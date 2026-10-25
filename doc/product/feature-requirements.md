@@ -1,563 +1,563 @@
-# 功能需求：按插件分章
+# Feature requirements: one chapter per plugin
 
-日期：2026-10-20。来源：[功能目录](feature-catalog.md)中未实现（✗）和部分实现（◐）的项，经删减评审后保留 78 项。界面语言（H14）另行处理，不在本文范围。
+Date: 2026-10-20. Source: the items in the [feature catalog](feature-catalog.md) that are not implemented (✗) or partly implemented (◐); after the cut review, 78 items remain. Interface language (H14) is handled separately and is out of scope here.
 
-每个插件一章。每章依次给出：
-- 定位与边界；
-- 功能一览；
-- 菜单与快捷键；
-- 逐项需求（需求、入口、行为细节、界面、持久化、核心依赖、验收、说明）；
-- 本章核心 API 请求。
+One chapter per plugin. Each chapter gives, in order:
+- scope and boundaries;
+- feature overview;
+- menus and shortcuts;
+- requirements item by item (requirement, entry points, behavior details, interface, persistence, core dependencies, acceptance, notes);
+- the chapter's core API requests.
 
-全文的核心 API 总表见[附录 A](#附录-a核心-api-请求总表)，各章共用的约定见[附录 B](#附录-b通用约定)。
+The core API summary for the whole document is in [Appendix A](#appendix-a-core-api-request-summary); conventions shared by all chapters are in [Appendix B](#appendix-b-common-conventions).
 
-**硬约束**（全文适用）：插件之间不通信；核心只提供插件做不到的宿主能力；跨平台（macOS 与 Windows，见社区工作流 §1.5），文中出现的 macOS 命令和行为描述是第一版的实现，以后统一改为平台无关；控件尺寸按[界面规格](ui-spec.md)。
+**Hard constraints** (apply to the whole document): plugins do not communicate with each other; the core provides only host capabilities that plugins cannot provide themselves; cross-platform (macOS and Windows, see community workflow §1.5) — the macOS commands and behavior described here are the first implementation and will later be made platform-independent; control sizes follow the [UI spec](ui-spec.md).
 
-## 插件一览
+## Plugin overview
 
-| 插件 | 位置 | 类型 | 本轮功能数 |
+| Plugin | Location | Type | Features this round |
 | --- | --- | --- | --- |
-| 播放控制 `playback` | `src/plugins/playback/` | 现有 | 10（另含「基础播放动作移交核心」） |
-| 播放列表 `playlist` | `src/plugins/playlist/` | 现有 | 11 |
-| 字幕 `subtitles` | `src/plugins/subtitles/` | 现有 | 11 |
-| 画面调节 `video` | `src/plugins/video/` | 现有 | 13 |
-| 音频工作台 `audio` | `src/plugins/audio/` | 现有 | 7 |
-| 截图 `capture` | `src/plugins/capture/` | 现有 | 4 |
-| 播放信息 `info` | `src/plugins/info/` | 现有 | 3 |
-| 窗口 `window` | `src/plugins/window/` | 新插件，待创建 | 5 |
-| 播放历史 `history` | `src/plugins/history/` | 新插件，待创建 | 2 |
-| 章节、书签与区段 `marks` | `src/plugins/marks/` | 新插件，待创建 | 3 |
-| 快捷键设置 `hotkeys` | `src/plugins/hotkeys/` | 新插件，待创建 | 3 |
-| 首选项 `preferences` | `src/plugins/preferences/` | 新插件，待创建 | 2 |
-| 插件管理 `plugins` | `src/plugins/plugins/` | 新插件，待创建 | 1 |
-| 专辑封面与空闲画面 `visualizer` | `src/plugins/visualizer/` | 新插件，待创建 | 2 |
-| 在线字幕 `subtitle-online` | `src/plugins/subtitle-online/` | 新插件，待创建 | 1 |
+| Playback control `playback` | `src/plugins/playback/` | Existing | 10 (plus "Basic playback actions handed over to the core") |
+| Playlist `playlist` | `src/plugins/playlist/` | Existing | 11 |
+| Subtitles `subtitles` | `src/plugins/subtitles/` | Existing | 11 |
+| Picture adjustment `video` | `src/plugins/video/` | Existing | 13 |
+| Audio workbench `audio` | `src/plugins/audio/` | Existing | 7 |
+| Capture `capture` | `src/plugins/capture/` | Existing | 4 |
+| Playback info `info` | `src/plugins/info/` | Existing | 3 |
+| Window `window` | `src/plugins/window/` | New plugin, to be created | 5 |
+| Playback history `history` | `src/plugins/history/` | New plugin, to be created | 2 |
+| Chapters, bookmarks and ranges `marks` | `src/plugins/marks/` | New plugin, to be created | 3 |
+| Shortcut settings `hotkeys` | `src/plugins/hotkeys/` | New plugin, to be created | 3 |
+| Preferences `preferences` | `src/plugins/preferences/` | New plugin, to be created | 2 |
+| Plugin management `plugins` | `src/plugins/plugins/` | New plugin, to be created | 1 |
+| Album art and idle screen `visualizer` | `src/plugins/visualizer/` | New plugin, to be created | 2 |
+| Online subtitles `subtitle-online` | `src/plugins/subtitle-online/` | New plugin, to be created | 1 |
 
-`subtitle-online` 独立成插件，没有并入 `subtitles`。原因有三：它依赖外部网络服务和 API key，需要单独的网络与凭据设置；可以单独停用；不影响本地字幕功能。
+`subtitle-online` is a plugin of its own and is not merged into `subtitles`, for three reasons: it depends on an external network service and an API key, so it needs its own network and credential settings; it can be disabled on its own; and it does not affect local subtitle features.
 
-## 编号 → 插件
+## ID → plugin
 
-| 编号 | 功能 | 插件 |
+| ID | Feature | Plugin |
 | --- | --- | --- |
-| A02 | 打开链接（通用 URL） | `playback` |
-| A03 | 打开文件夹 | `playlist` |
-| A08 | 次字幕（双字幕同时显示） | `subtitles` |
-| A09 | 重载字幕（重新读取文件） | `subtitles` |
-| A10 | 重开当前 / 最后一个文件 | `playback` |
-| A11 | 载入外部音频轨 | `audio` |
-| A12 | 最近播放历史 | `history` |
-| A13 | 打开文件时加入同文件夹 / 相似文件 | `playlist` |
-| A15 | 拖放文件到窗口打开 | `playlist` |
-| B06 | 跳转秒数可设置 | `playback` |
-| B07 | 上一帧 / 下一帧 | `playback` |
-| B08 | 上一关键帧 / 下一关键帧 | `playback` |
-| B09 | 跳到开头 | `playback` |
-| B11 | 上一句 / 下一句对白 | `subtitles` |
-| B21 | 章节 / 书签菜单与跳转 | `marks` |
-| B22 | 进度条上的章节 / 书签标记 | `marks` |
-| B23 | A-B 区段循环 | `marks` |
-| B25 | 记忆播放位置 | `history` |
-| B26 | 快速推进到下一个（原「无缝播放」，R-P5 降级） | `playlist` |
-| B29 | 播放时禁止屏保 / 休眠 | `playback` |
-| B30 | 播放时隐藏鼠标指针 | `window` |
-| C04 | 添加文件夹 | `playlist` |
-| C07 | 移除未选 / 移除无效项 | `playlist` |
-| C11 | 更多排序方式 | `playlist` |
-| C17 | 重启后恢复列表 | `playlist` |
-| C18 | 打开 / 保存 M3U、M3U8、PLS 列表 | `playlist` |
-| C21 | 搜索列表 | `playlist` |
-| C23 | 在 Finder 中显示 | `playlist` |
-| D02 | 依次切换字幕轨 | `subtitles` |
-| D05 | 手动输入同步值 | `subtitles` |
-| D06 | 字号快捷键 | `subtitles` |
-| D07 | 字幕位置快捷键 | `subtitles` |
-| D09 | 粗体 | `subtitles` |
-| D11 | 阴影、背景框 | `subtitles` |
-| D16 | 在线字幕搜索与下载 | `subtitle-online` |
-| D17 | 外部 ASS 字幕（保留特效） | `subtitles` |
-| D18 | 外部字幕格式：ASS、VTT 等 | `subtitles` |
-| E02 | 色调 | `video` |
-| E04 | 锐化（含边缘锐化） | `video` |
-| E05 | 降噪（3D / 瞬态 / 渐进） | `video` |
-| E06 | 去块 / 消色带 | `video` |
-| E08 | 上下翻转 / 左右翻转 | `video` |
-| E09 | 旋转 90 / 180 / 270 | `video` |
-| E10 | 反交错（自动 / 开 / 关） | `video` |
-| E11 | 宽高比与显示模式 | `video` |
-| E12 | 拉伸（加边）/ 裁剪到指定比例 | `video` |
-| E13 | 画面缩放与平移（帧位） | `video` |
-| E16 | HDR 校正 / 色调映射 | `video` |
-| E17 | 像素着色器（自定义 GLSL） | `video` |
-| E18 | 倍帧 / 运动补偿 | `video` |
-| F03 | 复制当前画面到剪贴板 | `capture` |
-| F04 | 单张截图带效果与字幕 | `capture` |
-| F07 | 截图格式 JPEG / BMP、质量 | `capture` |
-| F09 | 打开截图文件夹 | `capture` |
-| G03 | 选择音轨 | `audio` |
-| G04 | 依次切换音轨 | `audio` |
-| G05 | 声道选择（立体声 / 左 / 右 / 单声道混合） | `audio` |
-| G09 | 声音同步快捷键 | `audio` |
-| G11 | 晶化快捷键 | `audio` |
-| G16 | 音频输出设备选择 | `audio` |
-| H03 | 窗口 0.5 / 1 / 1.5 / 2 倍视频尺寸 | `window` |
-| H04 | 适应视频比例 | `window` |
-| H05 | 置顶：总是 / 播放时 / 全屏时 | `window` |
-| H07 | 画中画（替代迷你尺寸） | `window` |
-| H10 | 主题 / 配色切换 | `preferences` |
-| H12 | 空闲时显示徽标 | `visualizer` |
-| I03 | 简要信息 | `info` |
-| I05 | 播放属性对话框 | `info` |
-| I06 | 进度条悬停显示时间 | `playback` |
-| I07 | 进度条悬停显示缩略图 | `playback` |
-| I08 | 复制文件名 / 路径 | `playback` |
-| I09 | 关于 | `info` |
-| J01 | 快捷键设置 | `hotkeys` |
-| J02 | 鼠标动作设置 | `hotkeys` |
-| J03 | 忽略默认快捷键 | `hotkeys` |
-| J04 | 首选项总窗口 | `preferences` |
-| J07 | 插件管理 | `plugins` |
-| J11 | 纯音频时显示专辑封面 | `visualizer` |
-## 删减记录
+| A02 | Open URL (generic URL) | `playback` |
+| A03 | Open folder | `playlist` |
+| A08 | Secondary subtitles (two subtitles shown at once) | `subtitles` |
+| A09 | Reload subtitles (read the file again) | `subtitles` |
+| A10 | Reopen current / last file | `playback` |
+| A11 | Load external audio track | `audio` |
+| A12 | Recent playback history | `history` |
+| A13 | Add same-folder / similar files when opening a file | `playlist` |
+| A15 | Drag files onto the window to open | `playlist` |
+| B06 | Configurable seek step seconds | `playback` |
+| B07 | Previous frame / next frame | `playback` |
+| B08 | Previous keyframe / next keyframe | `playback` |
+| B09 | Jump to start | `playback` |
+| B11 | Previous / next subtitle line | `subtitles` |
+| B21 | Chapter / bookmark menu and jumping | `marks` |
+| B22 | Chapter / bookmark markers on the seek bar | `marks` |
+| B23 | A-B range loop | `marks` |
+| B25 | Remember playback position | `history` |
+| B26 | Fast advance to the next item (formerly "gapless playback", downgraded by R-P5) | `playlist` |
+| B29 | Prevent screensaver / sleep during playback | `playback` |
+| B30 | Hide the mouse pointer during playback | `window` |
+| C04 | Add folder | `playlist` |
+| C07 | Remove unselected / remove invalid items | `playlist` |
+| C11 | More sort orders | `playlist` |
+| C17 | Restore the list after restart | `playlist` |
+| C18 | Open / save M3U, M3U8, PLS lists | `playlist` |
+| C21 | Search the list | `playlist` |
+| C23 | Show in Finder | `playlist` |
+| D02 | Cycle subtitle tracks | `subtitles` |
+| D05 | Enter a sync value manually | `subtitles` |
+| D06 | Font size shortcuts | `subtitles` |
+| D07 | Subtitle position shortcuts | `subtitles` |
+| D09 | Bold | `subtitles` |
+| D11 | Shadow, background box | `subtitles` |
+| D16 | Online subtitle search and download | `subtitle-online` |
+| D17 | External ASS subtitles (keep effects) | `subtitles` |
+| D18 | External subtitle formats: ASS, VTT, etc. | `subtitles` |
+| E02 | Hue | `video` |
+| E04 | Sharpen (including edge sharpening) | `video` |
+| E05 | Denoise (3D / temporal / progressive) | `video` |
+| E06 | Deblock / deband | `video` |
+| E08 | Vertical flip / horizontal flip | `video` |
+| E09 | Rotate 90 / 180 / 270 | `video` |
+| E10 | Deinterlace (auto / on / off) | `video` |
+| E11 | Aspect ratio and display mode | `video` |
+| E12 | Stretch (add borders) / crop to a given ratio | `video` |
+| E13 | Picture zoom and pan (frame position) | `video` |
+| E16 | HDR correction / tone mapping | `video` |
+| E17 | Pixel shaders (custom GLSL) | `video` |
+| E18 | Frame doubling / motion compensation | `video` |
+| F03 | Copy the current frame to the clipboard | `capture` |
+| F04 | Single screenshot with effects and subtitles | `capture` |
+| F07 | Screenshot format JPEG / BMP, quality | `capture` |
+| F09 | Open the screenshot folder | `capture` |
+| G03 | Select audio track | `audio` |
+| G04 | Cycle audio tracks | `audio` |
+| G05 | Channel selection (stereo / left / right / mono mix) | `audio` |
+| G09 | Audio sync shortcuts | `audio` |
+| G11 | Crystalizer shortcuts | `audio` |
+| G16 | Audio output device selection | `audio` |
+| H03 | Window at 0.5 / 1 / 1.5 / 2× video size | `window` |
+| H04 | Fit to video aspect ratio | `window` |
+| H05 | On top: always / while playing / while fullscreen | `window` |
+| H07 | Picture-in-picture (replaces mini size) | `window` |
+| H10 | Theme / color scheme switching | `preferences` |
+| H12 | Show the logo when idle | `visualizer` |
+| I03 | Brief info | `info` |
+| I05 | Playback properties dialog | `info` |
+| I06 | Show time on seek bar hover | `playback` |
+| I07 | Show thumbnail on seek bar hover | `playback` |
+| I08 | Copy file name / path | `playback` |
+| I09 | About | `info` |
+| J01 | Shortcut settings | `hotkeys` |
+| J02 | Mouse action settings | `hotkeys` |
+| J03 | Ignore default shortcuts | `hotkeys` |
+| J04 | Main preferences window | `preferences` |
+| J07 | Plugin management | `plugins` |
+| J11 | Show album art for audio-only media | `visualizer` |
+## Cut log
 
-2026-10-20 删减评审中删除以下 47 项，原因是使用面窄，主流播放器（VLC、IINA、mpv、MPC-HC）也很少提供。原定的新插件 `files`、`scenes`、`timer` 随之取消：
+The 2026-10-20 cut review removed the following 47 items because few people use them and the mainstream players (VLC, IINA, mpv, MPC-HC) rarely offer them. The planned new plugins `files`, `scenes` and `timer` were dropped with them:
 
-- **打开**：A04 远程服务器浏览、A05 首选打开方式、A06 文件简索、A14 收藏
-- **播放**：B10 跳到中点/片尾前、B13 按帧号跳转、B14 关键帧定位模式、B15 场景网格、B18 变速音调模式、B19 跳过片头片尾、B20 跳过章节（B21 的章节跳转已覆盖）、B24 循环字幕句、B27 播放完后的动作、B28 定时退出
-- **列表**：C08 移到废纸篓、C13 反选、C19 多列表页签、C20 播放队列、C22 重命名、C24 复制粘贴列表项、C25 缩略图视图、C26 列表文件信息
-- **字幕**：D08 左右对齐、D12 字幕浏览器、D13 复制当前字幕、D14 保存字幕、D15 帧率转换、D19 字幕显示在黑边上、D21 字幕翻译
-- **画面**：E07 色阶、E14 下边距、E15 选择视频流
-- **截图**：F06 缩略图拼图、F08 文件名模板、F10 删除最近截图、F12 实时录制
-- **声音**：G06 声道互换（并入 G05 的选项）、G07 均衡器扩到 10 段、G12 降噪、G13 混响、G14 人声消除
-- **窗口与信息**：H02 全屏拉伸、H06 移到屏幕角落、H11 窗口不透明度、I04 杂项信息
-- **设置**：J05 配置导入导出、J10 检查更新
+- **Open**: A04 remote server browsing, A05 preferred open method, A06 quick file search, A14 favorites
+- **Playback**: B10 jump to middle / before the end, B13 jump by frame number, B14 keyframe seek mode, B15 scene grid, B18 speed-change pitch mode, B19 skip intro and outro, B20 skip chapter (covered by the chapter jumping in B21), B24 loop subtitle line, B27 action after playback ends, B28 timed quit
+- **List**: C08 move to Trash, C13 invert selection, C19 multiple list tabs, C20 play queue, C22 rename, C24 copy and paste list items, C25 thumbnail view, C26 list file info
+- **Subtitles**: D08 left/right alignment, D12 subtitle browser, D13 copy current subtitle, D14 save subtitles, D15 frame rate conversion, D19 subtitles shown on the black bars, D21 subtitle translation
+- **Picture**: E07 levels, E14 bottom margin, E15 select video stream
+- **Capture**: F06 thumbnail contact sheet, F08 file name template, F10 delete latest screenshot, F12 live recording
+- **Audio**: G06 channel swap (merged into the options of G05), G07 equalizer expanded to 10 bands, G12 noise reduction, G13 reverb, G14 vocal removal
+- **Window and info**: H02 fullscreen stretch, H06 move to a screen corner, H11 window opacity, I04 miscellaneous info
+- **Settings**: J05 settings import / export, J10 check for updates
 
-另有两项改动：
-- J11 只保留专辑封面，去掉音频动画。
-- H07 迷你尺寸改为 macOS 画中画。
+Two further changes:
+- J11 keeps only the album art; the audio animation is removed.
+- H07 mini size is replaced by macOS picture-in-picture.
 
 ---
 
-## 播放控制（`playback`）
+## Playback control (`playback`)
 
-**位置**：`src/plugins/playback/`（现有插件）
+**Location**: `src/plugins/playback/` (existing plugin)
 
-### 定位
+### Scope
 
-playback 负责底栏（进度条行 22px + 按钮行 40px）、「打开 / 关闭 / 重开」入口、「播放 ▸」下的跳转与速度，以及这些操作的屏幕提示。本轮在它上面加 10 项：打开链接、重开最后一个文件、四档跳转秒数可调、逐帧与关键帧跳转、跳到开头、播放时禁止屏保、进度条悬停时间与缩略图、复制文件名 / 路径。
+playback owns the bottom bar (seek bar row 22px + button row 40px), the "Open / Close / Reopen" entry points, seeking and speed under "Playback ▸", and the on-screen messages for these operations. This round adds 10 items to it: Open URL, reopen the last file, four adjustable seek steps, frame and keyframe stepping, jump to start, prevent the screensaver during playback, time and thumbnail on seek bar hover, and copy file name / path.
 
-边界：
-- 窗口尺寸、置顶、指针隐藏归新插件 `window`。两个插件互不调用，只读核心的 `player.state`。
-- 播放列表的「添加链接…」（playlist）把链接加进列表；本插件的「打开链接…」直接替换当前来源，不进列表。两者都用 UI-DLG-02 的同一套小窗规格，各自实现。
-- YouTube / Bilibili 链接从「打开链接…」打开时，由核心按主机名交给对应插件已注册的解析器（`resolvers.add`），本插件不识别站点。
-- 最近播放历史（A12）、记忆播放位置（B25）不在本章。A10 只记最后一个来源。
-- 「基础播放动作移交核心」（本章末节）完成后，播放 / 暂停、±5 秒、上一帧 / 下一帧、上一个 / 下一个、音量、静音、倍速 ±、停止由核心注册，playback 只负责底栏和扩展命令。下文各节先按「移交后」写，同时说明移交前怎么做。
+Boundaries:
+- Window size, on-top and pointer hiding belong to the new plugin `window`. The two plugins do not call each other; both only read the core's `player.state`.
+- The playlist's "Add Link…" (playlist) adds a link to the list; this plugin's "Open URL…" replaces the current source directly and does not go into the list. Both use the same small-window spec UI-DLG-02, each with its own implementation.
+- When a YouTube / Bilibili link is opened from "Open URL…", the core hands it, by host name, to the resolver registered by the matching plugin (`resolvers.add`); this plugin does not recognize sites.
+- Recent playback history (A12) and remembering the playback position (B25) are not in this chapter. A10 only records the last source.
+- Once "Basic playback actions handed over to the core" (the last section of this chapter) is done, play / pause, ±5 seconds, previous frame / next frame, previous / next, volume, mute, speed ± and stop are registered by the core, and playback only owns the bottom bar and the extended commands. The sections below are written for the state "after the hand-over", and also say what to do before it.
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| A02 | 打开链接（通用 URL） | ◐ | 否 |
-| A10 | 重开当前 / 最后一个文件 | ◐ | 否 |
-| B06 | 跳转秒数可设置 | ✗ | 移交后要（`player.setStepSeek`） |
-| B07 | 上一帧 / 下一帧 | ✗ | 是（核心动作 `frame-back` / `frame-forward`，`player.step`） |
-| B08 | 上一关键帧 / 下一关键帧 | ✗ | 是（`player.step("keyframe", …)`） |
-| B09 | 跳到开头 | ✗ | 否 |
-| B29 | 播放时禁止屏保 / 休眠 | ✗ | 是（通用能力 `plugin.power`） |
-| I06 | 进度条悬停显示时间 | ✗ | 否 |
-| I07 | 进度条悬停显示缩略图 | ✗ | 是（面板属性传图片） |
-| I08 | 复制文件名 / 路径 | ✗ | 是（通用能力 `plugin.clipboard`） |
-| — | 基础播放动作移交核心 | — | 是（核心注册动作 + `plugin.host.run`） |
+| A02 | Open URL (generic URL) | ◐ | No |
+| A10 | Reopen current / last file | ◐ | No |
+| B06 | Configurable seek step seconds | ✗ | After the hand-over (`player.setStepSeek`) |
+| B07 | Previous frame / next frame | ✗ | Yes (core actions `frame-back` / `frame-forward`, `player.step`) |
+| B08 | Previous keyframe / next keyframe | ✗ | Yes (`player.step("keyframe", …)`) |
+| B09 | Jump to start | ✗ | No |
+| B29 | Prevent screensaver / sleep during playback | ✗ | Yes (general capability `plugin.power`) |
+| I06 | Show time on seek bar hover | ✗ | No |
+| I07 | Show thumbnail on seek bar hover | ✗ | Yes (panel property carries an image) |
+| I08 | Copy file name / path | ✗ | Yes (general capability `plugin.clipboard`) |
+| — | Basic playback actions handed over to the core | — | Yes (core-registered actions + `plugin.host.run`) |
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-只列新增和变动的项，其余保持 `doc/product/menus.md` 现状。`order` 写的是该项所在那一层的值；子菜单的位置取其中最小的 `order`。「核心」表示移交后由核心注册，菜单位置不变。
+Only new and changed items are listed; everything else stays as in `doc/product/menus.md`. `order` is the value at the level the item sits on; a submenu's position is the smallest `order` inside it. "Core" means the core registers it after the hand-over; the menu position does not change.
 
-| 菜单路径 | 注册方 | order / group | 默认快捷键 | 说明 |
+| Menu path | Registered by | order / group | Default shortcut | Notes |
 | --- | --- | --- | --- | --- |
-| 打开 ▸ 打开链接… | playback | 110 / open | Ctrl+U | 新增；`打开 ▸` 子菜单整体仍在「打开文件…」(100) 与「关闭」(120) 之间 |
-| 重开当前/最后文件 | playback | 121 / open | Ctrl+Y | 原「重新打开」改名、扩大可用范围 |
-| 复制到剪贴板 ▸ 文件名 · 文件夹路径 · 完整路径 | playback | 125–127 / open | — | 新增 |
-| 播放 ▸ 跳转 ▸ 上一帧 · 下一帧 | 核心（移交前 playback） | 204–205 / frame | D · F | 新增，按住重复 |
-| 播放 ▸ 跳转 ▸ 上一关键帧 · 下一关键帧 | playback | 206–207 / frame | Ctrl+Shift+← · Ctrl+Shift+→ | 新增，按住重复 |
-| 播放 ▸ 跳转 ▸ 后退/前进 N 秒（4 档 × 2） | 第 1 档核心，2–4 档 playback | 210–217 / step | 不变 | 标题里的 N 随 B06 设置变化 |
-| 播放 ▸ 跳转 ▸ 跳到开头 | playback | 219 / points | Backspace | 新增 |
-| 播放 ▸ 跳转 ▸ 时间跨度设置… | playback | 223 / jump-settings | — | 新增 |
-| 播放 ▸ 播放时禁止屏保（勾选） | playback | 240 / playback-options | — | 新增，排在「播放列表 ▸」(230–235) 之后 |
-| 播放 ▸ 播放时隐藏鼠标指针（勾选） | window | 241 / playback-options | — | 见 window 章 B30 |
-| 播放 ▸ 进度条悬停显示时间 · 进度条悬停显示缩略图（勾选） | playback | 242–243 / playback-options | — | 新增 |
+| Open ▸ Open URL… | playback | 110 / open | Ctrl+U | New; the `Open ▸` submenu as a whole stays between "Open File…" (100) and "Close" (120) |
+| Reopen Current/Last File | playback | 121 / open | Ctrl+Y | The former "Reopen", renamed and available in more cases |
+| Copy to Clipboard ▸ File Name · Folder Path · Full Path | playback | 125–127 / open | — | New |
+| Playback ▸ Seek ▸ Previous Frame · Next Frame | Core (playback before the hand-over) | 204–205 / frame | D · F | New, repeats while held |
+| Playback ▸ Seek ▸ Previous Keyframe · Next Keyframe | playback | 206–207 / frame | Ctrl+Shift+← · Ctrl+Shift+→ | New, repeats while held |
+| Playback ▸ Seek ▸ Back/Forward N seconds (4 steps × 2) | Step 1 core, steps 2–4 playback | 210–217 / step | Unchanged | N in the title follows the B06 setting |
+| Playback ▸ Seek ▸ Jump to Start | playback | 219 / points | Backspace | New |
+| Playback ▸ Seek ▸ Seek Steps… | playback | 223 / jump-settings | — | New |
+| Playback ▸ Disable Screen Saver While Playing (checkbox) | playback | 240 / playback-options | — | New, placed after "Playlist ▸" (230–235) |
+| Playback ▸ Hide Pointer While Playing (checkbox) | window | 241 / playback-options | — | See B30 in the window chapter |
+| Playback ▸ Show Time on Seek Bar Hover · Show Thumbnail on Seek Bar Hover (checkboxes) | playback | 242–243 / playback-options | — | New |
 
-冲突检查（对照 menus.md 与各插件 `bindings`）：D、F、Backspace、Ctrl+Shift+←/→、Ctrl+U、Ctrl+Y 现在都没有命令占用。在 macOS 上，`Ctrl+X` 按 ⌃X 或 ⌘X 都能触发：
-- 系统默认把 ⌃←/⌃→ 留给调度中心切换空间（现有的「±30 秒」也受影响），用户可以按 ⌘⇧←/→。
-- Ctrl+U、Ctrl+Y 按 ⌘U、⌘Y 也能触发，不和系统冲突。
+Conflict check (against menus.md and each plugin's `bindings`): D, F, Backspace, Ctrl+Shift+←/→, Ctrl+U and Ctrl+Y are not used by any command now. On macOS, `Ctrl+X` is triggered by both ⌃X and ⌘X:
+- By default the system reserves ⌃←/⌃→ for Mission Control space switching (the existing "±30 seconds" is affected too); users can press ⌘⇧←/→.
+- Ctrl+U and Ctrl+Y can also be triggered with ⌘U and ⌘Y and do not conflict with the system.
 
 ---
 
-### A02 打开链接（通用 URL）
+### A02 Open URL (generic URL)
 
-现状：只有 YouTube / Bilibili 专用窗口和播放列表的「添加链接…」，没有直接打开任意链接、替换当前来源的入口。
+Current state: there are only the dedicated YouTube / Bilibili windows and the playlist's "Add Link…"; there is no entry point that opens an arbitrary link directly and replaces the current source.
 
-**需求**
-- 用户输入一个网络地址（或本地绝对路径），立即替换当前来源开始播放。
-- 支持的地址：`http`、`https`、`rtsp`、`rtmp`、`rtmps`、`mms`、`ftp`；`file://` 和以 `/` 开头的绝对路径按本地文件打开。其他地址提示无效。
-- 选项「默认使用剪贴板中可用地址」，默认开：打开窗口时剪贴板首行是支持的地址，就填进输入框并全选。
+**Requirement**
+- The user enters a network address (or an absolute local path), which immediately replaces the current source and starts playing.
+- Supported addresses: `http`, `https`, `rtsp`, `rtmp`, `rtmps`, `mms`, `ftp`; `file://` and absolute paths starting with `/` are opened as local files. Any other address is reported as invalid.
+- Option "Use an address from the clipboard by default", on by default: when the window opens and the first line of the clipboard is a supported address, it is filled into the input box and fully selected.
 
-**入口**：菜单「打开 ▸ 打开链接…」，Ctrl+U。
+**Entry point**: menu "Open ▸ Open URL…", Ctrl+U.
 
-**行为细节**
-1. 打开窗口时按以下顺序决定输入框内容：剪贴板（开关打开且首行有效）→ 本次运行上一次输入的文本 → 空。读剪贴板用 `plugin.clipboard.readText()`，没有文本或读取失败都当作没有内容，不提示。
-2. 确认时，取第一行非空文本，去掉首尾空白。
-   - 有多行时只打开第一行，窗口内提示「只打开第一行；多个链接请用播放列表的「添加链接…」」（只提示，不阻止）。
-   - 地址无效：窗口内显示「不是有效的链接」，窗口不关。
-3. 调用 `player.open(url)`。
-   - 返回之前，「打开」按钮显示「正在打开…」并禁用，再按回车或按钮都被忽略。
-   - `open` resolve 后关窗；reject 时窗口内显示「打开失败：<原因>」。
-   - 已接受但之后载入失败（`phase: error`）的，沿用现有的一次性屏幕提示「打开失败：…」。
-4. 匹配到解析器的链接（youtube.com、bilibili.com 等）由核心交给解析器处理；解析器没装时，按普通 URL 交给 mpv。
-5. 窗口不属于某个来源：打开期间别的插件换了来源，也照常打开用户输入的地址，因为这是用户主动发起的打开。
-6. 打开链接不加入播放列表；播放列表的上一个 / 下一个仍按它自己的游标走。
-7. 「Process subtitles（同时打开字幕）」不做，因为字幕属于 subtitles 插件，插件之间不能调用。
+**Behavior details**
+1. When the window opens, the input box content is decided in this order: clipboard (option on and first line valid) → the text last entered during this run → empty. The clipboard is read with `plugin.clipboard.readText()`; no text or a failed read both count as no content, with no message.
+2. On confirm, take the first non-empty line and trim leading and trailing whitespace.
+   - With several lines, only the first line is opened, and the window shows "Only the first line is opened; for several links use the playlist's "Add Link…"" (a hint only; it does not block).
+   - Invalid address: the window shows "Not a valid link" and stays open.
+3. Call `player.open(url)`.
+   - Until it returns, the "Open" button shows "Opening…" and is disabled; further Return presses or button clicks are ignored.
+   - When `open` resolves, the window closes; when it rejects, the window shows "Open failed: <reason>".
+   - If it was accepted but loading fails later (`phase: error`), the existing one-time on-screen message "Open failed: …" is used.
+4. Links that match a resolver (youtube.com, bilibili.com, etc.) are handed to the resolver by the core; when the resolver is not installed, they go to mpv as an ordinary URL.
+5. The window does not belong to a source: if another plugin changes the source while the window is open, the address the user entered is still opened, because this is an open the user started.
+6. Opening a link does not add it to the playlist; the playlist's previous / next still follow its own cursor.
+7. "Process subtitles (open subtitles at the same time)" is not done, because subtitles belong to the subtitles plugin and plugins cannot call each other.
 
-**界面**（UI-DLG-02 统一「输入链接」规格；不做历史列表）
-- 工具窗口 `ui/open-url.slint`，标题「打开链接」，宽 464px，高随内容（约 200px）。
-- 第一行说明「在下方输入您需要播放的文件网址。」，第二行灰字示例「例) https://example.com/video.mp4」。
-- 多行输入框 397×68。
-- 复选框「默认使用剪贴板中可用地址」。
-- 消息行，`text-dim`，自动换行。
-- 底部按钮 [打开] [取消]，按钮高 21px。
-- Esc 和「取消」关窗；输入框里回车等于「打开」，Shift+回车换行。
+**Interface** (the shared UI-DLG-02 "enter a link" spec; no history list)
+- Tool window `ui/open-url.slint`, title "Open URL", width 464px, height follows the content (about 200px).
+- First line of explanation "Enter the address of the file to play below."; second line, a grey example "e.g. https://example.com/video.mp4".
+- Multi-line input box 397×68.
+- Checkbox "Use an address from the clipboard by default".
+- Message line, `text-dim`, wraps automatically.
+- Bottom buttons [Open] [Cancel], button height 21px.
+- Esc and "Cancel" close the window; Return in the input box equals "Open", Shift+Return inserts a line break.
 
-**持久化**：`plugin.dataDirectory/settings.json` 的 `openUrl.pasteFromClipboard`（布尔，默认 `true`）。输入内容不落盘。
+**Persistence**: `openUrl.pasteFromClipboard` in `plugin.dataDirectory/settings.json` (boolean, default `true`). The input is not saved to disk.
 
-**核心依赖**：`player.open`、`windows.create`、`plugin.clipboard`（通用能力，第 2 轮）。
+**Core dependencies**: `player.open`, `windows.create`, `plugin.clipboard` (general capability, round 2).
 
-**验收**
-- 剪贴板里有 `https://…/a.mp4` 时按 Ctrl+U：输入框已填好并全选，按回车开始播放，窗口关闭。
-- 输入 `abc`：提示「不是有效的链接」，窗口不关。
-- 输入 YouTube 链接：由 youtube 插件的解析器播放。
-- 关掉剪贴板选项后再打开：输入框显示上一次输入的文本。
-- 地址不可达：屏幕提示「打开失败：…」只出现一次。
+**Acceptance**
+- With `https://…/a.mp4` on the clipboard, press Ctrl+U: the input box is filled and fully selected; pressing Return starts playback and closes the window.
+- Enter `abc`: the message "Not a valid link" appears and the window stays open.
+- Enter a YouTube link: it is played through the youtube plugin's resolver.
+- Turn the clipboard option off and open again: the input box shows the text entered last time.
+- Unreachable address: the on-screen message "Open failed: …" appears only once.
 
-**说明**：按 UI-DLG-02 不做历史列表和「保存输入地址」，也不做「同时打开字幕」。
+**Notes**: following UI-DLG-02, there is no history list and no "save entered address", and no "open subtitles at the same time".
 
-### A10 重开当前 / 最后一个文件
+### A10 Reopen current / last file
 
-现状：「重新打开」（order 121）只在载入失败后可用；没有快捷键；当前没有来源时什么都做不了。
+Current state: "Reopen" (order 121) is available only after a failed load; it has no shortcut; nothing can be done when there is no current source.
 
-**需求**
-- 有当前来源时，重新载入它。
-- 没有来源时（启动后、关闭后），打开上一次播放过的来源，跨启动有效。
+**Requirement**
+- When there is a current source, reload it.
+- When there is no source (after startup, after close), open the source played last, across launches.
 
-**入口**：顶层「重开当前/最后文件」，Ctrl+Y（原「重新打开」改名）。
+**Entry point**: top-level "Reopen Current/Last File", Ctrl+Y (the former "Reopen", renamed).
 
-**行为细节**
-1. 记录「最后一个来源」：监听 `player.onChange`。
-   - `kind === "media"`、`source` 非空、`phase` 第一次变成 `ready` 时，写入 `last.json`。
-   - 插件模拟器流（`kind: "stream"`）不记，因为不能重开。
-   - 来源可以是任何插件打开的（播放列表、YouTube 等）。
-2. 有当前来源（`phase` 为 `loading`、`ready`、`ended`、`error`）时：
-   - 先记下 `position` 和 `paused`，再调用 `player.open(source, { paused })`。
-   - 就绪后，原位置大于 0 且小于新时长时，跳回原位置。这是为了正在写入的文件重新载入后接着看。
-   - 屏幕提示「重新打开: <文件名或链接>」。
-3. 没有来源时：从 `last.json` 读 `source`，从头开始打开，屏幕提示「重开最后文件: <文件名>」。从上次位置续播属于 B25，不在本节。
-4. 不可用的情况：`last.json` 不存在或读坏，而且当前没有来源时，命令禁用，原因「没有可重开的文件」。
-5. 本地文件已被删除、链接已过期：照常尝试打开，失败走现有的「打开失败：…」提示。不预先检查文件是否存在，因为网络盘可能暂时不可达。
-6. 重开的来源由本插件 `open`。播放列表看到的是「被另一个插件替换」，它的游标不变（与 YouTube 窗口打开的行为一致）。
-7. 重复按 Ctrl+Y：上一次 `open` 返回前再按会被忽略（命令 `busy`）。
+**Behavior details**
+1. Record the "last source": listen to `player.onChange`.
+   - When `kind === "media"`, `source` is non-empty and `phase` first becomes `ready`, write `last.json`.
+   - Plugin simulator streams (`kind: "stream"`) are not recorded, because they cannot be reopened.
+   - The source can have been opened by any plugin (playlist, YouTube, etc.).
+2. When there is a current source (`phase` is `loading`, `ready`, `ended` or `error`):
+   - First note `position` and `paused`, then call `player.open(source, { paused })`.
+   - Once ready, if the old position is greater than 0 and less than the new duration, seek back to it. This lets a file that is still being written continue after it is reloaded.
+   - On-screen message "Reopened: <file name or link>".
+3. When there is no source: read `source` from `last.json` and open it from the start; on-screen message "Reopened the last file: <file name>". Resuming from the last position belongs to B25, not this section.
+4. When unavailable: if `last.json` does not exist or is corrupt and there is no current source, the command is disabled with the reason "No file to reopen".
+5. Local file deleted, link expired: try to open as usual; a failure goes through the existing "Open failed: …" message. Do not check in advance whether the file exists, because a network drive may be temporarily unreachable.
+6. The reopened source is opened (`open`) by this plugin. The playlist sees it as "replaced by another plugin", and its cursor does not change (the same as opening from the YouTube window).
+7. Pressing Ctrl+Y repeatedly: a press before the previous `open` has returned is ignored (the command is `busy`).
 
-**持久化**：`plugin.dataDirectory/last.json`：`{ "source": string, "openedAt": ISO 时间 }`。先写临时文件再改名。
+**Persistence**: `plugin.dataDirectory/last.json`: `{ "source": string, "openedAt": ISO time }`. Write a temporary file first, then rename it.
 
-**核心依赖**：`player.open`、`player.seek`、`media.ready()`、`player.onChange`。不需要核心新增。
+**Core dependencies**: `player.open`, `player.seek`, `media.ready()`, `player.onChange`. No new core API needed.
 
-**验收**
-- 播放 a.mp4 到 1:00 后按 Ctrl+Y：重新载入并回到 1:00 附近。
-- 关闭后按 Ctrl+Y：从头播放 a.mp4。
-- 重启播放器后不打开任何文件就按 Ctrl+Y：播放 a.mp4。
-- 删除 a.mp4 后按 Ctrl+Y：提示打开失败。
-- 第一次运行时菜单项灰色，原因「没有可重开的文件」。
+**Acceptance**
+- Play a.mp4 to 1:00 and press Ctrl+Y: it reloads and returns to about 1:00.
+- After closing, press Ctrl+Y: a.mp4 plays from the start.
+- Restart the player and, without opening any file, press Ctrl+Y: a.mp4 plays.
+- Delete a.mp4 and press Ctrl+Y: an open failure is reported.
+- On the first run the menu item is grey, with the reason "No file to reopen".
 
-### B06 跳转秒数可设置
+### B06 Configurable seek step seconds
 
-现状：四档跳转固定为 5 / 30 / 60 / 300 秒。
+Current state: the four seek steps are fixed at 5 / 30 / 60 / 300 seconds.
 
-**需求**
-- 用户分别设置四档跳转的秒数。
-  - 第 1 档：← / →，默认 5 秒。
-  - 第 2 档：Ctrl + ← / →，默认 30 秒。
-  - 第 3 档：Shift + ← / →，默认 60 秒。
-  - 第 4 档：Ctrl+Alt + ← / →，默认 300 秒。
-- 范围 0.1–3600 秒，最多一位小数。
+**Requirement**
+- The user sets the seconds of each of the four seek steps.
+  - Step 1: ← / →, default 5 seconds.
+  - Step 2: Ctrl + ← / →, default 30 seconds.
+  - Step 3: Shift + ← / →, default 60 seconds.
+  - Step 4: Ctrl+Alt + ← / →, default 300 seconds.
+- Range 0.1–3600 seconds, at most one decimal place.
 
-**入口**：「播放 ▸ 跳转 ▸ 时间跨度设置…」。
+**Entry point**: "Playback ▸ Seek ▸ Seek Steps…".
 
-**行为细节**
-1. 确定后立即生效：
-   - 菜单标题变成「后退 N 秒 / 前进 N 秒」，N 去掉多余的 0（`2.5`、`10`）。标题不能原地修改，八条命令放在一个子作用域里，释放后按新值重新添加，`order` 210–217 不变，绑定不变。
-   - 屏幕提示文字随之变化：「后退 10秒: 00:37 / 01:40」。
-2. 第 1 档的处理分两种情况：
-   - 移交前：由 playback 自己的 `backward-5` / `forward-5` 命令（改名为 `backward-1` / `forward-1`）按设置执行。
-   - 移交后：←/→ 是核心的基础动作，playback 调用 `player.setStepSeek({ seconds })` 把步长交给核心。playback 停用或卸载后，核心恢复 5 秒。
-3. 输入非法（空、非数字、超范围、两位以上小数）时，该行右侧标红，消息行显示「范围 0.1–3600 秒，最多一位小数」，「确定」不关窗也不保存。
-4. 每行有一个「默认值」按钮，只恢复这一行。
-5. 窗口不属于来源：没有媒体时也能打开和保存。
+**Behavior details**
+1. Takes effect immediately after OK:
+   - The menu titles become "Back N seconds / Forward N seconds", with trailing zeros removed from N (`2.5`, `10`). A title cannot be changed in place, so the eight commands live in a child scope, which is released and re-added with the new values; `order` 210–217 and the bindings stay the same.
+   - The on-screen message text changes accordingly: "Back 10 s: 00:37 / 01:40".
+2. Step 1 is handled in two ways:
+   - Before the hand-over: playback's own `backward-5` / `forward-5` commands (renamed to `backward-1` / `forward-1`) run with the setting.
+   - After the hand-over: ←/→ are core basic actions, and playback calls `player.setStepSeek({ seconds })` to hand the step to the core. When playback is disabled or uninstalled, the core goes back to 5 seconds.
+3. Invalid input (empty, not a number, out of range, two or more decimal places): the right side of that row turns red, the message line shows "Range 0.1–3600 s, at most one decimal place", and "OK" neither closes the window nor saves.
+4. Each row has a "Default" button that restores only that row.
+5. The window does not belong to a source: it can be opened and saved even with no media.
 
-**界面**
-- 工具窗口 `ui/time-jump.slint`，标题「时间跨度设置」，约 357×230。
-- 顶部说明「可设置播放时以时间为单位的移动跨度。」
-- 四行，每行：标签 → 输入框（宽 60）→「秒」→ [默认值]。
-  - 第 1 行标签「左/右 方向键：」
-  - 第 2 行标签「Ctrl + 左/右 方向键：」
-  - 第 3 行标签「Shift + 左/右 方向键：」
-  - 第 4 行标签「Ctrl + Alt + 左/右 方向键：」
-  - 这些标签写的是默认按键；用户改绑后标签不跟随，因为插件读不到绑定表。
-- 底部 [确定] [取消]。
+**Interface**
+- Tool window `ui/time-jump.slint`, title "Seek Steps", about 357×230.
+- Explanation at the top: "Set how far each seek key moves during playback."
+- Four rows, each: label → input box (width 60) → "s" → [Default].
+  - Row 1 label "Left/Right arrow keys:"
+  - Row 2 label "Ctrl + Left/Right arrow keys:"
+  - Row 3 label "Shift + Left/Right arrow keys:"
+  - Row 4 label "Ctrl + Alt + Left/Right arrow keys:"
+  - These labels show the default keys; after the user rebinds, the labels do not follow, because the plugin cannot read the binding table.
+- Bottom: [OK] [Cancel].
 
-**持久化**：`settings.json` 的 `seekSteps: [number, number, number, number]`，默认 `[5, 30, 60, 300]`。数组长度不对或值越界时，整组用默认值。
+**Persistence**: `seekSteps: [number, number, number, number]` in `settings.json`, default `[5, 30, 60, 300]`. If the array length is wrong or a value is out of range, the whole set falls back to the defaults.
 
-**核心依赖**：`commands.add`、子作用域重建、`windows.create`。【核心新增】（仅移交后需要，见末节）：
+**Core dependencies**: `commands.add`, child scope rebuild, `windows.create`. [New core API] (needed only after the hand-over, see the last section):
 
 ```ts
 player.setStepSeek(options: { seconds: number }): Promise<void>
 ```
 
-**验收**
-- 把第 1 档改成 10：按 → 显示「前进 10秒: …」，菜单显示「前进10秒」。
-- 第 3 档输入 4000：提示范围错误，窗口不关。
-- 重启后设置保持。
-- 点第 2 行的「默认值」，该行回到 30。
+**Acceptance**
+- Change step 1 to 10: pressing → shows "Forward 10 s: …", and the menu shows "Forward 10 s".
+- Enter 4000 for step 3: a range error is shown and the window stays open.
+- The settings persist after a restart.
+- Click "Default" on row 2: that row goes back to 30.
 
-**说明**：不提供逐帧步长设置，逐帧固定一帧；不做「以关键帧为移动单位」（已从需求中删除）。
+**Notes**: there is no frame step setting; frame stepping is always one frame. "Use keyframes as the seek unit" is not done (removed from the requirements).
 
-### B07 上一帧 / 下一帧
+### B07 Previous frame / next frame
 
-**需求**：每按一次，画面前进或后退一帧，播放保持暂停，用于逐帧查看。
+**Requirement**: each press moves the picture one frame forward or back and keeps playback paused, for frame-by-frame viewing.
 
-**入口**：「播放 ▸ 跳转 ▸ 上一帧（D）/ 下一帧（F）」，按住时随系统重复。
+**Entry point**: "Playback ▸ Seek ▸ Previous Frame (D) / Next Frame (F)"; repeats with the system key repeat while held.
 
-**行为细节**
-1. 正在播放时第一次按：暂停，并显示下一帧或上一帧；之后保持暂停。Space 继续播放。
-2. 下一帧用 mpv `frame-step`；上一帧用 `frame-back-step`。上一帧需要从前一个关键帧重新解码，长 GOP 片源可能要几百毫秒。
-3. 同一时间只有一个逐帧请求在途。在途期间按键重复触发的请求丢弃，不排队，这样松开按键后不会继续走。
-4. 屏幕提示「定位: 下一帧 00:01:23.456」/「定位: 上一帧 …」，时间精确到毫秒（取完成后的 `position`）。
-5. 边界：
-   - 在最后一帧按下一帧：不动，提示「已是最后一帧」。
-   - 在第一帧按上一帧：不动，提示「已是第一帧」。
-   - 没有视频轨（纯音频）：命令禁用，原因「没有视频」。
-   - 插件模拟器流、不可跳转的直播：上一帧禁用，原因「当前来源不支持逐帧后退」。直播仍可下一帧（mpv 能解码下一帧），由 `can.frameStep` 决定。
-   - 已播完（`phase: ended`）：上一帧可用，回到最后一帧之前；下一帧禁用。
-6. 拖动进度条的手势进行中触发逐帧：先结束手势（与现有「任何外部变化结束手势」规则一致）。
+**Behavior details**
+1. First press while playing: pause and show the next or previous frame; stay paused afterwards. Space resumes playback.
+2. Next frame uses mpv `frame-step`; previous frame uses `frame-back-step`. Previous frame has to decode again from the preceding keyframe, which can take a few hundred milliseconds on sources with a long GOP.
+3. Only one frame-step request is in flight at a time. Requests triggered by key repeat while one is in flight are dropped, not queued, so stepping does not continue after the key is released.
+4. On-screen message "Seek: next frame 00:01:23.456" / "Seek: previous frame …", with the time in milliseconds (the `position` after completion).
+5. Edge cases:
+   - Next frame on the last frame: nothing moves; message "Already at the last frame".
+   - Previous frame on the first frame: nothing moves; message "Already at the first frame".
+   - No video track (audio only): the command is disabled with the reason "No video".
+   - Plugin simulator streams and live streams that cannot seek: previous frame is disabled with the reason "The current source cannot step back a frame". Live streams can still step to the next frame (mpv can decode the next frame); this is decided by `can.frameStep`.
+   - Playback finished (`phase: ended`): previous frame is available and goes to just before the last frame; next frame is disabled.
+6. A frame step triggered while a seek bar drag gesture is in progress: end the gesture first (consistent with the existing rule "any external change ends the gesture").
 
-**核心依赖**：核心动作 `frame-back` / `frame-forward`（参考文档 §5.5），内部调用 `player.step("frame", …)`（裁决 R-P1，改写后接受：不加 `can.*`）。移交后这两条命令完全由核心注册和执行，playback 不注册、底栏也没有对应按钮。
+**Core dependencies**: core actions `frame-back` / `frame-forward` (reference §5.5), which call `player.step("frame", …)` internally (ruling R-P1, accepted after rewrite: no `can.*` added). After the hand-over these two commands are registered and run entirely by the core; playback does not register them, and the bottom bar has no buttons for them.
 
-**验收**
-- 播放中按 F：暂停，画面前进一帧，提示时间约增加 1/fps。
-- 连按 D 五次后，时间回退约 5/fps。
-- 按住 F 再松开：松开后不再前进。
-- 纯音频文件里菜单项灰色。
+**Acceptance**
+- Press F while playing: playback pauses, the picture moves one frame forward, and the time in the message grows by about 1/fps.
+- After pressing D five times, the time goes back by about 5/fps.
+- Hold F and release: stepping stops after release.
+- In an audio-only file the menu items are grey.
 
-### B08 上一关键帧 / 下一关键帧
+### B08 Previous keyframe / next keyframe
 
-**需求**：跳到当前画面之前或之后最近的一个关键帧，用于快速粗略地浏览。
+**Requirement**: jump to the nearest keyframe before or after the current picture, for quick rough browsing.
 
-**入口**：「播放 ▸ 跳转 ▸ 上一关键帧（Ctrl+Shift+←）/ 下一关键帧（Ctrl+Shift+→）」，按住重复。
+**Entry point**: "Playback ▸ Seek ▸ Previous Keyframe (Ctrl+Shift+←) / Next Keyframe (Ctrl+Shift+→)", repeats while held.
 
-**行为细节**
-1. 「上一」跳到严格早于当前显示时间的最近关键帧。当前正好停在关键帧上时，跳到再前一个，所以连按会一直后退。「下一」同理。
-2. 保持原来的暂停或播放状态。
-3. 同一时间一个请求在途，重复触发的请求丢弃。
-4. 屏幕提示「定位: 下一关键帧 00:12:03 / 01:40:00」。
-5. 边界：
-   - 不可跳转的来源：命令禁用，原因沿用「当前来源不支持此操作」。
-   - 纯音频（降级）：命令禁用，原因「没有视频」。`player.step` 对没有活动视频的来源返回 `unsupported`；有没有视频由 playback 在每个来源第一次就绪时查一次 `stats()` 缓存（裁决 R-P1）。插件模拟器流同样禁用。
-   - 已在第一个关键帧时按「上一」：跳到 0，提示「定位: 开始处」。
-   - 已在最后一个关键帧之后按「下一」：不动，提示「已是最后一个关键帧」。
+**Behavior details**
+1. "Previous" jumps to the nearest keyframe strictly earlier than the currently displayed time. When the picture is exactly on a keyframe, it jumps to the one before that, so repeated presses keep going back. "Next" works the same way.
+2. The paused or playing state is kept.
+3. One request in flight at a time; repeated triggers are dropped.
+4. On-screen message "Seek: next keyframe 00:12:03 / 01:40:00".
+5. Edge cases:
+   - Sources that cannot seek: the command is disabled with the existing reason "Not supported by the current source".
+   - Audio only (downgraded): the command is disabled with the reason "No video". `player.step` returns `unsupported` for sources without an active video; whether there is video is found by playback calling `stats()` once when each source first becomes ready, and cached (ruling R-P1). Plugin simulator streams are disabled the same way.
+   - "Previous" while already at the first keyframe: jump to 0; message "Jumped to the start".
+   - "Next" after the last keyframe: nothing moves; message "Already at the last keyframe".
 
-**核心依赖**：`player.step("keyframe", direction, { ifCurrent })`（裁决 R-P2 并入 R-P1；核心用 mpv `seek ±0.001 relative+keyframes`，两个方向都严格越过当前关键帧）。
+**Core dependencies**: `player.step("keyframe", direction, { ifCurrent })` (ruling R-P2 merged into R-P1; the core uses mpv `seek ±0.001 relative+keyframes`, which strictly passes the current keyframe in both directions).
 
-**验收**：H.264 片源上连按 Ctrl+Shift+→ 十次，每次的时间都增加，间隔和 GOP 一致（可用 `ffprobe -skip_frame nokey` 列出关键帧时间核对）；在关键帧上按 Ctrl+Shift+← 会跳到前一个关键帧，不会停在原地。
+**Acceptance**: on an H.264 source, press Ctrl+Shift+→ ten times: the time grows each time, and the intervals match the GOP (check against the keyframe times listed with `ffprobe -skip_frame nokey`); pressing Ctrl+Shift+← on a keyframe goes to the previous keyframe and does not stay in place.
 
-### B09 跳到开头
+### B09 Jump to start
 
-**需求**：一键回到 0:00。
+**Requirement**: return to 0:00 with one key.
 
-**入口**：「播放 ▸ 跳转 ▸ 跳到开头」，Backspace。
+**Entry point**: "Playback ▸ Seek ▸ Jump to Start", Backspace.
 
-**行为细节**
-1. `phase: ready`：`player.seek(0)`，保持暂停或播放状态。
-2. `phase: ended`：`player.restart()`，与现有「播完后按 Space 重播」一致。
-3. 不可跳转（直播、模拟器流）：禁用，原因「当前来源不支持此操作」。
-4. 屏幕提示「定位: 开始处」。
-5. 输入框获得焦点时，Backspace 被输入框吃掉，不会触发（绑定规则）。
+**Behavior details**
+1. `phase: ready`: `player.seek(0)`, keeping the paused or playing state.
+2. `phase: ended`: `player.restart()`, consistent with the existing "press Space after the end to replay".
+3. Cannot seek (live streams, simulator streams): disabled with the reason "Not supported by the current source".
+4. On-screen message "Jumped to the start".
+5. When an input box has focus, the input box takes Backspace and the command is not triggered (binding rule).
 
-**核心依赖**：`player.seek`、`player.restart`。不需要核心新增。
+**Core dependencies**: `player.seek`, `player.restart`. No new core API needed.
 
-**验收**：播放到 10:00 按 Backspace 回到 0:00 并继续播放；播完后按 Backspace 重新播放；在打开链接窗口的输入框里按 Backspace 只删字符。
+**Acceptance**: play to 10:00 and press Backspace: playback returns to 0:00 and continues; press Backspace after the end: playback starts again; Backspace in the input box of the Open URL window only deletes characters.
 
-### B29 播放时禁止屏保 / 休眠
+### B29 Prevent screensaver / sleep during playback
 
-**需求**：开关，默认开。播放中不启动屏幕保护程序，显示器不因空闲而睡眠；暂停或停止后恢复系统设置。
+**Requirement**: a toggle, on by default. During playback the screensaver does not start and the display does not sleep from idleness; after pause or stop, the system settings apply again.
 
-**入口**：「播放 ▸ 播放时禁止屏保」（勾选）。
+**Entry point**: "Playback ▸ Disable Screen Saver While Playing" (checkbox).
 
-**行为细节**
-1. 「正在播放」指 `phase === "ready" && !paused`，包括插件模拟器流。
-2. 开关打开时 playback 调用 `plugin.power.preventSleep("playing")`，关闭时 `"off"`（启动时按保存的值调用一次）。断言由播放器持有，参数按有无视频区分：
-   - 正在显示视频帧（含插件模拟器流）：`caffeinate -d -i -w <播放器 pid>`。同时阻止显示器睡眠（屏保随之不启动）和系统空闲睡眠。
-   - 纯音频：`-i -w <播放器 pid>`。只阻止系统睡眠，显示器可以关。
-3. 暂停、播完、关闭、出错、换来源时由播放器释放或重新判断；关闭开关或 playback 停用时撤销它的要求。断言绑定播放器进程，不会残留。
-4. 切换时提示「播放时禁止屏保: 开 / 关」。
-5. 这只是电源断言，不阻止用户手动锁屏，也不阻止盒盖睡眠。
-6. （降级）启动 `caffeinate` 失败只写播放器日志，插件收不到，不提示（参考文档 §16.2 的失败语义）。原第 5 条「无法阻止屏保：<原因>」已删除。
+**Behavior details**
+1. "Playing" means `phase === "ready" && !paused`, including plugin simulator streams.
+2. When the toggle is on, playback calls `plugin.power.preventSleep("playing")`, and `"off"` when it is off (called once at startup with the saved value). The assertion is held by the player, with arguments depending on whether there is video:
+   - Video frames are shown (including plugin simulator streams): `caffeinate -d -i -w <player pid>`. This prevents both display sleep (so the screensaver does not start) and system idle sleep.
+   - Audio only: `-i -w <player pid>`. Only system sleep is prevented; the display can turn off.
+3. On pause, end, close, error or source change, the player releases or re-evaluates it; turning the toggle off or disabling playback withdraws its request. The assertion is tied to the player process and is not left behind.
+4. On toggle, message "Disable screen saver while playing: on / off".
+5. This is only a power assertion; it does not stop the user from locking the screen manually, nor sleep when the lid is closed.
+6. (Downgraded) A failure to start `caffeinate` is only written to the player log; the plugin does not receive it and no message is shown (failure semantics in reference §16.2). The former item 5 "Cannot prevent the screensaver: <reason>" has been removed.
 
-**持久化**：`settings.json` 的 `preventSleep: boolean`，默认 `true`。
+**Persistence**: `preventSleep: boolean` in `settings.json`, default `true`.
 
-**核心依赖**：`plugin.power.preventSleep`（通用能力，第 2 轮）。mpv 的 `stop-screensaver` 只对它自己的视频输出有效，我们用 `vo=libmpv`，由宿主渲染，所以不生效；改由播放器按播放状态持有 `caffeinate` 断言，各插件不再自己启动子进程。
+**Core dependencies**: `plugin.power.preventSleep` (general capability, round 2). mpv's `stop-screensaver` only works for its own video output; we use `vo=libmpv` with the host rendering, so it has no effect. Instead the player holds a `caffeinate` assertion according to the playback state, and plugins no longer start child processes for this themselves.
 
-**验收**
-- 播放视频时 `pmset -g assertions` 里有 caffeinate 的 `PreventUserIdleDisplaySleep` 和 `PreventUserIdleSystemSleep`。
-- 屏保设成 1 分钟，播放 3 分钟不启动；暂停后 1 分钟启动。
-- 纯音频播放时只有 `PreventUserIdleSystemSleep`。
-- 关掉开关后断言消失。
-- 停用 playback 后没有残留的 caffeinate 进程。
+**Acceptance**
+- While a video plays, `pmset -g assertions` shows caffeinate's `PreventUserIdleDisplaySleep` and `PreventUserIdleSystemSleep`.
+- With the screensaver set to 1 minute, it does not start during 3 minutes of playback; after pausing, it starts after 1 minute.
+- During audio-only playback there is only `PreventUserIdleSystemSleep`.
+- After turning the toggle off, the assertion disappears.
+- After disabling playback, no caffeinate process is left.
 
-**说明**：区分纯音频，只阻止系统睡眠。
+**Notes**: audio only is treated separately and only prevents system sleep.
 
-### I06 进度条悬停显示时间
+### I06 Show time on seek bar hover
 
-> 默认值已被[交互规格](interaction-spec.md) IA-PB-01 取代：默认关；已保存过设置的用户保持原值。
+> The default has been superseded by IA-PB-01 in the [interaction spec](interaction-spec.md): off by default; users who have already saved a setting keep their value.
 
-**需求**：开关，默认关。鼠标停在进度条上时，指针上方显示该位置对应的时间。
+**Requirement**: a toggle, off by default. When the mouse rests on the seek bar, the time for that position is shown above the pointer.
 
-**入口**：「播放 ▸ 进度条悬停显示时间」（勾选）。
+**Entry point**: "Playback ▸ Show Time on Seek Bar Hover" (checkbox).
 
-**行为细节**
-1. 显示条件：开关开、`can-seek` 为真（时长已知），且指针在进度条 10px 点击区内。
-2. 时间 = 指针所在比例 × 时长，格式与底栏时间文字相同（不足 1 小时为 `MM:SS`，否则 `H:MM:SS`）。
-3. 拖动时显示拖动目标的时间，与指针位置一致。
-4. 提示框水平居中于指针，左右各留 2px，不超出窗口边缘；底边在进度线上方 4px，画在视频区上面。
-5. 指针离开、按下其它按钮、底栏自动隐藏（全屏）、来源变化时消失。悬停后立即显示，不像 `ToolTipArea` 那样等 600 ms。
-6. 时间在 Slint 里由 `duration` 和指针位置算出，不经过插件往返，所以移动鼠标没有延迟。插件只提供 `duration`（秒）和开关。
+**Behavior details**
+1. Shown when: the toggle is on, `can-seek` is true (duration known), and the pointer is inside the seek bar's 10px hit area.
+2. Time = pointer fraction × duration, in the same format as the bottom bar time text (`MM:SS` under 1 hour, otherwise `H:MM:SS`).
+3. While dragging, the time of the drag target is shown, matching the pointer position.
+4. The tooltip is centered horizontally on the pointer, keeps 2px on each side and does not go past the window edges; its bottom edge is 4px above the progress line, drawn over the video area.
+5. It disappears when the pointer leaves, another button is pressed, the bottom bar auto-hides (fullscreen), or the source changes. It shows immediately on hover, without the 600 ms wait of `ToolTipArea`.
+6. The time is computed in Slint from `duration` and the pointer position, without a round trip through the plugin, so mouse movement has no lag. The plugin only provides `duration` (seconds) and the toggle.
 
-**界面**
-- 桥接 global 增加 `in-out property <float> duration`、`in-out property <bool> hover-time`。
-- 提示框：`Theme.bg-panel` 底、1px `Theme.line` 边、内边距 5×2、字号 `font-body` 11px、`Theme.text`。
-- 提示框是底栏组件里的普通元素，用负 `y` 画到底栏上方的视频区，每次移动时更新位置（裁决 R-U4：宿主组合不裁切底栏，参考文档 §6.3）。不用 `PopupWindow`。
+**Interface**
+- The bridge global gains `in-out property <float> duration` and `in-out property <bool> hover-time`.
+- Tooltip: `Theme.bg-panel` background, 1px `Theme.line` border, padding 5×2, font size `font-body` 11px, `Theme.text`.
+- The tooltip is an ordinary element in the bottom bar component, drawn with a negative `y` into the video area above the bottom bar, with its position updated on every move (ruling R-U4: the host composition does not clip the bottom bar, reference §6.3). No `PopupWindow`.
 
-**持久化**：`settings.json` 的 `hoverTime: boolean`，默认 `false`（IA-PB-01）。
+**Persistence**: `hoverTime: boolean` in `settings.json`, default `false` (IA-PB-01).
 
-**核心依赖**：`panels.mount`、`bind`。预计不需要核心新增。
+**Core dependencies**: `panels.mount`, `bind`. No new core API expected.
 
-**验收**
-- 100 分钟片源，指针停在进度条中间：显示 `50:00` 左右，左右移动时文字跟随。
-- 指针在最左、最右端时提示框不超出窗口。
-- 直播流上不显示。
-- 关掉开关后不显示。
+**Acceptance**
+- 100-minute source, pointer resting in the middle of the seek bar: about `50:00` is shown, and the text follows when moving left and right.
+- With the pointer at the far left or far right end, the tooltip does not go past the window.
+- Not shown on live streams.
+- Not shown after the toggle is turned off.
 
-### I07 进度条悬停显示缩略图
+### I07 Show thumbnail on seek bar hover
 
-**需求**：开关，默认关（要 ffmpeg，且占 CPU）。悬停时，时间提示上方显示该位置的画面缩略图，160×90。
+**Requirement**: a toggle, off by default (needs ffmpeg and uses CPU). On hover, a 160×90 thumbnail of the picture at that position is shown above the time tooltip.
 
-**入口**：「播放 ▸ 进度条悬停显示缩略图」（勾选）。
+**Entry point**: "Playback ▸ Show Thumbnail on Seek Bar Hover" (checkbox).
 
-**行为细节**
-1. 只对本地文件有效：`source` 是绝对路径，且 `stats().video` 非空。网络链接、模拟器流、纯音频只显示时间。
-2. Slint 在悬停位置变化时发 `hover-changed(fraction)`，每 50 ms 最多一次；离开时发 `hover-ended()`。
-3. 插件把时间量化到时长的 0.5%（不小于 2 秒）作为缓存键，然后：
-   - 命中缓存：立即显示。
-   - 未命中：等指针停 80 ms 后生成：`ffmpeg -v error -ss <t> -i <path> -frames:v 1 -vf scale=160:90:force_original_aspect_ratio=decrease -q:v 5 <cache>/<key>.jpg`。
-   - 生成规则：`-ss` 放在 `-i` 前面，按关键帧快速定位；不经 shell；同一时间最多 1 个进程，3 秒超时；新的悬停目标出现时丢弃旧结果，正在运行的进程跑完但结果只入缓存。
-4. 生成期间显示上一张缩略图（若有），否则显示同尺寸黑框，时间文字照常显示。
-5. 缓存：`plugin.dataDirectory/thumbs/<来源 realpath + mtime 的哈希>/`。每个来源最多 200 张；换来源时删除旧来源的目录；插件启动时清空 `thumbs/`。
-6. ffmpeg 可执行文件：`VESTRA_FFMPEG`，否则 PATH 上的 `ffmpeg`，与 playlist 的 ffprobe 规则一致。找不到时，菜单项禁用，原因「需要 ffmpeg」，不弹提示。
-7. 单张生成失败时只显示时间，不提示。连续失败 5 次后，本来源不再尝试。
-8. 插件停用时结束正在运行的 ffmpeg。
+**Behavior details**
+1. Only for local files: `source` is an absolute path and `stats().video` is non-empty. Network links, simulator streams and audio only show just the time.
+2. Slint sends `hover-changed(fraction)` when the hover position changes, at most once every 50 ms; on leaving it sends `hover-ended()`.
+3. The plugin quantizes the time to 0.5% of the duration (at least 2 seconds) as the cache key, then:
+   - Cache hit: show immediately.
+   - Cache miss: generate after the pointer has rested for 80 ms: `ffmpeg -v error -ss <t> -i <path> -frames:v 1 -vf scale=160:90:force_original_aspect_ratio=decrease -q:v 5 <cache>/<key>.jpg`.
+   - Generation rules: `-ss` goes before `-i` for fast keyframe seeking; no shell; at most 1 process at a time, 3-second timeout; when a new hover target appears, the old result is discarded — a running process finishes, but its result only goes into the cache.
+4. While generating, the previous thumbnail (if any) is shown, otherwise a black box of the same size; the time text is shown as usual.
+5. Cache: `plugin.dataDirectory/thumbs/<hash of source realpath + mtime>/`. At most 200 images per source; on source change the old source's directory is deleted; `thumbs/` is emptied when the plugin starts.
+6. ffmpeg executable: `VESTRA_FFMPEG`, otherwise `ffmpeg` on PATH, the same rule as playlist's ffprobe. When not found, the menu item is disabled with the reason "Needs ffmpeg", without a popup message.
+7. When generating one thumbnail fails, only the time is shown, with no message. After 5 consecutive failures, no more attempts are made for this source.
+8. When the plugin is disabled, a running ffmpeg is terminated.
 
-**界面**：同 I06 的弹出框，上部 160×90 图片（`image-fit: contain`，`Theme.bg-video` 底：插件 Slint 不写硬编码颜色），下部时间文字。桥接 global 增加 `in-out property <bool> hover-thumbnail`、`in-out property <bool> has-thumbnail`（还没有图片时只画底色框）、`in-out property <image> thumbnail`、`callback hover-changed(float)`、`callback hover-ended()`。开关开着但当前来源不能出缩略图（网络、纯音频、连续失败 5 次）时 `hover-thumbnail` 为假，弹出框只有时间。
+**Interface**: the same popup as I06, with a 160×90 image on top (`image-fit: contain`, `Theme.bg-video` background: plugin Slint does not hard-code colors) and the time text below. The bridge global gains `in-out property <bool> hover-thumbnail`, `in-out property <bool> has-thumbnail` (only the background box is drawn while there is no image yet), `in-out property <image> thumbnail`, `callback hover-changed(float)` and `callback hover-ended()`. When the toggle is on but the current source cannot produce thumbnails (network, audio only, 5 consecutive failures), `hover-thumbnail` is false and the popup shows only the time.
 
-**持久化**：`settings.json` 的 `hoverThumbnail: boolean`，默认 `false`。
+**Persistence**: `hoverThumbnail: boolean` in `settings.json`, default `false`.
 
-**核心依赖**：现有 `panels.mount`、`bind`、`player.stats()`、`tools.run("ffmpeg")`。【核心新增】（第 3b 轮已提供，参考文档 §6.1）：
+**Core dependencies**: the existing `panels.mount`, `bind`, `player.stats()`, `tools.run("ffmpeg")`. [New core API] (provided in round 3b, reference §6.1):
 
 ```ts
-// 把本插件 dataDirectory 或包目录下的图片文件包装成图片引用，作为面板 / 窗口属性值传入；宿主读取文件，转成 Slint image
-plugin.ui.image(path: string): ImageRef   // 绝对路径，PNG/JPEG，≤ 16 MB 且 ≤ 4096×4096，在本插件 dataDirectory 或包目录下（缩略图放 dataDirectory）
+// Wraps an image file under this plugin's dataDirectory or package directory as an image reference, passed as a panel / window property value; the host reads the file and converts it to a Slint image
+plugin.ui.image(path: string): ImageRef   // absolute path, PNG/JPEG, ≤ 16 MB and ≤ 4096×4096, under this plugin's dataDirectory or package directory (thumbnails go in dataDirectory)
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
-type PropValue = Json | ImageRef;         // ImageRef 是不透明值，只能由 plugin.ui.image 生成
+type PropValue = Json | ImageRef;         // ImageRef is an opaque value that only plugin.ui.image can create
 ```
 
-理由：界面桥只接受 JSON（ui_values.rs 明确拒绝 image），插件不能把图片交给 Slint。缩略图由插件自己用 ffmpeg 生成，核心只负责「按路径加载图片」。不用 `media.capture` + `export`：它为截图设计，导出原尺寸 PNG 走离线任务，悬停预览太慢。
+Reason: the UI bridge only accepts JSON (ui_values.rs explicitly rejects image), so plugins cannot hand images to Slint. The plugin generates thumbnails itself with ffmpeg; the core only "loads an image by path". `media.capture` + `export` is not used: it is designed for screenshots and exports full-size PNGs through an offline job, which is too slow for hover previews.
 
-**验收**
-- 打开开关后，在 1080p 本地 mkv 的进度条上移动：200 ms 内出现缩略图，内容和该时间的画面一致。
-- 停在同一位置第二次悬停，立即显示（命中缓存）。
-- 在 YouTube 来源上只显示时间。
-- 删除 ffmpeg 后菜单项灰色。
-- 快速来回移动 10 秒：`ps` 里同时最多 1 个 ffmpeg。
+**Acceptance**
+- With the toggle on, move over the seek bar of a 1080p local mkv: a thumbnail appears within 200 ms, matching the picture at that time.
+- Hovering at the same position a second time shows it immediately (cache hit).
+- On a YouTube source only the time is shown.
+- After removing ffmpeg the menu item is grey.
+- Moving quickly back and forth for 10 seconds: `ps` shows at most 1 ffmpeg at a time.
 
-### I08 复制文件名 / 路径
+### I08 Copy file name / path
 
-**需求**：把当前来源的文件名、所在文件夹路径或完整路径复制到剪贴板。
+**Requirement**: copy the current source's file name, folder path or full path to the clipboard.
 
-**入口**：「复制到剪贴板 ▸ 文件名 · 文件夹路径 · 完整路径」。
+**Entry point**: "Copy to Clipboard ▸ File Name · Folder Path · Full Path".
 
-**行为细节**
-1. 本地文件（`source` 以 `/` 开头）：
-   - 文件名：`basename`，含扩展名。
-   - 文件夹路径：`dirname`。
-   - 完整路径：原样。
-2. 网络来源：只有「完整路径」可用，复制原始链接。「文件名」「文件夹路径」禁用，原因「网络来源没有文件名」。
-3. 没有来源，或者是生成流（`kind` 为 `"stream"`，比如模拟器；它的 `source` 是 `producer://<n>` 或打开的 ROM 路径，不按文件路径处理）：三项都禁用，原因「没有打开的文件」。
-4. 写剪贴板：`plugin.clipboard.writeText(text)`（以 UTF-8 文本写入系统剪贴板，中文路径不乱码）。
-5. 屏幕提示「已复制: <文本>」。文本超过 60 个字符时中间省略（保留开头 20、结尾 37 个字符），满足 OSD 200 字符上限。失败时提示「复制失败：<原因>」。
+**Behavior details**
+1. Local file (`source` starts with `/`):
+   - File name: `basename`, with extension.
+   - Folder path: `dirname`.
+   - Full path: as is.
+2. Network source: only "Full Path" is available and copies the original link. "File Name" and "Folder Path" are disabled with the reason "A network source has no file name".
+3. No source, or a generated stream (`kind` is `"stream"`, e.g. a simulator; its `source` is `producer://<n>` or the path of the opened ROM and is not treated as a file path): all three are disabled with the reason "No open file".
+4. Write to the clipboard: `plugin.clipboard.writeText(text)` (written to the system clipboard as UTF-8 text, so Chinese paths are not garbled).
+5. On-screen message "Copied: <text>". Text longer than 60 characters is shortened in the middle (keeping the first 20 and the last 37 characters), within the OSD limit of 200 characters. On failure the message is "Copy failed: <reason>".
 
-**核心依赖**：`player.state.source`、`plugin.clipboard`（通用能力，第 2 轮）。
+**Core dependencies**: `player.state.source`, `plugin.clipboard` (general capability, round 2).
 
-**验收**：播放「/Users/x/电影/a b.mkv」时，三项分别粘贴出「a b.mkv」「/Users/x/电影」「/Users/x/电影/a b.mkv」，中文正确；YouTube 来源时只有完整路径可用；关闭来源后三项灰色。
+**Acceptance**: while playing "/Users/x/电影/a b.mkv", the three items paste "a b.mkv", "/Users/x/电影" and "/Users/x/电影/a b.mkv" respectively, with correct Chinese; with a YouTube source only the full path is available; after closing the source all three are grey.
 
-**说明**：没有「其他」菜单，按文件领域放在顶层 open 组。
+**Notes**: there is no "Other" menu; following the file domain, these go into the top-level open group.
 
-### 基础播放动作移交核心
+### Basic playback actions handed over to the core
 
-依据[功能目录](feature-catalog.md#关于快捷键设置插件j01j03)末节「关于快捷键设置插件」：快捷键设置插件（J01）必须在 playback 被卸载或替换后仍能绑定基础操作，所以这些操作要由核心注册，像现在的「全屏」「退出」一样。
+Based on the last section of the [feature catalog](feature-catalog.md#关于快捷键设置插件j01j03), "About the shortcut settings plugin": the shortcut settings plugin (J01) must still be able to bind basic operations after playback is uninstalled or replaced, so these operations have to be registered by the core, like "Fullscreen" and "Quit" today.
 
-**核心注册的基础动作**
+**Basic actions registered by the core**
 
-菜单路径、order、默认绑定与现状相同，用户看到的菜单不变：
+Menu paths, order and default bindings are the same as now; the menu the user sees does not change:
 
-| 核心动作 id | 菜单路径 | order | 默认绑定 | 取代的 playback 命令 |
+| Core action id | Menu path | order | Default binding | playback command it replaces |
 | --- | --- | --- | --- | --- |
-| `play-pause` | 播放 ▸ 播放/暂停 | 201 | Space | `toggle-pause` |
-| `previous` | 播放 ▸ 上一个 | 202 | PageUp、Mouse:X1 | `previous` |
-| `next` | 播放 ▸ 下一个 | 203 | PageDown、Mouse:X2 | `next` |
-| `frame-back` / `frame-forward` | 播放 ▸ 跳转 ▸ 上一帧 / 下一帧 | 204 / 205 | D / F | 无（B07 新增） |
-| `seek-backward` / `seek-forward` | 播放 ▸ 跳转 ▸ 后退/前进 N 秒（第 1 档） | 210 / 211 | ← / →（重复） | `backward-5` / `forward-5` |
-| `rate-down` / `rate-up` | 播放 ▸ 速度 ▸ 减速 0.1 / 加速 0.1 | 221 / 222 | X / C | `rate-down` / `rate-up` |
-| `volume-up` / `volume-down` | 声音 ▸ 音量 + / 音量 − | 501 / 502 | ↑、滚轮上 / ↓、滚轮下（重复） | `volume-up` / `volume-down` |
-| `mute` | 声音 ▸ 静音（勾选） | 503 | M | `mute` |
-| `stop` | 关闭 | 120 | F4 | `close-source` |
+| `play-pause` | Playback ▸ Play/Pause | 201 | Space | `toggle-pause` |
+| `previous` | Playback ▸ Previous | 202 | PageUp, Mouse:X1 | `previous` |
+| `next` | Playback ▸ Next | 203 | PageDown, Mouse:X2 | `next` |
+| `frame-back` / `frame-forward` | Playback ▸ Seek ▸ Previous Frame / Next Frame | 204 / 205 | D / F | None (new in B07) |
+| `seek-backward` / `seek-forward` | Playback ▸ Seek ▸ Back/Forward N seconds (step 1) | 210 / 211 | ← / → (repeat) | `backward-5` / `forward-5` |
+| `rate-down` / `rate-up` | Playback ▸ Speed ▸ Slower 0.1 / Faster 0.1 | 221 / 222 | X / C | `rate-down` / `rate-up` |
+| `volume-up` / `volume-down` | Audio ▸ Volume + / Volume − | 501 / 502 | ↑, wheel up / ↓, wheel down (repeat) | `volume-up` / `volume-down` |
+| `mute` | Audio ▸ Mute (checkbox) | 503 | M | `mute` |
+| `stop` | Close | 120 | F4 | `close-source` |
 
-建议同时移交 `rate-10`（速度 ▸ 正常，Z）：它和 X / C 是同一组基础键，移交后快捷键插件也能绑定。分析原文只写了「倍速 ±」，这一条留给维护者决定。
+We suggest also handing over `rate-10` (Speed ▸ Normal, Z): it belongs to the same group of basic keys as X / C, and after the hand-over the shortcut plugin can bind it too. The original analysis only said "speed ±"; this one is left to the maintainer to decide.
 
-**核心要承接的现有行为**（从 `controller.ts` 搬过去，行为不变）
-- 播放 / 暂停：`phase: ended` 时改为重播；提示「已暂停」/「播放」。
-- 相对跳转：从最新一个未完成的目标继续累加（连按 → 不会丢步）；夹在 0 与时长之间；提示「前进 5秒: 00:37 / 01:40」；按 `setStepSeek` 设置的步长执行。
-- 倍速：±0.1，四舍五入到 0.01，夹在 0.25–4；提示「播放速度: 1.1x」。
-- 音量：±5，夹在 0–200，以最新的草稿值为基准；先设音量再取消静音；提示「音量: 85%」「静音: 开 / 关」。
-- 上一个 / 下一个：交给播放序列提供者；没有时禁用，原因「没有上一个 / 没有下一个」。
-- 每个动作的 `enabled` / `busy` / `reason` 与现在一致；屏幕提示由核心显示，文字与现在相同。
+**Existing behavior the core must take over** (moved over from `controller.ts`, behavior unchanged)
+- Play / pause: with `phase: ended` it replays instead; message "Paused" / "Play".
+- Relative seek: keeps adding from the latest unfinished target (repeated → presses do not lose steps); clamped between 0 and the duration; message "Forward 5 s: 00:37 / 01:40"; uses the step set with `setStepSeek`.
+- Speed: ±0.1, rounded to 0.01, clamped to 0.25–4; message "Speed: 1.1x".
+- Volume: ±5, clamped to 0–200, based on the latest draft value; set the volume first, then unmute; messages "Volume: 85%" and "Mute: on / off".
+- Previous / next: handed to the playback sequence provider; when there is none, disabled with the reason "No previous item / No next item".
+- Each action's `enabled` / `busy` / `reason` is the same as now; the on-screen messages are shown by the core with the same text as now.
 
-**playback 的变化**
-- 删除上表「取代」列的 11 条命令（`toggle-pause`、`previous`、`next`、`backward-5`、`forward-5`、`rate-down`、`rate-up`、`volume-up`、`volume-down`、`mute`、`close-source`）。保留并继续注册：`open`、`reopen`（A10 改名）、第 2–4 档跳转（`backward-30` 等，ID 随 B06 改为 `backward-2…4`）、`jump`、`rate-10`（若不移交）、`rate-05/15/20`、`rate-custom`，以及本章新增的命令。
-- 底栏按钮改为调用核心动作，保证按钮、菜单、快捷键共享同一个行为和提示：
-  - 播放 / 暂停 → `play-pause`；停止 → `stop`。
-  - 后退 / 前进 → `seek-backward` / `seek-forward`；右键 → `previous` / `next`。
-  - 静音图标 → `mute`。
-  - 音量滑块需要连续值，仍直接用 `player.setOutput`，规则与核心的 `volume-up/down` 相同。
-  - 进度条拖动仍用 `player.scrub`。
-- 底栏按钮的可用状态仍由 `player.state` 推出（`can.*`、`phase`），不需要读核心命令的状态。
-- B06 第 1 档步长通过 `player.setStepSeek` 交给核心。
-- 用户覆盖层里已有针对 `vestra.playback/<旧 id>` 的绑定：核心升级时一次性映射到新的核心动作 id。目前没有改绑界面，实际影响很小，但映射要写进升级逻辑。
+**Changes in playback**
+- Remove the 11 commands in the "replaces" column of the table above (`toggle-pause`, `previous`, `next`, `backward-5`, `forward-5`, `rate-down`, `rate-up`, `volume-up`, `volume-down`, `mute`, `close-source`). Keep registering: `open`, `reopen` (renamed by A10), seek steps 2–4 (`backward-30` etc., IDs change to `backward-2…4` with B06), `jump`, `rate-10` (if not handed over), `rate-05/15/20`, `rate-custom`, and the commands added in this chapter.
+- Bottom bar buttons call the core actions instead, so buttons, menus and shortcuts share one behavior and one message:
+  - Play / pause → `play-pause`; stop → `stop`.
+  - Back / forward → `seek-backward` / `seek-forward`; right-click → `previous` / `next`.
+  - Mute icon → `mute`.
+  - The volume slider needs continuous values and still uses `player.setOutput` directly, with the same rules as the core's `volume-up/down`.
+  - Seek bar dragging still uses `player.scrub`.
+- The enabled state of the bottom bar buttons is still derived from `player.state` (`can.*`, `phase`); there is no need to read the state of core commands.
+- B06's step 1 is handed to the core through `player.setStepSeek`.
+- Existing bindings for `vestra.playback/<old id>` in the user overlay: when the core is upgraded, they are mapped once to the new core action ids. There is no rebinding interface yet, so the actual impact is small, but the mapping has to be written into the upgrade logic.
 
-**核心依赖**【核心新增】：
+**Core dependencies** [New core API]:
 
 ```ts
 type HostAction =
@@ -566,347 +566,347 @@ type HostAction =
   | "seek-backward" | "seek-forward"
   | "rate-down" | "rate-up" | "rate-normal"
   | "volume-up" | "volume-down" | "mute";
-plugin.host.run(action: HostAction): Promise<void>       // 需要 commands；动作禁用时以 unavailable 失败
+plugin.host.run(action: HostAction): Promise<void>       // needs commands; fails with unavailable when the action is disabled
 player.setStepSeek(options: { seconds: number }): Promise<void>
-// seconds 0.1–3600，默认 5；调用插件停用后恢复默认
+// seconds 0.1–3600, default 5; back to the default after the calling plugin is disabled
 ```
 
-理由：
-- 「执行核心动作」不等于插件之间通信：核心是固定存在的一方，不依赖任何插件。
-- 没有 `host.run` 时，底栏只能自己重新实现一遍动作，按钮和快捷键会出现两套行为和提示（违反交互要求 §1「共享状态与行为」）。
-- `setStepSeek` 让第 1 档步长保持可设置（B06），同时设置仍归 playback 保存。
+Reasons:
+- "Running a core action" is not communication between plugins: the core is a party that is always there and does not depend on any plugin.
+- Without `host.run`, the bottom bar would have to re-implement the actions itself, and buttons and shortcuts would end up with two sets of behavior and messages (violating interaction requirements §1 "shared state and behavior").
+- `setStepSeek` keeps step 1 configurable (B06), while the setting is still saved by playback.
 
-**验收**
-- 移交后卸载 playback：Space、←/→、D/F、↑/↓、M、PageUp/PageDown、X/C、F4 仍可用，提示文字不变。
-- 重新装上 playback：底栏按钮和快捷键的效果、提示完全一致。
-- 把第 1 档设为 10 秒，← 后退 10 秒；停用 playback 后 ← 恢复 5 秒。
-- 菜单快照与移交前一致（只多出本章新增的项）。
+**Acceptance**
+- After the hand-over, uninstall playback: Space, ←/→, D/F, ↑/↓, M, PageUp/PageDown, X/C and F4 still work, and the message text is unchanged.
+- Reinstall playback: the effect and messages of the bottom bar buttons and the shortcuts are exactly the same.
+- Set step 1 to 10 seconds: ← goes back 10 seconds; after disabling playback, ← goes back to 5 seconds.
+- The menu snapshot is the same as before the hand-over (only with the items added in this chapter).
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-| 签名 | 理由 | 来源 |
+| Signature | Reason | Source |
 | --- | --- | --- |
-| ~~`player.stepFrame(…)`、`can.frameStep` / `can.frameBackStep`~~ → 已合并为 `player.step(unit, direction, opts?)`，不加 `can.*`（裁决 R-P1） | 逐帧是 mpv 命令，插件拿不到 | B07 |
-| ~~`player.stepKeyframe(…)`~~ → `player.step("keyframe", …)`（裁决 R-P2） | 「严格越过当前关键帧」只能在核心用 mpv 的 keyframes 方向 seek 实现 | B08 |
-| `plugin.ui.image(path: string): ImageRef`，属性值可为 `ImageRef`（dataDirectory 下的 PNG/JPEG） | 界面桥只收 JSON，插件无法显示自己生成的图片 | I07 |
-| `plugin.host.run(action: HostAction): Promise<void>` | 底栏按钮调用核心基础动作，按钮与快捷键共用一套行为 | 移交 |
-| `player.setStepSeek({ seconds }): Promise<void>` | 第 1 档 ←/→ 移交核心后仍可设置步长 | B06、移交 |
-| ~~（条件性）面板内 `PopupWindow` 可越出面板边界并跟随指针~~ | 不需要：底栏不裁切，提示用负 `y` 画到视频区（裁决 R-U4，参考文档 §6.3） | I06、I07 |
+| ~~`player.stepFrame(…)`, `can.frameStep` / `can.frameBackStep`~~ → merged into `player.step(unit, direction, opts?)`, no `can.*` added (ruling R-P1) | Frame stepping is an mpv command that plugins cannot reach | B07 |
+| ~~`player.stepKeyframe(…)`~~ → `player.step("keyframe", …)` (ruling R-P2) | "Strictly pass the current keyframe" can only be done in the core with mpv's keyframes-direction seek | B08 |
+| `plugin.ui.image(path: string): ImageRef`, property values may be `ImageRef` (PNG/JPEG under dataDirectory) | The UI bridge only accepts JSON; plugins cannot show images they generate | I07 |
+| `plugin.host.run(action: HostAction): Promise<void>` | Bottom bar buttons call core basic actions, so buttons and shortcuts share one behavior | Hand-over |
+| `player.setStepSeek({ seconds }): Promise<void>` | Step 1 ←/→ stays configurable after it is handed to the core | B06, hand-over |
+| ~~(conditional) a `PopupWindow` inside a panel that can extend beyond the panel and follow the pointer~~ | Not needed: the bottom bar is not clipped, and the tooltip is drawn into the video area with a negative `y` (ruling R-U4, reference §6.3) | I06, I07 |
 
-基础动作移交本身（核心注册上述 14 个动作）是核心职责调整，建议与快捷键接口（J01）合成一轮，按自上而下的流程做。
+The hand-over of the basic actions itself (the core registering the 14 actions above) is a change of core responsibilities; we suggest combining it with the shortcut interface (J01) into one round, done top-down.
 
 ---
 
-## 播放列表（`playlist`）
+## Playlist (`playlist`)
 
-**位置**：`src/plugins/playlist/`（现有插件）
+**Location**: `src/plugins/playlist/` (existing plugin)
 
-### 定位
+### Scope
 
-playlist 是侧栏播放列表与播放序列提供者（`player.provideSequence`）。现在已有：多文件添加、添加链接、多选、拖动排序、置顶/上下移/置底、按名称/路径/倒序排序、循环、随机、ffprobe 时长、列表右键菜单。本轮把它补齐成完整播放列表的日常功能：从文件夹、列表文件、拖放加入条目；更多排序、移除未选/无效项；搜索、在 Finder 中显示；重启后恢复列表；「打开文件时加入同文件夹/相似文件」；快速推进到下一个（B26，原「无缝播放」按裁决 R-P5 降级）。列表仍是单个列表（不做多页签）。
+playlist is the sidebar playlist and the playback sequence provider (`player.provideSequence`). It already has: adding several files, adding links, multi-select, drag to reorder, move to top / up / down / bottom, sort by name / path / reversed, loop, shuffle, ffprobe durations, and the list context menu. This round completes it with the everyday features of a full playlist: adding entries from folders, list files and drag and drop; more sort orders, remove unselected / invalid items; search, show in Finder; restore the list after restart; "add same-folder / similar files when opening a file"; fast advance to the next item (B26, the former "gapless playback", downgraded by ruling R-P5). The list is still a single list (no multiple tabs).
 
-边界：playlist 只通过核心协作。它不调用 history、playback 的命令，也不读它们的数据。别的插件打开的来源，playlist 只能从 `player.state` 看到（路径、`sourceId`、阶段）。所以「打开文件时加入同文件夹」由 playlist 观察来源变化自己完成（A13），history 等插件不需要知道 playlist 存在。需要核心新增的只有窗口拖放事件（A15）；预读下一来源（B26 原方案）被裁决 R-P5 拒绝。文件扫描、列表文件解析由插件用 Node 完成；ffprobe、Finder、设置文件用 SDK 通用能力（`plugin.tools`、`plugin.system`、`plugin.storage`，第 2 轮迁移）。
+Boundaries: playlist cooperates only through the core. It does not call history or playback commands and does not read their data. For sources opened by other plugins, playlist can only see `player.state` (path, `sourceId`, phase). So "add same-folder files when opening a file" is done by playlist itself by watching source changes (A13), and history and other plugins do not need to know that playlist exists. The only new core API needed is the window drop event (A15); preloading the next source (the original B26 plan) was rejected by ruling R-P5. Folder scanning and list file parsing are done by the plugin with Node; ffprobe, Finder and the settings file use SDK general capabilities (`plugin.tools`, `plugin.system`, `plugin.storage`, migrated in round 2).
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| A03 | 打开文件夹（加入并播放） | ✗ | 否 |
-| A13 | 打开文件时加入同文件夹 / 相似文件 | ✗ | 否 |
-| A15 | 拖放文件到窗口打开 | ✗ | **是**：窗口拖放事件（`drops.provide`、`Panel.onDrop`） |
-| B26 | 快速推进到下一个（原「无缝播放」，R-P5 降级） | ✗ | 否（受益于宿主「阶段变化立即推送」） |
-| C04 | 添加文件夹 | ✗ | 否 |
-| C07 | 移除未选 / 移除无效项 | ✗ | 否 |
-| C11 | 更多排序方式 | ◐（名称/路径/倒序） | 否 |
-| C17 | 重启后恢复列表 | ✗ | 否（`plugin.dataDirectory`） |
-| C18 | 打开 / 保存 M3U、M3U8、PLS | ✗ | 否 |
-| C21 | 搜索列表 | ✗ | 否 |
-| C23 | 在 Finder 中显示 | ✗ | 否 |
+| A03 | Open folder (add and play) | ✗ | No |
+| A13 | Add same-folder / similar files when opening a file | ✗ | No |
+| A15 | Drag files onto the window to open | ✗ | **Yes**: window drop events (`drops.provide`, `Panel.onDrop`) |
+| B26 | Fast advance to the next item (formerly "gapless playback", downgraded by R-P5) | ✗ | No (benefits from the host's "push phase changes immediately") |
+| C04 | Add folder | ✗ | No |
+| C07 | Remove unselected / remove invalid items | ✗ | No |
+| C11 | More sort orders | ◐ (name / path / reversed) | No |
+| C17 | Restore the list after restart | ✗ | No (`plugin.dataDirectory`) |
+| C18 | Open / save M3U, M3U8, PLS | ✗ | No |
+| C21 | Search the list | ✗ | No |
+| C23 | Show in Finder | ✗ | No |
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-**主菜单**（新增行加粗；`order` 在分配表 playlist 区间 230–249 内，「打开文件夹」占 `打开 ▸` 的 110）：
+**Main menu** (new rows in bold; `order` is within playlist's range 230–249 in the allocation table; "Open Folder" takes 110 in `Open ▸`):
 
-| 菜单路径 | order | group | 默认绑定 | 说明 |
+| Menu path | order | group | Default binding | Notes |
 | --- | --- | --- | --- | --- |
-| **打开 ▸ 打开文件夹…** | 110 | open | F2 | A03；`打开 ▸` 子菜单因此排在 110 |
-| 播放 ▸ 播放列表 ▸ 添加文件… | 230 | domain | | 现有 |
-| 播放 ▸ 播放列表 ▸ 添加链接… | 231 | domain | | 现有 |
-| **播放 ▸ 播放列表 ▸ 添加文件夹…** | 232 | domain | | C04（原 232–235 顺延） |
-| 播放 ▸ 播放列表 ▸ 循环 ▸ 不循环 / 全部 / 单个 | 233–235 | domain | | 现有，radio |
-| 播放 ▸ 播放列表 ▸ 随机 | 236 | domain | | 现有 |
-| **播放 ▸ 播放列表 ▸ 打开列表文件…** | 237 | list | | C18 |
-| **播放 ▸ 播放列表 ▸ 保存列表…** | 238 | list | | C18 |
-| **播放 ▸ 播放列表 ▸ 打开文件时 ▸ 仅打开该文件 / 加入相似文件 / 加入同文件夹全部文件** | 239–241 | open-mode | | A13，radio，默认「加入相似文件」（IA-PL-01） |
-| **播放 ▸ 播放列表 ▸ 快速推进到下一个** | 242 | options | | B26，勾选，默认关 |
-| **播放 ▸ 播放列表 ▸ 记住列表** | 243 | options | | C17，勾选，默认开 |
-| 播放列表（勾选） | 800 | windows | F6 | 现有 |
+| **Open ▸ Open Folder…** | 110 | open | F2 | A03; the `Open ▸` submenu is therefore placed at 110 |
+| Playback ▸ Playlist ▸ Add Files… | 230 | domain | | Existing |
+| Playback ▸ Playlist ▸ Add Link… | 231 | domain | | Existing |
+| **Playback ▸ Playlist ▸ Add Folder…** | 232 | domain | | C04 (the former 232–235 move down) |
+| Playback ▸ Playlist ▸ Loop ▸ Off / All / One | 233–235 | domain | | Existing, radio |
+| Playback ▸ Playlist ▸ Shuffle | 236 | domain | | Existing |
+| **Playback ▸ Playlist ▸ Open List File…** | 237 | list | | C18 |
+| **Playback ▸ Playlist ▸ Save List…** | 238 | list | | C18 |
+| **Playback ▸ Playlist ▸ When Opening a File ▸ Open Only That File / Add Similar Files / Add All Files in the Folder** | 239–241 | open-mode | | A13, radio, default "Add Similar Files" (IA-PL-01) |
+| **Playback ▸ Playlist ▸ Fast Advance to Next** | 242 | options | | B26, checkbox, off by default |
+| **Playback ▸ Playlist ▸ Remember List** | 243 | options | | C17, checkbox, on by default |
+| Playlist (checkbox) | 800 | windows | F6 | Existing |
 
-**列表焦点下的命令**（`focus: "panel"`，不进主菜单，出现在列表右键菜单 / ADD / SORT）：
+**Commands with list focus** (`focus: "panel"`, not in the main menu; they appear in the list context menu / ADD / SORT):
 
-| 命令 | 绑定 | 出现在 | 编号 |
+| Command | Binding | Appears in | ID |
 | --- | --- | --- | --- |
-| 播放 | Enter、P | 右键 | 现有 |
-| 添加文件… | **Ctrl+I**（现在无键） | 右键、ADD | C03 |
-| **添加文件夹…** | Ctrl+O | 右键、ADD | C04 |
-| 添加链接… | **Ctrl+U** | 右键、ADD | C03 |
-| 移除所选 | Delete、Backspace | 右键 | 现有 |
-| **移除未选** | Ctrl+Delete | 右键 | C07 |
-| **移除无效项** | Ctrl+T | 右键 | C07 |
-| 移除全部 | **Alt+Delete** | 右键 | 现有命令加键 |
-| **在 Finder 中显示** | Ctrl+F | 右键 | C23 |
-| 全选 | Ctrl+A | 右键 | 现有 |
-| **搜索** | Ctrl+S | 右键 | C21 |
-| **打开列表文件…** | F3 | 右键 | C18 |
-| **保存列表…** | F2 | 右键 | C18 |
-| **正序 / 反序**（radio） | Ctrl+1 / Ctrl+2 | SORT | C11 |
-| **按标题 / 文件名 / 扩展名 / 大小 / 时长 / 日期 / 乱序 / 文件夹** | Ctrl+3 … Ctrl+0 | SORT | C11 |
-| 按路径排序 | | SORT | 现有 |
-| 倒置当前顺序（原「倒序排列」改名） | | SORT | 现有 |
-| 关闭列表 | F6 | 右键 | 现有 |
-| 播放列表设置… | F5 | （不进菜单） | interaction-spec IA-PL-02：打开「选项 ▸ 播放 ▸ 播放列表」 |
+| Play | Enter, P | Context menu | Existing |
+| Add Files… | **Ctrl+I** (no key now) | Context menu, ADD | C03 |
+| **Add Folder…** | Ctrl+O | Context menu, ADD | C04 |
+| Add Link… | **Ctrl+U** | Context menu, ADD | C03 |
+| Remove Selected | Delete, Backspace | Context menu | Existing |
+| **Remove Unselected** | Ctrl+Delete | Context menu | C07 |
+| **Remove Invalid Items** | Ctrl+T | Context menu | C07 |
+| Remove All | **Alt+Delete** | Context menu | Existing command, key added |
+| **Show in Finder** | Ctrl+F | Context menu | C23 |
+| Select All | Ctrl+A | Context menu | Existing |
+| **Search** | Ctrl+S | Context menu | C21 |
+| **Open List File…** | F3 | Context menu | C18 |
+| **Save List…** | F2 | Context menu | C18 |
+| **Ascending / Descending** (radio) | Ctrl+1 / Ctrl+2 | SORT | C11 |
+| **By Title / File Name / Extension / Size / Duration / Date / Random Order / Folder** | Ctrl+3 … Ctrl+0 | SORT | C11 |
+| Sort by Path | | SORT | Existing |
+| Reverse Current Order (the former "Sort Reversed", renamed) | | SORT | Existing |
+| Close List | F6 | Context menu | Existing |
+| Playlist Settings… | F5 | (not in a menu) | interaction-spec IA-PL-02: opens "Options ▸ Playback ▸ Playlist" |
 
-**冲突与取舍**：
+**Conflicts and trade-offs**:
 
-1. 列表焦点下 `focus: "panel"` 先于全局查找，下列键在列表有焦点时改作列表命令：Ctrl+O（全局「打开文件」）、F3（全局「打开文件」）、F2（全局「打开文件夹」）、F5（全局「选项…」，改为打开播放列表设置页）。焦点离开列表后恢复全局含义。
-2. **移除未选只绑 Ctrl+Delete**（向前删除键），不绑 Ctrl+Backspace：后者等于 ⌘⌫，在 Finder 里是「移到废纸篓」，用户容易以为会删除磁盘文件。⌘⌫ 在列表里不绑定。
-3. 列表右键菜单是单层、最多 32 项（reference §6.3）。按上表右键菜单共 13 项命令 + 6 条分隔线 = 19 项，排序项放在 SORT 弹出菜单（12 项），都在限制内。
+1. With list focus, `focus: "panel"` is looked up before global, so the following keys act as list commands while the list has focus: Ctrl+O (global "Open File"), F3 (global "Open File"), F2 (global "Open Folder"), F5 (global "Options…", changed to open the playlist settings page). After focus leaves the list, the global meaning applies again.
+2. **Remove Unselected is bound only to Ctrl+Delete** (forward delete), not Ctrl+Backspace: the latter equals ⌘⌫, which is "Move to Trash" in Finder, and users could easily think it deletes files from disk. ⌘⌫ is not bound in the list.
+3. The list context menu is single-level with at most 32 items (reference §6.3). Following the table above, the context menu has 13 commands + 6 separators = 19 items, and the sort items are in the SORT popup menu (12 items); both are within the limit.
 
-列表右键菜单顺序：播放 | 添加文件…、添加文件夹…、添加链接… | 移除所选、移除未选、移除无效项、移除全部 | 在 Finder 中显示 | 全选、搜索 | 打开列表文件…、保存列表… | 关闭列表。ADD 弹出菜单：添加文件…、添加文件夹…、添加链接…。
+List context menu order: Play | Add Files…, Add Folder…, Add Link… | Remove Selected, Remove Unselected, Remove Invalid Items, Remove All | Show in Finder | Select All, Search | Open List File…, Save List… | Close List. ADD popup menu: Add Files…, Add Folder…, Add Link….
 
-### A03 打开文件夹
+### A03 Open folder
 
-**需求**：用户选一个文件夹，其中（含子文件夹）的媒体文件按自然顺序加入当前列表，并立即播放第一个加入的文件。
+**Requirement**: the user picks a folder; the media files in it (including subfolders) are added to the current list in natural order, and the first added file starts playing immediately.
 
-**入口**：右键菜单「打开 ▸ 打开文件夹…」，全局 F2。
+**Entry point**: context menu "Open ▸ Open Folder…", global F2.
 
-**行为细节**：
+**Behavior details**:
 
-1. 弹出 `dialogs.openDirectory({ title: "打开文件夹" })`；取消则什么都不做。
-2. 扫描：递归，最大深度 8 层，最多收集 5000 个媒体文件（超出部分丢弃，OSD 末尾加「，已达上限 5000」）。只收媒体扩展名，不收列表文件和字幕。排序为「按文件夹」（先比较父目录路径，再比较文件名，均自然排序），即子文件夹内容排在该文件夹自身文件之后、按子文件夹名排列。
-3. 默认先清空列表（不确认；正在打开别的来源时不清空），再加入；「打开或拖入时追加，不清空列表」打开时加入列表末尾，去重规则与「添加文件」相同（`realpath` 相同即重复）。
-4. 播放：播放第一个**新加入**的行；如果全部是重复项，播放文件夹中第一个文件对应的已有行。正在打开（`player.busy()`）时只加入不播放，OSD 说明。
-5. 扫描进行中命令显示忙碌（`busy`），再次触发被忽略。扫描在 Node 中异步进行，每读 200 个目录项让出一次事件循环；超过 1 秒未完成时 OSD：「正在扫描文件夹…」。插件停用时中止扫描。
-6. 第 3 条的清空已被 interaction-spec.md IA-PL-01 第 4 条改写：原「默认追加、可选 `clearOnOpenFolder`」作废，`clearOnOpenFolder` 合并进「打开或拖入时追加，不清空列表」（默认关），旧字段读入时忽略。
-7. 侧栏隐藏时照常加入并播放，不强制显示侧栏。
+1. Show `dialogs.openDirectory({ title: "Open Folder" })`; on cancel nothing happens.
+2. Scan: recursive, maximum depth 8 levels, collecting at most 5000 media files (the rest are dropped, and the OSD gets ", limit of 5000 reached" at the end). Only media extensions are collected, not list files or subtitles. The order is "by folder" (compare the parent directory path first, then the file name, both in natural order), so a subfolder's contents come after the folder's own files, ordered by subfolder name.
+3. By default the list is cleared first (no confirmation; not cleared while another source is being opened), then the files are added; when "Append when opening or dropping; don't clear the list" is on, they are added to the end of the list, with the same de-duplication rule as "Add Files" (same `realpath` means duplicate).
+4. Playback: play the first **newly added** row; if all are duplicates, play the existing row that matches the first file in the folder. While another open is in progress (`player.busy()`), files are only added, not played, and the OSD says so.
+5. While scanning, the command shows busy (`busy`) and further triggers are ignored. The scan runs asynchronously in Node and yields to the event loop every 200 directory entries; if it has not finished after 1 second, the OSD shows "Scanning folder…". When the plugin is disabled, the scan is aborted.
+6. The clearing in item 3 has been rewritten by item 4 of IA-PL-01 in interaction-spec.md: the former "append by default, optional `clearOnOpenFolder`" is void; `clearOnOpenFolder` is merged into "Append when opening or dropping; don't clear the list" (off by default), and the old field is ignored when read.
+7. When the sidebar is hidden, files are added and played as usual; the sidebar is not forced to show.
 
-OSD：
-- 成功：「已添加 N 项」（沿用现有文案，后接「，跳过 M 个重复」「，K 个子文件夹无法读取」）。
-- 无媒体：「文件夹中没有可播放的文件」。
-- 文件夹本身不可读：「无法读取文件夹：<原因>」。macOS 隐私保护拒绝时（`EPERM`）原因写「未获准访问此位置（系统设置 ▸ 隐私与安全性 ▸ 文件与文件夹）」。
+OSD:
+- Success: "Added N items" (the existing wording, followed by ", M duplicates skipped" and ", K subfolders could not be read").
+- No media: "No playable files in the folder".
+- The folder itself cannot be read: "Cannot read the folder: <reason>". When macOS privacy protection refuses (`EPERM`), the reason reads "Access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files and Folders)".
 
-**核心依赖**：现有 `dialogs.openDirectory`、`player.open`。新增无。
+**Core dependencies**: the existing `dialogs.openDirectory`, `player.open`. Nothing new.
 
-**验收**：
-- 选一个含 3 个视频、1 个 `.txt`、1 个子文件夹（2 个 mp3）的目录：列表增加 5 行，顺序为 3 个视频（自然序）后接 2 个 mp3，第一行开始播放。
-- 再选同一目录：列表被替换为同样 5 行，播放第一行；打开「追加」设置后再选：OSD「已添加 0 项，跳过 5 个重复」，播放第一个文件对应的行。
-- 空目录：OSD「文件夹中没有可播放的文件」，列表不变。
-- 扫描期间再按 F2：不弹第二个对话框。
-- 含符号链接环的目录：扫描结束，不重复加入。
+**Acceptance**:
+- Pick a directory with 3 videos, 1 `.txt` and 1 subfolder (2 mp3s): the list gains 5 rows, in the order 3 videos (natural order) followed by 2 mp3s, and the first row starts playing.
+- Pick the same directory again: the list is replaced by the same 5 rows and the first row plays; with the "append" setting on, pick it again: OSD "Added 0 items, 5 duplicates skipped", and the row matching the first file plays.
+- Empty directory: OSD "No playable files in the folder"; the list does not change.
+- Press F2 again during the scan: no second dialog appears.
+- A directory with a symbolic link loop: the scan ends, nothing is added twice.
 
-### A13 打开文件时加入同文件夹 / 相似文件
+### A13 Add same-folder / similar files when opening a file
 
-> 已被[交互规格](interaction-spec.md) IA-PL-01 改写（用户裁决）：默认「加入相似文件」；打开时先清空列表；「相似」「全部」的判定改用 IA-PL-01「同类文件规则」小节的规则。下文已按新规则改写。
+> Rewritten by IA-PL-01 in the [interaction spec](interaction-spec.md) (user ruling): the default is "Add Similar Files"; the list is cleared first on open; "similar" and "all" are decided by the rules in the "same-kind file rules" subsection of IA-PL-01. The text below has been rewritten to the new rules.
 
-**需求**：用户通过别的入口（底栏「打开文件」、最近播放、站点插件等）打开一个本地文件时，播放列表先清空，再把这个文件连同同文件夹的「相似文件」或「同组全部文件」加入，打开的文件成为当前行，之后可以下一个/自动推进。
+**Requirement**: when the user opens a local file through another entry point (the bottom bar's "Open File", recent playback, site plugins, etc.), the playlist is cleared first, then this file is added together with the "similar files" or "all files in the same group" from the same folder; the opened file becomes the current row, and next / automatic advance work afterwards.
 
-**入口**：「播放 ▸ 播放列表 ▸ 打开文件时 ▸」三选一（radio），也在设置页「选项 ▸ 播放 ▸ 播放列表」：
-- **仅打开该文件**：列表清空后只有这个文件，并接管它。
-- **加入相似文件**（默认）
-- **加入同文件夹全部文件**
+**Entry point**: "Playback ▸ Playlist ▸ When Opening a File ▸", one of three (radio); also on the settings page "Options ▸ Playback ▸ Playlist":
+- **Open Only That File**: after clearing, the list contains only this file, and the plugin adopts it.
+- **Add Similar Files** (default)
+- **Add All Files in the Folder**
 
-设置「打开或拖入时追加，不清空列表」（默认关；同一设置也管 A03「打开文件夹」与 A15 拖到视频区）打开时：不清空，追加去重（见第 4、6 条），「仅打开该文件」时列表不变、不接管（UI-PL-20）。
+When the setting "Append when opening or dropping; don't clear the list" (off by default; the same setting also covers A03 "Open Folder" and A15 drops on the video area) is on: the list is not cleared, files are appended with de-duplication (see items 4 and 6), and with "Open Only That File" the list does not change and the file is not adopted (UI-PL-20).
 
-**行为细节**：
+**Behavior details**:
 
-1. 触发条件：`player.onChange` 看到新的 `sourceId`，`kind === "media"`，`source` 是本地绝对路径（不含 `://`），且这个来源**不是本插件打开的**（本插件 `player.open` 返回的 `Media` 都记录在案）。URL、模拟器流不触发。
-2. 「相似文件」与「全部文件」的判定：按 interaction-spec.md IA-PL-01「同类文件规则」（`media.ts` `siblings` / `similarStep`）。要点：同文件夹、不递归；视频只配视频、音频只配音频；「相似」要求打开的文件名含空格、`-`、`_` 或 ASCII 数字，再过四步比较 S1–S4；「全部」只收同组文件；跳过以 `.` 开头的文件（macOS `._*`）。
-3. 不另设可调上限；匹配超过 5000 个时以打开的文件为中心截取 5000 个，OSD 末尾注明「已达上限 5000」。
-4. 加入方式：默认先清空列表（不确认），再按自然序加入，打开的文件本身也在其中，排在它前面的文件也加入。「追加」设置打开时改为追加到列表末尾，跳过已在列表中的文件（`realpath`）。
-5. **接管（adopt）**：打开的文件对应的行标为当前行（蓝色）。因为不是本插件打开的，没有 `Media` 句柄，接管期间：
-   - 当前行跟随规则：`player.state.sourceId` 等于接管时的 `sourceId` 即视为仍在播放该行；`sourceId` 变化即解除接管（与现有「已切换到列表外来源」相同，不提示）。
-   - 自然播完：`onChange` 看到同一 `sourceId` 的 `phase === "ended"` 且 `endReason === "natural"`，按现有推进规则（循环、随机）用 `player.open(next, { ifCurrent: endedState })` 推进；`stale` 表示别人已改了来源，放弃推进。
-   - 「单个循环」：`player.restart({ ifCurrent: endedState })`。
-   - `canNext`/`canPrevious` 以接管行为锚点计算，所以底栏上一个/下一个、PgUp/PgDn 立即可用。
-6. 「追加」设置打开、文件已在列表中：不加入新行，直接接管该行；此时模式为「仅打开该文件」则**不接管**（UI-PL-20）。清空模式下不复用旧行。插件启动（或重新启用）时正在播放的文件若已在恢复的列表中，只接管、不清空。
-7. 读取文件夹失败（权限等）：只加入这一个文件并接管（清空模式下列表只剩它），不提示。
-8. 一次打开只处理一次；同一 `sourceId` 的重播（`restart`）不重复处理。
-9. OSD：加入了打开的文件以外的新行时「已加入同文件夹 N 个文件」（N 不含打开的文件；追加模式下按新加入的行数）；没有时不提示。
-10. 与 A15、C18 的关系：拖放到视频区由 playlist 自己处理（A15）；拖入单个媒体文件时同样按本条的模式与同类文件规则扩展（IA-PL-01 差异第 9 条），按住 Option 时不扩展；本规则只对其它插件打开的来源生效。其它插件一次只打开一个来源，多选打开不扩展的规则因此自然满足。
+1. Trigger: `player.onChange` sees a new `sourceId`, `kind === "media"`, `source` is an absolute local path (no `://`), and this source was **not opened by this plugin** (every `Media` returned by this plugin's `player.open` is recorded). URLs and simulator streams do not trigger it.
+2. Deciding "similar files" and "all files": follow the "same-kind file rules" of IA-PL-01 in interaction-spec.md (`media.ts` `siblings` / `similarStep`). In short: same folder, not recursive; video only matches video, audio only matches audio; "similar" requires the opened file name to contain a space, `-`, `_` or an ASCII digit, then four comparison steps S1–S4; "all" only collects files of the same group; files starting with `.` are skipped (macOS `._*`).
+3. No separate adjustable limit; when more than 5000 files match, 5000 are taken centered on the opened file, and the OSD ends with "limit of 5000 reached".
+4. How files are added: by default the list is cleared first (no confirmation), then files are added in natural order, including the opened file itself and the files before it. With the "append" setting on, they are appended to the end of the list instead, skipping files already in the list (`realpath`).
+5. **Adopt**: the row of the opened file is marked as the current row (blue). Because it was not opened by this plugin, there is no `Media` handle; while adopted:
+   - Current row rule: as long as `player.state.sourceId` equals the `sourceId` at adoption, the row counts as still playing; when `sourceId` changes, the adoption ends (the same as the existing "switched to a source outside the list", with no message).
+   - Natural end: when `onChange` sees `phase === "ended"` and `endReason === "natural"` for the same `sourceId`, advance by the existing advance rules (loop, shuffle) with `player.open(next, { ifCurrent: endedState })`; `stale` means someone else has changed the source, and advancing is abandoned.
+   - "Loop one": `player.restart({ ifCurrent: endedState })`.
+   - `canNext`/`canPrevious` are computed with the adopted row as the anchor, so the bottom bar's previous / next and PgUp/PgDn work immediately.
+6. "Append" setting on and the file already in the list: no new row is added, and that row is adopted directly; if the mode is "Open Only That File", it is **not adopted** (UI-PL-20). In clear mode, old rows are not reused. When the plugin starts (or is re-enabled) and the file playing is already in the restored list, it is only adopted, without clearing.
+7. Reading the folder fails (permissions, etc.): only this one file is added and adopted (in clear mode the list contains only it), with no message.
+8. Each open is handled only once; a replay (`restart`) of the same `sourceId` is not handled again.
+9. OSD: when new rows besides the opened file were added, "Added N files from the same folder" (N does not include the opened file; in append mode it is the number of newly added rows); otherwise no message.
+10. Relation to A15 and C18: drops on the video area are handled by playlist itself (A15); dropping a single media file is expanded with the same mode and same-kind file rules as this item (difference item 9 of IA-PL-01), and not expanded when Option is held; this rule only applies to sources opened by other plugins. Other plugins open only one source at a time, so the rule "multi-select opens are not expanded" is met automatically.
 
-**持久化**：模式存在 `settings.openMode`（`"only" | "similar" | "folder"`，见 C17）。`settings.version` 低于 2 的旧文件在读入时一次性把 `openMode` 与 `appendOnOpen` 迁移为新默认（相似文件、不追加），其余设置保留；之后保存为版本 2，用户再改的值照常保存。
+**Persistence**: the mode is stored in `settings.openMode` (`"only" | "similar" | "folder"`, see C17). An old file with `settings.version` below 2 has `openMode` and `appendOnOpen` migrated once to the new defaults (similar files, no append) when read; the other settings are kept. It is then saved as version 2, and values the user changes later are saved as usual.
 
-**核心依赖**：现有 `player.onChange`、`player.state`（`sourceId`、`source`、`phase`、`endReason`）、`player.open({ ifCurrent })`、`player.restart`、`provideSequence`。新增无：接管只依赖公开状态，不需要别的插件的 `Media`。
+**Core dependencies**: the existing `player.onChange`, `player.state` (`sourceId`, `source`, `phase`, `endReason`), `player.open({ ifCurrent })`, `player.restart`, `provideSequence`. Nothing new: adoption only relies on public state and does not need another plugin's `Media`.
 
-**验收**：
-- 列表有 3 项，默认模式，文件夹有 `A01.mkv A02.mkv A03.mkv B.mkv song.mp3`；用底栏「打开文件」打开 `A02.mkv`：列表变为 `A01 A02 A03`，`A02` 为蓝色当前行；播完自动播放 `A03`。
-- 模式「加入同文件夹全部文件」，同上：列表为 `A01 A02 A03 B` 4 行（不收音频）。
-- 模式「仅打开该文件」：列表只剩打开的文件，为当前行。
-- 打开「追加」设置、模式「仅打开该文件」：列表不变，按 PgDn 不推进（`canNext` 为假，除非列表本身有当前行）。
-- IA-PL-01 的 17 组同类文件用例（`tests/similar.test.ts`）。
-- 接管 `A02` 后在外部再打开另一个 URL：`A02` 不再是当前行，不提示。
-- 打开 URL：列表不变。
+**Acceptance**:
+- The list has 3 items, default mode, the folder has `A01.mkv A02.mkv A03.mkv B.mkv song.mp3`; open `A02.mkv` with the bottom bar's "Open File": the list becomes `A01 A02 A03`, `A02` is the blue current row; after it ends, `A03` plays automatically.
+- Mode "Add All Files in the Folder", same as above: the list has 4 rows `A01 A02 A03 B` (audio not included).
+- Mode "Open Only That File": the list contains only the opened file, as the current row.
+- "Append" setting on, mode "Open Only That File": the list does not change, and PgDn does not advance (`canNext` is false unless the list itself has a current row).
+- The 17 same-kind file cases of IA-PL-01 (`tests/similar.test.ts`).
+- After adopting `A02`, open another URL from outside: `A02` is no longer the current row, with no message.
+- Open a URL: the list does not change.
 
-**说明**：跳过以 `.` 开头的文件；扩展名按整个扩展名匹配附录 B.5 的集合；排序用 `Intl.Collator("zh", { numeric: true })`（自然排序）；超过 5000 个匹配时截取。
+**Notes**: files starting with `.` are skipped; extensions are matched as whole extensions against the set in Appendix B.5; sorting uses `Intl.Collator("zh", { numeric: true })` (natural order); more than 5000 matches are truncated.
 
-### A15 拖放文件到窗口打开
+### A15 Drag files onto the window to open
 
-> 第 3b 轮按裁决 R-U2 改写：`kinds` → `extensions`；没有 `onDragOver`，不画插入线，插到落点所在行之前；同一扩展名先登记的生效；无处理者时核心什么也不做。
+> Rewritten in round 3b by ruling R-U2: `kinds` → `extensions`; there is no `onDragOver` and no insertion line is drawn; items are inserted before the row under the drop point; for the same extension, the first registration wins; with no handler, the core does nothing.
 >
-> 行为第 1 条已被 [交互规格](interaction-spec.md) G-11 取代（拖到视频区先清空列表再加入并播放）；行为第 2 条、验收第 4 条已被 G-12 取代（拖到列表默认追加到末尾，「插入到拖放位置」为选项、默认关）。下文已按新规则改写。
+> Behavior item 1 has been superseded by G-11 in the [interaction spec](interaction-spec.md) (dropping on the video area clears the list first, then adds and plays); behavior item 2 and acceptance item 4 have been superseded by G-12 (dropping on the list appends to the end by default; "insert at the drop position" is an option, off by default). The text below has been rewritten to the new rules.
 
-**需求**：从文件管理器（macOS 访达 Finder、Windows 资源管理器）把文件、文件夹或列表文件拖到 Vestra Player 主窗口（视频区）或播放列表侧栏（附着或浮动）上即可打开或加入。
+**Requirement**: dragging files, folders or list files from the file manager (Finder on macOS, File Explorer on Windows) onto the Vestra Player main window (video area) or the playlist sidebar (attached or floating) opens or adds them.
 
-**入口**：拖放。无菜单、无快捷键。
+**Entry point**: drag and drop. No menu, no shortcut.
 
-**行为细节**：
+**Behavior details**:
 
-1. **拖到视频区**（核心按扩展名分组后交给登记者；playlist 用 `drops.provide` 登记媒体扩展名（附录 B.5）、列表文件 `m3u m3u8 pls dpl`、`webloc` 和保留名 `"folder"`）：
-   - 文件夹按 A03 的规则展开（递归、上限 5000；macOS 包如 `.app` 不展开、跳过）；列表文件按 C18 解析成条目；媒体文件直接收。拖入多项时按文件管理器给出的顺序，各自展开后拼接。
-   - 只拖入**一个**本地媒体文件时，按 A13 的「打开文件时」模式扩展（见 interaction-spec.md IA-PL-01）：「相似」加入同文件夹的相似文件，「全部」加入同组全部文件，「仅打开该文件」不扩展；播放的是拖入的那个文件。拖入多个文件、文件夹或列表文件时不扩展。
-   - 有至少一项可加入时，**先清空列表**（不弹「移除全部前确认」），再按拖入顺序加入，**播放第一个条目**（G-11）。设置「打开或拖入时追加，不清空列表」（播放列表设置页，默认关）打开时：加入列表末尾（去重），播放第一个新条目。
-   - 按住 Option（Windows 为 Alt；`modifiers.alt`）松手：只追加到末尾，不清空、不播放（OSD：「已添加 N 项」）。
-2. **拖到播放列表**（`Panel.onDrop`，整组路径交给 playlist，不按扩展名分）：
-   - 不播放、不清空，只加入。默认**追加到末尾**（G-12）。设置「拖到列表时插入到拖放位置」（默认关）打开时：插到松手处所在行**之前**；落在空白处（最后一行之下）、页签条或底部按钮栏上仍追加到末尾。没有拖动中的插入线（核心不提供拖动过程中的位置）。
-   - 落点是面板坐标（只在「插入到拖放位置」打开时使用）；playlist 用侧栏回传的滚动位置与列表区高度（`list-area` 回调）换算到行。搜索筛选时按显示的行换算，插在该行在完整列表中的位置之前。
-   - 整组中 playlist 不收的文件（字幕等）跳过，OSD 末尾注明「跳过 N 个不支持的项目」。
-3. 字幕文件（`srt ass ssa vtt …`）、图片、其它类型 playlist 不登记；核心把它们交给登记了对应扩展名的插件（例如字幕插件），没有处理者时核心什么也不做（不提示）。playlist 不处理字幕，不调用字幕插件。
-4. 拖入的条目全部重复（只在追加时可能）：视频区拖放时播放第一个对应的已有行；OSD「已添加 0 项，跳过 N 个重复」。
-5. 网页链接：核心只报告文件路径，不报告浏览器拖来的 URL；Safari/Chrome 拖出的 `.webloc` 文件读取其 plist（XML 或二进制 `bplist00`，二进制由插件用纯 JS 解析，不调用系统工具）中的 `URL` 字段作为链接行（只接受 HTTP(S)，其它跳过）。
-6. 播放器正在打开另一个来源（`busy`）时，视频区拖放不清空、只追加，OSD 说明「…；正在打开，已加入列表」。
-7. 侧栏因空间不足被隐藏（`reason: "space"`）时，拖到视频区仍然有效。
-8. 拖入的内容一项都不能加入（全不支持、文件夹无法读取）：列表不变，OSD「没有可加入的项目：…」。多次拖放按到达顺序依次处理。
+1. **Drop on the video area** (the core groups by extension and hands each group to its registrant; playlist registers the media extensions (Appendix B.5), the list files `m3u m3u8 pls dpl`, `webloc` and the reserved name `"folder"` with `drops.provide`):
+   - Folders are expanded by the A03 rules (recursive, limit 5000; macOS bundles such as `.app` are not expanded and are skipped); list files are parsed into entries by C18; media files are taken directly. When several items are dropped, they are taken in the order the file manager gives, each expanded and then concatenated.
+   - When only **one** local media file is dropped, it is expanded by the A13 "When Opening a File" mode (see IA-PL-01 in interaction-spec.md): "similar" adds the similar files of the same folder, "all" adds all files of the same group, "Open Only That File" does not expand; the dropped file is the one played. Several files, folders or list files are not expanded.
+   - When at least one item can be added, **the list is cleared first** (without the "Confirm Before Removing All" prompt), then items are added in drop order and **the first entry plays** (G-11). When the setting "Append when opening or dropping; don't clear the list" (playlist settings page, off by default) is on: they are added to the end of the list (de-duplicated), and the first new entry plays.
+   - Released with Option held (Alt on Windows; `modifiers.alt`): only appended to the end, without clearing or playing (OSD: "Added N items").
+2. **Drop on the playlist** (`Panel.onDrop`; the whole group of paths goes to playlist, not split by extension):
+   - No playback, no clearing; items are only added. By default they are **appended to the end** (G-12). When the setting "Insert at the drop position when dropping on the list" (off by default) is on: they are inserted **before** the row under the release point; dropping on empty space (below the last row), the tab strip or the bottom button bar still appends to the end. There is no insertion line while dragging (the core does not provide positions during the drag).
+   - The drop point is in panel coordinates (used only when "insert at the drop position" is on); playlist converts it to a row with the scroll position and list area height reported back by the sidebar (the `list-area` callback). While a search filter is active, the conversion uses the displayed rows, and items are inserted before that row's position in the full list.
+   - Files in the group that playlist does not accept (subtitles, etc.) are skipped, and the OSD ends with "N unsupported items skipped".
+3. Subtitle files (`srt ass ssa vtt …`), images and other types are not registered by playlist; the core hands them to the plugin that registered the matching extension (for example the subtitles plugin), and does nothing when there is no handler (no message). playlist does not handle subtitles and does not call the subtitles plugin.
+4. All dropped entries are duplicates (only possible when appending): a drop on the video area plays the existing row matching the first one; OSD "Added 0 items, N duplicates skipped".
+5. Web links: the core only reports file paths, not URLs dragged from a browser; for `.webloc` files dragged out of Safari/Chrome, the `URL` field of their plist (XML or binary `bplist00`; binary is parsed by the plugin in pure JS without calling system tools) is used as a link row (only HTTP(S) is accepted; anything else is skipped).
+6. While the player is opening another source (`busy`), a drop on the video area does not clear and only appends; the OSD says "…; opening, added to the list".
+7. When the sidebar is hidden for lack of space (`reason: "space"`), dropping on the video area still works.
+8. None of the dropped content can be added (all unsupported, folder unreadable): the list does not change; OSD "Nothing to add: …". Several drops are handled one after another in arrival order.
 
-**界面**：`ui/sidebar.slint` 增加 `callback list-area(float, float)`（滚动距离、列表区高度，逻辑点），在列表区初始化、改变高度和滚动时回传。不画拖放插入线。
+**Interface**: `ui/sidebar.slint` gains `callback list-area(float, float)` (scroll distance and list area height, in logical points), reported when the list area is initialized, changes height, and scrolls. No drop insertion line is drawn.
 
-**核心依赖**：窗口拖放（第 3b 轮批次 2，能力 `ui.drop`，参考文档 §6.7）。插件做不到的原因：系统拖放只送到宿主的原生窗口；Slint 插件组件收不到系统拖放；而视频区不属于任何插件，必须由宿主按落点和扩展名分发。
+**Core dependencies**: window drag and drop (round 3b batch 2, capability `ui.drop`, reference §6.7). Why the plugin cannot do it: system drag and drop only reaches the host's native window; plugin Slint components do not receive system drops; and the video area belongs to no plugin, so the host has to dispatch by drop point and extension.
 
 ```ts
 interface DropModifiers { alt: boolean; shift: boolean; cmd: boolean }
-drops.provide(handler: { extensions: string[] /* 小写、不带点；"folder" = 文件夹 */; drop(e: { paths: string[]; modifiers: DropModifiers }): unknown }): Disposable;
-Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number } /* 面板坐标 */; modifiers: DropModifiers }) => unknown): Disposable;
+drops.provide(handler: { extensions: string[] /* lower case, no dot; "folder" = folders */; drop(e: { paths: string[]; modifiers: DropModifiers }): unknown }): Disposable;
+Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number } /* panel coordinates */; modifiers: DropModifiers }) => unknown): Disposable;
 ```
 
-宿主规则：视频区松手时按扩展名把 `paths` 分组（保留文件管理器给出的顺序），每组一次调用交给对应提供者；同一扩展名多个提供者时先登记的生效；无人认领的文件核心什么也不做。面板上松手时整组交给该面板的 `onDrop`；没有监听时按视频区规则处理。拖放期间不暂停、不改变播放。
+Host rules: on release over the video area, `paths` are grouped by extension (keeping the order the file manager gives), and each group goes to the matching provider in one call; when several providers register the same extension, the first registration wins; files nobody claims are ignored by the core. On release over a panel, the whole group goes to that panel's `onDrop`; with no listener, the video area rules apply. Drag and drop does not pause or change playback.
 
-**验收**：
-- 列表有 5 项，拖 1 个 mkv 到视频区：列表只剩这 1 项并播放；打开「打开或拖入时追加」后再拖：追加为第 6 项并播放。
-- 拖 1 个文件夹到视频区：按 A03 规则展开并播放第一项。
-- 文件夹有 `A01 A02 A03 B`，拖 `A02.mkv` 到视频区：列表为 `A01 A02 A03`，播放 `A02`；同时拖 `B` 与 `A02`：列表只有这 2 项。
-- 按住 Option（Windows 为 Alt）拖 3 个文件到视频区：加入 3 行，不播放。
-- 拖 2 个文件到列表第 4 行上：追加到末尾，不播放；打开「拖到列表时插入到拖放位置」后再拖到第 4 行上：两行插在原第 4 行之前；落在空白处时追加到末尾。
-- 拖 `.m3u8` 到视频区：列表被替换为解析出的条目并播放第一项。
-- 拖 `.srt` 到视频区、且没有插件登记 srt：列表不变、无提示。
-- 侧栏浮动时拖到浮动窗口：与附着时相同；侧栏因空间隐藏时拖到视频区仍有效。
+**Acceptance**:
+- The list has 5 items; drop 1 mkv on the video area: the list contains only this item and it plays; with "Append when opening or dropping" on, drop again: it is appended as item 6 and plays.
+- Drop 1 folder on the video area: it is expanded by the A03 rules and the first item plays.
+- The folder has `A01 A02 A03 B`; drop `A02.mkv` on the video area: the list is `A01 A02 A03` and `A02` plays; drop `B` and `A02` together: the list has only these 2 items.
+- Drop 3 files on the video area with Option held (Alt on Windows): 3 rows are added, nothing plays.
+- Drop 2 files on row 4 of the list: appended to the end, nothing plays; with "Insert at the drop position when dropping on the list" on, drop on row 4 again: the two rows are inserted before the former row 4; dropping on empty space appends to the end.
+- Drop a `.m3u8` on the video area: the list is replaced by the parsed entries and the first item plays.
+- Drop a `.srt` on the video area with no plugin registered for srt: the list does not change, no message.
+- With the sidebar floating, drop on the floating window: the same as when attached; with the sidebar hidden for lack of space, dropping on the video area still works.
 
-**说明**：拖入时不弹出「播放 / 加入」选择浮层，用 Option（Windows 为 Alt）键区分；拖入文件不再排序，保持文件管理器给出的顺序。
+**Notes**: no "play / add" choice popup appears on drop; the Option key (Alt on Windows) makes the distinction; dropped files are not sorted again and keep the order the file manager gives.
 
-### B26 快速推进到下一个
+### B26 Fast advance to the next item
 
-> 第 2 轮降级（裁决 R-P5）：原「无缝播放（预读下一个）」需要 `player.preload`，被拒绝。实测（协商记录 R-P5）在现有宿主上，自然结束 → 打开下一项的切换，同格式约 5–115 ms，采样率变化约 60–165 ms；宿主已改为来源阶段变化立即推送，去掉了其中 0–100 ms 的周期等待。本条改为把插件这一侧的推进路径缩到最短，不承诺无间隙：连续波形上 5–10 ms 的断开也能听到一声咔嗒，现场专辑、古典乐的「真正无缝」这次放弃。以后要再提，需带录音波形证据。
+> Downgraded in round 2 (ruling R-P5): the original "gapless playback (preload the next item)" needed `player.preload`, which was rejected. Measurements (negotiation record R-P5) on the current host: the switch from natural end → opening the next item takes about 5–115 ms for the same format and about 60–165 ms when the sample rate changes; the host now pushes source phase changes immediately, removing the 0–100 ms periodic wait from that. This item is changed to make the plugin's side of the advance path as short as possible, without promising no gap: even a 5–10 ms break in a continuous waveform is audible as a click, and "true gapless" for live albums and classical music is given up this time. Raising it again later needs evidence from recorded waveforms.
 
-**需求**：开启后，列表自然推进到下一项时尽快开始播放（专辑连续曲目、分段视频），同格式文件之间的切换 < 150 ms。
+**Requirement**: when enabled, a natural advance of the list to the next item starts playing as soon as possible (consecutive album tracks, segmented videos); the switch between files of the same format is < 150 ms.
 
-**入口**：「播放 ▸ 播放列表 ▸ 快速推进到下一个」勾选，默认关。
+**Entry point**: "Playback ▸ Playlist ▸ Fast Advance to Next" checkbox, off by default.
 
-**行为细节**：
+**Behavior details**:
 
-1. 开启时，当前行由本插件打开（或按 A13 接管）后，playlist 立即计算「自然播完后的下一项」（同推进规则：循环/随机/顺序），并对本地文件提前做 `realpath` 与 `fs.stat`，记为计划下一项。
-2. 随机模式下下一项预先抽定，只要它仍可选（未在本轮播过、仍在列表中），推进时就用它，不再重新抽取。
-3. 「下一项」发生变化时（重排、移除、切换循环/随机、编辑列表），在下一次界面刷新时重新计算并重新 `stat`；未变化时不重复读盘。
-4. 推进：`media.onEnd` 回调里，计划下一项仍是推进目标且文件检查已完成时，直接调用一次 `player.open(next, { ifCurrent: ended })`，不再读盘（`realpath` 结果与重复检查用提前算好的）。计划未就绪或已过期时按普通推进（先 `realpath` 再 `open`）。
-5. 提前检查发现文件已不存在：推进时不打开它，屏幕提示「无法打开 <标题>：文件不存在」，该行标为失败（警示图标），推进到再下一项（普通推进）。检查之后才被删除的文件按普通打开失败处理。
-6. 「单个循环」、列表末尾且「不循环」时没有计划下一项；推进规则不变（重播 / 「列表已播完」）。链接行没有文件检查，推进时同样只做一次 `open`。
-7. 用户手动「下一个」、双击别的行：按普通打开；新行开始后重新计算计划下一项。
-8. 关闭开关：立即丢弃计划，之后按普通推进。
-9. 计划不改变当前播放、不改变 `player.state`，只读一次文件元数据。
+1. When enabled, after the current row is opened by this plugin (or adopted by A13), playlist immediately computes "the next item after a natural end" (by the same advance rules: loop / shuffle / in order), runs `realpath` and `fs.stat` in advance for local files, and records it as the planned next item.
+2. In shuffle mode the next item is drawn in advance; as long as it is still eligible (not played in this pass, still in the list), it is used when advancing, without drawing again.
+3. When the "next item" changes (reorder, remove, switching loop / shuffle, editing the list), it is recomputed and `stat`ed again at the next interface refresh; when it has not changed, the disk is not read again.
+4. Advance: in the `media.onEnd` callback, if the planned next item is still the advance target and its file check is complete, `player.open(next, { ifCurrent: ended })` is called once directly, without reading the disk again (the precomputed `realpath` result and duplicate check are used). If the plan is not ready or has expired, the ordinary advance is used (`realpath` first, then `open`).
+5. The advance check finds the file no longer exists: it is not opened on advance; on-screen message "Cannot open <title>: the file does not exist"; the row is marked as failed (warning icon), and the advance goes to the item after it (ordinary advance). A file deleted after the check is handled as an ordinary open failure.
+6. With "Loop one", or at the end of the list with "Loop off", there is no planned next item; the advance rules do not change (replay / "End of the list"). Link rows have no file check, and advancing to them is also a single `open`.
+7. The user's manual "Next" or a double click on another row: an ordinary open; after the new row starts, the planned next item is recomputed.
+8. Turning the toggle off: the plan is discarded immediately, and ordinary advances are used afterwards.
+9. The plan does not change the current playback or `player.state`; it only reads the file metadata once.
 
-**持久化**：`settings.gapless`（布尔，见 C17；键名沿用原条目）。
+**Persistence**: `settings.gapless` (boolean, see C17; the key name is kept from the original item).
 
-**核心依赖**：无。受益于第 2 轮宿主行为「来源阶段变化立即推送」（`ready → ended` 不再等 100 ms 周期）。
+**Core dependencies**: none. Benefits from the round 2 host behavior "push source phase changes immediately" (`ready → ended` no longer waits for the 100 ms cycle).
 
-**验收**：
-- 开启后播放两段同格式（同采样率）的测试音频（如两段 44.1 kHz flac）：自然结束到下一项开始的切换 < 150 ms。测量：以 `VESTRA_PLAYLIST_TIMING=1` 启动宿主，stderr 每次自动推进打印「结束→open 被接受」「结束→新来源 ready」毫秒数，取「结束→ready」；或用屏幕录制 / 录音对比上一首最后一帧与下一首第一帧。
-- 关闭时同一测试作对照（多一次 `realpath`，差异在毫秒级）。
-- 播放中把下一行移到别处：推进到新的下一行。
-- 下一项文件在当前项开始前已删除：推进时跳过并屏幕提示，该行显示警示图标。
-- 播放中在外部打开 URL：不推进，不报错（`ifCurrent` 过期）。
+**Acceptance**:
+- Enabled, play two test audio files of the same format (same sample rate) (e.g. two 44.1 kHz flac files): the switch from natural end to the start of the next item is < 150 ms. Measurement: start the host with `VESTRA_PLAYLIST_TIMING=1`; for each automatic advance stderr prints the milliseconds for "end → open accepted" and "end → new source ready"; take "end → ready". Or compare the last frame of the previous track with the first frame of the next in a screen or audio recording.
+- The same test with the toggle off as a control (one more `realpath`; the difference is in milliseconds).
+- Move the next row elsewhere during playback: the advance goes to the new next row.
+- The next item's file is deleted before the current item starts: it is skipped on advance with an on-screen message, and the row shows a warning icon.
+- Open a URL from outside during playback: no advance, no error (`ifCurrent` expired).
 
-**说明**：没有预读与无缝切换（R-P5），只缩短推进路径；不做「合并多个文件播放」和「同时读取数」。
+**Notes**: there is no preloading and no gapless switching (R-P5), only a shorter advance path; "merge several files into one playback" and "number of simultaneous reads" are not done.
 
-### C04 添加文件夹
+### C04 Add folder
 
-**需求**：把一个文件夹（含子文件夹）中的媒体文件加入当前列表，不播放。
+**Requirement**: add the media files in a folder (including subfolders) to the current list without playing.
 
-**入口**：「播放 ▸ 播放列表 ▸ 添加文件夹…」；列表 ADD 弹出菜单、右键菜单；列表焦点 Ctrl+O。
+**Entry point**: "Playback ▸ Playlist ▸ Add Folder…"; the list's ADD popup menu and context menu; Ctrl+O with list focus.
 
-**行为细节**：扫描规则、上限、去重、OSD、忙碌状态与 A03 完全相同（共用同一个扫描函数）。区别：不播放；列表原本为空时选中第一个加入的行（与「添加文件」一致）。对话框标题「添加文件夹到播放列表」。扫描进行中「添加文件夹…」和「打开文件夹…」都显示忙碌。
+**Behavior details**: scan rules, limit, de-duplication, OSD and busy state are exactly the same as A03 (one shared scan function). Differences: nothing plays; when the list was empty, the first added row is selected (consistent with "Add Files"). Dialog title "Add Folder to Playlist". While scanning, both "Add Folder…" and "Open Folder…" show busy.
 
-**核心依赖**：现有 `dialogs.openDirectory`。
+**Core dependencies**: the existing `dialogs.openDirectory`.
 
-**验收**：在列表焦点下按 Ctrl+O 选目录，行加入末尾、不播放；与 A03 同样的去重与上限行为。
+**Acceptance**: with list focus, press Ctrl+O and pick a directory: rows are added at the end, nothing plays; the same de-duplication and limit behavior as A03.
 
-### C07 移除未选 / 移除无效项
+### C07 Remove unselected / remove invalid items
 
-**需求**：一键保留所选、删掉其余行；一键删掉文件已不存在的行。只改列表，不动磁盘。
+**Requirement**: with one command, keep the selection and delete the other rows; with one command, delete the rows whose files no longer exist. Only the list changes; nothing on disk is touched.
 
-**入口**：列表右键菜单「移除未选」（Ctrl+Delete）、「移除无效项」（Ctrl+T）。
+**Entry point**: list context menu "Remove Unselected" (Ctrl+Delete), "Remove Invalid Items" (Ctrl+T).
 
-**行为细节**：
+**Behavior details**:
 
-1. 移除未选：删除列表中所有未选中的行。没有选中项、或全部选中时禁用（原因「当前没有可操作项」）。当前播放的行被删除时与「移除所选」一致：媒体继续播放，解除绑定，OSD「当前媒体已移出列表」。进行中的 ffprobe 中止。OSD：「已移除 N 项」。
-2. 移除无效项：对列表中所有本地文件行并发 8 个 `fs.stat`；不存在（`ENOENT`/`ENOTDIR`）或不是普通文件的行删除；权限错误（`EACCES`/`EPERM`）**不**删除（文件仍在，可能稍后可读）。链接行不检查、不删除。检查期间命令忙碌。OSD：「已移除 N 个无效项」/「没有无效项」。
-3. 搜索过滤生效时（C21）两者只作用于可见行：「移除未选」删除可见但未选的行，隐藏行不动。
+1. Remove unselected: delete all rows in the list that are not selected. Disabled when nothing is selected or everything is selected (reason "Nothing to act on"). When the row currently playing is deleted, the behavior is the same as "Remove Selected": the media keeps playing, the binding is released, OSD "The current media was removed from the list". Running ffprobe jobs are aborted. OSD: "Removed N items".
+2. Remove invalid items: run `fs.stat` on all local file rows in the list, 8 at a time; rows that do not exist (`ENOENT`/`ENOTDIR`) or are not regular files are deleted; permission errors (`EACCES`/`EPERM`) are **not** deleted (the file is still there and may become readable later). Link rows are not checked or deleted. The command is busy during the check. OSD: "Removed N invalid items" / "No invalid items".
+3. While a search filter is active (C21), both only act on visible rows: "Remove Unselected" deletes visible rows that are not selected, and hidden rows are left alone.
 
-**核心依赖**：无。
+**Core dependencies**: none.
 
-**验收**：5 行选 2 行后 Ctrl+Delete，剩 2 行；把某文件在文件管理器中删掉后 Ctrl+T，该行消失，链接行保留；没有无效项时 OSD「没有无效项」。
+**Acceptance**: select 2 of 5 rows and press Ctrl+Delete: 2 rows remain; delete a file in the file manager and press Ctrl+T: its row disappears and link rows stay; with no invalid items, OSD "No invalid items".
 
-### C11 更多排序方式
+### C11 More sort orders
 
-**现状**：SORT 弹出菜单只有按名称、按路径、倒序排列。
+**Current state**: the SORT popup menu only has sort by name, sort by path and sort reversed.
 
-**需求**：补齐常用排序键与升降序。
+**Requirement**: add the common sort keys and ascending / descending order.
 
-**入口**：底栏 SORT 弹出菜单；列表焦点 Ctrl+1 … Ctrl+0（见菜单表）。
+**Entry point**: the bottom bar's SORT popup menu; Ctrl+1 … Ctrl+0 with list focus (see the menu table).
 
-**行为细节**：
+**Behavior details**:
 
-| 键 | 比较 | 无值时 |
+| Key | Comparison | When there is no value |
 | --- | --- | --- |
-| 按标题（Ctrl+3） | 显示标题（列表文件给出的标题，没有时为文件名），自然序 | — |
-| 按文件名（Ctrl+4） | 路径的 basename；链接取 URL 最后一段（解码后） | — |
-| 按扩展名（Ctrl+5） | 扩展名，相同再按文件名 | 无扩展名排最前 |
-| 按大小（Ctrl+6） | `stat.size` | 链接、不可读排最后 |
-| 按时长（Ctrl+7） | 已知时长（播放器报告优先，否则 ffprobe） | 未知排最后 |
-| 按日期（Ctrl+8） | 文件修改时间 `mtimeMs` | 链接、不可读排最后 |
-| 乱序（Ctrl+9） | Fisher–Yates 洗牌，不受升降序影响 | — |
-| 按文件夹（Ctrl+0） | 父目录路径，再按文件名 | 链接排最后 |
-| 按路径 | 完整路径/URL（现有） | — |
+| By Title (Ctrl+3) | Displayed title (the title given by the list file, otherwise the file name), natural order | — |
+| By File Name (Ctrl+4) | The basename of the path; for links, the last segment of the URL (decoded) | — |
+| By Extension (Ctrl+5) | Extension, then file name when equal | No extension sorts first |
+| By Size (Ctrl+6) | `stat.size` | Links and unreadable files sort last |
+| By Duration (Ctrl+7) | Known duration (the player's report first, otherwise ffprobe) | Unknown sorts last |
+| By Date (Ctrl+8) | File modification time `mtimeMs` | Links and unreadable files sort last |
+| Random Order (Ctrl+9) | Fisher–Yates shuffle, not affected by ascending / descending | — |
+| By Folder (Ctrl+0) | Parent directory path, then file name | Links sort last |
+| By Path | Full path / URL (existing) | — |
 
-1. 正序（Ctrl+1）/反序（Ctrl+2）是 radio 状态，默认正序。选择方向会立即按「上次的排序键」重新排序；从未排序过时按标题。选排序键时按当前方向排序。「无值时」的行在反序时仍排在最后。
-2. 稳定排序：比较相等时保持原有相对顺序。
-3. 原「倒序排列」改名「倒置当前顺序」，保留原行为（直接反转，不依赖排序键）。
-4. 需要 `stat` 的键（大小、日期）：异步并发 8 个读取，读取期间 SORT 菜单项忙碌；结果在本次排序后丢弃（不缓存，文件可能变化）。
-5. 排序作用于列表的全部行（即使搜索过滤生效），不改变选中、当前行；B26 开启时按新顺序重新准备下一项。
-6. 列表少于 2 行时禁用（现有规则）。
+1. Ascending (Ctrl+1) / Descending (Ctrl+2) is a radio state, ascending by default. Choosing a direction immediately re-sorts by "the last sort key"; if the list has never been sorted, by title. Choosing a sort key sorts in the current direction. Rows "with no value" still sort last in descending order.
+2. Stable sort: equal items keep their original relative order.
+3. The former "Sort Reversed" is renamed "Reverse Current Order" and keeps its behavior (reverse directly, independent of any sort key).
+4. Keys that need `stat` (size, date): read asynchronously, 8 at a time; the SORT menu items are busy while reading; the results are discarded after this sort (not cached, files may change).
+5. Sorting applies to all rows of the list (even with a search filter active) and does not change the selection or the current row; with B26 on, the next item is prepared again in the new order.
+6. Disabled when the list has fewer than 2 rows (existing rule).
 
-**持久化**：上次排序键与方向（`list.sort`，见 C17）。
+**Persistence**: the last sort key and direction (`list.sort`, see C17).
 
-**核心依赖**：无。
+**Core dependencies**: none.
 
-**验收**：构造大小、日期、时长、扩展名各不相同的 5 个文件，逐个执行排序键并与预期顺序比对；Ctrl+2 后顺序完全反转（无值项仍在最后）；乱序两次结果不同（概率断言用固定随机种子注入测试）。
+**Acceptance**: build 5 files that differ in size, date, duration and extension, run each sort key in turn and compare with the expected order; after Ctrl+2 the order is fully reversed (items with no value still last); two random orders give different results (the probability assertion injects a fixed random seed in tests).
 
-### C17 重启后恢复列表
+### C17 Restore the list after restart
 
-**需求**：退出再启动后，列表中的行（顺序、标题）、选中行、循环/随机及本章所有设置都恢复；不自动播放。
+**Requirement**: after quitting and starting again, the rows of the list (order, titles), the selected rows, loop / shuffle and all settings of this chapter are restored; nothing plays automatically.
 
-**入口**：「播放 ▸ 播放列表 ▸ 记住列表」勾选，默认开。
+**Entry point**: "Playback ▸ Playlist ▸ Remember List" checkbox, on by default.
 
-**行为细节**：
+**Behavior details**:
 
-1. 保存时机：列表或设置变化后 1 秒合并写一次；插件停用时（`onDispose`）同步写一次。写法按 reference §3.4：写临时文件再 `rename`。
-2. 保存内容（`playlists.json`）：
+1. When to save: after the list or settings change, writes are merged into one write after 1 second; when the plugin is disabled (`onDispose`), one synchronous write. Write method per reference §3.4: write a temporary file, then `rename`.
+2. What is saved (`playlists.json`):
    ```json
    { "version": 1,
      "settings": { "version": 2, "remember": true, "repeat": "none", "shuffle": false, "openMode": "similar",
@@ -916,1667 +916,1667 @@ Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number } /* �
                "cursor": 3, "selected": [3],
                "rows": [ { "kind": "file", "source": "/Users/…/a.mkv", "title": null, "duration": 1432.5 } ] } }
    ```
-   `title` 为 `null` 表示使用文件名，非空时来自列表文件（C18 的 `#EXTINF` / `TitleN`）；`duration` 为上次已知时长（恢复后立即显示，ffprobe 结果到来再更新）。
-3. 不保存：当前播放行的绑定、播放过（灰色）标记、失败状态、搜索词。
-4. 恢复：启动时读取；文件缺失或解析失败时用默认（空列表），并把坏文件改名为 `playlists.json.bad-<时间戳>` 保留一份。恢复的行不检查文件是否存在（大列表启动不读盘），不存在的文件在播放时按现有失败路径处理，或用 C07 清理。恢复后对本地行重新排队 ffprobe（有缓存时立即命中）。
-5. 关闭「记住列表」：立即删除 `playlists.json` 中的列表（只保留 `settings`），之后只保存设置。OSD：「不再记住列表」/「将记住列表」。
-6. 容量：列表最多 20 000 行；超过时拒绝继续加入，OSD「列表已达上限 20000 项」。
-7. 恢复时不打开任何媒体，不改变播放器状态；如果启动时播放器已有来源（例如命令行打开），按 A13 的模式处理。
+   `title` `null` means the file name is used; a non-empty value comes from a list file (`#EXTINF` / `TitleN` in C18); `duration` is the last known duration (shown immediately after restore and updated when the ffprobe result arrives).
+3. Not saved: the binding of the row currently playing, the played (grey) marks, failure states, the search text.
+4. Restore: read at startup; when the file is missing or fails to parse, the default (empty list) is used, and the bad file is renamed to `playlists.json.bad-<timestamp>` to keep a copy. Restored rows are not checked for existence (a large list does not read the disk at startup); missing files are handled by the existing failure path when played, or cleaned up with C07. After restore, local rows are queued for ffprobe again (cache hits are immediate).
+5. Turning "Remember List" off: the list in `playlists.json` is deleted immediately (only `settings` is kept), and only settings are saved afterwards. OSD: "The list will no longer be remembered" / "The list will be remembered".
+6. Capacity: at most 20 000 rows; beyond that, further additions are refused with the OSD "The list is full at 20000 items".
+7. Restoring does not open any media and does not change the player state; if the player already has a source at startup (for example opened from the command line), it is handled by the A13 mode.
 
-**持久化**：`<plugin.dataDirectory>/playlists.json`；ffprobe 时长缓存 `probe-cache.json`（realpath + mtime → 秒，最多 20 000 条，LRU）。
+**Persistence**: `<plugin.dataDirectory>/playlists.json`; ffprobe duration cache `probe-cache.json` (realpath + mtime → seconds, at most 20 000 entries, LRU).
 
-**核心依赖**：现有 `plugin.dataDirectory`。
+**Core dependencies**: the existing `plugin.dataDirectory`.
 
-**验收**：
-- 列表加入若干行（其中一部分来自带标题的 m3u8）、设循环「全部」，退出重启：行、标题、顺序全部恢复，未自动播放。
-- 关闭「记住列表」后重启：列表为空，循环设置仍为「全部」。
-- 手工写坏 `playlists.json`：启动得到空列表，目录中出现 `.bad-` 备份。
-- 测试：`startPlugin` 传同一 `dataDirectory` 两次验证恢复。
+**Acceptance**:
+- Add some rows to the list (some from an m3u8 with titles), set loop to "All", quit and restart: rows, titles and order are all restored, and nothing plays automatically.
+- Turn "Remember List" off and restart: the list is empty, and the loop setting is still "All".
+- Corrupt `playlists.json` by hand: startup gives an empty list, and a `.bad-` backup appears in the directory.
+- Test: pass the same `dataDirectory` to `startPlugin` twice to verify the restore.
 
-### C18 打开 / 保存 M3U、M3U8、PLS 列表
+### C18 Open / save M3U, M3U8, PLS lists
 
-**需求**：把 `.m3u` `.m3u8` `.pls` 列表文件读进播放列表；把当前列表保存为这三种格式之一。
+**Requirement**: read `.m3u` `.m3u8` `.pls` list files into the playlist; save the current list in one of these three formats.
 
-**入口**：「播放 ▸ 播放列表 ▸ 打开列表文件… / 保存列表…」；列表右键菜单；列表焦点 F3 / F2；拖放（A15）。
+**Entry point**: "Playback ▸ Playlist ▸ Open List File… / Save List…"; the list context menu; F3 / F2 with list focus; drag and drop (A15).
 
-**行为细节（打开）**：
+**Behavior details (open)**:
 
-1. `dialogs.openFile({ title: "打开播放列表文件" })`。系统对话框没有类型过滤，插件按扩展名判断；不是 `m3u m3u8 pls dpl` 时 OSD「不支持的列表格式」。
-2. 结果**替换**当前列表内容：正在播放的媒体继续播放，解除与列表行的绑定（同「移除全部」）。不自动播放（拖到视频区时按 A15 / G-11 替换列表并播放第一项；拖到列表上时按 A15 / G-12 追加或插入，不替换）。列表原本非空时先弹确认「用 <列表文件名> 替换当前列表？」[替换] [取消]。
-3. 解析：
-   - **M3U/M3U8**：逐行；`#EXTM3U` 可有可无；`#EXTINF:<秒>,<标题>` 作为下一条的标题和时长（秒 ≤ 0 视为未知）；其它 `#` 行忽略；空行忽略。条目可以是绝对路径、相对路径（相对列表文件所在目录）、`file://` URL（解码为路径）、`http(s)://` URL。其它协议（`rtsp://`、`ftp://` 等）作为链接行原样加入（播放交给 mpv；添加链接对话框只接受 HTTP(S) 的限制不适用于列表文件）。
-   - 编码：`.m3u8` 按 UTF-8；`.m3u` 先按 UTF-8 严格解码，失败则按 GB18030（`TextDecoder("gb18030")`），再失败按 Latin-1。去掉 UTF-8 BOM。
-   - **PLS**：INI 格式 `[playlist]`，`FileN`、`TitleN`、`LengthN`（-1 = 未知），按 N 升序；`NumberOfEntries` 只作校验。
-   - **DPL**（只读）：首行是 DPL 文件标识头，其后 `N*file*<路径>`、`N*title*<标题>`、`N*duration2*<毫秒>`。
-4. 去重：同一列表内 `realpath` 相同的本地文件只保留第一次；链接按 URL 原文去重。不存在的本地文件**保留**（行显示待重试，悬停提示「文件不存在」），以便列表在别的机器上做了路径迁移后用户自行处理。
-5. 上限：单个列表 20 000 条；文件大小上限 16 MB。OSD：「已打开列表：<名称>（N 项）」；跳过项另计「，跳过 M 项」。
+1. `dialogs.openFile({ title: "Open Playlist File" })`. The system dialog has no type filter, so the plugin decides by extension; when it is not `m3u m3u8 pls dpl`, OSD "Unsupported list format".
+2. The result **replaces** the current list contents: the media playing keeps playing, and its binding to the list row is released (as with "Remove All"). Nothing plays automatically (a drop on the video area replaces the list and plays the first item per A15 / G-11; a drop on the list appends or inserts per A15 / G-12, without replacing). When the list is not empty, a confirmation comes first: "Replace the current list with <list file name>?" [Replace] [Cancel].
+3. Parsing:
+   - **M3U/M3U8**: line by line; `#EXTM3U` is optional; `#EXTINF:<seconds>,<title>` gives the title and duration of the next entry (seconds ≤ 0 means unknown); other `#` lines are ignored; empty lines are ignored. Entries can be absolute paths, relative paths (relative to the list file's directory), `file://` URLs (decoded to paths), or `http(s)://` URLs. Other protocols (`rtsp://`, `ftp://`, etc.) are added as link rows as they are (playback goes to mpv; the Add Link dialog's restriction to HTTP(S) does not apply to list files).
+   - Encoding: `.m3u8` is read as UTF-8; `.m3u` is first decoded strictly as UTF-8, then as GB18030 on failure (`TextDecoder("gb18030")`), then as Latin-1. The UTF-8 BOM is removed.
+   - **PLS**: INI format `[playlist]`, `FileN`, `TitleN`, `LengthN` (-1 = unknown), in ascending N; `NumberOfEntries` is only used for validation.
+   - **DPL** (read only): the first line is the DPL file identification header, followed by `N*file*<path>`, `N*title*<title>`, `N*duration2*<milliseconds>`.
+4. De-duplication: within one list, local files with the same `realpath` are kept only once; links are de-duplicated by their literal URL. Local files that do not exist are **kept** (the row shows as pending retry, with the hover hint "File not found"), so that users can deal with path migrations themselves when a list was made on another machine.
+5. Limits: 20 000 entries per list; file size limit 16 MB. OSD: "Opened list: <name> (N items)"; skipped items are counted separately as ", M skipped".
 
-**行为细节（保存）**：
+**Behavior details (save)**:
 
-1. 列表为空时禁用。`dialogs.saveFile({ title: "保存播放列表", fileName: "<上次打开的列表文件名，没有时为「播放列表」>.m3u8" })`。
-2. 按用户输入的扩展名选格式：`.m3u8`（UTF-8）、`.m3u`（UTF-8，带 BOM 以便 Windows 播放器识别）、`.pls`；其它扩展名或无扩展名时追加 `.m3u8`。
-3. M3U 写法：首行 `#EXTM3U`，每条 `#EXTINF:<整数秒或 -1>,<显示标题>` + 路径。PLS：`[playlist]`、`FileN/TitleN/LengthN`、`NumberOfEntries`、`Version=2`。
-4. 路径：媒体位于列表文件所在目录或其子目录下时写相对路径，否则写绝对路径；链接写原文。
-5. 写临时文件再改名；目标已存在时系统对话框已确认覆盖，直接覆盖。OSD「已保存列表：<文件名>」；失败「无法保存列表：<原因>」。
+1. Disabled when the list is empty. `dialogs.saveFile({ title: "Save Playlist", fileName: "<name of the last opened list file, otherwise "Playlist">.m3u8" })`.
+2. The format is chosen by the extension the user enters: `.m3u8` (UTF-8), `.m3u` (UTF-8 with BOM so that Windows players recognize it), `.pls`; any other extension or none gets `.m3u8` appended.
+3. M3U format: first line `#EXTM3U`, each entry `#EXTINF:<whole seconds or -1>,<displayed title>` + path. PLS: `[playlist]`, `FileN/TitleN/LengthN`, `NumberOfEntries`, `Version=2`.
+4. Paths: media in the list file's directory or a subdirectory of it are written as relative paths, otherwise as absolute paths; links are written as they are.
+5. Write a temporary file, then rename; when the target exists, the system dialog has already confirmed the overwrite, so it is overwritten directly. OSD "Saved list: <file name>"; on failure "Cannot save the list: <reason>".
 
-**核心依赖**：现有 `dialogs.openFile`、`dialogs.saveFile`。
+**Core dependencies**: the existing `dialogs.openFile`, `dialogs.saveFile`.
 
-**验收**：
-- 用 VLC/foobar 导出的 m3u8（含相对路径、`#EXTINF` 标题）打开：标题与顺序一致。
-- GBK 编码的 m3u 中文路径正确解析。
-- 保存为 `.pls` 再打开：条目、标题、时长一致。
-- 保存时输入 `list`（无扩展名）：生成 `list.m3u8`。
-- 往返测试：保存 → 打开 → 再保存，两次文件内容相同。
+**Acceptance**:
+- Open an m3u8 exported by VLC/foobar (with relative paths and `#EXTINF` titles): titles and order match.
+- Chinese paths in a GBK-encoded m3u are parsed correctly.
+- Save as `.pls` and open again: entries, titles and durations match.
+- Enter `list` (no extension) when saving: `list.m3u8` is created.
+- Round-trip test: save → open → save again; the two files have the same content.
 
-**说明**：ASX 不做；DPL 只读不写。
+**Notes**: ASX is not done; DPL is read only, not written.
 
-### C21 搜索列表
+### C21 Search the list
 
-**需求**：在列表底部输入关键词，实时过滤列表，只显示标题或文件名匹配的行。
+**Requirement**: type keywords at the bottom of the list to filter it live, showing only the rows whose title or file name matches.
 
-**入口**：底栏搜索框；列表右键菜单「搜索」或列表焦点 Ctrl+S（聚焦搜索框并全选已有文字）。
+**Entry point**: the bottom bar search box; the list context menu "Search" or Ctrl+S with list focus (focuses the search box and selects the existing text).
 
-**行为细节**：
+**Behavior details**:
 
-1. 搜索框位于底部按钮栏 SORT 之后、总时长之前（UI-PL-09 规格：高约 24px、`#282828` 底），占剩余宽度，最小 60px；侧栏窄到不够时总时长先隐藏。占位文字「搜索」。
-2. 匹配：输入按空白拆成多个词，全部词都出现在「显示标题 + 文件名 + 链接 URL」中才算匹配；不区分大小写与全/半角（NFKC 归一化）。输入后 150 ms 去抖。
-3. 过滤期间：序号仍显示原序号；拖动排序与置顶/上下移/置底禁用（原因「搜索时不能调整顺序」）；Ctrl+A、移除未选只作用于可见行；过滤变化时隐藏行自动取消选中。总时长显示可见行合计并前缀「筛选 」。
-4. 搜索框内：Enter 播放第一个匹配行（有选中则播放光标行）；↓ 把焦点移回列表并选中第一个匹配行；Esc 清空并把焦点交回列表。没有匹配时列表区显示居中灰字「无匹配项」。
-5. 搜索框获得焦点时 `panel.setInteraction({ focused: true })`，防止底栏自动隐藏；输入框内的字母不触发 P、Q 等列表键（reference §4.1 焦点控件吃掉按键）。
+1. The search box sits in the bottom button bar after SORT and before the total duration (UI-PL-09 spec: about 24px high, `#282828` background), takes the remaining width, minimum 60px; when the sidebar is too narrow, the total duration hides first. Placeholder text "Search".
+2. Matching: the input is split on whitespace into words; a row matches only when all words appear in "displayed title + file name + link URL"; case-insensitive and full-width/half-width-insensitive (NFKC normalization). 150 ms debounce after input.
+3. While filtering: the row numbers still show the original numbers; drag to reorder and move to top / up / down / bottom are disabled (reason "The order cannot change while searching"); Ctrl+A and Remove Unselected only act on visible rows; when the filter changes, hidden rows are deselected automatically. The total duration shows the sum of the visible rows, prefixed with "Filtered ".
+4. In the search box: Enter plays the first matching row (the cursor row if something is selected); ↓ moves focus back to the list and selects the first matching row; Esc clears the box and gives focus back to the list. With no match, the list area shows a centered grey "No matches".
+5. When the search box has focus, `panel.setInteraction({ focused: true })` is called so the bottom bar does not auto-hide; letters typed in the input box do not trigger list keys such as P and Q (reference §4.1: a focused control takes the keys).
 
-**核心依赖**：无（插件 Slint 界面）。
+**Core dependencies**: none (plugin Slint interface).
 
-**验收**：100 行中输入「s01 1080」只剩同时含两个词的行；Esc 恢复全部；过滤时 Ctrl+A 再 Delete 只删可见行；搜索框里输入「p」不开始播放。
+**Acceptance**: in 100 rows, typing "s01 1080" leaves only the rows that contain both words; Esc restores all; while filtering, Ctrl+A then Delete only deletes visible rows; typing "p" in the search box does not start playback.
 
-**说明**：搜索框的外观见[界面规格](ui-spec.md) §5.2 底栏（高约 24，#282828）。
+**Notes**: for the look of the search box, see the bottom bar in [UI spec](ui-spec.md) §5.2 (about 24 high, #282828).
 
-### C23 在 Finder 中显示
+### C23 Show in Finder
 
-**需求**：在系统的文件管理器（macOS 访达 Finder、Windows 资源管理器）中打开所选文件所在的文件夹并选中该文件。菜单标题沿用「在 Finder 中显示」（各系统相同）。
+**Requirement**: open the folder of the selected file in the system file manager (Finder on macOS, File Explorer on Windows) and select the file. The menu title stays "Show in Finder" (the same on every system).
 
-**入口**：列表右键菜单「在 Finder 中显示」，列表焦点 Ctrl+F。
+**Entry point**: list context menu "Show in Finder", Ctrl+F with list focus.
 
-**行为细节**：
+**Behavior details**:
 
-1. 对所选本地文件行（最多 20 个）调用 `plugin.system.reveal(paths)`（第 2 轮通用能力，接受路径数组），同一文件夹的文件一次调用、全部高亮，不同文件夹分次调用。由播放器执行（参考文档 §16.5）：macOS 一个访达窗口选中全部；Windows 每个文件夹一个资源管理器窗口；其它系统 `unsupported`。
-2. 文件已不存在：显示其所在文件夹（`plugin.system.openPath(dir)`）；文件夹也不存在时 OSD「找不到文件：<名称>」。
-3. 选中只有链接行时禁用（原因「链接没有本地位置」）。选中超过 20 个时只处理前 20 个，OSD「只显示前 20 个文件」。
+1. Call `plugin.system.reveal(paths)` (round 2 general capability, takes an array of paths) for the selected local file rows (at most 20); files in the same folder go in one call and are all highlighted, different folders in separate calls. Run by the player (reference §16.5): on macOS one Finder window selects all of them; on Windows one File Explorer window per folder; on other systems `unsupported`.
+2. File no longer exists: show its folder (`plugin.system.openPath(dir)`); if the folder does not exist either, OSD "File not found: <name>".
+3. Disabled when only link rows are selected (reason "Links have no local location"). With more than 20 selected, only the first 20 are handled, OSD "Only the first 20 files are shown".
 
-**核心依赖**：`plugin.system.reveal`、`plugin.system.openPath`（第 2 轮通用能力）。
+**Core dependencies**: `plugin.system.reveal`, `plugin.system.openPath` (round 2 general capabilities).
 
-**验收**：选一个文件按 Ctrl+F，文件管理器（macOS 访达、Windows 资源管理器）打开其目录并高亮该文件；对已删除文件的行执行，文件管理器打开其目录。
+**Acceptance**: select a file and press Ctrl+F: the file manager (Finder on macOS, File Explorer on Windows) opens its directory and highlights the file; run it on the row of a deleted file: the file manager opens its directory.
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-| 接口（TS 草案） | 理由 |
+| Interface (TS draft) | Reason |
 | --- | --- |
-| `plugin.drops.provide({ extensions: string[]; drop(e): unknown }): Disposable`（能力 `ui.drop`；`"folder"` 匹配文件夹） | 系统拖放只到宿主原生窗口，视频区不属于任何插件，必须由宿主按扩展名分发（A15） |
-| `Panel.onDrop(listener: (e: { paths; at /* 面板坐标 */; modifiers }) => unknown): Disposable` | 拖到面板上需要落点坐标以插入到指定位置；Slint 插件组件收不到系统拖放（A15） |
-| `interface DropEvent { paths: string[]; at: { x; y }; modifiers: { alt; shift; cmd } }` | 上面两项的事件数据（`at` 只在 `Panel.onDrop`；裁决 R-U2 去掉了 `onDragOver`） |
-| ~~`player.preload(source: string, options: { after: Media; signal?: AbortSignal }): Preload`~~ | 裁决 R-P5 拒绝（实测同格式切换低于 150 ms 门槛）；B26 降级为「快速推进到下一个」，不需要核心新增 |
+| `plugin.drops.provide({ extensions: string[]; drop(e): unknown }): Disposable` (capability `ui.drop`; `"folder"` matches folders) | System drag and drop only reaches the host's native window, and the video area belongs to no plugin, so the host has to dispatch by extension (A15) |
+| `Panel.onDrop(listener: (e: { paths; at /* panel coordinates */; modifiers }) => unknown): Disposable` | Drops on a panel need the drop point to insert at a given position; plugin Slint components do not receive system drops (A15) |
+| `interface DropEvent { paths: string[]; at: { x; y }; modifiers: { alt; shift; cmd } }` | Event data for the two items above (`at` only in `Panel.onDrop`; ruling R-U2 removed `onDragOver`) |
+| ~~`player.preload(source: string, options: { after: Media; signal?: AbortSignal }): Preload`~~ | Rejected by ruling R-P5 (measured same-format switches are below the 150 ms threshold); B26 is downgraded to "fast advance to the next item" and needs no new core API |
 
 ---
 
-## 字幕（`subtitles`）
+## Subtitles (`subtitles`)
 
-**位置**：`src/plugins/subtitles/`（现有插件）
+**Location**: `src/plugins/subtitles/` (existing plugin)
 
-### 定位
+### Scope
 
-字幕插件负责字幕领域里「用户手边」的全部操作：选轨、显示、样式、同步、字幕文件读取与格式转换。本轮增加：次字幕、重载、按对白跳转、依次切换、同步数值输入与同步快捷键调整、样式快捷键与新样式字段（粗体、阴影、背景框、ASS 原样式），以及外部 ASS/SSA/VTT/SMI/MicroDVD 载入。
+The subtitles plugin owns every "at hand" operation in the subtitle domain: track selection, display, style, sync, subtitle file reading and format conversion. This round adds: secondary subtitles, reload, jumping by subtitle line, cycling tracks, numeric sync input and sync shortcut changes, style shortcuts and new style fields (bold, shadow, background box, original ASS styles), and loading external ASS/SSA/VTT/SMI/MicroDVD files.
 
-边界：
-- 字幕的**渲染**（libass、样式属性、次字幕、渲染尺寸）属于核心。插件只通过 `plugin.subtitles` 读写状态。
-- 字幕**文件**的解析、编码转换都在插件内用 Node 完成，不进核心。核心只多接收几种格式的字节。
-- 读取**内嵌**字幕的逐句内容需要核心（宿主已有内嵌字幕提取，`native_subtitle.rs`）。
-- 「按对白跳转」用现有 `player.seek`，不调用 playback 的命令。
-- 在线字幕搜索是另一个插件（`subtitle-online`），两者不通信：那个插件自己载入字幕轨，本插件从 `subtitles.onChange` 看到新轨，当作普通轨处理（`owned: false`，不能移除）。
+Boundaries:
+- Subtitle **rendering** (libass, style properties, secondary subtitles, render size) belongs to the core. The plugin only reads and writes state through `plugin.subtitles`.
+- Parsing and encoding conversion of subtitle **files** are done in the plugin with Node, not in the core. The core only accepts the bytes of a few more formats.
+- Reading the line-by-line content of **embedded** subtitles needs the core (the host already has embedded subtitle extraction, `native_subtitle.rs`).
+- "Jump by subtitle line" uses the existing `player.seek` and does not call playback's commands.
+- Online subtitle search is another plugin (`subtitle-online`), and the two do not communicate: that plugin loads its subtitle track itself, and this plugin sees the new track through `subtitles.onChange` and treats it as an ordinary track (`owned: false`, cannot be removed).
 
-manifest 需新增能力 `playback.read`（读位置、帧率、片源路径）和 `playback.control`（`seek`）。
+The manifest needs the new capabilities `playback.read` (read position, frame rate, source path) and `playback.control` (`seek`).
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| A08 | 次字幕（双字幕同时显示） | ✗ | 是：`subtitles.select` 的 `role`、`state.secondary`、`load` 的 `select: "secondary"`（裁决 R-T3：第 3a 轮） |
-| A09 | 重载字幕（重新读取文件） | ◐ | 否（本插件载入的轨由插件重新上传） |
-| B11 | 上一句 / 下一句对白、当前字幕起点 | ✗ | 否（裁决 R-T5 拒绝 `subtitles.cues`：插件自己解析，内嵌轨用 `tools.run("ffmpeg")` 与 `SubtitleTrack.streamIndex`） |
-| D02 | 依次切换字幕轨 | ✗ | 否 |
-| D05 | 手动输入同步值 | ◐ | `offsetMs` 范围放宽到 ±600 000（R-T8，第 2 轮已提供） |
-| D06 | 字号快捷键 | ◐ | 否 |
-| D07 | 字幕位置快捷键 | ◐ | 否 |
-| D09 | 粗体 | ✗ | 是：样式字段 `bold` |
-| D11 | 阴影、背景框 | ✗ | 是：样式字段 `shadow`、`box`（一个数字字段 = 不透明度，`null` 无框；R-T7） |
-| D17 | 外部 ASS 字幕（保留特效） | ◐ | 是：`load` 的 `format`；样式字段 `assOverride` |
-| D18 | ASS/VTT 等外部格式 | ✗ | 是：`load` 的 `format: "srt" \| "ass"`、`title`；`SubtitleTrack.codec/text`（VTT 在插件内转 SRT，R-T4） |
+| A08 | Secondary subtitles (two subtitles shown at once) | ✗ | Yes: `role` in `subtitles.select`, `state.secondary`, `select: "secondary"` in `load` (ruling R-T3: round 3a) |
+| A09 | Reload subtitles (read the file again) | ◐ | No (tracks loaded by this plugin are uploaded again by the plugin) |
+| B11 | Previous / next subtitle line, current subtitle start | ✗ | No (ruling R-T5 rejected `subtitles.cues`: the plugin parses itself; embedded tracks use `tools.run("ffmpeg")` and `SubtitleTrack.streamIndex`) |
+| D02 | Cycle subtitle tracks | ✗ | No |
+| D05 | Enter a sync value manually | ◐ | `offsetMs` range widened to ±600 000 (R-T8, provided in round 2) |
+| D06 | Font size shortcuts | ◐ | No |
+| D07 | Subtitle position shortcuts | ◐ | No |
+| D09 | Bold | ✗ | Yes: style field `bold` |
+| D11 | Shadow, background box | ✗ | Yes: style fields `shadow`, `box` (one number field = opacity, `null` for no box; R-T7) |
+| D17 | External ASS subtitles (keep effects) | ◐ | Yes: `format` in `load`; style field `assOverride` |
+| D18 | External formats such as ASS/VTT | ✗ | Yes: `format: "srt" \| "ass"` and `title` in `load`; `SubtitleTrack.codec/text` (VTT is converted to SRT in the plugin, R-T4) |
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-顶层「字幕 ▸」使用 300–399（`doc/product/menus.md`）。现有项重新编号；`subtitle-online` 占 360–369。
+The top-level "Subtitles ▸" uses 300–399 (`doc/product/menus.md`). Existing items are renumbered; `subtitle-online` takes 360–369.
 
-| 菜单路径 | order | 分组 | 默认快捷键 | 编号 |
+| Menu path | order | Group | Default shortcut | ID |
 | --- | --- | --- | --- | --- |
-| 打开 ▸ 打开字幕… | 113 | open | Alt+O（现有） | D17/D18 扩展格式 |
-| 打开 ▸ 添加次字幕… | 114 | open | — | A08 |
-| 播放 ▸ 跳转 ▸ 上一句对白 | 217 | jump-subtitle | Home | B11 |
-| 播放 ▸ 跳转 ▸ 下一句对白 | 217 | jump-subtitle | End | B11 |
-| 播放 ▸ 跳转 ▸ 当前字幕起点 | 217 | jump-subtitle | Ctrl+Home | B11 |
-| 字幕 ▸ 显示字幕（勾选） | 301 | domain | Alt+H（现有） | |
-| 字幕 ▸ 选择字幕轨 ▸ 不显示 / 各轨（单选，最多 8） | 302–310 | subtitle-track | — | 现有 |
-| 字幕 ▸ 选择字幕轨 ▸ 依次切换 | 311 | subtitle-cycle | Alt+L | D02 |
-| 字幕 ▸ 次字幕 ▸ 不显示 / 各轨（单选，最多 8） | 312–320 | subtitle-second | — | A08 |
-| 字幕 ▸ 次字幕 ▸ 位置 ▸ 顶部 / 主字幕上方（单选） | 321 | subtitle-second-pos | — | A08 |
-| 字幕 ▸ 字幕样式 ▸ 粗体（勾选） | 324 | style-font | Alt+B | D09 |
-| 字幕 ▸ 字幕样式 ▸ 字号 + / 字号 − | 325 / 326 | style-font | Alt+PageUp / Alt+PageDown | D06 |
-| 字幕 ▸ 字幕样式 ▸ 上移 / 下移 | 330–331 | style-move | Alt+↑ / Alt+↓ | D07 |
-| 字幕 ▸ 字幕样式 ▸ 复位位置 | 334 | style-move | Alt+Home | D07 |
-| 字幕 ▸ 字幕样式 ▸ 阴影（勾选） | 335 | style-box | — | D11 |
-| 字幕 ▸ 字幕样式 ▸ 字幕边框不透明（勾选） | 336 | style-box | — | D11 |
-| 字幕 ▸ 开启 ASS/SSA 原样式（勾选） | 337 | subtitle-render | — | D17 |
-| 字幕 ▸ 同步 ▸ 超前 / 滞后 / 复位 | 339–341 | subtitle-sync | `.` `,` `/`（现为 `>` `<` `/`，`>` `<` 让给音频同步，见冲突检查） | |
-| 字幕 ▸ 同步 ▸ 手动调整同步… | 342 | subtitle-sync-input | — | D05 |
-| （360–369 由 `subtitle-online` 使用） | | | | |
-| 字幕 ▸ 重载字幕 | 370 | subtitle-tools | Ctrl+Alt+Y | A09 |
-| 字幕 ▸ 刷新字幕轨 | 371 | subtitle-tools | —（现有） | |
-| 字幕 ▸ 字幕微调… | 372 | subtitle-tools | —（现有） | |
-| 字幕 ▸ 字幕设置… | 373 | subtitle-tools | Alt+F | D10 现有窗口，补快捷键 |
+| Open ▸ Open Subtitle… | 113 | open | Alt+O (existing) | D17/D18 extend the formats |
+| Open ▸ Add Secondary Subtitle… | 114 | open | — | A08 |
+| Playback ▸ Seek ▸ Previous Dialogue | 217 | jump-subtitle | Home | B11 |
+| Playback ▸ Seek ▸ Next Dialogue | 217 | jump-subtitle | End | B11 |
+| Playback ▸ Seek ▸ Current Subtitle Start | 217 | jump-subtitle | Ctrl+Home | B11 |
+| Subtitles ▸ Show Subtitles (checkbox) | 301 | domain | Alt+H (existing) | |
+| Subtitles ▸ Subtitle Track ▸ Off / each track (radio, at most 8) | 302–310 | subtitle-track | — | Existing |
+| Subtitles ▸ Subtitle Track ▸ Cycle | 311 | subtitle-cycle | Alt+L | D02 |
+| Subtitles ▸ Secondary Subtitle ▸ Off / each track (radio, at most 8) | 312–320 | subtitle-second | — | A08 |
+| Subtitles ▸ Secondary Subtitle ▸ Position ▸ Top / Above Main Subtitle (radio) | 321 | subtitle-second-pos | — | A08 |
+| Subtitles ▸ Subtitle Style ▸ Bold (checkbox) | 324 | style-font | Alt+B | D09 |
+| Subtitles ▸ Subtitle Style ▸ Size + / Size − | 325 / 326 | style-font | Alt+PageUp / Alt+PageDown | D06 |
+| Subtitles ▸ Subtitle Style ▸ Move Up / Move Down | 330–331 | style-move | Alt+↑ / Alt+↓ | D07 |
+| Subtitles ▸ Subtitle Style ▸ Reset Position | 334 | style-move | Alt+Home | D07 |
+| Subtitles ▸ Subtitle Style ▸ Shadow (checkbox) | 335 | style-box | — | D11 |
+| Subtitles ▸ Subtitle Style ▸ Opaque Box (checkbox) | 336 | style-box | — | D11 |
+| Subtitles ▸ Original ASS/SSA Styles (checkbox) | 337 | subtitle-render | — | D17 |
+| Subtitles ▸ Sync ▸ Earlier / Later / Reset | 339–341 | subtitle-sync | `.` `,` `/` (now `>` `<` `/`; `>` `<` go to audio sync, see the conflict check) | |
+| Subtitles ▸ Sync ▸ Adjust Sync… | 342 | subtitle-sync-input | — | D05 |
+| (360–369 used by `subtitle-online`) | | | | |
+| Subtitles ▸ Reload Subtitles | 370 | subtitle-tools | Ctrl+Alt+Y | A09 |
+| Subtitles ▸ Refresh Subtitle Tracks | 371 | subtitle-tools | — (existing) | |
+| Subtitles ▸ Subtitle Tuning… | 372 | subtitle-tools | — (existing) | |
+| Subtitles ▸ Subtitle Settings… | 373 | subtitle-tools | Alt+F | D10 existing window, shortcut added |
 
-冲突检查（对照 menus.md 当前绑定）：
-- Home / End / Ctrl+Home 全局未占用。播放列表面板获得焦点时的 Ctrl+Home/End（移动所选）是 `focus: "panel"`，优先于全局，不冲突；用户需先把焦点放回视频区。
-- Alt+F 未占用。Alt+P（手动输入字幕）不在本轮范围，不占。
-- **字幕同步改键**：美式键盘上 Shift+. = `>`、Shift+, = `<`、Shift+/ = `?`。声音同步用 `>` `<` `?`（audio 章 G09），因此字幕同步改用 `.` 超前、`,` 滞后、`/` 复位，`>` `<` 让给音频。`.` `,` 目前没有其它绑定。核心对旧的用户覆盖绑定不做迁移（目前没有改绑界面）。
+Conflict check (against the current bindings in menus.md):
+- Home / End / Ctrl+Home are not used globally. Ctrl+Home/End with the playlist panel focused (move the selection) are `focus: "panel"`, which take priority over global, so there is no conflict; the user has to put focus back on the video area first.
+- Alt+F is not used. Alt+P (enter subtitles manually) is out of scope this round and is not taken.
+- **Subtitle sync keys changed**: on a US keyboard Shift+. = `>`, Shift+, = `<`, Shift+/ = `?`. Audio sync uses `>` `<` `?` (G09 in the audio chapter), so subtitle sync changes to `.` earlier, `,` later, `/` reset, and `>` `<` go to audio. `.` and `,` have no other bindings now. The core does not migrate old user overlay bindings (there is no rebinding interface yet).
 
-### A08 次字幕（双字幕同时显示）
+### A08 Secondary subtitles (two subtitles shown at once)
 
-> **排期（第 2 轮裁决）**：次字幕整体推到第 3a 轮（R-T3、`load` 的 `select: "secondary"`、`secondaryPosition`）。下文按 3a 的接口执行；第 2 轮的「打开 ▸ 添加次字幕…」「字幕 ▸ 次字幕 ▸」不出现。
+> **Schedule (round 2 ruling)**: secondary subtitles as a whole move to round 3a (R-T3, `select: "secondary"` in `load`, `secondaryPosition`). The text below follows the 3a interface; round 2 does not show "Open ▸ Add Secondary Subtitle…" or "Subtitles ▸ Secondary Subtitle ▸".
 
-**需求**：同时显示两条字幕轨：主字幕在底部，次字幕在顶部或紧贴主字幕上方。次字幕可以是任一已有文本轨（内嵌或外部），也可以从文件添加。
+**Requirement**: show two subtitle tracks at once: the main subtitle at the bottom, the secondary subtitle at the top or right above the main subtitle. The secondary subtitle can be any existing text track (embedded or external), or added from a file.
 
-**入口**：
-- `打开 ▸ 添加次字幕…`：选文件 → 载入为外部轨并设为次字幕（不改变主字幕）。
-- `字幕 ▸ 次字幕 ▸ 不显示 / <轨名>`（单选，最多 8 条，超出的在字幕微调里选）。
-- `字幕 ▸ 次字幕 ▸ 位置 ▸ 顶部（默认）/ 主字幕上方`。
-- 字幕微调窗口新增一行「次字幕」下拉框（关闭字幕 + 各轨）。
+**Entry points**:
+- `Open ▸ Add Secondary Subtitle…`: pick a file → loaded as an external track and set as the secondary subtitle (the main subtitle does not change).
+- `Subtitles ▸ Secondary Subtitle ▸ Off / <track name>` (radio, at most 8 tracks; the rest are chosen in Subtitle Tuning).
+- `Subtitles ▸ Secondary Subtitle ▸ Position ▸ Top (default) / Above Main Subtitle`.
+- The Subtitle Tuning window gains a "Secondary Subtitle" drop-down row (subtitles off + each track).
 
-**行为细节**：
-1. 次字幕不能与主字幕是同一条轨：在次字幕菜单里，当前主字幕对应项禁用，原因「已作为主字幕」；反之亦然。用户在主字幕菜单选了当前的次字幕轨时，次字幕自动改为「不显示」，OSD「次字幕已关闭（已改为主字幕）」。
-2. 只接受文本轨（`track.text === true`）。图形轨（PGS、VobSub）在次字幕菜单里禁用，原因「次字幕仅支持文本字幕」。
-3. 「显示字幕」Alt+H 只开关主字幕；次字幕保持原设置。
-4. 换片源后次字幕重置为「不显示」（核心状态随来源清空）。
-5. 次字幕样式：字体、颜色、描边、粗体、阴影与主字幕相同；字号固定为主字幕字号的 85%；位置由「位置」单选决定。同步（`offsetMs`）对两条都生效。理由：mpv 的次字幕只有少量独立属性（`secondary-sub-pos`、`secondary-sub-delay`、`secondary-sub-ass-override`），本轮不做独立样式。
-6. 添加次字幕时走与 D18 相同的文件读取（格式、编码、大小检查）。上传成功但设为次字幕失败时，轨保留在列表中，OSD「已载入字幕，但无法设为次字幕」。
-7. OSD：`次字幕：<轨名>`、`次字幕：关闭`。
-8. 无媒体或无文本轨时，次字幕子菜单只有「不显示」（选中）；`添加次字幕…` 禁用，原因「没有可播放的媒体」。
+**Behavior details**:
+1. The secondary subtitle cannot be the same track as the main subtitle: in the secondary subtitle menu, the item of the current main subtitle is disabled with the reason "Already the primary subtitle", and the other way round. When the user picks the current secondary track in the main subtitle menu, the secondary subtitle is set to "Off" automatically, OSD "Secondary subtitle off (it is now the main subtitle)".
+2. Only text tracks are accepted (`track.text === true`). Image tracks (PGS, VobSub) are disabled in the secondary subtitle menu with the reason "Only text subtitles can be secondary".
+3. "Show Subtitles" Alt+H only toggles the main subtitle; the secondary subtitle keeps its setting.
+4. After the source changes, the secondary subtitle resets to "Off" (the core state is cleared with the source).
+5. Secondary subtitle style: font, color, outline, bold and shadow are the same as the main subtitle; the font size is fixed at 85% of the main subtitle's size; the position is set by the "Position" radio. Sync (`offsetMs`) applies to both. Reason: mpv's secondary subtitle has only a few independent properties (`secondary-sub-pos`, `secondary-sub-delay`, `secondary-sub-ass-override`), so there is no independent style this round.
+6. Adding a secondary subtitle uses the same file reading as D18 (format, encoding, size checks). If the upload succeeds but setting it as the secondary subtitle fails, the track stays in the list, OSD "Subtitle loaded, but it cannot be the secondary subtitle".
+7. OSD: `Secondary subtitle: <track name>`, `Secondary subtitle: off`.
+8. With no media or no text track, the secondary subtitle submenu has only "Off" (selected); `Add Secondary Subtitle…` is disabled with the reason "No media to play".
 
-**界面**：字幕微调窗口第二行加「次字幕」下拉框（与轨道下拉同宽，右侧不放按钮）。窗口仍 301 宽，总高度 ≤ 280（UI-TOOL-08）。
+**Interface**: the Subtitle Tuning window gets a "Secondary Subtitle" drop-down in its second row (the same width as the track drop-down, no button on the right). The window is still 301 wide, total height ≤ 280 (UI-TOOL-08).
 
-**持久化**：`settings.json` 存 `secondaryPosition`（`"top" | "aboveMain"`）。选中哪条轨不跨来源保存。
+**Persistence**: `settings.json` stores `secondaryPosition` (`"top" | "aboveMain"`). Which track is selected is not saved across sources.
 
-**核心依赖**：
-- 现有：`subtitles.state/onChange/refresh/select/load`、`dialogs.openFile`。
-- 【核心新增】
+**Core dependencies**:
+- Existing: `subtitles.state/onChange/refresh/select/load`, `dialogs.openFile`.
+- [New core API]
   ```ts
   interface SubtitlesState { readonly secondary: SubtitleTrack | null;
                              readonly secondaryConfirmation: "waiting" | "applied" | "uncertain"; }
   subtitles.selectSecondary(track: SubtitleTrack | null, opts?: { ifCurrent?: SubtitlesState }): Promise<SubtitlesState>
-  subtitles.load(bytes, opts?: { …; select?: "primary" | "secondary" | "none" })   // 默认 "primary"，与现在一致
+  subtitles.load(bytes, opts?: { …; select?: "primary" | "secondary" | "none" })   // default "primary", same as now
   type SubtitleStyle = { …; secondaryPosition?: "top" | "aboveMain" }
   ```
-  理由：mpv 的 `secondary-sid` 只有宿主能设；插件之间又不能合成两条轨。宿主需确认所用 libmpv 支持 `secondary-sub-pos`（mpv ≥ 0.38），否则「主字幕上方」降级为顶部，并在 `styleReason` 说明。
+  Reason: mpv's `secondary-sid` can only be set by the host, and plugins cannot compose two tracks between them. The host has to confirm that its libmpv supports `secondary-sub-pos` (mpv ≥ 0.38); otherwise "Above Main Subtitle" falls back to top, explained in `styleReason`.
 
-**验收**：
-- 有两条内嵌文本轨时，主选 1、次选 2，画面同时出现两行；`state.secondary.id` 等于轨 2。
-- 选次字幕为主字幕同一轨的菜单项禁用；改主字幕为当前次字幕轨后，次字幕自动关闭并有 OSD。
-- 图形轨在次字幕菜单中禁用。
-- 换文件后 `state.secondary === null`，菜单回到「不显示」。
-- `添加次字幕…` 选 SRT 后主字幕不变，次字幕为新轨。
+**Acceptance**:
+- With two embedded text tracks, main = 1 and secondary = 2: two lines appear on the picture at once; `state.secondary.id` equals track 2.
+- The menu item that would make the secondary subtitle the same track as the main subtitle is disabled; after changing the main subtitle to the current secondary track, the secondary subtitle turns off automatically with an OSD.
+- Image tracks are disabled in the secondary subtitle menu.
+- After changing files, `state.secondary === null` and the menu is back to "Off".
+- `Add Secondary Subtitle…` with an SRT: the main subtitle does not change, and the secondary subtitle is the new track.
 
-**说明**：本轮不按语言自动开启次字幕。
+**Notes**: this round does not turn on secondary subtitles automatically by language.
 
-### A09 重载字幕（重新读取文件）
+### A09 Reload subtitles (read the file again)
 
-**现状**：只有「刷新字幕轨」，重新读取宿主的轨道列表，不重读文件。
+**Current state**: there is only "Refresh Subtitle Tracks", which re-reads the host's track list but not the file.
 
-**需求**：用户在外部编辑器改了字幕文件后，按 Ctrl+Alt+Y 让播放器重新读取磁盘上的文件，立即显示新内容，保持当前选择和同步。
+**Requirement**: after the user edits a subtitle file in an external editor, pressing Ctrl+Alt+Y makes the player read the file on disk again and show the new content immediately, keeping the current selection and sync.
 
-**入口**：`字幕 ▸ 重载字幕`（Ctrl+Alt+Y）。
+**Entry point**: `Subtitles ▸ Reload Subtitles` (Ctrl+Alt+Y).
 
-**行为细节**：
-1. 作用对象：当前主字幕和次字幕中**由本插件载入**的外部轨（`owned`）。插件记住每条自己载入的轨的来源：`{ trackId, path, format, encoding, title, role }`，只在内存里。
-2. 对每条轨：重新读文件（D18 的读取流程）→ `load(bytes, { select: 原角色 })` → 成功后 `remove(旧轨)`。新轨替代旧轨在菜单中的位置（按标题重建菜单）。
-3. 文件内容未变（SHA-256 相同）时不重新上传，OSD「字幕未改变」。
-4. 文件已删除或读不到：保留旧轨，OSD「无法重载：找不到字幕文件 <文件名>」。
-5. 当前主次字幕都不是本插件载入的：内嵌轨 OSD「内嵌字幕无需重载」；其它插件载入的外部轨 OSD「此字幕不是由字幕插件载入，无法重载」。
-6. 字幕样式、同步不变（它们是插件样式层，不属于轨）。
-7. 重载期间菜单显示忙碌（沿用现有串行队列）；换片源时取消。
-8. 设置项「字幕文件改动后自动重载」（默认关）：开启时用 `fs.watch` 监视已载入文件，改动停止 500 ms 后自动执行同样流程，OSD「字幕已自动重载」。
-9. 成功 OSD：`已重载字幕 <文件名>`。
+**Behavior details**:
+1. Applies to: the external tracks **loaded by this plugin** (`owned`) among the current main and secondary subtitles. The plugin remembers the origin of each track it loaded: `{ trackId, path, format, encoding, title, role }`, in memory only.
+2. For each track: read the file again (the D18 reading flow) → `load(bytes, { select: <original role> })` → on success `remove(<old track>)`. The new track takes the old track's place in the menu (the menu is rebuilt by title).
+3. When the file content has not changed (same SHA-256), nothing is uploaded again, OSD "Subtitle unchanged".
+4. The file has been deleted or cannot be read: the old track is kept, OSD "Cannot reload: subtitle file <file name> not found".
+5. Neither the current main nor the secondary subtitle was loaded by this plugin: for embedded tracks OSD "Embedded subtitles need no reload"; for external tracks loaded by other plugins OSD "This subtitle was not loaded by the subtitles plugin and cannot be reloaded".
+6. Subtitle style and sync do not change (they are the plugin's style layer and do not belong to the track).
+7. While reloading, the menu shows busy (the existing serial queue is used); it is cancelled when the source changes.
+8. Setting "Reload automatically when the subtitle file changes" (off by default): when on, loaded files are watched with `fs.watch`, and 500 ms after changes stop, the same flow runs automatically, OSD "Subtitle reloaded automatically".
+9. Success OSD: `Reloaded subtitle <file name>`.
 
-**持久化**：`settings.json` 的 `autoReload: boolean`。
+**Persistence**: `autoReload: boolean` in `settings.json`.
 
-**核心依赖**：现有 `subtitles.load`、`remove`、`select`。不需要核心新增（宿主的 `sub-reload` 只对 mpv 自己打开的文件有意义，而我们的外部轨都是上传的临时文件）。
+**Core dependencies**: the existing `subtitles.load`, `remove`, `select`. No new core API needed (the host's `sub-reload` only makes sense for files mpv opened itself, while our external tracks are all uploaded temporary files).
 
-**验收**：
-- 载入 a.srt，外部修改第 1 句文本，Ctrl+Alt+Y 后画面显示新文本，`state.tracks` 中旧轨消失、新轨被选中。
-- 同步值在重载前后不变。
-- 文件删除后重载：旧轨仍在，OSD 文案正确。
-- 内容未改变时 `host.sent("subtitles.load")` 没有新增。
-- 自动重载开启时，改写文件后 1 秒内生效。
+**Acceptance**:
+- Load a.srt, change the text of line 1 externally, press Ctrl+Alt+Y: the picture shows the new text; in `state.tracks` the old track is gone and the new track is selected.
+- The sync value is the same before and after reload.
+- Reload after deleting the file: the old track is still there, and the OSD wording is correct.
+- When the content has not changed, `host.sent("subtitles.load")` has no new entry.
+- With automatic reload on, rewriting the file takes effect within 1 second.
 
-### B11 上一句 / 下一句对白
+### B11 Previous / next subtitle line
 
-**需求**：按 Home 跳到上一句字幕开始，按 End 跳到下一句字幕开始，Ctrl+Home 回到当前字幕句开始（复读）。用于语言学习和找台词。
+**Requirement**: Home jumps to the start of the previous subtitle line, End to the start of the next subtitle line, and Ctrl+Home back to the start of the current subtitle line (repeat). For language learning and finding lines.
 
-**入口**：`播放 ▸ 跳转 ▸ 上一句对白`（Home）、`下一句对白`（End）、`当前字幕起点`（Ctrl+Home）。放在 playback 的跳转子菜单内（order 217，独立分组，画分隔线），因为它们属于跳转操作；命令仍属字幕插件。
+**Entry points**: `Playback ▸ Seek ▸ Previous Dialogue` (Home), `Next Dialogue` (End), `Current Subtitle Start` (Ctrl+Home). They go in playback's Seek submenu (order 217, a group of their own, with a separator), because they are seek operations; the commands still belong to the subtitles plugin.
 
-**行为细节**：
-1. 依据当前**主字幕**轨的逐句时间表，由插件自己得到（裁决 R-T5，核心不提供 `cues`）：本插件载入的外部轨解析上传的字节（SRT 或 ASS）；内嵌文本轨用 `plugin.tools.run("ffmpeg", ["-v","error","-nostdin","-i",<片源>,"-map","0:<streamIndex>","-f","srt","pipe:1"])` 抽成 SRT 再解析（ASS 内嵌轨同样可抽）。显示时间 = 句子时间 + 同步值（`style.offsetMs`，正值滞后）。
-2. 时间表按轨缓存：首次按键时读取，之后同一轨直接用；换轨、换片源、重载后失效。ffmpeg 读取中菜单显示忙碌、按键忽略；超时按片源大小约每 100 MB 1 秒、至少 15 秒；超过 0.5 秒时 OSD「正在读取字幕…」。没有 ffmpeg 时 OSD「需要 ffmpeg 才能读取内嵌字幕」，超时「读取内嵌字幕超时」。
-3. 上一句：取显示开始时间 < 当前位置 − 0.5 秒的最后一句。这样在一句开头 0.5 秒内按 Home 会去上一句，而不是原地重复。
-4. 下一句：取显示开始时间 > 当前位置 + 0.05 秒的第一句。
-5. 当前字幕起点：当前位置所在句（开始 ≤ 位置 < 结束）的开始；不在任何句内时取最近一句已结束的句子。
-6. 跳转用 `player.seek(t)`，`t` 取句子开始 − 0.05 秒（防止解码定位到句子后半帧），下限 0。
-7. 没有可跳的句子：OSD「没有上一句对白」/「没有下一句对白」。
-8. 未选字幕、主字幕是图形轨或时间表为空：命令禁用，原因「没有可用的文本字幕」。下列情况同样禁用（插件拿不到时间表）：内嵌轨的 `streamIndex` 为 `null`（非 lavf 读取）、网络来源、其它插件载入的外部轨（如 subtitle-online 载入的轨）。
-9. 无媒体、`can.seek` 为假（直播流）：禁用，原因「当前媒体不能跳转」。
-10. 按住不放：`repeat: true`，连续按句子跳。跳转逐个执行，每次从上一次跳转落点（跳转完成后重新读取的位置）算起，避免停在同一句；按键比跳转快时最多排队一次，其余丢弃。
-11. OSD：`定位：上一对白位置 00:12:03.450`、`定位：下一对白位置 …`、`定位：当前对白起点 …`。
-12. `seek` 以 `stale` 失败（期间别人改了来源）时不重试，不提示。
+**Behavior details**:
+1. Based on the line timetable of the current **main subtitle** track, which the plugin gets itself (ruling R-T5: the core does not provide `cues`): for external tracks loaded by this plugin, parse the uploaded bytes (SRT or ASS); for embedded text tracks, extract SRT with `plugin.tools.run("ffmpeg", ["-v","error","-nostdin","-i",<source>,"-map","0:<streamIndex>","-f","srt","pipe:1"])` and parse it (embedded ASS tracks can be extracted the same way). Display time = line time + sync value (`style.offsetMs`, positive = later).
+2. The timetable is cached per track: read on the first key press and reused for the same track afterwards; invalidated by a track change, source change or reload. While ffmpeg is reading, the menu shows busy and key presses are ignored; the timeout is about 1 second per 100 MB of source size, at least 15 seconds; after 0.5 seconds, OSD "Reading subtitles…". Without ffmpeg, OSD "ffmpeg is needed to read embedded subtitles"; on timeout "Reading embedded subtitles timed out".
+3. Previous line: the last line whose display start < current position − 0.5 seconds. This way pressing Home within 0.5 seconds of the start of a line goes to the previous line instead of repeating the same one.
+4. Next line: the first line whose display start > current position + 0.05 seconds.
+5. Current subtitle start: the start of the line containing the current position (start ≤ position < end); when not inside any line, the most recent line that has ended.
+6. The jump uses `player.seek(t)`, with `t` = line start − 0.05 seconds (so decoding does not land on a frame in the second half of the line), minimum 0.
+7. No line to jump to: OSD "No previous dialogue" / "No next dialogue".
+8. No subtitle selected, the main subtitle is an image track, or the timetable is empty: the command is disabled with the reason "No text subtitles available". It is also disabled in these cases (the plugin cannot get a timetable): an embedded track's `streamIndex` is `null` (not read by lavf), network sources, external tracks loaded by other plugins (such as tracks loaded by subtitle-online).
+9. No media, or `can.seek` is false (live stream): disabled with the reason "The current media cannot seek".
+10. Held down: `repeat: true`, jumping line after line. Jumps run one at a time, each counted from where the previous jump landed (the position read again after the jump completes), so it does not stop on the same line; when keys come faster than jumps, at most one is queued and the rest are dropped.
+11. OSD: `Seek: previous dialogue 00:12:03.450`, `Seek: next dialogue …`, `Seek: start of current dialogue …`.
+12. When `seek` fails with `stale` (someone changed the source meanwhile), there is no retry and no message.
 
-**核心依赖**：
-- 现有：`player.seek`、`player.refresh`、`subtitles.state.style.offsetMs`；第 2 轮新增的 `SubtitleTrack.text`、`streamIndex`（R-T6）与 `plugin.tools.run`。
-- 不新增核心接口（裁决 R-T5：拒绝 `subtitles.cues`，替代方案为插件内 ffmpeg 抽取）。manifest 增加 `playback.read`、`playback.control`。
+**Core dependencies**:
+- Existing: `player.seek`, `player.refresh`, `subtitles.state.style.offsetMs`; `SubtitleTrack.text` and `streamIndex` (R-T6) and `plugin.tools.run`, added in round 2.
+- No new core interface (ruling R-T5: `subtitles.cues` rejected; the alternative is ffmpeg extraction in the plugin). The manifest adds `playback.read` and `playback.control`.
 
-**验收**：
-- 有 3 句（10–12 s、20–22 s、30–32 s）、同步 0 时：位置 25 s 按 End → 30 s；按 Home → 20 s；位置 20.3 s 按 Home → 10 s。
-- 内嵌文本轨（本地 mkv）首次按键调用一次 ffmpeg，之后同一轨不再调用；网络来源禁用。
-- 同步 +1000 ms 时按 End 从 25 s 跳到 31 s。
-- 无字幕时命令禁用并显示原因；直播流禁用。
-- 按住 End 连续跳句，不在同一句停住。
+**Acceptance**:
+- With 3 lines (10–12 s, 20–22 s, 30–32 s) and sync 0: at 25 s, End → 30 s; Home → 20 s; at 20.3 s, Home → 10 s.
+- An embedded text track (local mkv) calls ffmpeg once on the first key press, and not again for the same track afterwards; network sources are disabled.
+- With sync +1000 ms, End jumps from 25 s to 31 s.
+- With no subtitles, the command is disabled and shows the reason; disabled on live streams.
+- Holding End jumps line after line without stopping on the same line.
 
-### D02 依次切换字幕轨
+### D02 Cycle subtitle tracks
 
-**需求**：按 Alt+L 在字幕轨之间循环：轨 1 → 轨 2 → … → 轨 N → 关闭 → 轨 1。
+**Requirement**: Alt+L cycles through the subtitle tracks: track 1 → track 2 → … → track N → off → track 1.
 
-**入口**：`字幕 ▸ 选择字幕轨 ▸ 依次切换`（Alt+L）。
+**Entry point**: `Subtitles ▸ Subtitle Track ▸ Cycle` (Alt+L).
 
-**行为细节**：
-1. 顺序按 `state.tracks` 的列表顺序，含全部轨（不受菜单 8 条限制），最后一条之后是「关闭」。
-2. 当前是次字幕的轨跳过。
-3. 只有一条轨时在「轨 1 / 关闭」之间切换；没有轨时禁用，原因「没有字幕轨」。
-4. 连续快速按：以最后一次请求为准（串行队列中丢弃被替代的未开始请求），OSD 显示最终结果。
-5. OSD：`字幕：<轨名>（2/5）`、`字幕：关闭`。
-6. 切换失败（`stale` 等）沿用现有错误文案。
+**Behavior details**:
+1. The order follows the list order of `state.tracks`, including all tracks (not limited to the 8 in the menu), with "off" after the last one.
+2. The track that is currently the secondary subtitle is skipped.
+3. With only one track, it toggles between "track 1 / off"; with no tracks, it is disabled with the reason "No subtitle tracks".
+4. Fast repeated presses: the last request wins (requests not yet started that have been superseded are dropped from the serial queue), and the OSD shows the final result.
+5. OSD: `Subtitles: <track name> (2/5)`, `Subtitles: off`.
+6. Switch failures (`stale`, etc.) use the existing error wording.
 
-**核心依赖**：现有 `subtitles.select`。
+**Core dependencies**: the existing `subtitles.select`.
 
-**验收**：3 条轨时连按 Alt+L 4 次，选中依次为 2、3、关闭、1（从 1 开始）；次字幕轨被跳过；无轨时禁用。
+**Acceptance**: with 3 tracks, press Alt+L 4 times: the selection goes 2, 3, off, 1 (starting from 1); the secondary track is skipped; disabled with no tracks.
 
-### D05 手动输入同步值
+### D05 Enter a sync value manually
 
-**现状**：只能按 0.5 秒步进（菜单「超前 / 滞后 / 复位」、微调窗口的慢/快），不能输入数值；步长固定。
+**Current state**: sync can only move in 0.5-second steps (menu "Earlier / Later / Reset", slower / faster in the tuning window); no value can be entered; the step is fixed.
 
-**需求**：
-1. 输入任意同步值（毫秒），立即应用。
-2. 设置同步步长。
+**Requirement**:
+1. Enter any sync value (milliseconds), applied immediately.
+2. Set the sync step.
 
-**入口**：`字幕 ▸ 同步 ▸ 手动调整同步…`（打开小窗口）；字幕微调窗口的同步数字可点击打开同一窗口；字幕设置窗口新增「同步单位」行。
+**Entry points**: `Subtitles ▸ Sync ▸ Adjust Sync…` (opens a small window); clicking the sync number in the Subtitle Tuning window opens the same window; the Subtitle Settings window gains a "Sync step" row.
 
-**行为细节**：
-1. 输入框接受整数毫秒，可带正负号；正值字幕滞后，负值超前（与现有一致，提示文字写明）。范围 −600 000 至 600 000（核心第 2 轮已放宽，R-T8）。
-2. 打开窗口时填入当前值。按 Enter 或「应用」生效；超出范围时输入框保持原值，状态行「同步值须在 −600000 至 600000 毫秒之间」。
-3. 输入框获得焦点时上下方向键 ±步长（不触发全局快捷键，焦点控件吃掉按键）。
-4. 应用后 OSD `字幕同步：滞后 1.25 秒`（沿用现有 `syncText`），窗口不关闭。
-5. 未选字幕或轨不支持样式：输入框与按钮禁用，显示原因（沿用 `styleBlocked`）。
-6. 同步单位：0.05 / 0.1 / 0.25 / 0.5 / 1 / 5 秒，默认 0.5 秒。「超前 / 滞后」菜单标题随之变成「超前 0.1 秒」等（标题变化 → 在子作用域重建两条命令，`order` 不变）。
+**Behavior details**:
+1. The input box accepts whole milliseconds with an optional sign; positive values make subtitles later, negative values earlier (as now; the hint text says so). Range −600 000 to 600 000 (widened in core round 2, R-T8).
+2. When the window opens, the current value is filled in. Enter or "Apply" applies it; out of range, the input box keeps the old value and the status line shows "The sync value must be between −600000 and 600000 ms".
+3. When the input box has focus, the up and down arrow keys add or subtract one step (global shortcuts are not triggered; the focused control takes the keys).
+4. After applying, OSD `Subtitle sync: 1.25 s later` (the existing `syncText`); the window stays open.
+5. No subtitle selected, or the track does not support styles: the input box and button are disabled and show the reason (the existing `styleBlocked`).
+6. Sync step: 0.05 / 0.1 / 0.25 / 0.5 / 1 / 5 seconds, default 0.5 seconds. The "Earlier / Later" menu titles change accordingly to "Earlier 0.1 s" etc. (title change → the two commands are rebuilt in a child scope, `order` unchanged).
 
-**界面**：「手动调整同步」窗口 350×121：单行「同步值(毫秒)：」右对齐标签 102px、输入框 86×21、「应用」75×23，间距 7px，垂直居中；下方一行状态文字（11px）。
+**Interface**: the "Adjust Sync" window is 350×121: one row with the right-aligned label "Sync value (ms):" 102px, input box 86×21, "Apply" 75×23, spacing 7px, vertically centered; one line of status text (11px) below.
 
-**持久化**：`settings.json` 的 `syncStepMs`。同步值本身不持久化（跟随现有样式层行为）。
+**Persistence**: `syncStepMs` in `settings.json`. The sync value itself is not persisted (following the existing style layer behavior).
 
-**核心依赖**：
-- 现有：`subtitles.setStyle({ offsetMs })`。
-- 【核心第 2 轮已提供】`SubtitleStyle.offsetMs` 范围 −600 000–600 000（R-T8）。理由：不同版本片源的片头差异常见 1–3 分钟，±10 秒不够；mpv `sub-delay` 本身无此限制。
+**Core dependencies**:
+- Existing: `subtitles.setStyle({ offsetMs })`.
+- [Provided in core round 2] `SubtitleStyle.offsetMs` range −600 000–600 000 (R-T8). Reason: intros of different releases of a source commonly differ by 1–3 minutes, so ±10 seconds is not enough; mpv's `sub-delay` itself has no such limit.
 
-**验收**：输入 1250 应用 → `style.offsetMs === 1250`，OSD 正确；输入 abc 或 99999999 不生效并有状态提示；步长改 0.1 秒后按 `.` 每次 −100 ms，菜单标题改为「超前 0.1 秒」；按 `>` 不再改变字幕同步（改由音频同步使用）。
+**Acceptance**: enter 1250 and apply → `style.offsetMs === 1250`, with the correct OSD; entering abc or 99999999 has no effect and shows a status message; after changing the step to 0.1 seconds, each press of `.` is −100 ms and the menu title becomes "Earlier 0.1 s"; pressing `>` no longer changes the subtitle sync (it is now used by audio sync).
 
-### D06 字号快捷键
+### D06 Font size shortcuts
 
-**现状**：字幕微调窗口有字号 ±，未绑定快捷键，没有菜单项。
+**Current state**: the Subtitle Tuning window has font size ±, with no shortcuts and no menu items.
 
-**需求**：Alt+PageUp 字号 +2，Alt+PageDown 字号 −2，范围 16–72（宿主样式范围），默认 36。
+**Requirement**: Alt+PageUp font size +2, Alt+PageDown font size −2, range 16–72 (the host style range), default 36.
 
-**入口**：`字幕 ▸ 字幕样式 ▸ 字号 + / 字号 −`。
+**Entry point**: `Subtitles ▸ Subtitle Style ▸ Size + / Size −`.
 
-**行为细节**：
-1. 与微调窗口的按钮共用同一个 `styleChange`（合并 100 ms 提交），两者状态一致。
-2. `repeat: true`。到上下限时不再变化，OSD 仍显示当前值。
-3. OSD：`字幕尺寸：增加(38)`、`字幕尺寸：减小(34)`。
-4. 不可调样式时 OSD 显示原因（如「请先选择字幕轨。」）。
+**Behavior details**:
+1. Shares one `styleChange` with the tuning window buttons (submits merged over 100 ms), so both have the same state.
+2. `repeat: true`. At the upper or lower limit it does not change any more, and the OSD still shows the current value.
+3. OSD: `Subtitle size: larger (38)`, `Subtitle size: smaller (34)`.
+4. When the style cannot be adjusted, the OSD shows the reason (such as "Select a subtitle track first.").
 
-**核心依赖**：现有 `subtitles.setStyle`。
+**Core dependencies**: the existing `subtitles.setStyle`.
 
-**验收**：`host.press("Alt+PageUp")` 后 `style.fontSize` 为 38；在 72 时再按仍为 72；未选字幕时 OSD 为「请先选择字幕轨。」。
+**Acceptance**: after `host.press("Alt+PageUp")`, `style.fontSize` is 38; pressing again at 72 stays at 72; with no subtitle selected, the OSD is "Select a subtitle track first.".
 
-### D07 字幕位置快捷键
+### D07 Subtitle position shortcuts
 
-**现状**：字幕微调窗口有位置上/下，未绑定快捷键。
+**Current state**: the Subtitle Tuning window has position up / down, with no shortcuts.
 
-**需求**：Alt+↑ 上移、Alt+↓ 下移，每步 1%（底部边距 `marginPercent`），范围 2–15，默认 5；Alt+Home 复位位置。
+**Requirement**: Alt+↑ moves up, Alt+↓ moves down, 1% per step (bottom margin `marginPercent`), range 2–15, default 5; Alt+Home resets the position.
 
-**入口**：`字幕 ▸ 字幕样式 ▸ 上移 / 下移 / 复位位置`。
+**Entry point**: `Subtitles ▸ Subtitle Style ▸ Move Up / Move Down / Reset Position`.
 
-**行为细节**：
-1. 与微调窗口共用状态；`repeat: true`。
-2. 复位：`marginPercent = 5`。
-3. OSD：`字幕位置：上移(6%)`、`字幕位置：下移(4%)`、`字幕位置：默认(5%)`。
+**Behavior details**:
+1. Shares state with the tuning window; `repeat: true`.
+2. Reset: `marginPercent = 5`.
+3. OSD: `Subtitle position: up (6%)`, `Subtitle position: down (4%)`, `Subtitle position: default (5%)`.
 
-**核心依赖**：现有 `subtitles.setStyle`。
+**Core dependencies**: the existing `subtitles.setStyle`.
 
-**验收**：连按 Alt+↑ 3 次 → `marginPercent` 8；Alt+Home → 5，OSD 文案正确。
+**Acceptance**: press Alt+↑ 3 times → `marginPercent` 8; Alt+Home → 5, with the correct OSD wording.
 
-**说明**：不做「上下边距 ±」，字幕位置本来就是底边距。
+**Notes**: there is no "top / bottom margin ±"; the subtitle position already is the bottom margin.
 
-### D09 粗体
+### D09 Bold
 
-**需求**：字幕粗体开关，默认关。
+**Requirement**: a subtitle bold toggle, off by default.
 
-**入口**：`字幕 ▸ 字幕样式 ▸ 粗体`（勾选，Alt+B）；字幕设置窗口「字体」行下方加复选框「粗体」。
+**Entry points**: `Subtitles ▸ Subtitle Style ▸ Bold` (checkbox, Alt+B); a "Bold" checkbox below the "Font" row of the Subtitle Settings window.
 
-**行为细节**：
-1. 勾选状态 = 当前生效样式的 `bold`。
-2. OSD：`粗体字幕` / `禁用粗体字幕`。
-3. 捆绑字体没有粗体字形时由渲染器合成粗体（libass 默认行为），不报错。
-4. 不可调样式时 OSD 显示原因。
+**Behavior details**:
+1. Checked state = `bold` of the style currently in effect.
+2. OSD: `Bold subtitles` / `Bold subtitles off`.
+3. When the bundled font has no bold glyphs, the renderer synthesizes bold (libass default behavior), without an error.
+4. When the style cannot be adjusted, the OSD shows the reason.
 
-**持久化**：新增 `style.json`：保存除 `offsetMs` 外的全部样式字段（字体、字号、颜色、描边、边距、粗体、阴影、背景框、ASS 原样式、次字幕位置），插件启动后、第一次有可调样式的轨被选中时用 `setStyle` 恢复。理由：新增的开关若不记住，用户每次启动都要重设。读坏或字段越界时按默认值。
+**Persistence**: new `style.json`: saves all style fields except `offsetMs` (font, font size, color, outline, margin, bold, shadow, background box, original ASS styles, secondary subtitle position), restored with `setStyle` the first time a track with adjustable style is selected after the plugin starts. Reason: if the new toggles were not remembered, users would have to set them again on every launch. A corrupt file or out-of-range fields fall back to the defaults.
 
-**核心依赖**：【核心新增】`SubtitleStyle.bold?: boolean`（mpv `sub-bold`）。
+**Core dependencies**: [New core API] `SubtitleStyle.bold?: boolean` (mpv `sub-bold`).
 
-**验收**：Alt+B 后 `style.bold === true`，画面字幕变粗，菜单勾选；重启播放器后仍为粗体。
+**Acceptance**: after Alt+B, `style.bold === true`, the subtitles on the picture become bold and the menu item is checked; still bold after restarting the player.
 
-### D11 阴影、背景框
+### D11 Shadow, background box
 
-**需求**：
-1. 阴影：开关 + 阴影距离 0–4（默认 0 = 关；开启时默认 2），颜色固定黑色 50% 不透明。
-2. 背景框（不透明框）：开关，默认关；不透明度 0–100%，默认 50%，步长 5%；框颜色黑色。开启后描边设置不生效（框替代描边），界面写明。
+**Requirement**:
+1. Shadow: a toggle + shadow distance 0–4 (default 0 = off; 2 by default when turned on), color fixed at black 50% opacity.
+2. Background box (opaque box): a toggle, off by default; opacity 0–100%, default 50%, step 5%; box color black. When on, the outline setting has no effect (the box replaces the outline), and the interface says so.
 
-**入口**：`字幕 ▸ 字幕样式 ▸ 阴影`（勾选）、`字幕边框不透明`（勾选）；字幕设置窗口新增「阴影」滑块行（0–4 + 默认）和「背景框」复选 + 「不透明度」滑块行（+ 默认）。
+**Entry points**: `Subtitles ▸ Subtitle Style ▸ Shadow` (checkbox), `Opaque Box` (checkbox); the Subtitle Settings window gains a "Shadow" slider row (0–4 + default) and a "Background box" checkbox + "Opacity" slider row (+ default).
 
-**行为细节**：
-1. 菜单勾选「阴影」= 距离设为上次非零值（首次为 2）；取消 = 0。
-2. OSD：`字幕阴影：开(2)` / `字幕阴影：关`；`字幕边框不透明：开` / `关`。
-3. 滑块拖动沿用现有 100 ms 合并提交，松开时回推模型值。
+**Behavior details**:
+1. Checking "Shadow" in the menu sets the distance to the last non-zero value (2 the first time); unchecking sets it to 0.
+2. OSD: `Subtitle shadow: on (2)` / `Subtitle shadow: off`; `Opaque subtitle box: on` / `off`.
+3. Slider drags use the existing 100 ms merged submit, and the model value is pushed back on release.
 
-**持久化**：`style.json`（见 D09）。
+**Persistence**: `style.json` (see D09).
 
-**核心依赖**：【核心第 2 轮已提供，R-T7 改写】`SubtitleStyle.shadow?: number`（0–4，mpv `sub-shadow-offset` 按 1080p 缩放）、`SubtitleStyle.box?: number | null`（一个字段：不透明度 0–100，`null` 无框；宿主用 `background-box` + `sub-back-color`）。开关与不透明度合并为一个字段后，插件自己记住关框前的不透明度（`style.json` 的 `boxOpacity`）与上次的阴影距离（`shadowLast`）。宿主的背景框与阴影共用 `sub-shadow-offset`，**开框时阴影不生效**，设置窗口的阴影滑块随之置灰，复选框写明「背景框（替代描边与阴影）」。
+**Core dependencies**: [Provided in core round 2, rewritten by R-T7] `SubtitleStyle.shadow?: number` (0–4, mpv `sub-shadow-offset` scaled to 1080p), `SubtitleStyle.box?: number | null` (one field: opacity 0–100, `null` for no box; the host uses `background-box` + `sub-back-color`). With the toggle and opacity merged into one field, the plugin itself remembers the opacity before the box was turned off (`boxOpacity` in `style.json`) and the last shadow distance (`shadowLast`). The host's background box and shadow share `sub-shadow-offset`, so **the shadow has no effect while the box is on**; the shadow slider in the settings window turns grey accordingly, and the checkbox reads "Background box (replaces outline and shadow)".
 
-**验收**：开启背景框后字幕下出现半透明黑框；不透明度 100 时框全黑；阴影 4 时阴影明显；菜单与窗口状态一致。
+**Acceptance**: with the background box on, a semi-transparent black box appears under the subtitles; at opacity 100 the box is fully black; at shadow 4 the shadow is clearly visible; the menu and window states agree.
 
-### D17 外部 ASS 字幕（保留特效）
+### D17 External ASS subtitles (keep effects)
 
-**现状**：内嵌 ASS 由 mpv 渲染，但宿主固定 `sub-ass-override=force`，ASS 自带的字体、颜色、定位、特效被插件样式覆盖；外部只接受 SRT。
+**Current state**: embedded ASS is rendered by mpv, but the host fixes `sub-ass-override=force`, so the ASS file's own fonts, colors, positioning and effects are overridden by the plugin style; external files only accept SRT.
 
-**需求**：
-1. 能载入外部 `.ass` / `.ssa` 文件。
-2. 「开启 ASS/SSA 原样式」开关（默认开）：开启时 ASS 轨按文件自己的样式与特效（定位、移动、卡拉 OK、淡入淡出）显示；插件样式只对它应用字号缩放与同步值。关闭时与现在一样强制使用插件样式。
+**Requirement**:
+1. External `.ass` / `.ssa` files can be loaded.
+2. "Original ASS/SSA Styles" toggle (on by default): when on, ASS tracks are shown with the file's own styles and effects (positioning, movement, karaoke, fades); the plugin style only applies font size scaling and the sync value to them. When off, the plugin style is forced as now.
 
-**入口**：`打开 ▸ 打开字幕…`（Alt+O，文件过滤加入 ass/ssa）；`字幕 ▸ 开启 ASS/SSA 原样式`（勾选）；字幕设置窗口「ASS 样式」下拉（保留原样式 / 统一为字幕设置）。
+**Entry points**: `Open ▸ Open Subtitle…` (Alt+O, ass/ssa added to the file filter); `Subtitles ▸ Original ASS/SSA Styles` (checkbox); the "ASS style" drop-down in the Subtitle Settings window (Keep original styles / Use subtitle settings).
 
-**行为细节**：
-1. 读取流程同 D18（编码、大小）。ASS 文件里的 `[Fonts]`、`[Graphics]` 段（内嵌字体与图片）在上传前删除，因为宿主只用捆绑字体（`sub-font-provider=none`），这些数据无用且容易超过 2 MiB 上限；删除后状态行提示「已忽略字幕内嵌字体」。
-2. ASS 指定的字体不在宿主字体清单时由宿主回退到默认字体（libass 行为），不报错；字幕设置窗口的「字体」行对 ASS 轨显示「按字幕文件（缺失字体用默认字体）」。
-3. 原样式开启时，ASS 轨的：字号以「字幕字号 ÷ 36」为缩放比；颜色、描边、粗体、阴影、背景框、位置不生效（这些控件对 ASS 轨保持可用但旁注「ASS 原样式开启时无效」）。SRT/VTT 轨照常使用全部样式。
-4. 切换开关立即生效，OSD：`ASS/SSA 动态字幕：开` / `关`。
-5. 语法错误的 ASS：宿主拒绝（`invalid`），OSD「播放器拒绝了该字幕（文件过大或内容无效）。」（现有文案）。
+**Behavior details**:
+1. The reading flow is the same as D18 (encoding, size). The `[Fonts]` and `[Graphics]` sections of an ASS file (embedded fonts and images) are removed before upload, because the host only uses bundled fonts (`sub-font-provider=none`); this data is useless and easily exceeds the 2 MiB limit. After removal the status line says "Fonts embedded in the subtitle were ignored".
+2. When a font named by the ASS file is not in the host's font list, the host falls back to the default font (libass behavior), without an error; for ASS tracks the "Font" row of the Subtitle Settings window shows "As in the subtitle file (missing fonts use the default font)".
+3. With original styles on, for ASS tracks: the font size uses "subtitle font size ÷ 36" as the scale factor; color, outline, bold, shadow, background box and position have no effect (these controls stay available for ASS tracks but carry the side note "No effect while original ASS styles are on"). SRT/VTT tracks use all styles as usual.
+4. Switching the toggle takes effect immediately, OSD: `ASS/SSA animated subtitles: on` / `off`.
+5. ASS with syntax errors: the host rejects it (`invalid`), OSD "The player rejected this subtitle (the file is too large or its content is invalid)." (existing wording).
 
-**持久化**：`style.json` 的 `assOverride`。
+**Persistence**: `assOverride` in `style.json`.
 
-**核心依赖**：
-- 【核心第 2 轮已提供，R-T4】`subtitles.load(bytes, { format: "ass" })`（SSA 也用 `"ass"`；宿主对 ASS 做有界校验：UTF-8、≤ 2 MiB、有 `[Script Info]` 与 `[Events]`、Dialogue 行数 ≤ 20 000）。插件把 UTF-16 等编码转为 UTF-8 后上传。外部 ASS 轨不能进入「含字幕」截图（宿主限制）。
-- 【核心新增】`SubtitleStyle.assOverride?: "keep" | "force"`（默认 keep；mpv `sub-ass-override=scale` / `force`）。理由：覆盖策略是 mpv 全局属性，只有宿主能设；现在的 force 写死在宿主里。
+**Core dependencies**:
+- [Provided in core round 2, R-T4] `subtitles.load(bytes, { format: "ass" })` (SSA also uses `"ass"`; the host does bounded validation of ASS: UTF-8, ≤ 2 MiB, has `[Script Info]` and `[Events]`, ≤ 20 000 Dialogue lines). The plugin converts UTF-16 and other encodings to UTF-8 before upload. External ASS tracks cannot be included in "with subtitles" screenshots (host limitation).
+- [New core API] `SubtitleStyle.assOverride?: "keep" | "force"` (default keep; mpv `sub-ass-override=scale` / `force`). Reason: the override policy is a global mpv property that only the host can set; the current force is hard-coded in the host.
 
-**验收**：载入带 `\pos` 与 `\fad` 的 ASS，开关开启时字幕出现在指定位置并淡入；关闭后变为底部白字；内嵌 ASS 同样受开关控制；带 [Fonts] 段的 3 MiB 文件能载入。
+**Acceptance**: load an ASS with `\pos` and `\fad`: with the toggle on, the subtitle appears at the given position and fades in; when off it becomes white text at the bottom; embedded ASS is controlled by the toggle too; a 3 MiB file with a [Fonts] section can be loaded.
 
-### D18 外部字幕格式：ASS、VTT 等
+### D18 External subtitle formats: ASS, VTT, etc.
 
-**需求**：「打开字幕」接受常见文本字幕格式与常见编码，不要求用户先转成 UTF-8 SRT。
+**Requirement**: "Open Subtitle" accepts the common text subtitle formats and common encodings, without requiring the user to convert to UTF-8 SRT first.
 
-| 格式 | 扩展名 | 处理 |
+| Format | Extension | Handling |
 | --- | --- | --- |
-| SubRip | .srt | 原样上传（现有） |
-| ASS / SSA | .ass、.ssa | 上传 `format: "ass"`（D17；SSA 同样用 `"ass"`） |
-| WebVTT | .vtt | 插件转为 SRT（裁决 R-T4 不加 `"vtt"`）：去掉 `STYLE`、`REGION`、`NOTE` 块与 cue 设置，去掉 `<c>`、`<v>`、`<lang>`、`<ruby>` 与卡拉 OK 时间标签，保留 `<b>` `<i>` `<u>`；subtitles 与 subtitle-online 各带一份同样的转换代码 |
-| SAMI | .smi、.sami | 插件转为 SRT（按 `<SYNC Start=>` 分句；一个文件含多语言 class 时每种语言生成一条轨，标题带语言） |
-| MicroDVD | .sub（文本，`{start}{end}` 行） | 插件按视频帧率转为 SRT；帧率未知时用文件首行 `{1}{1}23.976` 声明，否则 23.976 并提示 |
-| 纯文本时间轴 | .txt | 不支持，提示「无法识别的字幕格式」 |
-| 图形字幕 | .sup、.idx/.sub（VobSub） | 本轮不支持，提示「暂不支持图形字幕文件」 |
+| SubRip | .srt | Uploaded as is (existing) |
+| ASS / SSA | .ass, .ssa | Uploaded with `format: "ass"` (D17; SSA also uses `"ass"`) |
+| WebVTT | .vtt | The plugin converts to SRT (ruling R-T4: no `"vtt"`): remove `STYLE`, `REGION` and `NOTE` blocks and cue settings, remove `<c>`, `<v>`, `<lang>`, `<ruby>` and karaoke timestamp tags, keep `<b>` `<i>` `<u>`; subtitles and subtitle-online each carry a copy of the same conversion code |
+| SAMI | .smi, .sami | The plugin converts to SRT (split into lines by `<SYNC Start=>`; when a file contains several language classes, one track per language, with the language in the title) |
+| MicroDVD | .sub (text, `{start}{end}` lines) | The plugin converts to SRT using the video frame rate; when the frame rate is unknown, use the `{1}{1}23.976` declaration on the file's first line, otherwise 23.976 with a message |
+| Plain text timeline | .txt | Not supported, message "Unknown subtitle format" |
+| Image subtitles | .sup, .idx/.sub (VobSub) | Not supported this round, message "Image subtitle files are not supported yet" |
 
-**行为细节**：
-1. 格式按内容识别，扩展名只作参考（`.sub` 先判断是否 MicroDVD 文本，二进制则视为 VobSub）。
-2. 编码：BOM（UTF-8 / UTF-16LE / UTF-16BE）优先；否则尝试严格 UTF-8；失败则用「默认编码」设置解码（默认 GB18030，可选 Big5、Shift_JIS、EUC-KR、Windows-1252、Windows-1251、ISO-8859-1），统一转为 UTF-8 后上传。Node 自带 ICU 支持这些编码。解码出现替换字符比例 > 1% 时 OSD「字幕编码可能不正确，可在字幕设置中更改默认编码」。
-3. 大小：读取文件 ≤ 8 MiB（现有）；转换并删除 ASS 内嵌字体后 ≤ 2 MiB（宿主上限），否则「字幕文件超过 2 MiB」。
-4. 打开对话框的文件类型提示「字幕文件 (*.srt *.ass *.ssa *.vtt *.smi *.sub)」（系统对话框若不支持过滤，就不限制，按内容识别）。
-5. 载入成功 OSD：`打开字幕：<文件名>`；SAMI 多语言时 `打开字幕：<文件名>（2 条轨）`。
-6. 轨标题用文件名（经 `load` 的 `title`），不再显示宿主临时名。
-7. 设置窗口新增「默认编码」下拉。
+**Behavior details**:
+1. The format is recognized by content; the extension is only a hint (`.sub` is first checked for MicroDVD text; binary means VobSub).
+2. Encoding: a BOM (UTF-8 / UTF-16LE / UTF-16BE) comes first; otherwise try strict UTF-8; on failure decode with the "Default encoding" setting (default GB18030; Big5, Shift_JIS, EUC-KR, Windows-1252, Windows-1251, ISO-8859-1 are available), and convert everything to UTF-8 before upload. Node's built-in ICU supports these encodings. When the share of replacement characters after decoding is > 1%, OSD "The subtitle encoding may be wrong; you can change the default encoding in Subtitle Settings".
+3. Size: the file read is ≤ 8 MiB (existing); after conversion and removal of ASS embedded fonts ≤ 2 MiB (the host limit), otherwise "The subtitle file is larger than 2 MiB".
+4. The open dialog's file type hint is "Subtitle files (*.srt *.ass *.ssa *.vtt *.smi *.sub)" (if the system dialog does not support filters, nothing is restricted and the content decides).
+5. Load success OSD: `Opened subtitle: <file name>`; for multi-language SAMI `Opened subtitle: <file name> (2 tracks)`.
+6. Track titles use the file name (through `title` in `load`), no longer the host's temporary name.
+7. The settings window gains a "Default encoding" drop-down.
 
-**持久化**：`settings.json` 的 `fallbackEncoding`。
+**Persistence**: `fallbackEncoding` in `settings.json`.
 
-**核心依赖**：
-- 【核心第 2 轮已提供，R-T4 改写】`subtitles.load` 的 `format`（`"srt" | "ass"`）与 `title`。VTT、SAMI、MicroDVD 在插件里转 SRT，不加核心格式。
-- 【核心新增】`SubtitleTrack.codec: string | null`、`SubtitleTrack.text: boolean`（宿主已从 mpv 读到 `codec`，只需开放）。用于区分文本与图形轨（A08、B11 要用）。
+**Core dependencies**:
+- [Provided in core round 2, rewritten by R-T4] `format` (`"srt" | "ass"`) and `title` in `subtitles.load`. VTT, SAMI and MicroDVD are converted to SRT in the plugin; no core formats are added.
+- [New core API] `SubtitleTrack.codec: string | null`, `SubtitleTrack.text: boolean` (the host already reads `codec` from mpv and only needs to expose it). Used to tell text tracks from image tracks (needed by A08 and B11).
 
-**验收**：GB18030 编码的 SRT、UTF-16LE 的 ASS、VTT、含中英两种 class 的 SMI、MicroDVD 各载入成功并显示正确文字；VobSub 给出明确提示；`state.tracks` 中新轨标题为文件名。
+**Acceptance**: a GB18030-encoded SRT, a UTF-16LE ASS, a VTT, an SMI with Chinese and English classes and a MicroDVD file each load and show the correct text; VobSub gives a clear message; the new track's title in `state.tracks` is the file name.
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-> **裁决结果（第 2 轮）**：`load` 的 `format`（`"srt" | "ass"`）、`title`、`select: "primary" | "none"`，`SubtitleTrack.codec/text/streamIndex`，样式字段 `bold`、`shadow`、`box`（单个数字字段）、`assOverride`，`offsetMs` ±600 000 已提供；`subtitles.cues` 拒绝（插件内 ffmpeg 替代）；次字幕（`select` 的 `role`、`select: "secondary"`、`secondaryPosition`）排第 3a 轮；不加 `"vtt"`、`"ssa"` 格式。下表保留原始请求。
+> **Ruling result (round 2)**: `format` (`"srt" | "ass"`), `title` and `select: "primary" | "none"` in `load`, `SubtitleTrack.codec/text/streamIndex`, the style fields `bold`, `shadow`, `box` (a single number field) and `assOverride`, and `offsetMs` ±600 000 are provided; `subtitles.cues` is rejected (replaced by ffmpeg in the plugin); secondary subtitles (`role` in `select`, `select: "secondary"`, `secondaryPosition`) are scheduled for round 3a; no `"vtt"` or `"ssa"` formats are added. The table below keeps the original requests.
 
-| 接口 | 理由 | 使用编号 |
+| Interface | Reason | Used by |
 | --- | --- | --- |
-| `subtitles.selectSecondary(track: SubtitleTrack \| null, opts?: { ifCurrent?: SubtitlesState }): Promise<SubtitlesState>`；`SubtitlesState.secondary: SubtitleTrack \| null`、`secondaryConfirmation` | mpv `secondary-sid` 只有宿主能设 | A08 |
-| `subtitles.load(bytes: Uint8Array, opts?: { format?: "srt" \| "ass" \| "ssa" \| "vtt"; title?: string; select?: "primary" \| "secondary" \| "none"; ifCurrent?; signal? }): Promise<SubtitleTrack>` | 宿主只校验 SRT；轨标题与是否选中需要宿主决定 | A08、A09、D17、D18 |
-| `subtitles.cues(track: SubtitleTrack, opts?: { signal?: AbortSignal }): Promise<SubtitleCue[]>`；`SubtitleCue { start; end; text }` | 内嵌字幕逐句内容只有宿主能可靠提取（宿主已有提取实现） | B11 |
-| `SubtitleTrack.codec: string \| null`、`SubtitleTrack.text: boolean` | 区分文本/图形轨；宿主已读到 codec，只需开放 | A08、B11、D18 |
-| `SubtitleStyle` 新增可选字段：`bold?: boolean`、`shadow?: number`（0–4）、`box?: boolean`、`boxOpacity?: number`（0–100）、`assOverride?: "keep" \| "force"`、`secondaryPosition?: "top" \| "aboveMain"` | mpv 样式属性只有宿主能写；可选字段保持现有调用兼容 | D09、D11、D17、A08 |
-| `SubtitleStyle.offsetMs` 范围放宽到 ±600 000（可选） | ±10 秒不够修正片头差异；mpv 无此限制 | D05 |
+| `subtitles.selectSecondary(track: SubtitleTrack \| null, opts?: { ifCurrent?: SubtitlesState }): Promise<SubtitlesState>`; `SubtitlesState.secondary: SubtitleTrack \| null`, `secondaryConfirmation` | mpv `secondary-sid` can only be set by the host | A08 |
+| `subtitles.load(bytes: Uint8Array, opts?: { format?: "srt" \| "ass" \| "ssa" \| "vtt"; title?: string; select?: "primary" \| "secondary" \| "none"; ifCurrent?; signal? }): Promise<SubtitleTrack>` | The host only validates SRT; the track title and whether it is selected need the host to decide | A08, A09, D17, D18 |
+| `subtitles.cues(track: SubtitleTrack, opts?: { signal?: AbortSignal }): Promise<SubtitleCue[]>`; `SubtitleCue { start; end; text }` | Only the host can reliably extract the line-by-line content of embedded subtitles (the host already has an extraction implementation) | B11 |
+| `SubtitleTrack.codec: string \| null`, `SubtitleTrack.text: boolean` | Tell text and image tracks apart; the host already reads codec and only needs to expose it | A08, B11, D18 |
+| New optional `SubtitleStyle` fields: `bold?: boolean`, `shadow?: number` (0–4), `box?: boolean`, `boxOpacity?: number` (0–100), `assOverride?: "keep" \| "force"`, `secondaryPosition?: "top" \| "aboveMain"` | mpv style properties can only be written by the host; optional fields keep existing calls compatible | D09, D11, D17, A08 |
+| `SubtitleStyle.offsetMs` range widened to ±600 000 (optional) | ±10 seconds is not enough to correct intro differences; mpv has no such limit | D05 |
 
 ---
 
-## 画面调节（`video`）
+## Picture adjustment (`video`)
 
-**位置**：`src/plugins/video/`（现有插件，manifest id `vestra.video`）
+**Location**: `src/plugins/video/` (existing plugin, manifest id `vestra.video`)
 
-**定位**
+**Scope**
 
-本插件负责「视频」菜单里所有改变画面外观的功能：色彩、图像处理滤镜、几何变换（翻转、旋转、裁剪/拉伸）、显示方式（宽高比、帧位缩放平移）、反交错，以及依赖 GPU 渲染的 HDR 色调映射、像素着色器、运动补偿。现在它只有 eq（亮度/对比度/饱和度/Gamma）和高斯模糊两种处理节点、一个 301 宽的单页窗口。本轮增加 E02、E04–E06、E08–E13、E16–E18 共 13 项，窗口改为四个页签。截图（`capture`）、字幕（`subtitles`）、播放信息（`info`）不归本插件。
+This plugin owns every feature in the "Video" menu that changes how the picture looks: color, image processing filters, geometric transforms (flip, rotate, crop/stretch), display mode (aspect ratio, framing zoom and pan), deinterlacing, and the GPU-rendering-dependent HDR tone mapping, pixel shaders and motion interpolation. Today it has only two processing nodes, eq (brightness / contrast / saturation / gamma) and Gaussian blur, and a single-page window 301 wide. This round adds 13 items, E02, E04–E06, E08–E13 and E16–E18, and the window gets four tabs. Capture (`capture`), subtitles (`subtitles`) and playback info (`info`) do not belong to this plugin.
 
-和核心的边界按三类划分，每项功能都标明属于哪一类：
+The boundary with the core falls into three classes, and each feature states which class it belongs to:
 
-1. **像素处理**（色调、锐化、降噪、去块、消色带、翻转、旋转、反交错、裁剪/拉伸、倍帧）：继续走本插件自己的处理链 `plugin.video.filter("picture")`，核心只需在 `VideoNode` 里增加节点类型（`src/host/src/effects.rs` 的 `VideoNode` 现在只有 `Eq`、`Gblur`）。这类效果跟着来源走，换片源后由 SDK 重新应用；「含效果」的截图和离线导出也包含它们（`effects.rs` 注释：同一套描述既生成实时图，也生成离线图），所以每个新节点在两条路径上都要能用。
-2. **显示方式**（宽高比、显示模式、缩放平移）：不改像素，只改画面在视频区里怎么摆放，对应 mpv 的 vo 级属性（`video-aspect-override`、`keepaspect`、`panscan`、`video-zoom`、`video-scale-x/y`、`video-pan-x/y`）。处理链表达不了这些，需要核心新增一个独立接口 `video.view()`；结果要正确，还需要宿主行为改动 **C-SIZE：渲染尺寸跟随视频区**（见 E11）。截图不包含这类效果。
-3. **GPU 渲染选项**（HDR 色调映射、GLSL 着色器、运动补偿插帧）：mpv 的 `tone-mapping`、`glsl-shaders`、`interpolation` 只在 GPU 渲染器里有效。渲染轮（2026-10-21）宿主完成了 **C-GPU**：macOS 默认用 libmpv 的 OpenGL 渲染，并提供 `plugin.video.render()`（reference §8.2，单一拥有者）；软件渲染仍是后备（无界面模式、`VESTRA_SOFTWARE_RENDER=1`、Windows 与 Linux、OpenGL 初始化失败），这时 `render()` 以 `unsupported` 拒绝。本插件按 `render()` 的状态启用或禁用这三项（E16–E18）。它们不进处理链，截图与导出不包含它们。
+1. **Pixel processing** (hue, sharpen, denoise, deblock, deband, flip, rotate, deinterlace, crop/stretch, frame doubling): continues to go through this plugin's own processing chain `plugin.video.filter("picture")`; the core only needs to add node types to `VideoNode` (`VideoNode` in `src/host/src/effects.rs` currently has only `Eq` and `Gblur`). These effects follow the source and are reapplied by the SDK after a source change; screenshots "with effects" and offline exports include them as well (comment in `effects.rs`: the same description produces both the live picture and the offline picture), so every new node has to work on both paths.
+2. **Display mode** (aspect ratio, display mode, zoom and pan): does not change pixels, only how the picture is placed in the video area, matching mpv's vo-level properties (`video-aspect-override`, `keepaspect`, `panscan`, `video-zoom`, `video-scale-x/y`, `video-pan-x/y`). The processing chain cannot express these, so the core needs a new separate interface `video.view()`; for correct results it also needs the host behavior change **C-SIZE: render size follows the video area** (see E11). Screenshots do not include these effects.
+3. **GPU render options** (HDR tone mapping, GLSL shaders, motion interpolation): mpv's `tone-mapping`, `glsl-shaders` and `interpolation` only work in the GPU renderer. In the render round (2026-10-21) the host completed **C-GPU**: macOS uses libmpv's OpenGL rendering by default and provides `plugin.video.render()` (reference §8.2, single owner); software rendering is still the fallback (headless mode, `VESTRA_SOFTWARE_RENDER=1`, Windows and Linux, OpenGL initialization failure), and then `render()` rejects with `unsupported`. This plugin enables or disables these three items (E16–E18) according to the state of `render()`. They are not in the processing chain, and screenshots and exports do not include them.
 
-本插件不和其它插件通信。需要的外部数据都从核心读：播放状态（`player.state`）、视频参数（`player.stats()` 的 `video.width/height/fps`）。
+This plugin does not communicate with other plugins. All the external data it needs is read from the core: playback state (`player.state`) and video parameters (`video.width/height/fps` of `player.stats()`).
 
-manifest 能力在现有基础上增加：`ui.dialog`（E17 选择着色器文件）。
+Manifest capabilities added to the existing ones: `ui.dialog` (E17 picking shader files).
 
-**功能一览**
+**Feature overview**
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| E02 | 色调 ±1% | ✗ | 是：`hue` 节点 |
-| E04 | 锐化、边缘锐化 | ✗ | 是：`sharpen` 节点（small / large，裁决 R-V2，不加 `cas`） |
-| E05 | 降噪（3D / 瞬态 / 渐进） | ✗ | 是：`denoise` 节点（hqdn3d，三种为插件内预设，裁决 R-V3） |
-| E06 | 去块 / 消色带 | ✗ | 是：`deblock`、`deband` 节点 |
-| E08 | 上下 / 左右翻转 | ✗ | 是：`transform` 节点（裁决 R-V5） |
-| E09 | 旋转 90 / 180 / 270 | ✗ | 是：`transform` 节点（裁决 R-V5） |
-| E10 | 反交错（自动 / 开 / 关） | ✗ | 是：`deinterlace` 节点（固定 BWDIF，裁决 R-V6） |
-| E11 | 宽高比与显示模式 | ✗ | 是：`video.view()`；C-SIZE（第 4a 轮，裁决 R-V9） |
-| E12 | 拉伸（加边）/ 裁剪到指定比例 | ✗ | 是：`reframe` 节点（裁决 R-V7） |
-| E13 | 画面缩放与平移（帧位） | ✗ | 是：`video.view()`（第 4a 轮，裁决 R-V9）；小键盘绑定名（第 2 轮已提供） |
-| E16 | HDR 自动校正 / 色调映射 | ✗ | 是：C-GPU + `video.render()`、`stats().video.transfer`（渲染轮已提供） |
-| E17 | 像素着色器（自定义 GLSL） | ✗ | 是：C-GPU + `video.render()`（渲染轮已提供） |
-| E18 | 倍帧 / 运动补偿 | ✗ | 倍帧：`frameBlend` 节点（第 4a 轮，裁决 R-V8）；运动补偿：C-GPU + `video.render()`（渲染轮已提供） |
+| E02 | Hue ±1% | ✗ | Yes: `hue` node |
+| E04 | Sharpen, edge sharpen | ✗ | Yes: `sharpen` node (small / large, ruling R-V2, no `cas`) |
+| E05 | Denoise (3D / temporal / progressive) | ✗ | Yes: `denoise` node (hqdn3d; the three kinds are presets in the plugin, ruling R-V3) |
+| E06 | Deblock / deband | ✗ | Yes: `deblock`, `deband` nodes |
+| E08 | Vertical / horizontal flip | ✗ | Yes: `transform` node (ruling R-V5) |
+| E09 | Rotate 90 / 180 / 270 | ✗ | Yes: `transform` node (ruling R-V5) |
+| E10 | Deinterlace (auto / on / off) | ✗ | Yes: `deinterlace` node (fixed BWDIF, ruling R-V6) |
+| E11 | Aspect ratio and display mode | ✗ | Yes: `video.view()`; C-SIZE (round 4a, ruling R-V9) |
+| E12 | Stretch (add borders) / crop to a given ratio | ✗ | Yes: `reframe` node (ruling R-V7) |
+| E13 | Picture zoom and pan (framing) | ✗ | Yes: `video.view()` (round 4a, ruling R-V9); numpad binding names (provided in round 2) |
+| E16 | Automatic HDR correction / tone mapping | ✗ | Yes: C-GPU + `video.render()`, `stats().video.transfer` (provided in the render round) |
+| E17 | Pixel shaders (custom GLSL) | ✗ | Yes: C-GPU + `video.render()` (provided in the render round) |
+| E18 | Frame doubling / motion interpolation | ✗ | Frame doubling: `frameBlend` node (round 4a, ruling R-V8); motion interpolation: C-GPU + `video.render()` (provided in the render round) |
 
-**菜单与快捷键**
+**Menus and shortcuts**
 
-菜单顺序：像素着色 → 反交错 → 比例 → 裁剪/拉伸 → 帧位 → 图像处理 → 图像旋转 → 截图 → 画面调节与复位 → 亮度…色调。「比例」「帧位」按领域规则（interaction-requirements.md §1：视频参数统一归入视频领域）放在「视频 ▸」下面。
+Menu order: Pixel Shaders → Deinterlace → Aspect → Crop/Stretch → Framing → Image Processing → Rotation → Snapshot → Picture Adjustments and Reset → Brightness…Hue. "Aspect" and "Framing" go under "Video ▸" by the domain rule (interaction-requirements.md §1: video parameters all belong to the video domain).
 
-**对现有入口的调整**：`画面调节…`、`复位`、亮度/对比度/饱和度六项从 order 401–408 移到 440–447，把 401–409 腾给新的子菜单，`截图 ▸`（capture，420）因此落在中间。`高斯模糊`（Ctrl+B）从「视频」第一层移到「视频 ▸ 图像处理 ▸」，命令 id 和绑定不变。子菜单内部各项用同一个 order（子菜单的位置取最小 order），靠声明顺序排列（reference §4：order 相同按同一插件的声明顺序）。改完后要同步更新 `doc/product/menus.md`。
+**Changes to existing entry points**: `Picture Adjustments…`, `Reset` and the six brightness / contrast / saturation items move from order 401–408 to 440–447, freeing 401–409 for the new submenus, so `Snapshot ▸` (capture, 420) ends up in the middle. `Gaussian Blur` (Ctrl+B) moves from the first level of "Video" to "Video ▸ Image Processing ▸"; the command id and binding do not change. Items inside a submenu all use the same order (a submenu's position is its smallest order) and are ordered by declaration (reference §4: equal order follows the declaration order of the same plugin). After the change, `doc/product/menus.md` has to be updated to match.
 
-| 菜单路径 | order | group | 默认快捷键 | 编号 |
+| Menu path | order | group | Default shortcut | ID |
 | --- | --- | --- | --- | --- |
-| 视频 ▸ 像素着色 ▸ 使用着色器（勾选）· 着色器列表… · 打开着色器文件夹 · 重新载入着色器 · —— · HDR 色调映射 ▸（单选：自动 / 关 / BT.2390 / Hable / Mobius / Reinhard / 裁剪 · —— · 动态峰值检测（勾选））· HDR 设置… | 402 | video-source（HDR 两项 video-hdr，峰值检测 video-hdr-peak） | 使用着色器 Shift+P | E16、E17 |
-| 视频 ▸ 反交错 ▸ 按序切换 · 自动 · 总是使用 · 不使用（单选）· —— · 输出 ▸ 按帧 / 按场（倍帧率）（单选） | 403 | video-source | 按序切换 Ctrl+I | E10 |
-| 视频 ▸ 比例 ▸ 保持宽高比 · 不保持宽高比 · 填满窗口（裁去多余）（单选）· —— · 依次切换比例 · 默认（按来源）· 4:3 · 16:9 · 16:10 · 1.85:1 · 2.35:1 · 自定义（x:y）（单选）· 自定义比例… | 404 | video-display | 依次切换比例 Shift+F6（Ctrl+F6 被 macOS 系统占用） | E11 |
-| 视频 ▸ 裁剪/拉伸 ▸ 不使用 · 按 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 拉伸 · 按 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 裁剪（单选）· —— · 位置复位 · 左移 · 右移 · 上移 · 下移 | 405 | video-display | 无（不用 Ctrl+Q，见下） | E12 |
-| 视频 ▸ 帧位 ▸ 帧位复位 · 全帧 + · 全帧 − · —— · 偏移 → · 偏移 ← · 偏移 ↑ · 偏移 ↓ · 帧位居中 | 406 | video-display | 见下表 | E13 |
-| 视频 ▸ 图像处理 ▸ 上下翻转 · 左右翻转 · —— · 高斯模糊 · 锐化 · 边缘锐化 · —— · 去块 · 消色带 · 3D 降噪 · 渐进降噪 · 瞬态降噪 · —— · 倍帧 · 运动补偿（全部勾选） | 408 | video-effects | Ctrl+P · Ctrl+Z · Ctrl+B · Ctrl+R · — · Ctrl+H · — · Ctrl+N · — · Ctrl+M | E04–E06、E08、E18 |
-| 视频 ▸ 图像旋转 ▸ 按序切换 · 不旋转 · 90° · 180° · 270°（单选） | 409 | video-effects | 按序切换 Alt+K | E09 |
-| 视频 ▸ 截图 ▸ …（capture，不变） | 420 | — | — | — |
-| 视频 ▸ 画面调节… | 440 | video-color | | 现有 |
-| 视频 ▸ 复位 | 441 | video-color | Q | 现有 |
-| 视频 ▸ 亮度 −1% / +1%，对比度，饱和度 | 442–447 | video-color | W/E、R/T、Y/U | 现有 |
-| 视频 ▸ 色调 −1% / +1% | 448 / 449 | video-color | I / O（`repeat`） | E02 |
+| Video ▸ Pixel Shaders ▸ Use Shaders (checkbox) · Shader List… · Open Shader Folder · Reload Shaders · —— · HDR Tone Mapping ▸ (radio: Auto / Off / BT.2390 / Hable / Mobius / Reinhard / Clip · —— · Dynamic Peak Detection (checkbox)) · HDR Settings… | 402 | video-source (the two HDR items video-hdr, peak detection video-hdr-peak) | Use Shaders Shift+P | E16, E17 |
+| Video ▸ Deinterlace ▸ Cycle · Auto · Always · Never (radio) · —— · Output ▸ By Frame / By Field (Double Rate) (radio) | 403 | video-source | Cycle Ctrl+I | E10 |
+| Video ▸ Aspect ▸ Keep Aspect Ratio · Ignore Aspect Ratio · Fill Window (Crop Excess) (radio) · —— · Cycle Aspect Ratio · Default (Source) · 4:3 · 16:9 · 16:10 · 1.85:1 · 2.35:1 · Custom (x:y) (radio) · Custom Aspect Ratio… | 404 | video-display | Cycle Aspect Ratio Shift+F6 (Ctrl+F6 is taken by macOS) | E11 |
+| Video ▸ Crop/Stretch ▸ None · Stretch to 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 · Crop to 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 (radio) · —— · Reset Position · Move Left · Move Right · Move Up · Move Down | 405 | video-display | None (not Ctrl+Q, see below) | E12 |
+| Video ▸ Framing ▸ Reset Framing · Zoom In · Zoom Out · —— · Pan → · Pan ← · Pan ↑ · Pan ↓ · Center Frame | 406 | video-display | See the table below | E13 |
+| Video ▸ Image Processing ▸ Flip Vertically · Flip Horizontally · —— · Gaussian Blur · Sharpen · Edge Sharpen · —— · Deblock · Deband · 3D Denoise · Gradual Denoise · Temporal Denoise · —— · Frame Doubling · Motion Interpolation (all checkboxes) | 408 | video-effects | Ctrl+P · Ctrl+Z · Ctrl+B · Ctrl+R · — · Ctrl+H · — · Ctrl+N · — · Ctrl+M | E04–E06, E08, E18 |
+| Video ▸ Rotation ▸ Cycle · No Rotation · 90° · 180° · 270° (radio) | 409 | video-effects | Cycle Alt+K | E09 |
+| Video ▸ Snapshot ▸ … (capture, unchanged) | 420 | — | — | — |
+| Video ▸ Picture Adjustments… | 440 | video-color | | Existing |
+| Video ▸ Reset | 441 | video-color | Q | Existing |
+| Video ▸ Brightness −1% / +1%, contrast, saturation | 442–447 | video-color | W/E, R/T, Y/U | Existing |
+| Video ▸ Hue −1% / +1% | 448 / 449 | video-color | I / O (`repeat`) | E02 |
 
-> **第 2 轮实现范围**：「像素着色 ▸」只有禁用的「使用着色器」（Shift+P）与「HDR 色调映射」两项（原因「需要 GPU 渲染，当前版本不支持」）；「图像处理 ▸ 倍帧」「运动补偿」显示为禁用并给出原因（倍帧第 4a 轮、运动补偿 C-GPU）；「比例 ▸」（E11）与「帧位 ▸」（E13）在第 4a 轮 `video.view()` 提供后才出现。其余各行按上表实现。
+> **Round 2 implementation scope**: "Pixel Shaders ▸" has only the two items "Use Shaders" (Shift+P) and "HDR Tone Mapping", both disabled (reason "Needs GPU rendering, not supported in this version"); "Image Processing ▸ Frame Doubling" and "Motion Interpolation" are shown disabled with a reason (frame doubling in round 4a, motion interpolation with C-GPU); "Aspect ▸" (E11) and "Framing ▸" (E13) appear only after `video.view()` is provided in round 4a. The other rows are implemented as in the table above.
 
-> **第 4a 轮实现范围**：「比例 ▸」（404）与「帧位 ▸」（406）按上表出现，帧位快捷键按下表（小键盘 + 备用键同时绑定，缩放与偏移 `repeat`）；「比例 ▸ 自定义（x:y）」在输入过自定义比例之前禁用，输入后标题变为「自定义（21:9）」。「图像处理 ▸ 倍帧」可用。「像素着色 ▸」两项与「运动补偿」仍禁用，原因改为「等待 GPU 渲染原型结论」（第 4a 轮 §7.2）。
+> **Round 4a implementation scope**: "Aspect ▸" (404) and "Framing ▸" (406) appear as in the table above, with the framing shortcuts as in the table below (numpad and fallback keys bound together; zoom and pan `repeat`); "Aspect ▸ Custom (x:y)" is disabled until a custom ratio has been entered, after which its title becomes "Custom (21:9)". "Image Processing ▸ Frame Doubling" is available. The two "Pixel Shaders ▸" items and "Motion Interpolation" are still disabled, with the reason changed to "Waiting for the GPU rendering prototype result" (round 4a §7.2).
 
-> **渲染轮实现范围（2026-10-21）**：「像素着色 ▸」按上表出现：使用着色器（Shift+P）、着色器列表…、打开着色器文件夹、重新载入着色器；HDR 色调映射 ▸ 七个单选 + 动态峰值检测；HDR 设置…。原来的占位命令 `video.shader.hdr` 换成 `video.hdr.<算法>`、`video.hdr.peak`、`video.hdr.settings`；新增 `video.shader.list`、`video.shader.folder`、`video.shader.reload`。「图像处理 ▸ 运动补偿」可用（勾选）。软件渲染时（`render()` 为 `failed` / `unsupported`）除「着色器列表…」「打开着色器文件夹」外全部禁用，原因「需要 GPU 渲染（当前为软件渲染）」；运行中退回软件渲染时随之禁用。另一个插件占着渲染选项（`conflict`）不算禁用：命令照常可选，用户操作时屏幕提示「渲染选项不可用：另一个插件正在控制渲染选项」，对方释放后再操作一次（或点窗口的「重试」）即生效。manifest 增加 `ui.dialog`。
+> **Render round implementation scope (2026-10-21)**: "Pixel Shaders ▸" appears as in the table above: Use Shaders (Shift+P), Shader List…, Open Shader Folder, Reload Shaders; HDR Tone Mapping ▸ with seven radio items + Dynamic Peak Detection; HDR Settings…. The former placeholder command `video.shader.hdr` is replaced by `video.hdr.<algorithm>`, `video.hdr.peak` and `video.hdr.settings`; `video.shader.list`, `video.shader.folder` and `video.shader.reload` are added. "Image Processing ▸ Motion Interpolation" is available (checkbox). With software rendering (`render()` is `failed` / `unsupported`) everything except "Shader List…" and "Open Shader Folder" is disabled with the reason "Needs GPU rendering (currently software rendering)"; when the player falls back to software rendering while running, they are disabled accordingly. Another plugin holding the render options (`conflict`) does not count as disabled: the commands can be chosen as usual, and when the user acts the on-screen message is "Render options unavailable: another plugin controls them"; after the other plugin releases them, acting again (or clicking "Retry" in the window) takes effect. The manifest adds `ui.dialog`.
 
-帧位快捷键（E13）。绑定语法现在没有小键盘按键名（reference §4.1 的输入只有 `0–9`），帧位键用小键盘，需要核心新增 `Numpad0`–`Numpad9`。Mac 笔记本没有小键盘，所以同时给一组 mpv 风格的备用键：
+Framing shortcuts (E13). The binding syntax has no numpad key names now (the input in reference §4.1 only has `0–9`); the framing keys use the numpad, so the core needs to add `Numpad0`–`Numpad9`. Mac laptops have no numpad, so a set of mpv-style fallback keys is bound as well:
 
-| 命令 | 小键盘键（需核心新增 Numpad） | 备用键（现有语法） |
+| Command | Numpad key (needs core Numpad names) | Fallback key (existing syntax) |
 | --- | --- | --- |
-| 帧位复位 | Numpad5 | Alt+Backspace |
-| 全帧 + / − | Numpad9 / Numpad1 | Alt+Plus / Alt+- |
-| 偏移 → ← ↑ ↓ | Ctrl+Numpad6 / 4 / 8 / 2 | Alt+ArrowRight / Left / Up / Down |
-| 帧位居中 | Ctrl+Numpad5 | — |
+| Reset Framing | Numpad5 | Alt+Backspace |
+| Zoom In / Out | Numpad9 / Numpad1 | Alt+Plus / Alt+- |
+| Pan → ← ↑ ↓ | Ctrl+Numpad6 / 4 / 8 / 2 | Alt+ArrowRight / Left / Up / Down |
+| Center Frame | Ctrl+Numpad5 | — |
 
-冲突检查（对照 `doc/product/menus.md` 和现有插件代码里的全部绑定）：
+Conflict check (against `doc/product/menus.md` and all bindings in the existing plugin code):
 
-- I、O、Ctrl+R、Ctrl+N、Ctrl+M、Ctrl+H、Ctrl+P、Ctrl+Z、Ctrl+I、Shift+F6、Alt+K、Shift+P、Alt+Plus、Alt+-、Alt+方向键、Alt+Backspace 目前都没人用。playback 只用了 Ctrl / Shift / Ctrl+Alt + ←/→，没用单独的 Alt + 方向键。
-- macOS 上 `Ctrl+X` 按 ⌃X 和 ⌘X 都会触发（reference §4.1）。**Ctrl+Q 不绑**，因为 ⌘Q 是退出；「图像缩放设置」做成画面调节窗口里的页面，不设快捷键。Ctrl+H 和 Ctrl+M 的 ⌘ 版本分别是系统的「隐藏」「最小化」，系统先接走时只有 ⌃H、⌃M 生效。这是可以接受的取舍，验收时按 ⌃ 键测。
-- `V`（弹出「选择图像」菜单）、`S`（弹出「像素着色」菜单）这类弹出子菜单的按键不绑：我们没有弹出主菜单子菜单的能力（`commands.popup` 被裁决拒绝；「选择图像」不做，`V` 不再需要）。
+- I, O, Ctrl+R, Ctrl+N, Ctrl+M, Ctrl+H, Ctrl+P, Ctrl+Z, Ctrl+I, Shift+F6, Alt+K, Shift+P, Alt+Plus, Alt+-, Alt+arrow keys and Alt+Backspace are not used by anyone now. playback only uses Ctrl / Shift / Ctrl+Alt + ←/→, not Alt + arrow keys alone.
+- On macOS, `Ctrl+X` is triggered by both ⌃X and ⌘X (reference §4.1). **Ctrl+Q is not bound**, because ⌘Q is Quit; "image scaling settings" becomes a page in the Picture Adjustments window, without a shortcut. The ⌘ versions of Ctrl+H and Ctrl+M are the system's "Hide" and "Minimize"; when the system takes them first, only ⌃H and ⌃M work. This is an acceptable trade-off; test with the ⌃ key during acceptance.
+- Keys that pop up submenus, such as `V` (pops up the "select image" menu) and `S` (pops up the "Pixel Shaders" menu), are not bound: we have no way to pop up a main menu submenu (`commands.popup` was rejected by ruling; "select image" is not done, so `V` is no longer needed).
 
-**画面调节窗口：分页组织**
+**Picture Adjustments window: tabbed layout**
 
-窗口宽 301 不变，高约 250（UI-TOOL-06 要求不超过 320×280），顶部加页签条（高 31，每个页签 74 宽，选中时底色 `#333`，[界面规格](ui-spec.md) §7.1）。四页内容区一样高（7 行 × 24 = 168），底部状态行四页共用：「启用画面效果」复选、一句话状态、失败时的「重试」（保留现有行为）。所有行沿用现有的「标签 65 右对齐 11px + 面板滑块 154×12 + 默认 41×18，行距 24」，复选框沿用现有的 `Check`（12px 方框）。改动立即生效，没有「应用」按钮（UI-TOOL-04）。窗口记住上次打开的页签（存在插件数据目录）。
+The window keeps its width of 301 and is about 250 high (UI-TOOL-06 requires no more than 320×280), with a tab strip added at the top (31 high, each tab 74 wide, `#333` background when selected, [UI spec](ui-spec.md) §7.1). The content area is the same height on all four pages (7 rows × 24 = 168), and the bottom status line is shared by all four pages: the "Enable picture effects" checkbox, a one-sentence status, and "Retry" on failure (existing behavior kept). All rows keep the existing "label 65 right-aligned 11px + panel slider 154×12 + default 41×18, row height 24", and checkboxes keep the existing `Check` (12px box). Changes take effect immediately; there is no "Apply" button (UI-TOOL-04). The window remembers the last opened tab (stored in the plugin data directory).
 
-| 页签 | 行（自上而下） | 编号 |
+| Tab | Rows (top to bottom) | ID |
 | --- | --- | --- |
-| **色彩** | 亮度、对比度、饱和度、色调、Gamma（5 行滑块）；预设按钮行：原始 / 鲜艳 / 电影 / 柔和（69×22） | 现有 + E02 |
-| **效果** | 每行是「复选 + 强度滑块 + 默认」：高斯模糊、锐化、边缘锐化、降噪（复选后跟 60 宽的模式下拉 3D / 渐进 / 瞬态，滑块缩到 88）、去块、消色带；第 7 行：倍帧（复选 65）+ 灰色小字「当前帧率已足够」（84，原帧率 ≥ 50 时）+ 运动补偿（复选 100，软件渲染时置灰） | E03、E04、E05、E06、E18 |
-| **画面** | 翻转：〔上下〕〔左右〕两个开关按钮 51×22；旋转：〔0°〕〔90°〕〔180°〕〔270°〕四个单选按钮 51×22；裁剪/拉伸：方式下拉 72（不使用 / 拉伸 / 裁剪）+ 比例下拉 76（4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1）；宽高比：下拉 154 +「…」按钮 21×21；显示：下拉 154；缩放：滑块 154 + 默认（对数刻度 25%–400%，悬停显示当前倍数；宽高比、显示、缩放三行在第 4a 轮 `video.view()` 之前置灰） | E08、E09、E11、E12、E13 |
-| **高级** | 反交错：模式下拉 90（自动 / 总是使用 / 不使用）+ 输出下拉 104（按帧 / 按场（倍帧率））；HDR：下拉 90（色调映射：自动 / 关 / BT.2390 / Hable / Mobius / Reinhard / 裁剪，自研下拉，列表放不下时上移）+ 目标亮度滑块 100；下一行灰色小字（标签位空，214 宽）「目标亮度 203 尼特」，片源已知不是 HDR 时接「 · 当前片源不是 HDR」；着色器：复选「启用」50 + 文字「3 个着色器」70 +〔列表…〕50 | E10、E16、E17 |
+| **Color** | Brightness, contrast, saturation, hue, gamma (5 slider rows); preset button row: Original / Vivid / Cinema / Soft (69×22) | Existing + E02 |
+| **Effects** | Each row is "checkbox + strength slider + default": Gaussian blur, sharpen, edge sharpen, denoise (the checkbox is followed by a 60-wide mode drop-down 3D / progressive / temporal, slider shrunk to 88), deblock, deband; row 7: frame doubling (checkbox 65) + small grey text "Rate already high enough" (84, when the original frame rate is ≥ 50) + motion interpolation (checkbox 100, grey with software rendering) | E03, E04, E05, E06, E18 |
+| **Picture** | Flip: two toggle buttons [Vert.][Horiz.] 51×22; rotate: four radio buttons [0°][90°][180°][270°] 51×22; crop/stretch: method drop-down 72 (none / stretch / crop) + ratio drop-down 76 (4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1); aspect ratio: drop-down 154 + "…" button 21×21; display: drop-down 154; zoom: slider 154 + default (logarithmic scale 25%–400%, the current factor shown on hover; the aspect ratio, display and zoom rows are grey until `video.view()` in round 4a) | E08, E09, E11, E12, E13 |
+| **Advanced** | Deinterlace: mode drop-down 90 (auto / always / never) + output drop-down 104 (by frame / by field (double rate)); HDR: drop-down 90 (tone mapping: auto / off / BT.2390 / Hable / Mobius / Reinhard / clip; a custom drop-down that moves up when the list does not fit) + target brightness slider 100; next row, small grey text (label slot empty, 214 wide) "Target 203 nits", followed by " · Not an HDR source" when the source is known not to be HDR; shaders: checkbox "Enable" 50 + text "3 shaders" 70 + [List…] 50 | E10, E16, E17 |
 
-软件渲染时，「高级」页的 HDR 下拉与滑块、着色器的「启用」和「效果」页的运动补偿置灰，悬停提示「需要 GPU 渲染（当前为软件渲染）」，HDR 小字行也显示这句；〔列表…〕照常可用（渲染轮之前原因为「等待 GPU 渲染原型结论」，第 4a 轮之前为「需要 GPU 渲染，当前版本不支持」）。各行总宽都不超过内容区 285（HDR 行 267、小字行 285、着色器行 253），下拉都是插件自己的 21 高下拉，不用 std-widgets 的 ComboBox。「效果」页的倍帧与「画面」页的宽高比、显示、缩放三行在第 4a 轮启用（之前置灰）。宽高比下拉的列表放不下时上移到窗口底边以内（7 项时盖住下拉本身）。窗口高 245（页签 31 + 上边距 10 + 内容 168 + 间距 6 + 状态行 22 + 下边距 8）。
+With software rendering, the HDR drop-down and slider on the "Advanced" page, the shaders' "Enable" and motion interpolation on the "Effects" page are grey, with the hover hint "Needs GPU rendering (currently software rendering)", which the small HDR text row also shows; [List…] stays available (before the render round the reason was "Waiting for the GPU rendering prototype result", before round 4a "Needs GPU rendering, not supported in this version"). No row is wider than the 285 content area (HDR row 267, small text row 285, shader row 253); all drop-downs are the plugin's own 21-high drop-downs, not the std-widgets ComboBox. Frame doubling on the "Effects" page and the aspect ratio, display and zoom rows on the "Picture" page are enabled in round 4a (grey before). When the aspect ratio drop-down list does not fit, it moves up to stay inside the window's bottom edge (with 7 items it covers the drop-down itself). Window height 245 (tabs 31 + top margin 10 + content 168 + spacing 6 + status line 22 + bottom margin 8).
 
-**处理链顺序与持久化（全章共用）**
+**Processing chain order and persistence (shared by the whole chapter)**
 
-本插件每次重算出一条完整的节点链，顺序固定，用户不能调：`deinterlace` → `reframe`（裁剪/加边）→ `transform`（翻转与旋转）→ `denoise`（3D → 渐进 → 瞬态）→ `deblock` → `deband` → `eq` → `hue` → `sharpen`（锐化，small）→ `sharpen`（边缘锐化，large）→ `gblur`（第 4a 轮再在最后加 `frameBlend`）。最长 13 个节点。理由：反交错要在一切空间滤镜之前；裁剪和加边要在旋转之前（比例相对于源画面）；先降噪再锐化；倍帧放最后。
+The plugin recomputes one complete node chain each time, in a fixed order that the user cannot change: `deinterlace` → `reframe` (crop / add borders) → `transform` (flip and rotate) → `denoise` (3D → progressive → temporal) → `deblock` → `deband` → `eq` → `hue` → `sharpen` (sharpen, small) → `sharpen` (edge sharpen, large) → `gblur` (round 4a adds `frameBlend` at the end). At most 13 nodes. Reasons: deinterlacing has to come before any spatial filter; cropping and adding borders have to come before rotation (the ratio is relative to the source picture); denoise before sharpening; frame doubling last.
 
-没开的效果不出现在链里；中性值（例如色调 0）也不产生节点（与现有 `nodesFor` 的做法一致）。开关一个效果会改变链的结构，核心会重建滤镜图（`UpdatePlan::NeedsReconfigure`），这是一次滤镜重配置，不是重启播放会话。拖动已开启效果的强度滑块时，如果该参数核心能在运行时修改（下表标「运行时」），只发运行时命令；如果不能，插件**只在滑块松开时提交**（`Slider.released`，`@vestra/widgets.slint` 已提供），拖动过程中不发，避免连续重建造成画面卡顿（interaction-requirements.md §3）。
+Effects that are off do not appear in the chain; neutral values (for example hue 0) do not produce a node either (consistent with the existing `nodesFor`). Toggling an effect changes the chain's structure, and the core rebuilds the filter graph (`UpdatePlan::NeedsReconfigure`); this is a filter reconfiguration, not a restart of the playback session. When dragging the strength slider of an enabled effect, if the core can change that parameter at runtime (marked "runtime" in the table below), only runtime commands are sent; if not, the plugin **submits only when the slider is released** (`Slider.released`, provided by `@vestra/widgets.slint`) and sends nothing during the drag, to avoid stutter from continuous rebuilds (interaction-requirements.md §3).
 
-> 第 2 轮（裁决 R-V1–R-V7）：核心只把 `eq`、`hue`、`gblur` 的参数标为运行时可改；其余节点（锐化、降噪、去块、消色带、裁剪/加边、翻转旋转、反交错）改参数都会重建滤镜，所以这些强度滑块一律只在松开时提交，下文各节写「运行时」「拖动时连续提交」的地方以此为准。
+> Round 2 (rulings R-V1–R-V7): the core marks only the parameters of `eq`, `hue` and `gblur` as runtime-changeable; changing parameters of the other nodes (sharpen, denoise, deblock, deband, crop / add borders, flip and rotate, deinterlace) rebuilds the filter, so these strength sliders all submit only on release; wherever the sections below say "runtime" or "submit continuously while dragging", this note takes precedence.
 
-设置通过 `plugin.storage.json("settings")` 写入 `plugin.dataDirectory/settings.json`（SDK 负责去抖、临时文件加改名；读坏的文件改名为 `settings.json.bad-<时间戳>` 并用默认值），启动时读入。分两类：
+Settings are written with `plugin.storage.json("settings")` to `plugin.dataDirectory/settings.json` (the SDK handles debouncing and temporary file plus rename; a corrupt file is renamed to `settings.json.bad-<timestamp>` and the defaults are used), and read at startup. Two classes:
 
-- **跨文件、跨重启保留**：色彩五项、所有「效果」页设置（含倍帧开关）、反交错模式、宽高比与显示模式、裁剪/拉伸选择与位置、HDR 算法与目标亮度、着色器列表与开关、上次的页签。这些是全局画面设置，不跟文件走。
-- **换片源时复位**：翻转、旋转、帧位（缩放、平移）。它们通常只针对某一个文件，留到下一个文件上会让人以为片源有问题。复位时不显示 OSD。
+- **Kept across files and restarts**: the five color items, all "Effects" page settings (including the frame doubling toggle), deinterlace mode, aspect ratio and display mode, crop/stretch choice and position, HDR algorithm and target brightness, the shader list and toggle, the last tab. These are global picture settings that do not follow the file.
+- **Reset on source change**: flip, rotate, framing (zoom, pan). They usually apply to one particular file, and carrying them over to the next file would make people think the source is broken. No OSD on reset.
 
-文件格式带版本号 `{ "version": 1, ... }`；遇到未知版本时按默认值启动，不覆盖原文件，直到用户改了设置才写回。
+The file format has a version number `{ "version": 1, ... }`; for an unknown version, the plugin starts with the defaults and does not overwrite the original file until the user changes a setting.
 
-### E02 色调
+### E02 Hue
 
-**需求**：在 −100%…+100% 范围内调整画面色相，步长 1%，默认 0%。±100% 对应色相角 ±180°，即 1% = 1.8°。
+**Requirement**: adjust the picture hue within −100%…+100%, step 1%, default 0%. ±100% corresponds to a hue angle of ±180°, so 1% = 1.8°.
 
-**入口**：菜单「视频 ▸ 色调 −1%」（I）/「色调 +1%」（O），按住时自动重复（`repeat: true`）；画面调节窗口「色彩」页的「色调」行（滑块 + 默认）。
+**Entry points**: menu "Video ▸ Hue −1%" (I) / "Hue +1%" (O), auto-repeating while held (`repeat: true`); the "Hue" row on the "Color" page of the Picture Adjustments window (slider + default).
 
-**行为细节**：
-- 按键与菜单：值先取整再加减 1，然后夹在 ±100 内；OSD「色调 +1% (+5%)」/「色调 -1% (-6%)」，格式与现有亮度提示一致。已到 +100% 时再按 O：值不变，OSD 照常显示「色调 +1% (+100%)」，让用户知道已到上限。
-- 「复位」（Q）和「原始」预设都把色调归 0；鲜艳 / 电影 / 柔和三个预设不改变色调（预设对象里色调固定为 0）。
-- 现有的 Gamma 保留，放在色彩页最后一行。
-- 没有就绪媒体时：值照常改，OSD 照常显示，滤镜状态为 `waiting`，媒体就绪后自动应用（SDK 现有行为）。
-- 「启用画面效果」关闭时：按键仍然改值并显示 OSD，但处理链为空；OSD 后面加「（画面效果已关闭）」。
-- 只有音频的来源（`player.stats().video === null`）：命令照常执行，核心应用到空视频阶段不报错；若核心以 `unsupported` 拒绝，窗口状态显示「当前来源没有画面」，不弹 OSD 错误。
+**Behavior details**:
+- Keys and menu: the value is rounded first, then 1 is added or subtracted, then it is clamped to ±100; OSD "Hue +1% (+5%)" / "Hue -1% (-6%)", in the same format as the existing brightness messages. At +100%, pressing O again: the value does not change, and the OSD still shows "Hue +1% (+100%)" so the user knows the limit is reached.
+- "Reset" (Q) and the "Original" preset both set hue to 0; the Vivid / Cinema / Soft presets do not change hue (hue is fixed at 0 in the preset objects).
+- The existing gamma is kept, as the last row of the color page.
+- With no ready media: the value changes as usual, the OSD shows as usual, the filter state is `waiting`, and it is applied automatically once the media is ready (existing SDK behavior).
+- With "Enable picture effects" off: keys still change the value and show the OSD, but the processing chain is empty; the OSD gets "(picture effects off)" appended.
+- Audio-only sources (`player.stats().video === null`): the command runs as usual, and the core applying it to an empty video stage is not an error; if the core rejects with `unsupported`, the window status shows "No picture in the current source", with no OSD error.
 
-**界面**：色彩页第 4 行「色调」，滑块 −100…100。
+**Interface**: row 4 "Hue" on the color page, slider −100…100.
 
-**持久化**：`color.hue`（整数）。
+**Persistence**: `color.hue` (integer).
 
-**核心依赖**：`plugin.video.filter`（现有）。【核心新增】节点类型：
+**Core dependencies**: `plugin.video.filter` (existing). [New core API] node type:
 ```ts
-{ kind: "hue"; degrees: number }   // −180–180；FFmpeg hue 滤镜的 h，运行时可调
+{ kind: "hue"; degrees: number }   // −180–180; h of the FFmpeg hue filter, adjustable at runtime
 ```
-插件把 `hue = round(value) * 1.8` 写进 `degrees`，值为 0 时不加节点。
+The plugin writes `hue = round(value) * 1.8` into `degrees`; with value 0, no node is added.
 
-**验收**：
-- 按住 O 两秒，色相连续变化且没有画面冻结或卡顿；松开后 OSD 显示最终值。
-- 滑块拖到 +100，彩条测试视频的红色变为青色（色相转 180°）。
-- 设为 +20 后重启播放器打开另一个文件，色调仍为 +20。
-- Q 复位后滑块回到 0，链中没有 `hue` 节点（TestHost `host.processing`）。
+**Acceptance**:
+- Hold O for two seconds: the hue changes continuously without the picture freezing or stuttering; after release, the OSD shows the final value.
+- Drag the slider to +100: red in a color bar test video turns cyan (hue rotated by 180°).
+- Set +20, restart the player and open another file: hue is still +20.
+- After Q resets, the slider is back at 0 and there is no `hue` node in the chain (TestHost `host.processing`).
 
-**说明**：「色调」即 Hue。
+**Notes**: "Hue" is the Chinese UI term 色调.
 
-### E04 锐化（含边缘锐化）
+### E04 Sharpen (including edge sharpening)
 
-> 第 2 轮降级（裁决 R-V2）：只有一个节点 `{ kind: "sharpen"; amount: 0–2; size: "small" | "large" }`（unsharp 3×3 / 7×7），不加 `cas`。「锐化」= `small`，`amount` = 强度 × 1.5 / 100；「边缘锐化」= `large`，`amount` = 强度 / 100。两者都不是运行时参数，强度滑块只在松开时提交。下文的 `luma`/`chroma`、CAS 以此为准。
+> Downgraded in round 2 (ruling R-V2): there is only one node `{ kind: "sharpen"; amount: 0–2; size: "small" | "large" }` (unsharp 3×3 / 7×7); `cas` is not added. "Sharpen" = `small`, `amount` = strength × 1.5 / 100; "Edge Sharpen" = `large`, `amount` = strength / 100. Neither is a runtime parameter; the strength sliders submit only on release. This note takes precedence over `luma`/`chroma` and CAS below.
 
-**需求**：
-- 「锐化」：开关 + 强度 0–100，默认关、强度 50。对应亮度锐化系数 0–1.5（线性映射），色度锐化固定为亮度系数的 1/3。
-- 「边缘锐化」：开关 + 强度 0–100，默认关、强度 50。用对比度自适应锐化（CAS），强度直接映射到 0–1。「边缘锐化」在 E06 的编号说明里，因为同属锐化，放在本节一起写。
-- 两者可以同时打开。
+**Requirement**:
+- "Sharpen": toggle + strength 0–100, off by default, strength 50. Maps to a luma sharpening factor of 0–1.5 (linear), with chroma sharpening fixed at 1/3 of the luma factor.
+- "Edge Sharpen": toggle + strength 0–100, off by default, strength 50. Uses contrast adaptive sharpening (CAS), with strength mapped directly to 0–1. "Edge sharpen" is listed in the ID description of E06, but since it is also sharpening, it is written up together in this section.
+- Both can be on at the same time.
 
-**入口**：「视频 ▸ 图像处理 ▸ 锐化」（勾选，Ctrl+R）、「边缘锐化」（勾选，无快捷键）；窗口「效果」页对应两行。
+**Entry points**: "Video ▸ Image Processing ▸ Sharpen" (checkbox, Ctrl+R), "Edge Sharpen" (checkbox, no shortcut); the two matching rows on the window's "Effects" page.
 
-**行为细节**：
-- 菜单和快捷键只切换开关，强度用上次的值；OSD「锐化: 开」/「锐化: 关」、「边缘锐化: 开」/「边缘锐化: 关」。
-- 在窗口里拖强度滑块不会自动打开开关（和现有高斯模糊一致：开关关闭时滑块置灰）。
-- 锐化节点（unsharp）的参数核心不能在运行时修改，所以强度滑块只在松开时提交；CAS 的强度可以在运行时改，拖动时连续提交。
-- 强度为 0 且开关打开：不加节点，勾选标记仍然显示为开（用户意图保留）。
-- 和高斯模糊同时打开时，顺序是先锐化后模糊（见处理链顺序）。不阻止这种组合，只是效果会互相抵消一部分。
+**Behavior details**:
+- The menu and shortcut only switch the toggle, using the last strength; OSD "Sharpen: on" / "Sharpen: off", "Edge sharpen: on" / "Edge sharpen: off".
+- Dragging the strength slider in the window does not turn the toggle on automatically (consistent with the existing Gaussian blur: the slider is grey while the toggle is off).
+- The core cannot change the parameters of the sharpen node (unsharp) at runtime, so the strength slider submits only on release; CAS strength can change at runtime and is submitted continuously while dragging.
+- Strength 0 with the toggle on: no node is added, and the check mark still shows on (the user's intent is kept).
+- When on together with Gaussian blur, the order is sharpen first, then blur (see the processing chain order). The combination is not blocked; the effects just partly cancel each other.
 
-**界面**：效果页第 2、3 行。
+**Interface**: rows 2 and 3 of the effects page.
 
-**持久化**：`effects.sharpen = { on, strength }`、`effects.cas = { on, strength }`。
+**Persistence**: `effects.sharpen = { on, strength }`, `effects.cas = { on, strength }`.
 
-**核心依赖**：【核心新增】节点类型：
+**Core dependencies**: [New core API] node types:
 ```ts
-{ kind: "sharpen"; luma: number; chroma: number } // unsharp 5×5；luma 0–1.5，chroma 0–1；非运行时
-{ kind: "cas"; strength: number }                 // 0–1；运行时可调
-```
-
-**验收**：
-- Ctrl+R 切换时，文字边缘的锐利程度有可见变化，菜单勾选和窗口复选同步。
-- 拖动锐化强度时播放不卡；松开后效果更新一次（TestHost：拖动过程中 `filter.set` 只调用一次）。
-- 1080p H.264 片源同时打开锐化和边缘锐化，开发机上丢帧率低于 1%（`player.stats().framesDropped`）。
-
-**说明**：每种锐化只给一个强度（第二个参数固定），这样窗口每行一个滑块就够。
-
-### E05 降噪（3D / 瞬态 / 渐进）
-
-> 第 2 轮降级（裁决 R-V3）：只有一个节点 `{ kind: "denoise"; lumaSpatial; chromaSpatial; lumaTemporal; chromaTemporal }`（hqdn3d，各 0–20），不加 `temporalDenoise`（atadenoise）。三种降噪是插件内预设，每点强度 s 的权重（空间亮度 / 空间色度 / 时间亮度 / 时间色度）：3D 0.1 / 0.075 / 0.15 / 0.1125（s = 40 即 hqdn3d 默认值）；渐进（中等平衡）0.06 / 0.045 / 0.06 / 0.045；瞬态（时间为主、少量空间）0.02 / 0.015 / 0.2 / 0.15。串联顺序 3D → 渐进 → 瞬态。参数不是运行时的，强度滑块松开时提交。窗口下拉顺序为 3D / 渐进 / 瞬态。
-
-**需求**：三种降噪，各自独立开关，共用一个强度设置位置：
-- **3D 降噪**：空间 + 时间降噪（hqdn3d）。强度 0–100，默认 40；映射为亮度空间 = s×0.1，色度空间 = s×0.075，亮度时间 = s×0.15，色度时间 = s×0.1125（s 为强度，即 hqdn3d 默认比例 4:3:6:4.5 的 s/40 倍）。
-- **瞬态降噪**：只做时间方向的自适应平均（atadenoise），对静止画面上的闪烁噪点有效。强度 0–100，默认 40，映射为阈值 0.01–0.2。
-- **渐进降噪**：只做时间方向、不做空间方向的 hqdn3d（空间分量为 0），细节保留最多、拖影最少。强度 0–100，默认 40，时间分量按 3D 降噪的比例映射。
-- 三者同时打开时按 3D → 渐进 → 瞬态 的顺序串联。
-
-**入口**：「视频 ▸ 图像处理 ▸ 3D 降噪」（勾选，Ctrl+N）、「渐进降噪」（勾选）、「瞬态降噪」（勾选，Ctrl+M）；窗口「效果」页「降噪」行：复选 + 模式下拉（3D / 瞬态 / 渐进）+ 强度滑块。下拉选中哪种，复选和滑块就是哪种的开关和强度，三种的状态各自保存。
-
-**行为细节**：
-- OSD：「3D 降噪: 开」「渐进降噪: 开」「瞬态降噪: 开」（关同理）。
-- 强度参数核心都能在运行时修改，拖动时连续提交。
-- 时间降噪依赖相邻帧。跳转之后头几帧可能有轻微拖影，属于正常现象，不需要处理。
-- 暂停时调整：核心对暂停中的视频会整图重设以刷新当前帧（`processing.rs` 现有逻辑），所以暂停时调强度能看到效果。
-
-**界面**：效果页第 4 行。
-
-**持久化**：`effects.denoise = { d3: {on, strength}, temporal: {on, strength}, gradual: {on, strength}, shownMode }`。
-
-**核心依赖**：【核心新增】节点类型：
-```ts
-{ kind: "denoise3d"; lumaSpatial: number; chromaSpatial: number; lumaTemporal: number; chromaTemporal: number } // hqdn3d，各 0–20，运行时
-{ kind: "temporalDenoise"; threshold: number } // atadenoise 的 0a/0b/1a/1b/2a/2b 统一取该值，0.01–0.3，运行时
-```
-渐进降噪复用 `denoise3d`，把两个空间分量设为 0。
-
-**验收**：
-- 噪点明显的测试片段：3D 降噪打开后静止背景的噪点明显减少；关掉后恢复。
-- 三种同时打开时链中依次出现 3 个降噪节点（TestHost）。
-- 1080p 片源打开 3D 降噪，开发机上实时播放不丢帧。
-
-**说明**：3D 降噪只给一个强度，按固定比例映射到内部的三个参数。
-
-### E06 去块 / 消色带
-
-> 第 2 轮：`deband` 的阈值不是运行时参数（裁决 R-V4 只有 `hue` 是），消色带滑块也只在松开时提交；去块仍是松开且强弱档位变化时才提交。
-
-**需求**（边缘锐化见 E04）：
-- **去块**：消除低码率视频的方块。开关 + 强度两档：弱 / 强（窗口里用滑块 0–100，小于 50 为弱、50 及以上为强），默认关、弱。
-- **消色带**：消除渐变区域的色阶条带。开关 + 强度 0–100，默认关、40；映射为阈值 0.005–0.05（线性），半径固定 16。
-
-**入口**：「视频 ▸ 图像处理 ▸ 去块」（勾选，Ctrl+H）、「消色带」（勾选，无快捷键）；窗口「效果」页第 5、6 行。
-
-**行为细节**：
-- OSD「去块: 开」「消色带: 开」（关同理）。
-- 去块的强弱切换会改变滤镜参数类型，核心按非运行时参数处理，所以去块滑块只在松开且强弱档位变化时提交；消色带阈值可在运行时调。
-- 去块按 8×8 宏块处理（H.264/HEVC 的 4×4 去块效果较弱）。说明写在悬停提示里：「对低码率 MPEG-2/MPEG-4 效果最明显」。
-
-**持久化**：`effects.deblock = {on, strength}`、`effects.deband = {on, strength}`。
-
-**核心依赖**：【核心新增】节点类型：
-```ts
-{ kind: "deblock"; strength: "weak" | "strong" }  // FFmpeg deblock filter=weak|strong，block=8；非运行时
-{ kind: "deband"; threshold: number; range: number } // 阈值 0.003–0.5 写入 1thr–4thr，range 1–64；运行时
+{ kind: "sharpen"; luma: number; chroma: number } // unsharp 5×5; luma 0–1.5, chroma 0–1; not runtime
+{ kind: "cas"; strength: number }                 // 0–1; adjustable at runtime
 ```
 
-**验收**：
-- 低码率 MPEG-4 测试片段打开去块后方块边界变淡。
-- 渐变天空素材打开消色带后条带减少。
-- Ctrl+H 切换后菜单勾选、窗口复选、OSD 三者一致。
+**Acceptance**:
+- Toggling with Ctrl+R visibly changes the sharpness of text edges, and the menu check and window checkbox stay in sync.
+- Dragging the sharpen strength does not make playback stutter; after release the effect updates once (TestHost: `filter.set` is called only once during the drag).
+- With sharpen and edge sharpen both on for a 1080p H.264 source, the dropped frame rate on the development machine is below 1% (`player.stats().framesDropped`).
 
-### E08 上下翻转 / 左右翻转
+**Notes**: each kind of sharpening has only one strength (the second parameter is fixed), so one slider per window row is enough.
 
-> 第 2 轮（裁决 R-V5）：翻转与旋转合成一个节点 `{ kind: "transform"; rotate; flipH; flipV }`，核心先转后翻；插件为保持「先翻后转」，在 90° / 270° 时交换两个翻转轴后发送。
+### E05 Denoise (3D / temporal / progressive)
 
-**需求**：两个独立开关，默认都关。两个都开等于旋转 180°。
+> Downgraded in round 2 (ruling R-V3): there is only one node `{ kind: "denoise"; lumaSpatial; chromaSpatial; lumaTemporal; chromaTemporal }` (hqdn3d, each 0–20); `temporalDenoise` (atadenoise) is not added. The three kinds of denoise are presets in the plugin, with weights per point of strength s (spatial luma / spatial chroma / temporal luma / temporal chroma): 3D 0.1 / 0.075 / 0.15 / 0.1125 (s = 40 is the hqdn3d default); progressive (moderate, balanced) 0.06 / 0.045 / 0.06 / 0.045; temporal (mainly temporal, a little spatial) 0.02 / 0.015 / 0.2 / 0.15. Chained in the order 3D → progressive → temporal. The parameters are not runtime; the strength slider submits on release. The window drop-down order is 3D / progressive / temporal.
 
-**入口**：「视频 ▸ 图像处理 ▸ 上下翻转」（勾选，Ctrl+P）、「左右翻转」（勾选，Ctrl+Z）；窗口「画面」页第 1 行〔上下〕〔左右〕开关按钮（按下态表示开启，用 `Button` 的 `checked`）。
+**Requirement**: three kinds of denoise, each with its own toggle, sharing one place for the strength setting:
+- **3D Denoise**: spatial + temporal denoise (hqdn3d). Strength 0–100, default 40; mapped to luma spatial = s×0.1, chroma spatial = s×0.075, luma temporal = s×0.15, chroma temporal = s×0.1125 (s is the strength, i.e. s/40 times the hqdn3d default ratio 4:3:6:4.5).
+- **Temporal Denoise**: only adaptive averaging over time (atadenoise), effective against flickering noise on still pictures. Strength 0–100, default 40, mapped to a threshold of 0.01–0.2.
+- **Gradual Denoise**: hqdn3d over time only, not space (spatial components 0), keeping the most detail with the least ghosting. Strength 0–100, default 40, temporal components mapped with the 3D denoise ratio.
+- When all three are on, they are chained in the order 3D → progressive → temporal.
 
-**行为细节**：
-- OSD「上下翻转: 开」「左右翻转: 关」。
-- 翻转是像素处理，含效果的截图和离线导出也被翻转。
-- 换片源时复位为关（见持久化分类）。如果复位前是开的，不提示。
-- 翻转在旋转之前处理，所以「左右翻转 + 旋转 90°」是先翻后转。
-- 字幕不随画面翻转（字幕由核心在滤镜之后叠加）。
+**Entry points**: "Video ▸ Image Processing ▸ 3D Denoise" (checkbox, Ctrl+N), "Gradual Denoise" (checkbox), "Temporal Denoise" (checkbox, Ctrl+M); the "Denoise" row on the window's "Effects" page: checkbox + mode drop-down (3D / temporal / progressive) + strength slider. Whichever kind the drop-down selects, the checkbox and slider are that kind's toggle and strength; the state of each of the three is saved separately.
 
-**持久化**：不跨文件保存。
+**Behavior details**:
+- OSD: "3D denoise: on", "Gradual denoise: on", "Temporal denoise: on" (likewise for off).
+- The core can change all strength parameters at runtime, so they are submitted continuously while dragging.
+- Temporal denoise depends on neighboring frames. The first few frames after a seek may show slight ghosting; this is normal and needs no handling.
+- Adjusting while paused: for paused video the core resets the whole graph to refresh the current frame (existing logic in `processing.rs`), so adjusting strength while paused shows the effect.
 
-**核心依赖**：【核心新增】节点类型：
+**Interface**: row 4 of the effects page.
+
+**Persistence**: `effects.denoise = { d3: {on, strength}, temporal: {on, strength}, gradual: {on, strength}, shownMode }`.
+
+**Core dependencies**: [New core API] node types:
 ```ts
-{ kind: "flip"; horizontal: boolean; vertical: boolean } // hflip / vflip；两者都为 false 时插件不发送
+{ kind: "denoise3d"; lumaSpatial: number; chromaSpatial: number; lumaTemporal: number; chromaTemporal: number } // hqdn3d, each 0–20, runtime
+{ kind: "temporalDenoise"; threshold: number } // atadenoise 0a/0b/1a/1b/2a/2b all take this value, 0.01–0.3, runtime
+```
+Gradual denoise reuses `denoise3d` with the two spatial components set to 0.
+
+**Acceptance**:
+- On a test clip with visible noise: with 3D denoise on, the noise on the still background clearly drops; it comes back when turned off.
+- With all three on, 3 denoise nodes appear in order in the chain (TestHost).
+- With 3D denoise on for a 1080p source, real-time playback on the development machine drops no frames.
+
+**Notes**: 3D denoise has only one strength, mapped with fixed ratios to the three internal parameters.
+
+### E06 Deblock / deband
+
+> Round 2: the `deband` threshold is not a runtime parameter (under ruling R-V4 only `hue` is), so the deband slider also submits only on release; deblock still submits only on release when the weak/strong level changes.
+
+**Requirement** (for edge sharpen, see E04):
+- **Deblock**: removes blocks in low-bitrate video. Toggle + two strength levels: weak / strong (a 0–100 slider in the window, below 50 is weak, 50 and above is strong), off by default, weak.
+- **Deband**: removes color banding in gradient areas. Toggle + strength 0–100, off by default, 40; mapped to a threshold of 0.005–0.05 (linear), radius fixed at 16.
+
+**Entry points**: "Video ▸ Image Processing ▸ Deblock" (checkbox, Ctrl+H), "Deband" (checkbox, no shortcut); rows 5 and 6 on the window's "Effects" page.
+
+**Behavior details**:
+- OSD "Deblock: on", "Deband: on" (likewise for off).
+- Switching deblock between weak and strong changes the filter parameter type, which the core treats as a non-runtime parameter, so the deblock slider submits only on release when the weak/strong level changes; the deband threshold can be adjusted at runtime.
+- Deblocking works on 8×8 macroblocks (the effect on 4×4 deblocking in H.264/HEVC is weaker). This is said in the hover hint: "Most effective on low-bitrate MPEG-2/MPEG-4".
+
+**Persistence**: `effects.deblock = {on, strength}`, `effects.deband = {on, strength}`.
+
+**Core dependencies**: [New core API] node types:
+```ts
+{ kind: "deblock"; strength: "weak" | "strong" }  // FFmpeg deblock filter=weak|strong, block=8; not runtime
+{ kind: "deband"; threshold: number; range: number } // threshold 0.003–0.5 written to 1thr–4thr, range 1–64; runtime
 ```
 
-**验收**：
-- Ctrl+P 后画面上下颠倒、字幕仍正常；Ctrl+P 再按一次恢复。
-- 打开新文件后两个开关自动复位为关。
-- 翻转状态下截「含效果」的图，图片也是翻转的。
+**Acceptance**:
+- On a low-bitrate MPEG-4 test clip, block edges fade with deblock on.
+- On gradient sky footage, banding drops with deband on.
+- After toggling with Ctrl+H, the menu check, the window checkbox and the OSD agree.
 
-**说明**：不单独做「旋转（水平/垂直切换）」，与 E09 重复。
+### E08 Vertical flip / horizontal flip
 
-### E09 旋转 90 / 180 / 270
+> Round 2 (ruling R-V5): flip and rotate are combined into one node `{ kind: "transform"; rotate; flipH; flipV }`; the core rotates first and then flips; to keep "flip first, then rotate", the plugin swaps the two flip axes at 90° / 270° before sending.
 
-> 第 2 轮（裁决 R-V5）：节点为 `transform`（见 E08）。「按宽高比自动旋转」本轮未做：`player.stats().video.width/height` 是解码输出尺寸，未经宿主的方向处理，竖拍片源判断会错；留待有「摆正后尺寸」的数据再做。
+**Requirement**: two independent toggles, both off by default. Both on equals a 180° rotation.
 
-**需求**：顺时针旋转 0° / 90° / 180° / 270°，单选，默认 0°。按序切换的顺序为 0 → 90 → 180 → 270 → 0。可选的「按宽高比自动旋转」：竖屏片源（高 > 宽）自动转 90° 横过来显示，默认关。
+**Entry points**: "Video ▸ Image Processing ▸ Flip Vertically" (checkbox, Ctrl+P), "Flip Horizontally" (checkbox, Ctrl+Z); toggle buttons [Vert.][Horiz.] in row 1 of the window's "Picture" page (the pressed state means on, using `checked` of `Button`).
 
-**入口**：「视频 ▸ 图像旋转 ▸ 按序切换」（Alt+K）、「不旋转 / 90° / 180° / 270°」（单选）、「按宽高比自动旋转」（勾选，放在单选组之后）；窗口「画面」页第 2 行四个单选按钮。
+**Behavior details**:
+- OSD "Flip vertically: on", "Flip horizontally: off".
+- Flipping is pixel processing, so screenshots with effects and offline exports are flipped as well.
+- Reset to off on source change (see the persistence classes). If it was on before the reset, there is no message.
+- Flipping is processed before rotation, so "flip horizontally + rotate 90°" flips first, then rotates.
+- Subtitles do not flip with the picture (the core overlays subtitles after the filters).
 
-**行为细节**：
-- OSD「图像旋转: 90°」/「图像旋转: 不旋转」。
-- 用户旋转叠加在核心已经做的「按元数据校正方向」之上：核心先按片源的旋转元数据把画面摆正（`source_geometry.rs`），本插件的旋转再在此基础上转。
-- 90° / 270° 会交换输出的宽高。核心的软件渲染按输出比例重新排版，宽高比设置（E11）作用于旋转后的画面。
-- 自动旋转：片源就绪后读 `player.stats().video` 的宽高（已经过元数据校正）。只在用户这一轮没有手动选过旋转时生效；用户手动选择后，本片源内不再自动旋转。
-- 换片源时复位为 0°（自动旋转开启时按新片源重新判断）。
-- 旋转是像素处理，含效果的截图也被旋转。
+**Persistence**: not saved across files.
 
-**持久化**：只保存「按宽高比自动旋转」开关，旋转角度不保存。
-
-**核心依赖**：【核心新增】节点类型：
+**Core dependencies**: [New core API] node type:
 ```ts
-{ kind: "transpose"; degrees: 90 | 180 | 270 } // 90 = transpose=clock，270 = transpose=cclock，180 = hflip,vflip
+{ kind: "flip"; horizontal: boolean; vertical: boolean } // hflip / vflip; the plugin does not send it when both are false
 ```
-不用 mpv 的 `video-rotate`：软件渲染器不支持旋转，宿主现在专门用 `format=rotate=0` 把元数据旋转清零、改由滤镜处理（`source_geometry.rs` 的 `INITIAL_FILTERS`）。用户旋转也走滤镜，和这条路径一致。
 
-**验收**：
-- 横屏片源 Alt+K 按四次，依次为 90°、180°、270°、不旋转，每次都有 OSD。
-- 90° 时画面竖向显示，比例正确不变形，视频区两侧加黑边。
-- 带旋转元数据（手机竖拍）的片源：默认显示已摆正；再选 90° 时在摆正的基础上转。
-- 打开自动旋转后打开竖屏片源，画面横过来显示；手动选「不旋转」后不再被自动改回。
+**Acceptance**:
+- After Ctrl+P the picture is upside down and subtitles are still normal; pressing Ctrl+P again restores it.
+- After opening a new file, both toggles reset to off automatically.
+- A screenshot "with effects" taken while flipped is flipped too.
 
-**说明**：两种自动旋转（0/90 与 180/270）合并为一个开关，固定转 90°。
+**Notes**: there is no separate "rotate (switch horizontal/vertical)", which would duplicate E09.
 
-### E10 反交错（自动 / 开 / 关）
+### E09 Rotate 90 / 180 / 270
 
-> 第 2 轮降级（裁决 R-V6）：节点 `{ kind: "deinterlace"; when: "interlaced" | "all"; output: "frame" | "field" }`，算法固定 BWDIF。删除「方式 ▸ BWDIF / YADIF」单选与窗口里的算法下拉；窗口「高级」页反交错行改为模式下拉 + 输出下拉。持久化为 `deinterlace = { mode, output }`。下文的 `method`、YADIF 不再适用。
+> Round 2 (ruling R-V5): the node is `transform` (see E08). "Rotate automatically by aspect ratio" is not done this round: `player.stats().video.width/height` are the decoder output size, without the host's orientation handling, so portrait sources would be judged wrongly; it waits until there is data for the "upright size".
 
-**需求**：
-- 模式三选一：**自动**（只处理带隔行标记的帧）/ **总是使用**（所有帧）/ **不使用**。默认自动。
-- 方式两选一：BWDIF（默认，质量好）/ YADIF（更省 CPU）。
-- 输出两选一：按帧（帧率不变，默认）/ 按场（帧率加倍，运动更流畅）。
-- 按序切换的顺序为 自动 → 总是使用 → 不使用 → 自动。
+**Requirement**: rotate clockwise by 0° / 90° / 180° / 270°, radio, default 0°. The cycle order is 0 → 90 → 180 → 270 → 0. Optional "Rotate automatically by aspect ratio": portrait sources (height > width) are automatically rotated 90° to display them landscape; off by default.
 
-**入口**：「视频 ▸ 反交错 ▸ 按序切换」（Ctrl+I）、模式单选、「方式 ▸」单选、「输出 ▸」单选；窗口「高级」页「反交错」行：模式下拉 + 方式下拉（输出方式只在菜单里设置，窗口里不放，以保持紧凑）。
+**Entry points**: "Video ▸ Rotation ▸ Cycle" (Alt+K), "No Rotation / 90° / 180° / 270°" (radio), "Rotate automatically by aspect ratio" (checkbox, after the radio group); four radio buttons in row 2 of the window's "Picture" page.
 
-**行为细节**：
-- OSD「反交错: 自动」/「反交错: 总是使用」/「反交错: 不使用」。
-- 自动模式的节点总是在链里（只处理带标记的帧），逐行片源上几乎没有开销；「不使用」时不加节点。
-- 反交错放在链的最前面，在本插件其它所有滤镜之前。
-- 「按场」输出会把帧率加倍，对 1080i 素材 CPU 开销较大。若 `player.stats().framesDropped` 在 5 秒内增加超过总帧数的 5%，OSD 提示一次「反交错按场输出丢帧较多，可改为按帧」（每个片源最多提示一次）。
-- 与 E18 倍帧同时开时，先反交错再倍帧。
+**Behavior details**:
+- OSD "Rotation: 90°" / "Rotation: none".
+- The user's rotation is applied on top of the core's "correct orientation from metadata": the core first makes the picture upright from the source's rotation metadata (`source_geometry.rs`), and this plugin's rotation is applied on top of that.
+- 90° / 270° swap the output width and height. The core's software rendering lays out again by the output ratio, and the aspect ratio setting (E11) applies to the rotated picture.
+- Automatic rotation: after the source is ready, read the width and height of `player.stats().video` (already corrected by metadata). It only takes effect when the user has not chosen a rotation manually in this pass; after a manual choice, there is no more automatic rotation for this source.
+- Reset to 0° on source change (with automatic rotation on, the new source is judged again).
+- Rotation is pixel processing, so screenshots with effects are rotated too.
 
-**持久化**：`deinterlace = { mode: "auto"|"on"|"off", method: "bwdif"|"yadif", output: "frame"|"field" }`。
+**Persistence**: only the "Rotate automatically by aspect ratio" toggle is saved; the rotation angle is not.
 
-**核心依赖**：【核心新增】节点类型：
+**Core dependencies**: [New core API] node type:
+```ts
+{ kind: "transpose"; degrees: 90 | 180 | 270 } // 90 = transpose=clock, 270 = transpose=cclock, 180 = hflip,vflip
+```
+mpv's `video-rotate` is not used: the software renderer does not support rotation, and the host now uses `format=rotate=0` specifically to zero the metadata rotation and handle it with filters instead (`INITIAL_FILTERS` in `source_geometry.rs`). The user's rotation also goes through filters, consistent with that path.
+
+**Acceptance**:
+- On a landscape source, press Alt+K four times: 90°, 180°, 270°, no rotation in turn, each with an OSD.
+- At 90° the picture is shown portrait, with the correct ratio and no distortion, and black bars on both sides of the video area.
+- A source with rotation metadata (shot portrait on a phone): shown upright by default; choosing 90° rotates on top of the upright picture.
+- With automatic rotation on, open a portrait source: the picture is shown landscape; after manually choosing "No Rotation", it is not changed back automatically.
+
+**Notes**: the two kinds of automatic rotation (0/90 and 180/270) are merged into one toggle that always rotates by 90°.
+
+### E10 Deinterlace (auto / on / off)
+
+> Downgraded in round 2 (ruling R-V6): the node is `{ kind: "deinterlace"; when: "interlaced" | "all"; output: "frame" | "field" }`, with the algorithm fixed at BWDIF. The "Method ▸ BWDIF / YADIF" radio items and the algorithm drop-down in the window are removed; the deinterlace row on the window's "Advanced" page becomes a mode drop-down + output drop-down. Persisted as `deinterlace = { mode, output }`. `method` and YADIF below no longer apply.
+
+**Requirement**:
+- Mode, one of three: **Auto** (only frames flagged as interlaced) / **Always** (all frames) / **Never**. Default auto.
+- Method, one of two: BWDIF (default, good quality) / YADIF (less CPU).
+- Output, one of two: by frame (frame rate unchanged, default) / by field (frame rate doubled, smoother motion).
+- The cycle order is Auto → Always → Never → Auto.
+
+**Entry points**: "Video ▸ Deinterlace ▸ Cycle" (Ctrl+I), the mode radio items, the "Method ▸" radio items, the "Output ▸" radio items; the "Deinterlace" row on the window's "Advanced" page: mode drop-down + method drop-down (output is only set in the menu, not in the window, to keep it compact).
+
+**Behavior details**:
+- OSD "Deinterlace: auto" / "Deinterlace: always" / "Deinterlace: never".
+- In auto mode the node is always in the chain (it only processes flagged frames), with almost no overhead on progressive sources; with "Never" no node is added.
+- Deinterlacing comes first in the chain, before every other filter of this plugin.
+- "By field" output doubles the frame rate, which costs a lot of CPU on 1080i material. If `player.stats().framesDropped` grows by more than 5% of the total frames within 5 seconds, the OSD shows once "Many frames dropped with field output, try frame output" (at most once per source).
+- When on together with E18 frame doubling, deinterlace first, then frame doubling.
+
+**Persistence**: `deinterlace = { mode: "auto"|"on"|"off", method: "bwdif"|"yadif", output: "frame"|"field" }`.
+
+**Core dependencies**: [New core API] node type:
 ```ts
 { kind: "deinterlace"; method: "bwdif" | "yadif"; when: "interlaced" | "all"; output: "frame" | "field" }
-// deint=interlaced|all，mode=send_frame|send_field；非运行时
+// deint=interlaced|all, mode=send_frame|send_field; not runtime
 ```
-不用 mpv 的 `deinterlace` 属性：那是播放器全局状态，不属于某个插件，插件停用时撤不干净；作为节点则跟随本插件的处理链生命周期。
+mpv's `deinterlace` property is not used: it is global player state that belongs to no plugin and cannot be cleanly withdrawn when the plugin is disabled; as a node, it follows the lifecycle of this plugin's processing chain.
 
-**验收**：
-- 1080i 测试片段在「不使用」时有梳状条纹，「自动」时消失。
-- 逐行片源在「自动」下画面与「不使用」完全一致（截图逐像素对比，误差为 0）。
-- Ctrl+I 循环三种模式，菜单单选点同步。
-- 「按场」输出时 `player.stats().video.fps` 翻倍（若核心报告输出帧率）或画面运动明显更流畅。
+**Acceptance**:
+- A 1080i test clip shows comb artifacts with "Never", which disappear with "Auto".
+- A progressive source with "Auto" looks exactly the same as with "Never" (pixel-by-pixel screenshot comparison, error 0).
+- Ctrl+I cycles through the three modes, and the menu radio dot follows.
+- With "by field" output, `player.stats().video.fps` doubles (if the core reports the output frame rate) or the motion is clearly smoother.
 
-**说明**：硬件反交错（H/W）和场序设置不做，场序由滤镜自动检测。
+**Notes**: hardware deinterlacing (H/W) and field order settings are not done; the filter detects the field order automatically.
 
-### E11 宽高比与显示模式
+### E11 Aspect ratio and display mode
 
-> 排期（裁决 R-V9）：`plugin.video.view()` 与 C-SIZE 第 4a 轮提供（单一拥有者，去掉 `scaleX` / `scaleY`），本项第 4a 轮实现。第 2 轮窗口「画面」页的宽高比、显示两行置灰，「比例 ▸」菜单不出现。
+> Schedule (ruling R-V9): `plugin.video.view()` and C-SIZE are provided in round 4a (single owner, `scaleX` / `scaleY` removed), and this item is implemented in round 4a. In round 2, the aspect ratio and display rows on the window's "Picture" page are grey, and the "Aspect ▸" menu does not appear.
 
-**需求**：
-- **宽高比**（单选）：默认（按来源）/ 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 / 自定义。自定义输入「宽:高」两个正数（例如 21:9），或一个小数（例如 2.39），范围 0.25–4.0。默认为「按来源」。
-- **显示模式**（单选）：保持宽高比（默认，加黑边）/ 不保持宽高比（拉伸填满视频区）/ 填满窗口（保持比例放大到填满，裁去溢出部分）。
-- 依次切换比例（Shift+F6）：默认 → 4:3 → 16:9 → 16:10 → 1.85:1 → 2.35:1 →（若已设自定义）自定义 → 默认。
+**Requirement**:
+- **Aspect ratio** (radio): Default (Source) / 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 / custom. Custom takes "width:height" as two positive numbers (for example 21:9) or one decimal (for example 2.39), range 0.25–4.0. The default is "source".
+- **Display mode** (radio): Keep Aspect Ratio (default, adds black bars) / Ignore Aspect Ratio (stretch to fill the video area) / Fill Window (keep the ratio and enlarge until filled, cropping what overflows).
+- Cycle Aspect Ratio (Shift+F6): Default → 4:3 → 16:9 → 16:10 → 1.85:1 → 2.35:1 → (if set) custom → Default.
 
-**入口**：「视频 ▸ 比例 ▸」各项；「自定义比例…」打开一个小输入窗（`windows.create("ui/aspect.slint")`，240×98：一行说明 + 一个 21 高的输入框 + 〔确定〕〔取消〕，输入错误时框下提示「格式：16:9 或 2.39」，用 `Theme.accent`（主题没有红色）；Esc 等于取消；也接受「21/9」和全角冒号）；窗口「画面」页的「宽高比」（下拉 +「…」打开同一个小窗）「显示」两行。
+**Entry points**: the items under "Video ▸ Aspect ▸"; "Custom Aspect Ratio…" opens a small input window (`windows.create("ui/aspect.slint")`, 240×98: one line of explanation + a 21-high input box + [OK][Cancel]; on invalid input, "Format: 16:9 or 2.39" is shown below the box in `Theme.accent` (the theme has no red); Esc equals Cancel; "21/9" and a full-width colon are accepted too); the "Aspect ratio" (drop-down + "…" opens the same small window) and "Display" rows on the window's "Picture" page.
 
-**行为细节**：
-- OSD 文案：「宽高比：默认」「宽高比：4:3」…「宽高比：自定义 - 21:9」；显示模式「保持宽高比」「不保持宽高比」「填满窗口」。
-- 宽高比是显示层效果：截图、离线导出、处理链都不受影响。
-- 旋转 90° / 270° 后，宽高比作用于旋转后的画面。
-- 全屏和窗口模式用同一套设置。
-- 宽高比和裁剪/拉伸（E12）可以同时设置：先按 E12 改变画面内容的比例，再按本项决定显示时的比例。
-- 只有音频的来源或封面图：设置保留，不提示。
-- 显示层只有一个拥有者（核心规则）。别的插件已经占用时，菜单与窗口照常可操作，屏幕提示「画面显示不可用：另一个插件正在控制画面显示」，窗口状态行显示「画面显示不可用」（悬停看原因）；占用者释放后，再操作一次或点「重试」即生效。插件启动时被占用不提示。
+**Behavior details**:
+- OSD wording: "Aspect ratio: Default", "Aspect ratio: 4:3" … "Aspect ratio: Custom - 21:9"; display mode "Keep Aspect Ratio", "Ignore Aspect Ratio", "Fill Window".
+- The aspect ratio is a display-layer effect: screenshots, offline exports and the processing chain are not affected.
+- After rotating by 90° / 270°, the aspect ratio applies to the rotated picture.
+- Fullscreen and windowed modes use the same settings.
+- Aspect ratio and crop/stretch (E12) can be set together: E12 first changes the ratio of the picture content, then this item decides the displayed ratio.
+- Audio-only sources or cover images: the settings are kept, with no message.
+- The display layer has only one owner (core rule). When another plugin already holds it, the menu and window can be used as usual; the on-screen message is "Display unavailable: another plugin controls the display", and the window status line shows "Display unavailable" (hover for the reason); after the holder releases it, acting again or clicking "Retry" takes effect. No message when it is held at plugin startup.
 
-**持久化**：`view.aspect`（`null` 表示按来源，否则为数值）、`view.customAspect`（最近一次的自定义文本，例如 "21:9"）、`view.fit`。
+**Persistence**: `view.aspect` (`null` means source, otherwise a number), `view.customAspect` (the latest custom text, for example "21:9"), `view.fit`.
 
-**核心依赖**：
-- 显示层接口（E11、E13 共用，第 4a 轮已提供，参考文档 §8.1）：
+**Core dependencies**:
+- Display layer interface (shared by E11 and E13, provided in round 4a, reference §8.1):
   ```ts
-  plugin.video.view(): VideoView   // 需要 processing.video；第一个调用的插件拥有显示层，别的插件 conflict；同一插件第二次调用抛错
+  plugin.video.view(): VideoView   // needs processing.video; the first plugin to call it owns the display layer, other plugins get conflict; a second call from the same plugin throws
   interface VideoView extends Disposable {
-    set(value: Partial<ViewSettings>): void;   // 合并写入，最后写入生效
-    readonly status: FilterStatus;              // 与滤镜相同的四态
+    set(value: Partial<ViewSettings>): void;   // merged write, last write wins
+    readonly status: FilterStatus;              // the same four states as filters
     onStatus(listener: (s: FilterStatus) => void): Disposable;
   }
   interface ViewSettings {
-    aspect: number | null;                // null = 按来源；0.25–4 → mpv video-aspect-override（null 写 -1）
-    fit: "keep" | "stretch" | "fill";     // keep: keepaspect=yes,panscan=0；stretch: keepaspect=no；fill: panscan=1
-    zoom: number;                         // 线性倍数 0.25–4 → video-zoom = log2(zoom)
+    aspect: number | null;                // null = source; 0.25–4 → mpv video-aspect-override (null writes -1)
+    fit: "keep" | "stretch" | "fill";     // keep: keepaspect=yes,panscan=0; stretch: keepaspect=no; fill: panscan=1
+    zoom: number;                         // linear factor 0.25–4 → video-zoom = log2(zoom)
     panX: number; panY: number;           // −1–1 → video-pan-x / video-pan-y
   }
   ```
-  为什么要核心做：这些是 mpv 的 vo 级属性，处理链节点表达不了；插件也不能直接写 mpv 属性。语义（裁决 R-V9）：**单一拥有者**，第二个插件 `conflict`；拥有者停用或 `dispose()` 时，核心把五项恢复为默认值；换来源时核心保留当前值。
-- 宿主行为 **C-SIZE：渲染尺寸跟随视频区**（第 4a 轮已完成）：渲染目标按视频区物理像素、以来源分辨率封顶，比例始终等于视频区比例，所以「不保持宽高比」「填满窗口」在任何窗口比例下都正确。
+  Why the core has to do it: these are mpv vo-level properties that processing chain nodes cannot express, and plugins cannot write mpv properties directly. Semantics (ruling R-V9): **single owner**, a second plugin gets `conflict`; when the owner is disabled or calls `dispose()`, the core restores the five items to their defaults; on source change the core keeps the current values.
+- Host behavior **C-SIZE: render size follows the video area** (done in round 4a): the render target follows the video area's physical pixels, capped at the source resolution, and its ratio always equals the video area's ratio, so "Ignore Aspect Ratio" and "Fill Window" are correct at any window ratio.
 
-**验收**：
-- 16:9 片源选 4:3：画面被横向压缩，左右出现黑边；OSD「宽高比：4:3」。
-- 把窗口拖成接近 1:1，选「不保持宽高比」：画面填满视频区，没有任何黑边。
-- 选「填满窗口」：没有黑边，画面上下或左右被裁掉。
-- 自定义输入「21:9」后，依次切换比例的序列里包含「自定义 - 21:9」。
-- 输入「abc」时确定按钮无效，框下显示格式提示。
-- 「含效果」截图的尺寸和比例不受宽高比设置影响。
-- 插件停用后画面恢复为按来源显示。
+**Acceptance**:
+- Choose 4:3 for a 16:9 source: the picture is squeezed horizontally, with black bars on the left and right; OSD "Aspect ratio: 4:3".
+- Drag the window to nearly 1:1 and choose "Ignore Aspect Ratio": the picture fills the video area without any black bars.
+- Choose "Fill Window": no black bars; the picture is cropped at the top and bottom or left and right.
+- After entering a custom "21:9", the Cycle Aspect Ratio sequence includes "Custom - 21:9".
+- With "abc" entered, the OK button does nothing and the format hint shows below the box.
+- The size and ratio of "with effects" screenshots are not affected by the aspect ratio setting.
+- After the plugin is disabled, the picture goes back to the source display.
 
-**说明**：「默认（按来源）」即按来源的输出比例；不做「固定为 0.5 / 1.0 / 1.5 / 2.0 倍帧」（帧位缩放 E13 能达到同样目的）；不做电视输出设备比例（4:3/16:9）；「填满窗口」即保持全屏宽高比、裁去多余；「依次切换比例」用 Shift+F6（Ctrl+F6 被 macOS 占用）。
+**Notes**: "Default (Source)" means the source's output ratio; "fixed at 0.5 / 1.0 / 1.5 / 2.0× frame" is not done (framing zoom E13 achieves the same); TV output device ratio (4:3/16:9) is not done; "Fill Window" means keep the fullscreen aspect ratio and crop the excess; "Cycle Aspect Ratio" uses Shift+F6 (Ctrl+F6 is taken by macOS).
 
-### E12 拉伸（加边）/ 裁剪到指定比例
+### E12 Stretch (add borders) / crop to a given ratio
 
-> 第 2 轮（裁决 R-V7）：一个节点 `{ kind: "reframe"; mode: "crop" | "pad"; aspect: 0.25–4; x; y: −1–1 }`，插件把位置 0%–100% 映射为 −1–1。窗口里改为「方式」「比例」两个下拉（列表短，弹出框留在窗口内）。
+> Round 2 (ruling R-V7): one node `{ kind: "reframe"; mode: "crop" | "pad"; aspect: 0.25–4; x; y: −1–1 }`; the plugin maps position 0%–100% to −1–1. In the window this becomes two drop-downs, "Method" and "Ratio" (the lists are short, so the popups stay inside the window).
 
-**需求**：改变画面**内容**本身的比例（像素处理，与 E11 只改显示不同）。单选：
-- **不使用**（默认）。
-- **按 X 拉伸**（X = 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1）：在画面周围补黑边，使画面整体比例变为 X，原画面不变形。例如 16:9 片源「按 4:3 拉伸」会在上下补黑边，字幕可以显示在黑边里，截图也带黑边。
-- **按 X 裁剪**：从画面中裁出比例为 X 的区域，丢弃其余部分。例如 2.35:1 电影被压成 16:9 带黑边的文件，「按 2.35:1 裁剪」会去掉上下黑边。
-- **位置**：水平、垂直位置各 0%–100%，默认 50%（居中），决定加边或裁剪时画面偏向哪一侧。菜单的上移 / 下移 / 左移 / 右移每次改 5%，「位置复位」回到 50% / 50%。
-- 源画面比例已等于 X 时，该选项不起作用（不加节点）。
+**Requirement**: change the ratio of the picture **content** itself (pixel processing, unlike E11 which only changes the display). Radio:
+- **None** (default).
+- **Stretch to X** (X = 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1): add black borders around the picture so that the overall ratio becomes X, without distorting the original picture. For example "Stretch to 4:3" on a 16:9 source adds black borders at the top and bottom; subtitles can be shown in the borders, and screenshots include the borders.
+- **Crop to X**: cut a region with ratio X out of the picture and discard the rest. For example a 2.35:1 film squeezed into a 16:9 file with black bars: "Crop to 2.35:1" removes the top and bottom bars.
+- **Position**: horizontal and vertical position, each 0%–100%, default 50% (centered), deciding which side the picture leans to when adding borders or cropping. The menu's Move Up / Move Down / Move Left / Move Right change it by 5% each time, and "Reset Position" goes back to 50% / 50%.
+- When the source ratio already equals X, the option has no effect (no node is added).
 
-**入口**：「视频 ▸ 裁剪/拉伸 ▸」各项；窗口「画面」页「裁剪/拉伸」下拉（位置只在菜单里调）。
+**Entry points**: the items under "Video ▸ Crop/Stretch ▸"; the "Crop/Stretch" drop-down on the window's "Picture" page (the position is only adjusted in the menu).
 
-**行为细节**：
-- OSD「裁剪/拉伸: 按 2.35:1 裁剪」「裁剪/拉伸: 不使用」；移动时「裁剪位置 (50%, 45%)」。
-- 处理在旋转之前，所以比例针对源画面（未旋转）计算。
-- 加边颜色固定为黑色。
-- 位置调整的参数核心不能在运行时修改，连续按方向键时插件按最后一次值提交（SDK 已合并在途请求），每次按键仍更新 OSD。
-- 裁剪后再配合 E11「按来源」显示时，显示比例是裁剪后的比例。
-- 裁剪 / 加边是像素处理，截图和离线导出也包含它。
+**Behavior details**:
+- OSD "Crop/stretch: crop to 2.35:1", "Crop/stretch: none"; when moving, "Crop position (50%, 45%)".
+- Processing comes before rotation, so the ratio is computed for the source picture (not rotated).
+- The border color is fixed black.
+- The core cannot change the position parameters at runtime; on repeated arrow key presses the plugin submits the last value (the SDK already merges in-flight requests), and each key press still updates the OSD.
+- When combined with E11 "source" display after cropping, the displayed ratio is the cropped ratio.
+- Cropping / adding borders is pixel processing, so screenshots and offline exports include it.
 
-**持久化**：`crop = { mode: "none" | "pad" | "crop", aspect: number, x: number, y: number }`，跨文件保留（全局设置）。
+**Persistence**: `crop = { mode: "none" | "pad" | "crop", aspect: number, x: number, y: number }`, kept across files (global setting).
 
-**核心依赖**：【核心新增】节点类型（尺寸由核心按输入尺寸计算，插件不需要知道源分辨率）：
+**Core dependencies**: [New core API] node types (the core computes sizes from the input size, so the plugin does not need to know the source resolution):
 ```ts
-{ kind: "crop"; aspect: number; x: number; y: number } // aspect 0.25–4；x、y 0–1
-// crop=w='min(iw,ih*A)':h='min(ih,iw/A)':x='(iw-ow)*X':y='(ih-oh)*Y'，宽高取偶数；非运行时
+{ kind: "crop"; aspect: number; x: number; y: number } // aspect 0.25–4; x, y 0–1
+// crop=w='min(iw,ih*A)':h='min(ih,iw/A)':x='(iw-ow)*X':y='(ih-oh)*Y', even width and height; not runtime
 { kind: "pad"; aspect: number; x: number; y: number }
-// pad=w='max(iw,ih*A)':h='max(ih,iw/A)':x='(ow-iw)*X':y='(oh-ih)*Y':color=black；非运行时
+// pad=w='max(iw,ih*A)':h='max(ih,iw/A)':x='(ow-iw)*X':y='(oh-ih)*Y':color=black; not runtime
 ```
 
-**验收**：
-- 2.35:1 内容的 16:9 信箱片源选「按 2.35:1 裁剪」后上下黑边消失，画面不变形。
-- 16:9 片源选「按 4:3 拉伸」后上下出现黑边，字幕可以显示在下黑边内，「含效果」截图是 4:3。
-- 裁剪状态下按「上移」三次，裁剪窗口向上移动，OSD 显示位置百分比。
+**Acceptance**:
+- A 16:9 letterboxed source with 2.35:1 content: after "Crop to 2.35:1" the top and bottom bars disappear and the picture is not distorted.
+- A 16:9 source with "Stretch to 4:3": black borders appear at the top and bottom, subtitles can show in the bottom border, and a "with effects" screenshot is 4:3.
+- While cropping, press "Move Up" three times: the crop window moves up and the OSD shows the position percentages.
 
-**说明**：「按像素单位缩放」和背景色选择不做；Ctrl+Q 不绑（见冲突说明）。
+**Notes**: "scale by pixel units" and background color choice are not done; Ctrl+Q is not bound (see the conflict notes).
 
-### E13 画面缩放与平移（帧位）
+### E13 Picture zoom and pan (framing)
 
-> 排期与降级（裁决 R-V9）：第 4a 轮提供 `video.view()` 并实现本项；去掉 `scaleX` / `scaleY`，所以删除「帧宽 + / −」「帧高 + / −」四条命令（菜单表与快捷键表已删）。第 2 轮窗口「画面」页的缩放行置灰，「帧位 ▸」菜单不出现。小键盘绑定名已在第 2 轮提供。
+> Schedule and downgrade (ruling R-V9): round 4a provides `video.view()` and implements this item; `scaleX` / `scaleY` are removed, so the four commands "frame width + / −" and "frame height + / −" are deleted (already removed from the menu and shortcut tables). In round 2 the zoom row on the window's "Picture" page is grey and the "Framing ▸" menu does not appear. The numpad binding names were provided in round 2.
 
-**需求**：
-- **全帧 + / −**：整体缩放，倍数范围 0.25–4.0，每步乘或除以 1.05，默认 1.0。
-- **偏移 → ← ↑ ↓**：平移画面，每步为视频宽（高）的 1%，范围 −100%–+100%，默认 0。
-- **帧位复位**：缩放、偏移全部恢复默认。**帧位居中**：只把偏移归零。
-- 窗口「画面」页的「缩放」滑块控制整体倍数（25%–400%，对数刻度，滑块中点为 100%），其「默认」按钮等于帧位复位。
+**Requirement**:
+- **Zoom In / Out**: overall zoom, factor range 0.25–4.0, each step multiplies or divides by 1.05, default 1.0.
+- **Pan → ← ↑ ↓**: move the picture, each step 1% of the video width (height), range −100%–+100%, default 0.
+- **Reset Framing**: restore zoom and pan to their defaults. **Center Frame**: only set the pan to zero.
+- The "Zoom" slider on the window's "Picture" page controls the overall factor (25%–400%, logarithmic scale, 100% at the slider's midpoint), and its "Default" button equals Reset Framing.
 
-**入口**：「视频 ▸ 帧位 ▸」各项及上文快捷键表（小键盘 + 备用键），可按住重复（`repeat: true`）；窗口「画面」页「缩放」行。
+**Entry points**: the items under "Video ▸ Framing ▸" and the shortcut table above (numpad + fallback keys), repeating while held (`repeat: true`); the "Zoom" row on the window's "Picture" page.
 
-**行为细节**：
-- OSD 文案带数值：「帧位调整：增加尺寸 (110%)」「帧位调整：减少尺寸 (95%)」「帧位调整：向左位移 (-3%, 0%)」（偏移为（横, 纵），向右、向下为正）「帧位调整：重置」「帧位调整：位移到中间」。
-- 显示层效果，不影响截图和导出。
-- 到达范围边界时值不变，OSD 照常显示当前值。
-- 换片源时复位为默认（不提示）。
-- 和 E11 显示模式叠加：先按显示模式确定画面框，再缩放平移。
-- 放大后画质：缩放发生在 mpv 渲染阶段；C-SIZE 让渲染尺寸随 `zoom` 放宽，放大后不是放大的低分辨率缓冲。
-- 窗口「缩放」滑块拖动时连续生效（显示层属性，不重建滤镜）。
+**Behavior details**:
+- OSD wording with values: "Framing: larger (110%)", "Framing: smaller (95%)", "Framing: move left (-3%, 0%)" (the pan is (horizontal, vertical), right and down positive), "Framing: reset", "Framing: centered".
+- A display-layer effect; screenshots and exports are not affected.
+- At the range limits the value does not change, and the OSD still shows the current value.
+- Reset to the defaults on source change (no message).
+- Combined with the E11 display mode: the display mode decides the picture frame first, then zoom and pan apply.
+- Quality after zooming in: zooming happens at mpv's render stage; C-SIZE widens the render size with `zoom`, so zooming in does not enlarge a low-resolution buffer.
+- Dragging the window's "Zoom" slider takes effect continuously (a display-layer property, no filter rebuild).
 
-**持久化**：不跨文件保存。
+**Persistence**: not saved across files.
 
-**核心依赖**：
-- `plugin.video.view()` 的 `zoom`、`panX`、`panY`（E11 中定义；换来源时核心保留当前值，复位由插件在 `sourceId` 变化时做）。
-- 【核心新增】绑定语法增加小键盘按键名 `Numpad0`–`Numpad9`、`NumpadPlus`、`NumpadMinus`、`NumpadMultiply`、`NumpadDivide`、`NumpadEnter`、`NumpadDecimal`，与主键盘的数字和符号键区分。为什么：帧位键全在小键盘上，而现在 `"5"` 同时匹配主键盘和小键盘（或只匹配其一，取决于宿主实现），插件无法区分。没有小键盘的键盘用备用键。
+**Core dependencies**:
+- `zoom`, `panX`, `panY` of `plugin.video.view()` (defined in E11; the core keeps the current values on source change, and the plugin resets them when `sourceId` changes).
+- [New core API] the binding syntax gains numpad key names `Numpad0`–`Numpad9`, `NumpadPlus`, `NumpadMinus`, `NumpadMultiply`, `NumpadDivide`, `NumpadEnter`, `NumpadDecimal`, distinct from the digit and symbol keys of the main keyboard. Why: the framing keys are all on the numpad, while today `"5"` matches both the main keyboard and the numpad (or only one of them, depending on the host implementation), so the plugin cannot tell them apart. Keyboards without a numpad use the fallback keys.
 
-**验收**：
-- 外接带小键盘的键盘：Numpad9 放大、Numpad1 缩小、Ctrl+Numpad6 右移、Numpad5 复位，各有 OSD。
-- 笔记本：Alt+Plus / Alt+- / Alt+方向键 / Alt+Backspace 有同样效果。
-- 主键盘的数字 5 不触发帧位复位。
-- 按住 Numpad9 时画面连续放大，到 400% 停止。
-- 缩放到 200% 后截图（含效果），截图仍是完整的未缩放画面。
+**Acceptance**:
+- With an external keyboard that has a numpad: Numpad9 zooms in, Numpad1 zooms out, Ctrl+Numpad6 pans right, Numpad5 resets, each with an OSD.
+- Laptop: Alt+Plus / Alt+- / Alt+arrow keys / Alt+Backspace have the same effects.
+- The digit 5 on the main keyboard does not trigger Reset Framing.
+- Holding Numpad9 zooms in continuously and stops at 400%.
+- After zooming to 200%, take a screenshot (with effects): the screenshot is still the full, unzoomed picture.
 
-**说明**：「预置」编辑和屏幕边距不在本编号内，不做；「帧位复位」只复位，不在复位和上次值之间切换。
+**Notes**: "preset" editing and screen margins are not part of this ID and are not done; "Reset Framing" only resets and does not toggle between the reset and the previous value.
 
-### E16 HDR 校正 / 色调映射
+### E16 HDR correction / tone mapping
 
-> **已实现（渲染轮，2026-10-21）**：宿主完成 C-GPU 并提供 `plugin.video.render()` 与 `PlaybackStats.video.transfer`（reference §8.2、§5.4）后接入。macOS 默认 GPU 渲染时可用；软件渲染（无界面、`VESTRA_SOFTWARE_RENDER=1`、Windows、Linux、OpenGL 初始化失败）时菜单禁用、窗口置灰，原因「需要 GPU 渲染（当前为软件渲染）」。
+> **Implemented (render round, 2026-10-21)**: connected after the host completed C-GPU and provided `plugin.video.render()` and `PlaybackStats.video.transfer` (reference §8.2, §5.4). Available with the default GPU rendering on macOS; with software rendering (headless, `VESTRA_SOFTWARE_RENDER=1`, Windows, Linux, OpenGL initialization failure) the menu is disabled and the window is grey, with the reason "Needs GPU rendering (currently software rendering)".
 
-**需求**：
-- 「HDR 色调映射」单选：**自动**（默认：片源是 HDR（PQ / HLG）时做色调映射）/ **关** / 算法：BT.2390 / Hable / Mobius / Reinhard / 裁剪。对应 `toneMapping` 的 `auto`、`off`、`bt.2390`、`hable`、`mobius`、`reinhard`、`clip`。
-- 「目标亮度」：SDR 显示器亮度 100–400 尼特，步长 10，默认 203（BT.2408 参考白；只有默认值不是 10 的倍数，拖动后按 10 取整）→ `targetPeak`。
-- 「动态峰值检测」开关，默认开 → `peakDetect`：逐场景估算峰值亮度，避免暗场景整体被压暗。
-- 实际行为以宿主为准（reference §8.2）：「关」映射为 mpv `tone-mapping=clip` + `gamut-mapping-mode=clip` 且不做峰值检测，即超出目标亮度的部分直接裁掉，与「完全不处理、发灰」不完全一样；macOS 的 OpenGL 4.1 没有计算着色器，mpv 关掉动态峰值检测，所以「动态峰值检测」在 macOS 上照常保存、发送但不起作用；输出总是 SDR（8 位），显示器支持 EDR 时也不输出 HDR，「自动」在 HDR 片源上总是做映射（原需求「EDR 显示器直接输出 HDR」未实现）。
+**Requirement**:
+- "HDR Tone Mapping" radio: **Auto** (default: tone map when the source is HDR (PQ / HLG)) / **Off** / algorithms: BT.2390 / Hable / Mobius / Reinhard / Clip. These correspond to `auto`, `off`, `bt.2390`, `hable`, `mobius`, `reinhard`, `clip` of `toneMapping`.
+- "Target brightness": SDR display brightness 100–400 nits, step 10, default 203 (BT.2408 reference white; only the default is not a multiple of 10, and dragging rounds to 10) → `targetPeak`.
+- "Dynamic Peak Detection" toggle, on by default → `peakDetect`: estimates the peak brightness per scene, so dark scenes are not darkened overall.
+- The actual behavior follows the host (reference §8.2): "Off" maps to mpv `tone-mapping=clip` + `gamut-mapping-mode=clip` without peak detection, so whatever exceeds the target brightness is clipped, which is not quite the same as "no processing at all, washed out"; macOS's OpenGL 4.1 has no compute shaders, so mpv turns dynamic peak detection off, and "Dynamic Peak Detection" is saved and sent as usual on macOS but has no effect; the output is always SDR (8-bit), even when the display supports EDR, and "Auto" always maps HDR sources (the original requirement "output HDR directly on EDR displays" is not implemented).
 
-**入口**：「视频 ▸ 像素着色 ▸ HDR 色调映射 ▸」七个单选，其后分隔线、「动态峰值检测」勾选；「视频 ▸ 像素着色 ▸ HDR 设置…」打开画面调节窗口并切到「高级」页；「高级」页 HDR 行：算法下拉 90 + 目标亮度滑块 100（拖动时连续生效），下一行灰色小字「目标亮度 N 尼特」。
+**Entry points**: the seven radio items under "Video ▸ Pixel Shaders ▸ HDR Tone Mapping ▸", followed by a separator and the "Dynamic Peak Detection" checkbox; "Video ▸ Pixel Shaders ▸ HDR Settings…" opens the Picture Adjustments window on the "Advanced" page; the HDR row on the "Advanced" page: algorithm drop-down 90 + target brightness slider 100 (takes effect continuously while dragging), and in the next row the small grey text "Target N nits".
 
-**行为细节**：
-- 只有 HDR 片源（`stats().video.transfer` 为 `pq` 或 `hlg`）才会被映射，SDR 片源上这些设置不起作用：设置保留，命令照常可选。插件在每个来源就绪后读一次 `transfer`（读不到时每 400 ms 再读，最多 8 次）。已知不是 HDR 时，菜单操作的 OSD 加注「HDR 色调映射: BT.2390（当前片源不是 HDR）」，窗口小字行接「 · 当前片源不是 HDR」；HDR 片源上 OSD 为「HDR 色调映射: BT.2390」「HDR 色调映射: 关」；没有媒体或读不到时不加注。
-- 「动态峰值检测」OSD「动态峰值检测: 开 / 关」。窗口里的改动不显示 OSD（与其它页一致）。
-- 色调映射在 GPU 渲染阶段进行，不进入处理链，「启用画面效果」不影响它，截图和离线导出不包含它。
-- 软件渲染：七个单选、动态峰值检测、HDR 设置… 禁用，原因「需要 GPU 渲染（当前为软件渲染）」；窗口 HDR 下拉与滑块置灰，悬停与小字行显示同一原因。播放中退回软件渲染（宿主推 `unsupported`）时随之禁用。
-- 宿主拒绝（`invalid`、`backend`）：窗口状态行「渲染设置失败」（悬停看原因）+「重试」。另一个插件占着渲染选项（`conflict`）：状态行「渲染选项不可用」，悬停「另一个插件正在控制渲染选项」；用户操作时 OSD「渲染选项不可用：另一个插件正在控制渲染选项」，激活时不提示。
+**Behavior details**:
+- Only HDR sources (`stats().video.transfer` is `pq` or `hlg`) are mapped; on SDR sources these settings have no effect: they are kept, and the commands can be chosen as usual. The plugin reads `transfer` once after each source becomes ready (if it cannot be read, again every 400 ms, at most 8 times). When the source is known not to be HDR, the OSD of a menu action adds a note: "HDR tone mapping: BT.2390 (not an HDR source)", and the window's small text row gets " · Not an HDR source"; on HDR sources the OSD is "HDR tone mapping: BT.2390", "HDR tone mapping: off"; no note when there is no media or the value cannot be read.
+- "Dynamic Peak Detection" OSD "Dynamic peak detection: on / off". Changes in the window show no OSD (consistent with the other pages).
+- Tone mapping happens at the GPU render stage, not in the processing chain; "Enable picture effects" does not affect it, and screenshots and offline exports do not include it.
+- Software rendering: the seven radio items, Dynamic Peak Detection and HDR Settings… are disabled with the reason "Needs GPU rendering (currently software rendering)"; the window's HDR drop-down and slider are grey, and the hover and small text row show the same reason. When the player falls back to software rendering during playback (the host pushes `unsupported`), they are disabled accordingly.
+- Host rejection (`invalid`, `backend`): window status line "Render settings failed" (hover for the reason) + "Retry". Another plugin holding the render options (`conflict`): status line "Render options unavailable", hover "Another plugin controls the render options"; when the user acts, OSD "Render options unavailable: another plugin controls them", with no message at activation.
 
-**持久化**：`render.toneMapping`、`render.targetPeak`、`render.peakDetect`（`settings.json`，仍为 `version: 1`；缺这一段的旧文件按默认值）。激活时把保存的值一次 `set` 进去。
+**Persistence**: `render.toneMapping`, `render.targetPeak`, `render.peakDetect` (`settings.json`, still `version: 1`; old files without this section use the defaults). At activation the saved values are `set` in one call.
 
-**核心依赖**（渲染轮已提供）：
-- **C-GPU**：macOS 默认 libmpv OpenGL 渲染，硬件解码 `hwdec=auto-safe`；软件渲染保留作后备。
-- 渲染选项接口（E16、E17、E18 共用，reference §8.2）：
+**Core dependencies** (provided in the render round):
+- **C-GPU**: libmpv OpenGL rendering by default on macOS, hardware decoding `hwdec=auto-safe`; software rendering is kept as a fallback.
+- Render options interface (shared by E16, E17 and E18, reference §8.2):
   ```ts
-  plugin.video.render(): RenderOptions   // 需要 processing.video；单一拥有者，规则同 video.view()
+  plugin.video.render(): RenderOptions   // needs processing.video; single owner, same rules as video.view()
   interface RenderOptions extends Disposable {
-    set(value: Partial<RenderSettings>): void;   // 合并写入，最后写入生效
-    readonly status: FilterStatus;               // 软件渲染下 failed / unsupported
+    set(value: Partial<RenderSettings>): void;   // merged write, last write wins
+    readonly status: FilterStatus;               // failed / unsupported under software rendering
     onStatus(listener: (s: FilterStatus) => void): Disposable;
   }
   interface RenderSettings {
     toneMapping: "auto" | "off" | "bt.2390" | "hable" | "mobius" | "reinhard" | "clip"; // → tone-mapping
-    targetPeak: number;          // 100–400 尼特 → target-peak
+    targetPeak: number;          // 100–400 nits → target-peak
     peakDetect: boolean;         // → hdr-compute-peak
-    shaders: string[];           // E17：绝对路径，文件要存在，最多 16 个 → glsl-shaders
-    interpolation: boolean;      // E18：→ interpolation + video-sync=display-resample + display-fps-override
+    shaders: string[];           // E17: absolute paths, files must exist, at most 16 → glsl-shaders
+    interpolation: boolean;      // E18: → interpolation + video-sync=display-resample + display-fps-override
   }
   ```
-  插件停用时宿主恢复 mpv 默认值。
-- `PlaybackStats.video.transfer`：`video-params/gamma` 原值（`bt.1886`、`srgb`、`pq`、`hlg` …），是不是 HDR 由插件判断。
+  When the plugin is disabled, the host restores the mpv defaults.
+- `PlaybackStats.video.transfer`: the raw value of `video-params/gamma` (`bt.1886`, `srgb`, `pq`, `hlg` …); the plugin decides whether it is HDR.
 
-**验收**：
-- HDR10 测试片段（PQ / BT.2020）在 SDR 显示器上：「关」与「自动」观感不同，「自动」亮度和色彩正常。
-- 切换算法时画面立即变化，播放不中断。
-- 目标亮度从 100 调到 300，画面整体亮度变化。
-- SDR 片源：窗口小字显示「当前片源不是 HDR」，菜单切换算法时 OSD 带同样的注。
-- `VESTRA_SOFTWARE_RENDER=1` 启动：菜单项禁用并显示原因，窗口控件置灰。
+**Acceptance**:
+- An HDR10 test clip (PQ / BT.2020) on an SDR display: "Off" and "Auto" look different, and "Auto" has normal brightness and color.
+- Switching algorithms changes the picture immediately, without interrupting playback.
+- Changing the target brightness from 100 to 300 changes the overall brightness of the picture.
+- SDR source: the window's small text shows "Not an HDR source", and switching algorithms in the menu adds the same note to the OSD.
+- Start with `VESTRA_SOFTWARE_RENDER=1`: the menu items are disabled and show the reason, and the window controls are grey.
 
-**说明**：HDR 只有一个「自动」选项，不分 ST 2084 / ST 2086；ICC 校正和 YCgCo 校正不在本编号内，macOS 由系统色彩管理负责。
+**Notes**: HDR has only one "Auto" option, without separate ST 2084 / ST 2086; ICC correction and YCgCo correction are not part of this ID; on macOS the system color management takes care of them.
 
-### E17 像素着色器（自定义 GLSL）
+### E17 Pixel shaders (custom GLSL)
 
-> **已实现（渲染轮，2026-10-21）**：走 `plugin.video.render()` 的 `shaders` 字段；软件渲染时除「着色器列表…」「打开着色器文件夹」外禁用，原因「需要 GPU 渲染（当前为软件渲染）」（列表可以提前整理）。
+> **Implemented (render round, 2026-10-21)**: goes through the `shaders` field of `plugin.video.render()`; with software rendering everything except "Shader List…" and "Open Shader Folder" is disabled with the reason "Needs GPU rendering (currently software rendering)" (the list can be prepared in advance).
 
-**需求**：
-- 用户可以加载 mpv 格式的 GLSL 用户着色器（`.glsl`，或 `.hook`；带 `//!HOOK` 声明，例如 FSRCNNX、Anime4K、KrigBilateral），按列表顺序叠加执行，最多 16 个。
-- 总开关「使用着色器」（默认关），关闭时发送空列表，插件保留自己的列表。
-- 着色器文件夹：`plugin.dataDirectory/shaders/`，第一次添加或打开时创建。用户放进去的 `.glsl` / `.hook` 文件出现在可选列表里（文件名以 `.` 开头的不算）。
-- 「着色器列表…」打开小窗（`ui/shaders.slint`，301×260）：标题行「已启用 N/16（按顺序执行）」；已启用列表（219 宽、113 高，每行 20，单击选中）与右侧一列 60×21 的按钮〔添加…〕〔移除〕〔上移〕〔下移〕〔清空〕；下面是「着色器文件夹里的其它文件（双击加入）」列表（3 行高，可滚动）；底行左侧一句红字说明（软件渲染时「需要 GPU 渲染（当前为软件渲染）」，开关未开时「「使用着色器」未打开」），右侧〔打开文件夹〕。列表里文件已不存在的项显示为「名字（文件不存在）」，提交时跳过。
-- 「添加…」用系统文件对话框（`plugin.dialogs.openFile`）选任意位置的文件，插件把它**复制**进着色器文件夹（同名文件被替换；选的就是文件夹里的文件时不复制），再加入列表并选中，这样原文件被移走后列表也不会失效。不是 `.glsl` / `.hook` 时 OSD「只能添加 .glsl 或 .hook 着色器文件」；已满 16 个时 OSD「最多 16 个着色器」；复制失败 OSD「着色器复制失败：<原因>」。
-- 「移除」只从列表去掉，文件留在文件夹（回到下面的可选列表）；「清空」同理。
-- 「重新载入着色器」：重新扫描文件夹，从列表去掉文件已不存在的项并提示「已移除不存在的着色器：a.glsl、b.glsl」（没有时「已重新载入着色器 (N)」），然后重新提交列表（用于在外部编辑了着色器之后；同样的列表是否让 mpv 重新编译以宿主为准）。
-- 「打开着色器文件夹」：`plugin.system.openPath`（由播放器打开，macOS 为 Finder、Windows 为资源管理器），失败时 OSD「无法打开着色器文件夹：<原因>」。
+**Requirement**:
+- The user can load GLSL user shaders in mpv format (`.glsl` or `.hook`, with `//!HOOK` declarations, for example FSRCNNX, Anime4K, KrigBilateral), applied on top of each other in list order, at most 16.
+- Master toggle "Use Shaders" (off by default); when off, an empty list is sent and the plugin keeps its own list.
+- Shader folder: `plugin.dataDirectory/shaders/`, created the first time something is added or the folder is opened. `.glsl` / `.hook` files the user puts in it appear in the available list (files whose names start with `.` do not count).
+- "Shader List…" opens a small window (`ui/shaders.slint`, 301×260): title row "Enabled N/16 (run in order)"; the enabled list (219 wide, 113 high, 20 per row, click to select) with a column of 60×21 buttons on the right [Add…][Remove][Move Up][Move Down][Clear]; below it the list "Other files in the shader folder (double-click to add)" (3 rows high, scrollable); on the bottom row, a line of red explanatory text on the left ("Needs GPU rendering (currently software rendering)" with software rendering, ""Use Shaders" is off" when the toggle is off) and [Open Folder] on the right. Items whose files no longer exist are shown as "name (file missing)" and skipped on submit.
+- "Add…" uses the system file dialog (`plugin.dialogs.openFile`) to pick a file anywhere; the plugin **copies** it into the shader folder (a file with the same name is replaced; nothing is copied when the chosen file is already in the folder), then adds it to the list and selects it, so the list stays valid after the original file is moved away. When it is not `.glsl` / `.hook`, OSD "Only .glsl or .hook shader files can be added"; with 16 already, OSD "At most 16 shaders"; when copying fails, OSD "Could not copy the shader: <reason>".
+- "Remove" only takes it out of the list; the file stays in the folder (back in the available list below); "Clear" works the same way.
+- "Reload Shaders": rescan the folder, remove items whose files no longer exist from the list with the message "Removed missing shaders: a.glsl, b.glsl" (otherwise "Shaders reloaded (N)"), then submit the list again (for after editing shaders externally; whether the same list makes mpv recompile is up to the host).
+- "Open Shader Folder": `plugin.system.openPath` (opened by the player, Finder on macOS, File Explorer on Windows); on failure OSD "Could not open the shader folder: <reason>".
 
-**入口**：「视频 ▸ 像素着色 ▸ 使用着色器」（勾选，Shift+P）、「着色器列表…」「打开着色器文件夹」「重新载入着色器」；窗口「高级」页「着色器」行：复选「启用」+ 文字「N 个着色器」+〔列表…〕按钮。
+**Entry points**: "Video ▸ Pixel Shaders ▸ Use Shaders" (checkbox, Shift+P), "Shader List…", "Open Shader Folder", "Reload Shaders"; the "Shaders" row on the window's "Advanced" page: checkbox "Enable" + text "N shaders" + [List…] button.
 
-**行为细节**：
-- OSD「像素着色: 开 (3)」/「像素着色: 关」；列表为空时打开开关：OSD「像素着色: 没有着色器」，开关仍记为开，之后加入第一个着色器即生效。窗口里的勾选不显示 OSD。
-- 发给宿主的是绝对路径（`<dataDirectory>/shaders/<名字>`）。
-- 编译失败：mpv 在第一次用到着色器时编译，宿主先报 `applied`，稍后把状态推为 `failed`（`message` 以 `shader compile failed: ` 开头，带编译器的第一行错误，**不带文件名**，mpv 不报）。插件显示 OSD「着色器载入失败」，窗口状态行「着色器载入失败」（悬停看完整原因）+「重试」；列表里其它着色器照常执行（宿主行为）。用户可在列表里移除出错的那个（或关掉开关）后恢复。
-- 着色器在 GPU 渲染阶段执行，不进入处理链，「启用画面效果」不影响它，截图和导出不包含它。
-- 着色器可能非常耗 GPU（例如 4K 上的 FSRCNNX）。插件不做性能判断。
+**Behavior details**:
+- OSD "Pixel shaders: on (3)" / "Pixel shaders: off"; turning the toggle on with an empty list: OSD "Pixel shaders: no shaders"; the toggle is still recorded as on and takes effect once the first shader is added. Checking in the window shows no OSD.
+- Absolute paths are sent to the host (`<dataDirectory>/shaders/<name>`).
+- Compile failure: mpv compiles a shader the first time it is used, so the host first reports `applied` and later pushes the state to `failed` (`message` starts with `shader compile failed: ` and carries the compiler's first error line, **without the file name**, which mpv does not report). The plugin shows the OSD "Shader failed to load", and the window status line "Shader failed to load" (hover for the full reason) + "Retry"; the other shaders in the list still run (host behavior). The user can recover by removing the faulty one from the list (or turning the toggle off).
+- Shaders run at the GPU render stage, not in the processing chain; "Enable picture effects" does not affect them, and screenshots and exports do not include them.
+- Shaders can be very GPU-heavy (for example FSRCNNX on 4K). The plugin makes no performance judgment.
 
-**持久化**：`render.shadersEnabled`、`render.shaders`（文件名列表，相对于着色器文件夹；读入时去掉带路径、隐藏或扩展名不对的项，去重，最多 16 个）。着色器文件本身放在 `plugin.dataDirectory/shaders/`。
+**Persistence**: `render.shadersEnabled`, `render.shaders` (list of file names relative to the shader folder; on read, items with paths, hidden items or wrong extensions are removed, duplicates removed, at most 16). The shader files themselves live in `plugin.dataDirectory/shaders/`.
 
-**核心依赖**：C-GPU；`plugin.video.render()` 的 `shaders` 字段（E16 中定义），绝对路径；`plugin.dialogs.openFile`（需要 `ui.dialog`，本轮加入 manifest）；`plugin.system.openPath`。
+**Core dependencies**: C-GPU; the `shaders` field of `plugin.video.render()` (defined in E16), with absolute paths; `plugin.dialogs.openFile` (needs `ui.dialog`, added to the manifest this round); `plugin.system.openPath`.
 
-**验收**：
-- 加入一个把画面反色的测试着色器并打开开关，画面反色；Shift+P 关闭后恢复。
-- 加入一个语法错误的着色器，OSD 与窗口状态行显示「着色器载入失败」，悬停看到编译器错误，播放不中断。
-- 「添加…」选桌面上的文件后，着色器文件夹里出现副本；删掉桌面原文件，列表仍然有效。
-- 重启播放器后列表和开关状态保留。
+**Acceptance**:
+- Add a test shader that inverts the picture and turn the toggle on: the picture is inverted; after Shift+P turns it off, it is restored.
+- Add a shader with a syntax error: the OSD and the window status line show "Shader failed to load", hovering shows the compiler error, and playback is not interrupted.
+- After "Add…" with a file on the desktop, a copy appears in the shader folder; delete the original on the desktop, and the list is still valid.
+- The list and toggle state are kept after restarting the player.
 
-**说明**：mpv 着色器用 `//!HOOK` 自己声明作用阶段，所以只需要一个列表、一个开关（Shift+P），不分「缩放前 / 缩放后」两组。
+**Notes**: mpv shaders declare their own stage with `//!HOOK`, so one list and one toggle (Shift+P) are enough, without separate "pre-resize / post-resize" groups.
 
-### E18 倍帧 / 运动补偿
+### E18 Frame doubling / motion interpolation
 
-> **运动补偿已实现（渲染轮，2026-10-21）**：走 `plugin.video.render()` 的 `interpolation` 字段；软件渲染时菜单与窗口复选禁用，原因「需要 GPU 渲染（当前为软件渲染）」。倍帧（frameBlend，软件）第 4a 轮已实现。
+> **Motion interpolation implemented (render round, 2026-10-21)**: goes through the `interpolation` field of `plugin.video.render()`; with software rendering the menu item and window checkbox are disabled with the reason "Needs GPU rendering (currently software rendering)". Frame doubling (frameBlend, software) was implemented in round 4a.
 
-> 排期（裁决 R-V8）：倍帧（`frameBlend`）第 4a 轮实现，与 C-SIZE 的渲染节奏改动同批验证；运动补偿在渲染轮接入，两者的互斥同时生效。
+> Schedule (ruling R-V8): frame doubling (`frameBlend`) is implemented in round 4a and verified in the same batch as C-SIZE's render pacing changes; motion interpolation is connected in the render round, and the mutual exclusion of the two takes effect then.
 
-**需求**：
-- **倍帧**（软件）：把帧率提高到 2 倍（上限 60 fps），中间帧由前后两帧混合生成，使低帧率画面的运动更平滑（会有轻微的运动模糊）。开关，默认关。原帧率已不低于 50 fps 时不处理。
-- **运动补偿**（GPU）：mpv 的插帧，按显示器刷新率重采样输出（宿主设 `interpolation=yes`、`video-sync=display-resample`、`display-fps-override` = 主显示器刷新率），消除 24 fps 内容在 60 Hz 显示器上的抖动。开关，默认关。
-- 两者互斥：打开一个时自动关闭另一个，OSD 说明「倍帧: 开（已关闭运动补偿）」「运动补偿: 开（已关闭倍帧）」（菜单与窗口都显示，因为另一个开关被改了）。
+**Requirement**:
+- **Frame doubling** (software): raises the frame rate to 2× (at most 60 fps), generating the in-between frames by blending the frames before and after, so motion in low-frame-rate pictures is smoother (with slight motion blur). A toggle, off by default. Not applied when the original frame rate is already at least 50 fps.
+- **Motion interpolation** (GPU): mpv's interpolation, resampling the output to the display refresh rate (the host sets `interpolation=yes`, `video-sync=display-resample`, `display-fps-override` = the main display's refresh rate), removing the judder of 24 fps content on 60 Hz displays. A toggle, off by default.
+- The two are mutually exclusive: turning one on turns the other off automatically, with the OSD "Frame doubling: on (motion interpolation turned off)" / "Motion interpolation: on (frame doubling turned off)" (shown from both the menu and the window, because the other toggle was changed).
 
-**入口**：「视频 ▸ 图像处理 ▸ 倍帧」（勾选）、「运动补偿」（勾选），都没有快捷键；窗口「效果」页第 7 行两个复选。
+**Entry points**: "Video ▸ Image Processing ▸ Frame Doubling" (checkbox), "Motion Interpolation" (checkbox), neither with a shortcut; the two checkboxes in row 7 of the window's "Effects" page.
 
-**行为细节**：
-- OSD「倍帧: 开」「运动补偿: 开」；窗口里的勾选只在发生互斥时显示 OSD。
-- 倍帧节点放在链的最后（核心也总把它放在整条视频图最后）。目标帧率 = min(原帧率 × 2, 60)（至少 24），原帧率读 `player.stats().video.fps`；为 `null`（未知）时按 2 × 30 = 60 处理。打开倍帧后 `stats().video.fps` 读到的是输出帧率，所以原帧率在链里没有倍帧节点时读：每个来源、每种反交错设置各读一次（按场输出让原帧率加倍），读到之前不加节点；没有画面时约 3 秒后放弃，直到换来源或重新勾选。
-- 原帧率 ≥ 50 时不加节点，勾选仍显示为开，窗口里倍帧复选旁显示灰色小字「当前帧率已足够」。
-- 倍帧在 CPU 上处理，4K 片源可能丢帧。若 5 秒内丢帧超过总帧数的 5%，OSD 提示一次「倍帧丢帧较多，建议关闭」（每个片源一次）。「启用画面效果」关闭时倍帧也一起撤销；运动补偿不属于处理链，不受「启用画面效果」影响。
-- 倍帧会进入含效果的截图和离线导出（导出的视频帧率随之改变）；运动补偿不会。
-- 运动补偿按主显示器的刷新率重采样，窗口在别的刷新率的显示器上时可能不够平滑（宿主限制）。
-- 软件渲染时运动补偿禁用，原因「需要 GPU 渲染（当前为软件渲染）」；保存的开关不变。
+**Behavior details**:
+- OSD "Frame doubling: on", "Motion interpolation: on"; checking in the window shows an OSD only when the mutual exclusion kicks in.
+- The frame doubling node goes last in the chain (the core also always puts it last in the whole video graph). Target frame rate = min(original frame rate × 2, 60) (at least 24), with the original frame rate read from `player.stats().video.fps`; when it is `null` (unknown), 2 × 30 = 60 is used. With frame doubling on, `stats().video.fps` reads the output frame rate, so the original frame rate is read while the chain has no frame doubling node: once per source and per deinterlace setting (field output doubles the original frame rate), and no node is added until it has been read; with no picture, it gives up after about 3 seconds until the source changes or the box is checked again.
+- With an original frame rate ≥ 50, no node is added, the check still shows on, and the small grey text "Rate already high enough" is shown next to the frame doubling checkbox in the window.
+- Frame doubling runs on the CPU, so 4K sources may drop frames. If more than 5% of the total frames are dropped within 5 seconds, the OSD shows once "Many frames dropped with frame doubling; consider turning it off" (once per source). When "Enable picture effects" is off, frame doubling is withdrawn too; motion interpolation is not part of the processing chain and is not affected by "Enable picture effects".
+- Frame doubling is included in screenshots with effects and in offline exports (the exported video's frame rate changes accordingly); motion interpolation is not.
+- Motion interpolation resamples to the main display's refresh rate, so it may not be smooth enough when the window is on a display with another refresh rate (host limitation).
+- With software rendering, motion interpolation is disabled with the reason "Needs GPU rendering (currently software rendering)"; the saved toggle does not change.
 
-**持久化**：`effects.frameBlend`、`render.interpolation`（读入时两者都为开则保留倍帧、关掉运动补偿）。
+**Persistence**: `effects.frameBlend`, `render.interpolation` (if both are on when read, frame doubling is kept and motion interpolation turned off).
 
-**核心依赖**：
-- 倍帧：节点类型
+**Core dependencies**:
+- Frame doubling: node type
   ```ts
-  { kind: "frameBlend"; fps: number } // 24–120；FFmpeg framerate=fps=N（混合插帧）；非运行时
+  { kind: "frameBlend"; fps: number } // 24–120; FFmpeg framerate=fps=N (blending interpolation); not runtime
   ```
-- 运动补偿：C-GPU；`plugin.video.render()` 的 `interpolation` 字段（E16 中定义）。不用 FFmpeg `minterpolate`（运动估计插帧），因为它在 1080p 上远达不到实时。
+- Motion interpolation: C-GPU; the `interpolation` field of `plugin.video.render()` (defined in E16). FFmpeg `minterpolate` (motion-estimation interpolation) is not used, because it is nowhere near real time at 1080p.
 
-**验收**：
-- 24 fps 平移镜头：打开倍帧后运动明显更平滑，`player.stats().video.fps` 或画面观感显示为 48 fps。
-- 60 fps 片源打开倍帧，链中没有 `frameBlend` 节点。
-- 打开倍帧再打开运动补偿，倍帧自动关闭并有 OSD；反过来同理。
-- 运动补偿打开时 `VESTRA_FRAME_LOG=1` 的帧数接近显示器刷新率，画面不卡顿。
-- 打开倍帧后「含效果」导出 5 秒片段，`ffprobe` 显示 48 fps（24 fps 来源）。
+**Acceptance**:
+- A 24 fps panning shot: with frame doubling on, motion is clearly smoother, and `player.stats().video.fps` or the look shows 48 fps.
+- A 60 fps source with frame doubling on: there is no `frameBlend` node in the chain.
+- Turn frame doubling on, then motion interpolation: frame doubling turns off automatically with an OSD; likewise the other way round.
+- With motion interpolation on, the frame count from `VESTRA_FRAME_LOG=1` is close to the display refresh rate, and the picture does not stutter.
+- With frame doubling on, export a 5-second clip "with effects": `ffprobe` shows 48 fps (24 fps source).
 
-**说明**：「倍帧」是混合插帧；运动补偿由 mpv GPU 插帧提供。
+**Notes**: "frame doubling" is blending interpolation; motion interpolation is provided by mpv's GPU interpolation.
 
-**本章核心 API 请求汇总**
+**Chapter core API request summary**
 
-| 接口 | 理由 |
+| Interface | Reason |
 | --- | --- |
-| `VideoNode` 增加 `{ kind: "hue"; degrees }`（−180–180，运行时） | E02。FFmpeg eq 没有色相，需要 hue 滤镜；插件不能自己加滤镜字符串 |
-| `VideoNode` 增加 `{ kind: "sharpen"; luma; chroma }`、`{ kind: "cas"; strength }` | E04 锐化、边缘锐化 |
-| `VideoNode` 增加 `{ kind: "denoise3d"; lumaSpatial; chromaSpatial; lumaTemporal; chromaTemporal }`、`{ kind: "temporalDenoise"; threshold }` | E05 三种降噪 |
-| `VideoNode` 增加 `{ kind: "deblock"; strength }`、`{ kind: "deband"; threshold; range }` | E06 |
-| `VideoNode` 增加 `{ kind: "flip"; horizontal; vertical }`、`{ kind: "transpose"; degrees: 90 \| 180 \| 270 }` | E08、E09。软件渲染器不支持 `video-rotate`，宿主已改由滤镜处理方向 |
-| `VideoNode` 增加 `{ kind: "deinterlace"; method; when; output }` | E10。节点随插件生命周期撤销，全局 `deinterlace` 属性做不到 |
-| `VideoNode` 增加 `{ kind: "crop"; aspect; x; y }`、`{ kind: "pad"; aspect; x; y }`（尺寸由核心按输入计算） | E12。插件不知道滤镜输入尺寸 |
-| `VideoNode` 增加 `{ kind: "frameBlend"; fps }` | E18 倍帧 |
-| `plugin.video.view(): VideoView`，`set(Partial<{ aspect; fit; zoom; panX; panY }>)`，单一拥有者（第 4a 轮已提供，裁决 R-V9 去掉 `scaleX`、`scaleY`） | E11、E13。这些是 mpv vo 级属性，处理链表达不了，插件也不能直接写 mpv 属性 |
-| 宿主行为 C-SIZE：渲染尺寸跟随视频区（第 4a 轮已完成；之前固定 960×540 再 contain 缩放） | E11、E13 的前提，否则拉伸、填满相对于错误的 16:9 缓冲计算 |
-| 绑定语法增加 `Numpad0`–`Numpad9`、`NumpadPlus`、`NumpadMinus` 等 | E13 帧位键全在小键盘，现有语法区分不了 |
-| 宿主行为 C-GPU：libmpv 改 GPU 渲染（渲染轮已完成：macOS 默认 OpenGL，软件渲染作后备） | E16、E17、E18 运动补偿的前提；软件渲染器不支持这三项 |
-| `plugin.video.render(): RenderOptions`，`set(Partial<{ toneMapping; targetPeak; peakDetect; shaders; interpolation }>)`（渲染轮已提供，单一拥有者） | E16、E17、E18 运动补偿，对应 mpv GPU 渲染属性 |
-| `PlaybackStats.video.transfer`（渲染轮已提供：`video-params/gamma` 原值，如 `bt.1886`、`pq`、`hlg`） | E16 判断片源是否为 HDR |
-| ~~（可选）`plugin.commands.popup(path: string[]): Promise<void>`~~ | 裁决拒绝；S 不绑 |
+| `VideoNode` gains `{ kind: "hue"; degrees }` (−180–180, runtime) | E02. FFmpeg eq has no hue, so the hue filter is needed; plugins cannot add filter strings themselves |
+| `VideoNode` gains `{ kind: "sharpen"; luma; chroma }`, `{ kind: "cas"; strength }` | E04 sharpen, edge sharpen |
+| `VideoNode` gains `{ kind: "denoise3d"; lumaSpatial; chromaSpatial; lumaTemporal; chromaTemporal }`, `{ kind: "temporalDenoise"; threshold }` | E05 three kinds of denoise |
+| `VideoNode` gains `{ kind: "deblock"; strength }`, `{ kind: "deband"; threshold; range }` | E06 |
+| `VideoNode` gains `{ kind: "flip"; horizontal; vertical }`, `{ kind: "transpose"; degrees: 90 \| 180 \| 270 }` | E08, E09. The software renderer does not support `video-rotate`; the host already handles orientation with filters |
+| `VideoNode` gains `{ kind: "deinterlace"; method; when; output }` | E10. The node is withdrawn with the plugin's lifecycle, which the global `deinterlace` property cannot do |
+| `VideoNode` gains `{ kind: "crop"; aspect; x; y }`, `{ kind: "pad"; aspect; x; y }` (sizes computed by the core from the input) | E12. The plugin does not know the filter input size |
+| `VideoNode` gains `{ kind: "frameBlend"; fps }` | E18 frame doubling |
+| `plugin.video.view(): VideoView`, `set(Partial<{ aspect; fit; zoom; panX; panY }>)`, single owner (provided in round 4a; ruling R-V9 removed `scaleX`, `scaleY`) | E11, E13. These are mpv vo-level properties that the processing chain cannot express, and plugins cannot write mpv properties directly |
+| Host behavior C-SIZE: render size follows the video area (done in round 4a; before, a fixed 960×540 then contain scaling) | Prerequisite for E11 and E13; otherwise stretch and fill are computed against the wrong 16:9 buffer |
+| Binding syntax gains `Numpad0`–`Numpad9`, `NumpadPlus`, `NumpadMinus`, etc. | The E13 framing keys are all on the numpad, which the existing syntax cannot distinguish |
+| Host behavior C-GPU: libmpv switches to GPU rendering (done in the render round: OpenGL by default on macOS, software rendering as fallback) | Prerequisite for E16, E17 and E18 motion interpolation; the software renderer does not support these three |
+| `plugin.video.render(): RenderOptions`, `set(Partial<{ toneMapping; targetPeak; peakDetect; shaders; interpolation }>)` (provided in the render round, single owner) | E16, E17, E18 motion interpolation, matching mpv GPU render properties |
+| `PlaybackStats.video.transfer` (provided in the render round: the raw value of `video-params/gamma`, such as `bt.1886`, `pq`, `hlg`) | E16 decides whether the source is HDR |
+| ~~(optional) `plugin.commands.popup(path: string[]): Promise<void>`~~ | Rejected by ruling; S is not bound |
 
-每个新节点都要同时支持实时 mpv 图和离线导出图（`render_lavfi` 共用）；节点总数仍受现有的「全部插件合计 64 个节点」上限约束。本插件最坏情况下约 15 个节点。
+Every new node has to support both the live mpv graph and the offline export graph (shared `render_lavfi`); the total number of nodes is still bound by the existing limit of "64 nodes for all plugins together". In the worst case this plugin uses about 15 nodes.
 
 ---
 
-## 音频工作台（`audio`）
+## Audio workbench (`audio`)
 
-**位置**：`src/plugins/audio/`（现有插件，manifest id `vestra.audio`）
+**Location**: `src/plugins/audio/` (existing plugin, manifest id `vestra.audio`)
 
-**定位**
+**Scope**
 
-本插件负责「声音」菜单里除音量和静音之外的所有功能：音轨选择与外部音轨载入、声道、均衡器、声音同步、各种音效、输出设备。现在它有 6 段均衡器、4 个预设、延迟滑块、规格化、清晰度增强，作用于自己的音频处理链 `workbench`。本轮增加 A11、G03–G05、G09、G11、G16 共 7 项，窗口改为三个页签。基础音量和静音仍属于 playback；字幕同步属于 subtitles。
+This plugin owns every feature in the "Audio" menu except volume and mute: audio track selection and loading external tracks, channels, equalizer, audio sync, the various audio effects, and the output device. Today it has a 6-band equalizer, 4 presets, a delay slider, normalize and clarity enhancement, acting on its own audio processing chain `workbench`. This round adds 7 items, A11, G03–G05, G09, G11 and G16, and the window gets three tabs. Basic volume and mute still belong to playback; subtitle sync belongs to subtitles.
 
-和核心的边界：
-- 声道处理继续走本插件的处理链 `plugin.audio.filter("workbench")`，核心只需在 `AudioNode` 里增加节点类型（`effects.rs` 的 `AudioNode` 现在只有 `Volume`、`Equalizer`、`Treble`、`Dynaudnorm`）。
-- 音轨列表与选择、载入外部音轨、输出设备是播放器状态，需要核心新增接口。
-- 声音同步、晶化的快捷键、外部音频的同名自动载入（Node 扫描文件夹）在插件内完成，不需要核心。
+Boundary with the core:
+- Channel processing continues to go through this plugin's processing chain `plugin.audio.filter("workbench")`; the core only needs to add node types to `AudioNode` (`AudioNode` in `effects.rs` currently has only `Volume`, `Equalizer`, `Treble`, `Dynaudnorm`).
+- The audio track list and selection, loading external tracks, and the output device are player state and need new core interfaces.
+- The audio sync and crystalizer shortcuts, and automatic loading of same-name external audio (Node scans the folder), are done in the plugin and do not need the core.
 
-**行为调整（重要）**：现在「设置属于一次载入的来源 + 一条选中的音轨，任一变化即复位为中性」（README）。本轮改为：**均衡器、预设、规格化、晶化、各音效、声道模式是全局设置**，跨音轨、跨文件、跨重启保留（存在插件数据目录）；**只有声音同步（延迟）跟着来源走**，按「声音同步」的保持方式决定是否复位（G09）。理由：G03/G04 让用户可以频繁切换音轨，如果每次切换都把均衡器清零，体验很差。换轨或换文件后，SDK 会把当前处理链自动重新应用到新音轨（现有行为）。
+**Behavior change (important)**: today "settings belong to one loaded source + one selected audio track, and any change resets them to neutral" (README). This round changes that: **equalizer, presets, normalize, crystalizer, the various effects and the channel mode are global settings**, kept across audio tracks, files and restarts (stored in the plugin data directory); **only audio sync (delay) follows the source**, and whether it resets is decided by the "Audio Sync" keep mode (G09). Reason: G03/G04 let users switch audio tracks often, and clearing the equalizer on every switch would be a poor experience. After a track or file change, the SDK automatically reapplies the current processing chain to the new track (existing behavior).
 
-manifest 能力增加：`playback.control`（切换音轨、载入外部音轨、选择输出设备）、`ui.dialog`（A11 的文件选择）。
+Manifest capabilities added: `playback.control` (switch audio track, load external audio track, choose output device), `ui.dialog` (file selection for A11).
 
-**功能一览**
+**Feature overview**
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| A11 | 载入外部音频轨 | ✗ | 是：`player.addAudioTrack` |
-| G03 | 选择音轨 | ✗ | 是：`player.selectAudioTrack`（裁决 R-T2） |
-| G04 | 依次切换音轨 | ✗ | 同 G03 |
-| G05 | 声道选择（立体声 / 左 / 右 / 单声道混合 / 左右互换） | ✗ | 是：`channels` 节点 |
-| G09 | 声音同步快捷键 | ◐ | 否（延迟范围放宽到 ±10 000，裁决 R-A5，第 2 轮已提供） |
-| G11 | 晶化快捷键 | ◐ | 否 |
-| G16 | 音频输出设备选择 | ✗ | 是：`player.audioDevices`、`player.setAudioDevice`（第 3a 轮，裁决 R-A2–R-A4） |
+| A11 | Load external audio track | ✗ | Yes: `player.addAudioTrack` |
+| G03 | Select audio track | ✗ | Yes: `player.selectAudioTrack` (ruling R-T2) |
+| G04 | Cycle audio tracks | ✗ | Same as G03 |
+| G05 | Channel selection (stereo / left / right / mono mix / swap left and right) | ✗ | Yes: `channels` node |
+| G09 | Audio sync shortcuts | ◐ | No (delay range widened to ±10 000, ruling R-A5, provided in round 2) |
+| G11 | Crystalizer shortcuts | ◐ | No |
+| G16 | Audio output device selection | ✗ | Yes: `player.audioDevices`, `player.setAudioDevice` (round 3a, rulings R-A2–R-A4) |
 
-**菜单与快捷键**
+**Menus and shortcuts**
 
-菜单结构：选择声音（含声道）→ 输出设备 → 音量（playback）→ 均衡器 → 预置 → 声音匹配(同步) → 声音处理。现有的 order 510–516 在 510–529 范围内重新分配：
+Menu structure: select audio (including channels) → output device → volume (playback) → equalizer → presets → audio matching (sync) → audio processing. The existing order 510–516 is reallocated within the 510–529 range:
 
-| 菜单路径 | order | group | 默认快捷键 | 编号 |
+| Menu path | order | group | Default shortcut | ID |
 | --- | --- | --- | --- | --- |
-| 打开 ▸ 载入外部音频… | 114 | open | 无 | A11 |
-| 声音 ▸ 音量 + / 音量 − / 静音（playback，不变） | 501–503 | domain | ↑ / ↓ / M | — |
-| 声音 ▸ 音频工作台… | 510 | audio-tools | | 现有 |
-| 声音 ▸ 音轨 ▸ 〔各音轨，单选〕· —— · 按序切换 · —— · 立体声 · 左声道 · 右声道 · 单声道混合 · 左右互换（单选） | 511 | audio-tools | 按序切换 Alt+A | G03、G04、G05 |
-| 声音 ▸ 输出设备 ▸ 系统默认 · 〔各设备〕（单选）（第 3a 轮） | 512 | audio-tools | | G16 |
-| 声音 ▸ 均衡器（勾选） | 513 | audio-eq | Shift+E | 现有 |
-| 声音 ▸ 预设 ▸ 平直 / 人声 / 音乐 / 影院（单选） | 514 | audio-eq | | 现有 |
-| 声音 ▸ 声音同步 ▸ 超前 50 毫秒 · 滞后 50 毫秒 · 复位 · —— · 不保持 · 本次运行内保持 · 始终保持（单选） | 515 | audio-eq | `>` / `<` / `?`（见下） | G09 |
-| 声音 ▸ 声音处理 ▸ 规格化 · 晶化（勾选） | 516 | audio-eq | Shift+N · Shift+C | G10（只补入口）、G11 |
-| 声音 ▸ 复位 | 517 | audio-eq | | 现有 |
+| Open ▸ Load External Audio… | 114 | open | None | A11 |
+| Audio ▸ Volume + / Volume − / Mute (playback, unchanged) | 501–503 | domain | ↑ / ↓ / M | — |
+| Audio ▸ Audio Workbench… | 510 | audio-tools | | Existing |
+| Audio ▸ Audio Track ▸ [each track, radio] · —— · Cycle · —— · Stereo · Left Channel · Right Channel · Mono Mix · Swap Left and Right (radio) | 511 | audio-tools | Cycle Alt+A | G03, G04, G05 |
+| Audio ▸ Output Device ▸ System Default · [each device] (radio) (round 3a) | 512 | audio-tools | | G16 |
+| Audio ▸ Equalizer (checkbox) | 513 | audio-eq | Shift+E | Existing |
+| Audio ▸ Preset ▸ Flat / Voice / Music / Cinema (radio) | 514 | audio-eq | | Existing |
+| Audio ▸ Audio Sync ▸ 50 ms Earlier · 50 ms Later · Reset · —— · Don't Keep · Keep for This Run · Always Keep (radio) | 515 | audio-eq | `>` / `<` / `?` (see below) | G09 |
+| Audio ▸ Processing ▸ Normalize · Crystalizer (checkboxes) | 516 | audio-eq | Shift+N · Shift+C | G10 (entry point only), G11 |
+| Audio ▸ Reset | 517 | audio-eq | | Existing |
 
-「打开 ▸ 载入外部音频…」放在「打开」菜单，紧跟 subtitles 的「打开字幕…」（113），不在「声音 ▸ 音轨」里重复放。规格化（G10，已有功能）只在「声音处理」子菜单里补一个入口和 Shift+N，因为它属于声音处理这一组，缺了它这一组不完整。
+"Open ▸ Load External Audio…" goes in the "Open" menu, right after subtitles' "Open Subtitle…" (113), and is not repeated under "Audio ▸ Audio Track". Normalize (G10, an existing feature) only gets an entry point and Shift+N in the "Processing" submenu, because it belongs to the audio processing group, which would be incomplete without it.
 
-**快捷键冲突与取舍**：
-- 声音同步的物理按键是 Shift+. / Shift+, / Shift+/。我们的绑定语法按打出的字符匹配、不写 Shift（reference §4.1），在美式键盘上就是 `>` `<` `?`。而 subtitles 现在占用了 `>` `<` `/`（字幕同步）。**定案**：音频用 `>` `<` `?`；字幕同步改为 `.` `,` `/`（subtitles 章已同步修改）。复位键 `?` 与字幕的 `/` 不冲突。
-- Alt+A、Shift+C、Shift+N 目前都没人用（现有绑定只有 Shift+E 带 Shift）。
-- `A`（弹出「选择声音」菜单）属于弹出子菜单，本轮不绑，原因同视频章节的 V、S。
+**Shortcut conflicts and trade-offs**:
+- The physical keys for audio sync are Shift+. / Shift+, / Shift+/. Our binding syntax matches the typed character and does not write Shift (reference §4.1), which on a US keyboard is `>` `<` `?`. subtitles currently uses `>` `<` `/` (subtitle sync). **Decision**: audio uses `>` `<` `?`; subtitle sync changes to `.` `,` `/` (already updated in the subtitles chapter). The reset key `?` does not conflict with the subtitles' `/`.
+- Alt+A, Shift+C and Shift+N are not used by anyone now (the only existing binding with Shift is Shift+E).
+- `A` (pops up the "select audio" menu) pops up a submenu and is not bound this round, for the same reason as V and S in the video chapter.
 
-**音频工作台窗口：分页组织**
+**Audio Workbench window: tabbed layout**
 
-宽 301 不变，高约 260（UI-TOOL-07：不超过 320×280）。顶部是与画面调节窗口相同的页签条（31 高，页签 74 宽），三页内容区一样高；底部状态行共用（现有的状态文字、失败时的「重试」）。记住上次打开的页签。
+The width stays at 301, height about 260 (UI-TOOL-07: no more than 320×280). At the top is the same tab strip as the Picture Adjustments window (31 high, tabs 74 wide); the content area is the same height on all three pages; the bottom status line is shared (the existing status text, "Retry" on failure). The last opened tab is remembered.
 
-| 页签 | 内容 | 编号 |
+| Tab | Content | ID |
 | --- | --- | --- |
-| **均衡器** | 现有的「均衡器」开关、预设弹出按钮与 6 段竖滑块，不变 | 现有 |
-| **效果** | 每行「标签 65 + 滑块 154 + 默认 41」或「复选 65 + 滑块 + 默认」：声音同步（−10000…+10000 毫秒，右侧显示数值，现有）、规格化（复选，现有）、晶化（复选 + 0–6 dB 滑块，即现有「清晰度」） | G09、G11 |
-| **声道与输出** | 音轨：下拉 154 + 〔载入…〕按钮 50×18（「载入…」在 41 宽里放不下）；声道：下拉 154（立体声 / 左声道 / 右声道 / 单声道混合 / 左右互换）；输出设备：下拉 200（第 3a 轮前置灰，悬停提示原因）；复选「自动载入同名音频文件」；声音同步保持方式：下拉 154（不保持 / 本次运行内保持 / 始终保持） | A11、G03、G05、G16、G09 |
+| **Equalizer** | The existing "Equalizer" toggle, preset popup button and 6 vertical band sliders, unchanged | Existing |
+| **Effects** | Each row is "label 65 + slider 154 + default 41" or "checkbox 65 + slider + default": audio sync (−10000…+10000 ms, value shown on the right, existing), normalize (checkbox, existing), crystalizer (checkbox + 0–6 dB slider, the existing "clarity") | G09, G11 |
+| **Output** | Audio track: drop-down 154 + [Load…] button 50×18 ("Load…" does not fit in 41); channels: drop-down 154 (Stereo / Left Channel / Right Channel / Mono Mix / Swap Left and Right); output device: drop-down 200 (grey before round 3a, with the reason on hover); checkbox "Auto-load audio files with the same name"; audio sync keep mode: drop-down 154 (Don't Keep / Keep for This Run / Always Keep) | A11, G03, G05, G16, G09 |
 
-页签条占 31 高，所以把现有的「延迟 / 规范化 / 清晰度」三行从均衡器下面移到「效果」页，均衡器页只放均衡器。
+The tab strip takes 31 in height, so the existing three rows "delay / normalize / clarity" move from below the equalizer to the "Effects" page, and the equalizer page holds only the equalizer.
 
-**处理链顺序与持久化（全章共用）**
+**Processing chain order and persistence (shared by the whole chapter)**
 
-链顺序固定：`channels` → `equalizer`×6 → `treble`（晶化）→ `dynaudnorm`（规格化）。理由：先确定声道，再做频响修正，规格化最后，用来兜住响度。
+The chain order is fixed: `channels` → `equalizer`×6 → `treble` (crystalizer) → `dynaudnorm` (normalize). Reason: decide the channels first, then correct the frequency response, and normalize last to catch the loudness.
 
-设置通过 `plugin.storage.json("settings")` 写入 `plugin.dataDirectory/settings.json`（SDK 负责去抖、临时文件加改名；读坏的文件改名为 `settings.json.bad-<时间戳>` 并用默认值，带 `version`）：`{ version: 1, equalizer, gains[6], normalize, clarity: { on, db }, channels: { mode }, autoLoadExternal, syncKeep, syncMs?, tab }`（`device` 第 3a 轮加入）。
+Settings are written with `plugin.storage.json("settings")` to `plugin.dataDirectory/settings.json` (the SDK handles debouncing and temporary file plus rename; a corrupt file is renamed to `settings.json.bad-<timestamp>` and the defaults are used; with `version`): `{ version: 1, equalizer, gains[6], normalize, clarity: { on, db }, channels: { mode }, autoLoadExternal, syncKeep, syncMs?, tab }` (`device` is added in round 3a).
 
-没开的效果不产生节点，中性设置仍然是空链（现有原则）。开关效果会改变链结构，核心会重建音频滤镜图（可能有一次很短的断音，不是重启会话）。
+Effects that are off produce no nodes, and neutral settings are still an empty chain (existing principle). Toggling an effect changes the chain structure, and the core rebuilds the audio filter graph (possibly a very short audio dropout, not a session restart).
 
-### A11 载入外部音频轨
+### A11 Load external audio track
 
-> 第 2 轮：`player.addAudioTrack` 已提供。外部音轨换来源前一直保留，停用插件不撤销（核心如此）。
+> Round 2: `player.addAudioTrack` is provided. An external audio track stays until the source changes and is not withdrawn when the plugin is disabled (that is how the core works).
 
-**需求**：
-- 为当前播放的视频载入一个外部音频文件（.mka / .m4a / .aac / .ac3 / .eac3 / .dts / .flac / .mp3 / .ogg / .opus / .wav 等，以核心能解码为准），作为一条新音轨加入并立即选中。
-- 可以载入多个，每个成为一条独立的音轨。
-- 「自动载入同名音频文件」开关（默认关）：打开本地文件时，插件扫描同一文件夹，把文件名以视频主名开头、扩展名属于上面的音频格式的文件（例如 `movie.mkv` 对应 `movie.ac3`、`movie.jpn.mka`）自动载入，但不自动选中（保持核心的默认选择）。
+**Requirement**:
+- Load an external audio file for the video currently playing (.mka / .m4a / .aac / .ac3 / .eac3 / .dts / .flac / .mp3 / .ogg / .opus / .wav, etc., whatever the core can decode), added as a new audio track and selected immediately.
+- Several can be loaded, each becoming a separate audio track.
+- "Auto-load audio files with the same name" toggle (off by default): when a local file is opened, the plugin scans the same folder and automatically loads files whose names start with the video's base name and whose extensions are in the audio formats above (for example `movie.ac3`, `movie.jpn.mka` for `movie.mkv`), but does not select them automatically (the core's default selection is kept).
 
-**入口**：「打开 ▸ 载入外部音频…」；窗口「声道与输出」页音轨行的〔载入…〕按钮；同一页的「自动载入同名音频文件」复选。
+**Entry points**: "Open ▸ Load External Audio…"; the [Load…] button in the audio track row on the window's "Output" page; the "Auto-load audio files with the same name" checkbox on the same page.
 
-**行为细节**：
-- 选择文件用 `plugin.dialogs.openFile({ title: "载入外部音频" })`。取消时什么都不做。
-- 提交时以对话框打开前的 `player.state` 为条件（`ifCurrent`）。用户在对话框打开期间换了文件时以 `stale` 失败，OSD「来源已改变，未载入音频」。
-- 成功后 OSD「已载入音频: movie.jpn.mka」，并切换到这条新音轨（G03 的菜单随 `audioTracks` 变化自动重建）。
-- 解码失败：OSD「无法载入音频: <核心给出的原因>」，音轨列表不变。
-- 没有来源（`phase` 为 `empty`）时命令禁用，原因「没有正在播放的文件」；`loading` 时也禁用，原因「正在载入」。
-- 同一来源重复载入同一路径：插件记住本来源已载入的路径，重复时不发请求，OSD「该音频已载入」。
-- 外部音轨属于当前来源，换来源后消失（核心行为）；自动载入在每次来源就绪时重新扫描。
-- 网络来源（http/https）：手动载入本地文件照常允许（时间轴可能对不上，由用户用声音同步调整）；自动载入只对本地文件生效。
-- 自动扫描只看同一层文件夹、不递归，最多载入 8 个；扫描在 Node 里异步进行，失败（无权限等）时静默跳过。
-- 外部音轨不能用于片段导出（核心已有规则：`AudioTrack.external`、`exportable`）。
+**Behavior details**:
+- Files are picked with `plugin.dialogs.openFile({ title: "Load External Audio" })`. On cancel nothing happens.
+- The submit is conditioned on the `player.state` from before the dialog opened (`ifCurrent`). If the user changed files while the dialog was open, it fails with `stale`, OSD "The source changed; the audio was not loaded".
+- On success, OSD "Audio loaded: movie.jpn.mka", and the new track is selected (the G03 menu rebuilds automatically as `audioTracks` changes).
+- Decode failure: OSD "Cannot load audio: <reason given by the core>"; the track list does not change.
+- With no source (`phase` is `empty`) the command is disabled with the reason "No file is playing"; also disabled while `loading`, with the reason "Loading".
+- Loading the same path again for the same source: the plugin remembers the paths loaded for this source, sends no request for a repeat, OSD "This audio is already loaded".
+- External audio tracks belong to the current source and disappear after the source changes (core behavior); automatic loading rescans each time a source becomes ready.
+- Network sources (http/https): loading a local file manually is allowed as usual (the timeline may not match; the user adjusts with audio sync); automatic loading only applies to local files.
+- The automatic scan only looks at the same folder level, not recursively, and loads at most 8 files; the scan runs asynchronously in Node and failures (no permission, etc.) are skipped silently.
+- External audio tracks cannot be used in clip export (existing core rule: `AudioTrack.external`, `exportable`).
 
-**持久化**：`autoLoadExternal`。
+**Persistence**: `autoLoadExternal`.
 
-**核心依赖**：`plugin.dialogs.openFile`（现有）；`player.state.audioTracks`（现有）。【核心新增】
+**Core dependencies**: `plugin.dialogs.openFile` (existing); `player.state.audioTracks` (existing). [New core API]
 ```ts
 player.addAudioTrack(path: string, opts?: { select?: boolean; ifCurrent?: PlayerState }): Promise<AudioTrack>
-// 需要 playback.control；对应 mpv `audio-add <path> select|auto`；select 默认 true
+// needs playback.control; corresponds to mpv `audio-add <path> select|auto`; select defaults to true
 ```
-为什么要核心做：往当前播放会话里加轨道是播放器内部操作，插件做不到。
+Why the core has to do it: adding a track to the current playback session is an operation inside the player that plugins cannot do.
 
-**验收**：
-- 播放无声视频时载入一个 .mp3，音轨菜单多出一项并被选中，能听到声音。
-- 打开自动载入后打开 `a.mkv`，同目录的 `a.ac3` 出现在音轨列表中但未被选中。
-- 在对话框里选文件期间用播放列表切到下一个文件，确认后提示「来源已改变」，新文件的音轨不受影响。
-- 选一个文本文件，提示「无法载入音频」，播放不中断。
+**Acceptance**:
+- While playing a silent video, load an .mp3: the audio track menu gains an item that is selected, and sound is heard.
+- With automatic loading on, open `a.mkv`: `a.ac3` in the same directory appears in the audio track list but is not selected.
+- While picking a file in the dialog, switch to the next file through the playlist; after confirming, "The source changed" is shown, and the new file's audio tracks are not affected.
+- Pick a text file: "Cannot load audio" is shown, and playback is not interrupted.
 
-### G03 选择音轨
+### G03 Select audio track
 
-> 第 2 轮（裁决 R-T2）：接口为 `player.selectAudioTrack(id, { ifCurrent })`。「音轨 ▸」子菜单里，音轨列表随 `audioTracks` 重建（order 511），按序切换与五种声道固定在其后（order 512，分组分隔）。
+> Round 2 (ruling R-T2): the interface is `player.selectAudioTrack(id, { ifCurrent })`. In the "Audio Track ▸" submenu, the track list is rebuilt as `audioTracks` changes (order 511), and Cycle and the five channel modes are fixed after it (order 512, separated as a group).
 
-**需求**：列出当前来源的所有音轨（含外部载入的），单选切换。每项显示「序号. 标题 [语言] (编码)」，外部音轨加「（外部）」，缺失字段省略，例如「1. 日语 [jpn] (aac)」「3. movie.ac3 (ac3)（外部）」；没有标题和语言时显示「音轨 2 (opus)」。
+**Requirement**: list all audio tracks of the current source (including externally loaded ones) and switch with radio items. Each item shows "number. title [language] (codec)"; external tracks get "(external)"; missing fields are left out, for example "1. Japanese [jpn] (aac)", "3. movie.ac3 (ac3) (external)"; with no title and no language, "Track 2 (opus)".
 
-**入口**：「声音 ▸ 音轨 ▸ 〔各音轨〕」（单选）；窗口「声道与输出」页音轨下拉；playback 底栏的「流选择」按钮若以后要做，由 playback 读 `player.state.audioTracks` 自己实现，本插件不提供给它。
+**Entry points**: "Audio ▸ Audio Track ▸ [each track]" (radio); the audio track drop-down on the window's "Output" page; if playback's bottom bar ever gets a "stream selection" button, playback implements it itself by reading `player.state.audioTracks`; this plugin does not provide it.
 
-**行为细节**：
-- OSD「音轨: 1. 日语 [jpn] (aac)」。
-- 菜单随 `player.state.audioTracks` 变化重建（比较 id 列表和选中项；只有勾选变化时也要刷新，用 `checked` 函数即可，不需要重建）。
-- `audioTracks === null`（载入中）：子菜单只显示禁用的「正在载入…」；`[]`（没有音轨）：只显示禁用的「没有音轨」。
-- 选择已选中的音轨：不发请求，不提示。
-- 提交以当前 `player.state` 为条件；`stale` 时什么都不做，也不提示（来源已变，菜单会随之重建）。
-- 切换音轨后，本插件的处理链由 SDK 自动重新应用到新音轨；均衡器等设置不复位（见本章「行为调整」）。
-- 换来源后回到核心的默认选择，不记住用户上次的选择。「记忆用户的语言/流选择」不在本编号内。
-- 插件生成的流（`kind: "stream"`，例如 NES）没有音轨列表时按「没有音轨」处理。
+**Behavior details**:
+- OSD "Audio track: 1. Japanese [jpn] (aac)".
+- The menu is rebuilt when `player.state.audioTracks` changes (compare the id list and the selection; when only the check changes it must refresh too, which a `checked` function handles without a rebuild).
+- `audioTracks === null` (loading): the submenu only shows a disabled "Loading…"; `[]` (no audio tracks): only a disabled "No Audio Tracks".
+- Selecting the already selected track: no request, no message.
+- The submit is conditioned on the current `player.state`; on `stale` nothing happens and there is no message (the source has changed, and the menu will be rebuilt accordingly).
+- After switching tracks, the SDK automatically reapplies this plugin's processing chain to the new track; equalizer and other settings are not reset (see "Behavior change" in this chapter).
+- After a source change, the core's default selection applies; the user's last choice is not remembered. "Remember the user's language / stream choice" is not part of this ID.
+- Plugin-generated streams (`kind: "stream"`, for example NES) without a track list are treated as "No Audio Tracks".
 
-**界面**：「声道与输出」页第 1 行。
+**Interface**: row 1 of the "Output" page.
 
-**持久化**：无。
+**Persistence**: none.
 
-**核心依赖**：`player.state.audioTracks`（现有）。【核心新增】
+**Core dependencies**: `player.state.audioTracks` (existing). [New core API]
 ```ts
 player.selectTrack(kind: "audio", id: number, opts?: { ifCurrent?: PlayerState }): Promise<PlayerState>
-// 需要 playback.control；对应 mpv `aid`；kind 目前只有 "audio"，保留参数以便以后扩展
+// needs playback.control; corresponds to mpv `aid`; kind is only "audio" for now, the parameter is kept for later extension
 ```
-为什么要核心做：切换音轨是播放器内部操作，插件拿不到 mpv。
+Why the core has to do it: switching audio tracks is an operation inside the player, and plugins cannot reach mpv.
 
-**验收**：
-- 双语 MKV：子菜单列出两条音轨，当前轨有单选点；选另一条后声音切换，OSD 正确。
-- 先把均衡器调成「人声」，再切换音轨，均衡器仍是「人声」。
-- 打开没有音频的文件，子菜单只有禁用的「没有音轨」。
+**Acceptance**:
+- Bilingual MKV: the submenu lists two audio tracks with a radio dot on the current one; choosing the other switches the sound, with the correct OSD.
+- Set the equalizer to "Voice", then switch tracks: the equalizer is still "Voice".
+- Open a file with no audio: the submenu only has a disabled "No Audio Tracks".
 
-### G04 依次切换音轨
+### G04 Cycle audio tracks
 
-**需求**：按音轨列表顺序切到下一条，到最后一条后回到第一条。
+**Requirement**: switch to the next track in list order; after the last one, back to the first.
 
-**入口**：「声音 ▸ 音轨 ▸ 按序切换」（Alt+A）。
+**Entry point**: "Audio ▸ Audio Track ▸ Cycle" (Alt+A).
 
-**行为细节**：
-- OSD 与 G03 相同：「音轨: 2. English [eng] (ac3)」。
-- 只有一条音轨：不发请求，OSD「只有一条音轨」。没有音轨或载入中：命令禁用，原因「没有音轨」/「正在载入」。
-- 连续快速按：每次以最新的 `player.state` 为基准计算下一条。上一次切换还没完成时（SDK 在途），本次按键基于插件看到的选中项计算，可能落后一步，但不会出错或失败。插件不排队。
-- 不按语言分组，严格按列表顺序。
+**Behavior details**:
+- OSD the same as G03: "Audio track: 2. English [eng] (ac3)".
+- Only one audio track: no request, OSD "Only one audio track". No audio tracks or loading: the command is disabled with the reason "No audio tracks" / "Loading".
+- Fast repeated presses: each computes the next track from the latest `player.state`. When the previous switch has not completed (in flight in the SDK), this press is computed from the selection the plugin sees, which may be one step behind but never wrong or failing. The plugin does not queue.
+- No grouping by language; strictly list order.
 
-**持久化**：无。
+**Persistence**: none.
 
-**核心依赖**：同 G03。
+**Core dependencies**: same as G03.
 
-**验收**：
-- 三条音轨的文件按 Alt+A 三次，依次切到第 2、3、1 条，每次有 OSD。
-- 单音轨文件按 Alt+A，提示「只有一条音轨」。
+**Acceptance**:
+- In a file with three audio tracks, press Alt+A three times: tracks 2, 3, 1 in turn, each with an OSD.
+- In a single-track file, press Alt+A: "Only one audio track" is shown.
 
-### G05 声道选择（立体声 / 左 / 右 / 单声道混合 / 左右互换）
+### G05 Channel selection (stereo / left / right / mono mix / swap left and right)
 
-> 第 2 轮（裁决 R-A1）：节点 `{ kind: "channels"; mode }`，核心用 `pan`，多于两声道先下混为立体声（`aformat`）。模式参数不是运行时的：切换声道会重建音频滤镜（可能有极短断音），下文「运行时可调」「没有明显断音」以此为准。声道数在来源就绪与换轨后读 `player.stats().audio.channels`，1 秒后再读一次（解码器换轨有延迟）。
+> Round 2 (ruling R-A1): node `{ kind: "channels"; mode }`; the core uses `pan`, and more than two channels are first downmixed to stereo (`aformat`). The mode parameter is not runtime: switching channels rebuilds the audio filter (possibly a very short dropout); this note takes precedence over "adjustable at runtime" and "no noticeable dropout" below. The channel count is read from `player.stats().audio.channels` when the source is ready and after a track change, and read again 1 second later (the decoder switches tracks with a delay).
 
-**需求**：单选，默认「立体声」：
-- **立体声**：原样输出。
-- **左声道**：两个扬声器都播放左声道。
-- **右声道**：两个扬声器都播放右声道。
-- **单声道混合**：左右混合为 (L+R)/2，两侧相同。用于只有一侧有声音的录音，或单耳耳机。
-- **左右互换**：左扬声器播放右声道，右扬声器播放左声道。用于左右接反的录音或耳机。
+**Requirement**: radio, default "Stereo":
+- **Stereo**: output as is.
+- **Left Channel**: both speakers play the left channel.
+- **Right Channel**: both speakers play the right channel.
+- **Mono Mix**: left and right are mixed as (L+R)/2, the same on both sides. For recordings with sound on only one side, or single-ear headphones.
+- **Swap Left and Right**: the left speaker plays the right channel, and the right speaker plays the left channel. For recordings or headphones wired the wrong way round.
 
-**入口**：「声音 ▸ 音轨 ▸ 立体声 / 左声道 / 右声道 / 单声道混合 / 左右互换」（单选，在音轨列表和按序切换之后）；窗口「声道与输出」页「声道」下拉。
+**Entry points**: "Audio ▸ Audio Track ▸ Stereo / Left Channel / Right Channel / Mono Mix / Swap Left and Right" (radio, after the track list and Cycle); the "Channels" drop-down on the window's "Output" page.
 
-**行为细节**：
-- OSD「声道: 左声道」。
-- 单声道音轨（`player.stats().audio.channels === 1`）：五个选项都禁用，原因「当前音轨是单声道」；设置保留，换到立体声音轨时自动生效。
-- 多声道音轨（5.1 / 7.1）：选非「立体声」时，核心先把音频混为立体声再处理，环绕声道并入左右（OSD 后面加「（已混为立体声）」，每次选择时提示）。选回「立体声」后恢复原多声道输出（不加节点）。
-- 声道数在来源就绪和切换音轨后通过 `player.stats()` 读取；读取失败时按立体声处理。
+**Behavior details**:
+- OSD "Channels: Left Channel".
+- Mono audio track (`player.stats().audio.channels === 1`): all five options are disabled with the reason "The current track is mono"; the setting is kept and takes effect automatically when switching to a stereo track.
+- Multichannel tracks (5.1 / 7.1): when anything other than "Stereo" is chosen, the core first mixes the audio to stereo, folding the surround channels into left and right (the OSD gets "(mixed to stereo)" appended, shown on every choice). Choosing "Stereo" again restores the original multichannel output (no node).
+- The channel count is read with `player.stats()` when the source is ready and after switching tracks; if the read fails, stereo is assumed.
 
-**持久化**：`channels.mode`。
+**Persistence**: `channels.mode`.
 
-**核心依赖**：【核心新增】节点类型：
+**Core dependencies**: [New core API] node type:
 ```ts
 { kind: "channels"; mode: "stereo" | "left" | "right" | "mono" | "swap" }
-// FFmpeg stereotools mode：lr>lr / lr>ll / lr>rr / lr>l+r / lr>rl；运行时可调
-// 输入多于 2 声道时核心在前面插入立体声下混；mode=stereo 时插件不发送
+// FFmpeg stereotools mode: lr>lr / lr>ll / lr>rr / lr>l+r / lr>rl; adjustable at runtime
+// with more than 2 input channels the core inserts a stereo downmix before it; the plugin does not send it for mode=stereo
 ```
 
-**验收**：
-- 左右不同的测试音（左 440 Hz、右 880 Hz）：选「左声道」后两侧都是 440 Hz；选「单声道混合」后两侧相同且都含两个频率。
-- 选「左右互换」后左耳 880 Hz、右耳 440 Hz。
-- 单声道文件上五个选项禁用，悬停显示原因。
-- 5.1 文件选「右声道」，有「已混为立体声」提示，声音正常。
-- 切换时没有明显断音（运行时参数）。
+**Acceptance**:
+- Test tone that differs left and right (left 440 Hz, right 880 Hz): after "Left Channel" both sides are 440 Hz; after "Mono Mix" both sides are the same and contain both frequencies.
+- After "Swap Left and Right", the left ear hears 880 Hz and the right ear 440 Hz.
+- On a mono file the five options are disabled, and hovering shows the reason.
+- A 5.1 file with "Right Channel": the "mixed to stereo" message appears, and the sound is normal.
+- No noticeable dropout when switching (runtime parameter).
 
-**说明**：包含「单声道混合」（G05 编号说明里的要求）；「左右声道互换」并入本单选，作为一种声道模式。
+**Notes**: includes "Mono Mix" (required by the G05 ID description); "swap left and right channels" is merged into this radio group as one channel mode.
 
-### G09 声音同步快捷键
+### G09 Audio sync shortcuts
 
-**现状**：窗口里有延迟滑块（±2000 ms，按 10 ms 取整，正值使音频更晚），没有菜单命令和快捷键；延迟随来源和音轨变化复位。
+**Current state**: the window has a delay slider (±2000 ms, rounded to 10 ms, positive values make the audio later), with no menu commands and no shortcuts; the delay resets when the source or audio track changes.
 
-**需求**（只写缺口）：
-- 菜单命令：「超前 50 毫秒」（延迟 −50，声音提前）、「滞后 50 毫秒」（延迟 +50，声音推后）、「复位」（延迟 0），按住时自动重复。步长 50 ms，范围 ±10 000 ms（第 2 轮核心放宽，裁决 R-A5）。
-- 保持方式（单选，默认「不保持」）：
-  - **不保持**：每次换来源延迟归 0（与现在一样）。
-  - **本次运行内保持**：换来源时保留延迟，退出播放器后归 0。
-  - **始终保持**：延迟写入数据目录，重启后仍生效。
-- 切换音轨（G03/G04）**不再**复位延迟（同一来源的不同音轨通常需要相同的偏移；有不同需求时用户自己调）。
+**Requirement** (only the gaps):
+- Menu commands: "50 ms Earlier" (delay −50, sound earlier), "50 ms Later" (delay +50, sound later), "Reset" (delay 0), auto-repeating while held. Step 50 ms, range ±10 000 ms (widened in core round 2, ruling R-A5).
+- Keep mode (radio, default "Don't Keep"):
+  - **Don't Keep**: the delay goes back to 0 on every source change (as now).
+  - **Keep for This Run**: the delay is kept on source change and goes back to 0 after the player quits.
+  - **Always Keep**: the delay is written to the data directory and still applies after a restart.
+- Switching audio tracks (G03/G04) **no longer** resets the delay (different tracks of the same source usually need the same offset; users adjust themselves when they need something else).
 
-**入口**：「声音 ▸ 声音同步 ▸」各项；快捷键 `>` 超前、`<` 滞后、`?` 复位（字幕同步相应改为 `.` `,` `/`，见冲突说明）；窗口「效果」页声音同步滑块（现有）、「声道与输出」页保持方式下拉。
+**Entry points**: the items under "Audio ▸ Audio Sync ▸"; shortcuts `>` earlier, `<` later, `?` reset (subtitle sync changes to `.` `,` `/` accordingly, see the conflict notes); the audio sync slider on the window's "Effects" page (existing), the keep mode drop-down on the "Output" page.
 
-**行为细节**：
-- OSD 文案：「音频同步: -0.05秒」「音频同步: +0.3秒」「音频同步: 0秒」。
-- 到 ±10 000 ms 边界时值不变，OSD 照常显示当前值。
-- 没有选中音轨时命令禁用，原因「没有选中的音轨」（与现有编辑命令一致）。
-- 延迟通过现有的 `filter.set({ nodes, delayMs })` 提交，不改变节点链，不会重建滤镜图。
-- 外部音轨（A11）同样适用。
-- 字幕同步是另一个插件，两者互不影响；OSD 文案用「音频同步」区分。
+**Behavior details**:
+- OSD wording: "Audio sync: -0.05 s", "Audio sync: +0.3 s", "Audio sync: 0 s".
+- At the ±10 000 ms limit the value does not change, and the OSD still shows the current value.
+- With no audio track selected, the command is disabled with the reason "No audio track selected" (consistent with the existing editing commands).
+- The delay is submitted through the existing `filter.set({ nodes, delayMs })`, which does not change the node chain or rebuild the filter graph.
+- External audio tracks (A11) are covered too.
+- Subtitle sync is another plugin, and the two do not affect each other; the OSD wording "Audio sync" tells them apart.
 
-**持久化**：`syncKeep`；「始终保持」时另存 `syncMs`。
+**Persistence**: `syncKeep`; with "Always Keep", `syncMs` is saved as well.
 
-**核心依赖**：现有 `audio.filter` 的 `delayMs`。【核心新增，可选】`delayMs` 范围从 ±2000 放宽到 ±10000（与字幕 `offsetMs` 一致），理由：外部载入的音轨（A11）偏差常超过 2 秒。核心现在按「正负贡献各不超过 2000」做预算（`processing.rs`），放宽时一并调整。
+**Core dependencies**: the existing `delayMs` of `audio.filter`. [New core API, optional] widen the `delayMs` range from ±2000 to ±10000 (consistent with the subtitles' `offsetMs`), because externally loaded audio tracks (A11) are often off by more than 2 seconds. The core now budgets "positive and negative contributions each at most 2000" (`processing.rs`), which has to be adjusted together.
 
-**验收**：
-- 按 `>` 三次，OSD 依次「-0.05秒」「-0.1秒」「-0.15秒」，窗口滑块同步移动。
-- `?` 复位为 0。
-- 「不保持」时打开下一个文件延迟为 0；「本次运行内保持」时保留，重启后为 0；「始终保持」重启后仍保留。
-- 切换音轨后延迟保持不变。
-- 字幕同步按键 `.` `,` `/` 只影响字幕，`>` `<` `?` 只影响音频。
+**Acceptance**:
+- Press `>` three times: the OSD shows "-0.05 s", "-0.1 s", "-0.15 s" in turn, and the window slider moves along.
+- `?` resets to 0.
+- With "Don't Keep" the delay is 0 when the next file opens; with "Keep for This Run" it is kept, and 0 after a restart; with "Always Keep" it is still kept after a restart.
+- After switching audio tracks, the delay stays the same.
+- The subtitle sync keys `.` `,` `/` only affect subtitles, and `>` `<` `?` only affect audio.
 
-**说明**：步长固定 50 ms，不提供修改步长的设置。
+**Notes**: the step is fixed at 50 ms; there is no setting to change it.
 
-### G11 晶化快捷键
+### G11 Crystalizer shortcuts
 
-**现状**：「清晰度增强」（3 kHz 高频搁架提升 0–6 dB）只能在窗口里拖动，没有开关、菜单和快捷键；值为 0 时等于关闭。
+**Current state**: "clarity enhancement" (3 kHz high-shelf boost 0–6 dB) can only be dragged in the window, with no toggle, menu or shortcut; a value of 0 equals off.
 
-**需求**（只写缺口）：
-- 把「清晰度增强」改名为「晶化」，并拆成开关 + 强度：开关默认关，强度 0–6 dB、默认 3 dB、步长 0.1。
-- 菜单「声音 ▸ 声音处理 ▸ 晶化」（勾选，Shift+C）只切换开关，强度用上次的值。
-- 窗口「效果」页晶化行：复选 + 滑块 + 默认。复选关闭时滑块置灰，但保留数值。
-- 旧设置迁移：旧的 `clarity > 0` 迁移为开关开、强度为原值；`clarity = 0` 迁移为开关关、强度 3。
+**Requirement** (only the gaps):
+- Rename "clarity enhancement" to "Crystalizer" and split it into a toggle + strength: the toggle is off by default, strength 0–6 dB, default 3 dB, step 0.1.
+- The menu item "Audio ▸ Processing ▸ Crystalizer" (checkbox, Shift+C) only switches the toggle, using the last strength.
+- The crystalizer row on the window's "Effects" page: checkbox + slider + default. With the checkbox off, the slider is grey but keeps its value.
+- Old settings migration: an old `clarity > 0` migrates to toggle on with the original value as strength; `clarity = 0` migrates to toggle off with strength 3.
 
-**行为细节**：
-- OSD「晶化: 开」/「晶化: 关」。
-- 开关打开但强度为 0：不产生节点，勾选仍显示为开。
-- 没有选中音轨时命令禁用（与现有编辑命令一致）。
+**Behavior details**:
+- OSD "Crystalizer: On" / "Crystalizer: Off".
+- Toggle on but strength 0: no node is produced, and the check still shows on.
+- With no audio track selected, the command is disabled (consistent with the existing editing commands).
 
-**持久化**：`clarity = { on, db }`。
+**Persistence**: `clarity = { on, db }`.
 
-**核心依赖**：现有 `treble` 节点，不需要新增。（FFmpeg 的 `crystalizer` 效果更接近晶化，但不是必需的，本轮不请求。）
+**Core dependencies**: the existing `treble` node; nothing new needed. (FFmpeg's `crystalizer` effect is closer to a crystalizer, but it is not required and is not requested this round.)
 
-**验收**：Shift+C 开关时高频有可听的变化；菜单勾选、窗口复选、OSD 一致；旧版设置升级后数值正确。
+**Acceptance**: toggling with Shift+C gives an audible change in the high frequencies; the menu check, window checkbox and OSD agree; after upgrading from old settings, the values are correct.
 
-**说明**：晶化只有一个强度参数（不单独提供带宽扩展、谐波助推）。
+**Notes**: the crystalizer has only one strength parameter (no separate bandwidth extension or harmonic boost).
 
-### G16 音频输出设备选择
+### G16 Audio output device selection
 
-> 排期（裁决 R-A2–R-A4）：推到第 3a 轮（核心体积预算）。第 2 轮不出现「输出设备 ▸」菜单；窗口「声道与输出」页输出设备下拉置灰，悬停提示「输出设备选择需要核心接口，后续版本提供」。第 3a 轮的接口去掉 `devicesRevision`，窗口打开时每 5 秒轮询 `audioDevices()`，设备选择由插件跨启动保存。
+> Schedule (rulings R-A2–R-A4): moved to round 3a (core size budget). Round 2 has no "Output Device ▸" menu; the output device drop-down on the window's "Output" page is grey, with the hover hint "Output device selection needs a core interface and will come in a later version". The round 3a interface drops `devicesRevision`; while the window is open, `audioDevices()` is polled every 5 seconds, and the device choice is saved across launches by the plugin.
 
-**需求**：
-- 列出系统的音频输出设备（内置扬声器、耳机、AirPods、HDMI 显示器、USB 声卡、虚拟设备等），单选。第一项是「系统默认」（默认值，跟随 macOS「声音」设置中的输出设备，系统里切换时自动跟着切）。
-- 选择具体设备后，播放器的声音（包括 NES 等插件生成的流）从该设备输出，与系统默认设置无关。
+**Requirement**:
+- List the system's audio output devices (built-in speakers, headphones, AirPods, HDMI displays, USB sound cards, virtual devices, etc.), radio. The first item is "System Default" (the default, following the output device in the macOS "Sound" settings, and switching automatically when it is switched in the system).
+- After choosing a specific device, the player's sound (including streams generated by plugins such as NES) comes out of that device, regardless of the system default.
 
-**入口**：「声音 ▸ 输出设备 ▸ 系统默认 · 〔各设备名〕」（单选）；窗口「声道与输出」页「输出设备」下拉（200 宽，名称太长时省略号截断，悬停显示全名）。
+**Entry points**: "Audio ▸ Output Device ▸ System Default · [each device name]" (radio); the "Output Device" drop-down on the window's "Output" page (200 wide; names that are too long are truncated with an ellipsis, with the full name on hover).
 
-**行为细节**：
-- OSD「音频输出: MacBook Pro 扬声器」/「音频输出: 系统默认」。
-- 设备列表：激活时读取一次；核心报告设备列表变化（插拔）时重读，并按 reference §4 的写法重建子菜单（order 512 不变）。
-- 选中的设备被拔掉：核心改用系统默认继续播放（不停播），插件 OSD「输出设备已断开，改用系统默认」，菜单单选点仍在用户选的设备上，但该项显示为禁用，原因「设备未连接」。设备重新接上后，核心自动切回，插件 OSD「音频输出: <设备名>」。
-- 启动时保存的设备不存在：同上，回退到系统默认，不弹 OSD（避免每次启动都提示），菜单里显示为禁用。
-- 切换设备时播放不暂停、不跳转；允许出现不超过约 0.5 秒的短暂静音（音频输出重新打开）。
-- 切换请求失败（设备被独占等）：OSD「无法切换到 <设备名>: <原因>」，保持原设备。
-- 选择设备不需要有来源：没有播放时也可以选，之后打开的媒体使用该设备。
-- 无界面模式（测试）或静音后端（`ao=null`）：子菜单只有禁用的「没有可用的输出设备」。
+**Behavior details**:
+- OSD "Audio output: MacBook Pro Speakers" / "Audio output: System Default".
+- Device list: read once at activation; when the core reports a device list change (plug / unplug), it is read again and the submenu is rebuilt as described in reference §4 (order 512 unchanged).
+- The selected device is unplugged: the core continues playing on the system default (no stop), the plugin shows the OSD "Output device disconnected, using System Default"; the menu's radio dot stays on the device the user chose, but that item is shown disabled with the reason "Device not connected". When the device is reconnected, the core switches back automatically, and the plugin shows the OSD "Audio output: <device name>".
+- The device saved at startup does not exist: same as above, falling back to the system default, without an OSD (to avoid a message at every launch), and shown disabled in the menu.
+- Switching devices does not pause or seek; a short silence of up to about 0.5 seconds is allowed (the audio output reopens).
+- The switch request fails (device in exclusive use, etc.): OSD "Cannot switch to <device name>: <reason>", keeping the old device.
+- Choosing a device does not need a source: it can be chosen with nothing playing, and media opened later use that device.
+- Headless mode (tests) or the null backend (`ao=null`): the submenu only has a disabled "No output devices available".
 
-**持久化**：`device`（核心给出的设备 id；`null` 表示系统默认）。插件激活时把它交给核心。
+**Persistence**: `device` (the device id given by the core; `null` means system default). The plugin hands it to the core at activation.
 
-**核心依赖**：【核心新增】
+**Core dependencies**: [New core API]
 ```ts
-player.audioDevices(): Promise<AudioDevice[]>                  // 需要 playback.read；mpv audio-device-list
-interface AudioDevice { id: string; name: string }             // id 稳定（CoreAudio UID），name 为本地化显示名
-player.setAudioDevice(id: string | null): Promise<void>        // 需要 playback.control；null = 系统默认（mpv audio-device=auto）
+player.audioDevices(): Promise<AudioDevice[]>                  // needs playback.read; mpv audio-device-list
+interface AudioDevice { id: string; name: string }             // stable id (CoreAudio UID), name is the localized display name
+player.setAudioDevice(id: string | null): Promise<void>        // needs playback.control; null = system default (mpv audio-device=auto)
 interface PlayerState {
   readonly audioOutput: {
-    requested: string | null;   // 用户选择的设备，null = 系统默认
-    active: string | null;      // 实际在用的设备，回退时与 requested 不同
-    devicesRevision: number;    // 设备列表变化时递增，插件据此重读 audioDevices()
+    requested: string | null;   // the device the user chose, null = system default
+    active: string | null;      // the device actually in use, differs from requested after a fallback
+    devicesRevision: number;    // increments when the device list changes; plugins re-read audioDevices() on it
   };
 }
 ```
-为什么要核心做：输出设备由播放器的音频输出持有，插件无法打开或切换。核心还要让生成流的音频路径（`producer_audio.rs`，cpal 打开的是系统默认设备）使用同一个设备，否则 NES 声音不跟随选择；并在设备断开后重新出现时自动切回 `requested`。
+Why the core has to do it: the output device is held by the player's audio output, and plugins cannot open or switch it. The core also has to make the audio path of generated streams (`producer_audio.rs`, where cpal opens the system default device) use the same device, otherwise NES sound does not follow the choice; and it has to switch back to `requested` automatically when a disconnected device reappears.
 
-**验收**：
-- 接上耳机后，子菜单自动出现耳机项；选它后声音从耳机出，系统默认仍为扬声器。
-- 播放中拔掉所选的 USB 声卡，声音转到系统默认继续，出现 OSD；重新插上后自动切回。
-- 选「系统默认」后，在 macOS 控制中心切换输出，播放器跟着切换。
-- 选定设备后重启播放器，仍使用该设备。
-- NES 模拟器运行时，声音也从所选设备输出。
+**Acceptance**:
+- After plugging in headphones, the submenu automatically gains a headphones item; after choosing it, sound comes out of the headphones while the system default is still the speakers.
+- Unplug the selected USB sound card during playback: sound continues on the system default, with an OSD; after plugging it back in, it switches back automatically.
+- With "System Default" chosen, switch the output in macOS Control Center: the player follows.
+- Choose a device and restart the player: it still uses that device.
+- While the NES emulator runs, its sound also comes out of the chosen device.
 
-**说明**：直通（Pass-through）和第二输出设备属于 G17 / Windows 专属，不做。
+**Notes**: pass-through and a second output device belong to G17 / are Windows-only, and are not done.
 
-**本章核心 API 请求汇总**
+**Chapter core API request summary**
 
-| 接口 | 理由 |
+| Interface | Reason |
 | --- | --- |
-| `player.addAudioTrack(path: string, opts?: { select?: boolean; ifCurrent?: PlayerState }): Promise<AudioTrack>` | A11。往播放会话里加轨道是播放器内部操作（mpv `audio-add`） |
-| `player.selectAudioTrack(id: number, opts?: { ifCurrent?: PlayerState }): Promise<PlayerState>`（裁决 R-T2 改写：去掉 `kind`） | G03、G04。切换音轨是播放器内部操作（mpv `aid`） |
-| `AudioNode` 增加 `{ kind: "channels"; mode: "stereo" \| "left" \| "right" \| "mono" \| "swap" }` | G05。核心负责多声道下混；插件不能自己加滤镜 |
-| `player.audioDevices(): Promise<AudioDevice[]>` | G16。设备列表来自播放器音频输出 |
-| `player.setAudioDevice(id: string \| null): Promise<void>` | G16。同时覆盖 mpv 和生成流（cpal）两条音频路径 |
-| `PlayerState.audioOutput: { requested: string \| null; active: string \| null }`（裁决 R-A4：去掉 `devicesRevision`，第 3a 轮） | G16。插件据此显示回退状态；窗口打开时每 5 秒重读设备列表 |
-| 音频 `delayMs` 放宽到 −10000–10000（第 2 轮已提供） | G09 / A11。外部音轨偏差常超过 2 秒 |
+| `player.addAudioTrack(path: string, opts?: { select?: boolean; ifCurrent?: PlayerState }): Promise<AudioTrack>` | A11. Adding a track to the playback session is an operation inside the player (mpv `audio-add`) |
+| `player.selectAudioTrack(id: number, opts?: { ifCurrent?: PlayerState }): Promise<PlayerState>` (rewritten by ruling R-T2: `kind` removed) | G03, G04. Switching audio tracks is an operation inside the player (mpv `aid`) |
+| `AudioNode` gains `{ kind: "channels"; mode: "stereo" \| "left" \| "right" \| "mono" \| "swap" }` | G05. The core handles multichannel downmix; plugins cannot add filters themselves |
+| `player.audioDevices(): Promise<AudioDevice[]>` | G16. The device list comes from the player's audio output |
+| `player.setAudioDevice(id: string \| null): Promise<void>` | G16. Covers both audio paths, mpv and generated streams (cpal) |
+| `PlayerState.audioOutput: { requested: string \| null; active: string \| null }` (ruling R-A4: `devicesRevision` removed, round 3a) | G16. The plugin shows the fallback state from it; while the window is open, the device list is re-read every 5 seconds |
+| Audio `delayMs` widened to −10000–10000 (provided in round 2) | G09 / A11. External audio tracks are often off by more than 2 seconds |
 
-不需要核心改动的：G09 的快捷键，G11 的快捷键，A11 的同名自动载入（Node 扫描文件夹）。
+No core changes needed for: the G09 shortcuts, the G11 shortcuts, A11's automatic loading of same-name files (Node scans the folder).
 
-## 截图（`capture`）
+## Capture (`capture`)
 
-**位置**：`src/plugins/capture/`（现有插件）
+**Location**: `src/plugins/capture/` (existing plugin)
 
-### 定位
+### Scope
 
-截图插件负责把播放内容存成图片或视频文件：单张截图、连拍、片段导出。本轮增加：复制画面到剪贴板、单张「实际画面」（含效果与字幕）、JPEG/BMP 与质量、打开截图文件夹。
+The capture plugin saves playback content as image or video files: single screenshots, bursts, clip export. This round adds: copying the frame to the clipboard, a single "rendered frame" screenshot (with effects and subtitles), JPEG/BMP and quality, and opening the screenshot folder.
 
-边界与取舍：
-- 取帧一律用核心快照（`media.capture` + `Snapshot.export`），保证与现有截图一致的冻结与条件提交语义。
-- JPEG/BMP 由核心快照直接导出（`Snapshot.export` 的 `jpeg` / `bmp`，参考文档 §10；可移植性轮 P1 起，替换原来插件内的 macOS `sips` 转换）。复制到剪贴板用 `plugin.clipboard.writeImage`，打开文件夹用 `plugin.system.openPath`，设置文件用 `plugin.storage.json`（第 2 轮通用能力，替换原来的 `osascript`、`open` 与自写的设置读写）。
-- 截图设置（格式、质量）对所有图片输出统一生效：单张、另存为、连拍。
+Boundaries and trade-offs:
+- Frames are always taken with core snapshots (`media.capture` + `Snapshot.export`), so the freeze and conditional-submit semantics are the same as the existing screenshots.
+- JPEG/BMP are exported directly by the core snapshot (`jpeg` / `bmp` of `Snapshot.export`, reference §10; since portability round P1, replacing the plugin's former macOS `sips` conversion). Copying to the clipboard uses `plugin.clipboard.writeImage`, opening the folder uses `plugin.system.openPath`, and the settings file uses `plugin.storage.json` (round 2 general capabilities, replacing the former `osascript`, `open` and hand-written settings I/O).
+- Screenshot settings (format, quality) apply to all image output: single shots, save as, bursts.
 
-manifest 增加能力 `clipboard`（F03）；其余已有（`media.read`、`media.control`、`playback.read`、`subtitles.read`）。
+The manifest adds the capability `clipboard` (F03); the rest already exist (`media.read`, `media.control`, `playback.read`, `subtitles.read`).
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| F03 | 复制当前画面到剪贴板 | ✗ | 否（通用能力 `plugin.clipboard`） |
-| F04 | 单张截图带效果与字幕 | ◐ | 否 |
-| F07 | JPEG/BMP 格式与质量 | ◐ | 是（`Snapshot.export` 的 `jpeg` / `bmp`，可移植性轮 P1 已交付） |
-| F09 | 打开截图文件夹 | ◐ | 否（通用能力 `plugin.system`） |
+| F03 | Copy the current frame to the clipboard | ✗ | No (general capability `plugin.clipboard`) |
+| F04 | Single screenshot with effects and subtitles | ◐ | No |
+| F07 | JPEG/BMP format and quality | ◐ | Yes (`jpeg` / `bmp` of `Snapshot.export`, delivered in portability round P1) |
+| F09 | Open the screenshot folder | ◐ | No (general capability `plugin.system`) |
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-`视频 ▸ 截图 ▸` 子项 420–449（子菜单位置取第一项 order）。
+`Video ▸ Snapshot ▸` items 420–449 (the submenu's position is the first item's order).
 
-| 菜单路径 | order | 分组 | 默认快捷键 | 编号 |
+| Menu path | order | Group | Default shortcut | ID |
 | --- | --- | --- | --- | --- |
-| 视频 ▸ 截图 ▸ 保存当前画面 | 420 | capture-source | Ctrl+E（现有） | |
-| 视频 ▸ 截图 ▸ 当前画面另存为… | 421 | capture-source | — | |
-| 视频 ▸ 截图 ▸ 复制当前画面 | 422 | capture-source | Ctrl+C | F03 |
-| 视频 ▸ 截图 ▸ 保存实际画面 | 423 | capture-screen | Ctrl+Alt+E | F04 |
-| 视频 ▸ 截图 ▸ 实际画面另存为… | 424 | capture-screen | — | F04 |
-| 视频 ▸ 截图 ▸ 复制实际画面 | 425 | capture-screen | Ctrl+Alt+C | F03/F04 |
-| 视频 ▸ 截图 ▸ 连拍…（窗口打开时勾选） | 426 | capture-export | Ctrl+G（现有） | |
-| 视频 ▸ 截图 ▸ 导出片段… | 428 | capture-export | — | |
-| 视频 ▸ 截图 ▸ 导出任务… | 429 | capture-export | — | |
-| 视频 ▸ 截图 ▸ 截取为 PNG / JPEG / BMP（单选） | 430–432 | capture-format | — | F07 |
-| 视频 ▸ 截图 ▸ 实际画面包含字幕（勾选） | 435 | capture-name | — | F04 |
-| 视频 ▸ 截图 ▸ 截图设置… | 436 | capture-name | — | F07 |
-| 视频 ▸ 截图 ▸ 截图文件夹… | 437 | capture-folder | —（现有，改序） | |
-| 视频 ▸ 截图 ▸ 打开截图文件夹 | 438 | capture-folder | — | F09 |
+| Video ▸ Snapshot ▸ Save Current Frame | 420 | capture-source | Ctrl+E (existing) | |
+| Video ▸ Snapshot ▸ Save Current Frame As… | 421 | capture-source | — | |
+| Video ▸ Snapshot ▸ Copy Current Frame | 422 | capture-source | Ctrl+C | F03 |
+| Video ▸ Snapshot ▸ Save Rendered Frame | 423 | capture-screen | Ctrl+Alt+E | F04 |
+| Video ▸ Snapshot ▸ Save Rendered Frame As… | 424 | capture-screen | — | F04 |
+| Video ▸ Snapshot ▸ Copy Rendered Frame | 425 | capture-screen | Ctrl+Alt+C | F03/F04 |
+| Video ▸ Snapshot ▸ Burst… (checked while the window is open) | 426 | capture-export | Ctrl+G (existing) | |
+| Video ▸ Snapshot ▸ Export Clip… | 428 | capture-export | — | |
+| Video ▸ Snapshot ▸ Export Tasks… | 429 | capture-export | — | |
+| Video ▸ Snapshot ▸ Capture as PNG / JPEG / BMP (radio) | 430–432 | capture-format | — | F07 |
+| Video ▸ Snapshot ▸ Include Subtitles in Rendered Frame (checkbox) | 435 | capture-name | — | F04 |
+| Video ▸ Snapshot ▸ Snapshot Settings… | 436 | capture-name | — | F07 |
+| Video ▸ Snapshot ▸ Snapshot Folder… | 437 | capture-folder | — (existing, reordered) | |
+| Video ▸ Snapshot ▸ Open Snapshot Folder | 438 | capture-folder | — | F09 |
 
-冲突检查：Ctrl+C、Ctrl+Alt+E、Ctrl+Alt+C 当前均未占用。C（加速 0.1）与带修饰键的组合不冲突。macOS 上 `Ctrl+C` 也响应 ⌘C；视频区没有可选文本，不影响系统复制；输入框获得焦点时按键被控件吃掉，不会误截图。
+Conflict check: Ctrl+C, Ctrl+Alt+E and Ctrl+Alt+C are not used now. C (faster 0.1) does not conflict with combinations that have modifiers. On macOS `Ctrl+C` also responds to ⌘C; the video area has no selectable text, so system copy is not affected; when an input box has focus the control takes the keys, so no screenshot is taken by mistake.
 
-### F03 复制当前画面到剪贴板
+### F03 Copy the current frame to the clipboard
 
-**需求**：一键把当前画面复制到系统剪贴板（PNG 图像），可直接粘贴到聊天、文档。分「源画面」（Ctrl+C，原始帧）与「实际画面」（Ctrl+Alt+C，含效果与字幕，见 F04）。
+**Requirement**: copy the current frame to the system clipboard with one key (PNG image), ready to paste into chats and documents. There are "source frame" (Ctrl+C, the original frame) and "rendered frame" (Ctrl+Alt+C, with effects and subtitles, see F04).
 
-**入口**：`视频 ▸ 截图 ▸ 复制当前画面`（Ctrl+C）、`复制实际画面`（Ctrl+Alt+C）。
+**Entry points**: `Video ▸ Snapshot ▸ Copy Current Frame` (Ctrl+C), `Copy Rendered Frame` (Ctrl+Alt+C).
 
-**行为细节**：
-1. 流程：`player.refresh()` 记下 `seen` → `media.capture({ ifCurrent: seen, processed })` → `export({ format: "png", destination: <临时目录>/clip-<n>.png })` → 等待完成 → `plugin.clipboard.writeImage(<路径>)` → 删除临时文件、释放快照。
-2. 临时目录：`os.tmpdir()/vestra-capture-<pid>/`，插件停用时清空。
-3. 剪贴板只放 PNG（不受截图格式设置影响），保留原始分辨率。
-4. 与 Ctrl+E 共用「一次只做一张」的互斥：上一张未完成时再按，OSD「上一张截图仍在处理」，不排队。理由：剪贴板只有一个，排队没有意义。
-5. 成功 OSD：`画面截图：复制到剪贴板`。失败：截图失败沿用现有文案（`截图失败：…`）；剪贴板写入失败「无法写入剪贴板」。
-6. 不可截图（无媒体、网络流、`can.snapshot` 为假）：禁用，原因「没有可截取的画面」（现有 `canCapture`）。
+**Behavior details**:
+1. Flow: `player.refresh()` records `seen` → `media.capture({ ifCurrent: seen, processed })` → `export({ format: "png", destination: <temporary directory>/clip-<n>.png })` → wait for completion → `plugin.clipboard.writeImage(<path>)` → delete the temporary file and release the snapshot.
+2. Temporary directory: `os.tmpdir()/vestra-capture-<pid>/`, emptied when the plugin is disabled.
+3. The clipboard only gets PNG (not affected by the screenshot format setting), at the original resolution.
+4. Shares the "one at a time" mutual exclusion with Ctrl+E: pressing again before the previous one finishes shows the OSD "The previous snapshot is still being processed", without queuing. Reason: there is only one clipboard, so queuing makes no sense.
+5. Success OSD: `Frame copied to the clipboard`. Failure: screenshot failures use the existing wording (`Snapshot failed: …`); clipboard write failure "Could not write to the clipboard".
+6. Cannot capture (no media, network stream, `can.snapshot` false): disabled with the reason "No frame to capture" (existing `canCapture`).
 
-**核心依赖**：现有 `media.capture`、`Snapshot.export`；第 2 轮通用能力 `plugin.clipboard.writeImage`（能力 `clipboard`，替换原来的 `osascript`）。
+**Core dependencies**: the existing `media.capture`, `Snapshot.export`; the round 2 general capability `plugin.clipboard.writeImage` (capability `clipboard`, replacing the former `osascript`).
 
-**验收**：播放中按 Ctrl+C，在图像应用中从剪贴板新建（macOS「预览」、Windows「画图」）得到与 Ctrl+E 同尺寸的图像；临时文件已删除；无媒体时命令禁用；连按两次第二次给出提示。
+**Acceptance**: press Ctrl+C during playback, then create a new image from the clipboard in an image application (macOS "Preview", Windows "Paint"): the image has the same size as from Ctrl+E; the temporary file has been deleted; the command is disabled with no media; pressing twice quickly gives a message on the second press.
 
-### F04 单张截图带效果与字幕
+### F04 Single screenshot with effects and subtitles
 
-**现状**：连拍与导出片段可选「包含画面效果 / 同时截取字幕」；单张截图（Ctrl+E、另存为）只截源画面。
+**Current state**: bursts and clip export can choose "include picture effects / capture subtitles too"; single screenshots (Ctrl+E, save as) only capture the source frame.
 
-**需求**：单张截图也能截「实际画面」：包含插件画面效果（亮度对比度、模糊等）和（可选）当前字幕。
+**Requirement**: single screenshots can also capture the "rendered frame": including the plugins' picture effects (brightness, contrast, blur, etc.) and (optionally) the current subtitles.
 
-**入口**：`视频 ▸ 截图 ▸ 保存实际画面`（Ctrl+Alt+E）、`实际画面另存为…`、`复制实际画面`（Ctrl+Alt+C）；`实际画面包含字幕`（勾选，默认开）。
+**Entry points**: `Video ▸ Snapshot ▸ Save Rendered Frame` (Ctrl+Alt+E), `Save Rendered Frame As…`, `Copy Rendered Frame` (Ctrl+Alt+C); `Include Subtitles in Rendered Frame` (checkbox, on by default).
 
-**行为细节**：
-1. 「实际画面」= `media.capture({ processed: true, subtitles: <勾选> })`；「源画面」保持 `processed: false`。
-2. 保存位置、格式、文件名与源画面相同（F07）；文件名不区分源/实际。
-3. 「包含字幕」默认开（理由：「实际画面」的用户意图就是所见即所得）。当前没有选中字幕时自然不含字幕，不报错。
-4. 局限（在截图设置窗口写明）：实际画面由离线渲染生成，字幕按插件样式重新绘制，与屏幕上的像素不完全相同；屏幕提示（OSD）不包含在内；字幕始终画在画面内。
-5. OSD：成功同现有「帧已保存为 …」；处理效果失败时沿用快照错误文案。
-6. 没有任何效果且不含字幕时，与源画面结果相同，不提示。
+**Behavior details**:
+1. "Rendered frame" = `media.capture({ processed: true, subtitles: <checkbox> })`; the "source frame" stays `processed: false`.
+2. Save location, format and file name are the same as for the source frame (F07); file names do not distinguish source / rendered.
+3. "Include subtitles" is on by default (reason: the user's intent with "rendered frame" is what you see is what you get). When no subtitle is selected, there are naturally no subtitles, without an error.
+4. Limitations (stated in the Snapshot Settings window): the rendered frame is produced by offline rendering, and subtitles are redrawn with the plugin style, so it is not pixel-identical to the screen; on-screen messages (OSD) are not included; subtitles are always drawn inside the picture.
+5. OSD: on success the same as the existing "Frame saved as …"; when processing effects fails, the snapshot error wording is used.
+6. With no effects and no subtitles, the result is the same as the source frame, without a message.
 
-**核心依赖**：现有 `media.capture({ processed, subtitles })`（需 `playback.read`、`subtitles.read`，manifest 已有）。
+**Core dependencies**: the existing `media.capture({ processed, subtitles })` (needs `playback.read`, `subtitles.read`, already in the manifest).
 
-**验收**：开启高斯模糊并显示字幕，Ctrl+Alt+E 得到模糊且带字幕的图片；Ctrl+E 得到清晰无字幕的图片；取消「实际画面包含字幕」后 Ctrl+Alt+E 无字幕。
+**Acceptance**: with Gaussian blur on and subtitles shown, Ctrl+Alt+E gives a blurred image with subtitles; Ctrl+E gives a sharp image without subtitles; after unchecking "Include Subtitles in Rendered Frame", Ctrl+Alt+E has no subtitles.
 
-### F07 截图格式 JPEG / BMP、质量
+### F07 Screenshot format JPEG / BMP, quality
 
-**现状**：只有 PNG。
+**Current state**: PNG only.
 
-**需求**：截图格式可选 PNG（默认）、JPEG、BMP；JPEG 质量 1–100，默认 90。
+**Requirement**: the screenshot format can be PNG (default), JPEG or BMP; JPEG quality 1–100, default 90.
 
-**入口**：`视频 ▸ 截图 ▸ 截取为 PNG / JPEG / BMP`（单选）；`截图设置…` 窗口「格式」「质量」；连拍窗口「其他设置」组的格式文字改为下拉（与菜单共用同一设置）。
+**Entry points**: `Video ▸ Snapshot ▸ Capture as PNG / JPEG / BMP` (radio); "Format" and "Quality" in the `Snapshot Settings…` window; the format text in the burst window's "Other settings" group becomes a drop-down (sharing the same setting with the menu).
 
-**行为细节**：
-1. 适用：保存当前画面、另存为、保存实际画面、连拍。复制到剪贴板总是 PNG。
-2. 流程：直接导出到目标：`export({ format: "jpeg", destination, sampleTime, quality })`、`export({ format: "bmp", destination, sampleTime })`。播放器从校验过的 PNG 转换，转换成功后才发布目标文件，中间文件由播放器删除（参考文档 §10）。转换失败时任务失败，与 PNG 导出失败相同（OSD「截图失败：…」，任务列表可重试），不留下 PNG。
-3. 另存为：对话框默认文件名带当前格式扩展名；用户输入 `.png/.jpg/.jpeg/.bmp` 时按用户扩展名决定本次格式（不改设置）。
-4. 默认 PNG（决定 D3）。质量默认 90（JPEG 100 文件过大且与 PNG 差别不大，故取 90）。
-5. 切换格式 OSD：`截图格式：JPEG`。
+**Behavior details**:
+1. Applies to: Save Current Frame, Save As, Save Rendered Frame, bursts. Copying to the clipboard is always PNG.
+2. Flow: export directly to the target: `export({ format: "jpeg", destination, sampleTime, quality })`, `export({ format: "bmp", destination, sampleTime })`. The player converts from a validated PNG and publishes the target file only after a successful conversion; the intermediate file is deleted by the player (reference §10). When conversion fails, the job fails just like a failed PNG export (OSD "Snapshot failed: …", retryable in the task list), and no PNG is left behind.
+3. Save As: the dialog's default file name has the current format's extension; when the user enters `.png/.jpg/.jpeg/.bmp`, the user's extension decides the format for this save (the setting does not change).
+4. PNG by default (decision D3). Quality defaults to 90 (JPEG 100 files are too large and differ little from PNG, so 90).
+5. Switching format OSD: `Snapshot format: JPEG`.
 
-**界面**：「截图设置」窗口（360 宽）：分组「格式」：格式下拉、质量滑块 + 数值（仅 JPEG 可用）；分组「保存位置」：截图文件夹（只读 + 「…」）、「条件允许时储存到播放文件夹」复选（默认关）。
+**Interface**: "Snapshot Settings" window (360 wide): group "Format": format drop-down, quality slider + value (JPEG only); group "Save location": screenshot folder (read-only + "…"), checkbox "Save to the media folder when possible" (off by default).
 
-**持久化**：`settings.json` 增加 `format`、`quality`（与现有 `folder` 同文件），用 `plugin.storage.json("settings")` 读写：读坏的文件改名为 `settings.json.bad-<时间戳>`，单个字段无效时只有该字段用默认值。
+**Persistence**: `settings.json` gains `format` and `quality` (in the same file as the existing `folder`), read and written with `plugin.storage.json("settings")`: a corrupt file is renamed to `settings.json.bad-<timestamp>`; when a single field is invalid, only that field uses its default.
 
-**核心依赖**：`Snapshot.export` 的 `jpeg`（`quality` 1–100，默认 90）与 `bmp`（可移植性轮 P1 交付，参考文档 §10）。
+**Core dependencies**: `jpeg` (`quality` 1–100, default 90) and `bmp` of `Snapshot.export` (delivered in portability round P1, reference §10).
 
-**验收**：选 JPEG 质量 80，Ctrl+E 生成 `.jpg`（文件内容是 JPEG，如 `file` 命令报告 JPEG image data），大小明显小于 PNG；截图文件夹里没有残留的临时 PNG；BMP 正常；另存为输入 `a.png` 时即使设置是 JPEG 也得到 PNG；连拍 10 张均为 JPEG。
+**Acceptance**: choose JPEG quality 80: Ctrl+E produces a `.jpg` (the content is JPEG, e.g. the `file` command reports JPEG image data), clearly smaller than the PNG; no temporary PNG is left in the screenshot folder; BMP works; Save As with `a.png` gives a PNG even when the setting is JPEG; a burst of 10 gives 10 JPEGs.
 
-### F09 打开截图文件夹
+### F09 Open the screenshot folder
 
-**现状**：能设置并记住截图文件夹；连拍窗口与任务列表里有打开按钮，菜单没有「打开截图文件夹」。
+**Current state**: the screenshot folder can be set and is remembered; the burst window and task list have open buttons, but the menu has no "Open Snapshot Folder".
 
-**需求**：菜单一键在系统的文件管理器（macOS 访达、Windows 资源管理器）中打开截图文件夹。
+**Requirement**: open the screenshot folder in the system file manager (Finder on macOS, File Explorer on Windows) from the menu with one click.
 
-**入口**：`视频 ▸ 截图 ▸ 打开截图文件夹`。
+**Entry point**: `Video ▸ Snapshot ▸ Open Snapshot Folder`.
 
-**行为细节**：
-1. 用 `plugin.system.openPath(folder)`。文件夹不存在时先创建（与现有 `openFolder` 一致）。「导出任务」里的「打开」同样用 `openPath`。
-2. 「条件允许时储存到播放文件夹」（F07 设置）开启且当前是本地文件时，打开的是视频所在文件夹。
-3. 失败 OSD「无法打开文件夹。」（现有文案）。
-4. 无媒体也可用。
+**Behavior details**:
+1. Uses `plugin.system.openPath(folder)`. When the folder does not exist, it is created first (consistent with the existing `openFolder`). "Open" in "Export Tasks" uses `openPath` too.
+2. When "Save to the media folder when possible" (F07 setting) is on and the current source is a local file, the video's folder is opened.
+3. Failure OSD "Could not open the folder." (existing wording).
+4. Available with no media.
 
-**核心依赖**：无。
+**Core dependencies**: none.
 
-**验收**：执行后文件管理器打开对应文件夹；文件夹被删除后执行会重新创建并打开。
+**Acceptance**: after running it, the file manager opens the folder; after the folder is deleted, running it creates the folder again and opens it.
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-| 接口 | 理由 | 使用编号 |
+| Interface | Reason | Used by |
 | --- | --- | --- |
-| `Snapshot.export` 的 `{ format: "jpeg"; quality? }` 与 `{ format: "bmp" }`（可移植性轮 P1 已交付） | 插件不调用系统命令转换图片（社区工作流 §1.5）；播放器只发布转换成功的文件，插件不再需要临时 PNG 与回退 | F07 |
+| `{ format: "jpeg"; quality? }` and `{ format: "bmp" }` of `Snapshot.export` (delivered in portability round P1) | Plugins do not call system commands to convert images (community workflow §1.5); the player only publishes successfully converted files, so the plugin no longer needs a temporary PNG and fallback | F07 |
 
-不请求通用的图片转换接口（可移植性轮裁决 §4.3）。剪贴板图像、打开文件夹、设置文件改用第 2 轮通用能力（`clipboard`、`system`、`storage`）。
+No general image conversion interface is requested (portability round ruling §4.3). Clipboard images, opening folders and settings files use the round 2 general capabilities instead (`clipboard`, `system`, `storage`).
 
-## 播放信息（`info`）
+## Playback info (`info`)
 
-**位置**：`src/plugins/info/`（现有插件）
+**Location**: `src/plugins/info/` (existing plugin)
 
-### 定位
+### Scope
 
-info 插件负责把播放状态以只读方式展示给用户。它现在只有 I02：Tab 打开的完整信息叠加层。本轮增加三项：简要信息（I03）、播放属性对话框（I05）、关于（I09）。
+The info plugin shows the playback state to the user, read-only. Today it only has I02: the full info overlay opened with Tab. This round adds three items: brief info (I03), the playback properties dialog (I05) and About (I09).
 
-边界：info 只读，不控制播放，不调用别的插件。I05 和 I09 里「核心才知道」的数据（实时解码统计、mpv/FFmpeg 版本、已加载插件列表）都要由核心提供。文件级信息（容器、码率、标签、附件）插件用 ffprobe 自己读（`plugin.tools.run`）。复制到剪贴板用 `plugin.clipboard.writeText`。
+Boundaries: info is read-only, does not control playback and does not call other plugins. The data in I05 and I09 that "only the core knows" (live decoding statistics, mpv/FFmpeg versions, the list of loaded plugins) has to come from the core. File-level information (container, bitrate, tags, attachments) is read by the plugin itself with ffprobe (`plugin.tools.run`). Copying to the clipboard uses `plugin.clipboard.writeText`.
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| I03 | 简要信息（文件名、时间、编码），按一次显示 3 秒 | ✗ | 无 |
-| I05 | 播放属性对话框（播放 / 文件 / 系统三页，复制、保存） | ✗ | `PlaybackStats` 扩展字段（第 2 轮）；版本行等 `plugin.app.info()`（3a） |
-| I09 | 关于（版本、mpv/FFmpeg 版本、已加载插件）——推到 3a | ✗ | `plugin.app.info()`；图片属性（显示 logo 可用编译期 `@image-url`，不必新增） |
+| I03 | Brief info (file name, time, codecs), shown for 3 seconds per press | ✗ | None |
+| I05 | Playback properties dialog (playback / file / system pages, copy, save) | ✗ | Extended `PlaybackStats` fields (round 2); version rows etc. from `plugin.app.info()` (3a) |
+| I09 | About (version, mpv/FFmpeg versions, loaded plugins) — moved to 3a | ✗ | `plugin.app.info()`; image properties (the logo can use compile-time `@image-url`, nothing new needed) |
 
-manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.window`（I05、I09 窗口）、`+ ui.dialog`（I05「保存为」）、`+ clipboard`（I05、I09 复制）。
+Manifest capabilities grow from `commands, playback.read, events, ui.osd` to: `+ ui.window` (I05 and I09 windows), `+ ui.dialog` (I05 "Save As"), `+ clipboard` (I05 and I09 copy).
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-| 菜单路径 | order | group | 默认绑定 | 说明 |
+| Menu path | order | group | Default binding | Notes |
 | --- | --- | --- | --- | --- |
-| 播放信息（勾选） | 810 | windows | Tab | 现有，不变 |
-| 播放属性… | 811 | windows | Ctrl+F1 | I05 |
-| 关于 Vestra Player… | 880 | windows | F1 | I09 |
-| （无菜单）简要信息 | — | — | Shift+Tab | I03，`path` 省略，`title: "简要信息"` |
+| Playback Info (checkbox) | 810 | windows | Tab | Existing, unchanged |
+| Playback Properties… | 811 | windows | Ctrl+F1 | I05 |
+| About Vestra Player… | 880 | windows | F1 | I09 |
+| (no menu) Brief Info | — | — | Shift+Tab | I03, `path` omitted, `title: "Brief Info"` |
 
-快捷键冲突检查：Shift+Tab、Ctrl+F1、F1 都不在 [menus.md](menus.md) 里。macOS 有两处要注意：⌃F1 默认是系统的「打开/关闭键盘访问」，可能被系统先截走，用户可以改按 ⌘F1（`Ctrl` 绑定接受 ⌘）；笔记本上 F1 要配合 fn 键。I03 不放进右键菜单，它平时都按键使用。如果日后需要菜单入口，再统一审查。
+Shortcut conflict check: Shift+Tab, Ctrl+F1 and F1 are not in [menus.md](menus.md). Two things to note on macOS: ⌃F1 is by default the system's "Turn keyboard access on or off" and may be taken by the system first; users can press ⌘F1 instead (a `Ctrl` binding accepts ⌘); on laptops F1 needs the fn key. I03 is not in the context menu, because it is normally used by key. If a menu entry is needed later, it will be reviewed together with the rest.
 
-### I03 简要信息
+### I03 Brief info
 
-> 内容已被 [交互规格](interaction-spec.md) IA-INFO-01 扩展：第 2 行在时间之后加当前章节（`player.chapters()` 中开始时间不晚于当前位置的最后一章，没有标题时为「第 N 章」）；选中了字幕轨时加第 3 行字幕轨名（标题，空则语言，再空则「字幕」）。每行按视频区宽度截断（至少 44 列）。下文「2 行」「44 列」以此为准。
+> The content has been extended by IA-INFO-01 in the [interaction spec](interaction-spec.md): line 2 adds the current chapter after the time (the last chapter in `player.chapters()` whose start time is not later than the current position; "Chapter N" when it has no title); when a subtitle track is selected, line 3 shows the subtitle track name (title, otherwise language, otherwise "Subtitles"). Each line is truncated to the video area width (at least 44 columns). This note takes precedence over "2 lines" and "44 columns" below.
 
-**需求**
-- 按 Shift+Tab 后，在视频左上角信息块里显示 2 行简要信息，3 秒后自动消失。显示期间再按一次，重新计时 3 秒。
-- 第 1 行是文件名，规则与 I02 相同（`fileName()`）。
-- 第 2 行是 `时间 / 时长 · 视频编码 分辨率 · 音频编码 声道`，例如 `01:23 / 45:00 · h264 1920×1080 · aac 2 声道`。某一项未知时整项省略，不写「-」。
-- 显示期间时间每秒刷新一次。
+**Requirement**
+- After Shift+Tab, 2 lines of brief info are shown in the info block at the top left of the video and disappear automatically after 3 seconds. Pressing again while shown restarts the 3 seconds.
+- Line 1 is the file name, with the same rules as I02 (`fileName()`).
+- Line 2 is `time / duration · video codec resolution · audio codec channels`, for example `01:23 / 45:00 · h264 1920×1080 · aac 2 ch`. When an item is unknown, the whole item is left out, without writing "-".
+- While shown, the time refreshes once per second.
 
-**入口**：Shift+Tab（无菜单项）。
+**Entry point**: Shift+Tab (no menu item).
 
-**行为细节**
-- 插件只有一个 `osd.panel()`。信息块文字按顺序拼接：简要信息（显示中时）、完整信息（开着时）。块之间空一行，合计不超过 32 行（实际最多 2 + 8 = 10 行）。
-- 完整信息（Tab）开着时也能叠加简要信息，两者互不关闭。
-- 未打开媒体：第 1 行显示「未打开媒体」，第 2 行省略。
-- 直播流（`duration === null`）：时间部分显示 `01:23 / 直播`。
-- `player.stats()` 失败时保留上一次的文字，下一秒重试（与 I02 一致）。
-- 3 秒到时只移除简要信息这一块。完整信息没开时，调用 `panel.set(null)`。
-- 不弹单行屏幕提示：内容已经写在信息块里。
+**Behavior details**
+- The plugin has only one `osd.panel()`. The info block text is concatenated in order: brief info (while shown), full info (while open). Blocks are separated by an empty line, at most 32 lines in total (in practice at most 2 + 8 = 10 lines).
+- Brief info can be stacked while the full info (Tab) is open; neither closes the other.
+- No media open: line 1 shows "No media open", and line 2 is left out.
+- Live streams (`duration === null`): the time part shows `01:23 / Live`.
+- When `player.stats()` fails, the previous text is kept and it retries the next second (consistent with I02).
+- When the 3 seconds are up, only the brief info block is removed. When the full info is not open, `panel.set(null)` is called.
+- No single-line on-screen message: the content is already in the info block.
 
-**界面**：沿用宿主信息块（半透明黑底、11px 等宽字、左上角），插件不能控制位置和样式。
+**Interface**: uses the host info block (semi-transparent black background, 11px monospace, top left); the plugin cannot control the position or style.
 
-**持久化**：无。
+**Persistence**: none.
 
-**核心依赖**：现有 `osd.panel()`、`player.state`、`player.stats()`。
+**Core dependencies**: the existing `osd.panel()`, `player.state`, `player.stats()`.
 
-**验收**
-- 播放本地视频时按 Shift+Tab，左上角出现 2 行，内容与当前文件一致；3 秒后消失。
-- 显示期间第 2 秒再按一次，消失时间从第 2 秒起推迟到 5 秒。
-- 先按 Tab 打开完整信息，再按 Shift+Tab，两块都显示，简要信息在上；3 秒后只剩完整信息。
-- 未打开媒体时按 Shift+Tab，只显示「未打开媒体」。
-- 单元测试：`host.press("Shift+Tab")` 之后 `host.osdPanel` 含 2 行；推进 3 秒计时器后为 `null`。
+**Acceptance**
+- Press Shift+Tab while playing a local video: 2 lines appear at the top left, matching the current file; they disappear after 3 seconds.
+- Press again at second 2 while shown: the disappearance moves from second 3 to second 5.
+- Press Tab first to open the full info, then Shift+Tab: both blocks show, brief info on top; after 3 seconds only the full info remains.
+- Press Shift+Tab with no media open: only "No media open" is shown.
+- Unit test: after `host.press("Shift+Tab")`, `host.osdPanel` contains 2 lines; after advancing the timer by 3 seconds it is `null`.
 
-**说明**：简要信息是按一次显示的动作，不是开关；样式统一用宿主信息块。
+**Notes**: brief info is a show-once action, not a toggle; the style is always the host info block.
 
-### I05 播放属性对话框
+### I05 Playback properties dialog
 
-> 第 2 轮降级（裁决 R-P7、R-W6 排期）：`PlaybackStats` 不加 `hwdec`，「播放信息」页单列一行「硬件解码」，固定显示「未使用」（播放器固定软件解码），等 C-GPU 再接。**渲染轮已接上**：`PlaybackStats.video.hwdec`（mpv `hwdec-current`）随 GPU 渲染交付，「硬件解码」一行如实显示：正在用的硬件解码器原样显示（如 `videotoolbox`），`"no"`（软件解码；软件渲染、Windows / Linux 目前总是如此，GPU 渲染下 mpv 解不了的格式也是）显示「未使用」，播放器没有报告（`null`）时显示「-」；`plugin.app` 在 3a 交付，「系统信息」页的 Vestra Player、mpv、FFmpeg 版本暂显示「未知」（行保留）。系统信息里的系统版本、机型、显示器当时由插件用 macOS 命令读取；可移植性轮 P1 起改为 `plugin.app.system()`（参考文档 §3.5），CPU 与内存用 Node `os`，插件不再调用系统命令。
+> Downgraded in round 2 (ruling R-P7, scheduling R-W6): `PlaybackStats` does not get `hwdec`; the "Playback" page has a separate "Hardware decoding" row that always shows "Not used" (the player always decodes in software), to be connected with C-GPU. **Connected in the render round**: `PlaybackStats.video.hwdec` (mpv `hwdec-current`) was delivered with GPU rendering, and the "Hardware decoding" row shows the truth: the hardware decoder in use is shown as is (e.g. `videotoolbox`); `"no"` (software decoding; currently always the case with software rendering and on Windows / Linux, and also for formats mpv cannot decode under GPU rendering) shows "Not used"; when the player does not report it (`null`), "-". `plugin.app` is delivered in 3a, so the Vestra Player, mpv and FFmpeg versions on the "System" page show "Unknown" for now (the rows are kept). The OS version, machine model and displays on the system page were at that time read by the plugin with macOS commands; since portability round P1 they come from `plugin.app.system()` (reference §3.5), CPU and memory from Node `os`, and the plugin no longer calls system commands.
 
-**需求**
-- 工具窗口「播放属性」，三个页签：
-  1. **播放信息**（实时，每秒刷新）
-     - 视频组：解码器、硬件解码（`video.hwdec`：如 `videotoolbox`，软件解码为「未使用」）、输入格式（编码、像素格式、色彩空间）、尺寸（源尺寸 → 显示尺寸）、源帧率、当前帧率、视频码率。
-     - 音频组：解码器、采样率、采样位数（采样格式）、声道数（含布局）、音频码率。
-     - 其它：后端、会话、已显示帧、丢帧、音画同步偏差（毫秒）、缓冲时长（秒）。
-  2. **文件信息**（打开时读取一次，有「刷新」按钮）
-     - 来源：完整路径、文件大小、修改时间。
-     - 容器：格式名、总时长、总码率。
-     - 逐条流信息：类型、编号、编码、语言、标题、默认/强制标记、各类型的关键参数。
-     - 章节数，以及元数据标签（标题、艺术家、专辑等）。
-     - 内嵌资源：附件流（字体、封面）的文件名与 MIME 类型。
-  3. **系统信息**
-     - Vestra Player 版本、插件 API 版本、mpv 版本、FFmpeg（libavcodec/libavformat）版本。
-     - 系统版本（如「macOS 26.2（25C56）」「Windows 11 23H2（22631.4460）」）、机型、CPU（型号与核数）、内存总量与可用量、显示器（每台一行：名称 · 像素尺寸 · 逻辑尺寸 @ 刷新率，如「Color LCD · 2940 x 1912 · 1470 x 956 @ 60 Hz」；多台时编号「显示器 1」「显示器 2」）。
-- 底部按钮：`复制到剪贴板`、`保存为…`、`关闭`。复制和保存的是当前页签的纯文本，`键：值` 一行一条，分组之间空行。
+**Requirement**
+- Tool window "Playback Properties" with three tabs:
+  1. **Playback** (live, refreshed every second)
+     - Video group: decoder, hardware decoding (`video.hwdec`: e.g. `videotoolbox`, "Not used" for software decoding), input format (codec, pixel format, color space), size (source size → display size), source frame rate, current frame rate, video bitrate.
+     - Audio group: decoder, sample rate, bits per sample (sample format), channel count (with layout), audio bitrate.
+     - Other: backend, session, frames shown, frames dropped, A/V sync offset (milliseconds), buffer length (seconds).
+  2. **File** (read once when opened, with a "Refresh" button)
+     - Source: full path, file size, modification time.
+     - Container: format name, total duration, total bitrate.
+     - Per-stream information: type, index, codec, language, title, default/forced flags, the key parameters of each type.
+     - Chapter count, and metadata tags (title, artist, album, etc.).
+     - Embedded resources: file names and MIME types of attachment streams (fonts, cover art).
+  3. **System**
+     - Vestra Player version, plugin API version, mpv version, FFmpeg (libavcodec/libavformat) versions.
+     - OS version (such as "macOS 26.2 (25C56)", "Windows 11 23H2 (22631.4460)"), machine model, CPU (model and core count), total and available memory, displays (one line each: name · pixel size · logical size @ refresh rate, such as "Color LCD · 2940 x 1912 · 1470 x 956 @ 60 Hz"; with several, numbered "Display 1", "Display 2").
+- Bottom buttons: `Copy to Clipboard`, `Save As…`, `Close`. Copy and save use the plain text of the current tab, one `key: value` per line, with empty lines between groups.
 
-**入口**：右键菜单顶层「播放属性…」（811），快捷键 Ctrl+F1。
+**Entry point**: top level of the context menu "Playback Properties…" (811), shortcut Ctrl+F1.
 
-**行为细节**
-- 窗口打开后保持显示，可以和播放并存，不暂停播放（交互要求 §3）。再按 Ctrl+F1 时，如果窗口已打开，就把它带到前面，不关闭。
-- 没有媒体时，「播放信息」和「文件信息」页显示一行「未打开媒体」，「系统信息」页照常。
-- 「文件信息」只读本地文件。来源是 URL 时显示「网络来源：只显示播放器报告的信息」，并列出 `player.state.source` 与 `stats()` 中能得到的项。
-- ffprobe 用 `plugin.tools.run("ffprobe", …)`，参数：`-v error -show_format -show_streams -show_chapters -of json <路径>`，超时 10 秒。失败或缺少 ffprobe 时，页内显示「无法读取文件信息（未找到 ffprobe）」或「无法读取文件信息：<一句原因>」。
-- 换片源（`sourceId` 变化）时：「播放信息」自动跟随；「文件信息」自动重新读取，旧的 ffprobe 进程被中止。
-- 「复制到剪贴板」用 `plugin.clipboard.writeText`。成功时屏幕提示 `已复制播放信息`，失败时页内状态行显示「复制失败」。
-- 「保存为…」调 `dialogs.saveFile({ fileName: "<文件名> 信息.txt" })`，用临时文件加改名的方式写入。成功时提示 `已保存到 <文件名>`。目标文件已存在时由系统对话框确认覆盖。
-- 每个值不超过 512 字符，超出部分截断并加「…」。属性总文本受 64 KB 字符串上限约束，按流分行。
+**Behavior details**
+- Once opened, the window stays open alongside playback and does not pause it (interaction requirements §3). Pressing Ctrl+F1 again while the window is open brings it to the front instead of closing it.
+- With no media, the "Playback" and "File" pages show one line "No media open"; the "System" page is as usual.
+- "File" only reads local files. When the source is a URL, it shows "Network source: only what the player reports" and lists what can be obtained from `player.state.source` and `stats()`.
+- ffprobe runs with `plugin.tools.run("ffprobe", …)`, arguments `-v error -show_format -show_streams -show_chapters -of json <path>`, timeout 10 seconds. On failure or with no ffprobe, the page shows "Cannot read file information (ffprobe not found)" or "Cannot read file information: <one-sentence reason>".
+- On source change (`sourceId` changes): "Playback" follows automatically; "File" is read again automatically, and the old ffprobe process is aborted.
+- "Copy to Clipboard" uses `plugin.clipboard.writeText`. On success the on-screen message is `Playback info copied`; on failure the page's status line shows "Copy failed".
+- "Save As…" calls `dialogs.saveFile({ fileName: "<file name> info.txt" })` and writes via temporary file plus rename. On success the message is `Saved to <file name>`. When the target exists, the system dialog confirms the overwrite.
+- Each value is at most 512 characters; longer values are truncated with "…". The total property text is bound by the 64 KB string limit, split into lines by stream.
 
-**界面**
-- 窗口 460×420，最小 400×320。顶部页签高 31px（与画面调节窗口的页签条相同）。
-- 内容区是只读的两列表格：左列标签 120px 右对齐，右列值可选择复制。分组标题 11px 粗体。内容超长时滚动。
-- 底部按钮行：按钮 21px 高、最小宽 66px、右对齐，与内容区相距 10px。
-- 使用 `Theme` 颜色与 `@vestra/widgets.slint` 的 Button。
+**Interface**
+- Window 460×420, minimum 400×320. Tabs at the top 31px high (the same as the tab strip of the Picture Adjustments window).
+- The content area is a read-only two-column table: left column labels 120px right-aligned, right column values selectable for copying. Group titles 11px bold. Scrolls when the content is long.
+- Bottom button row: buttons 21px high, minimum width 66px, right-aligned, 10px from the content area.
+- Uses `Theme` colors and the Button of `@vestra/widgets.slint`.
 
-**持久化**：记住上次打开的页签，存 `info.json` 的 `propertiesTab` 字段。
+**Persistence**: the last opened tab is remembered in the `propertiesTab` field of `info.json`.
 
-**核心依赖**
-- 现有：`player.stats()`、`dialogs.saveFile`、`windows.create`。
-- 【核心新增】扩展 `PlaybackStats`（新增字段都可以为 `null`，旧字段不变）：
+**Core dependencies**
+- Existing: `player.stats()`, `dialogs.saveFile`, `windows.create`.
+- [New core API] extend `PlaybackStats` (all new fields may be `null`; old fields unchanged):
 
   ```ts
   interface PlaybackStats {
     backend: string; session: number; framesShown: number; framesDropped: number | null;
     video: {
-      codec; width; height; fps;                      // 现有
+      codec; width; height; fps;                      // existing
       decoder: string | null;          // mpv video-codec
-      hwdec: string | null;            // hwdec-current；"no" 记为 null
+      hwdec: string | null;            // hwdec-current; "no" is recorded as null
       pixelFormat: string | null;      // video-params/pixelformat
       colorspace: string | null;       // video-params/colormatrix
       displayWidth: number | null; displayHeight: number | null; // video-out-params
       displayFps: number | null;       // estimated-vf-fps
-      bitrate: number | null;          // video-bitrate，bit/s
+      bitrate: number | null;          // video-bitrate, bit/s
     } | null;
     audio: {
-      codec; sampleRate; channels;                    // 现有
-      decoder: string | null; format: string | null;  // audio-codec、audio-params/format
+      codec; sampleRate; channels;                    // existing
+      decoder: string | null; format: string | null;  // audio-codec, audio-params/format
       channelLayout: string | null; bitrate: number | null;
     } | null;
     avSyncMs: number | null;           // avsync × 1000
@@ -2584,1775 +2584,1775 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
   }
   ```
 
-  理由：这些是播放器解码时才有的实时状态（硬解是否生效、当前帧率、音画同步、缓冲）。ffprobe 只能看到文件，看不到正在解码的会话。这些值只有 mpv 有，只能由核心转发。
-- 【核心新增·3a】`plugin.app.info(): Promise<AppInfo>`（定义见 I09）。「系统信息」页的 Vestra Player、mpv、FFmpeg 版本来自它，3a 之前显示「未知」。系统名称、版本、构建号、机型与显示器来自 `plugin.app.system()`（可移植性轮 P1，参考文档 §3.5，不需要能力；系统不报告的项显示「-」），CPU 与内存由插件用 Node `os` 模块读取。
+  Reason: these are live states that exist only while the player decodes (whether hardware decoding is in effect, current frame rate, A/V sync, buffer). ffprobe only sees the file, not the decoding session. Only mpv has these values, so only the core can forward them.
+- [New core API · 3a] `plugin.app.info(): Promise<AppInfo>` (defined in I09). The Vestra Player, mpv and FFmpeg versions on the "System" page come from it, and show "Unknown" before 3a. OS name, version, build number, machine model and displays come from `plugin.app.system()` (portability round P1, reference §3.5, no capability needed; items the system does not report show "-"), and CPU and memory are read by the plugin with the Node `os` module.
 
-**验收**
-- 播放 1080p H.264 + AAC 文件，按 Ctrl+F1，「播放信息」页显示解码器、1920×1080、帧率、采样率；「硬件解码」一行在 macOS GPU 渲染下为 `videotoolbox`，`VESTRA_SOFTWARE_RENDER=1` 或 `VESTRA_HWDEC=no` 启动时为「未使用」。
-- 「文件信息」页列出全部流。带章节的 MKV 显示正确章节数；带字体附件的 MKV 在「内嵌资源」列出字体文件名。
-- 播放中打开窗口不暂停、不卡顿；拖动进度条时「播放信息」页照常每秒刷新。
-- 「复制到剪贴板」之后在文本编辑器粘贴，得到与页签一致的纯文本。
-- 播放 YouTube 链接时，「文件信息」页显示网络来源说明，不调用 ffprobe。
-- 删除 PATH 上的 ffprobe 后，「文件信息」页显示「未找到 ffprobe」，另外两页正常。
+**Acceptance**
+- Play a 1080p H.264 + AAC file and press Ctrl+F1: the "Playback" page shows the decoder, 1920×1080, frame rate and sample rate; the "Hardware decoding" row is `videotoolbox` under GPU rendering on macOS, and "Not used" when started with `VESTRA_SOFTWARE_RENDER=1` or `VESTRA_HWDEC=no`.
+- The "File" page lists all streams. An MKV with chapters shows the correct chapter count; an MKV with font attachments lists the font file names under "Embedded resources".
+- Opening the window during playback does not pause or stutter; while dragging the seek bar, the "Playback" page still refreshes every second.
+- After "Copy to Clipboard", pasting into a text editor gives plain text matching the tab.
+- While playing a YouTube link, the "File" page shows the network source note and does not call ffprobe.
+- After removing ffprobe from PATH, the "File" page shows "ffprobe not found", and the other two pages are normal.
 
-**说明**：「媒体内嵌资源」并入「文件信息」页；不做「在线信息」；「播放信息」单独一页（视频解码器、输入/输出格式、源帧率、尺寸、当前帧率；音频解码器、采样率、采样位数、声道数；码率）。
+**Notes**: "embedded media resources" are merged into the "File" page; "online information" is not done; "Playback" is a page of its own (video decoder, input/output format, source frame rate, size, current frame rate; audio decoder, sample rate, bits per sample, channel count; bitrates).
 
-### I09 关于
+### I09 About
 
-> 第 2 轮不做，推到 3a（依赖 `plugin.app.info` / `onChange`、`packages.list`）。
+> Not done in round 2; moved to 3a (depends on `plugin.app.info` / `onChange`, `packages.list`).
 
-**需求**
-- 工具窗口「关于 Vestra Player」，内容：
-  - 品牌 logo，96×96。
-  - 「Vestra Player」字样（13px 粗体）。
-  - 版本行：`版本 0.x.y（构建 2026-10-20 abcdef0）`。
-  - 组件版本：插件 API `vestra/1`、mpv、FFmpeg（libavcodec / libavformat / libavfilter）、Slint、Node（宿主为插件使用的 Node）。
-  - 已加载插件列表：插件 id、版本、来源（已安装 / 开发加载 / 试载）、状态（运行中 / 启动中 / 失败）。按 id 排序，可滚动。
-- 按钮：`复制信息`（全部文字放进剪贴板，供报告问题时粘贴）、`关闭`。
+**Requirement**
+- Tool window "About Vestra Player", with:
+  - The brand logo, 96×96.
+  - The words "Vestra Player" (13px bold).
+  - Version line: `Version 0.x.y (build 2026-10-20 abcdef0)`.
+  - Component versions: plugin API `vestra/1`, mpv, FFmpeg (libavcodec / libavformat / libavfilter), Slint, Node (the Node the host uses for plugins).
+  - List of loaded plugins: plugin id, version, origin (installed / development / trial), state (running / starting / failed). Sorted by id, scrollable.
+- Buttons: `Copy Info` (puts all the text on the clipboard, for pasting into problem reports), `Close`.
 
-**入口**：右键菜单顶层「关于 Vestra Player…」（880），快捷键 F1。
+**Entry point**: top level of the context menu "About Vestra Player…" (880), shortcut F1.
 
-**行为细节**
-- 窗口打开期间插件列表实时更新：有插件被安装、停用或失败时 1 秒内刷新（订阅 `app.info` 的变化，或复用 J07 的 `packages.onChange`，见下）。
-- 某个组件版本拿不到时显示「未知」，不隐藏这一行。
-- 「复制信息」成功时屏幕提示 `已复制版本信息`。
-- 不显示许可证全文。许可证在仓库 `licenses/` 中，不放进本窗口（不做「条款和政策」页）。
+**Behavior details**
+- While the window is open, the plugin list updates live: when a plugin is installed, disabled or fails, it refreshes within 1 second (subscribing to changes of `app.info`, or reusing J07's `packages.onChange`, see below).
+- When a component version cannot be obtained, "Unknown" is shown and the row is not hidden.
+- On a successful "Copy Info", the on-screen message is `Version info copied`.
+- The full license text is not shown. Licenses are in the repository's `licenses/` and are not put in this window (there is no "terms and policies" page).
 
-**界面**：窗口 360×420，不可调整大小。上半部分（logo、名称、版本）居中；中部是组件版本的两列表格（标签 100px）；下部是插件列表（4 列，行高 18px，最多显示 8 行，超出滚动）；底部按钮行右对齐。logo 用 Slint 编译期 `@image-url("logo.png")`：构建时把 `src/assets/brand/logo.png` 复制进 info 插件包（包内资源），不需要运行时图片能力。
+**Interface**: window 360×420, not resizable. The top part (logo, name, version) is centered; the middle is a two-column table of component versions (labels 100px); the bottom part is the plugin list (4 columns, row height 18px, at most 8 rows shown, scrolling beyond that); the bottom button row is right-aligned. The logo uses Slint's compile-time `@image-url("logo.png")`: at build time `src/assets/brand/logo.png` is copied into the info plugin package (a package resource), so no runtime image capability is needed.
 
-**持久化**：无。
+**Persistence**: none.
 
-**核心依赖**
-- 【核心新增】
+**Core dependencies**
+- [New core API]
 
   ```ts
-  plugin.app.info(): Promise<AppInfo>                 // 无需能力：只读的公开信息
-  plugin.app.onChange(listener: (info: AppInfo) => void): Disposable // 插件列表或状态变化
+  plugin.app.info(): Promise<AppInfo>                 // no capability needed: read-only public information
+  plugin.app.onChange(listener: (info: AppInfo) => void): Disposable // plugin list or state changes
   interface AppInfo {
-    version: string;            // Vestra Player 版本
-    build: string | null;       // 构建日期 + 提交短哈希
+    version: string;            // Vestra Player version
+    build: string | null;       // build date + short commit hash
     apiVersion: string;         // "vestra/1"
     components: { mpv: string | null; ffmpeg: Record<string, string>; slint: string | null; node: string | null };
-    plugins: PluginInfo[];      // 定义见「插件管理」J07
+    plugins: PluginInfo[];      // defined in "Plugin management" J07
   }
   ```
 
-  理由：mpv、FFmpeg 库的版本是宿主链接进来的库的版本，插件进程看不到。PATH 上的 ffmpeg 可执行文件版本与宿主链接的 libav 版本未必相同。已加载插件列表是核心的运行时状态，插件之间不能互相查询。
+  Reason: the mpv and FFmpeg library versions are those of the libraries linked into the host, which the plugin process cannot see. The version of the ffmpeg executable on PATH is not necessarily the same as the libav version the host links. The list of loaded plugins is core runtime state, and plugins cannot query each other.
 
-**验收**
-- 按 F1 打开窗口，版本号与 `cargo pkgid` / 构建元数据一致；mpv 版本与 `mpv_client_api_version` 推算的结果一致。
-- 插件列表包含当前全部运行中的插件（至少 10 个产品插件）。在 J07 中停用 audio 后，1 秒内 audio 的状态变为「已停用」。
-- 「复制信息」后粘贴，得到包含版本和插件列表的纯文本。
-- logo 在深色背景上清晰，不变形。
+**Acceptance**
+- Press F1 to open the window: the version matches `cargo pkgid` / the build metadata; the mpv version matches what is derived from `mpv_client_api_version`.
+- The plugin list contains all currently running plugins (at least 10 product plugins). After disabling audio in J07, audio's state becomes "Disabled" within 1 second.
+- After "Copy Info", pasting gives plain text containing the versions and the plugin list.
+- The logo is clear on a dark background and not distorted.
 
-**说明**：只做一页，含「已加载插件」；「快捷键列表」由 J01 提供，「检查更新」不做。
+**Notes**: only one page, including "loaded plugins"; the "shortcut list" is provided by J01; "check for updates" is not done.
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-| 接口 | 理由 |
+| Interface | Reason |
 | --- | --- |
-| `PlaybackStats` 扩展字段（`decoder`、`pixelFormat`、`colorspace`、`displayFps`、`bitrate`、`avSyncMs`、`cacheSeconds` 等；`hwdec` 未采纳，裁决 R-P7） | 实时解码状态只在 mpv 里，ffprobe 看不到（第 2 轮已交付） |
-| `plugin.app.info(): Promise<AppInfo>`；`plugin.app.onChange(listener)` | 宿主链接的库的版本、已加载插件列表是核心状态 |
+| Extended `PlaybackStats` fields (`decoder`, `pixelFormat`, `colorspace`, `displayFps`, `bitrate`, `avSyncMs`, `cacheSeconds`, etc.; `hwdec` not adopted, ruling R-P7) | Live decoding state exists only in mpv, and ffprobe cannot see it (delivered in round 2) |
+| `plugin.app.info(): Promise<AppInfo>`; `plugin.app.onChange(listener)` | The versions of the libraries the host links and the list of loaded plugins are core state |
 
 ---
 
-## 窗口（`window`）
+## Window (`window`)
 
-**位置**：`src/plugins/window/`（第 3a 轮新建，实现说明见该目录 README）
+**Location**: `src/plugins/window/` (created in round 3a; see the README in that directory for implementation notes)
 
-### 定位
+### Scope
 
-window 插件负责主窗口在桌面上的状态：按视频尺寸倍数设置窗口、适应视频比例、开始播放时按视频尺寸调整窗口（G-02）、迷你尺寸、画中画（macOS）、置顶，以及窗口模式下播放时隐藏鼠标指针。它保存这些偏好并在启动时恢复，并按播放状态切换置顶（「播放时置顶」「全屏播放时置顶」）。
+The window plugin owns the state of the main window on the desktop: setting the window to a multiple of the video size, fitting the video aspect ratio, resizing the window to the video size when playback starts (G-02), mini size, picture-in-picture (macOS), always on top, and hiding the mouse pointer during playback in windowed mode. It saves these preferences and restores them at startup, and switches on-top according to the playback state ("While Playing", "While Playing in Fullscreen").
 
-边界：
-- 窗口本身（NSWindow 层级、尺寸、指针、全屏、画中画）由 Rust 核心持有，插件只发请求。本章需要一组 `plugin.window` 接口，用新能力 `window.control` 开放。
-- 普通「全屏」（Enter / F11 / 双击）仍是宿主命令，本插件不重复注册。
-- 窗口尺寸与位置的跨启动保存仍由核心（C8，`ui-state.json`）负责；本插件只保存置顶、指针、开始播放时的窗口尺寸这几项偏好（`settings.json`，「选项 ▸ 播放 ▸ 窗口」设置页与菜单项共用）。
-- 视频画面的宽高比、裁剪、缩放属于视频领域（其他章节），本章只改窗口，不改画面比例。
-- 不读取其他插件的任何状态；视频尺寸来自核心（3a：`player.stats()` 的 `video.displayWidth/Height`，见 H03 第 1 条）。
+Boundaries:
+- The window itself (NSWindow level, size, pointer, fullscreen, picture-in-picture) is held by the Rust core; the plugin only sends requests. This chapter needs a set of `plugin.window` interfaces, exposed through the new capability `window.control`.
+- Ordinary "Fullscreen" (Enter / F11 / double click) is still a host command; this plugin does not register it again.
+- Saving the window size and position across launches is still the core's job (C8, `ui-state.json`); this plugin only saves the preferences for on-top, the pointer and the window size when playback starts (`settings.json`, shared by the "Options ▸ Playback ▸ Window" settings page and the menu items).
+- The aspect ratio, cropping and zoom of the video picture belong to the video domain (other chapters); this chapter only changes the window, not the picture ratio.
+- It does not read any state of other plugins; the video size comes from the core (3a: `video.displayWidth/Height` of `player.stats()`, see H03 item 1).
 
-manifest 能力：`commands`、`events`、`playback.read`、`ui.osd`、`ui.settings`、`window.control`。
+Manifest capabilities: `commands`, `events`, `playback.read`, `ui.osd`, `ui.settings`, `window.control`.
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| B30 | 播放时隐藏鼠标指针（窗口模式） | ✓（3a） | 是（`window.setCursorAutoHide`） |
-| H03 | 窗口 0.5 / 1 / 1.5 / 2 倍视频尺寸 | ✓（3a） | 是（`window.setVideoArea`；尺寸用 `stats()`，`PlayerState.videoSize` 未进 3a） |
-| H04 | 适应视频比例 | ✓（3a） | 是（同上） |
-| H05 | 置顶：不 / 总是 / 播放时 / 全屏播放时（默认） | ✓（3a；「全屏播放时」交互对齐轮，IA-WIN-03） | 是（`window.setAlwaysOnTop`） |
-| H07 | 迷你尺寸（`` ` ``，所有系统）与画中画（macOS，独立命令） | ✓（渲染与画中画轮；交互对齐轮按 IA-WIN-01、IA-WIN-02 拆开） | 是（`window.setPictureInPicture`；宿主实现画中画帧输出）；迷你尺寸只用 W2 |
-| G-02 | 开始播放时按视频尺寸调整窗口（默认 1 倍） | ✓（交互对齐轮，见 interaction-spec.md G-02） | 否（`setVideoArea`、`stats()`） |
+| B30 | Hide the mouse pointer during playback (windowed mode) | ✓ (3a) | Yes (`window.setCursorAutoHide`) |
+| H03 | Window at 0.5 / 1 / 1.5 / 2× video size | ✓ (3a) | Yes (`window.setVideoArea`; the size comes from `stats()`, `PlayerState.videoSize` did not make 3a) |
+| H04 | Fit to video aspect ratio | ✓ (3a) | Yes (same as above) |
+| H05 | On top: never / always / while playing / while playing in fullscreen (default) | ✓ (3a; "while playing in fullscreen" in the interaction alignment round, IA-WIN-03) | Yes (`window.setAlwaysOnTop`) |
+| H07 | Mini size (`` ` ``, all systems) and picture-in-picture (macOS, a separate command) | ✓ (render and picture-in-picture round; split by IA-WIN-01 and IA-WIN-02 in the interaction alignment round) | Yes (`window.setPictureInPicture`; the host implements picture-in-picture frame output); mini size only uses W2 |
+| G-02 | Resize the window to the video size when playback starts (default 1×) | ✓ (interaction alignment round, see G-02 in interaction-spec.md) | No (`setVideoArea`, `stats()`) |
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-| 菜单路径 | order / group | 默认快捷键 | 说明 |
+| Menu path | order / group | Default shortcut | Notes |
 | --- | --- | --- | --- |
-| 屏幕 ▸ 画中画（勾选；只在系统支持画中画时出现，id `pip`） | 709 / screen | — | IA-WIN-01：Vestra 额外的命令，无默认按键。子菜单整体在宿主「全屏」(700) 之后、窗口入口组 (800) 之前；第一项用 group `screen`，子菜单与「全屏」之间不画分隔线 |
-| 屏幕 ▸ 迷你尺寸（勾选，所有系统，id `mini`） | 710 / screen | `` ` `` | IA-WIN-01 |
-| 屏幕 ▸ 0.5倍 · 1倍 · 1.5倍 · 2倍（单选，按当前尺寸显示圆点） | 711–714 / screen-size | 1 · 2 · 3 · 4 | |
-| 屏幕 ▸ 适应视频比例 | 715 / screen-size | 8 | |
-| 屏幕 ▸ 开始播放时 ▸ 不调整 · 0.5倍 · 1倍 · 1.5倍 · 2倍 · 适应视频比例（单选，默认 1倍） | 716–721 / screen-auto | — | G-02 |
-| 屏幕 ▸ 开始播放时 ▸ 只调整一次（勾选，默认关） | 722 / screen-auto-once | — | G-02；与单选项之间画分隔线 |
-| 屏幕 ▸ 置顶 ▸ 切换置顶方式 | 725 / screen-top | Ctrl+T | |
-| 屏幕 ▸ 置顶 ▸ 不置顶 · 总是置顶 · 播放时置顶 · 全屏播放时置顶（单选，默认最后一项） | 726–729 / screen-top-mode | — | 与「切换置顶方式」之间画分隔线；IA-WIN-03 |
-| 播放 ▸ 播放时隐藏鼠标指针（勾选） | 241 / playback-options | — | 放在播放领域，与 playback 的 240、242、243 同组 |
+| Screen ▸ Picture-in-Picture (checkbox; only shown when the system supports picture-in-picture, id `pip`) | 709 / screen | — | IA-WIN-01: an extra Vestra command with no default key. The submenu as a whole sits after the host's "Fullscreen" (700) and before the window entry group (800); the first item uses group `screen`, so no separator is drawn between the submenu and "Fullscreen" |
+| Screen ▸ Mini Size (checkbox, all systems, id `mini`) | 710 / screen | `` ` `` | IA-WIN-01 |
+| Screen ▸ 0.5× · 1× · 1.5× · 2× (radio, dot shown according to the current size) | 711–714 / screen-size | 1 · 2 · 3 · 4 | |
+| Screen ▸ Fit to Video Aspect Ratio | 715 / screen-size | 8 | |
+| Screen ▸ When Playback Starts ▸ Don't Resize · 0.5× · 1× · 1.5× · 2× · Fit to Video Aspect Ratio (radio, default 1×) | 716–721 / screen-auto | — | G-02 |
+| Screen ▸ When Playback Starts ▸ Only Once (checkbox, off by default) | 722 / screen-auto-once | — | G-02; a separator between it and the radio items |
+| Screen ▸ Always on Top ▸ Cycle Mode | 725 / screen-top | Ctrl+T | |
+| Screen ▸ Always on Top ▸ Never · Always · While Playing · While Playing in Fullscreen (radio, default the last one) | 726–729 / screen-top-mode | — | A separator between them and "Cycle Mode"; IA-WIN-03 |
+| Playback ▸ Hide Pointer While Playing (checkbox) | 241 / playback-options | — | Placed in the playback domain, in the same group as playback's 240, 242, 243 |
 
-冲突检查：1、2、3、4、8、`` ` ``、Ctrl+T 现在都没有命令占用。在 macOS 上 Ctrl 绑定按 ⌘ 也能触发：⌘T 不和系统快捷键冲突。⌘`（切换同一应用的窗口）不受影响，因为迷你尺寸绑定的是不带修饰键的 `` ` ``。数字键 1–4、8 是全局绑定，以后若有别的领域（例如宽高比预设）想用数字键，需要在 menus.md 统一分配。
+Conflict check: 1, 2, 3, 4, 8, `` ` `` and Ctrl+T are not used by any command now. On macOS a Ctrl binding can also be triggered with ⌘: ⌘T does not conflict with a system shortcut. ⌘` (cycle windows of the same app) is not affected, because mini size binds `` ` `` without modifiers. The digit keys 1–4 and 8 are global bindings; if another domain (for example aspect ratio presets) wants digit keys later, they have to be allocated together in menus.md.
 
 ---
 
-### B30 播放时隐藏鼠标指针
+### B30 Hide the mouse pointer during playback
 
-现状：只在全屏、播放中、空闲 3 秒时隐藏（main.rs `cursor-hidden = fullscreen && idle && playing`）。
+Current state: hidden only in fullscreen, while playing, after 3 seconds idle (main.rs `cursor-hidden = fullscreen && idle && playing`).
 
-> 默认值已被[交互规格](interaction-spec.md) G-06 取代：默认开；已保存过设置的用户保持原值。
+> The default has been superseded by G-06 in the [interaction spec](interaction-spec.md): on by default; users who have already saved a setting keep their value.
 
-**需求**：开关，默认开（G-06；原为默认关）；关时保持现状。打开后窗口模式也一样：播放中、指针在视频区内静止 3 秒，就隐藏指针。
+**Requirement**: a toggle, on by default (G-06; originally off by default); when off, things stay as now. When on, windowed mode works the same way: while playing, if the pointer rests in the video area for 3 seconds, it is hidden.
 
-**入口**：「播放 ▸ 播放时隐藏鼠标指针」（勾选）。
+**Entry point**: "Playback ▸ Hide Pointer While Playing" (checkbox).
 
-**行为细节**
-1. 隐藏条件：
-   - 开关开，或全屏（现状）。
-   - `phase === "ready" && !paused`。
-   - 指针在视频区内；底栏、侧栏、浮动面板、工具窗口、菜单上从不隐藏。
-   - 距上次指针移动、按键、点击至少 3 秒，沿用宿主的 `IDLE_MS`。
-2. 任何指针移动立即恢复显示。
-3. 菜单或系统对话框打开时不隐藏（沿用宿主的 obstruction 规则）。
-4. 主窗口失去焦点时不隐藏，因为指针可能在别的应用的窗口上方。
-5. 切换时提示「播放时隐藏鼠标: 开 / 关」。
-6. 插件停用时，核心恢复为只在全屏时隐藏。
+**Behavior details**
+1. Hide when:
+   - The toggle is on, or fullscreen (as now).
+   - `phase === "ready" && !paused`.
+   - The pointer is in the video area; never hidden over the bottom bar, sidebar, floating panels, tool windows or menus.
+   - At least 3 seconds since the last pointer move, key press or click, using the host's `IDLE_MS`.
+2. Any pointer movement shows it again immediately.
+3. Not hidden while a menu or system dialog is open (the host's obstruction rule).
+4. Not hidden when the main window loses focus, because the pointer may be over another application's window.
+5. On toggle, message "Hide pointer while playing: On / Off".
+6. When the plugin is disabled, the core goes back to hiding only in fullscreen.
 
-**持久化**：`plugin.dataDirectory/settings.json` 的 `hideCursorWhilePlaying: boolean`，默认 `true`（G-06）。激活时调用一次 `setCursorAutoHide`（只在开着时调用，核心的默认值 `"fullscreen"` 不发送，避免覆盖别的插件最后写入的值；默认开时激活即发送 `"playing"`）。
+**Persistence**: `hideCursorWhilePlaying: boolean` in `plugin.dataDirectory/settings.json`, default `true` (G-06). `setCursorAutoHide` is called once at activation (only when on; the core default `"fullscreen"` is not sent, to avoid overwriting a value another plugin wrote last; with the default on, `"playing"` is sent at activation).
 
-**核心依赖**【核心新增】：
+**Core dependencies** [New core API]:
 
 ```ts
 window.setCursorAutoHide(mode: "fullscreen" | "playing"): Promise<void>
-// "fullscreen"：现状；"playing"：窗口模式也隐藏。最后写入生效，插件停用时恢复 "fullscreen"
+// "fullscreen": as now; "playing": hide in windowed mode too. Last write wins; back to "fullscreen" when the plugin is disabled
 ```
 
-理由：指针显隐和空闲计时在宿主事件循环里，插件收不到指针事件。
+Reason: pointer visibility and the idle timer live in the host event loop, and plugins do not receive pointer events.
 
-**验收**
-- 开关打开、窗口模式播放：指针在视频上静止 3 秒消失，移动后出现。
-- 暂停后不消失。
-- 指针停在底栏上不消失。
-- 关掉开关后只在全屏时消失。
+**Acceptance**
+- Toggle on, playing in windowed mode: the pointer disappears after resting on the video for 3 seconds and reappears when moved.
+- It does not disappear after pausing.
+- It does not disappear while resting on the bottom bar.
+- With the toggle off, it disappears only in fullscreen.
 
-### H03 窗口 0.5 / 1 / 1.5 / 2 倍视频尺寸
+### H03 Window at 0.5 / 1 / 1.5 / 2× video size
 
-**需求**：一键把视频区调成视频显示尺寸的 0.5、1、1.5、2 倍。
+**Requirement**: with one key, set the video area to 0.5, 1, 1.5 or 2 times the video's display size.
 
-**入口**：「屏幕 ▸ 0.5倍（1）/ 1倍（2）/ 1.5倍（3）/ 2倍（4）」。
+**Entry point**: "Screen ▸ 0.5× (1) / 1× (2) / 1.5× (3) / 2× (4)".
 
-**行为细节**
-1. 视频显示尺寸取 `player.state.videoSize`：考虑容器宽高比和旋转后的显示宽高；插件模拟器流取 `openStream` 的宽高。
-   - 3a 实现：裁决没有给 `PlayerState.videoSize`，改用 `player.stats()` 的 `video.displayWidth/Height`（mpv `video-out-params/dw`、`dh`，宽高比校正与滤镜之后），没有时用 `video.width/height`。来源第一次 `ready` 时读取，mpv 还没给出时每 500 ms 重读、最多 10 次；每次执行前再读一次（画面可能已被旋转）。`video` 为 `null` 或尺寸为空即「没有视频」。
-2. 1 倍 = 一个视频像素对应一个逻辑点（Retina 上一个点是 2 个物理像素，观感与非 Retina 的 1:1 相同；macOS 上 QuickTime 的「实际大小」也是这种做法）。
-3. 目标是**视频区**，不是整个窗口。核心自动加上底栏（62px）和附着侧栏（含 3px 分隔条）。
-4. 保持窗口左上角不动。放不下时：
-   - 先把窗口挪回屏幕可见区（不含菜单栏和 Dock）。
-   - 仍放不下就按比例缩小视频区到能放下为止，提示「窗口: 2倍（已按屏幕缩小）」。
-   - 按最小尺寸放大时（第 5 条）提示「窗口: 0.5倍（已按最小尺寸放大）」。两者都由返回的 `clamped` 与实际尺寸判断。
-5. 小于最小尺寸（视频区宽 318 / 窗口宽 320、视频高 120）时，核心按最小值放大；附着侧栏放不下时按现有规则隐藏（`reason: "space"`）。
-6. 单选圆点：视频区与某个倍数相差 ≤ 1 点时，该项显示圆点；否则都不显示。
-7. 不可用（禁用并给原因）：
-   - 没有视频（空、纯音频）：「没有视频」。
-   - 全屏中：「全屏时不可用」。不自动退出全屏，避免误按数字键时画面突然变化。
-8. 提示「窗口: 1.5倍」。
-9. 调整进行中再按：命令忙碌（原因「正在调整窗口」），不排队。核心拒绝时提示「无法调整窗口：<原因>」。
+**Behavior details**
+1. The video display size comes from `player.state.videoSize`: the display width and height after the container aspect ratio and rotation; for plugin simulator streams, the width and height given to `openStream`.
+   - 3a implementation: the ruling did not provide `PlayerState.videoSize`, so `video.displayWidth/Height` of `player.stats()` is used instead (mpv `video-out-params/dw`, `dh`, after aspect ratio correction and filters), falling back to `video.width/height`. It is read when the source first becomes `ready`; while mpv has not provided it yet, it is re-read every 500 ms, at most 10 times; it is read again before each run (the picture may have been rotated). `video` being `null` or an empty size means "no video".
+2. 1× = one video pixel per logical point (on Retina one point is 2 physical pixels, which looks the same as 1:1 on non-Retina; QuickTime's "Actual Size" on macOS does the same).
+3. The target is the **video area**, not the whole window. The core adds the bottom bar (62px) and the attached sidebar (including the 3px divider) automatically.
+4. The window's top-left corner stays in place. When it does not fit:
+   - First move the window back into the visible screen area (excluding the menu bar and Dock).
+   - If it still does not fit, shrink the video area proportionally until it fits, with the message "Window: 2× (shrunk to fit the screen)".
+   - When enlarged to the minimum size (item 5), the message is "Window: 0.5× (enlarged to the minimum size)". Both are decided from the returned `clamped` and the actual size.
+5. Below the minimum size (video area width 318 / window width 320, video height 120), the core enlarges to the minimum; when the attached sidebar does not fit, it is hidden by the existing rule (`reason: "space"`).
+6. Radio dot: when the video area is within 1 point of a multiple, that item shows the dot; otherwise none do.
+7. Unavailable (disabled with a reason):
+   - No video (empty, audio only): "No video".
+   - In fullscreen: "Not available in fullscreen". Fullscreen is not exited automatically, so pressing a digit key by mistake does not suddenly change the picture.
+8. Message "Window: 1.5×".
+9. Pressing again while a resize is in progress: the command is busy (reason "Resizing the window"), no queuing. When the core refuses, the message is "Cannot resize the window: <reason>".
 
-**核心依赖**【核心新增】：
+**Core dependencies** [New core API]:
 
 ```ts
 window.setVideoArea(size: { width: number; height: number }): Promise<{ width: number; height: number; clamped: boolean }>
-// 逻辑点；返回实际应用的视频区尺寸
-// PlayerState 增加
-readonly videoSize: { width: number; height: number } | null;  // 显示尺寸，含 DAR 与旋转
+// logical points; returns the video area size actually applied
+// added to PlayerState
+readonly videoSize: { width: number; height: number } | null;  // display size, including DAR and rotation
 ```
 
-理由：窗口尺寸由宿主控制，只有宿主知道底栏、侧栏、分隔条怎么排；`stats()` 只有解码尺寸，不含显示宽高比，而且要主动查询，不能随状态推送。
+Reason: the window size is controlled by the host, and only the host knows how the bottom bar, sidebar and divider are laid out; `stats()` only has the decoded size, without the display aspect ratio, and has to be queried actively rather than pushed with the state.
 
-**验收**
-- 1920×1080 片源在 2560×1440 屏幕上按 2：视频区 1920×1080。
-- 按 4：缩小到能放下，提示「已按屏幕缩小」。
-- 720×576（DAR 16:9）片源按 2：视频区 1024×576。
-- 打开侧栏时按 2：窗口宽 = 视频宽 + 3 + 侧栏宽。
-- 全屏中菜单项灰色。
+**Acceptance**
+- A 1920×1080 source on a 2560×1440 screen, press 2: the video area is 1920×1080.
+- Press 4: shrunk until it fits, with the message "shrunk to fit the screen".
+- A 720×576 (DAR 16:9) source, press 2: the video area is 1024×576.
+- With the sidebar open, press 2: window width = video width + 3 + sidebar width.
+- In fullscreen the menu items are grey.
 
-**说明**：以窗口左上角为锚点调整尺寸，不提供以中心为锚点的选项。
+**Notes**: the window is resized with its top-left corner as the anchor; there is no option to anchor at the center.
 
-### H04 适应视频比例
+### H04 Fit to video aspect ratio
 
-**需求**：调整窗口，使视频区的宽高比等于视频的宽高比，消除黑边。
+**Requirement**: resize the window so that the video area's aspect ratio equals the video's, removing black bars.
 
-**入口**：「屏幕 ▸ 适应视频比例」，8。
+**Entry point**: "Screen ▸ Fit to Video Aspect Ratio", 8.
 
-**行为细节**
-1. 保持当前视频区宽度不变，高度 = 宽度 × `videoSize.height / videoSize.width`。
-2. 高度超出屏幕可见区时，改为以可用高度为准反算宽度。仍低于最小尺寸时，按 H03 第 5 条处理（最小尺寸下会有黑边）。
-3. 已经相符（误差 ≤ 1 点）时不改动，提示「窗口已适应视频比例」；否则提示「窗口: 适应视频比例」。
-4. 不可用的情况同 H03（没有视频、全屏）。
-5. 只调整一次，不随片源变化自动调整。自动调整属于「播放窗口尺寸」设置，由「屏幕 ▸ 开始播放时 ▸」负责（已被 interaction-spec.md G-02 取代：默认每个新来源按 1 倍调整）。
+**Behavior details**
+1. Keep the current video area width; height = width × `videoSize.height / videoSize.width`.
+2. When the height exceeds the visible screen area, compute the width from the available height instead. If it is still below the minimum size, H03 item 5 applies (there will be black bars at the minimum size).
+3. When it already fits (within 1 point), nothing changes and the message is "The window already fits the video aspect ratio"; otherwise "Window: Fit to video aspect ratio".
+4. Unavailable in the same cases as H03 (no video, fullscreen).
+5. It resizes only once and does not follow source changes automatically. Automatic resizing belongs to the "playback window size" setting, handled by "Screen ▸ When Playback Starts ▸" (superseded by G-02 in interaction-spec.md: by default each new source is resized to 1×).
 
-**核心依赖**：`window.setVideoArea`、`PlayerState.videoSize`、`window.state.videoArea`（同 H03）。
+**Core dependencies**: `window.setVideoArea`, `PlayerState.videoSize`, `window.state.videoArea` (same as H03).
 
-**验收**：16:9 片源在 800×800 视频区时按 8，视频区变为 800×450，上下没有黑边；2.39:1 片源同理；再按一次只显示「已适应」提示。
+**Acceptance**: a 16:9 source in an 800×800 video area, press 8: the video area becomes 800×450 with no black bars at the top or bottom; the same for a 2.39:1 source; pressing again only shows the "already fits" message.
 
-### H05 置顶：总是 / 播放时 / 全屏时
+### H05 On top: always / while playing / while fullscreen
 
-> 第 6 条与默认值已被[交互规格](interaction-spec.md) IA-WIN-03 取代：四种方式，默认「全屏播放时置顶」；迷你尺寸不再置顶（IA-WIN-02）。
+> Item 6 and the default have been superseded by IA-WIN-03 in the [interaction spec](interaction-spec.md): four modes, default "While Playing in Fullscreen"; mini size is no longer on top (IA-WIN-02).
 
-**需求**：选择主窗口的置顶方式：不置顶、总是置顶、播放时置顶、全屏播放时置顶（默认）。置顶时主窗口浮在其他应用窗口之上。
+**Requirement**: choose how the main window stays on top: never, always, while playing, while playing in fullscreen (default). When on top, the main window floats above other applications' windows.
 
-**入口**
-- 「屏幕 ▸ 置顶 ▸ 不置顶 · 总是置顶 · 播放时置顶 · 全屏播放时置顶」（单选）；「选项 ▸ 播放 ▸ 窗口」设置页的同一组单选。
-- 「屏幕 ▸ 置顶 ▸ 切换置顶方式」，Ctrl+T，按 不置顶 → 总是 → 播放时 → 全屏播放时 → 不置顶 循环。
+**Entry points**
+- "Screen ▸ Always on Top ▸ Never · Always · While Playing · While Playing in Fullscreen" (radio); the same radio group on the "Options ▸ Playback ▸ Window" settings page.
+- "Screen ▸ Always on Top ▸ Cycle Mode", Ctrl+T, cycling never → always → while playing → while playing in fullscreen → never.
 
-**行为细节**
-1. 总是置顶：立即调用 `setAlwaysOnTop(true)`。
-2. 播放时置顶：`phase === "ready" && !paused` 时置顶；暂停、播完、关闭、出错时取消；来回切换时立即跟随。
-3. 核心置顶时，主窗口和浮动侧栏窗口使用同一浮动层级。置顶期间新开的工具窗口也用同一层级，避免被主窗口挡住。系统文件对话框不受影响。
-4. 提示：「置顶: 总是」「置顶: 播放时」「置顶: 全屏播放时」「置顶: 关闭」。
-5. 插件停用时，核心取消置顶。
-6. 全屏播放时置顶：`window.state.fullscreen && phase === "ready" && !paused` 时置顶，否则不置顶；跟随 `window.onChange` 与播放状态。macOS 全屏使用独立的空间（Space），主窗口在那里本来就在最前，这一项在 macOS 上没有可见效果，仍然提供并作为默认值，保证两个系统的设置一致；Windows 上效果可见。（原第 6 条「不提供」已被 IA-WIN-03 取代。）
+**Behavior details**
+1. Always: call `setAlwaysOnTop(true)` immediately.
+2. While playing: on top when `phase === "ready" && !paused`; cancelled on pause, end, close or error; follows immediately when switching back and forth.
+3. When the core puts the window on top, the main window and the floating sidebar window use the same floating level. Tool windows opened while on top use the same level too, so they are not hidden behind the main window. System file dialogs are not affected.
+4. Messages: "Always on top: Always", "Always on top: While playing", "Always on top: While playing in fullscreen", "Always on top: Off".
+5. When the plugin is disabled, the core cancels on-top.
+6. While playing in fullscreen: on top when `window.state.fullscreen && phase === "ready" && !paused`, otherwise not; follows `window.onChange` and the playback state. macOS fullscreen uses a separate Space where the main window is already frontmost, so this mode has no visible effect on macOS; it is still offered and is the default, so that the settings are the same on both systems; on Windows the effect is visible. (The former item 6 "not offered" has been superseded by IA-WIN-03.)
 
-**持久化**：`settings.json` 的 `onTop: "never" | "always" | "playing" | "fullscreen"`，默认 `"fullscreen"`；已保存过的值保持。
+**Persistence**: `onTop: "never" | "always" | "playing" | "fullscreen"` in `settings.json`, default `"fullscreen"`; values already saved are kept.
 
-**实现**：实际置顶 = 总是 或（播放时 且 正在播放）或（全屏播放时 且 全屏 且 正在播放）；只在这个值变化时调用 `setAlwaysOnTop`，激活时值为不置顶就不发送（不覆盖别的插件最后写入的值）。迷你尺寸不参与（IA-WIN-02）。
+**Implementation**: actual on-top = always, or (while playing and playing), or (while playing in fullscreen and fullscreen and playing); `setAlwaysOnTop` is called only when this value changes, and nothing is sent at activation when the value is "not on top" (so a value another plugin wrote last is not overwritten). Mini size takes no part (IA-WIN-02).
 
-**核心依赖**【核心新增】：
+**Core dependencies** [New core API]:
 
 ```ts
-window.setAlwaysOnTop(onTop: boolean): Promise<void>   // 插件停用时恢复 false
+window.setAlwaysOnTop(onTop: boolean): Promise<void>   // back to false when the plugin is disabled
 ```
 
-理由：窗口层级（NSWindow level）只能由宿主设置。
+Reason: the window level (NSWindow level) can only be set by the host.
 
-**验收**
-- 选「总是置顶」后点 Finder：播放器仍在 Finder 窗口之上。
-- 选「播放时置顶」后暂停：Finder 可以盖住播放器；继续播放后播放器回到最上。
-- Ctrl+T 依次切换四种方式，提示文字正确。
-- 首次启动时圆点在「全屏播放时置顶」；窗口模式播放时 Finder 可以盖住播放器。
-- 重启后方式保持。
+**Acceptance**
+- After choosing "Always", click Finder: the player stays above the Finder window.
+- After choosing "While Playing", pause: Finder can cover the player; after resuming, the player comes back on top.
+- Ctrl+T cycles through the four modes with the correct message text.
+- On first launch the dot is on "While Playing in Fullscreen"; while playing in windowed mode, Finder can cover the player.
+- The mode is kept after a restart.
 
-**说明**：没有「其他」菜单，放在「屏幕」下。
+**Notes**: there is no "Other" menu; it goes under "Screen".
 
-### H07 画中画（替代迷你尺寸）
+### H07 Picture-in-picture (replaces mini size)
 
-> **已被 [交互规格](interaction-spec.md) IA-WIN-01、IA-WIN-02 取代（交互对齐轮）**：`` ` `` 在所有系统上都是「屏幕 ▸ 迷你尺寸」（id `mini`，order 710），迷你尺寸不再置顶；「屏幕 ▸ 画中画」是独立命令（id `pip`，order 709，无默认按键），只在 `pictureInPicture.supported` 为真时注册。两者互斥：进入画中画前先恢复迷你尺寸之前的尺寸，画中画中执行迷你尺寸时先退出画中画。下文的二选一形态与「替代」关系作废，画中画本身的行为规则不变。
+> **Superseded by IA-WIN-01 and IA-WIN-02 in the [interaction spec](interaction-spec.md) (interaction alignment round)**: `` ` `` is "Screen ▸ Mini Size" on all systems (id `mini`, order 710), and mini size is no longer on top; "Screen ▸ Picture-in-Picture" is a separate command (id `pip`, order 709, no default key), registered only when `pictureInPicture.supported` is true. The two are mutually exclusive: before entering picture-in-picture, the size from before mini size is restored first; running mini size during picture-in-picture exits picture-in-picture first. The one-or-the-other form and the "replaces" relation below are void; the behavior rules of picture-in-picture itself are unchanged.
 >
-> **已实现（渲染与画中画轮，2026-10）**。window 插件按 `window.state.pictureInPicture.supported` 二选一，并跟随 `window.onChange`（宿主在主窗口创建之后才报告 `true`，插件激活时通常还是 `false`；变化时同一命令改换标题、勾选与动作，切到画中画时若迷你尺寸正生效先恢复原尺寸与置顶方式），菜单位置 710 / group `screen`、快捷键 `` ` ``、命令 id `mini` 在各平台相同：
+> **Implemented (render and picture-in-picture round, 2026-10)**. The window plugin chooses one of the two by `window.state.pictureInPicture.supported` and follows `window.onChange` (the host reports `true` only after the main window has been created, so it is usually still `false` when the plugin activates; on change the same command switches title, check and action, and when switching to picture-in-picture while mini size is in effect, the original size and on-top mode are restored first). Menu position 710 / group `screen`, shortcut `` ` `` and command id `mini` are the same on all platforms:
 >
-> | 平台 | 菜单项 | 行为 |
+> | Platform | Menu item | Behavior |
 > | --- | --- | --- |
-> | macOS 14+（`supported: true`） | 「屏幕 ▸ 画中画」（勾选） | 下面的需求：`setPictureInPicture(!active)`，勾选跟随 `state.pictureInPicture.active`（`onChange`）。没有视频时禁用（「没有视频」；已在画中画时仍可退出）；全屏时可用（核心先退出全屏）。成功提示「画中画: 开 / 关」，失败「无法进入画中画：<原因>」，`busy` 忽略，切换进行中命令忙碌（「正在切换画中画」）。小窗「返回」、关闭按钮或核心关闭时提示一次「画中画: 关」，来源已没有视频时「画中画: 关（没有视频）」。不改窗口尺寸，不置顶。 |
-> | Windows、Linux、无界面（`supported: false`） | 「屏幕 ▸ 迷你尺寸」（勾选） | 退回下文「3a 形态：迷你尺寸」（`setVideoArea` + `setAlwaysOnTop`），行为不变。以后宿主在这些平台提供自己的小窗、`supported` 变为 `true` 时，插件自动改用画中画，不用改代码。 |
+> | macOS 14+ (`supported: true`) | "Screen ▸ Picture-in-Picture" (checkbox) | The requirement below: `setPictureInPicture(!active)`, the check follows `state.pictureInPicture.active` (`onChange`). Disabled with no video ("No video"; can still exit when already in picture-in-picture); available in fullscreen (the core exits fullscreen first). Success message "Picture-in-picture: On / Off", failure "Cannot enter picture-in-picture: <reason>", `busy` ignored, the command busy while switching ("Switching picture-in-picture"). When the small window's "back" button, close button or the core closes it, "Picture-in-picture: Off" is shown once, or "Picture-in-picture: Off (no video)" when the source no longer has video. Does not change the window size and does not put it on top. |
+> | Windows, Linux, headless (`supported: false`) | "Screen ▸ Mini Size" (checkbox) | Falls back to "3a form: mini size" below (`setVideoArea` + `setAlwaysOnTop`), behavior unchanged. When the host later provides its own small window on these platforms and `supported` becomes `true`, the plugin switches to picture-in-picture automatically without code changes. |
 >
-> 与下文的差异：第 1 条「当前版本不支持画中画」不会出现，不支持时直接是迷你尺寸；「有视频」用 `player.stats()` 的视频尺寸判断（`PlayerState.videoSize` 未提供，与 H03 相同）。
+> Differences from the text below: item 1's "picture-in-picture is not supported in this version" never appears, because without support it is simply mini size; "has video" is decided by the video size from `player.stats()` (`PlayerState.videoSize` is not provided, the same as H03).
 
-现状（立项时）：没有迷你尺寸，也没有画中画。macOS 有系统画中画（Picture in Picture），浮窗能盖在全屏应用之上、跟随用户切换空间，由系统管理位置与大小，比把主窗口缩到最小更符合 macOS 习惯。所以本项用画中画替代迷你尺寸，不再提供「缩小主窗口」。
+Current state (when the item was opened): no mini size and no picture-in-picture. macOS has system picture-in-picture, whose floating window can sit above fullscreen apps and follows the user across Spaces, with position and size managed by the system; this fits macOS habits better than shrinking the main window to its minimum. So this item replaces mini size with picture-in-picture and no longer offers "shrink the main window".
 
-**需求**
-- 开关：进入画中画后，视频在 macOS 原生画中画浮窗里继续播放；主窗口保留，视频区显示居中灰字「正在以画中画播放」。再执行一次，或点浮窗上的「返回」按钮，退出画中画，画面回到主窗口。
-- 浮窗上的播放 / 暂停按钮控制播放器，与底栏、Space 键共用同一个播放状态。
-- 浮窗的位置、大小、贴靠角落由系统管理，插件不设置，也不保存。
+**Requirement**
+- A toggle: after entering picture-in-picture, the video keeps playing in the native macOS picture-in-picture floating window; the main window stays, and its video area shows the centered grey text "Playing in picture-in-picture". Running it again, or clicking the "back" button on the floating window, exits picture-in-picture and the picture returns to the main window.
+- The play / pause button on the floating window controls the player and shares one playback state with the bottom bar and the Space key.
+- The floating window's position, size and corner snapping are managed by the system; the plugin neither sets nor saves them.
 
-**入口**：「屏幕 ▸ 画中画」（勾选），`` ` ``。
+**Entry point**: "Screen ▸ Picture-in-Picture" (checkbox), `` ` ``.
 
-**行为细节**
-1. 可用条件（不满足时禁用并给原因）：
-   - 有视频（`player.state.videoSize` 非空）；纯音频、空闲时为「没有视频」。
-   - 宿主支持（`window.state.pictureInPicture.supported`）；否则为「当前版本不支持画中画」。
-2. 进入：调用 `window.setPictureInPicture(true)`。成功后提示「画中画: 开」（提示画在主窗口上，浮窗里没有 OSD）；失败时提示「无法进入画中画：<原因>」，勾选不变。
-3. 全屏中执行：核心先退出全屏，再进入画中画。
-4. 退出的途径：再按 `` ` `` 或菜单；浮窗「返回」按钮（不暂停）；浮窗关闭按钮（核心同时暂停播放，与 Safari、QuickTime 的行为一致）。插件从 `window.onChange` 看到 `pictureInPicture.active` 变为 `false` 后更新勾选，提示「画中画: 关」。
-5. 换来源：画中画保持，浮窗显示新来源的画面。新来源没有视频时，核心退出画中画，插件提示「画中画: 关（没有视频）」。关闭来源时同样退出。
-6. 浮窗内容是 mpv 输出的帧，包含插件画面效果和 mpv 渲染的字幕；宿主用 Slint 画的屏幕提示、信息块、底栏不在浮窗里。
-7. 画中画期间主窗口可以最小化或被遮挡，浮窗照常播放。
-8. 重复触发：上一次 `setPictureInPicture` 未返回时再按被忽略（命令 `busy`）。
-9. 插件停用时，核心退出画中画。
+**Behavior details**
+1. Available when (otherwise disabled with a reason):
+   - There is video (`player.state.videoSize` non-empty); audio only or idle gives "No video".
+   - The host supports it (`window.state.pictureInPicture.supported`); otherwise "Picture-in-picture is not supported in this version".
+2. Enter: call `window.setPictureInPicture(true)`. On success the message is "Picture-in-picture: On" (drawn on the main window; the floating window has no OSD); on failure "Cannot enter picture-in-picture: <reason>", and the check does not change.
+3. Run in fullscreen: the core exits fullscreen first, then enters picture-in-picture.
+4. Ways to exit: press `` ` `` again or use the menu; the floating window's "back" button (does not pause); the floating window's close button (the core pauses playback at the same time, consistent with Safari and QuickTime). When the plugin sees `pictureInPicture.active` become `false` in `window.onChange`, it updates the check and shows "Picture-in-picture: Off".
+5. Source change: picture-in-picture stays, and the floating window shows the new source's picture. When the new source has no video, the core exits picture-in-picture and the plugin shows "Picture-in-picture: Off (no video)". Closing the source exits as well.
+6. The floating window's content is the frames mpv outputs, including plugin picture effects and subtitles rendered by mpv; the on-screen messages, info block and bottom bar that the host draws with Slint are not in the floating window.
+7. During picture-in-picture the main window can be minimized or covered, and the floating window keeps playing.
+8. Repeated triggers: a press before the previous `setPictureInPicture` has returned is ignored (the command is `busy`).
+9. When the plugin is disabled, the core exits picture-in-picture.
 
-**持久化**：无。
+**Persistence**: none.
 
-**核心依赖**【核心新增】：
+**Core dependencies** [New core API]:
 
 ```ts
 window.setPictureInPicture(on: boolean): Promise<void>
-// WindowState 增加
+// added to WindowState
 readonly pictureInPicture: { supported: boolean; active: boolean };
-// supported：宿主实现了画中画且系统版本满足要求；active：浮窗正在显示。插件停用时核心退出画中画
+// supported: the host implements picture-in-picture and the OS version qualifies; active: the floating window is showing. The core exits picture-in-picture when the plugin is disabled
 ```
 
-理由：画中画只能由宿主进程通过 AVKit 的 `AVPictureInPictureController` 发起，浮窗属于宿主的窗口与图层；视频帧也只在宿主里。插件做不到。
+Reason: picture-in-picture can only be started by the host process through AVKit's `AVPictureInPictureController`; the floating window belongs to the host's windows and layers, and the video frames exist only in the host. Plugins cannot do it.
 
-宿主工作与可行性（libmpv 当前为软件渲染，`vo=libmpv`）：
-- 播放器不是 `AVPlayer`，所以只能走 sample buffer 路径：宿主创建 `AVSampleBufferDisplayLayer`，用 `AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:playbackDelegate:)`（macOS 12 起提供）创建控制器，并实现 `AVPictureInPictureSampleBufferPlaybackDelegate`（播放 / 暂停、可播放时间范围、是否暂停、浮窗尺寸变化）。mpv 自带的 macOS 画中画只属于它自己的 `vo=mac` / `vo=gpu` 窗口，对 `vo=libmpv` 不可用。
-- 帧来源：软件渲染已经在 CPU 内存里得到每一帧 RGB 像素。画中画期间，宿主把每帧复制进 `CVPixelBuffer`（RGB24 转 BGRA），包成带显示时间戳的 `CMSampleBuffer`，入队到 `AVSampleBufferDisplayLayer`。可以做，代价是每帧一次拷贝和格式转换（960×540 约 2 MB/帧）。
-- 限制一：浮窗画面就是渲染缓冲的分辨率。现在固定 960×540，非 16:9 片源会带黑边，浮窗放大后发糊。建议画中画期间按视频显示比例单独确定渲染尺寸（长边不超过 1280），这与 C-SIZE（渲染尺寸跟随视频区）是同一类改动。
-- 限制二：画中画期间主窗口视频区不显示画面，但宿主必须继续按视频帧率驱动 mpv 渲染；主窗口最小化或被遮挡时，系统可能降低它的刷新频率，所以渲染驱动不能依赖主窗口的绘制回调。
-- 限制三：音画同步由宿主的时间戳保证。帧必须带正确的显示时间（用 mpv 的播放时间换算到 `CMTimebase`），否则浮窗画面会与声音错开。
-- C-GPU（libmpv 改 GPU 渲染）之后，可以改为从 IOSurface 支持的 `CVPixelBuffer` 直接入队，省掉拷贝。C-GPU 不是本项的前提。
-- 宿主的最低系统版本低于 macOS 12 时，`supported` 在旧系统上为 `false`。
+Host work and feasibility (libmpv currently renders in software, `vo=libmpv`):
+- The player is not an `AVPlayer`, so only the sample buffer path is possible: the host creates an `AVSampleBufferDisplayLayer`, creates the controller with `AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:playbackDelegate:)` (available since macOS 12), and implements `AVPictureInPictureSampleBufferPlaybackDelegate` (play / pause, playable time range, whether paused, floating window size changes). mpv's own macOS picture-in-picture only belongs to its own `vo=mac` / `vo=gpu` window and is not available for `vo=libmpv`.
+- Frame source: software rendering already produces each frame as RGB pixels in CPU memory. During picture-in-picture, the host copies each frame into a `CVPixelBuffer` (RGB24 to BGRA), wraps it in a `CMSampleBuffer` with a presentation timestamp, and enqueues it to the `AVSampleBufferDisplayLayer`. This is doable, at the cost of one copy and format conversion per frame (about 2 MB/frame at 960×540).
+- Limitation 1: the floating window's picture has the resolution of the render buffer. That is fixed at 960×540 now, so non-16:9 sources get black bars and the picture is blurry when the floating window is enlarged. We suggest determining the render size separately from the video display ratio during picture-in-picture (long side at most 1280); this is the same kind of change as C-SIZE (render size follows the video area).
+- Limitation 2: during picture-in-picture the main window's video area shows no picture, but the host must keep driving mpv rendering at the video frame rate; when the main window is minimized or covered, the system may lower its refresh rate, so rendering must not depend on the main window's draw callback.
+- Limitation 3: A/V sync is guaranteed by the host's timestamps. Frames must carry the correct presentation time (mpv's playback time converted to `CMTimebase`), otherwise the floating window's picture drifts from the sound.
+- After C-GPU (libmpv switches to GPU rendering), `CVPixelBuffer`s backed by IOSurface can be enqueued directly, saving the copy. C-GPU is not a prerequisite for this item.
+- If the host's minimum OS version is below macOS 12, `supported` is `false` on older systems.
 
-**验收**
-- 播放视频时按 `` ` ``：出现系统画中画浮窗并继续播放，主窗口视频区显示「正在以画中画播放」；切到另一个全屏应用，浮窗仍在最上层。
-- 在浮窗上暂停，底栏按钮同步变为暂停；按 Space 继续，浮窗同步。
-- 点浮窗「返回」：画面回到主窗口，播放不中断，菜单取消勾选。点浮窗关闭：退出画中画，播放暂停。
-- 纯音频文件里菜单项灰色，原因「没有视频」。
-- 画中画中播放 1080p 片源 1 分钟：丢帧率低于 1%（`player.stats().framesDropped`），音画同步偏差在 ±40 ms 内（I05 的 `avSyncMs`）。
-- 停用 window 插件时浮窗关闭。
+**Acceptance**
+- Press `` ` `` while playing a video: the system picture-in-picture floating window appears and keeps playing, and the main window's video area shows "Playing in picture-in-picture"; switch to another fullscreen app: the floating window stays on top.
+- Pause on the floating window: the bottom bar button changes to paused accordingly; press Space to resume, and the floating window follows.
+- Click the floating window's "back": the picture returns to the main window without interrupting playback, and the menu item is unchecked. Click the floating window's close button: picture-in-picture exits and playback pauses.
+- In an audio-only file the menu item is grey, with the reason "No video".
+- Play a 1080p source in picture-in-picture for 1 minute: the dropped frame rate is below 1% (`player.stats().framesDropped`), and the A/V sync offset is within ±40 ms (`avSyncMs` from I05).
+- When the window plugin is disabled, the floating window closes.
 
-#### 3a 形态：迷你尺寸（作者 A 决定，2026-10-21；交互对齐轮起所有系统都有，不再置顶）
+#### 3a form: mini size (decided by author A, 2026-10-21; on all systems since the interaction alignment round, no longer on top)
 
-3a 用已有的 W2（`setVideoArea`）与 W3（`setAlwaysOnTop`）提供迷你尺寸，占用画中画的菜单位置与按键。画中画交付后（渲染与画中画轮），迷你尺寸只在 `pictureInPicture.supported` 为 `false` 时（Windows、Linux、无界面）出现在同一位置；两项不会同时出现。
+3a provides mini size with the existing W2 (`setVideoArea`) and W3 (`setAlwaysOnTop`), taking picture-in-picture's menu position and key. After picture-in-picture was delivered (render and picture-in-picture round), mini size appears in the same position only when `pictureInPicture.supported` is `false` (Windows, Linux, headless); the two never appear together.
 
-- 入口：「屏幕 ▸ 迷你尺寸」（勾选），`` ` ``，order 710 / group `screen`。
-- 进入：视频区缩到能放进 400×300 的最大同比例尺寸（16:9 → 400×225、4:3 → 400×300；竖屏 9:16 → 169×300，核心按最小宽度 318 放大，有黑边），保持窗口左上角。不置顶，是否置顶只由 H05 的方式决定（IA-WIN-02，原「同时置顶」作废）。提示「迷你尺寸: 开」。
-- 退出：再按一次，视频区回到进入前的尺寸；提示「迷你尺寸: 关」。全屏中无法恢复尺寸时只结束迷你尺寸。
-- 自动结束（不恢复旧尺寸，不提示）：用户拖动改变窗口（视频区与迷你尺寸相差超过 1 点）、进入全屏、执行 H03 倍数或 H04 适应比例。
-- 不可用：全屏「全屏时不可用」；没有视频「没有视频」（已在迷你尺寸时仍可退出）；调整进行中忙碌。
-- 不保存，重启后不处于迷你尺寸。插件停用时窗口保持当时的尺寸。
+- Entry point: "Screen ▸ Mini Size" (checkbox), `` ` ``, order 710 / group `screen`.
+- Enter: the video area shrinks to the largest same-ratio size that fits in 400×300 (16:9 → 400×225, 4:3 → 400×300; portrait 9:16 → 169×300, which the core enlarges to the minimum width 318, with black bars), keeping the window's top-left corner. Not on top; whether it is on top is decided only by the H05 mode (IA-WIN-02; the former "also on top" is void). Message "Mini size: On".
+- Exit: press again, and the video area returns to the size before entering; message "Mini size: Off". When the size cannot be restored in fullscreen, mini size simply ends.
+- Ends automatically (without restoring the old size, without a message): the user drags to change the window (the video area differs from mini size by more than 1 point), enters fullscreen, or runs an H03 multiple or H04 fit.
+- Unavailable: in fullscreen "Not available in fullscreen"; no video "No video" (can still exit when already in mini size); busy while a resize is in progress.
+- Not saved; after a restart it is not in mini size. When the plugin is disabled, the window keeps its size at that moment.
 
-验收：1080p 片源按 `` ` ``，视频区 400×225；置顶方式为「不置顶」时点 Finder 后播放器被盖住；再按回到原尺寸；迷你尺寸中拖大窗口后勾选消失。
+Acceptance: on a 1080p source press `` ` ``: the video area is 400×225; with the on-top mode "Never", clicking Finder covers the player; pressing again returns to the original size; dragging the window larger during mini size removes the check.
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-新能力 `window.control` 开放下列接口。所有 setter 都是最后写入生效；插件停用时，核心撤销该插件造成的效果（与滤镜的撤销规则一致）。核心不保存这些偏好，由插件在激活时重新应用。
+The new capability `window.control` exposes the following interfaces. All setters are last-write-wins; when a plugin is disabled, the core withdraws the effects that plugin caused (consistent with the withdrawal rule for filters). The core does not save these preferences; the plugin reapplies them at activation.
 
 ```ts
 interface WindowState {
   readonly fullscreen: boolean;
-  readonly videoArea: { width: number; height: number };    // 当前视频区，逻辑点
+  readonly videoArea: { width: number; height: number };    // current video area, logical points
   readonly onTop: boolean;
   readonly pictureInPicture: { supported: boolean; active: boolean };
 }
 ```
 
-| 签名 | 理由 | 来源 |
+| Signature | Reason | Source |
 | --- | --- | --- |
-| `window.state: WindowState`；`window.onChange(listener): Disposable` | 插件需要知道全屏、视频区尺寸、画中画状态，来决定命令是否可用和勾选 | H03–H05、H07 |
-| `window.setVideoArea(size: { width; height }): Promise<{ width; height; clamped: boolean }>` | 窗口尺寸由宿主控制，只有宿主知道底栏和侧栏怎么排、屏幕可见区多大 | H03、H04 |
-| `PlayerState.videoSize: { width; height } \| null` | 显示尺寸（含 DAR、旋转、流尺寸）要随状态推送；`stats()` 只有解码尺寸 | H03、H04、H07 |
-| `window.setPictureInPicture(on: boolean): Promise<void>` | macOS 画中画只能由宿主通过 AVKit（`AVPictureInPictureController` + `AVSampleBufferDisplayLayer`）发起，帧也只在宿主里 | H07 |
-| `window.setAlwaysOnTop(onTop: boolean): Promise<void>` | 窗口层级只能由宿主设置；同时作用于浮动侧栏和新开的工具窗口 | H05 |
-| `window.setCursorAutoHide(mode: "fullscreen" \| "playing"): Promise<void>` | 指针显隐和空闲计时在宿主事件循环里 | B30 |
+| `window.state: WindowState`; `window.onChange(listener): Disposable` | The plugin needs to know fullscreen, video area size and picture-in-picture state to decide whether commands are available and checked | H03–H05, H07 |
+| `window.setVideoArea(size: { width; height }): Promise<{ width; height; clamped: boolean }>` | The window size is controlled by the host; only the host knows how the bottom bar and sidebar are laid out and how large the visible screen area is | H03, H04 |
+| `PlayerState.videoSize: { width; height } \| null` | The display size (including DAR, rotation, stream size) has to be pushed with the state; `stats()` only has the decoded size | H03, H04, H07 |
+| `window.setPictureInPicture(on: boolean): Promise<void>` | macOS picture-in-picture can only be started by the host through AVKit (`AVPictureInPictureController` + `AVSampleBufferDisplayLayer`), and the frames exist only in the host | H07 |
+| `window.setAlwaysOnTop(onTop: boolean): Promise<void>` | The window level can only be set by the host; it applies to the floating sidebar and newly opened tool windows as well | H05 |
+| `window.setCursorAutoHide(mode: "fullscreen" \| "playing"): Promise<void>` | Pointer visibility and the idle timer live in the host event loop | B30 |
 
 ---
 
-## 播放历史（`history`）
+## Playback history (`history`)
 
-**位置**：`src/plugins/history/`（新插件，待创建）
+**Location**: `src/plugins/history/` (new plugin, to be created)
 
-### 定位
+### Scope
 
-history 记录「用户打开过什么、看到哪里」：最近播放菜单（A12）、记忆播放位置并在下次打开时继续（B25）。它不关心来源是谁打开的：底栏、播放列表、站点插件、拖放打开的来源都只通过 `player.state` 被看到并记录。重新打开时调用 `player.open`。
+history records "what the user opened and how far they watched": the recent playback menu (A12), and remembering the playback position to resume next time (B25). It does not care who opened a source: sources opened from the bottom bar, the playlist, site plugins or drag and drop are all only seen and recorded through `player.state`. Reopening calls `player.open`.
 
-边界：history 不能和 playlist 通信。从「最近播放」重新打开一个文件后，用户若在 playlist 设了 A13「加入同文件夹全部文件」，playlist 会自己把整个文件夹加入——两个插件各自根据核心状态行动，彼此不知道对方。
+Boundaries: history cannot communicate with playlist. After a file is reopened from "Recently Played", if the user has set A13 "Add All Files in the Folder" in playlist, playlist adds the whole folder itself — the two plugins each act on the core state without knowing about each other.
 
-manifest 能力：`playback.read`、`playback.control`、`events`、`commands`、`ui.window`、`ui.osd`、`ui.dialog`。本插件**不需要核心新增 API**。
+Manifest capabilities: `playback.read`, `playback.control`, `events`, `commands`, `ui.window`, `ui.osd`, `ui.dialog`. This plugin **needs no new core API**.
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| A12 | 最近播放历史 | ✗ | 否 |
-| B25 | 记忆播放位置 | ✗ | 否 |
+| A12 | Recent playback history | ✗ | No |
+| B25 | Remember playback position | ✗ | No |
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-| 菜单路径 | order | group | 默认绑定 | 编号 |
+| Menu path | order | group | Default binding | ID |
 | --- | --- | --- | --- | --- |
-| 打开 ▸ 最近播放 ▸ 〈最多 20 条记录〉 | 114 | recent | | A12 |
-| 打开 ▸ 最近播放 ▸ 移除无效记录 | 114 | recent-manage | | A12 |
-| 打开 ▸ 最近播放 ▸ 清除记录 | 114 | recent-manage | | A12 |
-| 打开 ▸ 最近播放 ▸ 记录播放历史（勾选） | 114 | recent-manage | | A12 |
-| 播放 ▸ 记忆播放位置 ▸ 不记忆 / 自动继续 / 每次询问（radio） | 250–252 | domain | | B25 |
-| 播放 ▸ 记忆播放位置 ▸ 同时记忆音频文件（勾选） | 253 | resume-options | | B25 |
-| 播放 ▸ 记忆播放位置 ▸ 清除所有记忆点 | 254 | resume-options | | B25 |
+| Open ▸ Recently Played ▸ <at most 20 entries> | 114 | recent | | A12 |
+| Open ▸ Recently Played ▸ Remove Invalid Entries | 114 | recent-manage | | A12 |
+| Open ▸ Recently Played ▸ Clear Entries | 114 | recent-manage | | A12 |
+| Open ▸ Recently Played ▸ Record Playback History (checkbox) | 114 | recent-manage | | A12 |
+| Playback ▸ Resume Playback ▸ Don't Resume / Resume Automatically / Ask Every Time (radio) | 250–252 | domain | | B25 |
+| Playback ▸ Resume Playback ▸ Also Remember Audio Files (checkbox) | 253 | resume-options | | B25 |
+| Playback ▸ Resume Playback ▸ Clear All Saved Positions | 254 | resume-options | | B25 |
 
-说明：
+Notes:
 
-- 「打开 ▸ 最近播放」的项全部用 order 114，靠声明顺序排列（reference §4：order 相同时按同一插件的声明顺序），子菜单因此位于「打开字幕…」（113）之后。
-- 「播放 ▸ 记忆播放位置 ▸」用 250–254，接在 playlist 的 230–249 之后；需要把 250–259 登记到 menus.md 的分配表给 history。
+- All items under "Open ▸ Recently Played" use order 114 and are ordered by declaration (reference §4: equal order follows the declaration order of the same plugin), so the submenu sits after "Open Subtitle…" (113).
+- "Playback ▸ Resume Playback ▸" uses 250–254, after playlist's 230–249; 250–259 has to be registered to history in the allocation table of menus.md.
 
-### A12 最近播放历史
+### A12 Recent playback history
 
-**需求**：右键菜单「打开 ▸ 最近播放」列出最近打开过的文件和链接（新的在上），点一项即重新打开；可清除、可关闭记录。
+**Requirement**: the context menu "Open ▸ Recently Played" lists the files and links opened recently (newest on top); clicking an item reopens it; the history can be cleared and recording can be turned off.
 
-**入口**：见菜单表。
+**Entry points**: see the menu table.
 
-**行为细节**：
+**Behavior details**:
 
-1. **记录时机**：`player.onChange` 中，某个 `sourceId` 第一次进入 `phase === "ready"`，且 `kind === "media"`、`source` 非空时记录一次。`phase === "error"` 的来源不记录。模拟器等 `kind === "stream"` 不记录。同一 `sourceId` 的重播不重复记录。
-2. **身份**：本地文件用 `realpath`（失败时用原路径）；URL 用原文，但去掉 `#` 片段。已存在则移到最前并更新时间。
-3. **容量**：保存最多 100 条，菜单显示前 20 条；超过 100 条丢弃最旧的。
-4. **菜单项文字**：`<序号 1–9、0、然后无>  <显示名>`，有 B25 记忆点时后接 `（12:34）`。显示名：本地文件取文件名；URL 取 `主机名 › 最后一段路径`（解码，最长 60 字符，中间省略）。URL 带账户（`user:pass@`）时显示名不含账户，存储保留原文。菜单文字最长 80 字符。
-5. **点击**：`player.open(source)`（无条件，用户发起）。本地文件不存在（打开前 `fs.access` 检查）时不打开，OSD「文件不存在：<文件名>」，该项保留（可用「移除无效记录」清理）。打开失败（`backend` 等）：OSD「无法打开：<原因>」。
-6. **菜单重建**：记录变化后释放子作用域、按新内容重建（reference §4 的做法），500 ms 内的多次变化合并。
-7. **移除无效记录**：并发检查所有本地记录，删除不存在的；URL 保留。OSD「已移除 N 条无效记录」。
-8. **清除记录**：直接清空（不确认），OSD「已清除播放记录」。不清除 B25 记忆点（另有命令）。
-9. **记录播放历史**（默认开）：关闭后不再新增记录，已有记录保留；菜单仍显示已有记录。隐私：记录文件只在本机数据目录。
-10. 没有记录时子菜单显示一个禁用项「（无记录）」。
+1. **When to record**: in `player.onChange`, record once when a `sourceId` first reaches `phase === "ready"` with `kind === "media"` and a non-empty `source`. Sources with `phase === "error"` are not recorded. `kind === "stream"` sources such as simulators are not recorded. Replays of the same `sourceId` are not recorded again.
+2. **Identity**: local files use `realpath` (the original path when that fails); URLs use the literal text with the `#` fragment removed. If it already exists, it moves to the top and its time is updated.
+3. **Capacity**: at most 100 entries are saved and the first 20 are shown in the menu; beyond 100, the oldest are discarded.
+4. **Menu item text**: `<number 1–9, 0, then none>  <display name>`, followed by `(12:34)` when there is a B25 saved position. Display name: the file name for local files; `host › last path segment` for URLs (decoded, at most 60 characters, shortened in the middle). When a URL carries credentials (`user:pass@`), the display name leaves them out, while storage keeps the original. Menu text is at most 80 characters.
+5. **Click**: `player.open(source)` (unconditional, started by the user). When a local file does not exist (checked with `fs.access` before opening), it is not opened, OSD "File not found: <file name>", and the entry is kept (it can be cleaned up with "Remove Invalid Entries"). Open failure (`backend`, etc.): OSD "Cannot open: <reason>".
+6. **Menu rebuild**: after the entries change, the child scope is released and rebuilt with the new content (as in reference §4); several changes within 500 ms are merged.
+7. **Remove Invalid Entries**: check all local entries concurrently and delete those that do not exist; URLs are kept. OSD "Removed N invalid entries".
+8. **Clear Entries**: clears directly (no confirmation), OSD "Playback history cleared". B25 saved positions are not cleared (there is a separate command).
+9. **Record Playback History** (on by default): when off, no new entries are added and existing entries are kept; the menu still shows them. Privacy: the history file is only in the local data directory.
+10. With no entries, the submenu shows one disabled item "(No Entries)".
 
-**持久化**：`<dataDirectory>/recent.json`：`{ version: 1, enabled: true, items: [{ key, source, kind: "file"|"url", openedAt }] }`，用 `plugin.storage.json("recent")` 读写，最后一次变化后 1 秒写入（临时文件加改名）。文件权限随系统默认（第 2 轮迁移到 `storage` 后不再单独设 0600；数据目录位于只有本用户能进入的 `~/Library` 下）。读坏的文件改名为 `.bad-<时间戳>`。
+**Persistence**: `<dataDirectory>/recent.json`: `{ version: 1, enabled: true, items: [{ key, source, kind: "file"|"url", openedAt }] }`, read and written with `plugin.storage.json("recent")`, written 1 second after the last change (temporary file plus rename). File permissions follow the system default (after the round 2 migration to `storage`, 0600 is no longer set separately; the data directory is under `~/Library`, which only this user can enter). A corrupt file is renamed to `.bad-<timestamp>`.
 
-**核心依赖**：现有 `player.state`、`player.onChange`、`player.open`、`commands.add` + 子作用域重建。
+**Core dependencies**: the existing `player.state`, `player.onChange`, `player.open`, `commands.add` + child scope rebuild.
 
-**验收**：
-- 依次用底栏打开 a、b、再打开 a：菜单顺序 a、b。
-- 从播放列表播放 c（playlist 打开）：c 也出现在最前（记录不区分打开者）。
-- 删除 b 的文件后点 b：OSD「文件不存在：b.mkv」，不打开；「移除无效记录」后 b 消失。
-- 关闭「记录播放历史」后打开 d：菜单无 d。
-- 重启后菜单保持。
+**Acceptance**:
+- Open a, then b, then a again from the bottom bar: the menu order is a, b.
+- Play c from the playlist (opened by playlist): c also appears at the top (recording does not distinguish who opened it).
+- Delete b's file and click b: OSD "File not found: b.mkv", not opened; after "Remove Invalid Entries" b is gone.
+- Turn "Record Playback History" off and open d: d is not in the menu.
+- The menu is kept after a restart.
 
-**说明**：最近播放放在「打开 ▸ 最近播放」，与 macOS「最近使用」习惯一致。
+**Notes**: recent playback goes in "Open ▸ Recently Played", consistent with the macOS "Recent Items" habit.
 
-### B25 记忆播放位置
+### B25 Remember playback position
 
-**需求**：中途停止的文件，下次打开时从上次的位置继续；可选每次询问。
+**Requirement**: a file stopped partway continues from the last position the next time it is opened; optionally ask every time.
 
-**入口**：「播放 ▸ 记忆播放位置 ▸」：不记忆 / **自动继续**（默认）/ 每次询问；「同时记忆音频文件」（默认关）；「清除所有记忆点」。
+**Entry point**: "Playback ▸ Resume Playback ▸": Don't Resume / **Resume Automatically** (default) / Ask Every Time; "Also Remember Audio Files" (off by default); "Clear All Saved Positions".
 
-**行为细节**：
+**Behavior details**:
 
-1. **适用范围**：`kind === "media"`、`duration` 已知且 ≥ 60 秒的来源（直播流 `duration` 为空，不记）。视频总是适用；音频（按媒体扩展名表判断；扩展名不在表中时用 `player.stats()`，`video` 为 `null` 视为音频）只在「同时记忆音频文件」开启时适用。
-2. **记录**：跟踪当前来源的最后已知 `position`：
-   - 播放中每 5 秒、暂停时、`sourceId` 变化前（用变化前最后一次看到的位置）、插件停用时，写入记忆点；
-   - 位置 < 10 秒：不记（并删除已有记忆点，视为从头开始）；
-   - 位置 > `duration − 15 秒` 或 ≥ 95%，或自然播完（`endReason === "natural"`）：删除记忆点（已看完）。
-   - 身份与 A12 相同（realpath / URL）。另存文件大小，下次打开时大小不同（文件被替换）则作废记忆点。
-3. **恢复**（模式「自动继续」）：新的 `sourceId` 第一次进入 `phase === "ready"`，且存在有效记忆点时：`player.seek(记忆点 − 2 秒, { ifCurrent: readyState })`（回退 2 秒以便接上剧情，最小 0）。OSD：「从 12:34 继续播放」。
-   - `stale`（在 ready 之后用户或别的插件已经跳转、暂停或换了来源）：放弃，不提示。
-   - 同一 `sourceId` 的重播（`restart`，例如 playlist 单个循环）不恢复。
-   - 记忆点超过 `duration − 15 秒`（文件被截短等）：不恢复并删除。
-4. **每次询问**：ready 后照常从头播放，同时打开小窗口 `ui/resume.slint`（300×110）：「之前有未播放完的。接着播放吗？（12:34）」[接着播放]（默认按钮）[从头播放]。点「接着播放」按第 3 条跳转（`ifCurrent` 用窗口打开时的 ready 状态，期间来源若已改变则 `stale`，窗口关闭不提示）。10 秒无操作或来源改变时窗口自动关闭，视为从头播放。不暂停播放（interaction-requirements §3：显示工具界面不应擅自暂停）。
-5. **不记忆**：不读不写；已有记忆点保留（切回模式后继续生效）。
-6. **清除所有记忆点**：清空，OSD「已清除所有记忆点」。
-7. 容量：最多 1000 条，LRU（按最后更新时间）。
-8. 已知限制：恢复是在 ready 之后跳转，开头可能闪过约一帧画面和极短声音；B26 快速推进到下一项后若该项有记忆点，会在切换后跳转（位置正确）。
-9. A12 菜单项上的 `（12:34）` 取自本表。
+1. **Scope**: sources with `kind === "media"` and a known `duration` of ≥ 60 seconds (live streams have an empty `duration` and are not recorded). Video always applies; audio (decided by the media extension table; for extensions not in the table, by `player.stats()`, where `video` being `null` means audio) only applies when "Also Remember Audio Files" is on.
+2. **Recording**: track the last known `position` of the current source:
+   - Write the saved position every 5 seconds during playback, on pause, before `sourceId` changes (using the last position seen before the change), and when the plugin is disabled;
+   - Position < 10 seconds: not recorded (and an existing saved position is deleted, treated as starting from the beginning);
+   - Position > `duration − 15 seconds` or ≥ 95%, or a natural end (`endReason === "natural"`): delete the saved position (watched to the end).
+   - Identity is the same as A12 (realpath / URL). The file size is saved too; if the size differs at the next open (the file was replaced), the saved position is void.
+3. **Restore** (mode "Resume Automatically"): when a new `sourceId` first reaches `phase === "ready"` and a valid saved position exists: `player.seek(<saved position> − 2 seconds, { ifCurrent: readyState })` (2 seconds back to pick up the story, minimum 0). OSD: "Resuming from 12:34".
+   - `stale` (after ready, the user or another plugin has already seeked, paused or changed the source): give up, no message.
+   - Replays of the same `sourceId` (`restart`, for example playlist loop one) are not restored.
+   - The saved position is beyond `duration − 15 seconds` (the file was shortened, etc.): not restored, and deleted.
+4. **Ask Every Time**: after ready, playback starts from the beginning as usual, and a small window `ui/resume.slint` (300×110) opens: "You didn't finish this last time. Continue? (12:34)" [Continue] (default button) [Start Over]. Clicking "Continue" seeks as in item 3 (`ifCurrent` uses the ready state from when the window opened; if the source has changed meanwhile, it is `stale` and the window closes without a message). After 10 seconds without action, or when the source changes, the window closes automatically, which counts as starting over. Playback is not paused (interaction-requirements §3: showing a tool interface should not pause on its own).
+5. **Don't Resume**: nothing is read or written; existing saved positions are kept (they apply again after switching the mode back).
+6. **Clear All Saved Positions**: clears them, OSD "All saved positions cleared".
+7. Capacity: at most 1000 entries, LRU (by last update time).
+8. Known limitations: restoring seeks after ready, so about one frame of picture and a very short sound may flash at the start; after B26 fast-advances to the next item, if that item has a saved position, it seeks after the switch (at the correct position).
+9. The `(12:34)` on A12 menu items is taken from this table.
 
-**持久化**：`<dataDirectory>/positions.json`：`{ version: 1, mode: "auto"|"ask"|"off", audio: false, items: { [key]: { position, duration, size, updatedAt } } }`；用 `plugin.storage.json("positions")` 读写；记忆点每 5 秒更新一次，内容变化后 300 ms 写入，插件停用时写完。
+**Persistence**: `<dataDirectory>/positions.json`: `{ version: 1, mode: "auto"|"ask"|"off", audio: false, items: { [key]: { position, duration, size, updatedAt } } }`; read and written with `plugin.storage.json("positions")`; saved positions are updated every 5 seconds, written 300 ms after content changes, and fully written when the plugin is disabled.
 
-**核心依赖**：现有 `player.onChange`（`position`、`duration`、`phase`、`endReason`、`sourceId`）、`player.seek({ ifCurrent })`、`player.stats()`、`windows.create`、`osd.show`、`plugin.dataDirectory`。新增无：恢复以 ready 状态为条件跳转，与其它插件的操作冲突时由 `stale` 自然让位。
+**Core dependencies**: the existing `player.onChange` (`position`, `duration`, `phase`, `endReason`, `sourceId`), `player.seek({ ifCurrent })`, `player.stats()`, `windows.create`, `osd.show`, `plugin.dataDirectory`. Nothing new: restoring seeks conditioned on the ready state, and when it conflicts with other plugins' actions it yields naturally through `stale`.
 
-**验收**：
-- 播放 10 分钟视频到 05:00 后关闭，再从任意入口（底栏、列表、最近播放）打开：从 04:58 开始，OSD「从 05:00 继续播放」。
-- 播放到 9:50（距结束 10 秒）关闭：再次打开从头开始，记忆点已删除。
-- 30 秒的短片：不记忆。
-- mp3（默认设置）：不记忆；开启「同时记忆音频文件」后记忆。
-- 「每次询问」模式：打开后从头播放并弹窗；点「接着播放」跳到记忆点；10 秒不操作窗口关闭、继续从头播放。
-- 打开后 ready 之前用户已按 → 跳转：不再恢复（`stale`）。
-- 强制退出进程后重启：最多丢失 5 秒的位置。
+**Acceptance**:
+- Play a 10-minute video to 05:00 and close it, then open it from any entry point (bottom bar, list, recent playback): it starts at 04:58, OSD "Resuming from 05:00".
+- Close at 9:50 (10 seconds before the end): opening again starts from the beginning, and the saved position has been deleted.
+- A 30-second short clip: not remembered.
+- mp3 (default settings): not remembered; remembered after turning "Also Remember Audio Files" on.
+- "Ask Every Time" mode: after opening, it plays from the beginning and the window pops up; clicking "Continue" jumps to the saved position; after 10 seconds without action the window closes and playback continues from the beginning.
+- After opening, the user presses → to seek before ready: no restore (`stale`).
+- Restart after force-quitting the process: at most 5 seconds of position are lost.
 
-**说明**：回退 2 秒、95% 视为看完、60 秒以下不记，是我们定义的阈值。
+**Notes**: going back 2 seconds, counting 95% as watched and not recording under 60 seconds are thresholds we defined.
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-无。本插件全部功能用现有 SDK v2 接口完成。
+None. All features of this plugin are done with existing SDK v2 interfaces.
 
 ---
 
-## 章节、书签与区段（`marks`）
+## Chapters, bookmarks and ranges (`marks`)
 
-**位置**：`src/plugins/marks/`（第 3a 轮新建：B21、B23；B22 在 3b）
+**Location**: `src/plugins/marks/` (created in round 3a: B21, B23; B22 in 3b)
 
-### 定位
+### Scope
 
-marks 插件负责播放时间轴上的「点」和「段」：媒体自带的章节（只读）、用户的书签（增删改、按文件持久化）、A-B 区段循环。它提供菜单、快捷键和「章节/书签」列表窗口。
+The marks plugin owns the "points" and "ranges" on the playback timeline: the media's own chapters (read-only), the user's bookmarks (add, delete, edit, persisted per file), and A-B range loops. It provides menus, shortcuts and the "Chapters and Bookmarks" list window.
 
-边界：
-- **章节数据**来自媒体，由核心从 mpv 读出；第 3a 轮实现为按需读取的 `player.chapters()`（不进 `PlayerState`），marks 在每个来源第一次就绪时读一次。
-- **A-B 循环**由核心执行（mpv `ab-loop-a/b`）。插件保存起点、止点和开关，决定什么时候提交给核心。
-- **进度条标记（B22）**：进度条属于 playback 插件，marks 不能直接画上去，也不能调用 playback。本文选择**核心提供通用的「时间轴标记层」**：每个插件可以向核心发布一层标记，核心合并后公开给所有插件读取。marks 发布章节和书签标记，playback 读取合并结果画在进度条上。理由见 B22。
+Boundaries:
+- **Chapter data** comes from the media and is read from mpv by the core; round 3a implements it as the on-demand `player.chapters()` (not in `PlayerState`), which marks reads once when each source first becomes ready.
+- **A-B loops** are run by the core (mpv `ab-loop-a/b`). The plugin keeps the start point, end point and toggle, and decides when to submit them to the core.
+- **Seek bar marks (B22)**: the seek bar belongs to the playback plugin; marks cannot draw on it directly or call playback. This document chooses **a general "timeline mark layer" provided by the core**: each plugin can publish one layer of marks to the core, which merges them and makes them readable by all plugins. marks publishes chapter and bookmark marks, and playback reads the merged result and draws it on the seek bar. Reasons in B22.
 
-manifest 能力：`commands`、`playback.read`、`events`、`playback.control`、`ui.window`、`ui.osd`、`ui.dialog`（清空书签确认）；3b 加 `timeline.marks`（新能力）。
+Manifest capabilities: `commands`, `playback.read`, `events`, `playback.control`, `ui.window`, `ui.osd`, `ui.dialog` (confirmation for clearing bookmarks); 3b adds `timeline.marks` (new capability).
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| B21 | 章节 / 书签菜单与跳转、书签管理 | ✓ 3a | `player.chapters()`（3a 已有） |
-| B22 | 进度条上的章节 / 书签标记 | ✗ | 时间轴标记层 `plugin.timeline.*`；playback 配合绘制 |
-| B23 | A-B 区段循环（设点、微调、开关、当前区段循环） | ✓ 3a | `player.setLoop()`、`PlayerState.loop`（3a 已有） |
+| B21 | Chapter / bookmark menu and jumping, bookmark management | ✓ 3a | `player.chapters()` (already in 3a) |
+| B22 | Chapter / bookmark markers on the seek bar | ✗ | Timeline mark layer `plugin.timeline.*`; playback draws them |
+| B23 | A-B range loop (set points, fine-tune, toggle, loop the current range) | ✓ 3a | `player.setLoop()`, `PlayerState.loop` (already in 3a) |
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-「播放」子菜单内的新增项。playback 已用 201–226，playlist 已用 230–249，window 用 241，history 用 250–254（播放 ▸ 记忆播放位置），marks 用 260–289。
+New items in the "Playback" submenu. playback already uses 201–226, playlist 230–249, window 241, history 250–254 (Playback ▸ Resume Playback); marks uses 260–289.
 
-| 菜单路径 | order | group | 默认绑定 | 编号 |
+| Menu path | order | group | Default binding | ID |
 | --- | --- | --- | --- | --- |
-| 播放 ▸ 章节/书签 ▸ 章节/书签列表… | 260 | marks-list | H | B21 |
-| 播放 ▸ 章节/书签 ▸ 添加书签 | 261 | marks-edit | P | B21 |
-| 播放 ▸ 章节/书签 ▸ 上一书签/章节 | 262 | marks-edit | Shift+PageUp | B21 |
-| 播放 ▸ 章节/书签 ▸ 下一书签/章节 | 263 | marks-edit | Shift+PageDown | B21 |
-| 播放 ▸ 章节/书签 ▸ 上一章节 | 264 | marks-edit | Ctrl+PageUp | B21 |
-| 播放 ▸ 章节/书签 ▸ 下一章节 | 265 | marks-edit | Ctrl+PageDown | B21 |
-| 播放 ▸ 章节/书签 ▸ （动态）章节 1…N（radio，当前章节为选中） | 10000 + i（子菜单内部编号，见 B21） | marks-chapters | | B21 |
-| 播放 ▸ 章节/书签 ▸ （动态）书签 1…N | 20000 + i | marks-bookmarks | | B21 |
-| 播放 ▸ 章节/书签 ▸ 在进度条上显示标记（勾选） | 30000 | marks-option | | B22（3b） |
-| 播放 ▸ A-B 区段循环 ▸ 设定起点 | 270 | ab-a | `[` | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 解除起点 | 271 | ab-a | `{`（Shift+[） | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 起点后退 0.1 秒 | 272 | ab-a | Ctrl+[ | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 起点前进 0.1 秒 | 273 | ab-a | Alt+[ | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 设定止点 | 274 | ab-b | `]` | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 解除止点 | 275 | ab-b | `}`（Shift+]） | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 止点后退 0.1 秒 | 276 | ab-b | Ctrl+] | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 止点前进 0.1 秒 | 277 | ab-b | Alt+] | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 区段整体后退 0.1 秒 | 278 | ab-both | Ctrl+Alt+[ | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 区段整体前进 0.1 秒 | 279 | ab-both | Ctrl+Alt+] | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 循环当前章节/书签区段 | 280 | ab-toggle | Alt+\ | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 区段循环 开/关（勾选） | 281 | ab-toggle | `\` | B23 |
-| 播放 ▸ A-B 区段循环 ▸ 循环次数 ▸ 无限 / 1 / 2 / 3 / 5 / 10（radio） | 282–287 | ab-count | | B23 |
+| Playback ▸ Chapters and Bookmarks ▸ Chapter and Bookmark List… | 260 | marks-list | H | B21 |
+| Playback ▸ Chapters and Bookmarks ▸ Add Bookmark | 261 | marks-edit | P | B21 |
+| Playback ▸ Chapters and Bookmarks ▸ Previous Bookmark or Chapter | 262 | marks-edit | Shift+PageUp | B21 |
+| Playback ▸ Chapters and Bookmarks ▸ Next Bookmark or Chapter | 263 | marks-edit | Shift+PageDown | B21 |
+| Playback ▸ Chapters and Bookmarks ▸ Previous Chapter | 264 | marks-edit | Ctrl+PageUp | B21 |
+| Playback ▸ Chapters and Bookmarks ▸ Next Chapter | 265 | marks-edit | Ctrl+PageDown | B21 |
+| Playback ▸ Chapters and Bookmarks ▸ (dynamic) chapters 1…N (radio, the current chapter selected) | 10000 + i (numbering inside the submenu, see B21) | marks-chapters | | B21 |
+| Playback ▸ Chapters and Bookmarks ▸ (dynamic) bookmarks 1…N | 20000 + i | marks-bookmarks | | B21 |
+| Playback ▸ Chapters and Bookmarks ▸ Show Marks on Seek Bar (checkbox) | 30000 | marks-option | | B22 (3b) |
+| Playback ▸ A-B Loop ▸ Set Start Point | 270 | ab-a | `[` | B23 |
+| Playback ▸ A-B Loop ▸ Clear Start Point | 271 | ab-a | `{` (Shift+[) | B23 |
+| Playback ▸ A-B Loop ▸ Start Point Back 0.1 s | 272 | ab-a | Ctrl+[ | B23 |
+| Playback ▸ A-B Loop ▸ Start Point Forward 0.1 s | 273 | ab-a | Alt+[ | B23 |
+| Playback ▸ A-B Loop ▸ Set End Point | 274 | ab-b | `]` | B23 |
+| Playback ▸ A-B Loop ▸ Clear End Point | 275 | ab-b | `}` (Shift+]) | B23 |
+| Playback ▸ A-B Loop ▸ End Point Back 0.1 s | 276 | ab-b | Ctrl+] | B23 |
+| Playback ▸ A-B Loop ▸ End Point Forward 0.1 s | 277 | ab-b | Alt+] | B23 |
+| Playback ▸ A-B Loop ▸ Move Range Back 0.1 s | 278 | ab-both | Ctrl+Alt+[ | B23 |
+| Playback ▸ A-B Loop ▸ Move Range Forward 0.1 s | 279 | ab-both | Ctrl+Alt+] | B23 |
+| Playback ▸ A-B Loop ▸ Loop Current Chapter or Bookmark Range | 280 | ab-toggle | Alt+\ | B23 |
+| Playback ▸ A-B Loop ▸ A-B Loop On/Off (checkbox) | 281 | ab-toggle | `\` | B23 |
+| Playback ▸ A-B Loop ▸ Loop Count ▸ Endless / 1 / 2 / 3 / 5 / 10 (radio) | 282–287 | ab-count | | B23 |
 
-冲突检查与取舍：
-- PgUp/PgDn 没加修饰键时是 playback 的「上一个/下一个」，本插件只用加了 Shift 或 Ctrl 的组合，不冲突：书签/章节用 Shift+PgUp/PgDn，章节用 Ctrl+PgUp/PgDn。
-- `P` 在播放列表获得焦点时是 playlist 的面板范围「播放所选」。面板范围先于全局查找，所以列表有焦点时按 P 是播放所选，视频或底栏有焦点时才是添加书签。接受这个差异。
+Conflict check and trade-offs:
+- PgUp/PgDn without modifiers are playback's "previous / next"; this plugin only uses combinations with Shift or Ctrl, so there is no conflict: bookmarks/chapters use Shift+PgUp/PgDn, chapters use Ctrl+PgUp/PgDn.
+- With the playlist focused, `P` is playlist's panel-scope "play selected". Panel scope is looked up before global, so with the list focused P plays the selection, and only with the video or bottom bar focused does it add a bookmark. This difference is accepted.
 
-### B21 章节 / 书签菜单与跳转
+### B21 Chapter / bookmark menu and jumping
 
-**需求**
-- **菜单**：「播放 ▸ 章节/书签」下按顺序列出：
-  - 操作项。
-  - 章节：`01  Opening    00:00`，标题为 `null` 时写作 `章节 1`，当前章节显示单选点。
-  - 书签：`书签标题    01:23:45`，按时间排序。
-  - 「在进度条上显示标记」开关。
-  - 选择某一项即跳到对应时间。
-- **快捷键**：P 在当前位置添加书签；Shift+PgUp / Shift+PgDn 在章节与书签合并后的时间点中跳到上一个 / 下一个；Ctrl+PgUp / Ctrl+PgDn 只在章节间跳。
-- **书签管理窗口「章节/书签」（H）**：
-  - 列表显示章节（只读）和书签，按时间排序，三列：类型图标 / 时间 / 标题。
-  - 双击跳转。
-  - 选中书签后可以：改标题（行内编辑）、改时间（时间输入框 `h:mm:ss.d`）、移除。
-  - 底部按钮：`添加书签`、`移除`、`清空书签`（确认后清空当前文件的全部书签）。
-  - 顶部搜索框按标题过滤。
-- 书签字段：`time`（秒，保留 1 位小数）、`title`（1–100 字符，默认 `书签 N`，N 为当前文件书签数 + 1）、`created`（ISO 时间）。
-- 每个文件最多 500 个书签。
+**Requirement**
+- **Menu**: under "Playback ▸ Chapters and Bookmarks", in order:
+  - The action items.
+  - Chapters: `01  Opening    00:00`; when the title is `null`, written as `Chapter 1`; the current chapter shows a radio dot.
+  - Bookmarks: `bookmark title    01:23:45`, sorted by time.
+  - The "Show Marks on Seek Bar" toggle.
+  - Choosing an item jumps to its time.
+- **Shortcuts**: P adds a bookmark at the current position; Shift+PgUp / Shift+PgDn jump to the previous / next point among chapters and bookmarks merged; Ctrl+PgUp / Ctrl+PgDn jump only between chapters.
+- **Bookmark management window "Chapters and Bookmarks" (H)**:
+  - The list shows chapters (read-only) and bookmarks, sorted by time, in three columns: type icon / time / title.
+  - Double-click to jump.
+  - With a bookmark selected, you can: change the title (inline edit), change the time (time input box `h:mm:ss.d`), remove it.
+  - Bottom buttons: `Add Bookmark`, `Remove`, `Clear Bookmarks` (clears all bookmarks of the current file after confirmation).
+  - A search box at the top filters by title.
+- Bookmark fields: `time` (seconds, one decimal place), `title` (1–100 characters, default `Bookmark N`, where N is the current file's bookmark count + 1), `created` (ISO time).
+- At most 500 bookmarks per file.
 
-**入口**：见菜单表；H 打开窗口，再按 H 时把已打开的窗口带到前面。
+**Entry points**: see the menu table; H opens the window, and pressing H again brings the open window to the front.
 
-**行为细节**
-- 「上一个」以 `position − 1 秒` 为基准查找，这样连续按键可以越过刚到达的点；「下一个」以 `position + 0.5 秒` 为基准。前后没有可跳的点时，提示 `没有上一个书签/章节` / `没有下一个书签/章节`。
-- 添加书签：`phase !== "ready"` 或不能跳转（直播流）时禁用，`reason: "当前来源不能添加书签"`。同一时间点 ±0.5 秒内已有书签时不重复添加，提示 `此处已有书签`。成功时提示 `书签：书签 3 已添加（01:23）`。
-- 跳转：章节和书签都用 `player.seek(time)`。成功时提示 `章节定位：Opening` / `书签：定位到 书签 3`。
-- 动态菜单：章节或书签变化时，释放子作用域并重建。order 分配：章节项 `10000 + i`，书签项 `20000 + i`，「在进度条上显示标记」用 30000。这样章节组和书签组各自连续，组之间画分隔线（这一子菜单内部的 order 与外层无关）。菜单里最多列 50 个章节和 50 个书签；超出时最后一项为「更多…（共 N 项）」，点击打开窗口。
-- **书签的媒体标识**：本地文件用 `realpath`；URL 用 `player.state.source` 原文。同时记录文件大小，用来在列表顶部提示「文件已改变，书签时间可能不准」，书签不删除。
-- 没有媒体时，「添加 / 上一 / 下一」禁用；菜单只显示操作项；窗口显示「未打开媒体」。
-- 来源切换时窗口内容随之切换；行内编辑未提交的内容被丢弃。
-- 停用插件后书签保留在数据目录。
+**Behavior details**
+- "Previous" searches from `position − 1 second`, so repeated presses can pass the point just reached; "next" searches from `position + 0.5 seconds`. When there is no point before or after, the message is `No previous bookmark or chapter` / `No next bookmark or chapter`.
+- Add bookmark: disabled when `phase !== "ready"` or the source cannot seek (live stream), with `reason: "Can't add bookmarks to this source"`. When a bookmark already exists within ±0.5 seconds of the same point, it is not added again, with the message `A bookmark already exists here`. On success the message is `Bookmark added: Bookmark 3 (01:23)`.
+- Jump: both chapters and bookmarks use `player.seek(time)`. On success the message is `Chapter: Opening` / `Bookmark: Bookmark 3`.
+- Dynamic menu: when chapters or bookmarks change, the child scope is released and rebuilt. Order allocation: chapter items `10000 + i`, bookmark items `20000 + i`, "Show Marks on Seek Bar" 30000. This keeps the chapter group and the bookmark group each contiguous, with separators between the groups (the order inside this submenu is independent of the outer level). The menu lists at most 50 chapters and 50 bookmarks; beyond that the last item is "More… (N in all)", which opens the window when clicked.
+- **Media identity for bookmarks**: local files use `realpath`; URLs use the literal `player.state.source`. The file size is recorded too, used to show "The file has changed; bookmark times may be off" at the top of the list; bookmarks are not deleted.
+- With no media, "Add / Previous / Next" are disabled; the menu only shows the action items; the window shows "No media open".
+- On source change the window content switches accordingly; uncommitted inline edits are discarded.
+- After the plugin is disabled, bookmarks stay in the data directory.
 
-**界面**：「章节/书签」窗口 380×420，最小 320×300。顶部搜索框（21px）；列表三列（类型 16px 图标 / 时间 70px 等宽数字 / 标题），行高 18px；选中书签时，下方编辑区显示「时间」和「标题」两个输入框（21px，行距 26px）；底部按钮行 `添加书签` `移除` `清空书签`（21px）。章节行用 `text-dim` 色，表示只读。
+**Interface**: "Chapters and Bookmarks" window 380×420, minimum 320×300. Search box at the top (21px); list with three columns (type 16px icon / time 70px monospace digits / title), row height 18px; with a bookmark selected, the edit area below shows two input boxes "Time" and "Title" (21px, row spacing 26px); bottom button row `Add Bookmark` `Remove` `Clear Bookmarks` (21px). Chapter rows use the `text-dim` color to show they are read-only.
 
-**持久化**：`<dataDirectory>/bookmarks.json`（`plugin.storage.json`）：`{ "version": 1, "media": { "<标识>": { "size": 123, "modified": "<ISO>", "items": [{ "time": 83.4, "title": "书签 1", "created": "…" }] } } }`。每次修改后 500 ms 去抖写入（临时文件加改名）。媒体条目超过 2000 个时按 `modified` 淘汰最久未修改的条目；没有书签的文件不留条目。文件大小变了时提示保留，之后编辑该文件的书签即采用新大小。
+**Persistence**: `<dataDirectory>/bookmarks.json` (`plugin.storage.json`): `{ "version": 1, "media": { "<identity>": { "size": 123, "modified": "<ISO>", "items": [{ "time": 83.4, "title": "Bookmark 1", "created": "…" }] } } }`. Written 500 ms after each change, debounced (temporary file plus rename). When there are more than 2000 media entries, the least recently modified ones by `modified` are evicted; files without bookmarks leave no entry. When the file size has changed, the warning is kept, and the new size is adopted the next time that file's bookmarks are edited.
 
-**核心依赖**：现有 `player.seek`、`windows.create`、`osd.show`；【核心新增】
+**Core dependencies**: the existing `player.seek`, `windows.create`, `osd.show`; [New core API]
 
 ```ts
 interface PlayerState {
-  readonly chapters: readonly Chapter[] | null;   // null = 尚未就绪；[] = 没有章节；需 playback.read
+  readonly chapters: readonly Chapter[] | null;   // null = not ready yet; [] = no chapters; needs playback.read
 }
-interface Chapter { index: number; title: string | null; start: number }   // start 为秒，按 start 升序
+interface Chapter { index: number; title: string | null; start: number }   // start in seconds, ascending by start
 ```
 
-理由：章节是媒体信息，mpv 已经读出（`chapter-list`），插件拿不到 mpv；网络来源插件也无法用 ffprobe 读取。来源变化时核心先置为 `null`，就绪后填入。
+Reason: chapters are media information that mpv already reads (`chapter-list`), and plugins cannot reach mpv; plugins also cannot read network sources with ffprobe. On source change the core first sets it to `null`, and fills it in once ready.
 
-**验收**
-- 播放带 5 章的 MKV，「播放 ▸ 章节/书签」列出 5 章，当前章节显示单选点；选第 3 章后跳到它的起点，提示章节名。
-- 在 00:10、00:50 按 P，菜单出现两个书签；按 Shift+PgUp 先跳到 00:50，再按跳到 00:10。
-- 重启 Vestra Player 后再打开同一文件，书签还在。
-- 窗口中把「书签 1」改名为「高潮」，菜单 1 秒内更新。
-- 直播流中 P 不可用，菜单项显示禁用原因。
-- 播放列表获得焦点时按 P，播放所选项，不添加书签；视频获得焦点时按 P 添加书签。
+**Acceptance**
+- Play an MKV with 5 chapters: "Playback ▸ Chapters and Bookmarks" lists 5 chapters, with a radio dot on the current one; choosing chapter 3 jumps to its start and shows the chapter name.
+- Press P at 00:10 and 00:50: two bookmarks appear in the menu; Shift+PgUp first jumps to 00:50, pressing again to 00:10.
+- After restarting Vestra Player and opening the same file again, the bookmarks are still there.
+- Rename "Bookmark 1" to "Climax" in the window: the menu updates within 1 second.
+- In a live stream P is unavailable, and the menu item shows the disabled reason.
+- With the playlist focused, P plays the selected item and does not add a bookmark; with the video focused, P adds a bookmark.
 
-**第 3a 轮实现说明**
-- 菜单路径每段最多 80 字节（宿主限制）：章节、书签的菜单文字按字节截短加 `…`，重名加 ` (2)`；菜单溢出项分为「更多章节…（共 N 项）」「更多书签…（共 N 项）」。
-- 窗口的标题与时间编辑在列表下方的编辑区（回车或离开输入框时提交），不是列表行内编辑；时间超出时长、格式不对时在状态行提示，不提交。
-- Ctrl+PgUp/PgDn 没有可跳的章节时提示 `没有上一个章节` / `没有下一个章节`。
+**Round 3a implementation notes**
+- Each menu path segment is at most 80 bytes (host limit): chapter and bookmark menu text is shortened by bytes with `…` appended, and duplicates get ` (2)`; menu overflow items are split into "More Chapters… (N in all)" and "More Bookmarks… (N in all)".
+- Title and time editing in the window happen in the edit area below the list (committed on Return or when leaving the input box), not inline in the list rows; a time beyond the duration or in the wrong format is reported in the status line and not committed.
+- When Ctrl+PgUp/PgDn have no chapter to jump to, the message is `No previous chapter` / `No next chapter`.
 
-**说明**：书签按时间排序，没有「上移 / 下移」；不做「批量编辑时间」「检查书签」；不做视频旁的书签文件（P2，可以作为导出选项再议）；H 打开的是窗口，不是弹出菜单（核心没有在任意位置为插件弹出菜单的能力，本轮不为此新增）。
+**Notes**: bookmarks are sorted by time, with no "move up / move down"; "batch edit times" and "check bookmarks" are not done; bookmark files next to the video are not done (P2, can be discussed later as an export option); H opens a window, not a popup menu (the core cannot pop up a menu for a plugin at an arbitrary position, and nothing is added for that this round).
 
-### B22 进度条上的章节 / 书签标记
+### B22 Chapter / bookmark markers on the seek bar
 
-**需求**
-- 开关「在进度条上显示标记」（默认开）打开时，播放器底栏进度条在每个章节起点和书签处画一条竖线标记，鼠标悬停时显示标题与时间。
-- A-B 循环生效时，进度条画出 A、B 两点和区间底色。
-- 开关属于 marks，关闭时 marks 发布空标记层。
+**Requirement**
+- When the toggle "Show Marks on Seek Bar" (on by default) is on, the player's bottom bar seek bar draws a vertical line marker at each chapter start and bookmark, and shows the title and time on mouse hover.
+- While an A-B loop is active, the seek bar draws points A and B and a background color for the range.
+- The toggle belongs to marks; when off, marks publishes an empty mark layer.
 
-**入口**：播放 ▸ 章节/书签 ▸ 在进度条上显示标记（勾选）。
+**Entry point**: Playback ▸ Chapters and Bookmarks ▸ Show Marks on Seek Bar (checkbox).
 
-**方案选择**
+**Choice of approach**
 
-| 方案 | 做法 | 评价 |
+| Approach | How | Assessment |
 | --- | --- | --- |
-| A. 核心持有书签和章节 | 核心存储书签，提供增删接口；playback 从核心读取 | 书签的命名、持久化、编辑都是业务，放进核心违反「核心精简」 |
-| B. 核心直接把标记画进进度条 | 核心向 playback 的 Slint 注入元素 | 进度条是插件的界面，核心不能按插件名提供专属布局（交互要求 §2） |
-| **C. 核心提供通用「时间轴标记层」（选用）** | 每个插件向核心发布自己的一层标记；核心按来源管理并合并，公开给所有插件读；playback 只画「标记层合并结果 + `PlayerState.loop`」 | 核心只做数据转发（与 `osd.panel()` 每插件一块、播放序列标志同一模式），没有业务；任何插件都能贡献标记（例如以后的字幕插件可以标对白） |
+| A. The core holds bookmarks and chapters | The core stores bookmarks and provides add/delete interfaces; playback reads from the core | Naming, persisting and editing bookmarks are business logic; putting them in the core violates "keep the core lean" |
+| B. The core draws marks into the seek bar directly | The core injects elements into playback's Slint | The seek bar is a plugin's interface, and the core cannot provide a dedicated layout by plugin name (interaction requirements §2) |
+| **C. The core provides a general "timeline mark layer" (chosen)** | Each plugin publishes its own layer of marks to the core; the core manages and merges them per source and makes them readable by all plugins; playback only draws "the merged mark layers + `PlayerState.loop`" | The core only forwards data (the same pattern as one `osd.panel()` block per plugin and the playback sequence flags), with no business logic; any plugin can contribute marks (for example a future subtitles plugin could mark dialogue) |
 
-选择方案 C。章节标记也由 marks 发布（它读 `PlayerState.chapters`），而不是由核心自动加入，这样「显示标记」开关能完整控制章节和书签两类标记。A-B 区间由 playback 直接读 `PlayerState.loop` 绘制，因为循环状态在核心里，不管哪个插件设的循环都应该显示出来。
+Approach C is chosen. Chapter marks are also published by marks (it reads `PlayerState.chapters`) rather than added automatically by the core, so that the "show marks" toggle fully controls both kinds of marks, chapters and bookmarks. The A-B range is drawn by playback reading `PlayerState.loop` directly, because the loop state is in the core and should be shown whichever plugin set the loop.
 
-**行为细节（marks 一侧）**
-- 开关开、媒体就绪时，发布 `章节 ∪ 书签`：`kind` 为 `"chapter"` 或 `"bookmark"`，`title` 用菜单显示的文字。章节、书签或开关变化时重新发布（最后一次写入生效）。
-- 发布时带 `ifCurrent: state`。核心在来源变化时自动清空所有标记层，避免旧文件的标记画到新文件上；marks 在新来源就绪后重新发布。
-- 单层最多 1000 个标记，超出部分只发布前 1000 个（按时间）。
-- 关闭开关：发布 `[]`。屏幕提示 `进度条上显示书签/章节标记：开/关`。
+**Behavior details (marks side)**
+- With the toggle on and the media ready, publish `chapters ∪ bookmarks`: `kind` is `"chapter"` or `"bookmark"`, and `title` uses the text shown in the menu. Republish when chapters, bookmarks or the toggle change (last write wins).
+- Publish with `ifCurrent: state`. The core automatically clears all mark layers when the source changes, so the old file's marks are not drawn on the new file; marks republishes once the new source is ready.
+- At most 1000 marks per layer; beyond that only the first 1000 (by time) are published.
+- Turning the toggle off: publish `[]`. On-screen message `Bookmark and chapter marks on the seek bar: on/off`.
 
-**行为细节（playback 一侧，写给 playback 章节作为依赖）**
-- 在 2px 进度线上为每个标记画 1px 宽、6px 高的竖线（居中跨越进度线），颜色：章节 `Theme.text-dim`，书签 `Theme.accent`。A-B 区间在进度线下方画 2px 高的 `Theme.playing` 色块，A、B 处各画 1px × 8px 竖线。
-- 悬停在标记 ±3px 范围内时，提示框显示 `标题  01:23`（与 I06 悬停时间提示合并显示）。
-- 标记不接收点击：点击仍按进度条原有规则跳转。
+**Behavior details (playback side, written for the playback chapter as a dependency)**
+- On the 2px progress line, draw a 1px wide, 6px high vertical line for each mark (centered across the progress line), colored `Theme.text-dim` for chapters and `Theme.accent` for bookmarks. Draw the A-B range as a 2px high `Theme.playing` block below the progress line, with a 1px × 8px vertical line at each of A and B.
+- When hovering within ±3px of a mark, the tooltip shows `title  01:23` (combined with the I06 hover time tooltip).
+- Marks do not take clicks: a click still seeks by the seek bar's existing rules.
 
-**持久化**：开关存 `<dataDirectory>/marks.json` 的 `showOnSeekbar`。
+**Persistence**: the toggle is stored in `showOnSeekbar` of `<dataDirectory>/marks.json`.
 
-**核心依赖**
-- 【核心新增】时间轴标记层：
+**Core dependencies**
+- [New core API] timeline mark layer:
 
   ```ts
   type MarkKind = "chapter" | "bookmark" | "marker";
-  interface TimelineMark { time: number; kind: MarkKind; title: string | null; plugin: string /* 发布者 manifest id */ }
+  interface TimelineMark { time: number; kind: MarkKind; title: string | null; plugin: string /* publisher manifest id */ }
   interface Timeline {
-    readonly marks: readonly TimelineMark[];                 // 当前来源上所有层的合并结果，按 time 升序；需 playback.read
-    onChange(listener: (marks: readonly TimelineMark[]) => void): Disposable; // 需 events
-    layer(): TimelineLayer;                                  // 本插件的一层，每插件一个；需 timeline.marks
+    readonly marks: readonly TimelineMark[];                 // merged result of all layers on the current source, ascending by time; needs playback.read
+    onChange(listener: (marks: readonly TimelineMark[]) => void): Disposable; // needs events
+    layer(): TimelineLayer;                                  // this plugin's layer, one per plugin; needs timeline.marks
   }
   interface TimelineLayer extends Disposable {
-    set(marks: { time: number; kind: MarkKind; title?: string }[], opts?: { ifCurrent?: PlayerState }): void; // 最后写入生效；[] 清空
+    set(marks: { time: number; kind: MarkKind; title?: string }[], opts?: { ifCurrent?: PlayerState }): void; // last write wins; [] clears
   }
   // plugin.timeline: Timeline
   ```
 
-  规则：`time` 必须在 `[0, duration]` 内（`duration` 未知时只要求 ≥ 0），否则以 `invalid` 失败；`title` 不超过 100 字符；单层最多 1000 个标记；来源变化或插件停用时，核心清除该层。第二次调用 `layer()` 抛错。
-  理由：插件之间不能共享状态，进度条又属于另一个插件，只有核心能中转。这是不含业务的通用数据层，可以复用于以后的任何时间轴标注。
-- playback 需要读取 `plugin.timeline.marks` 和 `PlayerState.loop` 并绘制（playback 章节承担）。
+  Rules: `time` must be within `[0, duration]` (only ≥ 0 when `duration` is unknown), otherwise it fails with `invalid`; `title` at most 100 characters; at most 1000 marks per layer; the core clears the layer on source change or when the plugin is disabled. A second call to `layer()` throws.
+  Reason: plugins cannot share state, and the seek bar belongs to another plugin, so only the core can relay. This is a general data layer with no business logic, reusable for any future timeline annotation.
+- playback has to read `plugin.timeline.marks` and `PlayerState.loop` and draw them (the playback chapter takes this on).
 
-**验收**
-- 带 5 章 + 2 书签的文件：进度条出现 7 条竖线，书签为强调色；悬停书签时显示标题。
-- 关闭开关，竖线 1 秒内消失；再打开，竖线恢复。
-- 切换到没有章节的文件，旧标记立即消失，不残留。
-- 停用 marks 插件后，进度条上没有标记，A-B 区间（如果设过）仍然显示。
-- 单元测试：`host.timeline`（TestHost 需新增）记录发布内容；来源变化后层为空。
+**Acceptance**
+- A file with 5 chapters + 2 bookmarks: 7 vertical lines appear on the seek bar, bookmarks in the accent color; hovering a bookmark shows its title.
+- Turn the toggle off: the lines disappear within 1 second; turn it on again: the lines come back.
+- Switch to a file without chapters: the old marks disappear immediately, nothing is left.
+- After disabling the marks plugin, there are no marks on the seek bar, and the A-B range (if set) is still shown.
+- Unit test: `host.timeline` (to be added to TestHost) records what is published; after a source change the layer is empty.
 
-**第 3b 轮实现说明（marks 一侧）**
-- 标记的 `title` 是章节名（标题或 `章节 N`）与书签标题本身，不含菜单行里的序号和时间（时间由 playback 的提示显示）。
-- 只设了 A 时一并发布 `{ kind: "marker", title: "A" }`（B23）；它属于本插件的层，所以开关关闭时也不显示。
-- 时间不在 `[0, 时长]` 内的标记（如文件变短后的旧书签）略去不发，避免核心以 `invalid` 拒绝整层；`ifCurrent` 由核心只按来源比较（维护者签名调整第 3 条）。
-- Alt+\（B23）的区段仍只用本插件的章节与书签，不读 `timeline.marks`。
+**Round 3b implementation notes (marks side)**
+- A mark's `title` is the chapter name (title or `Chapter N`) or the bookmark title itself, without the number and time from the menu row (the time is shown by playback's tooltip).
+- When only A is set, `{ kind: "marker", title: "A" }` is published as well (B23); it belongs to this plugin's layer, so it is not shown when the toggle is off either.
+- Marks whose time is outside `[0, duration]` (such as old bookmarks after a file got shorter) are left out, so the core does not reject the whole layer with `invalid`; the core compares `ifCurrent` only by source (item 3 of the maintainer's signature adjustment).
+- The range of Alt+\ (B23) still only uses this plugin's chapters and bookmarks and does not read `timeline.marks`.
 
-**说明**：分成「marks 发布、playback 绘制」两段。
+**Notes**: split into two parts, "marks publishes, playback draws".
 
-### B23 A-B 区段循环
+### B23 A-B range loop
 
-**需求**
-- **设点**：`[` 把起点 A 设为当前位置，`]` 把止点 B 设为当前位置，精度 0.1 秒（四舍五入）。
-- **解除**：`{` 解除 A，`}` 解除 B。
-- **微调**：起点、止点各自 ±0.1 秒（Ctrl+[ / Alt+[、Ctrl+] / Alt+]）；区段整体 ±0.1 秒（Ctrl+Alt+[ / Ctrl+Alt+]），长度不变。
-- **开关**（`\`）：A、B 都设好时，开始或停止循环；循环停止后保留 A、B。
-- **循环当前章节/书签区段**（Alt+\）：把 A、B 设为当前位置所在的标记区段（相邻两个章节或书签之间），并立即开始循环。
-- **循环次数**：无限（默认）/ 1 / 2 / 3 / 5 / 10。次数用完后自动停止循环，继续往后播放。
-- 设好 A、B 后，默认**自动开始循环**（设定止点后即循环）。
+**Requirement**
+- **Set points**: `[` sets start point A to the current position, `]` sets end point B to the current position, with 0.1-second precision (rounded).
+- **Clear**: `{` clears A, `}` clears B.
+- **Fine-tune**: start and end points each ±0.1 seconds (Ctrl+[ / Alt+[, Ctrl+] / Alt+]); the whole range ±0.1 seconds (Ctrl+Alt+[ / Ctrl+Alt+]), with its length unchanged.
+- **Toggle** (`\`): with both A and B set, starts or stops the loop; A and B are kept after the loop stops.
+- **Loop Current Chapter or Bookmark Range** (Alt+\): sets A and B to the mark range containing the current position (between two adjacent chapters or bookmarks) and starts looping immediately.
+- **Loop count**: endless (default) / 1 / 2 / 3 / 5 / 10. When the count is used up, the loop stops automatically and playback continues.
+- After A and B are set, looping **starts automatically** by default (the loop starts once the end point is set).
 
-**入口**：见菜单表。
+**Entry points**: see the menu table.
 
-**行为细节**
-- 约束：`0 ≤ A < B ≤ duration`，`B − A ≥ 0.2 秒`。
-  - 设 A 时，如果 A ≥ B − 0.2：清除 B，提示 `起点晚于止点，已清除止点`。
-  - 设 B 时，如果 B ≤ A + 0.2：不设，提示 `止点必须晚于起点`。
-  - 设 B 时如果没有 A：A 取 0，提示 `A-B 循环：00:00.0 ~ 01:10.0`。
-- 微调的边界：A 在 `[0, B − 0.2]` 内钳制，B 在 `[A + 0.2, duration]` 内钳制；整体移动时两端都不越界，到边界就停（提示 `已到开头` / `已到结尾`）。
-- 提交给核心：A、B 都有并且循环开着时，调 `player.setLoop({ a, b, count })`；其它情况调 `setLoop(null)`。只设了 A 时不循环，进度条上显示 A 标记（通过 marks 的标记层，`kind: "marker"`，标题 `A`）。
-- 开始循环时，如果当前位置不在 `[A, B)` 内，先 `seek(A)`。循环中用户跳到 B 之后：不循环，继续播放（与 mpv 只在越过 B 时回跳的语义一致）；跳回区间内后照常循环。
-- 次数用完后，核心把 `PlayerState.loop` 置为 `null`，插件同步把开关状态改为关，提示 `区段循环结束`，A、B 保留。
-- 来源变化时：核心清除循环，插件清空 A、B（区段只对当前文件有意义；「记忆 AB 区段循环列表」本轮不做）。
-- 直播流、不能跳转的来源：全部 A-B 命令禁用，`reason: "当前来源不支持区段循环"`。
-- 别的插件设了循环（`PlayerState.loop` 不是 marks 提交的值）：marks 的「开/关」勾选反映核心状态；按 `\` 关闭的是核心中的当前循环。之后 marks 再设点时，覆盖核心中的循环。
-- Alt+\：用合并后的时间点（`timeline.marks` 中的章节和书签，以及 0 和 duration）找出包含 `position` 的区段。没有任何标记时，提示 `没有章节或书签，无法确定区段`。
-- 屏幕提示：`A-B 循环：01:02.3 ~ 01:10.0`（开始循环、调整时）；`A-B 起点：01:02.3`（只设了 A）；`解除区段循环`（关闭时）。时间格式 `m:ss.d`，一小时以上用 `h:mm:ss.d`。
-- 微调命令设 `repeat: true`，按住可以连续调整；去抖 100 ms 后再提交给核心，避免请求堆积。
+**Behavior details**
+- Constraints: `0 ≤ A < B ≤ duration`, `B − A ≥ 0.2 seconds`.
+  - When setting A, if A ≥ B − 0.2: clear B, message `Start point is after the end point; end point cleared`.
+  - When setting B, if B ≤ A + 0.2: not set, message `End point must be after the start point`.
+  - When setting B without A: A becomes 0, message `A-B loop: 00:00.0 ~ 01:10.0`.
+- Fine-tune limits: A is clamped to `[0, B − 0.2]` and B to `[A + 0.2, duration]`; when moving the whole range, neither end goes out of bounds, and it stops at the limit (message `Reached the beginning` / `Reached the end`).
+- Submitting to the core: when both A and B exist and the loop is on, call `player.setLoop({ a, b, count })`; otherwise call `setLoop(null)`. With only A set, there is no loop, and the seek bar shows an A marker (through marks' mark layer, `kind: "marker"`, title `A`).
+- When the loop starts and the current position is not within `[A, B)`, `seek(A)` first. When the user seeks past B during the loop: no looping, playback continues (consistent with mpv's semantics of jumping back only when crossing B); after seeking back into the range, looping resumes as usual.
+- When the count is used up, the core sets `PlayerState.loop` to `null`, the plugin sets the toggle state to off accordingly with the message `A-B loop ended`, and A and B are kept.
+- On source change: the core clears the loop, and the plugin clears A and B (a range only makes sense for the current file; "remember the A-B range loop list" is not done this round).
+- Live streams and sources that cannot seek: all A-B commands are disabled with `reason: "This source doesn't support A-B loop"`.
+- Another plugin set a loop (`PlayerState.loop` is not the value marks submitted): marks' "on/off" check reflects the core state; pressing `\` turns off the current loop in the core. When marks sets points afterwards, it overwrites the loop in the core.
+- Alt+\: find the range containing `position` among the merged time points (chapters and bookmarks in `timeline.marks`, plus 0 and duration). When there are no marks at all, the message is `No chapters or bookmarks to define a range`.
+- On-screen messages: `A-B loop: 01:02.3 ~ 01:10.0` (when the loop starts and when adjusting); `A-B start: 01:02.3` (only A set); `A-B loop off` (when turned off). Time format `m:ss.d`, `h:mm:ss.d` above an hour.
+- The fine-tune commands set `repeat: true`, so holding adjusts continuously; submits to the core after a 100 ms debounce, to avoid piling up requests.
 
-**界面**：只有菜单和快捷键，没有窗口。「编辑 AB 区段循环列表」本轮不做。
+**Interface**: only menus and shortcuts, no window. "Edit the A-B range loop list" is not done this round.
 
-**持久化**：循环次数存 `marks.json` 的 `abCount`。A、B 不持久化。
+**Persistence**: the loop count is stored in `abCount` of `marks.json`. A and B are not persisted.
 
-**核心依赖**
-- 【核心新增】
+**Core dependencies**
+- [New core API]
 
   ```ts
   interface Player {
-    setLoop(loop: { a: number; b: number; count?: number /* 1–99；省略 = 无限 */ } | null,
-            opts?: { ifCurrent?: PlayerState }): Promise<void>; // 需 playback.control；默认以当前 state 为条件
+    setLoop(loop: { a: number; b: number; count?: number /* 1–99; omitted = endless */ } | null,
+            opts?: { ifCurrent?: PlayerState }): Promise<void>; // needs playback.control; conditioned on the current state by default
   }
   interface PlayerState {
     readonly loop: { a: number; b: number; count: number | null; remaining: number | null } | null;
   }
   ```
 
-  规则：不满足 `0 ≤ a < b` 时以 `invalid` 失败；`b` 大于 `duration` 时钳制到 `duration`；来源变化时核心清除循环（mpv 的 `ab-loop-*` 默认会跨文件保留，核心要显式复位）；不能跳转的来源以 `unsupported` 失败。
-  理由：插件监听位置再 `seek`，精度只有位置事件的间隔（约 0.1 秒），回跳点会抖动，还会和用户操作产生 `stale` 竞争。mpv 在解码层精确地执行 `ab-loop-a/b/count`，只有核心能用。`PlayerState.loop` 公开后，playback 可以画区间。
+  Rules: fails with `invalid` when `0 ≤ a < b` does not hold; `b` greater than `duration` is clamped to `duration`; the core clears the loop on source change (mpv's `ab-loop-*` is kept across files by default, so the core has to reset it explicitly); sources that cannot seek fail with `unsupported`.
+  Reason: if the plugin listened to the position and then called `seek`, the precision would only be the interval of position events (about 0.1 seconds), the jump-back point would jitter, and it would race with user actions through `stale`. mpv runs `ab-loop-a/b/count` precisely at the decoding layer, which only the core can use. With `PlayerState.loop` public, playback can draw the range.
 
-**验收**
-- 在 00:10 按 `[`、在 00:20 按 `]`：提示 `A-B 循环：0:10.0 ~ 0:20.0`；播放到 0:20 时回到 0:10，连续三次误差 ≤ 0.1 秒（看时间显示）。
-- 按 `\` 停止循环，播放越过 0:20 继续；再按 `\`，回到 0:10 开始循环。
-- Ctrl+] 按住 1 秒，B 连续后退，提示时间同步变化。
-- 循环次数设为 2：循环两次后自动停止，提示 `区段循环结束`，勾选项变为未选中。
-- 换下一个文件后，循环和 A、B 都被清除，进度条上没有区间。
-- Alt+[、Alt+]、Alt+\ 在 macOS 上实机触发（见全局约定）。
-- 单元测试：TestHost 记录 `player.setLoop` 的参数；`[`、`]`、`\` 序列产生 `{a:10,b:20}` → `null` → `{a:10,b:20}`。
+**Acceptance**
+- Press `[` at 00:10 and `]` at 00:20: message `A-B loop: 0:10.0 ~ 0:20.0`; when playback reaches 0:20 it goes back to 0:10, three times in a row with an error ≤ 0.1 seconds (judged by the time display).
+- Press `\` to stop the loop: playback continues past 0:20; press `\` again: it goes back to 0:10 and loops.
+- Hold Ctrl+] for 1 second: B moves back continuously, and the message time changes along.
+- Set the loop count to 2: after looping twice it stops automatically with the message `A-B loop ended`, and the checked item becomes unchecked.
+- After moving to the next file, the loop and A and B are all cleared, and there is no range on the seek bar.
+- Alt+[, Alt+] and Alt+\ trigger on real macOS hardware (see the global conventions).
+- Unit test: TestHost records the arguments of `player.setLoop`; the sequence `[`, `]`, `\` produces `{a:10,b:20}` → `null` → `{a:10,b:20}`.
 
-**第 3a 轮实现说明**
-- 循环次数直接作为核心的 `count`（回跳次数）：选「2 次」= 区段共播 3 遍。核心不报告剩余次数（`PlayerState.loop` 没有 `remaining`）。
-- 约束统一为 `B − A ≥ 0.2`（正好 0.2 允许）。
-- 只设了 A 时的进度条 A 标记随 B22 在 3b 实现；Alt+\ 的区段用 marks 自己的章节与书签（3a 没有 `timeline.marks`）。
-- 解除起点/止点时：循环在开着则提示 `解除区段循环`，否则 `已解除起点` / `已解除止点`；只有 A 或只有 B 时的微调提示 `A-B 起点：…` / `A-B 止点：…`；Alt+\ 区段短于 0.2 秒时提示 `区段太短，无法循环`。
+**Round 3a implementation notes**
+- The loop count is used directly as the core's `count` (number of jumps back): choosing "2 Times" = the range plays 3 times in all. The core does not report the remaining count (`PlayerState.loop` has no `remaining`).
+- The constraint is unified as `B − A ≥ 0.2` (exactly 0.2 is allowed).
+- The seek bar A marker for "only A set" is implemented with B22 in 3b; the range of Alt+\ uses marks' own chapters and bookmarks (3a has no `timeline.marks`).
+- When clearing the start / end point: if the loop is on, the message is `A-B loop off`, otherwise `Start point cleared` / `End point cleared`; fine-tuning with only A or only B shows `A-B start: …` / `A-B end: …`; when the Alt+\ range is shorter than 0.2 seconds, the message is `Range too short to loop`.
 
-**说明**：不做区段列表（Shift+\）、「循环结束时的延迟」、校正时间。
+**Notes**: no range list (Shift+\), no "delay at the end of the loop", no time correction.
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-| 接口 | 理由 |
+| Interface | Reason |
 | --- | --- |
-| `PlayerState.chapters: readonly Chapter[] \| null`（`Chapter { index; title; start }`） | 章节是媒体信息，mpv 已经读出；网络来源插件读不到；多个插件共用 |
-| `player.setLoop(loop: { a; b; count? } \| null, opts?)`；`PlayerState.loop` | 精确循环只能由 mpv 执行；循环状态公开后 playback 可以画 |
-| `plugin.timeline.marks` / `onChange` / `layer().set(marks, opts)`；能力 `timeline.marks` | 进度条属于另一个插件，标记只能经核心中转；通用数据层，不含业务 |
+| `PlayerState.chapters: readonly Chapter[] \| null` (`Chapter { index; title; start }`) | Chapters are media information that mpv already reads; plugins cannot read them for network sources; shared by several plugins |
+| `player.setLoop(loop: { a; b; count? } \| null, opts?)`; `PlayerState.loop` | Precise looping can only be done by mpv; with the loop state public, playback can draw it |
+| `plugin.timeline.marks` / `onChange` / `layer().set(marks, opts)`; capability `timeline.marks` | The seek bar belongs to another plugin, so marks can only be relayed through the core; a general data layer with no business logic |
 
 ---
 
-## 快捷键设置（`hotkeys`）
+## Shortcut settings (`hotkeys`)
 
-**位置**：`src/plugins/hotkeys/`（新插件，待创建）
+**Location**: `src/plugins/hotkeys/` (new plugin, to be created)
 
-### 定位
+### Scope
 
-hotkeys 插件提供改绑界面：给任何插件或宿主注册的任何命令设置键盘与鼠标绑定（J01、J02），还有一个「忽略默认快捷键」开关（J03）。设计依据 [功能目录「关于快捷键设置插件」](feature-catalog.md#关于快捷键设置插件j01j03)：
+The hotkeys plugin provides the rebinding interface: keyboard and mouse bindings for any command registered by any plugin or the host (J01, J02), plus an "Ignore Default Shortcuts" toggle (J03). Design basis: [feature catalog, "About the shortcut settings plugin"](feature-catalog.md#关于快捷键设置插件j01j03):
 
-- 所有绑定都在核心的绑定表里。插件只是**声明**默认绑定，由核心裁决哪个输入触发哪个命令。
-- 核心已经有**用户覆盖层**：`bindings.rs::Table.overlay`，键为 `"<manifest id>/<command id>"`，值为绑定数组，`[]` 表示解绑；覆盖层优先于全部默认绑定。覆盖层跨启动保存在 `ui-state.json` 的 `bindings` 字段（`ui_state.rs`）。现状是「本轮只读、保存时保留」：宿主启动时 `set_overlay` 读入，没有对插件开放写入。
-- hotkeys 只和核心对话（列出、改绑、恢复），不知道也不调用 playback、playlist 等插件。以后新装的插件、工坊生成的插件，它们的命令会自动出现在列表里。
+- All bindings are in the core's binding table. Plugins only **declare** default bindings, and the core decides which input triggers which command.
+- The core already has a **user overlay**: `bindings.rs::Table.overlay`, keyed by `"<manifest id>/<command id>"`, with arrays of bindings as values, where `[]` means unbound; the overlay takes priority over all default bindings. The overlay is saved across launches in the `bindings` field of `ui-state.json` (`ui_state.rs`). The current state is "read-only this round, kept on save": the host reads it with `set_overlay` at startup, and writing is not exposed to plugins.
+- hotkeys only talks to the core (list, rebind, restore); it does not know about or call playback, playlist or other plugins. The commands of plugins installed later, and of plugins generated by the workshop, appear in the list automatically.
 
-现状补充（从 `bindings.rs` 读出）：
-- 宿主命令用 `manifest = "host"`，所以覆盖层键是 `host/fullscreen`、`host/exit-fullscreen`、`host/quit`。
-- 可绑定的鼠标输入是固定列表：`LeftDoubleClick[:LeftHalf|:RightHalf]`、`MiddleClick`、`X1`、`X2`、`WheelUp/Down/Left/Right`。**左键单击不能绑定**（宿主把左键按下用于获取焦点和 `capture`），右键保留给菜单。
-- 冲突时，覆盖层优先，其次按「宿主 → 先加载的插件 → 声明顺序」，被压下的绑定写日志（`conflicts`）。
-- 面板范围（`focus: "panel"`）与全局范围是两张独立的表。
+Additional current facts (read from `bindings.rs`):
+- Host commands use `manifest = "host"`, so the overlay keys are `host/fullscreen`, `host/exit-fullscreen`, `host/quit`.
+- The bindable mouse inputs are a fixed list: `LeftDoubleClick[:LeftHalf|:RightHalf]`, `MiddleClick`, `X1`, `X2`, `WheelUp/Down/Left/Right`. **Left click cannot be bound** (the host uses left button down for focus and `capture`), and the right button is reserved for the menu.
+- On conflict the overlay wins, then "host → earlier-loaded plugin → declaration order"; suppressed bindings are logged (`conflicts`).
+- Panel scope (`focus: "panel"`) and global scope are two separate tables.
 
-基础播放动作是否移到核心（feature-catalog.md 那一节的建议）属于核心职责调整，不在本插件需求内。本插件对此的要求只有一条：无论命令由谁注册，只要在绑定表里，就能改绑。
+Whether the basic playback actions move to the core (the suggestion in that section of feature-catalog.md) is a change of core responsibilities and is not part of this plugin's requirements. This plugin has only one requirement for it: whoever registers a command, as long as it is in the binding table, it can be rebound.
 
-manifest 能力：`commands`、`ui.window`、`ui.osd`、`bindings.manage`（新能力）；如果 J04 方案 A 落地，再加 `ui.settings`。
+Manifest capabilities: `commands`, `ui.window`, `ui.osd`, `bindings.manage` (new capability); if J04 approach A lands, `ui.settings` too.
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| J01 | 快捷键设置：列出全部命令及当前绑定，改绑、解绑、恢复默认，冲突处理 | ✗ | `plugin.bindings.list/set/reset/onChange`；能力 `bindings.manage` |
-| J02 | 鼠标动作设置：按鼠标输入逐项选择命令 | ✗ | 同上；【核心新增】`Mouse:LeftClick` 输入 |
-| J03 | 忽略默认快捷键 | ✗ | `plugin.bindings.ignoreDefaults` / `setIgnoreDefaults()` |
+| J01 | Shortcut settings: list all commands and their current bindings; rebind, unbind, restore defaults, conflict handling | ✗ | `plugin.bindings.list/set/reset/onChange`; capability `bindings.manage` |
+| J02 | Mouse action settings: choose a command for each mouse input | ✗ | Same as above; [New core API] input `Mouse:LeftClick` |
+| J03 | Ignore default shortcuts | ✗ | `plugin.bindings.ignoreDefaults` / `setIgnoreDefaults()` |
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-| 菜单路径 | order | group | 默认绑定 |
+| Menu path | order | group | Default binding |
 | --- | --- | --- | --- |
-| 设置 ▸ 快捷键… | 832 | settings-input | （无） |
-| 设置 ▸ 鼠标… | 833 | settings-input | （无） |
-| 设置 ▸ 忽略默认快捷键（勾选） | 834 | settings-input | （无） |
+| Settings ▸ Keyboard Shortcuts… | 832 | settings-input | (none) |
+| Settings ▸ Mouse… | 833 | settings-input | (none) |
+| Settings ▸ Ignore Default Shortcuts (checkbox) | 834 | settings-input | (none) |
 
-hotkeys 自己不设默认快捷键，避免和任何插件冲突；如果用户误操作，可以从菜单找回。J04 方案 A 落地后，「快捷键…」「鼠标…」改为 `plugin.settings.show("hotkeys.keyboard" | "hotkeys.mouse")`，在首选项窗口中打开对应页面；未落地时打开本插件自己的工具窗口。两种形态的布局相同。
+hotkeys sets no default shortcuts of its own, to avoid conflicting with any plugin; if the user makes a mistake, they can find their way back through the menu. Once J04 approach A lands, "Keyboard Shortcuts…" and "Mouse…" change to `plugin.settings.show("hotkeys.keyboard" | "hotkeys.mouse")`, opening the matching page in the preferences window; until then they open this plugin's own tool windows. Both forms have the same layout.
 
-### 第 3a 轮实现说明
+### Round 3a implementation notes
 
-- J03 按裁决 R-K2 的替代方案实现：没有 `ignoreDefaults` / `setIgnoreDefaults`，也没有 `ui-state.json` 的 `ignoreDefaultBindings`。hotkeys 对仍按默认运行的命令写空覆盖，在 `<dataDirectory>/ignore-defaults.json` 记录自己写过的条目，关闭时只还原这些；新加载的插件在 `bindings.onChange` 后补写（一次往返的窗口）。下文 J03「核心依赖」「持久化」两节以此为准。
-- J01、J02 是两个独立的工具窗口（J04 挂载在第 3b 轮）：快捷键 600×460（最小 520×380），鼠标 540×410。J02 的命令选择点开后在表格位置显示可过滤的列表，而不是下拉框（全局命令一百多条，下拉框放不下）。
-- J01 的状态多一种「已忽略」（J03 写下的空覆盖），快捷键列用括号显示被忽略的默认键（Slint 文本没有删除线）。
-- 捕获拿不到物理键：小键盘捕获为主键盘名；⌃P–⌃X 用 ⌘ 捕获（`Ctrl+` 绑定 ⌘ 与 ⌃ 都触发）。详见插件 README。
+- J03 is implemented with the alternative from ruling R-K2: there is no `ignoreDefaults` / `setIgnoreDefaults`, and no `ignoreDefaultBindings` in `ui-state.json`. hotkeys writes empty overrides for the commands still running on defaults, records the entries it wrote in `<dataDirectory>/ignore-defaults.json`, and only restores those when turned off; for newly loaded plugins it writes them after `bindings.onChange` (a one-round-trip window). This note takes precedence over the "Core dependencies" and "Persistence" sections of J03 below.
+- J01 and J02 are two separate tool windows (J04 mounting comes in round 3b): keyboard 600×460 (minimum 520×380), mouse 540×410. J02's command selection opens as a filterable list in place of the table rather than a drop-down (there are over a hundred global commands, which a drop-down cannot hold).
+- J01 has one more state, "Ignored" (the empty overrides J03 writes); the shortcut column shows the ignored default keys in parentheses (Slint text has no strikethrough).
+- Capture cannot get physical keys: numpad keys are captured as main keyboard names; ⌃P–⌃X are captured with ⌘ (a `Ctrl+` binding is triggered by both ⌘ and ⌃). See the plugin README for details.
 
-### J01 快捷键设置
+### J01 Shortcut settings
 
-**需求**
-- 列出绑定表中的全部命令，包括宿主命令、各插件命令、没有菜单路径的命令（如 I03、退出全屏），每行一条：
-  - **命令**：菜单路径用「 ▸ 」连接，例如 `播放 ▸ 跳转 ▸ 前进5秒`；没有菜单路径时用 `title`。
-  - **快捷键**：当前生效的全部键盘绑定，用逗号分隔，显示 `Ctrl+O, F3` 这种菜单文字。
-  - **范围**：`全局` / `面板内`（`focus: "panel"` 的命令，例如播放列表内的 Delete）。
-  - **来源**：插件 id，宿主命令显示「宿主」。
-  - **状态**：`默认`、`已修改`（覆盖层中有这条）、`冲突`（声明了，但有输入被别的命令压下）。
-- **筛选**：
-  - 搜索框匹配命令文字或按键文字；输入 `Ctrl+` 可以找出全部 Ctrl 组合。
-  - 下拉「全部 / 已修改 / 有冲突 / 未绑定」。
-  - 按「来源」筛选。
-- **编辑选中命令**：
-  - 下方编辑区以「标签」形式列出该命令的每个绑定，每个标签带 `×`，点 `×` 删除该绑定。
-  - `添加按键…`：进入捕获状态，等待用户按下一个组合键。
-  - `恢复默认`：只恢复这一条。
-  - `全部解绑`：写入 `[]`。
-- **全局操作**：
-  - `恢复全部默认`：清空整个覆盖层，需确认。
-  - `导出列表…`：把当前的完整快捷键表存为纯文本或 CSV，供用户查看和打印，即「快捷键列表」。
-- 每个命令最多 8 个绑定。
+**Requirement**
+- List all commands in the binding table, including host commands, plugin commands, and commands without a menu path (such as I03, exit fullscreen), one per row:
+  - **Command**: the menu path joined with " ▸ ", for example `Playback ▸ Seek ▸ Forward 5 s`; `title` when there is no menu path.
+  - **Shortcut**: all keyboard bindings currently in effect, comma-separated, shown as menu text like `Ctrl+O, F3`.
+  - **Scope**: `Global` / `In panel` (commands with `focus: "panel"`, for example Delete in the playlist).
+  - **Source**: the plugin id; host commands show "Player".
+  - **State**: `Default`, `Changed` (this entry is in the overlay), `Conflict` (declared, but an input is suppressed by another command).
+- **Filter**:
+  - The search box matches command text or key text; typing `Ctrl+` finds all Ctrl combinations.
+  - Drop-down "All / Changed / Conflicts / Unbound".
+  - Filter by "Source".
+- **Edit the selected command**:
+  - The edit area below lists each binding of the command as a "tag", each with `×`; clicking `×` deletes that binding.
+  - `Add Key…`: enters the capture state and waits for the user to press a key combination.
+  - `Restore Default`: restores only this entry.
+  - `Unbind All`: writes `[]`.
+- **Global actions**:
+  - `Restore All Defaults`: clears the whole overlay, with confirmation.
+  - `Export List…`: saves the current full shortcut table as plain text or CSV for the user to view and print, i.e. the "shortcut list".
+- At most 8 bindings per command.
 
-**入口**：设置 ▸ 快捷键…
+**Entry point**: Settings ▸ Keyboard Shortcuts…
 
-**行为细节**
-- **捕获**：
-  - 进入捕获状态后，捕获框显示「请按下快捷键（Esc 取消）」。工具窗口内绑定本来就不生效（API 参考 §4.1），所以按下的键不会触发命令。
-  - 单独按修饰键不结束捕获。
-  - Esc 取消捕获；如果真的要绑定 Esc，用捕获框旁边下拉菜单里的「Esc」项。
-  - Backspace 正常捕获。
-- **按键转换**：Slint `FocusScope.key-pressed` 给出 `event.text` 和修饰键。插件按与 `bindings.rs::from_slint_key` 相同的规则转成规范写法：
-  - macOS 上对调 ⌘ 与 ⌃；
-  - 私有区键码转成 `ArrowUp`、`F5` 等；
-  - 符号键去掉 Shift；
-  - `+` 写成 `Plus`。
-  最终以核心 `set()` 的校验为准，不合法时显示 `无法使用此按键`。
-- **系统保留键**：⌘Tab、⌘Space、⌃↑ 等被 macOS 截走，捕获不到，不需要特别处理。⌘Q 是宿主「退出」的默认键：可以改，但给其它命令绑定 ⌘Q 时要二次确认（「⌘Q 是退出 Vestra Player 的默认快捷键，确定改为……？」）。
-- **冲突**：同一范围内，新输入已经是另一条命令的生效绑定时，弹出确认条：`Ctrl+E 已用于「视频 ▸ 截图 ▸ 保存当前画面」` + `替换` / `取消`。
-  - 替换：先把对方的绑定写成「原生效绑定去掉这个输入」，再给本命令加上这个输入。两次 `set` 都成功才算完成；如果第二次失败，就把第一次改回去。
-  - 不提供「两者都保留」：同一层级的两个用户绑定按核心规则只有一个生效，保留两者会让用户困惑。
-  - 面板范围与全局范围不算冲突（核心先查面板），但在状态行提示「此键在播放列表获得焦点时另有用途」。
-- **默认值被压下**（插件之间的默认冲突，例如两个插件都声明了 F6）：该行状态为「冲突」，悬停显示「F6 被『播放列表』占用，未生效」。用户可以给其中一方改键来解决。
-- **实时性**：订阅 `bindings.onChange`，插件安装、停用、声明变化，或别处修改覆盖层时，列表 1 秒内刷新，选中行保持不变（按 `plugin + command` 匹配）。
-- **不在运行的插件**：覆盖层中可能有已停用或已卸载插件的条目（`orphans`）。默认不显示；在「来源」筛选里选「未加载的插件」时显示，可以删除。`恢复全部默认` 也会清掉这些条目。
-- **操作反馈**：每次成功修改都显示屏幕提示 `快捷键已更新：播放 ▸ 播放/暂停 = Space, K`。
-- 命令在修改过程中被注销（插件被停用）时，`set` 以 `missing` 失败，显示「该命令已不存在」，并刷新列表。
+**Behavior details**
+- **Capture**:
+  - In the capture state, the capture box shows "Press a shortcut (Esc cancels)". Bindings do not take effect inside tool windows anyway (API reference §4.1), so the pressed key does not trigger a command.
+  - Pressing a modifier alone does not end capture.
+  - Esc cancels capture; to actually bind Esc, use the "Esc" item in the drop-down next to the capture box.
+  - Backspace is captured normally.
+- **Key conversion**: Slint `FocusScope.key-pressed` gives `event.text` and the modifiers. The plugin converts them to the canonical form with the same rules as `bindings.rs::from_slint_key`:
+  - swap ⌘ and ⌃ on macOS;
+  - convert private-use key codes to `ArrowUp`, `F5`, etc.;
+  - drop Shift from symbol keys;
+  - write `+` as `Plus`.
+  The core's `set()` validation is final; when invalid, `This key cannot be used` is shown.
+- **System-reserved keys**: ⌘Tab, ⌘Space, ⌃↑ etc. are taken by macOS and cannot be captured; no special handling is needed. ⌘Q is the default key of the host's "Quit": it can be changed, but binding ⌘Q to another command needs a second confirmation ("⌘Q is the default shortcut for quitting Vestra Player. Change it to …?").
+- **Conflicts**: when, within the same scope, the new input is already an active binding of another command, a confirmation bar appears: `Ctrl+E is already used by "Video ▸ Snapshot ▸ Save Current Frame"` + `Replace` / `Cancel`.
+  - Replace: first write the other command's binding as "its active bindings minus this input", then add this input to this command. It is complete only when both `set` calls succeed; if the second fails, the first is reverted.
+  - There is no "keep both": by core rules only one of two user bindings at the same level takes effect, and keeping both would confuse users.
+  - Panel scope and global scope do not count as a conflict (the core checks the panel first), but the status line says "This key does something else when the playlist has focus".
+- **Defaults suppressed** (default conflicts between plugins, for example two plugins both declaring F6): that row's state is "Conflict", and hovering shows "F6 is taken by "Playlist" and has no effect". The user can resolve it by changing the key of one of them.
+- **Liveness**: subscribe to `bindings.onChange`; when plugins are installed or disabled, declarations change, or the overlay is changed elsewhere, the list refreshes within 1 second, keeping the selected row (matched by `plugin + command`).
+- **Plugins not running**: the overlay may contain entries of disabled or uninstalled plugins (`orphans`). They are hidden by default; they are shown when "Plugins not loaded" is chosen in the "Source" filter, and can be deleted. `Restore All Defaults` also clears these entries.
+- **Feedback**: each successful change shows the on-screen message `Shortcut updated: Playback ▸ Play/Pause = Space, K`.
+- When a command is unregistered during editing (its plugin is disabled), `set` fails with `missing`, "The command no longer exists" is shown, and the list refreshes.
 
-**界面**
-- 第 3b 轮起为选项窗口的设置页（id `hotkeys.keyboard`，分类「快捷键与鼠标」），宽 440：列表三列 命令 自适应（约 209，裁决 220 扣去内边距与间距后放不下）/ 快捷键 140 / 状态 60；来源与范围写在编辑区标题「命令（来源 · 面板内）」，来源仍可筛选，导出仍含五列。顶部 搜索 190、状态筛选 90、来源筛选 128。第 3a 轮的工具窗口（600×460）已删除。
-- 顶部（30px）：搜索框（200px）、状态筛选下拉（97px）、来源筛选下拉（120px）。
-- 列表：五列（命令 自适应 / 快捷键 140px / 范围 50px / 来源 120px / 状态 50px），行高 18px，可按命令或快捷键排序；「已修改」的行文字用 `Theme.text`，默认的行用 `Theme.text-list`，「冲突」用 `Theme.accent`。
-- 编辑区（高 90px）：
-  - 第 1 行是所选命令的完整路径（11px 粗体）；
-  - 第 2 行是绑定标签（每个标签高 18px，圆角 `radius-control`，内含 `×`）和捕获框（140×21）；
-  - 第 3 行按钮 `添加按键…` `恢复默认` `全部解绑`（21px）。
-- 底部按钮行：左侧 `恢复全部默认…` `导出列表…`，右侧 `关闭`。
+**Interface**
+- Since round 3b this is a settings page in the options window (id `hotkeys.keyboard`, category "Keys and Mouse"), 440 wide: the list has three columns, command adaptive (about 209; the 220 from the ruling did not fit after padding and spacing) / shortcut 140 / state 60; source and scope are written in the edit area title "Command (source · In panel)"; source can still be filtered, and the export still has five columns. At the top, search 190, state filter 90, source filter 128. The round 3a tool window (600×460) has been removed.
+- Top (30px): search box (200px), state filter drop-down (97px), source filter drop-down (120px).
+- List: five columns (command adaptive / shortcut 140px / scope 50px / source 120px / state 50px), row height 18px, sortable by command or shortcut; "Changed" rows use `Theme.text`, default rows `Theme.text-list`, "Conflict" `Theme.accent`.
+- Edit area (90px high):
+  - Line 1 is the full path of the selected command (11px bold);
+  - Line 2 is the binding tags (each 18px high, corner radius `radius-control`, with `×` inside) and the capture box (140×21);
+  - Line 3 is the buttons `Add Key…` `Restore Default` `Unbind All` (21px).
+- Bottom button row: `Restore All Defaults…` `Export List…` on the left, `Close` on the right.
 
-**持久化**：绑定数据由核心写入 `ui-state.json`（覆盖层），本插件不另存。只在 `<dataDirectory>/hotkeys.json` 存界面偏好（排序列、筛选条件）。
+**Persistence**: binding data is written by the core to `ui-state.json` (the overlay); this plugin saves nothing extra. Only interface preferences (sort column, filters) are stored in `<dataDirectory>/hotkeys.json`.
 
-**核心依赖**
-- 【核心新增】（细化 feature-catalog.md 中的草案）：
+**Core dependencies**
+- [New core API] (refining the draft in feature-catalog.md):
 
   ```ts
-  interface BindingRef { plugin: string /* manifest id；宿主为 "host" */; command: string }
+  interface BindingRef { plugin: string /* manifest id; "host" for the host */; command: string }
   interface BindingInfo extends BindingRef {
-    title: string;                 // 菜单项文字或 title
-    path: string[] | null;         // 菜单路径；不进主菜单为 null
+    title: string;                 // menu item text or title
+    path: string[] | null;         // menu path; null when not in the main menu
     scope: "global" | "panel";
-    defaults: string[];            // 声明的默认绑定（规范写法）
-    current: string[];             // 实际生效的绑定（覆盖层或默认，去掉被压下的）
-    overridden: boolean;           // 覆盖层中有这条
-    shadowed: { input: string; by: BindingRef }[]; // 声明了但没生效的输入及占用者
-    labels: string[];              // current 的菜单显示文字（"Ctrl+O"、"←"）
+    defaults: string[];            // declared default bindings (canonical form)
+    current: string[];             // bindings actually in effect (overlay or defaults, minus suppressed ones)
+    overridden: boolean;           // this entry is in the overlay
+    shadowed: { input: string; by: BindingRef }[]; // inputs declared but not in effect, and who holds them
+    labels: string[];              // menu display text of current ("Ctrl+O", "←")
   }
   interface Bindings {
     list(): Promise<{ commands: BindingInfo[]; orphans: { ref: BindingRef; inputs: string[] }[] }>;
-    set(ref: BindingRef, inputs: string[]): Promise<void>;   // 写覆盖层；[] = 解绑；校验失败 invalid；命令不存在 missing
-    reset(ref?: BindingRef): Promise<void>;                  // 删除这条覆盖（恢复默认）；省略 = 清空整个覆盖层
-    onChange(listener: () => void): Disposable;              // 声明、注销、覆盖层、ignoreDefaults 任一变化
+    set(ref: BindingRef, inputs: string[]): Promise<void>;   // writes the overlay; [] = unbind; validation failure invalid; command missing missing
+    reset(ref?: BindingRef): Promise<void>;                  // deletes this override (restore default); omitted = clear the whole overlay
+    onChange(listener: () => void): Disposable;              // any change to declarations, unregistration, overlay or ignoreDefaults
     readonly ignoreDefaults: boolean;                        // J03
     setIgnoreDefaults(on: boolean): Promise<void>;           // J03
   }
-  // plugin.bindings: Bindings，需要能力 bindings.manage（能改别的插件的快捷键）
+  // plugin.bindings: Bindings, needs the capability bindings.manage (can change other plugins' shortcuts)
   ```
 
-  核心实现要点：`set`、`reset` 写入 `Table.overlay` 后调用 `rebuild()`，并标记 `ui_state` 需要保存（沿用去抖写入）；菜单右侧的快捷键文字随之更新；`orphans` 是覆盖层中键不对应任何已声明命令的条目，`set` 允许对 orphan 条目写 `[]` 来删除。
-  理由：绑定表和覆盖层都在核心，插件之间不能互相修改；这正是覆盖层预留的用途。
+  Core implementation notes: `set` and `reset` write `Table.overlay`, then call `rebuild()` and mark `ui_state` as needing a save (with the existing debounced write); the shortcut text on the right of menus updates accordingly; `orphans` are overlay entries whose keys match no declared command, and `set` may write `[]` to an orphan entry to delete it.
+  Reason: the binding table and the overlay are in the core, and plugins cannot change each other; this is exactly what the overlay was reserved for.
 
-**验收**
-- 打开窗口，列表包含 menus.md 中全部带快捷键的命令，还有宿主的「全屏」「退出全屏」「退出」。
-- 把「播放/暂停」加一个 `K`：按 K 暂停；右键菜单「播放/暂停」右侧仍显示 `Space`（第一个生效的键）；重启后 K 仍然有效。
-- 给「保存当前画面」捕获 `Space`，弹出冲突确认，确认替换后：Space 截图，「播放/暂停」只剩 K（如果没加过 K，就未绑定，状态为「已修改」）。
-- 「恢复默认」后该行回到 `默认`，Space 恢复为播放/暂停。
-- 停用 audio：Shift+E 的行 1 秒内消失；重新启用后，之前对它的改绑仍然有效（覆盖层按 manifest id 保存）。
-- 在捕获框按 ⌘O，得到 `Ctrl+O`（macOS 上 Ctrl 接受 ⌘）；按 Shift+/ 得到 `?`。
-- 单元测试：TestHost 新增 `host.bindings`（覆盖层模拟）；`set` 后 `host.press("K")` 触发对应命令。
+**Acceptance**
+- Open the window: the list contains all commands with shortcuts in menus.md, plus the host's "Fullscreen", "Exit Fullscreen" and "Quit".
+- Add `K` to "Play/Pause": pressing K pauses; the context menu still shows `Space` to the right of "Play/Pause" (the first active key); K still works after a restart.
+- Capture `Space` for "Save Current Frame": a conflict confirmation appears; after confirming the replacement, Space takes a screenshot, and "Play/Pause" only has K left (if K was never added, it is unbound with the state "Changed").
+- After "Restore Default", that row is back to `Default`, and Space is play/pause again.
+- Disable audio: the Shift+E row disappears within 1 second; after re-enabling, the earlier rebinding of it still applies (the overlay is saved by manifest id).
+- Press ⌘O in the capture box: `Ctrl+O` is recorded (Ctrl accepts ⌘ on macOS); Shift+/ gives `?`.
+- Unit test: TestHost gains `host.bindings` (overlay simulation); after `set`, `host.press("K")` triggers the matching command.
 
-**说明**：按命令编辑，一个命令看到它全部的绑定，不另设一张叠加在默认快捷键之上的「用户快捷键」列表；多媒体键设置不做。
+**Notes**: editing is per command, so one command shows all its bindings; there is no separate "user shortcuts" list layered over the default shortcuts; multimedia key settings are not done.
 
-### J02 鼠标动作设置
+### J02 Mouse action settings
 
-**需求**
-- 按鼠标输入逐行列出，每行一个下拉框，选择该输入触发的命令，或选「（无）」：
-  - 左键单击（【核心新增】，默认无）
-  - 左键双击
-  - 左键双击（左半边）
-  - 左键双击（右半边）
-  - 中键单击
-  - 侧键后退（X1）
-  - 侧键前进（X2）
-  - 滚轮上推
-  - 滚轮下推
-  - 滚轮左推
-  - 滚轮右推
-- 顶部「修饰键」单选：`无` / `Ctrl` / `Alt` / `Shift` / `Cmd`。切换后列表显示「该修饰键 + 鼠标输入」的绑定，例如 Ctrl+滚轮。
-- 下拉框列出全部全局范围的命令，按菜单路径排序，可以输入文字过滤。
-- 每行右侧有「默认」按钮（small 18px），恢复该输入的默认归属。
+**Requirement**
+- One row per mouse input, each with a drop-down to choose the command that input triggers, or "(None)":
+  - Left click ([New core API], none by default)
+  - Left double-click
+  - Left double-click (left half)
+  - Left double-click (right half)
+  - Middle click
+  - Back button (X1)
+  - Forward button (X2)
+  - Wheel up
+  - Wheel down
+  - Wheel left
+  - Wheel right
+- A "Modifier" radio at the top: `None` / `Ctrl` / `Alt` / `Shift` / `Cmd`. After switching, the list shows the bindings for "that modifier + mouse input", for example Ctrl+wheel.
+- The drop-down lists all global-scope commands, sorted by menu path, filterable by typing.
+- Each row has a "Default" button on the right (small, 18px) that restores the default owner of that input.
 
-**入口**：设置 ▸ 鼠标…
+**Entry point**: Settings ▸ Mouse…
 
-**行为细节**
-- 某个输入选择命令 X 时：
-  1. 先从当前占用者的绑定中去掉这个输入（`set(占用者, 占用者.current − input)`）；
-  2. 再 `set(X, X.current + input)`。
-  选「（无）」时只执行第一步。
-- 「默认」按钮：如果该输入有默认归属（某个命令的 `defaults` 含它），就把该命令这条覆盖中的这个输入恢复；如果当前占用者不是默认归属，就从占用者那里去掉这个输入。
-- **左键单击**：
-  - 只有绑定了命令时，核心才延迟判定单击：在系统双击间隔（macOS `NSEvent.doubleClickInterval`，默认约 0.5 秒）内没有第二次点击，并且按下与抬起之间移动不超过 4px，才触发。
-  - 没有绑定时保持现状：立即聚焦，不延迟。
-  - 界面上说明「绑定后单击需要等待双击间隔，响应会稍慢」。
-- 右键单击固定打开菜单，不出现在列表里。
-- 滚轮输入按 30px 累计计步（宿主 `WHEEL_STEP`），这一行为不在此设置。
-- 修改立即生效，屏幕提示 `鼠标动作已更新：滚轮上推 = 声音 ▸ 音量 +`。
+**Behavior details**
+- When command X is chosen for an input:
+  1. First remove this input from the current holder's bindings (`set(holder, holder.current − input)`);
+  2. Then `set(X, X.current + input)`.
+  Choosing "(None)" runs only the first step.
+- "Default" button: if the input has a default owner (a command whose `defaults` contain it), restore this input in that command's override; if the current holder is not the default owner, remove this input from the holder.
+- **Left click**:
+  - Only when a command is bound does the core delay the single-click decision: it triggers only when no second click comes within the system double-click interval (macOS `NSEvent.doubleClickInterval`, about 0.5 seconds by default) and the pointer moves no more than 4px between press and release.
+  - With no binding, things stay as now: focus immediately, no delay.
+  - The interface explains "Once bound, a single click waits for the double-click interval, so it responds a little later".
+- Right click always opens the menu and does not appear in the list.
+- Wheel input is counted in steps of 30px (host `WHEEL_STEP`); this behavior is not set here.
+- Changes take effect immediately, with the on-screen message `Mouse action updated: Wheel up = Audio ▸ Volume +`.
 
-**界面**：选项窗口的设置页（id `hotkeys.mouse`，分类「快捷键与鼠标」，宽 440）。修饰键单选行（21px）；下方 11 行表格，每行为标签 110px 右对齐 + 命令选择 250×21 + 「默认」41×18，行距 26px（点开命令选择时在表格位置显示可过滤的命令列表）。
+**Interface**: a settings page in the options window (id `hotkeys.mouse`, category "Keys and Mouse", 440 wide). Modifier radio row (21px); below it an 11-row table, each row a label 110px right-aligned + command selection 250×21 + "Default" 41×18, row spacing 26px (opening the command selection shows a filterable command list in place of the table).
 
-**持久化**：同 J01，由核心覆盖层保存。
+**Persistence**: same as J01, saved by the core overlay.
 
-**核心依赖**
-- 同 J01：`plugin.bindings.*`。
-- 【核心新增】可绑定输入 `Mouse:LeftClick`：在 `bindings.rs::MOUSE` 中加入，并给 `host.slint` 的视频区 TouchArea 加上单击判定（只在 `has_click` 为真时延迟，与 `has_wheel` 的处理方式相同）。
-  理由：单击是视频区的指针事件，只有宿主能识别并区分单击与双击；UI-MOUSE-03 也把它列为待启用项。
+**Core dependencies**
+- Same as J01: `plugin.bindings.*`.
+- [New core API] bindable input `Mouse:LeftClick`: added to `bindings.rs::MOUSE`, with single-click detection added to the video area TouchArea in `host.slint` (delayed only when `has_click` is true, handled the same way as `has_wheel`).
+  Reason: a single click is a pointer event in the video area; only the host can recognize it and tell single from double clicks; UI-MOUSE-03 also lists it as pending.
 
-**验收**
-- 把「滚轮上推」改为「播放 ▸ 跳转 ▸ 前进5秒」：滚轮上推前进 5 秒，「声音 ▸ 音量 +」的绑定只剩 ↑。
-- 把「左键单击」设为「播放/暂停」：单击视频后约 0.5 秒暂停；双击仍然切换全屏，不会额外暂停。
-- 选择修饰键 Ctrl，把 Ctrl+滚轮上推设为「视频 ▸ 亮度 +1%」，验证生效。
-- 「默认」按钮让「侧键后退」回到「上一个」。
+**Acceptance**
+- Change "Wheel up" to "Playback ▸ Seek ▸ Forward 5 s": wheel up seeks forward 5 seconds, and "Audio ▸ Volume +" only has ↑ left.
+- Set "Left click" to "Play/Pause": a click on the video pauses after about 0.5 seconds; a double click still toggles fullscreen without an extra pause.
+- Choose modifier Ctrl and set Ctrl+wheel up to "Video ▸ Brightness +1%": verify it works.
+- The "Default" button sets "Back button" back to "Previous".
 
-**说明**：右键单击/双击固定给菜单，不可设置；中键双击不做；左/右半边双击由宿主提供。
+**Notes**: right click / double click is always the menu and cannot be set; middle double-click is not done; left/right-half double clicks are provided by the host.
 
-### J03 忽略默认快捷键
+### J03 Ignore default shortcuts
 
-**需求**
-- 开关打开后，全部插件声明的默认快捷键与默认鼠标绑定都不再生效，只有用户覆盖层中的绑定生效。
-- 宿主的「退出」（⌘Q）和「退出全屏」（Esc）不受影响，作为安全出口。
-- 菜单本身不受影响，用户随时可以从「设置 ▸ 忽略默认快捷键」关掉开关。
-- 开关默认关，跨启动保存。
+**Requirement**
+- When the toggle is on, none of the default shortcuts and default mouse bindings declared by plugins take effect; only bindings in the user overlay do.
+- The host's "Quit" (⌘Q) and "Exit Fullscreen" (Esc) are not affected, as safe exits.
+- The menu itself is not affected; the user can turn the toggle off at any time from "Settings ▸ Ignore Default Shortcuts".
+- The toggle is off by default and saved across launches.
 
-**入口**：设置 ▸ 忽略默认快捷键（勾选）；J01 窗口底部也有同一个复选框（同一状态）。
+**Entry points**: Settings ▸ Ignore Default Shortcuts (checkbox); the J01 window also has the same checkbox at the bottom (same state).
 
-**行为细节**
-- 打开时先确认：「忽略后，只有你在快捷键设置中修改过的按键生效，Space、方向键等默认按键都将失效。确定？」。确认后提示 `忽略默认快捷键：开`。
-- 打开后，J01 列表的「快捷键」列中，默认来源的绑定显示为删除线（`current` 为空），状态写「已忽略」。
-- 菜单右侧的快捷键文字随之消失（由核心的 `label()` 自然得出）。
-- 新安装的插件同样适用：它的默认绑定不生效。
+**Behavior details**
+- Turning it on asks first: "After this, only the keys you changed in the shortcut settings work; default keys such as Space and the arrow keys will stop working. Continue?". After confirming, the message is `Ignore default shortcuts: On`.
+- When on, the default-sourced bindings in the "Shortcut" column of the J01 list are shown struck through (`current` is empty), with the state "Ignored".
+- The shortcut text on the right of menus disappears accordingly (naturally, from the core's `label()`).
+- Newly installed plugins are covered too: their default bindings do not take effect.
 
-**持久化**：核心写入 `ui-state.json`（新增字段 `ignoreDefaultBindings: boolean`）。
+**Persistence**: the core writes it to `ui-state.json` (new field `ignoreDefaultBindings: boolean`).
 
-**核心依赖**
-- 【核心新增】`plugin.bindings.ignoreDefaults` / `setIgnoreDefaults(on)`（签名见 J01）。核心在 `rebuild()` 中，当开关打开时跳过 `owner != HOST` 的默认声明，宿主命令中保留 `quit`、`exit-fullscreen` 的默认绑定。
-- 理由：插件也能把每条命令逐一写成 `[]` 来模拟，但这样会让覆盖层与「用户真正的修改」混在一起，关闭时无法还原；新插件加载时还会出现竞态（先生效、后被解绑）。这只是一个布尔值，由核心在裁决时判断最可靠。
+**Core dependencies**
+- [New core API] `plugin.bindings.ignoreDefaults` / `setIgnoreDefaults(on)` (signature in J01). In `rebuild()`, when the toggle is on, the core skips default declarations with `owner != HOST`, and keeps the default bindings of `quit` and `exit-fullscreen` among host commands.
+- Reason: a plugin could simulate this by writing every command as `[]`, but that would mix the overlay with "the user's real changes" and make it impossible to restore when turned off; newly loaded plugins would also race (active first, unbound later). This is just one boolean, and judging it in the core during resolution is the most reliable.
 
-**验收**
-- 打开后，Space、方向键、Tab 都无效；J01 中修改过的 K（播放/暂停）仍然有效；⌘Q 仍能退出。
-- 关闭后，全部默认按键立即恢复。
-- 重启后状态保持。
-- 打开状态下安装一个带默认快捷键的新插件，它的快捷键不生效。
+**Acceptance**
+- When on, Space, the arrow keys and Tab do nothing; K (play/pause) changed in J01 still works; ⌘Q still quits.
+- When off, all default keys come back immediately.
+- The state is kept after a restart.
+- With it on, install a new plugin with default shortcuts: its shortcuts do not take effect.
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-| 接口 | 理由 |
+| Interface | Reason |
 | --- | --- |
-| `plugin.bindings.list(): Promise<{ commands: BindingInfo[]; orphans }>` | 绑定表在核心，插件看不到别的插件的命令 |
-| `plugin.bindings.set(ref, inputs[])` | 写用户覆盖层（核心已有，未开放） |
-| `plugin.bindings.reset(ref?)` | 恢复默认（单条或全部） |
-| `plugin.bindings.onChange(listener)` | 插件加载、停用、覆盖层变化时刷新 |
-| `plugin.bindings.ignoreDefaults` / `setIgnoreDefaults(on)` | 裁决规则开关，插件模拟会污染覆盖层 |
-| 能力 `bindings.manage` | 能改别的插件的快捷键，需要显式声明 |
-| 可绑定输入 `Mouse:LeftClick`（只在有绑定时延迟判定） | 视频区指针事件只有宿主能识别 |
+| `plugin.bindings.list(): Promise<{ commands: BindingInfo[]; orphans }>` | The binding table is in the core; plugins cannot see other plugins' commands |
+| `plugin.bindings.set(ref, inputs[])` | Write the user overlay (already in the core, not exposed) |
+| `plugin.bindings.reset(ref?)` | Restore defaults (one entry or all) |
+| `plugin.bindings.onChange(listener)` | Refresh when plugins load or are disabled and when the overlay changes |
+| `plugin.bindings.ignoreDefaults` / `setIgnoreDefaults(on)` | A switch in the resolution rules; simulating it in a plugin would pollute the overlay |
+| Capability `bindings.manage` | Can change other plugins' shortcuts, so it must be declared explicitly |
+| Bindable input `Mouse:LeftClick` (decision delayed only when bound) | Pointer events in the video area can only be recognized by the host |
 
 ---
 
-## 首选项（`preferences`）
+## Preferences (`preferences`)
 
-**位置**：`src/plugins/preferences/`（第 3b 轮创建）
+**Location**: `src/plugins/preferences/` (created in round 3b)
 
-### 定位
+### Scope
 
-preferences 插件提供统一的设置入口：
+The preferences plugin provides a unified settings entry point:
 
-- **首选项总窗口**（J04）：集中展示各插件的设置。
-- **外观**：配色切换（H10）。
+- **Main preferences window** (J04): shows the settings of all plugins in one place.
+- **Appearance**: color scheme switching (H10).
 
-难点是 J04：设置页分散在各插件里，而插件之间不能通信。本章比较三种方案后，推荐「核心提供设置页挂载位」：页面仍属于各插件，只和自己的插件对话；首选项窗口是核心组合出来的容器。preferences 插件只提供自己的「外观」页和入口命令。
+The hard part is J04: settings pages are spread across plugins, and plugins cannot communicate. After comparing three approaches, this chapter recommends "the core provides settings page mount slots": pages still belong to their plugins and only talk to their own plugin; the preferences window is a container composed by the core. The preferences plugin only provides its own "Appearance" page and the entry command.
 
-配色（H10）要求核心的 `Theme` 能在运行时切换。现在 `theme.slint` 中的颜色是 `out property` 常量，取自品牌 logo：琥珀 → 洋红 → 紫，底色是带紫调的近黑。
+Color schemes (H10) require the core's `Theme` to be switchable at runtime. Today the colors in `theme.slint` are `out property` constants taken from the brand logo: amber → magenta → purple, on a purple-tinted near-black background.
 
-manifest 能力：`commands`、`events`、`ui.osd`、`ui.settings`、`ui.theme`（方案 A 落地后不再需要自己的工具窗口与对话框）。
+Manifest capabilities: `commands`, `events`, `ui.osd`, `ui.settings`, `ui.theme` (once approach A lands, it no longer needs its own tool window and dialog).
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| J04 | 首选项总窗口（各插件设置页汇总） | ✗ | 设置页挂载位 `plugin.settings.page/show`（推荐方案） |
-| H10 | 主题 / 配色切换 | ✗ | Theme 改为宿主可设；`plugin.appearance.*` |
+| J04 | Main preferences window (settings pages of all plugins together) | ✗ | Settings page mount slots `plugin.settings.page/show` (recommended approach) |
+| H10 | Theme / color scheme switching | ✗ | Theme becomes settable by the host; `plugin.appearance.*` |
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-| 菜单路径 | order | group | 默认绑定 |
+| Menu path | order | group | Default binding |
 | --- | --- | --- | --- |
-| 设置 ▸ 选项… | 830 | settings-main | F5 |
-| 设置 ▸ 外观 ▸ Vestra 深色（radio，默认）· Vestra 浅色 | 840、841 | settings-look | |
+| Settings ▸ Options… | 830 | settings-main | F5 |
+| Settings ▸ Appearance ▸ Vestra Dark (radio, default) · Vestra Light | 840, 841 | settings-look | |
 
-「设置 ▸」子菜单的号段分配（本文七章合计）：选项… 830（preferences）；快捷键… 832、鼠标… 833、忽略默认快捷键 834（hotkeys）；插件管理… 836（plugins）；外观 ▸ 840–849（preferences 配色 840–841；visualizer 的「空闲时显示徽标」845）。F5 未被占用。macOS 笔记本上 F5 要配合 fn 键。
+Number range allocation for the "Settings ▸" submenu (across the seven chapters of this document): Options… 830 (preferences); Keyboard Shortcuts… 832, Mouse… 833, Ignore Default Shortcuts 834 (hotkeys); Plugin Manager… 836 (plugins); Appearance ▸ 840–849 (preferences color schemes 840–841; visualizer's "Show Logo When Idle" 845). F5 is not taken. On macOS laptops F5 needs the fn key.
 
-### J04 首选项总窗口
+### J04 Main preferences window
 
-**需求**
-- F5 打开「选项」窗口：
-  - 左侧是分类树，固定顺序：常规 / 播放 / 字幕 / 视频 / 声音 / 快捷键与鼠标 / 外观 / 插件 / 其它；
-  - 每个分类下列出各插件注册的页面（页面标题由插件给出，同一分类内按 `order`、再按插件 id 排序）；
-  - 右侧显示所选页面。
-- 页面改动立即生效，没有「确定 / 取消 / 应用」（UI-TOOL-04）；每个页面自己提供「默认」按钮。
-- 窗口底部固定按钮：右侧 `关闭`。
-- 记住上次打开的页面；下次 F5 直接显示该页（页面已不存在时显示第一页）。
-- 各插件可以从自己的菜单项直接打开首选项窗口中的自己的页面，例如以后 subtitles 的「字幕设置…」可以改为打开「字幕」分类下的页面。
+**Requirement**
+- F5 opens the "Options" window:
+  - On the left a category tree in a fixed order: General / Playback / Subtitles / Video / Audio / Keys and Mouse / Appearance / Plugins / Other;
+  - Under each category, the pages registered by plugins (page titles given by the plugins, sorted within a category by `order`, then by plugin id);
+  - On the right, the selected page.
+- Page changes take effect immediately, with no "OK / Cancel / Apply" (UI-TOOL-04); each page provides its own "Default" buttons.
+- A fixed button at the bottom of the window: `Close` on the right.
+- The last opened page is remembered; the next F5 shows it directly (the first page if it no longer exists).
+- Plugins can open their own page in the preferences window directly from their own menu items; for example subtitles' "Subtitle Settings…" could later open the page under the "Subtitles" category.
 
-**入口**：设置 ▸ 选项…（F5）。其它插件也可以通过 `plugin.settings.show(自己的页面 id)` 打开。
+**Entry point**: Settings ▸ Options… (F5). Other plugins can open it with `plugin.settings.show(<own page id>)` too.
 
-**方案比较**
+**Approach comparison**
 
-| 方案 | 做法 | 插件间通信 | 核心工作量 | 体验 |
+| Approach | How | Inter-plugin communication | Core work | Experience |
 | --- | --- | --- | --- | --- |
-| **A. 核心设置页挂载位（推荐）** | 插件用 `plugin.settings.page(file, {category, title})` 注册一个 Slint 页面（与 `panels.mount` 一样导出 component + global，属性和回调只连到注册它的插件）；核心提供「选项」容器窗口（分类树 + 页面区），按分类组合各插件的页面 | 无：每个页面只和自己的插件对话，容器由核心提供 | 中：复用面板挂载的组合与回调转发机制（`composition.rs`），新增一个窗口型挂载位和分类树 | 一个窗口集中全部设置，F5 打开；新插件的页面自动出现 |
-| B. 首选项只做入口导航 | 首选项窗口列出「某插件的设置…」入口，点击后打开该插件自己的工具窗口 | 需要首选项插件执行别的插件的命令，**违反硬约束**；若改为核心绘制入口列表，实质上就是一个菜单 | 小 | 窗口来回跳转，设置分散 |
-| C. 只靠菜单约定 | 各插件把设置入口都放进「设置 ▸」子菜单 | 无 | 零 | 没有总窗口，J04 实际没有实现 |
+| **A. Core settings page mount slots (recommended)** | A plugin registers a Slint page with `plugin.settings.page(file, {category, title})` (exporting a component + global like `panels.mount`, with properties and callbacks connected only to the registering plugin); the core provides the "Options" container window (category tree + page area) and composes the plugins' pages by category | None: each page only talks to its own plugin, and the container is provided by the core | Medium: reuses the composition and callback forwarding of panel mounting (`composition.rs`), adding a window-type mount slot and a category tree | All settings in one window, opened with F5; new plugins' pages appear automatically |
+| B. Preferences only as entry navigation | The preferences window lists "<plugin> settings…" entries that open each plugin's own tool window | Needs the preferences plugin to run other plugins' commands, **violating the hard constraint**; if the core drew the entry list instead, it would essentially be a menu | Small | Jumping between windows, settings scattered |
+| C. Menu convention only | Every plugin puts its settings entry in the "Settings ▸" submenu | None | Zero | No main window, so J04 is not actually implemented |
 
-**推荐 A**。理由：
-- 只有 A 能在不通信的前提下真正做到「集中设置」；
-- 核心新增的只是一个通用挂载位，不含业务，不认插件身份；
-- 页面在哪个插件里，状态和保存就在哪个插件里，与现在的面板模型一致。
+**A is recommended**. Reasons:
+- Only A truly achieves "settings in one place" without communication;
+- All the core adds is a general mount slot, with no business logic and no knowledge of plugin identities;
+- Whichever plugin a page is in holds its state and saving, consistent with today's panel model.
 
-**过渡**：A 落地之前，preferences 先实现方案 C。「选项…」打开 preferences 自己的工具窗口，只包含外观页；各插件的设置继续由各自菜单进入。A 落地后，preferences 把这一页改用 `settings.page` 注册，并把「选项…」改为 `settings.show()`。
+**Transition**: before A lands, preferences implements approach C first. "Options…" opens preferences' own tool window containing only the appearance page; the other plugins' settings are still reached from their own menus. After A lands, preferences registers that page with `settings.page` and changes "Options…" to `settings.show()`.
 
-**行为细节（方案 A）**
-- 容器窗口由核心创建和拥有，窗口标题「选项」。再次 `show()` 时把窗口带到前面并切换到指定页面。
-- 页面所属插件停用时，核心移除该页；如果它正在显示，就切到同分类的第一页，分类空了则切到「常规」第一页；没有任何页面时显示「没有可设置的项目」。插件重新启用后页面恢复（插件激活时会再次注册）。
-- 分类内没有页面时，分类树中不显示该分类。
-- 页面高度超过页面区时，核心提供垂直滚动；宽度固定，页面必须按 440px 宽设计。
-- 键盘：页面中的输入框照常工作；窗口内绑定不生效（与工具窗口相同）；⌘W 关闭窗口。
-- `show(pageId)` 只能指定本插件自己的页面（防止插件之间互相导航形成隐式耦合）；不带参数时打开上次的页面。
-- 窗口打开不影响播放（交互要求 §3）。
+**Behavior details (approach A)**
+- The container window is created and owned by the core, with the window title "Options". Calling `show()` again brings the window to the front and switches to the given page.
+- When a page's plugin is disabled, the core removes the page; if it was showing, it switches to the first page of the same category, or to the first "General" page when the category is empty; with no pages at all it shows "Nothing to set here". When the plugin is re-enabled, the page comes back (the plugin registers it again on activation).
+- Categories with no pages are not shown in the category tree.
+- When a page is taller than the page area, the core provides vertical scrolling; the width is fixed, and pages must be designed for 440px width.
+- Keyboard: input boxes in pages work as usual; bindings do not take effect inside the window (the same as tool windows); ⌘W closes the window.
+- `show(pageId)` can only name the plugin's own pages (to prevent plugins from navigating to each other and forming hidden coupling); without an argument it opens the last page.
+- Opening the window does not affect playback (interaction requirements §3).
 
-**界面（核心容器，方案 A）**：窗口 640×480，最小 600×420，可调整大小。左侧分类树宽 160px（背景 `Theme.bg-list`，分类 12px，页面 11px 缩进 12px，行高 20px，选中项底色 `Theme.selected-bg`）；右侧页面区内边距 14px（`dialog-padding`），顶部页面标题 13px 粗体，高 24px；底部按钮行高 40px，按钮 21px。
+**Interface (core container, approach A)**: window 640×480, minimum 600×420, resizable. Category tree on the left, 160px wide (background `Theme.bg-list`, categories 12px, pages 11px indented 12px, row height 20px, selected background `Theme.selected-bg`); page area on the right with 14px padding (`dialog-padding`), page title at the top 13px bold, 24px high; bottom button row 40px high, buttons 21px.
 
-**持久化**：上次打开的页面由核心存在 `ui-state.json` 的 `settings.lastPage`。各页的设置由各插件自己保存。
+**Persistence**: the last opened page is stored by the core in `settings.lastPage` of `ui-state.json`. Each page's settings are saved by its own plugin.
 
-**核心依赖**
-- 【核心新增】
+**Core dependencies**
+- [New core API]
 
   ```ts
   type SettingsCategory = "general" | "playback" | "subtitles" | "video" | "audio" | "input" | "appearance" | "plugins" | "other";
   interface Settings {
     page(file: string, options: { id: string; category: SettingsCategory; title: string; order?: number }):
-      View & Disposable & { readonly ready: Promise<void> }; // 需 ui.settings
-    show(pageId?: string): Promise<void>;  // 打开选项窗口；pageId 只能是本插件的页面
+      View & Disposable & { readonly ready: Promise<void> }; // needs ui.settings
+    show(pageId?: string): Promise<void>;  // opens the options window; pageId can only be this plugin's page
   }
   // plugin.settings: Settings
   ```
 
-  规则：`id` 在插件内唯一；`title` 1–24 字符；每个插件最多 8 个页面；页面文件规则同面板（导出一个 component 和一个 global，名字由 SDK 推断，没有 `component` / `global` 选项；页面没有 `visible`，裁决 R-S1）；回调没有「先绑定再显示」的限制。
-  理由：插件不能把别的插件的界面嵌进自己的窗口，只有核心能组合多个插件的 Slint 组件（底栏、侧栏已经这样做）。
+  Rules: `id` is unique within the plugin; `title` 1–24 characters; at most 8 pages per plugin; page file rules are the same as for panels (export one component and one global, with names inferred by the SDK; no `component` / `global` options; pages have no `visible`, ruling R-S1); callbacks have no "bind before show" restriction.
+  Reason: plugins cannot embed another plugin's interface in their own window; only the core can compose Slint components from several plugins (as it already does for the bottom bar and sidebar).
 
-**验收**
-- 按 F5 打开「选项」，左侧至少有「外观」（preferences）、「快捷键与鼠标」（hotkeys，若已提供页面）；点击页面后右侧切换，播放不受影响。
-- 停用 hotkeys：「快捷键与鼠标」分类 1 秒内消失；重新启用后恢复。
-- 在外观页切换配色，主窗口立即变化（见 H10），没有「应用」按钮。
-- 关闭再打开，显示上次的页面。
-- 过渡形态（只有方案 C）：F5 打开 preferences 自己的窗口，包含外观页。
+**Acceptance**
+- Press F5 to open "Options": the left side has at least "Appearance" (preferences) and "Keys and Mouse" (hotkeys, if it provides pages); clicking a page switches the right side, and playback is not affected.
+- Disable hotkeys: the "Keys and Mouse" category disappears within 1 second; it comes back after re-enabling.
+- Switch the color scheme on the appearance page: the main window changes immediately (see H10), with no "Apply" button.
+- Close and reopen: the last page is shown.
+- Transitional form (approach C only): F5 opens preferences' own window, containing the appearance page.
 
-**说明**：不设「应用」（立即生效）；「初始化」「导出当前配置」不做。
+**Notes**: no "Apply" (changes take effect immediately); "initialize" and "export current configuration" are not done.
 
-### H10 主题 / 配色切换
+### H10 Theme / color scheme switching
 
-**需求**
-- 配色由核心统一下发，可以在运行时切换，所有界面（主窗口、底栏、侧栏、右键菜单、所有插件工具窗口、首选项窗口）**立即**生效，不需要重启或重开窗口。
-- 两套配色（2026-10 视觉身份轮，界面规格 §2.1）：**Vestra 深色**（`vestra`，默认）和 **Vestra 浅色**（`vestra-light`），都是取自标志完整色谱的 Aurora 配色：强调色洋红，正在播放为青色，进度渐变琥珀 → 洋红 → 紫 → 青。浅色配色的视频区仍是深色。
-- 插件 std-widgets 以 `fluent-dark` 编译；选浅色配色时宿主在运行时把 std-widgets 的配色方案切到浅色（`Palette.color-scheme`），输入框、下拉框、复选框、滚动条随之变浅。
-- 「外观」页内容：
-  - 配色单选，每项附一块 120×40 的预览，画出视频区与底栏底色、进度填充、强调色、文字色；
-  - 「恢复默认」按钮（回到 Vestra 深色，已是默认时置灰）。
-  - 没有圆角选项：圆角、字号与控件尺寸不随配色变化，也不能单独改（裁决 R-S2）。
+**Requirement**
+- Color schemes are distributed by the core and can be switched at runtime; all interfaces (main window, bottom bar, sidebar, context menu, all plugin tool windows, the preferences window) update **immediately**, without restarting or reopening windows.
+- Two color schemes (2026-10 visual identity round, UI spec §2.1): **Vestra Dark** (`vestra`, default) and **Vestra Light** (`vestra-light`), both Aurora schemes taken from the full color spectrum of the logo: magenta accent, cyan for now playing, progress gradient amber → magenta → purple → cyan. The light scheme's video area stays dark.
+- Plugin std-widgets are compiled with `fluent-dark`; when the light scheme is chosen, the host switches the std-widgets color scheme to light at runtime (`Palette.color-scheme`), and input boxes, drop-downs, checkboxes and scroll bars become light accordingly.
+- "Appearance" page content:
+  - Color scheme radio items, each with a 120×40 preview showing the video area and bottom bar backgrounds, progress fill, accent color and text color;
+  - A "Restore Default" button (back to Vestra Dark, grey when already default).
+  - No corner radius option: corner radii, font sizes and control sizes do not change with the color scheme and cannot be changed separately (ruling R-S2).
 
-**入口**：设置 ▸ 外观 ▸ Vestra 深色 / Vestra 浅色（radio，840、841）；选项 ▸ 外观。以后每加一套配色，在这里多一个单选项。
+**Entry points**: Settings ▸ Appearance ▸ Vestra Dark / Vestra Light (radio, 840, 841); Options ▸ Appearance. Each color scheme added later gets one more radio item here.
 
-**行为细节**
-- 切换时屏幕提示 `配色：<配色名>`。
-- 选择保存在核心，跨启动保持。preferences 停用时配色保持不变：核心持有当前值，只是暂时没有切换入口。
-- 正在拖动的滑块、打开的菜单在切换时不应中断；如果某个视图更新失败，下次刷新时重试，不影响别的视图。
-- 未来可以开放「自定义强调色」，本轮不做；配色 id 由核心固定（`vestra`、`vestra-light`），没有配色列表接口（裁决 R-S2）。
+**Behavior details**
+- On switching, the on-screen message is `Palette: <scheme name>`.
+- The choice is saved in the core and kept across launches. When preferences is disabled, the color scheme stays: the core holds the current value, and there is just no way to switch it for the time being.
+- A slider being dragged or an open menu should not be interrupted by switching; if updating some view fails, it is retried at the next refresh without affecting other views.
+- A "custom accent color" could be opened up in the future, but not this round; scheme ids are fixed by the core (`vestra`, `vestra-light`), and there is no scheme list interface (ruling R-S2).
 
-**持久化**：核心写入 `ui-state.json` 的 `appearance.theme`（`"vestra"` 或 `"vestra-light"`；读到未知值时回到 `"vestra"`），只存这一项。
+**Persistence**: the core writes `appearance.theme` in `ui-state.json` (`"vestra"` or `"vestra-light"`; an unknown value falls back to `"vestra"`), and stores only this.
 
-**核心依赖**
-- 【核心新增】Theme 改为宿主可设的全局。
-  - `theme.slint` 中的颜色、`accent-fill` 改为由宿主下发（带当前 Vestra 默认值），`radius-*`、字号与尺寸保持常量；
-  - 宿主在每个窗口、面板、菜单实例创建时，以及配色变化时，对每个实例的 `Theme` 全局调用 `set_global_property`；
-  - 配色表放在宿主（`src/host/ui/vestra/palettes/*.json` 或 Rust 常量），每套配色列出全部颜色 token；
-  - 插件不能写 `Theme`：SDK 的 `set` / `bind` 只作用于插件自己的组件和桥接 global。
-- 【核心新增】
+**Core dependencies**
+- [New core API] Theme becomes a global settable by the host.
+  - The colors and `accent-fill` in `theme.slint` are distributed by the host instead (with the current Vestra defaults), while `radius-*`, font sizes and dimensions stay constants;
+  - The host calls `set_global_property` on the `Theme` global of every instance when each window, panel and menu instance is created and when the color scheme changes;
+  - The color scheme tables live in the host (`src/host/ui/vestra/palettes/*.json` or Rust constants), each listing all color tokens;
+  - Plugins cannot write `Theme`: the SDK's `set` / `bind` only act on the plugin's own components and bridge global.
+- [New core API]
 
   ```ts
-  type ThemeId = "vestra" | "vestra-light";                 // 以后加配色时扩充
+  type ThemeId = "vestra" | "vestra-light";                 // extended when schemes are added
   interface Appearance {
-    readonly theme: ThemeId;                                 // 同步只读，不需要能力
+    readonly theme: ThemeId;                                 // synchronous, read-only, no capability needed
     onChange(listener: (theme: ThemeId) => void): Disposable;
-    set(theme: ThemeId): Promise<void>;                      // 需 ui.theme；其它值 invalid
+    set(theme: ThemeId): Promise<void>;                      // needs ui.theme; other values invalid
   }
-  // plugin.appearance: Appearance（读取无需能力）
+  // plugin.appearance: Appearance (reading needs no capability)
   ```
 
-  理由：Theme 是被所有插件和宿主界面共享的全局。插件只能改自己的组件，换不了别的插件窗口的颜色；配色必须由核心统一下发，才能保证一致。
+  Reason: Theme is a global shared by all plugins and the host interface. A plugin can only change its own components and cannot change the colors of other plugins' windows; color schemes must be distributed by the core to stay consistent.
 
-**验收**
-- 「设置 ▸ 外观」只有「Vestra」一项且已选中；`set("vestra")` 成功，其它值返回 invalid。
-- 在测试中临时加入第二套配色并切换：1 秒内底栏进度条、菜单选中项、已打开的音频工作台窗口同步变色；重启后保持。
-- grep 插件 `.slint` 中的硬编码颜色（主题文件除外），结果为 0；否则切换后会有残留色块，这一项要回查各插件（UI-THEME-01 已要求）。
-- 停用 preferences 后配色不变。
-- 拖动音量滑块时切换配色，滑块不中断。
+**Acceptance**
+- "Settings ▸ Appearance" has only one item, "Vestra", and it is selected; `set("vestra")` succeeds, other values return invalid.
+- Temporarily add a second color scheme in a test and switch: within 1 second the bottom bar seek bar, the selected menu item and an open Audio Workbench window all change color; kept after a restart.
+- grep for hard-coded colors in plugin `.slint` files (theme files excepted): the result is 0; otherwise leftover color blocks remain after switching, and the plugins have to be checked (already required by UI-THEME-01).
+- After disabling preferences, the color scheme does not change.
+- Switch the color scheme while dragging the volume slider: the slider is not interrupted.
 
-**说明**：本轮不做色相滑块整体调色与自定义配色；皮肤不做。
+**Notes**: no hue slider for overall tinting and no custom color schemes this round; no skins.
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-| 接口 | 理由 |
+| Interface | Reason |
 | --- | --- |
-| `plugin.settings.page(file, { id, category, title, order? }): SettingsPage`；`plugin.settings.show(pageId?)`；能力 `ui.settings` | 只有核心能把多个插件的 Slint 页面组合进同一个窗口 |
-| `Theme` 颜色 token 改为宿主可设，并在所有视图实例上下发 | Theme 是全局共享的，插件只能改自己的组件 |
-| `plugin.appearance.theme/onChange/set`（固定 id）；能力 `ui.theme` | 配色选择是核心状态 |
+| `plugin.settings.page(file, { id, category, title, order? }): SettingsPage`; `plugin.settings.show(pageId?)`; capability `ui.settings` | Only the core can compose Slint pages from several plugins into one window |
+| `Theme` color tokens become settable by the host and are distributed to all view instances | Theme is shared globally, and plugins can only change their own components |
+| `plugin.appearance.theme/onChange/set` (fixed ids); capability `ui.theme` | The color scheme choice is core state |
 
 ---
 
-## 插件管理（`plugins`）
+## Plugin management (`plugins`)
 
-**位置**：`src/plugins/plugins/`（新插件，待创建）
+**Location**: `src/plugins/plugins/` (new plugin, to be created)
 
-### 定位
+### Scope
 
-plugins 插件提供「插件管理」窗口：列出全部插件，可以停用、启用、卸载、回退到上一版本、打开数据目录。
+The plugins plugin provides the "Plugin Manager" window: it lists all plugins and can disable, enable, uninstall, roll back to the previous version, and open the data folder.
 
-宿主现状（从 `src/host/src` 读出）：
+Current host state (read from `src/host/src`):
 
-| 能力 | 现状 |
+| Capability | Current state |
 | --- | --- |
-| 开发加载 | `--plugin <目录>` 可重复；README 中产品插件用这种方式启动 |
-| 托管安装库 | `package_store.rs`：`~/Library/Application Support/Vestra/packages`（`VESTRA_PACKAGE_STORE`），每个 id 记录 `current` 与 `previous` 两个版本，带 `revision`；带日志的原子提交与恢复；`gc` 清理无引用目录 |
-| 启动 | `package_manager.rs`：启动时加载全部 `current` 已提交的包 |
-| SDK 已开放 | `packages.validate` → `trial` / `install`，以及 `rollback`（需 `plugins.manage`，workshop 在用） |
-| 线上方法（SDK 未开放） | `packages.installed`（按 id 查一条记录） |
-| 停用 | 宿主内部有 `disable(owner)`（撤销资源、停进程），但没有对外接口；`plugins.list/load/activation/disable` 已在 2026-10-20 删除（架构总览 §3），2026-10-core-ui 记录「没有对外停用入口」 |
-| 卸载 | 不存在：store 没有删除记录的操作 |
-| 停用状态的持久化 | 不存在 |
+| Development loading | `--plugin <directory>`, repeatable; the README starts the product plugins this way |
+| Managed install store | `package_store.rs`: `~/Library/Application Support/Vestra/packages` (`VESTRA_PACKAGE_STORE`); each id records two versions, `current` and `previous`, with a `revision`; journaled atomic commit and recovery; `gc` cleans up unreferenced directories |
+| Startup | `package_manager.rs`: loads all committed `current` packages at startup |
+| Exposed in the SDK | `packages.validate` → `trial` / `install`, and `rollback` (needs `plugins.manage`, used by workshop) |
+| Wire method (not exposed in the SDK) | `packages.installed` (look up one record by id) |
+| Disable | The host has an internal `disable(owner)` (withdraws resources, stops the process) but no external interface; `plugins.list/load/activation/disable` were removed on 2026-10-20 (architecture overview §3), and 2026-10-core-ui records "no external disable entry point" |
+| Uninstall | Does not exist: the store has no operation to delete a record |
+| Persisting the disabled state | Does not exist |
 
-所以 J07 需要核心重新设计四个接口：列表、停用/启用、卸载、变化通知。plugins 插件只是界面。
+So J07 needs the core to redesign four interfaces: list, disable/enable, uninstall, change notification. The plugins plugin is only the interface.
 
-manifest 能力：`commands`、`ui.window`、`ui.osd`、`plugins.manage`（现有能力，扩展其覆盖的接口）。
+Manifest capabilities: `commands`, `ui.window`, `ui.osd`, `plugins.manage` (an existing capability, extending the interfaces it covers).
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| J07 | 插件列表、停用、启用、卸载（另含回退、打开数据目录） | ✗ | `packages.list/onChange/setEnabled/uninstall` |
+| J07 | Plugin list, disable, enable, uninstall (plus roll back, open data folder) | ✗ | `packages.list/onChange/setEnabled/uninstall` |
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-| 菜单路径 | order | group | 默认绑定 |
+| Menu path | order | group | Default binding |
 | --- | --- | --- | --- |
-| 设置 ▸ 插件管理… | 836 | settings-plugins | （无） |
+| Settings ▸ Plugin Manager… | 836 | settings-plugins | (none) |
 
-方案 A 落地后，也在首选项「插件」分类注册「插件管理」页面，内容与窗口相同。
+Once approach A lands, a "Plugin Manager" page with the same content as the window is also registered in the preferences "Plugins" category.
 
-### 第 3a 轮实现说明
+### Round 3a implementation notes
 
-- `PluginInfo` 按裁决 R-G1 去掉了 `dataDirectory` 与 `self`：数据目录按 `dirname(plugin.dataDirectory)/<id>` 推出，自身按 `info.id === plugin.id` 判断；`list` / `onChange` 不需要能力。下文「核心依赖」中的类型草案以参考文档 §12 为准。
-- 核心不为停用插件预先创建数据目录：「打开数据目录」在目录不存在时提示「数据目录不存在」，不由插件创建别的插件的目录。
-- 自身那一行的「重新加载」「回退到上一版本」也禁用（回退或重载自身会让管理窗口在操作中途重启）。
+- `PluginInfo` dropped `dataDirectory` and `self` under ruling R-G1: the data folder is derived as `dirname(plugin.dataDirectory)/<id>`, and self is decided by `info.id === plugin.id`; `list` / `onChange` need no capability. The type draft under "Core dependencies" below is superseded by reference §12.
+- The core does not create data folders in advance for disabled plugins: when the folder does not exist, "Open Data Folder" shows "The data folder does not exist", and the plugin does not create other plugins' folders.
+- "Reload" and "Roll Back" are also disabled on its own row (rolling back or reloading itself would restart the manager window in the middle of the operation).
 
-### J07 插件管理
+### J07 Plugin management
 
-**需求**
-- **列表**：每个插件一行，五列：
-  - 插件 id
-  - 版本（开发加载的插件没有版本时显示「开发」）
-  - 来源：已安装 / 开发加载 / 试载
-  - 状态：运行中 / 启动中 / 已停用 / 启动失败 / 已停止
-  - 数据大小
-- **列表来源**：运行中的、已安装但被停用的，以及启动失败的插件都要列出。
-- **详情区**（选中一行时）：
-  - 声明的能力列表，每项附中文说明，例如 `playback.control 控制播放`、`plugins.manage 管理插件`、`bindings.manage 修改快捷键`；
-  - 包目录与数据目录路径；
-  - 上一版本号（有时）；
-  - 最近的失败原因（有时）。
-- **操作按钮**：
-  - `停用` / `启用`（随状态切换）
-  - `卸载…`
-  - `回退到上一版本`（有上一版本时可用）
-  - `打开数据目录`（Finder）
-  - `重新加载`（停用后立即启用，用于插件出错后恢复）
-- 停用状态跨启动保持：已停用的已安装插件，下次启动时不加载。
+**Requirement**
+- **List**: one row per plugin, five columns:
+  - Plugin id
+  - Version ("Dev" for development-loaded plugins without a version)
+  - Source: installed / development / trial
+  - State: running / starting / disabled / failed / stopped
+  - Data size
+- **What is listed**: running plugins, installed but disabled plugins, and plugins that failed to start must all be listed.
+- **Details area** (when a row is selected):
+  - The declared capabilities, each with a plain-language description, for example `playback.control Control playback`, `plugins.manage Manage plugins`, `bindings.manage Change shortcuts`;
+  - The package directory and data folder paths;
+  - The previous version number (when there is one);
+  - The most recent failure reason (when there is one).
+- **Action buttons**:
+  - `Disable` / `Enable` (switching with the state)
+  - `Uninstall…`
+  - `Roll Back` (available when there is a previous version)
+  - `Open Data Folder` (Finder)
+  - `Reload` (disable and immediately enable, to recover after a plugin error)
+- The disabled state is kept across launches: a disabled installed plugin is not loaded at the next launch.
 
-**入口**：设置 ▸ 插件管理…
+**Entry point**: Settings ▸ Plugin Manager…
 
-**行为细节**
-- **停用**：
-  - 核心撤销该插件的全部资源（菜单、绑定、窗口、面板、滤镜、字幕层、解析器、播放序列提供者、标记层、设置页），并停止进程。
-  - 它打开的媒体**继续播放**（API 参考 §3.2）；它的处理效果（滤镜、字幕样式）被撤销。
-  - 停用前确认：「停用 vestra.audio 后，它的均衡器等效果会立即撤销。」
-  - 提示 `已停用 vestra.audio`。
-- **启用**：核心重新启动该插件，状态经过「启动中」到「运行中」；激活失败时状态为「启动失败」，详情区显示原因。
-- **不能停用自己**：plugins 插件自己那一行的「停用」「卸载」按钮禁用，悬停说明「插件管理不能停用自身」。核心也拒绝（`invalid`），防止用户把管理入口关掉之后无法恢复。
-- **开发加载的插件**（`--plugin`）：
-  - 可以停用、启用，但只在本次运行内有效（下次启动由命令行决定），详情区说明「开发加载：停用只在本次运行有效」；
-  - 不能卸载、不能回退（按钮禁用）。
-- **卸载**：
-  - 只适用于已安装的插件。确认框中有复选框「同时删除它的设置与数据」（默认不勾选）。
-  - 核心先停用，再从安装库中移除 `current` 与 `previous` 记录。包目录由 `gc` 回收。勾选删除数据时，再删除 `plugin-data/<id>/`。
-  - 用户覆盖层中该插件的快捷键条目保留（成为 orphan，可在 J01 中清除），以便重新安装后恢复。
-  - 提示 `已卸载 vestra.nes`。
-- **回退**：调用现有 `packages.rollback(id)`，界面跟随 `PackageChange` 的状态（准备中 / 激活中 / 已完成 / 失败）。失败时显示 message。
-- **试载中的插件**：只显示，不提供任何操作（由 workshop 管理）。
-- **实时性**：订阅 `packages.onChange`，安装、卸载、状态变化（含 workshop 安装的新插件）在 1 秒内反映到列表。
-- 正在进行的安装或回退期间（`PackageChange` 未结束），该插件的所有按钮禁用，`reason: "正在更新"`。
-- **打开数据目录**：`open <路径>` 子进程；目录不存在时先由核心创建，失败时提示「数据目录不可用」。
-- **数据大小**：插件自己遍历数据目录统计，最多 2 秒，超时显示「—」。读取别的插件的目录大小只是统计，不读内容；如果审查认为这也算越界，就改为 `PluginInfo.dataBytes` 由核心提供。
+**Behavior details**
+- **Disable**:
+  - The core withdraws all of the plugin's resources (menus, bindings, windows, panels, filters, subtitle layers, resolvers, playback sequence provider, mark layers, settings pages) and stops the process.
+  - Media it opened **keep playing** (API reference §3.2); its processing effects (filters, subtitle styles) are withdrawn.
+  - Confirm before disabling: "After disabling vestra.audio, its equalizer and other effects are withdrawn immediately."
+  - Message `Disabled vestra.audio`.
+- **Enable**: the core starts the plugin again; the state goes through "starting" to "running"; when activation fails, the state is "failed" and the details area shows the reason.
+- **Cannot disable itself**: the "Disable" and "Uninstall" buttons on the plugins plugin's own row are disabled, with the hover explanation "Plugin Manager cannot disable itself". The core refuses too (`invalid`), so users cannot turn off the management entry point and then be unable to recover.
+- **Development-loaded plugins** (`--plugin`):
+  - Can be disabled and enabled, but only for this run (the next launch is decided by the command line); the details area explains "Development loading: disabling only applies to this run";
+  - Cannot be uninstalled or rolled back (buttons disabled).
+- **Uninstall**:
+  - Only for installed plugins. The confirmation box has the checkbox "Also delete its settings and data" (unchecked by default).
+  - The core disables it first, then removes the `current` and `previous` records from the install store. The package directory is reclaimed by `gc`. When deleting data is checked, `plugin-data/<id>/` is deleted as well.
+  - The plugin's shortcut entries in the user overlay are kept (becoming orphans, which can be cleared in J01), so they come back after reinstalling.
+  - Message `Uninstalled vestra.nes`.
+- **Roll back**: calls the existing `packages.rollback(id)`, and the interface follows the states of `PackageChange` (preparing / activating / done / failed). On failure the message is shown.
+- **Plugins on trial**: shown only, with no actions (managed by workshop).
+- **Liveness**: subscribe to `packages.onChange`; installs, uninstalls and state changes (including new plugins installed by workshop) show up in the list within 1 second.
+- While an install or rollback is in progress (`PackageChange` not finished), all of that plugin's buttons are disabled with `reason: "Updating"`.
+- **Open Data Folder**: an `open <path>` child process; when the folder does not exist, the core creates it first; on failure the message is "Data folder unavailable".
+- **Data size**: the plugin walks the data folder itself to compute it, for at most 2 seconds, showing "—" on timeout. Reading the size of other plugins' folders is only a statistic and does not read their contents; if review considers this overstepping too, `PluginInfo.dataBytes` will be provided by the core instead.
 
-**界面**：第 3b 轮起为选项窗口的设置页（id `plugins.manage`，分类「插件」，宽 440；第 3a 轮的工具窗口 600×420 已删除，关闭用选项窗口的「关闭」）。下面的列宽为原窗口形态；页面形态为 id 自适应（约 189）/ 版本 50 / 来源 56 / 状态 56 / 数据 50，详情标签 64，按钮行不含「关闭」。
-- 上部列表（高 220px）：五列（id 自适应 / 版本 70 / 来源 70 / 状态 70 / 数据 60），行高 18px；「已停用」行文字用 `Theme.text-dim`，「启动失败」的状态列用 `Theme.accent`。
-- 中部详情区：两列表格，标签 80px，能力列表每行一项。
-- 底部按钮行：按钮 21px，左侧 `停用/启用` `重新加载` `回退到上一版本` `卸载…`，右侧 `打开数据目录` `关闭`。
+**Interface**: since round 3b this is a settings page in the options window (id `plugins.manage`, category "Plugins", 440 wide; the round 3a tool window 600×420 has been removed, and closing uses the options window's "Close"). The column widths below are for the original window form; the page form uses id adaptive (about 189) / version 50 / source 56 / state 56 / data 50, detail labels 64, and the button row has no "Close".
+- Top list (220px high): five columns (id adaptive / version 70 / source 70 / state 70 / data 60), row height 18px; "Disabled" rows use `Theme.text-dim` text, and the state column of "failed" uses `Theme.accent`.
+- Middle details area: a two-column table, labels 80px, one capability per line.
+- Bottom button row: buttons 21px; on the left `Disable/Enable` `Reload` `Roll Back` `Uninstall…`, on the right `Open Data Folder` `Close`.
 
-**持久化**：停用集合由核心持久化（已安装插件写入安装库目录中的 catalog，或 `ui-state.json` 的 `disabledPlugins`，由核心决定）。plugins 插件不另存。
+**Persistence**: the disabled set is persisted by the core (for installed plugins, written to the catalog in the install store directory, or to `disabledPlugins` in `ui-state.json`, as the core decides). The plugins plugin saves nothing extra.
 
-**核心依赖**
-- 现有：`packages.rollback`、`PackageChange`。
-- 【核心新增】
+**Core dependencies**
+- Existing: `packages.rollback`, `PackageChange`.
+- [New core API]
 
   ```ts
   interface PluginInfo {
     id: string; version: string | null;
     origin: "installed" | "development" | "trial";
     state: "starting" | "running" | "disabled" | "failed" | "stopped";
-    error: string | null;                 // 最近一次失败原因
+    error: string | null;                 // most recent failure reason
     capabilities: string[];
     directory: string; dataDirectory: string | null;
-    previousVersion: string | null;       // 安装库中的 previous
-    self: boolean;                        // 是调用者自己
+    previousVersion: string | null;       // previous in the install store
+    self: boolean;                        // is the caller itself
   }
   interface Packages {
-    // 现有：validate、rollback
-    list(): Promise<PluginInfo[]>;                                         // 需 plugins.manage
+    // existing: validate, rollback
+    list(): Promise<PluginInfo[]>;                                         // needs plugins.manage
     onChange(listener: (plugins: PluginInfo[]) => void): Disposable;
-    setEnabled(id: string, enabled: boolean): Promise<void>;               // 已安装：持久；开发加载：本次运行；自己：invalid；试载：unsupported
-    uninstall(id: string, options?: { removeData?: boolean }): Promise<PackageChange>; // 仅已安装；自己：invalid
+    setEnabled(id: string, enabled: boolean): Promise<void>;               // installed: persistent; development: this run; self: invalid; trial: unsupported
+    uninstall(id: string, options?: { removeData?: boolean }): Promise<PackageChange>; // installed only; self: invalid
   }
   ```
 
-  理由：
-  - 插件的运行状态、安装记录、停用状态都在核心；
-  - 停用需要撤销该插件在宿主侧的全部资源，插件做不到；
-  - 卸载需要修改带日志的安装库（`package_store.rs` 的原子提交），只有核心是这个库的唯一写入者。
-  `PluginInfo` 与 I09 的 `AppInfo.plugins` 共用同一类型（I09 读取时不需要能力）。
+  Reasons:
+  - The plugins' running state, install records and disabled state are all in the core;
+  - Disabling needs to withdraw all of the plugin's resources on the host side, which plugins cannot do;
+  - Uninstalling needs to change the journaled install store (atomic commit in `package_store.rs`), and the core is the only writer of that store.
+  `PluginInfo` is the same type as I09's `AppInfo.plugins` (I09 needs no capability to read it).
 
-**验收**
-- 打开窗口，列出 10 个产品插件及其状态，与 I09「关于」中的一致。
-- 停用 audio：「声音 ▸ 音频工作台…」从菜单消失，Shift+E 无效，正在播放的音乐不断；启用后恢复。
-- 停用一个已安装的插件并重启 Vestra Player，它仍为已停用，没有被加载。
-- 卸载 workshop 安装的测试插件（不删数据）：从列表消失，安装库中没有记录；重新安装后它的设置还在。勾选「同时删除数据」后，`plugin-data/<id>` 不存在。
-- plugins 自己那一行的停用、卸载按钮禁用；直接调用 `setEnabled(self, false)` 返回 `invalid`。
-- 开发加载的插件：卸载按钮禁用，停用后重启 Vestra Player，它照常被加载。
-- 回退：有上一版本的插件，点「回退到上一版本」后版本号变为上一版本。
+**Acceptance**
+- Open the window: it lists the 10 product plugins and their states, matching I09 "About".
+- Disable audio: "Audio ▸ Audio Workbench…" disappears from the menu, Shift+E does nothing, and the music playing does not stop; everything comes back after enabling.
+- Disable an installed plugin and restart Vestra Player: it is still disabled and was not loaded.
+- Uninstall a test plugin installed by workshop (without deleting data): it disappears from the list and the install store has no record; after reinstalling, its settings are still there. With "Also delete data" checked, `plugin-data/<id>` does not exist.
+- The disable and uninstall buttons on the plugins plugin's own row are disabled; calling `setEnabled(self, false)` directly returns `invalid`.
+- Development-loaded plugins: the uninstall button is disabled; after disabling and restarting Vestra Player, it is loaded as usual.
+- Roll back: for a plugin with a previous version, after clicking "Roll Back" the version number becomes the previous version.
 
-**说明**：按 Vestra 的插件模型设计；列表与按钮布局沿用常见的「添加 / 移除 / 设置 / 信息」列表对话框形式。
+**Notes**: designed for Vestra's plugin model; the list and button layout follow the common "add / remove / settings / info" list dialog form.
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-| 接口 | 理由 |
+| Interface | Reason |
 | --- | --- |
-| `plugin.packages.list(): Promise<PluginInfo[]>` | 插件运行与安装状态在核心 |
-| `plugin.packages.onChange(listener)` | 安装、停用、失败时刷新 |
-| `plugin.packages.setEnabled(id, enabled)`（持久化停用集合） | 停用要撤销宿主侧资源；对外停用接口已删除，需要重新设计 |
-| `plugin.packages.uninstall(id, { removeData? })` | 安装库只有核心能写，目前没有删除操作 |
+| `plugin.packages.list(): Promise<PluginInfo[]>` | The plugins' running and install state is in the core |
+| `plugin.packages.onChange(listener)` | Refresh on install, disable and failure |
+| `plugin.packages.setEnabled(id, enabled)` (persisting the disabled set) | Disabling must withdraw host-side resources; the external disable interface was removed and has to be redesigned |
+| `plugin.packages.uninstall(id, { removeData? })` | Only the core can write the install store, and there is no delete operation yet |
 
 ---
 
-## 专辑封面与空闲画面（`visualizer`）
+## Album art and idle screen (`visualizer`)
 
-**位置**：`src/plugins/visualizer/`（新插件，待创建）
+**Location**: `src/plugins/visualizer/` (new plugin, to be created)
 
-### 定位
+### Scope
 
-visualizer 插件负责「视频区没有画面时显示什么」：
+The visualizer plugin owns "what the video area shows when there is no picture":
 
-- **纯音频播放时**（J11）：显示专辑封面与曲目信息（没有封面时显示占位图）；
-- **空闲时**（H12）：没有打开任何来源时，居中显示品牌 logo；
-- **加载中**（interaction-spec.md G-16b）：来源 `phase === "loading"` 时显示转圈与「正在打开：<来源名>」。
+- **During audio-only playback** (J11): album art and track information (a placeholder when there is no cover);
+- **When idle** (H12): with no source open, the brand logo centered;
+- **While loading** (interaction-spec.md G-16b): while the source has `phase === "loading"`, a spinner and "Opening: <source name>".
 
-> 加载中的行为已被 [交互规格](interaction-spec.md) G-16a / G-16b 取代：核心在 `loading` 时让背景层生效，visualizer 画加载界面（74×74、12 个刻度、每 50 ms 一格的转圈，中心上移 30 px；下方粗体 15 px `Theme.text-dim` 文字，下移 30 px）；出错时回到加载前的画面；与徽标、封面互斥，不受两个开关影响。下文「`loading` 保持上一状态」「`loading` 期间保持徽标」作废。
+> The loading behavior has been superseded by G-16a / G-16b in the [interaction spec](interaction-spec.md): the core makes the backdrop layer effective during `loading`, and visualizer draws the loading screen (74×74, 12 ticks, a spinner advancing one tick every 50 ms, center moved up 30 px; below it bold 15 px `Theme.text-dim` text, moved down 30 px); on error it goes back to the picture from before loading; it is mutually exclusive with the logo and cover, and not affected by the two toggles. "`loading` keeps the previous state" and "the logo stays during `loading`" below are void.
 
-这些都要画在视频区里，而视频区由宿主绘制（`host.slint` 中的 `Image { source: root.video-frame }`），插件现在只能挂载到底栏和侧栏。所以需要核心新增一个「视频区背景层」挂载位：没有视频画面时，核心在视频区显示一个插件面板。另外，封面是运行时取得的图片，需要图片属性 `plugin.ui.image`（playback 章 I07 首次提出）。
+All of these have to be drawn in the video area, which the host draws (`Image { source: root.video-frame }` in `host.slint`), while plugins can currently only mount into the bottom bar and the sidebar. So the core needs a new "video area backdrop layer" mount slot: when there is no video picture, the core shows a plugin panel in the video area. In addition, the cover is an image obtained at runtime, which needs the image property `plugin.ui.image` (first proposed in I07 of the playback chapter).
 
-边界：
-- 背景层只负责显示，不接收鼠标和键盘输入。双击全屏、右键菜单、滚轮、拖放仍由宿主视频区处理。
-- 封面和标签由插件自己读：ffprobe、ffmpeg 提取，或读取同文件夹中的 `cover.jpg` 等。
-- 不做频谱、波形等随音频变化的动画，因此不需要核心提供实时音频数据。
+Boundaries:
+- The backdrop layer is display only and does not receive mouse or keyboard input. Double-click fullscreen, the context menu, the wheel and drag and drop are still handled by the host video area.
+- Covers and tags are read by the plugin itself: extracted with ffprobe and ffmpeg, or by reading `cover.jpg` etc. in the same folder.
+- No animations that follow the audio, such as spectrum or waveform, so the core does not need to provide live audio data.
 
-manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dialog`（选择自定义徽标）、`ui.osd`。
+Manifest capabilities: `commands`, `playback.read`, `events`, `ui.mount`, `ui.dialog` (choosing a custom logo), `ui.osd`.
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| J11 | 纯音频时显示专辑封面（无封面时占位） | ✓（3b） | 背景层挂载位 `panels.mount("backdrop")`；图片属性 `plugin.ui.image` |
-| H12 | 空闲时显示徽标 | ✓（3b） | 背景层挂载位（logo 用编译期 `@image-url`；自定义徽标需图片属性） |
+| J11 | Show album art for audio-only media (placeholder without a cover) | ✓ (3b) | Backdrop mount slot `panels.mount("backdrop")`; image property `plugin.ui.image` |
+| H12 | Show the logo when idle | ✓ (3b) | Backdrop mount slot (the logo uses compile-time `@image-url`; a custom logo needs the image property) |
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-| 菜单路径 | order | group | 默认绑定 |
+| Menu path | order | group | Default binding |
 | --- | --- | --- | --- |
-| 声音 ▸ 纯音频时显示专辑封面（勾选） | 530 | visual | |
-| 设置 ▸ 外观 ▸ 空闲时显示徽标（勾选） | 845 | settings-logo | |
-| 设置 ▸ 外观 ▸ 选择徽标图片… | 846 | settings-logo | |
-| 设置 ▸ 外观 ▸ 恢复默认徽标 | 847 | settings-logo | |
+| Audio ▸ Show Album Cover for Audio Only (checkbox) | 530 | visual | |
+| Settings ▸ Appearance ▸ Show Logo When Idle (checkbox) | 845 | settings-logo | |
+| Settings ▸ Appearance ▸ Choose Logo Image… | 846 | settings-logo | |
+| Settings ▸ Appearance ▸ Restore Default Logo | 847 | settings-logo | |
 
-「声音 ▸」子菜单中 playback 用 501–503，audio 用 510–529，本插件用 530–539。专辑封面放在声音领域，因为它只在播放音频时出现。徽标放在「设置 ▸ 外观」，与配色相邻。没有默认快捷键。
+In the "Audio ▸" submenu, playback uses 501–503, audio uses 510–529, and this plugin uses 530–539. The album cover goes in the audio domain because it only appears when audio is playing. The logo goes in "Settings ▸ Appearance", next to the color schemes. No default shortcuts.
 
-### J11 纯音频时显示专辑封面
+### J11 Show album art for audio-only media
 
-**需求**
-- 来源就绪、开关打开（默认开），且当前没有视频画面时（纯音频文件，或只有封面图的音频），视频区显示专辑封面：
-  - 封面居中，边长为视频区短边的 60%，最大 480px，保持比例，圆角 `radius-panel`，带 1px `Theme.line` 描边；
-  - 封面下方 3 行文字：标题（13px 粗体，`Theme.text`）/ 艺术家（11px，`Theme.text-list`）/ 专辑 · 年份（11px，`Theme.text-dim`）；
-  - 没有标签时，标题用文件名，另外两行省略。
-- 没有封面时显示占位图：品牌 logo 以 40% 不透明度放在封面位置，文字照常显示。
-- 不做频谱、波形或其它动画。
+**Requirement**
+- When the source is ready, the toggle is on (on by default), and there is no video picture (an audio-only file, or audio with only a cover image), the video area shows the album cover:
+  - The cover is centered, with a side length of 60% of the video area's short side, at most 480px, keeping its ratio, corner radius `radius-panel`, with a 1px `Theme.line` border;
+  - 3 lines of text below the cover: title (13px bold, `Theme.text`) / artist (11px, `Theme.text-list`) / album · year (11px, `Theme.text-dim`);
+  - With no tags, the title is the file name, and the other two lines are left out.
+- With no cover, a placeholder is shown: the brand logo at 40% opacity in the cover position, with the text shown as usual.
+- No spectrum, waveform or other animation.
 
-**入口**：「声音 ▸ 纯音频时显示专辑封面」（勾选）。
+**Entry point**: "Audio ▸ Show Album Cover for Audio Only" (checkbox).
 
-**行为细节**
-- **何时显示**：背景层是否显示由核心决定（`panels.backdrop.state.effective`）；画什么由插件判断（裁决 R-U3，没有 `mode`）：来源 `ready` / `ended` 且 `stats().video === null` 时画封面。
-- **已知行为**（裁决 3.2 第 8 条）：带内嵌封面、或同文件夹有 mpv 默认会加载的 `cover.jpg` / `folder.jpg` 等的音频，mpv 把封面当作视频轨显示（`stats().video` 非空，`effective = false`），看到的是 mpv 渲染的封面、没有标签文字。本插件的封面画面因此只在没有任何封面的音频上出现（占位图 + 标签）；内嵌与文件夹封面的提取保留，待核心把封面交给背景层后生效。
-- **封面来源**，按顺序取第一个可用的：
-  1. 内嵌封面：`ffmpeg -v error -nostdin -i <path> -map 0:v:0 -frames:v 1 -an -f image2 <cache>/cover.jpg`；只有当 ffprobe 显示 `disposition.attached_pic = 1` 时才提取，超时 10 秒；
-  2. 同一文件夹中的 `cover.jpg|png`、`folder.jpg|png`、`front.jpg|png`，忽略大小写；
-  3. 占位图。
-- **网络来源**：只用占位图和 `source` 中的文件名，不运行 ffmpeg。
-- **标签读取**：`ffprobe -v error -show_entries format_tags=title,artist,album,date -of json <path>`。
-- **缓存**：
-  - 键为 `sha1(realpath + size + mtime)`；
-  - 目录 `<dataDirectory>/cache/covers/<key>.jpg`，同目录的 `tags.json` 存标签；
-  - 上限 200 MB 或 30 天，按 `lastUsed` 淘汰。
-- **换曲**：`sourceId` 变化时，中止进行中的提取进程。新封面准备好之前先显示占位图，然后用 300 ms 淡入切换（Slint `animate`，不从 Node 逐帧推送）。
-- **关闭开关**：立即生效。关闭时，纯音频播放的视频区为 `bg-video` 纯色（现状）。切换时提示 `纯音频时显示专辑封面：开/关`。
-- **全屏时**：同样显示，尺寸按全屏的视频区计算。
-- 封面图片读取失败：显示占位图，不提示。
+**Behavior details**
+- **When to show**: whether the backdrop layer shows is decided by the core (`panels.backdrop.state.effective`); what to draw is decided by the plugin (ruling R-U3, no `mode`): draw the cover when the source is `ready` / `ended` and `stats().video === null`.
+- **Known behavior** (ruling 3.2 item 8): for audio with an embedded cover, or with a `cover.jpg` / `folder.jpg` etc. in the same folder that mpv loads by default, mpv shows the cover as a video track (`stats().video` non-empty, `effective = false`), so what is seen is the cover rendered by mpv, without tag text. This plugin's cover screen therefore only appears for audio with no cover at all (placeholder + tags); extracting embedded and folder covers is kept and takes effect once the core hands covers to the backdrop layer.
+- **Cover sources**, the first available one in order:
+  1. Embedded cover: `ffmpeg -v error -nostdin -i <path> -map 0:v:0 -frames:v 1 -an -f image2 <cache>/cover.jpg`; extracted only when ffprobe shows `disposition.attached_pic = 1`, timeout 10 seconds;
+  2. `cover.jpg|png`, `folder.jpg|png`, `front.jpg|png` in the same folder, case-insensitive;
+  3. The placeholder.
+- **Network sources**: only the placeholder and the file name from `source`, without running ffmpeg.
+- **Reading tags**: `ffprobe -v error -show_entries format_tags=title,artist,album,date -of json <path>`.
+- **Cache**:
+  - The key is `sha1(realpath + size + mtime)`;
+  - Directory `<dataDirectory>/cache/covers/<key>.jpg`, with tags stored in `tags.json` in the same directory;
+  - Limit 200 MB or 30 days, evicted by `lastUsed`.
+- **Track change**: when `sourceId` changes, running extraction processes are aborted. Until the new cover is ready, the placeholder is shown, then it switches with a 300 ms fade-in (Slint `animate`, not pushed frame by frame from Node).
+- **Turning the toggle off**: takes effect immediately. When off, the video area during audio-only playback is the plain `bg-video` color (as now). On toggle, message `Album cover for audio only: On/Off`.
+- **In fullscreen**: shown the same way, sized for the fullscreen video area.
+- Failure to read the cover image: the placeholder is shown, without a message.
 
-**界面**：背景层组件铺满视频区，不含可交互控件。布局如上，文字最大宽度为视频区宽度的 80%，超长省略。最小视频区（318×120 左右）时只显示封面（缩小）或只显示标题，以不溢出为准：高度 < 200px 时隐藏艺术家、专辑两行。
+**Interface**: the backdrop component fills the video area and has no interactive controls. Layout as above, with text at most 80% of the video area width, truncated when too long. At the minimum video area (about 318×120), only the cover (shrunk) or only the title is shown, whichever does not overflow: below 200px height the artist and album lines are hidden.
 
-**持久化**：`<dataDirectory>/visualizer.json`：`{ "audio": { "on": true }, "idle": { "on": true, "logo": null } }`。
+**Persistence**: `<dataDirectory>/visualizer.json`: `{ "audio": { "on": true }, "idle": { "on": true, "logo": null } }`.
 
-**核心依赖**
-- 【核心新增】视频区背景层挂载位：
+**Core dependencies**
+- [New core API] video area backdrop mount slot:
 
   ```ts
-  plugin.panels.mount("backdrop", file, options?): Panel           // 需 ui.mount；同一时间只能有一个背景层，第二个以 conflict 失败
+  plugin.panels.mount("backdrop", file, options?): Panel           // needs ui.mount; only one backdrop layer at a time, a second fails with conflict
   plugin.panels.backdrop: {
-    readonly state: { effective: boolean } | null; // null：没有背景层（裁决 R-U3 去掉了 mode）
+    readonly state: { effective: boolean } | null; // null: no backdrop layer (ruling R-U3 removed mode)
     onChange(listener: (state) => void): Disposable;
   }
   ```
 
-  规则：
-  - 核心在两种情况下显示背景层：`phase` 为 `empty`（未打开或已关闭）；`ready` / `ended` 且没有视频输出（含封面视频轨时算有输出）。插件用 `phase` 与 `stats().video` 区分空闲与纯音频；
-  - `loading` 时显示（G-16a，原「保持上一状态」作废）；`error` 时保持上一状态；
-  - 有视频画面时隐藏，`effective = false`；
-  - 背景层画在视频图像所在位置，位于宿主输入层（TouchArea）**之下**，不接收任何指针或键盘事件；
-  - 屏幕提示和信息块画在它之上；
-  - 插件停用时卸载，视频区恢复为纯色。
-  理由：视频区由宿主绘制，插件只能挂载到底栏和侧栏，没有办法在视频区显示内容。这是不含业务的通用挂载位，「空闲」「纯音频」的判定也只有核心最清楚（视频输出是否存在）。
-- 【核心新增】图片属性 `plugin.ui.image(path): ImageRef`（定义见 playback 章 I07），用于显示封面。占位图用编译期 `@image-url`，不需要它。
+  Rules:
+  - The core shows the backdrop layer in two cases: `phase` is `empty` (nothing opened, or closed); `ready` / `ended` with no video output (a cover video track counts as output). The plugin uses `phase` and `stats().video` to tell idle from audio-only;
+  - Shown during `loading` (G-16a; the former "keep the previous state" is void); keeps the previous state on `error`;
+  - Hidden when there is a video picture, `effective = false`;
+  - The backdrop layer is drawn where the video image is, **below** the host input layer (TouchArea), and receives no pointer or keyboard events;
+  - On-screen messages and the info block are drawn above it;
+  - Unmounted when the plugin is disabled, and the video area goes back to a plain color.
+  Reason: the video area is drawn by the host, and plugins can only mount into the bottom bar and sidebar, with no way to show content in the video area. This is a general mount slot with no business logic, and the core knows best how to judge "idle" and "audio only" (whether there is video output).
+- [New core API] image property `plugin.ui.image(path): ImageRef` (defined in I07 of the playback chapter), used to show covers. The placeholder uses compile-time `@image-url` and does not need it.
 
-**验收**
-- 播放一首带内嵌封面的 MP3：视频区显示封面与「标题 / 艺术家 / 专辑」，与 Finder「显示简介」一致；没有封面的 FLAC 文件夹里有 `cover.jpg` 时显示它。
-- 没有任何封面的音频：显示半透明品牌 logo 占位与文件名。
-- 双击封面画面仍然切换全屏，右键仍然打开菜单，滚轮仍然调音量。
-- 播放视频文件时封面不显示；从音频切到视频文件后，1 秒内切回视频画面。
-- 关闭开关后，纯音频时视频区为纯色。
-- 停用 visualizer 后，视频区恢复为纯色，播放不中断。
+**Acceptance**
+- Play an MP3 with an embedded cover: the video area shows the cover and "title / artist / album", matching Finder's "Get Info"; for a FLAC folder without a cover that has `cover.jpg`, that is shown.
+- Audio with no cover at all: the semi-transparent brand logo placeholder and the file name are shown.
+- Double-clicking the cover screen still toggles fullscreen, right-click still opens the menu, and the wheel still changes the volume.
+- The cover is not shown while playing a video file; after switching from audio to a video file, the video picture is back within 1 second.
+- With the toggle off, the video area is a plain color during audio-only playback.
+- After disabling visualizer, the video area goes back to a plain color and playback is not interrupted.
 
-**说明**：只做「显示专辑图片」；不做可视化动画与频谱、浮动球、图片文件夹幻灯片、下载可视化。
+**Notes**: only "show the album image"; no visualization animations and spectrum, floating ball, image folder slideshow, or downloading visualizations.
 
-### H12 空闲时显示徽标
+### H12 Show the logo when idle
 
-**需求**
-- 没有打开任何来源时（启动后、关闭来源后、播放列表结束且关闭了媒体），视频区居中显示徽标：
-  - 默认使用品牌 logo（`src/assets/brand/logo.png`），边长为视频区短边的 30%，限制在 64–256px，保持比例；
-  - 下方 12px 处显示「Vestra Player」（13px，`Theme.text-dim`）；
-  - 背景 `Theme.bg-video`。
-- 可以选择自定义徽标图片（PNG/JPEG），恢复默认后回到品牌 logo。
-- 开关「空闲时显示徽标」默认开。关闭时空闲画面为纯色（现状）。
+**Requirement**
+- When no source is open (after startup, after closing the source, after the playlist ends and the media is closed), the video area shows the logo centered:
+  - By default the brand logo (`src/assets/brand/logo.png`), with a side length of 30% of the video area's short side, limited to 64–256px, keeping its ratio;
+  - "Vestra Player" 12px below it (13px, `Theme.text-dim`);
+  - Background `Theme.bg-video`.
+- A custom logo image (PNG/JPEG) can be chosen; restoring the default goes back to the brand logo.
+- The toggle "Show Logo When Idle" is on by default. When off, the idle screen is a plain color (as now).
 
-**入口**：设置 ▸ 外观 ▸ 空闲时显示徽标 / 选择徽标图片… / 恢复默认徽标；另在选项窗口「外观」分类中注册「徽标与专辑封面」页面（`settings.page`，id `logo-cover`，order 20；含 J11 的开关、徽标预览与选择/恢复、封面缓存大小与清除）。
+**Entry points**: Settings ▸ Appearance ▸ Show Logo When Idle / Choose Logo Image… / Restore Default Logo; also a "Logo and Album Cover" page registered in the "Appearance" category of the options window (`settings.page`, id `logo-cover`, order 20; with the J11 toggle, the logo preview with choose/restore, and the cover cache size with clearing).
 
-**行为细节**
-- 何时显示：来源 `phase === "empty"`（插件判断）。`loading` 期间改为加载界面（G-16b，原「保持徽标」作废）；来源就绪后由视频画面或 J11 层接替。
-- **内置 logo**：构建时把 `src/assets/brand/logo.png` 复制进插件包，在 Slint 中用 `@image-url("logo.png")`，不依赖运行时图片能力。H12 的默认形态因此只依赖背景层挂载位。
-- **自定义徽标**：
-  - `dialogs.openFile` 选择图片后，校验扩展名与文件头（PNG/JPEG），超过 16 MB 或大于 4096×4096 时拒绝：「图片过大（最大 4096×4096、16 MB）」；
-  - 通过校验后复制到 `<dataDirectory>/logo.<ext>`（不放在 `cache/` 下，不会被当作缓存清理），用 `plugin.ui.image()` 显示；
-  - 原文件之后被删除或移动也不受影响。
-- 自定义图片读取失败时回退到内置 logo，提示一次 `徽标图片无法读取，已使用默认徽标`。
-- 窗口尺寸变化时徽标按比例实时缩放；视频区高度 < 120px 时隐藏「Vestra Player」字样。
-- 菜单切换时提示 `空闲时显示徽标：开/关`。
-- 背景层不接收输入：空闲时双击仍然切换全屏，右键仍然打开菜单。
+**Behavior details**
+- When to show: the source has `phase === "empty"` (decided by the plugin). During `loading` it changes to the loading screen (G-16b; the former "keep the logo" is void); once the source is ready, the video picture or the J11 layer takes over.
+- **Built-in logo**: at build time `src/assets/brand/logo.png` is copied into the plugin package and used in Slint with `@image-url("logo.png")`, without depending on the runtime image capability. So H12's default form depends only on the backdrop mount slot.
+- **Custom logo**:
+  - After choosing an image with `dialogs.openFile`, check the extension and file header (PNG/JPEG); reject files over 16 MB or larger than 4096×4096: "Image too large (max 4096×4096, 16 MB)";
+  - After the check passes, copy it to `<dataDirectory>/logo.<ext>` (not under `cache/`, so it is not cleaned up as cache), and show it with `plugin.ui.image()`;
+  - Deleting or moving the original file later has no effect.
+- When the custom image cannot be read, it falls back to the built-in logo with a one-time message `The logo image cannot be read; using the default logo`.
+- When the window size changes, the logo scales proportionally in real time; below 120px video area height the words "Vestra Player" are hidden.
+- On toggle from the menu, message `Logo when idle: On/Off`.
+- The backdrop layer takes no input: when idle, double-click still toggles fullscreen and right-click still opens the menu.
 
-**界面**：背景层组件中，空闲模式的布局如上；与 J11 共用同一个组件，插件按来源阶段切换显示内容，切换时 200 ms 淡入淡出。
+**Interface**: in the backdrop component, the idle layout is as above; it shares one component with J11, and the plugin switches the content by source phase, with a 200 ms cross-fade.
 
-**持久化**：`visualizer.json` 的 `idle`：`{ "on": true, "logo": null | "logo.png" }`。
+**Persistence**: `idle` in `visualizer.json`: `{ "on": true, "logo": null | "logo.png" }`.
 
-**核心依赖**
-- 【核心新增】背景层挂载位（同 J11）。
-- 【核心新增】图片属性（只有自定义徽标需要）。
+**Core dependencies**
+- [New core API] the backdrop mount slot (same as J11).
+- [New core API] the image property (needed only for a custom logo).
 
-**验收**
-- 不带参数启动 Vestra Player：视频区中央显示品牌 logo 与「Vestra Player」，深色背景上清晰、不变形。
-- 打开文件后徽标消失；按 F4 关闭后徽标重新出现。
-- 拖窄窗口到最小，徽标缩到 64px 且不溢出；全屏时最大 256px。
-- 选择一张自定义 PNG 后立即替换显示；删除原文件并重启后仍显示；「恢复默认徽标」后回到品牌 logo。
-- 关闭开关后空闲画面为纯色。
-- 空闲时双击视频区切换全屏。
+**Acceptance**
+- Start Vestra Player without arguments: the brand logo and "Vestra Player" are shown in the center of the video area, clear and undistorted on the dark background.
+- After opening a file the logo disappears; after closing with F4 it reappears.
+- Drag the window down to the minimum: the logo shrinks to 64px without overflowing; in fullscreen at most 256px.
+- Choose a custom PNG: it replaces the display immediately; after deleting the original and restarting it is still shown; after "Restore Default Logo" it is back to the brand logo.
+- With the toggle off, the idle screen is a plain color.
+- When idle, double-clicking the video area toggles fullscreen.
 
-**说明**：不做「播放时的徽标」（开始播放时的闪现）、徽标文件夹随机选择、位置与透明度调节；尺寸按视频区比例自动计算。
+**Notes**: no "logo during playback" (a flash when playback starts), no random choice from a logo folder, no position and opacity adjustment; the size is computed automatically from the video area.
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-| 接口 | 理由 |
+| Interface | Reason |
 | --- | --- |
-| `plugin.panels.mount("backdrop", file, options?)`；`plugin.panels.backdrop.state/onChange`（只有 `effective`，不接收输入；第 3b 轮已交付） | 视频区由宿主绘制，插件无处显示；「有无视频输出」只有核心知道 |
-| `plugin.ui.image(path): ImageRef`（同 playback 章 I07） | 显示运行时取得的封面与自定义徽标 |
+| `plugin.panels.mount("backdrop", file, options?)`; `plugin.panels.backdrop.state/onChange` (only `effective`, no input; delivered in round 3b) | The video area is drawn by the host, and plugins have nowhere to show content; only the core knows whether there is video output |
+| `plugin.ui.image(path): ImageRef` (same as I07 in the playback chapter) | Show covers obtained at runtime and custom logos |
 
 ---
 
-## 在线字幕（`subtitle-online`）
+## Online subtitles (`subtitle-online`)
 
-**位置**：`src/plugins/subtitle-online/`（新插件，待创建）
+**Location**: `src/plugins/subtitle-online/` (new plugin, to be created)
 
-### 定位
+### Scope
 
-新插件，负责需要网络服务的在线搜索与下载字幕（D16）。单独成插件的理由：要处理服务商账号、API 密钥、配额、隐私提示与网络失败，这些与本地字幕操作无关；用户可以不装它。
+A new plugin for searching and downloading subtitles online, which needs network services (D16). Why it is a plugin of its own: it has to handle provider accounts, API keys, quotas, privacy notices and network failures, none of which have to do with local subtitle operations; users can choose not to install it.
 
-边界：
-- 下载到的字幕通过核心 `subtitles.load` 载入为本插件拥有的轨。字幕插件（`subtitles`）从字幕状态看到这些轨，照常选轨、调样式；两插件不通信。
-- 本插件不调用任何付费服务作为默认值。所有需要密钥的服务都要用户自己填写；未配置时功能保持关闭并引导到设置窗口。
-- 网络请求在插件 Node 进程内用 `fetch` 完成，不经核心。
-- 密钥存系统的密钥存储（`plugin.secrets`，参考文档 §16.6：macOS 登录钥匙串，服务名 `vestra.subtitle-online`、账户名为密钥名；Windows 凭据管理器），系统没有可用的存储（`unsupported` / `unavailable`）时退回插件数据目录的 `secrets.json`（权限 0600），没有数据目录时只在本次运行内记住；设置窗口按系统写明存放位置（「macOS 钥匙串」「Windows 凭据管理器」、文件路径或「仅本次运行」）。
+Boundaries:
+- Downloaded subtitles are loaded with the core's `subtitles.load` as tracks owned by this plugin. The subtitles plugin (`subtitles`) sees these tracks in the subtitle state and selects tracks and adjusts styles as usual; the two plugins do not communicate.
+- This plugin does not use any paid service as a default. Every service that needs a key has to be filled in by the user; when nothing is configured, the feature stays off and leads to the settings window.
+- Network requests are made with `fetch` inside the plugin's Node process, not through the core.
+- Keys are stored in the system's secret store (`plugin.secrets`, reference §16.6: the macOS login keychain, with service name `vestra.subtitle-online` and the key name as account name; Windows Credential Manager); when the system has no usable store (`unsupported` / `unavailable`), it falls back to `secrets.json` in the plugin data directory (permissions 0600), and with no data directory they are only remembered for this run; the settings window states the storage location for the system ("macOS Keychain", "Windows Credential Manager", a file path, or "This run only").
 
-manifest：`commands`、`events`、`ui.window`、`ui.dialog`、`ui.osd`、`playback.read`、`subtitles.read`、`subtitles.control`。
+Manifest: `commands`, `events`, `ui.window`, `ui.dialog`, `ui.osd`, `playback.read`, `subtitles.read`, `subtitles.control`.
 
-### 功能一览
+### Feature overview
 
-| 编号 | 功能 | 当前 | 依赖核心新增 |
+| ID | Feature | Current | Needs new core API |
 | --- | --- | --- | --- |
-| D16 | 在线字幕搜索与下载 | ✗ | 用字幕章的 `subtitles.load`（`format`、`title`） |
+| D16 | Online subtitle search and download | ✗ | Uses `subtitles.load` from the subtitles chapter (`format`, `title`) |
 
-本插件不提出新的核心接口。
+This plugin proposes no new core interfaces.
 
-### 菜单与快捷键
+### Menus and shortcuts
 
-| 菜单路径 | order | 分组 | 默认快捷键 | 编号 |
+| Menu path | order | Group | Default shortcut | ID |
 | --- | --- | --- | --- | --- |
-| 字幕 ▸ 在线字幕 ▸ 搜索与下载字幕… | 360 | subtitle-online | — | D16 |
-| 字幕 ▸ 在线字幕 ▸ 在线字幕设置… | 361 | subtitle-online | — | D16 |
+| Subtitles ▸ Online Subtitles ▸ Search and Download Subtitles… | 360 | subtitle-online | — | D16 |
+| Subtitles ▸ Online Subtitles ▸ Online Subtitle Settings… | 361 | subtitle-online | — | D16 |
 
-不设默认快捷键。
+No default shortcuts.
 
-### D16 在线字幕搜索与下载
+### D16 Online subtitle search and download
 
-**需求**：按当前视频搜索在线字幕，列出结果（语言、版本名、格式、帧率、下载次数、匹配方式、来源），选一条或多条下载，下载后自动载入并选中，同时可保存到视频旁。
+**Requirement**: search online subtitles for the current video, list the results (language, release name, format, frame rate, download count, match method, source), download one or more, load and select them automatically after download, and optionally save them next to the video.
 
-#### 服务选择与取舍
+#### Service choice and trade-offs
 
-| 服务 | 状态（撰写时） | 需要什么 | 结论 |
+| Service | State (at time of writing) | What it needs | Conclusion |
 | --- | --- | --- | --- |
-| OpenSubtitles.com REST API（`https://api.opensubtitles.com/api/v1`） | 运营中，官方文档公开；旧 opensubtitles.org XML-RPC 已停用 | 每个请求带 `Api-Key`（应用开发者在 OpenSubtitles 网站免费注册「API consumer」获得）与自定义 `User-Agent`；下载需 `POST /download`，可选登录（`/login` 得到 JWT，免费账号的每日下载次数比匿名多）；按用户/IP 有每日下载配额，以 `/download` 响应里的 `remaining` 为准 | **默认服务**。支持文件哈希匹配（moviehash），多语言，结果质量最好 |
-| 射手网（shooter.cn） | 2014 年已关闭，原 API 不可用 | — | 不做 |
-| 射手网(伪) assrt.net API（`https://api.assrt.net/v1`） | 运营中，中文字幕多 | 用户免费注册取得 token；有调用频率限制；下载为单文件或压缩包 | **可选服务**，默认关；用户填 token 后可启用 |
-| 迅雷字幕接口（`api-shoulei-ssl.xunlei.com`） | 非公开接口，无文档、无条款，随时可能失效 | 无需密钥（按文件 CID 查询） | 不做（不使用未公开接口） |
-| SubDB、Addic7ed、Podnapisi 等 | SubDB 已关闭；Addic7ed 只能抓网页；Podnapisi 无正式公开 API | — | 不做 |
+| OpenSubtitles.com REST API (`https://api.opensubtitles.com/api/v1`) | In operation, official documentation public; the old opensubtitles.org XML-RPC has been shut down | Every request carries an `Api-Key` (obtained by the application developer by registering an "API consumer" for free on the OpenSubtitles website) and a custom `User-Agent`; downloads need `POST /download`, login optional (`/login` gives a JWT; free accounts get more daily downloads than anonymous use); there is a daily download quota per user/IP, as given by `remaining` in the `/download` response | **Default service**. Supports file hash matching (moviehash), many languages, best result quality |
+| Shooter (射手网, shooter.cn) | Closed in 2014, the original API is unavailable | — | Not done |
+| Assrt (射手网(伪)) assrt.net API (`https://api.assrt.net/v1`) | In operation, many Chinese subtitles | Users register for free to get a token; rate-limited; downloads are single files or archives | **Optional service**, off by default; can be enabled after the user fills in a token |
+| Xunlei (迅雷) subtitle interface (`api-shoulei-ssl.xunlei.com`) | Non-public interface, no documentation, no terms, may stop working at any time | No key needed (queried by file CID) | Not done (no undocumented interfaces) |
+| SubDB, Addic7ed, Podnapisi, etc. | SubDB has closed; Addic7ed can only be scraped; Podnapisi has no formal public API | — | Not done |
 
-**默认服务的密钥问题（需维护者决定）**：OpenSubtitles 的 `Api-Key` 标识的是**应用**，按其规则由应用开发者注册后随应用发布。两种做法：
-- (a) 项目注册「Vestra」consumer，密钥随插件发布（`config.json`，不进代码仓库的公开历史时可在构建时注入）；用户无需操作即可匿名搜索与少量下载，登录可选。
-- (b) 不随附密钥，用户首次使用时到设置里填自己的密钥。
+**The default service's key question (for the maintainer to decide)**: the OpenSubtitles `Api-Key` identifies the **application**, and by their rules it is registered by the application developer and shipped with the application. Two options:
+- (a) The project registers a "Vestra" consumer, and the key ships with the plugin (`config.json`; to keep it out of the public history of the code repository, it can be injected at build time); users can search anonymously and download a little without doing anything, with login optional.
+- (b) No key ships; users fill in their own key in the settings the first time they use it.
 
-推荐 (a)，开箱即用。在维护者完成注册前按 (b) 实现：没有密钥时「搜索与下载字幕…」打开设置窗口并说明如何申请。两种情况都允许用户填写自己的密钥覆盖。
+(a) is recommended, as it works out of the box. Until the maintainer completes the registration, implement (b): without a key, "Search and Download Subtitles…" opens the settings window and explains how to apply for one. In both cases users may fill in their own key to override.
 
-**第 2 轮实现（裁决未定 (a)）**：按 (b) 实现。插件不随附任何密钥；没有用户填写的密钥或 token 时不发出任何网络请求。
+**Round 2 implementation (ruling on (a) pending)**: implemented as (b). The plugin ships no key; with no key or token filled in by the user, it makes no network requests at all.
 
-#### 入口
+#### Entry points
 
-- `字幕 ▸ 在线字幕 ▸ 搜索与下载字幕…`：打开「字幕下载」窗口并立即用当前视频搜索。
-- `字幕 ▸ 在线字幕 ▸ 在线字幕设置…`：服务、账号、语言、自动搜索、保存位置。
+- `Subtitles ▸ Online Subtitles ▸ Search and Download Subtitles…`: opens the "Download Subtitles" window and immediately searches for the current video.
+- `Subtitles ▸ Online Subtitles ▸ Online Subtitle Settings…`: services, accounts, languages, automatic search, save location.
 
-#### 行为细节
+#### Behavior details
 
-1. **搜索条件**：
-   - 本地文件：计算 OpenSubtitles moviehash（文件大小 + 头尾各 64 KiB 按 64 位小端整数求和，Node 读文件计算，< 50 ms），同时发送文件名关键字（去掉扩展名、分辨率、编码、发布组等常见标记）。
-   - 网络来源：只用标题关键字（`player.state.source` 的路径末段或解析器给的标题）。
-   - 用户可在窗口顶部「标题」框改关键字后点「按标题搜索」。
-   - 语言：按设置的首选语言（默认 `zh-CN, zh-TW, en`，最多 5 个）。
-2. **结果列表**：合并各已启用服务的结果，排序：哈希匹配优先 → 首选语言顺序 → 下载次数降序。机器翻译 / AI 翻译的字幕（OpenSubtitles 的 `machine_translated`、`ai_translated` 字段）排在后面并标「机翻」。听障字幕标「HI」。每页 50 条，「更多」加载下一页。
-3. **下载**：
-   - 双击或「打开字幕」：下载所选 → 按 D18 的规则识别格式与编码 → `subtitles.load(bytes, { format, title: "<语言> · <版本名>", select: "primary" })`。
-   - 勾选多条后「添加字幕」：逐条下载并载入，`select: "none"`（只加入轨列表），完成后 OSD「已添加 3 条字幕」。
-   - 「直接保存」：下载勾选项保存到保存位置，不载入。
-   - 「另存为…」：保存所选到用户选择的位置。
-   - 「网页中打开」：打开该字幕的网页。**第 2 轮未实现**：通用能力 `plugin.system.openPath` 只接受存在的本地路径，插件不得再自己调用 `open`；已提请求「`plugin.system.openUrl(url)`」，接受后补上按钮。
-4. **保存位置**（设置，默认「尽可能保存在视频同目录」）：本地视频时保存为 `<视频名>.<语言>.<扩展名>`，不覆盖（`(1)` 规则）；目录不可写或网络来源时保存到 `<插件数据目录>/downloads/`。载入使用下载到的字节，不依赖保存成功；保存失败 OSD「字幕已载入，但无法保存到视频所在文件夹」。
-5. **压缩包**（assrt 常见）：zip 用插件内的解压（Node `zlib`，无需 npm 依赖）；包内多个字幕文件时列出让用户选；rar/7z 不支持，提示「此压缩格式暂不支持（rar、7z），请下载 zip 或单个字幕文件。」（打开网页待 `system.openUrl`，见上）。
-6. **配额与失败**：
-   - 配额用尽（OpenSubtitles 406/429 + `remaining: 0`）：OSD「今日下载次数已用完（OpenSubtitles）。登录账号可获得更多次数」；窗口状态行显示重置时间（响应中的 `reset_time`）。
-   - 401/403：「API 密钥无效，请在在线字幕设置中检查」。
-   - 网络错误/超时（单个请求 15 秒）：「无法连接 <服务名>」，其它服务结果照常显示。
-   - 无结果：「没有找到字幕，可修改标题后再搜索」。
-   - 请求在途时关闭窗口或换片源：中止（`AbortController`），不载入。
-7. **自动搜索**（设置，默认「不使用」；可选「打开没有字幕的视频时」）：打开本地视频且 `state.tracks` 无文本轨时，后台搜索；有哈希匹配且语言为首选第一语言的结果时，按设置「搜索后：显示下载窗口（默认）/ 自动载入最佳结果」处理。自动载入时 OSD「已自动载入在线字幕：<标题>」。
-8. **隐私**：设置窗口与首次搜索前一次性提示「搜索会把文件名关键字与文件哈希发送给所选服务」；用户确认后不再提示（记在设置里）。
-9. 无媒体：搜索窗口仍可用标题搜索，「打开字幕」禁用，原因「没有可载入字幕的媒体」。
+1. **Search criteria**:
+   - Local file: compute the OpenSubtitles moviehash (file size + the sum of the first and last 64 KiB as 64-bit little-endian integers, computed by reading the file in Node, < 50 ms), and send file name keywords as well (with the extension, resolution, codec, release group and other common markers removed).
+   - Network source: only title keywords (the last path segment of `player.state.source` or the title given by the resolver).
+   - The user can change the keywords in the "Title" box at the top of the window and click "Search by Title".
+   - Languages: the preferred languages from the settings (default `zh-CN, zh-TW, en`, at most 5).
+2. **Result list**: merge the results of all enabled services, sorted: hash matches first → preferred language order → download count descending. Machine-translated / AI-translated subtitles (OpenSubtitles fields `machine_translated`, `ai_translated`) go to the end and are marked "MT". Subtitles for the hearing impaired are marked "HI". 50 per page; "More" loads the next page.
+3. **Download**:
+   - Double-click or "Open Subtitle": download the selected one → detect format and encoding by the D18 rules → `subtitles.load(bytes, { format, title: "<language> · <release name>", select: "primary" })`.
+   - Check several and click "Add": download and load them one by one with `select: "none"` (only added to the track list); when done, OSD "Subtitles added: 3".
+   - "Save Only": download the checked items to the save location without loading them.
+   - "Save As…": save the selected one to a location the user chooses.
+   - "Open in Browser": open the subtitle's web page. **Not implemented in round 2**: the general capability `plugin.system.openPath` only accepts existing local paths, and the plugin may no longer call `open` itself; a request for "`plugin.system.openUrl(url)`" has been filed, and the button will be added once it is accepted.
+4. **Save location** (setting, default "Beside the video when possible"): for local videos, saved as `<video name>.<language>.<extension>`, without overwriting (the `(1)` rule); when the directory is not writable or the source is a network source, saved to `<plugin data directory>/downloads/`. Loading uses the downloaded bytes and does not depend on the save succeeding; on save failure, OSD "Subtitle loaded, but it could not be saved to the video's folder".
+5. **Archives** (common on assrt): zip is unpacked inside the plugin (Node `zlib`, no npm dependency); when the archive has several subtitle files, they are listed for the user to choose; rar/7z are not supported, with the message "This archive format is not supported yet (rar, 7z); download a zip or a single subtitle file." (opening the web page waits for `system.openUrl`, see above).
+6. **Quotas and failures**:
+   - Quota used up (OpenSubtitles 406/429 + `remaining: 0`): OSD "Today's downloads are used up (OpenSubtitles). Log in to an account for more"; the window status line shows the reset time (`reset_time` in the response).
+   - 401/403: "Invalid API key; check it in Online Subtitle Settings".
+   - Network error / timeout (15 seconds per request): "Cannot connect to <service name>"; other services' results are shown as usual.
+   - No results: "No subtitles found; change the title and search again".
+   - Closing the window or changing the source while a request is in flight: aborted (`AbortController`), nothing is loaded.
+7. **Automatic search** (setting, default "Never"; option "When opening a video without subtitles"): when a local video is opened and `state.tracks` has no text track, search in the background; when there is a hash-matched result in the first preferred language, handle it by the setting "After search: show the download window (default) / load the best result automatically". When loaded automatically, OSD "Online subtitle loaded automatically: <title>".
+8. **Privacy**: a one-time notice in the settings window and before the first search: "Searching sends file name keywords and the file hash to the selected service"; after the user confirms, it is not shown again (recorded in the settings).
+9. No media: the search window can still search by title; "Open Subtitle" is disabled with the reason "No media to load subtitles into".
 
-#### 界面
+#### Interface
 
-- 「字幕下载」窗口（560×360，最小 480×280）：顶部「标题：」输入框 + 「按标题搜索」「再次搜索」；中部结果列表（复选 20、语言 60、版本名 自适应、格式 40、FPS 50、下载数 60、匹配 40、来源 80），行高 20；底部按钮（21px 高）：「打开字幕」「添加字幕」「直接保存」「另存为…」「网页中打开」「设置…」；状态行。
-- 「在线字幕设置」窗口（420 宽）：分组「服务」（列表：启用复选 + 名称 + 状态；「上移」「下移」「设置…」「测试」）；分组「搜索」（首选语言、自动搜索、搜索后动作、仅查找文件名完全匹配、排除关键字）；分组「保存」（保存位置）。服务的「设置…」弹出小窗：API 密钥、用户名、密码（登录可选），「测试」显示剩余下载次数。
+- "Download Subtitles" window (560×360, minimum 480×280): at the top a "Title:" input box + "Search by Title" and "Search Again"; in the middle the result list (checkbox 20, language 60, release name adaptive, format 40, FPS 50, downloads 60, match 40, source 80), row height 20; buttons at the bottom (21px high): "Open Subtitle", "Add", "Save Only", "Save As…", "Open in Browser", "Settings…"; a status line.
+- "Online Subtitle Settings" window (420 wide): group "Services" (list: enable checkbox + name + status; "Move Up", "Move Down", "Settings…", "Test"); group "Search" (preferred languages, automatic search, action after search, only exact file name matches, excluded keywords); group "Save" (save location). A service's "Settings…" pops up a small window: API key, user name, password (login optional); "Test" shows the remaining downloads.
 
-#### 持久化
+#### Persistence
 
-`<plugin.dataDirectory>/settings.json`：已启用服务及顺序、首选语言、自动搜索、搜索后动作、排除关键字、保存位置、隐私提示已确认。密钥与密码存系统的密钥存储（见定位）。登录得到的 JWT 只存内存，过期重新登录。
+`<plugin.dataDirectory>/settings.json`: enabled services and their order, preferred languages, automatic search, action after search, excluded keywords, save location, privacy notice confirmed. Keys and passwords are stored in the system's secret store (see Scope). The JWT from login is kept only in memory and renewed by logging in again when it expires.
 
-#### 核心依赖
+#### Core dependencies
 
-- 现有：`player.state`（`source`、`kind`）、`subtitles.state/load/select`、`windows.create`、`dialogs.saveFile`、`osd.show`。
-- 用字幕章的【核心新增】`subtitles.load` 的 `format`（下载到 ASS/VTT 时）、`title`、`select`。本插件不提出新的核心接口。
+- Existing: `player.state` (`source`, `kind`), `subtitles.state/load/select`, `windows.create`, `dialogs.saveFile`, `osd.show`.
+- Uses the subtitles chapter's [New core API] `format` (when ASS/VTT is downloaded), `title` and `select` of `subtitles.load`. This plugin proposes no new core interfaces.
 
-#### 验收
+#### Acceptance
 
-- 填入有效密钥，打开一部常见电影文件，搜索结果出现哈希匹配项并排在最前。
-- 双击结果，字幕载入并被选中，轨标题为「语言 · 版本名」；视频旁出现 `<视频名>.zh.srt`。
-- 密钥错误时状态行文案正确；断网时 15 秒内给出「无法连接」。
-- 模拟 429 配额用尽，提示文案与重置时间正确。
-- 搜索中换片源，结果不载入到新片源。
-- 未填密钥时打开搜索直接跳到设置窗口。
+- With a valid key filled in, open a common film file: the search results include hash-matched items, sorted first.
+- Double-click a result: the subtitle loads and is selected, with the track title "language · release name"; `<video name>.zh.srt` appears next to the video.
+- With a wrong key, the status line wording is correct; with the network down, "Cannot connect" is given within 15 seconds.
+- Simulate a 429 quota exhaustion: the message wording and reset time are correct.
+- Change the source during a search: the results are not loaded into the new source.
+- With no key filled in, opening search jumps straight to the settings window.
 
-#### 说明
+#### Notes
 
-不做上传字幕，不做自定义的「网页字幕搜索链接」列表。
+No subtitle upload, and no custom list of "web subtitle search links".
 
-### 本章核心 API 请求汇总
+### Chapter core API request summary
 
-本章不新增核心接口。依赖字幕章已列出的 `subtitles.load` 的 `format` / `title` / `select` 选项。
+This chapter adds no core interfaces. It relies on the `format` / `title` / `select` options of `subtitles.load` already listed in the subtitles chapter.
 
 ---
 
 ---
 
-## 附录 A：核心 API 请求总表
+## Appendix A: Core API request summary
 
-> **注意**：本表是协商前作者一方的请求草案（社区工作流 §4.3）。每条的最终结论（拒绝并给替代 / 改写后接受 / 接受）、最终签名和所在轮次，以 [协商记录](../process/rounds/2026-10-features-negotiation.md) 第 3 步为准；已实现接口的权威说明在 [API 参考](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)。
+> **Note**: this table is the authors' request draft from before negotiation (community workflow §4.3). The final outcome of each item (rejected with an alternative / accepted after rewrite / accepted), the final signature and the round it lands in are given by step 3 of the [negotiation record](../process/rounds/2026-10-features-negotiation.md); the authoritative description of implemented interfaces is the [API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html).
 
-日期：2026-10-20。来源：本文各章「核心依赖」与「本章核心 API 请求汇总」，已删除功能（A04 A05 A06 A14 B10 B13 B14 B15 B18 B19 B20 B24 B27 B28 C08 C13 C19 C20 C22 C24 C25 C26 D08 D12 D13 D14 D15 D19 D21 E07 E14 E15 F06 F08 F10 F12 G06 G07 G12 G13 G14 H02 H06 H11 I04 J05 J10，以及 files、scenes、timer 三个插件）所需的接口不列入。同一接口被多章使用时只列一次。
+Date: 2026-10-20. Source: the "Core dependencies" and "Chapter core API request summary" of each chapter of this document; interfaces needed only by removed features (A04 A05 A06 A14 B10 B13 B14 B15 B18 B19 B20 B24 B27 B28 C08 C13 C19 C20 C22 C24 C25 C26 D08 D12 D13 D14 D15 D19 D21 E07 E14 E15 F06 F08 F10 F12 G06 G07 G12 G13 G14 H02 H06 H11 I04 J05 J10, and the three plugins files, scenes and timer) are not listed. An interface used by several chapters is listed once.
 
-列说明：「新能力」指 manifest 需要新增的能力名；写「现有 X」表示沿用已有能力；「—」表示不需要能力。「可选」「条件性」项不做也不影响对应功能上线。
+Column notes: "New capability" is the capability name the manifest has to add; "existing X" means an existing capability is reused; "—" means no capability is needed. Items marked "optional" or "conditional" can be skipped without blocking the matching feature.
 
-### 1. 接口总表
+### 1. Interface summary
 
-#### 1.1 播放器
+#### 1.1 Player
 
-| # | 接口（签名） | 新能力 | 使用的插件与编号 | 理由 |
+| # | Interface (signature) | New capability | Plugins and IDs using it | Reason |
 | --- | --- | --- | --- | --- |
-| P1 | `player.stepFrame(direction: "backward" \| "forward", opts?: Conditional): Promise<void>`；`PlayerState.can.frameStep: boolean`、`can.frameBackStep: boolean` | 现有 `playback.control` | playback B07；核心基础动作 `frame-back` / `frame-forward` | 逐帧是 mpv 命令（`frame-step` / `frame-back-step`），插件拿不到 mpv |
-| P2 | `player.stepKeyframe(direction: "backward" \| "forward", opts?: Conditional): Promise<void>` | 现有 `playback.control` | playback B08 | 「严格越过当前关键帧」只能用 mpv 的 `seek ±… relative+keyframes`；插件不知道关键帧位置 |
-| P3 | `player.setStepSeek(options: { seconds: number }): Promise<void>`（0.1–3600，默认 5；调用插件停用后恢复默认） | 现有 `playback.control` | playback B06、基础动作移交 | ←/→ 移交核心后，第 1 档步长仍要可设置，设置由 playback 保存 |
-| P4 | `plugin.host.run(action: HostAction): Promise<void>`；`HostAction = "play-pause" \| "stop" \| "previous" \| "next" \| "frame-back" \| "frame-forward" \| "seek-backward" \| "seek-forward" \| "rate-down" \| "rate-up" \| "rate-normal" \| "volume-up" \| "volume-down" \| "mute"`（动作禁用时以 `unavailable` 失败） | 现有 `commands` | playback 底栏按钮（基础动作移交） | 底栏按钮与快捷键共用核心动作的同一套行为与提示；「执行核心动作」不是插件间通信 |
-| P5 | `player.preload(source: string, options: { after: Media; signal?: AbortSignal }): Preload`；`interface Preload extends Disposable { readonly source: string; readonly started: Promise<Media> }` | 现有 `playback.control` | playlist B26 | 无间隙切换只能在 mpv 内部预读（`loadfile … append`、`prefetch-playlist`、`gapless-audio`），本地文件还要宿主事先建立 fd 租约 |
-| P6 | `PlayerState.videoSize: { width: number; height: number } \| null`（显示尺寸，含 DAR 与旋转） | 现有 `playback.read` | window H03、H04、H07 | 显示尺寸要随状态推送；`stats()` 只有解码尺寸且需主动查询 |
-| P7 | `PlaybackStats` 扩展（全部可为 `null`）：`video.decoder`、`hwdec`、`pixelFormat`、`colorspace`、`displayWidth/Height`、`displayFps`、`bitrate`；`audio.decoder`、`format`、`channelLayout`、`bitrate`；`avSyncMs`、`cacheSeconds` | 现有 `playback.read` | info I05；window H07 验收引用 `avSyncMs` | 实时解码状态只在 mpv 里，ffprobe 看不到正在解码的会话 |
-| P8 | `PlaybackStats.video.transfer: "sdr" \| "pq" \| "hlg" \| null` | 现有 `playback.read` | video E16 | 判断片源是否 HDR（mpv `video-params/gamma`） |
+| P1 | `player.stepFrame(direction: "backward" \| "forward", opts?: Conditional): Promise<void>`; `PlayerState.can.frameStep: boolean`, `can.frameBackStep: boolean` | existing `playback.control` | playback B07; core basic actions `frame-back` / `frame-forward` | Frame stepping is an mpv command (`frame-step` / `frame-back-step`), and plugins cannot reach mpv |
+| P2 | `player.stepKeyframe(direction: "backward" \| "forward", opts?: Conditional): Promise<void>` | existing `playback.control` | playback B08 | "Strictly pass the current keyframe" can only use mpv's `seek ±… relative+keyframes`; plugins do not know keyframe positions |
+| P3 | `player.setStepSeek(options: { seconds: number }): Promise<void>` (0.1–3600, default 5; back to the default after the calling plugin is disabled) | existing `playback.control` | playback B06, basic action hand-over | After ←/→ are handed to the core, the step 1 size still has to be configurable, with the setting saved by playback |
+| P4 | `plugin.host.run(action: HostAction): Promise<void>`; `HostAction = "play-pause" \| "stop" \| "previous" \| "next" \| "frame-back" \| "frame-forward" \| "seek-backward" \| "seek-forward" \| "rate-down" \| "rate-up" \| "rate-normal" \| "volume-up" \| "volume-down" \| "mute"` (fails with `unavailable` when the action is disabled) | existing `commands` | playback bottom bar buttons (basic action hand-over) | Bottom bar buttons and shortcuts share one behavior and message of the core actions; "running a core action" is not communication between plugins |
+| P5 | `player.preload(source: string, options: { after: Media; signal?: AbortSignal }): Preload`; `interface Preload extends Disposable { readonly source: string; readonly started: Promise<Media> }` | existing `playback.control` | playlist B26 | Gapless switching can only be done by preloading inside mpv (`loadfile … append`, `prefetch-playlist`, `gapless-audio`), and local files also need the host to set up an fd lease in advance |
+| P6 | `PlayerState.videoSize: { width: number; height: number } \| null` (display size, including DAR and rotation) | existing `playback.read` | window H03, H04, H07 | The display size has to be pushed with the state; `stats()` only has the decoded size and has to be queried |
+| P7 | Extended `PlaybackStats` (all may be `null`): `video.decoder`, `hwdec`, `pixelFormat`, `colorspace`, `displayWidth/Height`, `displayFps`, `bitrate`; `audio.decoder`, `format`, `channelLayout`, `bitrate`; `avSyncMs`, `cacheSeconds` | existing `playback.read` | info I05; window H07 acceptance refers to `avSyncMs` | Live decoding state exists only in mpv, and ffprobe cannot see the session being decoded |
+| P8 | `PlaybackStats.video.transfer: "sdr" \| "pq" \| "hlg" \| null` | existing `playback.read` | video E16 | Decide whether the source is HDR (mpv `video-params/gamma`) |
 
-#### 1.2 轨道与字幕
+#### 1.2 Tracks and subtitles
 
-| # | 接口（签名） | 新能力 | 使用的插件与编号 | 理由 |
+| # | Interface (signature) | New capability | Plugins and IDs using it | Reason |
 | --- | --- | --- | --- | --- |
-| T1 | `player.addAudioTrack(path: string, opts?: { select?: boolean; ifCurrent?: PlayerState }): Promise<AudioTrack>` | 现有 `playback.control` | audio A11 | 往播放会话里加轨道是播放器内部操作（mpv `audio-add`） |
-| T2 | `player.selectTrack(kind: "audio", id: number, opts?: { ifCurrent?: PlayerState }): Promise<PlayerState>`（`kind` 目前只有 `"audio"`，保留以便扩展） | 现有 `playback.control` | audio G03、G04 | 切换音轨是播放器内部操作（mpv `aid`） |
-| T3 | `subtitles.selectSecondary(track: SubtitleTrack \| null, opts?: { ifCurrent?: SubtitlesState }): Promise<SubtitlesState>`；`SubtitlesState.secondary: SubtitleTrack \| null`、`secondaryConfirmation: "waiting" \| "applied" \| "uncertain"` | 现有 `subtitles.control` | subtitles A08 | mpv `secondary-sid` 只有宿主能设 |
-| T4 | `subtitles.load(bytes: Uint8Array, opts?: { format?: "srt" \| "ass" \| "ssa" \| "vtt"; title?: string; select?: "primary" \| "secondary" \| "none"; ifCurrent?; signal? }): Promise<SubtitleTrack>`（ASS 有界校验：UTF-8、≤ 2 MiB、有 `[Script Info]` 与 `[Events]`、Dialogue ≤ 20 000） | 现有 `subtitles.control` | subtitles A08、A09、D17、D18；subtitle-online D16 | 宿主只校验 SRT；接受 ASS/VTT 需要宿主侧校验与正确的临时文件扩展名；轨标题与是否选中由宿主决定 |
-| T5 | `subtitles.cues(track: SubtitleTrack, opts?: { signal?: AbortSignal }): Promise<SubtitleCue[]>`；`SubtitleCue { start: number; end: number; text: string }`（只对文本轨，最多 20 000 句） | 现有 `subtitles.read` | subtitles B11 | 内嵌字幕的逐句内容只有宿主能可靠提取（宿主已有 `native_subtitle.rs`） |
-| T6 | `SubtitleTrack.codec: string \| null`、`SubtitleTrack.text: boolean` | 现有 `subtitles.read` | subtitles A08、B11、D18 | 区分文本与图形轨；宿主已读到 codec，只需开放 |
-| T7 | `SubtitleStyle` 新增可选字段：`bold?: boolean`、`shadow?: number`（0–4）、`box?: boolean`、`boxOpacity?: number`（0–100）、`assOverride?: "keep" \| "force"`、`secondaryPosition?: "top" \| "aboveMain"` | 现有 `subtitles.control` | subtitles D09、D11、D17、A08 | mpv 样式属性（`sub-bold`、`sub-shadow-offset`、`sub-border-style`、`sub-ass-override`、`secondary-sub-pos`）只有宿主能写 |
-| T8 | （可选）`SubtitleStyle.offsetMs` 范围放宽到 −600 000–600 000 | — | subtitles D05 | ±10 秒不够修正片头差异；mpv `sub-delay` 无此限制 |
+| T1 | `player.addAudioTrack(path: string, opts?: { select?: boolean; ifCurrent?: PlayerState }): Promise<AudioTrack>` | existing `playback.control` | audio A11 | Adding a track to the playback session is an operation inside the player (mpv `audio-add`) |
+| T2 | `player.selectTrack(kind: "audio", id: number, opts?: { ifCurrent?: PlayerState }): Promise<PlayerState>` (`kind` is only `"audio"` for now, kept for extension) | existing `playback.control` | audio G03, G04 | Switching audio tracks is an operation inside the player (mpv `aid`) |
+| T3 | `subtitles.selectSecondary(track: SubtitleTrack \| null, opts?: { ifCurrent?: SubtitlesState }): Promise<SubtitlesState>`; `SubtitlesState.secondary: SubtitleTrack \| null`, `secondaryConfirmation: "waiting" \| "applied" \| "uncertain"` | existing `subtitles.control` | subtitles A08 | mpv `secondary-sid` can only be set by the host |
+| T4 | `subtitles.load(bytes: Uint8Array, opts?: { format?: "srt" \| "ass" \| "ssa" \| "vtt"; title?: string; select?: "primary" \| "secondary" \| "none"; ifCurrent?; signal? }): Promise<SubtitleTrack>` (bounded ASS validation: UTF-8, ≤ 2 MiB, has `[Script Info]` and `[Events]`, Dialogue ≤ 20 000) | existing `subtitles.control` | subtitles A08, A09, D17, D18; subtitle-online D16 | The host only validates SRT; accepting ASS/VTT needs host-side validation and the correct temporary file extension; the track title and whether it is selected are decided by the host |
+| T5 | `subtitles.cues(track: SubtitleTrack, opts?: { signal?: AbortSignal }): Promise<SubtitleCue[]>`; `SubtitleCue { start: number; end: number; text: string }` (text tracks only, at most 20 000 lines) | existing `subtitles.read` | subtitles B11 | Only the host can reliably extract the line-by-line content of embedded subtitles (the host already has `native_subtitle.rs`) |
+| T6 | `SubtitleTrack.codec: string \| null`, `SubtitleTrack.text: boolean` | existing `subtitles.read` | subtitles A08, B11, D18 | Tell text and image tracks apart; the host already reads codec and only needs to expose it |
+| T7 | New optional `SubtitleStyle` fields: `bold?: boolean`, `shadow?: number` (0–4), `box?: boolean`, `boxOpacity?: number` (0–100), `assOverride?: "keep" \| "force"`, `secondaryPosition?: "top" \| "aboveMain"` | existing `subtitles.control` | subtitles D09, D11, D17, A08 | mpv style properties (`sub-bold`, `sub-shadow-offset`, `sub-border-style`, `sub-ass-override`, `secondary-sub-pos`) can only be written by the host |
+| T8 | (optional) widen the `SubtitleStyle.offsetMs` range to −600 000–600 000 | — | subtitles D05 | ±10 seconds is not enough to correct intro differences; mpv `sub-delay` has no such limit |
 
-#### 1.3 画面与渲染
+#### 1.3 Picture and rendering
 
-| # | 接口（签名） | 新能力 | 使用的插件与编号 | 理由 |
+| # | Interface (signature) | New capability | Plugins and IDs using it | Reason |
 | --- | --- | --- | --- | --- |
-| V1 | `VideoNode` 增加 `{ kind: "hue"; degrees: number }`（−180–180，运行时） | 现有 `processing.video` | video E02 | FFmpeg eq 没有色相；插件不能自己写滤镜字符串 |
-| V2 | `VideoNode` 增加 `{ kind: "sharpen"; luma; chroma }`、`{ kind: "cas"; strength }` | 现有 `processing.video` | video E04 | 锐化、边缘锐化 |
-| V3 | `VideoNode` 增加 `{ kind: "denoise3d"; lumaSpatial; chromaSpatial; lumaTemporal; chromaTemporal }`、`{ kind: "temporalDenoise"; threshold }` | 现有 `processing.video` | video E05 | 3D / 渐进 / 瞬态降噪 |
-| V4 | `VideoNode` 增加 `{ kind: "deblock"; strength: "weak" \| "strong" }`、`{ kind: "deband"; threshold; range }` | 现有 `processing.video` | video E06 | 去块、消色带 |
-| V5 | `VideoNode` 增加 `{ kind: "flip"; horizontal; vertical }`、`{ kind: "transpose"; degrees: 90 \| 180 \| 270 }` | 现有 `processing.video` | video E08、E09 | 软件渲染器不支持 `video-rotate`，宿主已改由滤镜处理方向 |
-| V6 | `VideoNode` 增加 `{ kind: "deinterlace"; method: "bwdif" \| "yadif"; when: "interlaced" \| "all"; output: "frame" \| "field" }` | 现有 `processing.video` | video E10 | 节点随插件生命周期撤销，全局 `deinterlace` 属性做不到 |
-| V7 | `VideoNode` 增加 `{ kind: "crop"; aspect; x; y }`、`{ kind: "pad"; aspect; x; y }`（尺寸由核心按输入计算） | 现有 `processing.video` | video E12 | 插件不知道滤镜输入尺寸 |
-| V8 | `VideoNode` 增加 `{ kind: "frameBlend"; fps: number }`（24–120） | 现有 `processing.video` | video E18（倍帧） | 混合插帧需要新滤镜节点 |
-| V9 | `plugin.video.view(): VideoView`；`set(Partial<{ aspect: number \| null; fit: "keep" \| "stretch" \| "fill"; zoom; scaleX; scaleY; panX; panY }>)`、`status`、`onStatus` | 现有 `processing.video` | video E11、E13 | 这些是 mpv vo 级属性，处理链表达不了，插件也不能直接写 mpv 属性；插件停用时核心恢复默认 |
-| V10 | `plugin.video.render(): RenderOptions`；`set(Partial<{ toneMapping; targetPeak; peakDetect; shaders: string[]; interpolation: boolean }>)`（C-GPU 前 `status` 恒为 `failed / unsupported`） | 现有 `processing.video` | video E16、E17、E18（运动补偿） | 对应 mpv GPU 渲染属性；前提是宿主行为 H3（C-GPU） |
-| V11 | （可选）`Snapshot.export({ format: "jpeg"; destination; quality?; sampleTime? })` | 现有 `media.control` | capture F07 | 已在可移植性轮 P1 交付（`jpeg`、`bmp`），替代插件内的 macOS `sips` 转换 |
+| V1 | `VideoNode` gains `{ kind: "hue"; degrees: number }` (−180–180, runtime) | existing `processing.video` | video E02 | FFmpeg eq has no hue; plugins cannot write filter strings themselves |
+| V2 | `VideoNode` gains `{ kind: "sharpen"; luma; chroma }`, `{ kind: "cas"; strength }` | existing `processing.video` | video E04 | Sharpen, edge sharpen |
+| V3 | `VideoNode` gains `{ kind: "denoise3d"; lumaSpatial; chromaSpatial; lumaTemporal; chromaTemporal }`, `{ kind: "temporalDenoise"; threshold }` | existing `processing.video` | video E05 | 3D / progressive / temporal denoise |
+| V4 | `VideoNode` gains `{ kind: "deblock"; strength: "weak" \| "strong" }`, `{ kind: "deband"; threshold; range }` | existing `processing.video` | video E06 | Deblock, deband |
+| V5 | `VideoNode` gains `{ kind: "flip"; horizontal; vertical }`, `{ kind: "transpose"; degrees: 90 \| 180 \| 270 }` | existing `processing.video` | video E08, E09 | The software renderer does not support `video-rotate`; the host already handles orientation with filters |
+| V6 | `VideoNode` gains `{ kind: "deinterlace"; method: "bwdif" \| "yadif"; when: "interlaced" \| "all"; output: "frame" \| "field" }` | existing `processing.video` | video E10 | The node is withdrawn with the plugin's lifecycle, which the global `deinterlace` property cannot do |
+| V7 | `VideoNode` gains `{ kind: "crop"; aspect; x; y }`, `{ kind: "pad"; aspect; x; y }` (sizes computed by the core from the input) | existing `processing.video` | video E12 | The plugin does not know the filter input size |
+| V8 | `VideoNode` gains `{ kind: "frameBlend"; fps: number }` (24–120) | existing `processing.video` | video E18 (frame doubling) | Blending interpolation needs a new filter node |
+| V9 | `plugin.video.view(): VideoView`; `set(Partial<{ aspect: number \| null; fit: "keep" \| "stretch" \| "fill"; zoom; scaleX; scaleY; panX; panY }>)`, `status`, `onStatus` | existing `processing.video` | video E11, E13 | These are mpv vo-level properties that the processing chain cannot express, and plugins cannot write mpv properties directly; the core restores the defaults when the plugin is disabled |
+| V10 | `plugin.video.render(): RenderOptions`; `set(Partial<{ toneMapping; targetPeak; peakDetect; shaders: string[]; interpolation: boolean }>)` (before C-GPU, `status` is always `failed / unsupported`) | existing `processing.video` | video E16, E17, E18 (motion interpolation) | Corresponds to mpv GPU render properties; prerequisite is host behavior H3 (C-GPU) |
+| V11 | (optional) `Snapshot.export({ format: "jpeg"; destination; quality?; sampleTime? })` | existing `media.control` | capture F07 | Delivered in portability round P1 (`jpeg`, `bmp`), replacing the plugin's macOS `sips` conversion |
 
-每个新 `VideoNode` 都要同时支持实时 mpv 图和离线导出图（`render_lavfi` 共用），并受「全部插件合计 64 个节点」上限约束；video 插件最坏约 15 个节点。
+Every new `VideoNode` has to support both the live mpv graph and the offline export graph (shared `render_lavfi`), and is bound by the limit of "64 nodes for all plugins together"; the video plugin uses about 15 nodes in the worst case.
 
-#### 1.4 音频
+#### 1.4 Audio
 
-| # | 接口（签名） | 新能力 | 使用的插件与编号 | 理由 |
+| # | Interface (signature) | New capability | Plugins and IDs using it | Reason |
 | --- | --- | --- | --- | --- |
-| A1 | `AudioNode` 增加 `{ kind: "channels"; mode: "stereo" \| "left" \| "right" \| "mono" \| "swap" }`（多于 2 声道时核心先下混为立体声；运行时可调） | 现有 `processing.audio` | audio G05 | 插件不能自己加滤镜；下混由核心负责 |
-| A2 | `player.audioDevices(): Promise<AudioDevice[]>`；`AudioDevice { id: string; name: string }` | 现有 `playback.read` | audio G16 | 设备列表来自播放器音频输出 |
-| A3 | `player.setAudioDevice(id: string \| null): Promise<void>`（`null` = 系统默认） | 现有 `playback.control` | audio G16 | 同时覆盖 mpv 与生成流（cpal）两条音频路径，断开后自动切回 |
-| A4 | `PlayerState.audioOutput: { requested: string \| null; active: string \| null; devicesRevision: number }` | 现有 `playback.read` | audio G16 | 插件据此显示回退状态，并在插拔后重读设备列表 |
-| A5 | （可选）音频滤镜 `delayMs` 范围放宽到 −10000–10000 | — | audio G09、A11 | 外部音轨偏差常超过 2 秒 |
+| A1 | `AudioNode` gains `{ kind: "channels"; mode: "stereo" \| "left" \| "right" \| "mono" \| "swap" }` (with more than 2 channels the core downmixes to stereo first; adjustable at runtime) | existing `processing.audio` | audio G05 | Plugins cannot add filters themselves; downmixing is the core's job |
+| A2 | `player.audioDevices(): Promise<AudioDevice[]>`; `AudioDevice { id: string; name: string }` | existing `playback.read` | audio G16 | The device list comes from the player's audio output |
+| A3 | `player.setAudioDevice(id: string \| null): Promise<void>` (`null` = system default) | existing `playback.control` | audio G16 | Covers both audio paths, mpv and generated streams (cpal), switching back automatically after a disconnect |
+| A4 | `PlayerState.audioOutput: { requested: string \| null; active: string \| null; devicesRevision: number }` | existing `playback.read` | audio G16 | The plugin shows the fallback state from it and re-reads the device list after plug / unplug |
+| A5 | (optional) widen the audio filter `delayMs` range to −10000–10000 | — | audio G09, A11 | External audio tracks are often off by more than 2 seconds |
 
-#### 1.5 窗口与应用
+#### 1.5 Window and application
 
-| # | 接口（签名） | 新能力 | 使用的插件与编号 | 理由 |
+| # | Interface (signature) | New capability | Plugins and IDs using it | Reason |
 | --- | --- | --- | --- | --- |
-| W1 | `window.state: WindowState`（`fullscreen`、`videoArea`、`onTop`、`pictureInPicture: { supported; active }`）；`window.onChange(listener): Disposable` | `window.control` | window H03–H05、H07 | 决定命令是否可用与勾选状态 |
-| W2 | `window.setVideoArea(size: { width; height }): Promise<{ width; height; clamped: boolean }>` | `window.control` | window H03、H04 | 只有宿主知道底栏、侧栏、屏幕可见区 |
-| W3 | `window.setAlwaysOnTop(onTop: boolean): Promise<void>` | `window.control` | window H05 | 窗口层级（NSWindow level）只能由宿主设置，并要作用于浮动侧栏与新开的工具窗口 |
-| W4 | `window.setCursorAutoHide(mode: "fullscreen" \| "playing"): Promise<void>` | `window.control` | window B30 | 指针显隐与空闲计时在宿主事件循环里 |
-| W5 | `window.setPictureInPicture(on: boolean): Promise<void>` | `window.control` | window H07 | macOS 画中画只能由宿主经 AVKit 发起，帧也只在宿主里；需要宿主行为 H8 |
-| W6 | `plugin.app.info(): Promise<AppInfo>`；`plugin.app.onChange(listener): Disposable`；`AppInfo { version; build; apiVersion; components: { mpv; ffmpeg; slint; node }; plugins: PluginInfo[] }` | —（只读公开信息） | info I05、I09 | 宿主链接的库版本、已加载插件列表是核心状态 |
+| W1 | `window.state: WindowState` (`fullscreen`, `videoArea`, `onTop`, `pictureInPicture: { supported; active }`); `window.onChange(listener): Disposable` | `window.control` | window H03–H05, H07 | Decide whether commands are available and their check state |
+| W2 | `window.setVideoArea(size: { width; height }): Promise<{ width; height; clamped: boolean }>` | `window.control` | window H03, H04 | Only the host knows the bottom bar, sidebar and visible screen area |
+| W3 | `window.setAlwaysOnTop(onTop: boolean): Promise<void>` | `window.control` | window H05 | The window level (NSWindow level) can only be set by the host, and has to apply to the floating sidebar and newly opened tool windows |
+| W4 | `window.setCursorAutoHide(mode: "fullscreen" \| "playing"): Promise<void>` | `window.control` | window B30 | Pointer visibility and the idle timer live in the host event loop |
+| W5 | `window.setPictureInPicture(on: boolean): Promise<void>` | `window.control` | window H07 | macOS picture-in-picture can only be started by the host through AVKit, and the frames exist only in the host; needs host behavior H8 |
+| W6 | `plugin.app.info(): Promise<AppInfo>`; `plugin.app.onChange(listener): Disposable`; `AppInfo { version; build; apiVersion; components: { mpv; ffmpeg; slint; node }; plugins: PluginInfo[] }` | — (read-only public information) | info I05, I09 | The versions of the libraries the host links and the list of loaded plugins are core state |
 
-所有 `window.*` setter 最后写入生效；插件停用时核心撤销该插件造成的效果。
+All `window.*` setters are last-write-wins; when a plugin is disabled, the core withdraws the effects that plugin caused.
 
-#### 1.6 界面与输入
+#### 1.6 Interface and input
 
-| # | 接口（签名） | 新能力 | 使用的插件与编号 | 理由 |
+| # | Interface (signature) | New capability | Plugins and IDs using it | Reason |
 | --- | --- | --- | --- | --- |
-| U1 | `plugin.ui.image(path: string): ImageRef`；面板 / 窗口属性值类型 `PropValue = Json \| ImageRef`（`ImageRef` 不透明，只能由该函数生成；PNG/JPEG，≤ 16 MB 且 ≤ 4096×4096，路径必须在本插件 `dataDirectory` 下） | — | playback I07；visualizer J11、H12（自定义徽标） | 界面桥只接受 JSON（`ui_values.rs` 拒绝 image），插件无法显示运行时生成或取得的图片 |
-| U2 | `plugin.drops.provide({ kinds: string[]; drop(e: DropEvent): unknown }): Disposable`；`Panel.onDrop(listener)`、`Panel.onDragOver(listener: (at \| null) => void)`；`DropEvent { paths: string[]; at: { x; y }; modifiers: { alt; shift; cmd } }` | `ui.drop` | playlist A15 | 系统拖放只到宿主原生窗口；视频区不属于任何插件，要由宿主按落点和扩展名分发 |
-| U3 | `plugin.panels.mount("backdrop", file, options?): Panel`；`plugin.panels.backdrop: { state: { effective; mode: "idle" \| "audio" \| null } \| null; onChange }`（不接收输入，同一时间一个） | 现有 `ui.mount` | visualizer J11、H12 | 视频区由宿主绘制，插件无处显示；「有无视频输出」只有核心知道 |
-| U4 | （条件性）面板内 `PopupWindow` 可越出面板边界并跟随指针 | — | playback I06、I07 | 仅当实现时发现悬停提示被面板裁切才提出 |
-| U5 | （可选）`plugin.commands.popup(path: string[]): Promise<void>` | 现有 `commands` | video E17（`S` 键弹出「像素着色」子菜单） | 插件没有弹出主菜单子菜单的能力；不做时 `S` 不绑 |
+| U1 | `plugin.ui.image(path: string): ImageRef`; panel / window property value type `PropValue = Json \| ImageRef` (`ImageRef` is opaque and can only be created by that function; PNG/JPEG, ≤ 16 MB and ≤ 4096×4096, the path must be under this plugin's `dataDirectory`) | — | playback I07; visualizer J11, H12 (custom logo) | The UI bridge only accepts JSON (`ui_values.rs` rejects image), so plugins cannot show images generated or obtained at runtime |
+| U2 | `plugin.drops.provide({ kinds: string[]; drop(e: DropEvent): unknown }): Disposable`; `Panel.onDrop(listener)`, `Panel.onDragOver(listener: (at \| null) => void)`; `DropEvent { paths: string[]; at: { x; y }; modifiers: { alt; shift; cmd } }` | `ui.drop` | playlist A15 | System drag and drop only reaches the host's native window; the video area belongs to no plugin, so the host has to dispatch by drop point and extension |
+| U3 | `plugin.panels.mount("backdrop", file, options?): Panel`; `plugin.panels.backdrop: { state: { effective; mode: "idle" \| "audio" \| null } \| null; onChange }` (takes no input, one at a time) | existing `ui.mount` | visualizer J11, H12 | The video area is drawn by the host, and plugins have nowhere to show content; only the core knows whether there is video output |
+| U4 | (conditional) a `PopupWindow` inside a panel that can extend beyond the panel and follow the pointer | — | playback I06, I07 | Only raised if the implementation finds the hover tooltip clipped by the panel |
+| U5 | (optional) `plugin.commands.popup(path: string[]): Promise<void>` | existing `commands` | video E17 (the `S` key pops up the "Pixel Shaders" submenu) | Plugins cannot pop up main menu submenus; without it, `S` is not bound |
 
-#### 1.7 时间轴与标记
+#### 1.7 Timeline and marks
 
-| # | 接口（签名） | 新能力 | 使用的插件与编号 | 理由 |
+| # | Interface (signature) | New capability | Plugins and IDs using it | Reason |
 | --- | --- | --- | --- | --- |
-| M1 | `PlayerState.chapters: readonly Chapter[] \| null`；`Chapter { index: number; title: string \| null; start: number }` | 现有 `playback.read` | marks B21、B22 | 章节是媒体信息，mpv 已读出；网络来源插件读不到；多插件共用 |
-| M2 | `player.setLoop(loop: { a: number; b: number; count?: number } \| null, opts?: { ifCurrent?: PlayerState }): Promise<void>`；`PlayerState.loop: { a; b; count: number \| null; remaining: number \| null } \| null`（来源变化时核心清除） | 现有 `playback.control` | marks B23；playback 绘制区间（B22） | 精确循环只能由 mpv `ab-loop-a/b/count` 执行；状态公开后进度条可以画 |
-| M3 | `plugin.timeline.marks`、`onChange(listener)`、`layer(): TimelineLayer`；`TimelineLayer.set(marks: { time; kind: "chapter" \| "bookmark" \| "marker"; title? }[], opts?: { ifCurrent? })` | `timeline.marks`（发布层时） | marks B22、B23（A 点标记）；playback 绘制 | 进度条属于另一个插件，标记只能经核心中转；通用数据层，不含业务 |
+| M1 | `PlayerState.chapters: readonly Chapter[] \| null`; `Chapter { index: number; title: string \| null; start: number }` | existing `playback.read` | marks B21, B22 | Chapters are media information that mpv already reads; plugins cannot read them for network sources; shared by several plugins |
+| M2 | `player.setLoop(loop: { a: number; b: number; count?: number } \| null, opts?: { ifCurrent?: PlayerState }): Promise<void>`; `PlayerState.loop: { a; b; count: number \| null; remaining: number \| null } \| null` (cleared by the core on source change) | existing `playback.control` | marks B23; playback draws the range (B22) | Precise looping can only be done by mpv `ab-loop-a/b/count`; with the state public, the seek bar can draw it |
+| M3 | `plugin.timeline.marks`, `onChange(listener)`, `layer(): TimelineLayer`; `TimelineLayer.set(marks: { time; kind: "chapter" \| "bookmark" \| "marker"; title? }[], opts?: { ifCurrent? })` | `timeline.marks` (when publishing a layer) | marks B22, B23 (A point marker); playback draws | The seek bar belongs to another plugin, so marks can only be relayed through the core; a general data layer with no business logic |
 
-#### 1.8 绑定
+#### 1.8 Bindings
 
-| # | 接口（签名） | 新能力 | 使用的插件与编号 | 理由 |
+| # | Interface (signature) | New capability | Plugins and IDs using it | Reason |
 | --- | --- | --- | --- | --- |
-| K1 | `plugin.bindings.list(): Promise<{ commands: BindingInfo[]; orphans }>`、`set(ref, inputs: string[])`、`reset(ref?)`、`onChange(listener)` | `bindings.manage` | hotkeys J01、J02 | 绑定表与用户覆盖层都在核心；覆盖层已有但未开放写入 |
-| K2 | `plugin.bindings.ignoreDefaults: boolean`、`setIgnoreDefaults(on: boolean): Promise<void>` | `bindings.manage` | hotkeys J03 | 裁决规则开关；插件逐条解绑会污染覆盖层且有竞态 |
-| K3 | 可绑定输入 `Mouse:LeftClick`（只在有绑定时延迟判定单击） | — | hotkeys J02 | 视频区指针事件只有宿主能识别并区分单击与双击 |
+| K1 | `plugin.bindings.list(): Promise<{ commands: BindingInfo[]; orphans }>`, `set(ref, inputs: string[])`, `reset(ref?)`, `onChange(listener)` | `bindings.manage` | hotkeys J01, J02 | The binding table and the user overlay are both in the core; the overlay exists but writing is not exposed |
+| K2 | `plugin.bindings.ignoreDefaults: boolean`, `setIgnoreDefaults(on: boolean): Promise<void>` | `bindings.manage` | hotkeys J03 | A switch in the resolution rules; unbinding entry by entry in a plugin would pollute the overlay and race |
+| K3 | Bindable input `Mouse:LeftClick` (single-click decision delayed only when bound) | — | hotkeys J02 | Only the host can recognize video area pointer events and tell single from double clicks |
 
-#### 1.9 设置与外观
+#### 1.9 Settings and appearance
 
-| # | 接口（签名） | 新能力 | 使用的插件与编号 | 理由 |
+| # | Interface (signature) | New capability | Plugins and IDs using it | Reason |
 | --- | --- | --- | --- | --- |
-| S1 | `plugin.settings.page(file, { id; category: SettingsCategory; title; order?; component?; global? }): SettingsPage`；`plugin.settings.show(pageId?: string): Promise<void>` | `ui.settings` | preferences J04、H10；hotkeys J01、J02（页面形态）；plugins J07（页面形态）；visualizer H12（页面形态） | 只有核心能把多个插件的 Slint 页面组合进同一个窗口 |
-| S2 | `plugin.appearance.themes`、`state`、`onChange`、`set(Partial<{ theme; corners }>)`；`ThemeInfo { id; title; preview; custom: false }` | `ui.theme`（`set` 时；读取无需能力） | preferences H10 | 配色选择是核心状态，必须由核心下发到所有视图；需要宿主行为 H6 |
+| S1 | `plugin.settings.page(file, { id; category: SettingsCategory; title; order?; component?; global? }): SettingsPage`; `plugin.settings.show(pageId?: string): Promise<void>` | `ui.settings` | preferences J04, H10; hotkeys J01, J02 (page form); plugins J07 (page form); visualizer H12 (page form) | Only the core can compose Slint pages from several plugins into one window |
+| S2 | `plugin.appearance.themes`, `state`, `onChange`, `set(Partial<{ theme; corners }>)`; `ThemeInfo { id; title; preview; custom: false }` | `ui.theme` (for `set`; reading needs no capability) | preferences H10 | The color scheme choice is core state and has to be distributed by the core to all views; needs host behavior H6 |
 
-#### 1.10 插件管理
+#### 1.10 Plugin management
 
-| # | 接口（签名） | 新能力 | 使用的插件与编号 | 理由 |
+| # | Interface (signature) | New capability | Plugins and IDs using it | Reason |
 | --- | --- | --- | --- | --- |
-| G1 | `plugin.packages.list(): Promise<PluginInfo[]>`；`onChange(listener)`；`PluginInfo { id; version; origin; state; error; capabilities; directory; dataDirectory; previousVersion; self }`（与 W6 的 `AppInfo.plugins` 共用类型） | 现有 `plugins.manage`（扩展覆盖范围） | plugins J07；info I09（经 W6 读取） | 插件运行与安装状态在核心 |
-| G2 | `plugin.packages.setEnabled(id, enabled): Promise<void>`（持久化停用集合；自己 → `invalid`；试载 → `unsupported`） | 现有 `plugins.manage` | plugins J07 | 停用要撤销宿主侧全部资源；原对外停用接口已删除，需要重新设计 |
-| G3 | `plugin.packages.uninstall(id, { removeData?: boolean }): Promise<PackageChange>` | 现有 `plugins.manage` | plugins J07 | 带日志的安装库只有核心能写，目前没有删除操作 |
+| G1 | `plugin.packages.list(): Promise<PluginInfo[]>`; `onChange(listener)`; `PluginInfo { id; version; origin; state; error; capabilities; directory; dataDirectory; previousVersion; self }` (the same type as W6's `AppInfo.plugins`) | existing `plugins.manage` (wider coverage) | plugins J07; info I09 (read through W6) | The plugins' running and install state is in the core |
+| G2 | `plugin.packages.setEnabled(id, enabled): Promise<void>` (persisting the disabled set; self → `invalid`; trial → `unsupported`) | existing `plugins.manage` | plugins J07 | Disabling must withdraw all host-side resources; the former external disable interface was removed and has to be redesigned |
+| G3 | `plugin.packages.uninstall(id, { removeData?: boolean }): Promise<PackageChange>` | existing `plugins.manage` | plugins J07 | Only the core can write the journaled install store, and there is no delete operation yet |
 
-新能力合计：`window.control`、`ui.drop`、`timeline.marks`、`bindings.manage`、`ui.settings`、`ui.theme`。
+New capabilities in total: `window.control`, `ui.drop`, `timeline.marks`, `bindings.manage`, `ui.settings`, `ui.theme`.
 
-### 2. 宿主行为改动（非 API）
+### 2. Host behavior changes (not API)
 
-| # | 改动 | 涉及 | 说明 |
+| # | Change | Affects | Notes |
 | --- | --- | --- | --- |
-| H1 | **基础播放动作移交核心** | playback（全章）；hotkeys J01 | 核心注册 14 个基础动作（播放/暂停、停止、上一个/下一个、上一帧/下一帧、第 1 档后退/前进、减速/加速/正常、音量 ±、静音），菜单位置与默认绑定不变；从 `controller.ts` 搬过行为与提示文字；用户覆盖层里 `vestra.playback/<旧 id>` 的绑定在升级时一次性映射到新 id。配合 P3、P4。`rate-10` 是否一起移交待维护者决定 |
-| H2 | **C-SIZE：渲染尺寸跟随视频区** | video E11、E13；window H07（浮窗分辨率） | 现在软件渲染固定 960×540（`backend.rs` `WIDTH/HEIGHT`），Slint `image-fit: contain` 缩放；「不保持宽高比」「填满窗口」和放大画质都依赖渲染目标与视频区尺寸（或比例）一致。不依赖 C-GPU |
-| H3 | **C-GPU：libmpv 改 GPU 渲染** | video E16、E17、E18 运动补偿；window H07（可选的零拷贝） | 从 `RenderContext::new_software` 改为 libmpv OpenGL 渲染接口 + gpu-next / libplacebo（或等价 Metal 路径）并嵌入 Slint 视频区；mpv 的 `tone-mapping`、`glsl-shaders`、`interpolation` 只在 GPU 渲染器里有效 |
-| H4 | **绑定语法增加小键盘按键名** | video E13 | `Numpad0`–`Numpad9`、`NumpadPlus`、`NumpadMinus`、`NumpadMultiply`、`NumpadDivide`、`NumpadEnter`、`NumpadDecimal`，与主键盘区分 |
-| H5 | **macOS Option 键识别** | 所有含 Alt 的默认绑定：playback B06（Ctrl+Alt+←/→）；subtitles A09（Ctrl+Alt+Y）、D02（Alt+L）、D06（Alt+PageUp/Down）、D07（Alt+↑/↓/Home）、D09（Alt+B）、D10（Alt+F）；video E09（Alt+K）、E13 备用键（Alt+方向键、Alt+Plus/-、Alt+Backspace）；audio G04（Alt+A）；capture F03/F04（Ctrl+Alt+E/C）；marks B23（Alt+[、Alt+]、Alt+\、Ctrl+Alt+[ / ]）；现有 Alt+O、Alt+H | `bindings.rs::from_slint_key` 按 `event.text` 识别，Option+键在 macOS 上会打出别的字符（⌥[ → `“`），死键（⌥E、⌥N、⌥U、⌥I、⌥`）更无字符；核心应把「不带修饰的物理键名」并入识别。另需验证 `Ctrl+[` 是否以 `\u{1b}` 到达被识别为 `Ctrl+Escape` |
-| H6 | **Theme 改为宿主可设** | preferences H10 | `theme.slint` 的颜色、`accent-fill`、`radius-*` 由 `out property` 常量改为 `in property`；宿主在每个窗口、面板、菜单实例创建时与配色变化时下发；配色表放在宿主；插件不能写 `Theme` |
-| H7 | **选项容器窗口** | preferences J04 | 核心拥有「选项」窗口（分类树 + 页面区），组合各插件 `settings.page` 注册的页面，复用面板挂载的组合与回调转发（`composition.rs`）；记住 `settings.lastPage` |
-| H8 | **画中画帧输出** | window H07 | 宿主创建 `AVSampleBufferDisplayLayer` 与 `AVPictureInPictureController`（sample buffer content source，macOS 12+），实现 playback delegate；画中画期间把每帧（RGB24 → BGRA）包成带时间戳的 `CMSampleBuffer` 入队；主窗口被遮挡或最小化时仍按视频帧率驱动渲染；关闭浮窗时暂停 |
-| H9 | **生成流音频跟随输出设备** | audio G16 | `producer_audio.rs`（cpal）现在只打开系统默认设备，要使用 `setAudioDevice` 选择的设备，并在断开后重新出现时切回 |
-| H10 | **停用状态持久化与对外停用** | plugins J07 | 内部 `disable(owner)` 对外开放（经 G2）；已安装插件的停用集合跨启动保存，启动时不加载；安装库增加删除记录操作（经 G3） |
-| H11 | **单击判定** | hotkeys J02 | `host.slint` 视频区 TouchArea 只在 `Mouse:LeftClick` 有绑定时延迟判定单击（系统双击间隔内无第二击、移动 ≤ 4px），无绑定时保持立即聚焦 |
-| H12 | **ASS 覆盖策略可设** | subtitles D17 | 宿主启动时写死的 `sub-ass-override=force` 改由 `SubtitleStyle.assOverride` 控制（默认 keep → `scale`）|
-| H13 | **A-B 循环跨文件复位** | marks B23 | mpv 的 `ab-loop-*` 默认跨文件保留，核心在来源变化时显式清除（M2 的规则） |
+| H1 | **Basic playback actions handed over to the core** | playback (whole chapter); hotkeys J01 | The core registers 14 basic actions (play/pause, stop, previous/next, previous/next frame, step 1 back/forward, slower/faster/normal, volume ±, mute), with menu positions and default bindings unchanged; behavior and message text are moved over from `controller.ts`; bindings for `vestra.playback/<old id>` in the user overlay are mapped once to the new ids on upgrade. Works with P3 and P4. Whether `rate-10` is handed over too is for the maintainer to decide |
+| H2 | **C-SIZE: render size follows the video area** | video E11, E13; window H07 (floating window resolution) | Software rendering is now fixed at 960×540 (`WIDTH/HEIGHT` in `backend.rs`) and scaled by Slint `image-fit: contain`; "Ignore Aspect Ratio", "Fill Window" and zoomed-in quality all depend on the render target matching the video area size (or ratio). Does not depend on C-GPU |
+| H3 | **C-GPU: libmpv switches to GPU rendering** | video E16, E17, E18 motion interpolation; window H07 (optional zero copy) | Change from `RenderContext::new_software` to the libmpv OpenGL render interface + gpu-next / libplacebo (or an equivalent Metal path) embedded in the Slint video area; mpv's `tone-mapping`, `glsl-shaders` and `interpolation` only work in the GPU renderer |
+| H4 | **Numpad key names in the binding syntax** | video E13 | `Numpad0`–`Numpad9`, `NumpadPlus`, `NumpadMinus`, `NumpadMultiply`, `NumpadDivide`, `NumpadEnter`, `NumpadDecimal`, distinct from the main keyboard |
+| H5 | **macOS Option key recognition** | All default bindings with Alt: playback B06 (Ctrl+Alt+←/→); subtitles A09 (Ctrl+Alt+Y), D02 (Alt+L), D06 (Alt+PageUp/Down), D07 (Alt+↑/↓/Home), D09 (Alt+B), D10 (Alt+F); video E09 (Alt+K), E13 fallback keys (Alt+arrow keys, Alt+Plus/-, Alt+Backspace); audio G04 (Alt+A); capture F03/F04 (Ctrl+Alt+E/C); marks B23 (Alt+[, Alt+], Alt+\, Ctrl+Alt+[ / ]); the existing Alt+O, Alt+H | `bindings.rs::from_slint_key` recognizes keys by `event.text`; Option+key types a different character on macOS (⌥[ → `“`), and dead keys (⌥E, ⌥N, ⌥U, ⌥I, ⌥`) produce no character at all; the core should also recognize "the physical key name without modifiers". It also needs to be verified whether `Ctrl+[` arrives as `\u{1b}` and is recognized as `Ctrl+Escape` |
+| H6 | **Theme becomes settable by the host** | preferences H10 | The colors, `accent-fill` and `radius-*` in `theme.slint` change from `out property` constants to `in property`; the host distributes them when each window, panel and menu instance is created and when the color scheme changes; the color scheme tables live in the host; plugins cannot write `Theme` |
+| H7 | **Options container window** | preferences J04 | The core owns the "Options" window (category tree + page area), composes the pages registered by plugins with `settings.page`, reusing the composition and callback forwarding of panel mounting (`composition.rs`); remembers `settings.lastPage` |
+| H8 | **Picture-in-picture frame output** | window H07 | The host creates `AVSampleBufferDisplayLayer` and `AVPictureInPictureController` (sample buffer content source, macOS 12+) and implements the playback delegate; during picture-in-picture each frame (RGB24 → BGRA) is wrapped in a timestamped `CMSampleBuffer` and enqueued; rendering keeps being driven at the video frame rate when the main window is covered or minimized; playback pauses when the floating window is closed |
+| H9 | **Generated stream audio follows the output device** | audio G16 | `producer_audio.rs` (cpal) currently only opens the system default device; it has to use the device chosen with `setAudioDevice`, and switch back when a disconnected device reappears |
+| H10 | **Persisted disabled state and external disable** | plugins J07 | Expose the internal `disable(owner)` (through G2); the disabled set of installed plugins is saved across launches, and they are not loaded at startup; the install store gains an operation to delete records (through G3) |
+| H11 | **Single-click detection** | hotkeys J02 | The video area TouchArea in `host.slint` delays the single-click decision only when `Mouse:LeftClick` is bound (no second click within the system double-click interval, movement ≤ 4px); without a binding it keeps focusing immediately |
+| H12 | **Configurable ASS override policy** | subtitles D17 | The `sub-ass-override=force` the host hard-codes at startup is controlled by `SubtitleStyle.assOverride` instead (default keep → `scale`) |
+| H13 | **A-B loop reset across files** | marks B23 | mpv's `ab-loop-*` is kept across files by default, so the core clears it explicitly on source change (the M2 rule) |
 
-### 3. 跨章统一决定
+### 3. Cross-chapter decisions
 
-1. **运行时图片属性**：统一为 `plugin.ui.image(path): ImageRef`，属性值写作 `ImageRef`（`PropValue = Json | ImageRef`，不透明值，只能由该函数生成）。原 playback I07 的 `interface ImageRef { $image: string }` 已改写；playlist C25 的 `{ "$image": path }` 随 C25 删除；visualizer 原来就用 `plugin.ui.image`，其中「见 scenes」的引用改为「见 playback 章 I07」。限制统一为 PNG/JPEG、≤ 16 MB 且 ≤ 4096×4096、路径在本插件 `dataDirectory` 下。原 I07 写的是 ≤ 2 MB，与 H12 自定义徽标允许 16 MB / 4096×4096 矛盾，按后者放宽。
-2. **循环区间**：统一为 marks 章的 `player.setLoop({ a, b, count? } | null, opts?)` 与 `PlayerState.loop`。subtitles 章原来写的 `{ start, end, count? }` 签名只服务于 B24，随 B24 删除，B22、B23 中「B24 复用」的说法也已删掉。
-3. **声音同步与字幕同步快捷键**：采用 audio 章的提议。音频同步用 `>` 超前、`<` 滞后、`?` 复位（即物理按键 Shift+. / Shift+, / Shift+/）；字幕同步从 `>` `<` `/` 改为 `.` 超前、`,` 滞后、`/` 复位。subtitles 章的菜单表、冲突检查、D05 文案与验收已同步修改；audio 章去掉了「若字幕不改则用 Ctrl+. / Ctrl+, / Ctrl+/」的备选方案。旧覆盖绑定不迁移（目前没有改绑界面）。
-4. **渲染相关称呼**：「渲染缓冲随视频区尺寸变化（现固定 960×540）」统一称 **C-SIZE：渲染尺寸跟随视频区**；「libmpv 改 GPU 渲染」统一称 **C-GPU：libmpv 改 GPU 渲染**。两者都标为「宿主行为改动」，不算 API。video 章在定位一节首次给出两个名称，window 章 H07 引用同样的名称。subtitles 章原有的「mpv 渲染尺寸跟随视频区」只服务于 D19，随 D19 删除。
-5. **音轨选择**：`player.selectTrack` 只保留 `kind: "audio"`（E15 视频流删除），签名从 video 章移到 audio 章 G03 定义，`kind` 参数保留以便以后扩展。
-6. **声道**：G06「左右声道互换」并入 G05，作为声道单选的第五个选项「左右互换」。`channels` 节点由 `{ mode; swap: boolean }` 改为 `{ mode: "stereo" | "left" | "right" | "mono" | "swap" }`，「声音处理」子菜单与窗口里的独立互换开关删除。
-7. **章节跳过**：B20 原拟并入 B21，但保留的 B21 只有章节 / 书签菜单、跳转和书签管理，没有「按章节名跳过」，所以 B20 的内容整体删除。原来写在 B20 的 `PlayerState.chapters` 定义移到 B21 的核心依赖里。
-8. **播放列表单列表化**：C19（多页签）删除后，playlist 全章「当前页签」改为「列表」；C17 的保存格式从 `tabs[]` 改为单个 `list`；C18「打开列表文件」原来是放进新页签，现在改为替换当前列表（列表非空时先确认），拖放列表文件仍按 A15 追加或插入。
-9. **章节标题随删减调整**：「截图与录制」改为「截图（`capture`）」，「播放历史与收藏」改为「播放历史（`history`）」，「可视化与空闲画面」改为「专辑封面与空闲画面（`visualizer`）」；插件 id 不变。
-10. **迷你尺寸改为画中画**：H07 改为 macOS 画中画，沿用原快捷键 `` ` `` 和菜单位置 710；`setVideoArea` 不再被 H07 使用，H07 改用新接口 W5 与宿主行为 H8。
+1. **Runtime image property**: unified as `plugin.ui.image(path): ImageRef`, with property values written as `ImageRef` (`PropValue = Json | ImageRef`, an opaque value that only this function can create). The original `interface ImageRef { $image: string }` of playback I07 has been rewritten; playlist C25's `{ "$image": path }` was removed with C25; visualizer already used `plugin.ui.image`, and its reference "see scenes" became "see I07 in the playback chapter". The limits are unified as PNG/JPEG, ≤ 16 MB and ≤ 4096×4096, with the path under the plugin's `dataDirectory`. The original I07 said ≤ 2 MB, which contradicted the 16 MB / 4096×4096 allowed for the H12 custom logo, so it was widened to the latter.
+2. **Loop range**: unified as the marks chapter's `player.setLoop({ a, b, count? } | null, opts?)` and `PlayerState.loop`. The `{ start, end, count? }` signature originally in the subtitles chapter only served B24 and was removed with B24; the wording "reused by B24" in B22 and B23 has been removed too.
+3. **Audio sync and subtitle sync shortcuts**: the audio chapter's proposal is adopted. Audio sync uses `>` earlier, `<` later, `?` reset (the physical keys Shift+. / Shift+, / Shift+/); subtitle sync changes from `>` `<` `/` to `.` earlier, `,` later, `/` reset. The subtitles chapter's menu table, conflict check, D05 wording and acceptance have been updated to match; the audio chapter dropped the alternative "use Ctrl+. / Ctrl+, / Ctrl+/ if subtitles do not change". Old overlay bindings are not migrated (there is no rebinding interface yet).
+4. **Rendering terms**: "the render buffer changes with the video area size (now fixed at 960×540)" is uniformly called **C-SIZE: render size follows the video area**; "libmpv switches to GPU rendering" is uniformly called **C-GPU: libmpv switches to GPU rendering**. Both are marked as "host behavior changes", not API. The video chapter introduces both names in its Scope section, and window H07 uses the same names. The subtitles chapter's original "mpv render size follows the video area" only served D19 and was removed with D19.
+5. **Audio track selection**: `player.selectTrack` keeps only `kind: "audio"` (E15 video streams removed); the signature moved from the video chapter to be defined in audio G03, and the `kind` parameter is kept for later extension.
+6. **Channels**: G06 "swap left and right channels" is merged into G05 as the fifth option of the channel radio group, "Swap Left and Right". The `channels` node changed from `{ mode; swap: boolean }` to `{ mode: "stereo" | "left" | "right" | "mono" | "swap" }`, and the separate swap toggle in the "Processing" submenu and the window was removed.
+7. **Chapter skipping**: B20 was originally to be merged into B21, but the B21 that remains only has the chapter / bookmark menu, jumping and bookmark management, without "skip by chapter name", so B20's content was removed entirely. The `PlayerState.chapters` definition originally written in B20 moved to B21's core dependencies.
+8. **Single-list playlist**: after C19 (multiple tabs) was removed, "current tab" throughout the playlist chapter became "list"; C17's save format changed from `tabs[]` to a single `list`; C18 "Open List File" originally put the list in a new tab and now replaces the current list (with confirmation when the list is not empty), while dropping list files still appends or inserts per A15.
+9. **Chapter titles adjusted after the cut**: "Capture and recording" became "Capture (`capture`)", "Playback history and favorites" became "Playback history (`history`)", and "Visualization and idle screen" became "Album art and idle screen (`visualizer`)"; the plugin ids are unchanged.
+10. **Mini size became picture-in-picture**: H07 became macOS picture-in-picture, keeping the original shortcut `` ` `` and menu position 710; `setVideoArea` is no longer used by H07, which uses the new interface W5 and host behavior H8 instead.
 
-## 附录 B：通用约定
+## Appendix B: Common conventions
 
-现状依据：`main`（1a149a3）的插件源码和宿主代码，以及 [API 参考](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)。
+Basis for the current state: the plugin sources and host code of `main` (1a149a3), and the [API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html).
 
-### B.1 当前宿主事实（读代码确认）
+### B.1 Current host facts (confirmed by reading the code)
 
-- **渲染**：宿主用 libmpv 软件渲染，固定渲染 960×540（`backend.rs` 里的 `WIDTH/HEIGHT`），再由 Slint 用 `image-fit: contain` 缩放到视频区。窗口形状造成的黑边是 Slint 画的，mpv 不知道。附录 A 的 C-SIZE、C-GPU 两项会改变这一点。
-- **字幕**：宿主启动时设置了 `sub-auto=no`、`sub-font-provider=none`、`embeddedfonts=no`、`sub-ass-override=force`（见 `backend.rs`、`subtitle_style.rs`）。
-- **外部字幕**：现在只能通过 `subtitles.load(bytes)` 上传 UTF-8 SRT，上限 2 MiB。
-- **截图与导出**：走离线 ffmpeg 工作进程，`Snapshot.export` 只支持 `png`、`mp4`。
+- **Rendering**: the host uses libmpv software rendering at a fixed 960×540 (`WIDTH/HEIGHT` in `backend.rs`), which Slint then scales to the video area with `image-fit: contain`. The black bars caused by the window shape are drawn by Slint, and mpv does not know about them. C-SIZE and C-GPU in Appendix A will change this.
+- **Subtitles**: at startup the host sets `sub-auto=no`, `sub-font-provider=none`, `embeddedfonts=no`, `sub-ass-override=force` (see `backend.rs`, `subtitle_style.rs`).
+- **External subtitles**: currently only UTF-8 SRT can be uploaded through `subtitles.load(bytes)`, with a 2 MiB limit.
+- **Screenshots and export**: go through an offline ffmpeg worker process; `Snapshot.export` only supports `png` and `mp4`.
 
-### B.2 菜单
+### B.2 Menus
 
-- 新增顶层菜单「设置 ▸」（`windows` 组，order 830–859），收纳首选项、快捷键、外观、插件管理。插件工坊仍在顶层，order 820，不移动。
-- `windows` 组的顶层编号：
+- A new top-level menu "Settings ▸" (`windows` group, order 830–859) holds preferences, shortcuts, appearance and plugin management. The plugin workshop stays at the top level, order 820, and does not move.
+- Top-level numbers of the `windows` group:
 
-  | 菜单项 | order |
+  | Menu item | order |
   | --- | --- |
-  | 播放列表 | 800 |
-  | 播放信息 | 810 |
-  | 播放属性… | 811 |
-  | 插件工坊… | 820 |
-  | 设置 ▸ | 830–859 |
-  | 关于 Vestra Player… | 880 |
+  | Playlist | 800 |
+  | Playback Info | 810 |
+  | Playback Properties… | 811 |
+  | Plugin Workshop… | 820 |
+  | Settings ▸ | 830–859 |
+  | About Vestra Player… | 880 |
 
-- 实现时要同步更新 [menus.md](menus.md)。
+- When implementing, [menus.md](menus.md) has to be updated to match.
 
-### B.3 快捷键
+### B.3 Shortcuts
 
-- **写法**：按 [Binding syntax](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#binding-syntax)，符号键写打出的字符，不写 Shift。例如 `Shift+[` 写成 `{`，`Shift+'` 写成 `"`。
-- **Ctrl 与 Cmd**：macOS 上 `Ctrl+X` 同时匹配 ⌃X 和 ⌘X。所以不要绑定 `Ctrl+Q`，否则会截走 ⌘Q（退出）。
-- **Option 键风险**：在 macOS 上，Option 加字母或符号通常会打出另一个字符，比如 Option+[ 打出 `“`，Option+E、Option+N 是死键。`bindings.rs::from_slint_key` 按 `event.text` 识别按键，所以 `Alt+…` 绑定可能不触发。所有含 Alt 的绑定都要实机验收。如果不触发，由核心改为按物理键识别（见附录 A），不改用别的默认键。
+- **Notation**: per [Binding syntax](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#binding-syntax), symbol keys are written as the typed character, without Shift. For example `Shift+[` is written `{`, and `Shift+'` is written `"`.
+- **Ctrl and Cmd**: on macOS `Ctrl+X` matches both ⌃X and ⌘X. So do not bind `Ctrl+Q`, or it would take ⌘Q (Quit).
+- **Option key risk**: on macOS, Option plus a letter or symbol usually types a different character, for example Option+[ types `“`, and Option+E and Option+N are dead keys. `bindings.rs::from_slint_key` recognizes keys by `event.text`, so `Alt+…` bindings may not trigger. Every binding with Alt has to be accepted on real hardware. If it does not trigger, the core switches to recognizing physical keys (see Appendix A); the default key is not changed to something else.
 
-### B.4 外部工具与系统命令
+### B.4 External tools and system commands
 
-- ffprobe 用 `VESTRA_FFPROBE`，没设时用 PATH 上的 `ffprobe`；ffmpeg 同理，用 `VESTRA_FFMPEG`。
-- 调用都不经 shell，带超时，插件停用时结束进程。
-- 缺少工具时，只在用到它的功能里提示，不算错误。
-- 剪贴板、阻止休眠、外部工具调用、设置文件读写、在文件管理器中显示和打开路径/网址、密钥存储、系统信息、截图格式，统一用核心能力（`plugin.clipboard`、`plugin.power`、`plugin.tools`、`plugin.storage`、`plugin.system`、`plugin.secrets`、`plugin.app.system()`、`Snapshot.export`）。插件不直接调用任何系统命令（社区工作流 §1.5），可移植性检查脚本 `npm run portability` 扫描结果须为零。
+- ffprobe uses `VESTRA_FFPROBE`, or `ffprobe` on PATH when it is not set; ffmpeg likewise uses `VESTRA_FFMPEG`.
+- No call goes through a shell; all have timeouts, and processes are terminated when the plugin is disabled.
+- A missing tool is only reported in the feature that uses it, and is not an error.
+- Clipboard, preventing sleep, calling external tools, reading and writing settings files, showing in the file manager and opening paths/URLs, secret storage, system information and screenshot formats all use core capabilities (`plugin.clipboard`, `plugin.power`, `plugin.tools`, `plugin.storage`, `plugin.system`, `plugin.secrets`, `plugin.app.system()`, `Snapshot.export`). Plugins do not call any system command directly (community workflow §1.5), and the portability check script `npm run portability` must report zero findings.
 
-### B.5 播放列表与文件
+### B.5 Playlist and files
 
-- **媒体扩展名**（大小写不敏感）：
-  - 视频：`mp4 m4v mkv webm mov avi wmv asf flv f4v ts m2ts mts mpg mpeg vob ogv 3gp rm rmvb`
-  - 音频：`mp3 m4a aac flac wav ogg oga opus wma ape alac aif aiff dsf dff mka wv tta ac3 dts`
-  - 列表文件：`m3u m3u8 pls`
-  - 字幕：`srt ass ssa vtt sub idx sup`
-- **自然排序**：用 `Intl.Collator("zh", { numeric: true, sensitivity: "base" })`，与现有的 `queue.ts` 一致。
-- **目录扫描**：
-  - 跳过以 `.` 开头的文件和目录，以及 macOS 包（`.app` 等）。
-  - 跟随符号链接，但按 `realpath` 去重，防止循环。
-  - 不可读的子目录跳过并计数。
+- **Media extensions** (case-insensitive):
+  - Video: `mp4 m4v mkv webm mov avi wmv asf flv f4v ts m2ts mts mpg mpeg vob ogv 3gp rm rmvb`
+  - Audio: `mp3 m4a aac flac wav ogg oga opus wma ape alac aif aiff dsf dff mka wv tta ac3 dts`
+  - List files: `m3u m3u8 pls`
+  - Subtitles: `srt ass ssa vtt sub idx sup`
+- **Natural sorting**: `Intl.Collator("zh", { numeric: true, sensitivity: "base" })`, consistent with the existing `queue.ts`.
+- **Directory scanning**:
+  - Skip files and directories starting with `.`, and macOS bundles (`.app`, etc.).
+  - Follow symbolic links, but de-duplicate by `realpath` to prevent loops.
+  - Unreadable subdirectories are skipped and counted.
 
-### B.6 提示与数据
+### B.6 Messages and data
 
-- 屏幕提示统一用 `plugin.osd.show`，超过 200 字符截断。正文用「OSD：」标出提示原文。
-- `<plugin.dataDirectory>/cache/` 下放可重建的缓存，例如缩略图、封面。
+- On-screen messages always use `plugin.osd.show`, truncated beyond 200 characters. In the text, "OSD:" marks the original message wording.
+- Rebuildable caches, such as thumbnails and covers, go under `<plugin.dataDirectory>/cache/`.
