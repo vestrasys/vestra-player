@@ -25,16 +25,23 @@ export interface PoEntry {
     flags: string[];
     /** A `#~` entry: no longer in the source. */
     obsolete: boolean;
+    /** `# ` lines: the translator's own comments, kept as written. */
+    comments?: string[];
 }
 /** The catalog key: `msgid`, or `msgctxt` U+0004 `msgid`. */
 export declare const keyOf: (context: string | undefined, id: string) => string;
 /** Parse a `.po` (or `.pot`) file. Throws with the line number on errors. */
 export declare function parsePo(text: string): {
     header: string;
+    /** The comment lines before the header entry, as written (`# Reviewed…`, `#, fuzzy`). */
+    headerComments: string[];
     entries: PoEntry[];
 };
-/** Write a `.po` file: the header, then the entries in the given order. */
-export declare function writePo(header: string, entries: readonly PoEntry[]): string;
+/**
+ * Write a `.po` file: the header (after its comment lines, as written),
+ * then the entries in the given order.
+ */
+export declare function writePo(header: string, entries: readonly PoEntry[], headerComments?: readonly string[]): string;
 /** A message of a compiled catalog: a translation, or `[one, other]`. */
 export type CompiledMessage = string | [string, string];
 /**

@@ -23,6 +23,9 @@ const translated = (entry) => !entry.fuzzy && !entry.obsolete && (entry.strings[
 export function parsePo(text) {
     const entries = [];
     let header = "";
+    let headerComments = [];
+    // Every comment line of the entry being read, as written.
+    let raw = [];
     const blank = () => ({
         id: "",
         strings: [],
@@ -39,11 +42,14 @@ export function parsePo(text) {
     let pending = blank();
     const finish = () => {
         if (started) {
-            if (entry.id === "" && entry.context === undefined)
+            if (entry.id === "" && entry.context === undefined) {
                 header = entry.strings[0] ?? "";
+                headerComments = raw;
+            }
             else
                 entries.push(entry);
         }
+        raw = [];
         entry = blank();
         started = false;
         field = "none";
@@ -66,8 +72,11 @@ export function parsePo(text) {
         else if (line.startsWith("#")) {
             if (started)
                 finish();
+            raw.push(lines[index].trimEnd());
             const body = line.slice(2).trim();
-            if (line.startsWith("#."))
+            if (line === "#" || line.startsWith("# "))
+                (pending.comments ??= []).push(line.slice(2));
+            else if (line.startsWith("#."))
                 pending.notes.push(body);
             else if (line.startsWith("#:"))
                 pending.references.push(...body.split(/\s+/).filter(Boolean));
@@ -135,7 +144,7 @@ export function parsePo(text) {
         field = next;
     }
     finish();
-    return { header, entries };
+    return { header, headerComments, entries };
 }
 function unquote(text, at) {
     if (text.length < 2 || !text.startsWith('"') || !text.endsWith('"'))
@@ -172,12 +181,19 @@ function field(keyword, text) {
         return `${keyword} ${poString(text)}`;
     return [`${keyword} ""`, ...parts.map(poString)].join("\n");
 }
-/** Write a `.po` file: the header, then the entries in the given order. */
-export function writePo(header, entries) {
-    const blocks = [`msgid ""\n${field("msgstr", header)}`];
+/**
+ * Write a `.po` file: the header (after its comment lines, as written),
+ * then the entries in the given order.
+ */
+export function writePo(header, entries, headerComments = []) {
+    const blocks = [
+        [...headerComments, `msgid ""`, field("msgstr", header)].join("\n"),
+    ];
     for (const entry of entries) {
         const prefix = entry.obsolete ? "#~ " : "";
         const lines = [];
+        for (const comment of entry.comments ?? [])
+            lines.push(comment === "" ? "#" : `# ${comment}`);
         for (const note of entry.notes)
             lines.push(`#. ${note}`);
         if (entry.references.length && !entry.obsolete)
