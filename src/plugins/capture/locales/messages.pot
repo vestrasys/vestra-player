@@ -4,364 +4,252 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: main.ts:68 ui/parts.slint:57
+#: main.ts:68 main.ts:73 ui/parts.slint:57
 msgid "Enter valid seconds; the end must be after the start."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:58
+#: main.ts:68 main.ts:73 ui/parts.slint:58
 msgid "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:59
+#: main.ts:68 main.ts:73 ui/parts.slint:59
 msgid "The burst runs past the end of the media. Use fewer frames or a shorter interval."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:60
+#: main.ts:68 main.ts:73 ui/parts.slint:60
 msgid "No free file name found."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:61
+#: main.ts:68 main.ts:73 ui/parts.slint:61
 msgid "The current frame cannot be captured. Open a local video file first."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:62
+#: main.ts:68 main.ts:73 ui/parts.slint:62
 msgid "The current frame cannot be exported. Open a local video file first."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:63
+#: main.ts:68 main.ts:73 ui/parts.slint:63
 msgid "Bursts and clips need a known media duration."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:64
+#: main.ts:68 main.ts:73 ui/parts.slint:64
 msgid "The selected range is past the end of the media."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:65
+#: main.ts:68 main.ts:73 ui/parts.slint:65
 msgid "The selected audio track cannot be exported. Choose another track or No Audio."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:66
+#: main.ts:68 main.ts:73 ui/parts.slint:66
 msgid "The media changed; nothing was started."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:67
+#: main.ts:68 main.ts:73 ui/parts.slint:67
 msgid "The player is busy. Try again later."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:68
+#: main.ts:68 main.ts:73 ui/parts.slint:68
 msgid "The current frame cannot be captured."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:69
+#: main.ts:68 main.ts:73 ui/parts.slint:69
 msgid "Could not capture the frame."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:70
+#: main.ts:68 main.ts:73 ui/parts.slint:70
 msgid "One export is running and four are queued. Please wait."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:71
+#: main.ts:68 main.ts:73 ui/parts.slint:71
 msgid "The kept frame has expired. Retry with the current frame."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:72
+#: main.ts:68 main.ts:73 ui/parts.slint:72
 msgid "The kept frame was released."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:73
+#: main.ts:68 main.ts:73 ui/parts.slint:73
 msgid "Cancelled."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:74
+#: main.ts:68 main.ts:73 ui/parts.slint:74
 msgid "Could not write to the clipboard"
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:75
+#: main.ts:68 main.ts:73 ui/parts.slint:75
 msgid "Not enough disk space"
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:76
+#: main.ts:68 main.ts:73 ui/parts.slint:76
 msgid "The target file already exists"
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:77
+#: main.ts:68 main.ts:73 ui/parts.slint:77
 msgid "No write permission"
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:78
+#: main.ts:68 main.ts:73 ui/parts.slint:78
 msgid "This media cannot be encoded"
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:79
+#: main.ts:68 main.ts:73 ui/parts.slint:79
 msgid "Export failed"
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:80
+#: main.ts:68 main.ts:73 ui/parts.slint:80
 msgid "This task has no output file yet."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:81
+#: main.ts:68 main.ts:73 ui/parts.slint:81
 msgid "The output file no longer exists."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:82
+#: main.ts:68 main.ts:73 ui/parts.slint:82
 msgid "Could not open the folder."
 msgstr ""
 
-#: main.ts:68 ui/parts.slint:83
+#: main.ts:68 main.ts:73 ui/parts.slint:83
 msgid "The snapshot folder is unavailable. Please choose it again."
 msgstr ""
 
-#: main.ts:75
-msgid "Snapshot failed: the snapshot folder is unavailable. Please choose it again."
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: one export is running and four are queued. Please wait."
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: the current frame cannot be captured. Open a local video file first."
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: the selected range is past the end of the media."
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: the media changed; nothing was started."
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: the player is busy. Try again later."
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: the current frame cannot be captured."
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: could not capture the frame."
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: cancelled."
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: no free file name found."
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: not enough disk space"
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: the target file already exists"
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: no write permission"
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: this media cannot be encoded"
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: export failed"
-msgstr ""
-
-#: main.ts:75
-msgid "Snapshot failed: the kept frame was released."
-msgstr ""
-
-#: main.ts:75
-msgid "Burst failed: not enough disk space"
-msgstr ""
-
-#: main.ts:75
-msgid "Burst failed: the target file already exists"
-msgstr ""
-
-#: main.ts:75
-msgid "Burst failed: no write permission"
-msgstr ""
-
-#: main.ts:75
-msgid "Burst failed: this media cannot be encoded"
-msgstr ""
-
-#: main.ts:75
-msgid "Burst failed: export failed"
-msgstr ""
-
-#: main.ts:75
-msgid "Burst failed: the kept frame was released."
-msgstr ""
-
-#: main.ts:75
-msgid "Export failed: not enough disk space"
-msgstr ""
-
-#: main.ts:75
-msgid "Export failed: the target file already exists"
-msgstr ""
-
-#: main.ts:75
-msgid "Export failed: no write permission"
-msgstr ""
-
-#: main.ts:75
-msgid "Export failed: this media cannot be encoded"
-msgstr ""
-
-#: main.ts:75
-msgid "Export failed: export failed"
-msgstr ""
-
-#: main.ts:75
-msgid "Export failed: the kept frame was released."
-msgstr ""
-
-#: main.ts:78
+#: main.ts:73
 msgid "Snapshot failed: {}"
 msgstr ""
 
-#: main.ts:78 ui/parts.slint:115
+#: main.ts:73 ui/parts.slint:115
 msgid "Burst failed: {}"
 msgstr ""
 
-#: main.ts:78 ui/parts.slint:117
+#: main.ts:73 ui/parts.slint:117
 msgid "Export failed: {}"
 msgstr ""
 
-#: main.ts:94
+#: main.ts:88
 msgid "Frame saved as {}"
 msgstr ""
 
 #. {0} is the number of frames (2–20), {1} the folder.
-#: main.ts:99
+#: main.ts:93
 msgid "Burst of {0} frames saved to {1}"
 msgstr ""
 
-#: main.ts:103
+#: main.ts:97
 msgid "Clip exported as {}"
 msgstr ""
 
-#: main.ts:133
+#: main.ts:127
 msgid "Snapshot format: {}"
 msgstr ""
 
-#: main.ts:155
+#: main.ts:149
 msgid "The previous snapshot is still being processed"
 msgstr ""
 
-#: main.ts:174
+#: main.ts:168
 msgid "Snapshot queued"
 msgstr ""
 
-#: main.ts:182
+#: main.ts:176
 msgid "Save Rendered Frame As"
 msgstr ""
 
-#: main.ts:182
+#: main.ts:176
 msgid "Save Current Frame As"
 msgstr ""
 
-#: main.ts:193
+#: main.ts:187
 msgid "Frame copied to the clipboard"
 msgstr ""
 
-#: main.ts:196
+#: main.ts:190
 msgid "Choose Snapshot Folder"
 msgstr ""
 
-#: main.ts:198
+#: main.ts:192
 msgid "Please choose an existing folder."
 msgstr ""
 
-#: main.ts:201
+#: main.ts:195
 msgid "Snapshot folder: {}"
 msgstr ""
 
-#: main.ts:286 ui/clip.slint:8
+#: main.ts:280 ui/clip.slint:8
 msgid "Export Clip"
 msgstr ""
 
-#: main.ts:335
+#: main.ts:329
 msgid "The snapshot window could not open."
 msgstr ""
 
-#: main.ts:352 manifest.json ui/error.slint:5
+#: main.ts:346 manifest.json ui/error.slint:5
 msgid "Snapshot"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Save Current Frame"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Save Current Frame As…"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Copy Current Frame"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Save Rendered Frame"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Save Rendered Frame As…"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Copy Rendered Frame"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Burst…"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Export Clip…"
 msgstr ""
 
-#: main.ts:352 ui/clip.slint:74
+#: main.ts:346 ui/clip.slint:74
 msgid "Export Tasks…"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Capture as PNG"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Capture as JPEG"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Capture as BMP"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Include Subtitles in Rendered Frame"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Snapshot Settings…"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Snapshot Folder…"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "Open Snapshot Folder"
 msgstr ""
 
-#: main.ts:352
+#: main.ts:346
 msgid "No frame to capture"
 msgstr ""
 
@@ -385,6 +273,22 @@ msgstr ""
 
 #: manifest.json
 msgid "export"
+msgstr ""
+
+#: model.ts:178 ui/clip.slint:13
+msgid "No Audio"
+msgstr ""
+
+#: model.ts:179 ui/clip.slint:13
+msgid "Current Track"
+msgstr ""
+
+#: model.ts:180
+msgid "Track {} · {}"
+msgstr ""
+
+#: model.ts:180
+msgid "Track {}"
 msgstr ""
 
 #: ui/burst.slint:8
@@ -467,14 +371,6 @@ msgstr ""
 msgid "Start"
 msgstr ""
 
-#: ui/clip.slint:13
-msgid "No Audio"
-msgstr ""
-
-#: ui/clip.slint:13
-msgid "Current Track"
-msgstr ""
-
 #: ui/clip.slint:29
 msgid "Range"
 msgstr ""
@@ -539,14 +435,8 @@ msgstr ""
 msgid "Cancelled"
 msgstr ""
 
-#. {0} is a task state (Failed), {1} why.
 #: ui/parts.slint:103
-msgid "{0}: {1}"
-msgstr ""
-
-#. {0} is a task state (Exporting), {1} the frames done, {2} the frames in all.
-#: ui/parts.slint:105
-msgid "{0} · {1}/{2}"
+msgid "Failed: {}"
 msgstr ""
 
 #. {} is the number of frames (2–20).
@@ -629,11 +519,6 @@ msgstr ""
 
 #: ui/tasks.slint:56
 msgid "Snapshot · {}"
-msgstr ""
-
-#. {0} is the time or time range, {1} the progress (Completed).
-#: ui/tasks.slint:60
-msgid "{0} · {1}"
 msgstr ""
 
 #: ui/tasks.slint:66

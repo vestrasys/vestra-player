@@ -25,7 +25,6 @@ Right-click menu: Video ▸ Snapshot.
 
 - Local videos with a known duration only.
 - Exports show no percentage, only the stage and the number of frames saved.
-- The audio choices of Export Clip are still in Chinese in every language (a window cannot yet build a translated list from data).
 
 ## Translations
 

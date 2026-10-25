@@ -131,20 +131,20 @@ test("activation: backdrop, settings page and menu entries, in English", async (
   assert.equal(props(host)["custom-logo"], false);
   const page = host.settingsPage(PAGE_ID);
   assert.deepEqual([page.category, page.title, page.order], ["appearance", "Logo and Album Cover", 20]);
-  const menu = [...host.commands.values()].map((c) => [c.declaration.path!.join(" ▶ "), c.declaration.order, c.declaration.group]);
+  const menu = [...host.commands.values()].map((c) => [c.declaration.path!.join(" ▸ "), c.declaration.order, c.declaration.group]);
   assert.deepEqual(menu, [
-    ["@audio ▶ Show Album Cover for Audio Only", 530, "visual"],
-    ["@settings ▶ Appearance ▶ Show Logo When Idle", 845, "settings-logo"],
-    ["@settings ▶ Appearance ▶ Choose Logo Image…", 846, "settings-logo"],
-    ["@settings ▶ Appearance ▶ Restore Default Logo", 847, "settings-logo"],
+    ["@audio ▸ Show Album Cover for Audio Only", 530, "visual"],
+    ["@settings ▸ Appearance ▸ Show Logo When Idle", 845, "settings-logo"],
+    ["@settings ▸ Appearance ▸ Choose Logo Image…", 846, "settings-logo"],
+    ["@settings ▸ Appearance ▸ Restore Default Logo", 847, "settings-logo"],
   ]);
   assert.deepEqual(
-    [...host.commands.values()].map((c) => c.display.path.join(" ▶ ")),
+    [...host.commands.values()].map((c) => c.display.path.join(" ▸ ")),
     [
-      "Audio ▶ Show Album Cover for Audio Only",
-      "Settings ▶ Appearance ▶ Show Logo When Idle",
-      "Settings ▶ Appearance ▶ Choose Logo Image…",
-      "Settings ▶ Appearance ▶ Restore Default Logo",
+      "Audio ▸ Show Album Cover for Audio Only",
+      "Settings ▸ Appearance ▸ Show Logo When Idle",
+      "Settings ▸ Appearance ▸ Choose Logo Image…",
+      "Settings ▸ Appearance ▸ Restore Default Logo",
     ],
   );
   assert.equal(host.command("reset-logo").state.reason, "Using the default logo");
@@ -517,8 +517,8 @@ test("Simplified Chinese: menus, settings page and messages from locales/zh-Hans
   assert.deepEqual(host.osd, ["徽标图片无法读取，已使用默认徽标"]);
   assert.equal(host.settingsPage(PAGE_ID).title, "徽标与专辑封面");
   assert.deepEqual(
-    [...host.commands.values()].map((c) => c.display.path.join(" ▶ ")),
-    ["声音 ▶ 纯音频时显示专辑封面", "设置 ▶ 外观 ▶ 空闲时显示徽标", "设置 ▶ 外观 ▶ 选择徽标图片…", "设置 ▶ 外观 ▶ 恢复默认徽标"],
+    [...host.commands.values()].map((c) => c.display.path.join(" ▸ ")),
+    ["声音 ▸ 纯音频时显示专辑封面", "设置 ▸ 外观 ▸ 空闲时显示徽标", "设置 ▸ 外观 ▸ 选择徽标图片…", "设置 ▸ 外观 ▸ 恢复默认徽标"],
   );
   // The player translates the reason with the plugin's catalog when it shows it.
   assert.equal(host.translate(host.command("reset-logo").state.reason!), "正在使用默认徽标");

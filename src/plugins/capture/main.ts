@@ -4,10 +4,9 @@ import type { CommandOptions, Plugin, Window } from "@vestra-player/sdk";
 import { clipboard } from "./copy.ts";
 import { capturer } from "./form.ts";
 import {
-  audioChoices, BURST_FAILED, CLIP_FAILED, extensionOf, Failure, FORMAT_LABEL, FORMATS, formatOfName, frameName, message, parseRange,
-  problemOf, quality, REASON, SNAPSHOT_FAILED, usable,
+  audioChoices, extensionOf, Failure, FORMAT_LABEL, FORMATS, formatOfName, frameName, message, parseRange, problemOf, quality, REASON, usable,
 } from "./model.ts";
-import type { Format, Kind, Problem, Reason, Spec } from "./model.ts";
+import type { Format, Kind, Problem, Spec } from "./model.ts";
 import { openSettings } from "./settings.ts";
 import { Tasks, terminal } from "./tasks.ts";
 import type { Task } from "./tasks.ts";
@@ -48,8 +47,8 @@ const MENU = {
   "capture.folder": "Snapshot Folder…",
   "capture.openFolder": "Open Snapshot Folder",
 } as const;
-const FAILED = { image: SNAPSHOT_FAILED, burst: BURST_FAILED, clip: CLIP_FAILED } as const;
-type FailedText = (typeof SNAPSHOT_FAILED)[keyof typeof SNAPSHOT_FAILED] | (typeof BURST_FAILED)[keyof typeof BURST_FAILED] | (typeof CLIP_FAILED)[keyof typeof CLIP_FAILED];
+/** The OSD prefix of a failed capture; the reason (or the player's or system's own message) goes after it. */
+const FAILED = { image: "Snapshot failed: {}", burst: "Burst failed: {}", clip: "Export failed: {}" } as const;
 
 /**
  * Capture (decision D3): Save Current Frame saves straight into the capture
@@ -59,6 +58,7 @@ type FailedText = (typeof SNAPSHOT_FAILED)[keyof typeof SNAPSHOT_FAILED] | (type
  */
 export default async function activate(plugin: Plugin) {
   const { player, osd } = plugin;
+  const { text } = plugin.i18n;
   const { settings, save } = openSettings(plugin);
   const ui = { burstBusy: false, clipBusy: false, stillBusy: false, burstStatus: status(), clipStatus: status(), tasksStatus: status() };
   // Headless hosts refuse the display; that never fails the action itself.
@@ -69,14 +69,8 @@ export default async function activate(plugin: Plugin) {
     // i18n-ignore: the player's or system's own message
     shown(osd.show(raw.slice(0, 200)));
   }
-  /** "Snapshot failed: …", "Burst failed: …", "Export failed: …": one template per reason. */
-  function sayFailed(kind: Kind, { reason, raw }: Problem) {
-    const text = reason ? (FAILED[kind] as Partial<Record<Reason, FailedText>>)[reason] : undefined;
-    if (text) return shown(osd.show(text));
-    // The player's or system's own message (or a reason this kind never fails with) after the prefix, as before.
-    const detail = cut(reason ? REASON[reason] : raw);
-    shown(kind === "image" ? osd.show("Snapshot failed: {}", [detail]) : kind === "burst" ? osd.show("Burst failed: {}", [detail]) : osd.show("Export failed: {}", [detail]));
-  }
+  /** "Snapshot failed: …", "Burst failed: …", "Export failed: …" with the reason, or the player's or system's own message. */
+  const sayFailed = (kind: Kind, { reason, raw }: Problem) => shown(osd.show(FAILED[kind], [reason ? text(REASON[reason]) : cut(raw)]));
   const tasks = new Tasks(plugin, finished);
   const exporter = capturer(plugin, tasks);
   const copier = clipboard(plugin);
@@ -262,7 +256,7 @@ export default async function activate(plugin: Plugin) {
   clip.bind(() => ({
     busy: ui.clipBusy,
     canExport: usable(player.state),
-    audioLabels: audioChoices(player.state).labels,
+    audioLabels: audioChoices(player.state, text).labels,
     status: ui.clipStatus,
   }));
   const mark = (field: "startTime" | "endTime") => async () => {
@@ -280,7 +274,7 @@ export default async function activate(plugin: Plugin) {
       const spec: Spec = {
         kind: "clip", start: range.start, end: range.end, count: 1, step: 1,
         processed: processed === true, subtitles: subtitles === true,
-        track: audioChoices(seen).values[Number(audio)] ?? "none", current: false,
+        track: audioChoices(seen, text).values[Number(audio)] ?? "none", current: false,
       };
       if (!usable(seen)) throw new Failure("unexportable");
       const chosen = await plugin.dialogs.saveFile({ title: "Export Clip", fileName: frameName(seen.source, range.start, ".mp4") });
@@ -345,11 +339,11 @@ export default async function activate(plugin: Plugin) {
     });
   };
   const canCapture = { enabled: () => usable(player.state), reason: () => (usable(player.state) ? null : "No frame to capture" as const) };
-  /** The options besides id, path, order and run; `reason` is typed so that its text is found (extract does not read spreads). */
-  type Extra = Omit<CommandOptions, "id" | "path" | "order" | "run" | "reason"> & { reason?: () => "No frame to capture" | null };
+  /** The options besides id, path, order and run; `reason` is typed so that extract finds its text. */
+  type Extra = Omit<CommandOptions, "id" | "path" | "title" | "order" | "run" | "reason"> & { reason?: () => "No frame to capture" | null };
   // `@video` is the player's Video menu; "Snapshot" is this plugin's own submenu.
   const entry = (id: keyof typeof MENU, order: number, run: () => unknown, extra: Extra = {}) =>
-    plugin.commands.add({ id, path: ["@video", "Snapshot", MENU[id]], order, run, ...extra, reason: extra.reason });
+    plugin.commands.add({ id, path: ["@video", "Snapshot", MENU[id]], order, run, ...extra });
   const source = { group: "capture-source", ...canCapture };
   const screen = { group: "capture-screen", ...canCapture };
   entry("capture.save", 420, () => saveFrame(false), { bindings: ["Ctrl+E"], ...source });

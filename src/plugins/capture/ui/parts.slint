@@ -99,8 +99,8 @@ export global Words {
     // "Completed", "Exporting · 3/10", "Failed: Not enough disk space"; empty without a task.
     public pure function progress(p: Progress) -> string {
         if (p.status == "") { return ""; }
-        // TRANSLATORS: {0} is a task state (Failed), {1} why.
-        if (p.reason != "" || p.raw != "") { return @tr("{0}: {1}", Words.state(p.status), Words.reason(p.reason, p.raw)); }
+        // Only a failed task has a reason.
+        if (p.reason != "" || p.raw != "") { return @tr("Failed: {}", Words.reason(p.reason, p.raw)); }
         // TRANSLATORS: {0} is a task state (Exporting), {1} the frames done, {2} the frames in all.
         if (p.total > 1) { return @tr("{0} · {1}/{2}", Words.state(p.status), p.done, p.total); }
         return Words.state(p.status);

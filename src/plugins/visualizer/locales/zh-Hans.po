@@ -95,7 +95,7 @@ msgid ""
 "Entries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
 msgstr ""
 "播放没有画面的音频时显示专辑封面与标题、艺术家、专辑；没有打开媒体时显示徽标（可换成自己的图片）；打开媒体期间显示加载画面。\n"
-"入口：「声音 ▶ 纯音频时显示专辑封面」「设置 ▶ 外观」。"
+"入口：「声音 ▸ 纯音频时显示专辑封面」「设置 ▸ 外观」。"
 
 #: manifest.json
 msgid "audio"

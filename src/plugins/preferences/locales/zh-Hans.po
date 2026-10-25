@@ -55,7 +55,7 @@ msgstr "打开选项窗口，切换界面配色和界面语言"
 
 #: manifest.json
 msgid "Settings ▸ Options… (F5) opens the player's options window. Settings ▸ Appearance picks the palette (Vestra Dark, Vestra Light); the options window also has an Appearance page with previews. Settings ▸ Language picks the interface language, used from the next start."
-msgstr "「设置 ▶ 选项…」（F5）打开播放器的选项窗口；「设置 ▶ 外观」选择界面配色（Vestra 深色、Vestra 浅色），选项窗口里也有带预览的「外观」页；「设置 ▶ 语言」选择界面语言，重启后生效。"
+msgstr "「设置 ▸ 选项…」（F5）打开播放器的选项窗口；「设置 ▸ 外观」选择界面配色（Vestra 深色、Vestra 浅色），选项窗口里也有带预览的「外观」页；「设置 ▸ 语言」选择界面语言，重启后生效。"
 
 #: manifest.json
 msgid "settings"

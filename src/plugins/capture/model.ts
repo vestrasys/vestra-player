@@ -1,6 +1,6 @@
 import { lstat } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
-import type { PlayerState } from "@vestra-player/sdk";
+import type { I18n, PlayerState } from "@vestra-player/sdk";
 
 /** Pure capture rules: parsing, validation, ranges and file naming. */
 export type Kind = "image" | "burst" | "clip";
@@ -41,7 +41,7 @@ export function quality(value: unknown) {
 /**
  * Every reason the plugin gives in its own words (English source text). The
  * windows say the same texts through `Words.reason` in ui/parts.slint (a test
- * keeps the two lists equal); the OSD shows them through the tables below.
+ * keeps the two lists equal); the OSD shows them as text values.
  */
 export const REASON = {
   range: "Enter valid seconds; the end must be after the start.",
@@ -94,44 +94,6 @@ export const problemOf = (error: unknown): Problem =>
 /** A task failure: a job reason, or the message of anything else. */
 export const jobProblem = (error: unknown): Problem<JobReason> =>
   error instanceof Failure && JOB_REASONS.includes(error.code) ? { reason: error.code as JobReason, raw: "" } : { reason: "", raw: message(error) };
-
-/** "Snapshot failed: …" — one template per reason a single frame (save, save as, copy, its task) can fail with. */
-export const SNAPSHOT_FAILED = {
-  folderUnavailable: "Snapshot failed: the snapshot folder is unavailable. Please choose it again.",
-  queueFull: "Snapshot failed: one export is running and four are queued. Please wait.",
-  unusable: "Snapshot failed: the current frame cannot be captured. Open a local video file first.",
-  outOfRange: "Snapshot failed: the selected range is past the end of the media.",
-  changed: "Snapshot failed: the media changed; nothing was started.",
-  busy: "Snapshot failed: the player is busy. Try again later.",
-  unavailable: "Snapshot failed: the current frame cannot be captured.",
-  captureFailed: "Snapshot failed: could not capture the frame.",
-  cancelled: "Snapshot failed: cancelled.",
-  noName: "Snapshot failed: no free file name found.",
-  space: "Snapshot failed: not enough disk space",
-  exists: "Snapshot failed: the target file already exists",
-  permission: "Snapshot failed: no write permission",
-  encoder: "Snapshot failed: this media cannot be encoded",
-  exportFailed: "Snapshot failed: export failed",
-  released: "Snapshot failed: the kept frame was released.",
-} as const satisfies Partial<Record<Reason, string>>;
-/** "Burst failed: …" per job reason. */
-export const BURST_FAILED = {
-  space: "Burst failed: not enough disk space",
-  exists: "Burst failed: the target file already exists",
-  permission: "Burst failed: no write permission",
-  encoder: "Burst failed: this media cannot be encoded",
-  exportFailed: "Burst failed: export failed",
-  released: "Burst failed: the kept frame was released.",
-} as const satisfies Record<JobReason, string>;
-/** "Export failed: …" (a clip) per job reason. */
-export const CLIP_FAILED = {
-  space: "Export failed: not enough disk space",
-  exists: "Export failed: the target file already exists",
-  permission: "Export failed: no write permission",
-  encoder: "Export failed: this media cannot be encoded",
-  exportFailed: "Export failed: export failed",
-  released: "Export failed: the kept frame was released.",
-} as const satisfies Record<JobReason, string>;
 
 export const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -207,14 +169,16 @@ export function chooseAudio(spec: Spec, state: PlayerState): number | "none" {
 
 /**
  * Clip audio choices: index 0 none, 1 the selected track, then each track.
- * The labels stay composed here, in Chinese, until a window can build a
- * combo box list from translated words plus data (migration blocker, see
- * doc/process/rounds/2026-10-i18n.md「第 2 轮请求」).
+ * The labels are text values: the player says the words, the track is data.
  */
-export function audioChoices(state: PlayerState) {
+export function audioChoices(state: PlayerState, text: I18n["text"]) {
   const tracks = state.audioTracks ?? [];
   return {
-    labels: /* i18n-ignore: migration blocker (above) */ ["无声音", "当前音轨", ...tracks.map((t) => `音轨 ${t.id}${t.title || t.language ? ` · ${t.title ?? t.language}` : ""}`)],
+    labels: [
+      text("No Audio"),
+      text("Current Track"),
+      ...tracks.map((t) => (t.title || t.language ? text("Track {} · {}", [t.id, t.title ?? t.language!]) : text("Track {}", [t.id]))),
+    ],
     values: ["none", "selected", ...tracks.map((t) => String(t.id))],
   };
 }

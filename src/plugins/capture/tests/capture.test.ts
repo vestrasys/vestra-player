@@ -129,6 +129,7 @@ test("menu per the allocation table; each dialog binds exactly its Slint callbac
 test("English by default: menus, dialog titles, OSD and window texts are the English source texts", async () => {
   const host = new TestHost();
   ready(host);
+  host.setSource({ audioTracks: [{ trackId: 7, selected: true, external: false, streamIndex: 1, codec: "aac", title: null, language: "en" }, { trackId: 8, selected: false, external: false, streamIndex: 2, codec: "opus", title: null, language: null }] });
   const { stop } = await start(host, "en");
   try {
     assert.deepEqual(host.command("capture.save").declaration.path, ["@video", "Snapshot", "Save Current Frame"]);
@@ -142,6 +143,7 @@ test("English by default: menus, dialog titles, OSD and window texts are the Eng
     host.window("clip").emit("export-clip", "1", "4", false, false, 0);
     await until(() => statusOf(host, "clip") === "No save location chosen.");
     assert.equal(host.sent("dialogs.open").at(-1)!.title, "Export Clip");
+    assert.deepEqual(host.window("clip").props["audio-labels"], ["No Audio", "Current Track", "Track 7 · en", "Track 8"]);
     host.window("clip").emit("export-clip", "5", "1", false, false, 0);
     await until(() => statusOf(host, "clip") === REASON.range);
     assert.deepEqual(host.window("clip").props.status, { kind: "error", reason: "range", raw: "", count: 0, name: "" }, "data, not words");
@@ -261,14 +263,14 @@ test("另存为 asks for a file; a source change while it is open captures nothi
 test("clip: the snapshot is conditional on the seen source and honours the dialog options", async () => {
   const host = new TestHost();
   ready(host);
-  host.setSource({ audioTracks: [{ trackId: 7, selected: true, external: false, streamIndex: 1, codec: "aac", title: null, language: "en" }] });
+  host.setSource({ audioTracks: [{ trackId: 7, selected: true, external: false, streamIndex: 1, codec: "aac", title: null, language: "en" }, { trackId: 8, selected: false, external: false, streamIndex: 2, codec: "opus", title: null, language: null }] });
   const setJob = manualJobs(host);
   const { stop } = await start(host);
   const folder = await mkdtemp(join(tmpdir(), "capture-options-"));
   try {
     await host.command("capture.clip").run();
     const clip = host.window("clip");
-    assert.deepEqual(clip.props["audio-labels"], ["无声音", "当前音轨", "音轨 7 · en"]);
+    assert.deepEqual(clip.props["audio-labels"], ["无声音", "当前音轨", "音轨 7 · en", "音轨 8"]);
     host.dialogAnswers.push([join(folder, "clip.mp4")]);
     clip.emit("export-clip", "1", "4", true, false, 2);
     // The status follows the job start (the name is checked on disk first); the job waits for setJob.

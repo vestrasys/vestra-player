@@ -75,7 +75,7 @@ export function words(host: TestHost) {
     !p.status
       ? ""
       : p.reason || p.raw
-        ? t("{0}: {1}", [state(p.status), reason(p.reason, p.raw)])
+        ? t("Failed: {}", [reason(p.reason, p.raw)])
         : p.total > 1
           ? t("{0} · {1}/{2}", [state(p.status), p.done, p.total])
           : state(p.status);
