@@ -49,7 +49,7 @@ async function play(host: TestHost, source: string, duration: number | null = 60
   if (duration !== null) host.setSource({ duration, position });
   await host.settle(WAIT);
 }
-/** Lines of Open ▶ Recently Played as shown, in menu order (one order: declaration order). */
+/** Lines of Open ▸ Recently Played as shown, in menu order (one order: declaration order). */
 const recentMenu = (host: TestHost) =>
   [...host.commands.values()]
     .filter((c) => c.declaration.path?.[1] === "Recently Played")
@@ -131,7 +131,7 @@ test("English by default: menus, messages and the ask window in the source text"
   await stop();
 });
 
-test("A12 menu entries: one order 114 under 打开 ▶ 最近播放, records then the management group", async () => {
+test("A12 menu entries: one order 114 under 打开 ▸ 最近播放, records then the management group", async () => {
   const { host, stop } = await start();
   assert.deepEqual(recentMenu(host), ["（无记录）", "移除无效记录", "清除记录", "记录播放历史"]);
   const empty = host.command("recent.empty");
@@ -310,7 +310,7 @@ test("B25 left at 05:00 and opened again: continues from 04:58 with 「从 05:00
   await play(host, a);
   host.setSource({ position: 300 });
   await play(host, b);
-  assert.deepEqual(records(host), ["1  b.mkv", "2  a.mkv (05:00)"]);
+  assert.deepEqual(records(host), ["1  b.mkv", "2  a.mkv（05:00）"]);
   assert.deepEqual(pluginSeeks(host), []);
   await play(host, a);
   assert.deepEqual(pluginSeeks(host), [298]);
@@ -358,7 +358,7 @@ test("B25 a natural end forgets the point", async () => {
   await play(host, a);
   host.setSource({ position: 300, paused: true });
   await host.settle(WAIT);
-  assert.equal(records(host)[0], "1  a.mkv (05:00)");
+  assert.equal(records(host)[0], "1  a.mkv（05:00）");
   host.setSource({ phase: "ended", terminalReason: "natural", position: 300 });
   await host.settle(WAIT);
   assert.equal(records(host)[0], "1  a.mkv");
@@ -469,7 +469,7 @@ test("B25 每次询问: 从头播放 closes the window and playing on records th
   assert.equal(host.window("resume").visible, false);
   host.setSource({ position: 120 });
   await play(host, b);
-  assert.equal(records(host)[1], "2  a.mkv (02:00)");
+  assert.equal(records(host)[1], "2  a.mkv（02:00）");
   await stop();
 });
 
@@ -491,7 +491,7 @@ test("B25 a replaced file (other size) drops its point; 不记忆 neither reads 
   host.setSource({ position: 400 });
   await play(host, b);
   assert.deepEqual(pluginSeeks(host), []);
-  assert.equal(records(host)[1], "2  a.mkv (05:00)");
+  assert.equal(records(host)[1], "2  a.mkv（05:00）");
   await host.command("resume.auto").run();
   await play(host, a);
   assert.deepEqual(pluginSeeks(host), [298]);

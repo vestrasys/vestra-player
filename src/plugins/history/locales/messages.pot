@@ -28,67 +28,67 @@ msgstr ""
 msgid "resume"
 msgstr ""
 
-#: menu.ts:91 menu.ts:111 menu.ts:119 menu.ts:130
+#: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
 msgid "Recently Played"
 msgstr ""
 
-#: menu.ts:91
+#: menu.ts:94
 msgid "(No Entries)"
 msgstr ""
 
-#: menu.ts:111
+#: menu.ts:114
 msgid "Remove Invalid Entries"
 msgstr ""
 
-#: menu.ts:115
+#: menu.ts:118
 msgid "Removed {} invalid entries"
 msgstr ""
 
-#: menu.ts:119
+#: menu.ts:122
 msgid "Clear Entries"
 msgstr ""
 
-#: menu.ts:125
+#: menu.ts:128
 msgid "Playback history cleared"
 msgstr ""
 
-#: menu.ts:130
+#: menu.ts:133
 msgid "Record Playback History"
 msgstr ""
 
-#: menu.ts:141
+#: menu.ts:144
 msgid "File not found: {}"
 msgstr ""
 
-#: menu.ts:150 menu.ts:153
+#: menu.ts:153 menu.ts:156
 msgid "Cannot open: {}"
 msgstr ""
 
-#: menu.ts:169 menu.ts:179 menu.ts:187 ui/resume.slint:6
+#: menu.ts:172 menu.ts:182 menu.ts:190 ui/resume.slint:6
 msgid "Resume Playback"
 msgstr ""
 
-#: menu.ts:169
+#: menu.ts:172
 msgid "Don't Resume"
 msgstr ""
 
-#: menu.ts:169
+#: menu.ts:172
 msgid "Resume Automatically"
 msgstr ""
 
-#: menu.ts:169
+#: menu.ts:172
 msgid "Ask Every Time"
 msgstr ""
 
-#: menu.ts:179
+#: menu.ts:182
 msgid "Also Remember Audio Files"
 msgstr ""
 
-#: menu.ts:187
+#: menu.ts:190
 msgid "Clear All Saved Positions"
 msgstr ""
 
-#: menu.ts:192
+#: menu.ts:195
 msgid "All saved positions cleared"
 msgstr ""
 

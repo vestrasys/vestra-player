@@ -5,135 +5,117 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: commands.ts:240
-msgid "Seek"
-msgstr "跳转"
-
-#: commands.ts:240
-msgid "Speed"
-msgstr "速度"
-
-#: commands.ts:240
-msgid "Open File…"
-msgstr "打开文件…"
-
-#: commands.ts:240
-msgid "Open URL…"
-msgstr "打开链接…"
-
-#: commands.ts:240
-msgid "Reopen Current/Last File"
-msgstr "重开当前/最后文件"
-
-#: commands.ts:240
-msgid "Copy to Clipboard"
-msgstr "复制到剪贴板"
-
-#: commands.ts:240
-msgid "File Name"
-msgstr "文件名"
-
-#: commands.ts:240
-msgid "Folder Path"
-msgstr "文件夹路径"
-
-#: commands.ts:240
-msgid "Full Path"
-msgstr "完整路径"
-
-#: commands.ts:240
-msgid "Previous Keyframe"
-msgstr "上一关键帧"
-
-#: commands.ts:240
-msgid "Next Keyframe"
-msgstr "下一关键帧"
-
-#: commands.ts:240
-msgid "Jump to Time…"
-msgstr "跳转到…"
-
-#: commands.ts:240
-msgid "Jump to Start"
-msgstr "跳到开头"
-
-#: commands.ts:240
-msgid "Seek Steps…"
-msgstr "时间跨度设置…"
-
-#: commands.ts:240
+# Not collected by `i18n extract` (SDK 1.5.11 skips sources without a letter); kept by hand.
 msgid "0.5×"
 msgstr "0.5倍"
 
-#: commands.ts:240
 msgid "1.5×"
 msgstr "1.5倍"
 
-#: commands.ts:240
 msgid "2×"
 msgstr "2倍"
 
-#: commands.ts:240
+#: commands.ts:65
+msgid "Back {} s"
+msgstr "后退{}秒"
+
+#: commands.ts:65
+msgid "Forward {} s"
+msgstr "前进{}秒"
+
+#: commands.ts:229
+msgid "Seek"
+msgstr "跳转"
+
+#: commands.ts:229
+msgid "Speed"
+msgstr "速度"
+
+#: commands.ts:229
+msgid "Open File…"
+msgstr "打开文件…"
+
+#: commands.ts:229
+msgid "Open URL…"
+msgstr "打开链接…"
+
+#: commands.ts:229
+msgid "Reopen Current/Last File"
+msgstr "重开当前/最后文件"
+
+#: commands.ts:229
+msgid "Copy to Clipboard"
+msgstr "复制到剪贴板"
+
+#: commands.ts:229
+msgid "File Name"
+msgstr "文件名"
+
+#: commands.ts:229
+msgid "Folder Path"
+msgstr "文件夹路径"
+
+#: commands.ts:229
+msgid "Full Path"
+msgstr "完整路径"
+
+#: commands.ts:229
+msgid "Previous Keyframe"
+msgstr "上一关键帧"
+
+#: commands.ts:229
+msgid "Next Keyframe"
+msgstr "下一关键帧"
+
+#: commands.ts:229
+msgid "Jump to Time…"
+msgstr "跳转到…"
+
+#: commands.ts:229
+msgid "Jump to Start"
+msgstr "跳到开头"
+
+#: commands.ts:229
+msgid "Seek Steps…"
+msgstr "时间跨度设置…"
+
+#: commands.ts:229
 msgid "Custom…"
 msgstr "自定义…"
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Disable Screen Saver While Playing"
 msgstr "播放时禁止屏保"
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Show Time on Seek Bar Hover"
 msgstr "进度条悬停显示时间"
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "进度条悬停显示缩略图"
 
-#: commands.ts:240
-msgid "Back 30 s"
-msgstr "后退30秒"
-
-#: commands.ts:240
-msgid "Back 60 s"
-msgstr "后退60秒"
-
-#: commands.ts:240
-msgid "Back 300 s"
-msgstr "后退300秒"
-
-#: commands.ts:240
-msgid "Forward 30 s"
-msgstr "前进30秒"
-
-#: commands.ts:240
-msgid "Forward 60 s"
-msgstr "前进60秒"
-
-#: commands.ts:240
-msgid "Forward 300 s"
-msgstr "前进300秒"
-
-#: commands.ts:249
+#: commands.ts:238
 msgid "Not supported by the current source"
 msgstr "当前来源不支持此操作"
 
-#: commands.ts:249
+#: commands.ts:238
 msgid "No file to reopen"
 msgstr "没有可重开的文件"
 
-#: commands.ts:249
+#: commands.ts:238
 msgid "No open file"
 msgstr "没有打开的文件"
 
-#: commands.ts:249
+#: commands.ts:238
 msgid "A network source has no file name"
 msgstr "网络来源没有文件名"
 
-#: commands.ts:249
+#: commands.ts:238
 msgid "No video"
 msgstr "没有视频"
 
-#: commands.ts:249
+#: commands.ts:238
 msgid "Needs ffmpeg"
 msgstr "需要 ffmpeg"
 
@@ -272,11 +254,6 @@ msgstr "跳转"
 #: manifest.json
 msgid "speed"
 msgstr "速度"
-
-#. a tooltip: a button's action and its key, e.g. "Pause (Space)".
-#: ui/bar.slint:73
-msgid "{} ({})"
-msgstr "{} ({})"
 
 #: ui/bar.slint:75
 msgid "Pause"

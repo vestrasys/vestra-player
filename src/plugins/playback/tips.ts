@@ -27,13 +27,11 @@ export function firstKey(info: BindingInfo): string | null {
 }
 
 /**
- * The top-level menu item whose key the sidebar toggle shows, as the binding
- * table names it (the menu text in the interface language): the playlist's
- * English title and its Chinese translation. The table has no
- * language-independent path yet (round doc, 第 2 轮请求).
+ * The top-level menu item whose key the sidebar toggle shows, by its menu key
+ * (`BindingInfo.key`, the English text menus merge by), so it is found in every
+ * interface language.
  */
-// i18n-ignore: other plugins' menu titles, compared with, never shown
-const SIDEBAR_ITEM: ReadonlySet<string> = new Set(["Playlist", "播放列表"]);
+const SIDEBAR_ITEM = "Playlist";
 
 /**
  * The bar elements' keys from the binding table (`plugin.bindings`), so a key
@@ -78,7 +76,7 @@ export class Keys {
       next: host("next"),
       mute: host("mute"),
       open: find((info) => info.plugin === this.#plugin.id && info.command === "open"),
-      sidebar: find((info) => info.path?.length === 1 && SIDEBAR_ITEM.has(info.path[0]!)),
+      sidebar: find((info) => info.key?.length === 1 && info.key[0] === SIDEBAR_ITEM),
     };
     this.#changed();
   }

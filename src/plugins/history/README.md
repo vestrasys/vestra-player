@@ -19,4 +19,3 @@ Remembers what was played recently, and continues next time where you stopped.
 ## Limits
 
 - Once a file is modified (its size changes), its saved position is dropped.
-- A saved position in a menu entry shows as "(12:34)" in every language until command titles can take arguments.

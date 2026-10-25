@@ -67,7 +67,7 @@ export default async function activate(plugin: Plugin) {
     await commands?.setSteps(steps);
   });
 
-  commands = addCommands(plugin, playback, jump, customRate, {
+  commands = addCommands(plugin, plugin.i18n, playback, jump, customRate, {
     openUrl,
     reopener,
     keyframes,

@@ -10,7 +10,7 @@ import activate from "../main.ts";
 import { firstKey } from "../tips.ts";
 
 const directory = new URL("..", import.meta.url);
-const start = (host = new TestHost(), dataDirectory?: string, locale: "en" | "zh-Hans" = "zh-Hans") =>
+const start = (host = new TestHost(), dataDirectory?: string, locale: "en" | "zh-Hans" | "ja" = "zh-Hans") =>
   startPlugin(activate, { directory, host, locale, ...(dataDirectory ? { dataDirectory } : {}) });
 
 /**
@@ -123,6 +123,21 @@ test("G-07 in English the tooltips are the source texts", async () => {
   assert.equal(tip.back, "Back 5 seconds (ArrowLeft)\nRight-click: Play previous (PageUp)");
   assert.equal(tip.volume, "Volume: 100%");
   assert.equal(tip.sidebar, "Playlist");
+  await stop();
+});
+
+test("G-07 the playlist button names the key of the top-level Playlist item in any language (by its menu key)", async () => {
+  const host = withMedia();
+  // Another plugin's top-level Playlist item, shown in Japanese; the table gives its English key.
+  const playlist = {
+    declaration: { id: "toggle", title: "Playlist", path: ["Playlist"], bindings: ["F6"] },
+    display: { title: "プレイリスト", path: ["プレイリスト"] },
+  };
+  host.coreCommands.set("vestra.playlist/toggle", playlist as never);
+  const { stop } = await start(host, undefined, "ja");
+  const bar = host.mounted();
+  host.emit("bindings.changed", null);
+  await until(() => bar.props["key-sidebar"] === "F6");
   await stop();
 });
 

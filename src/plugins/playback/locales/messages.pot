@@ -4,135 +4,107 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: commands.ts:240
+#: commands.ts:65
+msgid "Back {} s"
+msgstr ""
+
+#: commands.ts:65
+msgid "Forward {} s"
+msgstr ""
+
+#: commands.ts:229
 msgid "Seek"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Speed"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Open File…"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Open URL…"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Reopen Current/Last File"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Copy to Clipboard"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "File Name"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Folder Path"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Full Path"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Previous Keyframe"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Next Keyframe"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Jump to Time…"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Jump to Start"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Seek Steps…"
 msgstr ""
 
-#: commands.ts:240
-msgid "0.5×"
-msgstr ""
-
-#: commands.ts:240
-msgid "1.5×"
-msgstr ""
-
-#: commands.ts:240
-msgid "2×"
-msgstr ""
-
-#: commands.ts:240
+#: commands.ts:229
 msgid "Custom…"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Disable Screen Saver While Playing"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Show Time on Seek Bar Hover"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:229
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr ""
 
-#: commands.ts:240
-msgid "Back 30 s"
-msgstr ""
-
-#: commands.ts:240
-msgid "Back 60 s"
-msgstr ""
-
-#: commands.ts:240
-msgid "Back 300 s"
-msgstr ""
-
-#: commands.ts:240
-msgid "Forward 30 s"
-msgstr ""
-
-#: commands.ts:240
-msgid "Forward 60 s"
-msgstr ""
-
-#: commands.ts:240
-msgid "Forward 300 s"
-msgstr ""
-
-#: commands.ts:249
+#: commands.ts:238
 msgid "Not supported by the current source"
 msgstr ""
 
-#: commands.ts:249
+#: commands.ts:238
 msgid "No file to reopen"
 msgstr ""
 
-#: commands.ts:249
+#: commands.ts:238
 msgid "No open file"
 msgstr ""
 
-#: commands.ts:249
+#: commands.ts:238
 msgid "A network source has no file name"
 msgstr ""
 
-#: commands.ts:249
+#: commands.ts:238
 msgid "No video"
 msgstr ""
 
-#: commands.ts:249
+#: commands.ts:238
 msgid "Needs ffmpeg"
 msgstr ""
 
@@ -270,11 +242,6 @@ msgstr ""
 
 #: manifest.json
 msgid "speed"
-msgstr ""
-
-#. a tooltip: a button's action and its key, e.g. "Pause (Space)".
-#: ui/bar.slint:73
-msgid "{} ({})"
 msgstr ""
 
 #: ui/bar.slint:75

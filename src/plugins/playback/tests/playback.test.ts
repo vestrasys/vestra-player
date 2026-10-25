@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { Text } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { parseTime, rateText, time } from "../format.ts";
@@ -76,9 +77,11 @@ test("menu follows the allocation table: positions, groups, radio items, binding
       ["forward-4", "播放/跳转/前进300秒", 217, "step", false, ["Ctrl+Alt+ArrowRight"], false],
     ],
   );
-  // The declared English paths, in the player's menus and submenus.
+  // The declared English paths, in the player's menus and submenus (a text value as its source and args).
+  const english = (segment: string | Text) =>
+    typeof segment === "string" ? segment : segment.$vestraText.replace("{}", String(Object.values(segment.args ?? {})[0]));
   assert.deepEqual(
-    own(host).map(([id, { declaration: d }]) => [id, d.path.join("/")]),
+    own(host).map(([id, { declaration: d }]) => [id, d.path.map(english).join("/")]),
     [
       ["open", "Open File…"],
       ["open-url", "@open/Open URL…"],

@@ -1,4 +1,4 @@
-import type { Scope } from "@vestra-player/sdk";
+import type { I18n, Scope, Text } from "@vestra-player/sdk";
 import type { Playback } from "./controller.ts";
 import { type CopyKind, copyTarget } from "./copy.ts";
 import type { Keyframes } from "./keyframes.ts";
@@ -6,8 +6,7 @@ import type { OpenUrl } from "./open-url.ts";
 import type { Prompt } from "./prompt.ts";
 import type { Reopener } from "./reopen.ts";
 import type { SeekSteps, SettingsStore } from "./settings.ts";
-import type { MenuText, Reason, State, Untranslated } from "./texts.ts";
-import { STEP_TITLES } from "./texts.ts";
+import type { MenuText, Reason, State } from "./texts.ts";
 import type { Thumbnails } from "./thumbs.ts";
 import { stepText, type TimeJump } from "./time-jump.ts";
 
@@ -27,7 +26,7 @@ export type Features = {
 
 type Entry = {
   id: string;
-  path: (MenuText | Untranslated)[];
+  path: (MenuText | Text)[];
   /** Menu position: doc/product/menus.md, and the 播放控制 chapter's 菜单与快捷键 table for new items. */
   order: number;
   group?: string;
@@ -49,20 +48,10 @@ const ready = (enabled = true, checked: boolean | null = null, busy = false, rea
 });
 
 /**
- * The title of a tier 2–4 seek. Only the default seconds have a translated
- * title; other seconds are put together here in English until a menu title
- * can take arguments (round doc, 第 2 轮请求).
- */
-function stepTitle(direction: "backward" | "forward", seconds: number): MenuText | Untranslated {
-  const titles: Readonly<Record<number, MenuText>> = STEP_TITLES[direction];
-  return titles[seconds] ?? (`${direction === "backward" ? "Back" : "Forward"} ${stepText(seconds)} s` as Untranslated);
-}
-
-/**
  * Tiers 2–4 of the relative seeks (B06). Tier 1 (← →) is the core's
  * `seek-backward` / `seek-forward`, given its step with `player.setStepSeek`.
  */
-function seekEntries(p: Playback, steps: SeekSteps): Entry[] {
+function seekEntries(p: Playback, steps: SeekSteps, { text }: I18n): Entry[] {
   const tiers: [number, string, string][] = [
     [2, "Ctrl+ArrowLeft", "Ctrl+ArrowRight"],
     [3, "Shift+ArrowLeft", "Shift+ArrowRight"],
@@ -73,7 +62,7 @@ function seekEntries(p: Playback, steps: SeekSteps): Entry[] {
     const order = 210 + (tier - 1) * 2;
     const seek = (id: string, direction: "backward" | "forward", at: number, delta: number, binding: string): Entry => ({
       id,
-      path: ["@playback", "Seek", stepTitle(direction, seconds)],
+      path: ["@playback", "Seek", direction === "backward" ? text("Back {} s", [stepText(seconds)]) : text("Forward {} s", [stepText(seconds)])],
       order: at,
       group: "step",
       bindings: [binding],
@@ -258,15 +247,15 @@ function register(scope: Scope, table: Entry[]) {
  * cannot change in place, so `setSteps` disposes them and adds them again with
  * the new seconds (same ids, orders and bindings).
  */
-export function addCommands(scope: Scope, playback: Playback, jump: Prompt, customRate: Prompt, features: Features) {
+export function addCommands(scope: Scope, i18n: I18n, playback: Playback, jump: Prompt, customRate: Prompt, features: Features) {
   register(scope, entries(playback, jump, customRate, features));
   let seeks = scope.scope();
-  register(seeks, seekEntries(playback, features.settings.value.seekSteps));
+  register(seeks, seekEntries(playback, features.settings.value.seekSteps, i18n));
   return {
     async setSteps(steps: SeekSteps) {
       await seeks.dispose();
       seeks = scope.scope();
-      register(seeks, seekEntries(playback, steps));
+      register(seeks, seekEntries(playback, steps, i18n));
     },
   };
 }

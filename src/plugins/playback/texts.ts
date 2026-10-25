@@ -32,22 +32,7 @@ export type MenuText =
   | "Custom…"
   | "Disable Screen Saver While Playing"
   | "Show Time on Seek Bar Hover"
-  | "Show Thumbnail on Seek Bar Hover"
-  | StepTitle;
-
-/**
- * Titles of the tier 2–4 seeks with their default seconds (B06). Seconds the
- * user set in Seek Steps… have no title of their own: a menu title cannot take
- * arguments yet, so those show in English (round doc, 第 2 轮请求).
- */
-export const STEP_TITLES = {
-  backward: { 30: "Back 30 s", 60: "Back 60 s", 300: "Back 300 s" },
-  forward: { 30: "Forward 30 s", 60: "Forward 60 s", 300: "Forward 300 s" },
-} as const;
-type StepTitle = (typeof STEP_TITLES)[keyof typeof STEP_TITLES][keyof (typeof STEP_TITLES)["backward"]];
-
-/** A title built from data that has no translation (see {@link STEP_TITLES}). */
-export type Untranslated = string & { readonly untranslated: true };
+  | "Show Thumbnail on Seek Bar Hover";
 
 /** Why a command is greyed out (`reason`). */
 export type Reason =

@@ -361,8 +361,8 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
     assert.equal(host.stepSeek, 10);
     const titles = () =>
       ["backward-2", "forward-2", "backward-3", "forward-3", "backward-4", "forward-4"].map((id) => host.command(id).display.path.at(-1));
-    // Seconds other than the defaults have no translated title yet (a menu title takes no arguments).
-    assert.deepEqual(titles(), ["Back 2.5 s", "Forward 2.5 s", "Back 90 s", "Forward 90 s", "后退300秒", "前进300秒"]);
+    // Any seconds are translated: the title is a text value with the seconds as data.
+    assert.deepEqual(titles(), ["后退2.5秒", "前进2.5秒", "后退90秒", "前进90秒", "后退300秒", "前进300秒"]);
     assert.deepEqual(host.command("forward-3").declaration.bindings, ["Shift+ArrowRight"]);
     assert.equal(host.command("forward-3").declaration.order, 215);
     assert.deepEqual(host.conflicts, []);
@@ -384,7 +384,7 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
     const second = await start(new TestHost(), data);
     await second.host.settle();
     assert.deepEqual(second.host.sent("player.setStepSeek").map((p) => p.seconds), [10]);
-    assert.equal(second.host.command("backward-2").declaration.path.at(-1), "Back 2.5 s");
+    assert.equal(second.host.command("backward-2").display.path.at(-1), "后退2.5秒");
     await second.stop();
 
     // A set with one value out of range falls back as a whole.

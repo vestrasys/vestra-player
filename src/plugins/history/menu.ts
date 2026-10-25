@@ -1,12 +1,12 @@
 import { basename } from "node:path";
-import type { Osd, Plugin, Scope } from "@vestra-player/sdk";
+import type { I18n, Osd, Plugin, Scope, Text } from "@vestra-player/sdk";
 import { clock, displayName, middle } from "./identity.ts";
 import { exists, MENU_ITEMS, type Recent, type RecentItem } from "./recent.ts";
 import type { Mode, Resume } from "./resume.ts";
 import { timing } from "./store.ts";
 
 const RECENT = ["@open", "Recently Played"] as const;
-/** All of Open ▶ Recently Played shares one order; declaration order arranges it (reference §4). */
+/** All of Open ▸ Recently Played shares one order; declaration order arranges it (reference §4). */
 const RECENT_ORDER = 114;
 /** Headless hosts refuse the display; that never fails the action itself. */
 export const quiet = (shown: Promise<void>) => void shown.catch(() => {});
@@ -17,25 +17,28 @@ const TITLE_MAX = 80;
 /** `1`–`9`, `0`, then nothing: the number in front of the first ten records. */
 const number = (index: number) => (index < 9 ? `${index + 1}  ` : index === 9 ? "0  " : "");
 
-/** The menu lines of the records: number, display name, and the B25 point when there is one. */
-export function recentTitles(items: RecentItem[], resume: Resume): string[] {
+/**
+ * The menu lines of the records: number and display name (data), with the B25
+ * point when there is one as a text value (`{} ({})`, in Chinese `{}（{}）`).
+ */
+export function recentTitles(items: RecentItem[], resume: Resume, { text }: I18n): (string | Text)[] {
   const used = new Set<string>();
   return items.slice(0, MENU_ITEMS).map((item, index) => {
     const memo = resume.memo(item.key);
     const prefix = number(index);
-    // i18n: needs r2-api (a command title with args; until then the point shows as " (12:34)" in every language)
-    const suffix = memo ? ` (${clock(memo.position)})` : "";
-    const room = TITLE_MAX - [...prefix].length - [...suffix].length;
-    let title = `${prefix}${middle(displayName(item.source), room)}${suffix}`;
+    const point = memo ? clock(memo.position) : null;
+    // The point and its two brackets.
+    const room = TITLE_MAX - [...prefix].length - (point ? point.length + 2 : 0);
+    let name = `${prefix}${middle(displayName(item.source), room)}`;
     // Two records with the same name past the tenth would be the same menu path.
-    for (let n = 2; used.has(title); n++) title = `${prefix}${middle(displayName(item.source), room - 4)} (${n})${suffix}`;
-    used.add(title);
-    return title;
+    for (let n = 2; used.has(`${name} ${point}`); n++) name = `${prefix}${middle(displayName(item.source), room - 4)} (${n})`;
+    used.add(`${name} ${point}`);
+    return point ? text("{} ({})", [name, point]) : name;
   });
 }
 
 /**
- * Open ▶ Recently Played: rebuilt in a child scope whenever the records (or a shown
+ * Open ▸ Recently Played: rebuilt in a child scope whenever the records (or a shown
  * B25 point) change, changes within `timing.menuRebuild` merged. The whole
  * submenu is rebuilt so that the records stay above the management items.
  */
@@ -75,7 +78,7 @@ export class RecentMenu {
   /** Build now (at activation, and when a scheduled rebuild is due); nothing happens when no line changed. */
   async build() {
     const items = this.#recent.items.slice(0, MENU_ITEMS);
-    const titles = recentTitles(items, this.#resume);
+    const titles = recentTitles(items, this.#resume, this.#plugin.i18n);
     const signature = JSON.stringify([titles, items.map((item) => item.source)]);
     if (signature === this.#built || this.#disposed) return;
     this.#built = signature;
@@ -94,7 +97,7 @@ export class RecentMenu {
         enabled: false,
         run: () => {},
       });
-    // The titles are data (number, name, point): not translated.
+    // The titles are data (number, name), with the point as a text value.
     // i18n-ignore
     items.forEach((item, index) =>
       scope.commands.add({
@@ -155,7 +158,7 @@ export class RecentMenu {
   }
 }
 
-/** Playback ▶ Resume Playback ▶ (250–254). */
+/** Playback ▸ Resume Playback ▸ (250–254). */
 export function addResumeCommands(plugin: Plugin, resume: Resume, osd: Osd) {
   const path = ["@playback", "Resume Playback"] as const;
   const modes = [
