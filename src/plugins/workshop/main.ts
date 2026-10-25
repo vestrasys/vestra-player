@@ -515,6 +515,13 @@ export default async function activate(plugin: Plugin) {
   window.on("openPi", () => plugin.system.openUrl(PI_URL));
 
   // ---- settings page (Options ▸ Plugins ▸ Vestra Player AI)
+  /** A provider list entry: pi's providers by their own name (data), the custom endpoints in words. */
+  const entry = (x: Provider) =>
+    x.id === "custom-openai"
+      ? plugin.i18n.text("Custom · OpenAI format")
+      : x.id === "custom-anthropic"
+        ? plugin.i18n.text("Custom · Anthropic format")
+        : x.label;
   const page = plugin.settings.page("settings.slint", { id: "byok", category: "plugins", title: "Vestra Player AI" });
   page.bind(() => {
     const p = provider();
@@ -522,9 +529,8 @@ export default async function activate(plugin: Plugin) {
     const models = modelsOf(p);
     return {
       // A provider no longer offered shows as the first entry, so the list
-      // does not pretend another one is selected. Still Chinese, like the
-      // custom labels: see CUSTOM in providers.ts (request R2-workshop-1).
-      providers: [...(gone() ? [`${goneName(p.id)}（已不再提供）`] : []), ...providers.map((x) => x.label)],
+      // does not pretend another one is selected.
+      providers: [...(gone() ? [plugin.i18n.text("{} (no longer offered)", [goneName(p.id)])] : []), ...providers.map(entry)],
       providerIndex: gone() ? 0 : providers.indexOf(p),
       custom: !!p.api,
       canList: !gone() && (!!p.api || !!p.list),

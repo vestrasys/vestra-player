@@ -1,12 +1,13 @@
-import type { Plugin } from "@vestra-player/sdk";
+import type { Plugin, Text } from "@vestra-player/sdk";
 import type { Actions } from "./actions.ts";
-import type { Bookmarks } from "./bookmarks.ts";
-import { chapterName, type Chapters, chapterTitle, hasMedia } from "./chapters.ts";
+import { type Bookmarks, bookmarkName, cleanTitle } from "./bookmarks.ts";
+import { type Chapters, chapterTitle, hasMedia } from "./chapters.ts";
 import { parseTime, precise } from "./format.ts";
 
 /**
  * One list row; `rowId` is `c<index>` for a chapter, `b<id>` for a bookmark.
- * A chapter without a title has `title: ""` and is shown as "Chapter <number>".
+ * A chapter or bookmark without a title has `title: ""` and is shown as
+ * "Chapter <number>" / "Bookmark <number>".
  */
 type Row = { rowId: string; chapter: boolean; time: string; title: string; number: number; selected: boolean };
 
@@ -16,7 +17,7 @@ type Row = { rowId: string; chapter: boolean; time: string; title: string; numbe
  */
 type Status = {
   kind: "" | "empty-title" | "bad-time" | "too-late" | "removed" | "confirm-failed" | "cleared";
-  text?: string;
+  text?: string | Text;
   count?: number;
 };
 const NO_STATUS: Status = { kind: "" };
@@ -110,8 +111,8 @@ export class ListWindow {
         time: precise(chapter.start),
         title: chapterTitle(chapter) ?? "",
         number: i + 1,
-        // The search matches the English "Chapter N" of an untitled chapter.
-        match: chapterName(chapter, i),
+        // The search matches the English "Chapter N" / "Bookmark N" of an untitled row.
+        match: chapterTitle(chapter) ?? `Chapter ${i + 1}`,
         selected: false,
       })),
       ...this.#bookmarks.items.map((bookmark) => ({
@@ -121,8 +122,8 @@ export class ListWindow {
         order: 1,
         time: precise(bookmark.time),
         title: bookmark.title,
-        number: 0,
-        match: bookmark.title,
+        number: bookmark.number,
+        match: bookmark.title || `Bookmark ${bookmark.number}`,
         selected: false,
       })),
     ];
@@ -147,6 +148,7 @@ export class ListWindow {
     this.#window.set({
       editTime: bookmark ? precise(bookmark.time, true) : "",
       editTitle: bookmark ? bookmark.title : "",
+      editNumber: bookmark && !bookmark.title ? bookmark.number : 0,
     });
   }
 
@@ -165,7 +167,9 @@ export class ListWindow {
   #commitTitle(text: string) {
     const bookmark = this.#bookmark();
     if (!bookmark) return;
-    if (!this.#bookmarks.rename(bookmark.id, text)) this.#status = { kind: "empty-title" };
+    // Left empty, a bookmark without a title keeps none.
+    if (!bookmark.title && cleanTitle(text) === null) this.#status = NO_STATUS;
+    else if (!this.#bookmarks.rename(bookmark.id, text)) this.#status = { kind: "empty-title" };
     else this.#status = NO_STATUS;
     this.#loadEdit();
   }
@@ -201,7 +205,7 @@ export class ListWindow {
     const next = items[index + 1] ?? items[index - 1];
     this.#bookmarks.remove(bookmark.id);
     this.#selected = next ? `b${next.id}` : null;
-    this.#status = { kind: "removed", text: bookmark.title };
+    this.#status = { kind: "removed", text: bookmarkName(this.#plugin.i18n.text, bookmark) };
     this.#loadEdit();
   }
   async #clear() {

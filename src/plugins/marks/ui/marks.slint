@@ -10,7 +10,7 @@ export struct MarkRow {
     rowId: string,
     chapter: bool,
     time: string,
-    // "" for a chapter without a title: shown as "Chapter <number>".
+    // "" for a chapter or bookmark without a title: shown as "Chapter <number>" / "Bookmark <number>".
     title: string,
     number: int,
     selected: bool,
@@ -51,7 +51,9 @@ component Row inherits Rectangle {
         }
         Text {
             horizontal-stretch: 1;
-            text: root.mark.title != "" ? root.mark.title : @tr("Chapter {}", root.mark.number);
+            text: root.mark.title != "" ? root.mark.title
+                : root.mark.chapter ? @tr("Chapter {}", root.mark.number)
+                : @tr("Bookmark {}", root.mark.number);
             color: root.mark.chapter ? Theme.text-dim : Theme.text;
             font-size: Theme.font-body;
             vertical-alignment: center;
@@ -91,6 +93,9 @@ export component MarksWindow inherits Window {
     in-out property <string> search-text;
     in-out property <string> edit-time;
     in-out property <string> edit-title;
+    // A bookmark without a title: its number (the title input is empty and
+    // shows "Bookmark <number>" as its placeholder); 0 otherwise.
+    in property <int> edit-number;
     callback select(string);
     callback activate(string);
     callback search(string);
@@ -165,6 +170,7 @@ export component MarksWindow inherits Window {
                     height: Theme.input-height;
                     font-size: Theme.font-body;
                     text <=> root.edit-title;
+                    placeholder-text: root.edit-number > 0 ? @tr("Bookmark {}", root.edit-number) : "";
                     accepted(text) => { root.commit-title(text); }
                     changed has-focus => {
                         if !self.has-focus { root.commit-title(self.text); }

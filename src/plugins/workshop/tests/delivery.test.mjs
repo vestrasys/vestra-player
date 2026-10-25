@@ -88,7 +88,7 @@ test("install_plugin asks the user first; 回退 removes a first install; a refu
   await ai.ask("安装");
   assert.deepEqual(ai.host.confirmTexts.at(-1), {
     message: "安装 AI 生成的插件「演示」？",
-    detail: "local.demo 0.1.0\n能力：commands、ui.window\n安装后可以在 AI 窗口里点「回退（撤销安装）」。".replace("、", ", "),
+    detail: "local.demo 0.1.0\n能力：commands、ui.window\n安装后可以在 AI 窗口里点「回退（撤销安装）」。",
     confirm: "安装",
     cancel: ai.host.confirmTexts.at(-1).cancel,
   });

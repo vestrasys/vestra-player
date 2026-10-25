@@ -1,3 +1,4 @@
+import type { ListStyle, Locale } from "./plugin/types.ts";
 /**
  * The player's interface languages: English (the source language) first,
  * then the translations, as the player's own table (its tests check that
@@ -78,6 +79,83 @@ export declare function format(template: string, args: TemplateArgsValue): strin
  * number (`{n}` of a Slint plural is `"n"`). Translations must keep them.
  */
 export declare function placeholders(text: string): string[];
+/**
+ * The ways a `TextList` is joined (`ListStyle`), as the player
+ * joins them in each interface language (`LIST_SEPARATORS`).
+ */
+export declare const LIST_STYLES: readonly ListStyle[];
+/**
+ * The separator of each list style per interface language, as the player's
+ * table (`i18n::text::SEPARATORS`; its tests check that they agree).
+ */
+export declare const LIST_SEPARATORS: Readonly<Record<Locale, Readonly<Record<ListStyle, string>>>>;
+/**
+ * The player's limits on one text value (a
+ * {@link @vestra-player/sdk!Text | Text} or
+ * {@link @vestra-player/sdk!TextList | TextList} with everything nested in it), as the player's
+ * `i18n::text` (its tests check that they agree).
+ */
+export declare const TEXT_LIMITS: {
+    /** Nesting depth of texts and lists; the value itself is depth 0 (8). */
+    readonly depth: 8;
+    /** Texts, lists and arguments in all, the value itself included (1024). */
+    readonly nodes: 1024;
+    /** Arguments of one text (16). */
+    readonly args: 16;
+    /** Items of one list (256). */
+    readonly items: 256;
+    /** UTF-8 bytes of a source text or a string argument (4096). */
+    readonly stringBytes: 4096;
+};
+/** A translatable text on the wire: English source text and its arguments. */
+export type TextJson = {
+    $vestraText: string;
+    args?: ArgJson[] | {
+        [name: string]: ArgJson;
+    };
+};
+/** A list on the wire: items joined the interface language's way. */
+export type ListJson = {
+    $vestraList: ArgJson[];
+    style?: ListStyle;
+};
+/** An argument of a text: data (strings and numbers) or another text. */
+export type ArgJson = string | number | TextJson | ListJson;
+/** A text or list value (by its marker key). */
+export declare function isTextValue(value: unknown): value is TextJson | ListJson;
+/**
+ * Why the player would refuse a text value or template arguments, or
+ * `null`. `args` mode checks template arguments (an array or object of
+ * arguments) instead of one value. The same rules and messages as the
+ * player's `i18n::text::check`.
+ */
+export declare function textProblem(value: unknown, mode?: "value" | "args"): string | null;
+type TemplateArgsLike = readonly ArgJson[] | Readonly<Record<string, ArgJson>> | null;
+/**
+ * A text value as the player shows it: the source translated with the
+ * plugin's catalog and formatted with its (rendered) arguments; a list's
+ * items joined with the locale's separator.
+ */
+export declare function renderText(value: TextJson | ListJson, catalog: Catalog, locale: string): string;
+/**
+ * Template arguments with their texts rendered (for `format`): what the
+ * player fills a template with.
+ */
+export declare function renderTemplateArgs(args: TemplateArgsLike | undefined, catalog: Catalog, locale: string): TemplateArgsValue | undefined;
+/** The English rendering of a text value: the key a menu merges by. */
+export declare function textKey(value: TextJson | ListJson): string;
+/**
+ * A property value with every text value in it replaced by its shown
+ * string, as the player does before it hands the value to Slint. Returns
+ * a problem (`textProblem`) instead when a text value is malformed.
+ */
+export declare function resolveTexts<T>(value: T, catalog: Catalog, locale: string): {
+    value: T;
+} | {
+    problem: string;
+};
+/** Whether a value holds a text value anywhere (a cheap pre-check). */
+export declare function hasTexts(value: unknown): boolean;
 /** One `@tr("context" => "id" | "plural" % n, args…)` call. */
 export interface TrCall {
     context?: string;
@@ -128,3 +206,17 @@ export declare function menuKeys(path: readonly string[]): string[];
  * agree).
  */
 export declare const HOST_ZH_HANS: Readonly<Record<string, string>>;
+/**
+ * The catalog of a package directory for `locale`, as the player loads it:
+ * the compiled `locales/<lang>.json` of a built package, else the source
+ * `locales/<lang>.po`. Empty for English and without a file; a broken file
+ * throws.
+ */
+export declare function loadPackageCatalog(directory: string, locale: string): Catalog;
+/**
+ * Each line of `text` cut to `max` columns, ending with `…` when cut, as
+ * the player cuts an OSD panel's lines (`OsdPanelOptions.maxColumns`; the
+ * player measures with Unicode's East Asian Width, this is close to it).
+ */
+export declare function fitColumns(text: string, max: number): string;
+export {};

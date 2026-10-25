@@ -43,7 +43,7 @@ const SETTLED = ["key-saved", "fetched", "fetched-replaced", "fetch-failed-custo
 
 /**
  * The plugin, its window opened. `compat`: a mock server URL to configure as
- * 「自定义 · OpenAI 格式」 (its first listed model, mock-1) with KEY.
+ * "Custom · OpenAI format" (its first listed model, mock-1) with KEY.
  * `locale`: the interface language (English when unset).
  */
 export async function startAi({ data, compat, secrets = {}, deny = false, locale } = {}) {
@@ -69,7 +69,7 @@ export async function startAi({ data, compat, secrets = {}, deny = false, locale
   };
   /** A custom endpoint: Base URL (Enter lists its models), then the key. */
   const configure = async (url, { format = "OpenAI", model } = {}) => {
-    page.emit("choose-provider", page.props.providers.indexOf(`自定义 · ${format} 格式`));
+    page.emit("choose-provider", page.props.providers.indexOf(host.translate(`Custom · ${format} format`)));
     await host.settle();
     page.emit("accept-base-url", url);
     await until(host, () => page.props.listing === false && page.props.message.code !== "", "model list");

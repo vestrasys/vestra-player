@@ -199,9 +199,10 @@ export function createWire(transport) {
                 text,
                 ...(args === undefined ? {} : { args }),
             }),
-            panel: (text, args) => transport.request("osd.panel", {
+            panel: (text, args, maxColumns) => transport.request("osd.panel", {
                 text,
                 ...(args === undefined ? {} : { args }),
+                ...(maxColumns === undefined ? {} : { maxColumns }),
             }),
         },
         layout: {

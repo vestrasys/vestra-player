@@ -11,6 +11,7 @@ export { createPlugin } from "./plugin/index.js";
 export { HostError } from "./wire.js";
 export { API_VERSION, CAPABILITIES } from "./capabilities.js";
 export { COMMAND_LIMITS, MENU_IDS } from "./commands.js";
-export { Catalog, HOST_ZH_HANS, LOCALES, MENU_KEYS, matchLocale, parsePo, rewriteSlint, scanSlint, } from "./i18n.js";
+export { Catalog, HOST_ZH_HANS, LIST_SEPARATORS, LOCALES, MENU_KEYS, matchLocale, parsePo, rewriteSlint, renderText, scanSlint, TEXT_LIMITS, textKey, textProblem, } from "./i18n.js";
 export { MANIFEST_FIELDS, MANIFEST_LIMITS } from "./manifest.js";
 export { MARKDOWN_LIMITS } from "./plugin/markdown.js";
+export { UI_VALUE_LIMITS } from "./plugin/values.js";

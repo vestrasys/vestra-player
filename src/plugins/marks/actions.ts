@@ -1,5 +1,5 @@
 import type { Plugin } from "@vestra-player/sdk";
-import type { Bookmarks } from "./bookmarks.ts";
+import { type Bookmarks, bookmarkName } from "./bookmarks.ts";
 import { type Chapters, chapterTitle, hasMedia, stepPoint } from "./chapters.ts";
 import { clock } from "./format.ts";
 import type { Osd } from "./osd.ts";
@@ -62,7 +62,7 @@ export class Actions {
   jumpBookmark(id: number) {
     const bookmark = this.#bookmarks.get(id);
     if (!bookmark || this.jumpBlocked()) return;
-    return this.#seek(bookmark.time, () => this.#osd("Bookmark: {}", [bookmark.title]));
+    return this.#seek(bookmark.time, () => this.#osd("Bookmark: {}", [bookmarkName(this.#plugin.i18n.text, bookmark)]));
   }
 
   /** Shift+PgUp / PgDn: chapters and bookmarks merged; Ctrl+PgUp / PgDn: chapters only. */
@@ -103,7 +103,7 @@ export class Actions {
       this.#osd(result.reason, result.args);
       return null;
     }
-    this.#osd("Bookmark added: {} ({})", [result.bookmark.title, clock(result.bookmark.time)]);
+    this.#osd("Bookmark added: {} ({})", [bookmarkName(this.#plugin.i18n.text, result.bookmark), clock(result.bookmark.time)]);
     return result.bookmark;
   }
 

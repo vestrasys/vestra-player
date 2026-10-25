@@ -161,7 +161,7 @@ export class Delivering {
             : "{1} {2}\nCapabilities: none\nTo undo the install, click Roll Back (Undo Install) in the AI window.",
           confirm: "Install",
           // {0} (the message's {}) = name, {1} = id, {2} = version, {3} = capabilities.
-          args: [name, id, version, capabilities.join(", ")],
+          args: [name, id, version, this.plugin.i18n.list(capabilities)],
         });
         if (!answer.confirmed) {
           this.say("install-cancelled");

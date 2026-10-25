@@ -8,6 +8,8 @@
  * Internal: the player's runner and tests reach it through
  * `@vestra-player/sdk/runtime`, `LOCALES` through `./testing`.
  */
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 /**
  * The player's interface languages: English (the source language) first,
  * then the translations, as the player's own table (its tests check that
@@ -325,6 +327,254 @@ export function placeholders(text) {
     for (const match of plain.matchAll(/\{([^{}]*)\}/g))
         found.push(match[1]);
     return found.sort();
+}
+// ---------------------------------------------------------------- texts
+/**
+ * The ways a `TextList` is joined (`ListStyle`), as the player
+ * joins them in each interface language (`LIST_SEPARATORS`).
+ */
+export const LIST_STYLES = [
+    "list",
+    "clauses",
+    "semicolons",
+    "sentences",
+    "lines",
+];
+/**
+ * The separator of each list style per interface language, as the player's
+ * table (`i18n::text::SEPARATORS`; its tests check that they agree).
+ */
+export const LIST_SEPARATORS = {
+    en: {
+        list: ", ",
+        clauses: ", ",
+        semicolons: "; ",
+        sentences: ". ",
+        lines: "\n",
+    },
+    "zh-Hans": {
+        list: "、",
+        clauses: "，",
+        semicolons: "；",
+        sentences: "。",
+        lines: "\n",
+    },
+    ja: {
+        list: "、",
+        clauses: "、",
+        semicolons: "；",
+        sentences: "。",
+        lines: "\n",
+    },
+    ko: {
+        list: ", ",
+        clauses: ", ",
+        semicolons: "; ",
+        sentences: ". ",
+        lines: "\n",
+    },
+    de: {
+        list: ", ",
+        clauses: ", ",
+        semicolons: "; ",
+        sentences: ". ",
+        lines: "\n",
+    },
+    fr: {
+        list: ", ",
+        clauses: ", ",
+        semicolons: " ; ",
+        sentences: ". ",
+        lines: "\n",
+    },
+    es: {
+        list: ", ",
+        clauses: ", ",
+        semicolons: "; ",
+        sentences: ". ",
+        lines: "\n",
+    },
+};
+/**
+ * The player's limits on one text value (a
+ * {@link @vestra-player/sdk!Text | Text} or
+ * {@link @vestra-player/sdk!TextList | TextList} with everything nested in it), as the player's
+ * `i18n::text` (its tests check that they agree).
+ */
+export const TEXT_LIMITS = {
+    /** Nesting depth of texts and lists; the value itself is depth 0 (8). */
+    depth: 8,
+    /** Texts, lists and arguments in all, the value itself included (1024). */
+    nodes: 1024,
+    /** Arguments of one text (16). */
+    args: 16,
+    /** Items of one list (256). */
+    items: 256,
+    /** UTF-8 bytes of a source text or a string argument (4096). */
+    stringBytes: 4096,
+};
+const plainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+/** A text or list value (by its marker key). */
+export function isTextValue(value) {
+    return (plainObject(value) && ("$vestraText" in value || "$vestraList" in value));
+}
+const utf8 = (text) => new TextEncoder().encode(text).length;
+/**
+ * Why the player would refuse a text value or template arguments, or
+ * `null`. `args` mode checks template arguments (an array or object of
+ * arguments) instead of one value. The same rules and messages as the
+ * player's `i18n::text::check`.
+ */
+export function textProblem(value, mode = "value") {
+    let nodes = 0;
+    const L = TEXT_LIMITS;
+    const args = (list, depth) => {
+        const values = Array.isArray(list)
+            ? list
+            : plainObject(list)
+                ? Object.values(list)
+                : null;
+        if (!values)
+            return "args is an array or an object";
+        if (values.length > L.args)
+            return `args holds at most ${L.args} values`;
+        for (const item of values) {
+            const problem = arg(item, depth);
+            if (problem)
+                return problem;
+        }
+        return null;
+    };
+    const arg = (item, depth) => {
+        if (typeof item === "number")
+            return Number.isFinite(item) ? count() : "a number argument is finite";
+        if (typeof item === "string")
+            return utf8(item) > L.stringBytes
+                ? `a string argument is at most ${L.stringBytes} bytes`
+                : count();
+        if (isTextValue(item))
+            return text(item, depth + 1);
+        return "args are strings, numbers, texts and lists";
+    };
+    const count = () => ++nodes > L.nodes ? `a text holds at most ${L.nodes} values` : null;
+    const text = (item, depth) => {
+        if (depth > L.depth)
+            return `texts nest at most ${L.depth} deep`;
+        if (!plainObject(item))
+            return "a text is a $vestraText or $vestraList object";
+        const over = count();
+        if (over)
+            return over;
+        if ("$vestraText" in item) {
+            const keys = Object.keys(item);
+            if (keys.some((key) => key !== "$vestraText" && key !== "args"))
+                return "a text has only $vestraText and args";
+            const source = item.$vestraText;
+            if (typeof source !== "string" || source === "")
+                return "a text's source is a non-empty string";
+            if (utf8(source) > L.stringBytes)
+                return `a text's source is at most ${L.stringBytes} bytes`;
+            return item.args === undefined ? null : args(item.args, depth);
+        }
+        const keys = Object.keys(item);
+        if (keys.some((key) => key !== "$vestraList" && key !== "style"))
+            return "a list has only $vestraList and style";
+        const items = item.$vestraList;
+        if (!Array.isArray(items))
+            return "a list's items are an array";
+        if (items.length > L.items)
+            return `a list holds at most ${L.items} items`;
+        if (item.style !== undefined &&
+            !LIST_STYLES.includes(item.style))
+            return `a list's style is one of ${LIST_STYLES.join(", ")}`;
+        for (const entry of items) {
+            const problem = arg(entry, depth);
+            if (problem)
+                return problem;
+        }
+        return null;
+    };
+    return mode === "args" ? args(value, 0) : text(value, 0);
+}
+function renderArg(arg, r) {
+    return isTextValue(arg) ? renderValue(arg, r) : arg;
+}
+function renderValue(value, r) {
+    if ("$vestraText" in value) {
+        const template = r.catalog.text(value.$vestraText);
+        return format(template, renderArgs(value.args, r) ?? []);
+    }
+    const locale = LOCALES.includes(r.locale)
+        ? r.locale
+        : "en";
+    const separator = LIST_SEPARATORS[locale][value.style ?? "list"];
+    return value.$vestraList
+        .map((item) => String(argumentText(renderArg(item, r))))
+        .join(separator);
+}
+const argumentText = (value) => typeof value === "number" ? format("{}", [value]) : value;
+function renderArgs(args, r) {
+    if (args === undefined || args === null)
+        return undefined;
+    if (Array.isArray(args))
+        return args.map((arg) => renderArg(arg, r));
+    return Object.fromEntries(Object.entries(args).map(([name, arg]) => [name, renderArg(arg, r)]));
+}
+/**
+ * A text value as the player shows it: the source translated with the
+ * plugin's catalog and formatted with its (rendered) arguments; a list's
+ * items joined with the locale's separator.
+ */
+export function renderText(value, catalog, locale) {
+    return renderValue(value, { catalog, locale });
+}
+/**
+ * Template arguments with their texts rendered (for `format`): what the
+ * player fills a template with.
+ */
+export function renderTemplateArgs(args, catalog, locale) {
+    return renderArgs(args ?? undefined, { catalog, locale });
+}
+/** The English rendering of a text value: the key a menu merges by. */
+export function textKey(value) {
+    return renderValue(value, { catalog: new Catalog(), locale: "en" });
+}
+/**
+ * A property value with every text value in it replaced by its shown
+ * string, as the player does before it hands the value to Slint. Returns
+ * a problem (`textProblem`) instead when a text value is malformed.
+ */
+export function resolveTexts(value, catalog, locale) {
+    let problem = null;
+    const walk = (item) => {
+        if (problem)
+            return item;
+        if (isTextValue(item)) {
+            problem = textProblem(item);
+            return problem ? item : renderText(item, catalog, locale);
+        }
+        if (Array.isArray(item))
+            return item.map(walk);
+        if (plainObject(item)) {
+            // A runtime image or Markdown document stays as it is.
+            if ("$vestraImage" in item || "$vestraMarkdown" in item)
+                return item;
+            return Object.fromEntries(Object.entries(item).map(([key, entry]) => [key, walk(entry)]));
+        }
+        return item;
+    };
+    const out = walk(value);
+    return problem ? { problem } : { value: out };
+}
+/** Whether a value holds a text value anywhere (a cheap pre-check). */
+export function hasTexts(value) {
+    if (isTextValue(value))
+        return true;
+    if (Array.isArray(value))
+        return value.some(hasTexts);
+    if (plainObject(value))
+        return Object.values(value).some(hasTexts);
+    return false;
 }
 const lineEnd = (s, i) => {
     const found = s.slice(i).search(/[\n\r]/);
@@ -671,3 +921,52 @@ export const HOST_ZH_HANS = {
     "Not available in fullscreen": "全屏时不可用",
     "Picture-in-picture is not supported on this system": "此系统不支持画中画",
 };
+// ---------------------------------------------------------------- packages
+/**
+ * The catalog of a package directory for `locale`, as the player loads it:
+ * the compiled `locales/<lang>.json` of a built package, else the source
+ * `locales/<lang>.po`. Empty for English and without a file; a broken file
+ * throws.
+ */
+export function loadPackageCatalog(directory, locale) {
+    if (locale === "en")
+        return new Catalog();
+    const base = join(directory, "locales", locale);
+    if (existsSync(`${base}.json`)) {
+        const compiled = JSON.parse(readFileSync(`${base}.json`, "utf8"));
+        return new Catalog(compiled.messages ?? {});
+    }
+    if (existsSync(`${base}.po`))
+        return new Catalog(compileCatalog(locale, parsePo(readFileSync(`${base}.po`, "utf8")).entries).messages);
+    return new Catalog();
+}
+// ---------------------------------------------------------------- columns
+const WIDE = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1F300}-\u{1F64F}\u{1F900}-\u{1F9FF}\u{20000}-\u{3FFFD}]/u;
+const ZERO = /[\p{Mn}\p{Me}​-‏]/u;
+/** Columns of one character: 2 wide (East Asian), 0 combining, else 1. */
+const columnsOf = (c) => (ZERO.test(c) ? 0 : WIDE.test(c) ? 2 : 1);
+/**
+ * Each line of `text` cut to `max` columns, ending with `…` when cut, as
+ * the player cuts an OSD panel's lines (`OsdPanelOptions.maxColumns`; the
+ * player measures with Unicode's East Asian Width, this is close to it).
+ */
+export function fitColumns(text, max) {
+    return text
+        .split("\n")
+        .map((line) => {
+        let used = 0;
+        const chars = [...line];
+        if (chars.reduce((n, c) => n + columnsOf(c), 0) <= max)
+            return line;
+        let out = "";
+        for (const c of chars) {
+            const width = columnsOf(c);
+            if (used + width > max - 1)
+                break;
+            out += c;
+            used += width;
+        }
+        return `${out}…`;
+    })
+        .join("\n");
+}

@@ -2,6 +2,7 @@
 import { failure, Latest, quiet } from "./runtime.js";
 import { checkBindings } from "./bindings.js";
 import { MENU_IDS } from "../commands.js";
+import { isTextValue, textProblem } from "../i18n.js";
 const value = (item) => typeof item === "function" ? item() : item;
 /** Validate options and build the wire declaration. */
 function declare(options) {
@@ -11,7 +12,18 @@ function declare(options) {
         throw failure("invalid", `command ${options.id}: title or path required`);
     if (path.length > 8)
         throw failure("invalid", `command ${options.id}: path has 1–8 segments`);
-    const menu = path[0]?.startsWith("@") ? path[0].slice(1) : null;
+    for (const segment of [title, ...path])
+        if (typeof segment !== "string") {
+            const problem = isTextValue(segment)
+                ? "$vestraList" in segment
+                    ? "a menu text is a string or a text, not a list"
+                    : textProblem(segment)
+                : "title and path segments are strings or texts";
+            if (problem)
+                throw failure("invalid", `command ${options.id}: ${problem}`);
+        }
+    const first = path[0];
+    const menu = typeof first === "string" && first.startsWith("@") ? first.slice(1) : null;
     if (menu !== null && !MENU_IDS.includes(menu))
         throw failure("invalid", `command ${options.id}: unknown menu id @${menu}; the built-in menus are ${MENU_IDS.map((id) => `@${id}`).join(", ")}`);
     if (menu !== null && path.length < 2)
@@ -21,8 +33,8 @@ function declare(options) {
         throw failure("invalid", `command ${options.id}: order must be an integer within ±1000000`);
     const bindings = [...(options.bindings ?? [])];
     return {
-        title,
-        path,
+        title: title,
+        path: path,
         order,
         group: options.group ?? "domain",
         radio: options.radio ?? false,
@@ -89,11 +101,19 @@ class CommandHandle {
         scope.add(this);
     }
     #state() {
+        const reason = value(this.#spec.reason);
+        if (reason !== null && typeof reason !== "string") {
+            const problem = isTextValue(reason)
+                ? textProblem(reason)
+                : "reason is a string, a text or null";
+            if (problem)
+                throw failure("invalid", `command ${this.id}: ${problem}`);
+        }
         return {
             enabled: value(this.#spec.enabled),
             checked: value(this.#spec.checked),
             busy: value(this.#spec.busy),
-            reason: value(this.#spec.reason),
+            reason,
         };
     }
     #sync() {

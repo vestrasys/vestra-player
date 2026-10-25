@@ -420,11 +420,11 @@ msgstr ""
 msgid "Replace"
 msgstr ""
 
-#: labels.slint:6
+#: labels.slint:6 main.ts:521
 msgid "Custom · OpenAI format"
 msgstr ""
 
-#: labels.slint:7
+#: labels.slint:7 main.ts:523
 msgid "Custom · Anthropic format"
 msgstr ""
 
@@ -440,11 +440,15 @@ msgstr ""
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr ""
 
-#: main.ts:518 manifest.json
+#: main.ts:525 manifest.json
 msgid "Vestra Player AI"
 msgstr ""
 
-#: main.ts:732
+#: main.ts:533
+msgid "{} (no longer offered)"
+msgstr ""
+
+#: main.ts:738
 msgid "Vestra Player AI…"
 msgstr ""
 

@@ -1,7 +1,7 @@
-import type { Plugin, Scope } from "@vestra-player/sdk";
+import type { I18n, Plugin, Scope, Text } from "@vestra-player/sdk";
 import type { Actions } from "./actions.ts";
 import type { Bookmarks } from "./bookmarks.ts";
-import { chapterName, type Chapters, currentChapter } from "./chapters.ts";
+import { type Chapters, currentChapter } from "./chapters.ts";
 import { clock, line } from "./format.ts";
 import type { AbLoop } from "./loop.ts";
 import { COUNTS, timing } from "./store.ts";
@@ -14,22 +14,43 @@ export const MENU_ITEMS = 50;
 
 const two = (n: number) => String(n).padStart(2, "0");
 
-/** Menu lines `01  Opening    00:00`, unique (a repeated line gets ` (2)`). */
-export function chapterLines(chapters: ChapterLike[]): string[] {
+/** Menu lines `01  Opening    00:00` (`01  Chapter 1    00:00` without a title), unique. */
+export function chapterLines(text: I18n["text"], chapters: readonly ChapterLike[]): Text[] {
   const used = new Set<string>();
-  return chapters.map((chapter, i) => unique(used, `${two(i + 1)}  `, chapterName(chapter, i), `    ${clock(chapter.start)}`));
+  return chapters.map((chapter, i) =>
+    unique(text, used, `${two(i + 1)}  `, chapter.title?.trim() || { kind: "Chapter", number: i + 1 }, `    ${clock(chapter.start)}`),
+  );
 }
 type ChapterLike = { title: string | null; start: number };
-/** Menu lines `Bookmark title    01:23:45`, unique. */
-export function bookmarkLines(bookmarks: readonly { title: string; time: number }[]): string[] {
+/** Menu lines `Bookmark title    01:23:45` (`Bookmark 1    01:23:45` without a title), unique. */
+export function bookmarkLines(text: I18n["text"], bookmarks: readonly { title: string; number: number; time: number }[]): Text[] {
   const used = new Set<string>();
-  return bookmarks.map((bookmark) => unique(used, "", bookmark.title, `    ${clock(bookmark.time)}`));
+  return bookmarks.map((bookmark) =>
+    unique(text, used, "", bookmark.title || { kind: "Bookmark", number: bookmark.number }, `    ${clock(bookmark.time)}`),
+  );
 }
-function unique(used: Set<string>, prefix: string, text: string, suffix: string) {
-  let title = line(prefix, text, suffix);
-  for (let n = 2; used.has(title); n++) title = line(prefix, text, ` (${n})${suffix}`);
-  used.add(title);
-  return title;
+/**
+ * A menu line: an own title (data) shortened to fit the 80-byte path
+ * segment, or "Chapter N" / "Bookmark N" in the interface language; a
+ * repeated line gets ` (2)`. The menu tells lines apart by their English text.
+ */
+function unique(
+  text: I18n["text"],
+  used: Set<string>,
+  prefix: string,
+  name: string | { kind: "Chapter" | "Bookmark"; number: number },
+  suffix: string,
+): Text {
+  const english = (more: string) =>
+    typeof name === "string" ? line(prefix, name, more + suffix) : `${prefix}${name.kind} ${name.number}${more}${suffix}`;
+  let more = "";
+  for (let n = 2; used.has(english(more)); n++) more = ` (${n})`;
+  used.add(english(more));
+  // TRANSLATORS: a chapter or bookmark menu line made of the user's own title and its time; keep "{}".
+  if (typeof name === "string") return text("{}", [english(more)]);
+  const shown = name.kind === "Chapter" ? text("Chapter {}", [name.number]) : text("Bookmark {}", [name.number]);
+  // TRANSLATORS: a menu line: chapter number ("01  ", or nothing for a bookmark), "Chapter N" / "Bookmark N", then "    01:23"; usually kept as is.
+  return text("{}{}{}", [prefix, shown, more + suffix]);
 }
 
 /** Playback ▸ Chapters and Bookmarks ▸ previous / next (B21). */
@@ -119,8 +140,9 @@ export class MarksMenu {
   async build() {
     const chapters = this.#chapters.list;
     const bookmarks = this.#bookmarks.items;
-    const chapterTitles = chapterLines(chapters.slice(0, MENU_ITEMS));
-    const bookmarkTitles = bookmarkLines(bookmarks.slice(0, MENU_ITEMS));
+    const { text } = this.#plugin.i18n;
+    const chapterTitles = chapterLines(text, chapters.slice(0, MENU_ITEMS));
+    const bookmarkTitles = bookmarkLines(text, bookmarks.slice(0, MENU_ITEMS));
     const signature = JSON.stringify([chapterTitles, chapters.length, bookmarkTitles, bookmarks.map((b) => b.id)]);
     if (signature === this.#built || this.#disposed) return;
     this.#built = signature;
@@ -130,12 +152,10 @@ export class MarksMenu {
     const { player } = this.#plugin;
     const actions = this.#actions;
 
-    // The lines are data (titles and times); "Chapter N" and the "More…" lines
-    // stay English until the player can translate a title with arguments.
     chapterTitles.forEach((title, i) =>
       scope.commands.add({
         id: `chapter.${i}`,
-        path: [...MARKS, /* i18n-ignore: data */ title],
+        path: [...MARKS, title],
         order: 10000 + i,
         group: "marks-chapters",
         radio: true,
@@ -148,8 +168,7 @@ export class MarksMenu {
     if (chapters.length > MENU_ITEMS)
       scope.commands.add({
         id: "chapter.more",
-        // i18n: needs r2-api (command title with an argument)
-        path: [...MARKS, /* i18n-ignore: needs r2-api */ `More Chapters… (${chapters.length} in all)`],
+        path: [...MARKS, text("More Chapters… ({} in all)", [chapters.length])],
         order: 10000 + MENU_ITEMS,
         group: "marks-chapters",
         run: () => this.#openList(),
@@ -157,7 +176,7 @@ export class MarksMenu {
     bookmarks.slice(0, MENU_ITEMS).forEach((bookmark, i) =>
       scope.commands.add({
         id: `bookmark.${i}`,
-        path: [...MARKS, /* i18n-ignore: data */ bookmarkTitles[i]!],
+        path: [...MARKS, bookmarkTitles[i]!],
         order: 20000 + i,
         group: "marks-bookmarks",
         enabled: () => !actions.jumpBlocked(),
@@ -168,8 +187,7 @@ export class MarksMenu {
     if (bookmarks.length > MENU_ITEMS)
       scope.commands.add({
         id: "bookmark.more",
-        // i18n: needs r2-api (command title with an argument)
-        path: [...MARKS, /* i18n-ignore: needs r2-api */ `More Bookmarks… (${bookmarks.length} in all)`],
+        path: [...MARKS, text("More Bookmarks… ({} in all)", [bookmarks.length])],
         order: 20000 + MENU_ITEMS,
         group: "marks-bookmarks",
         run: () => this.#openList(),

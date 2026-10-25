@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import type { Text } from "@vestra-player/sdk";
 import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import { currentChapter, segmentAt, stepPoint } from "../chapters.ts";
 import { clock, fit, mediaKey, parseTime, precise } from "../format.ts";
@@ -59,9 +60,9 @@ const menuLines = (host: TestHost, group: string) =>
   [...host.commands.values()]
     .filter((c) => c.declaration.group === group)
     .sort((a, b) => a.declaration.order - b.declaration.order)
-    .map((c) => c.declaration.path.at(-1)!);
+    .map((c) => c.display.path.at(-1)!);
 const idFor = (host: TestHost, title: string) =>
-  [...host.commands.entries()].find(([, c]) => c.declaration.path.at(-1) === title)![0];
+  [...host.commands.entries()].find(([, c]) => c.display.path.at(-1) === title)![0];
 const seeks = (host: TestHost) =>
   host
     .sent("source.submit")
@@ -115,21 +116,32 @@ test("points: previous from position − 1, next from position + 0.5, current ch
   assert.equal(segmentAt([], 12, 20), null);
 });
 
-test("menu lines are numbered, unique and fit the 80-byte path segment", () => {
+test("menu lines are numbered, unique and fit the 80-byte path segment", async () => {
+  const host = new TestHost();
+  const { text } = (await start(host)).plugin.i18n;
+  const shown = (lines: readonly Text[]) => lines.map((line) => host.translate(line));
   assert.deepEqual(
-    chapterLines([
-      { title: "Opening", start: 0 },
-      { title: null, start: 75 },
-      { title: "  ", start: 3725 },
-    ]),
+    shown(
+      chapterLines(text, [
+        { title: "Opening", start: 0 },
+        { title: null, start: 75 },
+        { title: "  ", start: 3725 },
+      ]),
+    ),
     ["01  Opening    00:00", "02  Chapter 2    01:15", "03  Chapter 3    01:02:05"],
   );
-  const lines = bookmarkLines([
-    { title: "高潮", time: 83 },
-    { title: "高潮", time: 83.4 },
-    { title: "长".repeat(100), time: 5025 },
-  ]);
+  const lines = shown(
+    bookmarkLines(text, [
+      { title: "高潮", number: 0, time: 83 },
+      { title: "高潮", number: 0, time: 83.4 },
+      { title: "长".repeat(100), number: 0, time: 5025 },
+      { title: "", number: 2, time: 90 },
+      { title: "", number: 2, time: 90.6 },
+    ]),
+  );
   assert.deepEqual(lines.slice(0, 2), ["高潮    01:23", "高潮 (2)    01:23"]);
+  // Without a title: "Bookmark N"; a number used twice (one removed, one added) is told apart too.
+  assert.deepEqual(lines.slice(3), ["Bookmark 2    01:30", "Bookmark 2 (2)    01:30"]);
   assert.ok(lines.every((line) => Buffer.byteLength(line) <= 80 && line === line.trim()));
   assert.ok(lines[2]!.endsWith("…    01:23:45"));
 });
@@ -243,8 +255,8 @@ test("B21 bookmarks are kept per file across restarts; a changed file is flagged
   const entry = saved.media[movie];
   assert.equal(entry.size, 100);
   assert.deepEqual(
-    entry.items.map((item: { time: number; title: string }) => [item.time, item.title]),
-    [[83.4, "Bookmark 1"]],
+    entry.items.map((item: { time: number; title: string; number?: number }) => [item.time, item.title, item.number]),
+    [[83.4, "", 1]],
   );
   assert.ok(Date.parse(entry.items[0].created) > 0);
   {
@@ -278,7 +290,16 @@ test("B21 bookmarks.json: bad items are dropped one by one", async () => {
         [movie]: {
           size: 10,
           modified: "2026-10-01T00:00:00Z",
-          items: [{ time: 5, title: "好", created: "x" }, { time: -1, title: "bad", created: "x" }, { time: 7, title: "" }, null],
+          items: [
+            { time: 5, title: "好", created: "x" },
+            { time: 6, title: "", number: 3, created: "x" },
+            { time: 8, title: "Bookmark 4", created: "x" },
+            { time: -1, title: "bad", created: "x" },
+            { time: 7, title: "" },
+            { time: 9, title: "", created: "x" },
+            { time: 10, title: "", number: 0, created: "x" },
+            null,
+          ],
         },
       },
     }),
@@ -286,10 +307,15 @@ test("B21 bookmarks.json: bad items are dropped one by one", async () => {
   const host = new TestHost();
   await start(host, data);
   await play(host, movie);
-  assert.deepEqual(menuLines(host, "marks-bookmarks"), ["好    00:05"]);
+  // Untitled with its number; an old file's own "Bookmark 4" stays a title.
+  assert.deepEqual(menuLines(host, "marks-bookmarks"), ["好    00:05", "Bookmark 3    00:06", "Bookmark 4    00:08"]);
 });
 
 // ------------------------------------------------------------------ B21 window
+
+type WindowRow = { rowId: string; chapter: boolean; time: string; title: string; number: number; selected: boolean };
+/** A row's name as the window shows it (MarkRow in ui/marks.slint), in English. */
+const rowName = (row: WindowRow) => row.title || `${row.chapter ? "Chapter" : "Bookmark"} ${row.number}`;
 
 test("B21 window: rows by time, select and edit a bookmark, menu follows", async () => {
   const host = new TestHost();
@@ -304,9 +330,9 @@ test("B21 window: rows by time, select and edit a bookmark, menu follows", async
   assert.deepEqual(window.props.rows, []);
   await play(host, file(), 600, 20);
   await press(host, "P");
-  const rows = () => window.props.rows as { rowId: string; chapter: boolean; time: string; title: string; selected: boolean }[];
+  const rows = () => window.props.rows as WindowRow[];
   assert.deepEqual(
-    rows().map((r) => [r.chapter, r.time, r.title]),
+    rows().map((r) => [r.chapter, r.time, rowName(r)]),
     [
       [true, "0:00.0", "Opening"],
       [false, "0:20.0", "Bookmark 1"],
@@ -317,11 +343,18 @@ test("B21 window: rows by time, select and edit a bookmark, menu follows", async
   window.emit("select", bookmark);
   await host.settle();
   assert.equal(window.props.editing, true);
-  assert.equal(window.props["edit-title"], "Bookmark 1");
+  assert.deepEqual([rows()[1]!.title, rows()[1]!.number], ["", 1]);
+  // No title yet: the input is empty, "Bookmark 1" its placeholder; left empty, it stays so.
+  assert.deepEqual([window.props["edit-title"], window.props["edit-number"]], ["", 1]);
   assert.equal(window.props["edit-time"], "0:00:20.0");
+  window.emit("commitTitle", " ");
+  await host.settle();
+  assert.equal(window.props.status, "");
+  assert.equal(rows()[1]!.title, "");
   window.emit("commitTitle", "高潮");
   await host.settle(WAIT);
   assert.deepEqual(menuLines(host, "marks-bookmarks"), ["高潮    00:20"]);
+  assert.equal(window.props["edit-number"], 0);
   window.emit("commitTitle", "   ");
   await host.settle();
   assert.equal(window.props.status, "empty-title");
@@ -373,9 +406,9 @@ test("B21 window: add selects the new bookmark, remove keeps the place, clear as
   await at(host, 50);
   window.emit("add");
   await host.settle(WAIT);
-  const rows = () => window.props.rows as { rowId: string; title: string; selected: boolean }[];
+  const rows = () => window.props.rows as WindowRow[];
   assert.deepEqual(
-    rows().map((r) => [r.title, r.selected]),
+    rows().map((r) => [rowName(r), r.selected]),
     [
       ["Bookmark 1", false],
       ["Bookmark 2", false],
@@ -385,8 +418,10 @@ test("B21 window: add selects the new bookmark, remove keeps the place, clear as
   window.emit("select", rows()[1]!.rowId);
   window.emit("remove");
   await host.settle(WAIT);
+  // The status line's argument: "Removed: {}".
+  assert.equal(window.props["status-text"], "Bookmark 2");
   assert.deepEqual(
-    rows().map((r) => [r.title, r.selected]),
+    rows().map((r) => [rowName(r), r.selected]),
     [
       ["Bookmark 1", false],
       ["Bookmark 3", true],
@@ -591,31 +626,38 @@ test("B23: a refused loop turns the switch off and says why", async () => {
 const layer = (host: TestHost) => host.timeline.layers.get(host.manifestId) ?? [];
 const published = (host: TestHost) => layer(host).map((m) => [m.time, m.kind, m.title]);
 
-test("B22 marks: chapter names, cut titles, times inside the media, the first 1000 by time", () => {
-  const marks = seekbarMarks({
+test("B22 marks: chapter names, cut titles, times inside the media, the first 1000 by time", async () => {
+  const host = new TestHost();
+  const { text } = (await start(host)).plugin.i18n;
+  const marks = seekbarMarks(text, {
     chapters: [
       { title: null, start: 0 },
       { title: "长".repeat(150), start: 50 },
       { title: "Past the end", start: 700 },
     ],
-    bookmarks: [{ time: 50, title: "BM 1" }],
+    bookmarks: [
+      { time: 50, title: "BM 1", number: 0 },
+      { time: 60, title: "", number: 2 },
+    ],
     a: 20,
     b: null,
     duration: 600,
   });
   assert.deepEqual(
-    marks.map((m) => [m.time, m.kind, [...m.title].length]),
+    marks.map((m) => [m.time, m.kind, [...host.translate(m.title)].length]),
     [
       [0, "chapter", 9],
       [20, "marker", 1],
       [50, "chapter", 100],
       [50, "bookmark", 4],
+      [60, "bookmark", 10],
     ],
   );
-  assert.equal(marks[0]!.title, "Chapter 1");
+  assert.equal(host.translate(marks[0]!.title), "Chapter 1");
+  assert.equal(host.translate(marks.at(-1)!.title), "Bookmark 2");
   // Only A set gives the marker; with B too the loop span is the player's to draw.
-  assert.equal(seekbarMarks({ chapters: [], bookmarks: [], a: 20, b: 30, duration: null }).length, 0);
-  const many = seekbarMarks({
+  assert.equal(seekbarMarks(text, { chapters: [], bookmarks: [], a: 20, b: 30, duration: null }).length, 0);
+  const many = seekbarMarks(text, {
     chapters: Array.from({ length: 1200 }, (_, i) => ({ title: `C${i}`, start: 1200 - i })),
     bookmarks: [],
     a: null,
@@ -718,7 +760,7 @@ const fixedMenu = (host: TestHost, path: (c: ReturnType<TestHost["command"]>) =>
   [...host.commands.values()]
     .filter((c) => c.declaration.order < 10000)
     .sort((a, b) => a.declaration.order - b.declaration.order)
-    .map((c) => [path(c).slice(1).join(" ▶ "), c.declaration.order, c.declaration.group, c.declaration.bindings.join(",")]);
+    .map((c) => [path(c).slice(1).join(" ▸ "), c.declaration.order, c.declaration.group, c.declaration.bindings.join(",")]);
 
 test("menu: orders, groups and shortcuts as in the requirements; no binding conflicts", async () => {
   const host = new TestHost();
@@ -726,38 +768,38 @@ test("menu: orders, groups and shortcuts as in the requirements; no binding conf
   // English source text, in the player's Playback menu.
   assert.ok([...host.commands.values()].every((c) => c.declaration.path[0] === "@playback"));
   assert.deepEqual(fixedMenu(host, (c) => c.declaration.path), [
-    ["Chapters and Bookmarks ▶ Chapter and Bookmark List…", 260, "marks-list", "H"],
-    ["Chapters and Bookmarks ▶ Add Bookmark", 261, "marks-edit", "P"],
-    ["Chapters and Bookmarks ▶ Previous Bookmark or Chapter", 262, "marks-edit", "Shift+PageUp"],
-    ["Chapters and Bookmarks ▶ Next Bookmark or Chapter", 263, "marks-edit", "Shift+PageDown"],
-    ["Chapters and Bookmarks ▶ Previous Chapter", 264, "marks-edit", "Ctrl+PageUp"],
-    ["Chapters and Bookmarks ▶ Next Chapter", 265, "marks-edit", "Ctrl+PageDown"],
-    ["A-B Loop ▶ Set Start Point", 270, "ab-a", "["],
-    ["A-B Loop ▶ Clear Start Point", 271, "ab-a", "{"],
-    ["A-B Loop ▶ Start Point Back 0.1 s", 272, "ab-a", "Ctrl+["],
-    ["A-B Loop ▶ Start Point Forward 0.1 s", 273, "ab-a", "Alt+["],
-    ["A-B Loop ▶ Set End Point", 274, "ab-b", "]"],
-    ["A-B Loop ▶ Clear End Point", 275, "ab-b", "}"],
-    ["A-B Loop ▶ End Point Back 0.1 s", 276, "ab-b", "Ctrl+]"],
-    ["A-B Loop ▶ End Point Forward 0.1 s", 277, "ab-b", "Alt+]"],
-    ["A-B Loop ▶ Move Range Back 0.1 s", 278, "ab-both", "Ctrl+Alt+["],
-    ["A-B Loop ▶ Move Range Forward 0.1 s", 279, "ab-both", "Ctrl+Alt+]"],
-    ["A-B Loop ▶ Loop Current Chapter or Bookmark Range", 280, "ab-toggle", "Alt+\\"],
-    ["A-B Loop ▶ A-B Loop On/Off", 281, "ab-toggle", "\\"],
-    ["A-B Loop ▶ Loop Count ▶ Endless", 282, "ab-count", ""],
-    ["A-B Loop ▶ Loop Count ▶ Once", 283, "ab-count", ""],
-    ["A-B Loop ▶ Loop Count ▶ 2 Times", 284, "ab-count", ""],
-    ["A-B Loop ▶ Loop Count ▶ 3 Times", 285, "ab-count", ""],
-    ["A-B Loop ▶ Loop Count ▶ 5 Times", 286, "ab-count", ""],
-    ["A-B Loop ▶ Loop Count ▶ 10 Times", 287, "ab-count", ""],
+    ["Chapters and Bookmarks ▸ Chapter and Bookmark List…", 260, "marks-list", "H"],
+    ["Chapters and Bookmarks ▸ Add Bookmark", 261, "marks-edit", "P"],
+    ["Chapters and Bookmarks ▸ Previous Bookmark or Chapter", 262, "marks-edit", "Shift+PageUp"],
+    ["Chapters and Bookmarks ▸ Next Bookmark or Chapter", 263, "marks-edit", "Shift+PageDown"],
+    ["Chapters and Bookmarks ▸ Previous Chapter", 264, "marks-edit", "Ctrl+PageUp"],
+    ["Chapters and Bookmarks ▸ Next Chapter", 265, "marks-edit", "Ctrl+PageDown"],
+    ["A-B Loop ▸ Set Start Point", 270, "ab-a", "["],
+    ["A-B Loop ▸ Clear Start Point", 271, "ab-a", "{"],
+    ["A-B Loop ▸ Start Point Back 0.1 s", 272, "ab-a", "Ctrl+["],
+    ["A-B Loop ▸ Start Point Forward 0.1 s", 273, "ab-a", "Alt+["],
+    ["A-B Loop ▸ Set End Point", 274, "ab-b", "]"],
+    ["A-B Loop ▸ Clear End Point", 275, "ab-b", "}"],
+    ["A-B Loop ▸ End Point Back 0.1 s", 276, "ab-b", "Ctrl+]"],
+    ["A-B Loop ▸ End Point Forward 0.1 s", 277, "ab-b", "Alt+]"],
+    ["A-B Loop ▸ Move Range Back 0.1 s", 278, "ab-both", "Ctrl+Alt+["],
+    ["A-B Loop ▸ Move Range Forward 0.1 s", 279, "ab-both", "Ctrl+Alt+]"],
+    ["A-B Loop ▸ Loop Current Chapter or Bookmark Range", 280, "ab-toggle", "Alt+\\"],
+    ["A-B Loop ▸ A-B Loop On/Off", 281, "ab-toggle", "\\"],
+    ["A-B Loop ▸ Loop Count ▸ Endless", 282, "ab-count", ""],
+    ["A-B Loop ▸ Loop Count ▸ Once", 283, "ab-count", ""],
+    ["A-B Loop ▸ Loop Count ▸ 2 Times", 284, "ab-count", ""],
+    ["A-B Loop ▸ Loop Count ▸ 3 Times", 285, "ab-count", ""],
+    ["A-B Loop ▸ Loop Count ▸ 5 Times", 286, "ab-count", ""],
+    ["A-B Loop ▸ Loop Count ▸ 10 Times", 287, "ab-count", ""],
   ]);
   assert.deepEqual(
     fixedMenu(host, (c) => c.display.path),
     fixedMenu(host, (c) => c.declaration.path),
   );
   const option = host.command("marks.seekbar").declaration;
-  assert.deepEqual([option.path.slice(1).join(" ▶ "), option.order, option.group, option.bindings.join(",")], [
-    "Chapters and Bookmarks ▶ Show Marks on Seek Bar",
+  assert.deepEqual([option.path.slice(1).join(" ▸ "), option.order, option.group, option.bindings.join(",")], [
+    "Chapters and Bookmarks ▸ Show Marks on Seek Bar",
     30000,
     "marks-option",
     "",
@@ -774,30 +816,30 @@ test("zh-Hans: the menus read as before the migration", async () => {
   await start(host, undefined, "zh-Hans");
   assert.ok([...host.commands.values()].every((c) => c.display.path[0] === "播放"));
   assert.deepEqual(fixedMenu(host, (c) => c.display.path), [
-    ["章节/书签 ▶ 章节/书签列表…", 260, "marks-list", "H"],
-    ["章节/书签 ▶ 添加书签", 261, "marks-edit", "P"],
-    ["章节/书签 ▶ 上一书签/章节", 262, "marks-edit", "Shift+PageUp"],
-    ["章节/书签 ▶ 下一书签/章节", 263, "marks-edit", "Shift+PageDown"],
-    ["章节/书签 ▶ 上一章节", 264, "marks-edit", "Ctrl+PageUp"],
-    ["章节/书签 ▶ 下一章节", 265, "marks-edit", "Ctrl+PageDown"],
-    ["A-B 区段循环 ▶ 设定起点", 270, "ab-a", "["],
-    ["A-B 区段循环 ▶ 解除起点", 271, "ab-a", "{"],
-    ["A-B 区段循环 ▶ 起点后退 0.1 秒", 272, "ab-a", "Ctrl+["],
-    ["A-B 区段循环 ▶ 起点前进 0.1 秒", 273, "ab-a", "Alt+["],
-    ["A-B 区段循环 ▶ 设定止点", 274, "ab-b", "]"],
-    ["A-B 区段循环 ▶ 解除止点", 275, "ab-b", "}"],
-    ["A-B 区段循环 ▶ 止点后退 0.1 秒", 276, "ab-b", "Ctrl+]"],
-    ["A-B 区段循环 ▶ 止点前进 0.1 秒", 277, "ab-b", "Alt+]"],
-    ["A-B 区段循环 ▶ 区段整体后退 0.1 秒", 278, "ab-both", "Ctrl+Alt+["],
-    ["A-B 区段循环 ▶ 区段整体前进 0.1 秒", 279, "ab-both", "Ctrl+Alt+]"],
-    ["A-B 区段循环 ▶ 循环当前章节/书签区段", 280, "ab-toggle", "Alt+\\"],
-    ["A-B 区段循环 ▶ 区段循环 开/关", 281, "ab-toggle", "\\"],
-    ["A-B 区段循环 ▶ 循环次数 ▶ 无限", 282, "ab-count", ""],
-    ["A-B 区段循环 ▶ 循环次数 ▶ 1 次", 283, "ab-count", ""],
-    ["A-B 区段循环 ▶ 循环次数 ▶ 2 次", 284, "ab-count", ""],
-    ["A-B 区段循环 ▶ 循环次数 ▶ 3 次", 285, "ab-count", ""],
-    ["A-B 区段循环 ▶ 循环次数 ▶ 5 次", 286, "ab-count", ""],
-    ["A-B 区段循环 ▶ 循环次数 ▶ 10 次", 287, "ab-count", ""],
+    ["章节/书签 ▸ 章节/书签列表…", 260, "marks-list", "H"],
+    ["章节/书签 ▸ 添加书签", 261, "marks-edit", "P"],
+    ["章节/书签 ▸ 上一书签/章节", 262, "marks-edit", "Shift+PageUp"],
+    ["章节/书签 ▸ 下一书签/章节", 263, "marks-edit", "Shift+PageDown"],
+    ["章节/书签 ▸ 上一章节", 264, "marks-edit", "Ctrl+PageUp"],
+    ["章节/书签 ▸ 下一章节", 265, "marks-edit", "Ctrl+PageDown"],
+    ["A-B 区段循环 ▸ 设定起点", 270, "ab-a", "["],
+    ["A-B 区段循环 ▸ 解除起点", 271, "ab-a", "{"],
+    ["A-B 区段循环 ▸ 起点后退 0.1 秒", 272, "ab-a", "Ctrl+["],
+    ["A-B 区段循环 ▸ 起点前进 0.1 秒", 273, "ab-a", "Alt+["],
+    ["A-B 区段循环 ▸ 设定止点", 274, "ab-b", "]"],
+    ["A-B 区段循环 ▸ 解除止点", 275, "ab-b", "}"],
+    ["A-B 区段循环 ▸ 止点后退 0.1 秒", 276, "ab-b", "Ctrl+]"],
+    ["A-B 区段循环 ▸ 止点前进 0.1 秒", 277, "ab-b", "Alt+]"],
+    ["A-B 区段循环 ▸ 区段整体后退 0.1 秒", 278, "ab-both", "Ctrl+Alt+["],
+    ["A-B 区段循环 ▸ 区段整体前进 0.1 秒", 279, "ab-both", "Ctrl+Alt+]"],
+    ["A-B 区段循环 ▸ 循环当前章节/书签区段", 280, "ab-toggle", "Alt+\\"],
+    ["A-B 区段循环 ▸ 区段循环 开/关", 281, "ab-toggle", "\\"],
+    ["A-B 区段循环 ▸ 循环次数 ▸ 无限", 282, "ab-count", ""],
+    ["A-B 区段循环 ▸ 循环次数 ▸ 1 次", 283, "ab-count", ""],
+    ["A-B 区段循环 ▸ 循环次数 ▸ 2 次", 284, "ab-count", ""],
+    ["A-B 区段循环 ▸ 循环次数 ▸ 3 次", 285, "ab-count", ""],
+    ["A-B 区段循环 ▸ 循环次数 ▸ 5 次", 286, "ab-count", ""],
+    ["A-B 区段循环 ▸ 循环次数 ▸ 10 次", 287, "ab-count", ""],
   ]);
   assert.deepEqual(host.command("marks.seekbar").display.path.slice(1), ["章节/书签", "在进度条上显示标记"]);
   assert.equal(host.translate(host.command("marks.add").state.reason!), "未打开媒体");
@@ -813,13 +855,12 @@ test("zh-Hans: OSD texts and the clear dialog read as before the migration", asy
   await start(host, undefined, "zh-Hans");
   await play(host, file(), 600, 10);
   await press(host, "P");
-  // The default title is data and stays English for now (r2-api).
-  assert.equal(host.osd.at(-1), "书签：Bookmark 1 已添加（00:10）");
+  assert.equal(host.osd.at(-1), "书签：书签 1 已添加（00:10）");
   await press(host, "P");
   assert.equal(host.osd.at(-1), "此处已有书签");
   await at(host, 12);
   await press(host, "Shift+PageUp");
-  assert.equal(host.osd.at(-1), "书签：定位到 Bookmark 1");
+  assert.equal(host.osd.at(-1), "书签：定位到 书签 1");
   await at(host, 10);
   await press(host, "Ctrl+PageUp");
   assert.equal(host.osd.at(-1), "章节定位：章节 2");
@@ -856,4 +897,35 @@ test("zh-Hans: OSD texts and the clear dialog read as before the migration", asy
   await host.settle(WAIT);
   const { message, detail, confirm } = host.confirmTexts.at(-1)!;
   assert.deepEqual([message, detail, confirm], ["清空当前文件的全部书签？", "将移除 1 个书签，不能撤销。", "清空书签"]);
+});
+
+test("zh-Hans: untitled chapters and bookmarks read as before the migration; bookmarks.json saves no words for them", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  const movie = file();
+  const host = new TestHost();
+  host.chapters = [
+    { title: "Opening", start: 0 },
+    ...Array.from({ length: 60 }, (_, i) => ({ title: null, start: 5 + i })),
+  ];
+  await start(host, data, "zh-Hans");
+  await play(host, movie, 600, 70);
+  await press(host, "P");
+  const chapters = menuLines(host, "marks-chapters");
+  assert.deepEqual(chapters.slice(0, 2), ["01  Opening    00:00", "02  章节 2    00:05"]);
+  assert.equal(chapters.at(-1), "更多章节…（共 61 项）");
+  assert.deepEqual(menuLines(host, "marks-bookmarks"), ["书签 1    01:10"]);
+  assert.equal(idFor(host, "书签 1    01:10"), "bookmark.0");
+  assert.deepEqual(published(host).at(-1), [70, "bookmark", "书签 1"]);
+  assert.deepEqual(published(host)[1], [5, "chapter", "章节 2"]);
+  const saved = JSON.parse(readFileSync(join(data, "bookmarks.json"), "utf8"));
+  assert.deepEqual(
+    saved.media[movie].items.map((item: { title: string; number?: number }) => [item.title, item.number]),
+    [["", 1]],
+  );
+  await press(host, "H");
+  const window = host.window("marks");
+  window.emit("select", (window.props.rows as WindowRow[]).find((r) => !r.chapter)!.rowId);
+  window.emit("remove");
+  await host.settle(WAIT);
+  assert.equal(host.translate("Removed: {}", [window.props["status-text"] as string]), "已移除：书签 1");
 });

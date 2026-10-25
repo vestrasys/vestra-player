@@ -3,17 +3,36 @@ import { HostError } from "../wire.ts";
 import type { PackageManifest, PackageSource } from "./types.ts";
 import type { Json, LayoutSlot, LocalServices, PlaybackStats, Transport, WireSystemInfo } from "../wire.ts";
 import { COMMAND_LIMITS, MENU_IDS } from "../commands.ts";
+import { UI_VALUE_LIMITS } from "./values.ts";
 import type { CommandDeclaration } from "../commands.ts";
 import type { SourceState } from "../source.ts";
 import type { SubtitleState } from "../subtitles.ts";
 import type { RenderSettings, ViewSettings } from "./types.ts";
 import type { MediaJob } from "../media.ts";
-import type { LanguagePreference, Locale, Plugin, TemplateArgs, ThemeId } from "./types.ts";
-import { LOCALES } from "../i18n.ts";
+import type { LanguagePreference, Locale, Plugin, TemplateArgs, TextValue, ThemeId } from "./types.ts";
+import { LOCALES, LIST_SEPARATORS, TEXT_LIMITS } from "../i18n.ts";
 /** Throw one of these from `host.handle(...)` to simulate a definite refusal. */
 export { HostError };
 /** The player's command caps, which the test host enforces as well. */
 export { COMMAND_LIMITS, MENU_IDS };
+/** The player's property value limits, which the test host enforces as well. */
+export { UI_VALUE_LIMITS };
+/**
+ * The player's limits on one text value ({@link Text}, {@link TextList},
+ * with everything nested in it), which the test host enforces as well:
+ * nesting depth 8, 1024 texts, lists and arguments in all, 16 arguments per
+ * text, 256 items per list, 4096 bytes per source text or string argument.
+ *
+ * @since 1.5.11
+ */
+export { TEXT_LIMITS };
+/**
+ * The separator of each {@link ListStyle} per interface language, as the
+ * player joins a {@link TextList}.
+ *
+ * @since 1.5.11
+ */
+export { LIST_SEPARATORS };
 /**
  * The player's interface languages, English (the source) first, as the
  * player's own table: `["en", "zh-Hans", "ja", "ko", "de", "fr", "es"]`.
@@ -77,6 +96,19 @@ export interface FakeWindow {
     userClose(): void;
 }
 /**
+ * A file dialog as the player shows it ({@link TestHost.fileDialogs}).
+ *
+ * @since 1.5.11
+ */
+export interface FileDialogText {
+    /** Which dialog. */
+    kind: "openFile" | "openFiles" | "openDirectory" | "saveFile";
+    /** Its title as shown, if the plugin gave one. */
+    title?: string;
+    /** The proposed file name as shown, if the plugin gave one. */
+    fileName?: string;
+}
+/**
  * A command the plugin registered with `plugin.commands.add`, as the test
  * host keeps it. Get one with {@link TestHost.command} (the plugin's own) or
  * {@link TestHost.coreAction} (the player's core actions).
@@ -110,6 +142,14 @@ export interface FakeCommand {
         title: string;
         /** Each segment of the path as shown; empty without a path. */
         path: string[];
+        /**
+         * The disabled or busy reason as shown, `null` without one (a plugin
+         * command's; not enumerable, so comparing `display` with
+         * `{ title, path }` still works).
+         *
+         * @since 1.5.11
+         */
+        reason?: string | null;
     };
     /** The command state the player last received (after the update pass). */
     state: {
@@ -119,8 +159,8 @@ export interface FakeCommand {
         checked: boolean | null;
         /** `true` while the plugin reports the command as busy. */
         busy: boolean;
-        /** The reason shown when the command is disabled or busy. */
-        reason: string | null;
+        /** The reason the plugin sent (source text or a text value; see `display.reason`). */
+        reason: TextValue | null;
     };
     /**
      * The state revision the player holds; increases with every state update
@@ -348,7 +388,7 @@ export declare class TestHost implements Transport {
      *
      * @since 1.5.9
      */
-    translate(text: string, args?: TemplateArgs): string;
+    translate(text: TextValue, args?: TemplateArgs): string;
     /**
      * The saved interface language (`plugin.appearance.language`), changed by
      * `appearance.setLanguage` or {@link TestHost.setLanguage}.
@@ -383,6 +423,15 @@ export declare class TestHost implements Transport {
         /** The checkbox, if any. */
         checkbox?: string;
     }[];
+    /**
+     * Every file dialog (`openFile`, `openFiles`, `openDirectory`,
+     * `saveFile`) as the player shows it: the title translated, a text file
+     * name translated, newest last. The options the plugin sent are in
+     * `host.sent("dialogs.open")`.
+     *
+     * @since 1.5.11
+     */
+    readonly fileDialogs: FileDialogText[];
     /** The sequence provider's flags, `null` without a provider. */
     sequence: {
         /** The provider's `canNext`, as last evaluated. */

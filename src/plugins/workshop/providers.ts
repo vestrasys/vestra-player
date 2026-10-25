@@ -39,15 +39,13 @@ export function pickListed(provider: Provider, current: string, listed: string[]
 }
 
 /**
- * Custom endpoints; the worker registers each under its id. The labels are
- * still the Chinese text of the provider list (a ComboBox model): a list
- * entry cannot be translated without translation code in TypeScript (i18n
- * round 2 request R2-workshop-1). Elsewhere the windows name them in their own words
- * (labels.slint, by id).
+ * Custom endpoints; the worker registers each under its id. Their labels
+ * are never shown as they are: the settings page's provider list names them
+ * with texts (main.ts), the windows in their own words (labels.slint, by id).
  */
 export const CUSTOM: Provider[] = [
-  { id: "custom-openai", label: "自定义 · OpenAI 格式", models: [], defaultModel: "", api: "openai-completions" },
-  { id: "custom-anthropic", label: "自定义 · Anthropic 格式", models: [], defaultModel: "", api: "anthropic-messages" },
+  { id: "custom-openai", label: "Custom · OpenAI format", models: [], defaultModel: "", api: "openai-completions" },
+  { id: "custom-anthropic", label: "Custom · Anthropic format", models: [], defaultModel: "", api: "anthropic-messages" },
 ];
 
 /** A sensible first choice where pi's catalog has it. */

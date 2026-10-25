@@ -24,7 +24,7 @@ test("the catalog carries every key-based provider of pi, no login-only or cloud
   for (const p of providers) assert.ok(p.models.length > 0 && p.name, p.id);
 
   const ai = await startAi();
-  assert.deepEqual(ai.page.props.providers, [...providers.map((p) => p.name), "自定义 · OpenAI 格式", "自定义 · Anthropic 格式"]);
+  assert.deepEqual(ai.page.props.providers, [...providers.map((p) => p.name), "Custom · OpenAI format", "Custom · Anthropic format"]);
   // Choosing a provider fills the model list from the catalog.
   const mistral = providers.findIndex((p) => p.id === "mistral");
   ai.page.emit("choose-provider", mistral);
@@ -169,6 +169,7 @@ test("a saved provider that is no longer offered: notice, nothing sent, settings
   assert.equal(ai.page.props.gone, "Z.AI");
   assert.equal(ai.keyState(), "旧服务商的 key 不会自动删除");
   assert.equal(ai.page.props.providers[ai.page.props["provider-index"]], "Z.AI（已不再提供）");
+  assert.deepEqual(ai.page.props.providers.slice(-2), ["自定义 · OpenAI 格式", "自定义 · Anthropic 格式"]);
   assert.equal(ai.props.configured, false);
   await ai.send("send", "hi");
   assert.equal(mock.chats.length, 0);

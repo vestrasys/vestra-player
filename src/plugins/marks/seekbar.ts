@@ -1,5 +1,5 @@
-import type { Chapter, MarkKind, Plugin, TimelineLayer } from "@vestra-player/sdk";
-import type { Bookmarks } from "./bookmarks.ts";
+import type { Chapter, I18n, MarkKind, Plugin, Text, TimelineLayer } from "@vestra-player/sdk";
+import { type Bookmarks, bookmarkName } from "./bookmarks.ts";
 import { chapterName, type Chapters, hasMedia } from "./chapters.ts";
 import type { AbLoop } from "./loop.ts";
 import { MARKS } from "./menu.ts";
@@ -10,25 +10,30 @@ import type { Settings } from "./store.ts";
 export const LAYER_MAX = 1000;
 export const MARK_TITLE_MAX = 100;
 
-export type SeekbarMark = { time: number; kind: MarkKind; title: string };
+export type SeekbarMark = { time: number; kind: MarkKind; title: string | Text };
 
 /**
- * B22: what this plugin puts on the seek bar: chapter starts (named as in
- * the menu; `Chapter N` stays English, see `chapterName`), bookmarks and, while only A is set, an `A` marker (B23). Times
- * outside the media are left out (the player would refuse the whole layer),
- * then the first 1000 by time are kept.
+ * B22: what this plugin puts on the seek bar: chapter starts and bookmarks
+ * (named as in the menu: "Chapter N" / "Bookmark N" without a title) and,
+ * while only A is set, an `A` marker (B23). Times outside the media are left
+ * out (the player would refuse the whole layer), then the first 1000 by time
+ * are kept.
  */
-export function seekbarMarks(input: {
-  chapters: readonly Chapter[];
-  bookmarks: readonly { time: number; title: string }[];
-  a: number | null;
-  b: number | null;
-  duration: number | null;
-}): SeekbarMark[] {
-  const title = (text: string) => [...text].slice(0, MARK_TITLE_MAX).join("");
+export function seekbarMarks(
+  text: I18n["text"],
+  input: {
+    chapters: readonly Chapter[];
+    bookmarks: readonly { time: number; title: string; number: number }[];
+    a: number | null;
+    b: number | null;
+    duration: number | null;
+  },
+): SeekbarMark[] {
+  // Own titles are cut to the player's limit; "Chapter N" / "Bookmark N" are short.
+  const title = (name: string | Text) => (typeof name === "string" ? [...name].slice(0, MARK_TITLE_MAX).join("") : name);
   const marks: SeekbarMark[] = [
-    ...input.chapters.map((chapter, i) => ({ time: chapter.start, kind: "chapter" as const, title: title(chapterName(chapter, i)) })),
-    ...input.bookmarks.map((bookmark) => ({ time: bookmark.time, kind: "bookmark" as const, title: title(bookmark.title) })),
+    ...input.chapters.map((chapter, i) => ({ time: chapter.start, kind: "chapter" as const, title: title(chapterName(text, chapter, i)) })),
+    ...input.bookmarks.map((bookmark) => ({ time: bookmark.time, kind: "bookmark" as const, title: title(bookmarkName(text, bookmark)) })),
   ];
   if (input.a !== null && input.b === null) marks.push({ time: input.a, kind: "marker", title: "A" });
   const { duration } = input;
@@ -120,7 +125,7 @@ export class SeekbarMarks {
     this.#inputs = inputs;
     const marks =
       media && show
-        ? seekbarMarks({
+        ? seekbarMarks(this.#plugin.i18n.text, {
             chapters: this.#chapters.list,
             bookmarks: this.#bookmarks.items,
             a: loop.a,

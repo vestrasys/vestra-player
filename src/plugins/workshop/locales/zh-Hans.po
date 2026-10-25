@@ -427,11 +427,11 @@ msgstr "它是从别处安装的（不是 Vestra Player AI 生成的）。替换
 msgid "Replace"
 msgstr "替换"
 
-#: labels.slint:6
+#: labels.slint:6 main.ts:521
 msgid "Custom · OpenAI format"
 msgstr "自定义 · OpenAI 格式"
 
-#: labels.slint:7
+#: labels.slint:7 main.ts:523
 msgid "Custom · Anthropic format"
 msgstr "自定义 · Anthropic 格式"
 
@@ -447,11 +447,15 @@ msgstr "导出插件包"
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "导出源码（可以直接作为 GitHub 仓库）"
 
-#: main.ts:518 manifest.json
+#: main.ts:525 manifest.json
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:732
+#: main.ts:533
+msgid "{} (no longer offered)"
+msgstr "{}（已不再提供）"
+
+#: main.ts:738
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
 

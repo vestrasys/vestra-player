@@ -1,4 +1,4 @@
-import type { Chapter, Player, PlayerState } from "@vestra-player/sdk";
+import type { Chapter, I18n, Player, PlayerState, Text } from "@vestra-player/sdk";
 
 /** The media is open far enough for chapters, bookmarks and seeking to mean something. */
 export const hasMedia = (state: PlayerState) =>
@@ -7,12 +7,9 @@ export const hasMedia = (state: PlayerState) =>
 /** A chapter's own title; `null` when it has none (it is then called "Chapter N"). */
 export const chapterTitle = (chapter: Chapter): string | null => chapter.title?.trim() || null;
 
-/**
- * A chapter's name as plain data, for texts the player shows as they are
- * (menu lines, seek-bar marks): its title, `Chapter N` when it has none.
- */
-// i18n: needs r2-api (a translatable value inside a menu title / seek-bar mark title)
-export const chapterName = (chapter: Chapter, index: number) => chapterTitle(chapter) ?? `Chapter ${index + 1}`;
+/** A chapter's name (seek-bar marks): its title, or "Chapter N" (a text the player translates). */
+export const chapterName = (text: I18n["text"], chapter: Chapter, index: number): string | Text =>
+  chapterTitle(chapter) ?? text("Chapter {}", [index + 1]);
 
 /**
  * B21 chapters: read with `player.chapters()` once per source, when it first is
