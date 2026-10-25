@@ -792,6 +792,10 @@ impl Host {
             self.purge_secrets(&DataKey::Instance(guid));
         }
     }
+    /// The installed packages were started (the first `package_tick`).
+    pub(super) fn packages_started(&self) -> bool {
+        self.packages.booted
+    }
     pub(super) fn package_tick(&mut self) {
         self.purge_dropped_secrets();
         if !self.packages.booted {

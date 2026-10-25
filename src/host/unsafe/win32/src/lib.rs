@@ -2,8 +2,9 @@
 //! platform module (`src/host/src/platform/windows.rs`): the pointer position
 //! while a file is dragged over a window (winit 0.30 reports no position for
 //! drags), the modifier keys held right now, the double-click time, the
-//! submenu show delay, the thread's sleep-prevention state and a window's
-//! dark title bar. Each is one
+//! submenu show delay, the thread's sleep-prevention state, a window's
+//! dark title bar and letting the running player take the foreground for a
+//! second launch's files. Each is one
 //! call with plain integer arguments or one local out-parameter; the public
 //! API is safe. Compiled only on Windows (cross-checked from macOS by
 //! `npm run portability`, not yet run on Windows).
@@ -18,7 +19,7 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     GetDoubleClickTime, GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    GetCursorPos, SPI_GETMENUSHOWDELAY, SystemParametersInfoW,
+    ASFW_ANY, AllowSetForegroundWindow, GetCursorPos, SPI_GETMENUSHOWDELAY, SystemParametersInfoW,
 };
 
 /// The pointer in screen coordinates (physical pixels), `None` when the
@@ -101,4 +102,13 @@ pub fn set_dark_title_bar(hwnd: isize, dark: bool) -> bool {
         }
     };
     set(DWMWA_USE_IMMERSIVE_DARK_MODE as u32) >= 0 || set(BEFORE_20H1) >= 0
+}
+
+/// Let another process (the running player a second launch hands its files
+/// to) bring its window to the front: the foreground rights of the process
+/// the user just started pass on. `false` when the system refused.
+pub fn allow_any_foreground() -> bool {
+    // SAFETY: AllowSetForegroundWindow takes a process id by value
+    // (ASFW_ANY: any process) and has no memory-safety preconditions.
+    unsafe { AllowSetForegroundWindow(ASFW_ANY) != 0 }
 }

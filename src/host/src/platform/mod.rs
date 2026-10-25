@@ -18,6 +18,7 @@
 //! | dialogs | `confirm` |
 //! | power | `sleep_launcher` |
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
+//! | opening the player | `on_open_files` (macOS: open-documents Apple events through `vestra-open-files`; elsewhere files come on the command line), `single_instance` → `Launch` / `Primary` (shared, in `instance.rs`), `allow_handoff_foreground` (Windows: `AllowSetForegroundWindow`) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
 //! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
 //! | installation | `install_layout` (pure, in `layout.rs`, for every system) → `current_install_layout` |
@@ -90,6 +91,9 @@ pub use layout::*;
 
 mod fonts;
 pub use fonts::*;
+
+mod instance;
+pub use instance::*;
 
 /// The installation this executable runs from (`layout.rs`); `None` for a
 /// development build.
