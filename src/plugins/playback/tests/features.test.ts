@@ -305,7 +305,12 @@ test("A10 a plugin stream is not remembered and cannot be reloaded; repeats whil
   void host.command("reopen").run();
   await until(() => host.command("reopen").state.busy);
   assert.equal(host.command("reopen").state.enabled, false);
-  await assert.rejects(host.press("Ctrl+Y")); // busy: the host does not run it
+  // busy, so disabled: the key passes on (SDK 1.5.12, as the player) and nothing runs again
+  const shownBusy = host.osd.length;
+  const submitted = host.sent("source.submit").length;
+  assert.equal(await host.press("Ctrl+Y"), "passed");
+  assert.equal(host.osd.length, shownBusy);
+  assert.equal(host.sent("source.submit").length, submitted);
   release();
   host.reset("source.submit");
   await host.settle();
@@ -508,7 +513,11 @@ test("B08 repeats while a step is in flight are dropped; a refusal is shown, a s
   void host.command("keyframe-forward").run();
   await until(() => host.command("keyframe-forward").state.busy);
   assert.equal(host.command("keyframe-back").state.enabled, false);
-  await assert.rejects(host.press("Ctrl+Shift+ArrowRight")); // the held key's repeat: refused while busy
+  // the held key's repeat: the busy command is disabled, so the key passes on and no second step starts
+  const shownBusy = host.osd.length;
+  assert.equal(await host.press("Ctrl+Shift+ArrowRight"), "passed");
+  assert.equal(host.osd.length, shownBusy);
+  assert.equal(host.sent("player.step").length, 1);
   release();
   await host.settle();
   assert.equal(host.sent("player.step").length, 1);

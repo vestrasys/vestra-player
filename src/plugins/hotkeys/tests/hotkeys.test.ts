@@ -520,7 +520,7 @@ test("J02: left click and a modifier; (None) only takes the input", async () => 
   assert.equal(host.osd.at(-1), "Mouse action updated: Wheel down = (none)");
   assert.equal((page(host, "mouse").props.message as { kind: string }).kind, "mouse-updated-none");
   assert.deepEqual(overlay(host)["host/volume-down"], ["ArrowDown"]);
-  await assert.rejects(host.press("Mouse:WheelDown"));
+  await assert.rejects(host.press("Mouse:WheelDown"), /nothing is bound to Mouse:WheelDown/, "(None) unbinds the input");
 });
 
 test("J02: the mouse OSD message in Simplified Chinese names the input in Chinese", async () => {
@@ -557,8 +557,8 @@ test("J03: ignoring defaults (asks first), changed keys keep working, off restor
   assert.equal(host.confirms.at(-1)!.message, "Ignore default shortcuts?");
   assert.deepEqual(overlay(host)["host/play-pause"], []);
   assert.deepEqual(overlay(host)["host/volume-up"], []);
-  await assert.rejects(host.press("Space"));
-  await assert.rejects(host.press("Mouse:WheelUp"));
+  await assert.rejects(host.press("Space"), /nothing is bound to Space/, "the default is ignored");
+  await assert.rejects(host.press("Mouse:WheelUp"), /nothing is bound to Mouse:WheelUp/, "the default is ignored");
   const record = JSON.parse(readFileSync(join(host.dataDirectory, "ignore-defaults.json"), "utf8"));
   assert.equal(record.enabled, true);
   assert.equal(record.written.length, 14); // the 14 core actions (hotkeys declares none)

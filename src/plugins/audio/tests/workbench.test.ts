@@ -96,7 +96,14 @@ test("menu under Audio follows the allocation, and editing commands wait for a s
     reason: "No audio track selected",
   });
   assert.equal(host.command("audio.equalizer").state.enabled, false);
-  for (const key of ["Shift+E", ">", "<", "?", "Shift+N", "Shift+C"]) await assert.rejects(host.press(key), key);
+  // A disabled command's key shows its reason on the OSD and runs nothing (SDK 1.5.12, as the player).
+  const replaced = replaces(host).length;
+  for (const key of ["Shift+E", ">", "<", "?", "Shift+N", "Shift+C"]) {
+    const shown = host.osd.length;
+    assert.equal(await host.press(key), "reason", key);
+    assert.deepEqual(host.osd.slice(shown), ["No audio track selected"], key);
+  }
+  assert.equal(replaces(host).length, replaced, "no key changed the processing");
   assert.equal(host.command("audio.sync.earlier").state.reason, "No audio track selected");
   assert.equal(host.command("audio.sync.keep.none").state.checked, true);
   assert.equal(host.command("audio.sync.keep.always").state.enabled, true, "the keep mode needs no track");

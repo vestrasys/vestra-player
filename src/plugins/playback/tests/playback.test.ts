@@ -282,7 +282,11 @@ test("stop closes the source (button and F4)", async () => {
   assert.equal(host.source.phase, "empty");
   assert.deepEqual(host.coreRuns, ["stop"]);
   assert.equal(host.mounted().props["can-stop"], false);
-  await assert.rejects(host.press("F4")); // disabled now
+  // disabled now: the key shows the reason on the video and runs nothing (SDK 1.5.12, as the player)
+  const shown = host.osd.length;
+  assert.equal(await host.press("F4"), "reason");
+  assert.deepEqual(host.coreRuns, ["stop"]);
+  assert.deepEqual(host.osd.slice(shown), ["当前来源不支持此操作"]);
   await stop();
 });
 
@@ -448,7 +452,10 @@ test("relative seeks accumulate from the pending target, clamp to the source and
 test("previous/next are the core's: PageUp/PageDown and right-click on back/forward", async () => {
   const { host, stop } = await start(withMedia());
   const bar = host.mounted();
-  await assert.rejects(host.press("PageDown"));
+  // no next item: 下一个 is disabled, so PageDown shows why and runs nothing (SDK 1.5.12, as the player)
+  assert.equal(await host.press("PageDown"), "reason");
+  assert.deepEqual(host.coreRuns, []);
+  assert.deepEqual(host.osd, ["没有下一个"]);
   host.sequence = { canNext: true, canPrevious: true };
   host.setSource({ sequence: { next: true, previous: true } } as never);
   await host.settle();

@@ -1102,7 +1102,11 @@ test("software rendering: the GPU items are disabled with the reason, the list a
   assert.equal(window.props["render-ready"], false);
   assert.equal(window.props.status, "", "not a failure in the status line");
   assert.deepEqual(host.osd, []);
-  await assert.rejects(host.press("Shift+P"), "disabled commands refuse their keys");
+  // a disabled command's key shows its reason on the OSD and runs nothing (SDK 1.5.12, as the player)
+  const checked = host.command("video.shader.use").state.checked;
+  assert.equal(await host.press("Shift+P"), "reason");
+  assert.deepEqual(host.osd, [SOFTWARE]);
+  assert.equal(host.command("video.shader.use").state.checked, checked, "the shaders were not switched");
   await stop();
 });
 
