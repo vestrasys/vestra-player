@@ -1070,7 +1070,7 @@ msgstr "Occidental (ISO-8859-1)"
 #: ui/settings.slint:219
 #, x-machine
 msgid "Reload automatically when the subtitle file changes"
-msgstr "Recharger automatiquement quand le fichier de sous-titres change"
+msgstr "Recharger automatiquement si le fichier change"
 
 #: ui/settings.slint:234
 #, x-machine

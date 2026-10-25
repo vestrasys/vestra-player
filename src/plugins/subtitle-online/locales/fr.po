@@ -781,7 +781,7 @@ msgstr "Charger automatiquement le meilleur résultat"
 #: ui/settings.slint:143
 #, x-machine
 msgid "Only subtitles that exactly match the file (hash)"
-msgstr "Uniquement les sous-titres correspondant exactement au fichier (empreinte)"
+msgstr "Correspondance exacte uniquement (empreinte)"
 
 #: ui/settings.slint:150
 #, x-machine
