@@ -56,6 +56,14 @@ export struct SessionRow {
     running: bool,
 }
 
+// What the banner above the conversation says: a code, its arguments and a
+// count (main.ts `banner()`, a `Say` of providers.ts).
+export struct Say {
+    code: string,
+    args: [string],
+    n: int,
+}
+
 // What the result card says: a code and its arguments.
 export struct CardSay {
     code: string,
@@ -300,7 +308,7 @@ export component AiWindow inherits Window {
     // A provider and its key (or a local endpoint) are set up.
     in property <bool> configured: true;
     // Keychain state or missing setup, shown above the conversation; code "": none.
-    in property <CardSay> banner;
+    in property <Say> banner;
     // The shown session is generating.
     in property <bool> busy;
     // Another session is generating (one run at a time).
@@ -350,7 +358,7 @@ export component AiWindow inherits Window {
 
     private property <bool> can-send: root.configured && !root.busy && !root.blocked;
 
-    pure function banner-text(s: CardSay) -> string {
+    pure function banner-text(s: Say) -> string {
         s.code == "gone" ? Labels.gone(s.args[0])
             : s.code == "reading" ? @tr("Reading the API key from the keychain… (the system may ask for permission)")
             : s.code == "key-unreadable" ? @tr("Cannot read the key from the keychain; save it again in the settings. ({})", s.args[0])
