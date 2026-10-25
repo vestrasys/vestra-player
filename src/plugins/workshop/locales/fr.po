@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -97,7 +98,7 @@ msgstr "Réflexion…"
 #: ai.slint:140
 #, x-machine
 msgid "{0}, {1} failed"
-msgstr "{0}, {1} en échec"
+msgstr "{0}, dont {1} en échec"
 
 #: ai.slint:144
 #, x-machine
@@ -396,7 +397,7 @@ msgstr "Une erreur s'est produite : {}"
 #: ai.slint:391
 #, x-machine
 msgid "{0} ({1}) is taken by {2}"
-msgstr "{0} ({1}) est déjà pris par {2}"
+msgstr "{0} ({1}) est déjà utilisé par {2}"
 
 #: ai.slint:394
 #, x-machine
@@ -426,7 +427,7 @@ msgstr "Aujourd'hui"
 #: ai.slint:427
 #, x-machine
 msgid "Earlier"
-msgstr "Plus ancien"
+msgstr "Plus anciennes"
 
 #: ai.slint:442
 #, x-machine
@@ -573,7 +574,7 @@ msgstr "Vestra Player AI…"
 #: manifest.json
 #, x-machine
 msgid "Chat with your chosen model; let AI write Vestra plugins: check, test, install (reversible), export (BYOK, experimental)"
-msgstr "Discutez avec le modèle de votre choix ; laissez l'IA écrire des plugins Vestra : vérification, tests, installation (réversible), exportation (BYOK, expérimental)"
+msgstr "Discutez avec le modèle de votre choix ; laissez l'IA écrire des plugins Vestra : vérification, tests, installation (réversible), exportation (votre propre clé API, expérimental)"
 
 #: manifest.json
 #, x-machine

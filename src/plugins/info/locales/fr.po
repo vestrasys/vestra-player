@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -65,7 +66,7 @@ msgstr "Lien"
 #: about.ts:76 ui/about.slint:88
 #, x-machine
 msgid "Local file"
-msgstr "Fichier local"
+msgstr "Fichier"
 
 #: about.ts:76 ui/about.slint:89
 #, x-machine
@@ -80,7 +81,7 @@ msgstr "Installé"
 #: about.ts:76 ui/about.slint:91
 #, x-machine
 msgid "Development"
-msgstr "Développement"
+msgstr "Dév."
 
 #: about.ts:77 ui/about.slint:95
 #, x-machine
@@ -90,7 +91,7 @@ msgstr "Démarrage"
 #: about.ts:77 ui/about.slint:96
 #, x-machine
 msgid "Running"
-msgstr "En cours d'exécution"
+msgstr "Actif"
 
 #: about.ts:77 ui/about.slint:97
 #, x-machine
@@ -230,7 +231,7 @@ msgstr "Sous-titres"
 #: main.ts:126
 #, x-machine
 msgid "{} ch"
-msgstr "{} can."
+msgstr "{} canaux"
 
 #: main.ts:130
 #, x-machine
@@ -811,7 +812,7 @@ msgstr "Échec de la copie"
 #: ui/about.slint:187
 #, x-machine
 msgid "Copy Info"
-msgstr "Copier les infos"
+msgstr "Copier"
 
 #: ui/about.slint:188 ui/properties.slint:158
 #, x-machine
@@ -859,4 +860,4 @@ msgstr "Copier"
 #: ui/properties.slint:157
 #, x-machine
 msgid "Save As…"
-msgstr "Enregistrer sous…"
+msgstr "Enregistrer…"

@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -210,7 +211,7 @@ msgstr "Sous-titres en gras"
 #: main.ts:850
 #, x-machine
 msgid "Bold subtitles off"
-msgstr "Sous-titres en gras désactivés"
+msgstr "Sous-titres sans gras"
 
 #: main.ts:854
 #, x-machine
@@ -949,7 +950,7 @@ msgstr "Police"
 #: ui/settings.slint:78 ui/settings.slint:111 ui/settings.slint:123 ui/settings.slint:135 ui/settings.slint:157 ui/settings.slint:169 ui/settings.slint:180 ui/settings.slint:193 ui/settings.slint:213 ui/tune.slint:96 ui/tune.slint:104 ui/tune.slint:123
 #, x-machine
 msgid "Default"
-msgstr "Par défaut"
+msgstr "Défaut"
 
 #: ui/settings.slint:83
 #, x-machine
@@ -1019,7 +1020,7 @@ msgstr "Utiliser les paramètres des sous-titres"
 #: ui/settings.slint:185
 #, x-machine
 msgid "Sync step"
-msgstr "Pas de synchronisation"
+msgstr "Incrément de synchro"
 
 #: ui/settings.slint:189
 #, x-machine

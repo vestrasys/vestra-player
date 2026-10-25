@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -10,12 +11,12 @@ msgstr ""
 #: main.ts:68 main.ts:73 ui/parts.slint:57
 #, x-machine
 msgid "Enter valid seconds; the end must be after the start."
-msgstr "Saisissez des secondes valides ; la fin doit être après le début."
+msgstr "Saisissez un nombre de secondes valide ; la fin doit être postérieure au début."
 
 #: main.ts:68 main.ts:73 ui/parts.slint:58
 #, x-machine
 msgid "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."
-msgstr "Une rafale nécessite 2 à 20 images, un intervalle de 0,1 à 10 s et une durée de média connue."
+msgstr "Une rafale nécessite 2 à 20 images, un intervalle de 0.1 à 10 s et une durée de média connue."
 
 #: main.ts:68 main.ts:73 ui/parts.slint:59
 #, x-machine
@@ -400,7 +401,7 @@ msgstr "Intervalle :"
 #: ui/burst.slint:56
 #, x-machine
 msgid "s (0.1–10)"
-msgstr "s (0,1–10)"
+msgstr "s (0.1–10)"
 
 #: ui/burst.slint:58
 #, x-machine
@@ -583,7 +584,7 @@ msgstr "Aucun emplacement d'enregistrement choisi."
 #: ui/parts.slint:119
 #, x-machine
 msgid "Export started. Follow it in Export Tasks."
-msgstr "Exportation lancée. Suivez-la dans Tâches d'exportation."
+msgstr "Exportation lancée. Suivez-la dans « Tâches d'exportation »."
 
 #: ui/parts.slint:120
 #, x-machine

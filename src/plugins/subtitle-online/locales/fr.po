@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -615,12 +616,12 @@ msgstr "IPS"
 #: ui/download.slint:120
 #, x-machine
 msgid "Downloads"
-msgstr "Téléchargements"
+msgstr "Téléch."
 
 #: ui/download.slint:121
 #, x-machine
 msgid "Match"
-msgstr "Correspondance"
+msgstr "Critère"
 
 #: ui/download.slint:122
 #, x-machine
@@ -630,7 +631,7 @@ msgstr "Source"
 #: ui/download.slint:147
 #, x-machine
 msgid "Hash"
-msgstr "Empreinte"
+msgstr "Hash"
 
 #: ui/download.slint:147
 #, x-machine

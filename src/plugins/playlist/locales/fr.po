@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -55,7 +56,7 @@ msgstr "Impossible de lire le dossier : {}"
 #: main.ts:134
 #, x-machine
 msgid "Removed: {}"
-msgstr "Supprimé : {}"
+msgstr "Éléments supprimés : {}"
 
 #: main.ts:134
 #, x-machine
@@ -80,7 +81,7 @@ msgstr "Le média actuel a été retiré de la liste"
 #: main.ts:134
 #, x-machine
 msgid "List cleared; the current media continues"
-msgstr "Liste vidée ; le média actuel continue"
+msgstr "Liste vidée ; la lecture du média actuel continue"
 
 #: main.ts:134
 #, x-machine
@@ -315,7 +316,7 @@ msgstr "Supprimer la sélection"
 #: main.ts:527
 #, x-machine
 msgid "Remove Unselected"
-msgstr "Supprimer les non sélectionnés"
+msgstr "Supprimer les éléments non sélectionnés"
 
 #: main.ts:527
 #, x-machine
@@ -699,7 +700,7 @@ msgstr "Ajouter"
 #: ui/settings.slint:63
 #, x-machine
 msgid "Open and drop"
-msgstr "Ouverture et dépôt"
+msgstr "Ouverture et glisser-déposer"
 
 #: ui/settings.slint:67
 #, x-machine
@@ -724,12 +725,12 @@ msgstr "Ajouter tous les fichiers du dossier"
 #: ui/settings.slint:76
 #, x-machine
 msgid "Append when opening or dropping; don't clear the list"
-msgstr "Ajouter à la fin lors de l'ouverture ou du dépôt ; ne pas vider la liste"
+msgstr "Ajouter à la fin lors d'une ouverture ou d'un glisser-déposer ; ne pas vider la liste"
 
 #: ui/settings.slint:81
 #, x-machine
 msgid "Insert at the drop position when dropping on the list"
-msgstr "Insérer à l'endroit du dépôt lors d'un dépôt sur la liste"
+msgstr "Insérer à l'emplacement visé lors d'un glisser-déposer sur la liste"
 
 #: ui/settings.slint:86
 #, x-machine
@@ -764,7 +765,7 @@ msgstr "Confirmer avant de tout supprimer"
 #: ui/sidebar.slint:190
 #, x-machine
 msgid "Filtered {}"
-msgstr "Filtrés : {}"
+msgstr "Filtré : {}"
 
 #: ui/sidebar.slint:251
 #, x-machine

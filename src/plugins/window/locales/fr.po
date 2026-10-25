@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -296,7 +297,7 @@ msgstr "Taille de la fenêtre au début de la lecture"
 #: ui/page.slint:99
 #, x-machine
 msgid "Off"
-msgstr "Non"
+msgstr "Inchangée"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
 #: ui/page.slint:99

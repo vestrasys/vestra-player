@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -99,7 +100,7 @@ msgid ""
 ".nes files open like media: Open File, a drop on the video, the playlist; the Emulator context menu opens and stops them too. No keyboard controls or save states yet; no games included."
 msgstr ""
 "Exécute les ROM iNES avec JSNES ; l'image et le son sont lus dans le lecteur comme n'importe quel autre média.\n"
-"Les fichiers .nes s'ouvrent comme des médias : Ouvrir un fichier, un dépôt sur la vidéo, la liste de lecture ; le menu contextuel Émulateur permet aussi de les ouvrir et de les arrêter. Pas encore de commandes au clavier ni de sauvegardes d'état ; aucun jeu inclus."
+"Les fichiers .nes s'ouvrent comme des médias : Ouvrir un fichier, un glisser-déposer sur la vidéo, la liste de lecture ; le menu contextuel Émulateur permet aussi de les ouvrir et de les arrêter. Pas encore de commandes au clavier ni de sauvegardes d'état ; aucun jeu inclus."
 
 #: manifest.json
 #, x-machine
@@ -114,7 +115,7 @@ msgstr "NES"
 #: nes.slint:15
 #, x-machine
 msgid "Running {} · 256×240 · 48 kHz stereo"
-msgstr "En cours : {} · 256×240 · 48 kHz stéréo"
+msgstr "Exécution de {} · 256×240 · 48 kHz stéréo"
 
 #: nes.slint:16
 #, x-machine

@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -206,7 +207,7 @@ msgstr "Décaler la plage de +0,1 s"
 #: menu.ts:231
 #, x-machine
 msgid "Loop Current Chapter or Bookmark Range"
-msgstr "Boucler le chapitre ou la plage de signets actuel"
+msgstr "Boucler le chapitre actuel ou la plage de signets actuelle"
 
 #: menu.ts:237 menu.ts:250 osd.ts:51
 #, x-machine
@@ -461,7 +462,7 @@ msgstr "Le titre ne peut pas être vide"
 #: ui/marks.slint:184
 #, x-machine
 msgid "Time format is h:mm:ss.d"
-msgstr "Le format du temps est h:mm:ss.d"
+msgstr "Format attendu : h:mm:ss.d"
 
 #: ui/marks.slint:185
 #, x-machine

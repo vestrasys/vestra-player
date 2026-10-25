@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -85,22 +86,22 @@ msgstr "Charger un fichier audio externe"
 #: main.ts:176
 #, x-machine
 msgid "This audio is already loaded"
-msgstr "Cet audio est déjà chargé"
+msgstr "Ce fichier audio est déjà chargé"
 
 #: main.ts:180
 #, x-machine
 msgid "Audio loaded: {}"
-msgstr "Audio chargé : {}"
+msgstr "Fichier audio chargé : {}"
 
 #: main.ts:182
 #, x-machine
 msgid "The source changed; the audio was not loaded"
-msgstr "La source a changé ; l'audio n'a pas été chargé"
+msgstr "La source a changé ; le fichier audio n'a pas été chargé"
 
 #: main.ts:183
 #, x-machine
 msgid "Cannot load audio: {}"
-msgstr "Impossible de charger l'audio : {}"
+msgstr "Impossible de charger le fichier audio : {}"
 
 #: main.ts:234
 #, x-machine
@@ -419,7 +420,7 @@ msgid ""
 "Settings are kept across files and restarts; find it under Audio in the right-click menu and in the Audio Workbench… window."
 msgstr ""
 "Un égaliseur à six bandes avec préréglages, la synchronisation audio, la normalisation et le cristalliseur, le choix des canaux, ainsi que le changement de piste audio, le chargement de fichiers audio externes et le choix du périphérique de sortie.\n"
-"Les réglages sont conservés d'un fichier à l'autre et après un redémarrage ; accessible depuis Audio dans le menu contextuel et dans la fenêtre Atelier audio…."
+"Les réglages sont conservés d'un fichier à l'autre et après un redémarrage ; ils se trouvent sous Audio dans le menu contextuel et dans la fenêtre « Atelier audio… »."
 
 #: manifest.json
 #, x-machine
@@ -474,7 +475,7 @@ msgstr "Chargement de l'audio…"
 #: ui/workbench.slint:37
 #, x-machine
 msgid "Applying…"
-msgstr "Application…"
+msgstr "Application en cours…"
 
 #: ui/workbench.slint:38
 #, x-machine
@@ -494,7 +495,7 @@ msgstr "Prêt"
 #: ui/workbench.slint:184 ui/workbench.slint:549 ui/workbench.slint:697
 #, x-machine
 msgid "Default"
-msgstr "Par défaut"
+msgstr "Défaut"
 
 #: ui/workbench.slint:409
 #, x-machine
@@ -554,7 +555,7 @@ msgstr "Charger automatiquement les fichiers audio portant le même nom"
 #: ui/workbench.slint:641
 #, x-machine
 msgid "Keep sync"
-msgstr "Conserver la synchro"
+msgstr "Conserver"
 
 #: ui/workbench.slint:676
 #, x-machine

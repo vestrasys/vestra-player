@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -480,7 +481,7 @@ msgstr "Beaucoup d'images perdues avec le doublement d'images, envisagez de le d
 #: main.ts:721 main.ts:737
 #, x-machine
 msgid "At most {} shaders"
-msgstr "Au plus {} shaders"
+msgstr "{} shaders au maximum"
 
 #: main.ts:732
 #, x-machine
@@ -662,7 +663,7 @@ msgstr "Personnalisé (x:y)"
 #: main.ts:945
 #, x-machine
 msgid "Enter one with Custom Aspect Ratio… first"
-msgstr "Saisissez-en d'abord un avec Format d'image personnalisé…"
+msgstr "Définissez-en d'abord un via « Format d'image personnalisé… »"
 
 #: main.ts:946 picture.slint:665
 #, x-machine
@@ -737,12 +738,12 @@ msgstr "Réinitialiser la position"
 #: main.ts:981
 #, x-machine
 msgid "Move Left"
-msgstr "Déplacer à gauche"
+msgstr "Déplacer vers la gauche"
 
 #: main.ts:981
 #, x-machine
 msgid "Move Right"
-msgstr "Déplacer à droite"
+msgstr "Déplacer vers la droite"
 
 #: main.ts:981 ui/shaders.slint:103
 #, x-machine
@@ -991,7 +992,7 @@ msgstr "filtres"
 #: picture.slint:232 picture.slint:274 picture.slint:512 picture.slint:704
 #, x-machine
 msgid "Default"
-msgstr "Par défaut"
+msgstr "Défaut"
 
 #: picture.slint:383
 #, x-machine
@@ -1016,7 +1017,7 @@ msgstr "Options de rendu indisponibles"
 #: picture.slint:388
 #, x-machine
 msgid "Render settings failed"
-msgstr "Échec des paramètres de rendu"
+msgstr "Échec de l'application des paramètres de rendu"
 
 #: picture.slint:391
 #, x-machine
@@ -1278,7 +1279,7 @@ msgstr "Format d'image personnalisé"
 #: ui/aspect.slint:32
 #, x-machine
 msgid "Aspect ratio (width:height or decimal, 0.25–4)"
-msgstr "Format d'image (largeur:hauteur ou décimal, 0.25–4)"
+msgstr "Format d'image (largeur:hauteur ou nombre décimal, 0.25–4)"
 
 #: ui/aspect.slint:50
 #, x-machine

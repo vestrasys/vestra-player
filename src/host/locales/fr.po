@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -169,7 +170,7 @@ msgstr "Lecture"
 #: src/core_actions.rs:395
 #, x-machine
 msgid "Paused"
-msgstr "Pause"
+msgstr "En pause"
 
 #. On-screen message: the step in seconds, then the new position and the duration.
 #: src/core_actions.rs:412
@@ -236,12 +237,12 @@ msgstr "Image précédente : {}"
 #: src/main.rs:140
 #, x-machine
 msgid "The sidebar holds at most {} tabs"
-msgstr "La barre latérale contient au plus {} onglets"
+msgstr "La barre latérale ne peut pas contenir plus de {} onglets"
 
 #: src/main.rs:150
 #, x-machine
 msgid "Previous/Next is provided by {}"
-msgstr "Précédent/Suivant est fourni par {}"
+msgstr "Précédent/Suivant est déjà fourni par {}"
 
 #: src/main.rs:2604
 #, x-machine
@@ -284,12 +285,12 @@ msgstr "{} est pris en charge par {}"
 #: src/main.rs:3221
 #, x-machine
 msgid "{} not taken over: resolved by {}"
-msgstr "{} non repris : pris en charge par {}"
+msgstr "{} non repris : déjà pris en charge par {}"
 
 #: src/main.rs:3656
 #, x-machine
 msgid "Previous/Next not taken over: provided by {}"
-msgstr "Précédent/Suivant non repris : fourni par {}"
+msgstr "Précédent/Suivant non repris : déjà fourni par {}"
 
 #: src/main.rs:3776 src/main.rs:3783
 #, x-machine
@@ -334,7 +335,7 @@ msgstr "Le mode image dans l'image n'a pas démarré"
 #: src/platform/macos.rs:104
 #, x-machine
 msgid "Picture-in-picture needs macOS 14 or later"
-msgstr "Le mode image dans l'image nécessite macOS 14 ou ultérieur"
+msgstr "Le mode image dans l'image nécessite macOS 14 ou version ultérieure"
 
 #: src/renderer.rs:17
 #, x-machine
@@ -385,7 +386,7 @@ msgstr "Autre"
 #: src/slot_claims.rs:77
 #, x-machine
 msgid "The {} is used by {}"
-msgstr "L'emplacement « {} » est utilisé par {}"
+msgstr "L'emplacement « {} » est déjà utilisé par {}"
 
 #. A file extension, such as nes.
 #: src/source_resolvers.rs:156

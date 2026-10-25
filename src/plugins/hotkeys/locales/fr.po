@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -140,7 +141,7 @@ msgstr "Tout rétablir par défaut"
 #: keys-page.ts:474
 #, x-machine
 msgid "Shortcuts restored to defaults"
-msgstr "Raccourcis rétablis par défaut"
+msgstr "Raccourcis par défaut rétablis"
 
 #. only the part before the extension.
 #: keys-page.ts:485
@@ -231,7 +232,7 @@ msgstr "Double-clic gauche (moitié droite)"
 #: mouse-page.ts:178 ui/parts.slint:45
 #, x-machine
 msgid "Middle click"
-msgstr "Clic milieu"
+msgstr "Clic central"
 
 #: mouse-page.ts:178 ui/parts.slint:46
 #, x-machine
@@ -286,7 +287,7 @@ msgstr "Les raccourcis par défaut sont ignorés (Paramètres ▸ Ignorer les ra
 #: ui/keys.slint:112
 #, x-machine
 msgid "The plugin is not loaded; this change works again when it is back"
-msgstr "Le plugin n'est pas chargé ; cette modification reprendra effet à son retour"
+msgstr "Le plugin n'est pas chargé ; cette modification s'appliquera de nouveau à son retour"
 
 #: ui/keys.slint:191
 #, x-machine
@@ -306,7 +307,7 @@ msgstr "Conflits"
 #: ui/keys.slint:197 ui/keys.slint:284
 #, x-machine
 msgid "Unbound"
-msgstr "Non associés"
+msgstr "Sans raccourci"
 
 #: ui/keys.slint:256
 #, x-machine
@@ -356,7 +357,7 @@ msgstr "Ajouter une touche…"
 #: ui/keys.slint:309
 #, x-machine
 msgid "Press a shortcut (Esc cancels)"
-msgstr "Appuyez sur un raccourci (Esc pour annuler)"
+msgstr "Appuyez… (Esc annule)"
 
 #: ui/keys.slint:339
 #, x-machine
@@ -396,12 +397,12 @@ msgstr "Annuler"
 #: ui/keys.slint:379
 #, x-machine
 msgid "Restore All Defaults…"
-msgstr "Tout rétablir par défaut…"
+msgstr "Tout rétablir…"
 
 #: ui/keys.slint:380
 #, x-machine
 msgid "Export List…"
-msgstr "Exporter la liste…"
+msgstr "Exporter…"
 
 #: ui/keys.slint:383
 #, x-machine
@@ -416,7 +417,7 @@ msgstr "(Aucun)"
 #: ui/mouse.slint:106
 #, x-machine
 msgid "Modifier"
-msgstr "Modificateur"
+msgstr "Touche"
 
 #: ui/mouse.slint:109
 #, x-machine
@@ -451,7 +452,7 @@ msgstr "Plugins non chargés"
 #: ui/parts.slint:64
 #, x-machine
 msgid "{0} is taken by “{1}” and has no effect"
-msgstr "{0} est pris par « {1} » et n'a aucun effet"
+msgstr "{0} est déjà utilisé par « {1} » et n'a aucun effet"
 
 #: ui/parts.slint:67
 #, x-machine
@@ -481,7 +482,7 @@ msgstr "Échec de la modification : {}"
 #: ui/parts.slint:79
 #, x-machine
 msgid "Press Esc to cancel; to bind Esc itself, click “Esc” next to the box"
-msgstr "Appuyez sur Esc pour annuler ; pour associer Esc elle-même, cliquez sur « Esc » à côté du champ"
+msgstr "Appuyez sur Esc pour annuler ; pour associer la touche Esc elle-même, cliquez sur « Esc » à côté du champ"
 
 #: ui/parts.slint:80
 #, x-machine
@@ -491,7 +492,7 @@ msgstr "{} est déjà un raccourci de cette commande"
 #: ui/parts.slint:81
 #, x-machine
 msgid "At most {} bindings per command"
-msgstr "Au plus {} associations par commande"
+msgstr "{} associations au maximum par commande"
 
 #: ui/parts.slint:82
 #, x-machine

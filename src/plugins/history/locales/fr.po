@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -75,7 +76,7 @@ msgstr "Historique de lecture effacé"
 #: menu.ts:133
 #, x-machine
 msgid "Record Playback History"
-msgstr "Enregistrer l'historique de lecture"
+msgstr "Conserver l'historique de lecture"
 
 #: menu.ts:144
 #, x-machine

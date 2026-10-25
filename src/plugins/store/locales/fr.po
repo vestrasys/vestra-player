@@ -1,5 +1,6 @@
 # French translation of the messages in messages.pot.
 # Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: fr\n"
@@ -20,7 +21,7 @@ msgstr "Parcourir, installer et mettre à jour des plugins"
 #: manifest.json
 #, x-machine
 msgid "Browse plugins from the official Vestra Player plugin repository: descriptions, changelogs, version history and the permissions they need. Install, update, roll back to the previous version or uninstall in one click; add third-party repositories (clearly marked as unofficial), install from a link or a local .vxp file, or drop a .vxp file on the video area. The official repository's index is digitally signed, and the store checks the signature and every package's checksum; versions revoked by a repository are disabled, with the reason."
-msgstr "Parcourez les plugins du dépôt officiel de Vestra Player : descriptions, notes de version, historique des versions et autorisations requises. Installez, mettez à jour, revenez à la version précédente ou désinstallez en un clic ; ajoutez des dépôts tiers (clairement signalés comme non officiels), installez depuis un lien ou un fichier .vxp local, ou déposez un fichier .vxp sur la zone vidéo. L'index du dépôt officiel est signé numériquement, et le catalogue vérifie la signature et la somme de contrôle de chaque paquet ; les versions révoquées par un dépôt sont désactivées, avec la raison."
+msgstr "Parcourez les plugins du dépôt officiel de Vestra Player : descriptions, notes de version, historique des versions et autorisations requises. Installez, mettez à jour, revenez à la version précédente ou désinstallez en un clic ; ajoutez des dépôts tiers (clairement signalés comme non officiels), installez depuis un lien ou un fichier .vxp local, ou faites glisser un fichier .vxp sur la zone vidéo. L'index du dépôt officiel est signé numériquement, et le catalogue vérifie la signature et la somme de contrôle de chaque paquet ; les versions révoquées par un dépôt sont désactivées, avec la raison."
 
 #: manifest.json
 #, x-machine
@@ -485,7 +486,7 @@ msgstr "Ce dépôt a déjà été ajouté"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "At most {} repositories can be added"
-msgstr "Au plus {} dépôts peuvent être ajoutés"
+msgstr "Vous pouvez ajouter au maximum {} dépôts"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -790,7 +791,7 @@ msgstr "Licence"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Code"
-msgstr "Code"
+msgstr "Code source"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1030,7 +1031,7 @@ msgstr "Plugin révoqué « {} » désactivé"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Replace the installed “{}”?"
-msgstr "Remplacer « {} » installé ?"
+msgstr "Remplacer le plugin installé « {} » ?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1043,7 +1044,7 @@ msgid ""
 msgstr ""
 "{1}\n"
 "\n"
-"Installera {2} depuis le dépôt officiel.\n"
+"{2} sera installé depuis le dépôt officiel.\n"
 "\n"
 "{3}"
 
@@ -1060,7 +1061,7 @@ msgid ""
 msgstr ""
 "{1}\n"
 "\n"
-"Installera {2} depuis le dépôt non officiel.\n"
+"{2} sera installé depuis le dépôt non officiel.\n"
 "\n"
 "{4}\n"
 "\n"
@@ -1189,7 +1190,7 @@ msgstr "Ce plugin a déjà été installé depuis une autre source. Le remplacem
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "The current “{}” {} comes from {}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
-msgstr "« {} » {} actuel provient de {}. Le remplacement reprend les données d'une installation antérieure depuis cette source, s'il y en a eu une, sinon de nouvelles données vides. Les données du plugin d'origine sont conservées et seront réutilisées si vous le réinstallez depuis sa source d'origine."
+msgstr "La version actuelle de « {} » ({}) provient de {}. Le remplacement reprend les données d'une installation antérieure depuis cette source, s'il y en a eu une, sinon de nouvelles données vides. Les données du plugin d'origine sont conservées et seront réutilisées si vous le réinstallez depuis sa source d'origine."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1635,7 +1636,7 @@ msgstr "Activer quand même"
 #: store.ts:368 store.ts:369 store.ts:371
 #, x-machine
 msgid "Keep Using"
-msgstr "Continuer à utiliser"
+msgstr "Continuer à l'utiliser"
 
 #: store.ts:368 store.ts:369 store.ts:371
 #, x-machine
@@ -1685,7 +1686,7 @@ msgstr "Les dépôts tiers ne sont pas vérifiés par Vestra Player ; leurs plu
 #: ui/store.slint:216
 #, x-machine
 msgid "Search names, authors, tags…"
-msgstr "Rechercher noms, auteurs, étiquettes…"
+msgstr "Rechercher par nom, auteur, tag…"
 
 #: ui/store.slint:221
 #, x-machine
@@ -1705,7 +1706,7 @@ msgstr "Mises à jour"
 #: ui/store.slint:233
 #, x-machine
 msgid "Tags: All"
-msgstr "Étiquettes : toutes"
+msgstr "Tags : tous"
 
 #: ui/store.slint:240
 #, x-machine
@@ -1715,22 +1716,22 @@ msgstr "Tri : nom"
 #: ui/store.slint:240
 #, x-machine
 msgid "Sort: Updated"
-msgstr "Tri : mise à jour"
+msgstr "Tri : date"
 
 #: ui/store.slint:248
 #, x-machine
 msgid "You can also drop a .vxp plugin package on the player's video area to install it"
-msgstr "Vous pouvez aussi déposer un paquet de plugin .vxp sur la zone vidéo du lecteur pour l'installer"
+msgstr "Vous pouvez aussi faire glisser un paquet de plugin .vxp sur la zone vidéo du lecteur pour l'installer"
 
 #: ui/store.slint:249
 #, x-machine
 msgid "Install from File…"
-msgstr "Installer depuis un fichier…"
+msgstr "Depuis un fichier…"
 
 #: ui/store.slint:250
 #, x-machine
 msgid "Install from Link…"
-msgstr "Installer depuis un lien…"
+msgstr "Depuis un lien…"
 
 #: ui/store.slint:251
 #, x-machine
@@ -1775,7 +1776,7 @@ msgstr "Publié le"
 #: ui/store.slint:409
 #, x-machine
 msgid "Minimum player"
-msgstr "Lecteur minimum"
+msgstr "Lecteur requis"
 
 #: ui/store.slint:475
 #, x-machine
