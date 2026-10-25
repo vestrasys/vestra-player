@@ -5,7 +5,6 @@
 import { LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
-import { Messages, Status } from "messages.slint";
 
 export component SubtitleSync inherits Window {
     title: @tr("Adjust Sync");
@@ -14,8 +13,10 @@ export component SubtitleSync inherits Window {
     background: Theme.bg-panel;
     in property <bool> busy: false;
     in property <bool> can-style: false;
-    in property <Status> style-reason;
-    in property <Status> status;
+    /** Why styling is off (a text value); "" when it is on. */
+    in property <string> style-reason;
+    /** The status line (a text value, the player translates it); "" for none. */
+    in property <string> status;
     in-out property <string> value-text: "0";
     callback apply(string);
     callback nudge(string, int);
@@ -65,8 +66,8 @@ export component SubtitleSync inherits Window {
             }
         }
         Text {
-            text: root.status.id != "" ? Messages.text(root.status)
-                : !root.can-style ? Messages.text(root.style-reason)
+            text: root.status != "" ? root.status
+                : !root.can-style ? root.style-reason
                 : @tr("Positive delays the subtitles, negative advances them.");
             color: Theme.text-list;
             font-size: Theme.font-body;

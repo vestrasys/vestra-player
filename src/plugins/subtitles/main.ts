@@ -14,7 +14,7 @@ import type {
 } from "@vestra-player/sdk";
 import { ENCODINGS, convert, cuesOf, parseSrt, readFileBytes } from "./formats.ts";
 import type { Cue, Converted, Encoding } from "./formats.ts";
-import { Failure, NONE, STATUS, confirmed, forSlint, raw, status as message } from "./messages.ts";
+import { Failure, NONE, confirmed, raw, status as message, statusText } from "./messages.ts";
 import type { FileError, Status, StatusId } from "./messages.ts";
 import {
   DEFAULT_BOX,
@@ -104,7 +104,7 @@ const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest(
 /** Subtitles: Subtitle Tuning and Subtitle Settings windows, Subtitles ▸ menu, serialized subtitle operations. */
 export default async function activate(plugin: Plugin) {
   const { subtitles, osd } = plugin;
-  const { text, list } = plugin.i18n;
+  const { text } = plugin.i18n;
   /** A track without a title: "Embedded 3" / "External subtitle", translated. */
   const fallbackName = (t: SubtitleTrack): Text =>
     t.kind === "embedded" ? text("Embedded {}", [t.embeddedId ?? ""]) : text("External subtitle");
@@ -147,13 +147,8 @@ export default async function activate(plugin: Plugin) {
   // Headless hosts refuse the display; that never fails the action itself.
   const shown = (p: Promise<void>) => void p.catch(() => {});
   /** A status on screen, with its notes as further sentences ("A. B" / "A。B"). */
-  const say = (s: Status) => {
-    if (s.id === "raw") {
-      // i18n-ignore: the player's or the system's own message
-      shown(osd.show(String(s.args[0])));
-    } else if (s.id === "") shown(osd.show(""));
-    else shown(osd.show(list([text(STATUS[s.id], s.args), ...s.notes.map((note) => text(STATUS[note]))], "sentences")));
-  };
+  // i18n-ignore: a text value, or the player's or the system's own message ("" clears)
+  const say = (s: Status) => shown(osd.show(statusText(plugin.i18n, s)));
   /** The OSD wording for a subtitle offset (positive = later). */
   const sayOffset = (ms: number) =>
     shown(
@@ -526,7 +521,7 @@ export default async function activate(plugin: Plugin) {
   const common = () => {
     const s = subtitles.state;
     const blocked = styleBlocked(s);
-    return { busy, canStyle: !blocked, styleReason: forSlint(blocked ?? NONE), status: forSlint(status) };
+    return { busy, canStyle: !blocked, styleReason: statusText(plugin.i18n, blocked ?? NONE), status: statusText(plugin.i18n, status) };
   };
   tune.bind(() => {
     const s = subtitles.state, selected = s?.selected ?? null, style = current();

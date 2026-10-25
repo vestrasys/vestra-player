@@ -25,4 +25,4 @@ Picks subtitle tracks, loads external subtitles, adjusts style and sync.
 
 ## Translations
 
-Texts are English in the source; `locales/zh-Hans.po` has the Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`). The windows' status line and the on-screen messages share one table: `messages.ts` (by id) and `ui/messages.slint` (`@tr`); `tests/i18n.test.ts` checks that they agree.
+Texts are English in the source; `locales/zh-Hans.po` has the Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`). The windows' status line and the on-screen messages share one table, `messages.ts` (by id); both get the same text value (`statusText`), which the player translates.

@@ -1,9 +1,8 @@
 // The status line of the windows and its on-screen message: one id and its
-// arguments. The English templates are the source text; the windows show them
-// through ui/messages.slint (the same texts, @tr), the OSD through
-// `text(STATUS[id], args)` joined with its notes. tests/i18n.test.ts checks that both agree.
+// arguments. The English templates are the source text; the windows and the
+// OSD get the same text value (`statusText`), which the player translates.
 
-import type { TextArg } from "@vestra-player/sdk";
+import type { I18n, TextArg, TextValue } from "@vestra-player/sdk";
 
 /** Every status sentence, by id. `.waiting` / `.uncertain`: the player has not confirmed it yet. */
 export const STATUS = {
@@ -97,7 +96,7 @@ export const STATUS = {
   unknownFormat: "Unknown subtitle format",
   noCues: "The subtitle file has no subtitles.",
   tooLarge: "The subtitle file is larger than 2 MiB",
-  // Notes after a status (in the windows: "{0}. {1}").
+  // Notes after a status, as further sentences ("A. B", in Chinese "A。B").
   noteEncoding: "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings",
   noteFonts: "Fonts embedded in the subtitle were ignored",
   noteFps: "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976",
@@ -140,14 +139,14 @@ export class Failure extends Error {
   }
 }
 
-/** A `string` field of Slint: data as text; a text value as it is (the player shows it translated). */
-const field = (arg: TextArg | undefined) => (typeof arg === "number" ? String(arg) : (arg ?? ""));
-/** What a window's Slint gets (ui/messages.slint `Status`). */
-export const forSlint = (s: Status) => ({
-  id: s.id,
-  a: field(s.args[0]),
-  b: field(s.args[1]),
-  c: field(s.args[2]),
-  n1: s.notes[0] ?? "",
-  n2: s.notes[1] ?? "",
-});
+/**
+ * What the windows' status line and the OSD show: the status and its notes
+ * as sentences, a text value the player translates; the player's own words
+ * as they are; `""` for none.
+ */
+export function statusText({ text, list }: Pick<I18n, "text" | "list">, s: Status): TextValue {
+  if (s.id === "raw") return String(s.args[0] ?? "");
+  if (s.id === "") return "";
+  const head = text(STATUS[s.id], s.args);
+  return s.notes.length ? list([head, ...s.notes.map((note) => text(STATUS[note]))], "sentences") : head;
+}

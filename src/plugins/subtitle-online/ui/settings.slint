@@ -3,13 +3,13 @@
 import { CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
-import { Line, Location, Messages, Status, StatusText } from "messages.slint";
+import { Messages } from "messages.slint";
 
-/** A service (by id), whether it is on, and its key state or last test result. */
+/** A service (by id), whether it is on, and its key state or last test result (a text value). */
 export struct ServiceRow {
     service: string,
     enabled: bool,
-    state: Line,
+    state: string,
 }
 
 component Heading inherits Text {
@@ -38,8 +38,10 @@ export component OnlineSettings inherits Window {
     in-out property <bool> exact-only: false;
     in-out property <string> exclude-text: "";
     in property <int> save-index: 0;
-    in property <Location> location;
-    in property <Status> status;
+    /** Where the keys are kept (a text value). */
+    in property <string> location;
+    /** The status line (a text value). */
+    in property <string> status;
     in property <bool> busy: false;
     changed auto-index => { auto-combo.current-index = root.auto-index; }
     changed after-index => { after-combo.current-index = root.after-index; }
@@ -82,7 +84,7 @@ export component OnlineSettings inherits Window {
                                 toggled => { root.toggle-service(index, self.checked); }
                             }
                             Text { text: Messages.service-name(service.service); color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; width: 110px; }
-                            Text { text: Messages.line(service.state); color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                            Text { text: service.state; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
                         }
                     }
                 }
@@ -166,14 +168,14 @@ export component OnlineSettings inherits Window {
             }
         }
         Text {
-            text: @tr("Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}.", Messages.location(root.location.kind, root.location.value));
+            text: @tr("Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}.", root.location);
             color: Theme.text-dim;
             font-size: Theme.font-body;
             wrap: word-wrap;
             line-height-factor: 1.25;
         }
-        StatusText {
-            status: root.status;
+        Text {
+            text: root.status;
             color: Theme.text-list;
             font-size: Theme.font-body;
             overflow: elide;

@@ -7,7 +7,7 @@ import type { Secrets as Store, SystemInfo } from "@vestra-player/sdk";
 
 export type SecretName = "opensubtitles-api-key" | "opensubtitles-password" | "assrt-token";
 
-/** Where secrets are kept; the windows name it (ui/messages.slint `Messages.location`). */
+/** Where secrets are kept; the windows name it (messages.ts `locationText`). */
 export type Location = { kind: "macos" | "windows" | "system" | "file" | "memory"; value: string };
 const STORES: Partial<Record<SystemInfo["os"], Location["kind"]>> = { macos: "macos", windows: "windows" };
 /** The system has no usable store: fall back to the file (or this run). */

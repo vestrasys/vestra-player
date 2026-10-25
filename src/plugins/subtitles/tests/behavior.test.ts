@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { shownStatus, statusText } from "./status.ts";
+import { shownStatus } from "./status.ts";
 
 const directory = new URL("..", import.meta.url);
 const pause = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -155,7 +155,7 @@ test("a slider burst is merged into one style write with the latest values", asy
     fontId: "sans", fontSize: 38, color: "white", outline: 2, marginPercent: 6, offsetMs: 1000,
     bold: false, shadow: 0, box: null, assOverride: "keep", secondaryPosition: "top",
   });
-  assert.equal(shownStatus(host, window.props), "字幕样式已更新");
+  assert.equal(shownStatus(window.props), "字幕样式已更新");
   assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 1000);
   await stop();
 });
@@ -166,7 +166,7 @@ test("a style edit only applies to the selection it began on", async () => {
   host.subtitles.selection.stamp.revision++; // another plugin changes the selection meanwhile
   await host.settle(170);
   assert.equal(host.subtitles.presentation.effective, null);
-  assert.equal(shownStatus(host, window.props), "字幕轨已变化，请重新调整。");
+  assert.equal(shownStatus(window.props), "字幕轨已变化，请重新调整。");
   await stop();
 });
 
@@ -176,7 +176,7 @@ test("file picker cancellation never begins an upload", async () => {
   window.emit("load-file");
   await host.settle();
   assert.equal(host.sent("subtitles.upload.begin").length, 0);
-  assert.match(shownStatus(host, window.props), /未选择字幕文件/);
+  assert.match(shownStatus(window.props), /未选择字幕文件/);
   await stop();
 });
 
@@ -193,7 +193,7 @@ test("a source change while the picker is open fences the file before it is read
   answer({ cancelled: false, paths: ["/must-not-be-read.srt"] });
   await host.settle();
   assert.equal(host.sent("subtitles.upload.begin").length, 0);
-  assert.match(shownStatus(host, window.props), /媒体已切换/);
+  assert.match(shownStatus(window.props), /媒体已切换/);
   assert.equal(host.command("load").state.busy, false);
   await stop();
 });
@@ -214,7 +214,7 @@ test("source replacement and disposal cancel pending drag writes", async () => {
   switchSource(host);
   await host.settle(140);
   assert.equal(host.sent("subtitles.style").length, 0);
-  assert.match(shownStatus(host, window.props), /媒体已切换/);
+  assert.match(shownStatus(window.props), /媒体已切换/);
   window.emit("size-step", -1);
   await host.settle();
   await stop();
@@ -243,7 +243,7 @@ test("real file bytes are uploaded; a lost commit reply is resolved by the SDK a
     assert.deepEqual(commits[0]!.expected, { generation: 1, revision: 1 });
     assert.equal(host.sent("subtitles.operation")[0]!.operationId, commits[0]!.operationId);
     assert.equal(host.sent("subtitles.upload.discard").length, 0);
-    assert.equal(shownStatus(host, window.props), "打开字幕：actual.srt");
+    assert.equal(shownStatus(window.props), "打开字幕：actual.srt");
     assert.equal(host.osd.at(-1), "打开字幕：actual.srt", "the menu entry reports on screen");
     assert.deepEqual(host.subtitleLoads.map((l) => [l.format, l.title, l.select]), [["srt", "actual.srt", "primary"]]);
     assert.equal(window.props["selected-track"], 2);
@@ -252,7 +252,7 @@ test("real file bytes are uploaded; a lost commit reply is resolved by the SDK a
     window.emit("remove-selected");
     await host.settle();
     assert.equal(host.subtitles.tracks.length, 1);
-    assert.equal(shownStatus(host, window.props), "已移除外部字幕。");
+    assert.equal(shownStatus(window.props), "已移除外部字幕。");
     assert.equal(window.props["can-remove"], false);
   } finally {
     await stop();
@@ -274,8 +274,8 @@ test("unreadable, unknown, graphic and oversized files are refused before any up
     ] as const) {
       host.dialogAnswers.push([path]);
       window.emit("load-file");
-      for (let i = 0; i < 100 && shownStatus(host, window.props) !== text; i++) await host.settle(20);
-      assert.equal(shownStatus(host, window.props), text);
+      for (let i = 0; i < 100 && shownStatus(window.props) !== text; i++) await host.settle(20);
+      assert.equal(shownStatus(window.props), text);
     }
     assert.equal(host.sent("subtitles.upload.begin").length, 0);
   } finally {
@@ -295,8 +295,8 @@ test("a host refusal of the upload is shown as one Chinese sentence", async () =
     window.emit("load-file");
     const refused = "播放器拒绝了该字幕（文件过大或内容无效）。";
     // The plugin reads the file itself before the upload: poll for the result, `settle()` only waits for host calls.
-    for (let i = 0; i < 100 && shownStatus(host, window.props) !== refused; i++) await host.settle(20);
-    assert.equal(shownStatus(host, window.props), refused);
+    for (let i = 0; i < 100 && shownStatus(window.props) !== refused; i++) await host.settle(20);
+    assert.equal(shownStatus(window.props), refused);
     assert.equal(host.sent("subtitles.commit").length, 0);
   } finally {
     await stop();
@@ -322,17 +322,17 @@ test("settings, per-field defaults, reset style, hide and refresh act on the cur
   settings.emit("reset-style");
   await host.settle();
   assert.equal(host.subtitles.presentation.effective, null);
-  assert.equal(shownStatus(host, settings.props), "已恢复默认样式。");
+  assert.equal(shownStatus(settings.props), "已恢复默认样式。");
   await host.command("track-off").run();
   await host.settle();
   assert.equal(host.subtitles.selection.target, null);
-  assert.equal(shownStatus(host, window.props), "隐藏字幕");
+  assert.equal(shownStatus(window.props), "隐藏字幕");
   assert.equal(window.props["selected-track"], 0);
   assert.equal(window.props["can-style"], false);
-  assert.equal(statusText(host, window.props["style-reason"]), "请先选择字幕轨。");
+  assert.equal(window.props["style-reason"], "请先选择字幕轨。");
   await host.command("refresh").run();
   await host.settle();
-  assert.equal(shownStatus(host, window.props), "字幕轨已刷新。");
+  assert.equal(shownStatus(window.props), "字幕轨已刷新。");
   await stop();
 });
 
@@ -558,11 +558,11 @@ test("D05: typed sync values apply in whole ms; bad input reverts with a reason"
   assert.equal(host.subtitles.presentation.effective?.style.offsetMs, -300);
   sync.emit("apply", "abc");
   await host.settle();
-  assert.equal(shownStatus(host, sync.props), "请输入整数毫秒，例如 1250 或 -500。");
+  assert.equal(shownStatus(sync.props), "请输入整数毫秒，例如 1250 或 -500。");
   assert.equal(sync.props["value-text"], "-300", "the field goes back to the value in effect");
   sync.emit("apply", "99999999");
   await host.settle();
-  assert.equal(shownStatus(host, sync.props), "同步值须在 −600000 至 600000 毫秒之间");
+  assert.equal(shownStatus(sync.props), "同步值须在 −600000 至 600000 毫秒之间");
   assert.equal(host.subtitles.presentation.effective?.style.offsetMs, -300);
   sync.emit("nudge", "-300", 1);
   await host.settle(170);
@@ -574,7 +574,7 @@ test("D05: typed sync values apply in whole ms; bad input reverts with a reason"
   await host.command("track-off").run();
   await host.settle();
   assert.equal(sync.props["can-style"], false);
-  assert.equal(statusText(host, sync.props["style-reason"]), "请先选择字幕轨。");
+  assert.equal(sync.props["style-reason"], "请先选择字幕轨。");
   await stop();
 });
 

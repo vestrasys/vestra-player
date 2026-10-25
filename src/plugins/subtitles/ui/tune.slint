@@ -5,7 +5,6 @@
 import { ComboBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, ToolTipArea } from "@vestra/widgets.slint";
-import { Status, StatusText } from "messages.slint";
 
 component RowLabel inherits Text {
     width: 65px;
@@ -28,12 +27,14 @@ export component SubtitleTune inherits Window {
     in property <bool> busy: false;
     in property <bool> can-style: false;
     in property <bool> can-remove: false;
-    in property <Status> style-reason;
+    /** Why styling is off (a text value); "" when it is on. */
+    in property <string> style-reason;
     in property <int> subtitle-size: 36;
     in property <int> margin-percent: 5;
     // The offset in seconds with its sign: "+0.5", "−1", "0".
     in property <string> sync-seconds: "0";
-    in property <Status> status;
+    /** The status line (a text value, the player translates it); "" for none. */
+    in property <string> status;
     // A user pick or a model change detaches ComboBox.current-index; re-push model changes.
     changed track-labels => { track-combo.current-index = root.selected-track; }
     changed selected-track => { track-combo.current-index = root.selected-track; }
@@ -123,9 +124,8 @@ export component SubtitleTune inherits Window {
         }
         HorizontalLayout {
             spacing: 3px;
-            StatusText {
-                status: root.status;
-                fallback: root.style-reason;
+            Text {
+                text: root.status != "" ? root.status : root.style-reason;
                 color: Theme.text-list;
                 font-size: Theme.font-body;
                 vertical-alignment: center;

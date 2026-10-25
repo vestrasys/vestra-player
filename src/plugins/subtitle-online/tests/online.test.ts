@@ -7,9 +7,6 @@ import test from "node:test";
 import { deflateRawSync } from "node:zlib";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { STATUS } from "../messages.ts";
-import type { StatusId } from "../messages.ts";
-import { location, statusText } from "./status.ts";
 
 const directory = new URL("..", import.meta.url);
 const pause = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -85,7 +82,7 @@ async function sameCallbacks(host: TestHost, id: string, file: string) {
   assert.deepEqual([...host.window(id).callbacks].sort(), callbacks.sort(), file);
 }
 /** A window's status line as it shows. */
-const shown = (host: TestHost, id: string) => statusText(host, host.window(id).props.status);
+const shown = (host: TestHost, id: string) => host.window(id).props.status as string;
 const zh = { locale: "zh-Hans" } as const;
 const waitFor = async (check: () => boolean, what: string) => {
   const ok = () => {
@@ -146,7 +143,7 @@ test("keys are saved in the player's secret store, never in settings.json", asyn
     await t.host.settle();
     await waitFor(() => shown(t.host, "subtitle-online-service").startsWith("已保存"), "saved");
     assert.equal(shown(t.host, "subtitle-online-service"), "已保存（macOS 钥匙串（vestra.subtitle-online））");
-    assert.equal(location(t.host, service.props["location"]), "macOS 钥匙串（vestra.subtitle-online）", "the help text names it");
+    assert.equal(service.props["location"], "macOS 钥匙串（vestra.subtitle-online）", "the help text names it");
     assert.deepEqual(Object.fromEntries(t.host.secrets), { "opensubtitles-api-key": "SECRET", "opensubtitles-password": "pw" });
     assert.equal(await stat(join(t.data, "secrets.json")).catch(() => null), null, "nothing in a file");
     service.emit("save", "SECRET", "me", "");
@@ -199,9 +196,8 @@ test("a key left in secrets.json by the fallback is still read; saving to the st
     await t.host.command("settings").run();
     const settings = t.host.window("subtitle-online-settings");
     await waitFor(() => settings.props.services !== undefined, "settings bound");
-    const states = (settings.props.services as { state: { id: string } }[]).map((s) => s.state.id);
-    assert.deepEqual(states, ["keySet", "tokenSet"]);
-    assert.deepEqual(states.map((id) => t.host.translate(STATUS[id as StatusId])), ["已填写密钥", "已填写 token"]);
+    const states = (settings.props.services as { state: string }[]).map((s) => s.state);
+    assert.deepEqual(states, ["已填写密钥", "已填写 token"]);
     await saveKey(t, "NEW", "");
     assert.equal(t.host.secrets.get("opensubtitles-api-key"), "NEW");
     assert.deepEqual(JSON.parse(await readFile(join(t.data, "secrets.json"), "utf8")), { "assrt-token": "TOKEN" });
@@ -218,7 +214,7 @@ test("the store's location is named after the system; a refused save is reported
   try {
     await saveKey(windows, "SECRET", "");
     assert.equal(shown(windows.host, "subtitle-online-service"), "已保存（Windows 凭据管理器（vestra.subtitle-online））");
-    assert.match(location(windows.host, windows.host.window("subtitle-online-settings").props["location"]), /Windows 凭据管理器/);
+    assert.match(windows.host.window("subtitle-online-settings").props["location"] as string, /Windows 凭据管理器/);
   } finally {
     await windows.stop();
     await windows.cleanup();
@@ -264,17 +260,17 @@ test("search sends hash + keywords + languages once privacy is accepted; hash ma
     assert.equal(url.searchParams.get("query"), "the movie 2019");
     assert.deepEqual([...url.searchParams.keys()], ["languages", "moviehash", "query"], "sorted parameters");
     assert.equal(window.props["title-text"], "The Movie 2019");
-    const rows = window.props["rows"] as { release: string; hearing: boolean; machine: boolean; hash: boolean; language: string; code: string; service: string }[];
+    const rows = window.props["rows"] as { release: string; hearing: boolean; machine: boolean; hash: boolean; language: string; service: string }[];
     assert.deepEqual(rows.map((r) => [r.release, r.hearing, r.machine, r.hash]), [
       ["Movie.Hash.CN", true, false, true],
       ["Movie.Hash.EN", false, false, true],
       ["Movie.MT", false, true, true],
       ["Movie.EN", false, false, false],
     ]);
-    assert.deepEqual([rows[0]!.language, rows[0]!.code, rows[0]!.service], ["zh-CN", "zh-cn", "opensubtitles"]);
+    assert.deepEqual([rows[0]!.language, rows[0]!.service], ["简体中文", "opensubtitles"], "the language named");
     // ui/download.slint names them (ResultRow): the same catalog texts.
-    assert.deepEqual(["{} [HI]", "{} [MT]", "Hash", "Simplified Chinese"].map((text) => t.host.translate(text, ["Movie"])), [
-      "Movie [HI]", "Movie [机翻]", "哈希", "简体中文",
+    assert.deepEqual(["{} [HI]", "{} [MT]", "Hash"].map((text) => t.host.translate(text, ["Movie"])), [
+      "Movie [HI]", "Movie [机翻]", "哈希",
     ]);
     assert.equal(window.props["can-more"], true);
     window.emit("more");

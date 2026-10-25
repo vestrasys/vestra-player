@@ -4,303 +4,307 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: main.ts:44 ui/messages.slint:52
+#: main.ts:44 messages.ts:141
 msgid "Searching sends the file name keywords and the file hash to the chosen service."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:53
+#: main.ts:44 messages.ts:141
 msgid "First enter an API key for OpenSubtitles under Services (free at opensubtitles.com), or turn on Assrt and enter its token."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:54
+#: main.ts:44 messages.ts:141
 msgid "No media to load subtitles into"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:55
+#: main.ts:44 messages.ts:141
 msgid "No media to load subtitles into; you can search by title."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:56
+#: main.ts:44 messages.ts:141
 msgid "The media changed; no subtitle was loaded."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:57
+#: main.ts:44 messages.ts:141
 msgid "Cancelled."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:58
+#: main.ts:44 messages.ts:141
 msgid "The player refused the subtitle (file too large or invalid)."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:59
+#: main.ts:44 messages.ts:141
 msgid "Subtitles cannot be loaded into the current media."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:60
+#: main.ts:44 messages.ts:141
 msgid "Loading the subtitle failed."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:61
+#: main.ts:44 messages.ts:141
 msgid "Enter a title, then search."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:62
+#: main.ts:44 messages.ts:141
 msgid "Searching…"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:63
+#: main.ts:44 messages.ts:141
 msgid "Subtitles found: {}"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:64
+#: main.ts:44 messages.ts:141
 msgid "No subtitles found; change the title and search again"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:65
+#: main.ts:44 messages.ts:141
 msgid "Downloading subtitle…"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:66
+#: main.ts:44 messages.ts:141
 msgid "Downloading subtitles ({}/{})…"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:67
+#: main.ts:44 messages.ts:141
 msgid "Opened subtitle: {}"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:68
+#: main.ts:44 messages.ts:141
 msgid "Subtitle loaded, but it could not be saved in the video's folder"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:69
+#: main.ts:44 messages.ts:141
 msgid "Saved to {}"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:70
+#: main.ts:44 messages.ts:141
 msgid "Subtitles added: {}"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:71
+#: main.ts:44 messages.ts:141
 msgid "Subtitles saved: {} (in {})"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:72
+#: main.ts:44 messages.ts:141
 msgid "No place to save to."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:73
+#: main.ts:44 messages.ts:141
 msgid "Not saved."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:74
+#: main.ts:44 messages.ts:141
 msgid "Resets at {}"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:75
+#: main.ts:44 messages.ts:141
 msgid "Online subtitle loaded automatically: {}"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:76
+#: main.ts:44 messages.ts:141
 msgid "This archive format (rar, 7z) is not supported yet; download a zip or a single subtitle file."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:77
+#: main.ts:44 messages.ts:141
 msgid "The archive has no subtitle files."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:78
+#: main.ts:44 messages.ts:141
 msgid "The archive is damaged"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:79
+#: main.ts:44 messages.ts:141
 msgid "Write preferred languages like zh-CN, zh-TW, en (at most 5)"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:80
+#: main.ts:44 messages.ts:141
 msgid "Testing…"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:81
+#: main.ts:44 messages.ts:141
 msgid "Testing OpenSubtitles…"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:82
+#: main.ts:44 messages.ts:141
 msgid "Testing Assrt…"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:83
+#: main.ts:44 messages.ts:141
 msgid "Saved ({})"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:84
+#: main.ts:44 messages.ts:141
 msgid "Could not save: {}"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:85
+#: main.ts:44 messages.ts:141
 msgid "Key entered"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:86
+#: main.ts:44 messages.ts:141
 msgid "Token entered"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:87
+#: main.ts:44 messages.ts:141
 msgid "No key"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:88
+#: main.ts:44 messages.ts:141
 msgid "No token"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:89
+#: main.ts:44 messages.ts:141
 msgid "Enter the API key first"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:90
+#: main.ts:44 messages.ts:141
 msgid "Key and account are valid"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:91
+#: main.ts:44 messages.ts:141
 msgid "Key and account are valid; downloads left today: {}"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:92
+#: main.ts:44 messages.ts:141
 msgid "Key is valid (not logged in: fewer anonymous downloads)"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:93
+#: main.ts:44 messages.ts:141
 msgid "Enter the token first"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:94
+#: main.ts:44 messages.ts:141
 msgid "Token is valid"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:95
+#: main.ts:44 messages.ts:141
 msgid "Token is valid; calls left: {}"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:96
+#: main.ts:44 messages.ts:141
 msgid "Cancelled"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:97
+#: main.ts:44 messages.ts:141
 msgid "Cannot connect to OpenSubtitles"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:98
+#: main.ts:44 messages.ts:141
 msgid "Cannot connect to Assrt"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:99
+#: main.ts:44 messages.ts:141
 msgid "OpenSubtitles returned an unreadable response"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:100
+#: main.ts:44 messages.ts:141
 msgid "Assrt returned an unreadable response"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:101
+#: main.ts:44 messages.ts:141
 msgid "Invalid API key; check it in Online Subtitle Settings"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:102
+#: main.ts:44 messages.ts:141
 msgid "No downloads left today (OpenSubtitles). Log in for more downloads"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:103
+#: main.ts:44 messages.ts:141
 msgid "Too many requests to OpenSubtitles; try again later"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:104
+#: main.ts:44 messages.ts:141
 msgid "OpenSubtitles error ({})"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:105
+#: main.ts:44 messages.ts:141
 msgid "Wrong OpenSubtitles user name or password"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:106
+#: main.ts:44 messages.ts:141
 msgid "OpenSubtitles login failed"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:107
+#: main.ts:44 messages.ts:141
 msgid "OpenSubtitles gave no download link"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:108
+#: main.ts:44 messages.ts:141
 msgid "Cannot download the subtitle ({})"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:109
+#: main.ts:44 messages.ts:141
 msgid "Invalid Assrt token; check it in Online Subtitle Settings"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:110
+#: main.ts:44 messages.ts:141
 msgid "Assrt call limit reached; try again later"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:111
+#: main.ts:44 messages.ts:141
 msgid "Assrt error ({})"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:112
+#: main.ts:44 messages.ts:141
 msgid "Assrt gave no download link"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:113
+#: main.ts:44 messages.ts:141
 msgid "Cannot read the subtitle file."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:114
+#: main.ts:44 messages.ts:141
 msgid "The subtitle file must be a regular file of 1 byte to 8 MiB."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:115
+#: main.ts:44 messages.ts:141
 msgid "The subtitle file is empty or larger than 8 MiB."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:116
+#: main.ts:44 messages.ts:141
 msgid "Image subtitle files are not supported yet"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:117
+#: main.ts:44 messages.ts:141
 msgid "Unknown subtitle format"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:118
+#: main.ts:44 messages.ts:141
 msgid "The subtitle file has no subtitles."
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:119
+#: main.ts:44 messages.ts:141
 msgid "The subtitle file is larger than 2 MiB"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:120
+#: main.ts:44 messages.ts:141
 msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:121
+#: main.ts:44 messages.ts:141
 msgid "Fonts embedded in the subtitle were ignored"
 msgstr ""
 
-#: main.ts:44 ui/messages.slint:122
+#: main.ts:44 messages.ts:141
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr ""
 
-#: main.ts:391
+#: main.ts:333 model.ts:130
+msgid "{} · {}"
+msgstr ""
+
+#: main.ts:392
 msgid "Save Subtitle As"
 msgstr ""
 
-#: main.ts:549 main.ts:553 manifest.json
+#: main.ts:550 main.ts:554 manifest.json
 msgid "Online Subtitles"
 msgstr ""
 
-#: main.ts:549
+#: main.ts:550
 msgid "Search and Download Subtitles…"
 msgstr ""
 
-#: main.ts:553
+#: main.ts:554
 msgid "Online Subtitle Settings…"
 msgstr ""
 
@@ -322,71 +326,100 @@ msgstr ""
 msgid "download"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:23
+#: messages.ts:132
+msgid "This run only"
+msgstr ""
+
+#: messages.ts:132
+msgid "macOS Keychain ({})"
+msgstr ""
+
+#: messages.ts:132
+msgid "Windows Credential Manager ({})"
+msgstr ""
+
+#: messages.ts:132
+msgid "System secret store ({})"
+msgstr ""
+
+#: messages.ts:132
+msgid "{} (readable only by you)"
+msgstr ""
+
+#: messages.ts:135 ui/messages.slint:7
+msgid "Assrt"
+msgstr ""
+
+#. {0} is a service name, {1} the result of testing it
+#: messages.ts:147
+msgid "{0}: {1}"
+msgstr ""
+
+#: model.ts:102
 msgid "Simplified Chinese"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:24
+#: model.ts:102
 msgid "Traditional Chinese"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:25
+#: model.ts:102
 msgid "Chinese"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:26
+#: model.ts:102
 msgid "English"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:27
+#: model.ts:102
 msgid "Japanese"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:28
+#: model.ts:102
 msgid "Korean"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:29
+#: model.ts:102
 msgid "French"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:30
+#: model.ts:102
 msgid "German"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:31
+#: model.ts:102
 msgid "Spanish"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:32
+#: model.ts:102
 msgid "Italian"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:33
+#: model.ts:102
 msgid "Russian"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:34
+#: model.ts:102
 msgid "Portuguese"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:35
+#: model.ts:102
 msgid "Brazilian Portuguese"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:36
+#: model.ts:102
 msgid "Arabic"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:37
+#: model.ts:102
 msgid "Thai"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:38
+#: model.ts:102
 msgid "Vietnamese"
 msgstr ""
 
-#: model.ts:125 ui/messages.slint:39
+#: model.ts:102
 msgid "Cantonese"
 msgstr ""
 
@@ -406,7 +439,7 @@ msgstr ""
 msgid "OK"
 msgstr ""
 
-#: ui/download.slint:32
+#: ui/download.slint:31
 msgid "Download Subtitles"
 msgstr ""
 
@@ -494,71 +527,47 @@ msgstr ""
 msgid "More"
 msgstr ""
 
-#: ui/download.slint:163 ui/settings.slint:99
+#: ui/download.slint:163 ui/settings.slint:101
 msgid "Settings…"
-msgstr ""
-
-#: ui/messages.slint:18
-msgid "Assrt"
-msgstr ""
-
-#: ui/messages.slint:44
-msgid "macOS Keychain ({})"
-msgstr ""
-
-#: ui/messages.slint:45
-msgid "Windows Credential Manager ({})"
-msgstr ""
-
-#: ui/messages.slint:46
-msgid "System secret store ({})"
-msgstr ""
-
-#: ui/messages.slint:47
-msgid "{} (readable only by you)"
-msgstr ""
-
-#: ui/messages.slint:48
-msgid "This run only"
 msgstr ""
 
 #: ui/service.slint:17
 msgid "{} Settings"
 msgstr ""
 
-#: ui/service.slint:37
+#: ui/service.slint:39
 msgid "API key"
 msgstr ""
 
-#: ui/service.slint:37
+#: ui/service.slint:39
 msgid "Token"
 msgstr ""
 
-#: ui/service.slint:42
+#: ui/service.slint:44
 msgid "User name"
 msgstr ""
 
-#: ui/service.slint:43 ui/service.slint:48
+#: ui/service.slint:45 ui/service.slint:50
 msgid "Optional"
 msgstr ""
 
-#: ui/service.slint:47
+#: ui/service.slint:49
 msgid "Password"
 msgstr ""
 
-#: ui/service.slint:52
+#: ui/service.slint:54
 msgid "Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}."
 msgstr ""
 
-#: ui/service.slint:53
+#: ui/service.slint:55
 msgid "Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}."
 msgstr ""
 
-#: ui/service.slint:69 ui/settings.slint:100
+#: ui/service.slint:71 ui/settings.slint:102
 msgid "Test"
 msgstr ""
 
-#: ui/service.slint:70
+#: ui/service.slint:72
 msgid "Save"
 msgstr ""
 
@@ -566,78 +575,78 @@ msgstr ""
 msgid "Online Subtitle Settings"
 msgstr ""
 
-#: ui/settings.slint:62
+#: ui/settings.slint:64
 msgid "Services"
 msgstr ""
 
-#: ui/settings.slint:94
+#: ui/settings.slint:96
 msgid "Move Up"
 msgstr ""
 
-#: ui/settings.slint:95
+#: ui/settings.slint:97
 msgid "Move Down"
 msgstr ""
 
-#: ui/settings.slint:104
+#: ui/settings.slint:106
 msgid "Search"
 msgstr ""
 
-#: ui/settings.slint:107
+#: ui/settings.slint:109
 msgid "Languages"
 msgstr ""
 
-#: ui/settings.slint:119
+#: ui/settings.slint:121
 msgid "Auto search"
 msgstr ""
 
-#: ui/settings.slint:122
+#: ui/settings.slint:124
 msgid "Off"
 msgstr ""
 
-#: ui/settings.slint:122
+#: ui/settings.slint:124
 msgid "When opening a video without subtitles"
 msgstr ""
 
-#: ui/settings.slint:129
+#: ui/settings.slint:131
 msgid "After search"
 msgstr ""
 
-#: ui/settings.slint:132
+#: ui/settings.slint:134
 msgid "Show the download window"
 msgstr ""
 
-#: ui/settings.slint:132
+#: ui/settings.slint:134
 msgid "Load the best result automatically"
 msgstr ""
 
-#: ui/settings.slint:141
+#: ui/settings.slint:143
 msgid "Only subtitles that exactly match the file (hash)"
 msgstr ""
 
-#: ui/settings.slint:148
+#: ui/settings.slint:150
 msgid "Exclude"
 msgstr ""
 
-#: ui/settings.slint:152
+#: ui/settings.slint:154
 msgid "Separate with commas or spaces"
 msgstr ""
 
-#: ui/settings.slint:157
+#: ui/settings.slint:159
 msgid "Saving"
 msgstr ""
 
-#: ui/settings.slint:160
+#: ui/settings.slint:162
 msgid "Save to"
 msgstr ""
 
-#: ui/settings.slint:163
+#: ui/settings.slint:165
 msgid "Beside the video when possible"
 msgstr ""
 
-#: ui/settings.slint:163
+#: ui/settings.slint:165
 msgid "Plugin data folder"
 msgstr ""
 
-#: ui/settings.slint:169
+#: ui/settings.slint:171
 msgid "Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}."
 msgstr ""

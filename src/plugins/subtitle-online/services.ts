@@ -46,9 +46,8 @@ export class ServiceError extends Error {
 }
 
 /**
- * Language names for track titles (translated by the player, model.ts
- * `trackTitle`). The download window has the same names in ui/messages.slint
- * (`Messages.language`).
+ * Language names for track titles and the download window's rows (translated
+ * by the player, model.ts `trackTitle` and `row`).
  */
 const LANGUAGE_LABELS = {
   "zh-cn": "Simplified Chinese", "zh-tw": "Traditional Chinese", zh: "Chinese", en: "English", ja: "Japanese",

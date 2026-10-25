@@ -4,9 +4,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { STATUS } from "../messages.ts";
+import { statusText } from "../messages.ts";
+import type { Status } from "../messages.ts";
 import { SYNC_MENU, SYNC_STEPS } from "../model.ts";
-import { shownStatus, statusText, zh } from "./status.ts";
+import { shownStatus, words, zh } from "./status.ts";
+import type { Text } from "@vestra-player/sdk";
 
 const directory = new URL("..", import.meta.url);
 const embedded = { kind: "embedded" as const, id: 1 };
@@ -35,8 +37,10 @@ test("English by default: menus, on-screen messages and window status", async ()
   await host.settle(170);
   await host.command("tune").run();
   const window = host.window("subtitle-tune");
-  assert.equal(shownStatus(host, window.props), "Subtitle style updated");
-  assert.deepEqual(window.props.status, { id: "styleUpdated", a: "", b: "", c: "", n1: "", n2: "" });
+  assert.equal(shownStatus(window.props), "Subtitle style updated");
+  const sent = [...host.sent("ui.open"), ...host.sent("ui.set")].map((m) =>
+    m.property === "status" ? m.value : (m.properties as { status?: unknown } | undefined)?.status);
+  assert.deepEqual(sent.findLast(Boolean), { $vestraText: "Subtitle style updated", args: [] }, "a text value");
   assert.deepEqual(window.props["track-labels"], ["Subtitles Off", "English · en"]);
   assert.deepEqual(window.props["secondary-labels"], ["Secondary Off", "English · en"]);
   assert.equal(host.command("dialogue-next").state.reason, "No text subtitles available");
@@ -57,24 +61,14 @@ test("fallback track names are translated in the menu, the tune lists and the OS
 });
 
 test("Simplified Chinese: a window joins a status and its notes with 。", () => {
-  const host = new TestHost();
-  host.locale = "zh-Hans";
-  host.loadCatalog(new URL("..", import.meta.url).pathname);
-  const status = { id: "opened", a: "b.ass", b: "1", c: "", n1: "noteEncoding", n2: "noteFonts" };
-  assert.equal(statusText(host, status), "打开字幕：b.ass。字幕编码可能不正确，可在字幕设置中更改默认编码。已忽略字幕内嵌字体");
+  const opened: Status = { id: "opened", args: ["b.ass"], notes: ["noteEncoding", "noteFonts"] };
+  assert.equal(zh(opened), "打开字幕：b.ass。字幕编码可能不正确，可在字幕设置中更改默认编码。已忽略字幕内嵌字体");
+  assert.equal(
+    new TestHost().translate(statusText(words, opened) as Text),
+    "Opened subtitle: b.ass. The subtitle encoding may be wrong; change the default encoding in Subtitle Settings. Fonts embedded in the subtitle were ignored",
+  );
   assert.equal(zh({ id: "cycle.waiting", args: ["中文 · zh", 2, 3] }), "字幕：中文 · zh（2/3）（等待生效）");
   assert.equal(zh({ id: "raw", args: ["图形字幕"] }), "图形字幕", "the player's own words stay");
-});
-
-test("ui/messages.slint has every status of messages.ts with the same English text", async () => {
-  const slint = await read("ui/messages.slint");
-  const found = new Map(
-    [...slint.matchAll(/(?:m\.id|id) == "([\w.]+)" \{ return @tr\("((?:[^"\\]|\\.)*)"/g)].map((m) => [m[1]!, m[2]!]),
-  );
-  assert.deepEqual(Object.fromEntries(found), { ...STATUS });
-  // Each status passes exactly as many arguments as its text has placeholders.
-  for (const [, id, text, args] of slint.matchAll(/m\.id == "([\w.]+)" \{ return @tr\("((?:[^"\\]|\\.)*)"((?:, m\.[abc])*)\)/g))
-    assert.equal(args!.split(",").length - 1, text!.split("{}").length - 1, id);
 });
 
 test("fixed lists stay in step with their Slint names; every text is translated", async () => {
@@ -85,9 +79,7 @@ test("fixed lists stay in step with their Slint names; every text is translated"
   const po = await read("locales/zh-Hans.po");
   assert.doesNotMatch(po, /msgstr ""\n\n/);
   assert.match(po, /msgid "Subtitle Tuning…"\nmsgstr "字幕微调…"/);
-  // The catalog also keeps "{0}. {1}" (ui/messages.slint), which extract leaves out of the .pot.
-  assert.equal([...pot.matchAll(/^msgid /gm)].length + 1, [...po.matchAll(/^msgid /gm)].length);
-  assert.match(po, /msgid "\{0\}\. \{1\}"\nmsgstr "\{0\}。\{1\}"/);
+  assert.equal([...pot.matchAll(/^msgid /gm)].length, [...po.matchAll(/^msgid /gm)].length, "the catalog has the template's texts");
   for (const source of ["main.ts", "model.ts", "formats.ts", "messages.ts", "ui/tune.slint", "ui/settings.slint", "ui/sync.slint"]) {
     const code = (await read(source)).split("\n").filter((line) => !/^\s*(\/\/|\*|\/\*\*)/.test(line));
     assert.deepEqual(code.filter((line) => /\p{Script=Han}/u.test(line)), [], source);

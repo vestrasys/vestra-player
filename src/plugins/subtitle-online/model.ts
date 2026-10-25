@@ -96,15 +96,21 @@ export function rank(results: Result[], settings: Pick<Settings, "languages" | "
     );
 }
 
+/** A language's name by its code (any case), else the code as given. */
+function languageName(text: I18n["text"], code: string): Text | string {
+  const name = languageLabel(code);
+  return name ? text(name) : code;
+}
+
 /**
- * One row of the result list (ui/download.slint `ResultRow`): data; the
- * window names the language (`code`, lower case), the match and the service,
- * and marks hearing-impaired and machine-translated releases.
+ * One row of the result list (ui/download.slint `ResultRow`): data, and the
+ * language's name (translated by the player; an unknown code as given); the
+ * window names the match and the service, and marks hearing-impaired and
+ * machine-translated releases.
  */
-export const row = (r: Result, checked: boolean) => ({
+export const row = (text: I18n["text"], r: Result, checked: boolean) => ({
   checked,
-  language: r.language,
-  code: r.language.toLowerCase(),
+  language: languageName(text, r.language),
   release: r.release,
   hearing: r.hearingImpaired,
   machine: r.machine,
@@ -120,9 +126,8 @@ export const row = (r: Result, checked: boolean) => ({
  * release data), at most 200 characters with a SAMI language after it.
  */
 export function trackTitle(text: I18n["text"], r: Result): Text {
-  const name = languageLabel(r.language);
   const release = r.release.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 150);
-  return text("{} · {}", [name ? text(name) : r.language.slice(0, 20), release]);
+  return text("{} · {}", [languageName(text, r.language.slice(0, 20)), release]);
 }
 
 /** The language part of a saved file name: "zh-CN" → "zh". */

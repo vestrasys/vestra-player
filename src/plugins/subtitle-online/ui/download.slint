@@ -3,13 +3,12 @@
 import { CheckBox, LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
-import { Messages, Status, StatusText } from "messages.slint";
+import { Messages } from "messages.slint";
 
-/** One result (model.ts `row`): `language` as the service gives it, `code` in lower case; `service` an id. */
+/** One result (model.ts `row`): `language` its name (a text value), `service` an id. */
 export struct ResultRow {
     checked: bool,
     language: string,
-    code: string,
     release: string,
     hearing: bool,
     machine: bool,
@@ -43,7 +42,8 @@ export component SubtitleDownload inherits Window {
     in property <bool> can-load: false;
     in property <bool> can-more: false;
     in property <bool> has-checked: false;
-    in property <Status> status;
+    /** The status line (a text value). */
+    in property <string> status;
     callback search-title(string);
     callback search-again();
     callback accept-privacy();
@@ -139,7 +139,7 @@ export component SubtitleDownload inherits Window {
                                 checked: row.checked;
                                 toggled => { root.toggle-row(index, self.checked); }
                             }
-                            Cell { width: 60px; text: Messages.language(row.code, row.language); color: index == root.selected-index ? Theme.text : Theme.text-list; }
+                            Cell { width: 60px; text: row.language; color: index == root.selected-index ? Theme.text : Theme.text-list; }
                             Cell { horizontal-stretch: 1; text: root.release-text(row); color: index == root.selected-index ? Theme.text : Theme.text-list; }
                             Cell { width: 40px; text: row.format; }
                             Cell { width: 50px; text: row.fps; }
@@ -162,8 +162,8 @@ export component SubtitleDownload inherits Window {
             if root.busy: Button { height: Theme.button-height; text: @tr("Cancel"); clicked => { root.cancel(); } }
             Button { height: Theme.button-height; text: @tr("Settings…"); clicked => { root.open-settings(); } }
         }
-        StatusText {
-            status: root.status;
+        Text {
+            text: root.status;
             color: Theme.text-list;
             font-size: Theme.font-body;
             overflow: elide;

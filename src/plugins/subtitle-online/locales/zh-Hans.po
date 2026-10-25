@@ -5,303 +5,307 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:44 ui/messages.slint:52
+#: main.ts:44 messages.ts:141
 msgid "Searching sends the file name keywords and the file hash to the chosen service."
 msgstr "搜索会把文件名关键字与文件哈希发送给所选服务。"
 
-#: main.ts:44 ui/messages.slint:53
+#: main.ts:44 messages.ts:141
 msgid "First enter an API key for OpenSubtitles under Services (free at opensubtitles.com), or turn on Assrt and enter its token."
 msgstr "请先在「服务」中为 OpenSubtitles 填写 API 密钥（在 opensubtitles.com 免费申请），或启用并填写射手网(伪) token。"
 
-#: main.ts:44 ui/messages.slint:54
+#: main.ts:44 messages.ts:141
 msgid "No media to load subtitles into"
 msgstr "没有可载入字幕的媒体"
 
-#: main.ts:44 ui/messages.slint:55
+#: main.ts:44 messages.ts:141
 msgid "No media to load subtitles into; you can search by title."
 msgstr "没有可载入字幕的媒体，可按标题搜索。"
 
-#: main.ts:44 ui/messages.slint:56
+#: main.ts:44 messages.ts:141
 msgid "The media changed; no subtitle was loaded."
 msgstr "媒体已切换，未载入字幕。"
 
-#: main.ts:44 ui/messages.slint:57
+#: main.ts:44 messages.ts:141
 msgid "Cancelled."
 msgstr "已取消。"
 
-#: main.ts:44 ui/messages.slint:58
+#: main.ts:44 messages.ts:141
 msgid "The player refused the subtitle (file too large or invalid)."
 msgstr "播放器拒绝了该字幕（文件过大或内容无效）。"
 
-#: main.ts:44 ui/messages.slint:59
+#: main.ts:44 messages.ts:141
 msgid "Subtitles cannot be loaded into the current media."
 msgstr "当前媒体不能载入字幕。"
 
-#: main.ts:44 ui/messages.slint:60
+#: main.ts:44 messages.ts:141
 msgid "Loading the subtitle failed."
 msgstr "字幕载入失败。"
 
-#: main.ts:44 ui/messages.slint:61
+#: main.ts:44 messages.ts:141
 msgid "Enter a title, then search."
 msgstr "请输入标题后再搜索。"
 
-#: main.ts:44 ui/messages.slint:62
+#: main.ts:44 messages.ts:141
 msgid "Searching…"
 msgstr "正在搜索…"
 
-#: main.ts:44 ui/messages.slint:63
+#: main.ts:44 messages.ts:141
 msgid "Subtitles found: {}"
 msgstr "找到 {} 条字幕"
 
-#: main.ts:44 ui/messages.slint:64
+#: main.ts:44 messages.ts:141
 msgid "No subtitles found; change the title and search again"
 msgstr "没有找到字幕，可修改标题后再搜索"
 
-#: main.ts:44 ui/messages.slint:65
+#: main.ts:44 messages.ts:141
 msgid "Downloading subtitle…"
 msgstr "正在下载字幕…"
 
-#: main.ts:44 ui/messages.slint:66
+#: main.ts:44 messages.ts:141
 msgid "Downloading subtitles ({}/{})…"
 msgstr "正在下载字幕（{}/{}）…"
 
-#: main.ts:44 ui/messages.slint:67
+#: main.ts:44 messages.ts:141
 msgid "Opened subtitle: {}"
 msgstr "打开字幕：{}"
 
-#: main.ts:44 ui/messages.slint:68
+#: main.ts:44 messages.ts:141
 msgid "Subtitle loaded, but it could not be saved in the video's folder"
 msgstr "字幕已载入，但无法保存到视频所在文件夹"
 
-#: main.ts:44 ui/messages.slint:69
+#: main.ts:44 messages.ts:141
 msgid "Saved to {}"
 msgstr "已保存到 {}"
 
-#: main.ts:44 ui/messages.slint:70
+#: main.ts:44 messages.ts:141
 msgid "Subtitles added: {}"
 msgstr "已添加 {} 条字幕"
 
-#: main.ts:44 ui/messages.slint:71
+#: main.ts:44 messages.ts:141
 msgid "Subtitles saved: {} (in {})"
 msgstr "已保存 {} 个字幕到 {}"
 
-#: main.ts:44 ui/messages.slint:72
+#: main.ts:44 messages.ts:141
 msgid "No place to save to."
 msgstr "没有可保存的位置。"
 
-#: main.ts:44 ui/messages.slint:73
+#: main.ts:44 messages.ts:141
 msgid "Not saved."
 msgstr "未保存。"
 
-#: main.ts:44 ui/messages.slint:74
+#: main.ts:44 messages.ts:141
 msgid "Resets at {}"
 msgstr "将于 {} 重置"
 
-#: main.ts:44 ui/messages.slint:75
+#: main.ts:44 messages.ts:141
 msgid "Online subtitle loaded automatically: {}"
 msgstr "已自动载入在线字幕：{}"
 
-#: main.ts:44 ui/messages.slint:76
+#: main.ts:44 messages.ts:141
 msgid "This archive format (rar, 7z) is not supported yet; download a zip or a single subtitle file."
 msgstr "此压缩格式暂不支持（rar、7z），请下载 zip 或单个字幕文件。"
 
-#: main.ts:44 ui/messages.slint:77
+#: main.ts:44 messages.ts:141
 msgid "The archive has no subtitle files."
 msgstr "压缩包里没有字幕文件。"
 
-#: main.ts:44 ui/messages.slint:78
+#: main.ts:44 messages.ts:141
 msgid "The archive is damaged"
 msgstr "压缩包已损坏"
 
-#: main.ts:44 ui/messages.slint:79
+#: main.ts:44 messages.ts:141
 msgid "Write preferred languages like zh-CN, zh-TW, en (at most 5)"
 msgstr "首选语言写法如 zh-CN, zh-TW, en（最多 5 个）"
 
-#: main.ts:44 ui/messages.slint:80
+#: main.ts:44 messages.ts:141
 msgid "Testing…"
 msgstr "正在测试…"
 
-#: main.ts:44 ui/messages.slint:81
+#: main.ts:44 messages.ts:141
 msgid "Testing OpenSubtitles…"
 msgstr "正在测试 OpenSubtitles…"
 
-#: main.ts:44 ui/messages.slint:82
+#: main.ts:44 messages.ts:141
 msgid "Testing Assrt…"
 msgstr "正在测试 射手网(伪)…"
 
-#: main.ts:44 ui/messages.slint:83
+#: main.ts:44 messages.ts:141
 msgid "Saved ({})"
 msgstr "已保存（{}）"
 
-#: main.ts:44 ui/messages.slint:84
+#: main.ts:44 messages.ts:141
 msgid "Could not save: {}"
 msgstr "无法保存：{}"
 
-#: main.ts:44 ui/messages.slint:85
+#: main.ts:44 messages.ts:141
 msgid "Key entered"
 msgstr "已填写密钥"
 
-#: main.ts:44 ui/messages.slint:86
+#: main.ts:44 messages.ts:141
 msgid "Token entered"
 msgstr "已填写 token"
 
-#: main.ts:44 ui/messages.slint:87
+#: main.ts:44 messages.ts:141
 msgid "No key"
 msgstr "未填写密钥"
 
-#: main.ts:44 ui/messages.slint:88
+#: main.ts:44 messages.ts:141
 msgid "No token"
 msgstr "未填写 token"
 
-#: main.ts:44 ui/messages.slint:89
+#: main.ts:44 messages.ts:141
 msgid "Enter the API key first"
 msgstr "请先填写 API 密钥"
 
-#: main.ts:44 ui/messages.slint:90
+#: main.ts:44 messages.ts:141
 msgid "Key and account are valid"
 msgstr "密钥与账号有效"
 
-#: main.ts:44 ui/messages.slint:91
+#: main.ts:44 messages.ts:141
 msgid "Key and account are valid; downloads left today: {}"
 msgstr "密钥与账号有效，今日剩余下载 {} 次"
 
-#: main.ts:44 ui/messages.slint:92
+#: main.ts:44 messages.ts:141
 msgid "Key is valid (not logged in: fewer anonymous downloads)"
 msgstr "密钥有效（未登录，匿名下载次数较少）"
 
-#: main.ts:44 ui/messages.slint:93
+#: main.ts:44 messages.ts:141
 msgid "Enter the token first"
 msgstr "请先填写 token"
 
-#: main.ts:44 ui/messages.slint:94
+#: main.ts:44 messages.ts:141
 msgid "Token is valid"
 msgstr "token 有效"
 
-#: main.ts:44 ui/messages.slint:95
+#: main.ts:44 messages.ts:141
 msgid "Token is valid; calls left: {}"
 msgstr "token 有效，剩余调用 {} 次"
 
-#: main.ts:44 ui/messages.slint:96
+#: main.ts:44 messages.ts:141
 msgid "Cancelled"
 msgstr "已取消"
 
-#: main.ts:44 ui/messages.slint:97
+#: main.ts:44 messages.ts:141
 msgid "Cannot connect to OpenSubtitles"
 msgstr "无法连接 OpenSubtitles"
 
-#: main.ts:44 ui/messages.slint:98
+#: main.ts:44 messages.ts:141
 msgid "Cannot connect to Assrt"
 msgstr "无法连接 射手网(伪)"
 
-#: main.ts:44 ui/messages.slint:99
+#: main.ts:44 messages.ts:141
 msgid "OpenSubtitles returned an unreadable response"
 msgstr "OpenSubtitles 返回了无法识别的内容"
 
-#: main.ts:44 ui/messages.slint:100
+#: main.ts:44 messages.ts:141
 msgid "Assrt returned an unreadable response"
 msgstr "射手网(伪) 返回了无法识别的内容"
 
-#: main.ts:44 ui/messages.slint:101
+#: main.ts:44 messages.ts:141
 msgid "Invalid API key; check it in Online Subtitle Settings"
 msgstr "API 密钥无效，请在在线字幕设置中检查"
 
-#: main.ts:44 ui/messages.slint:102
+#: main.ts:44 messages.ts:141
 msgid "No downloads left today (OpenSubtitles). Log in for more downloads"
 msgstr "今日下载次数已用完（OpenSubtitles）。登录账号可获得更多次数"
 
-#: main.ts:44 ui/messages.slint:103
+#: main.ts:44 messages.ts:141
 msgid "Too many requests to OpenSubtitles; try again later"
 msgstr "OpenSubtitles 请求过于频繁，请稍后再试"
 
-#: main.ts:44 ui/messages.slint:104
+#: main.ts:44 messages.ts:141
 msgid "OpenSubtitles error ({})"
 msgstr "OpenSubtitles 出错（{}）"
 
-#: main.ts:44 ui/messages.slint:105
+#: main.ts:44 messages.ts:141
 msgid "Wrong OpenSubtitles user name or password"
 msgstr "OpenSubtitles 用户名或密码不正确"
 
-#: main.ts:44 ui/messages.slint:106
+#: main.ts:44 messages.ts:141
 msgid "OpenSubtitles login failed"
 msgstr "OpenSubtitles 登录失败"
 
-#: main.ts:44 ui/messages.slint:107
+#: main.ts:44 messages.ts:141
 msgid "OpenSubtitles gave no download link"
 msgstr "OpenSubtitles 没有给出下载地址"
 
-#: main.ts:44 ui/messages.slint:108
+#: main.ts:44 messages.ts:141
 msgid "Cannot download the subtitle ({})"
 msgstr "无法下载字幕（{}）"
 
-#: main.ts:44 ui/messages.slint:109
+#: main.ts:44 messages.ts:141
 msgid "Invalid Assrt token; check it in Online Subtitle Settings"
 msgstr "射手网(伪) token 无效，请在在线字幕设置中检查"
 
-#: main.ts:44 ui/messages.slint:110
+#: main.ts:44 messages.ts:141
 msgid "Assrt call limit reached; try again later"
 msgstr "射手网(伪) 调用次数已达上限，请稍后再试"
 
-#: main.ts:44 ui/messages.slint:111
+#: main.ts:44 messages.ts:141
 msgid "Assrt error ({})"
 msgstr "射手网(伪) 出错（{}）"
 
-#: main.ts:44 ui/messages.slint:112
+#: main.ts:44 messages.ts:141
 msgid "Assrt gave no download link"
 msgstr "射手网(伪) 没有给出下载地址"
 
-#: main.ts:44 ui/messages.slint:113
+#: main.ts:44 messages.ts:141
 msgid "Cannot read the subtitle file."
 msgstr "无法读取字幕文件。"
 
-#: main.ts:44 ui/messages.slint:114
+#: main.ts:44 messages.ts:141
 msgid "The subtitle file must be a regular file of 1 byte to 8 MiB."
 msgstr "字幕文件须为 1 字节至 8 MiB 的普通文件。"
 
-#: main.ts:44 ui/messages.slint:115
+#: main.ts:44 messages.ts:141
 msgid "The subtitle file is empty or larger than 8 MiB."
 msgstr "字幕文件为空或超过 8 MiB。"
 
-#: main.ts:44 ui/messages.slint:116
+#: main.ts:44 messages.ts:141
 msgid "Image subtitle files are not supported yet"
 msgstr "暂不支持图形字幕文件"
 
-#: main.ts:44 ui/messages.slint:117
+#: main.ts:44 messages.ts:141
 msgid "Unknown subtitle format"
 msgstr "无法识别的字幕格式"
 
-#: main.ts:44 ui/messages.slint:118
+#: main.ts:44 messages.ts:141
 msgid "The subtitle file has no subtitles."
 msgstr "字幕文件里没有字幕。"
 
-#: main.ts:44 ui/messages.slint:119
+#: main.ts:44 messages.ts:141
 msgid "The subtitle file is larger than 2 MiB"
 msgstr "字幕文件超过 2 MiB"
 
-#: main.ts:44 ui/messages.slint:120
+#: main.ts:44 messages.ts:141
 msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
 msgstr "字幕编码可能不正确，可在字幕设置中更改默认编码"
 
-#: main.ts:44 ui/messages.slint:121
+#: main.ts:44 messages.ts:141
 msgid "Fonts embedded in the subtitle were ignored"
 msgstr "已忽略字幕内嵌字体"
 
-#: main.ts:44 ui/messages.slint:122
+#: main.ts:44 messages.ts:141
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr "视频帧率未知，已按 23.976 换算 MicroDVD 字幕"
 
-#: main.ts:391
+#: main.ts:333 model.ts:130
+msgid "{} · {}"
+msgstr "{} · {}"
+
+#: main.ts:392
 msgid "Save Subtitle As"
 msgstr "另存字幕"
 
-#: main.ts:549 main.ts:553 manifest.json
+#: main.ts:550 main.ts:554 manifest.json
 msgid "Online Subtitles"
 msgstr "在线字幕"
 
-#: main.ts:549
+#: main.ts:550
 msgid "Search and Download Subtitles…"
 msgstr "搜索与下载字幕…"
 
-#: main.ts:553
+#: main.ts:554
 msgid "Online Subtitle Settings…"
 msgstr "在线字幕设置…"
 
@@ -325,71 +329,100 @@ msgstr "字幕"
 msgid "download"
 msgstr "下载"
 
-#: model.ts:125 ui/messages.slint:23
+#: messages.ts:132
+msgid "This run only"
+msgstr "仅本次运行"
+
+#: messages.ts:132
+msgid "macOS Keychain ({})"
+msgstr "macOS 钥匙串（{}）"
+
+#: messages.ts:132
+msgid "Windows Credential Manager ({})"
+msgstr "Windows 凭据管理器（{}）"
+
+#: messages.ts:132
+msgid "System secret store ({})"
+msgstr "系统密钥存储（{}）"
+
+#: messages.ts:132
+msgid "{} (readable only by you)"
+msgstr "{}（仅本人可读）"
+
+#: messages.ts:135 ui/messages.slint:7
+msgid "Assrt"
+msgstr "射手网(伪)"
+
+#. {0} is a service name, {1} the result of testing it
+#: messages.ts:147
+msgid "{0}: {1}"
+msgstr "{0}：{1}"
+
+#: model.ts:102
 msgid "Simplified Chinese"
 msgstr "简体中文"
 
-#: model.ts:125 ui/messages.slint:24
+#: model.ts:102
 msgid "Traditional Chinese"
 msgstr "繁体中文"
 
-#: model.ts:125 ui/messages.slint:25
+#: model.ts:102
 msgid "Chinese"
 msgstr "中文"
 
-#: model.ts:125 ui/messages.slint:26
+#: model.ts:102
 msgid "English"
 msgstr "英语"
 
-#: model.ts:125 ui/messages.slint:27
+#: model.ts:102
 msgid "Japanese"
 msgstr "日语"
 
-#: model.ts:125 ui/messages.slint:28
+#: model.ts:102
 msgid "Korean"
 msgstr "韩语"
 
-#: model.ts:125 ui/messages.slint:29
+#: model.ts:102
 msgid "French"
 msgstr "法语"
 
-#: model.ts:125 ui/messages.slint:30
+#: model.ts:102
 msgid "German"
 msgstr "德语"
 
-#: model.ts:125 ui/messages.slint:31
+#: model.ts:102
 msgid "Spanish"
 msgstr "西班牙语"
 
-#: model.ts:125 ui/messages.slint:32
+#: model.ts:102
 msgid "Italian"
 msgstr "意大利语"
 
-#: model.ts:125 ui/messages.slint:33
+#: model.ts:102
 msgid "Russian"
 msgstr "俄语"
 
-#: model.ts:125 ui/messages.slint:34
+#: model.ts:102
 msgid "Portuguese"
 msgstr "葡萄牙语"
 
-#: model.ts:125 ui/messages.slint:35
+#: model.ts:102
 msgid "Brazilian Portuguese"
 msgstr "巴西葡语"
 
-#: model.ts:125 ui/messages.slint:36
+#: model.ts:102
 msgid "Arabic"
 msgstr "阿拉伯语"
 
-#: model.ts:125 ui/messages.slint:37
+#: model.ts:102
 msgid "Thai"
 msgstr "泰语"
 
-#: model.ts:125 ui/messages.slint:38
+#: model.ts:102
 msgid "Vietnamese"
 msgstr "越南语"
 
-#: model.ts:125 ui/messages.slint:39
+#: model.ts:102
 msgid "Cantonese"
 msgstr "粤语"
 
@@ -409,7 +442,7 @@ msgstr "取消"
 msgid "OK"
 msgstr "确定"
 
-#: ui/download.slint:32
+#: ui/download.slint:31
 msgid "Download Subtitles"
 msgstr "字幕下载"
 
@@ -497,71 +530,47 @@ msgstr "另存为…"
 msgid "More"
 msgstr "更多"
 
-#: ui/download.slint:163 ui/settings.slint:99
+#: ui/download.slint:163 ui/settings.slint:101
 msgid "Settings…"
 msgstr "设置…"
-
-#: ui/messages.slint:18
-msgid "Assrt"
-msgstr "射手网(伪)"
-
-#: ui/messages.slint:44
-msgid "macOS Keychain ({})"
-msgstr "macOS 钥匙串（{}）"
-
-#: ui/messages.slint:45
-msgid "Windows Credential Manager ({})"
-msgstr "Windows 凭据管理器（{}）"
-
-#: ui/messages.slint:46
-msgid "System secret store ({})"
-msgstr "系统密钥存储（{}）"
-
-#: ui/messages.slint:47
-msgid "{} (readable only by you)"
-msgstr "{}（仅本人可读）"
-
-#: ui/messages.slint:48
-msgid "This run only"
-msgstr "仅本次运行"
 
 #: ui/service.slint:17
 msgid "{} Settings"
 msgstr "{} 设置"
 
-#: ui/service.slint:37
+#: ui/service.slint:39
 msgid "API key"
 msgstr "API 密钥"
 
-#: ui/service.slint:37
+#: ui/service.slint:39
 msgid "Token"
 msgstr "token"
 
-#: ui/service.slint:42
+#: ui/service.slint:44
 msgid "User name"
 msgstr "用户名"
 
-#: ui/service.slint:43 ui/service.slint:48
+#: ui/service.slint:45 ui/service.slint:50
 msgid "Optional"
 msgstr "可选"
 
-#: ui/service.slint:47
+#: ui/service.slint:49
 msgid "Password"
 msgstr "密码"
 
-#: ui/service.slint:52
+#: ui/service.slint:54
 msgid "Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}."
 msgstr "在 opensubtitles.com 注册账号后，到「API consumers」页面免费申请 API 密钥。用户名和密码可选，登录后每日下载次数更多。存放在：{}。"
 
-#: ui/service.slint:53
+#: ui/service.slint:55
 msgid "Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}."
 msgstr "在 assrt.net 注册后，在用户中心取得 API token。服务有调用频率限制。存放在：{}。"
 
-#: ui/service.slint:69 ui/settings.slint:100
+#: ui/service.slint:71 ui/settings.slint:102
 msgid "Test"
 msgstr "测试"
 
-#: ui/service.slint:70
+#: ui/service.slint:72
 msgid "Save"
 msgstr "保存"
 
@@ -569,93 +578,78 @@ msgstr "保存"
 msgid "Online Subtitle Settings"
 msgstr "在线字幕设置"
 
-#: ui/settings.slint:62
+#: ui/settings.slint:64
 msgid "Services"
 msgstr "服务"
 
-#: ui/settings.slint:94
+#: ui/settings.slint:96
 msgid "Move Up"
 msgstr "上移"
 
-#: ui/settings.slint:95
+#: ui/settings.slint:97
 msgid "Move Down"
 msgstr "下移"
 
-#: ui/settings.slint:104
+#: ui/settings.slint:106
 msgid "Search"
 msgstr "搜索"
 
-#: ui/settings.slint:107
+#: ui/settings.slint:109
 msgid "Languages"
 msgstr "首选语言"
 
-#: ui/settings.slint:119
+#: ui/settings.slint:121
 msgid "Auto search"
 msgstr "自动搜索"
 
-#: ui/settings.slint:122
+#: ui/settings.slint:124
 msgid "Off"
 msgstr "不使用"
 
-#: ui/settings.slint:122
+#: ui/settings.slint:124
 msgid "When opening a video without subtitles"
 msgstr "打开没有字幕的视频时"
 
-#: ui/settings.slint:129
+#: ui/settings.slint:131
 msgid "After search"
 msgstr "搜索后"
 
-#: ui/settings.slint:132
+#: ui/settings.slint:134
 msgid "Show the download window"
 msgstr "显示下载窗口"
 
-#: ui/settings.slint:132
+#: ui/settings.slint:134
 msgid "Load the best result automatically"
 msgstr "自动载入最佳结果"
 
-#: ui/settings.slint:141
+#: ui/settings.slint:143
 msgid "Only subtitles that exactly match the file (hash)"
 msgstr "仅查找与文件完全匹配（哈希）的字幕"
 
-#: ui/settings.slint:148
+#: ui/settings.slint:150
 msgid "Exclude"
 msgstr "排除关键字"
 
-#: ui/settings.slint:152
+#: ui/settings.slint:154
 msgid "Separate with commas or spaces"
 msgstr "用逗号或空格分隔"
 
-#: ui/settings.slint:157
+#: ui/settings.slint:159
 msgid "Saving"
 msgstr "保存"
 
-#: ui/settings.slint:160
+#: ui/settings.slint:162
 msgid "Save to"
 msgstr "保存位置"
 
-#: ui/settings.slint:163
+#: ui/settings.slint:165
 msgid "Beside the video when possible"
 msgstr "尽可能保存在视频同目录"
 
-#: ui/settings.slint:163
+#: ui/settings.slint:165
 msgid "Plugin data folder"
 msgstr "插件数据目录"
 
-#: ui/settings.slint:169
+#: ui/settings.slint:171
 msgid "Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}."
 msgstr "搜索会把文件名关键字与文件哈希发送给所选服务。密钥与密码存放在：{}。"
-
-#. two status messages in a list; in Chinese joined with ；
-#: ui/messages.slint:130
-msgid "{0}; {1}"
-msgstr "{0}；{1}"
-
-#. a status message, then another sentence about it; in Chinese joined with 。
-#: ui/messages.slint:132
-msgid "{0}. {1}"
-msgstr "{0}。{1}"
-
-#. {0} is a service name, {1} the result of testing it
-#: ui/messages.slint:137
-msgid "{0}: {1}"
-msgstr "{0}：{1}"

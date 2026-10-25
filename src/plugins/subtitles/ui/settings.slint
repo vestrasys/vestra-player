@@ -5,7 +5,6 @@
 import { CheckBox, ComboBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, Slider } from "@vestra/widgets.slint";
-import { Status, StatusText } from "messages.slint";
 
 component RowLabel inherits Text {
     width: 65px;
@@ -29,8 +28,10 @@ export component SubtitleSettings inherits Window {
     in-out property <float> box-opacity: 50;
     in property <int> ass-index: 0;
     in property <int> encoding-index: 0;
-    in property <Status> style-reason;
-    in property <Status> status;
+    /** Why styling is off (a text value); "" when it is on. */
+    in property <string> style-reason;
+    /** The status line (a text value, the player translates it); "" for none. */
+    in property <string> status;
     in property <[string]> font-labels: [];
     in property <int> selected-font: 0;
     in property <int> selected-color: 0;
@@ -222,9 +223,8 @@ export component SubtitleSettings inherits Window {
         }
         HorizontalLayout {
             spacing: 3px;
-            StatusText {
-                status: root.status;
-                fallback: root.style-reason;
+            Text {
+                text: root.status != "" ? root.status : root.style-reason;
                 color: Theme.text-list;
                 font-size: Theme.font-body;
                 vertical-alignment: center;

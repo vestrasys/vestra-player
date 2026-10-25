@@ -3,7 +3,7 @@
 import { LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
-import { Location, Messages, Status, StatusText } from "messages.slint";
+import { Messages } from "messages.slint";
 
 component RowLabel inherits Text {
     width: 70px;
@@ -19,12 +19,14 @@ export component ServiceSettings inherits Window {
     background: Theme.bg-panel;
     /** "opensubtitles" (API key and an optional account) or "assrt" (a token). */
     in property <string> service: "opensubtitles";
-    in property <Location> location;
+    /** Where the keys are kept (a text value). */
+    in property <string> location;
     property <bool> has-account: root.service == "opensubtitles";
     in-out property <string> key-text: "";
     in-out property <string> user-text: "";
     in-out property <string> password-text: "";
-    in property <Status> status;
+    /** The status line (a text value). */
+    in property <string> status;
     in property <bool> busy: false;
     callback save(string, string, string);
     callback test(string, string, string);
@@ -49,8 +51,8 @@ export component ServiceSettings inherits Window {
         }
         Text {
             text: root.has-account
-                ? @tr("Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}.", Messages.location(root.location.kind, root.location.value))
-                : @tr("Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}.", Messages.location(root.location.kind, root.location.value));
+                ? @tr("Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}.", root.location)
+                : @tr("Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}.", root.location);
             color: Theme.text-dim;
             font-size: Theme.font-body;
             wrap: word-wrap;
@@ -58,8 +60,8 @@ export component ServiceSettings inherits Window {
         }
         HorizontalLayout {
             spacing: 5px;
-            StatusText {
-                status: root.status;
+            Text {
+                text: root.status;
                 color: Theme.text-list;
                 font-size: Theme.font-body;
                 vertical-alignment: center;

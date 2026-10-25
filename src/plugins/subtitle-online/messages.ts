@@ -1,10 +1,11 @@
 // The status lines of the windows and the on-screen messages: an id and its
-// arguments (data, or a text value such as a track title). The English templates are the source text; the windows
-// show them through ui/messages.slint (the same texts, @tr), the OSD through
-// `osd.show(STATUS[id], args)`. tests/i18n.test.ts checks that both agree.
+// arguments (data, or a text value such as a track title). The English
+// templates are the source text; the player translates them: the windows get
+// a text value (`statusText`), the OSD `osd.show(STATUS[id], args)`.
 // formats.ts (shared with the Subtitles plugin) throws `Failure`s with its ids.
 
-import type { TextArg } from "@vestra-player/sdk";
+import type { I18n, Text, TextArg } from "@vestra-player/sdk";
+import type { Location } from "./secrets.ts";
 
 /** Every status sentence, by id. */
 export const STATUS = {
@@ -118,16 +119,32 @@ export class Failure extends Error {
   }
 }
 
-/** A `string` field of Slint: data as text; a text value as it is (the player shows it translated). */
-const field = (arg: TextArg | undefined) => (typeof arg === "number" ? String(arg) : (arg ?? ""));
-/** What Slint gets (ui/messages.slint `Line` and `Status`). */
-export const lineForSlint = (l: Line | undefined) => ({ id: l?.id ?? "", a: field(l?.args[0]), b: field(l?.args[1]) });
-export const forSlint = (s: Status) => ({
-  kind: s.kind,
-  service: s.service ?? "",
-  p0: lineForSlint(s.parts[0]),
-  p1: lineForSlint(s.parts[1]),
-  p2: lineForSlint(s.parts[2]),
-  p3: lineForSlint(s.parts[3]),
-  p4: lineForSlint(s.parts[4]),
-});
+type Words = Pick<I18n, "text" | "list">;
+
+/** Where secrets are kept: the system's store (`value` is the plugin id), a file (`value` is its path), or memory. */
+const LOCATIONS = {
+  macos: "macOS Keychain ({})",
+  windows: "Windows Credential Manager ({})",
+  system: "System secret store ({})",
+  file: "{} (readable only by you)",
+} as const;
+export const locationText = ({ text }: Words, l: Location): Text =>
+  l.kind === "memory" ? text("This run only") : text(LOCATIONS[l.kind], [l.value]);
+
+/** A service's name, by id (ui/messages.slint `Messages.service-name` has the same). */
+export const serviceName = ({ text }: Words, id: string): TextArg => (id === "assrt" ? text("Assrt") : "OpenSubtitles");
+
+/** The text of one line: a text value, the player's own words as they are, or "" for none. */
+export function lineText({ text }: Words, l: Line): TextArg {
+  if (l.id === "") return "";
+  if (l.id === "raw") return String(l.args[0] ?? "");
+  return text(STATUS[l.id], l.args);
+}
+
+/** What a window's status line shows: its lines joined as sentences ("A. B") or as a list ("A; B"). */
+export function statusText(words: Words, s: Status): TextArg {
+  // TRANSLATORS: {0} is a service name, {1} the result of testing it
+  if (s.kind === "service") return words.text("{0}: {1}", [serviceName(words, s.service ?? ""), lineText(words, s.parts[0] ?? line(""))]);
+  const items = s.parts.filter((l) => l.id !== "" && !(l.id === "raw" && !l.args[0])).map((l) => lineText(words, l));
+  return items.length > 1 ? words.list(items, s.kind === "list" ? "semicolons" : "sentences") : (items[0] ?? "");
+}

@@ -6,7 +6,7 @@ import { archiveKind, keywords, movieHash, unzipSubtitles, urlTitle } from "./me
 import { DEFAULTS, fileLanguage, isSettingsFile, parseLanguages, parseSettings, rank, row, trackTitle } from "./model.ts";
 import type { Settings } from "./model.ts";
 import { Secrets } from "./secrets.ts";
-import { Failure, NONE, STATUS, forSlint, line, lineForSlint, list, raw, sentences, serviceResult } from "./messages.ts";
+import { Failure, NONE, STATUS, line, lineText, list, locationText, raw, sentences, serviceResult, statusText } from "./messages.ts";
 import type { Line, Status, StatusId } from "./messages.ts";
 import { Assrt, OpenSubtitles, ServiceError } from "./services.ts";
 import type { Credentials, Query, Result, Service, ServiceId } from "./services.ts";
@@ -108,21 +108,22 @@ export default async function activate(plugin: Plugin) {
     return !!p.source && p.kind === "media" && p.phase === "ready";
   };
   download.bind(() => ({
-    rows: results.map((r) => row(r, checked.has(r.key))),
+    rows: results.map((r) => row(text, r, checked.has(r.key))),
     selectedIndex: selected,
     busy,
     privacyPending: privacyPending !== null,
     canLoad: canLoad(),
     canMore: more && last !== null,
     hasChecked: results.some((r) => checked.has(r.key)),
-    status: forSlint(status.parts.length || canLoad() ? status : one(line("noMediaSearchTitle"))),
+    status: statusText(plugin.i18n, status.parts.length || canLoad() ? status : one(line("noMediaSearchTitle"))),
   }));
   download.set({ titleText: "" });
   settingsWindow.bind(() => ({
     services: settings.services.map((s) => ({
       service: s.id,
       enabled: s.enabled,
-      state: lineForSlint(
+      state: lineText(
+        plugin.i18n,
         serviceState[s.id] ??
           line(configured(s.id) ? (s.id === "opensubtitles" ? "keySet" : "tokenSet") : s.id === "opensubtitles" ? "keyMissing" : "tokenMissing"),
       ),
@@ -131,14 +132,14 @@ export default async function activate(plugin: Plugin) {
     afterIndex: settings.afterSearch === "load-best" ? 1 : 0,
     exactOnly: settings.exactOnly,
     saveIndex: settings.saveLocation === "data" ? 1 : 0,
-    location: secrets.location,
-    status: forSlint(settingsStatus),
+    location: locationText(plugin.i18n, secrets.location),
+    status: statusText(plugin.i18n, settingsStatus),
     busy,
   }));
   serviceWindow.bind(() => ({
     service: editing,
-    location: secrets.location,
-    status: forSlint(serviceStatus),
+    location: locationText(plugin.i18n, secrets.location),
+    status: statusText(plugin.i18n, serviceStatus),
     busy,
   }));
 
@@ -512,7 +513,7 @@ export default async function activate(plugin: Plugin) {
       } else await secrets.set("assrt-token", next.token);
       credentials = next;
       delete serviceState[editing];
-      serviceStatus = one(line("saved", [secrets.location.kind, secrets.location.value]));
+      serviceStatus = one(line("saved", [locationText(plugin.i18n, secrets.location)]));
     } catch (e) {
       serviceStatus = one(line("saveFailed", [(e as Error).message]));
     }

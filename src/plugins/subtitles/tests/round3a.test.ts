@@ -206,13 +206,13 @@ test("A08: the 字幕微调 次字幕 row selects, refuses the primary with a re
   await host.settle();
   assert.deepEqual(secondary(host), EN);
   assert.equal(window.props["selected-secondary"], 2);
-  assert.equal(shownStatus(host, window.props), "次字幕：English · en");
+  assert.equal(shownStatus(window.props), "次字幕：English · en");
   window.emit("select-secondary", 1);
   await host.settle();
-  assert.equal(shownStatus(host, window.props), "无法设为次字幕：已作为主字幕");
+  assert.equal(shownStatus(window.props), "无法设为次字幕：已作为主字幕");
   window.emit("select-secondary", 3);
   await host.settle();
-  assert.equal(shownStatus(host, window.props), "无法设为次字幕：次字幕仅支持文本字幕");
+  assert.equal(shownStatus(window.props), "无法设为次字幕：次字幕仅支持文本字幕");
   assert.deepEqual(secondary(host), EN, "refusals change nothing");
   window.emit("select-secondary", 0);
   await host.settle();
