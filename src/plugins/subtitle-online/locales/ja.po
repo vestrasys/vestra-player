@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -118,7 +119,7 @@ msgstr "保存しませんでした。"
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "Resets at {}"
-msgstr "{} にリセット"
+msgstr "{} にリセットされます"
 
 #: main.ts:44 messages.ts:141
 #, x-machine
@@ -613,7 +614,7 @@ msgstr "FPS"
 #: ui/download.slint:120
 #, x-machine
 msgid "Downloads"
-msgstr "ダウンロード数"
+msgstr "DL 数"
 
 #: ui/download.slint:121
 #, x-machine
@@ -633,7 +634,7 @@ msgstr "ハッシュ"
 #: ui/download.slint:147
 #, x-machine
 msgid "Title"
-msgstr "タイトル"
+msgstr "題名"
 
 #: ui/download.slint:156
 #, x-machine

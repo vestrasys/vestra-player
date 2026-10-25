@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -98,7 +99,7 @@ msgstr "明るい部屋向け。ビデオ領域は暗いままです"
 #: ui/appearance.slint:90
 #, x-machine
 msgid "Default, from the logo's aurora colours"
-msgstr "デフォルト。ロゴのオーロラの色から"
+msgstr "デフォルト。ロゴのオーロラの色を使用"
 
 #: ui/appearance.slint:106
 #, x-machine

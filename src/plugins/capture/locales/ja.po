@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -184,7 +185,7 @@ msgstr "前のスナップショットをまだ処理中です"
 #: main.ts:168
 #, x-machine
 msgid "Snapshot queued"
-msgstr "スナップショットを待機列に追加しました"
+msgstr "スナップショットをキューに追加しました"
 
 #: main.ts:176
 #, x-machine
@@ -586,7 +587,7 @@ msgstr "書き出しを開始しました。「書き出しタスク」で確認
 #: ui/parts.slint:120
 #, x-machine
 msgid "Restarted."
-msgstr "再開しました。"
+msgstr "もう一度開始しました。"
 
 #: ui/settings.slint:8
 #, x-machine

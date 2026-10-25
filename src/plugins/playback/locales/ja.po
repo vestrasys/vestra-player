@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -361,7 +362,7 @@ msgstr "{} 秒戻る"
 #: ui/bar.slint:78
 #, x-machine
 msgid "Play previous"
-msgstr "前を再生"
+msgstr "前の項目を再生"
 
 #: ui/bar.slint:79
 #, x-machine
@@ -371,7 +372,7 @@ msgstr "{} 秒進む"
 #: ui/bar.slint:79
 #, x-machine
 msgid "Play next"
-msgstr "次を再生"
+msgstr "次の項目を再生"
 
 #: ui/bar.slint:80
 #, x-machine

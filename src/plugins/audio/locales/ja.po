@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -213,7 +214,7 @@ msgstr "再生中のファイルはありません"
 #: main.ts:530
 #, x-machine
 msgid "Generated video cannot take external audio"
-msgstr "生成された映像には外部オーディオを読み込めません"
+msgstr "生成されたビデオには外部オーディオを読み込めません"
 
 #: main.ts:539
 #, x-machine
@@ -353,7 +354,7 @@ msgstr "保持しない"
 #: main.ts:611 ui/workbench.slint:649
 #, x-machine
 msgid "Keep for This Run"
-msgstr "今回の起動中は保持"
+msgstr "起動中のみ保持"
 
 #: main.ts:611 ui/workbench.slint:650
 #, x-machine
@@ -383,17 +384,17 @@ msgstr "ノーマライズ：オフ"
 #: main.ts:633 ui/workbench.slint:531
 #, x-machine
 msgid "Crystalizer"
-msgstr "クリスタライザー"
+msgstr "クリスタライザ"
 
 #: main.ts:641
 #, x-machine
 msgid "Crystalizer: On"
-msgstr "クリスタライザー：オン"
+msgstr "クリスタライザ：オン"
 
 #: main.ts:641
 #, x-machine
 msgid "Crystalizer: Off"
-msgstr "クリスタライザー：オフ"
+msgstr "クリスタライザ：オフ"
 
 #: main.ts:651
 #, x-machine
@@ -415,9 +416,7 @@ msgstr "イコライザ、音声の同期、チャンネル、音声トラック
 msgid ""
 "A six-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\n"
 "Settings are kept across files and restarts; find it under Audio in the right-click menu and in the Audio Workbench… window."
-msgstr ""
-"プリセット付きの 6 バンドイコライザ、音声の同期、ノーマライズとクリスタライザー、チャンネルの選択に加え、音声トラックの切り替え、外部オーディオファイルの読み込み、出力デバイスの選択ができます。\n"
-"設定はファイルを変えても再起動しても保持されます。右クリックメニューの「オーディオ」と「オーディオワークベンチ…」ウインドウから使えます。"
+msgstr "プリセット付きの 6 バンドイコライザ、音声の同期、ノーマライズとクリスタライザ、チャンネルの選択に加え、音声トラックの切り替え、外部オーディオファイルの読み込み、出力デバイスの選択ができます。\n設定はファイルを変えても再起動しても保持されます。右クリックメニューの「オーディオ」と「オーディオワークベンチ…」ウインドウから使えます。"
 
 #: manifest.json
 #, x-machine

@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -140,12 +141,12 @@ msgstr "リンク"
 #: ui/plugins.slint:58
 #, x-machine
 msgid "Local file"
-msgstr "ローカルファイル"
+msgstr "ローカル"
 
 #: ui/plugins.slint:59
 #, x-machine
 msgid "Plugin Workshop"
-msgstr "プラグインワークショップ"
+msgstr "ワークショップ"
 
 #: ui/plugins.slint:60
 #, x-machine
@@ -170,7 +171,7 @@ msgstr "メニューコマンドとショートカット"
 #: ui/plugins.slint:67
 #, x-machine
 msgid "Open tool windows"
-msgstr "ツールウインドウを開く"
+msgstr "ツールウインドウの表示"
 
 #: ui/plugins.slint:68
 #, x-machine

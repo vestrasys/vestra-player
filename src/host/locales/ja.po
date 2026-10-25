@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -282,12 +283,12 @@ msgstr "{} は {} が処理しています"
 #: src/main.rs:3221
 #, x-machine
 msgid "{} not taken over: resolved by {}"
-msgstr "{} を引き継ぎません：{} が処理しています"
+msgstr "{} は引き継がれません：{} が処理しています"
 
 #: src/main.rs:3656
 #, x-machine
 msgid "Previous/Next not taken over: provided by {}"
-msgstr "前へ/次へを引き継ぎません：{} が提供しています"
+msgstr "前へ/次へは引き継がれません：{} が提供しています"
 
 #: src/main.rs:3776 src/main.rs:3783
 #, x-machine
@@ -322,7 +323,7 @@ msgstr "ピクチャ・イン・ピクチャのウインドウが閉じられま
 #: src/pip.rs:289
 #, x-machine
 msgid "Cannot enter picture-in-picture: {}"
-msgstr "ピクチャ・イン・ピクチャにできません：{}"
+msgstr "ピクチャ・イン・ピクチャを開始できません：{}"
 
 #: src/pip.rs:313
 #, x-machine

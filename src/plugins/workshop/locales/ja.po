@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -377,12 +378,12 @@ msgstr "{} を書き出しました"
 #: ai.slint:383
 #, x-machine
 msgid "Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
-msgstr "{} を書き出しました。ID が local. で始まっています：公開する前に、manifest.json の id を <GitHub のユーザー名>.<名前> に変更してください。LICENSE はプレースホルダです：公開する前に、選んだライセンスの全文に置き換え、manifest.json の license を設定してください。"
+msgstr "{} を書き出しました。ID が local. で始まっています。公開する前に、manifest.json の id を <GitHub のユーザー名>.<名前> に変更してください。LICENSE はプレースホルダです。公開する前に、選んだライセンスの全文に置き換え、manifest.json の license を設定してください。"
 
 #: ai.slint:384
 #, x-machine
 msgid "Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
-msgstr "{} を書き出しました。LICENSE はプレースホルダです：公開する前に、選んだライセンスの全文に置き換え、manifest.json の license を設定してください。"
+msgstr "{} を書き出しました。LICENSE はプレースホルダです。公開する前に、選んだライセンスの全文に置き換え、manifest.json の license を設定してください。"
 
 #: ai.slint:385
 #, x-machine

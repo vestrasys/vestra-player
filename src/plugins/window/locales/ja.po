@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -223,7 +224,7 @@ msgstr "ピクチャ・イン・ピクチャ：オフ"
 #: pip.ts:53
 #, x-machine
 msgid "Cannot enter picture-in-picture: {}"
-msgstr "ピクチャ・イン・ピクチャにできません：{}"
+msgstr "ピクチャ・イン・ピクチャを開始できません：{}"
 
 #: pip.ts:53
 #, x-machine

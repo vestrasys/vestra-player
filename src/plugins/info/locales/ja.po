@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -293,7 +294,7 @@ msgstr "メディア情報"
 #: manifest.json
 #, x-machine
 msgid "About"
-msgstr "情報"
+msgstr "バージョン情報"
 
 #: properties.ts:42
 #, x-machine

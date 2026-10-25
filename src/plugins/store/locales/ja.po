@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -1104,7 +1105,7 @@ msgstr "「{}」{}（以前のバージョン）をインストールします�
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Install “{}” {} (reinstall)?"
-msgstr "「{}」{}（再インストール）をインストールしますか？"
+msgstr "「{}」{} を再インストールしますか？"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1153,10 +1154,7 @@ msgid ""
 "From the Vestra Player official repository, author {2}.\n"
 "\n"
 "{3}"
-msgstr ""
-"Vestra Player 公式リポジトリから。作成者：{2}。\n"
-"\n"
-"{3}"
+msgstr "提供元：Vestra Player 公式リポジトリ、作成者：{2}。\n\n{3}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1463,7 +1461,7 @@ msgstr "メニューコマンドとショートカットの追加"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Open tool windows"
-msgstr "ツールウインドウを開く"
+msgstr "ツールウインドウの表示"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1503,12 +1501,12 @@ msgstr "再生中の内容と再生位置の読み取り"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Receive playback changes as they happen"
-msgstr "再生の変化をリアルタイムで受け取る"
+msgstr "再生の変化のリアルタイム受信"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Open media, control playback, keep the computer awake"
-msgstr "メディアを開く、再生の操作、スリープの防止"
+msgstr "メディアの読み込み、再生の操作、スリープの防止"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine

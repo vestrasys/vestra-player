@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ja\n"
@@ -128,7 +129,7 @@ msgstr "リピート：すべて"
 #: main.ts:134
 #, x-machine
 msgid "Repeat: One"
-msgstr "リピート：1 曲"
+msgstr "リピート：1 項目"
 
 #: main.ts:134
 #, x-machine
@@ -143,12 +144,12 @@ msgstr "シャッフル：オフ"
 #: main.ts:134
 #, x-machine
 msgid "Fast advance to next: On"
-msgstr "次の項目へすばやく進む：オン"
+msgstr "次の項目へすばやく切り替え：オン"
 
 #: main.ts:134
 #, x-machine
 msgid "Fast advance to next: Off"
-msgstr "次の項目へすばやく進む：オフ"
+msgstr "次の項目へすばやく切り替え：オフ"
 
 #: main.ts:134
 #, x-machine
@@ -408,7 +409,7 @@ msgstr "現在の順序を逆にする"
 #: main.ts:527
 #, x-machine
 msgid "Select All"
-msgstr "すべてを選択"
+msgstr "すべて選択"
 
 #: main.ts:527 ui/sidebar.slint:541
 #, x-machine
@@ -488,7 +489,7 @@ msgstr "すべて"
 #: main.ts:561 ui/settings.slint:93
 #, x-machine
 msgid "One"
-msgstr "1 曲"
+msgstr "1 項目"
 
 #: main.ts:561 ui/settings.slint:99
 #, x-machine
@@ -518,7 +519,7 @@ msgstr "フォルダ内のすべてのファイルを追加"
 #: main.ts:561
 #, x-machine
 msgid "Fast Advance to Next"
-msgstr "次の項目へすばやく進む"
+msgstr "次の項目へすばやく切り替え"
 
 #: main.ts:561
 #, x-machine
@@ -697,7 +698,7 @@ msgstr "追加"
 #: ui/settings.slint:63
 #, x-machine
 msgid "Open and drop"
-msgstr "開くとドロップ"
+msgstr "開く・ドロップ"
 
 #: ui/settings.slint:67
 #, x-machine
@@ -742,7 +743,7 @@ msgstr "リピート："
 #: ui/settings.slint:104
 #, x-machine
 msgid "Fast advance to next"
-msgstr "次の項目へすばやく進む"
+msgstr "次の項目へすばやく切り替え"
 
 #: ui/settings.slint:109
 #, x-machine
