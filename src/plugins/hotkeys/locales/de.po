@@ -401,7 +401,7 @@ msgstr "Exportieren…"
 #: ui/keys.slint:383
 #, x-machine
 msgid "Ignore default shortcuts"
-msgstr "Standard-Tastenkürzel ignorieren"
+msgstr "Standardtasten ignorieren"
 
 #: ui/mouse.slint:67 ui/mouse.slint:132
 #, x-machine
