@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -18,7 +19,7 @@ msgstr "No es una ROM de NES en formato iNES."
 #: core.ts:32
 #, x-machine
 msgid "The ROM file is incomplete: shorter than its header says."
-msgstr "El archivo ROM está incompleto: es más corto de lo que indica su cabecera."
+msgstr "El archivo ROM está incompleto: es más corto de lo que indica su encabezado."
 
 #: core.ts:45
 #, x-machine
@@ -95,9 +96,7 @@ msgstr "Juega ROM de NES en el reproductor"
 msgid ""
 "Runs iNES ROMs with JSNES; picture and sound play in the player like any other media.\n"
 ".nes files open like media: Open File, a drop on the video, the playlist; the Emulator context menu opens and stops them too. No keyboard controls or save states yet; no games included."
-msgstr ""
-"Ejecuta ROM iNES con JSNES; la imagen y el sonido se reproducen en el reproductor como cualquier otro medio.\n"
-"Los archivos .nes se abren como medios: Abrir archivo, arrastrándolos al vídeo o desde la lista de reproducción; el menú contextual Emulador también los abre y detiene. Aún sin controles de teclado ni partidas guardadas; no incluye juegos."
+msgstr "Ejecuta ROM iNES con JSNES; la imagen y el sonido se reproducen en el reproductor como cualquier otro medio.\nLos archivos .nes se abren como medios: Abrir archivo, arrastrándolos al video o desde la lista de reproducción; el menú contextual Emulador también los abre y detiene. Aún sin controles de teclado ni partidas guardadas; no incluye juegos."
 
 #: manifest.json
 #, x-machine
@@ -147,7 +146,7 @@ msgstr "Error: no se pudo abrir la ROM."
 #: nes.slint:22
 #, x-machine
 msgid "Error: timed out preparing the first audio and video buffers."
-msgstr "Error: se agotó el tiempo al preparar los primeros búferes de audio y vídeo."
+msgstr "Error: se agotó el tiempo al preparar los primeros búferes de audio y video."
 
 #: nes.slint:23
 #, x-machine

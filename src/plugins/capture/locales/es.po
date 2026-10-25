@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -8,12 +9,12 @@ msgstr ""
 #: main.ts:68 main.ts:73 ui/parts.slint:57
 #, x-machine
 msgid "Enter valid seconds; the end must be after the start."
-msgstr "Introduce segundos válidos; el final debe ser posterior al inicio."
+msgstr "Escribe segundos válidos; el final debe ser posterior al inicio."
 
 #: main.ts:68 main.ts:73 ui/parts.slint:58
 #, x-machine
 msgid "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."
-msgstr "Una ráfaga necesita 2–20 fotogramas, un intervalo de 0,1–10 s y una duración del medio conocida."
+msgstr "Una ráfaga necesita 2–20 fotogramas, un intervalo de 0.1–10 s y una duración del medio conocida."
 
 #: main.ts:68 main.ts:73 ui/parts.slint:59
 #, x-machine
@@ -28,12 +29,12 @@ msgstr "No se encontró ningún nombre de archivo libre."
 #: main.ts:68 main.ts:73 ui/parts.slint:61
 #, x-machine
 msgid "The current frame cannot be captured. Open a local video file first."
-msgstr "No se puede capturar el fotograma actual. Abre primero un archivo de vídeo local."
+msgstr "No se puede capturar el fotograma actual. Abre primero un archivo de video local."
 
 #: main.ts:68 main.ts:73 ui/parts.slint:62
 #, x-machine
 msgid "The current frame cannot be exported. Open a local video file first."
-msgstr "No se puede exportar el fotograma actual. Abre primero un archivo de vídeo local."
+msgstr "No se puede exportar el fotograma actual. Abre primero un archivo de video local."
 
 #: main.ts:68 main.ts:73 ui/parts.slint:63
 #, x-machine
@@ -299,7 +300,7 @@ msgstr "Incluir subtítulos en el fotograma renderizado"
 #: main.ts:346
 #, x-machine
 msgid "Snapshot Settings…"
-msgstr "Ajustes de captura…"
+msgstr "Configuración de captura…"
 
 #: main.ts:346
 #, x-machine
@@ -326,14 +327,12 @@ msgstr "Guarda o copia el fotograma actual, captura ráfagas y exporta clips"
 msgid ""
 "Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4 and shows its progress in a task list.\n"
 "Right-click menu: Video ▸ Snapshot."
-msgstr ""
-"Guarda, guarda como o copia el fotograma actual (el fotograma original, o el fotograma renderizado con efectos de vídeo y subtítulos) en PNG, JPEG o BMP; captura una ráfaga de fotogramas; exporta parte de un vídeo como MP4 y muestra su progreso en una lista de tareas.\n"
-"Menú contextual: Vídeo ▸ Captura."
+msgstr "Guarda, guarda como o copia el fotograma actual (el fotograma original, o el fotograma renderizado con efectos de video y subtítulos) en PNG, JPEG o BMP; captura una ráfaga de fotogramas; exporta parte de un video como MP4 y muestra su progreso en una lista de tareas.\nMenú contextual: Video ▸ Captura."
 
 #: manifest.json
 #, x-machine
 msgid "video"
-msgstr "vídeo"
+msgstr "video"
 
 #: manifest.json
 #, x-machine
@@ -378,7 +377,7 @@ msgstr "Guardar en"
 #: ui/burst.slint:45
 #, x-machine
 msgid "Snapshot settings"
-msgstr "Ajustes de captura"
+msgstr "Configuración de captura"
 
 #: ui/burst.slint:48
 #, x-machine
@@ -398,7 +397,7 @@ msgstr "Intervalo:"
 #: ui/burst.slint:56
 #, x-machine
 msgid "s (0.1–10)"
-msgstr "s (0,1–10)"
+msgstr "s (0.1–10)"
 
 #: ui/burst.slint:58
 #, x-machine
@@ -418,7 +417,7 @@ msgstr "Actual"
 #: ui/burst.slint:67
 #, x-machine
 msgid "Other settings"
-msgstr "Otros ajustes"
+msgstr "Otras opciones"
 
 #: ui/burst.slint:70 ui/clip.slint:47 ui/settings.slint:29
 #, x-machine
@@ -428,7 +427,7 @@ msgstr "Formato:"
 #: ui/burst.slint:79 ui/clip.slint:58
 #, x-machine
 msgid "Include video effects"
-msgstr "Incluir efectos de vídeo"
+msgstr "Incluir efectos de video"
 
 #: ui/burst.slint:80
 #, x-machine
@@ -591,7 +590,7 @@ msgstr "Reiniciado."
 #: ui/settings.slint:8
 #, x-machine
 msgid "Snapshot Settings"
-msgstr "Ajustes de captura"
+msgstr "Configuración de captura"
 
 #: ui/settings.slint:26
 #, x-machine
@@ -631,7 +630,7 @@ msgstr "Incluir subtítulos"
 #: ui/settings.slint:74
 #, x-machine
 msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
-msgstr "El fotograma renderizado se genera aparte: incluye los efectos de vídeo de los complementos, y los subtítulos se vuelven a dibujar con el estilo de los complementos, siempre dentro de la imagen, así que no es píxel a píxel lo que muestra la pantalla. No incluye los mensajes en pantalla."
+msgstr "El fotograma renderizado se genera aparte: incluye los efectos de video de los complementos, y los subtítulos se vuelven a dibujar con el estilo de los complementos, siempre dentro de la imagen, así que no es píxel a píxel lo que muestra la pantalla. No incluye los mensajes en pantalla."
 
 #: ui/tasks.slint:20
 #, x-machine

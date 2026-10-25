@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -8,12 +9,12 @@ msgstr ""
 #: main.ts:21
 #, x-machine
 msgid "Plugin Manager…"
-msgstr "Gestor de complementos…"
+msgstr "Administrador de complementos…"
 
 #: manager.ts:55 manifest.json
 #, x-machine
 msgid "Plugin Manager"
-msgstr "Gestor de complementos"
+msgstr "Administrador de complementos"
 
 #: manager.ts:229 ui/plugins.slint:149
 #, x-machine
@@ -73,7 +74,7 @@ msgstr "Desinstalar"
 #: manager.ts:285
 #, x-machine
 msgid "Also delete its settings and data"
-msgstr "Eliminar también sus ajustes y datos"
+msgstr "Eliminar también su configuración y sus datos"
 
 #: manager.ts:295 ui/plugins.slint:152
 #, x-machine
@@ -88,7 +89,7 @@ msgstr "Consulta los complementos instalados; desactívalos, actívalos, reviér
 #: manifest.json
 #, x-machine
 msgid "Lists every plugin of the player on the Plugins page of the options window: version, source, state and data size. Select a plugin to see its details (failure reason, source, package folder, data folder, capabilities), disable or enable it, reload it, roll it back to its previous version, uninstall it (optionally with its settings and data), or open its data folder. Built-in plugins, installed with the player, cannot be uninstalled."
-msgstr "Muestra todos los complementos del reproductor en la página Complementos de la ventana de opciones: versión, origen, estado y tamaño de los datos. Selecciona un complemento para ver sus detalles (motivo del error, origen, carpeta del paquete, carpeta de datos, capacidades), desactivarlo o activarlo, recargarlo, revertirlo a su versión anterior, desinstalarlo (opcionalmente con sus ajustes y datos) o abrir su carpeta de datos. Los complementos integrados, instalados con el reproductor, no se pueden desinstalar."
+msgstr "Muestra todos los complementos del reproductor en la página Complementos de la ventana de opciones: versión, origen, estado y tamaño de los datos. Selecciona un complemento para ver sus detalles (motivo del error, origen, carpeta del paquete, carpeta de datos, capacidades), desactivarlo o activarlo, recargarlo, revertirlo a su versión anterior, desinstalarlo (opcionalmente con su configuración y sus datos) o abrir su carpeta de datos. Los complementos integrados, instalados con el reproductor, no se pueden desinstalar."
 
 #: manifest.json
 #, x-machine
@@ -98,7 +99,7 @@ msgstr "complementos"
 #: manifest.json
 #, x-machine
 msgid "settings"
-msgstr "ajustes"
+msgstr "configuración"
 
 #: ui/plugins.slint:46
 #, x-machine
@@ -195,7 +196,7 @@ msgstr "Leer el estado de reproducción"
 #: ui/plugins.slint:72
 #, x-machine
 msgid "Receive live state"
-msgstr "Recibir el estado en directo"
+msgstr "Recibir el estado en tiempo real"
 
 #: ui/plugins.slint:73
 #, x-machine
@@ -205,7 +206,7 @@ msgstr "Controlar la reproducción"
 #: ui/plugins.slint:74
 #, x-machine
 msgid "Generate audio and video streams"
-msgstr "Generar secuencias de audio y vídeo"
+msgstr "Generar flujos de audio y video"
 
 #: ui/plugins.slint:75
 #, x-machine
@@ -245,7 +246,7 @@ msgstr "Resolver direcciones web"
 #: ui/plugins.slint:82
 #, x-machine
 msgid "Manage plugins"
-msgstr "Gestionar complementos"
+msgstr "Administrar complementos"
 
 #: ui/plugins.slint:83
 #, x-machine
@@ -280,7 +281,7 @@ msgstr "Restaurando"
 #: ui/plugins.slint:93
 #, x-machine
 msgid "Done"
-msgstr "Hecho"
+msgstr "Completado"
 
 #: ui/plugins.slint:94
 #, x-machine
@@ -307,7 +308,7 @@ msgstr "Demasiado tarde para cancelar"
 #: ui/plugins.slint:103
 #, x-machine
 msgid "Plugin Manager cannot disable or uninstall itself"
-msgstr "El Gestor de complementos no puede desactivarse ni desinstalarse a sí mismo"
+msgstr "El Administrador de complementos no puede desactivarse ni desinstalarse a sí mismo"
 
 #: ui/plugins.slint:104
 #, x-machine
@@ -332,7 +333,7 @@ msgstr "Instalando o revirtiendo; inténtalo más tarde"
 #: ui/plugins.slint:112 ui/plugins.slint:135
 #, x-machine
 msgid "Plugin Manager cannot disable itself"
-msgstr "El Gestor de complementos no puede desactivarse a sí mismo"
+msgstr "El Administrador de complementos no puede desactivarse a sí mismo"
 
 #: ui/plugins.slint:113
 #, x-machine
@@ -460,7 +461,7 @@ msgstr "No se puede pedir confirmación: {}"
 #: ui/plugins.slint:165
 #, x-machine
 msgid "The data folder does not exist (the plugin has not saved any settings or data yet)"
-msgstr "La carpeta de datos no existe (el complemento aún no ha guardado ajustes ni datos)"
+msgstr "La carpeta de datos no existe (el complemento aún no ha guardado configuración ni datos)"
 
 #: ui/plugins.slint:166
 #, x-machine
@@ -471,7 +472,7 @@ msgstr "Carpeta de datos no disponible: {}"
 #: ui/plugins.slint:189
 #, x-machine
 msgid "Dev"
-msgstr "Des."
+msgstr "Dev"
 
 #: ui/plugins.slint:241
 #, x-machine

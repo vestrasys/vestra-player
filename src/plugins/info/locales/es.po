@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -113,7 +114,7 @@ msgstr "{}  {}  {}  {}"
 #: about.ts:119
 #, x-machine
 msgid "Version info copied"
-msgstr "Información de versión copiada"
+msgstr "Se copió la información de versión"
 
 #: dialog.ts:20
 #, x-machine
@@ -158,7 +159,7 @@ msgstr "No se puede analizar la salida de ffprobe"
 #: dialog.ts:154
 #, x-machine
 msgid "Playback info copied"
-msgstr "Información de reproducción copiada"
+msgstr "Se copió la información de reproducción"
 
 #: dialog.ts:162
 #, x-machine
@@ -183,7 +184,7 @@ msgstr "Tiempo: {} / {}"
 #: main.ts:38
 #, x-machine
 msgid "Video: {} {}"
-msgstr "Vídeo: {} {}"
+msgstr "Video: {} {}"
 
 #: main.ts:39
 #, x-machine
@@ -203,7 +204,7 @@ msgstr "{} canales"
 #: main.ts:41
 #, x-machine
 msgid "Backend: {} (session {})"
-msgstr "Backend: {} (sesión {})"
+msgstr "Motor: {} (sesión {})"
 
 #: main.ts:42
 #, x-machine
@@ -238,7 +239,7 @@ msgstr "{} / {}"
 #: main.ts:130 properties.ts:252
 #, x-machine
 msgid "Live"
-msgstr "En directo"
+msgstr "En vivo"
 
 #: main.ts:134
 #, x-machine
@@ -278,7 +279,7 @@ msgstr "Capa de información de reproducción, propiedades de reproducción y ve
 #: manifest.json
 #, x-machine
 msgid "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins."
-msgstr "Muestra datos en directo en la esquina superior izquierda del vídeo (Tab): archivo, tiempo, códecs, fotogramas por segundo y más, o un resumen breve con Mayús+Tab. Propiedades de reproducción… muestra el estado de decodificación, las secuencias y metadatos del archivo e información del sistema, para copiarlos o guardarlos como texto. Acerca de Vestra Player… muestra la versión, los componentes y los complementos cargados."
+msgstr "Muestra datos en tiempo real en la esquina superior izquierda del video (Tab): archivo, tiempo, códecs, fotogramas por segundo y más, o un resumen breve con Mayús+Tab. Propiedades de reproducción… muestra el estado de decodificación, los flujos y metadatos del archivo e información del sistema, para copiarlos o guardarlos como texto. Acerca de Vestra Player… muestra la versión, los componentes y los complementos cargados."
 
 #: manifest.json
 #, x-machine
@@ -363,7 +364,7 @@ msgstr "No se usa"
 #: properties.ts:130 properties.ts:196 properties.ts:255
 #, x-machine
 msgid "Video"
-msgstr "Vídeo"
+msgstr "Video"
 
 #: properties.ts:131 properties.ts:140
 #, x-machine
@@ -398,7 +399,7 @@ msgstr "Fotogramas por segundo en pantalla"
 #: properties.ts:137
 #, x-machine
 msgid "Video bitrate"
-msgstr "Tasa de bits de vídeo"
+msgstr "Tasa de bits de video"
 
 #: properties.ts:139 properties.ts:196 properties.ts:256
 #, x-machine
@@ -443,7 +444,7 @@ msgstr "Otros"
 #: properties.ts:148
 #, x-machine
 msgid "Backend"
-msgstr "Backend"
+msgstr "Motor"
 
 #: properties.ts:149
 #, x-machine
@@ -503,7 +504,7 @@ msgstr "Adjunto"
 #: properties.ts:198
 #, x-machine
 msgid "Stream #{}: {}"
-msgstr "Secuencia n.º {}: {}"
+msgstr "Flujo n.º {}: {}"
 
 #: properties.ts:201
 #, x-machine
@@ -648,7 +649,7 @@ msgstr "Tasa de bits total"
 #: properties.ts:231
 #, x-machine
 msgid "Stream count"
-msgstr "Número de secuencias"
+msgstr "Número de flujos"
 
 #: properties.ts:232
 #, x-machine
@@ -693,7 +694,7 @@ msgstr "Dirección"
 #: properties.ts:254
 #, x-machine
 msgid "Streams"
-msgstr "Secuencias"
+msgstr "Flujos"
 
 #: properties.ts:257
 #, x-machine

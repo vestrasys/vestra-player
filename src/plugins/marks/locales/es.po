@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -50,9 +51,7 @@ msgstr "Salta por capítulos y marcadores; repite un intervalo A-B"
 msgid ""
 "Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar; sets an A-B range and loops it a chosen number of times.\n"
 "Find it in the context menu under \"Playback ▸ Chapters and Bookmarks\" and \"Playback ▸ A-B Loop\"."
-msgstr ""
-"Muestra los capítulos del medio; añade, nombra y gestiona marcadores para cada archivo; salta entre capítulos y marcadores y los muestra como marcas en la barra de progreso; define un intervalo A-B y lo repite el número de veces elegido.\n"
-"Está en el menú contextual, en «Reproducción ▸ Capítulos y marcadores» y «Reproducción ▸ Bucle A-B»."
+msgstr "Muestra los capítulos del medio; agrega, nombra y administra marcadores para cada archivo; salta entre capítulos y marcadores y los muestra como marcas en la barra de progreso; define un intervalo A-B y lo repite el número de veces elegido.\nEstá en el menú contextual, en «Reproducción ▸ Capítulos y marcadores» y «Reproducción ▸ Bucle A-B»."
 
 #: manifest.json
 #, x-machine
@@ -99,12 +98,12 @@ msgstr "Lista de capítulos y marcadores…"
 #: menu.ts:109 ui/marks.slint:195
 #, x-machine
 msgid "Add Bookmark"
-msgstr "Añadir marcador"
+msgstr "Agregar marcador"
 
 #: menu.ts:114 osd.ts:51
 #, x-machine
 msgid "Can't add bookmarks to this source"
-msgstr "No se pueden añadir marcadores a esta fuente"
+msgstr "No se pueden agregar marcadores a esta fuente"
 
 #: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:144
 #, x-machine
@@ -164,12 +163,12 @@ msgstr "Borrar punto inicial"
 #: menu.ts:231
 #, x-machine
 msgid "Start Point Back 0.1 s"
-msgstr "Punto inicial 0,1 s atrás"
+msgstr "Punto inicial 0.1 s atrás"
 
 #: menu.ts:231
 #, x-machine
 msgid "Start Point Forward 0.1 s"
-msgstr "Punto inicial 0,1 s adelante"
+msgstr "Punto inicial 0.1 s adelante"
 
 #: menu.ts:231
 #, x-machine
@@ -184,22 +183,22 @@ msgstr "Borrar punto final"
 #: menu.ts:231
 #, x-machine
 msgid "End Point Back 0.1 s"
-msgstr "Punto final 0,1 s atrás"
+msgstr "Punto final 0.1 s atrás"
 
 #: menu.ts:231
 #, x-machine
 msgid "End Point Forward 0.1 s"
-msgstr "Punto final 0,1 s adelante"
+msgstr "Punto final 0.1 s adelante"
 
 #: menu.ts:231
 #, x-machine
 msgid "Move Range Back 0.1 s"
-msgstr "Mover intervalo 0,1 s atrás"
+msgstr "Mover intervalo 0.1 s atrás"
 
 #: menu.ts:231
 #, x-machine
 msgid "Move Range Forward 0.1 s"
-msgstr "Mover intervalo 0,1 s adelante"
+msgstr "Mover intervalo 0.1 s adelante"
 
 #: menu.ts:231
 #, x-machine
@@ -284,7 +283,7 @@ msgstr "Marcador: {}"
 #: osd.ts:51
 #, x-machine
 msgid "Bookmark added: {} ({})"
-msgstr "Marcador añadido: {} ({})"
+msgstr "Marcador agregado: {} ({})"
 
 #: osd.ts:51
 #, x-machine
@@ -294,7 +293,7 @@ msgstr "Ya hay un marcador aquí"
 #: osd.ts:51
 #, x-machine
 msgid "Bookmarks full ({})"
-msgstr "Marcadores llenos ({})"
+msgstr "Se alcanzó el límite de marcadores ({})"
 
 #: osd.ts:51
 #, x-machine

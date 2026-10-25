@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -28,7 +29,7 @@ msgstr "No disponible en pantalla completa"
 #: main.ts:72 main.ts:99 main.ts:128 main.ts:140 pip.ts:42 size.ts:124
 #, x-machine
 msgid "No video"
-msgstr "No hay vídeo"
+msgstr "No hay video"
 
 #: main.ts:93
 #, x-machine
@@ -39,7 +40,7 @@ msgstr "Imagen en imagen"
 #: main.ts:120 main.ts:159 ui/page.slint:99
 #, x-machine
 msgid "0.5×"
-msgstr "0,5×"
+msgstr "0.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
 #: main.ts:120 main.ts:159 ui/page.slint:99
@@ -51,7 +52,7 @@ msgstr "1×"
 #: main.ts:120 main.ts:159 ui/page.slint:99
 #, x-machine
 msgid "1.5×"
-msgstr "1,5×"
+msgstr "1.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
 #: main.ts:120 main.ts:159 ui/page.slint:99
@@ -62,7 +63,7 @@ msgstr "2×"
 #: main.ts:134 main.ts:159
 #, x-machine
 msgid "Fit to Video Aspect Ratio"
-msgstr "Ajustar a la relación de aspecto del vídeo"
+msgstr "Ajustar a la relación de aspecto del video"
 
 #: main.ts:148
 #, x-machine
@@ -72,7 +73,7 @@ msgstr "Al iniciar la reproducción: no cambiar el tamaño de la ventana"
 #: main.ts:149
 #, x-machine
 msgid "When playback starts: Fit to video aspect ratio"
-msgstr "Al iniciar la reproducción: ajustar a la relación de aspecto del vídeo"
+msgstr "Al iniciar la reproducción: ajustar a la relación de aspecto del video"
 
 #: main.ts:150
 #, x-machine
@@ -184,16 +185,14 @@ msgstr "Ventana principal"
 #: manifest.json
 #, x-machine
 msgid "Window sizes by video scale, always on top, mini size and picture-in-picture"
-msgstr "Tamaños de ventana según la escala del vídeo, siempre visible, tamaño mini e imagen en imagen"
+msgstr "Tamaños de ventana según la escala del video, siempre visible, tamaño mini e imagen en imagen"
 
 #: manifest.json
 #, x-machine
 msgid ""
 "Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\n"
 "The items are in the context menu under Screen."
-msgstr ""
-"Cambia el tamaño de la ventana a 0,5–2× el vídeo o la ajusta a la relación de aspecto del vídeo, y la redimensiona automáticamente al iniciar la reproducción; nunca encima, siempre visible, encima durante la reproducción o durante la reproducción en pantalla completa; tamaño mini e imagen en imagen del sistema; oculta el puntero durante la reproducción.\n"
-"Las opciones están en el menú contextual, en Pantalla."
+msgstr "Cambia el tamaño de la ventana a 0.5–2× el video o la ajusta a la relación de aspecto del video, y la redimensiona automáticamente al iniciar la reproducción; siempre visible: nunca, siempre, durante la reproducción o durante la reproducción en pantalla completa; tamaño mini e imagen en imagen del sistema; oculta el puntero durante la reproducción.\nLas opciones están en el menú contextual, en Pantalla."
 
 #: manifest.json
 #, x-machine
@@ -233,7 +232,7 @@ msgstr "No se puede salir de imagen en imagen: {}"
 #: pip.ts:68
 #, x-machine
 msgid "Picture-in-picture: Off (no video)"
-msgstr "Imagen en imagen: desactivada (no hay vídeo)"
+msgstr "Imagen en imagen: desactivada (no hay video)"
 
 #: size.ts:47
 #, x-machine
@@ -253,22 +252,22 @@ msgstr "Ventana: {}×"
 #: size.ts:64
 #, x-machine
 msgid "The window already fits the video aspect ratio"
-msgstr "La ventana ya se ajusta a la relación de aspecto del vídeo"
+msgstr "La ventana ya se ajusta a la relación de aspecto del video"
 
 #: size.ts:72
 #, x-machine
 msgid "Window: Fit to video aspect ratio (shrunk to fit the screen)"
-msgstr "Ventana: ajustada a la relación de aspecto del vídeo (reducida para caber en la pantalla)"
+msgstr "Ventana: ajustada a la relación de aspecto del video (reducida para caber en la pantalla)"
 
 #: size.ts:72
 #, x-machine
 msgid "Window: Fit to video aspect ratio (enlarged to the minimum size)"
-msgstr "Ventana: ajustada a la relación de aspecto del vídeo (ampliada al tamaño mínimo)"
+msgstr "Ventana: ajustada a la relación de aspecto del video (ampliada al tamaño mínimo)"
 
 #: size.ts:72
 #, x-machine
 msgid "Window: Fit to video aspect ratio"
-msgstr "Ventana: ajustada a la relación de aspecto del vídeo"
+msgstr "Ventana: ajustada a la relación de aspecto del video"
 
 #: size.ts:87
 #, x-machine
@@ -305,12 +304,12 @@ msgstr "Ajustar aspecto"
 #: ui/page.slint:105
 #, x-machine
 msgid "Only once (only the first video of this run)"
-msgstr "Solo una vez (solo el primer vídeo de esta sesión)"
+msgstr "Solo una vez (solo el primer video de esta sesión)"
 
 #: ui/page.slint:111
 #, x-machine
 msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
-msgstr "Cada archivo nuevo se redimensiona una vez, cuando se conoce el tamaño de su vídeo, manteniendo la esquina superior izquierda de la ventana. No en pantalla completa, tamaño mini ni imagen en imagen; si arrastras la ventana durante la reproducción, ese archivo ya no se toca."
+msgstr "Cada archivo nuevo se redimensiona una vez, cuando se conoce el tamaño de su video, manteniendo la esquina superior izquierda de la ventana. No en pantalla completa, tamaño mini ni imagen en imagen; si arrastras la ventana durante la reproducción, ese archivo ya no se redimensiona."
 
 #: ui/page.slint:118
 #, x-machine
@@ -332,7 +331,7 @@ msgstr "En pantalla completa"
 #: ui/page.slint:126
 #, x-machine
 msgid "Mouse pointer"
-msgstr "Puntero del ratón"
+msgstr "Puntero del mouse"
 
 #: ui/page.slint:129
 #, x-machine

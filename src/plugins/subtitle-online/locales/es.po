@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -13,7 +14,7 @@ msgstr "La búsqueda envía las palabras clave del nombre del archivo y el hash 
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "First enter an API key for OpenSubtitles under Services (free at opensubtitles.com), or turn on Assrt and enter its token."
-msgstr "Primero introduce una clave de API de OpenSubtitles en Servicios (gratuita en opensubtitles.com), o activa Assrt e introduce su token."
+msgstr "Primero escribe una clave de API de OpenSubtitles en Servicios (gratuita en opensubtitles.com), o activa Assrt y escribe su token."
 
 #: main.ts:44 messages.ts:141
 #, x-machine
@@ -53,7 +54,7 @@ msgstr "Error al cargar el subtítulo."
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "Enter a title, then search."
-msgstr "Introduce un título y busca."
+msgstr "Escribe un título y busca."
 
 #: main.ts:44 messages.ts:141
 #, x-machine
@@ -88,7 +89,7 @@ msgstr "Subtítulo abierto: {}"
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "Subtitle loaded, but it could not be saved in the video's folder"
-msgstr "Subtítulo cargado, pero no se pudo guardar en la carpeta del vídeo"
+msgstr "Subtítulo cargado, pero no se pudo guardar en la carpeta del video"
 
 #: main.ts:44 messages.ts:141
 #, x-machine
@@ -98,7 +99,7 @@ msgstr "Guardado en {}"
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "Subtitles added: {}"
-msgstr "Subtítulos añadidos: {}"
+msgstr "Subtítulos agregados: {}"
 
 #: main.ts:44 messages.ts:141
 #, x-machine
@@ -173,12 +174,12 @@ msgstr "No se pudo guardar: {}"
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "Key entered"
-msgstr "Clave introducida"
+msgstr "Clave configurada"
 
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "Token entered"
-msgstr "Token introducido"
+msgstr "Token configurado"
 
 #: main.ts:44 messages.ts:141
 #, x-machine
@@ -193,7 +194,7 @@ msgstr "Sin token"
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "Enter the API key first"
-msgstr "Introduce primero la clave de API"
+msgstr "Escribe primero la clave de API"
 
 #: main.ts:44 messages.ts:141
 #, x-machine
@@ -213,7 +214,7 @@ msgstr "La clave es válida (sin iniciar sesión: menos descargas anónimas)"
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "Enter the token first"
-msgstr "Introduce primero el token"
+msgstr "Escribe primero el token"
 
 #: main.ts:44 messages.ts:141
 #, x-machine
@@ -253,7 +254,7 @@ msgstr "Assrt devolvió una respuesta ilegible"
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "Invalid API key; check it in Online Subtitle Settings"
-msgstr "Clave de API no válida; revísala en Ajustes de subtítulos en línea"
+msgstr "Clave de API no válida; revísala en Configuración de subtítulos en línea"
 
 #: main.ts:44 messages.ts:141
 #, x-machine
@@ -293,7 +294,7 @@ msgstr "No se puede descargar el subtítulo ({})"
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "Invalid Assrt token; check it in Online Subtitle Settings"
-msgstr "Token de Assrt no válido; revísalo en Ajustes de subtítulos en línea"
+msgstr "Token de Assrt no válido; revísalo en Configuración de subtítulos en línea"
 
 #: main.ts:44 messages.ts:141
 #, x-machine
@@ -348,7 +349,7 @@ msgstr "El archivo de subtítulos supera los 2 MiB"
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
-msgstr "La codificación de los subtítulos puede ser incorrecta; cambia la codificación predeterminada en Ajustes de subtítulos"
+msgstr "La codificación de los subtítulos puede ser incorrecta; cambia la codificación predeterminada en Configuración de subtítulos"
 
 #: main.ts:44 messages.ts:141
 #, x-machine
@@ -358,7 +359,7 @@ msgstr "Se ignoraron las fuentes incrustadas en el subtítulo"
 #: main.ts:44 messages.ts:141
 #, x-machine
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
-msgstr "Fotogramas por segundo del vídeo desconocidos; el subtítulo MicroDVD se convirtió a 23,976"
+msgstr "Fotogramas por segundo del video desconocidos; el subtítulo MicroDVD se convirtió a 23.976"
 
 #: main.ts:333 model.ts:130
 #, x-machine
@@ -383,21 +384,19 @@ msgstr "Buscar y descargar subtítulos…"
 #: main.ts:554
 #, x-machine
 msgid "Online Subtitle Settings…"
-msgstr "Ajustes de subtítulos en línea…"
+msgstr "Configuración de subtítulos en línea…"
 
 #: manifest.json
 #, x-machine
 msgid "Search and download subtitles for the current video"
-msgstr "Busca y descarga subtítulos para el vídeo actual"
+msgstr "Busca y descarga subtítulos para el video actual"
 
 #: manifest.json
 #, x-machine
 msgid ""
 "Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\n"
 "Find it in the right-click menu under Subtitles ▸ Online Subtitles."
-msgstr ""
-"Busca subtítulos en OpenSubtitles.com o Assrt por hash del archivo y título, los carga al momento y guarda una copia junto al vídeo. Requiere tu propia clave de API, guardada en el almacén seguro del sistema.\n"
-"Está en el menú contextual, en Subtítulos ▸ Subtítulos en línea."
+msgstr "Busca subtítulos en OpenSubtitles.com o Assrt por hash del archivo y título, los carga al momento y guarda una copia junto al video. Requiere tu propia clave de API, guardada en el almacén seguro del sistema.\nEstá en el menú contextual, en Subtítulos ▸ Subtítulos en línea."
 
 #: manifest.json
 #, x-machine
@@ -643,7 +642,7 @@ msgstr "Abrir"
 #: ui/download.slint:157
 #, x-machine
 msgid "Add"
-msgstr "Añadir"
+msgstr "Agregar"
 
 #: ui/download.slint:158
 #, x-machine
@@ -663,12 +662,12 @@ msgstr "Más"
 #: ui/download.slint:163 ui/settings.slint:101
 #, x-machine
 msgid "Settings…"
-msgstr "Ajustes…"
+msgstr "Configuración…"
 
 #: ui/service.slint:17
 #, x-machine
 msgid "{} Settings"
-msgstr "Ajustes de {}"
+msgstr "Configuración de {}"
 
 #: ui/service.slint:39
 #, x-machine
@@ -718,7 +717,7 @@ msgstr "Guardar"
 #: ui/settings.slint:30
 #, x-machine
 msgid "Online Subtitle Settings"
-msgstr "Ajustes de subtítulos en línea"
+msgstr "Configuración de subtítulos en línea"
 
 #: ui/settings.slint:64
 #, x-machine
@@ -758,12 +757,12 @@ msgstr "Desactivada"
 #: ui/settings.slint:124
 #, x-machine
 msgid "When opening a video without subtitles"
-msgstr "Al abrir un vídeo sin subtítulos"
+msgstr "Al abrir un video sin subtítulos"
 
 #: ui/settings.slint:131
 #, x-machine
 msgid "After search"
-msgstr "Tras la búsqueda"
+msgstr "Después de buscar"
 
 #: ui/settings.slint:134
 #, x-machine
@@ -803,7 +802,7 @@ msgstr "Guardar en"
 #: ui/settings.slint:165
 #, x-machine
 msgid "Beside the video when possible"
-msgstr "Junto al vídeo cuando sea posible"
+msgstr "Junto al video cuando sea posible"
 
 #: ui/settings.slint:165
 #, x-machine

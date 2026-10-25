@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -38,7 +39,7 @@ msgstr "Sincronización de subtítulos: {} s después"
 #: main.ts:264
 #, x-machine
 msgid "Add Secondary Subtitle"
-msgstr "Añadir subtítulo secundario"
+msgstr "Agregar subtítulo secundario"
 
 #: main.ts:264
 #, x-machine
@@ -68,7 +69,7 @@ msgstr "Operación de subtítulos en curso"
 #: main.ts:710
 #, x-machine
 msgid "Add Secondary Subtitle…"
-msgstr "Añadir subtítulo secundario…"
+msgstr "Agregar subtítulo secundario…"
 
 #: main.ts:712
 #, x-machine
@@ -173,7 +174,7 @@ msgstr "Subir"
 #: main.ts:831
 #, x-machine
 msgid "Subtitle position: up ({}%)"
-msgstr "Posición de subtítulos: arriba ({} %)"
+msgstr "Posición de subtítulos: arriba ({}%)"
 
 #: main.ts:834
 #, x-machine
@@ -183,7 +184,7 @@ msgstr "Bajar"
 #: main.ts:835
 #, x-machine
 msgid "Subtitle position: down ({}%)"
-msgstr "Posición de subtítulos: abajo ({} %)"
+msgstr "Posición de subtítulos: abajo ({}%)"
 
 #: main.ts:838
 #, x-machine
@@ -193,7 +194,7 @@ msgstr "Restablecer posición"
 #: main.ts:841
 #, x-machine
 msgid "Subtitle position: default ({}%)"
-msgstr "Posición de subtítulos: predeterminada ({} %)"
+msgstr "Posición de subtítulos: predeterminada ({}%)"
 
 #: main.ts:846 ui/settings.slint:94
 #, x-machine
@@ -208,7 +209,7 @@ msgstr "Subtítulos en negrita"
 #: main.ts:850
 #, x-machine
 msgid "Bold subtitles off"
-msgstr "Subtítulos en negrita desactivados"
+msgstr "Subtítulos sin negrita"
 
 #: main.ts:854
 #, x-machine
@@ -353,22 +354,22 @@ msgstr "Sincronización"
 #: main.ts:1044
 #, x-machine
 msgid "Earlier 0.05 s"
-msgstr "0,05 s antes"
+msgstr "0.05 s antes"
 
 #: main.ts:1044
 #, x-machine
 msgid "Earlier 0.1 s"
-msgstr "0,1 s antes"
+msgstr "0.1 s antes"
 
 #: main.ts:1044
 #, x-machine
 msgid "Earlier 0.25 s"
-msgstr "0,25 s antes"
+msgstr "0.25 s antes"
 
 #: main.ts:1044
 #, x-machine
 msgid "Earlier 0.5 s"
-msgstr "0,5 s antes"
+msgstr "0.5 s antes"
 
 #: main.ts:1044
 #, x-machine
@@ -383,22 +384,22 @@ msgstr "5 s antes"
 #: main.ts:1048
 #, x-machine
 msgid "Later 0.05 s"
-msgstr "0,05 s después"
+msgstr "0.05 s después"
 
 #: main.ts:1048
 #, x-machine
 msgid "Later 0.1 s"
-msgstr "0,1 s después"
+msgstr "0.1 s después"
 
 #: main.ts:1048
 #, x-machine
 msgid "Later 0.25 s"
-msgstr "0,25 s después"
+msgstr "0.25 s después"
 
 #: main.ts:1048
 #, x-machine
 msgid "Later 0.5 s"
-msgstr "0,5 s después"
+msgstr "0.5 s después"
 
 #: main.ts:1048
 #, x-machine
@@ -438,7 +439,7 @@ msgstr "Ajuste fino de subtítulos…"
 #: main.ts:1069
 #, x-machine
 msgid "Subtitle Settings…"
-msgstr "Ajustes de subtítulos…"
+msgstr "Configuración de subtítulos…"
 
 #: manifest.json
 #, x-machine
@@ -817,7 +818,7 @@ msgstr "El medio cambió; se canceló la operación en curso."
 #: messages.ts:150
 #, x-machine
 msgid "Enter whole milliseconds, for example 1250 or -500."
-msgstr "Introduce milisegundos enteros, por ejemplo 1250 o -500."
+msgstr "Escribe milisegundos enteros, por ejemplo 1250 o -500."
 
 #: messages.ts:150
 #, x-machine
@@ -922,7 +923,7 @@ msgstr "El archivo de subtítulos supera los 2 MiB"
 #: messages.ts:150 messages.ts:151
 #, x-machine
 msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
-msgstr "La codificación de los subtítulos puede ser incorrecta; cambia la codificación predeterminada en Ajustes de subtítulos"
+msgstr "La codificación de los subtítulos puede ser incorrecta; cambia la codificación predeterminada en Configuración de subtítulos"
 
 #: messages.ts:150 messages.ts:151
 #, x-machine
@@ -932,12 +933,12 @@ msgstr "Se ignoraron las fuentes incrustadas en el subtítulo"
 #: messages.ts:150 messages.ts:151
 #, x-machine
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
-msgstr "Fotogramas por segundo del vídeo desconocidos; el subtítulo MicroDVD se convirtió a 23,976"
+msgstr "Fotogramas por segundo del video desconocidos; el subtítulo MicroDVD se convirtió a 23.976"
 
 #: ui/settings.slint:19
 #, x-machine
 msgid "Subtitle Settings"
-msgstr "Ajustes de subtítulos"
+msgstr "Configuración de subtítulos"
 
 #: ui/settings.slint:70
 #, x-machine
@@ -992,12 +993,12 @@ msgstr "Cuadro de fondo (sustituye al contorno y la sombra)"
 #: ui/settings.slint:149
 #, x-machine
 msgid "Opacity {}%"
-msgstr "Opacidad {} %"
+msgstr "Opacidad {}%"
 
 #: ui/settings.slint:161
 #, x-machine
 msgid "Margin {}%"
-msgstr "Margen {} %"
+msgstr "Margen {}%"
 
 #: ui/settings.slint:173
 #, x-machine
@@ -1012,7 +1013,7 @@ msgstr "Mantener estilos originales"
 #: ui/settings.slint:176
 #, x-machine
 msgid "Use subtitle settings"
-msgstr "Usar ajustes de subtítulos"
+msgstr "Usar la configuración de subtítulos"
 
 #: ui/settings.slint:185
 #, x-machine
@@ -1117,7 +1118,7 @@ msgstr "Tamaño {}"
 #: ui/tune.slint:100
 #, x-machine
 msgid "Position {}%"
-msgstr "Posición {} %"
+msgstr "Posición {}%"
 
 #: ui/tune.slint:101
 #, x-machine
@@ -1132,7 +1133,7 @@ msgstr "Abajo"
 #: ui/tune.slint:110
 #, x-machine
 msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
-msgstr "En segundos. Un valor positivo retrasa los subtítulos; uno negativo los adelanta. Haz clic para introducir un valor."
+msgstr "En segundos. Un valor positivo retrasa los subtítulos; uno negativo los adelanta. Haz clic para escribir un valor."
 
 #: ui/tune.slint:113
 #, x-machine
@@ -1157,4 +1158,4 @@ msgstr "Quitar"
 #: ui/tune.slint:136
 #, x-machine
 msgid "Settings…"
-msgstr "Ajustes…"
+msgstr "Configuración…"

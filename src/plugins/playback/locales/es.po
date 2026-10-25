@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -83,17 +84,17 @@ msgstr "Ir al inicio"
 #: commands.ts:229
 #, x-machine
 msgid "Seek Steps…"
-msgstr "Pasos de salto…"
+msgstr "Intervalos de salto…"
 
 #: commands.ts:229
 #, x-machine
 msgid "0.5×"
-msgstr "0,5×"
+msgstr "0.5×"
 
 #: commands.ts:229
 #, x-machine
 msgid "1.5×"
-msgstr "1,5×"
+msgstr "1.5×"
 
 #: commands.ts:229
 #, x-machine
@@ -108,7 +109,7 @@ msgstr "Personalizada…"
 #: commands.ts:229
 #, x-machine
 msgid "Disable Screen Saver While Playing"
-msgstr "Desactivar salvapantallas al reproducir"
+msgstr "Desactivar protector de pantalla al reproducir"
 
 #: commands.ts:229
 #, x-machine
@@ -143,7 +144,7 @@ msgstr "Una fuente de red no tiene nombre de archivo"
 #: commands.ts:238
 #, x-machine
 msgid "No video"
-msgstr "No hay vídeo"
+msgstr "No hay video"
 
 #: commands.ts:238
 #, x-machine
@@ -153,12 +154,12 @@ msgstr "Requiere ffmpeg"
 #: controller.ts:148
 #, x-machine
 msgid "Open Media"
-msgstr "Abrir medio"
+msgstr "Abrir archivo multimedia"
 
 #: controller.ts:148
 #, x-machine
 msgid "Open Media (replaces the current source)"
-msgstr "Abrir medio (sustituye la fuente actual)"
+msgstr "Abrir archivo multimedia (sustituye la fuente actual)"
 
 #: main.ts:29
 #, x-machine
@@ -178,7 +179,7 @@ msgstr "Avanzar {} s: {} / {}"
 #: main.ts:29
 #, x-machine
 msgid "Jumped to the start"
-msgstr "Se saltó al inicio"
+msgstr "Se volvió al inicio"
 
 #: main.ts:29
 #, x-machine
@@ -203,7 +204,7 @@ msgstr "Velocidad: {}x"
 #: main.ts:29 ui/bar.slint:83
 #, x-machine
 msgid "Volume: {}%"
-msgstr "Volumen: {} %"
+msgstr "Volumen: {}%"
 
 #: main.ts:29
 #, x-machine
@@ -238,17 +239,17 @@ msgstr "Error al copiar: {}"
 #: main.ts:29 ui/open-url.slint:65
 #, x-machine
 msgid "Only the first line is opened; to open several links, add them to the playlist"
-msgstr "Solo se abre la primera línea; para abrir varios enlaces, añádelos a la lista de reproducción"
+msgstr "Solo se abre la primera línea; para abrir varios enlaces, agrégalos a la lista de reproducción"
 
 #: main.ts:29
 #, x-machine
 msgid "Disable screen saver while playing: On"
-msgstr "Desactivar salvapantallas al reproducir: activado"
+msgstr "Desactivar protector de pantalla al reproducir: activado"
 
 #: main.ts:29
 #, x-machine
 msgid "Disable screen saver while playing: Off"
-msgstr "Desactivar salvapantallas al reproducir: desactivado"
+msgstr "Desactivar protector de pantalla al reproducir: desactivado"
 
 #: main.ts:29
 #, x-machine
@@ -278,12 +279,12 @@ msgstr "Error en la operación de la fuente: {}"
 #: main.ts:29 ui/prompt.slint:18
 #, x-machine
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
-msgstr "Introduce un tiempo dentro de la duración de la fuente como HH:MM:SS.mmm"
+msgstr "Escribe una posición dentro de la duración de la fuente, con el formato HH:MM:SS.mmm"
 
 #: main.ts:29 ui/prompt.slint:19
 #, x-machine
 msgid "Speed must be between 0.25× and 4×"
-msgstr "La velocidad debe estar entre 0,25× y 4×"
+msgstr "La velocidad debe estar entre 0.25× y 4×"
 
 #: manifest.json
 #, x-machine
@@ -298,7 +299,7 @@ msgstr "Barra de controles inferior, abrir archivos y enlaces, saltos y velocida
 #: manifest.json
 #, x-machine
 msgid "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing."
-msgstr "La barra de controles en la parte inferior de la ventana principal (barra de progreso, botones de reproducción, volumen); abrir un archivo, abrir un enlace, reabrir el último archivo; varios pasos de salto, saltos por fotogramas clave, ir a una posición, velocidades fijas y personalizadas; tiempo o miniatura al pasar sobre la barra de progreso; sin salvapantallas durante la reproducción."
+msgstr "La barra de controles en la parte inferior de la ventana principal (barra de progreso, botones de reproducción, volumen); abrir un archivo, abrir un enlace, reabrir el último archivo; varios pasos de salto, saltos por fotogramas clave, ir a una posición, velocidades fijas y personalizadas; tiempo o miniatura al pasar sobre la barra de progreso; sin protector de pantalla durante la reproducción."
 
 #: manifest.json
 #, x-machine
@@ -422,7 +423,7 @@ msgstr "Abrir URL"
 #: ui/open-url.slint:37
 #, x-machine
 msgid "Enter the address of the file to play below."
-msgstr "Introduce abajo la dirección del archivo que quieres reproducir."
+msgstr "Escribe abajo la dirección del archivo que quieres reproducir."
 
 #: ui/open-url.slint:43
 #, x-machine
@@ -442,7 +443,7 @@ msgstr "Abrir"
 #: ui/open-url.slint:59
 #, x-machine
 msgid "Use an address from the clipboard by default"
-msgstr "Usar por defecto una dirección del portapapeles"
+msgstr "Usar de forma predeterminada la dirección del portapapeles"
 
 #: ui/open-url.slint:64
 #, x-machine
@@ -467,7 +468,7 @@ msgstr "Ir a la posición"
 #: ui/prompt.slint:44
 #, x-machine
 msgid "Speed (0.25–4×)"
-msgstr "Velocidad (0,25–4×)"
+msgstr "Velocidad (0.25–4×)"
 
 #: ui/prompt.slint:44
 #, x-machine
@@ -498,7 +499,7 @@ msgstr "Predeterminado"
 #: ui/time-jump.slint:65
 #, x-machine
 msgid "Seek Steps"
-msgstr "Pasos de salto"
+msgstr "Intervalos de salto"
 
 #: ui/time-jump.slint:83
 #, x-machine
@@ -528,7 +529,7 @@ msgstr "Ctrl + Alt + flechas izquierda/derecha:"
 #: ui/time-jump.slint:117
 #, x-machine
 msgid "Range 0.1–3600 s, at most one decimal place"
-msgstr "Intervalo 0,1–3600 s, como máximo un decimal"
+msgstr "Valores de 0.1 a 3600 s, con un decimal como máximo"
 
 #: ui/time-jump.slint:132
 #, x-machine

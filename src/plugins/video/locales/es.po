@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -63,32 +64,32 @@ msgstr "Llenar la ventana"
 #: main.ts:479
 #, x-machine
 msgid "Framing: larger ({}%)"
-msgstr "Encuadre: más grande ({} %)"
+msgstr "Encuadre: más grande ({}%)"
 
 #: main.ts:479
 #, x-machine
 msgid "Framing: smaller ({}%)"
-msgstr "Encuadre: más pequeño ({} %)"
+msgstr "Encuadre: más pequeño ({}%)"
 
 #: main.ts:486
 #, x-machine
 msgid "Framing: move right ({}%, {}%)"
-msgstr "Encuadre: mover a la derecha ({} %, {} %)"
+msgstr "Encuadre: mover a la derecha ({}%, {}%)"
 
 #: main.ts:486
 #, x-machine
 msgid "Framing: move left ({}%, {}%)"
-msgstr "Encuadre: mover a la izquierda ({} %, {} %)"
+msgstr "Encuadre: mover a la izquierda ({}%, {}%)"
 
 #: main.ts:486
 #, x-machine
 msgid "Framing: move up ({}%, {}%)"
-msgstr "Encuadre: mover arriba ({} %, {} %)"
+msgstr "Encuadre: mover arriba ({}%, {}%)"
 
 #: main.ts:486
 #, x-machine
 msgid "Framing: move down ({}%, {}%)"
-msgstr "Encuadre: mover abajo ({} %, {} %)"
+msgstr "Encuadre: mover abajo ({}%, {}%)"
 
 #: main.ts:491
 #, x-machine
@@ -108,82 +109,82 @@ msgstr "Imagen restablecida"
 #: main.ts:539
 #, x-machine
 msgid "Brightness -1% ({}%)"
-msgstr "Brillo -1 % ({} %)"
+msgstr "Brillo -1% ({}%)"
 
 #: main.ts:539
 #, x-machine
 msgid "Brightness +1% ({}%)"
-msgstr "Brillo +1 % ({} %)"
+msgstr "Brillo +1% ({}%)"
 
 #: main.ts:539
 #, x-machine
 msgid "Contrast -1% ({}%)"
-msgstr "Contraste -1 % ({} %)"
+msgstr "Contraste -1% ({}%)"
 
 #: main.ts:539
 #, x-machine
 msgid "Contrast +1% ({}%)"
-msgstr "Contraste +1 % ({} %)"
+msgstr "Contraste +1% ({}%)"
 
 #: main.ts:539
 #, x-machine
 msgid "Saturation -1% ({}%)"
-msgstr "Saturación -1 % ({} %)"
+msgstr "Saturación -1% ({}%)"
 
 #: main.ts:539
 #, x-machine
 msgid "Saturation +1% ({}%)"
-msgstr "Saturación +1 % ({} %)"
+msgstr "Saturación +1% ({}%)"
 
 #: main.ts:539
 #, x-machine
 msgid "Hue -1% ({}%)"
-msgstr "Tono -1 % ({} %)"
+msgstr "Tono -1% ({}%)"
 
 #: main.ts:539
 #, x-machine
 msgid "Hue +1% ({}%)"
-msgstr "Tono +1 % ({} %)"
+msgstr "Tono +1% ({}%)"
 
 #: main.ts:539
 #, x-machine
 msgid "Brightness -1% ({}%) (picture effects off)"
-msgstr "Brillo -1 % ({} %) (efectos de imagen desactivados)"
+msgstr "Brillo -1% ({}%) (efectos de imagen desactivados)"
 
 #: main.ts:539
 #, x-machine
 msgid "Brightness +1% ({}%) (picture effects off)"
-msgstr "Brillo +1 % ({} %) (efectos de imagen desactivados)"
+msgstr "Brillo +1% ({}%) (efectos de imagen desactivados)"
 
 #: main.ts:539
 #, x-machine
 msgid "Contrast -1% ({}%) (picture effects off)"
-msgstr "Contraste -1 % ({} %) (efectos de imagen desactivados)"
+msgstr "Contraste -1% ({}%) (efectos de imagen desactivados)"
 
 #: main.ts:539
 #, x-machine
 msgid "Contrast +1% ({}%) (picture effects off)"
-msgstr "Contraste +1 % ({} %) (efectos de imagen desactivados)"
+msgstr "Contraste +1% ({}%) (efectos de imagen desactivados)"
 
 #: main.ts:539
 #, x-machine
 msgid "Saturation -1% ({}%) (picture effects off)"
-msgstr "Saturación -1 % ({} %) (efectos de imagen desactivados)"
+msgstr "Saturación -1% ({}%) (efectos de imagen desactivados)"
 
 #: main.ts:539
 #, x-machine
 msgid "Saturation +1% ({}%) (picture effects off)"
-msgstr "Saturación +1 % ({} %) (efectos de imagen desactivados)"
+msgstr "Saturación +1% ({}%) (efectos de imagen desactivados)"
 
 #: main.ts:539
 #, x-machine
 msgid "Hue -1% ({}%) (picture effects off)"
-msgstr "Tono -1 % ({} %) (efectos de imagen desactivados)"
+msgstr "Tono -1% ({}%) (efectos de imagen desactivados)"
 
 #: main.ts:539
 #, x-machine
 msgid "Hue +1% ({}%) (picture effects off)"
-msgstr "Tono +1 % ({} %) (efectos de imagen desactivados)"
+msgstr "Tono +1% ({}%) (efectos de imagen desactivados)"
 
 #: main.ts:545
 #, x-machine
@@ -328,7 +329,7 @@ msgstr "Recortar/estirar: recortar a {}"
 #: main.ts:580
 #, x-machine
 msgid "Crop position ({}%, {}%)"
-msgstr "Posición del recorte ({} %, {} %)"
+msgstr "Posición del recorte ({}%, {}%)"
 
 #: main.ts:595
 #, x-machine
@@ -483,12 +484,12 @@ msgstr "Como máximo {} shaders"
 #: main.ts:732
 #, x-machine
 msgid "Add Shader (.glsl)"
-msgstr "Añadir shader (.glsl)"
+msgstr "Agregar shader (.glsl)"
 
 #: main.ts:735
 #, x-machine
 msgid "Only .glsl or .hook shader files can be added"
-msgstr "Solo se pueden añadir archivos de shader .glsl o .hook"
+msgstr "Solo se pueden agregar archivos de shader .glsl o .hook"
 
 #: main.ts:742
 #, x-machine
@@ -504,7 +505,7 @@ msgstr "No se pudo abrir la carpeta de shaders: {}"
 #: main.ts:760
 #, x-machine
 msgid "Removed missing shaders: {}"
-msgstr "Shaders que faltaban quitados: {}"
+msgstr "Se quitaron los shaders que faltaban: {}"
 
 #. {} is a list of file names.
 #: main.ts:761
@@ -590,7 +591,7 @@ msgstr "Detección dinámica de picos"
 #: main.ts:845
 #, x-machine
 msgid "HDR Settings…"
-msgstr "Ajustes de HDR…"
+msgstr "Configuración de HDR…"
 
 #: main.ts:849 main.ts:861 main.ts:871 picture.slint:718
 #, x-machine
@@ -660,7 +661,7 @@ msgstr "Personalizada (x:y)"
 #: main.ts:945
 #, x-machine
 msgid "Enter one with Custom Aspect Ratio… first"
-msgstr "Introduce primero una con Relación de aspecto personalizada…"
+msgstr "Define primero una con Relación de aspecto personalizada…"
 
 #: main.ts:946 picture.slint:665
 #, x-machine
@@ -910,42 +911,42 @@ msgstr "Restablecer"
 #: main.ts:1097
 #, x-machine
 msgid "Brightness -1%"
-msgstr "Brillo -1 %"
+msgstr "Brillo -1%"
 
 #: main.ts:1097
 #, x-machine
 msgid "Contrast -1%"
-msgstr "Contraste -1 %"
+msgstr "Contraste -1%"
 
 #: main.ts:1097
 #, x-machine
 msgid "Saturation -1%"
-msgstr "Saturación -1 %"
+msgstr "Saturación -1%"
 
 #: main.ts:1097
 #, x-machine
 msgid "Hue -1%"
-msgstr "Tono -1 %"
+msgstr "Tono -1%"
 
 #: main.ts:1106
 #, x-machine
 msgid "Brightness +1%"
-msgstr "Brillo +1 %"
+msgstr "Brillo +1%"
 
 #: main.ts:1106
 #, x-machine
 msgid "Contrast +1%"
-msgstr "Contraste +1 %"
+msgstr "Contraste +1%"
 
 #: main.ts:1106
 #, x-machine
 msgid "Saturation +1%"
-msgstr "Saturación +1 %"
+msgstr "Saturación +1%"
 
 #: main.ts:1106
 #, x-machine
 msgid "Hue +1%"
-msgstr "Tono +1 %"
+msgstr "Tono +1%"
 
 #: manifest.json picture.slint:317
 #, x-machine
@@ -962,14 +963,12 @@ msgstr "Color, procesamiento de imagen, relación de aspecto, recorte, rotación
 msgid ""
 "Adjust brightness, contrast, saturation and hue; image processing such as sharpening, denoising and deblocking; flip, rotation, deinterlacing and frame doubling; aspect ratio, crop/stretch and zooming and panning the frame; with GPU rendering also HDR tone mapping, pixel shaders and motion interpolation.\n"
 "Find it in the Video context menu and the Picture Adjustments… window."
-msgstr ""
-"Ajusta el brillo, el contraste, la saturación y el tono; procesamiento de imagen como enfoque, reducción de ruido y desbloqueo; volteo, rotación, desentrelazado y duplicación de fotogramas; relación de aspecto, recorte/estiramiento, zoom y desplazamiento de la imagen; con renderizado por GPU, también mapeo de tonos HDR, shaders de píxeles e interpolación de movimiento.\n"
-"Está en el menú contextual Vídeo y en la ventana Ajustes de imagen…"
+msgstr "Ajusta el brillo, el contraste, la saturación y el tono; procesamiento de imagen como enfoque, reducción de ruido y desbloqueo; volteo, rotación, desentrelazado y duplicación de fotogramas; relación de aspecto, recorte/estiramiento, zoom y desplazamiento de la imagen; con renderizado por GPU, también mapeo de tonos HDR, shaders de píxeles e interpolación de movimiento.\nEstá en el menú contextual Video y en la ventana Ajustes de imagen…"
 
 #: manifest.json
 #, x-machine
 msgid "video"
-msgstr "vídeo"
+msgstr "video"
 
 #: manifest.json
 #, x-machine
@@ -1014,7 +1013,7 @@ msgstr "Opciones de renderizado no disponibles"
 #: picture.slint:388
 #, x-machine
 msgid "Render settings failed"
-msgstr "Error en los ajustes de renderizado"
+msgstr "Error en la configuración de renderizado"
 
 #: picture.slint:391
 #, x-machine
@@ -1204,7 +1203,7 @@ msgstr "Visualización"
 #: picture.slint:688
 #, x-machine
 msgid "Zoom {}%"
-msgstr "Zoom {} %"
+msgstr "Zoom {}%"
 
 #: picture.slint:692
 #, x-machine
@@ -1316,7 +1315,7 @@ msgstr "No hay shaders"
 #: ui/shaders.slint:101
 #, x-machine
 msgid "Add…"
-msgstr "Añadir…"
+msgstr "Agregar…"
 
 #: ui/shaders.slint:102
 #, x-machine
@@ -1331,7 +1330,7 @@ msgstr "Vaciar"
 #: ui/shaders.slint:108
 #, x-machine
 msgid "Other files in the shader folder (double-click to add)"
-msgstr "Otros archivos de la carpeta de shaders (doble clic para añadir)"
+msgstr "Otros archivos de la carpeta de shaders (doble clic para agregar)"
 
 #: ui/shaders.slint:112
 #, x-machine

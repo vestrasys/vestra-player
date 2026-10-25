@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -13,12 +14,12 @@ msgstr "Historial de reproducción"
 #: manifest.json
 #, x-machine
 msgid "Recently played items, and resuming where you left off"
-msgstr "Elementos reproducidos recientemente y reanudación donde lo dejaste"
+msgstr "Elementos reproducidos recientemente y reanudar donde lo dejaste"
 
 #: manifest.json
 #, x-machine
 msgid "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
-msgstr "Abrir ▸ Reproducido recientemente muestra los archivos y enlaces abiertos recientemente. Reproducción ▸ Reanudar reproducción ofrece No reanudar, Reanudar automáticamente o Preguntar siempre: la próxima vez que se abra el mismo archivo, continúa donde se detuvo."
+msgstr "Abrir ▸ Reproducidos recientemente muestra los archivos y enlaces abiertos recientemente. Reproducción ▸ Reanudar reproducción ofrece No reanudar, Reanudar automáticamente o Preguntar siempre: la próxima vez que se abra el mismo archivo, continúa donde se detuvo."
 
 #: manifest.json
 #, x-machine
@@ -43,7 +44,7 @@ msgstr "{} ({})"
 #: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
 #, x-machine
 msgid "Recently Played"
-msgstr "Reproducido recientemente"
+msgstr "Reproducidos recientemente"
 
 #: menu.ts:94
 #, x-machine
@@ -68,7 +69,7 @@ msgstr "Borrar entradas"
 #: menu.ts:128
 #, x-machine
 msgid "Playback history cleared"
-msgstr "Historial de reproducción borrado"
+msgstr "Se borró el historial de reproducción"
 
 #: menu.ts:133
 #, x-machine
@@ -118,7 +119,7 @@ msgstr "Borrar todas las posiciones guardadas"
 #: menu.ts:195
 #, x-machine
 msgid "All saved positions cleared"
-msgstr "Todas las posiciones guardadas borradas"
+msgstr "Se borraron todas las posiciones guardadas"
 
 #: resume.ts:226
 #, x-machine

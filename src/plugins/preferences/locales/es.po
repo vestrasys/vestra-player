@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -18,12 +19,12 @@ msgstr "Paleta: Vestra Dark"
 #: main.ts:51
 #, x-machine
 msgid "Language: Follow System. Takes effect after restart"
-msgstr "Idioma: seguir al sistema. Se aplica tras reiniciar"
+msgstr "Idioma: el del sistema. Se aplicará al reiniciar"
 
 #: main.ts:52
 #, x-machine
 msgid "Language: {}. Takes effect after restart"
-msgstr "Idioma: {}. Se aplica tras reiniciar"
+msgstr "Idioma: {}. Se aplicará al reiniciar"
 
 #: main.ts:59 main.ts:93 ui/appearance.slint:98
 #, x-machine
@@ -53,7 +54,7 @@ msgstr "Vestra Light"
 #: main.ts:103 ui/language.slint:66
 #, x-machine
 msgid "Follow System"
-msgstr "Seguir al sistema"
+msgstr "Idioma del sistema"
 
 #: manifest.json
 #, x-machine
@@ -68,12 +69,12 @@ msgstr "Abre la ventana de opciones y cambia la paleta y el idioma"
 #: manifest.json
 #, x-machine
 msgid "Settings ▸ Options… (F5) opens the player's options window. Settings ▸ Appearance picks the palette (Vestra Dark, Vestra Light); the options window also has an Appearance page with previews. Settings ▸ Language picks the interface language, used from the next start."
-msgstr "Ajustes ▸ Opciones… (F5) abre la ventana de opciones del reproductor. Ajustes ▸ Apariencia elige la paleta (Vestra Dark, Vestra Light); la ventana de opciones también tiene una página Apariencia con vistas previas. Ajustes ▸ Idioma elige el idioma de la interfaz, que se usa a partir del siguiente inicio."
+msgstr "Configuración ▸ Opciones… (F5) abre la ventana de opciones del reproductor. Configuración ▸ Apariencia elige la paleta (Vestra Dark, Vestra Light); la ventana de opciones también tiene una página Apariencia con vistas previas. Configuración ▸ Idioma elige el idioma de la interfaz, que se usa a partir del siguiente inicio."
 
 #: manifest.json
 #, x-machine
 msgid "settings"
-msgstr "ajustes"
+msgstr "configuración"
 
 #: manifest.json
 #, x-machine
@@ -93,7 +94,7 @@ msgstr "idioma"
 #: ui/appearance.slint:90
 #, x-machine
 msgid "For bright rooms; the video area stays dark"
-msgstr "Para espacios luminosos; la zona del vídeo sigue oscura"
+msgstr "Para espacios luminosos; la zona del video sigue oscura"
 
 #: ui/appearance.slint:90
 #, x-machine
@@ -118,4 +119,4 @@ msgstr "Restaurar predeterminados"
 #: ui/language.slint:77
 #, x-machine
 msgid "Takes effect after restart."
-msgstr "Se aplica tras reiniciar."
+msgstr "Se aplicará al reiniciar."

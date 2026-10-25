@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -18,7 +19,7 @@ msgstr "Explora, instala y actualiza complementos"
 #: manifest.json
 #, x-machine
 msgid "Browse plugins from the official Vestra Player plugin repository: descriptions, changelogs, version history and the permissions they need. Install, update, roll back to the previous version or uninstall in one click; add third-party repositories (clearly marked as unofficial), install from a link or a local .vxp file, or drop a .vxp file on the video area. The official repository's index is digitally signed, and the store checks the signature and every package's checksum; versions revoked by a repository are disabled, with the reason."
-msgstr "Explora los complementos del repositorio oficial de Vestra Player: descripciones, registros de cambios, historial de versiones y los permisos que necesitan. Instala, actualiza, revierte a la versión anterior o desinstala con un clic; añade repositorios de terceros (marcados claramente como no oficiales), instala desde un enlace o un archivo .vxp local, o suelta un archivo .vxp sobre la zona del vídeo. El índice del repositorio oficial está firmado digitalmente, y la tienda comprueba la firma y la suma de comprobación de cada paquete; las versiones retiradas por un repositorio se desactivan, indicando el motivo."
+msgstr "Explora los complementos del repositorio oficial de Vestra Player: descripciones, registros de cambios, historial de versiones y los permisos que necesitan. Instala, actualiza, revierte a la versión anterior o desinstala con un clic; agrega repositorios de terceros (marcados claramente como no oficiales), instala desde un enlace o un archivo .vxp local, o suelta un archivo .vxp sobre la zona del video. El índice del repositorio oficial está firmado digitalmente, y la tienda comprueba la firma y la suma de comprobación de cada paquete; las versiones retiradas por un repositorio se desactivan, indicando el motivo."
 
 #: manifest.json
 #, x-machine
@@ -133,7 +134,7 @@ msgstr "Este complemento se está instalando o revirtiendo; inténtalo más tard
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "The Plugin Store lacks the “Manage plugins” permission"
-msgstr "La Tienda de complementos no tiene el permiso «Gestionar complementos»"
+msgstr "La Tienda de complementos no tiene el permiso «Administrar complementos»"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -303,7 +304,7 @@ msgstr "Descargando {} {}"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Downloading {} {} ({}%)"
-msgstr "Descargando {} {} ({} %)"
+msgstr "Descargando {} {} ({}%)"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -313,7 +314,7 @@ msgstr "Descargando el paquete del complemento"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Downloading the plugin package ({}%)"
-msgstr "Descargando el paquete del complemento ({} %)"
+msgstr "Descargando el paquete del complemento ({}%)"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -478,12 +479,12 @@ msgstr "No se puede conectar con {0} ({1}); se muestra la caché de {2}"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "This repository has already been added"
-msgstr "Este repositorio ya se ha añadido"
+msgstr "Este repositorio ya se ha agregado"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "At most {} repositories can be added"
-msgstr "Se pueden añadir como máximo {} repositorios"
+msgstr "Se pueden agregar como máximo {} repositorios"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -498,7 +499,7 @@ msgstr "No se pudo leer este repositorio: {}. Comprueba la dirección (la direcc
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Added {}"
-msgstr "Añadido: {}"
+msgstr "Agregado: {}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -658,7 +659,7 @@ msgstr "Mismo id que un complemento integrado del reproductor; no se puede insta
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Built-in plugins are updated with the player and cannot be uninstalled; to disable one, use “Settings ▸ Plugin Manager…”"
-msgstr "Los complementos integrados se actualizan con el reproductor y no se pueden desinstalar; para desactivar uno, usa «Ajustes ▸ Gestor de complementos…»"
+msgstr "Los complementos integrados se actualizan con el reproductor y no se pueden desinstalar; para desactivar uno, usa «Configuración ▸ Administrador de complementos…»"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -923,7 +924,7 @@ msgstr "Conexión rechazada"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Connection reset"
-msgstr "Conexión restablecida"
+msgstr "Conexión interrumpida"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -998,7 +999,7 @@ msgstr "Este complemento: los id que empiezan por vestra. están reservados para
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Enter a repository address starting with https://"
-msgstr "Introduce una dirección de repositorio que empiece por https://"
+msgstr "Escribe una dirección de repositorio que empiece por https://"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1078,13 +1079,7 @@ msgid ""
 "Current: {3}. After updating you can roll back to {3} in the store.\n"
 "\n"
 "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
-msgstr ""
-"Añadidos:\n"
-"{2}\n"
-"\n"
-"Actual: {3}. Tras actualizar, puedes revertir a {3} en la tienda.\n"
-"\n"
-"Un complemento es un programa completo: los permisos anteriores solo limitan lo que puede hacer con el reproductor, no la lectura y escritura de archivos ni el uso de la red."
+msgstr "Agregados:\n{2}\n\nActual: {3}. Tras actualizar, puedes revertir a {3} en la tienda.\n\nUn complemento es un programa completo: los permisos anteriores solo limitan lo que puede hacer con el reproductor, no la lectura y escritura de archivos ni el uso de la red."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1295,12 +1290,12 @@ msgstr "Sus menús, ventanas y efectos de procesamiento se quitan de inmediato."
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Add the unofficial repository “{}”?"
-msgstr "¿Añadir el repositorio no oficial «{}»?"
+msgstr "¿Agregar el repositorio no oficial «{}»?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Add the unofficial repository “Unnamed repository”?"
-msgstr "¿Añadir el repositorio no oficial «Repositorio sin nombre»?"
+msgstr "¿Agregar el repositorio no oficial «Repositorio sin nombre»?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1458,7 +1453,7 @@ msgstr ""
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Add menu commands and shortcuts"
-msgstr "Añadir comandos de menú y atajos"
+msgstr "Agregar comandos de menú y atajos"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1468,7 +1463,7 @@ msgstr "Abrir ventanas de herramientas"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Show panels in the bottom bar, the sidebar or behind the video"
-msgstr "Mostrar paneles en la barra inferior, la barra lateral o detrás del vídeo"
+msgstr "Mostrar paneles en la barra inferior, la barra lateral o detrás del video"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1478,7 +1473,7 @@ msgstr "Mostrar selectores de archivos y confirmaciones"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Show messages on the video"
-msgstr "Mostrar mensajes sobre el vídeo"
+msgstr "Mostrar mensajes sobre el video"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1493,7 +1488,7 @@ msgstr "Cambiar la paleta del reproductor"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Add pages to the Options window"
-msgstr "Añadir páginas a la ventana Opciones"
+msgstr "Agregar páginas a la ventana Opciones"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1513,7 +1508,7 @@ msgstr "Abrir medios, controlar la reproducción, mantener el equipo activo"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Provide audio and video it generates itself"
-msgstr "Proporcionar audio y vídeo generados por él mismo"
+msgstr "Proporcionar audio y video generados por él mismo"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1543,7 +1538,7 @@ msgstr "Hacer capturas y exportar clips"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Resolve online video addresses"
-msgstr "Resolver direcciones de vídeo en línea"
+msgstr "Resolver direcciones de video en línea"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1583,7 +1578,7 @@ msgstr "Reemplazar"
 #: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:121
 #, x-machine
 msgid "Add"
-msgstr "Añadir"
+msgstr "Agregar"
 
 #: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:79
 #, x-machine
@@ -1613,7 +1608,7 @@ msgstr "Desinstalar"
 #: store.ts:368 store.ts:369 store.ts:371
 #, x-machine
 msgid "Also delete its settings and data"
-msgstr "Eliminar también sus ajustes y datos"
+msgstr "Eliminar también su configuración y sus datos"
 
 #: store.ts:368 store.ts:369 store.ts:371
 #, x-machine
@@ -1663,7 +1658,7 @@ msgstr "Repositorios"
 #: ui/settings.slint:90
 #, x-machine
 msgid "Add Repository…"
-msgstr "Añadir repositorio…"
+msgstr "Agregar repositorio…"
 
 #: ui/settings.slint:114
 #, x-machine
@@ -1678,7 +1673,7 @@ msgstr "Cancelar"
 #: ui/settings.slint:130
 #, x-machine
 msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
-msgstr "Vestra Player no revisa los repositorios de terceros; sus complementos pueden leer tus archivos o usar la red. Añade solo repositorios de confianza. El repositorio oficial no se puede quitar; para que la tienda no se conecte, desactiva la Tienda de complementos en «Gestor de complementos»."
+msgstr "Vestra Player no revisa los repositorios de terceros; sus complementos pueden leer tus archivos o usar la red. Agrega solo repositorios de confianza. El repositorio oficial no se puede quitar; para que la tienda no se conecte, desactiva la Tienda de complementos en «Administrador de complementos»."
 
 #: ui/store.slint:216
 #, x-machine
@@ -1718,7 +1713,7 @@ msgstr "Ordenar: actualización"
 #: ui/store.slint:248
 #, x-machine
 msgid "You can also drop a .vxp plugin package on the player's video area to install it"
-msgstr "También puedes soltar un paquete de complemento .vxp sobre la zona del vídeo del reproductor para instalarlo"
+msgstr "También puedes soltar un paquete de complemento .vxp sobre la zona del video del reproductor para instalarlo"
 
 #: ui/store.slint:249
 #, x-machine
@@ -1773,7 +1768,7 @@ msgstr "Publicado"
 #: ui/store.slint:409
 #, x-machine
 msgid "Minimum player"
-msgstr "Reproductor mínimo"
+msgstr "Versión mín. del reproductor"
 
 #: ui/store.slint:475
 #, x-machine
@@ -1788,4 +1783,4 @@ msgstr "Un complemento es un programa completo: los permisos anteriores solo lim
 #: ui/store.slint:497
 #, x-machine
 msgid "Disable, reload, open the data folder: Settings ▸ Plugin Manager…"
-msgstr "Desactivar, recargar, abrir la carpeta de datos: Ajustes ▸ Gestor de complementos…"
+msgstr "Desactivar, recargar, abrir la carpeta de datos: Configuración ▸ Administrador de complementos…"

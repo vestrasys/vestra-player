@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -213,7 +214,7 @@ msgstr "No se está reproduciendo ningún archivo"
 #: main.ts:530
 #, x-machine
 msgid "Generated video cannot take external audio"
-msgstr "El vídeo generado no admite audio externo"
+msgstr "El video generado no admite audio externo"
 
 #: main.ts:539
 #, x-machine
@@ -398,7 +399,7 @@ msgstr "Cristalizador: desactivado"
 #: main.ts:651
 #, x-machine
 msgid "Audio processing reset"
-msgstr "Procesamiento de audio restablecido"
+msgstr "Se restableció el procesamiento de audio"
 
 #: manifest.json ui/workbench.slint:358
 #, x-machine
@@ -415,9 +416,7 @@ msgstr "Ecualizador, sincronización de audio, canales, pistas de audio y dispos
 msgid ""
 "A six-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\n"
 "Settings are kept across files and restarts; find it under Audio in the right-click menu and in the Audio Workbench… window."
-msgstr ""
-"Un ecualizador de seis bandas con preajustes, sincronización de audio, normalización y cristalizador, selección de canales, además de cambio de pista de audio, carga de archivos de audio externos y elección del dispositivo de salida.\n"
-"Los ajustes se mantienen entre archivos y reinicios; está en Audio del menú contextual y en la ventana Mesa de audio…"
+msgstr "Un ecualizador de seis bandas con preajustes, sincronización de audio, normalización y cristalizador, selección de canales, además de cambio de pista de audio, carga de archivos de audio externos y elección del dispositivo de salida.\nLa configuración se mantiene entre archivos y reinicios; está en Audio del menú contextual y en la ventana Mesa de audio…"
 
 #: manifest.json
 #, x-machine

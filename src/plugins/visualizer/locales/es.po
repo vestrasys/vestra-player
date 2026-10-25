@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -38,7 +39,7 @@ msgstr "Se usa el logotipo personalizado"
 #: main.ts:66
 #, x-machine
 msgid "Default logo restored"
-msgstr "Logotipo predeterminado restaurado"
+msgstr "Se restauró el logotipo predeterminado"
 
 #: main.ts:66
 #, x-machine
@@ -63,7 +64,7 @@ msgstr "Logotipo en reposo: desactivado"
 #: main.ts:66
 #, x-machine
 msgid "Cover cache cleared"
-msgstr "Caché de portadas vaciada"
+msgstr "Se vació la caché de portadas"
 
 #: main.ts:227
 #, x-machine
@@ -115,9 +116,7 @@ msgstr "Muestra la portada del álbum para solo audio y un logotipo en reposo"
 msgid ""
 "While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
 "Entries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
-msgstr ""
-"Mientras se reproduce audio sin imagen, muestra la portada del álbum con el título, el artista y el álbum; sin ningún medio abierto, muestra un logotipo (que puedes sustituir por tu propia imagen); mientras se abre un medio, muestra una pantalla de carga.\n"
-"Accesos: Audio ▸ Mostrar portada del álbum para solo audio, Ajustes ▸ Apariencia."
+msgstr "Mientras se reproduce audio sin imagen, muestra la portada del álbum con el título, el artista y el álbum; sin ningún medio abierto, muestra un logotipo (que puedes sustituir por tu propia imagen); mientras se abre un medio, muestra una pantalla de carga.\nAccesos: Audio ▸ Mostrar portada del álbum para solo audio, Configuración ▸ Apariencia."
 
 #: manifest.json
 #, x-machine

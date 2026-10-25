@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -88,7 +89,7 @@ msgstr "¿Ignorar los atajos predeterminados?"
 #: ignore.ts:49
 #, x-machine
 msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Leave Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
-msgstr "Solo funcionarán las teclas que cambiaste en Atajos de teclado; las teclas predeterminadas, como Espacio y las flechas, dejan de funcionar. Salir (⌘Q) y Salir de pantalla completa (Esc) no se ven afectados. Puedes desactivarlo en cualquier momento en Ajustes ▸ Ignorar atajos predeterminados."
+msgstr "Solo funcionarán las teclas que cambiaste en Atajos de teclado; las teclas predeterminadas, como Espacio y las flechas, dejan de funcionar. Salir (⌘Q) y Salir de pantalla completa (Esc) no se ven afectados. Puedes desactivarlo en cualquier momento en Configuración ▸ Ignorar atajos predeterminados."
 
 #: ignore.ts:50
 #, x-machine
@@ -128,17 +129,17 @@ msgstr "¿Restaurar todos los atajos predeterminados?"
 #: keys-page.ts:461
 #, x-machine
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
-msgstr "Se borrarán tus cambios en los atajos y acciones del ratón de todos los comandos, incluidos los de complementos que no están cargados."
+msgstr "Se borrarán tus cambios en los atajos y acciones del mouse de todos los comandos, incluidos los de complementos que no están cargados."
 
 #: keys-page.ts:462
 #, x-machine
 msgid "Restore All Defaults"
-msgstr "Restaurar todo lo predeterminado"
+msgstr "Restaurar valores predeterminados"
 
 #: keys-page.ts:474
 #, x-machine
 msgid "Shortcuts restored to defaults"
-msgstr "Atajos restaurados a los predeterminados"
+msgstr "Se restauraron los atajos predeterminados"
 
 #. only the part before the extension.
 #: keys-page.ts:485
@@ -160,7 +161,7 @@ msgstr "Atajos de teclado…"
 #: main.ts:39
 #, x-machine
 msgid "Mouse…"
-msgstr "Ratón…"
+msgstr "Mouse…"
 
 #: main.ts:46
 #, x-machine
@@ -170,26 +171,24 @@ msgstr "Ignorar atajos predeterminados"
 #: manifest.json
 #, x-machine
 msgid "Shortcut Settings"
-msgstr "Ajustes de atajos"
+msgstr "Configuración de atajos"
 
 #: manifest.json
 #, x-machine
 msgid "View and rebind keyboard shortcuts and mouse actions"
-msgstr "Consulta y reasigna atajos de teclado y acciones del ratón"
+msgstr "Consulta y reasigna atajos de teclado y acciones del mouse"
 
 #: manifest.json
 #, x-machine
 msgid ""
 "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\n"
 "Open it from the context menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
-msgstr ""
-"Muestra los comandos del reproductor y de cada complemento en la categoría Teclas y ratón de la ventana de opciones: busca por comando o tecla, reasigna, quita asignaciones, restaura los predeterminados, revisa conflictos y exporta la lista. Asigna comandos a los clics y la rueda del ratón sobre el vídeo, y puede ignorar todos los atajos predeterminados a la vez.\n"
-"Ábrelo desde el menú contextual: Ajustes ▸ Atajos de teclado… / Ratón… / Ignorar atajos predeterminados."
+msgstr "Muestra los comandos del reproductor y de cada complemento en la categoría Teclas y mouse de la ventana de opciones: busca por comando o tecla, reasigna, quita asignaciones, restaura los predeterminados, revisa conflictos y exporta la lista. Asigna comandos a los clics y la rueda del mouse sobre el video, y puede ignorar todos los atajos predeterminados a la vez.\nÁbrelo desde el menú contextual: Configuración ▸ Atajos de teclado… / Mouse… / Ignorar atajos predeterminados."
 
 #: manifest.json
 #, x-machine
 msgid "settings"
-msgstr "ajustes"
+msgstr "configuración"
 
 #: manifest.json
 #, x-machine
@@ -199,12 +198,12 @@ msgstr "atajos"
 #: manifest.json
 #, x-machine
 msgid "mouse"
-msgstr "ratón"
+msgstr "mouse"
 
 #: mouse-page.ts:38
 #, x-machine
 msgid "Mouse"
-msgstr "Ratón"
+msgstr "Mouse"
 
 #: mouse-page.ts:178 ui/parts.slint:41
 #, x-machine
@@ -269,17 +268,17 @@ msgstr "{}+{}"
 #: mouse-page.ts:182
 #, x-machine
 msgid "Mouse action updated: {0} = {1}"
-msgstr "Acción del ratón actualizada: {0} = {1}"
+msgstr "Acción del mouse actualizada: {0} = {1}"
 
 #: mouse-page.ts:183
 #, x-machine
 msgid "Mouse action updated: {} = (none)"
-msgstr "Acción del ratón actualizada: {} = (ninguna)"
+msgstr "Acción del mouse actualizada: {} = (ninguna)"
 
 #: ui/keys.slint:111
 #, x-machine
 msgid "Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)"
-msgstr "Se ignoran los atajos predeterminados (Ajustes ▸ Ignorar atajos predeterminados)"
+msgstr "Se ignoran los atajos predeterminados (Configuración ▸ Ignorar atajos predeterminados)"
 
 #: ui/keys.slint:112
 #, x-machine
@@ -349,12 +348,12 @@ msgstr "{0} ({1})"
 #: ui/keys.slint:296
 #, x-machine
 msgid "Add Key…"
-msgstr "Añadir tecla…"
+msgstr "Agregar tecla…"
 
 #: ui/keys.slint:309
 #, x-machine
 msgid "Press a shortcut (Esc cancels)"
-msgstr "Pulsa un atajo (Esc cancela)"
+msgstr "Presiona un atajo (Esc cancela)"
 
 #: ui/keys.slint:339
 #, x-machine
@@ -394,7 +393,7 @@ msgstr "Cancelar"
 #: ui/keys.slint:379
 #, x-machine
 msgid "Restore All Defaults…"
-msgstr "Restaurar todo lo predeterminado…"
+msgstr "Restaurar valores predeterminados…"
 
 #: ui/keys.slint:380
 #, x-machine
@@ -479,7 +478,7 @@ msgstr "Error al cambiar: {}"
 #: ui/parts.slint:79
 #, x-machine
 msgid "Press Esc to cancel; to bind Esc itself, click “Esc” next to the box"
-msgstr "Pulsa Esc para cancelar; para asignar la propia tecla Esc, haz clic en «Esc» junto al cuadro"
+msgstr "Presiona Esc para cancelar; para asignar la propia tecla Esc, haz clic en «Esc» junto al cuadro"
 
 #: ui/parts.slint:80
 #, x-machine
@@ -539,7 +538,7 @@ msgstr "No se puede confirmar: {}"
 #: ui/parts.slint:91
 #, x-machine
 msgid "All defaults restored"
-msgstr "Todo restaurado a lo predeterminado"
+msgstr "Se restauraron los valores predeterminados"
 
 #: ui/parts.slint:92
 #, x-machine

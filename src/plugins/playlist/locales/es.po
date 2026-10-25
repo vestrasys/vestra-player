@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: es\n"
@@ -8,27 +9,27 @@ msgstr ""
 #: drop.ts:197
 #, x-machine
 msgid "Nothing to add: {}"
-msgstr "Nada que añadir: {}"
+msgstr "Nada que agregar: {}"
 
 #: main.ts:134
 #, x-machine
 msgid "Added {count} files from the same folder"
-msgstr "Se añadieron {count} archivos de la misma carpeta"
+msgstr "Se agregaron {count} archivos de la misma carpeta"
 
 #: main.ts:134
 #, x-machine
 msgid "Added {count} files from the same folder, limit of {limit} reached"
-msgstr "Se añadieron {count} archivos de la misma carpeta; se alcanzó el límite de {limit}"
+msgstr "Se agregaron {count} archivos de la misma carpeta; se alcanzó el límite de {limit}"
 
 #: main.ts:134
 #, x-machine
 msgid "Nothing to add"
-msgstr "Nada que añadir"
+msgstr "Nada que agregar"
 
 #: main.ts:134
 #, x-machine
 msgid "Link added"
-msgstr "Enlace añadido"
+msgstr "Enlace agregado"
 
 #: main.ts:134
 #, x-machine
@@ -78,7 +79,7 @@ msgstr "El medio actual se eliminó de la lista"
 #: main.ts:134
 #, x-machine
 msgid "List cleared; the current media continues"
-msgstr "Lista vaciada; el medio actual continúa"
+msgstr "Se vació la lista; el medio actual continúa"
 
 #: main.ts:134
 #, x-machine
@@ -243,7 +244,7 @@ msgstr "No volver a preguntar"
 #: main.ts:275
 #, x-machine
 msgid "Add to Playlist"
-msgstr "Añadir a la lista de reproducción"
+msgstr "Agregar a la lista de reproducción"
 
 #: main.ts:289
 #, x-machine
@@ -253,12 +254,12 @@ msgstr "Abrir carpeta"
 #: main.ts:289
 #, x-machine
 msgid "Add Folder to Playlist"
-msgstr "Añadir carpeta a la lista de reproducción"
+msgstr "Agregar carpeta a la lista de reproducción"
 
 #: main.ts:318
 #, x-machine
 msgid "another source is opening, only added to the list"
-msgstr "se está abriendo otra fuente; solo se añadió a la lista"
+msgstr "se está abriendo otra fuente; solo se agregó a la lista"
 
 #: main.ts:416
 #, x-machine
@@ -293,17 +294,17 @@ msgstr "Reproducir"
 #: main.ts:527 main.ts:561
 #, x-machine
 msgid "Add Files…"
-msgstr "Añadir archivos…"
+msgstr "Agregar archivos…"
 
 #: main.ts:527 main.ts:561
 #, x-machine
 msgid "Add Folder…"
-msgstr "Añadir carpeta…"
+msgstr "Agregar carpeta…"
 
 #: main.ts:527 main.ts:561
 #, x-machine
 msgid "Add Link…"
-msgstr "Añadir enlace…"
+msgstr "Agregar enlace…"
 
 #: main.ts:527
 #, x-machine
@@ -433,7 +434,7 @@ msgstr "Cerrar lista"
 #: main.ts:527
 #, x-machine
 msgid "Playlist Settings…"
-msgstr "Ajustes de la lista de reproducción…"
+msgstr "Configuración de la lista de reproducción…"
 
 #: main.ts:529 main.ts:532 main.ts:564 main.ts:565
 #, x-machine
@@ -443,7 +444,7 @@ msgstr "Abriendo, o aún no se conoce el resultado"
 #: main.ts:529 main.ts:532 main.ts:564 main.ts:565
 #, x-machine
 msgid "Nothing to act on"
-msgstr "No hay nada sobre lo que actuar"
+msgstr "No hay elementos para esta acción"
 
 #: main.ts:529 main.ts:532 main.ts:555 main.ts:564 main.ts:565
 #, x-machine
@@ -508,12 +509,12 @@ msgstr "Abrir solo ese archivo"
 #: main.ts:561
 #, x-machine
 msgid "Add Similar Files"
-msgstr "Añadir archivos similares"
+msgstr "Agregar archivos similares"
 
 #: main.ts:561
 #, x-machine
 msgid "Add All Files in the Folder"
-msgstr "Añadir todos los archivos de la carpeta"
+msgstr "Agregar todos los archivos de la carpeta"
 
 #: main.ts:561
 #, x-machine
@@ -533,21 +534,19 @@ msgstr "Confirmar antes de quitar todo"
 #: main.ts:988
 #, x-machine
 msgid "opening, added to the list"
-msgstr "abriendo; añadido a la lista"
+msgstr "abriendo; agregado a la lista"
 
 #: manifest.json
 #, x-machine
 msgid "Sidebar playlist: add, sort, repeat and shuffle"
-msgstr "Lista de reproducción en la barra lateral: añadir, ordenar, repetir y aleatorio"
+msgstr "Lista de reproducción en la barra lateral: agregar, ordenar, repetir y aleatorio"
 
 #: manifest.json
 #, x-machine
 msgid ""
 "A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\n"
 "Entry points: \"Playlist\" (F6) in the context menu and Playback ▸ Playlist."
-msgstr ""
-"Una lista de reproducción en la barra lateral derecha: añade archivos, carpetas y enlaces, arrastrar y soltar, ordena y busca, repite y reproduce en orden aleatorio, y añade los archivos similares de la misma carpeta al abrir un archivo; lee y escribe listas M3U, M3U8 y PLS y restaura la lista tras reiniciar.\n"
-"Accesos: «Lista de reproducción» (F6) en el menú contextual y Reproducción ▸ Lista de reproducción."
+msgstr "Una lista de reproducción en la barra lateral derecha: agrega archivos, carpetas y enlaces, admite arrastrar y soltar, ordena y busca, repite y reproduce en orden aleatorio, y agrega los archivos similares de la misma carpeta al abrir un archivo; lee y escribe listas M3U, M3U8 y PLS y restaura la lista tras reiniciar.\nAccesos: «Lista de reproducción» (F6) en el menú contextual y Reproducción ▸ Lista de reproducción."
 
 #: manifest.json
 #, x-machine
@@ -567,7 +566,7 @@ msgstr "arrastrar y soltar"
 #: notices.ts:82
 #, x-machine
 msgid "access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)"
-msgstr "no se permite el acceso a esta ubicación (Ajustes del Sistema ▸ Privacidad y seguridad ▸ Archivos y carpetas)"
+msgstr "no se permite el acceso a esta ubicación (Configuración del Sistema ▸ Privacidad y seguridad ▸ Archivos y carpetas)"
 
 #: notices.ts:84
 #, x-machine
@@ -612,7 +611,7 @@ msgstr "no se puede leer {}: {}"
 #: queue.ts:349
 #, x-machine
 msgid "Added: {}"
-msgstr "Añadidos: {}"
+msgstr "Agregados: {}"
 
 #: queue.ts:350
 #, x-machine
@@ -632,22 +631,22 @@ msgstr "la lista está llena con {} elementos"
 #: ui/link.slint:18
 #, x-machine
 msgid "{} links added, only selected; playing them needs an available source provider"
-msgstr "Se añadieron {} enlaces, solo seleccionados; para reproducirlos se necesita un proveedor de fuentes disponible"
+msgstr "Se agregaron {} enlaces, solo seleccionados; para reproducirlos se necesita un proveedor de fuentes disponible"
 
 #: ui/link.slint:18
 #, x-machine
 msgid "Link added, only selected; playing it needs an available source provider"
-msgstr "Enlace añadido, solo seleccionado; para reproducirlo se necesita un proveedor de fuentes disponible"
+msgstr "Enlace agregado, solo seleccionado; para reproducirlo se necesita un proveedor de fuentes disponible"
 
 #: ui/link.slint:20
 #, x-machine
 msgid "Line {}: Enter a complete HTTP(S) link"
-msgstr "Línea {}: introduce un enlace HTTP(S) completo"
+msgstr "Línea {}: escribe un enlace HTTP(S) completo"
 
 #: ui/link.slint:20
 #, x-machine
 msgid "Enter a complete HTTP(S) link"
-msgstr "Introduce un enlace HTTP(S) completo"
+msgstr "Escribe un enlace HTTP(S) completo"
 
 #: ui/link.slint:22
 #, x-machine
@@ -672,17 +671,17 @@ msgstr "La lista está llena con {} elementos"
 #: ui/link.slint:25
 #, x-machine
 msgid "Enter HTTP(S) links; adding only selects, it does not play"
-msgstr "Introduce enlaces HTTP(S); añadir solo selecciona, no reproduce"
+msgstr "Escribe enlaces HTTP(S); agregar solo selecciona, no reproduce"
 
 #: ui/link.slint:26
 #, x-machine
 msgid "Add Links to Playlist"
-msgstr "Añadir enlaces a la lista de reproducción"
+msgstr "Agregar enlaces a la lista de reproducción"
 
 #: ui/link.slint:42
 #, x-machine
 msgid "Enter the web addresses to add to the playlist below, one per line."
-msgstr "Introduce abajo las direcciones web que quieres añadir a la lista de reproducción, una por línea."
+msgstr "Escribe abajo las direcciones web que quieres agregar a la lista de reproducción, una por línea."
 
 #: ui/link.slint:48
 #, x-machine
@@ -692,7 +691,7 @@ msgstr "Ejemplo: {}"
 #: ui/link.slint:55 ui/sidebar.slint:466
 #, x-machine
 msgid "Add"
-msgstr "Añadir"
+msgstr "Agregar"
 
 #: ui/settings.slint:63
 #, x-machine
@@ -712,17 +711,17 @@ msgstr "Abrir solo ese archivo"
 #: ui/settings.slint:70
 #, x-machine
 msgid "Add similar files"
-msgstr "Añadir archivos similares"
+msgstr "Agregar archivos similares"
 
 #: ui/settings.slint:70
 #, x-machine
 msgid "Add all files in the folder"
-msgstr "Añadir todos los archivos de la carpeta"
+msgstr "Agregar todos los archivos de la carpeta"
 
 #: ui/settings.slint:76
 #, x-machine
 msgid "Append when opening or dropping; don't clear the list"
-msgstr "Añadir al final al abrir o soltar; no vaciar la lista"
+msgstr "Agregar al final al abrir o soltar; no vaciar la lista"
 
 #: ui/settings.slint:81
 #, x-machine
