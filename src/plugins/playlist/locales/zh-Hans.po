@@ -165,7 +165,7 @@ msgstr "文件规范路径与已有项重复，已选择已有项"
 msgid "Close the other dialog first"
 msgstr "请先关闭另一个对话框"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:246
 msgid "Playlist"
 msgstr "播放列表"
 
@@ -329,7 +329,7 @@ msgstr "倒置当前顺序"
 msgid "Select All"
 msgstr "全选"
 
-#: main.ts:527 ui/sidebar.slint:541
+#: main.ts:527 ui/sidebar.slint:548
 msgid "Search"
 msgstr "搜索"
 
@@ -425,7 +425,7 @@ msgstr "记住列表"
 msgid "Confirm Before Removing All"
 msgstr "移除全部前确认"
 
-#: main.ts:988
+#: main.ts:1035
 msgid "opening, added to the list"
 msgstr "正在打开，已加入列表"
 
@@ -553,7 +553,7 @@ msgstr "在下方输入要加入播放列表的网址，每行一个。"
 msgid "Example: {}"
 msgstr "例) {}"
 
-#: ui/link.slint:63 ui/sidebar.slint:466
+#: ui/link.slint:63 ui/sidebar.slint:473
 msgid "Add"
 msgstr "添加"
 
@@ -609,23 +609,23 @@ msgstr "记住列表"
 msgid "Confirm before removing all"
 msgstr "移除全部前确认"
 
-#: ui/sidebar.slint:190
+#: ui/sidebar.slint:194
 msgid "Filtered {}"
 msgstr "筛选 {}"
 
-#: ui/sidebar.slint:251
+#: ui/sidebar.slint:255
 msgid "Attach to main window"
 msgstr "附着到主窗口"
 
-#: ui/sidebar.slint:251
+#: ui/sidebar.slint:255
 msgid "Detach as floating window"
 msgstr "分离为浮动窗口"
 
-#: ui/sidebar.slint:257
+#: ui/sidebar.slint:261
 msgid "Close list"
 msgstr "关闭列表"
 
-#: ui/sidebar.slint:314
+#: ui/sidebar.slint:321
 msgid ""
 "{}\n"
 "The file does not exist"
@@ -633,7 +633,7 @@ msgstr ""
 "{}\n"
 "文件不存在"
 
-#: ui/sidebar.slint:315
+#: ui/sidebar.slint:322
 msgid ""
 "{}\n"
 "The file does not exist or cannot be read now; can retry"
@@ -641,7 +641,7 @@ msgstr ""
 "{}\n"
 "文件不存在或暂不可读取，可重试"
 
-#: ui/sidebar.slint:316
+#: ui/sidebar.slint:323
 msgid ""
 "{}\n"
 "Cannot open this media"
@@ -649,34 +649,34 @@ msgstr ""
 "{}\n"
 "无法打开此媒体"
 
-#: ui/sidebar.slint:414
+#: ui/sidebar.slint:421
 msgid "No matches"
 msgstr "无匹配项"
 
-#: ui/sidebar.slint:441
+#: ui/sidebar.slint:448
 msgid "Move to top (Ctrl+Home)"
 msgstr "置顶 (Ctrl+Home)"
 
-#: ui/sidebar.slint:447
+#: ui/sidebar.slint:454
 msgid "Move up (Ctrl+↑)"
 msgstr "上移 (Ctrl+↑)"
 
-#: ui/sidebar.slint:453
+#: ui/sidebar.slint:460
 msgid "Move down (Ctrl+↓)"
 msgstr "下移 (Ctrl+↓)"
 
-#: ui/sidebar.slint:459
+#: ui/sidebar.slint:466
 msgid "Move to bottom (Ctrl+End)"
 msgstr "置底 (Ctrl+End)"
 
-#: ui/sidebar.slint:473
+#: ui/sidebar.slint:480
 msgid "Delete"
 msgstr "删除"
 
-#: ui/sidebar.slint:480
+#: ui/sidebar.slint:487
 msgid "Sort"
 msgstr "排序"
 
-#: ui/sidebar.slint:492
+#: ui/sidebar.slint:499
 msgid "Search (Ctrl+S)"
 msgstr "搜索 (Ctrl+S)"

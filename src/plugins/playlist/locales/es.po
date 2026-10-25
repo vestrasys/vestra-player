@@ -206,7 +206,7 @@ msgstr "La ruta canónica del archivo coincide con un elemento existente; se sel
 msgid "Close the other dialog first"
 msgstr "Cierra primero el otro cuadro de diálogo"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:246
 #, x-machine
 msgid "Playlist"
 msgstr "Lista de reproducción"
@@ -411,7 +411,7 @@ msgstr "Invertir el orden actual"
 msgid "Select All"
 msgstr "Seleccionar todo"
 
-#: main.ts:527 ui/sidebar.slint:541
+#: main.ts:527 ui/sidebar.slint:548
 #, x-machine
 msgid "Search"
 msgstr "Buscar"
@@ -531,7 +531,7 @@ msgstr "Recordar lista"
 msgid "Confirm Before Removing All"
 msgstr "Confirmar antes de quitar todo"
 
-#: main.ts:988
+#: main.ts:1035
 #, x-machine
 msgid "opening, added to the list"
 msgstr "abriendo; agregado a la lista"
@@ -690,7 +690,7 @@ msgstr "Escribe abajo las direcciones web que quieres agregar a la lista de repr
 msgid "Example: {}"
 msgstr "Ejemplo: {}"
 
-#: ui/link.slint:63 ui/sidebar.slint:466
+#: ui/link.slint:63 ui/sidebar.slint:473
 #, x-machine
 msgid "Add"
 msgstr "Agregar"
@@ -760,27 +760,27 @@ msgstr "Recordar lista"
 msgid "Confirm before removing all"
 msgstr "Confirmar antes de quitar todo"
 
-#: ui/sidebar.slint:190
+#: ui/sidebar.slint:194
 #, x-machine
 msgid "Filtered {}"
 msgstr "Filtrados: {}"
 
-#: ui/sidebar.slint:251
+#: ui/sidebar.slint:255
 #, x-machine
 msgid "Attach to main window"
 msgstr "Acoplar a la ventana principal"
 
-#: ui/sidebar.slint:251
+#: ui/sidebar.slint:255
 #, x-machine
 msgid "Detach as floating window"
 msgstr "Separar como ventana flotante"
 
-#: ui/sidebar.slint:257
+#: ui/sidebar.slint:261
 #, x-machine
 msgid "Close list"
 msgstr "Cerrar lista"
 
-#: ui/sidebar.slint:314
+#: ui/sidebar.slint:321
 #, x-machine
 msgid ""
 "{}\n"
@@ -789,7 +789,7 @@ msgstr ""
 "{}\n"
 "El archivo no existe"
 
-#: ui/sidebar.slint:315
+#: ui/sidebar.slint:322
 #, x-machine
 msgid ""
 "{}\n"
@@ -798,7 +798,7 @@ msgstr ""
 "{}\n"
 "El archivo no existe o no se puede leer ahora; se puede reintentar"
 
-#: ui/sidebar.slint:316
+#: ui/sidebar.slint:323
 #, x-machine
 msgid ""
 "{}\n"
@@ -807,42 +807,42 @@ msgstr ""
 "{}\n"
 "No se puede abrir este medio"
 
-#: ui/sidebar.slint:414
+#: ui/sidebar.slint:421
 #, x-machine
 msgid "No matches"
 msgstr "No hay coincidencias"
 
-#: ui/sidebar.slint:441
+#: ui/sidebar.slint:448
 #, x-machine
 msgid "Move to top (Ctrl+Home)"
 msgstr "Mover al principio (Ctrl+Inicio)"
 
-#: ui/sidebar.slint:447
+#: ui/sidebar.slint:454
 #, x-machine
 msgid "Move up (Ctrl+↑)"
 msgstr "Subir (Ctrl+↑)"
 
-#: ui/sidebar.slint:453
+#: ui/sidebar.slint:460
 #, x-machine
 msgid "Move down (Ctrl+↓)"
 msgstr "Bajar (Ctrl+↓)"
 
-#: ui/sidebar.slint:459
+#: ui/sidebar.slint:466
 #, x-machine
 msgid "Move to bottom (Ctrl+End)"
 msgstr "Mover al final (Ctrl+Fin)"
 
-#: ui/sidebar.slint:473
+#: ui/sidebar.slint:480
 #, x-machine
 msgid "Delete"
 msgstr "Eliminar"
 
-#: ui/sidebar.slint:480
+#: ui/sidebar.slint:487
 #, x-machine
 msgid "Sort"
 msgstr "Ordenar"
 
-#: ui/sidebar.slint:492
+#: ui/sidebar.slint:499
 #, x-machine
 msgid "Search (Ctrl+S)"
 msgstr "Buscar (Ctrl+S)"

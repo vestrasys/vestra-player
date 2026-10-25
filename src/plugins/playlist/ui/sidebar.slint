@@ -47,6 +47,10 @@ export global PlaylistBridge {
     // G-08: each increment of `scroll-request` scrolls the list to `scroll-to-y` (logical px).
     in property <float> scroll-to-y;
     in property <int> scroll-request;
+    // Where a newly shown list starts (logical px): the panel is created anew each time it
+    // shows (F6, its tab, detached, fullscreen pop-out), and the plugin keeps this at the
+    // list's scroll, or while the panel is hidden at the scroll that centres the playing row.
+    in property <float> show-y;
     // (row, Ctrl/Cmd held, Shift held)
     callback select-row(string, bool, bool);
     callback play-row(string);
@@ -266,7 +270,10 @@ export component PlaylistSidebar inherits Rectangle {
             list-area := Rectangle {
                 vertical-stretch: 1;
                 background: Theme.bg-list;
-                init => { PlaylistBridge.list-area(-list.content-y / 1px, self.height / 1px, self.y / 1px); }
+                init => {
+                    list.content-y = -PlaylistBridge.show-y * 1px;
+                    PlaylistBridge.list-area(-list.content-y / 1px, self.height / 1px, self.y / 1px);
+                }
                 changed height => { PlaylistBridge.list-area(-list.content-y / 1px, self.height / 1px, self.y / 1px); }
                 changed y => { PlaylistBridge.list-area(-list.content-y / 1px, self.height / 1px, self.y / 1px); }
                 // The list menu opens when the right button is released (as the main menu, G-15).

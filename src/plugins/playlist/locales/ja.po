@@ -206,7 +206,7 @@ msgstr "ファイルの正規パスが既存の項目と同じです。その項
 msgid "Close the other dialog first"
 msgstr "先にもう一方のダイアログを閉じてください"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:246
 #, x-machine
 msgid "Playlist"
 msgstr "プレイリスト"
@@ -411,7 +411,7 @@ msgstr "現在の順序を逆にする"
 msgid "Select All"
 msgstr "すべて選択"
 
-#: main.ts:527 ui/sidebar.slint:541
+#: main.ts:527 ui/sidebar.slint:548
 #, x-machine
 msgid "Search"
 msgstr "検索"
@@ -531,7 +531,7 @@ msgstr "リストを記憶"
 msgid "Confirm Before Removing All"
 msgstr "すべて削除する前に確認"
 
-#: main.ts:988
+#: main.ts:1035
 #, x-machine
 msgid "opening, added to the list"
 msgstr "開いている途中のため、リストに追加しました"
@@ -690,7 +690,7 @@ msgstr "プレイリストに追加する Web アドレスを、1 行に 1 つ�
 msgid "Example: {}"
 msgstr "例：{}"
 
-#: ui/link.slint:63 ui/sidebar.slint:466
+#: ui/link.slint:63 ui/sidebar.slint:473
 #, x-machine
 msgid "Add"
 msgstr "追加"
@@ -760,27 +760,27 @@ msgstr "リストを記憶"
 msgid "Confirm before removing all"
 msgstr "すべて削除する前に確認"
 
-#: ui/sidebar.slint:190
+#: ui/sidebar.slint:194
 #, x-machine
 msgid "Filtered {}"
 msgstr "絞り込み {}"
 
-#: ui/sidebar.slint:251
+#: ui/sidebar.slint:255
 #, x-machine
 msgid "Attach to main window"
 msgstr "メインウインドウに戻す"
 
-#: ui/sidebar.slint:251
+#: ui/sidebar.slint:255
 #, x-machine
 msgid "Detach as floating window"
 msgstr "フローティングウインドウとして切り離す"
 
-#: ui/sidebar.slint:257
+#: ui/sidebar.slint:261
 #, x-machine
 msgid "Close list"
 msgstr "リストを閉じる"
 
-#: ui/sidebar.slint:314
+#: ui/sidebar.slint:321
 #, x-machine
 msgid ""
 "{}\n"
@@ -789,7 +789,7 @@ msgstr ""
 "{}\n"
 "ファイルが存在しません"
 
-#: ui/sidebar.slint:315
+#: ui/sidebar.slint:322
 #, x-machine
 msgid ""
 "{}\n"
@@ -798,7 +798,7 @@ msgstr ""
 "{}\n"
 "ファイルが存在しないか、現在読み取れません。再試行できます"
 
-#: ui/sidebar.slint:316
+#: ui/sidebar.slint:323
 #, x-machine
 msgid ""
 "{}\n"
@@ -807,42 +807,42 @@ msgstr ""
 "{}\n"
 "このメディアを開けません"
 
-#: ui/sidebar.slint:414
+#: ui/sidebar.slint:421
 #, x-machine
 msgid "No matches"
 msgstr "一致する項目はありません"
 
-#: ui/sidebar.slint:441
+#: ui/sidebar.slint:448
 #, x-machine
 msgid "Move to top (Ctrl+Home)"
 msgstr "先頭へ移動（Ctrl+Home）"
 
-#: ui/sidebar.slint:447
+#: ui/sidebar.slint:454
 #, x-machine
 msgid "Move up (Ctrl+↑)"
 msgstr "上へ移動（Ctrl+↑）"
 
-#: ui/sidebar.slint:453
+#: ui/sidebar.slint:460
 #, x-machine
 msgid "Move down (Ctrl+↓)"
 msgstr "下へ移動（Ctrl+↓）"
 
-#: ui/sidebar.slint:459
+#: ui/sidebar.slint:466
 #, x-machine
 msgid "Move to bottom (Ctrl+End)"
 msgstr "末尾へ移動（Ctrl+End）"
 
-#: ui/sidebar.slint:473
+#: ui/sidebar.slint:480
 #, x-machine
 msgid "Delete"
 msgstr "削除"
 
-#: ui/sidebar.slint:480
+#: ui/sidebar.slint:487
 #, x-machine
 msgid "Sort"
 msgstr "並べ替え"
 
-#: ui/sidebar.slint:492
+#: ui/sidebar.slint:499
 #, x-machine
 msgid "Search (Ctrl+S)"
 msgstr "検索（Ctrl+S）"
