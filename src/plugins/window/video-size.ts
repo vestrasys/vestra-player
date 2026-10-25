@@ -24,7 +24,8 @@ export class VideoSize {
   /** The source whose size is known or being probed; reset whenever the size is dropped. */
   #probed = -1;
   #announced = -1;
-  #timer: ReturnType<typeof setTimeout> | null = null;
+  /** Cancels the pending retry of the probe, if any. */
+  #retry: (() => void) | null = null;
   #disposed = false;
   /** G-02: called once per source, when a probe first finds its video size (not again after a restart). */
   onFirstSize: ((source: number, size: Size) => void) | null = null;
@@ -33,7 +34,7 @@ export class VideoSize {
     this.#plugin = plugin;
     plugin.onDispose(() => {
       this.#disposed = true;
-      if (this.#timer) clearTimeout(this.#timer);
+      this.#cancelRetry();
     });
   }
 
@@ -48,12 +49,11 @@ export class VideoSize {
       this.#source = state.sourceId;
       // A restart keeps the source id but passes through `loading`: probe again on its `ready`.
       this.#probed = -1;
-      if (this.#timer) clearTimeout(this.#timer);
-      this.#timer = null;
+      this.#cancelRetry();
     }
     if (state.phase === "ready" && this.#probed !== state.sourceId) {
       this.#probed = state.sourceId;
-      if (this.#timer) clearTimeout(this.#timer);
+      this.#cancelRetry();
       void this.#probe(state.sourceId, timing.probeAttempts);
     }
   }
@@ -69,8 +69,13 @@ export class VideoSize {
     return this.#size;
   }
 
+  #cancelRetry() {
+    this.#retry?.();
+    this.#retry = null;
+  }
+
   async #probe(source: number, attempts: number) {
-    this.#timer = null;
+    this.#retry = null;
     const stats = await this.#plugin.player.stats().catch(() => null);
     const current = this.#plugin.player.state;
     if (this.#disposed || current.sourceId !== source || !showing(current)) return;
@@ -83,7 +88,7 @@ export class VideoSize {
         this.onFirstSize?.(source, size);
       }
     } else if (attempts > 1) {
-      this.#timer = setTimeout(() => void this.#probe(source, attempts - 1), timing.probeRetry);
+      this.#retry = timing.later(() => void this.#probe(source, attempts - 1), timing.probeRetry);
     }
   }
 }

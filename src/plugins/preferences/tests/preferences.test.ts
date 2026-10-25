@@ -241,11 +241,16 @@ test("a refused switch is reported and changes nothing", async () => {
 });
 
 test("Language: the menu and the page save the choice for the next start", async () => {
+  // Run in a translated language other than the one picked, so a switch at
+  // runtime would show. The texts come from this run's catalog (whatever
+  // its wording), never from the machine's locale.
   const { host, plugin } = await start(new TestHost(), "fr");
+  const shown = (text: string, args?: string[]) => host.translate(text, args);
+  assert.notEqual(shown("Language"), "Language", "fr has a catalog");
   const p = languagePage(host);
   assert.deepEqual([p.category, p.title, p.order, p.file, p.component, p.global], [
     "general",
-    "Language",
+    shown("Language"),
     10,
     "ui/language.slint",
     "LanguagePage",
@@ -259,9 +264,12 @@ test("Language: the menu and the page save the choice for the next start", async
   assert.equal(host.command("language.ja").state.checked, true);
   assert.equal(host.command("language.system").state.checked, false);
   assert.equal(p.props.language, "ja");
-  assert.deepEqual(host.osd, ["Language: 日本語. Takes effect after restart"]);
-  // The language of this run stays.
+  assert.deepEqual(host.osd, [shown("Language: {}. Takes effect after restart", ["日本語"])]);
+  // The language of this run stays (restart-only): same locale, same texts.
   assert.equal(plugin.i18n.locale, "fr");
+  assert.equal(host.locale, "fr");
+  assert.equal(p.title, shown("Language"));
+  assert.equal(host.command("language.system").display.path.at(-1), shown("Follow System"));
   // The page, the same choice again, and an unknown one.
   p.emit("pick", "system");
   p.emit("pick", "system");
@@ -269,7 +277,7 @@ test("Language: the menu and the page save the choice for the next start", async
   await host.settle();
   assert.equal(host.language, "system");
   assert.equal(host.sent("appearance.setLanguage").length, 2);
-  assert.deepEqual(host.osd.at(-1), "Language: Follow System. Takes effect after restart");
+  assert.deepEqual(host.osd.at(-1), shown("Language: Follow System. Takes effect after restart"));
   // Another plugin's change is followed silently.
   host.setLanguage("ko");
   await host.settle();

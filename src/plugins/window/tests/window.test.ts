@@ -11,6 +11,54 @@ import { normalize, timing } from "../settings.ts";
 import { displaySize } from "../video-size.ts";
 
 Object.assign(timing, { probeRetry: 10, probeAttempts: 5 });
+const realLater = timing.later;
+
+/**
+ * A clock the test advances: the plugin's delays (`timing.later`) wait until
+ * `fire()` instead of for real time, so a busy machine cannot run them early
+ * or late. Restored after each test.
+ */
+function manualClock(host: TestHost) {
+  const pending: { run: () => void; ms: number }[] = [];
+  timing.later = (run, ms) => {
+    const entry = { run, ms };
+    pending.push(entry);
+    return () => {
+      const index = pending.indexOf(entry);
+      if (index >= 0) pending.splice(index, 1);
+    };
+  };
+  return {
+    pending,
+    /** Run every delay due now, then wait for what they asked the host. */
+    async fire() {
+      for (const entry of pending.splice(0)) entry.run();
+      await host.settle();
+    },
+  };
+}
+
+/**
+ * Hold the host's answer to `method` until `release()`. `reached` resolves
+ * once the plugin's request is with the host: wait for that, not for time.
+ */
+function hold(host: TestHost, method: string, answer: (params: Record<string, unknown>) => unknown) {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let reach!: () => void;
+  const reached = new Promise<void>((resolve) => (reach = resolve));
+  host.handle(method, async (params) => {
+    reach();
+    await released;
+    return answer(params);
+  });
+  return { reached, release };
+}
+
+/** Wait (in event-loop turns, not time) until the player has received a state that passes `ready`. */
+async function published(ready: () => boolean) {
+  for (let turn = 0; turn < 1000 && !ready(); turn++) await new Promise((resolve) => setImmediate(resolve));
+}
 
 const directory = new URL("..", import.meta.url);
 const scratch = mkdtempSync(join(tmpdir(), "vestra-window-test-"));
@@ -37,6 +85,7 @@ async function manual(host = new TestHost()) {
 }
 test.afterEach(async () => {
   for (const stop of [...running]) await stop();
+  timing.later = realLater;
 });
 
 type Video = { width: number; height: number; displayWidth?: number | null; displayHeight?: number | null };
@@ -398,11 +447,34 @@ test("H03: still enabled after the video ends and plays again (restart passes th
 });
 
 test("H03: the size is read again while mpv has not reported it yet", async () => {
-  const { host } = await manual();
+  const host = new TestHost();
+  const clock = manualClock(host);
+  await manual(host);
   await play(host, null);
+  // The probe at `ready` found no video: one retry is waiting, after `probeRetry`.
+  assert.deepEqual(
+    clock.pending.map((entry) => entry.ms),
+    [timing.probeRetry],
+  );
+  assert.equal(state(host, "size.1").reason, "No video");
   setVideo(host, { width: 1280, height: 720 });
-  await host.settle(40);
+  await clock.fire();
   assert.equal(state(host, "size.1").enabled, true);
+  assert.equal(clock.pending.length, 0, "found: no more retries");
+});
+
+test("H03: the size is asked at most `probeAttempts` times", async () => {
+  const host = new TestHost();
+  const clock = manualClock(host);
+  await manual(host);
+  await play(host, null);
+  let retries = 0;
+  while (clock.pending.length > 0) {
+    retries++;
+    await clock.fire();
+  }
+  assert.equal(retries, timing.probeAttempts - 1);
+  assert.equal(state(host, "size.1").reason, "No video");
 });
 
 test("H03: 1–4 set the video area to the display size times 0.5–2; the radio dot follows", async () => {
@@ -461,13 +533,14 @@ test("H03: clamped sizes say why; refusals are shown", async () => {
 test("H03: busy while a resize is in flight", async () => {
   const { host } = await manual();
   await play(host);
-  let release!: () => void;
-  host.handle("window.setVideoArea", async (p) => {
-    await new Promise<void>((resolve) => (release = resolve));
-    return { width: Number(p.width), height: Number(p.height), clamped: false };
-  });
+  const { reached, release } = hold(host, "window.setVideoArea", (p) => ({
+    width: Number(p.width),
+    height: Number(p.height),
+    clamped: false,
+  }));
   const first = host.press("2");
-  await new Promise((resolve) => setTimeout(resolve, 20)); // settle() would wait for the held request
+  await reached; // settle() would wait for the held request
+  await published(() => state(host, "size.2").busy);
   assert.deepEqual([state(host, "size.2").busy, state(host, "fit").busy], [true, true]);
   await assert.rejects(host.press("4"));
   release();
@@ -765,13 +838,13 @@ test("H07: a refusal is shown and the check stays; busy is ignored", async () =>
 test("H07: busy while the switch is in flight; a second run sends nothing", async () => {
   const { host } = await manual();
   await play(host);
-  let release!: () => void;
-  host.handle("window.setPictureInPicture", async (p) => {
-    await new Promise<void>((resolve) => (release = resolve));
+  const { reached, release } = hold(host, "window.setPictureInPicture", (p) => {
     host.setMainWindow({ pictureInPicture: { supported: true, active: p.on === true } });
+    return null;
   });
   const first = host.command("pip").run();
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await reached;
+  await published(() => state(host, "pip").busy);
   assert.deepEqual([state(host, "pip").busy, state(host, "pip").reason], [true, "Switching picture-in-picture"]);
   assert.deepEqual([state(host, "mini").busy, state(host, "mini").reason], [true, "Switching picture-in-picture"]);
   await assert.rejects(host.command("pip").run());
