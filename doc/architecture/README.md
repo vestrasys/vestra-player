@@ -98,7 +98,7 @@ Manifest rules are in [Manifest](https://vestrasys.github.io/vestra-player-sdk/d
 
 ## 6. UI state file
 
-`$VESTRA_UI_STATE`, default `~/Library/Application Support/Vestra/ui-state.json`; headless mode neither reads nor writes it. Contents: main window position and size, sidebar width, per-manifest-id sidebar panel visibility/detached state and floating window position, the user binding overlay (`"<manifest id>/<command id>": [bindings…]`, `[]` means unbound; read-only in this round). Changes are merged and written 1 second later (temporary file + rename), and written once more on exit; an unreadable file is renamed to `ui-state.json.bad` and defaults are used. The format is in [core-ui-design.md §8](core-ui-design.md#8-c8-界面状态持久化).
+`$VESTRA_UI_STATE`, default `~/Library/Application Support/Vestra/ui-state.json`; headless mode neither reads nor writes it. Contents: main window position and size, sidebar width, per-manifest-id sidebar panel visibility/detached state and floating window position, the user binding overlay (`"<manifest id>/<command id>": [bindings…]`, `[]` means unbound; read-only in this round). Changes are merged and written 1 second later (temporary file + rename), and written once more on exit; an unreadable file is renamed to `ui-state.json.bad` and defaults are used. The format is in [core-ui-design.md §8](core-ui-design.md#8-c8-ui-state-persistence).
 
 ## 7. File paths and persistence (cross-platform)
 

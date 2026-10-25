@@ -1,6 +1,6 @@
 # Menu tree (generated)
 
-Generated from main on 2026-10-24: 18 built-in plugins + the official plugins youtube and bilibili + host commands, ordered by the host's sorting rules (order; built-in top-level menus have fixed positions). `‹…›` is the plugin that registers the item, `‹core›`/`‹host›` is the player itself; `[…]` is the default shortcut; `────` is a group separator; the 32 commands that have only a shortcut and no menu item are not in the tree.
+Generated from main on 2026-10-24: 18 built-in plugins + the third-party plugins zysilm.youtube and zysilm.bilibili + host commands, ordered by the host's sorting rules (order; built-in top-level menus have fixed positions). `‹…›` is the plugin that registers the item, `‹core›`/`‹host›` is the player itself; `[…]` is the default shortcut; `────` is a group separator; the 32 commands that have only a shortcut and no menu item are not in the tree.
 
 ```text
 Context menu

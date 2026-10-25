@@ -517,7 +517,7 @@ Reason: the UI bridge only accepts JSON (ui_values.rs explicitly rejects image),
 
 ### Basic playback actions handed over to the core
 
-Based on the last section of the [feature catalog](feature-catalog.md#关于快捷键设置插件j01j03), "About the shortcut settings plugin": the shortcut settings plugin (J01) must still be able to bind basic operations after playback is uninstalled or replaced, so these operations have to be registered by the core, like "Fullscreen" and "Quit" today.
+Based on the last section of the [feature catalog](feature-catalog.md#about-the-shortcut-settings-plugin-j01j03), "About the shortcut settings plugin": the shortcut settings plugin (J01) must still be able to bind basic operations after playback is uninstalled or replaced, so these operations have to be registered by the core, like "Fullscreen" and "Quit" today.
 
 **Basic actions registered by the core**
 
@@ -3323,7 +3323,7 @@ Approach C is chosen. Chapter marks are also published by marks (it reads `Playe
 
 ### Scope
 
-The hotkeys plugin provides the rebinding interface: keyboard and mouse bindings for any command registered by any plugin or the host (J01, J02), plus an "Ignore Default Shortcuts" toggle (J03). Design basis: [feature catalog, "About the shortcut settings plugin"](feature-catalog.md#关于快捷键设置插件j01j03):
+The hotkeys plugin provides the rebinding interface: keyboard and mouse bindings for any command registered by any plugin or the host (J01, J02), plus an "Ignore Default Shortcuts" toggle (J03). Design basis: [feature catalog, "About the shortcut settings plugin"](feature-catalog.md#about-the-shortcut-settings-plugin-j01j03):
 
 - All bindings are in the core's binding table. Plugins only **declare** default bindings, and the core decides which input triggers which command.
 - The core already has a **user overlay**: `bindings.rs::Table.overlay`, keyed by `"<manifest id>/<command id>"`, with arrays of bindings as values, where `[]` means unbound; the overlay takes priority over all default bindings. The overlay is saved across launches in the `bindings` field of `ui-state.json` (`ui_state.rs`). The current state is "read-only this round, kept on save": the host reads it with `set_overlay` at startup, and writing is not exposed to plugins.

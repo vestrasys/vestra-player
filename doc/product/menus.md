@@ -2,7 +2,7 @@
 
 > This table records the current implementation and corresponds to the top-level structure in [UI spec](ui-spec.md) §6.2.
 
-The product's context menu tree is merged from the commands registered by each of the 19 plugins (since 2026-10-22 there is also one item from the built-in plugin store `store`, see the table below) (`youtube` and `bilibili` have moved to the plugin repository and are installed through the store; their two items only exist once they are installed), the host's 14 core actions, and the host's own "Fullscreen" and "Quit" (compiled on 2026-10-21 from what the plugin code on main fafa40d actually registers). Menus are organised by user domain, not by plugin. Before adding or moving an entry, check it against this table to make sure there is no duplicate entry and nothing is scattered into the wrong domain ([interaction requirements §1](interaction-requirements.md#1-菜单按用户领域组织)).
+The product's context menu tree is merged from the commands registered by each of the 19 plugins (since 2026-10-22 there is also one item from the built-in plugin store `store`, see the table below) (`youtube` and `bilibili` have moved to the plugin repository and are installed through the store; their two items only exist once they are installed), the host's 14 core actions, and the host's own "Fullscreen" and "Quit" (compiled on 2026-10-21 from what the plugin code on main fafa40d actually registers). Menus are organised by user domain, not by plugin. Before adding or moving an entry, check it against this table to make sure there is no duplicate entry and nothing is scattered into the wrong domain ([interaction requirements §1](interaction-requirements.md#1-menus-are-organised-by-user-domain)).
 
 ## Menu tree
 
@@ -165,7 +165,7 @@ The labels below are the English interface text (the English source text of each
 | Playlist | playlist | F6 | Checked |
 | Playback Info | info | Tab | Checked |
 | Playback Properties… | info | Ctrl+F1 | On macOS ⌃F1 is reserved by the system; use ⌘F1 (see Conflict check) |
-| Plugin Workshop… | workshop | | |
+| Vestra Player AI… | workshop | | |
 | Plugin Store… | store | | `order` 822, `group: "windows"` (decided in step 2.2 on 2026-10-22); when plugins have updates, the title is "Plugin Store (N updates)…". The store's other entry points are not in the main menu: drag a `.vxp` onto the video area to install it; the "Options ▸ Plugins ▸ Plugin Store" settings page (third-party repositories, automatic checks) |
 | —— | | | |
 | Settings ▸ Options… | preferences | F5 | |

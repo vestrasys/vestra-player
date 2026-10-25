@@ -258,7 +258,7 @@ Screen ▸                                window
 Playlist ✓              F6               playlist
 Playback Info ✓         Tab              info (§9)
 Playback Properties…    Ctrl+F1          info
-Plugin Workshop…                         workshop
+Vestra Player AI…                        workshop
 Plugin Store…                            store
 ——
 Settings ▸                              preferences, hotkeys, plugins, visualizer (Options… F5, Keyboard Shortcuts…, Appearance ▸ …)
