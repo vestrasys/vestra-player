@@ -1,0 +1,816 @@
+msgid ""
+msgstr ""
+"Language: ja\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Searching sends the file name keywords and the file hash to the chosen service."
+msgstr "検索すると、ファイル名のキーワードとファイルのハッシュが選択したサービスに送信されます。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "First enter an API key for OpenSubtitles under Services (free at opensubtitles.com), or turn on Assrt and enter its token."
+msgstr "先に「サービス」で OpenSubtitles の API キー（opensubtitles.com で無料で取得できます）を入力するか、Assrt をオンにしてそのトークンを入力してください。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No media to load subtitles into"
+msgstr "字幕を読み込むメディアがありません"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No media to load subtitles into; you can search by title."
+msgstr "字幕を読み込むメディアがありません。タイトルで検索できます。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The media changed; no subtitle was loaded."
+msgstr "メディアが変わったため、字幕を読み込みませんでした。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cancelled."
+msgstr "キャンセルしました。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The player refused the subtitle (file too large or invalid)."
+msgstr "プレーヤーがこの字幕を拒否しました（ファイルが大きすぎるか無効です）。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles cannot be loaded into the current media."
+msgstr "現在のメディアには字幕を読み込めません。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Loading the subtitle failed."
+msgstr "字幕の読み込みに失敗しました。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Enter a title, then search."
+msgstr "タイトルを入力してから検索してください。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Searching…"
+msgstr "検索中…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles found: {}"
+msgstr "見つかった字幕：{}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No subtitles found; change the title and search again"
+msgstr "字幕が見つかりませんでした。タイトルを変えてもう一度検索してください"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Downloading subtitle…"
+msgstr "字幕をダウンロード中…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Downloading subtitles ({}/{})…"
+msgstr "字幕をダウンロード中（{}/{}）…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Opened subtitle: {}"
+msgstr "字幕を開きました：{}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitle loaded, but it could not be saved in the video's folder"
+msgstr "字幕を読み込みましたが、ビデオのフォルダに保存できませんでした"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Saved to {}"
+msgstr "{} に保存しました"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles added: {}"
+msgstr "追加した字幕：{}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles saved: {} (in {})"
+msgstr "保存した字幕：{}（{}）"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No place to save to."
+msgstr "保存できる場所がありません。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Not saved."
+msgstr "保存しませんでした。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Resets at {}"
+msgstr "{} にリセット"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Online subtitle loaded automatically: {}"
+msgstr "オンライン字幕を自動で読み込みました：{}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "This archive format (rar, 7z) is not supported yet; download a zip or a single subtitle file."
+msgstr "このアーカイブ形式（rar、7z）にはまだ対応していません。zip または単体の字幕ファイルをダウンロードしてください。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The archive has no subtitle files."
+msgstr "アーカイブに字幕ファイルがありません。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The archive is damaged"
+msgstr "アーカイブが破損しています"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Write preferred languages like zh-CN, zh-TW, en (at most 5)"
+msgstr "優先言語は zh-CN, zh-TW, en のように入力します（最大 5 個）"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Testing…"
+msgstr "テスト中…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Testing OpenSubtitles…"
+msgstr "OpenSubtitles をテスト中…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Testing Assrt…"
+msgstr "Assrt をテスト中…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Saved ({})"
+msgstr "保存しました（{}）"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Could not save: {}"
+msgstr "保存できませんでした：{}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key entered"
+msgstr "キー入力済み"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Token entered"
+msgstr "トークン入力済み"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No key"
+msgstr "キーなし"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No token"
+msgstr "トークンなし"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Enter the API key first"
+msgstr "先に API キーを入力してください"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key and account are valid"
+msgstr "キーとアカウントは有効です"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key and account are valid; downloads left today: {}"
+msgstr "キーとアカウントは有効です。本日の残りダウンロード数：{}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key is valid (not logged in: fewer anonymous downloads)"
+msgstr "キーは有効です（未ログインのため、匿名でのダウンロード数は少なくなります）"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Enter the token first"
+msgstr "先にトークンを入力してください"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Token is valid"
+msgstr "トークンは有効です"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Token is valid; calls left: {}"
+msgstr "トークンは有効です。残りの呼び出し回数：{}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cancelled"
+msgstr "キャンセル済み"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot connect to OpenSubtitles"
+msgstr "OpenSubtitles に接続できません"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot connect to Assrt"
+msgstr "Assrt に接続できません"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles returned an unreadable response"
+msgstr "OpenSubtitles から読み取れない応答が返されました"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt returned an unreadable response"
+msgstr "Assrt から読み取れない応答が返されました"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Invalid API key; check it in Online Subtitle Settings"
+msgstr "API キーが無効です。オンライン字幕の設定で確認してください"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No downloads left today (OpenSubtitles). Log in for more downloads"
+msgstr "本日のダウンロード数の上限に達しました（OpenSubtitles）。ログインするとダウンロード数が増えます"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Too many requests to OpenSubtitles; try again later"
+msgstr "OpenSubtitles へのリクエストが多すぎます。しばらくしてからもう一度お試しください"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles error ({})"
+msgstr "OpenSubtitles のエラー（{}）"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Wrong OpenSubtitles user name or password"
+msgstr "OpenSubtitles のユーザー名またはパスワードが正しくありません"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles login failed"
+msgstr "OpenSubtitles へのログインに失敗しました"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles gave no download link"
+msgstr "OpenSubtitles からダウンロードリンクが返されませんでした"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot download the subtitle ({})"
+msgstr "字幕をダウンロードできません（{}）"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Invalid Assrt token; check it in Online Subtitle Settings"
+msgstr "Assrt のトークンが無効です。オンライン字幕の設定で確認してください"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt call limit reached; try again later"
+msgstr "Assrt の呼び出し回数の上限に達しました。しばらくしてからもう一度お試しください"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt error ({})"
+msgstr "Assrt のエラー（{}）"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt gave no download link"
+msgstr "Assrt からダウンロードリンクが返されませんでした"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot read the subtitle file."
+msgstr "字幕ファイルを読み取れません。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file must be a regular file of 1 byte to 8 MiB."
+msgstr "字幕ファイルは 1 バイト〜8 MiB の通常ファイルである必要があります。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file is empty or larger than 8 MiB."
+msgstr "字幕ファイルが空か、8 MiB を超えています。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Image subtitle files are not supported yet"
+msgstr "画像字幕ファイルにはまだ対応していません"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Unknown subtitle format"
+msgstr "不明な字幕形式です"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file has no subtitles."
+msgstr "字幕ファイルに字幕がありません。"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file is larger than 2 MiB"
+msgstr "字幕ファイルが 2 MiB を超えています"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
+msgstr "字幕のエンコーディングが正しくない可能性があります。字幕の設定でデフォルトのエンコーディングを変更してください"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Fonts embedded in the subtitle were ignored"
+msgstr "字幕に埋め込まれたフォントは無視しました"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
+msgstr "ビデオのフレームレートが不明なため、MicroDVD 字幕を 23.976 で変換しました"
+
+#: main.ts:333 model.ts:130
+#, x-machine
+msgid "{} · {}"
+msgstr "{} · {}"
+
+#: main.ts:392
+#, x-machine
+msgid "Save Subtitle As"
+msgstr "字幕を別名で保存"
+
+#: main.ts:550 main.ts:554 manifest.json
+#, x-machine
+msgid "Online Subtitles"
+msgstr "オンライン字幕"
+
+#: main.ts:550
+#, x-machine
+msgid "Search and Download Subtitles…"
+msgstr "字幕を検索してダウンロード…"
+
+#: main.ts:554
+#, x-machine
+msgid "Online Subtitle Settings…"
+msgstr "オンライン字幕の設定…"
+
+#: manifest.json
+#, x-machine
+msgid "Search and download subtitles for the current video"
+msgstr "現在のビデオの字幕を検索してダウンロード"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\n"
+"Find it in the right-click menu under Subtitles ▸ Online Subtitles."
+msgstr ""
+"OpenSubtitles.com または Assrt で、ファイルのハッシュとタイトルから字幕を検索し、すぐに読み込んで、ビデオの横にコピーを保存します。ご自身の API キーが必要で、キーはシステムのシークレットストアに保存されます。\n"
+"右クリックメニューの「字幕 ▸ オンライン字幕」から使えます。"
+
+#: manifest.json
+#, x-machine
+msgid "subtitles"
+msgstr "字幕"
+
+#: manifest.json
+#, x-machine
+msgid "download"
+msgstr "ダウンロード"
+
+#: messages.ts:132
+#, x-machine
+msgid "This run only"
+msgstr "今回の起動中のみ"
+
+#: messages.ts:132
+#, x-machine
+msgid "macOS Keychain ({})"
+msgstr "macOS キーチェーン（{}）"
+
+#: messages.ts:132
+#, x-machine
+msgid "Windows Credential Manager ({})"
+msgstr "Windows 資格情報マネージャー（{}）"
+
+#: messages.ts:132
+#, x-machine
+msgid "System secret store ({})"
+msgstr "システムのシークレットストア（{}）"
+
+#: messages.ts:132
+#, x-machine
+msgid "{} (readable only by you)"
+msgstr "{}（本人のみ読み取り可能）"
+
+#: messages.ts:135 ui/messages.slint:7
+#, x-machine
+msgid "Assrt"
+msgstr "Assrt"
+
+#. {0} is a service name, {1} the result of testing it
+#: messages.ts:147
+#, x-machine
+msgid "{0}: {1}"
+msgstr "{0}：{1}"
+
+#: model.ts:102
+#, x-machine
+msgid "Simplified Chinese"
+msgstr "簡体字中国語"
+
+#: model.ts:102
+#, x-machine
+msgid "Traditional Chinese"
+msgstr "繁体字中国語"
+
+#: model.ts:102
+#, x-machine
+msgid "Chinese"
+msgstr "中国語"
+
+#: model.ts:102
+#, x-machine
+msgid "English"
+msgstr "英語"
+
+#: model.ts:102
+#, x-machine
+msgid "Japanese"
+msgstr "日本語"
+
+#: model.ts:102
+#, x-machine
+msgid "Korean"
+msgstr "韓国語"
+
+#: model.ts:102
+#, x-machine
+msgid "French"
+msgstr "フランス語"
+
+#: model.ts:102
+#, x-machine
+msgid "German"
+msgstr "ドイツ語"
+
+#: model.ts:102
+#, x-machine
+msgid "Spanish"
+msgstr "スペイン語"
+
+#: model.ts:102
+#, x-machine
+msgid "Italian"
+msgstr "イタリア語"
+
+#: model.ts:102
+#, x-machine
+msgid "Russian"
+msgstr "ロシア語"
+
+#: model.ts:102
+#, x-machine
+msgid "Portuguese"
+msgstr "ポルトガル語"
+
+#: model.ts:102
+#, x-machine
+msgid "Brazilian Portuguese"
+msgstr "ポルトガル語（ブラジル）"
+
+#: model.ts:102
+#, x-machine
+msgid "Arabic"
+msgstr "アラビア語"
+
+#: model.ts:102
+#, x-machine
+msgid "Thai"
+msgstr "タイ語"
+
+#: model.ts:102
+#, x-machine
+msgid "Vietnamese"
+msgstr "ベトナム語"
+
+#: model.ts:102
+#, x-machine
+msgid "Cantonese"
+msgstr "広東語"
+
+#: ui/choose.slint:7
+#, x-machine
+msgid "Choose Subtitle File"
+msgstr "字幕ファイルを選択"
+
+#: ui/choose.slint:20
+#, x-machine
+msgid "The archive has several subtitle files:"
+msgstr "アーカイブに複数の字幕ファイルがあります："
+
+#: ui/choose.slint:52 ui/download.slint:162
+#, x-machine
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: ui/choose.slint:53
+#, x-machine
+msgid "OK"
+msgstr "OK"
+
+#: ui/download.slint:31
+#, x-machine
+msgid "Download Subtitles"
+msgstr "字幕のダウンロード"
+
+#: ui/download.slint:63 ui/download.slint:65
+#, x-machine
+msgid "{} [MT]"
+msgstr "{} [機械翻訳]"
+
+#: ui/download.slint:63 ui/download.slint:64
+#, x-machine
+msgid "{} [HI]"
+msgstr "{} [HI]"
+
+#: ui/download.slint:75
+#, x-machine
+msgid "Title:"
+msgstr "タイトル："
+
+#: ui/download.slint:87
+#, x-machine
+msgid "Search by Title"
+msgstr "タイトルで検索"
+
+#: ui/download.slint:88
+#, x-machine
+msgid "Search Again"
+msgstr "再検索"
+
+#: ui/download.slint:93
+#, x-machine
+msgid "Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree."
+msgstr "検索すると、ファイル名のキーワードとファイルのハッシュが選択したサービスに送信されます。一度同意すると、次回からは確認しません。"
+
+#: ui/download.slint:101
+#, x-machine
+msgid "Agree and Search"
+msgstr "同意して検索"
+
+#: ui/download.slint:116
+#, x-machine
+msgid "Language"
+msgstr "言語"
+
+#: ui/download.slint:117
+#, x-machine
+msgid "Release"
+msgstr "リリース"
+
+#: ui/download.slint:118
+#, x-machine
+msgid "Format"
+msgstr "形式"
+
+#: ui/download.slint:119
+#, x-machine
+msgid "FPS"
+msgstr "FPS"
+
+#: ui/download.slint:120
+#, x-machine
+msgid "Downloads"
+msgstr "ダウンロード数"
+
+#: ui/download.slint:121
+#, x-machine
+msgid "Match"
+msgstr "一致"
+
+#: ui/download.slint:122
+#, x-machine
+msgid "Source"
+msgstr "提供元"
+
+#: ui/download.slint:147
+#, x-machine
+msgid "Hash"
+msgstr "ハッシュ"
+
+#: ui/download.slint:147
+#, x-machine
+msgid "Title"
+msgstr "タイトル"
+
+#: ui/download.slint:156
+#, x-machine
+msgid "Open"
+msgstr "開く"
+
+#: ui/download.slint:157
+#, x-machine
+msgid "Add"
+msgstr "追加"
+
+#: ui/download.slint:158
+#, x-machine
+msgid "Save Only"
+msgstr "保存のみ"
+
+#: ui/download.slint:159
+#, x-machine
+msgid "Save As…"
+msgstr "名前を付けて保存…"
+
+#: ui/download.slint:160
+#, x-machine
+msgid "More"
+msgstr "その他"
+
+#: ui/download.slint:163 ui/settings.slint:101
+#, x-machine
+msgid "Settings…"
+msgstr "設定…"
+
+#: ui/service.slint:17
+#, x-machine
+msgid "{} Settings"
+msgstr "{} の設定"
+
+#: ui/service.slint:39
+#, x-machine
+msgid "API key"
+msgstr "API キー"
+
+#: ui/service.slint:39
+#, x-machine
+msgid "Token"
+msgstr "トークン"
+
+#: ui/service.slint:44
+#, x-machine
+msgid "User name"
+msgstr "ユーザー名"
+
+#: ui/service.slint:45 ui/service.slint:50
+#, x-machine
+msgid "Optional"
+msgstr "任意"
+
+#: ui/service.slint:49
+#, x-machine
+msgid "Password"
+msgstr "パスワード"
+
+#: ui/service.slint:54
+#, x-machine
+msgid "Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}."
+msgstr "opensubtitles.com でアカウントを登録し、「API consumers」ページで無料の API キーを取得してください。ユーザー名とパスワードは任意です。ログインすると 1 日のダウンロード数が増えます。保存先：{}。"
+
+#: ui/service.slint:55
+#, x-machine
+msgid "Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}."
+msgstr "assrt.net で登録し、ユーザーセンターで API トークンを取得してください。このサービスには呼び出し頻度の制限があります。保存先：{}。"
+
+#: ui/service.slint:71 ui/settings.slint:102
+#, x-machine
+msgid "Test"
+msgstr "テスト"
+
+#: ui/service.slint:72
+#, x-machine
+msgid "Save"
+msgstr "保存"
+
+#: ui/settings.slint:30
+#, x-machine
+msgid "Online Subtitle Settings"
+msgstr "オンライン字幕の設定"
+
+#: ui/settings.slint:64
+#, x-machine
+msgid "Services"
+msgstr "サービス"
+
+#: ui/settings.slint:96
+#, x-machine
+msgid "Move Up"
+msgstr "上へ移動"
+
+#: ui/settings.slint:97
+#, x-machine
+msgid "Move Down"
+msgstr "下へ移動"
+
+#: ui/settings.slint:106
+#, x-machine
+msgid "Search"
+msgstr "検索"
+
+#: ui/settings.slint:109
+#, x-machine
+msgid "Languages"
+msgstr "言語"
+
+#: ui/settings.slint:121
+#, x-machine
+msgid "Auto search"
+msgstr "自動検索"
+
+#: ui/settings.slint:124
+#, x-machine
+msgid "Off"
+msgstr "オフ"
+
+#: ui/settings.slint:124
+#, x-machine
+msgid "When opening a video without subtitles"
+msgstr "字幕のないビデオを開いたとき"
+
+#: ui/settings.slint:131
+#, x-machine
+msgid "After search"
+msgstr "検索後"
+
+#: ui/settings.slint:134
+#, x-machine
+msgid "Show the download window"
+msgstr "ダウンロードウインドウを表示"
+
+#: ui/settings.slint:134
+#, x-machine
+msgid "Load the best result automatically"
+msgstr "最適な結果を自動で読み込む"
+
+#: ui/settings.slint:143
+#, x-machine
+msgid "Only subtitles that exactly match the file (hash)"
+msgstr "ファイルと完全に一致する字幕（ハッシュ）のみ"
+
+#: ui/settings.slint:150
+#, x-machine
+msgid "Exclude"
+msgstr "除外"
+
+#: ui/settings.slint:154
+#, x-machine
+msgid "Separate with commas or spaces"
+msgstr "カンマまたはスペースで区切る"
+
+#: ui/settings.slint:159
+#, x-machine
+msgid "Saving"
+msgstr "保存"
+
+#: ui/settings.slint:162
+#, x-machine
+msgid "Save to"
+msgstr "保存先"
+
+#: ui/settings.slint:165
+#, x-machine
+msgid "Beside the video when possible"
+msgstr "可能な場合はビデオと同じ場所"
+
+#: ui/settings.slint:165
+#, x-machine
+msgid "Plugin data folder"
+msgstr "プラグインのデータフォルダ"
+
+#: ui/settings.slint:171
+#, x-machine
+msgid "Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}."
+msgstr "検索すると、ファイル名のキーワードとファイルのハッシュが選択したサービスに送信されます。キーとパスワードの保存先：{}。"

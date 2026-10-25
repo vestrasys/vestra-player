@@ -1,0 +1,146 @@
+msgid ""
+msgstr ""
+"Language: ja\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: manifest.json
+#, x-machine
+msgid "Playback History"
+msgstr "再生履歴"
+
+#: manifest.json
+#, x-machine
+msgid "Recently played items, and resuming where you left off"
+msgstr "最近再生した項目と、続きからの再生"
+
+#: manifest.json
+#, x-machine
+msgid "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
+msgstr "「開く ▸ 最近再生した項目」に最近開いたファイルとリンクが表示されます。「再生 ▸ 再生位置の記憶」では「続きから再生しない」「自動的に続きから再生」「毎回確認する」を選べます。次に同じファイルを開いたとき、停止した位置から再生を続けます。"
+
+#: manifest.json
+#, x-machine
+msgid "playback"
+msgstr "再生"
+
+#: manifest.json
+#, x-machine
+msgid "history"
+msgstr "履歴"
+
+#: manifest.json
+#, x-machine
+msgid "resume"
+msgstr "続きから再生"
+
+#: menu.ts:36
+#, x-machine
+msgid "{} ({})"
+msgstr "{}（{}）"
+
+#: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
+#, x-machine
+msgid "Recently Played"
+msgstr "最近再生した項目"
+
+#: menu.ts:94
+#, x-machine
+msgid "(No Entries)"
+msgstr "（項目なし）"
+
+#: menu.ts:114
+#, x-machine
+msgid "Remove Invalid Entries"
+msgstr "無効な項目を削除"
+
+#: menu.ts:118
+#, x-machine
+msgid "Removed {} invalid entries"
+msgstr "無効な項目を {} 件削除しました"
+
+#: menu.ts:122
+#, x-machine
+msgid "Clear Entries"
+msgstr "項目を消去"
+
+#: menu.ts:128
+#, x-machine
+msgid "Playback history cleared"
+msgstr "再生履歴を消去しました"
+
+#: menu.ts:133
+#, x-machine
+msgid "Record Playback History"
+msgstr "再生履歴を記録"
+
+#: menu.ts:144
+#, x-machine
+msgid "File not found: {}"
+msgstr "ファイルが見つかりません：{}"
+
+#: menu.ts:153 menu.ts:156
+#, x-machine
+msgid "Cannot open: {}"
+msgstr "開けません：{}"
+
+#: menu.ts:172 menu.ts:182 menu.ts:190 ui/resume.slint:6
+#, x-machine
+msgid "Resume Playback"
+msgstr "再生位置の記憶"
+
+#: menu.ts:172
+#, x-machine
+msgid "Don't Resume"
+msgstr "続きから再生しない"
+
+#: menu.ts:172
+#, x-machine
+msgid "Resume Automatically"
+msgstr "自動的に続きから再生"
+
+#: menu.ts:172
+#, x-machine
+msgid "Ask Every Time"
+msgstr "毎回確認する"
+
+#: menu.ts:182
+#, x-machine
+msgid "Also Remember Audio Files"
+msgstr "オーディオファイルも記憶する"
+
+#: menu.ts:190
+#, x-machine
+msgid "Clear All Saved Positions"
+msgstr "保存したすべての再生位置を消去"
+
+#: menu.ts:195
+#, x-machine
+msgid "All saved positions cleared"
+msgstr "保存したすべての再生位置を消去しました"
+
+#: resume.ts:226
+#, x-machine
+msgid "Resuming from {}"
+msgstr "{} から再生を続けます"
+
+#: resume.ts:229
+#, x-machine
+msgid "Cannot resume: {}"
+msgstr "続きから再生できません：{}"
+
+#: ui/resume.slint:31
+#, x-machine
+msgid "You didn't finish this last time. Continue? ({})"
+msgstr "前回は最後まで再生されませんでした。続きから再生しますか？（{}）"
+
+#: ui/resume.slint:48
+#, x-machine
+msgid "Continue"
+msgstr "続きから再生"
+
+#: ui/resume.slint:51
+#, x-machine
+msgid "Start Over"
+msgstr "最初から再生"
