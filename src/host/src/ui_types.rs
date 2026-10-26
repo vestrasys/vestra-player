@@ -230,7 +230,7 @@ mod tests {
         let properties = json!({
             "has-project": false, "projects": [], "project-index": 0, "project-title": "",
             "card-status": {"code": "", "args": []}, "card-keys": [], "card-busy": false,
-            "can-rollback": false, "sessions": [], "rows": [], "configured": false,
+            "sessions": [], "rows": [], "configured": false,
             "banner": {"code": "reading", "args": [], "n": 0}, "busy": false, "blocked": false,
             "session-title": "", "provider-id": "anthropic", "provider-name": "Anthropic",
             "model-text": "", "has-folder": false, "can-retry": false, "draft": ""
