@@ -261,7 +261,7 @@ The layer ends in P4.
 
 - **Q1: patch.** 1.5.16 deprecates, 1.5.17 removes, `apiVersion` stays `vestra/1`. community-workflow §1.6 step 2 is amended to match: SDK releases are patch bumps by default, removals included.
 - **Q2: remove.** The store's Versions tab no longer installs an older version. The only way back to an older third-party version is to uninstall it and install a `.vxp` yourself.
-- **Q3: B.** Undo Install only uninstalls a first install. After an upgrade there is no Undo. The workshop keeps no previous `.vxp`.
+- **Q3: superseded the same day. There is no Undo Install at all.** The AI window drops the Undo action. Plugin management has exactly three operations: **install, uninstall, disable/enable**. Built-ins cannot be uninstalled. The workshop keeps no previous `.vxp`.
 
 Where §3–§5 assume the recommended Q2 (keep) or Q3 (A), these rulings override them; the implementers adjust.
 
