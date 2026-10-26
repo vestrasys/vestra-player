@@ -517,7 +517,7 @@ fn run(job: &Path) -> Result<()> {
     }
     let results = job.out.join(format!("results-{}.json", job.locale));
     std::fs::write(&results, serde_json::to_string_pretty(&outputs)?)?;
-    eprintln!(
+    diag!(
         "ui-shots: {} images in {} ({})",
         outputs.iter().filter(|o| o.png.is_some()).count(),
         job.out.display(),
@@ -534,7 +534,7 @@ mod tests {
     #[ignore = "the screenshot tool's renderer: run by `npm run ui:shots`"]
     fn render_plugin_screenshots() {
         let Some(job) = std::env::var_os("VESTRA_UI_SHOTS") else {
-            eprintln!("VESTRA_UI_SHOTS is not set: nothing to render (npm run ui:shots)");
+            diag!("VESTRA_UI_SHOTS is not set: nothing to render (npm run ui:shots)");
             return;
         };
         run(Path::new(&job)).unwrap();
