@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { ImageRef, Panel, PlayerState, Plugin } from "@vestra-player/sdk";
 import { CoverCache, fileName, type Track } from "./covers.ts";
 import { imageProblem } from "./images.ts";
+import { fileUrlPath, HOST_RULES, isUrl, type PathRules } from "./local-path.ts";
 import { Logo, type LogoNotice } from "./logo.ts";
 import { SettingsStore } from "./settings.ts";
 
@@ -16,11 +17,12 @@ const LOADING_NAME = 60;
  * G-16b: the name after "Opening: ": a file's name; a link's host and last
  * path segment (just the host when it has no path). Cut with "…".
  */
-export function loadingName(source: string | null) {
+export function loadingName(source: string | null, rules: PathRules = HOST_RULES) {
   if (!source) return "";
-  let name = fileName(source);
+  let name = fileName(source, rules);
   try {
-    const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(source) ? new URL(source) : null;
+    // A link shows its host; a path (even `C://x` on Windows) or a local `file:` URL does not.
+    const url = isUrl(source, rules) && fileUrlPath(source, rules) === null ? new URL(source) : null;
     if (url?.hostname) name = name === url.hostname ? url.hostname : `${url.hostname}/${name}`;
   } catch {
     // Not a URL after all: the file name.

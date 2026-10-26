@@ -4,6 +4,7 @@ import { readdir, readFile, realpath, rename, stat, unlink, writeFile } from "no
 import { dirname, join } from "node:path";
 import type { Tools } from "@vestra-player/sdk";
 import { extensionOf, imageInfo, imageProblem } from "./images.ts";
+import { baseName, HOST_RULES, localFile, type PathRules } from "./local-path.ts";
 
 /** Limits and delays; tests shorten them. */
 export const limits = {
@@ -45,21 +46,21 @@ interface Entry extends Tags {
 
 const EMPTY_TAGS: Tags = { title: "", artist: "", album: "", date: "" };
 
-/** A URL (not a local path): no ffmpeg, the placeholder and the name only. */
-export const isUrl = (source: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(source);
-
-/** The file name of a path, or the last segment of a URL (its host when it has none). */
-export function fileName(source: string) {
-  if (isUrl(source)) {
-    try {
-      const url = new URL(source);
-      const last = url.pathname.split("/").filter(Boolean).at(-1);
-      return last ? decodeURIComponent(last) : url.hostname || source;
-    } catch {
-      return source;
-    }
+/**
+ * The file name of a path (by the path rules of the OS the player runs on),
+ * of the file a `file:` URL names, or the last segment of any other URL (its
+ * host when it has none).
+ */
+export function fileName(source: string, rules: PathRules = HOST_RULES) {
+  const local = localFile(source, rules);
+  if (local !== null) return baseName(local, rules);
+  try {
+    const url = new URL(source);
+    const last = url.pathname.split("/").filter(Boolean).at(-1);
+    return last ? decodeURIComponent(last) : url.hostname || source;
+  } catch {
+    return source;
   }
-  return source.split("/").filter(Boolean).at(-1) ?? source;
 }
 
 /** Text of a tag, trimmed and bounded (lyrics-sized values are not titles). */
@@ -227,11 +228,13 @@ export class CoverCache {
     this.load();
     const name = fileName(source);
     const bare: Track = { title: name, artist: "", album: "", cover: null };
-    if (isUrl(source)) return bare;
+    // A link has no folder and no tags here (no tools for it); a `file:` URL is read as its path.
+    const path = localFile(source);
+    if (path === null) return bare;
     let real: string;
     let key: string;
     try {
-      real = await realpath(source);
+      real = await realpath(path);
       const info = await stat(real);
       key = createHash("sha1").update(`${real}\n${info.size}\n${info.mtimeMs}`).digest("hex");
     } catch {

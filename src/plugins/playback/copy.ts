@@ -1,15 +1,21 @@
-import { basename, dirname } from "node:path";
 import type { Clipboard, PlayerState } from "@vestra-player/sdk";
+import { fileName, folderOf, HOST_RULES, isLocalPath, type PathRules } from "./local-path.ts";
 import { errorMessage, type Osd, type Reason } from "./texts.ts";
 
 export type CopyKind = "name" | "folder" | "path";
 
 /** I08: the text a copy command puts on the clipboard, or why it cannot. */
-export function copyTarget(state: PlayerState, kind: CopyKind): { text: string } | { reason: Reason } {
+export function copyTarget(
+  state: PlayerState,
+  kind: CopyKind,
+  rules: PathRules = HOST_RULES,
+): { text: string } | { reason: Reason } {
   const { source } = state;
   if (!source || state.kind === "stream" || state.phase === "empty") return { reason: "No open file" };
-  if (!source.startsWith("/")) return kind === "path" ? { text: source } : { reason: "A network source has no file name" };
-  return { text: kind === "name" ? basename(source) : kind === "folder" ? dirname(source) : source };
+  if (!isLocalPath(source, rules))
+    return kind === "path" ? { text: source } : { reason: "A network source has no file name" };
+  const text = kind === "name" ? fileName(source, rules) : kind === "folder" ? folderOf(source, rules) : source;
+  return { text };
 }
 
 /** Over 60 characters: the first 20 and the last 37 around an ellipsis. */

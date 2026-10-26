@@ -3,11 +3,14 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import type { PlayerState } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
-import { shorten } from "../copy.ts";
+import { copyTarget, shorten } from "../copy.ts";
 import activate from "../main.ts";
 import { NO_VIDEO } from "../keyframes.ts";
+import { HOST_RULES, isLocalPath, type PathRules } from "../local-path.ts";
 import { FIRST_LINE_ONLY, parseAddress } from "../open-url.ts";
+import { displayName } from "../reopen.ts";
 import { parseStep, stepText } from "../time-jump.ts";
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost(), dataDirectory?: string) =>
@@ -50,6 +53,9 @@ async function saved(file: string, ready: (value: Record<string, unknown>) => bo
   return value!;
 }
 const URL_WINDOW = "playback-open-url";
+const RULES: PathRules[] = ["posix", "windows"];
+/** A local file as the player on this OS names it. */
+const LOCAL = HOST_RULES === "windows" ? "C:\\a.mp4" : "/a.mp4";
 
 // ------------------------------------------------------------------ A02
 
@@ -64,11 +70,52 @@ test("A02 addresses: supported schemes, local paths and file:// URLs; anything e
     "ftp://x/a.mkv",
     "HTTPS://Example.com/a",
   ])
-    assert.equal(parseAddress(url), url, url);
-  assert.equal(parseAddress("  /Users/x/a b.mkv  "), "/Users/x/a b.mkv");
-  assert.equal(parseAddress("file:///Users/x/%E7%94%B5%E5%BD%B1.mkv"), "/Users/x/电影.mkv");
-  for (const bad of ["abc", "", "www.example.com/a.mp4", "javascript:alert(1)", "smb://x/a", "https://", "https://a b/c", "C:\\a.mp4"])
-    assert.equal(parseAddress(bad), null, bad);
+    for (const rules of RULES) assert.equal(parseAddress(url, rules), url, `${rules} ${url}`);
+  for (const rules of RULES)
+    for (const bad of ["abc", "", "www.example.com/a.mp4", "javascript:alert(1)", "smb://x/a", "https://", "https://a b/c", "C:a.mp4"])
+      assert.equal(parseAddress(bad, rules), null, `${rules} ${bad}`);
+});
+
+// What each local form means on each OS; both are checked on every machine.
+const LOCAL_FORMS: [input: string, posix: string | null, windows: string | null][] = [
+  ["  /Users/x/a b.mkv  ", "/Users/x/a b.mkv", null], // Windows: no drive, so it would be the player's current one
+  ["\\a.mp4", null, null],
+  ["C:\\a.mp4", null, "C:\\a.mp4"],
+  ["  C:\\电影\\a b.mkv ", null, "C:\\电影\\a b.mkv"],
+  ["C:/x/a.mp4", null, "C:\\x\\a.mp4"],
+  ["\\\\server\\share\\a.mp4", null, "\\\\server\\share\\a.mp4"],
+  ["//server/share/a.mp4", "//server/share/a.mp4", "\\\\server\\share\\a.mp4"],
+  ["file:///Users/x/%E7%94%B5%E5%BD%B1.mkv", "/Users/x/电影.mkv", null], // Windows: no drive
+  ["file:///C:/x/a%20b.mp4", "/C:/x/a b.mp4", "C:\\x\\a b.mp4"],
+  ["file://localhost/C:/x/a.mp4", "/C:/x/a.mp4", "C:\\x\\a.mp4"],
+  ["file://server/share/a.mp4", null, "\\\\server\\share\\a.mp4"], // macOS: a file URL names no other machine
+];
+
+test("A02 local paths and file:// URLs follow the player's OS: POSIX paths on macOS, drive and UNC paths on Windows", () => {
+  for (const [input, posix, windows] of LOCAL_FORMS) {
+    assert.equal(parseAddress(input, "posix"), posix, `posix ${input}`);
+    assert.equal(parseAddress(input, "windows"), windows, `windows ${input}`);
+    // Without rules the OS running the test decides.
+    assert.equal(parseAddress(input), HOST_RULES === "windows" ? windows : posix, `here ${input}`);
+  }
+});
+
+test("I08 and A10 name a local file by the OS's path rules; a link is not a file", () => {
+  const playing = (source: string) => ({ source, kind: "media", phase: "playing" }) as unknown as PlayerState;
+  const copies = (source: string, rules: PathRules) =>
+    (["name", "folder", "path"] as const).map((kind) => {
+      const target = copyTarget(playing(source), kind, rules);
+      return "text" in target ? target.text : null;
+    });
+  assert.deepEqual(copies("/Users/x/a b.mkv", "posix"), ["a b.mkv", "/Users/x", "/Users/x/a b.mkv"]);
+  assert.deepEqual(copies("C:\\电影\\a b.mkv", "windows"), ["a b.mkv", "C:\\电影", "C:\\电影\\a b.mkv"]);
+  assert.deepEqual(copies("\\\\nas\\media\\a.mkv", "windows"), ["a.mkv", "\\\\nas\\media\\", "\\\\nas\\media\\a.mkv"]);
+  assert.deepEqual(copies("C:\\电影\\a b.mkv", "posix"), [null, null, "C:\\电影\\a b.mkv"]);
+  for (const rules of RULES) assert.deepEqual(copies("https://h/a.mp4", rules), [null, null, "https://h/a.mp4"]);
+  assert.equal(displayName("C:\\电影\\a b.mkv", "windows"), "a b.mkv");
+  assert.equal(displayName("/Users/x/a b.mkv", "posix"), "a b.mkv");
+  assert.equal(displayName("https://h/a.mp4", "windows"), "https://h/a.mp4");
+  for (const rules of RULES) assert.equal(isLocalPath("https://h/a.mp4", rules), false);
 });
 
 test("A02 Ctrl+U fills a clipboard address, selects it, and Enter opens it and closes the window", async () => {
@@ -108,9 +155,9 @@ test("A02 an invalid address keeps the window with a message; only the first lin
   await host.settle();
   assert.equal(window.props.notice, "invalid");
   assert.equal(host.sent("source.submit").length, 0);
-  window.emit("confirm", "\n  /a.mp4  \nhttps://x/b.mp4");
+  window.emit("confirm", `\n  ${LOCAL}  \nhttps://x/b.mp4`);
   await host.settle();
-  assert.deepEqual([intents(host).at(-1)!.kind, intents(host).at(-1)!.source], ["open", "/a.mp4"]);
+  assert.deepEqual([intents(host).at(-1)!.kind, intents(host).at(-1)!.source], ["open", LOCAL]);
   assert.equal(host.windows.has(URL_WINDOW), false);
   // The window is gone, so the note is on the video.
   assert.equal(host.sent("osd.show").at(-1)!.text, FIRST_LINE_ONLY);
@@ -643,20 +690,22 @@ test("I06 the bar gets the duration and the hover option; the option is saved", 
 // ------------------------------------------------------------------ I08
 
 test("I08 copies the file name, folder and full path of a local file", async () => {
-  const { host, stop } = await start(withMedia(new TestHost(), "/Users/x/电影/a b.mkv"));
+  const [folder, file] =
+    HOST_RULES === "windows" ? ["C:\\Users\\x\\电影", "C:\\Users\\x\\电影\\a b.mkv"] : ["/Users/x/电影", "/Users/x/电影/a b.mkv"];
+  const { host, stop } = await start(withMedia(new TestHost(), file));
   const copied: (string | null)[] = [];
   for (const id of ["copy-name", "copy-folder", "copy-path"]) {
     await host.command(id).run();
     copied.push(host.clipboard.text);
   }
-  assert.deepEqual(copied, ["a b.mkv", "/Users/x/电影", "/Users/x/电影/a b.mkv"]);
-  assert.equal(lastOsd(host), "已复制: /Users/x/电影/a b.mkv");
+  assert.deepEqual(copied, ["a b.mkv", folder, file]);
+  assert.equal(lastOsd(host), `已复制: ${file}`);
   host.handle("clipboard.writeText", () => {
     throw new HostError("failed", "系统拒绝写入");
   });
   await host.command("copy-name").run();
   assert.equal(lastOsd(host), "复制失败：系统拒绝写入");
-  assert.equal(host.clipboard.text, "/Users/x/电影/a b.mkv");
+  assert.equal(host.clipboard.text, file);
   host.reset("clipboard.writeText");
   await host.press("F4");
   await host.settle();

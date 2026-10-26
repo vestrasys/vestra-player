@@ -3,6 +3,7 @@ import { mkdir, realpath, rm, stat, unlink } from "node:fs/promises";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import type { ImageRef, PlayerState, Plugin } from "@vestra-player/sdk";
+import { isLocalPath } from "./local-path.ts";
 import type { SettingsStore } from "./settings.ts";
 import type { State } from "./texts.ts";
 
@@ -148,7 +149,7 @@ export class Thumbnails {
     }
     // A local file with a known length (it may be known only once ready).
     const { kind, source, duration } = state;
-    if (kind === "media" && source !== null && source.startsWith("/") && duration !== null && duration > 0)
+    if (kind === "media" && source !== null && isLocalPath(source) && duration !== null && duration > 0)
       this.#source = this.#fresh(state.sourceId, source, duration);
   }
 

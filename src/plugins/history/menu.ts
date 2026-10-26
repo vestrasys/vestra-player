@@ -1,7 +1,6 @@
-import { basename } from "node:path";
 import type { I18n, Osd, Plugin, Scope, Text } from "@vestra-player/sdk";
 import { clock, displayName, middle } from "./identity.ts";
-import { exists, MENU_ITEMS, type Recent, type RecentItem } from "./recent.ts";
+import { MENU_ITEMS, present, type Recent, type RecentItem } from "./recent.ts";
 import type { Mode, Resume } from "./resume.ts";
 import { timing } from "./store.ts";
 
@@ -24,7 +23,7 @@ const number = (index: number) => (index < 9 ? `${index + 1}  ` : index === 9 ? 
 export function recentTitles(items: RecentItem[], resume: Resume, { text }: I18n): (string | Text)[] {
   const used = new Set<string>();
   return items.slice(0, MENU_ITEMS).map((item, index) => {
-    const memo = resume.memo(item.key);
+    const memo = resume.memo(item);
     const prefix = number(index);
     const point = memo ? clock(memo.position) : null;
     // The point and its two brackets.
@@ -140,8 +139,8 @@ export class RecentMenu {
 
   /** Open a record (user initiated, so unconditional); a missing file is reported and kept. */
   async open(item: RecentItem) {
-    if (item.kind === "file" && !(await exists(item.source))) {
-      quiet(this.#osd.show("File not found: {}", [basename(item.source)]));
+    if (!(await present(item.source))) {
+      quiet(this.#osd.show("File not found: {}", [displayName(item.source)]));
       return;
     }
     // The root player: the media outlives this submenu's scope.

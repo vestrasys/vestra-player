@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import test from "node:test";
 import type { PlaybackStats } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
@@ -62,6 +62,12 @@ async function thumbnailsOn(host: TestHost) {
 }
 
 const ffmpegRuns = (host: TestHost) => host.tools.calls.filter((c) => c.tool === "ffmpeg");
+
+/** The file name of the picture the bar shows (the folder uses the OS's separator). */
+function shown(host: TestHost) {
+  const path = host.imagePath(host.mounted().props.thumbnail);
+  return path ? basename(path) : null;
+}
 
 /** Take over the settle timer: pending timers wait until the test fires them. */
 function manualClock() {
@@ -235,14 +241,14 @@ test("I07 a resting pointer makes a picture once; the same slot then shows at on
     assert.equal(runs[0]!.args[runs[0]!.args.indexOf("-i") + 1], media.file);
     const path = host.imagePath(bar.props.thumbnail);
     assert.ok(path?.startsWith(join(host.dataDirectory, "thumbs")), path ?? "no picture");
-    assert.ok(path!.endsWith("/100.jpg"));
+    assert.equal(basename(path!), "100.jpg");
     assert.ok(existsSync(path!));
     // Elsewhere, then back into the same 5 s slot: no second run, shown without waiting.
     bar.emit("hover-changed", 0.1);
     await until(() => timers.pending.size === 1);
     timers.fire();
     await until(() => ffmpegRuns(host).length === 2);
-    await until(() => host.imagePath(bar.props.thumbnail)?.endsWith("/20.jpg") ?? false);
+    await until(() => shown(host) === "20.jpg");
     bar.emit("hover-changed", 0.502);
     await until(() => host.imagePath(bar.props.thumbnail) === path);
     assert.equal(timers.pending.size, 0); // a cache hit does not wait
@@ -279,9 +285,9 @@ test("I07 one ffmpeg at a time: a target passed meanwhile is only cached, the ne
     const second = ffmpegRuns(host)[1]!.args;
     assert.equal(second[second.indexOf("-ss") + 1], "600.000");
     releases.shift()!();
-    await until(() => host.imagePath(bar.props.thumbnail)?.endsWith("/120.jpg") ?? false);
+    await until(() => shown(host) === "120.jpg");
     bar.emit("hover-changed", 0.2);
-    await until(() => host.imagePath(bar.props.thumbnail)?.endsWith("/40.jpg") ?? false);
+    await until(() => shown(host) === "40.jpg");
     assert.equal(ffmpegRuns(host).length, 2);
     await stop();
   } finally {

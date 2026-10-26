@@ -1,5 +1,5 @@
 import type { JsonStore, Osd, Player, PlayerState, Plugin, Window } from "@vestra-player/sdk";
-import { clock, fileSize, keyOf, mediaKind } from "./identity.ts";
+import { clock, fileSize, keyOf, legacyKeyOf, mediaKind } from "./identity.ts";
 import { quiet } from "./menu.ts";
 import { jsonStore, timing } from "./store.ts";
 
@@ -22,6 +22,8 @@ type Track = {
   sourceId: number;
   source: string;
   key: string;
+  /** The other key 0.1.3 stored for this source, if any (`legacyKeyOf`); its memo moves to `key`. */
+  legacy: string | null;
   size: number | null;
   /** `null` until known (extension table, then `player.stats()`). */
   audio: boolean | null;
@@ -105,9 +107,10 @@ export class Resume {
     this.#listeners.push(listener);
   }
 
-  /** The remembered position for a record key, if any (the A12 menu shows it). */
-  memo(key: string): Memo | undefined {
-    return this.items.get(key);
+  /** The remembered position for a record, if any (the A12 menu shows it); also one saved under the 0.1.3 key. */
+  memo({ key, source }: { key: string; source: string }): Memo | undefined {
+    const legacy = legacyKeyOf(source);
+    return this.items.get(key) ?? (legacy === null ? undefined : this.items.get(legacy));
   }
 
   setMode(mode: Mode) {
@@ -148,6 +151,7 @@ export class Resume {
         sourceId: state.sourceId,
         source: state.source,
         key: keyOf(state.source),
+        legacy: legacyKeyOf(state.source),
         size: fileSize(state.source),
         audio: kind === null ? null : kind === "audio",
         position: null,
@@ -201,7 +205,7 @@ export class Resume {
   async #resume(track: Track) {
     try {
       if (!(await this.#applies(track)) || this.mode === "off") return;
-      const memo = this.items.get(track.key);
+      const memo = this.#adopt(track);
       if (!memo || this.#track !== track) return;
       if (memo.size !== track.size || memo.position > track.duration! - END_MARGIN) {
         // The file was replaced or cut shorter: the point no longer means anything.
@@ -218,6 +222,24 @@ export class Resume {
     } finally {
       if (!this.#ask || this.#ask.track !== track) track.holding = false;
     }
+  }
+
+  /**
+   * The memo of `track`; one saved under its 0.1.3 key moves to the current key
+   * (same LRU place). 0.1.3 saw no file there, so it saved no size: the size
+   * seen now is taken as the file's.
+   */
+  #adopt(track: Track): Memo | undefined {
+    const memo = this.items.get(track.key);
+    const legacy = track.legacy;
+    if (memo || legacy === null) return memo;
+    const saved = this.items.get(legacy);
+    if (!saved) return undefined;
+    const old = saved.size === null ? { ...saved, size: track.size } : saved;
+    this.items = new Map([...this.items].map(([key, value]) => (key === legacy ? [track.key, old] : [key, value])));
+    this.#save();
+    this.#changed();
+    return old;
   }
 
   async #seek(track: Track, memo: Memo) {
@@ -267,6 +289,7 @@ export class Resume {
     }
     const before = this.items.get(track.key);
     this.items.delete(track.key); // insertion order is the LRU order
+    if (track.legacy !== null) this.items.delete(track.legacy); // replaced by the current key
     this.items.set(track.key, { position, duration, size: track.size, updatedAt: Date.now() });
     while (this.items.size > CAPACITY) this.items.delete(this.items.keys().next().value!);
     if (before?.position !== position) this.#save();
@@ -274,7 +297,9 @@ export class Resume {
   }
 
   #forget(track: Track) {
-    if (this.mode === "off" || !this.items.delete(track.key)) return;
+    if (this.mode === "off") return;
+    const legacy = track.legacy !== null && this.items.delete(track.legacy);
+    if (!this.items.delete(track.key) && !legacy) return;
     this.#save();
     this.#changed();
   }
