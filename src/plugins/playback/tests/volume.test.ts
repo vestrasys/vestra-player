@@ -46,7 +46,8 @@ test("volume: the bar's volume comes back after a restart, before anything is op
 
     const second = await start(data);
     await until(() => output(second.host).volume === 35);
-    assert.equal(second.host.mounted().props.volume, 35);
+    // The bar follows the player's state in a later write: wait for it.
+    await until(() => second.host.mounted().props.volume === 35);
     assert.equal(second.plugin.player.state.phase, "empty", "nothing is opened");
     // The first file plays at the remembered volume.
     second.host.openElsewhere("/movie.mp4");
@@ -69,7 +70,7 @@ test("volume: mute is remembered with the volume", () =>
     const second = await start(data);
     await until(() => output(second.host).muted);
     assert.deepEqual(output(second.host), { volume: 40, muted: true });
-    assert.equal(second.host.mounted().props.muted, true);
+    await until(() => second.host.mounted().props.muted === true);
     // Unmuting is remembered too.
     second.host.mounted().emit("action", "mute");
     await until(() => read(data)?.muted === false);
@@ -110,7 +111,8 @@ test("volume: applied once at start; later changes by others are adopted and sav
 
     const second = await start(data);
     await until(() => output(second.host).volume === 150);
-    assert.equal(second.host.mounted().props.volume, 100, "the slider shows a boost at its right end");
+    // The slider shows a boost at its right end (written after the player's state changes).
+    await until(() => second.host.mounted().props.volume === 100);
     await second.stop();
   }));
 

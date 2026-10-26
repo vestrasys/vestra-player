@@ -234,7 +234,9 @@ test("I07 a resting pointer makes a picture once; the same slot then shows at on
     assert.deepEqual([...timers.pending.values()].map((t) => t.ms), [SETTLE_MS]);
     assert.equal(ffmpegRuns(host).length, 0);
     timers.fire();
-    await until(() => bar.props["has-thumbnail"] === true);
+    // The SDK writes changed properties one at a time, so `has-thumbnail` can land a
+    // round trip before `thumbnail`: wait for the picture itself.
+    await until(() => bar.props["has-thumbnail"] === true && shown(host) !== null);
     const runs = ffmpegRuns(host);
     assert.equal(runs.length, 1);
     assert.equal(runs[0]!.args[runs[0]!.args.indexOf("-ss") + 1], "500.000");
@@ -366,7 +368,8 @@ test("I07 a new source removes the old source's pictures; a start empties thumbs
     assert.ok(dir);
     host.openElsewhere("/other.mkv");
     await until(() => !existsSync(join(data, "thumbs", dir!)));
-    assert.equal(bar.props["has-thumbnail"], false);
+    // The folder is removed by the plugin's own fs work; the bar's update is a separate write.
+    await until(() => bar.props["has-thumbnail"] === false);
     await stop();
   } finally {
     media.done();
@@ -386,7 +389,8 @@ test("I07 ffmpeg gone after the start: the run fails as unavailable and the opti
     await thumbnailsOn(host);
     host.mounted().emit("hover-changed", 0.5);
     await until(() => host.command("hover-thumbnail").state.reason === NEEDS_FFMPEG);
-    assert.equal(host.mounted().props["hover-thumbnail"], false);
+    // The command state and the bar's properties are separate host calls.
+    await until(() => host.mounted().props["hover-thumbnail"] === false);
     await stop();
   } finally {
     media.done();

@@ -80,7 +80,8 @@ test("G-07 every bar element has a tooltip naming its key; back/forward explain 
   const bar = host.mounted();
   // The player announces the table after the plugin's commands are declared.
   host.emit("bindings.changed", null);
-  await until(() => bar.props["key-open"] === "Ctrl+O");
+  // Properties are written one at a time: `key-mute` comes after `key-open`.
+  await until(() => bar.props["key-open"] === "Ctrl+O" && bar.props["key-mute"] === "M");
   // The test host labels a binding with its input name (the player shows ← → PgUp PgDn).
   let tip = tips(host, bar.props);
   assert.equal(tip.playPause, "暂停 (Space)");
