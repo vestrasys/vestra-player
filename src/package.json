@@ -14,6 +14,7 @@
     "sdk:sync-slint": "node scripts/sync-sdk-slint.mjs",
     "plugin": "node scripts/plugin.mjs",
     "plugins:build": "node scripts/plugin.mjs build --all",
+    "ui:shots": "node scripts/ui-shots.mjs",
     "test:sdk": "node --test tests/sdk/",
     "test:packaging": "node --test packaging/tests/",
     "portability": "node scripts/check-portability.mjs",

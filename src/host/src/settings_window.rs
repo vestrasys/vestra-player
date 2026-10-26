@@ -141,7 +141,7 @@ fn pick<'a>(pages: &[&'a Page], wanted: Option<&str>, category: Option<usize>) -
 }
 
 /// The tree model: a header per non-empty category, then its pages.
-fn rows(pages: &[&Page], current: Option<u64>) -> Value {
+pub(crate) fn rows(pages: &[&Page], current: Option<u64>) -> Value {
     let mut rows = Vec::new();
     for (index, name) in CATEGORIES.iter().enumerate() {
         let label = category_label(name);

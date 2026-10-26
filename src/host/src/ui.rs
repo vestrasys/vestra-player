@@ -150,7 +150,16 @@ pub fn translate(source: String, path: &Path) -> String {
 pub fn compile(path: &Path) -> Result<ComponentInstance> {
     compile_source(std::fs::read_to_string(path)?, path)
 }
-pub fn compile_source(mut source: String, path: &Path) -> Result<ComponentInstance> {
+pub fn compile_source(source: String, path: &Path) -> Result<ComponentInstance> {
+    definition_source(source, path)?
+        .create()
+        .map_err(Into::into)
+}
+/// The compiled component of [`compile_source`], to create several instances.
+pub fn definition_source(
+    mut source: String,
+    path: &Path,
+) -> Result<slint_interpreter::ComponentDefinition> {
     // R-H6: the player sets this window's palette (which `Theme` reads).
     if !source.contains(crate::theme::PALETTE) {
         source.push('\n');
@@ -161,13 +170,12 @@ pub fn compile_source(mut source: String, path: &Path) -> Result<ComponentInstan
     if result.components().count() > 1 {
         bail!("Slint file must export exactly one component");
     }
-    let definition = result.components().next().ok_or_else(|| {
+    result.components().next().ok_or_else(|| {
         anyhow::anyhow!(
             "Slint compilation: {:?}",
             result.diagnostics().collect::<Vec<_>>()
         )
-    })?;
-    definition.create().map_err(Into::into)
+    })
 }
 /// The standard window shortcuts (`platform::standard_window_shortcut`) of
 /// a secondary window: tool windows, floating panels, the options window;

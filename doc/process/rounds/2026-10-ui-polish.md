@@ -37,6 +37,14 @@ The countermeasures are all in the process below; the key point is that whoever 
 - **Offscreen screenshot tool**: one command renders every window and settings page of a given plugin to PNG, with a chosen language (en, zh-Hans, de) and sample data. Built by extending the existing slint-check prototype. Author agents look at the images with the Read tool.
 - From now on, task instructions include one line: before delivering, look at en and de with the screenshot tool and check against ui-spec.
 
+**Done (maintainer, 2026-10-26)**: `npm run ui:shots -- <plugin...> [--lang en,zh-Hans,de] [--out <dir>]` in `src/`; design, options and the differences from the player in [doc/architecture/ui-shots.md](../../architecture/ui-shots.md). There was no separate slint-check prototype in the repository; the tool extends the nearest thing, the recorded-props check (`scripts/ui-record.mjs` and `ui_types.rs`, [ci.md](../ci.md#recorded-plugin-props)):
+
+- Sample data are the plugin's own tests: with `VESTRA_UI_STATES` the recorder logs every window and settings page the tests open and every value sent to them, in order, with the test's name; each view's last state per test is rendered (identical states and identical pictures once). Windows no test opens are rendered with their default values. No per-plugin sample files and no plugin changes.
+- Rendering is the host's (`src/host/src/ui_shots.rs`, an ignored test the script runs once per language): `ui::compiler` with `@vestra/*` and the palette, the plugin's catalog for `@tr` and for text values, `ui_markdown` / `ui_image` / `ui_values` conversion and type check, `ui_fonts::install` (CJK fallback) and `theme::apply_fonts`, Slint's software renderer offscreen at the declared size; settings pages inside the player's Options window (640×480), plus the whole page when it is taller.
+- The output (default `<system temp>/vestra-ui-shots/<plugins>`) is the PNG files and `index.md` / `index.json`: per image the plugin, the view, the language and the state.
+
+Line for task briefs, from now on: **before delivering, look at en and de with the screenshot tool and check against ui-spec** (`npm run ui:shots -- <plugin> --lang en,de`, then Read the PNG files listed in `index.md`).
+
 ### Step 1: plugin center (merging the store and plugins plugins)
 
 1. **The coordinator writes the product specification**, below in this document, with wireframes; it keeps the store's existing window, colours and controls and changes only what the user named:
@@ -123,7 +131,7 @@ Deviations / notes (none change the requested behaviour):
 
 ## Progress
 
-- [ ] Step 0: screenshot tool
+- [x] Step 0: screenshot tool (`npm run ui:shots`, [ui-shots.md](../../architecture/ui-shots.md); maintainer, 2026-10-26; coordinator review pending)
 - [ ] Step 1: plugin center specification → negotiation → implementation → acceptance
 - [ ] Step 2: full screenshots → review → fixes → second review → acceptance
 - [ ] FS-BAR-1: fullscreen bar on hover only (accepted and implemented in `feat/fullscreen-bar-hover`; coordinator GUI test pending)
