@@ -340,15 +340,21 @@ fn documents(model: &ModelRc<Value>) -> Option<&crate::ui_markdown::Rows> {
     model.as_any().downcast_ref::<crate::ui_markdown::Rows>()
 }
 
-/// A Markdown document anywhere in the value.
+/// A Markdown document or (SDK 1.5.19) a runtime image anywhere below the
+/// top of the value: not JSON, so written in place by `merge`.
 fn has_documents(value: &Value) -> bool {
     match value {
         Value::Model(model) => {
             documents(model).is_some()
-                || (0..model.row_count())
-                    .any(|row| model.row_data(row).is_some_and(|v| has_documents(&v)))
+                || (0..model.row_count()).any(|row| {
+                    model
+                        .row_data(row)
+                        .is_some_and(|v| matches!(v, Value::Image(_)) || has_documents(&v))
+                })
         }
-        Value::Struct(object) => object.iter().any(|(_, v)| has_documents(v)),
+        Value::Struct(object) => object
+            .iter()
+            .any(|(_, v)| matches!(v, Value::Image(_)) || has_documents(v)),
         _ => false,
     }
 }
@@ -388,6 +394,8 @@ fn fits(current: &Value, next: &Value) -> bool {
                         .is_some_and(|after| fits(before, after))
                 })
         }
+        // Nested images (row logos) are leaves: replaced in place.
+        (Value::Image(_), Value::Image(_)) => true,
         (Value::Image(_), _) | (_, Value::Image(_)) => false,
         (current, next) => current.value_type() == next.value_type(),
     }
@@ -526,13 +534,16 @@ fn encode(value: &Json, depth: usize, budget: &mut Budget, hook: &mut Hook<'_>) 
 /// Refuse now what `from_json` would refuse later: a property value (wire
 /// form) the player stores and converts when a view is built (initial panel
 /// and settings page properties, settings writes while the window is closed).
-/// Images are checked when used; a Markdown document counts as one node and
-/// its text.
+/// Images are checked when used and count as one node; a Markdown document
+/// counts as one node and its text.
 pub fn check(value: &Json) -> Result<()> {
     if crate::ui_image::reference(value).is_some() {
         return Ok(());
     }
     from_json_with(value, &mut |node, _| {
+        if crate::ui_image::reference(node).is_some() {
+            return Some(Ok((Value::Void, 0)));
+        }
         let doc = crate::ui_markdown::reference(node)?;
         let text = doc.get("text").and_then(Json::as_str).map_or(0, str::len);
         Some(Ok((Value::Void, text)))
@@ -691,6 +702,9 @@ mod tests {
         );
         // An image is checked when used; a document is one value and its text.
         check(&json!({"$vestraImage": "/x.png", "ref": 1})).unwrap();
+        // Nested images (SDK 1.5.19) are one node each, not an object.
+        check(&json!([{"key": "a", "icon": {"$vestraImage": "/x.png", "ref": 2, "maxSide": 64}}]))
+            .unwrap();
         let doc = |n: usize| json!({"$vestraMarkdown": {"text": "x".repeat(n)}, "ref": 1});
         check(&json!([doc(200_000), doc(200_000)])).unwrap();
         assert!(over(&Json::Array(vec![doc(200_000); 6])).contains("total bytes"));
@@ -769,5 +783,44 @@ mod reconciliation_tests {
         // for an equal-size update that retains obsolete data or menu structure.
         assert!(!reconcile(&current, &from_json(&serde_json::json!([0, 0])).unwrap()).unwrap());
         assert_eq!(model.row_count(), 6);
+    }
+}
+
+#[cfg(test)]
+mod image_rows {
+    use super::*;
+
+    fn row(key: &str, icon: &slint::Image) -> Value {
+        let mut row = Struct::default();
+        row.set_field("key".into(), Value::String(key.into()));
+        row.set_field("icon".into(), Value::Image(icon.clone()));
+        Value::Struct(row)
+    }
+    fn list(rows: Vec<Value>) -> Value {
+        Value::Model(Rc::new(VecModel::from(rows)).into())
+    }
+
+    /// STORE-ROW-LOGO: rows with an image each update in place (the list
+    /// keeps its model, so a ListView keeps its scroll position).
+    #[test]
+    fn rows_with_images_update_in_place() {
+        let pixels = |width| slint::SharedPixelBuffer::<slint::Rgba8Pixel>::new(width, 1);
+        let (a, b) = (
+            slint::Image::from_rgba8(pixels(1)),
+            slint::Image::from_rgba8(pixels(2)),
+        );
+        let current = list(vec![row("a", &a), row("b", &a)]);
+        let next = list(vec![row("a", &a), row("b", &b), row("c", &b)]);
+        assert!(reconcile(&current, &next).unwrap());
+        let Value::Model(model) = &current else {
+            panic!("a model")
+        };
+        assert_eq!(model.row_count(), 3);
+        let Some(Value::Struct(second)) = model.row_data(1) else {
+            panic!("a row")
+        };
+        assert_eq!(second.get_field("icon"), Some(&Value::Image(b)));
+        // A whole-value image is still installed, never merged.
+        assert!(!reconcile(&Value::Image(a.clone()), &Value::Image(a)).unwrap());
     }
 }

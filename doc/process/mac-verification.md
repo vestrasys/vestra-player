@@ -16,7 +16,7 @@ Since 2026-10-26 the GitHub Actions budget has been used up, so CI does not run.
 - [ ] The `.app` bundle carries the built-ins unpacked under `Contents/Resources/plugins/<id>/` with `builtin.json` schema 2. Signing (ad-hoc, and with an identity if available) and notarization accept the loose files.
 - [ ] First start with an empty `~/Library/Application Support/Vestra`: nothing is written under `packages/packages/` for built-ins, and the UI is responsive.
 - [ ] Upgrade from a 0.5.0 profile: the old built-in copies are removed off the UI thread, and settings, secrets and third-party plugins are kept.
-- [ ] Plugin Manager and Plugin Store: no rollback anywhere; built-ins can be neither uninstalled nor disabled; third-party plugins can be installed, uninstalled, disabled and enabled.
+- [ ] Plugin Store (the only plugin management UI since 2026-10-26; "Settings ▸ Plugin Manager…" is gone): no rollback anywhere; built-ins can be neither uninstalled nor disabled; third-party plugins can be installed, uninstalled, disabled and enabled.
 - [ ] The Quit menu item still shows ⌘Q on macOS (`MENU_SHOWS_CMD`).
 
 ### #41 Windows fixes batch

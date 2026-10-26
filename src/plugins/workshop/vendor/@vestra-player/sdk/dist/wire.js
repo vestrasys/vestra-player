@@ -155,7 +155,7 @@ export function createWire(transport) {
         },
         /** The core's own playback actions; resolves when the action finished. */
         host: {
-            run: (action) => transport.request("host.run", { action }),
+            run: (action, seconds) => transport.request("host.run", seconds === undefined ? { action } : { action, seconds }),
         },
         step: {
             step: (unit, direction, expected) => transport.request("player.step", {
@@ -163,7 +163,7 @@ export function createWire(transport) {
                 direction,
                 ...(expected ? { expected } : {}),
             }),
-            setStepSeek: (seconds) => transport.request("player.setStepSeek", { seconds }),
+            setStepSeek: (seconds, keyframes) => transport.request("player.setStepSeek", keyframes === undefined ? { seconds } : { seconds, keyframes }),
         },
         clipboard: {
             readText: () => transport.request("clipboard.readText"),
@@ -284,6 +284,7 @@ export function createWire(transport) {
             cancel: (operationId) => transport.request("packages.cancel", { operationId }),
             list: () => transport.request("packages.list"),
             setEnabled: (id, enabled) => transport.request("packages.setEnabled", { id, enabled }),
+            reload: (id) => transport.request("packages.reload", { id }),
             uninstall: (id, removeData, expectedRevision, requestId) => transport.request("packages.uninstall", {
                 id,
                 removeData,

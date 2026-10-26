@@ -1,8 +1,12 @@
 //! Runtime images (R-U1, `plugin.ui.image`): a property value naming a PNG or
-//! JPEG file in the plugin's package or data directory. Checked on every use
-//! (path, size, format, dimensions), decoded once per (plugin, path, size,
-//! modification time); each plugin keeps at most 64 MB of decoded pixels, and
-//! only images no property shows are evicted, least recently used first.
+//! JPEG file in the plugin's package or data directory, as the whole value or
+//! (SDK 1.5.19, STORE-ROW-LOGO) a field at any depth, such as each row's logo.
+//! Checked on every use (path, size, format, dimensions), decoded once per
+//! (plugin, path, size, modification time, `maxSide`), optionally scaled down
+//! to `maxSide`; each plugin keeps at most 64 MB of decoded pixels, and only
+//! images no property shows are evicted, least recently used first. The
+//! images nested in the values of one view (a window, panel or settings page)
+//! show at most 32 MB of decoded pixels together.
 #![forbid(unsafe_code)]
 use super::*;
 use std::io::Read;
@@ -10,17 +14,37 @@ use std::io::Read;
 pub const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_SIDE: u32 = 4096;
 pub const BUDGET_BYTES: usize = 64 * 1024 * 1024;
+/// Decoded pixels the nested images of one view may show (STORE-ROW-LOGO):
+/// a write that would pass it is refused with `limit`.
+pub const VIEW_BUDGET_BYTES: usize = 32 * 1024 * 1024;
 /// The wire form the SDK sends for an `ImageRef` (an internal detail).
 pub const WIRE_KEY: &str = "$vestraImage";
 
-/// The path of a wire image reference: `{ "$vestraImage": path, "ref": n }`.
+/// The path of a wire image reference:
+/// `{ "$vestraImage": path, "ref": n, "maxSide"?: n }`.
 pub fn reference(value: &Value) -> Option<&Value> {
     let object = value.as_object()?;
     let path = object.get(WIRE_KEY)?;
     object
         .keys()
-        .all(|key| key == WIRE_KEY || key == "ref")
+        .all(|key| key == WIRE_KEY || key == "ref" || key == "maxSide")
         .then_some(path)
+}
+
+/// A wire reference's path and `maxSide` (0: full size).
+pub fn parts(value: &Value) -> std::result::Result<(&str, u32), RpcError> {
+    let path = reference(value)
+        .and_then(Value::as_str)
+        .ok_or_else(|| RpcError::invalid("image path must be a string"))?;
+    let side = match value.get("maxSide") {
+        None | Some(Value::Null) => 0,
+        Some(side) => side
+            .as_u64()
+            .filter(|side| (1..=u64::from(MAX_SIDE)).contains(side))
+            .ok_or_else(|| RpcError::invalid("image maxSide must be an integer 1..4096"))?
+            as u32,
+    };
+    Ok((path, side))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -29,6 +53,8 @@ pub struct Key {
     path: PathBuf,
     size: u64,
     modified: u128,
+    /// `maxSide`, 0 for the full size.
+    side: u32,
 }
 
 struct Entry {
@@ -89,7 +115,17 @@ pub fn locate(
 }
 
 /// PNG or JPEG by content, at most 4096×4096, as straight-alpha RGBA.
+#[cfg(test)]
 pub fn decode(bytes: &[u8]) -> std::result::Result<(slint::Image, usize), RpcError> {
+    decode_within(bytes, 0)
+}
+
+/// `decode`, scaled down (aspect kept, never up) so that neither side is
+/// over `side` (0: full size).
+pub fn decode_within(
+    bytes: &[u8],
+    side: u32,
+) -> std::result::Result<(slint::Image, usize), RpcError> {
     let format = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         image::ImageFormat::Png
     } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
@@ -104,10 +140,14 @@ pub fn decode(bytes: &[u8]) -> std::result::Result<(slint::Image, usize), RpcErr
     if width == 0 || height == 0 || width > MAX_SIDE || height > MAX_SIDE {
         return Err(fail("invalid", "image must be at most 4096×4096"));
     }
-    let pixels = reader()
+    let mut decoded = reader()
         .decode()
-        .map_err(|e| fail("invalid", format!("unreadable image: {e}")))?
-        .into_rgba8();
+        .map_err(|e| fail("invalid", format!("unreadable image: {e}")))?;
+    if side > 0 && (width > side || height > side) {
+        decoded = decoded.thumbnail(side, side);
+    }
+    let pixels = decoded.into_rgba8();
+    let (width, height) = pixels.dimensions();
     let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
         pixels.as_raw(),
         width,
@@ -127,12 +167,23 @@ impl Images {
         roots: &[PathBuf],
         path: &str,
     ) -> std::result::Result<(Key, slint::Image), RpcError> {
+        self.load_within(owner, roots, path, 0)
+    }
+    /// `load`, scaled down to `side` (0: full size).
+    pub fn load_within(
+        &mut self,
+        owner: u64,
+        roots: &[PathBuf],
+        path: &str,
+        side: u32,
+    ) -> std::result::Result<(Key, slint::Image), RpcError> {
         let (path, size, modified) = locate(path, roots)?;
         let key = Key {
             owner,
             path,
             size,
             modified,
+            side,
         };
         self.clock += 1;
         if let Some(entry) = self.entries.get_mut(&key) {
@@ -146,7 +197,7 @@ impl Images {
         if bytes.len() as u64 > MAX_FILE_BYTES {
             return Err(fail("invalid", "image file exceeds 16 MB"));
         }
-        let (image, size) = decode(&bytes)?;
+        let (image, size) = decode_within(&bytes, side)?;
         self.entries.insert(
             key.clone(),
             Entry {
@@ -185,6 +236,24 @@ impl Images {
         self.shown.retain(|(o, ..), _| *o != owner);
         self.markdown.release(owner, None, None);
         self.entries.retain(|key, _| key.owner != owner);
+    }
+    /// Decoded pixels `view` shows, each image once, leaving out what
+    /// `property` shows (the value being replaced).
+    pub fn view_bytes(&self, owner: u64, view: &str, property: &str) -> usize {
+        let prefix = format!("{property}#");
+        let keys: std::collections::BTreeSet<&Key> = self
+            .shown
+            .iter()
+            .filter(|((o, v, p), _)| {
+                *o == owner && v == view && p != property && !p.starts_with(&prefix)
+            })
+            .map(|(_, key)| key)
+            .collect();
+        keys.into_iter().map(|key| self.entry_bytes(key)).sum()
+    }
+    /// Decoded bytes of a cached image (0 when it is not cached).
+    pub fn entry_bytes(&self, key: &Key) -> usize {
+        self.entries.get(key).map_or(0, |entry| entry.bytes)
     }
     /// Bytes of decoded pixels this plugin keeps.
     pub fn bytes(&self, owner: u64) -> usize {
@@ -230,7 +299,7 @@ impl Host {
         roots
     }
     /// A property value for `owner`'s `view`: JSON, Markdown documents at
-    /// any depth, or an image reference as the whole value (checked again on
+    /// any depth, image references as the whole value or at any depth (checked again on
     /// every use, whoever produced the wire value). A failure names the
     /// property (`rows: UI array exceeds 4096 rows`).
     pub(super) fn prop_value(
@@ -251,25 +320,57 @@ impl Host {
         value: &Value,
     ) -> std::result::Result<SValue, RpcError> {
         let roots = self.image_roots(owner);
-        let Some(path) = ui_image::reference(value) else {
+        if ui_image::reference(value).is_none() {
             let mut cache = std::mem::take(&mut self.images.markdown);
-            let images = &mut self.images;
-            let converted =
-                ui_markdown::convert(&mut cache, (owner, view, property), value, &mut |path| {
+            let mut total = self.images.view_bytes(owner, view, property);
+            let mut counted = std::collections::BTreeSet::new();
+            let images = RefCell::new(&mut self.images);
+            let converted = ui_markdown::convert(
+                &mut cache,
+                (owner, view, property),
+                value,
+                &mut |path| {
                     images
+                        .borrow_mut()
                         .load(owner, &roots, path)
                         .ok()
                         .map(|(key, image)| (Some(key), image))
-                });
+                },
+                // A nested image (STORE-ROW-LOGO): a file that fails its
+                // checks is an empty image in its field, as a Markdown image
+                // shows its alt text; only a malformed reference or the
+                // view's budget refuses the whole write.
+                &mut |node| {
+                    let (path, side) = ui_image::parts(node)?;
+                    let mut images = images.borrow_mut();
+                    match images.load_within(owner, &roots, path, side) {
+                        Ok((key, image)) => {
+                            if counted.insert(key.clone()) {
+                                total += images.entry_bytes(&key);
+                            }
+                            if total > VIEW_BUDGET_BYTES {
+                                return Err(RpcError::new(
+                                    "limit",
+                                    "the images of one view exceed 32 MB of decoded pixels \
+                                     (use maxSide, or send fewer rows)",
+                                ));
+                            }
+                            Ok((Some(key), image))
+                        }
+                        Err(error) => {
+                            diag!("ui.image {path}: not shown: {}", error.message);
+                            Ok((None, slint::Image::default()))
+                        }
+                    }
+                },
+            );
             self.images.markdown = cache;
             let (converted, shown) = converted?;
             self.images.assign_many(owner, view, property, shown);
             return Ok(converted);
-        };
-        let path = path
-            .as_str()
-            .ok_or_else(|| RpcError::invalid("image path must be a string"))?;
-        let (key, image) = self.images.load(owner, &roots, path)?;
+        }
+        let (path, side) = ui_image::parts(value)?;
+        let (key, image) = self.images.load_within(owner, &roots, path, side)?;
         self.images.assign_many(owner, view, property, Vec::new());
         self.images
             .markdown
@@ -382,6 +483,7 @@ mod tests {
                 path: PathBuf::new(),
                 size: 0,
                 modified: 0,
+                side: 0,
             },
         );
         assert!(images.entries.contains_key(&first));
@@ -389,5 +491,42 @@ mod tests {
         images.release_view(1, "$mount");
         images.release_owner(1);
         assert_eq!(images.bytes(1), 0);
+    }
+
+    #[test]
+    fn max_side_scales_down_and_views_count_what_they_show() {
+        // Scaled down with the aspect kept, never up.
+        let (image, bytes) = decode_within(&png(200, 100), 64).unwrap();
+        assert_eq!((image.size().width, image.size().height), (64, 32));
+        assert_eq!(bytes, 64 * 32 * 4);
+        assert_eq!(decode_within(&png(20, 10), 64).unwrap().1, 20 * 10 * 4);
+        // The wire field: absent, or an integer 1..4096.
+        let wire = |side: Value| json!({"$vestraImage": "/a.png", "ref": 1, "maxSide": side});
+        assert_eq!(parts(&wire(json!(64))).unwrap(), ("/a.png", 64));
+        assert_eq!(parts(&json!({"$vestraImage": "/a.png"})).unwrap().1, 0);
+        for bad in [json!(0), json!(4097), json!(1.5), json!("64")] {
+            assert_eq!(parts(&wire(bad)).unwrap_err().code, "invalid");
+        }
+        // One entry per size of the same file.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let roots = [root.clone()];
+        let path = root.join("logo.png");
+        std::fs::write(&path, png(128, 128)).unwrap();
+        let path = path.to_str().unwrap();
+        let mut images = Images::default();
+        let (full, _) = images.load(1, &roots, path).unwrap();
+        let (small, image) = images.load_within(1, &roots, path, 32).unwrap();
+        assert_ne!(full, small);
+        assert_eq!(image.size().width, 32);
+        assert_eq!(images.entry_bytes(&small), 32 * 32 * 4);
+        // A view counts each image once, without the property being replaced.
+        images.assign_many(1, "w:1", "rows", vec![small.clone(), small.clone()]);
+        images.assign(1, "w:1", "cover", Some(full.clone()));
+        images.assign(1, "w:2", "cover", Some(full.clone()));
+        assert_eq!(images.view_bytes(1, "w:1", "x"), (128 * 128 + 32 * 32) * 4);
+        assert_eq!(images.view_bytes(1, "w:1", "rows"), 128 * 128 * 4);
+        assert_eq!(images.view_bytes(1, "w:1", "cover"), 32 * 32 * 4);
+        assert_eq!(images.view_bytes(2, "w:1", "x"), 0);
     }
 }

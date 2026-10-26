@@ -171,7 +171,6 @@ The labels below are the English interface text (the English source text of each
 | Settings ▸ Options… | preferences | F5 | |
 | Settings ▸ Keyboard Shortcuts… · Mouse… | hotkeys | | |
 | Settings ▸ Ignore Default Shortcuts | hotkeys | | Checked |
-| Settings ▸ Plugin Manager… | plugins | | |
 | Settings ▸ Appearance ▸ Vestra Dark · Vestra Light | preferences | | Radio (palette); `order` 840, 841. Dark is the default; with Light the video area stays dark |
 | Settings ▸ Appearance ▸ Show Logo When Idle | visualizer | | Checked |
 | Settings ▸ Appearance ▸ Choose Logo Image… · Restore Default Logo | visualizer | | "Restore Default Logo" is disabled while the default logo is in use |
@@ -227,11 +226,10 @@ Menus merge by English key ([i18n §5](../architecture/i18n.md#5-declarations-an
 | visualizer | Video-area background layer (idle logo, album cover for audio only); settings page in "Options" |
 | preferences | Tool window: Options (the player's settings window; this plugin provides the entry and the "Appearance" page) |
 | hotkeys | Tool windows: keyboard shortcuts, mouse |
-| plugins | Tool window: plugin manager |
 | nes | Tool window: NES |
 | youtube, bilibili | Tool windows: enter a link, play (YouTube also has download) |
 | workshop | Tool window: Plugin Workshop; each plugin it generates and installs has its own window |
-| store | Tool window: Plugin Store (list + details); "Options ▸ Plugins ▸ Plugin Store" settings page; the video area accepts dropped `.vxp` files (a drop provider for the `vxp` extension) |
+| store | Tool window: Plugin Store (list + details; its Installed tab is where plugins are managed, the Plugin Manager `vestra.plugins` was removed on 2026-10-26); "Options ▸ Plugins ▸ Plugin Store" settings page; the video area accepts dropped `.vxp` files (a drop provider for the `vxp` extension) |
 
 Showing, hiding or closing a tool window does not affect effects the plugin has already applied; closing a tool does not undo processing and does not replace the bottom bar.
 

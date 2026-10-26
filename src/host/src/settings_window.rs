@@ -975,7 +975,6 @@ mod tests {
             ),
             ("hotkeys/ui/keys.slint", "KeysPage", "Keys", 5),
             ("hotkeys/ui/mouse.slint", "MousePage", "Mouse", 5),
-            ("plugins/ui/plugins.slint", "PluginsPage", "Plugins", 7),
         ];
         let mut pages = Vec::new();
         for (i, (file, component, global, category)) in real.into_iter().enumerate() {

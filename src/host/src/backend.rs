@@ -428,6 +428,7 @@ impl Backend {
                             }
                             continue;
                         }
+                        actions.source_request(&command.method, &command.params);
                         let result =
                             context.call(command.reply.owner, &command.method, &command.params);
                         processing.note_source(sources.generation(), sources.phase());
@@ -435,7 +436,7 @@ impl Backend {
                         let _ = events.send(Event::Reply(command.reply, result));
                     }
                     sources.follow_device(&mpv);
-                    if let Some((done, result)) = actions.poll(&mpv) {
+                    for (done, result) in actions.poll(&mpv, sources.generation()) {
                         done.send(&events, result);
                     }
                     while let Some(event) = mpv.poll_event() {
@@ -841,8 +842,152 @@ struct CoreActions {
     seek: Option<(u64, f64, Instant)>,
     /// The one step waiting for its new position.
     stepping: Option<Stepping>,
+    /// The keyframe step seek in flight (`setStepSeek({ keyframes })`).
+    key_seek: Option<KeyFlight>,
+    /// Completions decided outside `poll` (a keyframe seek ended early),
+    /// sent by the next `poll`.
+    finished: Vec<(Completion, Result<Value, RpcError>)>,
+}
+/// A keyframe step seek waiting for mpv to land, and every press it carries.
+struct KeyFlight {
+    generation: u64,
+    state: crate::core_actions::KeySeek,
+    done: Vec<Completion>,
+    /// Where the issued seek started, and when it was sent.
+    before: f64,
+    started: Instant,
 }
 impl CoreActions {
+    /// A keyframe step seek: one mpv seek at a time from the landed
+    /// position; presses meanwhile are owed (`KeySeek`). Answered by `poll`.
+    fn key_seek(
+        &mut self,
+        context: &mut SourceContext,
+        facts: &crate::core_actions::Facts,
+        forward: bool,
+        step: f64,
+        done: &mut Option<Completion>,
+    ) -> Result<Option<Value>, RpcError> {
+        let generation = context.sources.generation();
+        if let Some(flight) = self
+            .key_seek
+            .as_mut()
+            .filter(|f| f.generation == generation)
+        {
+            flight.state.press(forward, step);
+            flight.done.extend(done.take());
+            return Ok(None);
+        }
+        self.end_key_seek();
+        let position = context
+            .mpv
+            .get_property::<f64>("time-pos")
+            .ok()
+            .or(facts.position)
+            .unwrap_or(0.0);
+        let (state, amount) =
+            crate::core_actions::KeySeek::start(position, facts.duration, forward, step);
+        let Some(amount) = amount else {
+            let text =
+                crate::core_actions::key_seek_notice(forward, step, position, facts.duration);
+            return Ok(Some(json!({ "osd": text })));
+        };
+        key_command(context.mpv, &crate::core_actions::key_seek_command(amount))?;
+        self.key_seek = Some(KeyFlight {
+            generation,
+            state,
+            done: done.take().into_iter().collect(),
+            before: position,
+            started: Instant::now(),
+        });
+        Ok(None)
+    }
+    /// A source change or another seek ends the keyframe seek in flight:
+    /// its presses resolve with no text.
+    fn end_key_seek(&mut self) {
+        if let Some(flight) = self.key_seek.take() {
+            self.finished.extend(
+                flight
+                    .done
+                    .into_iter()
+                    .map(|done| (done, Ok(json!({ "osd": null })))),
+            );
+        }
+    }
+    /// A plugin's source request: a seek or a new source ends a keyframe
+    /// step seek in flight (pause, rate and the like do not).
+    fn source_request(&mut self, method: &str, params: &Value) {
+        let intent = &params["intent"];
+        if method == "source.submit"
+            && (intent["kind"] != "control" || intent["control"]["kind"] == "seek")
+        {
+            self.end_key_seek();
+        }
+    }
+    /// Settle the keyframe seek in flight: the next owed seek, the one exact
+    /// fallback, or the presses' completions (one text, on the last; an
+    /// mpv error rejects only the last).
+    fn poll_key_seek(&mut self, mpv: &Mpv, generation: u64) {
+        use crate::core_actions::KeyNext;
+        let Some(flight) = self.key_seek.as_mut() else {
+            return;
+        };
+        if flight.generation != generation {
+            self.end_key_seek();
+            return;
+        }
+        let position = mpv.get_property::<f64>("time-pos").ok();
+        let seeking = mpv.get_property::<bool>("seeking").unwrap_or(false);
+        let moved = position.is_some_and(|now| (now - flight.before).abs() > 0.0001);
+        let at_end = mpv.get_property::<bool>("eof-reached").unwrap_or(false);
+        if !(moved && !seeking) && !at_end && flight.started.elapsed() < Duration::from_millis(1500)
+        {
+            return;
+        }
+        let landed = position.unwrap_or(flight.before);
+        let duration = mpv.get_property::<f64>("duration").ok();
+        let next = flight.state.settled(landed, duration, at_end);
+        let sent = match next {
+            KeyNext::Seek(amount) => {
+                key_command(mpv, &crate::core_actions::key_seek_command(amount)).map(|_| true)
+            }
+            KeyNext::Exact(target) => key_command(
+                mpv,
+                &[
+                    "seek".into(),
+                    format!("{target:.6}"),
+                    "absolute+exact".into(),
+                ],
+            )
+            .map(|_| true),
+            KeyNext::Done => Ok(false),
+        };
+        match sent {
+            Ok(true) => {
+                flight.before = landed;
+                flight.started = Instant::now();
+            }
+            outcome => {
+                let flight = self.key_seek.take().expect("a flight");
+                let last = flight.done.len().saturating_sub(1);
+                let text = crate::core_actions::key_seek_notice(
+                    flight.state.forward,
+                    flight.state.step,
+                    landed,
+                    duration,
+                );
+                let mut outcome = Some(outcome.map(|_| json!({ "osd": text })));
+                for (index, done) in flight.done.into_iter().enumerate() {
+                    let result = if index == last {
+                        outcome.take().expect("one outcome")
+                    } else {
+                        Ok(json!({ "osd": null }))
+                    };
+                    self.finished.push((done, result));
+                }
+            }
+        }
+    }
     fn submit(&mut self, context: &mut SourceContext, intent: Value) -> Result<(), RpcError> {
         self.operation += 1;
         context
@@ -888,6 +1033,10 @@ impl CoreActions {
         });
         let (plan, osd) = plan(action, &facts, step, pending.map(|(_, target, _)| target))
             .map_err(|reason| RpcError::new("unavailable", reason))?;
+        let keyframes = params["keyframes"].as_bool().unwrap_or(false);
+        if crate::core_actions::keyframe_seek(action, &facts, keyframes) {
+            return self.key_seek(context, &facts, action == "seek-forward", step, done);
+        }
         match plan {
             Plan::Restart => self.submit(context, json!({"kind":"restart"}))?,
             Plan::Pause(paused) => self.submit(
@@ -895,6 +1044,7 @@ impl CoreActions {
                 json!({"kind":"control","control":{"kind":"pause","paused":paused}}),
             )?,
             Plan::Seek(seconds) => {
+                self.end_key_seek();
                 self.submit(
                     context,
                     json!({"kind":"control","control":{"kind":"seek","seconds":seconds}}),
@@ -1004,7 +1154,14 @@ impl CoreActions {
     }
     /// Finish a step once the position moved and no seek is running, mpv hit
     /// the end, or 1.5 s passed (nothing moved: a boundary).
-    fn poll(&mut self, mpv: &Mpv) -> Option<(Completion, Result<Value, RpcError>)> {
+    /// What finished since the last call: a step, keyframe step seeks.
+    fn poll(&mut self, mpv: &Mpv, generation: u64) -> Vec<(Completion, Result<Value, RpcError>)> {
+        self.poll_key_seek(mpv, generation);
+        let mut done = std::mem::take(&mut self.finished);
+        done.extend(self.poll_step(mpv));
+        done
+    }
+    fn poll_step(&mut self, mpv: &Mpv) -> Option<(Completion, Result<Value, RpcError>)> {
         let stepping = self.stepping.as_ref()?;
         let position = mpv.get_property::<f64>("time-pos").ok();
         let seeking = mpv.get_property::<bool>("seeking").unwrap_or(false);
@@ -1025,6 +1182,12 @@ impl CoreActions {
             .then(|| crate::core_actions::frame_notice(stepping.forward, moved, position));
         Some((stepping.done, Ok(json!({ "osd": osd }))))
     }
+}
+
+/// One mpv command of a keyframe step seek; a failure is `backend`.
+fn key_command(mpv: &Mpv, command: &[String]) -> Result<(), RpcError> {
+    mpv.command(command)
+        .map_err(|e| RpcError::new("backend", e.to_string()))
 }
 
 /// An immediate outcome goes back with its completion; `None` is deferred.

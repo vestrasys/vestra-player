@@ -465,11 +465,11 @@ export declare function createWire(transport: Transport): {
     };
     /** The core's own playback actions; resolves when the action finished. */
     host: {
-        run: (action: string) => Promise<void>;
+        run: (action: string, seconds?: number) => Promise<void>;
     };
     step: {
         step: (unit: string, direction: string, expected?: SourceStamp) => Promise<void>;
-        setStepSeek: (seconds: number) => Promise<void>;
+        setStepSeek: (seconds: number, keyframes?: boolean) => Promise<void>;
     };
     clipboard: {
         readText: () => Promise<string | null>;
@@ -570,6 +570,7 @@ export declare function createWire(transport: Transport): {
         cancel: (operationId: string) => Promise<PackageOperation>;
         list: () => Promise<PackageInfo[]>;
         setEnabled: (id: string, enabled: boolean) => Promise<void>;
+        reload: (id: string) => Promise<void>;
         uninstall: (id: string, removeData: boolean, expectedRevision: number, requestId: string) => Promise<PackageOperation>;
     };
     snapshot: {

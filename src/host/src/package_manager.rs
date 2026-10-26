@@ -33,7 +33,12 @@ pub struct Manager {
     /// Package directories an operation freed while the thread ran; they
     /// go on its next run.
     cleanup_queue: BTreeSet<String>,
+    /// `packages.reload`: plugins stopped to start again, by id: the stopped
+    /// process and when; started once that process is gone (`reload_tick`).
+    reloads: BTreeMap<String, (u64, u64)>,
 }
+/// How long a reload waits for the stopped process to go, as installs do.
+const RELOAD_WAIT_MS: u64 = 20_000;
 struct Operation {
     id: String,
     package: String,
@@ -105,6 +110,7 @@ impl Manager {
             builtins,
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
+            reloads: BTreeMap::new(),
         })
     }
     /// Where an installed record's plugin runs from: a built-in from the
@@ -350,6 +356,10 @@ impl Host {
                 self.set_enabled(caller, string(params, "id")?, enabled)?;
                 Ok(Value::Null)
             }
+            "packages.reload" => {
+                self.reload(caller, string(params, "id")?)?;
+                Ok(Value::Null)
+            }
             "packages.uninstall" => self.uninstall(caller, params),
             _ => Err(RpcError::new("unsupported", "unknown package method")),
         }
@@ -482,9 +492,9 @@ impl Host {
             }
         }
     }
-    /// An operation runs on `id`.
+    /// An operation or a reload runs on `id`.
     fn package_busy(&self, id: &str) -> bool {
-        self.operation_pending(id)
+        self.operation_pending(id) || self.packages.reloads.contains_key(id)
     }
     /// While the `library-cleanup` thread scans the whole library (once, at
     /// start), installs and uninstalls wait; later runs remove only the
@@ -758,7 +768,11 @@ impl Host {
             if list.contains_key(id) {
                 continue;
             }
-            let (state, error) = stopped(self.dev_disabled.contains(id), self.failures.get(id));
+            let (state, error) = if self.packages.reloads.contains_key(id) {
+                ("starting", None)
+            } else {
+                stopped(self.dev_disabled.contains(id), self.failures.get(id))
+            };
             let data = self.data_directory_of(&DataKey::Development(id.clone()));
             list.insert(
                 id.clone(),
@@ -784,7 +798,10 @@ impl Host {
         }
         let running = self.running(id);
         if self.package_busy(id) {
-            return Err(RpcError::new("busy", "the package is being installed"));
+            return Err(RpcError::new(
+                "busy",
+                "the package is being installed or reloaded",
+            ));
         }
         let record = self.packages.store.get(id);
         // User ruling 2026-10-26: users manage third-party plugins only;
@@ -823,6 +840,18 @@ impl Host {
         if running.is_some() {
             return Ok(());
         }
+        self.start_stopped(id, installed, reserved, key, development)
+    }
+    /// Start a stopped plugin: its development load, else its installed
+    /// package (`set_enabled`, `reload`). The disabled flag is not touched.
+    fn start_stopped(
+        &mut self,
+        id: &str,
+        installed: Option<std::result::Result<(PathBuf, package_stage::PackageManifest), String>>,
+        reserved: std::result::Result<(), RpcError>,
+        key: Option<DataKey>,
+        development: Option<(PathBuf, plugins::Manifest)>,
+    ) -> std::result::Result<(), RpcError> {
         self.failures.remove(id);
         match (installed, development) {
             (_, Some((directory, _))) => self.load(&directory, 120_000)?,
@@ -840,9 +869,90 @@ impl Host {
                 })?;
                 self.load_package(&directory, &manifest, key)?;
             }
-            (None, None) => unreachable!("checked above"),
+            (None, None) => return Err(RpcError::new("missing", format!("no plugin {id}"))),
         }
         Ok(())
+    }
+    /// `packages.reload { id }` (SDK 1.5.19, STORE-RELOAD-BUILTIN): stop the
+    /// running plugin and start it again from the same package and data, once
+    /// its process is gone (`reload_tick`); a stopped or failed one starts
+    /// now. Built-ins included; the disabled flag is never written, so a
+    /// reload never leaves a plugin disabled. Same caller rules as
+    /// `setEnabled`: `plugins.manage`, never itself.
+    fn reload(&mut self, caller: u64, id: &str) -> std::result::Result<(), RpcError> {
+        if self.plugins[&caller].manifest.id == id {
+            return Err(RpcError::invalid("a plugin cannot reload itself"));
+        }
+        if self.package_busy(id) {
+            return Err(RpcError::new(
+                "busy",
+                "the package is being installed or reloaded",
+            ));
+        }
+        let record = self.packages.store.get(id);
+        let installed = self.packages.runs_from(id, &record);
+        let development = self.development.get(id).cloned();
+        if installed.is_none() && development.is_none() {
+            return Err(RpcError::new("missing", format!("no plugin {id}")));
+        }
+        let disabled = if development.is_some() {
+            self.dev_disabled.contains(id)
+        } else {
+            self.packages.store.disabled().contains(id)
+        };
+        if disabled {
+            return Err(RpcError::invalid(format!(
+                "{id} is disabled: enable it instead of reloading it"
+            )));
+        }
+        if let Some(owner) = self.running(id) {
+            self.disable(owner);
+            let now = self.now_ms();
+            self.packages.reloads.insert(id.into(), (owner, now));
+            return Ok(());
+        }
+        let reserved = check_reserved(id, record.instance.as_ref());
+        let key = record.instance.map(|i| DataKey::Instance(i.guid));
+        self.start_stopped(id, installed, reserved, key, development)
+    }
+    /// Start the reloaded plugins whose stopped process is gone; one that
+    /// does not go within `RELOAD_WAIT_MS` is listed as failed instead.
+    fn reload_tick(&mut self) {
+        if self.packages.reloads.is_empty() {
+            return;
+        }
+        let now = self.now_ms();
+        let due = self
+            .packages
+            .reloads
+            .iter()
+            .filter(|(_, (owner, since))| {
+                self.cleanup_done(*owner) || now.saturating_sub(*since) >= RELOAD_WAIT_MS
+            })
+            .map(|(id, (owner, _))| (id.clone(), *owner))
+            .collect::<Vec<_>>();
+        for (id, owner) in due {
+            self.packages.reloads.remove(&id);
+            if !self.cleanup_done(owner) {
+                self.failures.insert(
+                    id,
+                    "reload: the previous process did not stop within 20 s".into(),
+                );
+                continue;
+            }
+            if self.running(&id).is_some() {
+                continue;
+            }
+            let record = self.packages.store.get(&id);
+            let installed = self.packages.runs_from(&id, &record);
+            let reserved = check_reserved(&id, record.instance.as_ref());
+            let key = record.instance.map(|i| DataKey::Instance(i.guid));
+            let development = self.development.get(&id).cloned();
+            if let Err(error) = self.start_stopped(&id, installed, reserved, key, development) {
+                diag!("packages.reload {id}: {}", error.message);
+                self.failures.entry(id).or_insert(error.message);
+            }
+        }
     }
     /// `packages.uninstall { id, removeData, expectedRevision, requestId }`:
     /// stop it, remove it from the library (one catalog replacement), and
@@ -875,7 +985,10 @@ impl Host {
         )?;
         self.library_busy(None)?;
         if self.package_busy(&id) {
-            return Err(RpcError::new("busy", "the package is being installed"));
+            return Err(RpcError::new(
+                "busy",
+                "the package is being installed or reloaded",
+            ));
         }
         let remove_data = params["removeData"] == true;
         let data = remove_data
@@ -1026,6 +1139,7 @@ impl Host {
             self.packages.to_start = self.packages.store.installed().into_keys().collect();
         }
         self.start_queued();
+        self.reload_tick();
         self.cleanup_tick();
         let keys = self
             .packages
@@ -1641,6 +1755,7 @@ mod tests {
             builtins: BTreeMap::new(),
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
+            reloads: BTreeMap::new(),
         };
         let record = manager.store.get("counter");
         assert_eq!(

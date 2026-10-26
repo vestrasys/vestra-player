@@ -726,6 +726,10 @@ impl Cache {
 
 /// Loads a local image path: the file it is (`None` in tests) and the image.
 pub type Load<'a> = dyn FnMut(&str) -> Option<(Option<ui_image::Key>, slint::Image)> + 'a;
+/// Loads a nested image reference (its wire object): the file it is
+/// (`None` when none shows) and the image, or why the whole write is refused.
+pub type ImageLoad<'a> =
+    dyn FnMut(&Value) -> std::result::Result<(Option<ui_image::Key>, slint::Image), RpcError> + 'a;
 
 fn fingerprint(doc: &Doc) -> u64 {
     use std::hash::{Hash, Hasher};
@@ -782,14 +786,17 @@ fn parse(doc: Doc, earlier: &HashMap<Rc<RowKey>, Row>, load: &mut Load<'_>) -> P
 
 /// A property value with Markdown documents at any depth (a whole
 /// `[MarkdownBlock]` value, or a field of rows such as chat messages):
-/// JSON through `ui_values`, each document as its own `Rows` model. Runtime
-/// images may only be a whole value (`prop_value`): nested ones are
-/// `invalid`. Returns the image files the documents show.
+/// JSON through `ui_values`, each document as its own `Rows` model, and
+/// runtime images below the top (`{ "$vestraImage": … }` as a field or row,
+/// SDK 1.5.19) through `image`; a whole-value image is the caller's
+/// (`prop_value`). Returns the image files the documents and nested images
+/// show.
 pub fn convert(
     cache: &mut Cache,
     (owner, view, property): (u64, &str, &str),
     value: &Value,
     load: &mut Load<'_>,
+    image: &mut ImageLoad<'_>,
 ) -> std::result::Result<(SValue, Vec<ui_image::Key>), RpcError> {
     let slot = (owner, view.to_owned(), property.to_owned());
     let earlier = cache.slots.remove(&slot).unwrap_or_default();
@@ -805,12 +812,13 @@ pub fn convert(
             Some(Err(anyhow::anyhow!(message)))
         };
         if depth > 0 && ui_image::reference(node).is_some() {
-            return fail(
-                &mut failure,
-                RpcError::invalid(
-                    "an image reference must be the whole value of an image property",
-                ),
-            );
+            return match image(node) {
+                Ok((key, picture)) => {
+                    shown.extend(key);
+                    Some(Ok((SValue::Image(picture), 0)))
+                }
+                Err(error) => fail(&mut failure, error),
+            };
         }
         let doc = match parse_wire(reference(node)?) {
             Ok(doc) => doc,

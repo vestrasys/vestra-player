@@ -45,7 +45,7 @@ const env = {
       }
     : { TMPDIR: process.env.TMPDIR ?? "/tmp" }),
 };
-// A cold start starts 18 Node processes on the built-ins in place; on a
+// A cold start starts 17 Node processes on the built-ins in place; on a
 // Windows runner antivirus scans each file on first read, so allow more time.
 const seconds = String(options.seconds ?? (windows ? 45 : 15));
 console.log(`smoke: ${exe} --headless --seconds ${seconds} (PATH=${env.PATH})`);

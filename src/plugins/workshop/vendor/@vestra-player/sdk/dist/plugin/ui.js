@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { basename, extname, resolve } from "node:path";
 import { failure, Latest, quiet } from "./runtime.js";
 import { dropsOf } from "./drops.js";
-import { MarkdownHandle, markdown } from "./markdown.js";
+import { MarkdownHandle, markdown, remoteImageFile } from "./markdown.js";
 /** Slint names are kebab-case; plugin code may use camelCase. */
 export const kebab = (name) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 const encode = (props) => Object.fromEntries(Object.entries(props).map(([k, v]) => [kebab(k), v]));
@@ -21,51 +21,69 @@ export class ImageHandle {
     __vestraImage = true;
     #scope;
     #ref = ++images;
-    constructor(scope, path) {
+    #maxSide;
+    constructor(scope, path, maxSide) {
         this.#scope = scope;
         this.path = path;
+        this.#maxSide = maxSide;
     }
     /** Released with its scope: writing it is `invalid`. */
     get released() {
         return this.#scope.disposed;
     }
     toJSON() {
-        return { $vestraImage: this.path, ref: this.#ref };
+        // `maxSide` only when given: players before 0.5.1 refuse the field.
+        return this.#maxSide === undefined
+            ? { $vestraImage: this.path, ref: this.#ref }
+            : { $vestraImage: this.path, ref: this.#ref, maxSide: this.#maxSide };
     }
 }
+/** `ImageOptions.maxSide`, checked: an integer 1–4096 or absent. */
+export function imageSide(options) {
+    const side = options?.maxSide;
+    if (side === undefined)
+        return undefined;
+    if (!Number.isInteger(side) || side < 1 || side > 4096)
+        throw failure("invalid", "maxSide must be an integer 1–4096");
+    return side;
+}
 /**
- * A property value as sent: images and documents in wire form, documents at
- * any depth (released ones refused wherever they are); an image only as the
- * whole value, like the player.
+ * A property value as sent: images and documents in wire form, at any depth
+ * (released ones refused wherever they are), like the player.
  */
-function wireValue(value, nested = false) {
+function wireValue(value) {
     if (value instanceof MarkdownHandle) {
         if (value.released)
             throw failure("invalid", "Markdown document was released with the scope that created it");
         return value.toJSON();
     }
     if (value instanceof ImageHandle) {
-        if (nested)
-            throw failure("invalid", `image ${value.path}: an image reference must be the whole value of an image property`);
         if (value.released)
             throw failure("invalid", `image ${value.path} was released with the scope that created it`);
         return value.toJSON();
     }
     if (Array.isArray(value))
-        return value.map((item) => wireValue(item, true));
+        return value.map((item) => wireValue(item));
     if (value !== null && typeof value === "object") {
         const out = {};
         for (const [key, item] of Object.entries(value))
-            out[key] = wireValue(item, true);
+            out[key] = wireValue(item);
         return out;
     }
     return value;
 }
 export const ui = (scope) => ({
-    image(path) {
+    image(path, options) {
         if (typeof path !== "string" || !path)
             throw failure("invalid", "ui.image needs a file path");
-        return new ImageHandle(scope, path);
+        return new ImageHandle(scope, path, imageSide(options));
+    },
+    async remoteImage(url, options) {
+        if (typeof url !== "string" || !url.startsWith("https://"))
+            throw failure("invalid", "ui.remoteImage needs an https: address");
+        const side = imageSide(options);
+        const file = await remoteImageFile(scope.runtime, url);
+        return new ImageHandle(scope, file, side);
     },
     markdown: (text, options) => markdown(scope, text, options),
 });

@@ -19,6 +19,7 @@ import {
   Catalog,
   COMMAND_LIMITS,
   HOST_ZH_HANS,
+  IMAGE_LIMITS,
   LOCALES,
   MANIFEST_FIELDS,
   MANIFEST_LIMITS,
@@ -252,6 +253,41 @@ test("Markdown limits match the player's (host/src/ui_markdown.rs)", () => {
     .map((part) => Number(part.trim()))
     .reduce((a, b) => a * b, 1);
   assert.equal(bytes, MARKDOWN_LIMITS.textBytes);
+});
+
+test("step seek parameters are the player's: setStepSeek keyframes, host.run seconds (SDK 1.5.19)", () => {
+  // The SDK sends them only when given, under these names.
+  const wire = sdkFile("wire.js");
+  assert.match(wire, /"player\.setStepSeek",\s*keyframes === undefined/);
+  assert.match(wire, /"host\.run",\s*seconds === undefined/);
+  // The player reads them under the same names.
+  const main = host("src/main.rs");
+  assert.match(main, /params\["keyframes"\]/);
+  assert.match(main, /run_step\(action, &params\["seconds"\]\)/);
+  assert.match(main, /"keyframes":self\.step_keyframes\(\)/);
+});
+
+test("IMAGE_LIMITS match the player's (host/src/ui_image.rs)", () => {
+  const source = host("src/ui_image.rs");
+  const constant = (name: string) => {
+    const value = new RegExp(`pub const ${name}: \\w+ = ([^;]+);`).exec(
+      source,
+    )?.[1];
+    assert.ok(value, name);
+    return value
+      .split("*")
+      .map((part) => Number(part.trim()))
+      .reduce((a, b) => a * b, 1);
+  };
+  assert.deepEqual(
+    {
+      fileBytes: constant("MAX_FILE_BYTES"),
+      side: constant("MAX_SIDE"),
+      pluginBytes: constant("BUDGET_BYTES"),
+      viewBytes: constant("VIEW_BUDGET_BYTES"),
+    },
+    { ...IMAGE_LIMITS },
+  );
 });
 
 // ---------------------------------------------------------------- i18n
@@ -578,6 +614,8 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
     "packages.cancel",
   ],
   "Packages.setEnabled": ["packages.setEnabled"],
+  // SDK 1.5.19, player 0.5.1 (STORE-RELOAD-BUILTIN).
+  "Packages.reload": ["packages.reload"],
   "Packages.uninstall": ["packages.uninstall", "packages.cancel"],
   "Plugin.video.filter": [
     "processing.state",

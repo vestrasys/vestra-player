@@ -238,7 +238,7 @@ Date: 2026-10-20. Implementation status checked against the current Vestra `main
 | J04 | Main preferences window (settings in one place) | ✗ | new plugin + core (how the plugins' settings pages are combined needs design) |
 | J05 | Settings import / export | ⊘ | core. Dropped in the cut review (2026-10-20). |
 | J06 | Decoder / filter management | ⊘ | DirectShow stack |
-| J07 | Plugin management (list, disable, enable, uninstall) | ✗ | core (the disable API was removed in the previous round and needs a redesign) + new plugin |
+| J07 | Plugin management (list, disable, enable, uninstall) | ✅ | store: the plugin center's Installed tab (the separate Plugin Manager `vestra.plugins` was removed on 2026-10-26) |
 | J08 | Plugin Workshop (AI-generated plugins) | ✅ | workshop |
 | J09 | Emulator (NES) | ✅ | nes |
 | J10 | Check for updates | ⊘ | Not needed for now. Dropped in the cut review (2026-10-20). |

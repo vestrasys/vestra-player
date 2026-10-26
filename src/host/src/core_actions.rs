@@ -470,6 +470,144 @@ pub fn valid_step(seconds: f64) -> bool {
         && ((seconds * 10.0).round() - seconds * 10.0).abs() < 1e-9
 }
 
+/// `host.run`'s optional `seconds` (SDK 1.5.19): a step seek of that step
+/// instead of the `setStepSeek` one, only for the two step-seek actions.
+pub fn run_step(action: &str, seconds: &Value) -> Result<Option<f64>, String> {
+    if seconds.is_null() {
+        return Ok(None);
+    }
+    if !matches!(action, "seek-backward" | "seek-forward") {
+        return Err(format!(
+            "seconds applies only to seek-backward and seek-forward, not {action}"
+        ));
+    }
+    seconds
+        .as_f64()
+        .filter(|s| valid_step(*s))
+        .map(Some)
+        .ok_or_else(|| "seconds must be 0.1..3600 in tenths".into())
+}
+
+/// Keyframe step seeks (`setStepSeek({ keyframes: true })`, seek-keyframes
+/// round): they apply to the two step-seek actions on a source with moving
+/// video that can seek; everything else keeps the exact `plan`.
+pub fn keyframe_seek(action: &str, facts: &Facts, keyframes: bool) -> bool {
+    keyframes && matches!(action, "seek-backward" | "seek-forward") && facts.video && facts.can_seek
+}
+
+/// The mpv command of one keyframe step seek: always relative, so mpv
+/// rounds forward seeks to a keyframe at or after the target and backward
+/// ones to one at or before it (`absolute+keyframes` always rounds back and
+/// would stick on the keyframe it started from).
+pub fn key_seek_command(amount: f64) -> Vec<String> {
+    vec![
+        "seek".into(),
+        format!("{amount:.6}"),
+        "relative+keyframes".into(),
+    ]
+}
+
+/// The text a keyframe step seek shows once it landed: the label is the
+/// last press's step, the time where it landed.
+pub fn key_seek_notice(forward: bool, step: f64, landed: f64, duration: Option<f64>) -> String {
+    let args = json!([number_text(step), time(Some(landed)), time(duration)]);
+    if forward {
+        tr_args("Forward {} s: {} / {}", &args)
+    } else {
+        tr_args("Back {} s: {} / {}", &args)
+    }
+}
+
+/// What a keyframe step seek does next once mpv settled.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum KeyNext {
+    /// Another `relative+keyframes` seek by this amount (presses that came
+    /// in meanwhile).
+    Seek(f64),
+    /// The one exact fallback to this absolute target: a forward keyframe
+    /// seek that did not move forward (no keyframe after the target, the
+    /// last GOP).
+    Exact(f64),
+    /// Landed: complete the presses.
+    Done,
+}
+
+/// Keyframe step seeks are serialized from the landed position: one mpv seek
+/// at a time, presses meanwhile add up (`owed`, both directions netting out),
+/// and the next seek starts from where the previous one landed, so repeated
+/// presses never stick on one keyframe.
+#[derive(Clone, Debug, PartialEq)]
+pub struct KeySeek {
+    /// The landed position the issued seek started from, and its target.
+    pub base: f64,
+    pub target: f64,
+    /// Seconds the presses that came in meanwhile still owe (± direction).
+    pub owed: f64,
+    /// The last press: its direction and step (the on-screen label).
+    pub forward: bool,
+    pub step: f64,
+    /// The exact fallback of the issued seek was sent.
+    pub exact: bool,
+}
+
+/// `position ± delta` within the source.
+fn key_target(position: f64, delta: f64, duration: Option<f64>) -> f64 {
+    (position + delta)
+        .max(0.0)
+        .min(duration.unwrap_or(f64::INFINITY))
+}
+
+impl KeySeek {
+    /// A press while none is in flight, from the landed `position`: the
+    /// state and the relative amount to seek, or `None` when nothing moves
+    /// (backward at 0, forward at the end).
+    pub fn start(
+        position: f64,
+        duration: Option<f64>,
+        forward: bool,
+        step: f64,
+    ) -> (Self, Option<f64>) {
+        let delta = if forward { step } else { -step };
+        let target = key_target(position, delta, duration);
+        let amount = target - position;
+        let state = Self {
+            base: position,
+            target,
+            owed: 0.0,
+            forward,
+            step,
+            exact: false,
+        };
+        (state, (amount.abs() > 1e-6).then_some(amount))
+    }
+    /// A press while one is in flight: owed, not sent.
+    pub fn press(&mut self, forward: bool, step: f64) {
+        self.owed += if forward { step } else { -step };
+        self.forward = forward;
+        self.step = step;
+    }
+    /// mpv settled at `landed` (`at_end`: it reached the end).
+    pub fn settled(&mut self, landed: f64, duration: Option<f64>, at_end: bool) -> KeyNext {
+        let issued_forward = self.target > self.base;
+        if issued_forward && !self.exact && !at_end && landed <= self.base + 1e-3 {
+            self.exact = true;
+            return KeyNext::Exact(self.target);
+        }
+        if self.owed.abs() > 1e-6 {
+            let target = key_target(landed, self.owed, duration);
+            self.owed = 0.0;
+            let amount = target - landed;
+            if amount.abs() > 1e-6 {
+                self.base = landed;
+                self.target = target;
+                self.exact = false;
+                return KeyNext::Seek(amount);
+            }
+        }
+        KeyNext::Done
+    }
+}
+
 pub fn no_video() -> String {
     tr("No video")
 }
@@ -1021,5 +1159,139 @@ mod tests {
             "commands that stay in playback keep theirs"
         );
         assert!(!migrate_overlay(&mut overlay));
+    }
+
+    /// mpv's `relative+keyframes` on these keyframes: forward to the first
+    /// keyframe at or after the target (none: back to the last at or before
+    /// it, as mpv's retry does), backward to the last at or before it.
+    fn mpv_lands(keyframes: &[f64], from: f64, amount: f64) -> f64 {
+        let target = from + amount;
+        let before = || {
+            keyframes
+                .iter()
+                .copied()
+                .filter(|k| *k <= target)
+                .fold(0.0, f64::max)
+        };
+        if amount > 0.0 {
+            keyframes
+                .iter()
+                .copied()
+                .find(|k| *k >= target)
+                .unwrap_or_else(before)
+        } else {
+            before()
+        }
+    }
+
+    /// Run presses (`(forward, step)`, all inside one flight) from `from`
+    /// and settle until done: the positions it landed on, in order.
+    fn key_run(keyframes: &[f64], from: f64, presses: &[(bool, f64)]) -> Vec<f64> {
+        let duration = Some(45.0);
+        let (first, rest) = presses.split_first().unwrap();
+        let (mut state, amount) = KeySeek::start(from, duration, first.0, first.1);
+        for (forward, step) in rest {
+            state.press(*forward, *step);
+        }
+        let mut position = from;
+        let mut landed = Vec::new();
+        let mut next = amount.map_or(KeyNext::Done, KeyNext::Seek);
+        loop {
+            match next {
+                KeyNext::Seek(amount) => position = mpv_lands(keyframes, position, amount),
+                KeyNext::Exact(target) => position = target,
+                KeyNext::Done => return landed,
+            }
+            landed.push(position);
+            next = state.settled(position, duration, false);
+        }
+    }
+
+    #[test]
+    fn keyframe_step_seeks_land_on_keyframes_and_always_move() {
+        let keys = [0.0, 10.0, 20.0, 30.0, 40.0];
+        // From 12: → 5 lands on 20 (first at or after 17). ← 5 lands on 0,
+        // the last at or before 7 (the round's acceptance list says 10, which
+        // is after the target: the rule "at or before position − step" wins).
+        // From 10, ← 5 also lands on 0 (never 10); from 16, ← 5 on 10.
+        assert_eq!(key_run(&keys, 12.0, &[(true, 5.0)]), [20.0]);
+        assert_eq!(key_run(&keys, 12.0, &[(false, 5.0)]), [0.0]);
+        assert_eq!(key_run(&keys, 10.0, &[(false, 5.0)]), [0.0]);
+        assert_eq!(key_run(&keys, 16.0, &[(false, 5.0)]), [10.0]);
+        // Two quick → 5 from 0: 10, then the owed 5 from 10 → 20 (not 10, 10).
+        assert_eq!(
+            key_run(&keys, 0.0, &[(true, 5.0), (true, 5.0)]),
+            [10.0, 20.0]
+        );
+        // Tier 1 then tier 2 (5 then 30) from 0: 10, then 30 from 10 → 40.
+        assert_eq!(
+            key_run(&keys, 0.0, &[(true, 5.0), (true, 30.0)]),
+            [10.0, 40.0]
+        );
+        // Mixed directions net out: → 5 lands on 10, then +5 −5 owes nothing.
+        assert_eq!(
+            key_run(&keys, 0.0, &[(true, 5.0), (true, 5.0), (false, 5.0)]),
+            [10.0]
+        );
+        // Backward at 0 sends no seek.
+        assert_eq!(KeySeek::start(0.0, Some(45.0), false, 5.0).1, None);
+        // The last GOP: no keyframe after 42 + 2 → mpv goes back to 40, so the
+        // host sends the target once as an exact seek, and only once.
+        assert_eq!(key_run(&keys, 42.0, &[(true, 2.0)]), [40.0, 44.0]);
+        let (mut state, _) = KeySeek::start(42.0, Some(45.0), true, 2.0);
+        assert_eq!(state.settled(40.0, Some(45.0), false), KeyNext::Exact(44.0));
+        assert_eq!(state.settled(42.0, Some(45.0), false), KeyNext::Done);
+        // Reaching the end is a landing, not a reason for the fallback.
+        let (mut state, _) = KeySeek::start(42.0, Some(45.0), true, 2.0);
+        assert_eq!(state.settled(42.0, Some(45.0), true), KeyNext::Done);
+        // The command and the text.
+        assert_eq!(
+            key_seek_command(-5.0),
+            ["seek", "-5.000000", "relative+keyframes"]
+        );
+        assert_eq!(
+            key_seek_notice(true, 5.0, 20.0, Some(45.0)),
+            "Forward 5 s: 00:20 / 00:45"
+        );
+    }
+
+    #[test]
+    fn host_run_seconds_are_checked() {
+        assert_eq!(run_step("seek-forward", &Value::Null), Ok(None));
+        assert_eq!(run_step("seek-backward", &json!(30)), Ok(Some(30.0)));
+        assert_eq!(run_step("play-pause", &Value::Null), Ok(None));
+        for (action, seconds) in [
+            ("play-pause", json!(5)),
+            ("seek-forward", json!(0.05)),
+            ("seek-forward", json!(3601)),
+            ("seek-forward", json!(1.25)),
+            ("seek-forward", json!("5")),
+        ] {
+            assert!(run_step(action, &seconds).is_err(), "{action} {seconds}");
+        }
+    }
+
+    #[test]
+    fn keyframe_mode_applies_only_to_step_seeks_on_seekable_video() {
+        let facts = playing();
+        assert!(keyframe_seek("seek-forward", &facts, true));
+        assert!(keyframe_seek("seek-backward", &facts, true));
+        assert!(!keyframe_seek("seek-forward", &facts, false));
+        assert!(!keyframe_seek("frame-forward", &facts, true));
+        let audio = Facts {
+            video: false,
+            ..facts
+        };
+        assert!(!keyframe_seek("seek-forward", &audio, true));
+        let fixed = Facts {
+            can_seek: false,
+            ..facts
+        };
+        assert!(!keyframe_seek("seek-forward", &fixed, true));
+        // Exact mode is today's plan.
+        assert_eq!(
+            plan("seek-forward", &facts, 5.0, Some(42.0)).unwrap().0,
+            Plan::Seek(47.0)
+        );
     }
 }

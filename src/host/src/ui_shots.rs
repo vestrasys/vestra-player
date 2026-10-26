@@ -199,29 +199,46 @@ impl Renderer {
         }
         .resolve(&mut value)
         .map_err(|e| anyhow!("{property}: {e}"))?;
-        if let Some(path) = crate::ui_image::reference(&value) {
-            let path = path.as_str().unwrap_or_default();
-            return Ok(Value::Image(image(path).unwrap_or_else(|why| {
+        if crate::ui_image::reference(&value).is_some() {
+            let (path, side) = crate::ui_image::parts(&value).unwrap_or_default();
+            return Ok(Value::Image(image(path, side).unwrap_or_else(|why| {
                 problems.push(format!("{property}: image not shown: {why}"));
                 Default::default()
             })));
         }
         let mut cache = crate::ui_markdown::Cache::default();
         let mut missing = Vec::new();
-        let converted =
-            crate::ui_markdown::convert(&mut cache, (0, "shot", property), &value, &mut |path| {
-                match image(path) {
-                    Ok(image) => Some((None, image)),
-                    Err(why) => {
-                        missing.push(why);
-                        None
-                    }
+        let mut nested = Vec::new();
+        let converted = crate::ui_markdown::convert(
+            &mut cache,
+            (0, "shot", property),
+            &value,
+            &mut |path| match image(path, 0) {
+                Ok(image) => Some((None, image)),
+                Err(why) => {
+                    missing.push(why);
+                    None
                 }
-            })
-            .map(|(value, _)| value)
-            .map_err(|e| anyhow!("{property}: {}", e.message));
+            },
+            // Nested images (row logos) as the player shows them.
+            &mut |node| {
+                let (path, side) = crate::ui_image::parts(node)?;
+                Ok((
+                    None,
+                    image(path, side).unwrap_or_else(|why| {
+                        nested.push(why);
+                        Default::default()
+                    }),
+                ))
+            },
+        )
+        .map(|(value, _)| value)
+        .map_err(|e| anyhow!("{property}: {}", e.message));
         for why in missing {
             problems.push(format!("{property}: Markdown image not shown: {why}"));
+        }
+        for why in nested {
+            problems.push(format!("{property}: image not shown: {why}"));
         }
         converted
     }
@@ -489,12 +506,12 @@ impl Renderer {
 /// A runtime image or a Markdown image from a local file (the player also
 /// checks that it is in the plugin's package or data directory; recorded
 /// paths may point at test folders that no longer exist).
-fn image(path: &str) -> std::result::Result<slint::Image, String> {
+fn image(path: &str, side: u32) -> std::result::Result<slint::Image, String> {
     if !Path::new(path).is_absolute() {
         return Err(format!("{path}: not a local file"));
     }
     let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
-    crate::ui_image::decode(&bytes)
+    crate::ui_image::decode_within(&bytes, side)
         .map(|(image, _)| image)
         .map_err(|e| format!("{path}: {}", e.message))
 }
