@@ -275,7 +275,6 @@ export default async function activate(plugin: Plugin) {
       cardStatus: delivering.status,
       cardKeys: delivering.shadowedKeys,
       cardBusy: delivering.busy || exporting,
-      canRollback: !!p && delivering.installed.has(p.id),
       sessions: sessionRows(),
       rows: docs.props(shown.rows),
       configured: configured(),
@@ -477,7 +476,6 @@ export default async function activate(plugin: Plugin) {
     delivering.say("");
   });
   window.on("install", action((meta, p) => delivering.install(pathsOf(meta.id), p.id, false)));
-  window.on("rollback", action((_meta, p) => delivering.rollback(p.id)));
   window.on(
     "exportVxp",
     action(async (meta, p) => {

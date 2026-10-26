@@ -29,14 +29,12 @@ export function shown(host, file, fn, say) {
 }
 
 export const banner = (host, say) => shown(host, "ai.slint", "banner-text", say);
-/** The result card's line, as AiWindow.card-text in ai.slint (installs and rollbacks in two parts). */
+/** The result card's line, as AiWindow.card-text in ai.slint (installs in two parts). */
 export function card(host, say, keys = []) {
-  if (say.code === "installed" && keys.length)
-    return host.translate("Installed {0} {1}; you can click Roll Back (Undo Install). Shortcuts not in effect:", say.args);
+  if (say.code === "installed" && keys.length) return host.translate("Installed {0} {1}. Shortcuts not in effect:", say.args);
   if (say.code !== "result" && say.code !== "progress") return shown(host, "ai.slint", "card-text", say);
-  const [action, a, b, status, detail] = say.args;
-  const what =
-    action === "install" ? host.translate("Install {0} {1}", [a, b]) : action === "rollback" ? host.translate("Roll back to {}", [a]) : host.translate("Uninstall {}", [a]);
+  const [, a, b, status, detail] = say.args;
+  const what = host.translate("Install {0} {1}", [a, b]);
   if (say.code === "progress") return host.translate("{0}: {1}…", [what, status]);
   const outcomes = { committed: "done", cancelled: "cancelled", failed: "failed", failedDegraded: "failed; the previous version could not be fully restored", tooLate: "too late to cancel" };
   const outcome = outcomes[status] ? host.translate(outcomes[status]) : status;

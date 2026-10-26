@@ -1,6 +1,6 @@
 # Vestra Player AI (experimental)
 
-An AI assistant inside the player, based on [pi](https://github.com/earendil-works/pi). Use your own API key and chat with the model you choose; the AI can write Vestra plugins in the current chat's folder, type-check, test and pack them itself, and you can install the finished plugin (reversibly) or export it.
+An AI assistant inside the player, based on [pi](https://github.com/earendil-works/pi). Use your own API key and chat with the model you choose; the AI can write Vestra plugins in the current chat's folder, type-check, test and pack them itself, and you can install the finished plugin or export it.
 
 ## How to use it
 
@@ -26,13 +26,13 @@ When you ask the AI to write a plugin, it first reads the plugin SDK reference (
 | `test` | Run tests | Runs `tests/*.test.ts` in a separate restricted Node process: it can only read the plugin folder and only write a temporary folder, with no network and no child processes; on failure it returns the assertion messages and what the tests printed |
 | `check` | Check | id, dependencies, manifest, types, build (Slint is compiled by the player at install time) |
 | `pack` | Pack | Creates `dist/<id>-<version>.vxp` |
-| `install_plugin` | Install | The player validates it (including Slint), asks for confirmation in a dialog, then installs it (only when you ask); afterwards you can use "Roll Back (Undo Install)" |
+| `install_plugin` | Install | The player validates it (including Slint), asks for confirmation in a dialog, then installs it (only when you ask) |
 
 The AI is done only when type check, tests and check all pass. Every tool has a time limit and an output limit; clicking "■ Stop" cancels the running tool.
 
 When the chat has a plugin project, a plugin card appears above the input box:
 
-- "Install": installs it into the player (the source is recorded as the AI workshop); if a plugin with the same id came from elsewhere, you are asked first whether to replace it. Afterwards you can click "Roll Back (Undo Install)" (it returns to the old version if there was one, and uninstalls a first install). If, after installing, the plugin's shortcuts are taken by the player or another plugin (the player ignores those keys), both the card and the AI are told; for this the plugin reads the shortcut table (`bindings.manage`, read only; it changes no keys).
+- "Install": installs it into the player (the source is recorded as the AI workshop); if a plugin with the same id came from elsewhere, you are asked first whether to replace it. Installing again after a change upgrades the plugin in place and keeps its data. To remove it, use Uninstall… in the Plugin Manager. If, after installing, the plugin's shortcuts are taken by the player or another plugin (the player ignores those keys), both the card and the AI are told; for this the plugin reads the shortcut table (`bindings.manage`, read only; it changes no keys).
 - "Export .vxp": packs the plugin and saves a copy you can share.
 - "Export Source .zip": the complete plugin project, ready to become your own GitHub repository: README, CHANGELOG, tests, tsconfig, a package.json with the SDK dependency, a GitHub Actions workflow (check, test, pack), and a LICENSE placeholder to replace; without node_modules and dist.
 - "Open Folder": the plugin project's folder.
