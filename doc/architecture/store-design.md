@@ -1,12 +1,14 @@
 # Plugin Store (`vestra.store`): design and API gaps
 
+> **2026-10-26 ([plugin management round](../process/rounds/2026-10-plugin-management.md), user rulings Q2/Q3; store 0.1.6):** the player has no rollback, and the store neither rolls back nor installs an older version: Roll Back / Restore is gone, the confirmations no longer say you can roll back or restore, and the Versions tab offers no version older than the installed one from the same source. To go back, the user uninstalls the plugin and installs a `.vxp`. Plugin management has exactly three operations: install, uninstall, disable/enable. This design has been updated accordingly; the decisions in §9.3, §11 and §12 that allowed rollback or older versions are kept as the record and marked superseded. ("Rollback detection" of a stale repository index, §3.4, is a different thing and stays.)
+
 Date: 2026-10-22. Author: the store plugin author (ecosystem plan S5, [this round](../process/rounds/2026-10-slint-store.md) step 2.1). Status: **adopted** (coordinator decisions in [the round record](../process/rounds/2026-10-slint-store.md) "Coordinator decisions → 2026-10-22, step 2.2"), **implemented** (step 2.4, `src/plugins/store/` 0.1.0). Where the decisions or the implementation differ from the first draft, the text has been changed, and the differences are summarized in §12.
 
 Sources: [ecosystem plan](../product/ecosystem-plan.md) 1.1–1.6 (in particular 1.3 index format, 1.5a ids and install instances, the 12 decisions in 1.6, the record of the second half of S3); [S4 proposal](../architecture/store-api-proposal.md); store-changes (S4 change notice, deleted; the parts still valid are on the [SDK documentation site](https://vestrasys.github.io/vestra-player-sdk/)); [API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html); `types.d.ts` of SDK `@vestra-player/sdk` 1.1.2; the plugin repository's `scripts/lib/{signing,semver,publishing,revoked}.mjs` and `keys/index-signing.pub.pem`; the live `https://vestrasys.github.io/vestra-player-plugins/index.json` and `.sig` (fetched 2026-10-22; the signature verifies with the built-in public key, and fails after changing one byte).
 
 ## 0. Conclusion
 
-- The store is a **separate built-in plugin** `vestra.store`, in `src/plugins/store/`, released with the player (1.6 item 6). It is responsible for "discover → install → update → roll back"; the Plugin Manager (`vestra.plugins`) stays responsible for "running control of installed plugins". The two do not call each other; they only see the same install library through the public `plugin.packages` (§1.3).
+- The store is a **separate built-in plugin** `vestra.store`, in `src/plugins/store/`, released with the player (1.6 item 6). It is responsible for "discover → install → update → uninstall"; the Plugin Manager (`vestra.plugins`) stays responsible for "running control of installed plugins". The two do not call each other; they only see the same install library through the public `plugin.packages` (§1.3).
 - The main interface is a tool window: a list on the left, details on the right (three tabs README / Changelog / Versions, with a right column for information and permissions); there is also an "Options ▸ Plugins ▸ Plugin Store" settings page that manages third-party repositories and automatic checks.
 - The official index is verified with a built-in Ed25519 public key (Node's built-in `crypto`), packages are verified with `sha256` and `size`, and installation goes through `packages.validateArchive` → `install({ source, replace })`.
 - **v1 needs no new host or SDK API.** Evidence in §9.1. Two optional improvements (list icons, drag and drop onto tool windows) and one contract clarification (installing a lower version from the same source) are listed as well; none of them blocks implementation.
@@ -47,7 +49,7 @@ Ecosystem plan 1.4 says "the store extends the existing `plugins` plugin". Under
 | Consideration | Merged | Separate (adopted) |
 | --- | --- | --- |
 | Can be disabled | The Plugin Manager cannot disable itself; merged, the store's network checks could not be turned off either, except through a setting | Users who do not want network access can disable the store in the Plugin Manager; the Plugin Manager is not affected |
-| Fault isolation | The store's network, download and Markdown code share a process with the Plugin Manager; a store error takes the Plugin Manager down with it | When the store fails, the Plugin Manager can still disable, uninstall and roll back |
+| Fault isolation | The store's network, download and Markdown code share a process with the Plugin Manager; a store error takes the Plugin Manager down with it | When the store fails, the Plugin Manager can still disable and uninstall |
 | Interface form | The Plugin Manager is a 440-wide settings page; "list + details + README" does not fit | The store uses a tool window |
 | Ownership | Two authors edit the same directory | Each owns its own directory (workflow §1) |
 | Duplicated code | None | The capability description table and source texts, about 60 lines, one copy each (plugins do not share code anyway) |
@@ -58,7 +60,7 @@ Division of work:
 | --- | --- | --- |
 | Browse repositories, search, README, permissions, version history | ✔ | — |
 | Install (repository, link, file, drop), replace another source | ✔ | — |
-| Update, install another version, roll back to the previous version | ✔ (roll back only shown on the details page in the "Installed" state) | Roll back (exists, kept) |
+| Update, install another (newer) version | ✔ | — |
 | Uninstall | ✔ (details page, as in VS Code; part of the install lifecycle; calls the same `packages.uninstall`) | ✔ (exists) |
 | Revocation handling (automatically disable revoked versions) | ✔ | — |
 | Disable / enable, reload, data directory, data size, failure reason | — | ✔ |
@@ -80,7 +82,7 @@ For installed plugins the store's details page shows one hint line: "To disable,
 │ zysilm · Official   Installed │ │icon│ zysilm · Official repository                  │
 │ Paste a link to play or dow…  │ └────┘ Paste a link to play or download a single     │
 │                               │        public YouTube video                          │
-│───────────────────────────────│        [Update to 0.2.1] [Install Other Version…] [Roll Back] [Uninstall…] │
+│───────────────────────────────│        [Update to 0.2.1] [Uninstall…] │
 │ Bilibili Video         0.2.0  │ ⚠ Hint bar (revoked / unofficial / incompatible / source conflict, see 2.3) │
 │ zysilm · Official             │ ┌──────────────────────────────────┬────────────────┐ │
 │ Paste a link to play a sing…  │ │ (Description) (Changelog) (Versions) │ Version 0.2.0 │ │
@@ -129,7 +131,7 @@ The state is derived by comparing "this row (repository R, id)" with the install
 | State | Condition | Main button | Hint bar |
 | --- | --- | --- | --- |
 | Not installed | The install library has no such id | "Install" (installs `v*`) | Third-party repository: amber "Unofficial repository: not reviewed by Vestra Player" |
-| Installed (latest) | Same id, source = R, version ≥ `v*` | "Uninstall…"; plus "Roll Back to x.y.z" when there is a `previousVersion` | — |
+| Installed (latest) | Same id, source = R, version ≥ `v*` | "Uninstall…" | — |
 | Update available | Same id, source = R, `v*` higher | "Update to x.y.z", "Uninstall…" | When the new version adds permissions: "The new version needs new permissions: …" |
 | Installed from another source | Same id, source ≠ R, not built-in | "Replace…" | "Installed <version> from <source>. Replacing it uses new, empty data; the original data is kept" |
 | Same id as a built-in plugin | The id is `builtin: true` in the install library | None (button disabled, hover "Built-in plugins are updated with the player") | "Same id as a built-in plugin of the player; cannot be installed from here" |
@@ -137,7 +139,7 @@ The state is derived by comparing "this row (repository R, id)" with the install
 | Revoked (installed version) | The installed version falls in R's `revoked` range | "Update to x.y.z" when a fixed version exists; "Enable Anyway…" while the plugin is disabled (confirm the risk first, §3.10); "Uninstall…" | Red "This version has been revoked: <reason>. The store has disabled it." (after the risk is confirmed and it is enabled again: "…You confirmed the risk and enabled it again; the store will not disable it again.") |
 | All versions revoked | Not installed and all compatible versions are revoked | None | "This plugin has been revoked: <reason>" |
 | In progress | A download / install / uninstall is running for this row | "Cancel" | Progress |
-| Only on this machine (not in any repository) | In the install library, but no repository has this id or the source repository was removed | "Uninstall…", "Roll Back" when there is a `previousVersion` | When the source is a link / file / workshop: "Sideloaded plugin: not reviewed; the store does not check it for updates" |
+| Only on this machine (not in any repository) | In the install library, but no repository has this id or the source repository was removed | "Uninstall…" | When the source is a link / file / workshop: "Sideloaded plugin: not reviewed; the store does not check it for updates" |
 
 Development loads (`origin: "development"`) and test loads are not in "Installed" and do not affect the table above (they take precedence for this run; the store shows the install library's state as usual and writes "This run uses the development-loaded version" in the hint bar).
 
@@ -156,11 +158,12 @@ Every install is confirmed first (1.6 item 5 "manual confirmation by the user"; 
 | Install from the official repository | `Install “YouTube” 0.2.0?` | `From the Vestra Player official repository, author zysilm.\n\nIt will be able to:\n· Control playback…\n\nA plugin is a complete program. These permissions only limit how it uses the player's features; they do not limit reading and writing files or network access.` | Install |
 | Install from a third-party repository | `Install “X” 1.3.0 from an unofficial repository?` | `Repository: Foo (https://foo.example/). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust.\n\nIt will be able to: …` | Install Anyway (`destructive`) |
 | Link / file (sideload) | `Install the plugin package “X” 1.0.0?` | `From <link or file name>; not reviewed by any repository and not updated automatically. … It will be able to: …` | Install Anyway (`destructive`) |
-| Update (same permissions) | `Update “X” to 0.2.1?` | `Current: 0.2.0. After updating you can roll back to 0.2.0 in the store.` | Update |
+| Update (same permissions) | `Update “X” to 0.2.1?` | `Current: 0.2.0.` | Update |
 | Update (more permissions) | `Update “X” to 0.3.0? The new version needs more permissions` | `New: · Read and write the clipboard …` | Update |
-| Install an older version | `Install “X” 0.1.0 (older version)?` | `Current: 0.2.0.` | Install |
 | Replace another source | `Replace the installed “X”?` | `The current X 0.2.0 comes from <source>. After replacing, the new plugin uses new, empty data; the original plugin's data is kept and is used again when you reinstall it from the original source.` | Replace (`destructive`) |
 | Uninstall | `Uninstall “X”?` | `Its menus, windows and processing effects are removed immediately.` + check box "Also delete its settings and data" (unchecked by default, as in the Plugin Manager) | Uninstall (`destructive`) |
+
+There is no confirmation for an older version from the same source: the Versions tab does not offer one (2026-10-26, Q2).
 
 When `detail` exceeds 2000 characters, the permission list is cut to the first 20 items plus "N in total".
 
@@ -244,7 +247,7 @@ v* = the first version, from highest to lowest version number, that is compatibl
 - `app.version` comes from `plugin.app.version` (the host's Cargo version, 0.2.0); comparison uses only the three numeric parts (consistent with the host's rule, pre-release suffixes ignored).
 - `apiVersion` is hard-coded to `"vestra/1"`: the store is itself a `vestra/1` plugin, so a player that can run it supports `vestra/1`. When a future player supports two major versions at once, a list of supported versions in `plugin.app` will be requested per §4; not needed now.
 - `satisfies` / `compareVersions` / `parseRange` are ported unchanged from the plugin repository's `scripts/lib/semver.mjs` as `semver.ts` (same syntax: exact versions, `<`, `<=`, `>`, `>=`, `=`, space-joined, `||`, `*`; no `^` or `~`). Tests use the same set of cases.
-- "Install Other Version" lists all versions; incompatible and revoked rows are disabled with the reason.
+- "Install Other Version" (the Versions tab) lists all versions; incompatible and revoked rows are disabled with the reason, and a version older than the installed one from the same source has no Install button (2026-10-26, Q2).
 
 ### 3.6 Refresh and update checks
 
@@ -291,15 +294,14 @@ v* = the first version, from highest to lowest version number, that is compatibl
    - conflict → replace confirmation dialog → candidate.install({ source, replace: true })
    - unsupported → "Same id as a built-in plugin of the player; cannot be installed"
    - versionMismatch → "Needs Vestra Player ≥ x.y.z" (only reached when the index has a wrong minPlayerVersion)
-   - busy → "This plugin is being installed or rolled back; try again later"
+   - busy → "Plugins are being installed or cleaned up; try again later"
 7. Follow change.onChange until done: committed → osd "Installed X 0.2.0"; failedDegraded → "Installation failed; the previous version was restored";
    failed → "Installation failed: <message>"; cancelled → "Cancelled"
 8. finally delete the file in downloads
 ```
 
-- **Update** = install a higher version from the same source (the host treats the same source as an upgrade, keeps the instance and data, `previousVersion` = the old version).
-- **Roll back** = `packages.rollback(id)`, which only returns to `previousVersion` within the same instance (host contract). The button only appears when `previousVersion` is not empty.
-- **Install an older version** = install a lower-version package from the same source. The host's `install_instance` does not compare version numbers and handles it as a same-source upgrade (the old current version becomes `previousVersion`); the reference does not state that downgrades are allowed, so this is listed as contract clarification G3.
+- **Update** = install a higher version from the same source (the host treats the same source as an upgrade and keeps the instance and data; it keeps no previous version).
+- **No rollback and no older version** (2026-10-26, Q2/Q3): the store has no Roll Back / Restore action and does not install a version older than the installed one from the same source (the Versions tab offers none; `installFromRepository` also returns without asking if one is requested). To go back, the user uninstalls the plugin and installs a `.vxp` (from a file or a link).
 - **Cancel**: during download, abort the `fetch`; during install, call `change.cancel()` (the host may answer `tooLate`; the result is shown accordingly).
 - **Replace and dormant instances**: when replacing, the store does not need to know GUIDs or dormant instances: if the new source happens to have a dormant instance with the same id, the host automatically reconnects its data (S4 §1.3 "switching back"). The confirmation dialog text says "the original plugin's data is kept and is used again when you reinstall it from the original source".
 
@@ -326,7 +328,7 @@ v* = the first version, from highest to lowest version number, that is compatibl
    - "Enable Anyway…" on the store's details page: confirmation dialog `Enable the revoked “X” 0.2.0 anyway?` (`destructive`), detail with the revocation reason and "Continuing to use it may be risky. After you confirm, the store will not disable it automatically again, and the details page will keep showing a warning."; when a fixed version exists, it suggests updating instead. After confirmation, record `"accepted"` first, then `setEnabled(id, true)`.
    - The user enables it again elsewhere (Plugin Manager): the store sees through `packages.onChange` that a plugin recorded as `"disabled"` is running again, and afterwards shows a confirmation dialog `“X” 0.2.0 has been revoked. Keep using it?`, confirm "Keep Using" (recorded as `"accepted"`) / cancel "Disable" (disabled again; Esc also disables). The Plugin Manager's enable button does not go through the store; this is the closest the store can get to "confirm first". If it is enabled while the store has it disabled (or while the store itself is disabled), the store asks the same question the next time it runs.
    - Once recorded as `"accepted"`, the store no longer disables it or asks; the red hint on the details page stays.
-4. When the dialog is `busy` (another dialog is open), the notice is shown again after 60 seconds; with no interface (`unavailable`) only a log line is written (the plugin is still disabled). If disabling fails (`busy`, an install is running), it is not recorded as handled, and the next round tries again. The check runs after every repository refresh and after every `packages.onChange` (using the verified cache, without network), so rolling back to a revoked version is handled too.
+4. When the dialog is `busy` (another dialog is open), the notice is shown again after 60 seconds; with no interface (`unavailable`) only a log line is written (the plugin is still disabled). If disabling fails (`busy`, an install is running), it is not recorded as handled, and the next round tries again. The check runs after every repository refresh and after every `packages.onChange` (using the verified cache, without network), so a revoked version that becomes installed in any other way is handled too.
 5. For installed plugins, revocation is judged by the source repository's `revoked`, and **does not require the index to still list the plugin**: after a plugin is delisted (or all its entries are dropped as invalid), the same repository's `revoked` still applies (2026-10-22 security review: "delist + revoked `*`" is the most natural way to deal with a malicious plugin). Such a row has no repository entry, the state is "Revoked", and it only has "Enable Anyway…" and "Uninstall…"; a delisted plugin that is not revoked has the hint "The repository no longer offers this plugin; the store no longer checks it for updates (it still checks for revocations)".
 6. Revocation only applies to plugins installed from **the same source**: a repository can only revoke what it published itself; a third-party repository therefore cannot disable plugins of the official repository or of other repositories. Built-in plugins are not handled (`bundled`).
 7. Revocation entries also affect installation: a revoked version is never chosen as `v*`, is marked "Revoked" in the version history and cannot be installed.
@@ -397,7 +399,7 @@ Principle: on failure nothing is changed (the host's install is atomic); errors 
 | `reserved` (id starting with `vestra.`, player 0.4.1) | The host's original text: “<id>”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing |
 | `conflict` | (goes to the replace confirmation dialog) |
 | User cancels the confirmation | Not installed |
-| `busy` | This plugin is being installed or rolled back; try again later |
+| `busy` | Plugins are being installed or cleaned up; try again later |
 | `capability` (should not happen) | The Plugin Store lacks the “Manage plugins” permission |
 | Install in progress | Installing <name>… (activating) |
 | `committed` | Installed <name> <version> / Updated <name> to <version> |
@@ -405,10 +407,9 @@ Principle: on failure nothing is changed (the host's install is atomic); errors 
 | `failedDegraded` | Installation failed; the previous version was restored |
 | `cancelled` | Installation cancelled |
 | `tooLate` | Can no longer cancel; the installation continues |
-| Rollback succeeded | Rolled back <name> to <version> |
 | Uninstall succeeded | Uninstalled <name> (data kept / data deleted) |
 | Uninstall `unsupported` | Built-in plugins can only be disabled (list refreshed) |
-| Uninstall / roll back `missing` | This plugin no longer exists |
+| Uninstall `missing` | This plugin no longer exists |
 | Disk write failed | Couldn't write the download file: <reason> |
 
 ### 5.3 Other
@@ -500,7 +501,7 @@ In the implementation these were merged into 8 files (test key pairs are generat
 | `core.test.ts` | semver (all of the plugin repository's cases), player version comparison; the SPKI fingerprint of the built-in public key = the plugin repository's `keys/index-signing.pub.pem`; the live `index.json` + `.sig` of 2026-10-22 (`fixtures.ts`, base64) verify with the built-in public key, fail with one byte changed, and the live data selects bilibili / youtube 0.2.0; the various cases of test-key signatures (leading and trailing whitespace, non-base64, wrong length, another key, two signatures with one valid, key rotation); index parsing (unknown keys, per-entry dropping, truncation, sorting, duplicate ids, `schema: 2`, invalid top level); rollback detection; version selection (`apiVersion`, `minPlayerVersion`, revocation ranges); address normalization; plain-language permissions |
 | `net.test.ts` | Exact size and sha256; abort and delete the file on 1 extra byte / missing bytes / checksum mismatch; `Content-Length` over the limit refused outright; stream without length aborted at the limit; every hop only https, the hop to http not requested, the 6th redirect refused, 5 allowed; 404, 304, total timeout and first-byte timeout, cancel, offline; real `fetch` + 127.0.0.1 server: local http only usable when allowed, an endless stream aborted at the limit |
 | `repos.test.ts` | Opening the window reads and verifies, `User-Agent`; tampered index / another key / missing `.sig` keep the last trusted data and give the §5.1 text; replayed old index refused; offline restart uses the cache, a modified cache is no longer used; `304`; third-party repositories do not read `.sig`, `official` ignored, name with host name |
-| `install.test.ts` | Official install (plain-language permissions in the confirmation dialog, download via 302, `source` is the repository address, download file deleted, buttons after install); declining the confirmation does not download; size / checksum mismatch; package with more permissions than the entry; another source → "Replace…" with one confirmation + `replace: true`, nothing installed when declined; a conflict the store did not know about → retry after a second confirmation dialog; same id as built-in; `versionMismatch`, `failedDegraded`, `busy`; same-repository update (confirmation dialog for new permissions), rollback, installing an old version from the Versions tab, uninstall with data deletion; third-party repository warning bar, unofficial confirmation dialog, README remote images blocked; README links only open http(s), "Code ↗" |
+| `install.test.ts` | Official install (plain-language permissions in the confirmation dialog, download via 302, `source` is the repository address, download file deleted, buttons after install); declining the confirmation does not download; size / checksum mismatch; package with more permissions than the entry; another source → "Replace…" with one confirmation + `replace: true`, nothing installed when declined; a conflict the store did not know about → retry after a second confirmation dialog; same id as built-in; `versionMismatch`, `failedDegraded`, `busy`; same-repository update (confirmation dialog for new permissions, no rollback sentence), no Roll Back / Restore even when an older player still lists a previous version, no Install for versions older than the installed one in the Versions tab (and none from a stale window), uninstall with data deletion; third-party repository warning bar, unofficial confirmation dialog, README remote images blocked; README links only open http(s), "Code ↗" |
 | `sideload.test.ts` | Drop two `.vxp` on the video area: window opens, a sideload warning for each, `source: file`; "Install from File…": cancel, invalid file, built-in id, replacing the same id installed from a repository; "Install from Link…": http refused, stop above 64 MB, permissions taken from the package, `source: link` |
 | `revoked.test.ts` | Same-source hit → disable and merge into one notice dialog (fixed version); a second refresh does not disable again; red bar and buttons on the details page, cannot be installed again from the Versions tab; "Enable Anyway…" confirms the risk first, not disabled again after acceptance; re-enabled in the Plugin Manager → confirmation afterwards, "Disable" disables again, "Keep Using" recorded as accepted; sideloaded, built-in and other-repository revocations not handled; when disabling is `busy`, retried in the next round |
 | `store.test.ts` | Menu order 822 / `windows`, title with the update count (same source only; a higher version of the same id in another repository and built-ins do not count), OSD reported only once, count disappears after updating; automatic checks: no network at activation, once after 30 seconds (shortened in tests), then at the interval, no network when off; filter / search / tags / sort, incompatible and all revoked; README / changelog tabs, text when missing, "Show Images", "Retry" after a load failure; "Repositories…" opens the settings page, selection kept after closing and reopening the window |
@@ -524,7 +525,7 @@ Preparation: packaged layout or development run, either is fine; this machine ca
 | 8 | **Phase 4 leftover ③: Plugin Workshop install** — the workshop generates and installs the counter plugin | `workshop.counter` appears under "Installed" in the store, source "Plugin Workshop", "only on this machine" hint, no update check; its menu works | Screenshot |
 | 9 | Built-in plugins | Under "Installed", built-in plugins are marked "Built-in", with no uninstall / replace button | Screenshot |
 | 10 | Add the local test repository (127.0.0.1) on the settings page | Confirmation dialog (unofficial + local without encryption) → an "Unofficial: …" row appears in the list; README remote images blocked, and "Show Images" can be clicked | Screenshot |
-| 11 | Add a new version of an installed plugin in the test repository and refresh | Menu title "Plugin Store (1 update)…", OSD; appears under the "Updates" filter; update → "Roll Back to x" available → rollback succeeds | Screenshot |
+| 11 | Add a new version of an installed plugin in the test repository and refresh | Menu title "Plugin Store (1 update)…", OSD; appears under the "Updates" filter; update → only "Uninstall…" remains (no Roll Back); the Versions tab offers no older version | Screenshot |
 | 12 | Add the installed version to `revoked` in the test repository and refresh | The plugin is disabled + notice dialog (reason, fixed version); red bar "This version has been revoked… The store has disabled it." and "Enable Anyway…" on the details page; click it → risk confirmation dialog → after confirming the plugin runs, a refresh no longer disables it, and the red bar changes to "You confirmed the risk…". Another time: enable it directly in the Plugin Manager → the store afterwards asks "has been revoked. Keep using it?"; choosing "Disable" disables it again | Screenshot |
 | 13 | A version with `minPlayerVersion: "9.0.0"` in the test repository | That version is marked "Incompatible" and cannot be installed | Screenshot |
 | 14 | Disable the store (Plugin Manager) | The menu item disappears, other plugins are not affected; restored after enabling again | Screenshot |
@@ -545,8 +546,8 @@ Each capability the store needs, compared one by one:
 | Ed25519 signature verification | `node:crypto` `verify(null, …)` | Tested with the live index and the built-in public key (fails after tampering); `check-boundaries` only restricts relative paths and SDK imports, `node:` built-in modules are not restricted |
 | Player version | `plugin.app.version` | reference §3.5 |
 | Install `.vxp`, source, replace | `packages.validateArchive`, `candidate.install({ source, replace })` | reference §12 |
-| Update / roll back / uninstall / disable | `install` (same source), `rollback`, `uninstall`, `setEnabled` | reference §12 |
-| Installed list with sources and built-in flag | `source`, `builtin`, `previousVersion` of `packages.list()` / `onChange` | reference §12 |
+| Update / uninstall / disable | `install` (same source), `uninstall`, `setEnabled` | reference §12 |
+| Installed list with sources and built-in flag | `source`, `builtin` of `packages.list()` / `onChange` | reference §12 |
 | Install by drop | `drops.provide({ extensions: ["vxp"] })` (video area) | reference §6.7; S4 §10 states explicitly "install by drop is done by the store with the existing `ui.drop`" |
 | Choose a file | `dialogs.openFile` | reference §7 |
 | Confirm | `dialogs.confirm` (with check box, `destructive`) | reference §7 |
@@ -569,7 +570,7 @@ Each capability the store needs, compared one by one:
 
 | # | Question | Current state | Wanted |
 | --- | --- | --- | --- |
-| G3 (resolved) | Whether installing a **lower version** from the same source is allowed ("Install Other Version") | The host's `install_instance` in `package_manager.rs` only compares source identity (`current.source.identity() == source.identity()` keeps the instance), and the whole `packages.install` path (`stage` → `start_operation`) never compares version numbers; the old current version becomes `previousVersion` | Decision 7: allowed, as the host currently behaves. reference §12 has one added sentence (with step 2.4) |
+| G3 (resolved) | Whether installing a **lower version** from the same source is allowed ("Install Other Version") | The host's `install_instance` in `package_manager.rs` only compares source identity (`current.source.identity() == source.identity()` keeps the instance), and the whole `packages.install` path (`stage` → `start_operation`) never compares version numbers; the old current version becomes `previousVersion` | Decision 7: allowed, as the host currently behaves. reference §12 has one added sentence (with step 2.4). **Superseded 2026-10-26 (Q2):** the store no longer installs an older version from the same source |
 
 ### 9.4 Later (not in v1, no request)
 
@@ -596,7 +597,7 @@ src/plugins/store/
   repos.ts             address normalization, cache, conditional requests, verification, rollback detection   324
   index-format.ts      index parsing and per-entry validation                                       213
   catalog.ts           repositories × install library → rows and states (§2.3), version selection (§3.5)   187
-  installer.ts         repository / link / file install, confirmation dialogs, conflict and replace, rollback, uninstall   404
+  installer.ts         repository / link / file install, confirmation dialogs, conflict and replace, uninstall   404
   revocations.ts       §3.10                                                                         187
   settings-page.ts     settings page                                                                 126
   net.ts               get(): https, manual redirects, timeouts, stream limits, sha256, writing files   221
@@ -618,7 +619,7 @@ About 2840 lines of TS (excluding tests), about 790 lines of Slint. No npm depen
 | --- | --- | --- |
 | 1 | **Vertical slice**: menu "Plugin Store…" → read and verify the official index → list → details (no README) → confirm → download and verify → install | YouTube can be installed from the real official repository (unit tests + coordinator on-device #1, #4) |
 | 2 | README / changelog / versions tabs, icon, permission column, source code link | #2, #3 |
-| 3 | Cache and offline, refresh scheduling, update count and menu title, update, roll back, uninstall, install another version | #5, #11 |
+| 3 | Cache and offline, refresh scheduling, update count and menu title, update, uninstall, install another version | #5, #11 |
 | 4 | Sideloading: file, drop, link; replace confirmation | #6, #7, #8 |
 | 5 | Revocation | #12 |
 | 6 | Settings page and third-party repositories, remote image policy | #10, #13 |
@@ -636,7 +637,7 @@ The first draft listed 6 open questions here; all have been decided (original te
 | --- | --- | --- | --- |
 | 1 | Separate plugin or merged into the Plugin Manager | A separate built-in plugin `vestra.store` | §1.3 |
 | 2 | Menu position | Top level "Plugin Store…", right next to "Plugin Workshop…" (order 822); the title carries the count when updates are available | §1.2 |
-| 3 | Whether the store offers uninstall and roll back | Yes; the Plugin Manager keeps its buttons, and both call the same API | §1.3, §2.3 |
+| 3 | Whether the store offers uninstall and roll back | Yes; the Plugin Manager keeps its buttons, and both call the same API. **Roll back superseded 2026-10-26:** there is no rollback | §1.3, §2.3 |
 | 4 | The user enables a revoked plugin again manually | Disable automatically once and keep showing a warning; enabling again requires confirming the risk first, after which it is no longer forcibly disabled | §2.3, §3.10 |
 | 5 | Trust for third-party repositories | v1 only marks them "Unofficial" with a warning, no configured public keys, no TOFU; README remote images not loaded by default | §2.2, §4 |
 | 6 | Automatic check frequency | Once 30 seconds after activation, then every 24 hours, on by default, can be turned off on the settings page | §3.6 |
@@ -648,11 +649,11 @@ The first draft listed 6 open questions here; all have been decided (original te
 - **Revocation**: per decision 4, "Enable Anyway…" and the after-the-fact confirmation were added (§3.10 item 3); the check also runs on every install library change.
 - **Automatic checks**: per decision 6, the "≥ 6 hours since the last check" condition was removed (§3.6).
 - **Window not open when dropping**: the window is opened first, then the confirmation dialog is shown; the dialog already has the package's name, version and permissions, so the details are not first "shown from the manifest"; after installing, the newly installed row is selected.
-- **Roll back has no confirmation dialog** (the first draft's §2.5 did not list one either): a rollback can be undone with "Update"; when rolling back to a revoked version, the revocation check handles it as usual.
+- (Superseded 2026-10-26: there is no rollback.) **Roll back has no confirmation dialog** (the first draft's §2.5 did not list one either): a rollback can be undone with "Update"; when rolling back to a revoked version, the revocation check handles it as usual.
 - **URL fields in the index** (`iconUrl`, `readmeUrl` and so on) that are not https are only set to empty, without dropping the whole plugin; only an invalid `downloadUrl` drops the version. When the repository itself is local (`http://localhost` and so on), its own local http links are usable — which is why the local test repository in the coordinator acceptance checklist #10–#13 can install plugins.
 - **Fetch again when the signature does not match**: the index and `.sig` are two requests, and if the index is updated exactly in between, the first pair does not match; only when a second pair still does not match is it judged a failure.
-- **Same id installed from another source**: the list has two rows, one for the repository entry (state "Installed from…", only "Replace…"), and one for the locally installed instance (appears under the "Installed" filter, can be rolled back and uninstalled).
-- **Roll back button**: when the previous version is newer than the current one (after installing an old version or rolling back), it reads "Restore to x", with the result "Restored X to x" (on-device acceptance S3).
+- **Same id installed from another source**: the list has two rows, one for the repository entry (state "Installed from…", only "Replace…"), and one for the locally installed instance (appears under the "Installed" filter, can be uninstalled).
+- (Superseded 2026-10-26: there is no rollback.) **Roll back button**: when the previous version is newer than the current one (after installing an old version or rolling back), it reads "Restore to x", with the result "Restored X to x" (on-device acceptance S3).
 - **Data note for replace**: `PluginInfo` cannot see dormant instances, so the store cannot know whether this source was installed before; the confirmation dialog therefore says "If it was installed from this source before, its data from then is used again; otherwise it uses new, empty data" (S5).
 - **Right column information**: version, installed, updated, source, id, license, Code ↗.
 - **Settings page**: id `store.repos`, category "Plugins", order 20 (the Plugin Manager is 10).

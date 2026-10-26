@@ -1,6 +1,6 @@
 // The result card and the agent's install tool on the SDK test host: a
 // scaffolded project shows on the card; Install (the agent's install asks
-// first), Roll Back (Undo Install), Export .vxp, Export Source .zip. The player side of
+// first; there is no undo), Export .vxp, Export Source .zip. The player side of
 // validation is simulated with host handlers.
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -68,7 +68,7 @@ test("a scaffolded plugin shows on the card with 安装 (no trial); the player's
   await ai.stop();
 });
 
-test("install_plugin asks the user first; 回退 removes a first install; a refusal is reported to the agent", async () => {
+test("install_plugin asks the user first; there is no undo, and a click on 安装 upgrades in place; a refusal is reported to the agent", async () => {
   const mock = await server(
     scripted({
       做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo", title: "演示" } }] }],
@@ -88,24 +88,33 @@ test("install_plugin asks the user first; 回退 removes a first install; a refu
   await ai.ask("安装");
   assert.deepEqual(ai.host.confirmTexts.at(-1), {
     message: "安装 AI 生成的插件「演示」？",
-    detail: "local.demo 0.1.0\n能力：commands、ui.window\n安装后可以在 AI 窗口里点「回退（撤销安装）」。",
+    detail: "local.demo 0.1.0\n能力：commands、ui.window",
     confirm: "安装",
     cancel: ai.host.confirmTexts.at(-1).cancel,
   });
-  assert.match(toolText(mock, mock.chats.length - 1), /Install 演示 0\.1\.0: done/);
-  assert.equal(ai.card(), "已安装 演示 0.1.0，可以点「回退（撤销安装）」。");
+  const told = toolText(mock, mock.chats.length - 1);
+  assert.match(told, /Install 演示 0\.1\.0: done\. The plugin is enabled in the player\./);
+  assert.doesNotMatch(told, /Roll Back|undo/i);
+  assert.equal(ai.card(), "已安装 演示 0.1.0。");
   assert.deepEqual(ai.host.packageCalls.map((c) => [c.method, c.id, c.source?.kind]), [["install", "local.demo", "workshop"]]);
-  await ai.until(() => ai.props["can-rollback"] === true, "rollback offered");
+  assert.ok(!("can-rollback" in ai.props), "no Roll Back on the card");
 
-  await ai.send("rollback");
-  await ai.until(() => ai.props["can-rollback"] === false, "rolled back");
-  assert.equal(ai.card(), "卸载 local.demo完成");
-  assert.deepEqual(ai.host.packageCalls.at(-1), { method: "uninstall", id: "local.demo", removeData: false });
-  // A click on 安装 is the user's own decision: no second dialog.
+  // A click on 安装 is the user's own decision: no second dialog. A new version upgrades the plugin in place.
+  await ai.send("open-project");
+  const manifestFile = path.join(ai.host.system.opened.at(-1), "manifest.json");
+  await fs.writeFile(manifestFile, JSON.stringify({ ...JSON.parse(await fs.readFile(manifestFile, "utf8")), version: "0.1.1" }, null, 2));
   const confirms = ai.host.confirms.length;
   await ai.send("install");
-  await ai.until(() => ai.props["can-rollback"] === true, "installed by click");
+  await ai.until(() => ai.props["card-status"].code === "installed" && ai.props["card-status"].args[1] === "0.1.1", "upgraded by click");
+  assert.equal(ai.card(), "已安装 演示 0.1.1。");
   assert.equal(ai.host.confirms.length, confirms);
+  assert.deepEqual(
+    ai.host.packageCalls.map((c) => [c.method, c.id, c.source?.kind]),
+    [
+      ["install", "local.demo", "workshop"],
+      ["install", "local.demo", "workshop"],
+    ],
+  );
   await ai.stop();
 });
 
@@ -134,7 +143,7 @@ test("after an install, bindings another command holds are reported to the card 
   const told = toolText(mock, mock.chats.length - 1);
   assert.match(told, /Install 演示 0\.1\.0: done/);
   assert.match(told, /Shortcuts not in effect: \] \(加快 0\.25×\) is taken by vestra\.marks "设置 B 点"\./);
-  assert.equal(ai.card(), "已安装 演示 0.1.0，可以点「回退（撤销安装）」。快捷键没有生效：");
+  assert.equal(ai.card(), "已安装 演示 0.1.0。快捷键没有生效：");
   assert.deepEqual(
     ai.props["card-keys"].map((k) => shadowedText(ai.host, k)),
     ["]（加快 0.25×）已被vestra.marks「设置 B 点」占用"],

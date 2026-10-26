@@ -8,391 +8,366 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: ai.slint:106
+#: ai.slint:114
 #, x-machine
 msgid "Read"
 msgstr "Lire"
 
-#: ai.slint:107
+#: ai.slint:115
 #, x-machine
 msgid "Write"
 msgstr "Écrire"
 
-#: ai.slint:108
+#: ai.slint:116
 #, x-machine
 msgid "Edit"
 msgstr "Modifier"
 
-#: ai.slint:109
+#: ai.slint:117
 #, x-machine
 msgid "List"
 msgstr "Lister"
 
-#: ai.slint:110
+#: ai.slint:118
 #, x-machine
 msgid "Find"
 msgstr "Trouver"
 
-#: ai.slint:111
+#: ai.slint:119
 #, x-machine
 msgid "Search"
 msgstr "Rechercher"
 
-#: ai.slint:112 settings.slint:191
+#: ai.slint:120 settings.slint:191
 #, x-machine
 msgid "Delete"
 msgstr "Supprimer"
 
-#: ai.slint:113
+#: ai.slint:121
 #, x-machine
 msgid "Create plugin"
 msgstr "Créer le plugin"
 
-#: ai.slint:114
+#: ai.slint:122
 #, x-machine
 msgid "Type check"
 msgstr "Vérification des types"
 
-#: ai.slint:115
+#: ai.slint:123
 #, x-machine
 msgid "Run tests"
 msgstr "Lancer les tests"
 
-#: ai.slint:116
+#: ai.slint:124
 #, x-machine
 msgid "Check"
 msgstr "Vérifier"
 
-#: ai.slint:117
+#: ai.slint:125
 #, x-machine
 msgid "Pack"
 msgstr "Empaqueter"
 
-#: ai.slint:118 ai.slint:286 ai.slint:591 delivery.ts:162
+#: ai.slint:126 ai.slint:294 ai.slint:591 delivery.ts:156
 #, x-machine
 msgid "Install"
 msgstr "Installer"
 
 #. a file of the read-only reference, e.g. "reference/sdk/llms.txt".
-#: ai.slint:123
+#: ai.slint:131
 #, x-machine
 msgid "reference/{}"
 msgstr "reference/{}"
 
 #. a tool and what it is about, e.g. "Read main.ts".
-#: ai.slint:127
+#: ai.slint:135
 #, x-machine
 msgid "{0} {1}"
 msgstr "{0} {1}"
 
-#: ai.slint:133
+#: ai.slint:141
 #, x-machine
 msgid "Replying…"
 msgstr "Réponse en cours…"
 
-#: ai.slint:133
+#: ai.slint:141
 #, x-machine
 msgid "Thinking…"
 msgstr "Réflexion…"
 
-#: ai.slint:140
+#: ai.slint:148
 #, x-machine
 msgid "{0}, {1} failed"
 msgstr "{0}, dont {1} en échec"
 
-#: ai.slint:144
+#: ai.slint:152
 #, x-machine
 msgid "{n} tool call"
 msgid_plural "{n} tool calls"
 msgstr[0] "{n} appel d'outil"
 msgstr[1] "{n} appels d'outils"
 
-#: ai.slint:147
+#: ai.slint:155
 #, x-machine
 msgid "Stopped"
 msgstr "Arrêté"
 
-#: ai.slint:148
+#: ai.slint:156
 #, x-machine
 msgid "The last reply was interrupted (the player or the plugin quit)"
 msgstr "La dernière réponse a été interrompue (le lecteur ou le plugin s'est fermé)"
 
-#: ai.slint:149
+#: ai.slint:157
 #, x-machine
 msgid "Connection failed; retrying ({0}/{1})…"
 msgstr "Échec de la connexion ; nouvelle tentative ({0}/{1})…"
 
-#: ai.slint:150
+#: ai.slint:158
 #, x-machine
 msgid "Compacting the context…"
 msgstr "Compactage du contexte…"
 
-#: ai.slint:151
+#: ai.slint:159
 #, x-machine
 msgid "Context compacted"
 msgstr "Contexte compacté"
 
-#: ai.slint:152
+#: ai.slint:160
 #, x-machine
 msgid "{n} earlier message is not shown (the full record is in the session folder)"
 msgid_plural "{n} earlier messages are not shown (the full record is in the session folder)"
 msgstr[0] "{n} message antérieur n'est pas affiché (l'historique complet se trouve dans le dossier de la session)"
 msgstr[1] "{n} messages antérieurs ne sont pas affichés (l'historique complet se trouve dans le dossier de la session)"
 
-#: ai.slint:156
+#: ai.slint:164
 #, x-machine
 msgid "The API key is invalid or has no permission; check it in the settings."
 msgstr "La clé API est invalide ou n'a pas les autorisations nécessaires ; vérifiez-la dans les paramètres."
 
-#: ai.slint:157
+#: ai.slint:165
 #, x-machine
 msgid "The model “{}” is not available; choose another model in the settings."
 msgstr "Le modèle « {} » n'est pas disponible ; choisissez un autre modèle dans les paramètres."
 
-#: ai.slint:158
+#: ai.slint:166
 #, x-machine
 msgid "The model is not available; choose another model in the settings."
 msgstr "Le modèle n'est pas disponible ; choisissez un autre modèle dans les paramètres."
 
-#: ai.slint:159
+#: ai.slint:167
 #, x-machine
 msgid "Out of quota or too many requests; try again later."
 msgstr "Quota épuisé ou trop de requêtes ; réessayez plus tard."
 
-#: ai.slint:160
+#: ai.slint:168
 #, x-machine
 msgid "Network error: cannot reach the provider."
 msgstr "Erreur réseau : impossible de joindre le fournisseur."
 
-#: ai.slint:161
+#: ai.slint:169
 #, x-machine
 msgid "No reply from the provider for {} seconds; stopped."
 msgstr "Aucune réponse du fournisseur depuis {} secondes ; arrêté."
 
-#: ai.slint:162
+#: ai.slint:170
 #, x-machine
 msgid "The agent process quit unexpectedly."
 msgstr "Le processus de l'agent s'est arrêté de manière inattendue."
 
-#: ai.slint:164
+#: ai.slint:172
 #, x-machine
 msgid "Something went wrong."
 msgstr "Une erreur s'est produite."
 
-#: ai.slint:212
+#: ai.slint:220
 #, x-machine
 msgid "Collapse ▾"
 msgstr "Réduire ▾"
 
-#: ai.slint:212
+#: ai.slint:220
 #, x-machine
 msgid "All ▸"
 msgstr "Tout ▸"
 
-#: ai.slint:242 ai.slint:249
+#: ai.slint:250 ai.slint:257
 #, x-machine
 msgid "… (too long; the rest is not shown)"
 msgstr "… (trop long ; la suite n'est pas affichée)"
 
-#: ai.slint:245
+#: ai.slint:253
 #, x-machine
 msgid "Copy"
 msgstr "Copier"
 
-#: ai.slint:267
+#: ai.slint:275
 #, x-machine
 msgid "Retry"
 msgstr "Réessayer"
 
-#: ai.slint:268
+#: ai.slint:276
 #, x-machine
 msgid "Open Settings"
 msgstr "Ouvrir les paramètres"
 
-#: ai.slint:287 ai.slint:592
-#, x-machine
-msgid "Roll Back (Undo Install)"
-msgstr "Revenir en arrière (annuler l'installation)"
-
-#: ai.slint:288 ai.slint:593
+#: ai.slint:295 ai.slint:592
 #, x-machine
 msgid "Export .vxp"
 msgstr "Exporter le .vxp"
 
-#: ai.slint:289 ai.slint:594
+#: ai.slint:296 ai.slint:593
 #, x-machine
 msgid "Export Source .zip"
 msgstr "Exporter les sources en .zip"
 
-#: ai.slint:290 ai.slint:489 ai.slint:595
+#: ai.slint:297 ai.slint:489 ai.slint:594
 #, x-machine
 msgid "Open Folder"
 msgstr "Ouvrir le dossier"
 
-#: ai.slint:355
+#: ai.slint:359
 #, x-machine
 msgid "Reading the API key from the keychain… (the system may ask for permission)"
 msgstr "Lecture de la clé API dans le trousseau… (le système peut demander une autorisation)"
 
-#: ai.slint:356
+#: ai.slint:360
 #, x-machine
 msgid "Cannot read the key from the keychain; save it again in the settings. ({})"
 msgstr "Impossible de lire la clé dans le trousseau ; enregistrez-la à nouveau dans les paramètres. ({})"
 
-#: ai.slint:357
+#: ai.slint:361
 #, x-machine
 msgid "Cannot read the key from the keychain; save it again in the settings. (The key is not in the keychain)"
 msgstr "Impossible de lire la clé dans le trousseau ; enregistrez-la à nouveau dans les paramètres. (La clé n'est pas dans le trousseau)"
 
-#: ai.slint:358
+#: ai.slint:362
 #, x-machine
 msgid "The API key has not been read yet."
 msgstr "La clé API n'a pas encore été lue."
 
-#: ai.slint:359
+#: ai.slint:363
 #, x-machine
 msgid "No provider set up: choose a provider in the settings and save its API key first."
 msgstr "Aucun fournisseur configuré : choisissez d'abord un fournisseur dans les paramètres et enregistrez sa clé API."
 
-#: ai.slint:364
+#: ai.slint:368
 #, x-machine
 msgid "Install {0} {1}"
 msgstr "Installer {0} {1}"
 
-#: ai.slint:365
-#, x-machine
-msgid "Roll back to {}"
-msgstr "Revenir à {}"
-
-#: ai.slint:366
-#, x-machine
-msgid "Uninstall {}"
-msgstr "Désinstaller {}"
-
-#: ai.slint:369
+#: ai.slint:371
 #, x-machine
 msgid "done"
 msgstr "terminé"
 
-#: ai.slint:370
+#: ai.slint:372
 #, x-machine
 msgid "cancelled"
 msgstr "annulé"
 
-#: ai.slint:371
+#: ai.slint:373
 #, x-machine
 msgid "failed"
 msgstr "échec"
 
-#: ai.slint:372
+#: ai.slint:374
 #, x-machine
 msgid "failed; the previous version could not be fully restored"
 msgstr "échec ; la version précédente n'a pas pu être entièrement rétablie"
 
-#: ai.slint:373
+#: ai.slint:375
 #, x-machine
 msgid "too late to cancel"
 msgstr "trop tard pour annuler"
 
-#: ai.slint:377
+#: ai.slint:379
 #, x-machine
 msgid "Packing {}…"
 msgstr "Empaquetage de {}…"
 
-#: ai.slint:378
+#: ai.slint:380
 #, x-machine
 msgid "The player is validating {}…"
 msgstr "Le lecteur valide {}…"
 
-#: ai.slint:379
+#: ai.slint:381
 #, x-machine
 msgid "The player's validation failed ({0}): {1}"
 msgstr "Échec de la validation par le lecteur ({0}) : {1}"
 
-#: ai.slint:380
+#: ai.slint:382
 #, x-machine
 msgid "Checks before packing failed: {} problem(s)"
 msgstr "Échec des vérifications avant empaquetage : {} problème(s)"
 
-#: ai.slint:381
+#: ai.slint:383
 #, x-machine
 msgid "Packing failed: {} type error(s)"
 msgstr "Échec de l'empaquetage : {} erreur(s) de type"
 
-#: ai.slint:382
+#: ai.slint:384
 #, x-machine
 msgid "Packing failed"
 msgstr "Échec de l'empaquetage"
 
-#: ai.slint:383
+#: ai.slint:385
 #, x-machine
 msgid "Packing failed: no .vxp was written"
 msgstr "Échec de l'empaquetage : aucun .vxp n'a été écrit"
 
-#: ai.slint:384
+#: ai.slint:386
 #, x-machine
 msgid "Packing cancelled"
 msgstr "Empaquetage annulé"
 
-#: ai.slint:385
+#: ai.slint:387
 #, x-machine
 msgid "Packing timed out and was stopped"
 msgstr "L'empaquetage a dépassé le délai et a été arrêté"
 
-#: ai.slint:386
+#: ai.slint:388
 #, x-machine
 msgid "Not installed (cancelled)."
 msgstr "Non installé (annulé)."
 
-#: ai.slint:387
+#: ai.slint:389
 #, x-machine
 msgid "Installing {}…"
 msgstr "Installation de {}…"
 
-#: ai.slint:388
+#: ai.slint:390
 #, x-machine
 msgid "{} has the name of a plugin built into the player and cannot be installed; choose another id."
 msgstr "{} porte le nom d'un plugin intégré au lecteur et ne peut pas être installé ; choisissez un autre identifiant."
 
-#: ai.slint:389
+#: ai.slint:391
 #, x-machine
 msgid "Not installed: the installed plugin was kept."
 msgstr "Non installé : le plugin installé a été conservé."
 
-#: ai.slint:390
+#: ai.slint:392
 #, x-machine
 msgid "{0}: {1}…"
 msgstr "{0} : {1}…"
 
-#: ai.slint:391
+#: ai.slint:393
 #, x-machine
 msgid "{0}: {1} ({2})"
 msgstr "{0} : {1} ({2})"
 
-#: ai.slint:392
+#: ai.slint:394
 #, x-machine
 msgid "{0}: {1}"
 msgstr "{0} : {1}"
 
-#: ai.slint:393
-#, x-machine
-msgid "Installed {0} {1}; you can click Roll Back (Undo Install). Shortcuts not in effect:"
-msgstr "{0} {1} installé ; vous pouvez cliquer sur Revenir en arrière (annuler l'installation). Raccourcis sans effet :"
-
-#: ai.slint:394
-#, x-machine
-msgid "Installed {0} {1}; you can click Roll Back (Undo Install)."
-msgstr "{0} {1} installé ; vous pouvez cliquer sur Revenir en arrière (annuler l'installation)."
-
 #: ai.slint:395
 #, x-machine
-msgid "{} is no longer among the installed plugins."
-msgstr "{} ne fait plus partie des plugins installés."
+msgid "Installed {0} {1}. Shortcuts not in effect:"
+msgstr "{0} {1} installé. Raccourcis sans effet :"
 
 #: ai.slint:396
 #, x-machine
-msgid "Rolling back {}…"
-msgstr "Retour arrière de {}…"
+msgid "Installed {0} {1}."
+msgstr "{0} {1} installé."
 
 #: ai.slint:397
 #, x-machine
@@ -469,74 +444,70 @@ msgstr "Quel plugin souhaitez-vous créer, ou quelle question voulez-vous poser�
 msgid "Plugin: {}"
 msgstr "Plugin : {}"
 
-#: ai.slint:626
+#: ai.slint:625
 #, x-machine
 msgid "Another conversation is generating; please wait…"
 msgstr "Une autre conversation est en cours de génération ; veuillez patienter…"
 
-#: ai.slint:626
+#: ai.slint:625
 #, x-machine
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr "Saisissez un message… Entrée pour envoyer · Maj+Entrée pour aller à la ligne"
 
-#: ai.slint:643
+#: ai.slint:642
 #, x-machine
 msgid "Send"
 msgstr "Envoyer"
 
-#: ai.slint:647
+#: ai.slint:646
 #, x-machine
 msgid "■ Stop"
 msgstr "■ Arrêter"
 
-#: delivery.ts:158
+#: delivery.ts:154
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "Installer le plugin « {} » généré par l'IA ?"
 
-#: delivery.ts:159
+#: delivery.ts:155
 #, x-machine
 msgid ""
 "{1} {2}\n"
-"Capabilities: {3}\n"
-"To undo the install, click Roll Back (Undo Install) in the AI window."
+"Capabilities: {3}"
 msgstr ""
 "{1} {2}\n"
-"Capacités : {3}\n"
-"Pour annuler l'installation, cliquez sur Revenir en arrière (annuler l'installation) dans la fenêtre de l'IA."
+"Capacités : {3}"
 
-#: delivery.ts:159
+#: delivery.ts:155
 #, x-machine
 msgid ""
 "{1} {2}\n"
-"Capabilities: none\n"
-"To undo the install, click Roll Back (Undo Install) in the AI window."
+"Capabilities: none"
 msgstr ""
 "{1} {2}\n"
-"Capacités : aucune\n"
-"Pour annuler l'installation, cliquez sur Revenir en arrière (annuler l'installation) dans la fenêtre de l'IA."
+"Capacités : aucune"
 
-#: delivery.ts:188
+#: delivery.ts:182
 #, x-machine
 msgid "Replace the installed {}?"
 msgstr "Remplacer {} installé ?"
 
-#: delivery.ts:190
+#: delivery.ts:184
 #, x-machine
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "Il a été installé depuis une autre source (non créé par Vestra Player AI). Après le remplacement, le nouveau plugin démarre avec un nouveau dossier de données vide ; les données du plugin d'origine sont conservées et seront réutilisées si vous le réinstallez depuis sa source d'origine."
 
-#: delivery.ts:191
+#: delivery.ts:185
 #, x-machine
 msgid "Replace"
 msgstr "Remplacer"
 
-#: labels.slint:6 main.ts:521
+#: labels.slint:6 main.ts:519
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "Personnalisé · format OpenAI"
 
-#: labels.slint:7 main.ts:523
+#: labels.slint:7 main.ts:521
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "Personnalisé · format Anthropic"
@@ -546,35 +517,35 @@ msgstr "Personnalisé · format Anthropic"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "Le fournisseur choisi précédemment, « {} », n'est plus proposé ; utilisez un autre fournisseur ou « Personnalisé · format OpenAI/Anthropic »."
 
-#: main.ts:489
+#: main.ts:487
 #, x-machine
 msgid "Export Plugin Package"
 msgstr "Exporter le paquet du plugin"
 
-#: main.ts:504
+#: main.ts:502
 #, x-machine
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "Exporter les sources (prêtes à servir de dépôt GitHub)"
 
-#: main.ts:525 manifest.json
+#: main.ts:523 manifest.json
 #, x-machine
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:533
+#: main.ts:531
 #, x-machine
 msgid "{} (no longer offered)"
 msgstr "{} (n'est plus proposé)"
 
-#: main.ts:738
+#: main.ts:736
 #, x-machine
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
 
 #: manifest.json
 #, x-machine
-msgid "Chat with your chosen model; let AI write Vestra plugins: check, test, install (reversible), export (BYOK, experimental)"
-msgstr "Discutez avec le modèle de votre choix ; laissez l'IA écrire des plugins Vestra : vérification, tests, installation (réversible), exportation (votre propre clé API, expérimental)"
+msgid "Chat with your chosen model; let AI write Vestra plugins: check, test, install, export (BYOK, experimental)"
+msgstr "Discutez avec le modèle de votre choix ; laissez l'IA écrire des plugins Vestra : vérification, tests, installation, exportation (votre propre clé API, expérimental)"
 
 #: manifest.json
 #, x-machine
@@ -583,13 +554,13 @@ msgid ""
 "\n"
 "Each conversation has its own folder; the AI can only read and write that folder and cannot run commands. The API key is kept only in the system keychain, never in a file. The cost of calling the model is charged to your provider account.\n"
 "\n"
-"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed (reversibly) or exported as a .vxp or as a complete source project."
+"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed or exported as a .vxp or as a complete source project."
 msgstr ""
 "Vestra Player AI est l'assistant IA intégré au lecteur, basé sur pi (github.com/earendil-works/pi). Choisissez un fournisseur dans les paramètres (Anthropic, OpenAI, Google, OpenRouter, DeepSeek ou un service compatible OpenAI comme Ollama) et enregistrez votre propre clé API pour commencer une conversation.\n"
 "\n"
 "Chaque conversation a son propre dossier ; l'IA ne peut lire et écrire que dans ce dossier et ne peut pas exécuter de commandes. La clé API est conservée uniquement dans le trousseau du système, jamais dans un fichier. Le coût des appels au modèle est facturé sur votre compte chez le fournisseur.\n"
 "\n"
-"L'IA écrit des plugins à partir de la documentation du SDK des plugins et corrige ses propres erreurs grâce aux outils de vérification des types, de tests et d'empaquetage ; un plugin terminé peut être installé (de façon réversible) ou exporté en .vxp ou en projet source complet."
+"L'IA écrit des plugins à partir de la documentation du SDK des plugins et corrige ses propres erreurs grâce aux outils de vérification des types, de tests et d'empaquetage ; un plugin terminé peut être installé ou exporté en .vxp ou en projet source complet."
 
 #: manifest.json
 #, x-machine

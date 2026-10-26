@@ -225,7 +225,6 @@ export const info = (id: string, patch: Partial<Info> = {}): Info => ({
   error: null,
   capabilities: ["commands"],
   directory: `/packages/${id}`,
-  previousVersion: null,
   builtin: false,
   source: { kind: "file" },
   dataDirectory: null,
@@ -237,8 +236,7 @@ export const BUILTIN = info("vestra.video", { version: "0.2.0", builtin: true, s
 /**
  * The store on a TestHost (player 0.2.0) with the fake network and the test
  * key. `validateArchive` reads the fake package file the store downloaded
- * (and refuses reserved `vestra.` ids like the player);
- * `rollback` swaps current and previous like the player.
+ * (and refuses reserved `vestra.` ids like the player).
  */
 export async function start(
   options: {
@@ -275,16 +273,6 @@ export async function start(
       throw new HostError("versionMismatch", `requires Vestra Player ≥ ${manifest.minPlayerVersion}`);
     host.candidates.set(file, manifest);
     return { token: file, digest: "0".repeat(64), apiVersion: "vestra/1", manifest, checks: [], trustedExecution: true };
-  });
-  host.handle("packages.rollback", (p) => {
-    const entry = host.packages.find((each) => each.id === p.id);
-    if (!entry?.previousVersion) throw new HostError("missing", "no previous successful version");
-    host.setPackages(
-      host.packages.map((each) =>
-        each.id === p.id ? { ...each, version: entry.previousVersion, previousVersion: entry.version } : each,
-      ),
-    );
-    return { operationId: String(p.requestId), status: "committed" };
   });
   let store!: Store;
   const started = await startPlugin(

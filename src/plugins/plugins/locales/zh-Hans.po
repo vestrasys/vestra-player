@@ -13,65 +13,61 @@ msgstr "插件管理…"
 msgid "Plugin Manager"
 msgstr "插件管理"
 
-#: manager.ts:229 ui/plugins.slint:149
+#: manager.ts:226 ui/plugins.slint:146
 msgid "Enabled {}"
 msgstr "已启用 {}"
 
-#: manager.ts:233
+#: manager.ts:230
 msgid "Disable {}?"
 msgstr "停用 {}？"
 
-#: manager.ts:236
+#: manager.ts:233
 msgid "Its menus, shortcuts, windows and effects are removed at once; open media keeps playing. A development-loaded plugin stays disabled only for this run."
 msgstr "它的菜单、快捷键、窗口与处理效果会立即撤销，打开的媒体继续播放。开发加载的插件只在本次运行内停用。"
 
-#: manager.ts:236
+#: manager.ts:233
 msgid "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time."
 msgstr "它的菜单、快捷键、窗口与处理效果（如均衡器、滤镜、字幕样式）会立即撤销，打开的媒体继续播放。重启 Vestra Player 后仍保持停用，可随时在这里启用。"
 
-#: manager.ts:239 ui/plugins.slint:268 ui/plugins.slint:362
+#: manager.ts:236 ui/plugins.slint:257 ui/plugins.slint:351
 msgid "Disable"
 msgstr "停用"
 
-#: manager.ts:245 ui/plugins.slint:150
+#: manager.ts:242 ui/plugins.slint:147
 msgid "Disabled {}"
 msgstr "已停用 {}"
 
-#: manager.ts:257 ui/plugins.slint:151
+#: manager.ts:254 ui/plugins.slint:148
 msgid "Reloaded {}"
 msgstr "已重新加载 {}"
 
-#: manager.ts:269 ui/plugins.slint:153
-msgid "Rolled back {} to {}"
-msgstr "已回退 {} 到 {}"
-
-#: manager.ts:280
+#: manager.ts:264
 msgid "Uninstall {}?"
 msgstr "卸载 {}？"
 
-#: manager.ts:282
-msgid "Its current and previous versions are removed from the installed plugins. Its shortcut changes are kept and come back if you install it again."
-msgstr "将从安装库移除它的当前版本与上一版本。它的快捷键修改会保留，重新安装后恢复。"
+#: manager.ts:266
+msgid "It is removed from the installed plugins. Its shortcut changes are kept and come back if you install it again."
+msgstr "将从已安装的插件中移除它。它的快捷键修改会保留，重新安装后恢复。"
 
-#: manager.ts:283
+#: manager.ts:267
 msgid "Uninstall"
 msgstr "卸载"
 
-#: manager.ts:285
+#: manager.ts:269
 msgid "Also delete its settings and data"
 msgstr "同时删除它的设置与数据"
 
-#: manager.ts:295 ui/plugins.slint:152
+#: manager.ts:279 ui/plugins.slint:149
 msgid "Uninstalled {}"
 msgstr "已卸载 {}"
 
 #: manifest.json
-msgid "See the installed plugins; disable, enable, roll back or uninstall them"
-msgstr "查看已安装的插件，停用、启用、回退或卸载"
+msgid "See the installed plugins; disable, enable or uninstall them"
+msgstr "查看已安装的插件，停用、启用或卸载"
 
 #: manifest.json
-msgid "Lists every plugin of the player on the Plugins page of the options window: version, source, state and data size. Select a plugin to see its details (failure reason, source, package folder, data folder, capabilities), disable or enable it, reload it, roll it back to its previous version, uninstall it (optionally with its settings and data), or open its data folder. Built-in plugins, installed with the player, cannot be uninstalled."
-msgstr "在「选项」窗口的「插件」分类里列出播放器的全部插件：版本、来源、运行状态与数据大小。选中一个插件可以查看详情（失败原因、来源、包目录、数据目录、能力），停用或启用、重新加载、回退到上一版本、卸载（可同时删除它的设置与数据），或打开它的数据目录。随播放器安装的内置插件不能卸载。"
+msgid "Lists every plugin of the player on the Plugins page of the options window: version, source, state and data size. Select a plugin to see its details (failure reason, source, package folder, data folder, capabilities), disable or enable it, reload it, uninstall it (optionally with its settings and data), or open its data folder. Built-in plugins, installed with the player, cannot be uninstalled."
+msgstr "在「选项」窗口的「插件」分类里列出播放器的全部插件：版本、来源、运行状态与数据大小。选中一个插件可以查看详情（失败原因、来源、包目录、数据目录、能力），停用或启用、重新加载、卸载（可同时删除它的设置与数据），或打开它的数据目录。随播放器安装的内置插件不能卸载。"
 
 #: manifest.json
 msgid "plugins"
@@ -231,195 +227,171 @@ msgstr "已完成"
 msgid "Cancelled"
 msgstr "已取消"
 
-#. a rollback or uninstall did not complete.
+#. an uninstall did not complete.
 #: ui/plugins.slint:96
 msgctxt "change status"
 msgid "Failed"
 msgstr "失败"
 
 #: ui/plugins.slint:97
-msgid "Failed (previous version restored)"
-msgstr "失败（已恢复原版本）"
-
-#: ui/plugins.slint:98
 msgid "Too late to cancel"
 msgstr "已无法取消"
 
-#: ui/plugins.slint:103
+#: ui/plugins.slint:102
 msgid "Plugin Manager cannot disable or uninstall itself"
 msgstr "插件管理不能停用或卸载自身"
 
-#: ui/plugins.slint:104
-msgid "Development-loaded plugins cannot be uninstalled or rolled back"
-msgstr "开发加载的插件不能卸载或回退"
+#: ui/plugins.slint:103
+msgid "Development-loaded plugins cannot be uninstalled"
+msgstr "开发加载的插件不能卸载"
 
-#: ui/plugins.slint:105 ui/plugins.slint:114
+#: ui/plugins.slint:104 ui/plugins.slint:113
 msgid "Built-in plugins can only be disabled"
 msgstr "内置插件只能停用"
 
-#: ui/plugins.slint:106
+#: ui/plugins.slint:105
 msgid "This plugin no longer exists"
 msgstr "该插件已不存在"
 
-#: ui/plugins.slint:107
-msgid "Installing or rolling back, please try again later"
-msgstr "正在安装或回退，请稍后再试"
+#: ui/plugins.slint:106
+msgid "Plugins are being installed or cleaned up, please try again later"
+msgstr "正在安装或清理插件，请稍后再试"
 
-#: ui/plugins.slint:112 ui/plugins.slint:135
+#: ui/plugins.slint:111 ui/plugins.slint:132
 msgid "Plugin Manager cannot disable itself"
 msgstr "插件管理不能停用自身"
 
-#: ui/plugins.slint:113
+#: ui/plugins.slint:112
 msgid "Updating"
 msgstr "正在更新"
 
-#: ui/plugins.slint:115
+#: ui/plugins.slint:114
 msgid "Only installed plugins can be uninstalled"
 msgstr "只能卸载已安装的插件"
 
-#: ui/plugins.slint:120
+#: ui/plugins.slint:119
 msgid "Error"
 msgstr "失败原因"
 
-#: ui/plugins.slint:121
+#: ui/plugins.slint:120
 msgid "Warning"
 msgstr "提示"
 
-#: ui/plugins.slint:122
+#: ui/plugins.slint:121
 msgid "Note"
 msgstr "说明"
 
-#: ui/plugins.slint:123 ui/plugins.slint:249 ui/plugins.slint:290
+#: ui/plugins.slint:122 ui/plugins.slint:239 ui/plugins.slint:279
 msgid "Source"
 msgstr "来源"
 
-#. detail label: the version a rollback returns to.
-#: ui/plugins.slint:125
-msgid "Previous"
-msgstr "上一版本"
-
 #. detail label: the folder the plugin's package is in.
-#: ui/plugins.slint:127
+#: ui/plugins.slint:124
 msgid "Package"
 msgstr "包目录"
 
 #. detail label: the folder with the plugin's settings and data.
-#: ui/plugins.slint:129
+#: ui/plugins.slint:126
 msgid "Data folder"
 msgstr "数据目录"
 
-#: ui/plugins.slint:130
+#: ui/plugins.slint:127
 msgid "Capabilities"
 msgstr "能力"
 
-#: ui/plugins.slint:134
-msgid "Development load: disabling lasts only for this run; cannot be uninstalled or rolled back"
-msgstr "开发加载：停用只在本次运行有效；不能卸载或回退"
+#: ui/plugins.slint:131
+msgid "Development load: disabling lasts only for this run; cannot be uninstalled"
+msgstr "开发加载：停用只在本次运行有效；不能卸载"
 
-#: ui/plugins.slint:136
+#: ui/plugins.slint:133
 msgid "Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"
 msgstr "内置插件：随播放器安装和更新，只能停用，不能卸载"
 
-#: ui/plugins.slint:137
+#: ui/plugins.slint:134
 msgid "Unavailable"
 msgstr "不可用"
 
-#: ui/plugins.slint:138
+#: ui/plugins.slint:135
 msgid "(none)"
 msgstr "（无）"
 
-#: ui/plugins.slint:139
+#: ui/plugins.slint:136
 msgid "Repository ({})"
 msgstr "仓库（{}）"
 
-#: ui/plugins.slint:140
+#: ui/plugins.slint:137
 msgid "Link ({})"
 msgstr "链接（{}）"
 
 #. a capability id, two spaces, what it lets a plugin do.
-#: ui/plugins.slint:144
+#: ui/plugins.slint:141
 msgid "{0}  {1}"
 msgstr "{0}  {1}"
 
-#. progress or result of a rollback: plugin id, status.
-#: ui/plugins.slint:155
-msgid "Roll back {0}: {1}"
-msgstr "回退 {0}：{1}"
-
-#. plugin id, status, the player's message.
-#: ui/plugins.slint:157
-msgid "Roll back {0}: {1} ({2})"
-msgstr "回退 {0}：{1}（{2}）"
-
 #. progress or result of an uninstall: plugin id, status.
-#: ui/plugins.slint:159
+#: ui/plugins.slint:151
 msgid "Uninstall {0}: {1}"
 msgstr "卸载 {0}：{1}"
 
 #. plugin id, status, the player's message.
-#: ui/plugins.slint:161
+#: ui/plugins.slint:153
 msgid "Uninstall {0}: {1} ({2})"
 msgstr "卸载 {0}：{1}（{2}）"
 
-#: ui/plugins.slint:163
+#: ui/plugins.slint:155
 msgid "Cannot read the plugin list: {}"
 msgstr "无法读取插件列表：{}"
 
-#: ui/plugins.slint:164
+#: ui/plugins.slint:156
 msgid "Cannot ask for confirmation: {}"
 msgstr "无法确认：{}"
 
-#: ui/plugins.slint:165
+#: ui/plugins.slint:157
 msgid "The data folder does not exist (the plugin has not saved any settings or data yet)"
 msgstr "数据目录不存在（插件还没有保存过设置或数据）"
 
-#: ui/plugins.slint:166
+#: ui/plugins.slint:158
 msgid "Data folder unavailable: {}"
 msgstr "数据目录不可用：{}"
 
 #. the version column of a development-loaded plugin (50px wide).
-#: ui/plugins.slint:195 ui/plugins.slint:245
+#: ui/plugins.slint:187 ui/plugins.slint:235
 msgid "Dev"
 msgstr "开发"
 
-#: ui/plugins.slint:245 ui/plugins.slint:289
+#: ui/plugins.slint:235 ui/plugins.slint:278
 msgid "Version"
 msgstr "版本"
 
-#: ui/plugins.slint:253 ui/plugins.slint:291
+#: ui/plugins.slint:243 ui/plugins.slint:280
 msgid "Status"
 msgstr "状态"
 
 #. column header: the size of the plugin's data folder.
-#: ui/plugins.slint:255 ui/plugins.slint:293
+#: ui/plugins.slint:245 ui/plugins.slint:282
 msgid "Data"
 msgstr "数据"
 
-#: ui/plugins.slint:262 ui/plugins.slint:367
+#: ui/plugins.slint:252 ui/plugins.slint:356
 msgid "Reload"
 msgstr "重新加载"
 
-#. button: roll the plugin back to its previous version (94px wide).
-#: ui/plugins.slint:263 ui/plugins.slint:369
-msgid "Roll Back"
-msgstr "回退到上一版本"
-
-#: ui/plugins.slint:264 ui/plugins.slint:376
+#: ui/plugins.slint:253 ui/plugins.slint:363
 msgid "Uninstall…"
 msgstr "卸载…"
 
-#: ui/plugins.slint:265 ui/plugins.slint:381 ui/plugins.slint:386
+#: ui/plugins.slint:254 ui/plugins.slint:368 ui/plugins.slint:373
 msgid "Open Data Folder"
 msgstr "打开数据目录"
 
-#: ui/plugins.slint:268 ui/plugins.slint:362
+#: ui/plugins.slint:257 ui/plugins.slint:351
 msgid "Enable"
 msgstr "启用"
 
-#: ui/plugins.slint:288
+#: ui/plugins.slint:277
 msgid "Plugin"
 msgstr "插件"
 
-#: ui/plugins.slint:320
+#: ui/plugins.slint:309
 msgid "Select a plugin to see its details"
 msgstr "选择一个插件查看详情"

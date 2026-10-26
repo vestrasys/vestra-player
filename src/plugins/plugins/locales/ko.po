@@ -16,80 +16,75 @@ msgstr "플러그인 관리자…"
 msgid "Plugin Manager"
 msgstr "플러그인 관리자"
 
-#: manager.ts:229 ui/plugins.slint:149
+#: manager.ts:226 ui/plugins.slint:146
 #, x-machine
 msgid "Enabled {}"
 msgstr "{} 플러그인을 사용합니다"
 
-#: manager.ts:233
+#: manager.ts:230
 #, x-machine
 msgid "Disable {}?"
 msgstr "{} 플러그인을 사용 중지할까요?"
 
-#: manager.ts:236
+#: manager.ts:233
 #, x-machine
 msgid "Its menus, shortcuts, windows and effects are removed at once; open media keeps playing. A development-loaded plugin stays disabled only for this run."
 msgstr "이 플러그인의 메뉴, 단축키, 창, 효과가 즉시 제거되며 열린 미디어는 계속 재생됩니다. 개발용으로 로드한 플러그인은 이번 실행 동안에만 사용 중지됩니다."
 
-#: manager.ts:236
+#: manager.ts:233
 #, x-machine
 msgid "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time."
 msgstr "이 플러그인의 메뉴, 단축키, 창, 효과(이퀄라이저, 필터, 자막 스타일 등)가 즉시 제거되며 열린 미디어는 계속 재생됩니다. Vestra Player를 다시 시작해도 사용 중지 상태가 유지되며, 여기서 언제든 다시 사용할 수 있습니다."
 
-#: manager.ts:239 ui/plugins.slint:268 ui/plugins.slint:362
+#: manager.ts:236 ui/plugins.slint:257 ui/plugins.slint:351
 #, x-machine
 msgid "Disable"
 msgstr "사용 중지"
 
-#: manager.ts:245 ui/plugins.slint:150
+#: manager.ts:242 ui/plugins.slint:147
 #, x-machine
 msgid "Disabled {}"
 msgstr "{} 플러그인을 사용 중지했습니다"
 
-#: manager.ts:257 ui/plugins.slint:151
+#: manager.ts:254 ui/plugins.slint:148
 #, x-machine
 msgid "Reloaded {}"
 msgstr "{} 플러그인을 다시 로드했습니다"
 
-#: manager.ts:269 ui/plugins.slint:153
-#, x-machine
-msgid "Rolled back {} to {}"
-msgstr "{} 플러그인을 {} 버전으로 롤백했습니다"
-
-#: manager.ts:280
+#: manager.ts:264
 #, x-machine
 msgid "Uninstall {}?"
 msgstr "{} 플러그인을 제거할까요?"
 
-#: manager.ts:282
+#: manager.ts:266
 #, x-machine
-msgid "Its current and previous versions are removed from the installed plugins. Its shortcut changes are kept and come back if you install it again."
-msgstr "설치된 플러그인에서 현재 버전과 이전 버전이 제거됩니다. 단축키 변경 사항은 보관되며 다시 설치하면 복원됩니다."
+msgid "It is removed from the installed plugins. Its shortcut changes are kept and come back if you install it again."
+msgstr "설치된 플러그인에서 제거됩니다. 단축키 변경 사항은 보관되며 다시 설치하면 복원됩니다."
 
-#: manager.ts:283
+#: manager.ts:267
 #, x-machine
 msgid "Uninstall"
 msgstr "제거"
 
-#: manager.ts:285
+#: manager.ts:269
 #, x-machine
 msgid "Also delete its settings and data"
 msgstr "설정과 데이터도 삭제"
 
-#: manager.ts:295 ui/plugins.slint:152
+#: manager.ts:279 ui/plugins.slint:149
 #, x-machine
 msgid "Uninstalled {}"
 msgstr "{} 플러그인을 제거했습니다"
 
 #: manifest.json
 #, x-machine
-msgid "See the installed plugins; disable, enable, roll back or uninstall them"
-msgstr "설치된 플러그인 보기, 사용 중지·사용, 롤백, 제거"
+msgid "See the installed plugins; disable, enable or uninstall them"
+msgstr "설치된 플러그인 보기, 사용 중지·사용, 제거"
 
 #: manifest.json
 #, x-machine
-msgid "Lists every plugin of the player on the Plugins page of the options window: version, source, state and data size. Select a plugin to see its details (failure reason, source, package folder, data folder, capabilities), disable or enable it, reload it, roll it back to its previous version, uninstall it (optionally with its settings and data), or open its data folder. Built-in plugins, installed with the player, cannot be uninstalled."
-msgstr "옵션 창의 플러그인 페이지에 플레이어의 모든 플러그인을 버전, 출처, 상태, 데이터 크기와 함께 표시합니다. 플러그인을 선택하면 세부 정보(실패 원인, 출처, 패키지 폴더, 데이터 폴더, 권한)를 보고, 사용하거나 사용 중지하고, 다시 로드하고, 이전 버전으로 롤백하고, 제거(설정과 데이터 포함 가능)하거나 데이터 폴더를 열 수 있습니다. 플레이어와 함께 설치되는 내장 플러그인은 제거할 수 없습니다."
+msgid "Lists every plugin of the player on the Plugins page of the options window: version, source, state and data size. Select a plugin to see its details (failure reason, source, package folder, data folder, capabilities), disable or enable it, reload it, uninstall it (optionally with its settings and data), or open its data folder. Built-in plugins, installed with the player, cannot be uninstalled."
+msgstr "옵션 창의 플러그인 페이지에 플레이어의 모든 플러그인을 버전, 출처, 상태, 데이터 크기와 함께 표시합니다. 플러그인을 선택하면 세부 정보(실패 원인, 출처, 패키지 폴더, 데이터 폴더, 권한)를 보고, 사용하거나 사용 중지하고, 다시 로드하고, 제거(설정과 데이터 포함 가능)하거나 데이터 폴더를 열 수 있습니다. 플레이어와 함께 설치되는 내장 플러그인은 제거할 수 없습니다."
 
 #: manifest.json
 #, x-machine
@@ -288,7 +283,7 @@ msgstr "완료"
 msgid "Cancelled"
 msgstr "취소됨"
 
-#. a rollback or uninstall did not complete.
+#. an uninstall did not complete.
 #: ui/plugins.slint:96
 #, x-machine
 msgctxt "change status"
@@ -297,231 +292,202 @@ msgstr "실패"
 
 #: ui/plugins.slint:97
 #, x-machine
-msgid "Failed (previous version restored)"
-msgstr "실패 (이전 버전 복원됨)"
-
-#: ui/plugins.slint:98
-#, x-machine
 msgid "Too late to cancel"
 msgstr "이미 취소할 수 없습니다"
 
-#: ui/plugins.slint:103
+#: ui/plugins.slint:102
 #, x-machine
 msgid "Plugin Manager cannot disable or uninstall itself"
 msgstr "플러그인 관리자는 자기 자신을 사용 중지하거나 제거할 수 없습니다"
 
-#: ui/plugins.slint:104
+#: ui/plugins.slint:103
 #, x-machine
-msgid "Development-loaded plugins cannot be uninstalled or rolled back"
-msgstr "개발용으로 로드한 플러그인은 제거하거나 롤백할 수 없습니다"
+msgid "Development-loaded plugins cannot be uninstalled"
+msgstr "개발용으로 로드한 플러그인은 제거할 수 없습니다"
 
-#: ui/plugins.slint:105 ui/plugins.slint:114
+#: ui/plugins.slint:104 ui/plugins.slint:113
 #, x-machine
 msgid "Built-in plugins can only be disabled"
 msgstr "내장 플러그인은 사용 중지만 할 수 있습니다"
 
-#: ui/plugins.slint:106
+#: ui/plugins.slint:105
 #, x-machine
 msgid "This plugin no longer exists"
 msgstr "이 플러그인은 더 이상 없습니다"
 
-#: ui/plugins.slint:107
+#: ui/plugins.slint:106
 #, x-machine
-msgid "Installing or rolling back, please try again later"
-msgstr "설치 또는 롤백 중입니다. 나중에 다시 시도하세요"
+msgid "Plugins are being installed or cleaned up, please try again later"
+msgstr "플러그인을 설치하거나 정리하는 중입니다. 나중에 다시 시도하세요"
 
-#: ui/plugins.slint:112 ui/plugins.slint:135
+#: ui/plugins.slint:111 ui/plugins.slint:132
 #, x-machine
 msgid "Plugin Manager cannot disable itself"
 msgstr "플러그인 관리자는 자기 자신을 사용 중지할 수 없습니다"
 
-#: ui/plugins.slint:113
+#: ui/plugins.slint:112
 #, x-machine
 msgid "Updating"
 msgstr "업데이트 중"
 
-#: ui/plugins.slint:115
+#: ui/plugins.slint:114
 #, x-machine
 msgid "Only installed plugins can be uninstalled"
 msgstr "설치된 플러그인만 제거할 수 있습니다"
 
-#: ui/plugins.slint:120
+#: ui/plugins.slint:119
 #, x-machine
 msgid "Error"
 msgstr "오류"
 
-#: ui/plugins.slint:121
+#: ui/plugins.slint:120
 #, x-machine
 msgid "Warning"
 msgstr "경고"
 
-#: ui/plugins.slint:122
+#: ui/plugins.slint:121
 #, x-machine
 msgid "Note"
 msgstr "참고"
 
-#: ui/plugins.slint:123 ui/plugins.slint:249 ui/plugins.slint:290
+#: ui/plugins.slint:122 ui/plugins.slint:239 ui/plugins.slint:279
 #, x-machine
 msgid "Source"
 msgstr "출처"
 
-#. detail label: the version a rollback returns to.
-#: ui/plugins.slint:125
-#, x-machine
-msgid "Previous"
-msgstr "이전 버전"
-
 #. detail label: the folder the plugin's package is in.
-#: ui/plugins.slint:127
+#: ui/plugins.slint:124
 #, x-machine
 msgid "Package"
 msgstr "패키지"
 
 #. detail label: the folder with the plugin's settings and data.
-#: ui/plugins.slint:129
+#: ui/plugins.slint:126
 #, x-machine
 msgid "Data folder"
 msgstr "데이터 폴더"
 
-#: ui/plugins.slint:130
+#: ui/plugins.slint:127
 #, x-machine
 msgid "Capabilities"
 msgstr "권한"
 
-#: ui/plugins.slint:134
+#: ui/plugins.slint:131
 #, x-machine
-msgid "Development load: disabling lasts only for this run; cannot be uninstalled or rolled back"
-msgstr "개발용 로드: 사용 중지는 이번 실행 동안만 유지되며, 제거하거나 롤백할 수 없습니다"
+msgid "Development load: disabling lasts only for this run; cannot be uninstalled"
+msgstr "개발용 로드: 사용 중지는 이번 실행 동안만 유지되며, 제거할 수 없습니다"
 
-#: ui/plugins.slint:136
+#: ui/plugins.slint:133
 #, x-machine
 msgid "Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"
 msgstr "내장 플러그인: 플레이어와 함께 설치·업데이트되며, 사용 중지는 할 수 있지만 제거할 수 없습니다"
 
-#: ui/plugins.slint:137
+#: ui/plugins.slint:134
 #, x-machine
 msgid "Unavailable"
 msgstr "사용할 수 없음"
 
-#: ui/plugins.slint:138
+#: ui/plugins.slint:135
 #, x-machine
 msgid "(none)"
 msgstr "(없음)"
 
-#: ui/plugins.slint:139
+#: ui/plugins.slint:136
 #, x-machine
 msgid "Repository ({})"
 msgstr "저장소 ({})"
 
-#: ui/plugins.slint:140
+#: ui/plugins.slint:137
 #, x-machine
 msgid "Link ({})"
 msgstr "링크 ({})"
 
 #. a capability id, two spaces, what it lets a plugin do.
-#: ui/plugins.slint:144
+#: ui/plugins.slint:141
 #, x-machine
 msgid "{0}  {1}"
 msgstr "{0}  {1}"
 
-#. progress or result of a rollback: plugin id, status.
-#: ui/plugins.slint:155
-#, x-machine
-msgid "Roll back {0}: {1}"
-msgstr "{0} 롤백: {1}"
-
-#. plugin id, status, the player's message.
-#: ui/plugins.slint:157
-#, x-machine
-msgid "Roll back {0}: {1} ({2})"
-msgstr "{0} 롤백: {1} ({2})"
-
 #. progress or result of an uninstall: plugin id, status.
-#: ui/plugins.slint:159
+#: ui/plugins.slint:151
 #, x-machine
 msgid "Uninstall {0}: {1}"
 msgstr "{0} 제거: {1}"
 
 #. plugin id, status, the player's message.
-#: ui/plugins.slint:161
+#: ui/plugins.slint:153
 #, x-machine
 msgid "Uninstall {0}: {1} ({2})"
 msgstr "{0} 제거: {1} ({2})"
 
-#: ui/plugins.slint:163
+#: ui/plugins.slint:155
 #, x-machine
 msgid "Cannot read the plugin list: {}"
 msgstr "플러그인 목록을 읽을 수 없습니다: {}"
 
-#: ui/plugins.slint:164
+#: ui/plugins.slint:156
 #, x-machine
 msgid "Cannot ask for confirmation: {}"
 msgstr "확인을 요청할 수 없습니다: {}"
 
-#: ui/plugins.slint:165
+#: ui/plugins.slint:157
 #, x-machine
 msgid "The data folder does not exist (the plugin has not saved any settings or data yet)"
 msgstr "데이터 폴더가 없습니다 (플러그인이 아직 설정이나 데이터를 저장하지 않았습니다)"
 
-#: ui/plugins.slint:166
+#: ui/plugins.slint:158
 #, x-machine
 msgid "Data folder unavailable: {}"
 msgstr "데이터 폴더를 사용할 수 없습니다: {}"
 
 #. the version column of a development-loaded plugin (50px wide).
-#: ui/plugins.slint:195 ui/plugins.slint:245
+#: ui/plugins.slint:187 ui/plugins.slint:235
 #, x-machine
 msgid "Dev"
 msgstr "개발"
 
-#: ui/plugins.slint:245 ui/plugins.slint:289
+#: ui/plugins.slint:235 ui/plugins.slint:278
 #, x-machine
 msgid "Version"
 msgstr "버전"
 
-#: ui/plugins.slint:253 ui/plugins.slint:291
+#: ui/plugins.slint:243 ui/plugins.slint:280
 #, x-machine
 msgid "Status"
 msgstr "상태"
 
 #. column header: the size of the plugin's data folder.
-#: ui/plugins.slint:255 ui/plugins.slint:293
+#: ui/plugins.slint:245 ui/plugins.slint:282
 #, x-machine
 msgid "Data"
 msgstr "데이터"
 
-#: ui/plugins.slint:262 ui/plugins.slint:367
+#: ui/plugins.slint:252 ui/plugins.slint:356
 #, x-machine
 msgid "Reload"
 msgstr "다시 로드"
 
-#. button: roll the plugin back to its previous version (94px wide).
-#: ui/plugins.slint:263 ui/plugins.slint:369
-#, x-machine
-msgid "Roll Back"
-msgstr "롤백"
-
-#: ui/plugins.slint:264 ui/plugins.slint:376
+#: ui/plugins.slint:253 ui/plugins.slint:363
 #, x-machine
 msgid "Uninstall…"
 msgstr "제거…"
 
-#: ui/plugins.slint:265 ui/plugins.slint:381 ui/plugins.slint:386
+#: ui/plugins.slint:254 ui/plugins.slint:368 ui/plugins.slint:373
 #, x-machine
 msgid "Open Data Folder"
 msgstr "데이터 폴더 열기"
 
-#: ui/plugins.slint:268 ui/plugins.slint:362
+#: ui/plugins.slint:257 ui/plugins.slint:351
 #, x-machine
 msgid "Enable"
 msgstr "사용"
 
-#: ui/plugins.slint:288
+#: ui/plugins.slint:277
 #, x-machine
 msgid "Plugin"
 msgstr "플러그인"
 
-#: ui/plugins.slint:320
+#: ui/plugins.slint:309
 #, x-machine
 msgid "Select a plugin to see its details"
 msgstr "세부 정보를 볼 플러그인을 선택하세요"

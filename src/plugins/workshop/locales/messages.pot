@@ -1,317 +1,297 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.workshop 2.2.3\n"
+"Project-Id-Version: vestra.workshop 2.2.5\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: ai.slint:106
+#: ai.slint:114
 msgid "Read"
 msgstr ""
 
-#: ai.slint:107
+#: ai.slint:115
 msgid "Write"
 msgstr ""
 
-#: ai.slint:108
+#: ai.slint:116
 msgid "Edit"
 msgstr ""
 
-#: ai.slint:109
+#: ai.slint:117
 msgid "List"
 msgstr ""
 
-#: ai.slint:110
+#: ai.slint:118
 msgid "Find"
 msgstr ""
 
-#: ai.slint:111
+#: ai.slint:119
 msgid "Search"
 msgstr ""
 
-#: ai.slint:112 settings.slint:191
+#: ai.slint:120 settings.slint:191
 msgid "Delete"
 msgstr ""
 
-#: ai.slint:113
+#: ai.slint:121
 msgid "Create plugin"
 msgstr ""
 
-#: ai.slint:114
+#: ai.slint:122
 msgid "Type check"
 msgstr ""
 
-#: ai.slint:115
+#: ai.slint:123
 msgid "Run tests"
 msgstr ""
 
-#: ai.slint:116
+#: ai.slint:124
 msgid "Check"
 msgstr ""
 
-#: ai.slint:117
+#: ai.slint:125
 msgid "Pack"
 msgstr ""
 
-#: ai.slint:118 ai.slint:286 ai.slint:591 delivery.ts:162
+#: ai.slint:126 ai.slint:294 ai.slint:591 delivery.ts:156
 msgid "Install"
 msgstr ""
 
 #. a file of the read-only reference, e.g. "reference/sdk/llms.txt".
-#: ai.slint:123
+#: ai.slint:131
 msgid "reference/{}"
 msgstr ""
 
 #. a tool and what it is about, e.g. "Read main.ts".
-#: ai.slint:127
+#: ai.slint:135
 msgid "{0} {1}"
 msgstr ""
 
-#: ai.slint:133
+#: ai.slint:141
 msgid "Replying…"
 msgstr ""
 
-#: ai.slint:133
+#: ai.slint:141
 msgid "Thinking…"
 msgstr ""
 
-#: ai.slint:140
+#: ai.slint:148
 msgid "{0}, {1} failed"
 msgstr ""
 
-#: ai.slint:144
+#: ai.slint:152
 msgid "{n} tool call"
 msgid_plural "{n} tool calls"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ai.slint:147
+#: ai.slint:155
 msgid "Stopped"
 msgstr ""
 
-#: ai.slint:148
+#: ai.slint:156
 msgid "The last reply was interrupted (the player or the plugin quit)"
 msgstr ""
 
-#: ai.slint:149
+#: ai.slint:157
 msgid "Connection failed; retrying ({0}/{1})…"
 msgstr ""
 
-#: ai.slint:150
+#: ai.slint:158
 msgid "Compacting the context…"
 msgstr ""
 
-#: ai.slint:151
+#: ai.slint:159
 msgid "Context compacted"
 msgstr ""
 
-#: ai.slint:152
+#: ai.slint:160
 msgid "{n} earlier message is not shown (the full record is in the session folder)"
 msgid_plural "{n} earlier messages are not shown (the full record is in the session folder)"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ai.slint:156
+#: ai.slint:164
 msgid "The API key is invalid or has no permission; check it in the settings."
 msgstr ""
 
-#: ai.slint:157
+#: ai.slint:165
 msgid "The model “{}” is not available; choose another model in the settings."
 msgstr ""
 
-#: ai.slint:158
+#: ai.slint:166
 msgid "The model is not available; choose another model in the settings."
 msgstr ""
 
-#: ai.slint:159
+#: ai.slint:167
 msgid "Out of quota or too many requests; try again later."
 msgstr ""
 
-#: ai.slint:160
+#: ai.slint:168
 msgid "Network error: cannot reach the provider."
 msgstr ""
 
-#: ai.slint:161
+#: ai.slint:169
 msgid "No reply from the provider for {} seconds; stopped."
 msgstr ""
 
-#: ai.slint:162
+#: ai.slint:170
 msgid "The agent process quit unexpectedly."
 msgstr ""
 
-#: ai.slint:164
+#: ai.slint:172
 msgid "Something went wrong."
 msgstr ""
 
-#: ai.slint:212
+#: ai.slint:220
 msgid "Collapse ▾"
 msgstr ""
 
-#: ai.slint:212
+#: ai.slint:220
 msgid "All ▸"
 msgstr ""
 
-#: ai.slint:242 ai.slint:249
+#: ai.slint:250 ai.slint:257
 msgid "… (too long; the rest is not shown)"
 msgstr ""
 
-#: ai.slint:245
+#: ai.slint:253
 msgid "Copy"
 msgstr ""
 
-#: ai.slint:267
+#: ai.slint:275
 msgid "Retry"
 msgstr ""
 
-#: ai.slint:268
+#: ai.slint:276
 msgid "Open Settings"
 msgstr ""
 
-#: ai.slint:287 ai.slint:592
-msgid "Roll Back (Undo Install)"
-msgstr ""
-
-#: ai.slint:288 ai.slint:593
+#: ai.slint:295 ai.slint:592
 msgid "Export .vxp"
 msgstr ""
 
-#: ai.slint:289 ai.slint:594
+#: ai.slint:296 ai.slint:593
 msgid "Export Source .zip"
 msgstr ""
 
-#: ai.slint:290 ai.slint:489 ai.slint:595
+#: ai.slint:297 ai.slint:489 ai.slint:594
 msgid "Open Folder"
 msgstr ""
 
-#: ai.slint:355
+#: ai.slint:359
 msgid "Reading the API key from the keychain… (the system may ask for permission)"
 msgstr ""
 
-#: ai.slint:356
+#: ai.slint:360
 msgid "Cannot read the key from the keychain; save it again in the settings. ({})"
 msgstr ""
 
-#: ai.slint:357
+#: ai.slint:361
 msgid "Cannot read the key from the keychain; save it again in the settings. (The key is not in the keychain)"
 msgstr ""
 
-#: ai.slint:358
+#: ai.slint:362
 msgid "The API key has not been read yet."
 msgstr ""
 
-#: ai.slint:359
+#: ai.slint:363
 msgid "No provider set up: choose a provider in the settings and save its API key first."
 msgstr ""
 
-#: ai.slint:364
+#: ai.slint:368
 msgid "Install {0} {1}"
 msgstr ""
 
-#: ai.slint:365
-msgid "Roll back to {}"
-msgstr ""
-
-#: ai.slint:366
-msgid "Uninstall {}"
-msgstr ""
-
-#: ai.slint:369
+#: ai.slint:371
 msgid "done"
 msgstr ""
 
-#: ai.slint:370
+#: ai.slint:372
 msgid "cancelled"
 msgstr ""
 
-#: ai.slint:371
+#: ai.slint:373
 msgid "failed"
 msgstr ""
 
-#: ai.slint:372
+#: ai.slint:374
 msgid "failed; the previous version could not be fully restored"
 msgstr ""
 
-#: ai.slint:373
+#: ai.slint:375
 msgid "too late to cancel"
 msgstr ""
 
-#: ai.slint:377
+#: ai.slint:379
 msgid "Packing {}…"
 msgstr ""
 
-#: ai.slint:378
+#: ai.slint:380
 msgid "The player is validating {}…"
 msgstr ""
 
-#: ai.slint:379
+#: ai.slint:381
 msgid "The player's validation failed ({0}): {1}"
 msgstr ""
 
-#: ai.slint:380
+#: ai.slint:382
 msgid "Checks before packing failed: {} problem(s)"
 msgstr ""
 
-#: ai.slint:381
+#: ai.slint:383
 msgid "Packing failed: {} type error(s)"
 msgstr ""
 
-#: ai.slint:382
+#: ai.slint:384
 msgid "Packing failed"
 msgstr ""
 
-#: ai.slint:383
+#: ai.slint:385
 msgid "Packing failed: no .vxp was written"
 msgstr ""
 
-#: ai.slint:384
+#: ai.slint:386
 msgid "Packing cancelled"
 msgstr ""
 
-#: ai.slint:385
+#: ai.slint:387
 msgid "Packing timed out and was stopped"
 msgstr ""
 
-#: ai.slint:386
+#: ai.slint:388
 msgid "Not installed (cancelled)."
 msgstr ""
 
-#: ai.slint:387
+#: ai.slint:389
 msgid "Installing {}…"
 msgstr ""
 
-#: ai.slint:388
+#: ai.slint:390
 msgid "{} has the name of a plugin built into the player and cannot be installed; choose another id."
 msgstr ""
 
-#: ai.slint:389
+#: ai.slint:391
 msgid "Not installed: the installed plugin was kept."
 msgstr ""
 
-#: ai.slint:390
+#: ai.slint:392
 msgid "{0}: {1}…"
 msgstr ""
 
-#: ai.slint:391
+#: ai.slint:393
 msgid "{0}: {1} ({2})"
 msgstr ""
 
-#: ai.slint:392
+#: ai.slint:394
 msgid "{0}: {1}"
 msgstr ""
 
-#: ai.slint:393
-msgid "Installed {0} {1}; you can click Roll Back (Undo Install). Shortcuts not in effect:"
-msgstr ""
-
-#: ai.slint:394
-msgid "Installed {0} {1}; you can click Roll Back (Undo Install)."
-msgstr ""
-
 #: ai.slint:395
-msgid "{} is no longer among the installed plugins."
+msgid "Installed {0} {1}. Shortcuts not in effect:"
 msgstr ""
 
 #: ai.slint:396
-msgid "Rolling back {}…"
+msgid "Installed {0} {1}."
 msgstr ""
 
 #: ai.slint:397
@@ -374,57 +354,55 @@ msgstr ""
 msgid "Plugin: {}"
 msgstr ""
 
-#: ai.slint:626
+#: ai.slint:625
 msgid "Another conversation is generating; please wait…"
 msgstr ""
 
-#: ai.slint:626
+#: ai.slint:625
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr ""
 
-#: ai.slint:643
+#: ai.slint:642
 msgid "Send"
 msgstr ""
 
-#: ai.slint:647
+#: ai.slint:646
 msgid "■ Stop"
 msgstr ""
 
-#: delivery.ts:158
+#: delivery.ts:154
 msgid "Install the AI-generated plugin “{}”?"
 msgstr ""
 
-#: delivery.ts:159
+#: delivery.ts:155
 msgid ""
 "{1} {2}\n"
-"Capabilities: {3}\n"
-"To undo the install, click Roll Back (Undo Install) in the AI window."
+"Capabilities: {3}"
 msgstr ""
 
-#: delivery.ts:159
+#: delivery.ts:155
 msgid ""
 "{1} {2}\n"
-"Capabilities: none\n"
-"To undo the install, click Roll Back (Undo Install) in the AI window."
+"Capabilities: none"
 msgstr ""
 
-#: delivery.ts:188
+#: delivery.ts:182
 msgid "Replace the installed {}?"
 msgstr ""
 
-#: delivery.ts:190
+#: delivery.ts:184
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr ""
 
-#: delivery.ts:191
+#: delivery.ts:185
 msgid "Replace"
 msgstr ""
 
-#: labels.slint:6 main.ts:521
+#: labels.slint:6 main.ts:519
 msgid "Custom · OpenAI format"
 msgstr ""
 
-#: labels.slint:7 main.ts:523
+#: labels.slint:7 main.ts:521
 msgid "Custom · Anthropic format"
 msgstr ""
 
@@ -432,28 +410,28 @@ msgstr ""
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr ""
 
-#: main.ts:489
+#: main.ts:487
 msgid "Export Plugin Package"
 msgstr ""
 
-#: main.ts:504
+#: main.ts:502
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr ""
 
-#: main.ts:525 manifest.json
+#: main.ts:523 manifest.json
 msgid "Vestra Player AI"
 msgstr ""
 
-#: main.ts:533
+#: main.ts:531
 msgid "{} (no longer offered)"
 msgstr ""
 
-#: main.ts:738
+#: main.ts:736
 msgid "Vestra Player AI…"
 msgstr ""
 
 #: manifest.json
-msgid "Chat with your chosen model; let AI write Vestra plugins: check, test, install (reversible), export (BYOK, experimental)"
+msgid "Chat with your chosen model; let AI write Vestra plugins: check, test, install, export (BYOK, experimental)"
 msgstr ""
 
 #: manifest.json
@@ -462,7 +440,7 @@ msgid ""
 "\n"
 "Each conversation has its own folder; the AI can only read and write that folder and cannot run commands. The API key is kept only in the system keychain, never in a file. The cost of calling the model is charged to your provider account.\n"
 "\n"
-"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed (reversibly) or exported as a .vxp or as a complete source project."
+"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed or exported as a .vxp or as a complete source project."
 msgstr ""
 
 #: manifest.json

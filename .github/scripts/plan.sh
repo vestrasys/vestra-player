@@ -61,8 +61,7 @@ has() { [ "$all" = true ] || printf '%s\n' "$files" | grep -Eq "$1"; }
 host=false; has '^(src/host/|src/runtime/|src/package(-lock)?\.json$|rust-toolchain\.toml$|\.gitattributes$|\.github/)' && host=true
 lock=false; has '^(src/host/Cargo\.lock|src/host/deny\.toml|\.github/workflows/_audit\.yml)$' && lock=true
 # A built-in plugin's README / CHANGELOG ship in its package, so a change
-# under src/plugins/ is never docs only: static runs the built-in versions
-# guard (its plugin tests skip .md-only changes, below).
+# under src/plugins/ is never docs only: static runs that plugin's tests.
 docs_only=true
 if [ "$all" = true ] || printf '%s\n' "$files" | grep -Ev '^$|^doc/|\.md$' | grep -q . \
   || printf '%s\n' "$files" | grep -q '^src/plugins/'; then
@@ -94,7 +93,7 @@ if [ "$all" = true ] || has "$host_ui" \
   plugins=all
 else
   names=""
-  for name in $(printf '%s\n' "$files" | grep -Ev '\.md$' | sed -n 's|^src/plugins/\([a-z0-9-]*\)/.*|\1|p' | sort -u); do
+  for name in $(printf '%s\n' "$files" | sed -n 's|^src/plugins/\([a-z0-9-]*\)/.*|\1|p' | sort -u); do
     [ -f "src/plugins/$name/manifest.json" ] && names="$names $name"
   done
   [ -n "$names" ] && plugins="${names# }"

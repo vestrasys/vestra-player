@@ -138,7 +138,7 @@ Vestra Player.app/Contents/
   Resources/AppIcon.icns
   Resources/ui/              src/host/ui
   Resources/runtime/         output of stage-runtime.mjs (plus a copy of the SDK's LICENSE)
-  Resources/plugins/         output of stage-plugins.mjs (18 .vxp files and builtin.json)
+  Resources/plugins/         output of stage-plugins.mjs (builtin.json and one unpacked directory per built-in; .vxp files until 2026-10-26)
   Resources/licenses/        see §5
 ```
 

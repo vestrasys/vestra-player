@@ -1,6 +1,6 @@
 {
   "id": "vestra.plugins",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -12,8 +12,8 @@
   ],
   "name": "Plugin Manager",
   "author": "Vestra Player",
-  "punchline": "See the installed plugins; disable, enable, roll back or uninstall them",
-  "description": "Lists every plugin of the player on the Plugins page of the options window: version, source, state and data size. Select a plugin to see its details (failure reason, source, package folder, data folder, capabilities), disable or enable it, reload it, roll it back to its previous version, uninstall it (optionally with its settings and data), or open its data folder. Built-in plugins, installed with the player, cannot be uninstalled.",
+  "punchline": "See the installed plugins; disable, enable or uninstall them",
+  "description": "Lists every plugin of the player on the Plugins page of the options window: version, source, state and data size. Select a plugin to see its details (failure reason, source, package folder, data folder, capabilities), disable or enable it, reload it, uninstall it (optionally with its settings and data), or open its data folder. Built-in plugins, installed with the player, cannot be uninstalled.",
   "tags": [
     "plugins",
     "settings"

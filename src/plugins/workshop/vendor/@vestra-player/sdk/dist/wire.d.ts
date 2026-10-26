@@ -102,7 +102,6 @@ export interface PackageInfo {
     error: string | null;
     capabilities: string[];
     directory: string;
-    previousVersion: string | null;
     /** Player 0.2.0; absent from older players. */
     builtin?: boolean;
     source?: WireSource | null;
@@ -567,7 +566,6 @@ export declare function createWire(transport: Transport): {
             source?: WireSource;
             replace?: boolean;
         }) => Promise<PackageOperation>;
-        rollback: (id: string, expectedRevision: number, requestId: string) => Promise<PackageOperation>;
         operation: (operationId: string) => Promise<PackageOperation>;
         cancel: (operationId: string) => Promise<PackageOperation>;
         list: () => Promise<PackageInfo[]>;

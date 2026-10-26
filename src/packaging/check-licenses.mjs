@@ -36,8 +36,6 @@ import {
   repo,
   source,
   walk,
-  zipEntries,
-  zipRead,
 } from "./lib.mjs";
 
 const problems = [];
@@ -101,12 +99,6 @@ export async function sourcePlugin(dir) {
     read: async (rel) =>
       exists(join(dir, rel)) ? readFile(join(dir, rel)) : undefined,
   };
-}
-
-/** A plugin's files, from its .vxp. */
-export async function vxpPlugin(path) {
-  const files = (await zipEntries(path)).filter((name) => !name.endsWith("/"));
-  return { files, read: (rel) => zipRead(path, rel) };
 }
 
 /** A vendored package's license text, and the notices shipped beside it. */
@@ -423,7 +415,13 @@ async function checkBundle(root, platform) {
   };
   claim(config.own[platform], "own");
 
-  const packaged = new Map(); // .vxp → its components
+  // Each built-in plugin ships unpacked in <pluginsDir>/<id>/
+  // (scripts/stage-plugins.mjs); a component's `vxp` names that id.
+  const pluginFiles = (id) =>
+    files
+      .filter((file) => file.startsWith(`${pluginsDir}/${id}/`))
+      .map((file) => file.slice(pluginsDir.length + id.length + 2));
+  const packaged = new Map(); // plugin directory → its components
   for (const component of config.component) {
     const globs = component[platform] ?? [];
     if (globs.length && !claim(globs, component.name) && !component.deps)
@@ -432,46 +430,45 @@ async function checkBundle(root, platform) {
       if (!exists(join(root, licensesDir, file)))
         problem(`${component.name}: missing ${licensesDir}/${file}`);
     if (component.vxp) {
-      const vxp = files.find((file) =>
-        new RegExp(
-          `^${pluginsDir}/${component.vxp.replace(".", "\\.")}-[^/]+\\.vxp$`,
-        ).test(file),
-      );
-      if (!vxp)
+      const dir = `${pluginsDir}/${component.vxp}`;
+      const entries = new Set(pluginFiles(component.vxp));
+      if (!entries.has("manifest.json"))
         problem(`${component.name}: ${component.vxp} is not in ${pluginsDir}`);
       else {
-        const entries = new Set(await zipEntries(join(root, vxp)));
         for (const file of component.vxp_license_files ?? [])
           if (!entries.has(file))
-            problem(`${component.name}: ${vxp} has no ${file}`);
-        packaged.set(vxp, [...(packaged.get(vxp) ?? []), component]);
+            problem(`${component.name}: ${dir} has no ${file}`);
+        packaged.set(dir, [...(packaged.get(dir) ?? []), component]);
       }
     }
     if (component.deps) await checkDeps(root, platform, licensesDir, allowed);
     if (component.version === "node.json") await checkNode(root, platform);
   }
 
-  for (const [vxp, components] of packaged)
+  for (const [dir, components] of packaged)
     if (components.some((c) => c.inventory || c.vendor))
       problems.push(
         ...(await checkPluginPackages(
           components,
-          await vxpPlugin(join(root, vxp)),
+          await sourcePlugin(join(root, dir)),
           allowed,
-          vxp,
+          dir,
         )),
       );
 
   // Every plugin package that bundles npm packages carries licenses/.
-  for (const vxp of files.filter(
-    (file) => file.startsWith(`${pluginsDir}/`) && file.endsWith(".vxp"),
-  )) {
-    const entries = await zipEntries(join(root, vxp));
-    const manifest = await zipRead(join(root, vxp), "package.json");
-    const dependencies = manifest
-      ? Object.keys(JSON.parse(manifest).dependencies ?? {})
-      : [];
-    const id = vxp.slice(pluginsDir.length + 1).replace(/-[^-]+\.vxp$/, "");
+  const ids = new Set(
+    files
+      .filter((file) => file.startsWith(`${pluginsDir}/`))
+      .map((file) => file.slice(pluginsDir.length + 1).split("/"))
+      .filter((parts) => parts.length > 1)
+      .map((parts) => parts[0]),
+  );
+  for (const id of ids) {
+    const vxp = `${pluginsDir}/${id}`;
+    const entries = pluginFiles(id);
+    const manifest = await readJsonIfExists(join(root, vxp, "package.json"));
+    const dependencies = Object.keys(manifest?.dependencies ?? {});
     const dir = await pluginDirectory(id);
     const sourceDependencies = dir
       ? Object.keys(

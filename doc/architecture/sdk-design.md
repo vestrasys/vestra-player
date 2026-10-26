@@ -34,7 +34,7 @@ export default async function activate(plugin: Plugin) {
 | `subtitles` | `state`, `onChange`, `refresh`, `select`, `load(bytes, { ifCurrent?, signal? })`, `remove`, `setStyle` | `SubtitleTrack` (value object: `id`, `kind`, `embeddedId?`, `title`, `language`, `styleSupported`, `styleReason`, `owned`) | | subtitles |
 | `media` | `capture({ at?, processed?, subtitles?, audio?, ifCurrent? })` | `Snapshot` → `ExportJob` | Snapshot: `export`, read-only description; Job: `state`, `onChange`, `done`, `cancel`, `refresh` | capture |
 | `resolvers` | `add({ id, schemes, hosts, resolve })` | `Resolver` | `ready` | bilibili, youtube |
-| `packages` | `validate(dir)`, `rollback(id)` | `PackageCandidate` → `PackageChange` | Candidate: `install`; Change: `status`, `message`, `onChange`, `done`, `cancel` | workshop |
+| `packages` | `validate(dir)` (`rollback(id)` removed in 1.5.17) | `PackageCandidate` → `PackageChange` | Candidate: `install`; Change: `status`, `message`, `onChange`, `done`, `cancel` | workshop |
 | `osd` | `show(text)`, `panel()` | `OsdPanel` | `set(text \| null)` | info |
 | Scope | `scope()`, `add`, `onDispose`, `onError`, `update`, `dispose` | `Scope` | | all (`onError`, `update` as needed) |
 
@@ -112,7 +112,7 @@ The SDK still handles "lost replies" (a rejection that is not a host error, or a
 | Source | `source.operation(id)` | `pending` means accepted and still running (e.g. URL resolution in progress); keep querying at intervals starting at 40 ms, up to 500 ms, until `completed`/`failed`; if the query itself is rejected by the host → fail with `unknown`. Each plugin can only query its own operations; the host accepts `playback.control` or `playback.read` (`required_capability` in `main.rs`) |
 | Subtitles | `subtitles.operation(id)` | `completed` → adopt its state; `failed` → failed; `unknown` → fail with `rejected` (not executed); `unknownExpired` → refresh the state and fail with `expired` |
 | Snapshots/jobs | `jobs.operation(id)` | `completed` → adopt the result (a snapshot then reads `snapshot.state` again); `failed`/`unknown`/`unknownExpired` → failed; `pending` → query again after 250 ms |
-| Package install/rollback | `packages.operation(requestId)` | The host guarantees `operationId === requestId`; keep querying until a terminal state, never resend |
+| Package install/uninstall | `packages.operation(requestId)` | The host guarantees `operationId === requestId`; keep querying until a terminal state, never resend |
 
 Under v2 these branches almost never happen in practice (there are no client timeouts), but keeping them means the SDK still gives a definite conclusion when the transport misbehaves, and **never blindly resends a non-idempotent operation** (open, subtitle commit, starting a job, install). Only last-write-wins processing resources can be resent safely, and only when they were definitely not executed.
 

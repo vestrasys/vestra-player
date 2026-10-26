@@ -292,7 +292,6 @@ export component AiWindow inherits Window {
         card-measure := HorizontalLayout {
             spacing: 6px;
             Button { small: true; width: max(52px, self.preferred-width); text: @tr("Install"); }
-            Button { small: true; width: max(112px, self.preferred-width); text: @tr("Roll Back (Undo Install)"); }
             Button { small: true; width: max(80px, self.preferred-width); text: @tr("Export .vxp"); }
             Button { small: true; width: max(96px, self.preferred-width); text: @tr("Export Source .zip"); }
             Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); }
@@ -333,8 +332,6 @@ export component AiWindow inherits Window {
     // After an install: the bindings that did not take effect.
     in property <[Shadowed]> card-keys;
     in property <bool> card-busy;
-    // Installed in this run: Roll Back undoes it.
-    in property <bool> can-rollback;
 
     callback send(string);
     callback stop();
@@ -351,7 +348,6 @@ export component AiWindow inherits Window {
     callback draft-changed(string);
     callback choose-project(int);
     callback install();
-    callback rollback();
     callback export-vxp();
     callback export-source();
     callback open-project();
@@ -367,11 +363,9 @@ export component AiWindow inherits Window {
             : s.code == "not-configured" ? @tr("No provider set up: choose a provider in the settings and save its API key first.")
             : ""
     }
-    // An install, rollback or uninstall (args: action, a, b, status, message).
+    // An install (args: action "install", name, version, status, message).
     pure function action-text(s: CardSay) -> string {
-        s.args[0] == "install" ? @tr("Install {0} {1}", s.args[1], s.args[2])
-            : s.args[0] == "rollback" ? @tr("Roll back to {}", s.args[1])
-            : @tr("Uninstall {}", s.args[1])
+        @tr("Install {0} {1}", s.args[1], s.args[2])
     }
     pure function outcome-text(status: string) -> string {
         status == "committed" ? @tr("done")
@@ -398,10 +392,8 @@ export component AiWindow inherits Window {
             : s.code == "progress" ? @tr("{0}: {1}…", root.action-text(s), s.args[3])
             : s.code == "result" && s.args[4] != "" ? @tr("{0}: {1} ({2})", root.action-text(s), root.outcome-text(s.args[3]), s.args[4])
             : s.code == "result" ? @tr("{0}: {1}", root.action-text(s), root.outcome-text(s.args[3]))
-            : s.code == "installed" && root.card-keys.length > 0 ? @tr("Installed {0} {1}; you can click Roll Back (Undo Install). Shortcuts not in effect:", s.args[0], s.args[1])
-            : s.code == "installed" ? @tr("Installed {0} {1}; you can click Roll Back (Undo Install).", s.args[0], s.args[1])
-            : s.code == "not-installed" ? @tr("{} is no longer among the installed plugins.", s.args[0])
-            : s.code == "rolling-back" ? @tr("Rolling back {}…", s.args[0])
+            : s.code == "installed" && root.card-keys.length > 0 ? @tr("Installed {0} {1}. Shortcuts not in effect:", s.args[0], s.args[1])
+            : s.code == "installed" ? @tr("Installed {0} {1}.", s.args[0], s.args[1])
             : s.code == "exported" ? @tr("Exported {}", s.args[0])
             : s.code == "exported-source-local" ? @tr("Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json.", s.args[0])
             : s.code == "exported-source" ? @tr("Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json.", s.args[0])
@@ -597,7 +589,6 @@ export component AiWindow inherits Window {
                         spacing: 6px;
                         height: Theme.button-small-height;
                         Button { small: true; width: max(52px, self.preferred-width); text: @tr("Install"); enabled: !root.card-busy; clicked => { root.install(); } }
-                        if root.can-rollback: Button { small: true; width: max(112px, self.preferred-width); text: @tr("Roll Back (Undo Install)"); enabled: !root.card-busy; clicked => { root.rollback(); } }
                         Button { small: true; width: max(80px, self.preferred-width); text: @tr("Export .vxp"); enabled: !root.card-busy; clicked => { root.export-vxp(); } }
                         Button { small: true; width: max(96px, self.preferred-width); text: @tr("Export Source .zip"); enabled: !root.card-busy; clicked => { root.export-source(); } }
                         Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); clicked => { root.open-project(); } }

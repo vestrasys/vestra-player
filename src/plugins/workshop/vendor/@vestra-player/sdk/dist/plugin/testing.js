@@ -1919,7 +1919,7 @@ export class TestHost {
      */
     setPackages(list) {
         this.packages = list;
-        this.emit("packages.changed", structuredClone(list));
+        this.emit("packages.changed", structuredClone(this.packages));
     }
     #split(key) {
         const at = key.indexOf("/");
@@ -3205,9 +3205,6 @@ export class TestHost {
                 error: null,
                 capabilities: [...manifest.capabilities],
                 directory: `/test-host/packages/${manifest.id}`,
-                previousVersion: entry && identity(entry.source) === identity(source)
-                    ? entry.version
-                    : null,
                 builtin: false,
                 source,
                 dataDirectory: entry?.dataDirectory ?? null,

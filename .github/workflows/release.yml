@@ -49,7 +49,6 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tested: ${{ steps.tested.outputs.tested }}
-      builtin_base: ${{ steps.builtin-base.outputs.builtin_base }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -86,10 +85,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           WAIT: "1800"
         run: bash .github/scripts/main-green.sh
-      - id: builtin-base
-        env:
-          REF: ${{ github.ref }}
-        run: bash .github/scripts/builtin-base.sh
 
   static:
     needs: verify
@@ -97,8 +92,6 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/_static.yml
-    with:
-      builtin-base: ${{ needs.verify.outputs.builtin_base }}
 
   windows:
     needs: static
