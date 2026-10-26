@@ -10,6 +10,7 @@ The main window's control bar, and playback commands such as open, seek and spee
 - **Seek**: four seek steps (change them in Seek Steps…), previous/next keyframe, jump to the start, jump to a given time.
 - **Speed**: 0.5×, 1.5×, 2× and a custom speed.
 - **Seek bar hover**: shows the time or a thumbnail at the pointer (thumbnails need ffmpeg).
+- **Seek bar thumbnails (0.2.0)**: on by default for local video files, shown on hover and while dragging the seek bar. A few seconds after a file starts playing, a set of keyframe thumbnails (up to 200) is made in the background; until then the nearest finished thumbnail is shown. Opening a file is never slowed down by this: nothing runs before the first frame is on screen, at most two ffmpeg processes run at a time, and they pause while you drag or seek. Thumbnails are kept for next time (up to 200 MB in the plugin's data folder, oldest first out). Turn them off with Show Thumbnail on Seek Bar Hover. Network streams show the time only for now.
 - **No screen saver while playing**.
 
 ## Where to find it

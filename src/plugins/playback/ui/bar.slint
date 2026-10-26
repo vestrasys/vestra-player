@@ -28,10 +28,14 @@ export global PlaybackBridge {
     // I06: source duration in seconds and the Show Time on Seek Bar Hover option.
     in-out property <float> duration;
     in-out property <bool> hover-time;
-    // I07: the picture box (option on, a local file with video) and the picture once made.
+    // I07: the picture box (option on, a local file with video) and the source's
+    // sprite: `preview-count` cells of 160×90 in 10×10 sheets (cell c on sheet
+    // c / 100); `preview-map[cell]` is the made cell to show there (-1: none yet).
     in-out property <bool> hover-thumbnail;
-    in-out property <bool> has-thumbnail;
-    in-out property <image> thumbnail;
+    in-out property <int> preview-count;
+    in-out property <[int]> preview-map;
+    in-out property <image> preview-sheet-a;
+    in-out property <image> preview-sheet-b;
     // B22: marks sorted by time, and the A-B loop, as fractions of the duration.
     in-out property <[SeekMark]> marks;
     in-out property <bool> has-loop;
@@ -87,9 +91,9 @@ export global PlaybackBridge {
     callback seek-changed(float);
     callback seek-cancelled();
     callback dragging(bool);
-    // I07: the hovered fraction, at most every 50 ms while the picture box shows; the pointer left.
-    callback hover-changed(float);
-    callback hover-ended();
+    // I07: the pointer came onto the seek line (hover or drag) or left it; the
+    // sprite sheets are sent only meanwhile (the player decodes each on its UI thread).
+    callback pointing(bool);
     callback volume-changed(float);
     callback volume-released(float);
     callback toggle-time();
@@ -159,9 +163,9 @@ component SeekBar inherits Rectangle {
     out property <string> pointer-time: root.clock(root.fraction(touch.mouse-x) * PlaybackBridge.duration);
     // B22: the mark within 3px of the pointer (-1: none).
     out property <int> near-mark: root.pointing ? root.nearest(touch.mouse-x) : -1;
-    // I07: the last fraction sent with hover-changed (-1: none since the pointer came).
-    private property <float> sent: -1;
-    private property <float> pointer-fraction: root.fraction(touch.mouse-x);
+    // I07: the fraction under the pointer; the preview box picks its cell from it.
+    out property <float> pointer-fraction: root.fraction(touch.mouse-x);
+    changed pointing => { PlaybackBridge.pointing(self.pointing); }
     height: 10px;
     function fraction(x: length) -> float {
         return clamp((x - 4px) / root.span, 0, 1);
@@ -218,34 +222,6 @@ component SeekBar inherits Rectangle {
             return i - 1;
         }
         return right <= 3px ? i : -1;
-    }
-    // I07: send now when the last send is 50 ms old, else when the cooldown ends.
-    function report-hover() {
-        if !PlaybackBridge.hover-thumbnail || !root.pointing || root.pointer-fraction == root.sent {
-            return;
-        }
-        if !cooldown.running {
-            root.sent = root.pointer-fraction;
-            PlaybackBridge.hover-changed(root.sent);
-            cooldown.running = true;
-        }
-    }
-    changed pointer-fraction => { root.report-hover(); }
-    changed pointing => {
-        if self.pointing {
-            root.report-hover();
-        } else if root.sent >= 0 {
-            root.sent = -1;
-            PlaybackBridge.hover-ended();
-        }
-    }
-    cooldown := Timer {
-        interval: 50ms;
-        running: false;
-        triggered => {
-            self.running = false;
-            root.report-hover();
-        }
     }
     Rectangle {
         y: 4px;
@@ -490,7 +466,9 @@ export component PlaybackBar inherits Rectangle {
     // bottom 4px above the line, so it draws over the video above the bar. It
     // takes no input and follows the pointer without a plugin round trip.
     // B22: within 3px of a mark it reads "Title  01:23" (the mark's time).
-    // I07: a 160×90 picture above the text (a dark box until one is made).
+    // I07: a 160×90 picture above the text, on hover and while dragging (a dark
+    // box until a cell is made): the cell under the pointer, or the nearest
+    // made one, cropped from its sheet here, so it follows without a round trip.
     if (PlaybackBridge.hover-time || PlaybackBridge.hover-thumbnail || seek-bar.near-mark >= 0) && PlaybackBridge.can-seek && PlaybackBridge.duration > 0 && seek-bar.pointing: Rectangle {
         x: clamp(seek-bar.x + seek-bar.pointer-x - self.width / 2, 2px, max(2px, root.width - self.width - 2px));
         y: seek-bar.y + 4px - 4px - self.height;
@@ -506,14 +484,21 @@ export component PlaybackBar inherits Rectangle {
             padding-top: PlaybackBridge.hover-thumbnail ? 5px : 2px;
             padding-bottom: 2px;
             spacing: 2px;
-            if PlaybackBridge.hover-thumbnail: Rectangle {
+            if PlaybackBridge.hover-thumbnail: preview := Rectangle {
+                property <int> cell: PlaybackBridge.preview-count <= 0 ? -1
+                    : PlaybackBridge.preview-map[clamp(Math.floor(seek-bar.pointer-fraction * PlaybackBridge.preview-count), 0, PlaybackBridge.preview-count - 1)];
+                property <int> slot: Math.mod(Math.max(self.cell, 0), 100);
                 width: 160px;
                 height: 90px;
                 background: Theme.bg-video;
-                if PlaybackBridge.has-thumbnail: Image {
+                if preview.cell >= 0: Image {
                     width: 160px;
                     height: 90px;
-                    source: PlaybackBridge.thumbnail;
+                    source: preview.cell >= 100 ? PlaybackBridge.preview-sheet-b : PlaybackBridge.preview-sheet-a;
+                    source-clip-x: Math.mod(preview.slot, 10) * 160;
+                    source-clip-y: Math.floor(preview.slot / 10) * 90;
+                    source-clip-width: 160;
+                    source-clip-height: 90;
                     image-fit: contain;
                 }
             }
