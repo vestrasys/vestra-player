@@ -14,4 +14,5 @@ disallowed-macros = [
   { path = "std::eprint", reason = "use diag! (src/diag.rs): eprint! panics on a closed stderr" },
   { path = "std::println", reason = "the host writes nothing to stdout; diagnostics use diag! (src/diag.rs)" },
   { path = "std::print", reason = "the host writes nothing to stdout; diagnostics use diag! (src/diag.rs)" },
+  { path = "std::dbg", reason = "dbg! writes to stderr and panics on a closed one; use diag! (src/diag.rs)" },
 ]

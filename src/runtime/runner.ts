@@ -13,8 +13,12 @@ import type { Plugin } from "@vestra-player/sdk";
 // that would stop this process, even from console.error. Logs are best
 // effort (the player's side: host/src/diag.rs).
 process.stderr.on("error", () => {});
-// stdout is the pipe to the player: when it breaks, the player is gone.
-process.stdout.on("error", () => void stop());
+// stdout is the pipe to the player: when it breaks, the player is gone
+// (before `stop` can run, nothing needs cleaning up yet).
+let canStop = false;
+process.stdout.on("error", () => (canStop ? void stop() : process.exit(0)));
+/** How long `stop` waits for the plugin's cleanup. */
+const STOP_TIMEOUT_MS = 5000;
 // stdout is reserved for JSONL. Plugin logs use stderr.
 console.log = (...args: unknown[]) => console.error(...args);
 console.info = (...args: unknown[]) => console.error(...args);
@@ -107,6 +111,9 @@ async function stop() {
     request.reject(new HostError("disabled", "plugin stopped"));
   }
   pending.clear();
+  // A plugin's cleanup that never ends must not keep the process alive (the
+  // player may be gone: stdout broke).
+  setTimeout(() => process.exit(0), STOP_TIMEOUT_MS);
   try {
     await dispose?.();
   } catch (error) {
@@ -114,6 +121,7 @@ async function stop() {
   }
   process.exit(0);
 }
+canStop = true;
 const input = createInterface({ input: process.stdin });
 input.on("line", (line) => {
   try {

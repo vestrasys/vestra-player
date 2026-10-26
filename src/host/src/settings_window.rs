@@ -102,9 +102,14 @@ fn spawn_checker(events: mpsc::Sender<Event>) -> Option<mpsc::Sender<(u64, Strin
         .name("settings-check".into())
         .spawn(move || {
             for (serial, source) in receiver {
-                let result = composition::build(source, "OptionsWindow")
-                    .map(|_| ())
-                    .map_err(|e| format!("{e:#}"));
+                // A panic in the compiler answers this registration with an
+                // error instead of leaving it (and the ones after) unanswered.
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    composition::build(source, "OptionsWindow")
+                        .map(|_| ())
+                        .map_err(|e| format!("{e:#}"))
+                }))
+                .unwrap_or_else(|_| Err("the page's Slint compile failed (compiler panic)".into()));
                 if events.send(Event::SettingsChecked(serial, result)).is_err() {
                     return;
                 }
@@ -388,6 +393,23 @@ impl Host {
             }
             "settings.unregister" => {
                 let id = params_page(params)?.to_owned();
+                // Still compiling: the registration ends with an error and the
+                // page is never added.
+                if let Some(index) = self
+                    .settings
+                    .checking
+                    .iter()
+                    .position(|(_, page, _)| page.owner == owner && page.id == id)
+                {
+                    let (pending, ..) = self.settings.checking.remove(index);
+                    self.respond(
+                        pending,
+                        Err(RpcError::new(
+                            "stale",
+                            format!("page {id} was unregistered before it was ready"),
+                        )),
+                    );
+                }
                 let before = self.settings.pages.len();
                 self.settings
                     .pages

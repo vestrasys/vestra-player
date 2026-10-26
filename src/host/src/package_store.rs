@@ -175,6 +175,14 @@ pub struct Store {
     catalog: Catalog,
     /// Records `open` set aside this run (`Quarantined`).
     quarantined: Vec<Quarantined>,
+    /// Package digests the records `quarantine.json` lists name
+    /// (`digests_of`): kept in the library (`referenced`), so that
+    /// a record set aside can still be restored with its files.
+    kept: BTreeSet<String>,
+    /// Installed records left as they are this run because this library's
+    /// copy of their package could not be read (an antivirus holding a
+    /// file): not started, retried at the next start. Id → the error.
+    deferred: BTreeMap<String, String>,
 }
 
 /// A catalog record that failed its checks when the library opened: taken
@@ -194,8 +202,43 @@ pub struct Quarantined {
     pub reason: String,
 }
 
-/// Records kept in `quarantine.json`.
-const MAX_QUARANTINED: usize = 64;
+/// Records kept in `quarantine.json`: more than one start can set aside
+/// (`MAX_PACKAGES` installed and 64 pending), so that the packages of the
+/// records one start sets aside all stay referenced.
+const MAX_QUARANTINED: usize = 512;
+
+/// The package digests a record set aside may refer to: every string in
+/// it, at any depth and in any section, that reads as a digest. A field a
+/// newer player added (a version kept for rollback, say) is covered too;
+/// keeping a directory too many is harmless, deleting one is not.
+fn digests_of(entry: &Value) -> BTreeSet<String> {
+    let mut digests = BTreeSet::new();
+    let mut stack = vec![entry];
+    while let Some(value) = stack.pop() {
+        match value {
+            Value::String(text) if digest_name(text) => {
+                digests.insert(text.clone());
+            }
+            Value::Array(items) => stack.extend(items),
+            Value::Object(fields) => stack.extend(fields.values()),
+            _ => {}
+        }
+    }
+    digests
+}
+/// One record in `quarantine.json` at most (its JSON); a larger one keeps
+/// only a note.
+const MAX_QUARANTINED_ENTRY: usize = 64 * 1024;
+
+/// What `Store::rebase` found.
+enum Rebase {
+    /// Nothing to do, or this library has no good copy.
+    No,
+    /// The record now names this library's copy.
+    Moved,
+    /// This library's copy could not be read: decide at the next start.
+    Unreadable(String),
+}
 
 /// A record on its way to quarantine, with its JSON as read.
 struct Aside {
@@ -304,6 +347,7 @@ impl Store {
             "package library must not be a symlink"
         );
         let path = root.join("catalog.json");
+        let mut original = Vec::new();
         let (catalog, aside) = if path.exists() {
             let metadata = fs::symlink_metadata(&path)?;
             ensure!(
@@ -312,12 +356,11 @@ impl Store {
                     && metadata.len() <= MAX_CATALOG as u64,
                 "invalid package catalog"
             );
-            let mut bytes = Vec::new();
             File::open(path)?
                 .take(MAX_CATALOG as u64 + 1)
-                .read_to_end(&mut bytes)?;
-            ensure!(bytes.len() <= MAX_CATALOG, "package catalog too large");
-            lenient(serde_json::from_slice(&bytes).context("parse package catalog")?)?
+                .read_to_end(&mut original)?;
+            ensure!(original.len() <= MAX_CATALOG, "package catalog too large");
+            lenient(serde_json::from_slice(&original).context("parse package catalog")?)?
         } else {
             (Catalog::default(), Vec::new())
         };
@@ -325,15 +368,41 @@ impl Store {
             root,
             catalog,
             quarantined: Vec::new(),
+            kept: BTreeSet::new(),
+            deferred: BTreeMap::new(),
         };
         // One bad record does not stop the library (nor the player): it is
-        // set aside (`quarantine.json`) and everything else opens.
+        // set aside (`quarantine.json`) and everything else opens. Nothing
+        // set aside loses its files: its package directories stay referenced
+        // (`referenced`) while `quarantine.json` lists it.
         let mut next = store.catalog.clone();
         let mut aside = aside;
-        let mut changed = store.screen(&mut next, &mut aside);
+        let mut deferred = BTreeMap::new();
+        let mut changed = store.screen(&mut next, &mut aside, &mut deferred);
+        store.deferred = deferred;
         if !aside.is_empty() {
             changed = true;
+            // The rewrite drops records (a newer player's, say, after a
+            // downgrade): the catalog as it was is kept beside it first.
+            // Without that copy nothing is rewritten: the library does not
+            // open, as before records were set aside, and nothing is lost.
+            let backup = store.root.join(format!("catalog.json.bak-{}", unix_ms()));
+            File::create(&backup)
+                .and_then(|mut file| {
+                    file.write_all(&original)?;
+                    file.sync_all()
+                })
+                .with_context(|| format!("back up the package catalog to {}", backup.display()))?;
+            diag!(
+                "package library: records set aside; the catalog as it was is in {}",
+                backup.display()
+            );
             store.set_aside(&aside);
+        }
+        // This run's too, should `quarantine.json` not have been written.
+        store.kept = store.quarantine_digests();
+        for item in &aside {
+            store.kept.extend(digests_of(&item.entry));
         }
         // Catalogs written before instances: give each installed package a
         // fresh instance (its old `plugin-data/<id>` is not migrated).
@@ -448,19 +517,28 @@ impl Store {
 
     /// A package recorded under another library root (the library was
     /// moved, or copied with `VESTRA_PACKAGE_STORE`): the same digest in this
-    /// library is the same package once its bytes verify. `true` when
-    /// `package` now names this library's copy.
-    fn rebase(&self, package: &mut StoredPackage) -> bool {
+    /// library is the same package once its bytes verify.
+    fn rebase(&self, package: &mut StoredPackage) -> Rebase {
         let here = self.root.join("packages").join(&package.digest);
         if package.directory == here || !digest_name(&package.digest) || !here.is_dir() {
-            return false;
+            return Rebase::No;
         }
         let moved = StoredPackage {
             directory: here,
             ..package.clone()
         };
-        if verify_stored(&moved).is_err() {
-            return false;
+        if let Err(error) = verify_stored(&moved) {
+            // A file that could not be read (held by an antivirus, say)
+            // proves nothing either way: the record stays as it is. A
+            // missing file is not transient: that copy is incomplete.
+            if error.chain().any(|cause| {
+                cause
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|io| io.kind() != std::io::ErrorKind::NotFound)
+            }) {
+                return Rebase::Unreadable(format!("{error:#}"));
+            }
+            return Rebase::No;
         }
         diag!(
             "package library: {} {} moved from {} into this library",
@@ -469,20 +547,34 @@ impl Store {
             package.directory.display()
         );
         *package = moved;
-        true
+        Rebase::Moved
     }
 
     /// Check every record of `catalog` (just read) on its own; the ones that
     /// fail go to `aside` and out of `catalog`, so that the rest opens.
-    /// `true` when a record was rebased (`rebase`).
-    fn screen(&self, catalog: &mut Catalog, aside: &mut Vec<Aside>) -> bool {
+    /// `true` when a record was rebased (`rebase`). An installed record
+    /// whose library copy could not be read is left as it is and goes to
+    /// `deferred`.
+    fn screen(
+        &self,
+        catalog: &mut Catalog,
+        aside: &mut Vec<Aside>,
+        deferred: &mut BTreeMap<String, String>,
+    ) -> bool {
         let mut changed = false;
         let mut guids = BTreeSet::new();
+        // The records `lenient` could not read.
+        let read_aside = aside.len();
         // Installed packages: identity, package, instance.
         let mut set_aside_installed = Vec::new();
         for (id, installed) in catalog.installed.iter_mut() {
+            let mut unreadable = None;
             if let Some(package) = installed.current.as_mut() {
-                changed |= self.rebase(package);
+                match self.rebase(package) {
+                    Rebase::Moved => changed = true,
+                    Rebase::No => {}
+                    Rebase::Unreadable(error) => unreadable = Some(error),
+                }
             }
             let check = || -> Result<()> {
                 identifier(id)?;
@@ -493,7 +585,13 @@ impl Store {
                 // `previous` (players up to 0.5) is not followed: `Store::open`
                 // clears it.
                 if let Some(package) = &installed.current {
-                    self.validate_package(package)?;
+                    if unreadable.is_none() {
+                        self.validate_package(package)?;
+                    } else {
+                        // Still the other root's directory: everything but
+                        // that is checked (`rebase` checked the digest).
+                        identifier(&package.manifest.id)?;
+                    }
                     ensure!(
                         package.manifest.id == *id,
                         "installed package identity mismatch"
@@ -509,6 +607,15 @@ impl Store {
                 Ok(()) => {
                     if let Some(instance) = &installed.instance {
                         guids.insert(instance.guid.clone());
+                    }
+                    // This library's copy could not be read: the record
+                    // stays as it is, is not started, and the next start
+                    // tries again.
+                    if let Some(error) = unreadable {
+                        diag!(
+                            "package library: {id}: this library's copy could not be read ({error}); kept as it is, retried at the next start"
+                        );
+                        deferred.insert(id.clone(), error);
                     }
                 }
                 Err(error) => set_aside_installed.push((id.clone(), error)),
@@ -541,8 +648,51 @@ impl Store {
                 && valid_guid(&instance.guid)
                 && !guids.contains(&instance.guid)
             {
-                retired.push((id, instance.clone(), installed));
+                let dormant = Dormant {
+                    id: id.clone(),
+                    source: instance.source.clone(),
+                    version: installed
+                        .current
+                        .as_ref()
+                        .and_then(|c| c.manifest.version.clone()),
+                    installed_at: instance.installed_at,
+                    retired_at: unix_ms(),
+                };
+                retired.push((instance.guid.clone(), dormant));
             }
+        }
+        // Installed records that did not even read (a field a newer player
+        // added, after a downgrade): their instance is read leniently from
+        // the JSON, so that a same-source reinstall still reconnects to its
+        // data. A source this player does not know cannot be matched and
+        // is left in the quarantine record only.
+        for item in &aside[..read_aside] {
+            if item.record.section != "installed" || identifier(&item.record.id).is_err() {
+                continue;
+            }
+            let instance = &item.entry["instance"];
+            let Some(guid) = instance["guid"].as_str() else {
+                continue;
+            };
+            let Ok(source) = serde_json::from_value::<Source>(instance["source"].clone()) else {
+                continue;
+            };
+            if !valid_guid(guid) || guids.contains(guid) {
+                continue;
+            }
+            let dormant = Dormant {
+                id: item.record.id.clone(),
+                source,
+                version: item.entry["current"]["manifest"]["version"]
+                    .as_str()
+                    .map(str::to_owned),
+                installed_at: instance["installedAt"]
+                    .as_u64()
+                    .filter(|at| *at <= MAX_SAFE)
+                    .unwrap_or(0),
+                retired_at: unix_ms(),
+            };
+            retired.push((guid.to_owned(), dormant));
         }
         // Retired instances.
         let mut bad = Vec::new();
@@ -577,15 +727,38 @@ impl Store {
                 aside.push(Aside::new("dormant", &guid, reason, entry));
             }
         }
-        for (id, instance, installed) in retired {
-            if !catalog.dormant.contains_key(&instance.guid) {
-                retire(catalog, &id, &instance, &installed);
+        for (guid, dormant) in retired {
+            if catalog.dormant.contains_key(&guid) {
+                continue;
             }
+            // Never `dropped` (`retire`: that deletes the instance's
+            // secrets): with the dormant list full, the instance stays only
+            // in its quarantine record, its data and secrets untouched.
+            if catalog.dormant.len() >= MAX_DORMANT {
+                diag!(
+                    "package library: dormant list full; {} instance {guid} stays in quarantine.json only",
+                    dormant.id
+                );
+                continue;
+            }
+            catalog.dormant.insert(guid, dormant);
         }
         // Interrupted installs: against the installed records as they now stand.
         let mut bad = Vec::new();
         for (id, recovery) in catalog.pending.iter_mut() {
-            changed |= self.rebase(&mut recovery.target);
+            let unreadable = match self.rebase(&mut recovery.target) {
+                Rebase::Moved => {
+                    changed = true;
+                    None
+                }
+                Rebase::No => None,
+                // Set aside: its files stay (`referenced`), so nothing is lost.
+                Rebase::Unreadable(error) => Some(error),
+            };
+            if let Some(error) = unreadable {
+                bad.push((id.clone(), format!("library copy unreadable: {error}")));
+                continue;
+            }
             let check = || -> Result<()> {
                 identifier(id)?;
                 identifier(&recovery.operation_id)?;
@@ -717,11 +890,7 @@ impl Store {
     /// write that file is logged; the library opens anyway.
     fn set_aside(&mut self, aside: &[Aside]) {
         let path = self.root.join("quarantine.json");
-        let mut kept = fs::read(&path)
-            .ok()
-            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-            .and_then(|value| value.get("records").and_then(Value::as_array).cloned())
-            .unwrap_or_default();
+        let mut kept = self.quarantine_records();
         let at = unix_ms();
         for item in aside {
             let Quarantined {
@@ -730,15 +899,48 @@ impl Store {
                 reason,
             } = &item.record;
             diag!("package library: {section} {id:?} set aside: {reason}");
+            // The digests stay readable when the entry is cut short.
+            let digests = digests_of(&item.entry);
+            let size = serde_json::to_vec(&item.entry).map_or(0, |bytes| bytes.len());
+            let entry = if size > MAX_QUARANTINED_ENTRY {
+                serde_json::json!({ "truncated": size })
+            } else {
+                item.entry.clone()
+            };
             kept.push(serde_json::json!({
-                "at": at, "section": section, "id": id, "reason": reason, "entry": item.entry,
+                "at": at, "section": section, "id": id, "reason": reason,
+                "digests": digests, "entry": entry,
             }));
             self.quarantined.push(item.record.clone());
         }
         let excess = kept.len().saturating_sub(MAX_QUARANTINED);
         kept.drain(..excess);
+        // Within `MAX_CATALOG` in all (`quarantine_records` reads no more):
+        // the oldest entries are cut short first (their digests stay), then
+        // the oldest records go. Each record is measured once.
+        let size = |record: &Value| serde_json::to_vec(record).map_or(MAX_CATALOG, |b| b.len() + 1);
+        // Room for `{"records":[` and `]}`.
+        let budget = MAX_CATALOG - 16;
+        let mut sizes = kept.iter().map(size).collect::<Vec<_>>();
+        let mut total = sizes.iter().fold(0_usize, |sum, n| sum.saturating_add(*n));
+        let mut oldest = 0;
+        while total > budget && oldest < kept.len() {
+            if let Some(record) = kept[oldest].as_object_mut() {
+                record.insert("entry".into(), serde_json::json!({ "truncated": true }));
+            }
+            let now = size(&kept[oldest]);
+            total = total.saturating_sub(sizes[oldest]).saturating_add(now);
+            sizes[oldest] = now;
+            oldest += 1;
+        }
+        while total > budget && !kept.is_empty() {
+            total = total.saturating_sub(sizes.remove(0));
+            kept.remove(0);
+        }
         let write = || -> Result<()> {
-            let bytes = serde_json::to_vec_pretty(&serde_json::json!({ "records": kept }))?;
+            // Compact: what was measured is what is written.
+            let bytes = serde_json::to_vec(&serde_json::json!({ "records": kept }))?;
+            ensure!(bytes.len() <= MAX_CATALOG, "quarantine records too large");
             let mut temporary = tempfile::NamedTempFile::new_in(&self.root)?;
             temporary.write_all(&bytes)?;
             temporary.as_file().sync_all()?;
@@ -753,6 +955,54 @@ impl Store {
     /// The records `open` set aside this run.
     pub fn quarantined(&self) -> &[Quarantined] {
         &self.quarantined
+    }
+
+    /// Installed records left as they are this run (`deferred`): id → why.
+    pub fn deferred(&self) -> &BTreeMap<String, String> {
+        &self.deferred
+    }
+
+    /// `quarantine.json`'s records; none when it is missing, unreadable or
+    /// larger than `MAX_CATALOG` (it is never written larger).
+    fn quarantine_records(&self) -> Vec<Value> {
+        let path = self.root.join("quarantine.json");
+        let mut bytes = Vec::new();
+        let read = File::open(&path)
+            .and_then(|file| file.take(MAX_CATALOG as u64 + 1).read_to_end(&mut bytes));
+        if read.is_err() {
+            return Vec::new();
+        }
+        if bytes.len() > MAX_CATALOG {
+            diag!("package library: {} is too large; not read", path.display());
+            return Vec::new();
+        }
+        serde_json::from_slice::<Value>(&bytes)
+            .ok()
+            .and_then(|value| value.get("records").and_then(Value::as_array).cloned())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(Value::is_object)
+            .collect()
+    }
+
+    /// The package digests the records
+    /// `quarantine.json` lists name (`kept`).
+    fn quarantine_digests(&self) -> BTreeSet<String> {
+        let mut digests = BTreeSet::new();
+        for record in self.quarantine_records() {
+            match record["digests"].as_array() {
+                Some(listed) => digests.extend(
+                    listed
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .filter(|digest| digest_name(digest))
+                        .map(str::to_owned),
+                ),
+                // Written without its digests: read them from the entry.
+                None => digests.extend(digests_of(&record["entry"])),
+            }
+        }
+        digests
     }
 
     fn publish(&mut self, next: Catalog) -> Result<()> {
@@ -799,10 +1049,11 @@ impl Store {
     }
 
     /// The library entries the catalog refers to: every installed current
-    /// version and every pending target. Anything else in the library is
+    /// version and every pending target, and the packages of the records
+    /// `quarantine.json` lists (`kept`). Anything else in the library is
     /// garbage (`Library::collect`).
     pub fn referenced(&self) -> BTreeSet<String> {
-        let mut referenced = BTreeSet::new();
+        let mut referenced = self.kept.clone();
         for installed in self.catalog.installed.values() {
             if let Some(package) = &installed.current {
                 referenced.insert(package.digest.clone());
@@ -1462,7 +1713,7 @@ fn copy_tree(source: &std::path::Path, destination: &std::path::Path) -> Result<
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     fn candidate(version: &str) -> (tempfile::TempDir, Candidate) {
         let root = tempfile::tempdir().unwrap();
@@ -1876,7 +2127,7 @@ mod tests {
     }
 
     /// Two committed installs, `counter` and `other`, in a library at `root`.
-    fn two_installed(root: &std::path::Path) -> (StoredPackage, StoredPackage) {
+    pub(crate) fn two_installed(root: &std::path::Path) -> (StoredPackage, StoredPackage) {
         let mut store = Store::open(root.into()).unwrap();
         let (_dir, first) = candidate("1.0.0");
         let counter = store.stage(&first).unwrap();
@@ -2046,9 +2297,213 @@ mod tests {
     }
 
     #[test]
+    fn every_digest_a_record_names_is_kept_at_any_depth() {
+        let (a, b, c) = ("a".repeat(64), "b".repeat(64), "c".repeat(64));
+        let entry = serde_json::json!({
+            "current": {"digest": a, "manifest": {"version": "1.0.0"}},
+            "future": [{"kept": {"digest": b}}, c, "not-a-digest", 1, null],
+            "short": "abc",
+            "upper": "A".repeat(64),
+        });
+        assert_eq!(digests_of(&entry), BTreeSet::from([a, b, c]));
+    }
+
+    #[test]
     fn a_catalog_that_is_not_json_still_fails() {
         let root = tempfile::tempdir().unwrap();
         fs::write(root.path().join("catalog.json"), "not json").unwrap();
         assert!(Store::open(root.path().into()).is_err());
+    }
+
+    /// The library at `first` copied to a new root, as a moved library.
+    pub(crate) fn moved_copy(first: &std::path::Path) -> (tempfile::TempDir, PathBuf) {
+        let moved = tempfile::tempdir().unwrap();
+        let moved_path = dunce::canonicalize(moved.path()).unwrap();
+        fs::write(
+            moved_path.join("catalog.json"),
+            fs::read(first.join("catalog.json")).unwrap(),
+        )
+        .unwrap();
+        fs::create_dir(moved_path.join("packages")).unwrap();
+        for entry in fs::read_dir(first.join("packages")).unwrap() {
+            let entry = entry.unwrap();
+            let target = moved_path.join("packages").join(entry.file_name());
+            fs::create_dir(&target).unwrap();
+            copy_tree(&entry.path(), &target).unwrap();
+        }
+        (moved, moved_path)
+    }
+
+    /// A downgrade: a newer player wrote a field this one does not know. The
+    /// record is set aside, but the catalog as it was is backed up and the
+    /// package survives restarts and library cleanups.
+    #[test]
+    fn a_record_from_a_newer_player_keeps_its_package_and_a_backup() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = dunce::canonicalize(root.path()).unwrap();
+        let (counter, other) = two_installed(&root_path);
+        let guid = Store::open(root_path.clone())
+            .unwrap()
+            .get("counter")
+            .instance
+            .unwrap()
+            .guid;
+        // A package only a field of the newer player refers to.
+        let future = "f".repeat(64);
+        fs::create_dir(root_path.join("packages").join(&future)).unwrap();
+        edit_catalog(&root_path, |catalog| {
+            let record = &mut catalog["installed"]["counter"];
+            record["current"]["futureField"] = 1.into();
+            record["futureRollback"] = serde_json::json!({ "digest": future });
+            catalog["futureTop"] = true.into();
+        });
+        let before = fs::read(root_path.join("catalog.json")).unwrap();
+        let mut store = Store::open(root_path.clone()).unwrap();
+        assert!(store.get("counter").current.is_none());
+        assert!(store.quarantined().iter().any(|q| q.id == "counter"));
+        // Its instance, read from the JSON, is dormant: a same-source
+        // reinstall reconnects to its data.
+        let dormant = &store.dormant()[&guid];
+        assert_eq!(dormant.id, "counter");
+        assert_eq!(dormant.source, Source::File);
+        assert_eq!(dormant.version.as_deref(), Some("1.0.0"));
+        assert!(store.take_dropped().is_empty());
+        let backups = fs::read_dir(&root_path)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| {
+                p.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("catalog.json.bak-")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(backups.len(), 1);
+        assert_eq!(fs::read(&backups[0]).unwrap(), before);
+        store.library().collect(&store.referenced()).unwrap();
+        assert!(
+            counter.directory.is_dir(),
+            "kept while quarantine.json lists it"
+        );
+        drop(store);
+        // A restart (nothing set aside now) and its cleanup keep it too.
+        let store = Store::open(root_path.clone()).unwrap();
+        assert!(store.quarantined().is_empty());
+        store.library().collect(&store.referenced()).unwrap();
+        assert!(counter.directory.is_dir());
+        assert!(other.directory.is_dir());
+        assert!(root_path.join("packages").join(&future).is_dir());
+        assert!(store.dormant().contains_key(&guid));
+    }
+
+    /// Holds a file so that reading it fails with an I/O error (an
+    /// antivirus, say); `None` where this cannot be arranged.
+    pub(crate) fn hold_unreadable(file: &std::path::Path) -> Option<Box<dyn std::any::Any>> {
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            let held = fs::OpenOptions::new()
+                .read(true)
+                .share_mode(0)
+                .open(file)
+                .ok()?;
+            Some(Box::new(held))
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(file, fs::Permissions::from_mode(0o000)).ok()?;
+            // Root reads it anyway: nothing to test then.
+            if fs::read(file).is_ok() {
+                return None;
+            }
+            struct Restore(PathBuf);
+            impl Drop for Restore {
+                fn drop(&mut self) {
+                    let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o644));
+                }
+            }
+            Some(Box::new(Restore(file.to_owned())))
+        }
+    }
+
+    #[test]
+    fn an_unreadable_library_copy_is_kept_as_it_is_until_the_next_start() {
+        let first = tempfile::tempdir().unwrap();
+        let first_path = dunce::canonicalize(first.path()).unwrap();
+        let (counter, _) = two_installed(&first_path);
+        let (_moved, moved_path) = moved_copy(&first_path);
+        let copy = moved_path.join("packages").join(&counter.digest);
+        let Some(held) = hold_unreadable(&copy.join("main.js")) else {
+            return;
+        };
+        let store = Store::open(moved_path.clone()).unwrap();
+        assert!(store.deferred().contains_key("counter"));
+        assert!(!store.quarantined().iter().any(|q| q.id == "counter"));
+        // Left as it was: still the old root's directory.
+        assert_eq!(
+            store.get("counter").current.unwrap().directory,
+            counter.directory
+        );
+        assert!(store.referenced().contains(&counter.digest));
+        drop(store);
+        drop(held);
+        // Readable again: the next start takes this library's copy.
+        let store = Store::open(moved_path).unwrap();
+        assert!(store.deferred().is_empty());
+        assert_eq!(store.get("counter").current.unwrap().directory, copy);
+    }
+
+    #[test]
+    fn a_record_set_aside_with_the_dormant_list_full_keeps_its_secrets() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = dunce::canonicalize(root.path()).unwrap();
+        let (counter, _) = two_installed(&root_path);
+        edit_catalog(&root_path, |catalog| {
+            catalog["installed"]["counter"]["current"]["manifest"]["id"] = "someone.else".into();
+            let dormant = catalog["dormant"].as_object_mut().map(std::mem::take);
+            let mut dormant = dormant.unwrap_or_default();
+            for n in 0..MAX_DORMANT {
+                dormant.insert(
+                    new_guid(),
+                    serde_json::json!({"id":format!("x{n}"),"source":{"kind":"file"},
+                        "version":null,"installedAt":1,"retiredAt":1}),
+                );
+            }
+            catalog["dormant"] = Value::Object(dormant);
+        });
+        let mut store = Store::open(root_path).unwrap();
+        assert!(store.quarantined().iter().any(|q| q.id == "counter"));
+        assert_eq!(store.dormant().len(), MAX_DORMANT);
+        // Not dropped: dropping deletes the instance's secrets.
+        assert!(store.take_dropped().is_empty());
+        store.library().collect(&store.referenced()).unwrap();
+        assert!(counter.directory.is_dir());
+    }
+
+    #[test]
+    fn quarantine_json_stays_within_its_limit_and_keeps_digests() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = dunce::canonicalize(root.path()).unwrap();
+        let (counter, _) = two_installed(&root_path);
+        edit_catalog(&root_path, |catalog| {
+            let current = &mut catalog["installed"]["counter"]["current"];
+            current["futureField"] = "x".repeat(MAX_QUARANTINED_ENTRY + 1).into();
+        });
+        let store = Store::open(root_path.clone()).unwrap();
+        let bytes = fs::read(root_path.join("quarantine.json")).unwrap();
+        assert!(bytes.len() < MAX_QUARANTINED_ENTRY);
+        let kept: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(kept["records"][0]["digests"][0], counter.digest.as_str());
+        assert!(store.referenced().contains(&counter.digest));
+        // An oversized file is not read (and keeps nothing alive).
+        drop(store);
+        fs::write(
+            root_path.join("quarantine.json"),
+            vec![b' '; MAX_CATALOG + 1],
+        )
+        .unwrap();
+        let store = Store::open(root_path).unwrap();
+        assert!(store.quarantine_records().is_empty());
     }
 }

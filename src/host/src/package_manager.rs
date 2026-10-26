@@ -125,10 +125,15 @@ impl Manager {
                     .map(|manifest| (builtin.directory.clone(), manifest)),
             );
         }
-        record
-            .current
-            .as_ref()
-            .map(|current| Ok((current.directory.clone(), current.manifest.clone())))
+        let current = record.current.as_ref()?;
+        // Its copy in this library could not be read at start: the record
+        // still names another library's directory, which is never run
+        // (packages run only from this library, verified). The next start
+        // tries again.
+        if let Some(error) = self.store.deferred().get(id) {
+            return Some(Err(deferred_failure(error)));
+        }
+        Some(Ok((current.directory.clone(), current.manifest.clone())))
     }
 }
 impl Host {
@@ -452,6 +457,12 @@ impl Host {
             {
                 continue;
             }
+            // Its library copy could not be read at start: kept as it is,
+            // not started (`runs_from`); the next start tries again.
+            if let Some(error) = self.packages.store.deferred().get(&id) {
+                self.failures.insert(id.clone(), deferred_failure(error));
+                continue;
+            }
             let (Some(package), Some(instance)) =
                 (self.packages.runs_from(&id, &record), record.instance)
             else {
@@ -697,13 +708,25 @@ impl Host {
                     "builtin":builtin,"source":source,
                     "dataDirectory":data,"warnings":[],
                     "display":display(&manifest, crate::i18n::load(&directory).as_deref())}),
-                // A built-in whose copy in the installation failed its checks.
+                // A built-in whose copy in the installation failed its
+                // checks, or a package whose library copy could not be read
+                // at start (`Store::deferred`: the directory it names is
+                // another library's, not shown).
                 Err(failure) => {
-                    let builtin_entry = &self.packages.builtins[&id];
+                    let (version, directory) = match self.packages.builtins.get(&id) {
+                        Some(entry) => (Some(entry.version.clone()), Some(entry.directory.clone())),
+                        None => (
+                            record
+                                .current
+                                .as_ref()
+                                .and_then(|c| c.manifest.version.clone()),
+                            None,
+                        ),
+                    };
                     let state = if state == "disabled" { state } else { "failed" };
-                    json!({"id":id,"version":builtin_entry.version,
+                    json!({"id":id,"version":version,
                         "origin":"installed","state":state,"error":failure,
-                        "capabilities":[],"directory":builtin_entry.directory,
+                        "capabilities":[],"directory":directory.unwrap_or_default(),
                         "builtin":builtin,"source":source,
                         "dataDirectory":data,"warnings":[],
                         "display":{"name":null,"punchline":null,"description":null,"tags":[]}})
@@ -805,8 +828,12 @@ impl Host {
             (_, Some((directory, _))) => self.load(&directory, 120_000)?,
             (Some(package), None) => {
                 reserved?;
-                let (directory, manifest) =
-                    package.map_err(|failure| RpcError::new("unavailable", failure))?;
+                // Nothing runnable (a deferred record, a broken built-in):
+                // it stays listed as failed, with the same reason.
+                let (directory, manifest) = package.map_err(|failure| {
+                    self.failures.insert(id.into(), failure.clone());
+                    RpcError::new("unavailable", failure)
+                })?;
                 // Built-in records and installs both have an instance.
                 let key = key.ok_or_else(|| {
                     RpcError::new("unavailable", "the installed package has no instance")
@@ -1224,6 +1251,14 @@ fn display(manifest: &plugins::Manifest, catalog: Option<&crate::i18n::Catalog>)
 /// workshop installs of one are refused, and an installed non-built-in one
 /// (from before the rule) is not started. Development loads (`--plugin`)
 /// are not checked here (`Host::load`).
+/// The failure shown for an installed package whose library copy could not
+/// be read at start (`Store::deferred`).
+fn deferred_failure(error: &str) -> String {
+    format!("the plugin's files could not be read ({error}); try restarting the player")
+        .chars()
+        .take(512)
+        .collect()
+}
 fn check_reserved(id: &str, instance: Option<&Instance>) -> std::result::Result<(), RpcError> {
     if crate::manifest::reserved_id(id) && !instance.is_some_and(|i| i.builtin) {
         return Err(RpcError::new(
@@ -1573,6 +1608,58 @@ mod tests {
     }
     fn repo(url: &str) -> Source {
         Source::Repository { url: url.into() }
+    }
+
+    /// N1: a record left as it is because this library's copy could not be
+    /// read still names the other library's directory. Nothing runs it:
+    /// `runs_from` (which `start_installed`, `set_enabled` and
+    /// `package_list` all go through) answers the failure, never the
+    /// directory.
+    #[test]
+    fn a_deferred_record_never_runs_from_another_library() {
+        use package_store::tests::{hold_unreadable, moved_copy, two_installed};
+        let first = tempfile::tempdir().unwrap();
+        let first_path = dunce::canonicalize(first.path()).unwrap();
+        let (counter, other) = two_installed(&first_path);
+        let (_moved, moved_path) = moved_copy(&first_path);
+        let copy = moved_path.join("packages").join(&counter.digest);
+        let Some(_held) = hold_unreadable(&copy.join("main.js")) else {
+            return;
+        };
+        let store = Store::open(moved_path.clone()).unwrap();
+        assert!(store.deferred().contains_key("counter"));
+        let manager = Manager {
+            store,
+            secrets: crate::secret_index::Index::new(None),
+            candidates: BTreeMap::new(),
+            candidate_order: VecDeque::new(),
+            operations: BTreeMap::new(),
+            next: 0,
+            receipts: BTreeMap::new(),
+            booted: false,
+            to_start: VecDeque::new(),
+            builtins: BTreeMap::new(),
+            cleanup: None,
+            cleanup_queue: BTreeSet::new(),
+        };
+        let record = manager.store.get("counter");
+        assert_eq!(
+            record.current.as_ref().unwrap().directory,
+            counter.directory,
+            "the record is left as it was"
+        );
+        let failure = manager.runs_from("counter", &record).unwrap().unwrap_err();
+        assert!(failure.contains("could not be read"), "{failure}");
+        assert!(
+            !failure.contains(&*counter.directory.to_string_lossy()),
+            "{failure}"
+        );
+        // The other package verified and runs from this library.
+        let (directory, _) = manager
+            .runs_from("other", &manager.store.get("other"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(directory, moved_path.join("packages").join(&other.digest));
     }
 
     #[test]
