@@ -382,24 +382,30 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
   try {
     const first = await start(withMedia(new TestHost(), "/movie.mp4"), data);
     const { host } = first;
-    assert.deepEqual(host.sent("player.setStepSeek"), []); // the default 5 is the core's own
+    // Every start gives the core the pair: step 5 and "Jump to keyframes only" on by default.
+    await until(() => host.sent("player.setStepSeek").length === 1);
+    assert.deepEqual(host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: true }]);
+    assert.equal(host.stepSeekKeyframes, true);
     // Works with nothing open, and shows the saved values.
     await host.press("F4");
     await host.command("time-jump").run();
     await host.settle();
     const window = host.window(TIME_JUMP);
+    const values = () => [window.props.value1, window.props.value2, window.props.value3, window.props.value4, window.props.keyframes];
+    await until(() => window.visible && values().every((value) => value !== undefined));
     assert.equal(window.file, "ui/time-jump.slint");
-    assert.equal(window.visible, true);
-    assert.deepEqual([window.props.value1, window.props.value2, window.props.value3, window.props.value4], ["5", "30", "60", "300"]);
+    assert.deepEqual(values(), ["5", "30", "60", "300", true]);
+    assert.equal(host.translate("Jump to keyframes only"), "仅跳转到关键帧");
 
-    // An invalid row is marked and nothing is saved or applied.
-    window.emit("confirm", "10", "abc", "4000", "300");
-    await host.settle();
-    assert.deepEqual([window.props.invalid1, window.props.invalid2, window.props.invalid3, window.props.invalid4], [false, true, true, false]);
-    assert.equal(window.props["out-of-range"], true);
+    // An invalid row is marked and nothing is saved or applied, the checkbox included.
+    window.emit("confirm", "10", "abc", "4000", "300", false);
+    const marks = () => [window.props.invalid1, window.props.invalid2, window.props.invalid3, window.props.invalid4, window.props["out-of-range"]];
+    await until(() => window.props["out-of-range"] === true && window.props.invalid3 === true);
+    assert.deepEqual(marks(), [false, true, true, false, true]);
     assert.equal(host.translate("Range 0.1–3600 s, at most one decimal place"), "范围 0.1–3600 秒，最多一位小数");
     assert.equal(window.visible, true);
-    assert.deepEqual(host.sent("player.setStepSeek"), []);
+    assert.deepEqual(host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: true }]);
+    assert.equal(host.stepSeekKeyframes, true);
     // Default restores only its own row.
     window.emit("reset", 1);
     await host.settle();
@@ -407,10 +413,12 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
     assert.equal(window.props.invalid2, false);
     assert.equal(window.props.invalid3, true);
 
-    window.emit("confirm", "10", "2.5", "90", "300");
-    await host.settle();
-    assert.equal(window.visible, false);
+    // OK with the box cleared: the pair goes to the core and is saved with the steps.
+    window.emit("confirm", "10", "2.5", "90", "300", false);
+    await until(() => !window.visible && host.sent("player.setStepSeek").length === 2);
+    assert.deepEqual(host.sent("player.setStepSeek").at(-1), { seconds: 10, keyframes: false });
     assert.equal(host.stepSeek, 10);
+    assert.equal(host.stepSeekKeyframes, false);
     const titles = () =>
       ["backward-2", "forward-2", "backward-3", "forward-3", "backward-4", "forward-4"].map((id) => host.command(id).display.path.at(-1));
     // Any seconds are translated: the title is a text value with the seconds as data.
@@ -418,7 +426,7 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
     assert.deepEqual(host.command("forward-3").declaration.bindings, ["Shift+ArrowRight"]);
     assert.equal(host.command("forward-3").declaration.order, 215);
     assert.deepEqual(host.conflicts, []);
-    await saved(join(data, "settings.json"), (value) => JSON.stringify(value.seekSteps) === "[10,2.5,90,300]");
+    await saved(join(data, "settings.json"), (value) => JSON.stringify(value.seekSteps) === "[10,2.5,90,300]" && value.seekKeyframes === false);
 
     host.openElsewhere("/movie.mp4");
     host.setSource({ duration: 100, position: 50 });
@@ -432,18 +440,22 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
     assert.equal(lastOsd(host), "前进 90秒: 01:40 / 01:40");
     await first.stop();
 
-    // Next launch: tier 1 is given to the core again, the titles are restored.
+    // Next launch: the pair is given to the core again, the titles and the checkbox are restored.
     const second = await start(new TestHost(), data);
-    await second.host.settle();
-    assert.deepEqual(second.host.sent("player.setStepSeek").map((p) => p.seconds), [10]);
+    await until(() => second.host.sent("player.setStepSeek").length === 1);
+    assert.deepEqual(second.host.sent("player.setStepSeek"), [{ seconds: 10, keyframes: false }]);
     assert.equal(second.host.command("backward-2").display.path.at(-1), "后退2.5秒");
+    await second.host.command("time-jump").run();
+    const reopened = second.host.window(TIME_JUMP);
+    await until(() => reopened.visible && reopened.props.keyframes !== undefined && reopened.props.value1 !== undefined);
+    assert.deepEqual([reopened.props.value1, reopened.props.keyframes], ["10", false]);
     await second.stop();
 
-    // A set with one value out of range falls back as a whole.
-    writeFileSync(join(data, "settings.json"), JSON.stringify({ seekSteps: [10, 30, 60, 9999] }));
+    // A set with one value out of range falls back as a whole; a checkbox value that is not a boolean, to on.
+    writeFileSync(join(data, "settings.json"), JSON.stringify({ seekSteps: [10, 30, 60, 9999], seekKeyframes: "no" }));
     const third = await start(new TestHost(), data);
-    await third.host.settle();
-    assert.deepEqual(third.host.sent("player.setStepSeek"), []);
+    await until(() => third.host.sent("player.setStepSeek").length === 1);
+    assert.deepEqual(third.host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: true }]);
     assert.equal(third.host.command("forward-4").display.path.at(-1), "前进300秒");
     await third.stop();
   } finally {
@@ -451,16 +463,126 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
   }
 });
 
-test("B06 cancel and Escape close the window without saving", async () => {
-  const { host, stop } = await start();
+test("B06 cancel and Escape close the window without saving, the checkbox included", async () => {
+  const data = mkdtempSync(join(tmpdir(), "playback-steps-cancel-"));
+  try {
+    const { host, stop } = await start(new TestHost(), data);
+    await until(() => host.sent("player.setStepSeek").length === 1);
+    await host.command("time-jump").run();
+    const window = host.window(TIME_JUMP);
+    await until(() => window.visible && window.props.keyframes === true);
+    // The view's own edits (a cleared box, another step), then Cancel.
+    window.props.keyframes = false;
+    window.props.value2 = "45";
+    assert.deepEqual([window.props.keyframes, window.props.value2], [false, "45"]);
+    window.emit("cancel");
+    await until(() => !window.visible);
+    await host.settle(400); // past storage.json's debounce: nothing may be written
+    assert.deepEqual(host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: true }]);
+    assert.equal(host.stepSeekKeyframes, true);
+    assert.equal(host.command("forward-2").display.path.at(-1), "前进30秒");
+    assert.equal(existsSync(join(data, "settings.json")), false);
+    // Opening again shows the saved values, not the cancelled ones.
+    await host.command("time-jump").run();
+    await until(() => window.visible && window.props.keyframes === true && window.props.value2 === "30");
+    await stop();
+  } finally {
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+/** Two keyframes 10 s apart, a 100-second source at 12 s, the plugin started with `settings`. */
+async function keyframeSource(settings?: Record<string, unknown>) {
+  const data = mkdtempSync(join(tmpdir(), "playback-steps-kf-"));
+  if (settings) writeFileSync(join(data, "settings.json"), JSON.stringify(settings));
+  const host = withMedia();
+  host.keyframes = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  const started = await start(host, data);
+  await until(() => host.sent("player.setStepSeek").length === 1);
+  host.setSource({ position: 12 });
+  await host.settle();
+  return {
+    host,
+    stop: async () => {
+      await started.stop();
+      rmSync(data, { recursive: true, force: true });
+    },
+  };
+}
+/** The plugin's own on-screen texts (templates as sent, before translation). */
+const ownOsd = (host: TestHost) => host.sent("osd.show").map((p) => p.text);
+
+test("B06 keyframes on: tiers 2–4 are the core's step seek with their step; it lands and shows the landed time, the plugin no text", async () => {
+  const { host, stop } = await keyframeSource();
+  assert.equal(host.stepSeekKeyframes, true);
+  const shown = ownOsd(host).length;
+  const press = async (key: string, count: number) => {
+    await host.press(key);
+    await until(() => host.coreSeeks.length === count && host.osd.length > 0);
+    return host.coreSeeks.at(-1);
+  };
+  // From 12: forward 30 is target 42, the first keyframe at or after it is 50.
+  assert.deepEqual(await press("Ctrl+ArrowRight", 1), { action: "seek-forward", seconds: 30, keyframes: true, landed: 50 });
+  await until(() => host.source.position === 50 && lastOsd(host) === "前进 30秒: 00:50 / 01:40");
+  // From 50: back 60 is clamped to 0.
+  assert.deepEqual(await press("Shift+ArrowLeft", 2), { action: "seek-backward", seconds: 60, keyframes: true, landed: 0 });
+  await until(() => host.source.position === 0 && lastOsd(host) === "后退 60秒: 00:00 / 01:40");
+  host.setSource({ position: 12 });
+  await host.settle();
+  // Forward 300 runs to the end; back 30 from 12 to 0.
+  assert.deepEqual(await press("Ctrl+Alt+ArrowRight", 3), { action: "seek-forward", seconds: 300, keyframes: true, landed: 100 });
+  host.setSource({ position: 47 });
+  await host.settle();
+  // Back 30 from 47 is target 17, the last keyframe at or before it is 10.
+  assert.deepEqual(await press("Ctrl+ArrowLeft", 4), { action: "seek-backward", seconds: 30, keyframes: true, landed: 10 });
+  await until(() => host.source.position === 10 && lastOsd(host) === "后退 30秒: 00:10 / 01:40");
+  // Each press was one host.run with the tier's step; ← / → stays the core's own binding.
+  assert.deepEqual(
+    host.sent("host.run").map((p) => [p.action, p.seconds]),
+    [
+      ["seek-forward", 30],
+      ["seek-backward", 60],
+      ["seek-forward", 300],
+      ["seek-backward", 30],
+    ],
+  );
+  await host.press("ArrowRight");
+  await until(() => host.coreSeeks.length === 5);
+  assert.deepEqual(host.coreSeeks.at(-1), { action: "seek-forward", seconds: 5, keyframes: true, landed: 20 });
+  // No seek text of the plugin's own in keyframe mode: the core showed every one.
+  await host.settle(80);
+  assert.deepEqual(ownOsd(host).slice(shown), []);
+  await stop();
+});
+
+test("B06 keyframes off: tiers 2–4 keep the plugin's exact seeks and its own text; the setting is read at each press", async () => {
+  const { host, stop } = await keyframeSource({ seekKeyframes: false });
+  assert.deepEqual(host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: false }]);
+  await host.press("Ctrl+ArrowRight");
+  await until(() => host.source.position === 42 && lastOsd(host) === "前进 30秒: 00:42 / 01:40");
+  assert.deepEqual(host.sent("host.run"), []);
+  assert.deepEqual(host.coreSeeks, []);
+  assert.equal(ownOsd(host).at(-1), "Forward {} s: {} / {}");
+  // ← / → is exact too: the core had the pair with keyframes off.
+  await host.press("ArrowLeft");
+  await until(() => host.coreSeeks.length === 1);
+  assert.deepEqual(host.coreSeeks[0], { action: "seek-backward", seconds: 5, keyframes: false, landed: 37 });
+
+  // Turned on in the window: the next press of a tier goes to the core.
   await host.command("time-jump").run();
-  await host.settle();
   const window = host.window(TIME_JUMP);
-  window.emit("cancel");
+  await until(() => window.visible && window.props.keyframes === false && window.props.value1 === "5");
+  window.emit("confirm", "5", "30", "60", "300", true);
+  await until(() => !window.visible && host.sent("player.setStepSeek").length === 2);
+  assert.deepEqual(host.sent("player.setStepSeek").at(-1), { seconds: 5, keyframes: true });
+  host.setSource({ position: 12 });
   await host.settle();
-  assert.equal(window.visible, false);
-  assert.deepEqual(host.sent("player.setStepSeek"), []);
-  assert.equal(host.command("forward-2").display.path.at(-1), "前进30秒");
+  const shown = ownOsd(host).length;
+  await host.press("Ctrl+ArrowRight");
+  await until(() => host.coreSeeks.length === 2 && host.source.position === 50);
+  assert.deepEqual(host.coreSeeks[1], { action: "seek-forward", seconds: 30, keyframes: true, landed: 50 });
+  await host.settle(80);
+  assert.deepEqual(ownOsd(host).slice(shown), []);
   await stop();
 });
 

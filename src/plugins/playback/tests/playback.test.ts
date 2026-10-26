@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import type { Text } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
@@ -418,8 +421,13 @@ test("a late failure from a cleared gesture does not report into the new one", a
   await stop();
 });
 
-test("relative seeks accumulate from the pending target, clamp to the source and show the target", async () => {
-  const { host, stop } = await start(withMedia());
+test("exact mode: relative seeks accumulate from the pending target, clamp to the source and show the target", async (t) => {
+  // "Jump to keyframes only" off: tiers 2–4 are the plugin's own exact seeks, as before 0.2.1.
+  const data = mkdtempSync(join(tmpdir(), "playback-exact-"));
+  writeFileSync(join(data, "settings.json"), JSON.stringify({ seekKeyframes: false }));
+  const { host, stop } = await startPlugin(activate, { directory, host: withMedia(), locale: "zh-Hans", dataDirectory: data });
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  assert.deepEqual(host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: false }]);
   host.setSource({ position: 3 });
   await host.settle();
   host.emit("commands.execute", { id: "forward-2" });
@@ -446,6 +454,11 @@ test("relative seeks accumulate from the pending target, clamp to the source and
   host.mounted().emit("action", "seek-forward");
   await host.settle(80);
   assert.deepEqual(host.coreRuns, ["seek-backward", "seek-forward"]);
+  // Tiers 2–4 went through the plugin's own seeks, never the core's.
+  assert.deepEqual(
+    host.coreSeeks.map((s) => s.seconds),
+    [5, 5],
+  );
   await stop();
 });
 
