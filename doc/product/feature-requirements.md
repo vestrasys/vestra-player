@@ -29,7 +29,7 @@ The core API summary for the whole document is in [Appendix A](#appendix-a-core-
 | Chapters, bookmarks and ranges `marks` | `src/plugins/marks/` | New plugin, to be created | 3 |
 | Shortcut settings `hotkeys` | `src/plugins/hotkeys/` | New plugin, to be created | 3 |
 | Preferences `preferences` | `src/plugins/preferences/` | New plugin, to be created | 2 |
-| Plugin management `plugins` | `src/plugins/plugins/` | New plugin, to be created | 1 |
+| Plugin management `plugins` | `src/plugins/plugins/` | Removed 2026-10-26: managed in the store (`src/plugins/store/`) | 1 |
 | Album art and idle screen `visualizer` | `src/plugins/visualizer/` | New plugin, to be created | 2 |
 | Online subtitles `subtitle-online` | `src/plugins/subtitle-online/` | New plugin, to be created | 1 |
 
@@ -3720,7 +3720,9 @@ Number range allocation for the "Settings ▸" submenu (across the seven chapter
 
 ## Plugin management (`plugins`)
 
-**Location**: `src/plugins/plugins/` (new plugin, to be created)
+> **Superseded (2026-10-26):** the Plugin Manager `vestra.plugins` and "Settings ▸ Plugin Manager…" were removed; plugins are managed in the store's Installed tab (`doc/process/rounds/2026-10-plugin-center-spec.md`). This chapter is kept as history.
+
+**Location**: `src/plugins/plugins/` (removed)
 
 ### Scope
 

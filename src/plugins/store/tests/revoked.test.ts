@@ -101,7 +101,7 @@ test("仍然启用… asks about the risk; once accepted the store leaves it run
   }
 });
 
-test("enabled again elsewhere (插件管理): confirm the risk or it is disabled again", async () => {
+test("enabled again elsewhere (another plugin with plugins.manage): confirm the risk or it is disabled again", async () => {
   const net = new FakeNet();
   serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
   const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
@@ -110,7 +110,7 @@ test("enabled again elsewhere (插件管理): confirm the risk or it is disabled
     await store.refreshAll(true);
     await until(host, () => disables(host) === 1);
 
-    // The user enables it in 插件管理 and then picks 「停用」.
+    // Another plugin with plugins.manage enables it; the user then picks 「停用」.
     host.dialogAnswers.push(no);
     host.setPackages(host.packages.map((p) => (p.id === "zysilm.youtube" ? { ...p, state: "running" } : p)));
     await until(host, () => disables(host) === 2, "disabled again");
