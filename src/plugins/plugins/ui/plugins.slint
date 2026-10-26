@@ -85,26 +85,25 @@ global Words {
         if id == "bindings.manage" { return @tr("Change shortcuts"); }
         return "";
     }
-    // A package change's status (rollback, uninstall).
+    // A package change's status (uninstall).
     public pure function change(status: string) -> string {
         if status == "preparing" { return @tr("Preparing"); }
         if status == "activating" { return @tr("Activating"); }
         if status == "restoring" { return @tr("Restoring"); }
         if status == "committed" { return @tr("Done"); }
         if status == "cancelled" { return @tr("Cancelled"); }
-        // TRANSLATORS: a rollback or uninstall did not complete.
+        // TRANSLATORS: an uninstall did not complete.
         if status == "failed" { return @tr("change status" => "Failed"); }
-        if status == "failedDegraded" { return @tr("Failed (previous version restored)"); }
         if status == "tooLate" { return @tr("Too late to cancel"); }
         return status;
     }
     // A refused package call; `text` is the player's message.
     public pure function failure(code: string, text: string) -> string {
         if code == "self" { return @tr("Plugin Manager cannot disable or uninstall itself"); }
-        if code == "development" { return @tr("Development-loaded plugins cannot be uninstalled or rolled back"); }
+        if code == "development" { return @tr("Development-loaded plugins cannot be uninstalled"); }
         if code == "builtin" { return @tr("Built-in plugins can only be disabled"); }
         if code == "missing" { return @tr("This plugin no longer exists"); }
-        if code == "busy" { return @tr("Installing or rolling back, please try again later"); }
+        if code == "busy" { return @tr("Plugins are being installed or cleaned up, please try again later"); }
         return text;
     }
     // Why a button is off.
@@ -121,8 +120,6 @@ global Words {
         if code == "warning" { return @tr("Warning"); }
         if code == "note" { return @tr("Note"); }
         if code == "source" { return @tr("Source"); }
-        // TRANSLATORS: detail label: the version a rollback returns to.
-        if code == "previous" { return @tr("Previous"); }
         // TRANSLATORS: detail label: the folder the plugin's package is in.
         if code == "package" { return @tr("Package"); }
         // TRANSLATORS: detail label: the folder with the plugin's settings and data.
@@ -131,7 +128,7 @@ global Words {
         return code;
     }
     public pure function detail(line: DetailLine) -> string {
-        if line.kind == "development" { return @tr("Development load: disabling lasts only for this run; cannot be uninstalled or rolled back"); }
+        if line.kind == "development" { return @tr("Development load: disabling lasts only for this run; cannot be uninstalled"); }
         if line.kind == "self" { return @tr("Plugin Manager cannot disable itself"); }
         if line.kind == "builtin" { return @tr("Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"); }
         if line.kind == "unavailable" { return @tr("Unavailable"); }
@@ -150,11 +147,6 @@ global Words {
         if m.kind == "disabled" { return @tr("Disabled {}", m.id); }
         if m.kind == "reloaded" { return @tr("Reloaded {}", m.id); }
         if m.kind == "uninstalled" { return @tr("Uninstalled {}", m.id); }
-        if m.kind == "rolled-back" { return @tr("Rolled back {} to {}", m.id, m.text); }
-        // TRANSLATORS: progress or result of a rollback: plugin id, status.
-        if m.kind == "rollback" && m.text == "" { return @tr("Roll back {0}: {1}", m.id, Words.change(m.code)); }
-        // TRANSLATORS: plugin id, status, the player's message.
-        if m.kind == "rollback" { return @tr("Roll back {0}: {1} ({2})", m.id, Words.change(m.code), m.text); }
         // TRANSLATORS: progress or result of an uninstall: plugin id, status.
         if m.kind == "uninstall" && m.text == "" { return @tr("Uninstall {0}: {1}", m.id, Words.change(m.code)); }
         // TRANSLATORS: plugin id, status, the player's message.
@@ -212,7 +204,6 @@ export global Plugins {
     in property <bool> can-toggle;
     in property <string> toggle-tip;
     in property <bool> can-reload;
-    in property <bool> can-rollback;
     in property <bool> can-uninstall;
     in property <string> uninstall-tip;
     in property <bool> can-open;
@@ -220,7 +211,6 @@ export global Plugins {
     callback select(string);
     callback toggle();
     callback reload();
-    callback rollback();
     callback uninstall();
     callback open-data();
 }
@@ -254,13 +244,12 @@ export component PluginsPage inherits Rectangle {
         }
         size-measure := Cell { text: @tr("Data"); }
         label-measure := VerticalLayout {
-            for code in ["failure", "warning", "note", "source", "previous", "package", "data", "capabilities"]: Cell { text: Words.label(code); }
+            for code in ["failure", "warning", "note", "source", "package", "data", "capabilities"]: Cell { text: Words.label(code); }
         }
         buttons-measure := HorizontalLayout {
             spacing: 6px;
             Rectangle { width: root.toggle-width; }
             Button { text: @tr("Reload"); }
-            Button { width: max(94px, self.preferred-width); text: @tr("Roll Back"); }
             Button { width: max(66px, self.preferred-width); text: @tr("Uninstall…"); }
             Button { min-width: 82px; text: @tr("Open Data Folder"); }
         }
@@ -365,8 +354,6 @@ export component PluginsPage inherits Rectangle {
                 }
             }
             Button { horizontal-stretch: 0; text: @tr("Reload"); enabled: Plugins.can-reload; clicked => { Plugins.reload(); } }
-            // TRANSLATORS: button: roll the plugin back to its previous version (94px wide).
-            Button { horizontal-stretch: 0; width: max(94px, self.preferred-width); text: @tr("Roll Back"); enabled: Plugins.can-rollback; clicked => { Plugins.rollback(); } }
             ToolTipArea {
                 width: max(66px, uninstall-button.preferred-width);
                 text: Words.tip(Plugins.uninstall-tip);

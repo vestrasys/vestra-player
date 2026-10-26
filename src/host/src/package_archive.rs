@@ -127,22 +127,6 @@ fn copy_limited(input: &mut impl Read, output: &mut File, limit: u64) -> Result<
     Ok(copied)
 }
 
-/// The lowercase hex SHA-256 of a file.
-pub fn sha256(file: &Path) -> Result<String> {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    let mut input = File::open(file)?;
-    let mut buffer = [0_u8; 64 * 1024];
-    loop {
-        let read = input.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(format!("{:x}", hasher.finalize()))
-}
-
 /// Reject a path that is not a `.vxp` file before opening it.
 pub fn check_extension(file: &Path) -> Result<()> {
     match file.extension().and_then(|x| x.to_str()) {

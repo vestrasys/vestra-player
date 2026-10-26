@@ -4,7 +4,7 @@ use super::*;
 use package_stage::Candidate;
 use package_store::{Instance, Source, Store, StoredPackage};
 use plugins::DataKey;
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 
 /// Validated candidates kept at once (each is a staged copy on disk).
 const MAX_CANDIDATES: usize = 32;
@@ -20,8 +20,14 @@ pub struct Manager {
     next: u64,
     receipts: BTreeMap<String, Value>,
     booted: bool,
-    /// Built-in plugins being seeded on the `builtin-seed` thread.
-    seeding: Option<seed::Running>,
+    /// The installation's built-in plugins (`builtin.json`) by id; empty
+    /// when it has none (a development run).
+    builtins: BTreeMap<String, builtin::Builtin>,
+    /// The `library-cleanup` thread, while it removes package directories.
+    cleanup: Option<cleanup::Running>,
+    /// Package directories an operation freed while the thread ran; they
+    /// go on its next run.
+    cleanup_queue: BTreeSet<String>,
 }
 struct Operation {
     id: String,
@@ -64,7 +70,22 @@ impl Manager {
                     .join("packages")
             });
         let secrets = crate::secret_index::Index::new(Some(root.join("secrets")));
-        let store = Store::open(root)?;
+        let mut store = Store::open(root)?;
+        // Reads one small manifest per built-in; copies and hashes nothing.
+        let builtins = match builtin::directory().map(|directory| builtin::load(&directory)) {
+            Some(Ok(builtins)) => {
+                let ids = builtins.keys().cloned().collect();
+                if let Err(error) = store.sync_builtins(&ids) {
+                    eprintln!("built-in plugins: {error:#}");
+                }
+                builtins
+            }
+            Some(Err(error)) => {
+                eprintln!("built-in plugins: {error:#}");
+                BTreeMap::new()
+            }
+            None => BTreeMap::new(),
+        };
         let receipts = store.operations();
         Ok(Self {
             store,
@@ -75,8 +96,33 @@ impl Manager {
             next: 0,
             receipts,
             booted: false,
-            seeding: None,
+            builtins,
+            cleanup: None,
+            cleanup_queue: BTreeSet::new(),
         })
+    }
+    /// Where an installed record's plugin runs from: a built-in from the
+    /// installation, any other from its package in the library. `None`
+    /// when there is nothing to run (a built-in this installation does
+    /// not list); `Err` when the installation's copy failed its checks.
+    fn runs_from(
+        &self,
+        id: &str,
+        record: &package_store::Installed,
+    ) -> Option<std::result::Result<(PathBuf, package_stage::PackageManifest), String>> {
+        if record.instance.as_ref().is_some_and(|i| i.builtin) {
+            let builtin = self.builtins.get(id)?;
+            return Some(
+                builtin
+                    .manifest
+                    .clone()
+                    .map(|manifest| (builtin.directory.clone(), manifest)),
+            );
+        }
+        record
+            .current
+            .as_ref()
+            .map(|current| Ok((current.directory.clone(), current.manifest.clone())))
     }
 }
 impl Host {
@@ -200,7 +246,9 @@ impl Host {
                 self.packages.store.get(string(params, "id")?),
             )
             .map_err(anyhow::Error::from)?),
-            "packages.install" | "packages.rollback" => {
+            // There is no `packages.rollback` (2026-10 ruling): it is an
+            // unknown method, `unsupported`, like any other.
+            "packages.install" => {
                 let request = string(params, "requestId")?.to_owned();
                 if request.is_empty() || request.len() > 128 {
                     return Err(RpcError::invalid("requestId must contain 1..128 bytes"));
@@ -224,51 +272,37 @@ impl Host {
                     }
                     return Ok(operation.result.clone());
                 }
-                self.library_busy()?;
+                self.library_busy(None)?;
                 if self.packages.operations.len() >= 64 {
                     return Err(RpcError::new("busy", "operation history full"));
                 }
-                let source = if method == "packages.install" {
-                    Some(install_source(params)?)
-                } else {
-                    None
-                };
+                let source = install_source(params)?;
                 let replace = params.get("replace").is_some_and(|v| v == true);
-                let target = if method == "packages.install" {
-                    let token = string(params, "token")?;
-                    let candidate = self
-                        .packages
-                        .candidates
-                        .get(token)
-                        .cloned()
-                        .ok_or_else(|| RpcError::new("stale", "unknown validation token"))?;
-                    check_reserved(&candidate.manifest().id, None)?;
-                    self.packages.store.gc()?;
-                    self.packages.store.stage(&candidate)?
-                } else {
-                    self.packages
-                        .store
-                        .get(string(params, "id")?)
-                        .previous
-                        .ok_or_else(|| RpcError::new("missing", "no previous successful version"))?
-                };
-                let id = target.manifest.id.clone();
+                let token = string(params, "token")?;
+                let candidate = self
+                    .packages
+                    .candidates
+                    .get(token)
+                    .cloned()
+                    .ok_or_else(|| RpcError::new("stale", "unknown validation token"))?;
+                check_reserved(&candidate.manifest().id, None)?;
+                let id = candidate.manifest().id.clone();
                 let expected = params["expectedRevision"]
                     .as_u64()
                     .ok_or_else(|| RpcError::invalid("expectedRevision required"))?;
                 let before = self.packages.store.get(&id);
-                // A rollback of a reserved id: only the built-in instance's.
-                check_reserved(&id, before.instance.as_ref())?;
                 if before.revision != expected {
                     return Err(RpcError::new(
                         "revisionConflict",
                         "installed revision changed",
                     ));
                 }
-                let (instance, fresh) = match source {
-                    Some(source) => self.install_instance(&id, &before, source, replace)?,
-                    None => (None, false),
-                };
+                let (instance, fresh) = self.install_instance(&id, &before, source, replace)?;
+                // Garbage is collected off the UI thread, not here. Staging
+                // reuses an identical directory still in the library, so it
+                // waits while the cleanup thread removes that one.
+                self.library_busy(Some(candidate.digest()))?;
+                let target = self.packages.store.stage(&candidate)?;
                 self.start_operation(request, request_spec, target, before, instance, fresh)
             }
             "packages.operation" | "packages.cancel" => {
@@ -313,8 +347,9 @@ impl Host {
     }
     /// Which instance an install goes into (store proposal §1.3): the same
     /// source upgrades, another source needs `replace` and reconnects to a
-    /// dormant instance of that source when there is one. Built-ins are only
-    /// upgraded by seeding. `(instance, fresh)`: `fresh` when new data starts.
+    /// dormant instance of that source when there is one. Built-ins are
+    /// updated with the player only. `(instance, fresh)`: `fresh` when new
+    /// data starts.
     fn install_instance(
         &self,
         id: &str,
@@ -324,8 +359,8 @@ impl Host {
     ) -> std::result::Result<(Option<Instance>, bool), RpcError> {
         install_instance(&self.packages.store, id, before, source, replace)
     }
-    /// Journal the install (or rollback) and stop the running version; the
-    /// tick activates the target and commits or restores.
+    /// Journal the install and stop the running version; the tick activates
+    /// the target and commits or restores.
     fn start_operation(
         &mut self,
         request: String,
@@ -389,154 +424,10 @@ impl Host {
     fn data_directory_of(&self, key: &DataKey) -> Option<PathBuf> {
         plugins::data_root().map(|root| key.directory(&root))
     }
-    /// Install or upgrade the built-in plugins the installation ships
-    /// (`<resources>/plugins/builtin.json`, or `$VESTRA_BUILTIN_PLUGINS`). A
-    /// built-in is upgraded only when the installation carries a newer
-    /// version than it last seeded, so a user's rollback stays.
-    ///
-    /// The file work (hash, unpack, verify; seconds for a large package on
-    /// Windows, where the antivirus scans each new file on first read) runs
-    /// on a `builtin-seed` thread; the UI thread decides what to seed,
-    /// commits each staged package to the catalog (one replacement, no
-    /// reading of package files) and then starts it, one per tick
-    /// (`seed_tick`). The other installed plugins start right away. While
-    /// seeding runs, the thread is the library's only writer: install,
-    /// rollback and uninstall answer `busy`, and a plugin being seeded cannot
-    /// be enabled (`package_busy`).
-    fn start_seeding(&mut self) {
-        let Some(directory) = seed::directory() else {
-            return;
-        };
-        let list = match seed::read(&directory) {
-            Ok(list) => list,
-            Err(error) => {
-                eprintln!("built-in plugins: {error:#}");
-                return;
-            }
-        };
-        let mut jobs = Vec::new();
-        for entry in list {
-            match self.seed_decision(&entry) {
-                Ok(Some(_)) => jobs.push(entry),
-                Ok(None) => {}
-                Err(error) => eprintln!("built-in plugin {}: {error:#}", entry.id),
-            }
-        }
-        if jobs.is_empty() {
-            return;
-        }
-        let awaiting = jobs.iter().map(|entry| entry.id.clone()).collect();
-        let library = self.packages.store.library();
-        let referenced = self.packages.store.referenced();
-        let (sender, receiver) = std::sync::mpsc::channel();
-        let spawned = std::thread::Builder::new()
-            .name("builtin-seed".into())
-            .spawn(move || seed::stage_all(&directory, &library, &referenced, jobs, &sender));
-        match spawned {
-            Ok(_) => {
-                self.packages.seeding = Some(seed::Running {
-                    receiver,
-                    awaiting,
-                    ready: VecDeque::new(),
-                    started: std::time::Instant::now(),
-                    seeded: 0,
-                })
-            }
-            // Nothing is seeded this run; the installed versions start.
-            Err(error) => eprintln!("built-in plugins: {error}"),
-        }
-    }
-    /// The instance seeding `entry` would install into, if it is to be seeded.
-    fn seed_decision(&self, entry: &seed::Entry) -> Result<Option<Instance>> {
-        if self.development.contains_key(&entry.id) || self.operation_pending(&entry.id) {
-            return Ok(None);
-        }
-        seed::decide(entry, &self.packages.store.get(&entry.id))
-    }
-    /// Take the seeding thread's results: commit one staged package per tick
-    /// and start it; when all are in, the start-up is complete.
-    fn seed_tick(&mut self) {
-        let Some(running) = self.packages.seeding.as_mut() else {
-            return;
-        };
-        let mut finished = false;
-        loop {
-            match running.receiver.try_recv() {
-                Ok(result) => running.ready.push_back(result),
-                Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    finished = true;
-                    break;
-                }
-            }
-        }
-        if let Some((entry, staged)) = running.ready.pop_front() {
-            running.awaiting.remove(&entry.id);
-            match staged.and_then(|target| self.commit_seed(&entry, target)) {
-                Ok(()) => {
-                    if let Some(running) = self.packages.seeding.as_mut() {
-                        running.seeded += 1;
-                    }
-                }
-                Err(error) => eprintln!("built-in plugin {}: {error:#}", entry.id),
-            }
-            // Seeded or not, the installed version starts (a failure shows
-            // as `failed` in the list).
-            self.start_installed(Some(&entry.id));
-            return;
-        }
-        if !finished {
-            return;
-        }
-        let Some(running) = self.packages.seeding.take() else {
-            return;
-        };
-        for id in &running.awaiting {
-            eprintln!("built-in plugin {id}: seeding stopped");
-            self.start_installed(Some(id));
-        }
-        eprintln!(
-            "built-in plugins: {} seeded in {} ms",
-            running.seeded,
-            running.started.elapsed().as_millis()
-        );
-    }
-    /// Record a package the seeding thread staged, if it is still to be
-    /// seeded. Reads no package file (`Store::commit_seeded`).
-    fn commit_seed(&mut self, entry: &seed::Entry, target: StoredPackage) -> Result<()> {
-        let Some(instance) = self.seed_decision(entry)? else {
-            return Ok(());
-        };
-        let before = self.packages.store.get(&entry.id);
-        if before
-            .current
-            .as_ref()
-            .is_some_and(|current| current.digest == target.digest)
-        {
-            self.packages.store.set_seeded(&entry.id, &entry.version)?;
-            return Ok(());
-        }
-        // Seeding commits directly, without waiting for the activation; the
-        // plugin then starts like any installed package.
-        let request = format!("seed-{}", &entry.sha256[..32]);
-        let spec = json!({"method":"seed","params":{"id":entry.id,"version":entry.version}});
-        self.packages.store.commit_seeded(
-            &entry.id,
-            before.revision,
-            &target,
-            &request,
-            (
-                json!({"operationId":request,"packageId":entry.id,"status":"preparing","request":spec}),
-                json!({"operationId":request,"packageId":entry.id,"status":"committed","request":spec}),
-            ),
-            instance,
-        )?;
-        self.packages.receipts = self.packages.store.operations();
-        Ok(())
-    }
     /// Start the installed packages (only `only`, when given) that are not
-    /// disabled, not replaced by a development load, not in an operation and
-    /// not being seeded.
+    /// disabled, not replaced by a development load and not in an
+    /// operation. Built-ins run in place from the installation
+    /// (`runs_from`); nothing is copied.
     fn start_installed(&mut self, only: Option<&str>) {
         let pending = self
             .packages
@@ -546,72 +437,123 @@ impl Host {
             .collect::<Vec<_>>();
         let installed = self.packages.store.installed();
         for (id, record) in installed {
-            if only.is_some_and(|only| only != id)
-                || self.running(&id).is_some()
-                || self.seeding(&id)
-            {
+            if only.is_some_and(|only| only != id) || self.running(&id).is_some() {
                 continue;
             }
             // R-H10: a package the user disabled stays stopped; a
             // development load of the same id runs instead this run.
-            if !pending.contains(&id)
-                && !self.packages.store.disabled().contains(&id)
-                && !self.development.contains_key(&id)
-                && let Some(current) = record.current
-                && let Some(instance) = record.instance
-                && let Err(error) = check_reserved(&id, Some(&instance))
-                    .map_err(|refusal| anyhow::anyhow!(refusal.message))
-                    .and_then(|()| {
-                        self.load_package(
-                            &current.directory,
-                            &current.manifest,
-                            DataKey::Instance(instance.guid),
-                        )
-                    })
+            if pending.contains(&id)
+                || self.packages.store.disabled().contains(&id)
+                || self.development.contains_key(&id)
             {
+                continue;
+            }
+            let (Some(package), Some(instance)) =
+                (self.packages.runs_from(&id, &record), record.instance)
+            else {
+                continue;
+            };
+            let started = package
+                .map_err(anyhow::Error::msg)
+                .and_then(|(directory, manifest)| {
+                    check_reserved(&id, Some(&instance))
+                        .map_err(|refusal| anyhow::anyhow!(refusal.message))?;
+                    self.load_package(&directory, &manifest, DataKey::Instance(instance.guid))
+                });
+            if let Err(error) = started {
                 eprintln!("installed package {id} failed to start: {error}");
                 self.failures
                     .insert(id.clone(), error.to_string().chars().take(512).collect());
             }
         }
     }
-    /// Whether `id` waits for the seeding thread.
-    fn seeding(&self, id: &str) -> bool {
-        self.packages
-            .seeding
-            .as_ref()
-            .is_some_and(|running| running.awaiting.contains(id))
-    }
-    /// An operation runs on `id`, or it is being seeded.
+    /// An operation runs on `id`.
     fn package_busy(&self, id: &str) -> bool {
-        self.operation_pending(id) || self.seeding(id)
+        self.operation_pending(id)
     }
-    /// While built-ins are seeded the seeding thread writes the package
-    /// library; operations that stage, collect or remove packages wait.
-    fn library_busy(&self) -> std::result::Result<(), RpcError> {
-        if self.packages.seeding.is_some() {
+    /// While the `library-cleanup` thread scans the whole library (once, at
+    /// start), installs and uninstalls wait; later runs remove only the
+    /// directories they were given, and only an install of one of those
+    /// (`digest`) waits.
+    fn library_busy(&self, digest: Option<&str>) -> std::result::Result<(), RpcError> {
+        if self
+            .packages
+            .cleanup
+            .as_ref()
+            .is_some_and(|running| running.blocks(digest))
+        {
             return Err(RpcError::new(
                 "busy",
-                "built-in plugins are being updated; try again shortly",
+                "the plugin library is being cleaned up; try again shortly",
             ));
         }
         Ok(())
     }
-    /// A running built-in plugin (shipped with the player, not a development load).
+    /// At start: remove every package directory the catalog does not refer
+    /// to (the built-in copies and previous versions that players up to 0.5
+    /// kept, uninstalled packages, leftovers) on the `library-cleanup`
+    /// thread, never on the UI thread: on Windows a large package takes
+    /// seconds to delete.
+    fn collect_garbage(&mut self) {
+        let library = self.packages.store.library();
+        let referenced = self.packages.store.referenced();
+        match cleanup::spawn(library, cleanup::Work::Unreferenced(referenced)) {
+            Ok(running) => self.packages.cleanup = Some(running),
+            // Left for the next run; the directories are harmless.
+            Err(error) => eprintln!("package library: {error}"),
+        }
+    }
+    /// An operation freed `digest` (the version an upgrade replaced, an
+    /// uninstalled package, a failed install's target): remove it on the
+    /// cleanup thread, now or after its current run.
+    fn discard(&mut self, digest: &str) {
+        self.packages.cleanup_queue.insert(digest.to_owned());
+        self.cleanup_tick();
+    }
+    /// Start the queued removals when the thread is free; the ones the
+    /// catalog refers to again (reinstalled meanwhile) stay.
+    fn cleanup_tick(&mut self) {
+        if let Some(running) = &self.packages.cleanup {
+            if !running.finished() {
+                return;
+            }
+            self.packages.cleanup = None;
+        }
+        let referenced = self.packages.store.referenced();
+        let digests = std::mem::take(&mut self.packages.cleanup_queue)
+            .into_iter()
+            .filter(|digest| !referenced.contains(digest))
+            .collect::<BTreeSet<_>>();
+        if digests.is_empty() {
+            return;
+        }
+        match cleanup::spawn(self.packages.store.library(), cleanup::Work::Only(digests)) {
+            Ok(running) => self.packages.cleanup = Some(running),
+            Err(error) => eprintln!("package library: {error}"),
+        }
+    }
+    /// A running built-in plugin: shipped with the player and running from
+    /// the installation (not a development load of the same id).
     pub(super) fn is_builtin(&self, owner: u64) -> bool {
         let Some(plugin) = self.plugins.get(&owner) else {
             return false;
         };
-        let stored = self.packages.store.get(&plugin.manifest.id);
-        stored
-            .current
-            .is_some_and(|current| current.directory == plugin.directory)
-            && stored.instance.is_some_and(|instance| instance.builtin)
+        let id = &plugin.manifest.id;
+        self.packages
+            .builtins
+            .get(id)
+            .is_some_and(|builtin| builtin.directory == plugin.directory)
+            && self
+                .packages
+                .store
+                .get(id)
+                .instance
+                .is_some_and(|instance| instance.builtin)
     }
     /// Until the installed plugins started and while a built-in activates,
     /// other plugins' mounts wait (slot_claims).
     pub(super) fn builtins_starting(&mut self) -> bool {
-        if !self.packages.booted || self.packages.seeding.is_some() {
+        if !self.packages.booted {
             return true;
         }
         let now = self.now_ms();
@@ -654,10 +596,10 @@ impl Host {
             let plugin = &self.plugins[&owner];
             let id = plugin.manifest.id.clone();
             let stored = self.packages.store.get(&id);
-            let installed = stored
-                .current
-                .as_ref()
-                .is_some_and(|current| current.directory == plugin.directory);
+            let installed = self
+                .packages
+                .runs_from(&id, &stored)
+                .is_some_and(|package| package.is_ok_and(|(dir, _)| dir == plugin.directory));
             let warnings = self.warnings_of(owner);
             let (state, error) = match status {
                 Some(package_activation::Status::Pending { .. }) => ("starting", None),
@@ -674,13 +616,12 @@ impl Host {
             } else {
                 "development"
             };
-            let previous = installed
-                .then(|| stored.previous.and_then(|p| p.manifest.version))
-                .flatten();
             let instance = installed.then_some(stored.instance).flatten();
+            // `previousVersion` is always null (no rollback); SDK 1.5.17
+            // drops the field.
             list.insert(id.clone(), json!({"id":id,"version":plugin.manifest.version,
                 "origin":origin,"state":state,"error":error,"capabilities":plugin.manifest.capabilities,
-                "directory":plugin.directory,"previousVersion":previous,
+                "directory":plugin.directory,"previousVersion":null,
                 "builtin":instance.as_ref().is_some_and(|i| i.builtin),
                 "source":instance.map(|i| i.source),
                 "dataDirectory":plugin.data_directory(),"warnings":warnings,
@@ -696,7 +637,10 @@ impl Host {
             }
         };
         for (id, record) in self.packages.store.installed() {
-            let Some(current) = record.current.filter(|_| !list.contains_key(&id)) else {
+            if list.contains_key(&id) {
+                continue;
+            }
+            let Some(package) = self.packages.runs_from(&id, &record) else {
                 continue;
             };
             let (state, error) = if self.package_busy(&id) {
@@ -711,17 +655,28 @@ impl Host {
                 .instance
                 .as_ref()
                 .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())));
-            list.insert(
-                id.clone(),
-                json!({"id":id,"version":current.manifest.version,
-                "origin":"installed","state":state,"error":error,
-                "capabilities":current.manifest.capabilities,"directory":current.directory,
-                "previousVersion":record.previous.and_then(|p| p.manifest.version),
-                "builtin":record.instance.as_ref().is_some_and(|i| i.builtin),
-                "source":record.instance.map(|i| i.source),
-                "dataDirectory":data,"warnings":[],
-                "display":display(&current.manifest, crate::i18n::load(&current.directory).as_deref())}),
-            );
+            let builtin = record.instance.as_ref().is_some_and(|i| i.builtin);
+            let source = record.instance.map(|i| i.source);
+            let entry = match package {
+                Ok((directory, manifest)) => json!({"id":id,"version":manifest.version,
+                    "origin":"installed","state":state,"error":error,
+                    "capabilities":manifest.capabilities,"directory":directory,
+                    "previousVersion":null,"builtin":builtin,"source":source,
+                    "dataDirectory":data,"warnings":[],
+                    "display":display(&manifest, crate::i18n::load(&directory).as_deref())}),
+                // A built-in whose copy in the installation failed its checks.
+                Err(failure) => {
+                    let builtin_entry = &self.packages.builtins[&id];
+                    let state = if state == "disabled" { state } else { "failed" };
+                    json!({"id":id,"version":builtin_entry.version,
+                        "origin":"installed","state":state,"error":failure,
+                        "capabilities":[],"directory":builtin_entry.directory,
+                        "previousVersion":null,"builtin":builtin,"source":source,
+                        "dataDirectory":data,"warnings":[],
+                        "display":{"name":null,"punchline":null,"description":null,"tags":[]}})
+                }
+            };
+            list.insert(id.clone(), entry);
         }
         for (id, (directory, manifest)) in &self.development {
             if list.contains_key(id) {
@@ -756,7 +711,7 @@ impl Host {
             return Err(RpcError::new("busy", "the package is being installed"));
         }
         let record = self.packages.store.get(id);
-        let installed = record.current;
+        let installed = self.packages.runs_from(id, &record);
         let reserved = check_reserved(id, record.instance.as_ref());
         let key = record.instance.map(|i| DataKey::Instance(i.guid));
         let development = self.development.get(id).cloned();
@@ -784,13 +739,15 @@ impl Host {
         self.failures.remove(id);
         match (installed, development) {
             (_, Some((directory, _))) => self.load(&directory, 120_000)?,
-            (Some(current), None) => {
+            (Some(package), None) => {
                 reserved?;
-                // Only seeding and installs record a package, both with an instance.
+                let (directory, manifest) =
+                    package.map_err(|failure| RpcError::new("unavailable", failure))?;
+                // Built-in records and installs both have an instance.
                 let key = key.ok_or_else(|| {
                     RpcError::new("unavailable", "the installed package has no instance")
                 })?;
-                self.load_package(&current.directory, &current.manifest, key)?;
+                self.load_package(&directory, &manifest, key)?;
             }
             (None, None) => unreachable!("checked above"),
         }
@@ -819,28 +776,13 @@ impl Host {
             return Err(RpcError::invalid("a plugin cannot uninstall itself"));
         }
         let installed = self.packages.store.get(&id);
-        if installed.instance.as_ref().is_some_and(|i| i.builtin) {
-            return Err(RpcError::new(
-                "unsupported",
-                "built-in plugins can be disabled but not uninstalled",
-            ));
-        }
-        if installed.current.is_none() {
-            return Err(
-                if self.development.contains_key(&id) || self.running(&id).is_some() {
-                    RpcError::new("unsupported", "only installed plugins can be uninstalled")
-                } else {
-                    RpcError::new("missing", format!("no plugin {id}"))
-                },
-            );
-        }
-        if params["expectedRevision"].as_u64() != Some(installed.revision) {
-            return Err(RpcError::new(
-                "revisionConflict",
-                "installed revision changed",
-            ));
-        }
-        self.library_busy()?;
+        uninstallable(
+            &id,
+            &installed,
+            self.development.contains_key(&id) || self.running(&id).is_some(),
+            params["expectedRevision"].as_u64(),
+        )?;
+        self.library_busy(None)?;
         if self.package_busy(&id) {
             return Err(RpcError::new("busy", "the package is being installed"));
         }
@@ -867,6 +809,9 @@ impl Host {
         self.packages
             .store
             .uninstall(&id, &request, receipt.clone(), !remove_data)?;
+        if let Some(current) = &installed.current {
+            self.discard(&current.digest);
+        }
         self.packages.receipts = self.packages.store.operations();
         self.failures.remove(&id);
         if remove_data && let Some(instance) = &installed.instance {
@@ -896,10 +841,10 @@ impl Host {
             self.purge_secrets(&DataKey::Instance(guid));
         }
     }
-    /// The installed packages were started (the first `package_tick`) and
-    /// the built-ins seeded and started.
+    /// The installed packages, built-ins included, were started (the first
+    /// `package_tick`).
     pub(super) fn packages_started(&self) -> bool {
-        self.packages.booted && self.packages.seeding.is_none()
+        self.packages.booted
     }
     pub(super) fn package_tick(&mut self) {
         self.purge_dropped_secrets();
@@ -957,12 +902,14 @@ impl Host {
                     },
                 );
             }
-            self.start_seeding();
-            // Start committed packages independently of the authoring
-            // plugin; the ones being seeded start as their seed lands.
+            // The previous versions and built-in copies players up to 0.5
+            // kept, and any leftovers, go on the cleanup thread.
+            self.collect_garbage();
+            // Start committed packages and the built-ins independently of
+            // the authoring plugin.
             self.start_installed(None);
         }
-        self.seed_tick();
+        self.cleanup_tick();
         let keys = self
             .packages
             .operations
@@ -1081,6 +1028,10 @@ impl Host {
                 };
                 op.phase = "committed".into();
                 op.result = json!({"operationId":op.id,"packageId":op.package,"status":"committed","installed":installed,"owner":owner,"request":op.request});
+                // The version this replaced is not kept.
+                if let Some(old) = &op.old {
+                    self.discard(&old.digest);
+                }
                 return Ok(());
             }
         }
@@ -1112,6 +1063,9 @@ impl Host {
             self.packages
                 .store
                 .abort_with_receipt(&op.package, &op.id, op.result.clone())?;
+            // The target staged for it is not kept.
+            let target = op.target.digest.clone();
+            self.discard(&target);
             return Ok(());
         }
         op.result = json!({"operationId":op.id,"packageId":op.package,"status":op.phase,"owner":op.owner,"cancelRequested":op.cancel});
@@ -1175,10 +1129,11 @@ fn display(manifest: &plugins::Manifest, catalog: Option<&crate::i18n::Catalog>)
 
 /// The 2026-10-24 ruling (ecosystem-plan.md): a reserved `vestra.` id
 /// (`manifest::reserved_id`) is installed and started only as the
-/// installation's built-in instance, which seeding alone creates. Store,
-/// file, link and workshop installs of one are refused, and an
-/// installed non-built-in one (from before the rule) is not started.
-/// Development loads (`--plugin`) are not checked here (`Host::load`).
+/// installation's built-in instance, which `builtin.json` alone creates
+/// (`builtin::read` accepts only reserved ids). Store, file, link and
+/// workshop installs of one are refused, and an installed non-built-in one
+/// (from before the rule) is not started. Development loads (`--plugin`)
+/// are not checked here (`Host::load`).
 fn check_reserved(id: &str, instance: Option<&Instance>) -> std::result::Result<(), RpcError> {
     if crate::manifest::reserved_id(id) && !instance.is_some_and(|i| i.builtin) {
         return Err(RpcError::new(
@@ -1192,111 +1147,61 @@ fn check_reserved(id: &str, instance: Option<&Instance>) -> std::result::Result<
     Ok(())
 }
 
-/// The installation's built-in plugin list (written by `scripts/stage-plugins.mjs`)
-/// and the seeding thread's work (`Host::start_seeding`).
-mod seed {
-    use crate::package_store::{Installed, Instance, Library, Source, StoredPackage};
+/// Whether `packages.uninstall` may remove `installed` (`id`): a built-in
+/// cannot be uninstalled, only disabled; a plugin that is only loaded for
+/// development or running without a package is not installed; and the
+/// caller must have read the current revision.
+fn uninstallable(
+    id: &str,
+    installed: &package_store::Installed,
+    loaded: bool,
+    expected_revision: Option<u64>,
+) -> std::result::Result<(), RpcError> {
+    if installed.instance.as_ref().is_some_and(|i| i.builtin) {
+        return Err(RpcError::new(
+            "unsupported",
+            "built-in plugins can be disabled but not uninstalled",
+        ));
+    }
+    if installed.current.is_none() {
+        return Err(if loaded {
+            RpcError::new("unsupported", "only installed plugins can be uninstalled")
+        } else {
+            RpcError::new("missing", format!("no plugin {id}"))
+        });
+    }
+    if expected_revision != Some(installed.revision) {
+        return Err(RpcError::new(
+            "revisionConflict",
+            "installed revision changed",
+        ));
+    }
+    Ok(())
+}
+
+/// The installation's built-in plugins (`builtin.json`, written by
+/// `scripts/stage-plugins.mjs`). Each runs in place from its directory
+/// under `<resources>/plugins`: nothing is copied, hashed or written there.
+/// The installation protects those files like the rest of `<resources>`
+/// (the host runs `runtime/runner.ts` and `ui/host.slint` from there too):
+/// the `.app` signature on macOS, an admin-only install directory on
+/// Windows.
+mod builtin {
+    use crate::package_stage::PackageManifest;
     use anyhow::{Context, Result, ensure};
     use serde::Deserialize;
-    use std::collections::{BTreeSet, VecDeque};
+    use std::collections::{BTreeMap, BTreeSet};
     use std::path::{Path, PathBuf};
-    use std::sync::mpsc::{Receiver, Sender};
-    use std::time::Instant;
 
-    /// A package the seeding thread staged in the library, or why not.
-    pub type Staged = (Entry, Result<StoredPackage>);
-
-    /// Seeding in progress (`Manager::seeding`).
-    pub struct Running {
-        pub receiver: Receiver<Staged>,
-        /// Ids whose result has not been committed yet; they start then.
-        pub awaiting: BTreeSet<String>,
-        /// Results received, committed one per tick.
-        pub ready: VecDeque<Staged>,
-        pub started: Instant,
-        pub seeded: usize,
-    }
-
-    /// The instance seeding `entry` installs into, or `None` when it is not
-    /// seeded: installed from another source, or a version at least as new
-    /// already seeded (a user's rollback stays) whose directory is still in
-    /// the library.
-    pub fn decide(entry: &Entry, before: &Installed) -> Result<Option<Instance>> {
-        let version = crate::manifest::parse_version(&entry.version)
-            .with_context(|| format!("invalid version {}", entry.version))?;
-        Ok(match &before.instance {
-            Some(current) if !current.builtin => {
-                eprintln!(
-                    "built-in plugin {}: installed from another source; not seeded",
-                    entry.id
-                );
-                None
-            }
-            Some(current) => {
-                let seeded = current
-                    .seeded_version
-                    .as_deref()
-                    .and_then(crate::manifest::parse_version);
-                // A current version whose directory is gone (collected by
-                // another process sharing the library) is seeded again.
-                let missing = before
-                    .current
-                    .as_ref()
-                    .is_some_and(|package| !package.directory.is_dir());
-                (missing || !seeded.is_some_and(|seeded| seeded >= version)).then(|| Instance {
-                    seeded_version: Some(entry.version.clone()),
-                    ..current.clone()
-                })
-            }
-            None => Some(Instance {
-                builtin: true,
-                seeded_version: Some(entry.version.clone()),
-                ..Instance::new(Source::Bundled)
-            }),
-        })
-    }
-
-    /// The seeding thread: collect the library's garbage (`referenced` as
-    /// the catalog stood when seeding began; nothing else writes the
-    /// library meanwhile), then stage each entry and send it.
-    pub fn stage_all(
-        directory: &Path,
-        library: &Library,
-        referenced: &BTreeSet<String>,
-        jobs: Vec<Entry>,
-        sender: &Sender<Staged>,
-    ) {
-        if let Err(error) = library.gc(referenced) {
-            eprintln!("built-in plugins: package library: {error:#}");
-        }
-        for entry in jobs {
-            let staged = stage(directory, library, &entry);
-            if sender.send((entry, staged)).is_err() {
-                return;
-            }
-        }
-    }
-
-    /// Check `entry`'s archive against its sha256 and stage it in the library.
-    pub fn stage(directory: &Path, library: &Library, entry: &Entry) -> Result<StoredPackage> {
-        let file = directory.join(&entry.file);
-        ensure!(
-            crate::package_archive::sha256(&file)? == entry.sha256,
-            "{} does not match its sha256",
-            entry.file
-        );
-        let target = library.stage_archive(&file)?;
-        ensure!(
-            target.manifest.id == entry.id
-                && target.manifest.version.as_deref() == Some(entry.version.as_str()),
-            "{} holds {} {:?}, not {} {}",
-            entry.file,
-            target.manifest.id,
-            target.manifest.version,
-            entry.id,
-            entry.version
-        );
-        Ok(target)
+    /// A built-in plugin of this installation.
+    pub struct Builtin {
+        /// The version `builtin.json` lists.
+        pub version: String,
+        /// Its directory (canonical), where it runs from.
+        pub directory: PathBuf,
+        /// Its manifest, or why the directory failed the checks (the
+        /// plugin is then listed as `failed`).
+        pub manifest: std::result::Result<PackageManifest, String>,
     }
 
     #[derive(Deserialize)]
@@ -1310,8 +1215,8 @@ mod seed {
     pub struct Entry {
         pub id: String,
         pub version: String,
-        pub file: String,
-        pub sha256: String,
+        /// The plugin's directory next to `builtin.json`: its id.
+        pub directory: String,
     }
 
     /// `$VESTRA_BUILTIN_PLUGINS`, else the installation's built-in plugins
@@ -1321,12 +1226,15 @@ mod seed {
         crate::runtime_paths::get().builtin_directory()
     }
 
+    /// `builtin.json` in `directory`, strictly: schema 2, at most 64
+    /// plugins, each a reserved id (`vestra.`) in a directory of the same
+    /// name, with a version.
     pub fn read(directory: &Path) -> Result<Vec<Entry>> {
         let bytes = std::fs::read(directory.join("builtin.json")).context("builtin.json")?;
         ensure!(bytes.len() <= 256 * 1024, "builtin.json is too large");
         let list: List = serde_json::from_slice(&bytes).context("builtin.json")?;
         ensure!(
-            list.schema == 1,
+            list.schema == 2,
             "builtin.json schema {} is unknown",
             list.schema
         );
@@ -1334,6 +1242,7 @@ mod seed {
             list.plugins.len() <= 64,
             "builtin.json lists too many plugins"
         );
+        let mut seen = BTreeSet::new();
         for entry in &list.plugins {
             ensure!(
                 crate::manifest::valid_id(&entry.id),
@@ -1341,21 +1250,152 @@ mod seed {
                 entry.id
             );
             ensure!(
-                entry.sha256.len() == 64
-                    && entry
-                        .sha256
-                        .bytes()
-                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
-                "{}: sha256 must be 64 lowercase hex digits",
+                crate::manifest::reserved_id(&entry.id),
+                "{}: built-in plugins have vestra. ids",
+                entry.id
+            );
+            ensure!(seen.insert(&entry.id), "{} is listed twice", entry.id);
+            ensure!(
+                entry.directory == entry.id,
+                "{}: its directory must be named after its id",
                 entry.id
             );
             ensure!(
-                !entry.file.contains(['/', '\\']) && entry.file.ends_with(".vxp"),
-                "{}: file must be a .vxp name in the same directory",
-                entry.id
+                crate::manifest::parse_version(&entry.version).is_some(),
+                "{}: invalid version {}",
+                entry.id,
+                entry.version
             );
         }
         Ok(list.plugins)
+    }
+
+    /// Read `builtin.json` and check each plugin's directory: one small
+    /// manifest read each, no hashing or copying (milliseconds for all of
+    /// them). A plugin that fails is kept with the reason.
+    pub fn load(directory: &Path) -> Result<BTreeMap<String, Builtin>> {
+        let entries = read(directory)?;
+        let root = dunce::canonicalize(directory).context("built-in plugins directory")?;
+        Ok(entries
+            .into_iter()
+            .map(|entry| {
+                let path = root.join(&entry.directory);
+                let manifest = check(&root, &path, &entry).map_err(|error| format!("{error:#}"));
+                if let Err(error) = &manifest {
+                    eprintln!("built-in plugin {}: {error}", entry.id);
+                }
+                let directory = dunce::canonicalize(&path).unwrap_or(path);
+                (
+                    entry.id,
+                    Builtin {
+                        version: entry.version,
+                        directory,
+                        manifest,
+                    },
+                )
+            })
+            .collect())
+    }
+
+    /// `directory` is a real directory (not a link) inside `root`, and its
+    /// manifest passes the package rules and names `entry`'s id and version.
+    fn check(root: &Path, directory: &Path, entry: &Entry) -> Result<PackageManifest> {
+        let metadata = std::fs::symlink_metadata(directory)
+            .with_context(|| format!("{} is missing", entry.directory))?;
+        ensure!(
+            metadata.is_dir() && !metadata.file_type().is_symlink(),
+            "{} must be a directory",
+            entry.directory
+        );
+        let canonical = dunce::canonicalize(directory)?;
+        ensure!(
+            canonical.parent() == Some(root),
+            "{} is outside the built-in plugins directory",
+            entry.directory
+        );
+        let manifest = crate::manifest::parse(
+            &std::fs::read(canonical.join("manifest.json")).context("manifest.json")?,
+            crate::manifest::player_version(),
+        )?;
+        crate::manifest::check(&manifest, &canonical, true)?;
+        ensure!(
+            manifest.id == entry.id && manifest.version.as_deref() == Some(entry.version.as_str()),
+            "its manifest is {} {:?}, not {} {}",
+            manifest.id,
+            manifest.version,
+            entry.id,
+            entry.version
+        );
+        Ok(manifest)
+    }
+}
+
+/// The `library-cleanup` thread: removes package directories off the UI
+/// thread (`Library::collect` / `Library::remove`).
+mod cleanup {
+    use crate::package_store::Library;
+    use std::collections::BTreeSet;
+    use std::thread::JoinHandle;
+
+    pub const THREAD: &str = "library-cleanup";
+
+    pub enum Work {
+        /// Everything the catalog does not refer to (`referenced`), and
+        /// leftovers: at start, while nothing stages.
+        Unreferenced(BTreeSet<String>),
+        /// Only these directories (by digest).
+        Only(BTreeSet<String>),
+    }
+
+    pub struct Running {
+        handle: JoinHandle<()>,
+        /// `None` while it scans the whole library.
+        only: Option<BTreeSet<String>>,
+    }
+    impl Running {
+        pub fn finished(&self) -> bool {
+            self.handle.is_finished()
+        }
+        /// Whether staging `digest` (`None`: any change to the library)
+        /// must wait for this run.
+        pub fn blocks(&self, digest: Option<&str>) -> bool {
+            match (&self.only, digest) {
+                (None, _) => true,
+                (Some(only), Some(digest)) => only.contains(digest),
+                (Some(_), None) => false,
+            }
+        }
+        #[cfg(test)]
+        pub fn join(self) -> std::thread::Thread {
+            let thread = self.handle.thread().clone();
+            self.handle.join().unwrap();
+            thread
+        }
+    }
+
+    pub fn spawn(library: Library, work: Work) -> std::io::Result<Running> {
+        let only = match &work {
+            Work::Unreferenced(_) => None,
+            Work::Only(digests) => Some(digests.clone()),
+        };
+        let handle = std::thread::Builder::new()
+            .name(THREAD.into())
+            .spawn(move || {
+                let started = std::time::Instant::now();
+                let result = match &work {
+                    Work::Unreferenced(referenced) => library.collect(referenced),
+                    Work::Only(digests) => library.remove(digests),
+                };
+                let ms = started.elapsed().as_millis();
+                match result {
+                    Ok(0) => {}
+                    Ok(removed) => {
+                        eprintln!("package library: {removed} unused package(s) removed in {ms} ms")
+                    }
+                    Err(error) => eprintln!("package library: {error:#}"),
+                }
+            })?;
+        Ok(Running { handle, only })
     }
 }
 
@@ -1471,7 +1511,7 @@ mod tests {
             guid,
             "upgrade keeps the instance"
         );
-        assert!(second.previous.is_some(), "rollback within the instance");
+        assert!(second.previous.is_none(), "no previous version is kept");
         let error = install(
             &mut store,
             "a.b",
@@ -1642,296 +1682,392 @@ mod tests {
         }
     }
 
+    /// A built-in plugin directory `<root>/<id>` with `version`, as
+    /// `stage-plugins.mjs` unpacks it.
+    fn builtin_dir(root: &Path, id: &str, version: &str) {
+        let dir = root.join(id);
+        std::fs::create_dir_all(dir.join("ui")).unwrap();
+        std::fs::write(
+            dir.join("manifest.json"),
+            serde_json::to_vec(&json!({"id":id,"apiVersion":plugins::API,
+                "version":version,"entry":"main.js","capabilities":[]}))
+            .unwrap(),
+        )
+        .unwrap();
+        std::fs::write(dir.join("main.js"), "// built in").unwrap();
+        std::fs::write(dir.join("ui/a.slint"), "export component A {}").unwrap();
+    }
+    fn builtin_json(root: &Path, plugins: &[(&str, &str)]) {
+        let plugins = plugins
+            .iter()
+            .map(|(id, version)| json!({"id":id,"version":version,"directory":id}))
+            .collect::<Vec<_>>();
+        std::fs::write(
+            root.join("builtin.json"),
+            json!({"schema":2,"plugins":plugins}).to_string(),
+        )
+        .unwrap();
+    }
+    /// Every file under `root` with its size and modification time.
+    fn snapshot(root: &Path) -> Vec<(PathBuf, u64, std::time::SystemTime)> {
+        let mut files = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(next) = stack.pop() {
+            for item in std::fs::read_dir(next).unwrap() {
+                let path = item.unwrap().path();
+                let metadata = std::fs::metadata(&path).unwrap();
+                if metadata.is_dir() {
+                    stack.push(path.clone());
+                }
+                files.push((path, metadata.len(), metadata.modified().unwrap()));
+            }
+        }
+        files.sort();
+        files
+    }
+    fn set_read_only(root: &Path, read_only: bool) {
+        for (path, ..) in snapshot(root).into_iter().rev() {
+            let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+            #[allow(clippy::permissions_set_readonly_false)]
+            permissions.set_readonly(read_only);
+            std::fs::set_permissions(&path, permissions).unwrap();
+        }
+    }
+
     #[test]
     fn builtin_lists_are_strict() {
         let dir = tempfile::tempdir().unwrap();
         let write = |value: Value| {
             std::fs::write(dir.path().join("builtin.json"), value.to_string()).unwrap()
         };
-        let sha = "a".repeat(64);
         write(
-            json!({"schema":1,"plugins":[{"id":"vestra.video","version":"1.0.0","file":"vestra.video-1.0.0.vxp","sha256":sha}]}),
+            json!({"schema":2,"plugins":[{"id":"vestra.video","version":"1.0.0","directory":"vestra.video"}]}),
         );
-        assert_eq!(seed::read(dir.path()).unwrap().len(), 1);
+        assert_eq!(builtin::read(dir.path()).unwrap().len(), 1);
+        let entry = |id: &str, version: &str, directory: &str| json!({"id":id,"version":version,"directory":directory});
         for bad in [
-            json!({"schema":2,"plugins":[]}),
-            json!({"schema":1,"plugins":[{"id":"v","version":"1.0.0","file":"../v.vxp","sha256":sha}]}),
-            json!({"schema":1,"plugins":[{"id":"v","version":"1.0.0","file":"v.zip","sha256":sha}]}),
-            json!({"schema":1,"plugins":[{"id":"v","version":"1.0.0","file":"v.vxp","sha256":"x"}]}),
-            json!({"schema":1,"plugins":[{"id":"v","version":"1.0.0","file":"v.vxp","sha256":sha,"extra":1}]}),
+            // Schema 1 listed .vxp archives (players up to 0.5).
+            json!({"schema":1,"plugins":[]}),
+            json!({"schema":2,"plugins":[{"id":"vestra.v","version":"1.0.0","file":"v.vxp","sha256":"a"}]}),
+            json!({"schema":2,"plugins":[entry("vestra.v","1.0.0","../vestra.v")]}),
+            json!({"schema":2,"plugins":[entry("vestra.v","1.0.0","other")]}),
+            json!({"schema":2,"plugins":[entry("vestra.v","1.0","vestra.v")]}),
+            // Only reserved ids are built in.
+            json!({"schema":2,"plugins":[entry("zysilm.youtube","1.0.0","zysilm.youtube")]}),
+            json!({"schema":2,"plugins":[entry("vestra.v","1.0.0","vestra.v"),entry("vestra.v","1.0.1","vestra.v")]}),
+            json!({"schema":2,"plugins":[{"id":"vestra.v","version":"1.0.0","directory":"vestra.v","extra":1}]}),
         ] {
             write(bad.clone());
-            assert!(seed::read(dir.path()).is_err(), "{bad}");
+            assert!(builtin::read(dir.path()).is_err(), "{bad}");
         }
     }
 
-    /// A `.vxp` of `id` `version` with `main.js` saying `body`, and its entry.
-    fn archive(dir: &Path, id: &str, version: &str, body: &str) -> seed::Entry {
-        use std::io::Write;
-        let file = format!("{id}-{version}.vxp");
-        let mut writer = zip::ZipWriter::new(std::fs::File::create(dir.join(&file)).unwrap());
-        let options = zip::write::SimpleFileOptions::default();
-        writer.start_file("manifest.json", options).unwrap();
-        writer
-            .write_all(
-                &serde_json::to_vec(&json!({"id":id,"apiVersion":plugins::API,
-                "version":version,"entry":"main.js","capabilities":[]}))
-                .unwrap(),
+    /// Built-ins run in place: the registry reads each manifest from the
+    /// installation, which may be read-only, and writes nothing there.
+    #[test]
+    fn builtins_load_in_place_from_a_read_only_installation() {
+        let resources = tempfile::tempdir().unwrap();
+        let plugins_dir = resources.path().join("plugins");
+        std::fs::create_dir(&plugins_dir).unwrap();
+        builtin_dir(&plugins_dir, "vestra.demo", "1.2.0");
+        builtin_json(&plugins_dir, &[("vestra.demo", "1.2.0")]);
+        set_read_only(&plugins_dir, true);
+        let before = snapshot(&plugins_dir);
+        let builtins = builtin::load(&plugins_dir).unwrap();
+        let demo = &builtins["vestra.demo"];
+        assert_eq!(
+            demo.directory,
+            dunce::canonicalize(plugins_dir.join("vestra.demo")).unwrap(),
+            "runs from the installation"
+        );
+        let manifest = demo.manifest.as_ref().unwrap();
+        assert_eq!(manifest.version.as_deref(), Some("1.2.0"));
+        // Its entry resolves inside its directory, as `Plugin::load_manifest` checks.
+        plugins::package_file(&demo.directory, &manifest.entry).unwrap();
+        assert_eq!(snapshot(&plugins_dir), before, "nothing written");
+        set_read_only(&plugins_dir, false);
+    }
+
+    #[test]
+    fn a_builtin_that_fails_its_checks_is_kept_with_the_reason() {
+        let plugins_dir = tempfile::tempdir().unwrap();
+        let root = plugins_dir.path();
+        builtin_dir(root, "vestra.good", "1.0.0");
+        builtin_dir(root, "vestra.mislabelled", "2.0.0");
+        builtin_json(
+            root,
+            &[
+                ("vestra.good", "1.0.0"),
+                ("vestra.mislabelled", "2.0.1"),
+                ("vestra.missing", "1.0.0"),
+            ],
+        );
+        let builtins = builtin::load(root).unwrap();
+        assert!(builtins["vestra.good"].manifest.is_ok());
+        let error = builtins["vestra.mislabelled"]
+            .manifest
+            .as_ref()
+            .unwrap_err();
+        assert!(error.contains("not vestra.mislabelled 2.0.1"), "{error}");
+        let error = builtins["vestra.missing"].manifest.as_ref().unwrap_err();
+        assert!(error.contains("missing"), "{error}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_builtin_directory_that_is_a_link_is_refused() {
+        let plugins_dir = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        builtin_dir(elsewhere.path(), "vestra.demo", "1.0.0");
+        std::os::unix::fs::symlink(
+            elsewhere.path().join("vestra.demo"),
+            plugins_dir.path().join("vestra.demo"),
+        )
+        .unwrap();
+        builtin_json(plugins_dir.path(), &[("vestra.demo", "1.0.0")]);
+        let builtins = builtin::load(plugins_dir.path()).unwrap();
+        let error = builtins["vestra.demo"].manifest.as_ref().unwrap_err();
+        assert!(error.contains("must be a directory"), "{error}");
+    }
+
+    #[test]
+    fn builtins_are_disabled_never_uninstalled_and_third_party_plugins_are() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        store
+            .sync_builtins(&["vestra.audio".to_owned()].into())
+            .unwrap();
+        let builtin = store.get("vestra.audio");
+        let error = uninstallable("vestra.audio", &builtin, true, Some(builtin.revision));
+        assert_eq!(error.unwrap_err().code, "unsupported");
+        // Disabling works and survives a restart.
+        store.set_disabled("vestra.audio", true).unwrap();
+        drop(store);
+        let mut store = Store::open(root.path().into()).unwrap();
+        assert!(store.disabled().contains("vestra.audio"));
+        store.set_disabled("vestra.audio", false).unwrap();
+        // A third-party plugin: refused only with a stale revision.
+        let installed = install(&mut store, "a.b", "1.0.0", Source::File, false).unwrap();
+        assert_eq!(
+            uninstallable("a.b", &installed, true, Some(installed.revision + 1))
+                .unwrap_err()
+                .code,
+            "revisionConflict"
+        );
+        assert!(uninstallable("a.b", &installed, true, Some(installed.revision)).is_ok());
+        let none = Installed::default();
+        assert_eq!(
+            uninstallable("x", &none, false, Some(0)).unwrap_err().code,
+            "missing"
+        );
+        assert_eq!(
+            uninstallable("x", &none, true, Some(0)).unwrap_err().code,
+            "unsupported"
+        );
+    }
+
+    #[test]
+    fn third_party_uninstall_keeps_or_drops_its_data_and_its_files_go_off_thread() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        let first = install(&mut store, "k", "1.0.0", Source::File, false).unwrap();
+        let guid = first.instance.unwrap().guid;
+        let package = first.current.unwrap();
+        // Keeping data: the instance goes dormant, the package is garbage.
+        store.uninstall("k", "rm", json!({}), true).unwrap();
+        assert!(store.dormant().contains_key(&guid));
+        assert!(package.directory.is_dir(), "not removed on this thread");
+        let running = cleanup::spawn(
+            store.library(),
+            cleanup::Work::Only([package.digest.clone()].into()),
+        )
+        .unwrap();
+        assert!(running.blocks(Some(&package.digest)));
+        assert!(!running.blocks(Some(&"0".repeat(64))) && !running.blocks(None));
+        assert_eq!(running.join().name(), Some(cleanup::THREAD));
+        assert!(!package.directory.exists());
+        // Reinstalling reconnects; uninstalling with the data forgets it.
+        let again = install(&mut store, "k", "1.0.0", Source::File, false).unwrap();
+        assert_eq!(again.instance.unwrap().guid, guid);
+        store.uninstall("k", "rm2", json!({}), false).unwrap();
+        assert!(store.dormant().is_empty());
+        let running = cleanup::spawn(
+            store.library(),
+            cleanup::Work::Unreferenced(store.referenced()),
+        )
+        .unwrap();
+        assert!(
+            running.blocks(None),
+            "the start-up scan blocks every change"
+        );
+        running.join();
+        assert!(!package.directory.exists());
+    }
+
+    /// The library of a player up to 0.5: each built-in seeded (current,
+    /// previous, `seededVersion`), a third-party plugin upgraded once
+    /// (previous kept) and an interrupted seed. Opening it with this player
+    /// drops the packages from built-in records and every previous version
+    /// in one catalog write, keeps instances, data and the disabled flag,
+    /// and leaves the files to the cleanup thread.
+    #[test]
+    fn a_library_from_0_5_migrates_to_builtins_in_place_without_rollback() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        let old = install(&mut store, "vestra.audio", "1.0.0", Source::File, false).unwrap();
+        let new = install(&mut store, "vestra.audio", "1.1.0", Source::File, false).unwrap();
+        let youtube_old =
+            install(&mut store, "zysilm.youtube", "1.0.0", Source::File, false).unwrap();
+        let youtube = install(&mut store, "zysilm.youtube", "1.1.0", Source::File, false).unwrap();
+        let fresh_seed = {
+            let dir = tempfile::tempdir().unwrap();
+            store
+                .stage(&candidate(dir.path(), "vestra.info", "1.0.0"))
+                .unwrap()
+        };
+        store
+            .prepare_with_receipt(
+                "vestra.info",
+                0,
+                &fresh_seed,
+                "seed-info",
+                json!({"status":"preparing"}),
+                Some(Instance {
+                    builtin: true,
+                    ..Instance::new(Source::Bundled)
+                }),
             )
             .unwrap();
-        writer.start_file("ui/a.slint", options).unwrap();
-        writer.write_all(b"export component A {}").unwrap();
-        writer.start_file("main.js", options).unwrap();
-        writer.write_all(body.as_bytes()).unwrap();
-        writer.finish().unwrap();
-        seed::Entry {
-            id: id.into(),
-            version: version.into(),
-            sha256: package_archive::sha256(&dir.join(&file)).unwrap(),
-            file,
-        }
-    }
-    /// Seed `entry` the way the host does: decide, stage (the seeding
-    /// thread's part), commit (the UI thread's part).
-    fn seed_into(store: &mut Store, dir: &Path, entry: &seed::Entry) -> Option<Installed> {
-        let before = store.get(&entry.id);
-        let instance = seed::decide(entry, &before).unwrap()?;
-        let target = seed::stage(dir, &store.library(), entry).unwrap();
-        let receipt = json!({"operationId":"seed","status":"preparing"});
-        Some(
-            store
-                .commit_seeded(
-                    &entry.id,
-                    before.revision,
-                    &target,
-                    &format!("seed-{}", &entry.sha256[..32]),
-                    (receipt.clone(), receipt),
-                    instance,
-                )
-                .unwrap(),
-        )
-    }
+        store.set_disabled("vestra.audio", true).unwrap();
+        drop(store);
+        // Make it what 0.5 wrote: a seeded built-in with a previous version
+        // (the `install` helper drops `previous`, as this player does).
+        let path = dunce::canonicalize(root.path())
+            .unwrap()
+            .join("catalog.json");
+        let mut catalog: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let audio = &mut catalog["installed"]["vestra.audio"];
+        audio["previous"] = serde_json::to_value(old.current.as_ref().unwrap()).unwrap();
+        audio["instance"]["builtin"] = true.into();
+        audio["instance"]["source"] = json!({"kind":"bundled"});
+        audio["instance"]["seededVersion"] = "1.1.0".into();
+        catalog["installed"]["zysilm.youtube"]["previous"] =
+            serde_json::to_value(youtube_old.current.as_ref().unwrap()).unwrap();
+        std::fs::write(&path, serde_json::to_vec(&catalog).unwrap()).unwrap();
+        let guid = new.instance.unwrap().guid;
 
-    #[test]
-    fn seeding_installs_upgrades_only_to_newer_and_keeps_rollback_and_disabled() {
-        let root = tempfile::tempdir().unwrap();
-        let dir = tempfile::tempdir().unwrap();
-        let mut store = Store::open(root.path().join("store")).unwrap();
-        let v1 = archive(dir.path(), "vestra.demo", "1.0.0", "// 1");
-        let first = seed_into(&mut store, dir.path(), &v1).unwrap();
-        let instance = first.instance.clone().unwrap();
-        assert!(instance.builtin);
-        assert_eq!(instance.seeded_version.as_deref(), Some("1.0.0"));
-        let current = first.current.clone().unwrap();
-        // Staged in place under its digest, as a candidate captures it.
-        let extracted = package_archive::extract(&dir.path().join(&v1.file)).unwrap();
+        let store = Store::open(root.path().into()).unwrap();
+        let audio = store.get("vestra.audio");
+        let instance = audio.instance.clone().unwrap();
+        assert!(audio.current.is_none() && audio.previous.is_none());
+        assert_eq!(instance.guid, guid, "data and secrets stay with the GUID");
+        assert!(instance.builtin && instance.seeded_version.is_none());
+        assert!(store.disabled().contains("vestra.audio"));
+        let youtube_now = store.get("zysilm.youtube");
+        assert!(youtube_now.previous.is_none());
         assert_eq!(
-            current.digest,
-            Candidate::capture(extracted.path()).unwrap().digest()
+            youtube_now.current.as_ref().unwrap().digest,
+            youtube.current.as_ref().unwrap().digest
         );
-        assert!(current.directory.join("ui/a.slint").is_file());
-        // The same version again: nothing to do.
-        assert!(seed_into(&mut store, dir.path(), &v1).is_none());
-        // A newer version upgrades the same instance; the user's disabled
-        // flag stays; the old version is the rollback target.
-        store.set_disabled("vestra.demo", true).unwrap();
-        let v2 = archive(dir.path(), "vestra.demo", "1.1.0", "// 2");
-        let second = seed_into(&mut store, dir.path(), &v2).unwrap();
-        assert_eq!(second.instance.as_ref().unwrap().guid, instance.guid);
-        assert_eq!(second.previous.as_ref().unwrap().digest, current.digest);
-        assert!(store.disabled().contains("vestra.demo"));
-        assert!(store.pending().is_empty());
-        // A rollback to 1.0.0 is not overwritten by the same installation.
-        let rolled = store.get("vestra.demo");
-        store
-            .prepare("vestra.demo", rolled.revision, &current, "rollback-1")
-            .unwrap();
-        store.commit("vestra.demo", "rollback-1").unwrap();
-        assert!(seed_into(&mut store, dir.path(), &v2).is_none());
-        // An older installation does not downgrade either.
-        let old = archive(dir.path(), "vestra.demo", "0.9.0", "// 0");
         assert!(
-            seed::decide(&old, &store.get("vestra.demo"))
+            store.pending().is_empty(),
+            "the interrupted seed is dropped"
+        );
+        assert_eq!(store.operations()["seed-info"]["status"], "cancelled");
+        // The catalog still has only the fields 0.5 knows (it refuses unknown
+        // ones), `previous` included, so an older player still opens it.
+        let written: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let keys = |value: &Value| {
+            let mut keys = value
+                .as_object()
                 .unwrap()
-                .is_none()
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>();
+            keys.sort();
+            keys
+        };
+        assert_eq!(
+            keys(&written["installed"]["vestra.audio"]),
+            ["current", "instance", "previous", "revision"]
         );
-        // Garbage collection keeps every referenced version.
-        store.library().gc(&store.referenced()).unwrap();
-        let after = store.get("vestra.demo");
-        assert!(after.current.unwrap().directory.is_dir());
-        assert!(after.previous.unwrap().directory.is_dir());
-    }
-
-    #[test]
-    fn seeding_refuses_a_wrong_hash_or_a_mislabelled_archive() {
-        let root = tempfile::tempdir().unwrap();
-        let dir = tempfile::tempdir().unwrap();
-        let store = Store::open(root.path().join("store")).unwrap();
-        let mut entry = archive(dir.path(), "vestra.demo", "1.0.0", "// 1");
-        entry.sha256 = "0".repeat(64);
-        let error = seed::stage(dir.path(), &store.library(), &entry).unwrap_err();
-        assert!(error.to_string().contains("sha256"), "{error}");
-        let mut entry = archive(dir.path(), "vestra.demo", "1.0.0", "// 1");
-        entry.version = "1.0.1".into();
-        let error = seed::stage(dir.path(), &store.library(), &entry).unwrap_err();
-        assert!(
-            error.to_string().contains("not vestra.demo 1.0.1"),
-            "{error}"
+        assert_eq!(
+            keys(&written["installed"]["vestra.audio"]["instance"]),
+            ["builtin", "guid", "installedAt", "source"]
         );
-        // Nothing half-written is referenced: the next collection removes it.
-        store.library().gc(&store.referenced()).unwrap();
-        let left = std::fs::read_dir(root.path().join("store/packages"))
+        assert!(written["installed"]["zysilm.youtube"]["previous"].is_null());
+        // Idempotent: opening again writes nothing.
+        let bytes = std::fs::read(&path).unwrap();
+        drop(store);
+        let mut store = Store::open(root.path().into()).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        // The built-in copies, previous versions and the seed's staging go;
+        // the third-party plugin's current version stays.
+        store
+            .sync_builtins(&["vestra.audio".to_owned(), "vestra.info".to_owned()].into())
+            .unwrap();
+        let removed = store.library().collect(&store.referenced()).unwrap();
+        assert_eq!(removed, 4);
+        assert!(!old.current.unwrap().directory.exists());
+        assert!(!new.current.unwrap().directory.exists());
+        assert!(!youtube_old.current.unwrap().directory.exists());
+        assert!(!fresh_seed.directory.exists());
+        assert!(youtube.current.unwrap().directory.is_dir());
+        let left = std::fs::read_dir(root.path().join("packages"))
             .unwrap()
             .count();
-        assert_eq!(left, 0);
+        assert_eq!(left, 1);
     }
 
-    /// Another process sharing the library (a development or headless run)
-    /// may collect a directory staged but not committed yet, or a current one.
     #[test]
-    fn a_package_collected_by_another_process_is_not_committed_and_heals() {
+    fn builtin_records_follow_builtin_json() {
         let root = tempfile::tempdir().unwrap();
-        let dir = tempfile::tempdir().unwrap();
-        let mut store = Store::open(root.path().join("store")).unwrap();
-        let v1 = archive(dir.path(), "vestra.demo", "1.0.0", "// 1");
-        // Staged, then collected before the commit: no commit, no seededVersion.
-        let target = seed::stage(dir.path(), &store.library(), &v1).unwrap();
-        std::fs::remove_dir_all(&target.directory).unwrap();
-        let instance = seed::decide(&v1, &store.get("vestra.demo"))
-            .unwrap()
+        let mut store = Store::open(root.path().into()).unwrap();
+        let ids = |list: &[&str]| {
+            list.iter()
+                .map(|id| id.to_string())
+                .collect::<BTreeSet<_>>()
+        };
+        // A fresh profile: one record per built-in, no package, in one write.
+        store
+            .sync_builtins(&ids(&["vestra.a", "vestra.b"]))
             .unwrap();
-        let receipt = json!({"operationId":"seed","status":"preparing"});
-        let error = store
-            .commit_seeded(
-                "vestra.demo",
-                0,
-                &target,
-                "seed-1",
-                (receipt.clone(), receipt),
-                instance,
-            )
-            .unwrap_err();
-        assert!(error.to_string().contains("gone"), "{error}");
-        let after = store.get("vestra.demo");
-        assert!(after.current.is_none() && after.instance.is_none());
-        assert!(store.pending().is_empty());
-        // Seeded, then its current directory collected: seeded again at the
-        // same version, into the same instance.
-        let first = seed_into(&mut store, dir.path(), &v1).unwrap();
-        let current = first.current.unwrap();
+        let a = store.get("vestra.a").instance.unwrap();
+        assert!(a.builtin && a.source == Source::Bundled);
+        assert!(store.get("vestra.a").current.is_none());
         assert!(
-            seed::decide(&v1, &store.get("vestra.demo"))
+            std::fs::read_dir(root.path().join("packages"))
                 .unwrap()
+                .next()
                 .is_none()
         );
-        std::fs::remove_dir_all(&current.directory).unwrap();
-        let healed = seed::decide(&v1, &store.get("vestra.demo"))
+        let path = dunce::canonicalize(root.path())
             .unwrap()
+            .join("catalog.json");
+        let bytes = std::fs::read(&path).unwrap();
+        store
+            .sync_builtins(&ids(&["vestra.a", "vestra.b"]))
             .unwrap();
-        assert_eq!(healed.guid, first.instance.unwrap().guid);
-        let target = seed::stage(dir.path(), &store.library(), &v1).unwrap();
-        assert_eq!(target.digest, current.digest);
-        assert!(current.directory.join("main.js").is_file());
-    }
-
-    #[test]
-    fn another_source_is_not_seeded() {
-        let dir = tempfile::tempdir().unwrap();
-        let entry = archive(dir.path(), "vestra.demo", "1.0.0", "// 1");
-        let before = Installed {
-            instance: Some(Instance::new(Source::File)),
-            ..Default::default()
-        };
-        assert!(seed::decide(&entry, &before).unwrap().is_none());
-        let mut bad = archive(dir.path(), "vestra.demo", "1.0.0", "// 1");
-        bad.version = "1.0".into();
-        assert!(seed::decide(&bad, &Installed::default()).is_err());
-    }
-
-    /// Where seeding's time goes, on real packages (not run by default):
-    /// `VESTRA_SEED_BENCH_OLD` / `VESTRA_SEED_BENCH_NEW` name two
-    /// `resources/plugins` directories (an older and a newer installation).
-    /// Prints, per package, the seeding thread's part (hash, unpack and
-    /// verify) and the UI thread's part (the catalog commit).
-    #[test]
-    #[ignore]
-    fn seed_bench() {
-        let (Some(old), Some(new)) = (
-            std::env::var_os("VESTRA_SEED_BENCH_OLD"),
-            std::env::var_os("VESTRA_SEED_BENCH_NEW"),
-        ) else {
-            return;
-        };
-        let root = tempfile::tempdir().unwrap();
-        let mut store = Store::open(root.path().join("packages")).unwrap();
-        let mut run = |dir: &Path, label: &str| {
-            let started = std::time::Instant::now();
-            let mut longest_commit = 0;
-            store.library().gc(&store.referenced()).unwrap();
-            for entry in seed::read(dir).unwrap() {
-                let before = store.get(&entry.id);
-                let Some(instance) = seed::decide(&entry, &before).unwrap() else {
-                    continue;
-                };
-                let lap = std::time::Instant::now();
-                let target = seed::stage(dir, &store.library(), &entry).unwrap();
-                let staged = lap.elapsed().as_millis();
-                let lap = std::time::Instant::now();
-                let receipt = json!({"operationId":"seed","status":"preparing"});
-                store
-                    .commit_seeded(
-                        &entry.id,
-                        before.revision,
-                        &target,
-                        &format!("seed-{}", &entry.sha256[..32]),
-                        (receipt.clone(), receipt),
-                        instance,
-                    )
-                    .unwrap();
-                let committed = lap.elapsed().as_millis();
-                longest_commit = longest_commit.max(committed);
-                eprintln!(
-                    "{label} {} {}: seeding thread {staged} ms, UI commit {committed} ms",
-                    entry.id, entry.version
-                );
-            }
-            eprintln!(
-                "{label}: {} ms in all, longest UI commit {longest_commit} ms",
-                started.elapsed().as_millis()
-            );
-        };
-        run(Path::new(&old), "first");
-        run(Path::new(&new), "upgrade");
-        // The steps, for each package of the newer installation: unpacking
-        // with and without flushing each file, reading new files (the
-        // antivirus scans each on first read) and reading them again.
-        let dir = Path::new(&new);
-        for entry in seed::read(dir).unwrap() {
-            let file = dir.join(&entry.file);
-            let ms = |lap: std::time::Instant| lap.elapsed().as_millis();
-            let lap = std::time::Instant::now();
-            package_archive::sha256(&file).unwrap();
-            let hash = ms(lap);
-            let plain = tempfile::tempdir().unwrap();
-            let lap = std::time::Instant::now();
-            package_archive::extract_into(&file, plain.path(), false).unwrap();
-            let unpack = ms(lap);
-            let durable = tempfile::tempdir().unwrap();
-            let lap = std::time::Instant::now();
-            package_archive::extract_into(&file, durable.path(), true).unwrap();
-            let unpack_durable = ms(lap);
-            let lap = std::time::Instant::now();
-            package_stage::inspect(plain.path()).unwrap();
-            let first_read = ms(lap);
-            let lap = std::time::Instant::now();
-            package_stage::inspect(plain.path()).unwrap();
-            let second_read = ms(lap);
-            eprintln!(
-                "steps {}: sha256 {hash} ms, unpack {unpack} ms, unpack+flush {unpack_durable} ms, \
-                 first read+hash {first_read} ms, second read+hash {second_read} ms",
-                entry.id
-            );
-        }
+        assert_eq!(std::fs::read(&path).unwrap(), bytes, "nothing to change");
+        // A built-in the installation dropped is retired with its data...
+        store.set_disabled("vestra.a", true).unwrap();
+        store.sync_builtins(&ids(&["vestra.b"])).unwrap();
+        assert!(store.get("vestra.a").instance.is_none());
+        assert_eq!(store.dormant()[&a.guid].id, "vestra.a");
+        assert!(!store.disabled().contains("vestra.a"));
+        // ...and reconnects to it when it comes back.
+        store
+            .sync_builtins(&ids(&["vestra.a", "vestra.b"]))
+            .unwrap();
+        assert_eq!(store.get("vestra.a").instance.unwrap().guid, a.guid);
+        assert!(store.dormant().is_empty());
+        // A reserved id installed from a file before the rule is left alone.
+        let legacy_root = tempfile::tempdir().unwrap();
+        let mut legacy = Store::open(legacy_root.path().into()).unwrap();
+        let file = install(&mut legacy, "vestra.c", "1.0.0", Source::File, false).unwrap();
+        legacy.sync_builtins(&ids(&["vestra.c"])).unwrap();
+        assert_eq!(legacy.get("vestra.c").instance, file.instance);
+        assert!(check_reserved("vestra.c", file.instance.as_ref()).is_err());
     }
 
     /// What compiling Slint costs on the UI thread (not run by default):
@@ -1953,10 +2089,9 @@ mod tests {
         }
         let dir = Path::new(&dir);
         let mut total = 0;
-        for entry in seed::read(dir).unwrap() {
-            let extracted = package_archive::extract(&dir.join(&entry.file)).unwrap();
+        for entry in builtin::read(dir).unwrap() {
             let mut files = Vec::new();
-            let mut stack = vec![extracted.path().to_path_buf()];
+            let mut stack = vec![dir.join(&entry.directory)];
             while let Some(next) = stack.pop() {
                 for item in std::fs::read_dir(next).unwrap() {
                     let path = item.unwrap().path();

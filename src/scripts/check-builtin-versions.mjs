@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
  * A built-in plugin whose shipped files changed must ship under a higher
- * version. The host upgrades a seeded built-in only when the installation
- * carries a newer version than it last seeded (host/src/package_manager.rs
- * `seed::decide`, doc/architecture/store-api-proposal.md §3.3), so a
- * change shipped under the same version never reaches existing users (#27:
- * workshop's ai.slint changed under 2.2.3, and players that had run 0.5.0
- * kept the broken window).
+ * version. Players up to 0.5 copied ("seeded") built-ins into the user's
+ * library and upgraded a copy only when the installation carried a newer
+ * version, so a change shipped under the same version never reached
+ * existing users (#27: workshop's ai.slint changed under 2.2.3, and players
+ * that had run 0.5.0 kept the broken window). Since the 2026-10 plugin
+ * management round built-ins run in place from the installation and update
+ * with the player whatever their version; this guard is proposed for
+ * removal in that round's P4 (doc/process/rounds/2026-10-plugin-management.md).
  *
  *   node scripts/check-builtin-versions.mjs [--base <ref>] [--head <ref>]
  *

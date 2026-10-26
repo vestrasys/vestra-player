@@ -2,23 +2,25 @@
 /**
  * Builds the built-in plugins a packaged player ships
  * (`Vestra Player.app/Contents/Resources/plugins/`, `<install dir>\resources\plugins\`
- * on Windows; seeded by the host at
- * start-up; see host/src/package_manager.rs `start_seeding`):
+ * on Windows). The host runs each in place from its directory; nothing is
+ * copied into the user's library (host/src/package_manager.rs `builtin`):
  *
  *   plugins/
- *     builtin.json                 { schema: 1, plugins: [{ id, version, file, sha256 }] }
- *     <id>-<version>.vxp           `vestra-plugin pack` of each plugins/<name>
+ *     builtin.json     { schema: 2, plugins: [{ id, version, directory }] }
+ *     <id>/            the content of `vestra-plugin pack` of each plugins/<name>
+ *
+ * Each plugin is packed into a .vxp as for the store, then unpacked into
+ * `<id>/` and the .vxp deleted, so the shipped files are exactly what an
+ * install of that .vxp would run. `directory` is always the id.
  *
  * Every directory under plugins/ with a manifest.json is built in (the
  * network-video plugins live in the plugins repository and are installed
- * from the store). A built-in is upgraded on users' machines only when its
- * version here is newer than the one the player last seeded, so bump a
- * plugin's version whenever it changes (`npm run builtin-versions` checks it).
+ * from the store). Only `vestra.` ids may be built in (the host refuses
+ * others). A built-in updates with the player whatever its version.
  *
  *   node scripts/stage-plugins.mjs <destination>/plugins [name...]
  */
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import {
   mkdir,
@@ -26,9 +28,12 @@ import {
   readFile,
   rename,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { inflateRawSync } from "node:zlib";
+import { zipDirectory } from "../packaging/lib.mjs";
 
 const source = resolve(import.meta.dirname, "..");
 const pluginsRoot = join(source, "plugins");
@@ -42,6 +47,57 @@ export async function builtinNames() {
     )
     .map((item) => item.name)
     .sort();
+}
+
+/** Every file under `dir`, relative, with `/`. */
+async function files(dir) {
+  return (await readdir(dir, { recursive: true, withFileTypes: true }))
+    .filter((item) => item.isFile())
+    .map((item) =>
+      relative(dir, join(item.parentPath, item.name)).split(sep).join("/"),
+    )
+    .sort();
+}
+
+/**
+ * Unpack `archive` into `directory` (new), then check the tree holds
+ * exactly the archive's files with the same bytes.
+ */
+export async function unpack(archive, directory) {
+  const { bytes, entries } = await zipDirectory(archive);
+  const content = new Map();
+  for (const entry of entries) {
+    if (entry.name.endsWith("/")) continue;
+    const parts = entry.name.split("/");
+    if (
+      entry.name.includes("\\") ||
+      parts.some((part) => part === "" || part === "." || part === "..")
+    )
+      throw new Error(`${archive}: unsafe entry ${entry.name}`);
+    const local = entry.header;
+    const start =
+      local +
+      30 +
+      bytes.readUInt16LE(local + 26) +
+      bytes.readUInt16LE(local + 28);
+    const data = bytes.subarray(start, start + entry.compressed);
+    if (entry.method === 0) content.set(entry.name, data);
+    else if (entry.method === 8) content.set(entry.name, inflateRawSync(data));
+    else
+      throw new Error(`${archive}: ${entry.name} uses method ${entry.method}`);
+  }
+  await mkdir(directory);
+  for (const [name, data] of content) {
+    const target = join(directory, ...name.split("/"));
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, data, { flag: "wx" });
+  }
+  const unpacked = await files(directory);
+  if (unpacked.join("\n") !== [...content.keys()].sort().join("\n"))
+    throw new Error(`${directory} does not match ${archive}`);
+  for (const [name, data] of content)
+    if (!(await readFile(join(directory, ...name.split("/")))).equals(data))
+      throw new Error(`${directory}/${name} differs from ${archive}`);
 }
 
 export async function stagePlugins(destination, names) {
@@ -58,22 +114,26 @@ export async function stagePlugins(destination, names) {
     const manifest = JSON.parse(
       await readFile(join(pluginsRoot, name, "dist/manifest.json"), "utf8"),
     );
-    const file = `${manifest.id}-${manifest.version}.vxp`;
+    if (!/^vestra\./i.test(manifest.id))
+      throw new Error(`${name}: built-in plugins need a vestra. id`);
+    const file = join(destination, `${manifest.id}-${manifest.version}.vxp`);
     // SDK 1.0 named the archive .zip; the content is the same.
     const legacy = join(destination, `${manifest.id}-${manifest.version}.zip`);
-    if (!existsSync(join(destination, file)) && existsSync(legacy))
-      await rename(legacy, join(destination, file));
-    const bytes = await readFile(join(destination, file));
+    if (!existsSync(file) && existsSync(legacy)) await rename(legacy, file);
+    const directory = join(destination, manifest.id);
+    await unpack(file, directory);
+    await rm(file);
+    if (!(await stat(join(directory, "manifest.json"))).isFile())
+      throw new Error(`${directory}: no manifest.json`);
     plugins.push({
       id: manifest.id,
       version: manifest.version,
-      file,
-      sha256: createHash("sha256").update(bytes).digest("hex"),
+      directory: manifest.id,
     });
   }
   await writeFile(
     join(destination, "builtin.json"),
-    `${JSON.stringify({ schema: 1, plugins }, null, 2)}\n`,
+    `${JSON.stringify({ schema: 2, plugins }, null, 2)}\n`,
   );
   return plugins;
 }

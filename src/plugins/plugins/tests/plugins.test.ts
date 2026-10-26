@@ -24,6 +24,7 @@ const info = (id: string, patch: Partial<Info> = {}): Info => ({
   error: null,
   capabilities: ["commands"],
   directory: `/packages/${id}`,
+  // Required by the SDK 1.5.15 TestHost type; deprecated and ignored from 1.5.16.
   previousVersion: null,
   ...patch,
 });
@@ -35,7 +36,6 @@ const REPOSITORY = "https://plugins.example.org/index.json";
  */
 const LIST = (root: string) => [
   info("vestra.audio", {
-    previousVersion: "0.0.9",
     capabilities: ["commands", "processing.audio", "playback.read"],
     source: { kind: "repository", url: REPOSITORY },
     dataDirectory: join(root, "instance-7f3a"),
@@ -142,7 +142,6 @@ test("J07: details of the selected plugin", async () => {
     details(host).map((d) => [d.label, d.kind, d.value, d.url]),
     [
       ["source", "source", "repository", REPOSITORY],
-      ["previous", "", "0.0.9", ""],
       ["package", "", "/packages/vestra.audio", ""],
       ["data", "", join(root, "instance-7f3a"), ""],
       ["capabilities", "capability", "commands", ""],
@@ -240,7 +239,6 @@ test("J07: development loads", async () => {
   await emit(host, "select", "dev.thing");
   assert.equal(props(host)["can-toggle"], true);
   assert.equal(props(host)["can-uninstall"], false);
-  assert.equal(props(host)["can-rollback"], false);
   assert.equal(props(host)["uninstall-tip"], "not-installed");
   assert.ok(details(host).some((d) => d.label === "note" && d.kind === "development"));
   assert.deepEqual(details(host).find((d) => d.label === "source"), { label: "source", kind: "source", value: "development", url: "", warn: false });
@@ -269,18 +267,14 @@ test("J07: uninstall asks, can remove the data, and reports", async () => {
   assert.equal(host.packageCalls.length, 1);
 });
 
-test("J07: rollback follows the change; failures are shown", async () => {
+test("J07: no rollback, even if an older player lists a previous version; failures are shown", async () => {
   const host = new TestHost();
-  await start(host);
-  await emit(host, "select", "vestra.audio");
-  assert.equal(props(host)["can-rollback"], true);
-  host.handle("packages.rollback", (p) => ({ operationId: String(p.requestId), status: "committed" }));
-  await emit(host, "rollback");
-  assert.deepEqual(message(host), { kind: "rolled-back", id: "vestra.audio", code: "", text: "0.0.9", warn: false });
-  assert.equal(host.osd.at(-1), "Rolled back vestra.audio to 0.0.9");
-  host.handle("packages.rollback", (p) => ({ operationId: String(p.requestId), status: "failed", message: "manifest invalid" }));
-  await emit(host, "rollback");
-  assert.deepEqual(message(host), { kind: "rollback", id: "vestra.audio", code: "failed", text: "manifest invalid", warn: true });
+  await start(host, (root) => [info("zysilm.youtube", { previousVersion: "0.0.9", source: { kind: "file" }, dataDirectory: join(root, "instance-yt") })]);
+  await emit(host, "select", "zysilm.youtube");
+  assert.ok(!("can-rollback" in props(host)), "no Roll Back button");
+  assert.ok(!details(host).some((d) => d.value === "0.0.9"), "no previous version shown");
+  assert.equal(props(host)["can-uninstall"], true);
+  assert.ok(!host.sent("packages.rollback").length);
   host.handle("packages.setEnabled", () => {
     throw new HostError("busy", "installing");
   });
@@ -345,23 +339,23 @@ test("Simplified Chinese: the page's words are the old ones", async () => {
   assert.equal(zh("Link ({})", ["https://example.org/x-1.0.0.vxp"]), "链接（https://example.org/x-1.0.0.vxp）");
   assert.equal(zh("{0}  {1}", ["commands", zh("Menu commands and shortcuts")]), "commands  菜单命令与快捷键");
   assert.deepEqual(
-    ["Error", "Warning", "Note", "Previous", "Package", "Data folder", "Capabilities", "Unavailable", "(none)"].map((t) => zh(t)),
-    ["失败原因", "提示", "说明", "上一版本", "包目录", "数据目录", "能力", "不可用", "（无）"],
+    ["Error", "Warning", "Note", "Package", "Data folder", "Capabilities", "Unavailable", "(none)"].map((t) => zh(t)),
+    ["失败原因", "提示", "说明", "包目录", "数据目录", "能力", "不可用", "（无）"],
   );
   assert.equal(zh("Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"), "内置插件：随播放器安装和更新，只能停用，不能卸载");
-  assert.equal(zh("Development load: disabling lasts only for this run; cannot be uninstalled or rolled back"), "开发加载：停用只在本次运行有效；不能卸载或回退");
+  assert.equal(zh("Development load: disabling lasts only for this run; cannot be uninstalled"), "开发加载：停用只在本次运行有效；不能卸载");
   // Buttons and tips.
   assert.deepEqual(
-    ["Enable", "Disable", "Reload", "Roll Back", "Uninstall…", "Open Data Folder"].map((t) => zh(t)),
-    ["启用", "停用", "重新加载", "回退到上一版本", "卸载…", "打开数据目录"],
+    ["Enable", "Disable", "Reload", "Uninstall…", "Open Data Folder"].map((t) => zh(t)),
+    ["启用", "停用", "重新加载", "卸载…", "打开数据目录"],
   );
   assert.equal(zh("Plugin Manager cannot disable itself"), "插件管理不能停用自身");
   assert.equal(zh("Built-in plugins can only be disabled"), "内置插件只能停用");
   assert.equal(zh("Only installed plugins can be uninstalled"), "只能卸载已安装的插件");
   // Messages.
-  assert.equal(zh("Roll back {0}: {1} ({2})", ["vestra.audio", zh("change status\u0004Failed"), "manifest invalid"]), "回退 vestra.audio：失败（manifest invalid）");
-  assert.equal(zh("Installing or rolling back, please try again later"), "正在安装或回退，请稍后再试");
-  assert.equal(zh("Development-loaded plugins cannot be uninstalled or rolled back"), "开发加载的插件不能卸载或回退");
+  assert.equal(zh("Uninstall {0}: {1} ({2})", ["vestra.audio", zh("change status\u0004Failed"), "busy"]), "卸载 vestra.audio：失败（busy）");
+  assert.equal(zh("Plugins are being installed or cleaned up, please try again later"), "正在安装或清理插件，请稍后再试");
+  assert.equal(zh("Development-loaded plugins cannot be uninstalled"), "开发加载的插件不能卸载");
 
   // OSD and dialogs as a Chinese user sees them.
   await emit(host, "select", "vestra.audio");
@@ -375,14 +369,11 @@ test("Simplified Chinese: the page's words are the old ones", async () => {
   assert.equal(host.osd.at(-1), "已启用 vestra.audio");
   await emit(host, "reload");
   assert.equal(host.osd.at(-1), "已重新加载 vestra.audio");
-  host.handle("packages.rollback", (p) => ({ operationId: String(p.requestId), status: "committed" }));
-  await emit(host, "rollback");
-  assert.equal(host.osd.at(-1), "已回退 vestra.audio 到 0.0.9");
   host.dialogAnswers.push({ confirmed: true, checked: true });
   await emit(host, "uninstall");
   assert.deepEqual(host.confirmTexts.at(-1), {
     message: "卸载 vestra.audio？",
-    detail: "将从安装库移除它的当前版本与上一版本。它的快捷键修改会保留，重新安装后恢复。",
+    detail: "将从已安装的插件中移除它。它的快捷键修改会保留，重新安装后恢复。",
     confirm: "卸载",
     cancel: host.confirmTexts.at(-1)!.cancel,
     checkbox: "同时删除它的设置与数据",
@@ -390,10 +381,15 @@ test("Simplified Chinese: the page's words are the old ones", async () => {
   assert.equal(host.osd.at(-1), "已卸载 vestra.audio");
 });
 
-test("built-in plugins: disable and roll back, but Uninstall… is off with a hint", async () => {
+test("built-in plugins: disable and enable, no Roll Back, and Uninstall… is off with a hint", async () => {
   const host = new TestHost();
   await start(host, (root) => [
-    info("vestra.subtitles", { builtin: true, source: { kind: "bundled" }, previousVersion: "0.3.0", dataDirectory: join(root, "instance-sub") }),
+    info("vestra.subtitles", {
+      builtin: true,
+      source: { kind: "bundled" },
+      directory: "/Applications/Vestra Player.app/Contents/Resources/plugins/vestra.subtitles",
+      dataDirectory: join(root, "instance-sub"),
+    }),
   ]);
   assert.equal(row(host, "vestra.subtitles")!.origin, "bundled");
   await emit(host, "select", "vestra.subtitles");
@@ -401,8 +397,10 @@ test("built-in plugins: disable and roll back, but Uninstall… is off with a hi
   assert.equal(props(host)["uninstall-tip"], "builtin");
   assert.equal(props(host)["can-toggle"], true);
   assert.equal(props(host)["can-reload"], true);
-  assert.equal(props(host)["can-rollback"], true);
+  assert.ok(!("can-rollback" in props(host)));
   assert.equal(props(host)["can-open"], true);
+  // The package folder is the installation's (built-ins run in place).
+  assert.ok(details(host).some((d) => d.label === "package" && d.value.endsWith("Resources/plugins/vestra.subtitles")));
   assert.deepEqual(
     details(host)
       .slice(0, 2)

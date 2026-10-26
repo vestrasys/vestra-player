@@ -10,7 +10,7 @@ import { directorySize, timing } from "./sizes.ts";
 type Row = { id: string; version: string; origin: string; state: string; size: string; dim: boolean; failed: boolean; selected: boolean };
 /**
  * One detail line: `label` a code (`failure`, `warning`, `note`, `source`,
- * `previous`, `package`, `data`, `capabilities`, "" for a continued list);
+ * `package`, `data`, `capabilities`, "" for a continued list);
  * `kind` says how the page words `value`: "" shows it as it is, `source`
  * is a source code (with `url`), `capability` a capability id, the others
  * (`development`, `self`, `builtin`, `unavailable`, `none`) fixed notes.
@@ -30,9 +30,9 @@ export const PLUGINS_PAGE = "plugins.manage";
  * Plugin Manager (J07), a page of the options window: every plugin the player knows (running, installed but
  * disabled or failed, development loads) from `packages.list`,
  * following `packages.onChange`. The selected plugin can be disabled or
- * enabled, reloaded, rolled back, uninstalled (asks, optionally with its
- * data) and its data folder opened. Its own row cannot be disabled;
- * built-in plugins can be disabled but not uninstalled.
+ * enabled, reloaded, uninstalled (asks, optionally with its data) and its
+ * data folder opened. Its own row cannot be disabled; built-in plugins can
+ * be disabled but not uninstalled.
  */
 export class PluginsPage {
   readonly #plugin: Plugin;
@@ -62,7 +62,6 @@ export class PluginsPage {
     });
     page.on("toggle", () => this.#toggle());
     page.on("reload", () => this.#reload());
-    page.on("rollback", () => this.#rollback());
     page.on("uninstall", () => this.#uninstall());
     page.on("openData", () => this.#openData());
     page.bind(() => this.#props());
@@ -158,7 +157,6 @@ export class PluginsPage {
       // Tips are codes: self, busy, builtin, not-installed.
       toggleTip: self ? "self" : busy ? "busy" : "",
       canReload: canAct && !self && info.state !== "disabled",
-      canRollback: canAct && !self && installed && !!info.previousVersion,
       canUninstall: canAct && !self && installed && !info.builtin,
       uninstallTip: self ? "self" : busy ? "busy" : info?.builtin ? "builtin" : info && !installed ? "not-installed" : "",
       canOpen: !!info?.dataDirectory,
@@ -177,7 +175,6 @@ export class PluginsPage {
     else if (info.builtin) line("note", "builtin");
     // A source kind, or (development loads, older players) the origin.
     line("source", "source", info.source?.kind ?? info.origin, false, sourceUrl(info));
-    if (info.previousVersion) line("previous", "", info.previousVersion);
     line("package", "", info.directory);
     if (info.dataDirectory) line("data", "", info.dataDirectory);
     else line("data", "unavailable");
@@ -258,19 +255,6 @@ export class PluginsPage {
     });
   }
 
-  #rollback() {
-    const info = this.#info();
-    if (!info?.previousVersion || info.id === this.#plugin.id) return;
-    const { id } = info;
-    const target = info.previousVersion;
-    return this.#busyWith(info, async () => {
-      const change = await this.#plugin.packages.rollback(id);
-      const status = await this.#follow(change, "rollback", id);
-      if (status === "committed") this.#done({ kind: "rolled-back", id, text: target }, this.#plugin.osd.show("Rolled back {} to {}", [id, target]));
-      else this.#say({ kind: "rollback", id, code: status, text: change.message ?? "" }, true);
-    });
-  }
-
   async #uninstall() {
     const info = this.#info();
     if (!info || info.origin !== "installed" || info.builtin || info.id === this.#plugin.id) return;
@@ -279,7 +263,7 @@ export class PluginsPage {
       this.#plugin.dialogs.confirm({
         message: "Uninstall {}?",
         args: [id],
-        detail: "Its current and previous versions are removed from the installed plugins. Its shortcut changes are kept and come back if you install it again.",
+        detail: "It is removed from the installed plugins. Its shortcut changes are kept and come back if you install it again.",
         confirm: "Uninstall",
         destructive: true,
         checkbox: "Also delete its settings and data",
@@ -296,7 +280,7 @@ export class PluginsPage {
     });
   }
 
-  /** Show a change's progress (`kind` rollback or uninstall) until it ends; its final status. */
+  /** Show an uninstall's progress until it ends; its final status. */
   async #follow(change: PackageChange, kind: string, id: string) {
     const show = (status: PackageChange["status"]) => this.#say({ kind, id, code: status });
     show(change.status);

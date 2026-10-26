@@ -27,8 +27,8 @@ pub struct InstallLayout {
     pub ui: PathBuf,
     /// The plugin runtime: `runner.ts` and the SDK (`stage-runtime.mjs`).
     pub runtime: PathBuf,
-    /// The built-in plugins: `builtin.json` and the `.vxp` files
-    /// (`stage-plugins.mjs`).
+    /// The built-in plugins: `builtin.json` and one unpacked directory per
+    /// plugin, which the host runs in place (`stage-plugins.mjs`).
     pub plugins: PathBuf,
     /// Third-party licenses and the player's own `LICENSE`.
     pub licenses: PathBuf,

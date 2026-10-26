@@ -3,6 +3,8 @@
 Date: 2026-10-21. Author: API maintainer. Status: **confirmed (2026-10-21)**, see "Coordinator confirmation" at the end.
 Based on: [Ecosystem plan](../product/ecosystem-plan.md) chapter 1 (1.2, 1.3, 1.4, 1.5a, 1.6) and chapter 4 S4; [Workflow](../process/community-workflow.md) §1, §1.5, §1.6, §4.3.
 
+> **Revised 2026-10-26 ([plugin management round](../process/rounds/2026-10-plugin-management.md), user ruling).** Rollback is removed and built-ins are no longer copied into the library. Plugin management has exactly three operations: install, uninstall, disable/enable. Built-in plugins run in place from the installation (`<resources>/plugins/<id>/`), can be disabled but not uninstalled, and update with the player. `packages.rollback` answers `unsupported`, `previousVersion` is always `null` (SDK 1.5.16 deprecates both, 1.5.17 removes them), and no previous version is kept on disk. The sections below are updated where they state the current contract (§0 rows 4 and 8, §1, §1.3, §2.6, §3); the implementation records further down describe the S4 work as it was done and are marked where seeding or rollback has since gone.
+
 ## 0. Conclusion
 
 | # | Change | Location | Effect on the plugin API |
@@ -10,11 +12,11 @@ Based on: [Ecosystem plan](../product/ecosystem-plan.md) chapter 1 (1.2, 1.3, 1.
 | 1 | The install registry is merged into the existing `packages/catalog.json`: the current install of each id carries an **install instance** (GUID, source, built-in flag, enabled, install time); an instance that is replaced or uninstalled (keeping data) becomes "dormant" and is reattached when the same source is installed again | Host | No change (plugins still get their directory from `VESTRA_PLUGIN_DATA_DIR`) |
 | 2 | Data directory `plugin-data/<id>/` → `plugin-data/<GUID>/`; development loading uses `plugin-data/development/<id>/`; `secrets` is also isolated per GUID | Host | **One documented contract changes**: §3.4 "derive another plugin's data directory from `<data root>/<id>`" is withdrawn and replaced by the new field `PluginInfo.dataDirectory` (§7.3) |
 | 3 | New in `packages`: `validateArchive(file)` (`.vxp`), `install({ source, replace })`, `PluginInfo` gains `builtin`, `source`, `dataDirectory` | Host + SDK | Additions only |
-| 4 | Built-in plugins are identified by **source** (seeded from the installer); `uninstall` → `unsupported`, replacement from another source → `unsupported`; disable and rollback work as usual | Host | Only new error cases |
+| 4 | Built-in plugins are identified by **source** (listed in the installation's `builtin.json`, run in place); `uninstall` → `unsupported`, replacement from another source → `unsupported`; disabling works as usual (2026-10-26: there is no rollback) | Host | Only new error cases |
 | 5 | Manifest gains optional display fields and `minPlayerVersion`; host and CLI validate with the same rule table; unknown fields are **still rejected** | Host + SDK CLI | Additions only |
 | 6 | Core Markdown component: `MarkdownView` in `@vestra/markdown.slint` + the property value produced by `plugin.ui.markdown()`; the host parses with pulldown-cmark, remote images are downloaded and cached by the SDK in the plugin process | Host + SDK + widget library | Additions only, no new capability |
 | 7 | SDK 1.1.0: types, TestHost, CLI (validation of new fields, hint for ids without a prefix, build includes icon/README, `pack` produces `.vxp`) | SDK repository | Additions only; the `pack` file extension changes (not plugin API) |
-| 8 | Packaging: `Resources/plugins/` holds the built-in `.vxp` files and `builtin.json`; the host seeds them at startup | Host + `src/scripts/` | None |
+| 8 | Packaging: `Resources/plugins/` holds `builtin.json` (schema 2) and one unpacked directory per built-in; the host runs them in place (2026-10-26; until then `.vxp` files seeded into the library) | Host + `src/scripts/` | None |
 
 Not in core: downloading `index.json`, signature verification, update checks, withdrawal handling, repository management, permission display. All of these live in the store plugin (S5).
 
@@ -34,7 +36,7 @@ Not in core: downloading `index.json`, signature verification, update checks, wi
 
 ### 1.2 Registry location and format
 
-**No new file**; extend the existing `<app_data_dir>/packages/catalog.json` (`VESTRA_PACKAGE_STORE` can change the root). Reason: the instance must change in the **same atomic replacement** as install, rollback and recovery (`Store::publish` is already single-writer + temp-file rename); a separate file would mean handling two files that disagree.
+**No new file**; extend the existing `<app_data_dir>/packages/catalog.json` (`VESTRA_PACKAGE_STORE` can change the root). Reason: the instance must change in the **same atomic replacement** as install, uninstall and recovery (`Store::publish` is already single-writer + temp-file rename); a separate file would mean handling two files that disagree.
 
 ```jsonc
 {
@@ -46,11 +48,12 @@ Not in core: downloading `index.json`, signature verification, update checks, wi
         "source": { "kind": "bundled" },     // source of built-in plugins after the revision (end of document)
         "builtin": true,
         "enabled": true,                     // replaces the old disabled set
-        "installedAt": 1792540800000,        // first install of this instance, Unix milliseconds
-        "seededVersion": "1.2.0"             // built-in only: version last seeded from the installer (§3.3)
+        "installedAt": 1792540800000         // first install of this instance, Unix milliseconds
       },
-      "current": { "digest": "…", "manifest": { … }, "directory": "…/packages/<digest>" },
-      "previous": { … }                      // previous version within the same instance, for rollback
+      "current": null,                       // a built-in runs from the installation (§3.3); for others
+                                             // { "digest": "…", "manifest": { … }, "directory": "…/packages/<digest>" }
+      "previous": null                       // always null since 2026-10-26 (no rollback); kept so that
+                                             // players up to 0.5 still read the catalog
     }
   },
   "dormant": {                               // new: dormant instances (only data remains)
@@ -63,10 +66,11 @@ Not in core: downloading `index.json`, signature verification, update checks, wi
 
 | Field | Description |
 | --- | --- |
-| `guid` | UUID v4 generated by the host, lowercase with hyphens. Generated on a fresh install; kept on upgrade and rollback |
+| `guid` | UUID v4 generated by the host, lowercase with hyphens. Generated on a fresh install; kept on upgrade |
 | `id`, version | These are the key of `installed` and `current.manifest.version`; not stored twice |
 | `source` | The `PackageSource` of §2.3; the source of built-in plugins is `bundled` (the first draft used the official repository address; changed per "Coordinator revision" at the end) |
-| `builtin` | Written by the host when seeding; plugins cannot set it |
+| `builtin` | Written by the host for each id the installation's `builtin.json` lists (§3.3); plugins cannot set it |
+| `seededVersion` | Written by players up to 0.5 (seeding); read, then removed by the migration in `Store::open` (§3.3) |
 | `enabled` | Written by `setEnabled`; the old `disabled` set is removed (an old catalog is converted from the set once on read) |
 | `installedAt` | Time of the instance's first install |
 
@@ -84,7 +88,7 @@ Not released, no migration: entries in an old catalog without `instance` get a n
 | On replacement, the new source matches a dormant instance of the same id | "Switch back": reuse that GUID and data, delete the dormant record |
 | The replacement target is a built-in plugin | `unsupported` (built-ins cannot be replaced), not even with `replace` |
 | Replacement activation fails, is cancelled, or the player exits midway | The existing recovery flow restores `Installed` (including `instance`) as a whole; the data directory created for the new instance this time is deleted |
-| `rollback` | Only within the same instance (`previous`); the GUID does not change. A new instance after replacement has no `previous` |
+| `rollback` | Removed 2026-10-26: `unsupported`. An upgrade replaces the package; the replaced directory is deleted on the `library-cleanup` thread. An older version is an uninstall plus an install of its `.vxp` by the user |
 | `uninstall` without `removeData` | The current instance becomes dormant; reinstalling from the same source reattaches the data (equal to today's "uninstall keeps data, reinstall restores it" behavior) |
 | `uninstall({ removeData: true })` | Deletes the instance's registry entry and data directory (after the process exits); no dormant record is kept |
 | Running at the same time | Only one plugin per id runs: the existing `plugin already running` check in `load_package` is unchanged |
@@ -181,9 +185,9 @@ If the plugin wants to show "where the installed one came from" before the dialo
 - No promise about the GUID, so the host can change the storage layout later; plugins also cannot persist or compare instances (for example, to track which sources a user has switched between).
 - The GUID is visible in the `dataDirectory` path, but the documentation states that "the path format is not part of the contract".
 
-### 2.6 Rollback
+### 2.6 Rollback (removed 2026-10-26)
 
-Unchanged. `rollback(id)` returns to the `previous` of the same instance; built-in plugins can be rolled back (§3.3 ensures seeding does not immediately overwrite a user's rollback). Going "back to the old plugin" across sources = reinstall from the old source (which reattaches the dormant instance's data).
+There is no rollback. `packages.rollback` answers `unsupported` ("unknown package method"); `PluginInfo.previousVersion` is always `null`; SDK 1.5.16 marks both `@deprecated` and 1.5.17 removes them (`apiVersion` stays `vestra/1`). No previous version is kept on disk. Going "back to the old plugin" across sources = reinstall from the old source (which reattaches the dormant instance's data); going back to an older version = uninstall, then install that version's `.vxp`. Migration guide: SDK site, How-to, "Migrating off package rollback (1.5.16)".
 
 ---
 
@@ -191,7 +195,7 @@ Unchanged. `rollback(id)` returns to the `previous` of the same instance; built-
 
 ### 3.1 Identification
 
-By **source**: only instances seeded by the host at startup from the installer's `Resources/plugins/builtin.json` carry `builtin: true`. A plugin cannot declare itself built-in through `install()`; the `builtin` flag still depends only on the source. Since 2026-10-24 the `vestra.` prefix is reserved for built-in plugins, and the host refuses to install or trial any other package whose id starts with `vestra.` ("Coordinator revision (2026-10-24)" at the end).
+By **source**: only the records the host creates for the ids in the installation's `Resources/plugins/builtin.json` carry `builtin: true`, and `builtin.json` may list only reserved (`vestra.`) ids. A plugin cannot declare itself built-in through `install()`; the `builtin` flag still depends only on the source. Since 2026-10-24 the `vestra.` prefix is reserved for built-in plugins, and the host refuses to install or trial any other package whose id starts with `vestra.` ("Coordinator revision (2026-10-24)" at the end).
 
 ### 3.2 Behavior
 
@@ -199,44 +203,35 @@ By **source**: only instances seeded by the host at startup from the installer's
 | --- | --- |
 | `setEnabled(id, false/true)` | As usual, persists across launches |
 | `uninstall` | `code: "unsupported"`, message `built-in plugins can be disabled but not uninstalled` |
-| `install` a new version from the same source (official repository) | Upgrade, keeps `builtin` |
-| `install` from another source, with or without `replace` | `unsupported` (built-ins cannot be replaced) |
-| `rollback` | As usual |
+| `install` (any source, with or without `replace`) | `unsupported` "built-in plugins are updated with the player" |
+| `rollback` | `unsupported` (removed for every plugin) |
 
-### 3.3 Seeding (at host startup)
+### 3.3 Built-ins run in place (since 2026-10-26)
 
-`builtin.json` (generated by the packaging script):
+`builtin.json` (written by `src/scripts/stage-plugins.mjs`, schema 2) sits next to one unpacked directory per built-in:
 
-```json
-{ "schema": 1, "source": { "kind": "repository", "url": "https://…/index.json" },
-  "plugins": [ { "file": "vestra.subtitles-1.2.0.vxp", "sha256": "…" } ] }
+```text
+<resources>/plugins/
+  builtin.json        { "schema": 2, "plugins": [{ "id": "vestra.audio", "version": "1.4.2", "directory": "vestra.audio" }] }
+  vestra.audio/       the content of `vestra-plugin pack` (manifest.json, main.js, ui/, locales/, …)
 ```
 
-| Installed state | Action |
-| --- | --- |
-| This id is not installed | Install from the `.vxp` (new GUID, `builtin: true`, `seededVersion` = package version) |
-| Installed and built-in | Upgrade to the packaged version only if the package version > `seededVersion` (if the user installed a higher version through the store, leave it); if the user rolled back, the same installer does not overwrite it again |
-| Installed but from another source (the user sideloaded the same id before release) | Leave it, one log line; the built-in flag is not forced |
+- `stage-plugins.mjs` packs each `src/plugins/<name>` into a `.vxp` as for the store, unpacks it into `<id>/`, checks that the tree holds exactly the archive's files with the same bytes, and deletes the `.vxp`. It refuses a non-`vestra.` id.
+- The host (`package_manager.rs` `builtin`) reads `builtin.json` once at start: schema 2 only, at most 64 entries, each a reserved id, `directory` equal to the id, a valid version, no duplicates. Per entry it checks that the directory is a real directory (not a link) directly inside the canonical `plugins/` directory, and that `manifest.json` passes the package rules (`manifest::check`, as for an install) and names the same id and version. That is one small file read per plugin; nothing is hashed or copied. An entry that fails is logged and listed as `failed` with the reason.
+- The host never writes under `<resources>/plugins`; a plugin writes only under its `dataDirectory`. Integrity is that of the installation, like `runtime/runner.ts` and `ui/host.slint`, which the host already runs from `<resources>`: the `.app` signature on macOS, an admin-only install directory on Windows, the portable zip as trusted as the `.exe` beside it.
+- **Records.** The catalog keeps one record per built-in with `current: null`, `previous: null` and an instance `{ guid, source: bundled, builtin: true, installedAt }`. A fresh profile gets all of them in one catalog write (`Store::sync_builtins`); a record whose id `builtin.json` no longer lists is retired to `dormant` (data kept) and reconnects if the id comes back. A record of a listed id installed from another source before ids were reserved is left alone and does not start (`check_reserved`). No new catalog field, so players up to 0.5 still open the catalog. Without a `builtin.json` (a plain development run) records are neither created nor retired, and built-ins do not run.
+- **Start, list, enable** take a built-in's directory and manifest from `builtin.json` (`Manager::runs_from`), not from `current`. `PluginInfo` keeps its shape: `origin: "installed"`, `builtin: true`, `source: bundled`, `directory` = `<resources>/plugins/<id>`.
+- `$VESTRA_BUILTIN_PLUGINS=<directory>` still points the host at a staged `plugins/` directory (schema 2).
 
-Seeding (since 2026-10-26, below) stages the package on the `builtin-seed` thread (`Library::stage_archive`) and records it on the UI thread with `Store::commit_seeded`: one catalog replacement that writes the prepare and commit receipts and the installed record together, without the activate step (the plugin then starts like any installed package; a failed start shows as `failed`). A seed failure is logged per plugin and the installed version, if any, starts. `VESTRA_BUILTIN_PLUGINS=<directory>` can point to another seeding directory during development; a plain `cargo run` without that directory does not seed.
+**Migration of libraries from players up to 0.5** (`Store::open`, once, idempotent, one catalog write that reads no package file): built-in records lose `current`, `previous`, `seededVersion` and their `lastCommit`; every other record loses `previous`; an interrupted seed (a pending install of a built-in) is dropped and its receipt marked `cancelled`. GUIDs, `installedAt`, dormant instances and the disabled set stay, so settings, data and secrets are kept. An older player that opens the migrated catalog starts normally (no unknown field), finds `seededVersion` absent and copies its built-ins again into the same GUIDs; re-upgrading migrates again.
 
-**Seeding off the UI thread (2026-10-26).** Seeding the five upgraded built-ins of a 0.5.0 update froze the window for 20 s on Windows (one host tick of 20353 ms, "Not Responding"); a first start seeds all 18 and froze it as long. Measured on Windows 11 with Defender real-time protection (headless `seed_bench` in `package_manager.rs`, release build): almost all of it was `vestra.workshop` (499 files, 28 MB unpacked), whose files were copied six times (extract, capture, stage's capture, copy with a flush per file, capture of the copy, and a capture for each of prepare and commit), and Defender scans every new copy on its first read (~3 s per pass for workshop; a second read of the same files takes 0.1 s). Now:
+**Library cleanup off the UI thread.** The directories nothing refers to any more (the 0.5 built-in copies, previous versions, uninstalled packages, `.stage-`/`.trash-` leftovers) are deleted on the `library-cleanup` thread, never on the UI thread: each is renamed to `packages/.trash-<digest>` first, then removed; one that cannot be removed (antivirus holding a file) is left for the next start. At start the thread scans the whole library against the catalog's references (current versions and pending targets); while that scan runs, install and uninstall answer `busy`. Later, a committed upgrade, an uninstall or a failed install hands just the freed directory to the thread; then only an install of that same package (same digest) answers `busy`, so back-to-back installs are not refused. `Store::gc` on the UI thread (before each install and inside uninstall) is gone.
 
-- The UI thread reads `builtin.json`, decides per plugin (the rules in the table above, unchanged) and starts every installed plugin that is not to be seeded. A `builtin-seed` thread collects the library's garbage, then per plugin checks the archive's sha256, unpacks it straight into the library (`packages/.stage-*`, each file flushed), hashes and validates it in place (`package_stage::inspect`: the same digest, limits and manifest checks as `Candidate::capture`, without a copy) and renames it to `packages/<digest>`. Each result goes back to the UI thread, which commits one per tick in one catalog replacement (`Store::commit_seeded`: the prepare and commit receipts, the instance with `seededVersion`, the user's disabled flag kept; it reads no package file, about 6 ms) and then starts that plugin. A failure is logged per plugin and the installed version, if any, starts.
-- Nothing races: while seeding runs, the thread is the only writer of the package library; `packages.install`, `packages.rollback` and `packages.uninstall` answer `busy` and a plugin being seeded cannot be enabled; it is listed as `starting`. A plugin starts only from a committed catalog entry, so never from a half-written directory; a directory left by a stopped run is not referenced and goes at the next collection. Until all seeds are in, `packages_started()` is false (files opened at launch wait) and other plugins' mounts wait as before (`slot_claims`).
-- Numbers (Windows, same machine, all 18 / the 8 that differ between the two staged 0.5.0 builds): first start 21.4 s → 7.0 s of background work, upgrade 20.6 s → 6.0 s; the longest UI-thread step of seeding 21 s / 20 s → 7 ms. Workshop alone: sha256 4 ms, unpack 0.4 s, flushing each file +1.4 s, Defender on the first read 3.0 s.
-- `verify_package` (prepare and commit of every install) also hashes in place now, instead of copying the package to a temporary directory first.
-- Development and headless runs (`--plugin`, `--headless`) take no single-instance lock, so another process may share the library and collect a directory this run staged but has not committed yet. Two guards: `commit_seeded` checks that the target's `manifest.json` and entry file exist (metadata only) and otherwise does not commit (logged; the installed version starts); and a built-in whose current directory is missing is seeded again even at the same version (`seed::decide`).
+**Removed with seeding:** the `builtin-seed` thread, `seed::decide`/`stage_all`, `Store::commit_seeded`/`set_seeded`, `Library::stage_archive`, `package_archive::sha256`, and the `seed_bench` test. `packages_started()` is true after the first package tick; other plugins' mounts wait only while a built-in activates (`slot_claims`).
 
-Open items (seeding and the guard, 2026-10-26):
+History: until 2026-10-26 the host copied ("seeded") each built-in `.vxp` into the library, upgraded it only to a higher version so that a user's rollback stayed, and kept a previous version for rollback. On Windows that copy froze the UI for 14–21 s at first start and after an update; the stop-gap #39 moved it to a `builtin-seed` thread, and this round removed the copy. The figures and open items of that work are in git history (`7dda45d`).
 
-- A lock on the package library for every writer (install, rollback, uninstall, seeding, garbage collection) across processes, instead of relying on the single-instance lock of normal runs.
-- The guard compares plugin sources, so a toolchain-only change (SDK, TypeScript or esbuild version) that changes the packed `.vxp` without touching a plugin file is not caught; a later option is to pack base and head and compare the package digests.
-- Files opened at start-up wait for the installed plugins at most 20 s (`open_files.rs` `SETTLE_LIMIT`); seeding now counts toward that wait. Not a regression (seeding used to block the whole UI), but on a slow machine seeding can exceed it; consider not counting the limit while seeding runs.
-- Each mount recompiles the whole main-window shell on the UI thread (55 ms warm, 241 ms cold, measured with `slint_compile_bench`); batch the start-up mounts into one compile.
-
-**A changed built-in needs a higher version.** Because of the rule "upgrade only to a newer version", a built-in whose shipped files change under the same version never reaches users who already seeded that version (#27 changed workshop's `ai.slint` under 2.2.3; #38 bumped the five built-ins affected). `npm run builtin-versions` (`src/scripts/check-builtin-versions.mjs`, in `ci:local`; the static CI job is wired in a follow-up by the infrastructure maintainer, and its checkout needs `fetch-depth: 0` for the release tag and history) compares each built-in with the latest release tag (`--base <ref>` for another base, `--head <ref>` for a commit instead of the working tree) and fails when its shipped files differ but its `manifest.json` version is not higher. Shipped means what `vestra-plugin pack` puts into the `.vxp`: not `tests/`, `dist/`, `node_modules/`, dot files, `tsconfig*.json`, `.d.ts`, `.md`/`.pot` files, `.po` files outside `locales/`, or `vendor/` unless listed; listed paths always ship (`package.json` `vestra.assets`, the icon, README and changelog, so a README change needs a bump too); `locales/*.po` ship compiled; `manifest.json` counts for every field but `version`; `package.json` for its `vestra` options and, for a bundled plugin, its `dependencies` and `package-lock.json`. A plugin new since the base needs nothing.
-
+**The built-in version guard.** `npm run builtin-versions` (`src/scripts/check-builtin-versions.mjs`, #39) fails when a built-in's shipped files changed without a higher version, because a seeded copy was upgraded only to a newer version (#27). In place, a changed built-in reaches users with the player whatever its version, so the guard's reason is gone; the round proposes removing it in P4 (see the round record for the recommendation).
 When a `--plugin` development load has the same id as an installed plugin: the development load wins, and the installed one does not start in this run (`state: "stopped"`). Check the existing order of `package_tick` and `load` first when implementing.
 
 ### 3.4 What the `plugins` plugin and the workshop need to know
@@ -430,6 +425,8 @@ Everything is additive: new methods, optional parameters, new properties on outp
 
 ## 9. Implementation split, order and tests
 
+> Historical (S4 plan). Seeding, seeding tests and rollback were replaced on 2026-10-26: see §3.3 and the [plugin management round](../process/rounds/2026-10-plugin-management.md).
+
 ### 9.1 Order (maintainer alone; parallelizable items in parentheses)
 
 | Step | Contents | Depends on |
@@ -506,19 +503,21 @@ The user decided that built-in plugins stay in the player repository (revision o
 
 - The source of built-in plugins is the **installer** (`source.kind = "bundled"`), not the official repository address; `builtin.json` and the `.vxp` files are built by the packaging script from `src/plugins/`.
 - The first store version **neither updates nor replaces** built-in plugins: any `install` for a built-in id (whatever the source, with or without `replace`) returns `unsupported`; only seeding (a higher version in a new installer) upgrades built-in plugins. The row "`install` a new version from the same source (official repository) → upgrade" in the §3 table is withdrawn; the case "if the user installed a higher version through the store, leave it" in §3.3 no longer occurs.
-- Rollback and disabling work as usual.
+- Rollback and disabling work as usual. (2026-10-26: no rollback; built-ins only disable and enable.)
 
 ## Coordinator revision (2026-10-24, the `vestra.` prefix is reserved for built-in plugins)
 
 User ruling ("Plugin categories" at the start of the ecosystem plan): the only official plugins are the built-in plugins shipped with the player's main repository; their ids use `vestra.<name>`, and this prefix is reserved for them. All other plugins are third-party plugins, including those in the official plugin repository `plugins/`; they are only hosted in the official repository with stricter review, and their ids follow `<GitHub user or organization>.<name>`. youtube and bilibili become `zysilm.youtube` and `zysilm.bilibili` (author zysilm). The player has not been released, so there is no migration. This overturns "no id gets special treatment" and "`vestra.` is not reserved" in §4.3 and §10. What the host does:
 
 - `packages.validate`, `validateArchive`, `trial` and `install` reject packages whose id is a reserved id (case-insensitive, equal to `vestra` or starting with `vestra.`), with error code `reserved` and the message "“<id>”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed". Store installs, sideloading (dropping a `.vxp`, installing from a file, installing from a link), and installs and trials by the plugin workshop and AI all go through these methods.
-- `packages.rollback` for a reserved id works only on a built-in instance (that is, rolling back a built-in plugin, as before).
+- `packages.rollback` for a reserved id works only on a built-in instance (that is, rolling back a built-in plugin, as before). (2026-10-26: `packages.rollback` is gone; `builtin.json` itself may list only reserved ids.)
 - Built-in plugins come only from the installer's built-in plugin set (`builtin.json`, source `bundled` when seeded); this is the only way a reserved id gets into the install store.
 - At startup, leftover non-built-in plugins with reserved ids in the install store (installed before this rule) do not start; `packages.list` shows them as `failed` with the sentence above as `error`; the user can uninstall them.
 - `--plugin DIR` development loads with a reserved id are still allowed (built-in plugin authors develop with `--plugin`); the host prints a warning on stderr. Development loads are never written to the install store; their data is in `plugin-data/development/<id>/`.
 
 ## Implementation record (2026-10-21, stage 3, API maintainer)
+
+> Historical. Where it describes seeding, `seededVersion`, `builtin.json` schema 1 or rollback, it was replaced on 2026-10-26 (§3.3).
 
 Implemented items 1–8 of §0 in the order of §9, plus the coordinator revision (built-in plugin source `bundled`, any `install` for a built-in id is `unsupported`). The player is in the `rebuild/store-core` worktree, the SDK on the `store-1.1` branch of `vestra-player-sdk` (commit `453088e`, version 1.1.0, not tagged, not pushed). The host version is bumped to **0.2.0** (`Cargo.toml`), which is the `minPlayerVersion` required by the interfaces added in SDK 1.1.
 

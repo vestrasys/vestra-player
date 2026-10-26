@@ -1,8 +1,8 @@
 # 2026-10 round: plugin management (built-ins in place, no rollback)
 
-Started 2026-10-26. Top-down API change (community-workflow §5). **This document is the only progress record for this round.** Status: P1 design written by the API maintainer. The user answered Q1–Q3 on 2026-10-26 (§6). P1 implementation is next.
+Started 2026-10-26. Top-down API change (community-workflow §5). **This document is the only progress record for this round.** Status: **P1 implemented (2026-10-26) and passed P2** (§7): the coordinator measured first start and an upgrade of a copy of a real 0.5.0-era profile on Windows (responsive at 0.4 s, never "Not Responding", 37 old copies removed off the UI thread in 617 ms, nothing under `packages/packages/`). P3 (store, workshop, info) is next. The user answered Q1–Q3 on 2026-10-26 (§6; Q3 superseded the same day: no Undo Install at all).
 
-Line references are to `main` at `2d50207` unless marked `6bf7e77` (the stop-gap commit on branch `startup-seeding`, which merges first). SDK references are to the installed `@vestra-player/sdk` 1.5.15 (`src/node_modules/@vestra-player/sdk/dist/...`) and, by file, to the SDK repository.
+Line references are to `main` at `2d50207` unless marked `6bf7e77` (the stop-gap commit on branch `startup-seeding`, which merged as #39, `7dda45d`; its line references now apply to `main`). §3–§5 are the plan as written before the rulings; where they differ, §6 and §7 apply. SDK references are to the installed `@vestra-player/sdk` 1.5.15 (`src/node_modules/@vestra-player/sdk/dist/...`) and, by file, to the SDK repository.
 
 ## 1. Ruling and goals
 
@@ -211,6 +211,8 @@ The layer ends in P4.
 - `text.ts:53-68,134,241-270`, the locales, `README.md:3,15`, `manifest.json:18`, `CHANGELOG.md`;
 - tests `helpers.ts:228,241-285`, `install.test.ts:242-300`.
 
+> Superseded: the store and workshop lists that P3 follows are in §7.4 (they apply Q2 "remove" and the final Q3 "no Undo at all"). The workshop text below is the pre-ruling recommendation, kept for the record.
+
 **Vestra Player AI** (`vestra.workshop`), replacing "install with rollback". **Recommended (Q3): Undo Install without host rollback.**
 
 - After each committed install, the workshop keeps that `.vxp` in its data directory as `delivered/<id>.vxp`. Before that, it moves the one it already had to `delivered/<id>.previous.vxp`.
@@ -246,7 +248,7 @@ The layer ends in P4.
 | G3 Built-in disable/enable | Plugin Manager: disable a built-in, restart, enable | Stays disabled across restart; enable restores its menus; Uninstall… off with the hint; no Roll Back anywhere |
 | G4 Third-party uninstall | Store: install youtube; uninstall keeping data; reinstall; uninstall with "Also delete its settings and data" | Reinstall reconnects the data; deleting removes it |
 | G5 Store | Install, update, older version (per Q2), drop a `vestra.x` `.vxp` | Confirms have no rollback sentence; no Roll Back/Restore action; the reserved id is refused |
-| G6 AI window | Generate, Install, Undo Install; Install v1, then v2, then Undo Install | First Undo uninstalls; second returns to v1 with its data (per Q3); texts say "Undo Install" |
+| G6 AI window | Generate, Install; Install v1, then v2 | (Final Q3: no Undo at all.) No Undo / Roll Back button or text anywhere in the AI window or its result cards; the install works; removing the plugin is done with the Plugin Manager's Uninstall… |
 | G7 Dev override | `--plugin src/plugins/info` | The development load runs instead of the built-in for that run |
 
 ## 6. Risks and questions
@@ -272,3 +274,110 @@ Where §3–§5 assume the recommended Q2 (keep) or Q3 (A), these rulings overri
 - **Q3 (AI window Undo Install).** Choose between:
   - **A**, recommended: the workshop keeps the `.vxp` it last installed, and Undo after an upgrade reinstalls that file in place, keeping the data;
   - **B**: Undo only uninstalls (first installs), and there is no Undo after an upgrade.
+
+## 7. P1 delivery (API maintainer, 2026-10-26)
+
+Player worktree `C:\PROJECT\vestra-player\.claude\worktrees\agent-a75d2bf82f384f0ac` (based on `main` `7dda45d`); SDK checkout `C:\vestra\sdk`, branch `p1-deprecate-rollback` (based on `4da9b12`, SDK 1.5.15). Nothing is committed in either.
+
+### 7.1 Host
+
+| Item | Where | State |
+| --- | --- | --- |
+| Built-ins ship unpacked, run in place | `scripts/stage-plugins.mjs` (pack → unpack into `<id>/` → byte check → delete `.vxp`; `builtin.json` schema 2 `{id, version, directory}`; refuses non-`vestra.` ids); `package_manager.rs` `mod builtin` (`read`: schema 2, ≤64, reserved ids, `directory == id`, valid version, no duplicates; `load`: real directory directly inside the canonical `plugins/`, `manifest::check(.., package)`, id and version equal; a failing entry is kept as `failed` with its reason) | done |
+| Built-in records, start/list/enable from the registry | `Store::sync_builtins` (one write: new records, dormant reconnect, retire dropped ids); `Manager::runs_from` used by `start_installed`, `package_list`, `set_enabled`; `is_builtin` compares with the registry directory | done |
+| Catalog migration | `package_store.rs` `migrate_in_place` in `Store::open` (built-in records lose `current`/`previous`/`seededVersion`/`lastCommit`; every record loses `previous`; interrupted seeds dropped, receipt `cancelled`; pending baselines lose `previous`); one publish, no package file read; idempotent | done |
+| `library-cleanup` thread | `package_manager.rs` `mod cleanup`; `Library::collect` / `Library::remove` (rename to `.trash-<digest>`, then delete; failures left for the next run). `Store::gc` (UI thread, before every install and in uninstall) removed | done |
+| Seeding removed | `start_seeding`, `seed_tick`, `commit_seed`, `seed::*`, `Store::commit_seeded`, `Store::set_seeded`, `Library::stage_archive`, `package_archive::sha256`, `seed_bench` | done |
+| Rollback removed | dispatch arm gone → `unsupported` "unknown package method"; `committed()` keeps no `previous`; `referenced()`/`validate_catalog` no longer follow `previous` | done |
+| Compatibility layer | `packages.list` sends `previousVersion: null` for every entry; `Installed.previous` and `Instance.seeded_version` stay as fields (read, never written) so that 0.5 players read the catalog | done |
+| Built-in `uninstall` → `unsupported`; disable/enable | unchanged code path, now `uninstallable()` (testable) | done |
+| `vestra.` reservation, dev-load override | unchanged (`check_reserved`, `install_source`, `install_instance`, `Host::load`); `builtin.json` itself may list only reserved ids | done |
+| Packaging path checks | `packaging/check-licenses.mjs` `checkBundle` looks in `<pluginsDir>/<id>/` instead of `.vxp` files (`vxpPlugin` and the zip imports removed); `packaging/smoke.mjs` comment only (it already counts `builtin.json` entries). These files belong to the infrastructure maintainer; the change is the minimum the new layout needs, per §5 P1 | done, for the infra maintainer to review |
+
+Deviations from §2, with reasons:
+
+- **`busy` while cleaning.** §2.3 says install and uninstall answer `busy` while the thread runs and that later upgrades hand their old directory to the same thread. Taken literally, every install would make the next one fail with `busy` for the length of a delete (the store and workshop show `busy` as an error). Implemented: the **start-up** scan blocks install and uninstall (as §2.3); afterwards the thread gets only the freed digest (old version after a commit, uninstalled package, failed target), and only an install that would stage that same digest answers `busy`.
+- **No `builtin.json` → built-ins do not run.** A development run without `$VESTRA_BUILTIN_PLUGINS` (plain `cargo run`) used to start the copies an installed player had seeded into the shared library. Now it starts no built-ins and leaves their records alone (neither created nor retired). Use `--plugin` or `$VESTRA_BUILTIN_PLUGINS` (a staged directory).
+- **A listed id installed from another source** (a pre-reservation sideload of a `vestra.` id) stays as it is and does not start, as under seeding.
+- **Not changed:** deleting a stopped plugin's **data** directory on uninstall with "also delete data" still runs on the UI thread (`uninstall`, as before; a running plugin's data goes after it exits). Not package files, so outside this round; noted as a follow-up.
+
+### 7.2 SDK 1.5.16 (branch `p1-deprecate-rollback`)
+
+- `Packages.rollback`, `PluginInfo.previousVersion`, wire `PackageInfo.previousVersion` and wire `rollback`: `@deprecated` (removed in 1.5.17); docs of `revisionConflict`, `PackageChange(Status)`, `Plugin.dataDirectory`, `PluginInfo.directory` (a built-in's directory is in the installation and read-only) updated.
+- TestHost = host compat layer: `packages.rollback` → `HostError("unsupported", "unknown package method")`; `packages.list` / `packages.changed` report `previousVersion: null`; installs record no previous version. The `host.packages[].previousVersion` field stays **required** (deprecated, ignored): the first draft made it optional, which broke the compile of existing tests that turn a TestHost entry into a `PluginInfo` (plugin manager `plugins.test.ts:442`, store `tests/helpers.ts:283`); fixed before delivery.
+- Migration guide `docs/how-to/rollback-migration.md` ("Migrating off package rollback (1.5.16)"): exactly three operations (install, uninstall, disable/enable); no rollback, no older-version install, no Undo; built-ins disable/enable only; read-only `directory`; tests; 1.5.16 → 1.5.17 timeline; checklist. Linked from the How-to index and `scripts/doc-structure.mjs`; `publish.md`, `concepts/plugins.md`, `reference/capabilities.md` (note under the generated table) updated; `llms*.txt` regenerated; CHANGELOG 1.5.16; `package.json` 1.5.16.
+- `capabilities.ts` still lists `Packages.rollback` under `plugins.manage` (host-agreement test, `src/tests/sdk/host-agreement.test.ts:580`); both go in P4.
+
+### 7.3 Reference plugin: Plugin Manager `vestra.plugins` 0.2.4 → 0.2.5
+
+Removed: the `rollback` handler, `canRollback`, the "previous" detail line, `#rollback`, the Roll Back button (and its measure copy), `can-rollback` / `rollback()` in `ui/plugins.slint`, the rollback messages, "Previous" label, "Failed (previous version restored)". Texts that mentioned rolling back now say only uninstall (`failure` development, `busy` → "Plugins are being installed or cleaned up…", development detail, uninstall confirm "It is removed from the installed plugins…", manifest punchline/description, README). All six languages translated; obsolete entries dropped (`i18n check`: 95/95, 0 obsolete). Built-ins: disable/enable and Reload, Uninstall… off with the "builtin" hint, package folder shown from the installation. Tests: rollback cases replaced by "no rollback even if an older player lists a previous version", built-in test asserts no `can-rollback` and the in-place package folder. Source grep (tests and locales excluded) for `rollback|previousVersion|roll back`: empty.
+
+### 7.4 What P3 must change (store, workshop, info), per Q2 and the final Q3
+
+**Store `vestra.store` (store author):**
+
+- Roll Back / Restore action: `store.ts:561-569` (the action), `:708-709` (`case "rollback"`).
+- `installer.ts`: `rollbackVerb` and `rollback` (`:496-520`), `Verb` members `rollback`/`restore` and their `FOLLOW` texts (`:338-372`), the "you can roll back / restore … in the store" sentences in every confirm (`:150`, `:158`, `:170`, `:175`, `:180-181`, `:430`); keep "Current: {x}."
+- **Q2, older versions:** the Versions tab must not install a version lower than the installed one from the same source: `store.ts:678` `canInstall` (add "not older than the installed version"), and `installer.ts:162-181` (the `older` branch and "Install “{}” {} (older version)?") goes. Reinstalling the same version is already off (`current`).
+- `uninstall`'s `failedDegraded` text "Uninstallation failed; the previous version was restored" (`installer.ts:354`) never applies to an uninstall; drop it. Keep install's.
+- `text.ts:46,53-69,134-135,241-270` (rollback/restore/older entries), locales, `README.md:3,15`, `manifest.json:18`, `CHANGELOG.md`, version bump.
+- Tests: `tests/helpers.ts:228` (keep `previousVersion: null` until 1.5.17), `:241-285` (fake rollback), `install.test.ts:242-300` ("update, rollback, older version and uninstall from the same repository", which fails against SDK 1.5.16 as expected).
+- `doc/architecture/store-design.md` carries a notice; the store author updates it (rows on Roll Back, Restore, Install Other Version, `previousVersion`). "Rollback detection" of a stale index (`repos.ts`, design §3.4) is a different thing and stays.
+
+**Vestra Player AI `vestra.workshop` (workshop author), final Q3: no Undo at all:**
+
+- `ai.slint:295` (measure copy) and `:600` (the "Roll Back (Undo Install)" button), `:336-337` `can-rollback`, `:354` `callback rollback()`, `:370-373` the rollback progress text, `:401-402` "…; you can click Roll Back (Undo Install)".
+- `main.ts:278` (`canRollback`), `:480` (`window.on("rollback", …)`).
+- `delivery.ts`: `rollback()` (`:222-241`), the `installed` set that exists only to offer it (`:53` and where it is filled), the `"rollback"` action kind (`:47`, `:135`), "To undo the install, click Roll Back (Undo Install)…" in the confirm (`:160-161`) and in the model-facing result (`:213`), "Another install or rollback is in progress" (`:75`), header comments (`:1-5`, `:13`, `:38-40`). Keep no `.vxp` copies and no delivery state for undo.
+- `prompt.ts:69-71`, `worker/plugin-tools.ts:36` (tool description mentions Roll Back), `README.md:29,35`, locales, version bump.
+- Tests: `tests/delivery.test.mjs:3,98-107`, `tests/texts.mjs:32-39`.
+- After the SDK upgrade, `npm run vendor:sdk` (the check "vendor/ matches a fresh build from the player's SDK" fails against 1.5.16 until then).
+- **Host side, same merge (maintainer):** `src/host/src/ui_types.rs:233` lists the AI window's `"can-rollback"` property; the maintainer removes it when the workshop drops it.
+
+**Info `vestra.info`:** `tests/about.test.ts:23` keeps `previousVersion: null` while the SDK is 1.5.16 (the TestHost field is still required) and drops it with 1.5.17 (P4).
+
+### 7.5 The #39 `builtin-versions` guard: recommendation
+
+**Remove it in P4** (coordinator decides): `src/scripts/check-builtin-versions.mjs`, `src/tests/sdk/builtin-versions.test.mjs`, the `builtin-versions` npm script and its `ci:local` entry (maintainer); `.github/scripts/builtin-base.sh` and the `_static.yml` step, `ci.md` (infrastructure maintainer). Reason: its only reason was that a seeded copy was upgraded only to a higher version (#27); in place, the shipped files are the installation's, so a changed built-in reaches every user with the player whatever its version. Nothing else reads a built-in's version to decide anything (the store refuses installs over built-ins; `minPlayerVersion` is checked per manifest). Keep it until P1 has merged, not longer: a 0.5 player is never updated by a newer one's `builtin.json`. Bumping a built-in's version when it changes stays a good convention (the version is shown in the Plugin Manager and in bug reports), but not a CI gate. The script header now says this (`check-builtin-versions.mjs:1-11`).
+
+### 7.6 Checks (P1, Windows 11, `C:\vestra\target-p1`)
+
+| Command | Result |
+| --- | --- |
+| `cargo fmt --check` | exit 0 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | exit 0 |
+| `cargo test --locked --workspace` | exit 0; 437 passed, 0 failed, 4 ignored (+1 ignored elsewhere) |
+| `npm run check` / `format:check` / `boundaries` / `test:sdk` / `test:packaging` / `licenses` | all exit 0 (test:sdk 35/35, test:packaging 16 pass, 1 skipped) |
+| `typos` (repo root) | exit 0 |
+| `npm run plugin -- check/build/test plugins` | exit 0; 17/17 (SDK 1.5.15 and 1.5.16) |
+| `npm run check`, `test:sdk`, `plugin -- check/build/test plugins` against SDK 1.5.16 (§1.6 step 4, `npm install C:\vestra\sdk`, then `package.json`/lock restored and `npm ci`) | exit 0 after the TestHost fix in §7.2 |
+| SDK repo: `npm ci`, `build`, `check`, `format:check`, `lint`, `test` (182: 181 pass, 1 skipped), `docs`, `docs:llms`, `docs:check`, `doc-lint`, `examples`, `npm pack --dry-run` (1.5.16, 96 files), `typos` | all exit 0 |
+| `npm run portability` | exit 0, "portability: clean" (0 system commands; 5 `process.platform` branches, unchanged) |
+| `node packaging/bundle-windows.mjs --no-installer` with the P1 exe | exit 0; `check-licenses --bundle` "license check passed" on the unpacked layout |
+| `node packaging/smoke.mjs` on that bundle (packaged layout, bundled Node, empty profile, PATH without node) | exit 0: "15 plugins ready, 3 need a native shell, 18 built in" |
+
+Plugin tests, all plugins (fail counts; SDK 1.5.15 → 1.5.16): audio 0/37 → 0, capture 0/27 → 0, history 0/26 → 0 (one run had 1 flaky failure), hotkeys 0/23, info 0/46, marks 2/27 → 2, nes 26/30 → 26, playback 0/79, playlist 33/112 → 33, plugins 0/17 → 0, preferences 0/15, store 1/62 → 2 (+ "update, rollback, older version and uninstall from the same repository", P3), subtitle-online 2/21 → 2, subtitles 0/56, video 0/41, visualizer 0/21, window 0/38, workshop 3–4/62 → 4 (+ "vendor/ matches a fresh build", P3; "GitHub name… prefix" is a flaky 20 s timeout in both).
+
+### 7.7 Headless measurements (release build with a temporary loop timer, reverted; Windows 11 + Defender)
+
+Built-ins staged by the new `stage-plugins.mjs` (18 directories, 818 files) and **made read-only** for the user (deny write/append/attributes/delete; create, modify and delete verified refused). Host run headless with an empty or prepared `APPDATA`, `VESTRA_BUILTIN_PLUGINS` pointing at the staged directory.
+
+| Run | Longest loop iteration (UI thread) | All built-ins ready after spawn | `packages/packages/` after |
+| --- | --- | --- | --- |
+| First start (empty profile) | 197 ms (event handling; the first `package_tick`, which spawns 18 Node processes, 153 ms) | 1.19 s (18) | **0 entries** |
+| Upgrade from a real 0.5.0 profile (seeded by the 0.5.0 build: 18 copies; plus `vestra.hotkeys` disabled, `vestra.audio` with a `previous`, a marker file in hotkeys' data) | 166 ms (first `package_tick`) | 1.07 s (17; hotkeys stays disabled) | 0 entries: "18 unused package(s) removed in 225 ms" on `library-cleanup` |
+| Downgrade to 0.5.0 on the migrated profile, then the P1 build again | 0.5.0: starts, reseeds into the **same GUIDs**, hotkeys still disabled; P1 again: 159 ms, 1.10 s, 18 removed in 244 ms | | 0 |
+
+For comparison, the 0.5.0 build on the same machine needed 26.8 s (first start) / 26.0 s (after downgrade) until its built-ins were ready (seeding). In every P1 run the GUIDs, the disabled set and the data marker were kept; the catalog had 18 built-in records, none with `current` or `previous`.
+
+### 7.8 Staging for the coordinator's GUI checks (G1–G7)
+
+The built-ins are now directories under `resources\plugins`, so the stage must be rebuilt (an old stage has `.vxp` files and schema 1, which this host refuses with "builtin.json schema 1 is unknown"). Release exe: `C:\vestra\p1-out\vestra-host.exe`. In the player worktree, PowerShell:
+
+```powershell
+. C:\vestra\env.ps1 -Target C:\vestra\target-p1
+cd C:\PROJECT\vestra-player\.claude\worktrees\agent-a75d2bf82f384f0ac\src
+node packaging/bundle-windows.mjs --out C:\vestra\p1-bundle --binary C:\vestra\p1-out\vestra-host.exe --no-installer
+```
+
+Output: `C:\vestra\p1-bundle\VestraPlayer-0.5.0-windows-x64\` (staged install directory) and the portable zip. The maintainer already ran exactly this once (2026-10-26, with the delivered exe); that stage is in place and can be used as is, or rebuilt with the command (about 3 minutes). For G1/G2 on an Inno Setup install (admin-only directory), drop `--no-installer` on a machine with Inno Setup. G2 needs a 0.5.x profile first (install or run the 0.5.0 build once).

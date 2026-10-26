@@ -8,7 +8,7 @@ A map for API maintainers: how the components divide the work, how plugins are l
 ┌──────────── Host process (Rust, src/host) ────────────┐
 │ Slint native UI: main window, bottom bar/sidebar mounts, tool windows, menus │
 │ libmpv playback backend, processing chain, subtitles, snapshot/export workers │
-│ Plugin management: load, stop, install/roll back, reclaim owner resources    │
+│ Plugin management: load, stop, install/uninstall, reclaim owner resources    │
 └───────────────▲───────────────────────────────────────┘
                 │ JSONL over stdin/stdout (wire: vestra/1)
 ┌───────────────┴──── One Node process per plugin ──────┐
@@ -25,7 +25,7 @@ A map for API maintainers: how the components divide the work, how plugins are l
 ## 2. Loading and stopping plugins
 
 - **Development loading**: `vestra-host --plugin <directory>` (can be repeated) runs the entry `.ts` directly (Node 26 type stripping; the installed package uses the bundled Node, see `src/host/src/runtime_paths.rs`).
-- **Managed installation**: `packages.validate` → `install`/`rollback`; packages are stored in `VESTRA_PACKAGE_STORE`. Only build output is accepted (`dist/`, entry is `.js`, manifest has `version`).
+- **Managed installation**: `packages.validate` → `install`; `uninstall`; `setEnabled` (there is no rollback since 2026-10-26); packages are stored in `VESTRA_PACKAGE_STORE`, built-in plugins run in place from the installation. Only build output is accepted (`dist/`, entry is `.js`, manifest has `version`).
 - **Activation**: the host starts `node runner.ts <package directory>` → the runner reads the manifest, reads the initial state and subscribes to events according to capabilities → calls the default-exported `activate(plugin)` → sends `runtime.ready` once all registrations made during activation have succeeded, otherwise `runtime.failed`.
 - **Stopping**: the host revokes all of the plugin's resources by owner (menus and bindings, windows, panels and floating panel windows, processing resources, subtitle layers, snapshots, jobs, resolvers, producers, playback sequence providers, on-screen info blocks) and sends `runtime.stop`; the runner releases its handles and is killed if it has not exited within 300 ms. Each run gets a new owner generation, so late messages from an old process are never routed to a reloaded plugin of the same name.
 
@@ -99,7 +99,7 @@ mpv's counts stop at the renderer. `stats().framesShown` is the frames the video
 | Path | Contents |
 | --- | --- |
 | `src/host/src/main.rs` | Host main loop, RPC routing and capability checks, event broadcast |
-| `src/host/src/plugins.rs`, `package_*.rs` | Plugin processes, manifest validation, managed package store/install/rollback |
+| `src/host/src/plugins.rs`, `package_*.rs` | Plugin processes, manifest validation, managed package store/install/uninstall |
 | `src/host/src/backend.rs`, `source_*.rs`, `session.rs` | libmpv backend, source control and operation book, network source resolution |
 | `src/host/src/processing*.rs`, `effects.rs` | Video/audio processing chain |
 | `src/host/src/subtitle_*.rs`, `native_subtitle.rs` | Subtitle upload, selection, style layer |
@@ -109,7 +109,7 @@ mpv's counts stop at the renderer. `stats().framesShown` is the frames the video
 | `src/host/src/commands.rs`, `bindings.rs` | Command registry and menu tree, input binding table (parsing, scopes, conflicts, menu shortcut text) |
 | `src/host/src/plugins.rs` | Plugin processes; `VESTRA_PLUGIN_DATA_DIR` passes the data directory (by `DataKey`: installed `plugin-data/<install instance GUID>`, development loading `plugin-data/development/<id>`); the `secrets` service name is also by `DataKey`, and names used are recorded in the install store's `secrets/<service name>.json` (`secret_index.rs`, names only, ≤ 256 per service), used to delete them on uninstall with data and when a dormant instance is discarded |
 | `src/host/src/manifest.rs` | Manifest structure and rule table (shared by development loading and managed packages; the SDK CLI uses the same table, compared by the `host-agreement` test) |
-| `src/host/src/package_store.rs`, `package_archive.rs`, `package_manager.rs` | Install store (`packages/catalog.json`: each id's current install instance and dormant instances), `.vxp` extraction, install/replace/rollback/uninstall and built-in plugin seeding (`Resources/plugins/builtin.json`). Design in the [S4 proposal](store-api-proposal.md) |
+| `src/host/src/package_store.rs`, `package_archive.rs`, `package_manager.rs` | Install store (`packages/catalog.json`: each id's current install instance and dormant instances), `.vxp` extraction, install/replace/uninstall, built-in plugins run in place from `Resources/plugins/` (`builtin.json` schema 2), the migration of 0.5 libraries and the `library-cleanup` thread. Design in the [S4 proposal](store-api-proposal.md) §3.3 |
 | `src/host/src/ui_markdown.rs`, `ui/vestra/markdown.slint` | `plugin.ui.markdown`: pulldown-cmark parses into `[MarkdownBlock]`, inline styles use Slint `styled-text`; a document can be at any depth in a property value (`convert`, via the hook of `ui_values::from_json_with`), and each document is the host's own `Rows` model; cached by a (plugin, view, property) fingerprint (`Cache`, kept in `ui_image::Images` and released with the view); `ui_values::reconcile` updates values containing documents in place by shape (`fits`/`merge`), and documents are diffed by block (`Rows::update`). `MarkdownView` = `ScrollView` + `MarkdownBlocks` |
 | `src/host/src/i18n/`, `src/host/locales/` | Interface language: locale decided at startup (`platform::preferred_languages`), `.po` parsing and compiling (`po.rs`, shared with `build.rs`), Slint `@tr` rewriting (`slint_tr.rs`, via the file loader of `ui::compiler`), plugin and player catalogs, template formatting. Design in [i18n design](i18n.md) |
 | `src/host/src/window_state.rs`, `ui_state.rs` | Bottom bar/sidebar display rules (width, idle hiding, detaching), UI state persistence |
@@ -117,7 +117,7 @@ mpv's counts stop at the renderer. `stats().framesShown` is the frames the video
 | `src/runtime/runner.ts` | Plugin runner |
 | `src/node_modules/@vestra-player/sdk` | The npm package `@vestra-player/sdk`, with its source in the separate repository [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk) (`src/plugin/` plugin API, public types `types.ts`, test host `testing.ts`; `src/*.ts` wire client (internal); `bin/vestra-plugin.mjs` plugin command-line tool; `slint/` read-only copy of the widget library; `test/` SDK unit tests), version pinned by `src/package.json`. Entry points and release format in the [ecosystem plan S0 record](../product/ecosystem-plan.md), change process in [workflow §1.6](../process/community-workflow.md) |
 | `src/scripts/plugin.mjs`, `check-boundaries.mjs` | In-repo shortcut for calling `vestra-plugin` (by plugin name), import boundary check |
-| `src/scripts/stage-plugins.mjs` | Generates `Resources/plugins/` in the packaged layout: a `.vxp` for each plugin in `src/plugins/`, and `builtin.json` |
+| `src/scripts/stage-plugins.mjs` | Generates `Resources/plugins/` in the packaged layout: each plugin in `src/plugins/` packed and unpacked into `<id>/`, and `builtin.json` |
 | `src/scripts/check-builtin-versions.mjs` | `npm run builtin-versions`: fails when a built-in plugin's shipped files differ from the latest release tag (or `--base <ref>`) but its `manifest.json` version is not higher ([store proposal §3.3](store-api-proposal.md)); unit tests in `src/tests/sdk/builtin-versions.test.mjs` |
 | `src/scripts/sync-sdk-slint.mjs`, `stage-runtime.mjs` | Checks that the installed SDK's copy of the widget library matches `host/ui` (`--write <SDK repository>` copies `host/ui` into the SDK repository); generates `Resources/runtime` in the packaged layout from the installed SDK |
 | `src/tests/sdk/` | Player-side tests: runner, packaged layout, that the installed SDK's constants (the sources of the Reference tables on the SDK documentation site: capabilities and each member's requests, limits, binding names, built-in commands and submenus, palettes, error codes) and widget library copy agree with the host; `doc/` does not copy author documentation (`scripts/check-docs.mjs`) |

@@ -130,8 +130,8 @@ impl RuntimePaths {
             .collect()
     }
 
-    /// The built-in plugins to seed: `builtin_plugins` when it has a
-    /// `builtin.json`.
+    /// The built-in plugins, which run in place from there:
+    /// `builtin_plugins` when it has a `builtin.json`.
     pub fn builtin_directory(&self) -> Option<PathBuf> {
         self.builtin_plugins
             .clone()

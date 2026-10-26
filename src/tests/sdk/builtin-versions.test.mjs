@@ -1,6 +1,6 @@
 // scripts/check-builtin-versions.mjs: a built-in plugin whose shipped files
-// changed must carry a higher version (the host upgrades seeded built-ins
-// only to a newer version).
+// changed must carry a higher version (players up to 0.5 upgraded their
+// copies of built-ins only to a newer version; see the script's header).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
