@@ -1,5 +1,5 @@
-import { fileURLToPath } from "node:url";
 import type { Scope, Window } from "@vestra-player/sdk";
+import { fileUrlPath, HOST_RULES, type PathRules, typedPath } from "./local-path.ts";
 import type { SettingsStore } from "./settings.ts";
 import { errorMessage, type Osd } from "./texts.ts";
 
@@ -15,11 +15,13 @@ export type UrlNotice = "" | "invalid" | "firstLine" | "failed";
 
 /**
  * What `player.open` receives for one line: a supported network address as
- * typed, a local absolute path (`file://` converted), or `null`.
+ * typed, a local absolute path (`file://` converted), or `null`. Which local
+ * paths and `file:` URLs count follows the player's OS (`./local-path.ts`).
  */
-export function parseAddress(line: string): string | null {
+export function parseAddress(line: string, rules: PathRules = HOST_RULES): string | null {
   const text = line.trim();
-  if (text.startsWith("/")) return text;
+  const local = typedPath(text, rules);
+  if (local !== null) return local;
   let url: URL;
   try {
     url = new URL(text);
@@ -28,13 +30,7 @@ export function parseAddress(line: string): string | null {
   }
   if (/\s/.test(text)) return null;
   const scheme = url.protocol.slice(0, -1).toLowerCase();
-  if (scheme === "file") {
-    try {
-      return fileURLToPath(url);
-    } catch {
-      return null;
-    }
-  }
+  if (scheme === "file") return fileUrlPath(url, rules);
   return SCHEMES.has(scheme) && url.host !== "" ? text : null;
 }
 

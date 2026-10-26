@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import type { Locale } from "@vestra-player/sdk";
 import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
-import { clock, displayName, keyOf, mediaKind, middle } from "../identity.ts";
+import { clock, displayName, fileSize, isLocal, keyOf, legacyKeyOf, mediaKind, middle } from "../identity.ts";
 import activate from "../main.ts";
 import { timing } from "../store.ts";
 
@@ -86,6 +87,50 @@ test("identity: real path for files, link without fragment; names, clock, media 
   assert.equal(mediaKind("/a/b.flac"), "audio");
   assert.equal(mediaKind("https://h/a.mp3?x"), "audio");
   assert.equal(mediaKind("https://h/watch?v=1"), null);
+});
+
+const windows = process.platform === "win32";
+
+test("identity on every OS: a file: URL is its file, stream links stay links", () => {
+  const path = file("片 #1.mkv", 7);
+  const url = pathToFileURL(path).href;
+  assert.ok(isLocal(url));
+  assert.equal(keyOf(url), path);
+  assert.equal(keyOf(`${url}#t=5`), path);
+  assert.equal(displayName(url), "片 #1.mkv");
+  assert.equal(fileSize(url), 7);
+  assert.equal(mediaKind(url), "video");
+  assert.equal(legacyKeyOf(url), url, "0.1.3 keyed a file: URL as link text");
+  // 0.1.3 cut a Windows path at its `#` like a link.
+  assert.equal(legacyKeyOf(path), windows ? path.slice(0, path.indexOf("#")) : null);
+  for (const link of ["https://h.example/v/a.mp4#t=1", "rtsp://cam.local/live/main", "rtmp://h.example/app/key"]) {
+    assert.ok(!isLocal(link), link);
+    assert.equal(fileSize(link), null);
+    assert.equal(legacyKeyOf(link), null, link);
+  }
+  assert.equal(displayName("rtsp://cam.local/live/main"), "cam.local › main");
+  assert.equal(keyOf("rtsp://cam.local/live/main#x"), "rtsp://cam.local/live/main");
+});
+
+test("identity of Windows paths: files on Windows, links shown by their file name on macOS", () => {
+  const sources = ["C:\\Users\\x\\Movies\\b.mkv", "C:/Users/x/Movies/b.mkv", "\\\\server\\share\\Movies\\b.mkv"];
+  for (const source of sources) {
+    assert.equal(isLocal(source), windows, source);
+    assert.equal(displayName(source), "b.mkv", source);
+    assert.equal(mediaKind(source), "video", source);
+  }
+  // A missing file keeps its path as the key (the fragment is part of a file name).
+  assert.equal(keyOf("C:\\no\\such\\a#1.mkv"), windows ? "C:\\no\\such\\a#1.mkv" : "C:\\no\\such\\a");
+  assert.equal(legacyKeyOf("C:\\no\\such\\a#1.mkv"), windows ? "C:\\no\\such\\a" : null);
+  // A share as a file: URL: a UNC path on Windows; macOS has no path for it.
+  assert.equal(isLocal("file://server/share/b.mkv"), windows);
+  assert.equal(displayName("file://server/share/b.mkv"), windows ? "b.mkv" : "server › b.mkv");
+  if (windows) {
+    // One file however its path is spelled.
+    const path = file("c.mkv");
+    assert.equal(keyOf(path.replaceAll("\\", "/")), path);
+    assert.equal(keyOf(join(path, "..", ".", "c.mkv").replaceAll("\\", "/")), path);
+  }
 });
 
 // ------------------------------------------------------------------ A12
@@ -559,6 +604,55 @@ test("B25 stopping the plugin remembers the last position", async () => {
   assert.deepEqual(pluginSeeks(next.host), [121]);
   assert.equal(next.host.osd.at(-1), "从 02:03 继续播放");
   await next.stop();
+});
+
+test("storage: records saved under the 0.1.3 keys (file: URLs; Windows paths) are read, resumed and moved to the new key", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  const url = pathToFileURL(file("u.mkv")).href;
+  // On Windows 0.1.3 kept a drive path as link text: kind "url", the key as spelled.
+  const drive = windows ? file("w.mkv").replaceAll("\\", "/") : null;
+  const missing = windows ? join(scratch, "gone", "m.mkv") : null;
+  const legacy = [url, drive, missing].filter((source) => source !== null);
+  const openedAt = new Date(0).toISOString();
+  const items = legacy.map((source) => ({ key: source, source, kind: "url", openedAt }));
+  // 0.1.3 saw no file there, so it saved no size.
+  const memo = { position: 300, duration: 600, size: null, updatedAt: 1 };
+  writeFileSync(join(data, "recent.json"), JSON.stringify({ version: 1, enabled: true, items }));
+  writeFileSync(
+    join(data, "positions.json"),
+    JSON.stringify({ version: 1, mode: "auto", audio: false, items: Object.fromEntries(legacy.map((key) => [key, memo])) }),
+  );
+  const { host, stop } = await start(undefined, data);
+  const names = legacy.map((source) => basename(source));
+  assert.deepEqual(
+    records(host),
+    names.map((name, index) => `${index + 1}  ${name}（05:00）`),
+  );
+  for (const source of [url, drive].filter((source) => source !== null)) {
+    await play(host, source);
+    assert.equal(host.osd.at(-1), "从 05:00 继续播放", source);
+  }
+  assert.deepEqual(pluginSeeks(host), windows ? [298, 298] : [298]);
+  assert.equal(records(host).length, legacy.length, "no record twice");
+  await play(host, file("x.mkv"));
+  await stop();
+  const recent = JSON.parse(readFileSync(join(data, "recent.json"), "utf8"));
+  const positions = JSON.parse(readFileSync(join(data, "positions.json"), "utf8"));
+  const moved = [url, drive].filter((source) => source !== null).map((source) => keyOf(source));
+  for (const key of moved) {
+    assert.ok(recent.items.some((item: { key: string; kind: string }) => item.key === key && item.kind === "file"), key);
+    assert.equal(positions.items[key]?.size, 10, key);
+  }
+  for (const source of [url, drive]) if (source) assert.ok(!(source in positions.items), source);
+
+  if (missing) {
+    // A missing Windows file saved as "url" is now a file: Remove Invalid Entries removes it.
+    const next = await start(undefined, data);
+    await next.host.command("recent.prune").run();
+    await next.host.settle(WAIT);
+    assert.equal(next.host.osd.at(-1), "已移除 1 条无效记录");
+    await next.stop();
+  }
 });
 
 test("storage: a damaged file is kept as .bad-<time> and the defaults apply; one bad field keeps the rest", async () => {

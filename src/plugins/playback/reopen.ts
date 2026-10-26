@@ -1,5 +1,5 @@
-import { basename } from "node:path";
 import type { JsonStore, PlayerState, Scope } from "@vestra-player/sdk";
+import { fileName, HOST_RULES, isLocalPath } from "./local-path.ts";
 import { openStore } from "./settings.ts";
 import { type Osd, sourceFailure } from "./texts.ts";
 
@@ -8,7 +8,8 @@ const isLast = (value: unknown): value is Last =>
   typeof value === "object" && value !== null && typeof (value as Last).source === "string";
 
 /** A local path shows its file name; a link is shown whole. */
-export const displayName = (source: string) => (source.startsWith("/") ? basename(source) : source);
+export const displayName = (source: string, rules = HOST_RULES) =>
+  isLocalPath(source, rules) ? fileName(source, rules) : source;
 
 /**
  * A10 Reopen Current/Last File: reload the current source (back to where it was), or

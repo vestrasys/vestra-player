@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import { albumLine, CoverCache, fileName, folderCover, limits, parseProbe } from "../covers.ts";
 import { imageInfo, imageProblem } from "../images.ts";
+import { isUrl, localFile } from "../local-path.ts";
 import { NOT_IMAGE, TOO_LARGE, UNREADABLE } from "../logo.ts";
 import activate, { loadingName, PAGE_ID } from "../main.ts";
 import { readSettings } from "../settings.ts";
@@ -84,6 +86,27 @@ async function settle(host: TestHost) {
   for (let i = 0; i < 6; i++) await host.settle(20);
 }
 
+/**
+ * Settings ▸ Appearance ▸ Choose Logo Image… with this dialog answer. `run()`
+ * waits for host calls only; the plugin checks and copies the picture itself
+ * (stat, read, write, rename), which can outlast it (it does on Windows). Every
+ * picked file ends in one notice, so wait for it, then for the state update.
+ */
+async function chooseLogo(host: TestHost, answer: string[] | null) {
+  const before = host.osd.length;
+  host.dialogAnswers.push(answer);
+  await host.command("choose-logo").run();
+  for (let i = 0; i < 250 && answer && host.osd.length === before; i++) await host.settle(20);
+  await host.settle();
+}
+/** Settings ▸ Appearance ▸ Restore Default Logo: the plugin deletes the copy itself, then shows its notice. */
+async function resetLogo(host: TestHost) {
+  const before = host.osd.length;
+  await host.command("reset-logo").run();
+  for (let i = 0; i < 250 && host.osd.length === before; i++) await host.settle(20);
+  await host.settle();
+}
+
 // ------------------------------------------------------------------ pure parts
 
 test("images: PNG and JPEG sizes from their headers; limits", () => {
@@ -109,6 +132,53 @@ test("tags: any case, stream tags for Ogg, album · year; folder cover order; na
   assert.equal(folderCover(["a.jpg"]), null);
   assert.equal(fileName("/Music/a b.flac"), "a b.flac");
   assert.equal(fileName("https://radio.example/live/%E9%9F%B3.mp3?x=1"), "音.mp3");
+});
+
+test("paths: names by the rules of each OS; links; file: URLs", () => {
+  // POSIX (macOS): only `/` separates; a backslash is part of a name.
+  assert.equal(fileName("/Music/a b.flac", "posix"), "a b.flac");
+  assert.equal(fileName("/Music/a\\b.flac", "posix"), "a\\b.flac");
+  assert.equal(fileName("file:///Music/%E9%9F%B3.mp3", "posix"), "音.mp3");
+  assert.equal(localFile("file:///Music/a.mp3", "posix"), "/Music/a.mp3");
+  assert.equal(localFile("/Music/a.mp3", "posix"), "/Music/a.mp3");
+  assert.equal(localFile("https://radio.example/a.mp3", "posix"), null);
+  assert.equal(isUrl("/Music/a.mp3", "posix"), false);
+  // Windows: `\` and `/` both separate; drive, UNC and `C://` paths are paths, not links.
+  assert.equal(fileName("C:\\Music\\a b.flac", "windows"), "a b.flac");
+  assert.equal(fileName("C:/Music/a.flac", "windows"), "a.flac");
+  assert.equal(fileName("\\\\nas\\share\\专辑\\b.mp3", "windows"), "b.mp3");
+  assert.equal(isUrl("C://Music/a.mp3", "windows"), false);
+  assert.equal(fileName("file:///C:/Music/%E9%9F%B3.mp3", "windows"), "音.mp3");
+  assert.equal(localFile("file:///C:/Music/a.mp3", "windows"), "C:\\Music\\a.mp3");
+  assert.equal(localFile("file://nas/share/a.mp3", "windows"), "\\\\nas\\share\\a.mp3");
+  // No drive: not a local file on Windows; named like a link.
+  assert.equal(localFile("file:///Music/a.mp3", "windows"), null);
+  assert.equal(fileName("file:///Music/a.mp3", "windows"), "a.mp3");
+  // Links are the same everywhere.
+  for (const rules of ["posix", "windows"] as const) {
+    assert.equal(fileName("https://radio.example/live/%E9%9F%B3.mp3?x=1", rules), "音.mp3");
+    assert.equal(fileName("https://radio.example/", rules), "radio.example");
+    assert.equal(isUrl("https://radio.example/", rules), true);
+  }
+  // The loading screen: a path's name only, a link's host and name.
+  assert.equal(loadingName("C:\\Users\\me\\Music\\电影.mkv", "windows"), "电影.mkv");
+  assert.equal(loadingName("\\\\nas\\share\\clip.mp4", "windows"), "clip.mp4");
+  assert.equal(loadingName("C://media/clip.mp4", "windows"), "clip.mp4");
+  assert.equal(loadingName("file:///C:/media/clip.mp4", "windows"), "clip.mp4");
+  assert.equal(loadingName("file:///media/clip.mp4", "posix"), "clip.mp4");
+  assert.equal(loadingName("/media/a\\b.mp4", "posix"), "a\\b.mp4");
+  assert.equal(loadingName("https://cdn.example.com/films/clip.mp4", "windows"), "cdn.example.com/clip.mp4");
+});
+
+test("J11: a file: URL is read like its path (cover and tags)", async () => {
+  const host = new TestHost();
+  const dir = folder({ "u.flac": "x", "cover.jpg": jpeg(40, 40) });
+  host.tools.handle("ffprobe", () => ({ stdout: PROBE_PLAIN }));
+  await start(host);
+  host.openElsewhere(pathToFileURL(join(dir, "u.flac")).href);
+  await settle(host);
+  assert.deepEqual([props(host).mode, props(host).title, props(host)["has-cover"]], ["audio", "u.flac", true]);
+  assert.equal(host.tools.calls[0]!.args.at(-1), realpathSync(join(dir, "u.flac")));
 });
 
 test("settings: defaults, field by field", () => {
@@ -392,21 +462,16 @@ test("H12: custom logo is checked, copied, shown, kept over restarts and reset",
   const first = await start(host, data);
   const pictures = folder({ "mine.png": png(800, 400), "huge.png": png(5000, 5000), "fake.jpg": "text", "a.gif": "GIF89a" });
 
-  host.dialogAnswers.push([join(pictures, "huge.png")]);
-  await host.command("choose-logo").run();
+  await chooseLogo(host, [join(pictures, "huge.png")]);
   assert.equal(host.osd.at(-1), TOO_LARGE);
-  host.dialogAnswers.push([join(pictures, "fake.jpg")]);
-  await host.command("choose-logo").run();
+  await chooseLogo(host, [join(pictures, "fake.jpg")]);
   assert.equal(host.osd.at(-1), NOT_IMAGE);
-  host.dialogAnswers.push([join(pictures, "a.gif")]);
-  await host.command("choose-logo").run();
+  await chooseLogo(host, [join(pictures, "a.gif")]);
   assert.equal(host.osd.at(-1), NOT_IMAGE);
-  host.dialogAnswers.push(null);
-  await host.command("choose-logo").run();
+  await chooseLogo(host, null);
   assert.equal(props(host)["custom-logo"], false);
 
-  host.dialogAnswers.push([join(pictures, "mine.png")]);
-  await host.command("choose-logo").run();
+  await chooseLogo(host, [join(pictures, "mine.png")]);
   await host.settle();
   assert.equal(props(host)["custom-logo"], true);
   assert.equal(host.imagePath(props(host).logo), join(data, "logo.png"));
@@ -419,8 +484,7 @@ test("H12: custom logo is checked, copied, shown, kept over restarts and reset",
   const again = new TestHost();
   await start(again, data);
   assert.equal(props(again)["custom-logo"], true);
-  await again.command("reset-logo").run();
-  await again.settle();
+  await resetLogo(again);
   assert.equal(props(again)["custom-logo"], false);
   assert.equal(existsSync(join(data, "logo.png")), false);
   assert.equal(again.osd.at(-1), "Default logo restored");
@@ -527,14 +591,10 @@ test("Simplified Chinese: menus, settings page and messages from locales/zh-Hans
   await host.settle();
   assert.deepEqual(host.osd.slice(1), ["纯音频时显示专辑封面：关", "空闲时显示徽标：关"]);
   const pictures = folder({ "huge.png": png(5000, 5000), "a.gif": "GIF89a", "ok.png": png(10, 10) });
-  host.dialogAnswers.push([join(pictures, "huge.png")]);
-  await host.command("choose-logo").run();
-  host.dialogAnswers.push([join(pictures, "a.gif")]);
-  await host.command("choose-logo").run();
-  host.dialogAnswers.push([join(pictures, "ok.png")]);
-  await host.command("choose-logo").run();
-  await host.command("reset-logo").run();
-  await settle(host);
+  await chooseLogo(host, [join(pictures, "huge.png")]);
+  await chooseLogo(host, [join(pictures, "a.gif")]);
+  await chooseLogo(host, [join(pictures, "ok.png")]);
+  await resetLogo(host);
   assert.deepEqual(host.osd.slice(3), ["图片过大（最大 4096×4096、16 MB）", "只能使用 PNG 或 JPEG 图片", "已使用自定义徽标", "已恢复默认徽标"]);
   // The window texts are @tr in ui/*.slint; the same catalog translates them.
   assert.equal(host.translate("Opening: {}", ["a.mp3"]), "正在打开：a.mp3");

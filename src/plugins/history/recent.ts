@@ -1,6 +1,6 @@
 import { access } from "node:fs/promises";
 import type { JsonStore, PlayerState, Scope } from "@vestra-player/sdk";
-import { isLocal, keyOf } from "./identity.ts";
+import { isLocal, keyOf, legacyKeyOf, localPath } from "./identity.ts";
 import { jsonStore, timing } from "./store.ts";
 
 export type RecentItem = { key: string; source: string; kind: "file" | "url"; openedAt: string };
@@ -36,6 +36,8 @@ export class Recent {
             (item.kind === "file" || item.kind === "url") &&
             typeof item.openedAt === "string",
         )
+        // Derived from the source: 0.1.3 and earlier stored Windows paths as "url".
+        .map((item) => ({ ...item, kind: isLocal(item.source) ? ("file" as const) : ("url" as const) }))
         .slice(0, CAPACITY);
   }
 
@@ -51,13 +53,15 @@ export class Recent {
     this.#recorded = state.sourceId;
     if (!this.enabled) return;
     const key = keyOf(state.source);
+    // A record saved under the 0.1.3 key of the same source is this one.
+    const legacy = legacyKeyOf(state.source);
     const item: RecentItem = {
       key,
       source: state.source,
       kind: isLocal(state.source) ? "file" : "url",
       openedAt: new Date().toISOString(),
     };
-    this.items = [item, ...this.items.filter((other) => other.key !== key)].slice(0, CAPACITY);
+    this.items = [item, ...this.items.filter((other) => other.key !== key && other.key !== legacy)].slice(0, CAPACITY);
     this.#changed();
   }
 
@@ -75,7 +79,7 @@ export class Recent {
   /** Drop local records whose file no longer exists (checked concurrently); links stay. Returns how many went. */
   async prune(): Promise<number> {
     const checked = await Promise.all(
-      this.items.map(async (item) => ({ item, gone: item.kind === "file" && !(await exists(item.source)) })),
+      this.items.map(async (item) => ({ item, gone: !(await present(item.source)) })),
     );
     const gone = new Set(checked.filter((c) => c.gone).map((c) => c.item.key));
     if (!gone.size) return 0;
@@ -90,7 +94,10 @@ export class Recent {
   }
 }
 
-export async function exists(path: string) {
+/** Whether a local source's file exists; a link always counts as present. */
+export async function present(source: string) {
+  const path = localPath(source);
+  if (path === null) return true;
   try {
     await access(path);
     return true;
