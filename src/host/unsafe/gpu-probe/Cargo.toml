@@ -1,0 +1,58 @@
+[package]
+name = "vestra-gpu-probe"
+version = "0.0.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+description = "Go/no-go probe for Windows GPU rendering: libmpv's D3D11 render API shown in OpenGL through WGL_NV_DX_interop2 (evidence only, not part of the player)"
+
+# Evidence for doc/process/rounds/2026-10-windows-render.md, Appendix C. A
+# standalone workspace of its own: it is NOT a member of src/host's workspace,
+# the player never builds or links it, and it has its own Cargo.lock.
+#
+#   . C:\vestra\env.ps1 -Target C:\vestra\target-gpu -Ffmpeg
+#   cargo build --release --manifest-path src/host/unsafe/gpu-probe/Cargo.toml
+#   gpu-probe info | gpu-probe run [options]   (see src/lib.rs)
+#
+# Integration moves the parts that work into src/host/unsafe/render (a
+# registered unsafe crate); this crate then goes away.
+[workspace]
+
+[[bin]]
+name = "gpu-probe"
+path = "src/main.rs"
+
+# Same program, but it exports NvOptimusEnablement and
+# AmdPowerXpressRequestHighPerformance (build.rs), the hybrid-GPU hints that
+# ask the drivers to put the process's OpenGL context on the discrete GPU.
+[[bin]]
+name = "gpu-probe-dgpu"
+path = "src/bin/gpu-probe-dgpu.rs"
+
+[target.'cfg(windows)'.dependencies]
+glow = "=0.18.0"
+png = "=0.18.1"
+rsmpv-sys = "=0.1.1"
+windows = { version = "=0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Graphics_Gdi",
+  "Win32_Graphics_OpenGL",
+  "Win32_System_LibraryLoader",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+# The same lints as the registered unsafe crates (check-unsafe-policy.mjs).
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
+dbg_macro = "warn"
+todo = "warn"

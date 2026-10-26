@@ -558,3 +558,152 @@ Open items from the independent review (fixed before merge: the texture upload n
 - **F5** `BufferRing`: count copy-on-write events (a buffer still held by the UI when it comes round) in the frame log; consider `RING = 5`; release the ring's buffers while playback is stopped.
 - **F6** `VBlankWaiter`: log when reopening the clock fails after the window moved to another display (it keeps the old display's clock silently today).
 - **F9** macOS: not compiled locally (no macOS target here); CI's macOS job checks it. The macOS paths are the no-op `no_vblank` module, `VIDEO_TEXTURE = false`, the no-op `fullscreen_resized`, and the shared `BufferRing`.
+
+## Appendix C: GPU render gate (Windows, 2026-10-26)
+
+API maintainer; the go/no-go gate of §3 step 4 for option (c′), ordered by the user's ruling of 2026-10-26 (Windows GPU rendering goes into 0.6.0; integration comes after this gate). Same machine as Appendix B: Ryzen 9 7940HS, 16 logical CPUs; the AMD Radeon 780M drives the only screen; RTX 4070 Laptop GPU. Drivers: AMD 31.0.14005.21001 (GL `4.6.0 Compatibility Profile Context 22.40.05.21.231025`, an October 2023 driver), NVIDIA 32.0.16.1062 (GL `4.6.0 NVIDIA 610.62`). libmpv: the pinned shinchiro build in `C:\vestra\deps` (mpv `e471496c56`, render API 2.6).
+
+**Probe.** `src/host/unsafe/gpu-probe/` (crate `vestra-gpu-probe`). It is a standalone crate with its own `[workspace]` and `Cargo.lock`, so it is not a member of `src/host`'s workspace and the player never builds or links it (`cargo metadata` in `src/host` still lists the same six packages; `check-unsafe-policy.mjs` passes). It has the unsafe-crate lints, and every `unsafe` block carries a SAFETY comment (57 blocks, checked with the policy script's own rule 3 code). `vendor/render_d3d11.h` is mpv's header at `e471496c56` (ISC; not in the shinchiro package). It has two binaries:
+
+- `gpu-probe` runs in a normal process.
+- `gpu-probe-dgpu` is the same program, but it exports `NvOptimusEnablement` and `AmdPowerXpressRequestHighPerformance` (`build.rs`, `/EXPORT`), which ask the drivers to put the process's OpenGL on the discrete GPU.
+
+```text
+. C:\vestra\env.ps1 -Target C:\vestra\target-gpu -Ffmpeg
+cargo build --release --manifest-path src/host/unsafe/gpu-probe/Cargo.toml
+gpu-probe info                      # adapters, hidden GL context, interop matrix (no mpv)
+gpu-probe interop <index|warp>      # one matrix cell; GPU_PROBE_TRACE=1 traces each wglDX call
+gpu-probe run --adapter default|warp|<index> --src <file|av://lavfi:…> --size 3840x2160
+              --seconds 10 --warmup 2 [--gl] [--sync] [--lag 1] [--host-vf] [--block] [--png out.png]
+```
+
+`run` creates the device (`VIDEO_SUPPORT | BGRA_SUPPORT`, FL 11.1, `ID3D11Multithread::SetMultithreadProtected(TRUE)`) and mpv (`vo=libmpv`, `ao=null`, `hwdec=auto-safe`, `loop-file=inf`). It then calls `mpv_render_context_create` with `api_type="d3d11"` and `D3D11_INIT_PARAMS` (param 21), and renders every new frame into a ring of three `B8G8R8A8_UNORM` textures through `D3D11_FBO` (param 22). For each render it times the CPU wall time of `mpv_render_context_render` and the GPU time (timestamp queries). It also records the process CPU time over the measured window. At the end it reads the last frame back through a staging texture into a PNG.
+
+With `--gl`, a hidden window is created: `CreateWindowExW` without `WS_VISIBLE`, `WS_EX_NOACTIVATE`, never shown, so it can never take focus. Its WGL context opens the same D3D device once (`wglDXOpenDeviceNV`) and registers each ring texture (`wglDXRegisterObjectNV`, `GL_TEXTURE_2D`, read-only). For every frame it then locks the texture rendered `--lag` frames earlier, blits it into its own `GL_TEXTURE_2D` (what Slint would get as a `BorrowedOpenGLTexture`), and unlocks it. The three steps are timed separately. At the end the GL copy is read back and compared with the D3D readback pixel for pixel. `--sync` makes the render thread wait for the GPU to finish each frame (event query), the D3D counterpart of the macOS renderer's `glFinish`.
+
+**Conditions.** The user was working on the machine (GPU-heavy work). Each run sampled `\GPU Engine(*)\Utilization Percentage` for the probe process and for everyone else (one sample every ~2 s). Other processes used ≤ 2% 3D on the 780M and 1-13% (peaks up to 23%) on the 4070 during the runs; I saw no interference except possibly the one stall noted in C.3. Runs were 5-10 s measured after a 2 s warm-up; the probe never made a sound (`ao=null`) and never showed a window.
+
+### C.1 Verdict: **GO**
+
+Both questions are answered yes on this machine, with three conditions that the integration must meet (C.4). The two conditions that are not obvious are these:
+
+- **Pick the D3D adapter that matches the GL context by LUID before any `wglDX*` call.** The AMD driver crashes the process on a mismatch.
+- **Have the render thread wait until the GPU has finished a frame before publishing it.** Otherwise, on AMD the window's lock blocks the UI thread for ~10 ms per 4K frame.
+
+### C.2 G1: the shipped libmpv renders through the D3D11 render API
+
+| run (3840x2160 target unless noted) | adapter | `hwdec-current` / format | fps (measured) | `render()` CPU ms mean / p95 | GPU ms mean / p95 | process CPU | probe GPU load (3D / video) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `testsrc2` 1080p60, 1920x1080 target | 780M | `no` (raw frames) / yuv420p | 60.18 | 1.23 / 1.92 | (timer bug, fixed after this run) | 1.1% | 15% / - |
+| HEVC 4K60 10-bit | 780M | **`d3d11va`** / `d3d11[p010]` | 60.10 | 0.78 / 1.33 | 8.87 / 10.11 | **1.0%** | 55% / 57% |
+| AV1 4K60 10-bit | 780M | **`d3d11va`** / `d3d11[p010]` | 60.09 | 0.57 / 1.32 | 8.93 / 10.83 | **0.5%** | 50% / 45% |
+| HEVC 4K60 10-bit | RTX 4070 | **`d3d11va`** / `d3d11[p010]` | 60.00 | 0.87 / 1.29 | 5.47 / 8.10 | **0.8%** | 29% / 24% |
+| AV1 4K60 10-bit (with `--gl`) | RTX 4070 | **`d3d11va`** / `d3d11[p010]` | 60.05 | 0.69 / 1.28 | 4.86 / 9.16 | 3.3% (with GL, see C.3) | 31% / 26% |
+| HEVC 4K60, the host's `vf` chain (`--host-vf`) | 780M | **`d3d11va`** / `d3d11[p010]` | 60.21 | 0.84 / 1.34 | 9.03 / 10.24 | 1.0% | 55% / 57% |
+| HEVC 4K60, `BLOCK_FOR_TARGET_TIME=1` (the host's unpaced mode) | 780M | `d3d11va` | 60.00 | 16.6 (blocks until display time) | - | 1.1% | 55% / 57% |
+| `testsrc2`, 1920x1080 target | **WARP** | `no` | 19.98 | 50 / 122 | 49 / 116 | 47% | CPU |
+| HEVC 4K60, 1920x1080 target | **WARP** | `d3d11va-copy` (WARP has no video support, so mpv decodes on a hardware device of its own and copies) | 6.38 | 157 / 176 | 157 / 172 | 67% | CPU |
+
+- **The API works as documented.** `mpv_render_context_create(api_type="d3d11")` succeeds in 70-293 ms on all three adapters, and `mpv_render_context_render` never returned an error in any run (≈ 9,000 frames in total).
+- **Zero-copy**: `hwdec-current = d3d11va` (not `-copy`) with `video-params/pixelformat = d3d11`, `hw-pixelformat = p010` on both GPUs for HEVC and AV1 10-bit: mpv decodes on the device we pass and samples the decoder's textures directly.
+  - The host's initial filter chain (`source_geometry::INITIAL_FILTERS`: `lavfi=[null]` + `format`) keeps it zero-copy.
+- **4K60 cost**: about 1% CPU of the machine (0.08-0.16 cores) and under 1 ms of CPU per `render()` call. That compares with 24-32% CPU for the software path in B.1.
+  - GPU time per 4K frame: 8.9 ms on the 780M and 5.5 ms on the 4070. The 4070 is mostly idle and clocks down; its p95 is 8-9 ms.
+  - The 780M then runs at about 50-55% 3D plus 45-57% of its video engine at 4K60. That leaves room for Slint's composition, but not a lot. A 1440p target needs proportionally less.
+- **Drops**: 8-20 `frame-drop-count` per run, all within the first 2 s (the count at the end of the warm-up equals the final count in every run without `--sync`). `decoder-frame-drop-count` is 0 everywhere. Startup drops are worth a look during integration (§4 counter), but they are not a gate issue.
+- **Picture**: every readback was checked as an image. testsrc2's bars came out upright with the right colours (also on WARP), and the HEVC and AV1 frames looked correct (the AV1 screen-recording clip shows its own frame counter). The PNG files are in the maintainer's scratchpad and are not committed; `--png` reproduces them.
+- **WARP** (CI's headless path, `D3D_DRIVER_TYPE_WARP`): the render API works and the picture is right. It is fast enough for a correctness test that renders a few lavfi frames into a texture and checks the pixels, but not for any timing test.
+
+### C.3 G2: the texture shown in OpenGL through `WGL_NV_DX_interop2`
+
+**Which adapter the GL context lands on** (`gpu-probe info` and `gpu-probe-dgpu info`):
+
+| process | GL_RENDERER | `GL_DEVICE_LUID_EXT` → DXGI adapter | DXGI `EnumAdapters1(0)` and `D3D11CreateDevice(NULL)` |
+| --- | --- | --- | --- |
+| normal (`gpu-probe`; the player today) | AMD Radeon(TM) 780M (`ATI Technologies Inc.`) | `00000000:00011132` = the 780M, node mask 0 | the 780M |
+| with the dGPU export hints (`gpu-probe-dgpu`) | NVIDIA GeForce RTX 4070 Laptop GPU (`NVIDIA Corporation`) | `00000000:00012414` = the 4070, node mask 1 | the 4070 (the hints also reorder DXGI: the 4070 is listed first and owns the output) |
+
+- **Extensions**: both drivers expose `WGL_NV_DX_interop` and `WGL_NV_DX_interop2`, `GL_EXT_memory_object_win32` and `GL_EXT_semaphore_win32`.
+  - `WGL_NV_gpu_affinity` is absent on both (it is a Quadro feature).
+  - `WGL_AMD_gpu_association` is present on AMD only.
+  - Neither driver lists `GL_EXT_external_objects_win32`, but `glGetUnsignedBytevEXT(GL_DEVICE_LUID_EXT)` from `GL_EXT_memory_object_win32` works on both. It gives the exact DXGI `AdapterLuid`, which is the key for matching the adapters.
+- In both process configurations the default D3D adapter was the GL adapter: Windows' hybrid policy and the driver hints act on DXGI and GL together.
+
+**The hybrid matrix** (a 256x256 texture cleared to a known colour on the D3D side, read in GL through the interop):
+
+| GL context on | D3D device on | result |
+| --- | --- | --- |
+| 780M | 780M | OK: open + register + lock + blit + read 6-9 ms the first time, all pixels match |
+| 780M | RTX 4070 | **process crash**. `wglDXOpenDeviceNV` returns a non-null handle, then `wglDXRegisterObjectNV` faults with an access violation in `atio6axx.dll` (Event Log 1000, `0xc0000005`, offset `0x21552b0`, reproduced 3/3) |
+| 780M | WARP | **process crash**, same place |
+| RTX 4070 | RTX 4070 | OK, all pixels match |
+| RTX 4070 | 780M | clean failure: `wglDXOpenDeviceNV` returns NULL, `GetLastError = 0xC0070032` |
+| RTX 4070 | WARP | clean failure, same code |
+
+Neither driver falls back to a copy across adapters. A mismatched pair either fails (NVIDIA) or kills the process (AMD), so the host must never call `wglDX*` without a confirmed match.
+
+**Per-frame cost and correctness at 3840x2160** (the window side: lock the newest finished texture, blit into its own texture, unlock; CPU ms p50 / p95):
+
+| GPUs (GL = D3D) | clip | render thread waits for the GPU (`--sync`) | `wglDXLockObjectsNV` | blit (submit) | `wglDXUnlockObjectsNV` | fps |
+| --- | --- | --- | --- | --- | --- | --- |
+| 780M | HEVC | no, lag 1 | **9.73 / 10.76** | 0.02 | 1.20 / 1.46 | 60.03 |
+| 780M | HEVC | no, lag 0 | 9.67 / 10.50 | 0.02 | 1.17 / 1.55 | 60.06 |
+| 780M | HEVC, 1080p target | no | 9.18 / 10.58 | 0.02 | 0.56 / 0.71 | 60.05 |
+| 780M | testsrc2 (no decoder) | no | 8.59 / 9.85 | 0.02 | 1.10 / 1.25 | 60.07 |
+| 780M | HEVC | **yes** (wait 8.7 ms on the render thread) | **1.16 / 1.70** | 0.02 | 1.22 / 2.46 | 59.40 |
+| 780M | AV1 | **yes** (two runs) | **1.02-1.06 / 1.36** | 0.02 | 1.27-1.31 / 1.60-1.64 | 57.42 / 60.03 |
+| 4070 | HEVC | no | 0.16 / 0.32 | 0.02 | 0.20 / 0.32 | 60.04 |
+| 4070 | HEVC | yes (wait 7.2 ms) | 0.21 / 0.35 | 0.02 | 0.23 / 0.34 | 60.05 |
+| 4070 | AV1 | no | 0.17 / 0.31 | 0.02 | 0.21 / 0.37 | 60.05 |
+
+- **Pixels**: in every run the GL copy is **bit-identical** to the D3D readback (100% of pixels, max channel difference 0). GL row 0 is the D3D top row, so Slint gets the texture with `BorrowedOpenGLTextureOrigin::TopLeft`, as the macOS renderer and `vestra-video-texture` already do.
+- **AMD's lock waits for all D3D rendering in flight on the device**, not for the registered texture.
+  - It costs ~9.7 ms whether the texture is the one just rendered or one rendered a frame earlier (lag 0 vs 1).
+  - The cost does not depend on the size (9.2 ms with a 1080p target) or on the decoder (8.6 ms with lavfi). It roughly equals the GPU time of the frame just submitted plus ~2 ms.
+  - When the render thread waits for completion first, the lock drops to ~1 ms. The wait (8.7 ms) then happens on the render thread, where it costs nothing.
+  - `glFinish` after the unlock adds nothing on AMD, so the lock and unlock are synchronous.
+- **NVIDIA's lock and unlock return at once.** The cross-API wait moves to the GPU: a `glFinish` right after the unlock took 8.4 ms (p50 8.6) without `--sync` and 1.5 ms with it. The render-thread wait therefore also keeps NVIDIA's GL queue (and `SwapBuffers`) from stalling behind mpv's frame. The 4K blit itself costs ~1.1 ms of GPU.
+- **UI-thread budget per 4K frame** with the render-thread wait: ~2.5 ms on the 780M and ~0.45 ms on the 4070, against a 16.7 ms refresh.
+- **CPU with GL**: 5.0-5.4% (AMD) and 3.3-3.7% (NVIDIA). Without GL it is 0.5-1.0%. The difference is busy-waiting: inside AMD's lock, in NVIDIA's `glFinish`, and in the probe's own `yield_now` loop on the event query. The integration should wait on an `ID3D11Fence` event (`ID3D11DeviceContext4::Signal` + `SetEventOnCompletion`, Windows 10 1703+) and never call `glFinish`.
+- **One stall**: the first AMD AV1 `--sync` run had one 355 ms `wglDXUnlockObjectsNV` and a 127 ms completion wait (26 drops, 57.4 fps). The repeat ran clean (60.03 fps, unlock max 12.6 ms). The cause is unknown: possibly a driver hiccup or the user's GPU work (others' 3D load on the 4070 peaked at 19% in that run). Watch for it during acceptance.
+- **The probe's own limits**:
+  - One thread does mpv's render, the completion wait and the window's lock/blit/unlock; the real design splits the render thread from the UI thread. The 59.4 fps of the HEVC `--sync` run (5 drops after warm-up, one 57 ms gap) is that serial loop, not the API.
+  - The GL context is a legacy `wglCreateContext` on a hidden window, not Slint's `wglCreateContextAttribsARB` context. It uses the same driver (ICD), but it is not the same context.
+  - Nothing was presented (no `SwapBuffers`), so this is not a presented-fps measurement.
+  - Not tested: an Intel GPU, a newer AMD driver, device removal (TDR), HDR targets, Windows' per-app "Graphics preference" setting (it would mean writing the user's registry).
+
+### C.4 Conditions for the integration
+
+1. **Adapter match, checked by LUID, before any interop call.**
+   - The renderer creates its D3D device on DXGI adapter 0, which matched the GL context in both process configurations.
+   - When a window first draws, its view queries `GL_DEVICE_LUID_EXT`; if that is unavailable, it compares `GL_VENDOR` with the DXGI `VendorId`.
+   - On a mismatch, or with no interop entry points, the window reports `failed` and the host falls back to software (`backend.rs` fallback).
+   - Never call `wglDXOpenDeviceNV` on an unconfirmed pair (AMD crashes).
+2. **The render thread finishes the GPU work before publishing.**
+   - Use a fence event wait (not a spin) after `mpv_render_context_render`; only finished ring textures are published.
+   - The window locks only the newest finished texture, and skips (keeps showing its own copy) if the renderer has taken that texture back. This mirrors the macOS `IOSurfaceIsInUse` skip.
+   - The UI thread never waits on mpv.
+3. **Lock only around the blit** (one lock and one unlock per new frame), as in §2 (c′) risk 4; `glFinish` is never called.
+
+There are no plugin API changes. The `video.render` options become supported on Windows, which is an addition (§1.6 rule 1), not a behaviour change.
+
+### C.5 Refined integration plan and estimate (replaces §3 step 5)
+
+| # | work | where | estimate |
+| --- | --- | --- | --- |
+| 1 | Windows module of `vestra-gpu-render` with the same `Renderer`/`Handle` API: D3D11 device (`VIDEO_SUPPORT`, multithread-protected) on adapter 0, recording its LUID; `mpv_render_context_create` with params 21/22 through `rsmpv_sys` (the two structs from `render_d3d11.h`); a ring of 3 `B8G8R8A8` textures; the render thread with the update callback, `report_swap` pacing and the fence-event wait; publish and redraw callbacks as on macOS | `src/host/unsafe/render` (cfg(windows) module; `windows` 0.62 with the D3D11/DXGI/OpenGL features) | 1.5-2 days |
+| 2 | Window side in the rendering notifier: the LUID/vendor check; `wglDXOpenDeviceNV` once per window context; register ring textures lazily; lock the newest finished texture, blit into the window's own texture, unlock; `BorrowedOpenGLTexture` `TopLeft`; on `RenderingTeardown` unregister and close (the sidebar detach rebuilds the window while the mpv render context lives on, as on macOS) | same crate | 1-1.5 days |
+| 3 | `platform/windows.rs`: `GPU_RENDER = true`, `gpu_start`, the `GpuRenderer`/`GpuHandle`/`GpuFrame` types. `platform/mod.rs`: `no_gpu` only for other systems. `renderer::gpu_name` text "GPU rendering (Direct3D 11)" through i18n | host platform module | 0.5 day |
+| 4 | Pacing: route the GPU renderer's redraw requests through the Windows vertical-blank pacing (`frame_pacing`, Appendix B), not Slint's timer (B.2). The GPU view takes the window's one rendering notifier in place of `vestra-video-texture`, as on macOS | shared host code + platform module | 0.5-1 day |
+| 5 | Shader-failure detection for shaderc/spirv-cross messages (`video_render.rs`), from a real Windows log sample (the probe can produce one with `--log v` and a broken `glsl-shaders`) | shared host code | 0.5 day |
+| 6 | Tests: a WARP test that renders lavfi frames into a texture and checks the pixels (works headless; it could run in CI's Windows job, ~1-2 s); keep the probe's interop matrix as an `#[ignore]` real-machine test | `unsafe/render` tests | 0.5 day |
+| 7 | Docs: reference §5.4 and §8.2, the "unsupported on Windows" statements, the architecture notes | `doc/` | 0.5 day |
+| 8 | Acceptance per §3 step 6 on this machine with the coordinator (GUI): 4K60 AV1/HEVC/H.264 windowed and full screen, ≥ 59.5 presented fps, CPU ≤ 25%, `hwdec-current = d3d11va`; the fallbacks (`VESTRA_SOFTWARE_RENDER=1`, a forced LUID mismatch, RDP) | coordinator + maintainer | 1-2 days |
+
+**Total: about 6-8.5 agent-days**, down from the 9-13 of §2 (c′), because the probe (3-4 days there) is done and the remaining unknowns are settled. After integration, delete this probe crate or reduce it to the test in row 6.
+
+Open points for the coordinator or the user:
+
+- **Which GPU the player should use on hybrid laptops.** Today the process lands on the iGPU that drives the screen (the 780M), and the integration keeps that. The 780M carries 4K60 at ~55% 3D plus composition. Exporting the dGPU hints from `vestra-host.exe` would move both GL and D3D to the 4070 (lower GPU time, higher power). This is a product choice and not needed for 0.6.0.
+- **Coverage.** An Intel GPU and a current AMD driver are untested. The LUID check plus the software fallback makes an unknown driver fail safely, except for a driver that crashes on a *matched* pair, which nothing here suggests.
+- **Removing the probe.** `src/host/unsafe/gpu-probe` is not in `check-unsafe-policy.mjs`'s `UNSAFE_CRATES`, because rule 1 checks only workspace members. Once committed, rule 3 (SAFETY comments) covers its files as tracked sources. Removing it after integration avoids an unregistered unsafe directory.
