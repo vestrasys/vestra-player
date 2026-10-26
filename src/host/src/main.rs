@@ -427,8 +427,9 @@ struct Host {
     shown_size: Option<render_target::Size>,
     /// Core actions in flight that drop a repeated trigger.
     actions_busy: std::collections::BTreeSet<String>,
-    /// `player.setStepSeek` per owner: (write sequence, seconds); the newest wins.
-    step_seek: BTreeMap<u64, (u64, f64)>,
+    /// `player.setStepSeek` per owner: (write sequence, seconds, keyframes);
+    /// the newest pair wins.
+    step_seek: BTreeMap<u64, (u64, f64, bool)>,
     step_writes: u64,
     /// `window.setAlwaysOnTop` and `setCursorAutoHide("playing")` per plugin.
     on_top: window_control::LastWrite<bool>,
@@ -2978,8 +2979,16 @@ impl Host {
     fn step_seconds(&self) -> f64 {
         self.step_seek
             .values()
-            .max_by_key(|(sequence, _)| *sequence)
-            .map_or(core_actions::DEFAULT_STEP, |(_, seconds)| *seconds)
+            .max_by_key(|(sequence, ..)| *sequence)
+            .map_or(core_actions::DEFAULT_STEP, |(_, seconds, _)| *seconds)
+    }
+    /// Whether step seeks land on keyframes: the newest `setStepSeek`'s
+    /// `keyframes` (written as a pair with the seconds), else exact.
+    fn step_keyframes(&self) -> bool {
+        self.step_seek
+            .values()
+            .max_by_key(|(sequence, ..)| *sequence)
+            .is_some_and(|(.., keyframes)| *keyframes)
     }
     /// The seek menu titles carry the step: re-register them when it changes.
     fn step_seek_changed(&mut self, before: f64) {
@@ -3074,6 +3083,7 @@ impl Host {
                 reply,
                 method: "host.action".into(),
                 params: json!({"action":action,"step":step.unwrap_or_else(|| self.step_seconds()),
+                    "keyframes":self.step_keyframes(),
                     "sequence":{"next":facts.next,"previous":facts.previous}}),
             })
             .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
@@ -3649,7 +3659,10 @@ impl Host {
                 if !core_actions::ACTIONS.contains(&action) {
                     return Err(RpcError::invalid(format!("unknown host action {action}")));
                 }
-                if !self.run_core_action(action, Some(reply))? {
+                // SDK 1.5.19: one step seek of another step (tiers 2–4).
+                let step = core_actions::run_step(action, &params["seconds"])
+                    .map_err(RpcError::invalid)?;
+                if !self.run_core_action_with(action, Some(reply), step)? {
                     return Ok(None);
                 }
                 Value::Null
@@ -3659,10 +3672,15 @@ impl Host {
                     .as_f64()
                     .filter(|s| core_actions::valid_step(*s))
                     .ok_or_else(|| RpcError::invalid("seconds must be 0.1..3600 in tenths"))?;
+                let keyframes = match &params["keyframes"] {
+                    Value::Null => false,
+                    Value::Bool(keyframes) => *keyframes,
+                    _ => return Err(RpcError::invalid("keyframes must be a boolean")),
+                };
                 let before = self.step_seconds();
                 self.step_writes += 1;
                 self.step_seek
-                    .insert(reply.owner, (self.step_writes, seconds));
+                    .insert(reply.owner, (self.step_writes, seconds, keyframes));
                 self.step_seek_changed(before);
                 Value::Null
             }

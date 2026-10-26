@@ -105,9 +105,19 @@ fn convert(value: &Json) -> Result<Value> {
         return Ok(Value::Image(Default::default()));
     }
     let mut cache = crate::ui_markdown::Cache::default();
-    crate::ui_markdown::convert(&mut cache, (0, "recorded", "value"), &value, &mut |_| None)
-        .map(|(value, _)| value)
-        .map_err(|e| anyhow!(e.message))
+    crate::ui_markdown::convert(
+        &mut cache,
+        (0, "recorded", "value"),
+        &value,
+        &mut |_| None,
+        // A nested image is type-checked as an `image` field.
+        &mut |node| {
+            crate::ui_image::parts(node)?;
+            Ok((None, Default::default()))
+        },
+    )
+    .map(|(value, _)| value)
+    .map_err(|e| anyhow!(e.message))
 }
 
 /// Every refusal, one line each (`plugin/file: property: why (test)`).
@@ -219,6 +229,29 @@ mod tests {
         // A text value is rendered first, like in the player.
         set("heading", json!({"$vestraText": "Hello {}", "args": [1]})).unwrap();
         set("banner", json!({"code": "x", "args": ["a"]})).unwrap();
+    }
+
+    /// STORE-ROW-LOGO: an image in each row is an `image` field.
+    #[test]
+    fn rows_take_images_in_image_fields_only() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("w.slint"),
+            "export struct Row { key: string, icon: image }\n\
+             export component W inherits Window {\n\
+                 in property <[Row]> rows;\n\
+                 in property <[string]> names;\n\
+             }\n",
+        )
+        .unwrap();
+        let instance = view(dir.path(), "w.slint", None, None).unwrap();
+        let set = |name: &str, value: Json| {
+            crate::ui_values::set(&instance, None, name, convert(&value).unwrap())
+                .map_err(|e| e.to_string())
+        };
+        let icon = json!({"$vestraImage": "/i.png", "ref": 1, "maxSide": 64});
+        set("rows", json!([{"key": "a", "icon": icon}])).unwrap();
+        assert!(set("names", json!([icon])).is_err());
     }
 
     /// 0.5.0: "Vestra Player AI…" opened nothing (`HostError: wrong type`):

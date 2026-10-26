@@ -29,8 +29,16 @@ fn chat(bodies: &[&str]) -> Value {
 
 const SLOT: (u64, &str, &str) = (1, "w:chat", "messages");
 
+/// Nested images as an empty image each (their loading is `ui_image`'s).
+fn no_images(node: &Value) -> std::result::Result<(Option<ui_image::Key>, slint::Image), RpcError> {
+    ui_image::parts(node)?;
+    Ok((None, slint::Image::default()))
+}
+
 fn convert_plain(cache: &mut Cache, slot: (u64, &str, &str), value: &Value) -> SValue {
-    convert(cache, slot, value, &mut |_| None).unwrap().0
+    convert(cache, slot, value, &mut |_| None, &mut no_images)
+        .unwrap()
+        .0
 }
 
 fn field(row: &SValue, name: &str) -> SValue {
@@ -116,14 +124,26 @@ fn a_changed_document_reuses_its_unchanged_blocks() {
 #[test]
 fn nested_images_limits_and_failures() {
     let mut cache = Cache::default();
-    let nested = json!([{"cover": {"$vestraImage": "/a.png", "ref": 1}}]);
-    let error = convert(&mut cache, SLOT, &nested, &mut |_| None).unwrap_err();
-    assert_eq!(error.code, "invalid");
-    assert!(error.message.contains("whole value"), "{}", error.message);
+    // Images nest (SDK 1.5.19): an `image` field of each row.
+    let nested = json!([{"cover": {"$vestraImage": "/a.png", "ref": 1, "maxSide": 64}}]);
+    let (value, _) = convert(&mut cache, SLOT, &nested, &mut |_| None, &mut no_images).unwrap();
+    assert!(matches!(
+        field(&model(&value).row_data(0).unwrap(), "cover"),
+        SValue::Image(_)
+    ));
+    // A malformed reference is `invalid` wherever it is.
+    for bad in [
+        json!([{"cover": {"$vestraImage": 1, "ref": 1}}]),
+        json!([{"cover": {"$vestraImage": "/a.png", "ref": 1, "maxSide": 0}}]),
+        json!([{"cover": {"$vestraImage": "/a.png", "ref": 1, "maxSide": 5000}}]),
+    ] {
+        let error = convert(&mut cache, SLOT, &bad, &mut |_| None, &mut no_images).unwrap_err();
+        assert_eq!(error.code, "invalid", "{bad}");
+    }
     // Per document: the wire limit, `invalid`.
     let big = json!([{"body": {"$vestraMarkdown": {"text": "x".repeat(MAX_TEXT + 1)}, "ref": 1}}]);
     assert_eq!(
-        convert(&mut cache, SLOT, &big, &mut |_| None)
+        convert(&mut cache, SLOT, &big, &mut |_| None, &mut no_images)
             .unwrap_err()
             .code,
         "invalid"
@@ -131,8 +151,24 @@ fn nested_images_limits_and_failures() {
     // Per value: 1 MiB of text in all, documents included.
     let part = "段".repeat(70_000);
     let five = [part.as_str(); 5];
-    assert!(convert(&mut cache, SLOT, &chat(&five[..4]), &mut |_| None).is_ok());
-    let error = convert(&mut cache, SLOT, &chat(&five), &mut |_| None).unwrap_err();
+    assert!(
+        convert(
+            &mut cache,
+            SLOT,
+            &chat(&five[..4]),
+            &mut |_| None,
+            &mut no_images
+        )
+        .is_ok()
+    );
+    let error = convert(
+        &mut cache,
+        SLOT,
+        &chat(&five),
+        &mut |_| None,
+        &mut no_images,
+    )
+    .unwrap_err();
     assert!(error.message.contains("total bytes"), "{}", error.message);
     // A failed write keeps the documents the property still shows.
     let before = cache.parsed;
@@ -141,7 +177,7 @@ fn nested_images_limits_and_failures() {
     // Malformed documents are `invalid` at any depth.
     let bad = json!({"a": [{"$vestraMarkdown": {"text": 1}}]});
     assert_eq!(
-        convert(&mut cache, SLOT, &bad, &mut |_| None)
+        convert(&mut cache, SLOT, &bad, &mut |_| None, &mut no_images)
             .unwrap_err()
             .code,
         "invalid"
@@ -565,12 +601,18 @@ fn nested_document_images_are_checked_on_every_write() {
         let roots = [root.clone()];
         let mut value = chat(&["![图](a.png)", "无图"]);
         value[0]["body"]["$vestraMarkdown"]["base"] = json!(base);
-        convert(cache, SLOT, &value, &mut |path| {
-            images
-                .load(1, &roots, path)
-                .ok()
-                .map(|(key, image)| (Some(key), image))
-        })
+        convert(
+            cache,
+            SLOT,
+            &value,
+            &mut |path| {
+                images
+                    .load(1, &roots, path)
+                    .ok()
+                    .map(|(key, image)| (Some(key), image))
+            },
+            &mut no_images,
+        )
         .unwrap()
     };
     let (value, shown) = write(&mut cache);
