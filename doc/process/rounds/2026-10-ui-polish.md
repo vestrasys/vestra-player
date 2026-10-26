@@ -129,6 +129,68 @@ Deviations / notes (none change the requested behaviour):
 3. A side effect of decoupling: in fullscreen the pointer now also auto-hides when the bar is user-hidden or no bottom panel is mounted (it used to follow the bar's `idle` reason and never hid then).
 4. SDK text that describes the old behaviour, for an SDK patch (not edited here): `SlotState.reason` `idle` ("hidden after 3 seconds without activity"), `Panel.setInteraction` remarks ("The bottom bar hides after 3 seconds without activity in fullscreen"), and `Panels.mount` `"bottom"` ("In fullscreen it floats over the video and hides after 3 seconds without activity"); new wording: "in fullscreen it shows only while the pointer is over its band at the bottom edge and hides 500 ms after the pointer leaves". Same text in the generated `llms-full.txt`.
 
+## STORE-ROW-LOGO: images inside row values (§4.1 request, store author, 2026-10-26)
+
+**Requesting plugin / code location**: `vestra.store`, `src/plugins/store/store.ts` `#row()`, `ui/store.slint` `StoreRow` / `ListRow`.
+
+**User action and expected result**: the plugin-center spec ("List rows") puts the plugin's 32px logo at the left of every list row; offline, an installed plugin's logo comes from its own package.
+
+**Why the existing API cannot do it**: `PropValue` allows an `ImageRef` only as the whole value of a property; `PropData` (struct fields, array items) has no image. The host agrees: `ui_image.rs` `convert_prop` accepts an image reference only at the top level (`image reference as the whole value`), while `MarkdownRef` works at any depth since SDK 1.5.4. Minimal reproduction: `window.set({ rows: [{ key: "a", icon: plugin.ui.image(path) }] })` with `icon: image` in the Slint struct fails the type check (`Type 'ImageRef' is not assignable to type 'PropData'`). A fixed set of top-level `icon-0…icon-n` properties is not a fix (the list has no upper bound, and the rows come and go with search and tabs). Reading the icon file itself already works: the store copies an installed package's icon into its data folder (`icons.ts` `local()`), so no new file API is needed.
+
+**Desired usage**: as for Markdown since 1.5.4, an `ImageRef` at any depth of a property value:
+
+```ts
+window.bind(() => ({ rows: items.map((item) => ({ key: item.key, name: item.name, icon: plugin.ui.image(iconPath(item)) })) }));
+```
+
+```slint
+export struct StoreRow { key: string, name: string, icon: image }
+```
+
+**State, resources, failure**: the host owns the decoded images (the existing cache and its 16 MB budget, keyed per property, like `assign_many` for Markdown images); the plugin owns the files (package or data folder, as today). A path that fails the existing checks makes that field an empty image (as a Markdown image that fails), never the whole property. Missing capability on an older player: the row shows no logo (the field is the default image).
+
+**Contract / affected plugins**: compatible extension (a value that was refused becomes accepted); no plugin changes. SDK: widen `PropData` with `ImageRef`, and the TestHost conversion.
+
+**Minimal acceptance**: the store's Installed tab shows each plugin's logo in its row, offline too; 18 built-ins plus a few third-party rows do not exceed the image budget; the screenshot tool renders the logos.
+
+**Store side meanwhile**: rows ship without a logo; the details pane shows the icon (now also offline, from the installed package). The row layout reserves nothing, so adding the logo later is one `Image` in `ListRow`.
+
+## STORE-RELOAD-BUILTIN: restart a running built-in plugin (§4.1 request, store author, 2026-10-26)
+
+**Requesting plugin / code location**: `vestra.store`, `store.ts` `#controls()` / `#switch()`.
+
+**User action and expected result**: spec acceptance 1: a built-in row's `…` menu offers Reload and Open Data Folder. Reload stops and starts the plugin (recovering one that misbehaves without restarting the player).
+
+**Why the existing API cannot do it**: the only restart is `packages.setEnabled(id, false)` then `true`. Since the ruling "built-ins can be neither uninstalled nor disabled", the host refuses `setEnabled(id, false)` for a built-in with `unsupported` (`package_manager.rs` `set_enabled`, and the TestHost the same). `setEnabled(id, true)` on a running plugin is a no-op. So a **failed** (or stopped) built-in can be started again, but a **running** one cannot be restarted. Minimal reproduction: `await plugin.packages.setEnabled("vestra.video", false)` → rejects `unsupported`.
+
+**Desired usage** (one of):
+
+```ts
+await plugin.packages.reload(id); // stop and start; built-ins included; never leaves it disabled
+```
+
+or let `setEnabled(id, false)` stay refused but add `packages.restart(id)`. Semantics: stop, then start from the same package; the persisted disabled flag is never written; `invalid` for oneself (as today), `busy` during an install, `missing` unknown; a failed start leaves the plugin `failed` with the reason, as an enable does.
+
+**State, resources, failure**: the host owns the process and the persisted state; nothing on disk changes. Missing capability (older player): the store keeps the menu entry disabled for a running built-in.
+
+**Contract / affected plugins**: a new optional method; no behaviour change elsewhere. The store would also use it for third-party plugins (one call instead of two, so a reload can never leave a plugin disabled if the second call fails).
+
+**Minimal acceptance**: `reload("vestra.video")` on a running built-in stops and starts it (`packages.onChange` shows `starting` → `running`), the built-in is never reported `disabled`, and a restart of the player shows it running.
+
+**Store side meanwhile**: Reload is offered for built-ins and enabled only when the built-in is not running (failed or stopped: `setEnabled(id, true)` starts it); for a running built-in the entry is shown disabled.
+
+## STORE-ICONS: refresh, settings and "more" icons in the V-Line set (§4.1 request, store author, 2026-10-26; low priority)
+
+**Requesting plugin / code location**: `vestra.store`, `ui/parts.slint` `StoreIcons`.
+
+**User action and expected result**: the spec's ⟳ refresh button, ⚙ menu button and each row's `…` button are icon buttons drawn in the player's icon style.
+
+**Why the existing API cannot do it**: `@vestra/icons.slint` (and `icons-v-line.json`) has no refresh, settings or more icon. It is not blocking: `Button` takes Path data (`icon`, `stroked`), so the store draws its own three V-Line style paths (1.5px round strokes in a 14×12 box) in `parts.slint`.
+
+**Desired usage**: `Icon { name: "refresh"; }`, `"settings"`, `"more"` (and `Button { icon: Icons.commands("refresh"); stroked: true; }`), so that other plugins get the same glyphs (the workshop and the hotkeys page have similar buttons).
+
+**State / failure / contract**: none; additive. **Acceptance**: the store switches to the named icons with no visible change in its screenshots.
+
 ## Progress
 
 - [x] Step 0: screenshot tool (`npm run ui:shots`, [ui-shots.md](../../architecture/ui-shots.md); maintainer, 2026-10-26; coordinator review pending)

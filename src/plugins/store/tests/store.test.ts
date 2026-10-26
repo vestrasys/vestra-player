@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { timing } from "../store.ts";
-import { actions, banners, BUILTIN, choose, FakeNet, info, OFFICIAL, openStore, props, publish, rows, start, THIRD, until, yes } from "./helpers.ts";
+import { actions, AVAILABLE, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
 
 const path = (host: Awaited<ReturnType<typeof start>>["host"]) => host.command("open").declaration.path;
 
@@ -41,8 +41,7 @@ test("menu Plugin Store… counts updates from the same source only, announces t
     assert.equal(host.osd.length, 1, "announced once per run");
 
     await openStore(host);
-    host.window("store").emit("setFilter", 2);
-    await host.settle();
+    await tab(host, UPDATES);
     assert.deepEqual(rows(host).map((r) => r.name), ["YouTube"]);
     await choose(host, "YouTube");
     host.dialogAnswers.push(yes);
@@ -119,20 +118,31 @@ test("list: filters, search, tags, sort; incompatible and fully revoked plugins"
     ],
     { revoked: [{ id: "d.delta", versions: "*", reason: "停止维护" }] },
   );
-  const { host, stop } = await start({
+  const { host, store, stop } = await start({
     net,
     packages: [BUILTIN, info("b.beta", { version: "1.0.0", source: { kind: "repository", url: OFFICIAL } })],
   });
   try {
     await openStore(host);
-    await until(host, () => rows(host).length === 5);
+    await until(host, () => store.items.length === 5);
     const window = host.window("store");
-    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Gamma", "vestra.video"]);
+    // Installed (the first tab): built-ins first, then third-party; tags of this tab only.
+    assert.equal(props(host)["category"], INSTALLED);
+    assert.deepEqual(rows(host).map((r) => [r.name, r.badge]), [
+      ["vestra.video", "内置"],
+      ["Beta", "已安装"],
+    ]);
     // The first entry is the window's "Tags: All".
-    assert.deepEqual(props(host)["tag-model"], ["", "网络视频", "字幕"]);
-    window.emit("setTag", 2);
+    assert.deepEqual(props(host)["tag-model"], ["", "字幕"]);
+    assert.equal(props(host)["installed-count"], 2);
+    assert.equal(props(host)["available-count"], 3);
+    assert.equal(props(host)["available-known"], true);
+    await tab(host, AVAILABLE);
+    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Delta", "Gamma"]);
+    assert.deepEqual(props(host)["tag-model"], ["", "网络视频"]);
+    window.emit("setTag", 1);
     await host.settle();
-    assert.deepEqual(rows(host).map((r) => r.name), ["Beta"]);
+    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha"]);
     window.emit("setTag", 0);
     window.emit("search", "ANN");
     await host.settle();
@@ -141,16 +151,9 @@ test("list: filters, search, tags, sort; incompatible and fully revoked plugins"
     await host.settle();
     assert.equal(props(host)["empty-text"], "没有符合条件的插件");
     window.emit("search", "");
-    window.emit("setFilter", 1);
-    await host.settle();
-    assert.deepEqual(rows(host).map((r) => [r.name, r.badge]), [
-      ["Beta", "已安装"],
-      ["vestra.video", "内置"],
-    ]);
-    window.emit("setFilter", 0);
     window.emit("setSort", 1);
     await host.settle();
-    assert.deepEqual(rows(host).slice(0, 4).map((r) => r.name), ["Delta", "Gamma", "Beta", "Alpha"]);
+    assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma", "Alpha"]);
 
     const gamma = await choose(host, "Gamma");
     assert.equal(gamma.badge, "不兼容");
@@ -181,7 +184,7 @@ test("README and changelog tabs; missing ones say so; 显示图片 for a third-p
     store.settings.save({ ...store.settings.value, repos: [THIRD] });
     store.repos.sync([THIRD]);
     await openStore(host);
-    await until(host, () => rows(host).length === 4);
+    await until(host, () => store.items.length === 4);
     await choose(host, "Alpha");
     await until(host, () => host.markdown(props(host)["doc"]) !== null, "readme");
     assert.match(host.markdown(props(host)["doc"])!.text, /^# Alpha/);
@@ -224,11 +227,13 @@ test("仓库… opens the settings page; the window keeps the selection when clo
   const { host, store, stop } = await start({ net });
   try {
     await openStore(host);
-    await until(host, () => rows(host).length === 2);
+    await until(host, () => store.items.length === 2);
     await choose(host, "Alpha");
+    // ⚙ ▸ Repositories… and ⚙ ▸ Store Settings… both open the store's page in Options.
     host.window("store").emit("repos");
+    host.window("store").emit("settings");
     await host.settle();
-    assert.deepEqual(host.settings.shows, ["store.repos"]);
+    assert.deepEqual(host.settings.shows, ["store.repos", "store.repos"]);
     host.window("store").userClose();
     await host.settle();
     await host.command("open").run();
@@ -256,7 +261,7 @@ test("review 4: third-party README and icon on another host are not fetched unti
     store.settings.save({ ...store.settings.value, repos: [THIRD] });
     store.repos.sync([THIRD]);
     await openStore(host);
-    await until(host, () => rows(host).length === 3);
+    await until(host, () => store.items.length === 3);
     await choose(host, "Same");
     await until(host, () => net.count("https://third.example/icons/same.png") === 1, "same-host icon fetched");
     await choose(host, "Far");

@@ -47,8 +47,62 @@ export interface IndexEntry {
   iconCheck: AssetCheck;
   readmeCheck: AssetCheck;
   changelogCheck: AssetCheck;
+  /**
+   * The display fields per interface language (`translations`, optional):
+   * locale → only the fields the plugin translated. Built by the repository
+   * from each package's `locales/<lang>.json`.
+   */
+  translations: Record<string, Translation>;
   /** Newest first (sorted here, not trusted from the server). */
   versions: IndexVersion[];
+}
+
+/** One language's display fields of an index entry; a missing field falls back. */
+export interface Translation {
+  name?: string;
+  punchline?: string;
+  description?: string;
+  tags?: string[];
+}
+
+const LOCALE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
+const MAX_TRANSLATIONS = 32;
+
+const cleanTags = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? [...new Set(value.map((tag) => clean(tag, 24)).filter((tag): tag is string => tag !== null))].slice(0, 8)
+    : [];
+
+/** `translations`: well-formed locales only, each field cut like the English one; anything else is ignored. */
+function readTranslations(value: unknown): Record<string, Translation> {
+  const out: Record<string, Translation> = {};
+  if (!object(value)) return out;
+  for (const [locale, fields] of Object.entries(value).slice(0, MAX_TRANSLATIONS)) {
+    if (!LOCALE.test(locale) || !object(fields)) continue;
+    const entry: Translation = {};
+    const name = clean(fields.name, 64);
+    const punchline = clean(fields.punchline, 120);
+    const description = clean(fields.description, 2000, true);
+    if (name) entry.name = name;
+    if (punchline) entry.punchline = punchline;
+    if (description) entry.description = description;
+    const tags = cleanTags(fields.tags);
+    if (tags.length) entry.tags = tags;
+    out[locale] = entry;
+  }
+  return out;
+}
+
+/**
+ * The fields to show in `locale`: each one from the entry for `locale`, else
+ * from its base language (`zh-Hans` → `zh`); a field neither has stays
+ * absent (show the English one). English itself needs no entry.
+ */
+export function translationFor(translations: Record<string, Translation>, locale: string): Translation {
+  const base = locale.split("-")[0]!;
+  const own = Object.hasOwn(translations, locale) ? translations[locale]! : {};
+  const fallback = base !== locale && Object.hasOwn(translations, base) ? translations[base]! : {};
+  return { ...fallback, ...own };
 }
 
 export interface Revocation {
@@ -152,14 +206,13 @@ export function parseIndex(text: string, options: ParseOptions = {}): { index: R
       author: clean(item.author, 64),
       punchline: clean(item.punchline, 120),
       description: clean(item.description, 2000, true),
-      tags: Array.isArray(item.tags)
-        ? [...new Set(item.tags.map((tag) => clean(tag, 24)).filter((tag): tag is string => tag !== null))].slice(0, 8)
-        : [],
+      tags: cleanTags(item.tags),
       license: clean(item.license, 64),
       ...asset(item, "icon", url),
       ...asset(item, "readme", url),
       ...asset(item, "changelog", url),
       sourceUrl: url(item.sourceUrl),
+      translations: readTranslations(item.translations),
       versions,
     });
   }

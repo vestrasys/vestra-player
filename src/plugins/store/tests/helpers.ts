@@ -60,6 +60,8 @@ export type PluginSpec = {
   icon?: Buffer;
   /** Publish iconSha256/iconSize, readmeSha256/… like the current plugins repository. */
   hashes?: boolean;
+  /** The index's `translations` (sent as given). */
+  translations?: Record<string, unknown>;
   versions: VersionSpec[];
 };
 
@@ -113,6 +115,7 @@ export function buildIndex(
         changelogUrl,
         ...hashes,
         sourceUrl: `https://github.com/example/${p.id}`,
+        ...(p.translations ? { translations: p.translations } : {}),
         versions: p.versions.map((v) => {
           const capabilities = v.capabilities ?? ["commands"];
           const body = vxp({
@@ -340,17 +343,56 @@ export function props(host: TestHost): Record<string, Json> {
 /** The settings page's props as shown. */
 export const pageProps = (host: TestHost) => host.settingsPage("store.repos").props as Record<string, Json>;
 
-export const rows = (host: TestHost) =>
-  (props(host)["rows"] as { key: string; name: string; badge: string; version: string }[]) ?? [];
+type Row = { key: string; name: string; badge: string; version: string };
 
-/** Select the row with this name in the store window. */
+/** The rows of the current tab. */
+export const rows = (host: TestHost) => (props(host)["rows"] as Row[]) ?? [];
+
+/** The window's tabs. */
+export const INSTALLED = 0;
+export const AVAILABLE = 1;
+export const UPDATES = 2;
+
+/** Switch the store window to a tab. */
+export async function tab(host: TestHost, index: number) {
+  host.window("store").emit("setCategory", index);
+  await host.settle();
+}
+
+/** The rows of every tab (Installed, Available, Updates; an update row shows under Installed too). */
+export async function allRows(host: TestHost) {
+  const current = (props(host)["category"] as number | undefined) ?? INSTALLED;
+  const all: Row[] = [];
+  for (const index of [INSTALLED, AVAILABLE]) {
+    await tab(host, index);
+    all.push(...rows(host));
+  }
+  await tab(host, current);
+  return all;
+}
+
+/** Select the row with this name in the store window, switching to the tab that shows it. */
 export async function choose(host: TestHost, name: string) {
-  const row = rows(host).find((r) => r.name === name);
-  if (!row) throw new Error(`no row ${name}: ${rows(host).map((r) => r.name).join(", ")}`);
+  let row = rows(host).find((r) => r.name === name);
+  for (const index of [INSTALLED, AVAILABLE, UPDATES]) {
+    if (row) break;
+    await tab(host, index);
+    row = rows(host).find((r) => r.name === name);
+  }
+  if (!row) throw new Error(`no row ${name}: ${(await allRows(host)).map((r) => r.name).join(", ")}`);
   host.window("store").emit("select", row.key);
   await host.settle();
   return row;
 }
+
+/** A row's button and `…` menu as shown. */
+export const controls = (host: TestHost, name: string) => {
+  const row = rows(host).find((r) => r.name === name) as
+    | (Row & { primary: { id: string; text: string; enabled: boolean }; menu: { id: string; text: string; enabled: boolean }[]; dim: boolean })
+    | undefined;
+  if (!row) throw new Error(`no row ${name} in this tab`);
+  return { primary: row.primary.id === "" && row.primary.text === "" ? null : row.primary, menu: row.menu, dim: row.dim, badge: row.badge };
+};
 
 export const actions = (host: TestHost) => (props(host)["actions"] as { id: string; text: string; enabled: boolean }[]) ?? [];
 export const banners = (host: TestHost) => ((props(host)["banners"] as { text: string }[]) ?? []).map((b) => b.text);

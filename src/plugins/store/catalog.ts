@@ -1,5 +1,5 @@
 import type { PluginInfo } from "@vestra-player/sdk";
-import type { IndexEntry, IndexVersion, Revocation } from "./index-format.ts";
+import { translationFor, type IndexEntry, type IndexVersion, type Revocation } from "./index-format.ts";
 import { reservedId, reservedText } from "./labels.ts";
 import type { Repo } from "./repos.ts";
 import { compareVersions, isVersion, playerAtLeast, satisfies } from "./semver.ts";
@@ -58,13 +58,15 @@ export type ItemState =
   | "allRevoked" // every compatible version is revoked
   | "local"; // installed, not in any repository (or its repository was removed)
 
-/** Display fields of an installed plugin, read from its manifest. */
+/** Display fields of an installed plugin: the player's translation (`PluginInfo.display`), else its manifest. */
 export interface Display {
   name: string;
   author: string | null;
   punchline: string | null;
   description: string | null;
   tags: string[];
+  /** The manifest's own (English) name, punchline and tags: search and tags match these too. */
+  english: string[];
   license: string | null;
   sourceUrl: string | null;
   icon: string | null;
@@ -88,10 +90,14 @@ export interface Item {
   revocation: Revocation | null;
   /** Why nothing can be installed (incompatible / all revoked / reserved). */
   blocked: Msg | null;
+  /** Shown in the interface language when the index or the player translated it. */
   name: string;
   author: string | null;
   punchline: string | null;
+  description: string | null;
   tags: string[];
+  /** The English name, punchline and tags (search and the tag filter match these too). */
+  english: string[];
   published: string | null;
   local: Display | null;
   /** A local row installed from a configured repository that does not list it any more. */
@@ -106,6 +112,7 @@ export function buildItems(
   plugins: readonly PluginInfo[],
   player: string,
   display: (info: PluginInfo) => Display,
+  locale = "en",
 ): Item[] {
   const installed = new Map(plugins.filter((p) => p.origin === "installed").map((p) => [p.id, p]));
   const development = new Set(plugins.filter((p) => p.origin === "development").map((p) => p.id));
@@ -152,10 +159,8 @@ export function buildItems(
         state,
         revocation,
         blocked,
-        name: entry.name,
+        ...shown(entry, locale),
         author: entry.author,
-        punchline: entry.punchline,
-        tags: entry.tags,
         published: (best ?? entry.versions[0])?.published ?? null,
         local: null,
       });
@@ -184,7 +189,9 @@ export function buildItems(
       name: local.name,
       author: local.author,
       punchline: local.punchline,
+      description: local.description,
       tags: local.tags,
+      english: local.english,
       published: null,
       local,
       delisted: !revocation && repo?.index != null,
@@ -193,7 +200,19 @@ export function buildItems(
   return items;
 }
 
-/** Rows that stand for the installed instance (the Installed filter). */
+/** An index entry's display fields in `locale` (the index's `translations`), with the English ones for search. */
+function shown(entry: IndexEntry, locale: string) {
+  const t = translationFor(entry.translations, locale);
+  return {
+    name: t.name ?? entry.name,
+    punchline: t.punchline ?? entry.punchline,
+    description: t.description ?? entry.description,
+    tags: t.tags ?? entry.tags,
+    english: [entry.name, entry.punchline ?? "", ...entry.tags],
+  };
+}
+
+/** Rows that stand for the installed instance (the Installed tab). */
 export const isInstalledRow = (item: Item) =>
   item.state === "installed" ||
   item.state === "update" ||
