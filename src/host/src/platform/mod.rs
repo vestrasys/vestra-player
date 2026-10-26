@@ -26,6 +26,9 @@
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
 //! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file) |
+//! | full screen | `fullscreen_resized` (Windows: a full-screen window is kept one pixel off its display's rectangle; elsewhere nothing) |
+//! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, `vestra-video-texture`; elsewhere a new image per frame) |
+//! | redraw pacing | `VBLANK_CLOCK`, `vblank_waiter` → `VBlankWaiter` (Windows: vertical blanks through `vestra-win32`; elsewhere `no_vblank` below: Slint paces, with a display link on macOS) |
 //! | rendering | `window_refresh` (here, through winit on every system), `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` / `GpuFrame` / `GpuDraw` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
 //! | picture-in-picture | `pip_supported`, `PipWindow` (UI thread; macOS: AVKit through `vestra-pip`; elsewhere `pip_unsupported.rs`: `unsupported`) |
 //!
@@ -372,6 +375,42 @@ mod no_gpu {
 }
 #[cfg(not(target_os = "macos"))]
 pub use no_gpu::*;
+
+/// Redraw pacing where Slint already ties redraws to the display (macOS
+/// and iOS: a display link) or no display clock exists yet (Linux): the
+/// host does not pace (`frame_pacing.rs`); the Windows version is in
+/// `windows.rs`.
+#[cfg(not(target_os = "windows"))]
+mod no_vblank {
+    /// The host does not pace redraws on this system.
+    pub const VBLANK_CLOCK: bool = false;
+    /// Never made here (`vblank_waiter` answers `None`).
+    #[allow(dead_code)]
+    pub struct VBlankWaiter(());
+    impl VBlankWaiter {
+        pub fn wait(&mut self) -> bool {
+            false
+        }
+    }
+    pub fn vblank_waiter(_window: &slint::Window) -> Option<VBlankWaiter> {
+        None
+    }
+}
+#[cfg(not(target_os = "windows"))]
+pub use no_vblank::*;
+
+/// Software rendering shows each picture as a new image here (femtovg makes
+/// a texture per frame). The reused texture of `vestra-video-texture` is
+/// plain OpenGL, but so far it was measured and checked only on Windows;
+/// the Windows version is in `windows.rs`.
+#[cfg(not(target_os = "windows"))]
+pub const VIDEO_TEXTURE: bool = false;
+
+/// After a resize of a window: nothing to adjust for full screen here; the
+/// Windows version (a full-screen window must not match its display exactly)
+/// is in `windows.rs`.
+#[cfg(not(target_os = "windows"))]
+pub fn fullscreen_resized(_window: &slint::Window) {}
 
 /// Durability barrier for the entries of `directory`: after it returns, the
 /// names created, renamed or removed in it survive a crash (the package

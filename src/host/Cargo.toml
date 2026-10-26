@@ -44,11 +44,14 @@ sys-locale = "=0.3.2"
 # Menu width estimate (menu.rs): East Asian Width, already in the tree.
 unicode-width = { version = "=0.2.2", default-features = false }
 cpal = { version = "=0.18.2", optional = true }
+# Software rendering: video pictures shown through one reused OpenGL texture
+# (frames are not re-uploaded as new images); the `unsafe` stays in unsafe/texture.
+vestra-video-texture = { path = "unsafe/texture" }
 rtrb = { version = "=0.4.0", optional = true }
 
 # The unsafe/ crates share this lock file; `cargo test` here still runs only the host.
 [workspace]
-members = ["unsafe/open", "unsafe/pip", "unsafe/render", "unsafe/win32"]
+members = ["unsafe/open", "unsafe/pip", "unsafe/render", "unsafe/texture", "unsafe/win32"]
 
 # Lints for every first-party crate outside src/host/unsafe/ (`[lints] workspace = true`).
 # The unsafe/ crates do not inherit these: Cargo cannot override single lints of an

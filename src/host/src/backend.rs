@@ -20,7 +20,7 @@ use std::{
 
 pub use crate::render_target::Frame;
 use crate::render_target::{FrameSlot, Redraw, Shared};
-use slint::{Rgb8Pixel, SharedPixelBuffer};
+use slint::SharedPixelBuffer;
 #[cfg(feature = "producer-audio")]
 /// The cleared canvas a stopped producer leaves behind.
 const CLEAR: (u32, u32) = (960, 540);
@@ -132,6 +132,7 @@ impl Backend {
                             let _ = ready.send(Ok(()));
                         }
                         let mut redraw = Redraw::default();
+                        let mut buffers = crate::render_target::BufferRing::default();
                         let mut source: Option<(u32, u32)> = None;
                         let mut source_read: Option<Instant> = None;
                         while !renderer_stop.load(Ordering::Relaxed) {
@@ -146,12 +147,17 @@ impl Backend {
                                     source = source_size(&render_core);
                                     source_read = Some(Instant::now());
                                 }
-                                let (width, height) = crate::render_target::target(
-                                    request.area,
-                                    source,
-                                    request.zoom,
-                                );
-                                let mut buffer = SharedPixelBuffer::<Rgb8Pixel>::new(width, height);
+                                let (width, height) = crate::render_target::forced()
+                                    .unwrap_or_else(|| {
+                                        crate::render_target::target(
+                                            request.area,
+                                            source,
+                                            request.zoom,
+                                        )
+                                    });
+                                // Reused buffers: a new one per frame costs more
+                                // than mpv's render at 4K (`BufferRing`).
+                                let mut buffer = buffers.take(width, height);
                                 render.render_software(
                                     width as i32,
                                     height as i32,
@@ -159,6 +165,7 @@ impl Backend {
                                     width as usize * 3,
                                     buffer.make_mut_bytes(),
                                 )?;
+                                buffers.keep(&buffer);
                                 // Consume safe normalized frames offscreen while source
                                 // orientation is prepared; never publish an unrotated preview.
                                 if renderer_publish.load(Ordering::Acquire) {

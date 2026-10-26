@@ -15,6 +15,7 @@ mod drops;
 mod effects;
 pub mod font_asset;
 pub mod font_carrier;
+mod frame_pacing;
 mod i18n;
 mod input_trace;
 mod launch;
@@ -343,6 +344,9 @@ struct Host {
     mount_events: mpsc::SyncSender<composition::JsonCallback>,
     mount_input: mpsc::Receiver<composition::JsonCallback>,
     last_image: Option<slint::Image>,
+    /// Software rendering in an OpenGL window: the main window's reused
+    /// video texture (`vestra-video-texture`), `None` without one.
+    video_texture: RefCell<Option<vestra_video_texture::Feed>>,
     shell_generation: u64,
     next_shell_generation: u64,
     menu_path: Vec<String>,
@@ -1110,11 +1114,16 @@ impl Host {
     /// GPU rendering: show the renderer's texture in this window (before
     /// `show()`, so the rendering notifier sees the setup). A window that
     /// cannot show it switches the player to software rendering. Either way
-    /// the window's draws are counted (`stats().presentedFps`).
-    fn attach_gpu(&self, shell: &slint_interpreter::ComponentInstance) {
+    /// the window's draws are counted (`stats().presentedFps`). Returns the
+    /// window's reused video texture, if any, for `video_texture` once the
+    /// window is shown.
+    #[must_use]
+    fn attach_gpu(
+        &self,
+        shell: &slint_interpreter::ComponentInstance,
+    ) -> Option<vestra_video_texture::Feed> {
         let Some(gpu) = self.backend.render.gpu() else {
-            self.count_draws(shell);
-            return;
+            return self.count_draws(shell);
         };
         let render = self.backend.render.clone();
         let drawn = move |draw: platform::GpuDraw| match draw {
@@ -1138,11 +1147,35 @@ impl Host {
                 .render
                 .fall_back(&format!("the window cannot show GPU frames ({error})"));
         }
+        None
     }
     /// Software rendering: count the window's draws with its rendering
     /// notifier (femtovg); Slint's software renderer has none, so there each
-    /// winit redraw counts (without draw times).
-    fn count_draws(&self, shell: &slint_interpreter::ComponentInstance) {
+    /// winit redraw counts (without draw times). Where enabled
+    /// (`platform::VIDEO_TEXTURE`), the notifier also shows the pictures
+    /// through one reused texture (`show_frame`), returned for `video_texture`.
+    fn count_draws(
+        &self,
+        shell: &slint_interpreter::ComponentInstance,
+    ) -> Option<vestra_video_texture::Feed> {
+        if platform::VIDEO_TEXTURE {
+            let render = self.backend.render.clone();
+            let drawn = move |draw| match draw {
+                vestra_video_texture::Draw::Begin => {
+                    render.presentation.draw_begin(Instant::now());
+                }
+                vestra_video_texture::Draw::End => {
+                    render.presentation.draw_end(Instant::now(), false);
+                }
+            };
+            let show = |shell: &slint_interpreter::ComponentInstance, image: slint::Image| {
+                let _ = shell.set_property("video-frame", image.into());
+            };
+            if let Ok(feed) = vestra_video_texture::attach(shell, show, drawn) {
+                self.backend.render.presentation.start_counting();
+                return Some(feed);
+            }
+        }
         let render = self.backend.render.clone();
         let notifier = move |state, _: &slint::GraphicsAPI| match state {
             slint::RenderingState::BeforeRendering => {
@@ -1164,10 +1197,17 @@ impl Host {
             });
         }
         self.backend.render.presentation.start_counting();
+        None
     }
     /// Set the newest rendered frame on the video area (no copy: the renderer
     /// drew into this buffer).
     fn show_frame(&mut self) {
+        // Paced (Windows): one new picture per draw; a second one within the
+        // same refresh comes again right after the draw.
+        if !frame_pacing::accept_picture() {
+            self.backend.frame.miss();
+            return;
+        }
         let Some(frame) = self.backend.frame.take() else {
             return;
         };
@@ -1181,11 +1221,30 @@ impl Host {
                 .push(width as usize, height as usize, frame.buffer.as_bytes());
         }
         let set = Instant::now();
+        // Through the reused texture when the window has one (uploaded at
+        // the next draw); otherwise as a new image (femtovg then makes a new
+        // texture for it, Slint's software renderer composes it).
+        let texture = self
+            .video_texture
+            .borrow()
+            .as_ref()
+            .and_then(|feed| feed.put(frame.buffer.clone()));
         let image = slint::Image::from_rgb8(frame.buffer);
         self.last_image = Some(image.clone());
         self.last_frame = Some(set);
-        let _ = window.set_property("video-frame", image.into());
+        match texture {
+            Some(texture) => {
+                if let Some(texture) = texture {
+                    let _ = window.set_property("video-frame", texture.into());
+                }
+                window.window().request_redraw();
+            }
+            None => {
+                let _ = window.set_property("video-frame", image.into());
+            }
+        }
         self.backend.render.presentation.picture_set(set.elapsed());
+        frame_pacing::picture_set();
         // With GPU rendering these are a generated stream's frames (or its
         // cleared canvas): the next GPU frame sets its texture again.
         if let Some(gpu) = self.backend.render.gpu() {
@@ -1988,6 +2047,10 @@ impl Host {
                 {
                     debug_menu_pointer(slint_window, &menu_cursor, event);
                 }
+                // Before Slint lays out and draws at the new size.
+                if matches!(event, winit::event::WindowEvent::Resized(_)) {
+                    platform::fullscreen_resized(slint_window);
+                }
                 let dead = observe_key(&input, &modifiers, event);
                 release_modifiers(&input, &events, generation);
                 if let winit::event::WindowEvent::DroppedFile(path) = event {
@@ -2594,9 +2657,12 @@ impl Host {
                 shell.window().set_position(old.window().position());
                 shell.window().set_fullscreen(old.window().is_fullscreen());
             }
-            self.attach_gpu(&shell);
+            let texture = self.attach_gpu(&shell);
             shell.show()?;
+            // Only a shown candidate replaces the main window's texture.
+            self.video_texture.replace(texture);
             platform::shown(shell.window());
+            frame_pacing::follow(&shell);
             Ok(shell)
         };
         // Where the old shell's frame is (`ui::Placements`).
@@ -4920,7 +4986,16 @@ fn main() -> Result<()> {
         std::env::var_os("VESTRA_SOFTWARE_RENDER").as_deref(),
     );
     if !headless {
-        let winit = || slint::BackendSelector::new().backend_name("winit".into());
+        // Windows: the main window draws at the display's vertical blanks
+        // (`frame_pacing.rs`), not on Slint's timer.
+        let winit = || {
+            let selector = slint::BackendSelector::new().backend_name("winit".into());
+            if frame_pacing::wanted() {
+                selector.with_winit_custom_application_handler(frame_pacing::Handler)
+            } else {
+                selector
+            }
+        };
         if gpu && let Err(error) = winit().renderer_name("femtovg".into()).select() {
             eprintln!(
                 "render: the OpenGL window renderer is unavailable ({error}); software rendering"
@@ -4970,6 +5045,7 @@ fn main() -> Result<()> {
         mount_events,
         mount_input,
         last_image: None,
+        video_texture: RefCell::new(None),
         shell_generation: 1,
         next_shell_generation: 1,
         menu_path: Vec::new(),
@@ -5126,14 +5202,16 @@ fn main() -> Result<()> {
             ));
             slint::LogicalPosition::new(frame.x as f32, frame.y as f32)
         });
-        host.attach_gpu(&window);
+        let texture = host.attach_gpu(&window);
         // Title bars follow the palette from the first window on.
         platform::set_dark_title_bars(!theme::is_light(host.theme()));
         match position {
             Some(position) => host.placements.show_at(&window, position)?,
             None => window.show()?,
         }
+        host.video_texture.replace(texture);
         platform::shown(window.window());
+        frame_pacing::follow(&window);
         // Interpolation (`video.render()`) resamples to the main display's rate.
         let displays = platform::displays();
         let main_display = displays.iter().find(|d| d.primary).or(displays.first());
@@ -5159,6 +5237,13 @@ fn main() -> Result<()> {
                 Err(_) => busy.miss(),
             }))
         });
+        frame_pacing::on_deliver(Some(Box::new(|| {
+            FRAME_SINK.with(|sink| {
+                if let Some(deliver) = &*sink.borrow() {
+                    deliver();
+                }
+            })
+        })));
         let pip_host = host.clone();
         PIP_GPU_SINK.with(|sink| {
             *sink.borrow_mut() = Some(Box::new(move || {
@@ -5226,6 +5311,7 @@ fn main() -> Result<()> {
                 if host.backend.frame.missed() {
                     host.show_frame();
                 }
+                frame_pacing::tick();
                 if let Some(log) = host.frame_log.as_mut() {
                     log.tick_took(began.elapsed());
                 }
@@ -5257,6 +5343,8 @@ fn main() -> Result<()> {
         );
         window.run()?;
         timer.stop();
+        frame_pacing::stop();
+        frame_pacing::on_deliver(None);
         FRAME_SINK.with(|sink| sink.borrow_mut().take());
         PIP_GPU_SINK.with(|sink| sink.borrow_mut().take());
         host.borrow_mut().ui_state.flush();

@@ -1,0 +1,24 @@
+[package]
+name = "vestra-video-texture"
+version = "0.0.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+description = "Software-rendered video pictures shown in a Slint OpenGL window through one reused texture (the host's software rendering)"
+
+# One of the crates under src/host/unsafe/: the only place first-party Rust may
+# use `unsafe`. Every block carries a SAFETY comment; the public API is safe.
+[dependencies]
+glow = "=0.18.0"
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2"] }
+
+# Not `workspace = true` (that would forbid unsafe); src/scripts/check-unsafe-policy.mjs
+# requires these entries.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
+dbg_macro = "warn"
+todo = "warn"

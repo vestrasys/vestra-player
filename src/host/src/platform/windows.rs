@@ -466,6 +466,107 @@ pub fn displays() -> Vec<Display> {
     list
 }
 
+// ------------------------------------------------------------ full screen
+
+/// How a full-screen window is kept from matching its display exactly
+/// (`VESTRA_FULLSCREEN_MATCH`: `taller`, the default, one pixel past the
+/// bottom edge; `shorter`, one pixel short of it; `exact`, winit's own
+/// rectangle). A window that covers a display exactly can be switched by the
+/// graphics driver to the panel's native variable-refresh timing (on the
+/// 60-240 Hz test panel: 60 → 240 Hz and back), which blanks the display and
+/// blocks every present for up to seconds (round doc, Appendix B).
+fn fullscreen_extra() -> Option<i32> {
+    static EXTRA: std::sync::OnceLock<Option<i32>> = std::sync::OnceLock::new();
+    *EXTRA.get_or_init(
+        || match std::env::var("VESTRA_FULLSCREEN_MATCH").as_deref() {
+            Ok("exact") => None,
+            Ok("shorter") => Some(-1),
+            _ => Some(1),
+        },
+    )
+}
+
+/// After a resize of `window`: a borderless full-screen window that covers
+/// its display exactly is made one pixel taller (or shorter, see
+/// `fullscreen_extra`). winit keeps a full-screen window on its display but
+/// does not reset its size while it stays on the same display.
+pub fn fullscreen_resized(window: &slint::Window) {
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let Some(extra) = fullscreen_extra() else {
+        return;
+    };
+    window.with_winit_window(|window| {
+        if window.fullscreen().is_none() {
+            return;
+        }
+        if let Ok(handle) = window.window_handle()
+            && let RawWindowHandle::Win32(handle) = handle.as_raw()
+        {
+            vestra_win32::unmatch_display(handle.hwnd.get(), extra);
+        }
+    });
+}
+
+// ------------------------------------------------------------ redraw pacing
+
+/// Software rendering shows the pictures through one reused OpenGL texture
+/// (`vestra-video-texture`) instead of a new image per frame.
+pub const VIDEO_TEXTURE: bool = true;
+
+/// Slint's winit backend paces redraws here with a timer that is not tied
+/// to the display; the host paces the main window itself (`frame_pacing.rs`).
+pub const VBLANK_CLOCK: bool = true;
+
+/// The vertical blanks of the display a window is on (`vestra_win32::VBlank`),
+/// following the window to another display. Used on the pacing thread.
+pub struct VBlankWaiter {
+    clock: vestra_win32::VBlank,
+    hwnd: isize,
+    waits: u32,
+}
+impl VBlankWaiter {
+    /// Block until the next vertical blank; `false` when the display clock
+    /// failed and could not be opened again.
+    pub fn wait(&mut self) -> bool {
+        // About once a second at 60 Hz: has the window moved to another display?
+        self.waits = self.waits.wrapping_add(1);
+        if self.waits.is_multiple_of(64)
+            && self.clock.moved(self.hwnd)
+            && let Some(clock) = vestra_win32::VBlank::open(self.hwnd)
+        {
+            self.clock = clock;
+        }
+        if self.clock.wait() {
+            return true;
+        }
+        match vestra_win32::VBlank::open(self.hwnd) {
+            Some(clock) => {
+                self.clock = clock;
+                self.clock.wait()
+            }
+            None => false,
+        }
+    }
+}
+
+/// The display clock of `window` (shown, with a native window); `None` when
+/// the display has none (for example in a remote desktop session).
+pub fn vblank_waiter(window: &slint::Window) -> Option<VBlankWaiter> {
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let hwnd = window
+        .with_winit_window(|window| match window.window_handle().ok()?.as_raw() {
+            RawWindowHandle::Win32(handle) => Some(handle.hwnd.get()),
+            _ => None,
+        })
+        .flatten()?;
+    let clock = vestra_win32::VBlank::open(hwnd)?;
+    Some(VBlankWaiter {
+        clock,
+        hwnd,
+        waits: 0,
+    })
+}
+
 /// Windows 11 still says "Windows 10" in `ProductName`; the build decides.
 pub fn windows_name(build: Option<u32>) -> String {
     match build {

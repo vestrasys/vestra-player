@@ -30,3 +30,5 @@ flate = "flate"
 [default.extend-identifiers]
 # A deliberately misspelled field in the store API proposal's example.
 capabilties = "capabilties"
+# A Windows display-driver API field (VidPn = video present network), vestra-win32.
+VidPnSourceId = "VidPnSourceId"
