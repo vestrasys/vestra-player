@@ -18,4 +18,4 @@ export { THEME_PALETTES } from "./palettes.js";
 export { Catalog, HOST_ZH_HANS, LIST_SEPARATORS, LOCALES, MENU_KEYS, matchLocale, parsePo, rewriteSlint, renderText, scanSlint, TEXT_LIMITS, textKey, textProblem, } from "./i18n.js";
 export { MANIFEST_FIELDS, MANIFEST_LIMITS } from "./manifest.js";
 export { MARKDOWN_LIMITS } from "./plugin/markdown.js";
-export { UI_VALUE_LIMITS } from "./plugin/values.js";
+export { IMAGE_LIMITS, UI_VALUE_LIMITS } from "./plugin/values.js";

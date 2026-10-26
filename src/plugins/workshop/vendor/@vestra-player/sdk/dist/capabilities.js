@@ -131,6 +131,7 @@ export const CAPABILITY_INFO = Object.freeze({
             "Packages.validate",
             "Packages.validateArchive",
             "Packages.setEnabled",
+            "Packages.reload",
             "Packages.uninstall",
         ],
         requires: [],

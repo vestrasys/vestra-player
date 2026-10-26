@@ -1,6 +1,6 @@
 import type { Json } from "../wire.ts";
 import type { ScopeImpl } from "./scope.ts";
-import type { Dialogs, Disposable, ImageRef, Panels, PropValue, Props, Ui, View, Windows } from "./types.ts";
+import type { Dialogs, Disposable, ImageOptions, ImageRef, Panels, PropValue, Props, Ui, View, Windows } from "./types.ts";
 /** Slint names are kebab-case; plugin code may use camelCase. */
 export declare const kebab: (name: string) => string;
 /**
@@ -13,11 +13,13 @@ export declare class ImageHandle implements ImageRef {
     #private;
     readonly path: string;
     readonly __vestraImage: true;
-    constructor(scope: ScopeImpl, path: string);
+    constructor(scope: ScopeImpl, path: string, maxSide?: number);
     /** Released with its scope: writing it is `invalid`. */
     get released(): boolean;
     toJSON(): Json;
 }
+/** `ImageOptions.maxSide`, checked: an integer 1–4096 or absent. */
+export declare function imageSide(options: ImageOptions | undefined): number | undefined;
 export declare const ui: (scope: ScopeImpl) => Ui;
 /** Property and callback plumbing shared by windows, panels and settings pages. */
 export declare abstract class ViewBase implements View {

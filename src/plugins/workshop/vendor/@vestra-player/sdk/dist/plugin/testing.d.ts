@@ -10,7 +10,7 @@ import { OSD_LIMITS } from "./osd.ts";
 import { SECRET_LIMITS } from "./services.ts";
 import { BINDING_INPUTS } from "./bindings.ts";
 import { THEME_PALETTES } from "../palettes.ts";
-import { UI_VALUE_LIMITS } from "./values.ts";
+import { IMAGE_LIMITS, UI_VALUE_LIMITS } from "./values.ts";
 import type { CommandDeclaration } from "../commands.ts";
 import type { SourceState } from "../source.ts";
 import type { SubtitleState } from "../subtitles.ts";
@@ -39,7 +39,7 @@ export { BINDING_INPUTS };
 /** The colours of the player's palettes, by `Theme` token. */
 export { THEME_PALETTES };
 /** The player's property value limits, which the test host enforces as well. */
-export { UI_VALUE_LIMITS };
+export { IMAGE_LIMITS, UI_VALUE_LIMITS };
 /**
  * The player's limits on one text value ({@link Text}, {@link TextList},
  * with everything nested in it), which the test host enforces as well:
@@ -618,14 +618,19 @@ export declare class TestHost implements Transport {
         title?: string | null;
     }[]): void;
     /**
-     * Runtime images written to views (`plugin.ui.image`), newest last. The
-     * SDK refuses images of released scopes before anything is sent.
+     * Runtime images written to views (`plugin.ui.image`,
+     * `plugin.ui.remoteImage`), whole values and (SDK 1.5.19) images nested
+     * in rows, newest last. The SDK refuses images of released scopes before
+     * anything is sent. The test host does not read the files, so it does not
+     * check the player's per-view budget (`IMAGE_LIMITS.viewBytes`).
      */
     readonly images: {
         /** The image file's path, as given to `ui.image`. */
         path: string;
         /** The SDK's reference number for that `ImageRef`. */
         ref: number;
+        /** Its `maxSide` option, when given. */
+        maxSide?: number;
     }[];
     /**
      * The file an image property shows, or `null` when the value is not a
@@ -1109,6 +1114,39 @@ export declare class TestHost implements Transport {
     constructor();
     /** The `player.setStepSeek` value in effect (default 5). */
     stepSeek: number;
+    /** The `player.setStepSeek` `keyframes` in effect (default `false`, SDK 1.5.19). */
+    stepSeekKeyframes: boolean;
+    /**
+     * Test data: the keyframe times (seconds, ascending) of the current
+     * source, for keyframe step seeks. `null` (the default): none modelled,
+     * and step seeks are exact even with `stepSeekKeyframes`.
+     *
+     * @example
+     * ```ts
+     * host.setSource({ phase: "ready", duration: 45, position: 12 });
+     * host.keyframes = [0, 10, 20, 30, 40];
+     * await plugin.player.setStepSeek({ seconds: 5, keyframes: true });
+     * await plugin.host.run("seek-forward");
+     * assert.equal(host.source.position, 20);
+     * assert.equal(host.osd.at(-1), "Forward 5 s: 00:20 / 00:45");
+     * ```
+     */
+    keyframes: number[] | null;
+    /**
+     * Every step seek the core ran (`seek-backward` / `seek-forward`, from a
+     * key, the menu or `host.run`), newest last: the step, whether it went to
+     * a keyframe, and where it landed.
+     */
+    readonly coreSeeks: {
+        /** `seek-backward` or `seek-forward`. */
+        action: string;
+        /** The step: `host.run`'s `seconds`, else `setStepSeek`'s. */
+        seconds: number;
+        /** It landed on a keyframe (`stepSeekKeyframes` and keyframes modelled). */
+        keyframes: boolean;
+        /** The new position. */
+        landed: number;
+    }[];
     /** Every `player.step`, newest last. */
     readonly steps: {
         /** `"frame"` or `"keyframe"`. */
@@ -1339,7 +1377,7 @@ export declare class TestHost implements Transport {
     /** Every `packages.setEnabled` / `uninstall` / `install`, newest last. */
     readonly packageCalls: {
         /** Which call. */
-        method: "setEnabled" | "uninstall" | "install";
+        method: "setEnabled" | "reload" | "uninstall" | "install";
         /** The target plugin id. */
         id: string;
         /** `setEnabled`'s value. */
@@ -1368,9 +1406,10 @@ export declare class TestHost implements Transport {
      */
     readonly candidates: Map<string, PackageManifest>;
     /**
-     * Remote Markdown images (`plugin.ui.markdown`): address → a local PNG or
-     * JPEG file served for it, or `null` for a failing download. Nothing is
-     * fetched from the network in tests; unknown addresses fail.
+     * Remote images (`plugin.ui.markdown`, `plugin.ui.remoteImage`): address
+     * → a local PNG or JPEG file served for it, or `null` for a failing
+     * download. Nothing is fetched from the network in tests; unknown
+     * addresses fail.
      */
     readonly remoteImages: Map<string, string | null>;
     /**

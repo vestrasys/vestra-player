@@ -4,6 +4,8 @@ import type { Runtime } from "./runtime.ts";
 import type { ScopeImpl } from "./scope.ts";
 import type { Conditional, Disposable, Player, PlayerState, PluginError } from "./types.ts";
 export declare const rawOf: (state: PlayerState) => SourceState | undefined;
+/** A step-seek length the player accepts: 0.1–3600 seconds in tenths. */
+export declare const validStep: (seconds: unknown) => seconds is number;
 export declare const sameStamp: (a: SourceStamp, b: SourceStamp) => boolean;
 export declare function abortError(): PluginError;
 /** One per plugin: the state store and the operation book client. */

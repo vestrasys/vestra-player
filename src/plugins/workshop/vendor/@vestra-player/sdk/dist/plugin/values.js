@@ -55,6 +55,21 @@ function documentText(value) {
     return isObject(doc) && typeof doc.text === "string" ? doc.text : null;
 }
 /**
+ * The player's runtime image limits (`host/src/ui_image.rs`): a file's
+ * bytes and sides, the decoded pixels each plugin caches, and (SDK 1.5.19,
+ * player 0.5.1) the decoded pixels the nested images of one view may show.
+ */
+export const IMAGE_LIMITS = Object.freeze({
+    /** The largest image file the player reads, in bytes. */
+    fileBytes: 16 * 1024 * 1024,
+    /** The longest side, in pixels, the player accepts for an image file. */
+    side: 4096,
+    /** The decoded pixel bytes the player caches for each plugin's images. */
+    pluginBytes: 64 * 1024 * 1024,
+    /** The decoded pixel bytes the nested images of one view may show (player 0.5.1). */
+    viewBytes: 32 * 1024 * 1024,
+});
+/**
  * Why the player would refuse `value` (in wire form) as a property value,
  * or `null`. The same checks, order and messages as the player's
  * conversion (`host/src/ui_values.rs`). An image reference as the whole
@@ -79,6 +94,9 @@ export function valueLimitProblem(value) {
         if (budget.values === L.values)
             return `UI value exceeds ${L.values} total nodes`;
         budget.values += 1;
+        // An image (nested from SDK 1.5.19) is one value, like a document.
+        if (isObject(value) && "$vestraImage" in value)
+            return null;
         const doc = documentText(value);
         if (doc !== null) {
             const n = bytes(doc);

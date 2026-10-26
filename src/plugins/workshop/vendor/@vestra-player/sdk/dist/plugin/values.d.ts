@@ -47,6 +47,21 @@ export declare const UI_VALUE_LIMITS: {
     readonly textBytes: number;
 };
 /**
+ * The player's runtime image limits (`host/src/ui_image.rs`): a file's
+ * bytes and sides, the decoded pixels each plugin caches, and (SDK 1.5.19,
+ * player 0.5.1) the decoded pixels the nested images of one view may show.
+ */
+export declare const IMAGE_LIMITS: Readonly<{
+    /** The largest image file the player reads, in bytes. */
+    fileBytes: number;
+    /** The longest side, in pixels, the player accepts for an image file. */
+    side: 4096;
+    /** The decoded pixel bytes the player caches for each plugin's images. */
+    pluginBytes: number;
+    /** The decoded pixel bytes the nested images of one view may show (player 0.5.1). */
+    viewBytes: number;
+}>;
+/**
  * Why the player would refuse `value` (in wire form) as a property value,
  * or `null`. The same checks, order and messages as the player's
  * conversion (`host/src/ui_values.rs`). An image reference as the whole

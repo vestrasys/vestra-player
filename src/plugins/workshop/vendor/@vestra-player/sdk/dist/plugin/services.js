@@ -8,7 +8,7 @@ import { mkdir, open, rename, rm, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { failure } from "./runtime.js";
 import { systemServices } from "./local.js";
-import { playerOf } from "./player.js";
+import { playerOf, validStep } from "./player.js";
 const MAX_OUTPUT = 16 * 1024 * 1024;
 export const clipboard = (scope) => ({
     readText: () => scope.runtime.host.clipboard.readText(),
@@ -32,10 +32,17 @@ const ACTIONS = new Set([
     "mute",
 ]);
 export const host = (scope) => ({
-    async run(action) {
+    async run(action, options) {
         if (!ACTIONS.has(action))
             throw failure("invalid", `unknown host action ${String(action)}`);
-        await scope.runtime.host.host.run(action);
+        const seconds = options?.seconds;
+        if (options !== undefined) {
+            if (action !== "seek-backward" && action !== "seek-forward")
+                throw failure("invalid", `seconds applies only to seek-backward and seek-forward, not ${action}`);
+            if (!validStep(seconds))
+                throw failure("invalid", "seconds must be 0.1–3600 in tenths");
+        }
+        await scope.runtime.host.host.run(action, seconds);
         // Like the player's own controls: `player.state` shows the result.
         if (scope.runtime.can("playback.read"))
             await playerOf(scope.runtime)
