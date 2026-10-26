@@ -173,6 +173,107 @@ struct Catalog {
 pub struct Store {
     root: PathBuf,
     catalog: Catalog,
+    /// Records `open` set aside this run (`Quarantined`).
+    quarantined: Vec<Quarantined>,
+}
+
+/// A catalog record that failed its checks when the library opened: taken
+/// out of the catalog, logged and kept as it was in `quarantine.json` (the
+/// most recent `MAX_QUARANTINED`). An installed package set aside is
+/// reported as failed for this run (`packages.list`); its instance is
+/// retired (`retire`), so installing it again from the same source finds
+/// its data.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Quarantined {
+    /// The catalog section: `installed`, `pending`, `dormant`,
+    /// `operations`, `operationAt`, `lastCommit`, `disabled` or `catalog`
+    /// (an unknown field).
+    pub section: &'static str,
+    /// The record's key (package id, operation id or GUID).
+    pub id: String,
+    pub reason: String,
+}
+
+/// Records kept in `quarantine.json`.
+const MAX_QUARANTINED: usize = 64;
+
+/// A record on its way to quarantine, with its JSON as read.
+struct Aside {
+    record: Quarantined,
+    entry: Value,
+}
+impl Aside {
+    fn new(section: &'static str, id: &str, reason: impl ToString, entry: Value) -> Self {
+        Self {
+            record: Quarantined {
+                section,
+                id: id.into(),
+                reason: reason.to_string(),
+            },
+            entry,
+        }
+    }
+}
+
+/// The catalog from its JSON, one record at a time: a record that does not
+/// read (a wrong type, an unknown or missing field) is set aside instead of
+/// failing the whole catalog. Only JSON that is not an object fails.
+fn lenient(value: Value) -> Result<(Catalog, Vec<Aside>)> {
+    let Value::Object(mut fields) = value else {
+        anyhow::bail!("invalid package catalog: not an object");
+    };
+    let mut aside = Vec::new();
+    fn section<T: serde::de::DeserializeOwned>(
+        fields: &mut serde_json::Map<String, Value>,
+        name: &'static str,
+        aside: &mut Vec<Aside>,
+    ) -> BTreeMap<String, T> {
+        let mut records = BTreeMap::new();
+        match fields.remove(name) {
+            None | Some(Value::Null) => {}
+            Some(Value::Object(entries)) => {
+                for (id, entry) in entries {
+                    match serde_json::from_value::<T>(entry.clone()) {
+                        Ok(record) => {
+                            records.insert(id, record);
+                        }
+                        Err(error) => {
+                            aside.push(Aside::new(name, &id, format!("unreadable: {error}"), entry))
+                        }
+                    }
+                }
+            }
+            Some(other) => aside.push(Aside::new(name, "", "not an object", other)),
+        }
+        records
+    }
+    let mut catalog = Catalog {
+        installed: section(&mut fields, "installed", &mut aside),
+        pending: section(&mut fields, "pending", &mut aside),
+        operations: section(&mut fields, "operations", &mut aside),
+        operation_at: section(&mut fields, "operationAt", &mut aside),
+        last_commit: section(&mut fields, "lastCommit", &mut aside),
+        dormant: section(&mut fields, "dormant", &mut aside),
+        ..Catalog::default()
+    };
+    match fields.remove("disabled") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(ids)) => {
+            for id in ids {
+                match id {
+                    Value::String(id) => {
+                        catalog.disabled.insert(id);
+                    }
+                    other => aside.push(Aside::new("disabled", "", "not a package id", other)),
+                }
+            }
+        }
+        Some(other) => aside.push(Aside::new("disabled", "", "not a list", other)),
+    }
+    for (name, value) in fields {
+        aside.push(Aside::new("catalog", &name, "unknown field", value));
+    }
+    Ok((catalog, aside))
 }
 
 fn identifier(value: &str) -> Result<()> {
@@ -203,7 +304,7 @@ impl Store {
             "package library must not be a symlink"
         );
         let path = root.join("catalog.json");
-        let catalog = if path.exists() {
+        let (catalog, aside) = if path.exists() {
             let metadata = fs::symlink_metadata(&path)?;
             ensure!(
                 metadata.is_file()
@@ -216,16 +317,26 @@ impl Store {
                 .take(MAX_CATALOG as u64 + 1)
                 .read_to_end(&mut bytes)?;
             ensure!(bytes.len() <= MAX_CATALOG, "package catalog too large");
-            serde_json::from_slice(&bytes).context("parse package catalog")?
+            lenient(serde_json::from_slice(&bytes).context("parse package catalog")?)?
         } else {
-            Catalog::default()
+            (Catalog::default(), Vec::new())
         };
-        let mut store = Self { root, catalog };
-        store.validate_catalog()?;
+        let mut store = Self {
+            root,
+            catalog,
+            quarantined: Vec::new(),
+        };
+        // One bad record does not stop the library (nor the player): it is
+        // set aside (`quarantine.json`) and everything else opens.
+        let mut next = store.catalog.clone();
+        let mut aside = aside;
+        let mut changed = store.screen(&mut next, &mut aside);
+        if !aside.is_empty() {
+            changed = true;
+            store.set_aside(&aside);
+        }
         // Catalogs written before instances: give each installed package a
         // fresh instance (its old `plugin-data/<id>` is not migrated).
-        let mut next = store.catalog.clone();
-        let mut changed = false;
         for (id, installed) in next.installed.iter_mut() {
             if installed.current.is_some() && installed.instance.is_none() {
                 let instance = Instance::new(Source::File);
@@ -283,6 +394,8 @@ impl Store {
                     ..Installed::default()
                 },
             );
+            // Built-ins always run (a flag left by an earlier record goes).
+            next.disabled.remove(id);
             changed = true;
         }
         let dropped = next
@@ -333,73 +446,313 @@ impl Store {
         verify_stored(package)
     }
 
-    fn validate_catalog(&self) -> Result<()> {
-        ensure!(
-            self.catalog.installed.len() <= MAX_PACKAGES
-                && self.catalog.pending.len() <= 64
-                && self.catalog.operations.len() <= MAX_OPERATIONS
-                && self.catalog.operation_at.len() <= MAX_OPERATIONS
-                && self.catalog.last_commit.len() <= MAX_PACKAGES,
-            "package catalog count exceeded"
+    /// A package recorded under another library root (the library was
+    /// moved, or copied with `VESTRA_PACKAGE_STORE`): the same digest in this
+    /// library is the same package once its bytes verify. `true` when
+    /// `package` now names this library's copy.
+    fn rebase(&self, package: &mut StoredPackage) -> bool {
+        let here = self.root.join("packages").join(&package.digest);
+        if package.directory == here || !digest_name(&package.digest) || !here.is_dir() {
+            return false;
+        }
+        let moved = StoredPackage {
+            directory: here,
+            ..package.clone()
+        };
+        if verify_stored(&moved).is_err() {
+            return false;
+        }
+        diag!(
+            "package library: {} {} moved from {} into this library",
+            package.manifest.id,
+            package.digest,
+            package.directory.display()
         );
-        for (id, installed) in &self.catalog.installed {
-            identifier(id)?;
-            ensure!(
-                installed.revision <= MAX_SAFE,
-                "installed revision exhausted"
-            );
-            // `previous` (players up to 0.5) is not followed: `Store::open`
-            // clears it.
-            if let Some(package) = &installed.current {
-                self.validate_package(package)?;
-                ensure!(
-                    package.manifest.id == *id,
-                    "installed package identity mismatch"
-                );
-            }
-        }
-        for (id, recovery) in &self.catalog.pending {
-            identifier(id)?;
-            identifier(&recovery.operation_id)?;
-            ensure!(
-                recovery.id == *id && recovery.target.manifest.id == *id,
-                "recovery identity mismatch"
-            );
-            self.validate_package(&recovery.target)?;
-            ensure!(
-                serde_json::to_value(&recovery.before)? == serde_json::to_value(self.get(id))?,
-                "recovery baseline mismatch"
-            );
-        }
-        for id in self.catalog.operations.keys() {
-            identifier(id)?;
-        }
-        ensure!(
-            self.catalog.dormant.len() <= MAX_DORMANT,
-            "dormant instance count exceeded"
-        );
+        *package = moved;
+        true
+    }
+
+    /// Check every record of `catalog` (just read) on its own; the ones that
+    /// fail go to `aside` and out of `catalog`, so that the rest opens.
+    /// `true` when a record was rebased (`rebase`).
+    fn screen(&self, catalog: &mut Catalog, aside: &mut Vec<Aside>) -> bool {
+        let mut changed = false;
         let mut guids = BTreeSet::new();
-        for installed in self.catalog.installed.values() {
-            if let Some(instance) = &installed.instance {
-                ensure!(valid_guid(&instance.guid), "invalid instance GUID");
-                ensure!(guids.insert(&instance.guid), "duplicate instance GUID");
+        // Installed packages: identity, package, instance.
+        let mut set_aside_installed = Vec::new();
+        for (id, installed) in catalog.installed.iter_mut() {
+            if let Some(package) = installed.current.as_mut() {
+                changed |= self.rebase(package);
+            }
+            let check = || -> Result<()> {
+                identifier(id)?;
+                ensure!(
+                    installed.revision <= MAX_SAFE,
+                    "installed revision exhausted"
+                );
+                // `previous` (players up to 0.5) is not followed: `Store::open`
+                // clears it.
+                if let Some(package) = &installed.current {
+                    self.validate_package(package)?;
+                    ensure!(
+                        package.manifest.id == *id,
+                        "installed package identity mismatch"
+                    );
+                }
+                if let Some(instance) = &installed.instance {
+                    ensure!(valid_guid(&instance.guid), "invalid instance GUID");
+                    ensure!(!guids.contains(&instance.guid), "duplicate instance GUID");
+                }
+                Ok(())
+            };
+            match check() {
+                Ok(()) => {
+                    if let Some(instance) = &installed.instance {
+                        guids.insert(instance.guid.clone());
+                    }
+                }
+                Err(error) => set_aside_installed.push((id.clone(), error)),
             }
         }
-        for (guid, dormant) in &self.catalog.dormant {
-            ensure!(valid_guid(guid), "invalid instance GUID");
-            ensure!(guids.insert(guid), "duplicate instance GUID");
-            identifier(&dormant.id)?;
-        }
-        for recovery in self.catalog.pending.values() {
-            if let Some(instance) = &recovery.instance {
-                ensure!(valid_guid(&instance.guid), "invalid instance GUID");
+        let over = catalog
+            .installed
+            .keys()
+            .filter(|id| !set_aside_installed.iter().any(|(bad, _)| bad == *id))
+            .skip(MAX_PACKAGES)
+            .cloned()
+            .collect::<Vec<_>>();
+        set_aside_installed.extend(
+            over.into_iter()
+                .map(|id| (id, anyhow::anyhow!("installed package limit exceeded"))),
+        );
+        let mut retired = Vec::new();
+        for (id, error) in set_aside_installed {
+            let Some(installed) = catalog.installed.remove(&id) else {
+                continue;
+            };
+            let entry = serde_json::to_value(&installed).unwrap_or(Value::Null);
+            aside.push(Aside::new("installed", &id, format!("{error:#}"), entry));
+            catalog.last_commit.remove(&id);
+            catalog.disabled.remove(&id);
+            // Its data stays reachable: installing it again from the same
+            // source (a built-in: the next start) reconnects to it.
+            if let Some(instance) = &installed.instance
+                && identifier(&id).is_ok()
+                && valid_guid(&instance.guid)
+                && !guids.contains(&instance.guid)
+            {
+                retired.push((id, instance.clone(), installed));
             }
         }
-        for (id, operation) in &self.catalog.last_commit {
-            identifier(id)?;
-            identifier(operation)?;
+        // Retired instances.
+        let mut bad = Vec::new();
+        for (guid, dormant) in &catalog.dormant {
+            if !valid_guid(guid) {
+                bad.push((guid.clone(), "invalid instance GUID"));
+            } else if guids.contains(guid) {
+                bad.push((guid.clone(), "duplicate instance GUID"));
+            } else if identifier(&dormant.id).is_err() {
+                bad.push((guid.clone(), "invalid package identity"));
+            } else {
+                guids.insert(guid.clone());
+            }
         }
-        Ok(())
+        let mut by_age = catalog
+            .dormant
+            .iter()
+            .filter(|(guid, _)| !bad.iter().any(|(b, _)| b == *guid))
+            .map(|(guid, d)| (d.retired_at, guid.clone()))
+            .collect::<Vec<_>>();
+        by_age.sort();
+        let excess = by_age.len().saturating_sub(MAX_DORMANT);
+        bad.extend(
+            by_age
+                .into_iter()
+                .take(excess)
+                .map(|(_, guid)| (guid, "dormant instance count exceeded")),
+        );
+        for (guid, reason) in bad {
+            if let Some(dormant) = catalog.dormant.remove(&guid) {
+                let entry = serde_json::to_value(&dormant).unwrap_or(Value::Null);
+                aside.push(Aside::new("dormant", &guid, reason, entry));
+            }
+        }
+        for (id, instance, installed) in retired {
+            if !catalog.dormant.contains_key(&instance.guid) {
+                retire(catalog, &id, &instance, &installed);
+            }
+        }
+        // Interrupted installs: against the installed records as they now stand.
+        let mut bad = Vec::new();
+        for (id, recovery) in catalog.pending.iter_mut() {
+            changed |= self.rebase(&mut recovery.target);
+            let check = || -> Result<()> {
+                identifier(id)?;
+                identifier(&recovery.operation_id)?;
+                ensure!(
+                    recovery.id == *id && recovery.target.manifest.id == *id,
+                    "recovery identity mismatch"
+                );
+                self.validate_package(&recovery.target)?;
+                let before = catalog.installed.get(id).cloned().unwrap_or_default();
+                ensure!(
+                    serde_json::to_value(&recovery.before)? == serde_json::to_value(before)?,
+                    "recovery baseline mismatch"
+                );
+                if let Some(instance) = &recovery.instance {
+                    ensure!(valid_guid(&instance.guid), "invalid instance GUID");
+                }
+                Ok(())
+            };
+            if let Err(error) = check() {
+                bad.push((id.clone(), format!("{error:#}")));
+            }
+        }
+        let over = catalog
+            .pending
+            .keys()
+            .filter(|id| !bad.iter().any(|(b, _)| b == *id))
+            .skip(64)
+            .cloned()
+            .collect::<Vec<_>>();
+        bad.extend(
+            over.into_iter()
+                .map(|id| (id, "pending package limit exceeded".into())),
+        );
+        for (id, reason) in bad {
+            let Some(recovery) = catalog.pending.remove(&id) else {
+                continue;
+            };
+            // Its receipt ends (a `preparing` one would be kept forever).
+            if let Some(receipt) = catalog.operations.get_mut(&recovery.operation_id)
+                && receipt.is_object()
+            {
+                receipt["status"] = "failed".into();
+                receipt["message"] = format!("the install record was set aside: {reason}").into();
+            }
+            let entry = serde_json::to_value(&recovery).unwrap_or(Value::Null);
+            aside.push(Aside::new("pending", &id, reason, entry));
+        }
+        // Receipts and their bookkeeping.
+        let bad = catalog
+            .operations
+            .keys()
+            .filter(|id| identifier(id).is_err())
+            .cloned()
+            .collect::<Vec<_>>();
+        for id in bad {
+            let entry = catalog.operations.remove(&id).unwrap_or(Value::Null);
+            aside.push(Aside::new(
+                "operations",
+                &id,
+                "invalid operation identity",
+                entry,
+            ));
+        }
+        // Beyond the limit the oldest finished receipts go, as they would
+        // when a new one is written.
+        while catalog.operations.len() > MAX_OPERATIONS {
+            let before = catalog.operations.len();
+            evict_receipt(catalog);
+            if catalog.operations.len() == before {
+                break;
+            }
+        }
+        let over = catalog
+            .operations
+            .keys()
+            .skip(MAX_OPERATIONS)
+            .cloned()
+            .collect::<Vec<_>>();
+        for id in over {
+            let entry = catalog.operations.remove(&id).unwrap_or(Value::Null);
+            aside.push(Aside::new(
+                "operations",
+                &id,
+                "operation history full",
+                entry,
+            ));
+        }
+        let operations = &catalog.operations;
+        catalog
+            .operation_at
+            .retain(|id, _| operations.contains_key(id));
+        let bad = catalog
+            .last_commit
+            .iter()
+            .filter(|(id, operation)| identifier(id).is_err() || identifier(operation).is_err())
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        for id in bad {
+            let entry = catalog
+                .last_commit
+                .remove(&id)
+                .map_or(Value::Null, Value::from);
+            aside.push(Aside::new("lastCommit", &id, "invalid identity", entry));
+        }
+        let installed = &catalog.installed;
+        catalog
+            .last_commit
+            .retain(|id, _| installed.contains_key(id));
+        let bad = catalog
+            .disabled
+            .iter()
+            .filter(|id| identifier(id).is_err())
+            .cloned()
+            .collect::<Vec<_>>();
+        for id in bad {
+            catalog.disabled.remove(&id);
+            aside.push(Aside::new(
+                "disabled",
+                &id,
+                "invalid package identity",
+                Value::Null,
+            ));
+        }
+        changed
+    }
+
+    /// Log the records `open` set aside and keep them, as read, in
+    /// `quarantine.json` (the most recent `MAX_QUARANTINED`). A failure to
+    /// write that file is logged; the library opens anyway.
+    fn set_aside(&mut self, aside: &[Aside]) {
+        let path = self.root.join("quarantine.json");
+        let mut kept = fs::read(&path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+            .and_then(|value| value.get("records").and_then(Value::as_array).cloned())
+            .unwrap_or_default();
+        let at = unix_ms();
+        for item in aside {
+            let Quarantined {
+                section,
+                id,
+                reason,
+            } = &item.record;
+            diag!("package library: {section} {id:?} set aside: {reason}");
+            kept.push(serde_json::json!({
+                "at": at, "section": section, "id": id, "reason": reason, "entry": item.entry,
+            }));
+            self.quarantined.push(item.record.clone());
+        }
+        let excess = kept.len().saturating_sub(MAX_QUARANTINED);
+        kept.drain(..excess);
+        let write = || -> Result<()> {
+            let bytes = serde_json::to_vec_pretty(&serde_json::json!({ "records": kept }))?;
+            let mut temporary = tempfile::NamedTempFile::new_in(&self.root)?;
+            temporary.write_all(&bytes)?;
+            temporary.as_file().sync_all()?;
+            temporary.persist(&path).map_err(|error| error.error)?;
+            Ok(())
+        };
+        if let Err(error) = write() {
+            diag!("package library: {}: {error:#}", path.display());
+        }
+    }
+
+    /// The records `open` set aside this run.
+    pub fn quarantined(&self) -> &[Quarantined] {
+        &self.quarantined
     }
 
     fn publish(&mut self, next: Catalog) -> Result<()> {
@@ -719,6 +1072,14 @@ impl Store {
             !disabled || self.catalog.installed.contains_key(id),
             "only installed packages can be disabled"
         );
+        ensure!(
+            !disabled
+                || !self.catalog.installed[id]
+                    .instance
+                    .as_ref()
+                    .is_some_and(|i| i.builtin),
+            "built-in plugins cannot be disabled"
+        );
         if self.catalog.disabled.contains(id) == disabled {
             return Ok(());
         }
@@ -797,7 +1158,8 @@ impl Store {
 /// Players up to 0.5 copied each built-in into the library ("seeding") and
 /// kept the version an upgrade replaced. Built-ins now run from the
 /// installation and no previous version is kept: built-in records lose
-/// their package, every record its previous version, and an interrupted
+/// their package and their disabled flag (built-ins cannot be disabled,
+/// user ruling 2026-10-26), every record its previous version, and an interrupted
 /// seed (a pending built-in install) is dropped. Reads no package file;
 /// the directories no longer referenced are collected off the UI thread.
 /// Idempotent; `true` when it changed `catalog`.
@@ -831,6 +1193,11 @@ fn migrate_in_place(catalog: &mut Catalog) -> bool {
             if catalog.last_commit.remove(id).is_some() {
                 changed = true;
             }
+            // User ruling 2026-10-26: built-ins are always enabled; one that
+            // an earlier player let the user disable runs again.
+            if catalog.disabled.remove(id) {
+                changed = true;
+            }
             if let Some(instance) = installed.instance.as_mut()
                 && instance.seeded_version.take().is_some()
             {
@@ -854,7 +1221,7 @@ fn migrate_in_place(catalog: &mut Catalog) -> bool {
 /// is full the record is dropped (its data directory stays on disk).
 fn retire(catalog: &mut Catalog, id: &str, instance: &Instance, installed: &Installed) {
     if catalog.dormant.len() >= MAX_DORMANT {
-        eprintln!(
+        diag!(
             "package library: dormant list full; {id} instance {} is no longer reconnectable",
             instance.guid
         );
@@ -1506,5 +1873,182 @@ mod tests {
                 .unwrap(),
             0
         );
+    }
+
+    /// Two committed installs, `counter` and `other`, in a library at `root`.
+    fn two_installed(root: &std::path::Path) -> (StoredPackage, StoredPackage) {
+        let mut store = Store::open(root.into()).unwrap();
+        let (_dir, first) = candidate("1.0.0");
+        let counter = store.stage(&first).unwrap();
+        store.prepare("counter", 0, &counter, "one").unwrap();
+        store.commit("counter", "one").unwrap();
+        let other_dir = tempfile::tempdir().unwrap();
+        fs::write(other_dir.path().join("manifest.json"), serde_json::to_vec(&serde_json::json!({"id":"other","apiVersion":crate::plugins::API,"version":"1.0.0","entry":"main.js","capabilities":[]})).unwrap()).unwrap();
+        fs::write(other_dir.path().join("main.js"), "export default () => {}").unwrap();
+        let other = store
+            .stage(&Candidate::capture(other_dir.path()).unwrap())
+            .unwrap();
+        store.prepare("other", 0, &other, "two").unwrap();
+        store.commit("other", "two").unwrap();
+        (counter, other)
+    }
+
+    fn edit_catalog(root: &std::path::Path, edit: impl FnOnce(&mut Value)) {
+        let path = root.join("catalog.json");
+        let mut catalog: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        edit(&mut catalog);
+        fs::write(&path, serde_json::to_vec(&catalog).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_record_outside_the_library_is_set_aside_and_the_rest_opens() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = dunce::canonicalize(root.path()).unwrap();
+        let (counter, _) = two_installed(&root_path);
+        let guid = Store::open(root_path.clone())
+            .unwrap()
+            .get("counter")
+            .instance
+            .unwrap()
+            .guid;
+        // Not in this library either (else it is taken from here,
+        // `a_moved_library_keeps_its_packages`).
+        fs::remove_dir_all(&counter.directory).unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        edit_catalog(&root_path, |catalog| {
+            catalog["installed"]["counter"]["current"]["directory"] =
+                elsewhere.path().to_string_lossy().into();
+        });
+        let store = Store::open(root_path.clone()).unwrap();
+        assert_eq!(
+            store.quarantined(),
+            [Quarantined {
+                section: "installed",
+                id: "counter".into(),
+                reason: "package directory is outside this library".into(),
+            }]
+        );
+        assert!(store.get("counter").current.is_none());
+        assert!(store.get("other").current.is_some());
+        // Its data stays reachable: the instance is retired.
+        assert_eq!(store.dormant()[&guid].id, "counter");
+        // The record is kept as it was read.
+        let kept: Value =
+            serde_json::from_slice(&fs::read(root_path.join("quarantine.json")).unwrap()).unwrap();
+        assert_eq!(kept["records"][0]["id"], "counter");
+        assert_eq!(
+            kept["records"][0]["entry"]["current"]["directory"],
+            elsewhere.path().to_string_lossy().as_ref()
+        );
+        drop(store);
+        // The catalog was rewritten without it: it opens clean next time.
+        assert!(Store::open(root_path).unwrap().quarantined().is_empty());
+    }
+
+    #[test]
+    fn a_moved_library_keeps_its_packages() {
+        let first = tempfile::tempdir().unwrap();
+        let first_path = dunce::canonicalize(first.path()).unwrap();
+        two_installed(&first_path);
+        let moved = tempfile::tempdir().unwrap();
+        let moved_path = dunce::canonicalize(moved.path()).unwrap();
+        fs::write(
+            moved_path.join("catalog.json"),
+            fs::read(first_path.join("catalog.json")).unwrap(),
+        )
+        .unwrap();
+        fs::create_dir(moved_path.join("packages")).unwrap();
+        for entry in fs::read_dir(first_path.join("packages")).unwrap() {
+            let entry = entry.unwrap();
+            copy_tree(&entry.path(), &{
+                let target = moved_path.join("packages").join(entry.file_name());
+                fs::create_dir(&target).unwrap();
+                target
+            })
+            .unwrap();
+        }
+        // One copy changed on the way: that one is set aside.
+        let other = Store::open(first_path)
+            .unwrap()
+            .get("other")
+            .current
+            .unwrap();
+        fs::write(
+            moved_path
+                .join("packages")
+                .join(&other.digest)
+                .join("main.js"),
+            "changed",
+        )
+        .unwrap();
+        let store = Store::open(moved_path.clone()).unwrap();
+        let counter = store.get("counter").current.unwrap();
+        assert_eq!(
+            counter.directory,
+            moved_path.join("packages").join(&counter.digest)
+        );
+        assert_eq!(store.quarantined().len(), 1);
+        assert_eq!(store.quarantined()[0].id, "other");
+        assert!(store.get("other").current.is_none());
+    }
+
+    #[test]
+    fn unreadable_records_and_unknown_fields_are_set_aside() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = dunce::canonicalize(root.path()).unwrap();
+        two_installed(&root_path);
+        edit_catalog(&root_path, |catalog| {
+            catalog["installed"]["other"]["revision"] = "two".into();
+            catalog["installed"]["bad id!"] = catalog["installed"]["counter"].clone();
+            catalog["operations"]["bad op!"] = serde_json::json!({"status":"committed"});
+            catalog["lastCommit"]["counter"] = "bad op!".into();
+            catalog["futureField"] = true.into();
+        });
+        let store = Store::open(root_path.clone()).unwrap();
+        let mut aside = store
+            .quarantined()
+            .iter()
+            .map(|q| format!("{} {}", q.section, q.id))
+            .collect::<Vec<_>>();
+        aside.sort();
+        assert_eq!(
+            aside,
+            [
+                "catalog futureField",
+                "installed bad id!",
+                "installed other",
+                "lastCommit counter",
+                "operations bad op!",
+            ]
+        );
+        assert!(store.get("counter").current.is_some());
+        assert!(store.operations().contains_key("one"));
+        drop(store);
+        assert!(Store::open(root_path).unwrap().quarantined().is_empty());
+    }
+
+    #[test]
+    fn a_broken_interrupted_install_is_set_aside_and_its_receipt_ends() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = dunce::canonicalize(root.path()).unwrap();
+        let mut store = Store::open(root_path.clone()).unwrap();
+        let (_dir, first) = candidate("1.0.0");
+        let package = store.stage(&first).unwrap();
+        store.prepare("counter", 0, &package, "first").unwrap();
+        drop(store);
+        edit_catalog(&root_path, |catalog| {
+            catalog["pending"]["counter"]["target"]["digest"] = "0".repeat(64).into();
+        });
+        let store = Store::open(root_path).unwrap();
+        assert!(store.pending().is_empty());
+        assert_eq!(store.quarantined()[0].section, "pending");
+        assert_eq!(store.operations()["first"]["status"], "failed");
+    }
+
+    #[test]
+    fn a_catalog_that_is_not_json_still_fails() {
+        let root = tempfile::tempdir().unwrap();
+        fs::write(root.path().join("catalog.json"), "not json").unwrap();
+        assert!(Store::open(root.path().into()).is_err());
     }
 }

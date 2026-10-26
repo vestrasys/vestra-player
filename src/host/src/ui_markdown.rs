@@ -877,9 +877,10 @@ fn trace_cache(cache: &Cache) {
     if std::env::var_os("VESTRA_UI_PROPERTY_TRACE").is_some()
         && COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32
     {
-        eprintln!(
+        diag!(
             "ui.markdown parsed={} reused={}",
-            cache.parsed, cache.reused
+            cache.parsed,
+            cache.reused
         );
     }
 }

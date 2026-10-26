@@ -5,3 +5,13 @@ disallowed-methods = [
   { path = "std::fs::canonicalize", reason = "use dunce::canonicalize (no \\\\?\\ prefix on Windows)" },
   { path = "std::path::Path::canonicalize", reason = "use dunce::canonicalize (no \\\\?\\ prefix on Windows)" },
 ]
+# A GUI-subsystem host's stderr is often a pipe whose reader may be gone, and
+# the std print macros panic then (the release host aborts). Diagnostics use
+# `diag!` (src/diag.rs), which drops a failed write; the host writes nothing
+# to stdout.
+disallowed-macros = [
+  { path = "std::eprintln", reason = "use diag! (src/diag.rs): eprintln! panics on a closed stderr" },
+  { path = "std::eprint", reason = "use diag! (src/diag.rs): eprint! panics on a closed stderr" },
+  { path = "std::println", reason = "the host writes nothing to stdout; diagnostics use diag! (src/diag.rs)" },
+  { path = "std::print", reason = "the host writes nothing to stdout; diagnostics use diag! (src/diag.rs)" },
+]

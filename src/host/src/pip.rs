@@ -122,7 +122,7 @@ impl<S: Surface> PictureInPicture<S> {
         if let Some(surface) = &self.surface {
             match surface.push_rgb(width, height, rgb) {
                 Ok(()) => self.fed = true,
-                Err(error) => eprintln!("pip: {error}"),
+                Err(error) => diag!("pip: {error}"),
             }
         }
     }
@@ -142,7 +142,7 @@ impl<S: Surface> PictureInPicture<S> {
         }
         match surface.push_surface(frame) {
             Ok(()) => (self.fed, self.gpu_frame) = (true, Some(sequence)),
-            Err(error) => eprintln!("pip: {error}"),
+            Err(error) => diag!("pip: {error}"),
         }
     }
     /// `window.setPictureInPicture { on }`. `Ok(Some)`: answered now;

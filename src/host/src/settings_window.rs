@@ -83,6 +83,36 @@ pub struct Settings {
     current: Option<String>,
     /// The page set changed while the window is open: rebuild it.
     stale: bool,
+    /// Registrations whose page compiles on the `settings-check` thread:
+    /// (request, page, initial properties refused). The reply waits for it.
+    checking: Vec<(Reply, Page, Vec<RpcError>)>,
+    /// The `settings-check` thread's queue: (page serial, options window
+    /// source with that page alone).
+    checker: Option<mpsc::Sender<(u64, String)>>,
+}
+
+/// Compiles each registered page on its own on a thread of its own, so that
+/// a broken page fails its own registration (and not the shared window)
+/// without the compile, 60–160 ms each, holding the UI thread: at start-up
+/// the plugins register 8 pages, and the ticks that answered them took up to
+/// a second. The result comes back as `Event::SettingsChecked`.
+fn spawn_checker(events: mpsc::Sender<Event>) -> Option<mpsc::Sender<(u64, String)>> {
+    let (sender, receiver) = mpsc::channel::<(u64, String)>();
+    std::thread::Builder::new()
+        .name("settings-check".into())
+        .spawn(move || {
+            for (serial, source) in receiver {
+                let result = composition::build(source, "OptionsWindow")
+                    .map(|_| ())
+                    .map_err(|e| format!("{e:#}"));
+                if events.send(Event::SettingsChecked(serial, result)).is_err() {
+                    return;
+                }
+            }
+        })
+        .map_err(|error| diag!("settings-check thread: {error}"))
+        .ok()?;
+    Some(sender)
 }
 
 /// Category index, order, plugin id, page id.
@@ -241,6 +271,7 @@ impl Settings {
         open.order.get(index).copied()
     }
     pub fn remove_owner(&mut self, owner: u64) -> bool {
+        self.checking.retain(|(reply, ..)| reply.owner != owner);
         let before = self.pages.len();
         self.pages.retain(|p| p.owner != owner);
         let changed = self.pages.len() != before;
@@ -288,7 +319,14 @@ impl Host {
                         .filter(|o| o.abs() <= 1_000_000)
                         .ok_or_else(|| RpcError::invalid("order: an integer within ±1000000"))?,
                 };
-                if self.settings.page(owner, &id).is_some() {
+                let checking = || {
+                    self.settings
+                        .checking
+                        .iter()
+                        .map(|(_, page, _)| page)
+                        .filter(|p| p.owner == owner)
+                };
+                if self.settings.page(owner, &id).is_some() || checking().any(|p| p.id == id) {
                     return Err(RpcError::invalid(format!("page {id} already exists")));
                 }
                 if self
@@ -297,6 +335,7 @@ impl Host {
                     .iter()
                     .filter(|p| p.owner == owner)
                     .count()
+                    + checking().count()
                     >= MAX_PAGES
                 {
                     return Err(RpcError::invalid("a plugin has at most 8 settings pages"));
@@ -326,13 +365,26 @@ impl Host {
                     properties,
                 };
                 // Compile the page alone, so a broken page fails its own
-                // registration instead of the shared window.
-                composition::build(source(&[&page])?, "OptionsWindow")
-                    .map_err(|e| RpcError::new("ui-prepare", format!("{e:#}")))?;
-                self.settings.pages.push(page);
-                self.settings.stale |= self.settings.open.is_some();
-                self.report_refused(owner, refused);
-                Ok(Some(Value::Null))
+                // registration instead of the shared window: on the
+                // `settings-check` thread (`spawn_checker`); the reply waits.
+                let checked = source(&[&page])?;
+                if self.settings.checker.is_none() {
+                    self.settings.checker = spawn_checker(self.events.clone());
+                }
+                let queued =
+                    self.settings.checker.as_ref().is_some_and(|checker| {
+                        checker.send((page.serial, checked.clone())).is_ok()
+                    });
+                if !queued {
+                    // No thread: compiled here, as before.
+                    self.settings.checker = None;
+                    composition::build(checked, "OptionsWindow")
+                        .map_err(|e| RpcError::new("ui-prepare", format!("{e:#}")))?;
+                    self.settings_add(page, refused);
+                    return Ok(Some(Value::Null));
+                }
+                self.settings.checking.push((reply.clone(), page, refused));
+                Ok(None)
             }
             "settings.unregister" => {
                 let id = params_page(params)?.to_owned();
@@ -439,7 +491,7 @@ impl Host {
                     Err(error) => {
                         // Checked when written (`check_property`): an image
                         // removed since. Logged and reported to the plugin.
-                        eprintln!("settings property {}/{name}: {}", page.key(), error.message);
+                        diag!("settings property {}/{name}: {}", page.key(), error.message);
                         reports.push((page.owner, crate::ui_error(&error)));
                     }
                 }
@@ -585,6 +637,39 @@ impl Host {
             }
         }
     }
+    fn settings_add(&mut self, page: Page, refused: Vec<RpcError>) {
+        let owner = page.owner;
+        self.settings.pages.push(page);
+        self.settings.stale |= self.settings.open.is_some();
+        self.report_refused(owner, refused);
+    }
+    /// A page's compile on the `settings-check` thread finished: the
+    /// registration is answered now (dropped if its plugin stopped since).
+    pub(super) fn settings_checked(
+        &mut self,
+        serial: u64,
+        result: std::result::Result<(), String>,
+    ) {
+        let Some(index) = self
+            .settings
+            .checking
+            .iter()
+            .position(|(_, page, _)| page.serial == serial)
+        else {
+            return;
+        };
+        let (reply, page, refused) = self.settings.checking.remove(index);
+        if !self.plugins.contains_key(&reply.owner) {
+            return;
+        }
+        match result {
+            Ok(()) => {
+                self.settings_add(page, refused);
+                self.respond(reply, Ok(Value::Null));
+            }
+            Err(message) => self.respond(reply, Err(RpcError::new("ui-prepare", message))),
+        }
+    }
     /// Pages added or removed while the window is open: rebuild it.
     pub(super) fn settings_tick(&mut self) {
         if self.settings.stale
@@ -593,7 +678,7 @@ impl Host {
                 .settings_build()
                 .and_then(|()| self.settings_select(None))
         {
-            eprintln!("host.error settings window: {error:#}");
+            diag!("host.error settings window: {error:#}");
             self.settings.stale = false;
         }
     }
@@ -807,7 +892,7 @@ mod tests {
                 }
             }
             draw();
-            eprintln!("shown with every global changed: {}", shown.component);
+            diag!("shown with every global changed: {}", shown.component);
         }
         instance
     }

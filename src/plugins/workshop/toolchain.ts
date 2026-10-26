@@ -18,6 +18,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { baseEnvironment, runNode, type RunResult } from "./run.ts";
 import { zip, type ZipEntry } from "./zip.ts";
 
@@ -75,6 +76,12 @@ export const TIMEOUTS = { typecheck: 90_000, test: 90_000, check: 120_000, pack:
 const MAX_RESULT = 12_000;
 
 const json = (value: unknown) => JSON.stringify(value, null, 1);
+/** The last lines of a child's output (where a crash says why), at most 4000 characters. */
+const tail = (text: string) => text.trim().split(/\r?\n/).slice(-40).join("\n").slice(-4000);
+/** One flag for NODE_OPTIONS: in double quotes, where a backslash escapes the next character. */
+export const nodeOption = (flag: string) => `"${flag.replace(/[\\"]/g, "\\$&")}"`;
+/** For a summary: the exit code when the CLI failed without its usual report. */
+const unexplained = (report: { exitCode?: number | null }) => (report.exitCode === undefined ? "" : ` (the plugin CLI exited with code ${report.exitCode} without a report; its stderr is below)`);
 const result = (ok: boolean, summary: string, details?: unknown): ToolResult => {
   let text = details === undefined ? summary : `${summary}\n${json(details)}`;
   if (text.length > MAX_RESULT) text = `${text.slice(0, MAX_RESULT)}\n… (output too long, cut)`;
@@ -307,8 +314,8 @@ export class Toolchain {
    * NODE_PATH, which a development checkout has), the SDK copy, the project
    * and the session's tsconfig.json, and writes only its scratch folder; no
    * network, workers, addons or WASI. Child processes are allowed because the
-   * type checker is one (`tsc`, this Node), and Node passes the same flags on
-   * to it (NODE_OPTIONS). The only other child the CLI starts is `npm ci` for
+   * type checker is one (`tsc`, this Node), and it inherits the same flags
+   * through NODE_OPTIONS (see cli()). The only other child the CLI starts is `npm ci` for
    * dependencies, which packageProblems() refuses before.
    *
    * build and pack do not, yet: they copy files with fs.cp, which under the
@@ -330,9 +337,18 @@ export class Toolchain {
       // Trusted code on fixed arguments; it never runs the project's code
       // (bundling and npm installs are refused before, see packageProblems()).
       const permissions = command === "check" ? await this.confined(directory, session, tmp) : [];
-      return await runNode([...permissions, path.join(this.sdk, "bin", "vestra-plugin.mjs"), command, directory, ...extra], {
+      // ES module imports in the SDK find vendor/ too (see worker/vendor-resolve.ts).
+      const resolver = pathToFileURL(await fs.realpath(path.join(this.packageDir, "worker", "vendor-resolve.ts"))).href;
+      // The flags go in NODE_OPTIONS, each quoted. Given as arguments, Node
+      // hands the permission flags on to the type checker child in a
+      // NODE_OPTIONS it writes itself, unquoted: a space in a path
+      // ("C:\Program Files\Vestra Player\…", a user name) splits the
+      // --allow-fs-read and tsc may not read its own files. A NODE_OPTIONS
+      // that is set is passed on as it is.
+      const env = { ...this.cliEnvironment(tmp), NODE_OPTIONS: [...permissions, `--import=${resolver}`].map(nodeOption).join(" ") };
+      return await runNode([path.join(this.sdk, "bin", "vestra-plugin.mjs"), command, directory, ...extra], {
         cwd: directory,
-        env: this.cliEnvironment(tmp),
+        env,
         timeoutMs: TIMEOUTS[command as keyof typeof TIMEOUTS] ?? 120_000,
         signal,
       });
@@ -354,7 +370,20 @@ export class Toolchain {
       .split(/\r?\n/)
       .map((line) => /: hint: (.*)$/.exec(line)?.[1])
       .filter((x): x is string => !!x);
-    return { errors: errors.slice(0, 50), errorCount: errors.length, problems, hints };
+    const report: { errors: typeof errors; errorCount: number; problems: string[]; hints: string[]; exitCode?: number | null; stderr?: string; stdout?: string } = {
+      errors: errors.slice(0, 50),
+      errorCount: errors.length,
+      problems,
+      hints,
+    };
+    // A failure the CLI did not explain in its usual lines (it crashed,
+    // could not start, or printed something else): never an empty "failed".
+    if (run.code !== 0 && !errors.length && !problems.length) {
+      report.exitCode = run.code;
+      report.stderr = tail(run.stderr) || "(empty)";
+      if (run.stdout.trim()) report.stdout = tail(run.stdout);
+    }
+    return report;
   }
 
   /** `what`: the step, as in "Type check cancelled". */
@@ -418,7 +447,7 @@ export class Toolchain {
       if (stop) return stop;
       const report = this.cliReport(run, directory);
       if (run.code === 0) return result(true, `Type check passed (${/\((\d+) files?\)/.exec(run.stdout)?.[1] ?? "?"} files)`, report.hints.length ? { hints: report.hints } : undefined);
-      const summary = report.errorCount ? `Type check failed: ${report.errorCount} error(s)` : "Check failed";
+      const summary = report.errorCount ? `Type check failed: ${report.errorCount} error(s)` : `Check failed${unexplained(report)}`;
       return result(false, summary, report);
     });
   }
@@ -481,7 +510,7 @@ export class Toolchain {
       if (stop) return stop;
       const report = this.cliReport(run, directory);
       const warnings = [...rules.warnings, ...report.hints];
-      if (run.code !== 0) return result(false, report.errorCount ? `Check failed: ${report.errorCount} type error(s)` : "Check failed", { ...report, warnings });
+      if (run.code !== 0) return result(false, report.errorCount ? `Check failed: ${report.errorCount} type error(s)` : `Check failed${unexplained(report)}`, { ...report, warnings });
       return result(true, "Check passed (manifest, strict type check, build). The player compiles and checks Slint at install.", warnings.length ? { warnings } : undefined);
     });
   }
@@ -502,7 +531,7 @@ export class Toolchain {
         const report = this.cliReport(run, directory);
         return report.errorCount
           ? { ...result(false, `Packing failed: ${report.errorCount} type error(s)`, report), say: { code: "pack-type-errors", args: [String(report.errorCount)] } }
-          : { ...result(false, "Packing failed", report), say: { code: "pack-failed", args: [] } };
+          : { ...result(false, `Packing failed${unexplained(report)}`, report), say: { code: "pack-failed", args: [] } };
       }
       const packed = /packed (.+\.vxp) \((\d+) bytes, sha256 ([0-9a-f]{64})\)/.exec(run.stdout);
       const version = JSON.parse(await fs.readFile(path.join(directory, "manifest.json"), "utf8")).version as string;

@@ -253,7 +253,7 @@ test("J07: uninstall asks, can remove the data, and reports", async () => {
   await emit(host, "uninstall");
   const asked = host.confirms.at(-1)!;
   assert.equal(asked.destructive, true);
-  assert.equal(asked.checkbox, "Also delete its settings and data");
+  assert.equal(asked.checkbox, "Also delete its settings and data?");
   assert.equal(host.confirmTexts.at(-1)!.message, "Uninstall vestra.audio?");
   assert.deepEqual(host.packageCalls, [{ method: "uninstall", id: "vestra.audio", removeData: true }]);
   assert.equal(row(host, "vestra.audio"), undefined);
@@ -339,7 +339,7 @@ test("Simplified Chinese: the page's words are the old ones", async () => {
     ["Error", "Warning", "Note", "Package", "Data folder", "Capabilities", "Unavailable", "(none)"].map((t) => zh(t)),
     ["失败原因", "提示", "说明", "包目录", "数据目录", "能力", "不可用", "（无）"],
   );
-  assert.equal(zh("Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"), "内置插件：随播放器安装和更新，只能停用，不能卸载");
+  assert.equal(zh("Built-in plugin: installed and updated with the player; cannot be uninstalled or disabled"), "内置插件：随播放器安装和更新，不能卸载，也不能停用");
   assert.equal(zh("Development load: disabling lasts only for this run; cannot be uninstalled"), "开发加载：停用只在本次运行有效；不能卸载");
   // Buttons and tips.
   assert.deepEqual(
@@ -347,7 +347,7 @@ test("Simplified Chinese: the page's words are the old ones", async () => {
     ["启用", "停用", "重新加载", "卸载…", "打开数据目录"],
   );
   assert.equal(zh("Plugin Manager cannot disable itself"), "插件管理不能停用自身");
-  assert.equal(zh("Built-in plugins can only be disabled"), "内置插件只能停用");
+  assert.equal(zh("Built-in plugins come with the player and cannot be uninstalled or disabled"), "内置插件随播放器提供，不能卸载，也不能停用");
   assert.equal(zh("Only installed plugins can be uninstalled"), "只能卸载已安装的插件");
   // Messages.
   assert.equal(zh("Uninstall {0}: {1} ({2})", ["vestra.audio", zh("change status\u0004Failed"), "busy"]), "卸载 vestra.audio：失败（busy）");
@@ -373,12 +373,12 @@ test("Simplified Chinese: the page's words are the old ones", async () => {
     detail: "将从已安装的插件中移除它。它的快捷键修改会保留，重新安装后恢复。",
     confirm: "卸载",
     cancel: host.confirmTexts.at(-1)!.cancel,
-    checkbox: "同时删除它的设置与数据",
+    checkbox: "同时删除它的设置与数据？",
   });
   assert.equal(host.osd.at(-1), "已卸载 vestra.audio");
 });
 
-test("built-in plugins: disable and enable, no Roll Back, and Uninstall… is off with a hint", async () => {
+test("built-in plugins: Disable and Uninstall… are off with a hint, no Roll Back; a disabled one can be enabled", async () => {
   const host = new TestHost();
   await start(host, (root) => [
     info("vestra.subtitles", {
@@ -392,7 +392,9 @@ test("built-in plugins: disable and enable, no Roll Back, and Uninstall… is of
   await emit(host, "select", "vestra.subtitles");
   assert.equal(props(host)["can-uninstall"], false);
   assert.equal(props(host)["uninstall-tip"], "builtin");
-  assert.equal(props(host)["can-toggle"], true);
+  assert.equal(props(host)["toggle-enables"], false);
+  assert.equal(props(host)["can-toggle"], false);
+  assert.equal(props(host)["toggle-tip"], "builtin");
   assert.equal(props(host)["can-reload"], true);
   assert.ok(!("can-rollback" in props(host)));
   assert.equal(props(host)["can-open"], true);
@@ -412,10 +414,20 @@ test("built-in plugins: disable and enable, no Roll Back, and Uninstall… is of
   await emit(host, "uninstall");
   assert.equal(host.confirms.length, asked);
   assert.deepEqual(host.packageCalls, []);
-  // Disabling works as for any plugin.
-  host.dialogAnswers.push({ confirmed: true, checked: false });
+  // Nor does Disable.
   await emit(host, "toggle");
-  assert.deepEqual(host.packageCalls, [{ method: "setEnabled", id: "vestra.subtitles", enabled: false }]);
+  assert.equal(host.confirms.length, asked);
+  assert.deepEqual(host.packageCalls, []);
+  // One left disabled (before built-ins could not be) can be enabled again.
+  host.packages.find((p) => p.id === "vestra.subtitles")!.state = "disabled";
+  host.setPackages(host.packages);
+  await host.settle(WAIT);
+  assert.equal(props(host)["toggle-enables"], true);
+  assert.equal(props(host)["can-toggle"], true);
+  assert.equal(props(host)["toggle-tip"], "");
+  await emit(host, "toggle");
+  assert.equal(host.confirms.length, asked);
+  assert.deepEqual(host.packageCalls, [{ method: "setEnabled", id: "vestra.subtitles", enabled: true }]);
   // Its own row keeps its own hint, built in or not.
   await emit(host, "select", "vestra.plugins");
   assert.equal(props(host)["uninstall-tip"], "self");

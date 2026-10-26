@@ -473,7 +473,7 @@ export async function uninstall(store: Store, item: Item) {
     detail: msg("Its menus, windows and processing effects are removed immediately."),
     confirm: "Uninstall",
     destructive: true,
-    checkbox: "Also delete its settings and data",
+    checkbox: "Also delete its settings and data?",
   });
   if (!answer?.confirmed) return;
   if (!store.begin(msg("Uninstalling {}…", item.name))) return;
@@ -483,7 +483,7 @@ export async function uninstall(store: Store, item: Item) {
       answer.checked ? msg("Uninstalled {} (data deleted)", item.name) : msg("Uninstalled {} (data kept)", item.name),
     );
   } catch (error) {
-    store.report(errorCode(error) === "unsupported" ? msg("Built-in plugins can only be disabled") : failureText(store, error, info.id), true);
+    store.report(errorCode(error) === "unsupported" ? msg("Built-in plugins cannot be uninstalled") : failureText(store, error, info.id), true);
   } finally {
     store.end();
   }

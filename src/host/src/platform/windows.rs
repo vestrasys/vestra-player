@@ -54,7 +54,7 @@ fn title_bar(window: &winit::window::Window, dark: bool) {
     if let RawWindowHandle::Win32(handle) = handle.as_raw()
         && !vestra_win32::set_dark_title_bar(handle.hwnd.get(), dark)
     {
-        eprintln!("platform: the system refused a dark/light title bar");
+        diag!("platform: the system refused a dark/light title bar");
     }
 }
 
@@ -74,7 +74,7 @@ pub fn shown(window: &slint::Window) {
     let mut future = std::pin::pin!(future);
     let mut context = std::task::Context::from_waker(std::task::Waker::noop());
     let std::task::Poll::Ready(Ok(native)) = future.as_mut().poll(&mut context) else {
-        eprintln!("platform: a shown window has no winit window yet");
+        diag!("platform: a shown window has no winit window yet");
         return;
     };
     let id = u64::from(native.id()) as i64;

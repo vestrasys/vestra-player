@@ -808,7 +808,7 @@ impl Table {
                         .filter_map(|text| match parse(text) {
                             Ok(input) => Some(input),
                             Err(error) => {
-                                eprintln!("binding overlay {key}: {error}");
+                                diag!("binding overlay {key}: {error}");
                                 None
                             }
                         })
@@ -866,7 +866,7 @@ impl Table {
         }
         for conflict in &conflicts {
             if !self.conflicts.contains(conflict) {
-                eprintln!("{conflict}");
+                diag!("{conflict}");
             }
         }
         self.conflicts = conflicts;

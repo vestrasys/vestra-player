@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.plugins 0.2.5\n"
+"Project-Id-Version: vestra.plugins 0.2.7\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -8,55 +8,55 @@ msgstr ""
 msgid "Plugin Manager…"
 msgstr ""
 
-#: manager.ts:55 manifest.json
+#: manager.ts:56 manifest.json
 msgid "Plugin Manager"
 msgstr ""
 
-#: manager.ts:226 ui/plugins.slint:146
+#: manager.ts:229 ui/plugins.slint:146
 msgid "Enabled {}"
 msgstr ""
 
-#: manager.ts:230
+#: manager.ts:234
 msgid "Disable {}?"
 msgstr ""
 
-#: manager.ts:233
+#: manager.ts:237
 msgid "Its menus, shortcuts, windows and effects are removed at once; open media keeps playing. A development-loaded plugin stays disabled only for this run."
 msgstr ""
 
-#: manager.ts:233
+#: manager.ts:237
 msgid "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time."
 msgstr ""
 
-#: manager.ts:236 ui/plugins.slint:257 ui/plugins.slint:351
+#: manager.ts:240 ui/plugins.slint:257 ui/plugins.slint:351
 msgid "Disable"
 msgstr ""
 
-#: manager.ts:242 ui/plugins.slint:147
+#: manager.ts:246 ui/plugins.slint:147
 msgid "Disabled {}"
 msgstr ""
 
-#: manager.ts:254 ui/plugins.slint:148
+#: manager.ts:258 ui/plugins.slint:148
 msgid "Reloaded {}"
 msgstr ""
 
-#: manager.ts:264
+#: manager.ts:268
 msgid "Uninstall {}?"
 msgstr ""
 
-#: manager.ts:266
+#: manager.ts:270
 msgid "It is removed from the installed plugins. Its shortcut changes are kept and come back if you install it again."
 msgstr ""
 
-#: manager.ts:267
+#: manager.ts:271
 msgid "Uninstall"
 msgstr ""
 
-#: manager.ts:269
-msgid "Also delete its settings and data"
+#: manager.ts:273
+msgid "Also delete its settings and data?"
 msgstr ""
 
-#: manager.ts:279 ui/plugins.slint:149
+#: manager.ts:283 ui/plugins.slint:149
 msgid "Uninstalled {}"
 msgstr ""
 
@@ -245,7 +245,7 @@ msgid "Development-loaded plugins cannot be uninstalled"
 msgstr ""
 
 #: ui/plugins.slint:104 ui/plugins.slint:113
-msgid "Built-in plugins can only be disabled"
+msgid "Built-in plugins come with the player and cannot be uninstalled or disabled"
 msgstr ""
 
 #: ui/plugins.slint:105
@@ -303,7 +303,7 @@ msgid "Development load: disabling lasts only for this run; cannot be uninstalle
 msgstr ""
 
 #: ui/plugins.slint:133
-msgid "Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"
+msgid "Built-in plugin: installed and updated with the player; cannot be uninstalled or disabled"
 msgstr ""
 
 #: ui/plugins.slint:134

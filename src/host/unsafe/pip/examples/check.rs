@@ -18,6 +18,8 @@
 //! no black or white bands.
 //!
 //! `cargo run -p vestra-pip --example check [-- --frame 1560x878 --area 780x671]`
+// A terminal program: it prints (`clippy.toml` disallows that in the host).
+#![allow(clippy::disallowed_macros)]
 #[cfg(target_os = "macos")]
 fn main() {
     use objc2::{MainThreadMarker, MainThreadOnly};

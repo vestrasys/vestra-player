@@ -98,7 +98,10 @@ export component MarksWindow inherits Window {
     in property <int> edit-number;
     callback select(string);
     callback activate(string);
-    callback search(string);
+    // The search text, then how this language names an untitled chapter and
+    // bookmark, with "{}" where the number goes: the list matches the names
+    // it shows.
+    callback search(string, string, string);
     callback commit-time(string);
     callback commit-title(string);
     callback add();
@@ -123,7 +126,7 @@ export component MarksWindow inherits Window {
             font-size: Theme.font-body;
             placeholder-text: @tr("Search by title");
             text <=> root.search-text;
-            edited(text) => { root.search(text); }
+            edited(text) => { root.search(text, @tr("Chapter {}", "{}"), @tr("Bookmark {}", "{}")); }
         }
         if root.file-changed && root.media: Label {
             height: Theme.label-height;

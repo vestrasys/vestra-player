@@ -36,7 +36,7 @@ pub fn begin(what: &str) {
         id,
         start: Instant::now(),
     });
-    eprintln!("keys: trace #{id} +0.0 ms {what}");
+    diag!("keys: trace #{id} +0.0 ms {what}");
 }
 
 /// One hop of the current trace, if a press started one recently.
@@ -50,7 +50,7 @@ pub fn mark(hop: &str) {
     if let Some(trace) = trace.as_ref()
         && let Some(elapsed) = Some(trace.start.elapsed()).filter(|e| *e <= SPAN)
     {
-        eprintln!(
+        diag!(
             "keys: trace #{} +{:.1} ms {hop}",
             trace.id,
             elapsed.as_secs_f64() * 1000.

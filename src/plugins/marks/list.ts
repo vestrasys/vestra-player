@@ -22,6 +22,9 @@ type Status = {
 };
 const NO_STATUS: Status = { kind: "" };
 
+/** `"书签 {}"`, 3 → `"书签 3"`. */
+const named = (name: string, number: number) => name.replace("{}", String(number));
+
 /**
  * B21 Chapters and Bookmarks window (H): chapters (read only) and bookmarks
  * by time, filtered by the search box; double-click jumps; a selected
@@ -37,6 +40,8 @@ export class ListWindow {
   readonly #window;
   #selected: string | null = null;
   #filter = "";
+  /** How the window names an untitled chapter / bookmark, `{}` for the number (it sends them with the search). */
+  #names = { chapter: "Chapter {}", bookmark: "Bookmark {}" };
   #status: Status = NO_STATUS;
   #rows: { key: string; rows: Row[] } = { key: "", rows: [] };
 
@@ -48,8 +53,11 @@ export class ListWindow {
     const window = (this.#window = plugin.windows.create("ui/marks.slint"));
     window.on("select", (rowId: string) => this.#select(rowId));
     window.on("activate", (rowId: string) => this.#activate(rowId));
-    window.on("search", (text: string) => {
+    window.on("search", (text: string, chapter: string, bookmark: string) => {
       this.#filter = text.trim().toLowerCase();
+      // The window's translated names for an untitled row (`@tr` in marks.slint).
+      if (typeof chapter === "string" && chapter.includes("{}")) this.#names.chapter = chapter;
+      if (typeof bookmark === "string" && bookmark.includes("{}")) this.#names.bookmark = bookmark;
     });
     window.on("commitTitle", (text: string) => this.#commitTitle(text));
     window.on("commitTime", (text: string) => this.#commitTime(text));
@@ -111,8 +119,8 @@ export class ListWindow {
         time: precise(chapter.start),
         title: chapterTitle(chapter) ?? "",
         number: i + 1,
-        // The search matches the English "Chapter N" / "Bookmark N" of an untitled row.
-        match: chapterTitle(chapter) ?? `Chapter ${i + 1}`,
+        // An untitled row matches by the name the window shows ("Chapter N" in English).
+        match: chapterTitle(chapter) ?? named(this.#names.chapter, i + 1),
         selected: false,
       })),
       ...this.#bookmarks.items.map((bookmark) => ({
@@ -123,7 +131,7 @@ export class ListWindow {
         time: precise(bookmark.time),
         title: bookmark.title,
         number: bookmark.number,
-        match: bookmark.title || `Bookmark ${bookmark.number}`,
+        match: bookmark.title || named(this.#names.bookmark, bookmark.number),
         selected: false,
       })),
     ];

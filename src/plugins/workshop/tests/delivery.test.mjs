@@ -192,3 +192,30 @@ test("the GitHub name in the settings is the prefix of new plugins", async () =>
   await ai.until(() => ai.props["project-title"] === "demo · octocat.demo 0.1.0", "owner prefix");
   await ai.stop();
 });
+
+test("the card shows once the turn has ended, not while the agent still works; a later turn hides it until it ends", async () => {
+  const mock = await server(
+    scripted({
+      做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo", title: "演示" } }] }, { text: ["做好了。"], delayMs: 1500 }],
+      改一下: [{ toolCalls: [{ name: "write", args: { path: "local.demo/README.md", content: "# 演示\n" } }] }, { text: ["改好了。"], delayMs: 1500 }],
+    }),
+  );
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
+  await ai.ask("做个插件", { wait: false });
+  // The project exists (the scaffold's result went back to the model); the turn goes on.
+  await ai.until(() => mock.chats.length === 2, "scaffold done");
+  await ai.until(() => ai.props["project-title"] === "演示 · local.demo 0.1.0", "project known");
+  assert.equal(ai.props.busy, true);
+  assert.equal(ai.props["has-project"], false, "no card while the agent works");
+  await ai.until(() => ai.props.busy === false && ai.props.rows.at(-1).state !== 0, "reply");
+  await ai.until(() => ai.props["has-project"] === true, "card after the turn");
+
+  await ai.ask("改一下", { wait: false });
+  await ai.until(() => ai.props.busy === true, "busy");
+  assert.equal(ai.props["has-project"], false, "hidden again while the agent edits the plugin");
+  await ai.until(() => mock.chats.length === 4, "edit done");
+  assert.equal(ai.props["has-project"], false);
+  await ai.until(() => ai.props.busy === false && ai.props.rows.at(-1).state !== 0, "second reply");
+  await ai.until(() => ai.props["has-project"] === true, "card after the second turn");
+  await ai.stop();
+});

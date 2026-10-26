@@ -53,20 +53,20 @@ pub fn install(locale: &str) {
     let debug = std::env::var_os("VESTRA_DEBUG_FONTS").is_some_and(|v| v == "1");
     for chain in &chains {
         if debug {
-            eprintln!(
+            diag!(
                 "fonts: {} fallback: {}",
                 chain.script.code(),
                 chain.families.join(", ")
             );
         }
         if chain.system == 0 && !chain.families.is_empty() {
-            eprintln!(
+            diag!(
                 "fonts: no system font for {} text; using the bundled {}",
                 chain.script.code(),
                 chain.families.join(", ")
             );
         } else if chain.families.is_empty() {
-            eprintln!(
+            diag!(
                 "fonts: no font for {} text; it will show as boxes",
                 chain.script.code()
             );

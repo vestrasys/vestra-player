@@ -31,8 +31,9 @@ export const PLUGINS_PAGE = "plugins.manage";
  * disabled or failed, development loads) from `packages.list`,
  * following `packages.onChange`. The selected plugin can be disabled or
  * enabled, reloaded, uninstalled (asks, optionally with its data) and its
- * data folder opened. Its own row cannot be disabled; built-in plugins can
- * be disabled but not uninstalled.
+ * data folder opened. Its own row cannot be disabled; built-in plugins come
+ * with the player and can be neither uninstalled nor disabled (a disabled
+ * one can still be enabled).
  */
 export class PluginsPage {
   readonly #plugin: Plugin;
@@ -136,6 +137,8 @@ export class PluginsPage {
     const busy = !!info && (this.#busy.has(info.id) || info.state === "starting");
     const installed = info?.origin === "installed";
     const canAct = !!info && !busy;
+    // Built-ins cannot be disabled; one that is disabled can still be enabled.
+    const builtinOn = !!info?.builtin && info.state !== "disabled";
     return {
       rows: this.#list.map(
         (p): Row => ({
@@ -153,9 +156,9 @@ export class PluginsPage {
       hasSelection: !!info,
       details: info ? this.#details(info) : [],
       toggleEnables: info?.state === "disabled",
-      canToggle: canAct && !self,
+      canToggle: canAct && !self && !builtinOn,
       // Tips are codes: self, busy, builtin, not-installed.
-      toggleTip: self ? "self" : busy ? "busy" : "",
+      toggleTip: self ? "self" : busy ? "busy" : builtinOn ? "builtin" : "",
       canReload: canAct && !self && info.state !== "disabled",
       canUninstall: canAct && !self && installed && !info.builtin,
       uninstallTip: self ? "self" : busy ? "busy" : info?.builtin ? "builtin" : info && !installed ? "not-installed" : "",
@@ -225,6 +228,7 @@ export class PluginsPage {
         await this.#plugin.packages.setEnabled(id, true);
         this.#done({ kind: "enabled", id }, this.#plugin.osd.show("Enabled {}", [id]));
       });
+    if (info.builtin) return;
     const answer = await this.#ask(() =>
       this.#plugin.dialogs.confirm({
         message: "Disable {}?",
@@ -266,7 +270,7 @@ export class PluginsPage {
         detail: "It is removed from the installed plugins. Its shortcut changes are kept and come back if you install it again.",
         confirm: "Uninstall",
         destructive: true,
-        checkbox: "Also delete its settings and data",
+        checkbox: "Also delete its settings and data?",
       }),
     );
     if (!answer?.confirmed) return;

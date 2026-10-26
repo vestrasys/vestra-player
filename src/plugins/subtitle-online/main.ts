@@ -1,5 +1,6 @@
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Plugin, PlayerState, TextArg } from "@vestra-player/sdk";
 import { convert } from "./formats.ts";
 import { archiveKind, keywords, movieHash, unzipSubtitles, urlTitle } from "./media.ts";
@@ -12,7 +13,15 @@ import { Assrt, OpenSubtitles, ServiceError } from "./services.ts";
 import type { Credentials, Query, Result, Service, ServiceId } from "./services.ts";
 
 const isRemote = (source: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(source) && !/^file:\/\//i.test(source);
-const localPath = (source: string) => (/^file:\/\//i.test(source) ? decodeURIComponent(new URL(source).pathname) : source);
+/** A local source as a path: `file:///C:/a.mkv` is `C:\a.mkv` on Windows, `file:///a.mkv` is `/a.mkv` elsewhere. */
+const localPath = (source: string) => {
+  if (!/^file:\/\//i.test(source)) return source;
+  try {
+    return fileURLToPath(source);
+  } catch {
+    return decodeURIComponent(new URL(source).pathname); // e.g. an encoded `/` in a name
+  }
+};
 
 /** The line for a failure. */
 function errorText(e: unknown): Line {

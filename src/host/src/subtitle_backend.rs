@@ -859,7 +859,7 @@ impl Subtitles {
             self.style_baseline = Some(before.clone());
         }
         if std::env::var_os("VESTRA_STYLE_DIAGNOSTICS").is_some() {
-            eprintln!("SUBTITLE_STYLE_APPLY desired={properties:?} before={before:?}");
+            diag!("SUBTITLE_STYLE_APPLY desired={properties:?} before={before:?}");
         }
         for (name, value) in &properties {
             if let Err(error) = mpv.set_property(name, value.as_str()) {

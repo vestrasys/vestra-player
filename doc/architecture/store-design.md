@@ -408,7 +408,7 @@ Principle: on failure nothing is changed (the host's install is atomic); errors 
 | `cancelled` | Installation cancelled |
 | `tooLate` | Can no longer cancel; the installation continues |
 | Uninstall succeeded | Uninstalled <name> (data kept / data deleted) |
-| Uninstall `unsupported` | Built-in plugins can only be disabled (list refreshed) |
+| Uninstall `unsupported` | Built-in plugins cannot be uninstalled or disabled (list refreshed; 2026-10-26 ruling) |
 | Uninstall `missing` | This plugin no longer exists |
 | Disk write failed | Couldn't write the download file: <reason> |
 

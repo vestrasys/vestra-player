@@ -1,5 +1,8 @@
 //! `plugin.app`: the build's git short hash and the linked Slint version.
 #![forbid(unsafe_code)]
+// Cargo reads its directives from stdout (`clippy.toml` disallows the print
+// macros for the host itself, `src/diag.rs`).
+#![allow(clippy::disallowed_macros)]
 use std::process::Command;
 
 #[path = "src/i18n/po.rs"]

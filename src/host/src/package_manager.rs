@@ -8,6 +8,9 @@ use std::collections::{BTreeSet, VecDeque};
 
 /// Validated candidates kept at once (each is a staged copy on disk).
 const MAX_CANDIDATES: usize = 32;
+/// At start-up, how long one tick may spend starting installed plugins
+/// (`start_queued`).
+const START_BUDGET: std::time::Duration = std::time::Duration::from_millis(25);
 pub struct Manager {
     store: Store,
     /// Secret names per plugin service (`secrets.*`), for deleting them.
@@ -20,6 +23,8 @@ pub struct Manager {
     next: u64,
     receipts: BTreeMap<String, Value>,
     booted: bool,
+    /// Installed plugins still to start at start-up (`start_queued`).
+    to_start: VecDeque<String>,
     /// The installation's built-in plugins (`builtin.json`) by id; empty
     /// when it has none (a development run).
     builtins: BTreeMap<String, builtin::Builtin>,
@@ -76,12 +81,12 @@ impl Manager {
             Some(Ok(builtins)) => {
                 let ids = builtins.keys().cloned().collect();
                 if let Err(error) = store.sync_builtins(&ids) {
-                    eprintln!("built-in plugins: {error:#}");
+                    diag!("built-in plugins: {error:#}");
                 }
                 builtins
             }
             Some(Err(error)) => {
-                eprintln!("built-in plugins: {error:#}");
+                diag!("built-in plugins: {error:#}");
                 BTreeMap::new()
             }
             None => BTreeMap::new(),
@@ -96,6 +101,7 @@ impl Manager {
             next: 0,
             receipts,
             booted: false,
+            to_start: VecDeque::new(),
             builtins,
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
@@ -459,7 +465,7 @@ impl Host {
                     self.load_package(&directory, &manifest, DataKey::Instance(instance.guid))
                 });
             if let Err(error) = started {
-                eprintln!("installed package {id} failed to start: {error}");
+                diag!("installed package {id} failed to start: {error}");
                 self.failures
                     .insert(id.clone(), error.to_string().chars().take(512).collect());
             }
@@ -498,7 +504,7 @@ impl Host {
         match cleanup::spawn(library, cleanup::Work::Unreferenced(referenced)) {
             Ok(running) => self.packages.cleanup = Some(running),
             // Left for the next run; the directories are harmless.
-            Err(error) => eprintln!("package library: {error}"),
+            Err(error) => diag!("package library: {error}"),
         }
     }
     /// An operation freed `digest` (the version an upgrade replaced, an
@@ -527,7 +533,7 @@ impl Host {
         }
         match cleanup::spawn(self.packages.store.library(), cleanup::Work::Only(digests)) {
             Ok(running) => self.packages.cleanup = Some(running),
-            Err(error) => eprintln!("package library: {error}"),
+            Err(error) => diag!("package library: {error}"),
         }
     }
     /// A running built-in plugin: shipped with the player and running from
@@ -551,7 +557,7 @@ impl Host {
     /// Until the installed plugins started and while a built-in activates,
     /// other plugins' mounts wait (slot_claims).
     pub(super) fn builtins_starting(&mut self) -> bool {
-        if !self.packages.booted {
+        if !self.packages_started() {
             return true;
         }
         let now = self.now_ms();
@@ -566,6 +572,37 @@ impl Host {
                 self.activations.status(owner, now),
                 Ok(package_activation::Status::Pending { .. })
             )
+        })
+    }
+    /// A built-in still activating that may mount a panel (it declares
+    /// `ui.mount`) and has not asked yet: at start-up the shell waits a
+    /// little for it, so that the built-ins' panels come in one compile
+    /// (`prepare_mount_tick`).
+    pub(super) fn builtin_mount_expected(&mut self) -> bool {
+        if !self.packages_started() {
+            return true;
+        }
+        let now = self.now_ms();
+        let owners = self
+            .plugins
+            .iter()
+            .filter(|(owner, plugin)| {
+                plugin.allows("ui.mount")
+                    && !self.mounts.contains_key(owner)
+                    && !self.mount_queue.iter().any(|c| c.reply.owner == **owner)
+                    && !self
+                        .preparing
+                        .as_ref()
+                        .is_some_and(|(_, c)| c.reply.owner == **owner)
+            })
+            .map(|(owner, _)| *owner)
+            .collect::<Vec<_>>();
+        owners.into_iter().any(|owner| {
+            self.is_builtin(owner)
+                && matches!(
+                    self.activations.status(owner, now),
+                    Ok(package_activation::Status::Pending { .. })
+                )
         })
     }
     fn running(&self, id: &str) -> Option<u64> {
@@ -674,6 +711,26 @@ impl Host {
             };
             list.insert(id.clone(), entry);
         }
+        // Installed records the library set aside at start (`Quarantined`):
+        // failed, with the reason, until installed again.
+        for record in self.packages.store.quarantined() {
+            if record.section != "installed" || list.contains_key(&record.id) {
+                continue;
+            }
+            let error = format!(
+                "the plugin library's record of this plugin was set aside: {}",
+                record.reason
+            );
+            list.insert(
+                record.id.clone(),
+                json!({"id":record.id,"version":null,
+                    "origin":"installed","state":"failed","error":error,
+                    "capabilities":[],"directory":"",
+                    "builtin":false,"source":null,
+                    "dataDirectory":null,"warnings":[],
+                    "display":{"name":null,"punchline":null,"description":null,"tags":[]}}),
+            );
+        }
         for (id, (directory, manifest)) in &self.development {
             if list.contains_key(id) {
                 continue;
@@ -707,6 +764,17 @@ impl Host {
             return Err(RpcError::new("busy", "the package is being installed"));
         }
         let record = self.packages.store.get(id);
+        // User ruling 2026-10-26: users manage third-party plugins only;
+        // a built-in always runs (a development load of its id aside).
+        if !enabled
+            && record.instance.as_ref().is_some_and(|i| i.builtin)
+            && !self.development.contains_key(id)
+        {
+            return Err(RpcError::new(
+                "unsupported",
+                format!("{id} is a built-in plugin: built-in plugins cannot be disabled"),
+            ));
+        }
         let installed = self.packages.runs_from(id, &record);
         let reserved = check_reserved(id, record.instance.as_ref());
         let key = record.instance.map(|i| DataKey::Instance(i.guid));
@@ -827,7 +895,7 @@ impl Host {
                 index.purge(&service, platform::secret_delete);
             });
         if let Err(error) = spawned {
-            eprintln!("secrets purge: {error}");
+            diag!("secrets purge: {error}");
         }
     }
     /// Retired instances dropped because the dormant list was full can never
@@ -840,7 +908,32 @@ impl Host {
     /// The installed packages, built-ins included, were started (the first
     /// `package_tick`).
     pub(super) fn packages_started(&self) -> bool {
-        self.packages.booted
+        self.packages.booted && self.packages.to_start.is_empty()
+    }
+    /// Start the next installed plugins of the start-up queue, in their
+    /// order, until `START_BUDGET` of this tick is spent (at least one).
+    /// Starting a plugin spawns its Node process, several milliseconds each
+    /// on Windows; all of them in one tick held the UI thread for 150 ms.
+    fn start_queued(&mut self) {
+        if self.packages.to_start.is_empty() {
+            return;
+        }
+        let began = std::time::Instant::now();
+        let mut started = 0;
+        while let Some(id) = self.packages.to_start.pop_front() {
+            self.start_installed(Some(&id));
+            started += 1;
+            if began.elapsed() >= START_BUDGET {
+                break;
+            }
+        }
+        if self.frame_log.is_some() {
+            diag!(
+                "vestra packages: {started} started in {:.1} ms, {} to go",
+                began.elapsed().as_secs_f64() * 1000.,
+                self.packages.to_start.len()
+            );
+        }
     }
     pub(super) fn package_tick(&mut self) {
         self.purge_dropped_secrets();
@@ -902,9 +995,10 @@ impl Host {
             // kept, and any leftovers, go on the cleanup thread.
             self.collect_garbage();
             // Start committed packages and the built-ins independently of
-            // the authoring plugin.
-            self.start_installed(None);
+            // the authoring plugin: queued, a few per tick (`START_BUDGET`).
+            self.packages.to_start = self.packages.store.installed().into_keys().collect();
         }
+        self.start_queued();
         self.cleanup_tick();
         let keys = self
             .packages
@@ -931,7 +1025,7 @@ impl Host {
                 "committed" | "failed" | "cancelled" | "failedDegraded"
             ) {
                 if let Err(error) = self.packages.store.save_operation(&op.id, &op.result) {
-                    eprintln!("operation receipt: {error}");
+                    diag!("operation receipt: {error}");
                 }
                 self.packages
                     .receipts
@@ -1278,7 +1372,7 @@ mod builtin {
                 let path = root.join(&entry.directory);
                 let manifest = check(&root, &path, &entry).map_err(|error| format!("{error:#}"));
                 if let Err(error) = &manifest {
-                    eprintln!("built-in plugin {}: {error}", entry.id);
+                    diag!("built-in plugin {}: {error}", entry.id);
                 }
                 let directory = dunce::canonicalize(&path).unwrap_or(path);
                 (
@@ -1386,9 +1480,9 @@ mod cleanup {
                 match result {
                     Ok(0) => {}
                     Ok(removed) => {
-                        eprintln!("package library: {removed} unused package(s) removed in {ms} ms")
+                        diag!("package library: {removed} unused package(s) removed in {ms} ms")
                     }
-                    Err(error) => eprintln!("package library: {error:#}"),
+                    Err(error) => diag!("package library: {error:#}"),
                 }
             })?;
         Ok(Running { handle, only })
@@ -1827,7 +1921,7 @@ mod tests {
     }
 
     #[test]
-    fn builtins_are_disabled_never_uninstalled_and_third_party_plugins_are() {
+    fn builtins_are_never_disabled_nor_uninstalled_and_third_party_plugins_are() {
         let root = tempfile::tempdir().unwrap();
         let mut store = Store::open(root.path().into()).unwrap();
         store
@@ -1836,12 +1930,28 @@ mod tests {
         let builtin = store.get("vestra.audio");
         let error = uninstallable("vestra.audio", &builtin, true, Some(builtin.revision));
         assert_eq!(error.unwrap_err().code, "unsupported");
-        // Disabling works and survives a restart.
-        store.set_disabled("vestra.audio", true).unwrap();
+        // User ruling 2026-10-26: not disabled either.
+        assert!(store.set_disabled("vestra.audio", true).is_err());
+        // A built-in an earlier player let the user disable runs again; the
+        // catalog is written once.
         drop(store);
+        let path = dunce::canonicalize(root.path())
+            .unwrap()
+            .join("catalog.json");
+        let mut catalog: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        catalog["disabled"] = json!(["vestra.audio"]);
+        std::fs::write(&path, serde_json::to_vec(&catalog).unwrap()).unwrap();
+        let store = Store::open(root.path().into()).unwrap();
+        assert!(!store.disabled().contains("vestra.audio"));
+        drop(store);
+        let bytes = std::fs::read(&path).unwrap();
         let mut store = Store::open(root.path().into()).unwrap();
-        assert!(store.disabled().contains("vestra.audio"));
-        store.set_disabled("vestra.audio", false).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes, "written once");
+        // A third-party plugin can be disabled.
+        let other = install(&mut store, "c.d", "1.0.0", Source::File, false).unwrap();
+        assert!(other.instance.is_some_and(|i| !i.builtin));
+        store.set_disabled("c.d", true).unwrap();
+        assert!(store.disabled().contains("c.d"));
         // A third-party plugin: refused only with a stale revision.
         let installed = install(&mut store, "a.b", "1.0.0", Source::File, false).unwrap();
         assert_eq!(
@@ -1904,8 +2014,9 @@ mod tests {
     /// previous, `seededVersion`), a third-party plugin upgraded once
     /// (previous kept) and an interrupted seed. Opening it with this player
     /// drops the packages from built-in records and every previous version
-    /// in one catalog write, keeps instances, data and the disabled flag,
-    /// and leaves the files to the cleanup thread.
+    /// in one catalog write, keeps instances and data, clears a built-in's
+    /// disabled flag (built-ins cannot be disabled), and leaves the files to
+    /// the cleanup thread.
     #[test]
     fn a_library_from_0_5_migrates_to_builtins_in_place_without_previous_versions() {
         let root = tempfile::tempdir().unwrap();
@@ -1958,7 +2069,8 @@ mod tests {
         assert!(audio.current.is_none() && audio.previous.is_none());
         assert_eq!(instance.guid, guid, "data and secrets stay with the GUID");
         assert!(instance.builtin && instance.seeded_version.is_none());
-        assert!(store.disabled().contains("vestra.audio"));
+        // Built-ins cannot be disabled (user ruling 2026-10-26): it runs again.
+        assert!(!store.disabled().contains("vestra.audio"));
         let youtube_now = store.get("zysilm.youtube");
         assert!(youtube_now.previous.is_none());
         assert_eq!(
@@ -2046,7 +2158,6 @@ mod tests {
             .unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), bytes, "nothing to change");
         // A built-in the installation dropped is retired with its data...
-        store.set_disabled("vestra.a", true).unwrap();
         store.sync_builtins(&ids(&["vestra.b"])).unwrap();
         assert!(store.get("vestra.a").instance.is_none());
         assert_eq!(store.dormant()[&a.guid].id, "vestra.a");
@@ -2081,7 +2192,7 @@ mod tests {
         for round in 0..3 {
             let lap = std::time::Instant::now();
             composition::compile_json(&[], events.clone(), 1).unwrap();
-            eprintln!("shell (round {round}): {} ms", lap.elapsed().as_millis());
+            diag!("shell (round {round}): {} ms", lap.elapsed().as_millis());
         }
         let dir = Path::new(&dir);
         let mut total = 0;
@@ -2104,8 +2215,87 @@ mod tests {
             }
             let took = lap.elapsed().as_millis();
             total += took;
-            eprintln!("slint {}: {} files, {took} ms", entry.id, files.len());
+            diag!("slint {}: {} files, {took} ms", entry.id, files.len());
         }
-        eprintln!("slint all built-ins: {total} ms");
+        diag!("slint all built-ins: {total} ms");
+    }
+
+    /// The shell compiles at start-up (not run by default;
+    /// `VESTRA_SLINT_BENCH` names a `resources/plugins` directory): the
+    /// main window with nothing mounted, then the built-ins' three panels
+    /// (playback bottom bar, playlist sidebar, visualizer backdrop) mounted
+    /// one compile each, as they arrive, against all three in one compile.
+    #[test]
+    #[ignore]
+    fn startup_mount_bench() {
+        let Some(dir) = std::env::var_os("VESTRA_SLINT_BENCH") else {
+            return;
+        };
+        let dir = Path::new(&dir);
+        let spec = |owner, plugin: &str, file: &str, component: &str, global: &str, slot| {
+            composition::CompileSpec {
+                owner,
+                file: dunce::canonicalize(dir.join(plugin).join(file)).unwrap(),
+                component: component.into(),
+                global: Some(global.into()),
+                slot,
+            }
+        };
+        let specs = [
+            spec(
+                2,
+                "vestra.playback",
+                "ui/bar.slint",
+                "PlaybackBar",
+                "PlaybackBridge",
+                composition::Slot::Bottom,
+            ),
+            spec(
+                3,
+                "vestra.playlist",
+                "ui/sidebar.slint",
+                "PlaylistSidebar",
+                "PlaylistBridge",
+                composition::Slot::Sidebar,
+            ),
+            spec(
+                4,
+                "vestra.visualizer",
+                "ui/backdrop.slint",
+                "Backdrop",
+                "Art",
+                composition::Slot::Backdrop,
+            ),
+        ];
+        let (events, _receiver) = std::sync::mpsc::sync_channel(16);
+        let compile = |specs: &[composition::CompileSpec]| {
+            let lap = std::time::Instant::now();
+            composition::compile_json(specs, events.clone(), 1).unwrap();
+            lap.elapsed().as_millis()
+        };
+        diag!("main window, nothing mounted: {} ms", compile(&[]));
+        let one_each = (1..=specs.len())
+            .map(|n| compile(&specs[..n]))
+            .collect::<Vec<_>>();
+        diag!(
+            "one compile per mount: {one_each:?} ms, longest {} ms, total {} ms",
+            one_each.iter().max().unwrap(),
+            one_each.iter().sum::<u128>()
+        );
+        diag!("all three in one compile: {} ms", compile(&specs));
+        for round in 0..3 {
+            let lap = std::time::Instant::now();
+            let source = composition::shell_source(&specs).unwrap();
+            let sourced = lap.elapsed().as_millis();
+            let definition = composition::build(source, "HostWindow").unwrap();
+            let built = lap.elapsed().as_millis();
+            let _instance = definition.create().unwrap();
+            let created = lap.elapsed().as_millis();
+            diag!(
+                "round {round}: source {sourced} ms, compile {} ms, create {} ms",
+                built - sourced,
+                created - built
+            );
+        }
     }
 }

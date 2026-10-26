@@ -30,12 +30,21 @@ test("the work folder: inside is fine, outside, links and hidden names are refus
   await assert.rejects(work.writeFile(".pi/settings.json", "{}"), /names starting with "\."/);
   await assert.rejects(work.writeFile("src/.env", "x"), /names starting with "\."/);
 
-  await fs.symlink(path.join(root, "secret.txt"), path.join(root, "work/link.txt"));
-  await fs.symlink(root, path.join(root, "work/up"));
-  await assert.rejects(work.readFile("link.txt"), /symbolic link/);
-  await assert.rejects(work.writeFile("link.txt", "x"), /symbolic link/);
+  // A link to a folder outside. "junction" is a directory junction on Windows,
+  // which needs no privilege; elsewhere the type is ignored (a symbolic link).
+  await fs.symlink(root, path.join(root, "work/up"), "junction");
+  await assert.rejects(work.readFile("up/secret.txt"), /symbolic link/);
   await assert.rejects(work.writeFile("up/secret.txt", "x"), /symbolic link/);
+  await assert.rejects(work.writeFile("up/new.txt", "x"), /symbolic link/);
+  await assert.rejects(work.mkdir("up/sub"), /symbolic link/);
+  await assert.rejects(work.readdir("up"), /symbolic link/);
+  await assert.rejects(work.walk("up", 100), /symbolic link/);
+  await assert.rejects(work.isDirectory("up"), /symbolic link/);
+  await assert.rejects(work.readFile("up"), /symbolic link/);
+  await assert.rejects(work.writeFile("up", "x"), /symbolic link/);
   assert.equal(await fs.readFile(path.join(root, "secret.txt"), "utf8"), "outside");
+  await assert.rejects(fs.access(path.join(root, "new.txt")));
+  await assert.rejects(fs.access(path.join(root, "sub")));
   assert.deepEqual(await work.readdir("."), ["src"]);
   assert.deepEqual(await work.walk(".", 100), ["src/main.ts"]);
 
@@ -45,14 +54,34 @@ test("the work folder: inside is fine, outside, links and hidden names are refus
   await work.writeFile("src/debug.test.ts", "x");
   assert.equal(await work.remove("src/debug.test.ts"), "src/debug.test.ts");
   await assert.rejects(work.remove("src"), /not empty/);
-  await assert.rejects(work.remove("link.txt"), /symbolic link/);
   await assert.rejects(work.remove("up/secret.txt"), /symbolic link/);
+  await assert.rejects(work.remove("up"), /symbolic link/);
+  await fs.access(path.join(root, "work/up"));
   await assert.rejects(work.remove("../secret.txt"), /outside the working folder/);
   await assert.rejects(work.remove("."), /working folder itself/);
   assert.equal(await fs.readFile(path.join(root, "secret.txt"), "utf8"), "outside");
   await work.remove("src/main.ts");
   await work.remove("src");
   assert.deepEqual(await work.readdir("."), []);
+});
+
+test("a symbolic link to a file outside is refused for read, write and delete", async (t) => {
+  const { root, work } = await folder();
+  // A file link has no junction form; creating one can need a privilege
+  // (Windows without Developer Mode refuses it with EPERM).
+  try {
+    await fs.symlink(path.join(root, "secret.txt"), path.join(root, "work/link.txt"), "file");
+  } catch (error) {
+    if (error.code !== "EPERM" && error.code !== "EACCES") throw error;
+    t.skip(`this system does not let the test create a file symbolic link (${error.code})`);
+    return;
+  }
+  await assert.rejects(work.readFile("link.txt"), /symbolic link/);
+  await assert.rejects(work.writeFile("link.txt", "x"), /symbolic link/);
+  await assert.rejects(work.remove("link.txt"), /symbolic link/);
+  assert.equal(await fs.readFile(path.join(root, "secret.txt"), "utf8"), "outside");
+  assert.deepEqual(await work.readdir("."), []);
+  assert.deepEqual(await work.walk(".", 100), []);
 });
 
 test("the worker process cannot read outside, spawn, or see the key in its environment", async () => {

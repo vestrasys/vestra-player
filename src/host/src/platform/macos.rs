@@ -492,7 +492,7 @@ pub fn open_url(url: &str) -> std::result::Result<(), RpcError> {
 /// (`vestra-open-files`). Call once on the main thread before the event loop.
 pub fn on_open_files(deliver: impl Fn(Vec<PathBuf>) + 'static) {
     if !vestra_open_files::on_open_files(deliver) {
-        eprintln!("open files: the open-documents handler is not installed");
+        diag!("open files: the open-documents handler is not installed");
     }
 }
 

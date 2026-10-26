@@ -108,7 +108,7 @@ impl Index {
         let mut failed = Vec::new();
         for name in &names {
             if let Err(error) = delete(service, name) {
-                eprintln!(
+                diag!(
                     "secrets {service}: could not delete {name}: {}",
                     error.message
                 );
@@ -161,12 +161,12 @@ fn load(directory: Option<&Path>, service: &str) -> BTreeSet<String> {
         Ok(bytes) => serde_json::from_slice::<Vec<String>>(&bytes)
             .map(|names| names.into_iter().take(MAX_NAMES).collect())
             .unwrap_or_else(|error| {
-                eprintln!("secrets index {}: {error}", path.display());
+                diag!("secrets index {}: {error}", path.display());
                 BTreeSet::new()
             }),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => BTreeSet::new(),
         Err(error) => {
-            eprintln!("secrets index {}: {error}", path.display());
+            diag!("secrets index {}: {error}", path.display());
             BTreeSet::new()
         }
     }
@@ -192,7 +192,7 @@ fn save(directory: Option<&Path>, service: &str, names: &BTreeSet<String>) {
         std::fs::rename(&temporary, &path)
     })();
     if let Err(error) = result {
-        eprintln!("secrets index {}: {error}", path.display());
+        diag!("secrets index {}: {error}", path.display());
     }
 }
 

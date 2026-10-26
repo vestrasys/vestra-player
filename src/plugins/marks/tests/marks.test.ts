@@ -521,12 +521,20 @@ test("B23: held nudges are committed once, after they pause", async () => {
   await at(host, 20);
   await press(host, "]");
   const before = loops(host).length;
-  for (let i = 0; i < 5; i++) await host.press("Ctrl+]");
-  await host.settle();
-  assert.equal(host.osd.at(-1), "A-B loop: 0:10.0 ~ 0:19.5");
-  assert.equal(loops(host).length, before);
-  await host.settle(WAIT);
-  assert.deepEqual(loops(host).slice(before), [{ a: 10, b: 19.5 }]);
+  // Each press settles the test host (several timer rounds; one round is
+  // ~16 ms on Windows), so the burst needs a pause longer than five presses.
+  const loopCommit = timing.loopCommit;
+  timing.loopCommit = 1000;
+  try {
+    for (let i = 0; i < 5; i++) await host.press("Ctrl+]");
+    await host.settle();
+    assert.equal(host.osd.at(-1), "A-B loop: 0:10.0 ~ 0:19.5");
+    assert.equal(loops(host).length, before);
+    await host.settle(timing.loopCommit + WAIT);
+    assert.deepEqual(loops(host).slice(before), [{ a: 10, b: 19.5 }]);
+  } finally {
+    timing.loopCommit = loopCommit;
+  }
   for (let i = 0; i < 3; i++) await host.press("Ctrl+Alt+[");
   await host.settle(WAIT);
   assert.deepEqual(loops(host).at(-1), { a: 9.7, b: 19.2 });
@@ -924,6 +932,21 @@ test("zh-Hans: untitled chapters and bookmarks read as before the migration; boo
   );
   await press(host, "H");
   const window = host.window("marks");
+  // The search finds untitled rows by the name the window shows: its
+  // `@tr("Bookmark {}", "{}")` / `@tr("Chapter {}", "{}")` come with the text.
+  const search = async (text: string) => {
+    window.emit("search", text, host.translate("Chapter {}", ["{}"]), host.translate("Bookmark {}", ["{}"]));
+    await host.settle();
+    return (window.props.rows as WindowRow[]).map((r) => [r.chapter, r.number]);
+  };
+  assert.deepEqual(await search("书签"), [[false, 1]]);
+  assert.deepEqual(await search("章节 6"), [
+    [true, 6],
+    [true, 60],
+    [true, 61],
+  ]);
+  assert.deepEqual(await search("Bookmark"), []);
+  assert.equal((await search("")).length, 62);
   window.emit("select", (window.props.rows as WindowRow[]).find((r) => !r.chapter)!.rowId);
   window.emit("remove");
   await host.settle(WAIT);

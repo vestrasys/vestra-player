@@ -8,6 +8,13 @@ import { createPlugin, HostError } from "@vestra-player/sdk/runtime";
 import type { Json, Transport } from "@vestra-player/sdk/runtime";
 import type { Plugin } from "@vestra-player/sdk";
 
+// stderr is the player's own (inherited), often a pipe of whoever started
+// the player, whose reader may be gone: a failed write is an `error` event
+// that would stop this process, even from console.error. Logs are best
+// effort (the player's side: host/src/diag.rs).
+process.stderr.on("error", () => {});
+// stdout is the pipe to the player: when it breaks, the player is gone.
+process.stdout.on("error", () => void stop());
 // stdout is reserved for JSONL. Plugin logs use stderr.
 console.log = (...args: unknown[]) => console.error(...args);
 console.info = (...args: unknown[]) => console.error(...args);

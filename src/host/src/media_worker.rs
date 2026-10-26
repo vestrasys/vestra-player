@@ -271,7 +271,7 @@ impl Drop for ReapedChild {
         if !self.reaped
             && let Err(error) = self.kill_wait()
         {
-            eprintln!("media worker could not reap child: {error}");
+            diag!("media worker could not reap child: {error}");
         }
     }
 }

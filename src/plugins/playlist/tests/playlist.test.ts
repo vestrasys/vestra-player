@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Json } from "@vestra-player/sdk";
@@ -63,12 +63,15 @@ function fakeProbe() {
 /** Checks the texts as a Simplified Chinese user sees them (the plugin's old texts); `"en"` for the English source. */
 async function start(probe = fakeProbe(), locale: "en" | "zh-Hans" = "zh-Hans") {
   const directory = await mkdtemp(join(tmpdir(), "vestra-playlist-"));
-  const a = join(directory, "a.mp4"),
-    b = join(directory, "b.mp4"),
-    c = join(directory, "c.mp4"),
-    alias = join(directory, "alias.mp4");
+  const media = join(directory, "media");
+  await mkdir(media);
+  const a = join(media, "a.mp4"),
+    b = join(media, "b.mp4"),
+    c = join(media, "c.mp4"),
+    // Another path to a, through a directory link ("junction" needs no privilege on Windows).
+    alias = join(directory, "linked", "a.mp4");
   for (const file of [a, b, c]) await writeFile(file, "plugin test, no media decode claim");
-  await symlink(a, alias);
+  await symlink(media, join(directory, "linked"), "junction");
   const host = new TestHost();
   settleFiles(host);
   host.tools.handle("ffprobe", probe.handler);
@@ -1031,7 +1034,7 @@ test("ffprobe fills unplayed durations and the total; the player's duration over
     await app.host.settle();
     assert.equal(app.rows()[0].duration, "01:05");
     assert.equal(app.prop("total"), "1:01:05");
-    // Cached by realpath + mtime: re-adding the same file (via a symlink) after removal does not spawn again.
+    // Cached by realpath + mtime: re-adding the same file after removal does not spawn again.
     await app.click(1);
     await app.press("Delete");
     await app.addFiles([app.b]);

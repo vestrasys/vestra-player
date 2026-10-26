@@ -452,7 +452,7 @@ fn trace_reconciliation(mode: &str, rows: usize) {
     if std::env::var_os("VESTRA_UI_PROPERTY_TRACE").is_some()
         && COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32
     {
-        eprintln!("ui.model-update mode={mode} rows={rows}");
+        diag!("ui.model-update mode={mode} rows={rows}");
     }
 }
 

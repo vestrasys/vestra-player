@@ -162,7 +162,7 @@ impl Jobs {
         for worker in self.workers.drain(..) {
             if worker.is_finished() {
                 if worker.join().is_err() {
-                    eprintln!("media worker panicked");
+                    diag!("media worker panicked");
                 }
             } else {
                 pending.push(worker);

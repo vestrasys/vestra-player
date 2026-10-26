@@ -1174,7 +1174,7 @@ export component W inherits Window {
                 .unwrap();
             let before = read("video-width");
             settle_layout(shell.window());
-            eprintln!("sidebar-visible {visible}: {before} before settle_layout");
+            diag!("sidebar-visible {visible}: {before} before settle_layout");
             read("video-width")
         };
         assert_eq!(unsettled(false), 1470.);

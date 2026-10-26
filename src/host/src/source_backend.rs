@@ -442,7 +442,7 @@ impl Sources {
         if mpv.get_property::<String>("audio-device").ok().as_deref() != Some(wanted)
             && let Err(error) = mpv.set_property("audio-device", wanted)
         {
-            eprintln!("host.error audio-device {wanted}: {error}");
+            diag!("host.error audio-device {wanted}: {error}");
         }
         #[cfg(feature = "producer-audio")]
         self.producers.follow_device(target.as_deref());
@@ -1575,7 +1575,7 @@ fn clear_loop(mpv: &Mpv) {
         ("ab-loop-count", "inf"),
     ] {
         if let Err(error) = mpv.set_property(name, value) {
-            eprintln!("host.error {name}: {error}");
+            diag!("host.error {name}: {error}");
         }
     }
 }

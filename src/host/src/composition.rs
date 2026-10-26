@@ -506,16 +506,18 @@ fn deliver_json(sender: &mpsc::SyncSender<JsonCallback>, event: JsonCallback) ->
     match sender.try_send(event) {
         Ok(()) => true,
         Err(mpsc::TrySendError::Full(event)) => {
-            eprintln!(
+            diag!(
                 "composition callback queue full: owner={} callback={}; callback rejected",
-                event.owner, event.callback
+                event.owner,
+                event.callback
             );
             false
         }
         Err(mpsc::TrySendError::Disconnected(event)) => {
-            eprintln!(
+            diag!(
                 "composition callback receiver closed: owner={} callback={}",
-                event.owner, event.callback
+                event.owner,
+                event.callback
             );
             false
         }

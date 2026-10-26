@@ -5,8 +5,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { CUSTOM, customList, listModels, loadProviders, pickListed } from "../providers.ts";
 import { KEY, dataDirectory, server, startAi } from "./fixture.mjs";
+import { listenFetchable } from "./mock-openai.mjs";
 
 const catalog = async () => JSON.parse(await fs.readFile(new URL("../vendor/pi/models.json", import.meta.url), "utf8")).providers;
 
@@ -193,7 +195,7 @@ test("a saved provider that is no longer offered: notice, nothing sent, settings
 test("the model shown is the model used: choosing a provider saves its default and the lists follow", async () => {
   const data = await dataDirectory();
   const ai = await startAi({ data });
-  const providers = loadProviders(new URL("..", import.meta.url).pathname);
+  const providers = loadProviders(fileURLToPath(new URL("..", import.meta.url)));
   const minimax = providers.find((p) => p.id === "minimax");
   // The user picked something else in the list before (a one-way index would stop following).
   ai.page.emit("choose-provider", ai.page.props.providers.indexOf("OpenAI"));
@@ -222,12 +224,12 @@ test("listing styles of built-in providers, and which model to use after a listi
     header = req.headers["x-goog-api-key"];
     res.end(JSON.stringify({ models: [{ name: "models/gemini-9" }, { name: "models/gemini-8" }] }));
   });
-  await new Promise((resolve) => google.listen(0, "127.0.0.1", resolve));
+  await listenFetchable(google);
   assert.deepEqual(await listModels({ style: "google", url: `http://127.0.0.1:${google.address().port}/v1beta/models` }, KEY), ["gemini-8", "gemini-9"]);
   assert.equal(header, KEY);
   google.close();
 
-  const providers = loadProviders(new URL("..", import.meta.url).pathname);
+  const providers = loadProviders(fileURLToPath(new URL("..", import.meta.url)));
   const minimax = providers.find((p) => p.id === "minimax");
   assert.equal(minimax.list.style, "anthropic");
   // A retired model (still in pi's catalog) is replaced by a listed one; a listed current one stays.
@@ -238,7 +240,7 @@ test("listing styles of built-in providers, and which model to use after a listi
 test("a listed model that pi's catalog does not know runs on the provider's endpoint", async () => {
   process.env.PI_OFFLINE = "1";
   process.env.PI_TELEMETRY = "0";
-  process.env.PI_PACKAGE_DIR = new URL("../vendor/pi", import.meta.url).pathname;
+  process.env.PI_PACKAGE_DIR = fileURLToPath(new URL("../vendor/pi", import.meta.url));
   const sdk = await import("../vendor/pi/pi.mjs");
   const { resolveModel } = await import("../worker/models.ts");
   const runtime = await sdk.ModelRuntime.create({ credentials: new sdk.InMemoryCredentialStore(), modelsPath: null, refreshOnCreate: false });

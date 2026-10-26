@@ -11,67 +11,67 @@ msgstr ""
 msgid "Plugin Manager…"
 msgstr "Administrador de complementos…"
 
-#: manager.ts:55 manifest.json
+#: manager.ts:56 manifest.json
 #, x-machine
 msgid "Plugin Manager"
 msgstr "Administrador de complementos"
 
-#: manager.ts:226 ui/plugins.slint:146
+#: manager.ts:229 ui/plugins.slint:146
 #, x-machine
 msgid "Enabled {}"
 msgstr "Activado: {}"
 
-#: manager.ts:230
+#: manager.ts:234
 #, x-machine
 msgid "Disable {}?"
 msgstr "¿Desactivar {}?"
 
-#: manager.ts:233
+#: manager.ts:237
 #, x-machine
 msgid "Its menus, shortcuts, windows and effects are removed at once; open media keeps playing. A development-loaded plugin stays disabled only for this run."
 msgstr "Sus menús, atajos, ventanas y efectos se quitan de inmediato; el medio abierto sigue reproduciéndose. Un complemento cargado en desarrollo solo queda desactivado durante esta sesión."
 
-#: manager.ts:233
+#: manager.ts:237
 #, x-machine
 msgid "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time."
 msgstr "Sus menús, atajos, ventanas y efectos (como el ecualizador, los filtros o el estilo de subtítulos) se quitan de inmediato; el medio abierto sigue reproduciéndose. Sigue desactivado aunque Vestra Player se reinicie; puedes activarlo aquí en cualquier momento."
 
-#: manager.ts:236 ui/plugins.slint:257 ui/plugins.slint:351
+#: manager.ts:240 ui/plugins.slint:257 ui/plugins.slint:351
 #, x-machine
 msgid "Disable"
 msgstr "Desactivar"
 
-#: manager.ts:242 ui/plugins.slint:147
+#: manager.ts:246 ui/plugins.slint:147
 #, x-machine
 msgid "Disabled {}"
 msgstr "Desactivado: {}"
 
-#: manager.ts:254 ui/plugins.slint:148
+#: manager.ts:258 ui/plugins.slint:148
 #, x-machine
 msgid "Reloaded {}"
 msgstr "Recargado: {}"
 
-#: manager.ts:264
+#: manager.ts:268
 #, x-machine
 msgid "Uninstall {}?"
 msgstr "¿Desinstalar {}?"
 
-#: manager.ts:266
+#: manager.ts:270
 #, x-machine
 msgid "It is removed from the installed plugins. Its shortcut changes are kept and come back if you install it again."
 msgstr "Se elimina de los complementos instalados. Sus cambios de atajos se conservan y vuelven si lo instalas de nuevo."
 
-#: manager.ts:267
+#: manager.ts:271
 #, x-machine
 msgid "Uninstall"
 msgstr "Desinstalar"
 
-#: manager.ts:269
+#: manager.ts:273
 #, x-machine
-msgid "Also delete its settings and data"
-msgstr "Eliminar también su configuración y sus datos"
+msgid "Also delete its settings and data?"
+msgstr "¿Eliminar también su configuración y sus datos?"
 
-#: manager.ts:279 ui/plugins.slint:149
+#: manager.ts:283 ui/plugins.slint:149
 #, x-machine
 msgid "Uninstalled {}"
 msgstr "Desinstalado: {}"
@@ -307,8 +307,8 @@ msgstr "Los complementos cargados en desarrollo no se pueden desinstalar"
 
 #: ui/plugins.slint:104 ui/plugins.slint:113
 #, x-machine
-msgid "Built-in plugins can only be disabled"
-msgstr "Los complementos integrados solo se pueden desactivar"
+msgid "Built-in plugins come with the player and cannot be uninstalled or disabled"
+msgstr "Los complementos integrados vienen con el reproductor y no se pueden desinstalar ni desactivar"
 
 #: ui/plugins.slint:105
 #, x-machine
@@ -379,8 +379,8 @@ msgstr "Carga de desarrollo: la desactivación dura solo esta sesión; no se pue
 
 #: ui/plugins.slint:133
 #, x-machine
-msgid "Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"
-msgstr "Complemento integrado: se instala y actualiza con el reproductor; se puede desactivar, pero no desinstalar"
+msgid "Built-in plugin: installed and updated with the player; cannot be uninstalled or disabled"
+msgstr "Complemento integrado: se instala y actualiza con el reproductor; no se puede desinstalar ni desactivar"
 
 #: ui/plugins.slint:134
 #, x-machine

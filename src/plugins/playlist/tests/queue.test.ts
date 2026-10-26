@@ -1,6 +1,6 @@
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Media, PlayerState } from "@vestra-player/sdk";
@@ -41,10 +41,12 @@ function fixture() {
 test("realpath deduplicates same batch and symlink while inaccessible rows remain retryable", async () => {
   const directory = await mkdtemp(join(tmpdir(), "vestra-playlist-"));
   try {
-    const path = join(directory, "a.mp4"),
-      alias = join(directory, "alias.mp4");
+    await mkdir(join(directory, "media"));
+    const path = join(directory, "media", "a.mp4"),
+      // Another path to the same file, through a directory link ("junction" needs no privilege on Windows).
+      alias = join(directory, "linked", "a.mp4");
     await writeFile(path, "not decoded by plugin");
-    await symlink(path, alias);
+    await symlink(join(directory, "media"), join(directory, "linked"), "junction");
     const queue = new Queue(zh.texts);
     const said: Parameters<Queue["say"]>[] = [];
     queue.say = (text, args) => void said.push([text, args]);

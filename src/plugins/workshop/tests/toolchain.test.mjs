@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { Toolchain, checkOwner, parseTap, parseTsc } from "../toolchain.ts";
+import { Toolchain, checkOwner, nodeOption, parseTap, parseTsc } from "../toolchain.ts";
 import { runTool } from "../toolhost.ts";
 import { dataDirectory } from "./fixture.mjs";
 import { unzip } from "./unzip.mjs";
@@ -18,6 +18,63 @@ async function setup() {
   await fs.mkdir(session.work, { recursive: true });
   return { data, session, toolchain: new Toolchain(plugin, data) };
 }
+
+/**
+ * The plugin as the player installs it: what the toolchain runs (vendor/
+ * without pi, worker/vendor-resolve.ts) copied to a folder with spaces in its
+ * path ("C:\Program Files\Vestra Player\…") and no node_modules above it,
+ * with a data folder that has spaces too (a user name).
+ */
+async function installedCopy() {
+  const root = await dataDirectory();
+  const copy = path.join(root, "Vestra Player", "plugins", "vestra.workshop");
+  for (const tree of ["vendor/@vestra-player", "vendor/typescript", "vendor/@types", "vendor/undici-types"]) await fs.cp(path.join(plugin, tree), path.join(copy, tree), { recursive: true });
+  await fs.mkdir(path.join(copy, "worker"));
+  await fs.copyFile(path.join(plugin, "worker/vendor-resolve.ts"), path.join(copy, "worker/vendor-resolve.ts"));
+  const data = path.join(root, "plugin data with spaces");
+  const session = { dir: path.join(data, "sessions", "s-test"), work: path.join(data, "sessions", "s-test", "work") };
+  await fs.mkdir(session.work, { recursive: true });
+  return { copy, session, toolchain: new Toolchain(copy, data) };
+}
+
+test("installed: typecheck, check and pack work from a path with spaces and no node_modules above", async () => {
+  const { session, toolchain } = await installedCopy();
+  assert.equal((await toolchain.scaffold(session, { name: "demo" }, "octocat")).ok, true);
+  const typed = await toolchain.typecheck(session, "octocat.demo");
+  assert.equal(typed.ok, true, typed.text);
+  const checked = await toolchain.check(session, "octocat.demo", "octocat");
+  assert.equal(checked.ok, true, checked.text);
+  const packed = await toolchain.pack(session, "octocat.demo", "octocat");
+  assert.equal(packed.ok, true, packed.text);
+  await fs.access(packed.file);
+  // Still confined: a type error in a file outside the project is not read.
+  const outside = path.join(session.dir, "outside.d.ts");
+  await fs.writeFile(outside, "declare const outside: number;\n");
+  const main = path.join(session.work, "octocat.demo", "main.ts");
+  await fs.writeFile(main, `/// <reference path=${JSON.stringify(outside)} />\n${await fs.readFile(main, "utf8")}export const seen: number = outside;\n`);
+  const denied = await toolchain.typecheck(session, "octocat.demo");
+  assert.equal(denied.ok, false, denied.text);
+  assert.match(denied.text, /TS6053|TS2304/);
+});
+
+test("a CLI that fails without its report: the result has the exit code and stderr, never an empty failure", async () => {
+  const { copy, session, toolchain } = await installedCopy();
+  assert.equal((await toolchain.scaffold(session, { name: "demo" }, "octocat")).ok, true);
+  // The CLI cannot load: it dies with a stack trace and no report lines.
+  await fs.rm(path.join(copy, "vendor/typescript"), { recursive: true });
+  for (const run of [() => toolchain.typecheck(session, "octocat.demo"), () => toolchain.check(session, "octocat.demo", "octocat"), () => toolchain.pack(session, "octocat.demo", "octocat")]) {
+    const failed = await run();
+    assert.equal(failed.ok, false);
+    assert.match(failed.text, /exited with code 1 without a report/);
+    assert.match(failed.text, /"exitCode": 1/);
+    assert.match(failed.text, /"stderr": ".*typescript/s);
+  }
+});
+
+test("NODE_OPTIONS flags keep spaces, quotes and backslashes", () => {
+  assert.equal(nodeOption("--allow-fs-read=C:\\Program Files\\Vestra Player"), '"--allow-fs-read=C:\\\\Program Files\\\\Vestra Player"');
+  assert.equal(nodeOption('--x=a"b'), '"--x=a\\"b"');
+});
 
 test("the GitHub name becomes the id prefix; vestra and local are refused", () => {
   assert.equal(checkOwner(""), "");

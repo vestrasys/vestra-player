@@ -234,7 +234,7 @@ impl Producers {
         self.device = device.map(str::to_owned);
         for p in self.items.values_mut() {
             if let Err(error) = p.audio.retarget(device) {
-                eprintln!("host.error producer audio device: {error:#}");
+                diag!("host.error producer audio device: {error:#}");
             }
         }
     }

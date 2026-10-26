@@ -517,7 +517,7 @@ export component W inherits Window {
         let bytes = serde_json::to_string(&chat(&[last.as_str()]))
             .unwrap()
             .len();
-        eprintln!(
+        diag!(
             "{label}: {ticks} ticks, last message {} KB (value {} KB); ui.set ms p50 {:.2} p95 {:.2} max {:.2} (last 50 ticks p95 {:.2}); frame ms p50 {:.2} p95 {:.2} max {:.2}; parsed {} reused {}",
             last.len() / 1024,
             (history.iter().map(String::len).sum::<usize>() + bytes) / 1024,

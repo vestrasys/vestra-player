@@ -31,6 +31,18 @@ export function executableNames(tool, platform = process.platform, pathext = pro
         .filter((extension) => extension.startsWith("."));
     return [...new Set(extensions)].map((extension) => tool + extension);
 }
+/**
+ * Where a local stream listens: a Unix socket file `<name>.sock` in
+ * `directory` on macOS and Linux; on Windows a named pipe
+ * (`\\.\pipe\<directory's name>-<name>`), which Node's `net` listens on and
+ * connects to by that path (a socket file there fails with `EACCES`).
+ */
+export function localSocketPath(directory, name, platform = process.platform) {
+    if (platform !== "win32")
+        return join(directory, `${name}.sock`);
+    const scope = directory.split(/[\\/]/).filter(Boolean).at(-1) ?? "vestra";
+    return `\\\\.\\pipe\\${scope}-${name}`;
+}
 async function executable(path) {
     try {
         await access(path, constants.X_OK);

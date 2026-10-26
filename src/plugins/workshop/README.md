@@ -28,9 +28,9 @@ When you ask the AI to write a plugin, it first reads the plugin SDK reference (
 | `pack` | Pack | Creates `dist/<id>-<version>.vxp` |
 | `install_plugin` | Install | The player validates it (including Slint), asks for confirmation in a dialog, then installs it (only when you ask) |
 
-The AI is done only when type check, tests and check all pass. Every tool has a time limit and an output limit; clicking "■ Stop" cancels the running tool.
+The AI is done only when type check, tests and check all pass. Every tool has a time limit and an output limit; clicking "■ Stop" cancels the running tool. When the `vestra-plugin` command line fails without its usual report, the tool result carries its exit code and the end of its error output, never an empty failure.
 
-When the chat has a plugin project, a plugin card appears above the input box:
+When the chat has a plugin project, a plugin card appears above the input box once the AI has finished its reply (while it is still working, the card stays hidden; it comes back with the latest state when the reply ends):
 
 - "Install": installs it into the player (the source is recorded as the AI workshop); if a plugin with the same id came from elsewhere, you are asked first whether to replace it. Installing again after a change upgrades the plugin in place and keeps its data. To remove it, use Uninstall… in the Plugin Manager. If, after installing, the plugin's shortcuts are taken by the player or another plugin (the player ignores those keys), both the card and the AI are told; for this the plugin reads the shortcut table (`bindings.manage`, read only; it changes no keys).
 - "Export .vxp": packs the plugin and saves a copy you can share.

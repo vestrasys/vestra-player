@@ -199,9 +199,9 @@ impl Clock {
             let spinning = waited && spin.spinning(began.elapsed());
             let ok = waited && !spinning;
             if !waited {
-                eprintln!("frame pacing: the display clock failed; Slint paces redraws");
+                diag!("frame pacing: the display clock failed; Slint paces redraws");
             } else if spinning {
-                eprintln!(
+                diag!(
                     "frame pacing: the display clock returns without waiting (no real vertical blanks); Slint paces redraws"
                 );
             }

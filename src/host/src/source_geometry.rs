@@ -110,7 +110,7 @@ impl Geometry {
                 let rotation = mpv.get_property::<i64>("video-out-params/rotate");
                 if matches!((width, height, rotation), (Ok(w), Ok(h), Ok(0)) if w == expected.width && h == expected.height)
                 {
-                    eprintln!(
+                    diag!(
                         "source geometry ready entry={} generation={} cycle={} output={}x{} rotate=0",
                         load.0,
                         load.1.stamp.generation,
@@ -133,9 +133,11 @@ impl Geometry {
         };
         match selected_video(&tracks) {
             Some(false) => {
-                eprintln!(
+                diag!(
                     "source geometry ready entry={} generation={} cycle={} no selected video",
-                    load.0, load.1.stamp.generation, load.1.cycle
+                    load.0,
+                    load.1.stamp.generation,
+                    load.1.cycle
                 );
                 self.prepared = Some((load, Preparation::Confirmed));
                 self.publish_gate.store(true, Ordering::Release);
@@ -164,9 +166,15 @@ impl Geometry {
             "@vestra-orientation:lavfi=[{},sidedata=mode=delete:type=DISPLAYMATRIX]",
             expected.transform
         );
-        eprintln!(
+        diag!(
             "source geometry prepare entry={} generation={} cycle={} decoder={}x{} rotate={} filter={}",
-            load.0, load.1.stamp.generation, load.1.cycle, width, height, rotation, filter
+            load.0,
+            load.1.stamp.generation,
+            load.1.cycle,
+            width,
+            height,
+            rotation,
+            filter
         );
         self.prepared = Some((load, Preparation::Failed));
         mpv.command(&["vf", "pre", &filter]).map_err(|error| {

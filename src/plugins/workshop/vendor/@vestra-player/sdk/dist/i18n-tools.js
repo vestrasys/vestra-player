@@ -1,3 +1,11 @@
+var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExtension) || function (path, preserveJsx) {
+    if (typeof path === "string" && /^\.\.?\//.test(path)) {
+        return path.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function (m, tsx, d, ext, cm) {
+            return tsx ? preserveJsx ? ".jsx" : ".js" : d && (!ext || !cm) ? m : (d + ext + "." + cm.toLowerCase() + "js");
+        });
+    }
+    return path;
+};
 /**
  * `vestra-plugin i18n extract` and `vestra-plugin i18n check`, and the
  * catalog step of `vestra-plugin build` (docs/how-to/i18n.md): find the
@@ -16,9 +24,19 @@
  * @module
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, } from "node:fs";
+import { createRequire } from "node:module";
 import { join, relative, sep } from "node:path";
-import ts from "typescript";
+import { pathToFileURL } from "node:url";
 import { compileCatalog, keyOf, LOCALES, parsePo, placeholders, scanSlint, writePo, } from "./i18n.js";
+/**
+ * The SDK's TypeScript dependency, resolved the way the CLI resolves it
+ * (`compiler()` in bin/vestra-plugin.mjs): through `require` resolution from
+ * this package, which also searches `NODE_PATH`. A bare `import` of
+ * "typescript" would search only ancestor `node_modules` directories, so an
+ * SDK copied outside any (the player's AI workshop vendors one, and supplies
+ * TypeScript on `NODE_PATH`) could not start the CLI.
+ */
+const ts = (await import(__rewriteRelativeImportExtension(pathToFileURL(createRequire(import.meta.url).resolve("typescript")).href))).default;
 /** Locales whose plural has one form (`n == 1` and other are the same). */
 const ONE_FORM = new Set(["zh-Hans", "ja", "ko"]);
 export const pluralForms = (language) => ONE_FORM.has(language)
