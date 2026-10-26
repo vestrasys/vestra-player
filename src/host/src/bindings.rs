@@ -514,6 +514,15 @@ pub fn text(input: &Input) -> String {
     text + &input.name
 }
 
+/// Whether a menu may show `input` as a command's shortcut: a key, not a
+/// mouse binding, and no `Cmd` binding unless the system's menus show them
+/// (`platform::MENU_SHOWS_CMD`: on Windows `Cmd` is the Windows key, whose
+/// combinations the system takes, so `host/quit`'s `Cmd+Q` would name a
+/// shortcut that does nothing). The binding itself stays.
+pub fn label_shown(input: &Input, shows_cmd: bool) -> bool {
+    !input.name.starts_with("Mouse:") && (shows_cmd || !input.mods.cmd)
+}
+
 /// Menu text in the running system's style (`platform::KEY_LABELS`):
 /// `Ctrl+O` on Windows and Linux, `⌘O` on macOS.
 pub fn label(input: &Input) -> String {
@@ -956,7 +965,7 @@ impl Table {
             .iter()
             .filter(|(_, target)| target.owner == owner && target.id == id)
             .map(|((_, input), _)| input)
-            .filter(|input| !input.name.starts_with("Mouse:"))
+            .filter(|input| label_shown(input, crate::platform::MENU_SHOWS_CMD))
             .collect();
         // Keep the declaration order of the command's own list.
         let order = |input: &Input| {
@@ -1552,6 +1561,39 @@ mod tests {
         assert!(!table.has_wheel(true));
         assert_eq!(label_in(&key("Ctrl+ArrowLeft"), KeyLabels::Text), "Ctrl+←");
         assert_eq!(label_in(&key("PageDown"), KeyLabels::Text), "PgDn");
+    }
+
+    /// Menus show keys only, and `Cmd` bindings only where the system's
+    /// menus do (macOS); on Windows `host/quit` shows no shortcut.
+    #[test]
+    fn menus_show_cmd_bindings_only_where_cmd_is_a_menu_key() {
+        assert!(label_shown(&key("Cmd+Q"), true));
+        assert!(!label_shown(&key("Cmd+Q"), false));
+        assert!(!label_shown(&key("Ctrl+Cmd+F"), false));
+        assert!(label_shown(&key("Ctrl+O"), false));
+        assert!(label_shown(&key("Alt+Enter"), false));
+        assert!(!label_shown(&key("Mouse:LeftDoubleClick"), true));
+        let mut table = Table::default();
+        table
+            .declare(HOST, "quit", "host", &["Cmd+Q".into()], false, false)
+            .unwrap();
+        table
+            .declare(
+                HOST,
+                "open",
+                "host",
+                &["Cmd+O".into(), "Ctrl+O".into()],
+                false,
+                false,
+            )
+            .unwrap();
+        let shown = |id| table.label(HOST, id);
+        if crate::platform::MENU_SHOWS_CMD {
+            assert_eq!(shown("quit").as_deref(), Some("⌘Q"));
+        } else {
+            assert_eq!(shown("quit"), None);
+            assert_eq!(shown("open").as_deref(), Some("Ctrl+O"));
+        }
     }
 
     /// Menu shortcut text in both styles; `text` stays the canonical string.

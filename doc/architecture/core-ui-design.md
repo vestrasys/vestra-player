@@ -254,7 +254,7 @@ impl Table {
 | --- | --- | --- | --- |
 | `host/fullscreen` Fullscreen | `Enter`, `Alt+Enter` (interaction alignment IA-CORE-04), `F11`, `Mouse:LeftDoubleClick` | top level, `group: "screen"`, `order: 700`, checked = whether fullscreen | always available |
 | `host/exit-fullscreen` Exit fullscreen | `Escape` | not in the menu | only available in fullscreen |
-| `host/quit` Quit | `Cmd+Q` | top level, `group: "exit"`, `order: 990` | always available |
+| `host/quit` Quit | `Cmd+Q` (the menu shows it on macOS only: on Windows and Linux `Cmd` is the Windows / Super key, whose combinations the system takes, so menus show no `Cmd` binding, `platform::MENU_SHOWS_CMD`; there the close button and Alt+F4 quit) | top level, `group: "exit"`, `order: 990` | always available |
 
   Whether "Fullscreen" and "Quit" appear in the menu this round, see §18 Q2.
 - **Main window event flow**: the Slint callbacks `key-input(scope, text, ctrl, alt, shift, meta, repeat) -> bool` and `mouse-input(kind, zone, ctrl, alt, shift, meta) -> bool` query a read-only copy of the table **synchronously** on the UI thread (`Rc<RefCell<Table>>`, replaced as a whole on recompute); if bound, they return true (`accept`) and send `Event::Binding(owner, id)`; the main loop then checks enabled/busy with the existing `resolve_execution` and sends `commands.execute`. Bound but the command is disabled: the key is caught and not executed (same as Space today).

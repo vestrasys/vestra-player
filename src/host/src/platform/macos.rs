@@ -26,6 +26,8 @@ pub const SYSTEM: super::System = super::System::MacOs;
 pub const SLINT_CONTROL_IS_COMMAND: bool = true;
 /// A `Ctrl` binding also fires with ⌘ (bindings written for both systems).
 pub const CTRL_ACCEPTS_CMD: bool = true;
+/// Menus show ⌘ bindings (`bindings::label_shown`).
+pub const MENU_SHOWS_CMD: bool = true;
 
 // ------------------------------------------------------------------ windows
 

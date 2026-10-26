@@ -20,6 +20,15 @@ const MAX_TOTAL: u64 = 64 * 1024 * 1024;
 
 /// Extract `file` into a new temporary directory.
 pub fn extract(file: &Path) -> Result<TempDir> {
+    let directory = tempfile::Builder::new().prefix("vestra-vxp-").tempdir()?;
+    extract_into(file, directory.path(), false)?;
+    Ok(directory)
+}
+
+/// Extract `file` into `directory`, a new empty directory of the caller's.
+/// `durable`: each file is flushed to disk (`sync_all`) before it counts as
+/// written, for a directory that becomes part of the package library.
+pub fn extract_into(file: &Path, directory: &Path, durable: bool) -> Result<()> {
     let meta = fs::symlink_metadata(file).context("package file")?;
     ensure!(
         meta.is_file() && !meta.file_type().is_symlink(),
@@ -32,7 +41,6 @@ pub fn extract(file: &Path) -> Result<TempDir> {
         archive.len() <= MAX_FILES * 2,
         "package entry count exceeded"
     );
-    let directory = tempfile::Builder::new().prefix("vestra-vxp-").tempdir()?;
     let mut names = BTreeSet::new();
     let mut files = 0;
     let mut total = 0_u64;
@@ -62,7 +70,7 @@ pub fn extract(file: &Path) -> Result<TempDir> {
             names.insert(relative.to_lowercase()),
             "duplicate package entry (ignoring case): {name}"
         );
-        let target = directory.path().join(relative);
+        let target = directory.join(relative);
         if entry.is_dir() {
             fs::create_dir_all(&target)?;
             continue;
@@ -88,12 +96,15 @@ pub fn extract(file: &Path) -> Result<TempDir> {
             "package file/total byte limit exceeded: {name}"
         );
         total += copied;
+        if durable {
+            output.sync_all()?;
+        }
     }
     ensure!(
-        directory.path().join("manifest.json").is_file(),
+        directory.join("manifest.json").is_file(),
         "manifest.json must be at the root of the package"
     );
-    Ok(directory)
+    Ok(())
 }
 
 /// Copy at most `limit + 1` bytes, so an over-limit entry is detected

@@ -265,7 +265,7 @@ Settings ▸                              preferences, hotkeys, plugins, visuali
 ——
 About Vestra Player…    F1               info
 ——
-Quit                    Cmd+Q            host
+Quit                    Cmd+Q            host   (macOS; Windows/Linux show no shortcut)
 ```
 
 The full contents of the submenus and the plugin that owns each item are in [menus.md](menus.md).

@@ -405,5 +405,5 @@ Context menu
 ├─ ────────
 ├─ About Vestra Player…  [F1]   ‹info›
 ├─ ────────
-└─ Quit  [Cmd+Q]   ‹host›
+└─ Quit  [Cmd+Q on macOS; no shortcut shown on Windows/Linux]   ‹host›
 ```

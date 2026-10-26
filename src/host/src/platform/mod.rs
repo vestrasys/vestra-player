@@ -12,7 +12,7 @@
 //!
 //! | area | functions |
 //! | --- | --- |
-//! | per-system tables | `SYSTEM` → `standard_window_shortcut` (table in `shortcuts.rs`), `ui_monospace_font` (`monospace_font`), `ui_cjk_fallback_families` / `ui_bundled_cjk_fallback` (table in `fonts.rs`); the tables are the same code on every system; `KEY_LABELS` (how menus write shortcuts) |
+//! | per-system tables | `SYSTEM` → `standard_window_shortcut` (table in `shortcuts.rs`), `ui_monospace_font` (`monospace_font`), `ui_cjk_fallback_families` / `ui_bundled_cjk_fallback` (table in `fonts.rs`); the tables are the same code on every system; `KEY_LABELS` (how menus write shortcuts), `MENU_SHOWS_CMD` (whether they show `Cmd` bindings) |
 //! | windows | `shown`, `capture_windows`, `associate_new`, `set_floating`, `set_dark_title_bars`, `window_count`, `resize_content`, `screen_for`, `pointer_in`, `modifier_keys`, `double_click_seconds`, `menu_show_delay_ms` |
 //! | clipboard | `clipboard_read_text`, `clipboard_write_text`, `clipboard_write_image` |
 //! | dialogs | `confirm` |

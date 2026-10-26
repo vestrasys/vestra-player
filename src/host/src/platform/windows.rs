@@ -29,6 +29,10 @@ pub const SYSTEM: super::System = super::System::Windows;
 pub const SLINT_CONTROL_IS_COMMAND: bool = false;
 /// `Ctrl` is Ctrl; `Cmd` is the Windows (logo) key.
 pub const CTRL_ACCEPTS_CMD: bool = false;
+/// Menus show no `Cmd` binding: the system takes the Windows key's
+/// combinations (Win+Q opens search), and a key named "Cmd" means nothing
+/// here. Alt+F4 and the close button quit (`bindings::label_shown`).
+pub const MENU_SHOWS_CMD: bool = false;
 
 // ------------------------------------------------------------------ windows
 

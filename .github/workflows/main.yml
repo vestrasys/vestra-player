@@ -31,6 +31,7 @@ jobs:
       run_macos: ${{ steps.plan.outputs.run_macos }}
       plugins: ${{ steps.plan.outputs.plugins }}
       ui_props: ${{ steps.plan.outputs.ui_props }}
+      builtin_base: ${{ steps.builtin-base.outputs.builtin_base }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,6 +46,10 @@ jobs:
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: bash .github/scripts/plan.sh
+      - id: builtin-base
+        env:
+          REF: ${{ github.ref }}
+        run: bash .github/scripts/builtin-base.sh
 
   static:
     needs: plan
@@ -54,6 +59,7 @@ jobs:
     uses: ./.github/workflows/_static.yml
     with:
       plugins: ${{ needs.plan.outputs.plugins }}
+      builtin-base: ${{ needs.plan.outputs.builtin_base }}
 
   windows:
     needs: [plan, static]

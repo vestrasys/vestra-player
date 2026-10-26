@@ -39,51 +39,11 @@ impl Candidate {
     /// Copy first, then validate and hash precisely the staged bytes. Original
     /// manifest bytes participate in the digest; JSON is not reserialized.
     pub fn capture(source: &Path) -> Result<Self> {
-        let initial_root = fs::symlink_metadata(source).context("package root metadata")?;
-        ensure!(
-            initial_root.is_dir() && !initial_root.file_type().is_symlink(),
-            "package root must be a regular directory"
-        );
-        let source = dunce::canonicalize(source).context("package root")?;
-        let mut files = Vec::new();
-        let mut total = 0;
-        collect(&source, &source, 0, &mut files, &mut total)?;
-        files.sort_by(|a, b| a.relative.cmp(&b.relative));
         let directory = tempfile::Builder::new()
             .prefix("vestra-package-stage-")
             .tempdir()?;
-        let mut hasher = Sha256::new();
-        hasher.update(DIGEST_DOMAIN);
-        let mut copied = 0_u64;
-        for record in files {
-            let original = source.join(&record.relative);
-            let mut input = File::open(&original).context("open package file")?;
-            ensure!(
-                same_file(&record.metadata, &input.metadata()?),
-                "package file changed before capture: {}",
-                record.relative
-            );
-            let limit = MAX_FILE.min(MAX_TOTAL - copied);
-            let mut bytes = Vec::new();
-            (&mut input).take(limit + 1).read_to_end(&mut bytes)?;
-            ensure!(
-                bytes.len() as u64 <= limit,
-                "package file/total byte limit exceeded"
-            );
-            ensure!(
-                bytes.len() as u64 == record.metadata.len(),
-                "package file length changed: {}",
-                record.relative
-            );
-            let after = fs::symlink_metadata(&original)?;
-            ensure!(
-                same_file(&record.metadata, &input.metadata()?)
-                    && same_file(&record.metadata, &after),
-                "package file changed during capture: {}",
-                record.relative
-            );
-            copied += bytes.len() as u64;
-            let target = directory.path().join(&record.relative);
+        let digest = read_tree(source, |relative, bytes| {
+            let target = directory.path().join(relative);
             if let Some(parent) = target.parent() {
                 fs::create_dir_all(parent)?;
             }
@@ -93,17 +53,10 @@ impl Candidate {
                 .write(true)
                 .create_new(true)
                 .open(target)?;
-            output.write_all(&bytes)?;
+            output.write_all(bytes)?;
             output.flush()?;
-            hasher.update((record.relative.len() as u64).to_le_bytes());
-            hasher.update(record.relative.as_bytes());
-            hasher.update((bytes.len() as u64).to_le_bytes());
-            hasher.update(&bytes);
-        }
-        ensure!(
-            same_directory(&initial_root, &fs::symlink_metadata(&source)?),
-            "package root changed during capture"
-        );
+            Ok(())
+        })?;
         let manifest = crate::manifest::parse(
             &fs::read(directory.path().join("manifest.json"))
                 .context("package manifest missing")?,
@@ -117,7 +70,7 @@ impl Candidate {
         Ok(Self {
             directory: Arc::new(directory),
             manifest,
-            digest: format!("{:x}", hasher.finalize()),
+            digest,
         })
     }
 
@@ -130,6 +83,89 @@ impl Candidate {
     pub fn directory(&self) -> &Path {
         self.directory.path()
     }
+}
+
+/// The digest and manifest of a package directory the host itself wrote
+/// (the package library), read in place: the same bytes, limits, checks and
+/// digest as `Candidate::capture`, without the private copy. Not for
+/// directories another program supplies (a candidate is copied first).
+pub fn inspect(directory: &Path) -> Result<(String, PackageManifest)> {
+    let mut manifest_bytes = None;
+    let digest = read_tree(directory, |relative, bytes| {
+        if relative == "manifest.json" {
+            manifest_bytes = Some(bytes.to_vec());
+        }
+        Ok(())
+    })?;
+    let manifest = crate::manifest::parse(
+        &manifest_bytes.context("package manifest missing")?,
+        crate::manifest::player_version(),
+    )?;
+    validate_manifest(&manifest, directory)?;
+    ensure!(
+        directory.join(&manifest.entry).is_file(),
+        "production entry missing from staged package"
+    );
+    Ok((digest, manifest))
+}
+
+/// Read every file of the package rooted at `source` within the limits, in
+/// path order, checking that none changes while it is read; `each` gets its
+/// package-relative name and bytes. Returns the package digest: over the
+/// sorted names and bytes, original manifest bytes included (JSON is not
+/// reserialized).
+fn read_tree(source: &Path, mut each: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<String> {
+    let initial_root = fs::symlink_metadata(source).context("package root metadata")?;
+    ensure!(
+        initial_root.is_dir() && !initial_root.file_type().is_symlink(),
+        "package root must be a regular directory"
+    );
+    let source = dunce::canonicalize(source).context("package root")?;
+    let mut files = Vec::new();
+    let mut total = 0;
+    collect(&source, &source, 0, &mut files, &mut total)?;
+    files.sort_by(|a, b| a.relative.cmp(&b.relative));
+    let mut hasher = Sha256::new();
+    hasher.update(DIGEST_DOMAIN);
+    let mut copied = 0_u64;
+    for record in files {
+        let original = source.join(&record.relative);
+        let mut input = File::open(&original).context("open package file")?;
+        ensure!(
+            same_file(&record.metadata, &input.metadata()?),
+            "package file changed before capture: {}",
+            record.relative
+        );
+        let limit = MAX_FILE.min(MAX_TOTAL - copied);
+        let mut bytes = Vec::new();
+        (&mut input).take(limit + 1).read_to_end(&mut bytes)?;
+        ensure!(
+            bytes.len() as u64 <= limit,
+            "package file/total byte limit exceeded"
+        );
+        ensure!(
+            bytes.len() as u64 == record.metadata.len(),
+            "package file length changed: {}",
+            record.relative
+        );
+        let after = fs::symlink_metadata(&original)?;
+        ensure!(
+            same_file(&record.metadata, &input.metadata()?) && same_file(&record.metadata, &after),
+            "package file changed during capture: {}",
+            record.relative
+        );
+        copied += bytes.len() as u64;
+        each(&record.relative, &bytes)?;
+        hasher.update((record.relative.len() as u64).to_le_bytes());
+        hasher.update(record.relative.as_bytes());
+        hasher.update((bytes.len() as u64).to_le_bytes());
+        hasher.update(&bytes);
+    }
+    ensure!(
+        same_directory(&initial_root, &fs::symlink_metadata(&source)?),
+        "package root changed during capture"
+    );
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 /// The package-relative name of a captured file: its components joined with
@@ -280,6 +316,24 @@ mod tests {
             serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
         json[field] = value.into();
         fs::write(file, serde_json::to_vec(&json).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn inspect_reads_in_place_what_capture_copies() {
+        let root = fixture();
+        fs::create_dir(root.path().join("ui")).unwrap();
+        fs::write(root.path().join("ui/a.slint"), "export component A {}").unwrap();
+        let captured = Candidate::capture(root.path()).unwrap();
+        let (digest, manifest) = inspect(root.path()).unwrap();
+        assert_eq!(digest, captured.digest());
+        assert_eq!(
+            serde_json::to_value(&manifest).unwrap(),
+            serde_json::to_value(captured.manifest()).unwrap()
+        );
+        fs::write(root.path().join("ui/a.slint"), "export component B {}").unwrap();
+        assert_ne!(inspect(root.path()).unwrap().0, digest);
+        fs::remove_file(root.path().join("main.js")).unwrap();
+        assert!(inspect(root.path()).is_err(), "entry missing");
     }
 
     #[test]

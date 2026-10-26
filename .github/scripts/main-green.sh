@@ -9,8 +9,8 @@
 # (plan.sh), and main runs everything when there is none, so a green run on
 # commit S means static and both build-tests passed for S's tree. SHA counts
 # as checked when such an S is SHA itself, or an ancestor of it with only
-# documentation (doc/, *.md) changed in between: a tag on the release-notes
-# commit, for example.
+# documentation (doc/, *.md outside src/plugins/) changed in between: a tag
+# on the release-notes commit, for example.
 set -euo pipefail
 
 runs="repos/$REPO/actions/workflows/main.yml/runs"
@@ -31,7 +31,8 @@ tested=false
 for s in $(gh api "$runs?branch=main&status=success&per_page=30" --jq '.workflow_runs[].head_sha'); do
   git cat-file -e "$s^{commit}" 2>/dev/null || continue
   git merge-base --is-ancestor "$s" "$SHA" || continue
-  other="$(git diff --name-only "$s" "$SHA" | grep -Ev '^doc/|\.md$' || true)"
+  # src/plugins/**/*.md is not documentation: a built-in's README ships.
+  other="$(git diff --name-only "$s" "$SHA" | awk '/^src\/plugins\// || !(/^doc\// || /\.md$/)')"
   if [ "$s" = "$SHA" ]; then
     echo "main.yml passed $SHA"
     tested=true

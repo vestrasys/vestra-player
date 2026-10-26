@@ -18,6 +18,9 @@ pub const SYSTEM: super::System = super::System::Linux;
 pub const SLINT_CONTROL_IS_COMMAND: bool = false;
 /// `Ctrl` is Ctrl; `Cmd` is the Super key.
 pub const CTRL_ACCEPTS_CMD: bool = false;
+/// Menus show no `Cmd` binding: the desktop takes most Super-key
+/// combinations (`bindings::label_shown`).
+pub const MENU_SHOWS_CMD: bool = false;
 
 const WINDOWS: Unavailable = Unavailable("native windows are not supported on this system");
 

@@ -178,7 +178,7 @@ The labels below are the English interface text (the English source text of each
 | —— | | | |
 | About Vestra Player… | info | F1 | |
 | —— | | | |
-| Quit | host | Cmd+Q | key `Quit` |
+| Quit | host | Cmd+Q (shown on macOS; on Windows and Linux the menu shows no shortcut, the close button and Alt+F4 quit) | key `Quit` |
 
 Global keys not in the menu: Shift+Tab brief info (info), Esc "Leave Fullscreen" (host; only in fullscreen; in windowed mode the key goes to the focused control as usual).
 
