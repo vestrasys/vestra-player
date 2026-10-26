@@ -1,0 +1,8 @@
+# The probe is a console program whose report IS its stdout, so the host's
+# print-macro ban (src/host/clippy.toml, for a GUI-subsystem process) does not
+# apply. This file replaces the host's for this crate only; the canonicalize
+# ban is kept (the probe does not canonicalize paths either).
+disallowed-methods = [
+  { path = "std::fs::canonicalize", reason = "use dunce::canonicalize (no \\\\?\\ prefix on Windows)" },
+  { path = "std::path::Path::canonicalize", reason = "use dunce::canonicalize (no \\\\?\\ prefix on Windows)" },
+]
