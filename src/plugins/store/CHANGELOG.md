@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- No rollback (the player no longer keeps a previous version): the Roll Back / Restore action is gone, the confirmations no longer say you can roll back or restore, and the Versions tab no longer installs a version older than the installed one from the same repository. To go back to an older version, uninstall the plugin and install that version's `.vxp`.
+- A refused install while the player is busy reads "Plugins are being installed or cleaned up; try again later".
+
 ## 0.1.4
 
 - English source text with a Simplified Chinese translation (`locales/zh-Hans.po`); the Chinese interface reads as before. Needs Vestra Player 0.4.3.

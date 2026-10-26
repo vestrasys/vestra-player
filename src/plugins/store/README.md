@@ -1,6 +1,6 @@
 # Plugin Store
 
-Browse the plugins in the official Vestra Player repository and install, update, roll back or uninstall them.
+Browse the plugins in the official Vestra Player repository and install, update or uninstall them.
 
 ## Entries
 
@@ -12,7 +12,7 @@ Browse the plugins in the official Vestra Player repository and install, update,
 
 - **List**: the plugins of the official repository and of the repositories you added, and the plugins installed on this machine. Search (name, author, tags), filter by All / Installed / Updates, pick a tag, sort by name or by update time.
 - **Details**: description, changelog, version history and the permissions the plugin needs (in plain words; the ones to watch are amber).
-- **Install and update**: every install lists the permissions and asks first. Updates come only from the plugin's own repository; after an update you can roll back to the previous version. The Versions tab installs another version.
+- **Install and update**: every install lists the permissions and asks first. Updates come only from the plugin's own repository. The Versions tab installs a newer version than the installed one; to go back to an older version, uninstall the plugin and install that version's `.vxp`.
 - **From a file or a link**: Install from File… and Install from Link… in the window, or drop a `.vxp` on the video area. Such plugins are not reviewed by any repository, and the store does not check them for updates.
 - **Replace**: when the same plugin is already installed from somewhere else, the store asks before replacing it. The replacement starts with new, empty data; the old data is kept and comes back when you reinstall from the original source.
 - **Revocations**: when a repository revokes a version, the store disables it and tells you why; its page keeps a warning. You can confirm the risk and enable it again, and the store will not disable it again.

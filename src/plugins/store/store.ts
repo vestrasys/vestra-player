@@ -558,18 +558,8 @@ export class Store {
         if (item.best) list.push({ id: "replace", text: msg("Replace…"), enabled: idle });
         break;
     }
-    if (info && !info.builtin && (item.state === "installed" || item.state === "update" || item.state === "revoked" || item.state === "local")) {
-      if (info.previousVersion)
-        list.push({
-          id: "rollback",
-          text:
-            installer.rollbackVerb(info.version, info.previousVersion) === "restore"
-              ? msg("Restore to {}", info.previousVersion)
-              : msg("Roll Back to {}", info.previousVersion),
-          enabled: idle,
-        });
+    if (info && !info.builtin && (item.state === "installed" || item.state === "update" || item.state === "revoked" || item.state === "local"))
       list.push({ id: "uninstall", text: msg("Uninstall…"), enabled: idle });
-    }
     return list;
   }
 
@@ -655,9 +645,12 @@ export class Store {
     }
     const revoked = item.repo?.index?.revoked ?? [];
     const sameSource = item.state === "installed" || item.state === "update" || item.state === "revoked";
+    const installed = sameSource && item.installed?.version && isVersion(item.installed.version) ? item.installed.version : null;
     return item.entry.versions.map((v) => {
       const check = checkVersion(item.id, v, revoked, this.plugin.app.version);
       const current = sameSource && item.installed?.version === v.version;
+      // Nothing below the installed version from the same source: uninstall, then install a .vxp.
+      const older = installed !== null && isVersion(v.version) && compareVersions(v.version, installed) < 0;
       const status = current
         ? check.ok
           ? msg("Current")
@@ -675,7 +668,7 @@ export class Store {
         minimum: v.minPlayerVersion ?? "—",
         status: this.shown(status),
         tone: check.ok ? 0 : check.why === "revoked" ? 3 : 4,
-        canInstall: check.ok && !current && item.state !== "builtin" && item.state !== "reserved" && !this.busy,
+        canInstall: check.ok && !current && !older && item.state !== "builtin" && item.state !== "reserved" && !this.busy,
       };
     });
   }
@@ -705,8 +698,6 @@ export class Store {
       case "replace":
         if (item.best) await installer.installFromRepository(this, item, item.best);
         return;
-      case "rollback":
-        return installer.rollback(this, item);
       case "uninstall":
         return installer.uninstall(this, item);
       case "enable":

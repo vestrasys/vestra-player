@@ -61,7 +61,7 @@ export function failureText(store: Store, error: unknown, id?: string): Msg {
         ? msg("This plugin has the same id as a built-in plugin and cannot be installed")
         : msg("“{}” has the same id as a built-in plugin and cannot be installed", id);
     case "busy":
-      return msg("This plugin is being installed or rolled back; try again later");
+      return msg("Plugins are being installed or cleaned up; try again later");
     case "capability":
       return msg("The Plugin Store lacks the “Manage plugins” permission");
     case "missing":
@@ -147,7 +147,7 @@ export async function installFromRepository(store: Store, item: Item, version: I
         ? {
             message: msg("Update “{}” to {}? The new version needs more permissions", name, version.version),
             detail: msg(
-              "Added:\n{2}\n\nCurrent: {3}. After updating you can roll back to {3} in the store.\n\nA plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network.",
+              "Added:\n{2}\n\nCurrent: {3}.\n\nA plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network.",
               permissionList(added),
               current,
             ),
@@ -155,33 +155,19 @@ export async function installFromRepository(store: Store, item: Item, version: I
           }
         : {
             message: msg("Update “{}” to {}?", name, version.version),
-            detail: msg("Current: {2}. After updating you can roll back to {2} in the store.", current),
+            detail: msg("Current: {2}.", current),
             confirm: "Update",
           };
-    else {
-      const older = order < 0;
+    // Never older than the installed version from the same source (the Versions tab offers none): uninstall, then install a .vxp.
+    else if (order < 0) return;
+    else
       question = {
-        message: older
-          ? msg("Install “{}” {} (older version)?", name, version.version)
-          : msg("Install “{}” {} (reinstall)?", name, version.version),
+        message: msg("Install “{}” {} (reinstall)?", name, version.version),
         detail: added.length
-          ? older
-            ? msg(
-                "Current: {2}. After installing you can restore {2} in the store.\n\nThis version needs more permissions:\n{3}",
-                current,
-                permissionList(added),
-              )
-            : msg(
-                "Current: {2}. After installing you can roll back to {2} in the store.\n\nThis version needs more permissions:\n{3}",
-                current,
-                permissionList(added),
-              )
-          : older
-            ? msg("Current: {2}. After installing you can restore {2} in the store.", current)
-            : msg("Current: {2}. After installing you can roll back to {2} in the store.", current),
+          ? msg("Current: {2}.\n\nThis version needs more permissions:\n{3}", current, permissionList(added))
+          : msg("Current: {2}.", current),
         confirm: "Install",
       };
-    }
   } else
     question = repo.official
       ? {
@@ -335,7 +321,7 @@ function selectKey(store: Store, id: string, source: PackageSource): string {
   return `\n${id}`;
 }
 
-type Verb = "install" | "uninstall" | "rollback" | "restore";
+type Verb = "install" | "uninstall";
 
 /** What `follow` shows for each verb (one whole sentence per verb and outcome). */
 const FOLLOW = {
@@ -351,25 +337,8 @@ const FOLLOW = {
     preparing: msg("Uninstalling… (preparing)"),
     activating: msg("Uninstalling… (activating)"),
     tooLate: msg("Can no longer cancel; the uninstallation continues"),
-    failedDegraded: msg("Uninstallation failed; the previous version was restored"),
     cancelled: msg("Uninstallation cancelled"),
     failed: (why: Msg) => msg("Uninstallation failed: {}", why),
-  },
-  rollback: {
-    preparing: msg("Rolling back… (preparing)"),
-    activating: msg("Rolling back… (activating)"),
-    tooLate: msg("Can no longer cancel; the rollback continues"),
-    failedDegraded: msg("Rollback failed; the previous version was restored"),
-    cancelled: msg("Rollback cancelled"),
-    failed: (why: Msg) => msg("Rollback failed: {}", why),
-  },
-  restore: {
-    preparing: msg("Restoring… (preparing)"),
-    activating: msg("Restoring… (activating)"),
-    tooLate: msg("Can no longer cancel; the restore continues"),
-    failedDegraded: msg("Restore failed; the previous version was restored"),
-    cancelled: msg("Restore cancelled"),
-    failed: (why: Msg) => msg("Restore failed: {}", why),
   },
 } satisfies Record<Verb, unknown>;
 
@@ -386,12 +355,13 @@ async function follow(store: Store, change: PackageChange, verb: Verb, committed
     case "tooLate":
       return store.report(words.tooLate);
     case "failedDegraded":
-      return store.report(words.failedDegraded, true);
+      // Only an install reports this (the player kept what was installed before); an uninstall never does.
+      if ("failedDegraded" in words) return store.report(words.failedDegraded, true);
+      break;
     case "cancelled":
       return store.report(words.cancelled);
-    default:
-      return store.report(words.failed(raw(change.message ?? status)), true);
   }
+  return store.report(words.failed(raw(change.message ?? status)), true);
 }
 
 // ------------------------------------------------------------ side-loading
@@ -427,7 +397,7 @@ function sideloadQuestion(store: Store, candidate: PackageCandidate, from: { fil
       message: msg("Install the plugin package “{}” {}?", name, manifest.version),
       detail: info
         ? msg(
-            "{2}\n\nCurrently installed: {3} (same source; you can roll back after installing).\n\n{4}",
+            "{2}\n\nCurrently installed: {3} (same source).\n\n{4}",
             warning,
             info.version ?? "",
             perms,
@@ -493,31 +463,7 @@ export async function installFromLink(store: Store, text: string) {
   }
 }
 
-// ------------------------------------------------------------ rollback / uninstall
-
-/** "Roll back" to an older previous version, "restore" a newer one (after installing an older version or a rollback). */
-export function rollbackVerb(current: string | null, previous: string): "rollback" | "restore" {
-  return current && isVersion(current) && isVersion(previous) && compareVersions(previous, current) > 0 ? "restore" : "rollback";
-}
-
-export async function rollback(store: Store, item: Item) {
-  const info = item.installed;
-  if (!info?.previousVersion) return;
-  const verb = rollbackVerb(info.version, info.previousVersion);
-  if (!store.begin(verb === "restore" ? msg("Restoring {}…", item.name) : msg("Rolling back {}…", item.name))) return;
-  try {
-    const change = await store.plugin.packages.rollback(info.id);
-    await follow(store, change, verb, () =>
-      verb === "restore"
-        ? msg("Restored {} to {}", item.name, info.previousVersion!)
-        : msg("Rolled back {} to {}", item.name, info.previousVersion!),
-    );
-  } catch (error) {
-    store.report(errorCode(error) === "unsupported" ? msg("This plugin cannot be rolled back") : failureText(store, error, info.id), true);
-  } finally {
-    store.end();
-  }
-}
+// ------------------------------------------------------------ uninstall
 
 export async function uninstall(store: Store, item: Item) {
   const info = item.installed;

@@ -233,13 +233,13 @@ test("the player refuses the package (versionMismatch) or the install degrades",
     });
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", "install");
-    await until(host, () => host.osd.includes("这个插件正在安装或回退，请稍后再试"));
+    await until(host, () => host.osd.includes("正在安装或清理插件，请稍后再试"));
   } finally {
     await stop();
   }
 });
 
-test("update, rollback, older version and uninstall from the same repository", async () => {
+test("update and uninstall from the same repository; no rollback and no older version", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [
     {
@@ -264,41 +264,43 @@ test("update, rollback, older version and uninstall from the same repository", a
     assert.ok(banners(host).includes("新版本需要新的权限：读写剪贴板"));
     // The Updates chip shows the count ("Updates {}", in Slint).
     assert.equal(props(host)["updates"], 1);
+    type Version = { version: string; status: string; canInstall: boolean };
+    const versions = () => (props(host)["versions"] as Version[]).map((v) => [v.version, v.status, v.canInstall]);
+    // 版本 tab: newer versions only; nothing older than the installed one from the same source.
+    assert.deepEqual(versions(), [
+      ["0.3.0", "最新", true],
+      ["0.2.0", "当前", false],
+      ["0.1.0", "", false],
+    ]);
 
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", "update");
     await until(host, () => host.osd.includes("已更新 YouTube 到 0.3.0"));
     assert.equal(host.confirmTexts.at(-1)!.message, "更新「YouTube」到 0.3.0？新版本需要更多权限");
-    assert.match(String(host.confirmTexts.at(-1)!.detail), /新增：\n· 读写剪贴板/);
-    await until(host, () => !store.busy);
-    assert.deepEqual(actions(host).map((a) => a.text), ["回退到 0.2.0", "卸载…"]);
-
-    host.window("store").emit("act", "rollback");
-    await until(host, () => host.osd.includes("已回退 YouTube 到 0.2.0"));
-    await until(host, () => !store.busy);
-    // Acceptance S3: after the rollback the previous version (0.3.0) is newer.
-    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "恢复到 0.3.0", "卸载…"]);
-
-    // 版本 tab: the older 0.1.0 can be installed (same source; the player keeps one rollback step).
-    const versions = props(host)["versions"] as { version: string; status: string; canInstall: boolean }[];
-    assert.deepEqual(
-      versions.map((v) => [v.version, v.status, v.canInstall]),
-      [
-        ["0.3.0", "最新", true],
-        ["0.2.0", "当前", false],
-        ["0.1.0", "", true],
-      ],
+    assert.equal(
+      host.confirmTexts.at(-1)!.detail,
+      "新增：\n· 读写剪贴板\n\n当前 0.2.0。\n\n插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。",
     );
-    host.dialogAnswers.push(yes);
-    host.window("store").emit("installVersion", "0.1.0");
-    await until(host, () => host.osd.includes("已安装 YouTube 0.1.0"));
-    assert.equal(host.confirmTexts.at(-1)!.message, "安装「YouTube」0.1.0（旧版本）？");
-    assert.equal(host.confirmTexts.at(-1)!.detail, "当前 0.2.0。安装后可以在商城恢复到 0.2.0。");
     await until(host, () => !store.busy);
-    assert.ok(actions(host).some((x) => x.text === "恢复到 0.2.0"));
+    // No Roll Back / Restore, even if an older player still lists a previous version.
+    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…"]);
+    host.setPackages(host.packages.map((p) => (p.id === "zysilm.youtube" ? { ...p, previousVersion: "0.2.0" } : p)));
+    await until(host, () => (props(host)["versions"] as Version[]).some((v) => v.version === "0.3.0" && v.status === "当前"));
+    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…"]);
+    assert.deepEqual(versions(), [
+      ["0.3.0", "当前", false],
+      ["0.2.0", "", false],
+      ["0.1.0", "", false],
+    ]);
+    // A stale window or an old action id: nothing is asked or installed.
+    const confirms = host.confirmTexts.length;
+    const calls = host.packageCalls.length;
+    host.window("store").emit("installVersion", "0.2.0");
     host.window("store").emit("act", "rollback");
-    await until(host, () => host.osd.includes("已恢复 YouTube 到 0.2.0"));
-    await until(host, () => !store.busy);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(host.confirmTexts.length, confirms);
+    assert.equal(host.packageCalls.length, calls);
+    assert.equal(store.busy, false);
 
     host.dialogAnswers.push({ confirmed: true, checked: true });
     host.window("store").emit("act", "uninstall");
