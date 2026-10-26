@@ -3,7 +3,7 @@
  * Builds the built-in plugins a packaged player ships
  * (`Vestra Player.app/Contents/Resources/plugins/`, `<install dir>\resources\plugins\`
  * on Windows; seeded by the host at
- * start-up; see host/src/package_manager.rs `seed_builtins`):
+ * start-up; see host/src/package_manager.rs `start_seeding`):
  *
  *   plugins/
  *     builtin.json                 { schema: 1, plugins: [{ id, version, file, sha256 }] }
@@ -13,7 +13,7 @@
  * network-video plugins live in the plugins repository and are installed
  * from the store). A built-in is upgraded on users' machines only when its
  * version here is newer than the one the player last seeded, so bump a
- * plugin's version whenever it changes.
+ * plugin's version whenever it changes (`npm run builtin-versions` checks it).
  *
  *   node scripts/stage-plugins.mjs <destination>/plugins [name...]
  */

@@ -252,14 +252,7 @@ impl Store {
 
     fn verify_package(&self, package: &StoredPackage) -> Result<()> {
         self.validate_package(package)?;
-        let captured = Candidate::capture(&package.directory)?;
-        ensure!(
-            captured.digest() == package.digest
-                && serde_json::to_value(captured.manifest())?
-                    == serde_json::to_value(&package.manifest)?,
-            "stored package bytes or manifest changed"
-        );
-        Ok(())
+        verify_stored(package)
     }
 
     fn validate_catalog(&self) -> Result<()> {
@@ -363,35 +356,33 @@ impl Store {
     }
 
     pub fn stage(&self, candidate: &Candidate) -> Result<StoredPackage> {
-        let target = StoredPackage {
-            digest: candidate.digest().into(),
-            manifest: candidate.manifest().clone(),
-            directory: self.root.join("packages").join(candidate.digest()),
-        };
-        self.validate_package(&target)?;
-        if target.directory.exists() {
-            self.verify_package(&target)?;
-            return Ok(target);
+        self.library().stage(candidate)
+    }
+
+    /// The package directories (`packages/`), for staging and collecting
+    /// garbage on another thread while the catalog stays with the owner.
+    pub fn library(&self) -> Library {
+        Library {
+            packages: self.root.join("packages"),
         }
-        // Capture into a fresh bounded private tree before copying. The public
-        // Candidate path is not an OS-immutable filesystem object.
-        let source = Candidate::capture(candidate.directory())?;
-        ensure!(
-            source.digest() == candidate.digest(),
-            "candidate bytes changed"
-        );
-        let temporary = tempfile::Builder::new()
-            .prefix(".stage-")
-            .tempdir_in(self.root.join("packages"))?;
-        copy_tree(source.directory(), temporary.path())?;
-        let verified = Candidate::capture(temporary.path())?;
-        ensure!(
-            verified.digest() == candidate.digest(),
-            "candidate changed during staging"
-        );
-        fs::rename(temporary.path(), &target.directory)?;
-        crate::platform::sync_dir(&self.root.join("packages"))?;
-        Ok(target)
+    }
+
+    /// The library entries the catalog refers to: every installed current
+    /// and previous version and every pending target.
+    pub fn referenced(&self) -> BTreeSet<String> {
+        let mut referenced = BTreeSet::new();
+        for installed in self.catalog.installed.values() {
+            for package in [&installed.current, &installed.previous]
+                .into_iter()
+                .flatten()
+            {
+                referenced.insert(package.digest.clone());
+            }
+        }
+        for recovery in self.catalog.pending.values() {
+            referenced.insert(recovery.target.digest.clone());
+        }
+        referenced
     }
 
     pub fn prepare(
@@ -421,6 +412,34 @@ impl Store {
         instance: Option<Instance>,
     ) -> Result<()> {
         identifier(id)?;
+        ensure!(target.manifest.id == id, "target identity mismatch");
+        self.verify_package(target)?;
+        let next = self.prepared(
+            &self.catalog,
+            id,
+            expected_revision,
+            target,
+            operation_id,
+            receipt,
+            instance,
+        )?;
+        self.publish(next)
+    }
+
+    /// `catalog` with `target` journaled as `id`'s pending transaction; the
+    /// caller verified the target's bytes.
+    #[allow(clippy::too_many_arguments)]
+    fn prepared(
+        &self,
+        catalog: &Catalog,
+        id: &str,
+        expected_revision: u64,
+        target: &StoredPackage,
+        operation_id: &str,
+        receipt: Value,
+        instance: Option<Instance>,
+    ) -> Result<Catalog> {
+        identifier(id)?;
         identifier(operation_id)?;
         check_receipt(&receipt)?;
         if let Some(instance) = &instance {
@@ -431,33 +450,28 @@ impl Store {
             "invalid or exhausted revision"
         );
         ensure!(target.manifest.id == id, "target identity mismatch");
-        self.verify_package(target)?;
         ensure!(
-            !self.catalog.pending.contains_key(id),
+            !catalog.pending.contains_key(id),
             "package transaction already pending"
         );
+        ensure!(catalog.pending.len() < 64, "pending package limit reached");
         ensure!(
-            self.catalog.pending.len() < 64,
-            "pending package limit reached"
-        );
-        ensure!(
-            self.catalog.installed.contains_key(id)
-                || self.catalog.installed.len()
-                    + self
-                        .catalog
+            catalog.installed.contains_key(id)
+                || catalog.installed.len()
+                    + catalog
                         .pending
                         .keys()
-                        .filter(|key| !self.catalog.installed.contains_key(*key))
+                        .filter(|key| !catalog.installed.contains_key(*key))
                         .count()
                     < MAX_PACKAGES,
             "installed package limit reached"
         );
-        let before = self.get(id);
+        let before = catalog.installed.get(id).cloned().unwrap_or_default();
         ensure!(
             before.revision == expected_revision,
             "installed revision conflict"
         );
-        let mut next = self.catalog.clone();
+        let mut next = catalog.clone();
         next.pending.insert(
             id.into(),
             Recovery {
@@ -469,7 +483,7 @@ impl Store {
             },
         );
         insert_receipt(&mut next, operation_id, receipt)?;
-        self.publish(next)
+        Ok(next)
     }
 
     pub fn commit(&mut self, id: &str, operation_id: &str) -> Result<Installed> {
@@ -484,7 +498,7 @@ impl Store {
         &mut self,
         id: &str,
         operation_id: &str,
-        mut receipt: Value,
+        receipt: Value,
     ) -> Result<Installed> {
         identifier(id)?;
         identifier(operation_id)?;
@@ -500,20 +514,39 @@ impl Store {
             .catalog
             .pending
             .get(id)
-            .context("package transaction missing")?
-            .clone();
+            .context("package transaction missing")?;
         ensure!(
             recovery.operation_id == operation_id,
             "package operation conflict"
         );
         self.verify_package(&recovery.target)?;
+        let (next, installed) = Self::committed(self.catalog.clone(), id, operation_id, receipt)?;
+        self.publish(next)?;
+        Ok(installed)
+    }
+
+    /// `catalog` with `id`'s pending transaction `operation_id` committed;
+    /// the caller verified the target's bytes.
+    fn committed(
+        mut next: Catalog,
+        id: &str,
+        operation_id: &str,
+        mut receipt: Value,
+    ) -> Result<(Catalog, Installed)> {
+        let recovery = next
+            .pending
+            .remove(id)
+            .context("package transaction missing")?;
+        ensure!(
+            recovery.operation_id == operation_id,
+            "package operation conflict"
+        );
         let revision = recovery
             .before
             .revision
             .checked_add(1)
             .filter(|n| *n <= MAX_SAFE)
             .context("installed revision exhausted")?;
-        let mut next = self.catalog.clone();
         let before = recovery.before;
         let instance = recovery
             .instance
@@ -541,14 +574,12 @@ impl Store {
         ensure!(receipt.is_object(), "operation receipt must be an object");
         receipt["installed"] = serde_json::to_value(&installed)?;
         check_receipt(&receipt)?;
-        next.pending.remove(id);
         insert_receipt(&mut next, operation_id, receipt)?;
         next.installed.insert(id.into(), installed.clone());
         next.last_commit.insert(id.into(), operation_id.into());
         // Installing or rolling back is asking for the package to run.
         next.disabled.remove(id);
-        self.publish(next)?;
-        Ok(installed)
+        Ok((next, installed))
     }
 
     pub fn abort(&mut self, id: &str, operation_id: &str) -> Result<()> {
@@ -598,43 +629,50 @@ impl Store {
     /// Only call before staging a new target, while no temporary unjournaled
     /// StoredPackage is in use. This is single-writer library garbage collection.
     pub fn gc(&self) -> Result<()> {
-        let mut referenced = BTreeSet::new();
-        for installed in self.catalog.installed.values() {
-            for package in [&installed.current, &installed.previous]
-                .into_iter()
-                .flatten()
-            {
-                referenced.insert(package.digest.clone());
-            }
+        self.library().gc(&self.referenced())
+    }
+
+    /// Install a built-in package the seeding thread staged and verified
+    /// (`Library::stage_archive`), as one catalog replacement: the prepare
+    /// and commit receipts of `operation_id` and the installed record, and
+    /// the user's disabled flag kept. Unlike `prepare` / `commit` it does not
+    /// read the package again: the caller verified it just before, and no
+    /// other writer touches the library while seeding runs.
+    pub fn commit_seeded(
+        &mut self,
+        id: &str,
+        expected_revision: u64,
+        target: &StoredPackage,
+        operation_id: &str,
+        receipts: (Value, Value),
+        instance: Instance,
+    ) -> Result<Installed> {
+        self.validate_package(target)?;
+        // Metadata only: another process sharing the library (a development
+        // or headless run takes no single-instance lock) may have collected
+        // the staged directory before this commit.
+        ensure!(
+            target.directory.join("manifest.json").is_file()
+                && target.directory.join(&target.manifest.entry).is_file(),
+            "staged package {} is gone from the library; not committed",
+            target.digest
+        );
+        let disabled = self.catalog.disabled.contains(id);
+        let prepared = self.prepared(
+            &self.catalog,
+            id,
+            expected_revision,
+            target,
+            operation_id,
+            receipts.0,
+            Some(instance),
+        )?;
+        let (mut next, installed) = Self::committed(prepared, id, operation_id, receipts.1)?;
+        if disabled {
+            next.disabled.insert(id.into());
         }
-        for recovery in self.catalog.pending.values() {
-            referenced.insert(recovery.target.digest.clone());
-        }
-        let packages = self.root.join("packages");
-        for entry in fs::read_dir(&packages)? {
-            let entry = entry?;
-            let name = entry.file_name();
-            let Some(name) = name.to_str() else {
-                continue;
-            };
-            let digest_name = name.len() == 64
-                && name
-                    .bytes()
-                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
-            if !digest_name && !name.starts_with(".stage-") {
-                continue;
-            }
-            let metadata = fs::symlink_metadata(entry.path())?;
-            ensure!(
-                metadata.is_dir() && !metadata.file_type().is_symlink(),
-                "unexpected package library entry"
-            );
-            if !referenced.contains(name) {
-                fs::remove_dir_all(entry.path())?;
-            }
-        }
-        crate::platform::sync_dir(&packages)?;
-        Ok(())
+        self.publish(next)?;
+        Ok(installed)
     }
 
     /// Instances dropped instead of retired since the last call (`retire`).
@@ -817,6 +855,133 @@ fn evict_receipt(catalog: &mut Catalog) {
         catalog.operations.remove(&id);
         catalog.operation_at.remove(&id);
     }
+}
+
+/// Whether a library directory still holds exactly `package` (read in
+/// place, `package_stage::inspect`).
+fn verify_stored(package: &StoredPackage) -> Result<()> {
+    let (digest, manifest) = crate::package_stage::inspect(&package.directory)?;
+    ensure!(
+        digest == package.digest
+            && serde_json::to_value(&manifest)? == serde_json::to_value(&package.manifest)?,
+        "stored package bytes or manifest changed"
+    );
+    Ok(())
+}
+
+/// The package directories of a store (`<root>/packages/<digest>`). Staging
+/// and garbage collection need no catalog, so they can run on another
+/// thread; the store's owner keeps them from running at the same time as
+/// its own (seeding: `package_manager.rs`).
+#[derive(Clone, Debug)]
+pub struct Library {
+    packages: PathBuf,
+}
+
+impl Library {
+    fn target(&self, digest: &str, manifest: PackageManifest) -> StoredPackage {
+        StoredPackage {
+            directory: self.packages.join(digest),
+            digest: digest.into(),
+            manifest,
+        }
+    }
+
+    /// Copy a validated candidate into the library (if it is not there yet)
+    /// and verify the copy.
+    pub fn stage(&self, candidate: &Candidate) -> Result<StoredPackage> {
+        let target = self.target(candidate.digest(), candidate.manifest().clone());
+        if target.directory.exists() {
+            verify_stored(&target)?;
+            return Ok(target);
+        }
+        // Capture into a fresh bounded private tree before copying. The public
+        // Candidate path is not an OS-immutable filesystem object.
+        let source = Candidate::capture(candidate.directory())?;
+        ensure!(
+            source.digest() == candidate.digest(),
+            "candidate bytes changed"
+        );
+        let temporary = tempfile::Builder::new()
+            .prefix(".stage-")
+            .tempdir_in(&self.packages)?;
+        copy_tree(source.directory(), temporary.path())?;
+        let (digest, _) = crate::package_stage::inspect(temporary.path())?;
+        ensure!(
+            digest == candidate.digest(),
+            "candidate changed during staging"
+        );
+        fs::rename(temporary.path(), &target.directory)?;
+        crate::platform::sync_dir(&self.packages)?;
+        Ok(target)
+    }
+
+    /// Extract a `.vxp` the installation ships straight into the library
+    /// (durably), validate and hash it there, and keep it under its digest;
+    /// an identical package already there is verified and reused. One copy
+    /// of the files instead of `extract` + `capture` + `stage`'s three: on
+    /// Windows each new copy is scanned again by the antivirus on first read
+    /// (doc/architecture/store-api-proposal.md §3.3).
+    pub fn stage_archive(&self, file: &std::path::Path) -> Result<StoredPackage> {
+        let temporary = tempfile::Builder::new()
+            .prefix(".stage-")
+            .tempdir_in(&self.packages)?;
+        crate::package_archive::extract_into(file, temporary.path(), true)?;
+        sync_dirs(temporary.path())?;
+        let (digest, manifest) = crate::package_stage::inspect(temporary.path())?;
+        let target = self.target(&digest, manifest);
+        if target.directory.exists() {
+            verify_stored(&target)?;
+            return Ok(target);
+        }
+        fs::rename(temporary.path(), &target.directory)?;
+        crate::platform::sync_dir(&self.packages)?;
+        Ok(target)
+    }
+
+    /// Remove the library entries not in `referenced` (and leftover
+    /// `.stage-` directories). Only while nothing stages: an entry staged but
+    /// not yet journaled is not referenced.
+    pub fn gc(&self, referenced: &BTreeSet<String>) -> Result<()> {
+        for entry in fs::read_dir(&self.packages)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let digest_name = name.len() == 64
+                && name
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+            if !digest_name && !name.starts_with(".stage-") {
+                continue;
+            }
+            let metadata = fs::symlink_metadata(entry.path())?;
+            ensure!(
+                metadata.is_dir() && !metadata.file_type().is_symlink(),
+                "unexpected package library entry"
+            );
+            if !referenced.contains(name) {
+                fs::remove_dir_all(entry.path())?;
+            }
+        }
+        crate::platform::sync_dir(&self.packages)?;
+        Ok(())
+    }
+}
+
+/// Make the directory entries under `directory` durable (its files were
+/// synced as they were written).
+fn sync_dirs(directory: &std::path::Path) -> Result<()> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let metadata = fs::symlink_metadata(entry.path())?;
+        if metadata.is_dir() && !metadata.file_type().is_symlink() {
+            sync_dirs(&entry.path())?;
+        }
+    }
+    crate::platform::sync_dir(directory)?;
+    Ok(())
 }
 
 fn copy_tree(source: &std::path::Path, destination: &std::path::Path) -> Result<()> {

@@ -2837,6 +2837,7 @@ impl Host {
         quit.localize(|_| i18n::tr("Quit"));
         quit.group = "exit".into();
         quit.order = 990;
+        // Windows and Linux menus show no `Cmd` binding (`label_shown`).
         quit.bindings = vec!["Cmd+Q".into()];
         for (id, declaration, state) in [
             ("fullscreen", fullscreen, state(true, Some(false))),
