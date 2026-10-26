@@ -7,8 +7,14 @@ export type Settings = {
   preventSleep: boolean;
   /** I06 / IA-PB-01: off by default. */
   hoverTime: boolean;
-  /** I07: off by default (needs ffmpeg and takes CPU). */
+  /** I07: on by default from 0.2.0 (a keyframe sprite made in the background); off before. */
   hoverThumbnail: boolean;
+  /**
+   * 2: written by 0.2.0 or later. Before, the whole object was saved on any
+   * change, so a saved `hoverThumbnail: false` was mostly the old default, not
+   * a choice: such a file gets the new default.
+   */
+  format: number;
   /** B06: seconds of the four relative-seek tiers (← →, Ctrl, Shift, Ctrl+Alt). */
   seekSteps: SeekSteps;
   /** G-14: the bar's current-time label shows the remaining time. */
@@ -16,6 +22,8 @@ export type Settings = {
 };
 
 export const DEFAULT_STEPS: SeekSteps = [5, 30, 60, 300];
+/** `Settings.format` of this version. */
+export const SETTINGS_FORMAT = 2;
 
 /** 0.1–3600 seconds with at most one decimal. */
 export const validStep = (value: unknown): value is number =>
@@ -29,7 +37,8 @@ const defaults = (): Settings => ({
   openUrl: { pasteFromClipboard: true },
   preventSleep: true,
   hoverTime: false,
-  hoverThumbnail: false,
+  hoverThumbnail: true,
+  format: SETTINGS_FORMAT,
   seekSteps: [...DEFAULT_STEPS],
   remainingTime: false,
 });
@@ -78,7 +87,9 @@ export class SettingsStore {
       this.#value.openUrl.pasteFromClipboard = openUrl.pasteFromClipboard;
     if (typeof raw.preventSleep === "boolean") this.#value.preventSleep = raw.preventSleep;
     if (typeof raw.hoverTime === "boolean") this.#value.hoverTime = raw.hoverTime;
-    if (typeof raw.hoverThumbnail === "boolean") this.#value.hoverThumbnail = raw.hoverThumbnail;
+    // An older file's `false` was the old default: the new default (on) wins; its `true` stays.
+    if (typeof raw.hoverThumbnail === "boolean" && (raw.format === SETTINGS_FORMAT || raw.hoverThumbnail))
+      this.#value.hoverThumbnail = raw.hoverThumbnail;
     if (typeof raw.remainingTime === "boolean") this.#value.remainingTime = raw.remainingTime;
     // A wrong length or any value out of range: the whole set falls back.
     const steps = raw.seekSteps;
