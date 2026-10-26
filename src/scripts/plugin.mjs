@@ -12,6 +12,8 @@
  * `test` with VESTRA_UI_RECORD set to a directory also records the property
  * values the plugins send to their Slint views (scripts/ui-record.mjs), for
  * the host test that type-checks them against the compiled Slint.
+ * VESTRA_UI_STATES records every view event in order instead, for the
+ * screenshot tool (scripts/ui-shots.mjs).
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -57,7 +59,7 @@ const sdkPackage = createRequire(join(source, "package.json")).resolve(
 const { bin } = JSON.parse(await readFile(sdkPackage, "utf8"));
 const cli = join(dirname(sdkPackage), bin["vestra-plugin"]);
 const env = { ...process.env };
-if (command === "test" && env.VESTRA_UI_RECORD) {
+if (command === "test" && (env.VESTRA_UI_RECORD || env.VESTRA_UI_STATES)) {
   // Plugin tests run in child processes of the CLI (`node --test`), which
   // read NODE_OPTIONS; workers the plugins start get their own environment.
   const recorder = pathToFileURL(join(source, "scripts", "ui-record.mjs"));

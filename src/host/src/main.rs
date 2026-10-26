@@ -78,6 +78,8 @@ mod ui;
 mod ui_fonts;
 mod ui_image;
 mod ui_markdown;
+#[cfg(test)]
+mod ui_shots;
 mod ui_state;
 #[cfg(test)]
 mod ui_types;
