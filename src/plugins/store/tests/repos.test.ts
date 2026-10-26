@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { BUILTIN, choose, FakeNet, info, OFFICIAL, openStore, other, props, publish, rows, said, signWith, start, THIRD, until } from "./helpers.ts";
+import { allRows, AVAILABLE, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, other, props, publish, rows, said, signWith, start, tab, THIRD, until, UPDATES } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-repos-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -17,10 +17,14 @@ test("the official index is read, verified and listed when the window opens", as
   const { host, store, stop } = await start({ net });
   try {
     await openStore(host);
-    await until(host, () => rows(host).length === 3, "rows");
+    // Installed is the first tab; Available lists what the index offers.
+    assert.equal(props(host)["category"], INSTALLED);
+    assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video"]);
+    await tab(host, AVAILABLE);
+    await until(host, () => rows(host).length === 2, "rows");
     assert.deepEqual(
       rows(host).map((r) => r.name),
-      ["Bilibili 视频", "vestra.video", "YouTube"],
+      ["Bilibili 视频", "YouTube"],
     );
     assert.match(String(props(host)["status-text"]), /^官方仓库 \d\d:\d\d 已更新$/);
     assert.equal(store.repos.official.index?.plugins.length, 2);
@@ -100,7 +104,9 @@ test("offline: the verified cache is used after a restart; a tampered cache is n
     second.host.window("store").emit("refresh");
     await until(second.host, () => !second.store.repos.official.refreshing && /无法连接/.test(said(second.store.repos.official.status.text)));
     assert.match(said(second.store.repos.official.status.text), /^无法连接 官方仓库（找不到服务器），显示 .+ 的缓存$/);
-    assert.equal(rows(second.host).length, 3);
+    assert.equal((await allRows(second.host)).length, 3);
+    // Offline is said calmly, not as a warning.
+    assert.equal(props(second.host)["status-warn"], false);
   } finally {
     await second.stop();
   }
@@ -142,9 +148,11 @@ test("offline: installed details come from the package; Updates does not claim u
   try {
     await openStore(second.host);
     second.host.window("store").emit("refresh");
-    await until(second.host, () => !second.store.repos.official.refreshing && second.store.repos.official.status.warn);
+    await until(second.host, () => !second.store.repos.official.refreshing && /无法连接/.test(said(second.store.repos.official.status.text)));
     await choose(second.host, "YouTube");
     await until(second.host, () => second.host.markdown(props(second.host)["doc"])?.text === "# 本地说明", "local readme");
+    // Labelled as the installed version's text.
+    assert.ok(banners(second.host).includes("来自已安装的版本"));
     assert.equal(second.host.confirmTexts.length, 0);
   } finally {
     await second.stop();
@@ -154,13 +162,16 @@ test("offline: installed details come from the package; Updates does not claim u
   const third = await start({ net, dataDirectory: join(scratch, "offline-empty"), packages: [BUILTIN, yt] });
   try {
     await openStore(third.host);
-    await until(third.host, () => !third.store.repos.official.refreshing && third.store.repos.official.status.warn);
-    third.host.window("store").emit("setFilter", 2);
-    await third.host.settle();
+    await until(third.host, () => !third.store.repos.official.refreshing && /无法连接/.test(said(third.store.repos.official.status.text)));
+    await tab(third.host, UPDATES);
     assert.deepEqual(rows(third.host), []);
-    assert.equal(props(third.host)["empty-text"], "无法连接仓库，也没有缓存。连上网络后点「刷新」。");
-    third.host.window("store").emit("setFilter", 1);
-    await third.host.settle();
+    const calm = "无法连接仓库。联网之前这里不显示内容；点「刷新」重试。";
+    assert.equal(props(third.host)["empty-text"], calm);
+    assert.equal(props(third.host)["available-known"], false);
+    await tab(third.host, AVAILABLE);
+    assert.equal(props(third.host)["empty-text"], calm);
+    assert.equal(props(third.host)["status-warn"], false);
+    await tab(third.host, INSTALLED);
     assert.deepEqual(rows(third.host).map((r) => r.name).sort(), ["YouTube", "vestra.video"]);
     await choose(third.host, "YouTube");
     await until(third.host, () => third.host.markdown(props(third.host)["doc"])?.text === "# 本地说明", "local readme");
@@ -203,6 +214,7 @@ test("third-party repositories: no signature read, `official: true` ignored, lab
     assert.equal(said(third.label), "Vestra 官方（third.example）");
     assert.equal(net.count(`${THIRD}.sig`), 0);
     await openStore(host);
+    await tab(host, AVAILABLE);
     const row = rows(host).find((r) => r.name === "Viz") as { meta: string } | undefined;
     assert.equal(row?.meta, "Someone · 非官方：Vestra 官方（third.example）");
   } finally {

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { CAPABILITIES } from "../labels.ts";
 import { HOST, LABELS, PART, WINDOW } from "../text.ts";
-import { BUILTIN, FakeNet, OFFICIAL, openStore, props, publish, rows, start, until } from "./helpers.ts";
+import { allRows, BUILTIN, FakeNet, OFFICIAL, openStore, props, publish, rows, start, until } from "./helpers.ts";
 
 const pot = readFileSync(new URL("../locales/messages.pot", import.meta.url), "utf8");
 const po = readFileSync(new URL("../locales/zh-Hans.po", import.meta.url), "utf8");
@@ -25,18 +25,19 @@ test("every template and capability is in messages.pot and translated in zh-Hans
 test("English by default: the menu, the list and the OSD", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [{ id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] }]);
-  const { host, stop } = await start({ net, packages: [BUILTIN], locale: "en" });
+  const { host, store, stop } = await start({ net, packages: [BUILTIN], locale: "en" });
   try {
     assert.deepEqual(host.command("open").display.path, ["Plugin Store…"]);
     await openStore(host);
-    await until(host, () => rows(host).length === 2);
+    await until(host, () => store.items.length === 2);
     assert.deepEqual(
-      rows(host).map((r) => [r.name, r.badge, (r as { meta?: string }).meta]),
+      (await allRows(host)).map((r) => [r.name, r.badge, (r as { meta?: string }).meta]),
       [
-        ["Alpha", "", "Someone · Official repository"],
         ["vestra.video", "Built-in", "Unknown author · Built-in"],
+        ["Alpha", "", "Someone · Official repository"],
       ],
     );
+    assert.equal(rows(host)[0]?.name, "vestra.video", "back on the Installed tab");
     host.window("store").emit("openLink", "javascript:alert(1)");
     await host.settle(20);
     assert.ok(host.osd.includes("This kind of link cannot be opened"));

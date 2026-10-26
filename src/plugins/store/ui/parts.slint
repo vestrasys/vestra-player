@@ -4,6 +4,130 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
+import { Button, ToolTipArea } from "@vestra/widgets.slint";
+
+// One entry of a MenuButton's menu; `id` "" is a separator.
+export struct MenuEntry {
+    id: string,
+    text: string,
+    enabled: bool,
+}
+
+// V-Line strokes (1.5px, round caps) for the store's icon buttons, drawn in a
+// 14×12 box like the player's set, which has no refresh, settings or "more"
+// icon yet (round doc 2026-10-ui-polish, request STORE-ICONS).
+export global StoreIcons {
+    // A circle open at the upper right, the arrow turning clockwise.
+    out property <string> refresh: "M 10.99 7.45 A 4.25 4.25 0 1 1 10.26 3.27 M 10.26 0.87 L 10.26 3.27 L 7.9 2.85";
+    // A small gear: a ring and eight teeth.
+    out property <string> settings: "M 9 6 A 2 2 0 1 1 5 6 A 2 2 0 1 1 9 6 M 10.5 6 H 12 M 2 6 H 3.5 M 7 1 V 2.5 M 7 9.5 V 11 M 9.47 3.53 L 10.54 2.46 M 4.53 3.53 L 3.46 2.46 M 9.47 8.47 L 10.54 9.54 M 4.53 8.47 L 3.46 9.54";
+    // Three dots.
+    // (Small rings: a zero-length line draws nothing in the software renderer.)
+    out property <string> more: "M 3.5 6 A 0.5 0.5 0 1 1 2.5 6 A 0.5 0.5 0 1 1 3.5 6 M 7.5 6 A 0.5 0.5 0 1 1 6.5 6 A 0.5 0.5 0 1 1 7.5 6 M 11.5 6 A 0.5 0.5 0 1 1 10.5 6 A 0.5 0.5 0 1 1 11.5 6";
+}
+
+// A menu row in the main menu's style (ui-spec §6.3): 24px, 12px text, the
+// lit row selected-bg with a 2×14 accent bar on its left edge.
+component MenuRow {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback picked();
+    private property <bool> lit: touch.has-hover && root.enabled;
+    height: 24px;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    Rectangle {
+        border-radius: Theme.radius-control;
+        background: root.lit ? Theme.selected-bg : transparent;
+    }
+    if root.lit: Rectangle {
+        x: 0;
+        y: 5px;
+        width: 2px;
+        height: 14px;
+        border-radius: 1px;
+        background: Theme.accent;
+    }
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        Text {
+            text: root.text;
+            color: !root.enabled ? Theme.text-dim : root.lit ? Theme.text : Theme.text-list;
+            font-size: Theme.font-tab;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.picked(); }
+    }
+}
+
+// An icon button that opens a menu under it, right-aligned with it, in the
+// main menu's style (bg-panel, a line border, radius-panel). The caller sizes it.
+export component MenuButton {
+    in property <string> icon;
+    in property <length> icon-width: 14px;
+    in property <length> icon-height: 12px;
+    in property <string> tip;
+    in property <[MenuEntry]> entries;
+    in property <bool> enabled: true;
+    callback picked(string);
+    private property <length> menu-width: max(120px, measure.preferred-width + 20px);
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.tip;
+        Button {
+            width: 100%;
+            height: 100%;
+            icon: root.icon;
+            icon-width: root.icon-width;
+            icon-height: root.icon-height;
+            stroked: true;
+            enabled: root.enabled && root.entries.length > 0;
+            clicked => { menu.show(); }
+        }
+    }
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        measure := VerticalLayout {
+            for entry in root.entries: Text { text: entry.text; font-size: Theme.font-tab; }
+        }
+    }
+    menu := PopupWindow {
+        x: root.width - root.menu-width;
+        y: root.height + 2px;
+        width: root.menu-width;
+        Rectangle {
+            background: Theme.bg-panel;
+            border-color: Theme.line;
+            border-width: 1px;
+            border-radius: Theme.radius-panel;
+            VerticalLayout {
+                padding: 2px;
+                for entry in root.entries: VerticalLayout {
+                    if entry.id == "": Rectangle {
+                        height: 7px;
+                        Rectangle { x: 8px; width: parent.width - 16px; height: 1px; background: Theme.line; }
+                    }
+                    if entry.id != "": MenuRow {
+                        text: entry.text;
+                        enabled: entry.enabled;
+                        picked => {
+                            menu.close();
+                            root.picked(entry.id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 // Status colours: amber for warnings (the theme has no token for it: a
 // darker amber on a light palette's panels), the theme's danger red for

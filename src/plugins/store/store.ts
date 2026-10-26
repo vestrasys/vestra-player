@@ -21,6 +21,7 @@ import { Revocations, revocationKey } from "./revocations.ts";
 import { Repos, type Deps } from "./repos.ts";
 import { compareVersions, isVersion } from "./semver.ts";
 import { SettingsPage } from "./settings-page.ts";
+import { bytes, directorySize } from "./sizes.ts";
 import { argOf, joined, list, msg, raw, textOf, type Arg, type Label, type Msg } from "./text.ts";
 
 /** Persisted in `<data>/settings.json`. */
@@ -58,11 +59,17 @@ export const timing = {
   tick: 60 * 60 * 1000,
   /** Then every 24 hours. */
   interval: 24 * 60 * 60 * 1000,
+  /** Opening the window waits this long for a repository's response headers (a blackholed network). */
+  openHeaders: 5_000,
 };
+
+/** The window's tabs. */
+export const INSTALLED = 0;
+export const AVAILABLE = 1;
+export const UPDATES = 2;
 
 export const MENU_ORDER = 822;
 const README_LIMIT = 256 * 1024;
-const FILTERS = 3;
 const REMOTE_IMAGE = /!\[[^\]]*\]\(\s*<?(https?:\/\/[^)\s>]+)/g;
 
 /** A confirmation: `message` and `detail` share one list of arguments (`detail` numbers its placeholders after the message's). */
@@ -77,6 +84,11 @@ export interface Question {
 
 type Banner = { text: Msg | null; tone: number; action: string; actionText: Msg | null };
 
+/** A button or a `…` menu entry of a row; `id` is what `#act` does. */
+type Action = { id: string; text: Msg; enabled: boolean };
+
+type Fact = { label: Msg; text: Msg; url: string | null; action?: "openData" };
+
 type Doc = {
   key: string;
   ref: MarkdownRef | null;
@@ -86,6 +98,8 @@ type Doc = {
   scope: Scope | null;
   /** The document is on another host than a third-party index: not fetched until asked. */
   offHost?: string;
+  /** Offline: the installed package's own copy is shown. */
+  own?: boolean;
 };
 
 /**
@@ -108,7 +122,7 @@ export class Store {
   items: Item[] = [];
 
   // Window state
-  filter = 0;
+  category = INSTALLED;
   search = "";
   tag: string | null = null;
   sort = 0;
@@ -125,6 +139,10 @@ export class Store {
   readonly #images = new Map<string, ImageRef>();
   readonly #displays = new Map<string, Display>();
   readonly #logo: string;
+  /** Data directory → bytes ("pending" while measured, `null` unknown); measured again when the window opens. */
+  readonly #sizes = new Map<string, number | null | "pending">();
+  /** The row whose enable, disable or reload is running. */
+  #working: string | null = null;
   // Menu
   #menuScope: Scope | null = null;
   #menuCount = -1;
@@ -149,8 +167,8 @@ export class Store {
     window.on("search", (text: string) => {
       this.search = text;
     });
-    window.on("setFilter", (index: number) => {
-      this.filter = Math.max(0, Math.min(FILTERS - 1, index));
+    window.on("setCategory", (index: number) => {
+      this.category = Math.max(INSTALLED, Math.min(UPDATES, index));
     });
     window.on("setTag", (index: number) => {
       this.tag = index <= 0 ? null : (this.#tags()[index - 1] ?? null);
@@ -168,6 +186,10 @@ export class Store {
       void this.#loadDoc();
     });
     window.on("act", (action: string) => this.#act(action));
+    window.on("rowAct", (key: string, action: string) => {
+      if (this.selected !== key) this.select(key);
+      return this.#act(action);
+    });
     window.on("bannerAct", (action: string) => this.#bannerAct(action));
     window.on("installVersion", (version: string) => {
       const item = this.selectedItem();
@@ -176,7 +198,9 @@ export class Store {
     });
     window.on("openLink", (url: string) => this.#openLink(url));
     window.on("factLink", (index: number) => {
-      const fact = this.#facts(this.selectedItem())[index];
+      const item = this.selectedItem();
+      const fact = this.#facts(item)[index];
+      if (fact?.action === "openData" && item) return this.#openData(item);
       if (fact?.url) return this.#openLink(fact.url);
     });
     window.on("fromFile", () => this.#fromFile());
@@ -194,6 +218,7 @@ export class Store {
       this.linkOpen = false;
     });
     window.on("repos", () => plugin.settings.show(SettingsPage.ID));
+    window.on("settings", () => plugin.settings.show(SettingsPage.ID));
     window.on("refresh", () => this.refreshAll(true));
     window.on("cancel", () => this.#operation?.cancel?.());
     window.onClose(() => this.#docAbort?.abort());
@@ -238,9 +263,9 @@ export class Store {
   }
 
   /** Refresh every repository (or only stale ones), then recompute everything. */
-  async refreshAll(force: boolean) {
+  async refreshAll(force: boolean, headerTimeoutMs?: number) {
     this.#message = null;
-    const done = this.repos.refreshAll(force);
+    const done = this.repos.refreshAll(force, headerTimeoutMs);
     this.changed();
     await done;
     if (this.#disposed) return;
@@ -250,8 +275,10 @@ export class Store {
 
   /** The menu command (and the window button): show the window, refresh stale repositories. */
   async open(refresh = true) {
+    this.#sizes.clear();
     await this.window.show();
-    if (refresh && this.repos.list.some((repo) => this.repos.stale(repo))) void this.refreshAll(false);
+    // A short wait for the headers: offline, the Installed tab never waits for the network anyway.
+    if (refresh && this.repos.list.some((repo) => this.repos.stale(repo))) void this.refreshAll(false, timing.openHeaders);
     if (!this.selected) {
       const first = this.visible()[0];
       if (first) this.select(first.key);
@@ -266,7 +293,13 @@ export class Store {
 
   /** Recompute rows after the repositories or the install library changed. */
   rebuild(afterRefresh = false) {
-    this.items = buildItems(this.repos.list, this.packages, this.plugin.app.version, (info) => this.#display(info));
+    this.items = buildItems(
+      this.repos.list,
+      this.packages,
+      this.plugin.app.version,
+      (info) => this.#display(info),
+      this.plugin.i18n.locale,
+    );
     void this.updateMenu(afterRefresh);
     void this.revocations.check();
     void this.#loadDoc();
@@ -387,33 +420,42 @@ export class Store {
     return this.items.find((item) => item.key === this.selected) ?? null;
   }
 
-  /** Filter, search, tag and sort (design §2.1). */
+  /** The current tab, searched, tag-filtered and sorted (design §2.1); built-ins first under Installed. */
   visible(): Item[] {
     const query = this.search.trim().toLowerCase();
-    let items = this.#filtered().filter((item) =>
+    let items = this.#inCategory().filter((item) =>
       !query
         ? true
-        : [item.name, item.id, item.author ?? "", item.punchline ?? "", ...item.tags].some((text) =>
+        : [item.name, item.id, item.author ?? "", item.punchline ?? "", ...item.tags, ...item.english].some((text) =>
             text.toLowerCase().includes(query),
           ),
     );
-    if (this.tag) items = items.filter((item) => item.tags.some((t) => t.toLowerCase() === this.tag!.toLowerCase()));
+    if (this.tag) {
+      const tag = this.tag.toLowerCase();
+      items = items.filter((item) => [...item.tags, ...item.english].some((t) => t.toLowerCase() === tag));
+    }
+    const group = (item: Item) => (this.category === INSTALLED && item.installed?.builtin ? 0 : 1);
     const byName = (a: Item, b: Item) => a.name.localeCompare(b.name, "zh") || a.key.localeCompare(b.key);
-    return items.sort(
-      this.sort === 1 ? (a, b) => (b.published ?? "").localeCompare(a.published ?? "") || byName(a, b) : byName,
-    );
+    const order =
+      this.sort === 1 ? (a: Item, b: Item) => (b.published ?? "").localeCompare(a.published ?? "") || byName(a, b) : byName;
+    return items.sort((a, b) => group(a) - group(b) || order(a, b));
   }
 
-  #filtered(): Item[] {
-    if (this.filter === 1) return this.items.filter(isInstalledRow);
-    if (this.filter === 2) return this.items.filter((item) => item.state === "update");
-    return this.items;
+  #inCategory(): Item[] {
+    if (this.category === INSTALLED) return this.items.filter(isInstalledRow);
+    if (this.category === UPDATES) return this.items.filter((item) => item.state === "update");
+    return this.items.filter((item) => !isInstalledRow(item));
   }
 
   #tags(): string[] {
     const tags = new Map<string, string>();
-    for (const item of this.#filtered()) for (const tag of item.tags) if (!tags.has(tag.toLowerCase())) tags.set(tag.toLowerCase(), tag);
+    for (const item of this.#inCategory()) for (const tag of item.tags) if (!tags.has(tag.toLowerCase())) tags.set(tag.toLowerCase(), tag);
     return [...tags.values()].sort((a, b) => a.localeCompare(b, "zh"));
+  }
+
+  /** Some repository has an index (fresh or cached): Available and Updates mean something. */
+  #known(): boolean {
+    return this.repos.list.some((repo) => repo.index !== null);
   }
 
   props() {
@@ -426,14 +468,18 @@ export class Store {
       ? [this.#message.text]
       : this.repos.list.flatMap((repo) => (repo.status.text ? [repo.status.text] : []));
     const shown = (text: Msg | null) => this.shown(text);
+    const action = (a: Action | null) => (a ? { id: a.id, text: shown(a.text), enabled: a.enabled } : { id: "", text: "", enabled: false });
     const base = {
-      filter: this.filter,
+      category: this.category,
+      installedCount: this.items.filter(isInstalledRow).length,
+      availableCount: this.items.filter((each) => !isInstalledRow(each)).length,
+      availableKnown: this.#known(),
       updates: updateCount(this.items),
       // The first entry is "Tags: All" (the window's words).
       tagModel: ["", ...tags],
       tagIndex: this.tag ? Math.max(0, tags.findIndex((t) => t.toLowerCase() === this.tag!.toLowerCase()) + 1) : 0,
       sortIndex: this.sort,
-      rows: visible.map((each) => this.#row(each)),
+      rows: visible.map((each) => this.#row(each, action)),
       emptyText: shown(this.#emptyText(visible)),
       linkOpen: this.linkOpen,
       status: this.shown(joined(status, "{} · {}")),
@@ -448,31 +494,36 @@ export class Store {
       ...base,
       dName: item.name,
       dMeta: shown(msg("{} · {}", item.author ?? msg("Unknown author"), this.#origin(item))),
-      dPunchline: item.punchline ?? item.local?.description ?? "",
+      dPunchline: item.punchline ?? item.description ?? "",
       dIcon: this.#icon(item),
-      actions: this.#actions(item).map((a) => ({ ...a, text: shown(a.text) })),
+      actions: this.#actions(item).map(action),
       banners: this.#banners(item).map((b) => ({ ...b, text: shown(b.text), actionText: shown(b.actionText) })),
       tab: this.tab,
       doc: this.#doc.key === this.#docKey(item) && this.#doc.ref ? this.#doc.ref : [],
       docNote: shown(this.#doc.key === this.#docKey(item) ? this.#doc.note : msg("Loading…")),
       versions: this.#versions(item),
-      facts: this.#facts(item).map(({ label, text, url }) => ({ label: shown(label), text: shown(text), link: url !== null })),
+      facts: this.#facts(item).map(({ label, text, url, action: act }) => ({
+        label: shown(label),
+        text: shown(text),
+        link: url !== null || act !== undefined,
+      })),
       permissions: permissions(caps).map(({ text, risky }) => ({ text: shown(text), risky })),
-      manage: item.installed !== null && !item.installed.builtin,
     };
   }
 
   #emptyText(visible: Item[]): Msg | null {
     if (visible.length) return null;
     if (this.search || this.tag) return msg("No plugins match");
-    if (this.filter === 1) return msg("No plugins installed yet");
-    // Updates: "up to date" only when at least one index (fresh or cached) was read.
-    const unread = this.repos.list.every((repo) => !repo.index);
-    if (this.filter === 2 && !unread) return msg("All plugins are up to date");
-    if (this.repos.list.some((repo) => repo.refreshing)) return msg("Reading repositories…");
-    if (unread)
-      return msg("Can't connect to the repositories and there is no cached copy. Click “Refresh” once you are online.");
-    return msg("The repositories have no plugins yet");
+    if (this.category === INSTALLED) return msg("No plugins installed yet");
+    // Available and Updates need an index (fresh or cached); "up to date" only after one was read.
+    if (!this.#known()) {
+      if (this.repos.list.some((repo) => repo.refreshing)) return msg("Reading repositories…");
+      return msg("Can't reach the repositories. Showing nothing until you're online; click Refresh to retry.");
+    }
+    if (this.category === UPDATES) return msg("All plugins are up to date");
+    return this.repos.list.some((repo) => repo.index?.plugins.length)
+      ? msg("Every plugin from the repositories is installed")
+      : msg("The repositories have no plugins yet");
   }
 
   #origin(item: Item): Msg {
@@ -480,12 +531,17 @@ export class Store {
     return sourceName(item.installed?.source ?? null);
   }
 
-  #row(item: Item) {
-    const installedVersion = item.installed?.version ?? "";
+  #row(item: Item, action: (a: Action | null) => { id: string; text: TextValue; enabled: boolean }) {
+    const info = item.installed;
+    const installedVersion = info?.version ?? "";
     const shown = item.state === "otherSource" || item.state === "available" || item.state === "incompatible" || item.state === "allRevoked" || item.state === "reserved"
       ? (item.best ?? item.entry?.versions[0])?.version ?? ""
       : installedVersion;
+    // Disabled and Failed tag installed rows; Revoked says more and stays.
+    const own = isInstalledRow(item) && item.state !== "revoked" ? info : null;
     const [badge, tone] = ((): [Msg | null, number] => {
+      if (own?.state === "disabled") return [msg("Disabled"), 4];
+      if (own?.state === "failed") return [msg("Failed"), 2];
       switch (item.state) {
         case "installed":
           return [msg("Installed"), 0];
@@ -494,7 +550,7 @@ export class Store {
         case "revoked":
           return [msg("Revoked"), 3];
         case "otherSource":
-          return [msg("Installed from {}", sourceName(item.installed?.source ?? null)), 4];
+          return [msg("Installed from {}", sourceName(info?.source ?? null)), 4];
         case "builtin":
           return [msg("Built-in"), 4];
         case "incompatible":
@@ -509,16 +565,72 @@ export class Store {
           return [null, 0];
       }
     })();
+    const { primary, menu } = this.#controls(item, false);
     return {
       key: item.key,
       name: item.name,
       version: shown,
       meta: this.shown(msg("{} · {}", item.author ?? msg("Unknown author"), this.#origin(item))),
       punchline: item.punchline ?? "",
+      // A failed plugin's reason on hover.
+      tip: own?.state === "failed" && own.error ? own.error : (item.punchline ?? ""),
       badge: this.shown(badge),
       tone,
       selected: item.key === this.selected,
+      dim: isInstalledRow(item) && info?.state === "disabled",
+      // No logo per row yet: an image can only be a whole property value (round doc, request STORE-ROW-LOGO).
+      primary: action(primary),
+      menu: menu.map((each) => action(each)),
     };
+  }
+
+  /** The installed plugin has a newer version from its repository (update, or a revoked one with a fix). */
+  #newer(item: Item): boolean {
+    const version = item.installed?.version;
+    return (
+      (item.state === "update" || item.state === "revoked") &&
+      item.best !== null &&
+      !!version &&
+      isVersion(version) &&
+      compareVersions(item.best.version, version) > 0
+    );
+  }
+
+  /**
+   * A row's one button and its `…` menu by state (plugin-center spec, "List
+   * rows"); `detail` words the install and update buttons with the version.
+   * Built-ins have no button; their menu offers only Reload and Open Data Folder.
+   */
+  #controls(item: Item, detail: boolean): { primary: Action | null; menu: Action[] } {
+    const idle = !this.busy && this.#working === null;
+    if (this.#working === item.key) return { primary: { id: "", text: msg("Working…"), enabled: false }, menu: [] };
+    const a = (id: string, text: Msg, enabled = idle): Action => ({ id, text, enabled: enabled && idle });
+    const info = item.installed;
+    if (!info || !isInstalledRow(item)) {
+      if (item.state === "available")
+        return { primary: a("install", detail ? msg("Install {}", item.best!.version) : msg("Install")), menu: [] };
+      return { primary: null, menu: [] };
+    }
+    const openData = a("openData", msg("Open Data Folder"), info.dataDirectory !== null);
+    // Built-ins always run: a running one cannot be restarted with packages.setEnabled (§4.1 request).
+    if (info.builtin)
+      return {
+        primary: null,
+        menu: [a("reload", msg("Reload"), info.id !== this.plugin.id && info.state !== "running" && info.state !== "starting"), openData],
+      };
+    const uninstall = a("uninstall", msg("Uninstall…"));
+    const disable = a("disable", msg("Disable"));
+    const reload = a("reload", msg("Reload"));
+    const update = a("update", detail ? msg("Update to {}", item.best?.version ?? "") : msg("Update"));
+    if (info.state === "disabled") {
+      const enable = a("enable", item.state === "revoked" ? msg("Enable Anyway…") : msg("Enable"));
+      // A revoked version the store disabled: updating to the fixed one comes first.
+      if (item.state === "revoked" && this.#newer(item)) return { primary: update, menu: [enable, uninstall, openData] };
+      return { primary: enable, menu: [uninstall, openData] };
+    }
+    if (this.#newer(item)) return { primary: update, menu: [disable, uninstall, reload, openData] };
+    if (info.state === "failed") return { primary: reload, menu: [disable, uninstall, openData] };
+    return { primary: uninstall, menu: [disable, reload, openData] };
   }
 
   #icon(item: Item): ImageRef {
@@ -526,7 +638,11 @@ export class Store {
     // A third-party icon on another host than its index is never fetched (it would tell that host who looks).
     if (item.entry?.iconUrl && this.#sameHost(item, item.entry.iconUrl))
       path = this.icons.remote(item.entry.iconUrl, item.repo?.local ?? false, item.entry.iconCheck);
-    else if (item.local?.icon && item.installed) path = this.icons.local(join(item.installed.directory, item.local.icon));
+    // Not downloaded (offline, or not yet): an installed plugin's own icon from its package.
+    if (!path && item.installed) {
+      const icon = (item.local ?? this.#display(item.installed)).icon;
+      if (icon) path = this.icons.local(join(item.installed.directory, icon));
+    }
     return this.#image(path ?? this.#logo);
   }
 
@@ -539,29 +655,19 @@ export class Store {
     return ref;
   }
 
-  #actions(item: Item): { id: string; text: Msg; enabled: boolean }[] {
-    const idle = !this.busy;
+  /** The detail's buttons: the row's button, then Uninstall… and Disable for a third-party plugin. */
+  #actions(item: Item): Action[] {
+    const { primary } = this.#controls(item, true);
+    const list: Action[] = primary ? [primary] : [];
+    const idle = !this.busy && this.#working === null;
+    if (item.state === "otherSource" && item.best) list.push({ id: "replace", text: msg("Replace…"), enabled: idle });
     const info = item.installed;
-    const list: { id: string; text: Msg; enabled: boolean }[] = [];
-    const newer =
-      item.best && info?.version && isVersion(info.version) && compareVersions(item.best.version, info.version) > 0;
-    switch (item.state) {
-      case "available":
-        list.push({ id: "install", text: msg("Install {}", item.best!.version), enabled: idle });
-        break;
-      case "update":
-        list.push({ id: "update", text: msg("Update to {}", item.best!.version), enabled: idle });
-        break;
-      case "revoked":
-        if (newer) list.push({ id: "update", text: msg("Update to {}", item.best!.version), enabled: idle });
-        if (info?.state === "disabled") list.push({ id: "enable", text: msg("Enable Anyway…"), enabled: idle });
-        break;
-      case "otherSource":
-        if (item.best) list.push({ id: "replace", text: msg("Replace…"), enabled: idle });
-        break;
+    if (info && !info.builtin && isInstalledRow(item) && this.#working !== item.key) {
+      if (info.state === "disabled" && primary?.id !== "enable")
+        list.push({ id: "enable", text: item.state === "revoked" ? msg("Enable Anyway…") : msg("Enable"), enabled: idle });
+      if (primary?.id !== "uninstall") list.push({ id: "uninstall", text: msg("Uninstall…"), enabled: idle });
+      if (info.state !== "disabled") list.push({ id: "disable", text: msg("Disable"), enabled: idle });
     }
-    if (info && !info.builtin && (item.state === "installed" || item.state === "update" || item.state === "revoked" || item.state === "local"))
-      list.push({ id: "uninstall", text: msg("Uninstall…"), enabled: idle });
     return list;
   }
 
@@ -632,6 +738,7 @@ export class Store {
       if (doc.blocked > 0)
         add(msg("Remote images blocked (unofficial source): {}", doc.blocked), 2, "showImages", msg("Show Images"));
       if (doc.failed) add(doc.note, 2, "reloadDoc", msg("Retry"));
+      if (doc.own) add(msg("From the installed version"), 4);
     }
     return banners;
   }
@@ -673,9 +780,9 @@ export class Store {
     });
   }
 
-  #facts(item: Item | null): { label: Msg; text: Msg; url: string | null }[] {
+  #facts(item: Item | null): Fact[] {
     if (!item) return [];
-    const facts: { label: Msg; text: Msg; url: string | null }[] = [];
+    const facts: Fact[] = [];
     const latest = item.best ?? item.entry?.versions[0];
     if (latest) facts.push({ label: msg("Version"), text: raw(latest.version), url: null });
     if (item.installed) facts.push({ label: msg("Installed"), text: raw(item.installed.version ?? "—"), url: null });
@@ -686,7 +793,50 @@ export class Store {
     if (license) facts.push({ label: msg("License"), text: raw(license), url: null });
     const source = item.entry?.sourceUrl ?? item.local?.sourceUrl;
     if (source) facts.push({ label: msg("Code"), text: msg("Open ↗"), url: source });
+    // What the player knows about the installed plugin (formerly the Plugin Manager's details).
+    const info = isInstalledRow(item) ? item.installed : null;
+    if (info) {
+      facts.push({ label: msg("Status"), text: this.#status(info), url: null });
+      facts.push({ label: msg("Package"), text: raw(info.directory), url: null });
+      const data = info.dataDirectory;
+      facts.push(
+        data
+          ? { label: msg("Data folder"), text: raw(data), url: null, action: "openData" }
+          : { label: msg("Data folder"), text: raw("—"), url: null },
+      );
+      facts.push({ label: msg("Data size"), text: raw(data ? this.#size(data) : "—"), url: null });
+    }
     return facts;
+  }
+
+  #status(info: PluginInfo): Msg {
+    switch (info.state) {
+      case "running":
+        return msg("Running");
+      case "starting":
+        return msg("Starting");
+      case "disabled":
+        return msg("Disabled");
+      case "failed":
+        return info.error ? msg("Failed: {}", raw(info.error)) : msg("Failed");
+      default:
+        return msg("Stopped");
+    }
+  }
+
+  /** "…" until measured (in the background, one directory at a time per request). */
+  #size(directory: string): string {
+    const known = this.#sizes.get(directory);
+    if (known === undefined) {
+      this.#sizes.set(directory, "pending");
+      void directorySize(directory).then((size) => {
+        if (this.#sizes.get(directory) !== "pending") return;
+        this.#sizes.set(directory, size);
+        this.changed();
+      });
+      return "…";
+    }
+    return known === "pending" ? "…" : bytes(known);
   }
 
   async #act(action: string) {
@@ -701,7 +851,67 @@ export class Store {
       case "uninstall":
         return installer.uninstall(this, item);
       case "enable":
-        return this.revocations.enable(item);
+        // A revoked version the store disabled: asks first.
+        if (item.state === "revoked") return this.revocations.enable(item);
+        return this.#switch(item, "enable");
+      case "disable":
+      case "reload":
+        return this.#switch(item, action);
+      case "openData":
+        return this.#openData(item);
+    }
+  }
+
+  /** Enable, disable or reload (stop and start again) an installed plugin through `packages.setEnabled`. */
+  async #switch(item: Item, action: "enable" | "disable" | "reload") {
+    const info = item.installed;
+    if (!info || this.busy || this.#working !== null) return;
+    this.#working = item.key;
+    this.#message = null;
+    this.changed();
+    const { id } = info;
+    try {
+      if (action === "enable") await this.plugin.packages.setEnabled(id, true);
+      else if (action === "disable") await this.plugin.packages.setEnabled(id, false);
+      else {
+        // A failed or stopped plugin only needs starting.
+        if (info.state === "running" || info.state === "starting") await this.plugin.packages.setEnabled(id, false);
+        await this.plugin.packages.setEnabled(id, true);
+      }
+      this.report(
+        action === "enable"
+          ? msg("Enabled “{}”", item.name)
+          : action === "disable"
+            ? msg("Disabled “{}”", item.name)
+            : msg("Reloaded “{}”", item.name),
+      );
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      const why = code === undefined ? raw((error as Error).message) : installer.failureText(this, error, id);
+      this.report(
+        code === "unsupported" && info.builtin
+          ? msg("Built-in plugins cannot be disabled")
+          : action === "enable"
+            ? msg("Couldn't enable “{}”: {}", item.name, why)
+            : action === "disable"
+              ? msg("Couldn't disable “{}”: {}", item.name, why)
+              : msg("Couldn't reload “{}”: {}", item.name, why),
+        true,
+      );
+    } finally {
+      this.#working = null;
+      this.changed();
+    }
+  }
+
+  async #openData(item: Item) {
+    const directory = item.installed?.dataDirectory;
+    if (!directory) return;
+    try {
+      await this.plugin.system.openPath(directory);
+    } catch (error) {
+      if ((error as { code?: string }).code === "missing") this.report(msg("Its data folder does not exist yet"), true);
+      else this.report(msg("Couldn't open the data folder: {}", raw((error as Error).message)), true);
     }
   }
 
@@ -819,6 +1029,7 @@ export class Store {
               if (own === null) throw error;
               text = own;
               base = undefined;
+              if (this.#doc.key === key) this.#doc = { ...this.#doc, own: true };
             }
           }
         }
@@ -852,7 +1063,7 @@ export class Store {
         await scope.dispose();
         return;
       }
-      this.#doc = { key, ref, note: null, blocked, failed: false, scope };
+      this.#doc = { key, ref, note: null, blocked, failed: false, scope, ...(this.#doc.own ? { own: true } : {}) };
     } catch (error) {
       await scope.dispose();
       if (this.#doc.key !== key) return;
@@ -887,14 +1098,23 @@ export class Store {
     }
     const file = (value: unknown, fallback: string | null) =>
       typeof value === "string" && !value.includes("..") ? value : fallback;
-    const display: Display = {
-      name: clean(manifest.name, 64) ?? info.id,
-      author: clean(manifest.author, 64),
+    const tagsOf = (value: unknown) =>
+      Array.isArray(value) ? value.map((t) => clean(t, 24)).filter((t): t is string => t !== null).slice(0, 8) : [];
+    const english = {
+      name: clean(manifest.name, 64),
       punchline: clean(manifest.punchline, 120),
-      description: clean(manifest.description, 2000, true),
-      tags: Array.isArray(manifest.tags)
-        ? manifest.tags.map((t) => clean(t, 24)).filter((t): t is string => t !== null).slice(0, 8)
-        : [],
+      tags: tagsOf(manifest.tags),
+    };
+    // The player's translation of the manifest's texts (players 0.4.3 on), else the manifest's own.
+    const shown = info.display;
+    const tags = shown ? tagsOf(shown.tags) : [];
+    const display: Display = {
+      name: clean(shown?.name, 64) ?? english.name ?? info.id,
+      author: clean(manifest.author, 64),
+      punchline: clean(shown?.punchline, 120) ?? english.punchline,
+      description: clean(shown?.description, 2000, true) ?? clean(manifest.description, 2000, true),
+      tags: tags.length ? tags : english.tags,
+      english: [english.name ?? "", english.punchline ?? "", ...english.tags],
       license: clean(manifest.license, 64),
       sourceUrl: typeof manifest.sourceUrl === "string" && /^https:\/\//.test(manifest.sourceUrl) ? manifest.sourceUrl : null,
       icon: file(manifest.icon, null),

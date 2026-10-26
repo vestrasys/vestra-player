@@ -136,10 +136,11 @@ export class Repos {
     rmSync(this.#dir(url), { recursive: true, force: true });
   }
 
-  async refreshAll(force: boolean): Promise<void> {
+  /** `headerTimeoutMs`: a shorter wait for the response headers (opening the window must not spin for long offline). */
+  async refreshAll(force: boolean, headerTimeoutMs?: number): Promise<void> {
     const queue = this.list.filter((repo) => force || this.stale(repo));
     const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
-      for (let repo = queue.shift(); repo; repo = queue.shift()) await this.refresh(repo);
+      for (let repo = queue.shift(); repo; repo = queue.shift()) await this.refresh(repo, headerTimeoutMs);
     });
     await Promise.all(workers);
   }
@@ -149,12 +150,12 @@ export class Repos {
   }
 
   /** Fetch a repository's index; on any failure keep the copy we have. */
-  async refresh(repo: Repo): Promise<void> {
+  async refresh(repo: Repo, headerTimeoutMs?: number): Promise<void> {
     if (repo.refreshing) return;
     repo.refreshing = true;
     repo.status = { text: msg("Updating {}…", repo.label), warn: false };
     try {
-      const result = await this.#fetch(repo, repo.index !== null);
+      const result = await this.#fetch(repo, repo.index !== null, headerTimeoutMs);
       const now = this.#deps.now();
       if (result === "unchanged") {
         repo.fetchedAt = now;
@@ -178,7 +179,9 @@ export class Repos {
         repo.status = { text: msg("{0}: updated at {1}", repo.label, clock(now, now)), warn: false };
       }
     } catch (error) {
-      repo.status = { text: this.#failure(repo, error), warn: true };
+      // Being offline is not a fault: said calmly (the other failures are warnings).
+      const offline = error instanceof NetError && (error.code === "network" || error.code === "timeout");
+      repo.status = { text: this.#failure(repo, error), warn: !offline };
       this.#deps.log(`${repo.url}: ${(error as Error).message}`);
     } finally {
       repo.refreshing = false;
@@ -193,7 +196,8 @@ export class Repos {
     return result.index;
   }
 
-  async #fetch(repo: Repo, conditional: boolean) {
+  async #fetch(repo: Repo, conditional: boolean, headerTimeoutMs?: number) {
+    const wait = headerTimeoutMs === undefined ? {} : { headerTimeoutMs };
     const headers: Record<string, string> = { "User-Agent": this.#deps.userAgent };
     // The official index and its signature are fetched as a pair: when the
     // index changed between the two requests, one more try usually matches.
@@ -206,6 +210,7 @@ export class Repos {
       const got = await get(this.#deps.fetch, repo.url, {
         maxBytes: INDEX_LIMIT,
         timeoutMs: 30_000,
+        ...wait,
         headers: ask,
         allowLocalHttp: repo.local,
       });
@@ -221,6 +226,7 @@ export class Repos {
           const sig = await get(this.#deps.fetch, `${repo.url}.sig`, {
             maxBytes: SIG_LIMIT,
             timeoutMs: 15_000,
+            ...wait,
             headers,
           });
           signature = sig.bytes!.toString("utf8");

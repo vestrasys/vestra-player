@@ -1,15 +1,17 @@
-// Plugin Store (vestra.store, design §2.1): filters and buttons on top, the
-// plugin list on the left (300 wide, 52px rows), the selected plugin on the
+// Plugin Store (vestra.store, design §2.1; plugin-center spec 2026-10): tabs
+// Installed / Available / Updates with the refresh and ⚙ menu buttons on top,
+// then search, tags and sort; the plugin list on the left (300 wide, 62px
+// rows with the logo, one button and a … menu), the selected plugin on the
 // right (header, actions, notices, tabs Description / Changelog / Versions
 // and a 200px column with facts and permissions), a status line at the bottom.
 // Texts built at run time come translated from TypeScript (text values).
-// Minimum 760×480: top row search ≥ 180 + 3 filter buttons + two 110px
-// drop-downs + gaps ≈ 600; the detail keeps ≥ 440 next to the list.
+// Minimum 760×480: the tabs and two 23px buttons, search ≥ 180 + two 110px
+// drop-downs; the detail keeps ≥ 440 next to the list.
 import { LineEdit, ListView } from "std-widgets.slint";
 import { MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
-import { Cell, Chip, Choice, Tone } from "parts.slint";
+import { Cell, Choice, MenuButton, MenuEntry, StoreIcons, Tone } from "parts.slint";
 
 export struct StoreRow {
     key: string,
@@ -21,6 +23,13 @@ export struct StoreRow {
     // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim (see Tone)
     tone: int,
     selected: bool,
+    // On hover: the punchline, or why it failed.
+    tip: string,
+    // Disabled: drawn dimmed.
+    dim: bool,
+    // The one button by state (`id` "": none) and the … menu (empty: none).
+    primary: MenuEntry,
+    menu: [MenuEntry],
 }
 
 export struct StoreAction {
@@ -84,52 +93,79 @@ component SizedButton inherits Rectangle {
 component ListRow inherits Rectangle {
     in property <StoreRow> item;
     callback select();
-    // Three lines (18 + 16 + 16) with 4px padding top and bottom.
-    height: 60px;
+    callback act(string);
+    // Three lines (18 + 16 + 18) with 4px padding top and bottom. The 32px logo
+    // on the left waits for images inside row values (request STORE-ROW-LOGO).
+    height: 62px;
     background: root.item.selected ? Theme.selected-bg : touch.has-hover ? Theme.hover-bg : transparent;
-    VerticalLayout {
-        padding-left: 8px;
-        padding-right: 10px;
-        padding-top: 4px;
-        padding-bottom: 4px;
-        spacing: 1px;
-        HorizontalLayout {
-            height: 18px;
-            spacing: 6px;
-            Cell { horizontal-stretch: 1; text: root.item.name; color: Theme.text; font-size: Theme.font-tab; }
-            Cell { text: root.item.version; color: Theme.text-dim; }
-        }
-        HorizontalLayout {
-            height: 16px;
-            spacing: 6px;
-            Cell { horizontal-stretch: 1; text: root.item.meta; color: Theme.text-dim; }
-            Cell { text: root.item.badge; color: Tone.color(root.item.tone); }
-        }
-        Cell { height: 16px; text: root.item.punchline; color: Theme.text-list; }
-    }
-    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
+    // Under the content, so the row's buttons take their own clicks.
     ToolTipArea {
         width: 100%;
         height: 100%;
-        text: root.item.punchline;
+        text: root.item.tip;
         touch := TouchArea {
             width: 100%;
             height: 100%;
             clicked => { root.select(); }
         }
     }
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        VerticalLayout {
+            spacing: 1px;
+            HorizontalLayout {
+                height: 18px;
+                spacing: 6px;
+                Cell { horizontal-stretch: 1; text: root.item.name; color: root.item.dim ? Theme.text-dim : Theme.text; font-size: Theme.font-tab; }
+                Cell { text: root.item.version; color: Theme.text-dim; }
+            }
+            HorizontalLayout {
+                height: 16px;
+                spacing: 6px;
+                Cell { horizontal-stretch: 1; text: root.item.meta; color: Theme.text-dim; }
+                Cell { text: root.item.badge; color: Tone.color(root.item.tone); }
+            }
+            HorizontalLayout {
+                height: Theme.button-small-height;
+                spacing: 4px;
+                Cell { horizontal-stretch: 1; text: root.item.punchline; color: root.item.dim ? Theme.text-dim : Theme.text-list; }
+                if root.item.primary.id != "" || root.item.primary.text != "": Button {
+                    small: true;
+                    text: root.item.primary.text;
+                    enabled: root.item.primary.enabled;
+                    clicked => { root.act(root.item.primary.id); }
+                }
+                if root.item.menu.length > 0: MenuButton {
+                    width: Theme.button-small-height;
+                    height: Theme.button-small-height;
+                    icon: StoreIcons.more;
+                    tip: @tr("More");
+                    entries: root.item.menu;
+                    picked(id) => { root.act(id); }
+                }
+            }
+        }
+    }
+    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
 }
 
 component Tab inherits Rectangle {
     in property <string> text;
     in property <bool> active;
+    // Drawn in the accent colour while not current (updates waiting).
+    in property <bool> emphasis;
     callback clicked();
     height: 22px;
     width: label.preferred-width + 20px;
+    accessible-role: tab;
+    accessible-label: root.text;
     label := Text {
         text: root.text;
         font-size: Theme.font-tab;
-        color: root.active ? Theme.text : touch.has-hover ? Theme.text-list : Theme.text-dim;
+        color: root.active ? Theme.text : root.emphasis ? Theme.accent : touch.has-hover ? Theme.text-list : Theme.text-dim;
         vertical-alignment: center;
     }
     Rectangle {
@@ -148,9 +184,13 @@ export component StoreWindow inherits Window {
     min-height: 480px;
     background: Theme.bg-panel;
 
-    // Filters and list
+    // Tabs and list: 0 Installed, 1 Available, 2 Updates.
     in-out property <string> search-text;
-    in property <int> filter;
+    in property <int> category;
+    in property <int> installed-count;
+    in property <int> available-count;
+    // Some repository index was read (fresh or cached); otherwise Available counts "—".
+    in property <bool> available-known;
     // Plugins with an update (0: none).
     in property <int> updates;
     // Tags; the first entry stands for all of them.
@@ -175,8 +215,6 @@ export component StoreWindow inherits Window {
     in property <[StoreVersion]> versions;
     in property <[StoreFact]> facts;
     in property <[StorePermission]> permissions;
-    // Installed and not built in: where to disable it.
-    in property <bool> manage;
     // Status line: one message, or a text per repository.
     in property <string> status;
     in property <bool> status-warn;
@@ -184,7 +222,9 @@ export component StoreWindow inherits Window {
     in property <bool> can-cancel;
 
     callback search(string);
-    callback set-filter(int);
+    callback set-category(int);
+    // A row's button or … menu entry: the row's key and the action.
+    callback row-act(string, string);
     callback set-tag(int);
     callback set-sort(int);
     callback select(string);
@@ -199,6 +239,7 @@ export component StoreWindow inherits Window {
     callback link-accepted(string);
     callback link-cancelled();
     callback repos();
+    callback settings();
     callback refresh();
     callback cancel();
 
@@ -233,6 +274,52 @@ export component StoreWindow inherits Window {
         spacing: 6px;
         HorizontalLayout {
             spacing: 6px;
+            height: 22px;
+            Tab { text: @tr("Installed ({})", root.installed-count); active: root.category == 0; clicked => { root.set-category(0); } }
+            Tab {
+                text: root.available-known ? @tr("Available ({})", root.available-count) : @tr("Available (—)");
+                active: root.category == 1;
+                clicked => { root.set-category(1); }
+            }
+            Tab {
+                text: @tr("Updates ({})", root.updates);
+                active: root.category == 2;
+                emphasis: root.updates > 0;
+                clicked => { root.set-category(2); }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            ToolTipArea {
+                width: 23px;
+                text: @tr("Refresh");
+                Button {
+                    width: 100%;
+                    height: 100%;
+                    icon: StoreIcons.refresh;
+                    stroked: true;
+                    clicked => { root.refresh(); }
+                }
+            }
+            MenuButton {
+                width: 23px;
+                icon: StoreIcons.settings;
+                tip: @tr("More");
+                entries: [
+                    { id: "file", text: @tr("Install from File…"), enabled: true },
+                    { id: "link", text: @tr("Install from Link…"), enabled: true },
+                    { id: "repos", text: @tr("Repositories…"), enabled: true },
+                    { id: "", text: "", enabled: false },
+                    { id: "settings", text: @tr("Store Settings…"), enabled: true },
+                ];
+                picked(id) => {
+                    if id == "file" { root.from-file(); }
+                    if id == "link" { root.from-link(); }
+                    if id == "repos" { root.repos(); }
+                    if id == "settings" { root.settings(); }
+                }
+            }
+        }
+        HorizontalLayout {
+            spacing: 6px;
             height: 24px;
             search-box := LineEdit {
                 min-width: 180px;
@@ -241,14 +328,6 @@ export component StoreWindow inherits Window {
                 font-size: Theme.font-body;
                 text <=> root.search-text;
                 edited(text) => { root.search(text); }
-            }
-            Chip { width: max(48px, self.preferred-width); text: @tr("All"); checked: root.filter == 0; clicked => { root.set-filter(0); } }
-            Chip { width: max(56px, self.preferred-width); text: @tr("Installed"); checked: root.filter == 1; clicked => { root.set-filter(1); } }
-            Chip {
-                width: max(76px, self.preferred-width);
-                text: root.updates > 0 ? @tr("Updates {}", root.updates) : @tr("Updates");
-                checked: root.filter == 2;
-                clicked => { root.set-filter(2); }
             }
             Choice {
                 width: root.tag-width;
@@ -266,15 +345,7 @@ export component StoreWindow inherits Window {
                 selected(index) => { root.set-sort(index); }
             }
         }
-        HorizontalLayout {
-            spacing: 6px;
-            height: Theme.button-height;
-            Cell { horizontal-stretch: 1; text: @tr("You can also drop a .vxp plugin package on the player's video area to install it"); color: Theme.text-dim; }
-            SizedButton { min: 84px; text: @tr("Install from File…"); clicked => { root.from-file(); } }
-            SizedButton { min: 84px; text: @tr("Install from Link…"); clicked => { root.from-link(); } }
-            SizedButton { min: 60px; text: @tr("Repositories…"); clicked => { root.repos(); } }
-            SizedButton { min: 52px; text: @tr("Refresh"); clicked => { root.refresh(); } }
-        }
+        Cell { height: Theme.button-height; text: @tr("You can also drop a .vxp plugin package on the player's video area to install it"); color: Theme.text-dim; }
         if root.link-open: link-row := UrlInputRow {
             text <=> root.link-text;
             placeholder: @tr("Plugin package link (https://…/name-version.vxp)");
@@ -300,6 +371,7 @@ export component StoreWindow inherits Window {
                     for row in root.rows: ListRow {
                         item: row;
                         select => { root.select(row.key); }
+                        act(id) => { root.row-act(row.key, id); }
                     }
                 }
                 if root.rows.length == 0: Text {
@@ -518,7 +590,7 @@ export component StoreWindow inherits Window {
                             }
                         }
                     }
-                    if root.manage: Cell { text: @tr("Disable, reload, open the data folder: Settings ▸ Plugin Manager…"); color: Theme.text-dim; }
+
                 }
             }
         }

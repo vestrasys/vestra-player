@@ -1,6 +1,6 @@
 # Plugin Store
 
-Browse the plugins in the official Vestra Player repository and install, update or uninstall them.
+Browse the plugins in the official Vestra Player repository; install, update, uninstall, disable and enable them. The store is where plugins are managed.
 
 ## Entries
 
@@ -10,10 +10,13 @@ Browse the plugins in the official Vestra Player repository and install, update 
 
 ## Features
 
-- **List**: the plugins of the official repository and of the repositories you added, and the plugins installed on this machine. Search (name, author, tags), filter by All / Installed / Updates, pick a tag, sort by name or by update time.
-- **Details**: description, changelog, version history and the permissions the plugin needs (in plain words; the ones to watch are amber).
+- **Tabs**: Installed (built-in plugins first, then the others, disabled and failed ones too), Available (what the repositories offer that is not installed) and Updates, with their counts. Search (name, author, tags, in the interface language and in English), pick a tag, sort by name or by update time, within the tab. Refresh and the ⚙ menu (Install from File…, Install from Link…, Repositories…, Store Settings…) are at the top right.
+- **Rows**: one button by state (Install, Uninstall…, Update, Enable, Reload) and a … menu (Disable or Enable, Uninstall…, Reload, Open Data Folder). Built-in plugins have no button; their menu offers Reload and Open Data Folder.
+- **Details**: description, changelog, version history and the permissions the plugin needs (in plain words; the ones to watch are amber); for installed plugins also the status, package folder, data folder and data size.
+- **Disable and enable**: a disabled plugin stays off after a restart; its row is dimmed. Reload stops and starts a plugin, or starts a failed one again.
+- **Offline**: the Installed tab, details, uninstall, disable, enable, reload and installing a `.vxp` work without a network. Opening the store waits at most 5 seconds for a repository; Available and Updates then show the last known state or a note.
 - **Install and update**: every install lists the permissions and asks first. Updates come only from the plugin's own repository. The Versions tab installs a newer version than the installed one; to go back to an older version, uninstall the plugin and install that version's `.vxp`.
-- **From a file or a link**: Install from File… and Install from Link… in the window, or drop a `.vxp` on the video area. Such plugins are not reviewed by any repository, and the store does not check them for updates.
+- **From a file or a link**: Install from File… and Install from Link… in the ⚙ menu, or drop a `.vxp` on the video area. Such plugins are not reviewed by any repository, and the store does not check them for updates.
 - **Replace**: when the same plugin is already installed from somewhere else, the store asks before replacing it. The replacement starts with new, empty data; the old data is kept and comes back when you reinstall from the original source.
 - **Revocations**: when a repository revokes a version, the store disables it and tells you why; its page keeps a warning. You can confirm the risk and enable it again, and the store will not disable it again.
 - **Automatic check**: 30 seconds after the player starts, then every 24 hours; it only counts updates and never installs on its own. It can be turned off on the settings page.
@@ -27,8 +30,8 @@ Browse the plugins in the official Vestra Player repository and install, update 
 
 ## Limits
 
-- Built-in plugins are updated with the player and cannot be installed, replaced, uninstalled or disabled; reload them or open their data folder in Settings ▸ Plugin Manager….
-- The list shows no plugin icons (only the details do); dropping a `.vxp` on the store window does nothing, drop it on the video area.
+- Built-in plugins are updated with the player and cannot be installed, replaced, uninstalled or disabled. A running built-in cannot be reloaded yet (the player has no way to restart one); a failed one can.
+- The list shows no plugin icons yet (only the details do): the player shows an image only as a whole window property. Dropping a `.vxp` on the store window does nothing, drop it on the video area.
 - Behind a company proxy or with self-signed certificates the repositories may be unreachable.
 
 ## Translations

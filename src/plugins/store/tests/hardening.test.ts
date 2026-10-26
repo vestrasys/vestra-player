@@ -85,10 +85,10 @@ test("asset hashes: matching README and icon are shown; a tampered or resized on
   icon[icon.length - 1] = icon[icon.length - 1]! ^ 1;
   net.route("https://plugins.test/assets/b.bad/icon.png", { body: icon });
   net.route("https://plugins.test/assets/c.size/README.md", { body: "# Size, longer" });
-  const { host, stop } = await start({ net });
+  const { host, store, stop } = await start({ net });
   try {
     await openStore(host);
-    await until(host, () => !!props(host)["rows"] && (props(host)["rows"] as unknown[]).length >= 3);
+    await until(host, () => store.items.length >= 3);
     await choose(host, "Good");
     await until(host, () => host.markdown(props(host)["doc"])?.text === "# Good", "good readme");
     await until(host, () => host.imagePath(props(host)["d-icon"])?.includes("sha-") === true, "good icon");

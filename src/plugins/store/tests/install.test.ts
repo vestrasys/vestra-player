@@ -4,7 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
 import { installFromRepository } from "../installer.ts";
-import { actions, banners, BUILTIN, choose, FakeNet, info, no, OFFICIAL, openStore, props, publish, rows, start, THIRD, until, yes } from "./helpers.ts";
+import { actions, allRows, banners, BUILTIN, choose, FakeNet, info, no, OFFICIAL, openStore, props, publish, start, THIRD, until, yes } from "./helpers.ts";
 
 const YT = {
   id: "zysilm.youtube",
@@ -16,7 +16,7 @@ const YT = {
 async function ready(net: FakeNet, packages = [BUILTIN]) {
   const started = await start({ net, packages });
   await openStore(started.host);
-  await until(started.host, () => rows(started.host).length > 1, "rows");
+  await until(started.host, () => started.store.items.some((item) => item.entry !== null), "rows");
   return started;
 }
 
@@ -56,9 +56,9 @@ test("official install: confirm with permissions, download through a redirect, c
     await until(host, () => host.osd.includes("已安装 YouTube 0.2.0"), "osd");
     await until(host, () => !store.busy);
     assert.deepEqual(readdirSync(join(host.dataDirectory, "downloads")), [], "download removed");
-    assert.equal(rows(host).find((r) => r.name === "YouTube")?.badge, "已安装");
-    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…"]);
-    assert.equal(props(host)["manage"], true);
+    assert.equal((await allRows(host)).find((r) => r.name === "YouTube")?.badge, "已安装");
+    // The row's button and Disable (formerly in the Plugin Manager).
+    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…", "停用"]);
   } finally {
     await stop();
   }
@@ -134,7 +134,7 @@ test("installed from another source: 替换… asks once and installs with repla
     assert.deepEqual(actions(host).map((a) => a.id), ["replace"]);
     assert.ok(banners(host).some((b) => b.startsWith("已从本地文件安装 0.1.5")));
     // There is also the row of the installed instance (named from its manifest, here unreadable: the id).
-    assert.equal(rows(host).find((r) => r.name === "zysilm.youtube")?.badge, "已安装");
+    assert.equal((await allRows(host)).find((r) => r.name === "zysilm.youtube")?.badge, "已安装");
 
     host.dialogAnswers.push(no);
     host.window("store").emit("act", "replace");
@@ -184,14 +184,14 @@ test("vestra. ids in any repository: refused before downloading (reserved for bu
     store.settings.save({ ...store.settings.value, repos: [THIRD] });
     store.repos.sync([THIRD]);
     await openStore(host);
-    await until(host, () => rows(host).some((r) => r.name === "Extra") && rows(host).some((r) => r.name === "Fake Video"), "rows");
+    await until(host, () => store.items.some((i) => i.name === "Extra") && store.items.some((i) => i.name === "Fake Video"), "rows");
     const fake = await choose(host, "Fake Video");
     assert.equal(fake.badge, "不能安装");
     assert.deepEqual(actions(host), []);
     assert.ok(banners(host).includes("「vestra.video」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载"));
     assert.ok((props(host)["versions"] as { canInstall: boolean }[]).every((v) => !v.canInstall));
     // The built-in plugin keeps its own row.
-    assert.equal(rows(host).find((r) => r.name === "vestra.video")?.badge, "内置");
+    assert.equal((await allRows(host)).find((r) => r.name === "vestra.video" && r.key === "\nvestra.video")?.badge, "内置");
     const extra = await choose(host, "Extra");
     assert.equal(extra.badge, "不能安装");
     assert.deepEqual(actions(host), []);
@@ -260,7 +260,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
   try {
     const row = await choose(host, "YouTube");
     assert.equal(row.badge, "可更新 → 0.3.0");
-    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "卸载…"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "卸载…", "停用"]);
     assert.ok(banners(host).includes("新版本需要新的权限：读写剪贴板"));
     // The Updates chip shows the count ("Updates {}", in Slint).
     assert.equal(props(host)["updates"], 1);
@@ -283,7 +283,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
     );
     await until(host, () => !store.busy);
     // No Roll Back / Restore.
-    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…", "停用"]);
     await until(host, () => (props(host)["versions"] as Version[]).some((v) => v.version === "0.3.0" && v.status === "当前"));
     assert.deepEqual(versions(), [
       ["0.3.0", "当前", false],
@@ -327,7 +327,7 @@ test("third-party repository: warning banner, unofficial confirmation, remote RE
     store.repos.sync([THIRD]);
     host.remoteImages.set("https://img.example/shot.png", store.plugin.dataDirectory);
     await openStore(host);
-    await until(host, () => rows(host).some((r) => r.name === "Viz"));
+    await until(host, () => store.items.some((i) => i.name === "Viz"));
     await choose(host, "Viz");
     await until(host, () => banners(host).some((b) => b.startsWith("已阻止")), "blocked images");
     assert.ok(banners(host).includes("非官方仓库：未经 Vestra Player 审核，插件可能读取你的文件或联网"));
