@@ -5,119 +5,119 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: commands.ts:65
+#: commands.ts:67
 msgid "Back {} s"
 msgstr "后退{}秒"
 
-#: commands.ts:65
+#: commands.ts:67
 msgid "Forward {} s"
 msgstr "前进{}秒"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Seek"
 msgstr "跳转"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Speed"
 msgstr "速度"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Open File…"
 msgstr "打开文件…"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Open URL…"
 msgstr "打开链接…"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Reopen Current/Last File"
 msgstr "重开当前/最后文件"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Copy to Clipboard"
 msgstr "复制到剪贴板"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "File Name"
 msgstr "文件名"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Folder Path"
 msgstr "文件夹路径"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Full Path"
 msgstr "完整路径"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Previous Keyframe"
 msgstr "上一关键帧"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Next Keyframe"
 msgstr "下一关键帧"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Jump to Time…"
 msgstr "跳转到…"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Jump to Start"
 msgstr "跳到开头"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Seek Steps…"
 msgstr "时间跨度设置…"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "0.5×"
 msgstr "0.5倍"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "1.5×"
 msgstr "1.5倍"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "2×"
 msgstr "2倍"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Custom…"
 msgstr "自定义…"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Disable Screen Saver While Playing"
 msgstr "播放时禁止屏保"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Show Time on Seek Bar Hover"
 msgstr "进度条悬停显示时间"
 
-#: commands.ts:229
+#: commands.ts:231
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "进度条悬停显示缩略图"
 
-#: commands.ts:238
+#: commands.ts:240
 msgid "Not supported by the current source"
 msgstr "当前来源不支持此操作"
 
-#: commands.ts:238
+#: commands.ts:240
 msgid "No file to reopen"
 msgstr "没有可重开的文件"
 
-#: commands.ts:238
+#: commands.ts:240
 msgid "No open file"
 msgstr "没有打开的文件"
 
-#: commands.ts:238
+#: commands.ts:240
 msgid "A network source has no file name"
 msgstr "网络来源没有文件名"
 
-#: commands.ts:238
+#: commands.ts:240
 msgid "No video"
 msgstr "没有视频"
 
-#: commands.ts:238
+#: commands.ts:240
 msgid "Needs ffmpeg"
 msgstr "需要 ffmpeg"
 
@@ -129,103 +129,103 @@ msgstr "打开媒体"
 msgid "Open Media (replaces the current source)"
 msgstr "打开媒体（将替换当前来源）"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Seek: {} / {}"
 msgstr "跳转: {} / {}"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Back {} s: {} / {}"
 msgstr "后退 {}秒: {} / {}"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Forward {} s: {} / {}"
 msgstr "前进 {}秒: {} / {}"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Jumped to the start"
 msgstr "定位: 开始处"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Previous keyframe: {} / {}"
 msgstr "定位: 上一关键帧 {} / {}"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Next keyframe: {} / {}"
 msgstr "定位: 下一关键帧 {} / {}"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Already at the last keyframe"
 msgstr "已是最后一个关键帧"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Speed: {}x"
 msgstr "播放速度: {}x"
 
-#: main.ts:29 ui/bar.slint:83
+#: main.ts:30 ui/bar.slint:87
 msgid "Volume: {}%"
 msgstr "音量: {}%"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Open failed"
 msgstr "打开失败"
 
-#: main.ts:29 ui/open-url.slint:66
+#: main.ts:30 ui/open-url.slint:66
 msgid "Open failed: {}"
 msgstr "打开失败：{}"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Reopened: {}"
 msgstr "重新打开: {}"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Reopened the last file: {}"
 msgstr "重开最后文件: {}"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Copied: {}"
 msgstr "已复制: {}"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Copy failed: {}"
 msgstr "复制失败：{}"
 
-#: main.ts:29 ui/open-url.slint:65
+#: main.ts:30 ui/open-url.slint:65
 msgid "Only the first line is opened; to open several links, add them to the playlist"
 msgstr "只打开第一行；多个链接请用播放列表的「添加链接…」"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Disable screen saver while playing: On"
 msgstr "播放时禁止屏保: 开"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Disable screen saver while playing: Off"
 msgstr "播放时禁止屏保: 关"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Show time on seek bar hover: On"
 msgstr "进度条悬停显示时间: 开"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Show time on seek bar hover: Off"
 msgstr "进度条悬停显示时间: 关"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Show thumbnail on seek bar hover: On"
 msgstr "进度条悬停显示缩略图: 开"
 
-#: main.ts:29
+#: main.ts:30
 msgid "Show thumbnail on seek bar hover: Off"
 msgstr "进度条悬停显示缩略图: 关"
 
-#: main.ts:29 ui/prompt.slint:17
+#: main.ts:30 ui/prompt.slint:17
 msgid "Source operation failed: {}"
 msgstr "来源操作失败：{}"
 
-#: main.ts:29 ui/prompt.slint:18
+#: main.ts:30 ui/prompt.slint:18
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
 msgstr "请输入来源时长范围内的HH:MM:SS.mmm"
 
-#: main.ts:29 ui/prompt.slint:19
+#: main.ts:30 ui/prompt.slint:19
 msgid "Speed must be between 0.25× and 4×"
 msgstr "速度范围为0.25–4倍"
 
@@ -258,24 +258,24 @@ msgid "speed"
 msgstr "速度"
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
-#: ui/bar.slint:73
+#: ui/bar.slint:77
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: ui/bar.slint:75
+#: ui/bar.slint:79
 msgid "Pause"
 msgstr "暂停"
 
-#: ui/bar.slint:75
+#: ui/bar.slint:79
 msgid "Play"
 msgstr "播放"
 
-#: ui/bar.slint:76
+#: ui/bar.slint:80
 msgid "Stop"
 msgstr "停止"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:78 ui/bar.slint:79
+#: ui/bar.slint:82 ui/bar.slint:83
 msgid ""
 "{}\n"
 "Right-click: {}"
@@ -284,52 +284,52 @@ msgstr ""
 "右键：{}"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:78
+#: ui/bar.slint:82
 msgid "Back {} seconds"
 msgstr "后退 {} 秒"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:78
+#: ui/bar.slint:82
 msgid "Play previous"
 msgstr "播放上一个"
 
-#: ui/bar.slint:79
+#: ui/bar.slint:83
 msgid "Forward {} seconds"
 msgstr "前进 {} 秒"
 
-#: ui/bar.slint:79
+#: ui/bar.slint:83
 msgid "Play next"
 msgstr "播放下一个"
 
-#: ui/bar.slint:80
+#: ui/bar.slint:84
 msgid "Open file"
 msgstr "打开文件"
 
-#: ui/bar.slint:81
+#: ui/bar.slint:85
 msgid "Click to show the elapsed time"
 msgstr "点击切换已播放时间"
 
-#: ui/bar.slint:81
+#: ui/bar.slint:85
 msgid "Click to show the remaining time"
 msgstr "点击切换剩余时间"
 
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 msgid "Unmute"
 msgstr "取消静音"
 
-#: ui/bar.slint:82 ui/bar.slint:329
+#: ui/bar.slint:86 ui/bar.slint:305
 msgid "Mute"
 msgstr "静音"
 
-#: ui/bar.slint:84
+#: ui/bar.slint:88
 msgid "{} (the window is too narrow for the playlist)"
 msgstr "{}（窗口太窄，放不下播放列表）"
 
-#: ui/bar.slint:84 ui/bar.slint:353
+#: ui/bar.slint:88 ui/bar.slint:329
 msgid "Playlist"
 msgstr "播放列表"
 
-#: ui/bar.slint:329
+#: ui/bar.slint:305
 msgctxt "accessibility"
 msgid "Unmute"
 msgstr "解除静音"
@@ -382,7 +382,7 @@ msgstr "播放速度(0.25–4倍)"
 msgid "Time (h:mm:ss.ms)"
 msgstr "时间定位(时:分:秒.毫秒)"
 
-#: ui/prompt.slint:60 ui/time-jump.slint:148
+#: ui/prompt.slint:60 ui/time-jump.slint:156
 msgid "OK"
 msgstr "确定"
 
@@ -391,42 +391,46 @@ msgid "Go"
 msgstr "定位"
 
 #. the unit after a number of seconds.
-#: ui/time-jump.slint:34
+#: ui/time-jump.slint:35
 msgid "s"
 msgstr "秒"
 
-#: ui/time-jump.slint:40
+#: ui/time-jump.slint:41
 msgid "Default"
 msgstr "默认值"
 
-#: ui/time-jump.slint:67
+#: ui/time-jump.slint:70
 msgid "Seek Steps"
 msgstr "时间跨度设置"
 
-#: ui/time-jump.slint:78 ui/time-jump.slint:106
+#: ui/time-jump.slint:81 ui/time-jump.slint:109
 msgid "Left/Right arrow keys:"
 msgstr "左/右 方向键："
 
-#: ui/time-jump.slint:78 ui/time-jump.slint:114
+#: ui/time-jump.slint:81 ui/time-jump.slint:117
 msgid "Ctrl + Left/Right arrow keys:"
 msgstr "Ctrl + 左/右 方向键："
 
-#: ui/time-jump.slint:78 ui/time-jump.slint:122
+#: ui/time-jump.slint:81 ui/time-jump.slint:125
 msgid "Shift + Left/Right arrow keys:"
 msgstr "Shift + 左/右 方向键："
 
-#: ui/time-jump.slint:78 ui/time-jump.slint:130
+#: ui/time-jump.slint:81 ui/time-jump.slint:133
 msgid "Ctrl + Alt + Left/Right arrow keys:"
 msgstr "Ctrl + Alt + 左/右 方向键："
 
-#: ui/time-jump.slint:99
+#: ui/time-jump.slint:102
 msgid "Set how far each seek key moves during playback."
 msgstr "可设置播放时以时间为单位的移动跨度。"
 
-#: ui/time-jump.slint:137
+#: ui/time-jump.slint:141
+msgid "Jump to keyframes only"
+msgstr "仅跳转到关键帧"
+
+#: ui/time-jump.slint:145
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "范围 0.1–3600 秒，最多一位小数"
 
-#: ui/time-jump.slint:152
+#: ui/time-jump.slint:160
 msgid "Cancel"
 msgstr "取消"

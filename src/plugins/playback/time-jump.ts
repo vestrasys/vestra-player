@@ -13,8 +13,9 @@ export function parseStep(text: string): number | null {
 }
 
 /**
- * B06 Seek Steps…: four rows of seconds. OK saves and applies them at once
- * (`apply`); an invalid row is marked and keeps the window open, with the
+ * B06 Seek Steps…: four rows of seconds and "Jump to keyframes only". OK saves
+ * and applies them at once (`apply`); Cancel saves nothing, and the next opening
+ * shows the saved values. An invalid row is marked and keeps the window open, with the
  * allowed range below (`out-of-range`). The window does not belong to a
  * source: it works with nothing open.
  */
@@ -34,7 +35,7 @@ export class TimeJump {
       invalid3: this.invalid[2],
       invalid4: this.invalid[3],
     }));
-    this.window.on("cancel", () => this.window.hide());
+    this.window.on("cancel", () => this.#hide());
     // Default restores only its own row.
     this.window.on("reset", (row: number) => {
       if (!(row >= 0 && row < 4)) return;
@@ -42,8 +43,8 @@ export class TimeJump {
       this.invalid[row] = false;
       if (!this.invalid.includes(true)) this.outOfRange = false;
     });
-    this.window.on("confirm", async (...rows: string[]) => {
-      const steps = rows.slice(0, 4).map((row) => parseStep(String(row ?? "")));
+    this.window.on("confirm", async (...args: unknown[]) => {
+      const steps = args.slice(0, 4).map((row) => parseStep(String(row ?? "")));
       this.invalid = steps.map((step) => step === null);
       if (steps.length !== 4 || this.invalid.includes(true)) {
         this.outOfRange = true;
@@ -51,16 +52,28 @@ export class TimeJump {
       }
       this.outOfRange = false;
       const next = steps as SeekSteps;
+      // "Jump to keyframes only": anything but a boolean keeps the saved choice.
+      const keyframes = typeof args[4] === "boolean" ? args[4] : this.#settings.value.seekKeyframes;
       this.#settings.update((s) => {
         s.seekSteps = next;
+        s.seekKeyframes = keyframes;
       });
-      await this.window.hide();
+      await this.#hide();
       await apply(next);
     });
   }
 
+  /** On screen: a hidden window stays opened, so `Window.opened` alone does not tell. */
+  #visible = false;
+  #hide() {
+    this.#visible = false;
+    return this.window.hide();
+  }
+
+  /** Brings an open window to the front as it is; otherwise shows the saved values (a cancelled edit is gone). */
   async show() {
-    if (this.window.opened) return this.window.show();
+    if (this.#visible && this.window.opened) return this.window.show();
+    this.#visible = true;
     const steps = this.#settings.value.seekSteps;
     this.invalid = [false, false, false, false];
     this.outOfRange = false;
@@ -69,6 +82,7 @@ export class TimeJump {
       value2: stepText(steps[1]),
       value3: stepText(steps[2]),
       value4: stepText(steps[3]),
+      keyframes: this.#settings.value.seekKeyframes,
     });
     await this.window.show();
   }

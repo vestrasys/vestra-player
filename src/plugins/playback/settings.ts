@@ -17,6 +17,8 @@ export type Settings = {
   format: number;
   /** B06: seconds of the four relative-seek tiers (← →, Ctrl, Shift, Ctrl+Alt). */
   seekSteps: SeekSteps;
+  /** B06: the step seeks of all four tiers land on keyframes ("Jump to keyframes only"); on by default. */
+  seekKeyframes: boolean;
   /** G-14: the bar's current-time label shows the remaining time. */
   remainingTime: boolean;
 };
@@ -40,6 +42,7 @@ const defaults = (): Settings => ({
   hoverThumbnail: true,
   format: SETTINGS_FORMAT,
   seekSteps: [...DEFAULT_STEPS],
+  seekKeyframes: true,
   remainingTime: false,
 });
 
@@ -95,6 +98,7 @@ export class SettingsStore {
     const steps = raw.seekSteps;
     if (Array.isArray(steps) && steps.length === 4 && steps.every(validStep))
       this.#value.seekSteps = [...steps] as SeekSteps;
+    if (typeof raw.seekKeyframes === "boolean") this.#value.seekKeyframes = raw.seekKeyframes;
   }
 
   get value(): Readonly<Settings> {

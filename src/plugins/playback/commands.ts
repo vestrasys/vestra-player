@@ -22,6 +22,8 @@ export type Features = {
   copy: (kind: CopyKind) => Promise<void>;
   jumpToStart: () => Promise<void>;
   thumbnails: Thumbnails;
+  /** B06 tiers 2–4: one relative seek of `delta` seconds (keyframe or exact, as set at the press). */
+  seekBy: (delta: number) => unknown;
 };
 
 type Entry = {
@@ -51,7 +53,7 @@ const ready = (enabled = true, checked: boolean | null = null, busy = false, rea
  * Tiers 2–4 of the relative seeks (B06). Tier 1 (← →) is the core's
  * `seek-backward` / `seek-forward`, given its step with `player.setStepSeek`.
  */
-function seekEntries(p: Playback, steps: SeekSteps, { text }: I18n): Entry[] {
+function seekEntries(p: Playback, steps: SeekSteps, { text }: I18n, seekBy: (delta: number) => unknown): Entry[] {
   const tiers: [number, string, string][] = [
     [2, "Ctrl+ArrowLeft", "Ctrl+ArrowRight"],
     [3, "Shift+ArrowLeft", "Shift+ArrowRight"],
@@ -66,7 +68,7 @@ function seekEntries(p: Playback, steps: SeekSteps, { text }: I18n): Entry[] {
       order: at,
       group: "step",
       bindings: [binding],
-      action: () => p.seekBy(delta),
+      action: () => seekBy(delta),
       state: () => ready(p.canStep()),
     });
     return [
@@ -250,12 +252,12 @@ function register(scope: Scope, table: Entry[]) {
 export function addCommands(scope: Scope, i18n: I18n, playback: Playback, jump: Prompt, customRate: Prompt, features: Features) {
   register(scope, entries(playback, jump, customRate, features));
   let seeks = scope.scope();
-  register(seeks, seekEntries(playback, features.settings.value.seekSteps, i18n));
+  register(seeks, seekEntries(playback, features.settings.value.seekSteps, i18n, features.seekBy));
   return {
     async setSteps(steps: SeekSteps) {
       await seeks.dispose();
       seeks = scope.scope();
-      register(seeks, seekEntries(playback, steps, i18n));
+      register(seeks, seekEntries(playback, steps, i18n, features.seekBy));
     },
   };
 }

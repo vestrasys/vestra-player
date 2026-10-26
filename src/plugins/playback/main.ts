@@ -9,7 +9,7 @@ import { OutputMemory } from "./output-memory.ts";
 import { Keyframes } from "./keyframes.ts";
 import { Prompt } from "./prompt.ts";
 import { Reopener } from "./reopen.ts";
-import { DEFAULT_STEPS, type SeekSteps, SettingsStore } from "./settings.ts";
+import { type SeekSteps, SettingsStore } from "./settings.ts";
 import { Thumbnails } from "./thumbs.ts";
 import { Failure, type Osd } from "./texts.ts";
 import { TimeJump } from "./time-jump.ts";
@@ -63,11 +63,24 @@ export default async function activate(plugin: Plugin) {
   const thumbnails = new Thumbnails(plugin, settings, (id) => keyframes.video(id));
   // B29: the host holds the assertion while playing; a failed start is only in its log.
   const sleep = () => plugin.power.preventSleep(settings.value.preventSleep ? "playing" : "off");
-  // B06: tier 1 is the core's ← / →; the plugin gives it the step and keeps tiers 2–4.
-  const stepSeek = (seconds: number) => player.setStepSeek({ seconds }).catch((error) => playback.report(error));
+  // B06: tier 1 is the core's ← / →; the plugin gives it the step and the mode
+  // (as a pair, on every start: the core's own default is exact) and keeps tiers 2–4.
+  const stepSeek = () =>
+    player
+      .setStepSeek({ seconds: settings.value.seekSteps[0], keyframes: settings.value.seekKeyframes })
+      .catch((error) => playback.report(error));
+  // Tiers 2–4, read at each press. Keyframe mode is the core's step seek with
+  // another step: it lands, adds up with ← / → and shows the landed position
+  // itself, so no text here. Exact mode is the plugin's own seek, as before.
+  const seekBy = (delta: number) =>
+    settings.value.seekKeyframes
+      ? plugin.host
+          .run(delta < 0 ? "seek-backward" : "seek-forward", { seconds: Math.abs(delta) })
+          .catch((error) => playback.report(error))
+      : playback.seekBy(delta);
   let commands: { setSteps(steps: SeekSteps): Promise<void> } | null = null;
   const timeJump = new TimeJump(plugin, settings, async (steps) => {
-    await stepSeek(steps[0]);
+    await stepSeek();
     await commands?.setSteps(steps);
   });
 
@@ -81,6 +94,7 @@ export default async function activate(plugin: Plugin) {
     copy: (kind) => copyToClipboard(plugin.clipboard, player.state, kind, osd),
     jumpToStart: () => playback.jumpToStart(),
     thumbnails,
+    seekBy,
   });
   wireBar(bar, plugin, playback, settings, thumbnails, output);
   plugin.onError((error) => playback.report(error));
@@ -90,8 +104,8 @@ export default async function activate(plugin: Plugin) {
   thumbnails.observe(player.state);
   void thumbnails.probe();
   if (settings.value.preventSleep) void sleep().catch((error) => playback.report(error));
-  // The core's step is 5 until someone sets it; it returns to 5 when this plugin stops.
-  if (settings.value.seekSteps[0] !== DEFAULT_STEPS[0]) void stepSeek(settings.value.seekSteps[0]);
+  // The core's step is 5 s exact until someone sets it, and returns to that when this plugin stops.
+  void stepSeek();
 
   // Another source, or anyone else's change during a drag, ends the gesture;
   // further pointer moves wait for the next press. A failed load is announced once.

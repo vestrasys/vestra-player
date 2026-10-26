@@ -1,7 +1,8 @@
 // Seek Steps (B06): four rows of seconds for the relative-seek tiers.
 // Each row: label → input (60px) → s → [Default]; an invalid row is marked on
-// its right. [OK] [Cancel] at the bottom; Esc cancels, Enter in an input confirms.
-import { LineEdit } from "std-widgets.slint";
+// its right. Below: "Jump to keyframes only" (on by default), saved with the
+// steps. [OK] [Cancel] at the bottom; Esc cancels, Enter in an input confirms.
+import { CheckBox, LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 
@@ -61,7 +62,9 @@ export component TimeJumpWindow inherits Window {
     in-out property <string> value2;
     in-out property <string> value3;
     in-out property <string> value4;
-    callback confirm(string, string, string, string);
+    // The step seeks (all four tiers) land on keyframes.
+    in-out property <bool> keyframes: true;
+    callback confirm(string, string, string, string, bool);
     callback cancel();
     callback reset(int);
     title: @tr("Seek Steps");
@@ -82,7 +85,7 @@ export component TimeJumpWindow inherits Window {
         }
     }
     function submit() {
-        root.confirm(root.value1, root.value2, root.value3, root.value4);
+        root.confirm(root.value1, root.value2, root.value3, root.value4, root.keyframes);
     }
     FocusScope {
         key-pressed(event) => {
@@ -132,6 +135,11 @@ export component TimeJumpWindow inherits Window {
                 value <=> root.value4;
                 reset => { root.reset(3); }
                 accepted => { root.submit(); }
+            }
+            CheckBox {
+                height: Theme.checkbox-row-height;
+                text: @tr("Jump to keyframes only");
+                checked <=> root.keyframes;
             }
             Text {
                 text: root.out-of-range ? @tr("Range 0.1–3600 s, at most one decimal place") : "";
