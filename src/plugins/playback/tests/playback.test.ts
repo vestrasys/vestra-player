@@ -493,8 +493,8 @@ test("volume: latest value wins, volume before unmute, mute excluded while pendi
   bar.emit("volume-changed", 60);
   bar.emit("volume-released", 35);
   bar.emit("action", "mute"); // dropped: the volume has not landed yet
-  await until(() => bar.props.volume === 35);
-  assert.equal(bar.props["can-mute"], false);
+  // `can-mute` is written after `volume` (one property at a time): wait for both.
+  await until(() => bar.props.volume === 35 && bar.props["can-mute"] === false);
   assert.deepEqual(calls, [["volume", 80]]);
   assert.equal(lastOsd(host), "音量: 35%");
   release();
