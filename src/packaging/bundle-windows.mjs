@@ -118,8 +118,16 @@ console.log(`${stage}: ${megabytes(await directorySize(stage))}`);
 // on an M-series Mac; 215 s on the Windows runner) for a 1.5% smaller zip.
 const zip = join(out, `${base}-portable.zip`);
 await rm(zip, { force: true });
+// Without 7-Zip: Windows has no `zip`, but its bsdtar writes zip archives
+// (by full path: Git for Windows' GNU tar, if first on PATH, cannot).
 if (!spawnSync("7z", ["i"], { stdio: "ignore" }).error)
   run("7z", ["a", "-tzip", "-mx=5", "-bso0", "-bsp0", zip, stage]);
+else if (process.platform === "win32")
+  run(
+    join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe"),
+    ["-a", "-c", "-f", zip, base],
+    { cwd: out },
+  );
 else run("zip", ["-qr9", zip, base], { cwd: out });
 
 if (!options["no-installer"]) {
