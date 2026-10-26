@@ -5181,6 +5181,7 @@ dependencies = [
  "vestra-gpu-render",
  "vestra-open-files",
  "vestra-pip",
+ "vestra-video-texture",
  "vestra-win32",
  "windows-registry",
  "zip",
@@ -5210,6 +5211,14 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "objc2-io-surface",
  "objc2-quartz-core 0.3.2",
+]
+
+[[package]]
+name = "vestra-video-texture"
+version = "0.0.0"
+dependencies = [
+ "glow",
+ "slint",
 ]
 
 [[package]]

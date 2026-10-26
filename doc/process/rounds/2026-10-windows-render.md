@@ -381,3 +381,180 @@ The second candidate, if the display really is at 60 Hz, is UI-thread load durin
   - and, if step 2 shipped, the same run with `VESTRA_TIMER_PERIOD=0` and `=1`.
 
   Acceptance for this issue: `shown` and `presented` ≥ 59 on a 60 Hz display at the 1150x1524 target, and the playlist animation subjectively smooth. 4K full screen in software may still be CPU-bound; that part is the GPU work.
+
+---
+
+## Appendix B (2026-10-25, Windows machine): redraw pacing and the per-frame cost
+
+API maintainer, on the Windows machine: Ryzen 9 7940HS; the AMD 780M drives the only screen, a 2560x1600 panel that supports 60-240 Hz and runs at 60 Hz, scale 175%; RTX 4070 Laptop idle. `REG` as above. Slint 1.18.1 is the newest release on crates.io on 2026-10-25.
+
+### B.1 Measurements (coordinator, release build of main e887b7b, `VESTRA_FRAME_LOG=1`, ~11 s averages)
+
+Windowed, target 1366x1066, while the user was using the machine with Chrome in front:
+
+| clip | produced | shown (taken) | presented | redraws (old picture) | render mean/max ms | CPU |
+| --- | --- | --- | --- | --- | --- | --- |
+| AV1 4K60 10-bit | 60.5 | 58.5 | 46.6 | 7.4 | 3.6 / 15 | 31% |
+| HEVC 4K60 10-bit | 60.5 | 57.9 | 45.3 | 8.4 | 3.7 / 16 | 32% |
+| H.264 4K60 | 60.5 | 59.6 | 48.3 | 7.8 | 3.0 / 10 | 24% |
+| H.264 1080p60 | 60.5 | 60.4 | 52.4 | 5.9 | 3.2 / 9 | 16% |
+| H.264 23.976 | 24.1 | 24.1 | 24.1 | 22.9 | 2.2 / 7 | 9% |
+
+Second series (logs `c-*`, `d-*`, `e-*`):
+
+- Windowed with no other window on screen: presented 59.1-59.8 (AV1 4K60 and 1080p60; foreground or background; femtovg or Slint's software renderer). So the losses above need something else drawing on the screen, and the user requires the display rate regardless.
+- Full screen, target 2560x1600, AV1 4K60: default 54.3 presented (render mean 6.8-7.2 ms), femtovg 48.5 / 52.9 (7.2-8.8 ms), Slint software renderer 59.1 in one run and 43-57 in another. 1080p60 full screen (target 1920x1200): 59.4, render 4.3 ms. Render time grows with the target size.
+- One full-screen run (`e-def-fs2`) collapsed for 7 s: produced ~6, presented 1/s, render max 688 ms.
+
+### B.2 Cause 1: Slint's timer frame throttle (pacing)
+
+On every winit platform except Wayland and Apple, Slint paces redraws with `TimerBasedFrameThrottle` (`REG/i-slint-backend-winit-1.18.1/frame_throttle.rs:13-75`):
+
+1. A change (`set_property("video-frame")`, an animation, hover) calls the window adapter's `request_redraw` (`winitwindowadapter.rs:1849-1854`), which starts a **Repeated** Slint timer of `1000000 / refresh_mHz` integer milliseconds: **16 ms at 60 Hz** (`frame_throttle.rs:53-58`).
+2. Each tick calls `winit_window.request_redraw()` **unconditionally** and only then checks whether a redraw is still pending (`frame_throttle.rs:59-72`). winit delivers `RedrawRequested` after the callback, so the tick after a draw always asks for one more: **every change is drawn twice**. That is the 24 fps row exactly (24.1 new + 22.9 old-picture draws). Upstream fixed it on 2026-10-20 (slint-ui/slint `881a0bc`, issue #14281), not released yet.
+3. The timer is re-armed from when it ran (`REG/i-slint-core-1.18.1/timers.rs:371-372`, `:476-481`: `now + duration`), not from the display: 16 ms plus the wake-up delay plus whatever the UI thread was doing (a draw, a `SwapBuffers` that blocks until a vertical blank, `glcontext.rs:208-213`). It drifts against the 16.7 ms refresh, so some refreshes get two draws and some none.
+4. mpv delivers frames on its own audio-synced clock. A draw takes the newest frame (`FrameSlot` keeps one), so with draw instants drifting through the arrivals some frames are never drawn and some draws repeat the old one. The playlist animation runs on the same drifting timer.
+
+macOS uses a display link (`frame_throttle.rs:22-26`, `apple_display_link.rs`), hence 60/60 there. No Slint setting changes this; upstream master still uses the timer on Windows (without the double draw).
+
+### B.3 Cause 2: femtovg re-creates and uploads the video texture twice per frame (cost)
+
+Each software-rendered frame is set as a new `slint::Image`. femtovg 0.27 (`REG/femtovg-0.27.0/src/renderer/opengl/gl_texture.rs:28-107`, `:196-256`) then creates a **new texture** for it: it allocates a zeroed buffer of the whole frame, uploads it with `glTexImage2D` (`GL_RGB`), uploads the real pixels again with `glTexSubImage2D` (`GL_RGB`, `UNPACK_ALIGNMENT 1`) and deletes the previous texture. All of it on the UI thread inside the draw.
+
+Measured on this machine's driver (scratch program, invisible window for a WGL context, AMD 780M, GL 3.3.0 driver 22.40.05.21; 40 frames, `glFinish` included):
+
+| target | femtovg today | reused texture, one `glTexSubImage2D` RGB | RGBA | BGRA | PBO + BGRA |
+| --- | --- | --- | --- | --- | --- |
+| 1366x1066 | 4.0 ms (max 18.8) | 0.8 ms | 1.0 | 1.2 | 1.0 |
+| 2560x1600 | **7.4 ms** (max 15.1) | **1.1 ms** | 1.5 | 1.4 | 2.1 |
+| 3840x2160 | **14.3 ms** (max 34.3) | **2.1 ms** | 2.9 | 2.5 | 4.1 |
+
+The 7.4 ms at 2560x1600 matches the full-screen render mean (6.8-8.8 ms). At 3840x2160 this alone takes most of a 16.7 ms refresh. Changing the pixel format or using a PBO does not help on this driver; keeping the texture does (6-7x).
+
+The render thread is not the limit: mpv's software render with the host's options (`vo=libmpv`, `hwdec=auto-copy-safe` → `d3d11va-copy`, the orientation lavfi filter, `rgb24` into a fresh buffer; scratch program, real-time playback) produced **60.0-60.2 fps at both 2560x1600 and 3840x2160** for the AV1, HEVC and H.264 4K60 clips, 0-1 mpv drops.
+
+### B.4 The 688 ms stall
+
+In `e-def-fs2` the `refresh` column reads **240.0 Hz** for exactly the 7 stalled seconds and 60.0 Hz otherwise; most other full-screen runs show 240 Hz for 1-2 s around the switch to full screen (`c-def-fs`, `c-gl-fs`, `e-*-fs`), windowed runs never. The panel offers 60-240 Hz (`Win32_VideoController` MaxRefreshRate 240). So entering full screen makes the display switch mode or variable refresh (AMD FreeSync / Windows variable refresh rate for a full-screen window), and while it settles the driver blocks the GL calls of the draw for hundreds of milliseconds. It is outside the host's code; with the reused texture there are no texture allocations left in the draw, which may shorten it, but that is not verified. To confirm: repeat the full-screen run with FreeSync and Windows "Variable refresh rate" off (Adrenalin and Settings → Display → Graphics); if the stall goes away, the remedy is a setting, or keeping the full-screen window from qualifying as an exclusive full-screen app.
+
+### B.5 Fix
+
+Options for the pacing:
+
+| | design | verdict |
+| --- | --- | --- |
+| (a) | on each new frame, ask winit for a redraw directly and let `SwapBuffers` pace | **Rejected.** Slint 1.18.1's still-running timer adds an unconditional draw per tick, so up to two draws per frame; femtovg would block in `SwapBuffers`, Slint's software renderer (no vsync) would draw twice per refresh, and animations would stay on the drifting timer. |
+| (b) | a vertical blank clock that wakes the UI thread and draws then (Slint's Apple design) | **Chosen.** |
+| (c) | upgrade or patch Slint | No release has a fix. Backporting `881a0bc` with `[patch]` (a vendored fork) only removes the double draw; draws would still drift. |
+
+**Pacing** (`src/host/src/frame_pacing.rs`, OS-neutral; `platform::VBLANK_CLOCK` / `vblank_waiter`; `unsafe` only in `vestra-win32::VBlank`):
+
+- A winit `CustomApplicationHandler` (`with_winit_custom_application_handler`, feature `unstable-winit-030` already in use) sees every `RedrawRequested` before Slint. For the main window, while the clock runs, it holds the request and owes a draw to the next vertical blank.
+- A thread waits with `D3DKMTWaitForVerticalBlankEvent` on the adapter output of the display that holds the window (re-checked about once a second, so it follows the window; any refresh rate; the display's own adapter on this hybrid machine) and, while armed, wakes the UI thread once per blank. There, if a draw is owed or `Window::has_active_animations()` (the test Slint's display link uses), the window draws; otherwise the clock stops.
+- A new video picture is owed directly. A second picture that arrives before the first was drawn waits in the frame slot and is set right after that draw, so arrival jitter near a blank delays a picture by one refresh instead of losing it.
+- With the clock stopped, the first request draws at once (no added latency for a single change) and starts the clock.
+- Safety: an owed draw that no blank served within 50 ms is drawn from the host tick; a failed wait reopens the clock once, else Slint's pacing returns with a `frame pacing:` stderr line; no clock (remote desktop) means no pacing. `VESTRA_FRAME_PACING=slint` turns it off (A/B, field fallback).
+- Only the main window is paced. macOS and Linux: `VBLANK_CLOCK = false`, the handler is not installed, every call is a no-op.
+- Verified without a window: the clock wakes every 16.697 ms (min 16.50, max 16.90 over 120 blanks; `cargo test -p vestra-win32 -- --ignored`).
+
+**Reused video texture** (new unsafe crate `src/host/unsafe/texture`, `vestra-video-texture`, registered in `check-unsafe-policy.mjs`; enabled by `platform::VIDEO_TEXTURE`, true on Windows only because it was measured only here):
+
+- With software rendering in an OpenGL (femtovg) window, the main window's rendering notifier keeps one RGB texture of the picture's size and, right before Slint draws, uploads the newest picture into it with one `glTexSubImage2D`; the video area shows it as a borrowed OpenGL texture. The texture is re-created only when the picture size changes. mpv's `rgb24` output stays as it is (the fastest upload measured).
+- Slint's software renderer has no OpenGL; there the pixels are still set as an image (it composes them on the CPU, so its full-screen cost remains).
+
+**Diagnostics**: `VESTRA_RENDER_TARGET=WxH` (even sides, at most 3840x2160) makes the software renderer draw every frame at that size whatever the window, so the 4K per-frame cost can be measured on this 2560x1600 screen. Documented in `doc/architecture/README.md` next to `VESTRA_FRAME_LOG`.
+
+Expected effect: one draw per refresh at a fixed phase right after the blank, ~1-2 ms of upload instead of 7-14 ms, so a 60 fps video gets every frame drawn at 2560x1600 and 3840x2160; 24 fps drawn once per frame on a stable cadence; animations advance once per refresh. Remaining old-picture redraws: Slint 1.18.1's double draw still owes one extra draw after an isolated change (24 fps: ~24 a second, now at blanks), until Slint ships `881a0bc`. Not verified in the GUI yet: whether other applications drawing still cost frames (B.7).
+
+### B.6 Acceptance of the first fix build (coordinator, stage `C:\vestra\stage-fix`, logs `f-*`, `g-*`, `h-*`, `i-*`, `k-*`, `l-*`)
+
+Passed (steady state, presented per second):
+
+| case | old build | fix |
+| --- | --- | --- |
+| AV1 4K60, windowed / full screen 2560x1600 | 46.6 / 48.5-54.3 | **60.2 / 60.1** |
+| HEVC 4K60 full screen | - | **60.0** |
+| 1080p60 full screen (6 runs) | 59.4 | **59.9-60.1** |
+| render mean (UI thread draw) | ~7 ms | **1.4-1.5 ms** |
+| CPU of the machine | 31-34% | **23-28%** |
+| a busy browser canvas animation beside the player | 59.6-59.9 | **60.1-60.2** |
+| sidebar slide while playing | 55-60 | **60** |
+| Slint software renderer, full screen 2560x1600 | 43-59 | **59.3** |
+| `VESTRA_FRAME_PACING=slint` (Slint's pacing in the fix build), windowed / full screen | | 57.6 / 57.5 |
+
+- 23.976 fps: presented 24.1; old-picture redraws still ~24-27 a second (Slint 1.18.1's double draw, B.2 point 2; upstream fix pending, left as is).
+- The earlier windowed 46 with the user at the machine could not be reproduced; the old log shows host ticks at only 55-57 a second then (timers stretched), which the vertical blank pacing does not depend on.
+
+Not passed:
+
+1. **Full-screen entry stall** (B.4): in every run the `refresh` column reads 240 Hz for 1-2 s after the double-click while the UI nearly stops (ticks 3/s, presented 1-2/s); in 2 of ~12 runs it lasted 8 s or more (`f-h264-4k-fs`, `f-1080-fs` with the fix, `e-def-fs2` with the old build).
+2. **`VESTRA_RENDER_TARGET=3840x2160`**: the UI presents everything produced, but produced falls short: AV1 43.2 windowed / 43.7 full screen, HEVC 53.1, H.264 57.4, Slint software renderer with AV1 52.5, with the machine's CPU at 25-32%.
+3. The fix runs of the trace build logged no events: a bug in the trace build (it switched the trace on only when the pacing was off). Only the `VESTRA_FRAME_PACING=slint` trace runs (`g-tr-*-slint`) are usable; they confirm B.2: 58 draws a second at 60 fps content, with 2 frames a second overwritten before any draw.
+
+### B.7 The full-screen stall is a display mode switch (evidence)
+
+- Slint asks winit for **borderless** full screen (`REG/i-slint-backend-winit-1.18.1/winitwindowadapter.rs:1964`: `Fullscreen::Borderless(None)`), never exclusive, and the host never sets a display mode. The window-resize command of the window plugin is refused while full screen (`main.rs`, `Not available in fullscreen`), so it cannot race the switch.
+- In `g-tr-av1-fs-slint` (Slint's pacing, the trace's own vertical blank thread) the display delivered **no vertical blank for 660 ms**, `SwapBuffers` blocked up to **697 ms**, and the **render thread got no frame from mpv for 694 ms** (decoding with d3d11va on the same GPU). In `f-1080-fs` the render thread also slows to 6-14 frames a second during the 240 Hz phase while the UI's draws stay short (1-2 ms). The whole GPU and display pipeline stops, not the host's UI code: the signature of a display timing change (the panel blanks while the mode is set).
+- `refresh` is winit's current display mode (`EnumDisplaySettingsExW`): it really becomes 240 Hz, already in the second of the double-click, and returns to 60 Hz when the stall ends. The panel supports 60-240 Hz and the desktop runs at 60 Hz.
+- So a window that exactly covers the display is being promoted (by the graphics driver or the system: AMD FreeSync / Windows variable refresh rate for full-screen applications, or Windows Dynamic Refresh Rate) to the panel's native 240 Hz variable-refresh timing, and demoted back. Each switch blanks the display for ~0.5-0.7 s; the long cases switch back and forth.
+- Not verifiable here without a window or an admin registry read: which of FreeSync, "Variable refresh rate" or "Dynamic refresh rate" does it. The A/B runs in B.9 decide.
+- The trace build's 240 "vertical blanks" a second in `g-tr-*-slint` are an artefact of that build (one logger thread per main-window rebuild, all logging the same blank); the real interval is 16.7 ms.
+
+Host-side mitigation (in the fix build, `platform::fullscreen_resized`, `vestra-win32::unmatch_display`): when winit has made the window cover its display exactly, the host makes it **one pixel taller** (the extra row is past the bottom edge, invisible), from the shell's winit event hook, before Slint draws at the new size. winit resets a full-screen window's rectangle only when it moves to another display (`REG/winit-0.30.13/src/platform_impl/windows/event_loop.rs:1343-1360`), so the size sticks. A window that does not match the display rectangle is not treated as a full-screen application by the driver's or the system's full-screen detection, so no timing switch happens (confirmed in B.9). `VESTRA_FULLSCREEN_MATCH=shorter` (one pixel short) and `=exact` (winit's rectangle, the old behaviour) remain for comparisons. `taller` is the default although `shorter` also avoids the switch: `shorter` leaves the display's bottom pixel row outside the window, so an auto-hide taskbar pops up over the picture when the pointer reaches the bottom edge, and the full-screen bottom bar's trigger band (FS-BAR-1) loses its last row. On a desktop with another display directly below, the extra row of `taller` shows on that display (open item F4, B.10).
+
+### B.8 The 4K render-thread limit: a new 25 MB buffer per frame
+
+Measured headless with mpv's software render and the host's options at 3840x2160 (scratch program, 8 s of real-time playback per row; "pure" = `video-timing-offset=0`, so the call returns without waiting for the frame time):
+
+| buffer per frame | AV1 10-bit | HEVC 10-bit | H.264 |
+| --- | --- | --- | --- |
+| a plain `Vec` (my earlier test) | 60.0 fps, pure 8.1 ms (p95 13.5) | 60.2, 8.0 (12.3) | 60.2, 7.6 (9.3) |
+| **a new `SharedPixelBuffer`** per frame, freed on another thread (what the host did) | **30.0 fps, 27.7 ms** (p95 34.4), 263 mpv drops | **29.2 fps, 27.9 ms** | - |
+| **4 reused `SharedPixelBuffer`s** | **60.2 fps, 8.0 ms** (p95 11.6) | **60.0 fps, 8.7 ms** (p95 13.4) | - |
+
+- `SharedPixelBuffer::new` zero-fills a fresh 25 MB block every frame (its data also sits behind a header, so mpv may copy the frame once more to align it), and the UI thread frees the previous one (the UI-side `set` time rose from 0.1 to 1.4 ms at 4K). That costs ~20 ms a frame; the earlier test used a lazily zeroed `Vec`, which is why it showed 60.
+- Ruled out by measurement: real audio output (60), a concurrent 60 Hz 4K GL upload load on the same iGPU (60), software decoding (dav1d: pure 5.5 ms, cheaper than d3d11va-copy's 8.1 ms but not needed), `bgr0` instead of `rgb24` (7.5 vs 8.1 ms, not worth the format change).
+- Fix: `render_target::BufferRing` (4 buffers, round-robin; the UI releases a buffer within a frame or two, so when it comes round `make_mut_bytes` writes in place; if the UI still held it, copy-on-write keeps it correct). Unit-tested for in-place reuse and resizing.
+- The remaining per-frame cost at 3840x2160 is ~8 ms (p95 12-13 ms) of mpv's software render on one thread, within a 16.7 ms refresh but without much margin; the GPU path (§3) removes it.
+
+### B.9 GUI runs for the coordinator (second fix build)
+
+Builds: `C:\vestra\maint-out\vestra-host.exe` (pacing + reused texture + buffer ring + full-screen guard) and `C:\vestra\maint-out\vestra-host-trace.exe` (the same plus the corrected temporary trace: events now also with the pacing on, one vertical blank logger, and `Z<w>x<h>` for each resize and `G` when the guard changed the window). Analysis: `node C:\vestra\maint-out\pace-analyze.mjs <log> [skip seconds]` (now also prints the resizes and the longest gaps between vertical blanks, draws, frames and UI wake-ups after the first resize).
+
+1. 4K render limit: AV1, HEVC and H.264 with `-Env @{VESTRA_RENDER_TARGET='3840x2160'}`, windowed and `-Full`; target produced ≥ 59.5.
+2. Full-screen entry, six `-Full` runs each with the AV1 clip:
+   - `-Env @{VESTRA_PACE_TRACE='1'}` (guard on, default `taller`);
+   - `-Env @{VESTRA_PACE_TRACE='1'; VESTRA_FULLSCREEN_MATCH='shorter'}`;
+   - `-Env @{VESTRA_PACE_TRACE='1'; VESTRA_FULLSCREEN_MATCH='exact'}` (old behaviour, the control).
+   Look at the `refresh` column and the script's "after the first resize" line. Pass: `refresh` stays 60, no gap between vertical blanks above ~20 ms, draws continuous.
+3. If `exact` stalls and `taller` does not, the guard is the fix. If both stall, A/B the system settings with `exact`: Settings → System → Display → Advanced display → refresh rate (is it "Dynamic"?) set to a fixed 60 Hz; Settings → Display → Graphics → "Variable refresh rate" off; AMD Adrenalin FreeSync off; one setting at a time, three `-Full` runs each.
+4. Recheck the playlist slide and the bottom bar in full screen (the window is one pixel taller than the screen).
+
+Results (coordinator, second fix build, trace build for step 2):
+
+| case | result |
+| --- | --- |
+| Forced 3840x2160, AV1 / HEVC / H.264 4K60, windowed and full screen | **60.0-60.2 presented** (was 43.2 / 53.1 / 57.4 produced) |
+| Full-screen entry, `exact` (old behaviour), 6 runs | **6/6** switched to 240 Hz with ~690 ms gaps between vertical blanks (`n-exact-1`: `SwapBuffers` max 800 ms, vertical blank gap max 688 ms, 10 refresh intervals with two pictures) |
+| Full-screen entry, default (`taller`), 6 runs | **0/6** switches; 611 of 617 refresh intervals with exactly one draw; longest vertical blank gap 22.8 ms |
+| Full-screen entry, `shorter`, 6 runs | **0/6** switches |
+| Full-screen bottom bar and sidebar (screenshots) | intact |
+| Sidebar slide while playing | 60 presented |
+
+The guard is the fix for the stall; the system settings A/B of step 3 was not needed. `taller` stays the default (B.7: `shorter` breaks the auto-hide taskbar and the last row of the bottom bar's trigger band).
+
+### B.10 Remaining work
+
+- Slint with `881a0bc`: removes the remaining extra draw after an isolated change (24 fps); keep the vertical blank pacing.
+- Other windows (detached sidebar, settings) keep Slint's pacing.
+- Slint's software renderer (no OpenGL: VMs, remote desktop) still composes the whole window on the CPU each frame.
+- mpv's software render costs ~8 ms a frame at 3840x2160 on one thread; the GPU path (§3) removes it and the readback.
+- A/V offset up to one refresh, as before; display-synced playback belongs with the GPU work.
+
+Open items from the independent review (fixed before merge: the texture upload now sets and restores the whole unpack state; a display clock that returns without waiting, 16 waits in a row under 1 ms, falls back to Slint's pacing with one stderr line; a candidate main window's texture is kept only after it was shown):
+
+- **F2** `vestra-video-texture`: the borrowed texture's image may stay on the video area after `RenderingTeardown` deleted the texture (until the next frame sets a new one). Harmless while the window is torn down with it on Windows; settle it before enabling `VIDEO_TEXTURE` on macOS (a GUI check there too).
+- **F4** Full-screen guard: on a desktop with a display directly below, the extra row shows there; check `MonitorFromPoint` just below the display and pick another edge (or `shorter`) then. Also a main window rebuilt while full screen comes up at W×(H+1) of the old window; check it stays one pixel off and does not grow.
+- **F5** `BufferRing`: count copy-on-write events (a buffer still held by the UI when it comes round) in the frame log; consider `RING = 5`; release the ring's buffers while playback is stopped.
+- **F6** `VBlankWaiter`: log when reopening the clock fails after the window moved to another display (it keeps the old display's clock silently today).
+- **F9** macOS: not compiled locally (no macOS target here); CI's macOS job checks it. The macOS paths are the no-op `no_vblank` module, `VIDEO_TEXTURE = false`, the no-op `fullscreen_resized`, and the shared `BufferRing`.

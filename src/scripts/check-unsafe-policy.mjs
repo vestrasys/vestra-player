@@ -31,6 +31,7 @@ const UNSAFE_CRATES = new Map([
   ["vestra-open-files", "src/host/unsafe/open"],
   ["vestra-pip", "src/host/unsafe/pip"],
   ["vestra-gpu-render", "src/host/unsafe/render"],
+  ["vestra-video-texture", "src/host/unsafe/texture"],
   ["vestra-win32", "src/host/unsafe/win32"],
 ]);
 const UNSAFE_DIR = "src/host/unsafe/";

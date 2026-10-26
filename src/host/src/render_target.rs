@@ -69,6 +69,35 @@ pub fn target(area: Size, source: Option<Size>, zoom: f64) -> Size {
     (width, height)
 }
 
+/// `VESTRA_RENDER_TARGET=WxH` (diagnostics, next to `VESTRA_FRAME_LOG`): the
+/// software renderer draws every frame at this size, whatever the window, so
+/// the per-frame cost of a large target (mpv's render, the upload, the draw)
+/// can be measured on a small screen; the picture is scaled into the video
+/// area. Even sizes up to `MAX_PIXELS`; anything else is ignored.
+pub fn forced() -> Option<Size> {
+    static FORCED: std::sync::OnceLock<Option<Size>> = std::sync::OnceLock::new();
+    *FORCED.get_or_init(|| {
+        let value = std::env::var("VESTRA_RENDER_TARGET").ok()?;
+        let size = parse_size(&value);
+        if size.is_none() {
+            eprintln!("VESTRA_RENDER_TARGET={value}: not an even WxH up to 3840x2160; ignored");
+        }
+        size
+    })
+}
+
+/// `WxH` with even sides of at least 2 and at most `MAX_PIXELS` pixels.
+fn parse_size(text: &str) -> Option<Size> {
+    let (width, height) = text.trim().split_once(['x', 'X'])?;
+    let (width, height): (u32, u32) = (width.trim().parse().ok()?, height.trim().parse().ok()?);
+    (width >= 2
+        && height >= 2
+        && width % 2 == 0
+        && height % 2 == 0
+        && u64::from(width) * u64::from(height) <= MAX_PIXELS)
+        .then_some((width, height))
+}
+
 /// Applies a changing area at most every `THROTTLE`, always the final value
 /// within `THROTTLE` after the changes stop, and at once when asked to
 /// (fullscreen, scale-factor change).
@@ -239,6 +268,47 @@ impl Redraw {
             self.seen = revision;
         }
         due
+    }
+}
+
+/// The software renderer's frame buffers, reused round-robin. A new
+/// `SharedPixelBuffer` per frame costs a zero-filled allocation of the whole
+/// frame plus its page faults, and the UI thread frees it again: measured
+/// 2026-10-25 on the Windows test machine (Ryzen 9 7940HS, mpv software render
+/// at 3840x2160, 10-bit AV1 and HEVC 4K60 through d3d11va-copy), about 28 ms a
+/// frame (30 fps) against 8 ms (60 fps) with reused buffers.
+///
+/// `take` hands out the next buffer of the ring and the ring keeps a handle to
+/// it (`keep`). The UI drops its handles a frame or two later, so when the
+/// buffer comes round again (`RING` frames later) the ring's handle is the
+/// only one and `make_mut_bytes` writes in place; if the UI still held it,
+/// `make_mut_bytes` would copy (correct, only slower).
+#[derive(Default)]
+pub struct BufferRing {
+    slots: Vec<Option<slint::SharedPixelBuffer<slint::Rgb8Pixel>>>,
+    next: usize,
+}
+/// Buffers in the ring: one being drawn, one waiting in the frame slot, one
+/// or two held by the UI (the shown picture, the one being uploaded).
+pub const RING: usize = 4;
+impl BufferRing {
+    /// The next buffer for a `width`×`height` frame (a new one when the slot
+    /// is empty or of another size).
+    pub fn take(&mut self, width: u32, height: u32) -> slint::SharedPixelBuffer<slint::Rgb8Pixel> {
+        if self.slots.len() != RING {
+            self.slots = (0..RING).map(|_| None).collect();
+        }
+        self.next = (self.next + 1) % RING;
+        match self.slots[self.next].take() {
+            Some(buffer) if (buffer.width(), buffer.height()) == (width, height) => buffer,
+            _ => slint::SharedPixelBuffer::new(width, height),
+        }
+    }
+    /// Keep a handle to the buffer `take` just returned (after drawing into it).
+    pub fn keep(&mut self, buffer: &slint::SharedPixelBuffer<slint::Rgb8Pixel>) {
+        if let Some(slot) = self.slots.get_mut(self.next) {
+            *slot = Some(buffer.clone());
+        }
     }
 }
 
@@ -552,6 +622,44 @@ impl FrameLog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_buffer_ring_reuses_released_buffers_in_place() {
+        let mut ring = BufferRing::default();
+        let mut first = ring.take(64, 32);
+        let address = first.make_mut_bytes().as_ptr();
+        ring.keep(&first);
+        // The UI holds `first` for a while, then drops it.
+        let shown = first;
+        for _ in 1..RING {
+            let mut other = ring.take(64, 32);
+            assert_ne!(other.make_mut_bytes().as_ptr(), address);
+            ring.keep(&other);
+        }
+        drop(shown);
+        // Round again: the same memory, written in place (no copy).
+        let mut again = ring.take(64, 32);
+        assert_eq!(again.make_mut_bytes().as_ptr(), address);
+        ring.keep(&again);
+        // Another size: a new buffer.
+        for _ in 1..RING {
+            let other = ring.take(64, 32);
+            ring.keep(&other);
+        }
+        let resized = ring.take(32, 32);
+        assert_eq!((resized.width(), resized.height()), (32, 32));
+    }
+
+    #[test]
+    fn a_forced_target_is_an_even_size_within_the_ceiling() {
+        assert_eq!(parse_size("3840x2160"), Some((3840, 2160)));
+        assert_eq!(parse_size(" 2560 X 1600 "), Some((2560, 1600)));
+        assert_eq!(parse_size("3841x2160"), None, "odd");
+        assert_eq!(parse_size("3842x2160"), None, "over the ceiling");
+        assert_eq!(parse_size("0x0"), None);
+        assert_eq!(parse_size("1920"), None);
+        assert_eq!(parse_size("wide"), None);
+    }
 
     #[test]
     fn picture_in_picture_renders_the_picture_shape_inside_the_area() {

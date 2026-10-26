@@ -88,6 +88,11 @@ mpv's counts stop at the renderer. `stats().framesShown` is the frames the video
   - `produced` at the source rate but `shown` low: the UI thread is busy (see `tick`, `render`, `set`).
   - `shown` ≈ `presented` ≈ `refresh`, below the source: the display's refresh rate is the limit.
   - Many `redraws` with `presented` about half the source: vsync halving.
+- **`VESTRA_RENDER_TARGET=WxH`** (for example `3840x2160`): the software renderer draws every frame at this size whatever the window (even sides, at most 3840x2160), and the picture is scaled into the video area. It reproduces the per-frame cost of a large display on a small screen; read it with `VESTRA_FRAME_LOG=1`.
+- **Redraw pacing on Windows** (`frame_pacing.rs`): Slint's winit backend paces redraws there with a 16 ms timer that is not tied to the display, so the main window draws at the display's vertical blanks instead (a `vestra-win32` clock thread wakes the UI thread; macOS keeps Slint's display link). `VESTRA_FRAME_PACING=slint` turns this off for comparisons.
+- **Full screen on Windows** (`platform::fullscreen_resized`): a full-screen window is kept one pixel taller than its display, because a window that covers the display exactly can be switched by the driver or system to the panel's native variable-refresh timing, which blanks the display for up to seconds. `VESTRA_FULLSCREEN_MATCH=shorter` (one pixel short) or `=exact` (winit's rectangle) for comparisons.
+- **Software frame buffers** (`render_target::BufferRing`): the renderer reuses four frame buffers round-robin; a new zero-filled buffer per frame cost ~20 ms at 3840x2160.
+- **Video texture on Windows** (`vestra-video-texture`): with software rendering in an OpenGL window, each picture is uploaded into one reused texture before the draw, instead of a new image per frame (femtovg makes a new texture per image and uploads it twice).
 
 ## 5. Code map
 
