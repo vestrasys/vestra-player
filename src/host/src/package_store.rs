@@ -125,7 +125,7 @@ pub struct Installed {
     /// installation.
     pub current: Option<StoredPackage>,
     /// Always `None` now: players up to 0.5 kept the replaced version here
-    /// for rollback. Kept as a field so that those players still read the
+    /// so that the user could go back to it. Kept as a field so that those players still read the
     /// catalog (`Installed` refuses unknown and needs known fields).
     pub previous: Option<StoredPackage>,
     /// The current instance (always present while `current` is).
@@ -636,7 +636,7 @@ impl Store {
             retire(&mut next, id, old, &before);
         }
         next.dormant.remove(&instance.guid);
-        // The replaced version is not kept (there is no rollback): its
+        // The replaced version is not kept (nothing goes back to it): its
         // directory is garbage once this is published.
         let installed = Installed {
             revision,
@@ -795,8 +795,8 @@ impl Store {
 }
 
 /// Players up to 0.5 copied each built-in into the library ("seeding") and
-/// kept the version an upgrade replaced, for rollback. Built-ins now run
-/// from the installation and nothing is rolled back: built-in records lose
+/// kept the version an upgrade replaced. Built-ins now run from the
+/// installation and no previous version is kept: built-in records lose
 /// their package, every record its previous version, and an interrupted
 /// seed (a pending built-in install) is dropped. Reads no package file;
 /// the directories no longer referenced are collected off the UI thread.
@@ -1145,7 +1145,7 @@ mod tests {
             installed.current.unwrap().manifest.version.as_deref(),
             Some("1.1.0")
         );
-        assert!(installed.previous.is_none(), "no rollback target is kept");
+        assert!(installed.previous.is_none(), "no previous version is kept");
         // The replaced version is garbage; going back is a new install.
         assert_eq!(store.referenced(), [second.digest.clone()].into());
         assert_eq!(store.library().collect(&store.referenced()).unwrap(), 1);

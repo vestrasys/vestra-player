@@ -577,7 +577,6 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
     "packages.install",
     "packages.cancel",
   ],
-  "Packages.rollback": ["packages.rollback", "packages.cancel"],
   "Packages.setEnabled": ["packages.setEnabled"],
   "Packages.uninstall": ["packages.uninstall", "packages.cancel"],
   "Plugin.video.filter": [

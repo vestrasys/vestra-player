@@ -22,23 +22,20 @@ For the design and trade-offs see [ci-research.md](ci-research.md) §10.1–10.5
 | `.github/scripts/plan.sh` | The plan of ci.yml and main.yml: decides what to run from the changed paths (see below) |
 | `.github/scripts/ui-record-paths.mjs` | Makes the plugin paths in the recorded props relative to the checkout (ts job, before the upload) and absolute again in the checking job's checkout |
 | `.github/scripts/main-green.sh` | release.yml, nightly.yml: whether main.yml has already passed on this commit. First waits for any unfinished main.yml run on this commit (release up to 30 minutes, nightly 20 minutes, both waiting on Linux), then looks at the most recent green main.yml: if it is this commit, or an ancestor with only `doc/` and `*.md` changes in between (a `*.md` under `src/plugins/` is not documentation: a built-in's README ships), the commit counts as checked |
-| `.github/scripts/builtin-base.sh` | ci.yml / main.yml plan, release.yml verify: the base commit of the built-in versions guard (output `builtin_base`; see "Built-in plugin versions" below) |
 | `rust-toolchain.toml`, `src/host/deny.toml`, `_typos.toml`, `.github/zizmor.yml` | Tool configuration |
 | `.gitattributes` | LF for all checkouts (Windows converts to CRLF by default, which makes tests that compare source text fail) |
 | `src/scripts/check-unsafe-policy.mjs` | The unsafe rule (see below) |
-| `src/scripts/check-builtin-versions.mjs` | The built-in versions guard (API maintainer's script; see "Built-in plugin versions" below) |
 
 ## Stages of ci.yml / main.yml
 
 ```
 push(not main) / workflow_dispatch{full}     push(main)
 │                                            │
-plan [ubuntu]  changed paths → docs_only, host, lock, run_windows, run_macos; builtin_base
+plan [ubuntu]  changed paths → docs_only, host, lock, run_windows, run_macos
 │
 ├─ static [ubuntu]  (skipped when docs_only)           ← gate
 │    ├─ lint: typos · actionlint · zizmor · cargo fmt --check
 │    │        cargo deny (licenses bans sources) · cargo shear · unsafe-policy
-│    │        built-in plugin versions (against builtin_base)
 │    └─ ts:   npm run check · format:check · boundaries · portability --skip-host
 │             licenses · test:sdk · plugins:build · plugin -- test <plugins> · sdk:sync-slint
 │             (plugin tests with VESTRA_UI_RECORD → artifact ui-record)
@@ -62,8 +59,8 @@ pull_request{opened, reopened, ready_for_review, labeled ci:macos}, non-draft, h
 
 - `host` = changes to `src/host/`, `src/runtime/`, `src/package*.json`, `rust-toolchain.toml`, `.gitattributes` or `.github/` (host tests start the Node plugin runner). The `paths` of ci-macos.yml match this. Changes only to `src/plugins/` do not count as host: plugin tests are in the static ts job.
 - `run_windows` = `host` or `full`. `run_macos` = `full`, or `host` on main. Branch pushes do not run macOS: all branches are developed on a Mac, and `npm run ci:local` already runs macOS locally (including the GPU tests); Windows cannot run locally, so every host change on a branch runs it.
-- Changes only to `doc/` or `*.md`: only plan and ci-ok run (main too). A `*.md` under `src/plugins/` does not count as docs (a built-in's README and CHANGELOG ship in its package): static runs for the built-in versions guard, but such a change alone does not run that plugin's tests.
-- `plugins` (which plugins' tests the ts job runs): `all` on a full run, or when any path outside `doc/`, `*.md`, `src/host/` and `src/plugins/<name>/` changed (the SDK version, `src/scripts/`, `.github/`, ...); otherwise the plugin directories (those with a `manifest.json`) with a changed file other than `*.md`, and `none` when there are none; a change to the host's Slint or value conversion also gives `all` (see "Recorded plugin props"). A plugin can only import its own files and the SDK (`npm run boundaries`), so changes to other plugins cannot affect it. When release calls `_static` it does not pass this, and the default is `all`. The tests of the 18 plugins take about 220 seconds in total; workshop alone takes 78 seconds.
+- Changes only to `doc/` or `*.md`: only plan and ci-ok run (main too). A `*.md` under `src/plugins/` does not count as docs (a built-in's README and CHANGELOG ship in its package): static runs, with that plugin's tests.
+- `plugins` (which plugins' tests the ts job runs): `all` on a full run, or when any path outside `doc/`, `*.md`, `src/host/` and `src/plugins/<name>/` changed (the SDK version, `src/scripts/`, `.github/`, ...); otherwise the changed plugin directories (those with a `manifest.json`; a README or CHANGELOG counts), and `none` when there are none; a change to the host's Slint or value conversion also gives `all` (see "Recorded plugin props"). A plugin can only import its own files and the SDK (`npm run boundaries`), so changes to other plugins cannot affect it. When release calls `_static` it does not pass this, and the default is `all`. The tests of the 18 plugins take about 220 seconds in total; workshop alone takes 78 seconds.
 - `ui_props` = some plugin's tests run (`plugins` is not `none`); on main it becomes false when a branch run on the same tree passed `windows / windows` or `ui-props / windows` (see below).
 - **main reuses branch results**: when Windows / macOS needs to run on main, plan.sh first looks in the last 50 runs of ci.yml and ci-macos.yml for one whose `head_commit.tree_id` equals HEAD's tree and whose `windows / windows` (or `macos / macos`) job succeeded; if one exists, that system does not run again on main, and the log links to that run. When a PR that already contains the latest main is squash-merged, the main commit and the PR head have the same tree, so the inputs are identical. ci-macos.yml tests the PR's merge commit: when the head contains the base, its tree is the head's tree, and only in that case does main get the same tree as the head. **Rebase the PR onto the latest main before merging**, and main will mostly not compile again. static is not reused (Linux, cheap; the plugin test scope is computed from main's own previous green run).
 - Each push has only one run (previously a branch with a PR ran once for the push and once for pull_request, and the PR run also ran macOS). The concurrency group of ci.yml is `ci-<ref>`; a new push cancels the old run.
@@ -97,25 +94,6 @@ The SDK's test host does not know the Slint declarations, so a value Slint refus
 - `src/host/Cargo.toml` has `[workspace.lints.rust] unsafe_code = "forbid"`, and host uses `[lints] workspace = true`.
 - The three crates in `src/host/unsafe/*` do not inherit it; each sets `unsafe_op_in_unsafe_fn = "deny"`, `clippy::undocumented_unsafe_blocks = "deny"` and `clippy::missing_safety_doc = "deny"`.
 - `npm run unsafe-policy` (runs on any system, no compilation): checks the lint configuration of the workspace members; in all tracked `.rs` files (with comments and strings removed), `unsafe` or `allow(unsafe_code)` must not appear outside `src/host/unsafe/`, including platform code that is cfg'd out; every `unsafe {}` / `unsafe impl` in an unsafe crate must have a `// SAFETY:` above it. Adding an unsafe crate requires changing `UNSAFE_CRATES` in the script.
-
-## Built-in plugin versions
-
-The host upgrades a seeded built-in plugin only when the installation carries a higher version than it last seeded, so a built-in whose shipped files change under the same `manifest.json` version never reaches existing users (#27: workshop's AI window changed under 2.2.3; #38 bumped five such plugins). `src/scripts/check-builtin-versions.mjs` (`npm run builtin-versions` in `src/`) fails (exit 1) when a built-in's shipped files changed between a base and HEAD and its version is not higher; which files count as shipped is described in the script. Exit 2 means git could not answer (the base is missing).
-
-**Where**: the last step of the static `lint` job (Ubuntu, already running; no new runner). It runs whenever static runs, so on every push that is not docs only, and a change under `src/plugins/` (README and CHANGELOG included) is never docs only. It takes about a second.
-
-**Base** (`.github/scripts/builtin-base.sh`, run in the plan job of ci.yml / main.yml and the verify job of release.yml, which already have the full history and the tags; passed to `_static.yml` as the required input `builtin-base`, a commit SHA):
-
-| Event | Base | Why |
-| --- | --- | --- |
-| Branch push (the PR's checks; ci.yml, also a manual run on a branch) | `git merge-base origin/main HEAD` | The branch is judged by its own changes. Not `origin/main` itself: the guard compares two trees, so when main bumped and changed a plugin after the branch forked, the branch's older copy would count as a change with a lower version (replayed: base `v0.5.0`, head `v0.4.2` fails; with their merge base it passes) |
-| Push to main (main.yml), release tag or manual release (release.yml) | The latest `v*` tag before HEAD: `git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^` | What users have. Not the previous commit: one bump per release is enough, and a second change under a version already raised since the tag still reaches users; against the previous commit main would fail on it. Not the guard's own default (`describe HEAD`): on the tag push HEAD carries the tag being released and the check would compare the release with itself. main and release give the same base for the tagged commit, so release can skip static when main.yml already passed it (`main-green.sh`) |
-
-With no base (no merge base, no tag) the plan logs a warning and the step fails with a pointer to that log.
-
-**Fetch depth**: the lint job keeps its shallow checkout (depth 1). The step fetches only the base commit, `git fetch --no-tags --depth=1 origin <sha>`; git sends only the objects HEAD does not already have (replayed locally at 2d50207 against v0.5.0: 346 objects, about 1.7 MB, against 23 MB for the checkout and 42 MB for the full history with `fetch-depth: 0`). The checkout does not keep the token (`persist-credentials: false`), so the step passes the job token to this one `git fetch` as an `http.extraheader` through `GIT_CONFIG_*` environment variables, the way the checkout does, and nothing is written to `.git/config`. The guard gets `--base <sha> --head HEAD`, so it never needs `git describe`, the tags or the history.
-
-**Locally**: `npm run builtin-versions` compares the working tree with the latest release tag; `-- --base origin/main` (or the merge base) checks a branch.
 
 ## Packaging
 

@@ -225,8 +225,6 @@ export const info = (id: string, patch: Partial<Info> = {}): Info => ({
   error: null,
   capabilities: ["commands"],
   directory: `/packages/${id}`,
-  // Deprecated (SDK 1.5.16), still required by the TestHost; dropped with 1.5.17.
-  previousVersion: null,
   builtin: false,
   source: { kind: "file" },
   dataDirectory: null,

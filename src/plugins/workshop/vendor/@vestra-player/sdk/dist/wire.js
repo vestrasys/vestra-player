@@ -278,11 +278,6 @@ export function createWire(transport) {
                 ...(options.source === undefined ? {} : { source: options.source }),
                 ...(options.replace ? { replace: true } : {}),
             }),
-            rollback: (id, expectedRevision, requestId) => transport.request("packages.rollback", {
-                id,
-                expectedRevision,
-                requestId,
-            }),
             operation: (operationId) => transport.request("packages.operation", {
                 operationId,
             }),

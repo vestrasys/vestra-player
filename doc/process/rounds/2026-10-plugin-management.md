@@ -1,6 +1,6 @@
 # 2026-10 round: plugin management (built-ins in place, no rollback)
 
-Started 2026-10-26. Top-down API change (community-workflow §5). **This document is the only progress record for this round.** Status: **P1 implemented (2026-10-26) and passed P2** (§7): the coordinator measured first start and an upgrade of a copy of a real 0.5.0-era profile on Windows (responsive at 0.4 s, never "Not Responding", 37 old copies removed off the UI thread in 617 ms, nothing under `packages/packages/`). P3 (store, workshop, info) is next. The user answered Q1–Q3 on 2026-10-26 (§6; Q3 superseded the same day: no Undo Install at all).
+Started 2026-10-26. Top-down API change (community-workflow §5). **This document is the only progress record for this round.** Status: **P1–P5 done (2026-10-26).** SDK 1.5.16 and 1.5.17 are published, and the player depends on `^1.5.17`. The P5 GUI results are in §9. Earlier: **P1 implemented (2026-10-26) and passed P2** (§7): the coordinator measured first start and an upgrade of a copy of a real 0.5.0-era profile on Windows (responsive at 0.4 s, never "Not Responding", 37 old copies removed off the UI thread in 617 ms, nothing under `packages/packages/`). P3 (store, workshop, info) is next. The user answered Q1–Q3 on 2026-10-26 (§6; Q3 superseded the same day: no Undo Install at all).
 
 Line references are to `main` at `2d50207` unless marked `6bf7e77` (the stop-gap commit on branch `startup-seeding`, which merged as #39, `7dda45d`; its line references now apply to `main`). §3–§5 are the plan as written before the rulings; where they differ, §6 and §7 apply. SDK references are to the installed `@vestra-player/sdk` 1.5.15 (`src/node_modules/@vestra-player/sdk/dist/...`) and, by file, to the SDK repository.
 
@@ -381,3 +381,74 @@ node packaging/bundle-windows.mjs --out C:\vestra\p1-bundle --binary C:\vestra\p
 ```
 
 Output: `C:\vestra\p1-bundle\VestraPlayer-0.5.0-windows-x64\` (staged install directory) and the portable zip. The maintainer already ran exactly this once (2026-10-26, with the delivered exe); that stage is in place and can be used as is, or rebuilt with the command (about 3 minutes). For G1/G2 on an Inno Setup install (admin-only directory), drop `--no-installer` on a machine with Inno Setup. G2 needs a 0.5.x profile first (install or run the 0.5.0 build once).
+
+## 8. P4 delivery (API maintainer, 2026-10-26)
+
+Player worktree `C:\vestra\wt-p4` (branch `p4`, on `plugin-management`, draft PR #40); SDK `C:\vestra\sdk`, branch `p4-remove-rollback` (from `main` `b1d48bc`, 1.5.16). Nothing is committed, tagged or published in either.
+
+### 8.1 SDK 1.5.17 (branch `p4-remove-rollback`)
+
+- Removed: `Packages.rollback` (`types.ts`, `plugin/packages.ts`), `PluginInfo.previousVersion`, the wire method `packages.rollback` and the wire field `PackageInfo.previousVersion` (`wire.ts`), `"Packages.rollback"` from `CAPABILITY_INFO["plugins.manage"].apis`; `TestHost`: the `previousVersion` field of `host.packages`, the `#listed()` null-mapping and the `packages.rollback` handler (an install records nothing about the replaced version, as in 1.5.16).
+- Kept: `revisionConflict`, `PackageChangeStatus` `restoring` / `failedDegraded` (install-failure recovery). The wire `InstalledPackage.previous` (`packages.installed`, always `null`; the catalog keeps the field for 0.5 players) is untouched.
+- Tests: the 1.5.16 "no rollback" test is gone (nothing left to call); `previousVersion: null` dropped from `test/store.test.ts` and `test/round3a.test.ts` fixtures.
+- Docs: `capabilities.md` (row and deprecation note), *Migrating off package rollback* now says "1.5.16, removed in 1.5.17" (what 1.5.17 removed, tests, timeline, checklist), How-to index entry, `doc-structure.mjs` wording, `llms*.txt` regenerated, CHANGELOG 1.5.17, `package.json` / lock 1.5.17. `apiVersion` stays `vestra/1`.
+- Checks: `npm ci`, `build`, `check`, `format:check`, `lint`, `docs:llms`, `test` (181: 180 pass, 1 skipped), `docs`, `docs:check`, `doc-lint`, `examples`, `npm pack --dry-run` (1.5.17, 96 files), `typos`: all exit 0.
+
+### 8.2 Player
+
+- Host: `packages.list` no longer sends `previousVersion` (three entry shapes and the development entry); the leftover "no `packages.rollback`" comment is gone (the method was already an unknown `packages.*` method → `unsupported`). Comments and one test name in `package_store.rs` / `package_manager.rs` no longer say "rollback" for the catalog's `previous` field (migration reader unchanged).
+- `tests/sdk/host-agreement.test.ts`: `MEMBER_REQUESTS` loses `Packages.rollback`.
+- Test fixtures without `previousVersion`: `plugins/info/tests/about.test.ts`, `plugins/store/tests/helpers.ts` (authorised for this round), and the Plugin Manager's `plugins/plugins/tests/plugins.test.ts` (P1 reference plugin, maintainer; the `info()` fixture and J07, which no longer feeds a previous version). Test files only, no version bumps.
+- Workshop `vendor/`: `npm run vendor:sdk` against the local 1.5.17 (`@vestra-player/sdk` 1.5.15 → 1.5.17; 10 files under `vendor/@vestra-player/sdk`; TypeScript 5.9.3 and `@types/node` 26.6.5 unchanged). The workshop is already at 2.2.5 (P3), higher than on `main` and in `v0.5.0`; the guard, run once before its removal, passed against both.
+- `src/package.json` / `package-lock.json` are left at the published **1.5.16** (the branch had 1.5.15). After the 1.5.17 release: `cd src && npm install @vestra-player/sdk@1.5.17` (`package.json` `"^1.5.17"`; the lock's `node_modules/@vestra-player/sdk` entry → 1.5.17 with its registry `resolved` / `integrity`), then §6.1. Until then `npm run check` and `test:sdk` fail on 1.5.16 as expected (§8.4), and the workshop's "vendor/ matches" test fails.
+
+### 8.3 The #39 guard is removed (§7.5)
+
+`src/scripts/check-builtin-versions.mjs`, `src/tests/sdk/builtin-versions.test.mjs`, the `builtin-versions` npm script and its `ci:local` step; `.github/scripts/builtin-base.sh`, the `builtin-base` step and `builtin_base` output in `ci.yml`, `main.yml` and `release.yml` (release's `static` call has no `with:` again), the `builtin-base` input and the "built-in plugin versions" step of `_static.yml` (all four workflow files are byte-identical to before #39); `doc/process/ci.md` (two table rows, the stage diagram, the "Built-in plugin versions" section); `doc/architecture/README.md` row; `store-api-proposal.md` says the guard was removed.
+
+Kept: `plan.sh` / `main-green.sh` treat `src/plugins/**/*.md` as part of the package, not docs. One change with it: `plan.sh` no longer drops `*.md` when it picks the plugins to test, so a README- or CHANGELOG-only change runs that plugin's tests (before, static ran only for the guard, with `plugins=none`); `ci.md` says so. `actionlint` and `zizmor --offline --persona regular .github`: exit 0, no findings.
+
+### 8.4 Checks (Windows 11, `C:\vestra\target-p4`, deleted afterwards)
+
+| Check | Local SDK 1.5.17 | Published 1.5.16 (restored, `npm ci`) |
+| --- | --- | --- |
+| `cargo fmt --check` / `clippy -D warnings` / `cargo test --workspace` | 0 / 0 / 0 (437 passed, 0 failed, 5 ignored) | same |
+| `npm run plugin -- build nes workshop`, `check` | 0, 0 | 0, **2 (expected)**: 1.5.16's `TestHost` still requires `previousVersion` (`info`, `plugins`, `store` fixtures) |
+| `format:check`, `boundaries`, `portability` | 0, 0, 0 (clean) | 0, 0, 0 |
+| `test:sdk` | 0 (30/30) | **1 (expected)**: 1.5.16 still lists `Packages.rollback`, which `MEMBER_REQUESTS` no longer has |
+| `typos` | 0 | 0 |
+| plugin tests plugins / store / workshop / info | 0/17, 1/62, 3/62, 0/46 failed | 0/17, 1/62, **4**/62, 0/46 |
+
+Store 1 (asset hashes) and workshop 3 (provider listing, model choice, work folder) are the known Windows-only failures; workshop's 4th on 1.5.16 is "vendor/ matches a fresh build" (vendor is 1.5.17).
+
+### 8.5 Remaining hits for `rollback|previousVersion|Roll Back`
+
+SDK `src/`: none. SDK `docs/`: only the migration guide (`docs/how-to/rollback-migration.md`), its How-to index entry and the link to it in `publish.md` (and the same text in `llms*.txt`). Player `src/` (excluding `node_modules`):
+
+- Other meanings of "rollback", not plugin rollback: `host/src/effects.rs:3`, `processing.rs:966` (audio graph), `producer_audio.rs:680` (clock), `subtitle_backend.rs:873`.
+- Tests asserting absence: `plugins/plugins/tests/plugins.test.ts` (J07 and the built-in test: no `can-rollback`, no `packages.rollback` sent), `plugins/workshop/tests/delivery.test.mjs:97,100`, `plugins/store/tests/install.test.ts:242-299` (its line 287 still adds `previousVersion: "0.2.0"` to a `TestHost` entry through a spread; it compiles and is ignored with 1.5.17. A store-author follow-up, not changed here).
+- History: `plugins/store/CHANGELOG.md:5,24`.
+- Workshop `vendor/`: the SDK's `llms*.txt` (migration guide) and unrelated third-party text (TypeScript, `@types/node`, pi).
+
+## 9. P5 GUI checks (coordinator, Windows 11, 2026-10-26)
+
+Setup:
+- The combined branch (P1+P3) was bundled with `bundle-windows.mjs --no-installer`.
+- A temporary `APPDATA` was used: once fresh, once a copy of a real 0.5.0-era profile.
+- Synthetic input was sent only while the player was in the foreground.
+
+| # | Check | Result |
+| --- | --- | --- |
+| G1 | First start, empty profile | Pass: responsive at 0.4 s, never "Not Responding", nothing under `packages/packages/` |
+| G2 | Upgrade of the copy of a real 0.5.0-era profile | Pass: responsive at 0.4 s; "37 unused package(s) removed in 617 ms" off the UI thread |
+| G3 | Built-in disable and enable | Pass: vestra.audio disabled through the confirm dialog, still disabled after a restart, then enabled again. Uninstall stays greyed out, and the Package path is the installation |
+| G4 | Third-party uninstall | Pass: zysilm.bilibili 0.3.0 installed from the official repository, then uninstalled with its data; its library directory is gone |
+| G5 | Store | Pass: no Roll Back or Restore; the install confirm has no rollback sentence; built-ins say they update with the player and cannot be uninstalled. The Versions tab could not show an older version because the index has only one; tests cover it |
+| G6 | AI window | Partial: the window opens with no type error. Undo Install would only appear after a model-driven install, which needs a paid provider, so it was not run; `delivery.test.mjs` covers it |
+| G7 | Dev-load override | Not run in the GUI; host tests cover it |
+
+Found during P5 (follow-ups, not blockers):
+
+- **Closed stderr pipe aborts the host.** If stderr is a pipe that has been closed, `eprintln!` panics and the host aborts (0xc0000409). It happened twice when the test harness read stderr through a pipe that then closed, and never with stderr going to a file. A launcher that closes the pipe early would crash the player. Fix: a log writer that does not panic.
+- **Missing question mark.** The uninstall data question reads "Also delete its settings and data" without a question mark.
+- **One bad catalog entry stops the player.** A catalog entry whose directory is outside the library stops the player at start ("package directory is outside this library") instead of skipping that entry.

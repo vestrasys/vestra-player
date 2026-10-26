@@ -18,12 +18,11 @@
     "test:packaging": "node --test packaging/tests/",
     "portability": "node scripts/check-portability.mjs",
     "docs:check": "node scripts/check-docs.mjs",
-    "builtin-versions": "node scripts/check-builtin-versions.mjs",
     "unsafe-policy": "node scripts/check-unsafe-policy.mjs",
     "ci:local": "node scripts/ci-local.mjs"
   },
   "dependencies": {
-    "@vestra-player/sdk": "^1.5.15"
+    "@vestra-player/sdk": "^1.5.17"
   },
   "devDependencies": {
     "@types/node": "^25.0.0",

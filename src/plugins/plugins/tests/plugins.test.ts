@@ -24,8 +24,6 @@ const info = (id: string, patch: Partial<Info> = {}): Info => ({
   error: null,
   capabilities: ["commands"],
   directory: `/packages/${id}`,
-  // Required by the SDK 1.5.15 TestHost type; deprecated and ignored from 1.5.16.
-  previousVersion: null,
   ...patch,
 });
 const REPOSITORY = "https://plugins.example.org/index.json";
@@ -267,12 +265,11 @@ test("J07: uninstall asks, can remove the data, and reports", async () => {
   assert.equal(host.packageCalls.length, 1);
 });
 
-test("J07: no rollback, even if an older player lists a previous version; failures are shown", async () => {
+test("J07: no Roll Back; failures are shown", async () => {
   const host = new TestHost();
-  await start(host, (root) => [info("zysilm.youtube", { previousVersion: "0.0.9", source: { kind: "file" }, dataDirectory: join(root, "instance-yt") })]);
+  await start(host, (root) => [info("zysilm.youtube", { source: { kind: "file" }, dataDirectory: join(root, "instance-yt") })]);
   await emit(host, "select", "zysilm.youtube");
   assert.ok(!("can-rollback" in props(host)), "no Roll Back button");
-  assert.ok(!details(host).some((d) => d.value === "0.0.9"), "no previous version shown");
   assert.equal(props(host)["can-uninstall"], true);
   assert.ok(!host.sent("packages.rollback").length);
   host.handle("packages.setEnabled", () => {

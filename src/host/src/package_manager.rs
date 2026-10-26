@@ -246,8 +246,6 @@ impl Host {
                 self.packages.store.get(string(params, "id")?),
             )
             .map_err(anyhow::Error::from)?),
-            // There is no `packages.rollback` (2026-10 ruling): it is an
-            // unknown method, `unsupported`, like any other.
             "packages.install" => {
                 let request = string(params, "requestId")?.to_owned();
                 if request.is_empty() || request.len() > 128 {
@@ -617,11 +615,9 @@ impl Host {
                 "development"
             };
             let instance = installed.then_some(stored.instance).flatten();
-            // `previousVersion` is always null (no rollback); SDK 1.5.17
-            // drops the field.
             list.insert(id.clone(), json!({"id":id,"version":plugin.manifest.version,
                 "origin":origin,"state":state,"error":error,"capabilities":plugin.manifest.capabilities,
-                "directory":plugin.directory,"previousVersion":null,
+                "directory":plugin.directory,
                 "builtin":instance.as_ref().is_some_and(|i| i.builtin),
                 "source":instance.map(|i| i.source),
                 "dataDirectory":plugin.data_directory(),"warnings":warnings,
@@ -661,7 +657,7 @@ impl Host {
                 Ok((directory, manifest)) => json!({"id":id,"version":manifest.version,
                     "origin":"installed","state":state,"error":error,
                     "capabilities":manifest.capabilities,"directory":directory,
-                    "previousVersion":null,"builtin":builtin,"source":source,
+                    "builtin":builtin,"source":source,
                     "dataDirectory":data,"warnings":[],
                     "display":display(&manifest, crate::i18n::load(&directory).as_deref())}),
                 // A built-in whose copy in the installation failed its checks.
@@ -671,7 +667,7 @@ impl Host {
                     json!({"id":id,"version":builtin_entry.version,
                         "origin":"installed","state":state,"error":failure,
                         "capabilities":[],"directory":builtin_entry.directory,
-                        "previousVersion":null,"builtin":builtin,"source":source,
+                        "builtin":builtin,"source":source,
                         "dataDirectory":data,"warnings":[],
                         "display":{"name":null,"punchline":null,"description":null,"tags":[]}})
                 }
@@ -688,7 +684,7 @@ impl Host {
                 id.clone(),
                 json!({"id":id,"version":manifest.version,
                 "origin":"development","state":state,"error":error,
-                "capabilities":manifest.capabilities,"directory":directory,"previousVersion":null,
+                "capabilities":manifest.capabilities,"directory":directory,
                 "builtin":false,"source":null,"dataDirectory":data,"warnings":[],
                 "display":display(manifest, crate::i18n::load(directory).as_deref())}),
             );
@@ -1531,7 +1527,7 @@ mod tests {
                 .as_deref(),
             Some("1.1.0")
         );
-        // Replace: a new instance, the old one dormant, no rollback across.
+        // Replace: a new instance, the old one dormant, nothing kept across.
         let replaced = install(
             &mut store,
             "a.b",
@@ -1911,7 +1907,7 @@ mod tests {
     /// in one catalog write, keeps instances, data and the disabled flag,
     /// and leaves the files to the cleanup thread.
     #[test]
-    fn a_library_from_0_5_migrates_to_builtins_in_place_without_rollback() {
+    fn a_library_from_0_5_migrates_to_builtins_in_place_without_previous_versions() {
         let root = tempfile::tempdir().unwrap();
         let mut store = Store::open(root.path().into()).unwrap();
         let old = install(&mut store, "vestra.audio", "1.0.0", Source::File, false).unwrap();

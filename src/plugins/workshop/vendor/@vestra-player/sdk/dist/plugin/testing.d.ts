@@ -1328,8 +1328,6 @@ export declare class TestHost implements Transport {
         capabilities: string[];
         /** The package directory. */
         directory: string;
-        /** The version a rollback would restore, `null` without one. */
-        previousVersion: string | null;
         /** Shipped with the player: `uninstall` and `install` are `unsupported`. */
         builtin?: boolean;
         /** Where it was installed from. */

@@ -11,13 +11,6 @@ on:
           names under src/plugins (plan.sh picks them from the changed paths).
         type: string
         default: all
-      builtin-base:
-        description: >
-          The commit the built-in versions guard compares HEAD against
-          (.github/scripts/builtin-base.sh: a branch's merge base with main,
-          else the latest v* tag before HEAD).
-        type: string
-        required: true
     outputs:
       ui_record:
         description: >
@@ -76,25 +69,6 @@ jobs:
         run: cargo shear
       - name: unsafe policy
         run: node src/scripts/check-unsafe-policy.mjs
-      # A built-in whose shipped files changed needs a higher manifest
-      # version, or seeded installs never upgrade (#27). The checkout is
-      # shallow: fetch only the base commit at depth 1 (the objects HEAD
-      # does not already have), not the history and tags the guard would
-      # need to find the base itself. The token goes to this one fetch only,
-      # as the checkout passes it, and is not written to .git/config.
-      - name: built-in plugin versions
-        env:
-          BASE: ${{ inputs.builtin-base }}
-          TOKEN: ${{ github.token }}
-        run: |
-          [[ "$BASE" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::no built-in versions base ('$BASE'); see the plan / verify log"; exit 1; }
-          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            auth="$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
-            echo "::add-mask::$auth"
-            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
-              git fetch --no-tags --no-write-fetch-head --depth=1 origin "$BASE"
-          fi
-          node src/scripts/check-builtin-versions.mjs --base "$BASE" --head HEAD
 
   ts:
     name: ts (runtime, plugins, SDK copy)

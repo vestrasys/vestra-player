@@ -1,4 +1,4 @@
-/** Package validation and install/rollback (`plugins.manage`). */
+/** Package validation, install and uninstall (`plugins.manage`). */
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { failure, sleep, uncertain } from "./runtime.js";
@@ -62,7 +62,7 @@ class ChangeHandle {
         this.#accept(await this.#scope.runtime.host.packages.cancel(this.#id));
     }
 }
-/** Install and rollback reuse the request id as the operation id after a lost reply. */
+/** Install and uninstall reuse the request id as the operation id after a lost reply. */
 async function change(scope, submit, id) {
     const host = scope.runtime.host.packages;
     const installed = await host.installed(id);
@@ -126,7 +126,6 @@ export const packages = (scope) => ({
         const checked = await scope.runtime.host.packages.validateArchive(path);
         return candidate(scope, path, checked);
     },
-    rollback: (id) => change(scope, (requestId, revision) => scope.runtime.host.packages.rollback(id, revision, requestId), id),
     list: async () => (await scope.runtime.host.packages.list()).map(info),
     onChange(listener) {
         const watch = scope.runtime.on("packages.changed", (data) => scope.run(listener, data.map(info)), null);
@@ -152,7 +151,6 @@ const info = (plugin) => Object.freeze({
     error: plugin.error,
     capabilities: [...plugin.capabilities],
     directory: plugin.directory,
-    previousVersion: plugin.previousVersion,
     builtin: plugin.builtin === true,
     source: plugin.source ? Object.freeze({ ...plugin.source }) : null,
     dataDirectory: plugin.dataDirectory ?? null,

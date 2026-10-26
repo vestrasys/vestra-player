@@ -34,7 +34,7 @@ export default async function activate(plugin: Plugin) {
 | `subtitles` | `state`, `onChange`, `refresh`, `select`, `load(bytes, { ifCurrent?, signal? })`, `remove`, `setStyle` | `SubtitleTrack` (value object: `id`, `kind`, `embeddedId?`, `title`, `language`, `styleSupported`, `styleReason`, `owned`) | | subtitles |
 | `media` | `capture({ at?, processed?, subtitles?, audio?, ifCurrent? })` | `Snapshot` → `ExportJob` | Snapshot: `export`, read-only description; Job: `state`, `onChange`, `done`, `cancel`, `refresh` | capture |
 | `resolvers` | `add({ id, schemes, hosts, resolve })` | `Resolver` | `ready` | bilibili, youtube |
-| `packages` | `validate(dir)` (`rollback(id)` deprecated in 1.5.16, removed in 1.5.17) | `PackageCandidate` → `PackageChange` | Candidate: `install`; Change: `status`, `message`, `onChange`, `done`, `cancel` | workshop |
+| `packages` | `validate(dir)` (`rollback(id)` removed in 1.5.17) | `PackageCandidate` → `PackageChange` | Candidate: `install`; Change: `status`, `message`, `onChange`, `done`, `cancel` | workshop |
 | `osd` | `show(text)`, `panel()` | `OsdPanel` | `set(text \| null)` | info |
 | Scope | `scope()`, `add`, `onDispose`, `onError`, `update`, `dispose` | `Scope` | | all (`onError`, `update` as needed) |
 

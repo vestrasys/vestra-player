@@ -187,7 +187,7 @@ If the plugin wants to show "where the installed one came from" before the dialo
 
 ### 2.6 Rollback (removed 2026-10-26)
 
-There is no rollback. `packages.rollback` answers `unsupported` ("unknown package method"); `PluginInfo.previousVersion` is always `null`; SDK 1.5.16 marks both `@deprecated` and 1.5.17 removes them (`apiVersion` stays `vestra/1`). No previous version is kept on disk. Going "back to the old plugin" across sources = reinstall from the old source (which reattaches the dormant instance's data); going back to an older version = uninstall, then install that version's `.vxp`. Migration guide: SDK site, How-to, "Migrating off package rollback (1.5.16)".
+There is no rollback. `packages.rollback` answers `unsupported` ("unknown package method"); `PluginInfo.previousVersion` is always `null`; SDK 1.5.16 marks both `@deprecated` and 1.5.17 removes them (`apiVersion` stays `vestra/1`). No previous version is kept on disk. Going "back to the old plugin" across sources = reinstall from the old source (which reattaches the dormant instance's data); going back to an older version = uninstall, then install that version's `.vxp`. Migration guide: SDK site, How-to, "Migrating off package rollback (1.5.16, removed in 1.5.17)".
 
 ---
 
@@ -231,7 +231,7 @@ By **source**: only the records the host creates for the ids in the installation
 
 History: until 2026-10-26 the host copied ("seeded") each built-in `.vxp` into the library, upgraded it only to a higher version so that a user's rollback stayed, and kept a previous version for rollback. On Windows that copy froze the UI for 14–21 s at first start and after an update; the stop-gap #39 moved it to a `builtin-seed` thread, and this round removed the copy. The figures and open items of that work are in git history (`7dda45d`).
 
-**The built-in version guard.** `npm run builtin-versions` (`src/scripts/check-builtin-versions.mjs`, #39) fails when a built-in's shipped files changed without a higher version, because a seeded copy was upgraded only to a newer version (#27). In place, a changed built-in reaches users with the player whatever its version, so the guard's reason is gone; the round proposes removing it in P4 (see the round record for the recommendation).
+**The built-in version guard (removed in P4).** `npm run builtin-versions` (`src/scripts/check-builtin-versions.mjs`, #39) failed when a built-in's shipped files changed without a higher version, because a seeded copy was upgraded only to a newer version (#27). In place, a changed built-in reaches users with the player whatever its version, so the guard, its CI step and `.github/scripts/builtin-base.sh` were removed in P4 of the round. Bumping a changed built-in's version stays a convention (the Plugin Manager and bug reports show it), not a CI gate.
 When a `--plugin` development load has the same id as an installed plugin: the development load wins, and the installed one does not start in this run (`state: "stopped"`). Check the existing order of `package_tick` and `load` first when implementing.
 
 ### 3.4 What the `plugins` plugin and the workshop need to know
