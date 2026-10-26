@@ -33,7 +33,7 @@ export const PLUGIN_TOOLS: Record<string, { description: string; parameters: Ret
     parameters: Type.Object({ id }),
   },
   install_plugin: {
-    description: "Pack the plugin, let the player validate it (including Slint) and install it. The user confirms in a dialog first; Roll Back in the window undoes the install (the previous version, or uninstall after a first install). Only after the user asked for it.",
+    description: "Pack the plugin, let the player validate it (including Slint) and install it. The user confirms in a dialog first. Only after the user asked for it.",
     parameters: Type.Object({ id }),
   },
 };

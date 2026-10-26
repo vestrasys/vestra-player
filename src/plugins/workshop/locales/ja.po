@@ -6,389 +6,364 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: ai.slint:106
+#: ai.slint:114
 #, x-machine
 msgid "Read"
 msgstr "読み取り"
 
-#: ai.slint:107
+#: ai.slint:115
 #, x-machine
 msgid "Write"
 msgstr "書き込み"
 
-#: ai.slint:108
+#: ai.slint:116
 #, x-machine
 msgid "Edit"
 msgstr "編集"
 
-#: ai.slint:109
+#: ai.slint:117
 #, x-machine
 msgid "List"
 msgstr "一覧"
 
-#: ai.slint:110
+#: ai.slint:118
 #, x-machine
 msgid "Find"
 msgstr "ファイル検索"
 
-#: ai.slint:111
+#: ai.slint:119
 #, x-machine
 msgid "Search"
 msgstr "テキスト検索"
 
-#: ai.slint:112 settings.slint:191
+#: ai.slint:120 settings.slint:191
 #, x-machine
 msgid "Delete"
 msgstr "削除"
 
-#: ai.slint:113
+#: ai.slint:121
 #, x-machine
 msgid "Create plugin"
 msgstr "プラグインを作成"
 
-#: ai.slint:114
+#: ai.slint:122
 #, x-machine
 msgid "Type check"
 msgstr "型チェック"
 
-#: ai.slint:115
+#: ai.slint:123
 #, x-machine
 msgid "Run tests"
 msgstr "テストを実行"
 
-#: ai.slint:116
+#: ai.slint:124
 #, x-machine
 msgid "Check"
 msgstr "チェック"
 
-#: ai.slint:117
+#: ai.slint:125
 #, x-machine
 msgid "Pack"
 msgstr "パッケージ化"
 
-#: ai.slint:118 ai.slint:286 ai.slint:591 delivery.ts:162
+#: ai.slint:126 ai.slint:294 ai.slint:591 delivery.ts:156
 #, x-machine
 msgid "Install"
 msgstr "インストール"
 
 #. a file of the read-only reference, e.g. "reference/sdk/llms.txt".
-#: ai.slint:123
+#: ai.slint:131
 #, x-machine
 msgid "reference/{}"
 msgstr "reference/{}"
 
 #. a tool and what it is about, e.g. "Read main.ts".
-#: ai.slint:127
+#: ai.slint:135
 #, x-machine
 msgid "{0} {1}"
 msgstr "{0} {1}"
 
-#: ai.slint:133
+#: ai.slint:141
 #, x-machine
 msgid "Replying…"
 msgstr "返信中…"
 
-#: ai.slint:133
+#: ai.slint:141
 #, x-machine
 msgid "Thinking…"
 msgstr "考え中…"
 
-#: ai.slint:140
+#: ai.slint:148
 #, x-machine
 msgid "{0}, {1} failed"
 msgstr "{0}、{1} 件失敗"
 
-#: ai.slint:144
+#: ai.slint:152
 #, x-machine
 msgid "{n} tool call"
 msgid_plural "{n} tool calls"
 msgstr[0] "ツール呼び出し {n} 件"
 
-#: ai.slint:147
+#: ai.slint:155
 #, x-machine
 msgid "Stopped"
 msgstr "停止しました"
 
-#: ai.slint:148
+#: ai.slint:156
 #, x-machine
 msgid "The last reply was interrupted (the player or the plugin quit)"
 msgstr "前回の返信は中断されました（プレーヤーまたはプラグインが終了しました）"
 
-#: ai.slint:149
+#: ai.slint:157
 #, x-machine
 msgid "Connection failed; retrying ({0}/{1})…"
 msgstr "接続に失敗しました。再試行中（{0}/{1}）…"
 
-#: ai.slint:150
+#: ai.slint:158
 #, x-machine
 msgid "Compacting the context…"
 msgstr "コンテキストを圧縮中…"
 
-#: ai.slint:151
+#: ai.slint:159
 #, x-machine
 msgid "Context compacted"
 msgstr "コンテキストを圧縮しました"
 
-#: ai.slint:152
+#: ai.slint:160
 #, x-machine
 msgid "{n} earlier message is not shown (the full record is in the session folder)"
 msgid_plural "{n} earlier messages are not shown (the full record is in the session folder)"
 msgstr[0] "以前のメッセージ {n} 件は表示されていません（完全な記録はセッションフォルダにあります）"
 
-#: ai.slint:156
+#: ai.slint:164
 #, x-machine
 msgid "The API key is invalid or has no permission; check it in the settings."
 msgstr "API キーが無効か、権限がありません。設定で確認してください。"
 
-#: ai.slint:157
+#: ai.slint:165
 #, x-machine
 msgid "The model “{}” is not available; choose another model in the settings."
 msgstr "モデル「{}」は使用できません。設定で別のモデルを選択してください。"
 
-#: ai.slint:158
+#: ai.slint:166
 #, x-machine
 msgid "The model is not available; choose another model in the settings."
 msgstr "モデルは使用できません。設定で別のモデルを選択してください。"
 
-#: ai.slint:159
+#: ai.slint:167
 #, x-machine
 msgid "Out of quota or too many requests; try again later."
 msgstr "利用枠を超えたか、リクエストが多すぎます。しばらくしてからもう一度お試しください。"
 
-#: ai.slint:160
+#: ai.slint:168
 #, x-machine
 msgid "Network error: cannot reach the provider."
 msgstr "ネットワークエラー：プロバイダに接続できません。"
 
-#: ai.slint:161
+#: ai.slint:169
 #, x-machine
 msgid "No reply from the provider for {} seconds; stopped."
 msgstr "プロバイダから {} 秒間応答がないため、停止しました。"
 
-#: ai.slint:162
+#: ai.slint:170
 #, x-machine
 msgid "The agent process quit unexpectedly."
 msgstr "エージェントのプロセスが予期せず終了しました。"
 
-#: ai.slint:164
+#: ai.slint:172
 #, x-machine
 msgid "Something went wrong."
 msgstr "問題が発生しました。"
 
-#: ai.slint:212
+#: ai.slint:220
 #, x-machine
 msgid "Collapse ▾"
 msgstr "折りたたむ ▾"
 
-#: ai.slint:212
+#: ai.slint:220
 #, x-machine
 msgid "All ▸"
 msgstr "すべて ▸"
 
-#: ai.slint:242 ai.slint:249
+#: ai.slint:250 ai.slint:257
 #, x-machine
 msgid "… (too long; the rest is not shown)"
 msgstr "…（長すぎるため、残りは表示されていません）"
 
-#: ai.slint:245
+#: ai.slint:253
 #, x-machine
 msgid "Copy"
 msgstr "コピー"
 
-#: ai.slint:267
+#: ai.slint:275
 #, x-machine
 msgid "Retry"
 msgstr "再試行"
 
-#: ai.slint:268
+#: ai.slint:276
 #, x-machine
 msgid "Open Settings"
 msgstr "設定を開く"
 
-#: ai.slint:287 ai.slint:592
-#, x-machine
-msgid "Roll Back (Undo Install)"
-msgstr "ロールバック（インストールを取り消す）"
-
-#: ai.slint:288 ai.slint:593
+#: ai.slint:295 ai.slint:592
 #, x-machine
 msgid "Export .vxp"
 msgstr ".vxp を書き出す"
 
-#: ai.slint:289 ai.slint:594
+#: ai.slint:296 ai.slint:593
 #, x-machine
 msgid "Export Source .zip"
 msgstr "ソースの .zip を書き出す"
 
-#: ai.slint:290 ai.slint:489 ai.slint:595
+#: ai.slint:297 ai.slint:489 ai.slint:594
 #, x-machine
 msgid "Open Folder"
 msgstr "フォルダを開く"
 
-#: ai.slint:355
+#: ai.slint:359
 #, x-machine
 msgid "Reading the API key from the keychain… (the system may ask for permission)"
 msgstr "キーチェーンから API キーを読み取り中…（システムが許可を求めることがあります）"
 
-#: ai.slint:356
+#: ai.slint:360
 #, x-machine
 msgid "Cannot read the key from the keychain; save it again in the settings. ({})"
 msgstr "キーチェーンからキーを読み取れません。設定でもう一度保存してください。（{}）"
 
-#: ai.slint:357
+#: ai.slint:361
 #, x-machine
 msgid "Cannot read the key from the keychain; save it again in the settings. (The key is not in the keychain)"
 msgstr "キーチェーンからキーを読み取れません。設定でもう一度保存してください。（キーがキーチェーンにありません）"
 
-#: ai.slint:358
+#: ai.slint:362
 #, x-machine
 msgid "The API key has not been read yet."
 msgstr "API キーはまだ読み取られていません。"
 
-#: ai.slint:359
+#: ai.slint:363
 #, x-machine
 msgid "No provider set up: choose a provider in the settings and save its API key first."
 msgstr "プロバイダが設定されていません。先に設定でプロバイダを選択し、その API キーを保存してください。"
 
-#: ai.slint:364
+#: ai.slint:368
 #, x-machine
 msgid "Install {0} {1}"
 msgstr "{0} {1} をインストール"
 
-#: ai.slint:365
-#, x-machine
-msgid "Roll back to {}"
-msgstr "{} にロールバック"
-
-#: ai.slint:366
-#, x-machine
-msgid "Uninstall {}"
-msgstr "{} をアンインストール"
-
-#: ai.slint:369
+#: ai.slint:371
 #, x-machine
 msgid "done"
 msgstr "完了"
 
-#: ai.slint:370
+#: ai.slint:372
 #, x-machine
 msgid "cancelled"
 msgstr "キャンセル済み"
 
-#: ai.slint:371
+#: ai.slint:373
 #, x-machine
 msgid "failed"
 msgstr "失敗"
 
-#: ai.slint:372
+#: ai.slint:374
 #, x-machine
 msgid "failed; the previous version could not be fully restored"
 msgstr "失敗しました。以前のバージョンを完全には復元できませんでした"
 
-#: ai.slint:373
+#: ai.slint:375
 #, x-machine
 msgid "too late to cancel"
 msgstr "キャンセルするには遅すぎます"
 
-#: ai.slint:377
+#: ai.slint:379
 #, x-machine
 msgid "Packing {}…"
 msgstr "{} をパッケージ化中…"
 
-#: ai.slint:378
+#: ai.slint:380
 #, x-machine
 msgid "The player is validating {}…"
 msgstr "プレーヤーが {} を検証中…"
 
-#: ai.slint:379
+#: ai.slint:381
 #, x-machine
 msgid "The player's validation failed ({0}): {1}"
 msgstr "プレーヤーの検証に失敗しました（{0}）：{1}"
 
-#: ai.slint:380
+#: ai.slint:382
 #, x-machine
 msgid "Checks before packing failed: {} problem(s)"
 msgstr "パッケージ化前のチェックに失敗しました：問題 {} 件"
 
-#: ai.slint:381
+#: ai.slint:383
 #, x-machine
 msgid "Packing failed: {} type error(s)"
 msgstr "パッケージ化に失敗しました：型エラー {} 件"
 
-#: ai.slint:382
+#: ai.slint:384
 #, x-machine
 msgid "Packing failed"
 msgstr "パッケージ化に失敗しました"
 
-#: ai.slint:383
+#: ai.slint:385
 #, x-machine
 msgid "Packing failed: no .vxp was written"
 msgstr "パッケージ化に失敗しました：.vxp が作成されませんでした"
 
-#: ai.slint:384
+#: ai.slint:386
 #, x-machine
 msgid "Packing cancelled"
 msgstr "パッケージ化をキャンセルしました"
 
-#: ai.slint:385
+#: ai.slint:387
 #, x-machine
 msgid "Packing timed out and was stopped"
 msgstr "パッケージ化がタイムアウトしたため、停止しました"
 
-#: ai.slint:386
+#: ai.slint:388
 #, x-machine
 msgid "Not installed (cancelled)."
 msgstr "インストールしませんでした（キャンセル）。"
 
-#: ai.slint:387
+#: ai.slint:389
 #, x-machine
 msgid "Installing {}…"
 msgstr "{} をインストール中…"
 
-#: ai.slint:388
+#: ai.slint:390
 #, x-machine
 msgid "{} has the name of a plugin built into the player and cannot be installed; choose another id."
 msgstr "{} はプレーヤーの内蔵プラグインと同じ名前のため、インストールできません。別の ID を選択してください。"
 
-#: ai.slint:389
+#: ai.slint:391
 #, x-machine
 msgid "Not installed: the installed plugin was kept."
 msgstr "インストールしませんでした：インストール済みのプラグインはそのままです。"
 
-#: ai.slint:390
+#: ai.slint:392
 #, x-machine
 msgid "{0}: {1}…"
 msgstr "{0}：{1}…"
 
-#: ai.slint:391
+#: ai.slint:393
 #, x-machine
 msgid "{0}: {1} ({2})"
 msgstr "{0}：{1}（{2}）"
 
-#: ai.slint:392
+#: ai.slint:394
 #, x-machine
 msgid "{0}: {1}"
 msgstr "{0}：{1}"
 
-#: ai.slint:393
-#, x-machine
-msgid "Installed {0} {1}; you can click Roll Back (Undo Install). Shortcuts not in effect:"
-msgstr "{0} {1} をインストールしました。「ロールバック（インストールを取り消す）」をクリックできます。有効になっていないショートカット："
-
-#: ai.slint:394
-#, x-machine
-msgid "Installed {0} {1}; you can click Roll Back (Undo Install)."
-msgstr "{0} {1} をインストールしました。「ロールバック（インストールを取り消す）」をクリックできます。"
-
 #: ai.slint:395
 #, x-machine
-msgid "{} is no longer among the installed plugins."
-msgstr "{} はインストール済みのプラグインにもうありません。"
+msgid "Installed {0} {1}. Shortcuts not in effect:"
+msgstr "{0} {1} をインストールしました。有効になっていないショートカット："
 
 #: ai.slint:396
 #, x-machine
-msgid "Rolling back {}…"
-msgstr "{} をロールバック中…"
+msgid "Installed {0} {1}."
+msgstr "{0} {1} をインストールしました。"
 
 #: ai.slint:397
 #, x-machine
@@ -465,74 +440,70 @@ msgstr "どんなプラグインを作りますか？　それとも、何か質
 msgid "Plugin: {}"
 msgstr "プラグイン：{}"
 
-#: ai.slint:626
+#: ai.slint:625
 #, x-machine
 msgid "Another conversation is generating; please wait…"
 msgstr "別の会話が生成中です。しばらくお待ちください…"
 
-#: ai.slint:626
+#: ai.slint:625
 #, x-machine
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr "メッセージを入力… Enter で送信 · Shift+Enter で改行"
 
-#: ai.slint:643
+#: ai.slint:642
 #, x-machine
 msgid "Send"
 msgstr "送信"
 
-#: ai.slint:647
+#: ai.slint:646
 #, x-machine
 msgid "■ Stop"
 msgstr "■ 停止"
 
-#: delivery.ts:158
+#: delivery.ts:154
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "AI が生成したプラグイン「{}」をインストールしますか？"
 
-#: delivery.ts:159
+#: delivery.ts:155
 #, x-machine
 msgid ""
 "{1} {2}\n"
-"Capabilities: {3}\n"
-"To undo the install, click Roll Back (Undo Install) in the AI window."
+"Capabilities: {3}"
 msgstr ""
 "{1} {2}\n"
-"機能：{3}\n"
-"インストールを取り消すには、AI ウインドウで「ロールバック（インストールを取り消す）」をクリックしてください。"
+"機能：{3}"
 
-#: delivery.ts:159
+#: delivery.ts:155
 #, x-machine
 msgid ""
 "{1} {2}\n"
-"Capabilities: none\n"
-"To undo the install, click Roll Back (Undo Install) in the AI window."
+"Capabilities: none"
 msgstr ""
 "{1} {2}\n"
-"機能：なし\n"
-"インストールを取り消すには、AI ウインドウで「ロールバック（インストールを取り消す）」をクリックしてください。"
+"機能：なし"
 
-#: delivery.ts:188
+#: delivery.ts:182
 #, x-machine
 msgid "Replace the installed {}?"
 msgstr "インストール済みの {} を置き換えますか？"
 
-#: delivery.ts:190
+#: delivery.ts:184
 #, x-machine
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "このプラグインは別の場所からインストールされています（Vestra Player AI で作成したものではありません）。置き換えると、新しいプラグインは新しい空のデータフォルダで起動します。元のプラグインのデータは保持され、元の提供元から再インストールしたときに再び使用されます。"
 
-#: delivery.ts:191
+#: delivery.ts:185
 #, x-machine
 msgid "Replace"
 msgstr "置き換える"
 
-#: labels.slint:6 main.ts:521
+#: labels.slint:6 main.ts:519
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "カスタム · OpenAI 形式"
 
-#: labels.slint:7 main.ts:523
+#: labels.slint:7 main.ts:521
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "カスタム · Anthropic 形式"
@@ -542,35 +513,35 @@ msgstr "カスタム · Anthropic 形式"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "以前に選択したプロバイダ「{}」は提供が終了しました。別のプロバイダか「カスタム · OpenAI/Anthropic 形式」を使用してください。"
 
-#: main.ts:489
+#: main.ts:487
 #, x-machine
 msgid "Export Plugin Package"
 msgstr "プラグインパッケージを書き出す"
 
-#: main.ts:504
+#: main.ts:502
 #, x-machine
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "ソースを書き出す（そのまま GitHub リポジトリとして使用可能）"
 
-#: main.ts:525 manifest.json
+#: main.ts:523 manifest.json
 #, x-machine
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:533
+#: main.ts:531
 #, x-machine
 msgid "{} (no longer offered)"
 msgstr "{}（提供終了）"
 
-#: main.ts:738
+#: main.ts:736
 #, x-machine
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
 
 #: manifest.json
 #, x-machine
-msgid "Chat with your chosen model; let AI write Vestra plugins: check, test, install (reversible), export (BYOK, experimental)"
-msgstr "選んだモデルとチャットし、AI に Vestra プラグインを作成させる：チェック、テスト、インストール（取り消し可能）、書き出し（BYOK、試験的）"
+msgid "Chat with your chosen model; let AI write Vestra plugins: check, test, install, export (BYOK, experimental)"
+msgstr "選んだモデルとチャットし、AI に Vestra プラグインを作成させる：チェック、テスト、インストール、書き出し（BYOK、試験的）"
 
 #: manifest.json
 #, x-machine
@@ -579,13 +550,13 @@ msgid ""
 "\n"
 "Each conversation has its own folder; the AI can only read and write that folder and cannot run commands. The API key is kept only in the system keychain, never in a file. The cost of calling the model is charged to your provider account.\n"
 "\n"
-"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed (reversibly) or exported as a .vxp or as a complete source project."
+"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed or exported as a .vxp or as a complete source project."
 msgstr ""
 "Vestra Player AI は、pi（github.com/earendil-works/pi）をベースにしたプレーヤー内の AI アシスタントです。設定でプロバイダ（Anthropic、OpenAI、Google、OpenRouter、DeepSeek、または Ollama などの OpenAI 互換サービス）を選択し、ご自身の API キーを保存すると会話を始められます。\n"
 "\n"
 "会話ごとに専用のフォルダがあり、AI はそのフォルダの読み書きしかできず、コマンドは実行できません。API キーはシステムのキーチェーンにのみ保存され、ファイルには書き込まれません。モデルの呼び出しにかかる費用は、ご利用のプロバイダのアカウントに請求されます。\n"
 "\n"
-"AI はプラグイン SDK のドキュメントに基づいてプラグインを作成し、型チェック、テスト、パッケージ化のツールで自らエラーを修正します。完成したプラグインはインストール（取り消し可能）したり、.vxp または完全なソースプロジェクトとして書き出したりできます。"
+"AI はプラグイン SDK のドキュメントに基づいてプラグインを作成し、型チェック、テスト、パッケージ化のツールで自らエラーを修正します。完成したプラグインはインストールしたり、.vxp または完全なソースプロジェクトとして書き出したりできます。"
 
 #: manifest.json
 #, x-machine

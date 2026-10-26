@@ -5,313 +5,293 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: ai.slint:106
+#: ai.slint:114
 msgid "Read"
 msgstr "读取"
 
-#: ai.slint:107
+#: ai.slint:115
 msgid "Write"
 msgstr "写入"
 
-#: ai.slint:108
+#: ai.slint:116
 msgid "Edit"
 msgstr "修改"
 
-#: ai.slint:109
+#: ai.slint:117
 msgid "List"
 msgstr "列出"
 
-#: ai.slint:110
+#: ai.slint:118
 msgid "Find"
 msgstr "查找"
 
-#: ai.slint:111
+#: ai.slint:119
 msgid "Search"
 msgstr "搜索"
 
-#: ai.slint:112 settings.slint:191
+#: ai.slint:120 settings.slint:191
 msgid "Delete"
 msgstr "删除"
 
-#: ai.slint:113
+#: ai.slint:121
 msgid "Create plugin"
 msgstr "创建插件"
 
-#: ai.slint:114
+#: ai.slint:122
 msgid "Type check"
 msgstr "类型检查"
 
-#: ai.slint:115
+#: ai.slint:123
 msgid "Run tests"
 msgstr "运行测试"
 
-#: ai.slint:116
+#: ai.slint:124
 msgid "Check"
 msgstr "检查"
 
-#: ai.slint:117
+#: ai.slint:125
 msgid "Pack"
 msgstr "打包"
 
-#: ai.slint:118 ai.slint:286 ai.slint:591 delivery.ts:162
+#: ai.slint:126 ai.slint:294 ai.slint:591 delivery.ts:156
 msgid "Install"
 msgstr "安装"
 
 #. a file of the read-only reference, e.g. "reference/sdk/llms.txt".
-#: ai.slint:123
+#: ai.slint:131
 msgid "reference/{}"
 msgstr "参考资料/{}"
 
 #. a tool and what it is about, e.g. "Read main.ts".
-#: ai.slint:127
+#: ai.slint:135
 msgid "{0} {1}"
 msgstr "{0} {1}"
 
-#: ai.slint:133
+#: ai.slint:141
 msgid "Replying…"
 msgstr "回复中…"
 
-#: ai.slint:133
+#: ai.slint:141
 msgid "Thinking…"
 msgstr "思考中…"
 
-#: ai.slint:140
+#: ai.slint:148
 msgid "{0}, {1} failed"
 msgstr "{0}，{1} 个失败"
 
-#: ai.slint:144
+#: ai.slint:152
 msgid "{n} tool call"
 msgid_plural "{n} tool calls"
 msgstr[0] "{n} 个工具调用"
 
-#: ai.slint:147
+#: ai.slint:155
 msgid "Stopped"
 msgstr "已停止"
 
-#: ai.slint:148
+#: ai.slint:156
 msgid "The last reply was interrupted (the player or the plugin quit)"
 msgstr "上次的生成被中断（播放器或插件已退出）"
 
-#: ai.slint:149
+#: ai.slint:157
 msgid "Connection failed; retrying ({0}/{1})…"
 msgstr "连接失败，正在重试（{0}/{1}）…"
 
-#: ai.slint:150
+#: ai.slint:158
 msgid "Compacting the context…"
 msgstr "正在压缩上下文…"
 
-#: ai.slint:151
+#: ai.slint:159
 msgid "Context compacted"
 msgstr "上下文已压缩"
 
-#: ai.slint:152
+#: ai.slint:160
 msgid "{n} earlier message is not shown (the full record is in the session folder)"
 msgid_plural "{n} earlier messages are not shown (the full record is in the session folder)"
 msgstr[0] "更早的 {n} 条消息没有显示（完整记录在会话文件夹里）"
 
-#: ai.slint:156
+#: ai.slint:164
 msgid "The API key is invalid or has no permission; check it in the settings."
 msgstr "API key 无效或没有权限，请在设置中检查。"
 
-#: ai.slint:157
+#: ai.slint:165
 msgid "The model “{}” is not available; choose another model in the settings."
 msgstr "模型「{}」不可用，请在设置中换一个模型。"
 
-#: ai.slint:158
+#: ai.slint:166
 msgid "The model is not available; choose another model in the settings."
 msgstr "模型不可用，请在设置中换一个模型。"
 
-#: ai.slint:159
+#: ai.slint:167
 msgid "Out of quota or too many requests; try again later."
 msgstr "额度不足或请求过于频繁，请稍后重试。"
 
-#: ai.slint:160
+#: ai.slint:168
 msgid "Network error: cannot reach the provider."
 msgstr "网络错误：无法连接服务商。"
 
-#: ai.slint:161
+#: ai.slint:169
 msgid "No reply from the provider for {} seconds; stopped."
 msgstr "超过 {} 秒没有收到服务商的回复，已停止。"
 
-#: ai.slint:162
+#: ai.slint:170
 msgid "The agent process quit unexpectedly."
 msgstr "agent 进程意外退出。"
 
-#: ai.slint:164
+#: ai.slint:172
 msgid "Something went wrong."
 msgstr "出错了。"
 
-#: ai.slint:212
+#: ai.slint:220
 msgid "Collapse ▾"
 msgstr "收起 ▾"
 
-#: ai.slint:212
+#: ai.slint:220
 msgid "All ▸"
 msgstr "全部 ▸"
 
-#: ai.slint:242 ai.slint:249
+#: ai.slint:250 ai.slint:257
 msgid "… (too long; the rest is not shown)"
 msgstr "…（内容过长，后面没有显示）"
 
-#: ai.slint:245
+#: ai.slint:253
 msgid "Copy"
 msgstr "复制"
 
-#: ai.slint:267
+#: ai.slint:275
 msgid "Retry"
 msgstr "重试"
 
-#: ai.slint:268
+#: ai.slint:276
 msgid "Open Settings"
 msgstr "打开设置"
 
-#: ai.slint:287 ai.slint:592
-msgid "Roll Back (Undo Install)"
-msgstr "回退（撤销安装）"
-
-#: ai.slint:288 ai.slint:593
+#: ai.slint:295 ai.slint:592
 msgid "Export .vxp"
 msgstr "导出 .vxp"
 
-#: ai.slint:289 ai.slint:594
+#: ai.slint:296 ai.slint:593
 msgid "Export Source .zip"
 msgstr "导出源码 zip"
 
-#: ai.slint:290 ai.slint:489 ai.slint:595
+#: ai.slint:297 ai.slint:489 ai.slint:594
 msgid "Open Folder"
 msgstr "打开文件夹"
 
-#: ai.slint:355
+#: ai.slint:359
 msgid "Reading the API key from the keychain… (the system may ask for permission)"
 msgstr "正在读取钥匙串中的 API key…（系统可能会请求授权）"
 
-#: ai.slint:356
+#: ai.slint:360
 msgid "Cannot read the key from the keychain; save it again in the settings. ({})"
 msgstr "无法读取钥匙串中的 key，请在设置中重新保存。（{}）"
 
-#: ai.slint:357
+#: ai.slint:361
 msgid "Cannot read the key from the keychain; save it again in the settings. (The key is not in the keychain)"
 msgstr "无法读取钥匙串中的 key，请在设置中重新保存。（钥匙串里没有这个 key）"
 
-#: ai.slint:358
+#: ai.slint:362
 msgid "The API key has not been read yet."
 msgstr "尚未读取 API key。"
 
-#: ai.slint:359
+#: ai.slint:363
 msgid "No provider set up: choose a provider in the settings and save its API key first."
 msgstr "尚未配置服务商：请先在设置中选择服务商并保存 API key。"
 
-#: ai.slint:364
+#: ai.slint:368
 msgid "Install {0} {1}"
 msgstr "安装 {0} {1}"
 
-#: ai.slint:365
-msgid "Roll back to {}"
-msgstr "回退到 {}"
-
-#: ai.slint:366
-msgid "Uninstall {}"
-msgstr "卸载 {}"
-
-#: ai.slint:369
+#: ai.slint:371
 msgid "done"
 msgstr "完成"
 
-#: ai.slint:370
+#: ai.slint:372
 msgid "cancelled"
 msgstr "已取消"
 
-#: ai.slint:371
+#: ai.slint:373
 msgid "failed"
 msgstr "失败"
 
-#: ai.slint:372
+#: ai.slint:374
 msgid "failed; the previous version could not be fully restored"
 msgstr "失败，未能完全恢复原版本"
 
-#: ai.slint:373
+#: ai.slint:375
 msgid "too late to cancel"
 msgstr "已无法取消"
 
-#: ai.slint:377
+#: ai.slint:379
 msgid "Packing {}…"
 msgstr "正在打包 {}…"
 
-#: ai.slint:378
+#: ai.slint:380
 msgid "The player is validating {}…"
 msgstr "正在由播放器校验 {}…"
 
-#: ai.slint:379
+#: ai.slint:381
 msgid "The player's validation failed ({0}): {1}"
 msgstr "播放器校验没有通过（{0}）：{1}"
 
-#: ai.slint:380
+#: ai.slint:382
 msgid "Checks before packing failed: {} problem(s)"
 msgstr "打包前的检查未通过：{} 个问题"
 
-#: ai.slint:381
+#: ai.slint:383
 msgid "Packing failed: {} type error(s)"
 msgstr "打包失败：{} 个类型错误"
 
-#: ai.slint:382
+#: ai.slint:384
 msgid "Packing failed"
 msgstr "打包失败"
 
-#: ai.slint:383
+#: ai.slint:385
 msgid "Packing failed: no .vxp was written"
 msgstr "打包失败：没有生成 .vxp"
 
-#: ai.slint:384
+#: ai.slint:386
 msgid "Packing cancelled"
 msgstr "打包已取消"
 
-#: ai.slint:385
+#: ai.slint:387
 msgid "Packing timed out and was stopped"
 msgstr "打包超时，已停止"
 
-#: ai.slint:386
+#: ai.slint:388
 msgid "Not installed (cancelled)."
 msgstr "没有安装（已取消）。"
 
-#: ai.slint:387
+#: ai.slint:389
 msgid "Installing {}…"
 msgstr "正在安装 {}…"
 
-#: ai.slint:388
+#: ai.slint:390
 msgid "{} has the name of a plugin built into the player and cannot be installed; choose another id."
 msgstr "{} 和播放器内置插件同名，不能安装，请换一个 id。"
 
-#: ai.slint:389
+#: ai.slint:391
 msgid "Not installed: the installed plugin was kept."
 msgstr "没有安装：保留了已安装的插件。"
 
-#: ai.slint:390
+#: ai.slint:392
 msgid "{0}: {1}…"
 msgstr "{0}：{1}…"
 
-#: ai.slint:391
+#: ai.slint:393
 msgid "{0}: {1} ({2})"
 msgstr "{0}{1}（{2}）"
 
-#: ai.slint:392
+#: ai.slint:394
 msgid "{0}: {1}"
 msgstr "{0}{1}"
 
-#: ai.slint:393
-msgid "Installed {0} {1}; you can click Roll Back (Undo Install). Shortcuts not in effect:"
-msgstr "已安装 {0} {1}，可以点「回退（撤销安装）」。快捷键没有生效："
-
-#: ai.slint:394
-msgid "Installed {0} {1}; you can click Roll Back (Undo Install)."
-msgstr "已安装 {0} {1}，可以点「回退（撤销安装）」。"
-
 #: ai.slint:395
-msgid "{} is no longer among the installed plugins."
-msgstr "{} 已经不在已安装的插件里。"
+msgid "Installed {0} {1}. Shortcuts not in effect:"
+msgstr "已安装 {0} {1}。快捷键没有生效："
 
 #: ai.slint:396
-msgid "Rolling back {}…"
-msgstr "正在回退 {}…"
+msgid "Installed {0} {1}."
+msgstr "已安装 {0} {1}。"
 
 #: ai.slint:397
 msgid "Exported {}"
@@ -373,63 +353,59 @@ msgstr "想做什么插件，或者问点什么？"
 msgid "Plugin: {}"
 msgstr "插件：{}"
 
-#: ai.slint:626
+#: ai.slint:625
 msgid "Another conversation is generating; please wait…"
 msgstr "另一会话正在生成，请稍候…"
 
-#: ai.slint:626
+#: ai.slint:625
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr "输入消息… Enter 发送 · Shift+Enter 换行"
 
-#: ai.slint:643
+#: ai.slint:642
 msgid "Send"
 msgstr "发送"
 
-#: ai.slint:647
+#: ai.slint:646
 msgid "■ Stop"
 msgstr "■ 停止"
 
-#: delivery.ts:158
+#: delivery.ts:154
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "安装 AI 生成的插件「{}」？"
 
-#: delivery.ts:159
+#: delivery.ts:155
 msgid ""
 "{1} {2}\n"
-"Capabilities: {3}\n"
-"To undo the install, click Roll Back (Undo Install) in the AI window."
+"Capabilities: {3}"
 msgstr ""
 "{1} {2}\n"
-"能力：{3}\n"
-"安装后可以在 AI 窗口里点「回退（撤销安装）」。"
+"能力：{3}"
 
-#: delivery.ts:159
+#: delivery.ts:155
 msgid ""
 "{1} {2}\n"
-"Capabilities: none\n"
-"To undo the install, click Roll Back (Undo Install) in the AI window."
+"Capabilities: none"
 msgstr ""
 "{1} {2}\n"
-"能力：无\n"
-"安装后可以在 AI 窗口里点「回退（撤销安装）」。"
+"能力：无"
 
-#: delivery.ts:188
+#: delivery.ts:182
 msgid "Replace the installed {}?"
 msgstr "替换已安装的 {}？"
 
-#: delivery.ts:190
+#: delivery.ts:184
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "它是从别处安装的（不是 Vestra Player AI 生成的）。替换后新插件使用新的空数据目录；原插件的数据保留，以后从原来源重新安装时接上。"
 
-#: delivery.ts:191
+#: delivery.ts:185
 msgid "Replace"
 msgstr "替换"
 
-#: labels.slint:6 main.ts:521
+#: labels.slint:6 main.ts:519
 msgid "Custom · OpenAI format"
 msgstr "自定义 · OpenAI 格式"
 
-#: labels.slint:7 main.ts:523
+#: labels.slint:7 main.ts:521
 msgid "Custom · Anthropic format"
 msgstr "自定义 · Anthropic 格式"
 
@@ -437,29 +413,29 @@ msgstr "自定义 · Anthropic 格式"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "之前选择的服务商「{}」已不再提供，请改用其他服务商或「自定义 · OpenAI/Anthropic 格式」。"
 
-#: main.ts:489
+#: main.ts:487
 msgid "Export Plugin Package"
 msgstr "导出插件包"
 
-#: main.ts:504
+#: main.ts:502
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "导出源码（可以直接作为 GitHub 仓库）"
 
-#: main.ts:525 manifest.json
+#: main.ts:523 manifest.json
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:533
+#: main.ts:531
 msgid "{} (no longer offered)"
 msgstr "{}（已不再提供）"
 
-#: main.ts:738
+#: main.ts:736
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
 
 #: manifest.json
-msgid "Chat with your chosen model; let AI write Vestra plugins: check, test, install (reversible), export (BYOK, experimental)"
-msgstr "和你选的模型对话，让 AI 写 Vestra 插件：检查、测试、安装（可回退）、导出（自带 API key，实验性）"
+msgid "Chat with your chosen model; let AI write Vestra plugins: check, test, install, export (BYOK, experimental)"
+msgstr "和你选的模型对话，让 AI 写 Vestra 插件：检查、测试、安装、导出（自带 API key，实验性）"
 
 #: manifest.json
 msgid ""
@@ -467,13 +443,13 @@ msgid ""
 "\n"
 "Each conversation has its own folder; the AI can only read and write that folder and cannot run commands. The API key is kept only in the system keychain, never in a file. The cost of calling the model is charged to your provider account.\n"
 "\n"
-"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed (reversibly) or exported as a .vxp or as a complete source project."
+"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed or exported as a .vxp or as a complete source project."
 msgstr ""
 "Vestra Player AI 是播放器里的 AI 助手，基于 pi（github.com/earendil-works/pi）。在设置里选择服务商（Anthropic、OpenAI、Google、OpenRouter、DeepSeek，或 Ollama 等 OpenAI 兼容服务）并保存你自己的 API key，就可以开始对话。\n"
 "\n"
 "每个对话有自己的文件夹，AI 只能读写这个文件夹，不能运行命令。API key 只保存在系统钥匙串里，不写入任何文件。调用模型的费用由你的服务商账户承担。\n"
 "\n"
-"AI 按插件 SDK 的文档写插件，用类型检查、测试和打包工具自己修错；写好的插件可以安装（能回退），也可以导出 .vxp 或完整的源码项目。"
+"AI 按插件 SDK 的文档写插件，用类型检查、测试和打包工具自己修错；写好的插件可以安装，也可以导出 .vxp 或完整的源码项目。"
 
 #: manifest.json
 msgid "AI"

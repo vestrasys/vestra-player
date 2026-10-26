@@ -1,7 +1,6 @@
 // Installing a session's plugin in the player (plugins.manage): pack →
 // packages.validateArchive (the player's checks, Slint included) → an
-// install the user confirmed, reversible with Roll Back (rollback, or
-// uninstall after a first install). Used by the agent's install_plugin and by the
+// install the user confirmed. Used by the agent's install_plugin and by the
 // result card's buttons. After an install, bindings the player ignored
 // because another command holds the key (bindings.list, `shadowed`) are
 // reported to the user and the agent.
@@ -10,7 +9,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { SessionPaths, ToolResult, Toolchain } from "./toolchain.ts";
 
-/** What the model reads for the end state of an install, rollback or uninstall. */
+/** What the model reads for the end state of an install. */
 const CHANGE_TEXT: Record<string, string> = {
   committed: "done",
   cancelled: "cancelled",
@@ -35,23 +34,20 @@ export type Shadowed = {
 
 /**
  * What the card says: a template key of ai.slint and its arguments (data).
- * Installs, rollbacks and uninstalls (`progress`, `result`): args are
- * [action, a, b, status, message] with action "install" (a name, b version),
- * "rollback" (a version) or "uninstall" (a id).
+ * Installs (`progress`, `result`): args are [action, a, b, status, message]
+ * with action "install" (a name, b version).
  */
 export type CardSay = {
   code: string;
   args: string[];
 };
 
-type Action = [action: "install" | "rollback" | "uninstall", a: string, b: string];
+type Action = [action: "install", a: string, b: string];
 
 export class Delivering {
   private readonly plugin: Plugin;
   private readonly toolchain: Toolchain;
   private readonly owner: () => string;
-  /** Ids installed during this run: Roll Back is offered for them. */
-  readonly installed = new Set<string>();
   /** The result card's line: what the last action did. */
   status: CardSay = { code: "", args: [] };
   /** After an install: the bindings that did not take effect (listed under the line). */
@@ -72,7 +68,7 @@ export class Delivering {
 
   /** One action at a time; the card's buttons are disabled meanwhile. */
   private async exclusive(work: () => Promise<ToolResult>): Promise<ToolResult> {
-    if (this.busy) return { ok: false, text: "Another install or rollback is in progress; wait a moment" };
+    if (this.busy) return { ok: false, text: "Another install is in progress; wait a moment" };
     this.busy = true;
     this.plugin.update();
     try {
@@ -126,13 +122,13 @@ export class Delivering {
     }
   }
 
-  /** Follows an install or rollback to its end; the card shows each status. */
+  /** Follows an install to its end; the card shows each status. */
   private async follow(change: PackageChange, action: Action): Promise<{ ok: boolean; text: string; status: string }> {
     const listening = change.onChange((status) => this.say("progress", [...action, status]));
     try {
       const status = await change.done;
-      const [kind, a, b] = action;
-      const what = kind === "install" ? `Install ${a} ${b}` : kind === "rollback" ? `Roll back to ${a}` : `Uninstall ${a}`;
+      const [, a, b] = action;
+      const what = `Install ${a} ${b}`;
       const text = `${what}: ${CHANGE_TEXT[status] ?? status}${change.message ? ` (${change.message})` : ""}`;
       this.status = { code: "result", args: [...action, status, change.message ?? ""] };
       return { ok: status === "committed", text, status };
@@ -156,9 +152,7 @@ export class Delivering {
         const capabilities: string[] = manifest.capabilities ?? [];
         const answer = await this.plugin.dialogs.confirm({
           message: "Install the AI-generated plugin “{}”?",
-          detail: capabilities.length
-            ? "{1} {2}\nCapabilities: {3}\nTo undo the install, click Roll Back (Undo Install) in the AI window."
-            : "{1} {2}\nCapabilities: none\nTo undo the install, click Roll Back (Undo Install) in the AI window.",
+          detail: capabilities.length ? "{1} {2}\nCapabilities: {3}" : "{1} {2}\nCapabilities: none",
           confirm: "Install",
           // {0} (the message's {}) = name, {1} = id, {2} = version, {3} = capabilities.
           args: [name, id, version, this.plugin.i18n.list(capabilities)],
@@ -203,40 +197,17 @@ export class Delivering {
         this.plugin.update();
         return { ok, text };
       }
-      this.installed.add(id);
       const shadowed = await this.shadowed(id);
       this.say("installed", [name, version], shadowed);
       const keys = shadowed.map((s) => `${s.input} (${s.title}) is taken by ${s.plugin === "host" ? "the player" : s.plugin} "${s.holder}"`);
       return {
         ok,
         text:
-          `${text}. The plugin is enabled in the player; the user can click Roll Back (Undo Install) in the AI window to return to the state before the install.` +
+          `${text}. The plugin is enabled in the player.` +
           (keys.length
             ? `\nShortcuts not in effect: ${keys.join("; ")}. The player ignored these keys (on a conflict the user's settings come first, then the player and the plugins loaded earlier). Tell the user and suggest keys that are free, then install again.`
             : ""),
       };
-    });
-  }
-
-  /**
-   * Undoes this run's install: back to the previous version, or, for a
-   * first install, removes the plugin again (its data stays, so a later
-   * install from here reconnects to it).
-   */
-  rollback(id: string): Promise<ToolResult> {
-    return this.exclusive(async () => {
-      const entry = (await this.plugin.packages.list()).find((p) => p.id === id && p.origin === "installed");
-      if (!entry) {
-        this.installed.delete(id);
-        this.say("not-installed", [id]);
-        return { ok: false, text: `${id} is not installed` };
-      }
-      this.say("rolling-back", [id]);
-      const change = entry.previousVersion ? await this.plugin.packages.rollback(id) : await this.plugin.packages.uninstall(id);
-      const { ok, text } = await this.follow(change, entry.previousVersion ? ["rollback", entry.previousVersion, ""] : ["uninstall", id, ""]);
-      if (ok) this.installed.delete(id);
-      this.plugin.update();
-      return { ok, text };
     });
   }
 }
