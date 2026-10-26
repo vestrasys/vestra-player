@@ -11,67 +11,67 @@ msgstr ""
 msgid "Plugin Manager…"
 msgstr "プラグインマネージャー…"
 
-#: manager.ts:55 manifest.json
+#: manager.ts:56 manifest.json
 #, x-machine
 msgid "Plugin Manager"
 msgstr "プラグインマネージャー"
 
-#: manager.ts:226 ui/plugins.slint:146
+#: manager.ts:229 ui/plugins.slint:146
 #, x-machine
 msgid "Enabled {}"
 msgstr "{} を有効にしました"
 
-#: manager.ts:230
+#: manager.ts:234
 #, x-machine
 msgid "Disable {}?"
 msgstr "{} を無効にしますか？"
 
-#: manager.ts:233
+#: manager.ts:237
 #, x-machine
 msgid "Its menus, shortcuts, windows and effects are removed at once; open media keeps playing. A development-loaded plugin stays disabled only for this run."
 msgstr "メニュー、ショートカット、ウインドウ、エフェクトがすぐに取り除かれます。開いているメディアは再生を続けます。開発用に読み込んだプラグインは、今回の起動中のみ無効になります。"
 
-#: manager.ts:233
+#: manager.ts:237
 #, x-machine
 msgid "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time."
 msgstr "メニュー、ショートカット、ウインドウ、エフェクト（イコライザ、フィルタ、字幕スタイルなど）がすぐに取り除かれます。開いているメディアは再生を続けます。Vestra Player を再起動しても無効のままです。ここからいつでも有効にできます。"
 
-#: manager.ts:236 ui/plugins.slint:257 ui/plugins.slint:351
+#: manager.ts:240 ui/plugins.slint:257 ui/plugins.slint:351
 #, x-machine
 msgid "Disable"
 msgstr "無効にする"
 
-#: manager.ts:242 ui/plugins.slint:147
+#: manager.ts:246 ui/plugins.slint:147
 #, x-machine
 msgid "Disabled {}"
 msgstr "{} を無効にしました"
 
-#: manager.ts:254 ui/plugins.slint:148
+#: manager.ts:258 ui/plugins.slint:148
 #, x-machine
 msgid "Reloaded {}"
 msgstr "{} を再読み込みしました"
 
-#: manager.ts:264
+#: manager.ts:268
 #, x-machine
 msgid "Uninstall {}?"
 msgstr "{} をアンインストールしますか？"
 
-#: manager.ts:266
+#: manager.ts:270
 #, x-machine
 msgid "It is removed from the installed plugins. Its shortcut changes are kept and come back if you install it again."
 msgstr "インストール済みのプラグインから削除されます。ショートカットの変更は保持され、再インストールすると元に戻ります。"
 
-#: manager.ts:267
+#: manager.ts:271
 #, x-machine
 msgid "Uninstall"
 msgstr "アンインストール"
 
-#: manager.ts:269
+#: manager.ts:273
 #, x-machine
-msgid "Also delete its settings and data"
-msgstr "設定とデータも削除する"
+msgid "Also delete its settings and data?"
+msgstr "設定とデータも削除しますか？"
 
-#: manager.ts:279 ui/plugins.slint:149
+#: manager.ts:283 ui/plugins.slint:149
 #, x-machine
 msgid "Uninstalled {}"
 msgstr "{} をアンインストールしました"
@@ -307,8 +307,8 @@ msgstr "開発用に読み込んだプラグインはアンインストールで
 
 #: ui/plugins.slint:104 ui/plugins.slint:113
 #, x-machine
-msgid "Built-in plugins can only be disabled"
-msgstr "内蔵プラグインは無効化のみできます"
+msgid "Built-in plugins come with the player and cannot be uninstalled or disabled"
+msgstr "内蔵プラグインはプレーヤーに付属しており、アンインストールも無効化もできません"
 
 #: ui/plugins.slint:105
 #, x-machine
@@ -379,8 +379,8 @@ msgstr "開発用の読み込み：無効化は今回の起動中のみ有効で
 
 #: ui/plugins.slint:133
 #, x-machine
-msgid "Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"
-msgstr "内蔵プラグイン：プレーヤーと一緒にインストール・アップデートされます。無効にはできますが、アンインストールはできません"
+msgid "Built-in plugin: installed and updated with the player; cannot be uninstalled or disabled"
+msgstr "内蔵プラグイン：プレーヤーと一緒にインストール・アップデートされます。アンインストールも無効化もできません"
 
 #: ui/plugins.slint:134
 #, x-machine

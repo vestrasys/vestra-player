@@ -101,7 +101,7 @@ global Words {
     public pure function failure(code: string, text: string) -> string {
         if code == "self" { return @tr("Plugin Manager cannot disable or uninstall itself"); }
         if code == "development" { return @tr("Development-loaded plugins cannot be uninstalled"); }
-        if code == "builtin" { return @tr("Built-in plugins can only be disabled"); }
+        if code == "builtin" { return @tr("Built-in plugins come with the player and cannot be uninstalled or disabled"); }
         if code == "missing" { return @tr("This plugin no longer exists"); }
         if code == "busy" { return @tr("Plugins are being installed or cleaned up, please try again later"); }
         return text;
@@ -110,7 +110,7 @@ global Words {
     public pure function tip(code: string) -> string {
         if code == "self" { return @tr("Plugin Manager cannot disable itself"); }
         if code == "busy" { return @tr("Updating"); }
-        if code == "builtin" { return @tr("Built-in plugins can only be disabled"); }
+        if code == "builtin" { return @tr("Built-in plugins come with the player and cannot be uninstalled or disabled"); }
         if code == "not-installed" { return @tr("Only installed plugins can be uninstalled"); }
         return "";
     }
@@ -130,7 +130,7 @@ global Words {
     public pure function detail(line: DetailLine) -> string {
         if line.kind == "development" { return @tr("Development load: disabling lasts only for this run; cannot be uninstalled"); }
         if line.kind == "self" { return @tr("Plugin Manager cannot disable itself"); }
-        if line.kind == "builtin" { return @tr("Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"); }
+        if line.kind == "builtin" { return @tr("Built-in plugin: installed and updated with the player; cannot be uninstalled or disabled"); }
         if line.kind == "unavailable" { return @tr("Unavailable"); }
         if line.kind == "none" { return @tr("(none)"); }
         if line.kind == "source" && line.url != "" && line.value == "repository" { return @tr("Repository ({})", line.url); }

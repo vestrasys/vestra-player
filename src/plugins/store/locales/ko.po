@@ -188,8 +188,8 @@ msgstr "{} 플러그인을 제거했습니다 (데이터 보관됨)"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
-msgid "Built-in plugins can only be disabled"
-msgstr "내장 플러그인은 사용 중지만 할 수 있습니다"
+msgid "Built-in plugins cannot be uninstalled"
+msgstr "내장 플러그인은 제거할 수 없습니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
@@ -558,8 +558,8 @@ msgstr "플레이어 내장 플러그인과 ID가 같아 여기서 설치할 수
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
-msgid "Built-in plugins are updated with the player and cannot be uninstalled; to disable one, use “Settings ▸ Plugin Manager…”"
-msgstr "내장 플러그인은 플레이어와 함께 업데이트되며 제거할 수 없습니다. 사용 중지하려면 “설정 ▸ 플러그인 관리자…”를 사용하세요"
+msgid "Built-in plugins are updated with the player and cannot be uninstalled or disabled"
+msgstr "내장 플러그인은 플레이어와 함께 업데이트되며 제거하거나 사용 중지할 수 없습니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
@@ -1485,8 +1485,8 @@ msgstr "제거"
 
 #: store.ts:368 store.ts:369 store.ts:371
 #, x-machine
-msgid "Also delete its settings and data"
-msgstr "설정과 데이터도 삭제"
+msgid "Also delete its settings and data?"
+msgstr "설정과 데이터도 삭제할까요?"
 
 #: store.ts:368 store.ts:369 store.ts:371
 #, x-machine
@@ -1550,8 +1550,8 @@ msgstr "저장소의 루트 주소 또는 index.json의 전체 주소 (https://�
 
 #: ui/settings.slint:142
 #, x-machine
-msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
-msgstr "서드파티 저장소는 Vestra Player에서 검토하지 않으며, 그 플러그인은 파일을 읽거나 네트워크를 사용할 수 있습니다. 신뢰하는 저장소만 추가하세요. 공식 저장소는 제거할 수 없습니다. 스토어를 오프라인으로 두려면 “플러그인 관리자”에서 플러그인 스토어를 사용 중지하세요."
+msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline until you open it, turn off automatic update checks above."
+msgstr "서드파티 저장소는 Vestra Player에서 검토하지 않으며, 그 플러그인은 파일을 읽거나 네트워크를 사용할 수 있습니다. 신뢰하는 저장소만 추가하세요. 공식 저장소는 제거할 수 없습니다. 스토어를 열기 전까지 오프라인으로 두려면 위에서 자동 업데이트 확인을 끄세요."
 
 #: ui/store.slint:219 ui/store.slint:257
 #, x-machine

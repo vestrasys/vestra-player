@@ -271,7 +271,7 @@ impl Store {
                         Err(error) => error.to_string(),
                     };
                     let bad = path.with_extension("json.bad");
-                    eprintln!(
+                    diag!(
                         "ui state {}: {reason}; moved to {}",
                         path.display(),
                         bad.display()
@@ -321,7 +321,7 @@ impl Store {
         };
         match write() {
             Ok(()) => self.saved = self.state.clone(),
-            Err(error) => eprintln!("ui state {}: {error}", path.display()),
+            Err(error) => diag!("ui state {}: {error}", path.display()),
         }
     }
 }

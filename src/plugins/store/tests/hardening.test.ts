@@ -96,7 +96,7 @@ test("asset hashes: matching README and icon are shown; a tampered or resized on
     await choose(host, "Bad");
     await until(host, () => banners(host).includes("无法加载说明：校验和与描述不符"), "bad readme");
     await host.settle(30);
-    assert.match(String(host.imagePath(props(host)["d-icon"])), /assets\/icon\.png$/, "default icon");
+    assert.match(String(host.imagePath(props(host)["d-icon"])), /assets[\\/]icon\.png$/, "default icon");
     await choose(host, "Size");
     await until(host, () => banners(host).includes("无法加载说明：大小与描述不符"), "size mismatch");
     const icons = readdirSync(join(host.dataDirectory, "icons"));

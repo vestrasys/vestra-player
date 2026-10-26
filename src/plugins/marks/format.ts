@@ -1,4 +1,5 @@
 import { realpathSync, statSync } from "node:fs";
+import { isAbsolute } from "node:path";
 
 /** Seconds to one decimal (B21 bookmark times, B23 A/B points). */
 export const round1 = (seconds: number) => Math.round(seconds * 10) / 10;
@@ -61,8 +62,11 @@ export function line(prefix: string, text: string, suffix: string, max = 80): st
   return `${prefix}${fit(text, Math.max(3, max - bytes(prefix) - bytes(suffix)))}${suffix}`;
 }
 
-/** A source is a local file when it is an absolute path; anything else is a URL. */
-export const isLocal = (source: string) => source.startsWith("/");
+/**
+ * A source is a local file when it is an absolute path of this OS
+ * (`/Users/…`, `C:\Users\…`, `\\server\share\…`); anything else is a URL.
+ */
+export const isLocal = (source: string) => isAbsolute(source);
 
 /** B21 media identity: a local file by its real path (the path itself when that fails), a URL as is. */
 export function mediaKey(source: string): string {

@@ -80,7 +80,7 @@ pub fn forced() -> Option<Size> {
         let value = std::env::var("VESTRA_RENDER_TARGET").ok()?;
         let size = parse_size(&value);
         if size.is_none() {
-            eprintln!("VESTRA_RENDER_TARGET={value}: not an even WxH up to 3840x2160; ignored");
+            diag!("VESTRA_RENDER_TARGET={value}: not an even WxH up to 3840x2160; ignored");
         }
         size
     })

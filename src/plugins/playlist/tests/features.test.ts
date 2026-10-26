@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 import type { Json } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { settleFiles } from "./settle.ts";
@@ -129,7 +130,8 @@ test("A03: F2 opens a folder recursively in folder order, appends and plays the 
       "show/Player.app/inside.mp4",
       "show/list.m3u8",
     ]);
-    await symlink(dir, join(dir, "sub", "loop")); // a symlink cycle ends the walk
+    // A link cycle ends the walk (a directory "junction" needs no privilege on Windows).
+    await symlink(dir, join(dir, "sub", "loop"), "junction");
     app.host.dialogAnswers.push([dir]);
     await app.noticed(() => app.press("F2", false));
     assert.deepEqual(app.host.sent("dialogs.open").at(-1), { kind: "openDirectory", title: "Open Folder" });
@@ -422,7 +424,7 @@ test("C18: opening an m3u8 resolves relative paths, file URLs, titles and links;
         "#EXTINF:61,First title",
         "media/a.mp4",
         "#EXTINF:-1,Second",
-        `file://${encodeURI(b!)}`,
+        pathToFileURL(b!).href, // file:///C:/… on Windows, file:///… elsewhere
         "# a comment",
         "",
         "https://example.org/stream",
@@ -926,7 +928,8 @@ test("B26: on, the natural end opens the prepared next row at once, without read
   for (const fast of [false, true]) {
     const app = await start();
     try {
-      const [a, b] = await app.files(["a.mp4", "b.mp4"]);
+      // The same name in two folders, so that one folder can later become a link to the other.
+      const [a, b] = await app.files(["one/a.mp4", "two/a.mp4"]);
       await app.addFiles([a!, b!]);
       if (fast) await app.run("fast-advance");
       await app.click(0);
@@ -934,8 +937,9 @@ test("B26: on, the natural end opens the prepared next row at once, without read
       app.host.setSource({ phase: "ready" });
       await app.host.settle(30); // the next row is prepared while this one plays
       // b turns into an alias of a after that: only a fresh file check notices.
-      await rm(b!);
-      await symlink(a!, b!);
+      // A directory "junction" needs no privilege on Windows (a file symlink does).
+      await rm(join(app.root, "two"), { recursive: true });
+      await symlink(join(app.root, "one"), join(app.root, "two"), "junction");
       const ended = { ...app.host.source.stamp };
       app.end();
       await app.host.settle(30);
@@ -1101,8 +1105,24 @@ test("A15: a dropped folder is scanned as A03, a list file parsed as C18, a .web
   }
 });
 
-// Folders made unreadable with chmod: not on Windows (no POSIX modes) or as root (reads anyway).
-const noChmod = process.platform === "win32" || process.getuid?.() === 0;
+/**
+ * Whether chmod can make a folder unreadable here, tried rather than guessed from the
+ * platform: it cannot without POSIX modes (Windows) or as root (who reads anyway).
+ */
+async function chmodLocks() {
+  const dir = await mkdtemp(join(tmpdir(), "vestra-playlist-chmod-"));
+  try {
+    await chmod(dir, 0);
+    return await readdir(dir).then(
+      () => false,
+      () => true,
+    );
+  } finally {
+    await chmod(dir, 0o755);
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+const noChmod = !(await chmodLocks()) && "chmod 0 does not make a folder unreadable here (no POSIX modes, or root)";
 
 test("A15: the notice after a drop names every problem, as before; nothing to add names them all too", { skip: noChmod }, async () => {
   const app = await start();

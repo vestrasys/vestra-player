@@ -257,7 +257,7 @@ mod tests {
     #[ignore = "checks the values plugin tests recorded in VESTRA_UI_RECORD (npm run ci:local)"]
     fn recorded_plugin_props_match_their_slint() {
         let Some(dir) = std::env::var_os("VESTRA_UI_RECORD") else {
-            eprintln!("VESTRA_UI_RECORD is not set: nothing recorded to check");
+            diag!("VESTRA_UI_RECORD is not set: nothing recorded to check");
             return;
         };
         let mut records = Vec::new();
@@ -277,7 +277,7 @@ mod tests {
         );
         let plugins: std::collections::BTreeSet<_> =
             records.iter().map(|r| r.plugin.clone()).collect();
-        eprintln!(
+        diag!(
             "{} recorded values from {} plugins",
             records.len(),
             plugins.len()

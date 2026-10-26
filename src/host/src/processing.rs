@@ -657,7 +657,7 @@ impl Processing {
                     self.hwdec = Some((current, copy));
                     self.hwdec_watch = watch;
                 }
-                Err(error) => eprintln!("processing: hwdec={copy} refused: {error}"),
+                Err(error) => diag!("processing: hwdec={copy} refused: {error}"),
             }
         } else if let Some((original, copy)) = self.hwdec.take()
             && current == copy
@@ -666,7 +666,7 @@ impl Processing {
             match mpv.set_property("hwdec", original.as_str()) {
                 Ok(()) => self.hwdec_watch = watch,
                 Err(error) => {
-                    eprintln!("processing: restoring hwdec={original} failed: {error}");
+                    diag!("processing: restoring hwdec={original} failed: {error}");
                 }
             }
         }
@@ -703,7 +703,7 @@ impl Processing {
             // window.)
             rsmpv::Event::StartFile { .. } | rsmpv::Event::EndFile { .. } => {
                 if watch.retried {
-                    eprintln!(
+                    diag!(
                         "processing: hwdec retry outcome unknown (another file first; hwdec-current={})",
                         hwdec_current(mpv).as_deref().unwrap_or("unavailable"),
                     );
@@ -735,7 +735,7 @@ impl Processing {
                     self.hwdec_watch = None;
                     return;
                 }
-                eprintln!(
+                diag!(
                     "processing: hwdec fell back to software after switching to {mode}; requesting hardware decoding once more"
                 );
                 // mpv ignores setting an option to the value it has: going
@@ -755,20 +755,20 @@ impl Processing {
                         watch.restarted = false;
                     }
                     Err(error) => {
-                        eprintln!("processing: hwdec retry ({mode}) refused: {error}");
+                        diag!("processing: hwdec retry ({mode}) refused: {error}");
                         self.hwdec_watch = None;
                     }
                 }
             }
             HwdecCheck::Restored => {
-                eprintln!(
+                diag!(
                     "processing: hwdec retry restored hardware decoding ({})",
                     current.unwrap_or_default()
                 );
                 self.hwdec_watch = None;
             }
             HwdecCheck::StaysSoftware => {
-                eprintln!(
+                diag!(
                     "processing: hwdec retry did not restore hardware decoding (hwdec-current={}); this file stays on software decoding",
                     current.unwrap_or("unavailable")
                 );
@@ -1734,7 +1734,7 @@ mod tests {
                         &|| fell_back.get() || playback.position() >= end,
                     );
                     if fell_back.get() {
-                        eprintln!("fallback forced: player {attempt}, switch {revision}");
+                        diag!("fallback forced: player {attempt}, switch {revision}");
                         return (playback, processing, chain);
                     }
                 }

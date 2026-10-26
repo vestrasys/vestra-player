@@ -150,8 +150,8 @@ msgid "Uninstalled {} (data kept)"
 msgstr "已卸载 {}（数据已保留）"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
-msgid "Built-in plugins can only be disabled"
-msgstr "内置插件只能停用"
+msgid "Built-in plugins cannot be uninstalled"
+msgstr "内置插件不能卸载"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 msgid "Enabled “{}” again"
@@ -446,8 +446,8 @@ msgid "Same id as a built-in plugin of the player; cannot be installed from here
 msgstr "与播放器内置插件同 id，不能从这里安装"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
-msgid "Built-in plugins are updated with the player and cannot be uninstalled; to disable one, use “Settings ▸ Plugin Manager…”"
-msgstr "内置插件随播放器更新，不能卸载；停用请到「设置 ▸ 插件管理…」"
+msgid "Built-in plugins are updated with the player and cannot be uninstalled or disabled"
+msgstr "内置插件随播放器更新，不能卸载或停用"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 msgid "The repository no longer offers this plugin; the store no longer checks it for updates (it still checks for revocations)"
@@ -1218,8 +1218,8 @@ msgid "Uninstall"
 msgstr "卸载"
 
 #: store.ts:368 store.ts:369 store.ts:371
-msgid "Also delete its settings and data"
-msgstr "同时删除它的设置与数据"
+msgid "Also delete its settings and data?"
+msgstr "同时删除它的设置与数据？"
 
 #: store.ts:368 store.ts:369 store.ts:371
 msgid "Open Plugin Store"
@@ -1270,8 +1270,8 @@ msgid "The repository's root address or the full address of index.json (https://
 msgstr "仓库根地址或 index.json 的完整地址（https://…）"
 
 #: ui/settings.slint:142
-msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
-msgstr "第三方仓库未经 Vestra Player 审核，其中的插件可能读取你的文件或联网。只添加你信任的仓库。官方仓库不能移除；不想联网时可以在「插件管理」里停用插件商城。"
+msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline until you open it, turn off automatic update checks above."
+msgstr "第三方仓库未经 Vestra Player 审核，其中的插件可能读取你的文件或联网。只添加你信任的仓库。官方仓库不能移除；要让商城在你打开它之前不联网，请关闭上方的自动检查更新。"
 
 #: ui/store.slint:219 ui/store.slint:257
 msgid "Tags: All"

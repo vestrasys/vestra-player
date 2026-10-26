@@ -188,8 +188,8 @@ msgstr "{} をアンインストールしました（データは保持）"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
-msgid "Built-in plugins can only be disabled"
-msgstr "内蔵プラグインは無効化のみできます"
+msgid "Built-in plugins cannot be uninstalled"
+msgstr "内蔵プラグインはアンインストールできません"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
@@ -558,8 +558,8 @@ msgstr "プレーヤーの内蔵プラグインと同じ ID のため、ここ�
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
-msgid "Built-in plugins are updated with the player and cannot be uninstalled; to disable one, use “Settings ▸ Plugin Manager…”"
-msgstr "内蔵プラグインはプレーヤーと一緒にアップデートされ、アンインストールできません。無効にするには「設定 ▸ プラグインマネージャー…」を使用してください"
+msgid "Built-in plugins are updated with the player and cannot be uninstalled or disabled"
+msgstr "内蔵プラグインはプレーヤーと一緒にアップデートされ、アンインストールも無効化もできません"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
@@ -1485,8 +1485,8 @@ msgstr "アンインストール"
 
 #: store.ts:368 store.ts:369 store.ts:371
 #, x-machine
-msgid "Also delete its settings and data"
-msgstr "設定とデータも削除する"
+msgid "Also delete its settings and data?"
+msgstr "設定とデータも削除しますか？"
 
 #: store.ts:368 store.ts:369 store.ts:371
 #, x-machine
@@ -1550,8 +1550,8 @@ msgstr "リポジトリのルートアドレス、または index.json の完全
 
 #: ui/settings.slint:142
 #, x-machine
-msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
-msgstr "サードパーティのリポジトリは Vestra Player の審査を受けておらず、そのプラグインがファイルを読み取ったりネットワークを使用したりする可能性があります。信頼できるリポジトリだけを追加してください。公式リポジトリは削除できません。ストアをオフラインのままにするには、「プラグインマネージャー」でプラグインストアを無効にしてください。"
+msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline until you open it, turn off automatic update checks above."
+msgstr "サードパーティのリポジトリは Vestra Player の審査を受けておらず、そのプラグインがファイルを読み取ったりネットワークを使用したりする可能性があります。信頼できるリポジトリだけを追加してください。公式リポジトリは削除できません。ストアを開くまでオフラインのままにするには、上の自動アップデート確認をオフにしてください。"
 
 #: ui/store.slint:219 ui/store.slint:257
 #, x-machine

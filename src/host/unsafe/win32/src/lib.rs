@@ -310,6 +310,7 @@ mod tests {
     /// desktop) has no clock and passes.
     #[test]
     #[ignore = "needs a display"]
+    #[allow(clippy::disallowed_macros)] // a measurement for the terminal
     fn the_primary_display_blanks_at_its_refresh_rate() {
         let Some(clock) = VBlank::open(0) else {
             eprintln!("no vertical blank clock on this machine");

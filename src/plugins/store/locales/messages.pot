@@ -149,7 +149,7 @@ msgid "Uninstalled {} (data kept)"
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
-msgid "Built-in plugins can only be disabled"
+msgid "Built-in plugins cannot be uninstalled"
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
@@ -445,7 +445,7 @@ msgid "Same id as a built-in plugin of the player; cannot be installed from here
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
-msgid "Built-in plugins are updated with the player and cannot be uninstalled; to disable one, use “Settings ▸ Plugin Manager…”"
+msgid "Built-in plugins are updated with the player and cannot be uninstalled or disabled"
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
@@ -1141,7 +1141,7 @@ msgid "Uninstall"
 msgstr ""
 
 #: store.ts:368 store.ts:369 store.ts:371
-msgid "Also delete its settings and data"
+msgid "Also delete its settings and data?"
 msgstr ""
 
 #: store.ts:368 store.ts:369 store.ts:371
@@ -1193,7 +1193,7 @@ msgid "The repository's root address or the full address of index.json (https://
 msgstr ""
 
 #: ui/settings.slint:142
-msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
+msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline until you open it, turn off automatic update checks above."
 msgstr ""
 
 #: ui/store.slint:219 ui/store.slint:257

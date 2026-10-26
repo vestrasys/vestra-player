@@ -120,11 +120,16 @@ export function savePath(path: string) {
   return ["m3u8", "m3u", "pls"].includes(ext) ? { path, ext } : { path: `${path}.m3u8`, ext: "m3u8" };
 }
 
-/** Rows below the list's folder are written relative to it; others absolute; links verbatim. */
+/**
+ * Rows below the list's folder are written relative to it; others absolute; links verbatim.
+ * Relative paths always use `/`, so a list saved on Windows still works when shared with
+ * macOS or Linux (where `\` is a file name character); Windows players read `/` too.
+ * Absolute paths stay native: they only make sense on the machine that wrote them.
+ */
 function written(row: SavedRow, folder: string) {
   if (row.kind === "url") return row.source;
   const rel = relative(folder, row.source);
-  return rel && !rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel) ? rel : row.source;
+  return rel && !rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel) ? rel.split(sep).join("/") : row.source;
 }
 
 /** The bytes of a list file at `path` (format from its extension, see `savePath`). */

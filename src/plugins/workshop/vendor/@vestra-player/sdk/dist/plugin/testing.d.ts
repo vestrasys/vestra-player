@@ -917,8 +917,9 @@ export declare class TestHost implements Transport {
      */
     readonly jobs: Map<number, MediaJob>;
     /**
-     * `openStream`'s transport: a Unix socket (macOS, Linux) or, with `"tcp"`,
-     * loopback TCP where the plugin must send the token first (Windows).
+     * `openStream`'s transport: a local stream (a Unix socket on macOS and
+     * Linux, a named pipe on Windows) or, with `"tcp"`, loopback TCP where the
+     * plugin must send the token first, as the player on Windows answers.
      * Set it before the plugin calls `openStream`.
      */
     producerTransport: "unix" | "tcp";

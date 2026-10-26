@@ -184,7 +184,7 @@ impl Host {
     /// Deliver the palette to one new instance (failures retried on the next tick).
     pub(super) fn theme_view(&mut self, instance: &slint_interpreter::ComponentInstance) {
         if let Err(error) = apply_fonts(instance) {
-            eprintln!("host.error theme: {error:#}");
+            diag!("host.error theme: {error:#}");
             self.theme_pending = true;
         }
         if self.theme() == THEMES[0] {
@@ -192,7 +192,7 @@ impl Host {
             return;
         }
         if let Err(error) = apply(instance, self.theme()) {
-            eprintln!("host.error theme: {error:#}");
+            diag!("host.error theme: {error:#}");
             self.theme_pending = true;
         }
     }
@@ -211,7 +211,7 @@ impl Host {
         self.theme_pending = false;
         for instance in instances.drain(..) {
             if let Err(error) = apply(&instance, &theme).and_then(|()| apply_fonts(&instance)) {
-                eprintln!("host.error theme: {error:#}");
+                diag!("host.error theme: {error:#}");
                 self.theme_pending = true;
             }
         }

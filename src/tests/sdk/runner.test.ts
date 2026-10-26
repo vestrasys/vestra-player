@@ -257,6 +257,47 @@ test("a file type or site another plugin resolves does not fail activation", asy
   assert.equal(other.event, "runtime.failed");
 });
 
+test("a plugin that logs to a closed stderr keeps running", async () => {
+  // The player's stderr, which the runner inherits, can be a pipe whose
+  // reader is gone (a launcher that captured it and exited).
+  const directory = mkdtempSync(join(tmpdir(), "runner-"));
+  writeFileSync(
+    join(directory, "manifest.json"),
+    JSON.stringify({ id: "runner.test", entry: "main.mjs", capabilities: [] }),
+  );
+  writeFileSync(
+    join(directory, "main.mjs"),
+    `export default async function activate() {
+      for (let i = 0; i < 3; i++) {
+        console.error("log", i);
+        process.stderr.write("raw " + i + "\\n");
+        await new Promise((done) => setTimeout(done, 50));
+      }
+    }`,
+  );
+  const child = spawn(process.execPath, [runner, directory], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  child.stderr.destroy();
+  const exited = new Promise((done) => child.once("exit", done));
+  const lines = createInterface({ input: child.stdout });
+  const event = await new Promise<string>((done) => {
+    // A runner stopped by a failed log write never reports.
+    void exited.then(() => done("exited"));
+    lines.on("line", (line) => {
+      const message = JSON.parse(line);
+      if (message.event) return done(message.event);
+      child.stdin.write(
+        `${JSON.stringify({ id: message.id, result: { revision: 1 } })}\n`,
+      );
+    });
+  });
+  child.stdin.end();
+  const code = await exited;
+  assert.deepEqual({ event, code }, { event: "runtime.ready", code: 0 });
+  rmSync(directory, { recursive: true, force: true });
+});
+
 test("a request longer than the player's 1 MiB line is refused with limit, not sent", async () => {
   // The player stops a plugin that writes a longer line (host/src/plugins.rs).
   const result = await run(

@@ -190,8 +190,8 @@ msgstr "{} désinstallé (données conservées)"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
-msgid "Built-in plugins can only be disabled"
-msgstr "Les plugins intégrés peuvent seulement être désactivés"
+msgid "Built-in plugins cannot be uninstalled"
+msgstr "Les plugins intégrés ne peuvent pas être désinstallés"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
@@ -560,8 +560,8 @@ msgstr "Même identifiant qu'un plugin intégré du lecteur ; ne peut pas être
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
-msgid "Built-in plugins are updated with the player and cannot be uninstalled; to disable one, use “Settings ▸ Plugin Manager…”"
-msgstr "Les plugins intégrés sont mis à jour avec le lecteur et ne peuvent pas être désinstallés ; pour en désactiver un, utilisez « Paramètres ▸ Gestionnaire de plugins… »"
+msgid "Built-in plugins are updated with the player and cannot be uninstalled or disabled"
+msgstr "Les plugins intégrés sont mis à jour avec le lecteur et ne peuvent être ni désinstallés ni désactivés"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:346
 #, x-machine
@@ -1487,8 +1487,8 @@ msgstr "Désinstaller"
 
 #: store.ts:368 store.ts:369 store.ts:371
 #, x-machine
-msgid "Also delete its settings and data"
-msgstr "Supprimer aussi ses paramètres et ses données"
+msgid "Also delete its settings and data?"
+msgstr "Supprimer aussi ses paramètres et ses données ?"
 
 #: store.ts:368 store.ts:369 store.ts:371
 #, x-machine
@@ -1552,8 +1552,8 @@ msgstr "L'adresse racine du dépôt ou l'adresse complète de index.json (https:
 
 #: ui/settings.slint:142
 #, x-machine
-msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
-msgstr "Les dépôts tiers ne sont pas vérifiés par Vestra Player ; leurs plugins peuvent lire vos fichiers ou utiliser le réseau. N'ajoutez que des dépôts de confiance. Le dépôt officiel ne peut pas être supprimé ; pour garder le catalogue hors ligne, désactivez le Catalogue de plugins dans le « Gestionnaire de plugins »."
+msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline until you open it, turn off automatic update checks above."
+msgstr "Les dépôts tiers ne sont pas vérifiés par Vestra Player ; leurs plugins peuvent lire vos fichiers ou utiliser le réseau. N'ajoutez que des dépôts de confiance. Le dépôt officiel ne peut pas être supprimé ; pour garder le catalogue hors ligne tant que vous ne l'ouvrez pas, désactivez ci-dessus la recherche automatique des mises à jour."
 
 #: ui/store.slint:219 ui/store.slint:257
 #, x-machine

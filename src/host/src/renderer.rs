@@ -64,7 +64,7 @@ impl Render {
     /// Ask the render thread to switch to software rendering (once).
     pub fn fall_back(&self, reason: &str) {
         if self.active.load(Ordering::Acquire) && !self.fallback.swap(true, Ordering::AcqRel) {
-            eprintln!("render: {reason}; switching to software rendering");
+            diag!("render: {reason}; switching to software rendering");
         }
     }
     pub fn fallback_requested(&self) -> bool {

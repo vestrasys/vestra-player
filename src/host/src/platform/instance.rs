@@ -111,12 +111,12 @@ impl Primary {
                     match stream.and_then(|stream| receive(stream, &token)) {
                         Ok(Some(files)) => deliver(files),
                         Ok(None) => (),
-                        Err(error) => eprintln!("single instance: {error}"),
+                        Err(error) => diag!("single instance: {error}"),
                     }
                 }
             });
         if let Err(error) = spawned {
-            eprintln!("single instance: {error}");
+            diag!("single instance: {error}");
         }
     }
 }
@@ -221,6 +221,7 @@ mod tests {
 
     /// The other process of the test below: a second launch.
     #[test]
+    #[allow(clippy::disallowed_macros)] // its report to the parent goes on stdout
     fn child_second_launch() {
         let Some(directory) = std::env::var_os(CHILD_DIR) else {
             return;

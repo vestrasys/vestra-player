@@ -1,4 +1,4 @@
-import ts from "typescript";
+import type TS from "typescript";
 /** A translatable text found in the sources. */
 export interface Message {
     context?: string;
@@ -27,7 +27,7 @@ export interface ExtractOptions {
     /** The plugin's production `.ts` / `.mts` files, relative to `directory`. */
     typescript: readonly string[];
     /** Compiler options for a program over those files (as `check` uses). */
-    compilerOptions?: ts.CompilerOptions;
+    compilerOptions?: TS.CompilerOptions;
 }
 export declare const pluralForms: (language: string) => "nplurals=1; plural=0;" | "nplurals=2; plural=(n != 1);";
 /** Find every translatable text of a plugin, in reference order. */

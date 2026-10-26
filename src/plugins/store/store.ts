@@ -465,10 +465,12 @@ export class Store {
   #emptyText(visible: Item[]): Msg | null {
     if (visible.length) return null;
     if (this.search || this.tag) return msg("No plugins match");
-    if (this.filter === 2) return msg("All plugins are up to date");
     if (this.filter === 1) return msg("No plugins installed yet");
+    // Updates: "up to date" only when at least one index (fresh or cached) was read.
+    const unread = this.repos.list.every((repo) => !repo.index);
+    if (this.filter === 2 && !unread) return msg("All plugins are up to date");
     if (this.repos.list.some((repo) => repo.refreshing)) return msg("Reading repositories…");
-    if (this.repos.list.every((repo) => !repo.index))
+    if (unread)
       return msg("Can't connect to the repositories and there is no cached copy. Click “Refresh” once you are online.");
     return msg("The repositories have no plugins yet");
   }
@@ -607,9 +609,7 @@ export class Store {
       add(
         item.repo
           ? msg("Same id as a built-in plugin of the player; cannot be installed from here")
-          : msg(
-              "Built-in plugins are updated with the player and cannot be uninstalled; to disable one, use “Settings ▸ Plugin Manager…”",
-            ),
+          : msg("Built-in plugins are updated with the player and cannot be uninstalled or disabled"),
         4,
       );
     if (item.state === "local" && info) {
@@ -800,17 +800,26 @@ export class Store {
           text = this.#texts.get(url) ?? null;
           if (text === null) {
             if (check && check.size > README_LIMIT) throw new NetError("tooLarge", msg("File exceeds 256 KB"));
-            // With the index's size and sha256 the text must match exactly (else nothing is shown or cached).
-            const got = await get(this.deps.fetch, url, {
-              maxBytes: check ? check.size : README_LIMIT,
-              ...(check ? { exactSize: check.size, sha256: check.sha256 } : {}),
-              timeoutMs: 10_000,
-              signal: abort.signal,
-              headers: { "User-Agent": this.deps.userAgent },
-              allowLocalHttp: item.repo?.local ?? false,
-            });
-            text = got.bytes!.toString("utf8");
-            this.#texts.set(url, text);
+            try {
+              // With the index's size and sha256 the text must match exactly (else nothing is shown or cached).
+              const got = await get(this.deps.fetch, url, {
+                maxBytes: check ? check.size : README_LIMIT,
+                ...(check ? { exactSize: check.size, sha256: check.sha256 } : {}),
+                timeoutMs: 10_000,
+                signal: abort.signal,
+                headers: { "User-Agent": this.deps.userAgent },
+                allowLocalHttp: item.repo?.local ?? false,
+              });
+              text = got.bytes!.toString("utf8");
+              this.#texts.set(url, text);
+            } catch (error) {
+              // Offline: an installed plugin shows the file its own package carries.
+              const offline = error instanceof NetError && (error.code === "network" || error.code === "timeout");
+              const own = offline && item.installed ? this.#ownText(item.installed, changelog) : null;
+              if (own === null) throw error;
+              text = own;
+              base = undefined;
+            }
           }
         }
       } else if (item.installed && item.local) {
@@ -857,6 +866,13 @@ export class Store {
     this.changed();
     // The old document's scope goes once the new one is in the window.
     if (previous.scope && previous.scope !== this.#doc.scope) setTimeout(() => void previous.scope?.dispose(), 1000);
+  }
+
+  /** The README or changelog in an installed plugin's own directory. */
+  #ownText(info: PluginInfo, changelog: boolean): string | null {
+    const display = this.#display(info);
+    const name = changelog ? display.changelog : display.readme;
+    return name ? readLimited(join(info.directory, name)) : null;
   }
 
   /** Display fields of an installed plugin from its manifest (cached per directory). */

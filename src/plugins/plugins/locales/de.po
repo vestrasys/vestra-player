@@ -11,67 +11,67 @@ msgstr ""
 msgid "Plugin Manager…"
 msgstr "Plugin-Verwaltung…"
 
-#: manager.ts:55 manifest.json
+#: manager.ts:56 manifest.json
 #, x-machine
 msgid "Plugin Manager"
 msgstr "Plugin-Verwaltung"
 
-#: manager.ts:226 ui/plugins.slint:146
+#: manager.ts:229 ui/plugins.slint:146
 #, x-machine
 msgid "Enabled {}"
 msgstr "{} aktiviert"
 
-#: manager.ts:230
+#: manager.ts:234
 #, x-machine
 msgid "Disable {}?"
 msgstr "{} deaktivieren?"
 
-#: manager.ts:233
+#: manager.ts:237
 #, x-machine
 msgid "Its menus, shortcuts, windows and effects are removed at once; open media keeps playing. A development-loaded plugin stays disabled only for this run."
 msgstr "Menüs, Tastenkürzel, Fenster und Effekte des Plugins werden sofort entfernt; geöffnete Medien werden weiter abgespielt. Ein im Entwicklungsmodus geladenes Plugin bleibt nur für diese Sitzung deaktiviert."
 
-#: manager.ts:233
+#: manager.ts:237
 #, x-machine
 msgid "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time."
 msgstr "Menüs, Tastenkürzel, Fenster und Effekte des Plugins (etwa Equalizer, Filter, Untertitelstil) werden sofort entfernt; geöffnete Medien werden weiter abgespielt. Es bleibt auch nach einem Neustart von Vestra Player deaktiviert; Sie können es hier jederzeit wieder aktivieren."
 
-#: manager.ts:236 ui/plugins.slint:257 ui/plugins.slint:351
+#: manager.ts:240 ui/plugins.slint:257 ui/plugins.slint:351
 #, x-machine
 msgid "Disable"
 msgstr "Deaktivieren"
 
-#: manager.ts:242 ui/plugins.slint:147
+#: manager.ts:246 ui/plugins.slint:147
 #, x-machine
 msgid "Disabled {}"
 msgstr "{} deaktiviert"
 
-#: manager.ts:254 ui/plugins.slint:148
+#: manager.ts:258 ui/plugins.slint:148
 #, x-machine
 msgid "Reloaded {}"
 msgstr "{} neu geladen"
 
-#: manager.ts:264
+#: manager.ts:268
 #, x-machine
 msgid "Uninstall {}?"
 msgstr "{} deinstallieren?"
 
-#: manager.ts:266
+#: manager.ts:270
 #, x-machine
 msgid "It is removed from the installed plugins. Its shortcut changes are kept and come back if you install it again."
 msgstr "Es wird aus den installierten Plugins entfernt. Geänderte Tastenkürzel bleiben erhalten und gelten wieder, wenn Sie das Plugin erneut installieren."
 
-#: manager.ts:267
+#: manager.ts:271
 #, x-machine
 msgid "Uninstall"
 msgstr "Deinstallieren"
 
-#: manager.ts:269
+#: manager.ts:273
 #, x-machine
-msgid "Also delete its settings and data"
-msgstr "Auch Einstellungen und Daten löschen"
+msgid "Also delete its settings and data?"
+msgstr "Auch Einstellungen und Daten löschen?"
 
-#: manager.ts:279 ui/plugins.slint:149
+#: manager.ts:283 ui/plugins.slint:149
 #, x-machine
 msgid "Uninstalled {}"
 msgstr "{} deinstalliert"
@@ -307,8 +307,8 @@ msgstr "Im Entwicklungsmodus geladene Plugins können nicht deinstalliert werden
 
 #: ui/plugins.slint:104 ui/plugins.slint:113
 #, x-machine
-msgid "Built-in plugins can only be disabled"
-msgstr "Integrierte Plugins können nur deaktiviert werden"
+msgid "Built-in plugins come with the player and cannot be uninstalled or disabled"
+msgstr "Integrierte Plugins gehören zum Player und lassen sich weder deinstallieren noch deaktivieren"
 
 #: ui/plugins.slint:105
 #, x-machine
@@ -379,8 +379,8 @@ msgstr "Entwicklungsmodus: Deaktivieren gilt nur für diese Sitzung; Deinstallie
 
 #: ui/plugins.slint:133
 #, x-machine
-msgid "Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"
-msgstr "Integriertes Plugin: wird mit dem Player installiert und aktualisiert; kann deaktiviert, aber nicht deinstalliert werden"
+msgid "Built-in plugin: installed and updated with the player; cannot be uninstalled or disabled"
+msgstr "Integriertes Plugin: wird mit dem Player installiert und aktualisiert; kann weder deinstalliert noch deaktiviert werden"
 
 #: ui/plugins.slint:134
 #, x-machine

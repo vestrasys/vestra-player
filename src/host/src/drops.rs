@@ -169,7 +169,7 @@ impl Host {
                     extensions,
                 });
                 if !taken.is_empty() {
-                    eprintln!(
+                    diag!(
                         "drops: {} already provided for {taken:?}; the earlier provider keeps them",
                         self.plugins
                             .get(&owner)

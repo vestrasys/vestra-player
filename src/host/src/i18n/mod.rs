@@ -299,7 +299,7 @@ pub fn load_locale(directory: &Path, locale: &str) -> Option<Arc<Catalog>> {
     match result {
         Ok(catalog) => Some(Arc::new(catalog)),
         Err(error) => {
-            eprintln!("i18n: {error}");
+            diag!("i18n: {error}");
             None
         }
     }

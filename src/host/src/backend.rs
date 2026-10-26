@@ -445,7 +445,7 @@ impl Backend {
                                 &message.level,
                                 &message.text,
                             ) {
-                                eprintln!("libmpv: {}", message.text.trim_end());
+                                diag!("libmpv: {}", message.text.trim_end());
                                 let _ = events.send(Event::PluginMessage(
                                     owner,
                                     "video.render.status".into(),
@@ -456,7 +456,7 @@ impl Backend {
                                 && (message.text.contains("fontselect")
                                     || message.text.contains("Loading font"))
                             {
-                                eprintln!("libmpv {}: {}", message.prefix, message.text.trim_end());
+                                diag!("libmpv {}: {}", message.prefix, message.text.trim_end());
                             }
                             continue;
                         }
@@ -506,7 +506,7 @@ impl Backend {
                         processing.renderer_changed();
                         let hwdec = software_hwdec();
                         if let Err(error) = mpv.set_property("hwdec", hwdec.as_str()) {
-                            eprintln!("render: hwdec={hwdec} refused: {error}");
+                            diag!("render: hwdec={hwdec} refused: {error}");
                         }
                     }
                     if render_was_gpu
@@ -638,13 +638,13 @@ impl GpuRun<'_> {
             match crate::platform::gpu_start(self.mpv.clone(), area, self.publish.clone()) {
                 Ok(renderer) => renderer,
                 Err(error) => {
-                    eprintln!("render: GPU rendering unavailable ({error}); software rendering");
+                    diag!("render: GPU rendering unavailable ({error}); software rendering");
                     return false;
                 }
             };
         let hwdec = crate::renderer::hwdec(std::env::var("VESTRA_HWDEC").ok(), false);
         if let Err(error) = self.mpv.set_property("hwdec", hwdec.as_str()) {
-            eprintln!("render: hwdec={hwdec} refused: {error}");
+            diag!("render: hwdec={hwdec} refused: {error}");
         }
         self.render.install(renderer.handle());
         if let Some(ready) = ready.take() {

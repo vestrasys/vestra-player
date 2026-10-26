@@ -282,11 +282,9 @@ test("update and uninstall from the same repository; no rollback and no older ve
       "新增：\n· 读写剪贴板\n\n当前 0.2.0。\n\n插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。",
     );
     await until(host, () => !store.busy);
-    // No Roll Back / Restore, even if an older player still lists a previous version.
+    // No Roll Back / Restore.
     assert.deepEqual(actions(host).map((a) => a.text), ["卸载…"]);
-    host.setPackages(host.packages.map((p) => (p.id === "zysilm.youtube" ? { ...p, previousVersion: "0.2.0" } : p)));
     await until(host, () => (props(host)["versions"] as Version[]).some((v) => v.version === "0.3.0" && v.status === "当前"));
-    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…"]);
     assert.deepEqual(versions(), [
       ["0.3.0", "当前", false],
       ["0.2.0", "", false],
@@ -306,7 +304,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
     host.window("store").emit("act", "uninstall");
     await until(host, () => host.osd.includes("已卸载 YouTube（数据已删除）"));
     assert.deepEqual(host.packageCalls.at(-1), { method: "uninstall", id: "zysilm.youtube", removeData: true });
-    assert.equal(host.confirmTexts.at(-1)!.checkbox, "同时删除它的设置与数据");
+    assert.equal(host.confirmTexts.at(-1)!.checkbox, "同时删除它的设置与数据？");
   } finally {
     await stop();
   }

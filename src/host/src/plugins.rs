@@ -131,7 +131,7 @@ impl Plugin {
             .map(|root| data_key.directory(&root))
             .filter(|dir| {
                 std::fs::create_dir_all(dir)
-                    .map_err(|error| eprintln!("plugin data {}: {error}", dir.display()))
+                    .map_err(|error| diag!("plugin data {}: {error}", dir.display()))
                     .is_ok()
             });
         let mut command = paths.node_command();

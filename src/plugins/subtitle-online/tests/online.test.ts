@@ -1,8 +1,9 @@
 // Orchestration against the SDK test host with a fake `fetch`; no real network or secret store.
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { deflateRawSync } from "node:zlib";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
@@ -51,6 +52,8 @@ type SetupOptions = {
   file?: Record<string, string>;
   /** The interface language (default English). */
   locale?: "zh-Hans";
+  /** The video opened as a `file://` URL instead of a path. */
+  fileUrl?: boolean;
 };
 async function setup(options: SetupOptions = {}) {
   const folder = await mkdtemp(join(tmpdir(), "vestra-online-"));
@@ -70,10 +73,19 @@ async function setup(options: SetupOptions = {}) {
       host.handle(method, () => {
         throw new HostError(code, `${method}: ${code}`);
       });
-  host.openElsewhere(video);
+  host.openElsewhere(options.fileUrl ? pathToFileURL(video).href : video);
   host.subtitles.selection = { stamp: { generation: 1, revision: 1 }, target: null };
   const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data, ...(options.locale ? { locale: options.locale } : {}) });
   return { host, folder, data, video, stop, cleanup: () => rm(folder, { recursive: true, force: true }) };
+}
+/** Whether `folder`'s file system keeps POSIX modes: chmod a probe to 0600 and read it back (not on NTFS). */
+async function modesEnforced(folder: string) {
+  const probe = join(folder, "mode-probe");
+  await writeFile(probe, "");
+  await chmod(probe, 0o600);
+  const kept = ((await stat(probe)).mode & 0o777) === 0o600;
+  await rm(probe);
+  return kept;
 }
 /** The window binds exactly the callbacks its Slint file declares. */
 async function sameCallbacks(host: TestHost, id: string, file: string) {
@@ -172,7 +184,7 @@ async function saveKey(t: Awaited<ReturnType<typeof setup>>, key: string, passwo
 }
 
 for (const code of ["unavailable", "unsupported"] as const)
-  test(`no secret store (${code}): keys go to secrets.json (0600) in the data directory`, async () => {
+  test(`no secret store (${code}): keys go to secrets.json (0600) in the data directory`, async (context) => {
     const fetch = fakeFetch({});
     const t = await setup({ key: false, store: code, ...zh });
     try {
@@ -180,7 +192,8 @@ for (const code of ["unavailable", "unsupported"] as const)
       const file = join(t.data, "secrets.json");
       assert.equal(shown(t.host, "subtitle-online-service"), `已保存（${file}（仅本人可读））`);
       assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { "opensubtitles-api-key": "SECRET", "opensubtitles-password": "pw" });
-      assert.equal((await stat(file)).mode & 0o777, 0o600);
+      if (await modesEnforced(t.folder)) assert.equal((await stat(file)).mode & 0o777, 0o600);
+      else context.diagnostic("this file system has no POSIX modes: the 0600 check is skipped");
       assert.equal(t.host.secrets.size, 0);
     } finally {
       await t.stop();
@@ -313,6 +326,26 @@ test("double-click downloads, loads and selects the subtitle, and saves <video n
     window.emit("open-row", 0);
     await waitFor(() => t.host.subtitleLoads.length === 2 && window.props["busy"] === false, "loaded again");
     assert.ok((await readdir(t.folder)).includes("The.Movie.2019.1080p.BluRay.x264-GRP.zh (1).srt"), "never overwrites");
+  } finally {
+    await t.stop();
+    fetch.restore();
+    await t.cleanup();
+  }
+});
+
+test("a source opened as a file:// URL: hash and title from the file, the copy saved beside the video", async () => {
+  const fetch = searchAndDownload();
+  const t = await setup({ fileUrl: true, ...zh });
+  try {
+    await t.host.command("search").run();
+    const window = t.host.window("subtitle-download");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 2 && window.props["busy"] === false, "results");
+    const url = new URL(fetch.calls[0]!.url);
+    assert.match(url.searchParams.get("moviehash") ?? "", /^[0-9a-f]{16}$/, "the file was read for its hash");
+    assert.equal(url.searchParams.get("query"), "the movie 2019");
+    window.emit("open-row", 0);
+    await waitFor(() => t.host.subtitleLoads.length === 1 && window.props["busy"] === false, "loaded");
+    assert.ok((await readdir(t.folder)).includes("The.Movie.2019.1080p.BluRay.x264-GRP.zh.srt"), "beside the video");
   } finally {
     await t.stop();
     fetch.restore();

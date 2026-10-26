@@ -27,7 +27,7 @@ Browse the plugins in the official Vestra Player repository and install, update 
 
 ## Limits
 
-- Built-in plugins are updated with the player and cannot be installed, replaced or uninstalled here; disable or reload them in Settings ▸ Plugin Manager….
+- Built-in plugins are updated with the player and cannot be installed, replaced, uninstalled or disabled; reload them or open their data folder in Settings ▸ Plugin Manager….
 - The list shows no plugin icons (only the details do); dropping a `.vxp` on the store window does nothing, drop it on the video area.
 - Behind a company proxy or with self-signed certificates the repositories may be unreachable.
 

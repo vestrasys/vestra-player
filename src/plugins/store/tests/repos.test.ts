@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { BUILTIN, FakeNet, info, OFFICIAL, openStore, other, props, publish, rows, said, signWith, start, THIRD, until } from "./helpers.ts";
+import { BUILTIN, choose, FakeNet, info, OFFICIAL, openStore, other, props, publish, rows, said, signWith, start, THIRD, until } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-repos-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -118,6 +118,53 @@ test("offline: the verified cache is used after a restart; a tampered cache is n
     await until(third.host, () => /暂时看不到/.test(said(third.store.repos.official.status.text)));
     // Only the built-in plugin is left in the list.
     assert.deepEqual(rows(third.host).map((r) => r.name), ["vestra.video"]);
+  } finally {
+    await third.stop();
+  }
+});
+
+test("offline: installed details come from the package; Updates does not claim up to date without an index", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [YT]);
+  const directory = join(scratch, "offline-installed-yt");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, "manifest.json"), JSON.stringify({ id: YT.id, version: "0.2.0", name: "YouTube" }));
+  writeFileSync(join(directory, "README.md"), "# 本地说明");
+  const yt = info(YT.id, { version: "0.2.0", directory, source: { kind: "repository", url: OFFICIAL } });
+  const data = join(scratch, "offline-installed");
+  const first = await start({ net, dataDirectory: data, packages: [BUILTIN, yt] });
+  await first.store.refreshAll(true);
+  await first.stop();
+
+  // With the cached index: the installed plugin's description is its own README, nothing is asked.
+  net.offline = true;
+  const second = await start({ net, dataDirectory: data, packages: [BUILTIN, yt] });
+  try {
+    await openStore(second.host);
+    second.host.window("store").emit("refresh");
+    await until(second.host, () => !second.store.repos.official.refreshing && second.store.repos.official.status.warn);
+    await choose(second.host, "YouTube");
+    await until(second.host, () => second.host.markdown(props(second.host)["doc"])?.text === "# 本地说明", "local readme");
+    assert.equal(second.host.confirmTexts.length, 0);
+  } finally {
+    await second.stop();
+  }
+
+  // No cache at all: Updates says it can't connect instead of "all up to date"; Installed still lists the plugin.
+  const third = await start({ net, dataDirectory: join(scratch, "offline-empty"), packages: [BUILTIN, yt] });
+  try {
+    await openStore(third.host);
+    await until(third.host, () => !third.store.repos.official.refreshing && third.store.repos.official.status.warn);
+    third.host.window("store").emit("setFilter", 2);
+    await third.host.settle();
+    assert.deepEqual(rows(third.host), []);
+    assert.equal(props(third.host)["empty-text"], "无法连接仓库，也没有缓存。连上网络后点「刷新」。");
+    third.host.window("store").emit("setFilter", 1);
+    await third.host.settle();
+    assert.deepEqual(rows(third.host).map((r) => r.name).sort(), ["YouTube", "vestra.video"]);
+    await choose(third.host, "YouTube");
+    await until(third.host, () => third.host.markdown(props(third.host)["doc"])?.text === "# 本地说明", "local readme");
+    assert.equal(third.host.confirmTexts.length, 0);
   } finally {
     await third.stop();
   }

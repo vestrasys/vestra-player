@@ -3,6 +3,9 @@
 // started from Explorer); debug builds keep their console for the logs. Where
 // the logs go: doc/architecture/packaging-proposal.md §10.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// `diag!`, used everywhere below (declared first for its textual scope).
+#[macro_use]
+mod diag;
 mod backend;
 mod binding_manager;
 mod bindings;
@@ -257,6 +260,9 @@ enum Event {
     OpenFiles(Vec<PathBuf>, bool),
     /// The options window: (generation, tree index to show, or `None` = close).
     Settings(u64, Option<usize>),
+    /// A settings page compiled on the `settings-check` thread: (page
+    /// serial, the compile's error).
+    SettingsChecked(u64, std::result::Result<(), String>),
     RuntimeFault(u64, String),
 }
 #[derive(Deserialize)]
@@ -324,9 +330,15 @@ const OSD_PANEL_LINES: usize = 32;
 const OSD_PANEL_BYTES: usize = 4096;
 const OSD_MIN_COLUMNS: u64 = 8;
 const OSD_MAX_COLUMNS: u64 = 1000;
+/// At start-up, how long a queued mount waits for the other built-ins'
+/// mounts, so that the shell compiles once for all of them.
+const STARTUP_MOUNT_GATHER: Duration = Duration::from_millis(400);
 struct MountChange {
     reply: Reply,
     contribution: Option<Mount>,
+    /// Its owner was already told `ui.preparing` (a change put back after
+    /// its batch failed).
+    announced: bool,
 }
 struct Host {
     backend: Backend,
@@ -341,6 +353,9 @@ struct Host {
     mounts: BTreeMap<u64, Mount>,
     mount_queue: std::collections::VecDeque<MountChange>,
     preparing: Option<(Instant, MountChange)>,
+    /// Shell preparations still to run one change each, after a batch of
+    /// changes failed to compile (`prepare_mount_tick`).
+    mount_singly: usize,
     mount_events: mpsc::SyncSender<composition::JsonCallback>,
     mount_input: mpsc::Receiver<composition::JsonCallback>,
     last_image: Option<slint::Image>,
@@ -514,7 +529,7 @@ impl Host {
             let status = match self.activations.status(owner, now) {
                 Ok(status) => status,
                 Err(error) => {
-                    eprintln!("activation status: {error}");
+                    diag!("activation status: {error}");
                     continue;
                 }
             };
@@ -544,7 +559,7 @@ impl Host {
             })
             .is_err()
         {
-            eprintln!("host.error physical-input backend unavailable");
+            diag!("host.error physical-input backend unavailable");
         }
     }
     #[cfg(feature = "producer-audio")]
@@ -565,7 +580,7 @@ impl Host {
         // loads here; a development load is never installed (data under
         // plugin-data/development/), so it cannot become a built-in.
         if manifest::reserved_id(&candidate.id) {
-            eprintln!(
+            diag!(
                 "host.warning development load {}: vestra. ids are reserved for built-in plugins; \
                  this load is for built-in development only and cannot be installed",
                 candidate.id
@@ -683,6 +698,7 @@ impl Host {
             self.mount_queue.push_front(MountChange {
                 reply: Reply { owner, id: 0 },
                 contribution: None,
+                announced: false,
             });
         }
         let _ = self.backend.commands.send(Command {
@@ -717,13 +733,13 @@ impl Host {
             .get_mut(&owner)
             .and_then(|plugin| plugin.send(message).err());
         if let Some(error) = failed {
-            eprintln!("plugin transport: {error}");
+            diag!("plugin transport: {error}");
             self.disable(owner);
         }
     }
     fn broadcast(&mut self, event: &str, data: Value) {
         if event == "host.error" {
-            eprintln!("host.error {data}");
+            diag!("host.error {data}");
         }
         let mut failed = Vec::new();
         for (owner, plugin) in self
@@ -746,7 +762,7 @@ impl Host {
                     return;
                 }
                 if let Some(event) = message["event"].as_str() {
-                    eprintln!("runtime {owner} {event}: {}", message["data"]);
+                    diag!("runtime {owner} {event}: {}", message["data"]);
                     let now = self.now_ms();
                     let result = match event {
                         "runtime.ready" => self.activations.runtime_ready(owner, now),
@@ -758,7 +774,7 @@ impl Host {
                         _ => Ok(()),
                     };
                     if let Err(error) = result {
-                        eprintln!("activation runtime event: {error}");
+                        diag!("activation runtime event: {error}");
                     }
                     self.activation_tick();
                     return;
@@ -807,7 +823,7 @@ impl Host {
                         self.answer(reply, &request.method, &request.params);
                     }
                     Err(error) => {
-                        eprintln!("malformed request: {error}");
+                        diag!("malformed request: {error}");
                         self.disable(owner);
                     }
                 }
@@ -837,7 +853,7 @@ impl Host {
                 if debug_menu()
                     && let MenuAction::Invoke(token) = &action
                 {
-                    eprintln!("menu: invoke {token} open={:?}", self.menu_path);
+                    diag!("menu: invoke {token} open={:?}", self.menu_path);
                 }
                 match action {
                     MenuAction::Reset => {
@@ -853,7 +869,7 @@ impl Host {
                     MenuAction::Dismiss => self.close_menu(),
                     MenuAction::Hover(level, token, now) => {
                         if debug_menu() {
-                            eprintln!(
+                            diag!(
                                 "menu: hover level={level} token={token} now={now} open={:?} t={}",
                                 self.menu_path,
                                 self.now_ms()
@@ -881,7 +897,7 @@ impl Host {
                         Some(menu::Token::Command { owner, id }) => {
                             self.close_menu();
                             if let Err(error) = self.execute_command(owner, &id) {
-                                eprintln!("menu execute: {:?}", error);
+                                diag!("menu execute: {:?}", error);
                             }
                         }
                         None => (),
@@ -939,7 +955,7 @@ impl Host {
                     }) => self.show_osd(&reason),
                     _ => {
                         if let Err(error) = self.execute_command(owner, &id) {
-                            eprintln!("binding execute: {error:?}");
+                            diag!("binding execute: {error:?}");
                         }
                     }
                 }
@@ -1017,7 +1033,7 @@ impl Host {
             }
             Event::InjectKey(generation, key, kind, physical) => {
                 if debug_keys() {
-                    eprintln!("keys: inject to slint {key:?} {kind:?} window={generation}");
+                    diag!("keys: inject to slint {key:?} {kind:?} window={generation}");
                 }
                 if let Some(window) = self.window_for(generation) {
                     let window = window.clone_strong();
@@ -1038,7 +1054,7 @@ impl Host {
             }
             Event::ModifiersReleased(generation, keys) => {
                 if debug_keys() {
-                    eprintln!(
+                    diag!(
                         "keys: release to slint {keys:?} window={generation} live={} shell={}",
                         self.window_for(generation).is_some(),
                         self.shell_generation
@@ -1057,6 +1073,7 @@ impl Host {
             Event::Dropped(generation, path) => self.drops.arrived(generation, path),
             Event::OpenFiles(files, front) => self.open_files(files, front),
             Event::Settings(generation, index) => self.settings_event(generation, index),
+            Event::SettingsChecked(serial, result) => self.settings_checked(serial, result),
             Event::ConfirmDone(reply, confirmed, checked) => {
                 self.policy.activity(self.now_ms());
                 self.dialog_busy = false;
@@ -1089,7 +1106,7 @@ impl Host {
                 }
             }
             Event::RuntimeFault(owner, error) => {
-                eprintln!("plugin {owner}: {error}");
+                diag!("plugin {owner}: {error}");
                 let now = self.now_ms();
                 let _ =
                     self.activations
@@ -1357,7 +1374,7 @@ impl Host {
                     .map(|(w, h)| (w.round(), h.round())),
             );
             if self.pip_log.as_deref() != Some(line.as_str()) {
-                eprintln!("{line}");
+                diag!("{line}");
                 self.pip_log = Some(line);
             }
         }
@@ -1366,7 +1383,7 @@ impl Host {
                 pip::Effect::Respond(reply, result) => self.respond(reply, result),
                 pip::Effect::Action(action, step) => {
                     if let Err(error) = self.run_core_action_with(action, None, step) {
-                        eprintln!("pip: {action}: {}", error.message);
+                        diag!("pip: {action}: {}", error.message);
                     }
                 }
             }
@@ -1546,7 +1563,7 @@ impl Host {
         if let Err(error) =
             shell.set_property("input-blocked", (self.menu_open || self.dialog_busy).into())
         {
-            eprintln!("host.error physical-input bridge: {error}");
+            diag!("host.error physical-input bridge: {error}");
         }
         if self.osd_until.is_some_and(|until| now >= until) {
             self.osd_until = None;
@@ -1591,7 +1608,7 @@ impl Host {
             };
             let refresh = || platform::window_refresh(shell.window());
             if let Some(line) = log.line(counts, presentation, refresh, size, Instant::now()) {
-                eprintln!("{line}");
+                diag!("{line}");
             }
         }
         self.apply_on_top();
@@ -1886,7 +1903,7 @@ impl Host {
             }
             (None, true) if !owners.is_empty() => {
                 if let Err(error) = self.open_floating(&owners) {
-                    eprintln!("floating panel: {error:#}");
+                    diag!("floating panel: {error:#}");
                     if let Some(&owner) = owners.first() {
                         for owner in &owners {
                             self.send(*owner, json!({"event":"ui.error","data":{"code":"ui-prepare","message":format!("ui-prepare: {error:#}")}}));
@@ -2415,7 +2432,7 @@ impl Host {
             // the first candidate with a binding fires.
             let typed = bindings::typed_with_option(text, flag(0), flag(3), physical.as_ref());
             if debug_keys() {
-                eprintln!(
+                diag!(
                     "keys: slint scope={:?} text={:?} control={} alt={} shift={} meta={} repeat={} physical={physical:?} → {resolved:?} typed={typed:?} bound={}",
                     scope.as_str(),
                     text.as_str(),
@@ -2566,30 +2583,62 @@ impl Host {
         self.release_held_mounts();
         if self.preparing.is_none() {
             if let Some(change) = self.mount_queue.pop_front() {
-                self.send(
-                    change.reply.owner,
-                    json!({"event":"ui.preparing","data":{"phase":"preparing"}}),
-                );
+                if !change.announced {
+                    self.send(
+                        change.reply.owner,
+                        json!({"event":"ui.preparing","data":{"phase":"preparing"}}),
+                    );
+                }
                 self.preparing = Some((Instant::now(), change));
             }
             return;
         }
-        if self.preparing.as_ref().unwrap().0.elapsed() < Duration::from_millis(32) {
+        let waited = self.preparing.as_ref().unwrap().0.elapsed();
+        if waited < Duration::from_millis(32) {
+            return;
+        }
+        // At start-up, a built-in that will mount its panel and has not
+        // asked yet is waited for (briefly), to compile the shell once.
+        if waited < STARTUP_MOUNT_GATHER && self.builtin_mount_expected() {
             return;
         }
         let (_, change) = self.preparing.take().unwrap();
         let started = Instant::now();
-        let mut next = self.mounts.clone();
-        let owner = change.reply.owner;
-        if let Some(mount) = change.contribution {
-            if !self.plugins.contains_key(&owner) {
-                return;
-            }
-            // Mounted after all: an earlier refusal no longer applies.
-            self.clear_warning(owner, "slot-occupied");
-            next.insert(owner, mount);
+        // Every change queued meanwhile joins this one: one compile of the
+        // shell instead of one per mount (start-up mounts arrive together).
+        // After a failed batch its changes go one at a time again, so that
+        // one bad component fails only its own mount.
+        let mut changes = vec![change];
+        if self.mount_singly > 0 {
+            self.mount_singly -= 1;
         } else {
-            next.remove(&owner);
+            for change in self.mount_queue.drain(..).collect::<Vec<_>>() {
+                if !change.announced {
+                    self.send(
+                        change.reply.owner,
+                        json!({"event":"ui.preparing","data":{"phase":"preparing"}}),
+                    );
+                }
+                changes.push(change);
+            }
+        }
+        // A mount of a plugin stopped since is dropped, as before.
+        changes.retain(|change| {
+            change.contribution.is_none() || self.plugins.contains_key(&change.reply.owner)
+        });
+        if changes.is_empty() {
+            return;
+        }
+        let mut next = self.mounts.clone();
+        for change in &changes {
+            let owner = change.reply.owner;
+            if let Some(mount) = &change.contribution {
+                // Mounted after all: an earlier refusal no longer applies.
+                self.clear_warning(owner, "slot-occupied");
+                next.insert(owner, mount.clone());
+            } else {
+                next.remove(&owner);
+            }
         }
         self.next_shell_generation += 1;
         let candidate_generation = self.next_shell_generation;
@@ -2702,7 +2751,7 @@ impl Host {
                         window_state::Slot::Bottom => (mount.visible, false),
                     };
                     if let Err(error) = self.policy.attach(policy, id, visible, detached) {
-                        eprintln!("mount policy attach: {error}");
+                        diag!("mount policy attach: {error}");
                     }
                     // The tab that was current at the last run is current again.
                     if policy == window_state::Slot::Sidebar
@@ -2720,7 +2769,7 @@ impl Host {
                         self.policy
                             .set_locks(slot, *id, window_state::Locks::default())
                     {
-                        eprintln!("mount policy reset: {error}");
+                        diag!("mount policy reset: {error}");
                     }
                 }
                 self.policy.activity(self.now_ms());
@@ -2746,23 +2795,52 @@ impl Host {
             }
             Err(error) => Err(RpcError::new("ui-prepare", error.to_string())),
         };
-        self.send(owner,json!({"event":"ui.preparing","data":{"phase":if result.is_ok(){"ready"}else{"failed"},"elapsedMs":started.elapsed().as_secs_f64()*1000.}}));
-        if change.reply.id == 0 {
-            if let Err(error) = result {
-                self.broadcast(
-                    "host.error",
-                    json!({"code":"ui-owner-cleanup","owner":owner,"message":error.message}),
-                );
+        if self.frame_log.is_some() {
+            diag!(
+                "vestra shell: {} change(s), {} panel(s), prepared in {:.1} ms ({})",
+                changes.len(),
+                self.mounts.len(),
+                started.elapsed().as_secs_f64() * 1000.,
+                if result.is_ok() { "ready" } else { "failed" }
+            );
+        }
+        if result.is_err() && changes.len() > 1 {
+            // Again one at a time, from the next tick on (each still one
+            // compile per tick): the first, then the rest in their order.
+            self.mount_singly = changes.len();
+            let mut changes = changes.into_iter();
+            let first = changes.next().expect("more than one change");
+            for mut change in changes.rev() {
+                change.announced = true;
+                self.mount_queue.push_front(change);
             }
-        } else {
-            self.respond(change.reply, result);
+            let due = Instant::now()
+                .checked_sub(Duration::from_millis(32))
+                .unwrap_or_else(Instant::now);
+            self.preparing = Some((due, first));
+            return;
+        }
+        let elapsed = started.elapsed().as_secs_f64() * 1000.;
+        for change in changes {
+            let owner = change.reply.owner;
+            self.send(owner,json!({"event":"ui.preparing","data":{"phase":if result.is_ok(){"ready"}else{"failed"},"elapsedMs":elapsed}}));
+            if change.reply.id == 0 {
+                if let Err(error) = &result {
+                    self.broadcast(
+                        "host.error",
+                        json!({"code":"ui-owner-cleanup","owner":owner,"message":error.message}),
+                    );
+                }
+            } else {
+                self.respond(change.reply, result.clone());
+            }
         }
     }
     /// Initial properties `refuse_initial` left out: logged and reported
     /// to the plugin (`ui.error`, its `onError`).
     fn report_refused(&mut self, owner: u64, refused: Vec<RpcError>) {
         for error in refused {
-            eprintln!("initial property {owner}: {}", error.message);
+            diag!("initial property {owner}: {}", error.message);
             self.send(owner, ui_error(&error));
         }
     }
@@ -2778,7 +2856,7 @@ impl Host {
             match self.prop_value(owner, "$mount", name, value) {
                 Ok(value) => values.push((name.clone(), value)),
                 Err(error) => {
-                    eprintln!("mount property {owner}/{name}: {}", error.message);
+                    diag!("mount property {owner}/{name}: {}", error.message);
                     self.send(owner, ui_error(&error));
                 }
             }
@@ -2911,7 +2989,7 @@ impl Host {
             if id == "seek-backward" || id == "seek-forward" {
                 let _ = self.commands.remove(bindings::HOST, id);
                 if let Err(error) = self.register_core_action(id, declaration) {
-                    eprintln!("host.error core action {id}: {error}");
+                    diag!("host.error core action {id}: {error}");
                 }
             }
         }
@@ -3069,7 +3147,7 @@ impl Host {
     fn host_command(&mut self, id: &str) {
         if core_actions::ACTIONS.contains(&id) {
             if let Err(error) = self.run_core_action(id, None) {
-                eprintln!("core action {id}: {}", error.message);
+                diag!("core action {id}: {}", error.message);
             }
             return;
         }
@@ -3198,7 +3276,7 @@ impl Host {
                 .is_some_and(|at| at.elapsed() < Duration::from_secs(1)),
         };
         if let Some(error) = self.power.update(playback) {
-            eprintln!("host.error power {error}");
+            diag!("host.error power {error}");
         }
     }
     /// `window.setAlwaysOnTop`: every ordinary window of the application at
@@ -3215,7 +3293,7 @@ impl Host {
         match platform::set_floating(want) {
             Ok(count) => self.on_top_applied = Some((want, count)),
             Err(error) => {
-                eprintln!("host.error window level: {error}");
+                diag!("host.error window level: {error}");
                 self.on_top_applied = Some((want, count));
             }
         }
@@ -3361,7 +3439,7 @@ impl Host {
             Ok(Some(value)) => self.respond(reply, Ok(value)),
             Err(error) => {
                 if debug_keys() && method == "ui.menu" {
-                    eprintln!("keys: ui.menu refused {}: {}", error.code, error.message);
+                    diag!("keys: ui.menu refused {}: {}", error.code, error.message);
                 }
                 self.respond(reply, Err(error))
             }
@@ -3414,7 +3492,7 @@ impl Host {
         let warnings = self.warnings.entry(owner).or_default();
         warnings.retain(|(w, _)| w["code"] != warning["code"] || w["slot"] != warning["slot"]);
         warnings.push((warning.clone(), text.clone()));
-        eprintln!("{id}: {}", error.message);
+        diag!("{id}: {}", error.message);
         self.show_osd(&i18n::tr_args("{}: {}", &json!([id, text])));
         warning["plugin"] = id.into();
         warning["message"] = error.message.clone().into();
@@ -3470,7 +3548,7 @@ impl Host {
                 self.activations
                     .ui_finish(reply.owner, reply.id, outcome, self.now_ms())
             {
-                eprintln!("activation UI completion: {error}");
+                diag!("activation UI completion: {error}");
             }
         }
         let message = match result {
@@ -3739,7 +3817,7 @@ impl Host {
             }
             "ui.menu" => {
                 if debug_keys() {
-                    eprintln!(
+                    diag!(
                         "keys: ui.menu owner={} menu_open={} dialog={} sidebar_effective={}",
                         reply.owner,
                         self.menu_open,
@@ -4061,6 +4139,7 @@ impl Host {
                 self.mount_queue.push_back(MountChange {
                     reply: reply.clone(),
                     contribution,
+                    announced: false,
                 });
                 return Ok(None);
             }
@@ -4549,7 +4628,7 @@ fn menu_levels(
                 )
             })
             .collect();
-        eprintln!(
+        diag!(
             "menu: open={path:?} window={:.0}x{:.0} panels=[{}]",
             size.x,
             size.y,
@@ -4621,7 +4700,7 @@ fn observe_key(
                 }
             }
             if debug_keys() {
-                eprintln!("keys: winit modifiers {:?}", state.state());
+                diag!("keys: winit modifiers {:?}", state.state());
             }
             None
         }
@@ -4631,7 +4710,7 @@ fn observe_key(
             ..
         } => {
             if debug_keys() {
-                eprintln!(
+                diag!(
                     "keys: winit {:?} synthetic={is_synthetic} physical={:?} logical={:?} text={:?} repeat={} modifiers={:?}",
                     event.state,
                     event.physical_key,
@@ -4670,7 +4749,7 @@ fn observe_key(
                 .then(|| bindings::from_key("", false, false, false, false, Some(&physical)))
                 .flatten();
             if debug_keys() && matches!(event.logical_key, Key::Dead(_)) {
-                eprintln!("keys: dead key → {dead:?}");
+                diag!("keys: dead key → {dead:?}");
             }
             input.borrow_mut().physical = Some(physical);
             dead.map(|input| (input, event.repeat))
@@ -4777,11 +4856,11 @@ fn debug_menu_pointer(
         WindowEvent::CursorMoved { position, .. } => {
             let (x, y) = (position.x / scale, position.y / scale);
             cursor.set((x, y));
-            eprintln!("menu: pointer moved x={x:.1} y={y:.1}");
+            diag!("menu: pointer moved x={x:.1} y={y:.1}");
         }
         WindowEvent::MouseInput { state, button, .. } => {
             let (x, y) = cursor.get();
-            eprintln!("menu: pointer {state:?} {button:?} at x={x:.1} y={y:.1}");
+            diag!("menu: pointer {state:?} {button:?} at x={x:.1} y={y:.1}");
         }
         _ => {}
     }
@@ -4940,7 +5019,7 @@ fn main() -> Result<()> {
         urls,
     } = launch::parse(&args, &std::env::current_dir()?)?;
     for url in &urls {
-        eprintln!("host.warning open: {url} is not a file; open links from a plugin's command");
+        diag!("host.warning open: {url} is not a file; open links from a plugin's command");
     }
     // One player per user (`platform::single_instance`): a later launch
     // hands its files to the running one and exits. Development runs
@@ -4958,7 +5037,7 @@ fn main() -> Result<()> {
         match platform::single_instance(&directory, &files, Duration::from_secs(5)) {
             Ok(platform::Launch::HandedOff) => return Ok(()),
             Ok(platform::Launch::Primary(claimed)) => primary = Some(claimed),
-            Err(error) => eprintln!("single instance: {error}; running on its own"),
+            Err(error) => diag!("single instance: {error}; running on its own"),
         }
     }
     let mut evidence = frame_evidence.map(FrameEvidence::new).transpose()?;
@@ -4998,7 +5077,7 @@ fn main() -> Result<()> {
             }
         };
         if gpu && let Err(error) = winit().renderer_name("femtovg".into()).select() {
-            eprintln!(
+            diag!(
                 "render: the OpenGL window renderer is unavailable ({error}); software rendering"
             );
             gpu = false;
@@ -5043,6 +5122,7 @@ fn main() -> Result<()> {
         mounts: BTreeMap::new(),
         mount_queue: std::collections::VecDeque::new(),
         preparing: None,
+        mount_singly: 0,
         mount_events,
         mount_input,
         last_image: None,
@@ -5171,7 +5251,10 @@ fn main() -> Result<()> {
             if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
                 break;
             }
-            match receiver.recv_timeout(Duration::from_millis(10)) {
+            let received = receiver.recv_timeout(Duration::from_millis(10));
+            // A tick is the work after the wait (`VESTRA_FRAME_LOG=1`).
+            let began = Instant::now();
+            match received {
                 Ok(event) => {
                     if let Event::Broadcast(name, data) = &event
                         && name == "source.state"
@@ -5189,6 +5272,21 @@ fn main() -> Result<()> {
             host.notify_tick();
             host.timeline_tick();
             host.open_files_tick();
+            if let Some(log) = host.frame_log.as_mut() {
+                log.tick_took(began.elapsed());
+                let presentation = &host.backend.render.presentation;
+                let (produced, shown) = host.backend.frame.counts();
+                let (draws, presented) = presentation.counts();
+                let counts = render_target::LogCounts {
+                    produced,
+                    shown,
+                    draws,
+                    presented,
+                };
+                if let Some(line) = log.line(counts, presentation, || None, None, Instant::now()) {
+                    diag!("{line}");
+                }
+            }
             if let Some(evidence) = evidence.as_mut() {
                 evidence.sample(&host.backend, &observed_source, start)?;
             }
@@ -5335,7 +5433,7 @@ fn main() -> Result<()> {
                             Ok(())
                         };
                         if let Err(error) = save() {
-                            eprintln!("snapshot failed: {error}");
+                            diag!("snapshot failed: {error}");
                         }
                     }
                     let _ = slint::quit_event_loop();

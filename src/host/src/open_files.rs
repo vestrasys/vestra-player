@@ -76,7 +76,7 @@ impl Host {
                 .iter()
                 .any(|(_, _, paths)| paths.iter().any(|p| *p == text))
             {
-                eprintln!("host.warning open: no plugin opens {text}");
+                diag!("host.warning open: no plugin opens {text}");
             }
         }
         let modifiers = json!({"alt":false,"shift":false,"cmd":false});

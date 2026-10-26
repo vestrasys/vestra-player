@@ -1,9 +1,23 @@
 # Changelog
 
+## 0.1.8
+
+- Built-in plugins can be neither uninstalled nor disabled: the store no longer sends you to the Plugin Manager to disable one, and a refused uninstall reads "Built-in plugins cannot be uninstalled".
+- The repositories page says how to keep the store offline: turn off automatic update checks; the store then goes online only when you open it or click Refresh.
+- Offline, an installed plugin's README and changelog come from its own package instead of an error, and the Updates filter says it can't connect instead of "All plugins are up to date" when no repository index has ever been read.
+
+## 0.1.7
+
+- The uninstall confirmation's check box reads "Also delete its settings and data?", with a question mark, in every language.
+
 ## 0.1.6
 
 - No rollback (the player no longer keeps a previous version): the Roll Back / Restore action is gone, the confirmations no longer say you can roll back or restore, and the Versions tab no longer installs a version older than the installed one from the same repository. To go back to an older version, uninstall the plugin and install that version's `.vxp`.
 - A refused install while the player is busy reads "Plugins are being installed or cleaned up; try again later".
+
+## 0.1.5
+
+- Version bump only, so that players that had already installed 0.1.4 pick up the changes shipped since then; no change in behavior.
 
 ## 0.1.4
 

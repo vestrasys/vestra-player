@@ -268,7 +268,9 @@ export default async function activate(plugin: Plugin) {
     const last = shown.rows.at(-1);
     const p = project();
     return {
-      hasProject: !!p,
+      // The card (Install, Export) is for a finished turn: hidden while the
+      // agent works, back with the project's state when the turn has ended.
+      hasProject: !!p && !busy,
       projects: projects.map((x) => `${x.name} · ${x.id}`),
       projectIndex: Math.max(0, projects.findIndex((x) => x.id === chosen)),
       projectTitle: p ? `${p.name} · ${p.id} ${p.version}` : "",
