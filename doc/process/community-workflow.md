@@ -27,6 +27,8 @@ The API evolves in two directions, with different processes:
 
 Constraints shared by all agents:
 
+- **Language (user rule)**: everything addressed to the user is **Chinese**, without exception: answers, reports, progress notes and the one-line remarks between tool calls. Everything in the repositories is **English**: docs, round records, SDK docs, READMEs, commit messages, PR bodies. Agent briefs are English; sub-agents report to the coordinator in Chinese.
+
 - **Plugin independence**: plugins do not import each other, do not read each other's directories and do not communicate directly (no private messages, shared files or dedicated connections); the only shared things are the public SDK, public host state and mature third-party dependencies. Every plugin can load, run and be deactivated when no other plugin exists. Deactivating a plugin revokes only its own resources.
 - **The core does not know plugins**: the host routes by capability and registration, and does not write special business logic keyed on a plugin id.
 - **Safety**: first-party Rust forbids `unsafe`; TS uses erasable syntax (`erasableSyntaxOnly`).
