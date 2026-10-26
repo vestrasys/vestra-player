@@ -119,9 +119,10 @@ test("menu: two items under Subtitles ▸ Online Subtitles without shortcuts; wi
       ["@subtitles > Online Subtitles > Online Subtitle Settings…", 361, "subtitle-online", ""],
     ]);
     await t.host.command("search").run();
-    await t.host.settle();
-    assert.equal(t.host.window("subtitle-online-settings").visible, true, "no key: the settings window opens instead");
-    assert.match(shown(t.host, "subtitle-online-settings"), /^First enter an API key for OpenSubtitles/);
+    await waitFor(
+      () => t.host.window("subtitle-online-settings").visible && /^First enter an API key for OpenSubtitles/.test(shown(t.host, "subtitle-online-settings")),
+      "no key: the settings window opens instead",
+    );
     assert.equal(fetch.calls.length, 0, "nothing is sent without a key");
     for (const [id, file] of [["subtitle-online-settings", "settings"]] as const) {
       const slint = await readFile(new URL(`../ui/${file}.slint`, import.meta.url), "utf8");
@@ -142,9 +143,8 @@ test("keys are saved in the player's secret store, never in settings.json", asyn
     await t.host.command("settings").run();
     const settings = t.host.window("subtitle-online-settings");
     settings.emit("service-settings");
-    await t.host.settle();
+    await waitFor(() => t.host.window("subtitle-online-service").props["service"] === "opensubtitles", "service window");
     const service = t.host.window("subtitle-online-service");
-    assert.equal(service.props["service"], "opensubtitles");
     await sameCallbacks(t.host, "subtitle-online-service", "service");
     service.emit("test", "SECRET", "", "");
     await t.host.settle();
@@ -260,13 +260,21 @@ test("search sends hash + keywords + languages once privacy is accepted; hash ma
   const t = await setup({ privacy: false, ...zh });
   try {
     await t.host.command("search").run();
-    await t.host.settle();
     const window = t.host.window("subtitle-download");
-    assert.equal(window.props["privacy-pending"], true);
-    assert.equal(shown(t.host, "subtitle-download"), "搜索会把文件名关键字与文件哈希发送给所选服务。");
+    const prompt = "搜索会把文件名关键字与文件哈希发送给所选服务。";
+    await waitFor(() => window.props["privacy-pending"] === true && shown(t.host, "subtitle-download") === prompt, "privacy prompt");
     assert.equal(fetch.calls.length, 0, "nothing is sent before the user agrees");
     window.emit("accept-privacy");
-    await waitFor(() => shown(t.host, "subtitle-download") === "找到 4 条字幕" && window.props["busy"] === false, "results");
+    // Every property read below: they are written one at a time.
+    await waitFor(
+      () =>
+        shown(t.host, "subtitle-download") === "找到 4 条字幕" &&
+        window.props["busy"] === false &&
+        (window.props["rows"] as unknown[]).length === 4 &&
+        window.props["can-more"] === true &&
+        window.props["title-text"] === "The Movie 2019",
+      "results",
+    );
     const url = new URL(fetch.calls[0]!.url);
     assert.equal(url.searchParams.get("languages"), "en,zh-cn,zh-tw");
     assert.match(url.searchParams.get("moviehash")!, /^[0-9a-f]{16}$/);
@@ -315,16 +323,18 @@ test("double-click downloads, loads and selects the subtitle, and saves <video n
     await waitFor(() => (window.props["rows"] as unknown[])?.length === 2 && window.props["busy"] === false, "results");
     window.emit("open-row", 0);
     // The copy beside the video is written after the load, by the plugin itself: wait for the operation to end.
-    await waitFor(() => t.host.subtitleLoads.length === 1 && window.props["busy"] === false, "loaded");
+    // The SDK writes changed properties one at a time (`busy` lands a round trip before `status`): wait for both.
+    const video = join(t.folder, "The.Movie.2019.1080p.BluRay.x264-GRP.zh.srt");
+    const done = `打开字幕：简体中文 · Movie.CN。已保存到 ${video}`;
+    await waitFor(() => t.host.subtitleLoads.length === 1 && window.props["busy"] === false && shown(t.host, "subtitle-download") === done, "loaded");
     assert.deepEqual(t.host.subtitleLoads.map((l) => [l.format, l.title, l.select, l.bytes.toString()]), [["srt", "简体中文 · Movie.CN", "primary", SRT]]);
     assert.equal(JSON.parse(fetch.calls.find((c) => c.url.endsWith("/download"))!.body!).file_id, 7);
     assert.equal(t.host.osd.at(-1), "打开字幕：简体中文 · Movie.CN");
-    const video = join(t.folder, "The.Movie.2019.1080p.BluRay.x264-GRP.zh.srt");
-    assert.equal(shown(t.host, "subtitle-download"), `打开字幕：简体中文 · Movie.CN。已保存到 ${video}`);
     const files = await readdir(t.folder);
     assert.ok(files.includes("The.Movie.2019.1080p.BluRay.x264-GRP.zh.srt"), files.join());
     window.emit("open-row", 0);
-    await waitFor(() => t.host.subtitleLoads.length === 2 && window.props["busy"] === false, "loaded again");
+    const again = `打开字幕：简体中文 · Movie.CN。已保存到 ${join(t.folder, "The.Movie.2019.1080p.BluRay.x264-GRP.zh (1).srt")}`;
+    await waitFor(() => t.host.subtitleLoads.length === 2 && window.props["busy"] === false && shown(t.host, "subtitle-download") === again, "loaded again");
     assert.ok((await readdir(t.folder)).includes("The.Movie.2019.1080p.BluRay.x264-GRP.zh (1).srt"), "never overwrites");
   } finally {
     await t.stop();
@@ -362,8 +372,7 @@ test("Add adds the checked results without selecting them; Save Only only saves"
     await waitFor(() => (window.props["rows"] as unknown[])?.length === 2 && window.props["busy"] === false, "results");
     window.emit("toggle-row", 0, true);
     window.emit("toggle-row", 1, true);
-    await t.host.settle();
-    assert.equal(window.props["has-checked"], true);
+    await waitFor(() => window.props["has-checked"] === true, "checked");
     window.emit("add-checked");
     await waitFor(() => t.host.osd.at(-1) === "已添加 2 条字幕" && window.props["busy"] === false, "added");
     assert.deepEqual(t.host.subtitleLoads.map((l) => l.select), ["none", "none"]);
@@ -432,11 +441,13 @@ test("a source change during the download aborts it; nothing is loaded into the 
     t.host.subtitles.selection.stamp = { generation: 2, revision: 1 };
     await t.host.settle();
     release();
-    await pause(50);
-    await t.host.settle();
+    // `status` and `rows` are separate writes (one property at a time): poll for both instead of a fixed pause.
+    await waitFor(
+      () => shown(t.host, "subtitle-download") === "The media changed; no subtitle was loaded." && (window.props["rows"] as unknown[]).length === 0,
+      "aborted; results of the old source are dropped",
+    );
+    await t.host.settle(50); // a load that slipped through would show by now
     assert.equal(t.host.subtitleLoads.length, 0);
-    assert.equal(shown(t.host, "subtitle-download"), "The media changed; no subtitle was loaded.");
-    assert.deepEqual(window.props["rows"], [], "results of the old source are dropped");
   } finally {
     await t.stop();
     fetch.restore();
