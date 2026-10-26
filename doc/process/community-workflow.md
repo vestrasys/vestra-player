@@ -89,6 +89,15 @@ The source of the plugin SDK `@vestra-player/sdk` exists only in the [vestra-pla
 3. Then upgrade the dependency in the player: point `src/package.json` at the new version (while on git tags, change the `#v<version>` in the URL; after publishing to npm, use `npm install @vestra-player/sdk@<version>`), run `npm install` to refresh `package-lock.json`, run all §6.1 checks, and commit together with the host changes.
 4. Testing an unreleased SDK locally: in the player's `src/`, temporarily run `npm install <SDK repository directory>` (or `npm link`), and after verifying, **change it back** to the locked version; do not commit a `file:` dependency.
 
+**API change rules (user ruling, 2026-10-26)**
+
+Plugins never bundle the SDK: they import it as types only, and the player builds the `plugin` object with its own copy. A player upgrade therefore needs no plugin change, and plugin authors decide for themselves whether to follow a new SDK. What keeps old plugins working is that the API is changed carefully:
+
+1. **Additions** (new members, new optional fields, new capabilities): the maintainer decides alone and releases them as a patch. A plugin that uses an addition declares the player version it needs in `minPlayerVersion`.
+2. **Removals, signature changes and changes to existing behaviour** (error codes, defaults, when something happens): the maintainer first writes what changes, why, which plugins are affected and how they migrate, and **the user approves it before any work starts**. After approval the change ships as a deprecation in one SDK patch and the removal in a later one, with at least one published player release in between.
+3. **Plugins are not forced to update.** Every SDK release's CHANGELOG entry opens with who must change and what happens to a plugin that doesn't.
+4. **Later, when third-party plugins exist** (registered as an open item, not done yet): the packing tool records the SDK version a plugin was built with, and the player warns in the store and the plugin details when a plugin was built before a breaking change ("built on an older interface, parts may not work; the author has not updated it"), together with its last update date. Only when a removed API is essential to a plugin is it disabled, with the reason shown to the user.
+
 **The host changes the Slint widget library (`src/host/ui/palette.slint`, `src/host/ui/vestra/`)**
 
 The SDK package carries a read-only copy for authors' editors; the player's version is authoritative. When you change the widget library:
@@ -150,7 +159,7 @@ Minimal acceptance scenario
 1. **Classify first**: the existing implementation violates its contract (fix it as a defect; authors must not be made to work around it with a new request), a docs or usage problem, a capability gap, or a breaking design change.
 2. **Look for an existing way first**: can the existing API, an implementation inside the plugin, or a third-party library do it; make a minimal extension only when a shared capability is truly needed. A capability used by only one plugin can still go into the core; what matters is whether the responsibility belongs to the basic capabilities. Do not generalize endlessly because of one need.
 3. **Release compatible extensions promptly**: new optional parameters or independent capabilities are released after the regression tests of the affected plugins pass; plugins that do not use them need no change. Note: changing default behavior, error semantics, resource ownership or lifecycle also breaks compatibility; looking only at type signatures is not enough.
-4. **Switch breaking changes all at once**: write down the plan, the affected plugins and migration examples, and migrate together per §5; the old usage keeps working until the switch.
+4. **Switch breaking changes all at once**: write down the plan, the affected plugins and migration examples, **get the user's approval first** (§1.6 "API change rules"), and migrate together per §5; the old usage keeps working until the switch.
 5. **Prevent patch loops**: when several requests point to the same capability, or one change keeps leading to new breaking requests, pause changes in that area and merge them into one design topic before deciding.
 6. **A rejection must come with an alternative**; authors must not be left to add hidden entry points on their own.
 
