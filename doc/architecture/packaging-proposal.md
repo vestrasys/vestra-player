@@ -509,9 +509,9 @@ Implemented as in §2.4, with two differences from the text above: `InstallLayou
 
 | | macOS `.app` | Windows install directory (same for installer and portable zip) | Development build |
 | --- | --- | --- | --- |
-| Detection | exe is `<X>.app/Contents/MacOS/<exe>`, and `Contents/Info.plist` exists | the exe's directory contains `resources\runtime\runner.ts` | neither of the above |
+| Detection | exe is `<X>.app/Contents/MacOS/<exe>`, and `Contents/Info.plist` exists | the exe's directory contains `resources\runtime\runner.js` (`runner.ts` until 2026-10-27) | neither of the above |
 | UI | `Contents/Resources/ui/` (with `host.slint`) | `resources\ui\` | `src/host/ui` |
-| Runtime | `Contents/Resources/runtime/runner.ts` | `resources\runtime\runner.ts` | `src/runtime/runner.ts` |
+| Runtime | `Contents/Resources/runtime/runner.js` | `resources\runtime\runner.js` | `src/runtime/runner.ts` (the packaged runners are type-stripped `.js` since 2026-10-27, `stage-runtime.mjs`) |
 | Built-in plugins | `Contents/Resources/plugins/builtin.json` | `resources\plugins\builtin.json` | none (`VESTRA_BUILTIN_PLUGINS`) |
 | Node | `Contents/MacOS/node` | `node\node.exe` | `VESTRA_NODE`, otherwise `node` on PATH |
 | FFmpeg | `Contents/MacOS/ffmpeg`, `Contents/MacOS/ffprobe` | `ffmpeg\ffmpeg.exe`, `ffmpeg\ffprobe.exe` | `VESTRA_FFMPEG`/`VESTRA_FFPROBE`, otherwise PATH |

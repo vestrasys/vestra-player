@@ -350,7 +350,7 @@ Audit of the 18 built-ins (`src/plugins/**/*.ts`, excluding `vendor/`, `dist/`, 
 
 ### 9.2 stdout
 
-S replaces `process.stdout.write` so that a stray `console.log` from a vendored library (already redirected today, `runner.ts:23`) or a raw write goes to stderr with the plugin prefix; `post` keeps the original. `fs.writeSync(1)` and `process.stdout._handle` remain reachable; a line that does not start with `{"g":` is treated as a runner fault (§5.4) and restarts S rather than being mis-attributed. The own-process runner gets the same `process.stdout.write` redirection (today such a write breaks that plugin's own channel; afterwards it is logged) — a hardening, listed in §13.
+S replaces `process.stdout.write` so that a stray `console.log` from a vendored library (already redirected today, `runner.ts:23`) or a raw write goes to stderr with the plugin prefix; `post` keeps the original. `fs.writeSync(1)` and `process.stdout._handle` remain reachable; a line that does not start with `{"g":` is treated as a runner fault (§5.4) and restarts S rather than being misattributed. The own-process runner gets the same `process.stdout.write` redirection (today such a write breaks that plugin's own channel; afterwards it is logged) — a hardening, listed in §13.
 
 ### 9.3 `process.pid` in temporary names
 
@@ -449,3 +449,48 @@ Nothing in this design changes an error code, a default, a signature, or when a 
 ### User ruling (2026-10-27)
 
 The user approved starting the work ("可以开工") with the coordinator's recommended answers to §14: (1) a hung built-in (no heartbeat for 10 s) restarts all built-ins in the shared runner; (2) three restarts within 60 s fall back to one process per plugin until exit, with a notice; (3) install records start storing the repository index signature evidence now, host-side signature verification is for v2; (4) phase 0 (precompiled `runner.js`, `NODE_COMPILE_CACHE`) lands before the lazy-activation baseline. Trust is decided by the host from provenance, never from a manifest field; the plugin API does not change; v1 admits built-ins only.
+
+## 15. Implementation status
+
+| Phase | Status (2026-10-27, branch `shared-runner`) |
+| --- | --- |
+| P0 | Done: packaged `runner.js`; `NODE_COMPILE_CACHE` measured and **not kept** (§15.1); `--max-old-space-size` moves to S2 (only the host's spawn of S uses it) |
+| S1 | Done: `boot.ts`, thin `runner.ts`, `shared-runner.ts`, `tests/sdk/shared-runner.test.ts`; nothing in the product starts the shared runner yet |
+| S2, S3 | Not started |
+
+### 15.1 P0: `runner.js`, measured
+
+`scripts/stage-runtime.mjs` writes every `src/runtime/*.ts` as `.js` with Node's own stripper (`module.stripTypeScriptTypes`, mode `strip`: types become spaces, so stack-trace lines and columns are the source's; relative `./x.ts` imports are rewritten to `./x.js`, and staging fails if one is left). The packaged host runs `<runtime>/runner.js` (`runtime_paths.rs`); the Windows installation is recognised by `resources\runtime\runner.js` (`platform/layout.rs`). A development build still runs `src/runtime/runner.ts` (`cargo run`, `--plugin` unchanged, no build step). **A stage made before this change has no `runner.js`**: a new host copied into an old stage directory is not recognised as an installation; restage the runtime (`node scripts/stage-runtime.mjs <stage>/resources/runtime`).
+
+Method: the researcher's fake host (`memspike/measure.mjs`, `--nohook`, canned replies per plugin, `os-sample.mjs` after 5 s idle), one Node process at a time, the 17 built-ins' `dist/`, median of 3 (machine shared, about 1 GB free). `ts` = main's staged runtime (`runner.ts`), `js` = this branch's staged `runner.js`, `+ cache` = with `NODE_COMPILE_CACHE` warmed by one unrecorded run. Ready = spawn to `runtime.ready`; CPU = the process's total CPU at idle.
+
+| 17 built-ins | ts | js | js + cache | ts + cache |
+| --- | --- | --- | --- | --- |
+| WS sum (MB) | 1071 | **846** (−225, −13.3 per process) | 844 | 848 |
+| PB sum (MB) | 1208 | **1016** (−192, −11.3 per process) | 1022 | 1020 |
+| CPU sum (ms) | 4452 | **3500** (−21%) | 3379 | 3346 |
+| Ready, median of the 17 medians (ms) | 390 | **271** (−30%) | 322 | 323 |
+
+Per plugin (ready ms / WS / PB): `ts` 306–1075 / 61.6–65.6 / 70.0–72.9; `js` 237–615 / 47.2–58.2 / 59.1–61.3. The `js` outliers (playlist 615, video 495 ready) are single noisy runs on a shared machine; the second sweep below has them at 319 and 260.
+
+`NODE_COMPILE_CACHE` on top of `runner.js`, re-measured with N=5 on six plugins (playback, playlist, video, store, visualizer, audio): ready median 287 → 289 ms, CPU 1236 → 1251 ms, WS 300.2 → 303.3 MB. The cache's gain in §1 (−13 MB, −30 ms) was skipping the runner's type stripping, which `runner.js` already removes; the SDK's and plugins' bytecode compiles in a few ms. Below the §10.2 bar ("kept if ≥ 10 ms"), so the host does not set it. It would help a development build (`ts + cache` ≈ `js`), which is not the product; revisit for S if its single start of 17 plugins shows compile time.
+
+§11 row 1 (18 own processes, node WS ≤ 900 MB, ready ≤ 190 ms median) is the coordinator's measurement with the installed layout. The fake-host sum (846 MB for 17) suggests the WS bar holds; the 190 ms ready bar is met by neither runner under the fake host on this machine today (271 ms; the spike measured 209–243 ms for `ts` on a quieter machine), so read the ready numbers as relative.
+
+### 15.2 S1: the split and the shared runner
+
+- `boot.ts`: one plugin's life (`readManifest`, `boot(options)` → `{ deliver, stop, done, stats }`); no `process.argv`, `process.env`, stdout, `process.exit` or `console`. Options: `directory, manifest, dataDirectory, locale, app, write(line), log, trace, entryLoaded`; `entryLoaded` lets the own runner install its `unhandledRejection` handler at the same moment as before.
+- `runner.ts`: the process around one boot. Its stdout is byte-identical to main's, start to stop: run under main's staged `runner.ts` and this branch's `runner.js` with the same answers, then sent `runtime.stop`, five built-ins (video, playlist, playback, audio, window) and a fixture whose cleanup sends requests (an OSD panel cleared on dispose, `onDispose` calling `osd.show`) wrote identical bytes and exited 0 within 12 ms (video: 92 lines, 28 317 bytes); subtitles with a `runtime.failed` and exit code 1 too. The first S1 commit (8ef4b29) was not: `stop()` set its flag only after the plugin's cleanup had run synchronously, so a request sent by the cleanup was written after `runtime.stop` and never answered, and the runner waited its 5 s (the host kills at 300 ms, so the rest of the cleanup never ran). Found by the independent review; `stopping` is now set synchronously before the cleanup, as before the split, and two tests cover both runners. `tests/sdk/runner.test.ts` passes; its one changed line is the packaged-layout test's runner path (`runner.ts` → `runner.js`), because the staged layout no longer contains `runner.ts` (§10.1 and §12 P0 name this change). Every other test in it is untouched and runs `src/runtime/runner.ts`.
+- `shared-runner.ts`: the §5.2 protocol (`runner.hello`, `plugin.start`, per-plugin `runtime.stop` → `runner.stopped { g, timedOut }`, `runner.fault`, `runner.ping`/`pong` with `{ heapUsed, heapTotal, rss, external, plugins: { <g>: { id, requests, pending, events, handlerMs, readyMs } } }`, `runner.stop`). Every line it writes starts `{"g":<n>,` (`g` spliced into the inner JSON, no re-serialisation). Stop deadline 5 s; `VESTRA_SHARED_STOP_MS` shortens it for tests. A failed activation is disposed in S; a `runtime.stop` for a `g` S no longer holds answers `runner.stopped` at once.
+- Attribution (§6.2, settled): in Node 26 `AsyncLocalStorage.getStore()` is available inside both the `uncaughtException` and the `unhandledRejection` handler for throws from timers, `nextTick`, `setImmediate`, fs callbacks and promise continuations started inside `als.run`. A plugin's entry module is evaluated inside its store, so the design's "bare `import()`-time `nextTick`" case **is** attributed. Not attributed: a listener on a process-wide emitter created outside any plugin (`process.stdin.on("data", …)`), which runs in the emitter's context → `runner.fault { g: 0 }`, exit 1. A throw from a plugin already stopped (a timer its cleanup left) is logged with its prefix and not reported again.
+- Console: `log/info/debug/warn/error` → stderr with `[<plugin id>] ` (`[shared] ` without a store). `process.stdout.write` from plugin code goes to stderr with the prefix; S keeps the original for its own lines. The own runner keeps today's behaviour (§13 item 3 not applied, so its wire stays unchanged).
+- Tests (`tests/sdk/shared-runner.test.ts`, 13): two plugins on their own generations and id sequences, replies for an unknown `g` or id reach nobody; a failing activation and a missing manifest leave the other plugin running; stopping one runs its cleanup while the other still runs commands, `runner.stop` exits 0 after both cleanups; a never-settling cleanup → `timedOut: true`; prefixed logs, stdout writes on stderr, an unhandled rejection logged, a 1 MiB + 1 request refused with `limit` and never written; an attributed uncaught exception stops only its plugin (one fault; a later throw only logged); an unattributed one ends S with code 1; the staged `shared-runner.js` runs without TypeScript and without an ExperimentalWarning; **plugin-API invariance**: built-ins `video` and `playlist` (their package directories, as `--plugin` loads them; `test:sdk` runs before `plugins:build`, so not `dist/`) write the same messages, minus `g`, from start to `runtime.stop`, under `runner.ts` and under the shared runner beside a neighbour plugin; a cleanup's requests are refused with `disabled` and never written, in both runners; staging rewrites literal `.ts` imports (quotes and substitution-free templates) and refuses a computed one.
+- Packaging: `packaging/third-party.toml` `[own]` lists `runtime/runner.js`, `boot.js` and `shared-runner.js` instead of `runner.ts` (the bundle license check refused the staged files otherwise).
+
+### 15.3 What S2 needs
+
+- `runtime_paths.rs`: `shared_runner` next to `runner` (`<runtime>/shared-runner.js` packaged, `src/runtime/shared-runner.ts` in development); `--max-old-space-size=1024` on S's command only.
+- The host side of §5.2 as `shared-runner.ts` speaks it: wait for `runner.hello`; `plugin.start` carries what `load_manifest` puts in the environment today (`dataDirectory`, `locale`, and `app` as a JSON value, not a string); `runner.stopped` arrives for every `runtime.stop`, including one for a member that already failed or faulted; `runner.fault { g: 0 }` is followed by exit 1.
+- Envelope reader: lines up to `MAX_MESSAGE_BYTES + 64`, `g` always the first key.
+- Heartbeat and stats consumers, `trust()`, `builtin.json` schema 3, restart-all with the loop guard and fail-open (§7, §8): none exist yet.
+- The SDK docs sentence of §13 item 4 ships with S2.

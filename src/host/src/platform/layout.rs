@@ -5,7 +5,7 @@
 //!
 //! | | macOS `.app` | Windows install directory |
 //! | --- | --- | --- |
-//! | recognised by | `<X>.app/Contents/MacOS/<exe>` with `Contents/Info.plist` | `<dir>\<exe>` with `<dir>\resources\runtime\runner.ts` |
+//! | recognised by | `<X>.app/Contents/MacOS/<exe>` with `Contents/Info.plist` | `<dir>\<exe>` with `<dir>\resources\runtime\runner.js` |
 //! | resources | `Contents/Resources` | `<dir>\resources` |
 //! | ui, runtime, plugins | `<resources>/{ui,runtime,plugins}` | the same |
 //! | Node | `Contents/MacOS/node` | `<dir>\node\node.exe` |
@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 pub struct InstallLayout {
     /// `host.slint` and the `@vestra` library.
     pub ui: PathBuf,
-    /// The plugin runtime: `runner.ts` and the SDK (`stage-runtime.mjs`).
+    /// The plugin runtime: `runner.js` and the SDK (`stage-runtime.mjs`).
     pub runtime: PathBuf,
     /// The built-in plugins: `builtin.json` and one unpacked directory per
     /// plugin, which the host runs in place (`stage-plugins.mjs`).
@@ -73,7 +73,7 @@ pub fn install_layout(
         }
         System::Windows => {
             let resources = directory.join("resources");
-            if !is_file(&resources.join("runtime").join("runner.ts")) {
+            if !is_file(&resources.join("runtime").join("runner.js")) {
                 return None;
             }
             let tools = directory.join("ffmpeg");
@@ -155,7 +155,7 @@ mod tests {
     #[test]
     fn a_windows_install_directory_has_resources_beside_the_exe() {
         let root = Path::new("/Users/u/AppData/Local/Programs/Vestra Player");
-        let runner = root.join("resources").join("runtime").join("runner.ts");
+        let runner = root.join("resources").join("runtime").join("runner.js");
         let layout = install_layout(
             System::Windows,
             &root.join("vestra-host.exe"),

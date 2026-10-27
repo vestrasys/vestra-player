@@ -5,7 +5,7 @@
 //! | | packaged (`platform::current_install_layout`) | development build |
 //! | --- | --- | --- |
 //! | Node | `$VESTRA_NODE`, else the bundled one; **never `PATH`** | `$VESTRA_NODE`, else `node` on `PATH` |
-//! | runner | `<runtime>/runner.ts` | `src/runtime/runner.ts` |
+//! | runner | `<runtime>/runner.js` (types stripped at packaging, `stage-runtime.mjs`) | `src/runtime/runner.ts` (Node strips them) |
 //! | ui | `<ui>` | `src/host/ui` |
 //! | built-in plugins | `$VESTRA_BUILTIN_PLUGINS`, else `<plugins>` | `$VESTRA_BUILTIN_PLUGINS`, else none |
 //! | FFmpeg, ffprobe | `$VESTRA_FFMPEG` / `$VESTRA_FFPROBE`, else the bundled ones | the same variables, else `PATH` |
@@ -77,7 +77,7 @@ pub fn resolve(
         Some(layout) => RuntimePaths {
             packaged: true,
             node: var("VESTRA_NODE").unwrap_or(layout.node),
-            runner: layout.runtime.join("runner.ts"),
+            runner: layout.runtime.join("runner.js"),
             ui: layout.ui,
             builtin_plugins: Some(var("VESTRA_BUILTIN_PLUGINS").unwrap_or(layout.plugins)),
             ffmpeg: tool("VESTRA_FFMPEG", "ffmpeg", Some(&layout.ffmpeg)),
@@ -228,7 +228,7 @@ mod tests {
             RuntimePaths {
                 packaged: true,
                 node: root.join("bin/node"),
-                runner: root.join("res/runtime").join("runner.ts"),
+                runner: root.join("res/runtime").join("runner.js"),
                 ui: root.join("res/ui"),
                 builtin_plugins: Some(root.join("res/plugins")),
                 ffmpeg: Some(root.join("bin/ffmpeg")),
