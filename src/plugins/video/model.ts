@@ -284,8 +284,11 @@ export const eqNeutral = (p: Picture) => EQ_FIELDS.every((field) => clamp(p[fiel
  * One fixed order, never user-reorderable: deinterlace → reframe → transform → denoise
  * (3D, 渐进, 瞬态) → deblock → deband → eq → hue → sharpen → edge sharpen → gblur.
  * Neutral or switched-off effects make no node: with every colour at its default there is
- * no eq node either (any node in the chain makes the player decode with copy-back, which
- * costs zero-copy hardware decoding and slows exact seeks). `keepEq` keeps an eq node at its
+ * no eq node either (any filter in the chain makes the player decode with copy-back, which
+ * costs zero-copy hardware decoding and slows exact seeks). Deinterlace Auto is the player's
+ * own deinterlacer (`when: "auto"`), not a filter: it acts only on frames flagged interlaced,
+ * always at field rate (so Output does not apply), and on its own keeps zero-copy decoding;
+ * Always is `bwdif` on every frame with the Output setting. `keepEq` keeps an eq node at its
  * neutral values anyway: a slider dragged through 0 then updates in place instead of
  * removing and re-adding the node (each a chain rebuild) in the middle of the drag.
  * `blend` (E18, from `blendFps`) adds frameBlend last; the host keeps it last anyway.
@@ -293,8 +296,8 @@ export const eqNeutral = (p: Picture) => EQ_FIELDS.every((field) => clamp(p[fiel
 export function nodesFor(look: Look, blend: number | null = null, keepEq = false): VideoNode[] {
   const { picture: p, effects: e, deinterlace, reframe, geometry: g } = look;
   const nodes: VideoNode[] = [];
-  if (deinterlace.mode !== "off")
-    nodes.push({ kind: "deinterlace", when: deinterlace.mode === "on" ? "all" : "interlaced", output: deinterlace.output });
+  if (deinterlace.mode === "auto") nodes.push({ kind: "deinterlace", when: "auto", output: "field" });
+  else if (deinterlace.mode === "on") nodes.push({ kind: "deinterlace", when: "all", output: deinterlace.output });
   if (reframe.mode !== "none")
     nodes.push({
       kind: "reframe",

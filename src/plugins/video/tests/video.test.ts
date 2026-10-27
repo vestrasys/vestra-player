@@ -28,7 +28,10 @@ const look = (picture: Partial<Picture> = {}, more: Partial<Look> = {}): Look =>
   picture: { ...defaults, ...picture },
 });
 const neutralEq = { kind: "eq", brightness: 0, contrast: 1, saturation: 1, gamma: 1 };
-const autoDeinterlace = { kind: "deinterlace", when: "interlaced", output: "frame" };
+/** Deinterlace Auto: the player's per-frame deinterlacer, always at field rate (not a filter). */
+const autoDeinterlace = { kind: "deinterlace", when: "auto", output: "field" };
+/** The chain the TestHost accepted (it validates nodes as the player does). */
+const applied = (host: TestHost) => [...host.processing.resources.values()].find((r) => r.stage === "video")?.nodes as Node[] | undefined;
 async function playing(dataDirectory?: string, locale: Locale = "en") {
   const host = new TestHost();
   host.openElsewhere("/movie.mp4");
@@ -89,6 +92,21 @@ test("neutral: automatic deinterlace only; eq, blur, hue and strengths add nodes
   zero.effects.deband = { on: true, strength: 0 };
   assert.deepEqual(nodesFor(zero), [autoDeinterlace], "on at strength 0 makes no node");
   assert.deepEqual(nodesFor({ ...defaultLook(), deinterlace: { mode: "off", output: "frame" } }), [], "nothing active: an empty chain");
+});
+
+test("deinterlace: Auto is the player's deinterlacer at field rate whatever Output says; Always is bwdif with Output; Never nothing", () => {
+  const chainFor = (mode: "auto" | "on" | "off", output: "frame" | "field") => nodesFor({ ...defaultLook(), deinterlace: { mode, output } });
+  assert.deepEqual(defaultLook().deinterlace, { mode: "auto", output: "frame" }, "the stored default is unchanged");
+  assert.deepEqual(chainFor("auto", "frame"), [autoDeinterlace], "Auto + By Frame: still field rate (frame is refused with auto)");
+  assert.deepEqual(chainFor("auto", "field"), [autoDeinterlace]);
+  assert.deepEqual(chainFor("on", "frame"), [{ kind: "deinterlace", when: "all", output: "frame" }]);
+  assert.deepEqual(chainFor("on", "field"), [{ kind: "deinterlace", when: "all", output: "field" }]);
+  assert.deepEqual(chainFor("off", "field"), []);
+  const auto = look({ brightness: 10 }, { deinterlace: { mode: "auto", output: "frame" } });
+  const nodes = nodesFor(auto);
+  assert.deepEqual(nodes[0], autoDeinterlace, "first, with colour nodes after it");
+  assert.equal(nodes.filter((n) => n.kind === "deinterlace").length, 1, "never a second deinterlace node next to auto");
+  assert.ok(!nodes.some((n) => n.kind === "deinterlace" && n.when !== "auto"), "no bwdif under Auto");
 });
 
 test("the eq node exists only while a colour differs from its default; `keepEq` keeps a neutral one", () => {
@@ -272,6 +290,12 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
   assert.equal(host.command("video.aspect.default").state.checked, true);
   assert.equal(host.command("video.deinterlace.auto").state.checked, true);
   assert.equal(host.command("video.deinterlace.output.frame").state.checked, true);
+  for (const id of ["video.deinterlace.output.frame", "video.deinterlace.output.field"])
+    assert.deepEqual(
+      host.command(id).state,
+      { enabled: false, checked: id.endsWith("frame"), busy: false, reason: "Auto outputs by field (double rate); this setting applies to Always" },
+      "Output is greyed under Auto, with the reason",
+    );
   assert.equal(host.command("video.reframe.none").state.checked, true);
   assert.equal(host.command("video.rotate.0").state.checked, true);
   await host.command("video.picture").run();
@@ -676,32 +700,75 @@ test("E08 / E09: flips and rotation with OSD; the window follows; a new source s
   await stop();
 });
 
-test("E10: Ctrl+I cycles 自动 → 总是使用 → 不使用; output by frame or field", async () => {
+test("E10: Ctrl+I cycles 自动 → 总是使用 → 不使用; Auto is the player's deinterlacer, Output applies to Always", async () => {
   const { host, window, stop } = await playing();
-  assert.deepEqual(node(host, "deinterlace"), autoDeinterlace);
+  assert.deepEqual(chain(host), [autoDeinterlace], "defaults: the auto node only, no bwdif");
+  assert.deepEqual(applied(host), [autoDeinterlace], "accepted by the host");
   await host.press("Ctrl+I");
   await host.settle();
   assert.equal(host.osd.at(-1), "Deinterlace: always");
-  assert.deepEqual(node(host, "deinterlace"), { kind: "deinterlace", when: "all", output: "frame" });
+  assert.deepEqual(chain(host), [{ kind: "deinterlace", when: "all", output: "frame" }]);
   assert.equal(host.command("video.deinterlace.on").state.checked, true);
-  await host.press("Ctrl+I");
-  await host.settle();
-  assert.equal(host.osd.at(-1), "Deinterlace: never");
-  assert.equal(node(host, "deinterlace"), undefined);
-  assert.equal(window.props["deinterlace-index"], 2);
-  await host.press("Ctrl+I");
-  assert.equal(host.osd.at(-1), "Deinterlace: auto");
+  assert.equal(host.command("video.deinterlace.output.field").state.enabled, true, "Output applies to Always");
+  assert.equal(host.command("video.deinterlace.output.field").state.reason, null);
   await host.command("video.deinterlace.output.field").run();
   await host.settle();
   assert.equal(host.osd.at(-1), "Deinterlace output: by field (double rate)");
-  assert.deepEqual(node(host, "deinterlace"), { kind: "deinterlace", when: "interlaced", output: "field" });
+  assert.deepEqual(chain(host), [{ kind: "deinterlace", when: "all", output: "field" }]);
   assert.equal(window.props["output-index"], 1);
-  window.emit("choose", "deinterlace", 1);
+  await host.press("Ctrl+I");
+  await host.settle();
+  assert.equal(host.osd.at(-1), "Deinterlace: never");
+  assert.deepEqual(chain(host), [], "Never: an empty chain");
+  assert.equal(applied(host), undefined, "nothing applied");
+  assert.equal(window.props["deinterlace-index"], 2);
+  assert.equal(host.command("video.deinterlace.output.frame").state.enabled, true);
+  await host.press("Ctrl+I");
+  await host.settle();
+  assert.equal(host.osd.at(-1), "Deinterlace: auto");
+  assert.deepEqual(chain(host), [autoDeinterlace], "back to Auto with By Field stored: still the auto node");
+  assert.equal(host.command("video.deinterlace.output.field").state.enabled, false, "greyed again under Auto");
+  // Output chosen in the window while Auto is selected is kept for Always and changes nothing now.
+  const sent = host.sent("processing.replace").length;
   window.emit("choose", "output", 0);
   await host.settle();
-  assert.deepEqual(node(host, "deinterlace"), { kind: "deinterlace", when: "all", output: "frame" });
+  assert.equal(host.sent("processing.replace").length, sent, "an unchanged chain is not resent");
+  assert.deepEqual(chain(host), [autoDeinterlace]);
+  assert.equal(host.command("video.deinterlace.output.frame").state.checked, true, "stored for Always");
+  window.emit("choose", "deinterlace", 1);
+  await host.settle();
+  assert.deepEqual(chain(host), [{ kind: "deinterlace", when: "all", output: "frame" }], "Always picks up the stored By Frame");
+  window.emit("choose", "deinterlace", 0);
+  await host.press("E");
+  await host.settle();
+  assert.deepEqual(chain(host), [autoDeinterlace, { ...neutralEq, brightness: 0.01 }], "auto and a colour node");
+  assert.deepEqual(applied(host), chain(host), "applied together");
   assert.equal(chain(host)[0]!.kind, "deinterlace", "always first");
   await stop();
+});
+
+test("E10: deinterlace settings restored at startup: Auto with any Output installs the auto node; Always keeps its Output", async () => {
+  await withData(async (data) => {
+    const cases = [
+      [{ mode: "auto", output: "frame" }, [autoDeinterlace], 0, 0],
+      [{ mode: "auto", output: "field" }, [autoDeinterlace], 0, 1],
+      [{ mode: "on", output: "field" }, [{ kind: "deinterlace", when: "all", output: "field" }], 1, 1],
+      [{ mode: "on", output: "frame" }, [{ kind: "deinterlace", when: "all", output: "frame" }], 1, 0],
+      [{ mode: "off", output: "field" }, [], 2, 1],
+    ] as const;
+    for (const [deinterlace, nodes, modeIndex, outputIndex] of cases) {
+      await writeFile(join(data, "settings.json"), JSON.stringify({ version: 1, deinterlace }));
+      const { host, window, stop } = await playing(data);
+      await host.settle();
+      const what = `${deinterlace.mode} + ${deinterlace.output}`;
+      assert.deepEqual(host.sent("processing.replace").at(-1)?.nodes ?? [], nodes, what);
+      assert.deepEqual(applied(host) ?? [], nodes, `${what}: applied`);
+      assert.equal(window.props["deinterlace-index"], modeIndex, what);
+      assert.equal(window.props["output-index"], outputIndex, `${what}: the stored Output is shown`);
+      assert.equal(host.command(`video.deinterlace.output.${deinterlace.output}`).state.enabled, deinterlace.mode !== "auto", what);
+      await stop();
+    }
+  });
 });
 
 test("E12: pad or crop to a ratio, move the picture in 5% steps, reset the position", async () => {
@@ -899,10 +966,10 @@ test("E18: 倍帧 reads the source rate without frameBlend, then adds it last; a
   assert.equal(node(host, "frameBlend"), undefined, "60 fps is smooth enough");
   assert.equal(window.props["blend-enough"], true);
   assert.equal(host.command("video.frame-blend").state.checked, true, "the switch stays on");
-  // Field output changes the base rate: read again.
+  // A deinterlace change can change the base rate (Always + By Field doubles it): read again.
   setFps(host, 25);
-  await host.command("video.deinterlace.output.field").run();
-  await until(host, blendNode(host, 50), "the field-output rate read");
+  await host.command("video.deinterlace.on").run();
+  await until(host, blendNode(host, 50), "the rate read again after the deinterlace change");
   assert.deepEqual(chain(host).at(-1), { kind: "frameBlend", fps: 50 });
   window.emit("toggle", "frameBlend", false);
   await host.settle();

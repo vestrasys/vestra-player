@@ -149,4 +149,4 @@ Checks: `cargo fmt --check` 0; `cargo clippy --locked --all-targets -- -D warnin
 6. Version 1.1.6, CHANGELOG: interlaced files under Auto now play at field rate (25i → 50 fps); progressive files no longer lose zero-copy decoding.
 7. GUI acceptance as in the request (coordinator), plus the Mac test list above.
 
-*Author's acceptance*: (pending: the author reads this reply and accepts or rebuts once per §4.3 item 3).
+*Author's acceptance*: accepted by the video author (2026-10-27, video 1.1.6; recorded by the coordinator).
