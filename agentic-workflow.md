@@ -19,63 +19,51 @@ The API evolves in two directions, with different processes:
 
 Who does what, and how one piece of work travels from a request to `main`. The sections below are the rules; this is the map.
 
-```text
-                               ┌──────────────┐
-                               │     User      │  requirements · rulings (behaviour changes,
-                               └──────┬───────┘   API removals, trade-offs)
-                                      │ reports in Chinese ▲
-                                      ▼                    │
-┌───────────────────────────────────────────────────────────────────────────┐
-│ Coordinator   assigns work · reviews deliveries · rules on deadlocks ·       │
-│               owns doc/product · git commits and merges · real GUI tests ·   │
-│               releases (SDK: tag → npm) · reports to the user                │
-│ Rules: ≤ 3 background agents · one Rust build at a time (build.lock) ·       │
-│        quiet.flag while measuring · one role per agent                       │
-└──┬──────────┬──────────┬──────────┬──────────┬──────────┬─────────────────┘
-   │ assigns  │ assigns  │ assigns  │ assigns  │ (itself) │ assigns review
-   ▼          ▼          ▼          ▼          ▼          ▼
-┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌───────────┐
-│  API   ││ Plugin ││ Infra- ││Research││ Inter- ││Independent│
-│maintai-││authors ││structure│ (read- ││ action ││ reviewer  │
-│  ner   ││1/plugin││maintai- ││ only)  ││ design ││(read-only)│
-├────────┤├────────┤│  ner    │├────────┤│  lead  │├───────────┤
-│host,SDK││own     │├────────┤│sources ││menus,  ││re-runs all│
-│runtime,││plugin  ││CI, pack-││cited   ││UI spec ││checks;    │
-│arch    ││dir only││aging,   ││        ││        ││merge / fix│
-│docs    ││        ││licenses,││        ││        ││first / no │
-└───┬────┘└───┬────┘│releases │└────────┘└────────┘└───────────┘
-    │         │     └────────┘
-    │         │  missing API: §4.1 request ─────────────┐
-    │         │                                          ▼
-    │         │            ┌────────────────────────────────────────────┐
-    │         └──────────▶ │ Blackboard: this round's record             │
-    └────────────────────▶ │ doc/process/rounds/…: request · maintainer  │
-                           │ reply (alternative first, conservative) ·   │
-                           │ one rebuttal · ruling · measurements        │
-                           │ + each agent's worktree/branch (uncommitted) │
-                           └────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    U["User<br/>requirements · rulings (behaviour changes, API removals, trade-offs)"]
+    C["Coordinator<br/>assigns work · reviews deliveries · rules on deadlocks<br/>owns doc/product · git commits and merges · real GUI tests<br/>releases (SDK: tag → npm) · reports to the user<br/><i>≤ 3 background agents · one Rust build at a time (build.lock)<br/>quiet.flag while measuring · one role per agent</i>"]
+    U -- "requirements, rulings" --> C
+    C -- "reports in Chinese" --> U
+
+    API["API maintainer<br/>host, SDK, runtime, architecture docs"]
+    PA["Plugin authors (one per plugin)<br/>own plugin directory only"]
+    INF["Infrastructure maintainer<br/>CI, packaging, licenses, releases"]
+    RES["Researcher (read-only)<br/>sources cited"]
+    IXD["Interaction design lead<br/>menus, UI spec"]
+    REV["Independent reviewer (read-only)<br/>re-runs all checks; verdict: merge / fix first / do not merge"]
+
+    C -- assigns --> API
+    C -- assigns --> PA
+    C -- assigns --> INF
+    C -- assigns --> RES
+    C -. "role it holds itself" .-> IXD
+    C -- "assigns review" --> REV
+
+    BB[("Blackboard: this round's record doc/process/rounds/…<br/>request · maintainer reply (alternative first, conservative)<br/>one rebuttal · ruling · measurements<br/>+ each agent's worktree / branch (uncommitted)")]
+    PA -- "missing API: §4.1 request" --> BB
+    API -- "reply, implementation status" --> BB
+    PA -- "progress" --> BB
+```
 
 From assignment to main:
 
- assign ─▶ agent works in its own worktree, runs the §6.1 checks ─▶ §8 report (Chinese)
-                                                                     │
-   coordinator commits locally ─▶ independent reviewer re-runs ─┬─ merge ───────────────┐
-                                                                ├─ fix first ─▶ back to │
-                                                                │  the same agent ──────┘
-                                                                └─ do not merge ─▶ back / parked
-                                                                     ▼
-                         when it matters: coordinator's real GUI test (scripted input,
-                         screenshots, VESTRA_FRAME_LOG numbers)
-                                                                     ▼
-                         SDK involved: release the SDK patch first ─▶ player upgrades the dependency
-                                                                     ▼
-                         PR merged into main (CI budget paused: merged on local verification)
-
-Ask the user: API removals, signature or behaviour changes (§1.6) · changing an established
-  principle · conflicting requirements · new paid services or licences · no precedent.
-Decide without asking: pure additions · bug fixes · details where mpv or mainstream players
-  have an established practice · SDK patch releases.
+```mermaid
+flowchart TB
+    A["Coordinator assigns"] --> W["Agent works in its own worktree<br/>runs the §6.1 checks"]
+    W --> R8["§8 report (Chinese summary to the user)"]
+    R8 --> CM["Coordinator commits locally"]
+    CM --> RV{"Independent reviewer re-runs the checks"}
+    RV -- "fix first" --> W
+    RV -- "do not merge" --> PK["Back to the agent / parked"]
+    RV -- merge --> GUI["When it matters: coordinator's real GUI test<br/>(scripted input, screenshots, VESTRA_FRAME_LOG numbers)"]
+    GUI --> SDK{"SDK involved?"}
+    SDK -- yes --> REL["Release the SDK patch first"] --> DEP["Player upgrades the dependency"] --> M
+    SDK -- no --> M["PR merged into main<br/>(CI budget paused: merged on local verification)"]
 ```
+
+- **Ask the user**: API removals, signature or behaviour changes (§1.6) · changing an established principle · conflicting requirements · new paid services or licences · no precedent.
+- **Decide without asking**: pure additions · bug fixes · details where mpv or mainstream players have an established practice · SDK patch releases.
 
 ## 1. Roles and file ownership
 
@@ -107,26 +95,25 @@ Constraints shared by all agents:
 
 Control is a star; state lives on a "blackboard":
 
-```text
-                    User
-                     │ requirements, rulings
-                     ▼
-             ┌──────────────┐  git commit / push, releases, real GUI tests
-             │  Coordinator  │─────────────────────────────▶ repositories, npm, Pages
-             └──────────────┘
-  assigns │ ▲ §8 reports       │ steps in only on deadlock or escalation
-           ▼ │                 ▼
-  ┌──────────┬──────────┬──────────┬──────────┬──────────┐
-  │   API    │  Plugin  │  Infra   │Researcher│Independent│
-  │maintainer│authors ×N│maintainer│          │ reviewer  │
-  └────┬─────┴────┬─────┴────┬─────┴──────────┴────┬─────┘
-       │ read/write│ read/write│ read/write           │ read-only
-       ▼          ▼          ▼                      ▼
-  ┌─────────────────────────────────────────────────────────┐
-  │ Blackboard: this round's record doc/process/rounds/…     │
-  │ (requests, replies, rebuttals, rulings, progress)        │
-  │ + each agent's own worktree / branch (uncommitted work)  │
-  └─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    U["User"] -- "requirements, rulings" --> C["Coordinator"]
+    C -- "git commit / push, releases, real GUI tests" --> EXT["Repositories, npm, Pages"]
+    C -- assigns --> AG
+    AG -- "§8 reports" --> C
+    subgraph AG["Sub-agents (do not message each other)"]
+        API["API maintainer"]
+        PA["Plugin authors × N"]
+        INF["Infrastructure maintainer"]
+        RES["Researcher"]
+        REV["Independent reviewer"]
+    end
+    BB[("Blackboard: this round's record doc/process/rounds/…<br/>requests, replies, rebuttals, rulings, progress<br/>+ each agent's own worktree / branch (uncommitted work)")]
+    API <-- "read / write" --> BB
+    PA <-- "read / write" --> BB
+    INF <-- "read / write" --> BB
+    REV -- "read-only" --> BB
+    C -. "steps in only on deadlock or escalation" .-> BB
 ```
 
 - **Control (star)**: assigning work, rulings, merges and releases go only through the coordinator; sub-agents do not message each other. This follows the same idea as plugin independence: each role depends only on public agreements (this document, this round's record, the public API), not on another agent's private explanations.
@@ -350,6 +337,7 @@ When escalating, give: the specific problem, reproduction evidence, the options 
 - **Measurements, not impressions**: GUI checks use scripted input plus `VESTRA_FRAME_LOG` numbers (produced/presented per second, `pacing:`/`ui:`/`mpv:` segments), with a forced render target (`VESTRA_RENDER_TARGET`) to reproduce large screens. Evidence: the 4K menu-hover stutter was located this way (AccessKit tree rebuild, 120–160 ms per hover) and verified fixed (presented 10–14 → 54–60).
 - **What the coordinator decides without asking the user** (user rulings 2026-10-27): SDK patch releases (the release environment needs no manual approval; tag → npm); product details where mpv's default or mainstream players (PotPlayer, mpv, IINA, VLC; Chrome for plugin models) have an established practice — adopt it and mention it. Still asked: §1.6 removals and behaviour changes, real trade-offs, anything without a precedent; technical terms are explained in plain language when asking.
 - **Process changes go into this document**, not only into an agent's memory (user rule).
+- **Diagrams are Mermaid**, not ASCII art (user rule, 2026-10-27): every edge is written out (`A --> B`), so an LLM reads the graph without relying on column alignment, and GitHub renders it for people. Plain-text templates stay in `text` blocks.
 - **CI cost**: in private repositories macOS is billed at 10x and Windows at 2x. One push to a branch runs CI only once; record-only changes are collected into one batch before pushing; do not rerun both the push and the PR runs at the same time; macOS runs only when a PR is opened, when the `ci:macos` label is added, and on main, nightly and release ([ci.md](doc/process/ci.md)).
 
 Every sub-agent reports at the end in the following format:
