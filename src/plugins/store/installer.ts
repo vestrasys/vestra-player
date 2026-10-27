@@ -484,6 +484,8 @@ export async function uninstall(store: Store, item: Item) {
     );
   } catch (error) {
     store.report(errorCode(error) === "unsupported" ? msg("Built-in plugins cannot be uninstalled") : failureText(store, error, info.id), true);
+    // A refusal (`missing`, `unsupported`, `busy`) changes nothing `packages.onChange` would report: read the list again.
+    await store.reread();
   } finally {
     store.end();
   }

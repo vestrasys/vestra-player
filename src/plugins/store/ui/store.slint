@@ -13,6 +13,13 @@ import { Theme } from "@vestra/theme.slint";
 import { Button, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
 import { Cell, Choice, MenuButton, MenuEntry, StoreIcons, Tone } from "parts.slint";
 
+// A row's small tag before the badge (Dev, Warning).
+export struct StoreTag {
+    text: string,
+    // As StoreRow.tone.
+    tone: int,
+}
+
 export struct StoreRow {
     key: string,
     name: string,
@@ -27,6 +34,10 @@ export struct StoreRow {
     tip: string,
     // Disabled: drawn dimmed.
     dim: bool,
+    // Tags before the badge: a development load, what a running plugin was refused.
+    flags: [StoreTag],
+    // The plugin's logo (drawn 32px, decoded at 64).
+    logo: image,
     // The one button by state (`id` "": none) and the … menu (empty: none).
     primary: MenuEntry,
     menu: [MenuEntry],
@@ -94,8 +105,7 @@ component ListRow inherits Rectangle {
     in property <StoreRow> item;
     callback select();
     callback act(string);
-    // Three lines (18 + 16 + 18) with 4px padding top and bottom. The 32px logo
-    // on the left waits for images inside row values (request STORE-ROW-LOGO).
+    // The 32px logo, then three lines (18 + 16 + 18) with 4px padding top and bottom.
     height: 62px;
     background: root.item.selected ? Theme.selected-bg : touch.has-hover ? Theme.hover-bg : transparent;
     // Under the content, so the row's buttons take their own clicks.
@@ -114,6 +124,19 @@ component ListRow inherits Rectangle {
         padding-right: 8px;
         padding-top: 4px;
         padding-bottom: 4px;
+        spacing: 8px;
+        // In line with the name and the author.
+        VerticalLayout {
+            alignment: start;
+            padding-top: 2px;
+            Image {
+                width: 32px;
+                height: 32px;
+                source: root.item.logo;
+                image-fit: contain;
+                opacity: root.item.dim ? 0.5 : 1;
+            }
+        }
         VerticalLayout {
             spacing: 1px;
             HorizontalLayout {
@@ -126,7 +149,8 @@ component ListRow inherits Rectangle {
                 height: 16px;
                 spacing: 6px;
                 Cell { horizontal-stretch: 1; text: root.item.meta; color: Theme.text-dim; }
-                Cell { text: root.item.badge; color: Tone.color(root.item.tone); }
+                for flag in root.item.flags: Cell { text: flag.text; color: Tone.color(flag.tone); }
+                if root.item.badge != "": Cell { text: root.item.badge; color: Tone.color(root.item.tone); }
             }
             HorizontalLayout {
                 height: Theme.button-small-height;

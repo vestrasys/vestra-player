@@ -5,7 +5,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: manifest.json settings-page.ts:24 ui/store.slint:180
+#: manifest.json settings-page.ts:24 ui/store.slint:204
 msgid "Plugin Store"
 msgstr "插件商城"
 
@@ -25,835 +25,899 @@ msgstr "插件"
 msgid "store"
 msgstr "商城"
 
-#: store.ts:330
+#: store.ts:358
 msgid "Plugin Store…"
 msgstr "插件商城…"
 
-#: store.ts:330
+#: store.ts:358
 msgid "Plugin Store ({} updates)…"
 msgstr "插件商城（{} 个可更新）…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Another install is in progress; wait for it to finish"
 msgstr "正在进行另一项安装，请等它结束"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This system does not support confirmation dialogs; cannot continue"
 msgstr "此系统不支持确认框，无法继续"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Another dialog is open; close it first"
 msgstr "另一个对话框正在打开，请先关闭它"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Couldn't open the link: {}"
 msgstr "无法打开链接：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This kind of link cannot be opened"
 msgstr "不支持打开这种链接"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The downloaded file does not match the repository's description (size); deleted"
 msgstr "下载的文件与仓库描述不符（大小），已删除"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The downloaded file does not match the repository's description (checksum); deleted"
 msgstr "下载的文件与仓库描述不符（校验和），已删除"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The plugin package exceeds 64 MB; download stopped"
 msgstr "插件包超过 64 MB，已停止下载"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The download address is insecure or redirects too often; stopped"
 msgstr "下载地址不安全或跳转过多，已停止"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Download cancelled"
 msgstr "已取消下载"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Couldn't write the download file: {}"
 msgstr "无法写入下载文件：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Download failed: {}"
 msgstr "下载失败：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This is not a valid plugin package: {}"
 msgstr "这不是有效的插件包：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This plugin needs Vestra Player ≥ {} (current {})"
 msgstr "这个插件需要 Vestra Player ≥ {}（当前 {}）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This plugin needs a newer Vestra Player (current {})"
 msgstr "这个插件需要更新的 Vestra Player（当前 {}）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "“{}” has the same id as a built-in plugin and cannot be installed"
 msgstr "「{}」与播放器内置插件同 id，不能安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This plugin has the same id as a built-in plugin and cannot be installed"
 msgstr "「这个插件」与播放器内置插件同 id，不能安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Plugins are being installed or cleaned up; try again later"
 msgstr "正在安装或清理插件，请稍后再试"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The Plugin Store lacks the “Manage plugins” permission"
 msgstr "插件商城缺少「管理插件」权限"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This plugin no longer exists"
 msgstr "这个插件已不存在"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The plugin package does not match the repository's description (id); not installed"
 msgstr "插件包与仓库描述不符（id），未安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The plugin package does not match the repository's description (version); not installed"
 msgstr "插件包与仓库描述不符（版本），未安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The plugin package does not match the repository's description (permissions); not installed"
 msgstr "插件包与仓库描述不符（权限），未安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "You can only install from https:// links"
 msgstr "只能从 https:// 链接安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Not installed"
 msgstr "未安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Installed {} {}"
 msgstr "已安装 {} {}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Updated {} to {}"
 msgstr "已更新 {} 到 {}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Uninstalled {} (data deleted)"
 msgstr "已卸载 {}（数据已删除）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Uninstalled {} (data kept)"
 msgstr "已卸载 {}（数据已保留）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Built-in plugins cannot be uninstalled"
 msgstr "内置插件不能卸载"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Enabled “{}” again"
 msgstr "已重新启用「{}」"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Couldn't enable “{}”: {}"
 msgstr "无法启用「{}」：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Can no longer cancel; the installation continues"
 msgstr "已无法取消，安装继续进行"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Can no longer cancel; the uninstallation continues"
 msgstr "已无法取消，卸载继续进行"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Installation failed; the previous version was restored"
 msgstr "安装失败，已恢复原来的版本"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Installation cancelled"
 msgstr "已取消安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Uninstallation cancelled"
 msgstr "已取消卸载"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Installation failed: {}"
 msgstr "安装失败：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Uninstallation failed: {}"
 msgstr "卸载失败：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Downloading {} {}"
 msgstr "正在下载 {} {}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Downloading {} {} ({}%)"
 msgstr "正在下载 {} {}（{}%）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Downloading the plugin package"
 msgstr "正在下载插件包"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Downloading the plugin package ({}%)"
 msgstr "正在下载插件包（{}%）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Checking {}…"
 msgstr "正在检查 {}…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Checking the plugin package…"
 msgstr "正在检查插件包…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Installing {}…"
 msgstr "正在安装 {}…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Uninstalling {}…"
 msgstr "正在卸载 {}…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Installing… (preparing)"
 msgstr "正在安装…（准备中）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Installing… (activating)"
 msgstr "正在安装…（激活中）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Uninstalling… (preparing)"
 msgstr "正在卸载…（准备中）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Uninstalling… (activating)"
 msgstr "正在卸载…（激活中）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Updating {}…"
 msgstr "正在更新 {}…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{0}: up to date at {1}"
 msgstr "{0} {1} 已是最新"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{0}: updated at {1}"
 msgstr "{0} {1} 已更新"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{0}: data from {1}"
 msgstr "{0}：{1} 的数据"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The official repository has no signature file; this update was ignored"
 msgstr "官方仓库缺少签名文件，已忽略这次更新"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The official repository's signature check failed (it may have been tampered with); this update was ignored"
 msgstr "官方仓库的签名校验失败，可能被篡改，已忽略这次更新"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The official repository returned an old index; this update was ignored"
 msgstr "官方仓库返回了旧的索引，已忽略这次更新"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{} uses a newer format; please update Vestra Player"
 msgstr "{} 使用更新的格式，请更新 Vestra Player"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{}'s index is malformed"
 msgstr "{} 的索引格式不正确"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{0}'s index is malformed; showing the data from {1}"
 msgstr "{0} 的索引格式不正确，继续显示 {1} 的数据"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{0} returned error {1}"
 msgstr "{0} 返回错误 {1}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{0} returned error {1}; showing the data from {2}"
 msgstr "{0} 返回错误 {1}，继续显示 {2} 的数据"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{}'s index exceeds 4 MB; refused"
 msgstr "{} 的索引超过 4 MB，已拒绝"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{0}'s index exceeds 4 MB; refused; showing the data from {1}"
 msgstr "{0} 的索引超过 4 MB，已拒绝，继续显示 {1} 的数据"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{0}: {1}"
 msgstr "{0}：{1}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{0}: {1}; showing the data from {2}"
 msgstr "{0}：{1}，继续显示 {2} 的数据"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Can't connect to {0} ({1}); its plugins are not available for now"
 msgstr "无法连接 {0}（{1}），暂时看不到它的插件"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Can't connect to {0} ({1}); showing the cache from {2}"
 msgstr "无法连接 {0}（{1}），显示 {2} 的缓存"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This repository has already been added"
 msgstr "这个仓库已经添加过了"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "At most {} repositories can be added"
 msgstr "最多添加 {} 个仓库"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Reading {}…"
 msgstr "正在读取 {}…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Couldn't read this repository: {}. Check the address (the repository's root address or the full address of index.json)"
 msgstr "无法读取这个仓库：{}。请检查地址（仓库根地址或 index.json 的完整地址）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Added {}"
 msgstr "已添加 {}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Removed {}"
 msgstr "已移除 {}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "No plugins match"
 msgstr "没有符合条件的插件"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "All plugins are up to date"
 msgstr "所有插件都是最新的"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "No plugins installed yet"
 msgstr "还没有安装插件"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Reading repositories…"
 msgstr "正在读取仓库…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Can't reach the repositories. Showing nothing until you're online; click Refresh to retry."
 msgstr "无法连接仓库。联网之前这里不显示内容；点「刷新」重试。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The repositories have no plugins yet"
 msgstr "仓库里还没有插件"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Every plugin from the repositories is installed"
 msgstr "仓库里的插件都已安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Installed"
 msgstr "已安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Update → {}"
 msgstr "可更新 → {}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Revoked"
 msgstr "已撤回"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Installed from {}"
 msgstr "已从{}安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Incompatible"
 msgstr "不兼容"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Cannot be installed"
 msgstr "不能安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Disabled"
 msgstr "已停用"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Failed"
 msgstr "失败"
 
-#: store.ts:384 store.ts:399 store.ts:400 store.ts:401 store.ts:402 store.ts:404 text.ts:375 ui/store.slint:266 ui/store.slint:352 ui/store.slint:528
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Dev"
+msgstr "开发"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Warning"
+msgstr "警告"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Development load"
+msgstr "开发加载"
+
+#: store.ts:412 store.ts:427 store.ts:428 store.ts:429 store.ts:430 store.ts:432 text.ts:393 ui/store.slint:290 ui/store.slint:376 ui/store.slint:552
 msgid "Install"
 msgstr "安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 store.ts:401 store.ts:402 store.ts:404 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 store.ts:429 store.ts:430 store.ts:432 text.ts:393
 msgid "Update"
 msgstr "更新"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Enable"
 msgstr "启用"
 
-#: store.ts:384 store.ts:399 store.ts:400 store.ts:401 store.ts:402 store.ts:404 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 store.ts:429 store.ts:430 store.ts:432 text.ts:393
 msgid "Disable"
 msgstr "停用"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Reload"
 msgstr "重新加载"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Open Data Folder"
 msgstr "打开数据目录"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Working…"
 msgstr "处理中…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Enabled “{}”"
 msgstr "已启用「{}」"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Disabled “{}”"
 msgstr "已停用「{}」"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Reloaded “{}”"
 msgstr "已重新加载「{}」"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Couldn't disable “{}”: {}"
 msgstr "无法停用「{}」：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Couldn't reload “{}”: {}"
 msgstr "无法重新加载「{}」：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Built-in plugins cannot be disabled"
 msgstr "内置插件不能停用"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Disabled “{}” until the player quits"
+msgstr "已停用「{}」，到播放器退出为止"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "“{}” is being installed or reloaded; try again later"
+msgstr "「{}」正在安装或重新加载，请稍后再试"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "“{}” is disabled; enable it instead of reloading it"
+msgstr "「{}」已停用，请启用它，而不是重新加载"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Its data folder does not exist yet"
 msgstr "它的数据目录还不存在"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Couldn't open the data folder: {}"
 msgstr "无法打开数据目录：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Install {}"
 msgstr "安装 {}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Update to {}"
 msgstr "更新到 {}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Enable Anyway…"
 msgstr "仍然启用…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Replace…"
 msgstr "替换…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Uninstall…"
 msgstr "卸载…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Load"
 msgstr "加载"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Show Images"
 msgstr "显示图片"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Retry"
 msgstr "重试"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This version has been revoked: {}."
 msgstr "此版本已被撤回：{}。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This version has been revoked: {}. You confirmed the risk and enabled it again; the store will not disable it again."
 msgstr "此版本已被撤回：{}。你已确认风险并重新启用，商城不会再停用它。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This version has been revoked: {}. The store has disabled it."
 msgstr "此版本已被撤回：{}。商城已停用它。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network"
 msgstr "非官方仓库：未经 Vestra Player 审核，插件可能读取你的文件或联网"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This is a test repository on this machine, without encryption"
 msgstr "这是本机上的测试仓库，没有加密"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Installed {1} from {0}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data; the current data is kept"
 msgstr "已从{0}安装 {1}。替换时若之前从这个来源安装过会接上当时的数据，否则使用新的空数据；原数据保留"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Same id as a built-in plugin of the player; cannot be installed from here"
 msgstr "与播放器内置插件同 id，不能从这里安装"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Built-in plugins are updated with the player and cannot be uninstalled or disabled"
 msgstr "内置插件随播放器更新，不能卸载或停用"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The repository no longer offers this plugin; the store no longer checks it for updates (it still checks for revocations)"
 msgstr "仓库已不再提供这个插件，商城不再为它检查更新（仍会检查撤回）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Its repository was removed from the store; the store no longer checks it for updates or revocations"
 msgstr "它的仓库已从商城移除，商城不再为它检查更新和撤回"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Sideloaded plugin: not reviewed; the store does not check it for updates"
 msgstr "侧载插件：未经审核，商城不会为它检查更新"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This run uses the development-loaded version"
 msgstr "本次运行使用开发加载的版本"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Loaded for development (--plugin) in this run: disabling it lasts until the player quits, and it cannot be uninstalled here"
+msgstr "本次运行以开发方式加载（--plugin）：停用只到播放器退出为止，也不能在这里卸载"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Its bottom bar is not shown: “{}” holds the bottom bar"
+msgstr "它的底栏没有显示：底栏由「{}」占用"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Its sidebar tab is not shown: “{}” holds that place"
+msgstr "它的侧边栏标签页没有显示：这个位置由「{}」占用"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Its sidebar tab is not shown: the sidebar is full"
+msgstr "它的侧边栏标签页没有显示：侧边栏已满"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Its backdrop is not shown: “{}” holds the backdrop"
+msgstr "它的背景层没有显示：背景层由「{}」占用"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Its panel is not shown: “{}” holds that place"
+msgstr "它的面板没有显示：这个位置由「{}」占用"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Its panel is not shown: that place is full"
+msgstr "它的面板没有显示：这个位置已满"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Its Previous/Next is not used: “{}” provides them"
+msgstr "它的上一个/下一个没有生效：由「{}」提供"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "It does not open {}: “{}” does"
+msgstr "它不打开{}：由「{}」打开"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
+msgid "Part of it was refused because another plugin holds it ({})"
+msgstr "它的一部分被另一个插件占用，未能启用（{}）"
+
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The description is on another website ({}); not loaded automatically"
 msgstr "说明位于其它网站（{}），没有自动加载"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Remote images blocked (unofficial source): {}"
 msgstr "已阻止 {} 张远程图片（非官方来源）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "From the installed version"
 msgstr "来自已安装的版本"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Loading…"
 msgstr "正在加载…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Loading the description…"
 msgstr "正在加载说明…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Loading the changelog…"
 msgstr "正在加载更新日志…"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The author provided no description"
 msgstr "作者没有提供说明"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The author provided no changelog"
 msgstr "作者没有提供更新日志"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The description is on another website; not loaded automatically"
 msgstr "说明位于其它网站，未自动加载"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The changelog is on another website; not loaded automatically"
 msgstr "更新日志位于其它网站，未自动加载"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Couldn't load the description: {}"
 msgstr "无法加载说明：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Couldn't load the changelog: {}"
 msgstr "无法加载更新日志：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Couldn't show the description: {}"
 msgstr "无法显示说明：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Couldn't show the changelog: {}"
 msgstr "无法显示更新日志：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Current"
 msgstr "当前"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Current, {}"
 msgstr "当前，{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Incompatible: {}"
 msgstr "不兼容：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Latest"
 msgstr "最新"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375 ui/store.slint:264 ui/store.slint:503
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393 ui/store.slint:288 ui/store.slint:527
 msgid "Version"
 msgstr "版本"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Updated"
 msgstr "更新"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Source"
 msgstr "来源"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "License"
 msgstr "许可证"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Code"
 msgstr "源码"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Open ↗"
 msgstr "打开 ↗"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Status"
 msgstr "状态"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Running"
 msgstr "运行中"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Starting"
 msgstr "启动中"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Stopped"
 msgstr "已停止"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Failed: {}"
 msgstr "失败：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Package"
 msgstr "包目录"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Data folder"
 msgstr "数据目录"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Data size"
 msgstr "数据大小"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The new version needs new permissions: {}"
 msgstr "新版本需要新的权限：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Official repository"
 msgstr "官方仓库"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{} ({})"
 msgstr "{}（{}）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Unnamed repository ({})"
 msgstr "未命名仓库（{}）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Unofficial: {} ({})"
 msgstr "非官方：{}（{}）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Unofficial: Unnamed repository ({})"
 msgstr "非官方：未命名仓库（{}）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Vestra Player official repository"
 msgstr "Vestra Player 官方仓库"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Built-in"
 msgstr "内置"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Local file"
 msgstr "本地文件"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Link"
 msgstr "链接"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Plugin Workshop"
 msgstr "插件工坊"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Repository {}"
 msgstr "仓库 {}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Unknown source"
 msgstr "未知来源"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Unknown author"
 msgstr "未知作者"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Cancelled"
 msgstr "已取消"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Only https:// addresses are supported"
 msgstr "只支持 https:// 地址"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Redirected to an insecure address"
 msgstr "下载地址跳转到了不安全的地址"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Redirect without a target address ({})"
 msgstr "跳转缺少目标地址（{}）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Too many redirects"
 msgstr "跳转次数过多"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Size does not match the description"
 msgstr "大小与描述不符"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "File exceeds the size limit"
 msgstr "文件超过大小上限"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Checksum does not match the description"
 msgstr "校验和与描述不符"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Connection timed out"
 msgstr "连接超时"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Server not found"
 msgstr "找不到服务器"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Connection refused"
 msgstr "连接被拒绝"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Connection reset"
 msgstr "连接被重置"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Secure connection failed"
 msgstr "安全连接失败"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "File exceeds 256 KB"
 msgstr "文件超过 256 KB"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Not JSON"
 msgstr "不是 JSON"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The top level is not an object"
 msgstr "顶层不是对象"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Wrong schema"
 msgstr "schema 不正确"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "plugins is not an array"
 msgstr "plugins 不是数组"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "revoked is not an array"
 msgstr "revoked 不是数组"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "revoked has more than {} entries"
 msgstr "revoked 超过 {} 条"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Needs a newer plugin API ({})"
 msgstr "需要更新的插件 API（{}）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Needs Vestra Player ≥ {} (current {})"
 msgstr "需要 Vestra Player ≥ {}（当前 {}）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Revoked: {}"
 msgstr "已撤回：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This plugin has been revoked: {}"
 msgstr "此插件已被撤回：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr "「{}」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This plugin: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr "「这个插件」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Enter a repository address starting with https://"
 msgstr "请输入 https:// 开头的仓库地址"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The address cannot contain a user name or password"
 msgstr "仓库地址里不能带用户名或密码"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The repository address is too long"
 msgstr "仓库地址太长"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Unknown permission: {}"
 msgstr "未知权限：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Plugin Store: plugin updates available ({})"
 msgstr "插件商城：{} 个插件可以更新"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Disabled the revoked plugin “{}”"
 msgstr "已停用被撤回的插件「{}」"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Replace the installed “{}”?"
 msgstr "替换已安装的「{}」？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "{1}\n"
 "\n"
@@ -867,7 +931,7 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "{1}\n"
 "\n"
@@ -885,11 +949,11 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Update “{}” to {}? The new version needs more permissions"
 msgstr "更新「{}」到 {}？新版本需要更多权限"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "Added:\n"
 "{2}\n"
@@ -905,19 +969,19 @@ msgstr ""
 "\n"
 "插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Update “{}” to {}?"
 msgstr "更新「{}」到 {}？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Current: {2}."
 msgstr "当前 {2}。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Install “{}” {} (reinstall)?"
 msgstr "安装「{}」{}（重新安装）？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "Current: {2}.\n"
 "\n"
@@ -929,11 +993,11 @@ msgstr ""
 "这个版本需要更多权限：\n"
 "{3}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Install “{}” {}?"
 msgstr "安装「{}」{}？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "From the Vestra Player official repository, author {2}.\n"
 "\n"
@@ -943,11 +1007,11 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Install “{}” {} from an unofficial repository?"
 msgstr "安装来自非官方仓库的「{}」{}？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "{2}\n"
 "\n"
@@ -957,27 +1021,27 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{1}"
 msgstr "{1}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr "这个插件已从其它来源安装。替换后，若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据。原插件的数据保留，以后从原来源重新安装时接上。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The current “{}” {} comes from {}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr "当前的「{}」{} 来自{}。替换后，若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据。原插件的数据保留，以后从原来源重新安装时接上。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust."
 msgstr "仓库：{}（{}）。这个仓库未经 Vestra Player 审核，插件可能读取你的文件或联网。只安装你信任的作者的插件。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption."
 msgstr "仓库：{}（{}）。这个仓库未经 Vestra Player 审核，插件可能读取你的文件或联网。只安装你信任的作者的插件。这是本机上的测试仓库，没有加密。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "It will be able to:\n"
 "{}\n"
@@ -989,27 +1053,27 @@ msgstr ""
 "\n"
 "插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Unknown"
 msgstr "未知"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "· {}"
 msgstr "· {}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "· Uses none of the player's features"
 msgstr "· 不使用播放器的任何功能"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "{} in total"
 msgstr "等 {} 项"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Replace the installed version with the plugin package “{}” {}?"
 msgstr "用插件包「{}」{} 替换已安装的版本？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "{2}\n"
 "\n"
@@ -1023,11 +1087,11 @@ msgstr ""
 "\n"
 "{4}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Install the plugin package “{}” {}?"
 msgstr "安装插件包「{}」{}？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "{2}\n"
 "\n"
@@ -1041,31 +1105,31 @@ msgstr ""
 "\n"
 "{4}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "From the file {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr "来自文件 {}，未经任何仓库审核，也不会自动更新。只安装你信任的作者的插件。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "From the link {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr "来自链接 {}，未经任何仓库审核，也不会自动更新。只安装你信任的作者的插件。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Uninstall “{}”?"
 msgstr "卸载「{}」？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Its menus, windows and processing effects are removed immediately."
 msgstr "它的菜单、窗口和处理效果会立即撤销。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Add the unofficial repository “{}”?"
 msgstr "添加非官方仓库「{}」？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Add the unofficial repository “Unnamed repository”?"
 msgstr "添加非官方仓库「未命名仓库」？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "Address: {1}\n"
 "\n"
@@ -1075,7 +1139,7 @@ msgstr ""
 "\n"
 "其中的插件未经 Vestra Player 审核，可能读取你的文件或联网。商城会显示这个仓库的插件，但不会替你判断它们是否可信。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "Address: {1}\n"
 "\n"
@@ -1089,27 +1153,27 @@ msgstr ""
 "\n"
 "这是本机上的测试仓库，没有加密。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Remove the repository “{} ({})”?"
 msgstr "移除仓库「{}（{}）」？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Remove the repository “Unnamed repository ({1})”?"
 msgstr "移除仓库「未命名仓库（{1}）」？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "The store will stop reading this repository. Plugins installed from it stay, but the store no longer checks them for updates and revocations."
 msgstr "移除后商城不再读取这个仓库。从它安装的插件会保留，但商城不再为它们检查更新和撤回。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Disabled the revoked plugin “{}” {}"
 msgstr "已停用被撤回的插件「{}」{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Disabled {} revoked plugins"
 msgstr "已停用 {} 个被撤回的插件"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "The repository revoked these versions. Reasons:\n"
 "\n"
@@ -1123,11 +1187,11 @@ msgstr ""
 "\n"
 "如果仍要使用，可以在插件商城的详情页选择「仍然启用…」。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "“{}” {}: {}"
 msgstr "「{}」{}：{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "“{}” {}: {}\n"
 "You can update to {} in the Plugin Store."
@@ -1135,7 +1199,7 @@ msgstr ""
 "「{}」{}：{}\n"
 "可以在插件商城更新到 {}。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "{}\n"
 "\n"
@@ -1145,11 +1209,11 @@ msgstr ""
 "\n"
 "{}"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Enable the revoked “{}” {} anyway?"
 msgstr "仍然启用被撤回的「{}」{}？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
 "\n"
@@ -1159,7 +1223,7 @@ msgstr ""
 "\n"
 "继续使用可能有风险。确认后商城不会再自动停用它，详情页会一直显示警告。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
 "\n"
@@ -1173,11 +1237,11 @@ msgstr ""
 "\n"
 "建议改为更新到 {3}。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "“{}” {} has been revoked. Keep using it?"
 msgstr "「{}」{} 已被撤回，确定继续使用吗？"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
 "\n"
@@ -1187,7 +1251,7 @@ msgstr ""
 "\n"
 "继续使用可能有风险。确认后商城不会再自动停用它，详情页会一直显示警告。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
 "\n"
@@ -1201,147 +1265,147 @@ msgstr ""
 "\n"
 "建议改为更新到 {3}。"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Add menu commands and shortcuts"
 msgstr "添加菜单命令和快捷键"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Open tool windows"
 msgstr "打开工具窗口"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Show panels in the bottom bar, the sidebar or behind the video"
 msgstr "在底栏、侧栏或视频背景显示面板"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Show file pickers and confirmations"
 msgstr "弹出文件选择和确认对话框"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Show messages on the video"
 msgstr "在视频上显示提示文字"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Receive files dropped on the player"
 msgstr "接收拖到播放器上的文件"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Change the player's palette"
 msgstr "切换播放器配色"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Add pages to the Options window"
 msgstr "在「选项」窗口添加设置页"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Read what is playing and the position"
 msgstr "读取正在播放的内容和进度"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Receive playback changes as they happen"
 msgstr "实时接收播放状态变化"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Open media, control playback, keep the computer awake"
 msgstr "打开媒体、控制播放、阻止休眠"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Provide audio and video it generates itself"
 msgstr "向播放器提供自己生成的音视频"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Process the picture (filters, shaders)"
 msgstr "处理画面（滤镜、着色器）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Process the sound"
 msgstr "处理声音"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Read subtitles"
 msgstr "读取字幕"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Load and change subtitles"
 msgstr "载入和修改字幕"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Take snapshots and export clips"
 msgstr "截图与导出视频片段"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Resolve online video addresses"
 msgstr "解析网络视频地址"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Show marks on the progress bar"
 msgstr "在进度条上显示标记"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Adjust the main window (size, on top, picture-in-picture)"
 msgstr "调整主窗口（尺寸、置顶、画中画）"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Read and write the clipboard"
 msgstr "读写剪贴板"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Change all shortcuts"
 msgstr "修改所有快捷键"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Store sign-in details in the system keychain"
 msgstr "在系统钥匙串保存登录信息"
 
-#: store.ts:384 store.ts:399 store.ts:400 text.ts:375
+#: store.ts:412 store.ts:427 store.ts:428 text.ts:393
 msgid "Install, uninstall and disable other plugins"
 msgstr "安装、卸载、停用其它插件"
 
-#: store.ts:401 store.ts:402 store.ts:404
+#: store.ts:429 store.ts:430 store.ts:432
 msgid "Replace"
 msgstr "替换"
 
-#: store.ts:401 store.ts:402 store.ts:404 ui/settings.slint:44 ui/settings.slint:133
+#: store.ts:429 store.ts:430 store.ts:432 ui/settings.slint:44 ui/settings.slint:133
 msgid "Add"
 msgstr "添加"
 
-#: store.ts:401 store.ts:402 store.ts:404 ui/settings.slint:43 ui/settings.slint:91
+#: store.ts:429 store.ts:430 store.ts:432 ui/settings.slint:43 ui/settings.slint:91
 msgid "Remove"
 msgstr "移除"
 
-#: store.ts:401 store.ts:402 store.ts:404
+#: store.ts:429 store.ts:430 store.ts:432
 msgid "Install Anyway"
 msgstr "仍然安装"
 
-#: store.ts:401 store.ts:402 store.ts:404
+#: store.ts:429 store.ts:430 store.ts:432
 msgid "Uninstall"
 msgstr "卸载"
 
-#: store.ts:401 store.ts:402 store.ts:404
+#: store.ts:429 store.ts:430 store.ts:432
 msgid "Also delete its settings and data?"
 msgstr "同时删除它的设置与数据？"
 
-#: store.ts:401 store.ts:402 store.ts:404
+#: store.ts:429 store.ts:430 store.ts:432
 msgid "Open Plugin Store"
 msgstr "打开插件商城"
 
-#: store.ts:401 store.ts:402 store.ts:404
+#: store.ts:429 store.ts:430 store.ts:432
 msgid "OK"
 msgstr "知道了"
 
-#: store.ts:401 store.ts:402 store.ts:404
+#: store.ts:429 store.ts:430 store.ts:432
 msgid "Enable Anyway"
 msgstr "仍然启用"
 
-#: store.ts:401 store.ts:402 store.ts:404
+#: store.ts:429 store.ts:430 store.ts:432
 msgid "Keep Using"
 msgstr "继续使用"
 
-#: store.ts:942
+#: store.ts:1130
 msgid "Choose a plugin package (.vxp)"
 msgstr "选择插件包（.vxp）"
 
-#: ui/settings.slint:45 ui/settings.slint:137 ui/store.slint:612
+#: ui/settings.slint:45 ui/settings.slint:137 ui/store.slint:636
 msgid "Cancel"
 msgstr "取消"
 
@@ -1369,98 +1433,98 @@ msgstr "仓库根地址或 index.json 的完整地址（https://…）"
 msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline until you open it, turn off automatic update checks above."
 msgstr "第三方仓库未经 Vestra Player 审核，其中的插件可能读取你的文件或联网。只添加你信任的仓库。官方仓库不能移除；要让商城在你打开它之前不联网，请关闭上方的自动检查更新。"
 
-#: ui/store.slint:145 ui/store.slint:305
+#: ui/store.slint:169 ui/store.slint:329
 msgid "More"
 msgstr "更多"
 
-#: ui/store.slint:260 ui/store.slint:336
+#: ui/store.slint:284 ui/store.slint:360
 msgid "Tags: All"
 msgstr "标签：全部"
 
-#: ui/store.slint:262 ui/store.slint:343
+#: ui/store.slint:286 ui/store.slint:367
 msgid "Sort: Name"
 msgstr "排序：名称"
 
-#: ui/store.slint:262 ui/store.slint:343
+#: ui/store.slint:286 ui/store.slint:367
 msgid "Sort: Updated"
 msgstr "排序：更新时间"
 
-#: ui/store.slint:265 ui/store.slint:504
+#: ui/store.slint:289 ui/store.slint:528
 msgid "Published"
 msgstr "发布日期"
 
-#: ui/store.slint:278
+#: ui/store.slint:302
 msgid "Installed ({})"
 msgstr "已安装（{}）"
 
-#: ui/store.slint:280
+#: ui/store.slint:304
 msgid "Available ({})"
 msgstr "可安装（{}）"
 
-#: ui/store.slint:280
+#: ui/store.slint:304
 msgid "Available (—)"
 msgstr "可安装（—）"
 
-#: ui/store.slint:285
+#: ui/store.slint:309
 msgid "Updates ({})"
 msgstr "可更新（{}）"
 
-#: ui/store.slint:293
+#: ui/store.slint:317
 msgid "Refresh"
 msgstr "刷新"
 
-#: ui/store.slint:307
+#: ui/store.slint:331
 msgid "Install from File…"
 msgstr "从文件安装…"
 
-#: ui/store.slint:308
+#: ui/store.slint:332
 msgid "Install from Link…"
 msgstr "从链接安装…"
 
-#: ui/store.slint:309
+#: ui/store.slint:333
 msgid "Repositories…"
 msgstr "仓库…"
 
-#: ui/store.slint:311
+#: ui/store.slint:335
 msgid "Store Settings…"
 msgstr "商城设置…"
 
-#: ui/store.slint:327
+#: ui/store.slint:351
 msgid "Search names, authors, tags…"
 msgstr "搜索名称、作者、标签…"
 
-#: ui/store.slint:348
+#: ui/store.slint:372
 msgid "You can also drop a .vxp plugin package on the player's video area to install it"
 msgstr "也可以把 .vxp 插件包拖到播放器的视频区安装"
 
-#: ui/store.slint:351
+#: ui/store.slint:375
 msgid "Plugin package link (https://…/name-version.vxp)"
 msgstr "插件包链接（https://…/名称-版本.vxp）"
 
-#: ui/store.slint:396
+#: ui/store.slint:420
 msgid "Select a plugin on the left to see its details"
 msgstr "选择左侧的插件查看详情"
 
-#: ui/store.slint:464
+#: ui/store.slint:488
 msgid "Description"
 msgstr "说明"
 
-#: ui/store.slint:465
+#: ui/store.slint:489
 msgid "Changelog"
 msgstr "更新日志"
 
-#: ui/store.slint:466
+#: ui/store.slint:490
 msgid "Versions"
 msgstr "版本"
 
-#: ui/store.slint:505
+#: ui/store.slint:529
 msgid "Minimum player"
 msgstr "最低播放器"
 
-#: ui/store.slint:571
+#: ui/store.slint:595
 msgid "Permissions ({})"
 msgstr "权限（{}）"
 
-#: ui/store.slint:585
+#: ui/store.slint:609
 msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr "插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。"

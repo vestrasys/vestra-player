@@ -13,8 +13,8 @@ const RETRY_MS = 60_000;
  * Revoked versions (design §3.10, decision 2.2-4). A plugin installed from a
  * repository whose `revoked` list holds its version is disabled once, with a
  * notice; the detail page keeps a red warning. Enabling it again needs a
- * risk confirmation (the store's 「仍然启用…」, or after the fact when it was
- * enabled elsewhere, e.g. in 插件管理); once accepted the store never
+ * risk confirmation (the store's "Enable Anyway…", or after the fact when it was
+ * enabled outside the store, by another plugin with `plugins.manage`); once accepted the store never
  * disables it again. Only the repository the plugin came from can revoke it.
  */
 export class Revocations {
@@ -83,7 +83,7 @@ export class Revocations {
         this.#mark(key, "disabled");
         notices.push(item);
       } else if (state === "disabled" && (info.state === "running" || info.state === "starting") && !this.#asking.has(key)) {
-        // Enabled again somewhere else (插件管理): confirm the risk, or disable it again.
+        // Enabled again outside the store (another plugin with plugins.manage): confirm the risk, or disable it again.
         this.#asking.add(key);
         void this.#confirmReenabled(item, key);
       }

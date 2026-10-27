@@ -118,9 +118,11 @@ export component MenuButton {
                     if entry.id != "": MenuRow {
                         text: entry.text;
                         enabled: entry.enabled;
+                        // Pick first: closing the popup drops this row, and
+                        // `entry` would then read as empty.
                         picked => {
-                            menu.close();
                             root.picked(entry.id);
+                            menu.close();
                         }
                     }
                 }

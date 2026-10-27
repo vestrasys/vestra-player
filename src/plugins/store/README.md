@@ -11,9 +11,10 @@ Browse the plugins in the official Vestra Player repository; install, update, un
 ## Features
 
 - **Tabs**: Installed (built-in plugins first, then the others, disabled and failed ones too), Available (what the repositories offer that is not installed) and Updates, with their counts. Search (name, author, tags, in the interface language and in English), pick a tag, sort by name or by update time, within the tab. Refresh and the ⚙ menu (Install from File…, Install from Link…, Repositories…, Store Settings…) are at the top right.
-- **Rows**: one button by state (Install, Uninstall…, Update, Enable, Reload) and a … menu (Disable or Enable, Uninstall…, Reload, Open Data Folder). Built-in plugins have no button; their menu offers Reload and Open Data Folder.
+- **Rows**: the plugin's logo (an installed plugin's own icon, offline too; otherwise the repository's icon or the store's), one button by state (Install, Uninstall…, Update, Enable, Disable, Reload) and a … menu (Disable or Enable, Uninstall…, Reload, Open Data Folder). Built-in plugins have no button; their menu offers Reload and Open Data Folder. A Warning tag marks a running plugin that was refused something another plugin holds (a panel position, Previous/Next, a file type); hover for the reason, the details say it in full.
 - **Details**: description, changelog, version history and the permissions the plugin needs (in plain words; the ones to watch are amber); for installed plugins also the status, package folder, data folder and data size.
-- **Disable and enable**: a disabled plugin stays off after a restart; its row is dimmed. Reload stops and starts a plugin, or starts a failed one again.
+- **Disable and enable**: no question asked; a disabled plugin stays off after a restart, and its row is dimmed. Reload restarts a running plugin, built-ins included, or starts a failed one again.
+- **Development loads** (`--plugin`): listed under Installed with a Dev tag. They can be disabled and enabled, but disabling lasts only until the player quits, and they cannot be uninstalled here.
 - **Offline**: the Installed tab, details, uninstall, disable, enable, reload and installing a `.vxp` work without a network. Opening the store waits at most 5 seconds for a repository; Available and Updates then show the last known state or a note.
 - **Install and update**: every install lists the permissions and asks first. Updates come only from the plugin's own repository. The Versions tab installs a newer version than the installed one; to go back to an older version, uninstall the plugin and install that version's `.vxp`.
 - **From a file or a link**: Install from File… and Install from Link… in the ⚙ menu, or drop a `.vxp` on the video area. Such plugins are not reviewed by any repository, and the store does not check them for updates.
@@ -30,10 +31,10 @@ Browse the plugins in the official Vestra Player repository; install, update, un
 
 ## Limits
 
-- Built-in plugins are updated with the player and cannot be installed, replaced, uninstalled or disabled. A running built-in cannot be reloaded yet (the player has no way to restart one); a failed one can.
-- The list shows no plugin icons yet (only the details do): the player shows an image only as a whole window property. Dropping a `.vxp` on the store window does nothing, drop it on the video area.
+- Built-in plugins are updated with the player and cannot be installed, replaced, uninstalled or disabled. The store cannot reload itself.
+- Dropping a `.vxp` on the store window does nothing, drop it on the video area.
 - Behind a company proxy or with self-signed certificates the repositories may be unreachable.
 
 ## Translations
 
-Texts are English in the source; `locales/zh-Hans.po` has the Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`). Sentences built at run time are templates in `text.ts`, handed to the player as text values (`plugin.i18n.text`), which it translates in the windows, the OSD and the confirmations alike.
+Texts are English in the source; `locales/` has German, Spanish, French, Japanese, Korean and Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`). Sentences built at run time are templates in `text.ts`, handed to the player as text values (`plugin.i18n.text`), which it translates in the windows, the OSD and the confirmations alike.

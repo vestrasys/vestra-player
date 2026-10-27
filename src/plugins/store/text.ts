@@ -111,7 +111,11 @@ export const WINDOW = [
   "Cannot be installed",
   "Disabled",
   "Failed",
-  // A row's button and its … menu.
+  // A row's small tags: a development load (--plugin), what a running plugin was refused.
+  "Dev",
+  "Warning",
+  "Development load",
+  // A button and its … menu.
   "Install",
   "Update",
   "Enable",
@@ -126,6 +130,9 @@ export const WINDOW = [
   "Couldn't disable “{}”: {}",
   "Couldn't reload “{}”: {}",
   "Built-in plugins cannot be disabled",
+  "Disabled “{}” until the player quits",
+  "“{}” is being installed or reloaded; try again later",
+  "“{}” is disabled; enable it instead of reloading it",
   "Its data folder does not exist yet",
   "Couldn't open the data folder: {}",
   // The detail: buttons.
@@ -150,6 +157,17 @@ export const WINDOW = [
   "Its repository was removed from the store; the store no longer checks it for updates or revocations",
   "Sideloaded plugin: not reviewed; the store does not check it for updates",
   "This run uses the development-loaded version",
+  "Loaded for development (--plugin) in this run: disabling it lasts until the player quits, and it cannot be uninstalled here",
+  // What a running plugin was refused because another plugin holds it (PluginInfo.warnings); the argument is that plugin's name.
+  "Its bottom bar is not shown: “{}” holds the bottom bar",
+  "Its sidebar tab is not shown: “{}” holds that place",
+  "Its sidebar tab is not shown: the sidebar is full",
+  "Its backdrop is not shown: “{}” holds the backdrop",
+  "Its panel is not shown: “{}” holds that place",
+  "Its panel is not shown: that place is full",
+  "Its Previous/Next is not used: “{}” provides them",
+  "It does not open {}: “{}” does",
+  "Part of it was refused because another plugin holds it ({})",
   "The description is on another website ({}); not loaded automatically",
   "Remote images blocked (unofficial source): {}",
   "From the installed version",

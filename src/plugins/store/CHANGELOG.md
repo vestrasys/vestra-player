@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1
+
+Finishes the plugin center. Needs Vestra Player 0.5.1.
+
+- Each row shows the plugin's logo. An installed plugin uses the icon from its own package, so it shows offline too; a plugin from a repository uses the repository's icon, loaded only once its row is shown; otherwise the store's own icon. Logos are decoded small (twice their drawn size).
+- Reload now works for running plugins too, built-ins included, and starts a failed one again. The row says Working… until the plugin has restarted, then the status line says whether it runs or why it failed. A plugin being installed or reloaded, or one disabled in the meantime, gets a clear message instead.
+- A running plugin that was refused something another plugin holds (a panel position, Previous/Next, a file type) carries a Warning tag; hover for the reason, and the details say it in full. This used to be shown only in the Plugin Manager.
+- Plugins loaded for development (`--plugin`) are listed under Installed with a Dev tag and can be disabled and enabled there; disabling one lasts only until the player quits, and they cannot be uninstalled from the store.
+- Disabling still asks no question.
+- After a refused uninstall, or when a plugin turns out to be gone, the store reads the plugin list again, so the rows match the player.
+- The details' icon of an installed plugin now comes from its own package first.
+- The ⚙ menu and the rows' … menus act again: picking an entry did nothing, because the menu closed before reading which entry was picked.
+
 ## 0.2.0
 
 The store is now where you manage plugins (plugin center).

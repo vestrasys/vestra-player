@@ -101,12 +101,14 @@ Unchanged layout. The action buttons under the title mirror the row: the primary
 
 ## Acceptance (coordinator, Windows; screenshots in en, zh-Hans, de)
 
-1. Open the store from the menu: the Installed tab is selected and lists 18 built-ins, with no primary button and only Reload/Open Data Folder in their `…` menu.
+1. Open the store from the menu: the Installed tab is selected and lists 17 built-ins, with no primary button and only Reload/Open Data Folder in their `…` menu.
 2. Install zysilm.bilibili from Available. It appears in Installed with Uninstall… as its button. Disable it from `…`: the row dims and the button becomes Enable. Restart: it is still disabled. Enable it, then uninstall it with data.
 3. The ⚙ menu has Install from File…, Install from Link…, Repositories… and Store Settings…. Install a `.vxp` through it.
 4. Offline (the official repository made unreachable): steps 1–3 work except installing from a repository. Available/Updates show the calm note within about 5 s.
 5. The Plugin Manager is gone from the menu and from Options. No text anywhere says built-ins can be disabled.
 6. The screenshot tool renders the store window in all three languages without clipping or overflow.
+
+Status (store 0.2.1, 2026-10-26, checked by the user on Windows): row logos, built-in rows and VestraTube 0.4.0 install pass. The ⚙ menu entries did nothing (also the rows' `…` menus: `MenuButton` closed its popup before reading the picked entry); fixed in 0.2.1. Coordinator recheck 2026-10-27 (scripted input, screenshots): ⚙ ▸ Install from Link… shows the link box; a built-in's `…` ▸ Reload restarts it ("Reloaded …", status Running); ⚙ ▸ Install from File… installs VestraTube 0.4.1 through the file picker and the confirmation dialog. **Host defect found**: after a plugin restarts (Reload, or an install that replaces a running plugin) the main window comes to the front and the store tool window drops behind it; the store is not closed, only hidden. For the maintainer. **Step 4 (offline) not yet run**: the coordinator still owes it, with the repository made unreachable without taking the machine off the network (for example a hosts-file or firewall rule for the repository host, or a profile whose repository URL points at a dead local port).
 
 ## Who does what
 
