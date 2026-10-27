@@ -1178,3 +1178,29 @@ test("BUILTIN_COMMANDS and BUILTIN_SUBMENUS are what the player and its built-in
     "the built-in plugins' submenus differ from BUILTIN_SUBMENUS",
   );
 });
+
+test("SESSION_STORAGE_LIMITS are the player's (session_storage.rs; SDK 1.5.25, player 0.5.5)", async (t) => {
+  const runtime: { SESSION_STORAGE_LIMITS?: object } =
+    await import("@vestra-player/sdk/runtime");
+  if (!runtime.SESSION_STORAGE_LIMITS)
+    return t.skip("the installed SDK is older than 1.5.25");
+  const source = host("src/session_storage.rs");
+  const constant = (name: string) => {
+    const value = new RegExp(`const ${name}: \\w+ = ([^;]+);`).exec(
+      source,
+    )?.[1];
+    assert.ok(value, `${name} in session_storage.rs`);
+    return value
+      .split("*")
+      .map((part) => Number(part.trim().replaceAll("_", "")))
+      .reduce((a, b) => a * b, 1);
+  };
+  assert.deepEqual(
+    {
+      keyBytes: constant("MAX_KEY_BYTES"),
+      bytes: constant("MAX_SESSION_BYTES"),
+    },
+    { ...runtime.SESSION_STORAGE_LIMITS },
+    "SESSION_STORAGE_LIMITS differ from the player's session storage limits",
+  );
+});

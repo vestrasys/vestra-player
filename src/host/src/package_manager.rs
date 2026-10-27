@@ -835,6 +835,15 @@ impl Host {
                 self.disable(owner);
             }
             self.failures.remove(id);
+            // The user switched it off: its session values go (a reload, an
+            // upgrade or a crash keeps them; session_storage.rs).
+            let stopped = match &development {
+                Some(_) => Some(DataKey::Development(id.into())),
+                None => key,
+            };
+            if let Some(stopped) = stopped {
+                self.session_storage.clear(&stopped);
+            }
             return Ok(());
         }
         if running.is_some() {
@@ -1018,6 +1027,11 @@ impl Host {
         }
         self.packages.receipts = self.packages.store.operations();
         self.failures.remove(&id);
+        // Session values go with every uninstall, whether or not the files do.
+        if let Some(instance) = &installed.instance {
+            self.session_storage
+                .clear(&DataKey::Instance(instance.guid.clone()));
+        }
         if remove_data && let Some(instance) = &installed.instance {
             self.purge_secrets(&DataKey::Instance(instance.guid.clone()));
         }
