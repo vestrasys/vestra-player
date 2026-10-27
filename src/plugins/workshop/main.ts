@@ -50,7 +50,8 @@ interface Run {
 export default async function activate(plugin: Plugin) {
   const providers = loadProviders(import.meta.dirname);
   const sessions = new Sessions(plugin.dataDirectory);
-  const toolchain = new Toolchain(import.meta.dirname, plugin.dataDirectory);
+  // check lets the player compile the package (Slint included) before any install.
+  const toolchain = new Toolchain(import.meta.dirname, plugin.dataDirectory, (file) => plugin.packages.validateArchive(file));
   const pathsOf = (id: string): SessionPaths => ({ dir: sessions.directory(id), work: sessions.work(id) });
   const settings = plugin.storage.json<AiSettings>("settings", { defaults: DEFAULT_SETTINGS, validate: validSettings });
   // Settings migrate now (a file); keys only later (see moveLegacyKeys).

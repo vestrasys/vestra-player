@@ -2,7 +2,8 @@
 
 ## 2.2.8
 
-- "Vestra Player AI…" has a button on the bottom bar (`button: { icon: "ai", order: 100 }`, SDK 1.5.29): at the bar's right end, left of the Plugin Store's (order 200) and the sidebar toggle; in a narrow window it hides before them. A click opens the AI window like the menu item; the tooltip is "Vestra Player AI" with its key. Needs player 0.5.10 (`minPlayerVersion`); older players keep the menu item without a button.
+- "Vestra Player AI…" has a button on the bottom bar (`button: { icon: "ai", order: 100 }`, SDK 1.5.29): at the bar's right end, left of the Plugin Store's (order 200) and the sidebar toggle; in a narrow window it hides before them. A click opens the AI window like the menu item; the tooltip is "Vestra Player AI" with its key. Needs player 0.5.10 (`minPlayerVersion`).
+- `check` has the player compile the plugin before any install: it packs into a scratch folder and calls `packages.validateArchive` (manifest, the entry's JavaScript, every `.slint` file), the same checks an install runs. A refusal fails the check with the player's own diagnostics in `problems` (for Slint: file, position, message) and tells the AI to fix the file and check again; a pass reads "Check passed (manifest, strict type check, build, the player's Slint compile)". Before, Slint errors such as "'changed' is not a callback in SearchField" first showed at `install_plugin`, after the AI considered the plugin done. The system prompt says that typecheck and test do not compile Slint and check does. `install_plugin` still validates (last line of defence); its failure now also tells the AI to fix and run check again.
 - The vendored SDK is 1.5.29 (`npm run vendor:sdk`): the reference the AI reads covers bottom-bar buttons (`CommandOptions.button`, `BarButtons` in `@vestra/bar-buttons.slint`) and TestHost's `barButtons`.
 
 ## 2.2.7

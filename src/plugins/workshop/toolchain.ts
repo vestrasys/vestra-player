@@ -88,6 +88,14 @@ const result = (ok: boolean, summary: string, details?: unknown): ToolResult => 
   return { ok, text };
 };
 
+/** What the model does after the player refused a package. */
+export const PLAYER_NEXT = "Fix the file and line the player names (for a Slint error: the .slint file; read the widget's declaration in the SDK's slint/ folder), then run check again";
+/** The player's error as it said it: Slint's diagnostics (file, position, message) stay whole. */
+export const playerMessage = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 6000);
+export const playerCode = (error: unknown) => String((error as { code?: unknown })?.code ?? "error");
+const playerRefusal = (error: unknown) =>
+  playerCode(error) === "slint" ? "Check failed: the player's Slint compile reported errors" : `Check failed: the player's package check refused it (${playerCode(error)})`;
+
 export interface Diagnostic {
   file: string;
   line: number;
@@ -209,18 +217,28 @@ export function parseTap(output: string, root: string): TestReport {
   return report;
 }
 
+/**
+ * The player's own package checks (packages.validateArchive): manifest, the
+ * entry's JavaScript and every .slint file compiled. Rejects with the
+ * player's error (`code`, message) when the package fails them.
+ */
+export type Validator = (file: string) => Promise<unknown>;
+
 export class Toolchain {
   readonly packageDir: string;
   readonly dataDir: string;
   readonly vendor: string;
   readonly sdk: string;
+  /** Without one (the eval runner has no player), check stops at the build. */
+  private readonly validate: Validator | undefined;
   private mirroring: Promise<void> | undefined;
   /** One tool at a time per project (a build rewrites its dist/). */
   private readonly locks = new Map<string, Promise<unknown>>();
 
-  constructor(packageDir: string, dataDir: string) {
+  constructor(packageDir: string, dataDir: string, validate?: Validator) {
     this.packageDir = packageDir;
     this.dataDir = dataDir;
+    this.validate = validate;
     this.vendor = path.join(packageDir, "vendor");
     this.sdk = path.join(this.vendor, "@vestra-player", "sdk");
   }
@@ -542,22 +560,38 @@ export class Toolchain {
       const rules = await this.rules(directory, id, owner);
       if (rules.errors.length) return result(false, `Check failed: ${rules.errors.length} problem(s)`, { problems: rules.errors, warnings: rules.warnings });
       // build: manifest rules, strict types, transpiling, no runtime import of the SDK.
-      const run = await this.cli("build", directory, session, [], signal);
-      const stop = this.stopped(run, "Check");
-      if (stop) return stop;
-      const report = this.cliReport(run, directory);
-      const warnings = [...rules.warnings, ...report.hints];
-      if (run.code !== 0)
-        return result(
-          false,
-          report.errorCount
-            ? `Check failed: ${report.errorCount} type error(s)`
-            : report.undeclared
-              ? `Check failed: ${report.undeclared.length} SDK use(s) need a capability manifest.json does not declare`
-              : `Check failed${unexplained(report)}`,
-          { ...report, warnings },
-        );
-      return result(true, "Check passed (manifest, strict type check, build). The player compiles and checks Slint at install.", warnings.length ? { warnings } : undefined);
+      // With the player at hand, pack (which builds) into a scratch folder,
+      // and let the player check the package as an install would: the
+      // compiler in the loop, so Slint errors reach the model before install.
+      const scratch = this.validate ? path.join(session.dir, "tmp", `check-${randomBytes(4).toString("hex")}`) : undefined;
+      try {
+        const run = scratch ? await this.cli("pack", directory, session, ["--out", scratch], signal) : await this.cli("build", directory, session, [], signal);
+        const stop = this.stopped(run, "Check");
+        if (stop) return stop;
+        const report = this.cliReport(run, directory);
+        const warnings = [...rules.warnings, ...report.hints];
+        if (run.code !== 0)
+          return result(
+            false,
+            report.errorCount
+              ? `Check failed: ${report.errorCount} type error(s)`
+              : report.undeclared
+                ? `Check failed: ${report.undeclared.length} SDK use(s) need a capability manifest.json does not declare`
+                : `Check failed${unexplained(report)}`,
+            { ...report, warnings },
+          );
+        if (!scratch) return result(true, "Check passed (manifest, strict type check, build). The player compiles and checks Slint at install.", warnings.length ? { warnings } : undefined);
+        const packed = (await fs.readdir(scratch).catch(() => [] as string[])).find((name) => name.endsWith(".vxp"));
+        if (!packed) return result(false, "Check failed: the build wrote no package for the player to check", { output: tail(run.stdout) });
+        try {
+          await this.validate!(path.join(scratch, packed));
+        } catch (error) {
+          return result(false, playerRefusal(error), { problems: [playerMessage(error)], warnings, next: PLAYER_NEXT });
+        }
+        return result(true, "Check passed (manifest, strict type check, build, the player's Slint compile)", warnings.length ? { warnings } : undefined);
+      } finally {
+        if (scratch) await fs.rm(scratch, { recursive: true, force: true });
+      }
     });
   }
 

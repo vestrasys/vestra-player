@@ -24,7 +24,7 @@ When you ask the AI to write a plugin, it first reads the plugin SDK reference (
 | `scaffold_plugin` | Create plugin | Creates a project in the layout of the official plugin repository: manifest.json, main.ts, ui/, tests/, README, CHANGELOG |
 | `typecheck` | Type check | Strict type check (with the SDK types that come with the player); errors include file, line and error code. With SDK 1.5.26 or later it also lists every SDK call whose capability manifest.json does not declare (file, line, capability), which the player would refuse at run time; the AI adds the capability or drops the call |
 | `test` | Run tests | Runs `tests/*.test.ts` in a separate restricted Node process: it can only read the plugin folder and only write a temporary folder, with no network and no child processes; on failure it returns the assertion messages and what the tests printed |
-| `check` | Check | id, dependencies, manifest, types, build (Slint is compiled by the player at install time) |
+| `check` | Check | id, dependencies, manifest, types, build, then the player's own package checks on the packed plugin (`packages.validateArchive`: every Slint file compiled, as at install); a Slint error comes back to the AI with the player's diagnostics |
 | `pack` | Pack | Creates `dist/<id>-<version>.vxp` |
 | `install_plugin` | Install | The player validates it (including Slint), asks for confirmation in a dialog, then installs it (only when you ask) |
 
