@@ -91,6 +91,7 @@ export function wireBar(
   let pointing = false;
   bar.on("pointing", (on: boolean) => {
     pointing = on;
+    thumbnails.pointing(on); // 0.2.3: new sheets are handed over less often meanwhile
     scope.update();
   });
   bar.bind(() => {
@@ -180,12 +181,18 @@ export function wireBar(
     p.dragging = dragging;
     thumbnails.hold(dragging); // I07: the drag's seeks get the CPU
 
-    if (dragging) p.startDrag(); // the bar does not auto-hide while dragging
-    else if (p.draft !== null && !p.blockedGesture) p.notify("Seek: {} / {}", p.positionArgs(p.draft));
+    // 0.2.3: the gesture's seek mode is the "Jump to keyframes only" switch as
+    // it is at the press (the same switch as the arrow keys); the bar does not
+    // auto-hide while dragging.
+    if (dragging) p.startDrag(settings.value.seekKeyframes);
+    else {
+      if (p.draft !== null && !p.blockedGesture) p.notify("Seek: {} / {}", p.positionArgs(p.draft));
+      p.endDrag();
+    }
     locks();
   });
   bar.on("seekChanged", (fraction: number) => {
-    if (p.canSeek() && !p.blockedGesture) p.seek(fraction * player.state.duration!);
+    if (p.canSeek() && !p.blockedGesture) p.gestureSeek(fraction * player.state.duration!);
   });
   // Unsent points are dropped; a seek the host already accepted is not undone.
   bar.on("seekCancelled", async () => {

@@ -121,11 +121,11 @@ msgstr "没有视频"
 msgid "Needs ffmpeg"
 msgstr "需要 ffmpeg"
 
-#: controller.ts:148
+#: controller.ts:193
 msgid "Open Media"
 msgstr "打开媒体"
 
-#: controller.ts:148
+#: controller.ts:193
 msgid "Open Media (replaces the current source)"
 msgstr "打开媒体（将替换当前来源）"
 
@@ -382,7 +382,7 @@ msgstr "播放速度(0.25–4倍)"
 msgid "Time (h:mm:ss.ms)"
 msgstr "时间定位(时:分:秒.毫秒)"
 
-#: ui/prompt.slint:60 ui/time-jump.slint:156
+#: ui/prompt.slint:60 ui/time-jump.slint:165
 msgid "OK"
 msgstr "确定"
 
@@ -391,46 +391,50 @@ msgid "Go"
 msgstr "定位"
 
 #. the unit after a number of seconds.
-#: ui/time-jump.slint:35
+#: ui/time-jump.slint:36
 msgid "s"
 msgstr "秒"
 
-#: ui/time-jump.slint:41
+#: ui/time-jump.slint:42
 msgid "Default"
 msgstr "默认值"
 
-#: ui/time-jump.slint:70
+#: ui/time-jump.slint:71
 msgid "Seek Steps"
 msgstr "时间跨度设置"
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:109
+#: ui/time-jump.slint:82 ui/time-jump.slint:110
 msgid "Left/Right arrow keys:"
 msgstr "左/右 方向键："
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:117
+#: ui/time-jump.slint:82 ui/time-jump.slint:118
 msgid "Ctrl + Left/Right arrow keys:"
 msgstr "Ctrl + 左/右 方向键："
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:125
+#: ui/time-jump.slint:82 ui/time-jump.slint:126
 msgid "Shift + Left/Right arrow keys:"
 msgstr "Shift + 左/右 方向键："
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:133
+#: ui/time-jump.slint:82 ui/time-jump.slint:134
 msgid "Ctrl + Alt + Left/Right arrow keys:"
 msgstr "Ctrl + Alt + 左/右 方向键："
 
-#: ui/time-jump.slint:102
+#: ui/time-jump.slint:103
 msgid "Set how far each seek key moves during playback."
 msgstr "可设置播放时以时间为单位的移动跨度。"
 
-#: ui/time-jump.slint:141
+#: ui/time-jump.slint:142
 msgid "Jump to keyframes only"
 msgstr "仅跳转到关键帧"
 
-#: ui/time-jump.slint:145
+#: ui/time-jump.slint:147
+msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
+msgstr "适用于方向键和进度条：点击或拖动进度条会落在指针位置或其之前的关键帧上。"
+
+#: ui/time-jump.slint:154
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "范围 0.1–3600 秒，最多一位小数"
 
-#: ui/time-jump.slint:160
+#: ui/time-jump.slint:169
 msgid "Cancel"
 msgstr "取消"

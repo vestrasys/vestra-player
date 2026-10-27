@@ -17,7 +17,11 @@ export type Settings = {
   format: number;
   /** B06: seconds of the four relative-seek tiers (← →, Ctrl, Shift, Ctrl+Alt). */
   seekSteps: SeekSteps;
-  /** B06: the step seeks of all four tiers land on keyframes ("Jump to keyframes only"); on by default. */
+  /**
+   * B06: the step seeks of all four tiers land on keyframes ("Jump to keyframes
+   * only"); on by default. 0.2.3: the seek bar's clicks and drags follow the
+   * same switch (user ruling 2026-10-27); Jump to Time and Jump to Start stay exact.
+   */
   seekKeyframes: boolean;
   /** G-14: the bar's current-time label shows the remaining time. */
   remainingTime: boolean;

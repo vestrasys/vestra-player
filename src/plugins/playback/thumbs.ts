@@ -40,6 +40,23 @@ export const START_DELAY_MS = 1000;
 export const START_FALLBACK_MS = 3000;
 /** Sheets are written again at most this often while cells come in. */
 export const PUBLISH_MS = 1000;
+/**
+ * 0.2.3: while the pointer is on the seek line, changed sheets are handed to
+ * the bar at most this often (`PUBLISH_MS` still rules the disk writes).
+ *
+ * The trade-off: the player decodes every sheet it is handed on its UI thread
+ * (11.5 ms p50 for a 1600×900 JPEG, `2026-10-ui-redraw-stutter.md`) and
+ * uploads it as a texture (about 4 ms), so a sheet a second during the 15 s or
+ * so of generation stalled the UI thread, and the picture under the pointer,
+ * for up to 15–25 ms once a second while the user hovered the bar. At 2.5 s
+ * the thumbnails under a resting pointer fill in a little later (the cell
+ * under the pointer is already made once its sheet is handed over; the
+ * nearest made one shows until then), and a sheet nobody changed keeps its
+ * reference, so a run that touched only one of the two sheets costs one
+ * decode, not two. Nothing is held back while nobody points: the bar sends no
+ * sheets then, and the pointer's arrival sends the newest at once.
+ */
+export const SHOW_MS = 2500;
 /** After a seek, or the end of a drag, generation waits this long. */
 export const SEEK_QUIET_MS = 1000;
 /** A jump of the position by more than this (seconds) counts as a seek. */
@@ -236,6 +253,8 @@ type Job = {
   writing: boolean;
   /** When the last sheet write started (throttle). */
   wroteAt: number;
+  /** Sheets written to disk since the bar last got them (`SHOW_MS` throttle while pointing). */
+  unshown: Set<number>;
 };
 
 /** The part a cell belongs to (every queued cell has one; a cell without is decoded from the start on its own). */
@@ -252,6 +271,8 @@ const partOf = (job: Job, cell: number): Part =>
  * - At most `WORKERS` ffmpeg processes, one thread each; cells coarse to fine.
  * - Paused while the user drags the seek line, and for `SEEK_QUIET_MS` after a
  *   seek or a drag: running cells are ended and done again later.
+ * - Sheets reach the disk every `PUBLISH_MS` while cells come in, and the bar
+ *   at most every `SHOW_MS` while the pointer is on the seek line (0.2.3).
  * - 0.2.2: files cheap enough to decode whole (`plan`) get exact cells from
  *   one sequential pass in keyframe-aligned parts, software decoding; the
  *   others keyframe cells. An exact pass that fails, or whose part takes over
@@ -272,6 +293,10 @@ export class Thumbnails {
   #waiting: (() => void)[] = [];
   #held = false;
   #quietUntil = 0;
+  /** The pointer is on the seek line (hover or drag): the bar is sending the sheets. */
+  #pointing = false;
+  /** When the bar last got a changed sheet. */
+  #shownAt = 0;
   #last: { position: number; at: number; paused: boolean; rate: number } | null = null;
   readonly #scope: Plugin;
   readonly #settings: SettingsStore;
@@ -344,6 +369,18 @@ export class Thumbnails {
     }
   }
 
+  /**
+   * The pointer came onto the seek line (`true`) or left it. While it is there
+   * a changed sheet waits for `SHOW_MS` since the last one; when it leaves, a
+   * waiting sheet goes out at once (the bar sends no sheets to decode then).
+   */
+  pointing(on: boolean) {
+    if (on === this.#pointing) return;
+    this.#pointing = on;
+    const job = this.#job;
+    if (!on && job && job.unshown.size > 0) this.#show(job);
+  }
+
   /** The seek line is being dragged (`true`) or was let go. */
   hold(held: boolean) {
     if (held === this.#held) return;
@@ -402,6 +439,7 @@ export class Thumbnails {
   async #step() {
     const job = this.#job;
     if (!job || job.abort.signal.aborted) return;
+    if (job.unshown.size > 0) this.#publish(job); // a sheet held back by the throttle, due now
     const state = this.#scope.player.state;
     if (job.stage === "waiting") return this.#watch(job, state);
     if (job.stage === "running") this.#pump(job);
@@ -466,6 +504,7 @@ export class Thumbnails {
       dirty: new Set(),
       writing: false,
       wroteAt: 0,
+      unshown: new Set(),
     };
   }
 
@@ -750,7 +789,8 @@ export class Thumbnails {
         }
       });
       if (this.#job !== job || job.abort.signal.aborted) return;
-      this.#show(job);
+      for (const s of sheets) job.unshown.add(s);
+      this.#publish(job);
       await this.#saveIndex(job);
     } catch {
       if (job.abort.signal.aborted) return;
@@ -761,13 +801,33 @@ export class Thumbnails {
     }
   }
 
-  /** Hand the sheets on disk to the bar (a new reference makes the player read the file again). */
+  /**
+   * Hand the written sheets to the bar: now, or, while the pointer is on the
+   * seek line and the bar got a sheet less than `SHOW_MS` ago, when that time
+   * is up (a timer; `pointing(false)` also ends the wait).
+   */
+  #publish(job: Job) {
+    const wait = this.#shownAt + SHOW_MS - clock.now();
+    if (this.#pointing && this.preview !== null && wait > 0) return this.#schedule(wait);
+    this.#show(job);
+  }
+
+  /**
+   * Hand the sheets on disk to the bar. A changed sheet gets a new reference
+   * (the player reads the file again); an unchanged one keeps its reference,
+   * so the player does not decode it again.
+   */
   #show(job: Job) {
+    const previous = this.preview?.count === job.count ? this.preview.sheets : [];
     const sheets = Array.from({ length: sheetCount(job.count) }, (_, s) => {
       const first = s * 100;
       const any = job.made.subarray(first, Math.min(job.count, first + 100)).some(Boolean);
-      return any ? this.#scope.ui.image(join(job.dir!, `sheet-${s}.jpg`)) : null;
+      if (!any) return null;
+      const kept = previous[s];
+      return kept && !job.unshown.has(s) ? kept : this.#scope.ui.image(join(job.dir!, `sheet-${s}.jpg`));
     });
+    job.unshown.clear();
+    this.#shownAt = clock.now();
     this.preview = { count: job.count, map: nearestMade(job.made), sheets };
     this.#scope.update();
   }

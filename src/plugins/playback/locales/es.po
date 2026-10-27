@@ -151,12 +151,12 @@ msgstr "No hay video"
 msgid "Needs ffmpeg"
 msgstr "Requiere ffmpeg"
 
-#: controller.ts:148
+#: controller.ts:193
 #, x-machine
 msgid "Open Media"
 msgstr "Abrir archivo multimedia"
 
-#: controller.ts:148
+#: controller.ts:193
 #, x-machine
 msgid "Open Media (replaces the current source)"
 msgstr "Abrir archivo multimedia (sustituye la fuente actual)"
@@ -475,7 +475,7 @@ msgstr "Velocidad (0.25–4×)"
 msgid "Time (h:mm:ss.ms)"
 msgstr "Tiempo (h:mm:ss.ms)"
 
-#: ui/prompt.slint:60 ui/time-jump.slint:156
+#: ui/prompt.slint:60 ui/time-jump.slint:165
 #, x-machine
 msgid "OK"
 msgstr "Aceptar"
@@ -486,57 +486,61 @@ msgid "Go"
 msgstr "Ir"
 
 #. the unit after a number of seconds.
-#: ui/time-jump.slint:35
+#: ui/time-jump.slint:36
 #, x-machine
 msgid "s"
 msgstr "s"
 
-#: ui/time-jump.slint:41
+#: ui/time-jump.slint:42
 #, x-machine
 msgid "Default"
 msgstr "Predeterminado"
 
-#: ui/time-jump.slint:70
+#: ui/time-jump.slint:71
 #, x-machine
 msgid "Seek Steps"
 msgstr "Intervalos de salto"
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:109
+#: ui/time-jump.slint:82 ui/time-jump.slint:110
 #, x-machine
 msgid "Left/Right arrow keys:"
 msgstr "Flechas izquierda/derecha:"
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:117
+#: ui/time-jump.slint:82 ui/time-jump.slint:118
 #, x-machine
 msgid "Ctrl + Left/Right arrow keys:"
 msgstr "Ctrl + flechas izquierda/derecha:"
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:125
+#: ui/time-jump.slint:82 ui/time-jump.slint:126
 #, x-machine
 msgid "Shift + Left/Right arrow keys:"
 msgstr "Mayús + flechas izquierda/derecha:"
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:133
+#: ui/time-jump.slint:82 ui/time-jump.slint:134
 #, x-machine
 msgid "Ctrl + Alt + Left/Right arrow keys:"
 msgstr "Ctrl + Alt + flechas izquierda/derecha:"
 
-#: ui/time-jump.slint:102
+#: ui/time-jump.slint:103
 #, x-machine
 msgid "Set how far each seek key moves during playback."
 msgstr "Define cuánto avanza o retrocede cada tecla de salto durante la reproducción."
 
-#: ui/time-jump.slint:141
+#: ui/time-jump.slint:142
 #, x-machine
 msgid "Jump to keyframes only"
 msgstr "Saltar solo a fotogramas clave"
 
-#: ui/time-jump.slint:145
+#: ui/time-jump.slint:147
+msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
+msgstr "Se aplica a las teclas de flecha y a la barra de progreso: un clic o arrastre en la barra salta al fotograma clave en la posición del puntero o anterior."
+
+#: ui/time-jump.slint:154
 #, x-machine
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "Valores de 0.1 a 3600 s, con un decimal como máximo"
 
-#: ui/time-jump.slint:160
+#: ui/time-jump.slint:169
 #, x-machine
 msgid "Cancel"
 msgstr "Cancelar"
