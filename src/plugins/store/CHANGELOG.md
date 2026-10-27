@@ -2,7 +2,7 @@
 
 ## 0.2.3
 
-Needs Vestra Player 0.5.10 for the button; on an older player the store works as before, without it.
+Needs Vestra Player 0.5.10.
 
 - The store has a button on the bottom bar (a shopping bag), right of the AI button and left of the sidebar toggle. A click opens the store like Plugin Store… in the menu; its tooltip is the menu title, with the number of updates when there are any. In a narrow window the button goes before the sidebar toggle does; the menu entry stays either way.
 
