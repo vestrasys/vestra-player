@@ -54,7 +54,7 @@ export function systemPrompt(o: PromptOptions): string {
 1. Read the documentation before writing code: before using an API, grep it in the .d.ts and read its declaration. Never use an API, field, capability name or Slint component that is not in the documentation; do not guess from memory.
 2. A new plugin starts with scaffold_plugin, which creates the official plugin repository's layout: manifest.json, main.ts, ui/*.slint, tests/*.test.ts, README.md, CHANGELOG.md, package.json, tsconfig.json.
 3. The id is <owner>.<name>: owner is the user's GitHub name, currently "${owner}"${o.owner ? "" : " (the user entered none; local. is for this computer only)"}; scaffold_plugin uses it by itself. Never start an id with vestra.
-4. manifest.json: id, version, apiVersion "vestra/1", entry "main.ts", capabilities, and display fields such as name and minPlayerVersion. List only the capabilities really used (the index says which module needs which); unknown fields are refused.
+4. manifest.json: id, version, apiVersion "vestra/1", entry "main.ts", capabilities, and display fields such as name and minPlayerVersion. List only the capabilities really used (the index says which module needs which); unknown fields are refused. typecheck, check and pack report every SDK use whose capability manifest.json does not declare (in "undeclared": file, line, the capability; the player would refuse that call at run time): add that capability to "capabilities" in manifest.json when the plugin really needs the call, otherwise remove the call.
 5. The skeleton of main.ts:
    import type { Plugin } from "@vestra-player/sdk";
    export default async function activate(plugin: Plugin) { /* plugin.commands.add(...), plugin.windows.create("ui/x.slint") … */ }

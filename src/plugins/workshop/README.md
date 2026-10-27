@@ -22,7 +22,7 @@ When you ask the AI to write a plugin, it first reads the plugin SDK reference (
 | Tool | Status line | What it does |
 | --- | --- | --- |
 | `scaffold_plugin` | Create plugin | Creates a project in the layout of the official plugin repository: manifest.json, main.ts, ui/, tests/, README, CHANGELOG |
-| `typecheck` | Type check | Strict type check (with the SDK types that come with the player); errors include file, line and error code |
+| `typecheck` | Type check | Strict type check (with the SDK types that come with the player); errors include file, line and error code. With SDK 1.5.26 or later it also lists every SDK call whose capability manifest.json does not declare (file, line, capability), which the player would refuse at run time; the AI adds the capability or drops the call |
 | `test` | Run tests | Runs `tests/*.test.ts` in a separate restricted Node process: it can only read the plugin folder and only write a temporary folder, with no network and no child processes; on failure it returns the assertion messages and what the tests printed |
 | `check` | Check | id, dependencies, manifest, types, build (Slint is compiled by the player at install time) |
 | `pack` | Pack | Creates `dist/<id>-<version>.vxp` |
@@ -34,7 +34,7 @@ When the chat has a plugin project, a plugin card appears above the input box on
 
 - "Install": installs it into the player (the source is recorded as the AI workshop); if a plugin with the same id came from elsewhere, you are asked first whether to replace it. Installing again after a change upgrades the plugin in place and keeps its data. To remove it, use Uninstall… in the Plugin Manager. If, after installing, the plugin's shortcuts are taken by the player or another plugin (the player ignores those keys), both the card and the AI are told; for this the plugin reads the shortcut table (`bindings.manage`, read only; it changes no keys).
 - "Export .vxp": packs the plugin and saves a copy you can share.
-- "Export Source .zip": the complete plugin project, ready to become your own GitHub repository: README, CHANGELOG, tests, tsconfig, a package.json with the SDK dependency, a GitHub Actions workflow (check, test, pack), and a LICENSE placeholder to replace; without node_modules and dist.
+- "Export Source .zip": the complete plugin project, ready to become your own GitHub repository: README, CHANGELOG, tests, tsconfig, a package.json with the SDK dependency, a GitHub Actions workflow (check, test, pack), VS Code settings that use the project's own TypeScript (so the SDK's editor plugin, listed in tsconfig.json, marks an API call whose capability manifest.json does not declare and offers to add it), and a LICENSE placeholder to replace; without node_modules and dist.
 - "Open Folder": the plugin project's folder.
 
 ## Notes

@@ -38,8 +38,11 @@ export interface CapabilityInfo {
 /**
  * Every manifest capability the player knows (`vestra/1`), in the player's
  * order, with the members it opens, the capabilities they also need and the
- * store's wording. The player's tests check that the names agree with the
- * player's `host/src/plugins.rs` and the labels with its plugin store.
+ * store's wording. Built from the player's own capability table (its
+ * `src/host/capabilities.json`, copied into the SDK) and the requests each
+ * member sends, the same rule `vestra-plugin check` and the SDK's
+ * TypeScript plugin apply; the player's tests check that the copy is
+ * current.
  *
  * A member not listed under any capability needs none (`plugin.tools`,
  * `plugin.storage`, `plugin.system`, `plugin.app`, `plugin.ui`,
@@ -62,7 +65,7 @@ export declare const CAPABILITY_INFO: Readonly<Record<string, CapabilityInfo>>;
 /**
  * Manifest capabilities the player knows (`vestra/1`): the keys of
  * {@link CAPABILITY_INFO}, in the player's order. The same list as the
- * player's `host/src/plugins.rs`; the player's tests check that they agree.
+ * player's `host/capabilities.json`; the player's tests check that they agree.
  */
 export declare const CAPABILITIES: readonly string[];
 /** The plugin API version this SDK implements (`manifest.apiVersion`). */

@@ -18,6 +18,7 @@ import {
   CAPABILITY_INFO,
   Catalog,
   COMMAND_LIMITS,
+  HOST_CAPABILITIES,
   HOST_ZH_HANS,
   IMAGE_LIMITS,
   LOCALES,
@@ -179,6 +180,12 @@ test("capabilities and apiVersion match the player's manifest rules (host/capabi
     [...CAPABILITIES],
   );
   assert.equal(json.apiVersion, API_VERSION);
+});
+
+test("the installed SDK's copy of host/capabilities.json is current (SDK npm run capabilities:sync)", () => {
+  // CAPABILITY_INFO, vestra-plugin check and the SDK's TypeScript plugin
+  // are built from this copy: a capability change here needs an SDK release.
+  assert.deepEqual(HOST_CAPABILITIES, capabilityJson());
 });
 
 test("the installed SDK's Slint library copy matches the player's", () => {
