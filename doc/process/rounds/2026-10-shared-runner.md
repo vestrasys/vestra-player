@@ -445,3 +445,7 @@ Nothing in this design changes an error code, a default, a signature, or when a 
 2. §8.2 step 1: accept the fail-open after three restarts in 60 s (the rest of the session in own processes, with a notice)? The alternative is to keep retrying S, which can loop on a bad build.
 3. For v2 (third-party in S): should the host itself verify the repository index signature (a Rust Ed25519 dependency, `cargo-deny` review) rather than trust the store plugin's verification and recorded evidence? No work now; it decides what the install record must carry.
 4. Phase 0 before or after the lazy design's baseline measurement (recommended: before, one baseline for both).
+
+### User ruling (2026-10-27)
+
+The user approved starting the work ("可以开工") with the coordinator's recommended answers to §14: (1) a hung built-in (no heartbeat for 10 s) restarts all built-ins in the shared runner; (2) three restarts within 60 s fall back to one process per plugin until exit, with a notice; (3) install records start storing the repository index signature evidence now, host-side signature verification is for v2; (4) phase 0 (precompiled `runner.js`, `NODE_COMPILE_CACHE`) lands before the lazy-activation baseline. Trust is decided by the host from provenance, never from a manifest field; the plugin API does not change; v1 admits built-ins only.
