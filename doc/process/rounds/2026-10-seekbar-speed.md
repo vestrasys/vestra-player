@@ -1,6 +1,6 @@
 # 2026-10 round: seek-bar speed on local files
 
-Started 2026-10-26. **This document is the only progress record for this round.** Status: research and measurements done; one host performance fix on branch `seekbar-speed` (worktree `C:\vestra\wt-seekbar`, from main eae5f48), uncommitted and waiting for the coordinator; the seek-bar seek mode needs a user ruling (see "Options").
+Started 2026-10-26. **This document is the only progress record for this round.** Status: research and measurements done; the host performance fix (section 5) is on main (83bf54d, #57); the user ruled on the seek-bar mode (option B, section 8); the host and SDK side of the ruling is on branch `seekbar-keyframes` (worktree `C:\vestra\wt-seekkf`, from main 83bf54d); the SDK side is merged as SDK main ef7afce (#37, 1.5.22, tag after v1.5.21 publishes); the playback plugin's side (section 8.4) is in progress on branch `bar-keyframes`.
 
 ## User report (2026-10-26)
 
@@ -151,3 +151,46 @@ Clips: `C:\vestra\clips\h264-2160p60-gop10.mp4`, `hevc-2160p60-10bit-gop10.mp4`,
 
 - `cargo test --locked -- --include-ignored a_click_on_the_seek_bar_seeks_once` on macOS (needs ffmpeg with libx264 on PATH).
 - GUI items 1–4 above on macOS (GPU render path, `videotoolbox`): the duplicate seek happens there too, so the click should also be faster.
+- Section 8.4 items 1–4 on macOS once the playback plugin uses the option.
+
+## 8. Seek-bar keyframe mode: §4 record (2026-10-27)
+
+### 8.1 User ruling (2026-10-27, binding)
+
+The seek bar follows the **same "Jump to keyframes only" switch as the arrow keys** (playback 0.2.1 `settings.seekKeyframes`, default on): switch on → clicks and drags on the bar seek by keyframes (option B, PotPlayer style, no second exact seek); off → exact, as today. No new option, no "seek twice". This supersedes the question in section 6; option A is not done.
+
+### 8.2 §4.1 request (requesting plugin `vestra.playback`, `src/plugins/playback/bar.ts` → `controller.ts` → `Scrub.seek`)
+
+- **User action and expected result:** with the switch on, a click or a drag step on the bar shows the keyframe at or before the pointer at once (0.04–0.09 s on every measured clip, section 3.1) instead of decoding to the exact frame (0.2–2.7 s), and a drag keeps updating on long-GOP files (22–29 updates/s instead of 3, section 3.3).
+- **Why the existing API cannot do it:** `Scrub.seek(seconds)` and `player.seek` are always `absolute+exact` in the host (`Control::Seek`, scope guard of the keyframe round, `2026-10-seek-keyframes.md` §5). `setStepSeek({ keyframes })` affects only the two step actions. A plugin cannot emulate a keyframe seek: it has no keyframe index (the host reads none either; mpv finds the keyframe in the demuxer during the seek) and no seek mode on the wire, so the only alternative, "seek exactly to a guessed keyframe time", is both wrong and as slow as today.
+- **Desired usage:** `scrub.seek(seconds, { keyframes: settings.seekKeyframes })` on press, every move and release; one mode for the whole gesture.
+- **Ownership and failure:** the gesture stays the plugin's `Scrub`; the host owns the mode per seek and the duplicate skip. Failure, cancellation and a missing capability are as for `Scrub.seek` today (`false` when superseded, a rejection on a host failure). An older player ignores the option and seeks exactly.
+- **Contract:** no existing call changes; plugins that do not pass the option are unaffected. Affects `vestra.playback` only.
+- **Minimal acceptance:** section 8.4.
+
+### 8.3 Maintainer reply and ruling (§4.2, §4.3)
+
+- **Classification:** capability gap; the host has the state (mpv's seek modes) and the plugin cannot have it.
+- **Alternative considered:** plugin-side emulation (compute a keyframe time, seek exactly to it). Rejected: no keyframe positions are available to a plugin, and an exact seek to a keyframe time still decodes from the demuxer's seek point, so it is not faster. Reducing the requirement (option C, exact only) was measured in section 3 and is what the user rejected.
+- **Ruling: addition** (§1.6 rule 1, patch release), in the smallest shape named in section 6:
+  - **Wire:** `control: { kind: "seek", seconds, keyframes?: boolean }`; the SDK sends `keyframes` only when true.
+  - **Host 0.5.3:** `Control::Seek { seconds, keyframes }` (`session.rs`, `#[serde(default)]`, written back without the flag when false, so the operation-book shape plugins read is unchanged); `source_backend.rs` sends `absolute+keyframes` or `absolute+exact`. `SeekFlight` keys on **(entry, target, mode)**: a press-and-release in one mode still seeks once, and an exact seek to the target of a keyframe seek is always sent (keyed on the target alone it would be skipped and the picture would stay on the keyframe). `backend.rs` is unchanged: the host's own seeks still call `seek_elsewhere()`, and a scrub seek of either mode still ends a keyframe step flight (`source_request`), so `relative+keyframes` accumulation and `key_seek` are as before. `main.rs` traces `seek+keyframes` in the `source.submit` input trace.
+  - **SDK 1.5.22:** `Scrub.seek(seconds: number, options?: { keyframes?: boolean }): Promise<boolean>`; `TestHost.seeks` records `{ seconds, keyframes }` and lands on the exact target in both modes; CHANGELOG "Who must change: nobody"; docs *Playback*; also the pending *UI* pitfall patch (an `if` that flips under the pointer). Patch file: `sdk-1.5.22.patch` in the maintainer's scratchpad (applies on SDK main 1.5.21, `1200200`), verified in a fresh clone with `npm ci`, `check`, `format:check`, `lint`, `docs:check`, `examples`, `test` (191 tests, 190 passed, 1 skipped) and `npm pack --dry-run`.
+  - **Not added:** a `keyframes` option on `player.seek` (Jump to Time, chapters, bookmarks, the A-B loop stay exact; nobody asked), and no new playback setting.
+- **Tests (host):** `source_backend::seek_flight_tests::only_the_same_target_on_the_same_entry_in_the_same_mode_repeats`, `the_seek_flag_maps_to_the_mpv_mode` (wire default, boolean check, write-back shape, mpv arguments); the `#[ignore]` real-mpv test `a_click_on_the_seek_bar_seeks_once` now also seeks the bar in keyframe mode to 15.0 on the 10 s GOP clip (one seek for press and release, lands on the keyframe at 10.0) and then sends a keyframe seek and an exact seek to 17.0 back to back (lands at 17.0). The real-mpv test asserts landings: with the flight keyed on the target alone it still passed once on this machine, because mpv had not started the keyframe seek (`seeking` false) when the exact one arrived 1 ms later, so the mode key is proved by the unit test, not by timing. `tests/sdk/host-agreement.test.ts` checks that `session.rs` reads `keyframes` as an optional boolean, that `source_backend.rs` maps it to the two mpv modes, and, once the installed SDK is 1.5.22 or later, that `Scrub.seek` sends the field only when true (with 1.5.20 installed it checks that no seek control carries the field, so nothing fails before the upgrade).
+
+### 8.4 Acceptance
+
+**Playback author** (`vestra.playback`, after the coordinator upgrades `src/package.json` to SDK 1.5.22):
+
+1. `controller.ts`: every `scrub.seek(target)` of the bar gesture (press, moves, release) passes `{ keyframes: settings.value.seekKeyframes }`; the mode does not change inside one gesture. Tier seeks, Jump to Time, Jump to Start and `reopen.ts` stay exact unless the author decides otherwise within the ruling (the ruling covers the bar).
+2. `manifest.json`: `"minPlayerVersion": "0.5.3"`.
+3. Tests with `TestHost.seeks`: with the switch on, a click records `{ seconds, keyframes: true }`; with it off, `keyframes: false`; the shown position while dragging is the draft (the host reports the keyframe's time after landing).
+4. Settings text: the "Jump to keyframes only" description says it covers the arrow keys and the seek bar.
+5. Until the upgrade, nothing in the player fails: `npm run test:sdk` passes with SDK 1.5.20 (the host-agreement test is gated on the installed version), and the plugin cannot compile the new option, so its side waits.
+
+**Coordinator:**
+
+1. SDK: apply `sdk-1.5.22.patch` on SDK main, commit, tag `v1.5.22`, push (publish.yml publishes); then in `src/`: `npm install @vestra-player/sdk@1.5.22`, run §6.1.
+2. Player: merge `seekbar-keyframes` (host 0.5.3) with the SDK upgrade and the playback change; `cargo test --locked -- --include-ignored a_click_on_the_seek_bar_seeks_once` once on Windows (`-Ffmpeg`) and on the Mac list.
+3. GUI (clips of section 7; switch on): a click on the 10 s GOP clips shows a picture within ~0.1 s and the time shown is up to 10 s before the click point; a drag on them updates continuously and stops on a keyframe; switch off: items 1–4 of section 7 as before (exact). Arrow keys, D/F, Previous/Next Keyframe, Jump to Time, A-B loop: unchanged in both modes. No `host.error` in the log.

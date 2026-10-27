@@ -4392,9 +4392,22 @@ impl Host {
                     self.source_state_replies.insert((reply.owner, reply.id));
                 }
                 if method == "source.submit" {
+                    // A seek control names its mode: `Control::Seek`'s
+                    // optional `keyframes` (SDK 1.5.22 `Scrub.seek(seconds,
+                    // { keyframes: true })`) is read by the playback worker
+                    // (source_backend.rs); here it is only traced.
+                    let control = &params["intent"]["control"];
+                    let detail = match control["kind"].as_str() {
+                        Some("seek") if control["keyframes"] == true => {
+                            " seek+keyframes".to_owned()
+                        }
+                        Some(kind) => format!(" {kind}"),
+                        None => String::new(),
+                    };
                     input_trace::follow(&format!(
-                        "host loop: source.submit {} from plugin {}",
+                        "host loop: source.submit {}{} from plugin {}",
                         params["intent"]["kind"].as_str().unwrap_or("?"),
+                        detail,
                         reply.owner
                     ));
                 }

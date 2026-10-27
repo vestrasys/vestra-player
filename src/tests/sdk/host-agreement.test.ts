@@ -267,6 +267,54 @@ test("step seek parameters are the player's: setStepSeek keyframes, host.run sec
   assert.match(main, /"keyframes":self\.step_keyframes\(\)/);
 });
 
+test("a seek control's keyframes flag is the SDK's Scrub.seek option and the player's Control::Seek field (SDK 1.5.22, player 0.5.3)", () => {
+  // The player: an optional boolean on the seek control, false when absent
+  // (plugins built on older SDKs never send it), mapped to mpv's seek mode.
+  const session = host("src/session.rs");
+  assert.match(
+    session,
+    /Seek \{\s*seconds: f64,\s*#\[serde\(default[^\]]*\)\]\s*keyframes: bool,\s*\}/,
+  );
+  const backend = host("src/source_backend.rs");
+  assert.match(
+    backend,
+    /if keyframes \{\s*"absolute\+keyframes"\s*\} else \{\s*"absolute\+exact"\s*\}/,
+  );
+  // The SDK: `Scrub.seek(seconds, { keyframes })` sends the field under that
+  // name, and only when true, so older players see the intent they always
+  // saw. An installed SDK before 1.5.22 has no such option and sends nothing.
+  const player = sdkFile("plugin/player.js");
+  const version = JSON.parse(
+    readFileSync(
+      new URL(
+        "../../node_modules/@vestra-player/sdk/package.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ).version as string;
+  const atLeast = (a: string, b: string) => {
+    const x = a.split(".").map(Number);
+    const y = b.split(".").map(Number);
+    for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i]! > y[i]!;
+    return true;
+  };
+  const sends =
+    /kind: "seek",\s*seconds,\s*\.\.\.\(keyframes \? \{ keyframes \} : \{\}\)/.test(
+      player,
+    );
+  if (atLeast(version, "1.5.22"))
+    assert.ok(
+      sends,
+      `SDK ${version}: Scrub.seek sends keyframes only when true`,
+    );
+  else
+    assert.ok(
+      !/kind: "seek"[^}]*keyframes/.test(player),
+      `SDK ${version}: a seek control carries no keyframes field`,
+    );
+});
+
 test("IMAGE_LIMITS match the player's (host/src/ui_image.rs)", () => {
   const source = host("src/ui_image.rs");
   const constant = (name: string) => {
