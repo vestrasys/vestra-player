@@ -1147,6 +1147,18 @@ export declare class TestHost implements Transport {
         /** The new position. */
         landed: number;
     }[];
+    /**
+     * Every seek a plugin submitted (`player.seek`, `Scrub.seek`), newest
+     * last, with the mode it asked for. The test host lands on the exact
+     * target either way (the player lands a `keyframes` seek on the last
+     * keyframe at or before it); the core's step seeks are in `coreSeeks`.
+     */
+    readonly seeks: {
+        /** The target. */
+        seconds: number;
+        /** `Scrub.seek(seconds, { keyframes: true })` (SDK 1.5.22). */
+        keyframes: boolean;
+    }[];
     /** Every `player.step`, newest last. */
     readonly steps: {
         /** `"frame"` or `"keyframe"`. */

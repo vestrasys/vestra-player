@@ -316,7 +316,7 @@ class ScrubHandle {
                 !(this.#pending && sameStamp(raw.stamp, this.#pending)))
                 this.end();
         });
-        this.#queue = new Latest(async (seconds) => {
+        this.#queue = new Latest(async ({ seconds, keyframes }) => {
             if (!this.#active)
                 throw superseded;
             const started = Date.now();
@@ -326,9 +326,15 @@ class ScrubHandle {
                 intentVersion: expected.intentVersion + 1,
             };
             try {
+                // `keyframes` goes on the wire only when set, so players before
+                // 0.5.3 (which ignore the field) see the same intent as before.
                 const ticket = await service.submit({
                     kind: "control",
-                    control: { kind: "seek", seconds },
+                    control: {
+                        kind: "seek",
+                        seconds,
+                        ...(keyframes ? { keyframes } : {}),
+                    },
                     expected,
                 });
                 if (!this.#active)
@@ -354,11 +360,11 @@ class ScrubHandle {
     get active() {
         return this.#active;
     }
-    seek(seconds) {
+    seek(seconds, options = {}) {
         if (!this.#active)
             return Promise.resolve(false);
         return this.#queue
-            .push(seconds)
+            .push({ seconds, keyframes: options.keyframes === true })
             .catch((error) => (error === superseded ? false : Promise.reject(error)));
     }
     end() {

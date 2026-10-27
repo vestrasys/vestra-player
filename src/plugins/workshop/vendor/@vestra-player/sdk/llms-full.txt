@@ -1,4 +1,4 @@
-# @vestra-player/sdk 1.5.20: full reference
+# @vestra-player/sdk 1.5.23: full reference
 
 > Everything needed to write a Vestra Player plugin (plugin API `vestra/1`): the guides, every public declaration of `@vestra-player/sdk` and `@vestra-player/sdk/testing` with its documentation, and the complete source of the example plugins. Generated from the SDK's sources by scripts/llms.mjs; the short index is llms.txt.
 
@@ -445,7 +445,7 @@ Key names describe keys, not characters, with two deliberate exceptions:
 - **Option combinations match the physical key**, so `Alt+O` fires for ⌥O although that key types `ø`, and dead keys (⌥E, ⌥N…) fire too. On layouts that need Option to type a symbol (German ⌥5 = ``, ⌥L = `@`), a binding for the typed symbol (`"["`, `"@"`) wins over one for the physical key (`Alt+5`).
 - **`Ctrl` is portable, `Cmd` is not.** On macOS `Ctrl+X` fires for both ⌃X and ⌘X, `Cmd+X` only for ⌘X. On Windows `Cmd` is the Windows logo key, which the system mostly keeps, so write `Ctrl+…` for a binding that works on both systems.
 
-Mouse bindings apply only over the video area. `Mouse:LeftDoubleClick:LeftHalf` and `:RightHalf` win over the plain double click; wheel bindings count accumulated scroll steps. The right button is reserved for the context menu, and a left drag in window mode moves the window instead of clicking. A `Mouse:LeftClick` fires on release, except when the same modifiers also have a double-click binding and the click's command is not checkable: then the player waits the system's double-click interval to tell a click from a double click. (A checkable command such as play/pause runs at once; a double click runs it twice, which restores its state, and the double-click binding still fires.)
+Mouse bindings apply only over the video area. `Mouse:LeftDoubleClick:LeftHalf` and `:RightHalf` win over the plain double click; wheel bindings count accumulated scroll steps. The right button is reserved for the context menu, and a left drag in window mode moves the window instead of clicking. A `Mouse:LeftClick` fires on release, except when the same modifiers also have a double-click binding and the click's command is not checkable: then the player waits the system's double-click interval to tell a click from a double click. (A checkable command such as play/pause runs at once; a double click runs it twice, which restores its state, and the double-click binding still fires.) The player's defaults (player 0.5.2): a left click on the video is Play/Pause and nothing is bound to a double click (up to 0.5.1 a double click was Toggle Fullscreen); a click whose command is disabled does nothing.
 
 ##### The user's bindings
 
@@ -524,7 +524,7 @@ Without this rule, a "jump to bookmark" that arrives a moment late would seek a 
 Two controls follow other rules because they are about the device or a gesture, not the source:
 
 - setOutput (volume and mute) is last-write-wins and resolves `false` when a newer value replaced it.
-- scrub() starts a drag gesture on a seek bar: each seek in the gesture is conditional on the previous one, only the newest target is kept, and any outside change ends the gesture. Use it for a slider instead of calling `seek` on every move.
+- scrub() starts a drag gesture on a seek bar: each seek in the gesture is conditional on the previous one, only the newest target is kept, and any outside change ends the gesture. Use it for a slider instead of calling `seek` on every move. Scrub.seek with `{ keyframes: true }` (player 0.5.3, SDK 1.5.22) lands on the last keyframe at or before the target instead of the exact frame; see Step seeks: exact or keyframe.
 
 #### Sources
 
@@ -579,15 +579,17 @@ The player's **Previous** and **Next** (menu, keys, the bottom bar) are not tied
 
 #### Core actions
 
-Play/pause, stop, previous/next, frame steps, relative seeks, speed, volume and mute are **core actions**: commands the player registers itself, so they work with no plugin running. plugin.host.run(action) runs one exactly as its menu item or key would, with the same checks and the same on-screen text. A plugin's play button should call `host.run("play-pause")` rather than `setPaused`, so that it behaves like the Space key in every case (restart after the end, the "Paused" message, disabled without a source).
+Play/pause, stop, previous/next, frame steps, relative seeks, speed, volume and mute are **core actions**: commands the player registers itself, so they work with no plugin running. plugin.host.run(action) runs one exactly as its menu item or key would, with the same checks and the same on-screen text. A plugin's play button should call `host.run("play-pause")` rather than `setPaused`, so that it behaves like the Space key in every case (restart after the end, the "Paused" message, disabled without a source). A fullscreen button calls `host.run("fullscreen")` (player 0.5.2), which toggles the main window like Enter; show the button's state from `window.state.fullscreen`.
 
 The difference from the `Player` methods: a `Player` control is a precise operation the plugin is responsible for (conditional, silent, its own error handling); a core action is the user's action, performed on the plugin's behalf. The action ids, menu places and default keys are in Reference: commands; how keys reach them is in Commands, menus and key bindings.
 
 ##### Step seeks: exact or keyframe
 
-← / → (`seek-backward` / `seek-forward`) seek by the step that player.setStepSeek sets (5 s by default). By default they land on the exact time, which on a file with keyframes far apart means decoding from the previous keyframe first: a visible stall on 4K video. `setStepSeek({ seconds, keyframes: true })` (player 0.5.1, SDK 1.5.19) makes them land on a keyframe instead: forward on the first keyframe at or after position + step, backward on the last at or before position − step, and every press moves. Presses during a seek add up and continue from where it landed, and the on-screen text shows the landed time. Sources without moving video still seek exactly. The seek bar, `player.seek`, scrubs, chapters, loops and `player.step` are never affected.
+← / → (`seek-backward` / `seek-forward`) seek by the step that player.setStepSeek sets (5 s by default). By default they land on the exact time, which on a file with keyframes far apart means decoding from the previous keyframe first: a visible stall on 4K video. `setStepSeek({ seconds, keyframes: true })` (player 0.5.1, SDK 1.5.19) makes them land on a keyframe instead: forward on the first keyframe at or after position + step, backward on the last at or before position − step, and every press moves. Presses during a seek add up and continue from where it landed, and the on-screen text shows the landed time. Sources without moving video still seek exactly. `player.seek`, chapters, loops and `player.step` are never affected.
 
 For more steps of your own (Ctrl+→ and the like), call `plugin.host.run("seek-forward", { seconds: 30 })`: the same checks, mode, accumulation and text as →. In keyframe mode it resolves once the seek has landed, so `player.state.position` is current afterwards; do not show your own text for it. Set `"minPlayerVersion": "0.5.1"` when you rely on either option: older players ignore them.
+
+A seek bar follows the same switch with Scrub.seek and its `keyframes` option, `scrub.seek(seconds, { keyframes })` (player 0.5.3, SDK 1.5.22): with `keyframes: true` every click and drag step lands on the last keyframe at or before the pointer, so the picture follows the pointer on any file (an exact seek decodes from the keyframe to the target first: seconds on 4K video with keyframes far apart, and a drag freezes); the position is up to one keyframe interval early, and that is what the player shows, as PotPlayer does. Do not seek twice (keyframes, then exactly): one mode per gesture, the user's choice. Older players ignore the option and seek exactly (`"minPlayerVersion": "0.5.3"` when you rely on it).
 
 ```ts
 const keyframes = true; // the plugin's own setting
@@ -596,9 +598,13 @@ const seek = (delta: number) =>
   plugin.host.run(delta < 0 ? "seek-backward" : "seek-forward", {
     seconds: Math.abs(delta),
   });
+// The seek bar: one gesture per press, every click and drag step in the same mode.
+const scrub = plugin.player.scrub();
+await scrub.seek(27.6, { keyframes });
+scrub.end();
 ```
 
-In tests, `TestHost.keyframes` models the source's keyframes, and `host.coreSeeks` records each step seek with where it landed.
+In tests, `TestHost.keyframes` models the source's keyframes, `host.coreSeeks` records each step seek with where it landed, and `host.seeks` records each `player.seek` and `Scrub.seek` with the mode it asked for (the test host lands on the exact target in both modes).
 
 ## Concept: Video and audio processing
 
@@ -960,6 +966,7 @@ The API is the same on macOS and Windows; what differs is the system's own part:
 - **Hard-coded colours.** They do not follow the palette. Use `Theme.*`, and `Theme.danger` for errors.
 - **A `Ctrl+W` default binding.** It never fires in tool windows and floating panels. Pick another key.
 - **Two of a kind.** One panel per plugin, one backdrop per player, one OSD info block per plugin, one open dialog at a time (`busy`).
+- **An `if` that flips under the pointer.** `if touch.has-hover: Rectangle { … }` (a hover highlight, an accent bar, a tooltip-like box that follows the pointer) creates and destroys an element on every hover change. While a video plays, each such change costs the player's UI thread far more than a property change: the player's accessibility tree (screen readers, UI Automation) is rebuilt for the whole window each time, measured at 100–160 ms per hover on Windows, enough to drop the video to 10–15 frames a second while the pointer moves. Keep the element and change properties instead: `Rectangle { visible: touch.has-hover; … }` or `opacity:`. Use `if` for things that change rarely (a mode, a selection made with a click, a list that was loaded), never for something that follows the pointer or a hover.
 - **Slot state without `events`.** PanelSlot.state, appearance.theme and their `onChange` listeners follow other plugins and the user only with the `events` capability.
 
 #### Testing
@@ -2176,6 +2183,8 @@ The table lists the API whose documentation names a player version, newest last:
 | 0.4.2 | Resolvers.fileTypes, Resolvers.onFileTypesChange |
 | 0.4.3 | CommandOptions.path, PropValue, View.set, Appearance.setLanguage, TemplateArgs, Text, ConfirmOptions.args, OsdPanel.set, OsdPanelOptions.maxColumns, Osd.show |
 | 0.5.1 | ImageRef, ImageOptions.maxSide, PropValue, Ui.image, Ui.remoteImage, SlotState.reason, Panel.setInteraction, PlaybackStats.presentedFps, Player.setStepSeek, Host.run, Packages.reload |
+| 0.5.2 | HostAction |
+| 0.5.3 | Scrub.seek |
 
 The Slint library carries no version tags: `Theme.danger` needs player 0.3.0; `@vestra/icons.slint` and the palette `vestra-light` need 0.4.0 (Theme).
 
@@ -2410,7 +2419,7 @@ Every command the player (`host`) and its built-in plugins register when the pla
 | Copy to Clipboard ▸ File Name |  | `vestra.playback/copy-name` |
 | Copy to Clipboard ▸ Folder Path |  | `vestra.playback/copy-folder` |
 | Copy to Clipboard ▸ Full Path |  | `vestra.playback/copy-path` |
-| Playback ▸ Play/Pause | `Space` | `host/play-pause` |
+| Playback ▸ Play/Pause | `Space`, `Mouse:LeftClick` | `host/play-pause` |
 | Playback ▸ Previous | `PageUp`, `Mouse:X1` | `host/previous` |
 | Playback ▸ Next | `PageDown`, `Mouse:X2` | `host/next` |
 | Playback ▸ Seek ▸ Previous Frame | `D` | `host/frame-back` |
@@ -2640,7 +2649,7 @@ Every command the player (`host`) and its built-in plugins register when the pla
 | Emulator ▸ Open NES ROM… |  | `vestra.nes/nes.open` |
 | Emulator ▸ Stop NES |  | `vestra.nes/nes.stop` |
 | Emulator ▸ NES Tools… |  | `vestra.nes/nes.window` |
-| Toggle Fullscreen | `Enter`, `Alt+Enter`, `F11`, `Mouse:LeftDoubleClick` | `host/fullscreen` |
+| Toggle Fullscreen | `Enter`, `Alt+Enter`, `F11` | `host/fullscreen` |
 | Screen ▸ Picture-in-Picture |  | `vestra.window/pip` |
 | Screen ▸ Mini Size | ``` | `vestra.window/mini` |
 | Screen ▸ 0.5× | `1` | `vestra.window/size.0.5` |
@@ -2753,7 +2762,7 @@ The player's own playback commands, which plugin.host.run runs by id (capability
 | Action | Menu item | Default bindings |
 | --- | --- | --- |
 | `stop` | Close | `F4` |
-| `play-pause` | Playback ▸ Play/Pause | `Space` |
+| `play-pause` | Playback ▸ Play/Pause | `Space`, `Mouse:LeftClick` |
 | `previous` | Playback ▸ Previous | `PageUp`, `Mouse:X1` |
 | `next` | Playback ▸ Next | `PageDown`, `Mouse:X2` |
 | `frame-back` | Playback ▸ Seek ▸ Previous Frame | `D` |
@@ -2766,6 +2775,7 @@ The player's own playback commands, which plugin.host.run runs by id (capability
 | `volume-up` | Audio ▸ Volume + | `ArrowUp`, `Mouse:WheelUp` |
 | `volume-down` | Audio ▸ Volume − | `ArrowDown`, `Mouse:WheelDown` |
 | `mute` | Audio ▸ Mute | `M` |
+| `fullscreen` | Toggle Fullscreen | `Enter`, `Alt+Enter`, `F11` |
 
 The player also owns **Toggle Fullscreen** (`host/fullscreen`), **Leave Fullscreen** (`host/exit-fullscreen`, `Escape`, only in fullscreen) and **Quit** (`host/quit`); their keys are in Built-in commands.
 
@@ -2940,17 +2950,19 @@ Icon { name: "close"; width: 20px; height: 20px; }         // scaled
 | `add` | 10 × 10 | 1.5px |
 | `remove` | 10 × 10 | 1.5px |
 | `sort` | 10 × 10 | 1.5px |
+| `fullscreen` | 14 × 12 | 1.5px |
+| `exit-fullscreen` | 14 × 12 | 1.5px |
 
 #### Widgets
 
 `@vestra/widgets.slint`: compact controls drawn with the theme. Other controls come from `std-widgets.slint`.
 
-**`ToolTipArea`**: Hover for 600 ms to show `text` beside the pointer. The tip closes when the pointer leaves or presses; it shows again on the next hover.
+**`ToolTipArea`**: Hover for about half a second to show `text` beside the pointer. The tip closes when the pointer leaves, or presses on content that does not take the press itself; it shows again on the next hover. It is Slint's input-transparent tooltip: every press reaches the control under the pointer, and the tip does not take the keyboard focus. (Up to SDK 1.5.20 the tip was a PopupWindow, which swallowed the first press after it showed and took the focus while it was open.)
 
 | Member | Kind | Default | Note |
 | --- | --- | --- | --- |
 | `text` | in `string` |  |  |
-| `showing` | out `bool` |  | The tip is showing (read-only). |
+| `showing` | out `bool` |  | The tip is showing (read-only); it follows the tip's delay closely, not exactly. |
 
 **`Button`**: Dialog button: text (21px, or 18px when `small`), or an icon button when `text` is empty and `icon` holds Path data drawn in an icon-width × icon-height viewbox (filled, or 1.5px round-capped lines when `stroked`, as the @vestra/icons.slint set). The caller sizes icon buttons.
 
@@ -4944,8 +4956,27 @@ the gesture.
 
 ```ts
 interface Scrub {
-  /** Resolves `true` when this exact target was applied, `false` when a newer target superseded it or the gesture ended. Rejects on a host failure. */
-  seek(seconds: number): Promise<boolean>;
+  /**
+   * Seek within the gesture. Resolves `true` when this target was applied,
+   * `false` when a newer target superseded it or the gesture ended. Rejects
+   * on a host failure.
+   *
+   * `keyframes: true` (player 0.5.3, SDK 1.5.22): land on the last keyframe
+   * at or before `seconds` instead of decoding up to that exact frame. The
+   * picture appears at once on any file (tens of milliseconds instead of
+   * seconds on 4K video with keyframes far apart), up to one keyframe
+   * interval before the target; the position the player reports is the
+   * keyframe's. Use it when the user chose keyframe seeks (the same switch
+   * as Player.setStepSeek), and the exact seek otherwise. The player
+   * sends a repeated target of the same gesture only once while the seek is
+   * still running (a click is a press and a release), but an exact seek to
+   * the target of a keyframe seek is always sent. Omitted or `false`: exact,
+   * as before. Older players ignore the option and seek exactly: set
+   * `"minPlayerVersion": "0.5.3"` when you rely on it.
+   */
+  seek(seconds: number, options?: {
+    keyframes?: boolean;
+  }): Promise<boolean>;
   /** False once anyone else changed the source; later seeks are ignored. */
   readonly active: boolean;
   /** End the gesture; later seeks resolve `false`. */
@@ -5234,10 +5265,11 @@ interface Player {
    * step, backward on the last at or before position − step, and they
    * always move. Presses during a seek add up and continue from where it
    * landed; the on-screen text shows the landed time. Sources without moving
-   * video seek exactly. The seek bar, Player.seek, scrubs, chapters,
-   * loops and Player.step are unaffected. Omitted or `false`: exact
-   * seeks, as before. `seconds` and `keyframes` are written as a pair: the
-   * newest call sets both.
+   * video seek exactly. Player.seek, chapters, loops and
+   * Player.step are unaffected, and so is a scrub unless it asks for
+   * keyframes itself (Scrub.seek with `keyframes: true`, SDK 1.5.22).
+   * Omitted or `false`: exact seeks, as before. `seconds` and `keyframes`
+   * are written as a pair: the newest call sets both.
    *
    * Older players ignore `keyframes`: set `"minPlayerVersion": "0.5.1"` in
    * the manifest when you rely on it.
@@ -5278,23 +5310,29 @@ interface Player {
 
 ### HostAction
 
-The core's basic playback actions (menu commands owned by the player).
+The core's basic playback actions (menu commands owned by the player),
+and the main window's fullscreen toggle.
 
 | action | default bindings | behaviour |
 | --- | --- | --- |
 | `stop` | F4 | close the source |
-| `play-pause` | Space | pause / resume, replay after the end |
+| `play-pause` | Space, a left click on the video (player 0.5.2) | pause / resume, replay after the end |
 | `previous` / `next` | PageUp, Mouse:X1 / PageDown, Mouse:X2 | ask the sequence provider |
 | `frame-back` / `frame-forward` | D / F | `player.step("frame", …)` |
 | `seek-backward` / `seek-forward` | ← / → | relative seek by `setStepSeek` seconds (or `host.run`'s `seconds`), exact or to keyframes as `setStepSeek` says |
 | `rate-normal`, `rate-down`, `rate-up` | Z, X, C | 1×, ±0.1 within 0.25–4 |
 | `volume-up` / `volume-down` | ↑ / ↓, wheel | ±5 (`volume-up` stops at 100) |
 | `mute` | M | toggle mute |
+| `fullscreen` | Enter, Alt+Enter, F11 | toggle the main window's fullscreen: enter it when windowed, leave it when fullscreen, as the Toggle Fullscreen command does (SDK 1.5.21, player 0.5.2; `unavailable` when the player has no window) |
 
-In the binding overlay their keys are `host/<action>`.
+In the binding overlay their keys are `host/<action>`. `fullscreen`
+changes no playback state: read the result from `window.state.fullscreen`
+(`plugin.window.onChange`), which also changes when the user toggles it.
+Players before 0.5.2 reject it with `invalid`: set
+`"minPlayerVersion": "0.5.2"` when you use it.
 
 ```ts
-type HostAction = "play-pause" | "stop" | "previous" | "next" | "frame-back" | "frame-forward" | "seek-backward" | "seek-forward" | "rate-down" | "rate-up" | "rate-normal" | "volume-up" | "volume-down" | "mute";
+type HostAction = "play-pause" | "stop" | "previous" | "next" | "frame-back" | "frame-forward" | "seek-backward" | "seek-forward" | "rate-down" | "rate-up" | "rate-normal" | "volume-up" | "volume-down" | "mute" | "fullscreen";
 ```
 
 ### Host
@@ -7433,6 +7471,15 @@ class TestHost implements Transport {
     keyframes: boolean;
     /** The new position. */
     landed: number;
+  }[];
+  /**
+   * Every seek a plugin submitted (`player.seek`, `Scrub.seek`), newest last, with the mode it asked for. The test host lands on the exact target either way (the player lands a `keyframes` seek on the last keyframe at or before it); the core's step seeks are in `coreSeeks`.
+   */
+  readonly seeks: {
+    /** The target. */
+    seconds: number;
+    /** `Scrub.seek(seconds, { keyframes: true })` (SDK 1.5.22). */
+    keyframes: boolean;
   }[];
   /** Every `player.step`, newest last. */
   readonly steps: {
@@ -9730,7 +9777,7 @@ From top to bottom:
 - **The window.** A fixed `width`; `Theme.bg-panel` instead of a hard-coded colour, so the background follows the player's palette.
 - **The properties.** `level` is `in-out` because both the plugin and the user change it; `label` is only written by the plugin. `level-changed` reports a drag; `reset` reports the reset buttons.
 - **The layout.** `Theme.dialog-padding` and `Theme.font-body` give the spacing and text size of the player's dialogs.
-- **`ToolTipArea`** shows its `text` after the pointer rests on its content for 600 ms.
+- **`ToolTipArea`** shows its `text` after the pointer rests on its content for about half a second (600 ms before player 0.5.2). The tip never takes a press or the keyboard focus: a click goes to the control under the pointer even while the tip shows.
 - **The sliders** are bound _two-way_ to `level` with `<=>`, so dragging one moves the other at once, inside Slint. `changed` passes the value to the plugin. A one-way binding (`value: root.level`) would be broken by Slint the first time the user moved the slider. `panel: true` is the panel style; without it, the bar style.
 - **`Button`** with `text` is a dialog button; `small: true` is the 18-pixel one.
 - **Icon buttons** have no `text`; `icon` is SVG-style path data drawn in an `icon-width` × `icon-height` box (14×12 by default). `stroked: true` draws lines instead of filling. `checked` draws the icon in the accent colour.

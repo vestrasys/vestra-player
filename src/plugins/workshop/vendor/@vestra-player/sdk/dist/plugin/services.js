@@ -30,6 +30,7 @@ const ACTIONS = new Set([
     "volume-up",
     "volume-down",
     "mute",
+    "fullscreen",
 ]);
 export const host = (scope) => ({
     async run(action, options) {
