@@ -83,7 +83,7 @@ test("the packaged runtime layout (runner + SDK package) runs a plugin", async (
   const result = await run(
     "export default async function activate(plugin) { plugin.commands.add({ id: 'a', path: ['文件', 'A'], run() {} }); }",
     undefined,
-    join(staged, "runner.ts"),
+    join(staged, "runner.js"),
   );
   assert.deepEqual(result, {
     event: "runtime.ready",

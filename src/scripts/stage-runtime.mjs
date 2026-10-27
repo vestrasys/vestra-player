@@ -5,12 +5,21 @@
  * on Windows; found by host/src/runtime_paths.rs):
  *
  *   runtime/
- *     runner.ts                              the plugin runner (Node strips its types)
+ *     runner.js                              the own-process plugin runner
+ *     shared-runner.js                       the runner for trusted plugins sharing one process
+ *     boot.js                                one plugin's life, used by both runners
  *     package.json                           {"type":"module"}
  *     node_modules/@vestra-player/sdk/
  *       package.json                         exports map (runner and workshop resolve through it)
-       LICENSE                              the SDK's license (Apache-2.0), shipped with its code
+ *       LICENSE                              the SDK's license (Apache-2.0), shipped with its code
  *       dist/**.js, dist/**.d.ts             SDK implementation; the .d.ts serve the workshop
+ *
+ * The runners are `src/runtime/*.ts` with their types stripped here, so a
+ * plugin process does not load Node's type stripper (Amaro, a WebAssembly
+ * module: about 15 MB of memory per process, doc/process/rounds/2026-10-plugin-memory.md).
+ * Stripping replaces the types with spaces, so line and column numbers in
+ * stack traces are those of the source; relative imports of `./x.ts` become
+ * `./x.js`. A development build runs the `.ts` files directly.
  *
  * The SDK files are copied from the installed package
  * (node_modules/@vestra-player/sdk, the version src/package.json pins). It
@@ -19,8 +28,8 @@
  *   node scripts/stage-runtime.mjs <destination>/runtime
  */
 import { existsSync } from "node:fs";
-import { cp, mkdir, rm, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire, stripTypeScriptTypes } from "node:module";
 import { dirname, join, resolve } from "node:path";
 
 const source = resolve(import.meta.dirname, "..");
@@ -30,12 +39,51 @@ const sdk = dirname(
   ),
 );
 
+/** A relative module specifier ending in `.ts`, as written in an import. */
+const RELATIVE_TS =
+  /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(["'])(\.\.?\/[^"']+)\.ts\2/g;
+
+/**
+ * `source` (TypeScript with erasable syntax only, as the tsconfig requires)
+ * as JavaScript: Node's own stripper, the one that runs `.ts` at run time.
+ */
+export function stripTypes(text, file = "<source>") {
+  // The API is marked experimental in Node 26; its warning says nothing a
+  // packaging log needs.
+  const emitWarning = process.emitWarning;
+  process.emitWarning = (warning, ...rest) => {
+    if (!String(warning).includes("stripTypeScriptTypes"))
+      emitWarning.call(process, warning, ...rest);
+  };
+  let javascript;
+  try {
+    javascript = stripTypeScriptTypes(text, { mode: "strip" });
+  } finally {
+    process.emitWarning = emitWarning;
+  }
+  javascript = javascript.replace(
+    RELATIVE_TS,
+    (_, keyword, quote, path) => `${keyword}${quote}${path}.js${quote}`,
+  );
+  if (/(["'])\.\.?\/[^"']+\.ts\1/.test(javascript))
+    throw new Error(`${file}: a relative .ts import was not rewritten`);
+  return javascript;
+}
+
 export async function stageRuntime(destination) {
   if (!existsSync(join(sdk, "dist/player-runtime.js")))
     throw new Error(`SDK package without dist/ at ${sdk}: run npm ci`);
   await rm(destination, { recursive: true, force: true });
   await mkdir(destination, { recursive: true });
-  await cp(join(source, "runtime/runner.ts"), join(destination, "runner.ts"));
+  const runtime = join(source, "runtime");
+  for (const name of await readdir(runtime)) {
+    if (!name.endsWith(".ts") || name.endsWith(".d.ts")) continue;
+    const file = join(runtime, name);
+    await writeFile(
+      join(destination, name.replace(/\.ts$/, ".js")),
+      stripTypes(await readFile(file, "utf8"), file),
+    );
+  }
   await writeFile(
     join(destination, "package.json"),
     '{"type":"module","private":true}\n',

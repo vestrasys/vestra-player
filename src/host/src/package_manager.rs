@@ -1438,7 +1438,7 @@ fn uninstallable(
 /// `scripts/stage-plugins.mjs`). Each runs in place from its directory
 /// under `<resources>/plugins`: nothing is copied, hashed or written there.
 /// The installation protects those files like the rest of `<resources>`
-/// (the host runs `runtime/runner.ts` and `ui/host.slint` from there too):
+/// (the host runs `runtime/runner.js` and `ui/host.slint` from there too):
 /// the `.app` signature on macOS, an admin-only install directory on
 /// Windows.
 mod builtin {
