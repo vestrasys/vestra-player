@@ -95,7 +95,7 @@ What the counters say: at 4K the draw plus swap already takes 10 ms of every 16.
 
 ### Instrumentation (host 0.5.2, this branch)
 
-`ui: turn max A timers max A cursor max A pointer max A mean B ms other max A ms` at the end of the frame log line: UI-thread time between winit's callbacks, by what started each stretch (one loop turn; Slint's timers; a pointer move; the stretches in which Slint processed the coalesced pointer moves, that is hit testing, hover changes, callbacks and the `if` toggles; other window events). Posted closures (the AccessKit rebuild, `show_frame`) count with the stretch they land in. During the menu sweep, `turn max` ≫ `paint max` with `tick max` small localizes the work; `pointer max` large points at Slint's hover processing.
+`ui: turn max A timers max A cursor max A pre max A mean B ms pointer max A mean B ms other max A ms` at the end of the frame log line: UI-thread time between winit's callbacks, by what started each stretch (one loop turn; Slint's timers; a pointer move; a draw request's preparation up to `BeforeRendering`; the stretches in which Slint processed the coalesced pointer moves, that is hit testing, hover changes, callbacks and the `if` toggles; other window events). Requests the gate holds are not counted anywhere (Slint does not run for them), so `paint` is the mean of real draws. Posted closures (the AccessKit rebuild, `show_frame`) count with the stretch they land in. During the menu sweep, `turn max` ≫ `paint max` with `tick max` small localizes the work; `pointer max` large points at Slint's hover processing.
 
 ### A/B build for the coordinator
 
@@ -188,7 +188,7 @@ If the A/B confirms AccessKit, two further options for the maintainer, both need
 ## Changes (host 0.5.2)
 
 - `frame_pacing.rs`: `LINGER`; `Gate::vblank` returns `Blank::{Draw, Wait, Stop}`; per-second pacing statistics in the frame log (`pacing: moves held eager close refused skipped late paint` and the `ui:` buckets), counted in the winit hook (`new_events`, `window_event`, `about_to_wait`) and the blank handler.
-- `render_target.rs`: `Stages`, the software renderer's per-second counters (`mpv: calls retarget resized copied updates took work dropped delayed`), fed by the render thread (`backend.rs`) and the control worker (mpv's `frame-drop-count`, `vo-delayed-frame-count`, read only with `VESTRA_FRAME_LOG=1`).
+- `render_target.rs`: `Stages`, the software renderer's per-second counters (`mpv: calls resize-only resized copied updates took work dropped delayed`), fed by the render thread (`backend.rs`) and the control worker (mpv's `frame-drop-count`, `vo-delayed-frame-count`, read only with `VESTRA_FRAME_LOG=1`).
 - `main.rs`: both lines appended to the windowed frame log line; the stages also to the headless one.
 - `doc/architecture/README.md`: the new fields and the linger rule.
 - Version 0.5.2 (`Cargo.toml`, `Cargo.lock`).

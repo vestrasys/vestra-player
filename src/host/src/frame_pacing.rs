@@ -349,6 +349,10 @@ enum Segment {
     Paint = 1,
     Cursor = 2,
     Other = 3,
+    /// A draw request the gate held: Slint did not run for it (no draw, no
+    /// pointer flush), so the stretch is the hook's own bookkeeping. Not
+    /// reported; without it every held request would dilute `paint`.
+    Held = 4,
 }
 
 /// What the pacing did since the frame log's last line (UI thread).
@@ -367,7 +371,7 @@ struct Stats {
     /// The longest a blank waited for the UI thread.
     late: Duration,
     /// UI-thread time by segment kind (`Segment` as the index).
-    segments: [Bucket; 4],
+    segments: [Bucket; 5],
     /// Segments in which Slint processed the pending pointer moves (it
     /// coalesces them and processes them at the next other event or when
     /// the loop is about to wait): hit testing, hover changes, callbacks.
@@ -416,6 +420,15 @@ impl Stats {
                 self.pointer.add(took);
             }
         }
+    }
+    /// The draw request just recorded was held for a blank: its stretch is
+    /// relabelled, and a pointer move it would have flushed stays pending.
+    fn held(&mut self) {
+        if let Some((Segment::Paint, began, flush)) = self.open {
+            self.open = Some((Segment::Held, began, false));
+            self.pending_move |= flush;
+        }
+        self.held += 1;
     }
     /// Slint begins drawing (`BeforeRendering`): what the draw's segment
     /// held so far was preparation, the pointer flush among it.
@@ -568,7 +581,7 @@ impl CustomApplicationHandler for Handler {
             if decision.draw {
                 pacing.stats.draw(now, decision.arm);
             } else {
-                pacing.stats.held += 1;
+                pacing.stats.held();
             }
             if decision.deliver {
                 // Runs after this draw (a posted message): the refused
@@ -609,7 +622,7 @@ pub fn draw_began() {
 }
 
 /// `VESTRA_FRAME_LOG`: what the pacing did since the last call, appended to
-/// the frame log's line ("" without pacing): pointer moves over the main
+/// the frame log's line ("" without pacing, or after the clock failed): pointer moves over the main
 /// window, held redraw requests, draws at once with the clock stopped
 /// (`eager`), draws less than half a refresh apart (`close`), blanks the
 /// UI thread was too busy to take (`skipped`), the longest a blank waited
@@ -620,6 +633,7 @@ pub fn log_text() -> String {
         pacing
             .borrow_mut()
             .as_mut()
+            .filter(|p| !p.failed)
             .map_or_else(String::new, |pacing| {
                 let skipped = pacing.clock.skipped.swap(0, Ordering::Relaxed);
                 pacing.stats.text(skipped)
@@ -915,14 +929,13 @@ mod tests {
         let now = Instant::now();
         stats.blank(now, now + ms(3));
         stats.blank(now + REFRESH, now + REFRESH);
-        // A turn: timers 2 ms, a pointer move stored, a draw of 5 ms (eager,
-        // the clock was stopped) which processes the pending move first.
         let t = now + REFRESH;
+        // A turn: timers 2 ms, a pointer move stored, a draw of 5 ms (eager,
+        // the clock was stopped) which processes the pending move first (1 ms).
         stats.new_events(t);
         stats.event(t + ms(2), Segment::Cursor);
         stats.event(t + ms(3), Segment::Paint);
         stats.draw(t + ms(3), true);
-        // Slint processes the move, then draws from 4 ms on.
         stats.draw_began(t + ms(4));
         stats.event(t + ms(8), Segment::Other);
         stats.about_to_wait(t + ms(9));
@@ -931,10 +944,22 @@ mod tests {
         stats.event(t + ms(10), Segment::Paint);
         stats.draw(t + ms(10), false);
         stats.about_to_wait(t + ms(11));
-        stats.held = 2;
+        // Two held requests: Slint does not run for them, so their stretches
+        // count neither as paint nor as pointer time ...
+        stats.new_events(t + ms(12));
+        stats.event(t + ms(12), Segment::Paint);
+        stats.held();
+        stats.about_to_wait(t + ms(13));
+        // ... and a pointer move stored before one stays pending: Slint
+        // processes it when the loop is about to wait (2 ms here).
+        stats.new_events(t + ms(14));
+        stats.event(t + ms(14), Segment::Cursor);
+        stats.event(t + ms(14), Segment::Paint);
+        stats.held();
+        stats.about_to_wait(t + ms(16));
         assert_eq!(
             stats.text(1),
-            " pacing: moves 1 held 2 eager 1 close 1 refused 0 skipped 1 late max 3.0 ms paint max 4.0 mean 2.5 ms ui: turn max 9.0 timers max 2.0 cursor max 1.0 pre max 1.0 mean 1.0 ms pointer max 1.0 mean 1.0 ms other max 1.0 ms"
+            " pacing: moves 2 held 2 eager 1 close 1 refused 0 skipped 1 late max 3.0 ms paint max 4.0 mean 2.5 ms ui: turn max 9.0 timers max 2.0 cursor max 1.0 pre max 1.0 mean 1.0 ms pointer max 2.0 mean 1.5 ms other max 1.0 ms"
         );
         // Zeroed; a pointer move processed at the wait counts as pointer time.
         stats.new_events(t + ms(20));

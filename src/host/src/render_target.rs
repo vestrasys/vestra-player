@@ -346,7 +346,7 @@ pub struct FrameSlot {
 #[derive(Debug, Default)]
 pub struct Stages {
     calls: AtomicU64,
-    retarget: AtomicU64,
+    resize_only: AtomicU64,
     resized: AtomicU64,
     copied: AtomicU64,
     updates: AtomicU64,
@@ -371,7 +371,7 @@ impl Stages {
     /// how long it took and how much of that was work (not mpv's wait).
     pub fn call(&self, fresh: bool, resized: bool, copied: bool, took: Duration, work: Duration) {
         self.calls.fetch_add(1, Ordering::Relaxed);
-        self.retarget
+        self.resize_only
             .fetch_add(u64::from(!fresh), Ordering::Relaxed);
         self.resized
             .fetch_add(u64::from(resized), Ordering::Relaxed);
@@ -389,7 +389,7 @@ impl Stages {
         self.delayed
             .store(delayed.map_or(0, |n| n.max(0) + 1), Ordering::Relaxed);
     }
-    /// ` mpv: calls C retarget T resized Z copied K updates U took max A mean B ms
+    /// ` mpv: calls C resize-only T resized Z copied K updates U took max A mean B ms
     /// work max A mean B ms dropped D delayed L` since the last call (`-` for
     /// a counter mpv did not report).
     pub fn text(&self) -> String {
@@ -418,8 +418,8 @@ impl Stages {
             }
         };
         format!(
-            " mpv: calls {calls} retarget {} resized {} copied {} updates {} took {took} work {work} dropped {} delayed {}",
-            self.retarget.swap(0, Ordering::Relaxed),
+            " mpv: calls {calls} resize-only {} resized {} copied {} updates {} took {took} work {work} dropped {} delayed {}",
+            self.resize_only.swap(0, Ordering::Relaxed),
             self.resized.swap(0, Ordering::Relaxed),
             self.copied.swap(0, Ordering::Relaxed),
             self.updates.swap(0, Ordering::Relaxed),
@@ -723,7 +723,7 @@ mod tests {
         let stages = Stages::default();
         assert_eq!(
             stages.text(),
-            " mpv: calls 0 retarget 0 resized 0 copied 0 updates 0 took - work - dropped - delayed -"
+            " mpv: calls 0 resize-only 0 resized 0 copied 0 updates 0 took - work - dropped - delayed -"
         );
         stages.mpv_counts(Some(5), Some(1));
         let _ = stages.text();
@@ -745,7 +745,7 @@ mod tests {
         stages.mpv_counts(Some(9), Some(1));
         assert_eq!(
             stages.text(),
-            " mpv: calls 2 retarget 1 resized 1 copied 1 updates 1 took max 8.0 mean 6.0 ms work max 5.0 mean 4.0 ms dropped 4 delayed 0"
+            " mpv: calls 2 resize-only 1 resized 1 copied 1 updates 1 took max 8.0 mean 6.0 ms work max 5.0 mean 4.0 ms dropped 4 delayed 0"
         );
     }
 
