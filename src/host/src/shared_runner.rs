@@ -1,0 +1,846 @@
+//! The shared runner: the trusted (built-in) plugins in one Node process
+//! (`src/runtime/shared-runner.ts`, design and protocol in
+//! doc/process/rounds/2026-10-shared-runner.md §5, §7, §8).
+//!
+//! One stdin/stdout pair carries every member's messages; each line is the
+//! member's own message with the owner generation `g` spliced in as the first
+//! key (`{"g":12,"id":7,…}`), `g` 0 being the runner itself (`runner.hello`,
+//! `plugin.start`, `runner.ping`/`pong`, `runner.stopped`, `runner.fault`,
+//! `runner.stop`). The host keeps one generation per plugin, as for an own
+//! process; the runner has a [`RunnerId`] that no registry sees.
+//!
+//! This module is the process layer: spawning, the reader and writer
+//! threads, a member's send and stop, the heartbeat and the restart policy
+//! ([`Policy`]). Who runs here (`Host::trust`) and what a restart does
+//! (`Host::restart_shared`) live in `package_manager.rs`.
+#![forbid(unsafe_code)]
+
+use crate::Event;
+use crate::plugins::MAX_MESSAGE_BYTES;
+use anyhow::{Context, Result};
+use serde_json::{Value, json};
+use std::{
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    io::{BufRead, BufReader, Read, Write},
+    path::Path,
+    process::{Child, Stdio},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+    },
+    thread,
+    time::{Duration, Instant},
+};
+
+/// One incarnation of the shared runner (a new one after each restart).
+pub type RunnerId = u32;
+
+/// The longest line the runner may write: a member's message (at most
+/// [`MAX_MESSAGE_BYTES`], which the runner enforces before writing) plus the
+/// envelope's `"g":<digits>,`.
+pub const LINE_LIMIT: usize = MAX_MESSAGE_BYTES + 64;
+/// Lines one member may have queued for the runner: an own process's queue
+/// (`plugins.rs` `OUTBOUND_CAPACITY`); past it that member alone is stopped.
+const MEMBER_QUEUE: usize = 1024;
+/// The runner's one queue; a member reaching [`MEMBER_QUEUE`] is stopped
+/// long before 16 of them fill it.
+const QUEUE: usize = 16 * MEMBER_QUEUE;
+/// V8's old-space cap for the runner: a leaking member ends the runner (and
+/// is restarted with the others) at 1 GiB instead of exhausting the machine.
+pub const MAX_OLD_SPACE: &str = "--max-old-space-size=1024";
+/// How long a stopped member's cleanup may take before the host goes on:
+/// an own process's stop window (`plugins.rs` `Drop for Plugin`).
+const STOP_WAIT: Duration = Duration::from_millis(300);
+/// Heartbeat (user ruling 2026-10-27): a ping every 2 s
+/// (`VESTRA_SHARED_PING_MS` for tests); five unanswered = hung.
+pub const PING_MS: u64 = 2_000;
+pub const MISSED_LIMIT: u32 = 5;
+/// Restart loop guard (user ruling 2026-10-27): the third restart within a
+/// minute switches the trusted plugins to own processes until the player
+/// quits.
+pub const RESTART_LIMIT: usize = 3;
+pub const RESTART_WINDOW_MS: u64 = 60_000;
+/// The runner's heap past which the host logs a warning (once per runner).
+const HEAP_WARNING: u64 = 512 * 1024 * 1024;
+
+/// Whether the trusted plugins may share a runner at all: not with
+/// `VESTRA_SHARED=0` (every plugin in its own process, as before 0.5.6).
+pub fn enabled() -> bool {
+    std::env::var_os("VESTRA_SHARED").is_none_or(|value| value != "0")
+}
+
+/// The heartbeat interval (`VESTRA_SHARED_PING_MS`, else [`PING_MS`]).
+pub fn ping_ms() -> u64 {
+    std::env::var("VESTRA_SHARED_PING_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|ms| (50..=60_000).contains(ms))
+        .unwrap_or(PING_MS)
+}
+
+/// A line for the runner: `{"g":<g>,` and the message's own keys.
+pub fn envelope(g: u64, message: &Value) -> Option<String> {
+    if !message.is_object() {
+        return None;
+    }
+    let inner = message.to_string();
+    Some(if inner == "{}" {
+        format!("{{\"g\":{g}}}")
+    } else {
+        format!("{{\"g\":{g},{}", &inner[1..])
+    })
+}
+
+/// `g` from a line's first bytes (`{"g":<digits>`), which the runner always
+/// writes first: enough to blame an oversize line on its plugin.
+pub fn prefix_generation(bytes: &[u8]) -> Option<u64> {
+    let rest = bytes.strip_prefix(b"{\"g\":")?;
+    let digits = rest.iter().take_while(|b| b.is_ascii_digit()).count();
+    if digits == 0 || digits > 16 || !matches!(rest.get(digits), Some(b',' | b'}')) {
+        return None;
+    }
+    std::str::from_utf8(&rest[..digits]).ok()?.parse().ok()
+}
+
+/// A line from the runner: its generation and the message without `g`.
+pub fn parse_line(bytes: &[u8]) -> std::result::Result<(u64, Value), String> {
+    let g = prefix_generation(bytes).ok_or("a line without a leading generation")?;
+    let mut value: Value =
+        serde_json::from_slice(bytes).map_err(|e| format!("invalid protocol: {e}"))?;
+    let object = value
+        .as_object_mut()
+        .ok_or("a line that is not an object")?;
+    object.remove("g");
+    Ok((g, value))
+}
+
+struct Line {
+    g: u64,
+    message: Value,
+    /// The member's count of queued lines, decremented once written.
+    queued: Option<Arc<AtomicUsize>>,
+}
+
+/// What the host, the members and the reader thread share.
+pub struct Link {
+    pub id: RunnerId,
+    outbound: mpsc::SyncSender<Line>,
+    state: Mutex<LinkState>,
+}
+#[derive(Default)]
+struct LinkState {
+    /// False once the runner's stdout closed or the host let it go: a
+    /// member's stop then returns at once.
+    alive: bool,
+    /// Generations whose lines are accepted (started, not yet stopped).
+    members: BTreeSet<u64>,
+    /// Members waiting for their `runner.stopped`: `timedOut`.
+    waiters: BTreeMap<u64, mpsc::Sender<bool>>,
+    /// Members whose cleanup outlived the stop window.
+    leaked: usize,
+}
+impl Link {
+    fn state(&self) -> std::sync::MutexGuard<'_, LinkState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+    fn is_member(&self, g: u64) -> bool {
+        self.state().members.contains(&g)
+    }
+    fn stopped(&self, g: u64, timed_out: bool) {
+        let mut state = self.state();
+        if let Some(waiter) = state.waiters.remove(&g) {
+            let _ = waiter.send(timed_out);
+        }
+        if timed_out {
+            state.leaked += 1;
+        }
+    }
+    /// The runner is gone or let go: nobody waits for it any more.
+    fn close(&self) {
+        let mut state = self.state();
+        state.alive = false;
+        state.waiters.clear();
+    }
+    /// Members whose cleanup did not finish in time, this incarnation.
+    pub fn leaked(&self) -> usize {
+        self.state().leaked
+    }
+    /// Live members.
+    pub fn members(&self) -> usize {
+        self.state().members.len()
+    }
+}
+
+/// A plugin's place in the shared runner (`plugins::Plugin`'s runner).
+pub struct Member {
+    link: Arc<Link>,
+    g: u64,
+    queued: Arc<AtomicUsize>,
+}
+impl Member {
+    pub fn runner(&self) -> RunnerId {
+        self.link.id
+    }
+    pub fn send(&self, message: Value) -> Result<()> {
+        if self.queued.load(Ordering::Acquire) >= MEMBER_QUEUE {
+            anyhow::bail!("plugin output backpressure: {MEMBER_QUEUE} messages queued");
+        }
+        self.queued.fetch_add(1, Ordering::AcqRel);
+        let sent = self.link.outbound.try_send(Line {
+            g: self.g,
+            message,
+            queued: Some(self.queued.clone()),
+        });
+        match sent {
+            Ok(()) => Ok(()),
+            // The runner is gone (its writer stopped): the message is lost
+            // with it, and the runner's exit restarts this member. An error
+            // here would stop the member before the restart could see it.
+            Err(mpsc::TrySendError::Disconnected(_)) => {
+                self.queued.fetch_sub(1, Ordering::AcqRel);
+                Ok(())
+            }
+            Err(mpsc::TrySendError::Full(_)) => {
+                self.queued.fetch_sub(1, Ordering::AcqRel);
+                anyhow::bail!("shared runner output backpressure: its queue is full")
+            }
+        }
+    }
+    /// `runtime.stop` for this member, then wait for its `runner.stopped`
+    /// (at most [`STOP_WAIT`], as an own process gets before it is killed);
+    /// the runner lives on. Called where an own process would be waited for
+    /// and killed (`Drop for Plugin`, on the host's reaper thread).
+    pub fn stop(&self) {
+        let (done, wait) = mpsc::channel();
+        {
+            let mut state = self.link.state();
+            if !state.alive {
+                state.members.remove(&self.g);
+                return;
+            }
+            state.waiters.insert(self.g, done);
+        }
+        let sent = self.link.outbound.try_send(Line {
+            g: self.g,
+            message: json!({"event":"runtime.stop","data":null}),
+            queued: None,
+        });
+        let outcome = match sent {
+            Ok(()) => wait.recv_timeout(STOP_WAIT),
+            Err(_) => Err(mpsc::RecvTimeoutError::Disconnected),
+        };
+        let mut state = self.link.state();
+        state.waiters.remove(&self.g);
+        state.members.remove(&self.g);
+        if matches!(outcome, Err(mpsc::RecvTimeoutError::Timeout)) && state.alive {
+            state.leaked += 1;
+        }
+    }
+}
+
+/// The running shared runner, owned by the host (`Host.shared`).
+pub struct SharedRunner {
+    pub link: Arc<Link>,
+    child: Option<Child>,
+    /// `runner.hello`'s data, once it arrived.
+    pub hello: Option<Value>,
+    pub heartbeat: Heartbeat,
+    /// The last `runner.pong`'s `stats` (for the diagnostics of a restart).
+    pub stats: Value,
+    heap_warned: bool,
+    /// Since when it has had no member (`SharedRunner::idle`).
+    empty_since: Option<u64>,
+}
+impl SharedRunner {
+    /// Start the runner: `node --max-old-space-size=1024 shared-runner.js`.
+    /// Its lines arrive as `Event::Request(g, …)` for members and
+    /// `Event::Runner(id, …)` for the runner; its end as
+    /// `Event::RunnerExited(id)`.
+    pub fn spawn(id: RunnerId, events: mpsc::Sender<Event>, now: u64) -> Result<Self> {
+        let paths = crate::runtime_paths::get();
+        let mut child = paths
+            .node_command()
+            .arg(MAX_OLD_SPACE)
+            .arg(&paths.shared_runner)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .with_context(|| paths.node_failure())?;
+        let stdin = child.stdin.take().context("shared runner stdin")?;
+        let stdout = child.stdout.take().context("shared runner stdout")?;
+        let (outbound, output) = mpsc::sync_channel::<Line>(QUEUE);
+        let link = Arc::new(Link {
+            id,
+            outbound,
+            state: Mutex::new(LinkState {
+                alive: true,
+                ..Default::default()
+            }),
+        });
+        thread::Builder::new()
+            .name("shared-runner-write".into())
+            .spawn(move || write_lines(stdin, output))?;
+        let reader = link.clone();
+        thread::Builder::new()
+            .name("shared-runner-read".into())
+            .spawn(move || {
+                read_lines(BufReader::new(stdout), &reader, &events);
+                reader.close();
+                let _ = events.send(Event::RunnerExited(reader.id));
+            })?;
+        diag!("shared runner {id}: started (pid {})", child.id());
+        Ok(Self {
+            link,
+            child: Some(child),
+            hello: None,
+            heartbeat: Heartbeat::new(now),
+            stats: Value::Null,
+            heap_warned: false,
+            empty_since: None,
+        })
+    }
+
+    /// Admit plugin `g`: `plugin.start` with what an own process gets from
+    /// its arguments and environment (`plugins.rs` `load_manifest`).
+    pub fn start(
+        &mut self,
+        g: u64,
+        id: &str,
+        directory: &Path,
+        data_directory: Option<&Path>,
+        app: &Value,
+    ) -> Result<Member> {
+        self.link.state().members.insert(g);
+        let start = json!({"event":"plugin.start","data":{
+            "g": g,
+            "id": id,
+            "directory": directory,
+            "dataDirectory": data_directory,
+            "locale": crate::i18n::locale(),
+            "app": app,
+        }});
+        let sent = self.link.outbound.try_send(Line {
+            g: 0,
+            message: start,
+            queued: None,
+        });
+        if let Err(error) = sent {
+            self.link.state().members.remove(&g);
+            anyhow::bail!("shared runner: {error}");
+        }
+        self.empty_since = None;
+        Ok(Member {
+            link: self.link.clone(),
+            g,
+            queued: Arc::new(AtomicUsize::new(0)),
+        })
+    }
+
+    /// A control line from the runner (`g` 0) other than `runner.stopped`
+    /// (which the reader thread hands to the waiting member itself).
+    /// Returns a `runner.fault`'s `(g, message)`.
+    pub fn control(&mut self, message: &Value) -> Option<(u64, String)> {
+        match message["event"].as_str() {
+            Some("runner.hello") => {
+                diag!("shared runner {}: hello {}", self.link.id, message["data"]);
+                self.hello = Some(message["data"].clone());
+                None
+            }
+            Some("runner.pong") => {
+                self.heartbeat.pong(message["data"]["seq"].as_u64());
+                self.stats = message["data"]["stats"].clone();
+                if std::env::var_os("VESTRA_TRACE").is_some() {
+                    diag!("shared runner {}: {}", self.link.id, self.stats);
+                }
+                let heap = self.stats["heapUsed"].as_u64().unwrap_or(0);
+                if heap >= HEAP_WARNING && !self.heap_warned {
+                    self.heap_warned = true;
+                    diag!(
+                        "host.warning shared runner {}: heap {} MB",
+                        self.link.id,
+                        heap / (1024 * 1024)
+                    );
+                }
+                None
+            }
+            Some("runner.fault") => Some((
+                message["data"]["g"].as_u64().unwrap_or(0),
+                message["data"]["message"]
+                    .as_str()
+                    .unwrap_or("uncaught exception")
+                    .chars()
+                    .take(512)
+                    .collect(),
+            )),
+            _ => {
+                diag!("shared runner {}: unknown line {message}", self.link.id);
+                None
+            }
+        }
+    }
+
+    /// The heartbeat at a host tick: a ping when due; `Err` with the reason
+    /// once the runner counts as hung (no hello within the hello window,
+    /// or [`MISSED_LIMIT`] pings unanswered).
+    pub fn tick(&mut self, now: u64, interval: u64) -> std::result::Result<(), String> {
+        if self.hello.is_none() {
+            return if now.saturating_sub(self.heartbeat.since) >= interval * MISSED_LIMIT as u64 {
+                Err(format!(
+                    "no hello within {} s",
+                    interval * MISSED_LIMIT as u64 / 1000
+                ))
+            } else {
+                Ok(())
+            };
+        }
+        match self.heartbeat.tick(now, interval) {
+            Beat::Wait => Ok(()),
+            Beat::Ping(seq) => {
+                let _ = self.link.outbound.try_send(Line {
+                    g: 0,
+                    message: json!({"event":"runner.ping","data":{"seq":seq}}),
+                    queued: None,
+                });
+                Ok(())
+            }
+            Beat::Hung => Err(format!(
+                "no heartbeat for {} s",
+                interval * MISSED_LIMIT as u64 / 1000
+            )),
+        }
+    }
+
+    /// Without a member for a second: it is let go (`retire`) until the next
+    /// trusted plugin starts.
+    pub fn idle(&mut self, now: u64) -> bool {
+        if self.link.members() > 0 {
+            self.empty_since = None;
+            return false;
+        }
+        let since = *self.empty_since.get_or_insert(now);
+        now.saturating_sub(since) >= 1_000
+    }
+
+    /// Let it go without waiting on the caller's thread: `runner.stop`
+    /// (every member's cleanup, then exit) when `graceful`, else killed at
+    /// once; killed after [`STOP_WAIT`] either way.
+    pub fn retire(mut self, graceful: bool) {
+        self.link.close();
+        let Some(mut child) = self.child.take() else {
+            return;
+        };
+        if graceful {
+            let _ = self.link.outbound.try_send(Line {
+                g: 0,
+                message: json!({"event":"runner.stop"}),
+                queued: None,
+            });
+        } else {
+            let _ = child.kill();
+        }
+        let spawned = thread::Builder::new()
+            .name("shared-runner-reap".into())
+            .spawn(move || wait_or_kill(&mut child));
+        if let Err(error) = spawned {
+            diag!("shared runner: {error}");
+        }
+    }
+}
+impl Drop for SharedRunner {
+    /// The player quits: `runner.stop` (the members' cleanups run
+    /// concurrently in the runner), [`STOP_WAIT`], then killed — the same
+    /// window an own process gets.
+    fn drop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = self.link.outbound.try_send(Line {
+                g: 0,
+                message: json!({"event":"runner.stop"}),
+                queued: None,
+            });
+            wait_or_kill(&mut child);
+        }
+        self.link.close();
+    }
+}
+
+fn wait_or_kill(child: &mut Child) {
+    let deadline = Instant::now() + STOP_WAIT;
+    while Instant::now() < deadline {
+        if child.try_wait().ok().flatten().is_some() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+fn write_lines(mut stdin: impl Write, output: mpsc::Receiver<Line>) {
+    for line in output {
+        let Some(text) = envelope(line.g, &line.message) else {
+            diag!("shared runner: a message that is not an object was not sent");
+            continue;
+        };
+        let written = stdin
+            .write_all(text.as_bytes())
+            .and_then(|()| stdin.write_all(b"\n"))
+            .and_then(|()| stdin.flush());
+        if let Some(queued) = &line.queued {
+            queued.fetch_sub(1, Ordering::AcqRel);
+        }
+        // The runner is gone; its reader reports the exit.
+        if written.is_err() {
+            break;
+        }
+    }
+}
+
+/// The runner's stdout, line by line, until it closes or writes a line no
+/// member can own (then the runner is restarted: nothing else writes
+/// there, `runner.fault` with `g` 0).
+fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event>) {
+    let fault = |message: String| {
+        let _ = events.send(Event::Runner(
+            link.id,
+            json!({"event":"runner.fault","data":{"g":0,"message":message}}),
+        ));
+    };
+    loop {
+        let mut bytes = Vec::new();
+        let read = Read::by_ref(&mut reader)
+            .take(LINE_LIMIT as u64 + 1)
+            .read_until(b'\n', &mut bytes);
+        match read {
+            Ok(0) | Err(_) => return,
+            Ok(_) if bytes.len() > LINE_LIMIT => match prefix_generation(&bytes) {
+                // That plugin is stopped; the runner and the others go on.
+                Some(g) if g > 0 && link.is_member(g) => {
+                    let _ = events.send(Event::RuntimeFault(
+                        g,
+                        "protocol message exceeds 1 MiB".into(),
+                    ));
+                    if !bytes.ends_with(b"\n") && reader.skip_until(b'\n').unwrap_or(0) == 0 {
+                        return;
+                    }
+                }
+                _ => return fault("an oversize line without a plugin generation".into()),
+            },
+            Ok(_) => match parse_line(&bytes) {
+                Ok((0, message)) => {
+                    if message["event"] == "runner.stopped" {
+                        if let Some(g) = message["data"]["g"].as_u64() {
+                            link.stopped(g, message["data"]["timedOut"] == true);
+                        }
+                    } else if events.send(Event::Runner(link.id, message)).is_err() {
+                        return;
+                    }
+                }
+                Ok((g, message)) => {
+                    // A plugin already stopped (its last lines), or none of
+                    // this runner's: never another owner's.
+                    if link.is_member(g) && events.send(Event::Request(g, message)).is_err() {
+                        return;
+                    }
+                }
+                Err(error) => return fault(error),
+            },
+        }
+    }
+}
+
+/// The heartbeat's state (`SharedRunner::tick`).
+#[derive(Debug)]
+pub struct Heartbeat {
+    /// When the runner started, then when the last ping went out.
+    since: u64,
+    seq: u64,
+    /// The last ping not answered yet.
+    awaiting: Option<u64>,
+    missed: u32,
+}
+#[derive(Debug, PartialEq, Eq)]
+pub enum Beat {
+    Wait,
+    Ping(u64),
+    Hung,
+}
+impl Heartbeat {
+    pub fn new(now: u64) -> Self {
+        Self {
+            since: now,
+            seq: 0,
+            awaiting: None,
+            missed: 0,
+        }
+    }
+    pub fn tick(&mut self, now: u64, interval: u64) -> Beat {
+        if self.seq > 0 && now.saturating_sub(self.since) < interval {
+            return Beat::Wait;
+        }
+        if self.awaiting.is_some() {
+            self.missed += 1;
+            if self.missed >= MISSED_LIMIT {
+                return Beat::Hung;
+            }
+        }
+        self.seq += 1;
+        self.since = now;
+        self.awaiting = Some(self.seq);
+        Beat::Ping(self.seq)
+    }
+    pub fn pong(&mut self, seq: Option<u64>) {
+        if seq.is_some() && seq == self.awaiting {
+            self.awaiting = None;
+            self.missed = 0;
+        }
+    }
+}
+
+/// The restart policy of one player run (user rulings 2026-10-27).
+#[derive(Debug, Default)]
+pub struct Policy {
+    /// Restarts within the last [`RESTART_WINDOW_MS`].
+    restarts: VecDeque<u64>,
+    /// After [`RESTART_LIMIT`] restarts within the window: own processes for
+    /// every plugin until the player quits.
+    pub failed_open: bool,
+    /// Plugins a fault was attributed to: their own process for this run.
+    pub quarantined: BTreeSet<String>,
+    /// The next runner's id.
+    next: RunnerId,
+}
+impl Policy {
+    pub fn next_id(&mut self) -> RunnerId {
+        self.next += 1;
+        self.next
+    }
+    /// A restart at `now`: `true` when it is the one too many (fail open).
+    pub fn restart(&mut self, now: u64) -> bool {
+        while self
+            .restarts
+            .front()
+            .is_some_and(|at| now.saturating_sub(*at) >= RESTART_WINDOW_MS)
+        {
+            self.restarts.pop_front();
+        }
+        self.restarts.push_back(now);
+        if self.restarts.len() >= RESTART_LIMIT {
+            self.failed_open = true;
+        }
+        self.failed_open
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn the_envelope_puts_g_first_without_reserializing_the_message() {
+        let message = json!({"id":7,"result":{"a":1}});
+        let line = envelope(12, &message).unwrap();
+        assert!(line.starts_with("{\"g\":12,"), "{line}");
+        let (g, back) = parse_line(line.as_bytes()).unwrap();
+        assert_eq!((g, back), (12, message));
+        assert_eq!(envelope(3, &json!({})).unwrap(), "{\"g\":3}");
+        assert_eq!(envelope(3, &json!([1])), None);
+    }
+
+    #[test]
+    fn a_generation_is_read_only_from_the_first_key() {
+        assert_eq!(prefix_generation(b"{\"g\":42,\"id\":1"), Some(42));
+        assert_eq!(prefix_generation(b"{\"g\":0}"), Some(0));
+        assert_eq!(prefix_generation(b"{\"id\":1,\"g\":4}"), None);
+        assert_eq!(prefix_generation(b"{\"g\":4x"), None);
+        assert_eq!(prefix_generation(b"{\"g\":,"), None);
+        assert_eq!(prefix_generation(b"{\"g\":12345678901234567,"), None);
+        assert!(parse_line(b"{\"id\":1,\"g\":4}").is_err());
+        assert!(parse_line(b"{\"g\":4,").is_err());
+    }
+
+    fn link(members: &[u64]) -> (Link, mpsc::Receiver<Line>) {
+        let (outbound, output) = mpsc::sync_channel(QUEUE);
+        let link = Link {
+            id: 1,
+            outbound,
+            state: Mutex::new(LinkState {
+                alive: true,
+                members: members.iter().copied().collect(),
+                ..Default::default()
+            }),
+        };
+        (link, output)
+    }
+
+    fn read(link: &Link, input: Vec<u8>) -> Vec<Event> {
+        let (events, received) = mpsc::channel();
+        read_lines(Cursor::new(input), link, &events);
+        drop(events);
+        received.into_iter().collect()
+    }
+
+    #[test]
+    fn lines_go_to_their_member_and_control_lines_to_the_host() {
+        let (link, _output) = link(&[5]);
+        let (done, stopped) = mpsc::channel();
+        link.state().waiters.insert(5, done);
+        let input = b"{\"g\":5,\"id\":1,\"method\":\"commands.register\",\"params\":{}}\n\
+            {\"g\":9,\"event\":\"runtime.ready\"}\n\
+            {\"g\":0,\"event\":\"runner.hello\",\"data\":{\"pid\":1}}\n\
+            {\"g\":0,\"event\":\"runner.stopped\",\"data\":{\"g\":5,\"timedOut\":true}}\n"
+            .to_vec();
+        let events = read(&link, input);
+        assert_eq!(events.len(), 2, "g 9 is no member; stopped is consumed");
+        assert!(
+            matches!(&events[0], Event::Request(5, m) if m["method"] == "commands.register" && m.get("g").is_none())
+        );
+        assert!(matches!(&events[1], Event::Runner(1, m) if m["event"] == "runner.hello"));
+        assert_eq!(stopped.try_recv(), Ok(true));
+        assert_eq!(link.leaked(), 1);
+    }
+
+    #[test]
+    fn an_oversize_line_stops_its_plugin_and_reading_goes_on() {
+        let (link, _output) = link(&[7, 8]);
+        let mut input = format!(
+            "{{\"g\":7,\"id\":1,\"params\":\"{}\"}}\n",
+            "x".repeat(LINE_LIMIT)
+        )
+        .into_bytes();
+        input.extend_from_slice(b"{\"g\":8,\"event\":\"runtime.ready\"}\n");
+        let events = read(&link, input);
+        assert!(matches!(&events[0], Event::RuntimeFault(7, m) if m.contains("1 MiB")));
+        assert!(matches!(&events[1], Event::Request(8, _)));
+        assert_eq!(events.len(), 2);
+    }
+
+    #[test]
+    fn a_line_no_plugin_owns_is_a_runner_fault() {
+        for input in [
+            format!("{}\n", "x".repeat(LINE_LIMIT + 10)).into_bytes(),
+            b"junk from a raw stdout write\n{\"g\":8,\"event\":\"runtime.ready\"}\n".to_vec(),
+            b"{\"g\":8,\"event\":\n".to_vec(),
+        ] {
+            let (link, _output) = link(&[8]);
+            let events = read(&link, input);
+            assert_eq!(events.len(), 1);
+            assert!(
+                matches!(&events[0], Event::Runner(1, m) if m["event"] == "runner.fault" && m["data"]["g"] == 0)
+            );
+        }
+    }
+
+    #[test]
+    fn a_member_queue_is_bounded_and_the_writer_frees_it() {
+        let (link, output) = link(&[3]);
+        let member = Member {
+            link: Arc::new(link),
+            g: 3,
+            queued: Arc::new(AtomicUsize::new(0)),
+        };
+        for _ in 0..MEMBER_QUEUE {
+            member.send(json!({"event":"x"})).unwrap();
+        }
+        assert!(member.send(json!({"event":"x"})).is_err());
+        let mut written = Vec::new();
+        let lines: Vec<_> = output.try_iter().collect();
+        let (sink, input) = mpsc::sync_channel(QUEUE);
+        for line in lines {
+            sink.send(line).unwrap();
+        }
+        drop(sink);
+        write_lines(&mut written, input);
+        assert_eq!(member.queued.load(Ordering::Acquire), 0);
+        let text = String::from_utf8(written).unwrap();
+        assert_eq!(text.lines().count(), MEMBER_QUEUE);
+        assert!(text.starts_with("{\"g\":3,\"event\":\"x\"}\n"));
+        member.send(json!({"event":"x"})).unwrap();
+        // The runner is gone: no error (that would stop the member before
+        // the runner's exit restarts it), nothing counted as queued.
+        drop(output);
+        member.send(json!({"event":"x"})).unwrap();
+        assert_eq!(member.queued.load(Ordering::Acquire), 1);
+    }
+
+    #[test]
+    fn a_member_stop_waits_for_its_stopped_line_or_returns_when_the_runner_is_gone() {
+        let (link, output) = link(&[4]);
+        let link = Arc::new(link);
+        let member = Member {
+            link: link.clone(),
+            g: 4,
+            queued: Arc::new(AtomicUsize::new(0)),
+        };
+        let answer = link.clone();
+        let runner = thread::spawn(move || {
+            let line = output.recv().unwrap();
+            assert_eq!(
+                envelope(line.g, &line.message).unwrap(),
+                "{\"g\":4,\"data\":null,\"event\":\"runtime.stop\"}"
+            );
+            answer.stopped(4, false);
+            output
+        });
+        let began = Instant::now();
+        member.stop();
+        assert!(began.elapsed() < STOP_WAIT);
+        assert_eq!(link.members(), 0);
+        assert_eq!(link.leaked(), 0);
+        let _output = runner.join().unwrap();
+        // No answer: the stop window, then a leak.
+        link.state().members.insert(4);
+        member.stop();
+        assert_eq!(link.leaked(), 1);
+        // Gone: no wait at all.
+        link.close();
+        let began = Instant::now();
+        member.stop();
+        assert!(began.elapsed() < Duration::from_millis(50));
+    }
+
+    #[test]
+    fn five_unanswered_pings_are_a_hang() {
+        let mut beat = Heartbeat::new(0);
+        assert_eq!(beat.tick(0, 2000), Beat::Ping(1));
+        assert_eq!(beat.tick(1999, 2000), Beat::Wait);
+        beat.pong(Some(1));
+        assert_eq!(beat.tick(2000, 2000), Beat::Ping(2));
+        // A stale pong does not count.
+        beat.pong(Some(1));
+        let mut now = 2000;
+        for seq in 3..=6 {
+            now += 2000;
+            assert_eq!(beat.tick(now, 2000), Beat::Ping(seq));
+        }
+        now += 2000;
+        assert_eq!(beat.tick(now, 2000), Beat::Hung);
+        // One answer resets the count.
+        let mut beat = Heartbeat::new(0);
+        for at in [0, 2000, 4000, 6000] {
+            assert!(matches!(beat.tick(at, 2000), Beat::Ping(_)));
+        }
+        beat.pong(Some(4));
+        for at in [8000, 10000, 12000, 14000, 16000] {
+            assert!(matches!(beat.tick(at, 2000), Beat::Ping(_)), "{at}");
+        }
+        assert_eq!(beat.tick(18000, 2000), Beat::Hung);
+    }
+
+    #[test]
+    fn the_third_restart_within_a_minute_fails_open_for_the_run() {
+        let mut policy = Policy::default();
+        assert!(!policy.restart(0));
+        assert!(!policy.restart(30_000));
+        // The first left the window.
+        assert!(!policy.restart(61_000));
+        assert!(policy.restart(70_000));
+        assert!(policy.failed_open);
+        assert!(policy.restart(500_000), "for the rest of the run");
+        assert_eq!((policy.next_id(), policy.next_id()), (1, 2));
+    }
+}

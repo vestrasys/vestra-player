@@ -351,3 +351,13 @@ msgstr ""
 #: ui/vestra/markdown.slint:163
 msgid "[Image] {}"
 msgstr ""
+
+#. The OSD after the shared runner of the built-in plugins restarted.
+#: src/package_manager.rs
+msgid "Built-in plugins restarted after a fault"
+msgstr ""
+
+#. The OSD when the built-in plugins fall back to one process each.
+#: src/package_manager.rs
+msgid "Built-in plugins run separately for this session after repeated faults"
+msgstr ""

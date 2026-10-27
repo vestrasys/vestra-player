@@ -455,8 +455,9 @@ The user approved starting the work ("可以开工") with the coordinator's reco
 | Phase | Status (2026-10-27, branch `shared-runner`) |
 | --- | --- |
 | P0 | Done: packaged `runner.js`; `NODE_COMPILE_CACHE` measured and **not kept** (§15.1); `--max-old-space-size` moves to S2 (only the host's spawn of S uses it) |
-| S1 | Done: `boot.ts`, thin `runner.ts`, `shared-runner.ts`, `tests/sdk/shared-runner.test.ts`; nothing in the product starts the shared runner yet |
-| S2, S3 | Not started |
+| S1 | Done: `boot.ts`, thin `runner.ts`, `shared-runner.ts`, `tests/sdk/shared-runner.test.ts` |
+| S2 | Done (branch `shared-runner-s2`, host 0.5.6): the host starts the shared runner for the trusted built-ins; §16 |
+| S3 | Headless numbers in §16.3; the coordinator's GUI pass is open (§16.5) |
 
 ### 15.1 P0: `runner.js`, measured
 
@@ -494,3 +495,58 @@ Per plugin (ready ms / WS / PB): `ts` 306–1075 / 61.6–65.6 / 70.0–72.9; `j
 - Envelope reader: lines up to `MAX_MESSAGE_BYTES + 64`, `g` always the first key.
 - Heartbeat and stats consumers, `trust()`, `builtin.json` schema 3, restart-all with the loop guard and fail-open (§7, §8): none exist yet.
 - The SDK docs sentence of §13 item 4 ships with S2.
+
+## 16. S2: the host starts the shared runner (2026-10-27)
+
+API maintainer, branch `shared-runner-s2` from `main` d9a6d81, host 0.5.6. No plugin-API change: no SDK code, type, capability, error code or limit changed; `runner.ts`'s wire is untouched.
+
+### 16.1 What landed
+
+- **Packaging.** `scripts/stage-plugins.mjs` writes `builtin.json` schema 3: each entry gains `digest`, `packageDigest()` over the bytes it just unpacked and checked against the `.vxp` (the host's `package_stage::read_tree` algorithm: domain, byte-sorted `/` names, u64 LE lengths). `tests/fixtures/package-digest.json` (seven files: case order, `ui.json` before `ui/…`, a nested empty file, UTF-8 content) is hashed by `tests/sdk/package-digest.test.ts` and by the host's `digest_matches_the_shared_fixture`; a drift fails both.
+- **Reading.** `builtin::read` accepts schema 2 and 3; schema 3 requires a 64-digit lowercase hex `digest`, schema 2 refuses one. `Builtin.digest: Option<String>`. A schema-2 list runs its built-ins in own processes with one `diag` line per run.
+- **Trust** (`package_manager.rs`, `Host::trust` → the table `trust_of`). Shared only when all hold: listed in `builtin.json`, running from that entry's directory (canonical, inside the installation or `VESTRA_BUILTIN_PLUGINS`), its catalog instance is `builtin`, `VESTRA_SHARED` is not `0`, the runner has not failed open, no fault was attributed to the id this run, `builtin.json` has a digest, and the digest check passed. Otherwise own, and for a built-in one `diag` line with the reason (`shared runner: <id> runs alone: …`; shared: `shared runner <n>: <id> admitted`). `Host::load` (`--plugin`) never asks: development loads are own by construction.
+- **Digest checks off the UI thread.** `Manager::verify` runs `package_stage::inspect` (limits, manifest, digest) on a `builtin-verify` thread per built-in: for all built-ins at the first package tick (when sharing is on), for every member again after a restart (a new incarnation), and for a built-in on `packages.reload` (`reload_tick` waits for it). `start_queued` keeps a built-in whose check is running in the queue and starts the others meanwhile; past `VERIFY_WAIT` (3 s: a large package read for the first time, scanned by an antivirus) it starts in its own process ("its digest is still being checked").
+- **Process layer** (`shared_runner.rs`, new). `SharedRunner::spawn`: `node --no-experimental-webstorage --max-old-space-size=1024 <runtime>/shared-runner.js` (development build: `src/runtime/shared-runner.ts`; `runtime_paths.rs` `shared_runner`, and `missing` names it in a packaged player). One writer thread splices `{"g":<g>,` into each message (no re-serialisation); one reader thread reads lines up to `MAX_MESSAGE_BYTES + 64`, accepts only lines whose first key is `g` and whose `g` is a current member, hands `runner.stopped` to the member waiting for it, and sends `Event::Request(g, …)`, `Event::Runner(id, …)` or, at EOF, `Event::RunnerExited(id)`. An oversize line with a member's `g` prefix is `RuntimeFault(g)` and reading goes on; a line no member owns (no `g` prefix, invalid JSON, oversize without `g`) is an unattributed runner fault. `plugin.start` carries `g`, `id`, `directory`, `dataDirectory`, `locale` and `app` (a JSON value).
+- **Members.** `plugins::Plugin` keeps its per-owner state; its runner is `Own { child, outbound }` (unchanged) or `Shared(Member)`. A member's queue is bounded at 1024 lines like an own process's (past it: backpressure, that member alone is stopped). `Drop for Plugin` on the reaper thread: an own process as before; a member sends `runtime.stop` with its `g` and waits up to 300 ms for `runner.stopped` (the same window) while the runner lives on; a timeout counts as a leak. A send to a runner that is gone is dropped without an error (found in the restart drill, §16.3: the error disabled members before the runner's exit was handled, so they were not restarted).
+- **Host.** `Host.shared` (declared before `plugins`: at quit the runner gets `runner.stop`, 300 ms, then is killed, and the members' drops return at once) and `Host.shared_policy`. `shared_tick` from `package_tick` (both loops): `runner.ping` every 2 s once `runner.hello` arrived (`VESTRA_SHARED_PING_MS` for tests), five unanswered = hung; no hello within 10 s = hung; a runner without members for 1 s is let go (`runner.stop`).
+- **Faults and restarts** (user ruling 2026-10-27). `runner.fault { g }` attributed: that member goes through today's `RuntimeFault` path (failed, registrations revoked, not restarted, as an own process's crash) and is quarantined: if it starts again this run it runs in its own process. Runner exit, `runner.fault { g: 0 }`, a line no member owns, or a hang: `restart_shared` kills the runner, disables every member (registrations revoked, panels unmounted), checks their digests again, queues them in `to_start` and shows an OSD ("Built-in plugins restarted after a fault"); the members come back in a new runner as they activate. The third restart within 60 s fails open: every plugin starts in its own process until the player quits, OSD "Built-in plugins run separately for this session after repeated faults". Both strings are in `locales/` (zh-Hans written, de/es/fr/ja/ko machine-translated and marked `x-machine`). Session storage is keyed by the data key, so the restarted members find their values (`tests/shared_runner.rs`).
+- `VESTRA_SHARED=0`: every plugin in its own process (no digest checks either).
+
+### 16.2 Deviations from the design
+
+- **A hang is not attributed** (§8.2 item 4, §8.3): `handlerMs` is cumulative and is added only when a handler returns, so a member spinning inside a handler or a timer never shows up in the last pong. A hang restarts all members without quarantine; a built-in that spins on every start therefore causes a restart about every 12 s and the third fails open (≈ 25–35 s after the first hang): §11 row "one member spins" ends with every built-in in its own process, not only the spinner. Attributing hangs needs a watchdog inside the runner (a worker thread reading which member is in a handler); left for later.
+- **Leaked members** (§8.4, restart at `leaked ≥ 3` at a quiet moment): not done; leaks are counted per incarnation and printed in the restart line.
+- **`runner.hello`** is not waited for before `plugin.start`: the host writes the starts at once and the pipe holds them until the runner reads stdin (which it opens before writing hello). The hello still gates the heartbeat, and a missing hello counts as a hang.
+- **Digest check per incarnation**: as designed, plus the 3 s cap above, which the design did not have.
+- `packages.list` and `PluginInfo` unchanged (§13); the mode is in `diag` only.
+
+### 16.3 Measurements
+
+Headless, the real host: release build of this branch in a fresh stage (`C:\vestra\stage-s2\VestraPlayer-0.5.6-windows-x64`: the 0.5.2 stage's Node, FFmpeg and libmpv; ui, runtime and the 17 built-ins staged from this branch with `packaging/stage.mjs` `stageResources`, schema 3), `vestra-host.exe --headless --silent --seconds 20`, own `VESTRA_PACKAGE_STORE` / `VESTRA_PLUGIN_DATA` per profile, second start (one unrecorded first start per profile). At t = 15 s: the host's `node.exe` children, their working set and CPU (`Win32_Process`, user + kernel). Machine shared with other agents (no `quiet.flag` and no `build.lock` during the runs, about 16 GB free). Headless, three built-ins (playback, playlist, visualizer) fail their activation in both modes ("mounts require a native shell"), so 14 run.
+
+| 17 built-ins, 14 running | own (`VESTRA_SHARED=0`) | shared | design target (§11) |
+| --- | --- | --- | --- |
+| node processes | 14 | **1** | 1 |
+| node working set (MB), three runs | 703.6 / 703.5 / 703.9 | **60.6 / 61.3 / 61.2** | ≤ 150 |
+| node CPU at t = 15 s (ms), three runs | 3031 / 3109 / 2938 | **531 / 516 / 391** | ≤ 1000 |
+| last `runtime.ready` after launch (ms), three runs | 1081 / 1033 / 1023 | 1905 / 1098 / 991 | ≤ today's |
+
+The first start after staging (the 28.5 MB workshop read cold) admitted every built-in within 20 ms of each other. One later run, at a busy moment, had the workshop's digest check take ≈ 15 s; the 3 s cap of §16.1 exists for that case.
+
+Restart drill (same stage; the harness kills the shared runner's `node.exe` at t ≈ 8.7 s): detected within 4–5 ms (`RunnerExited`), the new runner's hello after 139–153 ms, 9 of 14 members ready after 288–323 ms, all 14 after **1.18 / 1.36 / 1.37 s** (with `VESTRA_TRACE` logging every request: 1.32 s). The last five (hotkeys, preferences, store, window, workshop) are the built-ins that also activate last at launch: a restart costs what their activation costs. Menus intact: with `VESTRA_TRACE`, every member sent the same number of `commands.*` requests after the restart as before it (audio 26, capture 16, history 9, hotkeys 3, info 4, marks 25, nes 3, preferences 11, store 1, subtitle-online 2, subtitles 28, video 94, window 19, workshop 1); the three failed built-ins are not members and are not restarted. Before the send fix of §16.1 one drill of three restarted only 7 of 14 (a broadcast between the kill and the exit event disabled the rest); every drill after it (10) restarted all 14.
+
+### 16.4 Tests
+
+- Host unit tests: `shared_runner.rs` (envelope and prefix parsing; reader routing, a consumed `runner.stopped`, an oversize line attributed and skipped, unowned lines as runner faults; a member's bounded queue and a send to a gone runner; a member's stop answered, timed out, or immediate once the runner is gone; heartbeat; restart window and fail-open), `package_manager.rs` (schema 2/3 strictness, a built-in's recorded digest and a changed file, off-thread digest checks with mismatch, supersede and the wait cap, the trust table), `package_stage.rs` (`digest_matches_the_shared_fixture`), `runtime_paths.rs` (the shared runner's path, `missing`).
+- `tests/shared_runner.rs` (new, `#[ignore]`d, run by `ci:local` with `--include-ignored`; needs Node 26 and libmpv): the real host headless over fixture built-ins with schema-3 digests. Two share one pid, a tampered digest runs alone in another; `process.exit` in one member restarts both together in a new process and each finds its session-storage counter (start 2), the lone one is not restarted; a member that exits the runner on every start gives three restarts and the fail-open line, and its sibling's fourth start is in its own process; `VESTRA_SHARED=0` runs alone and starts no runner.
+- `tests/sdk/package-digest.test.ts` (new): the fixture digest, order independence, name/content boundaries.
+
+### 16.5 For the coordinator's GUI pass
+
+1. Launch the packaged build: Task Manager shows **one** `node.exe` for the built-ins plus one per third-party plugin (YouTube, Bilibili when installed); every built-in's menu items, the playlist sidebar, the bottom bar and the visualizer backdrop are there.
+2. Kill the shared runner's `node.exe` (the one with `shared-runner.js` on its command line) while a file plays: playback continues, OSD "Built-in plugins restarted after a fault", panels and menus back within about 1.5 s, the playlist still lists its items (session storage).
+3. Kill it three times within a minute: the second OSD ("…run separately for this session…"), then one `node.exe` per built-in, everything usable.
+4. `VESTRA_SHARED=0`: one `node.exe` per plugin, as in 0.5.5.
+5. Change one byte of a built-in's file under `resources\plugins\<id>\` (in a copy of the installation): that plugin in its own process, `diag` "runs alone: its files have digest …"; the rest shared.
+6. Reload a built-in from the Plugin Manager: it comes back in the shared runner. Quit the player: no `node.exe` left behind.
+7. SDK: the docs patch (docs only, against SDK 1.5.25: README, *Getting started*, *How a plugin runs*, CHANGELOG "Unreleased", `llms*.txt` regenerated) ships with the next SDK patch release; S2 does not need a new SDK, so the player's dependency need not move.

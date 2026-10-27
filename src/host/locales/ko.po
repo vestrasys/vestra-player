@@ -436,3 +436,15 @@ msgstr "[이미지]"
 #, x-machine
 msgid "[Image] {}"
 msgstr "[이미지] {}"
+
+#. The OSD after the shared runner of the built-in plugins restarted.
+#: src/package_manager.rs
+#, x-machine
+msgid "Built-in plugins restarted after a fault"
+msgstr "오류로 인해 내장 플러그인을 다시 시작했습니다"
+
+#. The OSD when the built-in plugins fall back to one process each.
+#: src/package_manager.rs
+#, x-machine
+msgid "Built-in plugins run separately for this session after repeated faults"
+msgstr "오류가 반복되어 이번 세션에서는 내장 플러그인을 개별적으로 실행합니다"
