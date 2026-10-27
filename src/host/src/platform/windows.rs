@@ -58,6 +58,41 @@ fn title_bar(window: &winit::window::Window, dark: bool) {
     }
 }
 
+/// The executable's icon group (`windows/resources.rs` writes `windows/vestra.ico`,
+/// 16 to 256 px, as group 1): the logo Explorer and the taskbar show.
+const ICON_GROUP: u16 = 1;
+
+/// The player's icon at `logical` px on a display of `scale`, loaded from
+/// the executable's icon group (the system picks the closest of its sizes).
+fn icon(
+    logical: f64,
+    scale: f64,
+) -> std::result::Result<winit::window::Icon, winit::window::BadIcon> {
+    use winit::platform::windows::IconExtWindows;
+    let side = (logical * scale).round().max(1.) as u32;
+    winit::window::Icon::from_resource(ICON_GROUP, Some(winit::dpi::PhysicalSize::new(side, side)))
+}
+
+/// The player's icon on a window: the small one (16 px logical: title bar)
+/// and the large one (32 px: Alt+Tab, the taskbar button), at the window's
+/// scale (1.75: 28 and 56 px). winit's windows have none of their own, so
+/// every host window (main, floating sidebar, options, plugin windows) gets
+/// it here (`shown`). The taskbar groups by the executable, not the icon.
+fn set_icons(window: &winit::window::Window) {
+    use winit::platform::windows::WindowExtWindows;
+    let scale = window.scale_factor();
+    match (icon(16., scale), icon(32., scale)) {
+        (Ok(small), Ok(large)) => {
+            window.set_window_icon(Some(small));
+            window.set_taskbar_icon(Some(large));
+            diag!("ui: window icon set for {:?}", window.title());
+        }
+        (Err(error), _) | (_, Err(error)) => {
+            diag!("ui: no window icon for {:?}: {error}", window.title());
+        }
+    }
+}
+
 fn level(on: bool) -> winit::window::WindowLevel {
     if on {
         winit::window::WindowLevel::AlwaysOnTop
@@ -66,25 +101,91 @@ fn level(on: bool) -> winit::window::WindowLevel {
     }
 }
 
-/// Record a window the host just showed. winit has no list of an
-/// application's windows, so every `show()` reports here.
-pub fn shown(window: &slint::Window) {
+/// The winit window behind `window`, if it exists yet.
+fn native_of(window: &slint::Window) -> Option<Arc<winit::window::Window>> {
     use std::future::Future;
     let future = window.winit_window();
     let mut future = std::pin::pin!(future);
     let mut context = std::task::Context::from_waker(std::task::Waker::noop());
-    let std::task::Poll::Ready(Ok(native)) = future.as_mut().poll(&mut context) else {
-        diag!("platform: a shown window has no winit window yet");
+    match future.as_mut().poll(&mut context) {
+        std::task::Poll::Ready(Ok(native)) => Some(native),
+        _ => None,
+    }
+}
+
+/// How long `shown` waits for a window's native window (ticks of
+/// [`PENDING_TICK`]): 5 s.
+const PENDING_TRIES: u32 = 300;
+const PENDING_TICK: std::time::Duration = std::time::Duration::from_millis(16);
+
+thread_local! {
+    /// Shown windows whose native window does not exist yet, and the tries left.
+    static PENDING: RefCell<Vec<(slint::Weak<slint_interpreter::ComponentInstance>, u32)>> =
+        const { RefCell::new(Vec::new()) };
+    /// Polls [`PENDING`] while it is not empty.
+    static PENDING_TIMER: slint::Timer = slint::Timer::default();
+}
+
+/// Record a window the host just showed and give it the player's title bar
+/// (palette, level, icon). winit has no list of an application's windows,
+/// so every `show()` reports here. Slint creates the native window in the
+/// event loop after `show()`, so a window without one yet is set up as soon
+/// as it has one (polled every frame, up to 5 s).
+pub fn shown(instance: &slint_interpreter::ComponentInstance) {
+    use slint::ComponentHandle;
+    if let Some(native) = native_of(instance.window()) {
+        set_up(&native);
         return;
-    };
+    }
+    PENDING.with_borrow_mut(|pending| pending.push((instance.as_weak(), PENDING_TRIES)));
+    PENDING_TIMER.with(|timer| {
+        if !timer.running() {
+            timer.start(slint::TimerMode::Repeated, PENDING_TICK, poll_pending);
+        }
+    });
+}
+
+fn poll_pending() {
+    use slint::ComponentHandle;
+    let ready: Vec<Arc<winit::window::Window>> = PENDING.with_borrow_mut(|pending| {
+        let mut ready = Vec::new();
+        pending.retain_mut(|(weak, tries)| {
+            let Some(instance) = weak.upgrade() else {
+                return false;
+            };
+            if let Some(native) = native_of(instance.window()) {
+                ready.push(native);
+                return false;
+            }
+            *tries -= 1;
+            if *tries == 0 {
+                diag!(
+                    "platform: a shown window got no native window in 5 s; no icon or title bar set"
+                );
+            }
+            *tries > 0
+        });
+        ready
+    });
+    for native in &ready {
+        set_up(native);
+    }
+    if PENDING.with_borrow(Vec::is_empty) {
+        PENDING_TIMER.with(slint::Timer::stop);
+    }
+}
+
+/// A host window's native window exists: palette, level and icon, and the list.
+fn set_up(native: &Arc<winit::window::Window>) {
     let id = u64::from(native.id()) as i64;
     if FLOATING.get() {
         native.set_window_level(level(true));
     }
-    title_bar(&native, DARK.get());
+    title_bar(native, DARK.get());
+    set_icons(native);
     WINDOWS.with_borrow_mut(|list| {
         list.retain(|(known, weak)| *known != id && weak.strong_count() > 0);
-        list.push((id, Arc::downgrade(&native)));
+        list.push((id, Arc::downgrade(native)));
     });
 }
 
@@ -640,5 +741,20 @@ mod tests {
         assert_eq!(windows_name(Some(22631)), "Windows 11");
         assert_eq!(windows_name(Some(19045)), "Windows 10");
         assert_eq!(windows_name(None), "Windows");
+    }
+
+    /// The executable carries the icon group the windows use (the test
+    /// program is linked with the same resources), at the sizes Windows
+    /// draws at 100 %, 175 % and 200 %.
+    #[test]
+    fn the_window_icon_loads_from_the_executable_at_every_scale() {
+        for scale in [1., 1.25, 1.5, 1.75, 2.] {
+            for logical in [16., 32.] {
+                assert!(
+                    super::icon(logical, scale).is_ok(),
+                    "{logical} px at {scale}"
+                );
+            }
+        }
     }
 }

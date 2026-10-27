@@ -24,7 +24,7 @@ pub const MENU_SHOWS_CMD: bool = false;
 
 const WINDOWS: Unavailable = Unavailable("native windows are not supported on this system");
 
-pub fn shown(_window: &slint::Window) {}
+pub fn shown(_instance: &slint_interpreter::ComponentInstance) {}
 pub fn capture_windows() -> Result<NativeSnapshot> {
     Err(WINDOWS)
 }

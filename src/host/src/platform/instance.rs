@@ -96,8 +96,11 @@ impl Primary {
 
     /// Answer later launches on a thread of its own for the rest of the
     /// process: `deliver` gets each one's files (maybe none: it only wants
-    /// the player in front).
-    pub fn serve(self, deliver: impl Fn(Vec<PathBuf>) + Send + 'static) {
+    /// the player in front) and says whether it took them. A launch it
+    /// refuses (a player in its last moments, its event loop ended) gets no
+    /// acknowledgement, so it keeps trying until this process exits and
+    /// frees the lock, and becomes the next player itself.
+    pub fn serve(self, deliver: impl Fn(Vec<PathBuf>) -> bool + Send + 'static) {
         let Self {
             lock,
             listener,
@@ -108,9 +111,8 @@ impl Primary {
             .spawn(move || {
                 let _lock = lock;
                 for stream in listener.incoming() {
-                    match stream.and_then(|stream| receive(stream, &token)) {
-                        Ok(Some(files)) => deliver(files),
-                        Ok(None) => (),
+                    match stream.and_then(|stream| receive(stream, &token, &deliver)) {
+                        Ok(()) => (),
                         Err(error) => diag!("single instance: {error}"),
                     }
                 }
@@ -127,20 +129,24 @@ struct Message {
     files: Vec<PathBuf>,
 }
 
-/// One later launch's files; `None` for a connection without the token.
-fn receive(stream: TcpStream, token: &str) -> io::Result<Option<Vec<PathBuf>>> {
+/// One later launch: its files go to `deliver`, and it is acknowledged when
+/// `deliver` took them. A connection without the token is ignored.
+fn receive(
+    stream: TcpStream,
+    token: &str,
+    deliver: &impl Fn(Vec<PathBuf>) -> bool,
+) -> io::Result<()> {
     stream.set_read_timeout(Some(IO_TIMEOUT))?;
     stream.set_write_timeout(Some(IO_TIMEOUT))?;
     let mut line = String::new();
     BufReader::new((&stream).take(MAX_MESSAGE)).read_line(&mut line)?;
     let Ok(message) = serde_json::from_str::<Message>(&line) else {
-        return Ok(None);
+        return Ok(());
     };
-    if message.token != token {
-        return Ok(None);
+    if message.token != token || !deliver(message.files) {
+        return Ok(());
     }
-    (&stream).write_all(b"ok\n")?;
-    Ok(Some(message.files))
+    (&stream).write_all(b"ok\n")
 }
 
 fn hand_off(directory: &Path, files: &[PathBuf]) -> io::Result<()> {
@@ -186,10 +192,30 @@ mod tests {
             panic!("the first launch is the primary");
         };
         let (send, receive) = mpsc::channel();
+        primary.serve(move |files| send.send(files).is_ok());
+        receive
+    }
+
+    /// A player whose event loop has ended refuses handoffs: the launch is
+    /// not acknowledged and does not count as handed off (it becomes the
+    /// next player once that one exits; here the lock stays held, so it
+    /// runs on its own after the wait).
+    #[test]
+    fn a_refused_handoff_is_not_handed_off() {
+        let directory = tempfile::tempdir().unwrap();
+        let Ok(Launch::Primary(primary)) = single_instance(directory.path(), &[], Duration::ZERO)
+        else {
+            panic!("the first launch is the primary");
+        };
+        let (send, offered) = mpsc::channel();
         primary.serve(move |files| {
             let _ = send.send(files);
+            false
         });
-        receive
+        let files = [PathBuf::from("/m/late.mkv")];
+        let launch = single_instance(directory.path(), &files, Duration::from_millis(300));
+        assert!(launch.is_err(), "refused, not handed off");
+        assert_eq!(offered.recv_timeout(IO_TIMEOUT).unwrap(), files);
     }
 
     #[test]

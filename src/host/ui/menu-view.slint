@@ -9,7 +9,9 @@
 // scrolls, and the keyboard cursor stays in view. The host keeps the offset.
 // Rows are plain (non-virtualized) elements so accessibility targets map
 // one-to-one to the commands they activate.
-// Keep ROW (24px), SEPARATOR (7px), PAD (2px) and ARROW (12px) in sync with menu.rs.
+// Keep ROW (24px), SEPARATOR (7px), PAD (2px), ARROW (12px) and MenuItem's
+// columns (font size, paddings, check, spacing, submenu arrow) in sync with
+// menu.rs, which sizes each panel to its widest row.
 //
 // RULE (2026-10-27, render round): nothing under the pointer may toggle an
 // `if` as the pointer moves (hover, the lit or current row, a tip that

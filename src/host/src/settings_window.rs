@@ -477,7 +477,7 @@ impl Host {
         self.settings_select(None)?;
         if let Some(open) = &self.settings.open {
             open.instance.show()?;
-            crate::platform::shown(open.instance.window());
+            crate::platform::shown(&open.instance);
             use slint::winit_030::WinitWindowAccessor;
             open.instance
                 .window()
@@ -589,7 +589,7 @@ impl Host {
                 size.height as f32 / scale,
             ));
             self.placements.show_at(&instance, window.position())?;
-            crate::platform::shown(instance.window());
+            crate::platform::shown(&instance);
             let _ = old.instance.hide();
         }
         self.settings.open = Some(Open {

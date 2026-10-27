@@ -11,10 +11,13 @@
 //! other files, which the forced lavf demuxer would not follow either;
 //! `sub-auto` is off anyway). The host gives what matters itself
 //! (`source_backend::leased_options`): cover art beside audio files, and the
-//! demuxer cache for files on a network share ([`on_network`]), which libmpv
-//! turns on for remote files it opens by path. Reads are local positioned reads
-//! that do not block indefinitely, so libmpv's close at stop, advance or quit
-//! does not need a force-close, which `stream_cb` does not have.
+//! demuxer cache for files on a network file system ([`on_network`]), which
+//! libmpv turns on for remote files it opens by path. Reads are positioned
+//! reads on the file's handle: they block no longer than the file system's
+//! own reads, as libmpv's do when it opens the path itself (a stalled network
+//! share stalls both alike). libmpv's close at stop, advance or quit waits
+//! for a read in progress, as with a local file it reads by path; `stream_cb`
+//! has no force-close.
 #![forbid(unsafe_code)]
 
 use std::{
@@ -103,53 +106,15 @@ pub fn open(uri: &str) -> Result<Box<dyn Stream>, rsmpv::Error> {
         .ok_or(rsmpv::Error::LoadingFailed)
 }
 
-/// Where a Windows path lives, as far as its text tells.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Location {
-    /// A UNC path (`\\server\share\…`, `\\?\UNC\server\share\…`).
-    Share,
-    /// On drive letter (upper case).
-    Drive(char),
-    Other,
-}
-
-fn location(path: &str) -> Location {
-    let path = path.replace('/', "\\");
-    let drive = |rest: &str| {
-        let mut chars = rest.chars();
-        match (chars.next(), chars.next()) {
-            (Some(letter), Some(':')) if letter.is_ascii_alphabetic() => {
-                Location::Drive(letter.to_ascii_uppercase())
-            }
-            _ => Location::Other,
-        }
-    };
-    if let Some(rest) = path
-        .strip_prefix(r"\\?\")
-        .or_else(|| path.strip_prefix(r"\\.\"))
-    {
-        return match rest.get(..4) {
-            Some(unc) if unc.eq_ignore_ascii_case(r"UNC\") => Location::Share,
-            _ => drive(rest),
-        };
-    }
-    if path.starts_with(r"\\") {
-        return Location::Share;
-    }
-    drive(&path)
-}
-
-/// The file is on a network share or a mapped network drive, where libmpv
-/// would turn its demuxer cache on (`cache=auto` for remote files); it cannot
-/// tell through a stream protocol.
+/// The file is on a network file system (a share by UNC path or a mapped
+/// drive, WebDAV, NFS…), where libmpv would turn its demuxer cache on
+/// (`cache=auto` for remote files); it cannot tell through a stream
+/// protocol. Asked of the open handle, as libmpv asks its own
+/// (`vestra_win32::file_is_remote`), so it holds however the path was
+/// written (a mapped drive, `subst`, a symbolic link or junction to a share).
 #[cfg(windows)]
-pub fn on_network(path: &str) -> bool {
-    let path = std::path::absolute(path).unwrap_or_else(|_| path.into());
-    match location(&path.to_string_lossy()) {
-        Location::Share => true,
-        Location::Drive(letter) => vestra_win32::drive_is_remote(letter),
-        Location::Other => false,
-    }
+pub fn on_network(file: &File) -> bool {
+    vestra_win32::file_is_remote(file)
 }
 
 /// Lets `mpv` play [`Registration`] urls.
@@ -192,32 +157,31 @@ mod tests {
         assert_eq!(&buf, b"5678");
     }
 
-    #[test]
-    fn shares_and_drive_letters_are_told_apart() {
-        for (path, expected) in [
-            (r"\\server\share\a.mp4", Location::Share),
-            ("//server/share/a.mp4", Location::Share),
-            (r"\\?\UNC\server\share\a.mp4", Location::Share),
-            (r"\\?\unc\server\share\a.mp4", Location::Share),
-            (r"C:\Videos\a.mp4", Location::Drive('C')),
-            ("z:/a.mp4", Location::Drive('Z')),
-            (r"\\?\D:\a.mp4", Location::Drive('D')),
-            (r"\\.\E:\a.mp4", Location::Drive('E')),
-            ("a.mp4", Location::Other),
-            (r"\a.mp4", Location::Other),
-            ("", Location::Other),
-        ] {
-            assert_eq!(location(path), expected, "{path}");
-        }
-    }
-
     #[cfg(windows)]
     #[test]
     fn local_files_are_not_on_the_network() {
-        let dir = tempfile::tempdir().unwrap();
-        assert!(!on_network(&dir.path().join("a.mp4").to_string_lossy()));
-        assert!(on_network(r"\\server\share\a.mp4"));
-        assert!(!on_network("a.mp4"), "relative: the current drive");
+        let (dir, _registration) = registered(b"x");
+        assert!(!on_network(&File::open(dir.path().join("media")).unwrap()));
+    }
+
+    /// Real machine: a file opened through the local administrative share
+    /// (SMB loopback) is on the network, written as a UNC path or through
+    /// the `\\?\UNC\` prefix. Passes without the share.
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "needs the local administrative share"]
+    #[allow(clippy::disallowed_macros)] // a skip note for the terminal
+    fn files_opened_through_a_share_are_on_the_network() {
+        for path in [
+            r"\\localhost\C$\Windows\win.ini",
+            r"\\?\UNC\localhost\C$\Windows\win.ini",
+        ] {
+            let Ok(file) = File::open(path) else {
+                eprintln!("skipped: no local administrative share on this machine");
+                return;
+            };
+            assert!(on_network(&file), "{path}");
+        }
     }
 
     #[test]

@@ -4,13 +4,13 @@ version = "0.0.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
-description = "Win32 calls the host's Windows platform module needs (pointer, modifier keys, double-click time, menu show delay, sleep prevention, dark title bars, vertical blank waits, remote drives)"
+description = "Win32 calls the host's Windows platform module needs (pointer, modifier keys, double-click time, menu show delay, sleep prevention, dark title bars, vertical blank waits, files on network file systems)"
 
 # One of the crates under src/host/unsafe/: the only place first-party Rust may
 # use `unsafe`. Every block carries a SAFETY comment; the public API is safe.
 # Empty on other systems.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Wdk_Graphics_Direct3D", "Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_Storage_FileSystem", "Win32_System_Power", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Wdk_Graphics_Direct3D", "Wdk_Storage_FileSystem", "Wdk_System_SystemServices", "Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_System_IO", "Win32_System_Power", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
 
 # Not `workspace = true` (that would forbid unsafe); src/scripts/check-unsafe-policy.mjs
 # requires these entries.

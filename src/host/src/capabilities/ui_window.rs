@@ -128,7 +128,7 @@ fn change(
                 .ok_or_else(|| RpcError::invalid("visible requires boolean"))?
             {
                 view.instance.show().map_err(anyhow::Error::from)?;
-                platform::shown(view.instance.window());
+                platform::shown(&view.instance);
             } else {
                 view.instance.hide().map_err(anyhow::Error::from)?;
             }

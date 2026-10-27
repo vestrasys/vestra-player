@@ -6,9 +6,9 @@
 //! dark title bar, letting the running player take the foreground for a
 //! second launch's files, waiting for a display's vertical blank
 //! (`VBlank`, the redraw clock) and keeping a full-screen window from
-//! matching its display exactly (`unmatch_display`), and whether a drive
-//! letter is a network drive (`drive_is_remote`). Each is one
-//! call with plain integer arguments or one local out-parameter; the public
+//! matching its display exactly (`unmatch_display`), and whether an open
+//! file is on a network file system (`file_is_remote`). Each is one call
+//! with plain integer arguments, a borrowed handle, or local out-parameters; the public
 //! API is safe. Compiled only on Windows (cross-checked from macOS by
 //! `npm run portability`, not yet run on Windows).
 #![cfg(windows)]
@@ -53,21 +53,39 @@ pub fn modifier_keys() -> (bool, bool, bool) {
     (down(VK_MENU), down(VK_SHIFT), down(VK_CONTROL))
 }
 
-/// `GetDriveTypeW`'s result for a network drive (WinBase.h `DRIVE_REMOTE`).
-const DRIVE_REMOTE: u32 = 4;
-
-/// Drive `letter` (`'A'..='Z'`, any case) is a network drive (a mapped
-/// share). False for other letters and drives that do not exist.
-pub fn drive_is_remote(letter: char) -> bool {
-    if !letter.is_ascii_alphabetic() {
-        return false;
-    }
-    let root: Vec<u16> = format!("{}:\\", letter.to_ascii_uppercase())
-        .encode_utf16()
-        .chain(Some(0))
-        .collect();
-    // SAFETY: `root` is a NUL-terminated UTF-16 string that outlives the call.
-    unsafe { windows_sys::Win32::Storage::FileSystem::GetDriveTypeW(root.as_ptr()) == DRIVE_REMOTE }
+/// `file` is open on a network file system (an SMB share, by UNC path or a
+/// mapped drive, WebDAV, NFS…), asked of the open handle as mpv's
+/// `check_stream_network` (stream/stream_file.c) does: the volume's device is
+/// a network file system or is marked remote. False when the system does not
+/// answer.
+pub fn file_is_remote(file: &std::fs::File) -> bool {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Wdk::Storage::FileSystem::{
+        FileFsDeviceInformation, NtQueryVolumeInformationFile,
+    };
+    use windows_sys::Wdk::System::SystemServices::{
+        FILE_FS_DEVICE_INFORMATION, FILE_REMOTE_DEVICE,
+    };
+    use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
+    /// winioctl.h `FILE_DEVICE_NETWORK_FILE_SYSTEM`.
+    const FILE_DEVICE_NETWORK_FILE_SYSTEM: u32 = 0x14;
+    let mut info = FILE_FS_DEVICE_INFORMATION::default();
+    let mut status = IO_STATUS_BLOCK::default();
+    // SAFETY: the handle is `file`'s, open for the whole call (borrowed);
+    // `status` and `info` are valid, writable locals and `info`'s size is
+    // passed with it, so the call writes only inside them.
+    let result = unsafe {
+        NtQueryVolumeInformationFile(
+            file.as_raw_handle(),
+            &mut status,
+            (&raw mut info).cast(),
+            size_of::<FILE_FS_DEVICE_INFORMATION>() as u32,
+            FileFsDeviceInformation,
+        )
+    };
+    result >= 0
+        && (info.DeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM
+            || info.Characteristics & FILE_REMOTE_DEVICE != 0)
 }
 
 /// The system double-click time in milliseconds.
@@ -306,8 +324,30 @@ fn monitor_of(hwnd: isize) -> isize {
 
 #[cfg(test)]
 mod tests {
-    use super::VBlank;
+    use super::{VBlank, file_is_remote};
     use std::time::{Duration, Instant};
+
+    /// A file on a local disk (this test executable) is not remote.
+    #[test]
+    fn a_local_file_is_not_remote() {
+        let file = std::fs::File::open(std::env::current_exe().unwrap()).unwrap();
+        assert!(!file_is_remote(&file));
+    }
+
+    /// Real machine (`cargo test -p vestra-win32 -- --ignored`): the same
+    /// disk through the local administrative share (SMB loopback) is remote.
+    /// A machine without the share (not an administrator, the server service
+    /// off) passes.
+    #[test]
+    #[ignore = "needs the local administrative share"]
+    #[allow(clippy::disallowed_macros)] // a skip note for the terminal
+    fn a_file_opened_through_a_share_is_remote() {
+        let Ok(file) = std::fs::File::open(r"\\localhost\C$\Windows\win.ini") else {
+            eprintln!("skipped: no local administrative share on this machine");
+            return;
+        };
+        assert!(file_is_remote(&file));
+    }
 
     /// Real machine (`cargo test -p vestra-win32 -- --ignored`): the primary
     /// display's vertical blanks come at its refresh rate. Prints the

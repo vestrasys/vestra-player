@@ -19,12 +19,21 @@
 //! The chain only adds fallbacks: Latin text keeps the system UI font, and a
 //! window's `default-font-family` stays first. `VESTRA_DEBUG_FONTS=1`
 //! prints each chain at start-up.
+//!
+//! `install` also keeps the interface's Latin font (the one Slint lays out
+//! text without a `font-family` in) so the host can measure text it lays out
+//! itself: the context menu's panel widths (`text_width`, `menu.rs`).
 #![forbid(unsafe_code)]
 
 use crate::platform::{self, CjkScript};
+use skrifa::instance::{LocationRef, Size};
+use skrifa::{FontRef, MetadataProvider};
 use slint::fontique_011::fontique::{
-    Blob, Collection, FallbackKey, FamilyId, FontInfoOverride, Script,
+    Attributes, Blob, Collection, FallbackKey, FamilyId, FontInfoOverride, GenericFamily,
+    QueryStatus, Script, SourceCache,
 };
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// One script's chain as installed.
@@ -47,6 +56,7 @@ pub fn install(locale: &str) {
         Blob::new(bytes)
     });
     let mut collection = slint::fontique_011::shared_collection();
+    set_measure(TextMeasure::interface(&mut collection));
     let chains = apply(&mut collection, bundled, |script| {
         platform::ui_cjk_fallback_families(script, locale)
     });
@@ -72,6 +82,82 @@ pub fn install(locale: &str) {
             );
         }
     }
+}
+
+/// Advance widths of one font's characters.
+pub struct TextMeasure {
+    blob: Blob<u8>,
+    index: u32,
+    /// Advance per pixel of font size; `None`: the font lacks the character.
+    advances: RefCell<HashMap<char, Option<f64>>>,
+}
+
+impl TextMeasure {
+    pub fn new(blob: Blob<u8>, index: u32) -> Option<Self> {
+        FontRef::from_index(blob.as_ref(), index).ok()?;
+        Some(Self {
+            blob,
+            index,
+            advances: RefCell::default(),
+        })
+    }
+
+    /// The font Slint lays out text without a `font-family` in: the first
+    /// match of its generic families (`i_slint_common::sharedfontique::
+    /// FALLBACK_FAMILIES`: sans-serif, then system-ui) at the default
+    /// attributes; Arial on Windows, Helvetica on macOS.
+    pub fn interface(collection: &mut Collection) -> Option<Self> {
+        let mut cache = SourceCache::default();
+        let mut query = collection.query(&mut cache);
+        query.set_families([GenericFamily::SansSerif, GenericFamily::SystemUi]);
+        query.set_attributes(Attributes::default());
+        let mut found = None;
+        query.matches_with(|font| {
+            found = Some((font.blob.clone(), font.index));
+            QueryStatus::Stop
+        });
+        let (blob, index) = found?;
+        Self::new(blob, index)
+    }
+
+    fn advance(&self, c: char) -> Option<f64> {
+        *self.advances.borrow_mut().entry(c).or_insert_with(|| {
+            let font = FontRef::from_index(self.blob.as_ref(), self.index).ok()?;
+            let glyph = font.charmap().map(c)?;
+            let metrics = font.glyph_metrics(Size::new(1.), LocationRef::default());
+            metrics.advance_width(glyph).map(f64::from)
+        })
+    }
+
+    /// Width of `text` at `size` px from the advance widths, without shaping
+    /// (kerning narrows Latin text, so this does not under-measure it). A
+    /// character the font lacks is drawn in a fallback font and measured by
+    /// `missing`.
+    pub fn width(&self, text: &str, size: f64, missing: impl Fn(char) -> f64) -> f64 {
+        text.chars()
+            .map(|c| self.advance(c).map_or_else(|| missing(c), |a| a * size))
+            .sum()
+    }
+}
+
+thread_local! {
+    /// This thread's interface font (`install` on the UI thread).
+    static MEASURE: RefCell<Option<TextMeasure>> = const { RefCell::new(None) };
+}
+
+/// Measure this thread's text with `measure` from now on (`install`, tests).
+pub fn set_measure(measure: Option<TextMeasure>) {
+    MEASURE.with(|slot| *slot.borrow_mut() = measure);
+}
+
+/// Width of `text` at `size` px in the interface font; `None` before
+/// `install` on this thread or without a system Latin font.
+pub fn text_width(text: &str, size: f64, missing: impl Fn(char) -> f64) -> Option<f64> {
+    MEASURE.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|measure| measure.width(text, size, missing))
+    })
 }
 
 /// fontique's fallback key for `script` without a locale: what parley asks
