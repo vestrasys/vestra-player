@@ -17,10 +17,126 @@ export const MIN_SPAN = 2;
 /** Bytes of one cell as ffmpeg writes it (`rgb24`). */
 export const CELL_BYTES = CELL_WIDTH * CELL_HEIGHT * 3;
 
-/** How many cells a source of `duration` seconds gets (0 without a duration). */
+/** How many keyframe cells a source of `duration` seconds gets (0 without a duration). */
 export function cellCount(duration: number | null): number {
   if (duration === null || !Number.isFinite(duration) || duration <= 0) return 0;
   return Math.max(1, Math.min(MAX_CELLS, Math.floor(duration / MIN_SPAN)));
+}
+
+// ------------------------------------------------------------ exact mode (0.2.2)
+
+/**
+ * Seconds between exact cells: 0.5 s, or duration/200 when that is coarser.
+ * Half a second is finer than a pointer on the seek line can aim (a 30 s file
+ * gets 60 cells, 10–25 px each on a usual bar), and density costs nothing in
+ * this mode: the pass decodes every frame anyway, only the chosen ones are
+ * scaled. The 200-cell cap keeps the two-sheet layout the bar already has.
+ */
+export const EXACT_SPAN = 0.5;
+/**
+ * The budget: an exact pass may cost about this many seconds of decoding.
+ * It is what the keyframe sprite of a long file already costs today (200
+ * cells at 65–90 ms each, measured 1080p).
+ */
+export const EXACT_BUDGET_S = 15;
+/**
+ * Software decoding costs about this per pixel (measured 2.8–4.2 ns on
+ * 1080p30/60 H.264 and 4K60 10-bit HEVC with ffmpeg n9 on a Ryzen 7940HS;
+ * two parts at a time make the wall time about half). So 15 s buys 3.75
+ * billion pixels: 1080p30 for 60 s, 1080p60 for 30 s, 720p30 for 2.2 min,
+ * 4K60 for 7.5 s.
+ *
+ * Software only, on purpose: ffmpeg's hardware decoding (`-hwaccel` with the
+ * player's own method) is ten times cheaper in CPU, but it shares the one
+ * video engine the player is decoding on. Measured in the real player on 4K60
+ * HEVC (d3d11va-copy, AMD 780M): two d3d11va ffmpeg took 40 s instead of the
+ * 8–10 s they take alone, and playback fell to 18–31 frames a second while
+ * they ran. The headless probe (one ffmpeg, no window) had not shown it.
+ */
+export const DECODE_NS_PER_PIXEL = 4;
+/**
+ * The estimate is for this machine's class. A part that takes more than
+ * `SLOW_FACTOR` times its estimate (plus `SLOW_ALLOWANCE_MS` for the process
+ * start and jitter) says the machine is slower or busier than assumed: the
+ * pass ends and the file gets the keyframe sprite.
+ */
+export const SLOW_FACTOR = 2;
+export const SLOW_ALLOWANCE_MS = 1000;
+
+export type Mode = "keyframe" | "exact";
+/** The video facts the plan needs (`stats().video`, each `null` when the player has none). */
+export type VideoFacts = {
+  width: number | null;
+  height: number | null;
+  fps: number | null;
+};
+/** How a source's sprite is made. */
+export type Plan = { mode: Mode; count: number };
+
+/** Pixels decoded in `seconds` of the video, `null` when the facts are missing. */
+export function decodeWork(seconds: number, video: VideoFacts): number | null {
+  const { width, height, fps } = video;
+  if (!width || !height || !fps || width < 0 || height < 0 || fps <= 0) return null;
+  return width * height * fps * seconds;
+}
+
+/** Seconds decoding `work` pixels is estimated to take. */
+export const estimatedSeconds = (work: number) => (work * DECODE_NS_PER_PIXEL) / 1e9;
+
+/** Exact cells for `duration` seconds: every `EXACT_SPAN`, never finer than a frame (`fps`), at most `MAX_CELLS`. */
+export const exactCellCount = (duration: number, fps: number) =>
+  Math.max(1, Math.min(MAX_CELLS, Math.floor(duration / Math.max(EXACT_SPAN, 1 / fps))));
+
+/**
+ * Exact when decoding the whole file is estimated within the budget: every
+ * cell is then the real frame at its time, whatever the keyframe interval.
+ * Otherwise (or without video facts) the keyframe sprite as before.
+ */
+export function plan(duration: number, video: VideoFacts | null): Plan {
+  const keyframe: Plan = { mode: "keyframe", count: cellCount(duration) };
+  if (!video) return keyframe;
+  const work = decodeWork(duration, video);
+  if (work === null || estimatedSeconds(work) > EXACT_BUDGET_S) return keyframe;
+  return { mode: "exact", count: exactCellCount(duration, video.fps!) };
+}
+
+/** The time an exact cell shows (the frame on screen then): the middle of its span. */
+export const exactCellTime = (index: number, count: number, duration: number) => ((index + 0.5) * duration) / count;
+
+/** One ffmpeg run of exact mode: cells `first` … `first + n - 1`, decoded from the keyframe at `start` seconds. */
+export type Part = { first: number; n: number; start: number };
+
+/** Seconds of video a part covers at least (keyframes are grouped until then). */
+export const PART_S = 8;
+
+/** Milliseconds a part is estimated to take: its cells' share of the video, one thread. */
+export function partEstimateMs(part: Part, count: number, duration: number, video: VideoFacts): number {
+  return estimatedSeconds(decodeWork((part.n * duration) / count, video) ?? 0) * 1000;
+}
+
+/** Whether a part that took `wallMs` against `estimateMs` says the machine cannot afford the pass. */
+export const tooSlow = (wallMs: number, estimateMs: number) => wallMs > SLOW_FACTOR * estimateMs + SLOW_ALLOWANCE_MS;
+
+/**
+ * The parts of an exact pass, aligned on the file's keyframes (`keyframes`:
+ * their times, from ffprobe) so no part decodes frames another part needs:
+ * each begins at a keyframe and takes the cells up to the next part's. Parts
+ * come coarse to fine, like cells. Without keyframes: one part from 0.
+ */
+export function partition(count: number, duration: number, keyframes: readonly number[]): Part[] {
+  const bounds = [0];
+  for (const k of [...keyframes].sort((a, b) => a - b)) if (k - bounds[bounds.length - 1]! >= PART_S) bounds.push(k);
+  bounds.push(Number.POSITIVE_INFINITY);
+  const parts: Part[] = [];
+  const span = duration / count;
+  // The cells whose time is at or after a bound: (i + 0.5) * span >= bound.
+  const cellFrom = (bound: number) => Math.min(count, Math.max(0, Math.ceil(bound / span - 0.5)));
+  for (let b = 0; b + 1 < bounds.length; b++) {
+    const first = cellFrom(bounds[b]!);
+    const end = cellFrom(bounds[b + 1]!);
+    if (end > first) parts.push({ first, n: end - first, start: bounds[b]! });
+  }
+  return coarseToFine(parts.length).map((i) => parts[i]!);
 }
 
 /**

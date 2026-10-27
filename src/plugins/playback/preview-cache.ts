@@ -14,10 +14,15 @@ export const INDEX_FILE = "index.json";
 
 export type FileFacts = { path: string; size: number; mtimeMs: number };
 
-/** The folder name of a source's sprite: its real path, size, modification time and cell count. */
-export function cacheKey(file: FileFacts, count: number): string {
+/**
+ * The folder name of a source's sprite: its real path, size, modification
+ * time, cell count and (0.2.2) how it was made. Keyframe sprites keep their
+ * 0.2.0 names, so an upgrade throws none away; a file that now gets exact
+ * cells gets a new folder, and its keyframe one ages out.
+ */
+export function cacheKey(file: FileFacts, count: number, mode: "keyframe" | "exact" = "keyframe"): string {
   return createHash("sha1")
-    .update(`${CACHE_VERSION}\n${file.path}\n${file.size}\n${file.mtimeMs}\n${count}`)
+    .update(`${CACHE_VERSION}\n${file.path}\n${file.size}\n${file.mtimeMs}\n${count}${mode === "exact" ? "\nexact" : ""}`)
     .digest("hex")
     .slice(0, 20);
 }
@@ -34,6 +39,11 @@ export type CacheIndex = {
   complete: boolean;
   /** Last opened (ms since the epoch), for eviction. */
   usedAt: number;
+  /**
+   * 0.2.2, exact folders only: the exact pass failed or was too slow here, so
+   * the file gets the keyframe sprite and the pass is not tried again.
+   */
+  keyframesOnly?: boolean;
 };
 
 const isIndex = (value: unknown): value is CacheIndex => {
@@ -48,7 +58,8 @@ const isIndex = (value: unknown): value is CacheIndex => {
     Array.isArray(v.failed) &&
     v.failed.every((i) => Number.isInteger(i) && i >= 0 && i < v.count!) &&
     typeof v.complete === "boolean" &&
-    typeof v.usedAt === "number"
+    typeof v.usedAt === "number" &&
+    (v.keyframesOnly === undefined || typeof v.keyframesOnly === "boolean")
   );
 };
 

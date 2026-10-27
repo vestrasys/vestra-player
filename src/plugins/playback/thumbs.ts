@@ -11,11 +11,19 @@ import {
   cellCount,
   cellTime,
   coarseToFine,
+  exactCellTime,
   nearestMade,
+  type Part,
+  partEstimateMs,
+  partition,
+  type Plan,
   placeCell,
+  plan,
   sheetCount,
   sheetSize,
   stripCell,
+  tooSlow,
+  type VideoFacts,
 } from "./sprite.ts";
 import type { State } from "./texts.ts";
 
@@ -37,6 +45,13 @@ export const SEEK_QUIET_MS = 1000;
 /** A jump of the position by more than this (seconds) counts as a seek. */
 export const SEEK_JUMP_S = 1.5;
 export const CELL_TIMEOUT_MS = 10_000;
+/**
+ * An exact part decodes 8 s of video or more: within the budget a whole pass
+ * is about 15 s, so one part on a slow machine stays well under this.
+ */
+export const PART_TIMEOUT_MS = 60_000;
+/** The keyframe list of an exact pass (ffprobe): about 20 bytes per packet. */
+export const KEYFRAMES_MAX_OUTPUT = 8 * 1024 * 1024;
 /** The timers' clock; tests replace it to run time themselves. */
 export const clock = {
   now: () => Date.now(),
@@ -76,6 +91,63 @@ export function cellsArgs(source: string, seconds: readonly number[]): string[] 
   });
   graph += seconds.length > 1 ? `${labels}hstack=inputs=${seconds.length}` : `${labels}null`;
   return [...args, "-filter_complex", graph, "-frames:v", "1", "-f", "rawvideo", "-"];
+}
+
+/**
+ * Exact mode (0.2.2): one sequential decode of the cells `first` … `first + n - 1`
+ * (of `count` over `duration` seconds), starting at the keyframe at `start`
+ * seconds, as `n` frames of raw rgb24 on stdout in cell order.
+ *
+ * - Each cell is the frame on screen at its time: the `fps` filter resamples
+ *   the stream to one frame per span on a grid shifted (`setpts`) so that
+ *   tick k is cell k's time, `round=up` placing every frame on the tick at or
+ *   after it, so each tick keeps the last frame at or before it, and a span
+ *   without a frame (a slideshow, a still stretch of a screen recording)
+ *   repeats the previous frame instead of shifting every later cell by one.
+ *   `-frames:v` ends the run after the last cell (the rest of the file is not
+ *   read). Verified frame by frame on 30 fps, 1 fps and a 4 s frameless
+ *   stretch (round notes, 2026-10-27).
+ * - `-ss` at the keyframe: the demuxer starts there and the default accurate
+ *   seek keeps the keyframe itself (a frame is never before its own time), so
+ *   a cell right after a keyframe followed by a still stretch shows the
+ *   keyframe. Timestamps are then relative to the seek point.
+ * - Software decoding, one thread, like the keyframe runs: two parts run at a
+ *   time. No `-hwaccel`: the video engine belongs to the player
+ *   (`DECODE_NS_PER_PIXEL`).
+ */
+export function exactArgs(source: string, part: Part, count: number, duration: number): string[] {
+  const span = duration / count;
+  const start = part.start;
+  const first = exactCellTime(part.first, count, duration) - start;
+  const args = ["-nostdin", "-v", "error", "-threads", "1"];
+  if (start > 0) args.push("-ss", start.toFixed(3));
+  args.push("-i", source, "-an", "-sn", "-dn", "-filter_threads", "1");
+  const cell = `scale=${CELL_WIDTH}:${CELL_HEIGHT}:force_original_aspect_ratio=decrease,pad=${CELL_WIDTH}:${CELL_HEIGHT}:(ow-iw)/2:(oh-ih)/2,format=rgb24`;
+  args.push("-vf", `setpts=PTS-${first.toFixed(6)}/TB,fps=fps=1/${span.toFixed(6)}:start_time=0:round=up,${cell}`);
+  return [...args, "-fps_mode", "passthrough", "-frames:v", String(part.n), "-f", "rawvideo", "-"];
+}
+
+/** ffprobe: every video packet's time and flags (`K` first for keyframes), one per line. */
+export const keyframesArgs = (source: string) => [
+  "-v",
+  "error",
+  "-select_streams",
+  "v:0",
+  "-show_entries",
+  "packet=pts_time,flags",
+  "-of",
+  "csv=p=0",
+  source,
+];
+
+/** The keyframe times in `keyframesArgs` output (packets without a time are skipped). */
+export function parseKeyframes(output: string): number[] {
+  const times: number[] = [];
+  for (const line of output.split("\n")) {
+    const [time, flags] = line.trim().split(",");
+    if (flags?.startsWith("K") && time !== undefined && time !== "N/A" && Number.isFinite(Number(time))) times.push(Number(time));
+  }
+  return times.sort((a, b) => a - b);
 }
 
 /** A sheet's raw pixels (`raw`) written as `out` (JPEG). */
@@ -130,7 +202,16 @@ type Job = {
   sourceId: number;
   path: string;
   duration: number;
+  /** Cells (known once the plan is made at the start; 0 before). */
   count: number;
+  /** How the sprite is made: decided at the start from the video facts. */
+  plan: Plan | null;
+  /** `stats().video` seen while waiting for the first frame. */
+  video: VideoFacts | null;
+  /** Exact mode failed for this source (or was never possible): keyframes it is. */
+  keyframesOnly: boolean;
+  /** Exact mode: the parts of the pass (cells in coarse-to-fine part order fill `queue`). */
+  parts: Part[];
   abort: AbortController;
   /** waiting: for the first frame; running: making cells; done: nothing left (or failed). */
   stage: "waiting" | "starting" | "running" | "done";
@@ -157,16 +238,24 @@ type Job = {
   wroteAt: number;
 };
 
+/** The part a cell belongs to (every queued cell has one; a cell without is decoded from the start on its own). */
+const partOf = (job: Job, cell: number): Part =>
+  job.parts.find((p) => cell >= p.first && cell < p.first + p.n) ?? { first: cell, n: 1, start: 0 };
+
 /**
  * I07 Show Thumbnail on Seek Bar Hover (0.2.0: also while dragging): a
- * keyframe sprite of each local video, made in the background once the
- * source's first frame is on screen, and kept on disk across sessions.
+ * sprite of each local video, made in the background once the source's first
+ * frame is on screen, and kept on disk across sessions.
  *
  * - Never before the first frame, never competing with an open: a new source
  *   ends the old one's ffmpeg at once.
  * - At most `WORKERS` ffmpeg processes, one thread each; cells coarse to fine.
  * - Paused while the user drags the seek line, and for `SEEK_QUIET_MS` after a
  *   seek or a drag: running cells are ended and done again later.
+ * - 0.2.2: files cheap enough to decode whole (`plan`) get exact cells from
+ *   one sequential pass in keyframe-aligned parts, software decoding; the
+ *   others keyframe cells. An exact pass that fails, or whose part takes over
+ *   twice its estimate (`tooSlow`), falls back to the keyframe sprite.
  */
 export class Thumbnails {
   /** ffmpeg was found (`null` until the first answer). */
@@ -248,9 +337,8 @@ export class Thumbnails {
     }
     // A local file with a known length (it may be known only once ready).
     const { kind, source, duration } = state;
-    const count = cellCount(duration);
-    if (kind === "media" && source !== null && isLocalPath(source) && count > 0 && this.#root !== null) {
-      this.#job = this.#fresh(state.sourceId, source, duration!, count);
+    if (kind === "media" && source !== null && isLocalPath(source) && cellCount(duration) > 0 && this.#root !== null) {
+      this.#job = this.#fresh(state.sourceId, source, duration!);
       this.#seeks(state); // the position a later jump is measured from
       this.#schedule(0);
     }
@@ -330,6 +418,7 @@ export class Thumbnails {
       const stats = await this.#scope.player.stats().catch(() => null);
       if (this.#job !== job || job.abort.signal.aborted) return;
       const frames = stats?.framesShown ?? null;
+      if (stats?.video) job.video = stats.video;
       if (job.frames === null) {
         // The counter is the player's own (all sources): a frame drawn after
         // this one is surely this source's.
@@ -350,12 +439,16 @@ export class Thumbnails {
 
   // ---------------------------------------------------------------- work
 
-  #fresh(sourceId: number, path: string, duration: number, count: number): Job {
+  #fresh(sourceId: number, path: string, duration: number): Job {
     return {
       sourceId,
       path,
       duration,
-      count,
+      count: 0,
+      plan: null,
+      video: null,
+      keyframesOnly: false,
+      parts: [],
       abort: new AbortController(),
       stage: "waiting",
       frames: null,
@@ -364,7 +457,7 @@ export class Thumbnails {
       dir: null,
       key: null,
       sheets: [],
-      made: new Uint8Array(count),
+      made: new Uint8Array(0),
       failed: new Set(),
       queue: [],
       running: new Map(),
@@ -381,7 +474,16 @@ export class Thumbnails {
     try {
       const real = await realpath(job.path);
       const { size, mtimeMs } = await stat(real);
-      const key = cacheKey({ path: real, size, mtimeMs }, job.count);
+      let made = plan(job.duration, job.keyframesOnly ? null : job.video);
+      if (made.mode === "exact") {
+        // An earlier session found the pass failing or too slow for this file: keyframes, no new try.
+        const earlier = await readIndex(join(this.#root!, cacheKey({ path: real, size, mtimeMs }, made.count, "exact")));
+        if (earlier?.keyframesOnly) made = plan(job.duration, null);
+      }
+      job.plan = made;
+      job.count = made.count;
+      job.made = new Uint8Array(made.count);
+      const key = cacheKey({ path: real, size, mtimeMs }, job.count, made.mode);
       const dir = join(this.#root!, key);
       await mkdir(dir, { recursive: true });
       if (this.#job !== job || job.abort.signal.aborted) return;
@@ -399,7 +501,15 @@ export class Thumbnails {
         if (!index.complete) await this.#readBack(job);
       }
       if (this.#job !== job || job.abort.signal.aborted) return;
-      job.queue = coarseToFine(job.count).filter((i) => !job.made[i] && !job.failed.has(i));
+      const left = (i: number) => !job.made[i] && !job.failed.has(i);
+      if (made.mode === "exact" && job.made.some((m) => !m)) {
+        // Parts begin at keyframes; cells go in part order (parts coarse to fine).
+        job.parts = partition(job.count, job.duration, await this.#keyframes(job));
+        if (this.#job !== job || job.abort.signal.aborted) return;
+        job.queue = job.parts.flatMap((part) => Array.from({ length: part.n }, (_, i) => part.first + i)).filter(left);
+      } else {
+        job.queue = coarseToFine(job.count).filter(left);
+      }
       job.stage = "running";
       if (job.made.some(Boolean)) this.#show(job);
       void this.#saveIndex(job);
@@ -408,6 +518,22 @@ export class Thumbnails {
       this.#pump(job);
     } catch {
       if (this.#job === job) job.stage = "done"; // the file went away: no pictures
+    }
+  }
+
+  /** The file's keyframe times (ffprobe, in a slot); none when it cannot say: one part then. */
+  async #keyframes(job: Job): Promise<number[]> {
+    try {
+      const { stdout } = await this.#take(() =>
+        this.#scope.tools.run("ffprobe", keyframesArgs(job.path), {
+          timeoutMs: CELL_TIMEOUT_MS,
+          maxOutput: KEYFRAMES_MAX_OUTPUT,
+          signal: job.abort.signal,
+        }),
+      );
+      return parseKeyframes(new TextDecoder().decode(stdout));
+    } catch {
+      return [];
     }
   }
 
@@ -469,8 +595,18 @@ export class Thumbnails {
     if (job.queue.length === 0 && job.running.size === 0 && job.dirty.size === 0 && !job.writing) this.#finish(job);
   }
 
-  /** The next cells for one run: up to `BATCH` in queue order; a cell of a failed batch runs alone. */
+  /**
+   * The next cells for one run. Keyframe mode: up to `BATCH` in queue order; a
+   * cell of a failed batch runs alone. Exact mode: the rest of the part the
+   * next cell belongs to.
+   */
   #batch(job: Job): number[] {
+    if (job.plan?.mode === "exact") {
+      const part = partOf(job, job.queue[0]!);
+      const cells: number[] = [];
+      while (job.queue.length > 0 && job.queue[0]! >= part.first && job.queue[0]! < part.first + part.n) cells.push(job.queue.shift()!);
+      return cells;
+    }
     if (job.alone.has(job.queue[0]!)) return [job.queue.shift()!];
     const cells: number[] = [];
     while (cells.length < BATCH && job.queue.length > 0 && !job.alone.has(job.queue[0]!)) cells.push(job.queue.shift()!);
@@ -482,7 +618,38 @@ export class Thumbnails {
     const end = () => run.abort();
     job.abort.signal.addEventListener("abort", end, { once: true });
     for (const index of cells) job.running.set(index, run);
+    const exact = job.plan?.mode === "exact";
     try {
+      if (exact) {
+        // The part's cells from the first left to the last (made ones in between are made again).
+        const part = partOf(job, cells[0]!);
+        const first = Math.min(...cells);
+        const n = Math.max(...cells) - first + 1;
+        let began = 0;
+        const { stdout } = await this.#take(() => {
+          began = clock.now();
+          return this.#scope.tools.run("ffmpeg", exactArgs(job.path, { first, n, start: part.start }, job.count, job.duration), {
+            timeoutMs: PART_TIMEOUT_MS,
+            maxOutput: CELL_BYTES * n,
+            signal: run.signal,
+          });
+        });
+        // Slower than the estimate allows: this machine (or this moment) cannot afford the pass.
+        if (tooSlow(clock.now() - began, partEstimateMs({ first, n, start: part.start }, job.count, job.duration, job.video!))) throw new Error("too slow");
+        const got = Math.floor(stdout.length / CELL_BYTES);
+        if (got === 0) throw new Error("no picture");
+        for (let slot = 0; slot < n; slot++) {
+          const index = first + slot;
+          const s = Math.floor(index / 100);
+          if (slot < got) {
+            placeCell(job.sheets[s]!, sheetSize(s, job.count).width, index, stdout.subarray(slot * CELL_BYTES, (slot + 1) * CELL_BYTES));
+            job.made[index] = 1;
+            job.dirty.add(s);
+          } else job.failed.add(index); // the stream ended before the cell's time: its neighbour shows
+        }
+        job.failures = 0;
+        return;
+      }
       const seconds = cells.map((index) => cellTime(index, job.count, job.duration));
       const { stdout } = await this.#take(() =>
         this.#scope.tools.run("ffmpeg", cellsArgs(job.path, seconds), {
@@ -512,6 +679,11 @@ export class Thumbnails {
         this.#scope.update();
         return;
       }
+      if (exact) {
+        // The pass cannot run (a file ffmpeg cannot read) or is too slow here: keyframes instead.
+        this.#fallback(job);
+        return;
+      }
       if (cells.length > 1) {
         // One bad position fails the whole run: each is tried again on its own.
         for (const index of cells) job.alone.add(index);
@@ -529,6 +701,26 @@ export class Thumbnails {
       job.abort.signal.removeEventListener("abort", end);
       for (const index of cells) job.running.delete(index);
     }
+  }
+
+  /**
+   * An exact pass that failed: the source gets the keyframe sprite instead, as
+   * a fresh job (the old one's other runs end; their late answers are ignored).
+   * The exact folder's index remembers it (`keyframesOnly`), so the next open
+   * of the file goes straight to keyframes; the folder ages out with the others.
+   */
+  #fallback(job: Job) {
+    if (this.#job !== job) return;
+    job.abort.abort();
+    void this.#saveIndex(job, true);
+    const next = this.#fresh(job.sourceId, job.path, job.duration);
+    next.video = job.video;
+    next.keyframesOnly = true;
+    next.stage = "starting";
+    this.#job = next;
+    this.preview = null;
+    this.#scope.update();
+    void this.#start(next);
   }
 
   /** Write the changed sheets (raw → JPEG by ffmpeg, then renamed into place) and show them. */
@@ -580,7 +772,7 @@ export class Thumbnails {
     this.#scope.update();
   }
 
-  async #saveIndex(job: Job) {
+  async #saveIndex(job: Job, keyframesOnly = false) {
     if (!job.dir) return;
     const made: number[] = [];
     job.made.forEach((m, i) => void (m && made.push(i)));
@@ -591,6 +783,7 @@ export class Thumbnails {
       failed: [...job.failed].sort((a, b) => a - b),
       complete: made.length + job.failed.size >= job.count,
       usedAt: Date.now(),
+      ...(keyframesOnly ? { keyframesOnly } : {}),
     };
     await writeIndex(job.dir, index).catch(() => {});
   }
