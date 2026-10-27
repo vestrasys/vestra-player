@@ -431,8 +431,8 @@ fn the_simplified_chinese_catalog_keeps_the_old_texts() {
         ),
         (
             "{} is resolved by {}",
-            &["文件类型 .nes", "vestra.nes"],
-            "文件类型 .nes 已由 vestra.nes 解析",
+            &["文件类型 .srt", "vestra.subtitles"],
+            "文件类型 .srt 已由 vestra.subtitles 解析",
         ),
         (
             "{}: {}",

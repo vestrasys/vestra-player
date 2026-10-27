@@ -9,10 +9,7 @@
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "types": ["node"],
-    "skipLibCheck": true,
-    "paths": {
-      "jsnes": ["./plugins/nes/node_modules/jsnes/src/nes.d.ts"]
-    }
+    "skipLibCheck": true
   },
   "include": [
     "runtime/**/*.ts",

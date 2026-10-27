@@ -156,7 +156,7 @@ impl RuntimePaths {
     /// and later define `localStorage` / `sessionStorage`, and any access
     /// without `--localstorage-file` prints an ExperimentalWarning to the
     /// plugin's stderr; browser-minded dependencies probe it at import time
-    /// (JSNES, in the NES plugin, reads `localStorage.getItem` in a
+    /// (JSNES, used by the third-party NES plugin, reads `localStorage.getItem` in a
     /// try/catch). A plugin keeps its data through `plugin.storage`, so the
     /// globals are left undefined, as in Node 24 and earlier.
     pub fn node_command(&self) -> Command {

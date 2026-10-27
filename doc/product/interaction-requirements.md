@@ -4,7 +4,7 @@ Product interaction constraints set by the user; the design and implementation o
 
 ## Scope decisions (2026-10-18)
 
-- NES only requires a real emulator to run and output the game picture and sound to the player; keyboard input and save / load states are deferred. Policies such as the save format, ROM verification and reset belong to the NES plugin, and the public API contains no NES-specific concepts.
+- NES (since 2026-10-27 the store plugin VestraNES, not built in): a real emulator outputs the game picture and sound to the player; keyboard input goes to the game only while the VestraNES window is in front (its own window, no player API involved; fixed mapping), so the player's shortcuts are never taken; save / load states are deferred. Policies such as the save format, ROM verification and reset belong to the NES plugin, and the public API contains no NES-specific concepts.
 - YouTube (playback and download) and Bilibili (playback) are separate plugins. The playlist can add their links and play them; site parsing, network requests and download policy stay in the site plugins, which cooperate through the public source resolution capability, and plugins do not reference each other.
 
 ## 1. Menus are organised by user domain

@@ -1079,7 +1079,7 @@ export class TestHost {
      * @example
      * ```ts
      * const host = new TestHost();
-     * host.otherResolvers.push({ owner: "vestra.nes", extensions: ["nes"] });
+     * host.otherResolvers.push({ owner: "example.emulator", extensions: ["nes"] });
      * ```
      */
     otherResolvers = [];
@@ -1107,7 +1107,7 @@ export class TestHost {
      *
      * @example
      * ```ts
-     * host.otherResolvers.push({ owner: "vestra.nes", extensions: ["nes"] });
+     * host.otherResolvers.push({ owner: "example.emulator", extensions: ["nes"] });
      * host.updateFileTypes();
      * await host.settle();
      * assert.deepEqual(plugin.resolvers.fileTypes, ["nes"]);

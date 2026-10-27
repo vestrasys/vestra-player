@@ -347,10 +347,7 @@ Context menu
 │  ├─ Reset   ‹audio›
 │  ├─ ────────
 │  └─ Show Album Cover for Audio Only   ‹visualizer›
-├─ Emulator ▸
-│  ├─ Open NES ROM…   ‹nes›
-│  ├─ Stop NES   ‹nes›
-│  └─ NES Tools…   ‹nes›
+├─ Games ▸   (appears only when a plugin adds items; e.g. the store plugin VestraNES adds VestraNES ▸ Load ROM… · Stop · VestraNES Window…)
 ├─ ────────
 ├─ Toggle Fullscreen  [Enter / F11]   ‹host›
 ├─ Screen ▸

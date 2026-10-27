@@ -21,7 +21,7 @@ All 10 product plugins use the plugin API (SDK v2, see the [SDK documentation si
 | Audio Workbench | `src/plugins/audio` | Equalizer, presets, reset, playback not interrupted | The "Loudness normalization" check box has low contrast on the dark background |
 | Subtitles | `src/plugins/subtitles` | Loading external SRT, mixed Chinese and English display, track selection, style and undo | The track name shows the host's temporary name `vestra-subtitle-*.vtt` instead of the original file name; the plugin allows 8 MiB SRT, the host's upload limit is 2 MiB |
 | Capture and Export | `src/plugins/capture` | Save the current frame; the PNG matches the source frame pixel for pixel | Burst capture and MP4 not retested; no numeric progress; the burst page's "Sample start" keeps the time from when the window opened |
-| NES | `src/plugins/nes` | Opening a ROM shows picture and sound; the screen clears after stop | Keyboard input and save/load states deferred by scope |
+| VestraNES (was the built-in NES until 2026-10-27) | plugin repository `plugins/nes` (`zysilm.vestranes`) | Games ▸ VestraNES ▸ Load ROM… plays picture and sound at 60 fps on Windows; keys control the game only while the VestraNES window is in front; .nes no longer opens through Open File, drop or the playlist | Save/load states deferred; letters map by the typed character (layout-dependent) |
 | Plugin Workshop (experimental) | `src/plugins/workshop` | Generate → host validation → install → the generated counter works (local mock model, no paid calls) | Upgrade and rollback not tested in the GUI |
 | YouTube | plugin repository `plugins/youtube` | Public video playback | Download not retested in the GUI |
 | Bilibili | plugin repository `plugins/bilibili` | Public video playback | — |

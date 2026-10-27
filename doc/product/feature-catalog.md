@@ -240,7 +240,7 @@ Date: 2026-10-20. Implementation status checked against the current Vestra `main
 | J06 | Decoder / filter management | ⊘ | DirectShow stack |
 | J07 | Plugin management (list, disable, enable, uninstall) | ✅ | store: the plugin center's Installed tab (the separate Plugin Manager `vestra.plugins` was removed on 2026-10-26) |
 | J08 | Plugin Workshop (AI-generated plugins) | ✅ | workshop |
-| J09 | Emulator (NES) | ✅ | nes |
+| J09 | Emulator (NES) | ✅ | VestraNES, plugin repository (not built in since 2026-10-27) |
 | J10 | Check for updates | ⊘ | Not needed for now. Dropped in the cut review (2026-10-20). |
 | J11 | Visualization (animation and album art for audio-only playback) | ✗ | new plugin + core (drawing in the video area) |
 | J12 | Live-streaming, chat and broadcast tools | ⊘ | Third-party live-streaming services |
@@ -307,5 +307,5 @@ When choosing plugin experiment topics and dividing responsibilities between plu
 1. **Feature groups are not the menu structure.** For example, the entry points for loading subtitles are split between "Open" and "Subtitles", and audio recording, video recording and screenshots can also be regrouped by task; one plugin can contribute several menu entries.
 2. **Controlling parameters does not mean running the algorithm in TS.** Panels for color, audio DSP, GPU enhancement and the like handle the settings; the computation is done by a mature playback backend or a native provider. The exact bridge is decided by experiment.
 3. **Backend and platform settings do not all have to be plugins.** The lifecycle of low-level resources such as decoding, devices and renderers belongs to the host or the backend; plugins only provide policy and entry points.
-4. **Consider the default bundle and optional extensions separately.** The NES emulator and the like are optional extensions and are not part of the default feature set.
+4. **Consider the default bundle and optional extensions separately.** The NES emulator and the like are optional extensions and are not part of the default feature set (2026-10-27: the NES emulator left the player and is the store plugin VestraNES).
 5. **New candidates** (not numbered in the tables above): white balance / color temperature adjustment; GPU picture enhancement such as super-resolution, as extra experiment candidates.

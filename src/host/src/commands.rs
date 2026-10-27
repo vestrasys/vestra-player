@@ -1279,6 +1279,9 @@ mod tests {
     /// core-ui-design.md §14: the migration orders reproduce the tree that the
     /// old registry (fixed domain list, then UTF-8 byte order of path[1..])
     /// built from the same 46 commands (doc/process/rounds/menus-before.json).
+    /// The 模拟器 lines came from the built-in NES plugin, now the store
+    /// plugin zysilm.vestranes; the paths and orders stay as recorded; owner
+    /// ids follow the current plugin ids.
     #[test]
     fn migration_orders_reproduce_the_old_menu_tree() {
         const TABLE: &[(&str, &str, i32)] = &[
@@ -1293,8 +1296,8 @@ mod tests {
             ("vestra.playlist", "文件/播放列表/添加链接…", 209),
             ("vestra.playlist", "文件/播放列表/清空列表", 210),
             ("vestra.playlist", "文件/播放列表/移除选中项", 211),
-            ("zysilm.bilibili", "文件/网络媒体/Bilibili 视频…", 212),
-            ("zysilm.youtube", "文件/网络媒体/YouTube 视频…", 213),
+            ("zysilm.vestrabili", "文件/网络媒体/Bilibili 视频…", 212),
+            ("zysilm.vestratube", "文件/网络媒体/YouTube 视频…", 213),
             ("vestra.playback", "播放/前进5秒", 261),
             ("vestra.playback", "播放/后退5秒", 262),
             ("vestra.playback", "播放/播放/暂停", 263),
@@ -1324,9 +1327,9 @@ mod tests {
             ("vestra.subtitles", "字幕/字幕工作台…", 444),
             ("vestra.playlist", "视图/显示播放列表", 501),
             ("vestra.playback", "视图/显示播放栏", 502),
-            ("vestra.nes", "模拟器/NES 工具", 561),
-            ("vestra.nes", "模拟器/停止 NES", 562),
-            ("vestra.nes", "模拟器/打开 NES ROM…", 563),
+            ("zysilm.vestranes", "模拟器/NES 工具", 561),
+            ("zysilm.vestranes", "模拟器/停止 NES", 562),
+            ("zysilm.vestranes", "模拟器/打开 NES ROM…", 563),
             ("vestra.workshop", "插件/插件工坊…", 621),
         ];
         // "播放/暂停" is one leaf title that contains a slash. The old top-level
