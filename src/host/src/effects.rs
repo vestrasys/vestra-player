@@ -57,7 +57,11 @@ pub enum VideoNode {
         flip_h: bool,
         flip_v: bool,
     },
-    /// Always BWDIF.
+    /// BWDIF for `interlaced` and `all`. `auto` is the player's own
+    /// deinterlacer (mpv `deinterlace=auto`): decided per frame, the
+    /// decoder's hardware deinterlacer where frames stay on the GPU, one
+    /// frame per field, before every chain; it needs no frames in memory.
+    /// Offline (exports, processed snapshots) it is `bwdif` placed first.
     Deinterlace {
         when: DeinterlaceWhen,
         output: DeinterlaceOutput,
@@ -94,6 +98,9 @@ pub enum DeblockStrength {
 pub enum DeinterlaceWhen {
     Interlaced,
     All,
+    /// The player's deinterlacer (`VideoNode::Deinterlace`); only with
+    /// `DeinterlaceOutput::Field`.
+    Auto,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -244,6 +251,22 @@ trait Node {
     fn last(&self) -> bool {
         false
     }
+    /// Placed before all chains (keeps its place among such nodes).
+    fn first(&self) -> bool {
+        false
+    }
+    /// Done by the player itself during playback (an mpv option), so left
+    /// out of the player's graph; offline graphs keep its filters.
+    fn by_player(&self) -> bool {
+        false
+    }
+    /// Rules on one resource's nodes together.
+    fn validate_chain(_nodes: &[Self]) -> Result<()>
+    where
+        Self: Sized,
+    {
+        Ok(())
+    }
 }
 
 fn integer(name: &str, value: f64, min: f64, max: f64) -> Result<()> {
@@ -294,6 +317,12 @@ impl Node for VideoNode {
                 range("lumaTemporal", *luma_temporal, 0.0, 20.0)?;
                 range("chromaTemporal", *chroma_temporal, 0.0, 20.0)
             }
+            Self::Deinterlace {
+                when: DeinterlaceWhen::Auto,
+                output: DeinterlaceOutput::Frame,
+            } => Err(ValidationError(
+                "deinterlace when auto outputs one frame per field: output must be field".into(),
+            )),
             Self::Deblock { .. } | Self::Deinterlace { .. } => Ok(()),
             Self::Deband {
                 threshold,
@@ -318,6 +347,30 @@ impl Node for VideoNode {
     }
     fn last(&self) -> bool {
         matches!(self, Self::FrameBlend { .. })
+    }
+    fn first(&self) -> bool {
+        self.by_player()
+    }
+    fn by_player(&self) -> bool {
+        matches!(
+            self,
+            Self::Deinterlace {
+                when: DeinterlaceWhen::Auto,
+                ..
+            }
+        )
+    }
+    fn validate_chain(nodes: &[Self]) -> Result<()> {
+        let deinterlace = nodes
+            .iter()
+            .filter(|n| matches!(n, Self::Deinterlace { .. }))
+            .count();
+        if deinterlace > 1 && nodes.iter().any(Node::by_player) {
+            return Err(ValidationError(
+                "a chain with a deinterlace node when auto has no other deinterlace node".into(),
+            ));
+        }
+        Ok(())
     }
     fn name(&self) -> &'static str {
         match self {
@@ -460,7 +513,7 @@ impl Node for VideoNode {
                 parameter(
                     "deint",
                     match when {
-                        DeinterlaceWhen::Interlaced => "interlaced",
+                        DeinterlaceWhen::Interlaced | DeinterlaceWhen::Auto => "interlaced",
                         DeinterlaceWhen::All => "all",
                     },
                     false,
@@ -607,6 +660,7 @@ fn ordered<N: Node>(resources: &[Resource<N>]) -> Result<Vec<&Resource<N>>> {
         for node in &resource.nodes {
             node.validate()?;
         }
+        N::validate_chain(&resource.nodes)?;
     }
     let last = ordered
         .iter()
@@ -621,14 +675,54 @@ fn ordered<N: Node>(resources: &[Resource<N>]) -> Result<Vec<&Resource<N>>> {
     Ok(ordered)
 }
 
-/// The chain's nodes in graph order: resources in stable order, nodes in their
-/// own order, then the nodes that belong after every chain (`frameBlend`), so
-/// time-domain filters (denoise, deinterlace) work on the original frames.
-fn sequence<'a, N: Node>(resources: &[&'a Resource<N>]) -> Vec<&'a N> {
-    let nodes = resources.iter().flat_map(|r| &r.nodes);
-    let (mut chain, last): (Vec<_>, Vec<_>) = nodes.partition(|n| !n.last());
-    chain.extend(last);
-    chain
+/// Where a graph runs: in the player (mpv's `vf`/`af`, where `by_player`
+/// nodes are the player's own options) or in offline FFmpeg (exports).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Target {
+    Player,
+    Offline,
+}
+
+/// The chain's nodes in graph order: the nodes that belong before every chain
+/// (`deinterlace` `auto`, where mpv runs its deinterlacer), resources in
+/// stable order, nodes in their own order, then the nodes that belong after
+/// every chain (`frameBlend`), so time-domain filters (denoise, deinterlace)
+/// work on the original frames. The player's graph leaves out `by_player`
+/// nodes.
+fn sequence<'a, N: Node>(resources: &[&'a Resource<N>], target: Target) -> Vec<&'a N> {
+    let nodes = resources
+        .iter()
+        .flat_map(|r| &r.nodes)
+        .filter(|n| target == Target::Offline || !n.by_player());
+    let (mut first, mut chain, mut last) = (Vec::new(), Vec::new(), Vec::new());
+    for node in nodes {
+        if node.first() {
+            first.push(node);
+        } else if node.last() {
+            last.push(node);
+        } else {
+            chain.push(node);
+        }
+    }
+    first.append(&mut chain);
+    first.append(&mut last);
+    first
+}
+
+/// Whether the video chains ask for the player's own deinterlacer (mpv
+/// `deinterlace=auto`): any `deinterlace` node with `when: "auto"`.
+pub fn player_deinterlace<'a>(
+    mut resources: impl Iterator<Item = &'a Resource<VideoNode>>,
+) -> bool {
+    resources.any(|r| r.nodes.iter().any(Node::by_player))
+}
+
+/// Whether the player's video graph has FFmpeg filters, which need decoded
+/// frames in memory: any node the player does not do itself.
+pub fn needs_frames_in_memory<'a>(
+    mut resources: impl Iterator<Item = &'a Resource<VideoNode>>,
+) -> bool {
+    resources.any(|r| r.nodes.iter().any(|n| !n.by_player()))
 }
 
 pub fn validate(descriptors: &Descriptors) -> Result<()> {
@@ -652,9 +746,14 @@ fn label(name: &str, prefix: &str, index: usize, part: usize) -> String {
     }
 }
 
-fn render<N: Node>(resources: &[Resource<N>], prefix: &str, empty: &str) -> Result<String> {
+fn render<N: Node>(
+    resources: &[Resource<N>],
+    prefix: &str,
+    empty: &str,
+    target: Target,
+) -> Result<String> {
     let resources = ordered(resources)?;
-    let filters: Vec<_> = sequence(&resources)
+    let filters: Vec<_> = sequence(&resources, target)
         .into_iter()
         .enumerate()
         .flat_map(|(index, node)| {
@@ -690,14 +789,25 @@ fn render<N: Node>(resources: &[Resource<N>], prefix: &str, empty: &str) -> Resu
     })
 }
 
-/// Returns a numeric-only single-chain FFmpeg graph, usable within mpv's lavfi
-/// wrapper and offline FFmpeg. Resource IDs never enter the graph expression.
-/// Empty pipelines render null/anull. Sample-rate/Nyquist support must also be
-/// checked against the actual selected source before backend application.
+/// Returns a numeric-only single-chain FFmpeg graph for offline FFmpeg
+/// (exports, processed snapshots): every node, the ones the player does
+/// itself during playback (`deinterlace` `auto`) as their FFmpeg equivalent.
+/// Resource IDs never enter the graph expression. Empty pipelines render
+/// null/anull. Sample-rate/Nyquist support must also be checked against the
+/// actual selected source before backend application.
 pub fn render_lavfi(descriptors: &Descriptors) -> Result<String> {
     match descriptors {
-        Descriptors::Video(resources) => render(resources, "n", "null"),
-        Descriptors::Audio(resources) => render(resources, "n", "anull"),
+        Descriptors::Video(resources) => render(resources, "n", "null", Target::Offline),
+        Descriptors::Audio(resources) => render(resources, "n", "anull", Target::Offline),
+    }
+}
+
+/// The graph for mpv's lavfi wrapper during playback: without the nodes the
+/// player does itself (`player_deinterlace`).
+pub fn render_player(descriptors: &Descriptors) -> Result<String> {
+    match descriptors {
+        Descriptors::Video(resources) => render(resources, "n", "null", Target::Player),
+        Descriptors::Audio(resources) => render(resources, "n", "anull", Target::Player),
     }
 }
 
@@ -716,7 +826,14 @@ fn updates<N: Node>(old: &[Resource<N>], new: &[Resource<N>], prefix: &str) -> R
         }
     }
     let mut commands = Vec::new();
-    for (index, (old, new)) in sequence(&old).into_iter().zip(sequence(&new)).enumerate() {
+    let (old, new) = (
+        sequence(&old, Target::Player),
+        sequence(&new, Target::Player),
+    );
+    if old.len() != new.len() {
+        return Ok(UpdatePlan::NeedsReconfigure);
+    }
+    for (index, (old, new)) in old.into_iter().zip(new).enumerate() {
         let (old, new) = (old.filters(), new.filters());
         if old.len() != new.len() || old.iter().zip(&new).any(|(a, b)| a.name != b.name) {
             return Ok(UpdatePlan::NeedsReconfigure);
@@ -1134,6 +1251,124 @@ mod tests {
         assert_eq!(commands.len(), 1);
         assert_eq!(commands[0].target, "eq@n1");
         assert!(serde_json::from_str::<VideoNode>(r#"{"kind":"frameBlend","fps":48}"#).is_ok());
+    }
+
+    fn deinterlace(when: DeinterlaceWhen, output: DeinterlaceOutput) -> VideoNode {
+        VideoNode::Deinterlace { when, output }
+    }
+
+    /// `when: "auto"` is the player's own deinterlacer: not in the player's
+    /// graph, first in the offline one (exports), only at field rate, and
+    /// alone among the deinterlace nodes of its chain.
+    #[test]
+    fn auto_deinterlace_is_the_players_and_bwdif_first_offline() {
+        let auto = || deinterlace(DeinterlaceWhen::Auto, DeinterlaceOutput::Field);
+        let graph = Descriptors::Video(vec![
+            resource("a", "r", vec![tone(0.1)]),
+            resource("b", "r", vec![blur(2.0), auto()]),
+        ]);
+        assert_eq!(
+            render_player(&graph).unwrap(),
+            "eq@n0=brightness=0.1:contrast=1:saturation=1:gamma=1,\
+             gblur@n1=sigma=2:sigmaV=2:steps=3"
+        );
+        let offline = render_lavfi(&graph).unwrap();
+        assert!(
+            offline.starts_with("bwdif@n0=mode=send_field:deint=interlaced,eq@n1="),
+            "{offline}"
+        );
+        // A chain of only the player's deinterlacer leaves mpv's graph empty
+        // and needs no frames in memory.
+        let alone = Descriptors::Video(vec![resource("a", "r", vec![auto()])]);
+        assert_eq!(render_player(&alone).unwrap(), "null");
+        let Descriptors::Video(resources) = &alone else {
+            unreachable!()
+        };
+        assert!(player_deinterlace(resources.iter()));
+        assert!(!needs_frames_in_memory(resources.iter()));
+        let Descriptors::Video(resources) = &graph else {
+            unreachable!()
+        };
+        assert!(player_deinterlace(resources.iter()));
+        assert!(needs_frames_in_memory(resources.iter()));
+        // The explicit modes are FFmpeg filters as before.
+        for when in [DeinterlaceWhen::Interlaced, DeinterlaceWhen::All] {
+            let explicit = vec![resource(
+                "a",
+                "r",
+                vec![deinterlace(when, DeinterlaceOutput::Frame)],
+            )];
+            assert!(!player_deinterlace(explicit.iter()));
+            assert!(needs_frames_in_memory(explicit.iter()));
+            assert!(
+                render_player(&Descriptors::Video(explicit))
+                    .unwrap()
+                    .starts_with("bwdif@n0=mode=send_frame")
+            );
+        }
+        // Live updates elsewhere keep the player graph's indices.
+        let brighter = Descriptors::Video(vec![
+            resource("a", "r", vec![tone(0.3)]),
+            resource("b", "r", vec![blur(2.0), auto()]),
+        ]);
+        let UpdatePlan::Commands(commands) = runtime_commands(&graph, &brighter).unwrap() else {
+            panic!("eq changes in place");
+        };
+        assert_eq!(commands[0].target, "eq@n0");
+        // Switching between auto and an explicit mode rebuilds.
+        let explicit = Descriptors::Video(vec![
+            resource("a", "r", vec![tone(0.1)]),
+            resource(
+                "b",
+                "r",
+                vec![
+                    blur(2.0),
+                    deinterlace(DeinterlaceWhen::Interlaced, DeinterlaceOutput::Field),
+                ],
+            ),
+        ]);
+        assert_eq!(
+            runtime_commands(&graph, &explicit).unwrap(),
+            UpdatePlan::NeedsReconfigure
+        );
+        // Refused: frame rate, and another deinterlace node in the same chain.
+        let refused = [
+            vec![resource(
+                "a",
+                "r",
+                vec![deinterlace(DeinterlaceWhen::Auto, DeinterlaceOutput::Frame)],
+            )],
+            vec![resource(
+                "a",
+                "r",
+                vec![
+                    auto(),
+                    deinterlace(DeinterlaceWhen::All, DeinterlaceOutput::Field),
+                ],
+            )],
+            vec![resource("a", "r", vec![auto(), auto()])],
+        ];
+        for chain in refused {
+            assert!(validate(&Descriptors::Video(chain)).is_err());
+        }
+        // Several owners may each ask for it.
+        let shared = Descriptors::Video(vec![
+            resource("a", "r", vec![auto()]),
+            resource("b", "r", vec![auto()]),
+            resource(
+                "c",
+                "r",
+                vec![deinterlace(DeinterlaceWhen::All, DeinterlaceOutput::Frame)],
+            ),
+        ]);
+        assert!(validate(&shared).is_ok());
+        assert_eq!(
+            serde_json::from_str::<VideoNode>(
+                r#"{"kind":"deinterlace","when":"auto","output":"field"}"#
+            )
+            .unwrap(),
+            auto()
+        );
     }
 
     #[test]

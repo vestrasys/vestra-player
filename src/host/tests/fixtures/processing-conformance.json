@@ -45,6 +45,16 @@
     {
       "name": "no ready source",
       "steps": [{ "source": "loading", "stage": "video", "nodes": [{ "kind": "gblur", "sigma": 1, "steps": 3 }], "expect": "unavailable", "resources": 0 }]
+    },
+    {
+      "name": "deinterlace when auto: field output only, no other deinterlace node in its chain (player 0.5.4)",
+      "steps": [
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "deinterlace", "when": "auto", "output": "field" }], "expect": "applied", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "deinterlace", "when": "auto", "output": "frame" }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "deinterlace", "when": "auto", "output": "field" }, { "kind": "deinterlace", "when": "interlaced", "output": "field" }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "deinterlace", "when": "auto", "output": "field" }, { "kind": "gblur", "sigma": 1, "steps": 3 }], "expect": "applied", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [], "expect": "applied", "resources": 0 }
+      ]
     }
   ]
 }
