@@ -547,6 +547,76 @@ test("J02: the mouse OSD message in Simplified Chinese names the input in Chines
   assert.equal(host.osd.at(-1), "鼠标动作已更新：滚轮下推 = （无）");
 });
 
+/** A test host that reports `os` from `plugin.app.system()`. */
+function hostOn(os: "macos" | "windows" | "linux") {
+  const host = new TestHost();
+  host.systemInfo = { ...host.systemInfo, os };
+  return host;
+}
+const MODS = ["", "Ctrl", "Alt", "Shift"];
+
+test("J02: Cmd is a modifier on macOS only (Windows key elsewhere, as the menus)", async () => {
+  for (const [os, modifiers] of [["macos", [...MODS, "Cmd"]], ["windows", MODS], ["linux", MODS]] as const) {
+    const host = hostOn(os);
+    await start(host);
+    await host.command("mouse").run();
+    await host.settle(WAIT);
+    assert.deepEqual(page(host, "mouse").props.modifiers, modifiers, os);
+    assert.equal(page(host, "mouse").props.modifier, 0, os);
+    // An index past the list is ignored; on macOS index 4 is Cmd.
+    await emit(host, "mouse", "setModifier", 4);
+    assert.equal(page(host, "mouse").props.modifier, os === "macos" ? 4 : 0, os);
+    await emit(host, "mouse", "setModifier", 3); // Shift
+    await emit(host, "mouse", "pick", 7);
+    await emit(host, "mouse", "choose", "host/mute");
+    assert.deepEqual(overlay(host)["host/mute"], ["M", "Shift+Mouse:WheelUp"], os);
+    for (const stop of [...running]) await stop();
+  }
+});
+
+test("J02: a Cmd mouse binding kept on Windows is shown and can be changed", async () => {
+  const host = hostOn("windows");
+  host.bindings.overlay.set("host/mute", ["M", "Cmd+Mouse:WheelUp"]);
+  await start(host);
+  await host.command("mouse").run();
+  await host.settle(WAIT);
+  const window = page(host, "mouse");
+  type MouseRow = { command: string; bound: boolean };
+  assert.deepEqual(window.props.modifiers, [...MODS, "Cmd"]);
+  assert.equal(window.props.modifier, 0, "None stays chosen");
+  await emit(host, "mouse", "setModifier", 4);
+  assert.equal(window.props.modifier, 4);
+  assert.deepEqual([(window.props.rows as MouseRow[])[7]!.command, (window.props.rows as MouseRow[])[7]!.bound], [MUTE, true]);
+  // (None) takes it; the radio stays while chosen, then goes.
+  await emit(host, "mouse", "pick", 7);
+  await emit(host, "mouse", "choose", "");
+  assert.equal(overlay(host)["host/mute"], undefined, "back to its default, M");
+  assert.deepEqual([window.props.modifiers, window.props.modifier], [[...MODS, "Cmd"], 4]);
+  assert.equal((window.props.rows as MouseRow[])[7]!.bound, false);
+  await emit(host, "mouse", "setModifier", 1);
+  assert.deepEqual([window.props.modifiers, window.props.modifier], [MODS, 1]);
+});
+
+test("J01: on Windows the Windows key records nothing; Ctrl is Ctrl", async () => {
+  assert.equal(fromSlintKey({ text: "x", control: false, alt: false, shift: false, meta: true }, false), null);
+  assert.equal(fromSlintKey({ text: "\u{18}", control: false, alt: false, shift: false, meta: true }, false), null);
+  assert.deepEqual(fromSlintKey({ text: "x", control: true, alt: false, shift: false, meta: false }, false), { input: "Ctrl+X" });
+  const host = hostOn("windows");
+  await start(host);
+  await openKeys(host);
+  await capture(host, "host/mute", "x", { meta: true });
+  assert.equal(page(host, "keys").props.capturing, true, "still waiting");
+  await emit(host, "keys", "key", "x", true, false, false, false);
+  assert.equal(page(host, "keys").props.capturing, false);
+  assert.deepEqual(overlay(host)["host/mute"], ["M", "Ctrl+X"]);
+  // macOS: Slint's meta is ⌃, a Ctrl binding.
+  const mac = hostOn("macos");
+  await start(mac);
+  await openKeys(mac);
+  await capture(mac, "host/mute", "x", { meta: true });
+  assert.deepEqual(overlay(mac)["host/mute"], ["M", "Ctrl+X"]);
+});
+
 // ------------------------------------------------------------------ J03
 
 test("J03: ignoring defaults (asks first), changed keys keep working, off restores", async () => {

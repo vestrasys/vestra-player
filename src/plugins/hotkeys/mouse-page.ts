@@ -1,5 +1,5 @@
 import type { BindingInfo, Plugin } from "@vestra-player/sdk";
-import { commandText, inputOf, type Message, MODIFIERS, MOUSE, message, refKey, winner } from "./keys.ts";
+import { commandText, inputOf, type Message, type Modifier, MODIFIERS, MOUSE, message, refKey, winner } from "./keys.ts";
 import type { Osd } from "./main.ts";
 import { type BindingsModel, failure } from "./model.ts";
 
@@ -7,8 +7,7 @@ import { type BindingsModel, failure } from "./model.ts";
 export const MOUSE_PAGE = "hotkeys.mouse";
 
 /** `Ctrl+Mouse:WheelUp` for a modifier choice and a mouse input. */
-export const mouseInput = (modifier: number, input: string) =>
-  MODIFIERS[modifier] ? `${MODIFIERS[modifier]}+${input}` : input;
+export const mouseInput = (modifier: Modifier, input: string) => (modifier ? `${modifier}+${input}` : input);
 
 /**
  * Mouse (J02), a page of the options window: for each mouse input (under the chosen modifier) the
@@ -22,13 +21,16 @@ export class MousePage {
   readonly #model: BindingsModel;
   readonly #osd: Osd;
   readonly #page;
-  #modifier = 0;
+  /** The system has ⌘ (macOS): `Cmd` is always offered (`hasCmd`). */
+  readonly #mac: boolean;
+  #modifier: Modifier = "";
   /** Row being picked for, or null. */
   #picking: number | null = null;
   #filter = "";
   #message = message();
 
-  constructor(plugin: Plugin, model: BindingsModel, osd: Osd) {
+  constructor(plugin: Plugin, model: BindingsModel, osd: Osd, mac: boolean) {
+    this.#mac = mac;
     this.#plugin = plugin;
     this.#model = model;
     this.#osd = osd;
@@ -39,8 +41,9 @@ export class MousePage {
       order: 20,
     }));
     page.on("setModifier", (index: number) => {
-      if (index < 0 || index >= MODIFIERS.length) return;
-      this.#modifier = index;
+      const modifier = this.#modifiers()[index];
+      if (modifier === undefined) return;
+      this.#modifier = modifier;
       this.#picking = null;
     });
     page.on("pick", (row: number) => {
@@ -89,6 +92,20 @@ export class MousePage {
     return claimers.length === 1 && refKey(claimers[0]!) === refKey(home);
   }
 
+  /**
+   * The modifier radios. `Cmd` only on macOS: elsewhere it is the Windows
+   * (Super) key, which the menus never show either. A `Cmd` mouse binding
+   * kept from elsewhere (a synced or older setting) still brings the radio
+   * back, so it can be seen and changed; it stays while chosen.
+   */
+  #modifiers(): Modifier[] {
+    const cmd =
+      this.#mac ||
+      this.#modifier === "Cmd" ||
+      this.#global().some((c) => c.current.some((input) => MOUSE.some((m) => input === mouseInput("Cmd", m.input))));
+    return MODIFIERS.filter((m) => m !== "Cmd" || cmd);
+  }
+
   rows() {
     return MOUSE.map((mouse, index) => {
       const input = mouseInput(this.#modifier, mouse.input);
@@ -107,6 +124,7 @@ export class MousePage {
     const input = row === null ? null : mouseInput(this.#modifier, MOUSE[row]!.input);
     const owner = input ? winner(this.#model.commands, input, "global") : null;
     const filter = this.#filter.trim().toLowerCase();
+    const modifiers = this.#modifiers();
     const items =
       row === null
         ? []
@@ -117,8 +135,8 @@ export class MousePage {
               .sort((a, b) => a.text.localeCompare(b.text, "zh-Hans-CN")),
           ].filter((item) => !filter || item.key === "" || item.text.toLowerCase().includes(filter));
     return {
-      modifiers: [...MODIFIERS],
-      modifier: this.#modifier,
+      modifiers,
+      modifier: modifiers.indexOf(this.#modifier),
       rows: this.rows(),
       picking: row !== null,
       pickInput: inputOf(input ?? ""),
@@ -174,7 +192,7 @@ export class MousePage {
     const command = owner ? commandText(owner) : "";
     this.#say(message(owner ? "mouse-updated" : "mouse-updated-none", { input: inputOf(input), text: command }));
     const { text } = this.#plugin.i18n;
-    const modifier = MODIFIERS[this.#modifier];
+    const modifier = this.#modifier;
     const mouse = text(MOUSE[row]!.label);
     const name = modifier ? text("{}+{}", [modifier, mouse]) : mouse;
     this.#osd(

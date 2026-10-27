@@ -1,6 +1,7 @@
 import type { Plugin } from "@vestra-player/sdk";
 import { IgnoreDefaults } from "./ignore.ts";
 import { KeysPage } from "./keys-page.ts";
+import { hasCmd } from "./keys.ts";
 import { BindingsModel } from "./model.ts";
 import { MousePage } from "./mouse-page.ts";
 
@@ -22,10 +23,13 @@ export default async function activate(plugin: Plugin) {
   // i18n-ignore: the player's (or the SDK's) own message
   plugin.onError((error) => osd(plugin.osd.show(error.message)));
 
+  // `Cmd` is offered on macOS only (⌘); elsewhere it is the Windows key (`hasCmd`).
+  const { os } = await plugin.app.system().catch(() => ({ os: "other" as const }));
+  const mac = hasCmd(os);
   const model = new BindingsModel(plugin);
   const ignore = new IgnoreDefaults(plugin, model, osd);
-  const keys = new KeysPage(plugin, model, ignore, osd);
-  const mouse = new MousePage(plugin, model, osd);
+  const keys = new KeysPage(plugin, model, ignore, osd, mac);
+  const mouse = new MousePage(plugin, model, osd, mac);
 
   plugin.commands.add({
     id: "keys",

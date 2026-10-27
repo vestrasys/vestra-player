@@ -22,3 +22,4 @@ English source texts; Simplified Chinese in `locales/zh-Hans.po`. The exported l
 
 - Numeric keypad keys are recorded as the main keyboard's keys; ⌃P–⌃X cannot be recorded, use ⌘ instead (a `Ctrl+` binding answers to both ⌘ and ⌃).
 - Keys the system takes (such as ⌘Tab, ⌘Space) cannot be recorded.
+- The `Cmd` modifier (⌘) is offered on macOS only; on Windows and Linux it would be the Windows (Super) key, which the system keeps, so the Mouse page does not offer it and the Windows key is not recorded. An existing `Cmd` mouse binding still shows its radio so it can be changed.
