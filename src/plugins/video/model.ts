@@ -275,14 +275,22 @@ export const defaultLook = (): Look => ({
 
 const round = (n: number, digits = 4) => Math.round(n * 10 ** digits) / 10 ** digits;
 const strength = (t: Toggle) => (t.on ? clamp(t.strength, 0, 100) : 0);
+/** The eq fields (brightness, contrast, saturation, gamma; hue has its own node). */
+const EQ_FIELDS = ["brightness", "contrast", "saturation", "gamma"] as const;
+/** Every eq field at its default: the node would change nothing. */
+export const eqNeutral = (p: Picture) => EQ_FIELDS.every((field) => clamp(p[field], -100, 100) === 0);
 
 /**
  * One fixed order, never user-reorderable: deinterlace → reframe → transform → denoise
  * (3D, 渐进, 瞬态) → deblock → deband → eq → hue → sharpen → edge sharpen → gblur.
- * Neutral or switched-off effects make no node; eq is always first among the colour nodes.
+ * Neutral or switched-off effects make no node: with every colour at its default there is
+ * no eq node either (any node in the chain makes the player decode with copy-back, which
+ * costs zero-copy hardware decoding and slows exact seeks). `keepEq` keeps an eq node at its
+ * neutral values anyway: a slider dragged through 0 then updates in place instead of
+ * removing and re-adding the node (each a chain rebuild) in the middle of the drag.
  * `blend` (E18, from `blendFps`) adds frameBlend last; the host keeps it last anyway.
  */
-export function nodesFor(look: Look, blend: number | null = null): VideoNode[] {
+export function nodesFor(look: Look, blend: number | null = null, keepEq = false): VideoNode[] {
   const { picture: p, effects: e, deinterlace, reframe, geometry: g } = look;
   const nodes: VideoNode[] = [];
   if (deinterlace.mode !== "off")
@@ -310,13 +318,14 @@ export function nodesFor(look: Look, blend: number | null = null): VideoNode[] {
   if (e.deblock.on) nodes.push({ kind: "deblock", strength: e.deblock.strength < 50 ? "weak" : "strong" });
   const deband = strength(e.deband);
   if (deband > 0) nodes.push({ kind: "deband", threshold: round(0.005 + (deband / 100) * 0.045), range: 16 });
-  nodes.push({
-    kind: "eq",
-    brightness: clamp(p.brightness, -100, 100) / 100,
-    contrast: 2 ** (clamp(p.contrast, -100, 100) / 100),
-    saturation: 1 + clamp(p.saturation, -100, 100) / 100,
-    gamma: 2 ** (clamp(p.gamma, -100, 100) / 100),
-  });
+  if (keepEq || !eqNeutral(p))
+    nodes.push({
+      kind: "eq",
+      brightness: clamp(p.brightness, -100, 100) / 100,
+      contrast: 2 ** (clamp(p.contrast, -100, 100) / 100),
+      saturation: 1 + clamp(p.saturation, -100, 100) / 100,
+      gamma: 2 ** (clamp(p.gamma, -100, 100) / 100),
+    });
   const hue = Math.round(clamp(p.hue, -100, 100));
   if (hue !== 0) nodes.push({ kind: "hue", degrees: round(hue * 1.8, 2) });
   const sharpen = strength(e.sharpen);
