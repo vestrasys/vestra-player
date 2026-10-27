@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import test from "node:test";
 import { isDeepStrictEqual } from "node:util";
 import type { Locale } from "@vestra-player/sdk";
@@ -187,6 +187,127 @@ test("Ctrl+E saves the raw current frame into the capture folder with no dialog 
     assert.equal(job.destination, join(folder, "source-one_00.02.000.png"));
     const outcome = host.jobs.get(1)!.outcome as { destination: string };
     assert.equal(host.osd.at(-1), `帧已保存为 ${outcome.destination}`, "the path the host confirmed");
+  } finally {
+    await stop();
+    await cleanup();
+  }
+});
+
+/**
+ * A playing source: every read of the state returns the position at that
+ * moment, and the clock then moves on four frames at 60 fps, so the source
+ * has moved on by the time the plugin asks for the snapshot. Returns the
+ * positions read, oldest first.
+ */
+function playing(host: TestHost) {
+  const reads: number[] = [];
+  host.handle("source.state", () => {
+    const now = structuredClone(host.source);
+    reads.push(now.position ?? 0);
+    // After the reply, so the read returns this moment and not the next.
+    setImmediate(() => host.setSource({ position: (now.position ?? 0) + 4 / 60 }));
+    return now;
+  });
+  return reads;
+}
+
+test("while playing, Save Current / Rendered Frame capture the frame at the press and name it by the time the host reports", async () => {
+  const host = new TestHost();
+  ready(host);
+  const { stop } = await start(host);
+  const { folder, cleanup } = await withFolder(host);
+  try {
+    const reads = playing(host);
+    const saved = async (keys: string, mode: string) => {
+      const before = { jobs: host.sent("jobs.start").length, reads: reads.length };
+      await host.press(keys);
+      await until(() => host.sent("jobs.start").length === before.jobs + 1);
+      const capture = host.sent("snapshot.capture").at(-1)!;
+      assert.equal(capture.mode, mode);
+      assert.equal(capture.time, reads[before.reads], "the position read at the press, though the clock moved on during the folder check");
+      assert.ok(reads.length > before.reads + 1, "the source did move on before the capture");
+      return host.sent("jobs.start").at(-1)!;
+    };
+    const raw = await saved("Ctrl+E", "raw");
+    assert.equal(raw.destination, join(folder, "source-one_00.02.000.png"));
+    assert.equal(raw.sampleTime, 2, "the export takes the frame the name states");
+    await until(() => host.osd.at(-1)?.startsWith("帧已保存为") ?? false);
+    const screen = await saved("Ctrl+Alt+E", "processed");
+    assert.ok(Number(screen.sampleTime) > 2);
+    assert.equal(screen.destination, join(folder, frameName("/contract/source-one.mp4", Number(screen.sampleTime), ".png")));
+    await until(() => host.osd.at(-1)?.startsWith("帧已保存为") ?? false);
+    // The name follows the time the host reports for the frozen frame (say, the frame's own timestamp), not the requested one.
+    const reported = async (p: Parameters<TestHost["request"]>[1]) => {
+      host.reset("snapshot.capture");
+      try {
+        const snapshot = (await host.request("snapshot.capture", p)) as { time: number };
+        return { ...snapshot, time: snapshot.time + 0.004 };
+      } finally {
+        host.handle("snapshot.capture", reported);
+      }
+    };
+    host.handle("snapshot.capture", reported);
+    const snapped = await saved("Ctrl+E", "raw");
+    const time = Number(snapped.sampleTime);
+    assert.ok(Math.abs(time - (Number(host.sent("snapshot.capture").at(-1)!.time) + 0.004)) < 1e-9);
+    assert.equal(snapped.destination, join(folder, frameName("/contract/source-one.mp4", time, ".png")));
+    // Paused: the position is exact and stays.
+    host.reset("snapshot.capture");
+    host.reset("source.state");
+    host.setSource({ position: 7.25 });
+    await host.press("Ctrl+E");
+    await until(() => host.sent("jobs.start").at(-1)!.destination === join(folder, "source-one_00.07.250.png"));
+    assert.equal(host.sent("snapshot.capture").at(-1)!.time, 7.25);
+  } finally {
+    await stop();
+    await cleanup();
+  }
+});
+
+test("while playing, Save As offers the name of the frame it captures; a burst of the current frame names each file by its own time", async () => {
+  const host = new TestHost();
+  ready(host);
+  const { stop } = await start(host);
+  const { folder, cleanup } = await withFolder(host);
+  try {
+    const reads = playing(host);
+    let offered = "";
+    host.handle("dialogs.open", (p) => {
+      offered = String(p.fileName);
+      return { cancelled: false, paths: [join(folder, offered)] };
+    });
+    await host.command("capture.saveAs").run();
+    await until(() => host.sent("jobs.start").length === 1);
+    const time = Number(host.sent("snapshot.capture")[0]!.time);
+    assert.equal(offered, frameName("/contract/source-one.mp4", time, ".png"), "the offered name and the frozen frame agree");
+    assert.equal(host.sent("jobs.start")[0]!.destination, join(folder, offered));
+    host.reset("dialogs.open");
+    await host.press("Ctrl+G");
+    const press = reads.length;
+    host.window("burst").emit("start-burst", "0", "3", "0.5", true, false, false);
+    await until(() => host.sent("jobs.start").length === 4);
+    const frozen = host.sent("snapshot.capture")[1]!;
+    assert.equal(frozen.time, reads[press], "the frame at the press of Start, though the clock moved on");
+    assert.ok(reads.length > press + 1);
+    const starts = host.sent("jobs.start").slice(1);
+    const first = Number(starts[0]!.sampleTime);
+    assert.equal(first, reads[press]);
+    assert.deepEqual(
+      starts.map((s) => basename(String(s.destination))),
+      [0, 1, 2].map((i) => `00${i + 1}-${(first + i * 0.5).toFixed(3)}s.png`),
+      "each file is named by its own sample time",
+    );
+    assert.deepEqual(starts.map((s) => s.sampleTime), [0, 1, 2].map((i) => first + i * 0.5));
+    // Copy Current / Rendered Frame: the frame at the press too.
+    for (const [keys, mode] of [["Ctrl+C", "raw"], ["Ctrl+Alt+C", "processed"]] as const) {
+      host.handle("clipboard.writeImage", () => {});
+      const copied = () => host.osd.filter((line) => line === "画面截图：复制到剪贴板").length;
+      const before = { copied: copied(), reads: reads.length };
+      await host.press(keys);
+      await until(() => copied() === before.copied + 1);
+      const capture = host.sent("snapshot.capture").at(-1)!;
+      assert.deepEqual([capture.mode, capture.time], [mode, reads[before.reads]]);
+    }
   } finally {
     await stop();
     await cleanup();
