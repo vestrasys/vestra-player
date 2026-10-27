@@ -15,7 +15,7 @@ export { API_VERSION, CAPABILITIES, CAPABILITY_INFO, MESSAGE_LIMIT, } from "./ca
 export { BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS, } from "./commands.ts";
 export { BINDING_INPUTS } from "./plugin/bindings.ts";
 export { OSD_LIMITS } from "./plugin/osd.ts";
-export { SECRET_LIMITS } from "./plugin/services.ts";
+export { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./plugin/services.ts";
 export { THEME_PALETTES } from "./palettes.ts";
 export { Catalog, HOST_ZH_HANS, LIST_SEPARATORS, LOCALES, MENU_KEYS, matchLocale, parsePo, rewriteSlint, renderText, scanSlint, TEXT_LIMITS, textKey, textProblem, } from "./i18n.ts";
 export { MANIFEST_FIELDS, MANIFEST_LIMITS } from "./manifest.ts";

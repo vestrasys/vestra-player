@@ -488,6 +488,18 @@ export declare function createWire(transport: Transport): {
         set: (name: string, value: string) => Promise<void>;
         delete: (name: string) => Promise<void>;
     };
+    /**
+     * JSON values the player keeps per plugin until it quits (SDK 1.5.25,
+     * player 0.5.5). `get` answers `{}` for a missing key.
+     */
+    storageSession: {
+        get: (key: string) => Promise<{
+            value?: Json;
+        }>;
+        set: (key: string, value: Json) => Promise<void>;
+        delete: (key: string) => Promise<void>;
+        keys: () => Promise<string[]>;
+    };
     app: {
         system: () => Promise<WireSystemInfo>;
     };

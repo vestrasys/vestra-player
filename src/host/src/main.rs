@@ -60,6 +60,7 @@ mod render_target;
 mod renderer;
 mod secret_index;
 mod session;
+mod session_storage;
 mod settings_window;
 mod slot_claims;
 mod source_backend;
@@ -449,6 +450,8 @@ struct Host {
     failures: BTreeMap<String, String>,
     /// `uninstall({ removeData })`: data directories to delete once reaped.
     data_removals: BTreeMap<u64, PathBuf>,
+    /// `plugin.storage.session`: per plugin identity, for this player run.
+    session_storage: session_storage::SessionStorage,
     /// What `bindings.changed` / `packages.changed` last announced.
     bindings_sent: u64,
     packages_sent: Value,
@@ -3692,6 +3695,15 @@ impl Host {
         if method == "ui.markdownScan" {
             return self.markdown_scan(params).map(Some);
         }
+        if method.starts_with("storage.session.") {
+            // Keyed by the plugin's data identity, not by `reply.owner`: the
+            // values outlive this process (session_storage.rs).
+            let key = plugin.data_key.clone();
+            return self
+                .session_storage
+                .dispatch(&key, method, params)
+                .map(Some);
+        }
         if method.starts_with("packages.") {
             return self.package_dispatch(reply.owner, method, params).map(Some);
         }
@@ -5320,6 +5332,7 @@ fn main() -> Result<()> {
         dev_disabled: Default::default(),
         failures: BTreeMap::new(),
         data_removals: BTreeMap::new(),
+        session_storage: Default::default(),
         bindings_sent: 0,
         packages_sent: Value::Null,
         notified_at: 0,
@@ -5628,6 +5641,11 @@ fn required_capability(
         "power.preventSleep" | "player.setStepSeek" | "player.step" => Some("playback.control"),
         "system.reveal" | "system.openPath" | "system.openUrl" | "app.system" => None,
         "ui.markdownScan" => None,
+        // SDK 1.5.25, player 0.5.5: no capability, like `plugin.storage.json`.
+        "storage.session.get"
+        | "storage.session.set"
+        | "storage.session.delete"
+        | "storage.session.keys" => None,
         "secrets.get" | "secrets.set" | "secrets.delete" => Some("secrets"),
         "host.run" => Some("commands"),
         "playback.stats" => Some("playback.read"),
