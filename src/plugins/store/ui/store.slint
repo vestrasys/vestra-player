@@ -225,8 +225,13 @@ export component StoreWindow inherits Window {
     in property <string> empty-text;
     in property <bool> link-open;
     in-out property <string> link-text;
-    // Detail
+    // Detail: the selected row (always one the list shows; -1 none) and its details.
     in property <bool> has-selection;
+    in property <int> selected-index: -1;
+    // Bumped when the list should bring the selected row into view (a tab, search, tag or sort change, a selection made for you).
+    in property <int> scroll-request;
+    // Bumped when the search box is to be emptied (to show a plugin the search hid).
+    in property <int> clear-search;
     in property <string> d-name;
     in property <string> d-meta;
     in property <string> d-punchline;
@@ -268,6 +273,25 @@ export component StoreWindow inherits Window {
     callback cancel();
 
     forward-focus: search-box;
+
+    changed clear-search => { root.search-text = ""; }
+    // Rows are 62px (ListRow): scroll only as far as needed to show the selected row; nothing selected: the top.
+    // Kept within the list, which may have just become shorter.
+    changed scroll-request => {
+        let top = root.selected-index * 62px;
+        let view = plugin-list.visible-height;
+        let lowest = min(0px, view - root.rows.length * 62px);
+        let current = max(lowest, min(0px, plugin-list.content-y));
+        if root.selected-index < 0 {
+            plugin-list.content-y = 0px;
+        } else if top < -current {
+            plugin-list.content-y = -top;
+        } else if top + 62px > view - current {
+            plugin-list.content-y = max(lowest, view - top - 62px);
+        } else {
+            plugin-list.content-y = current;
+        }
+    }
 
     // Widths that follow the interface language, never under the original ones.
     // A drop-down: its widest label + 21px (6 + 5 padding, 2 gap, 8 caret).
@@ -387,7 +411,7 @@ export component StoreWindow inherits Window {
                 background: Theme.bg-list;
                 border-width: 1px;
                 border-color: Theme.line;
-                ListView {
+                plugin-list := ListView {
                     x: 1px;
                     y: 1px;
                     width: parent.width - 2px;
@@ -411,10 +435,12 @@ export component StoreWindow inherits Window {
                     vertical-alignment: center;
                 }
             }
-            // The selected plugin.
+            // The selected plugin; an empty list leaves the pane empty (the list says why).
+            // `visible:`, not `if`: a tab, search or tag change toggles it (menu-view.slint rule).
             Rectangle {
                 horizontal-stretch: 1;
-                if !root.has-selection: Text {
+                Text {
+                    visible: !root.has-selection && root.rows.length > 0;
                     width: 100%;
                     height: 100%;
                     text: @tr("Select a plugin on the left to see its details");
@@ -423,7 +449,8 @@ export component StoreWindow inherits Window {
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }
-                if root.has-selection: VerticalLayout {
+                VerticalLayout {
+                    visible: root.has-selection;
                     spacing: 6px;
                     HorizontalLayout {
                         spacing: 10px;

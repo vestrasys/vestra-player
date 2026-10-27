@@ -57,7 +57,9 @@ test("official install: confirm with permissions, download through a redirect, c
     await until(host, () => !store.busy);
     assert.deepEqual(readdirSync(join(host.dataDirectory, "downloads")), [], "download removed");
     assert.equal((await allRows(host)).find((r) => r.name === "YouTube")?.badge, "已安装");
-    // The row's button and Disable (formerly in the Plugin Manager).
+    // Under Installed now (Available stayed, without it): the row's button and Disable (formerly in the Plugin Manager).
+    assert.equal(props(host)["has-selection"], false);
+    await choose(host, "YouTube");
     assert.deepEqual(actions(host).map((a) => a.text), ["卸载…", "停用"]);
   } finally {
     await stop();

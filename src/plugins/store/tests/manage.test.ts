@@ -81,7 +81,8 @@ test("row logos: an installed plugin's own icon (offline too), else the store's;
       const path = logoOf(host, name);
       assert.equal(host.images.find((image) => image.path === path)?.maxSide, 64, name);
     }
-    // One reference per file: a row written again keeps its image.
+    // One reference per file: a row written again keeps its image (x.own stays selected, its details too).
+    await choose(host, "x.own");
     const refs = () => new Set(host.images.map((image) => image.ref)).size;
     const before = refs();
     host.window("store").emit("search", "x.");

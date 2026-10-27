@@ -69,6 +69,9 @@ export const INSTALLED = 0;
 export const AVAILABLE = 1;
 export const UPDATES = 2;
 
+/** The tab that always lists this row (an update shows under Updates too). */
+const homeOf = (item: Item) => (isInstalledRow(item) ? INSTALLED : AVAILABLE);
+
 export const MENU_ORDER = 822;
 const README_LIMIT = 256 * 1024;
 const REMOTE_IMAGE = /!\[[^\]]*\]\(\s*<?(https?:\/\/[^)\s>]+)/g;
@@ -166,6 +169,12 @@ export class Store {
   #menuChain: Promise<void> = Promise.resolve();
   #announced = false;
   #disposed = false;
+  /** Bumped when the list should scroll the selected row into view (`scroll-request`). */
+  #scroll = 0;
+  /** Bumped when the search box is to be emptied (`clear-search`): the box's text is the window's own. */
+  #clearSearch = 0;
+  /** A plugin `select`ed before it was in the plugin list (just installed from a file or link). */
+  #pending: string | null = null;
 
   constructor(plugin: Plugin, deps: Omit<Deps, "userAgent">) {
     this.plugin = plugin;
@@ -181,20 +190,29 @@ export class Store {
     rmSync(join(plugin.dataDirectory, "downloads"), { recursive: true, force: true });
 
     const window = (this.window = plugin.windows.create("ui/store.slint"));
+    // The details follow the list: a tab, search or tag that hides the selected plugin selects the list's first row.
     window.on("search", (text: string) => {
       this.search = text;
+      this.#listChanged();
     });
     window.on("setCategory", (index: number) => {
       this.category = Math.max(INSTALLED, Math.min(UPDATES, index));
+      // A tag the new tab has no plugin for would empty its list under "Tags: All".
+      const tag = this.tag?.toLowerCase();
+      if (tag !== undefined && !this.#tags().some((each) => each.toLowerCase() === tag)) this.tag = null;
+      this.#listChanged();
     });
     window.on("setTag", (index: number) => {
       this.tag = index <= 0 ? null : (this.#tags()[index - 1] ?? null);
+      this.#listChanged();
     });
     window.on("setSort", (index: number) => {
       this.sort = index === 1 ? 1 : 0;
+      this.#listChanged();
     });
     window.on("select", (key: string) => {
       if (this.selected === key) return;
+      this.#pending = null;
       this.selected = key;
       void this.#loadDoc();
     });
@@ -293,20 +311,72 @@ export class Store {
     await this.window.show();
     // A short wait for the headers: offline, the Installed tab never waits for the network anyway.
     if (refresh && this.repos.list.some((repo) => this.repos.stale(repo))) void this.refreshAll(false, timing.openHeaders);
-    if (!this.selected) {
-      const first = this.visible()[0];
-      if (first) this.select(first.key);
-    }
+    this.#listChanged();
+    this.changed();
   }
 
+  /**
+   * Show this plugin's details (after an install, from the revocation
+   * notice). The details only ever show a row of the list, so a plugin on
+   * another tab, or hidden by the tag or the search, brings its tab up and
+   * those filters off first.
+   */
   select(key: string) {
+    const item = this.items.find((each) => each.key === key);
+    this.#pending = item ? null : key;
+    if (item) this.#reveal(item);
     this.selected = key;
+    // Not in the list yet: scrolled to once it is (`rebuild`).
+    if (item) this.#scroll++;
     void this.#loadDoc();
     this.changed();
   }
 
+  /** Bring a row into the list: its tab, then without the tag, then without the search. */
+  #reveal(item: Item) {
+    this.#pending = null;
+    if (this.#shows(item.key)) return;
+    this.category = homeOf(item);
+    if (!this.#shows(item.key)) this.tag = null;
+    if (!this.#shows(item.key)) {
+      this.search = "";
+      this.#clearSearch++;
+    }
+    this.#scroll++;
+  }
+
+  /** The list shows this row now. */
+  #shows(key: string | null): boolean {
+    return key !== null && this.visible().some((each) => each.key === key);
+  }
+
+  /**
+   * The details follow the list (plugin-center spec, like app stores and
+   * VS Code's extensions view): keep the selection while the list shows it,
+   * else select the row at `at` (the first after a tab, search or tag
+   * change; the same place after the plugin left the list), or nothing when
+   * the list is empty.
+   */
+  #follow(at = 0) {
+    if (this.#shows(this.selected)) return;
+    const visible = this.visible();
+    const next = visible[Math.max(0, Math.min(at, visible.length - 1))]?.key ?? null;
+    if (next === this.selected) return;
+    this.selected = next;
+    this.#pending = null;
+    this.#scroll++;
+    void this.#loadDoc();
+  }
+
+  /** After a tab, search, tag or sort change: follow the list and bring the selected row into view. */
+  #listChanged() {
+    this.#follow();
+    this.#scroll++;
+  }
+
   /** Recompute rows after the repositories or the install library changed. */
   rebuild(afterRefresh = false) {
+    const at = this.visible().findIndex((each) => each.key === this.selected);
     this.items = buildItems(
       this.repos.list,
       this.packages,
@@ -314,6 +384,16 @@ export class Store {
       (info) => this.#display(info),
       this.plugin.i18n.locale,
     );
+    // A plugin selected before it reached the list (installed from a file or link) is shown once it has.
+    const pending = this.#pending !== null && this.selected === this.#pending ? this.selectedItem() : null;
+    if (pending) {
+      this.#reveal(pending);
+      this.#scroll++;
+    }
+    // The tab stays: a plugin that left the list (installed, updated, uninstalled, dropped by its
+    // repository) gives way to the row in its place, like VS Code's extensions view and app stores.
+    // An empty list that fills (an index read, a refresh that adds matches) selects its first row.
+    else if (at >= 0 || (this.selected === null && this.#pending === null)) this.#follow(Math.max(0, at));
     void this.updateMenu(afterRefresh);
     void this.revocations.check();
     void this.#loadDoc();
@@ -489,7 +569,9 @@ export class Store {
   props() {
     const visible = this.visible();
     const tags = this.#tags();
-    const item = this.selectedItem();
+    // Only a row of the list has details (a plugin selected before it reached the list waits for it).
+    const index = visible.findIndex((each) => each.key === this.selected);
+    const item = index >= 0 ? visible[index]! : null;
     const op = this.#operation;
     // One message, or a text per repository.
     const status = this.#message
@@ -515,6 +597,9 @@ export class Store {
       busyText: shown(op?.text ?? null),
       canCancel: op?.cancel != null,
       hasSelection: item !== null,
+      selectedIndex: index,
+      scrollRequest: this.#scroll,
+      clearSearch: this.#clearSearch,
     };
     if (!item) return base;
     const caps = item.best?.capabilities ?? item.installed?.capabilities ?? item.entry?.versions[0]?.capabilities ?? [];
