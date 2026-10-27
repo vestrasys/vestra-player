@@ -73,6 +73,12 @@ export const UPDATES = 2;
 const homeOf = (item: Item) => (isInstalledRow(item) ? INSTALLED : AVAILABLE);
 
 export const MENU_ORDER = 822;
+/**
+ * The bottom bar's button (player 0.5.10): position only, low further left and
+ * hidden first. The workshop's AI is 100, so the right end reads
+ * [AI][Store][sidebar toggle].
+ */
+export const BUTTON_ORDER = 200;
 const README_LIMIT = 256 * 1024;
 const REMOTE_IMAGE = /!\[[^\]]*\]\(\s*<?(https?:\/\/[^)\s>]+)/g;
 /**
@@ -438,6 +444,7 @@ export class Store {
         path: [count > 0 ? this.plugin.i18n.text("Plugin Store ({} updates)…", [count]) : "Plugin Store…"],
         order: MENU_ORDER,
         group: "windows",
+        button: { icon: "store", order: BUTTON_ORDER },
         run: () => this.open(),
       });
       if (afterRefresh && count > 0 && before <= 0 && !this.#announced) {
