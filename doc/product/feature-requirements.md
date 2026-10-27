@@ -1068,7 +1068,7 @@ The top-level "Subtitles ▸" uses 300–399 (`doc/product/menus.md`). Existing 
 | Subtitles ▸ Secondary Subtitle ▸ Position ▸ Top / Above Main Subtitle (radio) | 321 | subtitle-second-pos | — | A08 |
 | Subtitles ▸ Subtitle Style ▸ Bold (checkbox) | 324 | style-font | Alt+B | D09 |
 | Subtitles ▸ Subtitle Style ▸ Size + / Size − | 325 / 326 | style-font | Alt+PageUp / Alt+PageDown | D06 |
-| Subtitles ▸ Subtitle Style ▸ Move Up / Move Down | 330–331 | style-move | Alt+↑ / Alt+↓ | D07 |
+| Subtitles ▸ Subtitle Style ▸ Move Up / Move Down | 330–331 | style-move | none (user ruling 2026-10-27: Alt+↑/↓ pan the video; bind them in Settings ▸ Keyboard Shortcuts) | D07 |
 | Subtitles ▸ Subtitle Style ▸ Reset Position | 334 | style-move | Alt+Home | D07 |
 | Subtitles ▸ Subtitle Style ▸ Shadow (checkbox) | 335 | style-box | — | D11 |
 | Subtitles ▸ Subtitle Style ▸ Opaque Box (checkbox) | 336 | style-box | — | D11 |
@@ -1262,7 +1262,7 @@ Conflict check (against the current bindings in menus.md):
 
 **Current state**: the Subtitle Tuning window has position up / down, with no shortcuts.
 
-**Requirement**: Alt+↑ moves up, Alt+↓ moves down, 1% per step (bottom margin `marginPercent`), range 2–15, default 5; Alt+Home resets the position.
+**Requirement**: Move Up and Move Down (no default key, user ruling 2026-10-27: Alt+↑/↓ pan the video) move the subtitles 1% per step (bottom margin `marginPercent`), range 2–15, default 5; Alt+Home resets the position.
 
 **Entry point**: `Subtitles ▸ Subtitle Style ▸ Move Up / Move Down / Reset Position`.
 
@@ -1273,7 +1273,7 @@ Conflict check (against the current bindings in menus.md):
 
 **Core dependencies**: the existing `subtitles.setStyle`.
 
-**Acceptance**: press Alt+↑ 3 times → `marginPercent` 8; Alt+Home → 5, with the correct OSD wording.
+**Acceptance**: run Move Up 3 times → `marginPercent` 8; Alt+Home → 5, with the correct OSD wording.
 
 **Notes**: there is no "top / bottom margin ±"; the subtitle position already is the bottom margin.
 
@@ -1459,7 +1459,7 @@ Framing shortcuts (E13). The binding syntax has no numpad key names now (the inp
 
 Conflict check (against `doc/product/menus.md` and all bindings in the existing plugin code):
 
-- I, O, Ctrl+R, Ctrl+N, Ctrl+M, Ctrl+H, Ctrl+P, Ctrl+Z, Ctrl+I, Shift+F6, Alt+K, Shift+P, Alt+Plus, Alt+-, Alt+arrow keys and Alt+Backspace are not used by anyone now. playback only uses Ctrl / Shift / Ctrl+Alt + ←/→, not Alt + arrow keys alone.
+- I, O, Ctrl+R, Ctrl+N, Ctrl+M, Ctrl+H, Ctrl+P, Ctrl+Z, Ctrl+I, Shift+F6, Alt+K, Shift+P, Alt+Plus, Alt+-, Alt+arrow keys and Alt+Backspace are not used by anyone now (this check missed subtitles Move Up/Down on Alt+↑/↓; resolved 2026-10-27, see [menus](menus.md) Conflict check). playback only uses Ctrl / Shift / Ctrl+Alt + ←/→, not Alt + arrow keys alone.
 - On macOS, `Ctrl+X` is triggered by both ⌃X and ⌘X (reference §4.1). **Ctrl+Q is not bound**, because ⌘Q is Quit; "image scaling settings" becomes a page in the Picture Adjustments window, without a shortcut. The ⌘ versions of Ctrl+H and Ctrl+M are the system's "Hide" and "Minimize"; when the system takes them first, only ⌃H and ⌃M work. This is an acceptable trade-off; test with the ⌃ key during acceptance.
 - Keys that pop up submenus, such as `V` (pops up the "select image" menu) and `S` (pops up the "Pixel Shaders" menu), are not bound: we have no way to pop up a main menu submenu (`commands.popup` was rejected by ruling; "select image" is not done, so `V` is no longer needed).
 
@@ -4278,7 +4278,7 @@ New capabilities in total: `window.control`, `ui.drop`, `timeline.marks`, `bindi
 | H2 | **C-SIZE: render size follows the video area** | video E11, E13; window H07 (floating window resolution) | Software rendering is now fixed at 960×540 (`WIDTH/HEIGHT` in `backend.rs`) and scaled by Slint `image-fit: contain`; "Ignore Aspect Ratio", "Fill Window" and zoomed-in quality all depend on the render target matching the video area size (or ratio). Does not depend on C-GPU |
 | H3 | **C-GPU: libmpv switches to GPU rendering** | video E16, E17, E18 motion interpolation; window H07 (optional zero copy) | Change from `RenderContext::new_software` to the libmpv OpenGL render interface + gpu-next / libplacebo (or an equivalent Metal path) embedded in the Slint video area; mpv's `tone-mapping`, `glsl-shaders` and `interpolation` only work in the GPU renderer |
 | H4 | **Numpad key names in the binding syntax** | video E13 | `Numpad0`–`Numpad9`, `NumpadPlus`, `NumpadMinus`, `NumpadMultiply`, `NumpadDivide`, `NumpadEnter`, `NumpadDecimal`, distinct from the main keyboard |
-| H5 | **macOS Option key recognition** | All default bindings with Alt: playback B06 (Ctrl+Alt+←/→); subtitles A09 (Ctrl+Alt+Y), D02 (Alt+L), D06 (Alt+PageUp/Down), D07 (Alt+↑/↓/Home), D09 (Alt+B), D10 (Alt+F); video E09 (Alt+K), E13 fallback keys (Alt+arrow keys, Alt+Plus/-, Alt+Backspace); audio G04 (Alt+A); capture F03/F04 (Ctrl+Alt+E/C); marks B23 (Alt+[, Alt+], Alt+\, Ctrl+Alt+[ / ]); the existing Alt+O, Alt+H | `bindings.rs::from_slint_key` recognizes keys by `event.text`; Option+key types a different character on macOS (⌥[ → `“`), and dead keys (⌥E, ⌥N, ⌥U, ⌥I, ⌥`) produce no character at all; the core should also recognize "the physical key name without modifiers". It also needs to be verified whether `Ctrl+[` arrives as `\u{1b}` and is recognized as `Ctrl+Escape` |
+| H5 | **macOS Option key recognition** | All default bindings with Alt: playback B06 (Ctrl+Alt+←/→); subtitles A09 (Ctrl+Alt+Y), D02 (Alt+L), D06 (Alt+PageUp/Down), D07 (Alt+Home), D09 (Alt+B), D10 (Alt+F); video E09 (Alt+K), E13 fallback keys (Alt+arrow keys, Alt+Plus/-, Alt+Backspace); audio G04 (Alt+A); capture F03/F04 (Ctrl+Alt+E/C); marks B23 (Alt+[, Alt+], Alt+\, Ctrl+Alt+[ / ]); the existing Alt+O, Alt+H | `bindings.rs::from_slint_key` recognizes keys by `event.text`; Option+key types a different character on macOS (⌥[ → `“`), and dead keys (⌥E, ⌥N, ⌥U, ⌥I, ⌥`) produce no character at all; the core should also recognize "the physical key name without modifiers". It also needs to be verified whether `Ctrl+[` arrives as `\u{1b}` and is recognized as `Ctrl+Escape` |
 | H6 | **Theme becomes settable by the host** | preferences H10 | The colors, `accent-fill` and `radius-*` in `theme.slint` change from `out property` constants to `in property`; the host distributes them when each window, panel and menu instance is created and when the color scheme changes; the color scheme tables live in the host; plugins cannot write `Theme` |
 | H7 | **Options container window** | preferences J04 | The core owns the "Options" window (category tree + page area), composes the pages registered by plugins with `settings.page`, reusing the composition and callback forwarding of panel mounting (`composition.rs`); remembers `settings.lastPage` |
 | H8 | **Picture-in-picture frame output** | window H07 | The host creates `AVSampleBufferDisplayLayer` and `AVPictureInPictureController` (sample buffer content source, macOS 12+) and implements the playback delegate; during picture-in-picture each frame (RGB24 → BGRA) is wrapped in a timestamped `CMSampleBuffer` and enqueued; rendering keeps being driven at the video frame rate when the main window is covered or minimized; playback pauses when the floating window is closed |

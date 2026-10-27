@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.6
+
+- Subtitle Style ▸ Move Up / Move Down no longer default to Alt+↑ / Alt+↓, which pan the video (Video ▸ Framing ▸ Pan ↑/↓; user ruling 2026-10-27). The two defaults clashed and the player kept only one of them. Bind them yourself in Settings ▸ Keyboard Shortcuts if wanted; a key you already bound to them yourself stays. The commands, the menu items and Reset Position (Alt+Home) are unchanged.
+
 ## 0.4.5
 
 - Same-name subtitle files load automatically when a local video opens, as mpv does by default (`sub-auto=exact`); the player keeps mpv's own scan off (`sub-auto=no`) so that these files go through this plugin's reading: encoding detection, WebVTT/SAMI/MicroDVD conversion, Reload Subtitles and the automatic reload. A file matches when it is in the video's folder and its name is the video's name without the extension, optionally followed by a dot and a tag, then `.srt`, `.ass`, `.ssa`, `.vtt`, `.smi`, `.sami` or `.sub` (`movie.srt`, `movie.en.srt`, `movie.zh-Hans.ass`, `movie.en.forced.srt` for `movie.mkv`; not `movie2.srt` or `movie - trailer.srt`), compared case-insensitively (a file is still loaded once per exact path, so two files that differ only in case on a case-sensitive file system are two files). Unlike mpv, the tag can be any text (`movie.简体.srt`, `movie.chs&eng.ass`), and a file that names another video of the folder more closely is left to that video (`Movie.Extended.en.srt` goes with `Movie.Extended.mkv`, not with `Movie.mkv`).

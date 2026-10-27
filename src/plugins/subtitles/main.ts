@@ -997,11 +997,11 @@ export default async function activate(plugin: Plugin) {
     run: styleRun(() => sizeBy(-1), (s) => osd.show("Subtitle size: smaller ({})", [s.fontSize])),
   });
   plugin.commands.add({
-    id: "move-up", path: [...STYLE, "Move Up"], order: 330, group: "style-move", bindings: ["Alt+ArrowUp"], repeat: true,
+    id: "move-up", path: [...STYLE, "Move Up"], order: 330, group: "style-move", bindings: [], repeat: true,
     run: styleRun(() => moveBy(1), (s) => osd.show("Subtitle position: up ({}%)", [s.marginPercent])),
   });
   plugin.commands.add({
-    id: "move-down", path: [...STYLE, "Move Down"], order: 331, group: "style-move", bindings: ["Alt+ArrowDown"], repeat: true,
+    id: "move-down", path: [...STYLE, "Move Down"], order: 331, group: "style-move", bindings: [], repeat: true,
     run: styleRun(() => moveBy(-1), (s) => osd.show("Subtitle position: down ({}%)", [s.marginPercent])),
   });
   plugin.commands.add({

@@ -155,8 +155,8 @@ Context menu
 │  │  ├─ Size +  [Alt+PageUp]   ‹subtitles›
 │  │  ├─ Size −  [Alt+PageDown]   ‹subtitles›
 │  │  ├─ ────────
-│  │  ├─ Move Up  [Alt+ArrowUp]   ‹subtitles›
-│  │  ├─ Move Down  [Alt+ArrowDown]   ‹subtitles›
+│  │  ├─ Move Up   ‹subtitles›
+│  │  ├─ Move Down   ‹subtitles›
 │  │  ├─ Reset Position  [Alt+Home]   ‹subtitles›
 │  │  ├─ ────────
 │  │  ├─ Shadow   ‹subtitles›
