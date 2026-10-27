@@ -19,7 +19,10 @@ const RULES = {
     deblock: { strength: ["weak", "strong"] },
     deband: { threshold: [0.003, 0.5], range: [1, 64] },
     transform: { rotate: [0, 90, 180, 270], flipH: BOOL, flipV: BOOL },
-    deinterlace: { when: ["interlaced", "all"], output: ["frame", "field"] },
+    deinterlace: {
+        when: ["interlaced", "all", "auto"],
+        output: ["frame", "field"],
+    },
     reframe: { mode: ["crop", "pad"], aspect: [0.25, 4], x: [-1, 1], y: [-1, 1] },
     frameBlend: { fps: [24, 120] },
     volume: { gainDb: [-60, 0] },
@@ -73,7 +76,15 @@ export function nodeProblem(stage, nodes) {
         if (node.kind === "frameBlend" &&
             !Number.isInteger(node.fps))
             return "frameBlend.fps must be an integer";
+        if (node.kind === "deinterlace" &&
+            node.when === "auto" &&
+            node.output !== "field")
+            return "deinterlace when auto outputs one frame per field: output must be field";
     }
+    const deinterlace = nodes.filter((node) => node.kind === "deinterlace");
+    if (deinterlace.length > 1 &&
+        deinterlace.some((node) => node.when === "auto"))
+        return "a chain with a deinterlace node when auto has no other deinterlace node";
     if (nodes.filter((node) => node.kind === "frameBlend").length > 1)
         return "only one frameBlend node across all plugins";
     return null;
