@@ -9,7 +9,17 @@ const ROW: f64 = 24.;
 const SEPARATOR: f64 = 7.;
 const PAD: f64 = 2.;
 const MIN_WIDTH: f64 = 168.;
-const MAX_WIDTH: f64 = 420.;
+pub(crate) const MAX_WIDTH: f64 = 420.;
+/// MenuItem's row in ui/menu-view.slint (must match): font size, left and
+/// right padding, check column, layout spacing, submenu arrow column.
+const FONT: f64 = 12.;
+const ITEM_PAD_LEFT: f64 = 4.;
+const ITEM_PAD_RIGHT: f64 = 8.;
+const CHECK: f64 = 18.;
+const SPACING: f64 = 4.;
+const SUBMENU: f64 = 10.;
+/// Space between a title and its key text (one layout spacing included).
+const KEY_GAP: f64 = 24.;
 /// Neighbouring panels overlap slightly so the pointer can cross between them.
 const OVERLAP: f64 = 2.;
 /// G-03: a level taller than the window scrolls between two arrow bars this
@@ -64,19 +74,62 @@ pub fn valid_path(roots: &[MenuNode], path: &[String]) -> Vec<String> {
     valid
 }
 
-/// Rough text advance at the 12px menu font: wide characters (East Asian
-/// Width W/F: CJK, kana, Hangul, fullwidth forms) are about one em, the rest
-/// (Latin, accented Latin, Cyrillic, symbols) about half; combining marks
-/// add nothing.
-fn text_width(text: &str) -> f64 {
+/// Rough advance of `c` at the 12px menu font, for characters the interface
+/// font lacks and before it is known: wide characters (East Asian Width W/F:
+/// CJK, kana, Hangul, fullwidth forms) are about one em, the rest (Latin,
+/// accented Latin, Cyrillic, symbols) about half; combining marks add nothing.
+fn char_estimate(c: char) -> f64 {
     use unicode_width::UnicodeWidthChar;
-    text.chars()
-        .map(|c| match c.width() {
-            Some(0) if !c.is_ascii() => 0.,
-            Some(2) => 12.5,
-            _ => 7.,
+    match c.width() {
+        Some(0) if !c.is_ascii() => 0.,
+        Some(2) => 12.5,
+        _ => 7.,
+    }
+}
+
+/// Advance of a character the interface font lacks, drawn in a fallback
+/// font: CJK (Han, kana, Hangul, fullwidth forms) about one em, any other
+/// symbol (▸, ⚙, an emoji, drawn from a symbol or emoji font) up to one and a
+/// half em; combining marks nothing.
+fn missing_estimate(c: char) -> f64 {
+    use unicode_width::UnicodeWidthChar;
+    let cjk = matches!(u32::from(c),
+        0x1100..=0x11FF | 0x2E80..=0xA4CF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF
+            | 0xFE30..=0xFE4F | 0xFF00..=0xFF60 | 0xFFE0..=0xFFE6 | 0x20000..=0x3FFFF);
+    match c.width() {
+        Some(0) if !c.is_ascii() => 0.,
+        Some(2) if cjk => 12.5,
+        _ => 1.5 * FONT,
+    }
+}
+
+/// Advance of `text` at the 12px menu font: measured in the interface font
+/// (`ui_fonts`) on the UI thread, estimated elsewhere.
+pub(crate) fn text_width(text: &str) -> f64 {
+    crate::ui_fonts::text_width(text, FONT, missing_estimate)
+        .unwrap_or_else(|| text.chars().map(char_estimate).sum())
+}
+
+/// Panel width that shows every row of `rows` unelided (as standard menus are: each level
+/// as wide as its widest row, between MIN_WIDTH and MAX_WIDTH). A row is, in
+/// ui/menu-view.slint: the panel inset, MenuItem's left padding, the check
+/// column, the title, the key column (after a gap) if any, the submenu arrow
+/// column and the right padding, with the layout spacing between columns.
+pub(crate) fn panel_width(rows: &[Value]) -> f64 {
+    let widest = rows
+        .iter()
+        .map(|row| {
+            let busy = row["busy"].as_bool().unwrap_or(false);
+            let title = row["title"].as_str().unwrap_or_default();
+            let title = text_width(title) + if busy { text_width(" …") } else { 0. };
+            let keys = text_width(row["keys"].as_str().unwrap_or_default());
+            title + if keys > 0. { KEY_GAP + keys } else { 0. }
         })
-        .sum()
+        .fold(0., f64::max);
+    let chrome = 2. * PAD + ITEM_PAD_LEFT + CHECK + SPACING + SPACING + SUBMENU + ITEM_PAD_RIGHT;
+    // Slack for Slint's rounding: its preferred text width is whole pixels
+    // and up to 2px over the sum of advances (ui.rs tests).
+    (widest + chrome + 2.).ceil().clamp(MIN_WIDTH, MAX_WIDTH)
 }
 
 /// Key text for a command row (from the binding table).
@@ -106,7 +159,6 @@ fn row(node: &MenuNode, path: &[String], open: bool, labels: Labels<'_>) -> Valu
 /// Lay out one panel's rows: separator flags, row tops and panel size.
 fn panel(mut rows: Vec<Value>, separators: Vec<bool>) -> (Vec<Value>, f64, f64) {
     let mut y = PAD;
-    let mut widest: f64 = 0.;
     for (row, separator) in rows.iter_mut().zip(separators) {
         if separator {
             y += SEPARATOR;
@@ -114,11 +166,8 @@ fn panel(mut rows: Vec<Value>, separators: Vec<bool>) -> (Vec<Value>, f64, f64) 
         row["separator"] = separator.into();
         row["y"] = y.into();
         y += ROW;
-        let title = text_width(row["title"].as_str().unwrap_or_default());
-        let keys = text_width(row["keys"].as_str().unwrap_or_default());
-        widest = widest.max(title + if keys > 0. { 24. + keys } else { 0. });
     }
-    let width = (widest + 22. + 4. + 14. + 2. * PAD).clamp(MIN_WIDTH, MAX_WIDTH);
+    let width = panel_width(&rows);
     let height = if rows.is_empty() { ROW } else { y - PAD } + 2. * PAD;
     (rows, width, height)
 }
@@ -909,5 +958,54 @@ mod tests {
             assert_eq!(aim.tick(at(x, y), now), None, "wobble {i}");
         }
         assert_eq!(aim.tick(at(201., 114.), 1016 + AIM_GRACE_MS), Some(sibling));
+    }
+
+    /// Each level is as wide as its widest row (title, key column,
+    /// arrow, paddings), measured in the interface font, between MIN_WIDTH
+    /// and MAX_WIDTH. Coordinator report 2026-10-27: "VestraNES Window…"
+    /// was elided in a panel sized by the old per-character estimate.
+    #[test]
+    fn each_level_is_as_wide_as_its_widest_row() {
+        let measure = crate::ui_fonts::TextMeasure::new(
+            slint::fontique_011::fontique::Blob::new(std::sync::Arc::new(
+                crate::font_asset::bundled_bytes(),
+            )),
+            0,
+        )
+        .unwrap();
+        crate::ui_fonts::set_measure(Some(measure));
+        let chrome = 2. * PAD + ITEM_PAD_LEFT + CHECK + 2. * SPACING + SUBMENU + ITEM_PAD_RIGHT;
+        let width = |rows: Vec<Value>| panel(rows, vec![false; 4]).1;
+        let row = |title: &str, keys: &str| json!({"title": title, "keys": keys, "busy": false});
+        let title = "VestraNES Window…";
+        let measured = text_width(title);
+        assert!(measured > 0. && measured != title.chars().map(char_estimate).sum::<f64>());
+        // The widest row decides; the result is whole pixels.
+        let wide = width(vec![row("Load ROM…", ""), row("Stop", ""), row(title, "")]);
+        assert_eq!(wide, (measured + chrome + 2.).ceil().max(MIN_WIDTH));
+        assert!(wide - chrome >= measured);
+        // A long German label gets its whole width, beyond the minimum.
+        let german = "Untertitel-Synchronisierung zurücksetzen";
+        let long = width(vec![row(german, "")]);
+        assert!(long > MIN_WIDTH && long - chrome >= text_width(german));
+        // Key text adds its column and the gap before it; a busy row its " …".
+        let keyed = width(vec![row(german, "Ctrl+Shift+Alt+F12")]);
+        assert!(keyed - chrome >= text_width(german) + KEY_GAP + text_width("Ctrl+Shift+Alt+F12"));
+        let busy = width(vec![json!({"title": german, "keys": "", "busy": true})]);
+        assert!(busy - chrome >= text_width(german) + text_width(" …"));
+        // Short rows keep the minimum; absurd ones stop at the maximum.
+        assert_eq!(width(vec![row("Stop", "")]), MIN_WIDTH);
+        assert_eq!(width(vec![row(&"W".repeat(200), "")]), MAX_WIDTH);
+        assert_eq!(width(vec![]), MIN_WIDTH);
+        // Characters the font lacks: CJK about one em, other symbols and
+        // emoji one and a half, combining marks nothing.
+        assert_eq!(missing_estimate('中'), 12.5);
+        assert_eq!(missing_estimate('한'), 12.5);
+        assert_eq!(missing_estimate('▸'), 18.);
+        assert_eq!(missing_estimate('\u{1F3AC}'), 18.);
+        assert_eq!(missing_estimate('\u{301}'), 0.);
+        // Off the UI thread (no interface font) the estimate still applies.
+        crate::ui_fonts::set_measure(None);
+        assert_eq!(text_width("abc"), 21.);
     }
 }

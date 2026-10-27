@@ -24,6 +24,10 @@ struct LocalMedia {
     #[cfg(windows)]
     playback: crate::lease_stream::Registration,
     lease: Arc<crate::source_lease::Lease>,
+    /// Windows: the file is on a network file system, asked of the
+    /// playback handle (`lease_stream::on_network`); libmpv sees it
+    /// itself through `fd://` on Unix.
+    remote: bool,
 }
 impl LocalMedia {
     /// Ordinary self-contained media on a local path: the lease route. Keep
@@ -76,16 +80,21 @@ impl LocalMedia {
             Err(error) => return Err(error),
         };
         #[cfg(windows)]
+        let remote = crate::lease_stream::on_network(&playback);
+        #[cfg(not(windows))]
+        let remote = false;
+        #[cfg(windows)]
         let playback = crate::lease_stream::Registration::new(playback);
         #[cfg(not(any(unix, windows)))]
         {
-            let _ = (playback, lease);
+            let _ = (playback, lease, remote);
             return Ok(None);
         }
         #[cfg(any(unix, windows))]
         Ok(Some(Arc::new(Self {
             playback,
             lease: Arc::new(lease),
+            remote,
         })))
     }
     #[cfg(unix)]
@@ -134,6 +143,9 @@ pub struct Sources {
     audio_checked: Option<std::time::Instant>,
     /// The `Control::Seek` mpv is still running (`SeekFlight`).
     seek_flight: SeekFlight,
+    /// Repeats of a running seek not sent (tests read it).
+    #[cfg(test)]
+    seek_repeats_skipped: usize,
     #[cfg(feature = "producer-audio")]
     producers: crate::producer::Producers,
     #[cfg(feature = "producer-audio")]
@@ -1475,7 +1487,7 @@ impl Sources {
                     .map(|media| media.url())
                     .unwrap_or_else(|| source.clone());
                 // Keep the previous native load's File until its EndFile/new Ready.
-                let leased = media.as_ref().map(|_| source.as_str());
+                let leased = media.as_ref().map(|media| (source.as_str(), media.remote));
                 let entry = load(mpv, &url, *start_paused, leased)?;
                 self.current_local = media
                     .as_ref()
@@ -1498,7 +1510,7 @@ impl Sources {
                     .map(|media| media.url())
                     .unwrap_or_else(|| self.session.state().source.clone().unwrap_or_default());
                 let path = self.session.state().source.clone().unwrap_or_default();
-                let leased = media.as_ref().map(|_| path.as_str());
+                let leased = media.as_ref().map(|media| (path.as_str(), media.remote));
                 load(mpv, &source, false, leased).map(|entry| {
                     if let Some(media) = media {
                         self.local_media.insert(entry, media);
@@ -1581,6 +1593,10 @@ impl Sources {
                         if self.seek_flight.repeats(entry, *seconds, *keyframes)
                             && mpv.get_property::<bool>("seeking").unwrap_or(false)
                         {
+                            #[cfg(test)]
+                            {
+                                self.seek_repeats_skipped += 1;
+                            }
                             Ok(())
                         } else {
                             let command = seek_command(*seconds, *keyframes);
@@ -1720,22 +1736,33 @@ fn added_external(
     new.next().is_none().then_some(first)
 }
 /// `leased`: `source` is a [`LocalMedia`] url (`fd://` on Unix,
-/// `vestra-lease://` on Windows) for the local file at this path.
-fn load(mpv: &Mpv, source: &str, paused: bool, leased: Option<&str>) -> Result<i64, String> {
+/// `vestra-lease://` on Windows) for the local file at this path, and
+/// whether that file is on a network file system ([`LocalMedia::remote`]).
+fn load(
+    mpv: &Mpv,
+    source: &str,
+    paused: bool,
+    leased: Option<(&str, bool)>,
+) -> Result<i64, String> {
     match leased {
-        Some(path) => load_options(mpv, source, paused, &leased_options(mpv, path), true),
+        Some((path, remote)) => load_options(
+            mpv,
+            source,
+            paused,
+            &leased_options(mpv, path, remote),
+            true,
+        ),
         None => load_options(mpv, source, paused, "", false),
     }
 }
 
 /// What libmpv derives from a local file's path, given for a leased load,
-/// whose url carries none: the demuxer cache of a file on a network share
-/// (Windows; Unix `fd://` lets libmpv see the remote file system itself),
-/// and cover art beside an audio file ([`cover_art`]).
-fn leased_options(mpv: &Mpv, path: &str) -> String {
+/// whose url carries none: the demuxer cache of a file on a network file
+/// system (`remote`, Windows; Unix `fd://` lets libmpv see the remote file
+/// system itself), and cover art beside an audio file ([`cover_art`]).
+fn leased_options(mpv: &Mpv, path: &str, remote: bool) -> String {
     let mut options = String::new();
-    #[cfg(windows)]
-    if crate::lease_stream::on_network(path) {
+    if remote {
         options.push_str(",cache=yes");
     }
     let auto = mpv
@@ -1744,10 +1771,11 @@ fn leased_options(mpv: &Mpv, path: &str) -> String {
     let whitelist = mpv
         .get_property::<String>("cover-art-whitelist")
         .unwrap_or_default();
+    let image_exts = mpv.get_property::<String>("image-exts").unwrap_or_default();
     // One path list (`;` on Windows, `:` elsewhere): a repeated
     // `cover-art-files-append` in loadfile options keeps only the last.
     let separator = if cfg!(windows) { ';' } else { ':' };
-    let images = cover_art(Path::new(path), &auto, &whitelist)
+    let images = cover_art(Path::new(path), &auto, &whitelist, &image_exts)
         .iter()
         .map(|image| image.to_string_lossy().into_owned())
         .filter(|image| !image.contains(separator))
@@ -1763,12 +1791,17 @@ fn leased_options(mpv: &Mpv, path: &str) -> String {
 /// The pictures mpv's `cover-art-auto=exact` loads for `media` when it reads
 /// it by path, best first: images with the same name (any case) and then
 /// those named in `cover-art-whitelist` (`cover.jpg`, `Folder.png`, …) in its
-/// order. libmpv adds them to audio files only (no video stream); a leased
-/// load picks by extension instead. Nothing for `no`; the host sets no other
-/// mode (`fuzzy` and `all` are treated as `exact`).
-fn cover_art(media: &Path, auto: &str, whitelist: &str) -> Vec<std::path::PathBuf> {
+/// order, among files with an extension of `image-exts` (mpv's list of image
+/// extensions, any case). libmpv adds them to audio files only (no video
+/// stream); a leased load picks by extension instead. Nothing for `no`; the
+/// host sets no other mode (`fuzzy` and `all` are treated as `exact`).
+fn cover_art(
+    media: &Path,
+    auto: &str,
+    whitelist: &str,
+    image_exts: &str,
+) -> Vec<std::path::PathBuf> {
     const AUDIO: [&str; 6] = ["mp3", "m4a", "flac", "wav", "ogg", "opus"];
-    const IMAGES: [&str; 6] = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
     let lower = |name: Option<&std::ffi::OsStr>| {
         name.and_then(|name| name.to_str())
             .map(str::to_lowercase)
@@ -1785,6 +1818,11 @@ fn cover_art(media: &Path, auto: &str, whitelist: &str) -> Vec<std::path::PathBu
         .split(',')
         .map(str::to_lowercase)
         .collect::<Vec<_>>();
+    let images = image_exts
+        .split(',')
+        .filter(|ext| !ext.is_empty())
+        .map(str::to_lowercase)
+        .collect::<Vec<_>>();
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -1793,7 +1831,7 @@ fn cover_art(media: &Path, auto: &str, whitelist: &str) -> Vec<std::path::PathBu
         .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
         .filter_map(|entry| {
             let path = entry.path();
-            if !IMAGES.contains(&lower(path.extension()).as_str()) {
+            if !images.contains(&lower(path.extension())) {
                 return None;
             }
             let name = lower(path.file_stem());
@@ -2081,43 +2119,52 @@ mod seek_flight_tests {
             json!({"kind":"open","source":file.to_str().unwrap(),"startPaused":true}),
         );
         pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
-        let seek = json!({"kind":"control","control":{"kind":"seek","seconds":9.5}});
-        submit(&mut sources, 2, seek.clone());
-        std::thread::sleep(Duration::from_millis(100));
-        submit(&mut sources, 3, seek.clone());
-        let seeks = pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
-        // A second seek would still be queued or running: let it show up.
-        let end = Instant::now() + Duration::from_secs(3);
-        let mut more = 0;
-        while Instant::now() < end {
-            while let Some(event) = mpv.poll_event() {
-                sources.event(&event);
-                more += usize::from(matches!(event, MpvEvent::Seek));
+        // A click: the press, then the release with the same target once mpv
+        // has started the press's seek (its Seek event; the flight is cleared
+        // only when it lands). Returns the seeks mpv started from the press
+        // to its landing and then during a quiet second, and whether the host
+        // held the release back (it saw the seek still running). A duplicate
+        // the host sent can start before or after the first landing (mpv may
+        // hold a queued seek for up to 0.3 s), so the quiet window catches it.
+        let click = |sources: &mut Sources, ids: (u64, u64), intent: &Value| {
+            submit(sources, ids.0, intent.clone());
+            let mut seeks = pump(sources, &|e| matches!(e, MpvEvent::Seek));
+            let skipped = sources.seek_repeats_skipped;
+            submit(sources, ids.1, intent.clone());
+            let held = sources.seek_repeats_skipped == skipped + 1;
+            seeks += pump(sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
+            let quiet = Instant::now() + Duration::from_secs(1);
+            while Instant::now() < quiet {
+                while let Some(event) = mpv.poll_event() {
+                    sources.event(&event);
+                    seeks += usize::from(matches!(event, MpvEvent::Seek));
+                }
+                std::thread::sleep(Duration::from_millis(5));
             }
-            std::thread::sleep(Duration::from_millis(5));
-        }
-        assert_eq!(seeks + more, 1, "press and release: one seek");
-        assert!((mpv.get_property::<f64>("time-pos").unwrap() - 9.5).abs() < 0.02);
+            (seeks, held)
+        };
+        // An exact seek 9.9 s past the keyframe decodes ~590 1080p frames,
+        // far longer than the moment between the press's Seek and the release.
+        let seek = json!({"kind":"control","control":{"kind":"seek","seconds":9.9}});
+        let (seeks, held) = click(&mut sources, (2, 3), &seek);
+        assert!(held, "the release arrived while the seek ran: not sent");
+        assert_eq!(seeks, 1, "press and release: one seek");
+        assert!((mpv.get_property::<f64>("time-pos").unwrap() - 9.9).abs() < 0.02);
         submit(&mut sources, 4, seek);
         let again = pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
         assert_eq!(again, 1, "after it landed the same target seeks again");
         // The bar in keyframe mode: 15.0 lands on the keyframe at 10.0 (the
         // clip's keyframes are at 0 and 10 s), press and release seek once.
+        // A keyframe seek is quick: if it had already landed when the release
+        // came, the release rightly seeks again.
         let key_seek =
             json!({"kind":"control","control":{"kind":"seek","seconds":15.0,"keyframes":true}});
-        submit(&mut sources, 5, key_seek.clone());
-        submit(&mut sources, 6, key_seek);
-        let seeks = pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
-        let end = Instant::now() + Duration::from_secs(1);
-        let mut more = 0;
-        while Instant::now() < end {
-            while let Some(event) = mpv.poll_event() {
-                sources.event(&event);
-                more += usize::from(matches!(event, MpvEvent::Seek));
-            }
-            std::thread::sleep(Duration::from_millis(5));
+        let (seeks, held) = click(&mut sources, (5, 6), &key_seek);
+        if held {
+            assert_eq!(seeks, 1, "a keyframe click seeks once");
+        } else {
+            assert_eq!(seeks, 2, "a release after the landing seeks once more");
         }
-        assert_eq!(seeks + more, 1, "a keyframe click seeks once");
         let landed = mpv.get_property::<f64>("time-pos").unwrap();
         assert!(
             (landed - 10.0).abs() < 0.05,
@@ -2547,7 +2594,7 @@ mod lease_tests {
     /// mpv 0.41 by path, `cover-art-auto=exact` (checked with libmpv): the
     /// same name in any case first, then whitelisted names in list order;
     /// not `Song-extra.jpg` or `Song.mp3.jpg` (those are `fuzzy`), and none
-    /// for a video file.
+    /// for a video file. Image files are those `image-exts` names.
     #[test]
     fn cover_art_follows_mpvs_exact_rule() {
         let dir = tempfile::tempdir().unwrap();
@@ -2569,12 +2616,15 @@ mod lease_tests {
         }
         std::fs::create_dir(dir.path().join("front.jpg")).unwrap();
         let whitelist = "AlbumArt,Album,cover,front,AlbumArtSmall,Folder,.folder,thumb";
-        let names = |media: &str, auto: &str| {
-            cover_art(&dir.path().join(media), auto, whitelist)
+        let defaults = player().get_property::<String>("image-exts").unwrap();
+        assert!(defaults.split(',').any(|ext| ext == "webp"), "{defaults}");
+        let names_in = |media: &str, auto: &str, exts: &str| {
+            cover_art(&dir.path().join(media), auto, whitelist, exts)
                 .iter()
                 .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
                 .collect::<Vec<_>>()
         };
+        let names = |media: &str, auto: &str| names_in(media, auto, &defaults);
         assert_eq!(
             names("Song.mp3", "exact"),
             [
@@ -2587,7 +2637,16 @@ mod lease_tests {
         );
         assert!(names("Song.mp3", "no").is_empty());
         assert!(names("clip.mp4", "exact").is_empty());
-        assert_eq!(cover_art(Path::new("Song.mp3"), "exact", "").len(), 0);
+        assert_eq!(
+            cover_art(Path::new("Song.mp3"), "exact", "", &defaults).len(),
+            0
+        );
+        // A changed `image-exts` (any case) changes what counts as a picture.
+        assert_eq!(
+            names_in("Song.mp3", "exact", "PNG,txt"),
+            ["Song.png", "Song.txt", "Folder.png"]
+        );
+        assert!(names_in("Song.mp3", "exact", "").is_empty());
     }
 
     fn player() -> Mpv {

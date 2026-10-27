@@ -2045,7 +2045,7 @@ impl Host {
             &instance,
             slint::LogicalPosition::new(frame.x as f32, frame.y as f32),
         )?;
-        platform::shown(instance.window());
+        platform::shown(&instance);
         let native = before.and_then(|before| platform::associate_new(&before).ok());
         self.floating = Some(Floating {
             instance,
@@ -2801,7 +2801,7 @@ impl Host {
             shell.show()?;
             // Only a shown candidate replaces the main window's texture.
             self.video_texture.replace(texture);
-            platform::shown(shell.window());
+            platform::shown(&shell);
             frame_pacing::follow(&shell);
             Ok(shell)
         };
@@ -3265,6 +3265,7 @@ impl Host {
             return;
         }
         if id == "quit" {
+            stop_handoffs();
             self.ui_state.flush();
             let _ = slint::quit_event_loop();
             return;
@@ -4256,6 +4257,18 @@ impl FrameEvidence {
         Ok(())
     }
 }
+/// Whether this player still takes a later launch's files (`Primary::serve`).
+/// Cleared when quitting starts (Quit, or the event loop ending after the last
+/// window closed): a launch during the player's last moments is refused, keeps
+/// trying, and becomes the next player once this process exits and frees the
+/// lock. If the teardown takes longer than the launch waits (5 s), the launch
+/// runs on its own without the lock (`single_instance`'s error path).
+static HANDOFFS: AtomicBool = AtomicBool::new(true);
+
+fn stop_handoffs() {
+    HANDOFFS.store(false, Ordering::Release);
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let launch::Launch {
@@ -4348,7 +4361,7 @@ fn main() -> Result<()> {
     if let Some(primary) = primary {
         let events = events.clone();
         primary.serve(move |files| {
-            let _ = events.send(Event::OpenFiles(files, true));
+            HANDOFFS.load(Ordering::Acquire) && events.send(Event::OpenFiles(files, true)).is_ok()
         });
     }
     let backend = Backend::start(events.clone(), silent, gpu)?;
@@ -4544,6 +4557,7 @@ fn main() -> Result<()> {
                 evidence.sample(&host.backend, &observed_source, start)?;
             }
         }
+        stop_handoffs();
     } else {
         let native_before = platform::capture_windows().ok();
         let window = composition::compile_json(&[], host.mount_events.clone(), 1)?;
@@ -4562,7 +4576,7 @@ fn main() -> Result<()> {
             None => window.show()?,
         }
         host.video_texture.replace(texture);
-        platform::shown(window.window());
+        platform::shown(&window);
         frame_pacing::follow(&window);
         // Interpolation (`video.render()`) resamples to the main display's rate.
         let displays = platform::displays();
@@ -4693,7 +4707,9 @@ fn main() -> Result<()> {
                 }
             },
         );
-        window.run()?;
+        let ran = window.run();
+        stop_handoffs();
+        ran?;
         timer.stop();
         frame_pacing::stop();
         frame_pacing::on_deliver(None);

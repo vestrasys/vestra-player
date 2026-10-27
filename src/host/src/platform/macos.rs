@@ -39,7 +39,7 @@ fn app() -> Result<objc2::rc::Retained<NSApplication>> {
 }
 
 /// Nothing to record: AppKit lists the application's windows itself.
-pub fn shown(_window: &slint::Window) {}
+pub fn shown(_instance: &slint_interpreter::ComponentInstance) {}
 
 /// Capture immediately before showing a newly created host window. Hidden
 /// windows count too: showing an existing native window is not evidence that

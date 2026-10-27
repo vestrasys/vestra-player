@@ -316,7 +316,7 @@ pub fn open(
     }
     prepare(&instance);
     instance.show()?;
-    crate::platform::shown(instance.window());
+    crate::platform::shown(&instance);
     Ok(View { instance })
 }
 
@@ -652,6 +652,96 @@ msgstr "引 \"号\" \\ 后"
             };
         }
         PLATFORM.with(|_| {});
+    }
+
+    /// menu.rs sizes each panel from its own measurement of the row
+    /// text; it must never come out narrower than Slint's layout of the same
+    /// text at the menu font, or the row elides ("VestraNES Window…",
+    /// coordinator report 2026-10-27). Checked on every string of the host's
+    /// and the built-in plugins' catalogs in all languages (de and fr have
+    /// the longest Latin labels, ja/ko/zh-Hans the CJK ones).
+    #[allow(clippy::disallowed_macros)] // a skip note for the terminal
+    #[test]
+    fn menu_text_measurement_covers_slints_layout_in_every_language() {
+        headless();
+        crate::ui_fonts::install("en");
+        // A system without a Latin font (a bare container) has nothing to compare.
+        if crate::ui_fonts::text_width("x", 12., |_| 0.).is_none() {
+            eprintln!("skipped: no system Latin font to compare with");
+            return;
+        }
+        let source = r#"
+export component W inherits Window {
+    in property <string> t;
+    out property <length> w: label.preferred-width;
+    label := Text { text: root.t; font-size: 12px; }
+}"#;
+        let result = pollster::block_on(
+            compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+        );
+        let instance = result.component("W").unwrap().create().unwrap();
+        let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut directories = vec![src.join("host/locales")];
+        for plugin in std::fs::read_dir(src.join("plugins")).unwrap() {
+            directories.push(plugin.unwrap().path().join("locales"));
+        }
+        let (mut checked, mut short) = (0, Vec::new());
+        for directory in directories {
+            let Ok(files) = std::fs::read_dir(&directory) else {
+                continue;
+            };
+            for file in files {
+                let path = file.unwrap().path();
+                if path.extension().is_none_or(|e| e != "po") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap();
+                for entry in crate::i18n::po::parse(&text).unwrap() {
+                    for string in entry.strings.iter().chain([&entry.id]) {
+                        if string.is_empty() || string.contains('\n') {
+                            continue;
+                        }
+                        instance
+                            .set_property("t", Value::String(string.as_str().into()))
+                            .unwrap();
+                        let Value::Number(slint) = instance.get_property("w").unwrap() else {
+                            panic!("w");
+                        };
+                        // Slint's width is whole pixels and up to 2px over the
+                        // advances; `panel_width` keeps that much slack.
+                        let ours = crate::menu::text_width(string);
+                        checked += 1;
+                        if ours + 2. < slint {
+                            short.push(format!(
+                                "{}: {string:?} {ours:.1} < {slint:.1}",
+                                path.display()
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(checked > 1000, "{checked}");
+        assert!(short.is_empty(), "{}", short.join("\n"));
+        // The longest menu rows of the built-in plugins' catalogs (the French
+        // and Spanish A-B loop rows) and the reported VestraNES row fit below
+        // the maximum panel width, so none of them elides.
+        for (title, keys) in [
+            (
+                "Boucler le chapitre actuel ou la plage de signets actuelle",
+                "Alt+\\",
+            ),
+            (
+                "Repetir capítulo o intervalo de marcadores actual",
+                "Alt+\\",
+            ),
+            ("VestraNES Window…", ""),
+            ("VestraNES-Fenster…", ""),
+        ] {
+            let row = json!({"title": title, "keys": keys, "busy": false});
+            let width = crate::menu::panel_width(&[row]);
+            assert!(width < crate::menu::MAX_WIDTH, "{title}: {width}");
+        }
     }
 
     /// IA-CORE-01: Escape closes the deepest level first; on the top level it
