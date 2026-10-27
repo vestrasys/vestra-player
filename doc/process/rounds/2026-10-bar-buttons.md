@@ -34,3 +34,8 @@ The bottom bar is a built-in plugin (playback). The sidebar toggle was playback'
 Product docs updated: `ui-spec.md` UI-BAR-09/10, `interaction-spec.md` G-18, `menus.md`, `identity/icons-v-line.json` (`store`, `ai`).
 
 GUI check: by the user personally (user instruction 2026-10-27); the coordinator installs the build.
+
+## 5. Review (independent) and decisions after it
+
+- No blockers. Fixes: the SDK dependency moves to 1.5.29 before the host merges; playback rebased onto the host tip; the strip is rebuilt only when its inputs change (it was rebuilt every window tick, against the UI frame-rate rule); a failed image icon falls back to a named icon; the `check` warning reads the import, not the word; buttons must join the lazy-activation recording when idle stop lands (`panel-slots.md`).
+- **Toggle tooltip without a key (coordinator decision):** the old playlist button read "Playlist (F6)"; the player's toggle reads "Toggle Sidebar" with no key, because `host/sidebar` has no default key and F6 is the playlist's own tab action. A user can bind a key in Keyboard Shortcuts; the tooltip then shows it. Open to the user's GUI test.

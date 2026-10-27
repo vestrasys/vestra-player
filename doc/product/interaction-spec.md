@@ -655,7 +655,7 @@ In fullscreen, `reason === "fullscreen"` means the overlay is retracted (G-01) a
 
 ### IA-PB-02 Hiding rules for the right-hand buttons in a narrow window (P3)
 
-**Status**: not implemented. Current state: only the list toggle hides, when the bottom bar is narrower than 320.
+**Status**: superseded in part by the command strip (player 0.5.10, UI-BAR-10): its cells hide from the left end inward, the sidebar toggle last, and never overlap the time.
 
 **Requirements**: each right-hand button has its own minimum left edge position (list toggle 320, attached panel toggle 320, stream selection 350, CC 410, see IA-PB-06); a button is hidden when its left edge x is less than that value, so as the window narrows the right-hand buttons disappear from left to right; in addition, a button is also hidden when there is less than 8 px between its left edge and the right edge of the time text (including badges, IA-PB-05), so they never overlap.
 
@@ -708,7 +708,7 @@ In fullscreen, `reason === "fullscreen"` means the overlay is retracted (G-01) a
 
 ### IA-PB-06 Completing the right-hand bottom bar buttons: CC, stream selection, attached panel (P3)
 
-**Status**: not implemented. Current state: on the right there is only the playlist toggle (23×22, 8 px from the right). The control panel toggle is cancelled together with IA-CORE-09.
+**Status**: not implemented. Current state (player 0.5.10): the right end is the player's command strip (UI-BAR-09): contributed buttons ([AI][Store]) and the sidebar toggle (41×40, 4 px from the right). The control panel toggle is cancelled together with IA-CORE-09. When this item is taken up, CC and stream selection become commands with `button` (no separate 23×22 buttons), so they follow the strip's order and narrowing rules.
 
 **Requirements**: from left to right on the right side: CC, stream selection, playlist toggle, attached panel on / off; 8 between the 23×22 buttons.
 
