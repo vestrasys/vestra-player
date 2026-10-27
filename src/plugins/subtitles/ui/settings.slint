@@ -22,7 +22,7 @@ export component SubtitleSettings inherits Window {
     // 301px, wider by what a longer translated label or Default button needs, or for the
     // longest check box (indented to the controls, 10px padding each side).
     width: max(301px + (root.column - 65px) + (root.default-width - 41px),
-        root.column + 3px + max(box-check.preferred-width, reload-check.preferred-width) + 20px);
+        root.column + 3px + max(box-check.preferred-width, reload-check.preferred-width, load-check.preferred-width) + 20px);
     background: Theme.bg-panel;
     in property <bool> can-style: false;
     // The selected track is ASS/SSA with its own styles kept: the note under the font.
@@ -44,6 +44,7 @@ export component SubtitleSettings inherits Window {
     in-out property <float> margin-percent: 5;
     in property <int> sync-step-index: 3;
     in-out property <bool> auto-reload: false;
+    in-out property <bool> auto-load: true;
     changed font-labels => { font-combo.current-index = root.selected-font; }
     changed selected-font => { font-combo.current-index = root.selected-font; }
     changed selected-color => { color-combo.current-index = root.selected-color; }
@@ -60,6 +61,7 @@ export component SubtitleSettings inherits Window {
     callback reset-style();
     callback change-sync-step(int);
     callback change-auto-reload(bool);
+    callback change-auto-load(bool);
     callback change-bold(bool);
     callback change-shadow(float);
     callback change-box(bool);
@@ -242,6 +244,15 @@ export component SubtitleSettings inherits Window {
                 text: @tr("Reload automatically when the subtitle file changes");
                 checked <=> root.auto-reload;
                 toggled => { root.change-auto-reload(self.checked); }
+            }
+        }
+        HorizontalLayout {
+            padding-left: root.column + 3px;
+            load-check := CheckBox {
+                height: Theme.checkbox-row-height;
+                text: @tr("Load subtitle files with the same name automatically");
+                checked <=> root.auto-load;
+                toggled => { root.change-auto-load(self.checked); }
             }
         }
         HorizontalLayout {

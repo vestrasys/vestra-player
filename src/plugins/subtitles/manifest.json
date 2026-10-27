@@ -1,6 +1,6 @@
 {
   "id": "vestra.subtitles",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -17,7 +17,7 @@
   "name": "Subtitles",
   "author": "Vestra Player",
   "punchline": "Load external subtitles, pick tracks, adjust style and sync",
-  "description": "Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\nFind it in the right-click menu under Subtitles.",
+  "description": "Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), also the ones named like a local video when it opens, show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\nFind it in the right-click menu under Subtitles.",
   "tags": [
     "subtitles",
     "style",

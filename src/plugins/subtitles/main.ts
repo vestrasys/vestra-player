@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { watch } from "node:fs";
 import type { FSWatcher } from "node:fs";
 import { stat } from "node:fs/promises";
-import { basename, dirname } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import type {
   CommandOptions,
   Plugin,
@@ -33,6 +33,7 @@ import {
   serialize,
 } from "./model.ts";
 import type { Jump, SavedStyle, SecondaryPosition, StyleFile } from "./model.ts";
+import { SIDECAR_LIMIT, folders, sidecars } from "./sidecars.ts";
 
 /** Colour choices, in the order of ui/settings.slint's list. */
 const COLORS = ["white", "yellow", "cyan"] as const;
@@ -119,10 +120,11 @@ export default async function activate(plugin: Plugin) {
   const stored = parse(settingsStore.value);
   let syncStep = stored.syncStepMs;
   let autoReload = stored.autoReload;
+  let autoLoad = stored.autoLoad;
   let fallbackEncoding: Encoding = stored.fallbackEncoding;
   let secondaryPosition: SecondaryPosition = stored.secondaryPosition;
   const save = () =>
-    settingsStore.save(serialize({ ...stored, syncStepMs: syncStep, autoReload, fallbackEncoding, secondaryPosition }));
+    settingsStore.save(serialize({ ...stored, syncStepMs: syncStep, autoReload, autoLoad, fallbackEncoding, secondaryPosition }));
   // style.json (D09): the style without the sync, restored once a stylable track is selected.
   const styleStore = store<Record<string, unknown>>(plugin, "style", {});
   const fontBase = (): SavedStyle => saveable({ fontId: subtitles.state?.fonts[0]?.id ?? "", ...BASE });
@@ -161,24 +163,34 @@ export default async function activate(plugin: Plugin) {
     if (epoch !== ticket || (source !== undefined && source !== subtitles.state?.sourceId))
       throw new Failure("cancelled");
   };
-  /** One operation at a time; the menu shows busy meanwhile. Resolves to the final status. */
-  function run(text: Status, action: Action) {
+  /** User operations queued or running: a media switch reports cancelling them. */
+  let userOps = 0;
+  /**
+   * One operation at a time; the menu shows busy meanwhile. Resolves to the final status. A `quiet`
+   * operation (the automatic same-name scan) leaves the status alone: its failures are only logged.
+   */
+  function run(text: Status, action: Action, quiet = false) {
     const ticket = epoch;
+    if (!quiet) userOps++;
     chain = chain.then(async () => {
-      if (epoch !== ticket) return;
-      busy = true;
-      status = text;
-      plugin.update();
-      try {
-        await action(ticket);
-      } catch (e) {
-        status = errorText(e);
-        if ((e as { code?: string }).code) console.error(`[subtitles] ${(e as Error).message}`);
-      } finally {
-        busy = false;
-        if (!subtitles.state) await subtitles.refresh().catch(() => {});
-        plugin.update(); // also runs from the style timer, outside any SDK handler
+      if (epoch === ticket) {
+        busy = true;
+        if (!quiet) status = text;
+        plugin.update();
+        try {
+          await action(ticket);
+        } catch (e) {
+          const error = e as { code?: string; name?: string; message?: string };
+          if (!quiet) status = errorText(e);
+          const cancelled = e instanceof Failure || error.name === "AbortError" || error.code === "aborted";
+          if (quiet ? !cancelled : error.code) console.error(`[subtitles] ${error.message ?? String(e)}`);
+        } finally {
+          busy = false;
+          if (!subtitles.state) await subtitles.refresh().catch(() => {});
+          plugin.update(); // also runs from the style timer, outside any SDK handler
+        }
       }
+      if (!quiet) userOps--;
     });
     return chain.then(() => status);
   }
@@ -199,10 +211,17 @@ export default async function activate(plugin: Plugin) {
     status = message("cancelledByUser");
   }
 
-  const refresh: Action = async () => {
-    await subtitles.refresh();
+  /** Refresh Subtitle Tracks: re-read the tracks, and load same-name subtitle files that appeared since the video opened. */
+  const refresh: Action = async (ticket) => {
+    const s = await subtitles.refresh();
     desired = undefined;
     status = message("refreshed");
+    const video = autoLoad ? localVideo(s.sourceId) : null;
+    if (!video) return;
+    const paths = await findSidecars(s.sourceId, video);
+    guard(ticket, s.sourceId);
+    const count = paths.length ? await loadSidecars(ticket, paths) : 0;
+    if (count) status = message("refreshedLoaded", [count]);
   };
   /**
    * Primary selection. Choosing the track shown as the secondary moves it: the
@@ -221,6 +240,7 @@ export default async function activate(plugin: Plugin) {
       }
       await subtitles.select(track, { ifCurrent: base });
       guard(ticket, s.sourceId);
+      picked = s.sourceId;
       desired = undefined;
       const state = subtitles.state?.trackConfirmation;
       status = !track ? message("hidden") : message(confirmed(moved ? "moved" : "select", state), [label(track)]);
@@ -266,6 +286,8 @@ export default async function activate(plugin: Plugin) {
     if (!path) return void (status = message("noFile"));
     const converted = await readSubtitle(path);
     guard(ticket, initial.sourceId);
+    filesOf(initial.sourceId)?.tried.add(path); // Refresh Subtitle Tracks does not load it again
+    if (role === "primary") picked = initial.sourceId;
     let first: SubtitleTrack | null = null;
     for (const [part, item] of converted.tracks.entries()) {
       const s = await subtitles.refresh();
@@ -290,6 +312,150 @@ export default async function activate(plugin: Plugin) {
           : message(confirmed("notSecondary", state), [], converted.notes);
   };
   const load = loadAs("primary");
+
+  // ------------------------------------------------ Same-name subtitle files (mpv `sub-auto=exact`)
+  /** The source on which a primary track was chosen through this plugin (a menu, a key, Open Subtitle…). */
+  let picked = -1;
+  /** The source whose folder was scanned when it opened. */
+  let scanned = -1;
+  /**
+   * What the newest source has seen: files read on it (exact paths; matching ignores case, the
+   * file system may not) and how many tracks were loaded automatically. Replaced only by a newer source.
+   */
+  let sourceFiles = { sourceId: -1, tried: new Set<string>(), auto: 0 };
+  /** The record of `sourceId`, or null for a source that is no longer the newest. */
+  const filesOf = (sourceId: number) => {
+    if (sourceId > sourceFiles.sourceId) sourceFiles = { sourceId, tried: new Set(), auto: 0 };
+    return sourceId === sourceFiles.sourceId ? sourceFiles : null;
+  };
+  /** The current source's path when it is a local file that is ready, else null (URLs, streams, generated video). */
+  function localVideo(sourceId: number) {
+    const p = plugin.player.state;
+    if (p.sourceId !== sourceId || p.phase !== "ready" || p.kind !== "media" || !p.source) return null;
+    return p.source.includes("://") || !isAbsolute(p.source) ? null : p.source;
+  }
+  /**
+   * The same-name subtitle files of `video` not read yet on the source; none when the folder cannot be
+   * listed or the source changed meanwhile.
+   */
+  async function findSidecars(sourceId: number, video: string) {
+    const folder = dirname(video);
+    let entries: string[];
+    try {
+      entries = await folders.list(folder);
+    } catch (e) {
+      console.error(`[subtitles] cannot list ${folder}: ${(e as Error).message}`);
+      return [];
+    }
+    if (plugin.player.state.sourceId !== sourceId) return [];
+    const files = filesOf(sourceId);
+    if (!files) return [];
+    return sidecars(basename(video), entries)
+      .map((name) => join(folder, name))
+      .filter((path) => !files.tried.has(path));
+  }
+  /**
+   * Load same-name subtitle files through the same reading and conversion as Open Subtitle… (D18), in order,
+   * at most SIDECAR_LIMIT tracks per source: the player keeps 4 tracks per plugin and source, and Open
+   * Subtitle…, Add Secondary Subtitle… and Reload Subtitles need the rest.
+   * The first track becomes the primary, like mpv prefers external files, unless a track was chosen on this
+   * source through this plugin or another plugin's external track is shown; embedded defaults give way.
+   * A file that cannot be read or that the player refuses as invalid is skipped (logged) for this source;
+   * any other refusal (the player's track limit, busy) stops here without recording the file, so Refresh
+   * Subtitle Tracks can load it later. Returns the number of files loaded.
+   */
+  async function loadSidecars(ticket: number, paths: string[]) {
+    const signal = aborter.signal;
+    const initial = await subtitles.refresh();
+    guard(ticket, initial.sourceId);
+    const files = filesOf(initial.sourceId);
+    if (!files) return 0;
+    /** Nothing chosen through this plugin, and no other plugin's external track shown. */
+    const eligible = (s: SubtitlesState) => picked !== s.sourceId && (!s.selected || s.selected.kind === "embedded");
+    let choose = eligible(initial);
+    let count = 0;
+    for (const path of paths) {
+      if (files.auto >= SIDECAR_LIMIT) {
+        console.error(`[subtitles] ${path} not loaded: at most ${SIDECAR_LIMIT} same-name subtitle tracks per video`);
+        break;
+      }
+      if (files.tried.has(path)) continue;
+      let converted: Awaited<ReturnType<typeof readSubtitle>>;
+      try {
+        converted = await readSubtitle(path);
+      } catch (e) {
+        guard(ticket, initial.sourceId);
+        files.tried.add(path);
+        console.error(`[subtitles] skipped ${path}: ${(e as Error).message}`);
+        continue;
+      }
+      guard(ticket, initial.sourceId);
+      let added = false;
+      for (const [part, item] of converted.tracks.entries()) {
+        if (files.auto >= SIDECAR_LIMIT) break; // a SAMI file with more languages than the room left
+        let track: SubtitleTrack | null = null;
+        let role: "primary" | "none" = "none";
+        for (let attempt = 0; !track; attempt++) {
+          const s = await subtitles.refresh();
+          guard(ticket, initial.sourceId);
+          guard(ticket, s.sourceId);
+          role = choose && eligible(s) ? "primary" : "none";
+          try {
+            track = await subtitles.load(item.bytes, { format: item.format, title: trackTitle(path, item), select: role, ifCurrent: s, signal });
+          } catch (e) {
+            const error = e as { code?: string; name?: string; message?: string };
+            if (error.name === "AbortError" || error.code === "aborted") throw e;
+            // The selection changed under us (the player settling its default, another plugin): read it again.
+            if (error.code === "stale" && attempt < 2) continue;
+            console.error(`[subtitles] ${path} not loaded: ${error.message ?? String(e)}`);
+            if (error.code === "invalid") break; // this file's content: skip it, go on with the next
+            // The player's track limit, busy, or a selection that keeps changing: stop, and leave the
+            // file untried so Refresh Subtitle Tracks can load it later.
+            if (added) files.tried.add(path);
+            if (count + (added ? 1 : 0)) desired = undefined;
+            return count + (added ? 1 : 0);
+          }
+        }
+        guard(ticket, initial.sourceId);
+        if (!track) break;
+        if (role === "primary") choose = false;
+        remember(track.id, { path, part, hash: sha256(item.bytes), cues: cuesOf(item.format, item.bytes) });
+        files.auto++;
+        added = true;
+      }
+      files.tried.add(path);
+      if (added) count++;
+    }
+    if (count) desired = undefined;
+    return count;
+  }
+  /**
+   * Scan the folder of a local video once it is ready, if the setting is on. Quiet, like mpv: no
+   * on-screen message, and nothing on the status line unless files were loaded; a media switch or
+   * another plugin's change just stops it (Refresh Subtitle Tracks loads the rest).
+   */
+  function scanOnOpen() {
+    const s = seen;
+    if (!autoLoad || !s || s.phase !== "ready" || scanned === s.sourceId) return;
+    const video = localVideo(s.sourceId);
+    if (!video) return;
+    scanned = s.sourceId;
+    void findSidecars(s.sourceId, video).then((paths) => {
+      if (!paths.length || subtitles.state?.sourceId !== s.sourceId) return;
+      void run(NONE, async (ticket) => {
+        const before = status;
+        const count = await loadSidecars(ticket, paths);
+        // Not over a newer status.
+        if (count && epoch === ticket && status === before) status = message("autoLoaded", [count]);
+      }, true);
+    });
+  }
+  function setAutoLoad(on: boolean) {
+    autoLoad = on;
+    save();
+    scanOnOpen();
+  }
+
   /** Show Subtitles (Alt+H): hide the selection, or bring back the last shown track. */
   const toggleShown: Action = async (ticket) => {
     const s = await subtitles.refresh();
@@ -562,6 +728,7 @@ export default async function activate(plugin: Plugin) {
       marginPercent: style.marginPercent,
       syncStepIndex: Math.max(0, SYNC_STEPS.findIndex((step) => step === syncStep)),
       autoReload,
+      autoLoad,
     };
   });
 
@@ -658,6 +825,7 @@ export default async function activate(plugin: Plugin) {
     syncSyncMenu();
   }));
   settings.on("changeAutoReload", (on: boolean) => setAutoReload(on === true));
+  settings.on("changeAutoLoad", (on: boolean) => setAutoLoad(on === true));
 
   // Adjust Sync (D05): Enter or Apply applies; ↑/↓ in the field step by the sync step and apply.
   const applySync = (value: number) => {
@@ -1077,8 +1245,10 @@ export default async function activate(plugin: Plugin) {
   // A new source cancels pending work; a new source or selection drops the unconfirmed style.
   subtitles.onChange((s) => {
     if (seen && s.sourceId > seen.sourceId) {
+      // Only a user operation (or a pending style edit) is reported cancelled; the automatic scan is not one.
+      const active = userOps > 0 || styleTimer !== undefined;
       cancel();
-      status = message("mediaSwitched");
+      status = active ? message("mediaSwitched") : NONE;
     }
     if (!seen || s.sourceId !== seen.sourceId || s.selected?.id !== seen.selected?.id) desired = undefined;
     if (s.selected) lastShown = s.selected.id;
@@ -1088,7 +1258,10 @@ export default async function activate(plugin: Plugin) {
     syncTrackMenu(s);
     restoreStyle();
     syncPosition(s);
+    scanOnOpen();
   });
+  // The subtitle state may be ready before the player's state says the local file is (or the other way round).
+  plugin.player.onChange(() => scanOnOpen());
   // The host has no subtitle event; an open window also re-reads every 1.5 s.
   const poll = setInterval(() => {
     if ((tune.opened || settings.opened || syncWindow.opened) && !busy)
@@ -1105,6 +1278,7 @@ export default async function activate(plugin: Plugin) {
   });
   syncTrackMenu(await subtitles.refresh());
   restoreStyle();
+  scanOnOpen();
   await rebuilding;
   await syncRebuild;
 }

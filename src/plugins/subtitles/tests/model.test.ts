@@ -4,18 +4,23 @@ import { parse, parseSync, serialize } from "../model.ts";
 import { zh } from "./status.ts";
 
 test("settings parse leniently and keep fields a later version adds", () => {
-  assert.deepEqual(parse(null), { syncStepMs: 500, autoReload: false, fallbackEncoding: "gb18030", secondaryPosition: "top", extra: {} });
+  assert.deepEqual(parse(null), {
+    syncStepMs: 500, autoReload: false, autoLoad: true, fallbackEncoding: "gb18030", secondaryPosition: "top", extra: {},
+  });
   assert.deepEqual(parse({ syncStepMs: 100, autoReload: true, fallbackEncoding: "big5" }), {
-    syncStepMs: 100, autoReload: true, fallbackEncoding: "big5", secondaryPosition: "top", extra: {},
+    syncStepMs: 100, autoReload: true, autoLoad: true, fallbackEncoding: "big5", secondaryPosition: "top", extra: {},
   });
   assert.equal(parse({ fallbackEncoding: "utf-7" }).fallbackEncoding, "gb18030");
   assert.equal(parse({ syncStepMs: 123 }).syncStepMs, 500, "only the listed steps");
   assert.equal(parse({ autoReload: "yes" }).autoReload, false);
+  assert.equal(parse({ autoLoad: false }).autoLoad, false, "same-name subtitles: off only when saved off");
+  assert.equal(parse({ autoLoad: "no" }).autoLoad, true);
   assert.deepEqual(serialize(parse({ version: 1, secondary: "top", syncStepMs: 50 })), {
     secondary: "top",
     version: 1,
     syncStepMs: 50,
     autoReload: false,
+    autoLoad: true,
     fallbackEncoding: "gb18030",
     secondaryPosition: "top",
   });

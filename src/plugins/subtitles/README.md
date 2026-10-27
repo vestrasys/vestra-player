@@ -6,6 +6,7 @@ Picks subtitle tracks, loads external subtitles, adjusts style and sync.
 
 - **Tracks**: show/hide, pick a track or cycle through them.
 - **External subtitles**: load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD, with the encoding detected; reload them, automatically when the file changes if wanted.
+- **Same-name subtitles**: when a local video opens, subtitle files next to it with its name (`movie.srt`, `movie.en.srt`, `movie.zh-Hans.ass`) load automatically (at most 2, the exact name first), the first shown unless you chose a track; on by default (Subtitle Settings…). Refresh Subtitle Tracks also loads files added later.
 - **Secondary subtitle**: a second text subtitle at the top or above the main one.
 - **Style**: size, position, font, colour, outline, bold, shadow, background box, and whether ASS/SSA keep their own styles; the style is kept across restarts.
 - **Sync**: earlier, later, reset; a sync step, or a value typed in milliseconds.
