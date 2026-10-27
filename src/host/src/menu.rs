@@ -15,9 +15,6 @@ const OVERLAP: f64 = 2.;
 /// G-03: a level taller than the window scrolls between two arrow bars this
 /// high (must match ui/menu-view.slint).
 pub const ARROW: f64 = 12.;
-/// G-15: submenus open (and switch) after this delay on platforms without a
-/// system setting; Windows reads its own (`platform::menu_show_delay`).
-pub const SHOW_DELAY_MS: u64 = 400;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Point {
@@ -288,58 +285,178 @@ pub fn hover_target(current: &[String], level: usize, token: &str) -> Option<Vec
     }
 }
 
-/// G-15: Win32 submenu timing. The pointer resting on a group row opens it
-/// only after the show delay; with another submenu open, hovering a sibling
-/// switches after the same delay, and entering the open submenu meanwhile
-/// cancels the switch (so a diagonal move does not flip submenus). Clicks
-/// and keys open at once (the caller applies their path directly).
+/// A menu panel in window coordinates (logical px).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Rect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+impl Rect {
+    fn contains(&self, point: Point) -> bool {
+        point.x >= self.x
+            && point.x < self.x + self.width
+            && point.y >= self.y
+            && point.y < self.y + self.height
+    }
+}
+
+/// The panels of a `levels` value, by depth.
+pub fn panels(levels: &Value) -> Vec<Rect> {
+    levels
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|level| {
+            let number = |key: &str| level[key].as_f64().unwrap_or(0.);
+            Rect {
+                x: number("x"),
+                y: number("y"),
+                width: number("width"),
+                height: number("height"),
+            }
+        })
+        .collect()
+}
+
+/// G-15: how long a held switch waits once the pointer stops moving toward
+/// the open submenu.
+pub const AIM_GRACE_MS: u64 = 120;
+/// The triangle's near edge reaches this far above and below the submenu,
+/// so a move aimed at its first or last row counts.
+const AIM_SLACK: f64 = 8.;
+
+/// Whether a pointer move from `from` to `to` heads for `panel`: `to` is in
+/// the triangle from `from` to the panel's near edge (or in the panel).
+pub fn heading(from: Point, to: Point, panel: Rect) -> bool {
+    if panel.contains(to) {
+        return true;
+    }
+    if from == to {
+        return false;
+    }
+    let near = if panel.x >= from.x {
+        panel.x
+    } else {
+        panel.x + panel.width
+    };
+    let top = Point {
+        x: near,
+        y: panel.y - AIM_SLACK,
+    };
+    let bottom = Point {
+        x: near,
+        y: panel.y + panel.height + AIM_SLACK,
+    };
+    let side = |a: Point, b: Point, p: Point| (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+    let (d1, d2, d3) = (
+        side(from, top, to),
+        side(top, bottom, to),
+        side(bottom, from, to),
+    );
+    let negative = d1 < 0. || d2 < 0. || d3 < 0.;
+    let positive = d1 > 0. || d2 > 0. || d3 > 0.;
+    !(negative && positive)
+}
+
+/// The pointer must travel this far (logical px) from where a hold began
+/// before its direction is judged: nearer is a rest or jitter, not a move.
+pub const AIM_SLOP: f64 = 4.;
+
+/// G-15 (host 0.5.2, user ruling): submenus open and switch at once on
+/// hover, on every platform, with no system delay. Only a switch away from
+/// an open submenu can wait, while the pointer is moving toward that submenu
+/// (`heading`: the diagonal from the row to the submenu crosses siblings):
+/// it happens as soon as the pointer turns away, or once it has not moved
+/// toward the submenu for `AIM_GRACE_MS`. Reaching the submenu cancels it.
+/// The direction is the net displacement from where the hold began
+/// (`anchor`), never one 16 ms step, so a slow diagonal (1 px a tick, ticks
+/// without horizontal motion) and a 1 px jitter do not read as turning
+/// away. Clicks and keys open at once (the caller applies their path
+/// directly).
 #[derive(Debug, Default)]
-pub struct HoverDelay {
-    pending: Option<PendingHover>,
+pub struct HoverAim {
+    pending: Option<Vec<String>>,
+    /// The open submenu a held switch waits for.
+    toward: Option<Rect>,
+    /// Where the pointer was when the hold began.
+    anchor: Option<Point>,
+    /// The pointer at the last tick.
+    last: Option<Point>,
+    /// When the pointer last moved toward `toward`.
+    moved_ms: u64,
 }
 
-#[derive(Debug)]
-struct PendingHover {
-    path: Vec<String>,
-    since_ms: u64,
-}
-
-impl HoverDelay {
-    /// The pointer entered a row that asks for `target` (`hover_target`), while
-    /// `current` is open.
-    pub fn hover(&mut self, current: &[String], target: Vec<String>, now_ms: u64) {
+impl HoverAim {
+    /// The pointer entered a row that asks for `target` (`hover_target`)
+    /// while `current` is open; `submenu` is the open panel beside the row's
+    /// level, if any, and `pointer` where the pointer is (unknown: no aim).
+    /// Returns the path to open now.
+    pub fn hover(
+        &mut self,
+        current: &[String],
+        target: Vec<String>,
+        pointer: Option<Point>,
+        submenu: Option<Rect>,
+        now_ms: u64,
+    ) -> Option<Vec<String>> {
         if target == current {
             // Back on the open row, or inside the open submenu.
             self.pending = None;
-            return;
+            return None;
         }
-        if self
-            .pending
-            .as_ref()
-            .is_some_and(|pending| pending.path == target)
-        {
-            return;
+        if let (Some(panel), Some(to)) = (submenu, pointer) {
+            // The step from the last tick decides only when it is long
+            // enough to have a direction: a clear move away (straight down
+            // a column) switches now; a short one holds and lets the
+            // following ticks judge the net displacement.
+            let from = self.last.unwrap_or(to);
+            if distance(from, to) < AIM_SLOP || heading(from, to, panel) {
+                self.pending = Some(target);
+                self.toward = Some(panel);
+                self.anchor = Some(from);
+                self.moved_ms = now_ms;
+                return None;
+            }
         }
-        self.pending = Some(PendingHover {
-            path: target,
-            since_ms: now_ms,
-        });
+        self.pending = None;
+        Some(target)
     }
 
-    /// The path to open now that the delay passed, if any.
-    pub fn due(&mut self, now_ms: u64, delay_ms: u64) -> Option<Vec<String>> {
-        let ready = self
-            .pending
-            .as_ref()
-            .is_some_and(|pending| now_ms.saturating_sub(pending.since_ms) >= delay_ms);
-        ready
-            .then(|| self.pending.take().map(|pending| pending.path))
-            .flatten()
+    /// Each host tick, with the pointer: a held switch to apply now.
+    pub fn tick(&mut self, pointer: Option<Point>, now_ms: u64) -> Option<Vec<String>> {
+        let previous = self.last;
+        if pointer.is_some() {
+            self.last = pointer;
+        }
+        let panel = self.toward.filter(|_| self.pending.is_some())?;
+        let (Some(anchor), Some(to)) = (self.anchor, pointer) else {
+            // The pointer left the window: nothing to aim with.
+            return self.pending.take();
+        };
+        if distance(anchor, to) >= AIM_SLOP {
+            if !heading(anchor, to, panel) {
+                return self.pending.take();
+            }
+            if previous.is_some_and(|from| from != to) {
+                self.moved_ms = now_ms;
+            }
+        }
+        if now_ms.saturating_sub(self.moved_ms) >= AIM_GRACE_MS {
+            return self.pending.take();
+        }
+        None
     }
 
     pub fn clear(&mut self) {
         self.pending = None;
     }
+}
+
+fn distance(a: Point, b: Point) -> f64 {
+    (a.x - b.x).hypot(a.y - b.y)
 }
 
 #[cfg(test)]
@@ -610,54 +727,187 @@ mod tests {
         assert_eq!(value[1]["y"].as_f64().unwrap(), shown - PAD);
     }
 
-    /// G-15: hover timing, without a clock or a view.
+    /// G-15 (host 0.5.2): the submenu-aim triangle.
     #[test]
-    fn submenus_open_and_switch_after_the_delay_and_entering_the_open_one_cancels() {
+    fn a_move_heads_for_a_submenu_inside_the_triangle_to_its_near_edge() {
+        let panel = Rect {
+            x: 300.,
+            y: 100.,
+            width: 200.,
+            height: 120.,
+        };
+        let at = |x, y| Point { x, y };
+        // From a row at the left, diagonally down toward the submenu.
+        assert!(heading(at(200., 110.), at(220., 125.), panel));
+        // Up toward its top row (within the slack above it).
+        assert!(heading(at(200., 110.), at(230., 106.), panel));
+        // Straight down the parent column, or back to the left: away.
+        assert!(!heading(at(200., 110.), at(200., 130.), panel));
+        assert!(!heading(at(200., 110.), at(180., 112.), panel));
+        // Far below the submenu's bottom edge: away.
+        assert!(!heading(at(200., 110.), at(210., 300.), panel));
+        // Not moving is not heading; inside the panel always is.
+        assert!(!heading(at(200., 110.), at(200., 110.), panel));
+        assert!(heading(at(200., 110.), at(310., 110.), panel));
+        // A submenu that opened to the left (near the window's right edge).
+        let left = Rect { x: 0., ..panel };
+        assert!(heading(at(260., 110.), at(240., 125.), left));
+        assert!(!heading(at(260., 110.), at(280., 125.), left));
+    }
+
+    /// G-15 (host 0.5.2): hovers open at once; only a switch while the
+    /// pointer heads for the open submenu waits, until it turns away or
+    /// stops for `AIM_GRACE_MS`, and reaching the submenu cancels it.
+    #[test]
+    fn submenus_open_at_once_and_aiming_at_the_open_one_holds_a_switch() {
         let tree = tree(); // 文件 ▶ (播放列表 ▶, 网络 ▶), 播放 ▶
         let token = |path: &[&str]| format!("g:{}", json!(path));
-        let mut delay = HoverDelay::default();
+        let at = |x, y| Some(Point { x, y });
+        let submenu = Some(Rect {
+            x: 300.,
+            y: 100.,
+            width: 200.,
+            height: 120.,
+        });
+        let mut aim = HoverAim::default();
         let mut current: Vec<String> = Vec::new();
-        // Resting on 文件 for less than the delay, then leaving: nothing opens.
+        // Nothing open: a group row opens at once, with or without a pointer.
+        assert_eq!(aim.tick(at(200., 110.), 0), None);
         let target = hover_target(&current, 0, &token(&["文件"])).unwrap();
-        delay.hover(&current, target, 0);
-        assert_eq!(delay.due(399, SHOW_DELAY_MS), None);
-        let away = hover_target(&current, 0, "c:3:open").unwrap();
-        delay.hover(&current, away, 200);
-        assert_eq!(delay.due(1000, SHOW_DELAY_MS), None);
-        // Resting long enough opens it.
-        let target = hover_target(&current, 0, &token(&["文件"])).unwrap();
-        delay.hover(&current, target, 1000);
-        assert_eq!(delay.due(1399, SHOW_DELAY_MS), None);
-        current = delay.due(1400, SHOW_DELAY_MS).unwrap();
+        current = aim.hover(&current, target, None, None, 0).unwrap();
         assert_eq!(current, ["文件"]);
         assert_eq!(valid_path(&tree, &current), current);
-        // Crossing 播放 on the way into the open submenu: no switch.
+        // Moving straight down onto 播放 (not toward the submenu): at once.
+        assert_eq!(aim.tick(at(200., 110.), 16), None);
         let target = hover_target(&current, 0, &token(&["播放"])).unwrap();
-        delay.hover(&current, target, 2000);
-        let inside = hover_target(&current, 1, "c:3:x").unwrap();
-        delay.hover(&current, inside, 2100);
-        assert_eq!(delay.due(5000, SHOW_DELAY_MS), None);
-        assert_eq!(current, ["文件"]);
-        // Resting on 播放: after the delay 文件 closes and 播放 opens.
-        let target = hover_target(&current, 0, &token(&["播放"])).unwrap();
-        delay.hover(&current, target, 6000);
-        current = delay.due(6400, SHOW_DELAY_MS).unwrap();
+        current = aim
+            .hover(&current, target, at(200., 134.), submenu, 32)
+            .unwrap();
         assert_eq!(current, ["播放"]);
-        // A command row at the top level closes the open submenu after the delay.
-        let target = hover_target(&current, 0, "c:3:open").unwrap();
-        delay.hover(&current, target, 7000);
+        // Back to 文件, then a diagonal toward its submenu crosses 播放: held.
+        let target = hover_target(&current, 0, &token(&["文件"])).unwrap();
+        current = aim
+            .hover(&current, target, at(200., 112.), None, 48)
+            .unwrap();
+        aim.tick(at(200., 112.), 48);
+        let target = hover_target(&current, 0, &token(&["播放"])).unwrap();
         assert_eq!(
-            delay.due(7400, SHOW_DELAY_MS).unwrap(),
-            Vec::<String>::new()
+            aim.hover(&current, target, at(215., 125.), submenu, 64),
+            None
         );
-        // Repeated hover events of the same row keep the first time.
-        let target = hover_target(&[], 0, &token(&["文件"])).unwrap();
-        delay.hover(&[], target.clone(), 8000);
-        delay.hover(&[], target, 8300);
-        assert!(delay.due(8400, SHOW_DELAY_MS).is_some());
-        delay.hover(&[], vec!["播放".into()], 9000);
-        delay.clear();
-        assert_eq!(delay.due(99_999, SHOW_DELAY_MS), None);
+        // Still moving toward it: held past the grace.
+        assert_eq!(aim.tick(at(215., 125.), 64), None);
+        assert_eq!(aim.tick(at(240., 140.), 160), None);
+        assert_eq!(aim.tick(at(270., 150.), 260), None);
+        // Reaching the submenu (a row of it) cancels the switch.
+        let inside = hover_target(&current, 1, "c:3:x").unwrap();
+        assert_eq!(aim.hover(&current, inside, at(305., 150.), None, 270), None);
+        assert_eq!(aim.tick(at(305., 150.), 1000), None);
+        assert_eq!(current, ["文件"]);
+        // Aimed, then resting on 播放: it switches after the grace.
+        aim.tick(at(200., 112.), 2000);
+        let target = hover_target(&current, 0, &token(&["播放"])).unwrap();
+        assert_eq!(
+            aim.hover(&current, target, at(215., 125.), submenu, 2016),
+            None
+        );
+        assert_eq!(aim.tick(at(215., 125.), 2016), None);
+        assert_eq!(aim.tick(at(215., 125.), 2016 + AIM_GRACE_MS - 1), None);
+        current = aim.tick(at(215., 125.), 2016 + AIM_GRACE_MS).unwrap();
+        assert_eq!(current, ["播放"]);
+        // Aimed, then turning away (down the column): it switches at once.
+        let target = hover_target(&current, 0, &token(&["文件"])).unwrap();
+        current = aim
+            .hover(&current, target, at(200., 112.), None, 3000)
+            .unwrap();
+        aim.tick(at(200., 112.), 3000);
+        let target = hover_target(&current, 0, &token(&["播放"])).unwrap();
+        assert_eq!(
+            aim.hover(&current, target, at(215., 125.), submenu, 3016),
+            None
+        );
+        aim.tick(at(215., 125.), 3016);
+        current = aim.tick(at(212., 150.), 3032).unwrap();
+        assert_eq!(current, ["播放"]);
+        // A command row at the top level closes the open submenu at once.
+        let target = hover_target(&current, 0, "c:3:open").unwrap();
+        assert_eq!(
+            aim.hover(&current, target, at(212., 170.), None, 3048),
+            Some(Vec::<String>::new())
+        );
+        // A cleared hold never fires.
+        aim.tick(at(200., 112.), 4000);
+        assert_eq!(
+            aim.hover(
+                &["文件".into()],
+                vec!["播放".into()],
+                at(215., 125.),
+                submenu,
+                4016
+            ),
+            None
+        );
+        aim.clear();
+        assert_eq!(aim.tick(at(215., 125.), 99_999), None);
         assert_eq!(hover_target(&[], 0, "bad"), None);
+    }
+
+    /// Review finding (2026-10-27): the direction is the net displacement
+    /// from where the hold began, so a slow diagonal with ticks that move
+    /// only vertically, and a 1 px jitter, keep the submenu; the pointer
+    /// has to leave the triangle, or rest, before the switch.
+    #[test]
+    fn a_slow_diagonal_and_a_jitter_keep_the_open_submenu() {
+        let at = |x, y| Some(Point { x, y });
+        let submenu = Some(Rect {
+            x: 300.,
+            y: 100.,
+            width: 200.,
+            height: 120.,
+        });
+        let open = vec!["文件".to_owned()];
+        let sibling = vec!["播放".to_owned()];
+        // 1 px steps toward the submenu, a third of them straight down
+        // (dx = 0) and a third straight right: a step alone would read as
+        // turning away or as resting.
+        let mut aim = HoverAim::default();
+        aim.tick(at(200., 112.), 0);
+        aim.tick(at(200., 113.), 16);
+        assert_eq!(
+            aim.hover(&open, sibling.clone(), at(200., 113.), submenu, 16),
+            None,
+            "a short step holds"
+        );
+        let (mut x, mut y, mut now) = (200., 113., 16);
+        for step in 0..36 {
+            now += 16;
+            let (dx, dy) = [(1., 0.), (0., 1.), (1., 1.)][step % 3];
+            x += dx;
+            y += dy;
+            assert_eq!(aim.tick(at(x, y), now), None, "step {step} at ({x}, {y})");
+        }
+        // 24 px right and down: inside the triangle, still held after far
+        // more than the grace. Turning down the column now switches at once.
+        assert_eq!(aim.tick(at(x, y + 30.), now + 16), Some(sibling.clone()));
+        // A jitter around the hover point: no judgment, no switch, until
+        // the grace says the pointer rests.
+        let mut aim = HoverAim::default();
+        aim.tick(at(200., 112.), 1000);
+        assert_eq!(
+            aim.hover(&open, sibling.clone(), at(201., 113.), submenu, 1016),
+            None
+        );
+        let wobble = [
+            (201., 114.),
+            (200., 113.),
+            (201., 112.),
+            (202., 113.),
+            (201., 114.),
+        ];
+        for (i, (x, y)) in wobble.into_iter().enumerate() {
+            let now = 1032 + 16 * i as u64;
+            assert_eq!(aim.tick(at(x, y), now), None, "wobble {i}");
+        }
+        assert_eq!(aim.tick(at(201., 114.), 1016 + AIM_GRACE_MS), Some(sibling));
     }
 }

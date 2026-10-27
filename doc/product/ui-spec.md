@@ -155,7 +155,7 @@ Two rows, 62px high in total, all icon buttons, no text buttons.
 .big-btn    { width: 41px; height: 40px; color: var(--text); }     /* no separators between buttons; icon centered in the left 40px */
 .big-btn::hover-plate { left: 4px; top: 4px; width: 32px; height: 32px; border-radius: 8px; }
             /* rounded plate hover-bg on hover, press-bg when pressed; disabled icon icon-disabled */
-/* left→right: play/pause (one of the two by state) | stop | back (right-click: previous) | forward (right-click: next) | open */
+/* left→right: play/pause (one of the two by state) | stop | back (right-click: previous) | forward (right-click: next) | open | fullscreen (enter or leave by state) */
 .time      { margin-left: 10px; font-size: 11px; }  /* "00:12" text + " / 15:00" text-dim; only the current time is clickable, it toggles elapsed/remaining */
 /* right end: playlist toggle */
 .icon-btn  { width: 23px; height: 22px; color: var(--text-dim); margin-right: 8px; } /* accent on hover or when on, pressed accent-press */
@@ -167,12 +167,12 @@ Two rows, 62px high in total, all icon buttons, no text buttons.
 | UI-BAR-02 | The bottom bar shows no source path and no status text. The source name is in the window title (C9); status goes into on-screen messages (C5) | playback + host |
 | UI-BAR-03 | Seek bar as in the CSS above: a 2px round-capped line in a 10px hit area, unplayed `line`, played `accent-fill`; 8px round thumb, white core + 2px `accent` ring, ring `accent-press` when pressed | playback |
 | UI-BAR-04 | Mute icon 13×10 + volume bar 70×10 at the right end of the seek bar row; the volume bar is fixed at 70px and does not stretch | playback |
-| UI-BAR-05 | Five 41×40 icon buttons on the left of the button row: play/pause, stop (close the source), back, forward, open; right-click on back/forward = previous/next | playback (previous/next through C6) |
+| UI-BAR-05 | Six 41×40 icon buttons on the left of the button row: play/pause, stop (close the source), back, forward, open, fullscreen; right-click on back/forward = previous/next. Fullscreen (2026-10-26, user request) toggles the main window's fullscreen like Enter/F11 (`host.run("fullscreen")`, player 0.5.2): icon `fullscreen` when windowed and `exit-fullscreen` in fullscreen (`window.state`) | playback (previous/next through C6; fullscreen through `host.run`) |
 | UI-BAR-06 | Icons from `@vestra/icons.slint` (§2.5); normal `text`, disabled `icon-disabled`; hover/press lights a 32×32 rounded plate in the middle of the button; no separators between buttons | playback |
-| UI-BAR-07 | The time is a text label `current / total`: current in `text`, the slash and total in `text-dim`, 11px, 10px after the open button; clicking the current time toggles between "elapsed / remaining" | playback |
+| UI-BAR-07 | The time is a text label `current / total`: current in `text`, the slash and total in `text-dim`, 11px, 10px after the last shown button (fullscreen, or open while fullscreen is hidden, UI-BAR-10); clicking the current time toggles between "elapsed / remaining" | playback |
 | UI-BAR-08 | The bottom bar has no speed button and no inline edit field. Speed is set through the menu and Z/X/C; seeking to a time through the "Jump to Time…" dialog (G, §7.5); volume through the slider, ↑/↓, M | playback |
 | UI-BAR-09 | 23×22 playlist toggle (F6) at the right end of the button row, `accent` when on, consistent with the menu check and the sidebar state | playback places the button, reads and toggles the sidebar state (C7) |
-| UI-BAR-10 | Below a window width of 320px the right-hand buttons are hidden. Information badges (HW/SW, codec, channels, etc.) are in interaction specification IA-PB-05 | playback |
+| UI-BAR-10 | The time keeps priority over the fullscreen button: the fullscreen button is hidden first, when the bar is too narrow for six buttons, the time and the playlist toggle with 8px to spare, that is below 6 × 41 + 10 + time + 8 + 23 + 8 px. Measured with the 11px body font, `0:00:00 / 0:00:00` is about 85px, so the button shows from a bar width of 380px (compute it from the time's laid-out width, not the constant). Below a window width of 320px the right-hand buttons are hidden as well. Information badges (HW/SW, codec, channels, etc.) are in interaction specification IA-PB-05 | playback |
 | UI-BAR-11 | When loading fails, the status goes into an on-screen message; retry is the menu command "Reopen Current/Last File" (Ctrl+Y) | playback |
 
 ## 5. Playlist (playlist plugin playlist + host)
@@ -423,9 +423,9 @@ Default bindings (the complete list and conflict check are in [menus.md](menus.m
 
 | ID | Action | Default | Owner |
 | --- | --- | --- | --- |
-| UI-MOUSE-01 | Double-click the video | Toggle fullscreen | host |
+| UI-MOUSE-01 | Double-click the video | Unbound by default (host 0.5.2, user ruling 2026-10-26; it was Toggle Fullscreen); the user can bind it under "Settings ▸ Mouse…" | host (C3) |
 | UI-MOUSE-02 | Wheel | Volume +/− | core (C3 binding table) |
-| UI-MOUSE-03 | Click the video | Unbound by default; the user can bind it under "Settings ▸ Mouse…" | host (C3) |
+| UI-MOUSE-03 | Click the video | Play/Pause by default, on release (host 0.5.2); rebind under "Settings ▸ Mouse…" | host (C3) |
 | UI-MOUSE-04 | Right-click | Menu | host |
 | UI-MOUSE-05 | Drag the video in windowed mode | Move the window | host |
 

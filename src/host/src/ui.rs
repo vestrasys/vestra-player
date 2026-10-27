@@ -924,15 +924,16 @@ export component W inherits Window {
     }
 
     /// Coordinator report 2026-10-24 (播放 ▸ 跳转 ▸ / 速度微调 ▸): drives the
-    /// real view with pointer events and a host loop like `Host` (hover
-    /// delay, `set_menu_model`). Walking down a submenu in 20 px steps opens
-    /// the row it rests on; resting on a sibling switches after the delay;
-    /// a click opens at once even when an open level's state is published
-    /// between press and release.
+    /// real view with pointer events and a host loop like `Host` (submenu
+    /// aim, `set_menu_model`). Host 0.5.2 (G-15): hovering a group row opens
+    /// it within one tick, walking down a submenu switches siblings as the
+    /// pointer reaches them, a diagonal toward the open submenu across a
+    /// sibling keeps it; a click opens at once even when an open level's
+    /// state is published between press and release.
     #[test]
     fn menu_pointer_walk_switches_sibling_submenus_and_clicks_survive_state_changes() {
         use crate::commands::{CommandKey, CommandSnapshot, CommandState, Declaration, MenuNode};
-        use crate::menu::{HoverDelay, Point, SHOW_DELAY_MS, hover_target, levels};
+        use crate::menu::{HoverAim, Point, hover_target, levels, panels};
         use std::cell::{Cell, RefCell};
         use std::rc::Rc;
         headless();
@@ -1032,9 +1033,11 @@ export component W inherits Window {
         };
         let path = RefCell::new(Vec::<String>::new());
         let clock = Cell::new(0u64);
-        let delay = RefCell::new(HoverDelay::default());
+        let aim = RefCell::new(HoverAim::default());
+        // Where the pointer is, as the host's winit hook records it.
+        let at = Cell::new(None::<Point>);
         show(&path.borrow());
-        // One host tick (16 ms): the view's hovers, then a due delay.
+        // One host tick (16 ms): the view's hovers, then a held switch.
         let tick = || {
             slint::platform::update_timers_and_animations();
             let mut path = path.borrow_mut();
@@ -1043,14 +1046,26 @@ export component W inherits Window {
                     continue;
                 };
                 if now {
-                    delay.borrow_mut().clear();
+                    aim.borrow_mut().clear();
                     *path = target;
                     show(&path);
                 } else {
-                    delay.borrow_mut().hover(&path, target, clock.get());
+                    let open = panels(&levels(&roots(), &path, origin, size, &[], &none));
+                    let submenu = (path.len() > level)
+                        .then(|| open.get(level + 1).copied())
+                        .flatten();
+                    let next =
+                        aim.borrow_mut()
+                            .hover(&path, target, at.get(), submenu, clock.get());
+                    if let Some(next) = next {
+                        aim.borrow_mut().clear();
+                        *path = next;
+                        show(&path);
+                    }
                 }
             }
-            if let Some(next) = delay.borrow_mut().due(clock.get(), SHOW_DELAY_MS) {
+            let next = aim.borrow_mut().tick(at.get(), clock.get());
+            if let Some(next) = next {
                 *path = next;
                 show(&path);
             }
@@ -1063,6 +1078,10 @@ export component W inherits Window {
             }
         };
         let pointer = |(x, y): (f32, f32)| {
+            at.set(Some(Point {
+                x: f64::from(x),
+                y: f64::from(y),
+            }));
             instance
                 .window()
                 .dispatch_event(slint::platform::WindowEvent::PointerMoved {
@@ -1080,21 +1099,53 @@ export component W inherits Window {
         let open = |expected: &[&str], what: &str| assert_eq!(*path.borrow(), expected, "{what}");
 
         pointer(row(0, 1));
-        wait(500);
-        open(&["播放"], "resting on 播放 opens it");
-        // Down 播放 ▸ in 20 px steps every 150 ms, resting on 跳转 until it opens.
+        wait(0);
+        open(&["播放"], "hovering 播放 opens it within the tick");
+        // Down 播放 ▸ in 20 px steps, one tick each: every group row opens
+        // as the pointer reaches it.
         let (x, mut y) = row(1, 0);
         let (_, jump) = row(1, 3);
         let (_, speed) = row(1, 4);
         while y <= speed {
             pointer((x, y));
-            wait(150);
-            if (y - jump).abs() <= 12. && *path.borrow() == ["播放"] {
-                wait(300);
-                open(&["播放", "跳转"], "resting on 跳转 opens it");
+            wait(16);
+            if (y - jump).abs() <= 12. {
+                open(&["播放", "跳转"], "reaching 跳转 opens it at once");
             }
             y += 20.;
         }
+        pointer((x, speed));
+        wait(16);
+        open(
+            &["播放", "速度微调"],
+            "going straight down switches to 速度微调 at once",
+        );
+        // Back on 跳转, then diagonally toward its submenu across 速度微调:
+        // 跳转 stays open while the pointer heads for it.
+        pointer((x, jump));
+        wait(16);
+        open(&["播放", "跳转"], "back on 跳转");
+        let (sub_x, _) = row(2, 0);
+        let start = (x, jump);
+        for step in 1..=3 {
+            let t = step as f32 / 4.;
+            pointer((
+                start.0 + (sub_x - 40. - start.0) * t,
+                start.1 + (speed + 6. - start.1) * t,
+            ));
+            wait(16);
+            open(&["播放", "跳转"], "a diagonal toward 跳转 ▸ keeps it");
+        }
+        // The pointer stops there, on 速度微调: it switches after the grace.
+        wait(crate::menu::AIM_GRACE_MS - 32);
+        open(&["播放", "跳转"], "held within the grace");
+        wait(48);
+        open(&["播放", "速度微调"], "the pointer stopped: it switches");
+        pointer((x, jump));
+        wait(16);
+        pointer((x, speed));
+        wait(16);
+        open(&["播放", "速度微调"], "straight down again: at once");
         // On 速度微调 with small wiggles: 跳转 closes, 速度微调 opens.
         for wiggle in 0..4 {
             pointer((x + if wiggle % 2 == 0 { 3. } else { -3. }, speed));

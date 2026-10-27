@@ -399,7 +399,9 @@ export class KeysPage {
   #updated(ref: BindingRef) {
     const info = this.#model.find(ref);
     if (!info) return;
-    const keys = info.labels.join(", ");
+    // The keys, as the row shows them: a mouse input (Play/Pause's left
+    // click, player 0.5.2) is the mouse page's.
+    const keys = info.labels.filter((_, i) => !isMouse(info.current[i] ?? "")).join(", ");
     if (keys) {
       this.#say(message("updated", { text: keys }));
       this.#osd(this.#plugin.osd.show("Shortcut updated: {0} = {1}", [commandText(info), keys]));

@@ -434,8 +434,8 @@ msgstr "Zum Filtern tippen"
 
 #: ui/mouse.slint:205
 #, x-machine
-msgid "A bound left click responds only after the system's double-click interval; the right button always opens the menu."
-msgstr "Ein belegter Linksklick reagiert erst nach dem Doppelklick-Intervall des Systems; die rechte Taste öffnet immer das Menü."
+msgid "A left click may wait for the double-click interval while a double-click is bound; the right button always opens the menu."
+msgstr "Ist ein Doppelklick belegt, kann ein Linksklick auf das Doppelklick-Intervall warten; die rechte Taste öffnet immer das Menü."
 
 #: ui/parts.slint:59
 #, x-machine

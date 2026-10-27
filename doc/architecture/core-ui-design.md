@@ -208,7 +208,7 @@ Rules:
 - **Symbol keys** match the character actually typed, and cannot also be written with `Shift`: subtitle sync's `>` is written `">"`, not `"Shift+."`. `+` is written `Plus`. The same for digits: `"Shift+1"` is invalid; write `"!"`.
 - **Ctrl and Cmd on macOS**: on macOS `Ctrl+X` fires on both ⌃X and ⌘X (UI spec §0); `Cmd+X` only accepts ⌘X. For one event, an exact match is looked up first (⌘X looks for `Cmd+X` first); if none is found, it is looked up as `Ctrl+X`. On other platforms `Cmd` is the Win/Super key. (On macOS Slint reports ⌘ as `control` and ⌃ as `meta`; the host swaps them back in Rust.)
 - **Mouse** bindings only apply in the video area and can have modifiers. `LeftDoubleClick:LeftHalf`/`:RightHalf` distinguish by whether the double-click is on the left or right half of the video; when bindings with and without a zone exist at the same time, the one with the zone wins, and this does not count as a conflict. The wheel counts steps by accumulated distance (the threshold is set in P1b by testing with trackpad and mouse), firing once per step. `X1`/`X2` are the mouse side buttons (Slint `back`/`forward`).
-- The right button is reserved for the menu and cannot be bound. Left single click, long press, and right double-click are not done this round (§18 Q3). By default the host binds `Mouse:LeftDoubleClick` to fullscreen.
+- The right button is reserved for the menu and cannot be bound. Left single click, long press, and right double-click are not done this round (§18 Q3). Default mouse bindings, as history: until host 0.5.1 the host bound `Mouse:LeftDoubleClick` to fullscreen and nothing to a single click; from 0.5.2 (user ruling 2026-10-26) `Mouse:LeftClick` (added in round 3a) is Play/Pause and nothing is bound to a double click.
 - Default bindings **fire only on press and ignore the auto-repeat of a held key** (same as Space/←/→ today); when a command declares `repeat: true`, the system auto-repeat of keys also fires (§18 Q6). Mouse events have no repeat.
 - While the menu is open or a system dialog is open, all bindings are paused (same as today).
 - A bound `Tab` is caught by the host and is no longer used for focus switching inside the main window.
@@ -252,7 +252,7 @@ impl Table {
 
 | Command | Default bindings | Menu | State |
 | --- | --- | --- | --- |
-| `host/fullscreen` Fullscreen | `Enter`, `Alt+Enter` (interaction alignment IA-CORE-04), `F11`, `Mouse:LeftDoubleClick` | top level, `group: "screen"`, `order: 700`, checked = whether fullscreen | always available |
+| `host/fullscreen` Fullscreen | `Enter`, `Alt+Enter` (interaction alignment IA-CORE-04), `F11` (`Mouse:LeftDoubleClick` until host 0.5.1) | top level, `group: "screen"`, `order: 700`, checked = whether fullscreen | always available |
 | `host/exit-fullscreen` Exit fullscreen | `Escape` | not in the menu | only available in fullscreen |
 | `host/quit` Quit | `Cmd+Q` (the menu shows it on macOS only: on Windows and Linux `Cmd` is the Windows / Super key, whose combinations the system takes, so menus show no `Cmd` binding, `platform::MENU_SHOWS_CMD`; there the close button and Alt+F4 quit) | top level, `group: "exit"`, `order: 990` | always available |
 
@@ -943,7 +943,7 @@ The coordinator's review passed. The table below is the final decision (the orig
 | --- | --- | --- |
 | Q1 | Floating window default size | 300×408 (minimum 300×250) |
 | Q2 | Host "Fullscreen" and "Quit" in the top-level menu | Yes (`screen` group 700, `exit` group 990); P1b confirms ⌘Q does not duplicate the macOS default app menu |
-| Q3 | Range of mouse events | No left single click, long press, or right double-click; `Mouse:LeftDoubleClick` is the default binding for host fullscreen |
+| Q3 | Range of mouse events | No left single click, long press, or right double-click; `Mouse:LeftDoubleClick` is the default binding for host fullscreen (until 0.5.1; from 0.5.2 a left click is Play/Pause and a double click is unbound, user ruling 2026-10-26) |
 | Q4 | Binding conflicts between plugins | First loaded wins (§3.5) |
 | Q5 | Focus scopes | Only `panel` |
 | Q6 | Repeat when held | Commands can declare `repeat: true`, default false (§3.1, §3.2) |

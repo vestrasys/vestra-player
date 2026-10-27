@@ -1,6 +1,9 @@
 //! Bounded JSON ↔ Slint value conversion (host-internal).
-//! Equal values retain live properties; same-length Host-owned models reconcile
-//! changed rows. Structural changes replace models; Rc ownership stays with the view.
+//! Equal values retain live properties; Host-owned models reconcile changed
+//! rows, and rows added or removed at the end, in place (host 0.5.2: a length
+//! change used to replace the model, which rebuilt every row element). Type
+//! changes, and rows written into an empty model, replace models; Rc
+//! ownership stays with the view.
 //! Values holding Markdown documents (`ui_markdown::Rows`, at any depth) are
 //! updated in place as far as their shape allows: changed rows, rows added or
 //! removed at the end, document rows diffed, so a growing chat message does
@@ -291,10 +294,17 @@ pub fn reconcile(current: &Value, next: &Value) -> Result<bool> {
     if current_json == next_json {
         return Ok(true);
     }
-    if let (Value::Model(current), Value::Model(next)) = (current, next)
-        && current.row_count() == next.row_count()
-        && let Some(rows) = current.as_any().downcast_ref::<VecModel<Value>>()
+    if let (Value::Model(current_model), Value::Model(next_model)) = (current, next)
+        && let Some(rows) = current_model.as_any().downcast_ref::<VecModel<Value>>()
         && let (Json::Array(before), Json::Array(after)) = (&current_json, &next_json)
+        // A length change keeps the model too (rows appended by a page, a
+        // row removed): the shared rows update in place and the tail is
+        // pushed or removed, so the repeater keeps every unchanged row
+        // element (its hover, a click in progress, the scroll position).
+        // Rows written in may not change the declared row type, which only
+        // a current row shows: an empty model is replaced as before.
+        && (before.len() == after.len()
+            || (!before.is_empty() && appended_fit(current_model, next_model)))
     {
         // Validate and collect before mutation, so invalid input cannot partly apply.
         // The rows were converted above; comparing them again here used to
@@ -302,19 +312,46 @@ pub fn reconcile(current: &Value, next: &Value) -> Result<bool> {
         let mut changes = Vec::new();
         for (index, (before, after)) in before.iter().zip(after).enumerate() {
             if before != after {
-                changes.push((index, next.row_data(index).context("new UI row missing")?));
+                let row = next_model.row_data(index).context("new UI row missing")?;
+                // A changed row of another shape (`{a: 1}` → `{a: "x"}`)
+                // cannot be written into the model: Slint checks the type
+                // of an installed value, so the caller installs it whole.
+                if !current_model
+                    .row_data(index)
+                    .is_some_and(|current| fits(&current, &row))
+                {
+                    trace_reconciliation("replace", rows.row_count());
+                    return Ok(false);
+                }
+                changes.push((index, row));
             }
         }
+        let added = (before.len()..after.len())
+            .map(|index| next_model.row_data(index).context("new UI row missing"))
+            .collect::<Result<Vec<_>>>()?;
         trace_reconciliation("in-place", rows.row_count());
         for (index, value) in changes {
             rows.set_row_data(index, value);
         }
+        while rows.row_count() > after.len() {
+            rows.remove(rows.row_count() - 1);
+        }
+        rows.extend(added);
         return Ok(true);
     }
     if let Value::Model(model) = current {
         trace_reconciliation("replace", model.row_count());
     }
     Ok(false)
+}
+/// The rows `next` has beyond `current`'s have the shape of `current`'s first
+/// row (Slint checks the type of an installed model, not of a pushed row).
+fn appended_fit(current: &ModelRc<Value>, next: &ModelRc<Value>) -> bool {
+    let Some(sample) = current.row_data(0) else {
+        return false;
+    };
+    (current.row_count()..next.row_count())
+        .all(|index| next.row_data(index).is_some_and(|row| fits(&sample, &row)))
 }
 /// `reconcile` that also keeps models nested in rows: when `next` has the
 /// shape of `current` it is written in place at every depth, so a row whose
@@ -779,10 +816,70 @@ mod reconciliation_tests {
             serde_json::json!(2.5)
         );
         assert_eq!(model.row_count(), 6);
-        // A structural replacement must be installed by the caller, not mistaken
-        // for an equal-size update that retains obsolete data or menu structure.
-        assert!(!reconcile(&current, &from_json(&serde_json::json!([0, 0])).unwrap()).unwrap());
-        assert_eq!(model.row_count(), 6);
+        // Fewer rows: the tail goes, the model stays.
+        assert!(reconcile(&current, &from_json(&serde_json::json!([0, 0])).unwrap()).unwrap());
+        assert_eq!(model.row_count(), 2);
+        // A type change must be installed by the caller (Slint checks it),
+        // not pushed into the model.
+        let strings = from_json(&serde_json::json!([0, 0, "x"])).unwrap();
+        assert!(!reconcile(&current, &strings).unwrap());
+        assert_eq!(model.row_count(), 2);
+    }
+
+    fn rows(value: &Value) -> &ModelRc<Value> {
+        let Value::Model(model) = value else {
+            panic!("a model")
+        };
+        model
+    }
+
+    /// VestraTube 0.4.1: a page of results appended, a row removed, a row
+    /// selected: the model and every unchanged row stay (a ListView keeps
+    /// their elements, so a double click in progress and the hover survive).
+    #[test]
+    fn appended_and_removed_rows_keep_the_model_and_the_other_rows() {
+        let row = |key: &str, selected: bool| serde_json::json!({"key": key, "selected": selected});
+        let current = from_json(&serde_json::json!([row("a", false), row("b", false)])).unwrap();
+        let identity = rows(&current).as_any() as *const dyn std::any::Any;
+        let next = from_json(&serde_json::json!([
+            row("a", false),
+            row("b", true),
+            row("c", false),
+            row("d", false)
+        ]))
+        .unwrap();
+        assert!(reconcile(&current, &next).unwrap());
+        assert!(std::ptr::eq(
+            identity,
+            rows(&current).as_any() as *const dyn std::any::Any
+        ));
+        assert_eq!(to_json(&current).unwrap(), to_json(&next).unwrap());
+        let next = from_json(&serde_json::json!([row("a", false), row("b", true)])).unwrap();
+        assert!(reconcile(&current, &next).unwrap());
+        assert_eq!(to_json(&current).unwrap(), to_json(&next).unwrap());
+        assert!(std::ptr::eq(
+            identity,
+            rows(&current).as_any() as *const dyn std::any::Any
+        ));
+        // An added row of another shape replaces the model (Slint checks it).
+        let other =
+            from_json(&serde_json::json!([row("a", false), row("b", true), {"x": 1}])).unwrap();
+        assert!(!reconcile(&current, &other).unwrap());
+        // So does a changed row of another shape (review 2026-10-27), with
+        // the same length or with rows appended: nothing is written first.
+        let numbers = from_json(&serde_json::json!([{"a": 1}])).unwrap();
+        let strings = from_json(&serde_json::json!([{"a": "x"}, {"a": 2}])).unwrap();
+        assert!(!reconcile(&numbers, &strings).unwrap());
+        let strings = from_json(&serde_json::json!([{"a": "x"}])).unwrap();
+        assert!(!reconcile(&numbers, &strings).unwrap());
+        assert_eq!(
+            to_json(&numbers).unwrap(),
+            serde_json::json!([{"a": 1.0}]),
+            "untouched"
+        );
+        // Rows into an empty model: the type is unknown, so it is installed.
+        let empty = from_json(&serde_json::json!([])).unwrap();
+        assert!(!reconcile(&empty, &next).unwrap());
     }
 }
 
@@ -819,7 +916,31 @@ mod image_rows {
         let Some(Value::Struct(second)) = model.row_data(1) else {
             panic!("a row")
         };
-        assert_eq!(second.get_field("icon"), Some(&Value::Image(b)));
+        assert_eq!(second.get_field("icon"), Some(&Value::Image(b.clone())));
+        // A row selected (VestraTube 0.4.0's rows: an image and a flag per
+        // row): the same model, one row rewritten, the others untouched.
+        let flagged = |key: &str, icon: &slint::Image, selected: bool| {
+            let Value::Struct(mut row) = row(key, icon) else {
+                unreachable!()
+            };
+            row.set_field("selected".into(), Value::Bool(selected));
+            Value::Struct(row)
+        };
+        let current = list(vec![flagged("a", &a, false), flagged("b", &b, false)]);
+        let Value::Model(model) = &current else {
+            panic!("a model")
+        };
+        let identity = model.as_any() as *const dyn std::any::Any;
+        let selected = list(vec![flagged("a", &a, false), flagged("b", &b, true)]);
+        assert!(reconcile(&current, &selected).unwrap());
+        assert!(std::ptr::eq(
+            identity,
+            model.as_any() as *const dyn std::any::Any
+        ));
+        let Some(Value::Struct(second)) = model.row_data(1) else {
+            panic!("a row")
+        };
+        assert_eq!(second.get_field("selected"), Some(&Value::Bool(true)));
         // A whole-value image is still installed, never merged.
         assert!(!reconcile(&Value::Image(a.clone()), &Value::Image(a)).unwrap());
     }

@@ -345,7 +345,7 @@ msgid "Type to filter"
 msgstr ""
 
 #: ui/mouse.slint:205
-msgid "A bound left click responds only after the system's double-click interval; the right button always opens the menu."
+msgid "A left click may wait for the double-click interval while a double-click is bound; the right button always opens the menu."
 msgstr ""
 
 #: ui/parts.slint:59

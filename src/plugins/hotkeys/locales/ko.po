@@ -434,8 +434,8 @@ msgstr "입력하여 필터링"
 
 #: ui/mouse.slint:205
 #, x-machine
-msgid "A bound left click responds only after the system's double-click interval; the right button always opens the menu."
-msgstr "지정된 왼쪽 클릭은 시스템의 더블 클릭 간격이 지난 뒤에 반응합니다. 오른쪽 버튼은 항상 메뉴를 엽니다."
+msgid "A left click may wait for the double-click interval while a double-click is bound; the right button always opens the menu."
+msgstr "더블 클릭이 지정되어 있으면 왼쪽 클릭이 더블 클릭 간격만큼 기다릴 수 있습니다. 오른쪽 버튼은 항상 메뉴를 엽니다."
 
 #: ui/parts.slint:59
 #, x-machine

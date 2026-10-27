@@ -8,7 +8,10 @@ use crate::commands::{CommandState, Declaration};
 use crate::i18n::{tr, tr_args};
 use serde_json::{Value, json};
 
-pub const ACTIONS: [&str; 14] = [
+/// What `host.run` accepts (the SDK's `HostAction`). All but `fullscreen`
+/// are the playback commands declared here; `fullscreen` (host 0.5.2) is
+/// the host's own Toggle Fullscreen command (`WINDOW_ACTIONS`).
+pub const ACTIONS: [&str; 15] = [
     "play-pause",
     "stop",
     "previous",
@@ -23,7 +26,13 @@ pub const ACTIONS: [&str; 14] = [
     "volume-up",
     "volume-down",
     "mute",
+    "fullscreen",
 ];
+/// Actions of the main window, not of playback: `main.rs` registers their
+/// commands (`register_host_commands`) and runs them like the command's key
+/// (toggle fullscreen: in when windowed, out when fullscreen), without the
+/// playback state, busy flags or `declarations` here.
+pub const WINDOW_ACTIONS: [&str; 1] = ["fullscreen"];
 pub const MIN_RATE: f64 = 0.25;
 pub const MAX_RATE: f64 = 4.0;
 pub const DEFAULT_STEP: f64 = 5.0;
@@ -186,7 +195,9 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
                 tr("Play/Pause"),
                 201,
                 "domain",
-                &["Space"],
+                // A click on the video (user ruling 2026-10-26); it fires on
+                // release while no double click is bound (`video_click`).
+                &["Space", "Mouse:LeftClick"],
                 false,
             ),
         ),
@@ -788,10 +799,15 @@ mod tests {
         assert_eq!(declarations.len(), 14);
         let find = |id: &str| &declarations.iter().find(|(each, _)| *each == id).unwrap().1;
         for id in ACTIONS {
-            assert!(declarations.iter().any(|(each, _)| *each == id), "{id}");
+            assert_eq!(
+                declarations.iter().any(|(each, _)| *each == id),
+                !WINDOW_ACTIONS.contains(&id),
+                "{id}"
+            );
         }
         assert_eq!(find("play-pause").path, ["Playback", "Play/Pause"]);
         assert_eq!(find("play-pause").order, 201);
+        assert_eq!(find("play-pause").bindings, ["Space", "Mouse:LeftClick"]);
         assert_eq!(find("stop").path, ["Close"]);
         assert_eq!(find("stop").bindings, ["F4"]);
         assert_eq!(find("stop").group, "open");

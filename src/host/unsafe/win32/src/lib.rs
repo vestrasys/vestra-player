@@ -31,8 +31,8 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     GetDoubleClickTime, GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    ASFW_ANY, AllowSetForegroundWindow, GetCursorPos, GetWindowRect, SPI_GETMENUSHOWDELAY,
-    SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetWindowPos, SystemParametersInfoW,
+    ASFW_ANY, AllowSetForegroundWindow, GetCursorPos, GetWindowRect, SWP_NOACTIVATE,
+    SWP_NOOWNERZORDER, SWP_NOZORDER, SetWindowPos,
 };
 
 /// The pointer in screen coordinates (physical pixels), `None` when the
@@ -56,19 +56,6 @@ pub fn modifier_keys() -> (bool, bool, bool) {
 pub fn double_click_ms() -> u32 {
     // SAFETY: no arguments, no preconditions.
     unsafe { GetDoubleClickTime() }
-}
-
-/// The system submenu show delay in milliseconds (`SPI_GETMENUSHOWDELAY`),
-/// `None` when the system does not answer.
-pub fn menu_show_delay_ms() -> Option<u32> {
-    let mut delay: u32 = 0;
-    // SAFETY: SPI_GETMENUSHOWDELAY writes one DWORD to the pointer, which
-    // points at `delay`, a valid writable u32 for the duration of the call;
-    // `uiParam` is unused (0) and no setting is changed (fWinIni 0).
-    let ok = unsafe {
-        SystemParametersInfoW(SPI_GETMENUSHOWDELAY, 0, (&mut delay as *mut u32).cast(), 0)
-    };
-    (ok != 0).then_some(delay)
 }
 
 /// Keep the system (and, with `display`, the display) awake until
