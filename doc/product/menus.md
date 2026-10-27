@@ -86,7 +86,7 @@ The labels below are the English interface text (the English source text of each
 | Subtitles ▸ Secondary Subtitle ▸ Position ▸ Top · Above Main Subtitle | subtitles | | Radio |
 | Subtitles ▸ Subtitle Style ▸ Bold | subtitles | Alt+B | Checked |
 | Subtitles ▸ Subtitle Style ▸ Size + · Size − | subtitles | Alt+PgUp · Alt+PgDn | |
-| Subtitles ▸ Subtitle Style ▸ Move Up · Move Down · Reset Position | subtitles | Alt+↑ · Alt+↓ · Alt+Home | Alt+↑/↓ duplicate "Video ▸ Framing ▸ Pan ↑/↓" (see Conflict check) |
+| Subtitles ▸ Subtitle Style ▸ Move Up · Move Down · Reset Position | subtitles | none · none · Alt+Home | Move Up/Down have no default key (user ruling 2026-10-27, see Conflict check) |
 | Subtitles ▸ Subtitle Style ▸ Shadow · Opaque Box | subtitles | | Checked |
 | Subtitles ▸ Original ASS/SSA Styles | subtitles | | Checked |
 | Subtitles ▸ Sync ▸ Earlier 0.5 s · Later 0.5 s · Reset | subtitles | `.` · `,` · `/` | |
@@ -112,7 +112,7 @@ The labels below are the English interface text (the English source text of each
 | Video ▸ Crop/Stretch ▸ Reset Position · Move Left · Move Right · Move Up · Move Down | video | | |
 | Video ▸ Framing ▸ Reset Framing | video | Numpad5, Alt+Backspace | |
 | Video ▸ Framing ▸ Zoom In · Zoom Out | video | Numpad9, Alt+Plus · Numpad1, Alt+- | |
-| Video ▸ Framing ▸ Pan → · ← · ↑ · ↓ | video | Ctrl+Numpad6, Alt+→ · Ctrl+Numpad4, Alt+← · Ctrl+Numpad8, Alt+↑ · Ctrl+Numpad2, Alt+↓ | Alt+↑/↓ duplicate subtitle Move Up/Move Down (see Conflict check) |
+| Video ▸ Framing ▸ Pan → · ← · ↑ · ↓ | video | Ctrl+Numpad6, Alt+→ · Ctrl+Numpad4, Alt+← · Ctrl+Numpad8, Alt+↑ · Ctrl+Numpad2, Alt+↓ | |
 | Video ▸ Framing ▸ Center Frame | video | Ctrl+Numpad5 | |
 | Video ▸ Image Processing ▸ Flip Vertically · Flip Horizontally | video | Ctrl+P · Ctrl+Z | Checked |
 | Video ▸ Image Processing ▸ Gaussian Blur · Sharpen · Edge Sharpen | video | Ctrl+B · Ctrl+R · none | Checked |
@@ -237,7 +237,7 @@ Showing, hiding or closing a tool window does not affect effects the plugin has 
 
 On 2026-10-21 every default binding in the tables above (19 plugins, 14 core actions, the host's Fullscreen/Leave Fullscreen/Quit) was checked key by key per scope, treating `Cmd+X` and `Ctrl+X` as the same key on macOS (`CTRL_ACCEPTS_CMD`).
 
-- **Global scope: one conflict.** `Alt+↑` and `Alt+↓` are default bindings of both "Video ▸ Framing ▸ Pan ↑/↓" (video, the alternate keys from round 4a) and "Subtitles ▸ Subtitle Style ▸ Move Up/Move Down" (subtitles). The host lets the plugin loaded first (the owner with the smaller generation) win; the other is ignored and `binding conflict` is printed; Ctrl+Numpad8/2 (framing) are not affected. The round 4a conflict check in the "Framing" section of [feature requirements](feature-requirements.md) only checked playback's arrow keys and missed subtitles. One side's default keys need to change (awaiting a ruling).
+- **Global scope: one conflict, resolved.** `Alt+↑` and `Alt+↓` are default bindings of both "Video ▸ Framing ▸ Pan ↑/↓" (video, the alternate keys from round 4a) and "Subtitles ▸ Subtitle Style ▸ Move Up/Move Down" (subtitles). The host lets the plugin loaded first (the owner with the smaller generation) win; the other is ignored and `binding conflict` is printed; Ctrl+Numpad8/2 (framing) are not affected. The round 4a conflict check in the "Framing" section of [feature requirements](feature-requirements.md) only checked playback's arrow keys and missed subtitles. User ruling 2026-10-27: the video pan keeps Alt+↑/↓; subtitle Move Up/Move Down have no default key (subtitles 0.4.6), users bind them if they want. No conflict remains.
 - The host's only ⌘ binding is Cmd+Q (quit); no command declares Ctrl+Q; no other Ctrl binding duplicates it.
 - Standard window close keys (macOS ⌘W; Windows Ctrl+W, Ctrl+F4; Linux Ctrl+W; only in tool windows, floating panels and the options window, not in the binding table, see [Keys the system takes first](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#keys-the-system-takes-first)): checked on 2026-10-22, no default binding uses Ctrl+W, Cmd+W or Ctrl+F4 (F4 is "Stop", without a modifier, so no conflict).
 - Panel focus scope (playlist): no conflicts.

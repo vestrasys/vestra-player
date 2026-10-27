@@ -15,7 +15,7 @@ Picks subtitle tracks, loads external subtitles, adjusts style and sync.
 ## Entries
 
 - Right-click menu: Open ▸ Open Subtitle… (Alt+O), Open ▸ Add Secondary Subtitle….
-- Right-click menu Subtitles: Show Subtitles (Alt+H), Subtitle Track (Cycle Alt+L), Secondary Subtitle, Subtitle Style (Bold Alt+B, Size Alt+PgUp/PgDn, Move Up/Down Alt+↑/↓), Sync (`.` earlier, `,` later, `/` reset), Reload Subtitles (Ctrl+Alt+Y), Subtitle Tuning…, Subtitle Settings….
+- Right-click menu Subtitles: Show Subtitles (Alt+H), Subtitle Track (Cycle Alt+L), Secondary Subtitle, Subtitle Style (Bold Alt+B, Size Alt+PgUp/PgDn, Move Up/Down: no default key, Alt+↑/↓ pan the video; Reset Position Alt+Home), Sync (`.` earlier, `,` later, `/` reset), Reload Subtitles (Ctrl+Alt+Y), Subtitle Tuning…, Subtitle Settings….
 - Right-click menu Playback ▸ Seek: Previous Dialogue (Home), Next Dialogue (End), Current Subtitle Start (Ctrl+Home).
 
 ## Limits

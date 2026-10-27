@@ -77,8 +77,8 @@ test("menu per the allocation table; windows bind exactly their Slint callbacks"
     ["字幕 > 字幕样式 > 粗体", 324, "style-font", "Alt+B"],
     ["字幕 > 字幕样式 > 字号 +", 325, "style-font", "Alt+PageUp"],
     ["字幕 > 字幕样式 > 字号 −", 326, "style-font", "Alt+PageDown"],
-    ["字幕 > 字幕样式 > 上移", 330, "style-move", "Alt+ArrowUp"],
-    ["字幕 > 字幕样式 > 下移", 331, "style-move", "Alt+ArrowDown"],
+    ["字幕 > 字幕样式 > 上移", 330, "style-move", ""],
+    ["字幕 > 字幕样式 > 下移", 331, "style-move", ""],
     ["字幕 > 字幕样式 > 复位位置", 334, "style-move", "Alt+Home"],
     ["字幕 > 字幕样式 > 阴影", 335, "style-box", ""],
     ["字幕 > 字幕样式 > 字幕边框不透明", 336, "style-box", ""],
@@ -525,9 +525,10 @@ test("D06/D07: size and position keys share the tune window's edits and report o
   assert.equal(host.osd.at(-1), "字幕尺寸：减小(34)");
   for (let i = 0; i < 25; i++) await host.press("Alt+PageUp");
   assert.equal(host.osd.at(-1), "字幕尺寸：增加(72)", "the limit keeps the value and still reports it");
-  for (let i = 0; i < 3; i++) await host.press("Alt+ArrowUp");
+  // Move Up / Down have no default key (Alt+↑/↓ pan the video): run the commands.
+  for (let i = 0; i < 3; i++) await host.command("move-up").run();
   assert.equal(host.osd.at(-1), "字幕位置：上移(8%)");
-  await host.press("Alt+ArrowDown");
+  await host.command("move-down").run();
   assert.equal(host.osd.at(-1), "字幕位置：下移(7%)");
   await host.settle(170);
   assert.equal(host.subtitles.presentation.effective?.style.marginPercent, 7);
