@@ -7,7 +7,7 @@ import type { BuiltinCommand, BuiltinSubmenu } from "../commands.ts";
 import { CAPABILITY_INFO, MESSAGE_LIMIT } from "../capabilities.ts";
 import type { CapabilityInfo } from "../capabilities.ts";
 import { OSD_LIMITS } from "./osd.ts";
-import { SECRET_LIMITS } from "./services.ts";
+import { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./services.ts";
 import { BINDING_INPUTS } from "./bindings.ts";
 import { THEME_PALETTES } from "../palettes.ts";
 import { IMAGE_LIMITS, UI_VALUE_LIMITS } from "./values.ts";
@@ -34,6 +34,8 @@ export { MESSAGE_LIMIT };
 export { OSD_LIMITS };
 /** The player's limits on stored secrets. */
 export { SECRET_LIMITS };
+/** The player's limits on `plugin.storage.session`. */
+export { SESSION_STORAGE_LIMITS };
 /** The names bindings are made of. */
 export { BINDING_INPUTS };
 /** The colours of the player's palettes, by `Theme` token. */
@@ -1072,6 +1074,18 @@ export declare class TestHost implements Transport {
      * new name fails `limit` once 256 names are stored.
      */
     readonly secrets: Map<string, string>;
+    /**
+     * `plugin.storage.session`: key → value, as the player keeps them. Preset
+     * entries to simulate values an earlier run of the plugin stored in the
+     * same player session, or pass `startPlugin(..., { sessionStorage })`.
+     * Like the player, a key is 1–1024 bytes, a `set` that would make the
+     * entries larger than 1 MiB (keys, values as compact JSON and
+     * `SESSION_STORAGE_LIMITS.entryBytes` per key) fails `limit`, and an
+     * object's properties are stored sorted, as the player hands them back.
+     *
+     * @since 1.5.25
+     */
+    readonly sessionStorage: Map<string, Json>;
     /** What `plugin.app.system()` reports. */
     systemInfo: WireSystemInfo;
     /**
@@ -1594,6 +1608,15 @@ export declare function startPlugin(activate: (plugin: Plugin) => unknown, optio
     host?: TestHost;
     /** Use an existing directory as `plugin.dataDirectory` (to test a restart). */
     dataDirectory?: string;
+    /**
+     * Start with these `plugin.storage.session` values (to test a restart
+     * within one player session): pass the previous run's
+     * `host.sessionStorage`. They are copied into the new host's
+     * {@link TestHost.sessionStorage}.
+     *
+     * @since 1.5.25
+     */
+    sessionStorage?: ReadonlyMap<string, Json>;
     /**
      * The interface language to play ({@link TestHost.locale}): the plugin's
      * `locales/<locale>.po` (or `.json`) in `directory` is loaded and its

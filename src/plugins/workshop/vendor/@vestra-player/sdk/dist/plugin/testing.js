@@ -69,7 +69,7 @@ import { localSocketPath } from "./local.js";
 import { BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS, } from "../commands.js";
 import { CAPABILITY_INFO, MESSAGE_LIMIT } from "../capabilities.js";
 import { OSD_LIMITS } from "./osd.js";
-import { SECRET_LIMITS } from "./services.js";
+import { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./services.js";
 import { BINDING_INPUTS } from "./bindings.js";
 import { THEME_PALETTES } from "../palettes.js";
 import { IMAGE_LIMITS, UI_VALUE_LIMITS, valueLimitProblem } from "./values.js";
@@ -93,6 +93,8 @@ export { MESSAGE_LIMIT };
 export { OSD_LIMITS };
 /** The player's limits on stored secrets. */
 export { SECRET_LIMITS };
+/** The player's limits on `plugin.storage.session`. */
+export { SESSION_STORAGE_LIMITS };
 /** The names bindings are made of. */
 export { BINDING_INPUTS };
 /** The colours of the player's palettes, by `Theme` token. */
@@ -131,6 +133,34 @@ export { LIST_SEPARATORS };
  * ```
  */
 export { LOCALES };
+/** A `plugin.storage.session` key, checked as the player does. */
+function sessionKey(key) {
+    if (typeof key !== "string" ||
+        !key ||
+        key.includes("\0") ||
+        Buffer.byteLength(key) > SESSION_STORAGE_LIMITS.keyBytes)
+        throw new HostError("invalid", "session storage keys are 1–1024 bytes of text without NUL");
+    return key;
+}
+/** Code point (UTF-8 byte) order, as the player sorts session keys. */
+const byCodePoint = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
+/**
+ * A JSON value as the player hands it back: the player does not keep the
+ * order of object properties, it sorts them.
+ */
+function sortedJson(value) {
+    if (Array.isArray(value))
+        return value.map(sortedJson);
+    if (value && typeof value === "object")
+        return Object.fromEntries(Object.keys(value)
+            .sort(byCodePoint)
+            .map((key) => [key, sortedJson(value[key])]));
+    return value;
+}
+/** What one session entry counts towards the player's quota. */
+const sessionCost = (key, value) => Buffer.byteLength(key) +
+    Buffer.byteLength(JSON.stringify(value)) +
+    SESSION_STORAGE_LIMITS.entryBytes;
 const kebab = (name) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 function initialSource() {
@@ -1156,6 +1186,18 @@ export class TestHost {
      * new name fails `limit` once 256 names are stored.
      */
     secrets = new Map();
+    /**
+     * `plugin.storage.session`: key → value, as the player keeps them. Preset
+     * entries to simulate values an earlier run of the plugin stored in the
+     * same player session, or pass `startPlugin(..., { sessionStorage })`.
+     * Like the player, a key is 1–1024 bytes, a `set` that would make the
+     * entries larger than 1 MiB (keys, values as compact JSON and
+     * `SESSION_STORAGE_LIMITS.entryBytes` per key) fails `limit`, and an
+     * object's properties are stored sorted, as the player hands them back.
+     *
+     * @since 1.5.25
+     */
+    sessionStorage = new Map();
     /** What `plugin.app.system()` reports. */
     systemInfo = {
         os: "macos",
@@ -1622,6 +1664,11 @@ export class TestHost {
      */
     async request(method, params = {}) {
         const record = (params ?? {});
+        // The plugin runner refuses a request over the message limit before
+        // sending it (runtime/runner.ts): the player never sees it.
+        const line = JSON.stringify({ id: this.calls.length + 1, method, params });
+        if (Buffer.byteLength(line, "utf8") + 1 > MESSAGE_LIMIT)
+            throw new HostError("limit", `${method}: request exceeds the player's 1 MiB message limit`);
         this.calls.push({ method, params: record });
         this.#inFlight++;
         try {
@@ -2709,6 +2756,27 @@ export class TestHost {
             this.secrets.set(name, String(p.value));
         },
         "secrets.delete": (p) => void this.secrets.delete(String(p.name)),
+        // As the player (host/src/session_storage.rs).
+        "storage.session.get": (p) => {
+            const key = sessionKey(p.key);
+            return this.sessionStorage.has(key)
+                ? { value: structuredClone(this.sessionStorage.get(key)) }
+                : {};
+        },
+        "storage.session.set": (p) => {
+            const key = sessionKey(p.key);
+            if (!("value" in p))
+                throw new HostError("invalid", "set needs a JSON value");
+            let total = sessionCost(key, p.value);
+            for (const [other, value] of this.sessionStorage)
+                if (other !== key)
+                    total += sessionCost(other, value);
+            if (total > SESSION_STORAGE_LIMITS.bytes)
+                throw new HostError("limit", `session storage holds at most ${SESSION_STORAGE_LIMITS.bytes} bytes per plugin (keys, JSON values and ${SESSION_STORAGE_LIMITS.entryBytes} per key); this value would make ${total}`);
+            this.sessionStorage.set(key, sortedJson(p.value));
+        },
+        "storage.session.delete": (p) => void this.sessionStorage.delete(sessionKey(p.key)),
+        "storage.session.keys": () => [...this.sessionStorage.keys()].sort(byCodePoint),
         "app.system": () => structuredClone(this.systemInfo),
         "clipboard.readText": () => this.clipboard.text,
         "clipboard.writeText": (p) => {
@@ -3741,6 +3809,8 @@ export async function startPlugin(activate, options = {}) {
     host.manifestId = manifest.id;
     host.loadCatalog(directory);
     const data = options.dataDirectory ?? host.dataDirectory;
+    for (const [key, value] of options.sessionStorage ?? [])
+        host.sessionStorage.set(key, sortedJson(value));
     mkdirSync(data, { recursive: true });
     const instance = await createPlugin(host, manifest, directory, data, host.app);
     await activate(instance.plugin);

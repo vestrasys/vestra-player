@@ -182,6 +182,16 @@ export function createWire(transport) {
             set: (name, value) => transport.request("secrets.set", { name, value }),
             delete: (name) => transport.request("secrets.delete", { name }),
         },
+        /**
+         * JSON values the player keeps per plugin until it quits (SDK 1.5.25,
+         * player 0.5.5). `get` answers `{}` for a missing key.
+         */
+        storageSession: {
+            get: (key) => transport.request("storage.session.get", { key }),
+            set: (key, value) => transport.request("storage.session.set", { key, value }),
+            delete: (key) => transport.request("storage.session.delete", { key }),
+            keys: () => transport.request("storage.session.keys"),
+        },
         app: {
             system: () => transport.request("app.system"),
         },
