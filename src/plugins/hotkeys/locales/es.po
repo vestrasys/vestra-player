@@ -434,8 +434,8 @@ msgstr "Escribe para filtrar"
 
 #: ui/mouse.slint:205
 #, x-machine
-msgid "A bound left click responds only after the system's double-click interval; the right button always opens the menu."
-msgstr "Un clic izquierdo asignado responde solo tras el intervalo de doble clic del sistema; el botón derecho siempre abre el menú."
+msgid "A left click may wait for the double-click interval while a double-click is bound; the right button always opens the menu."
+msgstr "Si hay un doble clic asignado, un clic izquierdo puede esperar el intervalo de doble clic; el botón derecho siempre abre el menú."
 
 #: ui/parts.slint:59
 #, x-machine

@@ -221,13 +221,13 @@ test("J01: add a key; it runs the command, shows on the row, survives as an over
   await start(host);
   await openKeys(host);
   await capture(host, "host/play-pause", "k");
-  assert.deepEqual(overlay(host), { "host/play-pause": ["Space", "K"] });
+  assert.deepEqual(overlay(host), { "host/play-pause": ["Space", "Mouse:LeftClick", "K"] });
   assert.equal(row(host, PLAY)!.keys, "Space, K");
   assert.equal(row(host, PLAY)!.state, CHANGED);
   assert.equal(page(host, "keys").props.capturing, false);
   assert.deepEqual(
     (page(host, "keys").props.tags as { input: string }[]).map((t) => t.input),
-    ["Space", "K"],
+    ["Space", "Mouse:LeftClick", "K"],
   );
   assert.equal(host.osd.at(-1), `Shortcut updated: ${PLAY} = Space, K`);
   assert.deepEqual([message(host).kind, message(host).text], ["updated", "Space, K"]);
@@ -241,7 +241,7 @@ test("J01: add a key; it runs the command, shows on the row, survives as an over
   assert.equal(page(host, "keys").props.capturing, true);
   await emit(host, "keys", "key", "\u{1b}", false, false, false, false);
   assert.equal(page(host, "keys").props.capturing, false);
-  assert.deepEqual(overlay(host), { "host/play-pause": ["Space", "K"] });
+  assert.deepEqual(overlay(host), { "host/play-pause": ["Space", "Mouse:LeftClick", "K"] });
 });
 
 test("J01: a key in use asks first; Replace moves it, Cancel leaves both", async () => {
@@ -262,7 +262,11 @@ test("J01: a key in use asks first; Replace moves it, Cancel leaves both", async
 
   await capture(host, "host/mute", " ");
   await emit(host, "keys", "replace");
-  assert.deepEqual(overlay(host), { "host/play-pause": [], "host/mute": ["M", "Space"] });
+  // The mouse default (player 0.5.2) stays; only the key moves.
+  assert.deepEqual(overlay(host), {
+    "host/play-pause": ["Mouse:LeftClick"],
+    "host/mute": ["M", "Space"],
+  });
   await host.press("Space");
   assert.equal(host.coreRuns.at(-1), "mute");
   assert.equal(row(host, PLAY)!.state, CHANGED);
@@ -461,7 +465,9 @@ test("J02: mouse rows show the command each input runs; choosing moves the input
   const mouseRows = () => window.props.rows as MouseRow[];
   assert.equal(mouseRows().length, 11);
   assert.deepEqual(mouseRows()[7], { input: 7, command: VOLUME_UP, bound: true, resettable: false });
-  assert.deepEqual([mouseRows()[0]!.command, mouseRows()[0]!.bound], ["", false]);
+  // Left click: Play/Pause by default (player 0.5.2); double click: nothing.
+  assert.deepEqual([mouseRows()[0]!.command, mouseRows()[0]!.bound], [PLAY, true]);
+  assert.deepEqual([mouseRows()[1]!.command, mouseRows()[1]!.bound], ["", false]);
   assert.deepEqual(window.props.modifiers, ["", "Ctrl", "Alt", "Shift", "Cmd"]);
 
   await emit(host, "mouse", "pick", 7);
@@ -501,10 +507,13 @@ test("J02: left click and a modifier; (None) only takes the input", async () => 
   await host.command("mouse").run();
   await host.settle(WAIT);
   await emit(host, "mouse", "pick", 0);
-  await emit(host, "mouse", "choose", "host/play-pause");
-  assert.deepEqual(overlay(host), { "host/play-pause": ["Space", "Mouse:LeftClick"] });
+  await emit(host, "mouse", "choose", "host/stop");
+  assert.deepEqual(overlay(host)["host/stop"], ["F4", "Mouse:LeftClick"]);
+  // Player 0.5.2 binds a left click to Play/Pause by default; the click
+  // moves to Close and Play/Pause keeps Space (older players: no default).
+  assert.deepEqual(overlay(host)["host/play-pause"] ?? ["Space"], ["Space"]);
   await host.press("Mouse:LeftClick");
-  assert.equal(host.coreRuns.at(-1), "play-pause");
+  assert.equal(host.coreRuns.at(-1), "stop");
 
   await emit(host, "mouse", "setModifier", 1); // Ctrl
   assert.equal((page(host, "mouse").props.rows as { bound: boolean }[])[0]!.bound, false);

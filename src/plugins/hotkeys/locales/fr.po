@@ -436,8 +436,8 @@ msgstr "Tapez pour filtrer"
 
 #: ui/mouse.slint:205
 #, x-machine
-msgid "A bound left click responds only after the system's double-click interval; the right button always opens the menu."
-msgstr "Un clic gauche associé ne réagit qu'après le délai de double-clic du système ; le bouton droit ouvre toujours le menu."
+msgid "A left click may wait for the double-click interval while a double-click is bound; the right button always opens the menu."
+msgstr "Si un double-clic est associé, un clic gauche peut attendre le délai de double-clic ; le bouton droit ouvre toujours le menu."
 
 #: ui/parts.slint:59
 #, x-machine

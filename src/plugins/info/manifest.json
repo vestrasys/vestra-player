@@ -1,6 +1,6 @@
 {
   "id": "vestra.info",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [

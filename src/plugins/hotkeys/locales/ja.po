@@ -434,8 +434,8 @@ msgstr "入力して絞り込み"
 
 #: ui/mouse.slint:205
 #, x-machine
-msgid "A bound left click responds only after the system's double-click interval; the right button always opens the menu."
-msgstr "左クリックを割り当てると、システムのダブルクリック間隔が過ぎてから反応します。右ボタンは常にメニューを開きます。"
+msgid "A left click may wait for the double-click interval while a double-click is bound; the right button always opens the menu."
+msgstr "ダブルクリックが割り当てられていると、左クリックはダブルクリック間隔だけ待つことがあります。右ボタンは常にメニューを開きます。"
 
 #: ui/parts.slint:59
 #, x-machine

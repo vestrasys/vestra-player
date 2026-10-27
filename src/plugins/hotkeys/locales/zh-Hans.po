@@ -348,8 +348,8 @@ msgid "Type to filter"
 msgstr "输入文字过滤"
 
 #: ui/mouse.slint:205
-msgid "A bound left click responds only after the system's double-click interval; the right button always opens the menu."
-msgstr "左键单击绑定后要等过系统双击间隔才响应；右键固定打开菜单。"
+msgid "A left click may wait for the double-click interval while a double-click is bound; the right button always opens the menu."
+msgstr "绑定了双击时，左键单击可能要等过双击间隔才响应；右键固定打开菜单。"
 
 #: ui/parts.slint:59
 msgid "All sources"

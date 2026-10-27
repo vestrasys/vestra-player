@@ -41,7 +41,11 @@ component Tab {
     accessible-label: root.text;
     accessible-item-selected: root.current;
     accessible-action-default => { root.clicked(); }
-    if !root.current && touch.has-hover: Rectangle {
+    // Hover plate and current-tab bar: persistent, hidden by `visible` (an
+    // `if` that flips with the pointer rebuilds the accessibility tree; see
+    // the rule in menu-view.slint, 2026-10-27).
+    Rectangle {
+        visible: !root.current && touch.has-hover;
         x: 2px;
         y: 4px;
         width: parent.width - 4px;
@@ -49,7 +53,8 @@ component Tab {
         border-radius: Theme.radius-control;
         background: Theme.hover-bg;
     }
-    if root.current: Rectangle {
+    Rectangle {
+        visible: root.current;
         x: (parent.width - 28px) / 2;
         y: parent.height - 3px;
         width: 28px;

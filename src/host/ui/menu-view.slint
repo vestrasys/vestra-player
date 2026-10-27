@@ -1,15 +1,23 @@
 // Shared compact context menu (geometry and colours: ui-spec.md §6.3).
 // The host projects the registry as a chain of open levels (root first) and
 // computes each panel's geometry and row tops (menu.rs), so the view never
-// guesses layout or policy. Hovering a group opens it beside its row after
-// the host's submenu delay (G-15); clicking it or pressing Right opens it at
-// once. Left or Escape closes the deepest level; Escape on the top level
+// guesses layout or policy. Hovering a group opens it beside its row at once
+// (G-15; the host holds a switch while the pointer heads for the open
+// submenu); clicking it or pressing Right opens it too. Left or Escape closes the deepest level; Escape on the top level
 // dismisses (IA-CORE-01). A level taller than the window scrolls between two
 // arrow bars (G-03): resting on a bar scrolls a row every 50 ms, the wheel
 // scrolls, and the keyboard cursor stays in view. The host keeps the offset.
 // Rows are plain (non-virtualized) elements so accessibility targets map
 // one-to-one to the commands they activate.
 // Keep ROW (24px), SEPARATOR (7px), PAD (2px) and ARROW (12px) in sync with menu.rs.
+//
+// RULE (2026-10-27, render round): nothing under the pointer may toggle an
+// `if` as the pointer moves (hover, the lit or current row, a tip that
+// follows the cursor). Creating or destroying an element rebuilds the whole
+// window's accessibility tree in Slint 1.18 (`unregister_item_tree` →
+// `reload_tree`), 120–160 ms on a 4K render target, which dropped the video
+// to 10–14 fps during a menu sweep. Use `visible:` or `opacity:` on a
+// persistent element; `if` only for state that changes by click, key or model.
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 
@@ -62,8 +70,11 @@ component MenuItem inherits Rectangle {
     height: 24px;
     border-radius: Theme.radius-control;
     background: root.lit ? Theme.selected-bg : transparent;
-    // The lit row: a 2px accent bar at its left edge.
-    if root.lit: Rectangle {
+    // The lit row: a 2px accent bar at its left edge (always present, hidden
+    // when not lit: creating and destroying an element per hover rebuilt the
+    // window's accessibility tree, 2026-10-27).
+    Rectangle {
+        visible: root.lit;
         x: 0;
         y: 5px;
         width: 2px;
@@ -336,16 +347,20 @@ export component MenuView inherits Rectangle {
         }
     }
 
-    // Disabled-command explanation for the current row only.
-    if root.cursor >= 0 && root.cursor-level < root.levels.length
-        && root.cursor < root.rows-at(root.cursor-level)
-        && root.levels[root.cursor-level].rows[root.cursor].reason != "": Rectangle {
+    // Disabled-command explanation for the current row only. Persistent and
+    // shown by `visible` (the rule above: it follows the hovered row). An
+    // index out of range reads the default level and row (empty `reason`).
+    Rectangle {
+        private property <bool> valid: root.cursor >= 0 && root.cursor-level < root.levels.length
+            && root.cursor < root.rows-at(root.cursor-level);
         private property <MenuLevel> level: root.levels[root.cursor-level];
+        private property <MenuRow> lit-row: self.level.rows[root.cursor];
+        visible: self.valid && self.lit-row.reason != "";
         // Beside the panel at the row's height, so it never covers other rows.
         x: self.level.x * 1px + self.level.width * 1px + self.width + 4px <= root.width
             ? self.level.x * 1px + self.level.width * 1px + 4px
             : max(0px, self.level.x * 1px - self.width - 4px);
-        y: max(0px, min(self.level.y * 1px + (self.level.rows[root.cursor].y - self.level.viewport-y
+        y: max(0px, min(self.level.y * 1px + (self.lit-row.y - self.level.viewport-y
             + (self.level.scroll ? 12 : 0)) * 1px, root.height - self.height - 4px));
         width: min(tip.preferred-width + 16px, 360px);
         height: tip.preferred-height + 10px;
@@ -356,7 +371,7 @@ export component MenuView inherits Rectangle {
         tip := Text {
             x: 8px;
             width: parent.width - 16px;
-            text: parent.level.rows[root.cursor].reason;
+            text: parent.lit-row.reason;
             color: Theme.text;
             font-size: 11px;
             wrap: word-wrap;

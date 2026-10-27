@@ -29,7 +29,7 @@ The decisions below replace earlier wording in the feature requirements and the 
 | The volume limit in the UI and for keys is 100; `player.setOutput` still accepts 0–200 | G-13a, G-13b |
 | The background layer takes effect while loading and shows the loading screen | G-16a, G-16b |
 | OSD font size follows the video area height | G-10 |
-| The menu pops up when the right button is released; a submenu opens after a 400 ms hover; Esc closes one level at a time | G-15, IA-CORE-01 |
+| The menu pops up when the right button is released; a submenu opens at once on hover (a diagonal toward an open submenu keeps it); Esc closes one level at a time | G-15, IA-CORE-01 |
 | The video area has no minimum height | IA-CORE-13 |
 | Custom-drawn title bar with no main menu button; the menu is still opened with the right button | IA-CORE-07 |
 | No F7 control panel: picture, audio and subtitles stay three separate tool windows | IA-CORE-09 (cancelled) |
@@ -167,22 +167,22 @@ The decisions below replace earlier wording in the feature requirements and the 
 6. Right-click in fullscreen (macOS fullscreen space): the menu shows normally inside the fullscreen space.
 7. With the menu open, click the video outside the menu: the menu closes and the video does not respond to this click; switch away with ⌘Tab / Alt+Tab: the menu closes.
 
-### G-15 Submenu open delay; the menu pops up on right-button release (P1)
+### G-15 Submenus open on hover; the menu pops up on right-button release (P1)
 
-**Status**: implemented (delay state machine `menu::HoverDelay`; the host commits due paths every 16 ms).
+**Status**: implemented. Host 0.5.2 (2026-10-26, user ruling): submenus open and switch at once, with no delay on any platform; the aim rule is `menu::HoverAim` (pure data, unit tested), fed with the pointer the window's winit hook records. Before, a submenu opened after a 400 ms hover (Windows: `SPI_GETMENUSHOWDELAY`), which users saw as 1–2 s.
 
 **Requirements**:
 
 1. **Pop up on right-button release**: pressing the right button on the video area only records the position; on release the main menu pops up at **the release position**. Pressing, moving out of the video area (dragging onto the bottom bar or outside the window) and then releasing: no menu. No menu while the right button is held down.
-2. **Open delay**: a submenu opens only after the pointer rests on its row for the "open delay"; leaving the row before that cancels it.
-3. **Switch delay**: while a submenu is open, when the pointer moves to another row at the same level, the open submenu closes only after the same delay (and the new row's submenu opens, if it has one); if the pointer enters the open submenu during that time, the switch is cancelled. Moving diagonally towards a submenu does not switch it by mistake, and no separate direction check is needed.
+2. **Open at once**: the pointer entering a row with a submenu opens it within the host tick (16 ms); entering a command row closes deeper levels at once. No system delay setting is read.
+3. **Submenu aim**: while a submenu is open and the pointer moves toward it, it stays open when the pointer crosses sibling rows on the way: the move counts as toward it when the new pointer position is inside the triangle from the previous position to the submenu's near edge (extended 8px above and below). The switch to the sibling under the pointer happens as soon as a move leaves that triangle, or once the pointer has not moved toward the submenu for 120 ms (`AIM_GRACE_MS`); entering the submenu cancels it. Without a known pointer position (it left the window) the switch is immediate.
 4. Clicking a submenu row opens it immediately; keyboard → / Enter opens it immediately; when keyboard ↑↓ moves to a command row, deeper levels close immediately.
-5. Open delay: Windows reads the system setting `SPI_GETMENUSHOWDELAY` (default 400 ms); macOS and other systems use 400 ms (platform function `platform::menu_show_delay_ms()`).
+5. The same on every platform; the system's submenu delay (`SPI_GETMENUSHOWDELAY`) is no longer read.
 6. Panel menus (`Panel.showMenu`) are single-level and have no delay. Panels drawn by plugins are advised to call `showMenu` on right-button release as well, consistent with the main menu.
 
 **Core API**: none new.
 
-**Cross-platform**: see item 5. macOS system menus open almost immediately; Vestra's 400 ms is a deliberate trade-off (to prevent accidental opening), the same on both systems.
+**Cross-platform**: see item 5. macOS system menus also open at once and keep a submenu during a diagonal move; Vestra now behaves the same on both systems.
 
 **Acceptance**:
 
@@ -317,7 +317,7 @@ Without an API change: the host takes the first Latin letter of the title automa
 
 **Requirements**:
 
-1. (P2) The default bindings of the host's "Toggle Fullscreen" are `Enter`, `Alt+Enter`, `F11`, `Mouse:LeftDoubleClick`; Esc exits fullscreen (Esc does nothing in windowed mode). The shortcut text of the menu's "Toggle Fullscreen" row shows the first key, `Enter`.
+1. (P2) The default bindings of the host's "Toggle Fullscreen" are `Enter`, `Alt+Enter`, `F11` (host 0.5.2, user ruling 2026-10-26: no longer `Mouse:LeftDoubleClick`; a left click on the video is Play/Pause, and the user can bind the double click under Settings ▸ Mouse…); Esc exits fullscreen (Esc does nothing in windowed mode). The shortcut text of the menu's "Toggle Fullscreen" row shows the first key, `Enter`. Plugins toggle it with `host.run("fullscreen")` (player 0.5.2), the same as the key.
 2. (P3) Host command "fullscreen+" Ctrl+Enter: enters fullscreen and at the same time stretches the picture to fill the screen (aspect ratio not kept); pressing it again during stretched fullscreen exits fullscreen. Menu position after "Toggle Fullscreen", group `screen`, order 701.
 3. (P3) Host command "fullscreen on another display" Ctrl+Shift+Enter: moves the main window to the next display and then enters fullscreen; disabled when there is only one display, with the reason "only one display".
 
@@ -1227,7 +1227,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | G-12 | Windowed | Dropping on the list | Append to the end | G-12 |
 | G-13 | All | Volume range | UI and keys 0–100; `setOutput` 0–200 | G-13a, G-13b |
 | G-14 | Windowed | Time display toggle | Only the current time is clickable; the choice is saved | G-14 |
-| G-15 | All | Context menu | Pops up on right-button release; submenus open after a 400 ms hover | G-15 |
+| G-15 | All | Context menu | Pops up on right-button release; submenus open at once on hover, with submenu aim | G-15 |
 | G-16 | Loading | Video area | Shows the loading screen (spinner and "Opening: …") | G-16a, G-16b |
 | G-17 | Windowed | Floating playlist | Host title row (opacity, attach, pin, close), 10 px snapping (not implemented) | IA-CORE-10 |
 | G-18 | Windowed | Narrow window and sidebar | Below a width of 638 the sidebar is hidden, the preference is unchanged, and the bottom bar list button is half-lit | G-18 |
@@ -1270,7 +1270,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | F-09 | Pointer | Hidden after 3 seconds idle while playing; not hidden while paused; not hidden over the bottom bar or the pop-out (nor in the bar's band); independent of the bar | G-06, FS-BAR-1 |
 | F-10 | Title bar | Not shown (on macOS the system shows the menu bar when the pointer moves to the top) | IA-CORE-07 |
 | F-11 | OSD and info layer | Same as windowed mode; misc info can be set to "show only in fullscreen" (not implemented) | IA-INFO-02 |
-| F-12 | Entering fullscreen | Enter, Alt+Enter, F11, double-click; Esc exits; Ctrl+Enter stretched fullscreen, Ctrl+Shift+Enter fullscreen on another display (not implemented) | IA-CORE-04 |
+| F-12 | Entering fullscreen | Enter, Alt+Enter, F11 (a double click only when the user binds it); Esc exits; Ctrl+Enter stretched fullscreen, Ctrl+Shift+Enter fullscreen on another display (not implemented) | IA-CORE-04 |
 | F-13 | Always on top | Default "While Playing in Fullscreen" | IA-WIN-03 |
 | F-14 | Window size commands | Disabled, with the reason "Not available in fullscreen" | |
 | F-15 | Other displays | System behaviour, not filled with black | |
@@ -1304,7 +1304,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | I-02 | Bottom bar | Shown; play, stop, back and forward disabled, open available | |
 | I-03 | Seek bar slider | Currently hidden; target: a disabled-colour slider at the far left (not implemented) | IA-PB-03 |
 | I-04 | Time text | `--:-- / --:--` | G-14 |
-| I-05 | Double-click on the video area | Toggles fullscreen | |
+| I-05 | Click on the video area | Nothing happens (Play/Pause is unavailable, and a click shows no message); a double click does nothing by default | |
 | I-06 | Context menu | The full menu; unavailable items are greyed out and show the reason on hover | |
 | I-07 | Loading | Loading screen | G-16a, G-16b |
 
@@ -1321,8 +1321,8 @@ Vestra's specification written cell by cell as "state × interaction element". O
 
 | # | Location | Action | Specification | Item |
 | --- | --- | --- | --- | --- |
-| M-01 | Picture | Left click | Not bound by default; when bound, the click is decided only after the double-click interval ends; works only inside the video area | |
-| M-02 | Picture | Left double-click | Toggles fullscreen; the left half and right half can be bound separately | |
+| M-01 | Picture | Left click | Play/Pause by default (host 0.5.2), on release; it waits for the double-click interval only while a double click is bound and the click's command is not an on/off toggle; a click whose command is disabled does nothing; works only inside the video area, not over the bottom bar, the sidebar or a menu, not during picture-in-picture | R-H11 |
+| M-02 | Picture | Left double-click | Unbound by default (host 0.5.2; it was Toggle Fullscreen); the left half and right half can be bound separately | |
 | M-03 | Picture | Right click | Pops up the main menu on release | G-15 |
 | M-04 | Picture | Right double-click | Bindable (not implemented) | IA-CORE-08 |
 | M-05 | Picture | Middle click, double-click | Click bindable, not bound by default; double-click bindable (not implemented) | IA-CORE-08 |
@@ -1457,7 +1457,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | MN-02 | All | Pop-up timing | Right-button release | G-15 |
 | MN-03 | All | Can it extend beyond the window | Currently confined to the window and scrollable; target: can extend beyond the window (not implemented) | G-03 |
 | MN-04 | All | Submenu opening direction | To the right; flips to the left at the edge of the available area | G-03 |
-| MN-05 | All | Submenu open delay | 400 ms (Windows reads the system setting) | G-15 |
+| MN-05 | All | Submenu open delay | None: at once on hover, with submenu aim (host 0.5.2) | G-15 |
 | MN-06 | All | Disabled items | Dim text; the reason is shown beside it on hover | |
 | MN-07 | All | Check and radio | 14×14 checkbox, 12×12 radio dot | |
 | MN-08 | All | Row height | 24 px | |

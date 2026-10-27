@@ -5,7 +5,7 @@
 //   table row       label 120 + 8 + value ≥ 240 (scroll bar 12 inside)  = 380
 //   button row      status ≥ 50 + Refresh 66 + Copy 84 + Save As… 66 + Close 66 + 4 × 4 = 348 of 380
 // Height at the minimum 320: tabs 31 + 10 + table ≥ 237 + 10 + buttons 21 + 10 = 319.
-import { ScrollView } from "std-widgets.slint";
+import { Palette, ScrollView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 
@@ -142,7 +142,10 @@ export component PropertiesWindow inherits Window {
                                     wrap: char-wrap;
                                     color: Theme.text;
                                     font-size: Theme.font-body;
-                                    selection-background-color: Theme.selected-bg;
+                                    // The std-widgets LineEdit's selection colours, legible in both palettes
+                                    // (Theme.selected-bg is close to the field in the dark one).
+                                    selection-background-color: Palette.selection-background;
+                                    selection-foreground-color: Palette.selection-foreground;
                                 }
                             }
                         }

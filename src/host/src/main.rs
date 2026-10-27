@@ -313,6 +313,9 @@ struct InputShared {
     released: Vec<char>,
     /// A left press on the video waiting to become `Mouse:LeftClick` (R-H11).
     click: Option<video_click::Press>,
+    /// The pointer in a window (its generation, logical px), from its winit
+    /// hook; G-15 aims submenus with it.
+    pointer: Option<(u64, menu::Point)>,
 }
 /// Which window shows the open menu, and what it lists.
 #[derive(Clone, PartialEq)]
@@ -369,9 +372,9 @@ struct Host {
     menu_path: Vec<String>,
     /// Requested scroll offset of each open menu level (G-03).
     menu_scroll: Vec<f64>,
-    /// The submenu delay (G-15) and its length.
-    menu_delay: menu::HoverDelay,
-    menu_show_delay_ms: u64,
+    /// G-15: submenu aim, and the open panels it aims at (by depth).
+    menu_aim: menu::HoverAim,
+    menu_panels: Vec<menu::Rect>,
     policy: window_state::Policy,
     clock: Instant,
     window_facts: Value,
@@ -884,7 +887,18 @@ impl Host {
                         if now {
                             self.set_menu_path(path);
                         } else {
-                            self.menu_delay.hover(&self.menu_path, path, self.now_ms());
+                            // The open submenu beside the hovered level.
+                            let submenu = (self.menu_path.len() > level)
+                                .then(|| self.menu_panels.get(level + 1).copied())
+                                .flatten();
+                            let pointer = self.menu_pointer();
+                            let now = self.now_ms();
+                            if let Some(path) =
+                                self.menu_aim
+                                    .hover(&self.menu_path, path, pointer, submenu, now)
+                            {
+                                self.set_menu_path(path);
+                            }
                         }
                     }
                     MenuAction::Scroll(level, offset) => {
@@ -1510,6 +1524,19 @@ impl Host {
             && click.generation == self.shell_generation
             && let Some(target) = target
         {
+            // A click also focuses the video and starts a window drag, so a
+            // click whose command cannot run now (play/pause with nothing
+            // open) does nothing, without the reason a key would show.
+            if matches!(
+                self.commands.resolve_execution(target.owner, &target.id),
+                Err(commands::CommandError::Disabled { .. })
+            ) {
+                input_trace::mark(&format!(
+                    "click dropped: {}/{} is disabled",
+                    target.owner, target.id
+                ));
+                return;
+            }
             input_trace::mark(&format!(
                 "click fired ({}) → {}/{}",
                 if immediate {
@@ -2021,7 +2048,7 @@ impl Host {
                 self.menu_open = false;
                 self.menu_path.clear();
                 self.menu_scroll.clear();
-                self.menu_delay.clear();
+                self.menu_aim.clear();
                 self.menu_mode = MenuMode::Main;
             }
             let _ = floating.instance.hide();
@@ -2079,6 +2106,7 @@ impl Host {
                 if matches!(event, winit::event::WindowEvent::Resized(_)) {
                     platform::fullscreen_resized(slint_window);
                 }
+                track_pointer(&input, generation, slint_window, event);
                 let dead = observe_key(&input, &modifiers, event);
                 release_modifiers(&input, &events, generation);
                 if let winit::event::WindowEvent::DroppedFile(path) = event {
@@ -2325,7 +2353,8 @@ impl Host {
                 &mut self.menu_path.clone(),
                 &self.menu_scroll,
                 &labels,
-            )?,
+            )?
+            .0,
         )?;
         if let Some(image) = &self.last_image {
             window.set_property("video-frame", image.clone().into())?;
@@ -2410,6 +2439,7 @@ impl Host {
             if shortcuts.filter(window, event) {
                 return EventResult::PreventDefault;
             }
+            track_pointer(&input, generation, window, event);
             let _ = observe_key(&input, &modifiers, event);
             release_modifiers(&input, &events, generation);
             if let winit::event::WindowEvent::DroppedFile(path) = event {
@@ -2491,7 +2521,7 @@ impl Host {
         self.menu_mode = mode;
         self.menu_path.clear();
         self.menu_scroll.clear();
-        self.menu_delay.clear();
+        self.menu_aim.clear();
         if let Some(window) = self.window_for(generation) {
             let _ = window.set_property("menu-open", true.into());
         }
@@ -2501,7 +2531,7 @@ impl Host {
     /// Open this chain of submenus now. Levels that close or change forget
     /// their scroll offset; a waiting delayed hover is dropped.
     fn set_menu_path(&mut self, path: Vec<String>) {
-        self.menu_delay.clear();
+        self.menu_aim.clear();
         if path == self.menu_path {
             return;
         }
@@ -2515,15 +2545,25 @@ impl Host {
         let result = self.refresh_menu();
         self.report_menu(result);
     }
-    /// G-15: apply a hover whose submenu delay has passed.
+    /// G-15: apply a submenu switch held while the pointer headed for the
+    /// open submenu, once it turned away or stopped.
     fn menu_tick(&mut self) {
         if !self.menu_open {
             return;
         }
         let now = self.now_ms();
-        if let Some(path) = self.menu_delay.due(now, self.menu_show_delay_ms) {
+        let pointer = self.menu_pointer();
+        if let Some(path) = self.menu_aim.tick(pointer, now) {
             self.set_menu_path(path);
         }
+    }
+    /// The pointer in the window the menu is open in (logical px).
+    fn menu_pointer(&self) -> Option<menu::Point> {
+        self.input
+            .borrow()
+            .pointer
+            .filter(|(generation, _)| *generation == self.menu_generation)
+            .map(|(_, point)| point)
     }
     fn refresh_menu(&mut self) -> Result<()> {
         let labels = self.labels();
@@ -2538,13 +2578,15 @@ impl Host {
         let model = match &self.menu_mode {
             MenuMode::Main => {
                 let roots = self.commands.snapshot().roots;
-                menu_levels(
+                let (model, panels) = menu_levels(
                     window,
                     &roots,
                     &mut self.menu_path,
                     &self.menu_scroll,
                     &labels,
-                )?
+                )?;
+                self.menu_panels = panels;
+                model
             }
             MenuMode::Panel(owner, items) => {
                 // A command removed while its panel menu is open drops out.
@@ -2556,13 +2598,15 @@ impl Host {
                     })
                     .collect();
                 let (origin, size) = menu_frame(window);
-                ui_values::from_json(&menu::context_level(
+                let value = menu::context_level(
                     &entries,
                     origin,
                     size,
                     self.menu_scroll.first().copied().unwrap_or(0.),
                     &labels,
-                ))?
+                );
+                self.menu_panels = menu::panels(&value);
+                ui_values::from_json(&value)?
             }
         };
         set_menu_model(window, model)
@@ -2571,7 +2615,7 @@ impl Host {
         self.menu_open = false;
         self.menu_path.clear();
         self.menu_scroll.clear();
-        self.menu_delay.clear();
+        self.menu_aim.clear();
         self.menu_mode = MenuMode::Main;
         for window in [
             self.shell.as_ref(),
@@ -2911,13 +2955,10 @@ impl Host {
             commands::Declaration::new("Toggle Fullscreen", &["Toggle Fullscreen"]);
         fullscreen.group = "screen".into();
         fullscreen.order = 700;
-        // IA-CORE-04: Enter and Alt+Enter toggle full screen; F11 too.
-        fullscreen.bindings = vec![
-            "Enter".into(),
-            "Alt+Enter".into(),
-            "F11".into(),
-            "Mouse:LeftDoubleClick".into(),
-        ];
+        // IA-CORE-04: Enter and Alt+Enter toggle full screen; F11 too. No
+        // mouse default (user ruling 2026-10-26): a click on the video is
+        // play/pause, and a double click does nothing unless the user binds it.
+        fullscreen.bindings = vec!["Enter".into(), "Alt+Enter".into(), "F11".into()];
         fullscreen.localize(|_| i18n::tr("Toggle Fullscreen"));
         let mut exit = commands::Declaration::new("Leave Fullscreen", &[]);
         exit.bindings = vec!["Escape".into()];
@@ -3024,6 +3065,9 @@ impl Host {
     fn core_action_states(&mut self) {
         let facts = self.core_facts();
         for id in core_actions::ACTIONS {
+            if core_actions::WINDOW_ACTIONS.contains(&id) {
+                continue;
+            }
             let state = core_actions::state(id, &facts, self.actions_busy.contains(id));
             if self
                 .commands
@@ -3038,8 +3082,12 @@ impl Host {
         }
     }
     /// Run a core action for a binding, the menu or `host.run`. `reply` (a
-    /// plugin's `host.run`) is answered when it finished; `Ok(true)` means it
-    /// was answered already. A disabled action is `unavailable`.
+    /// plugin's `host.run`) is answered when it finished. `Ok(true)` means
+    /// the action is done and the caller answers now (a sequence step
+    /// handed to its provider, a repeat dropped while the same action runs,
+    /// a window action); `Ok(false)` means the backend answers `reply`
+    /// itself later (`host.run` then returns no reply). A disabled action
+    /// is `unavailable`.
     fn run_core_action(
         &mut self,
         action: &str,
@@ -3055,6 +3103,15 @@ impl Host {
         reply: Option<&Reply>,
         step: Option<f64>,
     ) -> std::result::Result<bool, RpcError> {
+        if core_actions::WINDOW_ACTIONS.contains(&action) {
+            // `host.run("fullscreen")` (host 0.5.2): what the Toggle
+            // Fullscreen key does, answered at once.
+            return if self.window_command(action) {
+                Ok(true)
+            } else {
+                Err(RpcError::new("unavailable", "the player has no window"))
+            };
+        }
         let facts = self.core_facts();
         let state = core_actions::state(action, &facts, false);
         if !state.enabled {
@@ -3165,23 +3222,33 @@ impl Host {
         );
     }
     fn host_command(&mut self, id: &str) {
-        if core_actions::ACTIONS.contains(&id) {
+        if core_actions::ACTIONS.contains(&id) && !core_actions::WINDOW_ACTIONS.contains(&id) {
             if let Err(error) = self.run_core_action(id, None) {
                 diag!("core action {id}: {}", error.message);
             }
             return;
         }
-        let Some(shell) = &self.shell else { return };
+        if id == "quit" {
+            self.ui_state.flush();
+            let _ = slint::quit_event_loop();
+            return;
+        }
+        self.window_command(id);
+    }
+    /// The main window's commands, for a key, the menu and `host.run`:
+    /// `fullscreen` toggles (in when windowed, out when fullscreen),
+    /// `exit-fullscreen` leaves. False without a window.
+    fn window_command(&self, id: &str) -> bool {
+        let Some(shell) = &self.shell else {
+            return false;
+        };
         let window = shell.window();
         match id {
             "fullscreen" => window.set_fullscreen(!window.is_fullscreen()),
             "exit-fullscreen" => window.set_fullscreen(false),
-            "quit" => {
-                self.ui_state.flush();
-                let _ = slint::quit_event_loop();
-            }
             _ => {}
         }
+        true
     }
     /// Merge the sequence provider's flags into a source state (C6).
     fn patch_source(&self, state: &mut Value) {
@@ -4649,7 +4716,7 @@ fn menu_levels(
     path: &mut Vec<String>,
     scroll: &[f64],
     labels: &dyn Fn(u64, &str) -> Option<String>,
-) -> Result<slint_interpreter::Value> {
+) -> Result<(slint_interpreter::Value, Vec<menu::Rect>)> {
     *path = menu::valid_path(roots, path);
     let (origin, size) = menu_frame(window);
     let value = menu::levels(roots, path, origin, size, scroll, labels);
@@ -4676,7 +4743,7 @@ fn menu_levels(
             panels.join("; ")
         );
     }
-    ui_values::from_json(&value)
+    Ok((ui_values::from_json(&value)?, menu::panels(&value)))
 }
 /// Where the menu opens and the window it must fit in, in logical px.
 fn menu_frame(window: &slint_interpreter::ComponentInstance) -> (menu::Point, menu::Point) {
@@ -4886,6 +4953,32 @@ fn debug_menu() -> bool {
 }
 /// `VESTRA_DEBUG_MENU=1`: the pointer as Slint receives it (logical px in
 /// the window's content), so a log shows which row a move or press hits.
+/// Record where the pointer is in this window (`InputShared::pointer`).
+fn track_pointer(
+    input: &Rc<RefCell<InputShared>>,
+    generation: u64,
+    window: &slint::Window,
+    event: &slint::winit_030::winit::event::WindowEvent,
+) {
+    use slint::winit_030::winit::event::WindowEvent;
+    match event {
+        WindowEvent::CursorMoved { position, .. } => {
+            let scale = f64::from(window.scale_factor());
+            let point = menu::Point {
+                x: position.x / scale,
+                y: position.y / scale,
+            };
+            input.borrow_mut().pointer = Some((generation, point));
+        }
+        WindowEvent::CursorLeft { .. } => {
+            let mut shared = input.borrow_mut();
+            if shared.pointer.is_some_and(|(owner, _)| owner == generation) {
+                shared.pointer = None;
+            }
+        }
+        _ => {}
+    }
+}
 fn debug_menu_pointer(
     window: &slint::Window,
     cursor: &std::cell::Cell<(f64, f64)>,
@@ -5172,8 +5265,8 @@ fn main() -> Result<()> {
         next_shell_generation: 1,
         menu_path: Vec::new(),
         menu_scroll: Vec::new(),
-        menu_delay: menu::HoverDelay::default(),
-        menu_show_delay_ms: platform::menu_show_delay_ms(),
+        menu_aim: menu::HoverAim::default(),
+        menu_panels: Vec::new(),
         policy: window_state::Policy::new(0),
         clock: Instant::now(),
         window_facts: Value::Null,

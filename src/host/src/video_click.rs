@@ -2,10 +2,12 @@
 //!
 //! A click waits out the system double-click interval only when a double
 //! click would do something else and a click repeated by it would not be
-//! harmless. Otherwise it fires on release, so a click bound to 播放/暂停
+//! harmless. Otherwise it fires on release, so a click bound to Play/Pause
 //! answers at once (it waited 0.5 s, the Windows default, before):
 //!
-//! - no `Mouse:LeftDoubleClick` binding for the press: nothing to wait for;
+//! - no `Mouse:LeftDoubleClick` binding for the press: nothing to wait for
+//!   (the defaults since host 0.5.2: a click is Play/Pause, a double click
+//!   is unbound);
 //! - the click's command is checkable (an on/off toggle or a radio item):
 //!   the double click's two clicks run it twice, which leaves its state as
 //!   it was, as players do when a click pauses and a double click goes full
@@ -204,6 +206,60 @@ mod tests {
         (table, commands)
     }
 
+    /// The host's default bindings (user ruling 2026-10-26): a click on the
+    /// video is Play/Pause, nothing is bound to a double click, so the click
+    /// fires on release in every playback phase.
+    #[test]
+    fn by_default_a_click_plays_or_pauses_on_release() {
+        let (mut table, mut commands) = (Table::default(), Registry::new());
+        // main.rs register_host_commands: fullscreen keeps only its keys.
+        let keys: Vec<String> = ["Enter", "Alt+Enter", "F11"].map(String::from).to_vec();
+        table
+            .declare(0, "fullscreen", "host", &keys, false, false)
+            .unwrap();
+        let playing = crate::core_actions::Facts {
+            phase_ready: true,
+            can_pause: true,
+            ..Default::default()
+        };
+        for (id, declaration) in crate::core_actions::declarations(5.) {
+            table
+                .declare(0, id, "host", &declaration.bindings, false, false)
+                .unwrap();
+            let state = crate::core_actions::state(id, &playing, false);
+            commands
+                .register(0, "host", id.into(), 1, declaration, state)
+                .unwrap();
+        }
+        let input = |name: &str| Input {
+            mods: crate::bindings::Mods::default(),
+            name: name.into(),
+        };
+        assert!(table.has_left_click());
+        let target = table.resolve(&input("Mouse:LeftClick"), None).unwrap();
+        assert_eq!((target.owner, target.id.as_str()), (0, "play-pause"));
+        for double in [
+            "Mouse:LeftDoubleClick:LeftHalf",
+            "Mouse:LeftDoubleClick:RightHalf",
+        ] {
+            assert!(table.resolve(&input(double), None).is_none(), "{double}");
+        }
+        assert!(immediate(&table, &commands, &input("Mouse:LeftClick")));
+        // A 90 ms click fires on release (the next 16 ms tick), not after
+        // the double-click interval.
+        assert_eq!(fires_at(90, true), Some(96));
+        // With nothing open the command is not checkable, and the click is
+        // still immediate: nothing waits for a double click.
+        let mut commands = Registry::new();
+        for (id, declaration) in crate::core_actions::declarations(5.) {
+            let state = crate::core_actions::state(id, &Default::default(), false);
+            commands
+                .register(0, "host", id.into(), 1, declaration, state)
+                .unwrap();
+        }
+        assert!(immediate(&table, &commands, &input("Mouse:LeftClick")));
+    }
+
     #[test]
     fn a_click_waits_only_for_a_double_click_that_would_disturb_it() {
         let click = Input {
@@ -213,7 +269,7 @@ mod tests {
         let (table, commands) = bound(Some(false), &["Mouse:LeftDoubleClick"]);
         assert!(
             immediate(&table, &commands, &click),
-            "a toggle (播放/暂停) fires at once"
+            "a toggle (Play/Pause) fires at once"
         );
         let (table, commands) = bound(None, &["Mouse:LeftDoubleClick:RightHalf"]);
         assert!(

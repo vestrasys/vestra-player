@@ -1277,6 +1277,13 @@ export class TestHost {
      * a keyframe, and where it landed.
      */
     coreSeeks = [];
+    /**
+     * Every seek a plugin submitted (`player.seek`, `Scrub.seek`), newest
+     * last, with the mode it asked for. The test host lands on the exact
+     * target either way (the player lands a `keyframes` seek on the last
+     * keyframe at or before it); the core's step seeks are in `coreSeeks`.
+     */
+    seeks = [];
     /** Every `player.step`, newest last. */
     steps = [];
     /** Every core action run (`host.run`, a core command, a pressed core binding), newest last. */
@@ -1375,7 +1382,7 @@ export class TestHost {
                 ["Playback", "Play/Pause"],
                 201,
                 "domain",
-                ["Space"],
+                ["Space", "Mouse:LeftClick"],
                 false,
             ],
             [
@@ -2735,6 +2742,7 @@ export class TestHost {
                 "volume-up",
                 "volume-down",
                 "mute",
+                "fullscreen",
             ];
             if (!actions.includes(String(p.action)))
                 throw new HostError("invalid", `unknown host action ${p.action}`);
@@ -2746,6 +2754,13 @@ export class TestHost {
                 if (!validStep(p.seconds))
                     throw new HostError("invalid", "seconds must be 0.1..3600 in tenths");
                 seconds = p.seconds;
+            }
+            // SDK 1.5.21: the main window's Toggle Fullscreen, like Enter: in when
+            // windowed, out when fullscreen, then `window.state`.
+            if (p.action === "fullscreen") {
+                this.coreRuns.push("fullscreen");
+                this.setMainWindow({ fullscreen: !this.mainWindow.fullscreen });
+                return;
             }
             this.#runCore(String(p.action), seconds);
         },
@@ -3059,6 +3074,16 @@ export class TestHost {
         "source.state": () => this.source,
         "source.submit": (p) => {
             const intent = p.intent;
+            const control = intent.control;
+            if (intent.kind === "control" && control?.kind === "seek") {
+                if (control.keyframes !== undefined &&
+                    typeof control.keyframes !== "boolean")
+                    throw new HostError("invalid", "keyframes must be a boolean");
+                this.seeks.push({
+                    seconds: Number(control.seconds),
+                    keyframes: control.keyframes === true,
+                });
+            }
             const ticket = this.#intent(intent);
             const operation = Number(p.operationId);
             // A file this plugin's file resolver claims: pending until it answers.

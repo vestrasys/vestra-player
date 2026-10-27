@@ -34,7 +34,7 @@ The labels below are the English interface text (the English source text of each
 | Reopen Current/Last File | playback | Ctrl+Y | |
 | Copy to Clipboard ▸ File Name · Folder Path · Full Path | playback | | |
 | —— | | | |
-| Playback ▸ Play/Pause | core | Space | |
+| Playback ▸ Play/Pause | core | Space, left click on the video | |
 | Playback ▸ Previous | core | PgUp, mouse side button X1 | |
 | Playback ▸ Next | core | PgDn, mouse side button X2 | |
 | Playback ▸ Seek ▸ Previous Frame · Next Frame | core | D · F | |
@@ -152,7 +152,7 @@ The labels below are the English interface text (the English source text of each
 | Audio ▸ Show Album Cover for Audio Only | visualizer | | Checked |
 | Emulator ▸ Open NES ROM… · Stop NES · NES Tools… | nes | | |
 | —— | | | |
-| Fullscreen | host | Enter, F11, double-click video | Checked; key `Toggle Fullscreen` (id `fullscreen`); in fullscreen Esc leaves fullscreen (command "Leave Fullscreen", key `Leave Fullscreen`, not in the menu) |
+| Fullscreen | host | Enter, Alt+Enter, F11 | Checked; key `Toggle Fullscreen` (id `fullscreen`); in fullscreen Esc leaves fullscreen (command "Leave Fullscreen", key `Leave Fullscreen`, not in the menu) |
 | Screen ▸ Picture-in-Picture | window | | Checked; appears only when the main window reports support for the system's picture-in-picture (macOS 14+) (id `pip`, IA-WIN-01); disabled without video (can still be left while in picture-in-picture); if mini size is active, the original size is restored first |
 | Screen ▸ Mini Size | window | `` ` `` | Checked; all systems (id `mini`, IA-WIN-01); not on top (IA-WIN-02); disabled without video and in fullscreen; run in picture-in-picture, it leaves picture-in-picture first |
 | Screen ▸ 0.5× · 1× · 1.5× · 2× | window | 1 · 2 · 3 · 4 | Radio; disabled without video |
@@ -250,5 +250,5 @@ System-reserved keys (not duplicates within this table, but the system may take 
 - macOS ⌃F1–⌃F8 are system keyboard-navigation keys. This table only uses **Ctrl+F1 (Playback Properties…)**: ⌃F1 is "Turn keyboard access on or off" by default, so only ⌘F1 triggers it reliably. ⌃F2–⌃F8 are unused.
 - macOS ⌃← / ⌃→ (switch Spaces) and ⌃↑ / ⌃↓ (Mission Control, application windows) are taken by the system by default: this affects "Back/Forward 30 s" (Ctrl+←/→, global) and the list's "Move Up/Move Down" (Ctrl+↑/↓, panel). The ⌘ versions work.
 - macOS ⌘H (hide) and ⌘M (minimise): if the system takes the ⌘ versions of Deblock (Ctrl+H) and Temporal Denoise (Ctrl+M) first, only ⌃H and ⌃M work (a trade-off accepted in round 4a).
-- On macOS F11 is "Show Desktop" by default, and on Apple keyboards F1–F12 are media keys by default (fn needed): fullscreen also has Enter and double-click; the commands on F1–F6 need fn on such keyboards.
+- On macOS F11 is "Show Desktop" by default, and on Apple keyboards F1–F12 are media keys by default (fn needed): fullscreen also has Enter; the commands on F1–F6 need fn on such keyboards.
 - Windows: some graphics drivers use Ctrl+Alt+arrow keys for screen rotation and may intercept "Back/Forward 300 s" (Ctrl+Alt+←/→). No other binding uses a Windows reserved combination (Alt+Tab, Alt+F4, Alt+Space, Ctrl+Esc, Win key combinations).

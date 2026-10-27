@@ -163,7 +163,9 @@ export component HostWindow inherits Window {
                                             && !event.modifiers.shift && !event.modifiers.meta;
                                         self.swallow-press = self.drag-swallow;
                                         root.window-input("capture");
-                                        if !root.menu-open {
+                                        // No click during picture-in-picture: the double click
+                                        // there brings the video back (IA-CORE-12).
+                                        if !root.menu-open && !root.picture-in-picture {
                                             root.left-press(self.mouse-x / 1px, self.mouse-y / 1px, event.modifiers.control,
                                                 event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
                                         }

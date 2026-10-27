@@ -30,6 +30,12 @@ export type SourceIntent = {
     } | {
         kind: "seek";
         seconds: number;
+        /**
+         * Land on the last keyframe at or before `seconds` instead of the
+         * exact time (player 0.5.3). Sent only when true: older players
+         * ignore the field and seek exactly.
+         */
+        keyframes?: boolean;
     } | {
         kind: "rate";
         rate: number;

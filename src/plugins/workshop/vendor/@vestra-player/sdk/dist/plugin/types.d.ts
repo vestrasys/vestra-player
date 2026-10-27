@@ -3501,10 +3501,32 @@ export interface Media {
  */
 export interface Scrub {
     /**
-     * Resolves `true` when this exact target was applied, `false` when a newer
-     * target superseded it or the gesture ended. Rejects on a host failure.
+     * Seek within the gesture. Resolves `true` when this target was applied,
+     * `false` when a newer target superseded it or the gesture ended. Rejects
+     * on a host failure.
+     *
+     * `keyframes: true` (player 0.5.3, SDK 1.5.22): land on the last keyframe
+     * at or before `seconds` instead of decoding up to that exact frame. The
+     * picture appears at once on any file (tens of milliseconds instead of
+     * seconds on 4K video with keyframes far apart), up to one keyframe
+     * interval before the target; the position the player reports is the
+     * keyframe's. Use it when the user chose keyframe seeks (the same switch
+     * as {@link Player.setStepSeek}), and the exact seek otherwise. The player
+     * sends a repeated target of the same gesture only once while the seek is
+     * still running (a click is a press and a release), but an exact seek to
+     * the target of a keyframe seek is always sent. Omitted or `false`: exact,
+     * as before. Older players ignore the option and seek exactly: set
+     * `"minPlayerVersion": "0.5.3"` when you rely on it.
+     *
+     * @example
+     * ```ts
+     * const keyframes = true; // the plugin's own setting
+     * bar.on("dragMove", (seconds: number) => void scrub?.seek(seconds, { keyframes }));
+     * ```
      */
-    seek(seconds: number): Promise<boolean>;
+    seek(seconds: number, options?: {
+        keyframes?: boolean;
+    }): Promise<boolean>;
     /** False once anyone else changed the source; later seeks are ignored. */
     readonly active: boolean;
     /** End the gesture; later seeks resolve `false`. */
@@ -3828,10 +3850,11 @@ export interface Player {
      * step, backward on the last at or before position − step, and they
      * always move. Presses during a seek add up and continue from where it
      * landed; the on-screen text shows the landed time. Sources without moving
-     * video seek exactly. The seek bar, {@link Player.seek}, scrubs, chapters,
-     * loops and {@link Player.step} are unaffected. Omitted or `false`: exact
-     * seeks, as before. `seconds` and `keyframes` are written as a pair: the
-     * newest call sets both.
+     * video seek exactly. {@link Player.seek}, chapters, loops and
+     * {@link Player.step} are unaffected, and so is a scrub unless it asks for
+     * keyframes itself ({@link Scrub.seek} with `keyframes: true`, SDK 1.5.22).
+     * Omitted or `false`: exact seeks, as before. `seconds` and `keyframes`
+     * are written as a pair: the newest call sets both.
      *
      * Older players ignore `keyframes`: set `"minPlayerVersion": "0.5.1"` in
      * the manifest when you rely on it.
@@ -3877,22 +3900,28 @@ export interface Player {
     setAudioDevice(id: string | null): Promise<void>;
 }
 /**
- * The core's basic playback actions (menu commands owned by the player).
+ * The core's basic playback actions (menu commands owned by the player),
+ * and the main window's fullscreen toggle.
  *
  * | action | default bindings | behaviour |
  * | --- | --- | --- |
  * | `stop` | F4 | close the source |
- * | `play-pause` | Space | pause / resume, replay after the end |
+ * | `play-pause` | Space, a left click on the video (player 0.5.2) | pause / resume, replay after the end |
  * | `previous` / `next` | PageUp, Mouse:X1 / PageDown, Mouse:X2 | ask the sequence provider |
  * | `frame-back` / `frame-forward` | D / F | `player.step("frame", …)` |
  * | `seek-backward` / `seek-forward` | ← / → | relative seek by `setStepSeek` seconds (or `host.run`'s `seconds`), exact or to keyframes as `setStepSeek` says |
  * | `rate-normal`, `rate-down`, `rate-up` | Z, X, C | 1×, ±0.1 within 0.25–4 |
  * | `volume-up` / `volume-down` | ↑ / ↓, wheel | ±5 (`volume-up` stops at 100) |
  * | `mute` | M | toggle mute |
+ * | `fullscreen` | Enter, Alt+Enter, F11 | toggle the main window's fullscreen: enter it when windowed, leave it when fullscreen, as the Toggle Fullscreen command does (SDK 1.5.21, player 0.5.2; `unavailable` when the player has no window) |
  *
- * In the binding overlay their keys are `host/<action>`.
+ * In the binding overlay their keys are `host/<action>`. `fullscreen`
+ * changes no playback state: read the result from `window.state.fullscreen`
+ * (`plugin.window.onChange`), which also changes when the user toggles it.
+ * Players before 0.5.2 reject it with `invalid`: set
+ * `"minPlayerVersion": "0.5.2"` when you use it.
  */
-export type HostAction = "play-pause" | "stop" | "previous" | "next" | "frame-back" | "frame-forward" | "seek-backward" | "seek-forward" | "rate-down" | "rate-up" | "rate-normal" | "volume-up" | "volume-down" | "mute";
+export type HostAction = "play-pause" | "stop" | "previous" | "next" | "frame-back" | "frame-forward" | "seek-backward" | "seek-forward" | "rate-down" | "rate-up" | "rate-normal" | "volume-up" | "volume-down" | "mute" | "fullscreen";
 /** `plugin.host`: the player's own core actions. */
 export interface Host {
     /**
