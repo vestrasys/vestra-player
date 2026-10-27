@@ -1,6 +1,6 @@
 # Round 3b: UI composition (timeline mark layer, runtime images, backdrop layer, drag and drop, theme and appearance, settings pages, URL input widget) + plugin integration
 
-Branch: `rebuild/features-r3b` (created by the coordinator from the commit after round 3a was merged into `main`). Basis: the 3b schedule in "Step 3: Rulings" of the [negotiation record](2026-10-features-negotiation.md) (below: "the rulings"), 3.2 item 5 (`ImageRef` release), 3.2 item 8, 3.3 "URL input dialog", the [feature requirements](../../product/feature-requirements.md) (below: "the requirements document"), [community workflow](../community-workflow.md) §3, §4, §5, and the items that [the round 3a task sheet](2026-10-features-r3a.md) (below: "r3a") §1 and §4.1 moved to this round.
+Branch: `rebuild/features-r3b` (created by the coordinator from the commit after round 3a was merged into `main`). Basis: the 3b schedule in "Step 3: Rulings" of the [negotiation record](2026-10-features-negotiation.md) (below: "the rulings"), 3.2 item 5 (`ImageRef` release), 3.2 item 8, 3.3 "URL input dialog", the [feature requirements](../../product/feature-requirements.md) (below: "the requirements document"), [community workflow](../../../agentic-workflow.md) §3, §4, §5, and the items that [the round 3a task sheet](2026-10-features-r3a.md) (below: "r3a") §1 and §4.1 moved to this round.
 
 ## 1. Scope
 

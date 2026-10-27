@@ -46,7 +46,7 @@ Started 2026-10-22, after the baseline main 13e2cb5. User instruction: "after De
 
 ## Process
 
-Top-down (community-workflow §5): the maintainer researches and writes a proposal → the coordinator decides → the maintainer implements (host finds the bundled Node, resource paths, packaging scripts, licenses) → CI release rehearsal (dispatch dry_run) → the coordinator tests the packaged `.app` on a real machine (double-click to start, all plugins active, playback, store install) → merge. The Windows installer is built and smoke-tested on CI; real-machine acceptance comes with S6.
+Top-down (agentic-workflow §5): the maintainer researches and writes a proposal → the coordinator decides → the maintainer implements (host finds the bundled Node, resource paths, packaging scripts, licenses) → CI release rehearsal (dispatch dry_run) → the coordinator tests the packaged `.app` on a real machine (double-click to start, all plugins active, playback, store install) → merge. The Windows installer is built and smoke-tested on CI; real-machine acceptance comes with S6.
 
 ## Progress
 

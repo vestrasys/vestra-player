@@ -1,6 +1,6 @@
 # 2026-10 round: plugin management (built-ins in place, no rollback)
 
-Started 2026-10-26. Top-down API change (community-workflow §5). **This document is the only progress record for this round.** **Superseded in part (user ruling, 2026-10-26, after this round merged): built-ins can be neither uninstalled nor disabled.** Users manage only third-party plugins. The host change and the UI change follow in `2026-10-ui-polish.md` step 1. Status: **P1–P5 done (2026-10-26).** SDK 1.5.16 and 1.5.17 are published, and the player depends on `^1.5.17`. The P5 GUI results are in §9. Earlier: **P1 implemented (2026-10-26) and passed P2** (§7): the coordinator measured first start and an upgrade of a copy of a real 0.5.0-era profile on Windows (responsive at 0.4 s, never "Not Responding", 37 old copies removed off the UI thread in 617 ms, nothing under `packages/packages/`). P3 (store, workshop, info) is next. The user answered Q1–Q3 on 2026-10-26 (§6; Q3 superseded the same day: no Undo Install at all).
+Started 2026-10-26. Top-down API change (agentic-workflow §5). **This document is the only progress record for this round.** **Superseded in part (user ruling, 2026-10-26, after this round merged): built-ins can be neither uninstalled nor disabled.** Users manage only third-party plugins. The host change and the UI change follow in `2026-10-ui-polish.md` step 1. Status: **P1–P5 done (2026-10-26).** SDK 1.5.16 and 1.5.17 are published, and the player depends on `^1.5.17`. The P5 GUI results are in §9. Earlier: **P1 implemented (2026-10-26) and passed P2** (§7): the coordinator measured first start and an upgrade of a copy of a real 0.5.0-era profile on Windows (responsive at 0.4 s, never "Not Responding", 37 old copies removed off the UI thread in 617 ms, nothing under `packages/packages/`). P3 (store, workshop, info) is next. The user answered Q1–Q3 on 2026-10-26 (§6; Q3 superseded the same day: no Undo Install at all).
 
 Line references are to `main` at `2d50207` unless marked `6bf7e77` (the stop-gap commit on branch `startup-seeding`, which merged as #39, `7dda45d`; its line references now apply to `main`). §3–§5 are the plan as written before the rulings; where they differ, §6 and §7 apply. SDK references are to the installed `@vestra-player/sdk` 1.5.15 (`src/node_modules/@vestra-player/sdk/dist/...`) and, by file, to the SDK repository.
 
@@ -153,7 +153,7 @@ These are unchanged and still enforced at the same points:
 - There is a precedent: 1.5.8 removed `PackageCandidate.trial()` at a patch level with `vestra/1` kept (SDK `CHANGELOG.md` 1.5.8).
 - `apiVersion` is a load gate (`package_manager.rs:146-151`). Changing it would refuse every third-party package, youtube and bilibili included, though none of them uses rollback.
 
-**This conflicts with community-workflow §1.6 step 2** ("a breaking change bumps the major version and changes `apiVersion`"). See question Q1.
+**This conflicts with agentic-workflow §1.6 step 2** ("a breaking change bumps the major version and changes `apiVersion`"). See question Q1.
 
 **Docs that change** (https://vestrasys.github.io/vestra-player-sdk/, SDK repo `docs/`):
 
@@ -261,7 +261,7 @@ The layer ends in P4.
 
 **User rulings on Q1–Q3 (2026-10-26, binding; the coordinator recorded them):**
 
-- **Q1: patch.** 1.5.16 deprecates, 1.5.17 removes, `apiVersion` stays `vestra/1`. community-workflow §1.6 step 2 is amended to match: SDK releases are patch bumps by default, removals included.
+- **Q1: patch.** 1.5.16 deprecates, 1.5.17 removes, `apiVersion` stays `vestra/1`. agentic-workflow §1.6 step 2 is amended to match: SDK releases are patch bumps by default, removals included.
 - **Q2: remove.** The store's Versions tab no longer installs an older version. The only way back to an older third-party version is to uninstall it and install a `.vxp` yourself.
 - **Q3: superseded the same day. There is no Undo Install at all.** The AI window drops the Undo action. Plugin management has exactly three operations: **install, uninstall, disable/enable**. Built-ins cannot be uninstalled. The workshop keeps no previous `.vxp`.
 

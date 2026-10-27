@@ -1,6 +1,6 @@
 # This round: plugin interaction redesign (step two, bottom-up)
 
-Branch: `rebuild/plugin-ui` (from `rebuild/core-ui` 8c1a53e). The process follows [community workflow](../community-workflow.md) §2, §4 (bottom-up). Before starting, each author reads: this document, community workflow §1, §2, §4, §8, [UI rework document](../../product/ui-spec.md) §2, §6, §8, §9 and the sections relevant to their own plugin (§11 lists the rework items per plugin), the [API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html), and [core UI design](../../architecture/core-ui-design.md) §2–§12.
+Branch: `rebuild/plugin-ui` (from `rebuild/core-ui` 8c1a53e). The process follows [community workflow](../../../agentic-workflow.md) §2, §4 (bottom-up). Before starting, each author reads: this document, community workflow §1, §2, §4, §8, [UI rework document](../../product/ui-spec.md) §2, §6, §8, §9 and the sections relevant to their own plugin (§11 lists the rework items per plugin), the [API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html), and [core UI design](../../architecture/core-ui-design.md) §2–§12.
 
 ## 1. Goals
 

@@ -59,6 +59,10 @@ Plugins describe their windows and panels in `.slint` files; the host compiles t
 
 The SDK lives in [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk); the YouTube and Bilibili plugins and the store index live in [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins).
 
+## Agentic Workflow
+
+The player is built by agents that simulate a plugin community: plugin authors, an API maintainer, an infrastructure maintainer, researchers, an independent reviewer and a coordinator. Roles, the request process for API changes, reviews, machine rules and when the user decides are in [Agentic Workflow](agentic-workflow.md).
+
 ## License
 
 Vestra Player is licensed under [GPL-3.0-or-later](LICENSE). The SDK and the plugins repository are Apache-2.0.

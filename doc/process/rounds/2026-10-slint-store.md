@@ -13,7 +13,7 @@ Run in order: task 1 first, then task 2 (the store UI is built on the new Slint)
 
 ## Roles and process
 
-- All code is written by sub-agents, one new agent per stage, each working in its own worktree and delivering a report in the fixed format. The coordinator does review, merging, the full checks (community-workflow §6.1), real-device testing, GitHub operations and small doc changes.
+- All code is written by sub-agents, one new agent per stage, each working in its own worktree and delivering a report in the fixed format. The coordinator does review, merging, the full checks (agentic-workflow §6.1), real-device testing, GitHub operations and small doc changes.
 - Task 1 is top-down (§5): maintainer research → list (coordinator decides) → maintainer implements → plugin authors change their own .slint where needed → SDK release where needed (§1.6) → full real-device regression → merge.
 - Task 2 is bottom-up (§4): the store plugin author writes a design and lists API gaps (coordinator decides) → if there are gaps, the maintainer goes through an API proposal → author implements → real-device acceptance → merge.
 

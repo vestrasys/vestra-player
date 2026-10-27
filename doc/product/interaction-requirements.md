@@ -1,6 +1,6 @@
 # Product interaction requirements
 
-Product interaction constraints set by the user; the design and implementation of every plugin must meet them. The plugin development process is in the [community workflow](../process/community-workflow.md); the concrete interaction in each state (keys, mouse, menus, window behaviour) is in the [interaction specification](interaction-spec.md).
+Product interaction constraints set by the user; the design and implementation of every plugin must meet them. The plugin development process is in the [community workflow](../../agentic-workflow.md); the concrete interaction in each state (keys, mouse, menus, window behaviour) is in the [interaction specification](interaction-spec.md).
 
 ## Scope decisions (2026-10-18)
 

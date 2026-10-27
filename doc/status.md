@@ -37,7 +37,7 @@ Each appeared once in the GUI smoke test after the host cleanup on 2026-10-20; r
 
 ## Pending API requests
 
-Handled through the bottom-up flow of the [community workflow](process/community-workflow.md).
+Handled through the bottom-up flow of the [community workflow](../agentic-workflow.md).
 
 | Item | Source | Suggested priority |
 | --- | --- | --- |

@@ -1,6 +1,6 @@
 # Portability round (top-down)
 
-Branch: `rebuild/portability` (from `main` ca548d5). Basis: [community workflow](../community-workflow.md) §1.5 (cross-platform rule), §5 (top-down).
+Branch: `rebuild/portability` (from `main` ca548d5). Basis: [community workflow](../../../agentic-workflow.md) §1.5 (cross-platform rule), §5 (top-down).
 
 ## 1. Goals
 

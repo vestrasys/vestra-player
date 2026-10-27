@@ -1,6 +1,6 @@
 # Round 1: features without core dependencies + negotiation of core requests
 
-Branch: `rebuild/features-r1` (from `main` 6ef174f). Basis: [feature requirements](../../product/feature-requirements.md) (below: "the requirements document"), [community workflow](../community-workflow.md) §3, §4 (especially §4.3 negotiation). 4 rounds in all; the plan is in §5.
+Branch: `rebuild/features-r1` (from `main` 6ef174f). Basis: [feature requirements](../../product/feature-requirements.md) (below: "the requirements document"), [community workflow](../../../agentic-workflow.md) §3, §4 (especially §4.3 negotiation). 4 rounds in all; the plan is in §5.
 
 ## 1. Two tracks
 

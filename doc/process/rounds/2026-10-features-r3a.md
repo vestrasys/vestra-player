@@ -1,6 +1,6 @@
 # Round 3a: input, window, plugin management, audio output, chapters and loops, secondary subtitles, confirm dialog + plugin integration
 
-Branch: `rebuild/features-r3a` (created by the coordinator from the commit after round 2 was merged into `main`). Based on: the 3a schedule and the 3.3 shared capabilities in "Step 3: Rulings" of the [negotiation record](2026-10-features-negotiation.md) (below: "the rulings"), the [feature requirements](../../product/feature-requirements.md) (below: "the requirements document"), the [community workflow](../community-workflow.md) §3, §4, §5, and the items carried over from [round 2 task sheet](2026-10-features-r2.md) §6.2.
+Branch: `rebuild/features-r3a` (created by the coordinator from the commit after round 2 was merged into `main`). Based on: the 3a schedule and the 3.3 shared capabilities in "Step 3: Rulings" of the [negotiation record](2026-10-features-negotiation.md) (below: "the rulings"), the [feature requirements](../../product/feature-requirements.md) (below: "the requirements document"), the [community workflow](../../../agentic-workflow.md) §3, §4, §5, and the items carried over from [round 2 task sheet](2026-10-features-r2.md) §6.2.
 
 ## 1. Scope
 
