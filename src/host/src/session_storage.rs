@@ -1,9 +1,9 @@
-//! `plugin.storage.session` (SDK 1.5.25, player 0.5.5): JSON values that
+﻿//! `plugin.storage.session` (SDK 1.5.25, player 0.5.5): JSON values that
 //! live as long as the player process, not the plugin process. User ruling
 //! 2026-10-27, after Chrome's `chrome.storage.session`; design record
 //! doc/process/rounds/2026-10-session-storage.md.
 //!
-//! The store is keyed by the plugin's [`DataKey`] (its installed instance or
+//! The store is keyed by the plugin's [`DataKey`](crate::plugins::DataKey) (its installed instance or
 //! development id: the same identity as its data directory and secrets), never
 //! by the process generation, so a value survives every restart of the
 //! plugin's process within one player run: a reload, an upgrade, a crash, a
@@ -61,7 +61,7 @@ fn key_of(params: &Value) -> std::result::Result<&str, RpcError> {
         .as_str()
         .filter(|key| (1..=MAX_KEY_BYTES).contains(&key.len()) && !key.contains('\0'))
         .ok_or_else(|| {
-            RpcError::invalid("session storage keys are 1–1024 bytes of text without NUL")
+            RpcError::invalid("session storage keys are 1鈥?024 bytes of text without NUL")
         })
 }
 
@@ -255,7 +255,7 @@ mod tests {
     fn the_quota_counts_keys_compact_json_and_entries_and_a_refused_set_changes_nothing() {
         let mut store = SessionStorage::default();
         let a = DataKey::Instance("a".into());
-        // "kN" + "\"…\"" + ENTRY_BYTES each: four of them fill the quota.
+        // "kN" + "\"鈥"" + ENTRY_BYTES each: four of them fill the quota.
         let quarter = MAX_SESSION_BYTES / 4 - 2 - 2 - ENTRY_BYTES;
         let fill = "x".repeat(quarter);
         for key in ["k0", "k1", "k2", "k3"] {
