@@ -1619,4 +1619,89 @@ export component W inherits Window {
             assert!(errors.is_empty(), "{}: {errors:?}", file.display());
         }
     }
+
+    /// Player 0.5.10: a bottom bar placing `BarButtons` shares the shell's
+    /// `BarButtonsHost` (the bar imports the same library file): the strip
+    /// reports itself placed and shows the cells that fit in its room, the
+    /// sidebar toggle longest and the plugins' highest order first gone.
+    #[test]
+    fn bar_buttons_share_the_shell_global_and_drop_the_highest_order_first() {
+        use crate::bar_buttons::{GLOBAL, Item, cell};
+        use crate::commands::ButtonIcon;
+        use slint_interpreter::Value;
+        headless();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let specs = [crate::composition::CompileSpec {
+            owner: 10,
+            file: base.join("strip-bar.slint"),
+            component: "StripBar".into(),
+            global: Some("StripBridge".into()),
+            slot: crate::composition::Slot::Bottom,
+        }];
+        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
+        let shell = crate::composition::compile_json(&specs, sender.clone(), 1).unwrap();
+        assert_eq!(
+            shell.get_global_property(GLOBAL, "placed").unwrap(),
+            Value::Bool(true)
+        );
+        // A bar without the strip: the player logs the hidden buttons.
+        let plain = crate::composition::compile_json(&bar_and_sidebar(), sender, 2).unwrap();
+        assert_eq!(
+            plain.get_global_property(GLOBAL, "placed").unwrap(),
+            Value::Bool(false)
+        );
+        let item = |id: &str, icon: &str| Item {
+            owner: 3,
+            id: id.into(),
+            icon: ButtonIcon::Name(icon.into()),
+            label: id.into(),
+            tip: id.into(),
+            enabled: true,
+            checkable: false,
+            checked: false,
+            dimmed: false,
+        };
+        let cells = vec![
+            cell(Some(&item("ai", "ai")), None),
+            cell(Some(&item("store", "store")), None),
+        ];
+        shell
+            .set_global_property(
+                GLOBAL,
+                "buttons",
+                Value::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
+            )
+            .unwrap();
+        shell
+            .set_global_property(
+                GLOBAL,
+                "toggle",
+                cell(Some(&item("sidebar", "playlist")), None),
+            )
+            .unwrap();
+        shell.window().set_size(slint::LogicalSize::new(800., 600.));
+        shell.show().unwrap();
+        let width = |room: f64| {
+            shell
+                .set_global_property("Owner10Bridge", "room", Value::Number(room))
+                .unwrap();
+            settle_layout(shell.window());
+            slint::platform::update_timers_and_animations();
+            match shell.get_global_property("Owner10Bridge", "shown").unwrap() {
+                Value::Number(width) => width,
+                other => panic!("{other:?}"),
+            }
+        };
+        assert_eq!(width(1000.), 123.);
+        // Two cells fit: the toggle and the lowest order.
+        assert_eq!(width(100.), 82.);
+        assert_eq!(width(41.), 41.);
+        assert_eq!(width(40.), 0.);
+        // Without a toggle the buttons take the room.
+        shell
+            .set_global_property(GLOBAL, "toggle", cell(None, None))
+            .unwrap();
+        assert_eq!(width(1000.), 82.);
+        shell.hide().unwrap();
+    }
 }

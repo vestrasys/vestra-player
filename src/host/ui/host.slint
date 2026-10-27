@@ -5,6 +5,8 @@ import { Theme } from "@vestra/theme.slint";
 // Exported so the player can set the colours (R-H6).
 export { VestraPalette } from "palette.slint";
 export { MenuChrome } from "menu-view.slint";
+// Bottom-bar command buttons (bar_buttons.rs fills it; a bar places BarButtons).
+export { BarButtonsHost } from "@vestra/bar-buttons.slint";
 export component HostWindow inherits Window {
     in property <string> window-title: "Vestra Player";
     title: root.window-title;

@@ -203,6 +203,25 @@ msgstr ""
 msgid "Leave Fullscreen"
 msgstr ""
 
+#: src/main.rs
+msgid "Toggle Sidebar"
+msgstr ""
+
+#. Why Toggle Sidebar (the bottom bar's sidebar button) is unavailable.
+#: src/bar_buttons.rs
+msgid "No panel is in the sidebar"
+msgstr ""
+
+#. A tooltip: a button's action and its key, e.g. "Plugin Store (F9)".
+#: src/bar_buttons.rs
+msgid "{} ({})"
+msgstr ""
+
+#. The sidebar button's tooltip while the sidebar is on but hidden; {} is the action and its key.
+#: src/bar_buttons.rs
+msgid "{} (the window is too narrow for the sidebar)"
+msgstr ""
+
 #: src/main.rs:2609
 msgid "Quit"
 msgstr ""

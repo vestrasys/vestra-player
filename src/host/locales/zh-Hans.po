@@ -204,6 +204,29 @@ msgstr "全屏"
 msgid "Leave Fullscreen"
 msgstr "仅退出全屏"
 
+#: src/main.rs
+#, x-machine
+msgid "Toggle Sidebar"
+msgstr "显示/隐藏侧栏"
+
+#. Why Toggle Sidebar (the bottom bar's sidebar button) is unavailable.
+#: src/bar_buttons.rs
+#, x-machine
+msgid "No panel is in the sidebar"
+msgstr "侧栏中没有面板"
+
+#. A tooltip: a button's action and its key, e.g. "Plugin Store (F9)".
+#: src/bar_buttons.rs
+#, x-machine
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#. The sidebar button's tooltip while the sidebar is on but hidden; {} is the action and its key.
+#: src/bar_buttons.rs
+#, x-machine
+msgid "{} (the window is too narrow for the sidebar)"
+msgstr "{}（窗口太窄，放不下侧栏）"
+
 #: src/main.rs:2609
 msgid "Quit"
 msgstr "退出"

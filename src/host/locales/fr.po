@@ -254,6 +254,29 @@ msgstr "Plein écran"
 msgid "Leave Fullscreen"
 msgstr "Quitter le plein écran"
 
+#: src/main.rs
+#, x-machine
+msgid "Toggle Sidebar"
+msgstr "Afficher/masquer la barre latérale"
+
+#. Why Toggle Sidebar (the bottom bar's sidebar button) is unavailable.
+#: src/bar_buttons.rs
+#, x-machine
+msgid "No panel is in the sidebar"
+msgstr "La barre latérale ne contient aucun panneau"
+
+#. A tooltip: a button's action and its key, e.g. "Plugin Store (F9)".
+#: src/bar_buttons.rs
+#, x-machine
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#. The sidebar button's tooltip while the sidebar is on but hidden; {} is the action and its key.
+#: src/bar_buttons.rs
+#, x-machine
+msgid "{} (the window is too narrow for the sidebar)"
+msgstr "{} (la fenêtre est trop étroite pour la barre latérale)"
+
 #: src/main.rs:2609
 #, x-machine
 msgid "Quit"
