@@ -36,7 +36,37 @@ pub struct Manager {
     /// `packages.reload`: plugins stopped to start again, by id: the stopped
     /// process and when; started once that process is gone (`reload_tick`).
     reloads: BTreeMap<String, (u64, u64)>,
+    /// Built-in digest checks for the shared runner (`verify`), by id.
+    verified: BTreeMap<String, Verified>,
+    verify_serial: u64,
+    verify_results: (
+        std::sync::mpsc::Sender<VerifyResult>,
+        std::sync::mpsc::Receiver<VerifyResult>,
+    ),
 }
+/// A finished digest check: id, serial, outcome.
+type VerifyResult = (String, u64, std::result::Result<(), String>);
+/// A built-in's digest check (`Manager::verify`).
+enum Verified {
+    /// On a `builtin-verify` thread (its serial, since when).
+    Running(u64, std::time::Instant),
+    /// `Err`: why it runs in its own process.
+    Done(std::result::Result<(), String>),
+}
+/// Where `load_package` runs a plugin (`Host::trust`).
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum Trust {
+    /// In the shared runner.
+    Shared,
+    /// In its own process; for a built-in, why (logged).
+    Own(Option<String>),
+    /// A built-in whose digest is being checked: start it once known.
+    Pending,
+}
+/// How long a built-in's start waits for its digest check (a large
+/// package read for the first time, scanned by an antivirus, can take
+/// seconds); then it starts in its own process.
+const VERIFY_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
 /// How long a reload waits for the stopped process to go, as installs do.
 const RELOAD_WAIT_MS: u64 = 20_000;
 struct Operation {
@@ -111,6 +141,9 @@ impl Manager {
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
             reloads: BTreeMap::new(),
+            verified: BTreeMap::new(),
+            verify_serial: 0,
+            verify_results: std::sync::mpsc::channel(),
         })
     }
     /// Where an installed record's plugin runs from: a built-in from the
@@ -141,8 +174,183 @@ impl Manager {
         }
         Some(Ok((current.directory.clone(), current.manifest.clone())))
     }
+    /// Check built-in `id`'s directory against its `builtin.json` digest on
+    /// a `builtin-verify` thread (`package_stage::inspect`: the package
+    /// limits, the manifest and the digest, as for a library copy); the
+    /// result arrives in `poll_verified`. A new check replaces a running one.
+    /// Nothing for a built-in without a digest or whose checks failed.
+    fn verify(&mut self, id: &str) {
+        let Some(builtin) = self.builtins.get(id) else {
+            return;
+        };
+        let (Some(expected), Ok(_)) = (builtin.digest.clone(), &builtin.manifest) else {
+            return;
+        };
+        self.verify_serial += 1;
+        let serial = self.verify_serial;
+        let directory = builtin.directory.clone();
+        let results = self.verify_results.0.clone();
+        let name = id.to_owned();
+        let spawned = std::thread::Builder::new()
+            .name("builtin-verify".into())
+            .spawn(move || {
+                let result = match package_stage::inspect(&directory) {
+                    Ok((digest, _)) if digest == expected => Ok(()),
+                    Ok((digest, _)) => Err(format!(
+                        "its files have digest {digest}, builtin.json records {expected}"
+                    )),
+                    Err(error) => Err(format!("{error:#}")),
+                };
+                let _ = results.send((name, serial, result));
+            });
+        let state = match spawned {
+            Ok(_) => Verified::Running(serial, std::time::Instant::now()),
+            Err(error) => Verified::Done(Err(format!("digest check: {error}"))),
+        };
+        self.verified.insert(id.to_owned(), state);
+    }
+    /// Take the finished digest checks.
+    fn poll_verified(&mut self) {
+        while let Ok((id, serial, result)) = self.verify_results.1.try_recv() {
+            if !matches!(self.verified.get(&id), Some(Verified::Running(s, _)) if *s == serial) {
+                continue;
+            }
+            if let Err(error) = &result {
+                diag!("built-in plugin {id}: {error}");
+            }
+            self.verified.insert(id, Verified::Done(result));
+        }
+    }
+    /// A digest check of `id` is running and its start may still wait for
+    /// it ([`VERIFY_WAIT`]); past that it starts in its own process.
+    fn verifying(&self, id: &str) -> bool {
+        matches!(self.verified.get(id), Some(Verified::Running(_, since)) if since.elapsed() < VERIFY_WAIT)
+    }
 }
 impl Host {
+    /// Where plugin `id`, about to run from `directory`, runs (doc/process/
+    /// rounds/2026-10-shared-runner.md §3): in the shared runner only a
+    /// built-in by provenance — listed in `builtin.json`, running from the
+    /// installation's own directory, recorded as built-in in the catalog —
+    /// whose files still have the digest packaging recorded, unless
+    /// `VESTRA_SHARED=0`, the runner failed repeatedly this run, or a fault
+    /// was attributed to it. Never from a manifest field; development loads
+    /// (`Host::load`) never ask.
+    pub(super) fn trust(&self, id: &str, directory: &Path) -> Trust {
+        trust_of(
+            id,
+            self.packages.builtins.get(id),
+            directory,
+            self.packages
+                .store
+                .get(id)
+                .instance
+                .is_some_and(|instance| instance.builtin),
+            shared_runner::enabled(),
+            &self.shared_policy,
+            self.packages.verified.get(id),
+        )
+    }
+    /// The shared runner at a host tick: the heartbeat (a hang restarts
+    /// every member), and an idle runner let go.
+    fn shared_tick(&mut self) {
+        let now = self.now_ms();
+        let Some(shared) = self.shared.as_mut() else {
+            return;
+        };
+        if shared.idle(now) {
+            if let Some(runner) = self.shared.take() {
+                diag!("shared runner {}: no plugin left; stopped", runner.link.id);
+                runner.retire(true);
+            }
+            return;
+        }
+        if let Err(reason) = shared.tick(now, shared_runner::ping_ms()) {
+            self.restart_shared(&reason, None);
+        }
+    }
+    /// A control line from shared runner `runner` (`Event::Runner`).
+    pub(super) fn runner_event(&mut self, runner: shared_runner::RunnerId, message: &Value) {
+        let Some(shared) = self.shared.as_mut().filter(|s| s.link.id == runner) else {
+            return;
+        };
+        let Some((g, text)) = shared.control(message) else {
+            return;
+        };
+        if g == 0 {
+            // No plugin owns it; the runner exits on its own.
+            self.restart_shared(&format!("unattributed fault: {text}"), None);
+            return;
+        }
+        let Some(id) = self
+            .plugins
+            .get(&g)
+            .filter(|plugin| plugin.shared_runner() == Some(runner))
+            .map(|plugin| plugin.manifest.id.clone())
+        else {
+            return;
+        };
+        // That plugin alone stops, as if its own process had crashed, and
+        // runs in its own process if it starts again this run.
+        diag!("shared runner {runner}: {id} faulted; its own process from now on");
+        self.shared_policy.quarantined.insert(id);
+        self.handle(Event::RuntimeFault(
+            g,
+            format!("uncaught exception: {text}"),
+        ));
+    }
+    /// The shared runner exited, faulted without attribution or hung:
+    /// every member stops (its registrations revoked as for any exit) and
+    /// starts again in a new runner, its digest checked again; `culprit`,
+    /// when known, in its own process. The third restart within a minute
+    /// fails open: own processes for all of them until the player quits.
+    /// Session storage is keyed by the plugin's data key, not by process,
+    /// so the restarted plugins find their values (`session_storage.rs`).
+    pub(super) fn restart_shared(&mut self, reason: &str, culprit: Option<String>) {
+        let Some(runner) = self.shared.take() else {
+            return;
+        };
+        let id = runner.link.id;
+        diag!(
+            "shared runner {id}: {reason}; restarting its plugins \
+             (members whose cleanup timed out: {}; last stats: {})",
+            runner.link.leaked(),
+            runner.stats
+        );
+        runner.retire(false);
+        let failed_open = self.shared_policy.restart(self.now_ms());
+        if let Some(culprit) = culprit {
+            self.shared_policy.quarantined.insert(culprit);
+        }
+        let members = self
+            .plugins
+            .iter()
+            .filter(|(_, plugin)| plugin.shared_runner() == Some(id))
+            .map(|(owner, plugin)| (*owner, plugin.manifest.id.clone()))
+            .collect::<Vec<_>>();
+        for (owner, _) in &members {
+            self.disable(*owner);
+        }
+        for (_, plugin) in members {
+            if !failed_open {
+                self.packages.verify(&plugin);
+            }
+            if !self.packages.to_start.contains(&plugin) {
+                self.packages.to_start.push_back(plugin);
+            }
+        }
+        let text = if failed_open {
+            diag!(
+                "shared runner: {} restarts within {} s; every plugin runs in its own process until the player quits",
+                shared_runner::RESTART_LIMIT,
+                shared_runner::RESTART_WINDOW_MS / 1000
+            );
+            i18n::tr("Built-in plugins run separately for this session after repeated faults")
+        } else {
+            i18n::tr("Built-in plugins restarted after a fault")
+        };
+        self.show_osd(&text);
+    }
     fn cleanup_done(&self, owner: u64) -> bool {
         self.cleanup.get(&owner) == Some(&(true, true))
     }
@@ -160,16 +368,53 @@ impl Host {
             "plugin already running"
         );
         self.activations.begin(owner, self.now_ms() + 15_000)?;
-        let plugin = Plugin::load_manifest(
-            directory,
-            owner,
-            self.events.clone(),
-            plugins::Manifest {
-                id: id.clone(),
-                ..manifest.clone()
-            },
-            key,
-        )?;
+        let manifest = plugins::Manifest {
+            id: id.clone(),
+            ..manifest.clone()
+        };
+        let plugin = match self.trust(&id, directory) {
+            Trust::Shared => {
+                if self.shared.is_none() {
+                    let runner = self.shared_policy.next_id();
+                    let now = self.now_ms();
+                    self.shared = Some(shared_runner::SharedRunner::spawn(
+                        runner,
+                        self.events.clone(),
+                        now,
+                    )?);
+                }
+                let shared = self
+                    .shared
+                    .as_mut()
+                    .ok_or_else(|| anyhow::anyhow!("shared runner"))?;
+                diag!("shared runner {}: {id} admitted", shared.link.id);
+                Plugin::load_manifest(
+                    directory,
+                    owner,
+                    self.events.clone(),
+                    manifest,
+                    key,
+                    plugins::Placement::Shared(shared),
+                )?
+            }
+            trust => {
+                match trust {
+                    Trust::Own(Some(reason)) => diag!("shared runner: {id} runs alone: {reason}"),
+                    Trust::Pending => {
+                        diag!("shared runner: {id} runs alone: its digest is still being checked")
+                    }
+                    _ => {}
+                }
+                Plugin::load_manifest(
+                    directory,
+                    owner,
+                    self.events.clone(),
+                    manifest,
+                    key,
+                    plugins::Placement::Own,
+                )?
+            }
+        };
         self.plugins.insert(owner, plugin);
         self.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
@@ -918,6 +1163,11 @@ impl Host {
             self.disable(owner);
             let now = self.now_ms();
             self.packages.reloads.insert(id.into(), (owner, now));
+            // A built-in's files are checked again before it shares the
+            // runner (`reload_tick` waits for the check).
+            if shared_runner::enabled() {
+                self.packages.verify(id);
+            }
             return Ok(());
         }
         let reserved = check_reserved(id, record.instance.as_ref());
@@ -935,8 +1185,9 @@ impl Host {
             .packages
             .reloads
             .iter()
-            .filter(|(_, (owner, since))| {
-                self.cleanup_done(*owner) || now.saturating_sub(*since) >= RELOAD_WAIT_MS
+            .filter(|(id, (owner, since))| {
+                (self.cleanup_done(*owner) && !self.packages.verifying(id))
+                    || now.saturating_sub(*since) >= RELOAD_WAIT_MS
             })
             .map(|(id, (owner, _))| (id.clone(), *owner))
             .collect::<Vec<_>>();
@@ -1076,12 +1327,23 @@ impl Host {
         }
         let began = std::time::Instant::now();
         let mut started = 0;
+        // A built-in whose digest is still being checked stays queued (it
+        // starts once the check is done, shared or alone); the others do not
+        // wait for it: a large package's first read can take seconds.
+        let mut checking = VecDeque::new();
         while let Some(id) = self.packages.to_start.pop_front() {
+            if self.packages.verifying(&id) {
+                checking.push_back(id);
+                continue;
+            }
             self.start_installed(Some(&id));
             started += 1;
             if began.elapsed() >= START_BUDGET {
                 break;
             }
+        }
+        while let Some(id) = checking.pop_back() {
+            self.packages.to_start.push_front(id);
         }
         if self.frame_log.is_some() {
             diag!(
@@ -1153,7 +1415,20 @@ impl Host {
             // Start committed packages and the built-ins independently of
             // the authoring plugin: queued, a few per tick (`START_BUDGET`).
             self.packages.to_start = self.packages.store.installed().into_keys().collect();
+            // The shared runner admits a built-in once its digest checked
+            // out, off this thread (`verify`).
+            if shared_runner::enabled() {
+                let ids = self.packages.builtins.keys().cloned().collect::<Vec<_>>();
+                for id in &ids {
+                    self.packages.verify(id);
+                }
+                if self.packages.builtins.values().any(|b| b.digest.is_none()) {
+                    diag!("built-in plugins without digests run in their own processes");
+                }
+            }
         }
+        self.packages.poll_verified();
+        self.shared_tick();
         self.start_queued();
         self.reload_tick();
         self.cleanup_tick();
@@ -1389,6 +1664,45 @@ fn deferred_failure(error: &str) -> String {
         .take(512)
         .collect()
 }
+/// `Host::trust` as a table: `builtin` is `id`'s `builtin.json` entry,
+/// `catalog_builtin` whether the catalog records its instance as built-in,
+/// `enabled` whether sharing is on (`VESTRA_SHARED`), `verified` its digest
+/// check.
+fn trust_of(
+    id: &str,
+    builtin: Option<&builtin::Builtin>,
+    directory: &Path,
+    catalog_builtin: bool,
+    enabled: bool,
+    policy: &shared_runner::Policy,
+    verified: Option<&Verified>,
+) -> Trust {
+    let Some(builtin) = builtin else {
+        return Trust::Own(None);
+    };
+    let own = |reason: &str| Trust::Own(Some(reason.into()));
+    if builtin.directory != directory || !catalog_builtin {
+        return own("not the installation's built-in");
+    }
+    if !enabled {
+        return own("VESTRA_SHARED=0");
+    }
+    if policy.failed_open {
+        return own("the shared runner failed repeatedly in this run");
+    }
+    if policy.quarantined.contains(id) {
+        return own("a fault was attributed to it in the shared runner");
+    }
+    if builtin.digest.is_none() {
+        return own("builtin.json records no digest");
+    }
+    match verified {
+        Some(Verified::Running(..)) => Trust::Pending,
+        Some(Verified::Done(Ok(()))) => Trust::Shared,
+        Some(Verified::Done(Err(error))) => Trust::Own(Some(error.clone())),
+        None => own("its digest was not checked"),
+    }
+}
 fn check_reserved(id: &str, instance: Option<&Instance>) -> std::result::Result<(), RpcError> {
     if crate::manifest::reserved_id(id) && !instance.is_some_and(|i| i.builtin) {
         return Err(RpcError::new(
@@ -1457,6 +1771,10 @@ mod builtin {
         /// Its manifest, or why the directory failed the checks (the
         /// plugin is then listed as `failed`).
         pub manifest: std::result::Result<PackageManifest, String>,
+        /// Its package digest as packaging recorded it (schema 3); the
+        /// shared runner admits it only while its directory still has it
+        /// (`Host::trust`). `None` from a schema-2 list: its own process.
+        pub digest: Option<String>,
     }
 
     #[derive(Deserialize)]
@@ -1472,6 +1790,10 @@ mod builtin {
         pub version: String,
         /// The plugin's directory next to `builtin.json`: its id.
         pub directory: String,
+        /// Schema 3: the package digest of that directory
+        /// (`package_stage::inspect`), 64 lowercase hex digits.
+        #[serde(default)]
+        pub digest: Option<String>,
     }
 
     /// `$VESTRA_BUILTIN_PLUGINS`, else the installation's built-in plugins
@@ -1481,15 +1803,16 @@ mod builtin {
         crate::runtime_paths::get().builtin_directory()
     }
 
-    /// `builtin.json` in `directory`, strictly: schema 2, at most 64
+    /// `builtin.json` in `directory`, strictly: schema 2 or 3, at most 64
     /// plugins, each a reserved id (`vestra.`) in a directory of the same
-    /// name, with a version.
+    /// name, with a version, and in schema 3 with its package digest (only
+    /// there).
     pub fn read(directory: &Path) -> Result<Vec<Entry>> {
         let bytes = std::fs::read(directory.join("builtin.json")).context("builtin.json")?;
         ensure!(bytes.len() <= 256 * 1024, "builtin.json is too large");
         let list: List = serde_json::from_slice(&bytes).context("builtin.json")?;
         ensure!(
-            list.schema == 2,
+            matches!(list.schema, 2 | 3),
             "builtin.json schema {} is unknown",
             list.schema
         );
@@ -1521,6 +1844,26 @@ mod builtin {
                 entry.id,
                 entry.version
             );
+            ensure!(
+                match (list.schema, &entry.digest) {
+                    (3, Some(digest)) => {
+                        digest.len() == 64
+                            && digest
+                                .bytes()
+                                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+                    }
+                    (2, None) => true,
+                    _ => false,
+                },
+                "{}: schema {} needs {} digest",
+                entry.id,
+                list.schema,
+                if list.schema == 3 {
+                    "a 64-digit lowercase hex"
+                } else {
+                    "no"
+                }
+            );
         }
         Ok(list.plugins)
     }
@@ -1546,6 +1889,7 @@ mod builtin {
                         version: entry.version,
                         directory,
                         manifest,
+                        digest: entry.digest,
                     },
                 )
             })
@@ -1758,21 +2102,7 @@ mod tests {
         };
         let store = Store::open(moved_path.clone()).unwrap();
         assert!(store.deferred().contains_key("counter"));
-        let manager = Manager {
-            store,
-            secrets: crate::secret_index::Index::new(None),
-            candidates: BTreeMap::new(),
-            candidate_order: VecDeque::new(),
-            operations: BTreeMap::new(),
-            next: 0,
-            receipts: BTreeMap::new(),
-            booted: false,
-            to_start: VecDeque::new(),
-            builtins: BTreeMap::new(),
-            cleanup: None,
-            cleanup_queue: BTreeSet::new(),
-            reloads: BTreeMap::new(),
-        };
+        let manager = manager(store, BTreeMap::new());
         let record = manager.store.get("counter");
         assert_eq!(
             record.current.as_ref().unwrap().directory,
@@ -2064,10 +2394,218 @@ mod tests {
             json!({"schema":2,"plugins":[entry("zysilm.youtube","1.0.0","zysilm.youtube")]}),
             json!({"schema":2,"plugins":[entry("vestra.v","1.0.0","vestra.v"),entry("vestra.v","1.0.1","vestra.v")]}),
             json!({"schema":2,"plugins":[{"id":"vestra.v","version":"1.0.0","directory":"vestra.v","extra":1}]}),
+            // Schema 3 records each package digest (stage-plugins.mjs), and only it.
+            json!({"schema":4,"plugins":[]}),
+            json!({"schema":3,"plugins":[entry("vestra.v","1.0.0","vestra.v")]}),
+            json!({"schema":3,"plugins":[{"id":"vestra.v","version":"1.0.0","directory":"vestra.v","digest":"AB"}]}),
+            json!({"schema":3,"plugins":[{"id":"vestra.v","version":"1.0.0","directory":"vestra.v","digest":"A".repeat(64)}]}),
+            json!({"schema":2,"plugins":[{"id":"vestra.v","version":"1.0.0","directory":"vestra.v","digest":"a".repeat(64)}]}),
         ] {
             write(bad.clone());
             assert!(builtin::read(dir.path()).is_err(), "{bad}");
         }
+        write(
+            json!({"schema":3,"plugins":[{"id":"vestra.v","version":"1.0.0","directory":"vestra.v","digest":"0a".repeat(32)}]}),
+        );
+        let entries = builtin::read(dir.path()).unwrap();
+        assert_eq!(entries[0].digest.as_deref(), Some("0a".repeat(32).as_str()));
+    }
+
+    fn manager(store: Store, builtins: BTreeMap<String, builtin::Builtin>) -> Manager {
+        Manager {
+            store,
+            secrets: crate::secret_index::Index::new(None),
+            candidates: BTreeMap::new(),
+            candidate_order: VecDeque::new(),
+            operations: BTreeMap::new(),
+            next: 0,
+            receipts: BTreeMap::new(),
+            booted: false,
+            to_start: VecDeque::new(),
+            builtins,
+            cleanup: None,
+            cleanup_queue: BTreeSet::new(),
+            reloads: BTreeMap::new(),
+            verified: BTreeMap::new(),
+            verify_serial: 0,
+            verify_results: std::sync::mpsc::channel(),
+        }
+    }
+
+    /// The digest check runs off the caller's thread and tells a match, a
+    /// changed file and a newer check apart.
+    #[test]
+    fn builtin_digests_are_checked_off_thread() {
+        let root = tempfile::tempdir().unwrap();
+        builtin_dir(root.path(), "vestra.good", "1.0.0");
+        builtin_dir(root.path(), "vestra.patched", "1.0.0");
+        let digest = |id: &str| package_stage::inspect(&root.path().join(id)).unwrap().0;
+        std::fs::write(
+            root.path().join("builtin.json"),
+            json!({"schema":3,"plugins":[
+                {"id":"vestra.good","version":"1.0.0","directory":"vestra.good","digest":digest("vestra.good")},
+                {"id":"vestra.patched","version":"1.0.0","directory":"vestra.patched","digest":digest("vestra.patched")}]})
+            .to_string(),
+        )
+        .unwrap();
+        std::fs::write(root.path().join("vestra.patched/main.js"), "// patched").unwrap();
+        let store_root = tempfile::tempdir().unwrap();
+        let mut manager = manager(
+            Store::open(store_root.path().to_path_buf()).unwrap(),
+            builtin::load(root.path()).unwrap(),
+        );
+        manager.verify("vestra.good");
+        manager.verify("vestra.patched");
+        manager.verify("vestra.missing");
+        assert!(!manager.verifying("vestra.missing"));
+        let began = std::time::Instant::now();
+        let running = |manager: &Manager, id: &str| {
+            matches!(manager.verified.get(id), Some(Verified::Running(..)))
+        };
+        while running(&manager, "vestra.good") || running(&manager, "vestra.patched") {
+            assert!(began.elapsed() < std::time::Duration::from_secs(10));
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            manager.poll_verified();
+        }
+        assert!(matches!(
+            manager.verified["vestra.good"],
+            Verified::Done(Ok(()))
+        ));
+        assert!(
+            matches!(&manager.verified["vestra.patched"], Verified::Done(Err(e)) if e.contains("builtin.json records"))
+        );
+        // A check started again supersedes the finished one until it reports;
+        // a start waits for a check only so long.
+        manager.verify("vestra.good");
+        assert!(manager.verifying("vestra.good"));
+        manager.verified.insert(
+            "vestra.good".into(),
+            Verified::Running(0, std::time::Instant::now() - VERIFY_WAIT),
+        );
+        assert!(!manager.verifying("vestra.good"));
+    }
+
+    /// Schema 3: the digest the list records is what `package_stage::inspect`
+    /// finds in the directory as long as nothing in it changed.
+    #[test]
+    fn a_builtin_carries_its_recorded_digest_and_inspect_tells_a_changed_file() {
+        let root = tempfile::tempdir().unwrap();
+        builtin_dir(root.path(), "vestra.demo", "1.2.0");
+        let (digest, _) = package_stage::inspect(&root.path().join("vestra.demo")).unwrap();
+        std::fs::write(
+            root.path().join("builtin.json"),
+            json!({"schema":3,"plugins":[{"id":"vestra.demo","version":"1.2.0",
+                "directory":"vestra.demo","digest":digest}]})
+            .to_string(),
+        )
+        .unwrap();
+        let builtins = builtin::load(root.path()).unwrap();
+        assert_eq!(
+            builtins["vestra.demo"].digest.as_deref(),
+            Some(digest.as_str())
+        );
+        std::fs::write(root.path().join("vestra.demo/main.js"), "// patched").unwrap();
+        let (patched, _) = package_stage::inspect(&root.path().join("vestra.demo")).unwrap();
+        assert_ne!(patched, digest);
+    }
+
+    /// Who runs in the shared runner: built-ins by provenance whose digest
+    /// checked out, unless sharing is off, failed open or the plugin faulted.
+    #[test]
+    fn only_verified_builtins_from_the_installation_share_the_runner() {
+        let root = tempfile::tempdir().unwrap();
+        builtin_dir(root.path(), "vestra.demo", "1.2.0");
+        builtin_json(root.path(), &[("vestra.demo", "1.2.0")]);
+        let mut builtins = builtin::load(root.path()).unwrap();
+        let directory = builtins["vestra.demo"].directory.clone();
+        let ok = Verified::Done(Ok(()));
+        let policy = shared_runner::Policy::default();
+        let trust = |builtin: Option<&builtin::Builtin>,
+                     directory: &Path,
+                     catalog: bool,
+                     enabled: bool,
+                     policy: &shared_runner::Policy,
+                     verified: Option<&Verified>| {
+            trust_of(
+                "vestra.demo",
+                builtin,
+                directory,
+                catalog,
+                enabled,
+                policy,
+                verified,
+            )
+        };
+        let reason = |trust: Trust| match trust {
+            Trust::Own(Some(reason)) => reason,
+            other => panic!("{other:?}"),
+        };
+        // Schema 2: no digest, no sharing.
+        let demo = builtins.get("vestra.demo");
+        assert!(
+            reason(trust(demo, &directory, true, true, &policy, Some(&ok))).contains("no digest")
+        );
+        builtins.get_mut("vestra.demo").unwrap().digest = Some("0".repeat(64));
+        let demo = builtins.get("vestra.demo");
+        assert_eq!(
+            trust(demo, &directory, true, true, &policy, Some(&ok)),
+            Trust::Shared
+        );
+        // Not a built-in at all: its own process, nothing to log.
+        assert_eq!(
+            trust(None, &directory, false, true, &policy, None),
+            Trust::Own(None)
+        );
+        // Another directory (a development copy), or not built-in in the catalog.
+        assert!(
+            reason(trust(demo, root.path(), true, true, &policy, Some(&ok)))
+                .contains("not the installation")
+        );
+        assert!(
+            reason(trust(demo, &directory, false, true, &policy, Some(&ok)))
+                .contains("not the installation")
+        );
+        // The digest check: running, failed, never run.
+        assert_eq!(
+            trust(
+                demo,
+                &directory,
+                true,
+                true,
+                &policy,
+                Some(&Verified::Running(1, std::time::Instant::now()))
+            ),
+            Trust::Pending
+        );
+        let mismatch = Verified::Done(Err("its files have digest x".into()));
+        assert!(
+            reason(trust(
+                demo,
+                &directory,
+                true,
+                true,
+                &policy,
+                Some(&mismatch)
+            ))
+            .contains("digest x")
+        );
+        assert!(reason(trust(demo, &directory, true, true, &policy, None)).contains("not checked"));
+        // VESTRA_SHARED=0, fail-open, quarantine.
+        assert!(
+            reason(trust(demo, &directory, true, false, &policy, Some(&ok)))
+                .contains("VESTRA_SHARED=0")
+        );
+        let mut failed = shared_runner::Policy::default();
+        failed.failed_open = true;
+        assert!(
+            reason(trust(demo, &directory, true, true, &failed, Some(&ok)))
+                .contains("failed repeatedly")
+        );
+        let mut quarantined = shared_runner::Policy::default();
+        quarantined.quarantined.insert("vestra.demo".into());
+        assert!(
+            reason(trust(demo, &directory, true, true, &quarantined, Some(&ok))).contains("fault")
+        );
     }
 
     /// Built-ins run in place: the registry reads each manifest from the

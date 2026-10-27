@@ -1,0 +1,12 @@
+{
+  "files": {
+    "manifest.json": "{\"id\":\"vestra.fixture\",\"apiVersion\":\"vestra/1\",\"entry\":\"main.js\",\"version\":\"1.0.0\"}\n",
+    "main.js": "export async function activate() {}\n",
+    "B.js": "upper case sorts before lower case\n",
+    "ui.json": "{}",
+    "ui/a.slint": "export component A {}\n",
+    "ui/sub/empty.txt": "",
+    "locales/zh-Hans.po": "msgid \"Copy\"\nmsgstr \"复制\"\n"
+  },
+  "digest": "ec76cfe267921d3081a753fca0bbb172da96c64e33f4afa93038b749f2923e29"
+}

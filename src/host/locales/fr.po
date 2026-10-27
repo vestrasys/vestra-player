@@ -438,3 +438,15 @@ msgstr "[Image]"
 #, x-machine
 msgid "[Image] {}"
 msgstr "[Image] {}"
+
+#. The OSD after the shared runner of the built-in plugins restarted.
+#: src/package_manager.rs
+#, x-machine
+msgid "Built-in plugins restarted after a fault"
+msgstr "Plugins intégrés redémarrés après une erreur"
+
+#. The OSD when the built-in plugins fall back to one process each.
+#: src/package_manager.rs
+#, x-machine
+msgid "Built-in plugins run separately for this session after repeated faults"
+msgstr "Après des erreurs répétées, les plugins intégrés s'exécutent séparément pour cette session"

@@ -63,6 +63,7 @@ mod secret_index;
 mod session;
 mod session_storage;
 mod settings_window;
+mod shared_runner;
 mod slot_claims;
 mod source_backend;
 mod source_geometry;
@@ -247,6 +248,10 @@ enum Event {
     ViewClosed(u64, String),
     PluginMessage(u64, String, Value),
     Exited(u64),
+    /// A control line of the shared runner (`g` 0): (runner, message).
+    Runner(shared_runner::RunnerId, Value),
+    /// The shared runner's stdout closed (it exited or was killed).
+    RunnerExited(shared_runner::RunnerId),
     Reaped(u64),
     BackendCleaned(u64),
     DialogDone(Reply, Option<Vec<PathBuf>>),
@@ -341,6 +346,12 @@ struct MountChange {
 }
 struct Host {
     backend: Backend,
+    /// The shared runner of the trusted plugins, while one runs. Declared
+    /// before `plugins`: at quit it stops (all members at once) before the
+    /// members are dropped.
+    shared: Option<shared_runner::SharedRunner>,
+    /// Restarts, quarantine and fail-open of the shared runner for this run.
+    shared_policy: shared_runner::Policy,
     plugins: BTreeMap<u64, Plugin>,
     views: BTreeMap<(u64, String), ui::View>,
     events: mpsc::Sender<Event>,
@@ -1104,6 +1115,12 @@ impl Host {
                 // Still running: the process ended without being stopped.
                 self.record_failure(owner, "plugin process exited");
                 self.disable(owner)
+            }
+            Event::Runner(runner, message) => self.runner_event(runner, &message),
+            Event::RunnerExited(runner) => {
+                if self.shared.as_ref().is_some_and(|s| s.link.id == runner) {
+                    self.restart_shared("the shared runner exited", None);
+                }
             }
             Event::Reaped(owner) => {
                 if let Some(cleanup) = self.cleanup.get_mut(&owner) {
@@ -4322,6 +4339,8 @@ fn main() -> Result<()> {
     let (mount_events, mount_input) = mpsc::sync_channel(64);
     let mut host = Host {
         backend,
+        shared: None,
+        shared_policy: Default::default(),
         plugins: BTreeMap::new(),
         views: BTreeMap::new(),
         events,

@@ -373,6 +373,24 @@ mod tests {
         );
     }
 
+    /// `src/tests/fixtures/package-digest.json` is hashed here and by
+    /// `scripts/stage-plugins.mjs` (`tests/sdk/package-digest.test.ts`): the
+    /// digest `builtin.json` records is the one this module computes.
+    #[test]
+    fn digest_matches_the_shared_fixture() {
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/package-digest.json");
+        let fixture: serde_json::Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        let root = tempfile::tempdir().unwrap();
+        for (name, text) in fixture["files"].as_object().unwrap() {
+            let target = root.path().join(name);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::write(target, text.as_str().unwrap()).unwrap();
+        }
+        let digest = read_tree(root.path(), |_, _| Ok(())).unwrap();
+        assert_eq!(digest, fixture["digest"].as_str().unwrap());
+    }
+
     #[test]
     fn captured_names_use_slash_on_every_system_and_stay_relative() {
         assert_eq!(

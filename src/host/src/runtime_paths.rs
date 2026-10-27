@@ -6,6 +6,7 @@
 //! | --- | --- | --- |
 //! | Node | `$VESTRA_NODE`, else the bundled one; **never `PATH`** | `$VESTRA_NODE`, else `node` on `PATH` |
 //! | runner | `<runtime>/runner.js` (types stripped at packaging, `stage-runtime.mjs`) | `src/runtime/runner.ts` (Node strips them) |
+//! | shared runner | `<runtime>/shared-runner.js` | `src/runtime/shared-runner.ts` |
 //! | ui | `<ui>` | `src/host/ui` |
 //! | built-in plugins | `$VESTRA_BUILTIN_PLUGINS`, else `<plugins>` | `$VESTRA_BUILTIN_PLUGINS`, else none |
 //! | FFmpeg, ffprobe | `$VESTRA_FFMPEG` / `$VESTRA_FFPROBE`, else the bundled ones | the same variables, else `PATH` |
@@ -32,6 +33,9 @@ pub struct RuntimePaths {
     /// the bare name `node`, which the system looks up on `PATH`.
     pub node: PathBuf,
     pub runner: PathBuf,
+    /// The runner for the plugins that share one Node process
+    /// (`shared_runner.rs`).
+    pub shared_runner: PathBuf,
     pub ui: PathBuf,
     /// The directory `builtin.json` is read from, if any.
     pub builtin_plugins: Option<PathBuf>,
@@ -78,6 +82,7 @@ pub fn resolve(
             packaged: true,
             node: var("VESTRA_NODE").unwrap_or(layout.node),
             runner: layout.runtime.join("runner.js"),
+            shared_runner: layout.runtime.join("shared-runner.js"),
             ui: layout.ui,
             builtin_plugins: Some(var("VESTRA_BUILTIN_PLUGINS").unwrap_or(layout.plugins)),
             ffmpeg: tool("VESTRA_FFMPEG", "ffmpeg", Some(&layout.ffmpeg)),
@@ -88,6 +93,7 @@ pub fn resolve(
             packaged: false,
             node: var("VESTRA_NODE").unwrap_or_else(|| "node".into()),
             runner: source.join("..").join("runtime").join("runner.ts"),
+            shared_runner: source.join("..").join("runtime").join("shared-runner.ts"),
             ui: source.join("ui"),
             builtin_plugins: var("VESTRA_BUILTIN_PLUGINS"),
             ffmpeg: tool("VESTRA_FFMPEG", "ffmpeg", None),
@@ -118,6 +124,7 @@ impl RuntimePaths {
         let mut required = vec![
             ("Node", self.node.clone()),
             ("plugin runner", self.runner.clone()),
+            ("shared plugin runner", self.shared_runner.clone()),
             ("interface", self.ui.join("host.slint")),
         ];
         if let Some(plugins) = &self.builtin_plugins {
@@ -229,6 +236,7 @@ mod tests {
                 packaged: true,
                 node: root.join("bin/node"),
                 runner: root.join("res/runtime").join("runner.js"),
+                shared_runner: root.join("res/runtime").join("shared-runner.js"),
                 ui: root.join("res/ui"),
                 builtin_plugins: Some(root.join("res/plugins")),
                 ffmpeg: Some(root.join("bin/ffmpeg")),
@@ -280,6 +288,7 @@ mod tests {
                 packaged: false,
                 node: "node".into(),
                 runner: source.join("..").join("runtime").join("runner.ts"),
+                shared_runner: source.join("..").join("runtime").join("shared-runner.ts"),
                 ui: source.join("ui"),
                 builtin_plugins: None,
                 ffmpeg: Some(Path::new("/usr/bin").join("ffmpeg")),
@@ -300,13 +309,14 @@ mod tests {
         );
         let runner = paths.runner.clone();
         let missing = paths.missing(|path: &Path| path == runner);
-        assert_eq!(missing.len(), 3, "{missing:?}");
+        assert_eq!(missing.len(), 4, "{missing:?}");
         assert!(
             missing[0].starts_with("Node: ") && missing[0].contains("bin"),
             "{missing:?}"
         );
-        assert!(missing[1].starts_with("interface: "));
-        assert!(missing[2].starts_with("built-in plugins: "));
+        assert!(missing[1].starts_with("shared plugin runner: "));
+        assert!(missing[2].starts_with("interface: "));
+        assert!(missing[3].starts_with("built-in plugins: "));
         assert!(paths.missing(|_: &Path| true).is_empty());
     }
 

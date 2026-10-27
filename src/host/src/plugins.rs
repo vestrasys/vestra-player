@@ -1,5 +1,9 @@
-//! Each trusted plugin gets its own Node process and stdout protocol.
+//! A plugin's host-side state and its runner: its own Node process
+//! (`runner.ts`, one JSONL pipe each way), or a member of the shared runner
+//! (`shared_runner.rs`) for the built-ins the host trusts
+//! (`Host::trust`).
 use crate::Event;
+use crate::shared_runner::{Member, SharedRunner};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use std::{
@@ -46,10 +50,24 @@ impl DataKey {
 /// Bounded per-plugin output queue. Source state alone emits ~10 events/s while playing,
 /// so a small queue disables healthy plugins after a brief event-loop stall.
 const OUTBOUND_CAPACITY: usize = 1024;
-/// `plugin.app` as JSON, set once at start-up and given to every plugin.
-static APP_INFO: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+/// `plugin.app`, set once at start-up and given to every plugin.
+static APP_INFO: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
 pub fn set_app_info(info: &Value) {
-    let _ = APP_INFO.set(info.to_string());
+    let _ = APP_INFO.set(info.clone());
+}
+/// Where a plugin runs.
+pub enum Placement<'a> {
+    /// Its own Node process.
+    Own,
+    /// A member of this shared runner.
+    Shared(&'a mut SharedRunner),
+}
+enum Runner {
+    Own {
+        child: Child,
+        outbound: mpsc::SyncSender<Value>,
+    },
+    Shared(Member),
 }
 pub struct Plugin {
     pub manifest: Manifest,
@@ -62,15 +80,22 @@ pub struct Plugin {
     /// `plugin.dataDirectory`.
     data_directory: Option<PathBuf>,
     pub subscriptions: BTreeSet<String>,
-    child: Child,
-    outbound: mpsc::SyncSender<Value>,
+    runner: Runner,
 }
 impl Plugin {
+    /// A development load (`--plugin`): always its own process.
     pub fn load(directory: &Path, generation: u64, events: mpsc::Sender<Event>) -> Result<Self> {
         let directory = dunce::canonicalize(directory).context("plugin directory")?;
         let manifest = crate::manifest::read_development(&directory)?;
         let key = DataKey::Development(manifest.id.clone());
-        Self::load_manifest(&directory, generation, events, manifest, key)
+        Self::load_manifest(
+            &directory,
+            generation,
+            events,
+            manifest,
+            key,
+            Placement::Own,
+        )
     }
     pub fn load_manifest(
         directory: &Path,
@@ -78,6 +103,7 @@ impl Plugin {
         events: mpsc::Sender<Event>,
         manifest: Manifest,
         data_key: DataKey,
+        placement: Placement<'_>,
     ) -> Result<Self> {
         let directory = dunce::canonicalize(directory)?;
         if manifest.api_version != API {
@@ -104,79 +130,22 @@ impl Plugin {
                     .map_err(|error| diag!("plugin data {}: {error}", dir.display()))
                     .is_ok()
             });
-        let mut command = paths.node_command();
-        if let Some(dir) = &data_directory {
-            command.env("VESTRA_PLUGIN_DATA_DIR", dir);
-        }
-        if let Some(info) = APP_INFO.get() {
-            command.env("VESTRA_APP_INFO", info);
-        }
-        // `plugin.i18n.locale`: fixed for the run.
-        command.env("VESTRA_LOCALE", crate::i18n::locale());
-        let mut child = command
-            .arg(&paths.runner)
-            .arg(&directory)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .with_context(|| paths.node_failure())?;
-        let mut stdin = child.stdin.take().context("plugin stdin")?;
-        let (outbound, output) = mpsc::sync_channel::<Value>(OUTBOUND_CAPACITY);
-        let write_events = events.clone();
-        thread::spawn(move || {
-            for message in output {
-                let mut write = || -> Result<()> {
-                    serde_json::to_writer(&mut stdin, &message)?;
-                    stdin.write_all(b"\n")?;
-                    stdin.flush()?;
-                    Ok(())
-                };
-                if let Err(error) = write() {
-                    let _ = write_events.send(Event::RuntimeFault(
-                        generation,
-                        format!("plugin stdin: {error}"),
-                    ));
-                    break;
-                }
-            }
-        });
-        let stdout = child.stdout.take().context("plugin stdout")?;
-        thread::spawn(move || {
-            let mut reader = BufReader::new(stdout);
-            loop {
-                // Protocol lines are capped at 1 MiB. Oversize/malformed output terminates the instance.
-                let mut bytes = Vec::new();
-                let read = std::io::Read::by_ref(&mut reader)
-                    .take(MAX_MESSAGE_BYTES as u64 + 1)
-                    .read_until(b'\n', &mut bytes);
-                match read {
-                    Ok(0) | Err(_) => break,
-                    Ok(_) if bytes.len() > MAX_MESSAGE_BYTES => {
-                        let _ = events.send(Event::RuntimeFault(
-                            generation,
-                            "protocol message exceeds 1 MiB".into(),
-                        ));
-                        break;
-                    }
-                    Ok(_) => match serde_json::from_slice(&bytes) {
-                        Ok(message) => {
-                            if events.send(Event::Request(generation, message)).is_err() {
-                                return;
-                            }
-                        }
-                        Err(e) => {
-                            let _ = events.send(Event::RuntimeFault(
-                                generation,
-                                format!("invalid protocol: {e}"),
-                            ));
-                            break;
-                        }
-                    },
-                }
-            }
-            let _ = events.send(Event::Exited(generation));
-        });
+        let runner = match placement {
+            Placement::Own => own_process(
+                paths,
+                &directory,
+                data_directory.as_deref(),
+                generation,
+                events,
+            )?,
+            Placement::Shared(shared) => Runner::Shared(shared.start(
+                generation,
+                &manifest.id,
+                &directory,
+                data_directory.as_deref(),
+                APP_INFO.get().unwrap_or(&Value::Null),
+            )?),
+        };
         let catalog = crate::i18n::load(&directory);
         if let Some(catalog) = &catalog {
             crate::i18n::register(&directory, catalog.clone());
@@ -188,15 +157,23 @@ impl Plugin {
             data_key,
             data_directory,
             subscriptions: BTreeSet::new(),
-            child,
-            outbound,
+            runner,
         })
     }
     pub fn send(&mut self, message: Value) -> Result<()> {
-        self.outbound
-            .try_send(message)
-            .map_err(|error| anyhow::anyhow!("plugin output backpressure/disconnected: {error}"))?;
-        Ok(())
+        match &self.runner {
+            Runner::Own { outbound, .. } => outbound.try_send(message).map_err(|error| {
+                anyhow::anyhow!("plugin output backpressure/disconnected: {error}")
+            }),
+            Runner::Shared(member) => member.send(message),
+        }
+    }
+    /// The shared runner this plugin runs in, if it does.
+    pub fn shared_runner(&self) -> Option<crate::shared_runner::RunnerId> {
+        match &self.runner {
+            Runner::Own { .. } => None,
+            Runner::Shared(member) => Some(member.runner()),
+        }
     }
     /// `plugin.dataDirectory`, when the player could create it.
     pub fn data_directory(&self) -> Option<&Path> {
@@ -222,24 +199,114 @@ impl Plugin {
         }
     }
 }
+/// An own process: `node runner.js <directory>`, the plugin's data
+/// directory, `plugin.app` and the locale in its environment.
+fn own_process(
+    paths: &crate::runtime_paths::RuntimePaths,
+    directory: &Path,
+    data_directory: Option<&Path>,
+    generation: u64,
+    events: mpsc::Sender<Event>,
+) -> Result<Runner> {
+    let mut command = paths.node_command();
+    if let Some(dir) = data_directory {
+        command.env("VESTRA_PLUGIN_DATA_DIR", dir);
+    }
+    if let Some(info) = APP_INFO.get() {
+        command.env("VESTRA_APP_INFO", info.to_string());
+    }
+    // `plugin.i18n.locale`: fixed for the run.
+    command.env("VESTRA_LOCALE", crate::i18n::locale());
+    let mut child = command
+        .arg(&paths.runner)
+        .arg(directory)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .with_context(|| paths.node_failure())?;
+    let mut stdin = child.stdin.take().context("plugin stdin")?;
+    let (outbound, output) = mpsc::sync_channel::<Value>(OUTBOUND_CAPACITY);
+    let write_events = events.clone();
+    thread::spawn(move || {
+        for message in output {
+            let mut write = || -> Result<()> {
+                serde_json::to_writer(&mut stdin, &message)?;
+                stdin.write_all(b"\n")?;
+                stdin.flush()?;
+                Ok(())
+            };
+            if let Err(error) = write() {
+                let _ = write_events.send(Event::RuntimeFault(
+                    generation,
+                    format!("plugin stdin: {error}"),
+                ));
+                break;
+            }
+        }
+    });
+    let stdout = child.stdout.take().context("plugin stdout")?;
+    thread::spawn(move || {
+        let mut reader = BufReader::new(stdout);
+        loop {
+            // Protocol lines are capped at 1 MiB. Oversize/malformed output terminates the instance.
+            let mut bytes = Vec::new();
+            let read = std::io::Read::by_ref(&mut reader)
+                .take(MAX_MESSAGE_BYTES as u64 + 1)
+                .read_until(b'\n', &mut bytes);
+            match read {
+                Ok(0) | Err(_) => break,
+                Ok(_) if bytes.len() > MAX_MESSAGE_BYTES => {
+                    let _ = events.send(Event::RuntimeFault(
+                        generation,
+                        "protocol message exceeds 1 MiB".into(),
+                    ));
+                    break;
+                }
+                Ok(_) => match serde_json::from_slice(&bytes) {
+                    Ok(message) => {
+                        if events.send(Event::Request(generation, message)).is_err() {
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        let _ = events.send(Event::RuntimeFault(
+                            generation,
+                            format!("invalid protocol: {e}"),
+                        ));
+                        break;
+                    }
+                },
+            }
+        }
+        let _ = events.send(Event::Exited(generation));
+    });
+    Ok(Runner::Own { child, outbound })
+}
 impl Drop for Plugin {
     fn drop(&mut self) {
         if let Some(catalog) = &self.catalog {
             crate::i18n::unregister(&self.directory, catalog);
         }
-        let _ = self.send(json!({"event":"runtime.stop","data":null}));
-        let deadline = Instant::now() + Duration::from_millis(300);
-        let mut exited = false;
-        while Instant::now() < deadline {
-            if self.child.try_wait().ok().flatten().is_some() {
-                exited = true;
-                break;
+        match &mut self.runner {
+            // The runner lives on; this member's cleanup gets the same window.
+            Runner::Shared(member) => member.stop(),
+            Runner::Own { child, outbound } => {
+                let _ = outbound.try_send(json!({"event":"runtime.stop","data":null}));
+                let deadline = Instant::now() + Duration::from_millis(300);
+                let mut exited = false;
+                while Instant::now() < deadline {
+                    if child.try_wait().ok().flatten().is_some() {
+                        exited = true;
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(5));
+                }
+                if !exited {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
             }
-            thread::sleep(Duration::from_millis(5));
-        }
-        if !exited {
-            let _ = self.child.kill();
-            let _ = self.child.wait();
         }
     }
 }
