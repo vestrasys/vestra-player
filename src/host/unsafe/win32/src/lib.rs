@@ -6,7 +6,8 @@
 //! dark title bar, letting the running player take the foreground for a
 //! second launch's files, waiting for a display's vertical blank
 //! (`VBlank`, the redraw clock) and keeping a full-screen window from
-//! matching its display exactly (`unmatch_display`). Each is one
+//! matching its display exactly (`unmatch_display`), and whether a drive
+//! letter is a network drive (`drive_is_remote`). Each is one
 //! call with plain integer arguments or one local out-parameter; the public
 //! API is safe. Compiled only on Windows (cross-checked from macOS by
 //! `npm run portability`, not yet run on Windows).
@@ -50,6 +51,23 @@ pub fn modifier_keys() -> (bool, bool, bool) {
     // memory-safety preconditions. A negative result (high bit) means "down".
     let down = |key: u16| unsafe { GetKeyState(i32::from(key)) } < 0;
     (down(VK_MENU), down(VK_SHIFT), down(VK_CONTROL))
+}
+
+/// `GetDriveTypeW`'s result for a network drive (WinBase.h `DRIVE_REMOTE`).
+const DRIVE_REMOTE: u32 = 4;
+
+/// Drive `letter` (`'A'..='Z'`, any case) is a network drive (a mapped
+/// share). False for other letters and drives that do not exist.
+pub fn drive_is_remote(letter: char) -> bool {
+    if !letter.is_ascii_alphabetic() {
+        return false;
+    }
+    let root: Vec<u16> = format!("{}:\\", letter.to_ascii_uppercase())
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
+    // SAFETY: `root` is a NUL-terminated UTF-16 string that outlives the call.
+    unsafe { windows_sys::Win32::Storage::FileSystem::GetDriveTypeW(root.as_ptr()) == DRIVE_REMOTE }
 }
 
 /// The system double-click time in milliseconds.

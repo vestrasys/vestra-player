@@ -10,68 +10,96 @@ use rsmpv::{EndFileReason, Event as MpvEvent, Mpv, Node};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, fs::File, path::Path, sync::Arc};
 
+/// A local file played under a lease that snapshot/clip workers read, with
+/// libmpv reading a second handle verified to be the leased object
+/// (`Lease::matches_file`). Unix: libmpv reads that handle as `fd://`.
+/// Windows: an fd cannot cross into libmpv's C runtime, so it reads it
+/// through the `vestra-lease://` stream protocol (lease_stream.rs). libmpv
+/// sees no path either way; leased loads force the lavf demuxer
+/// (`load_options`), so mkv ordered chapters/editions are not followed.
 struct LocalMedia {
     // This open description is used exclusively by libmpv, never by workers.
-    // Read only by the `fd://` route, which is Unix only.
-    #[cfg_attr(not(unix), allow(dead_code))]
+    #[cfg(unix)]
     playback: File,
+    #[cfg(windows)]
+    playback: crate::lease_stream::Registration,
     lease: Arc<crate::source_lease::Lease>,
 }
 impl LocalMedia {
-    fn open(source: &str) -> Result<Option<Arc<Self>>, String> {
-        #[cfg(unix)]
-        {
-            // Keep path-relative playlist/disc/reference loaders on their existing
-            // path route; this finite lease route is for ordinary self-contained media.
-            let extension = Path::new(source)
-                .extension()
-                .and_then(|x| x.to_str())
-                .unwrap_or("")
-                .to_ascii_lowercase();
-            if !matches!(
-                extension.as_str(),
-                "mp4"
-                    | "m4v"
-                    | "mov"
-                    | "mkv"
-                    | "webm"
-                    | "avi"
-                    | "mp3"
-                    | "m4a"
-                    | "flac"
-                    | "wav"
-                    | "ogg"
-                    | "opus"
-            ) || source.contains("://")
-                || !Path::new(source).is_file()
-            {
-                return Ok(None);
-            }
+    /// Ordinary self-contained media on a local path: the lease route. Keep
+    /// path-relative playlist/disc/reference loaders on their path route.
+    fn eligible(source: &str) -> bool {
+        let extension = Path::new(source)
+            .extension()
+            .and_then(|x| x.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        matches!(
+            extension.as_str(),
+            "mp4"
+                | "m4v"
+                | "mov"
+                | "mkv"
+                | "webm"
+                | "avi"
+                | "mp3"
+                | "m4a"
+                | "flac"
+                | "wav"
+                | "ogg"
+                | "opus"
+        ) && !source.contains("://")
+            && Path::new(source).is_file()
+    }
+    /// `streams`: Windows' lease protocol is registered on this player.
+    fn open(source: &str, streams: bool) -> Result<Option<Arc<Self>>, String> {
+        if !Self::eligible(source) || (cfg!(windows) && !streams) {
+            return Ok(None);
+        }
+        let opened = (|| -> Result<(File, crate::source_lease::Lease), String> {
             let playback = File::open(source).map_err(|e| e.to_string())?;
             let lease =
                 crate::source_lease::Lease::open(Path::new(source)).map_err(|e| e.to_string())?;
             if !lease.matches_file(&playback).map_err(|e| e.to_string())? {
                 return Err("source changed between independent opens".into());
             }
-            Ok(Some(Arc::new(Self {
-                playback,
-                lease: Arc::new(lease),
-            })))
-        }
-        #[cfg(not(unix))]
+            Ok((playback, lease))
+        })();
+        let (playback, lease) = match opened {
+            Ok(opened) => opened,
+            // Windows: libmpv opens the path itself and reports its own
+            // error; the file plays without snapshots if it can.
+            Err(error) if cfg!(windows) => {
+                diag!("host.error source lease: {error}");
+                return Ok(None);
+            }
+            Err(error) => return Err(error),
+        };
+        #[cfg(windows)]
+        let playback = crate::lease_stream::Registration::new(playback);
+        #[cfg(not(any(unix, windows)))]
         {
-            let _ = source;
-            Ok(None)
+            let _ = (playback, lease);
+            return Ok(None);
         }
+        #[cfg(any(unix, windows))]
+        Ok(Some(Arc::new(Self {
+            playback,
+            lease: Arc::new(lease),
+        })))
     }
     #[cfg(unix)]
     fn url(&self) -> String {
         use std::os::fd::AsRawFd;
         format!("fd://{}", self.playback.as_raw_fd())
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     fn url(&self) -> String {
-        unreachable!("local fd sources unavailable on this target")
+        self.playback.url()
+    }
+    #[cfg(not(any(unix, windows)))]
+    fn url(&self) -> String {
+        unreachable!("local leased sources unavailable on this target")
     }
 }
 
@@ -90,6 +118,8 @@ pub struct Sources {
     local_media: BTreeMap<i64, Arc<LocalMedia>>,
     current_local: Option<(u64, Arc<LocalMedia>)>,
     lease_ready: Option<(i64, u64)>,
+    /// Windows: the lease stream protocol is registered on the player.
+    lease_streams: bool,
     /// `player.setLoop`: (a, b, count) as requested; mpv counts down in
     /// `remaining-ab-loops`, which is not passed on (ruling R-M2).
     ab_loop: Option<(f64, f64, Option<u64>)>,
@@ -543,6 +573,23 @@ impl Sources {
             self.session.state().phase == Phase::Ready
                 && ticket.stamp.generation == self.generation()
         })
+    }
+    /// Windows: lets `mpv` read leased local files (lease_stream.rs); until
+    /// then, or if it fails, local files play by path without snapshots.
+    /// Elsewhere nothing to do (`fd://`).
+    pub fn register_lease_streams(&mut self, mpv: &Mpv) {
+        #[cfg(windows)]
+        match crate::lease_stream::register(mpv) {
+            Ok(()) => self.lease_streams = true,
+            Err(error) => diag!("host.error lease stream protocol: {error}"),
+        }
+        #[cfg(not(windows))]
+        let _ = mpv;
+    }
+    /// libmpv entry `entry` reads a leased local file (its container stream
+    /// numbers are the worker's: the load forces lavf).
+    pub fn leased(&self, entry: i64) -> bool {
+        self.local_media.contains_key(&entry)
     }
     /// Actual FileLoaded binding survives an ended->seek playback cycle change.
     pub fn presentation_load(&self) -> Option<(i64, IntentTicket)> {
@@ -1417,7 +1464,7 @@ impl Sources {
                 source,
                 start_paused,
                 ..
-            } => LocalMedia::open(source).and_then(|media| {
+            } => LocalMedia::open(source, self.lease_streams).and_then(|media| {
                 #[cfg(feature = "producer-audio")]
                 {
                     self.producers.deactivate();
@@ -1428,7 +1475,8 @@ impl Sources {
                     .map(|media| media.url())
                     .unwrap_or_else(|| source.clone());
                 // Keep the previous native load's File until its EndFile/new Ready.
-                let entry = load(mpv, &url, *start_paused)?;
+                let leased = media.as_ref().map(|_| source.as_str());
+                let entry = load(mpv, &url, *start_paused, leased)?;
                 self.current_local = media
                     .as_ref()
                     .map(|media| (ticket.stamp.generation, media.clone()));
@@ -1449,7 +1497,9 @@ impl Sources {
                     .as_ref()
                     .map(|media| media.url())
                     .unwrap_or_else(|| self.session.state().source.clone().unwrap_or_default());
-                load(mpv, &source, false).map(|entry| {
+                let path = self.session.state().source.clone().unwrap_or_default();
+                let leased = media.as_ref().map(|_| path.as_str());
+                load(mpv, &source, false, leased).map(|entry| {
                     if let Some(media) = media {
                         self.local_media.insert(entry, media);
                     }
@@ -1669,14 +1719,109 @@ fn added_external(
     let first = new.next()?.clone();
     new.next().is_none().then_some(first)
 }
-fn load(mpv: &Mpv, source: &str, paused: bool) -> Result<i64, String> {
-    load_with_options(mpv, source, paused, "")
+/// `leased`: `source` is a [`LocalMedia`] url (`fd://` on Unix,
+/// `vestra-lease://` on Windows) for the local file at this path.
+fn load(mpv: &Mpv, source: &str, paused: bool, leased: Option<&str>) -> Result<i64, String> {
+    match leased {
+        Some(path) => load_options(mpv, source, paused, &leased_options(mpv, path), true),
+        None => load_options(mpv, source, paused, "", false),
+    }
+}
+
+/// What libmpv derives from a local file's path, given for a leased load,
+/// whose url carries none: the demuxer cache of a file on a network share
+/// (Windows; Unix `fd://` lets libmpv see the remote file system itself),
+/// and cover art beside an audio file ([`cover_art`]).
+fn leased_options(mpv: &Mpv, path: &str) -> String {
+    let mut options = String::new();
+    #[cfg(windows)]
+    if crate::lease_stream::on_network(path) {
+        options.push_str(",cache=yes");
+    }
+    let auto = mpv
+        .get_property::<String>("cover-art-auto")
+        .unwrap_or_default();
+    let whitelist = mpv
+        .get_property::<String>("cover-art-whitelist")
+        .unwrap_or_default();
+    // One path list (`;` on Windows, `:` elsewhere): a repeated
+    // `cover-art-files-append` in loadfile options keeps only the last.
+    let separator = if cfg!(windows) { ';' } else { ':' };
+    let images = cover_art(Path::new(path), &auto, &whitelist)
+        .iter()
+        .map(|image| image.to_string_lossy().into_owned())
+        .filter(|image| !image.contains(separator))
+        .collect::<Vec<_>>()
+        .join(&separator.to_string());
+    if !images.is_empty() {
+        // `%n%` quotes a value of n bytes (mpv's key=value list syntax).
+        options.push_str(&format!(",cover-art-files=%{}%{images}", images.len()));
+    }
+    options
+}
+
+/// The pictures mpv's `cover-art-auto=exact` loads for `media` when it reads
+/// it by path, best first: images with the same name (any case) and then
+/// those named in `cover-art-whitelist` (`cover.jpg`, `Folder.png`, …) in its
+/// order. libmpv adds them to audio files only (no video stream); a leased
+/// load picks by extension instead. Nothing for `no`; the host sets no other
+/// mode (`fuzzy` and `all` are treated as `exact`).
+fn cover_art(media: &Path, auto: &str, whitelist: &str) -> Vec<std::path::PathBuf> {
+    const AUDIO: [&str; 6] = ["mp3", "m4a", "flac", "wav", "ogg", "opus"];
+    const IMAGES: [&str; 6] = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
+    let lower = |name: Option<&std::ffi::OsStr>| {
+        name.and_then(|name| name.to_str())
+            .map(str::to_lowercase)
+            .unwrap_or_default()
+    };
+    if auto == "no" || !AUDIO.contains(&lower(media.extension()).as_str()) {
+        return Vec::new();
+    }
+    let stem = lower(media.file_stem());
+    let (Some(dir), false) = (media.parent(), stem.is_empty()) else {
+        return Vec::new();
+    };
+    let whitelist = whitelist
+        .split(',')
+        .map(str::to_lowercase)
+        .collect::<Vec<_>>();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut found = entries
+        .flatten()
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+        .filter_map(|entry| {
+            let path = entry.path();
+            if !IMAGES.contains(&lower(path.extension()).as_str()) {
+                return None;
+            }
+            let name = lower(path.file_stem());
+            let rank = if name == stem {
+                0
+            } else {
+                1 + whitelist.iter().position(|listed| *listed == name)?
+            };
+            Some((rank, lower(path.file_name()), path))
+        })
+        .collect::<Vec<_>>();
+    found.sort();
+    found.into_iter().map(|(_, _, path)| path).collect()
 }
 fn load_with_options(mpv: &Mpv, source: &str, paused: bool, extra: &str) -> Result<i64, String> {
+    load_options(mpv, source, paused, extra, false)
+}
+fn load_options(
+    mpv: &Mpv,
+    source: &str,
+    paused: bool,
+    extra: &str,
+    leased: bool,
+) -> Result<i64, String> {
     let pause = if paused { "pause=yes" } else { "pause=no" };
     // ff-index is documented as reliable only with the mature lavf demuxer.
     // Apply this per leased, self-contained local load, not arbitrary URL loaders.
-    let options = if source.starts_with("fd://") {
+    let options = if leased || source.starts_with("fd://") {
         format!("{pause},demuxer=lavf,demuxer-lavf-probe-info=yes,rebase-start-time=yes")
     } else {
         pause.into()
@@ -2297,5 +2442,287 @@ mod resolution_tests {
             sources.session.state().terminal_reason,
             Some(EndReason::Failed("需要登录".into()))
         );
+    }
+}
+
+#[cfg(test)]
+mod lease_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    /// Ordinary local media gets a lease on Unix and Windows alike (Windows
+    /// had none before 0.5.8: snapshots were never available there); libmpv
+    /// reads it as `fd://` or `vestra-lease://`, never by path.
+    #[test]
+    fn ordinary_local_media_is_leased_on_unix_and_windows() {
+        let dir = tempfile::tempdir().unwrap();
+        let clip = dir.path().join("clip.MP4");
+        std::fs::write(&clip, b"not decoded here").unwrap();
+        let path = clip.to_str().unwrap();
+        let media = LocalMedia::open(path, true).unwrap();
+        if cfg!(any(unix, windows)) {
+            let media = media.expect("a leased local file");
+            assert_eq!(media.lease.facts().len, 16);
+            let url = media.url();
+            #[cfg(windows)]
+            {
+                assert!(url.starts_with("vestra-lease://"), "{url}");
+                let mut stream = crate::lease_stream::open(&url).unwrap();
+                let mut bytes = [0; 16];
+                assert_eq!(stream.read(&mut bytes).unwrap(), 16);
+                assert_eq!(&bytes, b"not decoded here");
+                // Without the protocol on the player: played by path, no lease.
+                assert!(LocalMedia::open(path, false).unwrap().is_none());
+            }
+            #[cfg(unix)]
+            assert!(url.starts_with("fd://"), "{url}");
+        }
+        let playlist = dir.path().join("list.m3u");
+        std::fs::write(&playlist, b"clip.MP4\n").unwrap();
+        for other in [
+            playlist.to_str().unwrap(),
+            dir.path().join("missing.mp4").to_str().unwrap(),
+            dir.path().to_str().unwrap(),
+            "https://example.com/a.mp4",
+        ] {
+            assert!(LocalMedia::open(other, true).unwrap().is_none(), "{other}");
+        }
+    }
+
+    /// Windows: when the file cannot be leased (here another program holds
+    /// it without sharing), the open goes on without a lease; libmpv opens
+    /// the path and reports its own error if it cannot either.
+    #[cfg(windows)]
+    #[test]
+    fn a_file_that_cannot_be_leased_opens_without_a_lease() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let clip = dir.path().join("clip.mp4");
+        std::fs::write(&clip, b"bytes").unwrap();
+        let exclusive = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&clip)
+            .unwrap();
+        let path = clip.to_str().unwrap();
+        assert!(LocalMedia::open(path, true).unwrap().is_none());
+        drop(exclusive);
+        assert!(LocalMedia::open(path, true).unwrap().is_some());
+    }
+
+    fn ffmpeg() -> std::path::PathBuf {
+        std::env::var_os("VESTRA_FFMPEG").map_or_else(|| "ffmpeg".into(), Into::into)
+    }
+
+    fn make(args: &[&str], path: &Path) {
+        let made = std::process::Command::new(ffmpeg())
+            .args(["-loglevel", "error", "-y"])
+            .args(args)
+            .arg(path)
+            .status()
+            .unwrap();
+        assert!(made.success());
+    }
+
+    fn clip(path: &Path) {
+        make(
+            &[
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=320x240:rate=30",
+                "-t",
+                "2",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-pix_fmt",
+                "yuv420p",
+            ],
+            path,
+        );
+    }
+
+    /// mpv 0.41 by path, `cover-art-auto=exact` (checked with libmpv): the
+    /// same name in any case first, then whitelisted names in list order;
+    /// not `Song-extra.jpg` or `Song.mp3.jpg` (those are `fuzzy`), and none
+    /// for a video file.
+    #[test]
+    fn cover_art_follows_mpvs_exact_rule() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in [
+            "Song.mp3",
+            "song.jpg",
+            "Song.png",
+            "cover.jpg",
+            "Folder.png",
+            "AlbumArt.webp",
+            "Song-extra.jpg",
+            "Song.mp3.jpg",
+            "other.jpg",
+            "Song.txt",
+            "clip.mp4",
+            "clip.jpg",
+        ] {
+            std::fs::write(dir.path().join(name), b"").unwrap();
+        }
+        std::fs::create_dir(dir.path().join("front.jpg")).unwrap();
+        let whitelist = "AlbumArt,Album,cover,front,AlbumArtSmall,Folder,.folder,thumb";
+        let names = |media: &str, auto: &str| {
+            cover_art(&dir.path().join(media), auto, whitelist)
+                .iter()
+                .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names("Song.mp3", "exact"),
+            [
+                "song.jpg",
+                "Song.png",
+                "AlbumArt.webp",
+                "cover.jpg",
+                "Folder.png"
+            ]
+        );
+        assert!(names("Song.mp3", "no").is_empty());
+        assert!(names("clip.mp4", "exact").is_empty());
+        assert_eq!(cover_art(Path::new("Song.mp3"), "exact", "").len(), 0);
+    }
+
+    fn player() -> Mpv {
+        Mpv::builder()
+            .unwrap()
+            .set_property("vo", "null")
+            .unwrap()
+            .set_property("ao", "null")
+            .unwrap()
+            .set_property("keep-open", true)
+            .unwrap()
+            .set_property("cover-art-auto", "exact")
+            .unwrap()
+            .build()
+            .unwrap()
+    }
+
+    fn submit(sources: &mut Sources, mpv: &Mpv, id: u64, intent: Value) {
+        sources
+            .dispatch(
+                mpv,
+                1,
+                "source.submit",
+                &json!({"operationId":id,"intent":intent}),
+            )
+            .unwrap();
+    }
+
+    /// Pumps events into `sources` until one matches `until` (20 s at most).
+    fn pump(sources: &mut Sources, mpv: &Mpv, until: impl Fn(&MpvEvent) -> bool) {
+        let end = Instant::now() + Duration::from_secs(20);
+        loop {
+            assert!(Instant::now() < end, "no event in time");
+            while let Some(event) = mpv.poll_event() {
+                sources.event(&event);
+                if until(&event) {
+                    return;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    /// Real local files: a leased load offers snapshots (the GUI's Video >
+    /// Snapshot items); the playing file can be renamed and, after the next
+    /// file or Close, deleted; without the protocol a file plays by path
+    /// without snapshots. Needs FFmpeg with libx264 (`VESTRA_FFMPEG`, else
+    /// `ffmpeg` on PATH):
+    /// `cargo test --locked -- --ignored a_local_file_offers_snapshots`.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn a_local_file_offers_snapshots() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("first.mp4");
+        let second = dir.path().join("second.mp4");
+        clip(&first);
+        clip(&second);
+        let mpv = player();
+        let mut sources = Sources::default();
+        sources.register_lease_streams(&mpv);
+        let restarted = |event: &MpvEvent| matches!(event, MpvEvent::PlaybackRestart);
+        let open =
+            |path: &Path| json!({"kind":"open","source":path.to_str().unwrap(),"startPaused":true});
+        submit(&mut sources, &mpv, 1, open(&first));
+        pump(&mut sources, &mpv, restarted);
+        let state = sources.snapshot(&mpv);
+        assert_eq!(state["container"], "mov,mp4,m4a,3gp,3g2,mj2", "{state}");
+        assert_eq!(state["capabilities"]["snapshotSource"], true, "{state}");
+        let path = mpv.get_property::<String>("path").unwrap();
+        assert!(
+            path.starts_with("fd://") || path.starts_with("vestra-lease://"),
+            "{path}"
+        );
+        let lease = sources.lease(sources.generation()).unwrap();
+        assert_eq!(lease.facts().len, std::fs::metadata(&first).unwrap().len());
+        drop(lease);
+        // Playing: the file can be renamed, and playback and the lease go on.
+        let moved = dir.path().join("moved.mp4");
+        std::fs::rename(&first, &moved).unwrap();
+        let seek = json!({"kind":"control","control":{"kind":"seek","seconds":1.0}});
+        submit(&mut sources, &mpv, 2, seek);
+        pump(&mut sources, &mpv, restarted);
+        let state = sources.snapshot(&mpv);
+        assert_eq!(state["capabilities"]["snapshotSource"], true, "{state}");
+        // The next file: the previous one can be deleted.
+        submit(&mut sources, &mpv, 3, open(&second));
+        pump(&mut sources, &mpv, restarted);
+        std::fs::remove_file(&moved).unwrap();
+        let state = sources.snapshot(&mpv);
+        assert_eq!(state["capabilities"]["snapshotSource"], true, "{state}");
+        // Close: the file can be deleted.
+        submit(&mut sources, &mpv, 4, json!({"kind":"close"}));
+        pump(&mut sources, &mpv, |event| {
+            matches!(event, MpvEvent::EndFile { .. })
+        });
+        std::fs::remove_file(&second).unwrap();
+        // Audio: the cover art beside it is loaded as mpv would by path.
+        let song = dir.path().join("Song.mp3");
+        make(&["-f", "lavfi", "-i", "sine=d=2"], &song);
+        for image in ["song.jpg", "cover.jpg"] {
+            let picture = ["-f", "lavfi", "-i", "color=c=red:s=16x16", "-frames:v", "1"];
+            make(&picture, &dir.path().join(image));
+        }
+        submit(&mut sources, &mpv, 5, open(&song));
+        pump(&mut sources, &mpv, restarted);
+        let pictures = (0..mpv.get_property::<i64>("track-list/count").unwrap())
+            .filter_map(|n| {
+                let name = mpv
+                    .get_property::<String>(&format!("track-list/{n}/external-filename"))
+                    .ok()?;
+                let selected = mpv
+                    .get_property::<bool>(&format!("track-list/{n}/selected"))
+                    .unwrap();
+                let file = Path::new(&name).file_name()?.to_str()?.to_owned();
+                Some((file, selected))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            pictures,
+            [
+                ("song.jpg".to_owned(), true),
+                ("cover.jpg".to_owned(), false)
+            ]
+        );
+        // Without the protocol (Windows): plays by path, no snapshots.
+        if cfg!(windows) {
+            let third = dir.path().join("third.mp4");
+            clip(&third);
+            let plain = player();
+            let mut unleased = Sources::default();
+            submit(&mut unleased, &plain, 1, open(&third));
+            pump(&mut unleased, &plain, restarted);
+            let state = unleased.snapshot(&plain);
+            assert_eq!(state["phase"], "ready", "{state}");
+            assert_eq!(state["capabilities"]["snapshotSource"], false, "{state}");
+        }
     }
 }

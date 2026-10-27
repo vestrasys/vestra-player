@@ -1015,6 +1015,63 @@ mod tests {
         assert_eq!(failed.cancel(), CancelResult::Terminal);
     }
 
+    /// The held lease feeds FFmpeg as `HELD_FILE_INPUT` (Windows: `fd:`) and
+    /// a still comes out. Needs FFmpeg/FFprobe with libx264: `VESTRA_FFMPEG`
+    /// (`env.ps1 -Ffmpeg`), else `ffmpeg` on PATH with `ffprobe` beside it.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn a_still_is_rendered_from_the_held_lease() {
+        let ffmpeg = std::env::var_os("VESTRA_FFMPEG").map_or_else(
+            || {
+                let names = if cfg!(windows) {
+                    "ffmpeg.exe"
+                } else {
+                    "ffmpeg"
+                };
+                std::env::split_paths(&std::env::var_os("PATH").unwrap())
+                    .map(|dir| dir.join(names))
+                    .find(|path| path.is_file())
+                    .expect("ffmpeg on PATH")
+            },
+            PathBuf::from,
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("clip.mp4");
+        let made = Command::new(&ffmpeg)
+            .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+            .arg("testsrc2=size=320x240:rate=30")
+            .args(["-t", "2", "-c:v", "libx264", "-preset", "ultrafast"])
+            .args(["-pix_fmt", "yuv420p"])
+            .arg(&source)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let lease = Arc::new(Lease::open(&source).unwrap());
+        let destination = dir.path().join("still.png");
+        let control = Arc::new(Control::new());
+        run(
+            RenderRequest {
+                lease,
+                time: 1.0,
+                destination: destination.clone(),
+                ffmpeg,
+                processed: None,
+                output: Output::Still(Still::Png),
+                video_stream: 0,
+                source_origin: 0.,
+            },
+            control.clone(),
+        );
+        assert_eq!(
+            control.snapshot().1,
+            Some(Outcome::Completed {
+                destination: destination.clone()
+            })
+        );
+        let still = image::open(&destination).unwrap();
+        assert_eq!((still.width(), still.height()), (320, 240));
+    }
+
     #[test]
     fn stderr_drain_keeps_only_a_bounded_suffix() {
         let mut input = vec![b'x'; STDERR_TAIL * 3];

@@ -23,6 +23,9 @@ mod frame_pacing;
 mod i18n;
 mod input_trace;
 mod launch;
+// Windows: libmpv reads leased local files through stream_cb (Unix: fd://).
+#[cfg(any(windows, test))]
+mod lease_stream;
 mod manifest;
 mod media_jobs;
 mod media_tracks;
