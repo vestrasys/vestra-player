@@ -14,18 +14,31 @@ import {
   cellPlace,
   cellTime,
   coarseToFine,
+  EXACT_BUDGET_S,
+  exactCellCount,
   MAX_CELLS,
   nearestMade,
+  PART_S,
+  partEstimateMs,
+  partition,
   placeCell,
+  plan,
   sheetSize,
+  SLOW_ALLOWANCE_MS,
+  SLOW_FACTOR,
   stripCell,
+  tooSlow,
 } from "../sprite.ts";
 import {
   BATCH,
   cellsArgs,
   clock,
+  exactArgs,
+  keyframesArgs,
   MAX_FAILURES,
   NEEDS_FFMPEG,
+  parseKeyframes,
+  PART_TIMEOUT_MS,
   SEEK_QUIET_MS,
   START_DELAY_MS,
   START_FALLBACK_MS,
@@ -35,14 +48,27 @@ import {
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost(), dataDirectory?: string) =>
   startPlugin(activate, { directory, host, locale: "en", ...(dataDirectory ? { dataDirectory } : {}) });
+/** 4K60 in software: a 20 s file is 10 billion pixels, four times the exact budget, so these tests get keyframe sprites. */
 const VIDEO = {
+  codec: "hevc",
+  width: 3840,
+  height: 2160,
+  fps: 60,
+  decoder: "hevc",
+  pixelFormat: "yuv420p10le",
+  hwdec: "no",
+} as unknown as PlaybackStats["video"];
+/** 1080p30 in software: 20 s is 1.2 billion pixels (5 s of decoding): exact mode. */
+const SMALL_VIDEO = {
   codec: "h264",
   width: 1920,
   height: 1080,
-  fps: 24,
+  fps: 30,
   decoder: "h264",
   pixelFormat: "yuv420p",
+  hwdec: "no",
 } as unknown as PlaybackStats["video"];
+const facts = (video: PlaybackStats["video"], over: Partial<NonNullable<PlaybackStats["video"]>> = {}) => ({ ...video!, ...over });
 
 // A ceiling, not a delay: generous because the whole suite runs in parallel.
 async function until(predicate: () => boolean | Promise<boolean>, ms = 5000) {
@@ -71,6 +97,9 @@ function playing(host: TestHost, source: string, duration = 20) {
 
 const cellRuns = (host: TestHost) => host.tools.calls.filter((c) => c.tool === "ffmpeg" && c.args.includes("-skip_frame"));
 const ffmpegRuns = (host: TestHost) => host.tools.calls.filter((c) => c.tool === "ffmpeg");
+/** Exact mode's runs: one ffmpeg per part (`-frames:v`). */
+const partRuns = (host: TestHost) => host.tools.calls.filter((c) => c.tool === "ffmpeg" && c.args.includes("-frames:v") && c.args.includes("-vf"));
+const partOf = (args: string[]) => ({ n: Number(args[args.indexOf("-frames:v") + 1]), ss: args.includes("-ss") ? args[args.indexOf("-ss") + 1]! : null });
 /** The seek times of one run (one per cell it makes). */
 const seeksOf = (args: string[]) => args.flatMap((arg, i) => (arg === "-ss" ? [args[i + 1]!] : []));
 const cellsMade = (host: TestHost) => cellRuns(host).reduce((n, c) => n + seeksOf(c.args).length, 0);
@@ -86,6 +115,33 @@ function fakeFfmpeg(host: TestHost, gate?: () => Promise<void>) {
     if (args.includes("-skip_frame")) {
       await gate?.();
       return { stdout: new Uint8Array(CELL_BYTES * seeksOf(args).length).fill(1) };
+    }
+    if (args.at(-1) === "-") return { stdout: new Uint8Array(readFileSync(input)) };
+    copyFileSync(input, args.at(-1)!);
+    return {};
+  });
+}
+
+/**
+ * ffmpeg and ffprobe as exact mode uses them: ffprobe lists packets with
+ * keyframes at `keyframes` seconds; a part run writes its `-frames:v` cells
+ * (`short` fewer for the part seeking to `short.ss`), each byte the cell's
+ * index in the part; `fail` makes every part run fail.
+ */
+function fakeExact(host: TestHost, keyframes: number[], options: { short?: { ss: string; by: number }; fail?: boolean } = {}) {
+  host.tools.handle("ffprobe", () => ({
+    stdout: [...keyframes.flatMap((k) => [`${k.toFixed(6)},K__`, `${(k + 0.033).toFixed(6)},___`]), "N/A,K__", ""].join("\n"),
+  }));
+  host.tools.handle("ffmpeg", async (args) => {
+    const input = args[args.indexOf("-i") + 1]!;
+    if (args.includes("-skip_frame")) return { stdout: new Uint8Array(CELL_BYTES * seeksOf(args).length).fill(1) };
+    if (args.includes("-frames:v") && args.includes("-vf")) {
+      if (options.fail) throw new HostError("failed", "Invalid data found when processing input");
+      const { n, ss } = partOf(args);
+      const cells = options.short && options.short.ss === ss ? n - options.short.by : n;
+      const out = new Uint8Array(CELL_BYTES * cells);
+      for (let slot = 0; slot < cells; slot++) out.fill(slot + 1, slot * CELL_BYTES, (slot + 1) * CELL_BYTES);
+      return { stdout: out };
     }
     if (args.at(-1) === "-") return { stdout: new Uint8Array(readFileSync(input)) };
     copyFileSync(input, args.at(-1)!);
@@ -119,6 +175,8 @@ function fakeClock(host: TestHost) {
       now = end;
       await host.settle();
     },
+    /** Move the clock without running timers (time passing inside one ffmpeg run). */
+    tick: (ms: number) => void (now += ms),
     restore: () => Object.assign(clock, saved),
   };
 }
@@ -203,18 +261,296 @@ test("I07 a run makes up to five keyframes: per input -noaccurate_seek -ss -copy
   assert.equal(BATCH, 5);
 });
 
+// ------------------------------------------------------------------ exact mode (0.2.2)
+
+test("0.2.2 plan: exact within the decoding budget, keyframes beyond it (4K always), no facts → keyframes; a slow part ends the pass", () => {
+  assert.equal(EXACT_BUDGET_S, 15);
+  // 1080p30 software: 62 million pixels a second, 4 ns each → 60 s fits, 61 s does not.
+  assert.deepEqual(plan(20, facts(SMALL_VIDEO)), { mode: "exact", count: 40 });
+  assert.deepEqual(plan(60, facts(SMALL_VIDEO)), { mode: "exact", count: 120 });
+  assert.deepEqual(plan(61, facts(SMALL_VIDEO)), { mode: "keyframe", count: 30 });
+  // 1080p60: 30 s.
+  assert.equal(plan(30, facts(SMALL_VIDEO, { fps: 60 })).mode, "exact");
+  assert.equal(plan(31, facts(SMALL_VIDEO, { fps: 60 })).mode, "keyframe");
+  // 4K60: 7.5 s, so any real file is keyframes; the player's hardware decoding changes nothing (its engine is not borrowed).
+  assert.deepEqual(plan(20, facts(VIDEO)), { mode: "keyframe", count: 10 });
+  assert.equal(plan(20, facts(VIDEO, { hwdec: "d3d11va-copy" })).mode, "keyframe");
+  assert.equal(plan(7, facts(VIDEO, { hwdec: "d3d11va-copy" })).mode, "exact");
+  // Without the facts (an older player, no video yet): the keyframe sprite.
+  assert.deepEqual(plan(20, null), { mode: "keyframe", count: 10 });
+  assert.equal(plan(20, facts(SMALL_VIDEO, { width: null })).mode, "keyframe");
+  assert.equal(plan(20, facts(SMALL_VIDEO, { fps: 0 })).mode, "keyframe");
+  // Cells: every half second, never finer than a frame, at most 200 (then duration/200 apart).
+  assert.equal(exactCellCount(20, 30), 40);
+  assert.equal(exactCellCount(100, 30), 200);
+  assert.equal(exactCellCount(150, 30), 200);
+  assert.equal(exactCellCount(0.3, 30), 1);
+  assert.equal(exactCellCount(20, 1), 20, "a 1 fps slideshow: one cell per frame");
+  assert.equal(exactCellCount(20, 0.4), 8);
+  assert.deepEqual(plan(20, facts(SMALL_VIDEO, { fps: 1 })), { mode: "exact", count: 20 });
+  // A part's estimate: its share of the video at one thread; twice that plus a second is too slow.
+  assert.equal(SLOW_FACTOR, 2);
+  assert.equal(SLOW_ALLOWANCE_MS, 1000);
+  const estimate = partEstimateMs({ first: 0, n: 20, start: 0 }, 40, 20, facts(SMALL_VIDEO)); // 10 s of 1080p30
+  assert.equal(Math.round(estimate), 2488);
+  assert.equal(tooSlow(5000, estimate), false);
+  assert.equal(tooSlow(6000, estimate), true);
+  assert.equal(tooSlow(900, 0), false, "a tiny part is never judged by its estimate alone");
+});
+
+test("0.2.2 plan: parts begin at keyframes at least 8 s apart, coarse to fine; one part without keyframes", () => {
+  assert.equal(PART_S, 8);
+  // 31 s, 62 cells half a second apart, a keyframe every 10 s: the cell at 10.25 s is the first of the second part.
+  assert.deepEqual(partition(62, 31, [0, 10, 20, 30]), [
+    { first: 0, n: 20, start: 0 },
+    { first: 40, n: 20, start: 20 },
+    { first: 20, n: 20, start: 10 },
+    { first: 60, n: 2, start: 30 },
+  ]);
+  // A keyframe every 2 s: grouped to 8 s.
+  assert.deepEqual(
+    partition(62, 31, Array.from({ length: 16 }, (_, i) => i * 2)).map((p) => p.start),
+    [0, 16, 8, 24],
+  );
+  // A late keyframe: a short last part; a keyframe closer than 8 s to the previous bound opens no part.
+  assert.deepEqual(partition(62, 31, [0, 5, 30.5]), [
+    { first: 0, n: 61, start: 0 },
+    { first: 61, n: 1, start: 30.5 },
+  ]);
+  assert.deepEqual(partition(62, 31, []), [{ first: 0, n: 62, start: 0 }]);
+  // Unsorted input, a keyframe past the end (the container's duration): no empty part.
+  assert.deepEqual(partition(40, 20, [10, 0, 20]), [
+    { first: 0, n: 20, start: 0 },
+    { first: 20, n: 20, start: 10 },
+  ]);
+});
+
+test("0.2.2 a part run: software, one thread, the frame on screen at each cell time (fps grid, gaps repeat), -frames:v", () => {
+  const sw = exactArgs("/a b/c.mkv", { first: 0, n: 20, start: 0 }, 40, 20);
+  assert.deepEqual(sw.slice(0, 7), ["-nostdin", "-v", "error", "-threads", "1", "-i", "/a b/c.mkv"]);
+  assert.ok(!sw.includes("-ss") && !sw.includes("-hwaccel"), "no seek for the first part; never the player's video engine");
+  assert.equal(sw[sw.indexOf("-filter_threads") + 1], "1");
+  // The grid: tick k at cell k's time (0.25 + k × 0.5 s); round=up keeps the last frame at or before each tick and
+  // repeats it over a span without frames. Checked with ffmpeg n9 on 30 fps (0.233, 0.733, …), a 1 fps slideshow
+  // (second k at cell k) and a clip without frames between 8 and 12 s (its 7.967 frame in the eight cells there).
+  const graph = sw[sw.indexOf("-vf") + 1]!;
+  assert.match(graph, /^setpts=PTS-0\.250000\/TB,fps=fps=1\/0\.500000:start_time=0:round=up,scale=160:90:force_original_aspect_ratio=decrease,pad=160:90:/);
+  assert.ok(!graph.includes("select"));
+  assert.deepEqual(sw.slice(-7), ["-fps_mode", "passthrough", "-frames:v", "20", "-f", "rawvideo", "-"]);
+  // The second part: from its keyframe (kept: a frame is not before its own time), cell times relative to the seek point.
+  const second = exactArgs("/x.mp4", { first: 20, n: 20, start: 10 }, 40, 20);
+  assert.deepEqual(second.slice(5, 9), ["-ss", "10.000", "-i", "/x.mp4"]);
+  assert.match(second[second.indexOf("-vf") + 1]!, /^setpts=PTS-0\.250000\/TB,fps=fps=1\/0\.500000:/);
+  // A slideshow: one cell per second, the grid at 0.5, 1.5, …
+  assert.match(exactArgs("/s.mp4", { first: 0, n: 20, start: 0 }, 20, 20)[exactArgs("/s.mp4", { first: 0, n: 20, start: 0 }, 20, 20).indexOf("-vf") + 1]!, /^setpts=PTS-0\.500000\/TB,fps=fps=1\/1\.000000:/);
+  assert.equal(PART_TIMEOUT_MS, 60_000);
+  // ffprobe's keyframe list.
+  assert.deepEqual(keyframesArgs("/x.mp4").slice(-5), ["-show_entries", "packet=pts_time,flags", "-of", "csv=p=0", "/x.mp4"]);
+  assert.deepEqual(parseKeyframes("2.000000,K__\n0.000000,K__\n0.033333,___\nN/A,K__\n,\n"), [0, 2]);
+});
+
+test("0.2.2 exact mode: ffprobe first, then the parts two at a time; cells are the frames in order; its own cache folder", async () => {
+  const media = mediaFile();
+  const data = mkdtempSync(join(tmpdir(), "vestra-preview-exact-"));
+  const host = new TestHost();
+  const time = fakeClock(host);
+  try {
+    playing(host, media.file); // 20 s of 1080p30: 40 exact cells
+    host.stats = { ...host.stats, video: SMALL_VIDEO };
+    fakeExact(host, [0, 10], { short: { ss: "10.000", by: 1 } });
+    const { stop } = await start(host, data);
+    const bar = host.mounted();
+    await generating(host, time);
+    await until(() => partRuns(host).length === 2);
+    assert.deepEqual(host.tools.calls.slice(0, 3).map((c) => c.tool), ["ffprobe", "ffmpeg", "ffmpeg"]);
+    assert.deepEqual(partRuns(host).map((c) => partOf(c.args)), [
+      { n: 20, ss: null },
+      { n: 20, ss: "10.000" },
+    ]);
+    assert.equal(cellRuns(host).length, 0, "no keyframe runs");
+    bar.emit("pointing", true);
+    await until(async () => {
+      await time.advance(500);
+      return bar.props["preview-count"] === 40 && (bar.props["preview-map"] as number[])[0] === 0;
+    });
+    const map = bar.props["preview-map"] as number[];
+    assert.equal(map.length, 40);
+    assert.deepEqual(map.slice(0, 20), Array.from({ length: 20 }, (_, i) => i));
+    assert.equal(map[39], 38, "the stream ended before the last cell: its neighbour shows");
+    // The sheet holds the frames in cell order: cell 25 is the second part's sixth frame.
+    const sheet = host.imagePath(bar.props["preview-sheet-a"]);
+    const pixels = readFileSync(sheet!);
+    assert.equal(pixels[(0 * 1600 + 160 * 5) * 3], 6, "cell 5 of the first part");
+    assert.equal(pixels[(180 * 1600 + 160 * 5) * 3], 6, "cell 25: the second part's sixth frame");
+    const real = (await import("node:fs")).realpathSync(media.file);
+    const { size, mtimeMs } = (await import("node:fs")).statSync(real);
+    assert.deepEqual(readdirSync(join(data, "thumbs")), [cacheKey({ path: real, size, mtimeMs }, 40, "exact")]);
+    assert.notEqual(cacheKey({ path: real, size, mtimeMs }, 40, "exact"), cacheKey({ path: real, size, mtimeMs }, 40));
+    await stop();
+  } finally {
+    time.restore();
+    media.done();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("0.2.2 exact mode: a part ended for a drag is made again whole; a pass that fails falls back to keyframes, remembered", async () => {
+  const media = mediaFile();
+  const data = mkdtempSync(join(tmpdir(), "vestra-preview-fallback-"));
+  const host = new TestHost();
+  const time = fakeClock(host);
+  try {
+    playing(host, media.file, 31);
+    host.stats = { ...host.stats, video: SMALL_VIDEO };
+    // Part runs wait to be let go (`release`) or ended (`kill`: what the plugin's abort does to the real ffmpeg).
+    const pending: { release: () => void; kill: () => void }[] = [];
+    fakeExact(host, [0, 10, 20, 30]);
+    const parts = host.tools.handlers.get("ffmpeg")!;
+    host.tools.handle("ffmpeg", async (args) => {
+      if (args.includes("-frames:v"))
+        await new Promise<void>((resolve, reject) => pending.push({ release: resolve, kill: () => reject(new HostError("aborted", "aborted")) }));
+      return parts(args);
+    });
+    const { stop } = await start(host);
+    const bar = host.mounted();
+    await generating(host, time);
+    await until(() => partRuns(host).length === WORKERS);
+    // Coarse to fine over the parts: the first and the third (at 20 s) run first.
+    assert.deepEqual(partRuns(host).map((c) => partOf(c.args).ss), [null, "20.000"]);
+    bar.emit("dragging", true);
+    await host.settle();
+    for (const run of pending.splice(0)) run.kill();
+    await time.advance(5000);
+    assert.equal(partRuns(host).length, WORKERS, "nothing new while the pointer is down");
+    bar.emit("dragging", false);
+    await host.settle();
+    await until(async () => {
+      await time.advance(SEEK_QUIET_MS / 4);
+      return partRuns(host).length === 2 * WORKERS;
+    });
+    // The ended parts come back whole (both at once, in either order).
+    assert.deepEqual(
+      partRuns(host)
+        .slice(2)
+        .map((c) => partOf(c.args))
+        .sort((a, b) => (a.ss ?? "").localeCompare(b.ss ?? "")),
+      [
+        { n: 20, ss: null },
+        { n: 20, ss: "20.000" },
+      ],
+    );
+    // Let the rest run: four parts in all, each once more at most.
+    await until(async () => {
+      for (const run of pending.splice(0)) run.release();
+      await time.advance(100);
+      return partRuns(host).length === 6;
+    });
+    assert.deepEqual(partRuns(host).slice(4).map((c) => partOf(c.args)), [
+      { n: 20, ss: "10.000" },
+      { n: 2, ss: "30.000" },
+    ]);
+    assert.equal(cellRuns(host).length, 0);
+    await stop();
+
+    // A pass that cannot run: the keyframe sprite instead (its own folder, its own cell count).
+    const again = new TestHost();
+    playing(again, media.file);
+    again.stats = { ...again.stats, video: SMALL_VIDEO };
+    fakeExact(again, [0, 10], { fail: true });
+    const second = await start(again, data);
+    const bar2 = again.mounted();
+    await generating(again, time);
+    await until(async () => {
+      await time.advance(50);
+      return cellRuns(again).length > 0;
+    });
+    assert.equal(partRuns(again).length, 2, "both first parts failed");
+    bar2.emit("pointing", true);
+    await until(async () => {
+      await time.advance(500);
+      return bar2.props["preview-count"] === 10;
+    });
+    await until(async () => {
+      await time.advance(500);
+      return (bar2.props["preview-map"] as number[]).join() === "0,1,2,3,4,5,6,7,8,9";
+    });
+    assert.equal(cellsMade(again), 10);
+    await second.stop();
+    // The exact folder remembers the fallback; the next open of the file goes straight to keyframes.
+    const real = (await import("node:fs")).realpathSync(media.file);
+    const { size, mtimeMs } = (await import("node:fs")).statSync(real);
+    const exactDir = join(data, "thumbs", cacheKey({ path: real, size, mtimeMs }, 40, "exact"));
+    assert.equal((await readIndex(exactDir))?.keyframesOnly, true);
+    const third = new TestHost();
+    playing(third, media.file);
+    third.stats = { ...third.stats, video: SMALL_VIDEO };
+    fakeExact(third, [0, 10]); // the pass would work now, but it is not tried
+    const last = await start(third, data);
+    await generating(third, time);
+    third.mounted().emit("pointing", true);
+    await until(async () => {
+      await time.advance(500);
+      return (third.mounted().props["preview-map"] as number[]).join() === "0,1,2,3,4,5,6,7,8,9";
+    });
+    assert.deepEqual(third.tools.calls.filter((c) => c.tool === "ffprobe").length, 0, "no keyframe list, no exact run");
+    assert.equal(partRuns(third).length, 0);
+    assert.equal(ffmpegRuns(third).length, 0, "the keyframe sprite of the second session is reused as it is");
+    await last.stop();
+  } finally {
+    time.restore();
+    media.done();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("0.2.2 exact mode: a part slower than twice its estimate ends the pass; the file gets keyframe thumbnails", async () => {
+  const media = mediaFile();
+  const host = new TestHost();
+  const time = fakeClock(host);
+  try {
+    playing(host, media.file); // 20 s of 1080p30: two parts of 10 s, 2.5 s estimated each
+    host.stats = { ...host.stats, video: SMALL_VIDEO };
+    fakeExact(host, [0, 10]);
+    const parts = host.tools.handlers.get("ffmpeg")!;
+    host.tools.handle("ffmpeg", async (args) => {
+      if (args.includes("-frames:v") && !args.includes("-ss")) time.tick(7000); // the first part took 7 s: over 2 × 2.5 s + 1 s
+      return parts(args);
+    });
+    const { stop } = await start(host);
+    const bar = host.mounted();
+    await generating(host, time);
+    await until(async () => {
+      await time.advance(50);
+      return cellRuns(host).length > 0;
+    });
+    assert.equal(partRuns(host).length, 2, "the two parts had started; nothing exact after the slow one");
+    bar.emit("pointing", true);
+    await until(async () => {
+      await time.advance(500);
+      return bar.props["preview-count"] === 10 && (bar.props["preview-map"] as number[]).join() === "0,1,2,3,4,5,6,7,8,9";
+    });
+    assert.equal(partRuns(host).length, 2);
+    await stop();
+  } finally {
+    time.restore();
+    media.done();
+  }
+});
+
 // ------------------------------------------------------------------ cache
 
-test("I07 cache: keyed on the real path, size, modification time and cell count", () => {
+test("I07 cache: keyed on the real path, size, modification time, cell count and (0.2.2) exact or not", () => {
   const file = { path: "/m/a.mkv", size: 100, mtimeMs: 5 };
   const key = cacheKey(file, 200);
   assert.match(key, /^[0-9a-f]{20}$/);
   assert.equal(cacheKey({ ...file }, 200), key);
+  assert.equal(cacheKey(file, 200, "keyframe"), key, "0.2.0 keyframe sprites keep their folders");
   for (const other of [
     cacheKey({ ...file, path: "/m/b.mkv" }, 200),
     cacheKey({ ...file, size: 101 }, 200),
     cacheKey({ ...file, mtimeMs: 6 }, 200),
     cacheKey(file, 199),
+    cacheKey(file, 200, "exact"),
   ])
     assert.notEqual(other, key);
 });

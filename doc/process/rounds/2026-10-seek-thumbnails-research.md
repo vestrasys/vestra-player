@@ -274,3 +274,46 @@ N is capped at 200, so the cost does not grow with duration; only the spacing do
 ## User ruling (2026-10-26)
 
 Proceed with the recommendation (keyframe sprite pre-generated in the background, shown on hover **and** drag, on by default for local files). **Hard constraint: opening a video must not take longer.** Generation starts only after playback has started, never competes with the open, and pauses while the user drags. Measure open-to-first-frame before and after; a small measurement tolerance is allowed.
+
+---
+
+## Exact thumbnails for short files (playback 0.2.2, 2026-10-27)
+
+**Problem.** The user's short clips (20 s, 31 s, 1 min, keyframes 5–10 s apart) get the keyframe at or before each cell, so a 31 s GOP-10 file shows 3–4 pictures over its 15 cells. **Idea tested:** one sequential decode of the whole file with `select` at the cell times, for files cheap enough; keyframe cells for the rest. The rule had to be a measured budget, not a length cutoff.
+
+### Spike (playback author, headless; Ryzen 9 7940HS, RTX 4070 + AMD 780M, ffmpeg n9, NVENC clips with GOP 10 s in `C:\vestra\clips\short\`)
+
+Software decoding costs **2.8–4.2 ns per pixel** on 1080p30/60 H.264 and 4K60 10-bit HEVC alike (one constant, 4 ns, fits); the keyframe method costs 65–90 ms per cell (1080p) and 160 ms (4K). Cost of a whole exact pass (2 threads) vs the keyframe sprite, quiet machine:
+
+| Clip | Keyframe cells / CPU / wall | Exact cells / CPU / wall (software) |
+|---|---|---|
+| 1080p30 31 s | 15 / 0.9 s / 1.7 s | 62 / 5.4–6.1 s / 2.9–3.3 s |
+| 1080p30 60 s | 30 / 2.1 / 2.8 | 120 / 14.2 / 7.4 |
+| 1080p60 31 s | 15 / 1.35 / 1.7 | 62 / 13.1 / 7.0 |
+| 1080p60 60 s | 30 / 2.4 / 3.0 | 120 / 28 / 14.7 |
+| 4K60 HEVC10 31 s | 15 / 3.6 / 5.5–9.9 | 62 / 75–87 / 41–53 |
+
+- **Parts** (`tools.run` returns stdout only at the end, so progressive cells need several runs): fixed quarters cost +53 % CPU (each re-decodes from the keyframe before its start); parts aligned on the file's keyframes (ffprobe packet flags, 0.11–0.14 s; grouped to ≥ 8 s) cost no more than one pass (1080p60 31 s: 8.5 s vs 12.0 s, single-thread decoding is more efficient), first part done after 1.8–2.9 s, and are byte-identical to the single pass (3 clips, every cell).
+- **Threads**: 1 thread per part, two parts at a time (wall ≈ CPU/1.85). All cores (16 threads) during 4K60 playback dropped 20–79 frames in 8 s; 1–2 threads dropped 0–6.
+- **Open time** (libmpv probe, background work killed 100 ms after loadfile, 10 rounds × 3 targets, paired with the same round's idle, only trials where the work was still running): keyframe method +38 ms median (trimmed mean +100, p95 +457); exact software +68 (+101, +336); no difference between methods, both the 0.2.0 cost of ending a running ffmpeg.
+- **`-hwaccel auto`** picks dxva2 on Windows and downloads every frame (4K 31 s: 21 s CPU); explicit `d3d11va` with `select` before `hwdownload` downloads only the chosen frames (1.3 s CPU, 8–10 s wall alone).
+
+### Coordinator GUI check (Windows 11, host 0.5.1 + staged playback 0.2.2 with d3d11va for hardware-decoded files, AMD 780M, player hwdec d3d11va-copy, software render)
+
+- `h264-1080p30-g10-31.mp4`: exact mode works: ffprobe, then two ffmpeg from ~1.1 s to ~3.2 s, a different picture every 0.5 s on hover, cache folder created.
+- `hevc10-2160p60-g10-31.mp4`: **fails the playback constraint.** Two d3d11va ffmpeg ran from 0.5 s to **40.5 s** (8–10 s when alone), and the player's own 4K60 playback dropped hard while they ran: produced/presented per second `24/18 60/60 60/60 60/57 23/19 22/17 31/24 18/9 29/26 61/61` (idle 60/60). The hardware decoder is shared between the player and ffmpeg.
+- Headless reproduction afterwards (probe playing the 4K clip 20 s, hwdec d3d11va-copy, no window): the contention shows as the ffmpeg parts slowing from 4–5 s to 6.8–9 s each (pass 11–16 s) with only 2–14 frames dropped; the probe does not present to a window, so the GUI path (software render and compositor on the same GPU) is what starves. Two software ffmpeg of one thread each during the same 4K60 playback: 0 frames dropped (second round; the first round's idle itself dropped 41 on a cold cache); during 1080p60 playback 0 in both rounds.
+
+### Decision (0.2.2 as delivered)
+
+- **Rule:** estimated decoding time = width × height × fps × duration × 4 ns; exact when ≤ 15 s (what 200 keyframe cells of a long file already cost), otherwise keyframes. Software decoding only: 1080p30 ≤ 60 s, 1080p60 ≤ 30 s, 720p30 ≤ ~2 min; **4K is always keyframe mode** (4K60 would need ≤ 7.5 s). No hardware decoding in ffmpeg, and no hardware factor in the budget: the engine belongs to the playing video.
+- Cells every 0.5 s or duration/200, whichever is coarser (density is free in a sequential pass; 200 keeps the two-sheet layout).
+- Parts aligned on keyframes, one thread each, at most two at a time (the existing `WORKERS`), coarse to fine; drag and seek pauses as before.
+- **Measured guard:** a part that takes more than 2× its estimate + 1 s ends the pass and the file falls back to keyframe thumbnails (a slower or busier machine than the 4 ns assumption). Any failure of a part does the same.
+- Cache key gains the mode for exact sprites; keyframe sprites keep their 0.2.0 keys.
+
+### Review fixes (independent reviewer, 2026-10-27)
+
+- **Cell placement.** `select='gte(t, first + selected_n*span)'` advanced by selected-frame count, so a span without a frame (a 1 fps slideshow, a still stretch of a VFR screen recording) took the next frame and shifted every later cell by one, and marked the part's tail cells failed. Replaced by the `fps` filter on a grid shifted to the cell times (`setpts=PTS-first/TB, fps=1/span:start_time=0:round=up`): each cell is the last frame at or before its time (the frame on screen), and a frameless span repeats it. The span is never finer than one frame (`max(0.5 s, 1/fps, duration/200)`). Checked frame by frame with ffmpeg n9 by hashing output cells back to source frames: 30 fps CFR → 0.233, 0.733, … (select gave 0.267, 0.767, …: the frame after instead of before, both within a frame); 1 fps slideshow, 20 cells → seconds 0…19 (select: 1…19 and a missing cell); a clip without frames between 8 and 12 s → the 7.967 frame in the eight cells of the gap, then 12.233, … (select: 12.033, 12.067, … shifted). The second part (`-ss` at its keyframe, now without the +1 ms that dropped the keyframe itself) → 10.233, 10.733, …
+- **Fallback remembered.** After a failed or too-slow pass the exact folder's `index.json` gets `keyframesOnly: true`; the next open of the file plans keyframes at once (no ffprobe, no exact runs), verified by test.
+- Coordinator GUI recheck of the software-only rule passed: 4K HEVC keyframe mode at 60/60, 1080p60 31 s keyframe mode, 1080p60 20 s exact with two software ffmpeg at 60/60.
