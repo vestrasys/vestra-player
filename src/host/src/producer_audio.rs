@@ -1,5 +1,9 @@
 //! CPAL/rtrb adapter (host-internal), not an acoustic fence.
-//! Fixed 48kHz stereo f32 only. The data callback allocates nothing, takes only
+//! Producers write 48kHz stereo f32; the device stream is 48kHz f32 with the
+//! device's channel count (stereo in the first two channels, mono as their
+//! mean) and the device's buffer size unless it allows 1024 frames. Nothing
+//! downstream depends on the callback size: producers pace on
+//! `consumedFrames`. The data callback allocates nothing, takes only
 //! a try-lock (contended only while R-H9 switches device: one silent buffer)
 //! and performs no IO. Device/backend implementation details are outside
 //! that claim. Reset cannot retract a buffer already handed to the device.
@@ -16,6 +20,8 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use rtrb::{Consumer, Producer, RingBuffer};
 
 const CAPACITY: usize = 9600;
+/// Device buffer asked for when the device reports a range that holds it.
+const PREFERRED_FRAMES: u32 = 1024;
 const MAX_SAFE: u64 = (1_u64 << 53) - 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -273,12 +279,25 @@ struct Frame {
 struct Callback {
     ring: Consumer<Frame>,
     shared: Arc<Shared>,
+    /// Interleaved channels of the device buffer (>= 1).
+    channels: usize,
     epoch: u64,
     clock: u64,
     underrun: u64,
 }
 
 impl Callback {
+    /// One device buffer of a stream with `channels` interleaved channels:
+    /// silence while the render state has another device's layout (during a
+    /// device switch), without consuming anything.
+    fn render_layout(&mut self, channels: usize, output: &mut [f32]) {
+        if self.channels == channels {
+            self.render(output);
+        } else {
+            output.fill(0.0);
+        }
+    }
+
     fn render(&mut self, output: &mut [f32]) {
         output.fill(0.0);
         let Some(config) = self.shared.config() else {
@@ -324,7 +343,7 @@ impl Callback {
         let initial_clock = self.clock;
         let initial_underrun = self.underrun;
         let mut discard_budget = CAPACITY;
-        for stereo in output.as_chunks_mut::<2>().0 {
+        for device_frame in output.chunks_exact_mut(self.channels) {
             if !self.shared.current(config) {
                 break;
             }
@@ -342,8 +361,15 @@ impl Callback {
             }
             if let Some(frame) = frame {
                 if !muted {
-                    for (destination, sample) in stereo.iter_mut().zip(frame.samples) {
-                        *destination = (sample * gain).clamp(-1.0, 1.0);
+                    let [left, right] = frame.samples;
+                    match device_frame {
+                        [mono] => *mono = ((left + right) * 0.5 * gain).clamp(-1.0, 1.0),
+                        // Front left/right; any further channels stay silent.
+                        [l, r, ..] => {
+                            *l = (left * gain).clamp(-1.0, 1.0);
+                            *r = (right * gain).clamp(-1.0, 1.0);
+                        }
+                        [] => {}
                     }
                 }
                 self.clock = self.clock.saturating_add(1);
@@ -375,13 +401,42 @@ pub struct Audio {
     errors: Arc<Mutex<rtrb::Producer<(u64, cpal::Error)>>>,
 }
 
-/// An output device by mpv id (`coreaudio/<UID>`: cpal's CoreAudio device id
-/// is the same UID), else the system default; `true` when it is the chosen one.
+/// The prefix of mpv's device ids for the backend of cpal's default host.
+const MPV_DEVICE_PREFIX: Option<&str> = if cfg!(target_os = "macos") {
+    Some("coreaudio/")
+} else if cfg!(windows) {
+    Some("wasapi/")
+} else {
+    None
+};
+
+/// The part of a WASAPI render endpoint id (`IMMDevice::GetId`, cpal's
+/// device id) that mpv drops from its device names and adds back on lookup
+/// (ao_wasapi_utils.c).
+const WASAPI_RENDER_ID_PREFIX: &str = "{0.0.0.00000000}.";
+
+/// cpal's device id for an mpv device id, if it names a device of the default
+/// host: CoreAudio `coreaudio/<UID>` → `<UID>`; WASAPI `wasapi/{guid}` →
+/// `{0.0.0.00000000}.{guid}`.
+fn cpal_device_id(mpv_id: &str) -> Option<std::borrow::Cow<'_, str>> {
+    let prefix = MPV_DEVICE_PREFIX?;
+    let id = mpv_id.strip_prefix(prefix).filter(|id| !id.is_empty())?;
+    Some(
+        if prefix == "wasapi/" && id.starts_with('{') && !id.starts_with(WASAPI_RENDER_ID_PREFIX) {
+            format!("{WASAPI_RENDER_ID_PREFIX}{id}").into()
+        } else {
+            id.into()
+        },
+    )
+}
+
+/// An output device by mpv id (see [`cpal_device_id`]), else the system
+/// default; `true` when it is the chosen one.
 fn output_device(id: Option<&str>) -> Result<(cpal::Device, bool)> {
     let host = cpal::default_host();
     let wanted = id
-        .and_then(|id| id.strip_prefix("coreaudio/"))
-        .and_then(|uid| host.device_by_id(&cpal::DeviceId::new(host.id(), uid)));
+        .and_then(cpal_device_id)
+        .and_then(|uid| host.device_by_id(&cpal::DeviceId::new(host.id(), &*uid)));
     match wanted {
         Some(device) => Ok((device, true)),
         None => host
@@ -391,37 +446,68 @@ fn output_device(id: Option<&str>) -> Result<(cpal::Device, bool)> {
     }
 }
 
-/// 48 kHz stereo f32 with a 1024 frame buffer on `device`, rendering from `callback`.
+/// The buffer to ask for: 1024 frames when the device reports a range that
+/// holds it, else the device's default. WASAPI shared mode reports only its
+/// period (`Range { min: 480, max: 480 }` at 48 kHz, or `Unknown`) and calls
+/// back at that period whatever is asked; mpv and other players likewise
+/// take the device's period instead of insisting on a size.
+fn buffer_request(supported: &cpal::SupportedBufferSize) -> cpal::BufferSize {
+    match supported {
+        cpal::SupportedBufferSize::Range { min, max }
+            if (*min..=*max).contains(&PREFERRED_FRAMES) =>
+        {
+            cpal::BufferSize::Fixed(PREFERRED_FRAMES)
+        }
+        _ => cpal::BufferSize::Default,
+    }
+}
+
+/// A 48 kHz f32 output config: stereo if offered, else the fewest channels
+/// above two (a multichannel mix format), else mono.
+fn choose_config(
+    configs: impl IntoIterator<Item = cpal::SupportedStreamConfigRange>,
+) -> Option<cpal::SupportedStreamConfig> {
+    configs
+        .into_iter()
+        .filter(|config| config.sample_format() == cpal::SampleFormat::F32 && config.channels() > 0)
+        .filter_map(|config| config.try_with_sample_rate(48_000))
+        .min_by_key(|config| match config.channels() {
+            2 => 0,
+            1 => u32::MAX,
+            channels => u32::from(channels),
+        })
+}
+
+/// A paused 48 kHz f32 stream on `device` (see [`choose_config`],
+/// [`buffer_request`]) rendering from `callback`, and its channel count.
+/// It renders only once the caller sets `callback`'s channels to that count.
 fn build_stream(
     device: &cpal::Device,
     shared: &Arc<Shared>,
     callback: &Arc<Mutex<Callback>>,
     errors: &Arc<Mutex<rtrb::Producer<(u64, cpal::Error)>>>,
-) -> Result<(cpal::Stream, serde_json::Value)> {
+) -> Result<(cpal::Stream, serde_json::Value, usize)> {
     let default_config = format!("{:?}", device.default_output_config()?);
-    let supported = device
-        .supported_output_configs()?
-        .filter(|config| {
-            config.channels() == 2 && config.sample_format() == cpal::SampleFormat::F32
-        })
-        .find_map(|config| config.try_with_sample_rate(48_000))
-        .context("output device does not support 48kHz stereo f32")?;
+    let supported = choose_config(device.supported_output_configs()?)
+        .context("output device does not support 48kHz f32")?;
     let supported_buffer = format!("{:?}", supported.buffer_size());
-    ensure!(
-        matches!(supported.buffer_size(),cpal::SupportedBufferSize::Range{min,max} if *min<=1024 && *max>=1024),
-        "device does not explicitly support the chosen 1024 frame buffer"
-    );
     let mut config = supported.config();
-    config.buffer_size = cpal::BufferSize::Fixed(1024);
+    config.buffer_size = buffer_request(supported.buffer_size());
+    let fixed = match config.buffer_size {
+        cpal::BufferSize::Fixed(frames) => Some(frames),
+        cpal::BufferSize::Default => None,
+    };
+    let channels = usize::from(config.channels);
     let render = callback.clone();
     let recorded = shared.clone();
     let queue = errors.clone();
     let stream = device.build_output_stream(
         config,
         // Only the stream being replaced contends for this lock (while the
-        // device switches); a missed lock renders one buffer of silence.
+        // device switches); a missed lock renders one buffer of silence, as
+        // does a buffer while the render state has another device's layout.
         move |output: &mut [f32], _| match render.try_lock() {
-            Ok(mut callback) => callback.render(output),
+            Ok(mut callback) => callback.render_layout(channels, output),
             Err(_) => output.fill(0.0),
         },
         move |error| {
@@ -437,8 +523,18 @@ fn build_stream(
         None,
     )?;
     let actual_buffer = stream.buffer_size()?;
-    let buffer = serde_json::json!({"device":device.to_string(),"supported":supported_buffer,"defaultConfig":default_config,"requestedFrames":1024,"actualFrames":actual_buffer,"oneBufferMilliseconds":actual_buffer as f64/48.});
-    Ok((stream, buffer))
+    // `requestedFrames` stays a number (SDK `producer.ts`): the device's own
+    // period when its default was asked for, marked by `"requested":"default"`.
+    let buffer = serde_json::json!({"device":device.to_string(),"channels":channels,"supported":supported_buffer,"defaultConfig":default_config,"requested":if fixed.is_some(){"fixed"}else{"default"},"requestedFrames":fixed.unwrap_or(actual_buffer),"actualFrames":actual_buffer,"oneBufferMilliseconds":actual_buffer as f64/48.});
+    Ok((stream, buffer, channels))
+}
+
+/// Sets the layout the render state writes (`build_stream`'s channel count).
+fn set_channels(callback: &Mutex<Callback>, channels: usize) {
+    callback
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .channels = channels;
 }
 pub struct Writer {
     shared: Arc<Shared>,
@@ -456,6 +552,7 @@ impl Audio {
         let callback = Arc::new(Mutex::new(Callback {
             ring: consumer,
             shared: shared.clone(),
+            channels: 2,
             epoch: 0,
             clock: 0,
             underrun: 0,
@@ -464,7 +561,8 @@ impl Audio {
         let errors = Arc::new(Mutex::new(error_send));
         let (target, chosen) = output_device(device)?;
         shared.chosen.store(chosen, Ordering::Release);
-        let (stream, buffer) = build_stream(&target, &shared, &callback, &errors)?;
+        let (stream, buffer, channels) = build_stream(&target, &shared, &callback, &errors)?;
+        set_channels(&callback, channels);
         stream.play()?;
         let writer = Writer {
             shared: shared.clone(),
@@ -495,8 +593,16 @@ impl Audio {
         }
         let (target, chosen) = output_device(device)?;
         self.stream.pause()?;
+        let previous = self
+            .callback
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .channels;
         match build_stream(&target, &self.shared, &self.callback, &self.errors).and_then(
-            |(stream, buffer)| stream.play().map(|()| (stream, buffer)).map_err(Into::into),
+            |(stream, buffer, channels)| {
+                set_channels(&self.callback, channels);
+                stream.play().map(|()| (stream, buffer)).map_err(Into::into)
+            },
         ) {
             Ok((stream, buffer)) => {
                 self.stream = stream;
@@ -513,6 +619,7 @@ impl Audio {
             Err(error) => {
                 // Stay on the old device; not retried until the choice changes.
                 self.device = device.map(str::to_owned);
+                set_channels(&self.callback, previous);
                 let _ = self.stream.play();
                 Err(error)
             }
@@ -748,6 +855,7 @@ mod tests {
             Callback {
                 shared,
                 ring: consumer,
+                channels: 2,
                 epoch: 0,
                 clock: 0,
                 underrun: 0,
@@ -833,6 +941,177 @@ mod tests {
         assert_eq!(callback.ring.slots(), 1);
         assert_eq!(callback.clock, 51);
         assert_eq!(shared.acknowledged.load(Ordering::Acquire), 3);
+    }
+
+    #[test]
+    fn buffer_request_takes_1024_only_from_a_range_that_holds_it() {
+        use cpal::{BufferSize::*, SupportedBufferSize};
+        let range = |min, max| buffer_request(&SupportedBufferSize::Range { min, max });
+        assert_eq!(range(15, 4096), Fixed(1024));
+        assert_eq!(range(1024, 1024), Fixed(1024));
+        // WASAPI shared mode: only the device period (10 ms at 48 kHz), or nothing.
+        assert_eq!(range(480, 480), Default);
+        assert_eq!(buffer_request(&SupportedBufferSize::Unknown), Default);
+        assert_eq!(range(1025, 8192), Default);
+        assert_eq!(range(64, 512), Default);
+    }
+
+    #[test]
+    fn config_prefers_48k_stereo_f32_then_a_multichannel_mix_then_mono() {
+        use cpal::{SampleFormat::*, SupportedBufferSize::Unknown};
+        let range = |channels, min, max, format| {
+            cpal::SupportedStreamConfigRange::new(channels, min, max, Unknown, format)
+        };
+        let chosen = |configs: Vec<_>| choose_config(configs).map(|c| c.channels());
+        assert_eq!(
+            chosen(vec![
+                range(6, 48_000, 48_000, F32),
+                range(2, 44_100, 44_100, F32),
+                range(2, 48_000, 48_000, I16),
+                range(2, 8_000, 384_000, F32),
+            ]),
+            Some(2)
+        );
+        let picked = choose_config(vec![range(2, 8_000, 384_000, F32)]).unwrap();
+        assert_eq!(picked.sample_rate(), 48_000);
+        // WASAPI lists only the mix format's channel count.
+        assert_eq!(
+            chosen(vec![
+                range(1, 48_000, 48_000, F32),
+                range(8, 48_000, 48_000, F32),
+                range(6, 48_000, 48_000, F32),
+            ]),
+            Some(6)
+        );
+        assert_eq!(chosen(vec![range(1, 48_000, 48_000, F32)]), Some(1));
+        // Resampling is not done here: a device without 48 kHz is refused.
+        assert_eq!(chosen(vec![range(2, 44_100, 44_100, F32)]), None);
+        assert_eq!(chosen(vec![range(0, 48_000, 48_000, F32)]), None);
+    }
+
+    #[test]
+    fn multichannel_and_mono_devices_get_stereo_in_front_or_its_mean() {
+        let (shared, mut writer, mut callback) = pair();
+        shared.reset(1, false, 0).unwrap();
+        callback.render(&mut []);
+        writer
+            .push(1, 0, &[[0.5, -0.25], [0.75, 0.25], [1.0, 1.0]])
+            .unwrap();
+        callback.channels = 6;
+        let mut output = [1.0; 6];
+        callback.render(&mut output);
+        assert_eq!(output, [0.5, -0.25, 0.0, 0.0, 0.0, 0.0]);
+        callback.channels = 1;
+        let mut output = [1.0; 1];
+        callback.render(&mut output);
+        assert_eq!(output, [0.5]);
+        shared.set_output(2.0, false).unwrap();
+        callback.render(&mut output);
+        assert_eq!(output, [1.0]);
+        assert_eq!((callback.clock, callback.underrun), (3, 0));
+    }
+
+    #[test]
+    fn another_layout_is_silent_and_an_odd_buffer_ignores_its_partial_frame() {
+        let (shared, mut writer, mut callback) = pair();
+        shared.reset(1, false, 0).unwrap();
+        callback.render(&mut []);
+        writer.push(1, 0, &[[0.5, -0.5], [0.25, -0.25]]).unwrap();
+        // A 6-channel stream while the state still has the old stereo layout.
+        let mut output = [1.0; 6];
+        callback.render_layout(6, &mut output);
+        assert_eq!(output, [0.0; 6]);
+        assert_eq!(
+            (callback.clock, callback.underrun, callback.ring.slots()),
+            (0, 0, 2)
+        );
+        let mut output = [1.0; 5];
+        callback.render_layout(2, &mut output);
+        assert_eq!(output, [0.5, -0.5, 0.25, -0.25, 0.0]);
+        assert_eq!((callback.clock, callback.underrun), (2, 0));
+    }
+
+    #[test]
+    fn mpv_device_ids_map_to_the_default_hosts_ids_only() {
+        // mpv lists WASAPI render endpoints without `{0.0.0.00000000}.`.
+        let wasapi = "wasapi/{6f1a0d4e-5b2c-4d3e-9f80-0123456789ab}";
+        let full = "{0.0.0.00000000}.{6f1a0d4e-5b2c-4d3e-9f80-0123456789ab}";
+        let id = |mpv: &str| cpal_device_id(mpv).map(|id| id.into_owned());
+        if cfg!(windows) {
+            assert_eq!(id(wasapi).as_deref(), Some(full));
+            assert_eq!(id(&format!("wasapi/{full}")).as_deref(), Some(full));
+            assert_eq!(id("coreaudio/BuiltInSpeakerDevice"), None);
+        }
+        if cfg!(target_os = "macos") {
+            assert_eq!(
+                id("coreaudio/BuiltInSpeakerDevice").as_deref(),
+                Some("BuiltInSpeakerDevice")
+            );
+            assert_eq!(id(wasapi), None);
+        }
+        for other in ["auto", "openal", "sdl/x", "wasapi/", "coreaudio/", ""] {
+            assert_eq!(id(other), None, "{other}");
+        }
+    }
+
+    /// Real output device: the stream starts and reports its buffer.
+    /// `cargo test real_output_device -- --ignored --nocapture`
+    #[test]
+    #[ignore = "needs an audio output device"]
+    // Test output for --nocapture, not the host's stdout.
+    #[allow(clippy::disallowed_macros)]
+    fn real_output_device_opens_and_consumes() {
+        let device = cpal::default_host().default_output_device().unwrap();
+        let supported: Vec<_> = device.supported_output_configs().unwrap().collect();
+        println!("default config: {:?}", device.default_output_config());
+        for config in &supported {
+            println!("supported: {config:?}");
+        }
+        let (audio, mut writer) = Audio::open(None).unwrap();
+        audio.reset(1, false, 0).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while !audio.facts().acknowledged {
+            assert!(std::time::Instant::now() < deadline, "no callback");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let silence = [[0.0; 2]; 4800];
+        assert_eq!(writer.push(1, 0, &silence).unwrap(), Push::Accepted);
+        while audio.facts().consumed_frames < 4800 {
+            assert!(std::time::Instant::now() < deadline, "not consumed");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let facts = audio.facts();
+        println!("buffer: {}", facts.buffer);
+        assert!(!facts.health.fatal(), "{:?}", facts.health);
+        assert!(facts.buffer["actualFrames"].as_u64().unwrap() > 0);
+        assert!(facts.buffer["requestedFrames"].is_u64());
+        // Every output device mpv lists for cpal's host resolves to a cpal device.
+        let mpv = rsmpv::Mpv::builder().unwrap().build().unwrap();
+        let Ok(rsmpv::Node::Array(entries)) = mpv.get_property::<rsmpv::Node>("audio-device-list")
+        else {
+            panic!("no audio-device-list");
+        };
+        let host = cpal::default_host();
+        let mut resolved = 0;
+        for entry in entries {
+            let rsmpv::Node::Map(fields) = entry else {
+                continue;
+            };
+            let Some((_, rsmpv::Node::String(name))) = fields.iter().find(|(k, _)| k == "name")
+            else {
+                continue;
+            };
+            let Some(id) = cpal_device_id(name) else {
+                continue;
+            };
+            let device = host.device_by_id(&cpal::DeviceId::new(host.id(), &*id));
+            println!("mpv {name} -> cpal {id}: {}", device.is_some());
+            assert!(device.is_some(), "{name}");
+            resolved += 1;
+        }
+        if MPV_DEVICE_PREFIX.is_some() {
+            assert!(resolved > 0, "mpv listed no device of cpal's host");
+        }
     }
 
     #[test]
