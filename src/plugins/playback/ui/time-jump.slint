@@ -1,7 +1,8 @@
 // Seek Steps (B06): four rows of seconds for the relative-seek tiers.
 // Each row: label → input (60px) → s → [Default]; an invalid row is marked on
-// its right. Below: "Jump to keyframes only" (on by default), saved with the
-// steps. [OK] [Cancel] at the bottom; Esc cancels, Enter in an input confirms.
+// its right. Below: "Jump to keyframes only" (on by default; 0.2.3: the arrow
+// keys and the seek bar), saved with the steps. [OK] [Cancel] at the bottom;
+// Esc cancels, Enter in an input confirms.
 import { CheckBox, LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
@@ -140,6 +141,14 @@ export component TimeJumpWindow inherits Window {
                 height: Theme.checkbox-row-height;
                 text: @tr("Jump to keyframes only");
                 checked <=> root.keyframes;
+            }
+            // 0.2.3: the same switch rules the seek bar (user ruling 2026-10-27).
+            Text {
+                text: @tr("Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer.");
+                color: Theme.text-dim;
+                font-size: Theme.font-body;
+                wrap: word-wrap;
+                line-height-factor: 1.25;
             }
             Text {
                 text: root.out-of-range ? @tr("Range 0.1–3600 s, at most one decimal place") : "";

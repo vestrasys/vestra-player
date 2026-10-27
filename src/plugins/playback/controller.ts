@@ -36,6 +36,15 @@ export class Playback {
   volumeDraft: number | null = null;
   #volumeRequest = 0;
   #scrub: Scrub | undefined;
+  /**
+   * 0.2.3: the bar gesture seeks by keyframes ("Jump to keyframes only", user
+   * ruling 2026-10-27). Decided at the press and kept for the press sample, every
+   * move and the release: a gesture never mixes the two modes, and there is no
+   * second, exact seek on release.
+   */
+  #gestureKeyframes = false;
+  /** The newest gesture seek has landed (`true` from the host) while the pointer was still down. */
+  #gestureLanded = false;
   readonly #player: Player;
   readonly #dialogs: Dialogs;
   readonly #update: () => void;
@@ -100,24 +109,60 @@ export class Playback {
     this.draft = null;
     this.seekTarget = null;
   }
-  /** Pointer pressed on the progress bar: a fresh gesture from the current state. */
-  startDrag() {
+  /**
+   * Pointer pressed on the progress bar: a fresh gesture from the current
+   * state. `keyframes` is the gesture's seek mode (the setting as it is now).
+   */
+  startDrag(keyframes = false) {
     this.blockedGesture = false;
     this.clearSeek();
+    this.#gestureKeyframes = keyframes;
+    this.#gestureLanded = false;
     this.#scrub = this.#player.scrub();
   }
-  /** Seek within the current gesture (a new one when none is active); returns the clamped target. */
+  /**
+   * The press, a move or the release of the bar gesture, in the mode decided at
+   * the press. The same target again (a click, or a release where the pointer
+   * stopped) is not sent twice: the first seek is already running or landed.
+   */
+  gestureSeek(seconds: number): number | null {
+    const target = this.#clamp(seconds);
+    if (target !== null && target === this.seekTarget && this.#scrub?.active) return target;
+    return this.#seek(target, this.#gestureKeyframes);
+  }
+  /**
+   * Pointer let go: the gesture is over. When its last seek landed while the
+   * pointer was still down (a click: press and release on the same spot send
+   * one seek), the host's position takes over from the draft now.
+   */
+  endDrag() {
+    if (this.#gestureLanded && this.seekTarget !== null) {
+      this.seekTarget = this.draft = null;
+      this.#gestureLanded = false;
+      this.#update();
+    }
+  }
+  /** An exact seek within the current gesture (a new one when none is active); returns the clamped target. */
   seek(seconds: number): number | null {
+    return this.#seek(this.#clamp(seconds), false);
+  }
+  #clamp(seconds: number): number | null {
     if (!this.can("seek")) return null;
-    const target = Math.max(0, Math.min(this.state.duration ?? Infinity, seconds));
+    return Math.max(0, Math.min(this.state.duration ?? Infinity, seconds));
+  }
+  #seek(target: number | null, keyframes: boolean): number | null {
+    if (target === null) return null;
     this.draft = this.seekTarget = target;
+    this.#gestureLanded = false;
     if (!this.#scrub?.active) this.#scrub = this.#player.scrub();
     const scrub = this.#scrub;
-    source(scrub.seek(target)).then(
+    // Player 0.5.3 / SDK 1.5.22: `keyframes` goes on the wire only when true (`absolute+keyframes`).
+    source(scrub.seek(target, { keyframes })).then(
       (applied) => {
-        if (!applied || scrub !== this.#scrub) return;
-        // While dragging the pointer owns the draft; the release sample clears it.
-        if (!this.dragging && this.seekTarget === target) {
+        if (!applied || scrub !== this.#scrub || this.seekTarget !== target) return;
+        // While dragging the pointer owns the draft: the release (`endDrag`) or its own seek clears it.
+        if (this.dragging) this.#gestureLanded = true;
+        else {
           this.seekTarget = this.draft = null;
           this.#update();
         }

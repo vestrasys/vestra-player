@@ -151,12 +151,12 @@ msgstr "ビデオがありません"
 msgid "Needs ffmpeg"
 msgstr "ffmpeg が必要です"
 
-#: controller.ts:148
+#: controller.ts:193
 #, x-machine
 msgid "Open Media"
 msgstr "メディアを開く"
 
-#: controller.ts:148
+#: controller.ts:193
 #, x-machine
 msgid "Open Media (replaces the current source)"
 msgstr "メディアを開く（現在のソースを置き換えます）"
@@ -475,7 +475,7 @@ msgstr "速度（0.25〜4×）"
 msgid "Time (h:mm:ss.ms)"
 msgstr "時間（h:mm:ss.ms）"
 
-#: ui/prompt.slint:60 ui/time-jump.slint:156
+#: ui/prompt.slint:60 ui/time-jump.slint:165
 #, x-machine
 msgid "OK"
 msgstr "OK"
@@ -486,57 +486,61 @@ msgid "Go"
 msgstr "移動"
 
 #. the unit after a number of seconds.
-#: ui/time-jump.slint:35
+#: ui/time-jump.slint:36
 #, x-machine
 msgid "s"
 msgstr "秒"
 
-#: ui/time-jump.slint:41
+#: ui/time-jump.slint:42
 #, x-machine
 msgid "Default"
 msgstr "デフォルト"
 
-#: ui/time-jump.slint:70
+#: ui/time-jump.slint:71
 #, x-machine
 msgid "Seek Steps"
 msgstr "シーク幅"
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:109
+#: ui/time-jump.slint:82 ui/time-jump.slint:110
 #, x-machine
 msgid "Left/Right arrow keys:"
 msgstr "左/右矢印キー："
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:117
+#: ui/time-jump.slint:82 ui/time-jump.slint:118
 #, x-machine
 msgid "Ctrl + Left/Right arrow keys:"
 msgstr "Ctrl + 左/右矢印キー："
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:125
+#: ui/time-jump.slint:82 ui/time-jump.slint:126
 #, x-machine
 msgid "Shift + Left/Right arrow keys:"
 msgstr "Shift + 左/右矢印キー："
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:133
+#: ui/time-jump.slint:82 ui/time-jump.slint:134
 #, x-machine
 msgid "Ctrl + Alt + Left/Right arrow keys:"
 msgstr "Ctrl + Alt + 左/右矢印キー："
 
-#: ui/time-jump.slint:102
+#: ui/time-jump.slint:103
 #, x-machine
 msgid "Set how far each seek key moves during playback."
 msgstr "再生中、各シークキーで移動する幅を設定します。"
 
-#: ui/time-jump.slint:141
+#: ui/time-jump.slint:142
 #, x-machine
 msgid "Jump to keyframes only"
 msgstr "キーフレームにのみジャンプ"
 
-#: ui/time-jump.slint:145
+#: ui/time-jump.slint:147
+msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
+msgstr "矢印キーとシークバーに適用されます。バーをクリックまたはドラッグすると、ポインター位置またはその直前のキーフレームに移動します。"
+
+#: ui/time-jump.slint:154
 #, x-machine
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "範囲は 0.1〜3600 秒、小数点以下は 1 桁まで"
 
-#: ui/time-jump.slint:160
+#: ui/time-jump.slint:169
 #, x-machine
 msgid "Cancel"
 msgstr "キャンセル"

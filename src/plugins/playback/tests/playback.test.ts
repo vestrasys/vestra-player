@@ -34,6 +34,26 @@ const seeks = (host: TestHost) =>
     .map((p) => p.intent as { kind: string; control?: { kind: string; seconds?: number } })
     .filter((i) => i.kind === "control" && i.control?.kind === "seek")
     .map((i) => i.control!.seconds);
+/** 0.2.3: every seek as it went on the wire: the target, and `keyframes` when the plugin sent it. */
+const wireSeeks = (host: TestHost) =>
+  host
+    .sent("source.submit")
+    .map((p) => p.intent as { kind: string; control?: { kind: string; seconds?: number; keyframes?: boolean } })
+    .filter((i) => i.kind === "control" && i.control?.kind === "seek")
+    .map((i) => ({ seconds: i.control!.seconds, ...("keyframes" in i.control! ? { keyframes: i.control!.keyframes } : {}) }));
+/** The plugin started with a saved `settings.json`. */
+async function startWith(settings: Record<string, unknown>, host = withMedia()) {
+  const data = mkdtempSync(join(tmpdir(), "playback-bar-"));
+  writeFileSync(join(data, "settings.json"), JSON.stringify(settings));
+  const started = await startPlugin(activate, { directory, host, locale: "zh-Hans", dataDirectory: data });
+  return {
+    host,
+    stop: async () => {
+      await started.stop();
+      rmSync(data, { recursive: true, force: true });
+    },
+  };
+}
 const lastOsd = (host: TestHost) => host.osd.at(-1);
 /** This plugin's own commands (the core's are in `host.coreCommands`). */
 const own = (host: TestHost) => [...host.commands];
@@ -418,6 +438,128 @@ test("a late failure from a cleared gesture does not report into the new one", a
   await host.settle(60);
   assert.equal(lastOsd(host), "来源操作失败：old");
   assert.equal(bar.props["elapsed-label"], "00:00");
+  await stop();
+});
+
+test("0.2.3 keyframes on (default): a click on the bar is one keyframe seek; the release on the same spot is not sent again", async () => {
+  const { host, stop } = await start(withMedia());
+  const bar = host.mounted();
+  bar.emit("dragging", true);
+  bar.emit("seek-changed", 0.25);
+  await host.settle(80); // the press seek lands while the pointer is still down
+  assert.deepEqual(wireSeeks(host), [{ seconds: 25, keyframes: true }]);
+  assert.equal(bar.props["elapsed-label"], "00:25", "the draft shows while pressed");
+  bar.emit("seek-changed", 0.25); // the release sample: the pointer did not move
+  bar.emit("dragging", false);
+  await host.settle(80);
+  assert.deepEqual(wireSeeks(host), [{ seconds: 25, keyframes: true }], "press and release: one seek, no exact seek after it");
+  assert.deepEqual(host.seeks, [{ seconds: 25, keyframes: true }]);
+  assert.equal(host.source.position, 25);
+  assert.equal(lastOsd(host), "跳转: 00:25 / 01:40");
+  assert.deepEqual(host.mounted().locks, { focused: false, dragging: false, popupOpen: false });
+  // The draft is gone with the release: the player's position shows (a keyframe seek lands before the target).
+  host.setSource({ position: 20 });
+  await host.settle();
+  assert.equal(bar.props["elapsed-label"], "00:20");
+  await stop();
+});
+
+test("0.2.3 a drag keeps the mode decided at the press: moves and the release seek by keyframes, none exact", async () => {
+  const { host, stop } = await start(withMedia());
+  const bar = host.mounted();
+  bar.emit("dragging", true);
+  bar.emit("seek-changed", 0.1);
+  await host.settle(80);
+  // The switch flips during the gesture (Seek Steps… OK): the gesture keeps its mode.
+  await host.command("time-jump").run();
+  const window = host.window("playback-time-jump");
+  await until(() => window.visible);
+  window.emit("confirm", "5", "30", "60", "300", false);
+  await until(() => !window.visible);
+  bar.emit("seek-changed", 0.3);
+  await host.settle(80);
+  bar.emit("seek-changed", 0.42); // the release sample, elsewhere
+  bar.emit("dragging", false);
+  await host.settle(80);
+  assert.deepEqual(wireSeeks(host), [
+    { seconds: 10, keyframes: true },
+    { seconds: 30, keyframes: true },
+    { seconds: 42, keyframes: true },
+  ]);
+  assert.equal(host.source.position, 42);
+  assert.equal(bar.props["elapsed-label"], "00:42");
+  // The next press reads the switch again: exact now, and still one seek for a click.
+  bar.emit("dragging", true);
+  bar.emit("seek-changed", 0.5);
+  await host.settle(80);
+  bar.emit("seek-changed", 0.5);
+  bar.emit("dragging", false);
+  await host.settle(80);
+  assert.deepEqual(wireSeeks(host).slice(3), [{ seconds: 50 }]);
+  assert.deepEqual(host.seeks.at(-1), { seconds: 50, keyframes: false });
+  await stop();
+});
+
+test("0.2.3 a drag that returns to the press target: the release equals the last sent target and is dropped", async () => {
+  const { host, stop } = await start(withMedia());
+  const bar = host.mounted();
+  bar.emit("dragging", true);
+  bar.emit("seek-changed", 0.25);
+  await host.settle(80);
+  bar.emit("seek-changed", 0.4);
+  await host.settle(80);
+  bar.emit("seek-changed", 0.25); // back to where the press was: a new target after 40, so it is sent
+  await host.settle(80);
+  assert.deepEqual(wireSeeks(host), [
+    { seconds: 25, keyframes: true },
+    { seconds: 40, keyframes: true },
+    { seconds: 25, keyframes: true },
+  ]);
+  bar.emit("seek-changed", 0.25); // the release sample equals the last *sent* target
+  bar.emit("dragging", false);
+  await host.settle(80);
+  assert.equal(wireSeeks(host).length, 3, "the release is not sent again");
+  assert.equal(host.source.position, 25);
+  assert.equal(lastOsd(host), "跳转: 00:25 / 01:40");
+  host.setSource({ position: 20 });
+  await host.settle();
+  assert.equal(bar.props["elapsed-label"], "00:20", "no draft left behind");
+  await stop();
+});
+
+test("0.2.3 keyframes off: the bar seeks exactly as before, without the flag on the wire", async () => {
+  const { host, stop } = await startWith({ seekKeyframes: false });
+  const bar = host.mounted();
+  bar.emit("dragging", true);
+  bar.emit("seek-changed", 0.1);
+  await host.settle(80);
+  bar.emit("seek-changed", 0.37);
+  bar.emit("dragging", false);
+  await host.settle(80);
+  assert.deepEqual(wireSeeks(host), [{ seconds: 10 }, { seconds: 37 }]);
+  assert.deepEqual(
+    host.seeks.map((s) => s.keyframes),
+    [false, false],
+  );
+  assert.equal(host.source.position, 37);
+  await stop();
+});
+
+test("0.2.3 Jump to Time and Jump to Start stay exact with the switch on", async () => {
+  const { host, stop } = await start(withMedia());
+  host.setSource({ position: 30 });
+  await host.settle();
+  await host.press("G");
+  await host.settle();
+  host.window("playback-jump").emit("confirm", "1:05");
+  await host.settle(80);
+  await host.command("jump-start").run();
+  await host.settle(80);
+  assert.deepEqual(wireSeeks(host), [{ seconds: 65 }, { seconds: 0 }]);
+  assert.deepEqual(
+    host.seeks.map((s) => s.keyframes),
+    [false, false],
+  );
   await stop();
 });
 

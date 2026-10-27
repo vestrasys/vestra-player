@@ -469,47 +469,67 @@ export component PlaybackBar inherits Rectangle {
     // I07: a 160×90 picture above the text, on hover and while dragging (a dark
     // box until a cell is made): the cell under the pointer, or the nearest
     // made one, cropped from its sheet here, so it follows without a round trip.
-    if (PlaybackBridge.hover-time || PlaybackBridge.hover-thumbnail || seek-bar.near-mark >= 0) && PlaybackBridge.can-seek && PlaybackBridge.duration > 0 && seek-bar.pointing: Rectangle {
+    // 0.2.3: the box and its two sheet images are permanent elements shown with
+    // `visible:`, never `if`: an element made on pointer enter (and an Image
+    // made when the cell crosses from sheet A to B) uploads its 1600×900
+    // texture again (about 4 ms on the player's UI thread) and rebuilds the
+    // window's accessibility tree. Nothing under the pointer toggles `if` on hover.
+    tip := Rectangle {
+        visible: (PlaybackBridge.hover-time || PlaybackBridge.hover-thumbnail || seek-bar.near-mark >= 0) && PlaybackBridge.can-seek && PlaybackBridge.duration > 0 && seek-bar.pointing;
+        property <bool> picture: PlaybackBridge.hover-thumbnail;
+        // 5px at the sides; above: 5px over a picture, 2px over the text alone; 2px between and below.
         x: clamp(seek-bar.x + seek-bar.pointer-x - self.width / 2, 2px, max(2px, root.width - self.width - 2px));
         y: seek-bar.y + 4px - 4px - self.height;
-        width: tip.preferred-width;
-        height: tip.preferred-height;
+        width: (self.picture ? max(160px, label.preferred-width) : label.preferred-width) + 10px;
+        height: (self.picture ? 5px + 90px + 2px : 2px) + label.preferred-height + 2px;
         background: Theme.bg-panel;
         border-color: Theme.line;
         border-width: 1px;
         border-radius: Theme.radius-control;
-        tip := VerticalLayout {
-            padding-left: 5px;
-            padding-right: 5px;
-            padding-top: PlaybackBridge.hover-thumbnail ? 5px : 2px;
-            padding-bottom: 2px;
-            spacing: 2px;
-            if PlaybackBridge.hover-thumbnail: preview := Rectangle {
-                property <int> cell: PlaybackBridge.preview-count <= 0 ? -1
-                    : PlaybackBridge.preview-map[clamp(Math.floor(seek-bar.pointer-fraction * PlaybackBridge.preview-count), 0, PlaybackBridge.preview-count - 1)];
-                property <int> slot: Math.mod(Math.max(self.cell, 0), 100);
+        preview := Rectangle {
+            visible: tip.picture;
+            property <int> cell: PlaybackBridge.preview-count <= 0 ? -1
+                : PlaybackBridge.preview-map[clamp(Math.floor(seek-bar.pointer-fraction * PlaybackBridge.preview-count), 0, PlaybackBridge.preview-count - 1)];
+            property <int> slot: Math.mod(Math.max(self.cell, 0), 100);
+            x: (parent.width - self.width) / 2;
+            y: 5px;
+            width: 160px;
+            height: 90px;
+            background: Theme.bg-video;
+            // One Image per sheet, each shown for its half of the cells.
+            Image {
+                visible: preview.cell >= 0 && preview.cell < 100;
                 width: 160px;
                 height: 90px;
-                background: Theme.bg-video;
-                if preview.cell >= 0: Image {
-                    width: 160px;
-                    height: 90px;
-                    source: preview.cell >= 100 ? PlaybackBridge.preview-sheet-b : PlaybackBridge.preview-sheet-a;
-                    source-clip-x: Math.mod(preview.slot, 10) * 160;
-                    source-clip-y: Math.floor(preview.slot / 10) * 90;
-                    source-clip-width: 160;
-                    source-clip-height: 90;
-                    image-fit: contain;
-                }
+                source: PlaybackBridge.preview-sheet-a;
+                source-clip-x: Math.mod(preview.slot, 10) * 160;
+                source-clip-y: Math.floor(preview.slot / 10) * 90;
+                source-clip-width: 160;
+                source-clip-height: 90;
+                image-fit: contain;
             }
-            Text {
-                horizontal-alignment: center;
-                text: seek-bar.near-mark < 0 ? seek-bar.pointer-time
-                    : PlaybackBridge.marks[seek-bar.near-mark].title == "" ? PlaybackBridge.marks[seek-bar.near-mark].clock
-                    : PlaybackBridge.marks[seek-bar.near-mark].title + "  " + PlaybackBridge.marks[seek-bar.near-mark].clock;
-                color: Theme.text;
-                font-size: Theme.font-body;
+            Image {
+                visible: preview.cell >= 100;
+                width: 160px;
+                height: 90px;
+                source: PlaybackBridge.preview-sheet-b;
+                source-clip-x: Math.mod(preview.slot, 10) * 160;
+                source-clip-y: Math.floor(preview.slot / 10) * 90;
+                source-clip-width: 160;
+                source-clip-height: 90;
+                image-fit: contain;
             }
+        }
+        label := Text {
+            x: 5px;
+            y: tip.picture ? 5px + 90px + 2px : 2px;
+            width: parent.width - 10px;
+            horizontal-alignment: center;
+            text: seek-bar.near-mark < 0 ? seek-bar.pointer-time
+                : PlaybackBridge.marks[seek-bar.near-mark].title == "" ? PlaybackBridge.marks[seek-bar.near-mark].clock
+                : PlaybackBridge.marks[seek-bar.near-mark].title + "  " + PlaybackBridge.marks[seek-bar.near-mark].clock;
+            color: Theme.text;
+            font-size: Theme.font-body;
         }
     }
 }

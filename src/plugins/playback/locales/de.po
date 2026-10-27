@@ -151,12 +151,12 @@ msgstr "Kein Video"
 msgid "Needs ffmpeg"
 msgstr "Erfordert ffmpeg"
 
-#: controller.ts:148
+#: controller.ts:193
 #, x-machine
 msgid "Open Media"
 msgstr "Medien öffnen"
 
-#: controller.ts:148
+#: controller.ts:193
 #, x-machine
 msgid "Open Media (replaces the current source)"
 msgstr "Medien öffnen (ersetzt die aktuelle Quelle)"
@@ -475,7 +475,7 @@ msgstr "Geschwindigkeit (0.25–4×)"
 msgid "Time (h:mm:ss.ms)"
 msgstr "Zeit (h:mm:ss.ms)"
 
-#: ui/prompt.slint:60 ui/time-jump.slint:156
+#: ui/prompt.slint:60 ui/time-jump.slint:165
 #, x-machine
 msgid "OK"
 msgstr "OK"
@@ -486,57 +486,61 @@ msgid "Go"
 msgstr "Springen"
 
 #. the unit after a number of seconds.
-#: ui/time-jump.slint:35
+#: ui/time-jump.slint:36
 #, x-machine
 msgid "s"
 msgstr "s"
 
-#: ui/time-jump.slint:41
+#: ui/time-jump.slint:42
 #, x-machine
 msgid "Default"
 msgstr "Standard"
 
-#: ui/time-jump.slint:70
+#: ui/time-jump.slint:71
 #, x-machine
 msgid "Seek Steps"
 msgstr "Sprungweiten"
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:109
+#: ui/time-jump.slint:82 ui/time-jump.slint:110
 #, x-machine
 msgid "Left/Right arrow keys:"
 msgstr "Pfeil links/rechts:"
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:117
+#: ui/time-jump.slint:82 ui/time-jump.slint:118
 #, x-machine
 msgid "Ctrl + Left/Right arrow keys:"
 msgstr "Ctrl + Pfeil links/rechts:"
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:125
+#: ui/time-jump.slint:82 ui/time-jump.slint:126
 #, x-machine
 msgid "Shift + Left/Right arrow keys:"
 msgstr "Shift + Pfeil links/rechts:"
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:133
+#: ui/time-jump.slint:82 ui/time-jump.slint:134
 #, x-machine
 msgid "Ctrl + Alt + Left/Right arrow keys:"
 msgstr "Ctrl + Alt + Pfeil links/rechts:"
 
-#: ui/time-jump.slint:102
+#: ui/time-jump.slint:103
 #, x-machine
 msgid "Set how far each seek key moves during playback."
 msgstr "Legen Sie fest, wie weit jede Sprungtaste während der Wiedergabe springt."
 
-#: ui/time-jump.slint:141
+#: ui/time-jump.slint:142
 #, x-machine
 msgid "Jump to keyframes only"
 msgstr "Nur zu Schlüsselbildern springen"
 
-#: ui/time-jump.slint:145
+#: ui/time-jump.slint:147
+msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
+msgstr "Gilt für die Pfeiltasten und die Fortschrittsleiste: Klicken oder Ziehen auf der Leiste springt zum Schlüsselbild an oder vor der Zeigerposition."
+
+#: ui/time-jump.slint:154
 #, x-machine
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "Bereich 0.1–3600 s, höchstens eine Nachkommastelle"
 
-#: ui/time-jump.slint:160
+#: ui/time-jump.slint:169
 #, x-machine
 msgid "Cancel"
 msgstr "Abbrechen"

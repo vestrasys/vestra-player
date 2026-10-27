@@ -39,7 +39,9 @@ import {
   NEEDS_FFMPEG,
   parseKeyframes,
   PART_TIMEOUT_MS,
+  PUBLISH_MS,
   SEEK_QUIET_MS,
+  SHOW_MS,
   START_DELAY_MS,
   START_FALLBACK_MS,
   WORKERS,
@@ -742,6 +744,128 @@ test("I07 the bar gets the sheets and the cell map; the next session reuses them
   }
 });
 
+test("0.2.3 while the pointer is on the bar a changed sheet goes out at most every SHOW_MS; at once when nobody points", async () => {
+  const media = mediaFile();
+  const host = new TestHost();
+  const time = fakeClock(host);
+  try {
+    playing(host, media.file, 400); // 200 cells on two sheets, five per run
+    const releases: (() => void)[] = [];
+    fakeFfmpeg(host, () => new Promise<void>((resolve) => releases.push(resolve)));
+    const { stop } = await start(host);
+    const bar = host.mounted();
+    await generating(host, time);
+    await until(() => releases.length === WORKERS);
+    const sheet = () => JSON.stringify(bar.props["preview-sheet-a"] ?? null);
+    /** Cells made, as the bar sees them (the map names each made cell at least once). */
+    const made = () => new Set((bar.props["preview-map"] as number[] | undefined) ?? []).size;
+    // Let one run land: its slot is free for the sheet write, then the next run starts.
+    const land = async () => {
+      releases.shift()!();
+      await until(async () => {
+        await time.advance(0);
+        return releases.length === WORKERS;
+      });
+    };
+    bar.emit("pointing", true);
+    await host.settle();
+    // The first cells are written and handed over at once.
+    await land();
+    assert.equal(made(), 5);
+    const first = sheet();
+    assert.notEqual(first, "null");
+    // A second later more cells land and the sheet is written (PUBLISH_MS), but the
+    // bar keeps the one it has until SHOW_MS after the last hand-over.
+    await time.advance(PUBLISH_MS);
+    await land();
+    assert.equal(made(), 5, "held back while pointing");
+    assert.equal(sheet(), first);
+    await time.advance(SHOW_MS - PUBLISH_MS - 100);
+    assert.equal(made(), 5, "still held back");
+    await time.advance(100);
+    assert.equal(made(), 10, "handed over when due");
+    assert.notEqual(sheet(), first);
+    const second = sheet();
+    // Nobody points: the bar sends no sheets, so a written sheet is adopted at
+    // once, and the pointer's return shows the newest without waiting.
+    bar.emit("pointing", false);
+    await host.settle();
+    assert.equal(bar.props["preview-count"], 0);
+    await time.advance(PUBLISH_MS);
+    await land();
+    bar.emit("pointing", true);
+    await host.settle();
+    assert.equal(made(), 15);
+    assert.notEqual(sheet(), second);
+    const third = sheet();
+    // Held back again; the pointer leaving ends the wait at once.
+    await time.advance(PUBLISH_MS);
+    await land();
+    assert.equal(made(), 15, "held back");
+    assert.equal(sheet(), third);
+    bar.emit("pointing", false);
+    await host.settle();
+    bar.emit("pointing", true);
+    await host.settle();
+    assert.equal(made(), 20);
+    assert.notEqual(sheet(), third);
+    for (const release of releases.splice(0)) release();
+    await stop();
+  } finally {
+    time.restore();
+    media.done();
+  }
+});
+
+test("0.2.3 a sheet without new cells keeps its image reference across a hand-over: only the changed sheet is decoded again", async () => {
+  const media = mediaFile();
+  const host = new TestHost();
+  const time = fakeClock(host);
+  try {
+    playing(host, media.file, 400); // 200 cells on two sheets, five per run
+    const releases: (() => void)[] = [];
+    fakeFfmpeg(host, () => new Promise<void>((resolve) => releases.push(resolve)));
+    const { stop } = await start(host);
+    const bar = host.mounted();
+    await generating(host, time);
+    await until(() => releases.length === WORKERS);
+    const ref = (sheet: "a" | "b") => JSON.stringify(bar.props[`preview-sheet-${sheet}`] ?? null);
+    // Runs land in queue order; after each the slot is free for the write (PUBLISH_MS has passed) and the next run starts.
+    const land = async () => {
+      releases.shift()!();
+      await until(async () => {
+        await time.advance(0);
+        return releases.length === WORKERS;
+      });
+    };
+    // Coarse to fine, five per run: runs 0–3 touch both sheets, run 4 only sheet B
+    // (cells 120–184), run 5 only sheet A (cells 4–36).
+    for (let run = 0; run < 4; run++) {
+      await time.advance(PUBLISH_MS);
+      await land();
+    }
+    bar.emit("pointing", true);
+    await host.settle();
+    const [a0, b0] = [ref("a"), ref("b")];
+    assert.notEqual(a0, "null");
+    assert.notEqual(b0, "null");
+    await time.advance(SHOW_MS); // not held back by the throttle
+    await land(); // run 4: sheet B only
+    assert.equal(ref("a"), a0, "sheet A unchanged: the same reference, nothing to decode again");
+    assert.notEqual(ref("b"), b0, "sheet B changed: a new reference");
+    const b1 = ref("b");
+    await time.advance(SHOW_MS);
+    await land(); // run 5: sheet A only
+    assert.notEqual(ref("a"), a0);
+    assert.equal(ref("b"), b1, "sheet B unchanged this time");
+    for (const release of releases.splice(0)) release();
+    await stop();
+  } finally {
+    time.restore();
+    media.done();
+  }
+});
+
 test("I07 a new source ends the old one's work at once; its own sprite starts from its first frame", async () => {
   const media = mediaFile();
   const host = new TestHost();
@@ -948,7 +1072,14 @@ test("I07 bar.slint crops the pointer's cell from the sheets itself: no round tr
   const slint = readFileSync(new URL("../ui/bar.slint", import.meta.url), "utf8");
   assert.doesNotMatch(slint, /hover-changed|hover-ended/);
   assert.match(slint, /PlaybackBridge\.preview-map\[clamp\(Math\.floor\(seek-bar\.pointer-fraction \* PlaybackBridge\.preview-count\)/);
-  assert.match(slint, /source: preview\.cell >= 100 \? PlaybackBridge\.preview-sheet-b : PlaybackBridge\.preview-sheet-a;/);
+  // 0.2.3: the box and the two sheet images are permanent elements (`visible:`),
+  // one per sheet: a recreated Image uploads its 1600×900 texture again, and
+  // nothing under the pointer may toggle `if` on hover.
+  assert.match(slint, /visible: preview\.cell >= 0 && preview\.cell < 100;\s+width: 160px;\s+height: 90px;\s+source: PlaybackBridge\.preview-sheet-a;/);
+  assert.match(slint, /visible: preview\.cell >= 100;\s+width: 160px;\s+height: 90px;\s+source: PlaybackBridge\.preview-sheet-b;/);
+  assert.match(slint, /tip := Rectangle \{\s+visible: \(PlaybackBridge\.hover-time \|\| PlaybackBridge\.hover-thumbnail \|\| seek-bar\.near-mark >= 0\)[^\n]* && seek-bar\.pointing;/);
+  assert.match(slint, /preview := Rectangle \{\s+visible: tip\.picture;/);
+  assert.doesNotMatch(slint, /if [^\n]*(pointing|preview\.cell|hover-thumbnail)[^\n]*: (Rectangle|Image)/, "no `if` toggled by the pointer");
   for (const clip of ["source-clip-x: Math.mod(preview.slot, 10) * 160;", "source-clip-y: Math.floor(preview.slot / 10) * 90;"])
     assert.ok(slint.includes(clip), clip);
   // The tip shows while pressed too, so the picture follows a drag; the plugin

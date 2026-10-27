@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.playback 0.2.1\n"
+"Project-Id-Version: vestra.playback 0.2.3\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -120,11 +120,11 @@ msgstr ""
 msgid "Needs ffmpeg"
 msgstr ""
 
-#: controller.ts:148
+#: controller.ts:193
 msgid "Open Media"
 msgstr ""
 
-#: controller.ts:148
+#: controller.ts:193
 msgid "Open Media (replaces the current source)"
 msgstr ""
 
@@ -379,7 +379,7 @@ msgstr ""
 msgid "Time (h:mm:ss.ms)"
 msgstr ""
 
-#: ui/prompt.slint:60 ui/time-jump.slint:156
+#: ui/prompt.slint:60 ui/time-jump.slint:165
 msgid "OK"
 msgstr ""
 
@@ -388,46 +388,50 @@ msgid "Go"
 msgstr ""
 
 #. the unit after a number of seconds.
-#: ui/time-jump.slint:35
+#: ui/time-jump.slint:36
 msgid "s"
 msgstr ""
 
-#: ui/time-jump.slint:41
+#: ui/time-jump.slint:42
 msgid "Default"
 msgstr ""
 
-#: ui/time-jump.slint:70
+#: ui/time-jump.slint:71
 msgid "Seek Steps"
 msgstr ""
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:109
+#: ui/time-jump.slint:82 ui/time-jump.slint:110
 msgid "Left/Right arrow keys:"
 msgstr ""
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:117
+#: ui/time-jump.slint:82 ui/time-jump.slint:118
 msgid "Ctrl + Left/Right arrow keys:"
 msgstr ""
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:125
+#: ui/time-jump.slint:82 ui/time-jump.slint:126
 msgid "Shift + Left/Right arrow keys:"
 msgstr ""
 
-#: ui/time-jump.slint:81 ui/time-jump.slint:133
+#: ui/time-jump.slint:82 ui/time-jump.slint:134
 msgid "Ctrl + Alt + Left/Right arrow keys:"
 msgstr ""
 
-#: ui/time-jump.slint:102
+#: ui/time-jump.slint:103
 msgid "Set how far each seek key moves during playback."
 msgstr ""
 
-#: ui/time-jump.slint:141
+#: ui/time-jump.slint:142
 msgid "Jump to keyframes only"
 msgstr ""
 
-#: ui/time-jump.slint:145
+#: ui/time-jump.slint:147
+msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
+msgstr ""
+
+#: ui/time-jump.slint:154
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr ""
 
-#: ui/time-jump.slint:160
+#: ui/time-jump.slint:169
 msgid "Cancel"
 msgstr ""
