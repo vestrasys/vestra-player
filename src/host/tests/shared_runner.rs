@@ -30,11 +30,22 @@ fn digest(files: &[(&str, String)]) -> String {
 /// start count this player run, kept in session storage), written to
 /// `root/<id>`; returns its `builtin.json` entry.
 fn builtin(root: &Path, id: &str, body: &str, tamper: bool) -> serde_json::Value {
+    builtin_with(root, id, body, tamper, &[])
+}
+
+/// `builtin` with these manifest capabilities.
+fn builtin_with(
+    root: &Path,
+    id: &str,
+    body: &str,
+    tamper: bool,
+    capabilities: &[&str],
+) -> serde_json::Value {
     let files = [
         (
             "manifest.json",
             serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-                "entry":"main.js","capabilities":[]})
+                "entry":"main.js","capabilities":capabilities})
             .to_string(),
         ),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
@@ -197,4 +208,122 @@ fn repeated_faults_fall_back_to_own_processes_and_the_switch_turns_sharing_off()
         "{log}"
     );
     assert!(!log.contains("shared runner 1"), "{log}");
+}
+
+/// The pid a fixture logged with its `n`th start.
+fn pid_of(log: &str, id: &str, n: u32) -> String {
+    let line = format!("{id} start {n} pid ");
+    log.lines()
+        .find_map(|l| l.split_once(&line).map(|(_, pid)| pid.trim().to_owned()))
+        .unwrap_or_else(|| panic!("no {line:?} in\n{log}"))
+}
+
+/// A built-in that reloads `target` after `ms` (`plugins.manage`).
+fn reloader(root: &Path, target: &str, ms: u32) -> serde_json::Value {
+    builtin_with(
+        root,
+        "vestra.fixture-manager",
+        &format!(
+            "if (n === 1) setTimeout(() => plugin.packages.reload({target:?})\
+             .catch((e) => console.error(`reload failed ${{e.code}}`)), {ms});"
+        ),
+        false,
+        &["plugins.manage"],
+    )
+}
+
+/// An uncaught exception the runner traces to one member stops that member
+/// only (no restart of the others) and runs it alone when it starts again.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn an_attributed_fault_stops_only_its_plugin_and_isolates_it() {
+    let root = plugins_root();
+    let plugins_dir = root.path().join("plugins");
+    let plugins = [
+        builtin(
+            &plugins_dir,
+            "vestra.fixture-faulty",
+            "if (n === 1) setTimeout(() => { throw new Error(\"boom\"); }, 300);",
+            false,
+        ),
+        builtin(&plugins_dir, "vestra.fixture-calm", "", false),
+        reloader(&plugins_dir, "vestra.fixture-faulty", 1500),
+    ];
+    let log = run(&plugins, root.path(), 5, &[]);
+    let shared = pid_of(&log, "vestra.fixture-calm", 1);
+    assert_eq!(pid_of(&log, "vestra.fixture-faulty", 1), shared);
+    assert!(log.contains("vestra.fixture-faulty faulted"), "{log}");
+    assert!(!log.contains("restarting its plugins"), "{log}");
+    assert!(!log.contains("vestra.fixture-calm start 2"), "{log}");
+    // Reloaded: alone, in another process; the others stay where they were.
+    assert!(
+        log.contains("vestra.fixture-faulty runs alone: a fault was attributed"),
+        "{log}"
+    );
+    assert_ne!(pid_of(&log, "vestra.fixture-faulty", 2), shared);
+}
+
+/// A member that blocks the event loop: no pong for five pings, every
+/// member restarts in a new runner (the spinner too: hangs are not
+/// attributed), once.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_hang_restarts_every_member_in_a_new_runner() {
+    let root = plugins_root();
+    let plugins_dir = root.path().join("plugins");
+    let plugins = [
+        builtin(
+            &plugins_dir,
+            "vestra.fixture-spin",
+            "if (n === 1) setTimeout(() => { for (;;) {} }, 500);",
+            false,
+        ),
+        builtin(&plugins_dir, "vestra.fixture-calm", "", false),
+    ];
+    let log = run(
+        &plugins,
+        root.path(),
+        8,
+        &[("VESTRA_SHARED_PING_MS", "400")],
+    );
+    assert!(log.contains("no heartbeat for 2 s"), "{log}");
+    assert_eq!(log.matches("restarting its plugins").count(), 1, "{log}");
+    let first = pid_of(&log, "vestra.fixture-calm", 1);
+    let second = pid_of(&log, "vestra.fixture-calm", 2);
+    assert_ne!(first, second);
+    assert_eq!(pid_of(&log, "vestra.fixture-spin", 2), second);
+}
+
+/// A member whose cleanup outlives the host's 300 ms window: the reload
+/// starts the new instance only after the runner reports the old one gone,
+/// never while the old cleanup still writes the same data directory.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_reload_waits_for_a_slow_cleanup_to_finish() {
+    let root = plugins_root();
+    let plugins_dir = root.path().join("plugins");
+    let plugins = [
+        builtin(
+            &plugins_dir,
+            "vestra.fixture-slow",
+            "const { readFileSync, writeFileSync, appendFileSync } = await import(\"node:fs\");\n\
+             const marker = `${plugin.dataDirectory}/cleanup.txt`;\n\
+             let before = \"\"; try { before = readFileSync(marker, \"utf8\"); } catch {}\n\
+             console.error(`vestra.fixture-slow found [${before}]`);\n\
+             plugin.onDispose(async () => {\n\
+               writeFileSync(marker, \"started\");\n\
+               await new Promise((done) => setTimeout(done, 1500));\n\
+               appendFileSync(marker, \" finished\");\n\
+             });",
+            false,
+        ),
+        reloader(&plugins_dir, "vestra.fixture-slow", 1000),
+    ];
+    let log = run(&plugins, root.path(), 7, &[]);
+    assert!(log.contains("still cleaning up after 300 ms"), "{log}");
+    pid_of(&log, "vestra.fixture-slow", 2);
+    assert!(
+        log.contains("vestra.fixture-slow found [started finished]"),
+        "the new instance started before the old cleanup finished:\n{log}"
+    );
 }

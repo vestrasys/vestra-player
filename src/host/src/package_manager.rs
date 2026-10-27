@@ -266,7 +266,7 @@ impl Host {
             return;
         }
         if let Err(reason) = shared.tick(now, shared_runner::ping_ms()) {
-            self.restart_shared(&reason, None);
+            self.restart_shared(&reason);
         }
     }
     /// A control line from shared runner `runner` (`Event::Runner`).
@@ -279,7 +279,7 @@ impl Host {
         };
         if g == 0 {
             // No plugin owns it; the runner exits on its own.
-            self.restart_shared(&format!("unattributed fault: {text}"), None);
+            self.restart_shared(&format!("unattributed fault: {text}"));
             return;
         }
         let Some(id) = self
@@ -301,12 +301,12 @@ impl Host {
     }
     /// The shared runner exited, faulted without attribution or hung:
     /// every member stops (its registrations revoked as for any exit) and
-    /// starts again in a new runner, its digest checked again; `culprit`,
-    /// when known, in its own process. The third restart within a minute
+    /// starts again in a new runner, its digest checked again. The third
+    /// restart within a minute
     /// fails open: own processes for all of them until the player quits.
     /// Session storage is keyed by the plugin's data key, not by process,
     /// so the restarted plugins find their values (`session_storage.rs`).
-    pub(super) fn restart_shared(&mut self, reason: &str, culprit: Option<String>) {
+    pub(super) fn restart_shared(&mut self, reason: &str) {
         let Some(runner) = self.shared.take() else {
             return;
         };
@@ -319,9 +319,6 @@ impl Host {
         );
         runner.retire(false);
         let failed_open = self.shared_policy.restart(self.now_ms());
-        if let Some(culprit) = culprit {
-            self.shared_policy.quarantined.insert(culprit);
-        }
         let members = self
             .plugins
             .iter()
@@ -1750,11 +1747,14 @@ fn uninstallable(
 
 /// The installation's built-in plugins (`builtin.json`, written by
 /// `scripts/stage-plugins.mjs`). Each runs in place from its directory
-/// under `<resources>/plugins`: nothing is copied, hashed or written there.
-/// The installation protects those files like the rest of `<resources>`
-/// (the host runs `runtime/runner.js` and `ui/host.slint` from there too):
-/// the `.app` signature on macOS, an admin-only install directory on
-/// Windows.
+/// under `<resources>/plugins`: nothing is copied or written there (each
+/// directory is hashed once per shared-runner incarnation, `Manager::verify`).
+/// The files are as safe as the rest of `<resources>` (the host runs
+/// `runtime/runner.js` and `ui/host.slint` from there too): the `.app`
+/// signature on macOS; on Windows a per-user install (`PrivilegesRequired=
+/// lowest`) is writable by the user, so the digest guards against a damaged
+/// or partial installation, not against a program running as the user
+/// (doc/process/rounds/2026-10-shared-runner.md §3.3).
 mod builtin {
     use crate::package_stage::PackageManifest;
     use anyhow::{Context, Result, ensure};
