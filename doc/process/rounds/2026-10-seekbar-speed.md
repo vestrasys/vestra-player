@@ -1,6 +1,6 @@
 # 2026-10 round: seek-bar speed on local files
 
-Started 2026-10-26. **This document is the only progress record for this round.** Status: research and measurements done; the host performance fix (section 5) is on main (83bf54d, #57); the user ruled on the seek-bar mode (option B, section 8); the host and SDK side of the ruling is on branch `seekbar-keyframes` (worktree `C:\vestra\wt-seekkf`, from main 83bf54d) the SDK side is merged as SDK main ef7afce (#37, 1.5.22, tag after v1.5.21 publishes); the playback plugin's side (section 8.4) is in progress on branch `bar-keyframes`.
+Started 2026-10-26. **This document is the only progress record for this round.** Status: research and measurements done; the host performance fix (section 5) is on main (83bf54d, #57); the user ruled on the seek-bar mode (option B, section 8); the host and SDK side of the ruling is on branch `seekbar-keyframes` (worktree `C:\vestra\wt-seekkf`, from main 83bf54d); the SDK side is merged as SDK main ef7afce (#37, 1.5.22, tag after v1.5.21 publishes); the playback plugin's side (section 8.4) is in progress on branch `bar-keyframes`.
 
 ## User report (2026-10-26)
 
