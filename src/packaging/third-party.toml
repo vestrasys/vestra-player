@@ -117,15 +117,6 @@ note = "Subtitle font, embedded in vestra-host."
 source = "https://github.com/notofonts/noto-cjk/tree/f8d157532fbfaeda587e826d4cd5b21a49186f7c"
 
 [[component]]
-name = "JSNES 2.1.0 (in the NES plugin)"
-license = "Apache-2.0"
-vxp = "vestra.nes"
-vxp_license_files = ["licenses/jsnes-LICENSE"]
-license_files = ["third-party/jsnes/LICENSE"]
-license_from = ["plugins/nes/licenses/jsnes-LICENSE"]
-source = "https://github.com/bfirsh/jsnes"
-
-[[component]]
 name = "npm packages bundled into vendor/pi/pi.mjs (in the workshop plugin)"
 vxp = "vestra.workshop"
 inventory = "dependency-inventory.json"

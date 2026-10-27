@@ -2297,7 +2297,7 @@ Why the core has to do it: the output device is held by the player's audio outpu
 - Unplug the selected USB sound card during playback: sound continues on the system default, with an OSD; after plugging it back in, it switches back automatically.
 - With "System Default" chosen, switch the output in macOS Control Center: the player follows.
 - Choose a device and restart the player: it still uses that device.
-- While the NES emulator runs, its sound also comes out of the chosen device.
+- While a plugin's generated stream (e.g. the VestraNES emulator from the store) runs, its sound also comes out of the chosen device.
 
 **Notes**: pass-through and a second output device belong to G17 / are Windows-only, and are not done.
 
@@ -3805,7 +3805,7 @@ Once approach A lands, a "Plugin Manager" page with the same content as the wind
   - Only for installed plugins. The confirmation box has the checkbox "Also delete its settings and data" (unchecked by default).
   - The core disables it first, then removes the `current` and `previous` records from the install store. The package directory is reclaimed by `gc`. When deleting data is checked, `plugin-data/<id>/` is deleted as well.
   - The plugin's shortcut entries in the user overlay are kept (becoming orphans, which can be cleared in J01), so they come back after reinstalling.
-  - Message `Uninstalled vestra.nes`.
+  - Message `Uninstalled <id>` (e.g. `Uninstalled zysilm.vestranes`).
 - **Roll back**: calls the existing `packages.rollback(id)`, and the interface follows the states of `PackageChange` (preparing / activating / done / failed). On failure the message is shown.
 - **Plugins on trial**: shown only, with no actions (managed by workshop).
 - **Liveness**: subscribe to `packages.onChange`; installs, uninstalls and state changes (including new plugins installed by workshop) show up in the list within 1 second.

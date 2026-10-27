@@ -150,7 +150,7 @@ The labels below are the English interface text (the English source text of each
 | Audio ▸ Processing ▸ Normalize · Crystalizer | audio | Shift+N · Shift+C | Checked |
 | Audio ▸ Reset | audio | | |
 | Audio ▸ Show Album Cover for Audio Only | visualizer | | Checked |
-| Emulator ▸ Open NES ROM… · Stop NES · NES Tools… | nes | | |
+| Games ▸ (appears only when a plugin adds items, e.g. VestraNES ▸ Load ROM… · Stop · VestraNES Window…) | third-party | | The built-in NES emulator left the player on 2026-10-27 (user ruling) |
 | —— | | | |
 | Fullscreen | host | Enter, Alt+Enter, F11 | Checked; key `Toggle Fullscreen` (id `fullscreen`); in fullscreen Esc leaves fullscreen (command "Leave Fullscreen", key `Leave Fullscreen`, not in the menu) |
 | Screen ▸ Picture-in-Picture | window | | Checked; appears only when the main window reports support for the system's picture-in-picture (macOS 14+) (id `pip`, IA-WIN-01); disabled without video (can still be left while in picture-in-picture); if mini size is active, the original size is restored first |
@@ -226,7 +226,6 @@ Menus merge by English key ([i18n §5](../architecture/i18n.md#5-declarations-an
 | visualizer | Video-area background layer (idle logo, album cover for audio only); settings page in "Options" |
 | preferences | Tool window: Options (the player's settings window; this plugin provides the entry and the "Appearance" page) |
 | hotkeys | Tool windows: keyboard shortcuts, mouse |
-| nes | Tool window: NES |
 | youtube, bilibili | Tool windows: enter a link, play (YouTube also has download) |
 | workshop | Tool window: Plugin Workshop; each plugin it generates and installs has its own window |
 | store | Tool window: Plugin Store (list + details; its Installed tab is where plugins are managed, the Plugin Manager `vestra.plugins` was removed on 2026-10-26); "Options ▸ Plugins ▸ Plugin Store" settings page; the video area accepts dropped `.vxp` files (a drop provider for the `vxp` extension) |

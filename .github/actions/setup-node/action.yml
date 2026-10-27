@@ -1,7 +1,7 @@
 name: Set up Node
 description: >
   Node with the npm cache, then `npm ci` in src/ and in every plugin that has
-  its own package-lock.json (nes, workshop).
+  its own package-lock.json (workshop).
 runs:
   using: composite
   steps:

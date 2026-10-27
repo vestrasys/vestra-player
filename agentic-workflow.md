@@ -181,7 +181,7 @@ Commits, tags and pushes in the SDK repository are made by the coordinator, the 
 6. Acceptance scenarios: user action | observable result | evidence (screenshot/output/test)
 ```
 
-Menus are organized by user domain (File, Playback, Video, Audio, Subtitles, View, Emulator, Plugins); sub-features such as reset and presets stay in their own domain. Changing a global menu path requires a proposal and cannot be self-approved.
+Menus are organized by user domain (File, Playback, Video, Audio, Subtitles, View, Games, Plugins); sub-features such as reset and presets stay in their own domain. Changing a global menu path requires a proposal and cannot be self-approved.
 
 ## 3. Keep the start gate and acceptance separate
 
@@ -302,8 +302,7 @@ Load all plugins in the same player process, operate each item with real mouse a
 | Video / audio processing | Effects actually apply to the picture or sound; controls return to default after reset; playback does not stop during continuous dragging |
 | Subtitles | Load an external SRT, mixed Chinese and English display, track selection, style and undo |
 | Screenshot export | The output matches the source frame pixel for pixel |
-| NES | Opening a ROM shows a picture; the screen clears after stopping |
-| Online video | Public videos play (`youtube` and `bilibili` are in the plugin repository: load them with `--plugin <plugin repository checkout>/plugins/<name>`, after running `npm ci` in the checkout) |
+| Online video, VestraNES | Public videos play; a ROM loaded from Games ▸ VestraNES shows a picture and the keys control it while the VestraNES window is in front (`vestratube`, `vestrabili` and `vestranes` are in the plugin repository: load them with `--plugin <plugin repository checkout>/plugins/<name>`, after running `npm ci` in the checkout) |
 | Plugin workshop | Generate → validate → install → the generated plugin works |
 | Deactivation | Deactivating one processing plugin revokes only its own effect, and the other plugins' effects remain (there is currently no public deactivation entry, so a test plugin or the host test driver is needed) |
 

@@ -250,7 +250,7 @@ Subtitles ▸                             subtitles
 Video ▸                                 video, capture
 ——
 Audio ▸                                 core (volume ↑/↓, mute M), audio
-Emulator ▸                              nes
+Games ▸                                 (appears only when a plugin adds items, e.g. VestraNES)
 ——
 Toggle Fullscreen       Enter            host
 Screen ▸                                window
@@ -386,7 +386,7 @@ The rules for plugin authors are on the SDK documentation site, [Interface guide
 | UI-DLG-03 | Screenshot | No window: Ctrl+E saves directly to the snapshot folder (PNG by default), Ctrl+C copies to the clipboard, "Save As…" opens a save dialog; an on-screen message on success; the save folder is chosen in Snapshot Settings | capture |
 | UI-DLG-04 | Burst | Separate dialog (width 438): storage, format/size, count and range groups, bottom buttons 24px high | capture |
 | UI-DLG-05 | Export Clip | Separate dialog (width 400), grouped by the §2.3 specification | capture |
-| UI-DLG-06 | NES, Plugin Workshop | Only the §7.3 common requirements | nes, workshop |
+| UI-DLG-06 | Plugin Workshop | Only the §7.3 common requirements | workshop |
 
 ## 8. Keyboard and mouse
 
@@ -497,7 +497,7 @@ Check this table when a plugin changes its interface. When the core capabilities
 | subtitles | UI-TOOL-01/03–05/08/09, UI-MENU-04 |
 | capture | UI-TOOL-01/05, UI-DLG-03–05 |
 | store, link-type plugins | UI-TOOL-01/05, UI-DLG-02 |
-| nes, workshop | UI-TOOL-01/05, UI-DLG-06 |
+| workshop | UI-TOOL-01/05, UI-DLG-06 |
 | info | UI-INFO-01–02 |
 
 ## 12. Open items
