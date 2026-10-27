@@ -32,3 +32,5 @@ flate = "flate"
 capabilties = "capabilties"
 # A Windows display-driver API field (VidPn = video present network), vestra-win32.
 VidPnSourceId = "VidPnSourceId"
+# `AsyncLocalStorage` variable in the shared-runner design.
+als = "als"
