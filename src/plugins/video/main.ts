@@ -247,17 +247,24 @@ export default async function activate(plugin: Plugin) {
 
   let sent = "";
   let sentBlend: number | null = null;
-  /** The SDK keeps one change in flight; an unchanged chain is not resent unless it failed. */
-  const apply = () => {
+  /** The chain last sent has an eq node (so a drag through 0 may keep it, see `nodesFor`). */
+  let sentEq = false;
+  /**
+   * The SDK keeps one change in flight; an unchanged chain is not resent unless it failed.
+   * `dragging`: a slider is being dragged, so an eq node already in the chain stays (neutral)
+   * until the release commits; it is never added for that reason.
+   */
+  const apply = (dragging = false) => {
     sentBlend = blendRate();
-    const nodes = enabled ? nodesFor(look, sentBlend) : [];
+    const nodes = enabled ? nodesFor(look, sentBlend, dragging && sentEq) : [];
     const key = JSON.stringify(nodes);
     if (key === sent && filter.status.state !== "failed") return;
     sent = key;
+    sentEq = nodes.some((n) => n.kind === "eq");
     filter.set(nodes);
   };
-  const change = () => {
-    apply();
+  const change = (dragging = false) => {
+    apply(dragging);
     persist();
     if (wantsMeasure()) void measure();
   };
@@ -356,12 +363,14 @@ export default async function activate(plugin: Plugin) {
     return field === "zoom" ? "view" : field === "targetPeak" ? "render" : (strengths as string[]).includes(field) ? "rebuild" : "live";
   };
   // eq, hue and gblur change in place while playing; the other filters rebuild, so they wait for release.
-  // Zoom (a display property) and 目标亮度 (a render option) follow the drag.
+  // Zoom (a display property) and 目标亮度 (a render option) follow the drag. The first move away
+  // from the defaults adds the eq node (one rebuild); from then on the drag updates it in place,
+  // also through 0, and the release removes it when every colour is back at its default.
   window.on("adjust", (field: string, value: number) => {
     const kind = storeValue(field, value);
     if (kind === "view") showView();
     else if (kind === "render") renderChanged();
-    else if (kind === "live") change();
+    else if (kind === "live") change(true);
   });
   window.on("commit", (field: string, value: number) => {
     const kind = storeValue(field, value);

@@ -21,6 +21,7 @@ Adjusts the picture's color, effects, aspect ratio and how it is shown.
 ## Limits
 
 - HDR, pixel shaders and motion interpolation need GPU rendering; they are unavailable under software rendering.
+- Colours at their defaults add no filter. While any colour, effect, flip, rotation, crop/stretch or deinterlace (Auto or Always) is active, the player decodes with copy-back (hardware decoding still, but frames pass through system memory), which costs zero-copy decoding and makes exact seeks on long-GOP files slower.
 - Frame doubling runs on the CPU and is heavy for high-resolution video.
 - The output is always SDR.
 

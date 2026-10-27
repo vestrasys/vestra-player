@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import type { Locale } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { aspectIndex, aspectMessage, blendFps, defaultLook, defaults, droppedTooMany, isHdr, isShaderName, nextAspect, nodesFor, parse, parseAspect, peakOf, serialize, shaderList } from "../model.ts";
+import { aspectIndex, aspectMessage, blendFps, defaultLook, defaults, droppedTooMany, eqNeutral, isHdr, isShaderName, nextAspect, nodesFor, parse, parseAspect, peakOf, presets, serialize, shaderList } from "../model.ts";
 import type { Look, Picture } from "../model.ts";
 
 const directory = new URL("..", import.meta.url);
@@ -77,18 +77,33 @@ async function withData(run: (data: string) => Promise<void>) {
 
 // ---------------------------------------------------------------- model
 
-test("neutral: automatic deinterlace and one eq node; blur, hue and strengths add nodes only when they act", () => {
-  assert.deepEqual(nodesFor(defaultLook()), [autoDeinterlace, neutralEq]);
+test("neutral: automatic deinterlace only; eq, blur, hue and strengths add nodes only when they act", () => {
+  assert.deepEqual(nodesFor(defaultLook()), [autoDeinterlace]);
   assert.deepEqual(nodesFor(look({ blurEnabled: true, blurStrength: 4 })).at(-1), { kind: "gblur", sigma: 4, steps: 3 });
-  assert.equal(nodesFor(look({ blurEnabled: true, blurStrength: 0 })).length, 2);
+  assert.equal(nodesFor(look({ blurEnabled: true, blurStrength: 0 })).length, 1);
   assert.deepEqual(nodesFor(look({ blurEnabled: true, blurStrength: 15 })).at(-1), { kind: "gblur", sigma: 10, steps: 3 });
   assert.deepEqual(nodesFor(look({ hue: 100 })).at(-1), { kind: "hue", degrees: 180 }, "E02: 1% = 1.8°");
   assert.deepEqual(nodesFor(look({ hue: -6 })).at(-1), { kind: "hue", degrees: -10.8 });
   const zero = defaultLook();
   zero.effects.sharpen = { on: true, strength: 0 };
   zero.effects.deband = { on: true, strength: 0 };
-  assert.deepEqual(nodesFor(zero), [autoDeinterlace, neutralEq], "on at strength 0 makes no node");
-  assert.deepEqual(nodesFor({ ...defaultLook(), deinterlace: { mode: "off", output: "frame" } }), [neutralEq]);
+  assert.deepEqual(nodesFor(zero), [autoDeinterlace], "on at strength 0 makes no node");
+  assert.deepEqual(nodesFor({ ...defaultLook(), deinterlace: { mode: "off", output: "frame" } }), [], "nothing active: an empty chain");
+});
+
+test("the eq node exists only while a colour differs from its default; `keepEq` keeps a neutral one", () => {
+  assert.equal(eqNeutral(defaults), true);
+  assert.deepEqual(nodesFor(look({ brightness: 1 })), [autoDeinterlace, { ...neutralEq, brightness: 0.01 }]);
+  assert.deepEqual(nodesFor(look({ contrast: 15 })).at(-1), { ...neutralEq, contrast: 2 ** 0.15 });
+  assert.deepEqual(nodesFor(look({ saturation: -12 })).at(-1), { ...neutralEq, saturation: 0.88 });
+  assert.deepEqual(nodesFor(look({ gamma: -5 })).at(-1), { ...neutralEq, gamma: 2 ** -0.05 });
+  assert.deepEqual(nodesFor(look({ hue: 3 })), [autoDeinterlace, { kind: "hue", degrees: 5.4 }], "hue has its own node; no eq");
+  assert.deepEqual(nodesFor(look({ blurEnabled: true })), [autoDeinterlace, { kind: "gblur", sigma: 3, steps: 3 }]);
+  assert.deepEqual(nodesFor(look({ brightness: 0.4 })).at(-1), { ...neutralEq, brightness: 0.004 }, "a fraction from a drag counts");
+  assert.deepEqual(nodesFor(look(), null, true), [autoDeinterlace, neutralEq]);
+  assert.deepEqual(nodesFor(look({ hue: 3 }), null, true), [autoDeinterlace, neutralEq, { kind: "hue", degrees: 5.4 }], "eq first among the colour nodes");
+  assert.deepEqual(nodesFor(look(presets.original)), [autoDeinterlace]);
+  assert.deepEqual(nodesFor(look(presets.vivid)).at(-1), { ...neutralEq, contrast: 2 ** 0.15, saturation: 1.2 });
 });
 
 test("the full chain keeps the fixed order and maps strengths to the host's ranges", () => {
@@ -436,6 +451,117 @@ test("presets replace colour and blur", async () => {
   await stop();
 });
 
+// The eq node is added and removed while playing: with the colours at their defaults there is none,
+// so an untouched picture keeps zero-copy hardware decoding.
+test("defaults: no eq node; one colour away from its default adds it with exact values; back to the default removes it", async () => {
+  const { host, window, stop } = await playing();
+  assert.deepEqual(kinds(host), ["deinterlace"], "defaults: no eq node");
+  assert.equal(node(host, "eq"), undefined);
+  await host.press("E");
+  await host.settle();
+  assert.deepEqual(chain(host), [autoDeinterlace, { kind: "eq", brightness: 0.01, contrast: 1, saturation: 1, gamma: 1 }], "one value: the node, exact");
+  await host.press("W");
+  await host.settle();
+  assert.deepEqual(kinds(host), ["deinterlace"], "back at the default: removed");
+  window.emit("commit", "gamma", -5);
+  await host.settle();
+  assert.deepEqual(eq(host), { kind: "eq", brightness: 0, contrast: 1, saturation: 1, gamma: 2 ** -0.05 });
+  window.emit("reset-field", "gamma");
+  await host.settle();
+  assert.equal(node(host, "eq"), undefined, "the row's 默认 button removes it");
+  window.emit("preset", "vivid");
+  await host.settle();
+  assert.deepEqual(eq(host), { kind: "eq", brightness: 0, contrast: 2 ** 0.15, saturation: 1.2, gamma: 1 });
+  window.emit("preset", "original");
+  await host.settle();
+  assert.equal(node(host, "eq"), undefined, "the 原始 preset removes it");
+  // Hue and blur have their own nodes: with the colours at their defaults they come without eq.
+  await host.press("O");
+  await host.press("Ctrl+B");
+  await host.settle();
+  assert.deepEqual(kinds(host), ["deinterlace", "hue", "gblur"]);
+  await stop();
+});
+
+test("Reset (Q) removes the eq node; so does the menu command", async () => {
+  const { host, window, stop } = await playing();
+  window.emit("adjust", "contrast", 30);
+  window.emit("adjust", "saturation", -20);
+  await host.settle();
+  assert.deepEqual(eq(host), { kind: "eq", brightness: 0, contrast: 2 ** 0.3, saturation: 0.8, gamma: 1 });
+  await host.press("Q");
+  await host.settle();
+  assert.equal(host.osd.at(-1), "Picture reset");
+  assert.deepEqual(kinds(host), ["deinterlace"], "reset: removed");
+  window.emit("adjust", "brightness", 12);
+  await host.settle();
+  assert.equal(eq(host).brightness, 0.12);
+  await host.command("video.reset").run();
+  await host.settle();
+  assert.equal(node(host, "eq"), undefined);
+  // With deinterlace off the chain is empty: nothing left for the player to decode copy-back for.
+  await host.command("video.deinterlace.off").run();
+  await host.settle();
+  assert.deepEqual(chain(host), []);
+  await stop();
+});
+
+test("a drag keeps the eq node through 0 and the release removes it; a drag that stays at the default adds none", async () => {
+  const { host, window, stop } = await playing();
+  const sent = () => host.sent("processing.replace").length;
+  // Moving a slider to exactly its default adds nothing.
+  const before = sent();
+  window.emit("adjust", "brightness", 0);
+  window.emit("commit", "brightness", 0);
+  await host.settle();
+  assert.equal(sent(), before, "no change sent");
+  assert.equal(node(host, "eq"), undefined);
+  // Away from the default: the node appears and follows the drag.
+  window.emit("adjust", "brightness", 5);
+  await host.settle();
+  assert.equal(eq(host).brightness, 0.05);
+  // Through 0 on the way down: the node stays, neutral, so the player updates it in place.
+  window.emit("adjust", "brightness", 0);
+  await host.settle();
+  assert.deepEqual(eq(host), neutralEq, "kept during the drag");
+  window.emit("adjust", "brightness", -3);
+  await host.settle();
+  assert.equal(eq(host).brightness, -0.03);
+  // Released at 0: removed.
+  window.emit("adjust", "brightness", 0);
+  window.emit("commit", "brightness", 0);
+  await host.settle();
+  assert.equal(node(host, "eq"), undefined, "the release removes it");
+  assert.deepEqual(kinds(host), ["deinterlace"]);
+  // A key step away and back: added and removed again (discrete steps, no drag).
+  await host.press("T");
+  await host.settle();
+  assert.equal(eq(host).contrast, 2 ** 0.01);
+  await host.press("R");
+  await host.settle();
+  assert.equal(node(host, "eq"), undefined);
+  await stop();
+});
+
+test("settings restored at startup with a non-default colour install the eq node; saved defaults do not", async () => {
+  await withData(async (data) => {
+    await writeFile(join(data, "settings.json"), JSON.stringify({ version: 1, picture: { contrast: 30 } }));
+    let { host, window, stop } = await playing(data);
+    await host.settle();
+    assert.equal(window.props.contrast, 30);
+    assert.deepEqual(chain(host), [autoDeinterlace, { kind: "eq", brightness: 0, contrast: 2 ** 0.3, saturation: 1, gamma: 1 }], "restored: present");
+    await host.press("Q");
+    await stop();
+    const saved = JSON.parse(await readFile(join(data, "settings.json"), "utf8"));
+    assert.equal(saved.picture.contrast, 0, "the reset is saved");
+    ({ host, window, stop } = await playing(data));
+    await host.settle();
+    assert.equal(window.props.contrast, 0);
+    assert.deepEqual(kinds(host), ["deinterlace"], "saved defaults: no eq node");
+    await stop();
+  });
+});
+
 // ---------------------------------------------------------------- effects
 
 test("E04–E06: menu keys switch effects at the remembered strength; menu, window and OSD agree", async () => {
@@ -449,7 +575,7 @@ test("E04–E06: menu keys switch effects at the remembered strength; menu, wind
   await host.command("video.denoise.gradual").run();
   await host.settle();
   assert.deepEqual(host.osd, ["Sharpen: on", "3D denoise: on", "Temporal denoise: on", "Deblock: on", "Edge sharpen: on", "Deband: on", "Gradual denoise: on"]);
-  assert.deepEqual(kinds(host), ["deinterlace", "denoise", "denoise", "denoise", "deblock", "deband", "eq", "sharpen", "sharpen"]);
+  assert.deepEqual(kinds(host), ["deinterlace", "denoise", "denoise", "denoise", "deblock", "deband", "sharpen", "sharpen"]);
   assert.deepEqual(node(host, "deblock"), { kind: "deblock", strength: "weak" });
   assert.equal(host.command("video.sharpen").state.checked, true);
   assert.equal(window.props["sharpen-enabled"], true);
@@ -637,7 +763,7 @@ test("global settings and the last page survive a restart; flip and rotation do 
     assert.equal(window.props["flip-v"], false);
     assert.equal(host.command("video.deinterlace.on").state.checked, true);
     assert.equal(host.command("video.reframe.pad.4").state.checked, true);
-    assert.deepEqual(kinds(host), ["deinterlace", "reframe", "eq", "hue", "sharpen"]);
+    assert.deepEqual(kinds(host), ["deinterlace", "reframe", "hue", "sharpen"], "colours at their defaults: no eq");
     await stop();
   });
 });
