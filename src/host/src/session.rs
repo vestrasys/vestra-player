@@ -44,9 +44,26 @@ pub enum EndReason {
     rename_all_fields = "camelCase"
 )]
 pub enum Control {
-    Pause { paused: bool },
-    Seek { seconds: f64 },
-    Rate { rate: f64 },
+    Pause {
+        paused: bool,
+    },
+    /// `seek <seconds> absolute+exact`, or `absolute+keyframes` with
+    /// `keyframes` (SDK 1.5.22 `Scrub.seek(seconds, { keyframes: true })`,
+    /// player 0.5.3): the picture lands on the last keyframe at or before
+    /// `seconds`, without decoding up to the exact frame. Absent on the wire
+    /// means exact, so older plugins are unchanged.
+    Seek {
+        seconds: f64,
+        #[serde(default, skip_serializing_if = "is_false")]
+        keyframes: bool,
+    },
+    Rate {
+        rate: f64,
+    },
+}
+
+fn is_false(flag: &bool) -> bool {
+    !*flag
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -458,7 +475,7 @@ impl SourceSession {
                 Err(RequestError::NoSource)
             }
             SourceIntent::Control {
-                control: Control::Seek { seconds },
+                control: Control::Seek { seconds, .. },
                 ..
             } if !seconds.is_finite() || *seconds < 0.0 => Err(RequestError::Invalid),
             SourceIntent::Control {

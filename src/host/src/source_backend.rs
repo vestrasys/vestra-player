@@ -102,7 +102,7 @@ pub struct Sources {
     audio_owner: Option<u64>,
     audio_active: Option<String>,
     audio_checked: Option<std::time::Instant>,
-    /// The exact seek mpv is still running (`SeekFlight`).
+    /// The `Control::Seek` mpv is still running (`SeekFlight`).
     seek_flight: SeekFlight,
     #[cfg(feature = "producer-audio")]
     producers: crate::producer::Producers,
@@ -126,7 +126,8 @@ pub struct Sources {
     input_epoch: u64,
 }
 /// The last `Control::Seek` sent to mpv while it is still running, so that a
-/// repeat of the same target is not sent again (seekbar-speed round).
+/// repeat of the same target in the same mode is not sent again
+/// (seekbar-speed round).
 ///
 /// The seek bar sends the same target on press and on release, so a click is
 /// two identical seeks about 100 ms apart. mpv starts the second one from the
@@ -135,20 +136,44 @@ pub struct Sources {
 /// clips with long GOPs and doubles the decode on short ones. Skipping the
 /// repeat lands on the same frame sooner. A repeat after the first seek
 /// finished (its `PlaybackRestart`) is sent as before.
+///
+/// The key is (entry, target, keyframes): a keyframe seek lands on the last
+/// keyframe at or before the target, an exact seek on the target itself, so
+/// they are different seeks even to the same number. An exact seek to the
+/// target of the keyframe seek still running is sent (and the other way
+/// round), otherwise a plugin that previews with keyframes and lands exactly
+/// would stay on the keyframe.
 #[derive(Default)]
-struct SeekFlight(Option<(i64, u64)>);
+struct SeekFlight(Option<(i64, u64, bool)>);
 impl SeekFlight {
-    /// True when `seconds` repeats the seek still running on this entry.
-    fn repeats(&self, entry: Option<i64>, seconds: f64) -> bool {
-        entry.is_some_and(|entry| self.0 == Some((entry, seconds.to_bits())))
+    /// True when `seconds` in this mode repeats the seek still running on this entry.
+    fn repeats(&self, entry: Option<i64>, seconds: f64, keyframes: bool) -> bool {
+        entry.is_some_and(|entry| self.0 == Some((entry, seconds.to_bits(), keyframes)))
     }
-    fn sent(&mut self, entry: Option<i64>, seconds: f64) {
-        self.0 = entry.map(|entry| (entry, seconds.to_bits()));
+    fn sent(&mut self, entry: Option<i64>, seconds: f64, keyframes: bool) {
+        self.0 = entry.map(|entry| (entry, seconds.to_bits(), keyframes));
     }
     /// The seek finished, or anything else moved or replaced the source.
     fn clear(&mut self) {
         self.0 = None;
     }
+}
+/// The mpv `seek` for a `Control::Seek`: `absolute+exact` decodes from the
+/// keyframe before `seconds` up to that frame; `absolute+keyframes` (SDK
+/// 1.5.22 `Scrub.seek(seconds, { keyframes: true })`, the seek bar with
+/// "Jump to keyframes only") shows the last keyframe at or before `seconds`
+/// at once, up to one keyframe interval early.
+fn seek_command(seconds: f64, keyframes: bool) -> [String; 3] {
+    [
+        "seek".into(),
+        seconds.to_string(),
+        if keyframes {
+            "absolute+keyframes"
+        } else {
+            "absolute+exact"
+        }
+        .into(),
+    ]
 }
 struct Resolution {
     requester: u64,
@@ -1501,17 +1526,17 @@ impl Sources {
                             "playback worker: libmpv pause={paused} set"
                         ));
                     }),
-                    Control::Seek { seconds } => {
+                    Control::Seek { seconds, keyframes } => {
                         let entry = self.active.map(|(entry, _)| entry);
-                        if self.seek_flight.repeats(entry, *seconds)
+                        if self.seek_flight.repeats(entry, *seconds, *keyframes)
                             && mpv.get_property::<bool>("seeking").unwrap_or(false)
                         {
                             Ok(())
                         } else {
-                            let sent =
-                                mpv.command(&["seek", &seconds.to_string(), "absolute+exact"]);
+                            let command = seek_command(*seconds, *keyframes);
+                            let sent = mpv.command(&command);
                             match sent {
-                                Ok(()) => self.seek_flight.sent(entry, *seconds),
+                                Ok(()) => self.seek_flight.sent(entry, *seconds, *keyframes),
                                 Err(_) => self.seek_flight.clear(),
                             }
                             sent
@@ -1721,21 +1746,95 @@ mod input_adapter_tests {
 mod seek_flight_tests {
     use super::*;
     #[test]
-    fn only_the_same_target_on_the_same_entry_repeats() {
+    fn only_the_same_target_on_the_same_entry_in_the_same_mode_repeats() {
         let mut flight = SeekFlight::default();
-        assert!(!flight.repeats(Some(1), 12.5), "nothing in flight");
-        flight.sent(Some(1), 12.5);
-        assert!(flight.repeats(Some(1), 12.5), "press then release");
-        assert!(!flight.repeats(Some(1), 12.500001), "a drag step");
-        assert!(!flight.repeats(Some(2), 12.5), "another file");
-        assert!(!flight.repeats(None, 12.5), "no file");
-        flight.sent(Some(1), 13.0);
-        assert!(!flight.repeats(Some(1), 12.5), "the newest seek counts");
-        assert!(flight.repeats(Some(1), 13.0));
+        assert!(!flight.repeats(Some(1), 12.5, false), "nothing in flight");
+        flight.sent(Some(1), 12.5, false);
+        assert!(flight.repeats(Some(1), 12.5, false), "press then release");
+        assert!(!flight.repeats(Some(1), 12.500001, false), "a drag step");
+        assert!(!flight.repeats(Some(2), 12.5, false), "another file");
+        assert!(!flight.repeats(None, 12.5, false), "no file");
+        assert!(
+            !flight.repeats(Some(1), 12.5, true),
+            "a keyframe seek to the exact target: another seek"
+        );
+        flight.sent(Some(1), 13.0, false);
+        assert!(
+            !flight.repeats(Some(1), 12.5, false),
+            "the newest seek counts"
+        );
+        assert!(flight.repeats(Some(1), 13.0, false));
         flight.clear();
-        assert!(!flight.repeats(Some(1), 13.0), "finished: sent again");
-        flight.sent(None, 13.0);
-        assert!(!flight.repeats(None, 13.0));
+        assert!(
+            !flight.repeats(Some(1), 13.0, false),
+            "finished: sent again"
+        );
+        flight.sent(None, 13.0, false);
+        assert!(!flight.repeats(None, 13.0, false));
+        // Keyframe mode: the same key rules, and an exact seek to the same
+        // target is not a repeat (it lands on the target, not the keyframe).
+        flight.sent(Some(1), 27.6, true);
+        assert!(flight.repeats(Some(1), 27.6, true), "press then release");
+        assert!(!flight.repeats(Some(1), 27.7, true), "a drag step");
+        assert!(
+            !flight.repeats(Some(1), 27.6, false),
+            "exact after keyframes: sent"
+        );
+    }
+    #[test]
+    fn the_seek_flag_maps_to_the_mpv_mode() {
+        // The wire: absent means exact (older plugins), true means keyframes.
+        let parse = |control: Value| serde_json::from_value::<Control>(control).unwrap();
+        assert_eq!(
+            parse(json!({"kind":"seek","seconds":9.5})),
+            Control::Seek {
+                seconds: 9.5,
+                keyframes: false
+            }
+        );
+        assert_eq!(
+            parse(json!({"kind":"seek","seconds":9.5,"keyframes":false})),
+            Control::Seek {
+                seconds: 9.5,
+                keyframes: false
+            }
+        );
+        assert_eq!(
+            parse(json!({"kind":"seek","seconds":9.5,"keyframes":true})),
+            Control::Seek {
+                seconds: 9.5,
+                keyframes: true
+            }
+        );
+        assert!(
+            serde_json::from_value::<Control>(json!({"kind":"seek","seconds":9.5,"keyframes":1}))
+                .is_err(),
+            "keyframes must be a boolean"
+        );
+        // Written back (the operation book) without the flag when it is off,
+        // so the shape plugins built on SDK 1.5.21 and earlier read is unchanged.
+        assert_eq!(
+            serde_json::to_value(Control::Seek {
+                seconds: 9.5,
+                keyframes: false
+            })
+            .unwrap(),
+            json!({"kind":"seek","seconds":9.5})
+        );
+        assert_eq!(
+            serde_json::to_value(Control::Seek {
+                seconds: 9.5,
+                keyframes: true
+            })
+            .unwrap(),
+            json!({"kind":"seek","seconds":9.5,"keyframes":true})
+        );
+        // The mpv command.
+        assert_eq!(seek_command(9.5, false), ["seek", "9.5", "absolute+exact"]);
+        assert_eq!(
+            seek_command(9.5, true),
+            ["seek", "9.5", "absolute+keyframes"]
+        );
     }
     #[test]
     fn a_restart_a_new_file_or_a_host_seek_ends_the_flight() {
@@ -1753,23 +1852,28 @@ mod seek_flight_tests {
             },
         ] {
             let mut sources = Sources::default();
-            sources.seek_flight.sent(Some(1), 5.0);
+            sources.seek_flight.sent(Some(1), 5.0, false);
             sources.event(&event);
-            assert!(!sources.seek_flight.repeats(Some(1), 5.0), "{event:?}");
+            assert!(
+                !sources.seek_flight.repeats(Some(1), 5.0, false),
+                "{event:?}"
+            );
         }
         let mut sources = Sources::default();
-        sources.seek_flight.sent(Some(1), 5.0);
+        sources.seek_flight.sent(Some(1), 5.0, false);
         sources.event(&MpvEvent::Seek);
         assert!(
-            sources.seek_flight.repeats(Some(1), 5.0),
+            sources.seek_flight.repeats(Some(1), 5.0, false),
             "the seek's own start keeps it"
         );
         sources.seek_elsewhere();
-        assert!(!sources.seek_flight.repeats(Some(1), 5.0));
+        assert!(!sources.seek_flight.repeats(Some(1), 5.0, false));
     }
     /// A seek-bar click (the same target on press and on release) makes mpv
-    /// seek once; the same target again after it landed seeks again. Needs
-    /// `ffmpeg` with libx264:
+    /// seek once; the same target again after it landed seeks again. A
+    /// keyframe bar seek (`keyframes: true`) lands on the keyframe at or
+    /// before the target, and an exact seek to that target right after it is
+    /// sent and lands exactly. Needs `ffmpeg` with libx264:
     /// `cargo test --locked -- --ignored a_click_on_the_seek_bar_seeks_once`.
     #[test]
     #[ignore = "needs ffmpeg with libx264"]
@@ -1852,6 +1956,61 @@ mod seek_flight_tests {
         submit(&mut sources, 4, seek);
         let again = pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
         assert_eq!(again, 1, "after it landed the same target seeks again");
+        // The bar in keyframe mode: 15.0 lands on the keyframe at 10.0 (the
+        // clip's keyframes are at 0 and 10 s), press and release seek once.
+        let key_seek =
+            json!({"kind":"control","control":{"kind":"seek","seconds":15.0,"keyframes":true}});
+        submit(&mut sources, 5, key_seek.clone());
+        submit(&mut sources, 6, key_seek);
+        let seeks = pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
+        let end = Instant::now() + Duration::from_secs(1);
+        let mut more = 0;
+        while Instant::now() < end {
+            while let Some(event) = mpv.poll_event() {
+                sources.event(&event);
+                more += usize::from(matches!(event, MpvEvent::Seek));
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(seeks + more, 1, "a keyframe click seeks once");
+        let landed = mpv.get_property::<f64>("time-pos").unwrap();
+        assert!(
+            (landed - 10.0).abs() < 0.05,
+            "a keyframe seek to 15.0 lands on the keyframe at 10.0, not {landed}"
+        );
+        // A keyframe seek and an exact seek to the same target back to back:
+        // the flight keys on the mode too, so the exact one is sent while the
+        // keyframe seek runs (keyed on the target alone it could be skipped
+        // and the picture stay on the keyframe at 10.0; whether mpv is already
+        // `seeking` when the second one arrives depends on timing, so the key
+        // itself is asserted by the unit test above). mpv may merge the two
+        // queued seeks into one, so only the landing is asserted here.
+        submit(
+            &mut sources,
+            7,
+            json!({"kind":"control","control":{"kind":"seek","seconds":17.0,"keyframes":true}}),
+        );
+        submit(
+            &mut sources,
+            8,
+            json!({"kind":"control","control":{"kind":"seek","seconds":17.0}}),
+        );
+        pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
+        let end = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < end
+            && (mpv.get_property::<bool>("seeking").unwrap_or(true)
+                || (mpv.get_property::<f64>("time-pos").unwrap() - 17.0).abs() > 0.02)
+        {
+            while let Some(event) = mpv.poll_event() {
+                sources.event(&event);
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let landed = mpv.get_property::<f64>("time-pos").unwrap();
+        assert!(
+            (landed - 17.0).abs() < 0.02,
+            "exact after keyframes to the same target lands exactly, not at {landed}"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
