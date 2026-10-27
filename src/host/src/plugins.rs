@@ -289,7 +289,9 @@ impl Drop for Plugin {
             crate::i18n::unregister(&self.directory, catalog);
         }
         match &mut self.runner {
-            // The runner lives on; this member's cleanup gets the same window.
+            // The runner lives on; past the same 300 ms the member counts as
+            // leaked, and the wait goes on until the runner reports it gone
+            // (at most 6 s, `Member::stop`).
             Runner::Shared(member) => member.stop(),
             Runner::Own { child, outbound } => {
                 let _ = outbound.try_send(json!({"event":"runtime.stop","data":null}));

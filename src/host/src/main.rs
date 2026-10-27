@@ -746,7 +746,27 @@ impl Host {
             .get_mut(&owner)
             .and_then(|plugin| plugin.send(message).err());
         if let Some(error) = failed {
-            diag!("plugin transport: {error}");
+            self.transport_failed(owner, &error);
+        }
+    }
+    /// A message for `owner` could not be queued. An own process: its queue
+    /// is full or its pipe closed, and it stops, as before. A member of the
+    /// shared runner: its queue fills only while the runner reads none of
+    /// its input (one reader for every member), so the runner is stuck;
+    /// every member restarts with it (`restart_shared`), this one included,
+    /// instead of this one stopping for good.
+    fn transport_failed(&mut self, owner: u64, error: &anyhow::Error) {
+        let Some(plugin) = self.plugins.get(&owner) else {
+            return;
+        };
+        diag!("plugin {owner} ({}) transport: {error}", plugin.manifest.id);
+        let runner = plugin.shared_runner();
+        if runner.is_some() && self.shared.as_ref().map(|s| s.link.id) == runner {
+            self.restart_shared(&format!(
+                "{}'s queue is full: the runner reads no input",
+                plugin.manifest.id
+            ));
+        } else {
             self.disable(owner);
         }
     }
@@ -760,12 +780,12 @@ impl Host {
             .iter_mut()
             .filter(|(_, p)| p.subscriptions.contains(event))
         {
-            if plugin.send(json!({"event":event,"data":data})).is_err() {
-                failed.push(*owner);
+            if let Err(error) = plugin.send(json!({"event":event,"data":data})) {
+                failed.push((*owner, error));
             }
         }
-        for owner in failed {
-            self.disable(owner);
+        for (owner, error) in failed {
+            self.transport_failed(owner, &error);
         }
     }
     fn handle(&mut self, event: Event) {
@@ -1119,7 +1139,7 @@ impl Host {
             Event::Runner(runner, message) => self.runner_event(runner, &message),
             Event::RunnerExited(runner) => {
                 if self.shared.as_ref().is_some_and(|s| s.link.id == runner) {
-                    self.restart_shared("the shared runner exited", None);
+                    self.restart_shared("the shared runner exited");
                 }
             }
             Event::Reaped(owner) => {

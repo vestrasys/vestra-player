@@ -312,6 +312,8 @@ test("logs carry the plugin's id, stdout writes go to stderr, oversize requests 
       `export default async function activate(plugin) {
         console.log("hello %s", "log");
         console.warn("careful");
+        console.error("[test.loud]", "already prefixed, as the SDK writes");
+        console.error("[test.loudly] another id");
         process.stdout.write("junk without newline");
         Promise.reject(new Error("forgotten"));
         const code = await plugin.osd.show("x".repeat(1024 * 1024)).then(() => "sent", (e) => e.code);
@@ -323,6 +325,12 @@ test("logs carry the plugin's id, stdout writes go to stderr, oversize requests 
   await host.event(1, "runtime.ready");
   assert.match(host.stderr, /^\[test\.loud\] hello log$/m);
   assert.match(host.stderr, /^\[test\.loud\] careful$/m);
+  // Once, not twice: the SDK starts its own error lines with the id.
+  assert.match(
+    host.stderr,
+    /^\[test\.loud\] already prefixed, as the SDK writes$/m,
+  );
+  assert.match(host.stderr, /^\[test\.loud\] \[test\.loudly\] another id$/m);
   assert.match(host.stderr, /^\[test\.loud\] junk without newline$/m);
   assert.match(
     host.stderr,

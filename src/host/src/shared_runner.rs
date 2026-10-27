@@ -41,17 +41,23 @@ pub type RunnerId = u32;
 /// envelope's `"g":<digits>,`.
 pub const LINE_LIMIT: usize = MAX_MESSAGE_BYTES + 64;
 /// Lines one member may have queued for the runner: an own process's queue
-/// (`plugins.rs` `OUTBOUND_CAPACITY`); past it that member alone is stopped.
+/// (`plugins.rs` `OUTBOUND_CAPACITY`). It fills only while the runner reads
+/// no input, so past it the host restarts the runner with every member
+/// (`Host::transport_failed`), this one included.
 const MEMBER_QUEUE: usize = 1024;
-/// The runner's one queue; a member reaching [`MEMBER_QUEUE`] is stopped
-/// long before 16 of them fill it.
+/// The runner's one queue; a member reaching [`MEMBER_QUEUE`] restarts the
+/// runner long before 16 of them fill it.
 const QUEUE: usize = 16 * MEMBER_QUEUE;
 /// V8's old-space cap for the runner: a leaking member ends the runner (and
 /// is restarted with the others) at 1 GiB instead of exhausting the machine.
 pub const MAX_OLD_SPACE: &str = "--max-old-space-size=1024";
-/// How long a stopped member's cleanup may take before the host goes on:
+/// How long a stopped member's cleanup may take before it counts as leaked:
 /// an own process's stop window (`plugins.rs` `Drop for Plugin`).
 const STOP_WAIT: Duration = Duration::from_millis(300);
+/// How long a stopped member's cleanup may run in the runner before it
+/// abandons it and reports the member gone (`STOP_TIMEOUT_MS` in
+/// `src/runtime/boot.ts`, 5 s), plus a margin.
+const MEMBER_GONE: Duration = Duration::from_secs(6);
 /// Heartbeat (user ruling 2026-10-27): a ping every 2 s
 /// (`VESTRA_SHARED_PING_MS` for tests); five unanswered = hung.
 pub const PING_MS: u64 = 2_000;
@@ -154,9 +160,6 @@ impl Link {
         if let Some(waiter) = state.waiters.remove(&g) {
             let _ = waiter.send(timed_out);
         }
-        if timed_out {
-            state.leaked += 1;
-        }
     }
     /// The runner is gone or let go: nobody waits for it any more.
     fn close(&self) {
@@ -209,10 +212,18 @@ impl Member {
             }
         }
     }
-    /// `runtime.stop` for this member, then wait for its `runner.stopped`
-    /// (at most [`STOP_WAIT`], as an own process gets before it is killed);
-    /// the runner lives on. Called where an own process would be waited for
-    /// and killed (`Drop for Plugin`, on the host's reaper thread).
+    /// `runtime.stop` for this member, then wait for its `runner.stopped`.
+    /// Called where an own process would be waited for and killed (`Drop
+    /// for Plugin`, on the host's reaper thread); the runner lives on. A
+    /// cleanup longer than an own process's window ([`STOP_WAIT`]) counts as
+    /// a leak, and the wait goes on until the runner reports the member gone
+    /// (its own deadline, [`MEMBER_GONE`]): the host reports the plugin
+    /// reaped only then, so a reload or an install does not start the new
+    /// instance while a cleanup that finishes within the runner's 5 s still
+    /// writes the same data directory. A cleanup the runner abandons at 5 s,
+    /// or a stop not reported within [`MEMBER_GONE`] (the runner's input
+    /// backed up, for one), can still overlap the new instance; both are
+    /// logged. An own process is killed instead; a member cannot be.
     pub fn stop(&self) {
         let (done, wait) = mpsc::channel();
         {
@@ -223,21 +234,43 @@ impl Member {
             }
             state.waiters.insert(self.g, done);
         }
+        let began = Instant::now();
         let sent = self.link.outbound.try_send(Line {
             g: self.g,
             message: json!({"event":"runtime.stop","data":null}),
             queued: None,
         });
-        let outcome = match sent {
+        let mut outcome = match sent {
             Ok(()) => wait.recv_timeout(STOP_WAIT),
             Err(_) => Err(mpsc::RecvTimeoutError::Disconnected),
         };
+        if matches!(outcome, Err(mpsc::RecvTimeoutError::Timeout)) {
+            self.link.state().leaked += 1;
+            diag!(
+                "shared runner {}: member {} still cleaning up after {} ms; waiting for the runner",
+                self.link.id,
+                self.g,
+                STOP_WAIT.as_millis()
+            );
+            outcome = wait.recv_timeout(MEMBER_GONE.saturating_sub(began.elapsed()));
+        }
+        match outcome {
+            Ok(true) => diag!(
+                "shared runner {}: member {}'s cleanup was abandoned after the runner's deadline",
+                self.link.id,
+                self.g
+            ),
+            Err(mpsc::RecvTimeoutError::Timeout) => diag!(
+                "shared runner {}: member {} not reported gone within {} s",
+                self.link.id,
+                self.g,
+                MEMBER_GONE.as_secs()
+            ),
+            _ => {}
+        }
         let mut state = self.link.state();
         state.waiters.remove(&self.g);
         state.members.remove(&self.g);
-        if matches!(outcome, Err(mpsc::RecvTimeoutError::Timeout)) && state.alive {
-            state.leaked += 1;
-        }
     }
 }
 
@@ -700,8 +733,8 @@ mod tests {
             matches!(&events[0], Event::Request(5, m) if m["method"] == "commands.register" && m.get("g").is_none())
         );
         assert!(matches!(&events[1], Event::Runner(1, m) if m["event"] == "runner.hello"));
+        // The waiting member learns its cleanup was abandoned; it counts the leak.
         assert_eq!(stopped.try_recv(), Ok(true));
-        assert_eq!(link.leaked(), 1);
     }
 
     #[test]
@@ -792,10 +825,28 @@ mod tests {
         assert_eq!(link.members(), 0);
         assert_eq!(link.leaked(), 0);
         let _output = runner.join().unwrap();
-        // No answer: the stop window, then a leak.
+        // A slow cleanup: a leak after the stop window, and the stop returns
+        // only once the runner reports the member gone (so a reload waits).
         link.state().members.insert(4);
+        let answer = link.clone();
+        let late = thread::spawn(move || {
+            thread::sleep(STOP_WAIT + Duration::from_millis(400));
+            answer.stopped(4, false);
+        });
+        let began = Instant::now();
         member.stop();
+        let took = began.elapsed();
+        assert!(took >= STOP_WAIT + Duration::from_millis(400), "{took:?}");
+        assert!(took < MEMBER_GONE, "{took:?}");
         assert_eq!(link.leaked(), 1);
+        late.join().unwrap();
+        // Never reported: the stop gives up at the runner's own deadline.
+        link.state().members.insert(4);
+        let began = Instant::now();
+        member.stop();
+        assert!(began.elapsed() >= MEMBER_GONE - Duration::from_millis(50));
+        assert_eq!(link.leaked(), 2);
+        assert_eq!(link.members(), 0);
         // Gone: no wait at all.
         link.close();
         let began = Instant::now();

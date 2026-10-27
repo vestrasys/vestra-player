@@ -70,9 +70,18 @@ const members = new Map<number, Member>();
 // stderr: best effort, as in runner.ts.
 process.stderr.on("error", () => {});
 const stderr = process.stderr.write.bind(process.stderr);
-const prefix = () => `[${als.getStore()?.id ?? "shared"}] `;
+/**
+ * `text` with the owner's `[<plugin id>] ` in front, once: the SDK already
+ * starts its own error lines with it (`console.error(\`[${id}]\`, error)`).
+ */
+const prefixed = (text: string) => {
+  const prefix = `[${als.getStore()?.id ?? "shared"}]`;
+  return text === prefix || text.startsWith(`${prefix} `)
+    ? text
+    : `${prefix} ${text}`;
+};
 const logLine = (...args: unknown[]) => {
-  stderr(`${prefix()}${format(...args)}\n`);
+  stderr(`${prefixed(format(...args))}\n`);
 };
 // stdout carries the protocol and only `post` writes it. Plugin code that
 // writes stdout (a library's progress output) reaches stderr instead of
@@ -81,7 +90,7 @@ const stdout = process.stdout.write.bind(process.stdout);
 process.stdout.write = ((chunk: unknown, ...rest: unknown[]) => {
   const text =
     typeof chunk === "string" ? chunk : Buffer.from(chunk as Uint8Array);
-  stderr(`${prefix()}${String(text).replace(/\n?$/, "\n")}`);
+  stderr(prefixed(String(text).replace(/\n?$/, "\n")));
   const done = rest.find((item) => typeof item === "function");
   if (done) process.nextTick(done as () => void);
   return true;
