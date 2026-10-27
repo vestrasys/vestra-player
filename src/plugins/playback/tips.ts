@@ -1,7 +1,7 @@
 import type { BindingInfo, Plugin } from "@vestra-player/sdk";
 
 /** The bar elements whose tooltip names a key (G-07). */
-export type TipKey = "play-pause" | "stop" | "seek-backward" | "seek-forward" | "previous" | "next" | "mute" | "open" | "sidebar";
+export type TipKey = "play-pause" | "stop" | "seek-backward" | "seek-forward" | "previous" | "next" | "mute" | "open" | "sidebar" | "fullscreen";
 
 /**
  * The commands' default keys as the menu labels them, used until (or when) the
@@ -17,6 +17,7 @@ export const DEFAULT_KEYS: Record<TipKey, string> = {
   mute: "M",
   open: "Ctrl+O",
   sidebar: "F6",
+  fullscreen: "Enter",
 };
 
 /** The host's menu text of a command's first active keyboard binding (`null`: none). */
@@ -77,6 +78,7 @@ export class Keys {
       mute: host("mute"),
       open: find((info) => info.plugin === this.#plugin.id && info.command === "open"),
       sidebar: find((info) => info.key?.length === 1 && info.key[0] === SIDEBAR_ITEM),
+      fullscreen: host("fullscreen"),
     };
     this.#changed();
   }
@@ -105,6 +107,7 @@ export function barTips(keys: Keys, state: { volume: number; step: number }) {
     keyOpen: keys.key("open"),
     keyMute: keys.key("mute"),
     keySidebar: keys.key("sidebar"),
+    keyFullscreen: keys.key("fullscreen"),
     stepText: seconds(state.step),
     volumePercent: Math.round(state.volume),
   };

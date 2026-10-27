@@ -56,6 +56,9 @@ export global PlaybackBridge {
     in-out property <bool> sidebar-on;
     // G-18: on, but hidden because the window is too narrow (drawn at half opacity).
     in-out property <bool> sidebar-hidden;
+    // UI-BAR-05 (0.2.4): the main window is fullscreen (`window.state`); the
+    // fullscreen button shows `exit-fullscreen` then, `fullscreen` otherwise.
+    in-out property <bool> fullscreen;
     // G-07: tooltips (600 ms, ToolTipArea) name the keys the user has bound
     // (the menu text, "" for none), the first seek step and the volume.
     in-out property <string> key-play-pause;
@@ -67,6 +70,7 @@ export global PlaybackBridge {
     in-out property <string> key-open;
     in-out property <string> key-mute;
     in-out property <string> key-sidebar;
+    in-out property <string> key-fullscreen;
     in-out property <string> step-text: "5";
     in-out property <int> volume-percent: 100;
     // G-14: the time label shows the remaining time.
@@ -82,6 +86,7 @@ export global PlaybackBridge {
     out property <string> tip-back: @tr("{}\nRight-click: {}", with-key(@tr("Back {} seconds", step-text), key-back), with-key(@tr("Play previous"), key-previous));
     out property <string> tip-forward: @tr("{}\nRight-click: {}", with-key(@tr("Forward {} seconds", step-text), key-forward), with-key(@tr("Play next"), key-next));
     out property <string> tip-open: with-key(@tr("Open file"), key-open);
+    out property <string> tip-fullscreen: with-key(fullscreen ? @tr("Leave fullscreen") : @tr("Fullscreen"), key-fullscreen);
     out property <string> tip-time: remaining-time ? @tr("Click to show the elapsed time") : @tr("Click to show the remaining time");
     out property <string> tip-mute: with-key(muted ? @tr("Unmute") : @tr("Mute"), key-mute);
     out property <string> tip-volume: @tr("Volume: {}%", volume-percent);
@@ -388,10 +393,29 @@ export component PlaybackBar inherits Rectangle {
         }
     }
 
-    // Button row: play/pause, stop, back 5s, forward 5s, open, time; sidebar toggle on the right.
-    Rectangle {
+    // Button row: play/pause, stop, back 5s, forward 5s, open, fullscreen, time;
+    // sidebar toggle on the right.
+    row := Rectangle {
         y: 22px;
         height: 40px;
+        // UI-BAR-10: the time keeps priority over the fullscreen button, which is
+        // hidden first: it shows only while the bar fits six buttons, 10px, the
+        // time label, 8px to spare, the 23px playlist toggle and its 8px margin.
+        // The time is measured, not a constant (`0:00:00 / 0:00:00` in the 11px
+        // body font is about 85px, so about 380px), at its widest for this file:
+        // the elapsed part as wide as "-" + the total (the remaining time), so the
+        // threshold does not move while the time runs (9:59 → 10:00) or when it
+        // switches to the remaining time; only an elapsed text wider than that
+        // (a source without a duration) widens it. Hidden is `visible: false`
+        // with no width, a persistent element, never `if`.
+        property <length> time-width: max(elapsed.preferred-width, widest-elapsed.preferred-width) + total.preferred-width;
+        property <bool> fullscreen-fits: root.width >= 6 * 41px + 10px + row.time-width + 8px + 23px + 8px;
+        // Measures the widest elapsed text (never drawn, outside the layout).
+        widest-elapsed := Text {
+            visible: false;
+            text: "-" + PlaybackBridge.total-label;
+            font-size: Theme.font-body;
+        }
         HorizontalLayout {
             spacing: 0px;
             alignment: start;
@@ -429,6 +453,16 @@ export component PlaybackBar inherits Rectangle {
                 enabled: PlaybackBridge.can-open;
                 clicked => { PlaybackBridge.action("open"); }
             }
+            // UI-BAR-05 (0.2.4): toggles fullscreen like Enter / F11 (`host.run("fullscreen")`).
+            BarButton {
+                visible: row.fullscreen-fits;
+                // Hidden: not actionable from the accessibility tree either.
+                enabled: row.fullscreen-fits;
+                width: row.fullscreen-fits ? 41px : 0px;
+                icon: PlaybackBridge.fullscreen ? "exit-fullscreen" : "fullscreen";
+                tip: PlaybackBridge.tip-fullscreen;
+                clicked => { PlaybackBridge.action("fullscreen"); }
+            }
             // G-14: only the current time is clickable (hand pointer); the total is not.
             HorizontalLayout {
                 padding-left: 10px;
@@ -447,7 +481,7 @@ export component PlaybackBar inherits Rectangle {
                         clicked => { PlaybackBridge.toggle-time(); }
                     }
                 }
-                Text {
+                total := Text {
                     text: " / " + PlaybackBridge.total-label;
                     color: Theme.text-dim;
                     font-size: Theme.font-body;

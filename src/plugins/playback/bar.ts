@@ -57,6 +57,8 @@ const CORE: ReadonlySet<string> = new Set<HostAction>([
   "previous",
   "next",
   "mute",
+  // UI-BAR-05 (0.2.4): toggles the main window's fullscreen, as Enter / F11 do.
+  "fullscreen",
 ]);
 
 /**
@@ -133,6 +135,8 @@ export function wireBar(
       sidebarOn: slot?.preferred ?? false,
       // G-18: on but not shown because the window is too narrow (fullscreen's collapsed pop-out counts as on).
       sidebarHidden: sidebarHidden,
+      // UI-BAR-05: the fullscreen button shows enter or leave.
+      fullscreen: scope.window.state.fullscreen,
       // G-14: which time the label shows (the tooltip offers the other).
       remainingTime: remaining,
       ...barTips(keys, { volume, step: settings.value.seekSteps[0] }),
