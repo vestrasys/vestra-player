@@ -1,6 +1,6 @@
 # 2026-10 round: Auto deinterlace without copy-back on progressive files
 
-Started 2026-10-27. **This document is the only progress record for this round.** Status: the video author found no way to do it with the existing API; a §4.1 request (DEINT-AUTO-1) waits for the maintainer. No plugin or host change yet; `vestra.video` stays at 1.1.5.
+Started 2026-10-27. **This document is the only progress record for this round.** Status: DEINT-AUTO-1 accepted in rewritten form (maintainer reply below); host 0.5.4 implemented on branch `video-deinterlace`, SDK 1.5.24 prepared as a patch, both waiting for the coordinator's release. The plugin change waits for the release; `vestra.video` stays at 1.1.5.
 
 ## User ruling (2026-10-27)
 
@@ -77,4 +77,67 @@ ffmpeg -f lavfi -i "testsrc2=size=1920x1080:rate=50,interlace=scan=tff" -t 20 -c
 
 `ffprobe -v error -select_streams v -show_entries stream=field_order interlaced-tff.mp4` must print `field_order=tt`.
 
-**Maintainer reply**: (pending)
+**Maintainer reply** (API maintainer, 2026-10-27; §4.2 / §4.3):
+
+Permalink prefix **M** as above (mpv e471496c56).
+
+*Classification*: a capability gap. Not a defect: `frames_in_memory` keeps its contract (every owned node is an FFmpeg software filter, and `bwdif` is one), and `when: "interlaced"` does what it says. Not a docs problem. Not breaking: a new value of an existing field, refused by older players.
+
+*Existing ways considered first*, with their cost:
+
+1. **Today's node** (`when: "interlaced"`): correct picture, but copy-back on every file. Fails the user ruling.
+2. **The plugin decides by itself** (read the field order from the file in Node, or spawn `ffprobe`): plugins do not run OS tools (§1.5) and the player ships no `ffprobe` to them; parsing field flags of MPEG-2 / H.264 / HEVC in every container inside one plugin reinvents the decoder; it cannot follow files that switch between progressive and interlaced; and on an interlaced file the node still arrives after playback started, with a mid-stream `hwdec` switch. Rejected.
+3. **Reduce the requirement** (default Never, Auto only on request): contradicts the user ruling.
+4. **(A) `stats().video.interlaced`**: an addition, but strictly weaker than (B) for more API surface (a field plus a change event): the plugin acts only after frames were decoded, so every interlaced file starts combed and switches `hwdec` mid-stream (decoder reopen, `HwdecWatch` path), and mixed files need polling. Not accepted.
+5. **`RenderOptions`**: render stage, macOS GPU only; deinterlacing belongs before scaling, at the decode stage. Not applicable.
+
+The capability needs mpv's `deinterlace` option and the decoder's own hardware deinterlacer, which only the host has (§4.3 item 4, first bullet), and any processing plugin can use it. So the core changes.
+
+*Ruling*: **accept (B), rewritten (narrower)**. Host 0.5.4, SDK 1.5.24 ("Who must change: nobody").
+
+- New value `when: "auto"` of the `deinterlace` node, **only with `output: "field"`**: `{ kind: "deinterlace", when: "auto", output: "field" }`. Contract: "the player's own deinterlacer, decided per frame from the decoder's interlaced flag; where frames stay on the GPU it uses the decoder's hardware deinterlacer; one output frame per field (double rate) on interlaced frames, progressive frames untouched; by itself it does not need frames in memory, so with no other node decoding stays zero-copy. Runs before every plugin's chain and before the player's own orientation, wherever it is written (as `frameBlend` always runs last)."
+- `when: "auto"` with `output: "frame"` → `invalid`. A chain (one resource) with a `when: "auto"` node and any other `deinterlace` node → `invalid`. Older players refuse the value with `invalid` (`when` is a closed enum there).
+- The host maps it to mpv `deinterlace=auto` (no `vf` entry), does not count it in `frames_in_memory`, and owns the option (below).
+
+*The author's open points*:
+
+1. **Output (frame vs field)**: every branch of mpv's auto deinterlacer outputs one frame per field, and none can be told otherwise through the `deinterlace` option: the software fallback is hard-coded `bwdif mode=send_field` (M`filters/f_auto_filters.c#L155-L160`), `bwdif_cuda` / `bwdif_vulkan` likewise (`#L111-L122`), `d3d11vpp` is created with `deint=yes:interlaced-only=yes` and its default processor mode outputs fields (`out_fields` is false only for `blend` / IVTC, M`video/filter/vf_d3d11vpp.c#L786-L796`); there is no VO deinterlacer in this mpv. Accepting `frame` and delivering double rate would break what `output` promises, so `frame` is refused rather than silently reinterpreted (the author's second option). **Consequence for the plugin's default** (Auto + By Frame, `model.ts` `defaultLook`): the user ruling can be met only at field rate, because no zero-copy path deinterlaces at frame rate. Recommended mapping: Auto → `when: "auto", output: "field"` whatever the Output setting, with Output applying to Always (say so in the menu or the README); keeping By Frame honoured under Auto means the old `bwdif` node and copy-back on every file again. Interlaced files then play at double rate by default (25i → 50 fps, as mpv and most players do); **the coordinator should look at this** in the GUI test.
+2. **Single owner of mpv's global `deinterlace`**: not like `frameBlend`. Two `frameBlend` nodes would convert the rate twice, so at most one is enforced; two `when: "auto"` nodes ask for the same idempotent thing, and refusing plugin B because plugin A holds one would make B's chain depend on another plugin (§1 plugin independence). So: `deinterlace=auto` while at least one owned video chain of any plugin holds a `when: "auto"` node, `no` otherwise; recomputed on every video chain change and on owner deactivation (`Processing::disable`, also used for a crash). The host is the only writer of the option (libmpv has no default key bindings and the host sets it nowhere else). Explicit nodes in other plugins' chains are not refused (that would couple plugins again) but documented: mpv's deinterlacer runs first, an `interlaced` node then sees unflagged frames and passes them through, an `all` node deinterlaces a second time, as two `bwdif` nodes do today.
+3. **`hwdec-extra-frames`**: not set. The surface pool is sized at decoder init with mpv's `auto` sizing, at least 6 extra surfaces on top of the codec's (`HWDEC_EXTRA_FRAMES`, M`video/decode/vd_lavc.c#L73` and `#L956-L972`); `d3d11vpp` holds the current frame plus the driver's past/future reference views (typically 1–2 and 0–1) and writes into its own output pool. A fixed higher value would cost GPU memory on every file, against the ruling. The GUI acceptance on the interlaced clip watches the log for surface allocation errors or drops; if they appear, setting a fixed value is a host defect fix with no API change.
+4. **Exports and processed snapshots**: they run the frozen chain in offline FFmpeg (`offline_descriptor.rs`), where mpv's option does not exist. There `when: "auto"` renders as `bwdif=mode=send_field:deint=interlaced`, placed first in the graph: the same per-frame decision and the same field rate as the live picture. Raw snapshots stay unprocessed.
+5. **macOS VideoToolbox**: `f_auto_filters.c` has no VideoToolbox branch, so mpv takes the generic path: an autoconvert restricted to software formats, which downloads hardware frames (`HW-downloading from …`, M`filters/f_autoconvert.c#L202-L280`), then software `bwdif send_field` (M`filters/f_auto_filters.c#L131-L161`). No decoder switch and no failure: only interlaced frames are copied to memory, by the filter; progressive frames stay zero-copy. The cost on interlaced files is about today's copy-back plus `bwdif`. The host does not switch to copy-back on `deinterlace-active`. **Not measured on a Mac** (none here): added to the Mac test list below.
+
+*Mac test list* (coordinator, macOS GPU rendering, default settings): progressive file → `hwdec-current` `videotoolbox`; interlaced clip → no combing, `hwdec-current` still `videotoolbox`, the log has `HW-downloading from videotoolbox` and no `no deinterlace filter available`.
+
+*Windows today*: the player on `main` renders in software on Windows (`platform::GPU_RENDER` is false there), so decoding is copy-back (`d3d11va-copy`) with or without a chain, and the author's `d3d11va` / `d3d11va-copy` reproduction applies to a GPU-rendering build. On software rendering `when: "auto"` still removes the cost on progressive files (no `bwdif` in the graph; mpv's deinterlacer is inserted only on interlaced frames) and deinterlaces interlaced ones with `bwdif send_field`; the `d3d11vpp` branch applies once Windows renders on the GPU with zero-copy `d3d11va`.
+
+### Implementation (API maintainer, 2026-10-27)
+
+Host 0.5.4 (`src/host/`; no plugin, runner or SDK-test file touched):
+
+- `effects.rs`: `DeinterlaceWhen::Auto`; `auto` + `frame` and a second `deinterlace` node in a resource with `auto` are `invalid` (`Node::validate_chain`); `Node::first` / `Node::by_player`: the player's graph (`render_player`, `runtime_commands`) leaves such nodes out, the offline graph (`render_lavfi`: exports, processed snapshots) renders them first as `bwdif=mode=send_field:deint=interlaced`; `player_deinterlace` and `needs_frames_in_memory` over the owned resources.
+- `processing.rs`: `set_deinterlace` owns mpv's global `deinterlace` (`auto` while any owner's chain has an `auto` node, `no` otherwise), set before the graph and restored if the graph change fails; recomputed in `disable` (deactivation, crash); `frames_in_memory` follows `needs_frames_in_memory` instead of "any chain" in `replace`, `disable` and `replay_ready`; `set_graph` / `apply` use `render_player`.
+- `tests/fixtures/processing-conformance.json`: a new case for `when: "auto"` (shared with the SDK's TestHost through `src/tests/sdk/host-agreement.test.ts`, which therefore needs SDK 1.5.24 installed).
+- Tests: `effects::auto_deinterlace_is_the_players_and_bwdif_first_offline` (player vs offline graph, live update indices, rebuild on mode change, refusals, several owners); `processing::auto_deinterlace_keeps_zero_copy_decoding` (only `auto` → `deinterlace=auto`, `hwdec` stays `auto-safe`, no `bwdif` in `vf`; plus a gblur → `auto-copy-safe`; back → `auto-safe`; explicit `interlaced` → `bwdif`, `deinterlace=no`, copy-back; `[]` → `no`; refusals change nothing); `processing::auto_deinterlace_is_shared_and_revoked_with_its_owners` (two owners, disabling one keeps `auto`, the last → `no`; disabling an owner with `auto` + gblur restores `deinterlace=no`, `auto-safe` and the graph); ignored real-decoding test `processing::auto_deinterlace_on_real_decoding` (software rendering, ffmpeg-made 25i TFF H.264 clip and a 25p clip).
+- Docs: `doc/architecture/README.md` §4.1.
+
+SDK 1.5.24, prepared as a patch against SDK `main` (e45c691, 1.5.23) for the coordinator: `VideoNode` `when: "auto"` with its contract, `nodeProblem` (the TestHost's validation) with the same two refusals, a test in `test/round4a.test.ts`, *Processing* concept page, CHANGELOG ("Who must change: nobody"), version 1.5.24, `llms.txt` / `llms-full.txt` regenerated.
+
+Checks run (Windows, 2026-10-27):
+
+- Host: `cargo fmt --check` 0; `cargo clippy --locked --all-targets -- -D warnings` 0; `cargo test --locked` 470 passed, 0 failed, 8 ignored; `cargo test --locked -- --ignored auto_deinterlace_on_` 1 passed (this machine's `d3d11va-copy`: on the interlaced clip `video-frame-info/interlaced` true, `deinterlace-active` true, `estimated-vf-fps` about 50, no `bwdif` in `vf`, no "no deinterlace filter available" / "creating deinterlacer failed" / filter-failed log line; on the progressive clip `deinterlace-active` false, about 25 fps); `npm run unsafe-policy` ok; `typos` on the changed files clean (the whole tree reports one pre-existing hit from `main`, in `doc/process/rounds/2026-10-shared-runner.md` line 353).
+- Player `src/`: `npm run check`, `format:check`, `boundaries` 0. `npm run test:sdk` with SDK 1.5.24 installed temporarily (`npm install --no-save` of the packed patch, then `npm ci` back to the lock): 34/34 pass; with the locked 1.5.23 the new conformance case fails (expected: 1.5.23's TestHost refuses `auto`), so the SDK upgrade goes in the same commit. Plugin tests and `portability` not run (no plugin or platform code changed).
+- SDK patch in a temporary clone: `npm ci`, `check`, `format:check`, `lint`, `docs:check` (0 failing in Markdown and enforced categories; the 61 "other" `@example` warnings are unchanged from 1.5.23), `npm run docs` (TypeDoc, exit 0, no warnings), `docs:llms -- --check`, `test` (192 tests, 191 pass, 0 fail, 1 skipped), `npm pack --dry-run` all exit 0; the patch applies to `C:\vestra\sdk` `main` (`git apply --check`).
+- Not run: GUI (coordinator), zero-copy `d3d11va` + `d3d11vpp` (no Windows GPU rendering on `main`), macOS (Mac test list above).
+
+### For the video author: acceptance list (after host 0.5.4 / SDK 1.5.24 are released)
+
+1. `manifest.json` `"minPlayerVersion": "0.5.4"`; SDK dependency `^1.5.24`.
+2. `model.ts` `videoNodes`: Auto → `{ kind: "deinterlace", when: "auto", output: "field" }`; Always → `when: "all"` with the Output setting as today; Never → no node. Auto + By Frame cannot be `when: "auto"` (`invalid`): either Auto ignores Output (recommended; the only mapping that meets the user ruling with the default By Frame), or Auto + By Frame keeps today's `when: "interlaced", output: "frame"` with copy-back on every file. Say in the menu or the README which one applies.
+3. Never put a second `deinterlace` node in the same chain as the `auto` one (`invalid`).
+4. Keep the node first in the chain for readability; the player runs it first anyway.
+5. TestHost tests: Auto installs `when: "auto"` (and, with no other look setting changed, nothing else), Always `when: "all"`, Never nothing; a chain with `auto` and colour nodes is applied.
+6. Version 1.1.6, CHANGELOG: interlaced files under Auto now play at field rate (25i → 50 fps); progressive files no longer lose zero-copy decoding.
+7. GUI acceptance as in the request (coordinator), plus the Mac test list above.
+
+*Author's acceptance*: (pending: the author reads this reply and accepts or rebuts once per §4.3 item 3).

@@ -58,6 +58,10 @@ pub struct Processing {
     /// The last `hwdec` switch `frames_in_memory` made, watched for mpv's
     /// software fallback (`hwdec_check`).
     hwdec_watch: Option<HwdecWatch>,
+    /// Whether the host set mpv's global `deinterlace` to `auto`, because
+    /// some owned video chain has a `deinterlace` `auto` node (`no` otherwise).
+    /// The host is the option's only writer.
+    deinterlace: bool,
     /// Retries made, for the hardware tests.
     #[cfg(test)]
     hwdec_retries: u32,
@@ -159,8 +163,11 @@ impl Processing {
             } else if empty {
                 Ok(())
             } else {
-                if stage == "video" {
-                    self.frames_in_memory(mpv, true);
+                // mpv's `deinterlace` is a global option and outlives the
+                // file; only the FFmpeg graph is replayed.
+                if let Descriptors::Video(resources) = &graph {
+                    let needed = effects::needs_frames_in_memory(resources.iter());
+                    self.frames_in_memory(mpv, needed);
                 }
                 set_graph(mpv, &graph)
             };
@@ -470,16 +477,28 @@ impl Processing {
                     );
                 }
                 let after = Descriptors::Video(next.values().map(|(_, r)| r.clone()).collect());
-                if !next.is_empty() {
+                if effects::needs_frames_in_memory(next.values().map(|(_, r)| r)) {
                     self.frames_in_memory(mpv, true);
                 }
-                let applied = if before == after {
-                    Ok(())
-                } else {
-                    apply(mpv, &before, &after)
-                };
+                let previous = self.deinterlace;
+                let wanted = effects::player_deinterlace(next.values().map(|(_, r)| r));
+                let mut applied = self.set_deinterlace(mpv, wanted);
+                if applied.is_ok() && before != after {
+                    applied = apply(mpv, &before, &after);
+                    if let Err(error) = &applied
+                        && let Err(restore) = self.set_deinterlace(mpv, previous)
+                    {
+                        applied = Err(RpcError::new(
+                            "backend-uncertain",
+                            format!(
+                                "{}; restoring deinterlace failed: {}",
+                                error.message, restore.message
+                            ),
+                        ));
+                    }
+                }
                 if let Err(error) = applied {
-                    let keep = !self.video.is_empty();
+                    let keep = effects::needs_frames_in_memory(self.video.values().map(|(_, r)| r));
                     self.frames_in_memory(mpv, keep);
                     if error.code == "backend-uncertain" {
                         self.uncertain.insert(stage.into(), error.message.clone());
@@ -491,7 +510,7 @@ impl Processing {
                     return Err(error);
                 }
                 self.video = next;
-                if self.video.is_empty() {
+                if !effects::needs_frames_in_memory(self.video.values().map(|(_, r)| r)) {
                     self.frames_in_memory(mpv, false);
                 }
                 self.confirmations
@@ -596,13 +615,20 @@ impl Processing {
             ("video", before_video, after_video),
             ("audio", before_audio, after_audio),
         ] {
-            let result = if stage == "audio" && (before != after || old_offset != next_offset) {
+            let mut result = if stage == "audio" && (before != after || old_offset != next_offset) {
                 apply_audio(mpv, &before, &after, old_offset, next_offset)
             } else if before != after {
                 apply(mpv, &before, &after)
             } else {
                 Ok(())
             };
+            // The player's deinterlacer stays only while another owner's
+            // chain still asks for it.
+            if stage == "video" {
+                let wanted = effects::player_deinterlace(self.video.values().map(|(_, r)| r));
+                let deinterlace = self.set_deinterlace(mpv, wanted);
+                result = result.and(deinterlace);
+            }
             if let Err(error) = result {
                 let reason = format!("owner {owner} cleanup: {}", error.message);
                 self.uncertain.insert(stage.into(), reason.clone());
@@ -611,7 +637,7 @@ impl Processing {
                 failures.push(format!("{stage}: {reason}"));
             }
         }
-        if self.video.is_empty() {
+        if !effects::needs_frames_in_memory(self.video.values().map(|(_, r)| r)) {
             self.frames_in_memory(mpv, false);
         }
         if !failures.is_empty() {
@@ -626,18 +652,38 @@ impl Processing {
         self.hwdec = None;
         self.hwdec_watch = None;
     }
+    /// mpv's own deinterlacer (`deinterlace=auto`) for the `deinterlace`
+    /// `auto` nodes, one switch shared by every owner: on while any owned
+    /// chain has such a node, off (`no`) when none is left. mpv decides per
+    /// frame from the decoder's interlaced flag and runs it before the `vf`
+    /// chain: the decoder's hardware deinterlacer on GPU frames (`d3d11vpp`
+    /// for zero-copy `d3d11va`), otherwise `bwdif` on frames in memory
+    /// (downloaded first when they are on the GPU, as VideoToolbox frames
+    /// are), one frame per field. It needs no copy-back decoding, so it does
+    /// not count for `frames_in_memory`.
+    fn set_deinterlace(&mut self, mpv: &Mpv, wanted: bool) -> Result<(), RpcError> {
+        if wanted == self.deinterlace {
+            return Ok(());
+        }
+        let value = if wanted { "auto" } else { "no" };
+        mpv.set_property("deinterlace", value)
+            .map_err(|e| RpcError::new("backend", format!("deinterlace={value}: {e}")))?;
+        self.deinterlace = wanted;
+        Ok(())
+    }
     /// The owned video nodes are FFmpeg software filters: they need decoded
     /// frames in memory. With zero-copy hardware decoding (GPU rendering's
     /// `hwdec=auto-safe`, i.e. VideoToolbox on macOS) mpv hands the graph GPU
     /// frames, the graph cannot be configured, and mpv drops the filter with
     /// only a log line ("Disabling filter vestra-owned because it has
     /// failed") while `vf add` has already succeeded. So while any owned video
-    /// chain exists, decoding uses the copy-back variant of the configured
-    /// mode (still hardware decoding), switched before the graph is
-    /// installed; the configured mode comes back once no chain is left,
-    /// unless someone else changed `hwdec` in between or the renderer
-    /// switched (`renderer_changed`). Software rendering already uses a
-    /// copy-back mode (`renderer::hwdec`), so there nothing switches.
+    /// chain has such a node (the `deinterlace` `auto` node is not one: it is
+    /// mpv's own deinterlacer, `set_deinterlace`), decoding uses the copy-back
+    /// variant of the configured mode (still hardware decoding), switched
+    /// before the graph is installed; the configured mode comes back once no
+    /// such node is left, unless someone else changed `hwdec` in between or
+    /// the renderer switched (`renderer_changed`). Software rendering already
+    /// uses a copy-back mode (`renderer::hwdec`), so there nothing switches.
     ///
     /// Each switch reopens the decoder mid-stream; if that makes mpv give up
     /// on hardware decoding for the rest of the file, `hwdec_check` asks
@@ -997,7 +1043,7 @@ fn set_graph(mpv: &Mpv, graph: &Descriptors) -> Result<(), RpcError> {
     } else {
         "af"
     };
-    let text = effects::render_lavfi(graph).map_err(|e| RpcError::invalid(e.to_string()))?;
+    let text = effects::render_player(graph).map_err(|e| RpcError::invalid(e.to_string()))?;
     mpv.command(&[stage, "add", &format!("@vestra-owned:lavfi=[{text}]")])
         .map_err(|e| RpcError::new("backend", e.to_string()))
 }
@@ -1009,8 +1055,8 @@ fn apply(mpv: &Mpv, before: &Descriptors, after: &Descriptors) -> Result<(), Rpc
     } else {
         "af"
     };
-    let next = effects::render_lavfi(after).map_err(|e| RpcError::invalid(e.to_string()))?;
-    let old = effects::render_lavfi(before).map_err(|e| RpcError::invalid(e.to_string()))?;
+    let next = effects::render_player(after).map_err(|e| RpcError::invalid(e.to_string()))?;
+    let old = effects::render_player(before).map_err(|e| RpcError::invalid(e.to_string()))?;
     let set = |graph: &str| mpv.command(&[stage, "add", &format!("@vestra-owned:lavfi=[{graph}]")]);
     let result = match plan {
         UpdatePlan::NeedsReconfigure => set(&next),
@@ -1348,6 +1394,129 @@ mod tests {
         assert_eq!(mpv.get_property::<String>("hwdec").unwrap(), "no");
     }
 
+    fn auto() -> Value {
+        json!({"kind":"deinterlace","when":"auto","output":"field"})
+    }
+    fn deinterlace(mpv: &Mpv) -> String {
+        mpv.get_property::<String>("deinterlace").unwrap()
+    }
+    fn hwdec(mpv: &Mpv) -> String {
+        mpv.get_property::<String>("hwdec").unwrap()
+    }
+
+    /// DEINT-AUTO-1: `when: "auto"` turns on mpv's own deinterlacer and
+    /// keeps zero-copy decoding; other nodes still need copy-back.
+    #[test]
+    fn auto_deinterlace_keeps_zero_copy_decoding() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("auto-safe");
+        let mut processing = ready();
+        assert_eq!(deinterlace(&mpv), "no");
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, json!([auto()])))
+            .unwrap();
+        assert_eq!(deinterlace(&mpv), "auto");
+        assert_eq!(hwdec(&mpv), "auto-safe");
+        assert!(!vf(&mpv).contains("bwdif"), "{}", vf(&mpv));
+        assert_eq!(processing.state()["video"].as_array().unwrap().len(), 1);
+
+        // Another node needs frames in memory; the deinterlacer stays mpv's.
+        let both = json!([auto(), {"kind":"gblur","sigma":4,"steps":3}]);
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, both))
+            .unwrap();
+        assert_eq!(hwdec(&mpv), "auto-copy-safe");
+        assert_eq!(deinterlace(&mpv), "auto");
+        assert!(vf(&mpv).contains("gblur@n0="), "{}", vf(&mpv));
+        assert!(!vf(&mpv).contains("bwdif"), "{}", vf(&mpv));
+
+        // Back to the deinterlacer alone: zero-copy again.
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(3, json!([auto()])))
+            .unwrap();
+        assert_eq!(hwdec(&mpv), "auto-safe");
+        assert_eq!(deinterlace(&mpv), "auto");
+        assert!(!vf(&mpv).contains("gblur"), "{}", vf(&mpv));
+
+        // An explicit mode replaces it: bwdif, copy-back, mpv's off.
+        let explicit = json!([{"kind":"deinterlace","when":"interlaced","output":"frame"}]);
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(4, explicit))
+            .unwrap();
+        assert_eq!(deinterlace(&mpv), "no");
+        assert_eq!(hwdec(&mpv), "auto-copy-safe");
+        assert!(
+            vf(&mpv).contains("bwdif@n0=mode=send_frame:deint=interlaced"),
+            "{}",
+            vf(&mpv)
+        );
+
+        // And back, then removed with an empty chain.
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(5, json!([auto()])))
+            .unwrap();
+        assert_eq!(deinterlace(&mpv), "auto");
+        assert_eq!(hwdec(&mpv), "auto-safe");
+        assert!(!vf(&mpv).contains("bwdif"), "{}", vf(&mpv));
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(6, json!([])))
+            .unwrap();
+        assert_eq!(deinterlace(&mpv), "no");
+        assert_eq!(hwdec(&mpv), "auto-safe");
+
+        // Refused before anything changes.
+        for (revision, nodes) in [
+            (
+                7,
+                json!([{"kind":"deinterlace","when":"auto","output":"frame"}]),
+            ),
+            (
+                8,
+                json!([auto(), {"kind":"deinterlace","when":"all","output":"field"}]),
+            ),
+        ] {
+            let error = processing
+                .replace(&mpv, OWNER, 1, Source::Decoded, &video(revision, nodes))
+                .unwrap_err();
+            assert_eq!(error.code, "invalid");
+            assert_eq!(deinterlace(&mpv), "no");
+        }
+    }
+
+    /// mpv's `deinterlace` is one option: on while any owner's chain asks
+    /// for it, off once the last one is removed or its plugin stops.
+    #[test]
+    fn auto_deinterlace_is_shared_and_revoked_with_its_owners() {
+        const OTHER: u64 = 8;
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("auto-safe");
+        let mut processing = ready();
+        processing.register(OTHER, "examples.other".into());
+        for owner in [OWNER, OTHER] {
+            processing
+                .replace(&mpv, owner, 1, Source::Decoded, &video(1, json!([auto()])))
+                .unwrap();
+        }
+        assert_eq!(deinterlace(&mpv), "auto");
+        processing.disable(&mpv, OWNER).unwrap();
+        assert_eq!(deinterlace(&mpv), "auto", "the other owner still asks");
+        assert_eq!(hwdec(&mpv), "auto-safe");
+        processing.disable(&mpv, OTHER).unwrap();
+        assert_eq!(deinterlace(&mpv), "no");
+
+        // Stopping a plugin whose chain had other nodes restores both.
+        processing.register(OWNER, "examples.blur".into());
+        let both = json!([auto(), {"kind":"gblur","sigma":4,"steps":3}]);
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, both))
+            .unwrap();
+        assert_eq!(hwdec(&mpv), "auto-copy-safe");
+        processing.disable(&mpv, OWNER).unwrap();
+        assert_eq!(deinterlace(&mpv), "no");
+        assert_eq!(hwdec(&mpv), "auto-safe");
+        assert!(!vf(&mpv).contains("gblur"), "{}", vf(&mpv));
+    }
+
     #[test]
     fn generated_streams_refuse_chains_but_accept_removal() {
         let _one = one_mpv_at_a_time();
@@ -1495,6 +1664,109 @@ mod tests {
         assert!(!failed.get(), "mpv dropped a filter");
         assert!(vf(&mpv).contains("gblur"));
         assert!(current().ends_with("-copy"), "with a chain: {}", current());
+        drop(render);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// DEINT-AUTO-1 on real decoding (software rendering, so frames are in
+    /// memory and mpv's auto deinterlacer is `bwdif send_field`): with a
+    /// `deinterlace` `auto` chain an interlaced H.264 clip (25i, flagged
+    /// top field first) is deinterlaced at field rate, a progressive one is
+    /// left alone, and no FFmpeg graph is added. Needs a hardware decoder
+    /// and `ffmpeg`: `cargo test --locked -- --ignored auto_deinterlace_on_`.
+    #[test]
+    #[ignore = "needs a hardware decoder and ffmpeg"]
+    fn auto_deinterlace_on_real_decoding() {
+        use std::time::{Duration, Instant};
+        let _one = one_mpv_at_a_time();
+        let dir = std::env::temp_dir().join(format!("vestra-deint-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let make = |name: &str, source: &str, extra: &[&str]| {
+            let file = dir.join(name);
+            let made = std::process::Command::new("ffmpeg")
+                .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i", source])
+                .args(["-t", "6", "-c:v", "libx264", "-pix_fmt", "yuv420p"])
+                .args(extra)
+                .arg(&file)
+                .status()
+                .unwrap();
+            assert!(made.success());
+            file
+        };
+        let interlaced = make(
+            "interlaced-tff.mkv",
+            "testsrc2=size=1280x720:rate=50,interlace=scan=tff",
+            &["-flags", "+ildct+ilme", "-x264-params", "tff=1"],
+        );
+        let progressive = make("progressive.mkv", "testsrc2=size=1280x720:rate=25", &[]);
+        let mpv = std::sync::Arc::new(mpv(&crate::renderer::hwdec(None, true)));
+        mpv.set_property("keep-open", true).unwrap();
+        mpv.set_property("vo", "libmpv").unwrap();
+        mpv.request_log_messages("v").unwrap();
+        let mut render = rsmpv::render::RenderContext::new_software(mpv.clone()).unwrap();
+        let problems = std::cell::RefCell::new(Vec::new());
+        let mut pixels = vec![0u8; 640 * 360 * 3];
+        let mut pump = |seconds: u64| {
+            let end = Instant::now() + Duration::from_secs(seconds);
+            while Instant::now() < end {
+                while let Some(event) = mpv.poll_event() {
+                    if let rsmpv::Event::LogMessage(message) = event
+                        && (message.text.contains("because it has failed")
+                            || message.text.contains("no deinterlace filter available")
+                            || message.text.contains("creating deinterlacer failed"))
+                    {
+                        problems.borrow_mut().push(message.text.to_owned());
+                    }
+                }
+                if render.update() {
+                    render
+                        .render_software(
+                            640,
+                            360,
+                            rsmpv::render::SwPixelFormat::Rgb24,
+                            640 * 3,
+                            &mut pixels,
+                        )
+                        .unwrap();
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        };
+        let active = || mpv.get_property::<bool>("deinterlace-active").unwrap();
+        let fps = || {
+            mpv.get_property::<f64>("estimated-vf-fps")
+                .unwrap_or_default()
+        };
+        let current = || {
+            mpv.get_property::<String>("hwdec-current")
+                .unwrap_or_default()
+        };
+        let interlaced_flag = || {
+            mpv.get_property::<bool>("video-frame-info/interlaced")
+                .unwrap_or_default()
+        };
+        mpv.command(&["loadfile", interlaced.to_str().unwrap()])
+            .unwrap();
+        pump(2);
+        assert!(interlaced_flag(), "the clip is flagged interlaced");
+        assert!(!active());
+        let mut processing = ready();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, json!([auto()])))
+            .unwrap();
+        pump(3);
+        assert!(problems.borrow().is_empty(), "{:?}", problems.borrow());
+        assert!(active(), "mpv's deinterlacer runs on the interlaced clip");
+        assert!((fps() - 50.).abs() < 3., "one frame per field: {}", fps());
+        assert!(!vf(&mpv).contains("bwdif"), "{}", vf(&mpv));
+        assert!(current().ends_with("-copy"), "hwdec-current={}", current());
+        mpv.command(&["loadfile", progressive.to_str().unwrap()])
+            .unwrap();
+        pump(3);
+        assert!(!interlaced_flag());
+        assert!(!active(), "progressive frames are left alone");
+        assert!((fps() - 25.).abs() < 3., "the source rate: {}", fps());
+        assert!(problems.borrow().is_empty(), "{:?}", problems.borrow());
         drop(render);
         let _ = std::fs::remove_dir_all(dir);
     }
