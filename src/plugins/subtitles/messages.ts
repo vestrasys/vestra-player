@@ -15,6 +15,8 @@ export const STATUS = {
   failed: "The subtitle operation failed.",
   cancelledByUser: "Cancelled.",
   refreshed: "Subtitle tracks refreshed.",
+  refreshedLoaded: "Subtitle tracks refreshed. Subtitle files loaded from the video's folder: {}",
+  autoLoaded: "Subtitle files loaded from the video's folder: {}",
   select: "Subtitles: {}",
   "select.waiting": "Subtitles: {} (waiting to take effect)",
   "select.uncertain": "Subtitles: {} (could not confirm it took effect)",

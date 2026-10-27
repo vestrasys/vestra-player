@@ -33,11 +33,13 @@ export const SECONDARY_POSITIONS = [
 export type Stored = {
   syncStepMs: number;
   autoReload: boolean;
+  /** Load the subtitle files with the same name when a local video opens (on unless saved off). */
+  autoLoad: boolean;
   fallbackEncoding: Encoding;
   secondaryPosition: SecondaryPosition;
   extra: Record<string, unknown>;
 };
-const KNOWN = new Set(["version", "syncStepMs", "autoReload", "fallbackEncoding", "secondaryPosition"]);
+const KNOWN = new Set(["version", "syncStepMs", "autoReload", "autoLoad", "fallbackEncoding", "secondaryPosition"]);
 export const isObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
 
@@ -48,13 +50,15 @@ export function parse(raw: unknown): Stored {
   const extra = Object.fromEntries(Object.entries(value).filter(([key]) => !KNOWN.has(key)));
   const fallbackEncoding = isEncoding(value.fallbackEncoding) ? value.fallbackEncoding : DEFAULT_ENCODING;
   const secondaryPosition: SecondaryPosition = value.secondaryPosition === "aboveMain" ? "aboveMain" : "top";
-  return { syncStepMs, autoReload: value.autoReload === true, fallbackEncoding, secondaryPosition, extra };
+  const autoLoad = value.autoLoad !== false;
+  return { syncStepMs, autoReload: value.autoReload === true, autoLoad, fallbackEncoding, secondaryPosition, extra };
 }
-export const serialize = ({ syncStepMs, autoReload, fallbackEncoding, secondaryPosition, extra }: Stored) => ({
+export const serialize = ({ syncStepMs, autoReload, autoLoad, fallbackEncoding, secondaryPosition, extra }: Stored) => ({
   ...extra,
   version: 1,
   syncStepMs,
   autoReload,
+  autoLoad,
   fallbackEncoding,
   secondaryPosition,
 });
