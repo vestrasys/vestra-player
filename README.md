@@ -13,7 +13,8 @@
   <a href="https://github.com/vestrasys/vestra-player/releases">Releases</a> ·
   <a href="https://vestrasys.github.io/vestra-player-sdk/">Plugin SDK docs</a> ·
   <a href="https://github.com/vestrasys/vestra-player-plugins">Plugins</a> ·
-  <a href="doc/README.md">Design docs</a>
+  <a href="doc/README.md">Design docs</a> ·
+  <a href="agentic-workflow.md">Agentic Workflow</a>
 </p>
 
 Vestra Player is an open-source video player for macOS and Windows. It aims for rich, discoverable controls (menus, shortcuts, a docked playlist, deep video and audio settings) on a modern, extensible architecture. Playback is handled by [libmpv](https://mpv.io); the interface is native [Slint](https://slint.dev); and everything you use (playback bar, playlist, video and audio adjustments, subtitles, screenshots and export, history, hotkeys, the plugin store, even an NES emulator) is a TypeScript plugin.
@@ -58,10 +59,6 @@ Plugins describe their windows and panels in `.slint` files; the host compiles t
 | `doc/` | Design documents, architecture and process notes ([index](doc/README.md)) |
 
 The SDK lives in [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk); the YouTube and Bilibili plugins and the store index live in [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins).
-
-## Agentic Workflow
-
-The player is built by agents that simulate a plugin community: plugin authors, an API maintainer, an infrastructure maintainer, researchers, an independent reviewer and a coordinator. Roles, the request process for API changes, reviews, machine rules and when the user decides are in [Agentic Workflow](agentic-workflow.md).
 
 ## License
 
