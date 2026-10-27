@@ -1,6 +1,6 @@
 # Round 2: core batch one (playback, tracks, processing nodes, basic action handover) + plugin adoption
 
-Branch: `rebuild/features-r2` (created by the coordinator from the commit after `rebuild/features-r1` was merged into `main`). Basis: the [negotiation record](2026-10-features-negotiation.md) "Step 3: Rulings" (below: "the rulings"), the [feature requirements](../../product/feature-requirements.md) (below: "the requirements document"), and the [community workflow](../community-workflow.md) §3, §4, §5. The overall round plan is in ruling 3.5: 2 → 3a → 3b → 4a → 4b.
+Branch: `rebuild/features-r2` (created by the coordinator from the commit after `rebuild/features-r1` was merged into `main`). Basis: the [negotiation record](2026-10-features-negotiation.md) "Step 3: Rulings" (below: "the rulings"), the [feature requirements](../../product/feature-requirements.md) (below: "the requirements document"), and the [community workflow](../../../agentic-workflow.md) §3, §4, §5. The overall round plan is in ruling 3.5: 2 → 3a → 3b → 4a → 4b.
 
 ## 1. Scope
 

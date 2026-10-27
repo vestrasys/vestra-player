@@ -1,4 +1,6 @@
-# Simulated community: a multi-agent workflow for plugin authors and the API maintainer
+# Agentic workflow: a simulated plugin community of agents
+
+This file is the authority for how agents work on this repository (it replaces `doc/process/community-workflow.md`, 2026-10-27).
 
 This project develops the player with several agents that simulate a plugin community: **plugin authors** are independent consumers who depend only on the public plugin API, the **API maintainer** is the single point that maintains the host and the SDK, and the **coordinator** schedules and integrates. The goal is not only to build the features, but also to test whether the API is easy to understand, whether changes stay under control, and whether the maintainer can meet different needs without opening a back door for any one plugin.
 
@@ -12,6 +14,68 @@ The API evolves in two directions, with different processes:
 | Who starts it | The plugin author submits a request | The maintainer designs and releases the new API |
 | Can plugin authors propose new capabilities | Yes | **No**, they can only report a "migration blocker" |
 | Product behavior | Evolves with the plugin | **Stays unchanged** (equivalent migration) |
+
+## 0. Overview (2026-10-27)
+
+Who does what, and how one piece of work travels from a request to `main`. The sections below are the rules; this is the map.
+
+```text
+                               ┌──────────────┐
+                               │     User      │  requirements · rulings (behaviour changes,
+                               └──────┬───────┘   API removals, trade-offs)
+                                      │ reports in Chinese ▲
+                                      ▼                    │
+┌───────────────────────────────────────────────────────────────────────────┐
+│ Coordinator   assigns work · reviews deliveries · rules on deadlocks ·       │
+│               owns doc/product · git commits and merges · real GUI tests ·   │
+│               releases (SDK: tag → npm) · reports to the user                │
+│ Rules: ≤ 3 background agents · one Rust build at a time (build.lock) ·       │
+│        quiet.flag while measuring · one role per agent                       │
+└──┬──────────┬──────────┬──────────┬──────────┬──────────┬─────────────────┘
+   │ assigns  │ assigns  │ assigns  │ assigns  │ (itself) │ assigns review
+   ▼          ▼          ▼          ▼          ▼          ▼
+┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐┌───────────┐
+│  API   ││ Plugin ││ Infra- ││Research││ Inter- ││Independent│
+│maintai-││authors ││structure│ (read- ││ action ││ reviewer  │
+│  ner   ││1/plugin││maintai- ││ only)  ││ design ││(read-only)│
+├────────┤├────────┤│  ner    │├────────┤│  lead  │├───────────┤
+│host,SDK││own     │├────────┤│sources ││menus,  ││re-runs all│
+│runtime,││plugin  ││CI, pack-││cited   ││UI spec ││checks;    │
+│arch    ││dir only││aging,   ││        ││        ││merge / fix│
+│docs    ││        ││licenses,││        ││        ││first / no │
+└───┬────┘└───┬────┘│releases │└────────┘└────────┘└───────────┘
+    │         │     └────────┘
+    │         │  missing API: §4.1 request ─────────────┐
+    │         │                                          ▼
+    │         │            ┌────────────────────────────────────────────┐
+    │         └──────────▶ │ Blackboard: this round's record             │
+    └────────────────────▶ │ doc/process/rounds/…: request · maintainer  │
+                           │ reply (alternative first, conservative) ·   │
+                           │ one rebuttal · ruling · measurements        │
+                           │ + each agent's worktree/branch (uncommitted) │
+                           └────────────────────────────────────────────┘
+
+From assignment to main:
+
+ assign ─▶ agent works in its own worktree, runs the §6.1 checks ─▶ §8 report (Chinese)
+                                                                     │
+   coordinator commits locally ─▶ independent reviewer re-runs ─┬─ merge ───────────────┐
+                                                                ├─ fix first ─▶ back to │
+                                                                │  the same agent ──────┘
+                                                                └─ do not merge ─▶ back / parked
+                                                                     ▼
+                         when it matters: coordinator's real GUI test (scripted input,
+                         screenshots, VESTRA_FRAME_LOG numbers)
+                                                                     ▼
+                         SDK involved: release the SDK patch first ─▶ player upgrades the dependency
+                                                                     ▼
+                         PR merged into main (CI budget paused: merged on local verification)
+
+Ask the user: API removals, signature or behaviour changes (§1.6) · changing an established
+  principle · conflicting requirements · new paid services or licences · no precedent.
+Decide without asking: pure additions · bug fixes · details where mpv or mainstream players
+  have an established practice · SDK patch releases.
+```
 
 ## 1. Roles and file ownership
 
@@ -172,7 +236,7 @@ A request is closed when the requesting plugin's actual call works and the neces
 
 The core must stay lean, so the maintainer **does not accept** API requests by default. The author has to prove that the change is unavoidable; the maintainer does not have to prove that it can be avoided. Requests go through the following process:
 
-1. **A draft is not an approval**. Core interfaces written in a requirements document (such as Appendix A of the [feature requirements](../product/feature-requirements.md)) are only the author's draft requests. Each one must be submitted separately per §4.1 and go through the whole process in this section.
+1. **A draft is not an approval**. Core interfaces written in a requirements document (such as Appendix A of the [feature requirements](doc/product/feature-requirements.md)) are only the author's draft requests. Each one must be submitted separately per §4.1 and go through the whole process in this section.
 2. **The maintainer first replies with an approach, and does not start implementing first**. For each request, the maintainer first gives a way to do it without changing the API, and states the cost of doing it that way:
    - combine existing APIs;
    - the plugin implements it itself with Node, ffmpeg or OS commands;
@@ -235,7 +299,7 @@ The SDK is in its own repository (§1.6): the SDK parts of P1 and P4 are done on
 
 In `src/`: `npm run check`, `npm run format:check`, `npm run boundaries`, `npm run test:sdk`, `npm run plugins:build`, `npm run plugin -- test <name>` for each plugin, `npm run portability` (build output goes to `$CARGO_TARGET_DIR/portability`, or to `vestra-target/portability` in the system temp directory when it is not set, never into the repository).
 In `src/host/`: `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked`.
-CI (GitHub Actions) runs the same checks, plus typos, cargo-deny, cargo-shear and the unsafe rule; to run them all locally at once use `cd src && npm run ci:local`, see [ci.md](ci.md).
+CI (GitHub Actions) runs the same checks, plus typos, cargo-deny, cargo-shear and the unsafe rule; to run them all locally at once use `cd src && npm run ci:local`, see [ci.md](doc/process/ci.md).
 When you change a plugin in the plugin repository (`youtube`, `bilibili`) or a public API that may affect them, also run in the plugin repository: `npm ci`, `npm run check`, `npm run format:check`, `npm run boundaries`, `npm run portability`, `npm run build`, `npm test` (the same as its CI).
 When you change the SDK, also run in the SDK repository: `npm ci`, `npm run check`, `npm run format:check`, `npm test`, `npm pack --dry-run` (the same as its CI).
 
@@ -286,7 +350,7 @@ When escalating, give: the specific problem, reproduction evidence, the options 
 - **Measurements, not impressions**: GUI checks use scripted input plus `VESTRA_FRAME_LOG` numbers (produced/presented per second, `pacing:`/`ui:`/`mpv:` segments), with a forced render target (`VESTRA_RENDER_TARGET`) to reproduce large screens. Evidence: the 4K menu-hover stutter was located this way (AccessKit tree rebuild, 120–160 ms per hover) and verified fixed (presented 10–14 → 54–60).
 - **What the coordinator decides without asking the user** (user rulings 2026-10-27): SDK patch releases (the release environment needs no manual approval; tag → npm); product details where mpv's default or mainstream players (PotPlayer, mpv, IINA, VLC; Chrome for plugin models) have an established practice — adopt it and mention it. Still asked: §1.6 removals and behaviour changes, real trade-offs, anything without a precedent; technical terms are explained in plain language when asking.
 - **Process changes go into this document**, not only into an agent's memory (user rule).
-- **CI cost**: in private repositories macOS is billed at 10x and Windows at 2x. One push to a branch runs CI only once; record-only changes are collected into one batch before pushing; do not rerun both the push and the PR runs at the same time; macOS runs only when a PR is opened, when the `ci:macos` label is added, and on main, nightly and release ([ci.md](ci.md)).
+- **CI cost**: in private repositories macOS is billed at 10x and Windows at 2x. One push to a branch runs CI only once; record-only changes are collected into one batch before pushing; do not rerun both the push and the PR runs at the same time; macOS runs only when a PR is opened, when the `ci:macos` label is added, and on main, nightly and release ([ci.md](doc/process/ci.md)).
 
 Every sub-agent reports at the end in the following format:
 

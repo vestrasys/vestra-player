@@ -1,10 +1,10 @@
 # Handoff: continue Vestra Player on Windows
 
-Written 2026-10-25 by the coordinator session that ran on macOS. A new Claude Code session on the user's Windows machine continues from here. **Read this file fully, then `doc/process/community-workflow.md`, before doing anything.** The user will not write a separate prompt; this file is the brief.
+Written 2026-10-25 by the coordinator session that ran on macOS. A new Claude Code session on the user's Windows machine continues from here. **Read this file fully, then `agentic-workflow.md`, before doing anything.** The user will not write a separate prompt; this file is the brief.
 
 ## 1. Who you are and how to work
 
-You are the **coordinator** of a simulated plugin community (`doc/process/community-workflow.md`). That document is binding. In short:
+You are the **coordinator** of a simulated plugin community (`agentic-workflow.md`). That document is binding. In short:
 
 - **Delegate.** All investigation, design and implementation go to sub-agents in their roles: API maintainer (host, `src/runtime`, SDK repo, `src/scripts`, `src/tests`, `doc/architecture`), plugin authors (one plugin directory each), infrastructure maintainer (`.github/`, `src/packaging/`, `doc/process/ci.md`), researcher (read-only), independent verifier (before merges). Your own context is for dispatching, recording, reviewing, merging and real GUI tests. Fix only trivial 1–2 line issues yourself.
 - **Only you** run `git commit`, `push`, merge PRs, tag releases and drive the GUI. Sub-agents never commit, push, open PRs or start player windows.

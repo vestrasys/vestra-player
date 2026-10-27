@@ -1,6 +1,6 @@
 # Features round 1: core interface negotiation record
 
-Basis: [Community workflow](../community-workflow.md) §4.2, §4.3; source of the requests: [Feature requirements](../../product/feature-requirements.md) Appendix A (below, "the requirements document"); for the round, see [2026-10-features-r1.md](2026-10-features-r1.md).
+Basis: [Community workflow](../../../agentic-workflow.md) §4.2, §4.3; source of the requests: [Feature requirements](../../product/feature-requirements.md) Appendix A (below, "the requirements document"); for the round, see [2026-10-features-r1.md](2026-10-features-r1.md).
 
 This document records three steps: step 1, the maintainer's reply (this section); step 2, rebuttals from the author representatives (at most one per item, evidence required); step 3, the maintainer's ruling and schedule. Step 1 is only an **initial assessment**, not an approval, and nothing has been implemented.
 

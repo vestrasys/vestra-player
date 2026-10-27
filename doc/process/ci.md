@@ -1,6 +1,6 @@
 # CI (GitHub Actions)
 
-For the design and trade-offs see [ci-research.md](ci-research.md) §10.1–10.5; this document only describes how it actually runs now. The check commands match [community-workflow.md](community-workflow.md) §6.1.
+For the design and trade-offs see [ci-research.md](ci-research.md) §10.1–10.5; this document only describes how it actually runs now. The check commands match [../../agentic-workflow.md](../../agentic-workflow.md) §6.1.
 
 ## Files
 

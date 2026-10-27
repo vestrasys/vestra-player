@@ -1,6 +1,6 @@
 # GPU rendering, picture-in-picture and Windows gaps
 
-Branch: `rebuild/render-pip` (from `main` 6a85fb6). Basis: [community workflow](../community-workflow.md) §1.5 (cross-platform rule), §4.3, §5. Prototypes and measurements are in [round 4a task sheet](2026-10-features-r4a.md) §7, prototype branch `rebuild/prototypes`.
+Branch: `rebuild/render-pip` (from `main` 6a85fb6). Basis: [community workflow](../../../agentic-workflow.md) §1.5 (cross-platform rule), §4.3, §5. Prototypes and measurements are in [round 4a task sheet](2026-10-features-r4a.md) §7, prototype branch `rebuild/prototypes`.
 
 ## 1. User rulings (2026-10-21)
 

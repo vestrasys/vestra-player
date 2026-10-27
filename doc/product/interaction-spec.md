@@ -10,7 +10,7 @@ The layout follows the feature requirements: the core (host) first, then one cha
 
 - It describes **behaviour**: which input in which state produces which result, including defaults, thresholds, delays and persistence. Sizes, colours and icons belong to the UI specification; this document mentions them only where they affect interaction.
 - The specification has been checked against the code. The values in the items (thresholds, delays, animation durations) are Vestra's values; to change one later, change this document and update the code to match.
-- Interfaces marked [New core API] are request drafts that have not been accepted yet. Following the [community workflow](../process/community-workflow.md) §4.1 they are submitted separately and go through the negotiation process of §4.3; once the maintainer accepts them they are written into the reference documentation.
+- Interfaces marked [New core API] are request drafts that have not been accepted yet. Following the [community workflow](../../agentic-workflow.md) §4.1 they are submitted separately and go through the negotiation process of §4.3; once the maintainer accepts them they are written into the reference documentation.
 
 ### 0.2 Settled interaction decisions
 

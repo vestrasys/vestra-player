@@ -264,7 +264,7 @@ Settled and implemented:
 - Official and third-party features use the same public plugin API, with no backdoors into internal objects.
 - Rust host, Slint native UI, TypeScript plugins, cooperating through explicit protocols.
 - First-party Rust forbids `unsafe`; native boundaries rely on safe wrappers or isolated processes.
-- The plugin API evolves driven by the needs of real plugins ([community workflow](../process/community-workflow.md)).
+- The plugin API evolves driven by the needs of real plugins ([community workflow](../../agentic-workflow.md)).
 
 Still to design and validate:
 

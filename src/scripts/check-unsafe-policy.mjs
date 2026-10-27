@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * First-party Rust may use `unsafe` only in the crates under src/host/unsafe/
- * (community-workflow §1, ci-research §10.4). Runs on any OS and needs no
+ * (agentic-workflow §1, ci-research §10.4). Runs on any OS and needs no
  * build: it reads every tracked .rs file, so it also covers code that is
  * cfg'd out on the machine running it (Windows code on macOS and so on).
  *
