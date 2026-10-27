@@ -363,7 +363,10 @@ export component PlaybackBar inherits Rectangle {
     row := Rectangle {
         y: 22px;
         height: 40px;
-        // UI-BAR-10: the strip gets what the buttons and the time leave; it hides its lowest order first (left end inward) and the sidebar toggle last; Fullscreen shows while the toggle's 41px cell still fits beside it; the time is never cut.
+        // UI-BAR-10: the strip gets what the buttons and the time leave; it hides
+        // its lowest order first (left end inward) and the sidebar toggle last;
+        // Fullscreen shows while the toggle's 41px cell still fits beside it; the
+        // time is never cut.
         // In numbers: Fullscreen from 6 × 41 + 10 + time + 8 + 41 + 4 px, the
         // toggle from 5 × 41 + 10 + time + 8 + 41 + 4 px, no strip below 320px.
         // The time is measured, not a constant (`0:00:00 / 0:00:00` in the 11px
