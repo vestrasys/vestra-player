@@ -7,6 +7,14 @@
  */
 import type { BindingInfo, BindingRef } from "@vestra-player/sdk";
 
+/**
+ * Whether the system has a `Cmd` modifier to offer: macOS only, where it is ⌘.
+ * On Windows `Cmd` is the Windows logo key and elsewhere the Super key; the
+ * player's menus never show such bindings and the system takes most of their
+ * combinations (the host's `MENU_SHOWS_CMD`; SDK Reference: Platforms).
+ */
+export const hasCmd = (os: string) => os === "macos";
+
 /** What a Slint key event carries (`event.text`, `event.modifiers.*`). */
 export type KeyEvent = { text: string; control: boolean; alt: boolean; shift: boolean; meta: boolean };
 
@@ -93,8 +101,12 @@ const symbol = (c: string) => (c === "+" ? "Plus" : c);
  * - Option: US Option characters go back to their key (⌥O `ø` → `Alt+O`,
  *   ⌥⇧. `˘` → `Alt+>`); another symbol typed with Option is that symbol
  *   (German ⌥5 `[` → `[`), as the player matches it first.
+ * - Without ⌘ (`mac` false: Windows, Linux) Slint's `meta` is the Windows or
+ *   Super key, which no binding offers there: a key held with it keeps the
+ *   capture waiting instead of becoming a `Ctrl` binding.
  */
-export function fromSlintKey(event: KeyEvent): Capture {
+export function fromSlintKey(event: KeyEvent, mac = true): Capture {
+  if (!mac && event.meta) return null;
   const chars = [...event.text];
   if (chars.length !== 1) return null;
   const c = chars[0]!;
@@ -146,8 +158,9 @@ export const MOUSE = [
   { input: "Mouse:WheelLeft", label: "Wheel left" },
   { input: "Mouse:WheelRight", label: "Wheel right" },
 ] as const;
-/** J02 modifier choices; `""` is none. */
+/** J02 modifier choices; `""` is none. `Cmd` is offered on macOS only (`hasCmd`). */
 export const MODIFIERS = ["", "Ctrl", "Alt", "Shift", "Cmd"] as const;
+export type Modifier = (typeof MODIFIERS)[number];
 
 const KEY_LABELS: Record<string, string> = {
   ArrowLeft: "←",

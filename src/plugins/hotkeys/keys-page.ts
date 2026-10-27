@@ -103,8 +103,11 @@ export class KeysPage {
   #pending: { input: string; owners: BindingInfo[]; target: BindingRef } | null = null;
   #message = message();
   #rows: { key: string; rows: Row[]; lines: Line[] } = { key: "", rows: [], lines: [] };
+  /** The system has ⌘ (macOS); elsewhere Slint's `meta` is the Windows key (`fromSlintKey`). */
+  readonly #mac: boolean;
 
-  constructor(plugin: Plugin, model: BindingsModel, ignore: IgnoreDefaults, osd: Osd) {
+  constructor(plugin: Plugin, model: BindingsModel, ignore: IgnoreDefaults, osd: Osd, mac: boolean) {
+    this.#mac = mac;
     this.#plugin = plugin;
     this.#model = model;
     this.#ignore = ignore;
@@ -321,8 +324,8 @@ export class KeysPage {
 
   #key(event: Parameters<typeof fromSlintKey>[0]) {
     if (!this.#capturing) return;
-    const result = fromSlintKey(event);
-    if (!result) return; // a modifier alone: keep waiting
+    const result = fromSlintKey(event, this.#mac);
+    if (!result) return; // a modifier alone (or the Windows key held): keep waiting
     if ("cancel" in result) {
       this.#capturing = false;
       this.#say();
