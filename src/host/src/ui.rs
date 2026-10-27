@@ -1623,9 +1623,9 @@ export component W inherits Window {
     /// Player 0.5.10: a bottom bar placing `BarButtons` shares the shell's
     /// `BarButtonsHost` (the bar imports the same library file): the strip
     /// reports itself placed and shows the cells that fit in its room, the
-    /// sidebar toggle longest and the plugins' highest order first gone.
+    /// sidebar toggle longest and the plugins' lowest order first gone.
     #[test]
-    fn bar_buttons_share_the_shell_global_and_drop_the_highest_order_first() {
+    fn bar_buttons_share_the_shell_global_and_drop_the_lowest_order_first() {
         use crate::bar_buttons::{GLOBAL, Item, cell};
         use crate::commands::ButtonIcon;
         use slint_interpreter::Value;
@@ -1681,27 +1681,42 @@ export component W inherits Window {
             .unwrap();
         shell.window().set_size(slint::LogicalSize::new(800., 600.));
         shell.show().unwrap();
-        let width = |room: f64| {
+        // The strip's width and the plugin buttons it shows (by id; "toggle"
+        // when the sidebar toggle shows too) at this room.
+        let strip = |room: f64, toggle: bool| {
             shell
                 .set_global_property("Owner10Bridge", "room", Value::Number(room))
                 .unwrap();
             settle_layout(shell.window());
             slint::platform::update_timers_and_animations();
-            match shell.get_global_property("Owner10Bridge", "shown").unwrap() {
-                Value::Number(width) => width,
+            let number = |name| match shell.get_global_property("Owner10Bridge", name).unwrap() {
+                Value::Number(n) => n,
                 other => panic!("{other:?}"),
+            };
+            let (width, first) = (number("shown"), number("first") as usize);
+            let cells = (width / 41.) as usize;
+            let mut shown: Vec<&str> = ["ai", "store"][first..].to_vec();
+            shown.truncate(cells - usize::from(toggle && cells > 0));
+            if toggle && cells > 0 {
+                shown.push("toggle");
             }
+            assert_eq!(shown.len(), cells, "room {room}");
+            (width, shown)
         };
-        assert_eq!(width(1000.), 123.);
-        // Two cells fit: the toggle and the lowest order.
-        assert_eq!(width(100.), 82.);
-        assert_eq!(width(41.), 41.);
-        assert_eq!(width(40.), 0.);
-        // Without a toggle the buttons take the room.
+        // AI (order 100) and Store (200): cells go from the left end inward,
+        // the lowest order first, the toggle last.
+        assert_eq!(strip(1000., true), (123., vec!["ai", "store", "toggle"]));
+        assert_eq!(strip(123., true), (123., vec!["ai", "store", "toggle"]));
+        assert_eq!(strip(100., true), (82., vec!["store", "toggle"]));
+        assert_eq!(strip(41., true), (41., vec!["toggle"]));
+        assert_eq!(strip(40., true), (0., vec![]));
+        // Without a toggle the buttons take the room, the lowest order going first.
         shell
             .set_global_property(GLOBAL, "toggle", cell(None, None))
             .unwrap();
-        assert_eq!(width(1000.), 82.);
+        assert_eq!(strip(1000., false), (82., vec!["ai", "store"]));
+        assert_eq!(strip(60., false), (41., vec!["store"]));
+        assert_eq!(strip(0., false), (0., vec![]));
         shell.hide().unwrap();
     }
 }

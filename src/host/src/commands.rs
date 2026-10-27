@@ -732,8 +732,10 @@ impl Registry {
     }
 
     /// The commands' bottom-bar buttons: each owner's first declared one,
-    /// then the lowest [`Self::MAX_BUTTONS`] by (order, manifest id,
-    /// sequence). The rest are `dropped`, with the limit they passed.
+    /// then, ranked by (order, manifest id, sequence), the highest
+    /// [`Self::MAX_BUTTONS`]: the lowest ranks go first, as in a narrow
+    /// strip (equal orders: the smaller plugin id, then the earlier
+    /// registration, goes first). The rest are `dropped`, with the limit.
     pub fn buttons(&self) -> Buttons<'_> {
         let mut per_owner: BTreeMap<OwnerGeneration, usize> = BTreeMap::new();
         let mut result = Buttons::default();
@@ -761,12 +763,16 @@ impl Registry {
             )
         };
         shown.sort_by_key(|entry| rank(entry));
-        for entry in shown.split_off(Self::MAX_BUTTONS.min(shown.len())) {
+        // Like the strip, which loses its lowest orders first in a narrow
+        // window: past the limit the lowest ranks are left out.
+        let over = shown.len().saturating_sub(Self::MAX_BUTTONS);
+        let kept = shown.split_off(over);
+        for entry in shown {
             result
                 .dropped
                 .push((entry, "at most 8 buttons in the player"));
         }
-        result.shown = shown;
+        result.shown = kept;
         result
     }
 
@@ -1736,7 +1742,7 @@ mod button_tests {
     }
 
     #[test]
-    fn one_button_per_plugin_eight_in_the_player_in_order_then_plugin_id() {
+    fn one_button_per_plugin_eight_in_the_player_keeping_the_highest_orders() {
         let mut registry = Registry::new();
         // Owner 1 declares two: the first declared keeps its button; the
         // second stays a menu item.
@@ -1803,24 +1809,35 @@ mod button_tests {
         }
         let buttons = registry.buttons();
         assert_eq!(buttons.shown.len(), Registry::MAX_BUTTONS);
-        // The highest orders are left out.
+        // Past eight the lowest orders are left out, as a narrow strip
+        // loses them first; the highest are kept, in ascending order.
         let out: Vec<_> = buttons
             .dropped
             .iter()
             .map(|(entry, limit)| (entry.manifest.as_str(), *limit))
             .collect();
-        assert!(out.contains(&("p15", "at most 8 buttons in the player")));
-        assert!(out.contains(&("p16", "at most 8 buttons in the player")));
-        // A removed plugin's button goes with its commands; the next one moves up.
-        registry.remove_owner(3).unwrap();
-        assert_eq!(registry.buttons().shown[0].key.local_id, "b");
-        assert!(
-            registry
-                .buttons()
-                .shown
-                .iter()
-                .any(|entry| entry.manifest == "p15")
+        assert_eq!(
+            out,
+            [
+                ("z.one", "one button per plugin"),
+                ("a.three", "at most 8 buttons in the player"),
+                ("b.two", "at most 8 buttons in the player"),
+            ]
         );
+        assert_eq!(buttons.shown[0].key.local_id, "first");
+        assert_eq!(buttons.shown[7].manifest, "p16");
+        // Equal orders: the smaller plugin id goes first. A removed plugin's
+        // button goes with its commands, and the next one comes back.
+        registry.remove_owner(3).unwrap();
+        let shown: Vec<_> = registry
+            .buttons()
+            .shown
+            .iter()
+            .map(|entry| entry.manifest.clone())
+            .collect();
+        assert_eq!(shown[0], "z.one");
+        registry.remove_owner(10).unwrap();
+        assert_eq!(registry.buttons().shown[0].manifest, "b.two");
     }
 
     /// `BUTTON_ICONS` is every name `Icons.commands` draws.
