@@ -738,6 +738,8 @@ export default async function activate(plugin: Plugin) {
     path: ["Vestra Player AI…"],
     order: 820,
     group: "windows",
+    // The bottom bar's button (player 0.5.10), left of the Plugin Store's (200).
+    button: { icon: "ai", order: 100 },
     run: () => {
       loadKey(); // not awaited: a keychain dialog must not hold the window
       return window.show();

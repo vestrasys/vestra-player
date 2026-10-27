@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.8
+
+- "Vestra Player AI…" has a button on the bottom bar (`button: { icon: "ai", order: 100 }`, SDK 1.5.29): at the bar's right end, left of the Plugin Store's (order 200) and the sidebar toggle; in a narrow window it hides before them. A click opens the AI window like the menu item; the tooltip is "Vestra Player AI" with its key. Needs player 0.5.10 (`minPlayerVersion`); older players keep the menu item without a button.
+- The vendored SDK is 1.5.29 (`npm run vendor:sdk`): the reference the AI reads covers bottom-bar buttons (`CommandOptions.button`, `BarButtons` in `@vestra/bar-buttons.slint`) and TestHost's `barButtons`.
+
 ## 2.2.7
 
 - New plugin projects list the SDK's TypeScript plugin in `tsconfig.json` (`"plugins": [{ "name": "@vestra-player/sdk/ts-plugin" }]`, SDK 1.5.26): in an editor, an API call whose capability `manifest.json` does not declare is marked, with a quick fix that adds it. The AI's own type check is unaffected: `tsc` does not load language-service plugins.

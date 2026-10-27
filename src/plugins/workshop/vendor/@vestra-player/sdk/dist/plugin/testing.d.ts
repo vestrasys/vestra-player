@@ -2,7 +2,7 @@ import type { Server } from "node:net";
 import { HostError } from "../wire.ts";
 import type { PackageManifest, PackageSource } from "./types.ts";
 import type { Json, LayoutSlot, LocalServices, PlaybackStats, Transport, WireSystemInfo } from "../wire.ts";
-import { BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS } from "../commands.ts";
+import { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS } from "../commands.ts";
 import type { BuiltinCommand, BuiltinSubmenu } from "../commands.ts";
 import { CAPABILITY_INFO, MESSAGE_LIMIT } from "../capabilities.ts";
 import type { CapabilityInfo } from "../capabilities.ts";
@@ -22,6 +22,8 @@ import { LOCALES, LIST_SEPARATORS, TEXT_LIMITS } from "../i18n.ts";
 export { HostError };
 /** The player's command caps, which the test host enforces as well. */
 export { COMMAND_LIMITS, MENU_IDS };
+/** The icons and limits of bottom-bar buttons, which the test host checks as well. */
+export { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS };
 /** The submenus of the player's built-in plugins, by key path. */
 export { BUILTIN_COMMANDS, BUILTIN_SUBMENUS };
 export type { BuiltinCommand, BuiltinSubmenu };
@@ -198,6 +200,37 @@ export interface FakeCommand {
      * busy, like the player, which does not call `run` then.
      */
     run(): Promise<void>;
+}
+/**
+ * A command's bottom-bar button (`CommandOptions.button`) as the player shows
+ * it: an entry of {@link TestHost.barButtons}.
+ *
+ * @since 1.5.29
+ */
+export interface FakeBarButton {
+    /** The command's local id. */
+    readonly command: string;
+    /** The icon name, or the image's path for a `plugin.ui.image` icon. */
+    readonly icon: string;
+    /** `true` when the icon is the plugin's image. */
+    readonly image: boolean;
+    /** The declared `order`. */
+    readonly order: number;
+    /** Clickable: the command is enabled and not busy. */
+    readonly enabled: boolean;
+    /** Drawn in the accent colour: the command is checked. */
+    readonly checked: boolean;
+    /**
+     * The tooltip without the key: the command's shown title (trailing "…"
+     * removed), then, while it cannot run, its reason on a second line.
+     */
+    readonly tooltip: string;
+    /**
+     * Click the button, then wait until the host is idle: runs the command
+     * as its menu item would. Rejects (with a {@link HostError}) while the
+     * button is disabled, and once the command is gone.
+     */
+    click(): Promise<void>;
 }
 /**
  * A generated stream (`plugin.player.openStream`) as the test host sees it:
@@ -1477,6 +1510,24 @@ export declare class TestHost implements Transport {
      * registered (never added, or disposed).
      */
     command(id: string): FakeCommand;
+    /**
+     * The plugin's bottom-bar buttons (`CommandOptions.button`) as the player
+     * shows them: at most one, the first declared (`BAR_BUTTON_LIMITS`; a
+     * later one stays a menu item only). Empty once the command is disposed.
+     * Whether the bar places them is the bar's business: the list is what
+     * the player hands to `BarButtons`.
+     *
+     * @example
+     * ```ts
+     * const [button] = host.barButtons;
+     * assert.equal(button?.icon, "store");
+     * await button?.click();
+     * assert.equal(host.window("store").visible, true);
+     * ```
+     *
+     * @since 1.5.29
+     */
+    get barButtons(): readonly FakeBarButton[];
     /**
      * The plugin's tool window with this id (by default the file name without
      * extension: `ui/picture.slint` → `picture`). Throws when it was never

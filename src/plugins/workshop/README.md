@@ -4,7 +4,7 @@ An AI assistant inside the player, based on [pi](https://github.com/earendil-wor
 
 ## How to use it
 
-1. Choose "Vestra Player AI…" in the right-click menu.
+1. Choose "Vestra Player AI…" in the right-click menu, or click the AI button at the right end of the bottom bar (left of the Plugin Store button).
 2. The first time, click "Go to Settings" (or "⚙ Settings" in the sidebar), and in "Options ▸ Plugins ▸ Vestra Player AI":
    - choose a provider: all the providers pi supports that use an API key (Anthropic, OpenAI, Google, OpenRouter, DeepSeek, Mistral, Groq, xAI, MiniMax, Moonshot and others, pay-as-you-go), or "Custom · OpenAI format" / "Custom · Anthropic format" (enter a Base URL; works with Ollama, LM Studio or other compatible services);
    - paste the API key and click "Save"; each provider's key is saved separately;
@@ -47,7 +47,7 @@ When the chat has a plugin project, a plugin card appears above the input box on
 - The opening line before the first tool call of a reply ("I'll start by reading…") is not shown: models usually write it in English, and the tool status line already says what is happening. The chat history keeps the original text.
 - AI replies are shown as Markdown (headings, lists, tables, code blocks and so on); code blocks have "Copy" in the top right corner, and links open in the browser. Web images in replies are not downloaded; only their alt text is shown. Very long chats show only the most recent messages; the full history is in the session folder.
 - The provider list has only pay-as-you-go APIs; subscription plans such as coding plans or Token Plans are not in the list; to use one, connect it with "Custom · OpenAI format" or "Custom · Anthropic format".
-- Needs Vestra Player 0.4.3 or later. The interface texts are written in English; the Simplified Chinese translation is in `locales/zh-Hans.po` (`vestra-plugin i18n extract` updates `locales/messages.pot`).
+- Needs Vestra Player 0.5.10 or later (the bottom-bar button). The interface texts are written in English; the Simplified Chinese translation is in `locales/zh-Hans.po` (`vestra-plugin i18n extract` updates `locales/messages.pot`).
 - The plugin SDK (`vendor/@vestra-player/sdk`, including the `vestra-plugin` command line), TypeScript and `@types/node` come with the plugin, at the same SDK version the player uses (`npm run vendor:sdk` updates them, `tests/vendor-sdk.mjs`). The reference the AI reads is the `llms.txt` and `llms-full.txt` shipped in the SDK package.
 - Evaluation: `tests/eval/` has 6 fixed tasks; `npm run eval` runs them with a real model (this costs money on your provider account; run it by hand only after changing the prompt or the tools), see the notes at the top of `tests/eval/run.mjs`.
 - Licenses of third-party components are in `licenses/` (shipped with the plugin package); the source of the pi logo is in `licenses/pi-logo/NOTICE.md`; the licenses of the SDK, TypeScript, `@types/node` and `undici-types` shipped with the plugin are in their own folders under `vendor/` (`LICENSE`, `LICENSE.txt`, `ThirdPartyNoticeText.txt`).
