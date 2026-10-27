@@ -1,6 +1,6 @@
 {
   "id": "vestra.store",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -21,5 +21,5 @@
     "store"
   ],
   "icon": "assets/icon.png",
-  "minPlayerVersion": "0.5.1"
+  "minPlayerVersion": "0.5.10"
 }

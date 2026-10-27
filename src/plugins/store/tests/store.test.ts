@@ -57,6 +57,39 @@ test("menu Plugin Store… counts updates from the same source only, announces t
   }
 });
 
+test("bottom-bar button: store icon at 200, the menu title as tooltip, a click opens the store", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [{ id: "zysilm.youtube", name: "YouTube", versions: [{ version: "0.3.0" }] }]);
+  const { host, store, stop } = await start({
+    net,
+    packages: [BUILTIN, info("zysilm.youtube", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } })],
+  });
+  try {
+    assert.deepEqual(host.command("open").declaration.button, { icon: "store", order: 200 });
+    assert.equal(host.barButtons.length, 1);
+    const [button] = host.barButtons;
+    assert.equal(button?.command, "open");
+    assert.equal(button?.icon, "store");
+    assert.equal(button?.image, false);
+    assert.equal(button?.order, 200);
+    assert.equal(button?.enabled, true, "the command has no disabled or busy state");
+    assert.equal(button?.checked, false);
+    assert.equal(button?.tooltip, "插件商城", "the menu title without its …");
+
+    await button?.click();
+    assert.equal(host.window("store").visible, true, "opens like the menu item");
+
+    // The update count re-registers the command; the button follows its title.
+    await store.refreshAll(true);
+    await until(host, () => path(host)?.[0] !== "Plugin Store…", "menu title");
+    assert.equal(host.barButtons.length, 1);
+    assert.equal(host.barButtons[0]?.tooltip, "插件商城（1 个可更新）");
+    assert.equal(host.barButtons[0]?.order, 200);
+  } finally {
+    await stop();
+  }
+});
+
 test("automatic check: once after activation, then daily; off means no network", async () => {
   // Real timers stay short, but nothing depends on how fast this machine is:
   // the first check is bounded from below only, "a day later" is an injected
