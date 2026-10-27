@@ -32,8 +32,13 @@ export function capturer(plugin: Scope, tasks: Tasks) {
   const { player } = plugin;
   let stopped = false;
 
-  /** `destination`: the file for an image or clip, the parent of a new `Capture-*` folder for a burst. */
-  async function start(spec: Spec, seen: PlayerState | null, destination: string, reuse?: Snapshot): Promise<Task> {
+  /**
+   * `destination`: the file for an image or clip, the parent of a new
+   * `Capture-*` folder for a burst; or a function of the captured frame's
+   * time, for a name that states the time of the frame in the file (while
+   * playing, the host freezes a later frame than the one `seen` reported).
+   */
+  async function start(spec: Spec, seen: PlayerState | null, destination: string | ((time: number) => string), reuse?: Snapshot): Promise<Task> {
     if (tasks.active().length >= 5) throw new Failure("queueFull");
     let snapshot = reuse;
     let directory: string | undefined;
@@ -53,11 +58,12 @@ export function capturer(plugin: Scope, tasks: Tasks) {
       if (!snapshot) throw new Failure("expired");
       if (stopped) throw new Failure("cancelled");
       const frozen: Spec = { ...spec, start: snapshot.time, current: false };
+      const path = typeof destination === "string" ? destination : destination(snapshot.time);
       let target: string;
       if (frozen.kind === "burst") {
         sampleTimes(snapshot.time, frozen.count, frozen.step, snapshot.duration);
-        target = directory = await mkdtemp(join(destination, "Capture-"));
-      } else target = await uniqueFile(destination, new Set(tasks.list.map((task) => resolve(task.destination))));
+        target = directory = await mkdtemp(join(path, "Capture-"));
+      } else target = await uniqueFile(path, new Set(tasks.list.map((task) => resolve(task.destination))));
       const task = tasks.add({ spec: frozen, sourceId: seen?.sourceId ?? 0, source: snapshot.source, snapshot, destination: target, directory });
       snapshot = directory = undefined;
       return task;

@@ -139,10 +139,15 @@ export default async function activate(plugin: Plugin) {
   };
 
   // ---------------------------------------------------------------- single frames
-  /** `screen`: the rendered frame (F04) — plugin effects and, when ticked, the subtitles. */
-  const frameSpec = (seen: { position: number | null }, current: boolean, screen: boolean, format: Format): Spec => ({
+  /**
+   * `screen`: the rendered frame (F04) — plugin effects and, when ticked, the
+   * subtitles. The frame at the position read when the command ran (mpv
+   * `screenshot`, PotPlayer), sent as the capture time; the host's current
+   * frame only when no position is known.
+   */
+  const frameSpec = (seen: { position: number | null }, screen: boolean, format: Format): Spec => ({
     kind: "image", start: seen.position ?? 0, count: 1, step: 1, processed: screen, subtitles: screen && settings.screenSubtitles,
-    track: "none", current, format, quality: settings.quality,
+    track: "none", current: seen.position === null, format, quality: settings.quality,
   });
   /** One single frame at a time (save, save as, copy); a second press is refused, not queued here. */
   async function single(action: () => Promise<void>) {
@@ -158,13 +163,17 @@ export default async function activate(plugin: Plugin) {
       ui.stillBusy = false;
     }
   }
-  /** Ctrl+E / Ctrl+Alt+E: the frame now, into the capture folder, no dialogs. */
+  /**
+   * Ctrl+E / Ctrl+Alt+E: the frame shown at the press, into the capture
+   * folder, no dialogs. The name states the time the host reports for the
+   * frame it froze (mpv `screenshot-template` `%P`), so name and picture agree.
+   */
   const saveFrame = (screen: boolean) =>
     single(async () => {
       const seen = await player.refresh();
       const folder = await targetFolder(seen.source);
       const format = settings.format;
-      await exporter.start(frameSpec(seen, true, screen, format), seen, join(folder, frameName(seen.source, seen.position ?? 0, extensionOf(format))));
+      await exporter.start(frameSpec(seen, screen, format), seen, (time) => join(folder, frameName(seen.source, time, extensionOf(format))));
       if (tasks.active().length > 1) shown(osd.show("Snapshot queued"));
     });
   /** The frame shown when the command ran, into a file the user picks; a typed extension picks the format once. */
@@ -177,7 +186,7 @@ export default async function activate(plugin: Plugin) {
       if (!chosen) return;
       const typed = formatOfName(chosen);
       const format = typed ?? settings.format;
-      await exporter.start(frameSpec(seen, false, screen, format), seen, typed ? chosen : `${chosen}${extensionOf(format)}`);
+      await exporter.start(frameSpec(seen, screen, format), seen, typed ? chosen : `${chosen}${extensionOf(format)}`);
     });
   /** Ctrl+C / Ctrl+Alt+C (F03): always PNG, original resolution. */
   const copyFrame = (screen: boolean) =>
@@ -238,12 +247,15 @@ export default async function activate(plugin: Plugin) {
     if (ui.burstBusy) return;
     ui.burstBusy = true; // exclusion before the first await
     try {
+      const from = current === true ? null : parseRange(start).start;
+      const seen = await player.refresh();
+      // "Current frame": the frame at the press, sent as the capture time; the host's current frame when no position is known.
+      const at = from ?? seen.position;
       const spec: Spec = {
-        kind: "burst", start: current ? 0 : parseRange(start).start, count: Number(count), step: Number(step),
-        processed: processed === true, subtitles: subtitles === true, track: "none", current: current === true,
+        kind: "burst", start: at ?? 0, count: Number(count), step: Number(step),
+        processed: processed === true, subtitles: subtitles === true, track: "none", current: at === null,
         format: settings.format, quality: settings.quality,
       };
-      const seen = await player.refresh();
       await exporter.start(spec, seen, await targetFolder(seen.source));
       ui.burstStatus = status("started", { count: spec.count });
     } catch (error) {

@@ -4,7 +4,7 @@ Saves and copies the current frame, captures bursts, exports video clips.
 
 ## Features
 
-- **Single frames**: Save Current Frame saves straight into the snapshot folder, named after the title and the playback time; Save As… lets you pick the place; Copy puts it on the clipboard.
+- **Single frames**: Save Current Frame saves straight into the snapshot folder, the frame shown at the key press, named after the title and the time of that frame; Save As… lets you pick the place; Copy puts it on the clipboard.
 - **Source frame and rendered frame**: the rendered frame includes video effects and, optionally, the subtitles.
 - **Formats**: PNG, JPEG (adjustable quality), BMP.
 - **Burst**: 2–20 frames at a fixed interval, saved into a folder of their own.

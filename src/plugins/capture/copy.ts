@@ -22,7 +22,9 @@ export function clipboard(plugin: Scope) {
     const file = join(directory, `clip-${++sequence}.png`);
     let snapshot: Snapshot | undefined;
     try {
-      snapshot = await plugin.media.capture({ ifCurrent: seen, processed, subtitles: processed && subtitles }).catch((error) => {
+      // The frame at the position read at the press (like Save), the host's current frame when none is known.
+      const at = seen.position === null ? {} : { at: seen.position };
+      snapshot = await plugin.media.capture({ ifCurrent: seen, processed, subtitles: processed && subtitles, ...at }).catch((error) => {
         throw captureError(error);
       });
       const job = await snapshot.export({ format: "png", destination: file });
