@@ -480,23 +480,14 @@ impl Processing {
                 if effects::needs_frames_in_memory(next.values().map(|(_, r)| r)) {
                     self.frames_in_memory(mpv, true);
                 }
-                let previous = self.deinterlace;
                 let wanted = effects::player_deinterlace(next.values().map(|(_, r)| r));
-                let mut applied = self.set_deinterlace(mpv, wanted);
-                if applied.is_ok() && before != after {
-                    applied = apply(mpv, &before, &after);
-                    if let Err(error) = &applied
-                        && let Err(restore) = self.set_deinterlace(mpv, previous)
-                    {
-                        applied = Err(RpcError::new(
-                            "backend-uncertain",
-                            format!(
-                                "{}; restoring deinterlace failed: {}",
-                                error.message, restore.message
-                            ),
-                        ));
+                let applied = self.deinterlace_then(mpv, wanted, || {
+                    if before == after {
+                        Ok(())
+                    } else {
+                        apply(mpv, &before, &after)
                     }
-                }
+                });
                 if let Err(error) = applied {
                     let keep = effects::needs_frames_in_memory(self.video.values().map(|(_, r)| r));
                     self.frames_in_memory(mpv, keep);
@@ -615,20 +606,24 @@ impl Processing {
             ("video", before_video, after_video),
             ("audio", before_audio, after_audio),
         ] {
-            let mut result = if stage == "audio" && (before != after || old_offset != next_offset) {
+            // The player's deinterlacer stays only while another owner's
+            // chain still asks for it. Switched before the graph, as in
+            // `replace`: a paused picture is redrawn by the graph change.
+            // Ownership is revoked whatever happens, so it is not put back.
+            let deinterlace = if stage == "video" {
+                let wanted = effects::player_deinterlace(self.video.values().map(|(_, r)| r));
+                self.set_deinterlace(mpv, wanted)
+            } else {
+                Ok(())
+            };
+            let result = if stage == "audio" && (before != after || old_offset != next_offset) {
                 apply_audio(mpv, &before, &after, old_offset, next_offset)
             } else if before != after {
                 apply(mpv, &before, &after)
             } else {
                 Ok(())
-            };
-            // The player's deinterlacer stays only while another owner's
-            // chain still asks for it.
-            if stage == "video" {
-                let wanted = effects::player_deinterlace(self.video.values().map(|(_, r)| r));
-                let deinterlace = self.set_deinterlace(mpv, wanted);
-                result = result.and(deinterlace);
             }
+            .and(deinterlace);
             if let Err(error) = result {
                 let reason = format!("owner {owner} cleanup: {}", error.message);
                 self.uncertain.insert(stage.into(), reason.clone());
@@ -670,6 +665,32 @@ impl Processing {
             .map_err(|e| RpcError::new("backend", format!("deinterlace={value}: {e}")))?;
         self.deinterlace = wanted;
         Ok(())
+    }
+    /// `set_deinterlace`, then the graph change `graph`: switched first so
+    /// the redraw of a paused picture that the graph change makes already
+    /// has the new deinterlacer. A graph change that fails puts the
+    /// deinterlacer back; if that fails too the stage is uncertain.
+    fn deinterlace_then(
+        &mut self,
+        mpv: &Mpv,
+        wanted: bool,
+        graph: impl FnOnce() -> Result<(), RpcError>,
+    ) -> Result<(), RpcError> {
+        let previous = self.deinterlace;
+        self.set_deinterlace(mpv, wanted)?;
+        let result = graph();
+        if let Err(error) = &result
+            && let Err(restore) = self.set_deinterlace(mpv, previous)
+        {
+            return Err(RpcError::new(
+                "backend-uncertain",
+                format!(
+                    "{}; restoring deinterlace failed: {}",
+                    error.message, restore.message
+                ),
+            ));
+        }
+        result
     }
     /// The owned video nodes are FFmpeg software filters: they need decoded
     /// frames in memory. With zero-copy hardware decoding (GPU rendering's
@@ -1517,6 +1538,71 @@ mod tests {
         assert!(!vf(&mpv).contains("gblur"), "{}", vf(&mpv));
     }
 
+    /// A graph change that fails after the deinterlacer was switched puts
+    /// the deinterlacer back (`deinterlace_then`, used by `replace`).
+    #[test]
+    fn a_failed_graph_change_restores_the_deinterlacer() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("auto-safe");
+        let mut processing = ready();
+        let seen = std::cell::Cell::new(String::new());
+        let error = processing
+            .deinterlace_then(&mpv, true, || {
+                // The graph change runs with the new deinterlacer.
+                seen.set(deinterlace(&mpv));
+                Err(RpcError::new("backend", "vf refused"))
+            })
+            .unwrap_err();
+        assert_eq!(seen.take(), "auto");
+        assert_eq!(error.code, "backend");
+        assert_eq!(deinterlace(&mpv), "no");
+        assert!(!processing.deinterlace);
+        // And the other way: on, then a failed change that would turn it off.
+        processing.deinterlace_then(&mpv, true, || Ok(())).unwrap();
+        assert_eq!(deinterlace(&mpv), "auto");
+        processing
+            .deinterlace_then(&mpv, false, || Err(RpcError::new("backend", "vf refused")))
+            .unwrap_err();
+        assert_eq!(deinterlace(&mpv), "auto");
+        assert!(processing.deinterlace);
+    }
+
+    /// A new file replays the chains: a chain with only the player's
+    /// deinterlacer needs no frames in memory, so decoding stays zero-copy;
+    /// the global `deinterlace` option is left as it is.
+    #[test]
+    fn replaying_an_auto_only_chain_keeps_zero_copy_decoding() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("auto-safe");
+        let mut processing = ready();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, json!([auto()])))
+            .unwrap();
+        processing.note_source(2, Phase::Loading);
+        processing.note_source(2, Phase::Ready);
+        processing.replay_ready(&mpv, 2, ticket(2)).unwrap();
+        assert_eq!(
+            processing.state()["source"]["stages"]["video"]["status"],
+            "applied"
+        );
+        assert_eq!(hwdec(&mpv), "auto-safe");
+        assert_eq!(deinterlace(&mpv), "auto");
+        assert!(!vf(&mpv).contains("bwdif"), "{}", vf(&mpv));
+        // With another node the replay switches to copy-back first.
+        let both = json!([auto(), {"kind":"gblur","sigma":4,"steps":3}]);
+        let change = json!({"stage":"video","resourceId":"blur","revision":2,"expectedGeneration":2,"nodes":both});
+        processing
+            .replace(&mpv, OWNER, 2, Source::Decoded, &change)
+            .unwrap();
+        // As if the earlier file had ended with zero-copy decoding.
+        processing.frames_in_memory(&mpv, false);
+        assert_eq!(hwdec(&mpv), "auto-safe");
+        processing.note_source(3, Phase::Loading);
+        processing.note_source(3, Phase::Ready);
+        processing.replay_ready(&mpv, 3, ticket(3)).unwrap();
+        assert_eq!(hwdec(&mpv), "auto-copy-safe");
+    }
+
     #[test]
     fn generated_streams_refuse_chains_but_accept_removal() {
         let _one = one_mpv_at_a_time();
@@ -1731,6 +1817,7 @@ mod tests {
                 }
                 std::thread::sleep(Duration::from_millis(5));
             }
+            pixels.clone()
         };
         let active = || mpv.get_property::<bool>("deinterlace-active").unwrap();
         let fps = || {
@@ -1760,6 +1847,16 @@ mod tests {
         assert!((fps() - 50.).abs() < 3., "one frame per field: {}", fps());
         assert!(!vf(&mpv).contains("bwdif"), "{}", vf(&mpv));
         assert!(current().ends_with("-copy"), "hwdec-current={}", current());
+        // Paused, stopping the last owner shows the combed frame at once:
+        // mpv's deinterlacer is off before the graph change redraws.
+        mpv.set_property("pause", true).unwrap();
+        let deinterlaced = pump(1);
+        assert_eq!(deinterlaced, pump(1), "paused: the picture stays");
+        processing.disable(&mpv, OWNER).unwrap();
+        assert_eq!(deinterlace(&mpv), "no");
+        let combed = pump(1);
+        assert_ne!(deinterlaced, combed, "the redraw is not deinterlaced");
+        mpv.set_property("pause", false).unwrap();
         mpv.command(&["loadfile", progressive.to_str().unwrap()])
             .unwrap();
         pump(3);

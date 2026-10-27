@@ -26,3 +26,10 @@ Since 2026-10-26 the GitHub Actions budget has been used up, so CI does not run.
 - [ ] Vestra Player AI in the **installed** `.app` (a path with spaces and no `node_modules` above it): typecheck, check and pack of a generated plugin succeed, and the plugin card shows only after the agent's turn.
 - [ ] Plugin Store offline (Wi-Fi off): the store opens; Installed and its details, uninstall, and install from a `.vxp` work; Available/Updates show a calm offline state.
 - [ ] Playlist: saving a list with relative entries writes `/`.
+
+### Host 0.5.4 / SDK 1.5.24: deinterlace `when: "auto"` (DEINT-AUTO-1, `doc/process/rounds/2026-10-deinterlace-auto.md`)
+Default settings, GPU rendering; once `vestra.video` 1.1.6 uses the node (until then, with a test chain of only `{ kind: "deinterlace", when: "auto", output: "field" }`). Interlaced clip: the `ffmpeg` command in the round record.
+- [ ] Progressive file: `stats().video.hwdec` (`hwdec-current`) is `videotoolbox`, not `videotoolbox-copy`; `deinterlace-active` false.
+- [ ] Interlaced clip: no combing on motion, double rate (50 fps for 25i), `hwdec-current` still `videotoolbox`; the log has `HW-downloading from videotoolbox` and no `no deinterlace filter available` / `creating deinterlacer failed`.
+- [ ] Mixed source (progressive then interlaced in one file). Encode the halves separately and join them without re-encoding, so only the second half is flagged: `ffmpeg -f lavfi -i testsrc2=size=1920x1080:rate=25 -t 5 -c:v libx264 -pix_fmt yuv420p p.ts`, `ffmpeg -f lavfi -i "testsrc2=size=1920x1080:rate=50,interlace=scan=tff" -t 5 -c:v libx264 -pix_fmt yuv420p -flags +ildct+ilme -x264-params tff=1 i.ts`, then `ffmpeg -i "concat:p.ts|i.ts" -c copy mixed.ts`. Expected: zero-copy (no download) for the progressive part; from the first interlaced frame on every frame is downloaded (mpv keeps its deinterlacer once inserted), with no stall, error or `hwdec` change at the switch; the next file starts zero-copy again.
+- [ ] Paused on an interlaced frame, turning Auto off (or stopping the video plugin) shows the combed frame at once, without resuming.
