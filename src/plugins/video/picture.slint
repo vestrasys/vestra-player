@@ -755,13 +755,19 @@ export component PictureWindow inherits Window {
                                 selected(i) => { root.choose("deinterlace", i); }
                             }
                         }
-                        VerticalLayout {
-                            alignment: center;
-                            Choice {
-                                width: 104px;
-                                model: [@tr("By Frame"), @tr("By Field (Double Rate)")];
-                                current-index <=> root.output-index;
-                                selected(i) => { root.choose("output", i); }
+                        // Auto (index 0) is the player's deinterlacer, always at field rate: Output applies to Always.
+                        ToolTipArea {
+                            width: 104px;
+                            text: root.deinterlace-index == 0 ? @tr("Auto outputs by field (double rate); this setting applies to Always") : "";
+                            VerticalLayout {
+                                alignment: center;
+                                Choice {
+                                    width: 104px;
+                                    enabled: root.deinterlace-index != 0;
+                                    model: [@tr("By Frame"), @tr("By Field (Double Rate)")];
+                                    current-index <=> root.output-index;
+                                    selected(i) => { root.choose("output", i); }
+                                }
                             }
                         }
                     }

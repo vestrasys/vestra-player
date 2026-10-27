@@ -116,6 +116,8 @@ const ROTATION_TITLES = [
 ] as const satisfies readonly { degrees: Rotation; title: string }[];
 /** E16, E17 and 运动补偿 are GPU render options; software rendering (and Windows for now) refuses them. */
 const SOFTWARE = "Needs GPU rendering (currently software rendering)";
+/** Deinterlace Auto is the player's deinterlacer, always at field rate: Output is greyed (menu reason; the window has the same tip). */
+const AUTO_OUTPUT = "Auto outputs by field (double rate); this setting applies to Always";
 /** E18: the source rate is read this long after the chain without frameBlend is in place, this many times at most. */
 const MEASURE_DELAY_MS = 400;
 const MEASURE_TRIES = 8;
@@ -237,7 +239,8 @@ export default async function activate(plugin: Plugin) {
   const notHdr = () => transfer !== null && !isHdr(transfer);
 
   // E18: the source rate is read with no frameBlend in the chain (afterwards stats() reports the
-  // blended rate), once per source and deinterlace setting (field output doubles the rate).
+  // blended rate), once per source and deinterlace setting (field output doubles the rate;
+  // Output is part of the key under Auto too, where it does not apply: at worst one more read).
   const blendKey = () => `${player.state.sourceId}:${look.deinterlace.mode}:${look.deinterlace.output}`;
   let measured: { key: string; fps: number | null } | null = null;
   let abandoned: string | null = null;
@@ -674,7 +677,9 @@ export default async function activate(plugin: Plugin) {
   // E10 field output and E18 倍帧 raise the frame rate on the CPU: when more than 5 % of the
   // frames in 5 seconds are dropped, each says so once per source.
   const heavy = [
-    { id: "field", active: () => enabled && look.deinterlace.mode !== "off" && look.deinterlace.output === "field" },
+    // Only where Output applies (Always): under Auto "try frame output" is not a choice, and a
+    // progressive file is not deinterlaced at all.
+    { id: "field", active: () => enabled && look.deinterlace.mode === "on" && look.deinterlace.output === "field" },
     { id: "blend", active: () => sentBlend !== null },
   ].map((item) => ({ ...item, warned: null as number | null }));
   let counted: (FrameCount & { source: number; watching: string }) | null = null;
@@ -852,7 +857,8 @@ export default async function activate(plugin: Plugin) {
     run: switchPeak,
   });
   commands.add({ id: "video.hdr.settings", path: ["@video", "Pixel Shaders", "HDR Settings…"], ...pixel, group: "video-hdr", ...gpu, run: () => showWindow(3) });
-  // 403 反交错 (E10, BWDIF only).
+  // 403 反交错 (E10): Auto is the player's per-frame deinterlacer at field rate, Always is BWDIF
+  // with the Output setting (greyed under Auto).
   commands.add({
     id: "video.deinterlace.cycle",
     path: ["@video", "Deinterlace", "Cycle"],
@@ -881,6 +887,8 @@ export default async function activate(plugin: Plugin) {
       order: 403,
       group: "video-deinterlace-output",
       radio: true,
+      enabled: () => look.deinterlace.mode !== "auto",
+      reason: () => (look.deinterlace.mode === "auto" ? AUTO_OUTPUT : null),
       checked: () => look.deinterlace.output === id,
       run: () => setOutput(id),
     });
