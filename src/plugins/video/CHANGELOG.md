@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.7
+
+- Software rendering (Windows, Linux, fallback) no longer writes `HostError: render options need GPU rendering` to the log at every start. The render options (HDR tone mapping, pixel shaders, motion interpolation) still report `unsupported` there, but that is the player's state, not a failure: their menu items stay disabled with the reason "Needs GPU rendering (currently software rendering)", as before, and other render failures (another plugin owns the options, a shader that does not compile) are logged as before.
+- Under software rendering the plugin no longer sends the options again after the first refusal (on an edit). The saved options are kept unchanged and apply when the same settings run with GPU rendering (macOS).
+
 ## 1.1.6
 
 - Deinterlace **Auto** (the default) now uses the player's own deinterlacer (`{ kind: "deinterlace", when: "auto", output: "field" }`, player 0.5.4) instead of a `bwdif` filter in the chain. The player decides per frame from the decoder's interlaced flag, so progressive files (almost all modern video) get no deinterlacer and no filter: with the default settings decoding stays zero-copy where the renderer allows it, instead of copy-back on every file. Interlaced files and the interlaced parts of mixed files are still deinterlaced, with the decoder's hardware deinterlacer where frames stay on the GPU.
