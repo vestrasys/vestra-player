@@ -707,3 +707,11 @@ Open points for the coordinator or the user:
 - **Which GPU the player should use on hybrid laptops.** Today the process lands on the iGPU that drives the screen (the 780M), and the integration keeps that. The 780M carries 4K60 at ~55% 3D plus composition. Exporting the dGPU hints from `vestra-host.exe` would move both GL and D3D to the 4070 (lower GPU time, higher power). This is a product choice and not needed for 0.6.0.
 - **Coverage.** An Intel GPU and a current AMD driver are untested. The LUID check plus the software fallback makes an unknown driver fail safely, except for a driver that crashes on a *matched* pair, which nothing here suggests.
 - **Removing the probe.** `src/host/unsafe/gpu-probe` is not in `check-unsafe-policy.mjs`'s `UNSAFE_CRATES`, because rule 1 checks only workspace members. Once committed, rule 3 (SAFETY comments) covers its files as tracked sources. Removing it after integration avoids an unregistered unsafe directory.
+
+## E. Parked (user ruling, 2026-10-27)
+
+Windows GPU rendering is parked: nothing of it goes to main, not even as an option (branch `gpu-render` kept as is; open reviewer finding: shared NT handles not closed after the GL import). Reasons: on the AMD 780M it never held 60 fps (GPU queueing of mpv's ~9 ms 4K render and the UI draw on the same engine), it needed ~150 unsafe blocks for the D3D11→OpenGL bridge, and its main promise (zero-copy) is defeated by any CPU `vf` filter anyway. The software path holds 60 fps on this machine.
+
+Why the bridge exists: on Windows hardware decoding is D3D-only and mpv's most mature renderer is D3D11, while Slint draws with OpenGL; the two meet only through vendor extensions (WGL_NV_DX_interop, GL_EXT_memory_object_win32). Every cross-platform toolkit that draws with OpenGL on Windows has this (Flutter avoids it with ANGLE on D3D11); D3D-only players (PotPlayer, MPC-HC) don't. macOS has an OS-provided zero-copy path (VideoToolbox → IOSurface → CGL). A Vulkan-only path was researched (`2026-10-vulkan-windows.md`) and rejected for now.
+
+If revisited: first measure the parked D3D11 path on the RTX 4070; the least risky integration would keep mpv on its D3D11 render API and switch Slint on Windows to its wgpu renderer (D3D12 backend), sharing a D3D texture — a bridge between Microsoft APIs instead of D3D↔OpenGL.
