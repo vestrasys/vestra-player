@@ -500,6 +500,33 @@ test("0.2.3 a drag keeps the mode decided at the press: moves and the release se
   await stop();
 });
 
+test("0.2.3 a drag that returns to the press target: the release equals the last sent target and is dropped", async () => {
+  const { host, stop } = await start(withMedia());
+  const bar = host.mounted();
+  bar.emit("dragging", true);
+  bar.emit("seek-changed", 0.25);
+  await host.settle(80);
+  bar.emit("seek-changed", 0.4);
+  await host.settle(80);
+  bar.emit("seek-changed", 0.25); // back to where the press was: a new target after 40, so it is sent
+  await host.settle(80);
+  assert.deepEqual(wireSeeks(host), [
+    { seconds: 25, keyframes: true },
+    { seconds: 40, keyframes: true },
+    { seconds: 25, keyframes: true },
+  ]);
+  bar.emit("seek-changed", 0.25); // the release sample equals the last *sent* target
+  bar.emit("dragging", false);
+  await host.settle(80);
+  assert.equal(wireSeeks(host).length, 3, "the release is not sent again");
+  assert.equal(host.source.position, 25);
+  assert.equal(lastOsd(host), "跳转: 00:25 / 01:40");
+  host.setSource({ position: 20 });
+  await host.settle();
+  assert.equal(bar.props["elapsed-label"], "00:20", "no draft left behind");
+  await stop();
+});
+
 test("0.2.3 keyframes off: the bar seeks exactly as before, without the flag on the wire", async () => {
   const { host, stop } = await startWith({ seekKeyframes: false });
   const bar = host.mounted();

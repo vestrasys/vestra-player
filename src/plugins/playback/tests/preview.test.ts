@@ -817,6 +817,55 @@ test("0.2.3 while the pointer is on the bar a changed sheet goes out at most eve
   }
 });
 
+test("0.2.3 a sheet without new cells keeps its image reference across a hand-over: only the changed sheet is decoded again", async () => {
+  const media = mediaFile();
+  const host = new TestHost();
+  const time = fakeClock(host);
+  try {
+    playing(host, media.file, 400); // 200 cells on two sheets, five per run
+    const releases: (() => void)[] = [];
+    fakeFfmpeg(host, () => new Promise<void>((resolve) => releases.push(resolve)));
+    const { stop } = await start(host);
+    const bar = host.mounted();
+    await generating(host, time);
+    await until(() => releases.length === WORKERS);
+    const ref = (sheet: "a" | "b") => JSON.stringify(bar.props[`preview-sheet-${sheet}`] ?? null);
+    // Runs land in queue order; after each the slot is free for the write (PUBLISH_MS has passed) and the next run starts.
+    const land = async () => {
+      releases.shift()!();
+      await until(async () => {
+        await time.advance(0);
+        return releases.length === WORKERS;
+      });
+    };
+    // Coarse to fine, five per run: runs 0–3 touch both sheets, run 4 only sheet B
+    // (cells 120–184), run 5 only sheet A (cells 4–36).
+    for (let run = 0; run < 4; run++) {
+      await time.advance(PUBLISH_MS);
+      await land();
+    }
+    bar.emit("pointing", true);
+    await host.settle();
+    const [a0, b0] = [ref("a"), ref("b")];
+    assert.notEqual(a0, "null");
+    assert.notEqual(b0, "null");
+    await time.advance(SHOW_MS); // not held back by the throttle
+    await land(); // run 4: sheet B only
+    assert.equal(ref("a"), a0, "sheet A unchanged: the same reference, nothing to decode again");
+    assert.notEqual(ref("b"), b0, "sheet B changed: a new reference");
+    const b1 = ref("b");
+    await time.advance(SHOW_MS);
+    await land(); // run 5: sheet A only
+    assert.notEqual(ref("a"), a0);
+    assert.equal(ref("b"), b1, "sheet B unchanged this time");
+    for (const release of releases.splice(0)) release();
+    await stop();
+  } finally {
+    time.restore();
+    media.done();
+  }
+});
+
 test("I07 a new source ends the old one's work at once; its own sprite starts from its first frame", async () => {
   const media = mediaFile();
   const host = new TestHost();
