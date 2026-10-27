@@ -41,15 +41,17 @@ pub type RunnerId = u32;
 /// envelope's `"g":<digits>,`.
 pub const LINE_LIMIT: usize = MAX_MESSAGE_BYTES + 64;
 /// Lines one member may have queued for the runner: an own process's queue
-/// (`plugins.rs` `OUTBOUND_CAPACITY`); past it that member alone is stopped.
+/// (`plugins.rs` `OUTBOUND_CAPACITY`). It fills only while the runner reads
+/// no input, so past it the host restarts the runner with every member
+/// (`Host::transport_failed`), this one included.
 const MEMBER_QUEUE: usize = 1024;
-/// The runner's one queue; a member reaching [`MEMBER_QUEUE`] is stopped
-/// long before 16 of them fill it.
+/// The runner's one queue; a member reaching [`MEMBER_QUEUE`] restarts the
+/// runner long before 16 of them fill it.
 const QUEUE: usize = 16 * MEMBER_QUEUE;
 /// V8's old-space cap for the runner: a leaking member ends the runner (and
 /// is restarted with the others) at 1 GiB instead of exhausting the machine.
 pub const MAX_OLD_SPACE: &str = "--max-old-space-size=1024";
-/// How long a stopped member's cleanup may take before the host goes on:
+/// How long a stopped member's cleanup may take before it counts as leaked:
 /// an own process's stop window (`plugins.rs` `Drop for Plugin`).
 const STOP_WAIT: Duration = Duration::from_millis(300);
 /// How long a stopped member's cleanup may run in the runner before it
@@ -216,9 +218,12 @@ impl Member {
     /// cleanup longer than an own process's window ([`STOP_WAIT`]) counts as
     /// a leak, and the wait goes on until the runner reports the member gone
     /// (its own deadline, [`MEMBER_GONE`]): the host reports the plugin
-    /// reaped only then, so a reload or an install never starts the new
-    /// instance while the old one's cleanup still writes the same data
-    /// directory. An own process is killed instead; a member cannot be.
+    /// reaped only then, so a reload or an install does not start the new
+    /// instance while a cleanup that finishes within the runner's 5 s still
+    /// writes the same data directory. A cleanup the runner abandons at 5 s,
+    /// or a stop not reported within [`MEMBER_GONE`] (the runner's input
+    /// backed up, for one), can still overlap the new instance; both are
+    /// logged. An own process is killed instead; a member cannot be.
     pub fn stop(&self) {
         let (done, wait) = mpsc::channel();
         {
