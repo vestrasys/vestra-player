@@ -5,7 +5,7 @@
 
 use std::sync::{
     Arc, Mutex, PoisonError,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering},
 };
 use std::time::{Duration, Instant};
 
@@ -332,6 +332,101 @@ pub struct FrameSlot {
     waker: Mutex<Option<Waker>>,
     produced: AtomicU64,
     shown: AtomicU64,
+    /// The software renderer's stages, for the frame log.
+    pub stages: Stages,
+}
+
+/// What the software renderer did since the frame log's last line (render
+/// thread and control worker write, the frame log reads): mpv render calls,
+/// those for a new target only (no new frame), calls at another size than
+/// the last (a new buffer and texture each), buffers copied because the UI
+/// still held them, the time of each call and the work in it (the call
+/// less mpv's wait for the frame's display time), mpv's frame updates, and
+/// mpv's own counters of dropped and late frames.
+#[derive(Debug, Default)]
+pub struct Stages {
+    calls: AtomicU64,
+    resize_only: AtomicU64,
+    resized: AtomicU64,
+    copied: AtomicU64,
+    updates: AtomicU64,
+    took_total: AtomicU64,
+    took_max: AtomicU64,
+    work_total: AtomicU64,
+    work_max: AtomicU64,
+    /// mpv `frame-drop-count` and `vo-delayed-frame-count` (totals plus one; 0 while unread).
+    dropped: AtomicI64,
+    delayed: AtomicI64,
+    /// The totals at the last line.
+    dropped_seen: AtomicI64,
+    delayed_seen: AtomicI64,
+}
+impl Stages {
+    /// mpv said a new frame is ready.
+    pub fn update(&self) {
+        self.updates.fetch_add(1, Ordering::Relaxed);
+    }
+    /// One mpv render call: `fresh` for a new frame (else a new target
+    /// only), at another size than the previous call, its buffer copied,
+    /// how long it took and how much of that was work (not mpv's wait).
+    pub fn call(&self, fresh: bool, resized: bool, copied: bool, took: Duration, work: Duration) {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        self.resize_only
+            .fetch_add(u64::from(!fresh), Ordering::Relaxed);
+        self.resized
+            .fetch_add(u64::from(resized), Ordering::Relaxed);
+        self.copied.fetch_add(u64::from(copied), Ordering::Relaxed);
+        let nanos = |d: Duration| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX);
+        self.took_total.fetch_add(nanos(took), Ordering::Relaxed);
+        self.took_max.fetch_max(nanos(took), Ordering::Relaxed);
+        self.work_total.fetch_add(nanos(work), Ordering::Relaxed);
+        self.work_max.fetch_max(nanos(work), Ordering::Relaxed);
+    }
+    /// The control worker: mpv's dropped and delayed frame totals.
+    pub fn mpv_counts(&self, dropped: Option<i64>, delayed: Option<i64>) {
+        self.dropped
+            .store(dropped.map_or(0, |n| n.max(0) + 1), Ordering::Relaxed);
+        self.delayed
+            .store(delayed.map_or(0, |n| n.max(0) + 1), Ordering::Relaxed);
+    }
+    /// ` mpv: calls C resize-only T resized Z copied K updates U took max A mean B ms
+    /// work max A mean B ms dropped D delayed L` since the last call (`-` for
+    /// a counter mpv did not report).
+    pub fn text(&self) -> String {
+        let calls = self.calls.swap(0, Ordering::Relaxed);
+        let ms = |nanos: u64| nanos as f64 / 1e6;
+        let timing = |total: &AtomicU64, max: &AtomicU64| {
+            let (total, max) = (
+                total.swap(0, Ordering::Relaxed),
+                max.swap(0, Ordering::Relaxed),
+            );
+            if calls == 0 {
+                "-".to_owned()
+            } else {
+                format!("max {:.1} mean {:.1} ms", ms(max), ms(total) / calls as f64)
+            }
+        };
+        let took = timing(&self.took_total, &self.took_max);
+        let work = timing(&self.work_total, &self.work_max);
+        let delta = |now: &AtomicI64, seen: &AtomicI64| {
+            let now = now.load(Ordering::Relaxed);
+            let before = seen.swap(now, Ordering::Relaxed);
+            if now == 0 {
+                "-".to_owned()
+            } else {
+                (now - before.max(1)).max(0).to_string()
+            }
+        };
+        format!(
+            " mpv: calls {calls} resize-only {} resized {} copied {} updates {} took {took} work {work} dropped {} delayed {}",
+            self.resize_only.swap(0, Ordering::Relaxed),
+            self.resized.swap(0, Ordering::Relaxed),
+            self.copied.swap(0, Ordering::Relaxed),
+            self.updates.swap(0, Ordering::Relaxed),
+            delta(&self.dropped, &self.dropped_seen),
+            delta(&self.delayed, &self.delayed_seen),
+        )
+    }
 }
 impl FrameSlot {
     pub fn new() -> Arc<Self> {
@@ -622,6 +717,37 @@ impl FrameLog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_stages_count_per_line() {
+        let stages = Stages::default();
+        assert_eq!(
+            stages.text(),
+            " mpv: calls 0 resize-only 0 resized 0 copied 0 updates 0 took - work - dropped - delayed -"
+        );
+        stages.mpv_counts(Some(5), Some(1));
+        let _ = stages.text();
+        stages.update();
+        stages.call(
+            true,
+            false,
+            false,
+            Duration::from_millis(4),
+            Duration::from_millis(3),
+        );
+        stages.call(
+            false,
+            true,
+            true,
+            Duration::from_millis(8),
+            Duration::from_millis(5),
+        );
+        stages.mpv_counts(Some(9), Some(1));
+        assert_eq!(
+            stages.text(),
+            " mpv: calls 2 resize-only 1 resized 1 copied 1 updates 1 took max 8.0 mean 6.0 ms work max 5.0 mean 4.0 ms dropped 4 delayed 0"
+        );
+    }
 
     #[test]
     fn the_buffer_ring_reuses_released_buffers_in_place() {

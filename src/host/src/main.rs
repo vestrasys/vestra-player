@@ -1182,7 +1182,9 @@ impl Host {
             let render = self.backend.render.clone();
             let drawn = move |draw| match draw {
                 vestra_video_texture::Draw::Begin => {
-                    render.presentation.draw_begin(Instant::now());
+                    let now = Instant::now();
+                    frame_pacing::draw_began();
+                    render.presentation.draw_begin(now);
                 }
                 vestra_video_texture::Draw::End => {
                     render.presentation.draw_end(Instant::now(), false);
@@ -1199,7 +1201,9 @@ impl Host {
         let render = self.backend.render.clone();
         let notifier = move |state, _: &slint::GraphicsAPI| match state {
             slint::RenderingState::BeforeRendering => {
-                render.presentation.draw_begin(Instant::now());
+                let now = Instant::now();
+                frame_pacing::draw_began();
+                render.presentation.draw_begin(now);
             }
             slint::RenderingState::AfterRendering => {
                 render.presentation.draw_end(Instant::now(), false);
@@ -1611,7 +1615,11 @@ impl Host {
             };
             let refresh = || platform::window_refresh(shell.window());
             if let Some(line) = log.line(counts, presentation, refresh, size, Instant::now()) {
-                diag!("{line}");
+                diag!(
+                    "{line}{}{}",
+                    self.backend.frame.stages.text(),
+                    frame_pacing::log_text()
+                );
             }
         }
         self.apply_on_top();
@@ -5304,7 +5312,7 @@ fn main() -> Result<()> {
                     presented,
                 };
                 if let Some(line) = log.line(counts, presentation, || None, None, Instant::now()) {
-                    diag!("{line}");
+                    diag!("{line}{}", host.backend.frame.stages.text());
                 }
             }
             if let Some(evidence) = evidence.as_mut() {
