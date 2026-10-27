@@ -936,6 +936,7 @@ impl CoreActions {
                 crate::core_actions::key_seek_notice(forward, step, position, facts.duration);
             return Ok(Some(json!({ "osd": text })));
         };
+        context.sources.seek_elsewhere();
         key_command(context.mpv, &crate::core_actions::key_seek_command(amount))?;
         self.key_seek = Some(KeyFlight {
             generation,
@@ -1165,10 +1166,13 @@ impl CoreActions {
             StepPlan::AtStart => {
                 return Ok(Some(json!({ "osd": first_frame() })));
             }
-            StepPlan::Command(command) => context
-                .mpv
-                .command(&command)
-                .map_err(|e| RpcError::new("backend", e.to_string()))?,
+            StepPlan::Command(command) => {
+                context.sources.seek_elsewhere();
+                context
+                    .mpv
+                    .command(&command)
+                    .map_err(|e| RpcError::new("backend", e.to_string()))?
+            }
             StepPlan::FromEnd => {
                 let fps = ["estimated-vf-fps", "container-fps"]
                     .iter()

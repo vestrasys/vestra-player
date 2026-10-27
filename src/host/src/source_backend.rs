@@ -102,6 +102,8 @@ pub struct Sources {
     audio_owner: Option<u64>,
     audio_active: Option<String>,
     audio_checked: Option<std::time::Instant>,
+    /// The exact seek mpv is still running (`SeekFlight`).
+    seek_flight: SeekFlight,
     #[cfg(feature = "producer-audio")]
     producers: crate::producer::Producers,
     #[cfg(feature = "producer-audio")]
@@ -122,6 +124,31 @@ pub struct Sources {
     input: Option<InputBinding>,
     #[cfg(feature = "producer-audio")]
     input_epoch: u64,
+}
+/// The last `Control::Seek` sent to mpv while it is still running, so that a
+/// repeat of the same target is not sent again (seekbar-speed round).
+///
+/// The seek bar sends the same target on press and on release, so a click is
+/// two identical seeks about 100 ms apart. mpv starts the second one from the
+/// keyframe again: after the first one's frame, or after 0.3 s when the first
+/// is still decoding (`execute_queued_seek`), which adds 0.3 to 0.45 s on 4K
+/// clips with long GOPs and doubles the decode on short ones. Skipping the
+/// repeat lands on the same frame sooner. A repeat after the first seek
+/// finished (its `PlaybackRestart`) is sent as before.
+#[derive(Default)]
+struct SeekFlight(Option<(i64, u64)>);
+impl SeekFlight {
+    /// True when `seconds` repeats the seek still running on this entry.
+    fn repeats(&self, entry: Option<i64>, seconds: f64) -> bool {
+        entry.is_some_and(|entry| self.0 == Some((entry, seconds.to_bits())))
+    }
+    fn sent(&mut self, entry: Option<i64>, seconds: f64) {
+        self.0 = entry.map(|entry| (entry, seconds.to_bits()));
+    }
+    /// The seek finished, or anything else moved or replaced the source.
+    fn clear(&mut self) {
+        self.0 = None;
+    }
 }
 struct Resolution {
     requester: u64,
@@ -730,7 +757,18 @@ impl Sources {
         result["snapshotProfile"] = json!({"timeDomain":"mpv-media","fileOriginValidation":"deferred-worker-origin-match-required"});
         result
     }
+    /// The host sent mpv a seek of its own (a keyframe step seek, a frame or
+    /// keyframe step): a later `Control::Seek` is always sent.
+    pub fn seek_elsewhere(&mut self) {
+        self.seek_flight.clear();
+    }
     pub fn event(&mut self, event: &MpvEvent) -> bool {
+        if matches!(
+            event,
+            MpvEvent::PlaybackRestart | MpvEvent::StartFile { .. } | MpvEvent::EndFile { .. }
+        ) {
+            self.seek_flight.clear();
+        }
         match event {
             MpvEvent::StartFile { playlist_entry_id } => {
                 // loadfile returns its actual native entry id before its events are drained.
@@ -1265,6 +1303,9 @@ impl Sources {
             self.input = None;
             self.cancel_provider_control("source superseded the provider control");
         }
+        if !matches!(intent, SourceIntent::Control { .. }) {
+            self.seek_flight.clear();
+        }
         if let Some((resolver, resolver_id)) = resolver {
             self.resolution_next += 1;
             let request_id = self.resolution_next;
@@ -1461,7 +1502,20 @@ impl Sources {
                         ));
                     }),
                     Control::Seek { seconds } => {
-                        mpv.command(&["seek", &seconds.to_string(), "absolute+exact"])
+                        let entry = self.active.map(|(entry, _)| entry);
+                        if self.seek_flight.repeats(entry, *seconds)
+                            && mpv.get_property::<bool>("seeking").unwrap_or(false)
+                        {
+                            Ok(())
+                        } else {
+                            let sent =
+                                mpv.command(&["seek", &seconds.to_string(), "absolute+exact"]);
+                            match sent {
+                                Ok(()) => self.seek_flight.sent(entry, *seconds),
+                                Err(_) => self.seek_flight.clear(),
+                            }
+                            sent
+                        }
                     }
                     Control::Rate { rate } => mpv.set_property("speed", *rate),
                 }
@@ -1660,6 +1714,145 @@ mod input_adapter_tests {
         input.delivery.ack(1, &release, 1).unwrap();
         assert!(input.delivery.pending().is_none());
         assert!(input.delivery.notice().pressed.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod seek_flight_tests {
+    use super::*;
+    #[test]
+    fn only_the_same_target_on_the_same_entry_repeats() {
+        let mut flight = SeekFlight::default();
+        assert!(!flight.repeats(Some(1), 12.5), "nothing in flight");
+        flight.sent(Some(1), 12.5);
+        assert!(flight.repeats(Some(1), 12.5), "press then release");
+        assert!(!flight.repeats(Some(1), 12.500001), "a drag step");
+        assert!(!flight.repeats(Some(2), 12.5), "another file");
+        assert!(!flight.repeats(None, 12.5), "no file");
+        flight.sent(Some(1), 13.0);
+        assert!(!flight.repeats(Some(1), 12.5), "the newest seek counts");
+        assert!(flight.repeats(Some(1), 13.0));
+        flight.clear();
+        assert!(!flight.repeats(Some(1), 13.0), "finished: sent again");
+        flight.sent(None, 13.0);
+        assert!(!flight.repeats(None, 13.0));
+    }
+    #[test]
+    fn a_restart_a_new_file_or_a_host_seek_ends_the_flight() {
+        for event in [
+            MpvEvent::PlaybackRestart,
+            MpvEvent::StartFile {
+                playlist_entry_id: 1,
+            },
+            MpvEvent::EndFile {
+                reason: EndFileReason::Stop,
+                error: None,
+                playlist_entry_id: 1,
+                playlist_insert_id: 0,
+                playlist_insert_num_entries: 0,
+            },
+        ] {
+            let mut sources = Sources::default();
+            sources.seek_flight.sent(Some(1), 5.0);
+            sources.event(&event);
+            assert!(!sources.seek_flight.repeats(Some(1), 5.0), "{event:?}");
+        }
+        let mut sources = Sources::default();
+        sources.seek_flight.sent(Some(1), 5.0);
+        sources.event(&MpvEvent::Seek);
+        assert!(
+            sources.seek_flight.repeats(Some(1), 5.0),
+            "the seek's own start keeps it"
+        );
+        sources.seek_elsewhere();
+        assert!(!sources.seek_flight.repeats(Some(1), 5.0));
+    }
+    /// A seek-bar click (the same target on press and on release) makes mpv
+    /// seek once; the same target again after it landed seeks again. Needs
+    /// `ffmpeg` with libx264:
+    /// `cargo test --locked -- --ignored a_click_on_the_seek_bar_seeks_once`.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn a_click_on_the_seek_bar_seeks_once() {
+        use std::time::{Duration, Instant};
+        let dir = std::env::temp_dir().join(format!("vestra-seekonce-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("gop10.mp4");
+        // A keyframe every 10 s: an exact seek decodes for a while.
+        let made = std::process::Command::new("ffmpeg")
+            .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+            .arg("testsrc2=size=1920x1080:rate=60")
+            .args(["-t", "20", "-c:v", "libx264", "-preset", "ultrafast"])
+            .args(["-g", "600", "-keyint_min", "600", "-sc_threshold", "0"])
+            .args(["-pix_fmt", "yuv420p"])
+            .arg(&file)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let mpv = Mpv::builder()
+            .unwrap()
+            .set_property("vo", "null")
+            .unwrap()
+            .set_property("ao", "null")
+            .unwrap()
+            .set_property("keep-open", true)
+            .unwrap()
+            .build()
+            .unwrap();
+        let mut sources = Sources::default();
+        let submit = |sources: &mut Sources, id: u64, intent: Value| {
+            sources
+                .dispatch(
+                    &mpv,
+                    1,
+                    "source.submit",
+                    &json!({"operationId":id,"intent":intent}),
+                )
+                .unwrap();
+        };
+        // Pumps events into `sources` until `until` or 20 s; returns the seeks mpv started.
+        let pump = |sources: &mut Sources, until: &dyn Fn(&MpvEvent) -> bool| {
+            let mut seeks = 0;
+            let end = Instant::now() + Duration::from_secs(20);
+            while Instant::now() < end {
+                while let Some(event) = mpv.poll_event() {
+                    sources.event(&event);
+                    seeks += usize::from(matches!(event, MpvEvent::Seek));
+                    if until(&event) {
+                        return seeks;
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            panic!("no event in time");
+        };
+        submit(
+            &mut sources,
+            1,
+            json!({"kind":"open","source":file.to_str().unwrap(),"startPaused":true}),
+        );
+        pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
+        let seek = json!({"kind":"control","control":{"kind":"seek","seconds":9.5}});
+        submit(&mut sources, 2, seek.clone());
+        std::thread::sleep(Duration::from_millis(100));
+        submit(&mut sources, 3, seek.clone());
+        let seeks = pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
+        // A second seek would still be queued or running: let it show up.
+        let end = Instant::now() + Duration::from_secs(3);
+        let mut more = 0;
+        while Instant::now() < end {
+            while let Some(event) = mpv.poll_event() {
+                sources.event(&event);
+                more += usize::from(matches!(event, MpvEvent::Seek));
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(seeks + more, 1, "press and release: one seek");
+        assert!((mpv.get_property::<f64>("time-pos").unwrap() - 9.5).abs() < 0.02);
+        submit(&mut sources, 4, seek);
+        let again = pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
+        assert_eq!(again, 1, "after it landed the same target seeks again");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
