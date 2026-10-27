@@ -46,36 +46,6 @@ impl DataKey {
 /// Bounded per-plugin output queue. Source state alone emits ~10 events/s while playing,
 /// so a small queue disables healthy plugins after a brief event-loop stall.
 const OUTBOUND_CAPACITY: usize = 1024;
-/// The SDK repeats this list (vestra-player-sdk: src/capabilities.ts, used by
-/// `vestra-plugin check`); tests/sdk/host-agreement.test.ts checks the
-/// installed SDK agrees.
-pub const CAPABILITIES: &[&str] = &[
-    "producer.av",
-    "playback.read",
-    "playback.control",
-    "source.resolve",
-    "events",
-    "commands",
-    "ui.window",
-    "ui.mount",
-    "ui.dialog",
-    "plugins.manage",
-    "processing.video",
-    "processing.audio",
-    "subtitles.read",
-    "subtitles.control",
-    "media.read",
-    "media.control",
-    "ui.osd",
-    "clipboard",
-    "window.control",
-    "bindings.manage",
-    "timeline.marks",
-    "ui.drop",
-    "ui.settings",
-    "ui.theme",
-    "secrets",
-];
 /// `plugin.app` as JSON, set once at start-up and given to every plugin.
 static APP_INFO: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 pub fn set_app_info(info: &Value) {
@@ -119,7 +89,7 @@ impl Plugin {
         if manifest
             .capabilities
             .iter()
-            .any(|c| !CAPABILITIES.contains(&c.as_str()))
+            .any(|c| !crate::capabilities::known(c))
         {
             bail!("unknown required capability");
         }

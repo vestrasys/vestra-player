@@ -241,7 +241,7 @@ pub fn check(manifest: &Manifest, directory: &Path, package: bool) -> Result<()>
         manifest
             .capabilities
             .iter()
-            .all(|c| crate::plugins::CAPABILITIES.contains(&c.as_str())),
+            .all(|c| crate::capabilities::known(c)),
         "unknown required capability"
     );
     ensure!(

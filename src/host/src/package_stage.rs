@@ -279,7 +279,7 @@ fn same_directory(a: &Metadata, b: &Metadata) -> bool {
 fn validate_manifest(manifest: &PackageManifest, directory: &Path) -> Result<()> {
     crate::manifest::check(manifest, directory, true)?;
     ensure!(
-        manifest.capabilities.len() <= crate::plugins::CAPABILITIES.len(),
+        manifest.capabilities.len() <= crate::capabilities::count(),
         "candidate capabilities must be unique and bounded"
     );
     Ok(())

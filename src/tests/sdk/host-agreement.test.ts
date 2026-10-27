@@ -172,13 +172,13 @@ test("TestHost answers processing changes like the player", async () => {
   }
 });
 
-test("capabilities and apiVersion match the player's manifest rules", () => {
-  const rust = host("src/plugins.rs");
-  const list = /pub const CAPABILITIES: &\[&str\] = &\[([^\]]*)\];/.exec(rust);
-  assert.ok(list, "CAPABILITIES in plugins.rs");
-  const names = [...list[1]!.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(names, [...CAPABILITIES]);
-  assert.equal(/pub const API: &str = "([^"]+)";/.exec(rust)?.[1], API_VERSION);
+test("capabilities and apiVersion match the player's manifest rules (host/capabilities.json)", () => {
+  const json = capabilityJson();
+  assert.deepEqual(
+    json.capabilities.map((c) => c.name),
+    [...CAPABILITIES],
+  );
+  assert.equal(json.apiVersion, API_VERSION);
 });
 
 test("the installed SDK's Slint library copy matches the player's", () => {
@@ -261,10 +261,15 @@ test("step seek parameters are the player's: setStepSeek keyframes, host.run sec
   assert.match(wire, /"player\.setStepSeek",\s*keyframes === undefined/);
   assert.match(wire, /"host\.run",\s*seconds === undefined/);
   // The player reads them under the same names.
-  const main = host("src/main.rs");
-  assert.match(main, /params\["keyframes"\]/);
-  assert.match(main, /run_step\(action, &params\["seconds"\]\)/);
-  assert.match(main, /"keyframes":self\.step_keyframes\(\)/);
+  assert.match(
+    host("src/capabilities/playback_control.rs"),
+    /params\["keyframes"\]/,
+  );
+  assert.match(
+    host("src/capabilities/commands.rs"),
+    /run_step\(action, &params\["seconds"\]\)/,
+  );
+  assert.match(host("src/main.rs"), /"keyframes":self\.step_keyframes\(\)/);
 });
 
 test("a seek control's keyframes flag is the SDK's Scrub.seek option and the player's Control::Seek field (SDK 1.5.22, player 0.5.3)", () => {
@@ -436,116 +441,97 @@ function matching(text: string, open: number): number {
   throw new Error("unbalanced brackets");
 }
 
-/** Split `pattern => value,` arms of a Rust `match` body. */
-function matchArms(body: string): { pattern: string; value: string }[] {
-  body = body.replace(/\/\/[^\n]*/g, "");
-  const arms: { pattern: string; value: string }[] = [];
-  let i = 0;
-  for (;;) {
-    const arrow = body.indexOf("=>", i);
-    if (arrow < 0) return arms;
-    const pattern = body.slice(i, arrow).trim();
-    let j = arrow + 2;
-    while (/\s/.test(body[j]!)) j++;
-    let end: number;
-    if (body[j] === "{") end = matching(body, j) + 1;
-    else if (body.startsWith("match ", j))
-      end = matching(body, body.indexOf("{", j)) + 1;
-    else {
-      end = j;
-      for (let depth = 0; end < body.length; end++) {
-        const c = body[end]!;
-        if (c === '"') end = body.indexOf('"', end + 1);
-        else if ("{([".includes(c)) depth++;
-        else if ("})]".includes(c)) depth--;
-        else if (c === "," && depth === 0) break;
-      }
+/** A method's capability in host/capabilities.json (see its `about`). */
+type Needs =
+  | null
+  | string
+  | {
+      param: string;
+      cases: Record<string, string | null>;
+      otherwise: string | null;
     }
-    arms.push({ pattern, value: body.slice(j, end).trim() });
-    i = end;
-    while (/[\s,]/.test(body[i] ?? "")) i++;
-  }
+  | { ifDeclared: string; then: string; otherwise: string };
+interface CapabilityJson {
+  name: string;
+  label: string;
+  risky: boolean;
+  requires: string[];
+  residency: string;
+  methods: { name: string; needs: Needs }[];
 }
 
-const DISPATCH = "let capability = match method {";
+/**
+ * The player's capabilities as host/src/capabilities/ generates them into
+ * host/capabilities.json (a host test keeps the file current).
+ */
+function capabilityJson() {
+  return JSON.parse(host("capabilities.json")) as {
+    apiVersion: string;
+    capabilities: CapabilityJson[];
+    uncapable: { name: string; needs: Needs }[];
+  };
+}
 
 /**
- * The capability host/src/main.rs `required_capability` asks for a request
- * from a plugin that declared `declared` (`null`: none; `undefined`: the
- * player does not know the method), read from its
- * `let capability = match method { ... }`. An arm matches method names or
- * `method if method.starts_with(..)`; its value is `None`, `Some("x")`,
- * `Some(if params["k"] == "v" { "a" } else { "b" })`,
- * `Some(if allows("x") { "a" } else { "b" })` or a nested
- * `match params["k"].as_str() { Some("v") => .., _ => .. }`.
+ * The capability the player asks for a request from a plugin that declared
+ * `declared` (`null`: none; `undefined`: the player does not know the
+ * method), read from host/capabilities.json: an exact method name first,
+ * then a `prefix.*` entry.
  */
 function dispatchCapabilities() {
-  const unquote = (text: string) =>
-    [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+  const json = capabilityJson();
+  const methods = [
+    ...json.capabilities.flatMap((c) => c.methods),
+    ...json.uncapable,
+  ];
   const evaluate = (
-    value: string,
+    needs: Needs,
     params: Record<string, string>,
     declared: ReadonlySet<string>,
-  ): string | null | undefined => {
-    value = value.replace(/^\{([\s\S]*)\}$/, "$1").trim();
-    if (value === "None") return null;
-    if (value.startsWith("return Err(")) return undefined;
-    const plain = /^Some\("([^"]+)"\)$/.exec(value);
-    if (plain) return plain[1]!;
-    const choice =
-      /^Some\(if params\["(\w+)"\] == "([^"]+)" \{\s*"([^"]+)"\s*\} else \{\s*"([^"]+)"\s*\}\)$/.exec(
-        value,
-      );
-    if (choice)
-      return params[choice[1]!] === choice[2] ? choice[3]! : choice[4]!;
-    const allowed =
-      /^Some\(if allows\("([^"]+)"\) \{\s*"([^"]+)"\s*\} else \{\s*"([^"]+)"\s*\}\)$/.exec(
-        value,
-      );
-    if (allowed) return declared.has(allowed[1]!) ? allowed[2]! : allowed[3]!;
-    const nested = /^match params\["(\w+)"\]\.as_str\(\) \{/.exec(value);
-    if (nested)
-      for (const arm of matchArms(braces(value, "match"))) {
-        const wanted = /^Some\("([^"]+)"\)$/.exec(arm.pattern)?.[1];
-        if (arm.pattern === "_" || params[nested[1]!] === wanted)
-          return evaluate(arm.value, params, declared);
-      }
-    throw new Error(`main.rs dispatch: cannot read the capability ${value}`);
+  ): string | null => {
+    if (needs === null || typeof needs === "string") return needs;
+    if ("param" in needs) {
+      const value = params[needs.param];
+      return value !== undefined && Object.hasOwn(needs.cases, value)
+        ? needs.cases[value]!
+        : needs.otherwise;
+    }
+    return declared.has(needs.ifDeclared) ? needs.then : needs.otherwise;
   };
-  const arms = matchArms(braces(host("src/main.rs"), DISPATCH)).map(
-    ({ pattern, value }) => {
-      if (pattern === "_")
-        return { names: [] as string[], prefixes: [""], value };
-      if (pattern.startsWith("method if "))
-        return {
-          names: [],
-          prefixes: [...pattern.matchAll(/starts_with\("([^"]+)"\)/g)].map(
-            (m) => m[1]!,
-          ),
-          value,
-        };
-      assert.match(
-        pattern,
-        /^"[^"]+"(\s*\|\s*"[^"]+")*$/,
-        `main.rs dispatch: cannot read the pattern ${pattern}`,
-      );
-      return { names: unquote(pattern), prefixes: [], value };
-    },
-  );
   const capability = (
     method: string,
     params: Record<string, string> = {},
     declared: ReadonlySet<string> = new Set(),
   ) => {
-    const arm = arms.find(
-      (arm) =>
-        arm.names.includes(method) ||
-        arm.prefixes.some((p) => method.startsWith(p)),
-    )!;
-    return evaluate(arm.value, params, declared);
+    const entry =
+      methods.find((m) => m.name === method) ??
+      methods.find(
+        (m) => m.name.endsWith(".*") && method.startsWith(m.name.slice(0, -1)),
+      );
+    return entry ? evaluate(entry.needs, params, declared) : undefined;
   };
-  return { capability, methods: arms.flatMap((arm) => arm.names) };
+  return {
+    capability,
+    methods: methods.map((m) => m.name).filter((name) => !name.endsWith("*")),
+  };
 }
+
+test("capabilities.json's wording and requirements are CAPABILITY_INFO's", () => {
+  const json = capabilityJson();
+  assert.deepEqual(
+    json.capabilities.map((c) => c.name),
+    Object.keys(CAPABILITY_INFO),
+    "capabilities.json lists other capabilities, or in another order, than CAPABILITY_INFO",
+  );
+  for (const c of json.capabilities) {
+    const info = CAPABILITY_INFO[c.name]!;
+    assert.deepEqual(
+      { label: c.label, risky: c.risky, requires: c.requires },
+      { label: info.label, risky: info.risky, requires: [...info.requires] },
+      `${c.name}: capabilities.json vs CAPABILITY_INFO`,
+    );
+  }
+});
 
 test("CAPABILITY_INFO's store wording is the store's (plugins/store/labels.ts)", () => {
   const store: Record<string, { text: string; risky?: boolean }> =
@@ -734,7 +720,7 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
  */
 const KNOWN_UNREACHED = new Set(["producer.declareInput"]);
 
-test("CAPABILITY_INFO.apis need the capabilities the player checks per request (main.rs dispatch)", () => {
+test("CAPABILITY_INFO.apis need the capabilities the player checks per request (host/capabilities.json)", () => {
   const { capability: capabilityOf, methods } = dispatchCapabilities();
   const request = (
     call: string,
@@ -827,7 +813,7 @@ test("CAPABILITY_INFO.apis need the capabilities the player checks per request (
   }
 });
 
-test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (main.rs, system.rs, secret_index.rs, plugins.rs)", () => {
+test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (capabilities/ui_osd.rs, system.rs, secret_index.rs, plugins.rs)", () => {
   const constant = (file: string, name: string) => {
     const value = new RegExp(`const ${name}: \\w+ = ([^;]+);`).exec(
       host(file),
@@ -840,11 +826,11 @@ test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (main.rs, sys
   };
   assert.deepEqual(
     {
-      messageChars: constant("src/main.rs", "OSD_MESSAGE_CHARS"),
-      panelLines: constant("src/main.rs", "OSD_PANEL_LINES"),
-      panelBytes: constant("src/main.rs", "OSD_PANEL_BYTES"),
-      minColumns: constant("src/main.rs", "OSD_MIN_COLUMNS"),
-      maxColumns: constant("src/main.rs", "OSD_MAX_COLUMNS"),
+      messageChars: constant("src/capabilities/ui_osd.rs", "OSD_MESSAGE_CHARS"),
+      panelLines: constant("src/capabilities/ui_osd.rs", "OSD_PANEL_LINES"),
+      panelBytes: constant("src/capabilities/ui_osd.rs", "OSD_PANEL_BYTES"),
+      minColumns: constant("src/capabilities/ui_osd.rs", "OSD_MIN_COLUMNS"),
+      maxColumns: constant("src/capabilities/ui_osd.rs", "OSD_MAX_COLUMNS"),
     },
     { ...OSD_LIMITS },
     "OSD_LIMITS differ from the player's OSD_* constants",

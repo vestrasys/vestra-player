@@ -300,3 +300,38 @@ The user approved starting the work ("可以开工") after the coordinator prese
 ### User ruling (2026-10-27, later): no idle stop in v1
 
 v1 is **start on first use only**: a plugin that is not used is not started (installed plugins cost no process until used), but once started it runs until the player quits. There is **no idle stop**, so plugin authors keep their habits (state in memory survives). §5.4 item 1 (idle plugins stopped, in-memory state lost) and item 6 (parking waits up to 2 s) are withdrawn; items 2–5 stand. If idle stopping is added later it is opt-in per plugin (a plugin declares it may be stopped); a plugin that does not declare it is never stopped. Reason: most of the gain comes from not starting unused plugins, and with the shared runner a resident built-in costs about 0.8 MB, so idle stopping would save little for a change in how every author writes plugins (the MV2 → MV3 pain).
+
+## 6. Implementation status
+
+| Step | Status (2026-10-27, branch `capabilities-c1` from `main` d8e7763) |
+| --- | --- |
+| C1 | Done, pending review: `src/host/src/capabilities/`, `src/host/capabilities.json`, the agreement test reads the JSON |
+| C2 | Not started (after S2 of the shared runner, §12 there) |
+| A1, B1 | Not started |
+
+### 6.1 C1: what landed
+
+- `capabilities/mod.rs`: `Info { name, label, risky, requires, residency }`, `Needs`, `Method`, the `Capability` trait (`info`, `methods`, `handle`), `ALL` (25 capabilities in the old `plugins::CAPABILITIES` order), `lookup` (exact name, then a `prefix.*` entry, from a `OnceLock`), `Route::needs`, `required` (the old `required_capability`, generated), `known`/`count` (replace `plugins::CAPABILITIES` in `plugins.rs`, `manifest.rs`, `package_stage.rs`), `json()` and the tests. One file per capability holds its metadata, its methods and the `dispatch` arms moved from `main.rs` (`self.` → `host.`, otherwise unchanged); `uncapable.rs` holds the eleven methods any plugin may call. `Host::dispatch` in `main.rs` is now: plugin, `lookup`, `needs`, the same `capability` refusal, the same text resolution, `route.handle`.
+- `src/host/capabilities.json` (649 lines): `apiVersion`, then per capability `name, label, risky, requires, residency, methods[{name, needs}]`, then `uncapable`. `capabilities::tests::json_is_current` fails with the first differing line; `VESTRA_UPDATE_CAPABILITIES=1 cargo test capabilities` rewrites it. serde_json writes object keys sorted.
+- `src/tests/sdk/host-agreement.test.ts`: the manifest-rules test and the per-member capability test read the JSON instead of regex-parsing `plugins.rs` and the `required_capability` match (the `matchArms` reader is gone); a new test checks the JSON's `label`, `risky`, `requires` and order against the installed SDK's `CAPABILITY_INFO`, which holds the drift until the SDK and store tables are generated. The OSD limits moved with `osd.*` to `capabilities/ui_osd.rs`; the step-seek test reads `capabilities/playback_control.rs` and `capabilities/commands.rs`.
+- Not touched: `Host`, `main()`, `renderer.rs`, `backend.rs`, the rest of `plugins.rs` (only its table and the one check that read it). The `main.rs` hunks are the `mod` line, the OSD constants, `dispatch` and the removed `required_capability` with its test: away from S2's `disable`/`handle`/`send`/`Event` and from the GPU hunks.
+
+### 6.2 C1: where it differs from §4.2
+
+- `Needs` is data, not a function pointer: `This`, `Nothing`, `Param { key, cases, otherwise }` (events by `event`, processing by `stage`) and `IfDeclared { declared, then, otherwise }` (`source.operation`), so the JSON carries the rule and the agreement test evaluates the same rule the host does.
+- The trait has only `info`, `methods` and `handle`; `record`, `revoke` and `rekey` come with A1, which defines what they do. The residency hint (`none`, `recordable`, `live`) sits in `Info` and the JSON; nothing reads it yet.
+- `prefix.*` method entries (`packages.*`, `sourceResolvers.*`, `settings.*`, `snapshot.*`, `jobs.*`, `subtitles.*`) keep the old prefix arms, so an unknown method under a prefix still gets the capability check and then its handler's `unsupported`, as before.
+- `processing.replace` and `processing.operation` are owned by `processing_video.rs` and ask for `processing.video` or `processing.audio` by stage; `processing.audio` owns no method. `packages.list` and `window.state` are in `uncapable.rs`.
+- `plugins::CAPABILITIES` is replaced by `capabilities::known` and `count`, not `names()`.
+- The list of methods whose parameters get text resolution stays in `Host::dispatch` (a candidate for a per-method flag later).
+
+### 6.3 C1: equivalence evidence
+
+A temporary test (removed before commit) put the old `required_capability` beside `capabilities::required` and compared them, result and error code, over 240 method names (every name of the old match, every method of the new table, prefix neighbours and unknown names) × 8 parameter sets × 3 declared-capability sets: 5 760 cases, all equal. `cargo test --locked`: 479 passed before, 483 after (the moved `required_capability` test plus four new ones), 8 ignored both times.
+
+One difference that is not a table difference: a plugin that declares `source.resolve` and sends an unknown `sourceResolvers.<x>` reached `unreachable!()` in the old `dispatch` (a host panic); it is now refused `unsupported` ("unknown method"), the answer every other unknown method gets. Recorded for the coordinator: it is the only reachable path whose outcome changed.
+
+### 6.4 C1: follow-ups
+
+- SDK: generate `CAPABILITY_INFO`'s `label`, `risky`, `requires` and key order from `capabilities.json` by a script in the SDK repository (the `apis` lists stay hand-written); store `plugins/store/labels.ts` likewise. Not needed for C1: the agreement test already fails on any drift between the JSON and the installed SDK.
+- Host version unchanged (0.5.5): no user-visible, wire or error-code change (apart from the panic above), and the repository has no rule that asks for a bump on an internal change.
