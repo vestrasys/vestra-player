@@ -161,7 +161,7 @@ msgstr "已是最后一个关键帧"
 msgid "Speed: {}x"
 msgstr "播放速度: {}x"
 
-#: main.ts:30 ui/bar.slint:87
+#: main.ts:30 ui/bar.slint:92
 msgid "Volume: {}%"
 msgstr "音量: {}%"
 
@@ -258,24 +258,24 @@ msgid "speed"
 msgstr "速度"
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
-#: ui/bar.slint:77
+#: ui/bar.slint:81
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: ui/bar.slint:79
+#: ui/bar.slint:83
 msgid "Pause"
 msgstr "暂停"
 
-#: ui/bar.slint:79
+#: ui/bar.slint:83
 msgid "Play"
 msgstr "播放"
 
-#: ui/bar.slint:80
+#: ui/bar.slint:84
 msgid "Stop"
 msgstr "停止"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:82 ui/bar.slint:83
+#: ui/bar.slint:86 ui/bar.slint:87
 msgid ""
 "{}\n"
 "Right-click: {}"
@@ -284,52 +284,60 @@ msgstr ""
 "右键：{}"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 msgid "Back {} seconds"
 msgstr "后退 {} 秒"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 msgid "Play previous"
 msgstr "播放上一个"
 
-#: ui/bar.slint:83
+#: ui/bar.slint:87
 msgid "Forward {} seconds"
 msgstr "前进 {} 秒"
 
-#: ui/bar.slint:83
+#: ui/bar.slint:87
 msgid "Play next"
 msgstr "播放下一个"
 
-#: ui/bar.slint:84
+#: ui/bar.slint:88
 msgid "Open file"
 msgstr "打开文件"
 
-#: ui/bar.slint:85
+#: ui/bar.slint:89
+msgid "Leave fullscreen"
+msgstr "退出全屏"
+
+#: ui/bar.slint:89
+msgid "Fullscreen"
+msgstr "全屏"
+
+#: ui/bar.slint:90
 msgid "Click to show the elapsed time"
 msgstr "点击切换已播放时间"
 
-#: ui/bar.slint:85
+#: ui/bar.slint:90
 msgid "Click to show the remaining time"
 msgstr "点击切换剩余时间"
 
-#: ui/bar.slint:86
+#: ui/bar.slint:91
 msgid "Unmute"
 msgstr "取消静音"
 
-#: ui/bar.slint:86 ui/bar.slint:305
+#: ui/bar.slint:91 ui/bar.slint:310
 msgid "Mute"
 msgstr "静音"
 
-#: ui/bar.slint:88
+#: ui/bar.slint:93
 msgid "{} (the window is too narrow for the playlist)"
 msgstr "{}（窗口太窄，放不下播放列表）"
 
-#: ui/bar.slint:88 ui/bar.slint:329
+#: ui/bar.slint:93 ui/bar.slint:334
 msgid "Playlist"
 msgstr "播放列表"
 
-#: ui/bar.slint:305
+#: ui/bar.slint:310
 msgctxt "accessibility"
 msgid "Unmute"
 msgstr "解除静音"

@@ -201,7 +201,7 @@ msgstr "すでに最後のキーフレームです"
 msgid "Speed: {}x"
 msgstr "速度：{}x"
 
-#: main.ts:30 ui/bar.slint:87
+#: main.ts:30 ui/bar.slint:92
 #, x-machine
 msgid "Volume: {}%"
 msgstr "音量：{}%"
@@ -322,28 +322,28 @@ msgid "speed"
 msgstr "速度"
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
-#: ui/bar.slint:77
+#: ui/bar.slint:81
 #, x-machine
 msgid "{} ({})"
 msgstr "{}（{}）"
 
-#: ui/bar.slint:79
+#: ui/bar.slint:83
 #, x-machine
 msgid "Pause"
 msgstr "一時停止"
 
-#: ui/bar.slint:79
+#: ui/bar.slint:83
 #, x-machine
 msgid "Play"
 msgstr "再生"
 
-#: ui/bar.slint:80
+#: ui/bar.slint:84
 #, x-machine
 msgid "Stop"
 msgstr "停止"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:82 ui/bar.slint:83
+#: ui/bar.slint:86 ui/bar.slint:87
 #, x-machine
 msgid ""
 "{}\n"
@@ -353,63 +353,73 @@ msgstr ""
 "右クリック：{}"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 #, x-machine
 msgid "Back {} seconds"
 msgstr "{} 秒戻る"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 #, x-machine
 msgid "Play previous"
 msgstr "前の項目を再生"
 
-#: ui/bar.slint:83
+#: ui/bar.slint:87
 #, x-machine
 msgid "Forward {} seconds"
 msgstr "{} 秒進む"
 
-#: ui/bar.slint:83
+#: ui/bar.slint:87
 #, x-machine
 msgid "Play next"
 msgstr "次の項目を再生"
 
-#: ui/bar.slint:84
+#: ui/bar.slint:88
 #, x-machine
 msgid "Open file"
 msgstr "ファイルを開く"
 
-#: ui/bar.slint:85
+#: ui/bar.slint:89
+#, x-machine
+msgid "Leave fullscreen"
+msgstr "フルスクリーンを終了"
+
+#: ui/bar.slint:89
+#, x-machine
+msgid "Fullscreen"
+msgstr "フルスクリーン"
+
+#: ui/bar.slint:90
 #, x-machine
 msgid "Click to show the elapsed time"
 msgstr "クリックすると経過時間を表示"
 
-#: ui/bar.slint:85
+#: ui/bar.slint:90
 #, x-machine
 msgid "Click to show the remaining time"
 msgstr "クリックすると残り時間を表示"
 
-#: ui/bar.slint:86
+#: ui/bar.slint:91
 #, x-machine
 msgid "Unmute"
 msgstr "ミュート解除"
 
-#: ui/bar.slint:86 ui/bar.slint:305
+#: ui/bar.slint:91 ui/bar.slint:310
 #, x-machine
 msgid "Mute"
 msgstr "ミュート"
 
-#: ui/bar.slint:88
+#: ui/bar.slint:93
 #, x-machine
 msgid "{} (the window is too narrow for the playlist)"
 msgstr "{}（ウインドウが狭すぎてプレイリストを表示できません）"
 
-#: ui/bar.slint:88 ui/bar.slint:329
+#: ui/bar.slint:93 ui/bar.slint:334
 #, x-machine
 msgid "Playlist"
 msgstr "プレイリスト"
 
-#: ui/bar.slint:305
+#: ui/bar.slint:310
 #, x-machine
 msgctxt "accessibility"
 msgid "Unmute"
@@ -532,6 +542,7 @@ msgid "Jump to keyframes only"
 msgstr "キーフレームにのみジャンプ"
 
 #: ui/time-jump.slint:147
+#, x-machine
 msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
 msgstr "矢印キーとシークバーに適用されます。バーをクリックまたはドラッグすると、ポインター位置またはその直前のキーフレームに移動します。"
 
