@@ -226,6 +226,7 @@ impl Backend {
                 render_initialized.recv()?.map_err(anyhow::Error::msg)?;
                 let _ = ready.send(Ok(versions));
                 let mut sources = crate::source_backend::Sources::default();
+                sources.register_lease_streams(&mpv);
                 // Pushed as `resolvers.fileTypes` when a file resolver comes or goes.
                 let mut file_types = Vec::<String>::new();
                 let mut geometry = crate::source_geometry::Geometry::new(publish_gate.clone());
@@ -518,7 +519,8 @@ impl Backend {
                         if accepted
                             && matches!(event, rsmpv::Event::FileLoaded)
                             && let Some((entry, ticket)) = sources.ready_load()
-                            && let Err(error) = subtitles.ready(&mpv, entry, ticket)
+                            && let Err(error) =
+                                subtitles.ready(&mpv, entry, ticket, sources.leased(entry))
                         {
                             subtitles.failed(error.message.clone());
                             let _ = events.send(Event::Broadcast(

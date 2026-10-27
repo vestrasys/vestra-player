@@ -1,5 +1,7 @@
 //! Local regular-file lease, not a strong immutable snapshot.
-//! Holding the open file preserves its object across rename/unlink/path replacement;
+//! Holding the open file preserves its object across rename/unlink/path replacement
+//! (Windows: the handle shares read, write and delete access, as libmpv's own does,
+//! so the file can still be renamed, moved or deleted while it plays);
 //! it does not prevent in-place writes. Length/mtime checks can miss same-length
 //! rewrites with preserved timestamps and cannot defeat adversarial concurrent
 //! writers. A worker must validate before AND after reading, discard failed output,
@@ -99,8 +101,28 @@ impl Lease {
         self.accepted.facts
     }
 
+    /// `file` (opened separately, for libmpv) is the held object: device and
+    /// inode on Unix, volume serial and file index on Windows (`same-file`),
+    /// and the same accepted size/mtime. The Windows file index is 64-bit; ReFS
+    /// ids are 128-bit, so two ReFS files may compare equal there (size and
+    /// mtime must still match).
     pub fn matches_file(&self, file: &File) -> Result<bool> {
-        Ok(Identity::read(&file.metadata()?)? == self.accepted)
+        if Identity::read(&file.metadata()?)? != self.accepted {
+            return Ok(false);
+        }
+        #[cfg(windows)]
+        let same = {
+            let held = self
+                .file
+                .lock()
+                .map_err(|_| anyhow::anyhow!("source reader lock is poisoned"))?
+                .try_clone()
+                .context("held source handle could not be cloned")?;
+            same_file::Handle::from_file(held)? == same_file::Handle::from_file(file.try_clone()?)?
+        };
+        #[cfg(not(windows))]
+        let same = true;
+        Ok(same)
     }
 
     /// Nonblocking admission for cancellable offline workers. Never wait on the UI/control thread.
@@ -262,6 +284,26 @@ mod tests {
         writer.sync_all().unwrap();
         assert!(reader.validate().is_err());
         assert_eq!(lease.facts().len, 6);
+    }
+
+    #[test]
+    fn only_a_handle_to_the_held_object_matches() {
+        let temp = TempDir::new();
+        let source = temp.0.join("source");
+        let twin = temp.0.join("twin");
+        fs::write(&source, b"same bytes").unwrap();
+        fs::write(&twin, b"same bytes").unwrap();
+        let lease = Lease::open(&source).unwrap();
+        assert!(lease.matches_file(&File::open(&source).unwrap()).unwrap());
+        // Same length, same mtime, another file: not the held object.
+        let twin_file = File::options().write(true).open(&twin).unwrap();
+        twin_file.set_modified(lease.facts().modified).unwrap();
+        drop(twin_file);
+        assert!(!lease.matches_file(&File::open(&twin).unwrap()).unwrap());
+        // A replacement at the path after the lease opened: not the held object.
+        fs::rename(&source, temp.0.join("moved")).unwrap();
+        fs::rename(&twin, &source).unwrap();
+        assert!(!lease.matches_file(&File::open(&source).unwrap()).unwrap());
     }
 
     #[test]

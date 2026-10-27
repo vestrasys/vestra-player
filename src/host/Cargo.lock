@@ -5145,7 +5145,7 @@ dependencies = [
 
 [[package]]
 name = "vestra-host"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5166,6 +5166,7 @@ dependencies = [
  "rfd",
  "rsmpv",
  "rtrb",
+ "same-file",
  "serde",
  "serde_json",
  "sha2",

@@ -228,6 +228,8 @@ pub struct Subtitles {
     phase: Phase,
     loaded: Option<NativeLoad>,
     active_load: Option<NativeLoad>,
+    /// The native load that reads a leased local file (`Sources::leased`).
+    leased_load: Option<NativeLoad>,
     orphans: Vec<Orphan>,
     uncertain: Option<String>,
     confirmed: bool,
@@ -250,6 +252,7 @@ impl Subtitles {
             phase: Phase::Empty,
             loaded: None,
             active_load: None,
+            leased_load: None,
             orphans: Vec::new(),
             uncertain: None,
             confirmed: false,
@@ -496,7 +499,14 @@ impl Subtitles {
         self.generation = generation;
         self.phase = phase;
     }
-    pub fn ready(&mut self, mpv: &Mpv, entry: i64, ticket: IntentTicket) -> Result<(), RpcError> {
+    /// `leased`: the load reads a leased local file (`Sources::leased`).
+    pub fn ready(
+        &mut self,
+        mpv: &Mpv,
+        entry: i64,
+        ticket: IntentTicket,
+        leased: bool,
+    ) -> Result<(), RpcError> {
         if self.phase != Phase::Ready || ticket.stamp.generation != self.generation {
             return Err(RpcError::new("stale", "subtitle load no longer current"));
         }
@@ -504,6 +514,7 @@ impl Subtitles {
             return Ok(());
         }
         self.active_load = Some((entry, ticket));
+        self.leased_load = leased.then_some((entry, ticket));
         // Actual FileLoaded has replaced the old native track namespace.
         self.orphans.clear();
         let native = tracks(mpv)?;
@@ -555,9 +566,8 @@ impl Subtitles {
             .ok()
             .as_deref()
             == Some("lavf")
-            && mpv
-                .get_property::<String>("path")
-                .is_ok_and(|path| path.starts_with("fd://"));
+            && self.active_load.is_some()
+            && self.active_load == self.leased_load;
         let tracks=native.into_iter().map(|native| {
    let managed=self.assets.iter().find(|(_,a)|a.binding==self.active_load.unwrap_or(a.binding)&&self.active_load.is_some()&&a.track==native.id).map(|((owner,id,revision),_)|Track::External{owner:*owner,resource_id:id.clone(),content_revision:*revision});
    let stream_index = if managed.is_none() && !native.external && indexed { native.stream_index } else { None };
