@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -158,7 +159,7 @@ test("menu follows the allocation table: positions, groups, radio items, binding
     assert.equal(removed in bar.props, false, removed);
   assert.equal(bar.props["elapsed-label"], "--:--");
   assert.equal(bar.props["total-label"], "--:--");
-  for (const flag of ["can-pause", "can-stop", "can-step", "can-previous", "can-next", "playing", "has-sidebar"])
+  for (const flag of ["can-pause", "can-stop", "can-step", "can-previous", "can-next", "playing"])
     assert.equal(bar.props[flag], false, flag);
   assert.equal(bar.props["can-open"], true);
   assert.equal(bar.props.duration, 0);
@@ -835,28 +836,31 @@ test("the time label toggles between elapsed and remaining", async () => {
   await stop();
 });
 
-test("the playlist button reads and toggles the sidebar position, whoever mounted it", async () => {
+test("0.2.5 the bar mounts with the player's BarButtons strip and leaves the sidebar toggle to it", async () => {
   const { host, stop } = await start(withMedia());
-  const bar = host.mounted();
-  assert.equal(bar.props["has-sidebar"], false);
-  host.layout.sidebar = { owner: 2, preferred: true, effective: true, reason: null, detached: false };
-  host.emit("window.state", {});
-  await host.settle();
-  assert.equal(bar.props["has-sidebar"], true);
-  assert.equal(bar.props["sidebar-on"], true);
-  bar.emit("toggle-sidebar");
-  await host.settle();
-  assert.deepEqual(
-    host.sent("layout.set").map((p) => [p.slot, p.visible]),
-    [["sidebar", false]],
-  );
-  assert.equal(bar.props["sidebar-on"], false);
-  // A change made elsewhere (the playlist's own F6) is followed.
-  host.layout.sidebar = { ...host.layout.sidebar, preferred: true, effective: true };
-  host.emit("window.state", {});
-  await host.settle();
-  assert.equal(bar.props["sidebar-on"], true);
-  await stop();
+  try {
+    const bar = host.mounted();
+    assert.equal(bar.slot, "bottom");
+    // The mounted file places BarButtons (vestra-plugin check warns otherwise).
+    const slint = await readFile(new URL(`../${bar.file}`, import.meta.url), "utf8");
+    assert.ok(slint.includes('import { BarButtons } from "@vestra/bar-buttons.slint";'));
+    assert.match(slint, /strip := BarButtons \{/);
+    // Playback contributes no button of its own: the strip holds other
+    // plugins' buttons and the player's Toggle Sidebar (host/sidebar).
+    assert.deepEqual(host.barButtons, []);
+    // No sidebar state of its own any more: the player's toggle shows it.
+    for (const removed of ["has-sidebar", "sidebar-on", "sidebar-hidden", "key-sidebar", "tip-sidebar"])
+      assert.equal(removed in bar.props, false, removed);
+    const mount = host.sent("ui.mount")[0]!;
+    if (Array.isArray(mount.callbacks)) assert.equal(mount.callbacks.includes("toggle-sidebar"), false);
+    // The sidebar is left alone: nothing the bar does sets it.
+    host.layout.sidebar = { owner: 2, preferred: true, effective: true, reason: null, detached: false };
+    host.emit("window.state", {});
+    await host.settle();
+    assert.deepEqual(host.sent("layout.set"), []);
+  } finally {
+    await stop();
+  }
 });
 
 test("dragging the volume keeps the bar shown until release", async () => {

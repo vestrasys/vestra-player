@@ -20,7 +20,6 @@ const start = (host = new TestHost(), dataDirectory?: string, locale: "en" | "zh
 function tips(host: TestHost, props: Record<string, unknown>) {
   const t = (text: string, args?: (string | number)[]) => host.translate(text, args);
   const withKey = (title: string, key: unknown) => (key === "" ? title : t("{} ({})", [title, String(key)]));
-  const playlist = withKey(t("Playlist"), props["key-sidebar"]);
   return {
     playPause: withKey(props.playing ? t("Pause") : t("Play"), props["key-play-pause"]),
     stop: withKey(t("Stop"), props["key-stop"]),
@@ -36,7 +35,6 @@ function tips(host: TestHost, props: Record<string, unknown>) {
     time: props["remaining-time"] ? t("Click to show the elapsed time") : t("Click to show the remaining time"),
     mute: withKey(props.muted ? t("Unmute") : t("Mute"), props["key-mute"]),
     volume: t("Volume: {}%", [Number(props["volume-percent"])]),
-    sidebar: props["sidebar-hidden"] ? t("{} (the window is too narrow for the playlist)", [playlist]) : playlist,
   };
 }
 
@@ -49,7 +47,6 @@ test("G-07 bar.slint words the tooltips from the data this test mirrors", async 
     'with-key(playing ? @tr("Pause") : @tr("Play"), key-play-pause)',
     'with-key(muted ? @tr("Unmute") : @tr("Mute"), key-mute)',
     '@tr("Volume: {}%", volume-percent)',
-    'sidebar-hidden ? @tr("{} (the window is too narrow for the playlist)", with-key(@tr("Playlist"), key-sidebar))',
   ])
     assert.ok(slint.includes(text), text);
 });
@@ -92,9 +89,8 @@ test("G-07 every bar element has a tooltip naming its key; back/forward explain 
   assert.equal(tip.time, "点击切换剩余时间");
   assert.equal(tip.mute, "静音 (M)");
   assert.equal(tip.volume, "音量: 100%");
-  // Nobody registered the top-level Playlist item here: no key.
-  assert.equal(bar.props["key-sidebar"], "");
-  assert.equal(tip.sidebar, "播放列表");
+  // The sidebar toggle is the player's (BarButtons, Toggle Sidebar): the bar sends no key for it.
+  assert.equal("key-sidebar" in bar.props, false);
 
   host.setSource({ paused: true, output: { volume: 35, muted: true } });
   await host.settle();
@@ -123,22 +119,6 @@ test("G-07 in English the tooltips are the source texts", async () => {
   assert.equal(tip.playPause, "Pause (Space)");
   assert.equal(tip.back, "Back 5 seconds (ArrowLeft)\nRight-click: Play previous (PageUp)");
   assert.equal(tip.volume, "Volume: 100%");
-  assert.equal(tip.sidebar, "Playlist");
-  await stop();
-});
-
-test("G-07 the playlist button names the key of the top-level Playlist item in any language (by its menu key)", async () => {
-  const host = withMedia();
-  // Another plugin's top-level Playlist item, shown in Japanese; the table gives its English key.
-  const playlist = {
-    declaration: { id: "toggle", title: "Playlist", path: ["Playlist"], bindings: ["F6"] },
-    display: { title: "プレイリスト", path: ["プレイリスト"] },
-  };
-  host.coreCommands.set("vestra.playlist/toggle", playlist as never);
-  const { stop } = await start(host, undefined, "ja");
-  const bar = host.mounted();
-  host.emit("bindings.changed", null);
-  await until(() => bar.props["key-sidebar"] === "F6");
   await stop();
 });
 
@@ -212,25 +192,3 @@ test("IA-PB-01 the hover time is off by default; a saved choice is kept", async 
   }
 });
 
-// ------------------------------------------------------------------ G-18
-
-test("G-18 the playlist button: half lit only when on but too narrow; fullscreen's collapsed pop-out counts as on", async () => {
-  const host = withMedia();
-  const { stop } = await start(host);
-  const bar = host.mounted();
-  const show = async (slot: { preferred: boolean; effective: boolean; reason: string | null }) => {
-    host.layout.sidebar = { owner: 2, detached: false, ...slot } as never;
-    host.emit("window.state", {});
-    await host.settle();
-    return [bar.props["sidebar-on"], bar.props["sidebar-hidden"], tips(host, bar.props).sidebar];
-  };
-  assert.deepEqual(await show({ preferred: true, effective: true, reason: null }), [true, false, "播放列表"]);
-  assert.deepEqual(await show({ preferred: true, effective: false, reason: "space" }), [
-    true,
-    true,
-    "播放列表（窗口太窄，放不下播放列表）",
-  ]);
-  assert.deepEqual(await show({ preferred: true, effective: false, reason: "fullscreen" }), [true, false, "播放列表"]);
-  assert.deepEqual(await show({ preferred: false, effective: false, reason: null }), [false, false, "播放列表"]);
-  await stop();
-});

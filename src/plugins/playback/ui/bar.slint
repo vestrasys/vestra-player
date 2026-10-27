@@ -4,6 +4,7 @@
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { Slider, ToolTipArea } from "@vestra/widgets.slint";
+import { BarButtons } from "@vestra/bar-buttons.slint";
 
 // B22: one mark of `timeline.marks`; `at` is the fraction of the duration,
 // `kind` chapter / bookmark / marker, `clock` the mark's time as text.
@@ -52,10 +53,6 @@ export global PlaybackBridge {
     in-out property <float> volume: 100;
     in-out property <bool> can-mute: true;
     in-out property <bool> can-volume: true;
-    in-out property <bool> has-sidebar;
-    in-out property <bool> sidebar-on;
-    // G-18: on, but hidden because the window is too narrow (drawn at half opacity).
-    in-out property <bool> sidebar-hidden;
     // UI-BAR-05 (0.2.4): the main window is fullscreen (`window.state`); the
     // fullscreen button shows `exit-fullscreen` then, `fullscreen` otherwise.
     in-out property <bool> fullscreen;
@@ -69,7 +66,6 @@ export global PlaybackBridge {
     in-out property <string> key-next;
     in-out property <string> key-open;
     in-out property <string> key-mute;
-    in-out property <string> key-sidebar;
     in-out property <string> key-fullscreen;
     in-out property <string> step-text: "5";
     in-out property <int> volume-percent: 100;
@@ -90,7 +86,6 @@ export global PlaybackBridge {
     out property <string> tip-time: remaining-time ? @tr("Click to show the elapsed time") : @tr("Click to show the remaining time");
     out property <string> tip-mute: with-key(muted ? @tr("Unmute") : @tr("Mute"), key-mute);
     out property <string> tip-volume: @tr("Volume: {}%", volume-percent);
-    out property <string> tip-sidebar: sidebar-hidden ? @tr("{} (the window is too narrow for the playlist)", with-key(@tr("Playlist"), key-sidebar)) : with-key(@tr("Playlist"), key-sidebar);
     // A core action id (`host.run`), or "open".
     callback action(string);
     callback seek-changed(float);
@@ -102,7 +97,6 @@ export global PlaybackBridge {
     callback volume-changed(float);
     callback volume-released(float);
     callback toggle-time();
-    callback toggle-sidebar();
 }
 
 // 41×40 icon button; hover and press light a 32×32 rounded plate in the
@@ -324,36 +318,6 @@ component MuteButton inherits Rectangle {
     }
 }
 
-// 23×22 toggle for the sidebar (playlist); accent while it is on, at half opacity
-// while on but hidden for want of room (G-18).
-component SidebarToggle inherits Rectangle {
-    width: 23px;
-    height: 22px;
-    opacity: PlaybackBridge.sidebar-hidden ? 0.5 : 1;
-    accessible-role: button;
-    accessible-label: @tr("Playlist");
-    accessible-checked: PlaybackBridge.sidebar-on;
-    accessible-enabled: PlaybackBridge.has-sidebar;
-    accessible-action-default => { if PlaybackBridge.has-sidebar { PlaybackBridge.toggle-sidebar(); } }
-    Icon {
-        x: 5px;
-        y: 6px;
-        name: "playlist";
-        color: !PlaybackBridge.has-sidebar ? Theme.icon-disabled
-            : touch.pressed ? Theme.accent-press
-            : (touch.has-hover || PlaybackBridge.sidebar-on) ? Theme.accent : Theme.text-dim;
-    }
-    ToolTipArea {
-        width: 100%;
-        height: 100%;
-        text: PlaybackBridge.tip-sidebar;
-        touch := TouchArea {
-            enabled: PlaybackBridge.has-sidebar;
-            clicked => { PlaybackBridge.toggle-sidebar(); }
-        }
-    }
-}
-
 export component PlaybackBar inherits Rectangle {
     min-height: 62px;
     max-height: 62px;
@@ -394,22 +358,32 @@ export component PlaybackBar inherits Rectangle {
     }
 
     // Button row: play/pause, stop, back 5s, forward 5s, open, fullscreen, time;
-    // sidebar toggle on the right.
+    // on the right the player's strip of command buttons (BarButtons, player
+    // 0.5.10): other plugins' buttons and its sidebar toggle, rightmost.
     row := Rectangle {
         y: 22px;
         height: 40px;
-        // UI-BAR-10: the time keeps priority over the fullscreen button, which is
-        // hidden first: it shows only while the bar fits six buttons, 10px, the
-        // time label, 8px to spare, the 23px playlist toggle and its 8px margin.
+        // UI-BAR-10: the time is never cut and keeps priority over the fullscreen
+        // button. The strip gets only what the buttons, the 10px gap, the time and
+        // 8px to spare leave (less its own 4px right margin), so it narrows first,
+        // one 41px cell at a time (the player picks which buttons go; the sidebar
+        // toggle stays longest). Fullscreen shows while the toggle's cell still
+        // fits beside it: from 6 × 41 + 10 + time + 8 + 41 + 4 px; below that the
+        // fullscreen button hides, then the toggle once its cell no longer fits
+        // beside five buttons, and below a bar width of 320px the strip gets no room.
         // The time is measured, not a constant (`0:00:00 / 0:00:00` in the 11px
-        // body font is about 85px, so about 380px), at its widest for this file:
+        // body font is about 85px, so Fullscreen shows from about 394px and the
+        // toggle from about 353px), at its widest for this file:
         // the elapsed part as wide as "-" + the total (the remaining time), so the
         // threshold does not move while the time runs (9:59 → 10:00) or when it
         // switches to the remaining time; only an elapsed text wider than that
         // (a source without a duration) widens it. Hidden is `visible: false`
         // with no width, a persistent element, never `if`.
         property <length> time-width: max(elapsed.preferred-width, widest-elapsed.preferred-width) + total.preferred-width;
-        property <bool> fullscreen-fits: root.width >= 6 * 41px + 10px + row.time-width + 8px + 23px + 8px;
+        property <bool> fullscreen-fits: root.width >= 6 * 41px + 10px + row.time-width + 8px + 41px + 4px;
+        // What the left side takes: the five buttons that always show, Fullscreen
+        // when it fits, the gap, the time and 8px to spare.
+        property <length> left-width: (row.fullscreen-fits ? 6 : 5) * 41px + 10px + row.time-width + 8px;
         // Measures the widest elapsed text (never drawn, outside the layout).
         widest-elapsed := Text {
             visible: false;
@@ -489,10 +463,13 @@ export component PlaybackBar inherits Rectangle {
                 }
             }
         }
-        // Hidden first when the window is narrower than 320px (UI-BAR-10).
-        if root.width >= 320px: SidebarToggle {
-            x: root.width - self.width - 8px;
-            y: (parent.height - self.height) / 2;
+        // The player's strip, at the right end with a 4px margin. A persistent
+        // element (never `if`), so the player sees it placed; it is as wide as the
+        // cells it shows, never more than `room`, so it stays clear of the time.
+        strip := BarButtons {
+            x: root.width - self.width - 4px;
+            y: 0px;
+            room: root.width >= 320px ? max(0px, root.width - row.left-width - 4px) : 0px;
         }
     }
 
