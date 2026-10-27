@@ -25,6 +25,8 @@ export type Settings = {
   appendOnOpen: boolean;
   /** G-12: a drop on the list goes before the row under the pointer, not to the end (`DropMousePos`, default off). */
   dropAtPointer: boolean;
+  /** 0.1.11: rows show a thumbnail (the bottom bar's toggle, default on); off: compact single-line rows. */
+  thumbnails: boolean;
 };
 type SavedList = {
   sort: { key: Exclude<SortKey, "shuffle" | "reverse">; descending: boolean } | null;
@@ -46,6 +48,7 @@ export const defaults = (): Settings => ({
   confirmClear: true,
   appendOnOpen: false,
   dropAtPointer: false,
+  thumbnails: true,
 });
 
 const REPEATS = ["none", "all", "one"];
@@ -65,6 +68,7 @@ function readSettings(raw: Partial<Settings> | undefined): Settings {
   if (typeof raw.confirmClear === "boolean") settings.confirmClear = raw.confirmClear;
   if (current && typeof raw.appendOnOpen === "boolean") settings.appendOnOpen = raw.appendOnOpen;
   if (typeof raw.dropAtPointer === "boolean") settings.dropAtPointer = raw.dropAtPointer;
+  if (typeof raw.thumbnails === "boolean") settings.thumbnails = raw.thumbnails;
   return settings;
 }
 
@@ -81,13 +85,15 @@ export const SAVE_DELAY_MS = 1000;
 export const PERSIST_CHECK_MS = 200;
 
 /**
- * `playlists.json` and `probe-cache.json` in the plugin's data directory
- * (`plugin.storage`): a file that does not parse or has an unknown version is
- * kept as `.bad-<time>` and defaults are used.
+ * `playlists.json`, `probe-cache.json` and `thumb-cache.json` (the index of the
+ * pictures in `thumbs/`) in the plugin's data directory (`plugin.storage`): a
+ * file that does not parse or has an unknown version is kept as `.bad-<time>`
+ * and defaults are used.
  */
 export class Store {
   readonly lists: JsonStore<Saved>;
   readonly cache: JsonStore<unknown[]>;
+  readonly thumbs: JsonStore<unknown[]>;
   constructor(scope: Scope) {
     this.lists = scope.storage.json<Saved>("playlists", {
       defaults: { version: 1, settings: defaults() },
@@ -95,6 +101,11 @@ export class Store {
       debounceMs: SAVE_DELAY_MS - PERSIST_CHECK_MS,
     });
     this.cache = scope.storage.json<unknown[]>("probe-cache", {
+      defaults: [],
+      validate: isCache,
+      debounceMs: SAVE_DELAY_MS - PERSIST_CHECK_MS,
+    });
+    this.thumbs = scope.storage.json<unknown[]>("thumb-cache", {
       defaults: [],
       validate: isCache,
       debounceMs: SAVE_DELAY_MS - PERSIST_CHECK_MS,

@@ -20,19 +20,28 @@ export const DROP_EXTENSIONS = [...VIDEO, ...AUDIO, ...LIST_FILES, "webloc", "fo
  * top through `list-area`; this is the value before the first report.
  */
 export const LIST_TOP = 31;
+/** A row of `ui/sidebar.slint`: one line, or (0.1.11) two lines beside a 96×54 thumbnail. */
 export const ROW_HEIGHT = 20;
+export const THUMB_ROW_HEIGHT = 62;
 
 /**
  * A15 drop on the list: the shown row under `y` (panel coordinates, the list
- * scrolled by `scroll`, starting at `top`), so the drop goes before it; `null`
- * on blank space, the tab strip or the bottom bar (`listHeight` tall list
- * area) = the end.
+ * scrolled by `scroll`, starting at `top`, rows `row` px high), so the drop goes
+ * before it; `null` on blank space, the tab strip or the bottom bar
+ * (`listHeight` tall list area) = the end.
  */
-export function dropRow(y: number, scroll: number, listHeight: number, shown: number, top = LIST_TOP): number | null {
+export function dropRow(
+  y: number,
+  scroll: number,
+  listHeight: number,
+  shown: number,
+  top = LIST_TOP,
+  row = ROW_HEIGHT,
+): number | null {
   const inList = y - top;
   if (!Number.isFinite(inList) || inList < 0 || inList >= listHeight) return null;
-  const row = Math.floor((inList + Math.max(0, scroll)) / ROW_HEIGHT);
-  return row < shown ? row : null;
+  const index = Math.floor((inList + Math.max(0, scroll)) / row);
+  return index < shown ? index : null;
 }
 
 export type Expanded = {

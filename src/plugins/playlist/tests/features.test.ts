@@ -32,7 +32,14 @@ const probeTable = (seconds: Record<string, number> = {}) => (args: string[]) =>
 
 async function start(
   // The old (Chinese) texts are checked as a Simplified Chinese user sees them; `locale: "en"` for the English source.
-  options: { data?: string; durations?: Record<string, number>; random?: () => number; locale?: "en" | "zh-Hans" } = {},
+  // `compact`: thumbnails off (the bottom bar's toggle), for tests that count rows of 20 px.
+  options: {
+    data?: string;
+    durations?: Record<string, number>;
+    random?: () => number;
+    locale?: "en" | "zh-Hans";
+    compact?: boolean;
+  } = {},
 ) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "vestra-playlist-features-")));
   const host = new TestHost();
@@ -45,6 +52,10 @@ async function start(
     ...(options.data ? { dataDirectory: options.data } : {}),
   });
   const panel = host.mounted();
+  if (options.compact) {
+    panel.emit("toggle-thumbnails");
+    await host.settle();
+  }
   const app = {
     host,
     root,
@@ -365,6 +376,7 @@ test("C17: the list, titles, selection and settings come back after a restart; n
       confirmClear: true,
       appendOnOpen: false,
       dropAtPointer: false,
+      thumbnails: true,
     });
     assert.deepEqual(saved.list.rows, [
       { kind: "file", source: b, title: "Named B", duration: 12 },
@@ -1172,7 +1184,7 @@ test("G-12: drops on the list add to the end by default; never play", async () =
 });
 
 test("G-12: with 「插入到拖放位置」 drops on the list go before the row under the point, or to the end on blank space", async () => {
-  const app = await start();
+  const app = await start({ compact: true });
   try {
     const rows = await app.files(["1.mp4", "2.mp4", "3.mp4", "4.mp4"]);
     await app.addFiles(rows);
@@ -1218,7 +1230,7 @@ test("A15: the drop point maps to a shown row; tab strip, bottom bar and blank s
 });
 
 test("G-12: with the player's tab strip the list reports top 0 and drops map from there", async () => {
-  const app = await start();
+  const app = await start({ compact: true });
   try {
     const rows = await app.files(["1.mp4", "2.mp4", "3.mp4", "4.mp4"]);
     await app.addFiles(rows);
@@ -1335,7 +1347,7 @@ test("IA-PL-02: the 播放列表 settings page follows the menu both ways; F5 wi
 });
 
 test("G-08: keyboard moves keep the cursor row in view with the least scroll", async () => {
-  const app = await start();
+  const app = await start({ compact: true });
   try {
     const names = Array.from({ length: 200 }, (_, i) => `${String(i + 1).padStart(3, "0")}.mp4`);
     await app.addFiles(await app.files(names));
@@ -1363,7 +1375,7 @@ test("G-08: keyboard moves keep the cursor row in view with the least scroll", a
 });
 
 test("G-08: a newly playing row out of view is centred, unless the user scrolled within 2 seconds", async () => {
-  const app = await start();
+  const app = await start({ compact: true });
   try {
     const names = Array.from({ length: 100 }, (_, i) => `${String(i + 1).padStart(3, "0")}.mp4`);
     await app.addFiles(await app.files(names));
