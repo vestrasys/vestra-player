@@ -42,9 +42,29 @@ impl Item {
 /// A button left out past a limit: owner, command id, plugin id, the limit.
 type Dropped = (u64, String, String, &'static str);
 
+/// What the strip is computed from. The window tick compares it (a few
+/// integers) and rebuilds only when it changed (UI frame-rate rule): the
+/// registry's revision (commands, their state and buttons), the binding
+/// table's (the keys in tooltips), the sidebar's state (the toggle), the
+/// interface language, and the composed windows (a new shell or floating
+/// window gets the strip and may place `BarButtons` or not).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Inputs {
+    pub commands: u64,
+    pub bindings: u64,
+    pub sidebar: Option<window_state::Visibility>,
+    pub slot: Option<(bool, bool)>,
+    pub locale: &'static str,
+    pub windows: (u64, Option<u64>),
+}
+
 /// What the windows show, and what was logged.
 #[derive(Default)]
 pub struct Strip {
+    /// What the strip was last built from.
+    inputs: Option<Inputs>,
+    /// Rebuilds so far (a test counts them).
+    rebuilds: u64,
     buttons: Vec<Item>,
     toggle: Option<Item>,
     /// Window generations that show `buttons` and `toggle`.
@@ -57,7 +77,18 @@ pub struct Strip {
 }
 
 impl Strip {
-    /// The command behind a click's token, if the strip shows it.
+    /// Whether the strip must be rebuilt for `inputs`; counts the rebuilds.
+    fn begin(&mut self, inputs: &Inputs) -> bool {
+        if self.inputs.as_ref() == Some(inputs) {
+            return false;
+        }
+        self.rebuilds += 1;
+        true
+    }
+    /// The command behind a click's token, if it is in the strip's list
+    /// (the plugins' buttons and the toggle). A cell hidden for want of room
+    /// is not clickable in the first place: its TouchArea is disabled and
+    /// its accessibility action guarded.
     pub fn target(&self, token: &str) -> Option<(u64, String)> {
         self.buttons
             .iter()
@@ -88,6 +119,14 @@ pub fn tip(label: &str, key: Option<&str>, state: &commands::CommandState) -> St
     match &state.reason {
         Some(reason) if !state.enabled || state.busy => format!("{named}\n{reason}"),
         _ => named,
+    }
+}
+
+/// The cell for a button whose image cannot be loaded: the `failed` icon.
+fn fallback(item: &Item) -> Item {
+    Item {
+        icon: commands::ButtonIcon::Name("failed".into()),
+        ..item.clone()
     }
 }
 
@@ -243,6 +282,9 @@ impl Host {
         shell: &slint_interpreter::ComponentInstance,
         sidebar: Option<window_state::Visibility>,
     ) {
+        if !self.bar.begin(&self.bar_inputs(sidebar)) {
+            return;
+        }
         self.sidebar_command_state();
         let (buttons, dropped) = self.bar_items();
         for (owner, id, manifest, limit) in dropped {
@@ -276,6 +318,23 @@ impl Host {
             }
         }
         self.bar_placement(shell);
+        // After Toggle Sidebar's own state update, which moves the revision.
+        self.bar.inputs = Some(self.bar_inputs(sidebar));
+    }
+
+    /// What the strip depends on, at this tick.
+    fn bar_inputs(&self, sidebar: Option<window_state::Visibility>) -> Inputs {
+        Inputs {
+            commands: self.commands.revision(),
+            bindings: self.input.borrow().table.revision(),
+            sidebar,
+            slot: self.policy.sidebar_state(),
+            locale: i18n::locale(),
+            windows: (
+                self.shell_generation,
+                self.floating.as_ref().map(|floating| floating.generation),
+            ),
+        }
     }
 
     /// Fill one window's `BarButtonsHost` and route its clicks.
@@ -308,8 +367,16 @@ impl Host {
                             Some(image)
                         }
                         Err(error) => {
-                            diag!("bar buttons: {}/{}: {}", item.owner, item.id, error.message);
-                            None
+                            // The cell keeps an icon (and stays the command's
+                            // button): the icon set's warning triangle.
+                            diag!(
+                                "bar buttons: {}/{}: {}; shown with the \"failed\" icon",
+                                item.owner,
+                                item.id,
+                                error.message
+                            );
+                            cells.push(cell(Some(&fallback(&item)), None));
+                            continue;
                         }
                     }
                 }
@@ -415,7 +482,7 @@ mod tests {
     }
 
     #[test]
-    fn tokens_name_only_the_cells_shown() {
+    fn tokens_name_only_the_strips_list() {
         let item = |owner, id: &str| Item {
             owner,
             id: id.into(),
@@ -437,5 +504,72 @@ mod tests {
         // Another command of the same plugin, or of the player, is not a cell.
         assert_eq!(strip.target("7/secret"), None);
         assert_eq!(strip.target("0/quit"), None);
+    }
+
+    /// The window tick rebuilds the strip only when what it is made from
+    /// changed (UI frame-rate rule): an unchanged tick costs a comparison.
+    #[test]
+    fn an_unchanged_tick_does_not_rebuild() {
+        let inputs = Inputs {
+            commands: 7,
+            bindings: 3,
+            sidebar: None,
+            slot: Some((true, false)),
+            locale: "en",
+            windows: (2, None),
+        };
+        let mut strip = Strip::default();
+        assert!(strip.begin(&inputs));
+        strip.inputs = Some(inputs.clone());
+        for _ in 0..100 {
+            assert!(!strip.begin(&inputs));
+        }
+        assert_eq!(strip.rebuilds, 1);
+        // Each input that changes rebuilds once.
+        for changed in [
+            Inputs {
+                commands: 8,
+                ..inputs.clone()
+            },
+            Inputs {
+                bindings: 4,
+                ..inputs.clone()
+            },
+            Inputs {
+                slot: Some((false, false)),
+                ..inputs.clone()
+            },
+            Inputs {
+                windows: (2, Some(5)),
+                ..inputs.clone()
+            },
+        ] {
+            assert!(strip.begin(&changed));
+            strip.inputs = Some(changed.clone());
+            assert!(!strip.begin(&changed));
+        }
+        assert_eq!(strip.rebuilds, 5);
+    }
+
+    #[test]
+    fn an_image_that_cannot_load_falls_back_to_the_failed_icon() {
+        let item = Item {
+            owner: 4,
+            id: "open".into(),
+            icon: commands::ButtonIcon::Image {
+                path: "/gone.png".into(),
+                max_side: 0,
+            },
+            label: "Open".into(),
+            tip: "Open".into(),
+            enabled: true,
+            checkable: false,
+            checked: false,
+            dimmed: false,
+        };
+        let shown = fallback(&item);
+        assert_eq!(shown.icon, commands::ButtonIcon::Name("failed".into()));
+        assert_eq!((shown.token(), shown.enabled), (item.token(), true));
+        assert!(commands::BUTTON_ICONS.contains(&"failed"));
     }
 }
