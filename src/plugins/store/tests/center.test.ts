@@ -73,6 +73,8 @@ async function center() {
 const ids = (list: { id: string }[]) => list.map((each) => each.id);
 const enables = (host: Awaited<ReturnType<typeof start>>["host"]) =>
   host.packageCalls.filter((c) => c.method === "setEnabled").map((c) => [c.id, c.enabled]);
+const reloads = (host: Awaited<ReturnType<typeof start>>["host"]) =>
+  host.packageCalls.filter((c) => c.method === "reload").map((c) => c.id);
 
 test("tabs: Installed first (built-ins, then third-party), Available, Updates; counts", async () => {
   const { host, stop } = await center();
@@ -98,8 +100,8 @@ test("row buttons and … menus by state", async () => {
     const builtin = controls(host, "vestra.video");
     assert.equal(builtin.primary, null, "built-ins have no button");
     assert.deepEqual(ids(builtin.menu), ["reload", "openData"]);
-    // A running built-in cannot be restarted through packages.setEnabled (request STORE-RELOAD-BUILTIN).
-    assert.deepEqual(builtin.menu.map((m) => m.enabled), [false, true]);
+    // A running built-in is restarted through packages.reload (player 0.5.1, request STORE-RELOAD-BUILTIN).
+    assert.deepEqual(builtin.menu.map((m) => m.enabled), [true, true]);
     assert.equal(builtin.badge, "内置");
 
     const running = controls(host, "A Run");
@@ -162,21 +164,22 @@ test("… menu: disable and enable through packages.setEnabled; the row dims and
   }
 });
 
-test("… menu: reload stops and starts a running plugin, starts a failed one; open the data folder", async () => {
+test("… menu: reload restarts a running plugin and starts a failed one (packages.reload); open the data folder", async () => {
   const { host, stop } = await center();
   try {
     const window = host.window("store");
     const key = (name: string) => rows(host).find((r) => r.name === name)!.key;
     window.emit("rowAct", key("A Run"), "reload");
     await until(host, () => props(host)["status-text"] === "已重新加载「A Run」", "reloaded");
-    assert.deepEqual(enables(host), [
-      ["a.run", false],
-      ["a.run", true],
-    ]);
+    assert.deepEqual(reloads(host), ["a.run"]);
+    assert.deepEqual(enables(host), [], "never through setEnabled: a reload leaves no disabled flag behind");
     window.emit("rowAct", key("C Bad"), "reload");
-    await until(host, () => props(host)["status-text"] === "已重新加载「C Bad」", "failed one started");
-    assert.deepEqual(enables(host).at(-1), ["c.bad", true]);
-    assert.equal(enables(host).length, 3, "a failed plugin is only started");
+    await until(
+      host,
+      () => props(host)["status-text"] === "已重新加载「C Bad」" && controls(host, "C Bad").badge !== "失败",
+      "failed one started",
+    );
+    assert.deepEqual(reloads(host), ["a.run", "c.bad"]);
 
     window.emit("rowAct", key("A Run"), "openData");
     await until(host, () => host.system.opened.length === 1, "opened");
@@ -209,12 +212,15 @@ test("built-ins: no disable and no uninstall anywhere; a refused disable says so
     assert.deepEqual(enables(host), []);
     assert.equal(store.items.find((i) => i.id === "vestra.video")?.installed?.state, "running");
 
-    // A built-in that failed can be started again (setEnabled true is allowed).
-    host.setPackages(host.packages.map((p) => (p.id === "vestra.video" ? { ...p, state: "failed", error: "crash" } : p)));
-    await until(host, () => controls(host, "vestra.video").menu[0]!.enabled, "reload offered");
+    // A running built-in is restarted, a failed one started again: packages.reload either way.
     host.window("store").emit("rowAct", "\nvestra.video", "reload");
-    await until(host, () => enables(host).length === 1, "started");
-    assert.deepEqual(enables(host), [["vestra.video", true]]);
+    await until(host, () => props(host)["status-text"] === "已重新加载「vestra.video」", "restarted");
+    host.setPackages(host.packages.map((p) => (p.id === "vestra.video" ? { ...p, state: "failed", error: "crash" } : p)));
+    await until(host, () => controls(host, "vestra.video").badge === "失败", "failed");
+    host.window("store").emit("rowAct", "\nvestra.video", "reload");
+    await until(host, () => reloads(host).length === 2 && controls(host, "vestra.video").badge === "内置", "started");
+    assert.deepEqual(reloads(host), ["vestra.video", "vestra.video"]);
+    assert.deepEqual(enables(host), []);
   } finally {
     await stop();
   }

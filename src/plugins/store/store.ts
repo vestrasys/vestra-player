@@ -8,10 +8,11 @@ import type {
   MarkdownRef,
   Plugin,
   PluginInfo,
+  PluginWarning,
   Scope,
   Window,
 } from "@vestra-player/sdk";
-import { buildItems, checkVersion, isInstalledRow, updateCount, type Display, type Item } from "./catalog.ts";
+import { buildItems, checkVersion, isDevelopmentRow, isInstalledRow, updateCount, type Display, type Item } from "./catalog.ts";
 import { clean } from "./index-format.ts";
 import { Icons } from "./icons.ts";
 import * as installer from "./installer.ts";
@@ -71,6 +72,15 @@ export const UPDATES = 2;
 export const MENU_ORDER = 822;
 const README_LIMIT = 256 * 1024;
 const REMOTE_IMAGE = /!\[[^\]]*\]\(\s*<?(https?:\/\/[^)\s>]+)/g;
+/**
+ * Decoded sizes, about twice the drawn size: the rows' 32px logos and the
+ * details' 56px icon. A 64px logo is 16 KB decoded, so even a thousand rows
+ * stay far under the player's 32 MB per view (`IMAGE_LIMITS.viewBytes`).
+ */
+const ROW_LOGO = 64;
+const DETAIL_ICON = 112;
+/** A reload that never reports back (the player starts it within 20 s). */
+const RELOAD_WAIT = 30_000;
 
 /** A confirmation: `message` and `detail` share one list of arguments (`detail` numbers its placeholders after the message's). */
 export interface Question {
@@ -88,6 +98,9 @@ type Banner = { text: Msg | null; tone: number; action: string; actionText: Msg 
 type Action = { id: string; text: Msg; enabled: boolean };
 
 type Fact = { label: Msg; text: Msg; url: string | null; action?: "openData" };
+
+/** A reload the player accepted; `seen` once the plugin was stopped (the next state is the new run). */
+type Reloading = { key: string; id: string; name: string; seen: boolean; timer: ReturnType<typeof setTimeout> };
 
 type Doc = {
   key: string;
@@ -141,8 +154,12 @@ export class Store {
   readonly #logo: string;
   /** Data directory → bytes ("pending" while measured, `null` unknown); measured again when the window opens. */
   readonly #sizes = new Map<string, number | null | "pending">();
+  /** Repository icons for the rows (`ui.remoteImage`): address → reference, `null` failed. */
+  readonly #logos = new Map<string, ImageRef | null | "pending">();
   /** The row whose enable, disable or reload is running. */
   #working: string | null = null;
+  /** A reload the player accepted: done once the plugin left `starting` (`packages.onChange`). */
+  #reloading: Reloading | null = null;
   // Menu
   #menuScope: Scope | null = null;
   #menuCount = -1;
@@ -236,16 +253,13 @@ export class Store {
     plugin.onDispose(() => {
       this.#disposed = true;
       this.#docAbort?.abort();
+      if (this.#reloading) clearTimeout(this.#reloading.timer);
     });
   }
 
   /** Activation: cached indexes and the install library, the menu, the timers. */
   async start() {
-    try {
-      this.#accept(await this.plugin.packages.list());
-    } catch (error) {
-      this.deps.log(`packages.list: ${(error as Error).message}`);
-    }
+    await this.reread();
     await this.updateMenu();
     const first = setTimeout(() => void this.autoCheck(), timing.firstCheck);
     const tick = setInterval(() => {
@@ -312,7 +326,21 @@ export class Store {
 
   #accept(list: PluginInfo[]) {
     this.packages = list;
+    this.#reloaded();
     this.rebuild();
+  }
+
+  /**
+   * Read the plugin list again: after a refusal (`missing`, an uninstall the
+   * player refused) nothing changed for `packages.onChange` to report, but
+   * the list the store showed was out of date.
+   */
+  async reread() {
+    try {
+      this.#accept(await this.plugin.packages.list());
+    } catch (error) {
+      this.deps.log(`packages.list: ${(error as Error).message}`);
+    }
   }
 
   /** "Plugin Store…", with the number of updates in the title (design §1.2). */
@@ -528,6 +556,7 @@ export class Store {
 
   #origin(item: Item): Msg {
     if (item.repo) return item.repo.origin;
+    if (isDevelopmentRow(item)) return msg("Development load");
     return sourceName(item.installed?.source ?? null);
   }
 
@@ -539,9 +568,12 @@ export class Store {
       : installedVersion;
     // Disabled and Failed tag installed rows; Revoked says more and stays.
     const own = isInstalledRow(item) && item.state !== "revoked" ? info : null;
+    const dev = isDevelopmentRow(item);
     const [badge, tone] = ((): [Msg | null, number] => {
       if (own?.state === "disabled") return [msg("Disabled"), 4];
       if (own?.state === "failed") return [msg("Failed"), 2];
+      // A development load says so in its Dev tag.
+      if (dev) return [null, 0];
       switch (item.state) {
         case "installed":
           return [msg("Installed"), 0];
@@ -566,22 +598,100 @@ export class Store {
       }
     })();
     const { primary, menu } = this.#controls(item, false);
+    const warnings = own?.state === "running" ? this.#warnings(own) : [];
+    // Small tags before the badge: a development load, and what a running plugin was refused.
+    const flags: { text: TextValue; tone: number }[] = [];
+    if (dev) flags.push({ text: this.shown(msg("Dev")), tone: 1 });
+    if (warnings.length) flags.push({ text: this.shown(msg("Warning")), tone: 2 });
     return {
       key: item.key,
       name: item.name,
       version: shown,
       meta: this.shown(msg("{} · {}", item.author ?? msg("Unknown author"), this.#origin(item))),
       punchline: item.punchline ?? "",
-      // A failed plugin's reason on hover.
-      tip: own?.state === "failed" && own.error ? own.error : (item.punchline ?? ""),
+      // On hover: a failed plugin's reason, a running one's warnings, else the punchline.
+      tip:
+        own?.state === "failed" && own.error
+          ? own.error
+          : warnings.length
+            ? this.shown(joined(warnings, "{} · {}"))
+            : (item.punchline ?? ""),
       badge: this.shown(badge),
       tone,
+      flags,
       selected: item.key === this.selected,
       dim: isInstalledRow(item) && info?.state === "disabled",
-      // No logo per row yet: an image can only be a whole property value (round doc, request STORE-ROW-LOGO).
+      logo: this.#rowLogo(item),
       primary: action(primary),
       menu: menu.map((each) => action(each)),
     };
+  }
+
+  /**
+   * A row's logo (plugin-center spec, "List rows"): an installed plugin's own
+   * icon from its package (works offline), else the repository index's icon
+   * through `ui.remoteImage` (only for the rows shown, once each), else the
+   * store's own icon.
+   */
+  #rowLogo(item: Item): ImageRef {
+    if (item.installed) {
+      const icon = (item.local ?? this.#display(item.installed)).icon;
+      const path = icon ? this.icons.local(join(item.installed.directory, icon)) : null;
+      if (path) return this.#image(path, ROW_LOGO);
+    }
+    const url = item.entry?.iconUrl;
+    // Third-party icons only from the index's own host (it would tell another host who looks); https only.
+    if (url && url.startsWith("https://") && this.#sameHost(item, url)) {
+      const known = this.#logos.get(url);
+      if (known === undefined) {
+        this.#logos.set(url, "pending");
+        this.plugin.ui.remoteImage(url, { maxSide: ROW_LOGO }).then(
+          (ref) => {
+            this.#logos.set(url, ref);
+            this.changed();
+          },
+          (error: Error) => {
+            this.#logos.set(url, null);
+            this.deps.log(`icon ${url}: ${error.message}`);
+          },
+        );
+      } else if (known !== null && known !== "pending") return known;
+    }
+    return this.#image(this.#logo, ROW_LOGO);
+  }
+
+  /** What a running plugin was refused because another plugin holds it (`PluginInfo.warnings`), in words. */
+  #warnings(info: PluginInfo): Msg[] {
+    const nameOf = (id: string | undefined) => {
+      const holder = id === undefined ? undefined : this.packages.find((p) => p.id === id);
+      return holder ? this.#display(holder).name : (id ?? "");
+    };
+    return (info.warnings ?? []).map((warning: PluginWarning) => {
+      const owner = nameOf(warning.owner);
+      switch (warning.code) {
+        case "slot-occupied":
+          if (warning.owner === undefined)
+            return warning.slot === "sidebar"
+              ? msg("Its sidebar tab is not shown: the sidebar is full")
+              : msg("Its panel is not shown: that place is full");
+          switch (warning.slot) {
+            case "bottom":
+              return msg("Its bottom bar is not shown: “{}” holds the bottom bar", owner);
+            case "sidebar":
+              return msg("Its sidebar tab is not shown: “{}” holds that place", owner);
+            case "backdrop":
+              return msg("Its backdrop is not shown: “{}” holds the backdrop", owner);
+            default:
+              return msg("Its panel is not shown: “{}” holds that place", owner);
+          }
+        case "sequence-taken":
+          return msg("Its Previous/Next is not used: “{}” provides them", owner);
+        case "resolver-taken":
+          return msg("It does not open {}: “{}” does", warning.target ?? "", owner);
+        default:
+          return msg("Part of it was refused because another plugin holds it ({})", warning.code);
+      }
+    });
   }
 
   /** The installed plugin has a newer version from its repository (update, or a revoked one with a fix). */
@@ -599,7 +709,9 @@ export class Store {
   /**
    * A row's one button and its `…` menu by state (plugin-center spec, "List
    * rows"); `detail` words the install and update buttons with the version.
-   * Built-ins have no button; their menu offers only Reload and Open Data Folder.
+   * Built-ins have no button; their menu offers only Reload and Open Data
+   * Folder. A development load cannot be uninstalled: its button disables or
+   * enables it for this run.
    */
   #controls(item: Item, detail: boolean): { primary: Action | null; menu: Action[] } {
     const idle = !this.busy && this.#working === null;
@@ -612,15 +724,16 @@ export class Store {
       return { primary: null, menu: [] };
     }
     const openData = a("openData", msg("Open Data Folder"), info.dataDirectory !== null);
-    // Built-ins always run: a running one cannot be restarted with packages.setEnabled (§4.1 request).
-    if (info.builtin)
-      return {
-        primary: null,
-        menu: [a("reload", msg("Reload"), info.id !== this.plugin.id && info.state !== "running" && info.state !== "starting"), openData],
-      };
-    const uninstall = a("uninstall", msg("Uninstall…"));
+    // `packages.reload` restarts any plugin but this one; a disabled one is enabled instead, a starting one is busy.
+    const reload = a("reload", msg("Reload"), info.id !== this.plugin.id && info.state !== "starting");
+    if (info.builtin) return { primary: null, menu: [reload, openData] };
     const disable = a("disable", msg("Disable"));
-    const reload = a("reload", msg("Reload"));
+    if (isDevelopmentRow(item)) {
+      if (info.state === "disabled") return { primary: a("enable", msg("Enable")), menu: [openData] };
+      if (info.state === "failed") return { primary: reload, menu: [disable, openData] };
+      return { primary: disable, menu: [reload, openData] };
+    }
+    const uninstall = a("uninstall", msg("Uninstall…"));
     const update = a("update", detail ? msg("Update to {}", item.best?.version ?? "") : msg("Update"));
     if (info.state === "disabled") {
       const enable = a("enable", item.state === "revoked" ? msg("Enable Anyway…") : msg("Enable"));
@@ -633,29 +746,32 @@ export class Store {
     return { primary: uninstall, menu: [disable, reload, openData] };
   }
 
+  /** The details' icon: as the row's, but the repository's icon is checked against the index's size and sha256. */
   #icon(item: Item): ImageRef {
     let path: string | null = null;
-    // A third-party icon on another host than its index is never fetched (it would tell that host who looks).
-    if (item.entry?.iconUrl && this.#sameHost(item, item.entry.iconUrl))
-      path = this.icons.remote(item.entry.iconUrl, item.repo?.local ?? false, item.entry.iconCheck);
-    // Not downloaded (offline, or not yet): an installed plugin's own icon from its package.
-    if (!path && item.installed) {
+    // An installed plugin's own icon from its package (offline too).
+    if (item.installed) {
       const icon = (item.local ?? this.#display(item.installed)).icon;
       if (icon) path = this.icons.local(join(item.installed.directory, icon));
     }
-    return this.#image(path ?? this.#logo);
+    // A third-party icon on another host than its index is never fetched (it would tell that host who looks).
+    if (!path && item.entry?.iconUrl && this.#sameHost(item, item.entry.iconUrl))
+      path = this.icons.remote(item.entry.iconUrl, item.repo?.local ?? false, item.entry.iconCheck);
+    return this.#image(path ?? this.#logo, DETAIL_ICON);
   }
 
-  #image(path: string): ImageRef {
-    let ref = this.#images.get(path);
+  /** One reference per file and size: a row written again keeps its image. */
+  #image(path: string, maxSide: number): ImageRef {
+    const key = `${maxSide}\n${path}`;
+    let ref = this.#images.get(key);
     if (!ref) {
-      ref = this.plugin.ui.image(path);
-      this.#images.set(path, ref);
+      ref = this.plugin.ui.image(path, { maxSide });
+      this.#images.set(key, ref);
     }
     return ref;
   }
 
-  /** The detail's buttons: the row's button, then Uninstall… and Disable for a third-party plugin. */
+  /** The detail's buttons: the row's button, then Enable, Uninstall… and Disable for a third-party plugin. */
   #actions(item: Item): Action[] {
     const { primary } = this.#controls(item, true);
     const list: Action[] = primary ? [primary] : [];
@@ -665,8 +781,9 @@ export class Store {
     if (info && !info.builtin && isInstalledRow(item) && this.#working !== item.key) {
       if (info.state === "disabled" && primary?.id !== "enable")
         list.push({ id: "enable", text: item.state === "revoked" ? msg("Enable Anyway…") : msg("Enable"), enabled: idle });
-      if (primary?.id !== "uninstall") list.push({ id: "uninstall", text: msg("Uninstall…"), enabled: idle });
-      if (info.state !== "disabled") list.push({ id: "disable", text: msg("Disable"), enabled: idle });
+      if (primary?.id !== "uninstall" && !isDevelopmentRow(item))
+        list.push({ id: "uninstall", text: msg("Uninstall…"), enabled: idle });
+      if (info.state !== "disabled" && primary?.id !== "disable") list.push({ id: "disable", text: msg("Disable"), enabled: idle });
     }
     return list;
   }
@@ -718,7 +835,8 @@ export class Store {
           : msg("Built-in plugins are updated with the player and cannot be uninstalled or disabled"),
         4,
       );
-    if (item.state === "local" && info) {
+    // A development load has its own notice below.
+    if (item.state === "local" && info && !isDevelopmentRow(item)) {
       if (item.delisted)
         add(
           msg(
@@ -730,7 +848,10 @@ export class Store {
         add(msg("Its repository was removed from the store; the store no longer checks it for updates or revocations"), 4);
       else add(msg("Sideloaded plugin: not reviewed; the store does not check it for updates"), 2);
     }
-    if (item.development) add(msg("This run uses the development-loaded version"), 4);
+    if (isDevelopmentRow(item))
+      add(msg("Loaded for development (--plugin) in this run: disabling it lasts until the player quits, and it cannot be uninstalled here"), 4);
+    else if (item.development) add(msg("This run uses the development-loaded version"), 4);
+    if (info?.state === "running" && isInstalledRow(item)) for (const warning of this.#warnings(info)) add(warning, 2);
     const doc = this.#doc;
     if (doc.key === this.#docKey(item)) {
       if (doc.offHost)
@@ -787,7 +908,7 @@ export class Store {
     if (latest) facts.push({ label: msg("Version"), text: raw(latest.version), url: null });
     if (item.installed) facts.push({ label: msg("Installed"), text: raw(item.installed.version ?? "—"), url: null });
     if (latest) facts.push({ label: msg("Updated"), text: raw(day(latest.published)), url: null });
-    facts.push({ label: msg("Source"), text: item.repo ? item.repo.label : sourceName(item.installed?.source ?? null), url: null });
+    facts.push({ label: msg("Source"), text: item.repo ? item.repo.label : this.#origin(item), url: null });
     facts.push({ label: raw("id"), text: raw(item.id), url: null });
     const license = item.entry?.license ?? item.local?.license;
     if (license) facts.push({ label: msg("License"), text: raw(license), url: null });
@@ -855,15 +976,17 @@ export class Store {
         if (item.state === "revoked") return this.revocations.enable(item);
         return this.#switch(item, "enable");
       case "disable":
-      case "reload":
+        // No question: it can be enabled again at once (user ruling).
         return this.#switch(item, action);
+      case "reload":
+        return this.#reload(item);
       case "openData":
         return this.#openData(item);
     }
   }
 
-  /** Enable, disable or reload (stop and start again) an installed plugin through `packages.setEnabled`. */
-  async #switch(item: Item, action: "enable" | "disable" | "reload") {
+  /** Enable or disable a plugin through `packages.setEnabled`; a development load stays disabled only for this run. */
+  async #switch(item: Item, action: "enable" | "disable") {
     const info = item.installed;
     if (!info || this.busy || this.#working !== null) return;
     this.#working = item.key;
@@ -871,19 +994,13 @@ export class Store {
     this.changed();
     const { id } = info;
     try {
-      if (action === "enable") await this.plugin.packages.setEnabled(id, true);
-      else if (action === "disable") await this.plugin.packages.setEnabled(id, false);
-      else {
-        // A failed or stopped plugin only needs starting.
-        if (info.state === "running" || info.state === "starting") await this.plugin.packages.setEnabled(id, false);
-        await this.plugin.packages.setEnabled(id, true);
-      }
+      await this.plugin.packages.setEnabled(id, action === "enable");
       this.report(
         action === "enable"
           ? msg("Enabled “{}”", item.name)
-          : action === "disable"
-            ? msg("Disabled “{}”", item.name)
-            : msg("Reloaded “{}”", item.name),
+          : isDevelopmentRow(item)
+            ? msg("Disabled “{}” until the player quits", item.name)
+            : msg("Disabled “{}”", item.name),
       );
     } catch (error) {
       const code = (error as { code?: string }).code;
@@ -893,15 +1010,86 @@ export class Store {
           ? msg("Built-in plugins cannot be disabled")
           : action === "enable"
             ? msg("Couldn't enable “{}”: {}", item.name, why)
-            : action === "disable"
-              ? msg("Couldn't disable “{}”: {}", item.name, why)
-              : msg("Couldn't reload “{}”: {}", item.name, why),
+            : msg("Couldn't disable “{}”: {}", item.name, why),
         true,
       );
+      // `missing` and other refusals change nothing the player would report: read the list again.
+      await this.reread();
     } finally {
       this.#working = null;
       this.changed();
     }
+  }
+
+  /**
+   * Restart a plugin, built-ins included, through `packages.reload`. The
+   * player answers once it stopped the plugin; the result comes with
+   * `packages.onChange` (`starting`, then `running` or `failed`), so the
+   * row says Working… until then.
+   */
+  async #reload(item: Item) {
+    const info = item.installed;
+    if (!info || this.busy || this.#working !== null) return;
+    const { id } = info;
+    this.#working = item.key;
+    this.#message = null;
+    const timer = setTimeout(() => this.#reloadDone(null), RELOAD_WAIT);
+    const pending: Reloading = { key: item.key, id, name: item.name, seen: false, timer };
+    this.#reloading = pending;
+    this.changed();
+    try {
+      await this.plugin.packages.reload(id);
+    } catch (error) {
+      clearTimeout(timer);
+      if (this.#reloading === pending) this.#reloading = null;
+      const code = (error as { code?: string }).code;
+      this.report(
+        code === "busy"
+          ? msg("“{}” is being installed or reloaded; try again later", item.name)
+          : code === "invalid"
+            ? msg("“{}” is disabled; enable it instead of reloading it", item.name)
+            : msg(
+                "Couldn't reload “{}”: {}",
+                item.name,
+                code === "missing" ? msg("This plugin no longer exists") : raw((error as Error).message),
+              ),
+        true,
+      );
+      this.#working = null;
+      // The list was out of date (gone, disabled or busy elsewhere): read it again.
+      await this.reread();
+      return;
+    }
+    if (this.#reloading !== pending) return;
+    // The player has stopped it: what the list says now (or next) is the new run.
+    pending.seen = true;
+    await this.reread();
+  }
+
+  /** Called with every new list: finishes a reload once its plugin left `starting`. */
+  #reloaded() {
+    const pending = this.#reloading;
+    if (!pending) return;
+    const info = this.packages.find((p) => p.id === pending.id);
+    if (info?.state === "starting") pending.seen = true;
+    else if (pending.seen || !info) this.#reloadDone(info ?? null);
+  }
+
+  #reloadDone(info: PluginInfo | null) {
+    const pending = this.#reloading;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.#reloading = null;
+    if (this.#working === pending.key) this.#working = null;
+    if (this.#disposed) return;
+    if (!info) {
+      // Gone, or still starting after the wait: the row shows its state.
+      const now = this.packages.find((p) => p.id === pending.id);
+      if (!now) this.report(msg("Couldn't reload “{}”: {}", pending.name, msg("This plugin no longer exists")), true);
+      else this.changed();
+    } else if (info.state === "failed")
+      this.report(msg("Couldn't reload “{}”: {}", pending.name, info.error ? raw(info.error) : msg("Failed")), true);
+    else this.report(msg("Reloaded “{}”", pending.name));
   }
 
   async #openData(item: Item) {

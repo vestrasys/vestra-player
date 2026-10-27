@@ -80,7 +80,7 @@ export interface Item {
   id: string;
   repo: Repo | null;
   entry: IndexEntry | null;
-  /** The installed plugin with this id (installed origin), if any. */
+  /** The installed plugin with this id (installed origin), if any; on a development row, that load. */
   installed: PluginInfo | null;
   /** A development load of the same id runs in this session. */
   development: boolean;
@@ -115,7 +115,9 @@ export function buildItems(
   locale = "en",
 ): Item[] {
   const installed = new Map(plugins.filter((p) => p.origin === "installed").map((p) => [p.id, p]));
-  const development = new Set(plugins.filter((p) => p.origin === "development").map((p) => p.id));
+  // Whatever is not from the install library is a development load (`--plugin`).
+  const loads = plugins.filter((p) => p.origin !== "installed");
+  const development = new Set(loads.map((p) => p.id));
   const covered = new Set<string>();
   const items: Item[] = [];
   for (const repo of repos) {
@@ -197,6 +199,31 @@ export function buildItems(
       delisted: !revocation && repo?.index != null,
     });
   }
+  // Development loads: listed under Installed (tagged Dev) so that they can be disabled and enabled for this run.
+  for (const info of loads) {
+    if (installed.has(info.id)) continue;
+    const local = display(info);
+    items.push({
+      key: `\n${info.id}`,
+      id: info.id,
+      repo: null,
+      entry: null,
+      installed: info,
+      development: true,
+      best: null,
+      state: "local",
+      revocation: null,
+      blocked: null,
+      name: local.name,
+      author: local.author,
+      punchline: local.punchline,
+      description: local.description,
+      tags: local.tags,
+      english: local.english,
+      published: null,
+      local,
+    });
+  }
   return items;
 }
 
@@ -212,7 +239,10 @@ function shown(entry: IndexEntry, locale: string) {
   };
 }
 
-/** Rows that stand for the installed instance (the Installed tab). */
+/** A development load's own row (`--plugin`): disabling it lasts for this run only; it cannot be uninstalled. */
+export const isDevelopmentRow = (item: Item) => item.installed !== null && item.installed.origin !== "installed";
+
+/** Rows that stand for the installed instance or a development load (the Installed tab). */
 export const isInstalledRow = (item: Item) =>
   item.state === "installed" ||
   item.state === "update" ||
