@@ -4,7 +4,7 @@ Status: implemented by the API maintainer; independent review "merge, with low i
 
 ## Ruling
 
-User ruling, 2026-10-27: following Chrome MV3's `chrome.storage.session`, add an API for state that lives as long as the **player process**, not the plugin process. It survives a plugin restart (a reload from the store, a crash and restart of the shared runner planned in [2026-10-shared-runner](2026-10-shared-runner.md), a later opt-in idle stop under [2026-10-lazy-activation](2026-10-lazy-activation.md)) and is cleared when the player quits. Existing APIs (`plugin.storage.json` and the rest) do not change. The docs say, where they explain the plugin lifecycle: "keep state that must survive a restart in session storage (or persistent storage)".
+User ruling, 2026-10-27: following Chrome MV3's `chrome.storage.session`, add an API for state that lives as long as the **player process**, not the plugin process. It survives a plugin restart (a reload from the store, a crash and restart of the shared runner planned in [2026-10-shared-runner](2026-10-shared-runner.md), the idle stop under [2026-10-lazy-activation](2026-10-lazy-activation.md)) and is cleared when the player quits. Existing APIs (`plugin.storage.json` and the rest) do not change. The docs say, where they explain the plugin lifecycle: "keep state that must survive a restart in session storage (or persistent storage)".
 
 Under §1.6 this is an **addition**: a new member, new wire methods, no change to any existing signature, error code, default or lifecycle. Released as an SDK patch; `apiVersion` stays `vestra/1`.
 
