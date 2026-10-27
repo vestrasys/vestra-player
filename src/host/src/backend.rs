@@ -135,8 +135,13 @@ impl Backend {
                         let mut buffers = crate::render_target::BufferRing::default();
                         let mut source: Option<(u32, u32)> = None;
                         let mut source_read: Option<Instant> = None;
+                        let mut last_size = None;
+                        let stages = &render_frame.stages;
                         while !renderer_stop.load(Ordering::Relaxed) {
                             let update = render.update();
+                            if update {
+                                stages.update();
+                            }
                             let (revision, request) = render_target.get();
                             if redraw.due(update, revision) {
                                 // The source display size changes only with a
@@ -158,14 +163,45 @@ impl Backend {
                                 // Reused buffers: a new one per frame costs more
                                 // than mpv's render at 4K (`BufferRing`).
                                 let mut buffer = buffers.take(width, height);
+                                // The frame's display time: mpv waits for it
+                                // inside the render call (render.h,
+                                // `MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME`,
+                                // on by default), so the call takes about one
+                                // frame interval; the work is what remains.
+                                let target = render
+                                    .next_frame_info()
+                                    .ok()
+                                    .map(|info| info.target_time)
+                                    .filter(|time| *time > 0);
+                                let began_us = render_core.get_time_us();
+                                let began = Instant::now();
+                                let held = buffer.as_bytes().as_ptr();
+                                let pixels = buffer.make_mut_bytes();
+                                let copied = pixels.as_ptr() != held;
                                 render.render_software(
                                     width as i32,
                                     height as i32,
                                     SwPixelFormat::Rgb24,
                                     width as usize * 3,
-                                    buffer.make_mut_bytes(),
+                                    pixels,
                                 )?;
+                                let took = began.elapsed();
                                 buffers.keep(&buffer);
+                                let resized = last_size
+                                    .replace((width, height))
+                                    .is_some_and(|last| last != (width, height));
+                                let waited = target
+                                    .filter(|time| *time > began_us)
+                                    .map_or(Duration::ZERO, |time| {
+                                        Duration::from_micros((time - began_us) as u64)
+                                    });
+                                stages.call(
+                                    update,
+                                    resized,
+                                    copied,
+                                    took,
+                                    took.saturating_sub(waited),
+                                );
                                 // Consume safe normalized frames offscreen while source
                                 // orientation is prepared; never publish an unrotated preview.
                                 if renderer_publish.load(Ordering::Acquire) {
@@ -197,6 +233,8 @@ impl Backend {
                 #[cfg(feature = "producer-audio")]
                 let mut producer_was_active = false;
                 let mut processing = crate::processing::Processing::default();
+                // `VESTRA_FRAME_LOG`: mpv's dropped and late frames for the line.
+                let frame_log = std::env::var("VESTRA_FRAME_LOG").as_deref() == Ok("1");
                 let mut view = crate::video_view::View::default();
                 let mut render_options = crate::video_render::Options::default();
                 let mut render_was_gpu = out_render.gpu().is_some();
@@ -575,6 +613,12 @@ impl Backend {
                     // out in this iteration; otherwise every 100 ms.
                     if push.due(sources.generation(), sources.phase(), Instant::now()) {
                         view_target.set_picture(picture_size(&mpv));
+                        if frame_log {
+                            out_frame.stages.mpv_counts(
+                                mpv.get_property::<i64>("frame-drop-count").ok(),
+                                mpv.get_property::<i64>("vo-delayed-frame-count").ok(),
+                            );
+                        }
                         let source_snapshot = sources.snapshot(&mpv);
                         // A watched hwdec switch's window also ends without an event.
                         if processing.hwdec_watching() {
