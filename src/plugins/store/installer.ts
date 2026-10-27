@@ -312,7 +312,9 @@ async function installCandidate(
     const upgraded = previous?.version && isVersion(previous.version) && compareVersions(version, previous.version) > 0;
     return upgraded ? msg("Updated {} to {}", name, version) : msg("Installed {} {}", name, version);
   });
-  store.select(selectKey(store, candidate.manifest.id, source));
+  // From a repository the row was already selected; it stays on its tab (the list picks its neighbour if it
+  // left). A file or link has no row yet: show it where it lands.
+  if (source.kind !== "repository") store.select(selectKey(store, candidate.manifest.id, source));
 }
 
 /** After an install: select the row that now stands for it. */

@@ -362,12 +362,18 @@ export async function tab(host: TestHost, index: number) {
 /** The rows of every tab (Installed, Available, Updates; an update row shows under Installed too). */
 export async function allRows(host: TestHost) {
   const current = (props(host)["category"] as number | undefined) ?? INSTALLED;
+  // Switching tabs moves the selection (the details follow the list): select the same row again afterwards.
+  const selected = (rows(host) as (Row & { selected?: boolean })[]).find((r) => r.selected)?.key;
   const all: Row[] = [];
   for (const index of [INSTALLED, AVAILABLE]) {
     await tab(host, index);
     all.push(...rows(host));
   }
   await tab(host, current);
+  if (selected !== undefined) {
+    host.window("store").emit("select", selected);
+    await host.settle();
+  }
   return all;
 }
 

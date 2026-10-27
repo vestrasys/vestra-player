@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- The details always show a plugin of the list. Switching tabs keeps the selected plugin when the new tab lists it, otherwise selects the tab's first plugin; a search or tag that hides the selected plugin does the same, and an empty list leaves the details empty until it fills (an index read, a refresh that adds matches), then selects its first plugin. A tab that has no plugin with the chosen tag shows all its plugins again (Tags: All). Before, Available could show the details of an installed plugin that was not in its list.
+- Installing, updating or uninstalling keeps the tab: when the plugin leaves the list (an install leaves Available, an update leaves Updates), the plugin in its place is selected, as when its repository drops it. A plugin installed from a file or a link, and the revocation notice's Open Plugin Store, still show the plugin on its own tab.
+- The list scrolls the selected plugin into view after a tab, search, tag or sort change.
+
 ## 0.2.1
 
 Finishes the plugin center. Needs Vestra Player 0.5.1.

@@ -48,7 +48,10 @@ test("menu Plugin Store… counts updates from the same source only, announces t
     host.window("store").emit("act", "update");
     await until(host, () => path(host)?.[0] === "Plugin Store…", "count gone after the update");
     await until(host, () => !store.busy);
+    // The updated plugin left Updates; the tab stays, empty, without details.
+    assert.equal(props(host)["category"], UPDATES);
     assert.equal(props(host)["empty-text"], "所有插件都是最新的");
+    assert.equal(props(host)["has-selection"], false);
   } finally {
     await stop();
   }
