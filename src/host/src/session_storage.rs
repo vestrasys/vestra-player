@@ -7,26 +7,40 @@
 //! development id: the same identity as its data directory and secrets), never
 //! by the process generation, so a value survives every restart of the
 //! plugin's process within one player run: a reload, an upgrade, a crash, a
-//! restart of the shared runner, a later idle stop. It is cleared when the
-//! user disables or uninstalls the plugin (`package_manager.rs`), and with the
-//! player process. Requests: `storage.session.get` / `set` / `delete` /
-//! `keys`; no capability, like `plugin.storage.json`.
+//! failed start. It is cleared when the user disables or uninstalls the
+//! plugin, when a retired instance can no longer be reconnected
+//! (`package_manager.rs`), and with the player process. Requests:
+//! `storage.session.get` / `set` / `delete` / `keys`; no capability, like
+//! `plugin.storage.json`.
+//!
+//! Values are kept as their compact JSON text, so the quota is what they
+//! take: each entry counts its key, its text and [`ENTRY_BYTES`] for the
+//! map's own bookkeeping. Object properties come back in the order
+//! `serde_json` keeps them (sorted), not the order the plugin wrote.
 #![forbid(unsafe_code)]
 use super::*;
 use std::collections::HashMap;
 
-/// UTF-8 bytes one plugin may hold: each key's bytes plus its value's
-/// compact JSON. The SDK repeats this and [`MAX_KEY_BYTES`]
+/// Bytes one plugin may hold: each key's UTF-8 bytes, its value's compact
+/// JSON and [`ENTRY_BYTES`]. The SDK repeats these and [`MAX_KEY_BYTES`]
 /// (`SESSION_STORAGE_LIMITS`); src/tests/sdk/host-agreement.test.ts checks them.
 pub const MAX_SESSION_BYTES: usize = 1024 * 1024;
 /// UTF-8 bytes of one key (at least 1; no NUL).
 pub const MAX_KEY_BYTES: usize = 1024;
+/// What one entry costs beyond its key and value text: two `String`s in a
+/// `BTreeMap` node and their allocations. Counting it keeps the memory of
+/// many tiny entries inside the quota too.
+pub const ENTRY_BYTES: usize = 128;
 
-/// One plugin's values and the bytes they count.
+/// One plugin's values (compact JSON text) and the bytes they count.
 #[derive(Default)]
 struct Entries {
-    values: BTreeMap<String, (Value, usize)>,
+    values: BTreeMap<String, String>,
     bytes: usize,
+}
+
+fn cost(key: &str, text: &str) -> usize {
+    key.len() + text.len() + ENTRY_BYTES
 }
 
 #[derive(Default)]
@@ -67,37 +81,47 @@ impl SessionStorage {
                     .plugins
                     .get(&id)
                     .and_then(|entries| entries.values.get(name))
-                    .map_or_else(|| json!({}), |(value, _)| json!({ "value": value })))
+                    .map_or_else(
+                        || json!({}),
+                        |text| {
+                            // Written by `set` from a `Value`: always parses.
+                            let value: Value = serde_json::from_str(text).unwrap_or(Value::Null);
+                            json!({ "value": value })
+                        },
+                    ))
             }
             "storage.session.set" => {
                 let name = key_of(params)?;
-                let value = params
+                let text = params
                     .get("value")
-                    .ok_or_else(|| RpcError::invalid("set needs a JSON value"))?;
-                let size = name.len() + value.to_string().len();
-                let entries = self.plugins.entry(id).or_default();
-                let replaced = entries.values.get(name).map_or(0, |(_, size)| *size);
-                let total = entries.bytes - replaced + size;
+                    .ok_or_else(|| RpcError::invalid("set needs a JSON value"))?
+                    .to_string();
+                let (held, replaced) = self.plugins.get(&id).map_or((0, 0), |entries| {
+                    let replaced = entries.values.get(name).map_or(0, |old| cost(name, old));
+                    (entries.bytes, replaced)
+                });
+                let total = held - replaced + cost(name, &text);
                 if total > MAX_SESSION_BYTES {
+                    // Refused before touching the store: nothing changes.
                     return Err(RpcError::new(
                         "limit",
                         format!(
                             "session storage holds at most {MAX_SESSION_BYTES} bytes per plugin \
-                             (keys plus JSON values); this value would make {total}"
+                             (keys, JSON values and {ENTRY_BYTES} per key); this value would make \
+                             {total}"
                         ),
                     ));
                 }
+                let entries = self.plugins.entry(id).or_default();
                 entries.bytes = total;
-                entries
-                    .values
-                    .insert(name.to_owned(), (value.clone(), size));
+                entries.values.insert(name.to_owned(), text);
                 Ok(Value::Null)
             }
             "storage.session.delete" => {
                 let name = key_of(params)?;
                 if let Some(entries) = self.plugins.get_mut(&id) {
-                    if let Some((_, size)) = entries.values.remove(name) {
-                        entries.bytes -= size;
+                    if let Some(text) = entries.values.remove(name) {
+                        entries.bytes -= cost(name, &text);
                     }
                     if entries.values.is_empty() {
                         self.plugins.remove(&id);
@@ -225,37 +249,91 @@ mod tests {
         );
     }
 
+    /// Values of a realistic size: one request is at most 1 MiB on the wire
+    /// (`plugins::MAX_MESSAGE_BYTES`), so a single value stays below that.
     #[test]
-    fn the_quota_counts_keys_and_compact_json_and_a_refused_set_changes_nothing() {
+    fn the_quota_counts_keys_compact_json_and_entries_and_a_refused_set_changes_nothing() {
         let mut store = SessionStorage::default();
         let a = DataKey::Instance("a".into());
-        // "k" + "\"…\"": 1 + 2 + n bytes.
-        let fill = "x".repeat(MAX_SESSION_BYTES - 3);
-        call(&mut store, &a, "set", json!({"key":"k","value":fill})).unwrap();
+        // "kN" + "\"…\"" + ENTRY_BYTES each: four of them fill the quota.
+        let quarter = MAX_SESSION_BYTES / 4 - 2 - 2 - ENTRY_BYTES;
+        let fill = "x".repeat(quarter);
+        for key in ["k0", "k1", "k2", "k3"] {
+            call(&mut store, &a, "set", json!({"key":key,"value":fill})).unwrap();
+        }
+        assert_eq!(store.plugins["instance:a"].bytes, MAX_SESSION_BYTES);
         let error = call(&mut store, &a, "set", json!({"key":"j","value":0})).unwrap_err();
         assert_eq!(error.code, "limit");
         assert_eq!(
             call(&mut store, &a, "keys", json!({})).unwrap(),
-            json!(["k"])
+            json!(["k0", "k1", "k2", "k3"])
         );
         // Replacing counts the new value instead of the old one.
-        let over = "x".repeat(MAX_SESSION_BYTES - 2);
-        let error = call(&mut store, &a, "set", json!({"key":"k","value":over})).unwrap_err();
+        let over = format!("{fill}x");
+        let error = call(&mut store, &a, "set", json!({"key":"k0","value":over})).unwrap_err();
         assert_eq!(error.code, "limit");
         assert_eq!(
-            call(&mut store, &a, "get", json!({"key":"k"})).unwrap()["value"]
+            call(&mut store, &a, "get", json!({"key":"k0"})).unwrap()["value"]
                 .as_str()
                 .unwrap()
                 .len(),
-            MAX_SESSION_BYTES - 3
+            quarter
         );
-        call(&mut store, &a, "set", json!({"key":"k","value":1})).unwrap();
+        call(&mut store, &a, "set", json!({"key":"k0","value":1})).unwrap();
         call(&mut store, &a, "set", json!({"key":"j","value":0})).unwrap();
-        // Another plugin has its own quota.
+        // Another plugin has its own quota; deleting gives the bytes back.
         let b = DataKey::Instance("b".into());
-        call(&mut store, &b, "set", json!({"key":"k","value":fill})).unwrap();
-        // Deleting gives the bytes back.
-        call(&mut store, &b, "delete", json!({"key":"k"})).unwrap();
-        call(&mut store, &b, "set", json!({"key":"k","value":fill})).unwrap();
+        for key in ["k0", "k1", "k2", "k3"] {
+            call(&mut store, &b, "set", json!({"key":key,"value":fill})).unwrap();
+        }
+        call(&mut store, &b, "delete", json!({"key":"k0"})).unwrap();
+        call(&mut store, &b, "set", json!({"key":"k0","value":fill})).unwrap();
+    }
+
+    #[test]
+    fn many_tiny_entries_count_their_bookkeeping() {
+        let mut store = SessionStorage::default();
+        let a = DataKey::Instance("a".into());
+        let mut stored = 0;
+        while call(
+            &mut store,
+            &a,
+            "set",
+            json!({"key":stored.to_string(),"value":0}),
+        )
+        .is_ok()
+        {
+            stored += 1;
+        }
+        assert!(stored <= MAX_SESSION_BYTES / ENTRY_BYTES, "{stored}");
+        assert!(store.plugins["instance:a"].bytes <= MAX_SESSION_BYTES);
+    }
+
+    #[test]
+    fn a_refused_first_set_leaves_no_entry() {
+        let mut store = SessionStorage::default();
+        let a = DataKey::Instance("a".into());
+        let huge = "x".repeat(MAX_SESSION_BYTES);
+        let error = call(&mut store, &a, "set", json!({"key":"k","value":huge})).unwrap_err();
+        assert_eq!(error.code, "limit");
+        assert!(store.plugins.is_empty());
+    }
+
+    #[test]
+    fn values_are_kept_as_compact_text_and_objects_come_back_sorted() {
+        let mut store = SessionStorage::default();
+        let a = DataKey::Instance("a".into());
+        let value: Value =
+            serde_json::from_str(r#"{"b": [0, 0], "a": {"d": 1, "c": null}}"#).unwrap();
+        call(&mut store, &a, "set", json!({"key":"k","value":value})).unwrap();
+        assert_eq!(
+            store.plugins["instance:a"].values["k"],
+            r#"{"a":{"c":null,"d":1},"b":[0,0]}"#
+        );
+        let back = call(&mut store, &a, "get", json!({"key":"k"})).unwrap();
+        assert_eq!(
+            back.to_string(),
+            r#"{"value":{"a":{"c":null,"d":1},"b":[0,0]}}"#
+        );
     }
 }

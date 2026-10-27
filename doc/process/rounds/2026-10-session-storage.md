@@ -1,6 +1,6 @@
 # Session storage (`plugin.storage.session`): SDK 1.5.25, host 0.5.5
 
-Status: implemented by the API maintainer, awaiting review and release (SDK patch based on SDK `main` 1.5.24, d93b1dc).
+Status: implemented by the API maintainer; independent review "merge, with low items to fix first" (memory bound, property order, per-value limit, dropped instances, wording, a rejected first set, lone surrogates), all fixed; awaiting release (SDK branch `sdk-1.5.25` on SDK `main` 1.5.24, d93b1dc).
 
 ## Ruling
 
@@ -33,11 +33,14 @@ Why `get/set/delete/keys` and not a `session.json(name, { defaults, validate })`
 | Plugin reloaded (`packages.reload`) | kept |
 | Plugin upgraded (same installation instance) | kept |
 | Plugin process crashed / stopped by a fault, started again | kept |
-| Shared runner restarts all its members (§8.2 of the runner record) | kept (the host calls `disable(owner)` and starts again; nothing clears) |
-| Idle stop and wake (lazy activation, later) | kept |
+| Start failed, or the plugin is in the failed state, and is started again | kept (nothing clears on a failure) |
+| Development load (`--plugin`) reloaded | kept (development key) |
+| Shared runner restarts all its members (§8.2 of the runner record; a later player) | kept (the host calls `disable(owner)` and starts again; nothing clears) |
+| Idle stop and wake (lazy activation, a later player) | kept |
 | User disables the plugin (`packages.setEnabled(id, false)`) | **cleared** |
 | User uninstalls the plugin (with or without `removeData`) | **cleared** |
 | Player quits | cleared (memory only) |
+| A retired instance is dropped from the full dormant list (`purge_dropped_secrets`) | **cleared**, with its secrets: it can never be reconnected |
 | Plugin replaced by the same id from another source (new instance) | the new instance starts empty; the old instance's values stay in memory until quit and are seen again if the user switches back within the session (as its data directory is) |
 
 Decisions:
@@ -47,8 +50,11 @@ Decisions:
 - **No capability**, like `plugin.storage.json` (the host's `required_capability` returns `None` for the four methods).
 - **Isolation:** the host derives the key from the requesting plugin; a plugin cannot name another's. Requests from a stopped owner are dropped before dispatch (the owner leaves `Host::plugins` synchronously in `disable`), so a late `set` cannot repopulate a cleared store.
 - **Values:** any JSON. The SDK sends `JSON.parse(JSON.stringify(value))`, so what `get` returns is what `JSON.stringify` wrote; a value it cannot write (`undefined`, a function, a cycle, a `BigInt`) is `invalid` before sending. The host does not validate shape; an upgraded plugin may read an older version's value (documented: check the shape).
+- **Stored as compact JSON text** (`String`), not as a `serde_json::Value` tree: a `Value` costs 32 bytes per node, so a 1 MiB array of zeros would have taken about 16 MiB. `get` parses the text again (it was written from a `Value`, so it always parses).
+- **Object property order is not kept.** The host parses the request into `serde_json::Value` without `preserve_order`, so objects come back with their properties sorted (JavaScript then lists integer-like names first, as always). Documented on `SessionStorage`; `TestHost` stores objects sorted the same way so tests see what the player returns.
+- **Lone surrogates.** `JSON.stringify` writes a lone surrogate as `\udXXX`, which `serde_json` refuses; the host then cannot parse the line and stops the plugin with a protocol fault. The SDK refuses such a key or value with `invalid` before sending (a `u`-flag regex, since `String.prototype.isWellFormed` is beyond the SDK's ES2023 target). This is a general wire issue, not one of session storage: any request carrying a plugin string with a lone surrogate (an OSD text, a property value, a command title) has the same effect. Left for a separate round: either the runner rejects such requests with `invalid`, or the host parses leniently and replaces them with U+FFFD.
 - **Keys:** 1–1024 UTF-8 bytes, no NUL, otherwise free text (session state is often keyed by a URL or a path, which the `a-z 0-9 -` rule of `storage.json` names would not allow).
-- **Quota: 1 MiB per plugin**, counting every key's bytes plus its value's compact JSON. Chrome allows 10 MB for all of an extension's session storage (raised from 1 MB in Chrome 112); a player plugin is smaller in scope, the protocol caps one message at 1 MiB anyway (`MAX_MESSAGE_BYTES`), and 1 MiB × the 17 built-ins plus a few third-party plugins keeps the worst case at tens of MB of host memory. Overflow fails with **`limit`** (the existing code for a count or size cap, as `secrets.set` beyond 256 names and the image budget) and changes nothing; replacing a key counts the new value instead of the old one.
+- **Quota: 1 MiB per plugin**, counting every key's bytes, its value's compact JSON and `ENTRY_BYTES` (128) per key for the map's own bookkeeping (two `String` headers in a `BTreeMap` node at ≥ half fill plus two allocations, about 100–150 bytes). With values held as text and the per-key charge, the quota is the memory: a plugin costs the host about 1 MiB at most (a little more for keys whose real bookkeeping exceeds 128 bytes; at most 8192 keys fit), so 17 built-ins plus a few third-party plugins stay around 20 MiB in the worst case, and real use is far below. Chrome allows 10 MB for all of an extension's session storage (raised from 1 MB in Chrome 112); a player plugin is smaller in scope. **One value is also bounded by the wire**: a `set` request is one message of at most 1 MiB (`MAX_MESSAGE_BYTES`, enforced by the runner before sending, `runtime/runner.ts`), so a single value is 1 MiB minus its key and the request envelope; a larger one fails `limit` in the runner, and `TestHost` now refuses every request over the message limit the same way. The docs say to split large state over several keys. Overflow fails with **`limit`** (the existing code for a count or size cap, as `secrets.set` beyond 256 names and the image budget) and changes nothing; replacing a key counts the new value instead of the old one.
 - **Older players** reject the methods with `unsupported` (unknown method); the docs say to set `"minPlayerVersion": "0.5.5"`.
 
 ## Alternatives considered
@@ -63,9 +69,9 @@ Decisions:
 
 Player (`session-storage` branch, host 0.5.5):
 
-- `src/host/src/session_storage.rs` (new): the store, the four requests, `clear`, unit tests (round trip, missing keys, bad keys, missing value, isolation between plugins and between an installed instance and a development load, quota counting, refused set changes nothing, delete returns bytes).
+- `src/host/src/session_storage.rs` (new): the store, the four requests, `clear`, unit tests (round trip, missing keys, bad keys, missing value, isolation between plugins and between an installed instance and a development load, quota counting with the per-key charge on realistically sized values, many tiny entries, refused set changes nothing, a refused first set leaves no entry, delete returns bytes, values held as compact text with sorted objects).
 - `src/host/src/main.rs`: `mod session_storage`, the `Host::session_storage` field, routing `storage.session.*` in `dispatch` (keyed by `plugin.data_key`), `None` capability arm in `required_capability`.
-- `src/host/src/package_manager.rs` (two small insertions, for an easy merge with the shared-runner branch): in `set_enabled`, the `!enabled` branch clears the stopped plugin's key (development key when a development load is the one switched off, else the instance key); in `uninstall`, after `failures.remove`, clears the instance key.
+- `src/host/src/package_manager.rs` (two small insertions, for an easy merge with the shared-runner branch): in `set_enabled`, the `!enabled` branch clears the stopped plugin's key (development key when a development load is the one switched off, else the instance key); in `uninstall`, after `failures.remove`, clears the instance key; `purge_dropped_secrets` clears each dropped retired instance with its secrets.
 - `src/host/Cargo.toml`, `Cargo.lock`: 0.5.5 (0.5.4 is the deinterlace branch).
 - `src/tests/sdk/host-agreement.test.ts`: one appended test, `SESSION_STORAGE_LIMITS` equals `MAX_KEY_BYTES` / `MAX_SESSION_BYTES`; it skips while the installed SDK is older than 1.5.25.
 - `doc/architecture/README.md`: a row for `session_storage.rs`.
@@ -74,7 +80,7 @@ SDK 1.5.25 (patch on SDK `main`): `SessionStorage` and `Storage.session` (types)
 
 ## Verification
 
-- Host unit tests (`session_storage::tests`, 4) and the whole `cargo test --locked`.
+- Host unit tests (`session_storage::tests`, 7) and the whole `cargo test --locked`.
 - Headless end-to-end run of the debug host with two development plugins (a counter that increments `runs` in session storage on each activation, and a manager with `plugins.manage`): `runs=1`; the manager's own `keys()` shows only its key; after `packages.reload` `runs=2`; after `setEnabled(false)` then `setEnabled(true)` `runs=1`; a 1 MiB value fails `limit` each time.
 - Not exercised end to end: uninstall (needs an installed package); covered by the unit test of `clear` and the four-line call site.
 

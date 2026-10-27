@@ -1199,6 +1199,7 @@ test("SESSION_STORAGE_LIMITS are the player's (session_storage.rs; SDK 1.5.25, p
     {
       keyBytes: constant("MAX_KEY_BYTES"),
       bytes: constant("MAX_SESSION_BYTES"),
+      entryBytes: constant("ENTRY_BYTES"),
     },
     { ...runtime.SESSION_STORAGE_LIMITS },
     "SESSION_STORAGE_LIMITS differ from the player's session storage limits",

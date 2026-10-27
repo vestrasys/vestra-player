@@ -1053,10 +1053,12 @@ impl Host {
         }
     }
     /// Retired instances dropped because the dormant list was full can never
-    /// be reconnected: their secrets go too.
+    /// be reconnected: their secrets and session values go too.
     fn purge_dropped_secrets(&mut self) {
         for (guid, _) in self.packages.store.take_dropped() {
-            self.purge_secrets(&DataKey::Instance(guid));
+            let key = DataKey::Instance(guid);
+            self.session_storage.clear(&key);
+            self.purge_secrets(&key);
         }
     }
     /// The installed packages, built-ins included, were started (the first
