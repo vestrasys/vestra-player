@@ -629,9 +629,9 @@ Changes only to host behaviour or semantics, with no API change: G-01 (`SlotStat
 
 **Acceptance**: click the current time to switch to remaining time and restart the player: remaining time is still shown; click the total duration: nothing happens; the pointer is a hand over the current time.
 
-### G-18 State of the bottom bar list button when the sidebar cannot be seen (P2)
+### G-18 State of the bottom bar sidebar toggle when the sidebar cannot be seen (P2)
 
-**Status**: implemented (bridge property `sidebar-hidden`).
+**Status**: implemented. Since player 0.5.10 the toggle is the player's (`host/sidebar` in the bar's command strip, UI-BAR-09) and the player computes this state (the strip's `dimmed` cell); before that, the playback bridge property `sidebar-hidden`.
 
 **Requirements**: the button has three appearances:
 
@@ -639,7 +639,7 @@ Changes only to host behaviour or semantics, with no API change: G-01 (`SlotStat
 | --- | --- | --- |
 | Off | `preferred === false` | Normal colour |
 | On | `preferred && effective`, or `reason === "fullscreen"` | Accent colour (pressed state) |
-| On but not visible | `preferred && !effective && reason === "space"` | Accent colour at 50% opacity; tooltip "Playlist (F6) (the window is too narrow for the playlist)" |
+| On but not visible | `preferred && !effective && reason === "space"` | Accent colour at 50% opacity; tooltip "Toggle Sidebar (the window is too narrow for the sidebar)", with the key when the user bound one |
 
 In fullscreen, `reason === "fullscreen"` means the overlay is retracted (G-01) and becomes visible when the pointer moves to the right edge, so it shows as "On". When the window is narrower than 638 (video 318 + divider 3 + sidebar 317), the sidebar is hidden for lack of space and the preference is unchanged.
 
