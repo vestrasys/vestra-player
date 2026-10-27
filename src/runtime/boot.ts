@@ -119,7 +119,11 @@ export function boot(options: BootOptions): Instance {
   >();
   const listeners = new Map<string, Set<(data: unknown) => void>>();
   let dispose: (() => Promise<void>) | undefined;
-  let stopping: Promise<void> | undefined;
+  // Set synchronously by `stop`, before the plugin's cleanup runs: a request
+  // the cleanup sends is refused, never written (as in the runner before the
+  // split).
+  let stopping = false;
+  let stopped: Promise<void> | undefined;
 
   /**
    * Requests on the ordered pipe. The host replies to every request or stops
@@ -191,7 +195,9 @@ export function boot(options: BootOptions): Instance {
   }
 
   function stop(): Promise<void> {
-    stopping ??= (async () => {
+    if (stopped) return stopped;
+    stopping = true;
+    stopped = (async () => {
       for (const request of pending.values()) {
         clearTimeout(request.timer);
         request.reject(new HostError("disabled", "plugin stopped"));
@@ -203,7 +209,7 @@ export function boot(options: BootOptions): Instance {
         log(error);
       }
     })();
-    return stopping;
+    return stopped;
   }
 
   async function activate(): Promise<"ready" | "failed"> {

@@ -39,9 +39,15 @@ const sdk = dirname(
   ),
 );
 
-/** A relative module specifier ending in `.ts`, as written in an import. */
+/**
+ * A relative module specifier ending in `.ts`, as written in a static import,
+ * an `export … from` or an `import()` of a literal (quoted, or a template
+ * without substitutions). A computed specifier (a variable, a template with
+ * `${…}`) is not supported: the runtime files import literal paths only, and
+ * the check in `stripTypes` refuses any quoted `./….ts` left behind.
+ */
 const RELATIVE_TS =
-  /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(["'])(\.\.?\/[^"']+)\.ts\2/g;
+  /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(["'`])(\.\.?\/[^"'`$]+)\.ts\2/g;
 
 /**
  * `source` (TypeScript with erasable syntax only, as the tsconfig requires)
@@ -65,7 +71,7 @@ export function stripTypes(text, file = "<source>") {
     RELATIVE_TS,
     (_, keyword, quote, path) => `${keyword}${quote}${path}.js${quote}`,
   );
-  if (/(["'])\.\.?\/[^"']+\.ts\1/.test(javascript))
+  if (/(["'`])\.\.?\/[^"'`]*\.ts\1/.test(javascript))
     throw new Error(`${file}: a relative .ts import was not rewritten`);
   return javascript;
 }

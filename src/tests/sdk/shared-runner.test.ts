@@ -10,6 +10,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import test from "node:test";
+// @ts-expect-error: a plain .mjs script without types
+import { stripTypes } from "../../scripts/stage-runtime.mjs";
 
 const runtime = resolve(import.meta.dirname, "../../runtime");
 const plugins = resolve(import.meta.dirname, "../../plugins");
@@ -487,7 +489,7 @@ const inner = (lines: Line[]) =>
   lines.map(({ g: _, ...message }) => JSON.stringify(message));
 
 for (const name of ["video", "playlist"]) {
-  test(`built-in ${name} writes the same messages in its own process and in the shared runner`, async () => {
+  test(`built-in ${name} writes the same messages in its own process and in the shared runner, start to stop`, async () => {
     const directory = join(plugins, name);
     const own = new Host([join(runtime, "runner.ts"), directory], answer, {
       VESTRA_LOCALE: "en",
@@ -495,8 +497,11 @@ for (const name of ["video", "playlist"]) {
       VESTRA_PLUGIN_DATA_DIR: scratch("own-data-"),
     });
     await own.line((l) => l.event === "runtime.ready", "own ready");
-    own.child.stdin.end();
+    const started = Date.now();
+    own.send({ event: "runtime.stop" });
     assert.equal(await own.exited, 0);
+    // The player kills a plugin that has not exited 300 ms after the stop.
+    assert.ok(Date.now() - started < 2000, "the own runner stopped promptly");
     // A real start-up: state reads, subscriptions, registrations.
     const methods = new Set(own.lines.map((l) => l.method));
     assert.ok(methods.has("commands.register"), [...methods].join());
@@ -514,8 +519,82 @@ for (const name of ["video", "playlist"]) {
     });
     await host.event(7, "runtime.ready");
     await host.event(1, "runtime.ready");
+    host.send({ g: 7, event: "runtime.stop" });
+    assert.deepEqual((await host.control("runner.stopped", 7)).data, {
+      g: 7,
+      timedOut: false,
+    });
     assert.deepEqual(inner(host.of(7)), inner(own.lines));
     host.send({ g: 0, event: "runner.stop" });
     assert.equal(await host.exited, 0);
   });
 }
+
+// A plugin's cleanup that sends a request (the SDK's OSD panel clears its
+// text on dispose; `onDispose` code may call the player) gets `disabled` at
+// once and nothing reaches the player after the stop, in both runners.
+const cleanupRequests = `export default async function activate(plugin) {
+  plugin.osd.panel().set("stats");
+  plugin.onDispose(async () => {
+    const code = await plugin.osd.show("bye").then(() => "sent", (e) => e.code);
+    console.error("cleanup " + code);
+  });
+}`;
+
+test("requests sent during cleanup are refused, not written: own runner", async () => {
+  const directory = fixture("test.cleanup", cleanupRequests, ["ui.osd"]);
+  const host = new Host([join(runtime, "runner.ts"), directory], () => ({
+    result: null,
+  }));
+  await host.line((l) => l.event === "runtime.ready", "ready");
+  const written = host.lines.length;
+  const started = Date.now();
+  host.send({ event: "runtime.stop" });
+  assert.equal(await host.exited, 0);
+  assert.ok(Date.now() - started < 2000, "stopped promptly");
+  assert.equal(host.lines.length, written, host.raw.slice(written).join());
+  assert.match(host.stderr, /cleanup disabled/);
+});
+
+test("requests sent during cleanup are refused, not written: shared runner", async () => {
+  const host = shared(() => ({ result: null }));
+  host.start(
+    1,
+    "test.cleanup",
+    fixture("test.cleanup", cleanupRequests, ["ui.osd"]),
+  );
+  await host.event(1, "runtime.ready");
+  const written = host.of(1).length;
+  host.send({ g: 1, event: "runtime.stop" });
+  assert.deepEqual((await host.control("runner.stopped", 1)).data, {
+    g: 1,
+    timedOut: false,
+  });
+  assert.equal(host.of(1).length, written);
+  assert.match(host.stderr, /\[test\.cleanup\] cleanup disabled/);
+  host.send({ g: 0, event: "runner.stop" });
+  assert.equal(await host.exited, 0);
+});
+
+test("staging rewrites literal relative .ts imports and refuses any left", () => {
+  const source = [
+    'import { a } from "./a.ts";',
+    "import type { B } from './b.ts';",
+    'export { c } from "../c.ts";',
+    'import "./side.ts";',
+    "const d = await import(`./d.ts`);",
+    "const e = await import('./e.ts');",
+    'const f = await import("node:fs");',
+  ].join("\n");
+  const javascript = stripTypes(source);
+  for (const name of ["./a.js", "../c.js", "./side.js", "./d.js", "./e.js"])
+    assert.ok(javascript.includes(name), `${name} in ${javascript}`);
+  assert.doesNotMatch(javascript, /b\.ts|b\.js/);
+  assert.ok(javascript.includes('"node:fs"'));
+  // Same lines as the source: stack traces point at runtime/*.ts.
+  assert.equal(javascript.split("\n").length, source.split("\n").length);
+  assert.throws(
+    () => stripTypes("const g = await import(`./${name}.ts`);", "g.ts"),
+    /g\.ts: a relative \.ts import was not rewritten/,
+  );
+});

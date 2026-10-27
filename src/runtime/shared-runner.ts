@@ -121,6 +121,8 @@ function start(data: Start) {
       manifest = await readManifest(data.directory);
     } catch (error) {
       logLine(error);
+      // Stopped while the manifest was read: the host no longer expects an answer.
+      if (!member.alive) return;
       post(
         g,
         JSON.stringify({
@@ -216,6 +218,10 @@ function stats() {
 function runner(message: Inbound) {
   switch (message.event) {
     case "plugin.start":
+      if (typeof message.data !== "object" || message.data === null) {
+        logLine("plugin.start without data");
+        return;
+      }
       start(message.data as Start);
       return;
     case "runner.ping":

@@ -6,8 +6,8 @@
 //! on Windows `ERROR_NO_DATA`), and that panic aborts the host. `diag!`
 //! writes the same line and drops a failed write; `clippy.toml` disallows
 //! the std print macros in the host, so every diagnostic goes through here.
-//! Plugin processes inherit the same stderr; the runner ignores failed
-//! writes too (`runtime/runner.ts`).
+//! Plugin processes inherit the same stderr; the runners ignore failed
+//! writes too (`src/runtime/runner.ts`, `shared-runner.ts`).
 #![forbid(unsafe_code)]
 
 use std::io::Write;
