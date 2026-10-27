@@ -152,8 +152,8 @@
         13,
         10
       ],
-      "usage": "playback/ui/bar.slint SidebarToggle",
-      "container": "23x22 toggle, icon at (5,6)",
+      "usage": "the player's sidebar toggle in @vestra/bar-buttons.slint (host/sidebar)",
+      "container": "41x40 bar button (@vestra/bar-buttons.slint)",
       "stroke": "tint",
       "stroke_width": 1.5,
       "stroke_line_cap": "round",
@@ -579,6 +579,40 @@
       ],
       "usage": "playlist bottom bar SORT (optional icon label)",
       "container": "41x18 small button",
+      "stroke": "tint",
+      "stroke_width": 1.5,
+      "stroke_line_cap": "round",
+      "stroke_line_join": "round"
+    },
+    "store": {
+      "commands": "M 2.5 4 H 11.5 L 10.9 9.6 Q 10.8 10.5 9.9 10.5 H 4.1 Q 3.2 10.5 3.1 9.6 Z M 5.2 4 V 3.3 A 1.8 1.8 0 0 1 8.8 3.3 V 4",
+      "viewbox": [
+        14,
+        12
+      ],
+      "size_px": [
+        14,
+        12
+      ],
+      "usage": "store's bar button (open)",
+      "container": "41x40 bar button (@vestra/bar-buttons.slint)",
+      "stroke": "tint",
+      "stroke_width": 1.5,
+      "stroke_line_cap": "round",
+      "stroke_line_join": "round"
+    },
+    "ai": {
+      "commands": "M 6 1.5 Q 6.6 5.4 10.5 6 Q 6.6 6.6 6 10.5 Q 5.4 6.6 1.5 6 Q 5.4 5.4 6 1.5 Z M 11.5 1.2 V 3.8 M 10.2 2.5 H 12.8",
+      "viewbox": [
+        14,
+        12
+      ],
+      "size_px": [
+        14,
+        12
+      ],
+      "usage": "workshop's bar button (workshop.open)",
+      "container": "41x40 bar button (@vestra/bar-buttons.slint)",
       "stroke": "tint",
       "stroke_width": 1.5,
       "stroke_line_cap": "round",

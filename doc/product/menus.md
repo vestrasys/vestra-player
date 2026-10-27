@@ -6,7 +6,7 @@ The product's context menu tree is merged from the commands registered by each o
 
 ## Menu tree
 
-2026-10-21, baseline main fafa40d. Compiled from the snapshot exported by `OUT=<file> node --test doc/process/rounds/menus-snapshot.test.ts` ([assignment table](../process/rounds/2026-10-plugin-ui.md) §3; at the time the script's default list covered all 19 plugins under `src/plugins`; after `youtube` and `bilibili` moved out, the default list is the other 17); the host's "Fullscreen", "Leave Fullscreen" and "Quit" are in `src/host/src/main.rs` (`register_host_commands`) and are not in the snapshot. Checked, radio and initially disabled states come from each command's `state` in the same test host.
+2026-10-21, baseline main fafa40d. Compiled from the snapshot exported by `OUT=<file> node --test doc/process/rounds/menus-snapshot.test.ts` ([assignment table](../process/rounds/2026-10-plugin-ui.md) §3; at the time the script's default list covered all 19 plugins under `src/plugins`; after `youtube` and `bilibili` moved out, the default list is the other 17); the host's "Fullscreen", "Leave Fullscreen", "Quit" and "Toggle Sidebar" (`host/sidebar`, player 0.5.10: no menu entry and no default key; the bottom bar's sidebar button, listed in Keyboard Shortcuts) are in `src/host/src/main.rs` (`register_host_commands`) and are not in the snapshot. Checked, radio and initially disabled states come from each command's `state` in the same test host.
 
 The labels below are the English interface text (the English source text of each string); the Simplified Chinese interface shows the translations from the `zh-Hans.po` catalogs.
 
