@@ -1,7 +1,17 @@
 import { readFile, stat } from "node:fs/promises";
-import { basename, dirname } from "node:path";
-import type { Command, CommandOptions, ConfirmOptions, Panel, Plugin, PluginError } from "@vestra-player/sdk";
-import { DROP_EXTENSIONS, dropProblems, dropRow, expandDrop, LIST_TOP, nothingToAdd, ROW_HEIGHT } from "./drop.ts";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Command, CommandOptions, ConfirmOptions, ImageRef, Panel, Plugin, PluginError } from "@vestra-player/sdk";
+import {
+  DROP_EXTENSIONS,
+  dropProblems,
+  dropRow,
+  expandDrop,
+  LIST_TOP,
+  nothingToAdd,
+  ROW_HEIGHT,
+  THUMB_ROW_HEIGHT,
+} from "./drop.ts";
 import { follower, type OpenMode } from "./follow.ts";
 import { linkDialog } from "./link.ts";
 import {
@@ -14,13 +24,28 @@ import {
   savePath,
   writeAtomic,
 } from "./listfile.ts";
-import { extensionOf, folderError, isMedia, LIST_FILES, scanFolder, siblings } from "./media.ts";
+import { extensionOf, folderError, isMedia, LIST_FILES, mediaKind, scanFolder, siblings } from "./media.ts";
 import { failureText, fitName, type NoticeArgs, type NoticeText } from "./notices.ts";
 import { playback } from "./playback.ts";
 import { Prober, toolRunner } from "./probe.ts";
 import { clock, lengthOf, Queue, type Placement, type Repeat, type Row, type SortKey } from "./queue.ts";
-import { centered, ensureVisible, inView, SHOW_SETTLE_MS, USER_SCROLL_HOLD_MS, WINDOW_ROWS, windowStart } from "./scroll.ts";
+import {
+  centered,
+  ensureVisible,
+  inView,
+  limit,
+  SHOW_SETTLE_MS,
+  THUMB_MARGIN,
+  THUMB_SEND_MARGIN,
+  USER_SCROLL_HOLD_MS,
+  WINDOW_ROWS,
+  windowStart,
+} from "./scroll.ts";
 import { defaults, PERSIST_CHECK_MS, Store, type Saved } from "./store.ts";
+import { ffmpegRunner, HOLD_AFTER_OPEN_MS, THUMB_WIDTH, Thumbnailer } from "./thumbs.ts";
+
+/** A transparent 1×1 picture: the rows' thumbnail until (or unless) one is made. */
+const PLACEHOLDER = fileURLToPath(new URL("./placeholder.png", import.meta.url));
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const repeats = [
@@ -117,6 +142,16 @@ export const REVEAL_LIMIT = 20;
 /** Injected in tests: the sort's shuffle source. */
 export type Options = { random: () => number };
 
+/** The line under a row's title beside its thumbnail: the file's folder, or the link's host. */
+function detailOf(row: Row) {
+  if (row.kind === "file") return basename(dirname(row.source));
+  try {
+    return new URL(row.source).host;
+  } catch {
+    return "";
+  }
+}
+
 /** Run `work` over `items`, at most `limit` at a time. */
 async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<void>) {
   let next = 0;
@@ -135,8 +170,28 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   // i18n-ignore: a row's title is data
   queue.sayTitle = (title) => void plugin.osd.show(title.slice(0, 200)).catch(() => {});
   const prober = new Prober(queue, toolRunner(plugin.tools), () => plugin.update());
-  queue.removed = (rowId) => prober.cancel(rowId);
+  // 0.1.11: thumbnails, made like the durations (only for the rows on screen), kept in
+  // `<dataDirectory>/thumbs`; none without a data directory.
+  let thumbDir: string | null = null;
+  try {
+    thumbDir = join(plugin.dataDirectory, "thumbs");
+  } catch {
+    /* no data directory: rows show the placeholder */
+  }
+  const thumbs = new Thumbnailer(
+    queue,
+    ffmpegRunner(plugin.tools),
+    thumbDir,
+    (path) => plugin.ui.image(path, { maxSide: THUMB_WIDTH }),
+    () => plugin.update(),
+  );
+  const placeholder: ImageRef = plugin.ui.image(PLACEHOLDER);
+  queue.removed = (rowId) => {
+    prober.cancel(rowId);
+    thumbs.cancel(rowId);
+  };
   plugin.onDispose(() => prober.cancelAll());
+  plugin.onDispose(() => thumbs.cancelAll());
   // Durations are read for the rows on screen only (set at each update below).
   prober.want([]);
   let follow: ReturnType<typeof follower> | null = null;
@@ -163,6 +218,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   queue.setShuffle(settings.shuffle);
   if (settings.remember && loaded.list) Store.restore(queue, loaded.list);
   prober.import(store?.cache.value);
+  thumbs.import(store?.thumbs.value);
   player.setFast(settings.gapless);
   const snapshot = (): [Saved, string] => {
     settings.repeat = queue.repeat;
@@ -178,12 +234,13 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     if (json !== saved) store.lists.save(value);
     saved = json;
     if (prober.dirty) store.cache.save(prober.export());
+    if (thumbs.dirty) store.thumbs.save(thumbs.export());
   };
   /** Write now (turning "Remember List" off removes the saved list at once). */
   const flush = async () => {
     persist();
     try {
-      await Promise.all([store?.lists.flush(), store?.cache.flush()]);
+      await Promise.all([store?.lists.flush(), store?.cache.flush(), store?.thumbs.flush()]);
     } catch (error) {
       queue.message = `Cannot save the list: ${errorText(error)}`;
     }
@@ -741,6 +798,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
 
   // G-08: scrolling the list from the plugin (`scroll-to-y` on each `scroll-request`).
   const listArea = { scroll: 0, height: Number.POSITIVE_INFINITY, top: LIST_TOP };
+  /** The rows' height in px (`ui/sidebar.slint`): taller beside a thumbnail. */
+  const rowHeight = () => (settings.thumbnails ? THUMB_ROW_HEIGHT : ROW_HEIGHT);
   const scroller = { request: 0, to: 0, sentAt: Number.NEGATIVE_INFINITY, userAt: Number.NEGATIVE_INFINITY };
   let lastPlaying: string | null = null;
   // The panel is created anew each time it shows (the player builds it when it appears), so
@@ -768,11 +827,12 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     const at = (rowId: string | null) => shown.findIndex((row) => row.rowId === rowId);
     if (reveal) {
       const index = at(queue.selected);
-      if (index >= 0) return { to: ensureVisible(index, listArea.scroll, listArea.height, shown.length), force: false };
+      if (index >= 0)
+        return { to: ensureVisible(index, listArea.scroll, listArea.height, shown.length, rowHeight()), force: false };
     }
     if (hidden() || appeared.pending) {
       const index = playing ? at(playing) : -1;
-      const to = index < 0 ? null : centered(index, listArea.height, shown.length);
+      const to = index < 0 ? null : centered(index, listArea.height, shown.length, rowHeight());
       // Nothing is on screen while hidden: only the next panel's start moves (no request).
       if (hidden()) {
         if (to !== null) listArea.scroll = to;
@@ -784,8 +844,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     // Not while the user browses (scrolled lately), nor for a row the search hides.
     if (!playingChanged || !playing || Date.now() - scroller.userAt < USER_SCROLL_HOLD_MS) return null;
     const index = at(playing);
-    if (index < 0 || inView(index, listArea.scroll, listArea.height)) return null;
-    return { to: centered(index, listArea.height, shown.length), force: false };
+    if (index < 0 || inView(index, listArea.scroll, listArea.height, rowHeight())) return null;
+    return { to: centered(index, listArea.height, shown.length, rowHeight()), force: false };
   };
   let wasShown = !hidden();
   // Shown again (F6, its tab, the fullscreen pop-out), hidden (centre it for the next
@@ -816,16 +876,32 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       scroller.sentAt = Date.now();
       listArea.scroll = target.to;
     }
-    firstRow = windowStart(firstRow, listArea.scroll, listArea.height, shown.length);
+    const height = rowHeight();
+    const pictures = settings.thumbnails;
+    firstRow = windowStart(firstRow, listArea.scroll, listArea.height, shown.length, height);
     const page = shown.slice(firstRow, firstRow + WINDOW_ROWS);
-    // Durations are read for the rows on screen only (never for the whole list up front).
-    const top = Math.floor(Math.max(0, listArea.scroll) / ROW_HEIGHT);
-    const rowsOnScreen = Number.isFinite(listArea.height) ? Math.ceil(listArea.height / ROW_HEIGHT) + 1 : 50;
+    // Durations (and thumbnails) are read for the rows on screen only (never for the whole
+    // list up front); with thumbnails, also for `THUMB_MARGIN` rows above and below.
+    const top = Math.floor(Math.max(0, listArea.scroll) / height);
+    const sized = Number.isFinite(listArea.height);
+    const rowsOnScreen = sized ? Math.ceil(listArea.height / height) + 1 : 50;
+    const margin = pictures && sized ? THUMB_MARGIN : 0;
     const ids = shown.slice(top, top + rowsOnScreen).map((row) => row.rowId);
-    if (ids.join("\n") !== onScreen) {
-      onScreen = ids.join("\n");
-      prober.want(ids);
+    const near = margin
+      ? [
+          ...ids,
+          ...shown.slice(top + rowsOnScreen, top + rowsOnScreen + margin).map((row) => row.rowId),
+          ...shown.slice(Math.max(0, top - margin), top).map((row) => row.rowId),
+        ]
+      : ids;
+    if (near.join("\n") !== onScreen) {
+      onScreen = near.join("\n");
+      prober.want(near);
     }
+    // Thumbnails only while the list is on screen and has its size.
+    thumbs.want(pictures && sized && !hidden() ? near : []);
+    const sendFrom = top - THUMB_SEND_MARGIN,
+      sendTo = top + rowsOnScreen + THUMB_SEND_MARGIN;
     // A row's number is its place in the whole list (also while a search filters).
     const index = queue.filtering ? new Map(queue.rows.map((row, i) => [row.rowId, i])) : null;
     let sum = 0,
@@ -843,6 +919,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     return {
       rowCount: shown.length,
       firstRow,
+      // Plain values only: the player updates a changed row in place (it replaces a model
+      // holding images as a whole, rebuilding every row element). The pictures are `thumbs`.
       rows: page.map((row: Row, i) => ({
         rowId: row.rowId,
         label: `${(index ? index.get(row.rowId)! : firstRow + i) + 1}. ${row.title}`,
@@ -853,7 +931,20 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         current: row.rowId === queue.binding?.rowId,
         played: row.played,
         failed: row.status === "failed",
+        // The thumbnail's placeholder ("video", "audio", "link" or ""), and the line under the
+        // title: the file's folder, or the link's host.
+        media: !pictures ? "" : row.kind === "url" ? "link" : (mediaKind(row.source) ?? ""),
+        detail: pictures ? detailOf(row) : "",
       })),
+      // One picture per row of `rows` (the placeholder until one is made, and outside
+      // `THUMB_SEND_MARGIN` rows of the view); empty without thumbnails.
+      thumbs: pictures
+        ? page.map((row, i) => {
+            const at = firstRow + i;
+            return (at >= sendFrom && at < sendTo && thumbs.picture(row.rowId)) || placeholder;
+          })
+        : [],
+      thumbnails: pictures,
       total,
       filtering: queue.filtering,
       focusSearch,
@@ -917,6 +1008,20 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       { x, y },
     ),
   );
+  // 0.1.11: the bottom bar's thumbnail toggle (saved with the settings). The row at the
+  // top of the view stays there while the rows change height.
+  list.on("toggleThumbnails", () => {
+    const before = rowHeight();
+    settings.thumbnails = !settings.thumbnails;
+    const after = rowHeight();
+    if (!settings.thumbnails) thumbs.want([]);
+    if (!Number.isFinite(listArea.height)) return;
+    const to = limit(Math.floor(listArea.scroll / before) * after, listArea.height, queue.visible().length, after);
+    scroller.request++;
+    scroller.to = to;
+    scroller.sentAt = Date.now();
+    listArea.scroll = to;
+  });
   list.on("hide", () => sidebar.setVisible(false));
   list.on("toggleDetached", () => sidebar.setDetached(!(sidebar.state?.detached ?? false)));
   // Only typing in the search box holds the panel (the bar or fullscreen pop-out stays while
@@ -1014,7 +1119,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         let before: number | undefined;
         if (how.at) {
           const shown = queue.visible();
-          const row = dropRow(how.at.y, listArea.scroll, listArea.height, shown.length, listArea.top);
+          const row = dropRow(how.at.y, listArea.scroll, listArea.height, shown.length, listArea.top, rowHeight());
           if (row !== null) before = queue.rows.indexOf(shown[row]!);
         }
         // G-11: replaced without asking; not while another source opens (only added then).
@@ -1060,4 +1165,19 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   });
   plugin.player.onChange((state) => follow?.check(state));
   void follow.check();
+
+  // Thumbnails never compete with an open: ffmpeg waits while a source loads and for
+  // `HOLD_AFTER_OPEN_MS` after (cache hits go on).
+  let opening = false;
+  const holdThumbs = (phase: string) => {
+    if (phase === "loading") {
+      if (!opening) thumbs.hold(Number.POSITIVE_INFINITY);
+      opening = true;
+    } else if (opening) {
+      opening = false;
+      thumbs.hold(Date.now() + HOLD_AFTER_OPEN_MS);
+    }
+  };
+  holdThumbs(plugin.player.state.phase);
+  plugin.player.onChange((state) => holdThumbs(state.phase));
 }

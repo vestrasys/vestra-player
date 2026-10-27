@@ -6,532 +6,532 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: drop.ts:197
+#: drop.ts:206
 #, x-machine
 msgid "Nothing to add: {}"
 msgstr "Nada que agregar: {}"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Added {count} files from the same folder"
 msgstr "Se agregaron {count} archivos de la misma carpeta"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Added {count} files from the same folder, limit of {limit} reached"
 msgstr "Se agregaron {count} archivos de la misma carpeta; se alcanzó el límite de {limit}"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Nothing to add"
 msgstr "Nada que agregar"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Link added"
 msgstr "Enlace agregado"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Existing link selected"
 msgstr "Se seleccionó el enlace existente"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Scanning folder…"
 msgstr "Explorando la carpeta…"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "No playable files in the folder"
 msgstr "No hay archivos reproducibles en la carpeta"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Cannot read the folder: {}"
 msgstr "No se puede leer la carpeta: {}"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Removed: {}"
 msgstr "Eliminado: {}"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Invalid items removed: {}"
 msgstr "Elementos no válidos eliminados: {}"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "No invalid items"
 msgstr "No hay elementos no válidos"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "The media being opened was removed from the list"
 msgstr "El medio que se estaba abriendo se eliminó de la lista"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "The current media was removed from the list"
 msgstr "El medio actual se eliminó de la lista"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "List cleared; the current media continues"
 msgstr "Se vació la lista; el medio actual continúa"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Unsupported list format"
 msgstr "Formato de lista no compatible"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Cannot open the list: the file is larger than 16 MB"
 msgstr "No se puede abrir la lista: el archivo supera los 16 MB"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Cannot open the list: {}"
 msgstr "No se puede abrir la lista: {}"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Opened list: {name} ({count} items)"
 msgstr "Lista abierta: {name} ({count} elementos)"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Opened list: {name} ({count} items), skipped: {skipped}"
 msgstr "Lista abierta: {name} ({count} elementos); omitidos: {skipped}"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Cannot save the list: {}"
 msgstr "No se puede guardar la lista: {}"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Saved list: {}"
 msgstr "Lista guardada: {}"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Repeat: Off"
 msgstr "Repetir: desactivado"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Repeat: All"
 msgstr "Repetir: todo"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Repeat: One"
 msgstr "Repetir: uno"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Shuffle: On"
 msgstr "Aleatorio: activado"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Shuffle: Off"
 msgstr "Aleatorio: desactivado"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Fast advance to next: On"
 msgstr "Avance rápido al siguiente: activado"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Fast advance to next: Off"
 msgstr "Avance rápido al siguiente: desactivado"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "The list will be remembered"
 msgstr "Se recordará la lista"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "The list will no longer be remembered"
 msgstr "Ya no se recordará la lista"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Confirm before removing all: On"
 msgstr "Confirmar antes de quitar todo: activado"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Confirm before removing all: Off"
 msgstr "Confirmar antes de quitar todo: desactivado"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "End of the list"
 msgstr "Fin de la lista"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Cannot replay: {}"
 msgstr "No se puede volver a reproducir: {}"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Cannot open {}: the file does not exist"
 msgstr "No se puede abrir {}: el archivo no existe"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Cannot open {}: cannot open this media"
 msgstr "No se puede abrir {}: no se puede abrir este medio"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Cannot open {}: {}"
 msgstr "No se puede abrir {}: {}"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "The file's canonical path matches an existing item; that item is selected"
 msgstr "La ruta canónica del archivo coincide con un elemento existente; se seleccionó ese elemento"
 
-#: main.ts:134
+#: main.ts:169
 #, x-machine
 msgid "Close the other dialog first"
 msgstr "Cierra primero el otro cuadro de diálogo"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:246
+#: main.ts:202 main.ts:595 main.ts:618 main.ts:771 manifest.json ui/settings.slint:114 ui/sidebar.slint:290
 #, x-machine
 msgid "Playlist"
 msgstr "Lista de reproducción"
 
-#: main.ts:246
+#: main.ts:303
 #, x-machine
 msgid "Remove all {} items from the playlist?"
 msgstr "¿Quitar los {} elementos de la lista de reproducción?"
 
-#: main.ts:246
+#: main.ts:303
 #, x-machine
 msgid "Replace the current list with {}?"
 msgstr "¿Reemplazar la lista actual por {}?"
 
-#: main.ts:246
+#: main.ts:303
 #, x-machine
 msgid "The media that is playing continues to play."
 msgstr "El medio que se está reproduciendo seguirá reproduciéndose."
 
-#: main.ts:246 main.ts:527
+#: main.ts:303 main.ts:584
 #, x-machine
 msgid "Remove All"
 msgstr "Quitar todo"
 
-#: main.ts:246
+#: main.ts:303
 #, x-machine
 msgid "Replace"
 msgstr "Reemplazar"
 
-#: main.ts:246
+#: main.ts:303
 #, x-machine
 msgid "Don't ask again"
 msgstr "No volver a preguntar"
 
-#: main.ts:275
+#: main.ts:332
 #, x-machine
 msgid "Add to Playlist"
 msgstr "Agregar a la lista de reproducción"
 
-#: main.ts:289
+#: main.ts:346
 #, x-machine
 msgid "Open Folder"
 msgstr "Abrir carpeta"
 
-#: main.ts:289
+#: main.ts:346
 #, x-machine
 msgid "Add Folder to Playlist"
 msgstr "Agregar carpeta a la lista de reproducción"
 
-#: main.ts:318
+#: main.ts:375
 #, x-machine
 msgid "another source is opening, only added to the list"
 msgstr "se está abriendo otra fuente; solo se agregó a la lista"
 
-#: main.ts:416
+#: main.ts:473
 #, x-machine
 msgid "Only the first {} files are shown"
 msgstr "Solo se muestran los primeros {} archivos"
 
-#: main.ts:438
+#: main.ts:495
 #, x-machine
 msgid "File not found: {}"
 msgstr "Archivo no encontrado: {}"
 
-#: main.ts:449
+#: main.ts:506
 #, x-machine
 msgid "Open Playlist File"
 msgstr "Abrir archivo de lista de reproducción"
 
-#: main.ts:495
+#: main.ts:552
 #, x-machine
 msgid "Save Playlist"
 msgstr "Guardar lista de reproducción"
 
-#: main.ts:497
+#: main.ts:554
 #, x-machine
 msgid "Playlist.m3u8"
 msgstr "Lista de reproducción.m3u8"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Play"
 msgstr "Reproducir"
 
-#: main.ts:527 main.ts:561
+#: main.ts:584 main.ts:618
 #, x-machine
 msgid "Add Files…"
 msgstr "Agregar archivos…"
 
-#: main.ts:527 main.ts:561
+#: main.ts:584 main.ts:618
 #, x-machine
 msgid "Add Folder…"
 msgstr "Agregar carpeta…"
 
-#: main.ts:527 main.ts:561
+#: main.ts:584 main.ts:618
 #, x-machine
 msgid "Add Link…"
 msgstr "Agregar enlace…"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Remove Selected"
 msgstr "Quitar seleccionados"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Remove Unselected"
 msgstr "Quitar no seleccionados"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Remove Invalid Items"
 msgstr "Quitar elementos no válidos"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Show in Finder"
 msgstr "Mostrar en el Finder"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Move to Top"
 msgstr "Mover al principio"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Move Up"
 msgstr "Subir"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Move Down"
 msgstr "Bajar"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Move to Bottom"
 msgstr "Mover al final"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Ascending"
 msgstr "Ascendente"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Descending"
 msgstr "Descendente"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "By Title"
 msgstr "Por título"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "By File Name"
 msgstr "Por nombre de archivo"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "By Extension"
 msgstr "Por extensión"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "By Size"
 msgstr "Por tamaño"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "By Duration"
 msgstr "Por duración"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "By Date"
 msgstr "Por fecha"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Random Order"
 msgstr "Orden aleatorio"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "By Folder"
 msgstr "Por carpeta"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Sort by Path"
 msgstr "Ordenar por ruta"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Reverse Current Order"
 msgstr "Invertir el orden actual"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Select All"
 msgstr "Seleccionar todo"
 
-#: main.ts:527 ui/sidebar.slint:548
+#: main.ts:584 ui/sidebar.slint:680
 #, x-machine
 msgid "Search"
 msgstr "Buscar"
 
-#: main.ts:527 main.ts:561
+#: main.ts:584 main.ts:618
 #, x-machine
 msgid "Open List File…"
 msgstr "Abrir archivo de lista…"
 
-#: main.ts:527 main.ts:561
+#: main.ts:584 main.ts:618
 #, x-machine
 msgid "Save List…"
 msgstr "Guardar lista…"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Close List"
 msgstr "Cerrar lista"
 
-#: main.ts:527
+#: main.ts:584
 #, x-machine
 msgid "Playlist Settings…"
 msgstr "Configuración de la lista de reproducción…"
 
-#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#: main.ts:586 main.ts:589 main.ts:621 main.ts:622
 #, x-machine
 msgid "Opening, or the result is not known yet"
 msgstr "Abriendo, o aún no se conoce el resultado"
 
-#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#: main.ts:586 main.ts:589 main.ts:621 main.ts:622
 #, x-machine
 msgid "Nothing to act on"
 msgstr "No hay elementos para esta acción"
 
-#: main.ts:529 main.ts:532 main.ts:555 main.ts:564 main.ts:565
+#: main.ts:586 main.ts:589 main.ts:612 main.ts:621 main.ts:622
 #, x-machine
 msgid "Scanning folder"
 msgstr "Explorando la carpeta"
 
-#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#: main.ts:586 main.ts:589 main.ts:621 main.ts:622
 #, x-machine
 msgid "Links have no local location"
 msgstr "Los enlaces no tienen ubicación local"
 
-#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#: main.ts:586 main.ts:589 main.ts:621 main.ts:622
 #, x-machine
 msgid "The order cannot change while searching"
 msgstr "El orden no puede cambiar durante una búsqueda"
 
-#: main.ts:545
+#: main.ts:602
 #, x-machine
 msgid "Not enough room; enlarge the window to show it"
 msgstr "No hay espacio suficiente; amplía la ventana para mostrarla"
 
-#: main.ts:550
+#: main.ts:607
 #, x-machine
 msgid "Open Folder…"
 msgstr "Abrir carpeta…"
 
-#: main.ts:561
+#: main.ts:618
 #, x-machine
 msgid "Repeat"
 msgstr "Repetir"
 
-#: main.ts:561 ui/settings.slint:150
+#: main.ts:618 ui/settings.slint:150
 #, x-machine
 msgid "Off"
 msgstr "Desactivado"
 
-#: main.ts:561 ui/settings.slint:150
+#: main.ts:618 ui/settings.slint:150
 #, x-machine
 msgid "All"
 msgstr "Todo"
 
-#: main.ts:561 ui/settings.slint:150
+#: main.ts:618 ui/settings.slint:150
 #, x-machine
 msgid "One"
 msgstr "Uno"
 
-#: main.ts:561 ui/settings.slint:156
+#: main.ts:618 ui/settings.slint:156
 #, x-machine
 msgid "Shuffle"
 msgstr "Aleatorio"
 
-#: main.ts:561
+#: main.ts:618
 #, x-machine
 msgid "When Opening a File"
 msgstr "Al abrir un archivo"
 
-#: main.ts:561
+#: main.ts:618
 #, x-machine
 msgid "Open Only That File"
 msgstr "Abrir solo ese archivo"
 
-#: main.ts:561
+#: main.ts:618
 #, x-machine
 msgid "Add Similar Files"
 msgstr "Agregar archivos similares"
 
-#: main.ts:561
+#: main.ts:618
 #, x-machine
 msgid "Add All Files in the Folder"
 msgstr "Agregar todos los archivos de la carpeta"
 
-#: main.ts:561
+#: main.ts:618
 #, x-machine
 msgid "Fast Advance to Next"
 msgstr "Avance rápido al siguiente"
 
-#: main.ts:561
+#: main.ts:618
 #, x-machine
 msgid "Remember List"
 msgstr "Recordar lista"
 
-#: main.ts:561
+#: main.ts:618
 #, x-machine
 msgid "Confirm Before Removing All"
 msgstr "Confirmar antes de quitar todo"
 
-#: main.ts:1035
+#: main.ts:1140
 #, x-machine
 msgid "opening, added to the list"
 msgstr "abriendo; agregado a la lista"
@@ -690,7 +690,7 @@ msgstr "Escribe abajo las direcciones web que quieres agregar a la lista de repr
 msgid "Example: {}"
 msgstr "Ejemplo: {}"
 
-#: ui/link.slint:63 ui/sidebar.slint:473
+#: ui/link.slint:63 ui/sidebar.slint:592
 #, x-machine
 msgid "Add"
 msgstr "Agregar"
@@ -760,27 +760,27 @@ msgstr "Recordar lista"
 msgid "Confirm before removing all"
 msgstr "Confirmar antes de quitar todo"
 
-#: ui/sidebar.slint:194
+#: ui/sidebar.slint:238
 #, x-machine
 msgid "Filtered {}"
 msgstr "Filtrados: {}"
 
-#: ui/sidebar.slint:255
+#: ui/sidebar.slint:299
 #, x-machine
 msgid "Attach to main window"
 msgstr "Acoplar a la ventana principal"
 
-#: ui/sidebar.slint:255
+#: ui/sidebar.slint:299
 #, x-machine
 msgid "Detach as floating window"
 msgstr "Separar como ventana flotante"
 
-#: ui/sidebar.slint:261
+#: ui/sidebar.slint:305
 #, x-machine
 msgid "Close list"
 msgstr "Cerrar lista"
 
-#: ui/sidebar.slint:321
+#: ui/sidebar.slint:365
 #, x-machine
 msgid ""
 "{}\n"
@@ -789,7 +789,7 @@ msgstr ""
 "{}\n"
 "El archivo no existe"
 
-#: ui/sidebar.slint:322
+#: ui/sidebar.slint:366
 #, x-machine
 msgid ""
 "{}\n"
@@ -798,7 +798,7 @@ msgstr ""
 "{}\n"
 "El archivo no existe o no se puede leer ahora; se puede reintentar"
 
-#: ui/sidebar.slint:323
+#: ui/sidebar.slint:367
 #, x-machine
 msgid ""
 "{}\n"
@@ -807,42 +807,50 @@ msgstr ""
 "{}\n"
 "No se puede abrir este medio"
 
-#: ui/sidebar.slint:421
+#: ui/sidebar.slint:540
 #, x-machine
 msgid "No matches"
 msgstr "No hay coincidencias"
 
-#: ui/sidebar.slint:448
+#: ui/sidebar.slint:567
 #, x-machine
 msgid "Move to top (Ctrl+Home)"
 msgstr "Mover al principio (Ctrl+Inicio)"
 
-#: ui/sidebar.slint:454
+#: ui/sidebar.slint:573
 #, x-machine
 msgid "Move up (Ctrl+↑)"
 msgstr "Subir (Ctrl+↑)"
 
-#: ui/sidebar.slint:460
+#: ui/sidebar.slint:579
 #, x-machine
 msgid "Move down (Ctrl+↓)"
 msgstr "Bajar (Ctrl+↓)"
 
-#: ui/sidebar.slint:466
+#: ui/sidebar.slint:585
 #, x-machine
 msgid "Move to bottom (Ctrl+End)"
 msgstr "Mover al final (Ctrl+Fin)"
 
-#: ui/sidebar.slint:480
+#: ui/sidebar.slint:600
 #, x-machine
 msgid "Delete"
 msgstr "Eliminar"
 
-#: ui/sidebar.slint:487
+#: ui/sidebar.slint:608
 #, x-machine
 msgid "Sort"
 msgstr "Ordenar"
 
-#: ui/sidebar.slint:499
+#: ui/sidebar.slint:617
+msgid "Hide Thumbnails"
+msgstr "Ocultar miniaturas"
+
+#: ui/sidebar.slint:617
+msgid "Show Thumbnails"
+msgstr "Mostrar miniaturas"
+
+#: ui/sidebar.slint:629
 #, x-machine
 msgid "Search (Ctrl+S)"
 msgstr "Buscar (Ctrl+S)"

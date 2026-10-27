@@ -5,427 +5,427 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: drop.ts:197
+#: drop.ts:206
 msgid "Nothing to add: {}"
 msgstr "没有可加入的项目：{}"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Added {count} files from the same folder"
 msgstr "已加入同文件夹 {count} 个文件"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Added {count} files from the same folder, limit of {limit} reached"
 msgstr "已加入同文件夹 {count} 个文件，已达上限 {limit}"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Nothing to add"
 msgstr "没有可加入的项目"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Link added"
 msgstr "已添加链接"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Existing link selected"
 msgstr "已选择已有链接"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Scanning folder…"
 msgstr "正在扫描文件夹…"
 
-#: main.ts:134
+#: main.ts:169
 msgid "No playable files in the folder"
 msgstr "文件夹中没有可播放的文件"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Cannot read the folder: {}"
 msgstr "无法读取文件夹：{}"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Removed: {}"
 msgstr "已移除 {} 项"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Invalid items removed: {}"
 msgstr "已移除 {} 个无效项"
 
-#: main.ts:134
+#: main.ts:169
 msgid "No invalid items"
 msgstr "没有无效项"
 
-#: main.ts:134
+#: main.ts:169
 msgid "The media being opened was removed from the list"
 msgstr "正在打开的媒体已移出列表"
 
-#: main.ts:134
+#: main.ts:169
 msgid "The current media was removed from the list"
 msgstr "当前媒体已移出列表"
 
-#: main.ts:134
+#: main.ts:169
 msgid "List cleared; the current media continues"
 msgstr "列表已清空，当前媒体继续"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Unsupported list format"
 msgstr "不支持的列表格式"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Cannot open the list: the file is larger than 16 MB"
 msgstr "无法打开列表：文件超过 16 MB"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Cannot open the list: {}"
 msgstr "无法打开列表：{}"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Opened list: {name} ({count} items)"
 msgstr "已打开列表：{name}（{count} 项）"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Opened list: {name} ({count} items), skipped: {skipped}"
 msgstr "已打开列表：{name}（{count} 项），跳过 {skipped} 项"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Cannot save the list: {}"
 msgstr "无法保存列表：{}"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Saved list: {}"
 msgstr "已保存列表：{}"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Repeat: Off"
 msgstr "循环：不循环"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Repeat: All"
 msgstr "循环：全部"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Repeat: One"
 msgstr "循环：单个"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Shuffle: On"
 msgstr "随机播放：开"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Shuffle: Off"
 msgstr "随机播放：关"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Fast advance to next: On"
 msgstr "快速推进到下一个：开"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Fast advance to next: Off"
 msgstr "快速推进到下一个：关"
 
-#: main.ts:134
+#: main.ts:169
 msgid "The list will be remembered"
 msgstr "将记住列表"
 
-#: main.ts:134
+#: main.ts:169
 msgid "The list will no longer be remembered"
 msgstr "不再记住列表"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Confirm before removing all: On"
 msgstr "移除全部前确认：开"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Confirm before removing all: Off"
 msgstr "移除全部前确认：关"
 
-#: main.ts:134
+#: main.ts:169
 msgid "End of the list"
 msgstr "列表已播完"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Cannot replay: {}"
 msgstr "无法重播：{}"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Cannot open {}: the file does not exist"
 msgstr "无法打开 {}：文件不存在"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Cannot open {}: cannot open this media"
 msgstr "无法打开 {}：无法打开此媒体"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Cannot open {}: {}"
 msgstr "无法打开 {}：{}"
 
-#: main.ts:134
+#: main.ts:169
 msgid "The file's canonical path matches an existing item; that item is selected"
 msgstr "文件规范路径与已有项重复，已选择已有项"
 
-#: main.ts:134
+#: main.ts:169
 msgid "Close the other dialog first"
 msgstr "请先关闭另一个对话框"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:246
+#: main.ts:202 main.ts:595 main.ts:618 main.ts:771 manifest.json ui/settings.slint:114 ui/sidebar.slint:290
 msgid "Playlist"
 msgstr "播放列表"
 
-#: main.ts:246
+#: main.ts:303
 msgid "Remove all {} items from the playlist?"
 msgstr "移除播放列表中的全部 {} 项？"
 
-#: main.ts:246
+#: main.ts:303
 msgid "Replace the current list with {}?"
 msgstr "用 {} 替换当前列表？"
 
-#: main.ts:246
+#: main.ts:303
 msgid "The media that is playing continues to play."
 msgstr "正在播放的媒体继续播放。"
 
-#: main.ts:246 main.ts:527
+#: main.ts:303 main.ts:584
 msgid "Remove All"
 msgstr "移除全部"
 
-#: main.ts:246
+#: main.ts:303
 msgid "Replace"
 msgstr "替换"
 
-#: main.ts:246
+#: main.ts:303
 msgid "Don't ask again"
 msgstr "不再询问"
 
-#: main.ts:275
+#: main.ts:332
 msgid "Add to Playlist"
 msgstr "添加到播放列表"
 
-#: main.ts:289
+#: main.ts:346
 msgid "Open Folder"
 msgstr "打开文件夹"
 
-#: main.ts:289
+#: main.ts:346
 msgid "Add Folder to Playlist"
 msgstr "添加文件夹到播放列表"
 
-#: main.ts:318
+#: main.ts:375
 msgid "another source is opening, only added to the list"
 msgstr "正在打开另一个来源，只加入列表"
 
-#: main.ts:416
+#: main.ts:473
 msgid "Only the first {} files are shown"
 msgstr "只显示前 {} 个文件"
 
-#: main.ts:438
+#: main.ts:495
 msgid "File not found: {}"
 msgstr "找不到文件：{}"
 
-#: main.ts:449
+#: main.ts:506
 msgid "Open Playlist File"
 msgstr "打开播放列表文件"
 
-#: main.ts:495
+#: main.ts:552
 msgid "Save Playlist"
 msgstr "保存播放列表"
 
-#: main.ts:497
+#: main.ts:554
 msgid "Playlist.m3u8"
 msgstr "播放列表.m3u8"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Play"
 msgstr "播放"
 
-#: main.ts:527 main.ts:561
+#: main.ts:584 main.ts:618
 msgid "Add Files…"
 msgstr "添加文件…"
 
-#: main.ts:527 main.ts:561
+#: main.ts:584 main.ts:618
 msgid "Add Folder…"
 msgstr "添加文件夹…"
 
-#: main.ts:527 main.ts:561
+#: main.ts:584 main.ts:618
 msgid "Add Link…"
 msgstr "添加链接…"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Remove Selected"
 msgstr "移除所选"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Remove Unselected"
 msgstr "移除未选"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Remove Invalid Items"
 msgstr "移除无效项"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Show in Finder"
 msgstr "在 Finder 中显示"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Move to Top"
 msgstr "置顶"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Move Up"
 msgstr "上移"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Move Down"
 msgstr "下移"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Move to Bottom"
 msgstr "置底"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Ascending"
 msgstr "正序"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Descending"
 msgstr "反序"
 
-#: main.ts:527
+#: main.ts:584
 msgid "By Title"
 msgstr "按标题"
 
-#: main.ts:527
+#: main.ts:584
 msgid "By File Name"
 msgstr "按文件名"
 
-#: main.ts:527
+#: main.ts:584
 msgid "By Extension"
 msgstr "按扩展名"
 
-#: main.ts:527
+#: main.ts:584
 msgid "By Size"
 msgstr "按大小"
 
-#: main.ts:527
+#: main.ts:584
 msgid "By Duration"
 msgstr "按时长"
 
-#: main.ts:527
+#: main.ts:584
 msgid "By Date"
 msgstr "按日期"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Random Order"
 msgstr "乱序"
 
-#: main.ts:527
+#: main.ts:584
 msgid "By Folder"
 msgstr "按文件夹"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Sort by Path"
 msgstr "按路径排序"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Reverse Current Order"
 msgstr "倒置当前顺序"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Select All"
 msgstr "全选"
 
-#: main.ts:527 ui/sidebar.slint:548
+#: main.ts:584 ui/sidebar.slint:680
 msgid "Search"
 msgstr "搜索"
 
-#: main.ts:527 main.ts:561
+#: main.ts:584 main.ts:618
 msgid "Open List File…"
 msgstr "打开列表文件…"
 
-#: main.ts:527 main.ts:561
+#: main.ts:584 main.ts:618
 msgid "Save List…"
 msgstr "保存列表…"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Close List"
 msgstr "关闭列表"
 
-#: main.ts:527
+#: main.ts:584
 msgid "Playlist Settings…"
 msgstr "播放列表设置…"
 
-#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#: main.ts:586 main.ts:589 main.ts:621 main.ts:622
 msgid "Opening, or the result is not known yet"
 msgstr "正在打开或结果未知"
 
-#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#: main.ts:586 main.ts:589 main.ts:621 main.ts:622
 msgid "Nothing to act on"
 msgstr "当前没有可操作项"
 
-#: main.ts:529 main.ts:532 main.ts:555 main.ts:564 main.ts:565
+#: main.ts:586 main.ts:589 main.ts:612 main.ts:621 main.ts:622
 msgid "Scanning folder"
 msgstr "正在扫描文件夹"
 
-#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#: main.ts:586 main.ts:589 main.ts:621 main.ts:622
 msgid "Links have no local location"
 msgstr "链接没有本地位置"
 
-#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#: main.ts:586 main.ts:589 main.ts:621 main.ts:622
 msgid "The order cannot change while searching"
 msgstr "搜索时不能调整顺序"
 
-#: main.ts:545
+#: main.ts:602
 msgid "Not enough room; enlarge the window to show it"
 msgstr "空间不足，放大窗口后可显示"
 
-#: main.ts:550
+#: main.ts:607
 msgid "Open Folder…"
 msgstr "打开文件夹…"
 
-#: main.ts:561
+#: main.ts:618
 msgid "Repeat"
 msgstr "循环"
 
-#: main.ts:561 ui/settings.slint:150
+#: main.ts:618 ui/settings.slint:150
 msgid "Off"
 msgstr "不循环"
 
-#: main.ts:561 ui/settings.slint:150
+#: main.ts:618 ui/settings.slint:150
 msgid "All"
 msgstr "全部"
 
-#: main.ts:561 ui/settings.slint:150
+#: main.ts:618 ui/settings.slint:150
 msgid "One"
 msgstr "单个"
 
-#: main.ts:561 ui/settings.slint:156
+#: main.ts:618 ui/settings.slint:156
 msgid "Shuffle"
 msgstr "随机"
 
-#: main.ts:561
+#: main.ts:618
 msgid "When Opening a File"
 msgstr "打开文件时"
 
-#: main.ts:561
+#: main.ts:618
 msgid "Open Only That File"
 msgstr "仅打开该文件"
 
-#: main.ts:561
+#: main.ts:618
 msgid "Add Similar Files"
 msgstr "加入相似文件"
 
-#: main.ts:561
+#: main.ts:618
 msgid "Add All Files in the Folder"
 msgstr "加入同文件夹全部文件"
 
-#: main.ts:561
+#: main.ts:618
 msgid "Fast Advance to Next"
 msgstr "快速推进到下一个"
 
-#: main.ts:561
+#: main.ts:618
 msgid "Remember List"
 msgstr "记住列表"
 
-#: main.ts:561
+#: main.ts:618
 msgid "Confirm Before Removing All"
 msgstr "移除全部前确认"
 
-#: main.ts:1035
+#: main.ts:1140
 msgid "opening, added to the list"
 msgstr "正在打开，已加入列表"
 
@@ -553,7 +553,7 @@ msgstr "在下方输入要加入播放列表的网址，每行一个。"
 msgid "Example: {}"
 msgstr "例) {}"
 
-#: ui/link.slint:63 ui/sidebar.slint:473
+#: ui/link.slint:63 ui/sidebar.slint:592
 msgid "Add"
 msgstr "添加"
 
@@ -609,23 +609,23 @@ msgstr "记住列表"
 msgid "Confirm before removing all"
 msgstr "移除全部前确认"
 
-#: ui/sidebar.slint:194
+#: ui/sidebar.slint:238
 msgid "Filtered {}"
 msgstr "筛选 {}"
 
-#: ui/sidebar.slint:255
+#: ui/sidebar.slint:299
 msgid "Attach to main window"
 msgstr "附着到主窗口"
 
-#: ui/sidebar.slint:255
+#: ui/sidebar.slint:299
 msgid "Detach as floating window"
 msgstr "分离为浮动窗口"
 
-#: ui/sidebar.slint:261
+#: ui/sidebar.slint:305
 msgid "Close list"
 msgstr "关闭列表"
 
-#: ui/sidebar.slint:321
+#: ui/sidebar.slint:365
 msgid ""
 "{}\n"
 "The file does not exist"
@@ -633,7 +633,7 @@ msgstr ""
 "{}\n"
 "文件不存在"
 
-#: ui/sidebar.slint:322
+#: ui/sidebar.slint:366
 msgid ""
 "{}\n"
 "The file does not exist or cannot be read now; can retry"
@@ -641,7 +641,7 @@ msgstr ""
 "{}\n"
 "文件不存在或暂不可读取，可重试"
 
-#: ui/sidebar.slint:323
+#: ui/sidebar.slint:367
 msgid ""
 "{}\n"
 "Cannot open this media"
@@ -649,34 +649,42 @@ msgstr ""
 "{}\n"
 "无法打开此媒体"
 
-#: ui/sidebar.slint:421
+#: ui/sidebar.slint:540
 msgid "No matches"
 msgstr "无匹配项"
 
-#: ui/sidebar.slint:448
+#: ui/sidebar.slint:567
 msgid "Move to top (Ctrl+Home)"
 msgstr "置顶 (Ctrl+Home)"
 
-#: ui/sidebar.slint:454
+#: ui/sidebar.slint:573
 msgid "Move up (Ctrl+↑)"
 msgstr "上移 (Ctrl+↑)"
 
-#: ui/sidebar.slint:460
+#: ui/sidebar.slint:579
 msgid "Move down (Ctrl+↓)"
 msgstr "下移 (Ctrl+↓)"
 
-#: ui/sidebar.slint:466
+#: ui/sidebar.slint:585
 msgid "Move to bottom (Ctrl+End)"
 msgstr "置底 (Ctrl+End)"
 
-#: ui/sidebar.slint:480
+#: ui/sidebar.slint:600
 msgid "Delete"
 msgstr "删除"
 
-#: ui/sidebar.slint:487
+#: ui/sidebar.slint:608
 msgid "Sort"
 msgstr "排序"
 
-#: ui/sidebar.slint:499
+#: ui/sidebar.slint:617
+msgid "Hide Thumbnails"
+msgstr "隐藏缩略图"
+
+#: ui/sidebar.slint:617
+msgid "Show Thumbnails"
+msgstr "显示缩略图"
+
+#: ui/sidebar.slint:629
 msgid "Search (Ctrl+S)"
 msgstr "搜索 (Ctrl+S)"

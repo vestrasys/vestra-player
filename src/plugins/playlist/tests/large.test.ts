@@ -40,7 +40,7 @@ function hostRefuses(value: Json): string | null {
 }
 
 /** 3000 empty media files in 30 folders, the playlist plugin, and a record of every panel write. */
-async function start(count = 3000) {
+async function start(count = 3000, compact = true) {
   const root = await mkdtemp(join(tmpdir(), "vestra-playlist-large-"));
   const files: string[] = [];
   for (let folder = 0; folder < count / 100; folder++) {
@@ -68,6 +68,11 @@ async function start(count = 3000) {
   }) as typeof host.request;
   const { stop } = await startPlugin((plugin) => activate(plugin), { directory: new URL("..", import.meta.url), host });
   const panel = host.mounted();
+  // These tests count rows of 20 px: thumbnails off (the bottom bar's toggle).
+  if (compact) {
+    panel.emit("toggle-thumbnails");
+    await host.settle();
+  }
   const app = {
     host,
     panel,
@@ -165,6 +170,52 @@ test("3000 files: every panel write fits the player's limits, scrolling moves a 
     assert.ok(Math.max(...app.writes.filter((w) => w.property === "rows").map((w) => (w.value as Json[]).length)) <= WINDOW_ROWS);
   } finally {
     await app.close();
+  }
+});
+
+test("2000 files with thumbnails: the list shows as fast as without; ffmpeg runs only for the rows near the view", async () => {
+  /** Time until the folder's 2000 rows are shown, and the app (thumbnails on or off). */
+  const addFolder = async (compact: boolean) => {
+    const app = await start(2000, compact);
+    let made = 0;
+    app.host.tools.handle("ffmpeg", async () => {
+      made++;
+      await pause(5);
+      return { stdout: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) };
+    });
+    await app.scroll(0); // the list has its size: 800 px
+    app.host.dialogAnswers.push([app.root]);
+    const started = performance.now();
+    await app.host.command("playlist.add-folder").run();
+    await app.until(() => app.count() === 2000, "the folder to be added");
+    return { app, took: performance.now() - started, made: () => made };
+  };
+  const off = await addFolder(true);
+  await off.app.close();
+  const on = await addFolder(false);
+  try {
+    const { app } = on;
+    // Measured on the 2026-10 Windows laptop: both ~0.6 s; the bound leaves room for a loaded machine.
+    assert.ok(on.took < Math.max(2 * off.took, off.took + 1000), `thumbnails on ${on.took.toFixed(0)} ms, off ${off.took.toFixed(0)} ms`);
+    assert.ok(on.took < 5000);
+    // 800 px of 62 px rows: 13 on screen (14 with the one cut), 3 more below.
+    await app.until(() => on.made() === 17, "the first screen's thumbnails");
+    await app.host.settle(100);
+    assert.equal(on.made(), 17, "nothing beyond the rows near the view");
+    assert.equal(app.probes(), 17, "durations: the same rows");
+    const thumbs = app.panel.props.thumbs as Json[];
+    assert.equal(thumbs.length, WINDOW_ROWS, "one picture per row sent");
+    // Far down: only the rows near the new view.
+    await app.scroll(1500 * 62);
+    await app.until(() => on.made() === 17 + 20, "the new screen's thumbnails");
+    await app.host.settle(100);
+    assert.equal(on.made(), 37);
+    for (const { property, value } of app.writes) assert.equal(hostRefuses(value), null, `${property} is refused`);
+    // One reference per picture (the same one in every write), plus the placeholder.
+    const images = new Set(app.host.images.map((image) => image.ref)).size;
+    assert.equal(images, 38, "37 pictures and the placeholder");
+  } finally {
+    await on.app.close();
   }
 });
 

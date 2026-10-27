@@ -10,6 +10,7 @@ The playlist in the right sidebar.
 - **Play**: repeat (off, all, one), shuffle; plays the next item when one ends, and Fast Advance to Next can shorten the switch.
 - **Opens on the playing item**: each time the list is shown (F6, its tab, detached or attached, after a restart) it is scrolled so that the playing item is in the middle (at the top or bottom near the list's ends); while the list is shown, an item that starts playing out of view is scrolled to the middle, unless you scrolled in the last 2 seconds.
 - **List files**: open and save M3U, M3U8, PLS; open DPL.
+- **Thumbnails** (on by default): each row shows a small picture with the duration on it, the title and the file's folder. Videos show a keyframe from a tenth of the way in, audio files their cover art, links a placeholder. The button at the right of the bottom bar switches between these rows and compact single-line rows; the choice is remembered. Pictures are made only for the rows on screen and a few around them (needs ffmpeg, at most 2 at a time, paused while a file opens) and kept in the plugin's data folder, so they come back at once.
 - Shows each item's duration and the total duration: items that have played use the duration from the player; for items not yet played, durations are read only for the rows on screen (needs ffprobe, at most 2 at a time), so adding many files does not read them one by one; the total has a "+" when some items are unknown. The list can be restored after a restart.
 
 ## Where to find it
@@ -24,5 +25,6 @@ The playlist in the right sidebar.
 
 - Fast Advance to Next is not gapless playback; there is still a short pause at the switch.
 - The list gives the interface only the 200 rows around the view at a time and updates them as you scroll; when you drag the scroll bar far in one go, the rows at the new position appear a moment later.
-- Links are resolved by the installed site plugins; this plugin does not resolve links.
+- Links are resolved by the installed site plugins; this plugin does not resolve links. Link rows have no thumbnail of their own (the playlist does not know a site's pictures).
+- A thumbnail is made from a keyframe, so it may come from slightly before a tenth of the video; a file changed on disk gets a new one the next time its row is shown.
 - Files that other plugins take over by extension (such as emulator ROMs) can be added with Add Files… and play normally, including previous/next; dropping onto the list, scanning folders and "similar files" only recognize audio and video extensions and do not include these files yet.
