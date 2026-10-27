@@ -1303,16 +1303,98 @@ test("software rendering: the GPU items are disabled with the reason, the list a
   await stop();
 });
 
-test("software rendering after start: the player's push disables the items", async () => {
-  const { host, window, stop } = await playing();
-  await host.settle();
-  assert.equal(host.command("video.interpolation").state.enabled, true);
-  host.failVideoRender("unsupported", "the window cannot show OpenGL frames");
-  await host.settle();
-  assert.equal(host.command("video.interpolation").state.enabled, false);
-  assert.equal(host.command("video.interpolation").state.reason, SOFTWARE);
-  assert.equal(window.props["render-ready"], false);
+/** What `run` writes to the plugin log (console.error), as text. */
+async function logged(run: () => Promise<void>): Promise<string[]> {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => void lines.push(args.map((a) => (a instanceof Error ? `${(a as Error & { code?: string }).code}: ${a.message}` : String(a))).join(" "));
+  try {
+    await run();
+  } finally {
+    console.error = original;
+  }
+  return lines;
+}
+const SAVED_RENDER = { toneMapping: "hable", targetPeak: 300, peakDetect: false, shadersEnabled: true, shaders: ["invert.glsl"], interpolation: true } as const;
+
+test("software rendering: nothing in the log, nothing sent after the first refusal; the saved options are kept for GPU rendering", async () => {
+  await withData(async (data) => {
+    await mkdir(join(data, "shaders"));
+    await writeFile(join(data, "shaders", "invert.glsl"), INVERT);
+    await writeFile(join(data, "settings.json"), JSON.stringify({ version: 1, render: SAVED_RENDER }));
+    const host = new TestHost();
+    host.videoRender.gpu = false;
+    host.openElsewhere("/movie.mp4");
+    let sentAtStart = 0;
+    const lines = await logged(async () => {
+      const { stop } = await start(host, data);
+      await host.settle();
+      sentAtStart = host.sent("video.render.set").length;
+      assert.equal(host.command("video.interpolation").state.enabled, false);
+      assert.equal(host.command("video.interpolation").state.reason, SOFTWARE);
+      assert.equal(host.command("video.hdr.hable").state.checked, true, "the saved choice still shows");
+      // the window's 目标亮度 control is greyed; a stray edit is saved but not sent
+      await host.command("video.picture").run();
+      host.window("picture").emit("adjust", "targetPeak", 250);
+      await host.settle();
+      await stop();
+    });
+    assert.deepEqual(lines, [], "software rendering is a state, not an error");
+    assert.equal(host.sent("video.render.set").length, sentAtStart, "once refused, nothing more is sent");
+    assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")).render, { ...SAVED_RENDER, targetPeak: 250 });
+    // The same profile on GPU rendering (macOS): everything applies.
+    const gpu = new TestHost();
+    gpu.openElsewhere("/movie.mp4");
+    const { stop } = await start(gpu, data);
+    await gpu.settle();
+    assert.deepEqual(gpu.videoRender.values, {
+      toneMapping: "hable",
+      targetPeak: 250,
+      peakDetect: false,
+      shaders: [join(data, "shaders", "invert.glsl")],
+      interpolation: true,
+    });
+    assert.equal(gpu.command("video.interpolation").state.enabled, true);
+    await stop();
+  });
+});
+
+test("GPU rendering: render failures other than software rendering are still logged", async () => {
+  const host = new TestHost();
+  host.setVideoRenderOwner("other.plugin");
+  host.openElsewhere("/movie.mp4");
+  const lines = await logged(async () => {
+    const { stop } = await start(host);
+    await host.settle();
+    assert.equal(host.command("video.interpolation").state.enabled, true, "a conflict is not software rendering");
+    await stop();
+  });
+  assert.ok(lines.length > 0 && lines.every((line) => line.includes("conflict")), lines.join("\n"));
+  // A shader that does not compile (pushed by the player): logged as before.
+  const { host: gpu, stop } = await playing();
+  await gpu.settle();
+  const compile = await logged(async () => {
+    gpu.failVideoRender("failed", "shader compile failed: ERROR: 0:2: Use of undeclared identifier 'nope'");
+    await gpu.settle();
+  });
+  assert.equal(gpu.command("video.interpolation").state.enabled, true);
+  assert.ok(compile.length > 0 && compile.every((line) => line.startsWith("[vestra.video] failed: shader compile failed")), compile.join("\n"));
   await stop();
+});
+
+test("software rendering after start: the player's push disables the items", async () => {
+  const lines = await logged(async () => {
+    const { host, window, stop } = await playing();
+    await host.settle();
+    assert.equal(host.command("video.interpolation").state.enabled, true);
+    host.failVideoRender("unsupported", "the window cannot show OpenGL frames");
+    await host.settle();
+    assert.equal(host.command("video.interpolation").state.enabled, false);
+    assert.equal(host.command("video.interpolation").state.reason, SOFTWARE);
+    assert.equal(window.props["render-ready"], false);
+    await stop();
+  });
+  assert.deepEqual(lines, [], "the fallback to software rendering is not an error either");
 });
 
 test("E17: 添加… copies the file into the shader folder; Shift+P sends absolute paths; the list is edited in the window", async () => {

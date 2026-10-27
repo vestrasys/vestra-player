@@ -158,8 +158,15 @@ export default async function activate(plugin: Plugin) {
   const persist = () => store.save(serialize(look, tab));
 
   // E16, E17, E18 运动补偿: GPU render options, global and saved; not part of the chain, so
-  // 启用画面效果 leaves them alone. Under software rendering every set is refused (`unsupported`).
-  const render = plugin.video.render();
+  // 启用画面效果 leaves them alone. Under software rendering every set is refused (`unsupported`),
+  // the handle's first take included. That is a state of the player, not an error: the handle
+  // lives in its own scope, which keeps `unsupported` out of the log (the items show the reason
+  // instead) and logs every other failure as before. The saved options stay for GPU rendering.
+  const renderScope = plugin.scope();
+  renderScope.onError((error) => {
+    if (error.code !== "unsupported") console.error(`[${plugin.id}]`, error);
+  });
+  const render = renderScope.video.render();
   const shaderFolder = join(plugin.dataDirectory, "shaders");
   const shaderPath = (name: string) => join(shaderFolder, name);
   const gpuReady = () => !(render.status.state === "failed" && render.status.error.code === "unsupported");
@@ -169,6 +176,8 @@ export default async function activate(plugin: Plugin) {
   let renderAnnounce = false;
   /** Missing shader files are left out (the player refuses them); 重新载入着色器 drops them from the list. */
   const applyRender = (user = false, force = false) => {
+    // Software rendering: nothing is sent (it would only be refused); the settings stay saved.
+    if (!gpuReady()) return;
     renderAnnounce ||= user;
     const values = {
       toneMapping: look.render.toneMapping,
