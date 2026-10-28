@@ -11,6 +11,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   API_VERSION,
+  BAR_BUTTON_ICONS,
+  BAR_BUTTON_LIMITS,
   BINDING_INPUTS,
   BUILTIN_COMMANDS,
   BUILTIN_SUBMENUS,
@@ -113,6 +115,24 @@ test("TEXT_LIMITS and LIST_SEPARATORS match the player's (host/src/i18n/text.rs)
     ),
   );
   assert.deepEqual(rows, LIST_SEPARATORS);
+});
+
+test("BAR_BUTTON_ICONS and BAR_BUTTON_LIMITS match the player's (host/src/commands.rs)", () => {
+  const rust = host("src/commands.rs");
+  const table = /pub const BUTTON_ICONS: [^=]+= \[([\s\S]*?)\];/.exec(rust);
+  assert.ok(table, "BUTTON_ICONS in commands.rs");
+  const icons = [...table[1]!.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(icons, [...BAR_BUTTON_ICONS]);
+  const constant = (name: string) =>
+    Number(new RegExp(`const ${name}: \\w+ = (\\d+);`).exec(rust)?.[1]);
+  assert.deepEqual(
+    {
+      perPlugin: constant("MAX_BUTTONS_PER_OWNER"),
+      total: constant("MAX_BUTTONS"),
+      maxOrder: constant("MAX_BUTTON_ORDER"),
+    },
+    { ...BAR_BUTTON_LIMITS },
+  );
 });
 
 test("MENU_IDS are the player's built-in menu ids", () => {

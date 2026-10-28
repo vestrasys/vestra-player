@@ -82,3 +82,30 @@ It must not fail silently:
 - When done, remove the sentence "do not load together with the playlist" from the panel-menu README.
 
 No new system-specific code: the floating window keeps using the existing `platform::` calls.
+
+## Bottom-bar command buttons (player 0.5.10)
+
+2026-10-27, user-approved design. The bottom bar stays exclusive (one panel), yet other plugins need a one-click entry point in it (the plugin store, the AI workshop). Rejected: a general `commands.run("<plugin>/<command>")` (the bar would hard-code other plugins), core actions for them (plugin-specific logic in the core), a host strip composed over the bar without its cooperation (the host does not know the bar's geometry).
+
+```mermaid
+flowchart LR
+    P["plugin: commands.add({ path, button: { icon, order } })"] --> R["commands::Registry::buttons()<br/>1 per plugin, 8 in the player"]
+    H["host/sidebar: Toggle Sidebar<br/>(owner host)"] --> T["bar_buttons::bar_tick (each window tick)"]
+    R --> T
+    T --> G["BarButtonsHost (global of @vestra/bar-buttons.slint)<br/>filled in the shell and the floating sidebar"]
+    G --> B["BarButtons, placed by the bottom bar<br/>(room → cells that fit)"]
+    B -- "clicked(token)" --> E["Event::BarButton → bar_click → execute_command(owner, id)"]
+```
+
+- **Contributor API**: `CommandOptions.button` (SDK 1.5.29). The registry validates it (`commands::button_valid`: a menu path, order 0–999, an icon of `BUTTON_ICONS` or an image the `commands` capability located in the plugin's directories). `Registry::buttons` keeps each owner's first declared button, then the 8 highest by (order, manifest id, sequence): the lowest ranks are left out, matching the strip, which loses its lowest orders first (equal orders: the smaller plugin id, then the earlier registration, goes first); the rest are logged once as `limit`. The command and its menu entry always stay.
+- **One shared global.** The bar imports `@vestra/bar-buttons.slint`; the shell and the floating window export `BarButtonsHost` from the same library file, so the bar's `BarButtons` reads the global the host fills (Slint globals are per instance, shared by every component in it). The cells are nine persistent elements (eight plugin cells and the toggle) shown with `visible:`; nothing is created on hover or resize (the AccessKit rule of `menu-view.slint`).
+- **Width.** The bar gives `room`; the strip shows `floor(room / 41px)` cells, losing them from its outer (left) end inward (coordinator ruling 2026-10-27, option b): the plugins' buttons in ascending order, so the lowest order goes first, and the toggle (rightmost) last. `order` is position only: low is further left and goes first. `first-shown` (out) is the index of the leftmost plugin button shown. Its `width` is the cells shown, for the bar's own layout.
+- **The sidebar toggle** is the host command `host/sidebar` (Toggle Sidebar, outside the menu, no default key; F6 stays the playlist's): enabled while a panel is in the sidebar, checked while the sidebar is wanted, the cell dimmed (G-18) while wanted but hidden for room. Running it toggles the sidebar slot's preference, as `panels.sidebar.toggle()` does.
+- **Discoverability.** `BarButtons` sets `BarButtonsHost.placed` in `init`; while plugins have buttons and the mounted bottom bar never placed it, the host logs one line naming the bar's plugin and the hidden buttons. `vestra-plugin check` warns about a bottom bar whose Slint file does not use `BarButtons`.
+- **Older players** build the `plugin` object with their own SDK, which does not send `button`: no button, no error. `Declaration` keeps `deny_unknown_fields`; `button` is read apart before it.
+- **Tests**: `commands::button_tests` (validation, limits, order, removal; `BUTTON_ICONS` is the icon set), `bar_buttons::tests` (labels, tooltips, tokens), `ui::tests::bar_buttons_share_the_shell_global_and_drop_the_lowest_order_first` (a real shell: `placed`, the width and which cells show at several rooms), `composition` (both windows export the global), `tests/sdk/host-agreement.test.ts` (`BAR_BUTTON_ICONS`, `BAR_BUTTON_LIMITS`, `host/sidebar` in `BUILTIN_COMMANDS`).
+- **Clicks.** A click sends the cell's token; the host runs it only when the token is in the strip's list (the plugins' buttons and the toggle). A cell hidden for want of room is not clickable at all: its TouchArea is disabled and its accessibility action guarded.
+- **Cost per tick.** `bar_tick` runs on every window tick but compares `bar_buttons::Inputs` first (the registry and binding revisions, the sidebar's state, the language, the window generations) and rebuilds only when it changed (UI frame-rate rule; `bar_buttons::tests::an_unchanged_tick_does_not_rebuild`).
+- **Images** are decoded when the strip is rebuilt (at most 64 px); one that cannot be loaded shows the icon set's `failed` icon instead of an empty cell, and stays clickable.
+- **Lazy activation (open item).** Buttons are runtime contributions: a plugin adds them while it runs. When idle stop lands (lazy activation's record/replay of a plugin's contributions), the `button` must be part of the recorded command declaration, so a parked plugin's button stays in the strip and a click wakes the plugin like its menu item does.
+- **Release note for 0.5.10** (coordinator ruling S4): the sidebar toggle in the bottom bar is now the player's **Toggle Sidebar** command; its tooltip reads "Toggle Sidebar", with no key unless the user binds one in Keyboard Shortcuts (it used to read "Playlist (F6)": F6 stays the playlist's own tab action).

@@ -252,6 +252,29 @@ msgstr "Activar/desactivar pantalla completa"
 msgid "Leave Fullscreen"
 msgstr "Salir de pantalla completa"
 
+#: src/main.rs
+#, x-machine
+msgid "Toggle Sidebar"
+msgstr "Mostrar/ocultar la barra lateral"
+
+#. Why Toggle Sidebar (the bottom bar's sidebar button) is unavailable.
+#: src/bar_buttons.rs
+#, x-machine
+msgid "No panel is in the sidebar"
+msgstr "La barra lateral no contiene ningún panel"
+
+#. A tooltip: a button's action and its key, e.g. "Plugin Store (F9)".
+#: src/bar_buttons.rs
+#, x-machine
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#. The sidebar button's tooltip while the sidebar is on but hidden; {} is the action and its key.
+#: src/bar_buttons.rs
+#, x-machine
+msgid "{} (the window is too narrow for the sidebar)"
+msgstr "{} (la ventana es demasiado estrecha para la barra lateral)"
+
 #: src/main.rs:2609
 #, x-machine
 msgid "Quit"

@@ -435,7 +435,7 @@ impl Host {
                     let current = window
                         .get_global_property(&alias, &property)
                         .map_err(|e| RpcError::new("ui", e.to_string()))?;
-                    if !ui_values::reconcile(&current, &value)? {
+                    if !ui_values::reconcile_in(window.window(), &current, &value)? {
                         ui_values::set(&window, Some(&alias), &property, value)
                             .map_err(|e| RpcError::new("ui", e.to_string()))?;
                     }

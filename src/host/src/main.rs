@@ -7,6 +7,7 @@
 #[macro_use]
 mod diag;
 mod backend;
+mod bar_buttons;
 mod binding_manager;
 mod bindings;
 mod capabilities;
@@ -40,6 +41,7 @@ mod package_archive;
 mod package_manager;
 pub mod package_stage;
 pub mod package_store;
+mod package_validate;
 mod pip;
 mod platform;
 mod plugins;
@@ -276,6 +278,8 @@ enum Event {
     /// serial, the compile's error).
     SettingsChecked(u64, std::result::Result<(), String>),
     RuntimeFault(u64, String),
+    /// A bottom-bar button clicked: (window generation, its token).
+    BarButton(u64, String),
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -498,6 +502,8 @@ struct Host {
     theme_pending: bool,
     /// New windows to put where the previous ones were (`ui::Placements`).
     placements: ui::Placements,
+    /// Bottom-bar command buttons (`bar_buttons.rs`).
+    bar: bar_buttons::Strip,
 }
 struct AreaReply {
     reply: Reply,
@@ -1015,6 +1021,7 @@ impl Host {
                 self.ui_state.state.sidebar = Some(ui_state::Sidebar { width });
                 self.ui_state.touch(self.now_ms());
             }
+            Event::BarButton(generation, token) => self.bar_click(generation, &token),
             Event::PipReturn(generation) => {
                 if generation == self.shell_generation {
                     self.pip.restore();
@@ -1725,8 +1732,10 @@ impl Host {
         }
         self.policy.tick(now);
         self.sync_tabs(&shell);
+        let mut sidebar_seen = None;
         let result = (|| -> Result<Value> {
             let snapshot = self.policy.evaluate(viewport, now)?;
+            sidebar_seen = snapshot.sidebar;
             shell.set_property("host-fullscreen", fullscreen.into())?;
             shell.set_property(
                 "menu-open",
@@ -1774,6 +1783,7 @@ impl Host {
             )
         })();
         self.answer_video_area(video, now);
+        self.bar_tick(&shell, sidebar_seen);
         match result {
             Ok(facts) => {
                 let detached = facts["slots"]["sidebar"]["effective"] == true
@@ -3005,10 +3015,17 @@ impl Host {
         quit.order = 990;
         // Windows and Linux menus show no `Cmd` binding (`label_shown`).
         quit.bindings = vec!["Cmd+Q".into()];
+        // Player 0.5.10: the bottom bar's sidebar toggle (the rightmost cell
+        // of `BarButtons`, bar_buttons.rs); outside the menu, no default key
+        // (F6 is the playlist's), bindable in Keyboard Shortcuts.
+        let mut sidebar = commands::Declaration::new("Toggle Sidebar", &[]);
+        sidebar.localize(|_| i18n::tr("Toggle Sidebar"));
         for (id, declaration, state) in [
             ("fullscreen", fullscreen, state(true, Some(false))),
             ("exit-fullscreen", exit, state(false, None)),
             ("quit", quit, state(true, None)),
+            // `bar_buttons::SIDEBAR` (a literal: tests/sdk/host-agreement.test.ts reads it).
+            ("sidebar", sidebar, state(false, Some(false))),
         ] {
             self.input
                 .borrow_mut()
@@ -3262,6 +3279,10 @@ impl Host {
             if let Err(error) = self.run_core_action(id, None) {
                 diag!("core action {id}: {}", error.message);
             }
+            return;
+        }
+        if id == bar_buttons::SIDEBAR {
+            self.toggle_sidebar();
             return;
         }
         if id == "quit" {
@@ -4196,6 +4217,17 @@ fn set_menu_model(
     if !ui_values::reconcile_nested(&current, &next)? {
         window.set_property("menu-levels", next)?;
     }
+    // A level whose own fields changed (its open row, its size) leaves its
+    // rows' repeater with a dirty model binding until the next frame, and
+    // Slint 1.18 drops a row change that arrives meanwhile when the binding
+    // then yields the same model (`RepeaterTracker::row_changed` marks the
+    // row dirty; `model()` sees an unchanged model and never updates it).
+    // The host writes the menu several times between two frames when the
+    // pointer crosses rows fast (hover events are handled in 16 ms
+    // batches): a group row opened and closed in one batch kept `open`
+    // and stayed lit (user report, 0.5.9). Settling the repeaters now
+    // makes the next in-place write apply at once.
+    ui::settle_layout(window.window());
     Ok(())
 }
 fn string<'a>(params: &'a Value, key: &str) -> std::result::Result<&'a str, RpcError> {
@@ -4472,6 +4504,7 @@ fn main() -> Result<()> {
         settings_category: None,
         theme_pending: false,
         placements: ui::Placements::default(),
+        bar: bar_buttons::Strip::default(),
         commands: commands::Registry::new(),
     };
     // The interface language of this run (doc/architecture/i18n.md §2):

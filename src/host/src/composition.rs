@@ -327,6 +327,7 @@ pub fn floating_source(specs: &[CompileSpec], title: &str) -> Result<String> {
 import {{ Theme }} from "@vestra/theme.slint";
 export {{ VestraPalette }} from "palette.slint";
 export {{ MenuChrome }} from "menu-view.slint";
+export {{ BarButtonsHost }} from "@vestra/bar-buttons.slint";
 export component FloatingPanel inherits Window {{
     in property <string> panel-title: {title};
     title: root.panel-title;
@@ -631,7 +632,8 @@ pub fn set_alias_value(
     value: Value,
 ) -> Result<()> {
     let current = instance.get_global_property(alias, property)?;
-    if !crate::ui_values::reconcile(&current, &value)? {
+    if !crate::ui_values::reconcile_in(slint::ComponentHandle::window(instance), &current, &value)?
+    {
         crate::ui_values::set(instance, Some(alias), property, value)?;
     }
     Ok(())
@@ -649,7 +651,8 @@ pub fn set_global_value(
     }
     let alias = global_alias(spec.owner);
     let current = instance.get_global_property(&alias, property)?;
-    if !crate::ui_values::reconcile(&current, &value)? {
+    if !crate::ui_values::reconcile_in(slint::ComponentHandle::window(instance), &current, &value)?
+    {
         crate::ui_values::set(instance, Some(&alias), property, value)?;
     }
     Ok(())
@@ -799,11 +802,22 @@ mod tests {
         let source = shell_source(&with_backdrop).unwrap();
         assert!(source.find("Owner30View").unwrap() < source.find("mouse := TouchArea").unwrap());
         assert!(definition.global_properties("Owner30Bridge").is_some());
-        build(
+        let floating = build(
             floating_source(&specs[1..], "播放列表").unwrap(),
             "FloatingPanel",
         )
         .unwrap();
+        // Player 0.5.10: both windows export the bar buttons' global (bar_buttons.rs).
+        for window in [&definition, &floating] {
+            let names: Vec<_> = window
+                .global_properties(crate::bar_buttons::GLOBAL)
+                .expect("BarButtonsHost exported")
+                .map(|(name, _)| name)
+                .collect();
+            for name in ["buttons", "toggle", "placed"] {
+                assert!(names.iter().any(|n| n == name), "{name}");
+            }
+        }
     }
 
     #[test]

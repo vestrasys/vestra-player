@@ -271,6 +271,25 @@ fn mismatch(path: &str, current: &Value, next: &Value) -> Option<String> {
 /// with stable length update only changed rows, preserving focused repeater items.
 /// False means the caller must install the new value (including structural change).
 pub fn reconcile(current: &Value, next: &Value) -> Result<bool> {
+    reconcile_settled(current, next, &|| {})
+}
+
+/// `reconcile` for a property of `window`. A value holding documents is
+/// merged at every depth, and a struct field changed above a document
+/// leaves that document's repeater with a dirty model binding until the
+/// next frame; Slint 1.18 drops a row change that arrives meanwhile
+/// (`RepeaterTracker::row_changed` marks the row dirty, and `model()` then
+/// sees the same model and never updates it). Two writes before a frame (a
+/// chat message's status, then its text) left the old text drawn. The
+/// window's repeaters are settled before each such merge (the work the
+/// next frame does first); within one merge a document always changes
+/// before the fields above it. Cost (`ui_markdown::rows_tests::stream_probe`,
+/// 200 messages, release, Windows): 0.06 ms per write at p50, 0.14 ms at p95.
+pub fn reconcile_in(window: &slint::Window, current: &Value, next: &Value) -> Result<bool> {
+    reconcile_settled(current, next, &|| crate::ui::settle_layout(window))
+}
+
+fn reconcile_settled(current: &Value, next: &Value, settle: &dyn Fn()) -> Result<bool> {
     // Runtime images (`plugin.ui.image`) are not JSON: always install them,
     // and replace an image with whatever comes next.
     if matches!(current, Value::Image(_)) || matches!(next, Value::Image(_)) {
@@ -284,6 +303,7 @@ pub fn reconcile(current: &Value, next: &Value) -> Result<bool> {
             return Ok(false);
         }
         trace_reconciliation("in-place", rows(current));
+        settle();
         return Ok(!merge(current, next).1);
     }
     // Markdown rows (`plugin.ui.markdown`) carry images and styled text:

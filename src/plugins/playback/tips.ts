@@ -1,7 +1,7 @@
 import type { BindingInfo, Plugin } from "@vestra-player/sdk";
 
 /** The bar elements whose tooltip names a key (G-07). */
-export type TipKey = "play-pause" | "stop" | "seek-backward" | "seek-forward" | "previous" | "next" | "mute" | "open" | "sidebar" | "fullscreen";
+export type TipKey = "play-pause" | "stop" | "seek-backward" | "seek-forward" | "previous" | "next" | "mute" | "open" | "fullscreen";
 
 /**
  * The commands' default keys as the menu labels them, used until (or when) the
@@ -16,7 +16,6 @@ export const DEFAULT_KEYS: Record<TipKey, string> = {
   next: "PgDn",
   mute: "M",
   open: "Ctrl+O",
-  sidebar: "F6",
   fullscreen: "Enter",
 };
 
@@ -28,17 +27,8 @@ export function firstKey(info: BindingInfo): string | null {
 }
 
 /**
- * The top-level menu item whose key the sidebar toggle shows, by its menu key
- * (`BindingInfo.key`, the English text menus merge by), so it is found in every
- * interface language.
- */
-const SIDEBAR_ITEM = "Playlist";
-
-/**
  * The bar elements' keys from the binding table (`plugin.bindings`), so a key
  * the user rebinds shows in the tooltip; the labels are the host's menu text.
- * The sidebar toggle has no command of its own: its key is that of the top-level
- * menu item Playlist ({@link SIDEBAR_ITEM}), whoever registers it (none: no key).
  */
 export class Keys {
   #keys: Record<TipKey, string | null> = { ...DEFAULT_KEYS };
@@ -77,7 +67,6 @@ export class Keys {
       next: host("next"),
       mute: host("mute"),
       open: find((info) => info.plugin === this.#plugin.id && info.command === "open"),
-      sidebar: find((info) => info.key?.length === 1 && info.key[0] === SIDEBAR_ITEM),
       fullscreen: host("fullscreen"),
     };
     this.#changed();
@@ -106,7 +95,6 @@ export function barTips(keys: Keys, state: { volume: number; step: number }) {
     keyNext: keys.key("next"),
     keyOpen: keys.key("open"),
     keyMute: keys.key("mute"),
-    keySidebar: keys.key("sidebar"),
     keyFullscreen: keys.key("fullscreen"),
     stepText: seconds(state.step),
     volumePercent: Math.round(state.volume),

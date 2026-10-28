@@ -50,7 +50,8 @@ interface Run {
 export default async function activate(plugin: Plugin) {
   const providers = loadProviders(import.meta.dirname);
   const sessions = new Sessions(plugin.dataDirectory);
-  const toolchain = new Toolchain(import.meta.dirname, plugin.dataDirectory);
+  // check lets the player compile the package (Slint included) before any install.
+  const toolchain = new Toolchain(import.meta.dirname, plugin.dataDirectory, (file) => plugin.packages.validateArchive(file));
   const pathsOf = (id: string): SessionPaths => ({ dir: sessions.directory(id), work: sessions.work(id) });
   const settings = plugin.storage.json<AiSettings>("settings", { defaults: DEFAULT_SETTINGS, validate: validSettings });
   // Settings migrate now (a file); keys only later (see moveLegacyKeys).
@@ -325,6 +326,8 @@ export default async function activate(plugin: Plugin) {
     // configured() made sure the key is in memory (or that none was ever saved).
     const key = await keyFor(p.id);
     const directory = sessions.directory(meta.id);
+    // Scratch packages an earlier check could not remove (see Toolchain.check).
+    await toolchain.sweep(pathsOf(meta.id));
     const run: Run = {
       meta,
       chat,
@@ -738,6 +741,8 @@ export default async function activate(plugin: Plugin) {
     path: ["Vestra Player AI…"],
     order: 820,
     group: "windows",
+    // The bottom bar's button (player 0.5.10), left of the Plugin Store's (200).
+    button: { icon: "ai", order: 100 },
     run: () => {
       loadKey(); // not awaited: a keychain dialog must not hold the window
       return window.show();

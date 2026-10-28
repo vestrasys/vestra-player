@@ -201,7 +201,7 @@ msgstr "Bereits am letzten Schlüsselbild"
 msgid "Speed: {}x"
 msgstr "Geschwindigkeit: {}x"
 
-#: main.ts:30 ui/bar.slint:92
+#: main.ts:30 ui/bar.slint:88
 #, x-machine
 msgid "Volume: {}%"
 msgstr "Lautstärke: {} %"
@@ -322,28 +322,28 @@ msgid "speed"
 msgstr "Geschwindigkeit"
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
-#: ui/bar.slint:81
+#: ui/bar.slint:77
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: ui/bar.slint:83
+#: ui/bar.slint:79
 #, x-machine
 msgid "Pause"
 msgstr "Pause"
 
-#: ui/bar.slint:83
+#: ui/bar.slint:79
 #, x-machine
 msgid "Play"
 msgstr "Abspielen"
 
-#: ui/bar.slint:84
+#: ui/bar.slint:80
 #, x-machine
 msgid "Stop"
 msgstr "Stopp"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:86 ui/bar.slint:87
+#: ui/bar.slint:82 ui/bar.slint:83
 #, x-machine
 msgid ""
 "{}\n"
@@ -353,73 +353,63 @@ msgstr ""
 "Rechtsklick: {}"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:86
+#: ui/bar.slint:82
 #, x-machine
 msgid "Back {} seconds"
 msgstr "{} Sekunden zurück"
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:86
+#: ui/bar.slint:82
 #, x-machine
 msgid "Play previous"
 msgstr "Vorheriges abspielen"
 
-#: ui/bar.slint:87
+#: ui/bar.slint:83
 #, x-machine
 msgid "Forward {} seconds"
 msgstr "{} Sekunden vorwärts"
 
-#: ui/bar.slint:87
+#: ui/bar.slint:83
 #, x-machine
 msgid "Play next"
 msgstr "Nächstes abspielen"
 
-#: ui/bar.slint:88
+#: ui/bar.slint:84
 #, x-machine
 msgid "Open file"
 msgstr "Datei öffnen"
 
-#: ui/bar.slint:89
+#: ui/bar.slint:85
 #, x-machine
 msgid "Leave fullscreen"
 msgstr "Vollbild verlassen"
 
-#: ui/bar.slint:89
+#: ui/bar.slint:85
 #, x-machine
 msgid "Fullscreen"
 msgstr "Vollbild"
 
-#: ui/bar.slint:90
+#: ui/bar.slint:86
 #, x-machine
 msgid "Click to show the elapsed time"
 msgstr "Klicken, um die abgelaufene Zeit anzuzeigen"
 
-#: ui/bar.slint:90
+#: ui/bar.slint:86
 #, x-machine
 msgid "Click to show the remaining time"
 msgstr "Klicken, um die Restzeit anzuzeigen"
 
-#: ui/bar.slint:91
+#: ui/bar.slint:87
 #, x-machine
 msgid "Unmute"
 msgstr "Ton ein"
 
-#: ui/bar.slint:91 ui/bar.slint:310
+#: ui/bar.slint:87 ui/bar.slint:304
 #, x-machine
 msgid "Mute"
 msgstr "Stummschalten"
 
-#: ui/bar.slint:93
-#, x-machine
-msgid "{} (the window is too narrow for the playlist)"
-msgstr "{} (das Fenster ist zu schmal für die Wiedergabeliste)"
-
-#: ui/bar.slint:93 ui/bar.slint:334
-#, x-machine
-msgid "Playlist"
-msgstr "Wiedergabeliste"
-
-#: ui/bar.slint:310
+#: ui/bar.slint:304
 #, x-machine
 msgctxt "accessibility"
 msgid "Unmute"

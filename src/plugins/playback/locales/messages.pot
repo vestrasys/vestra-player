@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.playback 0.2.3\n"
+"Project-Id-Version: vestra.playback 0.2.5\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -160,7 +160,7 @@ msgstr ""
 msgid "Speed: {}x"
 msgstr ""
 
-#: main.ts:30 ui/bar.slint:92
+#: main.ts:30 ui/bar.slint:88
 msgid "Volume: {}%"
 msgstr ""
 
@@ -257,84 +257,76 @@ msgid "speed"
 msgstr ""
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
-#: ui/bar.slint:81
+#: ui/bar.slint:77
 msgid "{} ({})"
 msgstr ""
 
-#: ui/bar.slint:83
+#: ui/bar.slint:79
 msgid "Pause"
 msgstr ""
 
-#: ui/bar.slint:83
+#: ui/bar.slint:79
 msgid "Play"
 msgstr ""
 
-#: ui/bar.slint:84
+#: ui/bar.slint:80
 msgid "Stop"
 msgstr ""
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:86 ui/bar.slint:87
+#: ui/bar.slint:82 ui/bar.slint:83
 msgid ""
 "{}\n"
 "Right-click: {}"
 msgstr ""
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:86
+#: ui/bar.slint:82
 msgid "Back {} seconds"
 msgstr ""
 
 #. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:86
+#: ui/bar.slint:82
 msgid "Play previous"
 msgstr ""
 
-#: ui/bar.slint:87
+#: ui/bar.slint:83
 msgid "Forward {} seconds"
 msgstr ""
 
-#: ui/bar.slint:87
+#: ui/bar.slint:83
 msgid "Play next"
 msgstr ""
 
-#: ui/bar.slint:88
+#: ui/bar.slint:84
 msgid "Open file"
 msgstr ""
 
-#: ui/bar.slint:89
+#: ui/bar.slint:85
 msgid "Leave fullscreen"
 msgstr ""
 
-#: ui/bar.slint:89
+#: ui/bar.slint:85
 msgid "Fullscreen"
 msgstr ""
 
-#: ui/bar.slint:90
+#: ui/bar.slint:86
 msgid "Click to show the elapsed time"
 msgstr ""
 
-#: ui/bar.slint:90
+#: ui/bar.slint:86
 msgid "Click to show the remaining time"
 msgstr ""
 
-#: ui/bar.slint:91
+#: ui/bar.slint:87
 msgid "Unmute"
 msgstr ""
 
-#: ui/bar.slint:91 ui/bar.slint:310
+#: ui/bar.slint:87 ui/bar.slint:304
 msgid "Mute"
 msgstr ""
 
-#: ui/bar.slint:93
-msgid "{} (the window is too narrow for the playlist)"
-msgstr ""
-
-#: ui/bar.slint:93 ui/bar.slint:334
-msgid "Playlist"
-msgstr ""
-
-#: ui/bar.slint:310
+#: ui/bar.slint:304
 msgctxt "accessibility"
 msgid "Unmute"
 msgstr ""

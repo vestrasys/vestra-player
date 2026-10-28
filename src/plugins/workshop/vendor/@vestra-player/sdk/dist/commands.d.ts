@@ -1,5 +1,5 @@
 /** Finite candidate command registry. Host authenticates owner; no plugin supplies an owner id. */
-import type { Transport } from "./wire.ts";
+import type { Json, Transport } from "./wire.ts";
 import type { ListJson, TextJson } from "./i18n.ts";
 /**
  * The player's command registry caps, the same values as the player's own
@@ -44,6 +44,43 @@ export declare const COMMAND_LIMITS: {
  * ```
  */
 export declare const MENU_IDS: readonly ["open", "playback", "subtitles", "video", "audio", "screen", "settings"];
+/**
+ * The icons a bottom-bar button may name (`CommandOptions.button.icon`):
+ * every icon of the player's V-Line set, `@vestra/icons.slint` (draw one
+ * in your own Slint with `Icon { name: "store"; }`). The player's tests check
+ * that this list is its icon set.
+ *
+ * @example
+ * ```ts
+ * import assert from "node:assert/strict";
+ * import { BAR_BUTTON_ICONS } from "@vestra-player/sdk/testing";
+ *
+ * assert.ok(BAR_BUTTON_ICONS.includes("store"));
+ * ```
+ *
+ * @since 1.5.29
+ */
+export declare const BAR_BUTTON_ICONS: readonly ["play", "pause", "stop", "back", "forward", "open", "volume", "mute", "playlist", "detach", "attach", "close", "failed", "move-top", "move-up", "move-down", "move-bottom", "search", "chapter", "bookmark", "check-task", "check-box", "menu-check", "submenu", "scroll-up", "scroll-down", "caret-down", "sort-asc", "sort-desc", "tag-remove", "preview-play", "add", "remove", "sort", "fullscreen", "exit-fullscreen", "store", "ai"];
+/**
+ * The player's limits on bottom-bar buttons (`CommandOptions.button`), the
+ * same values as the player's (its tests check that they agree). A button
+ * past `perPlugin` or `total` is left out: its command still registers and
+ * its menu entry stays, and the player logs the button it left out
+ * (`limit`). Which ones stay: each plugin's first declared button, then the
+ * `total` highest by order, plugin id and declaration order: as in a narrow
+ * strip, the lowest order goes first (equal orders: the smaller plugin id,
+ * then the earlier declaration, goes first).
+ *
+ * @since 1.5.29
+ */
+export declare const BAR_BUTTON_LIMITS: {
+    /** Buttons one plugin shows (1). */
+    readonly perPlugin: 1;
+    /** Buttons the player shows, every plugin together, besides its own sidebar toggle (8). */
+    readonly total: 8;
+    /** The highest `order` (999; the lowest is 0). */
+    readonly maxOrder: 999;
+};
 /**
  * A submenu that one of the player's built-in plugins declares: an entry of
  * {@link BUILTIN_SUBMENUS}.
@@ -157,6 +194,15 @@ export type CommandDeclaration = {
     focus: "panel" | null;
     /** Fire again on keyboard auto-repeat while held. */
     repeat: boolean;
+    /**
+     * A bottom-bar button (player 0.5.10): an icon name, or an image in the
+     * `plugin.ui.image` wire form. Sent only when set: older players refuse
+     * unknown declaration fields.
+     */
+    button?: {
+        icon: string | Json;
+        order: number;
+    };
 };
 export declare function commandClient(transport: Transport): {
     register: (id: string, revision: number, declaration: CommandDeclaration, state: CommandState) => Promise<{

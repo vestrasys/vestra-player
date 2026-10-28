@@ -86,7 +86,6 @@ export function wireBar(
       drawn = { marks: current, duration, rows: seekMarks(current, duration) };
     return drawn.rows;
   };
-  const sidebar = scope.panels.sidebar;
   const p = playback;
   let volumeDragging = false;
   // I07: the pointer is on the seek line (hover or drag): the preview's sheets go out.
@@ -102,8 +101,6 @@ export function wireBar(
     const volume = p.volumeDraft ?? state.volume;
     const remaining = settings.value.remainingTime;
     const left = remaining && position !== null && state.duration !== null;
-    const slot = sidebar.state;
-    const sidebarHidden = !!slot?.preferred && !slot.effective && slot.reason === "space";
     return {
       elapsedLabel: left ? `-${time(state.duration! - position!)}` : time(position),
       totalLabel: time(state.duration),
@@ -131,10 +128,6 @@ export function wireBar(
       volume: Math.min(volume, 100),
       canMute: !p.muteBusy && p.volumeDraft === null,
       canVolume: !p.muteBusy,
-      hasSidebar: slot !== null,
-      sidebarOn: slot?.preferred ?? false,
-      // G-18: on but not shown because the window is too narrow (fullscreen's collapsed pop-out counts as on).
-      sidebarHidden: sidebarHidden,
       // UI-BAR-05: the fullscreen button shows enter or leave.
       fullscreen: scope.window.state.fullscreen,
       // G-14: which time the label shows (the tooltip offers the other).
@@ -165,7 +158,6 @@ export function wireBar(
   });
   // G-14: the choice is saved (`remainingTime`) and kept across restarts.
   bar.on("toggleTime", () => settings.update((s) => void (s.remainingTime = !s.remainingTime)));
-  bar.on("toggleSidebar", () => sidebar.toggle());
   bar.on("volumeChanged", (value: number) => {
     if (!volumeDragging) {
       volumeDragging = true;

@@ -57,7 +57,74 @@ pub struct Declaration {
     /// the plugin; empty = show the keys.
     #[serde(skip)]
     pub display: Display,
+    /// A bottom-bar button (`CommandOptions.button`, player 0.5.10): read
+    /// apart from the rest by the `commands` capability (its image is
+    /// checked against the plugin's directories), so here it is skipped.
+    #[serde(skip)]
+    pub button: Option<Button>,
 }
+
+/// A command's bottom-bar button: the cell `BarButtons`
+/// (`@vestra/bar-buttons.slint`) shows for it (bar_buttons.rs).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Button {
+    pub icon: ButtonIcon,
+    /// Left to right, ascending, 0..=[`Registry::MAX_BUTTON_ORDER`].
+    pub order: i32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ButtonIcon {
+    /// One of [`BUTTON_ICONS`].
+    Name(String),
+    /// A plugin image (`plugin.ui.image`): its path and `maxSide` (0: none).
+    Image { path: String, max_side: u32 },
+}
+
+/// The names of `@vestra/icons.slint` (`Icons.commands`), the icons a
+/// button may name. Mirrored by `BAR_BUTTON_ICONS` in the SDK package;
+/// tests/sdk/host-agreement.test.ts checks the installed SDK agrees, and a
+/// test here that the list is the icon set's.
+pub const BUTTON_ICONS: [&str; 38] = [
+    "play",
+    "pause",
+    "stop",
+    "back",
+    "forward",
+    "open",
+    "volume",
+    "mute",
+    "playlist",
+    "detach",
+    "attach",
+    "close",
+    "failed",
+    "move-top",
+    "move-up",
+    "move-down",
+    "move-bottom",
+    "search",
+    "chapter",
+    "bookmark",
+    "check-task",
+    "check-box",
+    "menu-check",
+    "submenu",
+    "scroll-up",
+    "scroll-down",
+    "caret-down",
+    "sort-asc",
+    "sort-desc",
+    "tag-remove",
+    "preview-play",
+    "add",
+    "remove",
+    "sort",
+    "fullscreen",
+    "exit-fullscreen",
+    "store",
+    "ai",
+];
 
 /// The shown text of a [`Declaration`].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -79,6 +146,7 @@ impl Declaration {
             focus: None,
             repeat: false,
             display: Display::default(),
+            button: None,
         }
     }
     /// The menu text of this command.
@@ -400,6 +468,44 @@ pub fn normalize(path: &mut [String]) -> Result<()> {
     Ok(())
 }
 
+/// A button needs a menu entry (where the command stays reachable from a
+/// bar without `BarButtons`), an order in range and a known icon.
+fn button_valid(button: &Button, path: &[String]) -> Result<()> {
+    if path.is_empty() {
+        return Err(CommandError::Invalid(
+            "button needs a menu path: a bar button is also a menu item".into(),
+        ));
+    }
+    if !(0..=Registry::MAX_BUTTON_ORDER).contains(&button.order) {
+        return Err(CommandError::Invalid(format!(
+            "button order must be an integer 0–{}",
+            Registry::MAX_BUTTON_ORDER
+        )));
+    }
+    match &button.icon {
+        ButtonIcon::Name(name) if !BUTTON_ICONS.contains(&name.as_str()) => {
+            Err(CommandError::Invalid(format!(
+                "unknown button icon {name:?}: a name of @vestra/icons.slint ({}) or an image from plugin.ui.image",
+                BUTTON_ICONS.join(", ")
+            )))
+        }
+        ButtonIcon::Image { path, .. } if path.is_empty() => Err(CommandError::Invalid(
+            "button image needs a file path".into(),
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// The bottom-bar buttons, as [`Registry::buttons`] lays them out.
+#[derive(Debug, Default)]
+pub struct Buttons<'a> {
+    /// Shown, left to right: ascending order, then manifest id, then
+    /// registration sequence; at most [`Registry::MAX_BUTTONS`].
+    pub shown: Vec<&'a CommandSnapshot>,
+    /// Left out past a limit, with the limit's words.
+    pub dropped: Vec<(&'a CommandSnapshot, &'static str)>,
+}
+
 fn state_valid(state: &CommandState) -> Result<()> {
     if let Some(reason) = &state.reason {
         text(reason, "reason", 512)?;
@@ -417,6 +523,14 @@ impl Registry {
     pub const MAX_COMMANDS: usize = 1024;
     pub const MAX_PER_OWNER: usize = 160;
     pub const MAX_DEPTH: usize = 8;
+    /// Bottom-bar buttons (`CommandOptions.button`): one per plugin, eight
+    /// in the player; a button past them is left out (its command and menu
+    /// entry stay) and logged. `order` is 0..=999. Mirrored by
+    /// `BAR_BUTTON_LIMITS` in the SDK package; tests/sdk/host-agreement.test.ts
+    /// checks the installed SDK agrees.
+    pub const MAX_BUTTONS: usize = 8;
+    pub const MAX_BUTTONS_PER_OWNER: usize = 1;
+    pub const MAX_BUTTON_ORDER: i32 = 999;
 
     pub fn new() -> Self {
         Self::default()
@@ -456,6 +570,9 @@ impl Registry {
             return Err(CommandError::Invalid(
                 "order must be within ±1000000".into(),
             ));
+        }
+        if let Some(button) = &declaration.button {
+            button_valid(button, &declaration.path)?;
         }
         for binding in &declaration.bindings {
             crate::bindings::parse(binding).map_err(CommandError::Invalid)?;
@@ -612,6 +729,51 @@ impl Registry {
             revision: self.revision,
             roots: tree(&entries, 0, false),
         }
+    }
+
+    /// The commands' bottom-bar buttons: each owner's first declared one,
+    /// then, ranked by (order, manifest id, sequence), the highest
+    /// [`Self::MAX_BUTTONS`]: the lowest ranks go first, as in a narrow
+    /// strip (equal orders: the smaller plugin id, then the earlier
+    /// registration, goes first). The rest are `dropped`, with the limit.
+    pub fn buttons(&self) -> Buttons<'_> {
+        let mut per_owner: BTreeMap<OwnerGeneration, usize> = BTreeMap::new();
+        let mut result = Buttons::default();
+        let mut declared: Vec<_> = self
+            .commands
+            .values()
+            .filter(|entry| entry.declaration.button.is_some())
+            .collect();
+        declared.sort_by_key(|entry| entry.sequence);
+        let mut shown = Vec::new();
+        for entry in declared {
+            let count = per_owner.entry(entry.key.owner).or_default();
+            if *count < Self::MAX_BUTTONS_PER_OWNER {
+                *count += 1;
+                shown.push(entry);
+            } else {
+                result.dropped.push((entry, "one button per plugin"));
+            }
+        }
+        let rank = |entry: &CommandSnapshot| {
+            (
+                entry.declaration.button.as_ref().map_or(0, |b| b.order),
+                entry.manifest.clone(),
+                entry.sequence,
+            )
+        };
+        shown.sort_by_key(|entry| rank(entry));
+        // Like the strip, which loses its lowest orders first in a narrow
+        // window: past the limit the lowest ranks are left out.
+        let over = shown.len().saturating_sub(Self::MAX_BUTTONS);
+        let kept = shown.split_off(over);
+        for entry in shown {
+            result
+                .dropped
+                .push((entry, "at most 8 buttons in the player"));
+        }
+        result.shown = kept;
+        result
     }
 
     /// Resolve immediately before dispatch, at the serial registry arbiter.
@@ -1521,5 +1683,175 @@ mod tests {
             (plain.shown_title(), plain.shown_path()),
             ("B", vec!["A".to_owned(), "B".into()])
         );
+    }
+}
+
+#[cfg(test)]
+mod button_tests {
+    use super::*;
+
+    fn state() -> CommandState {
+        CommandState {
+            enabled: true,
+            checked: None,
+            busy: false,
+            reason: None,
+        }
+    }
+    fn with_button(path: &[&str], icon: &str, order: i32) -> Declaration {
+        Declaration {
+            button: Some(Button {
+                icon: ButtonIcon::Name(icon.into()),
+                order,
+            }),
+            ..Declaration::new(path.last().copied().unwrap_or("Title"), path)
+        }
+    }
+    fn shown(registry: &Registry) -> Vec<String> {
+        registry
+            .buttons()
+            .shown
+            .iter()
+            .map(|entry| entry.key.local_id.clone())
+            .collect()
+    }
+
+    #[test]
+    fn buttons_need_a_menu_path_a_known_icon_and_an_order_in_range() {
+        let mut registry = Registry::new();
+        let mut register =
+            |id: &str, declaration| registry.register(1, "a", id.into(), 1, declaration, state());
+        let invalid = |result: Result<()>| matches!(result, Err(CommandError::Invalid(_)));
+        assert!(invalid(register("a", with_button(&[], "store", 1))));
+        assert!(invalid(register("b", with_button(&["B"], "shopping", 1))));
+        assert!(invalid(register("c", with_button(&["C"], "store", -1))));
+        assert!(invalid(register("d", with_button(&["D"], "store", 1000))));
+        let image = Declaration {
+            button: Some(Button {
+                icon: ButtonIcon::Image {
+                    path: String::new(),
+                    max_side: 0,
+                },
+                order: 1,
+            }),
+            ..Declaration::new("E", &["E"])
+        };
+        assert!(invalid(register("e", image)));
+        register("f", with_button(&["F"], "store", 0)).unwrap();
+        register("g", with_button(&["G"], "ai", 999)).unwrap();
+    }
+
+    #[test]
+    fn one_button_per_plugin_eight_in_the_player_keeping_the_highest_orders() {
+        let mut registry = Registry::new();
+        // Owner 1 declares two: the first declared keeps its button; the
+        // second stays a menu item.
+        registry
+            .register(
+                1,
+                "z.one",
+                "first".into(),
+                1,
+                with_button(&["One"], "ai", 50),
+                state(),
+            )
+            .unwrap();
+        registry
+            .register(
+                1,
+                "z.one",
+                "second".into(),
+                1,
+                with_button(&["Two"], "store", 1),
+                state(),
+            )
+            .unwrap();
+        // Equal orders: by plugin id.
+        registry
+            .register(
+                2,
+                "b.two",
+                "b".into(),
+                1,
+                with_button(&["B"], "add", 10),
+                state(),
+            )
+            .unwrap();
+        registry
+            .register(
+                3,
+                "a.three",
+                "a".into(),
+                1,
+                with_button(&["A"], "add", 10),
+                state(),
+            )
+            .unwrap();
+        assert_eq!(shown(&registry), ["a", "b", "first"]);
+        let dropped = registry.buttons().dropped;
+        assert_eq!(dropped.len(), 1);
+        assert_eq!(dropped[0].0.key.local_id, "second");
+        assert!(
+            registry.snapshot().roots.len() == 4,
+            "the menu keeps every entry"
+        );
+        for owner in 10..17 {
+            registry
+                .register(
+                    owner,
+                    &format!("p{owner}"),
+                    "x".into(),
+                    1,
+                    with_button(&[&format!("P{owner}")], "add", 100 + owner as i32),
+                    state(),
+                )
+                .unwrap();
+        }
+        let buttons = registry.buttons();
+        assert_eq!(buttons.shown.len(), Registry::MAX_BUTTONS);
+        // Past eight the lowest orders are left out, as a narrow strip
+        // loses them first; the highest are kept, in ascending order.
+        let out: Vec<_> = buttons
+            .dropped
+            .iter()
+            .map(|(entry, limit)| (entry.manifest.as_str(), *limit))
+            .collect();
+        assert_eq!(
+            out,
+            [
+                ("z.one", "one button per plugin"),
+                ("a.three", "at most 8 buttons in the player"),
+                ("b.two", "at most 8 buttons in the player"),
+            ]
+        );
+        assert_eq!(buttons.shown[0].key.local_id, "first");
+        assert_eq!(buttons.shown[7].manifest, "p16");
+        // Equal orders: the smaller plugin id goes first. A removed plugin's
+        // button goes with its commands, and the next one comes back.
+        registry.remove_owner(3).unwrap();
+        let shown: Vec<_> = registry
+            .buttons()
+            .shown
+            .iter()
+            .map(|entry| entry.manifest.clone())
+            .collect();
+        assert_eq!(shown[0], "z.one");
+        registry.remove_owner(10).unwrap();
+        assert_eq!(registry.buttons().shown[0].manifest, "b.two");
+    }
+
+    /// `BUTTON_ICONS` is every name `Icons.commands` draws.
+    #[test]
+    fn button_icons_are_the_icon_sets_names() {
+        let slint = include_str!("../ui/vestra/icons.slint");
+        let names: Vec<_> = slint
+            .split("if name == \"")
+            .skip(1)
+            .filter_map(|rest| {
+                let (name, after) = rest.split_once('"')?;
+                after.starts_with(" { return \"").then_some(name)
+            })
+            .collect();
+        assert_eq!(names, BUTTON_ICONS);
     }
 }

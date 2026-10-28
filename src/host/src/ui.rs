@@ -643,15 +643,23 @@ msgstr "引 \"号\" \\ 后"
     }
 
     fn headless() {
+        headless_window();
+    }
+
+    /// The headless platform's one window (every component of this thread
+    /// shows in it). It reuses its buffer, so a test that draws it repaints
+    /// only the dirty regions, as the player's software renderer does.
+    fn headless_window() -> std::rc::Rc<slint::platform::software_renderer::MinimalSoftwareWindow> {
         thread_local! {
-            static PLATFORM: () = {
+            static WINDOW: std::rc::Rc<slint::platform::software_renderer::MinimalSoftwareWindow> = {
                 let window = slint::platform::software_renderer::MinimalSoftwareWindow::new(
-                    Default::default(),
+                    slint::platform::software_renderer::RepaintBufferType::ReusedBuffer,
                 );
-                slint::platform::set_platform(Box::new(Headless(window))).unwrap();
+                slint::platform::set_platform(Box::new(Headless(window.clone()))).unwrap();
+                window
             };
         }
-        PLATFORM.with(|_| {});
+        WINDOW.with(std::rc::Rc::clone)
     }
 
     /// menu.rs sizes each panel from its own measurement of the row
@@ -1618,5 +1626,407 @@ export component W inherits Window {
                 .collect();
             assert!(errors.is_empty(), "{}: {errors:?}", file.display());
         }
+    }
+
+    /// Player 0.5.10: a bottom bar placing `BarButtons` shares the shell's
+    /// `BarButtonsHost` (the bar imports the same library file): the strip
+    /// reports itself placed and shows the cells that fit in its room, the
+    /// sidebar toggle longest and the plugins' lowest order first gone.
+    #[test]
+    fn bar_buttons_share_the_shell_global_and_drop_the_lowest_order_first() {
+        use crate::bar_buttons::{GLOBAL, Item, cell};
+        use crate::commands::ButtonIcon;
+        use slint_interpreter::Value;
+        headless();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let specs = [crate::composition::CompileSpec {
+            owner: 10,
+            file: base.join("strip-bar.slint"),
+            component: "StripBar".into(),
+            global: Some("StripBridge".into()),
+            slot: crate::composition::Slot::Bottom,
+        }];
+        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
+        let shell = crate::composition::compile_json(&specs, sender.clone(), 1).unwrap();
+        assert_eq!(
+            shell.get_global_property(GLOBAL, "placed").unwrap(),
+            Value::Bool(true)
+        );
+        // A bar without the strip: the player logs the hidden buttons.
+        let plain = crate::composition::compile_json(&bar_and_sidebar(), sender, 2).unwrap();
+        assert_eq!(
+            plain.get_global_property(GLOBAL, "placed").unwrap(),
+            Value::Bool(false)
+        );
+        let item = |id: &str, icon: &str| Item {
+            owner: 3,
+            id: id.into(),
+            icon: ButtonIcon::Name(icon.into()),
+            label: id.into(),
+            tip: id.into(),
+            enabled: true,
+            checkable: false,
+            checked: false,
+            dimmed: false,
+        };
+        let cells = vec![
+            cell(Some(&item("ai", "ai")), None),
+            cell(Some(&item("store", "store")), None),
+        ];
+        shell
+            .set_global_property(
+                GLOBAL,
+                "buttons",
+                Value::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
+            )
+            .unwrap();
+        shell
+            .set_global_property(
+                GLOBAL,
+                "toggle",
+                cell(Some(&item("sidebar", "playlist")), None),
+            )
+            .unwrap();
+        shell.window().set_size(slint::LogicalSize::new(800., 600.));
+        shell.show().unwrap();
+        // The strip's width and the plugin buttons it shows (by id; "toggle"
+        // when the sidebar toggle shows too) at this room.
+        let strip = |room: f64, toggle: bool| {
+            shell
+                .set_global_property("Owner10Bridge", "room", Value::Number(room))
+                .unwrap();
+            settle_layout(shell.window());
+            slint::platform::update_timers_and_animations();
+            let number = |name| match shell.get_global_property("Owner10Bridge", name).unwrap() {
+                Value::Number(n) => n,
+                other => panic!("{other:?}"),
+            };
+            let (width, first) = (number("shown"), number("first") as usize);
+            let cells = (width / 41.) as usize;
+            let mut shown: Vec<&str> = ["ai", "store"][first..].to_vec();
+            shown.truncate(cells - usize::from(toggle && cells > 0));
+            if toggle && cells > 0 {
+                shown.push("toggle");
+            }
+            assert_eq!(shown.len(), cells, "room {room}");
+            (width, shown)
+        };
+        // AI (order 100) and Store (200): cells go from the left end inward,
+        // the lowest order first, the toggle last.
+        assert_eq!(strip(1000., true), (123., vec!["ai", "store", "toggle"]));
+        assert_eq!(strip(123., true), (123., vec!["ai", "store", "toggle"]));
+        assert_eq!(strip(100., true), (82., vec!["store", "toggle"]));
+        assert_eq!(strip(41., true), (41., vec!["toggle"]));
+        assert_eq!(strip(40., true), (0., vec![]));
+        // Without a toggle the buttons take the room, the lowest order going first.
+        shell
+            .set_global_property(GLOBAL, "toggle", cell(None, None))
+            .unwrap();
+        assert_eq!(strip(1000., false), (82., vec!["ai", "store"]));
+        assert_eq!(strip(60., false), (41., vec!["store"]));
+        assert_eq!(strip(0., false), (0., vec![]));
+        shell.hide().unwrap();
+    }
+
+    /// A menu driven like the player drives it: the real MenuView, the
+    /// host's hover rules (`menu::hover_target`, `menu::HoverAim`, a tick
+    /// every 16 ms) and its model updates (`set_menu_model`), drawn by the
+    /// software renderer into a reused buffer, as on Windows.
+    struct MenuSim {
+        window: slint_interpreter::ComponentInstance,
+        roots: Vec<crate::commands::MenuNode>,
+        path: Vec<String>,
+        aim: crate::menu::HoverAim,
+        panels: Vec<crate::menu::Rect>,
+        levels: serde_json::Value,
+        hovers: std::rc::Rc<std::cell::RefCell<Vec<(usize, String, bool)>>>,
+        pointer: crate::menu::Point,
+        now: u64,
+        buffer: Vec<slint::platform::software_renderer::PremultipliedRgbaColor>,
+    }
+
+    const SIM_SIZE: (u32, u32) = (800, 600);
+
+    const SIM_SOURCE: &str = r#"
+import { MenuView, MenuLevel } from "menu-view.slint";
+export { MenuChrome } from "menu-view.slint";
+export { VestraPalette } from "palette.slint";
+export component MenuWindow inherits Window {
+    width: 800px; height: 600px;
+    in property <[MenuLevel]> menu-levels;
+    callback menu-hover(int, string, bool);
+    MenuView {
+        width: root.width; height: root.height;
+        levels: root.menu-levels;
+        hovered(level, token, now) => { root.menu-hover(level, token, now); }
+    }
+}"#;
+
+    impl MenuSim {
+        fn new() -> Self {
+            use crate::commands::{CommandState, Declaration, Registry};
+            headless();
+            let mut registry = Registry::new();
+            let state = CommandState {
+                enabled: true,
+                checked: None,
+                busy: false,
+                reason: None,
+            };
+            let paths: &[&[&str]] = &[
+                &["Open File…"],
+                &["Video", "Pixel Shaders", "Use Shaders"],
+                &["Video", "Deinterlace", "Auto"],
+                &["Video", "Aspect", "16:9"],
+                &["Video", "Framing", "Zoom In"],
+                &["Video", "Image Processing", "Sharpen"],
+                &["Video", "Image Processing", "Deband"],
+                &["Video", "Rotation", "90°"],
+                &["Video", "Snapshot", "Save Current Frame"],
+                &["Video", "Picture Adjustments…"],
+                &["Video", "Reset"],
+                &["Video", "Brightness -1%"],
+                &["Video", "Brightness +1%"],
+                &["Video", "Contrast -1%"],
+                &["Quit"],
+            ];
+            for (index, path) in paths.iter().enumerate() {
+                registry
+                    .register(
+                        1,
+                        "test.menu",
+                        format!("c{index}"),
+                        1,
+                        Declaration::new(path.last().unwrap(), path),
+                        state.clone(),
+                    )
+                    .unwrap();
+            }
+            let window = crate::composition::build(SIM_SOURCE.into(), "MenuWindow")
+                .unwrap()
+                .create()
+                .unwrap();
+            let hovers = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+            let sink = hovers.clone();
+            window
+                .set_callback("menu-hover", move |args| {
+                    if let [
+                        slint_interpreter::Value::Number(level),
+                        slint_interpreter::Value::String(token),
+                        slint_interpreter::Value::Bool(now),
+                    ] = args
+                    {
+                        sink.borrow_mut()
+                            .push((*level as usize, token.to_string(), *now));
+                    }
+                    slint_interpreter::Value::Void
+                })
+                .unwrap();
+            window
+                .window()
+                .set_size(slint::PhysicalSize::new(SIM_SIZE.0, SIM_SIZE.1));
+            window.show().unwrap();
+            let mut sim = Self {
+                window,
+                roots: registry.snapshot().roots,
+                path: Vec::new(),
+                aim: crate::menu::HoverAim::default(),
+                panels: Vec::new(),
+                levels: serde_json::Value::Null,
+                hovers,
+                pointer: crate::menu::Point { x: 0., y: 0. },
+                now: 1000,
+                buffer: vec![Default::default(); (SIM_SIZE.0 * SIM_SIZE.1) as usize],
+            };
+            sim.refresh();
+            sim.draw();
+            sim
+        }
+        fn refresh(&mut self) {
+            self.path = crate::menu::valid_path(&self.roots, &self.path);
+            self.levels = crate::menu::levels(
+                &self.roots,
+                &self.path,
+                crate::menu::Point { x: 20., y: 20. },
+                crate::menu::Point {
+                    x: f64::from(SIM_SIZE.0),
+                    y: f64::from(SIM_SIZE.1),
+                },
+                &[],
+                &|_, _| None,
+            );
+            self.panels = crate::menu::panels(&self.levels);
+            crate::set_menu_model(
+                &self.window,
+                crate::ui_values::from_json(&self.levels).unwrap(),
+            )
+            .unwrap();
+        }
+        fn set_path(&mut self, path: Vec<String>) {
+            self.aim.clear();
+            if path != self.path {
+                self.path = path;
+                self.refresh();
+            }
+        }
+        /// The host loop: the hovers the view reported, as main.rs handles them.
+        fn host(&mut self) {
+            let hovers: Vec<_> = self.hovers.borrow_mut().drain(..).collect();
+            for (level, token, now) in hovers {
+                let Some(path) = crate::menu::hover_target(&self.path, level, &token) else {
+                    continue;
+                };
+                if now {
+                    self.set_path(path);
+                    continue;
+                }
+                let submenu = (self.path.len() > level)
+                    .then(|| self.panels.get(level + 1).copied())
+                    .flatten();
+                if let Some(path) =
+                    self.aim
+                        .hover(&self.path, path, Some(self.pointer), submenu, self.now)
+                {
+                    self.set_path(path);
+                }
+            }
+        }
+        /// A host tick (main.rs: the events of the last 16 ms, then
+        /// `window_tick`'s `menu_tick`) and a frame.
+        fn tick(&mut self) {
+            self.host();
+            if let Some(path) = self.aim.tick(Some(self.pointer), self.now) {
+                self.set_path(path);
+            }
+            self.draw();
+        }
+        fn draw(&mut self) {
+            slint::platform::update_timers_and_animations();
+            let buffer = &mut self.buffer;
+            headless_window().draw_if_needed(|renderer| {
+                renderer.render(buffer, SIM_SIZE.0 as usize);
+            });
+        }
+        /// One pointer step, 1 ms after the last; a host tick every 16 ms.
+        fn move_to(&mut self, x: f64, y: f64) {
+            self.pointer = crate::menu::Point { x, y };
+            self.window
+                .window()
+                .dispatch_event(slint::platform::WindowEvent::PointerMoved {
+                    position: slint::LogicalPosition::new(x as f32, y as f32),
+                });
+            slint::platform::update_timers_and_animations();
+            self.now += 1;
+            if self.now.is_multiple_of(16) {
+                self.tick();
+            }
+        }
+        /// Where a row of a level is: its panel's x and the row's middle.
+        fn row(&self, level: usize, title: &str) -> (f64, f64) {
+            let panel = &self.levels[level];
+            let row = panel["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["title"] == title)
+                .unwrap_or_else(|| panic!("no row {title}"));
+            (
+                panel["x"].as_f64().unwrap(),
+                panel["y"].as_f64().unwrap() + row["y"].as_f64().unwrap() + 12.,
+            )
+        }
+        /// The rows of a level drawn lit: their 2px accent bar differs from
+        /// the row's own background beside it.
+        fn lit(&self, level: usize) -> Vec<String> {
+            let Some(panel) = self.levels.get(level) else {
+                return Vec::new();
+            };
+            let pixel = |x: f64, y: f64| {
+                let p = self.buffer[y as usize * SIM_SIZE.0 as usize + x as usize];
+                (p.red, p.green, p.blue)
+            };
+            panel["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|row| {
+                    let x = panel["x"].as_f64().unwrap();
+                    let y = panel["y"].as_f64().unwrap() + row["y"].as_f64().unwrap() + 12.;
+                    pixel(x + 3., y) != pixel(x + 14., y)
+                })
+                .map(|row| row["title"].as_str().unwrap().to_owned())
+                .collect()
+        }
+    }
+
+    /// Open Video, sweep its submenu up and down three times at `step` px
+    /// per 1 ms (starting `phase` ms into a 16 ms host tick) and rest on
+    /// Reset; the open path and the lit rows of both levels.
+    fn sweep(step: f64, phase: u64) -> (Vec<String>, Vec<String>, Vec<String>) {
+        let mut sim = MenuSim::new();
+        sim.now += phase;
+        let (x, y) = sim.row(0, "Video");
+        for _ in 0..20 {
+            sim.move_to(x + 31., y);
+            sim.move_to(x + 30., y);
+        }
+        assert_eq!(sim.path, ["Video"]);
+        let (sub_x, top) = sim.row(1, "Pixel Shaders");
+        let (_, bottom) = sim.row(1, "Contrast -1%");
+        let (_, reset) = sim.row(1, "Reset");
+        let x = sub_x + 40.;
+        for _ in 0..3 {
+            let mut y = top;
+            while y < bottom {
+                sim.move_to(x, y);
+                y += step;
+            }
+            while y > top {
+                sim.move_to(x, y);
+                y -= step;
+            }
+        }
+        let mut y = top;
+        while y < reset {
+            sim.move_to(x, y);
+            y += step;
+        }
+        // Rest there: a held switch (G-15) settles, frames are drawn.
+        for _ in 0..400 {
+            sim.move_to(x, reset);
+        }
+        sim.draw();
+        let result = (sim.path.clone(), sim.lit(0), sim.lit(1));
+        sim.window.hide().unwrap();
+        result
+    }
+
+    /// User report (0.5.9, Windows, software rendering): sweeping a submenu
+    /// up and down at about 6000 px/s left rows that open a submenu
+    /// ("Image Processing") drawn lit beside the row under the pointer, with
+    /// their submenus closed. Like native menus, only the row under the
+    /// pointer and the parents of open submenus may be lit. Before the fix
+    /// every combination below left one to five such rows.
+    #[test]
+    fn a_fast_sweep_leaves_only_the_pointer_row_and_open_parents_lit() {
+        let mut failures = Vec::new();
+        for step in [2., 6., 14.] {
+            for phase in [0, 5, 11] {
+                let (path, root, video) = sweep(step, phase);
+                if path != ["Video"] || root != ["Video"] || video != ["Reset"] {
+                    failures.push(format!(
+                        "step {step} phase {phase}: path {path:?} lit {root:?} {video:?}"
+                    ));
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "{}",
+            failures.join(
+                "
+"
+            )
+        );
     }
 }

@@ -84,6 +84,12 @@ fn register_or_update(
         // Text values in the title and path: the key is their
         // English rendering, the shown text their translation.
         let mut raw = params["declaration"].clone();
+        // Player 0.5.10: the bottom-bar button, read apart (its image is
+        // the plugin's file); `Declaration` still refuses unknown fields.
+        let button = match raw.as_object_mut().and_then(|o| o.remove("button")) {
+            None | Some(Value::Null) => None,
+            Some(value) => Some(button(host, reply.owner, &value)?),
+        };
         let mut shown_title = None;
         let mut shown_path = Vec::new();
         let menu_text = |value: &mut Value| {
@@ -110,6 +116,7 @@ fn register_or_update(
         }
         let mut declaration: commands::Declaration =
             serde_json::from_value(raw).map_err(|e| RpcError::invalid(e.to_string()))?;
+        declaration.button = button;
         // Keys first (`@video`, old Chinese titles), then the
         // shown text from this plugin's catalog.
         let declared = declaration.path.clone();
@@ -142,4 +149,45 @@ fn register_or_update(
             .map_err(|e| RpcError::new("command", e.to_string()))?;
     }
     Ok(json!({"revision":host.commands.revision()}))
+}
+
+/// `declaration.button`: `{ icon, order }`, the icon a name of the icon
+/// set (checked by the registry) or an image reference to one of the
+/// plugin's files (checked here, like a property's image).
+fn button(
+    host: &Host,
+    owner: u64,
+    value: &Value,
+) -> std::result::Result<commands::Button, RpcError> {
+    let object = value
+        .as_object()
+        .filter(|o| o.keys().all(|key| key == "icon" || key == "order"))
+        .ok_or_else(|| RpcError::invalid("button is { icon, order }"))?;
+    let order = object
+        .get("order")
+        .and_then(Value::as_i64)
+        .filter(|order| (0..=i64::from(commands::Registry::MAX_BUTTON_ORDER)).contains(order))
+        .ok_or_else(|| {
+            RpcError::invalid(format!(
+                "button order must be an integer 0–{}",
+                commands::Registry::MAX_BUTTON_ORDER
+            ))
+        })? as i32;
+    let icon = match object.get("icon") {
+        Some(Value::String(name)) => commands::ButtonIcon::Name(name.clone()),
+        Some(image) if crate::ui_image::reference(image).is_some() => {
+            let (path, max_side) = crate::ui_image::parts(image)?;
+            crate::ui_image::locate(path, &host.image_roots(owner))?;
+            commands::ButtonIcon::Image {
+                path: path.to_owned(),
+                max_side,
+            }
+        }
+        _ => {
+            return Err(RpcError::invalid(
+                "button icon is an icon name or an image from plugin.ui.image",
+            ));
+        }
+    };
+    Ok(commands::Button { icon, order })
 }

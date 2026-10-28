@@ -629,9 +629,9 @@ Changes only to host behaviour or semantics, with no API change: G-01 (`SlotStat
 
 **Acceptance**: click the current time to switch to remaining time and restart the player: remaining time is still shown; click the total duration: nothing happens; the pointer is a hand over the current time.
 
-### G-18 State of the bottom bar list button when the sidebar cannot be seen (P2)
+### G-18 State of the bottom bar sidebar toggle when the sidebar cannot be seen (P2)
 
-**Status**: implemented (bridge property `sidebar-hidden`).
+**Status**: implemented. Since player 0.5.10 the toggle is the player's (`host/sidebar` in the bar's command strip, UI-BAR-09) and the player computes this state (the strip's `dimmed` cell); before that, the playback bridge property `sidebar-hidden`.
 
 **Requirements**: the button has three appearances:
 
@@ -639,7 +639,7 @@ Changes only to host behaviour or semantics, with no API change: G-01 (`SlotStat
 | --- | --- | --- |
 | Off | `preferred === false` | Normal colour |
 | On | `preferred && effective`, or `reason === "fullscreen"` | Accent colour (pressed state) |
-| On but not visible | `preferred && !effective && reason === "space"` | Accent colour at 50% opacity; tooltip "Playlist (F6) (the window is too narrow for the playlist)" |
+| On but not visible | `preferred && !effective && reason === "space"` | Accent colour at 50% opacity; tooltip "Toggle Sidebar (the window is too narrow for the sidebar)", with the key when the user bound one |
 
 In fullscreen, `reason === "fullscreen"` means the overlay is retracted (G-01) and becomes visible when the pointer moves to the right edge, so it shows as "On". When the window is narrower than 638 (video 318 + divider 3 + sidebar 317), the sidebar is hidden for lack of space and the preference is unchanged.
 
@@ -655,7 +655,7 @@ In fullscreen, `reason === "fullscreen"` means the overlay is retracted (G-01) a
 
 ### IA-PB-02 Hiding rules for the right-hand buttons in a narrow window (P3)
 
-**Status**: not implemented. Current state: only the list toggle hides, when the bottom bar is narrower than 320.
+**Status**: superseded in part by the command strip (player 0.5.10, UI-BAR-10): its cells hide from the left end inward, the sidebar toggle last, and never overlap the time.
 
 **Requirements**: each right-hand button has its own minimum left edge position (list toggle 320, attached panel toggle 320, stream selection 350, CC 410, see IA-PB-06); a button is hidden when its left edge x is less than that value, so as the window narrows the right-hand buttons disappear from left to right; in addition, a button is also hidden when there is less than 8 px between its left edge and the right edge of the time text (including badges, IA-PB-05), so they never overlap.
 
@@ -708,7 +708,7 @@ In fullscreen, `reason === "fullscreen"` means the overlay is retracted (G-01) a
 
 ### IA-PB-06 Completing the right-hand bottom bar buttons: CC, stream selection, attached panel (P3)
 
-**Status**: not implemented. Current state: on the right there is only the playlist toggle (23×22, 8 px from the right). The control panel toggle is cancelled together with IA-CORE-09.
+**Status**: not implemented. Current state (player 0.5.10): the right end is the player's command strip (UI-BAR-09): contributed buttons ([AI][Store]) and the sidebar toggle (41×40, 4 px from the right). The control panel toggle is cancelled together with IA-CORE-09. When this item is taken up, CC and stream selection become commands with `button` (no separate 23×22 buttons), so they follow the strip's order and narrowing rules.
 
 **Requirements**: from left to right on the right side: CC, stream selection, playlist toggle, attached panel on / off; 8 between the 23×22 buttons.
 

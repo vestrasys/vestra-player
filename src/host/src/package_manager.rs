@@ -43,6 +43,8 @@ pub struct Manager {
         std::sync::mpsc::Sender<VerifyResult>,
         std::sync::mpsc::Receiver<VerifyResult>,
     ),
+    /// `packages.validate*` on their threads (package_validate.rs).
+    validations: crate::package_validate::Validations,
 }
 /// A finished digest check: id, serial, outcome.
 type VerifyResult = (String, u64, std::result::Result<(), String>);
@@ -94,14 +96,20 @@ impl Manager {
     /// goes (an install that already staged it keeps its own copy).
     fn remember(&mut self, token: String, candidate: Candidate) {
         while self.candidate_order.len() >= MAX_CANDIDATES {
-            if let Some(oldest) = self.candidate_order.pop_front() {
-                self.candidates.remove(&oldest);
+            if let Some(oldest) = self.candidate_order.pop_front()
+                && let Some(gone) = self.candidates.remove(&oldest)
+            {
+                // Its staged copy is removed off the UI thread.
+                crate::package_validate::drop_later(gone);
             }
         }
         self.candidate_order.push_back(token.clone());
         self.candidates.insert(token, candidate);
     }
     pub fn open() -> Result<Self> {
+        // Staged copies an earlier run left behind (it quit or crashed
+        // while validating).
+        crate::package_validate::sweep_stale();
         let root = std::env::var_os("VESTRA_PACKAGE_STORE")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
@@ -144,6 +152,7 @@ impl Manager {
             verified: BTreeMap::new(),
             verify_serial: 0,
             verify_results: std::sync::mpsc::channel(),
+            validations: Default::default(),
         })
     }
     /// Where an installed record's plugin runs from: a built-in from the
@@ -426,6 +435,40 @@ impl Host {
             .and_then(|v| v["activation"]["status"].as_str().map(str::to_owned))
             .unwrap_or_else(|| "unknown".into())
     }
+    /// `packages.validate` and `packages.validateArchive`: the request is
+    /// read here, the package checked on a thread (package_validate.rs), and
+    /// the answer sent from `package_tick` (`answer_validations`).
+    pub(super) fn validate_package(
+        &mut self,
+        reply: &Reply,
+        method: &str,
+        params: &Value,
+    ) -> std::result::Result<(), RpcError> {
+        let request = crate::package_validate::Request::read(method, params)?;
+        for (reply, error) in self.packages.validations.start(reply.clone(), request) {
+            self.respond(reply, Err(error));
+        }
+        Ok(())
+    }
+    /// Answer finished validations: a passing package gets its token and
+    /// joins the recent candidates (`Manager::remember`).
+    fn answer_validations(&mut self) {
+        let running = &self.plugins;
+        let done = self
+            .packages
+            .validations
+            .poll(|owner| running.contains_key(&owner));
+        for (reply, result) in done {
+            let result = result.map(|candidate| {
+                self.packages.next += 1;
+                let token = format!("candidate-{}-{}", self.packages.next, candidate.digest());
+                let report = json!({"token":token,"digest":candidate.digest(),"apiVersion":plugins::API,"manifest":candidate.manifest(),"checks":["manifest","digest","productionJavaScript","slintCompile"],"trustedExecution":true});
+                self.packages.remember(token, candidate);
+                report
+            });
+            self.respond(reply, result);
+        }
+    }
     pub(super) fn package_dispatch(
         &mut self,
         caller: u64,
@@ -433,74 +476,6 @@ impl Host {
         params: &Value,
     ) -> std::result::Result<Value, RpcError> {
         match method {
-            "packages.validate" | "packages.validateArchive" => {
-                let candidate = if method == "packages.validate" {
-                    Candidate::capture(Path::new(string(params, "directory")?))?
-                } else {
-                    let file = Path::new(string(params, "file")?);
-                    package_archive::check_extension(file)
-                        .map_err(|e| RpcError::invalid(e.to_string()))?;
-                    let extracted = package_archive::extract(file)
-                        .map_err(|e| RpcError::invalid(format!("{e:#}")))?;
-                    Candidate::capture(extracted.path())?
-                };
-                check_reserved(&candidate.manifest().id, None)?;
-                if params
-                    .get("digest")
-                    .is_some_and(|v| v.as_str() != Some(candidate.digest()))
-                {
-                    return Err(RpcError::new("staleDigest", "candidate digest changed"));
-                }
-                if params
-                    .get("apiVersion")
-                    .is_some_and(|v| v.as_str() != Some(plugins::API))
-                {
-                    return Err(RpcError::new("versionMismatch", "contract mismatch"));
-                }
-                let result = crate::runtime_paths::get()
-                    .node_command()
-                    .arg("--check")
-                    .arg(candidate.directory().join(&candidate.manifest().entry))
-                    .output()
-                    .map_err(anyhow::Error::from)?;
-                if !result.status.success() {
-                    return Err(RpcError::new(
-                        "javascript",
-                        String::from_utf8_lossy(&result.stderr)
-                            .chars()
-                            .take(8192)
-                            .collect::<String>(),
-                    ));
-                }
-                fn slint_files(root: &Path, found: &mut Vec<PathBuf>) -> Result<()> {
-                    for entry in std::fs::read_dir(root)? {
-                        let p = entry?.path();
-                        if p.is_dir() {
-                            slint_files(&p, found)?;
-                        } else if p.extension().is_some_and(|x| x == "slint") {
-                            found.push(p);
-                        }
-                    }
-                    Ok(())
-                }
-                let mut files = vec![];
-                slint_files(candidate.directory(), &mut files)?;
-                for path in files {
-                    let compiler = crate::ui::compiler();
-                    let result = pollster::block_on(compiler.build_from_path(path));
-                    if result.has_errors() {
-                        return Err(RpcError::new(
-                            "slint",
-                            format!("{:?}", result.diagnostics().collect::<Vec<_>>()),
-                        ));
-                    }
-                }
-                self.packages.next += 1;
-                let token = format!("candidate-{}-{}", self.packages.next, candidate.digest());
-                let report = json!({"token":token,"digest":candidate.digest(),"apiVersion":plugins::API,"manifest":candidate.manifest(),"checks":["manifest","digest","productionJavaScript","slintCompile"],"trustedExecution":true});
-                self.packages.remember(token, candidate);
-                Ok(report)
-            }
             "packages.installed" => Ok(serde_json::to_value(
                 self.packages.store.get(string(params, "id")?),
             )
@@ -1425,6 +1400,7 @@ impl Host {
             }
         }
         self.packages.poll_verified();
+        self.answer_validations();
         self.shared_tick();
         self.start_queued();
         self.reload_tick();
@@ -1700,7 +1676,10 @@ fn trust_of(
         None => own("its digest was not checked"),
     }
 }
-fn check_reserved(id: &str, instance: Option<&Instance>) -> std::result::Result<(), RpcError> {
+pub(crate) fn check_reserved(
+    id: &str,
+    instance: Option<&Instance>,
+) -> std::result::Result<(), RpcError> {
     if crate::manifest::reserved_id(id) && !instance.is_some_and(|i| i.builtin) {
         return Err(RpcError::new(
             "reserved",
@@ -2429,6 +2408,7 @@ mod tests {
             verified: BTreeMap::new(),
             verify_serial: 0,
             verify_results: std::sync::mpsc::channel(),
+            validations: Default::default(),
         }
     }
 

@@ -1,0 +1,21 @@
+// A bottom bar that places the player's command buttons (bar_buttons.rs).
+import { BarButtons } from "@vestra/bar-buttons.slint";
+
+export global StripBridge {
+    in-out property <length> room: 1000px;
+    // The strip's width, reported back for the test.
+    in-out property <length> shown;
+    // The index of the leftmost plugin button shown.
+    in-out property <int> first;
+}
+
+export component StripBar inherits Rectangle {
+    min-height: 40px;
+    max-height: 40px;
+    strip := BarButtons {
+        x: parent.width - self.width - 4px;
+        room: StripBridge.room;
+        changed width => { StripBridge.shown = self.width; }
+        changed first-shown => { StripBridge.first = self.first-shown; }
+    }
+}

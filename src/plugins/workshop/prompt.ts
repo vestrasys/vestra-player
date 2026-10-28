@@ -66,7 +66,12 @@ export function systemPrompt(o: PromptOptions): string {
 
 # Plugin tools
 scaffold_plugin{name,title} → typecheck{id} → test{id} → check{id} → pack{id}${o.delivery ? " → install_plugin{id}" : ""}
-${o.delivery ? "- Call install_plugin only when the user explicitly asks for it (do not install a finished plugin on your own); before installing, the player validates it (Slint included) and the user confirms in a dialog.\n" : ""}
+- typecheck and test do not compile .slint files.${
+  o.delivery
+    ? ` check also has the player compile the packed plugin, every .slint file included, exactly as an install would: a Slint error comes back one per line as file:line:column: error: message (the file inside the plugin, e.g. ui/main.slint:12:5). Fix each error at that place: first read that .slint file and the components it imports; the player's @vestra components are declared in ${SDK}/slint/, std-widgets are documented in Slint's own documentation. Warning lines can be ignored. A JavaScript error names the built dist/main.js (file:line, no column): fix the .ts source it came from, not dist/. Then run check again.`
+    : " The player compiles Slint only when it installs the plugin."
+}
+${o.delivery ? "- Call install_plugin only when the user explicitly asks for it (do not install a finished plugin on your own); before installing, the player validates it again and the user confirms in a dialog.\n" : ""}
 # Done means
 typecheck with 0 errors, test all passing and check passing. Until then, read the error messages, change the code and run again; when the same problem is still there after 3 attempts, stop and tell the user where you are stuck. Before delivering, make sure the plugin folder has no debugging files. When done, say briefly what the plugin does and how to use it${o.delivery ? ", and finally suggest that the user click Install" : ""}.`;
 }
