@@ -666,3 +666,17 @@ Executable `C:\vestra\wgpuint2\vestra-host.exe` (this change on top of §15; SHA
 4. **Optional, 780M, gate on vs off, 20 s each:** the §14 stalls remain (draws of tens of ms; expect `slow` and `past-blank` > 0). The gate turns jitter drops into one-refresh delays but cannot hide stalls longer than a refresh.
 
 Reading the results: if presented is still below drawn with the gate on, compare `shown` with produced. Below produced means frames were replaced in the ring before any window took them (frames faster than the display for more than a refresh). `past-blank` > 0 together with presented < 60 means the present itself is late (acquire or GPU), which the gate does not address.
+
+## 18. Coordinator's hardware check of the frame gate (2026-10-28, H.264 2160p60 windowed, 20 s, after start-up)
+
+| Run | GPU | Gate | Presented per second | Counters |
+| --- | --- | --- | --- | --- |
+| p1 | 4070 (`high-performance`) | on | 60–61, one second at 57 | `slow` 0–3, `past-blank` 0 |
+| p2 | 4070 | off (`VESTRA_GPU_FRAME_GATE=0`) | 46–60, mean 55.9 | `slow` 2–5, `past-blank` 0 |
+| p4 | 780M (Windows' order) | on | 56–61 for 8 s, then 40–48 | `slow` up to 25, `past-blank` up to 20 once the stalls start |
+| p5 | 780M | off | 37–43, mean 40.5 | `slow` 12–21, `past-blank` 6–15 |
+
+- On the 4070 the gate removes the lost frames: 60 per second steady (§17's analysis confirmed: with the gate off `past-blank` stays 0, so the old drops were replaced pictures, not missed presents).
+- On the 780M the gate helps until the iGPU's draw stalls (§14) begin; then `past-blank` counts missed refreshes, which no pacing change can fix.
+- The `render:` line names how the GPU was chosen ("chosen by VESTRA_GPU_ADAPTER=high-performance" / "Windows' order … other GPUs: 1 NVIDIA …"), as designed.
+- Product question for the user (not decided here): on hybrid laptops, mpv and Chromium follow Windows' per-app GPU order (the iGPU by default) and let the user choose in Settings ▸ Display ▸ Graphics; the 4070 gives 60 fps here and the 780M about 40 at 4K60. Options: keep Windows' order (standard practice) and document the setting, or default to the high-performance GPU when plugged in.
