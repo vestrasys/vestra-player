@@ -13,6 +13,12 @@ impl Host {
         generation: u64,
     ) {
         use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
+        // The window's close request quits the player, whatever tool windows
+        // are still open (set again with each shell, like the hook below).
+        let events = self.events.clone();
+        view::on_main_close(window.window(), move || {
+            let _ = events.send(Event::MainClosed);
+        });
         let events = self.events.clone();
         #[cfg(feature = "producer-audio")]
         let routing = self.backend.input.clone();

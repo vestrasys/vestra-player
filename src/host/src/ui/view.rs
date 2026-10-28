@@ -357,6 +357,19 @@ pub fn perform(window: &slint::Window, action: crate::platform::WindowAction) {
         }
     }
 }
+/// The main window's close request (its title bar's close button, Alt+F4,
+/// ⌘W) quits the player, as in mpv, VLC and PotPlayer: `quit` starts the
+/// player's Quit (the menu's), which ends the event loop, saves the state and
+/// closes the tool windows. The window stays shown until then: left to
+/// Slint's default (hide), the event loop kept running while a plugin's tool
+/// window or the options window was still open, and the player with it.
+/// A tool window's own close only closes that window (`open`).
+pub fn on_main_close(window: &slint::Window, quit: impl Fn() + 'static) {
+    window.on_close_requested(move || {
+        quit();
+        slint::CloseRequestResponse::KeepWindowShown
+    });
+}
 pub struct View {
     pub instance: ComponentInstance,
 }
@@ -586,6 +599,27 @@ export component W inherits Window {
         perform(instance.window(), crate::platform::WindowAction::Close);
         assert_eq!(asked.get(), 1);
         assert!(instance.window().is_visible());
+    }
+
+    /// A close request on the main window (title bar, Alt+F4, ⌘W) starts the
+    /// player's Quit and leaves the window shown for it; the default (hide)
+    /// left the player running while a tool window was open.
+    #[test]
+    fn closing_the_main_window_quits() {
+        headless();
+        let instance = compile_source(
+            "export component W inherits Window { width: 100px; height: 100px; }".into(),
+            Path::new("w.slint"),
+        )
+        .unwrap();
+        instance.show().unwrap();
+        let quits = std::rc::Rc::new(std::cell::Cell::new(0));
+        let count = quits.clone();
+        on_main_close(instance.window(), move || count.set(count.get() + 1));
+        perform(instance.window(), crate::platform::WindowAction::Close);
+        assert_eq!(quits.get(), 1);
+        assert!(instance.window().is_visible());
+        instance.hide().unwrap();
     }
 
     /// `Theme.font-mono` in a plugin's own window (and so in its Markdown
