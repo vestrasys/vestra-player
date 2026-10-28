@@ -14,15 +14,16 @@
 //! become the file's cover art tracks.
 //!
 //! At most [`MAX_RUNNING`] folders are read at once. Loads from a folder
-//! already being read (the next song of the same album) share that read;
-//! other folders queue for a free reader, so a file waits for its cover art
-//! rather than going without it.
+//! already being read or queued (the next song of the same album) share that
+//! read; other folders queue for a free reader, newest first, so the file
+//! playing now waits for its cover art rather than going without it, and a
+//! folder whose loads all ended meanwhile is not read at all.
 #![forbid(unsafe_code)]
 
 use rsmpv::{Mpv, Node};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak, mpsc};
 use std::time::Duration;
 
 /// How long a load waits for its pictures before it goes on without them.
@@ -34,8 +35,13 @@ pub const MAX_RUNNING: usize = 4;
 /// The pictures of one load, as the paths given to libmpv.
 pub type Pictures = Vec<String>;
 
-/// Pictures that did not come within the wait.
-pub struct Listing(mpsc::Receiver<Pictures>);
+/// Pictures that did not come within the wait. Dropping it (the entry
+/// ended, another file was opened) withdraws the request: a folder whose
+/// requests are all withdrawn before a reader is free is not read.
+pub struct Listing {
+    receive: mpsc::Receiver<Pictures>,
+    _alive: Arc<()>,
+}
 
 /// What a load gets from [`Lister::list`].
 pub enum Covers {
@@ -45,8 +51,14 @@ pub enum Covers {
     Later(Listing),
 }
 
-/// Ranks a folder's files into one load's pictures.
-type Waiter = Box<dyn FnOnce(&[PathBuf]) + Send>;
+/// One load waiting for a folder: ranks the folder's files into its
+/// pictures, while its [`Listing`] is alive.
+struct Waiter {
+    alive: Weak<()>,
+    deliver: Deliver,
+}
+/// Ranks the folder's files and sends the load its pictures.
+type Deliver = Box<dyn FnOnce(&[PathBuf]) + Send>;
 /// Reads a folder's files (`source_backend::folder_files`; tests fake it).
 type Read = Arc<dyn Fn(&Path) -> Vec<PathBuf> + Send + Sync>;
 
@@ -60,10 +72,58 @@ pub struct Lister {
 struct Shared {
     /// Reader threads alive.
     running: usize,
-    /// Folders waiting for a reader, oldest first.
+    /// Folders waiting for a reader, newest request first: the file playing
+    /// now is the one the user waits for, and older requests are usually
+    /// withdrawn by then (quick skipping through a slow share).
     queue: VecDeque<PathBuf>,
     /// The loads waiting for each folder being read or queued.
     waiting: HashMap<PathBuf, Vec<Waiter>>,
+}
+impl Shared {
+    /// Drops withdrawn requests everywhere, and the queued folders nobody
+    /// waits for any more. Run on every request, so the queue and the
+    /// waiter lists stay small while every reader is stuck (a network
+    /// share that stopped answering) and no reader frees up to prune them.
+    /// A folder being read keeps its entry (its reader removes it).
+    fn prune(&mut self) {
+        for waiters in self.waiting.values_mut() {
+            waiters.retain(|waiter| waiter.alive.strong_count() > 0);
+        }
+        let waiting = &mut self.waiting;
+        self.queue.retain(|folder| {
+            let wanted = waiting
+                .get(folder)
+                .is_some_and(|waiters| !waiters.is_empty());
+            if !wanted {
+                waiting.remove(folder);
+            }
+            wanted
+        });
+    }
+    /// The next queued folder someone still waits for; folders whose
+    /// requests were all withdrawn are dropped unread.
+    fn next_folder(&mut self) -> Option<PathBuf> {
+        while let Some(folder) = self.queue.pop_front() {
+            let wanted = self.waiting.get_mut(&folder).is_some_and(|waiters| {
+                waiters.retain(|waiter| waiter.alive.strong_count() > 0);
+                !waiters.is_empty()
+            });
+            if wanted {
+                return Some(folder);
+            }
+            self.waiting.remove(&folder);
+        }
+        None
+    }
+    /// A reader finished (or could not start): the next wanted folder for
+    /// it, or its place is given back.
+    fn hand_on(&mut self) -> Option<PathBuf> {
+        let next = self.next_folder();
+        if next.is_none() {
+            self.running -= 1;
+        }
+        next
+    }
 }
 impl Lister {
     pub fn new(read: impl Fn(&Path) -> Vec<PathBuf> + Send + Sync + 'static) -> Self {
@@ -84,21 +144,31 @@ impl Lister {
         rank: impl FnOnce(&[PathBuf]) -> Pictures + Send + 'static,
     ) -> Covers {
         let (send, receive) = mpsc::sync_channel(1);
-        let waiter: Waiter = Box::new(move |files| {
-            let _ = send.send(rank(files));
-        });
+        let alive = Arc::new(());
+        let waiter = Waiter {
+            alive: Arc::downgrade(&alive),
+            deliver: Box::new(move |files| {
+                let _ = send.send(rank(files));
+            }),
+        };
         let start = {
             let mut shared = self.lock();
+            shared.prune();
             if let Some(waiters) = shared.waiting.get_mut(&folder) {
-                // Being read or queued: share that read.
+                // Being read or queued: share that read; a queued folder
+                // moves to the front.
                 waiters.push(waiter);
+                if let Some(at) = shared.queue.iter().position(|queued| *queued == folder) {
+                    shared.queue.remove(at);
+                    shared.queue.push_front(folder);
+                }
             } else {
                 shared.waiting.insert(folder.clone(), vec![waiter]);
-                shared.queue.push_back(folder);
+                shared.queue.push_front(folder);
             }
             let mut start = Vec::new();
             while shared.running < MAX_RUNNING
-                && let Some(next) = shared.queue.pop_front()
+                && let Some(next) = shared.next_folder()
             {
                 shared.running += 1;
                 start.push(next);
@@ -117,47 +187,56 @@ impl Lister {
         match wait.map(|wait| receive.recv_timeout(wait)) {
             Some(Ok(pictures)) => Covers::Now(pictures),
             Some(Err(mpsc::RecvTimeoutError::Disconnected)) => Covers::Now(Vec::new()),
-            Some(Err(mpsc::RecvTimeoutError::Timeout)) | None => Covers::Later(Listing(receive)),
+            Some(Err(mpsc::RecvTimeoutError::Timeout)) | None => Covers::Later(Listing {
+                receive,
+                _alive: alive,
+            }),
         }
     }
-    /// A reader for `folder`, which holds one of the `running` places.
-    fn spawn(&self, folder: PathBuf) {
-        let lister = self.clone();
-        let read = folder.clone();
-        let spawned = std::thread::Builder::new()
-            .name("cover-art".into())
-            .spawn(move || lister.work(read));
-        if let Err(error) = spawned {
+    /// A reader for `folder`, which holds one of the `running` places. When
+    /// no thread can be started, that folder's loads go without (their
+    /// receivers see the senders dropped) and the next queued folder is
+    /// tried, until one starts or the queue is empty.
+    fn spawn(&self, mut folder: PathBuf) {
+        loop {
+            let lister = self.clone();
+            let read = folder.clone();
+            let spawned = std::thread::Builder::new()
+                .name("cover-art".into())
+                .spawn(move || lister.work(read));
+            let Err(error) = spawned else {
+                return;
+            };
             diag!("cover art: no reader thread ({error})");
             let mut shared = self.lock();
-            shared.running -= 1;
-            // Its loads go without (their receivers see the senders dropped).
             shared.waiting.remove(&folder);
+            match shared.hand_on() {
+                Some(next) => folder = next,
+                None => return,
+            }
         }
     }
     /// Reads `folder`, answers its loads, then the queued folders, until
-    /// none is left.
+    /// none is wanted.
     fn work(&self, mut folder: PathBuf) {
         loop {
-            let slot = Slot {
+            let mut slot = Slot {
                 lister: self,
                 folder: Some(folder.clone()),
+                done: false,
             };
             let files = (self.read)(&folder);
             let waiters = self.lock().waiting.remove(&folder).unwrap_or_default();
+            // Taken: from now on a panic only hands the place on (a newer
+            // request for the same folder waits for a read of its own).
+            slot.folder = None;
             for waiter in waiters {
-                waiter(&files);
-            }
-            slot.done();
-            let next = {
-                let mut shared = self.lock();
-                let next = shared.queue.pop_front();
-                if next.is_none() {
-                    shared.running -= 1;
+                if waiter.alive.strong_count() > 0 {
+                    (waiter.deliver)(&files);
                 }
-                next
-            };
-            match next {
+            }
+            slot.done = true;
+            match self.lock().hand_on() {
                 Some(next) => folder = next,
                 None => return,
             }
@@ -165,31 +244,24 @@ impl Lister {
     }
 }
 /// A reader's place while it reads one folder. Dropped without `done` (the
-/// read or a ranking panicked): that folder's remaining loads go without,
-/// and the place passes to a new reader for the next queued folder, or is
-/// given back.
+/// read or a ranking panicked): the folder's loads, if not taken yet, go
+/// without, and the place passes to the next queued folder or is given back.
 struct Slot<'a> {
     lister: &'a Lister,
     folder: Option<PathBuf>,
-}
-impl Slot<'_> {
-    fn done(mut self) {
-        self.folder = None;
-    }
+    done: bool,
 }
 impl Drop for Slot<'_> {
     fn drop(&mut self) {
-        let Some(folder) = self.folder.take() else {
+        if self.done {
             return;
-        };
+        }
         let next = {
             let mut shared = self.lister.lock();
-            shared.waiting.remove(&folder);
-            let next = shared.queue.pop_front();
-            if next.is_none() {
-                shared.running -= 1;
+            if let Some(folder) = self.folder.take() {
+                shared.waiting.remove(&folder);
             }
-            next
+            shared.hand_on()
         };
         if let Some(next) = next {
             self.lister.spawn(next);
@@ -279,7 +351,7 @@ impl Late {
         if !current && !loaded {
             return Step::Drop;
         }
-        if let State::Listing(Listing(receive)) = &self.state {
+        if let State::Listing(Listing { receive, .. }) = &self.state {
             match receive.try_recv() {
                 Ok(pictures) => self.state = State::Listed(pictures),
                 Err(mpsc::TryRecvError::Empty) => return Step::Wait,
@@ -345,7 +417,6 @@ pub fn command(picture: &str, select: bool) -> Node {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Instant;
 
     fn pictures(names: &[&str]) -> Pictures {
@@ -357,23 +428,43 @@ mod tests {
             .map(|file| file.to_string_lossy().into_owned())
             .collect()
     }
-    /// A folder read that answers with the folder's cover.jpg once released.
-    fn gated() -> (Lister, mpsc::Sender<()>, Arc<AtomicUsize>) {
+    /// The folders read, in order.
+    type Reads = Arc<Mutex<Vec<PathBuf>>>;
+    fn read(reads: &Reads) -> Vec<PathBuf> {
+        reads.lock().unwrap().clone()
+    }
+    /// A folder read that answers with the folder's cover.jpg, once released
+    /// (folders named `quick…` at once).
+    fn gated() -> (Lister, mpsc::Sender<()>, Reads) {
         let (release, gate) = mpsc::channel::<()>();
         let gate = Mutex::new(gate);
-        let reads = Arc::new(AtomicUsize::new(0));
-        let counted = reads.clone();
+        let reads = Reads::default();
+        let seen = reads.clone();
         let lister = Lister::new(move |folder| {
-            counted.fetch_add(1, Ordering::AcqRel);
-            let _ = gate.lock().unwrap().recv();
+            seen.lock().unwrap().push(folder.to_path_buf());
+            if !folder.to_string_lossy().starts_with("quick") {
+                let _ = gate.lock().unwrap().recv();
+            }
             vec![folder.join("cover.jpg")]
         });
         (lister, release, reads)
     }
+    /// `MAX_RUNNING` folders being read and not answering.
+    fn stuck(lister: &Lister, reads: &Reads) -> Vec<Covers> {
+        let held = (0..MAX_RUNNING)
+            .map(|n| lister.list(format!("stuck{n}").into(), None, names))
+            .collect::<Vec<_>>();
+        let end = Instant::now() + Duration::from_secs(5);
+        while read(reads).len() < MAX_RUNNING {
+            assert!(Instant::now() < end);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        held
+    }
     fn answer(covers: Covers) -> Pictures {
         match covers {
             Covers::Now(found) => found,
-            Covers::Later(Listing(receive)) => receive
+            Covers::Later(Listing { receive, .. }) => receive
                 .recv_timeout(Duration::from_secs(5))
                 .expect("the pictures come"),
         }
@@ -541,7 +632,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(late.iter().all(|covers| matches!(covers, Covers::Later(_))));
         let end = Instant::now() + Duration::from_secs(5);
-        while reads.load(Ordering::Acquire) < MAX_RUNNING {
+        while read(&reads).len() < MAX_RUNNING {
             assert!(Instant::now() < end);
             std::thread::sleep(Duration::from_millis(1));
         }
@@ -554,7 +645,93 @@ mod tests {
             let folder = PathBuf::from(format!("dir{n}"));
             assert_eq!(answer(covers), names(&[folder.join("cover.jpg")]));
         }
-        assert_eq!(reads.load(Ordering::Acquire), MAX_RUNNING + 1);
+        assert_eq!(read(&reads).len(), MAX_RUNNING + 1);
+        settled(&lister);
+    }
+
+    /// Quick skipping through a slow share: a queued folder whose load ended
+    /// (its `Listing` dropped) is never read.
+    #[test]
+    fn a_queued_folder_whose_load_ended_is_not_read() {
+        let (lister, release, reads) = gated();
+        let held = stuck(&lister, &reads);
+        drop(lister.list("quick-old".into(), None, names));
+        let current = lister.list("quick-current".into(), None, names);
+        release.send(()).unwrap();
+        assert_eq!(
+            answer(current),
+            names(&[PathBuf::from("quick-current").join("cover.jpg")])
+        );
+        for _ in 1..MAX_RUNNING {
+            release.send(()).unwrap();
+        }
+        drop(held);
+        settled(&lister);
+        assert!(
+            !read(&reads).contains(&PathBuf::from("quick-old")),
+            "{:?}",
+            read(&reads)
+        );
+        assert!(lister.lock().waiting.is_empty());
+    }
+
+    /// Every reader stuck (the share stopped answering) and quick skipping
+    /// through 50 folders: the withdrawn requests do not pile up.
+    #[test]
+    fn withdrawn_requests_do_not_pile_up_while_every_reader_is_stuck() {
+        let (lister, release, reads) = gated();
+        let held = stuck(&lister, &reads);
+        for n in 0..50 {
+            // Each load ends (its Listing dropped) before the next starts.
+            drop(lister.list(format!("quick{n}").into(), None, names));
+            drop(lister.list("quick-album".into(), None, names));
+        }
+        let current = lister.list("quick-current".into(), None, names);
+        {
+            let shared = lister.lock();
+            assert_eq!(shared.queue, [PathBuf::from("quick-current")]);
+            assert!(shared.waiting.values().all(|waiters| waiters.len() <= 1));
+        }
+        for _ in 0..MAX_RUNNING {
+            release.send(()).unwrap();
+        }
+        assert_eq!(answer(current).len(), 1);
+        drop(held);
+        settled(&lister);
+        let read = read(&reads);
+        assert!(read.contains(&PathBuf::from("quick-current")));
+        assert_eq!(read.len(), MAX_RUNNING + 1, "{read:?}");
+        assert!(lister.lock().waiting.is_empty());
+    }
+
+    /// The file playing now is read before older requests still queued.
+    #[test]
+    fn the_current_folder_is_not_held_up_by_older_requests() {
+        let (lister, release, reads) = gated();
+        let held = stuck(&lister, &reads);
+        let older = (0..3)
+            .map(|n| lister.list(format!("quick-older{n}").into(), None, names))
+            .collect::<Vec<_>>();
+        let current = lister.list("quick-current".into(), None, names);
+        release.send(()).unwrap();
+        assert_eq!(answer(current).len(), 1);
+        assert_eq!(
+            read(&reads)[MAX_RUNNING],
+            PathBuf::from("quick-current"),
+            "the first folder read after the stuck ones"
+        );
+        // The older ones are still read (their loads are alive), newest first.
+        for covers in older {
+            assert_eq!(answer(covers).len(), 1);
+        }
+        assert_eq!(
+            read(&reads)[MAX_RUNNING + 1..],
+            ["quick-older2", "quick-older1", "quick-older0"].map(PathBuf::from)
+        );
+        for _ in 1..MAX_RUNNING {
+            release.send(()).unwrap();
+        }
+        drop(held);
         settled(&lister);
     }
 
@@ -570,7 +747,7 @@ mod tests {
         let cover = names(&[PathBuf::from("album").join("cover.jpg")]);
         assert_eq!(answer(first), cover);
         assert_eq!(answer(second), cover);
-        assert_eq!(reads.load(Ordering::Acquire), 1);
+        assert_eq!(read(&reads).len(), 1);
         settled(&lister);
     }
 
@@ -582,7 +759,8 @@ mod tests {
             assert!(folder != Path::new("bad"), "unreadable");
             vec![folder.join("cover.jpg")]
         });
-        let Covers::Later(Listing(bad)) = lister.list("bad".into(), None, names) else {
+        let Covers::Later(Listing { receive: bad, .. }) = lister.list("bad".into(), None, names)
+        else {
             panic!("late");
         };
         assert_eq!(
@@ -620,13 +798,34 @@ mod tests {
             answer(queued),
             names(&[PathBuf::from("queued").join("cover.jpg")])
         );
-        let Covers::Later(Listing(bad)) = bad else {
+        let Covers::Later(Listing { receive: bad, .. }) = bad else {
             panic!("late");
         };
         assert!(bad.recv_timeout(Duration::from_secs(5)).is_err());
         for covers in held {
             assert_eq!(answer(covers).len(), 1);
         }
+        settled(&lister);
+    }
+
+    /// A ranking that panics after the folder's loads were taken: only the
+    /// place is handed on; a later request for that folder gets its own read.
+    #[test]
+    fn a_ranking_that_panics_hands_on_only_the_place() {
+        let lister = Lister::new(|folder| vec![folder.join("cover.jpg")]);
+        let Covers::Later(Listing { receive: bad, .. }) =
+            lister.list("x".into(), None, |_| panic!("ranking"))
+        else {
+            panic!("late");
+        };
+        assert!(bad.recv_timeout(Duration::from_secs(5)).is_err());
+        settled(&lister);
+        assert!(lister.lock().waiting.is_empty());
+        let again = lister.list("x".into(), None, names);
+        assert_eq!(
+            answer(again),
+            names(&[PathBuf::from("x").join("cover.jpg")])
+        );
         settled(&lister);
     }
 
