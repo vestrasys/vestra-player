@@ -66,7 +66,7 @@ import { extname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HostError } from "../wire.js";
 import { localSocketPath } from "./local.js";
-import { BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS, } from "../commands.js";
+import { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS, } from "../commands.js";
 import { CAPABILITY_INFO, MESSAGE_LIMIT } from "../capabilities.js";
 import { OSD_LIMITS } from "./osd.js";
 import { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./services.js";
@@ -83,6 +83,8 @@ import { Catalog, format as formatTemplate, HOST_GROUPS, HOST_ZH_HANS, LOCALES, 
 export { HostError };
 /** The player's command caps, which the test host enforces as well. */
 export { COMMAND_LIMITS, MENU_IDS };
+/** The icons and limits of bottom-bar buttons, which the test host checks as well. */
+export { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS };
 /** The submenus of the player's built-in plugins, by key path. */
 export { BUILTIN_COMMANDS, BUILTIN_SUBMENUS };
 /** The manifest capabilities: what each opens and how the store shows it. */
@@ -2096,6 +2098,53 @@ export class TestHost {
         return command;
     }
     /**
+     * The plugin's bottom-bar buttons (`CommandOptions.button`) as the player
+     * shows them: at most one, the first declared (`BAR_BUTTON_LIMITS`; a
+     * later one stays a menu item only). Empty once the command is disposed.
+     * Whether the bar places them is the bar's business: the list is what
+     * the player hands to `BarButtons`.
+     *
+     * @example
+     * ```ts
+     * const [button] = host.barButtons;
+     * assert.equal(button?.icon, "store");
+     * await button?.click();
+     * assert.equal(host.window("store").visible, true);
+     * ```
+     *
+     * @since 1.5.29
+     */
+    get barButtons() {
+        const host = this;
+        return [...this.commands]
+            .filter(([, command]) => command.declaration.button !== undefined)
+            .slice(0, BAR_BUTTON_LIMITS.perPlugin)
+            .map(([id, command]) => {
+            const button = command.declaration.button;
+            const image = typeof button.icon !== "string";
+            const reason = command.display.reason;
+            const title = command.display.title.replace(/(…|\.\.\.)\s*$/, "");
+            const enabled = command.state.enabled && !command.state.busy;
+            return Object.freeze({
+                command: id,
+                icon: image
+                    ? String(button.icon.$vestraImage)
+                    : button.icon,
+                image,
+                order: button.order,
+                enabled,
+                checked: command.state.checked === true,
+                tooltip: !enabled && reason ? `${title}\n${reason}` : title,
+                async click() {
+                    const current = host.commands.get(id);
+                    if (current !== command)
+                        throw new HostError("missing", `command ${id} is gone`);
+                    await current.run();
+                },
+            });
+        });
+    }
+    /**
      * The plugin's tool window with this id (by default the file name without
      * extension: `ui/picture.slint` → `picture`). Throws when it was never
      * opened with `show()`.
@@ -2501,6 +2550,23 @@ export class TestHost {
                 throw new HostError("limit", "command registry limit reached");
             const host = this;
             const declaration = p.declaration;
+            // Player 0.5.10: a bar button needs a path, an order 0–999 and a
+            // known icon or an image of the plugin.
+            if (declaration.button !== undefined) {
+                const { icon, order } = declaration.button;
+                if (path.length === 0)
+                    throw new HostError("invalid", "button needs a menu path");
+                if (!Number.isInteger(order) ||
+                    order < 0 ||
+                    order > BAR_BUTTON_LIMITS.maxOrder)
+                    throw new HostError("invalid", `button order must be an integer 0–${BAR_BUTTON_LIMITS.maxOrder}`);
+                if (typeof icon === "string") {
+                    if (!BAR_BUTTON_ICONS.includes(icon))
+                        throw new HostError("invalid", `unknown button icon "${icon}"`);
+                }
+                else if (this.imagePath(icon) === null)
+                    throw new HostError("invalid", "button icon is an icon name or an image from plugin.ui.image");
+            }
             // Like the player: the menu texts and the reason are checked (and
             // shown) when they arrive.
             for (const segment of [declaration.title, ...(declaration.path ?? [])])

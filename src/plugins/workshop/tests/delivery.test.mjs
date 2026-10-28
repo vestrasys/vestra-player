@@ -64,6 +64,7 @@ test("a scaffolded plugin shows on the card with 安装 (no trial); the player's
   await ai.ask("安装");
   assert.equal(await ai.calls(-2), "✗ 安装 local.demo");
   assert.match(toolText(mock, mock.chats.length - 1), /unknown element FancyButton/);
+  assert.match(toolText(mock, mock.chats.length - 1), /run check again, before installing again/);
   assert.deepEqual(ai.host.packageCalls, []);
   await ai.stop();
 });

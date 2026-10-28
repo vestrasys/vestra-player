@@ -7,7 +7,7 @@
 import type { PackageCandidate, PackageChange, Plugin, PluginError } from "@vestra-player/sdk";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { SessionPaths, ToolResult, Toolchain } from "./toolchain.ts";
+import { PLAYER_NEXT, playerCode, playerMessage, type SessionPaths, type ToolResult, type Toolchain } from "./toolchain.ts";
 
 /** What the model reads for the end state of an install. */
 const CHANGE_TEXT: Record<string, string> = {
@@ -88,10 +88,15 @@ export class Delivering {
     try {
       return { candidate: await this.plugin.packages.validateArchive(packed.file) };
     } catch (error) {
-      // Manifest, package and Slint problems the player found.
-      const kind = code(error) ?? "error";
+      // Manifest, package and Slint problems the player found (check runs the
+      // same validation; this stays as the last line of defence).
+      const kind = playerCode(error);
       return {
-        failure: { ok: false, text: `The player's validation failed (${kind}): ${errorText(error)}`, say: { code: "invalid", args: [kind, errorText(error)] } },
+        failure: {
+          ok: false,
+          text: `The player's validation failed (${kind}): ${playerMessage(error)}\n${PLAYER_NEXT}, before installing again.`,
+          say: { code: "invalid", args: [kind, errorText(error)] },
+        },
       };
     }
   }
