@@ -11,107 +11,127 @@ msgstr ""
 msgid "{} (build {})"
 msgstr "{} (compilación {})"
 
-#: about.ts:32 about.ts:78 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:86 ui/about.slint:120
+#: about.ts:32 about.ts:109 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:93 ui/about.slint:137
 #, x-machine
 msgid "Unknown"
 msgstr "Desconocido"
 
-#: about.ts:34 ui/about.slint:116 ui/about.slint:159
+#: about.ts:34 ui/about.slint:131 ui/about.slint:176
 #, x-machine
 msgid "Plugin API"
 msgstr "API de complementos"
 
-#: about.ts:70 ui/about.slint:155
+#: about.ts:68 ui/about.slint:108
+#, x-machine
+msgid "GPU"
+msgstr "GPU"
+
+#: about.ts:68 ui/about.slint:108
+#, x-machine
+msgid "Software"
+msgstr "Software"
+
+#: about.ts:69 ui/about.slint:111
+#, x-machine
+msgid "{} — {}"
+msgstr "{} — {}"
+
+#: about.ts:100 ui/about.slint:172
 #, x-machine
 msgid "Version {} (build {})"
 msgstr "Versión {} (compilación {})"
 
-#: about.ts:70 ui/about.slint:155
+#: about.ts:100 ui/about.slint:172
 #, x-machine
 msgid "Version {}"
 msgstr "Versión {}"
 
-#: about.ts:71 properties.ts:61
+#: about.ts:101 about.ts:102 properties.ts:61
 #, x-machine
 msgid "{}: {}"
 msgstr "{}: {}"
 
-#: about.ts:72 ui/about.slint:170
+#: about.ts:102 ui/about.slint:132 ui/about.slint:193
+#, x-machine
+msgid "Rendering"
+msgstr "Renderizado"
+
+#: about.ts:103 ui/about.slint:205
 #, x-machine
 msgid "Loaded plugins"
 msgstr "Complementos cargados"
 
-#: about.ts:73 ui/about.slint:181
+#: about.ts:104 ui/about.slint:216
 #, x-machine
 msgid "Unknown (cannot read the plugin list)"
 msgstr "Desconocido (no se puede leer la lista de complementos)"
 
-#: about.ts:76 ui/about.slint:90
+#: about.ts:107 ui/about.slint:97
 #, x-machine
 msgid "Built-in"
 msgstr "Integrado"
 
-#: about.ts:76 ui/about.slint:91
+#: about.ts:107 ui/about.slint:98
 #, x-machine
 msgid "Repository"
 msgstr "Repositorio"
 
-#: about.ts:76 ui/about.slint:92
+#: about.ts:107 ui/about.slint:99
 #, x-machine
 msgid "Link"
 msgstr "Enlace"
 
-#: about.ts:76 ui/about.slint:93
+#: about.ts:107 ui/about.slint:100
 #, x-machine
 msgid "Local file"
 msgstr "Archivo local"
 
-#: about.ts:76 ui/about.slint:94
+#: about.ts:107 ui/about.slint:101
 #, x-machine
 msgid "Workshop"
 msgstr "Taller"
 
-#: about.ts:76 ui/about.slint:95
+#: about.ts:107 ui/about.slint:102
 #, x-machine
 msgid "Installed"
 msgstr "Instalado"
 
-#: about.ts:76 ui/about.slint:96
+#: about.ts:107 ui/about.slint:103
 #, x-machine
 msgid "Development"
 msgstr "Desarrollo"
 
-#: about.ts:77 ui/about.slint:100
+#: about.ts:108 ui/about.slint:114
 #, x-machine
 msgid "Starting"
 msgstr "Iniciando"
 
-#: about.ts:77 ui/about.slint:101
+#: about.ts:108 ui/about.slint:115
 #, x-machine
 msgid "Running"
 msgstr "En ejecución"
 
-#: about.ts:77 ui/about.slint:102
+#: about.ts:108 ui/about.slint:116
 #, x-machine
 msgid "Disabled"
 msgstr "Desactivado"
 
-#: about.ts:77 ui/about.slint:103
+#: about.ts:108 ui/about.slint:117
 #, x-machine
 msgid "Failed"
 msgstr "Error"
 
-#: about.ts:77 ui/about.slint:104
+#: about.ts:108 ui/about.slint:118
 #, x-machine
 msgid "Stopped"
 msgstr "Detenido"
 
-#: about.ts:78
+#: about.ts:109
 #, x-machine
 msgid "{}  {}  {}  {}"
 msgstr "{}  {}  {}  {}"
 
-#: about.ts:119
+#: about.ts:164
 #, x-machine
 msgid "Version info copied"
 msgstr "Se copió la información de versión"
@@ -646,7 +666,7 @@ msgstr "Codificador"
 msgid "Creation time"
 msgstr "Fecha de creación"
 
-#: properties.ts:222 properties.ts:250 ui/about.slint:123 ui/about.slint:170
+#: properties.ts:222 properties.ts:250 ui/about.slint:140 ui/about.slint:205
 #, x-machine
 msgid "Source"
 msgstr "Origen"
@@ -827,32 +847,32 @@ msgstr "Información de Vestra Player.txt"
 msgid "{} info.txt"
 msgstr "Información de {}.txt"
 
-#: ui/about.slint:60
+#: ui/about.slint:62
 #, x-machine
 msgid "About Vestra Player"
 msgstr "Acerca de Vestra Player"
 
-#: ui/about.slint:119 ui/about.slint:170
+#: ui/about.slint:136 ui/about.slint:205
 #, x-machine
 msgid "Version"
 msgstr "Versión"
 
-#: ui/about.slint:127 ui/about.slint:170
+#: ui/about.slint:144 ui/about.slint:205
 #, x-machine
 msgid "State"
 msgstr "Estado"
 
-#: ui/about.slint:213 ui/properties.slint:157
+#: ui/about.slint:248 ui/properties.slint:160
 #, x-machine
 msgid "Copy failed"
 msgstr "Error al copiar"
 
-#: ui/about.slint:219
+#: ui/about.slint:254
 #, x-machine
 msgid "Copy Info"
 msgstr "Copiar información"
 
-#: ui/about.slint:220 ui/properties.slint:168
+#: ui/about.slint:255 ui/properties.slint:171
 #, x-machine
 msgid "Close"
 msgstr "Cerrar"
@@ -880,22 +900,22 @@ msgctxt "tab"
 msgid "System"
 msgstr "Sistema"
 
-#: ui/properties.slint:158
+#: ui/properties.slint:161
 #, x-machine
 msgid "Save failed: {}"
 msgstr "Error al guardar: {}"
 
-#: ui/properties.slint:165
+#: ui/properties.slint:168
 #, x-machine
 msgid "Refresh"
 msgstr "Actualizar"
 
-#: ui/properties.slint:166
+#: ui/properties.slint:169
 #, x-machine
 msgid "Copy"
 msgstr "Copiar"
 
-#: ui/properties.slint:167
+#: ui/properties.slint:170
 #, x-machine
 msgid "Save As…"
 msgstr "Guardar como…"

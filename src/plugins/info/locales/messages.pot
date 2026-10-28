@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.info 0.1.6\n"
+"Project-Id-Version: vestra.info 0.1.8\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -8,87 +8,103 @@ msgstr ""
 msgid "{} (build {})"
 msgstr ""
 
-#: about.ts:32 about.ts:78 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:86 ui/about.slint:120
+#: about.ts:32 about.ts:109 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:93 ui/about.slint:137
 msgid "Unknown"
 msgstr ""
 
-#: about.ts:34 ui/about.slint:116 ui/about.slint:159
+#: about.ts:34 ui/about.slint:131 ui/about.slint:176
 msgid "Plugin API"
 msgstr ""
 
-#: about.ts:70 ui/about.slint:155
+#: about.ts:68 ui/about.slint:108
+msgid "GPU"
+msgstr ""
+
+#: about.ts:68 ui/about.slint:108
+msgid "Software"
+msgstr ""
+
+#: about.ts:69 ui/about.slint:111
+msgid "{} — {}"
+msgstr ""
+
+#: about.ts:100 ui/about.slint:172
 msgid "Version {} (build {})"
 msgstr ""
 
-#: about.ts:70 ui/about.slint:155
+#: about.ts:100 ui/about.slint:172
 msgid "Version {}"
 msgstr ""
 
-#: about.ts:71 properties.ts:61
+#: about.ts:101 about.ts:102 properties.ts:61
 msgid "{}: {}"
 msgstr ""
 
-#: about.ts:72 ui/about.slint:170
+#: about.ts:102 ui/about.slint:132 ui/about.slint:193
+msgid "Rendering"
+msgstr ""
+
+#: about.ts:103 ui/about.slint:205
 msgid "Loaded plugins"
 msgstr ""
 
-#: about.ts:73 ui/about.slint:181
+#: about.ts:104 ui/about.slint:216
 msgid "Unknown (cannot read the plugin list)"
 msgstr ""
 
-#: about.ts:76 ui/about.slint:90
+#: about.ts:107 ui/about.slint:97
 msgid "Built-in"
 msgstr ""
 
-#: about.ts:76 ui/about.slint:91
+#: about.ts:107 ui/about.slint:98
 msgid "Repository"
 msgstr ""
 
-#: about.ts:76 ui/about.slint:92
+#: about.ts:107 ui/about.slint:99
 msgid "Link"
 msgstr ""
 
-#: about.ts:76 ui/about.slint:93
+#: about.ts:107 ui/about.slint:100
 msgid "Local file"
 msgstr ""
 
-#: about.ts:76 ui/about.slint:94
+#: about.ts:107 ui/about.slint:101
 msgid "Workshop"
 msgstr ""
 
-#: about.ts:76 ui/about.slint:95
+#: about.ts:107 ui/about.slint:102
 msgid "Installed"
 msgstr ""
 
-#: about.ts:76 ui/about.slint:96
+#: about.ts:107 ui/about.slint:103
 msgid "Development"
 msgstr ""
 
-#: about.ts:77 ui/about.slint:100
+#: about.ts:108 ui/about.slint:114
 msgid "Starting"
 msgstr ""
 
-#: about.ts:77 ui/about.slint:101
+#: about.ts:108 ui/about.slint:115
 msgid "Running"
 msgstr ""
 
-#: about.ts:77 ui/about.slint:102
+#: about.ts:108 ui/about.slint:116
 msgid "Disabled"
 msgstr ""
 
-#: about.ts:77 ui/about.slint:103
+#: about.ts:108 ui/about.slint:117
 msgid "Failed"
 msgstr ""
 
-#: about.ts:77 ui/about.slint:104
+#: about.ts:108 ui/about.slint:118
 msgid "Stopped"
 msgstr ""
 
-#: about.ts:78
+#: about.ts:109
 msgid "{}  {}  {}  {}"
 msgstr ""
 
-#: about.ts:119
+#: about.ts:164
 msgid "Version info copied"
 msgstr ""
 
@@ -517,7 +533,7 @@ msgstr ""
 msgid "Creation time"
 msgstr ""
 
-#: properties.ts:222 properties.ts:250 ui/about.slint:123 ui/about.slint:170
+#: properties.ts:222 properties.ts:250 ui/about.slint:140 ui/about.slint:205
 msgid "Source"
 msgstr ""
 
@@ -662,27 +678,27 @@ msgstr ""
 msgid "{} info.txt"
 msgstr ""
 
-#: ui/about.slint:60
+#: ui/about.slint:62
 msgid "About Vestra Player"
 msgstr ""
 
-#: ui/about.slint:119 ui/about.slint:170
+#: ui/about.slint:136 ui/about.slint:205
 msgid "Version"
 msgstr ""
 
-#: ui/about.slint:127 ui/about.slint:170
+#: ui/about.slint:144 ui/about.slint:205
 msgid "State"
 msgstr ""
 
-#: ui/about.slint:213 ui/properties.slint:157
+#: ui/about.slint:248 ui/properties.slint:160
 msgid "Copy failed"
 msgstr ""
 
-#: ui/about.slint:219
+#: ui/about.slint:254
 msgid "Copy Info"
 msgstr ""
 
-#: ui/about.slint:220 ui/properties.slint:168
+#: ui/about.slint:255 ui/properties.slint:171
 msgid "Close"
 msgstr ""
 
@@ -705,18 +721,18 @@ msgctxt "tab"
 msgid "System"
 msgstr ""
 
-#: ui/properties.slint:158
+#: ui/properties.slint:161
 msgid "Save failed: {}"
 msgstr ""
 
-#: ui/properties.slint:165
+#: ui/properties.slint:168
 msgid "Refresh"
 msgstr ""
 
-#: ui/properties.slint:166
+#: ui/properties.slint:169
 msgid "Copy"
 msgstr ""
 
-#: ui/properties.slint:167
+#: ui/properties.slint:170
 msgid "Save As…"
 msgstr ""

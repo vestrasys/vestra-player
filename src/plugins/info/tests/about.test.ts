@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
-import { aboutText, components, pluginRows } from "../about.ts";
+import { aboutText, components, NO_RENDERING, pluginRows, renderingRow, renderingValue } from "../about.ts";
 import activate from "../main.ts";
 
 const directory = new URL("..", import.meta.url);
@@ -100,6 +100,7 @@ test("I09: Copy Info copies the whole window as text; a refusal shows Copy faile
         "FFmpeg: 9.0.2",
         "Slint: 1.16.1",
         `Node: v${process.versions.node}`,
+        "Rendering: GPU",
         "",
         "Loaded plugins",
         "vestra.audio  0.1.0  Development  Running",
@@ -180,8 +181,9 @@ test("I09 in Simplified Chinese: the window's words and the message of before", 
   try {
     assert.deepEqual(host.command("info.about").display.path, ["关于 Vestra Player…"]);
     // What about.slint shows through @tr (the player rewrites the literals with the catalog).
-    const words = ["About Vestra Player", "Loaded plugins", "Version", "Source", "State", "Copy Info", "Close", "Copy failed", "Unknown", "Plugin API"];
-    assert.deepEqual(words.map((w) => host.translate(w)), ["关于 Vestra Player", "已加载插件", "版本", "来源", "状态", "复制信息", "关闭", "复制失败", "未知", "插件 API"]);
+    const words = ["About Vestra Player", "Loaded plugins", "Version", "Source", "State", "Copy Info", "Close", "Copy failed", "Unknown", "Plugin API", "Rendering", "GPU", "Software"];
+    assert.deepEqual(words.map((w) => host.translate(w)), ["关于 Vestra Player", "已加载插件", "版本", "来源", "状态", "复制信息", "关闭", "复制失败", "未知", "插件 API", "渲染", "GPU", "软件"]);
+    assert.equal(host.translate("{} — {}", ["软件", "reason"]), "软件——reason");
     assert.equal(host.translate("Version {} (build {})", ["0.1.0", "289b26b"]), "版本 0.1.0（构建 289b26b）");
     assert.equal(host.translate("Version {}", ["0.2.0"]), "版本 0.2.0");
     assert.equal(host.translate("Unknown (cannot read the plugin list)"), "未知（无法读取插件列表）");
@@ -209,6 +211,7 @@ test("I09 in Simplified Chinese: the window's words and the message of before", 
         "FFmpeg：9.0.2",
         "Slint：1.16.1",
         `Node：v${process.versions.node}`,
+        "渲染：GPU",
         "",
         "已加载插件",
         "vestra.audio  0.1.0  开发加载  运行中",
@@ -219,5 +222,151 @@ test("I09 in Simplified Chinese: the window's words and the message of before", 
     );
   } finally {
     await stop();
+  }
+});
+
+/** Reasons in the shapes player 0.5.13 sends (`Reason::message`), and a code a newer player may add. */
+const DENYLIST =
+  "the graphics driver is on the player's denylist: AMD Radeon 780M driver 31.0.14005: GPU draws stall for tens of milliseconds (AMD Radeon 780M, driver 31.0.14005.21001; rule amd-780m-draw-stalls); update the graphics driver, or on a computer with two GPUs choose the other one for Vestra in Windows Settings > System > Display > Graphics";
+const SOFTWARE_REASONS = [
+  { code: "no-gpu-backend", message: "this player has no GPU renderer on Windows yet" },
+  { code: "headless", message: "the player runs without windows" },
+  { code: "env", message: "VESTRA_RENDER is set" },
+  { code: "preference", message: "chosen in the player's settings" },
+  { code: "denylist", message: DENYLIST },
+  { code: "previous-crash", message: "GPU rendering crashed at a start on 2026-10-28; it is tried again after a driver or player update, or on 2026-11-04" },
+  { code: "init-failed", message: "GPU rendering unavailable: no Metal device" },
+  { code: "window-fallback", message: "a window could not show GPU frames" },
+  { code: "some-future-code", message: "a reason a newer player gives" },
+];
+
+async function openAbout(host: TestHost) {
+  await host.command("info.about").run();
+  await host.settle();
+  return host.window("about");
+}
+/** The Node and Rendering lines of Copy Info. */
+async function copied(host: TestHost) {
+  host.clipboard.text = "";
+  host.window("about").emit("copy-info");
+  await until(() => host.clipboard.text !== "");
+  return host.clipboard.text.split("\n").filter((line) => /^(Node|Rendering|渲染)[:：]/.test(line));
+}
+
+test("I09 Rendering: software shows the player's reason as it is, for every reason shape", async () => {
+  const { host, stop } = await start();
+  try {
+    host.videoRender.gpu = false;
+    for (const reason of SOFTWARE_REASONS) {
+      host.rendering.reason = reason;
+      const window = await openAbout(host);
+      assert.equal(window.props.rendering, "software", reason.code);
+      assert.equal(window.props["rendering-reason"], reason.message, `${reason.code}: the message unchanged`);
+      assert.deepEqual(await copied(host), [`Node: v${process.versions.node}`, `Rendering: Software — ${reason.message}`], reason.code);
+      window.userClose();
+      await host.settle();
+    }
+  } finally {
+    await stop();
+  }
+});
+
+test("I09 Rendering: GPU alone for default and pending; another GPU reason (VESTRA_RENDER) is shown", async () => {
+  const { host, stop } = await start();
+  try {
+    for (const [reason, shown] of [
+      [{ code: "default", message: "nothing rules GPU rendering out" }, ""],
+      [{ code: "pending", message: "GPU rendering is starting" }, ""],
+      [{ code: "env", message: "VESTRA_RENDER is set" }, "VESTRA_RENDER is set"],
+    ] as const) {
+      host.rendering.reason = { ...reason };
+      const window = await openAbout(host);
+      assert.equal(window.props.rendering, "gpu");
+      assert.equal(window.props["rendering-reason"], shown, reason.code);
+      assert.deepEqual((await copied(host)).slice(1), [shown ? `Rendering: GPU — ${shown}` : "Rendering: GPU"], reason.code);
+      window.userClose();
+      await host.settle();
+    }
+  } finally {
+    await stop();
+  }
+});
+
+test("I09 Rendering: read again at each opening (GPU, then software after a window fallback)", async () => {
+  const { host, stop } = await start();
+  try {
+    let window = await openAbout(host);
+    assert.equal(window.props.rendering, "gpu");
+    window.userClose();
+    await host.settle();
+    host.videoRender.gpu = false;
+    host.rendering.reason = { code: "window-fallback", message: "a window could not show GPU frames" };
+    window = await openAbout(host);
+    assert.equal(window.props.rendering, "software");
+    assert.equal(window.props["rendering-reason"], "a window could not show GPU frames");
+  } finally {
+    await stop();
+  }
+});
+
+test("I09 Rendering: left out before player 0.5.12 and on a failed read; the mode alone before 0.5.13", async () => {
+  const { host, stop } = await start();
+  try {
+    // Player 0.5.11: neither field.
+    host.handle("app.system", () => structuredClone(host.systemInfo));
+    let window = await openAbout(host);
+    assert.equal(window.props.rendering, "", "not reported: no row, not a guess");
+    assert.equal(window.props["rendering-reason"], "");
+    assert.deepEqual(await copied(host), [`Node: v${process.versions.node}`]);
+    window.userClose();
+    await host.settle();
+    // Player 0.5.12: the mode without a reason.
+    host.handle("app.system", () => ({ ...structuredClone(host.systemInfo), rendering: "software" }));
+    window = await openAbout(host);
+    assert.equal(window.props.rendering, "software");
+    assert.equal(window.props["rendering-reason"], "");
+    assert.deepEqual((await copied(host)).slice(1), ["Rendering: Software"]);
+    window.userClose();
+    await host.settle();
+    // A failed read: no row; the rest of the window as usual.
+    host.handle("app.system", () => {
+      throw new HostError("failed", "refused");
+    });
+    window = await openAbout(host);
+    assert.equal(window.props.rendering, "");
+    assert.equal((window.props.plugins as unknown[]).length, 3);
+    assert.deepEqual(await copied(host), [`Node: v${process.versions.node}`]);
+  } finally {
+    await stop();
+  }
+});
+
+test("I09 Rendering pure rules and words (English, Simplified Chinese)", async () => {
+  const zh = await start("zh-Hans");
+  const en = await start();
+  try {
+    assert.deepEqual(renderingRow(null), NO_RENDERING);
+    assert.deepEqual(renderingRow({}), NO_RENDERING);
+    assert.deepEqual(renderingRow({ rendering: "other" as never }), NO_RENDERING, "an unknown mode is not guessed");
+    assert.deepEqual(renderingRow({ rendering: "gpu" }), { mode: "gpu", reason: "" });
+    assert.deepEqual(renderingRow({ rendering: "software", renderingReason: { code: "denylist", message: DENYLIST } }), { mode: "software", reason: DENYLIST });
+    // A software reason is never hidden, even with a code that is quiet under GPU rendering.
+    assert.deepEqual(renderingRow({ rendering: "software", renderingReason: { code: "default", message: "x" } }), { mode: "software", reason: "x" });
+    const value = (i18n: typeof en.i18n, row: Parameters<typeof renderingValue>[1]) => i18n.resolve(renderingValue(i18n, row));
+    assert.equal(value(en.i18n, { mode: "gpu", reason: "" }), "GPU");
+    assert.equal(value(en.i18n, { mode: "software", reason: "this player has no GPU renderer on Windows yet" }), "Software — this player has no GPU renderer on Windows yet");
+    assert.equal(value(zh.i18n, { mode: "software", reason: "this player has no GPU renderer on Windows yet" }), "软件——this player has no GPU renderer on Windows yet");
+    const bare = { version: "0.2.0", build: null, components: { mpv: null, libav: {}, slint: "" } };
+    assert.match(aboutText(zh.i18n, bare, null, [], { mode: "software", reason: "r" }), /\nNode：未知\n渲染：软件——r\n\n已加载插件\n/);
+    assert.match(aboutText(en.i18n, bare, null, []), /\nNode: Unknown\n\nLoaded plugins\n/, "no row without a renderer");
+    // about.slint words both modes and the reason the same way, and measures the label.
+    const slint = await readFile(new URL("../ui/about.slint", import.meta.url), "utf8");
+    assert.match(slint, /mode == "gpu" \? @tr\("GPU"\) : @tr\("Software"\)/);
+    assert.match(slint, /@tr\("\{\} — \{\}", root\.rendering-name\(mode\), reason\)/);
+    const measure = slint.slice(slint.indexOf("label-measure :="), slint.indexOf("version-measure :="));
+    assert.match(measure, /@tr\("Plugin API"\)[\s\S]*@tr\("Rendering"\)/, "the label column fits Rendering too");
+  } finally {
+    await zh.stop();
+    await en.stop();
   }
 });
