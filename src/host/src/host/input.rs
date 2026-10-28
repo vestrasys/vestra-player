@@ -264,7 +264,7 @@ impl Host {
     /// A floating panel forwards keys to the binding table and records each
     /// press's physical key first (see `observe_key`). Its standard window
     /// shortcuts (⌘W…) come before that and never reach the table; the main
-    /// window has its own hook (`bind_shell`) without them.
+    /// window has its own hook (`bind_window_events`) without them.
     pub(crate) fn observe_keys(
         &self,
         window: &slint_interpreter::ComponentInstance,
