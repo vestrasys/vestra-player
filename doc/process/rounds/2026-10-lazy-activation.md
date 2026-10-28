@@ -310,7 +310,7 @@ After the "no idle stop" ruling above (08:19), the user asked how to reclaim plu
 | Step | Status (2026-10-27, branch `capabilities-c1` from `main` d8e7763) |
 | --- | --- |
 | C1 | Done, pending review: `src/host/src/capabilities/`, `src/host/capabilities.json`, the agreement test reads the JSON |
-| C2 | Not started (after S2 of the shared runner, §12 there) |
+| C2 | Done 2026-10-28 (branch `refactor-c2`, two commits: moves, then the `main.rs` split; see §6.5) |
 | A1, B1 | Not started |
 
 ### 6.1 C1: what landed
@@ -334,6 +334,14 @@ After the "no idle stop" ruling above (08:19), the user asked how to reclaim plu
 A temporary test (removed before commit) put the old `required_capability` beside `capabilities::required` and compared them, result and error code, over 240 method names (every name of the old match, every method of the new table, prefix neighbours and unknown names) × 8 parameter sets × 3 declared-capability sets: 5 760 cases, all equal. `cargo test --locked`: 479 passed before, 483 after (the moved `required_capability` test plus four new ones), 8 ignored both times.
 
 One difference that is not a table difference: a plugin that declares `source.resolve` and sends an unknown `sourceResolvers.<x>` reached `unreachable!()` in the old `dispatch` (a host panic); it is now refused `unsupported` ("unknown method"), the answer every other unknown method gets. Recorded for the coordinator: it is the only reachable path whose outcome changed.
+
+### 6.5 C2: what landed (2026-10-28, user request of 2026-10-27)
+
+- `src/host/src/` now has `host/` (15 files: `Host`, events, handle, lifecycle, dispatch, rpc, actions, state, window, shell, menus, input, mounts, video, package_activation), `packages/` (8), `playback/` (34), `ui/` (21), `process/` (3), plus the unchanged `capabilities/`, `platform/`, `i18n/`; 16 files stay at the root. `main.rs` is 567 lines (was 4875).
+- Differences from §4.1: `plugins.rs` became `process/mod.rs` (a `process/process.rs` trips clippy's `module_inception`); `i18n/` stays at the root (`build.rs` reads it by path); `host/` has more files than planned because `impl Host` was over 3 200 lines; files the plan did not list: `bar_buttons.rs`, `slot_claims.rs`, `ui_state.rs`, `ui_types.rs`, `ui_fonts.rs`, `window_control.rs` → `ui/`; `lease_stream.rs` → `playback/`; `package_validate.rs` → `packages/`; `shared_runner.rs` → `process/`; `session_storage.rs` stays at the root (a host service several capabilities use).
+- Equivalence (independent review): an item-by-item token comparison of the whole tree before and after each commit found only path edits, visibility (`pub(super)` → `pub(crate)`, crate-internal only), `include_str!` depth and rustfmt re-wrapping; the moved items, including `Host`'s field order, are token-identical. `cargo test --include-ignored` 545 passed before and after; name-filtered CI tests still match one test each.
+- Mac test list: compile the host on macOS once (the review checked the unix-only code paths by reading).
+- The Windows wgpu branch needs a rebase: renamed files follow automatically; its `main.rs` hunks move by hand into `host/mod.rs`, `host/handle.rs`, `host/video.rs`, `host/window.rs` and `main.rs` (about half a day).
 
 ### 6.4 C1: follow-ups
 
