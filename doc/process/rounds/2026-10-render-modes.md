@@ -283,7 +283,7 @@ Should-fix:
 
 Nits:
 
-- Resume: mpv's `start` and `pause` are set before the file loads (no second of sound from 0); `start` is reset to `none` and the resume dropped once the first load is ready, has ended or failed (a different first file or a failed load logs one `restart:` line).
+- Resume (changed again after the second review): the resume point travels with the open intent instead of mpv's global options. `host.resume` stores it in `Sources` (`resume_next_open`); the first open, close or provider takes it (`source_backend::claim_resume`): an open of exactly that path gets the old pause state in its intent (so the session reports it) and loads with `loadfile <src> replace -1 pause=…,start=<t>` (`start_option`, mpv's per-file options); any other first source drops it with one `restart:` line, so a plugin opening another file first neither gets the position nor makes the resumed file start from 0 with a global `start` left over. The global `start`/`pause` setting, their clearing and the match by file name are gone. A source a resolver plugin claims opens paused as before, from its start. Tested (`resume_tests`).
 - `os.build` on macOS: builds with letters (`25C56`) match only with `=`, as text; documented on the field and tested.
 - `merged()` refuses a file whose rule (or exception) has an unknown `op`, `between` without `value2`, or a vendor/device id that is not hexadecimal; the caller logs one `render:` line and keeps the built-in rules. Tested.
 - A restarted player that does not get the lock in 20 s runs on its own with the usual `single instance: …; running on its own` line instead of quitting.
@@ -292,6 +292,10 @@ Nits:
 - SDK: `TestHost` computes the next start's reason in the player's order (`headless`/`no-gpu-backend` before the preference; GPU chosen and available is `default`), its default messages are the player's, and the `preference` code is documented as "the user chose software rendering".
 
 Checks after the fixes: host `cargo fmt --check` 0, `cargo clippy --locked --workspace --all-targets -D warnings` 0 and without `--workspace` 0, macOS cross-clippy `--all-targets` 0, `cargo test --locked --workspace` (host 572 passed / 13 ignored, `vestra-win32` 3 / 2 ignored), `cargo shear` 0; `src/` with the SDK branch installed: `check` 0, `format:check` 0, `test:sdk` 56 of 57 (the store label, 8.4 item 2); SDK: `build`, `check`, `format:check`, `lint`, `doc-lint`, `docs:check`, `docs:llms -- --check` all 0, `npm test` 246 / 1 skipped / 0 failed, `npm pack --dry-run` 1.5.35.
+
+### 8.7 Noted for M3 (second review)
+
+- With a `software-windows` rule holding, `Facts::blocked` also rules GPU mode out (and `gpu.available` is false), because on main GPU mode needs OpenGL windows. M3 brings wgpu (Direct3D 12) windows on Windows, which do not use the driver's OpenGL: there the rule must only replace OpenGL windows (the CPU mode ladder and an OpenGL fallback), not exclude GPU mode.
 
 ## 9. The first real window rule: white OpenGL windows on Adrenalin 26.10.1 (2026-10-28)
 

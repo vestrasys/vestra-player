@@ -248,8 +248,6 @@ impl Backend {
                 let mut render_options = crate::playback::video_render::Options::default();
                 let mut render_was_gpu = out_render.gpu().is_some();
                 let mut cover_art = CoverArt::default();
-                // `host.resume`: where a restarted player's first file continues.
-                let mut resume = None::<Value>;
                 let mut subtitles = crate::playback::subtitle_backend::Subtitles::new(fonts);
                 let mut jobs = crate::playback::media_jobs::Jobs::default();
                 let mut push = StatePush::new();
@@ -441,22 +439,20 @@ impl Backend {
                             continue;
                         }
                         // A restarted player continues its first file where
-                        // the replaced one was (`host/rendering.rs`): mpv's
-                        // `start` and `pause` options before the file loads,
-                        // so it does not play from 0 first; cleared once the
-                        // first load is ready or failed.
+                        // the replaced one was (`host/rendering.rs`): the
+                        // next open of that file loads with `start=` and its
+                        // pause state (`source_backend::claim_resume`).
                         if command.method == "host.resume" {
-                            let seconds = command.params["seconds"].as_f64().unwrap_or(0.);
-                            if seconds > 0.
-                                && let Err(error) =
-                                    mpv.set_property("start", seconds.to_string().as_str())
-                            {
-                                diag!("restart: start={seconds} refused: {error}");
-                            }
-                            if command.params["paused"].as_bool() == Some(true) {
-                                let _ = mpv.set_property("pause", true);
-                            }
-                            resume = Some(command.params);
+                            sources.resume_next_open(
+                                crate::playback::source_backend::ResumePoint {
+                                    source: command.params["source"]
+                                        .as_str()
+                                        .unwrap_or_default()
+                                        .into(),
+                                    seconds: command.params["seconds"].as_f64().unwrap_or(0.),
+                                    paused: command.params["paused"].as_bool() == Some(true),
+                                },
+                            );
                             continue;
                         }
                         if command.method == "playback.stats" {
@@ -564,28 +560,6 @@ impl Backend {
                             "playback.backend".into(),
                             json!({"currentSession":sources.generation(),"event":format!("{event:?}")}),
                         ));
-                    }
-                    if let Some(point) = &resume {
-                        use crate::playback::session::Phase;
-                        let phase = sources.phase();
-                        if matches!(phase, Phase::Ready | Phase::Error | Phase::Ended) {
-                            // By file name: the session may name the file as a
-                            // URL or a canonical path.
-                            let same = sources.current_source().map(file_name)
-                                == point["source"].as_str().map(file_name);
-                            if phase == Phase::Ready
-                                && same
-                                && point["paused"].as_bool() == Some(true)
-                            {
-                                let _ = mpv.set_property("pause", true);
-                            } else if !same || phase != Phase::Ready {
-                                diag!(
-                                    "restart: the first load was not the resumed file, or failed; resuming dropped"
-                                );
-                            }
-                            let _ = mpv.set_property("start", "none");
-                            resume = None;
-                        }
                     }
                     if !geometry_error && let Err(error) = geometry.tick(&mpv, &sources) {
                         geometry_error = true;
@@ -768,10 +742,6 @@ impl GpuRun<'_> {
         // the switch (see `software_hwdec`).
         false
     }
-}
-/// The last path component of a path or URL (`host.resume`).
-fn file_name(source: &str) -> &str {
-    source.rsplit(['/', '\\']).next().unwrap_or(source)
 }
 /// `hwdec` while the software renderer draws (`renderer::hwdec`).
 fn software_hwdec() -> String {
