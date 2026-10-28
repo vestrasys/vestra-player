@@ -1,7 +1,11 @@
 //! `commands`: menu commands with keys and state (crate::commands, the
 //! binding table), and running the player's own actions (`host.run`).
 use super::{Capability, Handled, Info, Method, Residency, plugin};
-use crate::{Host, Reply, RpcError, commands, core_actions, i18n, input_trace, string};
+use crate::{
+    commands, core_actions,
+    host::{Host, Reply, RpcError, string},
+    i18n, input_trace,
+};
 use serde_json::{Value, json};
 
 pub struct Commands;

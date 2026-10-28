@@ -1,7 +1,7 @@
 //! `ui.drop`: files dropped on the player (drops.rs). Drop targets are
 //! recordable; a panel's `drops.listen` lives with its mount.
 use super::{Capability, Handled, Info, Method, Residency};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct UiDrop;

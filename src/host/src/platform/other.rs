@@ -5,8 +5,8 @@
 use super::{
     Display, HostWindowId, NativeSnapshot, OsFacts, Result, ScreenFacts, Unavailable, unsupported,
 };
-use crate::RpcError;
 use crate::clipboard::Image;
+use crate::host::RpcError;
 use crate::power::Launcher;
 use std::path::{Path, PathBuf};
 

@@ -13,7 +13,7 @@ use std::sync::{
 use rsmpv::{Mpv, Node};
 
 use crate::{
-    RpcError,
+    host::RpcError,
     playback::session::{IntentTicket, Phase},
     playback::source_backend::Sources,
 };

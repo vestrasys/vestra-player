@@ -2,7 +2,7 @@
 //! (`processing.replace` and `processing.operation` for the audio stage) are
 //! served by processing_video.rs, which asks for this capability by stage.
 use super::{Capability, Handled, Info, Method, Residency};
-use crate::{Host, Reply, RpcError};
+use crate::host::{Host, Reply, RpcError};
 use serde_json::Value;
 
 pub struct ProcessingAudio;

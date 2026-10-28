@@ -1,5 +1,5 @@
 //! Direct Slint interpreter integration, with primitive property and callback transport.
-use crate::Event;
+use crate::host::Event;
 use anyhow::{Result, bail};
 use serde_json::json;
 use slint_interpreter::{Compiler, ComponentHandle, ComponentInstance, Value};
@@ -23,7 +23,7 @@ pub fn ui_dir() -> PathBuf {
 /// (`sidebar-visible`, or a plugin panel's own `if`) is the old layout until
 /// the next frame. This runs that pass now. It is the only Slint private
 /// interface outside `ui_markdown`: recheck on every Slint upgrade (the
-/// `ui::tests::geometry_*` tests fail if the behaviour changes).
+/// `ui::view::tests::geometry_*` tests fail if the behaviour changes).
 pub fn settle_layout(window: &slint::Window) {
     slint::private_unstable_api::re_exports::WindowInner::from_pub(window)
         .ensure_tree_instantiated();
@@ -965,7 +965,8 @@ export component W inherits Window {
             &[],
             &none,
         );
-        crate::set_menu_model(&instance, crate::ui::ui_values::from_json(&value).unwrap()).unwrap();
+        crate::host::set_menu_model(&instance, crate::ui::ui_values::from_json(&value).unwrap())
+            .unwrap();
         let level = &value[0];
         let (store, settings) = (9, 10);
         move_to(&instance, centre(level, 1));
@@ -1000,8 +1001,11 @@ export component W inherits Window {
                 &[offset],
                 &none,
             );
-            crate::set_menu_model(&instance, crate::ui::ui_values::from_json(&value).unwrap())
-                .unwrap();
+            crate::host::set_menu_model(
+                &instance,
+                crate::ui::ui_values::from_json(&value).unwrap(),
+            )
+            .unwrap();
             let level = &value[0];
             let vp = level["viewport-y"].as_f64().unwrap();
             let visible = level["height"].as_f64().unwrap() - 2. * ARROW;
@@ -1128,8 +1132,11 @@ export component W inherits Window {
         let size = Point { x: 900., y: 600. };
         let show = |path: &[String]| {
             let value = levels(&roots(), path, origin, size, &[], &none);
-            crate::set_menu_model(&instance, crate::ui::ui_values::from_json(&value).unwrap())
-                .unwrap();
+            crate::host::set_menu_model(
+                &instance,
+                crate::ui::ui_values::from_json(&value).unwrap(),
+            )
+            .unwrap();
         };
         let path = RefCell::new(Vec::<String>::new());
         let clock = Cell::new(0u64);
@@ -1858,7 +1865,7 @@ export component MenuWindow inherits Window {
                 &|_, _| None,
             );
             self.panels = crate::ui::menu::panels(&self.levels);
-            crate::set_menu_model(
+            crate::host::set_menu_model(
                 &self.window,
                 crate::ui::ui_values::from_json(&self.levels).unwrap(),
             )
@@ -1871,7 +1878,7 @@ export component MenuWindow inherits Window {
                 self.refresh();
             }
         }
-        /// The host loop: the hovers the view reported, as main.rs handles them.
+        /// The host loop: the hovers the view reported, as host/handle.rs handles them.
         fn host(&mut self) {
             let hovers: Vec<_> = self.hovers.borrow_mut().drain(..).collect();
             for (level, token, now) in hovers {

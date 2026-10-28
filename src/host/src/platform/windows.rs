@@ -11,8 +11,8 @@
 use super::{
     Display, HostWindowId, NativeSnapshot, OsFacts, Rect, Result, ScreenFacts, Unavailable,
 };
-use crate::RpcError;
 use crate::clipboard::Image;
+use crate::host::RpcError;
 use crate::power::{Assertion, Launcher};
 use slint::winit_030::{WinitWindowAccessor, winit};
 use std::cell::{Cell, RefCell};

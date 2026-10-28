@@ -4,7 +4,7 @@
 //! Plugin authors cannot see a GUI. This renders each view a plugin's tests
 //! produced, with the player's own pipeline and no window on screen:
 //!
-//! - compiled by `ui::compile` (tool windows) or `settings_window::source` +
+//! - compiled by `ui::view::compile` (tool windows) or `settings_window::source` +
 //!   `composition::build` (the Options window holding a settings page): the
 //!   `@vestra/*` library, the palette, the fluent-dark style, and the `@tr`
 //!   rewrite with the plugin's catalog in the chosen language (`i18n`);
@@ -274,7 +274,7 @@ impl Renderer {
         })
     }
 
-    /// A tool window (`ui.open`): `ui::open` without the event wiring.
+    /// A tool window (`ui.open`): `ui::view::open` without the event wiring.
     fn window(&mut self, shot: &Shot, out: &Path) -> Result<Vec<Output>> {
         let path = shot.plugin.join(&shot.file);
         self.catalog(&shot.plugin);

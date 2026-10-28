@@ -1,6 +1,6 @@
 //! `media.read`: the state of snapshots and export jobs.
 use super::{Capability, Handled, Info, Method, Residency, forward_media};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct MediaRead;

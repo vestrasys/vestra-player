@@ -6,7 +6,7 @@
 //! at render time, so snapshots and exports never contain them.
 #![forbid(unsafe_code)]
 
-use crate::RpcError;
+use crate::host::RpcError;
 use serde_json::{Value, json};
 use std::path::Path;
 

@@ -13,8 +13,13 @@
 //! one process per selected file for "Open" on a multiple selection, and
 //! each of those hands its file over separately (`single_instance`).
 #![forbid(unsafe_code)]
-use super::*;
-use crate::host::package_activation;
+use crate::host::*;
+use serde_json::json;
+use slint::ComponentHandle;
+use std::{
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 const SETTLE_LIMIT: Duration = Duration::from_secs(20);
 const QUIET: Duration = Duration::from_millis(300);

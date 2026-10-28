@@ -1,6 +1,6 @@
 //! Requests any plugin may make, without a manifest capability.
 use super::{Handled, Method, plugin};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub static METHODS: &[Method] = &[

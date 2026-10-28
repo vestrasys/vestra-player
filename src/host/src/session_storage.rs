@@ -1,4 +1,4 @@
-﻿//! `plugin.storage.session` (SDK 1.5.25, player 0.5.5): JSON values that
+//! `plugin.storage.session` (SDK 1.5.25, player 0.5.5): JSON values that
 //! live as long as the player process, not the plugin process. User ruling
 //! 2026-10-27, after Chrome's `chrome.storage.session`; design record
 //! doc/process/rounds/2026-10-session-storage.md.
@@ -18,7 +18,10 @@
 //! map's own bookkeeping. Object properties come back in the order
 //! `serde_json` keeps them (sorted), not the order the plugin wrote.
 #![forbid(unsafe_code)]
-use super::*;
+use crate::host::*;
+use crate::process;
+use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 /// Bytes one plugin may hold: each key's UTF-8 bytes, its value's compact

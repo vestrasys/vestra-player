@@ -1,6 +1,9 @@
 //! `ui.osd`: messages on the video and the information panel.
 use super::{Capability, Handled, Info, Method, Residency};
-use crate::{Host, OSD_MS, Reply, RpcError, i18n};
+use crate::{
+    host::{Host, OSD_MS, Reply, RpcError},
+    i18n,
+};
 use serde_json::Value;
 use slint_interpreter::Value as SValue;
 

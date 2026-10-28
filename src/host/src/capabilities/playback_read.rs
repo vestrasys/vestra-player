@@ -1,7 +1,7 @@
 //! `playback.read`: what is playing, the position, chapters, devices, stats
 //! and timeline marks; the playback worker answers most of it.
 use super::{Capability, Handled, Info, Method, Residency, forward};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct PlaybackRead;

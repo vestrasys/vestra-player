@@ -1,6 +1,6 @@
 //! `subtitles.read`: the subtitle tracks and their state.
 use super::{Capability, Handled, Info, Method, Residency, forward_media};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct SubtitlesRead;

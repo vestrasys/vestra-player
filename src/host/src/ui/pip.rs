@@ -6,9 +6,9 @@
 //! [`Surface`] trait, so the rules are tested without one.
 #![forbid(unsafe_code)]
 
+use crate::host::{Reply, RpcError};
 use crate::i18n::{tr, tr_args};
 use crate::platform::{HostWindowId, PipEvent, Rect};
-use crate::{Reply, RpcError};
 use serde_json::{Value, json};
 
 /// How long a start or stop may take before the reply gives up (ms).

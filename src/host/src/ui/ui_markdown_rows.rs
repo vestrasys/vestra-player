@@ -2,6 +2,7 @@
 //! document cache and in-place updates (`ui_markdown::convert`,
 //! `ui_values::reconcile`).
 use super::*;
+use slint::ComponentHandle;
 use slint::Model;
 use std::sync::atomic::{AtomicU64, Ordering as Atomic};
 

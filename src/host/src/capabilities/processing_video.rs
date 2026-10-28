@@ -2,7 +2,7 @@
 //! interpolated rendering. Also serves the requests the two filter chains
 //! share, which ask for `processing.video` or `processing.audio` by stage.
 use super::{Capability, Handled, Info, Method, Needs, Residency, forward, forward_media};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct ProcessingVideo;

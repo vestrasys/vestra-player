@@ -2,7 +2,7 @@
 //! (binding_manager.rs). `events.subscribe` of `bindings.changed` asks for
 //! it too (events.rs).
 use super::{Capability, Handled, Info, Method, Residency};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct BindingsManage;

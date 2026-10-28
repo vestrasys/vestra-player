@@ -1,7 +1,7 @@
 //! Finite raw snapshot/job candidate. No product behavior or arbitrary FFmpeg strings.
 #![forbid(unsafe_code)]
 use crate::{
-    RpcError,
+    host::RpcError,
     playback::media_worker::{self, Control, Status},
     playback::processing_operations::{self as operations, Admission, Book, Key, Stage},
     playback::session::SourceStamp,

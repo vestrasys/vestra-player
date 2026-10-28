@@ -8,8 +8,12 @@
 //! controls: scroll bars, line edits, combo boxes, check boxes), so they are
 //! light in a light palette although the host compiles them as fluent-dark.
 #![forbid(unsafe_code)]
+use crate::host::*;
 use crate::ui::ui_state;
-use crate::*;
+use anyhow::Result;
+use serde_json::{Value, json};
+use slint::ComponentHandle;
+use slint_interpreter::Value as SValue;
 
 /// The palettes, in menu order; the first is the default.
 pub const THEMES: [&str; 2] = ["vestra", "vestra-light"];

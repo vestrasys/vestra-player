@@ -5,10 +5,14 @@
 //! only from the files the SDK downloaded (`images`: address → local path).
 //! Embedded HTML is dropped.
 #![forbid(unsafe_code)]
+use crate::host::*;
 use crate::ui::ui_image;
-use crate::*;
+use anyhow::Result;
 use pulldown_cmark::{Event as Md, Options, Parser, Tag, TagEnd};
+use serde_json::{Value, json};
 use slint::StyledText;
+use slint_interpreter::Value as SValue;
+use std::{cell::RefCell, collections::BTreeMap, path::Path, rc::Rc};
 // Filling placeholders has no public API in Slint 1.18.1
 // (`StyledText::from_markdown` takes no arguments): recheck on every upgrade.
 use slint::private_unstable_api::re_exports::parse_markdown;
@@ -965,6 +969,7 @@ mod rows_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use slint::ComponentHandle;
 
     fn kinds(text: &str) -> Vec<&'static str> {
         blocks(text, None).iter().map(|b| b.kind).collect()

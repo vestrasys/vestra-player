@@ -1,7 +1,7 @@
 //! Finite owner-aware runtime candidate. Not a general filter graph API.
 use crate::playback::processing_operations::{self as operations, Admission, Key, Stage};
 use crate::{
-    RpcError,
+    host::RpcError,
     playback::effects::{self, AudioNode, Descriptors, Resource, UpdatePlan, VideoNode},
 };
 use rsmpv::Mpv;

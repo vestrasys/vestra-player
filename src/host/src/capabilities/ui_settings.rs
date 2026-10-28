@@ -1,7 +1,7 @@
 //! `ui.settings`: pages in the Options window (settings_window.rs, which
 //! refuses the methods it does not know).
 use super::{Capability, Handled, Info, Method, Residency};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct UiSettings;

@@ -6,7 +6,7 @@
 //! has one owner; another plugin asking for it is refused with `conflict`
 //! (`resolver-taken`), which does not fail its activation.
 #![forbid(unsafe_code)]
-use crate::RpcError;
+use crate::host::RpcError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;

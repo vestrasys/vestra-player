@@ -296,7 +296,10 @@ test("step seek parameters are the player's: setStepSeek keyframes, host.run sec
     host("src/capabilities/commands.rs"),
     /run_step\(action, &params\["seconds"\]\)/,
   );
-  assert.match(host("src/main.rs"), /"keyframes":self\.step_keyframes\(\)/);
+  assert.match(
+    host("src/host/actions.rs"),
+    /"keyframes":self\.step_keyframes\(\)/,
+  );
 });
 
 test("a seek control's keyframes flag is the SDK's Scrub.seek option and the player's Control::Seek field (SDK 1.5.22, player 0.5.3)", () => {
@@ -1045,14 +1048,14 @@ function assertRows(
   );
 }
 
-/** The player's own commands as host/src registers them (main.rs, core_actions.rs). */
+/** The player's own commands as host/src registers them (host/actions.rs, core_actions.rs). */
 function hostCommands(): Row[] {
   const literals = (text: string) =>
     [...text.matchAll(/"([^"]*)"/g)].map((m) => m[1]!);
   const rows: Row[] = [];
   // register_host_commands: `let mut x = Declaration::new("Title", &["Path"])`, `x.bindings = vec![..]`.
   const own = braces(
-    host("src/main.rs"),
+    host("src/host/actions.rs"),
     "fn register_host_commands(&mut self)",
   );
   for (const [, id, variable] of own.matchAll(
@@ -1117,7 +1120,7 @@ test("BUILTIN_COMMANDS and BUILTIN_SUBMENUS are what the player and its built-in
   assertRows(
     hostCommands(),
     BUILTIN_COMMANDS.filter((row) => row.owner === "host"),
-    "the player's own commands (main.rs register_host_commands, core_actions.rs) differ from BUILTIN_COMMANDS",
+    "the player's own commands (host/actions.rs register_host_commands, core_actions.rs) differ from BUILTIN_COMMANDS",
   );
   const root = new URL("../../plugins/", import.meta.url);
   const rows: Row[] = [];
