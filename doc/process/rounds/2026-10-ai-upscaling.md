@@ -32,3 +32,15 @@ Stop after V1 if the picture does not change on this machine, and after V2 if th
 ## 4. Risks
 
 The whole process moves to the discrete GPU (restart needed to switch; power and heat); no reliable "active" signal; the factor must follow the video area; 10-bit/HDR sources may need conversion to NV12 first; lavfi filters before `d3d11vpp` may force frame downloads; the support query wakes the discrete GPU (do it when the menu opens, cache the result); NVIDIA has no first-hand documentation of the input range or laptop limits; community reports of crashes after a few minutes (mpv PR #14155).
+
+## 5. V1 result (coordinator, 2026-10-28, `vsr-check.ps1`, three offscreen runs of 15 s)
+
+| Run | Adapter | mpv log | 4070 3D load | Pixels |
+| --- | --- | --- | --- | --- |
+| `scaling-mode=nvidia` | RTX 4070 Laptop | "NVIDIA RTX Super Resolution enabled." | 0 % | identical to `standard` (PSNR inf) |
+| `scaling-mode=standard` | RTX 4070 Laptop | — | 4.4 % mean | — |
+| `scaling-mode=nvidia` | 780M | "NVIDIA RTX Super Resolution enabled." | — | AMD's own scaler |
+
+- The extension call succeeds on both GPUs (the AMD driver also accepts the NVIDIA GUID), so "enabled" proves nothing; the support query must use `VideoProcessorGetStreamExtension` as VLC does.
+- On the 4070 the picture did not change: VSR was not active. Likely causes, not yet told apart: the NVIDIA app's RTX Video "Super Resolution" switch is off (it is per user and the probe cannot read it), or the driver applies VSR only to presented video (the probe renders offscreen). Power: on AC.
+- Next: the user checks NVIDIA app ▸ System ▸ Video ▸ RTX Video Enhancement ▸ Super Resolution (on, quality 4, status indicator on); then the same runs again, and a presented run (the branch player on the 4070) if offscreen stays identical. Per §3 the experiment stops if it still does not change.
