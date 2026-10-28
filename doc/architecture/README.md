@@ -105,6 +105,23 @@ mpv's counts stop at the renderer. `stats().framesShown` is the frames the video
 - **Software frame buffers** (`render_target::BufferRing`): the renderer reuses four frame buffers round-robin; a new zero-filled buffer per frame cost ~20 ms at 3840x2160.
 - **Video texture on Windows** (`vestra-video-texture`): with software rendering in an OpenGL window, each picture is uploaded into one reused texture before the draw, instead of a new image per frame (femtovg makes a new texture per image and uploads it twice).
 
+## 4.3 Render mode, driver denylist and crash guard (0.5.13)
+
+Round record [2026-10-render-modes](../process/rounds/2026-10-render-modes.md). The renderer pair (libmpv on the GPU with femtovg/OpenGL windows, or libmpv's software renderer with Slint's default windows) is decided once at start by `playback::render_mode::decide` from facts `host::rendering::startup` gathers; first match wins:
+
+1. headless → software (`headless`); no GPU renderer on this system (`platform::GPU_RENDER`: Windows and Linux today) → software (`no-gpu-backend`);
+2. `VESTRA_RENDER=cpu|software|gpu|auto` (`VESTRA_SOFTWARE_RENDER=1` is `cpu`) → that mode (`env`; `gpu` overrides the two checks below, with a `render:` note);
+3. the saved preference `software` (`render.json` in the application data directory) → software (`preference`);
+4. the crash guard (`render-state.json`, `playback::render_state`): `attempting` is written before GPU rendering starts and `ok` once it ran 5 s, gave up on its own or the player quit; a start that finds `attempting` records `crashed`, and GPU rendering stays off (`previous-crash`) until the adapter, its driver version (macOS: the system build) or the player version changes, or for 7 days (Firefox's `DriverCrashGuard`);
+5. the driver denylist (`playback::render_denylist`): the rules built into the host (`src/host/render-denylist.json`, Chromium's `software_rendering_list.json` fields) merged by id with `<app data>/render-denylist.json`, matched against the first adapter the system offers (`platform::gpu_adapters`; Windows: DXGI `EnumAdapters1` order and the user-mode driver version from `CheckInterfaceSupport`, in `vestra-win32`) → software (`denylist`; on Windows the message points to Settings > System > Display > Graphics);
+6. otherwise GPU (`default`).
+
+Denylist rules that hold are logged even when an earlier step decided. A rule with action `software-windows` also gives CPU mode Slint's software window renderer instead of OpenGL, whatever decided the mode, unless `SLINT_BACKEND` is set (the built-in `amd-780m-white-opengl-windows`: AMD Adrenalin 26.10.1 and later on the Radeon 780M draws OpenGL windows white). Windows has no GPU renderer yet, so the 780M draw-stall rule only shows as a `render:` line there. `renderer::Render` holds the effective mode and its reason (`pending` until the render thread installs GPU rendering; `init-failed`, `window-fallback` after a fallback), read together by `Render::now`.
+
+Plugins (SDK 1.5.35): `plugin.app.system()` adds `renderingReason { code, message }`; `rendering.state` (no capability) reports the mode now and why, the saved preference, the next start's mode and reason, `restartPending` (the next start's mode differs from the one this run started with) and whether GPU can be chosen (`gpu { available, reason }`); `rendering.setPreference` and `rendering.restart` need `rendering.manage` (risky). A preference is saved at once and applies at the next start, restart or not. `rendering.restart` starts the player again with `--vestra-restart PID` (it waits up to 20 s for this player's instance lock and never hands files over), this run's `--plugin` directories and `--silent`, and the current local file with `--vestra-resume SECONDS:paused|playing` (the backend seeks once that file is ready, `host.resume`), then quits as Quit does.
+
+- **Release note for 0.5.13**: plugins can read why the player renders on the GPU or in software, choose software or GPU rendering for the next start and restart the player; the player keeps GPU rendering off on graphics drivers known to misbehave and after a start that crashed in GPU rendering.
+
 ## 5. Code map
 
 | Path | Contents |

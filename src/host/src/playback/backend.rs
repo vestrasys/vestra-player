@@ -248,6 +248,8 @@ impl Backend {
                 let mut render_options = crate::playback::video_render::Options::default();
                 let mut render_was_gpu = out_render.gpu().is_some();
                 let mut cover_art = CoverArt::default();
+                // `host.resume`: where a restarted player's first file continues.
+                let mut resume = None::<Value>;
                 let mut subtitles = crate::playback::subtitle_backend::Subtitles::new(fonts);
                 let mut jobs = crate::playback::media_jobs::Jobs::default();
                 let mut push = StatePush::new();
@@ -438,6 +440,12 @@ impl Backend {
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
+                        // A restarted player continues its first file where
+                        // the replaced one was (`host/restart.rs`).
+                        if command.method == "host.resume" {
+                            resume = Some(command.params);
+                            continue;
+                        }
                         if command.method == "playback.stats" {
                             let frames = sequence.load(Ordering::Relaxed)
                                 + out_render.gpu().map_or(0, |gpu| gpu.frames());
@@ -543,6 +551,24 @@ impl Backend {
                             "playback.backend".into(),
                             json!({"currentSession":sources.generation(),"event":format!("{event:?}")}),
                         ));
+                    }
+                    if let Some(point) = &resume
+                        && sources.phase() == crate::playback::session::Phase::Ready
+                        // By file name: the session may name the file as a URL or
+                        // a canonical path.
+                        && sources.current_source().map(file_name) == point["source"].as_str().map(file_name)
+                    {
+                        let seconds = point["seconds"].as_f64().unwrap_or(0.);
+                        if seconds > 0.
+                            && let Err(error) =
+                                mpv.command(&["seek", &seconds.to_string(), "absolute"])
+                        {
+                            diag!("restart: resuming at {seconds} s failed: {error}");
+                        }
+                        if point["paused"].as_bool() == Some(true) {
+                            let _ = mpv.set_property("pause", true);
+                        }
+                        resume = None;
                     }
                     if !geometry_error && let Err(error) = geometry.tick(&mpv, &sources) {
                         geometry_error = true;
@@ -725,6 +751,10 @@ impl GpuRun<'_> {
         // the switch (see `software_hwdec`).
         false
     }
+}
+/// The last path component of a path or URL (`host.resume`).
+fn file_name(source: &str) -> &str {
+    source.rsplit(['/', '\\']).next().unwrap_or(source)
 }
 /// `hwdec` while the software renderer draws (`renderer::hwdec`).
 fn software_hwdec() -> String {

@@ -20,7 +20,7 @@
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | opening the player | `on_open_files` (macOS: open-documents Apple events through `vestra-open-files`; elsewhere files come on the command line), `single_instance` → `Launch` / `Primary` (shared, in `instance.rs`), `allow_handoff_foreground` (Windows: `AllowSetForegroundWindow`) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
-//! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
+//! | facts | `os_facts` (blocking), `gpu_adapters` (Windows: DXGI through `vestra-win32`; elsewhere none yet), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
 //! | installation | `install_layout` (pure, in `layout.rs`, for every system) → `current_install_layout` |
 //! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
@@ -268,6 +268,28 @@ pub struct OsFacts {
     pub build: Option<String>,
     /// The hardware model (`Mac15,6`, the firmware's product name), if known.
     pub model: Option<String>,
+}
+
+/// A graphics adapter as the driver check sees it (`gpu_adapters`;
+/// `playback::render_denylist`), without system-specific concepts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GpuAdapter {
+    pub name: String,
+    /// PCI vendor and device (`0x1002`, `0x15BF`).
+    pub vendor_id: u32,
+    pub device_id: u32,
+    /// Dotted, as the system reports it (`31.0.14005.21001`).
+    pub driver_version: Option<String>,
+    /// No GPU of its own (a software rasterizer or a remote session's).
+    pub software: bool,
+}
+
+/// The adapters in the order the system offers them to this process (the
+/// first is what GPU rendering would use), before any window or device.
+/// Windows: DXGI through `vestra-win32`; elsewhere none yet.
+#[cfg(not(target_os = "windows"))]
+pub fn gpu_adapters() -> Vec<GpuAdapter> {
+    Vec::new()
 }
 
 /// One display for `plugin.app.system()`.

@@ -1,14 +1,17 @@
 //! Which renderer pair draws: the video renderer (libmpv on the GPU, or its
 //! software renderer) and Slint's window renderer, decided once at start
 //! from plain facts, with the reason (round record 2026-10-render-modes
-//! §2.1). Pure: `main.rs` reads the environment and the platform constants
-//! and passes them in; nothing here calls the system.
+//! §2.1, §3). Pure: `main.rs` gathers the facts (environment, the saved
+//! preference, the adapter, the driver denylist, the crash guard) and
+//! passes them in; nothing here calls the system.
 //!
 //! The decision is the *intended* mode. What draws later is
 //! `renderer::Render`, which can only go from GPU to CPU (`fall_back`) and
 //! keeps the reason of its last change.
 #![forbid(unsafe_code)]
 
+use crate::platform::GpuAdapter;
+use crate::playback::render_denylist::{self, Action, Denylist};
 use std::ffi::OsStr;
 use std::fmt;
 
@@ -23,6 +26,16 @@ pub enum Mode {
     Gpu,
 }
 
+impl Mode {
+    /// `SystemInfo.rendering` and `rendering.state`'s modes.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Cpu => "software",
+            Self::Gpu => "gpu",
+        }
+    }
+}
+
 /// Slint's window renderer, chosen together with the mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WindowKind {
@@ -30,20 +43,63 @@ pub enum WindowKind {
     Default,
     /// femtovg on OpenGL: what GPU mode's texture sharing needs.
     OpenGl,
+    /// Slint's software renderer: a driver whose OpenGL cannot draw the
+    /// windows (denylist action `software-windows`); CPU mode only.
+    Software,
 }
 
-/// Why the player renders the way it does: `render:` lines, and later
-/// `SystemInfo` (M2).
+/// The user's choice (`render.json`, `rendering.setPreference`), applied at
+/// the next start.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Preference {
+    /// The player decides: GPU where this system has a GPU renderer and
+    /// nothing rules it out.
+    #[default]
+    Auto,
+    /// GPU rendering where it is available.
+    Gpu,
+    /// Software rendering.
+    Software,
+}
+
+impl Preference {
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "auto" => Some(Self::Auto),
+            "gpu" => Some(Self::Gpu),
+            "software" => Some(Self::Software),
+            _ => None,
+        }
+    }
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Gpu => "gpu",
+            Self::Software => "software",
+        }
+    }
+}
+
+/// Why the player renders the way it does: `render:` lines,
+/// `SystemInfo.renderingReason` and `rendering.state`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Reason {
     /// Nothing rules GPU rendering out.
     Default,
+    /// GPU rendering is starting (the render thread has not installed it).
+    Pending,
     /// No windows (`--headless`).
     Headless,
     /// This system has no GPU renderer (`platform::GPU_RENDER`).
     NoGpuBackend,
-    /// `VESTRA_SOFTWARE_RENDER` asks for software rendering.
-    Env,
+    /// An environment variable asks for it (its name).
+    Env(&'static str),
+    /// The user's preference.
+    Preference,
+    /// A denylist rule (`render_denylist`) holds for the graphics driver.
+    Denylist { rule: String, detail: String },
+    /// GPU rendering crashed at an earlier start (`render_state`).
+    PreviousCrash(String),
     /// GPU rendering could not start: the window renderer or libmpv's GPU
     /// context refused.
     InitFailed(String),
@@ -52,46 +108,81 @@ pub enum Reason {
 }
 
 impl Reason {
-    /// A stable code (kebab case) for logs and, from M2, `SystemInfo`.
+    /// A stable code (kebab case).
     pub fn code(&self) -> &'static str {
         match self {
             Self::Default => "default",
+            Self::Pending => "pending",
             Self::Headless => "headless",
             Self::NoGpuBackend => "no-gpu-backend",
-            Self::Env => "env",
+            Self::Env(_) => "env",
+            Self::Preference => "preference",
+            Self::Denylist { .. } => "denylist",
+            Self::PreviousCrash(_) => "previous-crash",
             Self::InitFailed(_) => "init-failed",
             Self::WindowFallback(_) => "window-fallback",
         }
+    }
+    /// The human text (English).
+    pub fn message(&self) -> String {
+        match self {
+            Self::Default => "nothing rules GPU rendering out".into(),
+            Self::Pending => "GPU rendering is starting".into(),
+            Self::Headless => "the player runs without windows".into(),
+            Self::NoGpuBackend => format!(
+                "this player has no GPU renderer on {} yet",
+                system_name(std::env::consts::OS)
+            ),
+            Self::Env(variable) => format!("{variable} is set"),
+            Self::Preference => "chosen in the player's settings".into(),
+            Self::Denylist { detail, .. }
+            | Self::PreviousCrash(detail)
+            | Self::InitFailed(detail)
+            | Self::WindowFallback(detail) => detail.clone(),
+        }
+    }
+    /// `{ code, message }` for the API.
+    pub fn json(&self) -> serde_json::Value {
+        serde_json::json!({"code":self.code(),"message":self.message()})
     }
 }
 
 impl fmt::Display for Reason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let code = self.code();
-        match self {
-            Self::Default => write!(f, "{code}"),
-            Self::Headless => write!(f, "{code} (no windows)"),
-            Self::NoGpuBackend => write!(
-                f,
-                "{code} (no GPU rendering on {} yet)",
-                std::env::consts::OS
-            ),
-            Self::Env => write!(f, "{code} (VESTRA_SOFTWARE_RENDER)"),
-            Self::InitFailed(detail) | Self::WindowFallback(detail) => {
-                write!(f, "{code} ({detail})")
-            }
-        }
+        write!(f, "{} ({})", self.code(), self.message())
     }
 }
 
-/// The start-up facts the decision reads.
-#[derive(Clone, Copy, Debug)]
-pub struct Inputs {
+/// `windows` → `Windows`, as people write it.
+fn system_name(os: &str) -> &str {
+    match os {
+        "windows" => "Windows",
+        "macos" => "macOS",
+        "linux" => "Linux",
+        other => other,
+    }
+}
+
+/// Everything the decision reads, gathered once at start (`main.rs`) and
+/// kept, so `rendering.state` can tell what the next start would choose.
+#[derive(Clone, Debug, Default)]
+pub struct Facts {
     pub headless: bool,
     /// `platform::GPU_RENDER`.
     pub gpu_backend: bool,
-    /// `VESTRA_SOFTWARE_RENDER` set (`software_requested`).
-    pub software_env: bool,
+    /// A mode the environment forces (`env_choice`), with the variable.
+    pub env: Option<(Preference, &'static str)>,
+    /// `std::env::consts::OS` and the system build.
+    pub os: &'static str,
+    pub build: Option<String>,
+    /// The adapter GPU rendering would use (the system's first).
+    pub adapter: Option<GpuAdapter>,
+    pub denylist: Denylist,
+    /// The crash guard keeps GPU rendering off: why, with until when.
+    pub crashed: Option<String>,
+    /// `SLINT_BACKEND` is set: Slint picks the window renderer itself and
+    /// a denylist rule does not change it.
+    pub slint_backend: bool,
 }
 
 /// The renderer pair and why.
@@ -100,6 +191,8 @@ pub struct Decision {
     pub mode: Mode,
     pub windows: WindowKind,
     pub reason: Reason,
+    /// More `render:` lines: denylist rules that hold, overrides.
+    pub notes: Vec<String>,
 }
 
 impl Decision {
@@ -108,15 +201,27 @@ impl Decision {
             mode: Mode::Cpu,
             windows: WindowKind::Default,
             reason,
+            notes: Vec::new(),
         }
     }
-    pub fn gpu(&self) -> bool {
+    fn gpu(reason: Reason) -> Self {
+        Self {
+            mode: Mode::Gpu,
+            windows: WindowKind::OpenGl,
+            reason,
+            notes: Vec::new(),
+        }
+    }
+    pub fn is_gpu(&self) -> bool {
         self.mode == Mode::Gpu
     }
     /// GPU rendering could not start before the backend did (the window
     /// renderer refused): CPU mode with Slint's default windows.
     pub fn fall_back(self, reason: Reason) -> Self {
-        Self::cpu(reason)
+        Self {
+            notes: self.notes,
+            ..Self::cpu(reason)
+        }
     }
     /// The start-up `render:` line.
     pub fn line(&self) -> String {
@@ -128,38 +233,186 @@ impl Decision {
             match self.windows {
                 WindowKind::Default => "Slint's default window renderer",
                 WindowKind::OpenGl => "OpenGL windows",
+                WindowKind::Software => "Slint's software window renderer",
             },
         );
         format!("render: {mode}, {windows}; reason: {}", self.reason)
     }
 }
 
-/// First match wins: headless, no GPU renderer on this system, the
-/// environment, else GPU.
-pub fn decide(inputs: Inputs) -> Decision {
-    if inputs.headless {
-        Decision::cpu(Reason::Headless)
-    } else if !inputs.gpu_backend {
-        Decision::cpu(Reason::NoGpuBackend)
-    } else if inputs.software_env {
-        Decision::cpu(Reason::Env)
-    } else {
-        Decision {
-            mode: Mode::Gpu,
-            windows: WindowKind::OpenGl,
-            reason: Reason::Default,
+impl Facts {
+    /// What keeps GPU rendering off whatever the user prefers: the crash
+    /// guard, then the first denylist rule whose action is `cpu`.
+    fn blocked(&self) -> Option<Reason> {
+        if let Some(detail) = &self.crashed {
+            return Some(Reason::PreviousCrash(detail.clone()));
+        }
+        self.rules()
+            .into_iter()
+            .find(|rule| matches!(rule.action, Some(Action::Cpu | Action::SoftwareWindows)))
+            .map(|rule| Reason::Denylist {
+                rule: rule.id.clone(),
+                detail: self.denylist_detail(&rule.id, &rule.description),
+            })
+    }
+    fn rules(&self) -> Vec<&render_denylist::Rule> {
+        self.denylist.matches(render_denylist::Facts {
+            os: self.os,
+            build: self.build.as_deref(),
+            adapter: self.adapter.as_ref(),
+        })
+    }
+    fn adapter_text(&self) -> String {
+        self.adapter.as_ref().map_or_else(
+            || "unknown adapter".into(),
+            |adapter| {
+                format!(
+                    "{}, {:04X}:{:04X}, driver {}",
+                    adapter.name,
+                    adapter.vendor_id,
+                    adapter.device_id,
+                    adapter.driver_version.as_deref().unwrap_or("unknown")
+                )
+            },
+        )
+    }
+    fn denylist_detail(&self, rule: &str, description: &str) -> String {
+        let hint = if self.os == "windows" {
+            "; update the graphics driver, or on a computer with two GPUs choose the other one for Vestra in Windows Settings > System > Display > Graphics"
+        } else {
+            "; update the graphics driver"
+        };
+        format!(
+            "the graphics driver is on the player's denylist: {description} ({}; rule {rule}){hint}",
+            self.adapter_text()
+        )
+    }
+    /// Whether `"gpu"` can be chosen now (ignoring the environment and the
+    /// preference): `Err` with why not.
+    pub fn gpu_available(&self) -> Result<(), Reason> {
+        if self.headless {
+            Err(Reason::Headless)
+        } else if !self.gpu_backend {
+            Err(Reason::NoGpuBackend)
+        } else if let Some(reason) = self.blocked() {
+            Err(reason)
+        } else {
+            Ok(())
         }
     }
 }
 
-/// `VESTRA_SOFTWARE_RENDER` is set to anything but `0` or empty.
-pub fn software_requested(value: Option<&OsStr>) -> bool {
-    value.is_some_and(|value| !value.is_empty() && value != "0")
+/// First match wins: headless, no GPU renderer on this system, the
+/// environment, the preference `software`, the crash guard, a denylist rule,
+/// else GPU. Denylist rules that hold are noted even when something earlier
+/// decided (Windows without a GPU renderer reports them). Then the windows:
+/// a `software-windows` rule gives CPU mode Slint's software renderer,
+/// whatever decided the mode, unless `SLINT_BACKEND` is set.
+pub fn decide(facts: &Facts, preference: Preference) -> Decision {
+    let blocked = facts.blocked();
+    let mut decision = if facts.headless {
+        Decision::cpu(Reason::Headless)
+    } else if !facts.gpu_backend {
+        Decision::cpu(Reason::NoGpuBackend)
+    } else {
+        match facts.env {
+            Some((Preference::Software, variable)) => Decision::cpu(Reason::Env(variable)),
+            Some((Preference::Gpu, variable)) => {
+                let mut decision = Decision::gpu(Reason::Env(variable));
+                if let Some(reason) = &blocked {
+                    decision
+                        .notes
+                        .push(format!("render: {variable} overrides {reason}"));
+                }
+                decision
+            }
+            _ if preference == Preference::Software => Decision::cpu(Reason::Preference),
+            _ => blocked.map_or_else(|| Decision::gpu(Reason::Default), Decision::cpu),
+        }
+    };
+    if let Some(rule) = facts
+        .rules()
+        .into_iter()
+        .find(|rule| rule.action == Some(Action::SoftwareWindows))
+        && !facts.headless
+    {
+        if facts.slint_backend {
+            decision.notes.push(format!(
+                "render: SLINT_BACKEND is set; the windows keep it (denylist rule {} not applied to them)",
+                rule.id
+            ));
+        } else if decision.mode == Mode::Cpu {
+            decision.windows = WindowKind::Software;
+        }
+    }
+    for rule in facts.rules() {
+        let action = match rule.action {
+            Some(Action::Cpu) => "software rendering",
+            Some(Action::SoftwareWindows) => "software rendering and software windows",
+            _ => "a note only",
+        };
+        decision.notes.push(format!(
+            "render: denylist rule {} holds for {} ({action}): {}",
+            rule.id,
+            facts.adapter_text(),
+            rule.description
+        ));
+    }
+    decision
+}
+
+/// `VESTRA_RENDER` (`cpu`/`software`, `gpu`, `auto`/empty) and its older
+/// alias `VESTRA_SOFTWARE_RENDER` (anything but `0` or empty): the mode the
+/// environment forces, and a warning for a value it does not know.
+pub fn env_choice(
+    render: Option<&OsStr>,
+    software: Option<&OsStr>,
+) -> (Option<(Preference, &'static str)>, Option<String>) {
+    const RENDER: &str = "VESTRA_RENDER";
+    let (choice, warning) = match render.map(|value| value.to_string_lossy()) {
+        None => (None, None),
+        Some(value) => match value.trim() {
+            "" | "auto" => (None, None),
+            "cpu" | "software" => (Some((Preference::Software, RENDER)), None),
+            "gpu" => (Some((Preference::Gpu, RENDER)), None),
+            other => (
+                None,
+                Some(format!(
+                    "render: {RENDER}={other} is not cpu, software, gpu or auto; ignored"
+                )),
+            ),
+        },
+    };
+    let alias = software.is_some_and(|value| !value.is_empty() && value != "0");
+    let choice =
+        choice.or_else(|| alias.then_some((Preference::Software, "VESTRA_SOFTWARE_RENDER")));
+    (choice, warning)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn facts(headless: bool, gpu_backend: bool) -> Facts {
+        Facts {
+            headless,
+            gpu_backend,
+            os: "windows",
+            denylist: Denylist::built_in(),
+            ..Facts::default()
+        }
+    }
+    fn bad_amd() -> GpuAdapter {
+        GpuAdapter {
+            name: "AMD Radeon 780M".into(),
+            vendor_id: 0x1002,
+            device_id: 0x15BF,
+            driver_version: Some("31.0.14005.21001".into()),
+            software: false,
+        }
+    }
+    const SOFTWARE_ENV: Option<(Preference, &str)> =
+        Some((Preference::Software, "VESTRA_SOFTWARE_RENDER"));
 
     #[test]
     fn the_first_matching_fact_decides() {
@@ -172,48 +425,153 @@ mod tests {
             ((true, false, true), (Cpu, Default, Reason::Headless)),
             ((false, false, false), (Cpu, Default, Reason::NoGpuBackend)),
             ((false, false, true), (Cpu, Default, Reason::NoGpuBackend)),
-            ((false, true, true), (Cpu, Default, Reason::Env)),
+            (
+                (false, true, true),
+                (Cpu, Default, Reason::Env("VESTRA_SOFTWARE_RENDER")),
+            ),
         ];
         for ((headless, gpu_backend, software_env), (mode, windows, reason)) in table {
-            let inputs = Inputs {
-                headless,
-                gpu_backend,
-                software_env,
-            };
+            let mut facts = facts(headless, gpu_backend);
+            facts.env = software_env.then_some(SOFTWARE_ENV).flatten();
+            let decision = decide(&facts, Preference::Auto);
             assert_eq!(
-                decide(inputs),
-                Decision {
-                    mode,
-                    windows,
-                    reason
-                },
-                "{inputs:?}"
+                (decision.mode, decision.windows, decision.reason),
+                (mode, windows, reason),
+                "{headless} {gpu_backend} {software_env}"
             );
         }
     }
 
     #[test]
-    fn the_software_variable_counts_unless_empty_or_zero() {
-        assert!(!software_requested(None));
-        assert!(!software_requested(Some(OsStr::new(""))));
-        assert!(!software_requested(Some(OsStr::new("0"))));
-        assert!(software_requested(Some(OsStr::new("1"))));
-        assert!(software_requested(Some(OsStr::new("yes"))));
+    fn the_preference_the_guard_and_the_denylist_come_after_the_environment() {
+        let mut gpu = facts(false, true);
+        assert!(decide(&gpu, Preference::Gpu).is_gpu());
+        assert_eq!(
+            decide(&gpu, Preference::Software).reason,
+            Reason::Preference
+        );
+        gpu.adapter = Some(bad_amd());
+        let denied = decide(&gpu, Preference::Gpu);
+        assert_eq!(denied.mode, Mode::Cpu);
+        assert_eq!(denied.reason.code(), "denylist");
+        let message = denied.reason.message();
+        assert!(message.contains("amd-780m-draw-stalls"), "{message}");
+        assert!(message.contains("AMD Radeon 780M, 1002:15BF, driver 31.0.14005.21001"));
+        assert!(message.contains("Display > Graphics"), "the Windows hint");
+        assert_eq!(gpu.gpu_available().unwrap_err().code(), "denylist");
+        // The environment overrides it, with a note.
+        gpu.env = Some((Preference::Gpu, "VESTRA_RENDER"));
+        let forced = decide(&gpu, Preference::Software);
+        assert_eq!(forced.reason, Reason::Env("VESTRA_RENDER"));
+        assert!(forced.notes[0].contains("VESTRA_RENDER overrides denylist"));
+        // The crash guard comes before the denylist.
+        gpu.env = None;
+        gpu.crashed = Some("crashed before".into());
+        assert_eq!(
+            decide(&gpu, Preference::Auto).reason,
+            Reason::PreviousCrash("crashed before".into())
+        );
+        assert_eq!(gpu.gpu_available().unwrap_err().code(), "previous-crash");
     }
 
-    /// The same as `renderer::wanted` before M1, for every input.
+    /// Windows on main: no GPU renderer, but a rule that holds is reported.
+    #[test]
+    fn without_a_gpu_renderer_a_holding_rule_is_only_reported() {
+        let mut windows = facts(false, false);
+        windows.adapter = Some(bad_amd());
+        let decision = decide(&windows, Preference::Gpu);
+        assert_eq!(decision.reason, Reason::NoGpuBackend);
+        assert_eq!(decision.notes.len(), 1);
+        assert!(decision.notes[0].starts_with("render: denylist rule amd-780m-draw-stalls holds"));
+        assert_eq!(windows.gpu_available(), Err(Reason::NoGpuBackend));
+        assert_eq!(
+            Reason::NoGpuBackend.message(),
+            format!(
+                "this player has no GPU renderer on {} yet",
+                system_name(std::env::consts::OS)
+            )
+        );
+        assert_eq!(system_name("windows"), "Windows");
+        assert_eq!(system_name("macos"), "macOS");
+    }
+
+    /// Adrenalin 26.10.1 on the 780M: white OpenGL windows (round record §9).
+    #[test]
+    fn a_software_windows_rule_changes_the_windows_of_cpu_mode_unless_slint_backend_is_set() {
+        let white = GpuAdapter {
+            driver_version: Some("32.0.32015.7029".into()),
+            ..bad_amd()
+        };
+        // Windows on main: no GPU renderer, the rule still changes the windows.
+        let mut windows = facts(false, false);
+        windows.adapter = Some(white.clone());
+        let decision = decide(&windows, Preference::Auto);
+        assert_eq!(
+            (decision.mode, decision.windows, decision.reason.clone()),
+            (Mode::Cpu, WindowKind::Software, Reason::NoGpuBackend)
+        );
+        assert!(decision.line().contains("Slint's software window renderer"));
+        assert!(decision.notes[0].contains("amd-780m-white-opengl-windows"));
+        // With a GPU renderer it also rules GPU out.
+        let mut gpu = facts(false, true);
+        gpu.adapter = Some(white.clone());
+        let decision = decide(&gpu, Preference::Gpu);
+        assert_eq!(
+            (decision.mode, decision.windows),
+            (Mode::Cpu, WindowKind::Software)
+        );
+        assert_eq!(decision.reason.code(), "denylist");
+        assert_eq!(gpu.gpu_available().unwrap_err().code(), "denylist");
+        // SLINT_BACKEND wins; headless has no windows.
+        windows.slint_backend = true;
+        let decision = decide(&windows, Preference::Auto);
+        assert_eq!(decision.windows, WindowKind::Default);
+        assert!(decision.notes[0].contains("SLINT_BACKEND is set"));
+        let mut headless = facts(true, false);
+        headless.adapter = Some(white);
+        assert_eq!(
+            decide(&headless, Preference::Auto).windows,
+            WindowKind::Default
+        );
+    }
+
+    #[test]
+    fn the_environment_variables_parse() {
+        let os = |text: &'static str| Some(OsStr::new(text));
+        assert_eq!(env_choice(None, None), (None, None));
+        assert_eq!(env_choice(os("auto"), os("1")), (SOFTWARE_ENV, None));
+        assert_eq!(
+            env_choice(os("cpu"), None).0,
+            Some((Preference::Software, "VESTRA_RENDER"))
+        );
+        assert_eq!(
+            env_choice(os("gpu"), os("1")).0,
+            Some((Preference::Gpu, "VESTRA_RENDER"))
+        );
+        let (choice, warning) = env_choice(os("vulkan"), None);
+        assert_eq!(choice, None);
+        assert!(warning.unwrap().contains("VESTRA_RENDER=vulkan"));
+        for off in ["", "0"] {
+            assert_eq!(env_choice(None, os(off)), (None, None));
+        }
+        assert_eq!(env_choice(None, os("yes")).0, SOFTWARE_ENV);
+        for name in ["auto", "gpu", "software"] {
+            assert_eq!(Preference::parse(name).unwrap().name(), name);
+        }
+        assert_eq!(Preference::parse("cpu"), None);
+    }
+
+    /// The same as `renderer::wanted` before M1 for the M1 inputs.
     #[test]
     fn gpu_exactly_when_it_was_wanted_before() {
         for headless in [false, true] {
             for gpu_backend in [false, true] {
                 for software_env in [false, true] {
-                    let decision = decide(Inputs {
-                        headless,
-                        gpu_backend,
-                        software_env,
-                    });
-                    assert_eq!(decision.gpu(), gpu_backend && !headless && !software_env);
-                    assert_eq!(decision.windows == WindowKind::OpenGl, decision.gpu());
+                    let mut facts = facts(headless, gpu_backend);
+                    facts.env = software_env.then_some(SOFTWARE_ENV).flatten();
+                    let decision = decide(&facts, Preference::Auto);
+                    assert_eq!(decision.is_gpu(), gpu_backend && !headless && !software_env);
+                    assert_eq!(decision.windows == WindowKind::OpenGl, decision.is_gpu());
                 }
             }
         }
@@ -221,14 +579,10 @@ mod tests {
 
     #[test]
     fn a_start_failure_keeps_its_detail_and_the_line_names_everything() {
-        let gpu = decide(Inputs {
-            headless: false,
-            gpu_backend: true,
-            software_env: false,
-        });
+        let gpu = decide(&facts(false, true), Preference::Auto);
         assert_eq!(
             gpu.line(),
-            "render: GPU rendering, OpenGL windows; reason: default"
+            "render: GPU rendering, OpenGL windows; reason: default (nothing rules GPU rendering out)"
         );
         let cpu = gpu.fall_back(Reason::InitFailed("no OpenGL".into()));
         assert_eq!((cpu.mode, cpu.windows), (Mode::Cpu, WindowKind::Default));
@@ -236,7 +590,15 @@ mod tests {
             cpu.line(),
             "render: software rendering, Slint's default window renderer; reason: init-failed (no OpenGL)"
         );
-        assert_eq!(Reason::Env.to_string(), "env (VESTRA_SOFTWARE_RENDER)");
+        assert_eq!(
+            Reason::Env("VESTRA_SOFTWARE_RENDER").to_string(),
+            "env (VESTRA_SOFTWARE_RENDER is set)"
+        );
         assert_eq!(Reason::WindowFallback("x".into()).code(), "window-fallback");
+        assert_eq!(
+            Reason::Pending.json(),
+            serde_json::json!({"code":"pending","message":"GPU rendering is starting"})
+        );
+        assert_eq!((Mode::Gpu.name(), Mode::Cpu.name()), ("gpu", "software"));
     }
 }

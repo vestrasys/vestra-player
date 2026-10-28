@@ -64,8 +64,12 @@ pub trait GpuBackend {
 /// Shared by the backend's render thread, its control worker and the UI.
 pub struct Render {
     wanted: bool,
-    /// Why the player renders as it does now (`render_mode::Reason`).
+    /// Why the player renders as it does now (`render_mode::Reason`):
+    /// `pending` until the render thread installs GPU rendering. Held while
+    /// `active` changes, so `now` reads the two together.
     reason: Mutex<Reason>,
+    /// The decision's reason, for when GPU rendering is installed.
+    intended: Reason,
     handle: OnceLock<platform::GpuHandle>,
     /// The GPU renderer draws now.
     active: AtomicBool,
@@ -84,8 +88,13 @@ impl Render {
     /// first when the decision is GPU.
     pub fn new(decision: &Decision) -> Arc<Self> {
         Arc::new(Self {
-            wanted: decision.gpu(),
-            reason: Mutex::new(decision.reason.clone()),
+            wanted: decision.is_gpu(),
+            reason: Mutex::new(if decision.is_gpu() {
+                Reason::Pending
+            } else {
+                decision.reason.clone()
+            }),
+            intended: decision.reason.clone(),
             handle: OnceLock::new(),
             active: AtomicBool::new(false),
             fallback: AtomicBool::new(false),
@@ -98,12 +107,14 @@ impl Render {
         self.wanted
     }
     /// Why the player renders as it does now.
-    #[allow(dead_code)] // `SystemInfo.renderingReason` reads it from M2 on
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn reason(&self) -> Reason {
-        self.reason
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+        self.now().1
+    }
+    /// Whether the GPU renderer draws now, and why, read together.
+    pub fn now(&self) -> (bool, Reason) {
+        let reason = self.reason.lock().unwrap_or_else(PoisonError::into_inner);
+        (self.active.load(Ordering::Acquire), reason.clone())
     }
     /// The GPU renderer while it draws, seen through its contract only.
     pub fn gpu(&self) -> Option<&impl GpuBackend> {
@@ -120,9 +131,12 @@ impl Render {
     }
     pub fn install(&self, handle: platform::GpuHandle) {
         let _ = self.handle.set(handle);
+        let mut reason = self.reason.lock().unwrap_or_else(PoisonError::into_inner);
         self.active.store(true, Ordering::Release);
+        *reason = self.intended.clone();
     }
     pub fn deactivate(&self) {
+        let _reason = self.reason.lock().unwrap_or_else(PoisonError::into_inner);
         self.active.store(false, Ordering::Release);
     }
     /// Ask the render thread to switch to software rendering (once).
@@ -213,20 +227,23 @@ mod tests {
 
     #[test]
     fn a_fallback_needs_an_active_gpu_and_is_asked_once() {
-        use crate::playback::render_mode::{Inputs, decide};
-        let render = Render::new(&decide(Inputs {
-            headless: false,
+        use crate::playback::render_mode::{Facts, Preference, decide};
+        let facts = Facts {
             gpu_backend: true,
-            software_env: false,
-        }));
+            ..Facts::default()
+        };
+        let render = Render::new(&decide(&facts, Preference::Auto));
         assert!(render.wanted());
         assert!(render.gpu().is_none());
         assert_eq!(render.backend_name(), software_name());
-        assert_eq!(render.reason(), Reason::Default);
+        // Not installed yet: software now, GPU starting.
+        assert_eq!(render.now(), (false, Reason::Pending));
         render.fall_back(Reason::WindowFallback("no GPU yet".into()));
         assert!(!render.fallback_requested(), "nothing to fall back from");
-        assert_eq!(render.reason(), Reason::Default);
+        assert_eq!(render.reason(), Reason::Pending);
         render.active.store(true, Ordering::Release);
+        *render.reason.lock().unwrap() = render.intended.clone();
+        assert_eq!(render.now(), (true, Reason::Default));
         render.fall_back(Reason::WindowFallback("window".into()));
         render.fall_back(Reason::WindowFallback("again".into()));
         assert!(render.fallback_requested());
