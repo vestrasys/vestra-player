@@ -680,3 +680,5 @@ Reading the results: if presented is still below drawn with the gate on, compare
 - On the 780M the gate helps until the iGPU's draw stalls (§14) begin; then `past-blank` counts missed refreshes, which no pacing change can fix.
 - The `render:` line names how the GPU was chosen ("chosen by VESTRA_GPU_ADAPTER=high-performance" / "Windows' order … other GPUs: 1 NVIDIA …"), as designed.
 - Product question for the user (not decided here): on hybrid laptops, mpv and Chromium follow Windows' per-app GPU order (the iGPU by default) and let the user choose in Settings ▸ Display ▸ Graphics; the 4070 gives 60 fps here and the 780M about 40 at 4K60. Options: keep Windows' order (standard practice) and document the setting, or default to the high-performance GPU when plugged in.
+
+**User ruling (2026-10-28):** on hybrid laptops the player follows the mpv approach: Windows' per-app GPU order by default (Settings ▸ Display ▸ Graphics decides; the integrated GPU unless the user picks "High performance" for Vestra), `VESTRA_GPU_ADAPTER` stays as an override. When the nightly ships, its notes tell users where to choose the GPU.
