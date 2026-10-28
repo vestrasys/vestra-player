@@ -357,8 +357,8 @@ pub fn perform(window: &slint::Window, action: crate::platform::WindowAction) {
         }
     }
 }
-/// The main window's close request (its title bar's close button, Alt+F4,
-/// ⌘W) quits the player, as in mpv, VLC and PotPlayer: `quit` starts the
+/// The main window's close request (its title bar's close button, Alt+F4;
+/// ⌘W does nothing in the main window) quits the player, as in mpv, VLC and PotPlayer: `quit` starts the
 /// player's Quit (the menu's), which ends the event loop, saves the state and
 /// closes the tool windows. The window stays shown until then: left to
 /// Slint's default (hide), the event loop kept running while a plugin's tool
@@ -601,7 +601,7 @@ export component W inherits Window {
         assert!(instance.window().is_visible());
     }
 
-    /// A close request on the main window (title bar, Alt+F4, ⌘W) starts the
+    /// A close request on the main window (title bar, Alt+F4) starts the
     /// player's Quit and leaves the window shown for it; the default (hide)
     /// left the player running while a tool window was open.
     #[test]
