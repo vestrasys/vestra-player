@@ -117,7 +117,7 @@ fn change(
                 .instance
                 .get_property(name)
                 .map_err(|e| RpcError::new("ui", e.to_string()))?;
-            if !ui_values::reconcile(&current, &next)? {
+            if !ui_values::reconcile_in(view.instance.window(), &current, &next)? {
                 ui_values::set(&view.instance, None, name, next)
                     .map_err(|e| RpcError::new("ui", e.to_string()))?;
             }

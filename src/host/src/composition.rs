@@ -632,7 +632,8 @@ pub fn set_alias_value(
     value: Value,
 ) -> Result<()> {
     let current = instance.get_global_property(alias, property)?;
-    if !crate::ui_values::reconcile(&current, &value)? {
+    if !crate::ui_values::reconcile_in(slint::ComponentHandle::window(instance), &current, &value)?
+    {
         crate::ui_values::set(instance, Some(alias), property, value)?;
     }
     Ok(())
@@ -650,7 +651,8 @@ pub fn set_global_value(
     }
     let alias = global_alias(spec.owner);
     let current = instance.get_global_property(&alias, property)?;
-    if !crate::ui_values::reconcile(&current, &value)? {
+    if !crate::ui_values::reconcile_in(slint::ComponentHandle::window(instance), &current, &value)?
+    {
         crate::ui_values::set(instance, Some(&alias), property, value)?;
     }
     Ok(())

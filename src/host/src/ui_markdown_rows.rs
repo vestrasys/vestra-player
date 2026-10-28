@@ -530,7 +530,9 @@ export component W inherits Window {
             }
             let next = convert_plain(&mut cache, SLOT, &params["value"]);
             let current = instance.get_property("messages").unwrap();
-            if !in_place || !crate::ui_values::reconcile(&current, &next).unwrap() {
+            if !in_place
+                || !crate::ui_values::reconcile_in(instance.window(), &current, &next).unwrap()
+            {
                 instance.set_property("messages", next).unwrap();
             }
             set.push(started.elapsed().as_secs_f64() * 1000.);
@@ -642,4 +644,76 @@ fn nested_document_images_are_checked_on_every_write() {
         field(&body.row_data(0).unwrap(), "has-image"),
         SValue::Bool(false)
     );
+}
+
+/// A chat written several times between two frames, the way the host
+/// handles a plugin's `ui.set` calls (all those of one tick, then a frame):
+/// the frame shows the last value. Each write is installed whole into a
+/// fresh model for the reference.
+fn frames_after(
+    (instance, window): &(
+        slint_interpreter::ComponentInstance,
+        std::rc::Rc<slint::platform::software_renderer::MinimalSoftwareWindow>,
+    ),
+    writes: &[Value],
+) -> (Vec<u16>, Vec<u16>) {
+    let empty = crate::ui_values::from_json(&json!([])).unwrap();
+    instance.set_property("messages", empty).unwrap();
+    draw(window, 360, 480);
+    let mut cache = Cache::default();
+    let mut write = |value: &Value| {
+        let next = convert_plain(&mut cache, SLOT, value);
+        let current = instance.get_property("messages").unwrap();
+        if !crate::ui_values::reconcile_in(instance.window(), &current, &next).unwrap() {
+            instance.set_property("messages", next).unwrap();
+        }
+    };
+    write(&writes[0]);
+    draw(window, 360, 480);
+    for value in &writes[1..] {
+        write(value);
+    }
+    let shown = pixels(window, 360, 480).iter().map(|p| p.0).collect();
+    let fresh = convert_plain(&mut Cache::default(), SLOT, writes.last().unwrap());
+    instance.set_property("messages", fresh).unwrap();
+    let expected = pixels(window, 360, 480).iter().map(|p| p.0).collect();
+    (shown, expected)
+}
+
+/// Review of the context-menu fix (host 0.5.10): a struct field above a
+/// document changed in place leaves the document's repeater with a dirty
+/// model binding until the next frame, and Slint 1.18 drops a row change
+/// that arrives meanwhile (`RepeaterTracker::row_changed`). A chat message
+/// whose status changed and whose text then grew before the frame kept its
+/// old text (before `ui_values::reconcile_in`: 868 and 398 stale pixels).
+#[test]
+fn a_document_written_after_its_message_changed_shows_its_new_text() {
+    let message = |role: &str, body: &str| {
+        let mut value = chat(&["第一条", body]);
+        value[1]["role"] = json!(role);
+        value
+    };
+    let cases = [
+        // The status changes, then the text (two `ui.set` calls).
+        vec![
+            message("assistant", "旧文字"),
+            message("thinking", "旧文字"),
+            message("thinking", "新的文字，长一些。New text, longer."),
+        ],
+        // Status and text together, then text streamed into the same
+        // paragraph (an added paragraph marks the whole list dirty, which
+        // hides the dropped change).
+        vec![
+            message("assistant", "旧文字"),
+            message("thinking", "流式"),
+            message("thinking", "流式输出继续"),
+            message("thinking", "流式输出继续，**更多**文字。"),
+        ],
+    ];
+    let view = compile(LIST, (360, 480));
+    for (index, writes) in cases.iter().enumerate() {
+        let (shown, expected) = frames_after(&view, writes);
+        let differ = shown.iter().zip(&expected).filter(|(a, b)| a != b).count();
+        assert_eq!(differ, 0, "case {index}: {differ} pixels show stale text");
+    }
 }
