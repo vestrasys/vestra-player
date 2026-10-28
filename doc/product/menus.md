@@ -135,6 +135,7 @@ The labels below are the English interface text (the English source text of each
 | Video ▸ Contrast −1% · +1% | video | R · T | |
 | Video ▸ Saturation −1% · +1% | video | Y · U | |
 | Video ▸ Hue −1% · +1% | video | I · O | |
+| Video ▸ GPU Rendering (Experimental) | video | | Checked when the saved choice is GPU, or Auto resolving to GPU (macOS default); disabled with the player's reason when GPU cannot be chosen (Windows: no GPU renderer yet; denylisted driver; earlier GPU crash); while a restart would change the renderer the title is "GPU Rendering (Restart to Apply)" and picking it offers "Restart Vestra Player now to apply?" (Restart Now · Later). Player 0.5.13 |
 | —— | | | |
 | Audio ▸ Volume + · Volume − | core | ↑, wheel up · ↓, wheel down | |
 | Audio ▸ Mute | core | M | Checked |
