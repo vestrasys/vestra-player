@@ -682,3 +682,16 @@ Reading the results: if presented is still below drawn with the gate on, compare
 - Product question for the user (not decided here): on hybrid laptops, mpv and Chromium follow Windows' per-app GPU order (the iGPU by default) and let the user choose in Settings ▸ Display ▸ Graphics; the 4070 gives 60 fps here and the 780M about 40 at 4K60. Options: keep Windows' order (standard practice) and document the setting, or default to the high-performance GPU when plugged in.
 
 **User ruling (2026-10-28):** on hybrid laptops the player follows the mpv approach: Windows' per-app GPU order by default (Settings ▸ Display ▸ Graphics decides; the integrated GPU unless the user picks "High performance" for Vestra), `VESTRA_GPU_ADAPTER` stays as an override. When the nightly ships, its notes tell users where to choose the GPU.
+
+## 19. After the AMD driver update (coordinator, 2026-10-28, Adrenalin 26.10.1, `amdkmdag.sys` 32.0.32015.7029)
+
+H.264 2160p60 windowed, 25 s, frame gate on, after start-up:
+
+| GPU | Presented per second | Notes |
+| --- | --- | --- |
+| 780M (Windows' order) | 21–54, mean 38 | `refused` 18–38 per second, `past-blank` 0–2, `ui-gpu` draw mean 7.4–8.2 ms (max 33) |
+| RTX 4070 (`high-performance`) | 60–61 every second | as §18 |
+
+- The new driver did **not** remove the 780M's slow window draws: the draw takes ~8 ms on average (it was ~3 ms in the first morning measurements), so the gate defers pictures and 4K60 shows ~40 fps. The 780M stays unsuitable for GPU mode at 4K60 with this branch; the 4070 is fine.
+- On the same driver the default OpenGL (femtovg) windows of main render white (full UI test record §7); main's Windows CPU mode needs Slint's software renderer on this driver (render modes M2 denylist).
+- Not run again: the notifier path, the GL fallback and the device-removal restart (§16 list); the GL fallback is moot on this driver (white windows).
