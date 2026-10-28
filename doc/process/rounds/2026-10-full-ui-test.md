@@ -73,3 +73,14 @@ Installed player (`%LOCALAPPDATA%\Programs\Vestra Player`) updated to main 0e84d
 - Snapshots on macOS unchanged: Save Current Frame on a local file; an mp3 with `cover.jpg` beside it shows the cover (now supplied by the host for leased loads).
 - NES at 60 fps with SDK 1.5.27.
 - Subtitle auto-load, store selection, capture naming, hotkeys (Cmd still offered on macOS) as on Windows.
+
+Added 2026-10-28 (changes merged since the test; each needs one check on a Mac before the CI budget is raised):
+
+- Host 0.5.10: the bottom bar's command strip at 1× and 2× ([AI][Store][toggle]); the sidebar toggle in fullscreen; narrowing hides AI, Store, Fullscreen, then the toggle.
+- Host 0.5.10: a fast sweep over a submenu leaves only the pointer row and the open parent lit.
+- Host 0.5.10: Slint validation errors read `path:line:column` with package paths (no temporary folder), also on macOS.
+- Refactor C2 (#95): the host compiles on macOS (unix-only code paths were checked by reading only).
+- Host 0.5.11: `unsafe/render` compiles; with GPU rendering, installing a panel plugin while playing, in fullscreen and after Stop shows no flicker and no previous frame.
+- Store 0.2.3 and workshop 2.2.8: the bar buttons open their windows.
+
+Open item found 2026-10-28 (same in 0.5.10 and 0.5.11): closing the main window while a tool window such as the Plugin Store is open does not quit the player.

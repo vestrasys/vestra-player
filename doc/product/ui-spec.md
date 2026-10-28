@@ -300,6 +300,7 @@ The full contents of the submenus and the plugin that owns each item are in [men
 | --- | --- | --- |
 | UI-MENU-07 | Menu colors, corner radii and shortcut text as in the CSS above. Shortcuts are written by system convention (`platform::KEY_LABELS`): on Windows and Linux `Ctrl+Shift+S`, `Alt+→`; on macOS symbols in the order ⌃⌥⇧⌘ without "+" (`⇧⌘S`, `⌥→`), a `Ctrl` binding is written as ⌘ (it responds to ⌘ on macOS), and Esc, Enter, Tab, Backspace, Del, PgUp, PgDn, Home, End are written as ⎋ ↩ ⇥ ⌫ ⌦ ⇞ ⇟ ↖ ↘. In this document and in menus.md all shortcuts use the Windows notation | host |
 | UI-MENU-08 | Item height 24px, font size 12px; separator row 7px (1px line in the middle); the four constants row height, separator, padding and arrow are kept identical in `menu-view.slint` and `menu.rs` | host |
+| UI-MENU-09 | A menu panel is as wide as its widest row measured with the UI font (title, shortcut text, check and arrow columns, paddings), between 168px and 420px; longer titles are elided. The constants in `ui/menu.rs` match the row layout in `menu-view.slint` (player 0.5.9) | host |
 
 ## 7. Tool windows (picture, audio, subtitle, capture and other plugins)
 
