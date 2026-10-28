@@ -747,7 +747,9 @@ test("A11: auto-loading same-named audio adds same-named audio next to a local f
   const data = await mkdtemp(join(tmpdir(), "vestra-audio-"));
   try {
     await mkdir(join(folder, "sub"));
-    for (const name of ["film.mkv", "film.ac3", "film.jpn.mka", "film.srt", "other.mp3", "sub/film.flac"]) await writeFile(join(folder, name), "");
+    // film.Extended.ac3 names film.Extended.mkv more closely, so it is left to that video.
+    const files = ["film.mkv", "film.ac3", "film.jpn.mka", "film.srt", "other.mp3", "sub/film.flac", "film.Extended.mkv", "film.Extended.ac3"];
+    for (const name of files) await writeFile(join(folder, name), "");
     const host = new TestHost();
     host.openElsewhere(join(folder, "film.mkv"));
     host.setSource({ audioTracks: [track(1)] });
@@ -775,6 +777,11 @@ test("A11: auto-loading same-named audio adds same-named audio next to a local f
     next.setSource({ audioTracks: [track(1)] });
     await next.settle(20);
     assert.equal(next.sent("audio.addTrack").length, 2);
+    // The closer video gets the file the first one left.
+    next.openElsewhere(join(folder, "film.Extended.mkv"));
+    next.setSource({ audioTracks: [track(1)] });
+    await next.settle(20);
+    assert.deepEqual(next.sent("audio.addTrack").slice(2).map((p) => p.path), [join(folder, "film.Extended.ac3")]);
     await started.stop();
   } finally {
     await rm(folder, { recursive: true, force: true });

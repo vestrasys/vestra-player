@@ -104,6 +104,31 @@ test("A11 same-name scan: audio files that start with the video's name, at most 
   assert.equal(companions("a.mp4", many).length, 8);
 });
 
+test("A11 same-name scan: names compare in NFC; a name with an empty tag (`movie..ac3`) is not the video's", () => {
+  // macOS lists decomposed names; the open path may be composed, or the other way round.
+  assert.deepEqual(companions("Café.mkv", ["Café.ac3", "Café.jpn.mka"]), ["Café.ac3", "Café.jpn.mka"]);
+  assert.deepEqual(companions("Café.mkv", ["Café.flac"]), ["Café.flac"]);
+  // The closer-video rule compares in NFC too.
+  assert.deepEqual(companions("Café.mkv", ["Café.Extended.mkv", "Café.Extended.ac3", "Café.ac3"]), ["Café.ac3"]);
+  assert.deepEqual(companions("movie.mkv", ["movie..ac3", "movie.ac3", "movie..jpn.mka", "movie.jpn.mka"]), [
+    "movie..jpn.mka", "movie.ac3", "movie.jpn.mka",
+  ]);
+});
+
+test("A11 same-name scan: a file that names another video of the folder more closely belongs to that one", () => {
+  const folder = ["Movie.mkv", "Movie.Extended.mkv", "Movie.ac3", "Movie.Extended.ac3", "Movie.Extended.jpn.mka", "Movie.jpn.mka"];
+  assert.deepEqual(companions("Movie.mkv", folder), ["Movie.ac3", "Movie.jpn.mka"]);
+  assert.deepEqual(companions("Movie.Extended.mkv", folder), ["Movie.Extended.ac3", "Movie.Extended.jpn.mka"]);
+  // Case-insensitive like the match itself; the longer video only takes what it names.
+  assert.deepEqual(companions("movie.mp4", ["movie.mp4", "MOVIE.EXTENDED.MP4", "movie.extended.flac", "movie.ext.flac"]), ["movie.ext.flac"]);
+  // Only videos count: an audio file, a subtitle or another file with a longer name takes nothing.
+  assert.deepEqual(companions("movie.mkv", ["movie.jpn.flac", "movie.jpn.srt", "movie.jpn.nfo", "movie.jpn.ac3"]), [
+    "movie.jpn.ac3", "movie.jpn.flac",
+  ]);
+  // A video that only shares a prefix without the dot (`Movie2`) or the same stem (`Movie.mp4`) takes nothing.
+  assert.deepEqual(companions("Movie.mkv", ["Movie2.mkv", "Movie.mp4", "Movie.ac3", "Movie2.ac3"]), ["Movie.ac3"]);
+});
+
 test("G16: the saved device is an id the player accepts, kept with its name; titles stay distinct", () => {
   const stored = parse({ device: "coreaudio/AB-12", deviceName: "AirPods Pro" });
   assert.equal(stored.device, "coreaudio/AB-12");

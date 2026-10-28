@@ -245,15 +245,38 @@ export const AUTO_LOAD_LIMIT = 8;
 const extension = (name: string) => (name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : "");
 
 /**
- * Same-folder files that start with the source's name and have an audio extension
- * (`movie.mkv` → `movie.ac3`, `movie.jpn.mka`), sorted, at most 8. An audio source gets none.
+ * Video extensions, only to give an audio file to the video it names best:
+ * `Movie.Extended.ac3` belongs to `Movie.Extended.mkv`, not to `Movie.mkv`, when both are in the folder.
+ */
+const VIDEO_EXTENSIONS = [
+  "mkv", "mp4", "m4v", "avi", "mov", "wmv", "webm", "flv", "ts", "m2ts", "mts", "mpg", "mpeg", "vob", "ogv", "3gp", "rm", "rmvb", "asf", "divx",
+];
+/** File name without its last extension, compared case-insensitively and in NFC (macOS lists NFD names). */
+const stemOf = (name: string) => (name.lastIndexOf(".") > 0 ? name.slice(0, name.lastIndexOf(".")) : name).normalize("NFC").toLowerCase();
+/** `name`'s stem is `base`, or `base` + "." + a tag (`movie.jpn`, `movie.en.5ch`); not `movie.` (`movie..ac3`). */
+const named = (base: string, name: string) => name === base || (name.startsWith(`${base}.`) && name.length > base.length + 1);
+
+/**
+ * Same-folder files whose name is the source's name without its extension, optionally followed by
+ * "." and a tag, then an audio extension (`movie.mkv` → `movie.ac3`, `movie.jpn.mka`; case-insensitive,
+ * NFC), sorted, at most 8. An audio source gets none.
+ * A file that names another video of the folder more closely (a longer name) belongs to that one:
+ * with `Movie.mkv` and `Movie.Extended.mkv` side by side, `Movie.Extended.ac3` goes with the second.
  */
 export function companions(sourceName: string, names: readonly string[]) {
   const dot = sourceName.lastIndexOf(".");
   if (dot <= 0 || AUDIO_EXTENSIONS.includes(extension(sourceName))) return [];
-  const stem = sourceName.slice(0, dot).toLowerCase();
+  const stem = stemOf(sourceName);
+  const others = names
+    .filter((name) => VIDEO_EXTENSIONS.includes(extension(name)))
+    .map(stemOf)
+    .filter((other) => other.length > stem.length && named(stem, other));
   return names
-    .filter((name) => name !== sourceName && name.toLowerCase().startsWith(`${stem}.`) && AUDIO_EXTENSIONS.includes(extension(name)))
+    .filter((name) => name !== sourceName && AUDIO_EXTENSIONS.includes(extension(name)))
+    .filter((name) => {
+      const key = stemOf(name);
+      return named(stem, key) && !others.some((other) => named(other, key));
+    })
     .sort()
     .slice(0, AUTO_LOAD_LIMIT);
 }
