@@ -268,7 +268,7 @@ const MAX_SIDEBAR_TABS = 8;
  *   {@link TestHost.app}, {@link TestHost.systemInfo},
  *   {@link TestHost.chapters}, {@link TestHost.audioDevices},
  *   {@link TestHost.secrets}, {@link TestHost.clipboard},
- *   {@link TestHost.tools}.
+ *   {@link TestHost.tools}, {@link TestHost.rendering}.
  * - **Assert** on records: {@link TestHost.osd}, {@link TestHost.calls},
  *   {@link TestHost.sent}, {@link TestHost.conflicts},
  *   {@link TestHost.layout}, {@link TestHost.menus}, and many more.
@@ -1267,7 +1267,8 @@ export class TestHost {
     /**
      * What the player pushes when mpv cannot compile a shader (code `failed`)
      * or switches to software rendering (`unsupported`, which also sets
-     * `videoRender.gpu` to false). Pushed only when this plugin is the owner.
+     * `videoRender.gpu` to false and `rendering.reason` to `window-fallback`
+     * with `message`). Pushed only when this plugin is the owner.
      *
      * @example Make a shader fail to compile
      * The plugin's render options report `failed`, as when mpv rejects a
@@ -1290,8 +1291,10 @@ export class TestHost {
      * @since 1.0.0
      */
     failVideoRender(code, message) {
-        if (code === "unsupported")
+        if (code === "unsupported") {
             this.videoRender.gpu = false;
+            this.rendering.reason = { code: "window-fallback", message };
+        }
         if (this.videoRender.owner === this.manifestId)
             this.emit("video.render.status", {
                 state: "failed",
@@ -1527,7 +1530,8 @@ export class TestHost {
     /**
      * What `plugin.app.system()` reports. Its `rendering` follows
      * {@link TestHost.videoRender | videoRender.gpu} (`"gpu"` or
-     * `"software"`), so one switch covers the render options and the fact.
+     * `"software"`), so one switch covers the render options and the fact;
+     * its `renderingReason` is {@link TestHost.rendering | rendering.reason}.
      */
     systemInfo = {
         os: "macos",
@@ -1559,6 +1563,64 @@ export class TestHost {
             libav: { ffmpeg: "7.1" },
             slint: "1.18.1",
         },
+    };
+    /**
+     * The player's rendering choice behind `plugin.rendering` (player
+     * 0.5.13). The mode drawing now is {@link TestHost.videoRender |
+     * videoRender.gpu}, as for `plugin.app.system()`; the rest is preset here
+     * and changed by the plugin's calls, as the player would:
+     *
+     * - `setPreference` saves `preference` and never changes the mode. It
+     *   refuses `"gpu"` while `gpu.available` is false: with `unsupported`
+     *   when `gpu.reason.code` is `no-gpu-backend` or `headless`, otherwise
+     *   with `unavailable`, the reason's message in both cases.
+     * - The next start uses `"software"` for the `"software"` choice, else
+     *   software with `gpu.reason` while the GPU is not available, else the
+     *   GPU (code `preference` for a `"gpu"` choice, `default` for
+     *   `"auto"`). `restartPending` compares that with `startedWith`.
+     * - `restartPlayer` counts in `restarts` and leaves the plugin running
+     *   (call `stop()` yourself); a second one rejects with `busy`, as a
+     *   restart is then under way.
+     *
+     * Inject other refusals (`failed` for an unwritable settings file or a
+     * new process that could not start) with `host.handle("rendering.setPreference", …)`
+     * or `host.handle("rendering.restart", …)`. The defaults are a macOS
+     * player on the GPU: `"auto"`, available, started on the GPU.
+     *
+     * @example Test a GPU switch on a system without a GPU renderer
+     * The plugin's GPU menu item is greyed out with the player's reason when
+     * the GPU cannot be chosen. The host is preset before the plugin starts,
+     * because the plugin reads the state while activating; software
+     * rendering is `videoRender.gpu = false`, and `gpu` says why the GPU
+     * cannot be chosen.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
+     * import activate from "../main.ts";
+     *
+     * const host = new TestHost();
+     * host.videoRender.gpu = false; // software draws now (Windows)
+     * host.rendering.startedWith = "software";
+     * host.rendering.reason = { code: "no-gpu-backend", message: "No GPU renderer on Windows" };
+     * host.rendering.gpu = { available: false, reason: host.rendering.reason };
+     * const { stop } = await startPlugin(activate, {
+     *   directory: new URL("..", import.meta.url),
+     *   host,
+     * });
+     * const item = host.command("gpu-rendering");
+     * assert.equal(item.state.enabled, false);
+     * assert.equal(item.state.reason, "No GPU renderer on Windows");
+     * await stop();
+     * ```
+     *
+     * @since 1.5.35
+     */
+    rendering = {
+        reason: { code: "default", message: "nothing rules GPU rendering out" },
+        preference: "auto",
+        startedWith: "gpu",
+        gpu: { available: true, reason: null },
+        restarts: 0,
     };
     /** What `player.chapters()` lists while media is ready. */
     chapters = [];
@@ -3190,6 +3252,54 @@ export class TestHost {
             revision: stamp.revision + 1,
         };
     }
+    /** `rendering.state` from {@link TestHost.rendering} and `videoRender.gpu`. */
+    #renderingState() {
+        const { reason, preference, startedWith, gpu } = this.rendering;
+        // The player's order (render_mode.rs decide): no windows or no GPU
+        // renderer first, then the preference `software`, then what keeps GPU
+        // rendering off (denylist, crash), else GPU with the reason `default`
+        // (also when the preference is `gpu`).
+        const system = !gpu.available &&
+            (gpu.reason?.code === "headless" ||
+                gpu.reason?.code === "no-gpu-backend");
+        const next = system
+            ? { mode: "software", reason: gpu.reason }
+            : preference === "software"
+                ? {
+                    mode: "software",
+                    reason: {
+                        code: "preference",
+                        message: "chosen in the player's settings",
+                    },
+                }
+                : !gpu.available
+                    ? {
+                        mode: "software",
+                        reason: gpu.reason ?? {
+                            code: "default",
+                            message: "nothing rules GPU rendering out",
+                        },
+                    }
+                    : {
+                        mode: "gpu",
+                        reason: {
+                            code: "default",
+                            message: "nothing rules GPU rendering out",
+                        },
+                    };
+        return {
+            mode: this.videoRender.gpu ? "gpu" : "software",
+            reason: { ...reason },
+            preference,
+            nextMode: next.mode,
+            nextReason: { ...next.reason },
+            restartPending: next.mode !== startedWith,
+            gpu: {
+                available: gpu.available,
+                reason: gpu.available || !gpu.reason ? null : { ...gpu.reason },
+            },
+        };
+    }
     #defaults = {
         "events.subscribe": (p) => void this.subscriptions.add(String(p.event)),
         "events.unsubscribe": (p) => void this.subscriptions.delete(String(p.event)),
@@ -3506,7 +3616,30 @@ export class TestHost {
         "app.system": () => ({
             ...structuredClone(this.systemInfo),
             rendering: this.videoRender.gpu ? "gpu" : "software",
+            renderingReason: { ...this.rendering.reason },
         }),
+        // As the player 0.5.13 (see TestHost.rendering for the model).
+        "rendering.state": () => this.#renderingState(),
+        "rendering.setPreference": (p) => {
+            const preference = p.preference;
+            if (preference !== "auto" &&
+                preference !== "gpu" &&
+                preference !== "software")
+                throw new HostError("invalid", 'preference must be "auto", "gpu" or "software"');
+            const { available, reason } = this.rendering.gpu;
+            if (preference === "gpu" && !available)
+                throw new HostError(reason?.code === "no-gpu-backend" || reason?.code === "headless"
+                    ? "unsupported"
+                    : "unavailable", reason?.message ?? "GPU rendering cannot be chosen");
+            this.rendering.preference = preference;
+            return this.#renderingState();
+        },
+        "rendering.restart": () => {
+            if (this.rendering.restarts > 0)
+                throw new HostError("busy", "a restart is already under way");
+            this.rendering.restarts++;
+            return null;
+        },
         "clipboard.readText": () => this.clipboard.text,
         "clipboard.writeText": (p) => {
             if (typeof p.text !== "string")

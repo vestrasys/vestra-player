@@ -15,7 +15,7 @@ import { IMAGE_LIMITS, UI_VALUE_LIMITS } from "./values.ts";
 import type { CommandDeclaration } from "../commands.ts";
 import type { SourceState } from "../source.ts";
 import type { SubtitleState } from "../subtitles.ts";
-import type { RenderSettings, ViewSettings } from "./types.ts";
+import type { RenderingMode, RenderingPreference, RenderingReason, RenderSettings, ViewSettings } from "./types.ts";
 import type { MediaJob } from "../media.ts";
 import type { LanguagePreference, Locale, Plugin, TemplateArgs, TextValue, ThemeId } from "./types.ts";
 import { LOCALES, LIST_SEPARATORS, TEXT_LIMITS } from "../i18n.ts";
@@ -469,7 +469,7 @@ export interface MarkdownWire {
  *   {@link TestHost.app}, {@link TestHost.systemInfo},
  *   {@link TestHost.chapters}, {@link TestHost.audioDevices},
  *   {@link TestHost.secrets}, {@link TestHost.clipboard},
- *   {@link TestHost.tools}.
+ *   {@link TestHost.tools}, {@link TestHost.rendering}.
  * - **Assert** on records: {@link TestHost.osd}, {@link TestHost.calls},
  *   {@link TestHost.sent}, {@link TestHost.conflicts},
  *   {@link TestHost.layout}, {@link TestHost.menus}, and many more.
@@ -1306,7 +1306,8 @@ export declare class TestHost implements Transport {
     /**
      * What the player pushes when mpv cannot compile a shader (code `failed`)
      * or switches to software rendering (`unsupported`, which also sets
-     * `videoRender.gpu` to false). Pushed only when this plugin is the owner.
+     * `videoRender.gpu` to false and `rendering.reason` to `window-fallback`
+     * with `message`). Pushed only when this plugin is the owner.
      *
      * @example Make a shader fail to compile
      * The plugin's render options report `failed`, as when mpv rejects a
@@ -1611,9 +1612,10 @@ export declare class TestHost implements Transport {
     /**
      * What `plugin.app.system()` reports. Its `rendering` follows
      * {@link TestHost.videoRender | videoRender.gpu} (`"gpu"` or
-     * `"software"`), so one switch covers the render options and the fact.
+     * `"software"`), so one switch covers the render options and the fact;
+     * its `renderingReason` is {@link TestHost.rendering | rendering.reason}.
      */
-    systemInfo: Omit<WireSystemInfo, "rendering">;
+    systemInfo: Omit<WireSystemInfo, "rendering" | "renderingReason">;
     /**
      * What `plugin.app` reports. Set it before {@link startPlugin}: the plugin
      * receives it once at start-up.
@@ -1632,6 +1634,74 @@ export declare class TestHost implements Transport {
             /** The Slint version. */
             slint: string;
         };
+    };
+    /**
+     * The player's rendering choice behind `plugin.rendering` (player
+     * 0.5.13). The mode drawing now is {@link TestHost.videoRender |
+     * videoRender.gpu}, as for `plugin.app.system()`; the rest is preset here
+     * and changed by the plugin's calls, as the player would:
+     *
+     * - `setPreference` saves `preference` and never changes the mode. It
+     *   refuses `"gpu"` while `gpu.available` is false: with `unsupported`
+     *   when `gpu.reason.code` is `no-gpu-backend` or `headless`, otherwise
+     *   with `unavailable`, the reason's message in both cases.
+     * - The next start uses `"software"` for the `"software"` choice, else
+     *   software with `gpu.reason` while the GPU is not available, else the
+     *   GPU (code `preference` for a `"gpu"` choice, `default` for
+     *   `"auto"`). `restartPending` compares that with `startedWith`.
+     * - `restartPlayer` counts in `restarts` and leaves the plugin running
+     *   (call `stop()` yourself); a second one rejects with `busy`, as a
+     *   restart is then under way.
+     *
+     * Inject other refusals (`failed` for an unwritable settings file or a
+     * new process that could not start) with `host.handle("rendering.setPreference", …)`
+     * or `host.handle("rendering.restart", …)`. The defaults are a macOS
+     * player on the GPU: `"auto"`, available, started on the GPU.
+     *
+     * @example Test a GPU switch on a system without a GPU renderer
+     * The plugin's GPU menu item is greyed out with the player's reason when
+     * the GPU cannot be chosen. The host is preset before the plugin starts,
+     * because the plugin reads the state while activating; software
+     * rendering is `videoRender.gpu = false`, and `gpu` says why the GPU
+     * cannot be chosen.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
+     * import activate from "../main.ts";
+     *
+     * const host = new TestHost();
+     * host.videoRender.gpu = false; // software draws now (Windows)
+     * host.rendering.startedWith = "software";
+     * host.rendering.reason = { code: "no-gpu-backend", message: "No GPU renderer on Windows" };
+     * host.rendering.gpu = { available: false, reason: host.rendering.reason };
+     * const { stop } = await startPlugin(activate, {
+     *   directory: new URL("..", import.meta.url),
+     *   host,
+     * });
+     * const item = host.command("gpu-rendering");
+     * assert.equal(item.state.enabled, false);
+     * assert.equal(item.state.reason, "No GPU renderer on Windows");
+     * await stop();
+     * ```
+     *
+     * @since 1.5.35
+     */
+    readonly rendering: {
+        /** Why the mode drawing now is what it is (`RenderingState.reason`, `SystemInfo.renderingReason`). */
+        reason: RenderingReason;
+        /** The saved choice: `"auto"`, `"gpu"` or `"software"`. */
+        preference: RenderingPreference;
+        /** The mode this run started with; `restartPending` compares the next start's mode with it. */
+        startedWith: RenderingMode;
+        /** Whether the plugin may choose `"gpu"`, and why not (`null` while available). */
+        gpu: {
+            /** `false`: `setPreference("gpu")` is refused. */
+            available: boolean;
+            /** Why the GPU cannot be chosen; `null` while it can. */
+            reason: RenderingReason | null;
+        };
+        /** Accepted `restartPlayer` calls. */
+        restarts: number;
     };
     /** What `player.chapters()` lists while media is ready. */
     chapters: {
