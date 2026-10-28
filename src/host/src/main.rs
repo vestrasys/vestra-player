@@ -233,6 +233,7 @@ fn main() -> Result<()> {
         mount_input,
         last_image: None,
         video_texture: RefCell::new(None),
+        video_target: Rc::default(),
         shell_generation: 1,
         next_shell_generation: 1,
         menu_path: Vec::new(),
@@ -434,6 +435,7 @@ fn main() -> Result<()> {
         host.borrow().bind_shell(&window, 1)?;
         host.borrow_mut().theme_view(&window);
         host.borrow_mut().shell = Some(window.clone_strong());
+        host.borrow().video_target.replace(window.as_weak());
         // Render cadence: each new frame wakes the event loop (coalesced)
         // instead of waiting for the 16 ms tick.
         let frames = host.borrow().backend.frame.clone();

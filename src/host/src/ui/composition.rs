@@ -534,8 +534,33 @@ pub fn compile_json(
     events: mpsc::SyncSender<JsonCallback>,
     shell_generation: u64,
 ) -> Result<ComponentInstance> {
+    compile_json_in(specs, events, shell_generation, None)
+}
+
+/// [`compile_json`] into `window` (the main window's), when given: the new
+/// shell's component tree replaces the shown one inside the same native
+/// window instead of opening a new window, the way browsers and IDEs swap
+/// content (no hide/show, no move, no resize; maximized and fullscreen stay).
+///
+/// Slint attaches the new tree to the window as it creates it (its
+/// `init` code then sets the initial focus), so the window shows the new
+/// tree from its next draw on: the caller finishes setting it up before
+/// returning to the event loop, calls `show()` on it (which only moves the
+/// window's strong reference to it; the native window is already visible),
+/// and must not `hide()` the old shell, which shares the window. A caller
+/// that fails after this returned puts the old tree back with
+/// [`crate::ui::view::ShownTree::restore`].
+pub fn compile_json_in(
+    specs: &[CompileSpec],
+    events: mpsc::SyncSender<JsonCallback>,
+    shell_generation: u64,
+    window: Option<&slint::Window>,
+) -> Result<ComponentInstance> {
     let definition = compile_definition(specs)?;
-    let instance = definition.create()?;
+    let instance = match window {
+        Some(window) => definition.create_with_existing_window(window)?,
+        None => definition.create()?,
+    };
     for spec in specs.iter().filter(|spec| spec.global.is_some()) {
         let alias = global_alias(spec.owner);
         let callbacks = definition

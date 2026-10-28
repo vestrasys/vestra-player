@@ -643,8 +643,24 @@ pub fn log_text() -> String {
 
 /// Pace `shell` (the main window, after `show()`; when `wanted`); a rebuilt
 /// main window replaces the previous one. Nothing without a display clock.
+/// A shell shown in the native window already paced (a new composition
+/// replaces the tree in the same window) keeps its clock and gate.
 pub fn follow(shell: &slint_interpreter::ComponentInstance) {
     if !wanted() {
+        return;
+    }
+    let window = shell.window().with_winit_window(|window| window.id());
+    let kept = PACING.with(|pacing| {
+        let mut pacing = pacing.borrow_mut();
+        match pacing.as_mut() {
+            Some(pacing) if Some(pacing.window) == window => {
+                pacing.shell = shell.as_weak();
+                true
+            }
+            _ => false,
+        }
+    });
+    if kept {
         return;
     }
     // Dropping the old one stops its thread.

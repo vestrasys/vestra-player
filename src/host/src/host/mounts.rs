@@ -104,74 +104,76 @@ impl Host {
                 .filter_map(|owner| next.get(owner).map(|m| m.title.clone()))
                 .collect::<Vec<_>>()
         ));
-        let build = || -> Result<slint_interpreter::ComponentInstance> {
-            let specs = shown.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
-            let shell =
-                composition::compile_json(&specs, self.mount_events.clone(), candidate_generation)?;
-            for (mount, values) in shown.iter().zip(values) {
-                for (name, value) in values {
-                    composition::set_global_value(&shell, &mount.spec, &name, value)?;
-                }
-                let visible = match mount.spec.slot {
-                    composition::Slot::Sidebar => {
-                        composition::set_tabbed(&shell, &mount.spec, order.len() > 1)?;
-                        sidebar.0 && !sidebar.1
+        // The main window stays: the new shell's tree replaces the old one
+        // inside it (`view::replace_shell`), with no hide/show, move or resize.
+        let reuse = self.shell.is_some();
+        let build =
+            |window: Option<&slint::Window>| -> Result<slint_interpreter::ComponentInstance> {
+                let specs = shown.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
+                let shell = composition::compile_json_in(
+                    &specs,
+                    self.mount_events.clone(),
+                    candidate_generation,
+                    window,
+                )?;
+                for (mount, values) in shown.iter().zip(values) {
+                    for (name, value) in values {
+                        composition::set_global_value(&shell, &mount.spec, &name, value)?;
                     }
-                    _ => mount.visible && !mount.detached,
-                };
-                if let Some(property) = mount.spec.slot.visible_property() {
-                    shell.set_property(property, visible.into())?;
+                    let visible = match mount.spec.slot {
+                        composition::Slot::Sidebar => {
+                            composition::set_tabbed(&shell, &mount.spec, order.len() > 1)?;
+                            sidebar.0 && !sidebar.1
+                        }
+                        _ => mount.visible && !mount.detached,
+                    };
+                    if let Some(property) = mount.spec.slot.visible_property() {
+                        shell.set_property(property, visible.into())?;
+                    }
                 }
-            }
-            shell.set_property("sidebar-titles", titles?)?;
-            // The tab that will be current, so the first frame shows it.
-            let active = order
-                .iter()
-                .position(|&o| Some(o) == self.policy.sidebar_active())
-                .or_else(|| {
-                    order.iter().position(|o| {
-                        next.get(o).map(|m| m.manifest.as_str()) == slot.active.as_deref()
+                shell.set_property("sidebar-titles", titles?)?;
+                // The tab that will be current, so the first frame shows it.
+                let active = order
+                    .iter()
+                    .position(|&o| Some(o) == self.policy.sidebar_active())
+                    .or_else(|| {
+                        order.iter().position(|o| {
+                            next.get(o).map(|m| m.manifest.as_str()) == slot.active.as_deref()
+                        })
                     })
-                })
-                .unwrap_or(0);
-            shell.set_property("sidebar-active", SValue::Number(active as f64))?;
-            self.bind_shell(&shell, candidate_generation)?;
-            self.bind_tabs(&shell, candidate_generation)?;
-            if let Some(old) = &self.shell {
-                let size = old.window().size();
-                let scale = old.window().scale_factor();
-                shell.window().set_size(slint::LogicalSize::new(
-                    size.width as f32 / scale,
-                    size.height as f32 / scale,
-                ));
-                shell.window().set_position(old.window().position());
-                shell.window().set_fullscreen(old.window().is_fullscreen());
-            }
-            let texture = self.attach_gpu(&shell);
-            shell.show()?;
-            // Only a shown candidate replaces the main window's texture.
-            self.video_texture.replace(texture);
-            platform::shown(&shell);
-            frame_pacing::follow(&shell);
-            Ok(shell)
-        };
-        // Where the old shell's frame is (`view::Placements`).
-        let position = self.shell.as_ref().map(|old| old.window().position());
-        let result = match build() {
-            Ok(shell) => {
-                if let Some(position) = position {
-                    self.placements.track(&shell, position.into());
+                    .unwrap_or(0);
+                shell.set_property("sidebar-active", SValue::Number(active as f64))?;
+                self.bind_shell(&shell, candidate_generation)?;
+                self.bind_tabs(&shell, candidate_generation)?;
+                if window.is_some() {
+                    // `replace_shell` shows it in the window, which keeps its
+                    // rendering notifier (`retarget_shell`).
+                    return Ok(shell);
                 }
+                let texture = self.attach_gpu(&shell);
+                shell.show()?;
+                // Only a shown candidate replaces the main window's texture.
+                self.video_texture.replace(texture);
+                platform::shown(&shell);
+                frame_pacing::follow(&shell);
+                Ok(shell)
+            };
+        let result = match view::replace_shell(self.shell.as_ref(), build) {
+            Ok(shell) => {
                 self.theme_view(&shell);
                 #[cfg(feature = "producer-audio")]
                 self.physical_revoke(producer_input::RevokeReason::WindowHidden);
-                self.native_before = native_before.clone();
-                self.native_window = native_before
-                    .as_ref()
-                    .and_then(|before| platform::associate_new(before).ok());
-                if let Some(old) = self.shell.replace(shell) {
-                    let _ = old.hide();
+                if reuse {
+                    self.retarget_shell(&shell);
+                } else {
+                    self.native_before = native_before.clone();
+                    self.native_window = native_before
+                        .as_ref()
+                        .and_then(|before| platform::associate_new(before).ok());
+                    self.video_target.replace(shell.as_weak());
                 }
+                // Not hidden: it shared the window. Dropping it frees its tree.
+                drop(self.shell.replace(shell));
                 let old_owners = self.mounts.keys().copied().collect::<Vec<_>>();
                 for old in old_owners {
                     if !next.contains_key(&old) {

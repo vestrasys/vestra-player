@@ -157,6 +157,10 @@ pub(crate) struct Host {
     /// Software rendering in an OpenGL window: the main window's reused
     /// video texture (`vestra-video-texture`), `None` without one.
     pub(crate) video_texture: RefCell<Option<vestra_video_texture::Feed>>,
+    /// The main shell the window's rendering notifier shows new video
+    /// textures on (`attach_gpu`): it outlives a shell, since a new
+    /// composition replaces the tree in the same window (`retarget_shell`).
+    pub(crate) video_target: Rc<RefCell<slint::Weak<slint_interpreter::ComponentInstance>>>,
     pub(crate) shell_generation: u64,
     pub(crate) next_shell_generation: u64,
     pub(crate) menu_path: Vec<String>,

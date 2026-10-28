@@ -365,12 +365,13 @@ mod no_gpu {
         pub fn attach<T: slint::ComponentHandle + 'static>(
             &self,
             _component: &T,
-            _show: impl Fn(&T, slint::Image) + 'static,
+            _show: impl Fn(slint::Image) + 'static,
             _failed: impl FnOnce(String) + 'static,
             _drawn: impl FnMut(GpuDraw) + 'static,
         ) -> Result<(), String> {
             Err("GPU rendering is not available".into())
         }
+        pub fn retarget<T: slint::ComponentHandle + 'static>(&self, _component: &T) {}
     }
 }
 #[cfg(not(target_os = "macos"))]

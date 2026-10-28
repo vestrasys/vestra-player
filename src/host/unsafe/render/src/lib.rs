@@ -187,6 +187,9 @@ struct Shared {
     /// (epoch, hold): after [`Handle::reshow`], windows show nothing up to
     /// frame `hold`, then set the next frame's image again.
     reshow: Mutex<(u64, u64)>,
+    /// Bumped by [`Handle::retarget`]: windows hand their current image to
+    /// `show` again at their next draw.
+    retargets: AtomicU64,
     /// Frames copied into windows.
     shown: AtomicU64,
 }
@@ -389,30 +392,27 @@ impl Handle {
     }
     /// Show the video in `component`'s window (call before it is shown):
     /// `show` gets each new texture image (first frame, resize, after
-    /// [`reshow`](Self::reshow)) to set on the video area. Each new frame asks
-    /// the last four attached windows to redraw. `failed` runs once if the
-    /// window cannot show textures (its renderer is not OpenGL). `drawn` sees
-    /// each draw of the window (this notifier is the window's only one).
+    /// [`reshow`](Self::reshow), after [`retarget`](Self::retarget)) to set on
+    /// the video area of whatever component the window shows then. Each new
+    /// frame asks the last four attached windows to redraw. `failed` runs
+    /// once if the window cannot show textures (its renderer is not OpenGL).
+    /// `drawn` sees each draw of the window (this notifier is the window's
+    /// only one).
     pub fn attach<T>(
         &self,
         component: &T,
-        show: impl Fn(&T, Image) + 'static,
+        show: impl Fn(Image) + 'static,
         failed: impl FnOnce(String) + 'static,
         mut drawn: impl FnMut(Draw) + 'static,
     ) -> Result<(), String>
     where
         T: ComponentHandle + 'static,
     {
-        let weak = component.as_weak();
-        let mut redraw = lock(&self.0.redraw);
-        redraw.push(Box::new(move || {
-            let _ = weak.upgrade_in_event_loop(|component| component.window().request_redraw());
-        }));
-        let stale = redraw.len().saturating_sub(4);
-        drop(redraw.drain(..stale));
-        drop(redraw);
-        let (shared, weak, mut view) = (self.0.clone(), component.as_weak(), None::<View>);
+        self.redraw_on(component);
+        let (shared, mut view) = (self.0.clone(), None::<View>);
         let (mut failed, mut copied) = (Some(failed), false);
+        let (mut current, mut retargets) =
+            (None::<Image>, self.0.retargets.load(Ordering::Relaxed));
         let notifier = move |state, api: &GraphicsAPI| match state {
             RenderingState::RenderingSetup => {
                 view = matches!(api, GraphicsAPI::NativeOpenGL { .. }).then(View::new).flatten();
@@ -427,21 +427,54 @@ impl Handle {
                 let copies = shared.shown.load(Ordering::Relaxed);
                 let frame = lock(&shared.latest).clone();
                 let reshow = *lock(&shared.reshow);
-                if let (Some(view), Some(frame), Some(component)) =
-                    (view.as_mut(), frame, weak.upgrade())
+                let now = shared.retargets.load(Ordering::Relaxed);
+                let retargeted = std::mem::replace(&mut retargets, now) != now;
+                if let (Some(view), Some(frame)) = (view.as_mut(), frame)
                     && let Some(image) = view.update(&frame, reshow, &shared.shown)
                 {
-                    show(&component, image);
+                    current = Some(image.clone());
+                    show(image);
+                } else if retargeted && let Some(image) = &current {
+                    // Another component took the window's place: same texture.
+                    show(image.clone());
                 }
                 copied = shared.shown.load(Ordering::Relaxed) != copies;
             }
             RenderingState::AfterRendering => {
                 drawn(Draw::End { copied: std::mem::take(&mut copied) })
             }
-            RenderingState::RenderingTeardown => view = None,
+            RenderingState::RenderingTeardown => {
+                view = None;
+                current = None;
+            }
             _ => (),
         };
         component.window().set_rendering_notifier(notifier).map_err(|e| e.to_string())
+    }
+    /// Another component took the place of an attached one inside the same
+    /// window (its rendering notifier stays): new frames ask it to redraw,
+    /// and the window hands its current image to `show` again at its next
+    /// draw, for the new component's video area.
+    pub fn retarget<T>(&self, component: &T)
+    where
+        T: ComponentHandle + 'static,
+    {
+        self.redraw_on(component);
+        self.0.retargets.fetch_add(1, Ordering::Relaxed);
+    }
+    /// Each new frame asks `component`'s window to redraw (the last four
+    /// components given here; a dropped one ignores it).
+    fn redraw_on<T>(&self, component: &T)
+    where
+        T: ComponentHandle + 'static,
+    {
+        let weak = component.as_weak();
+        let mut redraw = lock(&self.0.redraw);
+        redraw.push(Box::new(move || {
+            let _ = weak.upgrade_in_event_loop(|component| component.window().request_redraw());
+        }));
+        let stale = redraw.len().saturating_sub(4);
+        drop(redraw.drain(..stale));
     }
 }
 
