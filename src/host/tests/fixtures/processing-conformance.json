@@ -1,5 +1,5 @@
 {
-  "about": "processing.replace cases the player (host/src/processing.rs) and the SDK's TestHost (tests/sdk/host-agreement.test.ts) must answer alike. Each case starts from a ready decoded source with no chains; each step sends one change (resourceId \"r\", revision 1, 2, ...) and expects \"applied\" or an error code, then the number of this stage's resources the player holds.",
+  "about": "processing.replace cases the player (host/src/playback/processing.rs) and the SDK's TestHost (tests/sdk/host-agreement.test.ts) must answer alike. Each case starts from a ready decoded source with no chains; each step sends one change (resourceId \"r\", revision 1, 2, ...) and expects \"applied\" or an error code, then the number of this stage's resources the player holds.",
   "cases": [
     {
       "name": "on, off with an empty chain, on again (the blur example)",

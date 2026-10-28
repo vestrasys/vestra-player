@@ -1,6 +1,6 @@
-//! `ui.window`: a plugin's own Slint windows (ui.rs).
+//! `ui.window`: a plugin's own Slint windows (ui/view.rs).
 use super::{Capability, Handled, Info, Method, Residency, plugin};
-use crate::{Host, Reply, RpcError, platform, plugins, string, theme, ui, ui_values};
+use crate::{Host, Reply, RpcError, platform, process, string, ui::theme, ui::ui_values, ui::view};
 use serde_json::{Value, json};
 use slint::ComponentHandle;
 use std::collections::BTreeMap;
@@ -46,7 +46,7 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     if host.views.contains_key(&(reply.owner, id.clone())) {
         return Err(RpcError::new("conflict", "view already exists"));
     }
-    let path = plugins::package_file(&plugin(host, reply)?.directory, string(params, "file")?)?;
+    let path = process::package_file(&plugin(host, reply)?.directory, string(params, "file")?)?;
     let properties: BTreeMap<String, Value> =
         serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
             .map_err(|e| RpcError::invalid(e.to_string()))?;
@@ -67,7 +67,7 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     }
     let theme = host.theme().to_owned();
     let missed = std::cell::Cell::new(false);
-    let view = ui::open(
+    let view = view::open(
         &path,
         reply.owner,
         &id,

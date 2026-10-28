@@ -86,7 +86,7 @@ if [ "$docs_only" = true ]; then run_windows=false; run_macos=false; lock=false;
 # (_build-test.yml `ui-record`). The host's Slint library (`@vestra/*`), its
 # value conversion and the Slint version (Cargo.lock) are part of that check,
 # so a change to them tests (and records) every plugin.
-host_ui='^src/host/(ui/|src/(ui|ui_values|ui_types|ui_image|ui_markdown[a-z_]*|composition)\.rs$|src/i18n/|Cargo\.lock$)'
+host_ui='^src/host/(ui/|src/ui/(view|ui_values|ui_types|ui_image|ui_markdown[a-z_]*|composition)\.rs$|src/i18n/|Cargo\.lock$)'
 plugins=none
 if [ "$all" = true ] || has "$host_ui" \
   || printf '%s\n' "$files" | grep -Ev '^$|^doc/|\.md$|^src/host/|^src/plugins/[^/]+/' | grep -q .; then

@@ -23,7 +23,7 @@ import type { Plugin } from "@vestra-player/sdk";
 export const STOP_TIMEOUT_MS = 5000;
 /**
  * The player reads protocol lines of at most 1 MiB, newline included, and
- * stops a plugin that writes a longer one (`host/src/plugins.rs`). In the
+ * stops a plugin that writes a longer one (`host/src/process/mod.rs`). In the
  * shared runner the limit applies to the inner message; the envelope's
  * `"g":<n>,` is the host's allowance.
  */

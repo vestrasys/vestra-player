@@ -66,7 +66,7 @@ pub fn clipboard_write_image(_kind: Image, _bytes: Vec<u8>) -> std::result::Resu
 }
 
 pub fn confirm(
-    _options: &crate::confirm::Options,
+    _options: &crate::ui::confirm::Options,
     _parent: Option<HostWindowId>,
     _done: impl Fn(bool, bool) + Send + 'static,
 ) -> std::result::Result<(), RpcError> {

@@ -1,6 +1,6 @@
 //! `ui.dialog`: native file pickers and confirmations.
 use super::{Capability, Handled, Info, Method, Residency};
-use crate::{Event, Host, Reply, RpcError, confirm, i18n, platform, string};
+use crate::{Event, Host, Reply, RpcError, i18n, platform, string, ui::confirm};
 use serde_json::Value;
 
 pub struct UiDialog;
@@ -63,7 +63,7 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
     let answer = reply.clone();
     host.dialog_busy = true;
     #[cfg(feature = "producer-audio")]
-    host.physical_revoke(crate::producer_input::RevokeReason::Dialog);
+    host.physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
     if let Err(error) = platform::confirm(&options, host.native_window, move |yes, checked| {
         let _ = events.send(Event::ConfirmDone(answer.clone(), yes, checked));
     }) {
@@ -141,6 +141,6 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     }
     host.dialog_busy = true;
     #[cfg(feature = "producer-audio")]
-    host.physical_revoke(crate::producer_input::RevokeReason::Dialog);
+    host.physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
     Ok(())
 }

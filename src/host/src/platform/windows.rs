@@ -387,7 +387,7 @@ pub fn clipboard_write_image(kind: Image, bytes: Vec<u8>) -> std::result::Result
 /// becomes a second Yes/No dialog after confirming (task dialogs through rfd
 /// have no checkbox). `done` runs on a worker thread.
 pub fn confirm(
-    options: &crate::confirm::Options,
+    options: &crate::ui::confirm::Options,
     parent: Option<HostWindowId>,
     done: impl Fn(bool, bool) + Send + 'static,
 ) -> std::result::Result<(), RpcError> {
@@ -419,7 +419,7 @@ pub fn confirm(
     };
     // Built here, on the UI thread that owns the windows; only waiting for
     // the answers happens on the worker.
-    let labels = crate::confirm::button_labels(options);
+    let labels = crate::ui::confirm::button_labels(options);
     let first = dialog(
         text,
         MessageButtons::OkCancelCustom(labels.0.clone(), labels.1.clone()),
@@ -433,7 +433,7 @@ pub fn confirm(
     std::thread::spawn(move || {
         let confirmed = match pollster::block_on(first) {
             MessageDialogResult::Custom(label) => {
-                crate::confirm::confirmed_by(Some(&label), &labels)
+                crate::ui::confirm::confirmed_by(Some(&label), &labels)
             }
             _ => false,
         };

@@ -374,7 +374,7 @@ pub fn catalog_for(file: &Path) -> Option<Arc<Catalog>> {
         .map(|(_, catalog)| catalog.clone());
     drop(owners);
     found.or_else(|| {
-        let ui = crate::ui::ui_dir();
+        let ui = crate::ui::view::ui_dir();
         let ui = dunce::canonicalize(&ui).unwrap_or(ui);
         (canonical.starts_with(&ui) || file.starts_with(&ui))
             .then(|| host().cloned())

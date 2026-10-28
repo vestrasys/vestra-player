@@ -5,7 +5,7 @@
 
 use super::{HostWindowId, PipEvent, Rect};
 use crate::RpcError;
-use crate::pip::Playback;
+use crate::ui::pip::Playback;
 
 pub fn pip_supported() -> bool {
     false
@@ -20,7 +20,7 @@ impl PipWindow {
     }
 }
 
-impl crate::pip::Surface for PipWindow {
+impl crate::ui::pip::Surface for PipWindow {
     type Frame = super::GpuFrame;
     fn place(&self, _window: HostWindowId, _area: Rect) -> bool {
         match *self {}

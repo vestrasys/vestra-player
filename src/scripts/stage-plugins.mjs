@@ -3,7 +3,7 @@
  * Builds the built-in plugins a packaged player ships
  * (`Vestra Player.app/Contents/Resources/plugins/`, `<install dir>\resources\plugins\`
  * on Windows). The host runs each in place from its directory; nothing is
- * copied into the user's library (host/src/package_manager.rs `builtin`):
+ * copied into the user's library (host/src/packages/package_manager.rs `builtin`):
  *
  *   plugins/
  *     builtin.json     { schema: 3, plugins: [{ id, version, directory, digest }] }

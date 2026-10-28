@@ -592,7 +592,7 @@ File: `$VESTRA_UI_STATE`, when unset `~/Library/Application Support/Vestra/ui-st
 
 - Writing: changes are merged and written once 1 second after a change, and once more before exit; written to a temporary file first and then renamed, to avoid corrupting it.
 - Read failure (not JSON, unknown `version`): log it, rename the original file to `ui-state.json.bad`, start with defaults. An invalid single field only ignores that field.
-- Module: new file `src/host/src/ui_state.rs` (`load() -> UiState`, `UiState::changed()`, `save_if_due(now)`); `save_if_due` is called in the 16 ms timer of the host main loop.
+- Module: new file `src/host/src/ui/ui_state.rs` (`load() -> UiState`, `UiState::changed()`, `save_if_due(now)`); `save_if_due` is called in the 16 ms timer of the host main loop.
 
 ### 8.2 Replaced and deleted, migration
 

@@ -285,7 +285,7 @@ Today both `plugins::Manifest` and `package_stage::PackageManifest` are `deny_un
 - When fields are added later, authors also write `minPlayerVersion`, so the store will not push the plugin to old players;
 - When sideloaded into an old player, the host **reads `minPlayerVersion` first** and then parses strictly, so the error is "requires Vestra Player ≥ x.y.z" rather than "unknown field".
 
-Implementation hint: merge the two manifest structs into one module (suggested `src/host/src/manifest.rs`), with one set of fields and two validation modes (development/package). serde's `flatten` cannot be combined with `deny_unknown_fields`, so do not reuse fields through `flatten`.
+Implementation hint: merge the two manifest structs into one module (suggested `src/host/src/packages/manifest.rs`), with one set of fields and two validation modes (development/package). serde's `flatten` cannot be combined with `deny_unknown_fields`, so do not reuse fields through `flatten`.
 
 ### 4.3 id rules
 

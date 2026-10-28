@@ -14,6 +14,7 @@
 //! each of those hands its file over separately (`single_instance`).
 #![forbid(unsafe_code)]
 use super::*;
+use crate::host::package_activation;
 
 const SETTLE_LIMIT: Duration = Duration::from_secs(20);
 const QUIET: Duration = Duration::from_millis(300);

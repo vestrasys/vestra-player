@@ -175,9 +175,9 @@ fn button(
         })? as i32;
     let icon = match object.get("icon") {
         Some(Value::String(name)) => commands::ButtonIcon::Name(name.clone()),
-        Some(image) if crate::ui_image::reference(image).is_some() => {
-            let (path, max_side) = crate::ui_image::parts(image)?;
-            crate::ui_image::locate(path, &host.image_roots(owner))?;
+        Some(image) if crate::ui::ui_image::reference(image).is_some() => {
+            let (path, max_side) = crate::ui::ui_image::parts(image)?;
+            crate::ui::ui_image::locate(path, &host.image_roots(owner))?;
             commands::ButtonIcon::Image {
                 path: path.to_owned(),
                 max_side,
