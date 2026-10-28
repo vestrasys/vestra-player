@@ -441,7 +441,7 @@ impl Backend {
                         // A restarted player continues its first file where
                         // the replaced one was (`host/rendering.rs`): the
                         // next open of that file loads with `start=` and its
-                        // pause state (`source_backend::claim_resume`).
+                        // pause state (`source_backend::resume_claim`).
                         if command.method == "host.resume" {
                             sources.resume_next_open(
                                 crate::playback::source_backend::ResumePoint {

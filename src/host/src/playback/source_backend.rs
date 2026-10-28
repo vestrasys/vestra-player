@@ -1374,8 +1374,9 @@ impl Sources {
             .as_deref()
             .and_then(|source| self.resolvers.find(source));
         // A restarted player's first open (`host.resume`): its pause state
-        // goes into the intent and its position into this load's options.
-        let start = claim_resume(&mut self.resume, &mut intent, resolver.is_some());
+        // goes into the intent and its position into this load's options;
+        // the resume point is taken only once the session admits the intent.
+        let claim = resume_claim(self.resume.as_ref(), &mut intent, resolver.is_some());
         let preflight = preflight.and_then(|()| {
             if resolver.is_some() && self.resolutions.len() >= 32 {
                 Err(crate::playback::session::RequestError::Busy)
@@ -1417,6 +1418,7 @@ impl Sources {
                 ));
             }
         };
+        let start = take_resume(&mut self.resume, claim);
         #[cfg(feature = "producer-audio")]
         if matches!(
             intent,
@@ -1786,9 +1788,6 @@ fn added_external(
     let first = new.next()?.clone();
     new.next().is_none().then_some(first)
 }
-/// `leased`: `source` is a [`LocalMedia`] url (`fd://` on Unix,
-/// `vestra-lease://` on Windows) for the local file at this path, and
-/// whether that file is on a network file system ([`LocalMedia::remote`]).
 /// Where a restarted player's first file continues (`host.resume`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResumePoint {
@@ -1799,23 +1798,29 @@ pub struct ResumePoint {
     pub paused: bool,
 }
 
-/// The first open, close or provider after `host.resume` takes the resume
-/// point: an open of that exact source gets its pause state (in the intent,
-/// so the session reports it) and returns its position for the load's
-/// `start=` option. Anything else drops it. A resolved source (a resolver
-/// plugin claims it) opens paused as before but from its start.
-fn claim_resume(
-    resume: &mut Option<ResumePoint>,
+/// What the pending resume point does to a source change.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Claim {
+    /// An open of exactly the resumed path: from `start` (`None`: from
+    /// its beginning, a resolved source), with the old pause state.
+    Resume { start: Option<f64> },
+    /// Another first source: the resume point is dropped.
+    Drop,
+}
+
+/// The first open, close or provider after `host.resume` claims the resume
+/// point: an open of that exact path gets its pause state (in the intent, so
+/// the session reports it) and its position for the load's `start=`
+/// option; anything else drops it. A resolved source (a resolver plugin
+/// claims it) opens paused as before but from its beginning. Nothing is
+/// taken here: [`take_resume`] does that once the session admitted the
+/// intent, so a refused open (stale, busy) leaves the resume point.
+fn resume_claim(
+    resume: Option<&ResumePoint>,
     intent: &mut SourceIntent,
     resolved: bool,
-) -> Option<f64> {
-    if !matches!(
-        intent,
-        SourceIntent::Open { .. } | SourceIntent::OpenProvider { .. } | SourceIntent::Close { .. }
-    ) {
-        return None;
-    }
-    let point = resume.take()?;
+) -> Option<Claim> {
+    let point = resume?;
     match intent {
         SourceIntent::Open {
             source,
@@ -1823,12 +1828,32 @@ fn claim_resume(
             ..
         } if *source == point.source => {
             *start_paused = point.paused;
-            if resolved {
-                diag!("restart: a resolver opens {source}; it starts from the beginning");
-                return None;
-            }
-            (point.seconds > 0.).then_some(point.seconds)
+            let start = (!resolved && point.seconds > 0.).then_some(point.seconds);
+            Some(Claim::Resume { start })
         }
+        SourceIntent::Open { .. }
+        | SourceIntent::OpenProvider { .. }
+        | SourceIntent::Close { .. } => Some(Claim::Drop),
+        _ => None,
+    }
+}
+
+/// An admitted source change takes the resume point it claimed; returns
+/// the position for `start=`.
+fn take_resume(resume: &mut Option<ResumePoint>, claim: Option<Claim>) -> Option<f64> {
+    let point = match claim {
+        Some(_) => resume.take()?,
+        None => return None,
+    };
+    match claim {
+        Some(Claim::Resume { start: None }) => {
+            diag!(
+                "restart: a resolver opens {}; it starts from the beginning",
+                point.source
+            );
+            None
+        }
+        Some(Claim::Resume { start }) => start,
         _ => {
             diag!(
                 "restart: the first source opened is not {}; resuming dropped",
@@ -1855,6 +1880,11 @@ impl Sources {
 }
 
 impl Sources {
+    /// `leased`: `source` is a [`LocalMedia`] url (`fd://` on Unix,
+    /// `vestra-lease://` on Windows) for the local file at this path, and
+    /// whether that file is on a network file system ([`LocalMedia::remote`]).
+    /// `start`: the resumed position (`resume_claim`, `take_resume`), as `start=`.
+    ///
     /// `loadfile`; a leased load also gets what libmpv would derive from
     /// the path (`leased_options`). Its cover art is listed off this thread
     /// (`cover_listing`): pictures that are not listed in time are added to
@@ -2093,39 +2123,83 @@ mod resume_tests {
         })
     }
 
+    /// Claim, then take after admission (as `dispatch` does).
+    fn admitted(
+        resume: &mut Option<ResumePoint>,
+        intent: &mut SourceIntent,
+        resolved: bool,
+    ) -> Option<f64> {
+        let claim = resume_claim(resume.as_ref(), intent, resolved);
+        take_resume(resume, claim)
+    }
+
     #[test]
     fn the_resumed_file_opens_paused_at_its_position_and_only_once() {
         let mut resume = point();
         let mut intent = open("/m/a.mkv", false);
-        assert_eq!(claim_resume(&mut resume, &mut intent, false), Some(61.25));
+        assert_eq!(admitted(&mut resume, &mut intent, false), Some(61.25));
         assert_eq!(intent, open("/m/a.mkv", true), "paused in the intent");
         assert_eq!(resume, None);
         let mut again = open("/m/a.mkv", false);
-        assert_eq!(claim_resume(&mut resume, &mut again, false), None);
+        assert_eq!(admitted(&mut resume, &mut again, false), None);
         assert_eq!(again, open("/m/a.mkv", false));
         assert_eq!(start_option(Some(61.25)), ",start=61.25");
         assert_eq!(start_option(None), "");
         assert_eq!(start_option(Some(0.)), "");
     }
 
-    /// A plugin that opens another file first does not get the position,
-    /// and the resumed file then opens from its start.
+    /// A plugin that opens another file first does not get the position;
+    /// the resumed file then opens from its beginning.
     #[test]
     fn another_first_open_drops_the_resume_point() {
         let mut resume = point();
         let mut other = open("/m/b.mkv", false);
-        assert_eq!(claim_resume(&mut resume, &mut other, false), None);
+        assert_eq!(admitted(&mut resume, &mut other, false), None);
         assert_eq!(other, open("/m/b.mkv", false));
         assert_eq!(resume, None);
         // Other intents before the open leave it.
         let mut resume = point();
         let mut restart = SourceIntent::Restart { expected: None };
-        assert_eq!(claim_resume(&mut resume, &mut restart, false), None);
+        assert_eq!(admitted(&mut resume, &mut restart, false), None);
         assert!(resume.is_some());
-        // A resolved source: paused, from its start.
+        // A resolved source: paused, from its beginning.
         let mut resolved = open("/m/a.mkv", false);
-        assert_eq!(claim_resume(&mut resume, &mut resolved, true), None);
+        assert_eq!(admitted(&mut resume, &mut resolved, true), None);
         assert_eq!(resolved, open("/m/a.mkv", true));
+        assert_eq!(resume, None);
+    }
+
+    /// The player refuses the open (here: `stale`, an expected stamp that
+    /// is not the current one): the resume point stays for the next open.
+    #[test]
+    fn a_refused_open_does_not_take_the_resume_point() {
+        let mpv = Mpv::builder()
+            .unwrap()
+            .set_property("vo", "null")
+            .unwrap()
+            .set_property("ao", "null")
+            .unwrap()
+            .build()
+            .unwrap();
+        let mut sources = Sources::default();
+        sources.resume_next_open(point().unwrap());
+        let refused = sources.dispatch(
+            &mpv,
+            1,
+            "source.submit",
+            &json!({"operationId":1,"intent":{"kind":"open","source":"/m/a.mkv","startPaused":false,
+                "expected":{"generation":99,"intentVersion":99}}}),
+        );
+        assert_eq!(refused.unwrap_err().code, "stale");
+        assert_eq!(sources.resume, point(), "kept");
+        let malformed = sources.dispatch(
+            &mpv,
+            1,
+            "source.submit",
+            &json!({"operationId":2,"intent":{"kind":"open"}}),
+        );
+        assert_eq!(malformed.unwrap_err().code, "invalid");
+        assert_eq!(sources.resume, point(), "kept");
     }
 }
 
