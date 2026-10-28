@@ -41,7 +41,10 @@ test("check: the player's Slint diagnostics come back whole as a failed check, a
   assert.equal(checked.ok, false, checked.text);
   assert.match(checked.text, /^Check failed: the player's Slint compile reported errors\n/);
   const details = JSON.parse(checked.text.slice(checked.text.indexOf("\n") + 1));
-  assert.deepEqual(details.problems, [SLINT_ERROR]);
+  // One problem per diagnostic line, as the player wrote them (no literal "\n" inside one).
+  assert.deepEqual(details.problems, SLINT_ERROR.split("\n"));
+  assert.equal(details.problems.length, 2);
+  assert.ok(!checked.text.includes("\\n"), "no escaped newline in the text the model reads");
   assert.match(details.next, /run check again/);
   assert.equal(seen.length, 1);
   assert.match(path.basename(seen[0].file), /^local\.demo-0\.1\.0\.vxp$/);
@@ -50,12 +53,15 @@ test("check: the player's Slint diagnostics come back whole as a failed check, a
 
   // Another refusal keeps its code in the summary.
   const other = new Toolchain(plugin, data, async () => {
-    throw new HostError("javascript", "main.js:3\nSyntaxError: Unexpected token");
+    // As the player says it: the built file and line (no column), node --check's lines below.
+    throw new HostError("javascript", "dist/main.js:2\n  plugin.commands.add({ id: 'x', run: () => });\n\nSyntaxError: Unexpected token ')'\n");
   });
   const refused = await other.check(paths, "local.demo", "");
   assert.equal(refused.ok, false);
   assert.match(refused.text, /^Check failed: the player's package check refused it \(javascript\)/);
-  assert.match(refused.text, /SyntaxError: Unexpected token/);
+  const jsDetails = JSON.parse(refused.text.slice(refused.text.indexOf("\n") + 1));
+  assert.deepEqual(jsDetails.problems, ["dist/main.js:2", "  plugin.commands.add({ id: 'x', run: () => });", "SyntaxError: Unexpected token ')'"]);
+  assert.match(jsDetails.next, /dist\/main\.js: fix the \.ts source/);
 });
 
 test("check: when the player accepts the package, the check says Slint was compiled", async () => {
@@ -71,6 +77,37 @@ test("check: when the player accepts the package, the check says Slint was compi
   assert.match(checked.text, /^Check passed \(manifest, strict type check, build, the player's Slint compile\)/);
   assert.equal(calls, 1);
   assert.deepEqual(await fs.readdir(path.join(paths.dir, "tmp")).catch(() => []), [], "no scratch folder left");
+});
+
+test("check: a stop while the player validates returns at once, without waiting for the player's reply", async () => {
+  const { data, paths } = await session();
+  const controller = new AbortController();
+  let asked = 0;
+  const toolchain = new Toolchain(plugin, data, () => {
+    asked++;
+    setTimeout(() => controller.abort(), 50);
+    return new Promise(() => {}); // the player never answers
+  });
+  assert.equal((await toolchain.scaffold(paths, { name: "demo" }, "")).ok, true);
+  let timer;
+  const checked = await Promise.race([
+    toolchain.check(paths, "local.demo", "", controller.signal),
+    new Promise((_, reject) => (timer = setTimeout(() => reject(new Error("check waited for the player")), 60_000))),
+  ]);
+  clearTimeout(timer);
+  assert.equal(asked, 1);
+  assert.equal(checked.ok, false);
+  assert.equal(checked.text, "Check cancelled");
+  assert.deepEqual(checked.say, { code: "cancelled", args: ["Check"] });
+
+  // A refusal that arrives after the stop is dropped (the test runner fails on an unhandled rejection).
+  const later = new AbortController();
+  const late = new Toolchain(plugin, data, () => {
+    setTimeout(() => later.abort(), 10);
+    return new Promise((_, reject) => setTimeout(() => reject(new HostError("slint", "ui/main.slint:1:1: error: late")), 200));
+  });
+  assert.equal((await late.check(paths, "local.demo", "", later.signal)).text, "Check cancelled");
+  await new Promise((resolve) => setTimeout(resolve, 300));
 });
 
 test("sweep: a session's leftover check-* scratch folders go, other scratch stays, and a missing tmp/ is fine", async () => {

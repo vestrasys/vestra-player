@@ -90,10 +90,25 @@ const result = (ok: boolean, summary: string, details?: unknown): ToolResult => 
 
 /** What the model does after the player refused a package. */
 export const PLAYER_NEXT =
-  "Fix each error at the file:line:column the player names (a Slint error: that .slint file; read the widget's declaration in the SDK's slint/ folder first), then run check again";
+  "Fix each error line at the file:line:column the player names (warning lines can be ignored; a JavaScript error names the built dist/main.js: fix the .ts source it came from), then run check again";
 /** The player's error as it said it: Slint's diagnostics, one per line (`<file>:<line>:<column>: error|warning: <message>`), stay whole. */
 export const playerMessage = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 6000);
 export const playerCode = (error: unknown) => String((error as { code?: unknown })?.code ?? "error");
+/** Waits for `work`; true when `signal` aborted first (or already had). `work`'s rejection passes through. */
+async function raceAbort(work: Promise<unknown>, signal: AbortSignal | undefined): Promise<boolean> {
+  if (!signal) return (await work, false);
+  if (signal.aborted) return true;
+  let onAbort = () => {};
+  const aborted = new Promise<true>((resolve) => {
+    onAbort = () => resolve(true);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([work.then(() => false), aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
 const playerRefusal = (error: unknown) =>
   playerCode(error) === "slint" ? "Check failed: the player's Slint compile reported errors" : `Check failed: the player's package check refused it (${playerCode(error)})`;
 
@@ -592,9 +607,12 @@ export class Toolchain {
         const packed = (await fs.readdir(scratch).catch(() => [] as string[])).find((name) => name.endsWith(".vxp"));
         if (!packed) return result(false, "Check failed: the build wrote no package for the player to check", { output: tail(run.stdout) });
         try {
-          await this.validate!(path.join(scratch, packed));
+          // The player's reply cannot be withdrawn: on a stop, return at once and drop the reply when it comes.
+          const validated = this.validate!(path.join(scratch, packed));
+          validated.catch(() => {});
+          if (await raceAbort(validated, signal)) return { ...result(false, "Check cancelled"), say: { code: "cancelled", args: ["Check"] } };
         } catch (error) {
-          return result(false, playerRefusal(error), { problems: [playerMessage(error)], warnings, next: PLAYER_NEXT });
+          return result(false, playerRefusal(error), { problems: playerMessage(error).split("\n").filter(Boolean), warnings, next: PLAYER_NEXT });
         }
         return result(true, "Check passed (manifest, strict type check, build, the player's Slint compile)", warnings.length ? { warnings } : undefined);
       } finally {
