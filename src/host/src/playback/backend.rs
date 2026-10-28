@@ -1,5 +1,6 @@
 //! One persistent libmpv core. Rendering and all control calls stay off the UI thread.
 use crate::host::{Event, Reply, RpcError};
+use crate::playback::renderer::GpuBackend as _;
 use anyhow::Result;
 use rsmpv::{
     Mpv,
@@ -45,8 +46,13 @@ pub struct Backend {
     worker: Option<thread::JoinHandle<()>>,
 }
 impl Backend {
-    /// `gpu`: try GPU rendering first (`renderer::wanted`).
-    pub fn start(events: mpsc::Sender<Event>, silent: bool, gpu: bool) -> Result<Self> {
+    /// `render`: the start-up decision (`render_mode::decide`); GPU mode tries
+    /// GPU rendering first.
+    pub fn start(
+        events: mpsc::Sender<Event>,
+        silent: bool,
+        render: &crate::playback::render_mode::Decision,
+    ) -> Result<Self> {
         let (commands, receiver) = mpsc::channel::<Command>();
         let (stop, stopping) = mpsc::channel();
         let frame = FrameSlot::new();
@@ -58,7 +64,7 @@ impl Backend {
         let input = Arc::new(Mutex::new(None));
         #[cfg(feature = "producer-audio")]
         let out_input = input.clone();
-        let render = crate::playback::renderer::Render::new(gpu);
+        let render = crate::playback::renderer::Render::new(render);
         let out_render = render.clone();
         let (ready, initialized) = mpsc::sync_channel(1);
         let worker = thread::spawn(move || {
@@ -690,7 +696,10 @@ impl GpuRun<'_> {
             match crate::platform::gpu_start(self.mpv.clone(), area, self.publish.clone()) {
                 Ok(renderer) => renderer,
                 Err(error) => {
-                    diag!("render: GPU rendering unavailable ({error}); software rendering");
+                    self.render
+                        .start_failed(crate::playback::render_mode::Reason::InitFailed(format!(
+                            "GPU rendering unavailable: {error}"
+                        )));
                     return false;
                 }
             };

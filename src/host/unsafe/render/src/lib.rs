@@ -15,6 +15,8 @@
 use glow::{HasContext, NativeFramebuffer, NativeTexture};
 use objc2_core_foundation::{CFDictionary, CFNumber, CFRetained, CFString};
 pub use objc2_io_surface::IOSurfaceRef;
+/// A published frame, as [`Handle::latest`] returns it.
+pub type Frame = CFRetained<IOSurfaceRef>;
 use rsmpv::{Mpv, render::OpenGlFbo, render::OwnedRenderContext};
 use slint::{BorrowedOpenGLTextureBuilder as Borrowed, BorrowedOpenGLTextureOrigin};
 use slint::{ComponentHandle, GraphicsAPI, Image, RenderingState};
@@ -383,7 +385,7 @@ impl Handle {
         *reshow = (reshow.0 + 1, hold);
     }
     /// The newest frame: its number and surface (for picture-in-picture).
-    pub fn latest(&self) -> Option<(u64, CFRetained<IOSurfaceRef>)> {
+    pub fn latest(&self) -> Option<(u64, Frame)> {
         lock(&self.0.latest).as_ref().map(|frame| (frame.sequence, frame.surface.0.clone()))
     }
     /// Call `notify` on the render thread after each new frame.

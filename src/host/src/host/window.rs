@@ -1,5 +1,6 @@
 //! The window tick, the sidebar's tabs and its floating window.
 use super::*;
+use crate::playback::renderer::GpuBackend as _;
 
 impl Host {
     pub(crate) fn window_tick(&mut self) {

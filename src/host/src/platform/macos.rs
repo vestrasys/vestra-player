@@ -578,6 +578,47 @@ pub use vestra_gpu_render::IOSurfaceRef as GpuFrame;
 pub use vestra_gpu_render::{Draw as GpuDraw, Handle as GpuHandle, Renderer as GpuRenderer};
 pub const GPU_RENDER: bool = true;
 
+/// The host's GPU contract, delegated to `vestra-gpu-render`'s own methods.
+impl crate::playback::renderer::GpuBackend for GpuHandle {
+    type Frame = vestra_gpu_render::Frame;
+    fn set_size(&self, size: (u32, u32)) {
+        vestra_gpu_render::Handle::set_size(self, size);
+    }
+    fn set_display_fps(&self, fps: Option<f64>) {
+        vestra_gpu_render::Handle::set_display_fps(self, fps);
+    }
+    fn frames(&self) -> u64 {
+        vestra_gpu_render::Handle::frames(self)
+    }
+    fn shown(&self) -> u64 {
+        vestra_gpu_render::Handle::shown(self)
+    }
+    fn size(&self) -> Option<(u32, u32)> {
+        vestra_gpu_render::Handle::size(self)
+    }
+    fn reshow(&self) {
+        vestra_gpu_render::Handle::reshow(self);
+    }
+    fn latest(&self) -> Option<(u64, Self::Frame)> {
+        vestra_gpu_render::Handle::latest(self)
+    }
+    fn on_frame(&self, notify: impl Fn() + Send + 'static) {
+        vestra_gpu_render::Handle::on_frame(self, notify);
+    }
+    fn attach<T: slint::ComponentHandle + 'static>(
+        &self,
+        component: &T,
+        show: impl Fn(slint::Image) + 'static,
+        failed: impl FnOnce(String) + 'static,
+        drawn: impl FnMut(GpuDraw) + 'static,
+    ) -> std::result::Result<(), String> {
+        vestra_gpu_render::Handle::attach(self, component, show, failed, drawn)
+    }
+    fn retarget<T: slint::ComponentHandle + 'static>(&self, component: &T) {
+        vestra_gpu_render::Handle::retarget(self, component);
+    }
+}
+
 /// Start drawing `mpv` at `size` pixels; frames are shown while `publish`.
 pub fn gpu_start(
     mpv: std::sync::Arc<rsmpv::Mpv>,
