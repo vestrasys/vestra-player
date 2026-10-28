@@ -6,7 +6,7 @@
 //! The table is a pure function of the system, so every system's entries are
 //! tested on every machine; `imp::SYSTEM` picks the running one. These keys
 //! never reach the binding table: the window takes the press before Slint
-//! sees it (`ui::WindowShortcuts`), even while a text field has focus.
+//! sees it (`ui::view::WindowShortcuts`), even while a text field has focus.
 //!
 //! A new system adds a `System` variant, its entries below and `SYSTEM` in
 //! its own module. Android and iOS have no keyboard shortcuts (an empty

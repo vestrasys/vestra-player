@@ -2,7 +2,7 @@
 //! plugins; the RPC face of package_manager.rs, which refuses the methods it
 //! does not know. `packages.list` needs no capability (uncapable.rs).
 use super::{Capability, Handled, Info, Method, Residency};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct PluginsManage;

@@ -8,9 +8,17 @@
 //! images nested in the values of one view (a window, panel or settings page)
 //! show at most 32 MB of decoded pixels together.
 #![forbid(unsafe_code)]
-use crate::ui::{ui_image, ui_markdown};
-use crate::*;
+use crate::host::*;
+use crate::ui::ui_image;
+use crate::ui::ui_markdown;
+use serde_json::Value;
+use slint_interpreter::Value as SValue;
 use std::io::Read;
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 pub const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_SIDE: u32 = 4096;
@@ -384,6 +392,7 @@ impl Host {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn png(width: u32, height: u32) -> Vec<u8> {
         let mut bytes = Vec::new();

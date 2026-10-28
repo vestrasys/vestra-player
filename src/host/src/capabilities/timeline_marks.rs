@@ -1,7 +1,7 @@
 //! `timeline.marks`: a plugin's layer of marks on the progress bar
 //! (timeline.rs). Reading the marks is `playback.read` (playback_read.rs).
 use super::{Capability, Handled, Info, Method, Residency};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct TimelineMarks;

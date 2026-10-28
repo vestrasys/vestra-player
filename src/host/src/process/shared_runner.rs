@@ -15,7 +15,7 @@
 //! (`Host::restart_shared`) live in `package_manager.rs`.
 #![forbid(unsafe_code)]
 
-use crate::Event;
+use crate::host::Event;
 use crate::process::MAX_MESSAGE_BYTES;
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
@@ -177,7 +177,7 @@ impl Link {
     }
 }
 
-/// A plugin's place in the shared runner (`plugins::Plugin`'s runner).
+/// A plugin's place in the shared runner (`process::Plugin`'s runner).
 pub struct Member {
     link: Arc<Link>,
     g: u64,

@@ -1,7 +1,7 @@
 //! The basic playback actions the core owns (R-H1): their menu declarations,
 //! enabled/busy/checked state, and what each one does to the source, with the
 //! same on-screen text the playback plugin used. Pure data; `backend.rs`
-//! executes the plans and `main.rs` registers the commands.
+//! executes the plans and `host/actions.rs` registers the commands.
 #![forbid(unsafe_code)]
 
 use crate::commands::{CommandState, Declaration};
@@ -28,7 +28,7 @@ pub const ACTIONS: [&str; 15] = [
     "mute",
     "fullscreen",
 ];
-/// Actions of the main window, not of playback: `main.rs` registers their
+/// Actions of the main window, not of playback: `host/actions.rs` registers their
 /// commands (`register_host_commands`) and runs them like the command's key
 /// (toggle fullscreen: in when windowed, out when fullscreen), without the
 /// playback state, busy flags or `declarations` here.

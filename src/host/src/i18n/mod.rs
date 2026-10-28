@@ -9,7 +9,7 @@
 //!
 //! - `catalog_for(dir)`: the catalog of the package (or the player's `ui/`
 //!   directory) a `.slint` file belongs to; the Slint file loader
-//!   (`ui::compiler`) rewrites `@tr` literals with it (`slint_tr`).
+//!   (`ui::view::compiler`) rewrites `@tr` literals with it (`slint_tr`).
 //! - `Catalog::text`, `Catalog::template`: declarations and sentences a plugin
 //!   hands the player (menu titles, OSD messages) in that plugin's catalog.
 //! - `tr`, `tr_args`: the player's own strings, in `src/host/locales/`.

@@ -1,6 +1,10 @@
 //! `ui.dialog`: native file pickers and confirmations.
 use super::{Capability, Handled, Info, Method, Residency};
-use crate::{Event, Host, Reply, RpcError, i18n, platform, string, ui::confirm};
+use crate::{
+    host::{Event, Host, Reply, RpcError, string},
+    i18n, platform,
+    ui::confirm,
+};
 use serde_json::Value;
 
 pub struct UiDialog;

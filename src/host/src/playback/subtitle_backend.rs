@@ -1,7 +1,7 @@
 //! Finite subtitle resource adapter. Public libmpv commands, mature WebVTT/ASS rendering.
 #![forbid(unsafe_code)]
 use crate::{
-    RpcError,
+    host::RpcError,
     playback::processing_operations::{self as operations, Admission, Key, Stage},
     playback::session::{IntentTicket, Phase},
     playback::subtitle_format,

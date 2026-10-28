@@ -5,7 +5,7 @@
 //! plugins cannot write there). Uninstalling with `removeData`, or dropping a
 //! retired instance, deletes the recorded entries.
 #![forbid(unsafe_code)]
-use crate::RpcError;
+use crate::host::RpcError;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},

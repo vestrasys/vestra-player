@@ -1,5 +1,5 @@
 //! One persistent libmpv core. Rendering and all control calls stay off the UI thread.
-use crate::{Event, Reply, RpcError};
+use crate::host::{Event, Reply, RpcError};
 use anyhow::Result;
 use rsmpv::{
     Mpv,

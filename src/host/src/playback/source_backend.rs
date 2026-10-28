@@ -1,6 +1,6 @@
 //! Candidate source contract over actual libmpv entry identities.
 use crate::{
-    RpcError,
+    host::RpcError,
     playback::session::{
         Admission, Control, EndReason, IntentTicket, OperationBook, Phase, SourceEvent,
         SourceIntent, SourceSession,

@@ -304,8 +304,8 @@ pub fn window_refresh(window: &slint::Window) -> Option<f64> {
 
 /// The refusal for something this system's implementation does not do.
 #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
-fn unsupported(what: &str) -> crate::RpcError {
-    crate::RpcError::new(
+fn unsupported(what: &str) -> crate::host::RpcError {
+    crate::host::RpcError::new(
         "unsupported",
         format!("{what} is not supported on {}", std::env::consts::OS),
     )
@@ -553,7 +553,7 @@ pub fn av_listen() -> std::io::Result<(AvListener, serde_json::Value)> {
 /// (generic passwords) on macOS, the Credential Manager on Windows.
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod keyring_store {
-    use crate::RpcError;
+    use crate::host::RpcError;
 
     fn entry(service: &str, account: &str) -> Result<keyring::Entry, RpcError> {
         keyring::Entry::new(service, account).map_err(error)

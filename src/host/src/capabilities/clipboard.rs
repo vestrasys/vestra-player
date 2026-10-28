@@ -1,6 +1,6 @@
 //! `clipboard`: reading and writing the system clipboard (crate::clipboard).
 use super::{Capability, Handled, Info, Method, Residency};
-use crate::{Host, Reply, RpcError};
+use crate::host::{Host, Reply, RpcError};
 use serde_json::Value;
 
 pub struct Clipboard;

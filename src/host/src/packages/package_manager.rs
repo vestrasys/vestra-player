@@ -1,15 +1,20 @@
 //! Finite trusted-package lifecycle. This is not a sandbox or dependency solver.
 #![forbid(unsafe_code)]
-use crate::host::package_activation;
+use crate::host::*;
 use crate::packages::package_stage::Candidate;
 use crate::packages::package_store::{Instance, Source, Store, StoredPackage};
 use crate::packages::{package_stage, package_store};
-use crate::process::shared_runner;
-#[cfg(test)]
-use crate::ui::composition;
-use crate::*;
+use crate::playback::backend::Command;
+use crate::process::{Plugin, shared_runner};
+use crate::{i18n, platform, process};
+use anyhow::Result;
 use process::DataKey;
+use serde_json::{Value, json};
 use std::collections::{BTreeSet, VecDeque};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 /// Validated candidates kept at once (each is a staged copy on disk).
 const MAX_CANDIDATES: usize = 32;
@@ -2034,6 +2039,7 @@ fn install_instance(
 mod tests {
     use super::*;
     use crate::packages::package_store::Installed;
+    use crate::ui::composition;
 
     fn candidate(dir: &Path, id: &str, version: &str) -> Candidate {
         std::fs::write(

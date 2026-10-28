@@ -1,7 +1,9 @@
 //! `plugin.bindings` (`bindings.manage`): list every command's bindings, write
 //! the user overlay, and tell managing plugins when anything changed.
 #![forbid(unsafe_code)]
-use super::*;
+use crate::bindings;
+use crate::host::*;
+use serde_json::{Value, json};
 
 /// A command as plugins name it: manifest id (`host` for the player) and command id.
 fn reference(params: &Value) -> std::result::Result<(String, String), RpcError> {

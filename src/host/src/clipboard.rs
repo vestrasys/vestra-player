@@ -3,7 +3,7 @@
 //! The checks are here; the system side is `platform::clipboard_*`.
 #![forbid(unsafe_code)]
 
-use crate::{RpcError, platform};
+use crate::{host::RpcError, platform};
 use serde_json::Value;
 use std::path::Path;
 

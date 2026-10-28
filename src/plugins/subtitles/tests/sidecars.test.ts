@@ -44,7 +44,7 @@ async function folderWith(files: Record<string, string | Buffer>) {
 }
 /**
  * The player's subtitle limit, which the test host does not model: at most `limit` live tracks per
- * plugin and source (src/host/src/subtitle_state.rs MAX_OWNER_RESOURCES = 4), refused at the commit
+ * plugin and source (src/host/src/playback/subtitle_state.rs MAX_OWNER_RESOURCES = 4), refused at the commit
  * with the code the player sends (`busy`).
  */
 class LimitedHost extends TestHost {

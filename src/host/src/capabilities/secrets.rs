@@ -1,7 +1,7 @@
 //! `secrets`: sign-in details in the system keychain (system.rs,
 //! secret_index.rs).
 use super::{Capability, Handled, Info, Method, Residency};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct Secrets;

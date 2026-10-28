@@ -1,7 +1,11 @@
 //! `playback.control`: opening media and controlling playback (the playback
 //! worker), Previous/Next, step seek and keeping the computer awake.
 use super::{Capability, Handled, Info, Method, Needs, Residency, forward};
-use crate::{Host, Reply, RpcError, core_actions, i18n, input_trace, string};
+use crate::{
+    core_actions,
+    host::{Host, Reply, RpcError, string},
+    i18n, input_trace,
+};
 use serde_json::{Value, json};
 
 pub struct PlaybackControl;

@@ -2,8 +2,13 @@
 //! menus and interaction locks, and the layout of those slots.
 use super::{Capability, Handled, Info, Method, Residency, plugin};
 use crate::{
-    Host, LayoutChange, MenuMode, Mount, MountChange, Reply, RpcError, debug_keys, i18n,
-    layout_change, policy_slot, process, refuse_initial, string, ui::composition, ui::slot_claims,
+    host::{
+        Host, LayoutChange, MenuMode, Mount, MountChange, Reply, RpcError, debug_keys,
+        layout_change, policy_slot, refuse_initial, string,
+    },
+    i18n, process,
+    ui::composition,
+    ui::slot_claims,
     ui::window_state,
 };
 use serde_json::{Value, json};

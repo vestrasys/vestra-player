@@ -2,7 +2,7 @@
 //! (subtitle_backend.rs, in the playback worker, which refuses the methods
 //! it does not know).
 use super::{Capability, Handled, Info, Method, Residency, forward_media};
-use crate::{Host, Reply};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct SubtitlesControl;

@@ -1,6 +1,6 @@
 //! `events`: the player's events pushed to a plugin as they happen.
 use super::{Capability, Handled, Info, Method, Needs, Residency};
-use crate::{Host, Reply, RpcError, string};
+use crate::host::{Host, Reply, RpcError, string};
 use serde_json::Value;
 
 pub struct Events;

@@ -10,8 +10,8 @@
 //! requests are dropped and its running ones told to stop at the next step,
 //! and their staged copies go with them.
 #![forbid(unsafe_code)]
+use crate::host::{Reply, RpcError};
 use crate::packages::package_stage::Candidate;
-use crate::{Reply, RpcError};
 use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
@@ -52,9 +52,9 @@ impl Request {
     /// parameters, and an archive's file extension.
     pub fn read(method: &str, params: &Value) -> Result<Self, RpcError> {
         let source = if method == "packages.validate" {
-            Source::Directory(PathBuf::from(crate::string(params, "directory")?))
+            Source::Directory(PathBuf::from(crate::host::string(params, "directory")?))
         } else {
-            let file = Path::new(crate::string(params, "file")?);
+            let file = Path::new(crate::host::string(params, "file")?);
             crate::packages::package_archive::check_extension(file)
                 .map_err(|e| RpcError::invalid(e.to_string()))?;
             Source::Archive(file.to_owned())

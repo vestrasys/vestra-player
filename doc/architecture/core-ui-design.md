@@ -2,7 +2,7 @@
 
 Date: 2026-10-20. Stage: P1a design; the P2 review has passed (rulings in [this round's task](../process/rounds/2026-10-core-ui.md) §8 "P2 review", merged into this document); P1b implements this document.
 Basis: [this round's task](../process/rounds/2026-10-core-ui.md) §2, §5; [UI spec](../product/ui-spec.md) §2, §3, §6, §8, §9, §10.
-Current code: `src/host/src/{main,commands,menu,composition,window_state,ui,plugins}.rs`, `src/host/ui/*.slint`, `src/sdk/plugin/*.ts`, `src/runtime/runner.ts`.
+Current code: `src/host/src/{main,commands}.rs`, `src/host/src/host/`, `src/host/src/ui/{menu,composition,window_state,view}.rs`, `src/host/src/process/mod.rs`, `src/host/ui/*.slint`, `src/sdk/plugin/*.ts`, `src/runtime/runner.ts`.
 
 How to read: each item first gives the public interface, then how the host does it, lifecycle and errors, a usage example, the old things it replaces that are deleted in P4, and how existing plugins migrate. §14 explains why the menu tree does not change after migration, §15 is the rewrite reference for migrators to copy, §16 is the complete deletion list, and §18 holds the questions the coordinator has to decide.
 

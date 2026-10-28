@@ -9,8 +9,13 @@
 //! (`commands::Registry::buttons`); a button left out is logged once, and so
 //! is a bottom bar that does not place `BarButtons` while buttons exist.
 #![forbid(unsafe_code)]
+use crate::host::*;
 use crate::ui::{composition, window_state};
-use crate::*;
+use crate::{bindings, commands, i18n, input_trace};
+use anyhow::Result;
+use serde_json::json;
+use slint::ComponentHandle;
+use slint_interpreter::Value as SValue;
 use std::collections::BTreeSet;
 
 /// The global every composed window exports.

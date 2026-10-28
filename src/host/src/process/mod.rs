@@ -5,7 +5,7 @@
 pub(crate) mod runtime_paths;
 pub(crate) mod shared_runner;
 
-use crate::Event;
+use crate::host::Event;
 use crate::process::shared_runner::{Member, SharedRunner};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};

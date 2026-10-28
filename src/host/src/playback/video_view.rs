@@ -4,7 +4,7 @@
 //! Display settings never enter snapshots or exports (those run offline FFmpeg).
 #![forbid(unsafe_code)]
 
-use crate::RpcError;
+use crate::host::RpcError;
 use rsmpv::Mpv;
 use serde_json::{Value, json};
 

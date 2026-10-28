@@ -3,9 +3,15 @@
 //! the right, Close at the bottom. The player owns the window; each page is a
 //! plugin Slint component with its own bridge global, composed like panels.
 #![forbid(unsafe_code)]
+use crate::host::*;
+use crate::process;
 use crate::ui::{composition, ui_image, ui_values};
-use crate::*;
 use anyhow::Context;
+use anyhow::Result;
+use serde_json::{Value, json};
+use slint::ComponentHandle;
+use slint_interpreter::Value as SValue;
+use std::{collections::BTreeMap, path::PathBuf, sync::mpsc};
 
 /// Fixed order of the tree (J04); `category_label` has the headers.
 pub const CATEGORIES: [&str; 9] = [
@@ -355,7 +361,7 @@ impl Host {
                 let mut properties: BTreeMap<String, Value> =
                     serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
                         .map_err(|e| RpcError::invalid(e.to_string()))?;
-                let refused = crate::refuse_initial(&mut properties);
+                let refused = crate::host::refuse_initial(&mut properties);
                 self.settings.next_serial += 1;
                 let page = Page {
                     owner,
@@ -515,7 +521,7 @@ impl Host {
                         // Checked when written (`check_property`): an image
                         // removed since. Logged and reported to the plugin.
                         diag!("settings property {}/{name}: {}", page.key(), error.message);
-                        reports.push((page.owner, crate::ui_error(&error)));
+                        reports.push((page.owner, crate::host::ui_error(&error)));
                     }
                 }
             }

@@ -1,6 +1,12 @@
 //! `ui.window`: a plugin's own Slint windows (ui/view.rs).
 use super::{Capability, Handled, Info, Method, Residency, plugin};
-use crate::{Host, Reply, RpcError, platform, process, string, ui::theme, ui::ui_values, ui::view};
+use crate::{
+    host::{Host, Reply, RpcError, string},
+    platform, process,
+    ui::theme,
+    ui::ui_values,
+    ui::view,
+};
 use serde_json::{Value, json};
 use slint::ComponentHandle;
 use std::collections::BTreeMap;

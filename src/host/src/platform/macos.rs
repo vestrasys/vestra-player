@@ -7,8 +7,8 @@
 use super::{
     Display, HostWindowId, NativeSnapshot, OsFacts, Rect, Result, ScreenFacts, Unavailable,
 };
-use crate::RpcError;
 use crate::clipboard::Image;
+use crate::host::RpcError;
 use crate::power::{Assertion, Hold, Launcher};
 use objc2::MainThreadMarker;
 use objc2_app_kit::NSApplication;

@@ -4,7 +4,7 @@
 //! never reached.
 
 use super::{HostWindowId, PipEvent, Rect};
-use crate::RpcError;
+use crate::host::RpcError;
 use crate::ui::pip::Playback;
 
 pub fn pip_supported() -> bool {

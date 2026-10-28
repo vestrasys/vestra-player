@@ -8,7 +8,10 @@
 //! block (Finder, keychain prompts), so they run on a worker thread and the
 //! reply comes back as an `Event::Reply`.
 #![forbid(unsafe_code)]
-use super::*;
+use crate::host::*;
+use crate::platform;
+use serde_json::{Value, json};
+use std::path::PathBuf;
 use std::sync::OnceLock;
 
 pub const MAX_REVEAL: usize = 256;

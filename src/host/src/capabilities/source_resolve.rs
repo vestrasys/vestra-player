@@ -1,7 +1,7 @@
 //! `source.resolve`: resolvers for online addresses and file types
 //! (source_resolvers.rs, in the playback worker).
 use super::{Capability, Handled, Info, Method, Residency, forward};
-use crate::{Host, Reply, RpcError};
+use crate::host::{Host, Reply, RpcError};
 use serde_json::Value;
 
 pub struct SourceResolve;

@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 use crate::platform::{AvListener, AvStream};
 use crate::{
-    RpcError,
+    host::RpcError,
     playback::producer_audio::{Audio, Push, Writer},
     playback::producer_binary::{self as wire, Kind, Spec},
 };

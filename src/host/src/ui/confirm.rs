@@ -4,7 +4,7 @@
 //! Windows).
 #![forbid(unsafe_code)]
 
-use crate::RpcError;
+use crate::host::RpcError;
 use serde_json::Value;
 
 #[derive(Clone, Debug, PartialEq)]

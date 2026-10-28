@@ -6,7 +6,16 @@
 //! the panel under the pointer (if it listens) or, by extension, to the
 //! providers (`drops.provide`). Directories match the reserved name `folder`.
 #![forbid(unsafe_code)]
-use crate::*;
+use crate::host::*;
+use crate::platform;
+use crate::ui::view;
+use serde_json::{Value, json};
+use slint::ComponentHandle;
+use slint_interpreter::Value as SValue;
+use std::{
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 const GROUP_MS: u128 = 30;
 const MAX_EXTENSIONS: usize = 64;
