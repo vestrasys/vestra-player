@@ -360,6 +360,26 @@ mod tests {
         }
     }
 
+    /// A commit the registry refused leaves its upload completed but active
+    /// (`subtitle_backend` discards it only after a commit that took
+    /// effect); the SDK's discard then frees the plugin's slot.
+    #[test]
+    fn discarding_a_completed_upload_frees_its_slot() {
+        let mut registry = Registry::new();
+        for id in 1..=2 {
+            registry.begin(1, id, 7, 2).unwrap();
+            registry.append(1, id, 7, 0, b"ab").unwrap();
+            registry.complete(1, id, 7).unwrap();
+        }
+        assert_eq!(registry.begin(1, 3, 7, 2), Err(Error::Limit));
+        registry.discard(1, 1).unwrap();
+        registry.discard(1, 2).unwrap();
+        assert_eq!(registry.reserved, 0);
+        registry.begin(1, 3, 7, 2).unwrap();
+        // A second discard of the same id is a no-op, not an error.
+        registry.discard(1, 1).unwrap();
+    }
+
     #[test]
     fn active_and_reserved_limits_refuse_without_consuming_ids() {
         let mut registry = Registry::new();

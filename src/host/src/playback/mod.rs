@@ -3,6 +3,7 @@
 //! render targets and frame pacing).
 
 pub(crate) mod backend;
+pub(crate) mod cover_listing;
 pub(crate) mod effects;
 pub(crate) mod media_jobs;
 pub(crate) mod media_tracks;
