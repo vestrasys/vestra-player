@@ -434,8 +434,13 @@ impl Handle {
                 {
                     current = Some(image.clone());
                     show(image);
-                } else if retargeted && let Some(image) = &current {
-                    // Another component took the window's place: same texture.
+                } else if retargeted
+                    && view.as_ref().is_some_and(|view| view.epoch == reshow.0)
+                    && let Some(image) = &current
+                {
+                    // Another component took the window's place: same
+                    // texture. Not after a `reshow` the window has not
+                    // followed yet: that frame was cleared from the video area.
                     show(image.clone());
                 }
                 copied = shared.shown.load(Ordering::Relaxed) != copies;

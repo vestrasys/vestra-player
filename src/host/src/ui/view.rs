@@ -55,27 +55,40 @@ impl ShownTree {
             })
     }
 
-    /// Show this tree in `window` again if a replacement took its place
-    /// (nothing otherwise: re-attaching would close its popups and reset
-    /// its focus).
-    pub fn restore(&self, window: &slint::Window) {
-        if !self.is_shown_in(window) {
-            slint::private_unstable_api::re_exports::WindowInner::from_pub(window)
-                .set_component(&self.0);
+    /// Show this tree in `window` again if a replacement took its place;
+    /// whether it did (nothing otherwise: re-attaching would close its
+    /// popups and reset its focus).
+    ///
+    /// Re-attaching clears the window's focus, and the tree's `init` (which
+    /// gave it) does not run again: the caller gives the focus back. A
+    /// replacement whose `show()` failed may hold the window's strong
+    /// reference: showing the window again moves it back to this tree (the
+    /// native window is already visible; winit returns at once).
+    pub fn restore(&self, window: &slint::Window) -> bool {
+        if self.is_shown_in(window) {
+            return false;
         }
+        let inner = slint::private_unstable_api::re_exports::WindowInner::from_pub(window);
+        inner.set_component(&self.0);
+        if window.is_visible() {
+            let _ = inner.show();
+        }
+        true
     }
 }
 
 /// Build the main window's next shell and show it, the way browsers and
 /// IDEs swap content without touching the top-level window.
 ///
-/// With an `old` shell, `build` gets its window and builds the new shell in
-/// it (`composition::compile_json_in`); this then shows it there, which only
-/// moves the window's strong reference to the new tree: the native window
-/// stays visible where it was, at its size, maximized or fullscreen, with
-/// its focus and z-order, so nothing hides, fades, moves or resizes. The
-/// old shell must not be hidden (it shares the window): the caller drops
-/// it. If `build` fails, the window shows the old tree again.
+/// With an `old` shell, `build` gets its window and must build the new shell
+/// in it (`composition::compile_json_in`; a shell built elsewhere is
+/// refused); this then shows it there, which only moves the window's strong
+/// reference to the new tree: the native window stays visible where it was,
+/// at its size, maximized or fullscreen, with its focus and z-order, so
+/// nothing hides, fades, moves or resizes. The old shell must not be hidden
+/// (it shares the window): the caller drops it. If `build` fails, the window
+/// shows the old tree again, with the focus on its video area
+/// (`focus-video`).
 ///
 /// Without an old shell, `build` gets `None` and shows its own new window.
 pub fn replace_shell(
@@ -92,19 +105,33 @@ pub fn replace_shell(
     // (which applies the window properties).
     let state = window.map(|w| (w.is_fullscreen(), w.is_maximized(), w.is_minimized()));
     let built = build(window).and_then(|shell| {
+        if let (Some(window), Some(kept)) = (window, &kept)
+            && kept.is_shown_in(window)
+        {
+            bail!("the new shell was not built in the main window");
+        }
         if let Some((fullscreen, maximized, minimized)) = state {
-            let window = shell.window();
-            window.set_fullscreen(fullscreen);
-            window.set_maximized(maximized);
-            window.set_minimized(minimized);
+            // All three at once on the new root: `Window::set_fullscreen` and
+            // the like each apply the window properties, and an order with a
+            // mixed state in between would unmaximize and maximize again.
+            if let Some(item) =
+                slint::private_unstable_api::re_exports::WindowInner::from_pub(shell.window())
+                    .window_item()
+            {
+                let item = item.as_pin_ref();
+                item.full_screen.set(fullscreen);
+                item.maximized.set(maximized);
+                item.minimized.set(minimized);
+            }
             shell.show()?;
         }
         Ok(shell)
     });
     if built.is_err()
-        && let (Some(window), Some(kept)) = (window, &kept)
+        && let (Some(old), Some(window), Some(kept)) = (old, window, &kept)
+        && kept.restore(window)
     {
-        kept.restore(window);
+        let _ = old.invoke("focus-video", &[]);
     }
     built
 }
@@ -1564,6 +1591,9 @@ export component W inherits Window {
         renderer: slint::platform::software_renderer::SoftwareRenderer,
         size: std::cell::Cell<slint::PhysicalSize>,
         position: std::cell::Cell<slint::PhysicalPosition>,
+        /// Fullscreen, maximized, minimized as the system has them: like
+        /// winit, a property update that differs changes the window.
+        flags: std::cell::Cell<(bool, bool, bool)>,
     }
     impl slint::platform::WindowAdapter for Recorded {
         fn window(&self) -> &slint::Window {
@@ -1593,6 +1623,23 @@ export component W inherits Window {
             native(format!("set_visible {visible}"));
             Ok(())
         }
+        fn update_window_properties(&self, properties: slint::platform::WindowProperties<'_>) {
+            let flags = (
+                properties.is_fullscreen(),
+                properties.is_maximized(),
+                properties.is_minimized(),
+            );
+            let old = self.flags.replace(flags);
+            for (name, was, now) in [
+                ("fullscreen", old.0, flags.0),
+                ("maximized", old.1, flags.1),
+                ("minimized", old.2, flags.2),
+            ] {
+                if was != now {
+                    native(format!("{name} {now}"));
+                }
+            }
+        }
         fn renderer(&self) -> &dyn slint::platform::Renderer {
             &self.renderer
         }
@@ -1609,6 +1656,7 @@ export component W inherits Window {
                     renderer: slint::platform::software_renderer::SoftwareRenderer::new(),
                     size: Default::default(),
                     position: Default::default(),
+                    flags: Default::default(),
                 }
             }))
         }
@@ -1674,6 +1722,7 @@ export component W inherits Window {
         assert!(ShownTree::of(window).is_some());
         assert!(window.is_visible());
         assert!(window.is_maximized());
+        assert!(canvas_focused(&new));
         assert_eq!(window.scale_factor(), 1.75);
         assert_eq!(window.size(), slint::PhysicalSize::new(2572, 1673));
         assert_eq!(window.position(), slint::PhysicalPosition::new(120, 64));
@@ -1696,14 +1745,24 @@ export component W inherits Window {
         last.hide().unwrap();
     }
 
+    fn canvas_focused(shell: &ComponentInstance) -> bool {
+        matches!(
+            shell.get_property("canvas-focused"),
+            Ok(slint_interpreter::Value::Bool(true))
+        )
+    }
+
     /// A shell that fails after Slint attached it to the window (a binding,
-    /// a panel's property) leaves the old tree shown and working, with no
-    /// native call; one that fails before (compilation) leaves it untouched.
+    /// a panel's property, `show()`) leaves the old tree shown and working,
+    /// with the window's strong reference and the video area's focus back
+    /// and no change of the window's state; one that fails before
+    /// (compilation) leaves it untouched.
     #[test]
     fn shell_swap_failure_shows_the_old_tree_again() {
         let (old, sender) = recorded_main_window();
         let old_tree = ShownTree::of(old.window()).unwrap();
         let width = video_width(&old);
+        assert!(canvas_focused(&old));
         let failed = replace_shell(Some(&old), |window| {
             let _shell = crate::ui::composition::compile_json_in(
                 &bar_and_sidebar(),
@@ -1715,14 +1774,48 @@ export component W inherits Window {
         });
         assert!(failed.is_err());
         assert!(old_tree.is_shown_in(old.window()));
+        assert!(canvas_focused(&old));
+        // Only the re-show that moves the strong reference back.
+        assert_eq!(native_calls(), ["set_visible true"]);
         let failed = replace_shell(Some(&old), |_| anyhow::bail!("compilation failed"));
         assert!(failed.is_err());
         assert!(old_tree.is_shown_in(old.window()));
         assert!(native_calls().is_empty());
         assert!(old.window().is_visible());
+        assert!(old.window().is_maximized());
         old.set_property("sidebar-visible", false.into()).unwrap();
         assert_eq!(video_width(&old), width);
         old.hide().unwrap();
+    }
+
+    /// A shell built in a window of its own (`compile_json` instead of
+    /// `compile_json_in` with the main window) is refused, and the main
+    /// window keeps its tree: the swap never opens a second window.
+    #[test]
+    fn shell_swap_refuses_a_shell_built_in_another_window() {
+        let (old, sender) = recorded_main_window();
+        let old_tree = ShownTree::of(old.window()).unwrap();
+        let failed = replace_shell(Some(&old), |_| {
+            crate::ui::composition::compile_json(&bar_and_sidebar(), sender.clone(), 2)
+        });
+        let error = failed.err().unwrap().to_string();
+        assert!(error.contains("not built in the main window"), "{error}");
+        assert!(old_tree.is_shown_in(old.window()));
+        // The stray window was created but never shown.
+        assert_eq!(native_calls(), ["new window"]);
+        old.hide().unwrap();
+    }
+
+    /// `prepare_mount_tick` (which needs a whole `Host`) swaps through
+    /// `replace_shell` and builds in the window it is given; a change back
+    /// to building a new window fails here.
+    #[test]
+    fn prepare_mount_tick_builds_in_the_main_window() {
+        let mounts = include_str!("../host/mounts.rs");
+        assert!(mounts.contains("view::replace_shell(self.shell.as_ref(), build)"));
+        assert!(mounts.contains("composition::compile_json_in("));
+        assert!(!mounts.contains("composition::compile_json("));
+        assert!(!mounts.contains(".hide()"));
     }
 
     /// A window waits for its native window (none on the headless

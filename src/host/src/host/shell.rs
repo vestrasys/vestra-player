@@ -1,22 +1,26 @@
-//! Binding a newly compiled shell's callbacks.
+//! Binding a newly compiled shell's callbacks and its window's event hook.
 use super::*;
 
 impl Host {
-    pub(crate) fn bind_shell(
+    /// The main window's winit event hook, tagged with the shell generation
+    /// that receives its events. The window has one hook slot, which outlives
+    /// a shell (a new composition replaces the tree in the same window):
+    /// it is set once the shell for `generation` is shown, never for a
+    /// candidate that may still fail (`prepare_mount_tick`).
+    pub(crate) fn bind_window_events(
         &self,
         window: &slint_interpreter::ComponentInstance,
         generation: u64,
-    ) -> Result<()> {
-        {
-            use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
-            let events = self.events.clone();
-            #[cfg(feature = "producer-audio")]
-            let routing = self.backend.input.clone();
-            let input = self.input.clone();
-            let weak = window.as_weak();
-            let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
-            let menu_cursor = std::cell::Cell::new((f64::NAN, f64::NAN));
-            window.window().on_winit_window_event(move |slint_window, event| {
+    ) {
+        use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
+        let events = self.events.clone();
+        #[cfg(feature = "producer-audio")]
+        let routing = self.backend.input.clone();
+        let input = self.input.clone();
+        let weak = window.as_weak();
+        let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
+        let menu_cursor = std::cell::Cell::new((f64::NAN, f64::NAN));
+        window.window().on_winit_window_event(move |slint_window, event| {
                 if debug_menu()
                     && weak.upgrade().is_some_and(|shell| {
                         matches!(shell.get_property("menu-open"), Ok(SValue::Bool(true)))
@@ -77,7 +81,12 @@ impl Host {
                 }
                 EventResult::Propagate
             });
-        }
+    }
+    pub(crate) fn bind_shell(
+        &self,
+        window: &slint_interpreter::ComponentInstance,
+        generation: u64,
+    ) -> Result<()> {
         let events = self.events.clone();
         #[cfg(feature = "producer-audio")]
         let routing = self.backend.input.clone();

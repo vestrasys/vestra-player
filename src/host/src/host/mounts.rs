@@ -160,9 +160,15 @@ impl Host {
             };
         let result = match view::replace_shell(self.shell.as_ref(), build) {
             Ok(shell) => {
+                // The window's one event hook now reports for this shell (not
+                // set while building: a failed candidate leaves the old one).
+                self.bind_window_events(&shell, candidate_generation);
                 self.theme_view(&shell);
-                #[cfg(feature = "producer-audio")]
-                self.physical_revoke(producer_input::RevokeReason::WindowHidden);
+                // Emulator key capture stays: the window was neither hidden
+                // nor unfocused, and the new tree gives the video area the
+                // focus (its `init`); each key is still checked against the
+                // new shell's `canvas-focused`. A capture revoked here used
+                // to end at every plugin install or uninstall.
                 if reuse {
                     self.retarget_shell(&shell);
                 } else {
