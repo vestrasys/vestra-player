@@ -1,5 +1,5 @@
 import type { ScopeImpl } from "./scope.ts";
-import type { Clipboard, Host, Power, Secrets, Storage, System, Tools } from "./types.ts";
+import type { Clipboard, Host, Power, Rendering, Secrets, Storage, System, Tools } from "./types.ts";
 export declare const clipboard: (scope: ScopeImpl) => Clipboard;
 export declare const host: (scope: ScopeImpl) => Host;
 export declare const power: (scope: ScopeImpl) => Power;
@@ -112,3 +112,4 @@ export declare const SECRET_LIMITS: Readonly<{
     readonly names: 256;
 }>;
 export declare const secrets: (scope: ScopeImpl) => Secrets;
+export declare const rendering: (scope: ScopeImpl) => Rendering;

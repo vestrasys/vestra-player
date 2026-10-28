@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.10
+
+- The vendored SDK is 1.5.35 (`npm run vendor:sdk`). The reference the AI reads (`llms.txt` / `llms-full.txt`) and the declarations its type check and tests use now cover `plugin.rendering` (the GPU or software rendering choice, capability `rendering.manage`, player 0.5.13), `SystemInfo.renderingReason`, `TestHost.rendering` and the how-to guide *Offer a GPU rendering switch*. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
 ## 2.2.9
 
 - The vendored SDK is 1.5.34 (`npm run vendor:sdk`), the version the player now uses. The reference the AI reads (`llms.txt` / `llms-full.txt`) carries every declaration's examples and remarks, the corrected facts and the new how-to guides of SDK 1.5.30–1.5.34 (playback control, data storage, loading subtitles), and `SUBTITLE_LIMITS`; the type check and tests the AI runs use the 1.5.34 declarations and TestHost. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.

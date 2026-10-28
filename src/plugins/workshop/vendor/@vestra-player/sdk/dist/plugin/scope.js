@@ -17,7 +17,7 @@ import { packages } from "./packages.js";
 import { osd } from "./osd.js";
 import { mainWindow } from "./window.js";
 import { bindingsApi } from "./bindings.js";
-import { clipboard, host, power, secrets, storage, system, tools, } from "./services.js";
+import { clipboard, host, power, rendering, secrets, storage, system, tools, } from "./services.js";
 export class ScopeImpl {
     runtime;
     #parent;
@@ -63,6 +63,7 @@ export class ScopeImpl {
     storage = storage(this);
     system = system(this);
     secrets = secrets(this);
+    rendering = rendering(this);
     window = mainWindow(this);
     bindings = bindingsApi(this);
     ui = ui(this);

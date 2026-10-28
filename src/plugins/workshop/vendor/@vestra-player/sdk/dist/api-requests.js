@@ -140,4 +140,7 @@ export const API_REQUESTS = Object.freeze({
     "Secrets.get": [{ method: "secrets.get" }],
     "Secrets.set": [{ method: "secrets.set" }],
     "Secrets.delete": [{ method: "secrets.delete" }],
+    "Rendering.state": [{ method: "rendering.state" }],
+    "Rendering.setPreference": [{ method: "rendering.setPreference" }],
+    "Rendering.restartPlayer": [{ method: "rendering.restart" }],
 });

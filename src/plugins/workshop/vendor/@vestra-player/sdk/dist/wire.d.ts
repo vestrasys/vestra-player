@@ -315,6 +315,26 @@ export interface WireSystemInfo {
     }[];
     /** Player 0.5.12; older players leave it out. */
     rendering?: "gpu" | "software";
+    /** Why `rendering` is what it is (player 0.5.13; older players leave it out). */
+    renderingReason?: WireRenderingReason;
+}
+/** A rendering reason: a stable kebab-case `code` and English text. */
+export interface WireRenderingReason {
+    code: string;
+    message: string;
+}
+/** `rendering.state` and `rendering.setPreference` (player 0.5.13). */
+export interface WireRenderingState {
+    mode: "gpu" | "software";
+    reason: WireRenderingReason;
+    preference: "auto" | "gpu" | "software";
+    nextMode: "gpu" | "software";
+    nextReason: WireRenderingReason;
+    restartPending: boolean;
+    gpu: {
+        available: boolean;
+        reason: WireRenderingReason | null;
+    };
 }
 /**
  * Template arguments on the wire (`osd.show`, `osd.panel`, `dialogs.confirm`,
@@ -526,6 +546,15 @@ export declare function createWire(transport: Transport): {
     };
     app: {
         system: () => Promise<WireSystemInfo>;
+    };
+    /**
+     * The rendering choice (player 0.5.13): `state` needs no capability,
+     * `setPreference` and `restart` need `rendering.manage`.
+     */
+    rendering: {
+        state: () => Promise<WireRenderingState>;
+        setPreference: (preference: string) => Promise<WireRenderingState>;
+        restart: () => Promise<null>;
     };
     power: {
         preventSleep: (mode: "off" | "playing") => Promise<void>;
