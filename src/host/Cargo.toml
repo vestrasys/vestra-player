@@ -1,6 +1,6 @@
 [package]
 name = "vestra-host"
-version = "0.5.10"
+version = "0.5.11"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
@@ -18,7 +18,11 @@ rsmpv = { version = "=0.2.1", features = ["render", "stream-cb"] }
 # `unstable-fontique-011`: `slint::fontique_011::shared_collection()`, the
 # per-script CJK fallback chains of `ui_fonts.rs`.
 slint = { version = "=1.18.1", features = ["unstable-winit-030", "unstable-fontique-011"] }
-slint-interpreter = "=1.18.1"
+# `internal`: `ComponentDefinition::create_with_existing_window`, so that a new
+# main-window composition replaces the component tree inside the same native
+# window, as Slint's live preview does (`ui::composition::compile_json_in`).
+# Not covered by semver: recheck on every Slint upgrade (the version is pinned).
+slint-interpreter = { version = "=1.18.1", features = ["internal"] }
 rfd = "0.17.2"
 base64 = "=0.22.1"
 sha2 = "=0.10.9"

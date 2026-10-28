@@ -33,9 +33,12 @@ impl Host {
         };
         self.backend.render.presentation.start_counting();
         let render = self.backend.render.clone();
-        let show = move |shell: &slint_interpreter::ComponentInstance, image: slint::Image| {
+        let target = self.video_target.clone();
+        let show = move |image: slint::Image| {
             // A generated stream's picture stays (its frames come as pixels).
-            if !render.producer() {
+            if !render.producer()
+                && let Some(shell) = target.borrow().upgrade()
+            {
                 let _ = shell.set_property("video-frame", image.into());
             }
         };
@@ -69,8 +72,11 @@ impl Host {
                     render.presentation.draw_end(Instant::now(), false);
                 }
             };
-            let show = |shell: &slint_interpreter::ComponentInstance, image: slint::Image| {
-                let _ = shell.set_property("video-frame", image.into());
+            let target = self.video_target.clone();
+            let show = move |image: slint::Image| {
+                if let Some(shell) = target.borrow().upgrade() {
+                    let _ = shell.set_property("video-frame", image.into());
+                }
             };
             if let Ok(feed) = vestra_video_texture::attach(shell, show, drawn) {
                 self.backend.render.presentation.start_counting();
@@ -101,6 +107,18 @@ impl Host {
         }
         self.backend.render.presentation.start_counting();
         None
+    }
+    /// A new shell took the main window's place inside the same native
+    /// window (`prepare_mount_tick`): what was attached to the window stays
+    /// (its rendering notifier and reused texture, its native window id and
+    /// title bar) and now serves `shell`; what followed the old shell
+    /// follows the new one.
+    pub(crate) fn retarget_shell(&self, shell: &slint_interpreter::ComponentInstance) {
+        self.video_target.replace(shell.as_weak());
+        if let Some(gpu) = self.backend.render.gpu() {
+            gpu.retarget(shell);
+        }
+        frame_pacing::follow(shell);
     }
     /// Set the newest rendered frame on the video area (no copy: the renderer
     /// drew into this buffer).

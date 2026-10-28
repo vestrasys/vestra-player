@@ -233,6 +233,7 @@ fn main() -> Result<()> {
         mount_input,
         last_image: None,
         video_texture: RefCell::new(None),
+        video_target: Rc::default(),
         shell_generation: 1,
         next_shell_generation: 1,
         menu_path: Vec::new(),
@@ -432,8 +433,13 @@ fn main() -> Result<()> {
             .and_then(|before| platform::associate_new(before).ok());
         let host = Rc::new(RefCell::new(host));
         host.borrow().bind_shell(&window, 1)?;
+        host.borrow().bind_window_events(&window, 1);
         host.borrow_mut().theme_view(&window);
         host.borrow_mut().shell = Some(window.clone_strong());
+        host.borrow().video_target.replace(window.as_weak());
+        // Only `host.shell` keeps the main shell: a composition change
+        // replaces it (`view::replace_shell`) and its tree must be freed.
+        drop(window);
         // Render cadence: each new frame wakes the event loop (coalesced)
         // instead of waiting for the 16 ms tick.
         let frames = host.borrow().backend.frame.clone();
@@ -549,7 +555,7 @@ fn main() -> Result<()> {
                 }
             },
         );
-        let ran = window.run();
+        let ran = slint::run_event_loop();
         stop_handoffs();
         ran?;
         timer.stop();
@@ -561,7 +567,11 @@ fn main() -> Result<()> {
         // Native windows/resources must be released before process teardown.
         host.borrow_mut().close_floating();
         host.borrow_mut().views.clear();
-        host.borrow_mut().shell = None;
+        // `run()` used to hide the window it showed; the current shell now.
+        let shell = host.borrow_mut().shell.take();
+        if let Some(shell) = shell {
+            let _ = shell.hide();
+        }
     }
     Ok(())
 }

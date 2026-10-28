@@ -53,11 +53,13 @@ pub struct Feed(Rc<RefCell<State>>);
 /// Show the pictures handed to the returned `Feed` in `component`'s window
 /// (call before it is shown; this is the window's only rendering notifier).
 /// `show` gets the texture's image when the texture is created or resized,
-/// to set on the video area. `drawn` sees each draw. An error: the window's
+/// to set on the video area of whatever component the window shows then
+/// (the window outlives a component when another one replaces it in the
+/// same window). `drawn` sees each draw. An error: the window's
 /// renderer has no rendering notifier (Slint's software renderer).
 pub fn attach<T>(
     component: &T,
-    show: impl Fn(&T, Image) + 'static,
+    show: impl Fn(Image) + 'static,
     mut drawn: impl FnMut(Draw) + 'static,
 ) -> Result<Feed, String>
 where
@@ -65,7 +67,6 @@ where
 {
     let feed = Feed(Rc::default());
     let state = feed.0.clone();
-    let weak = component.as_weak();
     let mut view: Option<View> = None;
     let notifier = move |rendering: RenderingState, api: &GraphicsAPI| match rendering {
         RenderingState::RenderingSetup => {
@@ -84,9 +85,7 @@ where
                 && let Some(image) = view.upload(&buffer)
             {
                 state.borrow_mut().image = Some((image.clone(), view.size()));
-                if let Some(component) = weak.upgrade() {
-                    show(&component, image);
-                }
+                show(image);
             }
         }
         RenderingState::AfterRendering => drawn(Draw::End),
