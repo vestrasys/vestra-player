@@ -14,7 +14,7 @@
  *    keeps the distinct ones; a window file no test opened is shown with its
  *    default values.
  * 3. Renders them in each language with the host's own pipeline (the ignored
- *    host test `ui_shots::tests::render_plugin_screenshots`, Slint's software
+ *    host test `ui::ui_shots::tests::render_plugin_screenshots`, Slint's software
  *    renderer, no window on screen), one process per language.
  * 4. Writes `index.md` and `index.json` next to the PNG files: per image the
  *    plugin, the view, the language and the state (the test it came from).
@@ -341,7 +341,7 @@ for (const lang of langs) {
     [
       "--ignored",
       "--exact",
-      "ui_shots::tests::render_plugin_screenshots",
+      "ui::ui_shots::tests::render_plugin_screenshots",
       "--nocapture",
     ],
     {

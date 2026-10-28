@@ -3,7 +3,7 @@
 //! 2026-10-27, after Chrome's `chrome.storage.session`; design record
 //! doc/process/rounds/2026-10-session-storage.md.
 //!
-//! The store is keyed by the plugin's [`DataKey`](crate::plugins::DataKey) (its installed instance or
+//! The store is keyed by the plugin's [`DataKey`](crate::process::DataKey) (its installed instance or
 //! development id: the same identity as its data directory and secrets), never
 //! by the process generation, so a value survives every restart of the
 //! plugin's process within one player run: a reload, an upgrade, a crash, a
@@ -49,10 +49,10 @@ pub struct SessionStorage {
 }
 
 /// The store's own key for a plugin: one per data identity.
-fn identity(key: &plugins::DataKey) -> String {
+fn identity(key: &process::DataKey) -> String {
     match key {
-        plugins::DataKey::Instance(guid) => format!("instance:{guid}"),
-        plugins::DataKey::Development(id) => format!("development:{id}"),
+        process::DataKey::Instance(guid) => format!("instance:{guid}"),
+        process::DataKey::Development(id) => format!("development:{id}"),
     }
 }
 
@@ -69,7 +69,7 @@ impl SessionStorage {
     /// Answers one `storage.session.*` request of the plugin `key`.
     pub fn dispatch(
         &mut self,
-        key: &plugins::DataKey,
+        key: &process::DataKey,
         method: &str,
         params: &Value,
     ) -> std::result::Result<Value, RpcError> {
@@ -140,7 +140,7 @@ impl SessionStorage {
     }
     /// Forget everything the plugin `key` stored: the user disabled or
     /// uninstalled it. A restart of its process does not call this.
-    pub fn clear(&mut self, key: &plugins::DataKey) {
+    pub fn clear(&mut self, key: &process::DataKey) {
         self.plugins.remove(&identity(key));
     }
 }
@@ -148,7 +148,7 @@ impl SessionStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use plugins::DataKey;
+    use process::DataKey;
 
     fn call(
         store: &mut SessionStorage,
@@ -250,7 +250,7 @@ mod tests {
     }
 
     /// Values of a realistic size: one request is at most 1 MiB on the wire
-    /// (`plugins::MAX_MESSAGE_BYTES`), so a single value stays below that.
+    /// (`process::MAX_MESSAGE_BYTES`), so a single value stays below that.
     #[test]
     fn the_quota_counts_keys_compact_json_and_entries_and_a_refused_set_changes_nothing() {
         let mut store = SessionStorage::default();

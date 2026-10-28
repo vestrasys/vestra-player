@@ -2,7 +2,7 @@
 /**
  * Lays out the plugin runtime the way a packaged player ships it
  * (`Vestra Player.app/Contents/Resources/runtime/`, `<install dir>\resources\runtime\`
- * on Windows; found by host/src/runtime_paths.rs):
+ * on Windows; found by host/src/process/runtime_paths.rs):
  *
  *   runtime/
  *     runner.js                              the own-process plugin runner

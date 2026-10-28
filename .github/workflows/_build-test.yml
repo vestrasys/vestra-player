@@ -81,7 +81,7 @@ jobs:
           VESTRA_UI_RECORD: ${{ runner.temp }}/ui-record
         run: |
           node ../../.github/scripts/ui-record-paths.mjs absolute "$VESTRA_UI_RECORD" "$GITHUB_WORKSPACE"
-          cargo test --locked --bin vestra-host -- --ignored --exact ui_types::tests::recorded_plugin_props_match_their_slint
+          cargo test --locked --bin vestra-host -- --ignored --exact ui::ui_types::tests::recorded_plugin_props_match_their_slint
       # Runs even when the tests failed, for one more signal per run.
       - name: cargo doc
         if: ${{ !cancelled() && inputs.doc && !inputs.ui-only }}

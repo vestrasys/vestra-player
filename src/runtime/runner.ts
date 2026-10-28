@@ -3,7 +3,7 @@
  * JSONL protocol on stdin/stdout. The host starts it as
  * `node runner.js <plugin directory>` (packaged; `runner.ts` in a development
  * build) with the plugin's parameters in the environment
- * (`host/src/plugins.rs`). The plugin's life is `boot.ts`; this file owns
+ * (`host/src/process/mod.rs`). The plugin's life is `boot.ts`; this file owns
  * the process: its pipes, its console, its exit.
  */
 import { createInterface } from "node:readline";

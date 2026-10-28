@@ -6,100 +6,39 @@
 // `diag!`, used everywhere below (declared first for its textual scope).
 #[macro_use]
 mod diag;
-mod backend;
-mod bar_buttons;
 mod binding_manager;
 mod bindings;
 mod capabilities;
 mod clipboard;
 mod commands;
-pub mod composition;
-mod confirm;
 mod core_actions;
-mod drops;
-mod effects;
 pub mod font_asset;
 pub mod font_carrier;
-mod frame_pacing;
+pub mod host;
 mod i18n;
 mod input_trace;
 mod launch;
-// Windows: libmpv reads leased local files through stream_cb (Unix: fd://).
-#[cfg(any(windows, test))]
-mod lease_stream;
-mod manifest;
-mod media_jobs;
-mod media_tracks;
-mod media_worker;
-mod menu;
-mod native_subtitle;
-mod offline_audio;
-mod offline_descriptor;
 mod open_files;
-pub mod package_activation;
-mod package_archive;
-mod package_manager;
-pub mod package_stage;
-pub mod package_store;
-mod package_validate;
-mod pip;
+pub mod packages;
 mod platform;
-mod plugins;
+pub mod playback;
 mod power;
-mod processing;
-pub mod processing_operations;
-#[cfg(feature = "producer-audio")]
-mod producer;
-#[cfg(feature = "producer-audio")]
-mod producer_audio;
-#[cfg(feature = "producer-audio")]
-mod producer_controls;
-#[cfg(feature = "producer-audio")]
-pub mod producer_input;
-#[cfg(feature = "producer-audio")]
-mod producer_input_delivery;
-mod runtime_paths;
-
-#[cfg(feature = "producer-audio")]
-pub mod producer_binary;
-mod render_target;
-mod renderer;
-mod secret_index;
-mod session;
+mod process;
 mod session_storage;
-mod settings_window;
-mod shared_runner;
-mod slot_claims;
-mod source_backend;
-mod source_geometry;
-pub mod source_lease;
-mod source_resolvers;
-mod subtitle_backend;
-pub mod subtitle_format;
-pub mod subtitle_state;
-pub mod subtitle_style;
-pub mod subtitle_upload;
 mod system;
-mod theme;
 mod timeline;
-mod ui;
-mod ui_fonts;
-mod ui_image;
-mod ui_markdown;
-#[cfg(test)]
-mod ui_shots;
-mod ui_state;
-#[cfg(test)]
-mod ui_types;
-mod ui_values;
-mod video_click;
-mod video_render;
-mod video_view;
-pub mod window_control;
-pub mod window_state;
+pub mod ui;
+
 use anyhow::{Result, bail};
-use backend::{Backend, Command};
-use plugins::Plugin;
+use host::package_activation;
+use packages::{manifest, package_manager};
+#[cfg(feature = "producer-audio")]
+use playback::producer_input;
+use playback::{
+    backend::{Backend, Command},
+    frame_pacing, render_target, renderer, video_click,
+};
+use process::{Plugin, runtime_paths, shared_runner};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use slint::ComponentHandle;
@@ -115,6 +54,10 @@ use std::{
         mpsc,
     },
     time::{Duration, Instant},
+};
+use ui::{
+    bar_buttons, composition, drops, menu, pip, settings_window, slot_claims, theme, ui_fonts,
+    ui_image, ui_state, ui_values, view, window_control, window_state,
 };
 
 #[derive(Serialize, Debug, Clone)]
@@ -360,7 +303,7 @@ struct Host {
     /// Restarts, quarantine and fail-open of the shared runner for this run.
     shared_policy: shared_runner::Policy,
     plugins: BTreeMap<u64, Plugin>,
-    views: BTreeMap<(u64, String), ui::View>,
+    views: BTreeMap<(u64, String), view::View>,
     events: mpsc::Sender<Event>,
     next_generation: u64,
     headless: bool,
@@ -454,7 +397,7 @@ struct Host {
     /// `window.setVideoArea` answered once the video area shows the target.
     area_replies: Vec<AreaReply>,
     /// Development loads of this run (`--plugin`, or re-enabled): directory, manifest.
-    development: BTreeMap<String, (PathBuf, plugins::Manifest)>,
+    development: BTreeMap<String, (PathBuf, process::Manifest)>,
     /// Development loads the user disabled (this run only).
     dev_disabled: std::collections::BTreeSet<String>,
     /// Why a plugin last stopped on its own, by id.
@@ -500,8 +443,8 @@ struct Host {
     settings_category: Option<usize>,
     /// A view missed the palette: deliver again on the next tick.
     theme_pending: bool,
-    /// New windows to put where the previous ones were (`ui::Placements`).
-    placements: ui::Placements,
+    /// New windows to put where the previous ones were (`view::Placements`).
+    placements: view::Placements,
     /// Bottom-bar command buttons (`bar_buttons.rs`).
     bar: bar_buttons::Strip,
 }
@@ -1393,7 +1336,7 @@ impl Host {
             .as_ref()
             .zip(self.native_window)
             .map(|(shell, id)| {
-                ui::settle_layout(shell.window());
+                view::settle_layout(shell.window());
                 let number = |name: &str| match shell.get_property(name) {
                     Ok(SValue::Number(n)) => n,
                     _ => 0.,
@@ -1648,7 +1591,7 @@ impl Host {
         }
         self.host_command_states(fullscreen);
         // The sidebar and plugin panels show and hide `if` elements.
-        ui::settle_layout(shell.window());
+        view::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
             Ok(slint_interpreter::Value::Number(n)) => n,
             _ => 0.,
@@ -2480,7 +2423,7 @@ impl Host {
         let input = self.input.clone();
         let events = self.events.clone();
         let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
-        let shortcuts = ui::WindowShortcuts::default();
+        let shortcuts = view::WindowShortcuts::default();
         window.window().on_winit_window_event(move |window, event| {
             if shortcuts.filter(window, event) {
                 return EventResult::PreventDefault;
@@ -2815,7 +2758,7 @@ impl Host {
             frame_pacing::follow(&shell);
             Ok(shell)
         };
-        // Where the old shell's frame is (`ui::Placements`).
+        // Where the old shell's frame is (`view::Placements`).
         let position = self.shell.as_ref().map(|old| old.window().position());
         let result = match build() {
             Ok(shell) => {
@@ -3484,7 +3427,7 @@ impl Host {
         if shell.window().is_fullscreen() {
             return Err(unavailable(&i18n::tr("Not available in fullscreen")));
         }
-        ui::settle_layout(shell.window());
+        view::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
             Ok(SValue::Number(n)) if n.is_finite() => n,
             _ => 0.,
@@ -3623,7 +3566,7 @@ impl Host {
                 catalog: None,
                 locale: i18n::locale(),
             },
-            plugins::Plugin::texts,
+            process::Plugin::texts,
         );
         texts.sentence(text, args).map_err(RpcError::invalid)
     }
@@ -4227,7 +4170,7 @@ fn set_menu_model(
     // batches): a group row opened and closed in one batch kept `open`
     // and stayed lit (user report, 0.5.9). Settling the repeaters now
     // makes the next in-place write apply at once.
-    ui::settle_layout(window.window());
+    view::settle_layout(window.window());
     Ok(())
 }
 fn string<'a>(params: &'a Value, key: &str) -> std::result::Result<&'a str, RpcError> {
@@ -4399,7 +4342,7 @@ fn main() -> Result<()> {
     let backend = Backend::start(events.clone(), silent, gpu)?;
     // `plugin.app`, handed to every plugin process when it starts.
     let ffmpeg = &backend.versions["ffmpeg"];
-    plugins::set_app_info(&json!({"version":env!("CARGO_PKG_VERSION"),
+    process::set_app_info(&json!({"version":env!("CARGO_PKG_VERSION"),
         "build":option_env!("VESTRA_BUILD"),
         "components":{"mpv":backend.versions["mpv"],
             "libav":if ffmpeg.is_string() { json!({"ffmpeg":ffmpeg}) } else { json!({}) },
@@ -4503,7 +4446,7 @@ fn main() -> Result<()> {
         settings: Default::default(),
         settings_category: None,
         theme_pending: false,
-        placements: ui::Placements::default(),
+        placements: view::Placements::default(),
         bar: bar_buttons::Strip::default(),
         commands: commands::Registry::new(),
     };

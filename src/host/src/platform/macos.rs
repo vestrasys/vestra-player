@@ -109,7 +109,7 @@ impl PipWindow {
     }
 }
 
-impl crate::pip::Surface for PipWindow {
+impl crate::ui::pip::Surface for PipWindow {
     type Frame = GpuFrame;
     fn place(&self, id: HostWindowId, area: Rect) -> bool {
         use objc2_foundation::{NSPoint, NSRect, NSSize};
@@ -136,7 +136,7 @@ impl crate::pip::Surface for PipWindow {
     fn stop(&self) {
         self.0.stop()
     }
-    fn set_playback(&self, playback: &crate::pip::Playback) {
+    fn set_playback(&self, playback: &crate::ui::pip::Playback) {
         self.0.set_playback(
             playback.paused,
             playback.position,
@@ -332,7 +332,7 @@ pub fn clipboard_write_image(kind: Image, bytes: Vec<u8>) -> std::result::Result
 /// asked, the floating sidebar), else on `parent`, else app-modal (`done`
 /// then runs before this returns): the sheet never hides its caller.
 pub fn confirm(
-    options: &crate::confirm::Options,
+    options: &crate::ui::confirm::Options,
     parent: Option<HostWindowId>,
     done: impl Fn(bool, bool) + Send + 'static,
 ) -> std::result::Result<(), RpcError> {

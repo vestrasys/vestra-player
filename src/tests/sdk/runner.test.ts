@@ -299,7 +299,7 @@ test("a plugin that logs to a closed stderr keeps running", async () => {
 });
 
 test("a request longer than the player's 1 MiB line is refused with limit, not sent", async () => {
-  // The player stops a plugin that writes a longer line (host/src/plugins.rs).
+  // The player stops a plugin that writes a longer line (host/src/process/mod.rs).
   const result = await run(
     `export default async function activate(plugin) {
       const code = await plugin.osd.show("x".repeat(1024 * 1024)).then(() => "sent", (e) => e.code);

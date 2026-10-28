@@ -5,7 +5,7 @@
  * VESTRA_UI_RECORD: every property value a plugin sends to a window, panel
  * or settings page on the SDK test host, in its wire form, as JSON lines in
  * that directory. The host test `recorded_plugin_props_match_their_slint`
- * (src/host/src/ui_types.rs) sets each one on the compiled Slint component
+ * (src/host/src/ui/ui_types.rs) sets each one on the compiled Slint component
  * with the real interpreter: the test host does not know the Slint
  * declarations, so a value whose type does not match (a struct field the
  * struct does not declare, a number for a string) would otherwise pass every

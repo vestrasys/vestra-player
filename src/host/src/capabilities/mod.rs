@@ -12,7 +12,7 @@
 //! Adding a capability: a new module implementing [`Capability`], one line in
 //! [`ALL`] (the order is the manifest order the SDK repeats), then
 //! `VESTRA_UPDATE_CAPABILITIES=1 cargo test capabilities` to rewrite the JSON.
-use crate::{Host, Reply, RpcError, backend::Command};
+use crate::{Host, Reply, RpcError, playback::backend::Command};
 use serde_json::{Map, Value, json};
 use std::{collections::HashMap, sync::OnceLock};
 
@@ -342,7 +342,7 @@ pub fn json() -> Value {
             A method's needs: null (none), a capability name, \
             {param, cases, otherwise} (by a string parameter) or {ifDeclared, then, otherwise}. \
             A method name ending in .* covers the prefix's other methods.",
-        "apiVersion": crate::plugins::API,
+        "apiVersion": crate::process::API,
         "capabilities": ALL.iter().map(|c| {
             let info = c.info();
             json!({

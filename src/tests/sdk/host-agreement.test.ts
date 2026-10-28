@@ -54,8 +54,8 @@ test("COMMAND_LIMITS matches the player's registry", () => {
   assert.equal(constant("MAX_COMMANDS"), COMMAND_LIMITS.total);
 });
 
-test("UI_VALUE_LIMITS match the player's (host/src/ui_values.rs)", () => {
-  const rust = host("src/ui_values.rs");
+test("UI_VALUE_LIMITS match the player's (host/src/ui/ui_values.rs)", () => {
+  const rust = host("src/ui/ui_values.rs");
   const constant = (name: string) => {
     const value = new RegExp(`pub const ${name}: usize = ([^;]+);`).exec(
       rust,
@@ -153,7 +153,7 @@ type Step = {
   resources: number;
 };
 
-// host/src/processing.rs runs the same cases against the player's own
+// host/src/playback/processing.rs runs the same cases against the player's own
 // processing book (conformance_cases_shared_with_the_sdk_test_host).
 test("TestHost answers processing changes like the player", async () => {
   const fixture = JSON.parse(
@@ -232,8 +232,8 @@ test("the installed SDK's Slint library copy matches the player's", () => {
   assert.equal(result.status, 0, result.stderr);
 });
 
-test("manifest rules match the player's (host/src/manifest.rs)", () => {
-  const rust = host("src/manifest.rs");
+test("manifest rules match the player's (host/src/packages/manifest.rs)", () => {
+  const rust = host("src/packages/manifest.rs");
   const constant = (name: string) => {
     const match = new RegExp(`pub const ${name}: \\w+ = ([^;]+);`).exec(rust);
     assert.ok(match, name);
@@ -270,9 +270,9 @@ test("manifest rules match the player's (host/src/manifest.rs)", () => {
   assert.deepEqual([...fields].sort(), [...MANIFEST_FIELDS].sort());
 });
 
-test("Markdown limits match the player's (host/src/ui_markdown.rs)", () => {
+test("Markdown limits match the player's (host/src/ui/ui_markdown.rs)", () => {
   const text = /pub const MAX_TEXT: usize = ([^;]+);/.exec(
-    host("src/ui_markdown.rs"),
+    host("src/ui/ui_markdown.rs"),
   )?.[1];
   assert.ok(text, "MAX_TEXT");
   const bytes = text
@@ -302,12 +302,12 @@ test("step seek parameters are the player's: setStepSeek keyframes, host.run sec
 test("a seek control's keyframes flag is the SDK's Scrub.seek option and the player's Control::Seek field (SDK 1.5.22, player 0.5.3)", () => {
   // The player: an optional boolean on the seek control, false when absent
   // (plugins built on older SDKs never send it), mapped to mpv's seek mode.
-  const session = host("src/session.rs");
+  const session = host("src/playback/session.rs");
   assert.match(
     session,
     /Seek \{\s*seconds: f64,\s*#\[serde\(default[^\]]*\)\]\s*keyframes: bool,\s*\}/,
   );
-  const backend = host("src/source_backend.rs");
+  const backend = host("src/playback/source_backend.rs");
   assert.match(
     backend,
     /if keyframes \{\s*"absolute\+keyframes"\s*\} else \{\s*"absolute\+exact"\s*\}/,
@@ -347,8 +347,8 @@ test("a seek control's keyframes flag is the SDK's Scrub.seek option and the pla
     );
 });
 
-test("IMAGE_LIMITS match the player's (host/src/ui_image.rs)", () => {
-  const source = host("src/ui_image.rs");
+test("IMAGE_LIMITS match the player's (host/src/ui/ui_image.rs)", () => {
+  const source = host("src/ui/ui_image.rs");
   const constant = (name: string) => {
     const value = new RegExp(`pub const ${name}: \\w+ = ([^;]+);`).exec(
       source,
@@ -840,7 +840,7 @@ test("CAPABILITY_INFO.apis need the capabilities the player checks per request (
   }
 });
 
-test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (capabilities/ui_osd.rs, system.rs, secret_index.rs, plugins.rs)", () => {
+test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (capabilities/ui_osd.rs, system.rs, secret_index.rs, process/mod.rs)", () => {
   const constant = (file: string, name: string) => {
     const value = new RegExp(`const ${name}: \\w+ = ([^;]+);`).exec(
       host(file),
@@ -866,15 +866,15 @@ test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (capabilities
     {
       nameChars: constant("src/system.rs", "MAX_SECRET_NAME"),
       valueBytes: constant("src/system.rs", "MAX_SECRET_BYTES"),
-      names: constant("src/secret_index.rs", "MAX_NAMES"),
+      names: constant("src/packages/secret_index.rs", "MAX_NAMES"),
     },
     { ...SECRET_LIMITS },
     "SECRET_LIMITS differ from the player's secret limits",
   );
   assert.equal(
-    constant("src/plugins.rs", "MAX_MESSAGE_BYTES"),
+    constant("src/process/mod.rs", "MAX_MESSAGE_BYTES"),
     MESSAGE_LIMIT,
-    "MESSAGE_LIMIT vs plugins.rs MAX_MESSAGE_BYTES",
+    "MESSAGE_LIMIT vs process/mod.rs MAX_MESSAGE_BYTES",
   );
 });
 
@@ -920,7 +920,7 @@ test("BINDING_INPUTS are the names the player's binding parser accepts (bindings
 });
 
 test("THEME_PALETTES are the player's palettes (theme.rs)", () => {
-  const rust = host("src/theme.rs");
+  const rust = host("src/ui/theme.rs");
   const themes = /pub const THEMES: \[&str; \d+\] = \[([^\]]*)\];/.exec(
     rust,
   )?.[1];

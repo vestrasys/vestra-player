@@ -2,8 +2,9 @@
 //! menus and interaction locks, and the layout of those slots.
 use super::{Capability, Handled, Info, Method, Residency, plugin};
 use crate::{
-    Host, LayoutChange, MenuMode, Mount, MountChange, Reply, RpcError, composition, debug_keys,
-    i18n, layout_change, plugins, policy_slot, refuse_initial, slot_claims, string, window_state,
+    Host, LayoutChange, MenuMode, Mount, MountChange, Reply, RpcError, debug_keys, i18n,
+    layout_change, policy_slot, process, refuse_initial, string, ui::composition, ui::slot_claims,
+    ui::window_state,
 };
 use serde_json::{Value, json};
 use slint::ComponentHandle;
@@ -111,7 +112,7 @@ fn mount(
             return Err(host.refuse_taken(reply.owner, error, text));
         }
         let plugin = plugin(host, reply)?;
-        let file = plugins::package_file(&plugin.directory, string(params, "file")?)?;
+        let file = process::package_file(&plugin.directory, string(params, "file")?)?;
         let mut properties: BTreeMap<String, Value> =
             serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
                 .map_err(|e| RpcError::invalid(e.to_string()))?;
