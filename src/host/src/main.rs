@@ -33,7 +33,7 @@ use anyhow::{Result, bail};
 use host::package_activation;
 use host::{Event, FRAME_SINK, Host, InputShared, MenuMode, PIP_GPU_SINK};
 use packages::package_manager;
-use playback::{backend::Backend, frame_pacing, render_target, renderer};
+use playback::{backend::Backend, frame_pacing, render_mode, render_target};
 use process::{Plugin, runtime_paths};
 use serde_json::{Value, json};
 use slint::ComponentHandle;
@@ -163,12 +163,18 @@ fn main() -> Result<()> {
         }
         bail!("{text}");
     }
-    // GPU rendering (SDK site, Concepts: render options) needs Slint's OpenGL renderer (femtovg);
-    // headless, `VESTRA_SOFTWARE_RENDER=1` and other systems render in software.
-    let mut gpu = renderer::wanted(
+    // The renderer pair and why (round record 2026-10-render-modes): GPU
+    // rendering (SDK site, Concepts: render options) needs Slint's OpenGL
+    // renderer (femtovg); headless, `VESTRA_SOFTWARE_RENDER=1` and systems
+    // without a GPU renderer render in software.
+    let mut render = render_mode::decide(render_mode::Inputs {
         headless,
-        std::env::var_os("VESTRA_SOFTWARE_RENDER").as_deref(),
-    );
+        gpu_backend: platform::GPU_RENDER,
+        software_env: render_mode::software_requested(
+            std::env::var_os("VESTRA_SOFTWARE_RENDER").as_deref(),
+        ),
+    });
+    diag!("{}", render.line());
     if !headless {
         // Windows: the main window draws at the display's vertical blanks
         // (`frame_pacing.rs`), not on Slint's timer.
@@ -180,14 +186,17 @@ fn main() -> Result<()> {
                 selector
             }
         };
-        if gpu && let Err(error) = winit().renderer_name("femtovg".into()).select() {
-            diag!(
-                "render: the OpenGL window renderer is unavailable ({error}); software rendering"
-            );
-            gpu = false;
-            winit().select()?;
-        } else if !gpu {
-            winit().select()?;
+        match render.windows {
+            render_mode::WindowKind::OpenGl => {
+                if let Err(error) = winit().renderer_name("femtovg".into()).select() {
+                    render = render.fall_back(render_mode::Reason::InitFailed(format!(
+                        "the OpenGL window renderer is unavailable: {error}"
+                    )));
+                    diag!("{}", render.line());
+                    winit().select()?;
+                }
+            }
+            render_mode::WindowKind::Default => winit().select()?,
         }
     }
     let mut observed_source = Value::Null;
@@ -205,7 +214,7 @@ fn main() -> Result<()> {
             HANDOFFS.load(Ordering::Acquire) && events.send(Event::OpenFiles(files, true)).is_ok()
         });
     }
-    let backend = Backend::start(events.clone(), silent, gpu)?;
+    let backend = Backend::start(events.clone(), silent, &render)?;
     // `plugin.app`, handed to every plugin process when it starts.
     let ffmpeg = &backend.versions["ffmpeg"];
     process::set_app_info(&json!({"version":env!("CARGO_PKG_VERSION"),

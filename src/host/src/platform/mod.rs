@@ -29,7 +29,7 @@
 //! | full screen | `fullscreen_resized` (Windows: a full-screen window is kept one pixel off its display's rectangle; elsewhere nothing) |
 //! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, `vestra-video-texture`; elsewhere a new image per frame) |
 //! | redraw pacing | `VBLANK_CLOCK`, `vblank_waiter` → `VBlankWaiter` (Windows: vertical blanks through `vestra-win32`; elsewhere `no_vblank` below: Slint paces, with a display link on macOS) |
-//! | rendering | `window_refresh` (here, through winit on every system), `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` / `GpuFrame` / `GpuDraw` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
+//! | rendering | `window_refresh` (here, through winit on every system), `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` (implements `playback::renderer::GpuBackend`) / `GpuFrame` / `GpuDraw` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
 //! | picture-in-picture | `pip_supported`, `PipWindow` (UI thread; macOS: AVKit through `vestra-pip`; elsewhere `pip_unsupported.rs`: `unsupported`) |
 //!
 //! Window rectangles are logical points. macOS uses the Cocoa lower-left
@@ -313,7 +313,7 @@ fn unsupported(what: &str) -> crate::host::RpcError {
 
 /// GPU rendering on systems without an implementation yet (Windows, Linux):
 /// `gpu_start` refuses, so the host renders in software and never holds a
-/// `GpuHandle`; its methods are inert.
+/// `GpuHandle`; its `GpuBackend` methods are inert.
 #[cfg(not(target_os = "macos"))]
 mod no_gpu {
     use std::sync::{Arc, atomic::AtomicBool};
@@ -345,24 +345,25 @@ mod no_gpu {
             GpuHandle(())
         }
     }
-    impl GpuHandle {
-        pub fn set_size(&self, _size: (u32, u32)) {}
-        pub fn set_display_fps(&self, _fps: Option<f64>) {}
-        pub fn frames(&self) -> u64 {
+    impl crate::playback::renderer::GpuBackend for GpuHandle {
+        type Frame = Box<GpuFrame>;
+        fn set_size(&self, _size: (u32, u32)) {}
+        fn set_display_fps(&self, _fps: Option<f64>) {}
+        fn frames(&self) -> u64 {
             0
         }
-        pub fn shown(&self) -> u64 {
+        fn shown(&self) -> u64 {
             0
         }
-        pub fn size(&self) -> Option<(u32, u32)> {
+        fn size(&self) -> Option<(u32, u32)> {
             None
         }
-        pub fn reshow(&self) {}
-        pub fn latest(&self) -> Option<(u64, Box<GpuFrame>)> {
+        fn reshow(&self) {}
+        fn latest(&self) -> Option<(u64, Box<GpuFrame>)> {
             None
         }
-        pub fn on_frame(&self, _notify: impl Fn() + Send + 'static) {}
-        pub fn attach<T: slint::ComponentHandle + 'static>(
+        fn on_frame(&self, _notify: impl Fn() + Send + 'static) {}
+        fn attach<T: slint::ComponentHandle + 'static>(
             &self,
             _component: &T,
             _show: impl Fn(slint::Image) + 'static,
@@ -371,7 +372,7 @@ mod no_gpu {
         ) -> Result<(), String> {
             Err("GPU rendering is not available".into())
         }
-        pub fn retarget<T: slint::ComponentHandle + 'static>(&self, _component: &T) {}
+        fn retarget<T: slint::ComponentHandle + 'static>(&self, _component: &T) {}
     }
 }
 #[cfg(not(target_os = "macos"))]

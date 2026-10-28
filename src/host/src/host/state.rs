@@ -1,6 +1,7 @@
 //! Source, window, picture-in-picture, layout and backdrop state, the
 //! title, power and always-on-top.
 use super::*;
+use crate::playback::renderer::GpuBackend as _;
 
 /// What a `layout.set` changes: the preference, floating, the current tab.
 #[derive(Debug, PartialEq)]

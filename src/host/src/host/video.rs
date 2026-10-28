@@ -1,6 +1,8 @@
 //! Video frames on the shell, picture-in-picture, the render size and
 //! clicks on the video.
 use super::*;
+use crate::playback::render_mode::Reason;
+use crate::playback::renderer::GpuBackend as _;
 
 thread_local! {
     /// The UI thread's frame delivery, run by the renderer's wake-up.
@@ -43,11 +45,13 @@ impl Host {
             }
         };
         let render = self.backend.render.clone();
-        let failed = move |reason: String| render.fall_back(&reason);
+        let failed = move |reason: String| render.fall_back(Reason::WindowFallback(reason));
         if let Err(error) = gpu.attach(shell, show, failed, drawn) {
             self.backend
                 .render
-                .fall_back(&format!("the window cannot show GPU frames ({error})"));
+                .fall_back(Reason::WindowFallback(format!(
+                    "the window cannot show GPU frames ({error})"
+                )));
         }
         None
     }

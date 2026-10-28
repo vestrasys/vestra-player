@@ -1,12 +1,13 @@
-//! Which renderer draws the video (SDK site, Concepts: render options). GPU rendering (libmpv
-//! OpenGL, through the platform module) is the default; software rendering
-//! (`RenderContext::new_software`) is the fallback: headless runs,
-//! `VESTRA_SOFTWARE_RENDER=1`, systems without a GPU implementation, and a GL
-//! failure at start (mpv's context, or a window that cannot show textures).
+//! Which renderer draws the video now (SDK site, Concepts: render options).
+//! The start-up choice and its reason are `render_mode::decide`; GPU
+//! rendering (libmpv on the GPU, through the platform module's
+//! `GpuBackend`) then falls back to software rendering
+//! (`RenderContext::new_software`) when it cannot start or a window cannot
+//! show its frames, never back. `Render` keeps the reason of the last change.
 #![forbid(unsafe_code)]
 
 use crate::platform;
-use std::ffi::OsStr;
+use crate::playback::render_mode::{Decision, Reason};
 use std::sync::{
     Arc, Mutex, OnceLock, PoisonError,
     atomic::{AtomicBool, Ordering},
@@ -20,10 +21,51 @@ pub fn software_name() -> String {
     crate::i18n::tr("libmpv · software rendering")
 }
 
+/// What the host asks of a GPU renderer's UI-side handle, on every system
+/// (round record 2026-10-render-modes §2.2). Each platform module implements
+/// it for its `platform::GpuHandle` (macOS: `vestra-gpu-render`; elsewhere
+/// the inert `no_gpu` stub), so a missing or different method fails to
+/// compile on every system. Statically dispatched: the host sees the handle
+/// only through `Render::gpu`, as `impl GpuBackend`.
+pub trait GpuBackend {
+    /// A published frame (`latest`), for picture-in-picture.
+    type Frame: std::ops::Deref<Target = platform::GpuFrame>;
+    /// Render at `size` pixels from the next frame on.
+    fn set_size(&self, size: (u32, u32));
+    /// Pace to the display (`Some(fps)`, interpolation) or to the video.
+    fn set_display_fps(&self, fps: Option<f64>);
+    /// Frames rendered so far.
+    fn frames(&self) -> u64;
+    /// Frames a window showed so far.
+    fn shown(&self) -> u64;
+    /// The size of the newest frame.
+    fn size(&self) -> Option<(u32, u32)>;
+    /// The windows show the newest frame again (after a generated stream's
+    /// picture replaced it).
+    fn reshow(&self);
+    /// The newest frame and its sequence number.
+    fn latest(&self) -> Option<(u64, Self::Frame)>;
+    /// Run `notify` (any thread) after each new frame.
+    fn on_frame(&self, notify: impl Fn() + Send + 'static);
+    /// Show the frames in `component`'s window: `show` sets each image,
+    /// `failed` runs once if the window cannot show them, `drawn` brackets
+    /// each draw.
+    fn attach<T: slint::ComponentHandle + 'static>(
+        &self,
+        component: &T,
+        show: impl Fn(slint::Image) + 'static,
+        failed: impl FnOnce(String) + 'static,
+        drawn: impl FnMut(platform::GpuDraw) + 'static,
+    ) -> Result<(), String>;
+    /// A new shell took the attached window's place (same native window).
+    fn retarget<T: slint::ComponentHandle + 'static>(&self, component: &T);
+}
+
 /// Shared by the backend's render thread, its control worker and the UI.
-#[derive(Default)]
 pub struct Render {
     wanted: bool,
+    /// Why the player renders as it does now (`render_mode::Reason`).
+    reason: Mutex<Reason>,
     handle: OnceLock<platform::GpuHandle>,
     /// The GPU renderer draws now.
     active: AtomicBool,
@@ -38,21 +80,43 @@ pub struct Render {
     pub presentation: crate::playback::render_target::Presentation,
 }
 impl Render {
-    pub fn new(wanted: bool) -> Arc<Self> {
+    /// From the start-up decision: the render thread tries GPU rendering
+    /// first when the decision is GPU.
+    pub fn new(decision: &Decision) -> Arc<Self> {
         Arc::new(Self {
-            wanted,
-            ..Self::default()
+            wanted: decision.gpu(),
+            reason: Mutex::new(decision.reason.clone()),
+            handle: OnceLock::new(),
+            active: AtomicBool::new(false),
+            fallback: AtomicBool::new(false),
+            producer: AtomicBool::new(false),
+            refresh: Mutex::new(None),
+            presentation: Default::default(),
         })
     }
     pub fn wanted(&self) -> bool {
         self.wanted
     }
-    /// The GPU renderer while it draws.
-    pub fn gpu(&self) -> Option<&platform::GpuHandle> {
+    /// Why the player renders as it does now.
+    #[allow(dead_code)] // `SystemInfo.renderingReason` reads it from M2 on
+    pub fn reason(&self) -> Reason {
+        self.reason
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+    /// The GPU renderer while it draws, seen through its contract only.
+    pub fn gpu(&self) -> Option<&impl GpuBackend> {
         self.active
             .load(Ordering::Acquire)
             .then(|| self.handle.get())
             .flatten()
+    }
+    /// GPU rendering was wanted but could not start: the render thread
+    /// renders in software from the start.
+    pub fn start_failed(&self, reason: Reason) {
+        diag!("render: {reason}; software rendering");
+        *self.reason.lock().unwrap_or_else(PoisonError::into_inner) = reason;
     }
     pub fn install(&self, handle: platform::GpuHandle) {
         let _ = self.handle.set(handle);
@@ -62,9 +126,10 @@ impl Render {
         self.active.store(false, Ordering::Release);
     }
     /// Ask the render thread to switch to software rendering (once).
-    pub fn fall_back(&self, reason: &str) {
+    pub fn fall_back(&self, reason: Reason) {
         if self.active.load(Ordering::Acquire) && !self.fallback.swap(true, Ordering::AcqRel) {
             diag!("render: {reason}; switching to software rendering");
+            *self.reason.lock().unwrap_or_else(PoisonError::into_inner) = reason;
         }
     }
     pub fn fallback_requested(&self) -> bool {
@@ -96,13 +161,6 @@ impl Render {
     }
 }
 
-/// GPU unless headless, `VESTRA_SOFTWARE_RENDER` is set (to anything but
-/// `0` or empty), or this system has no GPU implementation.
-pub fn wanted(headless: bool, software: Option<&OsStr>) -> bool {
-    let software = software.is_some_and(|value| !value.is_empty() && value != "0");
-    platform::GPU_RENDER && !headless && !software
-}
-
 /// mpv `hwdec` for a renderer: `VESTRA_HWDEC`, else `auto-safe` (mpv
 /// falls back to software decoding by itself when no method works).
 ///
@@ -130,15 +188,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn software_rendering_when_headless_asked_for_or_unavailable() {
-        assert_eq!(wanted(false, None), platform::GPU_RENDER);
-        assert!(!wanted(true, None), "headless");
-        assert!(!wanted(false, Some(OsStr::new("1"))));
-        assert_eq!(wanted(false, Some(OsStr::new("0"))), platform::GPU_RENDER);
-        assert_eq!(wanted(false, Some(OsStr::new(""))), platform::GPU_RENDER);
-    }
-
-    #[test]
     fn hwdec_is_hardware_for_both_renderers_and_copy_back_for_software() {
         assert_eq!(hwdec(None, false), "auto-safe");
         assert_eq!(hwdec(Some(String::new()), false), "auto-safe");
@@ -164,15 +213,26 @@ mod tests {
 
     #[test]
     fn a_fallback_needs_an_active_gpu_and_is_asked_once() {
-        let render = Render::new(true);
+        use crate::playback::render_mode::{Inputs, decide};
+        let render = Render::new(&decide(Inputs {
+            headless: false,
+            gpu_backend: true,
+            software_env: false,
+        }));
+        assert!(render.wanted());
         assert!(render.gpu().is_none());
         assert_eq!(render.backend_name(), software_name());
-        render.fall_back("no GPU yet");
+        assert_eq!(render.reason(), Reason::Default);
+        render.fall_back(Reason::WindowFallback("no GPU yet".into()));
         assert!(!render.fallback_requested(), "nothing to fall back from");
+        assert_eq!(render.reason(), Reason::Default);
         render.active.store(true, Ordering::Release);
-        render.fall_back("window");
-        render.fall_back("again");
+        render.fall_back(Reason::WindowFallback("window".into()));
+        render.fall_back(Reason::WindowFallback("again".into()));
         assert!(render.fallback_requested());
+        assert_eq!(render.reason(), Reason::WindowFallback("window".into()));
+        render.start_failed(Reason::InitFailed("context".into()));
+        assert_eq!(render.reason().code(), "init-failed");
         render.deactivate();
         assert!(render.gpu().is_none());
         assert_eq!(render.refresh(), 60.);
