@@ -1827,8 +1827,9 @@ impl Sources {
 /// What libmpv derives from a local file's path, given for a leased load,
 /// whose url carries none: the demuxer cache of a file on a network file
 /// system (`remote`, Windows; Unix `fd://` lets libmpv see the remote file
-/// system itself), and cover art beside an audio file ([`cover_art`]),
-/// listed on its own thread for up to `wait`: a listing still running is
+/// system itself), and cover art beside an audio file (the folder read by
+/// [`folder_files`] on a `cover_listing` thread for up to `wait`, the
+/// pictures picked by [`rank_cover_art`]): a listing still running is
 /// returned for [`Sources::late_cover_art`].
 fn leased_options(
     mpv: &Mpv,
@@ -1907,7 +1908,7 @@ fn cover_art(
         _ => Vec::new(),
     }
 }
-/// The files (not folders) in `dir`: the slow part of [`cover_art`] on a
+/// The files (not folders) in `dir`: the slow part of finding cover art on a
 /// huge network folder, done once per folder by `cover_listing`.
 fn folder_files(dir: &Path) -> Vec<std::path::PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -1919,7 +1920,9 @@ fn folder_files(dir: &Path) -> Vec<std::path::PathBuf> {
         .map(|entry| entry.path())
         .collect()
 }
-/// [`cover_art`]'s choice among the files of `media`'s folder.
+/// The cover art libmpv would pick for `media` among the files of its
+/// folder: the rule is described on `cover_art` (the two steps together,
+/// for the tests).
 fn rank_cover_art(
     media: &Path,
     files: &[std::path::PathBuf],

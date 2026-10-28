@@ -1,7 +1,7 @@
 //! Cover art listing off the backend thread.
 //!
 //! A leased load gives libmpv no path, so the host lists the pictures beside
-//! an audio file itself (`source_backend::cover_art`) and passes them as
+//! an audio file itself (`source_backend::rank_cover_art`) and passes them as
 //! `cover-art-files`. Listing reads the whole folder, which on a huge network
 //! folder can take seconds; the backend thread (libmpv's events, every
 //! playback request) must not wait for that. The folder is read on its own
