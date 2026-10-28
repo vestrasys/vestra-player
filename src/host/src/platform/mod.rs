@@ -18,7 +18,7 @@
 //! | dialogs | `confirm` |
 //! | power | `sleep_launcher` |
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
-//! | opening the player | `on_open_files` (macOS: open-documents Apple events through `vestra-open-files`; elsewhere files come on the command line), `single_instance` → `Launch` / `Primary` (shared, in `instance.rs`), `allow_handoff_foreground` (Windows: `AllowSetForegroundWindow`) |
+//! | opening the player | `on_open_files` (macOS: open-documents Apple events through `vestra-open-files`; elsewhere files come on the command line), `single_instance` / `single_instance_restarted` → `Launch` / `Primary` (shared, in `instance.rs`), `allow_handoff_foreground` (Windows: `AllowSetForegroundWindow`) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
 //! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
 //! | installation | `install_layout` (pure, in `layout.rs`, for every system) → `current_install_layout` |
@@ -27,9 +27,9 @@
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
 //! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file) |
 //! | full screen | `fullscreen_resized` (Windows: a full-screen window is kept one pixel off its display's rectangle; elsewhere nothing) |
-//! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, `vestra-video-texture`; elsewhere a new image per frame) |
+//! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, OpenGL or wgpu, `vestra-video-texture`; elsewhere a new image per frame) |
 //! | redraw pacing | `VBLANK_CLOCK`, `vblank_waiter` → `VBlankWaiter` (Windows: vertical blanks through `vestra-win32`; elsewhere `no_vblank` below: Slint paces, with a display link on macOS) |
-//! | rendering | `window_refresh` (here, through winit on every system), `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` / `GpuFrame` / `GpuDraw` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
+//! | rendering | `window_refresh` (here, through winit on every system), `select_window_renderer`, `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` / `GpuFrame` / `GpuDraw`, `gpu_started`, `gpu_log_text`, `gpu_failed`, `window_device_lost` (macOS: OpenGL windows, `vestra-gpu-render` with OpenGL; Windows: wgpu/Direct3D 12 windows, `vestra-gpu-render` with Direct3D 11 into shared textures; elsewhere `no_gpu` below refuses, so the host renders in software) |
 //! | picture-in-picture | `pip_supported`, `PipWindow` (UI thread; macOS: AVKit through `vestra-pip`; elsewhere `pip_unsupported.rs`: `unsupported`) |
 //!
 //! Window rectangles are logical points. macOS uses the Cocoa lower-left
@@ -311,10 +311,10 @@ fn unsupported(what: &str) -> crate::host::RpcError {
     )
 }
 
-/// GPU rendering on systems without an implementation yet (Windows, Linux):
-/// `gpu_start` refuses, so the host renders in software and never holds a
-/// `GpuHandle`; its methods are inert.
-#[cfg(not(target_os = "macos"))]
+/// GPU rendering on systems without an implementation yet (Linux and the
+/// rest): `gpu_start` refuses, so the host renders in software and never
+/// holds a `GpuHandle`; its methods are inert.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod no_gpu {
     use std::sync::{Arc, atomic::AtomicBool};
 
@@ -374,8 +374,99 @@ mod no_gpu {
         pub fn retarget<T: slint::ComponentHandle + 'static>(&self, _component: &T) {}
     }
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub use no_gpu::*;
+
+/// Choose Slint's window renderer (before the event loop; not headless).
+/// `gpu`: GPU rendering is wanted; returns whether it still is with the
+/// renderer chosen. Here: femtovg on OpenGL, which GPU rendering needs
+/// (macOS), else the winit default. The Windows version (wgpu on
+/// Direct3D 12 first; `opengl_windows`: a restart after a lost GPU device
+/// asks for OpenGL windows) is in `windows.rs`.
+#[cfg(not(target_os = "windows"))]
+pub fn select_window_renderer(
+    gpu: bool,
+    _opengl_windows: bool,
+    winit: impl Fn() -> slint::BackendSelector,
+) -> std::result::Result<bool, slint::PlatformError> {
+    if gpu && let Err(error) = winit().renderer_name("femtovg".into()).select() {
+        diag!("render: the OpenGL window renderer is unavailable ({error}); software rendering");
+        winit().select()?;
+        return Ok(false);
+    } else if !gpu {
+        winit().select()?;
+    }
+    Ok(gpu)
+}
+
+/// The GPU renderer started: route its diagnostics (Windows: `render:`
+/// lines of its device and failures; nothing here).
+#[cfg(not(target_os = "windows"))]
+pub fn gpu_started(_handle: &GpuHandle) {}
+
+/// `VESTRA_FRAME_LOG`: the GPU renderer's own numbers for the line (Windows;
+/// nothing here).
+#[cfg(not(target_os = "windows"))]
+pub fn gpu_log_text(_handle: &GpuHandle) -> String {
+    String::new()
+}
+
+/// Whether the windows' GPU device was lost (Windows; never here).
+#[cfg(not(target_os = "windows"))]
+pub fn window_device_lost() -> bool {
+    false
+}
+
+/// The calling thread's CPU cycles (Windows only; 0 here).
+#[cfg(not(target_os = "windows"))]
+pub fn thread_cycles() -> u64 {
+    0
+}
+
+/// The main window starts a draw (Windows only).
+#[cfg(not(target_os = "windows"))]
+pub fn ui_draw_started() {}
+
+/// The main window's draw went to the GPU (Windows only).
+#[cfg(not(target_os = "windows"))]
+pub fn ui_draw_submitted() {}
+
+/// The main window's draws' GPU completion (Windows only; "" here).
+#[cfg(not(target_os = "windows"))]
+pub fn ui_gpu_text() -> String {
+    String::new()
+}
+
+/// What to do when the windows' GPU device is lost (Windows only).
+#[cfg(not(target_os = "windows"))]
+pub fn on_window_device_lost(_hook: impl Fn() + Send + Sync + 'static) {}
+
+/// Whether windows may show video through a rendering notifier (always
+/// here; Windows: not with wgpu windows, see `windows.rs`).
+#[cfg(not(target_os = "windows"))]
+pub fn window_notifiers() -> bool {
+    true
+}
+
+/// The software rendering texture of a window without a notifier (Windows
+/// only).
+#[cfg(not(target_os = "windows"))]
+pub fn direct_video_feed() -> Option<vestra_video_texture::Feed> {
+    None
+}
+
+/// Wait for process `pid` to end (a restarted player and the one it
+/// replaces): `true` once it has (Windows; restarts happen only there).
+#[cfg(not(target_os = "windows"))]
+pub fn wait_for_process_exit(_pid: u32, _timeout: std::time::Duration) -> bool {
+    true
+}
+
+/// Why the GPU renderer stopped on its own (Windows; never here).
+#[cfg(not(target_os = "windows"))]
+pub fn gpu_failed(_handle: &GpuHandle) -> Option<String> {
+    None
+}
 
 /// Redraw pacing where Slint already ties redraws to the display (macOS
 /// and iOS: a display link) or no display clock exists yet (Linux): the

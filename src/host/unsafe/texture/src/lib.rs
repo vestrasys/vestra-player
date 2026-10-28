@@ -12,10 +12,17 @@
 //! picture into it right before Slint draws, and the video area shows it as a
 //! borrowed OpenGL texture.
 //!
-//! Windows that do not draw with OpenGL (Slint's software renderer) have no
-//! rendering notifier or no OpenGL; `Feed::put` then refuses and the host
-//! sets the pixels as an image, as before. All `unsafe` stays in this crate;
-//! the public API is safe.
+//! On Windows the windows draw with femtovg on wgpu (Direct3D 12): there the
+//! same `Feed` keeps one wgpu texture per window instead (`wgpu_view.rs`,
+//! safe code).
+//!
+//! Windows that do not draw with OpenGL or wgpu (Slint's software renderer)
+//! have no rendering notifier or no such API; `Feed::put` then refuses and the
+//! host sets the pixels as an image, as before. All `unsafe` stays in this
+//! crate; the public API is safe.
+
+#[cfg(windows)]
+mod wgpu_view;
 
 use glow::{HasContext, NativeTexture};
 use slint::{
@@ -44,6 +51,13 @@ struct State {
     pending: Option<SharedPixelBuffer<Rgb8Pixel>>,
     /// The texture's image and size, once one exists.
     image: Option<(Image, Size)>,
+    /// Uploads since the frame log last read them: count, longest, total
+    /// (UI thread, inside the draw's `BeforeRendering`).
+    uploads: (u32, std::time::Duration, std::time::Duration),
+    /// Windows, a wgpu window without a rendering notifier (`direct`): the
+    /// texture, filled at once by `put`.
+    #[cfg(windows)]
+    direct: Option<wgpu_view::View>,
 }
 
 /// One window's video pictures (UI thread).
@@ -67,11 +81,17 @@ where
 {
     let feed = Feed(Rc::default());
     let state = feed.0.clone();
-    let mut view: Option<View> = None;
+    let mut view: Option<Target> = None;
     let notifier = move |rendering: RenderingState, api: &GraphicsAPI| match rendering {
         RenderingState::RenderingSetup => {
             view = match api {
-                GraphicsAPI::NativeOpenGL { get_proc_address } => Some(View::new(get_proc_address)),
+                GraphicsAPI::NativeOpenGL { get_proc_address } => {
+                    Some(Target::Gl(View::new(get_proc_address)))
+                }
+                #[cfg(windows)]
+                GraphicsAPI::WGPU30 { device, queue, .. } => {
+                    wgpu_view::View::new(device, queue).map(Target::Wgpu)
+                }
                 _ => None,
             };
             let mut state = state.borrow_mut();
@@ -81,11 +101,18 @@ where
         RenderingState::BeforeRendering => {
             drawn(Draw::Begin);
             let pending = state.borrow_mut().pending.take();
-            if let (Some(view), Some(buffer)) = (view.as_mut(), pending)
-                && let Some(image) = view.upload(&buffer)
-            {
-                state.borrow_mut().image = Some((image.clone(), view.size()));
-                show(image);
+            if let (Some(view), Some(buffer)) = (view.as_mut(), pending) {
+                let began = std::time::Instant::now();
+                let image = view.upload(&buffer);
+                let took = began.elapsed();
+                let mut current = state.borrow_mut();
+                let uploads = &mut current.uploads;
+                *uploads = (uploads.0 + 1, uploads.1.max(took), uploads.2 + took);
+                if let Some(image) = image {
+                    current.image = Some((image.clone(), view.size()));
+                    drop(current);
+                    show(image);
+                }
             }
         }
         RenderingState::AfterRendering => drawn(Draw::End),
@@ -104,7 +131,39 @@ where
     Ok(feed)
 }
 
+/// Windows: the feed of a wgpu window that has no rendering notifier (a
+/// notifier makes Slint 1.18.1's femtovg-wgpu recompile its pipelines every
+/// draw; `vestra-gpu-render` `uses_rendering_notifier`). Each picture is
+/// uploaded and expanded at once in `put`, on the device and queue the
+/// windows draw with; `put` always returns the texture's image to set.
+/// `None` if the device refuses the pipeline.
+#[cfg(windows)]
+pub fn direct(device: &wgpu::Device, queue: &wgpu::Queue) -> Option<Feed> {
+    let view = wgpu_view::View::new(device, queue)?;
+    let state = State {
+        ready: true,
+        direct: Some(view),
+        ..State::default()
+    };
+    Some(Feed(Rc::new(RefCell::new(state))))
+}
+
 impl Feed {
+    /// `VESTRA_FRAME_LOG`: the picture uploads into the texture since the
+    /// last call (` upload max A mean B ms`, the RGB copy and, with wgpu, the
+    /// expansion's submit), or "" without any.
+    pub fn take_upload_text(&self) -> String {
+        let (count, max, total) = std::mem::take(&mut self.0.borrow_mut().uploads);
+        if count == 0 {
+            return String::new();
+        }
+        let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.;
+        format!(
+            " upload max {:.1} mean {:.1} ms",
+            ms(max),
+            ms(total) / f64::from(count)
+        )
+    }
     /// Hand over the newest picture; it is uploaded at the next draw (ask
     /// the window to redraw). `None`: not shown here (no OpenGL context yet,
     /// or none at all): set the pixels as an image instead. `Some(image)`:
@@ -115,6 +174,20 @@ impl Feed {
         if !state.ready {
             return None;
         }
+        #[cfg(windows)]
+        if let Some(view) = state.direct.as_mut() {
+            // No notifier: upload now (between draws, on the UI thread).
+            let began = std::time::Instant::now();
+            let fresh = view.upload(&buffer);
+            let size = view.size();
+            let took = began.elapsed();
+            let uploads = &mut state.uploads;
+            *uploads = (uploads.0 + 1, uploads.1.max(took), uploads.2 + took);
+            if let Some(image) = fresh {
+                state.image = Some((image, size));
+            }
+            return Some(state.image.as_ref().map(|(image, _)| image.clone()));
+        }
         let size = (buffer.width(), buffer.height());
         let image = state
             .image
@@ -123,6 +196,32 @@ impl Feed {
             .map(|(image, _)| image.clone());
         state.pending = Some(buffer);
         Some(image)
+    }
+}
+
+/// The window's texture: OpenGL (femtovg), or on Windows wgpu (femtovg on
+/// Direct3D 12, `wgpu_view.rs`).
+// One per window, made once: its size does not matter.
+#[allow(clippy::large_enum_variant)]
+enum Target {
+    Gl(View),
+    #[cfg(windows)]
+    Wgpu(wgpu_view::View),
+}
+impl Target {
+    fn size(&self) -> Size {
+        match self {
+            Self::Gl(view) => view.size(),
+            #[cfg(windows)]
+            Self::Wgpu(view) => view.size(),
+        }
+    }
+    fn upload(&mut self, buffer: &SharedPixelBuffer<Rgb8Pixel>) -> Option<Image> {
+        match self {
+            Self::Gl(view) => view.upload(buffer),
+            #[cfg(windows)]
+            Self::Wgpu(view) => view.upload(buffer),
+        }
     }
 }
 

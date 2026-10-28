@@ -1,8 +1,10 @@
 //! Which renderer draws the video (SDK site, Concepts: render options). GPU rendering (libmpv
-//! OpenGL, through the platform module) is the default; software rendering
-//! (`RenderContext::new_software`) is the fallback: headless runs,
-//! `VESTRA_SOFTWARE_RENDER=1`, systems without a GPU implementation, and a GL
-//! failure at start (mpv's context, or a window that cannot show textures).
+//! on the GPU through the platform module: OpenGL on macOS, Direct3D 11 into
+//! textures the Direct3D 12 windows show on Windows) is the default; software
+//! rendering (`RenderContext::new_software`) is the fallback: headless runs,
+//! `VESTRA_SOFTWARE_RENDER=1`, systems without a GPU implementation, and a
+//! failure at start (mpv's render context, a window renderer that cannot show
+//! the frames, or on Windows no Direct3D 12 GPU for the windows).
 #![forbid(unsafe_code)]
 
 use crate::platform;
@@ -14,7 +16,11 @@ use std::sync::{
 
 /// `stats().backend` for each renderer, in the interface language.
 pub fn gpu_name() -> String {
-    crate::i18n::tr("libmpv · GPU rendering (OpenGL)")
+    if cfg!(target_os = "windows") {
+        crate::i18n::tr("libmpv · GPU rendering (Direct3D)")
+    } else {
+        crate::i18n::tr("libmpv · GPU rendering (OpenGL)")
+    }
 }
 pub fn software_name() -> String {
     crate::i18n::tr("libmpv · software rendering")
@@ -107,7 +113,7 @@ pub fn wanted(headless: bool, software: Option<&OsStr>) -> bool {
 /// falls back to software decoding by itself when no method works).
 ///
 /// The software renderer (`RenderContext::new_software`, the only renderer
-/// on systems without `GPU_RENDER`, e.g. Windows) has no hardware-decoding
+/// on systems without `GPU_RENDER`, e.g. Linux) has no hardware-decoding
 /// interop, so it gets the copy-back variant: `auto-copy-safe` picks
 /// `d3d11va-copy`, `nvdec-copy`, `videotoolbox-copy`… (decoding on the GPU,
 /// frames copied to memory), which mpv documents as working "with all video
@@ -144,7 +150,7 @@ mod tests {
         assert_eq!(hwdec(Some(String::new()), false), "auto-safe");
         assert_eq!(hwdec(Some("no".into()), false), "no");
         assert_eq!(hwdec(Some("d3d11va".into()), false), "d3d11va");
-        // Software rendering (Windows, headless, VESTRA_SOFTWARE_RENDER).
+        // Software rendering (headless, VESTRA_SOFTWARE_RENDER, a fallback).
         assert_eq!(hwdec(None, true), "auto-copy-safe");
         assert_eq!(hwdec(Some(String::new()), true), "auto-copy-safe");
         assert_eq!(hwdec(Some("no".into()), true), "no");

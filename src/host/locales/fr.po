@@ -365,6 +365,11 @@ msgstr "Le mode image dans l'image nécessite macOS 14 ou version ultérieure"
 msgid "libmpv · GPU rendering (OpenGL)"
 msgstr "libmpv · rendu GPU (OpenGL)"
 
+#: src/renderer.rs:18
+#, x-machine
+msgid "libmpv · GPU rendering (Direct3D)"
+msgstr "libmpv · rendu GPU (Direct3D)"
+
 #: src/renderer.rs:20
 #, x-machine
 msgid "libmpv · software rendering"

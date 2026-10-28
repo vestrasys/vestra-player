@@ -95,9 +95,17 @@ impl Host {
             let refresh = || platform::window_refresh(shell.window());
             if let Some(line) = log.line(counts, presentation, refresh, size, Instant::now()) {
                 diag!(
-                    "{line}{}{}",
+                    "{line}{}{}{}{}",
                     self.backend.frame.stages.text(),
-                    frame_pacing::log_text()
+                    frame_pacing::log_text(),
+                    self.backend
+                        .render
+                        .gpu()
+                        .map_or_else(String::new, platform::gpu_log_text),
+                    self.video_texture
+                        .borrow()
+                        .as_ref()
+                        .map_or_else(String::new, |feed| feed.take_upload_text())
                 );
             }
         }

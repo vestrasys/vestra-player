@@ -103,9 +103,20 @@ rfd = { version = "0.17.2", features = ["common-controls-v6"] }
 # The loopback stream transport's token (platform/mod.rs `av_tcp`).
 getrandom = "=0.3.4"
 vestra-win32 = { path = "unsafe/win32" }
+# Every window draws with Slint's femtovg renderer on wgpu (Direct3D 12) and
+# libmpv's Direct3D 11 frames are shown from textures shared with that device
+# (doc/process/rounds/2026-10-windows-wgpu.md); the `unsafe` stays in
+# unsafe/render. Windows only: macOS keeps femtovg on OpenGL. `femtovg` (GL)
+# and the software renderer stay as the fallbacks (platform/windows.rs).
+slint = { version = "=1.18.1", features = ["renderer-femtovg-wgpu", "unstable-wgpu-30"] }
+vestra-gpu-render = { path = "unsafe/render" }
 # File identity (volume serial + file index) of the handle libmpv reads a leased
 # local file through (source_lease.rs `matches_file`, lease_stream.rs).
 same-file = "=1.0.6"
+
+# Tests only: a GPU renderer on WARP (video_render.rs, the broken-shader test).
+[target.'cfg(windows)'.dev-dependencies]
+vestra-gpu-render = { path = "unsafe/render", features = ["test-support"] }
 
 # ICU4X prints every data-fallback warning with eprintln! when debug_assertions are on.
 # Parley segments CJK text without the optional CJ dictionary on each layout (line

@@ -66,6 +66,29 @@ pub fn single_instance(directory: &Path, files: &[PathBuf], wait: Duration) -> i
     }
 }
 
+/// A restart of this player (the previous process is ending after its
+/// window device was lost): wait up to `wait` for that process's lock
+/// instead of handing the files to it.
+pub fn single_instance_restarted(directory: &Path, wait: Duration) -> io::Result<Launch> {
+    std::fs::create_dir_all(directory)?;
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(directory.join(LOCK))?;
+    let deadline = Instant::now() + wait;
+    loop {
+        match lock.try_lock() {
+            Ok(()) => return Primary::start(directory, lock).map(Launch::Primary),
+            Err(TryLockError::Error(error)) => return Err(error),
+            Err(TryLockError::WouldBlock) if Instant::now() >= deadline => {
+                return Err(io::Error::other("the previous player did not end"));
+            }
+            Err(TryLockError::WouldBlock) => std::thread::sleep(Duration::from_millis(50)),
+        }
+    }
+}
+
 impl Primary {
     fn start(directory: &Path, lock: File) -> io::Result<Self> {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;

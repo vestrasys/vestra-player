@@ -12,6 +12,14 @@ description = "Software-rendered video pictures shown in a Slint OpenGL window t
 glow = "=0.18.0"
 slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2"] }
 
+# Windows: the windows draw with femtovg on wgpu (Direct3D 12), so the same
+# feed also keeps a wgpu texture (src/wgpu_view.rs). `wgpu` must equal Slint
+# 1.18.1's `unstable-wgpu-30` version.
+[target.'cfg(windows)'.dependencies]
+pollster = "0.4"
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "unstable-wgpu-30"] }
+wgpu = { version = "=30.0.1", default-features = false, features = ["dx12", "wgsl"] }
+
 # Not `workspace = true` (that would forbid unsafe); src/scripts/check-unsafe-policy.mjs
 # requires these entries.
 [lints.rust]

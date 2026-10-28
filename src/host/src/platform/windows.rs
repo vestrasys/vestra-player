@@ -609,8 +609,8 @@ pub fn fullscreen_resized(window: &slint::Window) {
 
 // ------------------------------------------------------------ redraw pacing
 
-/// Software rendering shows the pictures through one reused OpenGL texture
-/// (`vestra-video-texture`) instead of a new image per frame.
+/// Software rendering shows the pictures through one reused texture (OpenGL
+/// or wgpu, `vestra-video-texture`) instead of a new image per frame.
 pub const VIDEO_TEXTURE: bool = true;
 
 /// Slint's winit backend paces redraws here with a timer that is not tied
@@ -665,6 +665,262 @@ pub fn vblank_waiter(window: &slint::Window) -> Option<VBlankWaiter> {
         hwnd,
         waits: 0,
     })
+}
+
+// ---------------------------------------------------------------- rendering
+
+/// A frame the GPU renderer published (`GpuHandle::latest`): a texture of the
+/// windows' Direct3D 12 device (picture-in-picture is `unsupported` here, so
+/// nothing reads it yet).
+pub use vestra_gpu_render::Frame as GpuFrame;
+/// libmpv draws with Direct3D 11 on a device of the windows' adapter into a
+/// ring of textures shared with the windows' Direct3D 12 device; each window
+/// (femtovg on wgpu) shows the newest one directly. The raw Direct3D calls
+/// are in the `vestra-gpu-render` crate.
+pub use vestra_gpu_render::{Draw as GpuDraw, Handle as GpuHandle, Renderer as GpuRenderer};
+pub const GPU_RENDER: bool = true;
+
+/// Start drawing `mpv` at `size` pixels; frames are shown while `publish`.
+/// Refused (the host renders in software) when the windows do not draw with
+/// Direct3D 12 on a GPU (`select_window_renderer`) or the adapter cannot
+/// share textures and fences between Direct3D 11 and 12.
+pub fn gpu_start(
+    mpv: Arc<rsmpv::Mpv>,
+    size: (u32, u32),
+    publish: Arc<std::sync::atomic::AtomicBool>,
+) -> std::result::Result<GpuRenderer, String> {
+    GpuRenderer::start(mpv, size, publish)
+}
+
+/// The renderer's own diagnostics as `render:` lines.
+pub fn gpu_started(handle: &GpuHandle) {
+    handle.on_diag(|line| diag!("render: {line}"));
+}
+
+/// `VESTRA_FRAME_LOG`: the render thread's numbers (the `gpu:` segment).
+pub fn gpu_log_text(handle: &GpuHandle) -> String {
+    handle.log_text()
+}
+
+/// Why the GPU renderer stopped on its own (its device was removed, a
+/// fence failed); the host then renders in software.
+pub fn gpu_failed(handle: &GpuHandle) -> Option<String> {
+    handle.failed()
+}
+
+/// `VESTRA_WINDOW_RENDERER` (for testing the fallbacks).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Forced {
+    /// Unset: wgpu on a Direct3D 12 GPU, else the fallbacks.
+    None,
+    /// `gl`: OpenGL windows (main's path), else Slint's software renderer.
+    Gl,
+    /// `software`: Slint's software renderer.
+    Software,
+    /// `wgpu`: wgpu windows even on an adapter without a GPU.
+    Wgpu,
+}
+impl Forced {
+    /// The value, and a warning for one this does not know (then unset).
+    fn parse(value: Option<&str>) -> (Self, Option<String>) {
+        match value.map(str::trim) {
+            None | Some("") => (Self::None, None),
+            Some("gl") => (Self::Gl, None),
+            Some("software") => (Self::Software, None),
+            Some("wgpu") => (Self::Wgpu, None),
+            Some(other) => (
+                Self::None,
+                Some(format!(
+                    "render: VESTRA_WINDOW_RENDERER={other} is not gl, software or wgpu; ignored"
+                )),
+            ),
+        }
+    }
+    /// Whether the windows try wgpu on a device whose adapter is `software`
+    /// (or not).
+    fn wgpu(self, software: bool) -> bool {
+        match self {
+            Self::None => !software,
+            Self::Wgpu => true,
+            Self::Gl | Self::Software => false,
+        }
+    }
+}
+
+/// Choose Slint's window renderer (before the event loop; not headless).
+/// Every window draws with femtovg on wgpu, on one Direct3D 12 device of
+/// DXGI's first adapter (`VESTRA_GPU_ADAPTER`: another index, or `warp`),
+/// which GPU rendering shares its textures with; software rendering also
+/// draws into these windows. Without a Direct3D 12 GPU (no Direct3D 12, a
+/// remote desktop session or a virtual machine whose adapter is Microsoft's,
+/// WARP) the windows draw with femtovg on OpenGL, as before, else with
+/// Slint's software renderer, and the video renders in software. Each
+/// outcome is one `render:` line. `VESTRA_WINDOW_RENDERER` forces a step
+/// (`Forced`). Returns whether GPU rendering (`gpu`: wanted) stays possible.
+/// A lost device later ends the event loop (`window_device_lost`; the host
+/// restarts the player). `opengl_windows`: a second restart after lost
+/// devices in a row asks for OpenGL windows (an internal argument).
+pub fn select_window_renderer(
+    gpu: bool,
+    opengl_windows: bool,
+    winit: impl Fn() -> slint::BackendSelector,
+) -> std::result::Result<bool, slint::PlatformError> {
+    let (mut forced, warning) =
+        Forced::parse(std::env::var("VESTRA_WINDOW_RENDERER").ok().as_deref());
+    if let Some(warning) = warning {
+        diag!("{warning}");
+    }
+    if opengl_windows {
+        forced = Forced::Gl;
+    }
+    let reason = match forced {
+        Forced::Gl if opengl_windows => "the GPU device was lost twice in a row".to_string(),
+        Forced::Gl => "VESTRA_WINDOW_RENDERER=gl".to_string(),
+        Forced::Software => {
+            diag!(
+                "render: VESTRA_WINDOW_RENDERER=software: the windows draw with Slint's software renderer; software rendering"
+            );
+            winit().renderer_name("software".into()).select()?;
+            return Ok(false);
+        }
+        Forced::None | Forced::Wgpu => {
+            let adapter = std::env::var("VESTRA_GPU_ADAPTER").ok();
+            match vestra_gpu_render::WindowDevice::open(adapter.as_deref()) {
+                Ok(device) if forced.wgpu(device.software()) => {
+                    // Before the selection: a device lost from here on is
+                    // reported and ends the event loop.
+                    device.on_error(
+                        |line| diag!("render: {line}"),
+                        || {
+                            // Restart now (whatever the teardown does), then
+                            // end the loop: the windows cannot draw any more.
+                            if let Some(hook) = LOST_HOOK.get() {
+                                hook();
+                            }
+                            let _ = slint::invoke_from_event_loop(|| {
+                                let _ = slint::quit_event_loop();
+                            });
+                        },
+                    );
+                    let selector = winit()
+                        .renderer_name("femtovg-wgpu".into())
+                        .require_wgpu_30(device.configuration());
+                    let gpu = gpu && !device.software();
+                    match selector.select() {
+                        Ok(()) => {
+                            device.install();
+                            WGPU_WINDOWS.store(true, std::sync::atomic::Ordering::Relaxed);
+                            // Test switch (R2): remove the device after N s,
+                            // as a driver reset would, to exercise the loss
+                            // and restart path on real hardware.
+                            if let Some(seconds) = std::env::var("VESTRA_TEST_REMOVE_DEVICE")
+                                .ok()
+                                .and_then(|value| value.parse::<f64>().ok())
+                                .filter(|seconds| seconds.is_finite() && *seconds >= 0.)
+                            {
+                                std::thread::spawn(move || {
+                                    std::thread::sleep(std::time::Duration::from_secs_f64(seconds));
+                                    let removed =
+                                        vestra_gpu_render::remove_window_device_for_test();
+                                    diag!(
+                                        "render: VESTRA_TEST_REMOVE_DEVICE: window device removed: {removed}"
+                                    );
+                                });
+                            }
+                            diag!(
+                                "render: the windows draw with Direct3D 12 (wgpu) on {}; {}",
+                                device.describe(),
+                                if gpu {
+                                    "GPU rendering"
+                                } else {
+                                    "software rendering"
+                                }
+                            );
+                            return Ok(gpu);
+                        }
+                        Err(error) => format!("the Direct3D 12 window renderer failed ({error})"),
+                    }
+                }
+                // Dropped here: an OpenGL fallback keeps no Direct3D 12 device.
+                Ok(device) => format!("{} has no GPU of its own", device.describe()),
+                Err(error) => format!("no Direct3D 12 device ({error})"),
+            }
+        }
+    };
+    if winit().renderer_name("femtovg".into()).select().is_ok() {
+        diag!("render: {reason}; the windows draw with OpenGL; software rendering");
+    } else {
+        diag!(
+            "render: {reason}; no OpenGL either: the windows draw with Slint's software renderer; software rendering"
+        );
+        winit().renderer_name("software".into()).select()?;
+    }
+    Ok(false)
+}
+
+/// What to do when the windows' Direct3D 12 device is lost, on the thread
+/// that notices (the host starts the restarted player at once); set before
+/// `select_window_renderer`.
+static LOST_HOOK: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> = std::sync::OnceLock::new();
+
+/// Run `hook` when the windows' device is lost (once per process).
+pub fn on_window_device_lost(hook: impl Fn() + Send + Sync + 'static) {
+    let _ = LOST_HOOK.set(Box::new(hook));
+}
+
+/// The windows draw with wgpu (set by `select_window_renderer`).
+static WGPU_WINDOWS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether a window may show video through a rendering notifier. Not with
+/// wgpu windows by default: a notifier makes Slint 1.18.1's femtovg-wgpu
+/// recompile its pipelines on every draw (`vestra-gpu-render`
+/// `uses_rendering_notifier`, `VESTRA_WGPU_NOTIFIER=1` to compare). Then the
+/// host counts draws through `frame_pacing::on_draw` and software pictures
+/// go through `direct_video_feed`.
+pub fn window_notifiers() -> bool {
+    !WGPU_WINDOWS.load(std::sync::atomic::Ordering::Relaxed)
+        || vestra_gpu_render::uses_rendering_notifier()
+}
+
+/// The software rendering texture of a wgpu window without a notifier.
+pub fn direct_video_feed() -> Option<vestra_video_texture::Feed> {
+    let (device, queue) = vestra_gpu_render::window_wgpu()?;
+    vestra_video_texture::direct(&device, &queue)
+}
+
+/// The calling thread's CPU cycles so far (the frame log's `cpu` segment).
+pub fn thread_cycles() -> u64 {
+    vestra_win32::thread_cycles()
+}
+
+/// The main window starts a draw (frame log: ` ui-gpu`).
+pub fn ui_draw_started() {
+    vestra_gpu_render::ui_draw_started();
+}
+
+/// The main window's draw went to the GPU (frame log: ` ui-gpu`).
+pub fn ui_draw_submitted() {
+    vestra_gpu_render::ui_draw_submitted();
+}
+
+/// `VESTRA_FRAME_LOG`: the main window's draws' GPU completion.
+pub fn ui_gpu_text() -> String {
+    vestra_gpu_render::ui_gpu_text()
+}
+
+/// Wait for process `pid` to end (a restarted player waits for the one it
+/// replaces); `true` once it has or when it is gone.
+pub fn wait_for_process_exit(pid: u32, timeout: std::time::Duration) -> bool {
+    vestra_win32::wait_for_process_exit(
+        pid,
+        timeout.as_millis().min(u128::from(u32::MAX - 1)) as u32,
+    )
+}
+
+/// The windows' Direct3D 12 device was lost (a driver reset): the event
+/// loop ended, and the host restarts the player.
+pub fn window_device_lost() -> bool {
+    vestra_gpu_render::device_lost()
 }
 
 /// Windows 11 still says "Windows 10" in `ProductName`; the build decides.
@@ -756,5 +1012,27 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The window renderer ladder: wgpu on a GPU; an adapter without one
+    /// goes to the fallbacks unless wgpu is forced; `gl`/`software` skip
+    /// wgpu; an unknown value warns once and counts as unset.
+    #[test]
+    fn the_window_renderer_ladder_follows_the_adapter_and_the_override() {
+        assert_eq!(Forced::parse(None), (Forced::None, None));
+        assert_eq!(Forced::parse(Some(" ")), (Forced::None, None));
+        assert_eq!(Forced::parse(Some("gl")).0, Forced::Gl);
+        assert_eq!(Forced::parse(Some("software")).0, Forced::Software);
+        assert_eq!(Forced::parse(Some("wgpu")).0, Forced::Wgpu);
+        let (forced, warning) = Forced::parse(Some("vulkan"));
+        assert_eq!(forced, Forced::None);
+        assert!(warning.is_some_and(|w| w.starts_with("render: VESTRA_WINDOW_RENDERER=vulkan")));
+        assert!(Forced::None.wgpu(false), "a GPU: wgpu windows");
+        assert!(
+            !Forced::None.wgpu(true),
+            "WARP / remote desktop: OpenGL, then software"
+        );
+        assert!(Forced::Wgpu.wgpu(true));
+        assert!(!Forced::Gl.wgpu(false) && !Forced::Software.wgpu(false));
     }
 }

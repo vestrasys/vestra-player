@@ -178,6 +178,10 @@ impl Host {
                 if event == "source.state" {
                     self.patch_source(&mut data);
                     let previous = std::mem::replace(&mut self.last_source, data.clone());
+                    // What a restart after a lost GPU device reopens.
+                    *LAST_SOURCE
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = data.clone();
                     if previous["phase"] != data["phase"] {
                         input_trace::mark(&format!(
                             "host loop: source.state phase={}",

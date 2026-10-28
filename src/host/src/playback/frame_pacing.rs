@@ -276,7 +276,94 @@ struct Pacing {
     clock: Arc<Clock>,
     /// The clock failed: hold nothing.
     failed: bool,
+    /// `VESTRA_FRAME_PACING=slint`: no clock, Slint paces; the hook only
+    /// measures the main window's draws for the frame log.
+    passive: bool,
     stats: Stats,
+    cycles: Cycles,
+    counts: Counts,
+}
+
+/// The main window's draws per frame-log line: requests (winit
+/// `RedrawRequested`), draws let through, new pictures owed a draw
+/// (`picture_set`), and how long after the last vertical blank each draw
+/// started (` counts:` segment).
+#[derive(Debug, Default)]
+struct Counts {
+    requested: u64,
+    drawn: u64,
+    pictures: u64,
+    after_blank: Bucket,
+}
+impl Counts {
+    fn drawn(&mut self, now: Instant, last_blank: Option<Instant>, period: Option<Duration>) {
+        self.drawn += 1;
+        let period = period.unwrap_or(Duration::from_micros(16_667));
+        if let Some(blank) = last_blank {
+            let after = now.saturating_duration_since(blank);
+            if after < period * 2 {
+                self.after_blank.add(after);
+            }
+        }
+    }
+    fn text(&mut self) -> String {
+        let text = format!(
+            " counts: requested {} drawn {} pictures {} blank-to-draw {}",
+            self.requested,
+            self.drawn,
+            self.pictures,
+            self.after_blank.text()
+        );
+        *self = Self::default();
+        text
+    }
+}
+
+/// `VESTRA_FRAME_PACING=every`: draw at every vertical blank while the
+/// clock runs, new picture or not (diagnostics).
+fn every_blank() -> bool {
+    static EVERY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *EVERY.get_or_init(|| std::env::var("VESTRA_FRAME_PACING").as_deref() == Ok("every"))
+}
+
+/// The UI thread's CPU cycles in the main window's draws
+/// (`platform::thread_cycles`; 0 where there is no counter): a draw that
+/// takes long but few cycles waited, one with many cycles worked.
+#[derive(Debug, Default)]
+struct Cycles {
+    /// The open draw's dispatch and Slint draw started at these counts.
+    paint_at: Option<u64>,
+    draw_at: Option<u64>,
+    /// (count, total) since the frame log's last line.
+    paint: (u64, u64),
+    draw: (u64, u64),
+}
+impl Cycles {
+    /// The draw's dispatch ended (winit's next callback).
+    fn close_paint(&mut self) {
+        if let Some(at) = self.paint_at.take() {
+            // The draw (and its present) went to the GPU: time its completion.
+            crate::platform::ui_draw_submitted();
+            let used = crate::platform::thread_cycles().saturating_sub(at);
+            self.paint = (self.paint.0 + 1, self.paint.1 + used);
+        }
+    }
+    fn text(&mut self) -> String {
+        let mean = |(count, total): (u64, u64)| {
+            if count == 0 {
+                "-".to_owned()
+            } else {
+                format!("{:.1}", total as f64 / count as f64 / 1e6)
+            }
+        };
+        let text = format!(
+            " cpu paint {} draw {} Mcycles",
+            mean(self.paint),
+            mean(self.draw)
+        );
+        (self.paint, self.draw) = ((0, 0), (0, 0));
+        text
+    }
 }
 impl Pacing {
     fn request_redraw(&self) {
@@ -296,7 +383,8 @@ impl Pacing {
         let animating = self
             .shell
             .upgrade()
-            .is_some_and(|shell| shell.window().has_active_animations());
+            .is_some_and(|shell| shell.window().has_active_animations())
+            || every_blank();
         match self.gate.vblank(now, animating) {
             Blank::Draw => self.request_redraw(),
             Blank::Wait => (),
@@ -379,8 +467,17 @@ struct Stats {
     /// One loop turn: from winit's first callback to the wait.
     turn: Bucket,
     /// From a draw request's callback to Slint's `BeforeRendering`: the
-    /// pointer flush when one is pending, then Slint's own preparation.
+    /// pointer flush when one is pending, then Slint's own preparation; with
+    /// wgpu windows also the swapchain acquire (`get_current_texture`, which
+    /// waits on DXGI's frame-latency object) and the clear's submit.
     pre: Bucket,
+    /// `BeforeRendering` to `AfterRendering`: Slint's draw and its submits.
+    draw: Bucket,
+    /// `AfterRendering` to the end of the draw's dispatch: the present
+    /// (`SwapBuffers`, or wgpu's `Queue::present`) and Slint's bookkeeping.
+    present: Bucket,
+    /// When the open draw's `AfterRendering` came.
+    after: Option<Instant>,
     /// The open segment: kind, start, whether the pointer flush is in it.
     open: Option<(Segment, Instant, bool)>,
     turn_began: Option<Instant>,
@@ -414,6 +511,9 @@ impl Stats {
     }
     fn end_segment(&mut self, now: Instant) {
         if let Some((kind, began, flush)) = self.open.take() {
+            if let Some(after) = self.after.take().filter(|_| kind == Segment::Paint) {
+                self.present.add(now.saturating_duration_since(after));
+            }
             let took = now.saturating_duration_since(began);
             self.segments[kind as usize].add(took);
             if flush {
@@ -440,6 +540,13 @@ impl Stats {
                 self.pointer.add(pre);
             }
             self.open = Some((Segment::Paint, now, false));
+        }
+    }
+    /// Slint drew (`AfterRendering`); the present follows.
+    fn draw_ended(&mut self, now: Instant) {
+        if let Some((Segment::Paint, began, _)) = self.open {
+            self.draw.add(now.saturating_duration_since(began));
+            self.after = Some(now);
         }
     }
     /// winit starts a loop turn (Slint's timers run next).
@@ -472,11 +579,11 @@ impl Stats {
         }
     }
     /// The counters as text, then zeroed.
-    fn text(&mut self, skipped: u64) -> String {
+    fn text(&mut self, skipped: u64, passive: bool) -> String {
         let ms = |d: Duration| d.as_secs_f64() * 1000.;
         let seg = |kind: Segment| &self.segments[kind as usize];
         let text = format!(
-            " pacing: moves {} held {} eager {} close {} refused {} skipped {skipped} late max {:.1} ms paint {} ui: turn max {} timers max {} cursor max {} pre {} pointer {} other max {} ms",
+            " pacing: moves {} held {} eager {} close {} refused {} skipped {skipped} late max {:.1} ms paint {} ui: turn max {} timers max {} cursor max {} pre {} pointer {} other max {} ms draw {} present {} paced {}",
             self.moves,
             self.held,
             self.eager,
@@ -490,6 +597,9 @@ impl Stats {
             self.pre.text(),
             self.pointer.text(),
             seg(Segment::Other).max_text(),
+            self.draw.text(),
+            self.present.text(),
+            if passive { "no" } else { "yes" },
         );
         *self = Self {
             open: self.open,
@@ -518,6 +628,24 @@ thread_local! {
         const { RefCell::new(None) };
     /// Hands the main window the newest video picture (`on_deliver`).
     static DELIVER: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
+    /// `on_draw`.
+    static ON_DRAW: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
+}
+
+/// Called for each draw of the main window the hook lets through (UI
+/// thread): the host's draw count where the window has no rendering
+/// notifier (`platform::window_notifiers`). `None` removes it.
+pub fn on_draw(callback: Option<Box<dyn Fn()>>) {
+    ON_DRAW.with(|slot| *slot.borrow_mut() = callback);
+}
+fn drew() {
+    // Diagnostics: the GPU reaching this draw (` ui-gpu wait`).
+    crate::platform::ui_draw_started();
+    ON_DRAW.with(|slot| {
+        if let Some(callback) = &*slot.borrow() {
+            callback();
+        }
+    });
 }
 
 /// How to hand the main window the newest video picture again after a
@@ -528,11 +656,19 @@ pub fn on_deliver(deliver: Option<Box<dyn Fn()>>) {
 
 /// Whether to pace the main window here: the system has a display clock and
 /// `VESTRA_FRAME_PACING=slint` (A/B tests, a fallback in the field) is not set.
+/// (`=every` paces too, drawing at every vertical blank: `every_blank`.)
 pub fn wanted() -> bool {
     crate::platform::VBLANK_CLOCK && std::env::var("VESTRA_FRAME_PACING").as_deref() != Ok("slint")
 }
 
-/// The winit hook (installed with the backend when `wanted`): holds the
+/// Whether the winit hook is installed (`Handler`): where the host can pace
+/// (`platform::VBLANK_CLOCK`). With `VESTRA_FRAME_PACING=slint` it only
+/// measures the main window's draws (`paced no` in the frame log).
+pub fn hooked() -> bool {
+    crate::platform::VBLANK_CLOCK
+}
+
+/// The winit hook (installed with the backend when `hooked`): holds the
 /// main window's redraw requests per the gate.
 pub struct Handler;
 impl CustomApplicationHandler for Handler {
@@ -543,6 +679,7 @@ impl CustomApplicationHandler for Handler {
     ) -> EventResult {
         PACING.with(|pacing| {
             if let Some(pacing) = pacing.borrow_mut().as_mut() {
+                pacing.cycles.close_paint();
                 pacing.stats.new_events(Instant::now());
             }
         });
@@ -564,7 +701,11 @@ impl CustomApplicationHandler for Handler {
             else {
                 return EventResult::Propagate;
             };
+            pacing.cycles.close_paint();
             let now = Instant::now();
+            if matches!(event, winit::event::WindowEvent::RedrawRequested) {
+                pacing.counts.requested += 1;
+            }
             let kind = match event {
                 winit::event::WindowEvent::RedrawRequested => Segment::Paint,
                 winit::event::WindowEvent::CursorMoved { .. } => Segment::Cursor,
@@ -574,12 +715,26 @@ impl CustomApplicationHandler for Handler {
             if kind != Segment::Paint {
                 return EventResult::Propagate;
             }
+            if pacing.passive {
+                pacing.stats.draw(now, false);
+                pacing
+                    .counts
+                    .drawn(now, pacing.stats.last_blank, pacing.stats.period);
+                pacing.cycles.paint_at = Some(crate::platform::thread_cycles());
+                drew();
+                return EventResult::Propagate;
+            }
             let decision = pacing.gate.redraw_requested(now);
             if decision.arm {
                 pacing.arm();
             }
             if decision.draw {
                 pacing.stats.draw(now, decision.arm);
+                pacing
+                    .counts
+                    .drawn(now, pacing.stats.last_blank, pacing.stats.period);
+                pacing.cycles.paint_at = Some(crate::platform::thread_cycles());
+                drew();
             } else {
                 pacing.stats.held();
             }
@@ -604,6 +759,7 @@ impl CustomApplicationHandler for Handler {
     fn about_to_wait(&mut self, _: &winit::event_loop::ActiveEventLoop) -> EventResult {
         PACING.with(|pacing| {
             if let Some(pacing) = pacing.borrow_mut().as_mut() {
+                pacing.cycles.close_paint();
                 pacing.stats.about_to_wait(Instant::now());
             }
         });
@@ -617,6 +773,22 @@ pub fn draw_began() {
     PACING.with(|pacing| {
         if let Some(pacing) = pacing.borrow_mut().as_mut() {
             pacing.stats.draw_began(Instant::now());
+            pacing.cycles.draw_at = Some(crate::platform::thread_cycles());
+        }
+    });
+}
+
+/// Slint drew the main window (its rendering notifier's `AfterRendering`):
+/// splits the draw (`draw`) from the present after it (`present`).
+pub fn draw_ended() {
+    PACING.with(|pacing| {
+        if let Some(pacing) = pacing.borrow_mut().as_mut() {
+            pacing.stats.draw_ended(Instant::now());
+            if let Some(at) = pacing.cycles.draw_at.take() {
+                let used = crate::platform::thread_cycles().saturating_sub(at);
+                let draw = pacing.cycles.draw;
+                pacing.cycles.draw = (draw.0 + 1, draw.1 + used);
+            }
         }
     });
 }
@@ -636,17 +808,20 @@ pub fn log_text() -> String {
             .filter(|p| !p.failed)
             .map_or_else(String::new, |pacing| {
                 let skipped = pacing.clock.skipped.swap(0, Ordering::Relaxed);
-                pacing.stats.text(skipped)
+                pacing.stats.text(skipped, pacing.passive)
+                    + &pacing.cycles.text()
+                    + &pacing.counts.text()
+                    + &crate::platform::ui_gpu_text()
             })
     })
 }
 
-/// Pace `shell` (the main window, after `show()`; when `wanted`); a rebuilt
+/// Pace `shell` (the main window, after `show()`; when `hooked`); a rebuilt
 /// main window replaces the previous one. Nothing without a display clock.
 /// A shell shown in the native window already paced (a new composition
 /// replaces the tree in the same window) keeps its clock and gate.
 pub fn follow(shell: &slint_interpreter::ComponentInstance) {
-    if !wanted() {
+    if !hooked() {
         return;
     }
     let window = shell.window().with_winit_window(|window| window.id());
@@ -682,6 +857,23 @@ fn start_pending() {
         return;
     };
     PENDING.with(|pending| pending.borrow_mut().take());
+    if !wanted() {
+        // Measure only: no clock, nothing held.
+        PACING.with(|pacing| {
+            *pacing.borrow_mut() = Some(Pacing {
+                gate: Gate::default(),
+                window,
+                shell: shell.as_weak(),
+                clock: Arc::new(Clock::default()),
+                failed: false,
+                passive: true,
+                stats: Stats::default(),
+                cycles: Cycles::default(),
+                counts: Counts::default(),
+            });
+        });
+        return;
+    }
     let waiter = crate::platform::vblank_waiter(shell.window());
     PACING.with(|pacing| {
         let mut pacing = pacing.borrow_mut();
@@ -703,7 +895,10 @@ fn start_pending() {
             shell: shell.as_weak(),
             clock,
             failed: false,
+            passive: false,
             stats: Stats::default(),
+            cycles: Cycles::default(),
+            counts: Counts::default(),
         });
     });
 }
@@ -716,7 +911,7 @@ pub fn accept_picture() -> bool {
         pacing
             .borrow_mut()
             .as_mut()
-            .filter(|p| !p.failed)
+            .filter(|p| !p.failed && !p.passive)
             .is_none_or(|p| {
                 let accepted = p.gate.accept_picture(Instant::now());
                 p.stats.refused += u64::from(!accepted);
@@ -729,7 +924,13 @@ pub fn accept_picture() -> bool {
 /// vertical blank.
 pub fn picture_set() {
     PACING.with(|pacing| {
-        if let Some(pacing) = pacing.borrow_mut().as_mut().filter(|p| !p.failed)
+        if let Some(pacing) = pacing.borrow_mut().as_mut() {
+            pacing.counts.pictures += 1;
+        }
+        if let Some(pacing) = pacing
+            .borrow_mut()
+            .as_mut()
+            .filter(|p| !p.failed && !p.passive)
             && pacing.gate.picture_set(Instant::now())
         {
             pacing.arm();
@@ -742,7 +943,7 @@ pub fn picture_set() {
 pub fn tick() {
     start_pending();
     PACING.with(|pacing| {
-        if let Some(pacing) = pacing.borrow_mut().as_mut()
+        if let Some(pacing) = pacing.borrow_mut().as_mut().filter(|p| !p.passive)
             && pacing.gate.overdue(Instant::now())
         {
             pacing.request_redraw();
@@ -754,6 +955,7 @@ pub fn tick() {
 pub fn stop() {
     PENDING.with(|pending| pending.borrow_mut().take());
     PACING.with(|pacing| pacing.borrow_mut().take());
+    ON_DRAW.with(|slot| slot.borrow_mut().take());
 }
 
 #[cfg(test)]
@@ -974,8 +1176,8 @@ mod tests {
         stats.held();
         stats.about_to_wait(t + ms(16));
         assert_eq!(
-            stats.text(1),
-            " pacing: moves 2 held 2 eager 1 close 1 refused 0 skipped 1 late max 3.0 ms paint max 4.0 mean 2.5 ms ui: turn max 9.0 timers max 2.0 cursor max 1.0 pre max 1.0 mean 1.0 ms pointer max 2.0 mean 1.5 ms other max 1.0 ms"
+            stats.text(1, false),
+            " pacing: moves 2 held 2 eager 1 close 1 refused 0 skipped 1 late max 3.0 ms paint max 4.0 mean 2.5 ms ui: turn max 9.0 timers max 2.0 cursor max 1.0 pre max 1.0 mean 1.0 ms pointer max 2.0 mean 1.5 ms other max 1.0 ms draw - present - paced yes"
         );
         // Zeroed; a pointer move processed at the wait counts as pointer time.
         stats.new_events(t + ms(20));
@@ -983,10 +1185,28 @@ mod tests {
         stats.about_to_wait(t + ms(24));
         assert!(
             stats
-                .text(0)
-                .ends_with("paint - ui: turn max 4.0 timers max 0.0 cursor max 4.0 pre - pointer max 4.0 mean 4.0 ms other max 0.0 ms"),
+                .text(0, false)
+                .ends_with("paint - ui: turn max 4.0 timers max 0.0 cursor max 4.0 pre - pointer max 4.0 mean 4.0 ms other max 0.0 ms draw - present - paced yes"),
             "{}",
-            stats.text(0)
+            stats.text(0, false)
+        );
+    }
+
+    /// A draw's dispatch splits into preparation (pointer flush, Slint's
+    /// preparation, the wgpu acquire), Slint's draw, and the present.
+    #[test]
+    fn a_draw_splits_into_preparation_draw_and_present() {
+        let (mut stats, t) = (Stats::default(), Instant::now());
+        let ms = Duration::from_millis;
+        stats.event(t, Segment::Paint);
+        stats.draw_began(t + ms(3));
+        stats.draw_ended(t + ms(5));
+        stats.new_events(t + ms(12));
+        let text = stats.text(0, true);
+        assert!(text.contains(" pre max 3.0 mean 3.0 ms "), "{text}");
+        assert!(
+            text.ends_with("draw max 2.0 mean 2.0 ms present max 7.0 mean 7.0 ms paced no"),
+            "{text}"
         );
     }
 

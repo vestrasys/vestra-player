@@ -6,9 +6,11 @@
 //! dark title bar, letting the running player take the foreground for a
 //! second launch's files, waiting for a display's vertical blank
 //! (`VBlank`, the redraw clock) and keeping a full-screen window from
-//! matching its display exactly (`unmatch_display`), and whether an open
-//! file is on a network file system (`file_is_remote`). Each is one call
-//! with plain integer arguments, a borrowed handle, or local out-parameters; the public
+//! matching its display exactly (`unmatch_display`), whether an open
+//! file is on a network file system (`file_is_remote`), waiting for a
+//! process to end (`wait_for_process_exit`), and the thread's CPU cycles
+//! (`thread_cycles`). Each is one call with plain integer arguments, a
+//! borrowed handle, or local out-parameters; the public
 //! API is safe. Compiled only on Windows (cross-checked from macOS by
 //! `npm run portability`, not yet run on Windows).
 #![cfg(windows)]
@@ -147,6 +149,40 @@ pub fn allow_any_foreground() -> bool {
     // SAFETY: AllowSetForegroundWindow takes a process id by value
     // (ASFW_ANY: any process) and has no memory-safety preconditions.
     unsafe { AllowSetForegroundWindow(ASFW_ANY) != 0 }
+}
+
+/// CPU cycles the calling thread has run so far (`QueryThreadCycleTime`):
+/// the frame log tells a busy UI thread from one that waits. 0 on failure.
+pub fn thread_cycles() -> u64 {
+    use windows_sys::Win32::System::Threading::GetCurrentThread;
+    use windows_sys::Win32::System::WindowsProgramming::QueryThreadCycleTime;
+    let mut cycles = 0u64;
+    // SAFETY: the current thread's pseudo-handle (no close needed) and a
+    // live local out-parameter.
+    let ok = unsafe { QueryThreadCycleTime(GetCurrentThread(), &mut cycles) };
+    if ok != 0 { cycles } else { 0 }
+}
+
+/// Wait up to `timeout_ms` for process `pid` to end (a player restarting
+/// itself waits for the process it replaces). `true` once it ended or when
+/// it is already gone; `false` on a timeout.
+pub fn wait_for_process_exit(pid: u32, timeout_ms: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
+    };
+    // SAFETY: OpenProcess takes plain values and returns a handle we own
+    // (null when the process is gone or not accessible).
+    let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
+    if process.is_null() {
+        return true;
+    }
+    // SAFETY: a live process handle of ours, waited on and closed exactly once.
+    unsafe {
+        let ended = WaitForSingleObject(process, timeout_ms) == WAIT_OBJECT_0;
+        CloseHandle(process);
+        ended
+    }
 }
 
 /// When window `hwnd` covers its display exactly (a borderless full-screen

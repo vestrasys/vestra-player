@@ -210,8 +210,9 @@ impl Options {
         self.write(None, 60., player)?;
         Ok(true)
     }
-    /// The status push for a shader mpv could not compile (`libmpv_render`
-    /// error log lines carrying the compiler's `ERROR:`), once per setting.
+    /// The status push for a shader mpv could not compile (a `libmpv_render`
+    /// error log line carrying a compiler message, `compile_error`), once per
+    /// setting.
     pub fn shader_failure(
         &mut self,
         prefix: &str,
@@ -224,7 +225,7 @@ impl Options {
             || self.settings.shaders.is_empty()
             || prefix != "libmpv_render"
             || level != "error"
-            || !text.starts_with("ERROR:")
+            || !compile_error(text)
         {
             return None;
         }
@@ -266,6 +267,25 @@ impl Options {
         self.reported = false;
         Ok(())
     }
+}
+
+/// Whether a `libmpv_render` error line is a shader compiler's message, in
+/// the formats of the compilers mpv's renderers use:
+///
+/// - OpenGL drivers and glslang: `ERROR: 0:39: 'x' : undeclared identifier`;
+/// - shaderc (Direct3D 11, GLSL to SPIR-V): `input:42: error: 'x' :
+///   undeclared identifier` (recorded on Windows, 2026-10-26);
+/// - D3DCompile (the HLSL that spirv-cross made): `(42,12): error X3004: …`,
+///   or mpv's own `D3DCompile failed: …`.
+///
+/// mpv also logs the shader source with numbered lines (`[ 42] …`), which
+/// may contain any text, so those never count.
+fn compile_error(text: &str) -> bool {
+    !text.starts_with('[')
+        && (text.starts_with("ERROR:")
+            || text.contains(": error:")
+            || text.contains(": error X")
+            || text.starts_with("D3DCompile failed"))
 }
 
 /// `video.render.status` data: the handle's status becomes `failed`.
@@ -415,6 +435,16 @@ mod tests {
                 .is_none()
         );
         assert!(options.release(1, &mut fake).unwrap());
+        assert!(
+            options
+                .shader_failure(
+                    "libmpv_render",
+                    "error",
+                    "input:42: error: 'x' : undeclared identifier"
+                )
+                .is_none(),
+            "released: no owner"
+        );
         assert_eq!(options.owner(), None);
         assert!(fake.shaders.is_empty());
         assert_eq!(fake.props["target-peak"], "auto");
@@ -427,6 +457,100 @@ mod tests {
                 .is_none(),
             "no shaders, not ours"
         );
+    }
+
+    /// The compiler lines of a broken shader (`undefined_name`) as libmpv
+    /// logs them: OpenGL on macOS, and on Windows (Direct3D 11) the lines
+    /// recorded on the parked `gpu-render` branch (2026-10-26) and checked
+    /// again on WARP by `warp_a_broken_shader_logs_a_line_that_compile_error_counts`.
+    #[test]
+    fn compiler_messages_of_every_renderer_count_and_the_source_listing_does_not() {
+        for line in [
+            "ERROR: 0:39: 'undefined_name' : undeclared identifier",
+            "input:42: error: 'undefined_name' : undeclared identifier",
+            "C:\\shader(42,12-25): error X3004: undeclared identifier 'undefined_name'",
+            "D3DCompile failed: 0x80004005",
+        ] {
+            assert!(compile_error(line), "{line}");
+        }
+        for line in [
+            "shaderc output:",
+            "shaderc compile status 'error' (1 errors, 0 warnings)",
+            "GLSL source:",
+            "[ 42]     return HOOKED_tex(HOOKED_pos) * undefined_name;",
+            "[ 43] // ERROR: 0:1: not an error, a comment : error: in the source",
+            "Disabling filter vestra-owned because it has failed.",
+        ] {
+            assert!(!compile_error(line), "{line}");
+        }
+        let (mut fake, mut options) = (Fake::default(), Options::default());
+        let file = shader();
+        let path = file.path().to_str().unwrap().to_owned();
+        options
+            .set(1, &json!({"shaders":[path]}), true, 60., &mut fake)
+            .unwrap();
+        let (owner, status) = options
+            .shader_failure(
+                "libmpv_render",
+                "error",
+                "input:42: error: 'undefined_name' : undeclared identifier\n",
+            )
+            .unwrap();
+        assert_eq!(owner, 1);
+        assert_eq!(
+            status["error"]["message"],
+            "shader compile failed: input:42: error: 'undefined_name' : undeclared identifier"
+        );
+    }
+
+    /// Windows: libmpv's Direct3D 11 renderer (on WARP, no GPU needed) logs
+    /// a broken shader as a `libmpv_render` error that `compile_error`
+    /// counts, so `video.render` reports `failed` there as on macOS.
+    #[cfg(windows)]
+    #[test]
+    fn warp_a_broken_shader_logs_a_line_that_compile_error_counts() {
+        use std::time::{Duration, Instant};
+        let shader =
+            std::env::temp_dir().join(format!("vestra-broken-{}.glsl", std::process::id()));
+        let text = "//!HOOK MAIN\n//!BIND HOOKED\nvec4 hook() {\n    return HOOKED_tex(HOOKED_pos) * undefined_name;\n}\n";
+        std::fs::write(&shader, text).unwrap();
+        let mpv = std::sync::Arc::new(
+            rsmpv::Mpv::builder()
+                .unwrap()
+                .set_property("vo", "libmpv")
+                .unwrap()
+                .set_property("ao", "null")
+                .unwrap()
+                .set_property("hwdec", "no")
+                .unwrap()
+                .build()
+                .unwrap(),
+        );
+        mpv.request_log_messages("v").unwrap();
+        let publish = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let renderer = vestra_gpu_render::start_on_warp(mpv.clone(), (64, 64), publish).unwrap();
+        let path = shader.to_str().unwrap();
+        mpv.command(&["change-list", "glsl-shaders", "append", path])
+            .unwrap();
+        mpv.command(&["loadfile", "av://lavfi:testsrc2=s=64x64:d=30"])
+            .unwrap();
+        let (handle, mut errors, start) = (renderer.handle(), Vec::new(), Instant::now());
+        while start.elapsed() < Duration::from_secs(10)
+            && (handle.frames() < 3 || errors.is_empty())
+        {
+            while let Some(event) = mpv.poll_event() {
+                if let rsmpv::Event::LogMessage(message) = event
+                    && message.prefix == "libmpv_render"
+                    && message.level == "error"
+                {
+                    errors.push(message.text);
+                }
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let _ = std::fs::remove_file(&shader);
+        assert!(errors.iter().any(|text| compile_error(text)), "{errors:#?}");
+        assert!(handle.frames() > 0, "mpv still renders without the shader");
     }
 
     #[test]

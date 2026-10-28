@@ -298,6 +298,10 @@ msgstr "此系统不支持画中画（需要 macOS 14 或更高版本）"
 msgid "libmpv · GPU rendering (OpenGL)"
 msgstr "libmpv · GPU 渲染（OpenGL）"
 
+#: src/renderer.rs:18
+msgid "libmpv · GPU rendering (Direct3D)"
+msgstr "libmpv · GPU 渲染（Direct3D）"
+
 #: src/renderer.rs:20
 msgid "libmpv · software rendering"
 msgstr "libmpv · 软件渲染"

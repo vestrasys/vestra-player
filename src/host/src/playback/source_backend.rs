@@ -390,6 +390,10 @@ impl Sources {
             .ok_or_else(|| RpcError::new("source-unavailable", "local source lease unavailable"))?;
         Ok(media.lease.clone())
     }
+    /// The current source as the session names it (a path or a URL).
+    pub fn current_source(&self) -> Option<&str> {
+        self.session.state().source.as_deref()
+    }
     pub fn phase(&self) -> Phase {
         self.session.state().phase
     }
