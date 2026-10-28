@@ -46,6 +46,8 @@ export class RecentMenu {
   readonly #recent: Recent;
   readonly #resume: Resume;
   readonly #osd: Osd;
+  /** Holds the submenu scopes; created before the onDispose below, so it is released after it. */
+  readonly #root: Scope;
   #scope: Scope | null = null;
   #built: string | null = null;
   #timer: ReturnType<typeof setTimeout> | null = null;
@@ -57,8 +59,12 @@ export class RecentMenu {
     this.#recent = recent;
     this.#resume = resume;
     this.#osd = osd;
+    this.#root = plugin.scope();
     recent.onChange(() => this.schedule());
     resume.onChange(() => this.schedule());
+    // Runs before the submenu scopes are released (newest first): a rebuild due
+    // meanwhile would otherwise declare its commands while the old ones are still
+    // being removed ("command recent.item.0 is already declared").
     plugin.onDispose(() => {
       this.#disposed = true;
       if (this.#timer) clearTimeout(this.#timer);
@@ -82,8 +88,9 @@ export class RecentMenu {
     if (signature === this.#built || this.#disposed) return;
     this.#built = signature;
     const old = this.#scope;
-    const scope = (this.#scope = this.#plugin.scope());
+    const scope = (this.#scope = this.#root.scope());
     if (old) await old.dispose();
+    if (this.#disposed) return; // stopped meanwhile: `#root` releases `scope`
     // Each title is a literal in its own `scope.commands.add` (`i18n extract` reads only those).
     const order = RECENT_ORDER;
 
