@@ -89,8 +89,9 @@ const result = (ok: boolean, summary: string, details?: unknown): ToolResult => 
 };
 
 /** What the model does after the player refused a package. */
-export const PLAYER_NEXT = "Fix the file and line the player names (for a Slint error: the .slint file; read the widget's declaration in the SDK's slint/ folder), then run check again";
-/** The player's error as it said it: Slint's diagnostics (file, position, message) stay whole. */
+export const PLAYER_NEXT =
+  "Fix each error at the file:line:column the player names (a Slint error: that .slint file; read the widget's declaration in the SDK's slint/ folder first), then run check again";
+/** The player's error as it said it: Slint's diagnostics, one per line (`<file>:<line>:<column>: error|warning: <message>`), stay whole. */
 export const playerMessage = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 6000);
 export const playerCode = (error: unknown) => String((error as { code?: unknown })?.code ?? "error");
 const playerRefusal = (error: unknown) =>
@@ -330,6 +331,13 @@ export class Toolchain {
     } finally {
       if (this.locks.get(key) === next) this.locks.delete(key);
     }
+  }
+
+  /** Removes the session's scratch packages a check left behind (a crash, a locked file); never throws. */
+  async sweep(session: SessionPaths): Promise<void> {
+    const tmp = path.join(session.dir, "tmp");
+    const names = await fs.readdir(tmp).catch(() => [] as string[]);
+    await Promise.all(names.filter((name) => name.startsWith("check-")).map((name) => fs.rm(path.join(tmp, name), { recursive: true, force: true }).catch(() => {})));
   }
 
   /** Strict settings at the session level, a fresh tmp/ for one call. */
@@ -590,7 +598,8 @@ export class Toolchain {
         }
         return result(true, "Check passed (manifest, strict type check, build, the player's Slint compile)", warnings.length ? { warnings } : undefined);
       } finally {
-        if (scratch) await fs.rm(scratch, { recursive: true, force: true });
+        // A lingering handle (EBUSY on Windows) must not replace the check's result; sweep() removes it later.
+        if (scratch) await fs.rm(scratch, { recursive: true, force: true }).catch(() => {});
       }
     });
   }

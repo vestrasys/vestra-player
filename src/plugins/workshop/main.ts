@@ -326,6 +326,8 @@ export default async function activate(plugin: Plugin) {
     // configured() made sure the key is in memory (or that none was ever saved).
     const key = await keyFor(p.id);
     const directory = sessions.directory(meta.id);
+    // Scratch packages an earlier check could not remove (see Toolchain.check).
+    await toolchain.sweep(pathsOf(meta.id));
     const run: Run = {
       meta,
       chat,

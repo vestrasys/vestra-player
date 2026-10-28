@@ -14,11 +14,13 @@ const plugin = path.resolve(import.meta.dirname, "..");
 
 /**
  * What the player (0.5.10) answers for a Slint file that does not compile:
- * code `slint`, the message its Debug form of Slint's diagnostics, with the
- * file in the player's extraction folder and a byte offset, not a line.
+ * code `slint`, one diagnostic per line, errors first, the file relative to
+ * the package.
  */
-const SLINT_ERROR =
-  '[Diagnostic { message: "\'changed\' is not a callback in SearchField", span: SourceLocation { source_file: Some("C:\\\\Users\\\\me\\\\AppData\\\\Local\\\\Temp\\\\.tmpAbC123\\\\ui\\\\main.slint"), span: Span { offset: 412, length: 7 } }, level: Error }]';
+const SLINT_ERROR = [
+  "ui/main.slint:14:9: error: 'changed' is not a callback in SearchField",
+  "ui/main.slint:3:1: warning: Component is implicitly marked for export. This is deprecated and it should be explicitly exported",
+].join("\n");
 
 async function session() {
   const data = await dataDirectory();
@@ -71,6 +73,18 @@ test("check: when the player accepts the package, the check says Slint was compi
   assert.deepEqual(await fs.readdir(path.join(paths.dir, "tmp")).catch(() => []), [], "no scratch folder left");
 });
 
+test("sweep: a session's leftover check-* scratch folders go, other scratch stays, and a missing tmp/ is fine", async () => {
+  const { data, paths } = await session();
+  const toolchain = new Toolchain(plugin, data, async () => ({}));
+  await toolchain.sweep(paths);
+  const tmp = path.join(paths.dir, "tmp");
+  await fs.mkdir(path.join(tmp, "check-0badf00d"), { recursive: true });
+  await fs.writeFile(path.join(tmp, "check-0badf00d", "local.demo-0.1.0.vxp"), "x");
+  await fs.mkdir(path.join(tmp, "a1b2c3d4"));
+  await toolchain.sweep(paths);
+  assert.deepEqual(await fs.readdir(tmp), ["a1b2c3d4"]);
+});
+
 /** The model: per user message, a list of steps (one per tool result so far in that turn). */
 function scripted(turns) {
   return (req) => {
@@ -103,10 +117,12 @@ test("in the player: the agent's check calls packages.validateArchive and the mo
   const text = typeof told.content === "string" ? told.content : JSON.stringify(told.content);
   assert.match(text, /Check failed: the player's Slint compile reported errors/);
   assert.match(text, /'changed' is not a callback in SearchField/);
-  assert.match(text, /main\.slint/);
+  assert.match(text, /ui\/main\.slint:14:9: error: 'changed' is not a callback in SearchField/);
+  assert.match(text, /file:line:column/);
   assert.match(text, /run check again/);
   // The system prompt tells the model check compiles Slint.
   assert.match(mock.chats.at(-1).body.messages[0].content, /check also has the player compile the packed plugin, every \.slint file included/);
+  assert.match(mock.chats.at(-1).body.messages[0].content, /file:line:column: error: message/);
   assert.deepEqual(ai.host.packageCalls, [], "nothing installed");
   await ai.stop();
 });

@@ -68,7 +68,7 @@ export function systemPrompt(o: PromptOptions): string {
 scaffold_plugin{name,title} → typecheck{id} → test{id} → check{id} → pack{id}${o.delivery ? " → install_plugin{id}" : ""}
 - typecheck and test do not compile .slint files.${
   o.delivery
-    ? ` check also has the player compile the packed plugin, every .slint file included, exactly as an install would: a Slint error comes back with its file, position and message. Fix that .slint file (read the widget's declaration in ${SDK}/slint/ first) and run check again.`
+    ? ` check also has the player compile the packed plugin, every .slint file included, exactly as an install would: a Slint error comes back one per line as file:line:column: error: message (the file inside the plugin, e.g. ui/main.slint:12:5). Fix each error at that place in the .slint file (read the widget's declaration in ${SDK}/slint/ first) and run check again.`
     : " The player compiles Slint only when it installs the plugin."
 }
 ${o.delivery ? "- Call install_plugin only when the user explicitly asks for it (do not install a finished plugin on your own); before installing, the player validates it again and the user confirms in a dialog.\n" : ""}
