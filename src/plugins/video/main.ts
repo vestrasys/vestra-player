@@ -121,6 +121,8 @@ const AUTO_OUTPUT = "Auto outputs by field (double rate); this setting applies t
 /** The renderer switch (render modes §8.4): its title, and the title while a restart would change the renderer. */
 const GPU_TITLE = "GPU Rendering (Experimental)";
 const GPU_PENDING_TITLE = "GPU Rendering (Restart to Apply)";
+/** Busy reason of the switch while a choice is being saved or the restart question is open. */
+const SWITCHING = "Switching…";
 /** Checked when the saved choice is the GPU, or Auto where the next start draws on the GPU (macOS). */
 const gpuChosen = (state: RenderingState) => state.preference === "gpu" || (state.preference === "auto" && state.nextMode === "gpu");
 /** E18: the source rate is read this long after the chain without frameBlend is in place, this many times at most. */
@@ -1152,6 +1154,13 @@ export default async function activate(plugin: Plugin) {
   let renderingMenu: Scope | null = null;
   let renderingTitle: string | null = null;
   let switching = false;
+  let restarting = false;
+  /** Usable where the GPU can be chosen, and always while checked, so a user can leave the GPU. */
+  const switchable = () => rendering !== null && (rendering.gpu.available || gpuChosen(rendering));
+  /** "Switching…" while busy; the player's own message (data, not a text to translate) while disabled. */
+  // TRANSLATORS: {} is the player's own message, already in the interface language.
+  const playerText = (message: string) => plugin.i18n.text("{}", [message]);
+  const switchReason = () => (switching ? SWITCHING : switchable() || !rendering?.gpu.reason ? null : playerText(rendering.gpu.reason.message));
   const buildRendering = async () => {
     const title = rendering === null ? null : rendering.restartPending ? GPU_PENDING_TITLE : GPU_TITLE;
     if (stopped || title === renderingTitle) return;
@@ -1167,13 +1176,24 @@ export default async function activate(plugin: Plugin) {
       group: "video-rendering",
       checked: () => rendering !== null && gpuChosen(rendering),
       // Greyed out with the player's reason where the GPU cannot be chosen (Windows without a
-      // GPU renderer, a denylisted driver, a GPU crash at an earlier start, no user interface).
-      enabled: () => rendering?.gpu.available === true,
-      // i18n-ignore: the player's own message, already worded by the player
-      reason: () => rendering?.gpu.reason?.message ?? null,
+      // GPU renderer, a denylisted driver, a GPU crash at an earlier start, no user interface);
+      // a checked item stays usable, so a user can always switch back to software rendering.
+      enabled: switchable,
+      reason: switchReason,
       busy: () => switching,
       run: switchRendering,
     });
+    // Chrome's Relaunch beside its hardware acceleration switch: the restart stays offered while
+    // the choice waits for it; picking the switch again undoes the choice instead.
+    if (rendering?.restartPending)
+      renderingMenu.commands.add({
+        id: "video.gpu-rendering.restart",
+        path: ["@video", "Restart Player to Apply"],
+        order: 460,
+        group: "video-rendering",
+        busy: () => restarting || switching,
+        run: restartNow,
+      });
   };
   let renderingQueue: Promise<void> = Promise.resolve();
   const showRendering = () => (renderingQueue = renderingQueue.then(buildRendering, buildRendering));
@@ -1209,7 +1229,10 @@ export default async function activate(plugin: Plugin) {
         await showRendering();
       }
       const on = choice === "gpu";
-      if (!rendering.restartPending) shown(plugin.osd.show(on ? "GPU rendering: on" : "GPU rendering: off"));
+      // Chosen, but something still rules the GPU out at the next start (VESTRA_RENDER, a
+      // denylist rule…): say why instead of "on".
+      if (on && rendering.nextMode !== "gpu") shown(plugin.osd.show("GPU rendering chosen; the next start still uses software rendering: {}", [rendering.nextReason.message]));
+      else if (!rendering.restartPending) shown(plugin.osd.show(on ? "GPU rendering: on" : "GPU rendering: off"));
       else await offerRestart(on);
     } finally {
       switching = false;
@@ -1232,10 +1255,19 @@ export default async function activate(plugin: Plugin) {
       shown(plugin.osd.show(on ? "GPU rendering: on (applies at the next start)" : "GPU rendering: off (applies at the next start)"));
       return;
     }
-    // Resolves once the player accepted; it then quits (stopping this plugin) and starts again.
-    await plugin.rendering.restartPlayer().catch((error: PluginError) => {
-      if (!stopped) shown(plugin.osd.show("Could not restart the player: {}", [error.message]));
-    });
+    await restartNow();
+  };
+  /** Resolves once the player accepted; it then quits (stopping this plugin) and starts again. */
+  const restartNow = async () => {
+    if (restarting) return;
+    restarting = true;
+    try {
+      await plugin.rendering.restartPlayer();
+    } catch (error) {
+      if (!stopped) shown(plugin.osd.show("Could not restart the player: {}", [(error as PluginError).message]));
+    } finally {
+      restarting = false;
+    }
   };
   let renderingSource = player.state.sourceId;
   player.onChange((state) => {
