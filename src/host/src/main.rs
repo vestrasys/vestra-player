@@ -4216,6 +4216,17 @@ fn set_menu_model(
     if !ui_values::reconcile_nested(&current, &next)? {
         window.set_property("menu-levels", next)?;
     }
+    // A level whose own fields changed (its open row, its size) leaves its
+    // rows' repeater with a dirty model binding until the next frame, and
+    // Slint 1.18 drops a row change that arrives meanwhile when the binding
+    // then yields the same model (`RepeaterTracker::row_changed` marks the
+    // row dirty; `model()` sees an unchanged model and never updates it).
+    // The host writes the menu several times between two frames when the
+    // pointer crosses rows fast (hover events are handled in 16 ms
+    // batches): a group row opened and closed in one batch kept `open`
+    // and stayed lit (user report, 0.5.9). Settling the repeaters now
+    // makes the next in-place write apply at once.
+    ui::settle_layout(window.window());
     Ok(())
 }
 fn string<'a>(params: &'a Value, key: &str) -> std::result::Result<&'a str, RpcError> {
