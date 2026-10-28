@@ -573,3 +573,9 @@ API maintainer, on the coordinator's instruction. The old branch `windows-wgpu-r
 3. `VESTRA_WGPU_NOTIFIER=1`, same swap, 30 s: the video comes back at the next draw.
 4. `VESTRA_WINDOW_RENDERER=gl`, 20 s: one `render:` line, software video as on main.
 5. Optional: `VESTRA_TEST_REMOVE_DEVICE=10` (seconds), 30 s: `logs/restart.log` shows the restart and the new player resumes the file; this exercises `host/restart.rs` after the move.
+
+## 16. Coordinator's hardware check of the port (2026-10-28, 780M, H.264 2160p60 windowed)
+
+- Baseline, 20 s, `VESTRA_FRAME_LOG=1`: the startup `render:` lines name Direct3D 12 (wgpu) windows and mpv on Direct3D 11 with shared Direct3D 12 textures; per second produced 59–61, shown 45–51, presented 39–42 (§13 had 31.1; the 780M is in the §14 state, so the numbers are only comparable with each other).
+- Shell swap (0.5.11) on the GPU path: VestraTube disabled and enabled from the store while playing. No fade, no move; the video stayed on the new tree (screenshot after the second swap shows the picture); no `render:` failure line; `shown` kept counting. The two seconds containing a swap dipped (presented 18 and 23, shown 32 and 32), the others stayed at 31–49.
+- Not run this time: the notifier path, the GL fallback and the device-removal restart (steps 3–5 of the port report); the clip ended at 20 s.
