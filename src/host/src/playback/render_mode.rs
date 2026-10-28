@@ -175,8 +175,9 @@ pub struct Facts {
     /// `std::env::consts::OS` and the system build.
     pub os: &'static str,
     pub build: Option<String>,
-    /// The adapter GPU rendering would use (the system's first).
-    pub adapter: Option<GpuAdapter>,
+    /// The system's adapters in its order; the first is what GPU rendering
+    /// would use.
+    pub adapters: Vec<GpuAdapter>,
     pub denylist: Denylist,
     /// The crash guard keeps GPU rendering off: why, with until when.
     pub crashed: Option<String>,
@@ -240,52 +241,80 @@ impl Decision {
     }
 }
 
+/// A denylist rule that holds, and the adapter it holds for.
+struct Hit<'a> {
+    rule: &'a render_denylist::Rule,
+    adapter: Option<&'a GpuAdapter>,
+}
+
 impl Facts {
     /// What keeps GPU rendering off whatever the user prefers: the crash
-    /// guard, then the first denylist rule whose action is `cpu`.
+    /// guard, then the first rule whose action is `cpu` or
+    /// `software-windows`.
     fn blocked(&self) -> Option<Reason> {
         if let Some(detail) = &self.crashed {
             return Some(Reason::PreviousCrash(detail.clone()));
         }
-        self.rules()
+        self.hits()
             .into_iter()
-            .find(|rule| matches!(rule.action, Some(Action::Cpu | Action::SoftwareWindows)))
-            .map(|rule| Reason::Denylist {
-                rule: rule.id.clone(),
-                detail: self.denylist_detail(&rule.id, &rule.description),
+            .find(|hit| matches!(hit.rule.action, Some(Action::Cpu | Action::SoftwareWindows)))
+            .map(|hit| self.denylist_reason(&hit))
+    }
+    /// The first `software-windows` rule that holds.
+    fn window_rule(&self) -> Option<Hit<'_>> {
+        self.hits()
+            .into_iter()
+            .find(|hit| hit.rule.action == Some(Action::SoftwareWindows))
+    }
+    /// The rules that hold: `cpu` and `warn` rules for the first adapter
+    /// (the one GPU rendering would use); `software-windows` rules for any
+    /// adapter with a GPU of its own, because OpenGL windows may draw on
+    /// another GPU than the first (a hybrid laptop's per-app choice).
+    fn hits(&self) -> Vec<Hit<'_>> {
+        let first = self.adapters.first();
+        let matches = |adapter: Option<&GpuAdapter>| {
+            self.denylist.matches(render_denylist::Facts {
+                os: self.os,
+                build: self.build.as_deref(),
+                adapter,
             })
+        };
+        let mut hits: Vec<Hit<'_>> = matches(first)
+            .into_iter()
+            .map(|rule| Hit {
+                rule,
+                adapter: first,
+            })
+            .collect();
+        for adapter in self.adapters.iter().skip(1).filter(|a| !a.software) {
+            for rule in matches(Some(adapter)) {
+                if rule.action == Some(Action::SoftwareWindows)
+                    && !hits.iter().any(|hit| hit.rule.id == rule.id)
+                {
+                    hits.push(Hit {
+                        rule,
+                        adapter: Some(adapter),
+                    });
+                }
+            }
+        }
+        hits
     }
-    fn rules(&self) -> Vec<&render_denylist::Rule> {
-        self.denylist.matches(render_denylist::Facts {
-            os: self.os,
-            build: self.build.as_deref(),
-            adapter: self.adapter.as_ref(),
-        })
-    }
-    fn adapter_text(&self) -> String {
-        self.adapter.as_ref().map_or_else(
-            || "unknown adapter".into(),
-            |adapter| {
-                format!(
-                    "{}, {:04X}:{:04X}, driver {}",
-                    adapter.name,
-                    adapter.vendor_id,
-                    adapter.device_id,
-                    adapter.driver_version.as_deref().unwrap_or("unknown")
-                )
-            },
-        )
-    }
-    fn denylist_detail(&self, rule: &str, description: &str) -> String {
+    fn denylist_reason(&self, hit: &Hit<'_>) -> Reason {
         let hint = if self.os == "windows" {
             "; update the graphics driver, or on a computer with two GPUs choose the other one for Vestra in Windows Settings > System > Display > Graphics"
         } else {
             "; update the graphics driver"
         };
-        format!(
-            "the graphics driver is on the player's denylist: {description} ({}; rule {rule}){hint}",
-            self.adapter_text()
-        )
+        Reason::Denylist {
+            rule: hit.rule.id.clone(),
+            detail: format!(
+                "the graphics driver is on the player's denylist: {} ({}; rule {}){hint}",
+                hit.rule.description,
+                adapter_text(hit.adapter),
+                hit.rule.id
+            ),
+        }
     }
     /// Whether `"gpu"` can be chosen now (ignoring the environment and the
     /// preference): `Err` with why not.
@@ -300,6 +329,22 @@ impl Facts {
             Ok(())
         }
     }
+}
+
+/// `name, 1002:15BF, driver x` for logs and messages.
+fn adapter_text(adapter: Option<&GpuAdapter>) -> String {
+    adapter.map_or_else(
+        || "unknown adapter".into(),
+        |adapter| {
+            format!(
+                "{}, {:04X}:{:04X}, driver {}",
+                adapter.name,
+                adapter.vendor_id,
+                adapter.device_id,
+                adapter.driver_version.as_deref().unwrap_or("unknown")
+            )
+        },
+    )
 }
 
 /// First match wins: headless, no GPU renderer on this system, the
@@ -317,23 +362,32 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
     } else {
         match facts.env {
             Some((Preference::Software, variable)) => Decision::cpu(Reason::Env(variable)),
-            Some((Preference::Gpu, variable)) => {
-                let mut decision = Decision::gpu(Reason::Env(variable));
-                if let Some(reason) = &blocked {
+            // It overrides the crash guard and `cpu` rules, not a driver
+            // that cannot draw OpenGL windows.
+            Some((Preference::Gpu, variable)) => match facts.window_rule() {
+                Some(hit) => {
+                    let mut decision = Decision::cpu(facts.denylist_reason(&hit));
+                    decision.notes.push(format!(
+                        "render: {variable}=gpu does not override denylist rule {}",
+                        hit.rule.id
+                    ));
                     decision
-                        .notes
-                        .push(format!("render: {variable} overrides {reason}"));
                 }
-                decision
-            }
+                None => {
+                    let mut decision = Decision::gpu(Reason::Env(variable));
+                    if let Some(reason) = &blocked {
+                        decision
+                            .notes
+                            .push(format!("render: {variable} overrides {reason}"));
+                    }
+                    decision
+                }
+            },
             _ if preference == Preference::Software => Decision::cpu(Reason::Preference),
             _ => blocked.map_or_else(|| Decision::gpu(Reason::Default), Decision::cpu),
         }
     };
-    if let Some(rule) = facts
-        .rules()
-        .into_iter()
-        .find(|rule| rule.action == Some(Action::SoftwareWindows))
+    if let Some(Hit { rule, .. }) = facts.window_rule()
         && !facts.headless
     {
         if facts.slint_backend {
@@ -345,7 +399,7 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
             decision.windows = WindowKind::Software;
         }
     }
-    for rule in facts.rules() {
+    for Hit { rule, adapter } in facts.hits() {
         let action = match rule.action {
             Some(Action::Cpu) => "software rendering",
             Some(Action::SoftwareWindows) => "software rendering and software windows",
@@ -354,7 +408,7 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
         decision.notes.push(format!(
             "render: denylist rule {} holds for {} ({action}): {}",
             rule.id,
-            facts.adapter_text(),
+            adapter_text(adapter),
             rule.description
         ));
     }
@@ -450,7 +504,7 @@ mod tests {
             decide(&gpu, Preference::Software).reason,
             Reason::Preference
         );
-        gpu.adapter = Some(bad_amd());
+        gpu.adapters = vec![bad_amd()];
         let denied = decide(&gpu, Preference::Gpu);
         assert_eq!(denied.mode, Mode::Cpu);
         assert_eq!(denied.reason.code(), "denylist");
@@ -478,7 +532,7 @@ mod tests {
     #[test]
     fn without_a_gpu_renderer_a_holding_rule_is_only_reported() {
         let mut windows = facts(false, false);
-        windows.adapter = Some(bad_amd());
+        windows.adapters = vec![bad_amd()];
         let decision = decide(&windows, Preference::Gpu);
         assert_eq!(decision.reason, Reason::NoGpuBackend);
         assert_eq!(decision.notes.len(), 1);
@@ -504,7 +558,7 @@ mod tests {
         };
         // Windows on main: no GPU renderer, the rule still changes the windows.
         let mut windows = facts(false, false);
-        windows.adapter = Some(white.clone());
+        windows.adapters = vec![white.clone()];
         let decision = decide(&windows, Preference::Auto);
         assert_eq!(
             (decision.mode, decision.windows, decision.reason.clone()),
@@ -514,7 +568,7 @@ mod tests {
         assert!(decision.notes[0].contains("amd-780m-white-opengl-windows"));
         // With a GPU renderer it also rules GPU out.
         let mut gpu = facts(false, true);
-        gpu.adapter = Some(white.clone());
+        gpu.adapters = vec![white.clone()];
         let decision = decide(&gpu, Preference::Gpu);
         assert_eq!(
             (decision.mode, decision.windows),
@@ -528,11 +582,68 @@ mod tests {
         assert_eq!(decision.windows, WindowKind::Default);
         assert!(decision.notes[0].contains("SLINT_BACKEND is set"));
         let mut headless = facts(true, false);
-        headless.adapter = Some(white);
+        headless.adapters = vec![white];
         assert_eq!(
             decide(&headless, Preference::Auto).windows,
             WindowKind::Default
         );
+    }
+
+    /// A hybrid laptop with Vestra set to "High performance": the RTX 4070
+    /// comes first, but OpenGL windows may still draw on the 780M.
+    #[test]
+    fn a_window_rule_holds_for_any_gpu_and_the_environment_cannot_override_it() {
+        let nvidia = GpuAdapter {
+            name: "NVIDIA GeForce RTX 4070 Laptop GPU".into(),
+            vendor_id: 0x10DE,
+            device_id: 0x2820,
+            driver_version: Some("32.0.16.1062".into()),
+            software: false,
+        };
+        let white = GpuAdapter {
+            driver_version: Some("32.0.32015.7029".into()),
+            ..bad_amd()
+        };
+        let mut hybrid = facts(false, true);
+        hybrid.adapters = vec![nvidia.clone(), white];
+        let decision = decide(&hybrid, Preference::Auto);
+        assert_eq!(
+            (decision.mode, decision.windows),
+            (Mode::Cpu, WindowKind::Software)
+        );
+        assert!(decision.reason.message().contains("AMD Radeon 780M"));
+        // A `cpu` rule counts for the first adapter only.
+        hybrid.adapters = vec![nvidia, bad_amd()];
+        assert!(decide(&hybrid, Preference::Auto).is_gpu());
+        // A software adapter second is not looked at.
+        let mut basic = facts(false, true);
+        basic.adapters = vec![
+            bad_amd(),
+            GpuAdapter {
+                software: true,
+                driver_version: Some("32.0.32015.7029".into()),
+                ..bad_amd()
+            },
+        ];
+        assert_eq!(
+            decide(&basic, Preference::Auto).windows,
+            WindowKind::Default
+        );
+        // VESTRA_RENDER=gpu overrides a `cpu` rule, not a window rule.
+        basic.env = Some((Preference::Gpu, "VESTRA_RENDER"));
+        assert!(decide(&basic, Preference::Auto).is_gpu());
+        let mut white_only = facts(false, true);
+        white_only.adapters = vec![GpuAdapter {
+            driver_version: Some("32.0.32015.7029".into()),
+            ..bad_amd()
+        }];
+        white_only.env = Some((Preference::Gpu, "VESTRA_RENDER"));
+        let decision = decide(&white_only, Preference::Auto);
+        assert_eq!(
+            (decision.mode, decision.windows),
+            (Mode::Cpu, WindowKind::Software)
+        );
+        assert!(decision.notes[0].contains("does not override"));
     }
 
     #[test]

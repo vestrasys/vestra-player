@@ -40,7 +40,9 @@ pub struct Os {
     /// `windows`, `macos` or `linux` (`std::env::consts::OS`).
     #[serde(rename = "type")]
     pub kind: String,
-    /// The system build (Windows 26200, macOS 25C56 compares part by part).
+    /// The system build. Dotted numbers (Windows `26200.6899`) compare part
+    /// by part with every `op`; a build with letters (macOS `25C56`) only
+    /// with `=`, as text.
     #[serde(default)]
     pub build: Option<Version>,
 }
@@ -120,6 +122,11 @@ impl Denylist {
             if !rule.disabled && rule.action.is_none() {
                 return Err(format!("rule {} has no action", rule.id));
             }
+            for conditions in std::iter::once(&rule.conditions).chain(&rule.exceptions) {
+                conditions
+                    .check()
+                    .map_err(|error| format!("rule {}: {error}", rule.id))?;
+            }
             self.rules.retain(|old| old.id != rule.id);
             self.rules.push(rule);
         }
@@ -142,6 +149,19 @@ impl Denylist {
 }
 
 impl Conditions {
+    /// Ids are hexadecimal; versions have a known `op`.
+    fn check(&self) -> Result<(), String> {
+        for id in self.vendor_id.iter().chain(&self.device_id) {
+            if hex(id).is_none() {
+                return Err(format!("{id:?} is not a hexadecimal id"));
+            }
+        }
+        let builds = self.os.as_ref().and_then(|os| os.build.as_ref());
+        for version in builds.into_iter().chain(&self.driver_version) {
+            version.check()?;
+        }
+        Ok(())
+    }
     fn hold(&self, facts: Facts<'_>) -> bool {
         let os = self.os.as_ref().is_none_or(|os| {
             os.kind == facts.os
@@ -169,12 +189,25 @@ impl Conditions {
 }
 
 impl Version {
+    /// A known `op`, `value2` with `between`.
+    fn check(&self) -> Result<(), String> {
+        match self.op.as_str() {
+            "<" | "<=" | "=" | "==" | ">=" | ">" => Ok(()),
+            "between" if self.value2.is_some() => Ok(()),
+            "between" => Err("between without value2".into()),
+            other => Err(format!("unknown op {other:?}")),
+        }
+    }
     fn holds(&self, value: &str) -> bool {
         let against = |bound: &str| compare(value, bound);
         match self.op.as_str() {
             "<" => against(&self.value) == Some(Ordering::Less),
             "<=" => matches!(against(&self.value), Some(Ordering::Less | Ordering::Equal)),
-            "=" | "==" => against(&self.value) == Some(Ordering::Equal),
+            "=" | "==" => match against(&self.value) {
+                Some(order) => order == Ordering::Equal,
+                // Not dotted numbers (a macOS build): the same text.
+                None => value == self.value,
+            },
             ">=" => matches!(
                 against(&self.value),
                 Some(Ordering::Greater | Ordering::Equal)
@@ -326,6 +359,11 @@ mod tests {
             Some(Action::Warn)
         );
         for bad_file in [
+            r#"{"version":1,"rules":[{"id":"x","action":"cpu","vendor_id":"AMD"}]}"#,
+            r#"{"version":1,"rules":[{"id":"x","action":"cpu","device_id":["0x15BF","?"]}]}"#,
+            r#"{"version":1,"rules":[{"id":"x","action":"cpu","driver_version":{"op":"~","value":"1"}}]}"#,
+            r#"{"version":1,"rules":[{"id":"x","action":"cpu","driver_version":{"op":"between","value":"1"}}]}"#,
+            r#"{"version":1,"rules":[{"id":"x","action":"cpu","exceptions":[{"vendor_id":"zz"}]}]}"#,
             "{",
             r#"{"version":2,"rules":[]}"#,
             r#"{"version":1,"rules":[{"id":"x"}]}"#,
@@ -367,6 +405,22 @@ mod tests {
         assert!(os.hold(facts(Some("26200"))));
         assert!(!os.hold(facts(Some("19045"))));
         assert!(!os.hold(facts(None)));
+        // A macOS build matches with `=` as text, never with an order.
+        let mac = |op: &str| Conditions {
+            os: Some(Os {
+                kind: "macos".into(),
+                build: Some(version(op, "25C56")),
+            }),
+            ..Conditions::default()
+        };
+        let on_mac = |build| Facts {
+            os: "macos",
+            build: Some(build),
+            adapter: None,
+        };
+        assert!(mac("=").hold(on_mac("25C56")));
+        assert!(!mac("=").hold(on_mac("25C57")));
+        assert!(!mac(">=").hold(on_mac("25C56")));
         assert_eq!(hex("0x15bf"), Some(0x15BF));
         assert_eq!(hex("nope"), None);
     }

@@ -141,8 +141,7 @@ fn main() -> Result<()> {
     let mut primary = None;
     if let Some(directory) = instance_dir {
         // A player that restarted itself (`rendering.restart`) is replaced
-        // by this one: wait for its lock, never hand over, and do not run
-        // without the lock (two players).
+        // by this one: wait up to 20 s for its lock and never hand over.
         let claimed = match restart {
             Some(_) => platform::single_instance_restarted(&directory, Duration::from_secs(20)),
             None => platform::single_instance(&directory, &files, Duration::from_secs(5)),
@@ -150,10 +149,7 @@ fn main() -> Result<()> {
         match claimed {
             Ok(platform::Launch::HandedOff) => return Ok(()),
             Ok(platform::Launch::Primary(claimed)) => primary = Some(claimed),
-            Err(error) if restart.is_some() => {
-                diag!("restart: the player this one replaces did not end ({error}); not starting");
-                return Ok(());
-            }
+            // As any launch that cannot claim the lock: run on its own.
             Err(error) => diag!("single instance: {error}; running on its own"),
         }
     }
@@ -192,10 +188,12 @@ fn main() -> Result<()> {
     }
     // The crash guard: armed until GPU rendering ran a few seconds, gave up
     // on its own, or the player quit (`render_state`).
+    // `_armed` lives until `main` returns, by any path: only a process
+    // that dies leaves the guard armed.
     let guard = startup.guard.clone();
-    if render.is_gpu() {
-        guard.arm(startup.key.clone(), playback::render_state::now());
-    }
+    let _armed = render
+        .is_gpu()
+        .then(|| guard.arm(startup.key.clone(), playback::render_state::now()));
     if !headless {
         // Windows: the main window draws at the display's vertical blanks
         // (`frame_pacing.rs`), not on Slint's timer.
@@ -307,6 +305,7 @@ fn main() -> Result<()> {
                 directories: directories.clone(),
                 silent,
             },
+            restarted_at: restart.map(|_| Instant::now()),
         },
         source_state_replies: Default::default(),
         floating: None,

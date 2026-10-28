@@ -441,8 +441,21 @@ impl Backend {
                             continue;
                         }
                         // A restarted player continues its first file where
-                        // the replaced one was (`host/restart.rs`).
+                        // the replaced one was (`host/rendering.rs`): mpv's
+                        // `start` and `pause` options before the file loads,
+                        // so it does not play from 0 first; cleared once the
+                        // first load is ready or failed.
                         if command.method == "host.resume" {
+                            let seconds = command.params["seconds"].as_f64().unwrap_or(0.);
+                            if seconds > 0.
+                                && let Err(error) =
+                                    mpv.set_property("start", seconds.to_string().as_str())
+                            {
+                                diag!("restart: start={seconds} refused: {error}");
+                            }
+                            if command.params["paused"].as_bool() == Some(true) {
+                                let _ = mpv.set_property("pause", true);
+                            }
                             resume = Some(command.params);
                             continue;
                         }
@@ -552,23 +565,27 @@ impl Backend {
                             json!({"currentSession":sources.generation(),"event":format!("{event:?}")}),
                         ));
                     }
-                    if let Some(point) = &resume
-                        && sources.phase() == crate::playback::session::Phase::Ready
-                        // By file name: the session may name the file as a URL or
-                        // a canonical path.
-                        && sources.current_source().map(file_name) == point["source"].as_str().map(file_name)
-                    {
-                        let seconds = point["seconds"].as_f64().unwrap_or(0.);
-                        if seconds > 0.
-                            && let Err(error) =
-                                mpv.command(&["seek", &seconds.to_string(), "absolute"])
-                        {
-                            diag!("restart: resuming at {seconds} s failed: {error}");
+                    if let Some(point) = &resume {
+                        use crate::playback::session::Phase;
+                        let phase = sources.phase();
+                        if matches!(phase, Phase::Ready | Phase::Error | Phase::Ended) {
+                            // By file name: the session may name the file as a
+                            // URL or a canonical path.
+                            let same = sources.current_source().map(file_name)
+                                == point["source"].as_str().map(file_name);
+                            if phase == Phase::Ready
+                                && same
+                                && point["paused"].as_bool() == Some(true)
+                            {
+                                let _ = mpv.set_property("pause", true);
+                            } else if !same || phase != Phase::Ready {
+                                diag!(
+                                    "restart: the first load was not the resumed file, or failed; resuming dropped"
+                                );
+                            }
+                            let _ = mpv.set_property("start", "none");
+                            resume = None;
                         }
-                        if point["paused"].as_bool() == Some(true) {
-                            let _ = mpv.set_property("pause", true);
-                        }
-                        resume = None;
                     }
                     if !geometry_error && let Err(error) = geometry.tick(&mpv, &sources) {
                         geometry_error = true;

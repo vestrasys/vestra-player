@@ -69,7 +69,8 @@ pub fn single_instance(directory: &Path, files: &[PathBuf], wait: Duration) -> i
 /// A player that replaces one which restarted itself (`--vestra-restart`):
 /// wait up to `wait` for that player to release the lock, then claim it;
 /// never hand files over (the old player is quitting). An error means the
-/// old player did not end: the caller does not start (two players).
+/// old player did not end in time: the caller runs on its own, as after any
+/// failed claim.
 pub fn single_instance_restarted(directory: &Path, wait: Duration) -> io::Result<Launch> {
     std::fs::create_dir_all(directory)?;
     let lock = OpenOptions::new()

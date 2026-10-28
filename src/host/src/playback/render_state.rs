@@ -105,13 +105,18 @@ impl GuardFile {
         }
         guard
     }
-    /// Before GPU rendering starts.
-    pub fn arm(&self, key: GuardKey, now: u64) {
+    /// Before GPU rendering starts. Keep the returned [`Armed`] until the
+    /// player ends: dropping it settles the guard, so a start that returns
+    /// with an ordinary error (or unwinds) is not taken for a crash; only a
+    /// process that dies leaves `attempting` behind.
+    #[must_use = "dropping it settles the guard at once"]
+    pub fn arm(&self, key: GuardKey, now: u64) -> Armed {
         self.write(&Guard {
             state: GuardState::Attempting,
             key,
             at: now,
         });
+        Armed(self.clone())
     }
     /// GPU rendering started (or gave up on its own, or the player quits):
     /// an `attempting` becomes `ok`; anything else stays.
@@ -121,6 +126,15 @@ impl GuardFile {
             guard.state = GuardState::Ok;
             self.write(&guard);
         }
+    }
+}
+
+/// An armed crash guard (`GuardFile::arm`); settles it when dropped.
+pub struct Armed(GuardFile);
+
+impl Drop for Armed {
+    fn drop(&mut self) {
+        self.0.settle();
     }
 }
 
@@ -202,7 +216,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = GuardFile::new(Some(dir.path().join("render-state.json")));
         assert_eq!(file.recover(100), Guard::default(), "no file: nothing");
-        file.arm(key("31.0.14005.21001"), 100);
+        // The process dies: nothing drops the guard.
+        std::mem::forget(file.arm(key("31.0.14005.21001"), 100));
         // The run died: the next start finds `attempting`.
         let guard = file.recover(200);
         assert_eq!((guard.state, guard.at), (GuardState::Crashed, 200));
@@ -230,16 +245,25 @@ mod tests {
     fn a_run_that_started_or_quit_settles_and_settling_keeps_a_crash() {
         let dir = tempfile::tempdir().unwrap();
         let file = GuardFile::new(Some(dir.path().join("render-state.json")));
-        file.arm(key("1"), 100);
+        let armed = file.arm(key("1"), 100);
         file.settle();
         assert_eq!(file.read().state, GuardState::Ok);
+        drop(armed);
         assert_eq!(file.recover(200).state, GuardState::Ok);
-        file.arm(key("1"), 300);
+        // A start that returns early with an error drops the guard: settled.
+        let start = || -> Result<(), String> {
+            let _armed = file.arm(key("1"), 250);
+            assert_eq!(file.read().state, GuardState::Attempting);
+            Err("Backend::start failed".into())
+        };
+        assert!(start().is_err());
+        assert_eq!(file.read().state, GuardState::Ok, "an error is not a crash");
+        std::mem::forget(file.arm(key("1"), 300));
         file.recover(400);
         file.settle();
         assert_eq!(file.read().state, GuardState::Crashed);
         let none = GuardFile::new(None);
-        none.arm(key("1"), 1);
+        drop(none.arm(key("1"), 1));
         assert_eq!(none.recover(2), Guard::default());
     }
 

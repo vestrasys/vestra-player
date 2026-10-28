@@ -23,6 +23,30 @@ pub(crate) struct Rendering {
     pub file: Option<PathBuf>,
     /// What a restart starts again with.
     pub relaunch: Relaunch,
+    /// This player was started by a restart (`--vestra-restart`), at this
+    /// time: it refuses another one for [`RESTART_COOLDOWN`], so a plugin
+    /// that restarts on activation cannot loop.
+    pub restarted_at: Option<std::time::Instant>,
+}
+
+/// How long a restarted player refuses `rendering.restart`.
+pub(crate) const RESTART_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Whether a restart is refused now (`busy`): one is under way in this
+/// process, or this process was itself started by a restart less than
+/// [`RESTART_COOLDOWN`] ago.
+fn restart_refused(
+    restarting: bool,
+    restarted_at: Option<std::time::Instant>,
+    now: std::time::Instant,
+) -> Option<&'static str> {
+    if restarting {
+        Some("the player is already restarting")
+    } else if restarted_at.is_some_and(|at| now.saturating_duration_since(at) < RESTART_COOLDOWN) {
+        Some("the player restarted less than 30 seconds ago")
+    } else {
+        None
+    }
 }
 
 /// The player's own arguments a restart repeats.
@@ -61,12 +85,12 @@ pub(crate) fn startup(headless: bool) -> Startup {
     let build = (!headless)
         .then(|| crate::system::os_facts().build.clone())
         .flatten();
-    let adapter = if headless {
-        None
+    let adapters = if headless {
+        Vec::new()
     } else {
-        platform::gpu_adapters().into_iter().next()
+        platform::gpu_adapters()
     };
-    if let Some(adapter) = &adapter {
+    for adapter in &adapters {
         diag!(
             "render: adapter {} ({:04X}:{:04X}, driver {}{})",
             adapter.name,
@@ -91,13 +115,12 @@ pub(crate) fn startup(headless: bool) -> Startup {
         diag!("render: render.json is ignored ({warning})");
     }
     let guard = GuardFile::new(path("render-state.json"));
+    let adapter = adapters.first();
     let key = GuardKey {
         adapter: adapter
-            .as_ref()
             .map(|adapter| adapter.name.clone())
             .unwrap_or_default(),
         driver: adapter
-            .as_ref()
             .and_then(|adapter| adapter.driver_version.clone())
             .or_else(|| build.clone())
             .unwrap_or_default(),
@@ -117,7 +140,7 @@ pub(crate) fn startup(headless: bool) -> Startup {
             env,
             os: std::env::consts::OS,
             build,
-            adapter,
+            adapters,
             denylist,
             crashed,
             slint_backend: std::env::var_os("SLINT_BACKEND").is_some_and(|value| !value.is_empty()),
@@ -212,13 +235,19 @@ impl Host {
                 "a player without windows does not restart",
             ));
         }
-        if RESTARTING.load(Ordering::Acquire) {
-            return Err(RpcError::new("busy", "the player is already restarting"));
+        if let Some(why) = restart_refused(
+            RESTARTING.load(Ordering::Acquire),
+            self.rendering.restarted_at,
+            std::time::Instant::now(),
+        ) {
+            return Err(RpcError::new("busy", why));
         }
         let exe = std::env::current_exe()
             .map_err(|error| RpcError::new("failed", format!("the player's path: {error}")))?;
         let mut command = relaunch_command(&exe, &self.rendering.relaunch, &self.last_source);
         diag!("restart: {command:?}");
+        // Windows: the new player may take the foreground from this one.
+        platform::allow_handoff_foreground();
         let child = command
             .spawn()
             .map_err(|error| RpcError::new("failed", format!("the restart failed: {error}")))?;
@@ -296,7 +325,19 @@ mod tests {
             preference: Preference::Auto,
             file,
             relaunch: Relaunch::default(),
+            restarted_at: None,
         }
+    }
+
+    #[test]
+    fn a_restarted_player_refuses_another_restart_for_a_while() {
+        let start = std::time::Instant::now();
+        assert_eq!(restart_refused(false, None, start), None);
+        assert!(restart_refused(true, None, start).is_some(), "under way");
+        let soon = start + std::time::Duration::from_secs(5);
+        assert!(restart_refused(false, Some(start), soon).is_some());
+        let later = start + RESTART_COOLDOWN;
+        assert_eq!(restart_refused(false, Some(start), later), None);
     }
 
     #[test]
@@ -343,13 +384,13 @@ mod tests {
             false
         );
         let mut denied = rendering(true, None);
-        denied.facts.adapter = Some(GpuAdapter {
+        denied.facts.adapters = vec![GpuAdapter {
             name: "AMD Radeon 780M".into(),
             vendor_id: 0x1002,
             device_id: 0x15BF,
             driver_version: Some("31.0.14005.21001".into()),
             software: false,
-        });
+        }];
         let error = denied.set_preference(Preference::Gpu).unwrap_err();
         assert_eq!(error.code, "unavailable");
         assert!(error.message.contains("denylist"), "{}", error.message);
