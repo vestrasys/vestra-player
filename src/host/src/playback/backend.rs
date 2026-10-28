@@ -479,6 +479,7 @@ impl Backend {
                         let _ = events.send(Event::Reply(command.reply, result));
                     }
                     sources.follow_device(&mpv);
+                    sources.late_cover_art(&mpv);
                     for (done, result) in actions.poll(&mpv, sources.generation()) {
                         done.send(&events, result);
                     }

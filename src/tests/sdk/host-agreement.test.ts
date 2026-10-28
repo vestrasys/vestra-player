@@ -35,6 +35,7 @@ import {
   rewriteSlint,
   scanSlint,
   SECRET_LIMITS,
+  SUBTITLE_LIMITS,
   THEME_PALETTES,
   UI_VALUE_LIMITS,
   LIST_SEPARATORS,
@@ -881,6 +882,61 @@ test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (capabilities
   );
 });
 
+test("SystemInfo.rendering has the values app.system reports (system.rs rendering_json)", () => {
+  const sdk = /readonly rendering\??: ([^;]+);/.exec(
+    sdkFile("plugin/types.d.ts"),
+  )?.[1];
+  assert.ok(sdk, "SystemInfo.rendering in the SDK's types.d.ts");
+  const system = host("src/system.rs");
+  const body =
+    /pub fn rendering_json\(gpu: bool\) -> Value \{\n([^\n]*)\n\}/.exec(
+      system,
+    )?.[1];
+  assert.ok(body, "rendering_json in system.rs");
+  const values = (text: string) =>
+    [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!).sort();
+  assert.deepEqual(values(sdk), values(body));
+  assert.ok(
+    system.includes(`value["rendering"] = rendering;`),
+    "app.system sets rendering",
+  );
+});
+
+test("SUBTITLE_LIMITS are the player's (playback/subtitle_state.rs, subtitle_upload.rs)", () => {
+  // `pub const NAME: usize = …;` inside the Registry of each file.
+  const constant = (file: string, name: string) => {
+    const value = new RegExp(`pub const ${name}: usize = ([^;]+);`).exec(
+      host(file),
+    )?.[1];
+    assert.ok(value, `${name} in ${file}`);
+    return value
+      .split("*")
+      .map((part) => Number(part.trim()))
+      .reduce((a, b) => a * b, 1);
+  };
+  const state = "src/playback/subtitle_state.rs";
+  const upload = "src/playback/subtitle_upload.rs";
+  assert.equal(
+    constant(upload, "MAX_UPLOAD_BYTES"),
+    constant(state, "MAX_CONTENT_BYTES"),
+    "an upload and a committed file have the same limit",
+  );
+  assert.deepEqual(
+    {
+      fileBytes: constant(state, "MAX_CONTENT_BYTES"),
+      tracksPerPlugin: constant(state, "MAX_OWNER_RESOURCES"),
+      tracks: constant(state, "MAX_RESOURCES"),
+      totalBytes: constant(state, "MAX_TOTAL_BYTES"),
+      loadsPerPlugin: constant(state, "MAX_OWNER_KEYS"),
+      loads: constant(state, "MAX_KEYS"),
+      uploadsPerPlugin: constant(upload, "MAX_OWNER_ACTIVE"),
+      uploads: constant(upload, "MAX_ACTIVE"),
+    },
+    { ...SUBTITLE_LIMITS },
+    "SUBTITLE_LIMITS differ from the player's subtitle registries",
+  );
+});
+
 test("BINDING_INPUTS are the names the player's binding parser accepts (bindings.rs)", () => {
   const rust = host("src/bindings.rs");
   const list = (name: string) => {
@@ -983,6 +1039,20 @@ test("HostAction ids are the player's core actions (core_actions.rs ACTIONS)", (
  */
 const KNOWN_UNDOCUMENTED_CODES = new Set<string>([]);
 
+/**
+ * Codes the player returns only for a wire parameter the SDK never sends, so
+ * no plugin sees them and the `PluginError` table leaves them out (SDK 1.5.33).
+ * Each entry names the request and parameter; the test checks that the SDK's
+ * wire client still does not send it.
+ */
+const SDK_UNREACHABLE_CODES = new Map<
+  string,
+  { readonly method: string; readonly param: string }
+>([
+  // packages.validate { digest }: the SDK sends only directory and apiVersion.
+  ["staleDigest", { method: "packages.validate", param: "digest" }],
+]);
+
 test("the error codes the player returns are PluginError codes", () => {
   const types = sdkFile("plugin/types.d.ts");
   const table = types.slice(
@@ -1006,9 +1076,28 @@ test("the error codes the player returns are PluginError codes", () => {
         /RpcError::new\(\s*"([^"]+)"/g,
       ))
         returned.add(m[1]!);
+  const wire = sdkFile("wire.js");
+  for (const [code, { method, param }] of SDK_UNREACHABLE_CODES) {
+    assert.ok(
+      returned.has(code),
+      `SDK_UNREACHABLE_CODES: the player no longer returns "${code}"; remove the entry`,
+    );
+    assert.ok(
+      !documented.has(code),
+      `SDK_UNREACHABLE_CODES: PluginError lists "${code}" now; remove the entry`,
+    );
+    const call = wire.slice(wire.indexOf(`"${method}"`));
+    assert.ok(call.length < wire.length, `${method} in the SDK's wire.js`);
+    assert.ok(
+      !call.slice(0, call.indexOf("})")).includes(param),
+      `SDK_UNREACHABLE_CODES: the SDK now sends ${method} { ${param} }, so "${code}" reaches plugins; document it`,
+    );
+  }
   for (const code of returned)
     assert.ok(
-      documented.has(code) || KNOWN_UNDOCUMENTED_CODES.has(code),
+      documented.has(code) ||
+        KNOWN_UNDOCUMENTED_CODES.has(code) ||
+        SDK_UNREACHABLE_CODES.has(code),
       `the player returns code "${code}", which the PluginError table does not list`,
     );
   for (const code of KNOWN_UNDOCUMENTED_CODES) {

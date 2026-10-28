@@ -6,6 +6,9 @@ export declare const API_VERSION: "vestra/1";
 /**
  * A JSON value: what crosses the wire to the player. Slint property values,
  * callback arguments and protocol parameters are all `Json`.
+ *
+ * @since 1.0.0
+ * @category Plugin
  */
 export type Json = null | boolean | number | string | Json[] | {
     [key: string]: Json;
@@ -71,23 +74,42 @@ export interface UiCallback {
  * `timeout`, `aborted`, `limit` (a player limit such as the command count),
  * `disabled` (the plugin is stopping).
  *
- * @example
+ * @example Simulate the player refusing a clipboard write in a test
+ * The test proves the plugin sees a refused write as an error with code
+ * `failed`. `host.handle` replaces the test host's handler for one request
+ * method; the `HostError` it throws travels back like the player's own
+ * refusal, so the call rejects with that `code` and is not retried.
+ * `host.reset` puts the default handler back for later steps.
  * ```ts
+ * import assert from "node:assert/strict";
  * import { HostError, startPlugin } from "@vestra-player/sdk/testing";
+ * import activate from "../main.ts";
  *
- * const { host, plugin, stop } = await startPlugin(activate, { directory });
+ * const { host, plugin, stop } = await startPlugin(activate, {
+ *   directory: new URL("..", import.meta.url),
+ * });
  * host.handle("clipboard.writeText", () => {
  *   throw new HostError("failed", "the system refused the write");
  * });
  * await assert.rejects(plugin.clipboard.writeText("x"), { code: "failed" });
- * host.reset("clipboard.writeText");
+ * host.reset("clipboard.writeText"); // writes succeed again
  * await stop();
  * ```
+ *
+ * @remarks
+ * A definite refusal, as opposed to a lost reply: the SDK does not retry
+ * it, and the plugin sees an `Error` with `code`.
+ *
+ * @capability None.
+ * @since 1.0.0
+ * @category Testing
  */
 export declare class HostError extends Error {
     /** The stable error code, e.g. `"invalid"`, `"stale"`, `"unavailable"`. */
     code: string;
     /**
+     * A refusal with this code, as the player would send it.
+     *
      * @param code - The stable error code the caller will see as `error.code`.
      * @param message - Human-readable detail (not for branching on).
      */
@@ -275,7 +297,7 @@ export interface LocalServices {
         signal: AbortSignal;
     }): Promise<Uint8Array>;
 }
-/** `app.system`: the operating system and the displays. */
+/** `app.system`: the operating system, the displays and the renderer. */
 export interface WireSystemInfo {
     os: "macos" | "windows" | "linux" | "other";
     name: string;
@@ -291,6 +313,8 @@ export interface WireSystemInfo {
         refreshRate: number | null;
         primary: boolean;
     }[];
+    /** Player 0.5.12; older players leave it out. */
+    rendering?: "gpu" | "software";
 }
 /**
  * Template arguments on the wire (`osd.show`, `osd.panel`, `dialogs.confirm`,
