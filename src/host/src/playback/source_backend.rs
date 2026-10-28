@@ -112,6 +112,13 @@ impl LocalMedia {
     }
 }
 
+/// Reads folders with [`folder_files`].
+struct CoverLister(crate::playback::cover_listing::Lister);
+impl Default for CoverLister {
+    fn default() -> Self {
+        Self(crate::playback::cover_listing::Lister::new(folder_files))
+    }
+}
 /// `cover_listing::WAIT`; tests set `None` (never wait).
 struct CoverWait(Option<std::time::Duration>);
 impl Default for CoverWait {
@@ -137,8 +144,8 @@ pub struct Sources {
     lease_ready: Option<(i64, u64)>,
     /// Windows: the lease stream protocol is registered on the player.
     lease_streams: bool,
-    /// Cover art listing threads alive (`cover_listing::MAX_RUNNING`).
-    cover_listings: Arc<std::sync::atomic::AtomicUsize>,
+    /// The cover art folder readers (`cover_listing`).
+    cover_listings: CoverLister,
     /// How long a load waits for its cover art listing.
     cover_wait: CoverWait,
     /// The cover art of the current load that is still being listed.
@@ -1794,7 +1801,7 @@ impl Sources {
             return load_options(mpv, source, paused, "", false);
         };
         let (options, late) =
-            leased_options(mpv, path, remote, &self.cover_listings, self.cover_wait.0);
+            leased_options(mpv, path, remote, &self.cover_listings.0, self.cover_wait.0);
         let entry = load_options(mpv, source, paused, &options, true)?;
         self.late_covers =
             late.map(|listing| crate::playback::cover_listing::Late::new(entry, listing));
@@ -1827,10 +1834,10 @@ fn leased_options(
     mpv: &Mpv,
     path: &str,
     remote: bool,
-    listings: &Arc<std::sync::atomic::AtomicUsize>,
+    listings: &crate::playback::cover_listing::Lister,
     wait: Option<std::time::Duration>,
 ) -> (String, Option<crate::playback::cover_listing::Listing>) {
-    use crate::playback::cover_listing::{Covers, list};
+    use crate::playback::cover_listing::Covers;
     let mut options = String::new();
     if remote {
         options.push_str(",cache=yes");
@@ -1839,16 +1846,17 @@ fn leased_options(
         .get_property::<String>("cover-art-auto")
         .unwrap_or_default();
     // Only audio files get cover art: no listing (and no thread) otherwise.
-    if !has_cover_art(Path::new(path), &auto) {
+    let media = Path::new(path).to_path_buf();
+    let (Some(folder), true) = (media.parent(), has_cover_art(&media, &auto)) else {
         return (options, None);
-    }
+    };
+    let folder = folder.to_path_buf();
     let whitelist = mpv
         .get_property::<String>("cover-art-whitelist")
         .unwrap_or_default();
     let image_exts = mpv.get_property::<String>("image-exts").unwrap_or_default();
-    let media = Path::new(path).to_path_buf();
-    let images = match list(listings, wait, move || {
-        cover_paths(&cover_art(&media, &auto, &whitelist, &image_exts))
+    let images = match listings.list(folder, wait, move |files| {
+        cover_paths(&rank_cover_art(&media, files, &whitelist, &image_exts))
     }) {
         Covers::Now(images) => images,
         Covers::Later(listing) => return (options, Some(listing)),
@@ -1882,19 +1890,46 @@ fn cover_paths(images: &[std::path::PathBuf]) -> Vec<String> {
 /// extensions, any case). libmpv adds them to audio files only (no video
 /// stream); a leased load picks by extension instead. Nothing for `no`; the
 /// host sets no other mode (`fuzzy` and `all` are treated as `exact`).
+/// The player reads the folder ([`folder_files`]) and ranks it
+/// ([`rank_cover_art`]) separately, through `cover_listing`; this is the two
+/// together, for the tests.
+#[cfg(test)]
 fn cover_art(
     media: &Path,
     auto: &str,
     whitelist: &str,
     image_exts: &str,
 ) -> Vec<std::path::PathBuf> {
-    if !has_cover_art(media, auto) {
-        return Vec::new();
+    match media.parent() {
+        Some(dir) if has_cover_art(media, auto) => {
+            rank_cover_art(media, &folder_files(dir), whitelist, image_exts)
+        }
+        _ => Vec::new(),
     }
-    let stem = lower(media.file_stem());
-    let (Some(dir), false) = (media.parent(), stem.is_empty()) else {
+}
+/// The files (not folders) in `dir`: the slow part of [`cover_art`] on a
+/// huge network folder, done once per folder by `cover_listing`.
+fn folder_files(dir: &Path) -> Vec<std::path::PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
+    entries
+        .flatten()
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+        .map(|entry| entry.path())
+        .collect()
+}
+/// [`cover_art`]'s choice among the files of `media`'s folder.
+fn rank_cover_art(
+    media: &Path,
+    files: &[std::path::PathBuf],
+    whitelist: &str,
+    image_exts: &str,
+) -> Vec<std::path::PathBuf> {
+    let stem = lower(media.file_stem());
+    if stem.is_empty() {
+        return Vec::new();
+    }
     let whitelist = whitelist
         .split(',')
         .map(str::to_lowercase)
@@ -1904,14 +1939,9 @@ fn cover_art(
         .filter(|ext| !ext.is_empty())
         .map(str::to_lowercase)
         .collect::<Vec<_>>();
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let mut found = entries
-        .flatten()
-        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
-        .filter_map(|entry| {
-            let path = entry.path();
+    let mut found = files
+        .iter()
+        .filter_map(|path| {
             if !images.contains(&lower(path.extension())) {
                 return None;
             }
@@ -1921,7 +1951,7 @@ fn cover_art(
             } else {
                 1 + whitelist.iter().position(|listed| *listed == name)?
             };
-            Some((rank, lower(path.file_name()), path))
+            Some((rank, lower(path.file_name()), path.clone()))
         })
         .collect::<Vec<_>>();
     found.sort();

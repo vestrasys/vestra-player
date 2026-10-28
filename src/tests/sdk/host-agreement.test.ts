@@ -883,7 +883,7 @@ test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (capabilities
 });
 
 test("SystemInfo.rendering has the values app.system reports (system.rs rendering_json)", () => {
-  const sdk = /readonly rendering: ([^;]+);/.exec(
+  const sdk = /readonly rendering\??: ([^;]+);/.exec(
     sdkFile("plugin/types.d.ts"),
   )?.[1];
   assert.ok(sdk, "SystemInfo.rendering in the SDK's types.d.ts");
