@@ -84,3 +84,18 @@ Added 2026-10-28 (changes merged since the test; each needs one check on a Mac b
 - Store 0.2.3 and workshop 2.2.8: the bar buttons open their windows.
 
 Open item found 2026-10-28 (same in 0.5.10 and 0.5.11): closing the main window while a tool window such as the Plugin Store is open does not quit the player.
+
+## 7. Store offline test (owed since the plugin-management round; coordinator, 2026-10-28)
+
+Method: the player's Node processes were cut off from the network with `NODE_USE_ENV_PROXY=1` and `HTTPS_PROXY`/`HTTP_PROXY` pointing at a closed local port (every fetch fails with `ECONNREFUSED`, as when offline); player 0.5.12, a separate profile.
+
+| Step | Result |
+| --- | --- |
+| Open the store from the bottom bar | Opens; Installed (17) listed with details; Available shows the cached list; status line "Can't connect to Official repository (Connection refused); showing the cache from 04:41" |
+| Disable / enable VestraTube | Both work; the sidebar tab goes and comes back |
+| Uninstall VestraTube (keep data) | Works; "Uninstalled VestraTube (data kept)" |
+| Install from a `.vxp` file (handed to the running player) | The install dialog lists the permissions; "Install Anyway" installs it; the sidebar tab is back |
+
+Verdict: the store's offline requirements (plugin-management ruling) hold.
+
+Found during the test, separate from the store: with AMD Adrenalin 26.10.1 (`amdkmdag.sys` 32.0.32015.7029) the default femtovg (OpenGL) windows on the 780M render **white** (frames are presented, the desktop shows a white client area; tool windows too); `SLINT_BACKEND=winit-software` renders correctly at 4K60 (shown 60/s). With the old driver 31.0.14005 OpenGL windows were fine. Handled as the first real denylist rule in render modes M2 (`2026-10-render-modes.md`); the user's profile has `SLINT_BACKEND=winit-software` as a stop-gap until M2 lands.
