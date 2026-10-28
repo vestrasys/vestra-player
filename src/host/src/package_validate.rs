@@ -17,11 +17,23 @@ use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
+use std::time::{Duration, Instant};
 
 /// The longest `packages.validateArchive` failure text (`javascript`, `slint`).
 pub const CHECK_TEXT_LIMIT: usize = 8192;
 /// Validations running at once; each may compile Slint, which takes memory.
 const MAX_RUNNING: usize = 2;
+/// How long `node --check` may take before it is killed and the package
+/// refused (`javascript`), so a hung check cannot hold a place forever.
+const NODE_CHECK_LIMIT: Duration = Duration::from_secs(30);
+/// The compiler's error for a file without a component of its own.
+const NO_COMPONENT: &str = "No component found";
+/// Temporary directories validation creates (`package_archive::extract`,
+/// `Candidate::capture`); `sweep_stale` removes those left by an earlier run.
+const TEMP_PREFIXES: [&str; 2] = ["vestra-vxp-", "vestra-package-stage-"];
+/// How old a left-over temporary directory must be before `sweep_stale`
+/// removes it: older than any candidate a running player still keeps.
+const STALE_AFTER: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// What to validate, as read from the request on the caller's thread.
 pub struct Request {
@@ -94,14 +106,21 @@ fn validate(request: Request, cancel: &Cancel) -> Result<Candidate, RpcError> {
     }
     cancel.check()?;
     let entry = &candidate.manifest().entry;
-    let result = crate::runtime_paths::get()
-        .node_command()
+    let mut command = crate::runtime_paths::get().node_command();
+    command
         .arg("--check")
-        .arg(candidate.directory().join(entry))
-        .output()
-        .map_err(anyhow::Error::from)?;
-    if !result.status.success() {
-        let text = String::from_utf8_lossy(&result.stderr);
+        .arg(candidate.directory().join(entry));
+    let Some((success, stderr)) = run_limited(command, NODE_CHECK_LIMIT, cancel)? else {
+        return Err(RpcError::new(
+            "javascript",
+            format!(
+                "{entry}: node --check did not finish within {} s",
+                NODE_CHECK_LIMIT.as_secs()
+            ),
+        ));
+    };
+    if !success {
+        let text = String::from_utf8_lossy(&stderr);
         return Err(RpcError::new(
             "javascript",
             package_relative(&text, candidate.directory(), entry)
@@ -128,16 +147,107 @@ fn validate(request: Request, cancel: &Cancel) -> Result<Candidate, RpcError> {
         // The interpreter's compiler is not tied to Slint's event loop or
         // platform: it parses and type-checks, and the result's component
         // definitions are dropped here, on this thread.
-        let result = pollster::block_on(crate::ui::compiler().build_from_path(path));
-        if result.has_errors() {
-            let lines = result
-                .diagnostics()
-                .map(|d| SlintLine::of(&d, candidate.directory()))
-                .collect::<Vec<_>>();
+        let result = pollster::block_on(crate::ui::compiler().build_from_path(&path));
+        // A library file (only globals, or components for other files to
+        // import) has no component of its own: "No component found" is no
+        // error here (as ui.rs's check of the player's files); its importers
+        // compile it, so a real error in it still fails.
+        let lines = result
+            .diagnostics()
+            .map(|d| SlintLine::of(&d, candidate.directory(), &path))
+            .filter(|line| !(line.error && line.message == NO_COMPONENT))
+            .collect::<Vec<_>>();
+        if lines.iter().any(|line| line.error) {
             return Err(RpcError::new("slint", slint_report(lines)));
         }
     }
     Ok(candidate)
+}
+
+/// Drop `value` on a thread of its own: a candidate's staged copy is
+/// removed from disk when its last handle goes, which is no work for the UI
+/// thread. If no thread can be started, it goes here, with the closure.
+pub fn drop_later<T: Send + 'static>(value: T) {
+    let _ = std::thread::Builder::new()
+        .name("package-drop".into())
+        .spawn(move || drop(value));
+}
+
+/// Remove temporary directories validation left in the system temporary
+/// directory in an earlier run (the player quit or crashed while one ran),
+/// once older than [`STALE_AFTER`]. On a thread of its own, at start-up.
+pub fn sweep_stale() {
+    let _ = std::thread::Builder::new()
+        .name("package-sweep".into())
+        .spawn(|| sweep_stale_in(&std::env::temp_dir(), STALE_AFTER));
+}
+fn sweep_stale_in(directory: &Path, age: Duration) -> usize {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return 0;
+    };
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if !TEMP_PREFIXES.iter().any(|prefix| name.starts_with(prefix)) {
+            continue;
+        }
+        let old = entry
+            .metadata()
+            .ok()
+            .filter(|meta| meta.is_dir())
+            .and_then(|meta| meta.modified().ok())
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|elapsed| elapsed >= age);
+        if old && std::fs::remove_dir_all(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
+/// Run `command` for at most `limit`: `(succeeded, stderr)`, or `None` when
+/// it took longer and was killed. A cancelled validation kills it at once.
+fn run_limited(
+    mut command: std::process::Command,
+    limit: Duration,
+    cancel: &Cancel,
+) -> Result<Option<(bool, Vec<u8>)>, RpcError> {
+    use std::io::Read;
+    use std::process::Stdio;
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(anyhow::Error::from)?;
+    // Read on its own thread, so a full pipe never stalls the child.
+    let mut pipe = child.stderr.take();
+    let reader = std::thread::Builder::new()
+        .name("package-validate-stderr".into())
+        .spawn(move || {
+            let mut bytes = vec![];
+            if let Some(pipe) = pipe.as_mut() {
+                let _ = pipe.read_to_end(&mut bytes);
+            }
+            bytes
+        })
+        .map_err(anyhow::Error::from)?;
+    let began = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().map_err(anyhow::Error::from)? {
+            break Some(status);
+        }
+        if began.elapsed() >= limit || cancel.0.load(Ordering::Relaxed) {
+            let _ = child.kill();
+            let _ = child.wait();
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let stderr = reader.join().unwrap_or_default();
+    cancel.check()?;
+    Ok(status.map(|status| (status.success(), stderr)))
 }
 
 /// `text` (a tool's output about the package) without the staging
@@ -180,17 +290,21 @@ struct SlintLine {
 }
 
 impl SlintLine {
-    fn of(diagnostic: &slint_interpreter::Diagnostic, root: &Path) -> Self {
-        let file = diagnostic.source_file().map_or_else(String::new, |path| {
-            let real = dunce::canonicalize(path).unwrap_or_else(|_| path.to_owned());
-            let root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_owned());
-            let shown = real.strip_prefix(&root).unwrap_or(&real);
-            shown
+    /// `diagnostic` from compiling `compiled` in the package at `root`; one
+    /// without a file of its own is about `compiled`.
+    fn of(diagnostic: &slint_interpreter::Diagnostic, root: &Path, compiled: &Path) -> Self {
+        let path = diagnostic.source_file().unwrap_or(compiled);
+        let real = dunce::canonicalize(path).unwrap_or_else(|_| path.to_owned());
+        let root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_owned());
+        // Outside the package (a `@vestra` library file): its whole path.
+        let file = match real.strip_prefix(&root) {
+            Ok(inside) => inside
                 .components()
                 .map(|part| part.as_os_str().to_string_lossy())
                 .collect::<Vec<_>>()
-                .join("/")
-        });
+                .join("/"),
+            Err(_) => real.to_string_lossy().replace('\\', "/"),
+        };
         let (line, column) = diagnostic.line_column();
         Self {
             error: diagnostic.level() == slint_interpreter::DiagnosticLevel::Error,
@@ -306,14 +420,20 @@ impl Validations {
                 running.cancel.0.store(true, Ordering::Relaxed);
             }
         }
-        let mut done = vec![];
+        let (mut done, mut unanswered) = (vec![], vec![]);
         while let Ok((serial, result)) = self.results.1.try_recv() {
             let Some(running) = self.running.remove(&serial) else {
+                unanswered.push(result);
                 continue;
             };
             if alive(running.reply.owner) {
                 done.push((running.reply, result));
+            } else {
+                unanswered.push(result);
             }
+        }
+        if !unanswered.is_empty() {
+            drop_later(unanswered);
         }
         done.extend(
             self.pump()
@@ -375,12 +495,12 @@ mod tests {
             "export component Bad inherits Rectangle {\n    nonsense: 3px;\n}\n",
         )
         .unwrap();
-        let result = pollster::block_on(crate::ui::compiler().build_from_path(file));
+        let result = pollster::block_on(crate::ui::compiler().build_from_path(&file));
         assert!(result.has_errors());
         let text = slint_report(
             result
                 .diagnostics()
-                .map(|d| SlintLine::of(&d, root.path()))
+                .map(|d| SlintLine::of(&d, root.path(), &file))
                 .collect(),
         );
         let first = text.lines().next().unwrap();
@@ -556,5 +676,136 @@ mod tests {
         cancel.0.store(true, Ordering::Relaxed);
         let error = validate(request(dir.path()), &cancel).err().unwrap();
         assert_eq!(error.code, "disabled");
+    }
+
+    /// A file of globals only, imported by another, is a library: it has
+    /// no component of its own and still passes (as in subtitle-online's
+    /// `ui/messages.slint`); a real error in it still fails, by name.
+    #[test]
+    fn a_file_of_globals_only_passes_and_its_errors_still_count() {
+        let main = (
+            "ui/main.slint",
+            "import { Theme } from \"theme.slint\";\n\
+             export component Main inherits Rectangle { background: Theme.accent; }\n",
+        );
+        let good = package(
+            "example.globals",
+            "// ok\n",
+            &[
+                main,
+                (
+                    "ui/theme.slint",
+                    "export global Theme { out property <color> accent: #f00; }\n",
+                ),
+            ],
+        );
+        let candidate = validate(request(good.path()), &Cancel::default()).unwrap();
+        assert_eq!(candidate.manifest().id, "example.globals");
+        let bad = package(
+            "example.globals.bad",
+            "// ok\n",
+            &[
+                main,
+                (
+                    "ui/theme.slint",
+                    "export global Theme {\n    out property <color> accent: nonsense;\n}\n",
+                ),
+            ],
+        );
+        let error = validate(request(bad.path()), &Cancel::default())
+            .err()
+            .unwrap();
+        assert_eq!(error.code, "slint");
+        assert!(
+            error.message.starts_with("ui/theme.slint:2:"),
+            "{}",
+            error.message
+        );
+        assert!(!error.message.contains(NO_COMPONENT), "{}", error.message);
+    }
+
+    /// A diagnostic in a file outside the package (a library the package
+    /// imports) names that file's whole path with forward slashes; one
+    /// without a file names the file being compiled.
+    #[test]
+    fn a_file_outside_the_package_keeps_its_whole_path() {
+        let outside = tempfile::tempdir().unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let file = outside.path().join("bad.slint");
+        std::fs::write(
+            &file,
+            "export component Bad inherits Rectangle { nonsense: 3px; }\n",
+        )
+        .unwrap();
+        let result = pollster::block_on(crate::ui::compiler().build_from_path(&file));
+        let line = result
+            .diagnostics()
+            .map(|d| SlintLine::of(&d, root.path(), &file))
+            .next()
+            .unwrap();
+        let whole = dunce::canonicalize(&file)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        assert_eq!(line.file, whole);
+        assert!(!line.file.contains('\\'), "{}", line.file);
+        let empty = tempfile::tempdir().unwrap();
+        let lone = empty.path().join("lone.slint");
+        std::fs::write(&lone, "export global G { out property <int> n: 1; }\n").unwrap();
+        let result = pollster::block_on(crate::ui::compiler().build_from_path(&lone));
+        let unnamed = result.diagnostics().find(|d| d.source_file().is_none());
+        if let Some(diagnostic) = unnamed {
+            assert_eq!(
+                SlintLine::of(&diagnostic, empty.path(), &lone).file,
+                "lone.slint"
+            );
+        }
+    }
+
+    /// A check that runs past its limit is killed and reported, not
+    /// waited for; a quick one returns its outcome and error output.
+    #[test]
+    fn a_hung_check_is_killed_at_its_limit() {
+        let mut slow = crate::runtime_paths::get().node_command();
+        slow.args(["-e", "setTimeout(() => {}, 20000)"]);
+        let began = Instant::now();
+        let outcome = run_limited(slow, Duration::from_millis(300), &Cancel::default()).unwrap();
+        assert!(outcome.is_none());
+        assert!(began.elapsed() < Duration::from_secs(10));
+        let mut quick = crate::runtime_paths::get().node_command();
+        quick.args(["-e", "process.stderr.write('no'); process.exit(3)"]);
+        let (success, stderr) = run_limited(quick, Duration::from_secs(30), &Cancel::default())
+            .unwrap()
+            .unwrap();
+        assert!(!success);
+        assert_eq!(stderr, b"no");
+    }
+
+    /// Only this player's temporary directories, and only old ones.
+    #[test]
+    fn stale_temporary_directories_are_swept_by_prefix_and_age() {
+        let temp = tempfile::tempdir().unwrap();
+        for name in ["vestra-vxp-a", "vestra-package-stage-b", "other-c"] {
+            std::fs::create_dir_all(temp.path().join(name).join("ui")).unwrap();
+        }
+        assert_eq!(sweep_stale_in(temp.path(), Duration::from_secs(3600)), 0);
+        assert_eq!(sweep_stale_in(temp.path(), Duration::ZERO), 2);
+        assert!(temp.path().join("other-c").is_dir());
+        assert!(!temp.path().join("vestra-vxp-a").exists());
+    }
+
+    /// A staged copy dropped for the UI thread is removed on another.
+    #[test]
+    fn a_dropped_candidate_goes_on_another_thread() {
+        let dir = package("example.drop", "// ok\n", &[]);
+        let candidate = validate(request(dir.path()), &Cancel::default()).unwrap();
+        let staged = candidate.directory().to_owned();
+        assert!(staged.is_dir());
+        drop_later(candidate);
+        let began = Instant::now();
+        while staged.exists() {
+            assert!(began.elapsed() < Duration::from_secs(10));
+            std::thread::sleep(Duration::from_millis(5));
+        }
     }
 }
