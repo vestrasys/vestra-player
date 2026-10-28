@@ -41,6 +41,7 @@ mod package_archive;
 mod package_manager;
 pub mod package_stage;
 pub mod package_store;
+mod package_validate;
 mod pip;
 mod platform;
 mod plugins;

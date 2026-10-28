@@ -22,6 +22,12 @@ impl Capability for PluginsManage {
         METHODS
     }
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
-        host.package_dispatch(reply.owner, method, params).map(Some)
+        match method {
+            // Answered later, off the UI thread (package_validate.rs).
+            "packages.validate" | "packages.validateArchive" => {
+                host.validate_package(reply, method, params).map(|()| None)
+            }
+            _ => host.package_dispatch(reply.owner, method, params).map(Some),
+        }
     }
 }
