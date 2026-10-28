@@ -96,14 +96,20 @@ impl Manager {
     /// goes (an install that already staged it keeps its own copy).
     fn remember(&mut self, token: String, candidate: Candidate) {
         while self.candidate_order.len() >= MAX_CANDIDATES {
-            if let Some(oldest) = self.candidate_order.pop_front() {
-                self.candidates.remove(&oldest);
+            if let Some(oldest) = self.candidate_order.pop_front()
+                && let Some(gone) = self.candidates.remove(&oldest)
+            {
+                // Its staged copy is removed off the UI thread.
+                crate::package_validate::drop_later(gone);
             }
         }
         self.candidate_order.push_back(token.clone());
         self.candidates.insert(token, candidate);
     }
     pub fn open() -> Result<Self> {
+        // Staged copies an earlier run left behind (it quit or crashed
+        // while validating).
+        crate::package_validate::sweep_stale();
         let root = std::env::var_os("VESTRA_PACKAGE_STORE")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
