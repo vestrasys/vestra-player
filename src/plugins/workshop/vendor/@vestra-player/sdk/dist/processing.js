@@ -1,5 +1,5 @@
 const BOOL = [true, false];
-/** Value ranges, the same as the host's `effects.rs` (the host is authoritative). */
+/** Value ranges, the same as the host's `src/host/src/playback/effects.rs` (the host is authoritative). */
 const RULES = {
     eq: {
         brightness: [-1, 1],

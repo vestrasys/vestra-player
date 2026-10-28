@@ -17,6 +17,7 @@ export { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, BUILTIN_COMMANDS, BUILTIN_SUBMENUS
 export { BINDING_INPUTS } from "./plugin/bindings.ts";
 export { OSD_LIMITS } from "./plugin/osd.ts";
 export { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./plugin/services.ts";
+export { SUBTITLE_LIMITS } from "./plugin/subtitles.ts";
 export { THEME_PALETTES } from "./palettes.ts";
 export { Catalog, HOST_ZH_HANS, LIST_SEPARATORS, LOCALES, MENU_KEYS, matchLocale, parsePo, rewriteSlint, renderText, scanSlint, TEXT_LIMITS, textKey, textProblem, } from "./i18n.ts";
 export { MANIFEST_FIELDS, MANIFEST_LIMITS } from "./manifest.ts";

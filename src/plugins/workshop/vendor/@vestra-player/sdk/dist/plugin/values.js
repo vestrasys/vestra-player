@@ -15,15 +15,41 @@
  * bound (a playlist, a history) should send the rows near the view and say
  * how many there are, not the whole list.
  *
- * @example
+ * @example Send a long playlist as a window of rows
+ * A list view shows any number of entries while each write stays small:
+ * the plugin sends only the rows around the scroll position plus the total,
+ * and the view reports where it scrolled to. After the `scrolled` handler
+ * returns, the SDK evaluates the `bind` function again and sends the new
+ * window. Each row object and each of its fields count as one value toward
+ * `values`, and so does the array holding them.
  * ```ts
+ * declare const entries: { title: string; duration: number }[];
+ * import type { View } from "@vestra-player/sdk";
+ * declare const list: View;
+ * // ---cut---
  * import { UI_VALUE_LIMITS } from "@vestra-player/sdk/testing";
  *
- * // 8 fields per row: 9 values (the row and its fields).
- * const window = Math.floor(UI_VALUE_LIMITS.values / 9) - 1;
+ * // 200 rows, or fewer if the limits were smaller: 2 fields per row make
+ * // 3 values (the row and its fields), plus 1 for the array.
+ * const size = Math.min(
+ *   200,
+ *   UI_VALUE_LIMITS.arrayRows,
+ *   Math.floor((UI_VALUE_LIMITS.values - 1) / 3),
+ * );
+ * let first = 0;
+ * list.bind(() => ({
+ *   total: entries.length,
+ *   rows: entries.slice(first, first + size),
+ * }));
+ * // The Slint view reports its first visible row; the window follows it.
+ * list.on("scrolled", (row: number) => {
+ *   first = Math.max(0, row - Math.floor(size / 2));
+ * });
  * ```
  *
  * @since 1.5.10
+ *
+ * @category Testing
  */
 export const UI_VALUE_LIMITS = {
     /** Nesting depth; the value itself is depth 0 (8). */
@@ -55,9 +81,12 @@ function documentText(value) {
     return isObject(doc) && typeof doc.text === "string" ? doc.text : null;
 }
 /**
- * The player's runtime image limits (`host/src/ui_image.rs`): a file's
+ * The player's runtime image limits (`src/host/src/ui/ui_image.rs`): a file's
  * bytes and sides, the decoded pixels each plugin caches, and (SDK 1.5.19,
  * player 0.5.1) the decoded pixels the nested images of one view may show.
+ *
+ * @since 1.5.19
+ * @category Testing
  */
 export const IMAGE_LIMITS = Object.freeze({
     /** The largest image file the player reads, in bytes. */
@@ -72,7 +101,7 @@ export const IMAGE_LIMITS = Object.freeze({
 /**
  * Why the player would refuse `value` (in wire form) as a property value,
  * or `null`. The same checks, order and messages as the player's
- * conversion (`host/src/ui_values.rs`). An image reference as the whole
+ * conversion (`src/host/src/ui/ui_values.rs`). An image reference as the whole
  * value is not counted (the player loads it instead).
  */
 export function valueLimitProblem(value) {
