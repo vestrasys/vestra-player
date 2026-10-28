@@ -39,3 +39,8 @@ GUI check: by the user personally (user instruction 2026-10-27); the coordinator
 
 - No blockers. Fixes: the SDK dependency moves to 1.5.29 before the host merges; playback rebased onto the host tip; the strip is rebuilt only when its inputs change (it was rebuilt every window tick, against the UI frame-rate rule); a failed image icon falls back to a named icon; the `check` warning reads the import, not the word; buttons must join the lazy-activation recording when idle stop lands (`panel-slots.md`).
 - **Toggle tooltip without a key (coordinator decision):** the old playlist button read "Playlist (F6)"; the player's toggle reads "Toggle Sidebar" with no key, because `host/sidebar` has no default key and F6 is the playlist's own tab action. A user can bind a key in Keyboard Shortcuts; the tooltip then shows it. Open to the user's GUI test.
+
+## 6. GUI check and merge (2026-10-28)
+
+- The user went to sleep and allowed the coordinator to test with the computer; the coordinator checked the staged 0.5.10 build: [AI][Store][toggle] at the right end; AI and Store open their windows; the toggle hides and shows the sidebar; narrowing hides AI, Store, Fullscreen, then the toggle; fast submenu sweeps leave only the pointer row and the open parent lit. Installed for the user (`%LOCALAPPDATA%\Programs\Vestra Player`, main 7e32f46). Merged as #94.
+- Found while recording the download page: after installing a plugin that mounts a sidebar panel (VestraTube) and closing the store, the main window fades out for about half a second (the desktop shows) and reappears slightly moved: the main window is rebuilt when the composition changes. Follow-up for the maintainer: recomposition must not hide the window or move it.
