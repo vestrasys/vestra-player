@@ -44,3 +44,21 @@ The whole process moves to the discrete GPU (restart needed to switch; power and
 - The extension call succeeds on both GPUs (the AMD driver also accepts the NVIDIA GUID), so "enabled" proves nothing; the support query must use `VideoProcessorGetStreamExtension` as VLC does.
 - On the 4070 the picture did not change: VSR was not active. Likely causes, not yet told apart: the NVIDIA app's RTX Video "Super Resolution" switch is off (it is per user and the probe cannot read it), or the driver applies VSR only to presented video (the probe renders offscreen). Power: on AC.
 - Next: the user checks NVIDIA app ▸ System ▸ Video ▸ RTX Video Enhancement ▸ Super Resolution (on, quality 4, status indicator on); then the same runs again, and a presented run (the branch player on the 4070) if offscreen stays identical. Per §3 the experiment stops if it still does not change.
+
+## 6. V1 again with Super Resolution switched on (2026-10-28)
+
+The NVIDIA app had RTX Video Super Resolution **off** (default). The coordinator switched it on (quality High, status indicator on) and repeated the runs on real footage (Big Buck Bunny 4K60, a 10 s excerpt; 1080p reference made with `scale=flags=area`; `d3d11vpp=scale=2`, 4070):
+
+| Output vs the 4K frame | SSIM (All) |
+| --- | --- |
+| `scaling-mode=nvidia` (VSR) | 0.9856 |
+| `scaling-mode=standard` | 0.9931 |
+| ffmpeg bicubic (CPU) | 0.9949 |
+| ffmpeg lanczos (CPU) | 0.9947 |
+
+- VSR now changes the picture (on the synthetic bars clip: PSNR 36.8 dB between VSR and standard, previously identical). Crops show visibly sharper fur and edges than standard; fidelity metrics score it lower, as expected for a detail-synthesising scaler. The 3D engine counter stays at 0 % during VSR (it runs on the video engine), so 3D load is not a usable signal.
+- V1 passes: VSR works on this machine once the user's driver switch is on. The plugin must say so ("turn on Super Resolution in the NVIDIA app"); we cannot read the switch.
+
+## 7. V2: the branch player on the 4070 (2026-10-28, `VESTRA_GPU_ADAPTER=1`, H.264 2160p60 windowed, panel on the 780M)
+
+Both the windows (wgpu D3D12) and mpv (D3D11) on the RTX 4070; Windows copies the frames to the 780M panel. Per second: produced 60, shown 59–61, presented 55–61 (one second at 50 during start-up); `ui-gpu` draw mean 3.7–3.8 ms, mpv render 0.9 ms. On the 780M the same clip presented 39–42 (wgpu record §16). The cross-adapter copy does not stop 60 fps; the remaining drops (1–5 frames a second) are for the wgpu round's pacing work.
