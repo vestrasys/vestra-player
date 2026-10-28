@@ -10,11 +10,12 @@ Adjusts the picture's color, effects, aspect ratio and how it is shown.
 - **Aspect ratio and crop**: keep or ignore the aspect ratio, fill the window; common and custom ratios; crop or stretch to a ratio.
 - **Framing**: zoom and pan the picture.
 - **GPU render options**: HDR tone mapping, pixel shaders, motion interpolation.
+- **GPU rendering switch**: Video ▸ GPU Rendering (Experimental) chooses GPU or software rendering for the next start and offers a restart; greyed out with the player's reason where the GPU cannot be chosen (Windows for now).
 - Color, effect and aspect settings carry over between files and restarts; flip, rotation and framing apply to the current file only.
 
 ## Entries
 
-- Right-click menu Video: Pixel Shaders, Deinterlace (Ctrl+I), Aspect (Shift+F6), Crop/Stretch, Framing, Image Processing, Rotation (Alt+K), Picture Adjustments…, Reset (Q).
+- Right-click menu Video: Pixel Shaders, Deinterlace (Ctrl+I), Aspect (Shift+F6), Crop/Stretch, Framing, Image Processing, Rotation (Alt+K), Picture Adjustments…, Reset (Q), GPU Rendering (Experimental).
 - Brightness W/E, contrast R/T, saturation Y/U, hue I/O.
 - The Picture Adjustments… window has four tabs: Color, Effects, Picture, Advanced.
 

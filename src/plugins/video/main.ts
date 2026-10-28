@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, readdir } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
-import type { FilterStatus, Plugin, PluginError } from "@vestra-player/sdk";
+import type { FilterStatus, Plugin, PluginError, RenderingPreference, RenderingState, Scope } from "@vestra-player/sdk";
 import {
   DEINTERLACE_MODES,
   FITS,
@@ -118,6 +118,11 @@ const ROTATION_TITLES = [
 const SOFTWARE = "Needs GPU rendering (currently software rendering)";
 /** Deinterlace Auto is the player's deinterlacer, always at field rate: Output is greyed (menu reason; the window has the same tip). */
 const AUTO_OUTPUT = "Auto outputs by field (double rate); this setting applies to Always";
+/** The renderer switch (render modes §8.4): its title, and the title while a restart would change the renderer. */
+const GPU_TITLE = "GPU Rendering (Experimental)";
+const GPU_PENDING_TITLE = "GPU Rendering (Restart to Apply)";
+/** Checked when the saved choice is the GPU, or Auto where the next start draws on the GPU (macOS). */
+const gpuChosen = (state: RenderingState) => state.preference === "gpu" || (state.preference === "auto" && state.nextMode === "gpu");
 /** E18: the source rate is read this long after the chain without frameBlend is in place, this many times at most. */
 const MEASURE_DELAY_MS = 400;
 const MEASURE_TRIES = 8;
@@ -1139,6 +1144,106 @@ export default async function activate(plugin: Plugin) {
   }
   apply();
   applyRender();
+
+  // 460 GPU Rendering (Experimental): the player's renderer choice (`plugin.rendering`). The player
+  // keeps the choice and applies it at the next start; this item only shows and changes it. A
+  // title cannot change in place, so the item lives in a child scope rebuilt when it changes.
+  let rendering: RenderingState | null = await plugin.rendering.state().catch(() => null);
+  let renderingMenu: Scope | null = null;
+  let renderingTitle: string | null = null;
+  let switching = false;
+  const buildRendering = async () => {
+    const title = rendering === null ? null : rendering.restartPending ? GPU_PENDING_TITLE : GPU_TITLE;
+    if (stopped || title === renderingTitle) return;
+    renderingTitle = title;
+    await renderingMenu?.dispose();
+    renderingMenu = null;
+    if (title === null || stopped) return;
+    renderingMenu = plugin.scope();
+    renderingMenu.commands.add({
+      id: "video.gpu-rendering",
+      path: ["@video", title],
+      order: 460,
+      group: "video-rendering",
+      checked: () => rendering !== null && gpuChosen(rendering),
+      // Greyed out with the player's reason where the GPU cannot be chosen (Windows without a
+      // GPU renderer, a denylisted driver, a GPU crash at an earlier start, no user interface).
+      enabled: () => rendering?.gpu.available === true,
+      // i18n-ignore: the player's own message, already worded by the player
+      reason: () => rendering?.gpu.reason?.message ?? null,
+      busy: () => switching,
+      run: switchRendering,
+    });
+  };
+  let renderingQueue: Promise<void> = Promise.resolve();
+  const showRendering = () => (renderingQueue = renderingQueue.then(buildRendering, buildRendering));
+  /** Read the state again (the SDK has no menu-open event): on a new source and around every switch. */
+  const refreshRendering = async () => {
+    const next = await plugin.rendering.state().catch(() => null);
+    if (stopped) return;
+    if (next) rendering = next;
+    plugin.update();
+    await showRendering();
+  };
+  const switchRendering = async () => {
+    if (switching) return;
+    switching = true;
+    try {
+      const now = await plugin.rendering.state().catch(() => rendering);
+      if (now === null) return;
+      rendering = now;
+      const choice: RenderingPreference = gpuChosen(now) ? "software" : "gpu";
+      try {
+        rendering = await plugin.rendering.setPreference(choice);
+      } catch (error) {
+        // `unsupported`/`unavailable`: the GPU was ruled out after the state was read (the item
+        // greys out with the reason); `failed`: the player could not save its settings.
+        const refused = error as PluginError;
+        rendering = await plugin.rendering.state().catch(() => rendering);
+        if (refused.code === "unsupported" || refused.code === "unavailable")
+          shown(plugin.osd.show("GPU rendering unavailable: {}", [refused.message]));
+        else shown(plugin.osd.show("Could not save the rendering choice: {}", [refused.message]));
+        return;
+      } finally {
+        plugin.update();
+        await showRendering();
+      }
+      const on = choice === "gpu";
+      if (!rendering.restartPending) shown(plugin.osd.show(on ? "GPU rendering: on" : "GPU rendering: off"));
+      else await offerRestart(on);
+    } finally {
+      switching = false;
+    }
+  };
+  /** The choice waits for a restart: offer it now; Later (or no dialog) keeps it for the next start. */
+  const offerRestart = async (on: boolean) => {
+    const answer = await plugin.dialogs
+      .confirm({
+        message: "Restart Vestra Player now to apply?",
+        detail: on
+          ? "Vestra Player will draw on the GPU from the restart on. A local file continues where it is. If you choose Later, GPU rendering starts the next time you open Vestra Player."
+          : "Vestra Player will use software rendering from the restart on. A local file continues where it is. If you choose Later, software rendering starts the next time you open Vestra Player.",
+        confirm: "Restart Now",
+        cancel: "Later",
+      })
+      .catch(() => null);
+    if (stopped) return;
+    if (!answer?.confirmed) {
+      shown(plugin.osd.show(on ? "GPU rendering: on (applies at the next start)" : "GPU rendering: off (applies at the next start)"));
+      return;
+    }
+    // Resolves once the player accepted; it then quits (stopping this plugin) and starts again.
+    await plugin.rendering.restartPlayer().catch((error: PluginError) => {
+      if (!stopped) shown(plugin.osd.show("Could not restart the player: {}", [error.message]));
+    });
+  };
+  let renderingSource = player.state.sourceId;
+  player.onChange((state) => {
+    if (state.sourceId === renderingSource) return;
+    renderingSource = state.sourceId;
+    void refreshRendering();
+  });
+  await showRendering();
 }
 
 /**

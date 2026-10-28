@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.8
+
+- New **Video ▸ GPU Rendering (Experimental)**, a check item at the end of the Video menu for the player's renderer choice (`plugin.rendering`, SDK 1.5.35). It is checked when the saved choice is the GPU, or Auto where the next start draws on the GPU (the macOS default), and greyed out with the player's reason where the GPU cannot be chosen: Windows (no GPU renderer yet), a graphics driver on the player's denylist, a GPU crash at an earlier start. Picking it saves GPU or software rendering in the player's settings; the running player keeps its renderer and the next start uses the choice. While a restart would change the renderer, the item reads **GPU Rendering (Restart to Apply)** and the plugin asks "Restart Vestra Player now to apply?": Restart Now restarts the player (a local file continues where it is), Later keeps the choice for the next start. Picking it again before a restart returns to the current renderer and clears the pending state. A refused choice or a failed save or restart is shown on screen with the player's message. The plugin stores nothing itself.
+- The state is read at activation, before and after every switch and on each new source (the SDK has no menu-open event).
+- New capability `rendering.manage` (highlighted in the store). Requires player 0.5.13 (`minPlayerVersion`).
+
 ## 1.1.7
 
 - Software rendering (Windows, Linux, fallback) no longer writes `HostError: render options need GPU rendering` to the log at every start. The render options (HDR tone mapping, pixel shaders, motion interpolation) still report `unsupported` there, but that is the player's state, not a failure: their menu items stay disabled with the reason "Needs GPU rendering (currently software rendering)", as before, and other render failures (another plugin owns the options, a shader that does not compile) are logged as before.
