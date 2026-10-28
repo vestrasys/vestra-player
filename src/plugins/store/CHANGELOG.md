@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4
+
+- The permission `rendering.manage` (Vestra Player 0.5.13, SDK 1.5.35) is shown in words: "Choose GPU or software rendering and restart the player", in amber like the other risky permissions, in the install and update confirmations and the plugin details. Before, it read "Unknown permission: rendering.manage".
+
 ## 0.2.3
 
 Needs Vestra Player 0.5.10.
