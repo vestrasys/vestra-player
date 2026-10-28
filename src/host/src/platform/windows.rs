@@ -749,7 +749,8 @@ impl Forced {
 
 /// Choose Slint's window renderer (before the event loop; not headless).
 /// Every window draws with femtovg on wgpu, on one Direct3D 12 device of
-/// DXGI's first adapter (`VESTRA_GPU_ADAPTER`: another index, or `warp`),
+/// DXGI's first adapter (`VESTRA_GPU_ADAPTER`: another index,
+/// `high-performance`, `minimum-power` or `warp`),
 /// which GPU rendering shares its textures with; software rendering also
 /// draws into these windows. Without a Direct3D 12 GPU (no Direct3D 12, a
 /// remote desktop session or a virtual machine whose adapter is Microsoft's,
@@ -886,6 +887,19 @@ pub fn window_notifiers() -> bool {
 pub fn direct_video_feed() -> Option<vestra_video_texture::Feed> {
     let (device, queue) = vestra_gpu_render::window_wgpu()?;
     vestra_video_texture::direct(&device, &queue)
+}
+
+/// GPU frames in a window without a notifier take the main window's frame
+/// pacing (`frame_pacing::accept_picture`): a new frame is taken only once
+/// the previous picture was drawn (`vestra-gpu-render`
+/// `gate_direct_frames`). `None`: every frame at once.
+pub fn gate_gpu_frames(accept: Option<Box<dyn Fn() -> bool>>) {
+    vestra_gpu_render::gate_direct_frames(accept);
+}
+
+/// After a draw: take a GPU frame the pacing refused before it.
+pub fn update_gpu_frames() {
+    vestra_gpu_render::update_direct_views();
 }
 
 /// The calling thread's CPU cycles so far (the frame log's `cpu` segment).

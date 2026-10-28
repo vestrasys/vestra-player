@@ -48,6 +48,10 @@ impl Host {
         let render = self.backend.render.clone();
         let target = self.video_target.clone();
         let notifier = platform::window_notifiers();
+        // Without a notifier the window sets each frame's image between
+        // draws; paced, it takes one only after the previous one was drawn,
+        // and the image it sets owes the draw (wgpu round record §17).
+        let paced = !notifier && frame_pacing::gpu_frames_paced();
         let show = move |image: slint::Image| {
             // A generated stream's picture stays (its frames come as pixels).
             if !render.producer() {
@@ -60,11 +64,17 @@ impl Host {
                     // Each image is a new frame; the next draw presents it.
                     render.presentation.picture_set(Duration::ZERO);
                 }
+                if paced {
+                    frame_pacing::picture_set();
+                }
             }
         };
         if !notifier {
             self.count_draws_without_notifier();
         }
+        platform::gate_gpu_frames(
+            paced.then(|| Box::new(frame_pacing::accept_picture) as Box<dyn Fn() -> bool>),
+        );
         let render = self.backend.render.clone();
         let failed = move |reason: String| render.fall_back(&reason);
         if let Err(error) = gpu.attach(shell, show, failed, drawn) {
@@ -352,9 +362,14 @@ impl Host {
     /// vertical blank, as a new software picture does (`show_frame`), instead
     /// of waiting for Slint's timer to ask (coalesced: one wake-up of the UI
     /// thread at a time). A generated stream's pictures are owed by
-    /// `show_frame` itself.
+    /// `show_frame` itself. Not for windows without a notifier when GPU
+    /// frames are paced (`frame_pacing::gpu_frames_paced`): there the image
+    /// set between draws owes the draw (`attach_gpu`), so a vertical blank
+    /// can no longer fall between a frame's image and the draw it owes.
     pub(crate) fn gpu_pacing_hook(&mut self) {
-        if !frame_pacing::wanted() {
+        if !frame_pacing::wanted()
+            || (!platform::window_notifiers() && frame_pacing::gpu_frames_paced())
+        {
             return;
         }
         // No GPU renderer (any more, after a fallback): a later one is hooked

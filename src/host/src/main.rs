@@ -505,7 +505,9 @@ fn main() -> Result<()> {
                 if let Some(deliver) = &*sink.borrow() {
                     deliver();
                 }
-            })
+            });
+            // A GPU frame a window without a notifier refused (Windows).
+            platform::update_gpu_frames();
         })));
         let pip_host = host.clone();
         PIP_GPU_SINK.with(|sink| {

@@ -76,7 +76,8 @@ pub struct WindowDevice(Arc<Gpu>);
 
 impl WindowDevice {
     /// Open a device (the installed one, if any). `adapter`
-    /// (`VESTRA_GPU_ADAPTER`): unset for DXGI's first adapter, an index, or
+    /// (`VESTRA_GPU_ADAPTER`): unset for DXGI's first adapter, an index,
+    /// `high-performance`, `minimum-power` or
     /// `warp`. Dropped unless [`install`](Self::install)ed (an OpenGL
     /// fallback keeps no Direct3D 12 device).
     pub fn open(adapter: Option<&str>) -> Result<Self, String> {
@@ -97,7 +98,10 @@ impl WindowDevice {
     /// The adapter, for the `render:` diagnostics.
     pub fn describe(&self) -> String {
         let facts = &self.0.facts;
-        format!("{} (LUID {:016x}; swapchain {})", facts.name, facts.luid, self.0.swapchain)
+        format!(
+            "{} (LUID {:016x}; chosen by {}; swapchain {})",
+            facts.name, facts.luid, facts.how, self.0.swapchain
+        )
     }
     /// Report the device's errors to `sink` instead of wgpu's default, which
     /// panics on an error nobody captured (a window draw that wgpu refuses
@@ -970,7 +974,7 @@ impl Handle {
             }
             let now = shared.retargets.load(Ordering::Relaxed);
             let retargeted = std::mem::replace(&mut retargets, now) != now;
-            if let Some(image) = view.direct(&shared) {
+            if let Some(image) = view.direct(&shared, &direct_accepts) {
                 current = Some(image.clone());
                 show(image);
             } else if retargeted
@@ -1004,6 +1008,9 @@ thread_local! {
     /// The newest such window's liveness check, which `retarget` points at
     /// the component that took its place.
     static DIRECT_ALIVE: RefCell<Option<Alive>> = const { RefCell::new(None) };
+    /// Whether a window shown without a notifier may take a new frame now
+    /// ([`gate_direct_frames`]); none: always.
+    static DIRECT_GATE: RefCell<Option<Box<dyn Fn() -> bool>>> = const { RefCell::new(None) };
 }
 /// An update of the direct windows is queued on the UI thread.
 static DIRECT_QUEUED: AtomicBool = AtomicBool::new(false);
@@ -1018,6 +1025,26 @@ fn wake_direct_views() {
         DIRECT_QUEUED.store(false, Ordering::Release);
         DIRECT.with(|views| views.borrow_mut().retain_mut(|update| update()));
     });
+}
+
+/// The host's frame pacing for windows shown without a notifier (UI
+/// thread): `accept` says whether such a window may take a new frame now.
+/// The host refuses while the previous picture still waits for its draw, so
+/// two frames published within one refresh are both shown, one refresh
+/// apart, instead of the second replacing the first; after that draw it
+/// calls [`update_direct_views`]. `None`: every new frame is taken at once.
+pub fn gate_direct_frames(accept: Option<Box<dyn Fn() -> bool>>) {
+    DIRECT_GATE.with(|gate| *gate.borrow_mut() = accept);
+}
+
+/// Update the windows shown without a notifier (posted to the UI thread):
+/// after a draw, for a frame [`gate_direct_frames`] refused.
+pub fn update_direct_views() {
+    wake_direct_views();
+}
+
+fn direct_accepts() -> bool {
+    DIRECT_GATE.with(|gate| gate.borrow().as_ref().is_none_or(|accept| accept()))
 }
 
 /// Whether windows show the frames through a rendering notifier
@@ -1136,7 +1163,7 @@ impl View {
     /// all submitted before this point on the same thread and queue), and the
     /// windows' queue waits for the new frame's `ready` before the next draw.
     /// The image to set, if the shown texture changed.
-    fn direct(&mut self, shared: &Shared) -> Option<Image> {
+    fn direct(&mut self, shared: &Shared, accept: &dyn Fn() -> bool) -> Option<Image> {
         let fences = shared.fences.get()?;
         if lock(&shared.failed).is_some() {
             self.after(shared);
@@ -1145,7 +1172,7 @@ impl View {
         }
         let (epoch, hold) = *lock(&shared.reshow);
         let stale = self.epoch != epoch;
-        let mut exchange = lock(&shared.exchange);
+        let exchange = lock(&shared.exchange);
         let latest = exchange.ring.latest()?;
         if stale && latest.sequence <= hold {
             // The caller's picture replaced ours: the texture is free again.
@@ -1157,8 +1184,14 @@ impl View {
         if !stale && self.showing == Some(latest.slot) {
             return None;
         }
-        let frame = exchange.ring.claim()?;
         drop(exchange);
+        // Paced (`gate_direct_frames`): not while the shown picture still
+        // waits for its draw; the frame stays in the ring and the host
+        // updates again after that draw.
+        if !accept() {
+            return None;
+        }
+        let frame = lock(&shared.exchange).ring.claim()?;
         if fences_on() && !shared.gpu.wait(&fences.ready, frame.payload.ready) {
             lock(&shared.exchange).ring.release(frame.slot);
             return None;

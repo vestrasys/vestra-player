@@ -202,17 +202,21 @@ fn warp_a_window_without_a_notifier_keeps_its_texture_until_the_next_frame() {
     assert!(until(10, || handle.frames() > 0), "no frame");
     let shared = &handle.0;
     let mut view = View::default();
-    assert!(view.direct(shared).is_some(), "the newest frame is shown");
+    assert!(view.direct(shared, &|| true).is_some(), "the newest frame is shown");
     let first = view.claim.expect("held");
     let before = handle.frames();
     assert!(until(10, || handle.frames() > before), "no newer frame");
-    assert!(view.direct(shared).is_some(), "the newer frame is shown");
+    // Paced, while the shown picture still waits for its draw: the newer
+    // frame stays in the ring and the shown texture stays claimed.
+    assert!(view.direct(shared, &|| false).is_none(), "refused");
+    assert_eq!(view.claim, Some(first), "still the first texture");
+    assert!(view.direct(shared, &|| true).is_some(), "the newer frame is shown");
     assert!(view.claim.is_some_and(|slot| slot != first || slot.generation != first.generation));
     let signalled = shared.signalled.load(Ordering::Relaxed);
     assert!(signalled > 0, "the old texture got its done signal");
     let fences = shared.fences.get().unwrap();
     assert!(until(5, || fences.done.completed() >= signalled));
-    assert!(view.direct(shared).is_none() || handle.frames() > before + 1);
+    assert!(view.direct(shared, &|| true).is_none() || handle.frames() > before + 1);
     view.after(shared);
     drop(renderer);
 }
@@ -222,6 +226,8 @@ fn the_adapter_choice_reads_the_environment_value() {
     assert_eq!(Choice::parse(Some("")), Choice::Default);
     assert_eq!(Choice::parse(Some("warp")), Choice::Warp);
     assert_eq!(Choice::parse(Some(" 1 ")), Choice::Index(1));
+    assert_eq!(Choice::parse(Some("high-performance")), Choice::HighPerformance);
+    assert_eq!(Choice::parse(Some(" minimum-power")), Choice::MinimumPower);
     assert_eq!(Choice::parse(Some("dgpu")), Choice::Default);
 }
 

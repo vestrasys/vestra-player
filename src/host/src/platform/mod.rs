@@ -455,6 +455,14 @@ pub fn direct_video_feed() -> Option<vestra_video_texture::Feed> {
     None
 }
 
+/// Pace GPU frames of windows without a notifier (Windows only).
+#[cfg(not(target_os = "windows"))]
+pub fn gate_gpu_frames(_accept: Option<Box<dyn Fn() -> bool>>) {}
+
+/// Take a GPU frame the pacing refused (Windows only).
+#[cfg(not(target_os = "windows"))]
+pub fn update_gpu_frames() {}
+
 /// Wait for process `pid` to end (a restarted player and the one it
 /// replaces): `true` once it has (Windows; restarts happen only there).
 #[cfg(not(target_os = "windows"))]

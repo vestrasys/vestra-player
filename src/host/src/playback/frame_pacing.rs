@@ -53,6 +53,11 @@ const OVERDUE: Duration = Duration::from_millis(50);
 /// longer than the gap between two pictures of a video down to 15 fps, so
 /// during playback every draw, also one for a UI change, waits for a blank.
 const LINGER: Duration = Duration::from_millis(100);
+/// A draw dispatch this long or longer counts as `slow` in the frame log:
+/// half a refresh at 60 Hz, more than the draw itself takes on a GPU that
+/// keeps up (about 4 ms on the RTX 4070), so the rest waited in the
+/// swapchain acquire or the present.
+const SLOW: Duration = Duration::from_millis(8);
 
 /// What a vertical blank does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -487,6 +492,16 @@ struct Stats {
     last_blank: Option<Instant>,
     /// The refresh period, from consecutive blanks.
     period: Option<Duration>,
+    /// The open draw dispatch: when it started, and the vertical blank it
+    /// followed.
+    dispatch: Option<(Instant, Option<Instant>)>,
+    /// Draw dispatches that took `SLOW` or longer (the swapchain acquire
+    /// blocked, or the draw itself was long).
+    slow: u64,
+    /// Draw dispatches that ended more than a refresh after the blank they
+    /// followed: the present went out after the next blank, so that blank
+    /// most likely showed the previous picture again (a missed refresh).
+    past: u64,
 }
 impl Stats {
     fn blank(&mut self, blank: Instant, now: Instant) {
@@ -501,6 +516,8 @@ impl Stats {
     }
     /// A draw goes ahead now.
     fn draw(&mut self, now: Instant, eager: bool) {
+        // An eager draw follows no blank (the clock was stopped).
+        self.dispatch = Some((now, self.last_blank.filter(|_| !eager)));
         self.eager += u64::from(eager);
         let half = self.period.unwrap_or(Duration::from_micros(16_667)) / 2;
         if let Some(last) = self.last_draw.replace(now)
@@ -513,6 +530,16 @@ impl Stats {
         if let Some((kind, began, flush)) = self.open.take() {
             if let Some(after) = self.after.take().filter(|_| kind == Segment::Paint) {
                 self.present.add(now.saturating_duration_since(after));
+            }
+            if kind == Segment::Paint
+                && let Some((start, blank)) = self.dispatch.take()
+            {
+                let took = now.saturating_duration_since(start);
+                self.slow += u64::from(took >= SLOW);
+                let period = self.period.unwrap_or(Duration::from_micros(16_667));
+                self.past += u64::from(
+                    blank.is_some_and(|blank| now.saturating_duration_since(blank) > period),
+                );
             }
             let took = now.saturating_duration_since(began);
             self.segments[kind as usize].add(took);
@@ -583,7 +610,7 @@ impl Stats {
         let ms = |d: Duration| d.as_secs_f64() * 1000.;
         let seg = |kind: Segment| &self.segments[kind as usize];
         let text = format!(
-            " pacing: moves {} held {} eager {} close {} refused {} skipped {skipped} late max {:.1} ms paint {} ui: turn max {} timers max {} cursor max {} pre {} pointer {} other max {} ms draw {} present {} paced {}",
+            " pacing: moves {} held {} eager {} close {} refused {} skipped {skipped} late max {:.1} ms paint {} slow {} past-blank {} ui: turn max {} timers max {} cursor max {} pre {} pointer {} other max {} ms draw {} present {} paced {}",
             self.moves,
             self.held,
             self.eager,
@@ -591,6 +618,8 @@ impl Stats {
             self.refused,
             ms(self.late),
             seg(Segment::Paint).text(),
+            self.slow,
+            self.past,
             self.turn.max_text(),
             seg(Segment::Timers).max_text(),
             seg(Segment::Cursor).max_text(),
@@ -608,6 +637,7 @@ impl Stats {
             last_draw: self.last_draw,
             last_blank: self.last_blank,
             period: self.period,
+            dispatch: self.dispatch,
             ..Self::default()
         };
         text
@@ -659,6 +689,18 @@ pub fn on_deliver(deliver: Option<Box<dyn Fn()>>) {
 /// (`=every` paces too, drawing at every vertical blank: `every_blank`.)
 pub fn wanted() -> bool {
     crate::platform::VBLANK_CLOCK && std::env::var("VESTRA_FRAME_PACING").as_deref() != Ok("slint")
+}
+
+/// Whether GPU frames shown without a rendering notifier (Windows wgpu
+/// windows) go through this pacing like software pictures: the window takes
+/// a new frame only when the previous one was drawn (`accept_picture`), and
+/// the draw is owed when the frame's image is set (`picture_set`), not when
+/// the renderer publishes it. `VESTRA_GPU_FRAME_GATE=0` (A/B tests): the
+/// window takes the newest frame at once and each published frame owes a
+/// draw (wgpu round record §17).
+pub fn gpu_frames_paced() -> bool {
+    static PACED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    wanted() && *PACED.get_or_init(|| std::env::var("VESTRA_GPU_FRAME_GATE").as_deref() != Ok("0"))
 }
 
 /// Whether the winit hook is installed (`Handler`): where the host can pace
@@ -799,7 +841,9 @@ pub fn draw_ended() {
 /// (`eager`), draws less than half a refresh apart (`close`), blanks the
 /// UI thread was too busy to take (`skipped`), the longest a blank waited
 /// for the UI thread (`late`), and each draw dispatch until winit's next
-/// callback (`paint`: Slint's draw and `SwapBuffers`).
+/// callback (`paint`: Slint's draw and `SwapBuffers`), dispatches of `SLOW`
+/// or longer (`slow`) and those that ended after the next blank
+/// (`past-blank`).
 pub fn log_text() -> String {
     PACING.with(|pacing| {
         pacing
@@ -1177,7 +1221,7 @@ mod tests {
         stats.about_to_wait(t + ms(16));
         assert_eq!(
             stats.text(1, false),
-            " pacing: moves 2 held 2 eager 1 close 1 refused 0 skipped 1 late max 3.0 ms paint max 4.0 mean 2.5 ms ui: turn max 9.0 timers max 2.0 cursor max 1.0 pre max 1.0 mean 1.0 ms pointer max 2.0 mean 1.5 ms other max 1.0 ms draw - present - paced yes"
+            " pacing: moves 2 held 2 eager 1 close 1 refused 0 skipped 1 late max 3.0 ms paint max 4.0 mean 2.5 ms slow 0 past-blank 0 ui: turn max 9.0 timers max 2.0 cursor max 1.0 pre max 1.0 mean 1.0 ms pointer max 2.0 mean 1.5 ms other max 1.0 ms draw - present - paced yes"
         );
         // Zeroed; a pointer move processed at the wait counts as pointer time.
         stats.new_events(t + ms(20));
@@ -1186,10 +1230,41 @@ mod tests {
         assert!(
             stats
                 .text(0, false)
-                .ends_with("paint - ui: turn max 4.0 timers max 0.0 cursor max 4.0 pre - pointer max 4.0 mean 4.0 ms other max 0.0 ms draw - present - paced yes"),
+                .ends_with("paint - slow 0 past-blank 0 ui: turn max 4.0 timers max 0.0 cursor max 4.0 pre - pointer max 4.0 mean 4.0 ms other max 0.0 ms draw - present - paced yes"),
             "{}",
             stats.text(0, false)
         );
+    }
+
+    /// A draw dispatch of `SLOW` or more is `slow`; one that ends more than
+    /// a refresh after the blank it followed is `past-blank`; an eager draw
+    /// (the clock was stopped) follows no blank.
+    #[test]
+    fn the_log_counts_slow_draws_and_draws_past_the_next_blank() {
+        let (mut stats, t) = (Stats::default(), Instant::now());
+        let ms = Duration::from_millis;
+        stats.blank(t, t);
+        stats.blank(t + REFRESH, t + REFRESH);
+        let blank = t + REFRESH;
+        // 3 ms: neither.
+        stats.event(blank, Segment::Paint);
+        stats.draw(blank, false);
+        stats.new_events(blank + ms(3));
+        // 10 ms: slow, still before the next blank.
+        stats.event(blank + ms(4), Segment::Paint);
+        stats.draw(blank + ms(4), false);
+        stats.new_events(blank + ms(14));
+        // 3 ms, but it ends 18 ms after its blank: past it.
+        stats.event(blank + ms(15), Segment::Paint);
+        stats.draw(blank + ms(15), false);
+        stats.new_events(blank + ms(18));
+        // Eager and long: slow, but no blank to be past.
+        stats.event(blank + ms(40), Segment::Paint);
+        stats.draw(blank + ms(40), true);
+        stats.new_events(blank + ms(60));
+        let text = stats.text(0, false);
+        assert!(text.contains(" slow 2 past-blank 1 ui:"), "{text}");
+        assert!(stats.text(0, false).contains(" slow 0 past-blank 0 ui:"));
     }
 
     /// A draw's dispatch splits into preparation (pointer flush, Slint's

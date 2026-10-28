@@ -25,6 +25,10 @@ use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Direct3D12::*;
 use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC};
 use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE};
+use windows::Win32::Graphics::Dxgi::{
+    DXGI_GPU_PREFERENCE, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, DXGI_GPU_PREFERENCE_MINIMUM_POWER,
+    IDXGIFactory6,
+};
 use windows::Win32::Graphics::Dxgi::{IDXGIAdapter, IDXGIAdapter1, IDXGIDevice, IDXGIFactory4};
 use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 use windows::core::{Interface, PCWSTR};
@@ -40,6 +44,15 @@ fn luid64(luid: LUID) -> u64 {
 }
 
 /// Which adapter the windows and the renderer use (`VESTRA_GPU_ADAPTER`).
+///
+/// The default does what mpv (`--d3d11-adapter` empty: a null adapter, so
+/// Direct3D's default one), Chromium's Dawn without a power preference and
+/// Firefox do on hybrid laptops: the adapter Windows lists first for this
+/// process. That order follows the per-app choice in Settings > System >
+/// Display > Graphics, so the user picks the GPU there, as for those
+/// programs. None of them switches by power source on its own (wgpu round
+/// record §17). The adapter is chosen once per process; a change needs a
+/// restart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Choice {
     /// DXGI's first adapter: the one Windows lists first for this process,
@@ -49,16 +62,37 @@ pub enum Choice {
     Default,
     /// DXGI's adapter with this index.
     Index(u32),
+    /// The first adapter of `IDXGIFactory6::EnumAdapterByGpuPreference`
+    /// with `DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE` (external, then discrete,
+    /// then integrated GPUs), whatever the per-app setting says.
+    HighPerformance,
+    /// The same with `DXGI_GPU_PREFERENCE_MINIMUM_POWER` (integrated first).
+    MinimumPower,
     /// The WARP software rasterizer (tests, and a forced fallback).
     Warp,
 }
 impl Choice {
-    /// `None`/empty: `Default`; `warp`; a number: that index.
+    /// `None`/empty: `Default`; `warp`; `high-performance`; `minimum-power`;
+    /// a number: that index. Anything else: `Default`.
     pub fn parse(value: Option<&str>) -> Self {
         match value.map(str::trim) {
             Some("warp") => Self::Warp,
+            Some("high-performance") => Self::HighPerformance,
+            Some("minimum-power") => Self::MinimumPower,
             Some(index) => index.parse().map_or(Self::Default, Self::Index),
             None => Self::Default,
+        }
+    }
+    /// How the adapter was chosen (the `render:` line).
+    fn how(self) -> String {
+        match self {
+            Self::Default => {
+                "Windows' order for this process (Settings > Display > Graphics)".into()
+            }
+            Self::Index(index) => format!("VESTRA_GPU_ADAPTER={index}"),
+            Self::HighPerformance => "VESTRA_GPU_ADAPTER=high-performance".into(),
+            Self::MinimumPower => "VESTRA_GPU_ADAPTER=minimum-power".into(),
+            Self::Warp => "VESTRA_GPU_ADAPTER=warp".into(),
         }
     }
 }
@@ -70,29 +104,62 @@ pub struct Facts {
     pub luid: u64,
     /// No GPU of its own (WARP, Basic Render, a remote-desktop adapter).
     pub software: bool,
+    /// How it was chosen, and the other GPUs present (the `render:` line).
+    pub how: String,
 }
 
-fn dxgi_adapter(choice: Choice) -> Result<(IDXGIAdapter1, Facts), String> {
-    // SAFETY: plain factory creation; an owned interface comes back.
-    let factory: IDXGIFactory4 =
-        unsafe { CreateDXGIFactory1() }.map_err(|e| format!("CreateDXGIFactory1: {e}"))?;
-    // SAFETY: a live factory; each call returns an owned adapter or an
-    // error (DXGI_ERROR_NOT_FOUND past the last one).
-    let adapter: IDXGIAdapter1 = unsafe {
-        match choice {
-            Choice::Default => factory.EnumAdapters1(0),
-            Choice::Index(index) => factory.EnumAdapters1(index),
-            Choice::Warp => factory.EnumWarpAdapter(),
-        }
-    }
-    .map_err(|e| format!("no DXGI adapter {choice:?}: {e}"))?;
+/// An adapter's name, LUID and whether it has no GPU of its own.
+fn adapter_facts(adapter: &IDXGIAdapter1) -> Result<(String, u64, bool), String> {
     // SAFETY: a live adapter; GetDesc1 fills a plain struct.
     let desc = unsafe { adapter.GetDesc1() }.map_err(|e| e.to_string())?;
     let end = desc.Description.iter().position(|&c| c == 0).unwrap_or(desc.Description.len());
     let software =
         desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0 || desc.VendorId == MICROSOFT;
     let name = String::from_utf16_lossy(&desc.Description[..end]);
-    Ok((adapter, Facts { name, luid: luid64(desc.AdapterLuid), software }))
+    Ok((name, luid64(desc.AdapterLuid), software))
+}
+
+fn dxgi_adapter(choice: Choice) -> Result<(IDXGIAdapter1, Facts), String> {
+    // SAFETY: plain factory creation; an owned interface comes back.
+    let factory: IDXGIFactory4 =
+        unsafe { CreateDXGIFactory1() }.map_err(|e| format!("CreateDXGIFactory1: {e}"))?;
+    let by_preference = |preference: DXGI_GPU_PREFERENCE| -> windows::core::Result<IDXGIAdapter1> {
+        // IDXGIFactory6: Windows 10 1803 and later.
+        let factory: IDXGIFactory6 = factory.cast()?;
+        // SAFETY: a live factory; an owned adapter or an error comes back.
+        unsafe { factory.EnumAdapterByGpuPreference(0, preference) }
+    };
+    let adapter: IDXGIAdapter1 = match choice {
+        // SAFETY: a live factory; each call returns an owned adapter or an
+        // error (DXGI_ERROR_NOT_FOUND past the last one).
+        Choice::Default => unsafe { factory.EnumAdapters1(0) },
+        // SAFETY: as above.
+        Choice::Index(index) => unsafe { factory.EnumAdapters1(index) },
+        Choice::HighPerformance => by_preference(DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE),
+        Choice::MinimumPower => by_preference(DXGI_GPU_PREFERENCE_MINIMUM_POWER),
+        // SAFETY: as above.
+        Choice::Warp => unsafe { factory.EnumWarpAdapter() },
+    }
+    .map_err(|e| format!("no DXGI adapter {choice:?}: {e}"))?;
+    let (name, luid, software) = adapter_facts(&adapter)?;
+    // The other GPUs, so the log says what another choice would give.
+    let mut others = Vec::new();
+    for index in 0..16 {
+        // SAFETY: as above; past the last adapter an error ends the list.
+        let Ok(other) = (unsafe { factory.EnumAdapters1(index) }) else {
+            break;
+        };
+        if let Ok((other_name, other_luid, false)) = adapter_facts(&other)
+            && other_luid != luid
+        {
+            others.push(format!("{index} {other_name}"));
+        }
+    }
+    let how = match others.as_slice() {
+        [] => choice.how(),
+        others => format!("{}; other GPUs: {}", choice.how(), others.join(", ")),
+    };
+    Ok((adapter, Facts { name, luid, software, how }))
 }
 
 /// The windows' wgpu device on the Direct3D 12 backend, on one adapter.

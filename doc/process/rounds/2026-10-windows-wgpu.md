@@ -197,7 +197,8 @@ Not run:
 | `VESTRA_SOFTWARE_RENDER=1` | software rendering (existing); the windows stay on wgpu |
 | `VESTRA_WINDOW_RENDERER=gl` / `software` / `wgpu` | force the OpenGL windows (main's path), Slint's software renderer, or wgpu windows even on a software adapter; any other value: one warning, then ignored |
 | `VESTRA_RESTARTED=<n>` | set by the player on itself when it restarts after a lost device (not for users) |
-| `VESTRA_GPU_ADAPTER=<index>` / `warp` | the DXGI adapter for the windows and the renderer |
+| `VESTRA_GPU_ADAPTER=<index>` / `high-performance` / `minimum-power` / `warp` | the DXGI adapter for the windows and the renderer; unset: Windows' order for the process (per-app setting, §17) |
+| `VESTRA_GPU_FRAME_GATE=0` | A/B only: GPU frames in windows without a notifier skip the frame pacing gate (the behaviour before §17) |
 | `VESTRA_GPU_PRIORITY=-7..7` | mpv's device's GPU thread priority (default -7) |
 | `VESTRA_FRAME_LOG=1` | as before, plus the ` gpu:` segment |
 
@@ -579,3 +580,89 @@ API maintainer, on the coordinator's instruction. The old branch `windows-wgpu-r
 - Baseline, 20 s, `VESTRA_FRAME_LOG=1`: the startup `render:` lines name Direct3D 12 (wgpu) windows and mpv on Direct3D 11 with shared Direct3D 12 textures; per second produced 59–61, shown 45–51, presented 39–42 (§13 had 31.1; the 780M is in the §14 state, so the numbers are only comparable with each other).
 - Shell swap (0.5.11) on the GPU path: VestraTube disabled and enabled from the store while playing. No fade, no move; the video stayed on the new tree (screenshot after the second swap shows the picture); no `render:` failure line; `shown` kept counting. The two seconds containing a swap dipped (presented 18 and 23, shown 32 and 32), the others stayed at 31–49.
 - Not run this time: the notifier path, the GL fallback and the device-removal restart (steps 3–5 of the port report); the clip ended at 20 s.
+
+## 17. Adapter choice, and the last drops on the RTX 4070 (2026-10-28)
+
+API maintainer, on the coordinator's instruction, in `C:\vestra\wt-wgpu-port` (branch `windows-wgpu-render-2`), uncommitted. The ruling at the top still holds: none of this goes to main.
+
+### 17.1 Which GPU by default
+
+**What the others do on hybrid laptops** (sources checked 2026-10-28):
+
+| program | default adapter | how the user picks another |
+| --- | --- | --- |
+| mpv | `--d3d11-adapter` empty: `mp_d3d11_create_present_device` passes a null adapter to `D3D11CreateDevice`, so Direct3D's default, the first one DXGI enumerates (`video/out/gpu/d3d11_helpers.c`). mpv exports neither `NvOptimusEnablement` nor `AmdPowerXpressRequestHighPerformance` (`osdep/main-fn-win.c`) | `--d3d11-adapter=<name>`, or Windows' per-app setting |
+| Chromium (Dawn, WebGPU) | with no power preference Dawn keeps the OS order "so users can control adapter preference through OS system settings (e.g. Windows Graphics Settings per-app GPU preference)" (Dawn change `da528f5`, 2026-04); `EnumAdapterByGpuPreference` only when a page asks for a preference (Dawn `6949f01`) | Windows' per-app setting |
+| Chrome WebGL | the `default` power preference has meant low power since Chrome 80, to save battery | Windows' per-app setting |
+| VLC | the default Direct3D 11 adapter (not re-checked this round: the source URL moved) | Windows' per-app setting |
+
+`IDXGIFactory6::EnumAdapterByGpuPreference` with `UNSPECIFIED` "is equivalent to calling `IDXGIFactory1::EnumAdapters1`" (Microsoft Learn), and that order follows the per-app choice in Settings > System > Display > Graphics ("Let Windows decide", "Power saving", "High performance"). **None of these programs switches by power source on its own.** An "AC: high performance, battery: minimum power" policy would be ours alone, and it would override the user's per-app setting.
+
+**Decision (§8 rule: follow the precedent):** the default stays Windows' order (`EnumAdapters1(0)`), as mpv and Dawn do. On the test laptop the user makes the player run on the RTX 4070 by choosing "High performance" for `vestra-host.exe` in Windows' graphics settings, as for mpv. If the user wants a power-source policy anyway, that is a product decision for them; the switch below makes it easy to try. Live switching is not added: the adapter is chosen once per process (`OnceLock`).
+
+**Changes:**
+
+- `VESTRA_GPU_ADAPTER` also takes `high-performance` and `minimum-power`: the first adapter of `EnumAdapterByGpuPreference` with that preference (Windows 10 1803 and later; on an older system the error is reported and the windows fall back as for any adapter that fails). An index and `warp` work as before; unset or unknown means Windows' order.
+- The startup `render:` line says how the adapter was chosen and which other GPUs exist, for example:
+  `render: the windows draw with Direct3D 12 (wgpu) on AMD Radeon 780M Graphics (LUID …; chosen by Windows' order for this process (Settings > Display > Graphics); other GPUs: 1 NVIDIA GeForce RTX 4070 Laptop GPU; swapchain Wait, DxgiFromHwnd); GPU rendering`.
+  The numbers are `EnumAdapters1` indices, so the line also tells which `VESTRA_GPU_ADAPTER=<index>` picks the other GPU. Adapters without a GPU of their own (Basic Render) are not listed.
+
+### 17.2 Why the 4070 still presents 55-59 of 60
+
+**From the V2 frame log** (`C:\vestra\logs\v2a.err`, AI upscaling record §7), the seconds after start-up:
+
+| produced | shown | pictures | drawn | presented | redraws | `gpu: complete` mean / max | `paint` mean / max | `ui-gpu draw` mean |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 60 | 60 | 60 | 60 | 58 | 2 | 4.6 / 9.4 ms | 3.6 / 12.6 ms | 3.6 ms |
+| 60 | 60 | 60 | 60 | 60 | 0 | 4.4 / 9.4 | 3.7 / 5.3 | 3.7 |
+| 61 | 61 | 61 | 61 | 61 | 0 | 4.2 / 9.1 | 3.8 / 5.7 | 3.8 |
+| 60 | 59 | 59 | 60 | 59 | 1 | 4.5 / 16.1 | 3.6 / 5.2 | 3.9 |
+| 60 | 60 | 60 | 60 | 56 | 4 | 8.3 / 16.7 | 4.1 / 10.3 | 4.9 |
+| 60 | 59 | 59 | 60 | 55 | 5 | 9.0 / 18.5 | 3.7 / 10.5 | 4.1 |
+| 61 | 60 | 60 | 60 | 59 | 1 | 8.9 / 18.7 | 3.5 / 8.9 | 3.7 |
+| 60 | 60 | 60 | 60 | 57 | 3 | 9.2 / 19.6 | 3.6 / 8.7 | 3.8 |
+
+**What it rules out:**
+
+- Not the swapchain (latency 2, FIFO, the `Wait` frame-latency object): every draw went out (`drawn` 60), the whole dispatch took 3.5-4.1 ms on average and at most 12.6 ms, under a refresh, and `ui-gpu wait` stayed at 0.0-0.1 ms.
+- Not scheduling: `blank-to-draw` ≤ 0.6 ms, `skipped` 0, `late` ≤ 0.5 ms.
+- Not mpv: `shown` equals produced (±1); the frames reached the window.
+- Not the gate drawing too little: `drawn` equals `pictures` (±1) every second.
+
+**What it shows:** in every second presented + redraws = drawn. Each missing frame is one draw that showed no new picture, and the frame before it was never drawn on its own. With no rendering notifier (the default since §9), each published frame posts two separate UI-thread events (`produce`: `ask_redraw`, then the `on_frame` callbacks):
+
+1. the window's direct update, which sets the newest texture's image at once (`View::direct`), and
+2. the pacing hook's `frame_pacing::picture_set`, which owes the next blank a draw (`gpu_pacing_hook`).
+
+The vertical blank arrives as a third posted event. When frame k+1 is published just before a blank, its image replaces frame k's before the blank's draw. Frame k is lost, and the draw owed for k+1 then shows nothing new: a `redraw`. The same happens when the blank's event lands between frame k+1's two events. Unlike software pictures (`show_frame` asks `accept_picture` first), the GPU direct path had no "one new picture per refresh" gate, so jitter around a blank dropped a frame instead of delaying it.
+
+Why some seconds and not others: the render thread publishes a frame only after waiting on the CPU for mpv's GPU work (`complete`). In the bad seconds that wait doubled (mean 8-9 ms, max 16-20 ms, longer than a refresh), so publish times wandered across the blanks. The good seconds had `complete` at 4.2-4.6 ms. Why the wait grew (the cross-adapter copy to the 780M panel, clocks) is not known; the fix does not depend on it.
+
+**Fix (`VESTRA_GPU_FRAME_GATE=0` restores the old path for A/B):** GPU frames in windows without a notifier go through the same gate as software pictures.
+
+- `vestra-gpu-render`: `gate_direct_frames(accept)` (UI thread). `View::direct` asks `accept` before it claims a new frame. When refused, the frame stays in the ring and the shown texture stays claimed (no fence or ring traffic). `update_direct_views()` runs the update again.
+- Host: `attach_gpu` installs `frame_pacing::accept_picture` as the gate, and the image the update sets owes the draw (`frame_pacing::picture_set` in `show`). Image and owed draw are now one step, so no event can fall between them. `gpu_pacing_hook` is not installed for these windows. After the draw that took the waiting picture, the pacing's deliver (`on_deliver`) also calls `platform::update_gpu_frames()`, so the refused frame is set and drawn at the next blank.
+- Ring: three textures (one shown and claimed, the newest published, one being rendered). A refused frame stays the newest until it is taken; a still newer one replaces it only when frames come faster than the display for longer than a refresh, as before.
+- Cost: a frame published just after a picture that still waits is shown one refresh later instead of being dropped (the software path's 0.5.x behaviour). `VESTRA_WGPU_NOTIFIER=1` (frames taken inside the draw) is unchanged.
+
+**New counters** (` pacing:` segment, after `paint`):
+
+- `slow N`: draw dispatches of 8 ms or more (the swapchain acquire blocked, or a long draw). Without a notifier, `paint` is the whole dispatch: acquire, draw and present.
+- `past-blank N`: dispatches that ended more than a refresh after the blank they followed. The present went out after the next blank, so that blank most likely showed the previous picture again. Eager draws (clock stopped) are not counted.
+
+The existing `refused` counter now also counts GPU frames held for the next refresh.
+
+**Tests:** WARP: a refused frame leaves the shown texture claimed, and the next update shows the newer frame (`warp_a_window_without_a_notifier_keeps_its_texture_until_the_next_frame`). Pacing: the two new counters (`the_log_counts_slow_draws_and_draws_past_the_next_blank`). Adapter choice: parsing of the new values.
+
+**Checks (this machine):** `cargo fmt --check`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo test --locked --workspace` (host 543 passed / 12 ignored; `vestra-gpu-render` 11 passed on WARP / 1 ignored; `vestra-video-texture` 1; `vestra-win32` 1 / 2 ignored), `cargo build --release --locked`, `node scripts/check-unsafe-policy.mjs` (193 unsafe blocks, ok). Not run: GPU hardware tests, GUI.
+
+### 17.3 For the coordinator (hardware, each ≤ 60 s, one at a time, quiet flag set)
+
+Executable `C:\vestra\wgpuint2\vestra-host.exe` (this change on top of §15; SHA-256 `77F94F1B053745660F091CA831D1447CDFE23DF69277DD2C93114E071E86E5C2`), staged as for §16. Clip `C:\vestra\clips\h264-2160p60.mp4`, windowed, `VESTRA_FRAME_LOG=1`, 20 s each. Ignore the first two seconds (start-up).
+
+1. **4070, gate on:** `VESTRA_GPU_ADAPTER=high-performance`. The `render:` line names the RTX 4070 "chosen by VESTRA_GPU_ADAPTER=high-performance; other GPUs: 0 AMD Radeon 780M Graphics". Expected per second: produced 60, presented 59-61, redraws 0-1, `refused` 0-6 (the frames that used to be lost, now one refresh late), `past-blank` 0, `slow` 0-2.
+2. **4070, gate off (A/B):** as 1 plus `VESTRA_GPU_FRAME_GATE=0`. Expected as in V2: presented 55-61, redraws 1-5, `refused` 0. `past-blank` 0 here confirms the old drops were not missed presents.
+3. **Default adapter, 10 s:** no `VESTRA_GPU_ADAPTER`. The `render:` line names the adapter "chosen by Windows' order for this process …; other GPUs: 1 NVIDIA GeForce RTX 4070 Laptop GPU" (the 780M while the per-app setting is "Let Windows decide"). Optional: set "High performance" for `vestra-host.exe` in Settings > System > Display > Graphics, start again, and the line names the 4070 with the same "Windows' order" wording. Reset the setting afterwards.
+4. **Optional, 780M, gate on vs off, 20 s each:** the §14 stalls remain (draws of tens of ms; expect `slow` and `past-blank` > 0). The gate turns jitter drops into one-refresh delays but cannot hide stalls longer than a refresh.
+
+Reading the results: if presented is still below drawn with the gate on, compare `shown` with produced. Below produced means frames were replaced in the ring before any window took them (frames faster than the display for more than a refresh). `past-blank` > 0 together with presented < 60 means the present itself is late (acquire or GPU), which the gate does not address.
