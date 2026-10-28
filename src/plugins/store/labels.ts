@@ -30,6 +30,7 @@ export const CAPABILITIES = {
   "bindings.manage": { text: "Change all shortcuts", risky: true },
   secrets: { text: "Store sign-in details in the system keychain", risky: true },
   "plugins.manage": { text: "Install, uninstall and disable other plugins", risky: true },
+  "rendering.manage": { text: "Choose GPU or software rendering and restart the player", risky: true },
 } as const satisfies Record<string, { text: string; risky?: true }>;
 
 /** The words of a capability (a template of text.ts). */
