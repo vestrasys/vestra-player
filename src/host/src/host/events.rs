@@ -44,6 +44,8 @@ pub(crate) enum Event {
     UiCallback(u64, Value),
     /// The user closed a plugin tool window: (owner, view id).
     ViewClosed(u64, String),
+    /// The user closed the main window: the player quits (`view::on_main_close`).
+    MainClosed,
     PluginMessage(u64, String, Value),
     Exited(u64),
     /// A control line of the shared runner (`g` 0): (runner, message).

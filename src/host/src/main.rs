@@ -574,8 +574,7 @@ fn main() -> Result<()> {
         PIP_GPU_SINK.with(|sink| sink.borrow_mut().take());
         host.borrow_mut().ui_state.flush();
         // Native windows/resources must be released before process teardown.
-        host.borrow_mut().close_floating();
-        host.borrow_mut().views.clear();
+        host.borrow_mut().close_secondary_windows();
         // `run()` used to hide the window it showed; the current shell now.
         let shell = host.borrow_mut().shell.take();
         if let Some(shell) = shell {

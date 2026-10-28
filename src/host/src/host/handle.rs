@@ -280,6 +280,7 @@ impl Host {
             Event::PluginMessage(owner, event, data) => {
                 self.send(owner, json!({"event":event,"data":data}))
             }
+            Event::MainClosed => self.host_command("quit"),
             Event::ViewClosed(owner, id) => {
                 if let Some(view) = self.views.remove(&(owner, id.clone())) {
                     let _ = view.instance.hide();

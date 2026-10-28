@@ -510,6 +510,18 @@ impl Host {
             let _ = floating.instance.hide();
         }
     }
+    /// Quitting: every window but the main one goes away now, before the
+    /// plugins and the backend are torn down (a shown Slint window keeps
+    /// itself alive until hidden, so dropping it is not enough).
+    pub(crate) fn close_secondary_windows(&mut self) {
+        self.close_floating();
+        for view in std::mem::take(&mut self.views).into_values() {
+            let _ = view.instance.hide();
+        }
+        if let Some(window) = self.settings.window() {
+            let _ = window.hide();
+        }
+    }
     /// Shell or floating window generation still alive.
     pub(crate) fn window_generation_live(&self, generation: u64) -> bool {
         generation == self.shell_generation
