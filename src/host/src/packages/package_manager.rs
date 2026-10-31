@@ -643,10 +643,13 @@ impl Host {
         // A parked version goes like a running one (an upgrade has a new
         // digest: its recording is of no use).
         self.forget_parked(&id, true);
-        let waiting = self.running(&id);
-        if let Some(owner) = waiting {
+        let running = self.running(&id);
+        if let Some(owner) = running {
             self.disable(owner);
         }
+        // Parked just now: its process may still be finishing; the new
+        // version starts once it is gone, as after a running one.
+        let waiting = running.or_else(|| self.parked_process(&id));
         let fresh_data = fresh
             .then(|| process::data_root().map(|root| root.join(&target_guid)))
             .flatten();
@@ -681,7 +684,7 @@ impl Host {
     /// disabled, not replaced by a development load and not in an
     /// operation. Built-ins run in place from the installation
     /// (`runs_from`); nothing is copied.
-    fn start_installed(&mut self, only: Option<&str>) {
+    pub(crate) fn start_installed(&mut self, only: Option<&str>) {
         let pending = self
             .packages
             .operations
@@ -715,17 +718,39 @@ impl Host {
             else {
                 continue;
             };
-            // Lazy activation: a valid recording is replayed instead; the
-            // plugin starts on its first use (host/lazy.rs).
+            // Lazy activation: a valid recording of a plugin that was lazy
+            // at its ready is replayed instead; the plugin starts on its
+            // first use (host/lazy.rs). One that was resident starts now.
+            // Without a recording (its first run) it waits for a place.
+            let mut first_run = false;
             if self.lazy.enabled
                 && let Ok((directory, manifest)) = &package
                 && check_reserved(&id, Some(&instance)).is_ok()
                 && let Some(key) = self.lazy_key(&id)
-                && let Some(recording) = lazy::read(&self.packages.store.activation_dir(), &key)
             {
-                match self.lazy_replay(&id, directory, manifest, &key, recording) {
-                    Ok(()) => continue,
-                    Err(error) => diag!("lazy: {id} replay failed, starting it: {error}"),
+                match lazy::read(&self.packages.store.activation_dir(), &key) {
+                    Some(recording) if recording.resident_at_ready => {
+                        diag!("lazy: {id} starts: resident at its last ready");
+                    }
+                    Some(recording) => {
+                        match self.lazy_replay(&id, directory, manifest, &key, recording) {
+                            Ok(()) => continue,
+                            Err(error) => diag!("lazy: {id} replay failed, starting it: {error}"),
+                        }
+                    }
+                    // Built-ins first: another plugin's first run waits
+                    // while a built-in is still to start or queued, since
+                    // what it claims at activation waits for them.
+                    None if !self.lazy.first_run_free()
+                        || !self.packages.builtins.contains_key(&id)
+                            && self.builtin_first_run_pending() =>
+                    {
+                        let builtins = &self.packages.builtins;
+                        self.lazy
+                            .queue_first_run(id.clone(), |id| builtins.contains_key(id));
+                        continue;
+                    }
+                    None => first_run = true,
                 }
             }
             let started = package
@@ -735,10 +760,17 @@ impl Host {
                         .map_err(|refusal| anyhow::anyhow!(refusal.message))?;
                     self.load_package(&directory, &manifest, DataKey::Instance(instance.guid))
                 });
-            if let Err(error) = started {
-                diag!("installed package {id} failed to start: {error}");
-                self.failures
-                    .insert(id.clone(), error.to_string().chars().take(512).collect());
+            match started {
+                Ok(owner) if first_run => {
+                    diag!("lazy: {id} starts for its first run");
+                    self.lazy.first_run(owner);
+                }
+                Ok(_) => (),
+                Err(error) => {
+                    diag!("installed package {id} failed to start: {error}");
+                    self.failures
+                        .insert(id.clone(), error.to_string().chars().take(512).collect());
+                }
             }
         }
     }
@@ -913,7 +945,9 @@ impl Host {
     /// Until the installed plugins started and while a built-in activates,
     /// other plugins' mounts wait (slot_claims).
     pub(crate) fn builtins_starting(&mut self) -> bool {
-        if !self.packages_started() {
+        // A built-in waiting for its first run (lazy activation) has not
+        // claimed its slots yet.
+        if !self.packages_started() || self.builtin_first_run_queued() {
             return true;
         }
         let now = self.now_ms();
@@ -929,6 +963,20 @@ impl Host {
                 Ok(package_activation::Status::Pending { .. })
             )
         })
+    }
+    /// A built-in is still to start at start-up (`to_start`) or waits for
+    /// its first run: other plugins' first runs wait for it.
+    fn builtin_first_run_pending(&self) -> bool {
+        self.packages
+            .to_start
+            .iter()
+            .any(|id| self.packages.builtins.contains_key(id))
+            || self.builtin_first_run_queued()
+    }
+    /// A built-in waits for its first run (lazy activation, §2.4).
+    pub(crate) fn builtin_first_run_queued(&self) -> bool {
+        self.lazy
+            .builtin_queued(|id| self.packages.builtins.contains_key(id))
     }
     /// A built-in still activating that may mount a panel (it declares
     /// `ui.mount`) and has not asked yet: at start-up the shell waits a
@@ -993,6 +1041,12 @@ impl Host {
                 .is_some_and(|package| package.is_ok_and(|(dir, _)| dir == plugin.directory));
             let warnings = self.warnings_of(owner);
             let (state, error) = match status {
+                // Woken from idle (lazy activation): it was running all along.
+                Some(package_activation::Status::Pending { .. })
+                    if self.lazy.waking.contains_key(&owner) =>
+                {
+                    ("running", None)
+                }
                 Some(package_activation::Status::Pending { .. }) => ("starting", None),
                 Some(package_activation::Status::Failed { message }) => ("failed", Some(message)),
                 Some(package_activation::Status::TimedOut) => {
@@ -1008,13 +1062,19 @@ impl Host {
                 "development"
             };
             let instance = installed.then_some(stored.instance).flatten();
-            list.insert(id.clone(), json!({"id":id,"version":plugin.manifest.version,
-                "origin":origin,"state":state,"error":error,"capabilities":plugin.manifest.capabilities,
+            // `process` (SDK 1.5.38): it has a process (`idle` below).
+            let process = (state == "running").then_some("running");
+            list.insert(
+                id.clone(),
+                json!({"id":id,"version":plugin.manifest.version,
+                "origin":origin,"state":state,"error":error,"process":process,
+                "capabilities":plugin.manifest.capabilities,
                 "directory":plugin.directory,
                 "builtin":instance.as_ref().is_some_and(|i| i.builtin),
                 "source":instance.map(|i| i.source),
                 "dataDirectory":plugin.data_directory(),"warnings":warnings,
-                "display":display(&plugin.manifest, plugin.catalog.as_deref())}));
+                "display":display(&plugin.manifest, plugin.catalog.as_deref())}),
+            );
         }
         let stopped = |disabled: bool, failure: Option<&String>| {
             if disabled {
@@ -1032,31 +1092,38 @@ impl Host {
             let Some(package) = self.packages.runs_from(&id, &record) else {
                 continue;
             };
-            let (state, error) = if self.package_busy(&id) {
-                ("starting", None)
-            } else if self.lazy.parked_id(&id).is_some() {
-                // Parked (lazy activation): it runs again on its first use.
-                // `state` stays `running` until the SDK and the store know
-                // an idle plugin (step B1: a `process` field).
-                ("running", None)
-            } else {
-                stopped(
-                    self.packages.store.disabled().contains(&id),
-                    self.failures.get(&id),
-                )
-            };
+            // Waiting for its first run (lazy activation) counts as starting.
+            let disabled = self.packages.store.disabled().contains(&id);
+            let parked = self
+                .lazy
+                .parked_id(&id)
+                .and_then(|owner| self.lazy.parked.get(&owner));
+            let (state, error) =
+                if self.package_busy(&id) || !disabled && self.lazy.first_queue.contains(&id) {
+                    ("starting", None)
+                } else if let Some(parked) = parked {
+                    // Parked (lazy activation): it runs again on its first use;
+                    // `state` stays `running`, `process` says `idle`, and what
+                    // it was refused while it ran stays listed.
+                    ("running", parked.warning.clone())
+                } else {
+                    stopped(disabled, self.failures.get(&id))
+                };
+            let warnings = parked.map_or_else(Vec::new, |parked| parked.warnings.clone());
             let data = record
                 .instance
                 .as_ref()
                 .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())));
             let builtin = record.instance.as_ref().is_some_and(|i| i.builtin);
             let source = record.instance.map(|i| i.source);
+            let process =
+                (self.lazy.parked_id(&id).is_some() && state == "running").then_some("idle");
             let entry = match package {
                 Ok((directory, manifest)) => json!({"id":id,"version":manifest.version,
-                    "origin":"installed","state":state,"error":error,
+                    "origin":"installed","state":state,"error":error,"process":process,
                     "capabilities":manifest.capabilities,"directory":directory,
                     "builtin":builtin,"source":source,
-                    "dataDirectory":data,"warnings":[],
+                    "dataDirectory":data,"warnings":warnings,
                     "display":display(&manifest, crate::i18n::load(&directory).as_deref())}),
                 // A built-in whose copy in the installation failed its
                 // checks, or a package whose library copy could not be read
@@ -1192,7 +1259,22 @@ impl Host {
         if running.is_some() || self.lazy.parked_id(id).is_some() {
             return Ok(());
         }
+        // Disabled right after a park: it starts once that process is gone
+        // (`reload_tick`), never beside it on the same data.
+        if let Some(owner) = self.parked_process(id) {
+            let now = self.now_ms();
+            self.packages.reloads.insert(id.into(), (owner, now));
+            return Ok(());
+        }
         self.start_stopped(id, installed, reserved, key, development)
+    }
+    /// The process installed plugin `id` was parked from (lazy activation),
+    /// while it is still finishing: what a start of `id` waits for, as for
+    /// a running one it stops.
+    fn parked_process(&self, id: &str) -> Option<u64> {
+        self.lazy
+            .stopping(id)
+            .filter(|owner| !self.process_gone(*owner))
     }
     /// Start a stopped plugin: its development load, else its installed
     /// package (`set_enabled`, `reload`). The disabled flag is not touched.
@@ -1258,10 +1340,13 @@ impl Host {
             )));
         }
         // Parked: it has no process, so it starts now, observed fresh (its
-        // recording goes).
+        // recording goes); once the process it was parked from is gone.
         self.forget_parked(id, true);
-        if let Some(owner) = self.running(id) {
+        let running = self.running(id);
+        if let Some(owner) = running {
             self.disable(owner);
+        }
+        if let Some(owner) = running.or_else(|| self.parked_process(id)) {
             let now = self.now_ms();
             self.packages.reloads.insert(id.into(), (owner, now));
             // A built-in's files are checked again before it shares the
@@ -1363,12 +1448,20 @@ impl Host {
         let receipt =
             json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
         self.forget_parked(&id, true);
+        // Parked just now: its process may still be writing its data.
+        let parked = self
+            .parked_process(&id)
+            .filter(|owner| self.cleanup.get(owner).is_some_and(|(reaped, _)| !reaped));
         if let Some(owner) = self.running(&id) {
             self.disable(owner);
             // Delete the data after the process is gone (it flushes on stop).
             if let Some(directory) = data.clone() {
                 self.data_removals.insert(owner, directory);
             }
+        } else if let Some(owner) = parked
+            && let Some(directory) = data.clone()
+        {
+            self.data_removals.insert(owner, directory);
         } else if let Some(directory) = &data {
             let _ = std::fs::remove_dir_all(directory);
         }

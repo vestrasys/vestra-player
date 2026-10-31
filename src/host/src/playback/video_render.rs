@@ -222,6 +222,10 @@ impl Options {
     pub fn unreported_shaders(&self) -> bool {
         self.owner.is_some() && !self.reported && !self.settings.shaders.is_empty()
     }
+    /// The owner's settings have shaders (told of a failure or not).
+    pub fn holds_shaders(&self) -> bool {
+        self.owner.is_some() && !self.settings.shaders.is_empty()
+    }
     /// A compile failure was reported for the current settings: the owner.
     pub fn mark_reported(&mut self) -> Option<u64> {
         self.reported = true;
@@ -339,6 +343,8 @@ pub(crate) mod tests {
         /// The last `glsl-shaders` list written.
         pub(crate) shaders: Vec<String>,
         refuse: Option<&'static str>,
+        /// Refuse this many `glsl-shaders` writes (then accept again).
+        pub(crate) refuse_shaders: u32,
     }
     impl Options {
         /// What the render owner hears for a log line (the backend asks
@@ -368,6 +374,10 @@ pub(crate) mod tests {
             Ok(())
         }
         fn shaders(&mut self, paths: &[String]) -> Result<(), String> {
+            if self.refuse_shaders > 0 {
+                self.refuse_shaders -= 1;
+                return Err("refused".into());
+            }
             self.shaders = paths.to_vec();
             Ok(())
         }

@@ -40,6 +40,7 @@ export class WindowService {
         if (this.#started)
             return;
         this.#started = true;
+        // A mirror: a plugin listens through `watch` and bindings.
         this.#runtime.on("window.state", (data) => {
             const facts = data;
             // The event carries the facts; anything else is read again.
@@ -47,7 +48,7 @@ export class WindowService {
                 this.accept(facts);
             else
                 void this.read();
-        });
+        }, "events", true);
         void this.read();
     }
     /** The palette, as the `window.state` reply carried it (`plugin.appearance`). */
@@ -91,7 +92,13 @@ export class WindowService {
     }
     watch(listener) {
         this.#listeners.add(listener);
-        return { dispose: async () => void this.#listeners.delete(listener) };
+        const held = this.#runtime.hold("window.state");
+        return {
+            dispose: async () => {
+                this.#listeners.delete(listener);
+                await held.dispose();
+            },
+        };
     }
 }
 export const windowOf = (runtime) => runtime.service("window", () => new WindowService(runtime));
@@ -101,6 +108,7 @@ export function mainWindow(scope) {
     return {
         get state() {
             service().start();
+            scope.runtime.reading("window.state");
             return service().state;
         },
         onChange(listener) {

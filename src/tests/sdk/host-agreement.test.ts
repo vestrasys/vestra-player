@@ -1065,6 +1065,7 @@ test("VIDEO_PROCESSING_LIMITS are the player's (playback/effects.rs, plugin_file
       shaderIdBytes: constant(shaders, "MAX_ID"),
       lutBytes: constant(files, "MAX_LUT_BYTES"),
       lutSize: constant(files, "MAX_LUT_SIZE"),
+      lutPathBytes: constant(effects, "MAX_LUT_PATH"),
       matrixValue: constant(effects, "MATRIX_VALUE"),
       rdiv: constant(effects, "MAX_RDIV"),
       bias: constant(effects, "MAX_BIAS"),

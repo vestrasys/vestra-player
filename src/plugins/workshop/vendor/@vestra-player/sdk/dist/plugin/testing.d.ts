@@ -536,6 +536,16 @@ export declare class TestHost implements Transport {
     /** The host events the plugin subscribed to (needs `events` etc.). */
     readonly subscriptions: Set<string>;
     /**
+     * The subscribed events the plugin really listens to: an `onChange` and
+     * the like, or a binding that reads the state. The SDK's own copies of
+     * the state (what keeps `plugin.player.state` current) are left out.
+     * Empty means the player may stop the plugin while nothing uses it
+     * (unless it holds something else: a window, a panel, a filter…).
+     *
+     * @since 1.5.38
+     */
+    readonly listening: Set<string>;
+    /**
      * The player's source facts (phase, position, duration, paused, rate,
      * audio tracks, loop, ...). Wire-level shape; change it with
      * {@link TestHost.setSource}, which also broadcasts it.

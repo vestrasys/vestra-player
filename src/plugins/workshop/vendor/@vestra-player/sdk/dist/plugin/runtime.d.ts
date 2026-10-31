@@ -53,15 +53,28 @@ export declare class Runtime {
     starting<T>(work: Promise<T>, report: (error: unknown) => void): Promise<T>;
     activated(): Promise<void>;
     bind(evaluate: () => void): Disposable;
+    /**
+     * A service's state for `event` is read: a binding evaluated now depends
+     * on it, so the event counts as listened to while the binding reads it.
+     */
+    reading(event: string): void;
     /** Coalesce: one evaluation pass per microtask turn, however many changes. */
     invalidate(): void;
     /**
      * Host events with one `events.subscribe` per name, however many listeners.
      * Without the `events` capability the listener simply never fires.
+     * `mirror`: the SDK's own copy of the state (`plugin.player.state` and
+     * the like), not a listener of the plugin's (see {@link EventGroup}).
      */
     on(event: string, listener: Listener, 
     /** The capability the event needs; `null`: none. */
-    needs?: string | null): Disposable;
+    needs?: string | null, mirror?: boolean): Disposable;
+    /**
+     * Count `event` as listened to while held: a watcher of a service's
+     * state, a binding that reads it. Nothing when nothing subscribed to it
+     * (no capability, or the service did not start).
+     */
+    hold(event: string): Disposable;
     /** Raw transport events the host pushes without a subscription. */
     raw(event: string, listener: Listener): Disposable;
 }

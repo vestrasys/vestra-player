@@ -782,12 +782,19 @@ impl Backend {
                         ));
                     }
                     if render_was_gpu && !render_is_gpu {
-                        for (owner, status) in shaders.software_fallback() {
+                        let (pushes, written) = shaders.software_fallback(
+                            &mut render_options,
+                            &mut crate::playback::video_render::Mpv(&mpv),
+                        );
+                        for (owner, status) in pushes {
                             let _ = events.send(Event::PluginMessage(
                                 owner,
                                 "video.shaders.status".into(),
                                 status,
                             ));
+                        }
+                        if let Err(error) = written {
+                            diag!("video shaders: {}", error.message);
                         }
                     }
                     render_was_gpu = render_is_gpu;

@@ -11,7 +11,8 @@
 //! options keep their own 16. Files were checked on the main thread
 //! (`plugin_files::shader`, the capability layer), which also sends the
 //! rank. GPU rendering only: under software rendering a non-empty list is
-//! `unsupported`. Shaders act at render time, so snapshots and exports
+//! `unsupported`, and a switch to software clears every list (each handle
+//! hears `unsupported`). Shaders act at render time, so snapshots and exports
 //! never contain them. A stopped plugin's lists go (`disable`).
 #![forbid(unsafe_code)]
 
@@ -47,7 +48,13 @@ struct Entry {
 /// Every plugin's shader lists.
 #[derive(Debug, Default)]
 pub struct Channel {
+    /// What mpv's `glsl-shaders` holds after the render options' shaders.
     entries: BTreeMap<Key, Entry>,
+    /// Owners whose lists must go (stopped, or a switch to software
+    /// rendering) but which mpv still holds because it refused the shorter
+    /// list: `entries` keeps them, so it stays what mpv has, and every
+    /// later write (`flush`, `set`) leaves them out again.
+    stale: std::collections::BTreeSet<u64>,
 }
 
 /// `video.shaders.status` data for handle `id`.
@@ -66,11 +73,46 @@ impl Channel {
         Self::joined(&self.entries)
     }
     pub fn holds(&self, owner: u64) -> bool {
-        self.entries.keys().any(|key| key.owner == owner)
+        !self.stale.contains(&owner) && self.entries.keys().any(|key| key.owner == owner)
     }
-    /// Owners and ids of the handles with shaders.
+    /// Owners and ids of the live handles with shaders.
     fn handles(&self) -> impl Iterator<Item = (u64, &str)> {
-        self.entries.keys().map(|key| (key.owner, key.id.as_str()))
+        self.entries
+            .keys()
+            .filter(|key| !self.stale.contains(&key.owner))
+            .map(|key| (key.owner, key.id.as_str()))
+    }
+    /// The entries without the stale owners' (and without `skip`).
+    fn live(&self, skip: Option<&Key>) -> BTreeMap<Key, Entry> {
+        self.entries
+            .iter()
+            .filter(|(k, _)| !self.stale.contains(&k.owner) && Some(*k) != skip)
+            .map(|(k, e)| {
+                (
+                    k.clone(),
+                    Entry {
+                        paths: e.paths.clone(),
+                        reported: e.reported,
+                    },
+                )
+            })
+            .collect()
+    }
+    /// Write the list without the stale owners' shaders. On a refusal
+    /// `entries` keeps them (mpv does: `set_channel` restored the old
+    /// list) and the next write tries again.
+    fn flush(&mut self, render: &mut Options, player: &mut impl Player) -> Result<(), RpcError> {
+        if self.stale.is_empty() {
+            return Ok(());
+        }
+        let next = self.live(None);
+        let joined = Self::joined(&next);
+        if joined != self.paths() {
+            render.set_channel(joined, player)?;
+        }
+        self.entries = next;
+        self.stale.clear();
+        Ok(())
     }
     /// `video.shaders.set { id, paths, manifestId, rank }` → `{ state }`.
     /// The capability layer checked `paths` and set `manifestId` and `rank`
@@ -113,20 +155,7 @@ impl Channel {
                 "shaders need GPU rendering; the player renders in software",
             ));
         }
-        let mut next: BTreeMap<Key, Entry> = self
-            .entries
-            .iter()
-            .filter(|(k, _)| **k != key)
-            .map(|(k, e)| {
-                (
-                    k.clone(),
-                    Entry {
-                        paths: e.paths.clone(),
-                        reported: e.reported,
-                    },
-                )
-            })
-            .collect();
+        let mut next = self.live(Some(&key));
         let others: usize = next.values().map(|e| e.paths.len()).sum();
         if others + paths.len() > MAX_SHADERS {
             return Err(RpcError::new(
@@ -151,57 +180,73 @@ impl Channel {
             render.set_channel(joined, player)?;
         }
         self.entries = next;
+        // The stale owners' shaders went with this write.
+        self.stale.clear();
         Ok(json!({"state": if ready { "applied" } else { "waiting" }}))
     }
     /// The owner stopped (or was parked): its shaders go. Errors only when
-    /// mpv refused the new list.
+    /// mpv refused the new list; then mpv and `entries` both keep them and
+    /// the next write removes them (`flush`).
     pub fn disable(
         &mut self,
         owner: u64,
         render: &mut Options,
         player: &mut impl Player,
     ) -> Result<(), RpcError> {
-        if !self.holds(owner) {
-            return Ok(());
+        if self.entries.keys().any(|key| key.owner == owner) {
+            self.stale.insert(owner);
         }
-        self.entries.retain(|key, _| key.owner != owner);
-        render.set_channel(self.paths(), player)
+        self.flush(render, player)
     }
     /// The player switched to software rendering: every handle with
-    /// shaders hears `unsupported`.
-    pub fn software_fallback(&self) -> Vec<(u64, Value)> {
-        self.handles()
+    /// shaders hears `unsupported` and its list goes (it no longer counts
+    /// against the limit or keeps the plugin resident); a plugin sets it
+    /// again after the player draws on the GPU again (a restart). Returns
+    /// the pushes, and an error when mpv refused the shorter list (it is
+    /// tried again at the next write).
+    pub fn software_fallback(
+        &mut self,
+        render: &mut Options,
+        player: &mut impl Player,
+    ) -> (Vec<(u64, Value)>, Result<(), RpcError>) {
+        let pushes: Vec<_> = self
+            .handles()
             .map(|(owner, id)| {
                 (
                     owner,
                     status(
                         id,
                         "unsupported",
-                        "the player switched to software rendering",
+                        "the player switched to software rendering; set the shaders again once it draws on the GPU",
                     ),
                 )
             })
-            .collect()
+            .collect();
+        let owners: Vec<u64> = self.entries.keys().map(|key| key.owner).collect();
+        self.stale.extend(owners);
+        (pushes, self.flush(render, player))
     }
     /// A shader mpv could not compile (`video_render::compile_line`).
-    /// mpv's message does not say which file failed, so every holder of
-    /// shaders not yet told hears it: the render options' owner and each
-    /// handle, once per list. With one holder the message is mpv's line,
-    /// as before; with several it says the player cannot tell whose.
-    /// Returns `(owner, event, data)`.
+    /// mpv's message does not say which file failed. The message form
+    /// comes from everyone whose shaders are on now (the render options'
+    /// owner and each live handle): with one, mpv's line as before; with
+    /// several, it says the player cannot tell whose failed (also when the
+    /// others were told already: a good list joining a broken one must not
+    /// be blamed with certainty). Only holders not yet told for their
+    /// current list hear it. Returns `(owner, event, data)`.
     pub fn compile_failure(
         &mut self,
         render: &mut Options,
         text: &str,
     ) -> Vec<(u64, &'static str, Value)> {
+        let stale = &self.stale;
+        let live =
+            |key: &Key, entry: &Entry| !stale.contains(&key.owner) && !entry.paths.is_empty();
+        let holders = usize::from(render.holds_shaders())
+            + self.entries.iter().filter(|(k, e)| live(k, e)).count();
         let render_holds = render.unreported_shaders();
-        let holders = usize::from(render_holds)
-            + self
-                .entries
-                .values()
-                .filter(|e| !e.reported && !e.paths.is_empty())
-                .count();
-        if holders == 0 {
+        let untold = self.entries.iter().any(|(k, e)| live(k, e) && !e.reported);
+        if !render_holds && !untold {
             return Vec::new();
         }
         let text = text.trim();
@@ -221,7 +266,7 @@ impl Channel {
             ));
         }
         for (key, entry) in &mut self.entries {
-            if !entry.reported && !entry.paths.is_empty() {
+            if !entry.reported && !entry.paths.is_empty() && !self.stale.contains(&key.owner) {
                 entry.reported = true;
                 pushes.push((
                     key.owner,
@@ -446,10 +491,179 @@ mod tests {
             &["/a"],
         )
         .unwrap();
-        let pushes = channel.software_fallback();
-        assert_eq!(pushes.len(), 1);
+        set(
+            &mut channel,
+            &mut render,
+            &mut fake,
+            2,
+            ("b", [1, 2]),
+            "y",
+            &["/b"],
+        )
+        .unwrap();
+        let (pushes, written) = channel.software_fallback(&mut render, &mut fake);
+        written.unwrap();
+        assert_eq!(pushes.len(), 2, "every handle hears it");
         assert_eq!(pushes[0].1["error"]["code"], "unsupported");
         assert_eq!(pushes[0].1["id"], "x");
+        // The lists went: they no longer count or keep the plugins live.
+        assert!(fake.shaders.is_empty());
+        assert!(!channel.holds(1) && !channel.holds(2));
+        assert!(channel.paths().is_empty());
+        let state = channel
+            .set(1, &clear, true, false, &mut render, &mut fake)
+            .unwrap();
+        assert_eq!(state["state"], "applied", "clear() still succeeds");
+    }
+
+    #[test]
+    fn a_refused_removal_keeps_channel_and_mpv_alike_and_is_retried() {
+        let (mut channel, mut render, mut fake) =
+            (Channel::default(), Options::default(), Fake::default());
+        set(
+            &mut channel,
+            &mut render,
+            &mut fake,
+            1,
+            ("a", [1, 1]),
+            "x",
+            &["/a"],
+        )
+        .unwrap();
+        set(
+            &mut channel,
+            &mut render,
+            &mut fake,
+            2,
+            ("b", [1, 2]),
+            "x",
+            &["/b"],
+        )
+        .unwrap();
+        fake.refuse_shaders = 1;
+        let error = channel.disable(1, &mut render, &mut fake).unwrap_err();
+        assert_eq!(error.code, "backend");
+        // mpv kept the old list, and so does the channel.
+        assert_eq!(fake.shaders, ["/a", "/b"]);
+        assert_eq!(channel.paths(), fake.shaders);
+        assert!(!channel.holds(1), "the stopped owner holds nothing");
+        // The stopped owner's shaders count for nothing and hear nothing.
+        assert!(
+            channel
+                .compile_failure(&mut render, "ERROR: x")
+                .iter()
+                .all(|(owner, _, _)| *owner == 2)
+        );
+        // The next write leaves them out.
+        set(
+            &mut channel,
+            &mut render,
+            &mut fake,
+            2,
+            ("b", [1, 2]),
+            "x",
+            &["/b2"],
+        )
+        .unwrap();
+        assert_eq!(fake.shaders, ["/b2"]);
+        assert_eq!(channel.paths(), fake.shaders);
+        // Or a later disable retries on its own.
+        set(
+            &mut channel,
+            &mut render,
+            &mut fake,
+            3,
+            ("c", [1, 3]),
+            "x",
+            &["/c"],
+        )
+        .unwrap();
+        fake.refuse_shaders = 1;
+        assert!(channel.disable(3, &mut render, &mut fake).is_err());
+        assert_eq!(fake.shaders, ["/b2", "/c"]);
+        channel.disable(9, &mut render, &mut fake).unwrap();
+        assert_eq!(fake.shaders, ["/b2"]);
+        assert_eq!(channel.paths(), fake.shaders);
+    }
+
+    /// Review M1: the message form comes from everyone whose shaders are on,
+    /// not from who has not been told yet.
+    #[test]
+    fn a_good_list_joining_a_broken_one_is_not_blamed_with_certainty() {
+        let (mut channel, mut render, mut fake) =
+            (Channel::default(), Options::default(), Fake::default());
+        set(
+            &mut channel,
+            &mut render,
+            &mut fake,
+            1,
+            ("a", [1, 1]),
+            "x",
+            &["/broken"],
+        )
+        .unwrap();
+        let first = channel.compile_failure(&mut render, "ERROR: 0:1: x");
+        assert_eq!(first.len(), 1);
+        assert_eq!(
+            first[0].2["error"]["message"],
+            "shader compile failed: ERROR: 0:1: x"
+        );
+        // B joins with a good shader; mpv recompiles and fails again on A's.
+        set(
+            &mut channel,
+            &mut render,
+            &mut fake,
+            2,
+            ("b", [1, 2]),
+            "x",
+            &["/good"],
+        )
+        .unwrap();
+        let second = channel.compile_failure(&mut render, "ERROR: 0:1: x");
+        assert_eq!(second.len(), 1, "only B was not told yet");
+        assert_eq!(second[0].0, 2);
+        let message = second[0].2["error"]["message"].as_str().unwrap();
+        assert!(message.contains("cannot tell whose failed"), "{message}");
+        assert!(message.contains("shaders of 2 handles"), "{message}");
+    }
+
+    /// Review M1: a broken `render().shaders` entry: a channel owner that
+    /// joins is told it is ambiguous.
+    #[test]
+    fn a_broken_render_shader_does_not_blame_a_channel_owner_with_certainty() {
+        let (mut channel, mut render, mut fake) =
+            (Channel::default(), Options::default(), Fake::default());
+        let file = tempfile::Builder::new().suffix(".glsl").tempfile().unwrap();
+        let path = file.path().to_str().unwrap().to_owned();
+        render
+            .set(9, &json!({"shaders":[path]}), true, 60., &mut fake)
+            .unwrap();
+        let first = channel.compile_failure(&mut render, "ERROR: r");
+        assert_eq!(first.len(), 1);
+        assert_eq!((first[0].0, first[0].1), (9, "video.render.status"));
+        assert_eq!(
+            first[0].2["error"]["message"],
+            "shader compile failed: ERROR: r"
+        );
+        set(
+            &mut channel,
+            &mut render,
+            &mut fake,
+            1,
+            ("a", [1, 1]),
+            "x",
+            &["/good"],
+        )
+        .unwrap();
+        let second = channel.compile_failure(&mut render, "ERROR: r");
+        assert_eq!(second.len(), 1, "the render owner was told already");
+        assert_eq!((second[0].0, second[0].1), (1, "video.shaders.status"));
+        assert!(
+            second[0].2["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("cannot tell whose failed")
+        );
     }
 
     #[test]

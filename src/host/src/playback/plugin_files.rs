@@ -2,10 +2,15 @@
 //! (`VideoNode::Lut3d`) and user shaders (`plugin.video.shaders()`, SDK
 //! 1.5.39, player 0.5.20). Like images (`ui_image::locate`), a file must be
 //! the plugin's own: inside its package directory or its data directory
-//! after following links, so a plugin cannot make the player read files it
-//! was not given. Checked on the main thread when the request arrives (the
-//! capability layer has the roots); the playback worker gets the canonical
-//! path.
+//! after following links *at the time of the check*. This keeps a plugin
+//! from naming arbitrary paths through the API; it is not a sandbox. The
+//! file is read later by mpv/FFmpeg (at each load, snapshot or export), so
+//! a plugin can still replace it with a link or use a hard link to a file
+//! elsewhere after the check, and plugins run as unsandboxed Node processes
+//! that can read the user's files anyway. Checked on the main (UI) thread
+//! when the request arrives (the capability layer has the roots), like
+//! `ui.image`: a canonicalize, a stat and for `.cube` up to 64 KiB read per
+//! request; the playback worker gets the canonical path.
 #![forbid(unsafe_code)]
 
 use crate::host::RpcError;

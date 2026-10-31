@@ -164,6 +164,9 @@ const info = (plugin) => Object.freeze({
         ...(warning.slot === undefined ? {} : { slot: warning.slot }),
         ...(warning.owner === undefined ? {} : { owner: warning.owner }),
     }))),
+    ...(plugin.process === "running" || plugin.process === "idle"
+        ? { process: plugin.process }
+        : {}),
     ...(plugin.display
         ? {
             display: Object.freeze({

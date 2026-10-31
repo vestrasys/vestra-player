@@ -29,6 +29,7 @@ class AppearanceService {
         if (this.#started)
             return;
         this.#started = true;
+        // A mirror: a plugin listens through `watch` and bindings.
         this.#runtime.on("appearance.changed", (data) => {
             const event = data;
             const language = preference(event?.language);
@@ -39,7 +40,7 @@ class AppearanceService {
             const theme = event?.theme;
             if (theme && THEMES.includes(theme))
                 this.accept(theme);
-        });
+        }, "events", true);
     }
     accept(theme) {
         if (theme === this.theme)
@@ -51,7 +52,13 @@ class AppearanceService {
     }
     watch(listener) {
         this.#listeners.add(listener);
-        return { dispose: async () => void this.#listeners.delete(listener) };
+        const held = this.#runtime.hold("appearance.changed");
+        return {
+            dispose: async () => {
+                this.#listeners.delete(listener);
+                await held.dispose();
+            },
+        };
     }
 }
 const appearanceOf = (runtime) => runtime.service("appearance", () => new AppearanceService(runtime));
@@ -60,6 +67,7 @@ export function appearance(scope) {
     return {
         get theme() {
             service().start();
+            scope.runtime.reading("appearance.changed");
             return service().theme;
         },
         onChange(listener) {
@@ -80,6 +88,7 @@ export function appearance(scope) {
         },
         get language() {
             service().start();
+            scope.runtime.reading("appearance.changed");
             return service().language;
         },
         async setLanguage(language) {
