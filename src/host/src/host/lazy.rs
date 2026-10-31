@@ -38,7 +38,7 @@ const IDLE_MS: u64 = 60_000;
 const SCHEMA: u32 = 1;
 /// How often the idle tick looks at the running plugins.
 const CHECK_MS: u64 = 250;
-/// A wake slower than this shows "Starting <name>…" (§5.2).
+/// A wake slower than this shows `Starting <name>…` (§5.2).
 const STARTING_OSD_MS: u64 = 400;
 /// How long a wake waits for the process its plugin was parked from (as
 /// `packages.reload` waits, `RELOAD_WAIT_MS`).
@@ -199,7 +199,7 @@ pub(crate) struct Parked {
     /// unregisters its own on another thread), and where its images come
     /// from (`Host::image_roots`).
     pub origin: Origin,
-    /// Its name, for "Starting <name>…".
+    /// Its name, for `Starting <name>…`.
     pub name: String,
     /// Triggers that came while it was parked; held until it is started.
     pub triggers: Vec<Value>,
