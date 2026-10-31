@@ -426,17 +426,27 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
                 }
             },
             _ if preference == Preference::Software => Decision::cpu(Reason::Preference),
-            _ => match blocked {
-                Some(reason) => Decision::cpu(reason),
-                None if facts.gpu_opt_in && preference == Preference::Auto => {
-                    Decision::cpu(Reason::OffByDefault)
-                }
-                None => Decision::gpu(Reason::Default),
-            },
+            // GPU rendering is off until it is turned on: the driver check
+            // (crash guard, denylist) runs only then (user ruling, M3).
+            _ if facts.gpu_opt_in && preference == Preference::Auto => {
+                Decision::cpu(Reason::OffByDefault)
+            }
+            _ => blocked.map_or_else(|| Decision::gpu(Reason::Default), Decision::cpu),
         }
     };
-    if facts.wgpu_windows && decision.mode == Mode::Gpu {
-        decision.windows = WindowKind::Wgpu;
+    if facts.wgpu_windows {
+        // GPU mode's windows are wgpu; CPU mode's are femtovg on OpenGL,
+        // as on main, named explicitly: with wgpu compiled in, Slint's
+        // default renderer would be femtovg-wgpu (Slint 1.18.1 also drops
+        // OpenGL femtovg from its default fallbacks then).
+        if decision.mode == Mode::Gpu {
+            decision.windows = WindowKind::Wgpu;
+        } else if decision.windows == WindowKind::Default {
+            decision.windows = WindowKind::OpenGl;
+        }
+        if decision.cpu_windows == WindowKind::Default {
+            decision.cpu_windows = WindowKind::OpenGl;
+        }
     }
     if let Some(Hit { rule, .. }) = facts.window_rule()
         && !facts.headless
@@ -472,7 +482,12 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
         }
         decision.cpu_windows = kind;
     }
+    // Off by default: only a rule that changes CPU mode's windows matters.
+    let off = decision.reason == Reason::OffByDefault;
     for Hit { rule, adapter } in facts.hits() {
+        if off && rule.action != Some(Action::SoftwareWindows) {
+            continue;
+        }
         let action = match rule.action {
             Some(Action::Cpu) => "software rendering",
             Some(Action::SoftwareWindows) => "software rendering and software windows",
@@ -766,8 +781,9 @@ mod tests {
         let auto = decide(&windows, Preference::Auto);
         assert_eq!(
             (auto.mode, auto.windows, auto.reason.clone()),
-            (Mode::Cpu, WindowKind::Default, Reason::OffByDefault)
+            (Mode::Cpu, WindowKind::OpenGl, Reason::OffByDefault)
         );
+        assert!(auto.line().contains("software rendering, OpenGL windows"));
         assert_eq!(auto.reason.code(), "default", "the SDK's code");
         assert!(auto.reason.message().contains("experimental"));
         assert_eq!(windows.gpu_available(), Ok(()), "the switch can turn it on");
@@ -776,7 +792,14 @@ mod tests {
             (chosen.mode, chosen.windows, chosen.reason.clone()),
             (Mode::Gpu, WindowKind::Wgpu, Reason::Default)
         );
-        assert_eq!(chosen.cpu_windows, WindowKind::Default);
+        assert_eq!(chosen.cpu_windows, WindowKind::OpenGl);
+        assert_eq!(
+            chosen
+                .clone()
+                .fall_back(Reason::InitFailed("no Direct3D 12".into()))
+                .windows,
+            WindowKind::OpenGl
+        );
         assert!(chosen.line().contains("Direct3D 12 (wgpu) windows"));
         let mut env = windows_gpu();
         env.env = Some((Preference::Gpu, "VESTRA_RENDER"));
@@ -789,13 +812,66 @@ mod tests {
             decide(&windows, Preference::Software).reason,
             Reason::Preference
         );
-        // The crash guard (a crash or the second device loss) still wins.
+        // The crash guard (a crash or the second device loss) still wins
+        // once GPU rendering is turned on.
         let mut crashed = windows_gpu();
         crashed.crashed = Some("lost twice".into());
         assert_eq!(
             decide(&crashed, Preference::Gpu).reason.code(),
             "previous-crash"
         );
+        // Off by default, the driver check does not run: neither the guard
+        // nor a `cpu` rule is the reason, and the rule is not logged.
+        assert_eq!(
+            decide(&crashed, Preference::Auto).reason,
+            Reason::OffByDefault
+        );
+        let mut stalls = windows_gpu();
+        stalls.adapters = vec![bad_amd()];
+        let auto = decide(&stalls, Preference::Auto);
+        assert_eq!(
+            (auto.windows, auto.reason),
+            (WindowKind::OpenGl, Reason::OffByDefault)
+        );
+        assert!(auto.notes.is_empty(), "{:?}", auto.notes);
+        assert_eq!(stalls.gpu_available().unwrap_err().code(), "denylist");
+    }
+
+    /// H1 (M3 review): CPU mode on Windows never gets wgpu windows nor
+    /// Slint's default (which would be femtovg-wgpu there).
+    #[test]
+    fn cpu_mode_with_wgpu_compiled_in_never_draws_with_wgpu() {
+        let adapters = [vec![], vec![bad_amd()], vec![white_amd()]];
+        let envs = [None, SOFTWARE_ENV, Some((Preference::Gpu, "VESTRA_RENDER"))];
+        let window_envs = [None, Some(WindowKind::OpenGl), Some(WindowKind::Software)];
+        for adapters in &adapters {
+            for env in envs {
+                for window_env in window_envs {
+                    for crashed in [None, Some("crashed".to_string())] {
+                        for preference in [Preference::Auto, Preference::Gpu, Preference::Software]
+                        {
+                            let facts = Facts {
+                                adapters: adapters.clone(),
+                                env,
+                                window_env,
+                                crashed: crashed.clone(),
+                                ..windows_gpu()
+                            };
+                            let decision = decide(&facts, preference);
+                            let cpu = [WindowKind::OpenGl, WindowKind::Software];
+                            assert!(cpu.contains(&decision.cpu_windows), "{decision:?}");
+                            if decision.mode == Mode::Cpu {
+                                assert!(cpu.contains(&decision.windows), "{decision:?}");
+                            } else {
+                                assert_eq!(decision.windows, WindowKind::Wgpu);
+                                let failed = decision.fall_back(Reason::InitFailed("x".into()));
+                                assert!(cpu.contains(&failed.windows), "{failed:?}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -829,7 +905,7 @@ mod tests {
         let denied = decide(&stalls, Preference::Gpu);
         assert_eq!(
             (denied.mode, denied.windows),
-            (Mode::Cpu, WindowKind::Default)
+            (Mode::Cpu, WindowKind::OpenGl)
         );
         assert_eq!(denied.reason.code(), "denylist");
         assert_eq!(stalls.gpu_available().unwrap_err().code(), "denylist");

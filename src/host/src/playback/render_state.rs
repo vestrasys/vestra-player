@@ -64,6 +64,16 @@ pub struct Guard {
 }
 
 impl Guard {
+    /// Whether the guard went to `crashed` for [`LOSSES`] device losses
+    /// within a day (the newest loss is when it did), not for a start that
+    /// died; losses kept from earlier runs alone do not count.
+    pub fn crashed_by_losses(&self) -> bool {
+        let n = self.losses.len();
+        self.state == GuardState::Crashed
+            && n >= LOSSES
+            && self.losses.last() == Some(&self.at)
+            && self.at.saturating_sub(self.losses[n - LOSSES]) < DAY
+    }
     /// Until when (Unix seconds) GPU rendering stays off for `key`, if it does.
     pub fn blocks(&self, key: &GuardKey, now: u64) -> Option<u64> {
         let until = self.at.saturating_add(GUARD_DAYS * DAY);
@@ -100,6 +110,7 @@ impl GuardFile {
     /// At start: an `attempting` left by the last run becomes `crashed`
     /// (now). Returns the guard as it stands.
     pub fn recover(&self, now: u64) -> Guard {
+        let _one = one_writer();
         let mut guard = self.read();
         if guard.state == GuardState::Attempting {
             guard.state = GuardState::Crashed;
@@ -119,6 +130,7 @@ impl GuardFile {
     /// process that dies leaves `attempting` behind.
     #[must_use = "dropping it settles the guard at once"]
     pub fn arm(&self, key: GuardKey, now: u64) -> Armed {
+        let _one = one_writer();
         // Earlier device losses count while the key stays the same.
         let previous = self.read();
         let losses = if previous.key == key {
@@ -138,6 +150,7 @@ impl GuardFile {
     /// [`LOSSES`]th loss within a day for the same key turns the guard to
     /// `crashed`. Returns whether it did.
     pub fn device_lost(&self, key: GuardKey, now: u64) -> bool {
+        let _one = one_writer();
         let mut guard = self.read();
         if guard.key != key {
             guard = Guard {
@@ -163,12 +176,24 @@ impl GuardFile {
     /// GPU rendering started (or gave up on its own, or the player quits):
     /// an `attempting` becomes `ok`; anything else stays.
     pub fn settle(&self) {
+        let _one = one_writer();
         let mut guard = self.read();
         if guard.state == GuardState::Attempting {
             guard.state = GuardState::Ok;
             self.write(&guard);
         }
     }
+}
+
+/// One read-modify-write of `render-state.json` at a time in this process:
+/// the device's callback (`device_lost`, any thread) and the UI thread's
+/// settle timer must not lose each other's writes. One player writes the
+/// file at a time (a restarted one waits for the old one to end).
+fn one_writer() -> std::sync::MutexGuard<'static, ()> {
+    static WRITER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    WRITER
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// An armed crash guard (`GuardFile::arm`); settles it when dropped.
@@ -327,6 +352,13 @@ mod tests {
         assert_eq!(guard.state, GuardState::Crashed);
         assert_eq!(guard.blocks(&key("1"), 140), Some(130 + GUARD_DAYS * DAY));
         assert_eq!(guard.blocks(&key("2"), 140), None, "driver updated");
+        assert!(guard.crashed_by_losses());
+        // A start that dies later is not reported as losses (stale ones
+        // kept by `arm`).
+        std::mem::forget(file.arm(key("1"), 200));
+        let later = file.recover(300);
+        assert_eq!(later.state, GuardState::Crashed);
+        assert!(!later.crashed_by_losses(), "{later:?}");
         // A day apart, or another driver: one loss each.
         let other = GuardFile::new(Some(dir.path().join("other.json")));
         assert!(!other.device_lost(key("1"), 100));

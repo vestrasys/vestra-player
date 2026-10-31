@@ -113,16 +113,19 @@ static HANDOFFS: AtomicBool = AtomicBool::new(true);
 fn stop_handoffs() {
     HANDOFFS.store(false, Ordering::Release);
 }
-/// CPU mode's windows (`render_mode::WindowKind`): Slint's default, femtovg
-/// on OpenGL (`VESTRA_WINDOW_RENDERER=gl`; Slint's software renderer when
-/// OpenGL fails), or Slint's software renderer (a `software-windows`
-/// denylist rule, `VESTRA_WINDOW_RENDERER=software`).
+/// CPU mode's windows (`render_mode::WindowKind`): femtovg on OpenGL
+/// (Windows always, named explicitly since Slint's default there would be
+/// femtovg-wgpu; `VESTRA_WINDOW_RENDERER=gl` elsewhere), with Slint's
+/// software renderer when OpenGL fails; Slint's software renderer (a
+/// `software-windows` denylist rule, `VESTRA_WINDOW_RENDERER=software`); or
+/// Slint's default (macOS and Linux). `decide` never gives CPU mode wgpu
+/// windows; if it did, they would get OpenGL ones here.
 fn select_cpu_windows(
     windows: render_mode::WindowKind,
     winit: impl Fn() -> slint::BackendSelector,
 ) -> std::result::Result<(), slint::PlatformError> {
     match windows {
-        render_mode::WindowKind::OpenGl => {
+        render_mode::WindowKind::OpenGl | render_mode::WindowKind::Wgpu => {
             if let Err(error) = winit().renderer_name("femtovg".into()).select() {
                 diag!("render: no OpenGL windows ({error}); Slint's software renderer");
                 winit().renderer_name("software".into()).select()?;
@@ -130,7 +133,7 @@ fn select_cpu_windows(
             Ok(())
         }
         render_mode::WindowKind::Software => winit().renderer_name("software".into()).select(),
-        render_mode::WindowKind::Default | render_mode::WindowKind::Wgpu => winit().select(),
+        render_mode::WindowKind::Default => winit().select(),
     }
 }
 
@@ -233,6 +236,9 @@ fn main() -> Result<()> {
         .then(|| guard.arm(startup.key.clone(), playback::render_state::now()));
     // What a restart after a lost window device needs (Windows wgpu
     // windows; `host/restart.rs`).
+    // When this player was started by a restart: another is refused for a
+    // while (`rendering::RESTART_COOLDOWN`).
+    let restarted_at = restart.map(|_| Instant::now());
     let lost_device = host::LostDevice {
         relaunch: host::Relaunch {
             directories: directories.clone(),
@@ -240,6 +246,7 @@ fn main() -> Result<()> {
         },
         guard: guard.clone(),
         key: startup.key.clone(),
+        restarted_at,
     };
     if !headless {
         // Windows: the main window draws at the display's vertical blanks
@@ -368,7 +375,7 @@ fn main() -> Result<()> {
                 directories: directories.clone(),
                 silent,
             },
-            restarted_at: restart.map(|_| Instant::now()),
+            restarted_at,
         },
         source_state_replies: Default::default(),
         floating: None,
@@ -460,14 +467,6 @@ fn main() -> Result<()> {
     }
     for directory in &directories {
         host.load(directory, 120_000)?;
-    }
-    // A restart continues its first file where the replaced player was.
-    if let (Some(resume), Some(file)) = (resume, files.first()) {
-        let _ = host.backend.commands.send(playback::backend::Command {
-            reply: host::Reply { owner: 0, id: 0 },
-            method: "host.resume".into(),
-            params: json!({"source":file.to_string_lossy(),"seconds":resume.seconds,"paused":resume.paused}),
-        });
     }
     // A restart continues its first file where the replaced player was.
     if let (Some(resume), Some(file)) = (resume, files.first()) {

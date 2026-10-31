@@ -37,7 +37,7 @@ pub(crate) const RESTART_COOLDOWN: std::time::Duration = std::time::Duration::fr
 /// Whether a restart is refused now (`busy`): one is under way in this
 /// process, or this process was itself started by a restart less than
 /// [`RESTART_COOLDOWN`] ago.
-fn restart_refused(
+pub(crate) fn restart_refused(
     restarting: bool,
     restarted_at: Option<std::time::Instant>,
     now: std::time::Instant,
@@ -138,7 +138,7 @@ pub(crate) fn startup(headless: bool) -> Startup {
     let crashed = recovered.blocks(&key, now).map(|until| {
         format!(
             "{}; it is tried again after a graphics driver or player update, or in {} days",
-            if recovered.losses.len() >= render_state::LOSSES {
+            if recovered.crashed_by_losses() {
                 "the graphics device was lost twice within a day while the player used it"
             } else {
                 "GPU rendering stopped an earlier start of the player"
