@@ -493,7 +493,7 @@ mod no_vblank {
     #[allow(dead_code)]
     pub struct VBlankWaiter(());
     impl VBlankWaiter {
-        pub fn wait(&mut self) -> bool {
+        pub fn wait(&mut self, _moved: bool) -> bool {
             false
         }
     }

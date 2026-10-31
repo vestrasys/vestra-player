@@ -547,6 +547,30 @@ impl Sources {
         self.follow_device(mpv);
         Ok(Value::Null)
     }
+    /// How long until `follow_device` looks at the audio devices again.
+    pub fn device_check_in(&self, now: std::time::Instant) -> std::time::Duration {
+        self.audio_checked.map_or(std::time::Duration::ZERO, |at| {
+            (at + std::time::Duration::from_secs(1)).saturating_duration_since(now)
+        })
+    }
+    /// Whether something here ends without an mpv event or a command, so the
+    /// control worker keeps looking every few milliseconds (`backend.rs`,
+    /// `POLL`): a source resolution (its deadline), a cover art listing
+    /// still running, a generated stream (its frames, acknowledgements and
+    /// failures come from its own threads).
+    pub fn polling(&self) -> bool {
+        #[cfg(feature = "producer-audio")]
+        let producer = self.producers.active().is_some()
+            || self.awaiting_audio.is_some()
+            || self.input.is_some()
+            || self.pending_error.is_some();
+        #[cfg(not(feature = "producer-audio"))]
+        let producer = false;
+        producer
+            || !self.resolutions.is_empty()
+            || !self.resolution_events.is_empty()
+            || self.late_covers.is_some()
+    }
     /// R-A3/R-H9: play on the requested device while it is present, else on
     /// the system default; checked every second. mpv and generated streams
     /// follow the same choice.

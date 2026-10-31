@@ -171,6 +171,8 @@ pub struct Shared {
     /// The picture's size inside the last rendered frame (the frame less
     /// mpv's margins, `osd-dimensions`), from the control worker.
     picture: Mutex<Option<(f64, f64)>>,
+    /// Wakes the software renderer when the request changes (`set_waker`).
+    waker: Mutex<Option<Waker>>,
 }
 impl Default for Shared {
     fn default() -> Self {
@@ -181,10 +183,16 @@ impl Default for Shared {
             }),
             revision: AtomicU64::new(0),
             picture: Mutex::new(None),
+            waker: Mutex::new(None),
         }
     }
 }
 impl Shared {
+    /// The software renderer's wake-up: called after each change of the
+    /// request, so the renderer draws at the new size without polling.
+    pub fn set_waker(&self, waker: Waker) {
+        *self.waker.lock().unwrap_or_else(PoisonError::into_inner) = Some(waker);
+    }
     pub fn set_area(&self, area: Size) {
         self.update(|request| request.area = area);
     }
@@ -196,8 +204,13 @@ impl Shared {
         let mut request = self.request.lock().unwrap_or_else(PoisonError::into_inner);
         let before = *request;
         change(&mut request);
-        if *request != before {
-            self.revision.fetch_add(1, Ordering::AcqRel);
+        if *request == before {
+            return;
+        }
+        self.revision.fetch_add(1, Ordering::AcqRel);
+        drop(request);
+        if let Some(waker) = &*self.waker.lock().unwrap_or_else(PoisonError::into_inner) {
+            waker();
         }
     }
     /// The control worker: the picture's size in the last rendered frame.
@@ -940,6 +953,25 @@ mod tests {
         );
         assert_eq!(shared.get().1.zoom, 2.);
         assert!(shared.get().0 > revision);
+    }
+
+    /// 0.5.15: the software renderer waits for a wake-up instead of
+    /// polling every 5 ms, so each change of the target must wake it.
+    #[test]
+    fn a_changed_target_wakes_the_renderer() {
+        let shared = Shared::default();
+        let wakes = Arc::new(AtomicU64::new(0));
+        let counted = wakes.clone();
+        shared.set_waker(Box::new(move || {
+            counted.fetch_add(1, Ordering::Relaxed);
+        }));
+        shared.set_area((1000, 600));
+        shared.set_area((1000, 600));
+        assert_eq!(wakes.load(Ordering::Relaxed), 1, "no change, no wake-up");
+        shared.set_zoom(2.);
+        assert_eq!(wakes.load(Ordering::Relaxed), 2);
+        shared.set_picture(Some((800., 450.)));
+        assert_eq!(wakes.load(Ordering::Relaxed), 2, "not part of the request");
     }
 
     #[test]

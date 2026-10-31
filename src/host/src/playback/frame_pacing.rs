@@ -208,6 +208,9 @@ struct Clock {
     /// Blanks not queued because the previous one was still waiting: the
     /// UI thread was busy for a whole refresh (`log_text`).
     skipped: AtomicU64,
+    /// The window moved or changed its scale factor: the next wait checks
+    /// which display it is on (`VBlankWaiter::wait`).
+    moved: AtomicBool,
 }
 #[derive(Default)]
 struct ClockState {
@@ -236,7 +239,7 @@ impl Clock {
                 }
             }
             let began = Instant::now();
-            let waited = waiter.wait();
+            let waited = waiter.wait(self.moved.swap(false, Ordering::AcqRel));
             let spinning = waited && spin.spinning(began.elapsed());
             let ok = waited && !spinning;
             if !waited {
@@ -745,6 +748,15 @@ impl CustomApplicationHandler for Handler {
             };
             pacing.cycles.close_paint();
             let now = Instant::now();
+            if matches!(
+                event,
+                winit::event::WindowEvent::Moved(_)
+                    | winit::event::WindowEvent::ScaleFactorChanged { .. }
+            ) {
+                // Perhaps onto another display: its vertical blanks from the
+                // next wait on, not up to a second later.
+                pacing.clock.moved.store(true, Ordering::Release);
+            }
             if matches!(event, winit::event::WindowEvent::RedrawRequested) {
                 pacing.counts.requested += 1;
             }
