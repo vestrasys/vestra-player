@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5
+
+- The permission `video.upscaling` (Vestra Player 0.5.16, SDK 1.5.37) is shown in words: "Upscale the video with the GPU's video upscaler", in the install and update confirmations and the plugin details. Before, it read "Unknown permission: video.upscaling".
+
 ## 0.2.4
 
 - The permission `rendering.manage` (Vestra Player 0.5.13, SDK 1.5.35) is shown in words: "Choose GPU or software rendering and restart the player", in amber like the other risky permissions, in the install and update confirmations and the plugin details. Before, it read "Unknown permission: rendering.manage".

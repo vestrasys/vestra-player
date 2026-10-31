@@ -1,0 +1,9 @@
+{
+  "id": "test.upscaling-probe",
+  "name": "Upscaling Probe (hardware test)",
+  "version": "0.1.0",
+  "apiVersion": "vestra/1",
+  "minPlayerVersion": "0.5.16",
+  "entry": "main.ts",
+  "capabilities": ["commands", "ui.osd", "video.upscaling"]
+}

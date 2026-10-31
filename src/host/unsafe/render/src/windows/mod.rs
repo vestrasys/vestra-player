@@ -64,6 +64,12 @@ pub fn window_wgpu() -> Option<(wgpu::Device, wgpu::Queue)> {
     GPU.get().map(|gpu| (gpu.device.clone(), gpu.queue.clone()))
 }
 
+/// The installed window device's adapter: its LUID and name. GPU rendering
+/// (mpv's Direct3D 11 device) runs on the same adapter.
+pub fn window_adapter() -> Option<(u64, String)> {
+    GPU.get().map(|gpu| (gpu.facts.luid, gpu.facts.name.clone()))
+}
+
 /// Whether the window device was lost: the windows can no longer draw, and
 /// the host restarts the player (see `platform/windows.rs`).
 pub fn device_lost() -> bool {

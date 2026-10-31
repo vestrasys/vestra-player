@@ -9,9 +9,11 @@
 //! matching its display exactly (`unmatch_display`), whether an open
 //! file is on a network file system (`file_is_remote`), waiting for a
 //! process to end (`wait_for_process_exit`), the thread's CPU cycles
-//! (`thread_cycles`), and the DXGI adapters with their driver versions
+//! (`thread_cycles`), the DXGI adapters with their driver versions
 //! (`dxgi_adapters`, through the `windows` crate's COM interfaces; no device
-//! is created). Each is one call with plain integer arguments, a
+//! is created), and whether an adapter's driver offers RTX Video Super
+//! Resolution (`video_super_resolution`: a short-lived Direct3D 11 device
+//! and video processor). Each is one call with plain integer arguments, a
 //! borrowed handle, or local out-parameters; the public
 //! API is safe. Compiled only on Windows (cross-checked from macOS by
 //! `npm run portability`, not yet run on Windows).
@@ -432,10 +434,198 @@ fn version_parts(value: i64) -> [u16; 4] {
     [48, 32, 16, 0].map(|shift| (value >> shift) as u16)
 }
 
+/// NVIDIA's PPE stream extension (`{d43ce1b3-1f4b-48ac-baee-c3c25375e6f7}`),
+/// the one mpv's `d3d11vpp=scaling-mode=nvidia` sets for RTX Video Super
+/// Resolution (AI upscaling round record §2).
+const NVIDIA_PPE: windows::core::GUID =
+    windows::core::GUID::from_u128(0xd43ce1b3_1f4b_48ac_baee_c3c25375e6f7);
+
+/// What [`video_super_resolution`] found: the driver's answer to
+/// `VideoProcessorGetStreamExtension(PPE)` on a test video processor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SuperResolution {
+    /// The call's result (an `HRESULT`: negative is a failure).
+    pub result: i32,
+    /// The value the driver wrote (0 when it wrote none).
+    pub value: u32,
+}
+
+impl SuperResolution {
+    /// The driver offers it: the query succeeded with a non-zero value
+    /// (VLC's check). Setting the extension proves nothing: AMD's driver
+    /// accepts NVIDIA's GUID too (round record §5).
+    pub fn supported(&self) -> bool {
+        self.result >= 0 && self.value != 0
+    }
+}
+
+/// Ask the driver of the adapter with this LUID whether it offers RTX Video
+/// Super Resolution, as VLC does: a Direct3D 11 device with video support on
+/// that adapter, a 1080p → 2160p video processor, then
+/// `VideoProcessorGetStreamExtension` with NVIDIA's PPE GUID. Everything is
+/// released before it returns. It wakes a sleeping discrete GPU: call it
+/// when the answer is needed, and keep the answer. `Err` when the adapter is
+/// gone or Direct3D 11 has no video processor on it.
+pub fn video_super_resolution(luid: u64) -> Result<SuperResolution, String> {
+    use windows::Win32::Foundation::HMODULE;
+    use windows::Win32::Graphics::Direct3D::{
+        D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1,
+    };
+    use windows::Win32::Graphics::Direct3D11::{
+        D3D11_CREATE_DEVICE_VIDEO_SUPPORT, D3D11_SDK_VERSION, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
+        D3D11_VIDEO_PROCESSOR_CONTENT_DESC, D3D11_VIDEO_USAGE_PLAYBACK_NORMAL, D3D11CreateDevice,
+        ID3D11Device, ID3D11VideoContext, ID3D11VideoDevice,
+    };
+    use windows::Win32::Graphics::Dxgi::Common::DXGI_RATIONAL;
+    use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIAdapter, IDXGIFactory1};
+    use windows::core::Interface;
+    // SAFETY: plain factory creation; an owned interface or an error comes
+    // back.
+    let factory: IDXGIFactory1 =
+        unsafe { CreateDXGIFactory1() }.map_err(|e| format!("CreateDXGIFactory1: {e}"))?;
+    let mut found = None;
+    for index in 0..64 {
+        // SAFETY: a live factory; an owned adapter, or DXGI_ERROR_NOT_FOUND
+        // past the last one.
+        let Ok(adapter) = (unsafe { factory.EnumAdapters1(index) }) else {
+            break;
+        };
+        // SAFETY: a live adapter; GetDesc1 fills a plain struct.
+        let Ok(desc) = (unsafe { adapter.GetDesc1() }) else {
+            continue;
+        };
+        let id = (u64::from(desc.AdapterLuid.HighPart as u32) << 32)
+            | u64::from(desc.AdapterLuid.LowPart);
+        if id == luid {
+            found = Some(adapter);
+            break;
+        }
+    }
+    let adapter: IDXGIAdapter = found
+        .ok_or_else(|| format!("no adapter with LUID {luid:016x}"))?
+        .cast()
+        .map_err(|e| e.to_string())?;
+    let levels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
+    let mut device: Option<ID3D11Device> = None;
+    // SAFETY: the adapter lives for the call, the feature levels are a valid
+    // slice, and the out-pointer is a live local.
+    unsafe {
+        D3D11CreateDevice(
+            &adapter,
+            D3D_DRIVER_TYPE_UNKNOWN,
+            HMODULE::default(),
+            D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
+            Some(&levels),
+            D3D11_SDK_VERSION,
+            Some(&mut device),
+            None,
+            None,
+        )
+    }
+    .map_err(|e| format!("D3D11CreateDevice (video support): {e}"))?;
+    let device = device.ok_or("D3D11CreateDevice returned no device")?;
+    let video: ID3D11VideoDevice = device
+        .cast()
+        .map_err(|e| format!("no Direct3D 11 video device: {e}"))?;
+    // SAFETY: a live device; an owned reference comes back.
+    let context = unsafe { device.GetImmediateContext() }.map_err(|e| e.to_string())?;
+    let video_context: ID3D11VideoContext = context
+        .cast()
+        .map_err(|e| format!("no Direct3D 11 video context: {e}"))?;
+    let rate = DXGI_RATIONAL {
+        Numerator: 60,
+        Denominator: 1,
+    };
+    let desc = D3D11_VIDEO_PROCESSOR_CONTENT_DESC {
+        InputFrameFormat: D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
+        InputFrameRate: rate,
+        InputWidth: 1920,
+        InputHeight: 1080,
+        OutputFrameRate: rate,
+        OutputWidth: 3840,
+        OutputHeight: 2160,
+        Usage: D3D11_VIDEO_USAGE_PLAYBACK_NORMAL,
+    };
+    // SAFETY: a live video device and a valid descriptor that outlives the
+    // call; an owned enumerator or an error comes back.
+    let enumerator = unsafe { video.CreateVideoProcessorEnumerator(&desc) }
+        .map_err(|e| format!("CreateVideoProcessorEnumerator: {e}"))?;
+    // SAFETY: a live video device and enumerator; an owned processor or an
+    // error comes back.
+    let processor = unsafe { video.CreateVideoProcessor(&enumerator, 0) }
+        .map_err(|e| format!("CreateVideoProcessor: {e}"))?;
+    let mut value: u32 = 0;
+    // SAFETY: a live video context and processor, stream 0 (the processor
+    // has one), a static GUID, and `value` is a live, writable u32 whose size
+    // is passed with it, so the driver writes only inside it.
+    let result = unsafe {
+        video_context.VideoProcessorGetStreamExtension(
+            &processor,
+            0,
+            &NVIDIA_PPE,
+            std::mem::size_of::<u32>() as u32,
+            (&raw mut value).cast(),
+        )
+    };
+    Ok(SuperResolution { result, value })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{VBlank, dxgi_adapters, file_is_remote, version_parts};
+    use super::{
+        SuperResolution, VBlank, dxgi_adapters, file_is_remote, version_parts,
+        video_super_resolution,
+    };
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn super_resolution_needs_a_successful_query_with_a_value() {
+        let answer = |result, value| SuperResolution { result, value }.supported();
+        assert!(answer(0, 1));
+        assert!(!answer(0, 0), "succeeded without saying yes");
+        // E_INVALIDARG with a stale value: not supported.
+        assert!(!answer(0x8007_0057_u32 as i32, 1));
+    }
+
+    /// An adapter that does not exist is an error, not "unsupported".
+    #[test]
+    fn super_resolution_on_a_missing_adapter_is_an_error() {
+        let error = video_super_resolution(u64::MAX).unwrap_err();
+        assert!(error.contains("no adapter"), "{error}");
+    }
+
+    /// Real machine, read-only (AI upscaling round record §8, case U0):
+    /// `cargo test -p vestra-win32 -- --ignored --nocapture super_resolution_on_each`
+    /// prints every adapter's answer. It wakes a sleeping discrete GPU for a
+    /// moment; it renders nothing and changes no setting. Expected: the RTX
+    /// GPU supported, AMD/Intel GPUs not (or an error), WARP an error.
+    #[test]
+    #[ignore = "real GPUs"]
+    #[allow(clippy::disallowed_macros)] // a report for the terminal
+    fn super_resolution_on_each_adapter() {
+        for adapter in dxgi_adapters().unwrap() {
+            let started = Instant::now();
+            let answer = video_super_resolution(adapter.luid);
+            eprintln!(
+                "{} ({:04X}:{:04X}, LUID {:016x}, driver {:?}): {} in {:?}",
+                adapter.name,
+                adapter.vendor_id,
+                adapter.device_id,
+                adapter.luid,
+                adapter.driver_version,
+                match &answer {
+                    Ok(found) => format!(
+                        "result 0x{:08X}, value {}, supported {}",
+                        found.result as u32,
+                        found.value,
+                        found.supported()
+                    ),
+                    Err(error) => format!("error: {error}"),
+                },
+                started.elapsed()
+            );
+        }
+    }
 
     #[test]
     fn a_driver_version_splits_into_four_parts() {

@@ -1627,6 +1627,11 @@ msgstr "Instalar, desinstalar y desactivar otros complementos"
 msgid "Choose GPU or software rendering and restart the player"
 msgstr "Elegir el renderizado por GPU o por software y reiniciar el reproductor"
 
+#: store.ts:499 store.ts:514 store.ts:515 text.ts:393
+#, x-machine
+msgid "Upscale the video with the GPU's video upscaler"
+msgstr "Escalar el vídeo con el escalador de vídeo de la GPU"
+
 #: store.ts:516 store.ts:517 store.ts:519
 #, x-machine
 msgid "Replace"

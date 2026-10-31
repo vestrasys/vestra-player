@@ -30,6 +30,7 @@
 //! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, OpenGL or wgpu, `vestra-video-texture`; elsewhere a new image per frame) |
 //! | redraw pacing | `VBLANK_CLOCK`, `vblank_waiter` → `VBlankWaiter` (Windows: vertical blanks through `vestra-win32`; elsewhere `no_vblank` below: Slint paces, with a display link on macOS) |
 //! | rendering | `window_refresh` (here, through winit on every system), `select_wgpu_windows`, `GPU_RENDER`, `GPU_WINDOWS_WGPU`, `GPU_OPT_IN`, `gpu_start` → `GpuRenderer` / `GpuHandle` (implements `playback::renderer::GpuBackend`) / `GpuFrame` / `GpuDraw`, `gpu_started`, `gpu_failed`, `window_device_lost` (macOS: OpenGL windows, `vestra-gpu-render` with OpenGL; Windows: wgpu/Direct3D 12 windows, `vestra-gpu-render` with Direct3D 11 into shared textures; elsewhere `no_gpu` below refuses, so the host renders in software) |
+//! | video upscaling | `upscaler_probe` → `UpscalerProbe` (blocking: it wakes a sleeping discrete GPU), `gpu_render_adapter`, `upscaler_filter`, `UPSCALER_HWDEC` (Windows: NVIDIA RTX Video Super Resolution through mpv's `d3d11vpp`, checked through `vestra-win32`; elsewhere `no_upscaler` below: `platform`) |
 //! | picture-in-picture | `pip_supported`, `PipWindow` (UI thread; macOS: AVKit through `vestra-pip`; elsewhere `pip_unsupported.rs`: `unsupported`) |
 //!
 //! Window rectangles are logical points. macOS uses the Cocoa lower-left
@@ -291,6 +292,54 @@ pub struct GpuAdapter {
 pub fn gpu_adapters() -> Vec<GpuAdapter> {
     Vec::new()
 }
+
+/// A GPU on which the system's video upscaler works (`upscaler_probe`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpscalerGpu {
+    /// The adapter's identity, as `gpu_render_adapter` reports it.
+    pub id: u64,
+    pub name: String,
+}
+
+/// Why the system's video upscaler cannot run on any GPU: a stable code
+/// (`platform`, `no-gpu`, `driver`, `gpu-unsupported`; the API's
+/// `UpscalingReasonCode`) and the English text.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpscalerRefusal {
+    pub code: &'static str,
+    pub message: String,
+}
+
+/// What `upscaler_probe` found: the GPUs it works on (at least one), or why
+/// it works on none.
+pub type UpscalerProbe = std::result::Result<Vec<UpscalerGpu>, UpscalerRefusal>;
+
+/// No video upscaler on this system (macOS, Linux): `platform`.
+#[cfg(not(target_os = "windows"))]
+mod no_upscaler {
+    /// Answers at once; nothing is asked of the GPU.
+    pub fn upscaler_probe() -> super::UpscalerProbe {
+        Err(super::UpscalerRefusal {
+            code: "platform",
+            message: format!(
+                "the player has no video upscaler on {}; it uses NVIDIA RTX Video Super Resolution on Windows",
+                crate::playback::render_mode::system_name(std::env::consts::OS)
+            ),
+        })
+    }
+    /// The adapter GPU rendering runs on: not known here.
+    pub fn gpu_render_adapter() -> Option<(u64, String)> {
+        None
+    }
+    /// No upscaling filter.
+    pub fn upscaler_filter(_factor: f64) -> Option<String> {
+        None
+    }
+    /// The hardware decoding the upscaler needs: none.
+    pub const UPSCALER_HWDEC: &str = "";
+}
+#[cfg(not(target_os = "windows"))]
+pub use no_upscaler::*;
 
 /// One display for `plugin.app.system()`.
 #[derive(Clone, Debug, PartialEq)]

@@ -15,7 +15,7 @@ import { IMAGE_LIMITS, UI_VALUE_LIMITS } from "./values.ts";
 import type { CommandDeclaration } from "../commands.ts";
 import type { SourceState } from "../source.ts";
 import type { SubtitleState } from "../subtitles.ts";
-import type { RenderingMode, RenderingPreference, RenderingReason, RenderSettings, ViewSettings } from "./types.ts";
+import type { RenderingMode, RenderingPreference, RenderingReason, RenderSettings, UpscalingReason, ViewSettings } from "./types.ts";
 import type { MediaJob } from "../media.ts";
 import type { LanguagePreference, Locale, Plugin, TemplateArgs, TextValue, ThemeId } from "./types.ts";
 import { LOCALES, LIST_SEPARATORS, TEXT_LIMITS } from "../i18n.ts";
@@ -469,7 +469,8 @@ export interface MarkdownWire {
  *   {@link TestHost.app}, {@link TestHost.systemInfo},
  *   {@link TestHost.chapters}, {@link TestHost.audioDevices},
  *   {@link TestHost.secrets}, {@link TestHost.clipboard},
- *   {@link TestHost.tools}, {@link TestHost.rendering}.
+ *   {@link TestHost.tools}, {@link TestHost.rendering},
+ *   {@link TestHost.upscaling}.
  * - **Assert** on records: {@link TestHost.osd}, {@link TestHost.calls},
  *   {@link TestHost.sent}, {@link TestHost.conflicts},
  *   {@link TestHost.layout}, {@link TestHost.menus}, and many more.
@@ -1702,6 +1703,65 @@ export declare class TestHost implements Transport {
         };
         /** Accepted `restartPlayer` calls. */
         restarts: number;
+    };
+    /**
+     * The GPU's video upscaler behind `plugin.video.upscaling` (player
+     * 0.5.16), answered as the player would:
+     *
+     * - `state()` and `set(true)` set `checked` (the player's one GPU check; a
+     *   plugin that should not wake the GPU while it starts can assert it is
+     *   still `false`) and report `available` from `reason` (`null`: it
+     *   works), this plugin's `enabled`, and `requested` with `factor` while
+     *   enabled, available and `factor` is above 1.
+     * - `set(true)` refuses with `unsupported` and the reason's message while
+     *   `reason` is set, unless its code is `decoding`, or `rendering` with
+     *   `renderingStarting` (GPU rendering still starting): those can pass
+     *   during the run, so the player keeps the request. Nothing changes when
+     *   it refuses.
+     * - `set(false)` always succeeds and does not check the GPU: before any
+     *   check it reports `available: false` with the reason `unchecked`.
+     *
+     * Inject other answers with `host.handle("video.upscaling.set", …)`. The
+     * defaults are a player where upscaling works and a 1080p video shown
+     * full screen on a 4K display (`factor` 2), whatever `systemInfo` says.
+     *
+     * @example Test the menu item on a computer without an RTX GPU
+     * The plugin's upscaling item is greyed out with the player's reason after
+     * the user first picks it. Starting the plugin checks nothing (`checked`
+     * stays false, so no GPU wakes up); the first pick reads the state, and
+     * `set(true)` would reject with `unsupported`, as in the player.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
+     * import activate from "../main.ts";
+     *
+     * const host = new TestHost();
+     * host.upscaling.reason = { code: "no-gpu", message: "no NVIDIA GPU" };
+     * const { stop } = await startPlugin(activate, {
+     *   directory: new URL("..", import.meta.url),
+     *   host,
+     * });
+     * assert.equal(host.upscaling.checked, false); // starting woke no GPU
+     * const item = host.command("upscaling");
+     * await item.run(); // the first pick checks the GPU
+     * assert.equal(item.state.enabled, false); // greyed out
+     * assert.equal(item.state.reason, "no NVIDIA GPU"); // the player's message
+     * await stop();
+     * ```
+     *
+     * @since 1.5.37
+     */
+    readonly upscaling: {
+        /** Why upscaling does not work; `null` while it does. */
+        reason: UpscalingReason | null;
+        /** Whether this plugin has upscaling on (`set`); a test may preset it. */
+        enabled: boolean;
+        /** The factor the player would request; `null` or at most 1: the video needs no upscaling. */
+        factor: number | null;
+        /** Whether the plugin made the player check the GPU (`state`, `set(true)`). */
+        checked: boolean;
+        /** GPU rendering is still starting: a `rendering` reason then lets `set(true)` keep the request. */
+        renderingStarting: boolean;
     };
     /** What `player.chapters()` lists while media is ready. */
     chapters: {

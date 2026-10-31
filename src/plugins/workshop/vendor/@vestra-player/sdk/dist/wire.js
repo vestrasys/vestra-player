@@ -138,6 +138,11 @@ export function createWire(transport) {
             /** The GPU renderer's options (`plugin.video.render()`). */
             renderSet: (values) => transport.request("video.render.set", { values }),
             renderRelease: () => transport.request("video.render.release"),
+            /** The GPU's video upscaler (`plugin.video.upscaling`, player 0.5.16). */
+            upscalingState: () => transport.request("video.upscaling.state"),
+            upscalingSet: (enabled) => transport.request("video.upscaling.set", {
+                enabled,
+            }),
         },
         /** Mark layers on the seek bar (`plugin.timeline`). */
         timeline: {
