@@ -252,7 +252,7 @@ impl Host {
     }
 
     /// The sidebar toggle's cell: the Toggle Sidebar command, the playlist
-    /// icon, accent while the sidebar is wanted, at half opacity while it is
+    /// icon, its on dot while the sidebar is wanted, at half opacity while it is
     /// wanted but the window is too narrow for it (G-18).
     fn sidebar_item(&self, sidebar: Option<window_state::Visibility>) -> Option<Item> {
         let entry = self.commands.get(bindings::HOST, SIDEBAR)?;
