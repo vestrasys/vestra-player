@@ -5,7 +5,7 @@
  *   node scripts/plugin.mjs <check|build|test|pack> <name...|--all> [--version x.y.z] [--out dir]
  *
  * A name is a directory under plugins/; a name with a slash is a path relative
- * to src/ (for example `examples/bookmark`). `--all` covers plugins/ only.
+ * to src/ (for example `tests/hardware/video-primitives-probe/a`). `--all` covers plugins/ only.
  * Everything else, including the options, is the CLI's (see its header in
  * @vestra-player/sdk/bin/vestra-plugin.mjs).
  *

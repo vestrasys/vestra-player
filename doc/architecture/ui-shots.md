@@ -11,7 +11,7 @@ npm run ui:shots -- <plugin...> [--lang en,zh-Hans,de] [--out <dir>]
     [--state <text>] [--max <n>] [--theme vestra|vestra-light] [--scale <factor>] [--states <dir>]
 ```
 
-- `<plugin>`: a directory under `src/plugins/` (`store`, `workshop`), or a path with a slash relative to `src/` (`examples/bookmark`). Several at once are fine.
+- `<plugin>`: a directory under `src/plugins/` (`store`, `workshop`), or a path with a slash relative to `src/` (`tests/hardware/video-primitives-probe/a`). Several at once are fine.
 - `--lang`: any of the player's languages (`en`, `zh-Hans`, `ja`, `ko`, `de`, `fr`, `es`); default `en,zh-Hans,de` (German has the longest strings).
 - `--out`: default `<system temp>/vestra-ui-shots/<plugins>` (emptied first); a directory inside the repository is refused.
 - `--state <text>`: only the states whose test name contains the text; `--max <n>`: at most n states per view.

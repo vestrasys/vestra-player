@@ -186,8 +186,6 @@ Round record [2026-10-video-primitives](../process/rounds/2026-10-video-primitiv
 | `src/scripts/sync-sdk-slint.mjs`, `stage-runtime.mjs` | Checks that the installed SDK's copy of the widget library matches `host/ui` (`--write <SDK repository>` copies `host/ui` into the SDK repository); generates `Resources/runtime` in the packaged layout: the runners as `.js` (Node's own type stripper, positions kept, `./x.ts` imports rewritten to `./x.js`) and the installed SDK |
 | `src/tests/sdk/` | Player-side tests: runner, shared runner (including a built-in writing the same messages under both runners), packaged layout, that the installed SDK's constants (the sources of the Reference tables on the SDK documentation site: capabilities and each member's requests, limits, binding names, built-in commands and submenus, palettes, error codes) and widget library copy agree with the host; `doc/` does not copy author documentation (`scripts/check-docs.mjs`) |
 | `src/plugins/` | Built-in product plugins, which are also the only official plugins (id `vestra.<name>`; the prefix is reserved for them). `zysilm.youtube` and `zysilm.bilibili` are third-party plugins hosted in the official plugin repository [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins) |
-| `src/examples/bookmark/` | Tutorial example plugin |
-| `src/examples/core-ui/`, `src/examples/panel-menu/` | Demo plugins for the core UI interfaces (menus, bindings, on-screen messages, playback sequence, sidebar state and detaching, panel context menus, theme widgets) |
 
 ## 6. UI state file
 

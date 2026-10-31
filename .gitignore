@@ -4,6 +4,5 @@ node_modules/
 
 # Plugin builds are produced by `npm run plugin -- build <name>` (the SDK's vestra-plugin CLI).
 src/plugins/*/dist/
-src/examples/*/dist/
 
 *.tsbuildinfo

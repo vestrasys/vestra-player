@@ -26,7 +26,7 @@ All 10 product plugins use the plugin API (SDK v2, see the [SDK documentation si
 | YouTube | plugin repository `plugins/youtube` | Public video playback | Download not retested in the GUI |
 | Bilibili | plugin repository `plugins/bilibili` | Public video playback | — |
 
-There is also the example plugin `src/examples/bookmark` (the SDK site's [Bookmark example](https://vestrasys.github.io/vestra-player-sdk/documents/Example__Bookmark.html) walks through a plugin like it), tested in the player.
+Example plugins live in the SDK repository (`examples/`; the SDK site's [Examples](https://vestrasys.github.io/vestra-player-sdk/documents/Examples.html)); the player repository has none.
 
 ## Intermittent problems (not reliably reproduced)
 

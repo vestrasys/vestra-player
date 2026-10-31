@@ -15,7 +15,6 @@ Everything a plugin author needs is on the SDK's documentation site, [vestrasys.
 In this repository:
 
 - `src/plugins/`: the built-in plugins (ids `vestra.<name>`, a prefix only they may use). `video/` is the shortest.
-- `src/examples/`: small plugins the player's tests run (`bookmark/`, `markdown/`, ...).
 - How the player implements the plugin API: [doc/architecture/](../architecture/README.md); why the SDK is designed as it is: [sdk-design.md](../architecture/sdk-design.md).
 
 `src/tests/sdk/host-agreement.test.ts` checks that the SDK's constants (the source of the site's Reference tables) agree with this player; `src/scripts/check-docs.mjs` keeps author documentation out of `doc/`.

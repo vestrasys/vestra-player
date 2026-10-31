@@ -1987,7 +1987,7 @@ export component W inherits Window {
     }
 
     #[test]
-    fn all_plugin_and_example_slint_files_compile() {
+    fn all_plugin_slint_files_compile() {
         fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
             for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
                 let path = entry.path();
@@ -2006,7 +2006,6 @@ export component W inherits Window {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
         let mut files = Vec::new();
         walk(&root.join("plugins"), &mut files);
-        walk(&root.join("examples"), &mut files);
         assert!(files.len() >= 15, "found {files:?}");
         for file in files {
             let result = pollster::block_on(compiler().build_from_path(&file));
