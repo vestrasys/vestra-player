@@ -628,6 +628,10 @@ impl Host {
             .instance
             .as_ref()
             .map(|i| DataKey::Instance(i.guid.clone()));
+        // The replaced version's recording (keyed by its instance).
+        if let Some(instance) = &before.instance {
+            lazy::remove(&self.activation_dir(), &instance.guid);
+        }
         self.packages.store.prepare_with_receipt(
             &id,
             before.revision,
@@ -773,6 +777,12 @@ impl Host {
             digest,
             version,
         })
+    }
+    /// Removes installed plugin `id`'s recording, if it has one.
+    pub(crate) fn drop_recording(&self, id: &str) {
+        if let Some(instance) = self.packages.store.get(id).instance {
+            lazy::remove(&self.activation_dir(), &instance.guid);
+        }
     }
     /// The directory recordings are kept in.
     pub(crate) fn activation_dir(&self) -> PathBuf {

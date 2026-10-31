@@ -394,3 +394,8 @@ msgstr ""
 #: src/host/lazy.rs
 msgid "Starting {}…"
 msgstr ""
+
+#. The OSD when a plugin stopped while idle cannot start again for its first use.
+#: src/host/lazy.rs
+msgid "{} could not start"
+msgstr ""

@@ -488,3 +488,9 @@ msgstr "{}을(를) 더 이상 사용할 수 없습니다"
 #, x-machine
 msgid "Starting {}…"
 msgstr "{} 시작 중…"
+
+#. The OSD when a plugin stopped while idle cannot start again for its first use.
+#: src/host/lazy.rs
+#, x-machine
+msgid "{} could not start"
+msgstr "{}을(를) 시작할 수 없습니다"

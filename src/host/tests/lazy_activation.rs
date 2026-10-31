@@ -48,7 +48,9 @@ fn fixture(root: &Path) -> serde_json::Value {
                  await plugin.storage.session.set(\"starts\", n);\n\
                  console.error(`{ID} start ${{n}}`);\n\
                  plugin.commands.add({{ id: \"hello\", path: [\"Tools\", \"Hello\"],\n\
-                 run: () => console.error(`{ID} hello in start ${{n}}`) }});\n}}\n"
+                 run: () => console.error(`{ID} hello in start ${{n}}`) }});\n\
+                 plugin.onDispose(() => new Promise((done) => setTimeout(() => {{\n\
+                 console.error(`{ID} disposed ${{n}}`); done(); }}, 1200)));\n}}\n"
             ),
         ),
     ];
@@ -120,9 +122,14 @@ fn an_idle_plugin_is_parked_replayed_woken_by_its_command_and_parked_again() {
         let files = std::fs::read_dir(&recordings).unwrap().count();
         assert_eq!(files, 1, "one recording in {}", recordings.display());
 
+        // Woken at 2.5 s; parked; woken again 100 ms after that park, while
+        // its first process still runs its 1.2 s `onDispose`.
         let mut woken = lazy.to_vec();
-        woken.push(("VESTRA_TEST_EXECUTE", "vestra.fixture-lazy/hello@2500"));
-        let second = run(root.path(), 7, &woken);
+        woken.push((
+            "VESTRA_TEST_EXECUTE",
+            "vestra.fixture-lazy/hello@2500,vestra.fixture-lazy/hello@park+100",
+        ));
+        let second = run(root.path(), 11, &woken);
         assert!(
             second.contains(&format!("lazy: {ID} replayed (1 calls)")),
             "{second}"
@@ -142,12 +149,34 @@ fn an_idle_plugin_is_parked_replayed_woken_by_its_command_and_parked_again() {
             second.contains(&format!("{ID} hello in start 1")),
             "the command ran once woken: {second}"
         );
-        assert_eq!(count(&second, &format!("{ID} start")), 1, "{second}");
         let ran = second.find("hello in start 1").unwrap();
         let parked = second
-            .rfind(&format!("lazy: {ID} parked"))
+            .find(&format!("lazy: {ID} parked"))
             .unwrap_or_else(|| panic!("parked again: {second}"));
         assert!(ran < parked, "{second}");
+        // The second wake waits for the parked process: one instance at a
+        // time on its data directory (as reload and install wait).
+        assert!(
+            second.contains(&format!("lazy: {ID} waits for its stopped process")),
+            "{second}"
+        );
+        let disposed = second
+            .find(&format!("{ID} disposed 1"))
+            .unwrap_or_else(|| panic!("disposed: {second}"));
+        let again = second
+            .find(&format!("{ID} start 2"))
+            .unwrap_or_else(|| panic!("started again: {second}"));
+        assert!(parked < disposed && disposed < again, "{second}");
+        // Session storage outlives the process: its count went on.
+        assert!(
+            second.contains(&format!("{ID} hello in start 2")),
+            "{second}"
+        );
+        assert_eq!(count(&second, &format!("{ID} start")), 2, "{second}");
+        assert!(
+            count(&second, &format!("lazy: {ID} parked")) >= 2,
+            "parked twice: {second}"
+        );
 
         let eager = run(
             root.path(),

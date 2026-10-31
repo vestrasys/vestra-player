@@ -488,3 +488,9 @@ msgstr "{} ya no está disponible"
 #, x-machine
 msgid "Starting {}…"
 msgstr "Iniciando {}…"
+
+#. The OSD when a plugin stopped while idle cannot start again for its first use.
+#: src/host/lazy.rs
+#, x-machine
+msgid "{} could not start"
+msgstr "No se pudo iniciar {}"

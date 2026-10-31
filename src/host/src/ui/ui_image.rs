@@ -293,19 +293,18 @@ impl Images {
 }
 
 impl Host {
-    /// Where a plugin's images may live: its package and data directories.
+    /// Where a plugin's images may live: its package and data directories;
+    /// a parked plugin's too (lazy activation: its bar button and settings
+    /// pages still show).
     pub(crate) fn image_roots(&self, owner: u64) -> Vec<PathBuf> {
-        let Some(plugin) = self.plugins.get(&owner) else {
-            return Vec::new();
-        };
-        let mut roots = vec![plugin.directory.clone()];
-        if let Some(data) = plugin
-            .data_directory()
-            .and_then(|d| dunce::canonicalize(d).ok())
-        {
-            roots.push(data);
+        if let Some(plugin) = self.plugins.get(&owner) {
+            return plugin.origin().image_roots();
         }
-        roots
+        self.lazy
+            .parked
+            .get(&owner)
+            .map(|parked| parked.origin.image_roots())
+            .unwrap_or_default()
     }
     /// A property value for `owner`'s `view`: JSON, Markdown documents at
     /// any depth, image references as the whole value or at any depth (checked again on

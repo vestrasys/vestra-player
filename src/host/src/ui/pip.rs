@@ -211,11 +211,11 @@ impl<S: Surface> PictureInPicture<S> {
             surface.stop();
         }
     }
-    /// A plugin stopped: if its request is in effect, the window closes.
     /// `owner` asked for picture-in-picture.
     pub fn holds(&self, owner: u64) -> bool {
         self.owner == Some(owner)
     }
+    /// A plugin stopped: if its request is in effect, the window closes.
     pub fn remove_owner(&mut self, owner: u64) {
         if self.owner != Some(owner) {
             return;

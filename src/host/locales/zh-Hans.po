@@ -399,3 +399,8 @@ msgstr "{} 已不可用"
 #: src/host/lazy.rs
 msgid "Starting {}…"
 msgstr "正在启动 {}…"
+
+#. The OSD when a plugin stopped while idle cannot start again for its first use.
+#: src/host/lazy.rs
+msgid "{} could not start"
+msgstr "{} 无法启动"

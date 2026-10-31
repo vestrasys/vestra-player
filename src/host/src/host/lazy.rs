@@ -26,6 +26,9 @@ const SCHEMA: u32 = 1;
 const CHECK_MS: u64 = 250;
 /// A wake slower than this shows "Starting <name>…" (§5.2).
 const STARTING_OSD_MS: u64 = 400;
+/// How long a wake waits for the process its plugin was parked from (as
+/// `packages.reload` waits, `RELOAD_WAIT_MS`).
+const STOP_WAIT_MS: u64 = 20_000;
 /// What a parked plugin is woken by (the recorded entries' triggers).
 const TRIGGERS: &[&str] = &[
     "commands.execute",
@@ -172,11 +175,38 @@ pub(crate) fn remove(directory: &Path, guid: &str) {
 pub(crate) struct Parked {
     pub id: String,
     pub guid: String,
-    pub directory: PathBuf,
-    /// Registered for its settings pages' Slint (`i18n::catalog_for`).
-    pub catalog: Option<Arc<Catalog>>,
+    /// Its package: its catalog (registered for its settings pages' Slint,
+    /// `i18n::catalog_for`: an `Arc` of its own, since the stopped plugin
+    /// unregisters its own on another thread), and where its images come
+    /// from (`Host::image_roots`).
+    pub origin: Origin,
     /// Its name, for "Starting <name>…".
     pub name: String,
+    /// Triggers that came while it was parked; held until it is started.
+    pub triggers: Vec<Value>,
+    /// Since when they wait for the process it was parked from to go.
+    pub waiting: Option<u64>,
+}
+impl Parked {
+    fn new(id: String, guid: String, origin: Origin, name: String) -> Self {
+        if let Some(catalog) = &origin.catalog {
+            i18n::register(&origin.directory, catalog.clone());
+        }
+        Self {
+            id,
+            guid,
+            origin,
+            name,
+            triggers: Vec::new(),
+            waiting: None,
+        }
+    }
+    /// It is no longer parked: its catalog goes (if still this one).
+    fn release(&self) {
+        if let Some(catalog) = &self.origin.catalog {
+            i18n::unregister(&self.origin.directory, catalog);
+        }
+    }
 }
 
 /// A parked plugin started by a trigger, until its `runtime.ready`.
@@ -188,13 +218,20 @@ pub(crate) struct Waking {
     pub announced: bool,
 }
 
-/// `VESTRA_TEST_EXECUTE=<manifest id>/<command id>@<ms>[,...]`: run a
-/// plugin command that long after start, as a menu click would (headless
-/// tests; the player has no other way in without input).
+/// `VESTRA_TEST_EXECUTE=<manifest id>/<command id>@<ms>[,...]`: a test
+/// switch, read in any build like `VESTRA_TEST_REMOVE_DEVICE` (and like it
+/// not passed on to a restarted player): run a plugin command that long
+/// after start, as a menu click would, or `@park+<ms>` that long after the
+/// plugin's next park. Headless tests have no other way in without input.
 struct TestExecute {
     manifest: String,
     command: String,
-    at: u64,
+    at: When,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum When {
+    At(u64),
+    AfterPark(u64),
 }
 
 fn test_executes(text: &str) -> Vec<TestExecute> {
@@ -205,7 +242,10 @@ fn test_executes(text: &str) -> Vec<TestExecute> {
             Some(TestExecute {
                 manifest: manifest.into(),
                 command: command.into(),
-                at: at.parse().ok()?,
+                at: match at.strip_prefix("park+") {
+                    Some(ms) => When::AfterPark(ms.parse().ok()?),
+                    None => When::At(at.parse().ok()?),
+                },
             })
         })
         .collect()
@@ -228,6 +268,10 @@ pub(crate) struct Lazy {
     told: BTreeMap<u64, &'static str>,
     next_check: u64,
     tests: Vec<TestExecute>,
+    /// Woken owners: the old generation → the new one, for what was on its
+    /// way to the old one while the registries moved (a resolution the
+    /// worker asked for before `owner.rekey`).
+    moved: BTreeMap<u64, u64>,
 }
 impl Lazy {
     pub fn from_env() -> Self {
@@ -253,6 +297,7 @@ impl Lazy {
         self.asking.remove(&owner);
         self.told.remove(&owner);
         self.waking.remove(&owner);
+        self.moved.retain(|_, to| *to != owner);
     }
     /// `owner` was used now.
     pub fn touch(&mut self, owner: u64, now: u64) {
@@ -278,6 +323,12 @@ impl Host {
     pub(crate) fn lazy_deliver(&mut self, owner: u64, message: &Value) -> bool {
         let event = event(message);
         let trigger = event.is_some_and(|e| TRIGGERS.contains(&e));
+        if let Some(&to) = self.lazy.moved.get(&owner) {
+            if trigger || event == Some("source.resolveCancel") {
+                self.send(to, message.clone());
+            }
+            return false;
+        }
         if let Some(waking) = self.lazy.waking.get_mut(&owner) {
             // A resolution cancelled before the plugin was ready follows
             // its request.
@@ -287,9 +338,12 @@ impl Host {
             }
             return true;
         }
-        if self.lazy.parked.contains_key(&owner) {
+        if let Some(parked) = self.lazy.parked.get_mut(&owner) {
             if trigger {
-                self.wake(owner, message.clone());
+                parked.triggers.push(message.clone());
+                self.wake(owner);
+            } else if event == Some("source.resolveCancel") && !parked.triggers.is_empty() {
+                parked.triggers.push(message.clone());
             }
             return false;
         }
@@ -299,42 +353,65 @@ impl Host {
         }
         true
     }
-    /// Start parked `from` for `trigger` (§2.2): a new owner generation, the
-    /// recorded entries moved to it, the trigger held for its ready.
-    fn wake(&mut self, from: u64, trigger: Value) {
+    /// Start parked `from` for its held triggers (§2.2): a new owner
+    /// generation, the recorded entries moved to it, the triggers held for
+    /// its ready. Not while the process it was parked from is still going
+    /// (two instances would share its data directory; reload and install
+    /// wait the same way): `lazy_tick` starts it once that process is gone.
+    fn wake(&mut self, from: u64) {
+        let now = self.now_ms();
+        let gone = self.process_gone(from);
+        let Some(parked) = self.lazy.parked.get_mut(&from) else {
+            return;
+        };
+        if !gone {
+            if parked.waiting.is_none() {
+                diag!("lazy: {} waits for its stopped process", parked.id);
+                parked.waiting = Some(now);
+            }
+            return;
+        }
         let Some(parked) = self.lazy.parked.remove(&from) else {
             return;
         };
-        if let Some(catalog) = &parked.catalog {
-            i18n::unregister(&parked.directory, catalog);
-        }
+        parked.release();
         match self.start_package(&parked.id) {
             Ok(to) => {
                 diag!(
                     "lazy: {} woken by {} (owner {from} → {to})",
                     parked.id,
-                    event(&trigger).unwrap_or("?")
+                    parked.triggers.first().and_then(event).unwrap_or("?")
                 );
                 capabilities::rekey(self, from, to);
-                let now = self.now_ms();
+                self.lazy.moved.insert(from, to);
                 self.lazy.touch(to, now);
                 self.lazy.waking.insert(
                     to,
                     Waking {
                         name: parked.name,
-                        queue: vec![trigger],
+                        queue: parked.triggers,
                         since: now,
                         announced: false,
                     },
                 );
             }
-            Err(error) => {
-                diag!("lazy: {} could not start: {error}", parked.id);
-                self.failures
-                    .insert(parked.id, error.to_string().chars().take(512).collect());
-                self.forget_entries(from);
-            }
+            Err(error) => self.wake_failed(from, parked, &error.to_string()),
         }
+    }
+    /// The process `owner` ran in is gone and the worker cleaned up after it
+    /// (a replayed owner never had one).
+    fn process_gone(&self, owner: u64) -> bool {
+        self.cleanup
+            .get(&owner)
+            .is_none_or(|done| *done == (true, true))
+    }
+    /// A parked plugin could not start: its entries go, the user is told.
+    fn wake_failed(&mut self, from: u64, parked: Parked, error: &str) {
+        diag!("lazy: {} could not start: {error}", parked.id);
+        self.failures
+            .insert(parked.id, error.chars().take(512).collect());
+        self.forget_entries(from);
+        self.show_osd(&i18n::tr_args("{} could not start", &json!([parked.name])));
     }
     /// A parked owner's registrations go (it is disabled, uninstalled,
     /// reloaded or could not start).
@@ -346,16 +423,20 @@ impl Host {
             params: Value::Null,
         });
     }
-    /// Plugin `id`, if parked, stops being parked: its entries go, and its
-    /// recording too when `drop_recording`. Whether it was parked.
+    /// Plugin `id`, if parked, stops being parked: its entries go. With
+    /// `drop_recording` its recording goes too, parked or not and whether
+    /// lazy activation is on or not (an uninstall, reload, install or
+    /// upgrade: what it recorded is of no use any more). Whether it was
+    /// parked.
     pub(crate) fn forget_parked(&mut self, id: &str, drop_recording: bool) -> bool {
+        if drop_recording {
+            self.drop_recording(id);
+        }
         let Some(owner) = self.lazy.parked_id(id) else {
             return false;
         };
         if let Some(parked) = self.lazy.parked.remove(&owner) {
-            if let Some(catalog) = &parked.catalog {
-                i18n::unregister(&parked.directory, catalog);
-            }
+            parked.release();
             if drop_recording {
                 remove(&self.activation_dir(), &parked.guid);
             }
@@ -376,9 +457,6 @@ impl Host {
         self.next_generation += 1;
         let owner = self.next_generation;
         let catalog = i18n::load(directory);
-        if let Some(catalog) = &catalog {
-            i18n::register(directory, catalog.clone());
-        }
         let origin = Origin {
             id: id.into(),
             directory: directory.to_owned(),
@@ -391,9 +469,6 @@ impl Host {
                 capabilities::replay(self, owner, &origin, &manifest.capabilities, call)
             {
                 self.forget_entries(owner);
-                if let Some(catalog) = &catalog {
-                    i18n::unregister(directory, catalog);
-                }
                 bail!("{}: {}: {}", call.method, error.code, error.message);
             }
         }
@@ -406,13 +481,7 @@ impl Host {
         );
         self.lazy.parked.insert(
             owner,
-            Parked {
-                id: id.into(),
-                guid: key.guid.clone(),
-                directory: directory.to_owned(),
-                catalog,
-                name,
-            },
+            Parked::new(id.into(), key.guid.clone(), origin, name),
         );
         Ok(())
     }
@@ -474,6 +543,24 @@ impl Host {
         if !self.lazy.enabled {
             return;
         }
+        // Parked plugins whose stopped process is gone start now; one whose
+        // process does not go within `STOP_WAIT_MS` fails, as a reload does.
+        let due = self
+            .lazy
+            .parked
+            .iter()
+            .filter_map(|(owner, parked)| Some((*owner, parked.waiting?)))
+            .collect::<Vec<_>>();
+        for (owner, since) in due {
+            if self.process_gone(owner) {
+                self.wake(owner);
+            } else if now.saturating_sub(since) >= STOP_WAIT_MS
+                && let Some(parked) = self.lazy.parked.remove(&owner)
+            {
+                parked.release();
+                self.wake_failed(owner, parked, "its stopped process did not go within 20 s");
+            }
+        }
         let slow = self
             .lazy
             .waking
@@ -509,11 +596,11 @@ impl Host {
     /// What the host itself knows of `owner` being idle (§2.3): installed,
     /// ready, unused for `VESTRA_IDLE_MS`, nothing of its in flight.
     fn lazy_idle(&mut self, owner: u64, now: u64) -> bool {
-        if self.lazy.waking.contains_key(&owner) || self.lazy_key_of(owner).is_none() {
-            return false;
-        }
         let since = *self.lazy.active.entry(owner).or_insert(now);
-        if now.saturating_sub(since) < self.lazy.idle_ms {
+        if now.saturating_sub(since) < self.lazy.idle_ms
+            || self.lazy.waking.contains_key(&owner)
+            || self.lazy_key_of(owner).is_none()
+        {
             return false;
         }
         let id = self.plugins[&owner].manifest.id.clone();
@@ -535,7 +622,7 @@ impl Host {
         };
         let now = self.now_ms();
         if !self.plugins.contains_key(&owner)
-            || self.lazy.active.get(&owner).is_some_and(|at| *at > asked)
+            || self.lazy.active.get(&owner).is_some_and(|at| *at >= asked)
             || !self.lazy_idle(owner, now)
         {
             return;
@@ -571,10 +658,16 @@ impl Host {
             return;
         };
         let id = plugin.manifest.id.clone();
-        let directory = plugin.directory.clone();
-        let catalog = plugin.catalog.clone();
-        let name =
-            crate::packages::package_manager::display_name(&plugin.manifest, catalog.as_deref());
+        // Its own catalog: the stopping plugin unregisters its `Arc` on
+        // the thread that drops it, which must not take the parked one's.
+        let origin = Origin {
+            catalog: i18n::load(&plugin.directory),
+            ..plugin.origin()
+        };
+        let name = crate::packages::package_manager::display_name(
+            &plugin.manifest,
+            origin.catalog.as_deref(),
+        );
         let count = calls.len();
         if let Err(error) = write(&self.activation_dir(), &key, calls) {
             diag!("lazy: {id} not parked: its recording: {error}");
@@ -583,21 +676,22 @@ impl Host {
             return;
         }
         self.stop(owner, true);
-        // Its settings pages still show in its language.
-        if let Some(catalog) = &catalog {
-            i18n::register(&directory, catalog.clone());
-        }
         diag!("lazy: {id} parked ({count} recorded calls)");
-        self.lazy.parked.insert(
-            owner,
-            Parked {
-                id,
-                guid: key.guid,
-                directory,
-                catalog,
-                name,
-            },
-        );
+        // `VESTRA_TEST_EXECUTE` entries timed from this park.
+        let now = self.now_ms();
+        if let Some(test) = self
+            .lazy
+            .tests
+            .iter_mut()
+            .find(|t| t.manifest == id && matches!(t.at, When::AfterPark(_)))
+            && let When::AfterPark(ms) = test.at
+        {
+            test.at = When::At(now + ms);
+        }
+        // Its settings pages still show in its language.
+        self.lazy
+            .parked
+            .insert(owner, Parked::new(id, key.guid, origin, name));
     }
     /// `VESTRA_TEST_EXECUTE`: the due commands run, by manifest id.
     fn lazy_test_execute(&mut self, now: u64) {
@@ -606,7 +700,7 @@ impl Host {
         }
         let (due, waiting): (Vec<_>, Vec<_>) = std::mem::take(&mut self.lazy.tests)
             .into_iter()
-            .partition(|test| test.at <= now);
+            .partition(|test| matches!(test.at, When::At(at) if at <= now));
         self.lazy.tests = waiting;
         for test in due {
             let owner = self
@@ -681,14 +775,77 @@ mod tests {
         remove(directory.path(), &key().guid);
     }
 
+    fn origin(directory: &Path, data: Option<PathBuf>) -> Origin {
+        let catalog = Catalog::from_json(r#"{"language":"zh-Hans","messages":{"Hello":"你好"}}"#);
+        Origin {
+            id: "a.b".into(),
+            directory: directory.to_owned(),
+            catalog: Some(Arc::new(catalog.unwrap())),
+            data_directory: data,
+        }
+    }
+
+    /// Review M2: a parked plugin keeps its translations although the
+    /// stopped plugin unregisters its own catalog later, on another thread.
+    #[test]
+    fn a_parked_catalog_outlives_the_stopped_plugins_own() {
+        let directory = tempfile::tempdir().unwrap();
+        let page = directory.path().join("page.slint");
+        let running = origin(directory.path(), None);
+        let own = running.catalog.clone().unwrap();
+        i18n::register(directory.path(), own.clone());
+        // As `park`: a catalog of its own (loaded again), then the plugin's
+        // drop unregisters the plugin's.
+        let parked = Parked::new(
+            "a.b".into(),
+            "guid".into(),
+            origin(directory.path(), None),
+            "A".into(),
+        );
+        i18n::unregister(directory.path(), &own);
+        let shown = i18n::catalog_for(&page).expect("still registered");
+        assert!(Arc::ptr_eq(&shown, parked.origin.catalog.as_ref().unwrap()));
+        assert_eq!(shown.text("Hello"), "你好");
+        parked.release();
+        assert!(i18n::catalog_for(&page).is_none());
+    }
+
+    /// Review M3: a parked plugin's images come from its package and data
+    /// directories, as a running one's (`Host::image_roots`).
+    #[test]
+    fn a_parked_origin_names_its_image_roots() {
+        let package = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+        let origin = origin(package.path(), Some(data.path().to_owned()));
+        assert_eq!(
+            origin.image_roots(),
+            [
+                package.path().to_owned(),
+                dunce::canonicalize(data.path()).unwrap()
+            ]
+        );
+        let missing = Origin {
+            data_directory: Some(data.path().join("gone")),
+            ..origin
+        };
+        assert_eq!(missing.image_roots(), [package.path().to_owned()]);
+        assert_eq!(missing.text("Hello"), "你好");
+    }
+
     #[test]
     fn test_executes_name_a_plugin_command_and_a_time() {
-        let tests = test_executes("a.b/hello@1500, c.d/x/y@20,bad,e.f/g@soon");
+        let tests = test_executes("a.b/hello@1500, c.d/x/y@park+20,bad,e.f/g@soon");
         let read = tests
             .iter()
             .map(|t| (t.manifest.as_str(), t.command.as_str(), t.at))
             .collect::<Vec<_>>();
-        assert_eq!(read, [("a.b", "hello", 1500), ("c.d", "x/y", 20)]);
+        assert_eq!(
+            read,
+            [
+                ("a.b", "hello", When::At(1500)),
+                ("c.d", "x/y", When::AfterPark(20))
+            ]
+        );
         assert!(test_executes("").is_empty());
     }
 }

@@ -61,11 +61,11 @@ impl Power {
         };
         Ok(())
     }
-    /// A stopped plugin's request goes with it.
     /// `owner` keeps the display awake.
     pub fn holds(&self, owner: u64) -> bool {
         self.requesters.contains(&owner)
     }
+    /// A stopped plugin's request goes with it.
     pub fn remove_owner(&mut self, owner: u64) {
         self.requesters.remove(&owner);
     }
