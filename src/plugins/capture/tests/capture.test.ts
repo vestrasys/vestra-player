@@ -169,6 +169,13 @@ test("the reasons in model.ts and the windows' Words.reason in ui/parts.slint ar
   await stop();
 });
 
+test("the Export Tasks list is Slint's ListView over task-rows, not a ScrollView with a VerticalLayout", async () => {
+  const slint = await readFile(new URL("../ui/tasks.slint", import.meta.url), "utf8");
+  assert.match(slint, /import \{ ListView \} from "std-widgets\.slint";/);
+  assert.match(slint, /ListView \{\s*for task in root\.task-rows: Rectangle \{\s*height: 40px;/);
+  assert.doesNotMatch(slint, /ScrollView/);
+});
+
 test("Ctrl+E saves the raw current frame into the capture folder with no dialog and an OSD", async () => {
   const host = new TestHost();
   ready(host);

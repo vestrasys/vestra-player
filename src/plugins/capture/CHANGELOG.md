@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.6
+
+- Export Tasks: the task list is Slint's `ListView` (std-widgets) instead of a `ScrollView` holding a `VerticalLayout` with a `for` over the rows, so only the rows in view are instantiated, as in the other lists of the player. Who must change: nobody. What users see: nothing new; the rows (two lines, Cancel / Open / Retry, 40 px each), the empty-list note and the scrolling are the same.
+- The dialogs keep the std `ComboBox` and `CheckBox`: moving them to the library `Choice` / `Check` is optional in the widgets migration and would change their look.
+
 ## 1.0.5
 
 - Lazy activation (player 0.5.21, SDK 1.5.40): the plugin no longer keeps running while idle. Who must change: nobody. What users see: nothing new; the Snapshot items are greyed with "No frame to capture" (translated as before) until a frame can be captured, and the Burst and Export Clip dialogs show what they did. Under `VESTRA_LAZY=1` the player may now stop the plugin while nothing uses it and start it again on the next capture.
