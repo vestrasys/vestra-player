@@ -7,24 +7,66 @@ import { sourceFailure } from "./texts.ts";
 import type { Preview, Thumbnails } from "./thumbs.ts";
 import { barTips, Keys } from "./tips.ts";
 
-/** The bar finds the hovered mark with a fixed-depth binary search (`bar.slint`): 2^13 marks at most. */
-export const MAX_MARKS = 8192;
+/**
+ * The marks the bar shows: the rows of one property value the player takes
+ * (`UI_VALUE_LIMITS.arrayRows`; `marks` is 1 + 3 values a row, under its 16384).
+ * The bar's lower-bound search (`bar.slint`) takes 13 halvings for 4096 rows.
+ */
+export const MAX_MARKS = 4096;
+/** The ticks' x in `M<x> 0V1` runs 0…MARK_UNITS across the line (the Paths' `viewbox-width`). */
+export const MARK_UNITS = 100_000;
+/**
+ * The hover tips' text, at most (an upper bound: 3 bytes a UTF-16 unit, which
+ * also covers JSON escapes), so the bar's write stays well inside the player's
+ * 1 MiB per value and per message whatever the titles; past it a mark's tip is
+ * its time alone. 4096 marks with titles of 30 characters fit, any script.
+ */
+export const MARK_TIP_BYTES = 512 * 1024;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
+export interface SeekMarks {
+  /** Sorted by time: `at` the fraction of the duration (the bar's hover search), `tip` "Title  01:23". */
+  rows: Json[];
+  /** One Path's commands per kind: a 1px tick `M<x> 0V1` per distinct x. */
+  chapterTicks: string;
+  bookmarkTicks: string;
+  markerTicks: string;
+}
+
+const NO_MARKS: SeekMarks = { rows: [], chapterTicks: "", bookmarkTicks: "", markerTicks: "" };
+
 /**
- * B22: `timeline.marks` as the seek line draws them, sorted by time (as the
- * player merges them): `at` is the fraction of the duration, `clock` the
- * mark's time for the hover tip "Title  01:23".
+ * B22: `timeline.marks` as the seek line shows them, sorted by time (as the
+ * player merges them), at most MAX_MARKS: the hover rows, and the ticks as
+ * one Path per kind (no element per mark; each string ≤ 11 bytes a mark,
+ * about 45 KB at most, under the player's 64 KiB per string).
  */
-export function seekMarks(marks: readonly TimelineMark[], duration: number | null): Json[] {
-  if (!duration || duration <= 0) return [];
-  return marks.slice(0, MAX_MARKS).map((mark) => ({
-    at: clamp01(mark.time / duration),
-    kind: mark.kind,
-    title: mark.title ?? "",
-    clock: time(mark.time),
-  }));
+export function seekMarks(marks: readonly TimelineMark[], duration: number | null): SeekMarks {
+  if (!duration || duration <= 0) return NO_MARKS;
+  const rows: Json[] = [];
+  const ticks = { chapter: [] as string[], bookmark: [] as string[], marker: [] as string[] };
+  const last = { chapter: -1, bookmark: -1, marker: -1 };
+  let budget = MARK_TIP_BYTES;
+  for (const mark of marks.slice(0, MAX_MARKS)) {
+    const at = clamp01(mark.time / duration);
+    const clock = time(mark.time);
+    const title = mark.title ?? "";
+    const cost = 3 * (title.length + 2 + clock.length);
+    const titled = title !== "" && cost <= budget;
+    if (titled) budget -= cost;
+    rows.push({ at, tip: titled ? `${title}  ${clock}` : clock });
+    // Marks in time order: a tick on the same x as the kind's previous one adds nothing.
+    const x = Math.round(at * MARK_UNITS);
+    if (x !== last[mark.kind]) ticks[mark.kind].push(`M${x} 0V1`);
+    last[mark.kind] = x;
+  }
+  return {
+    rows,
+    chapterTicks: ticks.chapter.join(""),
+    bookmarkTicks: ticks.bookmark.join(""),
+    markerTicks: ticks.marker.join(""),
+  };
 }
 
 /**
@@ -79,12 +121,12 @@ export function wireBar(
   // G-07: tooltips name the keys the user has bound (read again when bindings change).
   const keys = new Keys(scope, () => scope.update());
   void keys.refresh();
-  let drawn: { marks: readonly TimelineMark[]; duration: number | null; rows: Json[] } | null = null;
+  let drawn: { marks: readonly TimelineMark[]; duration: number | null; shown: SeekMarks } | null = null;
   const marks = (duration: number | null) => {
     const current = scope.timeline.marks;
     if (drawn?.marks !== current || drawn.duration !== duration)
-      drawn = { marks: current, duration, rows: seekMarks(current, duration) };
-    return drawn.rows;
+      drawn = { marks: current, duration, shown: seekMarks(current, duration) };
+    return drawn.shown;
   };
   const p = playback;
   let volumeDragging = false;
@@ -101,6 +143,7 @@ export function wireBar(
     const volume = p.volumeDraft ?? state.volume;
     const remaining = settings.value.remainingTime;
     const left = remaining && position !== null && state.duration !== null;
+    const shown = marks(state.duration);
     return {
       elapsedLabel: left ? `-${time(state.duration! - position!)}` : time(position),
       totalLabel: time(state.duration),
@@ -112,7 +155,10 @@ export function wireBar(
       // I07: the picture box, and the sprite the bar crops the pointer's cell from (hover and drag).
       ...previewProps(thumbnails.active(state), thumbnails.preview, pointing),
       // B22: everyone's marks, and the A-B loop (whoever set it).
-      marks: marks(state.duration),
+      marks: shown.rows,
+      chapterTicks: shown.chapterTicks,
+      bookmarkTicks: shown.bookmarkTicks,
+      markerTicks: shown.markerTicks,
       hasLoop: Boolean(state.loop && state.duration),
       loopA: state.loop && state.duration ? clamp01(state.loop.a / state.duration) : 0,
       loopB: state.loop && state.duration ? clamp01(state.loop.b / state.duration) : 0,
