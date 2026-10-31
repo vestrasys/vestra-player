@@ -420,7 +420,7 @@ impl D3d11 {
         self.try_signal(fence, value).is_ok()
     }
 
-    /// As [`signal`](Self::signal), with the error.
+    /// As `signal`, with the error.
     pub fn try_signal(&self, fence: &SharedFence, value: u64) -> Result<(), String> {
         // SAFETY: as for `gpu_wait`; Flush only submits.
         unsafe {

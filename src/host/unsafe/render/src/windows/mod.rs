@@ -98,7 +98,7 @@ pub fn window_adapter() -> Option<(u64, String)> {
 }
 
 /// Whether the window device was lost (or GPU rendering stalled, see
-/// [`watchdog`]): the windows can no longer draw, and the host restarts the
+/// the `watchdog` module): the windows can no longer draw, and the host restarts the
 /// player (see `platform/windows.rs`).
 pub fn device_lost() -> bool {
     LOST.load(Ordering::Acquire)
