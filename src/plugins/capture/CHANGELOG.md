@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.7
+
+- The Burst, Export Clip and Snapshot Settings dialogs use the player library's `Choice` and `Check` (`@vestra/widgets.slint`) instead of std-widgets' `ComboBox` (3) and `CheckBox` (7), so every drop-down and check box in the player has one look. What users see: Vestra-style drop-downs (21px, the list below with at most 10 rows, arrow keys / Home / End change the choice, Space / Enter / F4 open it) and check boxes (13px accent box, a label that wraps instead of widening the dialog); a control reached with Tab draws a 1px accent focus ring, and clicking one no longer takes the keyboard focus from the player. The Format choice reports a pick only when it changes. Who must change: nobody; the dialogs' properties and callbacks (`format-index`, `audio-index`, `choose-format(int)`, `set-beside-media(bool)`, `set-screen-subtitles(bool)`) are unchanged.
+- Requires player 0.6.0 (`minPlayerVersion`), whose widget library ships `Choice` and `Check`.
+
 ## 1.0.6
 
 - Export Tasks: the task list is Slint's `ListView` (std-widgets) instead of a `ScrollView` holding a `VerticalLayout` with a `for` over the rows, so only the rows in view are instantiated, as in the other lists of the player. Who must change: nobody. What users see: nothing new; the rows (two lines, Cancel / Open / Retry, 40 px each), the empty-list note and the scrolling are the same.

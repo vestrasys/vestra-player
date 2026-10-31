@@ -1,15 +1,13 @@
 // Burst: the continuous capture dialog (438 wide, B§6.8; UI-DLG-04).
-import { CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
+import { LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button } from "@vestra/widgets.slint";
+import { Button, Check, Choice } from "@vestra/widgets.slint";
 import { FormLabel, Group, Note, Progress, Status, Words } from "parts.slint";
 
 export component BurstDialog inherits Window {
     title: @tr("Burst");
-    // 438px, wider only when the content needs it in this language. The format drop-down's
-    // fluent minimum is 10px more than this dialog ever gave it (it is narrower in every
-    // language), so that much is not counted.
-    width: max(438px, body.min-width - 10px);
+    // 438px, wider only when the content needs it in this language.
+    width: max(438px, body.min-width);
     background: Theme.bg-panel;
     in property <string> folder;
     in property <bool> busy;
@@ -72,7 +70,7 @@ export component BurstDialog inherits Window {
                     LineEdit { width: 65px; height: Theme.input-height; font-size: Theme.font-body; text <=> root.burst-step; enabled: !root.busy; }
                     Note { text: @tr("s (0.1–10)"); }
                 }
-                CheckBox { height: Theme.checkbox-row-height; text: @tr("Start at the current position"); checked <=> root.current-time; enabled: !root.busy; }
+                Check { text: @tr("Start at the current position"); checked <=> root.current-time; enabled: !root.busy; }
                 HorizontalLayout {
                     spacing: 4px;
                     FormLabel { width: root.setting-column; text: @tr("Start:"); }
@@ -85,16 +83,15 @@ export component BurstDialog inherits Window {
                 HorizontalLayout {
                     spacing: 4px;
                     FormLabel { width: max(40px, self.preferred-width); text: @tr("Format:"); }
-                    ComboBox {
-                        height: Theme.input-height;
+                    Choice {
                         model: ["PNG", "JPEG", "BMP"];
                         current-index <=> root.format-index;
                         enabled: !root.busy;
-                        selected => { root.choose-format(self.current-index); }
+                        selected(index) => { root.choose-format(index); }
                     }
                 }
-                CheckBox { height: Theme.checkbox-row-height; text: @tr("Include video effects"); checked <=> root.processed; enabled: !root.busy; }
-                CheckBox { height: Theme.checkbox-row-height; text: @tr("Capture subtitles too"); checked <=> root.subtitles; enabled: root.processed && !root.busy; }
+                Check { text: @tr("Include video effects"); checked <=> root.processed; enabled: !root.busy; }
+                Check { text: @tr("Capture subtitles too"); checked <=> root.subtitles; enabled: root.processed && !root.busy; }
                 Rectangle { vertical-stretch: 1; }
             }
         }
