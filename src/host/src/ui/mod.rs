@@ -14,6 +14,7 @@ pub(crate) mod theme;
 pub(crate) mod ui_fonts;
 pub(crate) mod ui_image;
 pub(crate) mod ui_markdown;
+pub(crate) mod ui_patch;
 #[cfg(test)]
 pub(crate) mod ui_shots;
 pub(crate) mod ui_state;

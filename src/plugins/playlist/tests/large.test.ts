@@ -63,8 +63,13 @@ async function start(count = 3000, compact = true) {
   const writes: { property: string; value: Json }[] = [];
   const request = host.request.bind(host);
   host.request = (async (method: string, params: Record<string, Json> = {}) => {
-    if (method === "ui.setMount") writes.push({ property: String(params.property), value: params.value as Json });
-    return request(method, params);
+    const result = await request(method, params);
+    // The value the panel shows after the write: a row patch (SDK 1.5.44) carries operations.
+    if (method === "ui.setMount") {
+      const property = String(params.property);
+      writes.push({ property, value: "patch" in params ? (host.mounted().props[property] as Json) : (params.value as Json) });
+    }
+    return result;
   }) as typeof host.request;
   const { stop } = await startPlugin((plugin) => activate(plugin), { directory: new URL("..", import.meta.url), host });
   const panel = host.mounted();

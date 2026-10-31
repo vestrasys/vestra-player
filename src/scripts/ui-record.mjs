@@ -107,6 +107,10 @@ if (out || states) {
       });
     const known = views.get(this);
     const p = params ?? {};
+    // A row patch (SDK 1.5.44, player 0.6.0) carries operations, not the
+    // value: record the whole value the property shows after it.
+    const shownValue = (props) =>
+      p.patch ? props?.[String(p.property)] : p.value;
     const each = (view, properties) => {
       for (const [name, value] of Object.entries(properties ?? {}))
         record(plain(view), name, value);
@@ -122,10 +126,11 @@ if (out || states) {
       case "ui.set": {
         const view = known.windows.get(String(p.id));
         if (view) {
-          record(plain(view), String(p.property), p.value);
+          const value = shownValue(this.windows.get(String(p.id))?.props);
+          record(plain(view), String(p.property), value);
           event(known, view, "window", "set", {
             property: String(p.property),
-            value: p.value,
+            value,
           });
         }
         break;
@@ -147,10 +152,11 @@ if (out || states) {
         break;
       case "ui.setMount":
         if (known.panel) {
-          record(plain(known.panel), String(p.property), p.value);
+          const value = shownValue(this.panel?.props);
+          record(plain(known.panel), String(p.property), value);
           event(known, known.panel, "panel", "set", {
             property: String(p.property),
-            value: p.value,
+            value,
           });
         }
         break;
@@ -171,10 +177,13 @@ if (out || states) {
       case "settings.set": {
         const view = known.pages.get(String(p.id));
         if (view) {
-          record(plain(view), String(p.property), p.value);
+          const value = shownValue(
+            this.settings.pages.get(String(p.id))?.props,
+          );
+          record(plain(view), String(p.property), value);
           event(known, view, "page", "set", {
             property: String(p.property),
-            value: p.value,
+            value,
           });
         }
         break;

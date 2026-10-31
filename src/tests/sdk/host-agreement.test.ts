@@ -32,6 +32,8 @@ import {
   MESSAGE_LIMIT,
   OSD_LIMITS,
   parsePo,
+  PATCH_FEATURE,
+  PATCH_OPS,
   rewriteSlint,
   scanSlint,
   SECRET_LIMITS,
@@ -78,6 +80,20 @@ test("UI_VALUE_LIMITS match the player's (host/src/ui/ui_values.rs)", () => {
     },
     { ...UI_VALUE_LIMITS },
   );
+});
+
+test("row patches: the SDK's op limit and feature name match the player's (host/src/ui/ui_patch.rs)", () => {
+  const rust = host("src/ui/ui_patch.rs");
+  assert.equal(
+    Number(/pub const MAX_PATCH_OPS: usize = (\d+);/.exec(rust)?.[1]),
+    PATCH_OPS,
+  );
+  assert.equal(
+    /pub const FEATURE: &str = "([^"]+)";/.exec(rust)?.[1],
+    PATCH_FEATURE,
+  );
+  // The player advertises it in plugin.app's start-up data.
+  assert.match(host("src/main.rs"), /"features":\[ui::ui_patch::FEATURE\]/);
 });
 
 test("TEXT_LIMITS and LIST_SEPARATORS match the player's (host/src/i18n/text.rs)", () => {

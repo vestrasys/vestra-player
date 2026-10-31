@@ -418,11 +418,26 @@ fn has_documents(value: &Value) -> bool {
     }
 }
 
+/// A Markdown document (`ui_markdown::Rows`) anywhere in `value`. Unlike
+/// `has_documents`, images do not count: row patches (`ui_patch`) write
+/// rows with images in place, but leave documents to `merge`.
+pub(crate) fn has_markdown(value: &Value) -> bool {
+    match value {
+        Value::Model(model) => {
+            documents(model).is_some()
+                || (0..model.row_count())
+                    .any(|row| model.row_data(row).is_some_and(|v| has_markdown(&v)))
+        }
+        Value::Struct(object) => object.iter().any(|(_, v)| has_markdown(v)),
+        _ => false,
+    }
+}
+
 /// `next` can be written into `current` in place without changing a Slint
 /// type: documents for documents; host models whose shared rows fit and
 /// whose added rows fit the first current row; structs with the same
 /// fields; values of the same kind.
-fn fits(current: &Value, next: &Value) -> bool {
+pub(crate) fn fits(current: &Value, next: &Value) -> bool {
     match (current, next) {
         (Value::Model(current), Value::Model(next)) => {
             match (documents(current), documents(next)) {
@@ -535,6 +550,31 @@ pub type Hook<'a> = dyn FnMut(&Json, usize) -> Option<Result<(Value, usize)>> + 
 /// depth; each is one node of the budget, its text counts toward the total).
 pub fn from_json_with(value: &Json, hook: &mut Hook<'_>) -> Result<Value> {
     encode(value, 0, &mut Budget::default(), hook)
+}
+
+/// Rows for an array (a row patch's, `ui_patch`): converted as the rows of
+/// one array value would be, at depth 1 with one budget for all of them
+/// (the array itself counts as one value).
+pub fn from_json_rows_with(rows: &[&Json], hook: &mut Hook<'_>) -> Result<Vec<Value>> {
+    let mut budget = Budget::default();
+    budget.node(0)?;
+    budget.array(rows.len())?;
+    rows.iter()
+        .map(|row| encode(row, 1, &mut budget, hook))
+        .collect()
+}
+
+/// `check` for the rows of a row patch (`from_json_rows_with`'s budget).
+pub fn check_rows(rows: &[&Json]) -> Result<()> {
+    from_json_rows_with(rows, &mut |node, _| {
+        if crate::ui::ui_image::reference(node).is_some() {
+            return Some(Ok((Value::Void, 0)));
+        }
+        let doc = crate::ui::ui_markdown::reference(node)?;
+        let text = doc.get("text").and_then(Json::as_str).map_or(0, str::len);
+        Some(Ok((Value::Void, text)))
+    })
+    .map(drop)
 }
 
 fn encode(value: &Json, depth: usize, budget: &mut Budget, hook: &mut Hook<'_>) -> Result<Value> {

@@ -4,6 +4,7 @@ use crate::{
     host::{Host, Reply, RpcError, string},
     platform, process,
     ui::theme,
+    ui::ui_patch,
     ui::ui_values,
     ui::view,
 };
@@ -68,6 +69,8 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     )
     .map_err(|e| RpcError::invalid(e.to_string()))?;
     let view_key = format!("w:{id}");
+    // Row patches apply on these initial properties (seq 0).
+    host.images.reset_writes(reply.owner, &view_key);
     let mut values = Vec::new();
     for (name, value) in &properties {
         match host.prop_value(reply.owner, &view_key, name, value) {
@@ -112,6 +115,35 @@ fn change(
     if !host.views.contains_key(&key) {
         return Err(RpcError::new("missing", "view not found"));
     }
+    let view_key = format!("w:{}", key.1);
+    if method == "ui.set"
+        && let Some(patch) = params.get("patch")
+    {
+        let property = string(params, "property")?;
+        let (base, seq, ops) = ui_patch::request(patch)?;
+        if host.images.seq(reply.owner, &view_key, property) != base {
+            return Err(ui_patch::stale());
+        }
+        let current = host.views[&key]
+            .instance
+            .get_property(property)
+            .map_err(|e| RpcError::new("ui", e.to_string()))?;
+        let slint_interpreter::Value::Model(model) = &current else {
+            return Err(ui_patch::stale());
+        };
+        let ops = ui_patch::parse(ops, slint::Model::row_count(model))?;
+        // A window keeps no stored value: what its model cannot take in
+        // place is `stale`, and the SDK sends the whole value.
+        let rows = host
+            .patch_rows(reply.owner, &view_key, property, &ops)?
+            .filter(|rows| ui_patch::applicable(&current, ops.before, &ops.shapes, &rows.values))
+            .ok_or_else(ui_patch::stale)?;
+        ui_patch::apply(&current, &ops.shapes, rows.values);
+        host.images
+            .patched_rows(reply.owner, &view_key, property, rows.keys);
+        host.images.set_seq(reply.owner, &view_key, property, seq);
+        return Ok(());
+    }
     let next = match method {
         "ui.set" => Some(host.prop_value(
             reply.owner,
@@ -134,6 +166,8 @@ fn change(
                 ui_values::set(&view.instance, None, name, next)
                     .map_err(|e| RpcError::new("ui", e.to_string()))?;
             }
+            let seq = params["seq"].as_u64().unwrap_or(0);
+            host.images.set_seq(reply.owner, &view_key, name, seq);
         }
         "ui.show" => {
             if params["visible"]

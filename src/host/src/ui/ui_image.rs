@@ -76,6 +76,15 @@ struct Entry {
 /// windows), `$mount` (the panel, docked or floating).
 type Slot = (u64, String, String);
 
+/// What the last write of a property left for row patches (`ui_patch`):
+/// the write's `seq` (0: the initial properties), and for an array without
+/// Markdown documents the images each row shows, in row order.
+#[derive(Default)]
+pub struct Written {
+    pub seq: u64,
+    pub rows: Option<Vec<Vec<Key>>>,
+}
+
 #[derive(Default)]
 pub struct Images {
     entries: BTreeMap<Key, Entry>,
@@ -83,6 +92,8 @@ pub struct Images {
     clock: u64,
     /// The Markdown documents properties show, released with them.
     pub markdown: ui_markdown::Cache,
+    /// Per property, released with its view like the images it shows.
+    written: BTreeMap<Slot, Written>,
 }
 
 fn fail(code: &str, message: impl Into<String>) -> RpcError {
@@ -240,11 +251,69 @@ impl Images {
         self.shown
             .retain(|(o, v, _), _| !(*o == owner && v == view));
         self.markdown.release(owner, Some(view), None);
+        self.reset_writes(owner, view);
     }
     pub fn release_owner(&mut self, owner: u64) {
         self.shown.retain(|(o, ..), _| *o != owner);
         self.markdown.release(owner, None, None);
         self.entries.retain(|key, _| key.owner != owner);
+        self.written.retain(|(o, ..), _| *o != owner);
+    }
+    /// The view shows its initial properties again (`ui.mount`, `ui.open`,
+    /// `settings.register`): every property's write record is back at 0.
+    pub fn reset_writes(&mut self, owner: u64, view: &str) {
+        self.written
+            .retain(|(o, v, _), _| !(*o == owner && v == view));
+    }
+    /// The `seq` of the property's last write (0: none since the initial
+    /// properties).
+    pub fn seq(&self, owner: u64, view: &str, property: &str) -> u64 {
+        self.written
+            .get(&(owner, view.to_owned(), property.to_owned()))
+            .map_or(0, |written| written.seq)
+    }
+    pub fn set_seq(&mut self, owner: u64, view: &str, property: &str, seq: u64) {
+        self.written
+            .entry((owner, view.to_owned(), property.to_owned()))
+            .or_default()
+            .seq = seq;
+    }
+    /// The images each row of the property's array shows (`None`: not an
+    /// array converted by `prop_value`, or one holding documents).
+    pub fn row_keys(&self, owner: u64, view: &str, property: &str) -> Option<&Vec<Vec<Key>>> {
+        self.written
+            .get(&(owner, view.to_owned(), property.to_owned()))?
+            .rows
+            .as_ref()
+    }
+    fn set_row_keys(
+        &mut self,
+        owner: u64,
+        view: &str,
+        property: &str,
+        rows: Option<Vec<Vec<Key>>>,
+    ) {
+        let slot = (owner, view.to_owned(), property.to_owned());
+        match rows {
+            Some(rows) => self.written.entry(slot).or_default().rows = Some(rows),
+            None => {
+                if let Some(written) = self.written.get_mut(&slot) {
+                    written.rows = None;
+                }
+            }
+        }
+    }
+    /// A row patch applied: the images each row shows now. The property's
+    /// shown images are replaced only when some row showed or shows one.
+    pub fn patched_rows(&mut self, owner: u64, view: &str, property: &str, rows: Vec<Vec<Key>>) {
+        let before = self
+            .row_keys(owner, view, property)
+            .is_some_and(|rows| rows.iter().any(|row| !row.is_empty()));
+        if before || rows.iter().any(|row| !row.is_empty()) {
+            let keys = rows.iter().flatten().cloned().collect();
+            self.assign_many(owner, view, property, keys);
+        }
+        self.set_row_keys(owner, view, property, Some(rows));
     }
     /// Decoded pixels `view` shows, each image once, leaving out what
     /// `property` shows (the value being replaced).
@@ -292,6 +361,31 @@ impl Images {
     }
 }
 
+/// A Markdown document (wire form) anywhere in `value`.
+pub fn has_markdown(value: &Value) -> bool {
+    if ui_markdown::reference(value).is_some() {
+        return true;
+    }
+    match value {
+        Value::Array(items) => items.iter().any(has_markdown),
+        Value::Object(fields) => reference(value).is_none() && fields.values().any(has_markdown),
+        _ => false,
+    }
+}
+
+/// Nested image references (wire form) in `value`, as the image hook of
+/// `prop_value` meets them.
+pub fn image_count(value: &Value) -> usize {
+    if reference(value).is_some() {
+        return 1;
+    }
+    match value {
+        Value::Array(items) => items.iter().map(image_count).sum(),
+        Value::Object(fields) => fields.values().map(image_count).sum(),
+        _ => 0,
+    }
+}
+
 impl Host {
     /// Where a plugin's images may live: its package and data directories;
     /// a parked plugin's too (lazy activation: its bar button and settings
@@ -329,6 +423,14 @@ impl Host {
     ) -> std::result::Result<SValue, RpcError> {
         let roots = self.image_roots(owner);
         if ui_image::reference(value).is_none() {
+            // An array without documents: the images of each row, for row
+            // patches (`ui_patch`). The image hook runs once per nested
+            // image, in row order; a file that fails its checks is `None`.
+            let per_row = value
+                .as_array()
+                .filter(|rows| !rows.iter().any(has_markdown))
+                .map(|rows| rows.iter().map(image_count).collect::<Vec<_>>());
+            let mut order: Vec<Option<Key>> = Vec::new();
             let mut cache = std::mem::take(&mut self.images.markdown);
             let mut total = self.images.view_bytes(owner, view, property);
             let mut counted = std::collections::BTreeSet::new();
@@ -363,10 +465,12 @@ impl Host {
                                      (use maxSide, or send fewer rows)",
                                 ));
                             }
+                            order.push(Some(key.clone()));
                             Ok((Some(key), image))
                         }
                         Err(error) => {
                             diag!("ui.image {path}: not shown: {}", error.message);
+                            order.push(None);
                             Ok((None, slint::Image::default()))
                         }
                     }
@@ -375,10 +479,19 @@ impl Host {
             self.images.markdown = cache;
             let (converted, shown) = converted?;
             self.images.assign_many(owner, view, property, shown);
+            let rows = per_row.map(|counts| {
+                let mut order = order.into_iter();
+                counts
+                    .into_iter()
+                    .map(|count| order.by_ref().take(count).flatten().collect())
+                    .collect()
+            });
+            self.images.set_row_keys(owner, view, property, rows);
             return Ok(converted);
         }
         let (path, side) = ui_image::parts(value)?;
         let (key, image) = self.images.load_within(owner, &roots, path, side)?;
+        self.images.set_row_keys(owner, view, property, None);
         self.images.assign_many(owner, view, property, Vec::new());
         self.images
             .markdown
