@@ -1,6 +1,6 @@
 # 2026-10 round: AI upscaling experiment (RTX Video Super Resolution)
 
-Branch-only work: built on the Windows wgpu branch (`windows-wgpu-render-2`). Windows GPU rendering stays off main (user ruling), so this does too.
+Started on the Windows wgpu branch (`windows-wgpu-render-2`) while Windows GPU rendering was off main; since render modes M3 (host 0.5.14, 2026-10-31) GPU rendering is on main, off by default, and V3 builds on main.
 
 ## 1. Ruling (user, 2026-10-27)
 
@@ -138,3 +138,20 @@ Common: this branch's player in release, `. C:\vestra\env.ps1 -Ffmpeg`, `VESTRA_
 - **L2**: the SDK examples ask on the first pick of the item (`state ??= await …state()`), not at activation; the TestHost example asserts `checked` is still false after start.
 - **L3**: `set(false)` is answered at once and never starts the GPU check; before any check it reports `available: false` with the new reason code `unchecked` (also in the SDK union and the agreement test, which reads it from `Reason::code`).
 - **L5**: when DXGI cannot list the adapters, the probe reports `gpu-unsupported` with the error, not `no-gpu`.
+
+### 8.7 Hardware checks (coordinator, 2026-10-31, release build of 428ebd8 with the local SDK 1.5.37 runtime copied in)
+
+`--plugin src\tests\hardware\upscaling-probe`, separate application data directory, internal panel on the 780M, NVIDIA app Super Resolution on (quality High, status indicator on).
+
+| Case | Result |
+| --- | --- |
+| U0 | 780M `result 0, value 0, supported false` (129 ms); RTX 4070 `result 0, value 1, supported true` (241 ms); Basic Render: `D3D11CreateDevice` fails (0x887A0004) |
+| U1 CPU mode | `rendering`, "… turn on Video ▸ GPU Rendering (Experimental) and restart the player"; one check line for two State calls (216 ms); On → `unsupported` with the same text |
+| U2 GPU mode on the 780M | `adapter`, names both GPUs and Windows Settings ▸ System ▸ Display ▸ Graphics |
+| U3/U4 GPU mode on the 4070, 1080p in a ~2000 px wide video area (window and maximised with the sidebar) | `d3d11vpp=scale=1.03` / `1.04` (width-limited, correct); NVIDIA's "RTX VSR" indicator shows on the picture; 60/60 presented on 1080p60, 30/30 on a 30 fps clip |
+| 4K source after the playlist advanced | `upscaling: off` (factor < 1), correct |
+| U6 Off | `upscaling: off` at once; 60 presented |
+| U7 brightness +1 % | `upscaling: off`, State `decoding` (copy-back); after Reset the filter returned by itself (`scale=1.04`) |
+| U8 probe's node process killed | `upscaling: off`; playback continues |
+
+Not run: U5 pixel comparison (the NVIDIA indicator shows VSR is active), U9 device loss with upscaling on, U10 HDR10 source, U11 two plugins. The review fixes (23865d9: refused-factor spin, `set(false)` without the check, DXGI failure reason) came after these runs; they change no path exercised above except that `set(false)` before any check now answers `unchecked`.
