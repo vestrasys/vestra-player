@@ -59,7 +59,7 @@ export global Keys {
     in property <string> pending-key;
     in property <string> pending-command;
     in property <Message> message;
-    in-out property <bool> ignore;
+    in property <bool> ignore;
     callback search(string);
     callback status-filter(int);
     callback source-filter(int);
@@ -446,9 +446,12 @@ export component KeysPage inherits Rectangle {
                 alignment: center;
                 Button { horizontal-stretch: 0; width: max(72px, self.preferred-width); text: @tr("Export List…"); clicked => { Keys.export(); } }
             }
+            // The plugin owns the state: turning it on asks first, so the box
+            // stays clear while the question is open and follows `ignore` after.
             Check {
                 text: @tr("Ignore default shortcuts");
-                checked <=> Keys.ignore;
+                self-toggle: false;
+                checked: Keys.ignore;
                 toggled(on) => { Keys.toggle-ignore(); }
             }
             Rectangle { horizontal-stretch: 1; }

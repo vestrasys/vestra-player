@@ -147,11 +147,15 @@ export class KeysPage {
     });
     page.on("resetAll", () => this.#resetAll());
     page.on("export", () => this.#export());
-    // The library check box flips itself; the plugin decides (turning it on asks first),
-    // so the answer is pushed back even when it did not change (a declined question).
+    // The check box does not flip itself (`self-toggle: false`); the plugin decides
+    // (turning it on asks first) and pushes the state back afterwards, also when it
+    // did not change (a declined question) or the toggle failed.
     page.on("toggleIgnore", async () => {
-      await ignore.toggle();
-      page.set({ ignore: ignore.enabled });
+      try {
+        await ignore.toggle();
+      } finally {
+        page.set({ ignore: ignore.enabled });
+      }
     });
     page.bind(() => this.#props());
     model.onChange(() => {

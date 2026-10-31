@@ -1,6 +1,6 @@
 {
   "id": "vestra.hotkeys",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [

@@ -696,19 +696,32 @@ test("OSD messages and dialogs in Simplified Chinese, as before", async () => {
   assert.equal(host.osd.at(-1), "快捷键已恢复默认");
 });
 
-test("J01: the check box flips itself; a declined question pulls it back", async () => {
+test("J01: the check box stays clear while the question is open; declined or failed, it stays clear", async () => {
   const host = new TestHost();
   await start(host);
   await openKeys(host);
   const keys = page(host, "keys");
   assert.equal(keys.props.ignore, false);
-  // The library Check sets `ignore` itself before `toggled` reaches the plugin.
+  // `self-toggle: false`: the check box only asks; `ignore` changes when the plugin says so.
+  let answer!: (reply: { confirmed: boolean; checked: boolean }) => void;
+  host.handle("dialogs.confirm", () => new Promise((resolve) => (answer = resolve)));
+  keys.emit("toggleIgnore");
+  for (let i = 0; i < 100 && !answer; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(answer, "the question is open");
+  assert.equal(keys.props.ignore, false, "not checked while the question is open");
+  answer({ confirmed: false, checked: false });
+  await host.settle(WAIT);
+  assert.equal(host.command("ignore-defaults").state.checked, false);
+  assert.equal(keys.props.ignore, false);
+  // A failed question still pushes the state back (a stale `true` is overwritten).
+  host.handle("dialogs.confirm", () => {
+    throw new HostError("unavailable", "no dialog");
+  });
   keys.props.ignore = true;
-  host.dialogAnswers.push({ confirmed: false, checked: false });
   await emit(host, "keys", "toggleIgnore");
   assert.equal(host.command("ignore-defaults").state.checked, false);
-  assert.equal(keys.props.ignore, false, "sent back although the plugin's value did not change");
-  keys.props.ignore = true;
+  assert.equal(keys.props.ignore, false, "sent back after the error");
+  host.reset("dialogs.confirm");
   host.dialogAnswers.push({ confirmed: true, checked: false });
   await emit(host, "keys", "toggleIgnore");
   assert.equal(host.command("ignore-defaults").state.checked, true);
