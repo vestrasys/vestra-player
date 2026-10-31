@@ -24,9 +24,11 @@ export class SettingsPage {
       title: "Plugin Store",
       order: 20,
     });
-    page.on("toggleAuto", () => {
+    // The check box's new state (idempotent: a repeated or stale event cannot flip it back).
+    page.on("toggleAuto", (on: boolean) => {
       const settings = store.settings;
-      settings.save({ ...settings.value, autoCheck: !settings.value.autoCheck });
+      if (settings.value.autoCheck === on) return;
+      settings.save({ ...settings.value, autoCheck: on });
     });
     page.on("startAdd", () => {
       this.#adding = true;

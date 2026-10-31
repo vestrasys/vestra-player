@@ -10,7 +10,7 @@
 import { LineEdit, ListView } from "std-widgets.slint";
 import { MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button, Choice, Tab, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
+import { Button, Choice, Tabs, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
 import { Cell, MenuButton, MenuEntry, StoreIcons, Tone } from "parts.slint";
 
 // A row's small tag before the badge (Dev, Warning).
@@ -186,7 +186,8 @@ export component StoreWindow inherits Window {
 
     // Tabs and list: 0 Installed, 1 Available, 2 Updates.
     in-out property <string> search-text;
-    in property <int> category;
+    // In-out: the tab strip sets it on a click or an arrow key (then asks with set-category).
+    in-out property <int> category;
     in property <int> installed-count;
     in property <int> available-count;
     // Some repository index was read (fresh or cached); otherwise Available counts "—".
@@ -215,7 +216,8 @@ export component StoreWindow inherits Window {
     in property <image> d-icon;
     in property <[StoreAction]> actions;
     in property <[StoreBanner]> banners;
-    in property <int> tab;
+    // In-out: the detail tab strip sets it (then asks with set-tab).
+    in-out property <int> tab;
     in property <[MarkdownBlock]> doc;
     in property <string> doc-note;
     in property <[StoreVersion]> versions;
@@ -300,21 +302,21 @@ export component StoreWindow inherits Window {
         HorizontalLayout {
             spacing: 6px;
             height: 22px;
-            // The library Tab in our own row: Updates is in the accent colour while
-            // updates wait (Tabs has no per-tab emphasis), the buttons share the row.
-            Tab { text: @tr("Installed ({})", root.installed-count); selected: root.category == 0; clicked => { root.set-category(0); } }
-            Tab {
-                text: root.available-known ? @tr("Available ({})", root.available-count) : @tr("Available (—)");
-                selected: root.category == 1;
-                clicked => { root.set-category(1); }
+            // The library Tabs (Left/Right/Home/End, tab-list role) at the row's 22px on
+            // the panel background: Updates is in the accent colour while updates wait.
+            Tabs {
+                height: 22px;
+                horizontal-stretch: 1;
+                background: transparent;
+                model: [
+                    @tr("Installed ({})", root.installed-count),
+                    root.available-known ? @tr("Available ({})", root.available-count) : @tr("Available (—)"),
+                    @tr("Updates ({})", root.updates),
+                ];
+                emphasis: [false, false, root.updates > 0];
+                current-index <=> root.category;
+                selected(index) => { root.set-category(index); }
             }
-            Tab {
-                text: @tr("Updates ({})", root.updates);
-                selected: root.category == 2;
-                emphasis: root.updates > 0;
-                clicked => { root.set-category(2); }
-            }
-            Rectangle { horizontal-stretch: 1; }
             ToolTipArea {
                 width: 23px;
                 text: @tr("Refresh");
@@ -491,14 +493,12 @@ export component StoreWindow inherits Window {
                         VerticalLayout {
                             horizontal-stretch: 1;
                             spacing: 0px;
-                            HorizontalLayout {
+                            Tabs {
                                 height: 22px;
-                                alignment: start;
-                                for text[index] in [@tr("Description"), @tr("Changelog"), @tr("Versions")]: Tab {
-                                    text: text;
-                                    selected: root.tab == index;
-                                    clicked => { root.set-tab(index); }
-                                }
+                                background: transparent;
+                                model: [@tr("Description"), @tr("Changelog"), @tr("Versions")];
+                                current-index <=> root.tab;
+                                selected(index) => { root.set-tab(index); }
                             }
                             Rectangle {
                                 vertical-stretch: 1;

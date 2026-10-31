@@ -16,7 +16,7 @@ export struct RepoRow {
 }
 
 export global StoreSettings {
-    // In-out: the check box flips it itself (then asks with toggle-auto).
+    // In-out: the check box flips it itself (then asks with toggle-auto, passing the new value).
     in-out property <bool> auto-check: true;
     in property <[RepoRow]> repos;
     in property <bool> adding;
@@ -24,7 +24,7 @@ export global StoreSettings {
     in property <bool> can-add: true;
     in property <string> message;
     in property <bool> message-warn;
-    callback toggle-auto();
+    callback toggle-auto(bool);
     callback start-add();
     callback add(string);
     callback cancel-add();
@@ -51,7 +51,7 @@ export component StorePage inherits Rectangle {
         Check {
             text: @tr("Check for updates automatically (30 seconds after the player starts, then every 24 hours)");
             checked <=> StoreSettings.auto-check;
-            toggled(on) => { StoreSettings.toggle-auto(); }
+            toggled(on) => { StoreSettings.toggle-auto(on); }
         }
         Text {
             text: @tr("When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many.");

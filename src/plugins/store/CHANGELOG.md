@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.7
+
+Needs Vestra Player 0.6.0.
+
+- Both tab rows (Installed / Available / Updates and Description / Changelog / Versions) are the player's tab strip (`Tabs`): with the focus on a row, Left/Right (and Home/End) switch tabs, and screen readers announce the row as a tab list. They stay 22px high on the window's background; Updates is still in the accent colour while updates wait.
+- The settings page's "Check for updates automatically" takes the check box's new state instead of flipping the setting, so a repeated or late event cannot turn it back.
+
 ## 0.2.6
 
 Needs Vestra Player 0.6.0.
