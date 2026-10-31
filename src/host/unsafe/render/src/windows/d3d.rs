@@ -415,12 +415,18 @@ impl D3d11 {
 
     /// After mpv's frame: `fence` reaches `value` when the GPU finished it;
     /// the commands are submitted now.
+    #[cfg(test)]
     pub fn signal(&self, fence: &SharedFence, value: u64) -> bool {
+        self.try_signal(fence, value).is_ok()
+    }
+
+    /// As `signal`, with the error.
+    pub fn try_signal(&self, fence: &SharedFence, value: u64) -> Result<(), String> {
         // SAFETY: as for `gpu_wait`; Flush only submits.
         unsafe {
-            let signalled = self.context4.Signal(&fence.d3d11, value).is_ok();
+            let signalled = self.context4.Signal(&fence.d3d11, value);
             self.context.Flush();
-            signalled
+            signalled.map_err(|error| error.to_string())
         }
     }
 }

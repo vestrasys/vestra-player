@@ -921,6 +921,27 @@ impl Host {
                 .instance
                 .is_some_and(|instance| instance.builtin)
     }
+    /// Where a running plugin's shaders go in the shader channel
+    /// (`playback/video_shaders.rs`): `(0, 0)` built-in, `(1, first
+    /// install in Unix ms)` an installed instance, `(2, 0)` a development
+    /// load.
+    pub(crate) fn install_rank(&self, owner: u64) -> (u8, u64) {
+        if self.is_builtin(owner) {
+            return (0, 0);
+        }
+        let Some(plugin) = self.plugins.get(&owner) else {
+            return (2, 0);
+        };
+        let process::DataKey::Instance(guid) = &plugin.data_key else {
+            return (2, 0);
+        };
+        self.packages
+            .store
+            .get(&plugin.manifest.id)
+            .instance
+            .filter(|instance| &instance.guid == guid)
+            .map_or((2, 0), |instance| (1, instance.installed_at))
+    }
     /// Until the installed plugins started and while a built-in activates,
     /// other plugins' mounts wait (slot_claims).
     pub(crate) fn builtins_starting(&mut self) -> bool {

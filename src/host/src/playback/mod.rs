@@ -11,6 +11,7 @@ pub(crate) mod media_worker;
 pub(crate) mod native_subtitle;
 pub(crate) mod offline_audio;
 pub(crate) mod offline_descriptor;
+pub(crate) mod plugin_files;
 pub(crate) mod processing;
 pub mod processing_operations;
 #[cfg(feature = "producer-audio")]
@@ -47,4 +48,5 @@ pub(crate) mod renderer;
 pub(crate) mod upscaling;
 pub(crate) mod video_click;
 pub(crate) mod video_render;
+pub(crate) mod video_shaders;
 pub(crate) mod video_view;

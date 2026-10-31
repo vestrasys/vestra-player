@@ -138,6 +138,11 @@ export function createWire(transport) {
             /** The GPU renderer's options (`plugin.video.render()`). */
             renderSet: (values) => transport.request("video.render.set", { values }),
             renderRelease: () => transport.request("video.render.release"),
+            /**
+             * One shader channel handle's list (`plugin.video.shaders(id)`, player
+             * 0.5.20); `[]` removes it.
+             */
+            shadersSet: (id, paths) => transport.request("video.shaders.set", { id, paths }),
             /** The GPU's video upscaler (`plugin.video.upscaling`, player 0.5.16). */
             upscalingState: () => transport.request("video.upscaling.state"),
             upscalingSet: (enabled) => transport.request("video.upscaling.set", {

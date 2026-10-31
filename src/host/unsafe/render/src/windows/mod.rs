@@ -14,17 +14,23 @@
 //!   `wgpu::Texture`. Two shared fences order the two APIs on the GPU:
 //!   each draw waits for `ready` (mpv's frame finished) and signals `done`;
 //!   mpv's device waits for the last `done` of a texture before rendering
-//!   into it again. The UI thread never waits on the CPU.
+//!   into it again. The UI thread never waits on the CPU, and by default
+//!   neither does the render thread (`VESTRA_GPU_CPU_WAIT=1`: it waits for
+//!   each frame to finish before publishing it, as up to host 0.5.18).
 //! - As on macOS the mpv render context lives as long as the `Renderer`, so
 //!   a window rebuild (sidebar detach) never ends playback.
+//! - A watchdog ([`watchdog`]) treats fences that stop moving like a lost
+//!   device (`VESTRA_GPU_WATCHDOG`).
 
 mod d3d;
 mod mpv;
 mod ring;
 #[cfg(test)]
 mod tests;
+mod watchdog;
 
-use d3d::{Choice, D3d11, Gpu, SharedFence, Waiter};
+pub use d3d::Choice;
+use d3d::{D3d11, Gpu, SharedFence, Waiter};
 use ring::{RING, Ring, Slot};
 use rsmpv::Mpv;
 use slint::{ComponentHandle, GraphicsAPI, Image, RenderingState};
@@ -48,8 +54,29 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// instance must outlive its device (`Gpu`).
 static GPU: OnceLock<Arc<Gpu>> = OnceLock::new();
 
-/// The window device was lost (a driver reset, a removed GPU).
+/// The window device was lost (a driver reset, a removed GPU), or GPU
+/// rendering stalled (the watchdog), which the host handles the same way.
 static LOST: AtomicBool = AtomicBool::new(false);
+
+/// The renderers started in this process ([`release_gpu_waits`]).
+static LIVE: Mutex<Vec<std::sync::Weak<Shared>>> = Mutex::new(Vec::new());
+
+/// The player quits (any thread; call it before the windows and their
+/// device go): every live renderer releases its shared fences and stops,
+/// so no GPU wait on them (the windows' queue waiting for a frame mpv's GPU
+/// never finishes, a stall with `VESTRA_GPU_WATCHDOG=0` or before the
+/// watchdog's limit) can hold up the presents, the swapchains' teardown or
+/// the device's drain. Round record 2026-10-render-modes §11.6.
+pub fn release_gpu_waits() {
+    let live: Vec<Arc<Shared>> = lock(&LIVE).iter().filter_map(std::sync::Weak::upgrade).collect();
+    for shared in live {
+        shared.release_for_quit();
+    }
+}
+
+/// What [`WindowDevice::on_error`] runs when the device is lost; the
+/// watchdog runs it too when GPU rendering stalls.
+static ON_LOST: OnceLock<Arc<dyn Fn() + Send + Sync>> = OnceLock::new();
 
 /// A test switch (`VESTRA_TEST_REMOVE_DEVICE`): remove the installed window
 /// device as a driver reset would; `false` without one or without
@@ -70,8 +97,9 @@ pub fn window_adapter() -> Option<(u64, String)> {
     GPU.get().map(|gpu| (gpu.facts.luid, gpu.facts.name.clone()))
 }
 
-/// Whether the window device was lost: the windows can no longer draw, and
-/// the host restarts the player (see `platform/windows.rs`).
+/// Whether the window device was lost (or GPU rendering stalled, see
+/// the `watchdog` module): the windows can no longer draw, and the host restarts the
+/// player (see `platform/windows.rs`).
 pub fn device_lost() -> bool {
     LOST.load(Ordering::Acquire)
 }
@@ -114,12 +142,15 @@ impl WindowDevice {
     /// must not end the player): each distinct message a few times. A lost
     /// device (a driver reset) sets [`device_lost`], is reported, and calls
     /// `lost`: the windows cannot draw any more, so the host ends the event
-    /// loop and restarts the player.
+    /// loop and restarts the player. The renderer's watchdog calls `lost`
+    /// too when GPU rendering stalls.
     pub fn on_error(
         &self,
         sink: impl Fn(String) + Send + Sync + 'static,
-        lost: impl Fn() + Send + 'static,
+        lost: impl Fn() + Send + Sync + 'static,
     ) {
+        let lost: Arc<dyn Fn() + Send + Sync> = Arc::new(lost);
+        let _ = ON_LOST.set(lost.clone());
         let sink = Arc::new(sink);
         let seen = Mutex::new(Vec::<String>::new());
         let errors = sink.clone();
@@ -345,12 +376,19 @@ struct Stats {
     renders: u64,
     render_max: f64,
     render_total: f64,
+    /// Frames whose completion on the GPU was timed (from the `ready`
+    /// signal until the GPU reached it): on the render thread with the CPU
+    /// wait, else on the completion thread ([`Completion`]).
+    completes: u64,
     complete_max: f64,
     complete_total: f64,
     /// mpv's GPU waited for a window's draw before reusing a texture.
     done_waits: u64,
     /// No free texture for 100 ms.
     stuck: u64,
+    /// Without the CPU wait: the render thread waited for an earlier frame
+    /// before rendering the next one (more than [`IN_FLIGHT`] in flight).
+    throttled: u64,
 }
 
 struct Shared {
@@ -386,14 +424,32 @@ struct Shared {
 
     /// The last `done` value handed to a window draw (UI thread order).
     signalled: AtomicU64,
+    /// The last `ready` value mpv's device enqueued, and the last `done`
+    /// value the windows' queue enqueued (the watchdog compares them with
+    /// what the GPU reached).
+    ready_enqueued: AtomicU64,
+    done_enqueued: AtomicU64,
+    /// mpv's render calls, odd while the render thread is inside one (the
+    /// watchdog).
+    calls: AtomicU64,
+    /// The render thread waits on the CPU for each frame before publishing
+    /// it (`VESTRA_GPU_CPU_WAIT=1`); set by the render thread.
+    cpu_wait: AtomicBool,
     /// `render:` lines, kept until the host takes them.
     diag: Mutex<(Vec<String>, Option<Sink>)>,
     stats: Mutex<Stats>,
     /// Why the render thread stopped (`Handle::failed`).
     failed: Mutex<Option<String>>,
+    /// The player quits ([`release_gpu_waits`]): the fences are released,
+    /// nothing renders, claims or signals any more (not a failure).
+    quitting: AtomicBool,
     /// Tests: make the render thread take its failure path.
     #[cfg(test)]
     fail_now: AtomicBool,
+    /// Tests: make mpv's device wait on the GPU for a `done` value that is
+    /// never signalled (a fence deadlock, for the watchdog).
+    #[cfg(test)]
+    stall_now: AtomicBool,
     /// Last: the textures and fences above drop before the device.
     gpu: Arc<Gpu>,
 }
@@ -415,13 +471,40 @@ impl Shared {
             direct_generation: AtomicU64::new(0),
             retargets: AtomicU64::new(0),
             signalled: AtomicU64::new(0),
+            ready_enqueued: AtomicU64::new(0),
+            done_enqueued: AtomicU64::new(0),
+            calls: AtomicU64::new(0),
+            cpu_wait: AtomicBool::new(false),
             diag: Mutex::default(),
             stats: Mutex::default(),
             failed: Mutex::default(),
+            quitting: AtomicBool::new(false),
             #[cfg(test)]
             fail_now: AtomicBool::new(false),
+            #[cfg(test)]
+            stall_now: AtomicBool::new(false),
             gpu,
         }
+    }
+    /// GPU rendering stopped for good: it failed, or the player quits.
+    fn halted(&self) -> bool {
+        self.quitting.load(Ordering::Acquire) || lock(&self.failed).is_some()
+    }
+    /// The player quits: release both fences (every GPU wait on them, on
+    /// mpv's queue and the windows', passes, so presenting, a swapchain's
+    /// teardown and the device's drain cannot wait for a frame that never
+    /// finishes, as in a stall with the watchdog off) and stop the render
+    /// thread; the windows stop claiming frames.
+    fn release_for_quit(&self) {
+        if self.quitting.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        self.stop.store(true, Ordering::Release);
+        if let Some(fences) = self.fences.get() {
+            fences.ready.release_all();
+            fences.done.release_all();
+        }
+        mpv::Wake::wake(self);
     }
     fn wait(&self, timeout: Duration) {
         let pending = lock(&self.pending.0);
@@ -455,10 +538,12 @@ impl mpv::Wake for Shared {
     }
 }
 
-/// Owns the render thread and with it mpv's (only) render context.
+/// Owns the render thread and with it mpv's (only) render context, and the
+/// watchdog thread.
 pub struct Renderer {
     shared: Arc<Shared>,
     thread: Option<thread::JoinHandle<()>>,
+    watchdog: Option<thread::JoinHandle<()>>,
 }
 
 /// The UI side of a [`Renderer`]: cloneable and `Send`.
@@ -484,14 +569,35 @@ impl Renderer {
         size: Size,
         publish: Arc<AtomicBool>,
     ) -> Result<Self, String> {
+        let limit = watchdog::limit(std::env::var("VESTRA_GPU_WATCHDOG").ok().as_deref());
+        Self::start_watched(gpu, mpv, size, publish, limit)
+    }
+    /// As `start_on`, with the watchdog's limit (`None`: no watchdog).
+    fn start_watched(
+        gpu: Arc<Gpu>,
+        mpv: Arc<Mpv>,
+        size: Size,
+        publish: Arc<AtomicBool>,
+        limit: Option<Duration>,
+    ) -> Result<Self, String> {
         let shared = Arc::new(Shared::new(gpu, clamp(size)));
+        {
+            let mut live = lock(&LIVE);
+            live.retain(|weak| weak.strong_count() > 0);
+            live.push(Arc::downgrade(&shared));
+        }
         let (ready, started) = mpsc::sync_channel(1);
         let inner = shared.clone();
         let thread = thread::Builder::new().name("vestra-gpu-render".into());
         let thread =
             thread.spawn(move || produce(mpv, inner, publish, ready)).map_err(|e| e.to_string())?;
-        let renderer = Self { shared, thread: Some(thread) };
+        let mut renderer = Self { shared, thread: Some(thread), watchdog: None };
         started.recv().map_err(|_| "render thread died".to_string())??;
+        if let Some(limit) = limit {
+            let inner = renderer.shared.clone();
+            let thread = thread::Builder::new().name("vestra-gpu-watchdog".into());
+            renderer.watchdog = thread.spawn(move || watch(&inner, limit)).ok();
+        }
         Ok(renderer)
     }
     pub fn handle(&self) -> Handle {
@@ -503,10 +609,171 @@ impl Drop for Renderer {
     fn drop(&mut self) {
         self.shared.stop.store(true, Ordering::Release);
         mpv::Wake::wake(&*self.shared);
+        if let Some(thread) = self.watchdog.take() {
+            thread.thread().unpark();
+            let _ = thread.join();
+        }
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
     }
+}
+
+/// How often the watchdog looks at the fences.
+const WATCH_POLL: Duration = Duration::from_millis(100);
+
+/// The watchdog thread: until the renderer stops or fails, look at the
+/// fences and the render call every [`WATCH_POLL`]; a stall ends GPU
+/// rendering like a lost device ([`stalled`]).
+fn watch(shared: &Arc<Shared>, limit: Duration) {
+    let mut clocks = watchdog::Watch::new(limit);
+    loop {
+        thread::park_timeout(WATCH_POLL);
+        if shared.stop.load(Ordering::Acquire) || lock(&shared.failed).is_some() {
+            return;
+        }
+        let Some(fences) = shared.fences.get() else { continue };
+        // What was enqueued before what the GPU reached: a value enqueued
+        // in between is seen as reached, never as behind.
+        let ready = shared.ready_enqueued.load(Ordering::Acquire);
+        let done = shared.done_enqueued.load(Ordering::Acquire);
+        let sample = watchdog::Sample {
+            ready: (ready, fences.ready.completed()),
+            done: (done, fences.done.completed()),
+            call: shared.calls.load(Ordering::Acquire),
+        };
+        if let Some(reason) = clocks.observe(Instant::now(), sample) {
+            stalled(shared, reason);
+            return;
+        }
+    }
+}
+
+/// GPU rendering stalled: release every GPU wait on the shared fences (so
+/// neither queue waits forever and the windows draw again), stop GPU
+/// rendering (`Handle::failed`), and, where the host installed a device-loss
+/// handler ([`WindowDevice::on_error`]), treat it as a lost device: the
+/// host records it in the crash guard and restarts the player.
+fn stalled(shared: &Shared, reason: String) {
+    {
+        // Marked first: the render thread's own failure (its next signal
+        // fails once the fences are released) must not replace it.
+        let mut failed = lock(&shared.failed);
+        if failed.is_some() {
+            return;
+        }
+        *failed = Some(reason.clone());
+    }
+    shared.diag(format!("{reason}; GPU rendering stops as after a lost device"));
+    if let Some(fences) = shared.fences.get() {
+        fences.ready.release_all();
+        fences.done.release_all();
+    }
+    shared.ask_redraw();
+    if let Some(lost) = ON_LOST.get() {
+        LOST.store(true, Ordering::Release);
+        lost();
+    }
+}
+
+/// Times each frame's completion on the GPU off the render thread (the
+/// frame log's `complete`) when the render thread does not wait for it.
+struct Completion {
+    frames: Option<mpsc::Sender<(u64, Instant)>>,
+    thread: Option<thread::JoinHandle<()>>,
+}
+
+impl Completion {
+    fn start(shared: Arc<Shared>) -> Self {
+        let (frames, received) = mpsc::channel::<(u64, Instant)>();
+        let thread = thread::Builder::new().name("vestra-gpu-complete".into()).spawn(move || {
+            let Ok(waiter) = Waiter::new() else { return };
+            for (value, signalled) in received {
+                if wait_ready(&shared, &waiter, value, FRAME_WAIT) {
+                    let ms = signalled.elapsed().as_secs_f64() * 1e3;
+                    let mut stats = lock(&shared.stats);
+                    stats.completes += 1;
+                    stats.complete_max = stats.complete_max.max(ms);
+                    stats.complete_total += ms;
+                }
+            }
+        });
+        Self { frames: Some(frames), thread: thread.ok() }
+    }
+    /// Frame `value` was signalled now.
+    fn signalled(&self, value: u64) {
+        if let Some(frames) = &self.frames {
+            let _ = frames.send((value, Instant::now()));
+        }
+    }
+}
+
+impl Drop for Completion {
+    fn drop(&mut self) {
+        drop(self.frames.take());
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+/// `VESTRA_GPU_CPU_WAIT=1`: the render thread waits on the CPU until each
+/// frame finished on the GPU before publishing it (up to host 0.5.18, for
+/// A/B measurements). Otherwise only the GPU-side fences order the frames
+/// (round record 2026-10-render-modes §11 item 3).
+fn cpu_wait_on() -> bool {
+    std::env::var("VESTRA_GPU_CPU_WAIT").as_deref() == Ok("1")
+}
+
+/// Frames mpv's device may have in flight without the CPU wait: before it
+/// renders frame n+1, frame n-1 must have finished (as DXGI's default frame
+/// latency bounds a swapchain), so a GPU slower than the video does not
+/// queue frames without end.
+const IN_FLIGHT: u64 = 2;
+
+/// Wait on the CPU up to `timeout` for `ready` to reach `value`, in steps,
+/// giving up once the renderer stops: a renderer dropped while the fences
+/// do not move (a stall, `VESTRA_GPU_WATCHDOG=0`) must not wait 2 s per
+/// wait. `false` when it was not reached.
+fn wait_ready(shared: &Shared, waiter: &Waiter, value: u64, timeout: Duration) -> bool {
+    let Some(fences) = shared.fences.get() else { return false };
+    let deadline = Instant::now() + timeout;
+    loop {
+        let stopped = shared.stop.load(Ordering::Acquire);
+        let left = if stopped {
+            Duration::ZERO
+        } else {
+            deadline.saturating_duration_since(Instant::now()).min(WATCH_POLL)
+        };
+        if waiter.wait(&fences.ready, value, left.as_millis().max(1) as u32) {
+            return true;
+        }
+        if stopped || Instant::now() >= deadline {
+            return false;
+        }
+    }
+}
+
+/// How long the render thread waits for one frame on the CPU.
+const FRAME_WAIT: Duration = Duration::from_secs(2);
+
+/// `VESTRA_TEST_GPU_STALL=<seconds>` (a hardware test switch for the
+/// watchdog): that long after the first frame, mpv's device waits on the GPU
+/// for a `done` value no window ever signals, as a fence deadlock in a
+/// driver would.
+fn test_stall_after() -> Option<Duration> {
+    std::env::var("VESTRA_TEST_GPU_STALL")
+        .ok()
+        .and_then(|value| value.trim().parse::<f64>().ok())
+        .filter(|seconds| seconds.is_finite() && *seconds >= 0.)
+        .map(Duration::from_secs_f64)
+}
+
+/// A `done` value no window will signal (the stall test switches): far
+/// above any value one run reaches, below `u64::MAX`, the value
+/// `SharedFence::release_all` sets, which releases the wait.
+fn never_signalled(fences: &Fences) -> u64 {
+    fences.done.completed().saturating_add(1 << 40)
 }
 
 /// One WARP device per process (Direct3D 12's software rasterizer), for tests:
@@ -544,8 +811,28 @@ fn gpu_priority() -> Option<i32> {
 }
 
 /// The render thread: mpv renders each due frame into a free texture of the
-/// ring, the thread waits (an event) until the GPU finished it, and
-/// publishes it.
+/// ring and the thread publishes it with its `ready` value; with
+/// `VESTRA_GPU_CPU_WAIT=1` it first waits (an event) until the GPU finished
+/// the frame.
+///
+/// Without that wait (the default) the GPU-side fences carry the ordering
+/// (round record 2026-10-render-modes §11 item 3):
+///
+/// - a window samples a texture only after its queue waited for the frame's
+///   `ready` value (`View::before`/`direct`), so it never shows a frame
+///   mpv's GPU is still drawing;
+/// - mpv draws into a texture again only after its device waited for the
+///   `done` value of the last window draw that showed it, and never into
+///   the newest or a claimed one (`ring.rs`), so slot reuse is ordered on
+///   the GPU as before;
+/// - a ring generation is dropped (a resize) and the thread ends only after
+///   mpv's last frame finished, so no render target goes while mpv's GPU
+///   still writes it;
+/// - at most [`IN_FLIGHT`] frames are on the GPU (a CPU wait for frame n-1
+///   before frame n+1), so a slow GPU cannot queue frames without end;
+/// - a removed device is asked for after each frame (no completion
+///   timeout notices it any more); its fences complete with `u64::MAX`, and
+///   a fence that never moves without a removal is the watchdog's.
 fn produce(
     mpv: Arc<Mpv>,
     shared: Arc<Shared>,
@@ -575,16 +862,25 @@ fn produce(
     // update callback asks), unless `VESTRA_MPV_BLOCK=1` (the first version's
     // behaviour: wait inside the render call for the frame's display time).
     let block = std::env::var("VESTRA_MPV_BLOCK").as_deref() == Ok("1");
+    // Without the windows' fence waits only the CPU wait orders the frames.
+    let cpu_wait = cpu_wait_on() || !fences_on();
+    shared.cpu_wait.store(cpu_wait, Ordering::Relaxed);
     shared.diag(format!(
         "mpv renders with Direct3D 11 on {} (LUID {:016x}, video support {}, GPU thread priority {}, \
-         block for target time {}); the windows show its frames through shared Direct3D 12 textures",
+         block for target time {}, CPU wait for each frame {}); the windows show its frames through \
+         shared Direct3D 12 textures",
         gpu.facts.name,
         gpu.facts.luid,
         if d3d11.video { "yes" } else { "no" },
         d3d11.priority,
-        if block { "on" } else { "off" }
+        if block { "on" } else { "off" },
+        if cpu_wait { "on (VESTRA_GPU_CPU_WAIT=1)" } else { "off" }
     ));
     let _ = ready.send(Ok(()));
+    // Without the CPU wait each frame's completion is timed off this thread.
+    let completion = (!cpu_wait).then(|| Completion::start(shared.clone()));
+    let stall_after = test_stall_after();
+    let mut stall_at = None::<Instant>;
     let (mut slots, mut slots_size) = (Vec::<d3d::Slot>::new(), None::<Size>);
     // A new size first seen when; the ring changes once it has held for
     // `SETTLE` (a border drag asks for a new size every frame).
@@ -593,7 +889,12 @@ fn produce(
     // GPU rendering cannot go on: release every GPU wait on the shared
     // fences (neither queue may wait forever) and tell the host, which
     // switches to software rendering (`Handle::failed`).
+    // The first failure stands: after the watchdog released the fences
+    // (`u64::MAX`), this thread's next signal fails too.
     let fail = |reason: String| {
+        if shared.halted() {
+            return;
+        }
         let reason = match d3d11.removed() {
             Some(removed) => format!("{reason} (device removed: {removed})"),
             None => reason,
@@ -601,7 +902,7 @@ fn produce(
         shared.diag(format!("{reason}; GPU rendering stops"));
         fences.ready.release_all();
         fences.done.release_all();
-        *lock(&shared.failed) = Some(reason);
+        lock(&shared.failed).get_or_insert(reason);
         shared.ask_redraw();
     };
     // Ring allocations that failed in a row (without a removed device).
@@ -610,6 +911,10 @@ fn produce(
         #[cfg(test)]
         if shared.fail_now.load(Ordering::Acquire) {
             fail("a test asked the renderer to fail".into());
+            break;
+        }
+        // The watchdog stopped GPU rendering (it released the fences).
+        if shared.halted() {
             break;
         }
         let pace = *lock(&shared.pace);
@@ -636,7 +941,13 @@ fn produce(
                 match made {
                     // The old generation's textures go now (mpv's side) and
                     // once no frame or window image refers to them (wgpu's).
+                    // Without the CPU wait, mpv's last frame in them may
+                    // still be on the GPU: let it finish first (a resize is
+                    // rare; Direct3D 11 would defer the release anyway).
                     Ok(made) => {
+                        if !cpu_wait {
+                            let _ = wait_ready(&shared, &waiter, ready_value, FRAME_WAIT);
+                        }
                         slots = made;
                         ring_failures = 0;
                     }
@@ -694,8 +1005,46 @@ fn produce(
             fail("mpv's device could not wait for a window's draw".into());
             break;
         }
+        // Test switches for the watchdog: a `done` value no window signals
+        // (released only by `SharedFence::release_all`).
+        #[cfg(test)]
+        if shared.stall_now.swap(false, Ordering::AcqRel) {
+            let _ = d3d11.gpu_wait(&fences.done, never_signalled(fences));
+        }
+        if let Some(after) = stall_after {
+            let at = *stall_at.get_or_insert_with(|| Instant::now() + after);
+            if Instant::now() >= at && ready_value > 0 {
+                shared.diag("VESTRA_TEST_GPU_STALL: mpv's device now waits for a fence value no window signals".into());
+                let _ = d3d11.gpu_wait(&fences.done, never_signalled(fences));
+                stall_at = Some(Instant::now() + Duration::from_secs(24 * 60 * 60));
+            }
+        }
+        // Without the CPU wait: at most `IN_FLIGHT` frames on the GPU.
+        let mut throttled = false;
+        if !cpu_wait && ready_value >= IN_FLIGHT {
+            let bound = ready_value + 1 - IN_FLIGHT;
+            if fences.ready.completed() < bound {
+                throttled = true;
+                if !wait_ready(&shared, &waiter, bound, FRAME_WAIT) {
+                    if d3d11.removed().is_some() {
+                        fail("a frame did not finish on the GPU".into());
+                        break;
+                    }
+                    // Stopping: no render and no signal after a wait given up.
+                    if shared.stop.load(Ordering::Acquire) {
+                        break;
+                    }
+                }
+            }
+        }
+        if shared.stop.load(Ordering::Acquire) {
+            break;
+        }
         let began = Instant::now();
-        if let Err(error) = render.render(&slots[index].d3d11, block && pace.is_none()) {
+        shared.calls.fetch_add(1, Ordering::AcqRel);
+        let rendered = render.render(&slots[index].d3d11, block && pace.is_none());
+        shared.calls.fetch_add(1, Ordering::AcqRel);
+        if let Err(error) = rendered {
             if d3d11.removed().is_some() {
                 fail(format!("mpv's render failed ({error})"));
                 break;
@@ -703,41 +1052,68 @@ fn produce(
             continue;
         }
         let rendered = began.elapsed();
+        // The watchdog stopped GPU rendering meanwhile: its release set the
+        // fences to `u64::MAX`, and no signal may follow (a lower value),
+        // nor may a frame be published.
+        if shared.halted() {
+            break;
+        }
         // Published only with its `ready` signal enqueued: a window's queue
         // waits for that value.
-        if !d3d11.signal(&fences.ready, ready_value + 1) {
-            fail("mpv's device could not signal a finished frame".into());
+        if let Err(error) = d3d11.try_signal(&fences.ready, ready_value + 1) {
+            fail(format!("mpv's device could not signal a finished frame ({error})"));
             break;
         }
         ready_value += 1;
-        let completing = Instant::now();
-        if !waiter.wait(&fences.ready, ready_value, 2000) {
-            if d3d11.removed().is_some() {
-                fail("a frame did not finish on the GPU".into());
-                break;
+        shared.ready_enqueued.store(ready_value, Ordering::Release);
+        let completed = match &completion {
+            // The GPU-side fences order everything (record §11 item 3):
+            // windows wait for `ready` on their queue, mpv's device waits
+            // for `done` before it renders into a texture again. No
+            // completion timeout notices a removed device here: ask.
+            Some(completion) => {
+                completion.signalled(ready_value);
+                if let Some(removed) = d3d11.removed() {
+                    fail(format!("mpv's device was removed ({removed})"));
+                    break;
+                }
+                None
             }
-            timeouts += 1;
-            if timeouts == 1 {
-                shared.diag("a frame did not finish within 2 s on the GPU".into());
+            None => {
+                let completing = Instant::now();
+                if !wait_ready(&shared, &waiter, ready_value, FRAME_WAIT) {
+                    if d3d11.removed().is_some() {
+                        fail("a frame did not finish on the GPU".into());
+                        break;
+                    }
+                    timeouts += 1;
+                    if timeouts == 1 {
+                        shared.diag("a frame did not finish within 2 s on the GPU".into());
+                    }
+                }
+                Some(completing.elapsed())
             }
-        }
+        };
         {
             let ms = |d: Duration| d.as_secs_f64() * 1e3;
-            let (rendered, completed) = (ms(rendered), ms(completing.elapsed()));
             let mut stats = lock(&shared.stats);
             stats.renders += 1;
-            stats.render_max = stats.render_max.max(rendered);
-            stats.render_total += rendered;
-            stats.complete_max = stats.complete_max.max(completed);
-            stats.complete_total += completed;
+            stats.render_max = stats.render_max.max(ms(rendered));
+            stats.render_total += ms(rendered);
+            if let Some(completed) = completed.map(ms) {
+                stats.completes += 1;
+                stats.complete_max = stats.complete_max.max(completed);
+                stats.complete_total += completed;
+            }
             stats.done_waits += u64::from(done_wait);
             stats.stuck += u64::from(asked > 0);
+            stats.throttled += u64::from(throttled);
         }
         if pace.is_some() {
             render.report_swap();
         }
         drawn = Some(Instant::now());
-        if publish.load(Ordering::Acquire) {
+        if publish.load(Ordering::Acquire) && !shared.halted() {
             let texture = slots[index].texture.clone();
             let payload = Payload { texture, ready: ready_value, size: slots_size.unwrap_or(size) };
             lock(&shared.exchange).ring.publish(index, payload);
@@ -745,6 +1121,16 @@ fn produce(
             lock(&shared.notify).iter().for_each(|notify| notify());
         }
     }
+    // mpv's last frame finishes before its textures go (after a failure
+    // the fence is released, so this returns at once); a renderer stopped
+    // while its fences do not move (a stall with the watchdog off) gives up
+    // after a short wait instead: both are released, as on a failure, so
+    // nothing waits on them any more.
+    if !waiter.wait(&fences.ready, ready_value, 250) {
+        fences.ready.release_all();
+        fences.done.release_all();
+    }
+    drop(completion);
     // mpv's render context goes before the textures, the device and
     // `shared` (the update callback's target).
     drop(render);
@@ -826,12 +1212,19 @@ impl Handle {
             return String::new();
         }
         let count = stats.renders as f64;
+        let completes = stats.completes.max(1) as f64;
+        // Appended last, so readers of the older segment keep working.
+        let throttled = if self.0.cpu_wait.load(Ordering::Relaxed) {
+            String::new()
+        } else {
+            format!(" throttled {}", stats.throttled)
+        };
         format!(
-            " gpu: render max {:.1} mean {:.1} ms complete max {:.1} mean {:.1} ms done-waits {} stuck {}",
+            " gpu: render max {:.1} mean {:.1} ms complete max {:.1} mean {:.1} ms done-waits {} stuck {}{throttled}",
             stats.render_max,
             stats.render_total / count,
             stats.complete_max,
-            stats.complete_total / count,
+            stats.complete_total / completes,
             stats.done_waits,
             stats.stuck
         )
@@ -1067,7 +1460,8 @@ pub fn uses_rendering_notifier() -> bool {
 
 /// `VESTRA_GPU_FENCES=0` (diagnostics only): no GPU waits or signals on the
 /// shared fences from the windows' side; mpv's frames are still finished on
-/// the CPU before they are published, but a texture may be rendered into
+/// the CPU before they are published (this turns the render thread's CPU
+/// wait on), but a texture may be rendered into
 /// while a draw still samples it (possible tearing).
 fn fences_on() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
@@ -1106,7 +1500,7 @@ impl View {
         let Some(fences) = shared.fences.get() else {
             return (None, false);
         };
-        if lock(&shared.failed).is_some() {
+        if shared.halted() {
             // The renderer stopped; the host shows software pictures now.
             self.showing = None;
             return (None, false);
@@ -1171,7 +1565,7 @@ impl View {
     /// The image to set, if the shown texture changed.
     fn direct(&mut self, shared: &Shared, accept: &dyn Fn() -> bool) -> Option<Image> {
         let fences = shared.fences.get()?;
-        if lock(&shared.failed).is_some() {
+        if shared.halted() {
             self.after(shared);
             self.showing = None;
             return None;
@@ -1230,7 +1624,7 @@ impl View {
         let Some(slot) = self.claim.take() else {
             return;
         };
-        if lock(&shared.failed).is_some() {
+        if shared.halted() {
             // The fences were released for good; nothing waits any more.
             lock(&shared.exchange).ring.release(slot);
             return;
@@ -1242,6 +1636,9 @@ impl View {
         let signal = shared.signalled.fetch_add(1, Ordering::Relaxed) + 1;
         let signalled =
             shared.fences.get().is_some_and(|fences| shared.gpu.signal(&fences.done, signal));
+        if signalled {
+            shared.done_enqueued.fetch_max(signal, Ordering::AcqRel);
+        }
         let mut exchange = lock(&shared.exchange);
         if signalled && slot.generation == exchange.ring.generation() {
             let done = &mut exchange.done[slot.index];

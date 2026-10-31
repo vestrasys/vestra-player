@@ -428,6 +428,34 @@ pub fn dxgi_adapters() -> Result<Vec<DxgiAdapter>, String> {
     Ok(adapters)
 }
 
+/// The LUID of the first adapter `IDXGIFactory6::EnumAdapterByGpuPreference`
+/// gives for `high_performance` (else minimum power): the adapter
+/// `VESTRA_GPU_ADAPTER=high-performance|minimum-power` makes GPU rendering
+/// use. No device is created. An error before Windows 10 1803 (no
+/// `IDXGIFactory6`) or without DXGI.
+pub fn dxgi_preferred_adapter(high_performance: bool) -> Result<u64, String> {
+    use windows::Win32::Graphics::Dxgi::{
+        CreateDXGIFactory1, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
+        DXGI_GPU_PREFERENCE_MINIMUM_POWER, IDXGIAdapter1, IDXGIFactory6,
+    };
+    let preference = if high_performance {
+        DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE
+    } else {
+        DXGI_GPU_PREFERENCE_MINIMUM_POWER
+    };
+    // SAFETY: plain factory creation; an owned interface or an error comes
+    // back (IDXGIFactory6 from Windows 10 1803 on).
+    let factory: IDXGIFactory6 =
+        unsafe { CreateDXGIFactory1() }.map_err(|e| format!("IDXGIFactory6: {e}"))?;
+    // SAFETY: a live factory; an owned adapter or an error comes back.
+    let adapter: IDXGIAdapter1 = unsafe { factory.EnumAdapterByGpuPreference(0, preference) }
+        .map_err(|e| format!("EnumAdapterByGpuPreference: {e}"))?;
+    // SAFETY: a live adapter; GetDesc1 fills a plain struct it returns by
+    // value.
+    let desc = unsafe { adapter.GetDesc1() }.map_err(|e| format!("GetDesc1: {e}"))?;
+    Ok((u64::from(desc.AdapterLuid.HighPart as u32) << 32) | u64::from(desc.AdapterLuid.LowPart))
+}
+
 /// A `LARGE_INTEGER` driver version as its four 16-bit parts, high first.
 fn version_parts(value: i64) -> [u16; 4] {
     let value = value as u64;
