@@ -105,7 +105,7 @@ test("a search or tag that hides the selected plugin selects the first row it le
     await search(host, "");
     assert.equal(details(host), "Beta");
     // Tags: All, audio, video.
-    assert.deepEqual(props(host)["tag-model"], ["", "audio", "video"]);
+    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "audio", "video"]);
     host.window("store").emit("setTag", 1);
     await host.settle();
     assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma"]);
