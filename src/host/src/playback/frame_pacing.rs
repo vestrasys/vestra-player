@@ -24,7 +24,15 @@
 //!   a video plays (a picture at least every few refreshes) it keeps running
 //!   across a refresh that brings no new picture;
 //! - with the clock stopped, the first request draws at once (no added
-//!   latency for a single change) and starts the clock.
+//!   latency for a single change) and starts the clock;
+//! - while a video plays, a UI change without a new picture (a timer, the
+//!   time display) waits for the next picture and is drawn with it, up to
+//!   `OVERDUE`, unless the user just gave input or Slint animates (0.5.19):
+//!   in full screen each draw is a present the display shows at once, and
+//!   a present of its own between two video frames moved them off their
+//!   blanks (round record 2026-10-render-modes §11 item 7);
+//! - an owed draw is drawn off the blanks (`overdue`) only while no blank
+//!   arrives.
 //!
 //! The linger is for UI changes during playback (0.5.2). When the clock
 //! stopped at the first refresh without a new picture, a hover change in that
@@ -58,6 +66,13 @@ const LINGER: Duration = Duration::from_millis(100);
 /// keeps up (about 4 ms on the RTX 4070), so the rest waited in the
 /// swapchain acquire or the present.
 const SLOW: Duration = Duration::from_millis(8);
+/// While a video plays (a picture set within this long; covers 20 fps and
+/// faster), a draw owed only for a UI change waits for the next picture and
+/// is drawn with it (`Gate::vblank`), up to `OVERDUE`.
+const PLAYING: Duration = Duration::from_millis(60);
+/// Input (pointer, keys, wheel) within this long: UI changes draw at the next
+/// blank, not with the next picture (hover feedback at the display's rate).
+const INPUT: Duration = Duration::from_millis(250);
 
 /// What a vertical blank does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,8 +116,46 @@ pub struct Gate {
     refused: bool,
     /// The last draw, for `LINGER`.
     drawn: Option<Instant>,
+    /// The last video picture set (`PLAYING`).
+    last_picture: Option<Instant>,
+    /// The last input to the main window (`INPUT`).
+    last_input: Option<Instant>,
+    /// The last vertical blank (`overdue` only while none arrive).
+    last_blank: Option<Instant>,
+    /// Blanks at which a UI-only draw waited for the next picture.
+    pub folded: u64,
+    /// The owed draw carries a folded UI change (for `folded-late`).
+    carried: bool,
+    /// `VESTRA_FRAME_FOLD=0`: no folding (A/B, record §11 item 7).
+    pub no_fold: bool,
 }
 impl Gate {
+    /// Whether the draw just let through carries a UI change that waited
+    /// for its picture (`folds`); cleared.
+    pub fn take_carried(&mut self) -> bool {
+        std::mem::take(&mut self.carried)
+    }
+    /// Input reached the main window (a pointer move, a click, a key).
+    pub fn input(&mut self, now: Instant) {
+        self.last_input = Some(now);
+    }
+    /// Whether the owed draw (owed since `since`, no picture with it) waits
+    /// for the next video picture: a video plays, there was no recent input,
+    /// and it has not waited `OVERDUE` yet. Each draw is a present, and on a
+    /// display that follows the presents (an independent flip, variable
+    /// refresh) a present of its own for a UI change shows between two
+    /// video frames and moves them off their blanks (item 7 of round record
+    /// 2026-10-render-modes §11).
+    fn folds(&self, now: Instant, since: Instant) -> bool {
+        let within = |at: Option<Instant>, span: Duration| {
+            at.is_some_and(|at| now.saturating_duration_since(at) < span)
+        };
+        !self.no_fold
+            && self.picture.is_none()
+            && within(self.last_picture, PLAYING)
+            && !within(self.last_input, INPUT)
+            && now.saturating_duration_since(since) < OVERDUE
+    }
     /// winit asks the main window to draw.
     pub fn redraw_requested(&mut self, now: Instant) -> Decision {
         let arm = if std::mem::take(&mut self.allowed) {
@@ -139,11 +192,24 @@ impl Gate {
     /// its timer). Returns whether the clock must start.
     pub fn picture_set(&mut self, now: Instant) -> bool {
         self.picture.get_or_insert(now);
+        self.last_picture = Some(now);
         self.owed.get_or_insert(now);
         !std::mem::replace(&mut self.armed, true)
     }
     /// A vertical blank at `now`. `animating`: Slint runs an animation.
+    /// While a video plays, a draw owed only for a UI change (no new
+    /// picture) waits for the next picture (`folds`), so the window presents
+    /// once per video frame, not once more for each UI change.
     pub fn vblank(&mut self, now: Instant, animating: bool) -> Blank {
+        self.last_blank = Some(now);
+        if !animating
+            && let Some(since) = self.owed
+            && self.folds(now, since)
+        {
+            self.folded += 1;
+            self.carried = true;
+            return Blank::Wait;
+        }
         if self.owed.take().is_some() || animating {
             self.allowed = true;
             Blank::Draw
@@ -158,11 +224,17 @@ impl Gate {
         }
     }
     /// The host tick: `true` when an owed draw waited longer than `OVERDUE`
-    /// (draw it now).
+    /// and no vertical blank came for that long either (the clock stalled):
+    /// draw it now. While blanks arrive they serve it, so no draw happens
+    /// between two blanks.
     pub fn overdue(&mut self, now: Instant) -> bool {
-        if self
-            .owed
-            .is_some_and(|since| now.saturating_duration_since(since) >= OVERDUE)
+        let stalled = self
+            .last_blank
+            .is_none_or(|blank| now.saturating_duration_since(blank) >= OVERDUE);
+        if stalled
+            && self
+                .owed
+                .is_some_and(|since| now.saturating_duration_since(since) >= OVERDUE)
         {
             self.owed = None;
             self.allowed = true;
@@ -497,7 +569,7 @@ struct Stats {
     period: Option<Duration>,
     /// The open draw dispatch: when it started, and the vertical blank it
     /// followed.
-    dispatch: Option<(Instant, Option<Instant>)>,
+    dispatch: Option<(Instant, Option<Instant>, bool)>,
     /// Draw dispatches that took `SLOW` or longer (the swapchain acquire
     /// blocked, or the draw itself was long).
     slow: u64,
@@ -505,6 +577,8 @@ struct Stats {
     /// followed: the present went out after the next blank, so that blank
     /// most likely showed the previous picture again (a missed refresh).
     past: u64,
+    /// Of past: draws that carried a UI change folded into their picture.
+    past_folded: u64,
 }
 impl Stats {
     fn blank(&mut self, blank: Instant, now: Instant) {
@@ -518,9 +592,10 @@ impl Stats {
         }
     }
     /// A draw goes ahead now.
-    fn draw(&mut self, now: Instant, eager: bool) {
+    /// `carried`: the draw carries a folded UI change (`Gate::take_carried`).
+    fn draw(&mut self, now: Instant, eager: bool, carried: bool) {
         // An eager draw follows no blank (the clock was stopped).
-        self.dispatch = Some((now, self.last_blank.filter(|_| !eager)));
+        self.dispatch = Some((now, self.last_blank.filter(|_| !eager), carried));
         self.eager += u64::from(eager);
         let half = self.period.unwrap_or(Duration::from_micros(16_667)) / 2;
         if let Some(last) = self.last_draw.replace(now)
@@ -535,14 +610,14 @@ impl Stats {
                 self.present.add(now.saturating_duration_since(after));
             }
             if kind == Segment::Paint
-                && let Some((start, blank)) = self.dispatch.take()
+                && let Some((start, blank, carried)) = self.dispatch.take()
             {
                 let took = now.saturating_duration_since(start);
                 self.slow += u64::from(took >= SLOW);
                 let period = self.period.unwrap_or(Duration::from_micros(16_667));
-                self.past += u64::from(
-                    blank.is_some_and(|blank| now.saturating_duration_since(blank) > period),
-                );
+                let past = blank.is_some_and(|blank| now.saturating_duration_since(blank) > period);
+                self.past += u64::from(past);
+                self.past_folded += u64::from(past && carried);
             }
             let took = now.saturating_duration_since(began);
             self.segments[kind as usize].add(took);
@@ -706,6 +781,20 @@ pub fn gpu_frames_paced() -> bool {
     wanted() && *PACED.get_or_init(|| std::env::var("VESTRA_GPU_FRAME_GATE").as_deref() != Ok("0"))
 }
 
+/// Whether UI-only draws wait for the next video picture while a video plays
+/// (`Gate::folds`, 0.5.19). `VESTRA_FRAME_FOLD=0` (A/B tests, record §11
+/// item 7): they draw at the next blank, as before; logged once.
+fn fold_wanted() -> bool {
+    static FOLD: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FOLD.get_or_init(|| {
+        let off = std::env::var("VESTRA_FRAME_FOLD").as_deref() == Ok("0");
+        if off {
+            diag!("frame pacing: VESTRA_FRAME_FOLD=0: UI changes draw at the next blank, not with the next picture");
+        }
+        !off
+    })
+}
+
 /// Whether the winit hook is installed (`Handler`): where the host can pace
 /// (`platform::VBLANK_CLOCK`). With `VESTRA_FRAME_PACING=slint` it only
 /// measures the main window's draws (`paced no` in the frame log).
@@ -760,6 +849,19 @@ impl CustomApplicationHandler for Handler {
             if matches!(event, winit::event::WindowEvent::RedrawRequested) {
                 pacing.counts.requested += 1;
             }
+            if matches!(
+                event,
+                winit::event::WindowEvent::CursorMoved { .. }
+                    | winit::event::WindowEvent::CursorEntered { .. }
+                    | winit::event::WindowEvent::CursorLeft { .. }
+                    | winit::event::WindowEvent::MouseInput { .. }
+                    | winit::event::WindowEvent::MouseWheel { .. }
+                    | winit::event::WindowEvent::KeyboardInput { .. }
+                    | winit::event::WindowEvent::Touch(_)
+            ) {
+                // UI changes after input draw at the next blank (`INPUT`).
+                pacing.gate.input(now);
+            }
             let kind = match event {
                 winit::event::WindowEvent::RedrawRequested => Segment::Paint,
                 winit::event::WindowEvent::CursorMoved { .. } => Segment::Cursor,
@@ -770,7 +872,7 @@ impl CustomApplicationHandler for Handler {
                 return EventResult::Propagate;
             }
             if pacing.passive {
-                pacing.stats.draw(now, false);
+                pacing.stats.draw(now, false, false);
                 pacing
                     .counts
                     .drawn(now, pacing.stats.last_blank, pacing.stats.period);
@@ -783,7 +885,8 @@ impl CustomApplicationHandler for Handler {
                 pacing.arm();
             }
             if decision.draw {
-                pacing.stats.draw(now, decision.arm);
+                let carried = pacing.gate.take_carried();
+                pacing.stats.draw(now, decision.arm, carried);
                 pacing
                     .counts
                     .drawn(now, pacing.stats.last_blank, pacing.stats.period);
@@ -864,9 +967,14 @@ pub fn log_text() -> String {
             .filter(|p| !p.failed)
             .map_or_else(String::new, |pacing| {
                 let skipped = pacing.clock.skipped.swap(0, Ordering::Relaxed);
+                // `folded`: blanks at which a UI-only draw waited for the
+                // next video picture (appended after the counts, 0.5.19).
+                let folded = std::mem::take(&mut pacing.gate.folded);
+                let late = std::mem::take(&mut pacing.stats.past_folded);
                 pacing.stats.text(skipped, pacing.passive)
                     + &pacing.cycles.text()
                     + &pacing.counts.text()
+                    + &format!(" folded {folded} folded-late {late}")
                     + &crate::platform::ui_gpu_text()
             })
     })
@@ -946,7 +1054,10 @@ fn start_pending() {
             return;
         }
         *pacing = Some(Pacing {
-            gate: Gate::default(),
+            gate: Gate {
+                no_fold: !fold_wanted(),
+                ..Gate::default()
+            },
             window,
             shell: shell.as_weak(),
             clock,
@@ -1169,6 +1280,147 @@ mod tests {
         assert_eq!(gate.redraw_requested(now), DRAW, "delivered once");
     }
 
+    /// Item 7 (record §11): in full screen (an independent flip, where each
+    /// present is shown at once) UI changes without a new picture drew at
+    /// a blank of their own, about 11 extra presents a second between the
+    /// video frames. While a video plays they now wait for the next picture
+    /// and are drawn with it.
+    #[test]
+    fn ui_changes_while_a_video_plays_are_drawn_with_the_next_picture() {
+        let mut gate = Gate::default();
+        let mut now = Instant::now();
+        let mut draws = Vec::new();
+        // 30 fps on 60 Hz: a picture in every other refresh; a UI change
+        // (the time display, a timer) in each refresh without one.
+        for refresh in 0..60u32 {
+            let start = now;
+            if refresh % 2 == 0 {
+                let picture = start + REFRESH * 3 / 10;
+                assert!(gate.accept_picture(picture));
+                gate.picture_set(picture);
+            } else {
+                let change = start + REFRESH / 2;
+                if gate.redraw_requested(change).draw {
+                    draws.push((change, false));
+                }
+            }
+            now += REFRESH;
+            let with_picture = gate.picture.is_some();
+            if gate.vblank(now, false) == Blank::Draw {
+                assert!(gate.redraw_requested(now).draw);
+                draws.push((now, with_picture));
+            }
+        }
+        // The first picture starts the clock: its blank draws it; then one
+        // draw per picture, none for the UI changes alone.
+        assert_eq!(draws.len(), 30, "{draws:?}");
+        assert!(draws.iter().all(|(_, picture)| *picture), "{draws:?}");
+        assert_eq!(gate.folded, 30, "each refresh without a picture");
+    }
+
+    /// Input, a paused video and an owed draw that waited `OVERDUE` draw at
+    /// the next blank, as before.
+    #[test]
+    fn ui_changes_draw_at_the_next_blank_after_input_or_without_playback() {
+        let playing = |gate: &mut Gate, now: &mut Instant| {
+            gate.picture_set(*now);
+            *now += REFRESH;
+            assert_eq!(gate.vblank(*now, false), Blank::Draw);
+            assert_eq!(gate.redraw_requested(*now), DRAW);
+        };
+        // A pointer move: the hover change draws at the next blank.
+        let mut gate = Gate::default();
+        let mut now = Instant::now();
+        playing(&mut gate, &mut now);
+        gate.input(now + REFRESH / 4);
+        assert_eq!(gate.redraw_requested(now + REFRESH / 2), HOLD);
+        now += REFRESH;
+        assert_eq!(gate.vblank(now, false), Blank::Draw, "after input");
+        // Paused (no picture for `PLAYING`): the next blank.
+        let mut gate = Gate::default();
+        let mut now = Instant::now();
+        playing(&mut gate, &mut now);
+        now += PLAYING;
+        assert_eq!(gate.redraw_requested(now), HOLD);
+        now += REFRESH;
+        assert_eq!(gate.vblank(now, false), Blank::Draw, "paused");
+        // The video stopped right after a picture: the change waits at most
+        // `OVERDUE`, then a blank draws it.
+        let mut gate = Gate::default();
+        let mut now = Instant::now();
+        playing(&mut gate, &mut now);
+        let asked = now + REFRESH / 2;
+        assert_eq!(gate.redraw_requested(asked), HOLD);
+        let drawn = loop {
+            now += REFRESH;
+            if gate.vblank(now, false) == Blank::Draw {
+                break now;
+            }
+        };
+        assert!(drawn - asked >= REFRESH && drawn - asked <= OVERDUE + REFRESH);
+        // Animations draw at every blank, playing or not.
+        playing(&mut gate, &mut now);
+        assert_eq!(gate.redraw_requested(now + REFRESH / 2), HOLD);
+        assert_eq!(gate.vblank(now + REFRESH, true), Blank::Draw);
+    }
+
+    /// `VESTRA_FRAME_FOLD=0` draws a UI change at the next blank; a draw that
+    /// carries a folded change says so once (`folded-late`).
+    #[test]
+    fn folding_can_be_switched_off_and_a_carrying_draw_is_marked() {
+        let run = |no_fold: bool| {
+            let mut gate = Gate {
+                no_fold,
+                ..Gate::default()
+            };
+            let mut now = Instant::now();
+            gate.picture_set(now);
+            now += REFRESH;
+            assert_eq!(gate.vblank(now, false), Blank::Draw);
+            assert_eq!(gate.redraw_requested(now), DRAW);
+            assert!(!gate.take_carried(), "a picture alone");
+            assert_eq!(gate.redraw_requested(now + REFRESH / 2), HOLD);
+            now += REFRESH;
+            let blank = gate.vblank(now, false);
+            gate.picture_set(now + REFRESH / 3);
+            now += REFRESH;
+            if blank == Blank::Wait {
+                assert_eq!(gate.vblank(now, false), Blank::Draw);
+            }
+            assert_eq!(gate.redraw_requested(now), DRAW);
+            (blank, gate.take_carried(), gate.take_carried())
+        };
+        assert_eq!(
+            run(false),
+            (Blank::Wait, true, false),
+            "folded, marked once"
+        );
+        assert_eq!(run(true), (Blank::Draw, false, false), "switched off");
+    }
+
+    /// An owed draw is drawn off the blanks only while no blank arrives.
+    #[test]
+    fn overdue_draws_only_when_the_blanks_stop() {
+        let mut gate = Gate::default();
+        let start = Instant::now();
+        assert_eq!(gate.redraw_requested(start), EAGER);
+        assert_eq!(gate.redraw_requested(start), HOLD);
+        assert!(!gate.overdue(start + OVERDUE / 2));
+        // No blank came: drawn now.
+        assert!(gate.overdue(start + OVERDUE));
+        assert_eq!(gate.redraw_requested(start + OVERDUE), DRAW);
+        // With blanks arriving, a draw owed that long is not drawn between
+        // them (a folded one waits for its blank).
+        let now = start + OVERDUE * 2;
+        gate.picture_set(now);
+        assert_eq!(gate.vblank(now + REFRESH, false), Blank::Draw);
+        assert_eq!(gate.redraw_requested(now + REFRESH), DRAW);
+        let asked = now + REFRESH + REFRESH / 2;
+        assert_eq!(gate.redraw_requested(asked), HOLD);
+        assert_eq!(gate.vblank(now + REFRESH * 2, false), Blank::Wait, "folded");
+        assert!(!gate.overdue(asked + OVERDUE), "a blank came 1 refresh ago");
+    }
+
     #[test]
     fn animations_draw_at_every_vertical_blank() {
         let mut gate = Gate::default();
@@ -1209,14 +1461,14 @@ mod tests {
         stats.new_events(t);
         stats.event(t + ms(2), Segment::Cursor);
         stats.event(t + ms(3), Segment::Paint);
-        stats.draw(t + ms(3), true);
+        stats.draw(t + ms(3), true, false);
         stats.draw_began(t + ms(4));
         stats.event(t + ms(8), Segment::Other);
         stats.about_to_wait(t + ms(9));
         // A second draw within half a refresh.
         stats.new_events(t + ms(10));
         stats.event(t + ms(10), Segment::Paint);
-        stats.draw(t + ms(10), false);
+        stats.draw(t + ms(10), false, false);
         stats.about_to_wait(t + ms(11));
         // Two held requests: Slint does not run for them, so their stretches
         // count neither as paint nor as pointer time ...
@@ -1260,19 +1512,19 @@ mod tests {
         let blank = t + REFRESH;
         // 3 ms: neither.
         stats.event(blank, Segment::Paint);
-        stats.draw(blank, false);
+        stats.draw(blank, false, false);
         stats.new_events(blank + ms(3));
         // 10 ms: slow, still before the next blank.
         stats.event(blank + ms(4), Segment::Paint);
-        stats.draw(blank + ms(4), false);
+        stats.draw(blank + ms(4), false, false);
         stats.new_events(blank + ms(14));
         // 3 ms, but it ends 18 ms after its blank: past it.
         stats.event(blank + ms(15), Segment::Paint);
-        stats.draw(blank + ms(15), false);
+        stats.draw(blank + ms(15), false, false);
         stats.new_events(blank + ms(18));
         // Eager and long: slow, but no blank to be past.
         stats.event(blank + ms(40), Segment::Paint);
-        stats.draw(blank + ms(40), true);
+        stats.draw(blank + ms(40), true, false);
         stats.new_events(blank + ms(60));
         let text = stats.text(0, false);
         assert!(text.contains(" slow 2 past-blank 1 ui:"), "{text}");

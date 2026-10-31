@@ -1,0 +1,17 @@
+{
+  "id": "test.video-primitives-probe-a",
+  "name": "Video Primitives Probe A (hardware test)",
+  "version": "0.1.0",
+  "apiVersion": "vestra/1",
+  "minPlayerVersion": "0.5.20",
+  "entry": "main.ts",
+  "capabilities": [
+    "commands",
+    "ui.osd",
+    "playback.read",
+    "events",
+    "processing.video",
+    "media.read",
+    "media.control"
+  ]
+}

@@ -48,7 +48,7 @@ Both nodes go through the existing chain: frames in memory (copy-back decoding, 
 
 ## 3. Hardware cases for the coordinator (≤ 60 s each, one at a time)
 
-A throwaway plugin (development load, `--plugin`, capabilities `playback.read`, `events`, `processing.video`) with a `shaders/` and a `looks/` directory is enough; nothing here needs a built-in plugin to change.
+Test plugin: `src/tests/hardware/video-primitives-probe/a` and `/b` (ids `test.video-primitives-probe-a` / `-b`; the same `main.ts`, shaders and LUTs, keep them identical). Load one or both as development plugins, for example `vestra-host --plugin src/tests/hardware/video-primitives-probe/a --plugin src/tests/hardware/video-primitives-probe/b <clip>` (the installed player's `--plugin` takes the same paths). Each adds Video ▸ Primitives Probe A / B with: Convolution Sharpen, Convolution Blur 5x5, LUT Warm, LUT Invert, Clear Filter, Shader Tint (Red), Shader Invert, Shader Broken, Clear Shaders, Processed Snapshot (a PNG in the plugin's data directory, path on the OSD). Copy A also has keys Ctrl+Alt+1 … 9, 0 in that order; copy B is menu only. Every status change goes to the OSD and to the log as `video-primitives-probe A|B: …`. Development loads sort after installed plugins, A before B (by id), so in H4 A's shader runs first. H8 needs a `render()` owner with a broken shader: add the probe's `shaders/broken.glsl` to the built-in Picture Adjustments plugin's pixel shader list (it copies the file into its own data directory) and turn pixel shaders on, or a scratch plugin that calls `plugin.video.render().set({ shaders: [that file] })`.
 
 | # | Mode | Action | Expected |
 | --- | --- | --- | --- |
