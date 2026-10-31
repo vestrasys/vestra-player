@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.6
+
+Needs Vestra Player 0.6.0.
+
+- The store uses the player's shared controls (`@vestra/widgets.slint`): the tag and sort drop-downs, the tabs (Installed / Available / Updates and Description / Changelog / Versions, still 22px high) and the settings page's check box look like the other windows'. Tabs are at least 74px wide, the current one has the short accent underline, and the pointer lights a plate; Updates is still in the accent colour while updates wait. The drop-downs and the check box can be reached with Tab and worked with the keyboard (arrows, Space, Enter, Esc); a click does not take the focus from the search box.
+- The tag drop-down's first entry ("Tags: All") now comes translated from the plugin; the drop-down lists show at most 11 rows and scroll past that, as before.
+- The "⋯" menus (the row menu and the More menu at the top right) stay the store's own: the player's menu (`Panel.showMenu`) is only for docked panels, not tool windows.
+
 ## 0.2.5
 
 - The permission `video.upscaling` (Vestra Player 0.5.16, SDK 1.5.37) is shown in words: "Upscale the video with the GPU's video upscaler", in the install and update confirmations and the plugin details. Before, it read "Unknown permission: video.upscaling".

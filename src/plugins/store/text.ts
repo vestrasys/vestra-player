@@ -202,6 +202,8 @@ export const WINDOW = [
   "Package",
   "Data folder",
   "Data size",
+  // The tag drop-down's first entry.
+  "Tags: All",
   // A banner (the permissions are a list).
   "The new version needs new permissions: {}",
 ] as const;

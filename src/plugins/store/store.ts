@@ -592,8 +592,8 @@ export class Store {
       availableCount: this.items.filter((each) => !isInstalledRow(each)).length,
       availableKnown: this.#known(),
       updates: updateCount(this.items),
-      // The first entry is "Tags: All" (the window's words).
-      tagModel: ["", ...tags],
+      // The first entry stands for all tags (the library drop-down shows the model as it is).
+      tagModel: [shown(msg("Tags: All")), ...tags],
       tagIndex: this.tag ? Math.max(0, tags.findIndex((t) => t.toLowerCase() === this.tag!.toLowerCase()) + 1) : 0,
       sortIndex: this.sort,
       rows: visible.map((each) => this.#row(each, action)),

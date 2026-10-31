@@ -168,14 +168,14 @@ test("list: filters, search, tags, sort; incompatible and fully revoked plugins"
       ["vestra.video", "内置"],
       ["Beta", "已安装"],
     ]);
-    // The first entry is the window's "Tags: All".
-    assert.deepEqual(props(host)["tag-model"], ["", "字幕"]);
+    // The first entry is "Tags: All", translated by the plugin.
+    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "字幕"]);
     assert.equal(props(host)["installed-count"], 2);
     assert.equal(props(host)["available-count"], 3);
     assert.equal(props(host)["available-known"], true);
     await tab(host, AVAILABLE);
     assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Delta", "Gamma"]);
-    assert.deepEqual(props(host)["tag-model"], ["", "网络视频"]);
+    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "网络视频"]);
     window.emit("setTag", 1);
     await host.settle();
     assert.deepEqual(rows(host).map((r) => r.name), ["Alpha"]);
