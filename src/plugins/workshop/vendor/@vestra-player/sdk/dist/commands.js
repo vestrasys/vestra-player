@@ -619,18 +619,20 @@ export const BUILTIN_COMMANDS = Object.freeze(BUILTIN_COMMAND_TABLE.trim()
 }));
 export function commandClient(transport) {
     return {
-        register: (id, revision, declaration, state) => transport.request("commands.register", {
+        register: (id, revision, declaration, state, when) => transport.request("commands.register", {
             id,
             revision,
             declaration,
             state,
+            ...(when ? { when: when } : {}),
         }),
         /** Remove the command from the menu and the binding table; the id is free again. */
         unregister: (id) => transport.request("commands.unregister", { id }),
-        update: (id, revision, state) => transport.request("commands.update", {
+        update: (id, revision, state, when) => transport.request("commands.update", {
             id,
             revision,
             state,
+            ...(when ? { when: when } : {}),
         }),
     };
 }

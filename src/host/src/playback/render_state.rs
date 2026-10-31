@@ -48,8 +48,16 @@ pub struct GuardKey {
     pub app: String,
 }
 
+/// What a record's key names (`Guard::schema`). 0 (a file written before
+/// host 0.5.19, without the field): the first graphics adapter, whatever
+/// `VESTRA_GPU_ADAPTER` chose. [`SCHEMA`]: the adapter GPU rendering used.
+pub const SCHEMA: u32 = 2;
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Guard {
+    /// Which adapter `key` names ([`SCHEMA`]); 0 for older files.
+    #[serde(default)]
+    pub schema: u32,
     #[serde(default)]
     pub state: GuardState,
     #[serde(default, flatten)]
@@ -74,10 +82,44 @@ impl Guard {
             && self.losses.last() == Some(&self.at)
             && self.at.saturating_sub(self.losses[n - LOSSES]) < DAY
     }
-    /// Until when (Unix seconds) GPU rendering stays off for `key`, if it does.
-    pub fn blocks(&self, key: &GuardKey, now: u64) -> Option<u64> {
+    /// Whether this record is about `keys`: a current record by the adapter
+    /// GPU rendering uses (`keys.key`); one written before 0.5.19 by the
+    /// first adapter (`keys.legacy`), as it was then, so an earlier crash
+    /// keeps protecting exactly what it protected (L1, record §11).
+    pub fn is_for(&self, keys: &Keys) -> bool {
+        if self.schema >= SCHEMA {
+            self.key == keys.key
+        } else {
+            self.key == keys.legacy
+        }
+    }
+    /// Until when (Unix seconds) GPU rendering stays off for `keys`, if it
+    /// does.
+    pub fn blocks(&self, keys: &Keys, now: u64) -> Option<u64> {
         let until = self.at.saturating_add(GUARD_DAYS * DAY);
-        (self.state == GuardState::Crashed && self.key == *key && now < until).then_some(until)
+        (self.state == GuardState::Crashed && self.is_for(keys) && now < until).then_some(until)
+    }
+}
+
+/// What the guard is keyed on now, and what a file written before 0.5.19
+/// was keyed on (the first adapter).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Keys {
+    /// The adapter GPU rendering uses (`VESTRA_GPU_ADAPTER` or Windows'
+    /// per-app order), its driver, the player.
+    pub key: GuardKey,
+    /// The same with the system's first adapter.
+    pub legacy: GuardKey,
+}
+
+#[cfg(test)]
+impl Keys {
+    /// One key for both (the adapter is the first).
+    pub fn same(key: GuardKey) -> Self {
+        Self {
+            legacy: key.clone(),
+            key,
+        }
     }
 }
 
@@ -129,18 +171,19 @@ impl GuardFile {
     /// with an ordinary error (or unwinds) is not taken for a crash; only a
     /// process that dies leaves `attempting` behind.
     #[must_use = "dropping it settles the guard at once"]
-    pub fn arm(&self, key: GuardKey, now: u64) -> Armed {
+    pub fn arm(&self, keys: &Keys, now: u64) -> Armed {
         let _one = one_writer();
         // Earlier device losses count while the key stays the same.
         let previous = self.read();
-        let losses = if previous.key == key {
+        let losses = if previous.is_for(keys) {
             previous.losses
         } else {
             Vec::new()
         };
         self.write(&Guard {
+            schema: SCHEMA,
             state: GuardState::Attempting,
-            key,
+            key: keys.key.clone(),
             at: now,
             losses,
         });
@@ -148,16 +191,15 @@ impl GuardFile {
     }
     /// The GPU device was lost (the player restarts): record it; the
     /// [`LOSSES`]th loss within a day for the same key turns the guard to
-    /// `crashed`. Returns whether it did.
-    pub fn device_lost(&self, key: GuardKey, now: u64) -> bool {
+    /// `crashed`. Returns whether it did. The record is rewritten with the
+    /// current key and schema.
+    pub fn device_lost(&self, keys: &Keys, now: u64) -> bool {
         let _one = one_writer();
         let mut guard = self.read();
-        if guard.key != key {
-            guard = Guard {
-                key,
-                ..Guard::default()
-            };
+        if !guard.is_for(keys) {
+            guard = Guard::default();
         }
+        (guard.schema, guard.key) = (SCHEMA, keys.key.clone());
         guard
             .losses
             .retain(|&at| at <= now && now.saturating_sub(at) < DAY);
@@ -194,6 +236,22 @@ fn one_writer() -> std::sync::MutexGuard<'static, ()> {
     WRITER
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Main-window draws after which CPU mode's Direct3D 12 windows count as
+/// started when no video is being opened.
+pub const FIRST_DRAWS: u64 = 3;
+
+/// Whether CPU mode's Direct3D 12 windows have started, so the crash guard
+/// settles (record 2026-10-render-modes §11.4, §11.5): the first video
+/// picture was shown (`pictures`, the presentation's presented frames: its
+/// upload into the windows' texture went through), or the window drew
+/// [`FIRST_DRAWS`] times and no source is being opened (`opening`: a start
+/// with a file, or a source loading), whose first upload would still come.
+/// A start that never gets there (audio only, an open that fails) settles
+/// on the 5 s timer, as GPU mode does.
+pub fn windows_started(draws: u64, pictures: u64, opening: bool) -> bool {
+    pictures >= 1 || (draws >= FIRST_DRAWS && !opening)
 }
 
 /// An armed crash guard (`GuardFile::arm`); settles it when dropped.
@@ -284,23 +342,30 @@ mod tests {
         let file = GuardFile::new(Some(dir.path().join("render-state.json")));
         assert_eq!(file.recover(100), Guard::default(), "no file: nothing");
         // The process dies: nothing drops the guard.
-        std::mem::forget(file.arm(key("31.0.14005.21001"), 100));
+        std::mem::forget(file.arm(&Keys::same(key("31.0.14005.21001")), 100));
         // The run died: the next start finds `attempting`.
         let guard = file.recover(200);
         assert_eq!((guard.state, guard.at), (GuardState::Crashed, 200));
         assert_eq!(file.read(), guard, "recorded");
         let until = 200 + GUARD_DAYS * DAY;
-        assert_eq!(guard.blocks(&key("31.0.14005.21001"), 300), Some(until));
         assert_eq!(
-            guard.blocks(&key("32.0.32015.7029"), 300),
+            guard.blocks(&Keys::same(key("31.0.14005.21001")), 300),
+            Some(until)
+        );
+        assert_eq!(
+            guard.blocks(&Keys::same(key("32.0.32015.7029")), 300),
             None,
             "driver updated"
         );
         let mut player = key("31.0.14005.21001");
         player.app = "0.5.14".into();
-        assert_eq!(guard.blocks(&player, 300), None, "player updated");
         assert_eq!(
-            guard.blocks(&key("31.0.14005.21001"), until),
+            guard.blocks(&Keys::same(player.clone()), 300),
+            None,
+            "player updated"
+        );
+        assert_eq!(
+            guard.blocks(&Keys::same(key("31.0.14005.21001")), until),
             None,
             "expired"
         );
@@ -312,25 +377,25 @@ mod tests {
     fn a_run_that_started_or_quit_settles_and_settling_keeps_a_crash() {
         let dir = tempfile::tempdir().unwrap();
         let file = GuardFile::new(Some(dir.path().join("render-state.json")));
-        let armed = file.arm(key("1"), 100);
+        let armed = file.arm(&Keys::same(key("1")), 100);
         file.settle();
         assert_eq!(file.read().state, GuardState::Ok);
         drop(armed);
         assert_eq!(file.recover(200).state, GuardState::Ok);
         // A start that returns early with an error drops the guard: settled.
         let start = || -> Result<(), String> {
-            let _armed = file.arm(key("1"), 250);
+            let _armed = file.arm(&Keys::same(key("1")), 250);
             assert_eq!(file.read().state, GuardState::Attempting);
             Err("Backend::start failed".into())
         };
         assert!(start().is_err());
         assert_eq!(file.read().state, GuardState::Ok, "an error is not a crash");
-        std::mem::forget(file.arm(key("1"), 300));
+        std::mem::forget(file.arm(&Keys::same(key("1")), 300));
         file.recover(400);
         file.settle();
         assert_eq!(file.read().state, GuardState::Crashed);
         let none = GuardFile::new(None);
-        drop(none.arm(key("1"), 1));
+        drop(none.arm(&Keys::same(key("1")), 1));
         assert_eq!(none.recover(2), Guard::default());
     }
 
@@ -340,31 +405,108 @@ mod tests {
     fn a_second_device_loss_within_a_day_blocks_like_a_crash() {
         let dir = tempfile::tempdir().unwrap();
         let file = GuardFile::new(Some(dir.path().join("render-state.json")));
-        let armed = file.arm(key("1"), 100);
-        assert!(!file.device_lost(key("1"), 110), "one loss: restart on GPU");
+        let armed = file.arm(&Keys::same(key("1")), 100);
+        assert!(
+            !file.device_lost(&Keys::same(key("1")), 110),
+            "one loss: restart on GPU"
+        );
         assert_eq!(file.read().state, GuardState::Ok, "not taken for a crash");
         std::mem::forget(armed);
         // The restarted player arms again: the loss is kept.
-        std::mem::forget(file.arm(key("1"), 120));
+        std::mem::forget(file.arm(&Keys::same(key("1")), 120));
         assert_eq!(file.read().losses, [110]);
-        assert!(file.device_lost(key("1"), 130), "the second one");
+        assert!(
+            file.device_lost(&Keys::same(key("1")), 130),
+            "the second one"
+        );
         let guard = file.recover(140);
         assert_eq!(guard.state, GuardState::Crashed);
-        assert_eq!(guard.blocks(&key("1"), 140), Some(130 + GUARD_DAYS * DAY));
-        assert_eq!(guard.blocks(&key("2"), 140), None, "driver updated");
+        assert_eq!(
+            guard.blocks(&Keys::same(key("1")), 140),
+            Some(130 + GUARD_DAYS * DAY)
+        );
+        assert_eq!(
+            guard.blocks(&Keys::same(key("2")), 140),
+            None,
+            "driver updated"
+        );
         assert!(guard.crashed_by_losses());
         // A start that dies later is not reported as losses (stale ones
         // kept by `arm`).
-        std::mem::forget(file.arm(key("1"), 200));
+        std::mem::forget(file.arm(&Keys::same(key("1")), 200));
         let later = file.recover(300);
         assert_eq!(later.state, GuardState::Crashed);
         assert!(!later.crashed_by_losses(), "{later:?}");
         // A day apart, or another driver: one loss each.
         let other = GuardFile::new(Some(dir.path().join("other.json")));
-        assert!(!other.device_lost(key("1"), 100));
-        assert!(!other.device_lost(key("1"), 100 + DAY));
-        assert!(!other.device_lost(key("2"), 100 + DAY + 1));
+        assert!(!other.device_lost(&Keys::same(key("1")), 100));
+        assert!(!other.device_lost(&Keys::same(key("1")), 100 + DAY));
+        assert!(!other.device_lost(&Keys::same(key("2")), 100 + DAY + 1));
         assert_eq!(other.read().losses, [100 + DAY + 1]);
+    }
+
+    /// L1 (record §11): a file written before 0.5.19 (no `schema`) was keyed
+    /// on the first adapter; it keeps blocking exactly that, and the next
+    /// write keys it on the adapter GPU rendering uses.
+    #[test]
+    fn a_guard_file_from_before_the_adapter_key_is_read_as_it_was_meant() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("render-state.json");
+        let first = key("31.0.14005.21001");
+        let nvidia = GuardKey {
+            adapter: "NVIDIA GeForce RTX 4070 Laptop GPU".into(),
+            driver: "32.0.16.1062".into(),
+            app: "0.5.13".into(),
+        };
+        // As 0.5.18 wrote it: crashed, keyed on the first adapter (the
+        // 780M), with VESTRA_GPU_ADAPTER on the 4070 at the time.
+        std::fs::write(
+            &path,
+            br#"{"state":"crashed","adapter":"AMD Radeon 780M","driver":"31.0.14005.21001","app":"0.5.13","at":100,"losses":[90,100]}"#,
+        )
+        .unwrap();
+        let file = GuardFile::new(Some(path.clone()));
+        let keys = Keys {
+            key: nvidia.clone(),
+            legacy: first.clone(),
+        };
+        let old = file.recover(200);
+        assert_eq!(old.schema, 0);
+        assert!(old.blocks(&keys, 200).is_some(), "still blocks");
+        assert!(
+            old.blocks(&Keys::same(nvidia.clone()), 200).is_none(),
+            "not by the new key"
+        );
+        // The first device loss after the update: the losses carry over
+        // (the same machine and setup), and the record is now keyed on the
+        // 4070.
+        assert!(file.device_lost(&keys, 150));
+        let new = file.read();
+        assert_eq!((new.schema, &new.key), (SCHEMA, &nvidia));
+        assert_eq!(new.losses, [90, 100, 150]);
+        assert!(new.blocks(&keys, 200).is_some());
+        assert!(new.blocks(&Keys::same(first.clone()), 200).is_none());
+        // Arming keys the record on the GPU's adapter too.
+        std::mem::forget(file.arm(&keys, 300));
+        let armed = file.read();
+        assert_eq!((armed.schema, armed.key), (SCHEMA, nvidia));
+        // A broken or empty file is no record.
+        std::fs::write(&path, b"{}").unwrap();
+        assert_eq!(file.recover(400), Guard::default());
+    }
+
+    /// Re-review M (record §11.5): a start with a file waits for the first
+    /// picture, whose upload into the Direct3D 12 texture comes hundreds of
+    /// ms after the first draws.
+    #[test]
+    fn direct3d_12_windows_count_as_started_after_their_first_picture_when_opening() {
+        // Nothing opened: three draws.
+        assert!(!windows_started(2, 0, false));
+        assert!(windows_started(FIRST_DRAWS, 0, false));
+        // A file opening: draws alone are not enough.
+        assert!(!windows_started(60, 0, true));
+        assert!(windows_started(1, 1, true), "the first picture was shown");
+        assert!(windows_started(0, 1, false));
     }
 
     #[test]

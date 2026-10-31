@@ -128,22 +128,63 @@ impl Host {
         let revision = self.input.borrow().table.revision();
         if revision != self.bindings_sent {
             self.bindings_sent = revision;
-            self.broadcast("bindings.changed", Value::Null);
+            // Only a change of the list: a table rebuilt to the same list
+            // (a plugin parked or woken under a new owner, lazy activation
+            // §6.9) is not one, so it wakes no parked listener.
+            let list = if self.listened("bindings.changed") {
+                in_order(self.bindings_list())
+            } else {
+                Value::Null
+            };
+            if list.is_null() {
+                self.bindings_list_sent = list;
+            } else if list != self.bindings_list_sent {
+                // The first list of a run is no change for a parked plugin.
+                let first = self.bindings_list_sent.is_null();
+                self.bindings_list_sent = list;
+                self.announce("bindings.changed", Value::Null, first);
+            }
         }
-        if self
-            .plugins
-            .values()
-            .any(|plugin| plugin.subscriptions.contains_key("packages.changed"))
-        {
+        if self.listened("packages.changed") {
             let list = self.package_list();
             // A park or a wake alone changes only `process`: no event (§5.3).
             let compared = without_process(&list);
             if compared != self.packages_sent {
+                let first = self.packages_sent.is_null();
                 self.packages_sent = compared;
-                self.broadcast("packages.changed", list);
+                self.announce("packages.changed", list, first);
             }
         }
     }
+    /// Broadcast `event`; `first` (the first of a run) wakes no parked plugin.
+    fn announce(&mut self, event: &str, data: Value, first: bool) {
+        self.lazy.mute = first;
+        self.broadcast(event, data);
+        self.lazy.mute = false;
+    }
+    /// A running plugin subscribed to `event`, or a parked one is woken by it.
+    fn listened(&self, event: &str) -> bool {
+        self.plugins
+            .values()
+            .any(|plugin| plugin.subscriptions.contains_key(event))
+            || self
+                .lazy
+                .wakes
+                .values()
+                .any(|events| events.contains(event))
+    }
+}
+
+/// `bindings.list` with its commands by plugin and command id: the
+/// table's order follows owner generations, which a wake changes.
+fn in_order(mut list: Value) -> Value {
+    if let Some(commands) = list["commands"].as_array_mut() {
+        commands.sort_by(|a, b| {
+            (a["plugin"].as_str(), a["command"].as_str())
+                .cmp(&(b["plugin"].as_str(), b["command"].as_str()))
+        });
+    }
+    list
 }
 
 /// `packages.list` without each plugin's `process`, to compare.

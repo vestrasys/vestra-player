@@ -11,6 +11,7 @@ mod bindings;
 mod capabilities;
 mod clipboard;
 mod commands;
+mod conditions;
 mod core_actions;
 pub mod font_asset;
 pub mod font_carrier;
@@ -113,13 +114,14 @@ static HANDOFFS: AtomicBool = AtomicBool::new(true);
 fn stop_handoffs() {
     HANDOFFS.store(false, Ordering::Release);
 }
-/// CPU mode's windows (`render_mode::WindowKind`): femtovg on OpenGL
-/// (Windows always, named explicitly since Slint's default there would be
-/// femtovg-wgpu; `VESTRA_WINDOW_RENDERER=gl` elsewhere), with Slint's
-/// software renderer when OpenGL fails; Slint's software renderer (a
-/// `software-windows` denylist rule, `VESTRA_WINDOW_RENDERER=software`); or
-/// Slint's default (macOS and Linux). `decide` never gives CPU mode wgpu
-/// windows; if it did, they would get OpenGL ones here.
+/// CPU mode's windows other than wgpu ones (`render_mode::WindowKind`; wgpu
+/// windows are selected in `main` and fall back to
+/// `Decision::fallback_windows`): femtovg on OpenGL (Windows, named
+/// explicitly since Slint's default there would be femtovg-wgpu;
+/// `VESTRA_WINDOW_RENDERER=gl` elsewhere), with Slint's software renderer
+/// when OpenGL fails; Slint's software renderer (an OpenGL window denylist
+/// rule, `VESTRA_WINDOW_RENDERER=software`); or Slint's default (macOS and
+/// Linux, `SLINT_BACKEND`). `Wgpu` here gets OpenGL ones.
 fn select_cpu_windows(
     windows: render_mode::WindowKind,
     winit: impl Fn() -> slint::BackendSelector,
@@ -226,14 +228,14 @@ fn main() -> Result<()> {
     for note in &render.notes {
         diag!("{note}");
     }
-    // The crash guard: armed until GPU rendering ran a few seconds, gave up
-    // on its own, or the player quit (`render_state`).
-    // `_armed` lives until `main` returns, by any path: only a process
-    // that dies leaves the guard armed.
+    // The crash guard: armed until GPU rendering (or, on Windows, CPU mode's
+    // Direct3D 12 windows: a driver that crashes there would crash every
+    // start) ran a few seconds, gave up on its own, or the player quit
+    // (`render_state`). `_armed` lives until `main` returns, by any path:
+    // only a process that dies leaves the guard armed.
     let guard = startup.guard.clone();
-    let _armed = render
-        .is_gpu()
-        .then(|| guard.arm(startup.key.clone(), playback::render_state::now()));
+    let _armed = (render.is_gpu() || render.uses_wgpu_windows())
+        .then(|| guard.arm(&startup.keys, playback::render_state::now()));
     // What a restart after a lost window device needs (Windows wgpu
     // windows; `host/restart.rs`).
     // When this player was started by a restart: another is refused for a
@@ -245,7 +247,7 @@ fn main() -> Result<()> {
             silent,
         },
         guard: guard.clone(),
-        key: startup.key.clone(),
+        keys: startup.keys.clone(),
         restarted_at,
     };
     if !headless {
@@ -260,24 +262,26 @@ fn main() -> Result<()> {
             }
         };
         // The windows the decision chose; a GPU mode whose windows cannot be
-        // had falls back to software rendering with CPU mode's windows.
+        // had falls back to software rendering with CPU mode's fallback
+        // windows, and CPU mode's wgpu windows fall back to them too.
+        let wgpu_windows = || {
+            // A lost window device (or a stalled GPU renderer) restarts the
+            // player at once, from the device's callback, after recording
+            // the loss in the crash guard: the new one waits for this
+            // process to end, however it ends (a lost device may also fail
+            // Slint's teardown).
+            let lost = lost_device.clone();
+            platform::on_window_device_lost(move || {
+                let source = LAST_SOURCE
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                restart_player(&lost, &source);
+            });
+            platform::select_wgpu_windows(winit)
+        };
         let gpu_windows = match render.windows {
-            render_mode::WindowKind::Wgpu => {
-                // A lost window device restarts the player at once, from
-                // the device's callback, after recording the loss in the
-                // crash guard: the new one waits for this process to end,
-                // however it ends (a lost device may also fail Slint's
-                // teardown).
-                let lost = lost_device.clone();
-                platform::on_window_device_lost(move || {
-                    let source = LAST_SOURCE
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone();
-                    restart_player(&lost, &source);
-                });
-                platform::select_wgpu_windows(winit)
-            }
+            render_mode::WindowKind::Wgpu if render.is_gpu() => wgpu_windows(),
             render_mode::WindowKind::OpenGl if render.is_gpu() => winit()
                 .renderer_name("femtovg".into())
                 .select()
@@ -289,7 +293,17 @@ fn main() -> Result<()> {
             diag!("{}", render.line());
             guard.settle();
         }
-        if !render.is_gpu() {
+        if !render.is_gpu() && render.windows == render_mode::WindowKind::Wgpu {
+            // CPU mode in Direct3D 12 windows (record §11 item 5): software
+            // video uploaded once per frame, flip model with vsync.
+            if let Err(error) = wgpu_windows() {
+                diag!("render: no Direct3D 12 windows for software rendering ({error})");
+                render = render.without_wgpu_windows();
+                diag!("{}", render.line());
+                guard.settle();
+            }
+        }
+        if !render.is_gpu() && render.windows != render_mode::WindowKind::Wgpu {
             select_cpu_windows(render.windows, winit)?;
         }
     }
@@ -370,6 +384,7 @@ fn main() -> Result<()> {
         rendering: host::Rendering {
             facts: startup.facts,
             started: render.mode,
+            windows: render.windows,
             preference: startup.preference,
             file: startup.file,
             relaunch: host::Relaunch {
@@ -410,6 +425,7 @@ fn main() -> Result<()> {
         data_removals: BTreeMap::new(),
         session_storage: Default::default(),
         bindings_sent: 0,
+        bindings_list_sent: Value::Null,
         packages_sent: Value::Null,
         notified_at: 0,
         timeline: Default::default(),
@@ -478,6 +494,9 @@ fn main() -> Result<()> {
             params: json!({"source":file.to_string_lossy(),"seconds":resume.seconds,"paused":resume.paused}),
         });
     }
+    // A start with a file: CPU mode's Direct3D 12 windows count as started
+    // only once its first picture was shown (the crash guard, below).
+    let opened_at_start = !files.is_empty();
     host.open_files(files, false);
     let start = Instant::now();
     if headless {
@@ -605,6 +624,13 @@ fn main() -> Result<()> {
                 })
             });
         }));
+        // CPU mode's Direct3D 12 windows (record §11.4, §11.5): the crash
+        // guard counts a crash only while they are made, draw their first
+        // frames and take the first video picture (a start with a file, or
+        // a source loading), not one unrelated to the GPU later in the first
+        // 5 s of a start; the 5 s timer below stays the backstop.
+        let mut first_draws = (!render.is_gpu() && render.windows == render_mode::WindowKind::Wgpu)
+            .then(|| guard.clone());
         let tick_host = host.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
@@ -617,6 +643,15 @@ fn main() -> Result<()> {
                 let mut host = tick_host.borrow_mut();
                 for event in receiver.try_iter().take(128) {
                     host.handle(event);
+                }
+                if first_draws.is_some() {
+                    let (draws, pictures) = host.backend.render.presentation.counts();
+                    let opening = opened_at_start || host.last_source["phase"] == "loading";
+                    if playback::render_state::windows_started(draws, pictures, opening)
+                        && let Some(guard) = first_draws.take()
+                    {
+                        guard.settle();
+                    }
                 }
                 host.placements.tick();
                 host.mount_callbacks();
@@ -692,6 +727,11 @@ fn main() -> Result<()> {
         // The loop also ends with an error when the windows' GPU device was
         // lost (a driver reset): tear down as usual first.
         let ran = slint::run_event_loop();
+        // However the loop ended (Quit, the last window closed, a restart):
+        // release the GPU renderer's fences before the windows, their
+        // device and the renderer go, so a stalled frame cannot hold up the
+        // teardown (record 2026-10-render-modes §11.6).
+        platform::release_gpu_waits();
         // Lazy activation: what each running plugin was at its ready.
         host.borrow_mut().lazy_quit();
         stop_handoffs();

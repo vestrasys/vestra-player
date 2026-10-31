@@ -48,6 +48,9 @@ mod uncapable;
 mod video_upscaling;
 mod window_control;
 
+pub(crate) use commands::refresh_conditions;
+pub(crate) use events::WAKE_EVENTS;
+
 /// What a capability is, as the manifest, the store and the SDK name it.
 // Read by the JSON generator (`json`, a test) and the lazy activation to come.
 #[cfg_attr(not(test), allow(dead_code))]
@@ -238,10 +241,15 @@ pub fn replay(
     declared: &[String],
     call: &Call,
 ) -> Handled {
-    let capability = lookup(&call.method)
+    let route = lookup(&call.method);
+    let capability = route
         .and_then(|route| route.owner)
         .ok_or_else(|| RpcError::new("unsupported", "unknown method"))?;
-    if !declared.iter().any(|c| c == capability.info().name) {
+    // What the request asks for, as for a live one (`packages.changed`
+    // needs no capability, `bindings.changed` needs `bindings.manage`).
+    let allows = |name: &str| declared.iter().any(|c| c == name);
+    let needs = route.and_then(|route| route.needs(&call.params, allows));
+    if needs.is_some_and(|needed| !allows(needed)) {
         return Err(RpcError::new(
             "capability",
             "capability must be declared in manifest",

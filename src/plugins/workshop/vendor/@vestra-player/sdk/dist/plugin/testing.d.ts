@@ -15,6 +15,7 @@ import { IMAGE_LIMITS, UI_VALUE_LIMITS } from "./values.ts";
 import type { CommandDeclaration } from "../commands.ts";
 import type { SourceState } from "../source.ts";
 import type { SubtitleState } from "../subtitles.ts";
+import { VIDEO_PROCESSING_LIMITS } from "../processing.ts";
 import type { RenderingMode, RenderingPreference, RenderingReason, RenderSettings, UpscalingReason, ViewSettings } from "./types.ts";
 import type { MediaJob } from "../media.ts";
 import type { LanguagePreference, Locale, Plugin, TemplateArgs, TextValue, ThemeId } from "./types.ts";
@@ -41,6 +42,8 @@ export { SECRET_LIMITS };
 export { SESSION_STORAGE_LIMITS };
 /** The player's limits on loaded subtitle files, which the test host enforces as well. */
 export { SUBTITLE_LIMITS };
+/** The player's bounds on convolution, lut3d and shader-channel requests, which the test host enforces as well. */
+export { VIDEO_PROCESSING_LIMITS };
 /** The names bindings are made of. */
 export { BINDING_INPUTS };
 /** The colours of the player's palettes, by `Theme` token. */
@@ -268,7 +271,26 @@ export interface FakeCommand {
          */
         reason?: string | null;
     };
-    /** The command state the player last received (after the update pass). */
+    /**
+     * The conditions the plugin sent for `enabled` and `checked`
+     * (`plugin.when`, wire form), `undefined` without. Like the player, the
+     * host evaluates them in {@link FakeCommand.state} against `source`,
+     * `mainWindow.fullscreen`, `appearance` and `language`.
+     *
+     * @since 1.5.40
+     */
+    when?: {
+        /** The condition of `enabled`. */
+        enabled?: Json;
+        /** The condition of `checked`. */
+        checked?: Json;
+    };
+    /**
+     * The command state as the player shows it: what the plugin last sent
+     * (after the update pass), with the fields given as conditions
+     * (`plugin.when`) evaluated now. With an `enabled` condition, `reason`
+     * is `null` while the command is enabled and not busy.
+     */
     state: {
         /** `false` when the plugin disabled the command. */
         enabled: boolean;
@@ -545,6 +567,16 @@ export declare class TestHost implements Transport {
      * @since 1.5.38
      */
     readonly listening: Set<string>;
+    /**
+     * Why the plugin listens to each event of {@link TestHost.listening}:
+     * every listener and every binding that reads its state, as the
+     * player's log says them (`a listener added at main.ts:12`,
+     * `command "Save" enabled is a function that reads plugin.player.state
+     * (main.ts:40) — use plugin.when`), in the order they came.
+     *
+     * @since 1.5.40
+     */
+    readonly listeningWhy: Map<string, string[]>;
     /**
      * The player's source facts (phase, position, duration, paused, rate,
      * audio tracks, loop, ...). Wire-level shape; change it with
@@ -1342,6 +1374,64 @@ export declare class TestHost implements Transport {
      */
     failVideoRender(code: "failed" | "unsupported", message: string): void;
     /**
+     * The shader channel (`plugin.video.shaders(id)`, SDK 1.5.39): the lists
+     * the player holds for this plugin's handles by id (the real paths, after
+     * following links), and how many shaders other plugins hold, which count
+     * against {@link VIDEO_PROCESSING_LIMITS}`.shaders` (`limit`). Files must
+     * be under {@link TestHost.fileRoots}; under software rendering
+     * (`videoRender.gpu = false`) a non-empty list fails with `unsupported`.
+     *
+     * @since 1.5.39
+     */
+    readonly videoShaders: {
+        /** This plugin's lists by handle id; a cleared handle has none. */
+        handles: Map<string, string[]>;
+        /** Shaders other plugins hold (0–16). */
+        others: number;
+    };
+    /**
+     * Where the plugin's own files may be: its package directory and its
+     * data directory ({@link startPlugin} sets both when the list is still
+     * empty). `lut3d` files and shader-channel files outside them fail with
+     * `invalid`, as in the player.
+     *
+     * @since 1.5.39
+     */
+    fileRoots: string[];
+    /**
+     * What the player pushes to a shader handle when mpv cannot compile a
+     * shader (code `failed`; the player cannot tell whose shader failed, so
+     * every handle with shaders hears it) or the player switches to software
+     * rendering (`unsupported`; use {@link TestHost.failVideoRender}, which
+     * also tells the handles). Pushed only to a handle that holds shaders.
+     *
+     * @capability None.
+     *
+     * @example Make the plugin's shader fail to compile
+     * The plugin's shader handle reports `failed`, as when mpv rejects a
+     * shader. The host pushes the failure only to a handle that holds
+     * shaders, which its accepted `set` made it; the SDK updates the
+     * handle's `status` when the push arrives, so the test settles first.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * import { join } from "node:path";
+     * import { writeFileSync } from "node:fs";
+     * declare const host: TestHost;
+     * // ---cut---
+     * const file = join(plugin.dataDirectory, "sharpen.glsl");
+     * writeFileSync(file, "//!HOOK MAIN\n");
+     * const shaders = plugin.video.shaders("sharpen");
+     * shaders.set([file]); // the handle now holds a shader
+     * await host.settle();
+     * host.failVideoShaders("sharpen", "shader compile failed: ERROR: 0:3: ...");
+     * await host.settle();
+     * assert.equal(shaders.status.state, "failed");
+     * ```
+     *
+     * @since 1.5.39
+     */
+    failVideoShaders(id: string, message: string): void;
+    /**
      * The player's processing (filter) state. Wire-level; may change in minor
      * versions. `resources` holds each `video.filter` / `audio.filter` chain the
      * plugin applied, keyed by the SDK's resource id.
@@ -1681,9 +1771,9 @@ export declare class TestHost implements Transport {
      * import activate from "../main.ts";
      *
      * const host = new TestHost();
-     * host.videoRender.gpu = false; // software draws now (Windows)
+     * host.videoRender.gpu = false; // software draws now (Linux)
      * host.rendering.startedWith = "software";
-     * host.rendering.reason = { code: "no-gpu-backend", message: "No GPU renderer on Windows" };
+     * host.rendering.reason = { code: "no-gpu-backend", message: "this player has no GPU renderer on Linux yet" };
      * host.rendering.gpu = { available: false, reason: host.rendering.reason };
      * const { stop } = await startPlugin(activate, {
      *   directory: new URL("..", import.meta.url),
@@ -1691,7 +1781,7 @@ export declare class TestHost implements Transport {
      * });
      * const item = host.command("gpu-rendering");
      * assert.equal(item.state.enabled, false);
-     * assert.equal(item.state.reason, "No GPU renderer on Windows");
+     * assert.equal(item.state.reason, "this player has no GPU renderer on Linux yet");
      * await stop();
      * ```
      *
@@ -2527,6 +2617,32 @@ export declare class TestHost implements Transport {
      * @since 1.0.0
      */
     close(): void;
+    /**
+     * Why the player would keep this plugin running while nothing uses it
+     * (lazy activation, player 0.5.21), one line per reason, as the player's
+     * log says it: an event it listens to that is not one the player wakes
+     * it for (with what listens and where it was added), its mounted panel,
+     * its open windows. Empty: the player may stop it while idle and start
+     * it again on its next use. Filter chains, streams, jobs and the like
+     * (which also keep a plugin running) are not listed.
+     *
+     * @capability None.
+     * @since 1.5.40
+     *
+     * @example Check that a plugin can be stopped while idle
+     * The test fails if the plugin keeps running for no reason after it
+     * starts, and names the reason (a command whose `enabled` reads
+     * `plugin.player.state`, say: give it a `plugin.when` condition). The
+     * player stops such a plugin while nothing uses it and starts it again
+     * on its next use, so it costs no process meanwhile.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * assert.deepEqual(host.keepsRunning, []);
+     * ```
+     */
+    get keepsRunning(): string[];
 }
 /**
  * Activate a plugin against a test host, the way the player's runner does:

@@ -138,6 +138,11 @@ export function createWire(transport) {
             /** The GPU renderer's options (`plugin.video.render()`). */
             renderSet: (values) => transport.request("video.render.set", { values }),
             renderRelease: () => transport.request("video.render.release"),
+            /**
+             * One shader channel handle's list (`plugin.video.shaders(id)`, player
+             * 0.5.20); `[]` removes it.
+             */
+            shadersSet: (id, paths) => transport.request("video.shaders.set", { id, paths }),
             /** The GPU's video upscaler (`plugin.video.upscaling`, player 0.5.16). */
             upscalingState: () => transport.request("video.upscaling.state"),
             upscalingSet: (enabled) => transport.request("video.upscaling.set", {
@@ -260,13 +265,19 @@ export function createWire(transport) {
              * only the SDK keeps a copy of the state (player 0.5.18; older
              * players ignore it); `listen` changes it.
              */
-            async subscribe(event, listener, mirror = false) {
+            async subscribe(event, listener, mirror = false, 
+            /** What listens (player 0.5.21 logs it; older players ignore it). */
+            why) {
                 const off = transport.on(event, listener);
                 let subscription = subscriptions.get(event);
                 if (!subscription) {
                     subscription = {
                         count: 0,
-                        ready: transport.request("events.subscribe", mirror ? { event, mirror: true } : { event }),
+                        ready: transport.request("events.subscribe", mirror
+                            ? { event, mirror: true }
+                            : why?.length
+                                ? { event, why }
+                                : { event }),
                     };
                     subscriptions.set(event, subscription);
                 }
@@ -297,7 +308,11 @@ export function createWire(transport) {
              * again, which replaces the mark (player 0.5.18; older players keep
              * one subscription per name and ignore the mark).
              */
-            listen: (event, active) => transport.request("events.subscribe", active ? { event } : { event, mirror: true }),
+            listen: (event, active, why) => transport.request("events.subscribe", active
+                ? why?.length
+                    ? { event, why }
+                    : { event }
+                : { event, mirror: true }),
         },
         ui: {
             /** Player 0.2.0: the remote images a Markdown document shows. */

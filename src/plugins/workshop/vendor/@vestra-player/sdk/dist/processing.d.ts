@@ -1,7 +1,3 @@
-/**
- * Processing chains for the player's video and audio filters. Applied means
- * the backend accepted the chain, not that a frame with it is visible yet.
- */
 import type { Transport } from "./wire.ts";
 /**
  * One node of a {@link VideoFilter} chain, by `kind`. Values outside the
@@ -165,7 +161,114 @@ export type VideoNode =
     kind: "frameBlend";
     /** Output frame rate, integer 24–120. */
     fps: number;
+}
+/**
+ * A convolution matrix of your own per plane (FFmpeg `convolution`, SDK
+ * 1.5.39, player 0.5.20): sharpen, blur, emboss or detect edges with a
+ * 3×3, 5×5 or 7×7 kernel, or a row or column kernel. `planes[i]` is
+ * plane `i` of the decoded picture: for the usual YUV video 0 is luma
+ * (brightness), 1 and 2 are the colour planes, 3 is alpha. A missing
+ * entry or `null` leaves that plane as it is; at least one entry has a
+ * matrix. Players before 0.5.20 refuse the kind with `invalid`.
+ */
+ | {
+    /** The node type. */
+    kind: "convolution";
+    /** 1–4 entries, by plane; `null` passes the plane through. */
+    planes: (ConvolutionPlane | null)[];
+}
+/**
+ * Recolour the picture with a 3D look-up table (FFmpeg `lut3d`, SDK
+ * 1.5.39, player 0.5.20): a `.cube` file the plugin ships in its package
+ * or wrote to its {@link Plugin.dataDirectory}. The player reads the file
+ * when the chain is set (and again for each new source, snapshot or
+ * export), so it must stay there while the chain uses it. The table is
+ * applied to RGB; the player converts the picture to RGB and back.
+ * Players before 0.5.20 refuse the kind with `invalid`.
+ */
+ | {
+    /** The node type. */
+    kind: "lut3d";
+    /**
+     * Absolute path of a `.cube` file (`LUT_3D_SIZE` 2–65, at most
+     * 16 MiB) inside the plugin's package directory or data directory
+     * after following links; a path with `[` or `]` is refused. Outside
+     * those: `invalid`; a file that does not exist: `missing`.
+     */
+    file: string;
+    /** How colours between the table's points are computed; `tetrahedral` is FFmpeg's default. */
+    interpolation: "nearest" | "trilinear" | "tetrahedral" | "pyramid" | "prism";
 };
+/**
+ * One plane's kernel of a `convolution` {@link VideoNode}: each output
+ * sample is `(sum of matrix × neighbourhood) × rdiv + bias`, clipped to the
+ * sample range.
+ *
+ * @since 1.5.39
+ * @category Processing
+ */
+export type ConvolutionPlane = {
+    /**
+     * `square`: `matrix` is a 3×3, 5×5 or 7×7 kernel, row by row (9, 25 or
+     * 49 entries); `row` / `column`: a horizontal / vertical kernel with an
+     * odd number of entries up to 49.
+     */
+    mode: "square" | "row" | "column";
+    /** Integers −1024–1024 (FFmpeg reads whole numbers only). */
+    matrix: number[];
+    /**
+     * Multiplier 0–256; 0 divides by the sum of the matrix (by 1 when it
+     * sums to 0), which keeps the brightness of a blur.
+     */
+    rdiv: number;
+    /** Added after the multiplication, 0–65535 in the plane's sample units (128 is mid grey for 8-bit video). */
+    bias: number;
+};
+/**
+ * The player's bounds for the video primitives of SDK 1.5.39 (player
+ * 0.5.20): `convolution` and `lut3d` {@link VideoNode}s and the shader
+ * channel (`plugin.video.shaders()`). Values beyond them fail with
+ * `invalid`; more shaders than `shaders` fail with `limit`.
+ *
+ * @example Refuse a shader list the player would not take
+ * The plugin checks a shader list against the player's limit before it
+ * sets it, and says so on the OSD instead of waiting for a `limit` failure.
+ * The limit counts every plugin's shaders, so the player still decides.
+ * ```ts
+ * import type { Plugin } from "@vestra-player/sdk";
+ * declare const plugin: Plugin;
+ * declare const files: string[];
+ * // ---cut---
+ * import { VIDEO_PROCESSING_LIMITS } from "@vestra-player/sdk/testing";
+ *
+ * if (files.length > VIDEO_PROCESSING_LIMITS.shaders)
+ *   void plugin.osd.show("Too many shaders");
+ * else plugin.video.shaders().set(files);
+ * ```
+ *
+ * @since 1.5.39
+ * @category Testing
+ */
+export declare const VIDEO_PROCESSING_LIMITS: Readonly<{
+    /** Shaders across every plugin's `plugin.video.shaders()` handles (16). */
+    shaders: 16;
+    /** Bytes of one shader file (16 MiB). */
+    shaderBytes: number;
+    /** Bytes of a shader handle's id (128). */
+    shaderIdBytes: 128;
+    /** Bytes of one `lut3d` `.cube` file (16 MiB). */
+    lutBytes: number;
+    /** Largest `LUT_3D_SIZE` of a `lut3d` file, points per axis (65). */
+    lutSize: 65;
+    /** Bytes of a `lut3d` file path (4096). */
+    lutPathBytes: 4096;
+    /** Largest magnitude of a `convolution` matrix entry (1024). */
+    matrixValue: 1024;
+    /** Largest `convolution` `rdiv` (256). */
+    rdiv: 256;
+    /** Largest `convolution` `bias` (65535). */
+    bias: 65535;
+}>;
 /**
  * One node of an {@link AudioFilter} chain, by `kind`. Values outside the
  * ranges fail with `invalid`; "live" fields change in place while playing.
@@ -236,6 +339,17 @@ export type AudioNode =
     /** `stereo` leaves it unchanged. */
     mode: "stereo" | "left" | "right" | "mono" | "swap";
 };
+/**
+ * Whether `text` has a control character as Rust's `char::is_control`
+ * sees one (C0, DEL and C1: U+0000–U+001F, U+007F–U+009F).
+ */
+export declare function hasControl(text: string): boolean;
+/**
+ * The form of a `lut3d` path (the player's `effects.rs lut_path`); where
+ * the file is and what it holds the player checks when the request arrives
+ * (the test host too, `TestHost.fileRoots`).
+ */
+export declare function lutPathProblem(file: unknown): string | null;
 /**
  * Why `nodes` would be refused (`null` when valid): unknown kinds or fields,
  * values out of range, more than 64 nodes. Used by the test host.

@@ -55,6 +55,32 @@
         { "source": "decoded", "stage": "video", "nodes": [{ "kind": "deinterlace", "when": "auto", "output": "field" }, { "kind": "gblur", "sigma": 1, "steps": 3 }], "expect": "applied", "resources": 1 },
         { "source": "decoded", "stage": "video", "nodes": [], "expect": "applied", "resources": 0 }
       ]
+    },
+    {
+      "name": "convolution: square 3x3/5x5/7x7 or an odd row/column up to 49, integer entries, bounded rdiv and bias (player 0.5.20)",
+      "steps": [
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [{ "mode": "square", "matrix": [0, -1, 0, -1, 5, -1, 0, -1, 0], "rdiv": 1, "bias": 0 }] }], "expect": "applied", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [null, { "mode": "row", "matrix": [1, 2, 1], "rdiv": 0, "bias": 0 }, { "mode": "column", "matrix": [1, 1, 1, 1, 1], "rdiv": 0.2, "bias": 0 }] }], "expect": "applied", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [{ "mode": "square", "matrix": [1, 1, 1, 1, 1, 1, 1, 1], "rdiv": 0, "bias": 0 }] }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [{ "mode": "row", "matrix": [1, 1], "rdiv": 0, "bias": 0 }] }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [{ "mode": "square", "matrix": [0, 0, 0, 0, 0.5, 0, 0, 0, 0], "rdiv": 0, "bias": 0 }] }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [{ "mode": "square", "matrix": [0, 0, 0, 0, 1025, 0, 0, 0, 0], "rdiv": 0, "bias": 0 }] }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [{ "mode": "square", "matrix": [0, 0, 0, 0, 1, 0, 0, 0, 0], "rdiv": 257, "bias": 0 }] }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [{ "mode": "square", "matrix": [0, 0, 0, 0, 1, 0, 0, 0, 0], "rdiv": 1, "bias": -1 }] }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [] }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [null, null] }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [null, null, null, null, { "mode": "row", "matrix": [1], "rdiv": 0, "bias": 0 }] }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "convolution", "planes": [{ "mode": "square", "matrix": [0, 0, 0, 0, 1, 0, 0, 0, 0], "rdiv": 1, "bias": 0, "expression": "x" }] }], "expect": "invalid", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [], "expect": "applied", "resources": 0 }
+      ]
+    },
+    {
+      "name": "lut3d: an absolute path to a .cube file (player 0.5.20; where the file is is checked when the request arrives)",
+      "steps": [
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "lut3d", "file": "looks/warm.cube", "interpolation": "tetrahedral" }], "expect": "invalid", "resources": 0 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "lut3d", "file": "warm.3dl", "interpolation": "trilinear" }], "expect": "invalid", "resources": 0 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "lut3d", "file": "warm.cube", "interpolation": "cubic" }], "expect": "invalid", "resources": 0 }
+      ]
     }
   ]
 }

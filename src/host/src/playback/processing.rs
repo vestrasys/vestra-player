@@ -1317,6 +1317,61 @@ mod tests {
     /// removes the resource (it used to fail `invalid` for video, so "off"
     /// left the blur in place), and while a chain exists decoding copies
     /// frames back to memory so mpv's software filters can run.
+    /// mpv's graph carries a `convolution` matrix and a `lut3d` path with a
+    /// quote, a comma and a semicolon (player 0.5.20): frames pass through
+    /// both filters without a filter or graph error, and the chain asks for
+    /// frames in memory like every other node.
+    #[test]
+    fn mpv_runs_convolution_and_a_lut_from_an_awkward_directory() {
+        use std::time::{Duration, Instant};
+        let _one = one_mpv_at_a_time();
+        let dir = tempfile::tempdir().unwrap();
+        let looks = dir.path().join("O'Brien, looks; v2");
+        std::fs::create_dir(&looks).unwrap();
+        let cube = looks.join("invert.cube");
+        let mut text = String::from("LUT_3D_SIZE 2\n");
+        for _ in 0..8 {
+            text.push_str("0.5 0.5 0.5\n");
+        }
+        std::fs::write(&cube, text).unwrap();
+        let mpv = mpv("auto-safe");
+        mpv.request_log_messages("warn").unwrap();
+        let mut processing = ready();
+        let nodes = json!([
+            {"kind":"convolution","planes":[{"mode":"square","matrix":[0,-1,0,-1,5,-1,0,-1,0],"rdiv":1,"bias":0}]},
+            {"kind":"lut3d","file":cube.to_str().unwrap(),"interpolation":"tetrahedral"},
+        ]);
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, nodes))
+            .unwrap();
+        assert!(vf(&mpv).contains("convolution@n0"), "{}", vf(&mpv));
+        assert!(vf(&mpv).contains("lut3d@n1"), "{}", vf(&mpv));
+        assert_eq!(
+            mpv.get_property::<String>("hwdec").unwrap(),
+            "auto-copy-safe"
+        );
+        mpv.command(&["loadfile", "av://lavfi:testsrc2=s=64x64:d=30"])
+            .unwrap();
+        let (mut errors, start) = (Vec::new(), Instant::now());
+        while start.elapsed() < Duration::from_secs(10)
+            && mpv.get_property::<f64>("time-pos").unwrap_or(0.) < 0.5
+        {
+            while let Some(event) = mpv.poll_event() {
+                if let rsmpv::Event::LogMessage(message) = event
+                    && matches!(message.level.as_str(), "error" | "fatal")
+                {
+                    errors.push(format!("{}: {}", message.prefix, message.text));
+                }
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(
+            mpv.get_property::<f64>("time-pos").unwrap_or(0.) >= 0.5,
+            "played"
+        );
+        assert!(errors.is_empty(), "{errors:#?}");
+    }
+
     #[test]
     fn an_empty_video_chain_removes_the_resource_and_hwdec_follows_the_chain() {
         let _one = one_mpv_at_a_time();

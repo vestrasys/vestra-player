@@ -6,7 +6,7 @@
 //! software (round record 2026-10-render-modes §3.5 item 4, §4 M3).
 use super::rendering::{RESTARTING, Relaunch, relaunch_command, restart_refused};
 use crate::platform;
-use crate::playback::render_state::{self, GuardFile, GuardKey};
+use crate::playback::render_state::{self, GuardFile, Keys};
 use serde_json::Value;
 use std::sync::atomic::Ordering;
 
@@ -20,7 +20,7 @@ pub(crate) static LAST_SOURCE: std::sync::Mutex<Value> = std::sync::Mutex::new(V
 pub(crate) struct LostDevice {
     pub relaunch: Relaunch,
     pub guard: GuardFile,
-    pub key: GuardKey,
+    pub keys: Keys,
     /// This player was started by a restart, at this time: it does not
     /// restart itself again within `rendering::RESTART_COOLDOWN`.
     pub restarted_at: Option<std::time::Instant>,
@@ -44,9 +44,7 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
     if RESTARTING.swap(true, Ordering::AcqRel) {
         return;
     }
-    let off = lost
-        .guard
-        .device_lost(lost.key.clone(), render_state::now());
+    let off = lost.guard.device_lost(&lost.keys, render_state::now());
     let why = software_after_loss(lost, off, std::time::Instant::now());
     let Ok(exe) = std::env::current_exe() else {
         restart_log("render: the GPU device was lost; the player could not restart itself");
@@ -64,12 +62,37 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
     platform::allow_handoff_foreground();
     crate::stop_handoffs();
     match command.spawn() {
-        Ok(child) => restart_log(&format!(
-            "render: the restarted player is process {}",
-            child.id()
-        )),
+        Ok(child) => {
+            restart_log(&format!(
+                "render: the restarted player is process {}",
+                child.id()
+            ));
+            exit_if_stuck(EXIT_AFTER);
+        }
         Err(error) => restart_log(&format!("render: the restart failed: {error}")),
     }
+}
+
+/// How long this player may take to end after a device loss started the new
+/// one, which waits 20 s for it (`main.rs`).
+const EXIT_AFTER: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// After a device loss or a GPU stall (`vestra-gpu-render`'s watchdog) the
+/// teardown can hang in the driver, the render thread being stuck in it;
+/// the new player would then wait for this one and the lock (round record
+/// 2026-10-render-modes §10 L6). End the process if it is still there
+/// after `after`.
+fn exit_if_stuck(after: std::time::Duration) {
+    let _ = std::thread::Builder::new()
+        .name("vestra-exit-after-loss".into())
+        .spawn(move || {
+            std::thread::sleep(after);
+            restart_log(&format!(
+                "render: the player did not end {} s after the device loss; ending it",
+                after.as_secs()
+            ));
+            std::process::exit(3);
+        });
 }
 
 /// Why the player restarted after a device loss renders in software, if it
@@ -96,6 +119,7 @@ fn command_after_loss(
     // A test switch must not remove the restarted player's device too.
     command.env_remove("VESTRA_TEST_REMOVE_DEVICE");
     command.env_remove("VESTRA_TEST_EXECUTE");
+    command.env_remove("VESTRA_TEST_GPU_STALL");
     if off {
         // `VESTRA_RENDER=gpu` overrides the guard; the child must not.
         command.env("VESTRA_RENDER", "software");
@@ -136,7 +160,7 @@ mod tests {
         LostDevice {
             relaunch: Relaunch::default(),
             guard: GuardFile::new(None),
-            key: GuardKey::default(),
+            keys: Keys::default(),
             restarted_at,
         }
     }
@@ -156,6 +180,7 @@ mod tests {
         assert_eq!(env(&on, "VESTRA_RENDER"), None, "the environment as it is");
         assert_eq!(env(&on, "VESTRA_TEST_REMOVE_DEVICE"), Some(None), "removed");
         assert_eq!(env(&on, "VESTRA_TEST_EXECUTE"), Some(None), "removed");
+        assert_eq!(env(&on, "VESTRA_TEST_GPU_STALL"), Some(None), "removed");
         let off = command_after_loss(path, &lost(None), &Value::Null, true);
         assert_eq!(env(&off, "VESTRA_RENDER"), Some(Some("software".into())));
         let args: Vec<_> = off.get_args().collect();

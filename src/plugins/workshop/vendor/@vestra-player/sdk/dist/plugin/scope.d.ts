@@ -8,6 +8,7 @@ export declare class ScopeImpl implements Plugin {
     get dataDirectory(): string;
     get disposed(): boolean;
     readonly commands: import("./types.ts").Commands;
+    readonly when: import("./types.ts").When;
     readonly windows: import("./types.ts").Windows;
     readonly panels: import("./types.ts").Panels;
     readonly dialogs: import("./types.ts").Dialogs;
@@ -15,6 +16,7 @@ export declare class ScopeImpl implements Plugin {
     readonly video: {
         view: () => import("./types.ts").VideoView;
         render: () => import("./types.ts").RenderOptions;
+        shaders: (id?: string) => import("./types.ts").VideoShaders;
         upscaling: import("./types.ts").VideoUpscaling;
         filter(id: string): import("./types.ts").VideoFilter;
     };
