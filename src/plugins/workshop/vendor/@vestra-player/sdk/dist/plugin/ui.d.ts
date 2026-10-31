@@ -38,7 +38,11 @@ export declare abstract class ViewBase implements View {
     on<A extends Json[]>(callback: string, handler: (...args: A) => unknown): Disposable;
     set(props: Props): void;
     bind(props: () => Props): Disposable;
-    /** Current desired properties (bound values win over earlier `set`). */
+    /**
+     * Current desired properties (bound values win over earlier `set`). A
+     * precise pass (`Runtime.part`) skips a bind function that read none of
+     * the changed state: its last values stay.
+     */
     protected snapshot(): Record<string, PropValue>;
     protected evaluate(): void;
     /** The host already shows these values (e.g. sent as initial properties). */

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.18
+
+- The vendored SDK is 1.5.45 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The reference the AI reads (`llms.txt` / `llms-full.txt`) and the declarations its type check and tests use now cover the shader channel `plugin.video.shaders(id?)` (`VideoShaders`, several plugins' mpv user shaders at once, GPU rendering only), the `convolution` and `lut3d` video nodes (`ConvolutionPlane`, `.cube` files from the plugin's package or data directory), `VIDEO_PROCESSING_LIMITS`, and TestHost's `videoShaders`, `fileRoots` and `failVideoShaders`; all of it needs player 0.5.20. The reference also no longer says only macOS renders on the GPU. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
 ## 2.2.17
 
 - The vendored SDK is 1.5.44 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The reference the AI reads (`llms.txt` / `llms-full.txt`) and the declarations its type check and tests use now cover the shader channel `plugin.video.shaders(id?)` (`VideoShaders`, several plugins' mpv user shaders at once, GPU rendering only), the `convolution` and `lut3d` video nodes (`ConvolutionPlane`, `.cube` files from the plugin's package or data directory), `VIDEO_PROCESSING_LIMITS`, and TestHost's `videoShaders`, `fileRoots` and `failVideoShaders`; all of it needs player 0.5.20. The reference also no longer says only macOS renders on the GPU. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.

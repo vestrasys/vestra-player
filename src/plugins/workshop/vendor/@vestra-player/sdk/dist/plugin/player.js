@@ -40,9 +40,63 @@ const audioTrack = (track) => Object.freeze({
     title: track.title,
     language: track.language,
 });
-function view(raw) {
+/**
+ * The key of `plugin.player.state` in the runtime's field tracking
+ * (`Runtime.depends`). Its fields are the state's own, plus `stamp` for
+ * what `isCurrent` and `Media.current` compare.
+ */
+export const PLAYER = "player";
+/** `util.inspect` shows a state's values, not its getters. */
+const INSPECT = Symbol.for("nodejs.util.inspect.custom");
+const values = new WeakMap();
+/**
+ * The state a plugin sees: each field a getter over the same values, so the
+ * SDK learns which fields a binding or listener read (`Runtime.depends`).
+ * It behaves like the plain frozen object it was: same keys in the same
+ * order, enumerable, JSON, spread, `structuredClone` and `util.inspect`
+ * give the values.
+ */
+function tracked(runtime, data) {
+    const state = {};
+    for (const key of Object.keys(data)) {
+        const value = data[key];
+        Object.defineProperty(state, key, {
+            enumerable: true,
+            get: () => {
+                runtime?.depends(PLAYER, key);
+                return value;
+            },
+        });
+    }
+    Object.defineProperty(state, INSPECT, { value: () => data });
+    const frozen = Object.freeze(state);
+    values.set(frozen, data);
+    return frozen;
+}
+/** The fields of `next` that differ from `last` (`stamp` included). */
+function changes(last, lastRaw, next, nextRaw) {
+    const a = values.get(last);
+    const b = values.get(next);
+    const changed = [];
+    for (const key of Object.keys(b)) {
+        const x = a[key];
+        const y = b[key];
+        if (x === y)
+            continue;
+        if (x === null ||
+            y === null ||
+            typeof x !== "object" ||
+            typeof y !== "object" ||
+            JSON.stringify(x) !== JSON.stringify(y))
+            changed.push(key);
+    }
+    if (!sameStamp(lastRaw.stamp, nextRaw.stamp))
+        changed.push("stamp");
+    return changed;
+}
+function view(raw, runtime) {
     const reason = raw.terminalReason;
-    const state = Object.freeze({
+    const data = Object.freeze({
         sourceId: raw.stamp.generation,
         kind: raw.kind === "producer" ? "stream" : "media",
         phase: raw.phase,
@@ -78,6 +132,7 @@ function view(raw) {
             active: raw.audioOutput?.active ?? null,
         }),
     });
+    const state = tracked(runtime, data);
     raws.set(state, raw);
     return state;
 }
@@ -110,12 +165,18 @@ export function abortError() {
 export class PlayerService {
     runtime;
     raw = empty;
-    state = view(empty);
+    state;
+    /**
+     * The fields the last accepted state changed (`onChange` listeners are
+     * told so a listener that read none of them needs no full pass).
+     */
+    change = new Map();
     #watchers = new Set();
     #operation = 0;
     output;
     constructor(runtime) {
         this.runtime = runtime;
+        this.state = view(empty, runtime);
         // The SDK's copy of the state (a mirror): a plugin listens through
         // `watch` and the bindings that read `state`.
         runtime.on("source.state", (data) => this.accept(data), "events", true);
@@ -137,12 +198,16 @@ export class PlayerService {
             return;
         if (JSON.stringify(raw) === JSON.stringify(this.raw))
             return;
+        const last = this.state;
+        const lastRaw = this.raw;
         this.raw = raw;
-        this.state = view(raw);
+        this.state = view(raw, this.runtime);
+        const changed = changes(last, lastRaw, this.state, raw);
+        this.change = new Map([[PLAYER, new Set(changed)]]);
         for (const watcher of [...this.#watchers])
             watcher(raw);
-        // Bindings may read `player.state`; refresh them like after a handler.
-        this.runtime.invalidate();
+        // A precise pass: only the bindings that read a changed field.
+        this.runtime.changed(PLAYER, changed);
     }
     watch(watcher) {
         this.#watchers.add(watcher);
@@ -244,6 +309,7 @@ class MediaHandle {
         this.#ticket = ticket;
     }
     get current() {
+        this.#service.runtime.depends(PLAYER, "stamp");
         return this.#service.raw.stamp.generation === this.#ticket.stamp.generation;
     }
     ready(options = {}) {
@@ -313,7 +379,9 @@ class ScrubHandle {
     #pending = null;
     #watch;
     #queue;
+    #service;
     constructor(service) {
+        this.#service = service;
         this.#allowed = { ...service.raw.stamp };
         this.#watch = service.watch((raw) => {
             if (!sameStamp(raw.stamp, this.#allowed) &&
@@ -377,6 +445,9 @@ class ScrubHandle {
         this.#active = false;
         this.#queue.stop();
         void this.#watch.dispose();
+        // `active` changed, maybe outside plugin code (a new source, a failed
+        // seek): bindings that read it see it in a full pass.
+        this.#service.runtime.invalidate();
     }
 }
 const superseded = new HostError("superseded", "gesture ended");
@@ -434,10 +505,11 @@ export function player(scope) {
     return {
         get state() {
             scope.runtime.reading("source.state");
+            scope.runtime.depends(PLAYER);
             return service().state;
         },
         onChange(listener) {
-            const watch = service().watch(() => scope.run(listener, service().state));
+            const watch = service().watch(() => scope.runOn(service().change, listener, service().state));
             return scope.add({
                 dispose: async () => {
                     scope.forget(watch);
@@ -448,6 +520,7 @@ export function player(scope) {
         refresh: () => service().refresh(),
         isCurrent(state) {
             const raw = raws.get(state);
+            scope.runtime.depends(PLAYER, "stamp");
             return !!raw && sameStamp(raw.stamp, service().raw.stamp);
         },
         async open(source, options = {}) {
