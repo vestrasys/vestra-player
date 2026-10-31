@@ -421,8 +421,16 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
     assert.equal(host.stepSeekKeyframes, false);
     const titles = () =>
       ["backward-2", "forward-2", "backward-3", "forward-3", "backward-4", "forward-4"].map((id) => host.command(id).display.path.at(-1));
+    // The tiers' child scope is made again with the new titles; wait until it is back.
+    await until(() => {
+      try {
+        return titles()[1] === "前进2.5秒";
+      } catch {
+        return false;
+      }
+    });
     // Any seconds are translated: the title is a text value with the seconds as data.
-    assert.deepEqual(titles(), ["后退2.5秒", "前进2.5秒", "后退90秒", "前进90秒", "后退300秒", "前进300秒"]);
+    assert.deepEqual(titles(),["后退2.5秒", "前进2.5秒", "后退90秒", "前进90秒", "后退300秒", "前进300秒"]);
     assert.deepEqual(host.command("forward-3").declaration.bindings, ["Shift+ArrowRight"]);
     assert.equal(host.command("forward-3").declaration.order, 215);
     assert.deepEqual(host.conflicts, []);

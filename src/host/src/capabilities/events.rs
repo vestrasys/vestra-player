@@ -1,7 +1,7 @@
 //! `events`: the player's events pushed to a plugin as they happen.
-use super::{Capability, Handled, Info, Method, Needs, Recorded, Residency};
-use crate::host::{Host, Reply, RpcError, string};
-use serde_json::Value;
+use super::{Call, Capability, Handled, Info, Method, Needs, Recorded, Residency};
+use crate::host::{Host, Origin, Reply, RpcError, string};
+use serde_json::{Value, json};
 
 pub struct Events;
 static INFO: Info = Info {
@@ -40,6 +40,37 @@ const EVENTS: &[&str] = &[
     "appearance.changed",
     "resolvers.fileTypes",
 ];
+/// Events a parked plugin is woken for (lazy activation §6.9): they follow
+/// a user's or a plugin's deliberate change (an install, a key edit, the
+/// palette, a resolver), never playback, so a listener of one does not keep
+/// its plugin running; the host records it and wakes the plugin to deliver
+/// the event. `source.state` (every 100 ms while playing), `window.state`
+/// (every resize step, menu and focus change), `playback.backend` (every
+/// mpv event) and `timeline.changed` (every source and mark) keep it.
+pub(crate) const WAKE_EVENTS: &[&str] = &[
+    "packages.changed",
+    "bindings.changed",
+    "appearance.changed",
+    "resolvers.fileTypes",
+];
+/// The longest reason kept (the SDK's description of a listener), and how
+/// many per event.
+const WHY_LIMIT: usize = 300;
+const WHYS_LIMIT: usize = 16;
+
+/// `events.subscribe { why }`: the reasons, a list of strings (or one).
+fn reasons(why: &Value) -> Vec<String> {
+    let text = |value: &Value| {
+        value
+            .as_str()
+            .map(|why| why.chars().take(WHY_LIMIT).collect())
+    };
+    match why {
+        Value::Array(items) => items.iter().filter_map(text).take(WHYS_LIMIT).collect(),
+        other => text(other).into_iter().collect(),
+    }
+}
+
 impl Capability for Events {
     fn info(&self) -> &'static Info {
         &INFO
@@ -48,16 +79,66 @@ impl Capability for Events {
         METHODS
     }
     /// A listener is a receiver the host pushes to (§3.2); a mirror is not:
-    /// the SDK reads the state again when the plugin starts (§3.1).
+    /// the SDK reads the state again when the plugin starts (§3.1). A
+    /// listener of a wake event is recorded instead (§6.9).
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        match host.plugins.get(&owner) {
-            Some(plugin) if plugin.subscriptions.values().any(|active| *active) => {
-                Recorded::Live("an event listener")
-            }
-            _ => Recorded::Nothing,
+        let Some(plugin) = host.plugins.get(&owner) else {
+            return Recorded::Nothing;
+        };
+        let listened = plugin
+            .subscriptions
+            .iter()
+            .filter(|(_, active)| **active)
+            .map(|(event, _)| event.as_str())
+            .collect::<Vec<_>>();
+        if listened.iter().any(|event| !WAKE_EVENTS.contains(event)) {
+            return Recorded::Live("an event listener");
+        }
+        if listened.is_empty() {
+            return Recorded::Nothing;
+        }
+        Recorded::Calls(
+            listened
+                .into_iter()
+                .map(|event| Call::new("events.subscribe", json!({ "event": event })))
+                .collect(),
+        )
+    }
+    /// The woken plugin subscribes again itself.
+    fn rekey(&self, host: &mut Host, from: u64, _: u64) {
+        host.lazy.wakes.remove(&from);
+    }
+    /// A parked plugin keeps its wake events; otherwise they go.
+    fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
+        if !keep_recorded {
+            host.lazy.wakes.remove(&owner);
+            return;
+        }
+        let Some(plugin) = host.plugins.get(&owner) else {
+            return;
+        };
+        let wakes = plugin
+            .subscriptions
+            .iter()
+            .filter(|(event, active)| **active && WAKE_EVENTS.contains(&event.as_str()))
+            .map(|(event, _)| event.clone())
+            .collect::<std::collections::BTreeSet<_>>();
+        if !wakes.is_empty() {
+            host.lazy.wakes.insert(owner, wakes);
         }
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
+    fn replay(&self, host: &mut Host, owner: u64, _: &Origin, call: &Call) -> Handled {
+        let event = string(&call.params, "event")?;
+        if call.method != "events.subscribe" || !WAKE_EVENTS.contains(&event) {
+            return Err(RpcError::new("unsupported", "not a recorded method"));
+        }
+        host.lazy
+            .wakes
+            .entry(owner)
+            .or_default()
+            .insert(event.to_owned());
+        Ok(None)
+    }
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         let event = string(params, "event")?;
         if !EVENTS.contains(&event) {
@@ -69,8 +150,17 @@ impl Capability for Events {
             // between mirror and listener as listeners come and go.
             let mirror = params["mirror"] == true;
             plugin.subscriptions.insert(event.into(), !mirror);
+            // SDK 1.5.40: everything that listens, and where the plugin
+            // added it.
+            let whys = reasons(&params["why"]);
+            if mirror || whys.is_empty() {
+                plugin.listeners.remove(event);
+            } else {
+                plugin.listeners.insert(event.into(), whys);
+            }
         } else {
             plugin.subscriptions.remove(event);
+            plugin.listeners.remove(event);
         }
         Ok(Some(Value::Null))
     }

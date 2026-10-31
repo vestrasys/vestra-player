@@ -2,7 +2,9 @@
 //! binding table), and running the player's own actions (`host.run`).
 use super::{Call, Capability, Handled, Info, Method, Recorded, Residency, plugin};
 use crate::{
-    commands, core_actions,
+    commands,
+    conditions::{Conditions, Facts},
+    core_actions,
     host::{Host, Origin, Reply, RpcError, string},
     i18n, input_trace,
 };
@@ -44,10 +46,11 @@ impl Capability for Commands {
                 if let Some(state) = state.as_object_mut() {
                     state.insert("busy".into(), false.into());
                 }
-                Call::new(
-                    "commands.register",
-                    json!({"id":id,"revision":revision,"declaration":sent.declaration,"state":state}),
-                )
+                let mut params = json!({"id":id,"revision":revision,"declaration":sent.declaration,"state":state});
+                if !sent.when.is_null() {
+                    params["when"] = sent.when.clone();
+                }
+                Call::new("commands.register", params)
             })
             .collect();
         Recorded::Calls(calls)
@@ -128,11 +131,21 @@ fn register_or_update(
         register(host, reply.owner, &origin, params)?;
     } else {
         let (id, revision, state) = parsed(&origin, params)?;
+        let conditions = conditions(params)?;
         host.commands
             .update(reply.owner, id, revision, state)
             .map_err(|e| RpcError::new("command", e.to_string()))?;
+        refresh_conditions(host);
         host.commands
-            .note_sent(reply.owner, id, None, params["state"].clone());
+            .set_conditions(reply.owner, id, conditions)
+            .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
+        host.commands.note_sent(
+            reply.owner,
+            id,
+            None,
+            params["state"].clone(),
+            params["when"].clone(),
+        );
     }
     Ok(json!({"revision":host.commands.revision()}))
 }
@@ -171,6 +184,7 @@ fn register(
     params: &Value,
 ) -> std::result::Result<(), RpcError> {
     let (id, revision, state) = parsed(origin, params)?;
+    let conditions = conditions(params)?;
     let texts = origin.texts();
     // Text values in the title and path: the key is their
     // English rendering, the shown text their translation.
@@ -221,11 +235,16 @@ fn register(
     host.commands
         .register(owner, &origin.id, id.into(), revision, declaration, state)
         .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
+    refresh_conditions(host);
+    host.commands
+        .set_conditions(owner, id, conditions)
+        .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
     host.commands.note_sent(
         owner,
         id,
         Some(params["declaration"].clone()),
         params["state"].clone(),
+        params["when"].clone(),
     );
     host.input
         .borrow_mut()
@@ -233,6 +252,28 @@ fn register(
         .declare(owner, id, &origin.id, &bindings, panel, repeat)
         .map_err(RpcError::invalid)?;
     Ok(())
+}
+
+/// A register's or update's `when` (SDK 1.5.40, `plugin.when`): its
+/// `enabled` and `checked` conditions, evaluated by the player.
+fn conditions(params: &Value) -> std::result::Result<Option<Conditions>, RpcError> {
+    Conditions::parse(&params["when"]).map_err(RpcError::invalid)
+}
+
+/// The player's state that conditions read, as it is now: the registry
+/// evaluates every condition again when it changed (`Host::broadcast` of
+/// `source.state`, `window.state` and `appearance.changed`), and before a
+/// command's conditions are first evaluated.
+pub(crate) fn refresh_conditions(host: &mut Host) {
+    let language = host.language_preference();
+    let facts = Facts::new(
+        &host.last_source,
+        &host.window_facts,
+        // The palette shown: a retired id saved earlier shows the default.
+        crate::ui::theme::known(host.theme()),
+        language.as_deref().unwrap_or(i18n::SYSTEM),
+    );
+    host.commands.set_facts(facts);
 }
 
 /// `declaration.button`: `{ icon, order }`, the icon a name of the icon

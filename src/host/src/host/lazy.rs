@@ -43,6 +43,10 @@ const STARTING_OSD_MS: u64 = 400;
 /// How long a wake waits for the process its plugin was parked from (as
 /// `packages.reload` waits, `RELOAD_WAIT_MS`).
 const STOP_WAIT_MS: u64 = 20_000;
+/// How long after start-up settled wake events still wake nothing: a
+/// state change of start-up (a plugin starting → running) reaches the
+/// next announcement up to 200 ms later (`notify_tick`).
+const QUIET_AFTER_START_MS: u64 = 1_000;
 /// What a parked plugin is woken by (the recorded entries' triggers).
 const TRIGGERS: &[&str] = &[
     "commands.execute",
@@ -302,6 +306,17 @@ pub(crate) struct Lazy {
     classifying: BTreeMap<u64, u64>,
     /// Each running plugin's class at its last ready (§3.4).
     classes: BTreeMap<u64, Class>,
+    /// Parked owners' recorded listeners of wake events
+    /// (`capabilities::events::WAKE_EVENTS`, §6.9): such an event wakes
+    /// the plugin, which receives it at its ready.
+    pub wakes: BTreeMap<u64, BTreeSet<String>>,
+    /// Set around an announcement that wakes no parked plugin: the first
+    /// `packages.changed` and `bindings.changed` of a run (nothing changed
+    /// for a plugin that last ran in an earlier one).
+    pub mute: bool,
+    /// When start-up settled (`lazy_settled`, latched once per run): wake
+    /// events wake nothing before `QUIET_AFTER_START_MS` after it.
+    settled_at: Option<u64>,
     /// First runs waiting for a place (manifest ids, in start order).
     pub first_queue: VecDeque<String>,
     /// First runs in flight: started, not yet resident or parked and gone.
@@ -395,6 +410,16 @@ impl Lazy {
     }
 }
 
+/// Hold `message`, an event for a plugin that is not ready (parked or
+/// waking): one of the same event already held goes, so the plugin receives
+/// only the newest, after what came before it (§6.9; the data is a state,
+/// the list of plugins or the palette).
+pub(crate) fn hold_event(queue: &mut Vec<Value>, message: Value) {
+    let event = message["event"].clone();
+    queue.retain(|held| held["event"] != event);
+    queue.push(message);
+}
+
 fn event(message: &Value) -> Option<&str> {
     message["event"].as_str()
 }
@@ -484,6 +509,66 @@ impl Host {
             }
             Err(error) => self.wake_failed(from, parked, &error.to_string()),
         }
+    }
+    /// `Host::broadcast` of `event`: each parked plugin that listened to it
+    /// (a wake event, §6.9) is woken and receives it at its ready; a newer
+    /// one of the same event replaces one still held. Not while the player
+    /// starts nor for `QUIET_AFTER_START_MS` after it settled
+    /// (`lazy_settled`), nor for the first announcement of a run
+    /// (`Lazy::mute`): the plugins registering then are not a change, and a
+    /// woken plugin reads the current state when it starts anyway.
+    pub(crate) fn lazy_event(&mut self, event: &str, data: &Value) {
+        if self.lazy.mute {
+            return;
+        }
+        // Every broadcast comes here (`source.state` ten times a second):
+        // the listeners first, the start-up check only when there is one.
+        let owners = self
+            .lazy
+            .wakes
+            .iter()
+            .filter(|(_, events)| events.contains(event))
+            .map(|(owner, _)| *owner)
+            .collect::<Vec<_>>();
+        let now = self.now_ms();
+        let quiet = self
+            .lazy
+            .settled_at
+            .is_none_or(|at| now.saturating_sub(at) < QUIET_AFTER_START_MS);
+        if owners.is_empty() || quiet {
+            return;
+        }
+        for owner in owners {
+            let Some(parked) = self.lazy.parked.get_mut(&owner) else {
+                continue;
+            };
+            hold_event(&mut parked.triggers, json!({"event":event,"data":data}));
+            self.wake(owner);
+        }
+    }
+    /// Start-up is over: every installed plugin started, replayed or
+    /// queued has run its first activation (as files opened at launch wait,
+    /// `open_files_tick`).
+    fn lazy_settled(&mut self) -> bool {
+        if !self.packages_started()
+            || self.builtin_first_run_queued()
+            || !self.lazy.first_queue.is_empty()
+        {
+            return false;
+        }
+        let now = self.now_ms();
+        let owners = self
+            .plugins
+            .keys()
+            .filter(|owner| !self.lazy.waking.contains_key(owner))
+            .copied()
+            .collect::<Vec<_>>();
+        !owners.into_iter().any(|owner| {
+            matches!(
+                self.activations.status(owner, now),
+                Ok(package_activation::Status::Pending { .. })
+            )
+        })
     }
     /// A settings page of `owner` is shown (§2.1): a parked plugin starts,
     /// so the page shows its current values and its callbacks have a
@@ -640,7 +725,11 @@ impl Host {
     /// answer comes before anything the plugin asks it after this
     /// (`lazy_answer`).
     fn lazy_classify(&mut self, owner: u64) {
-        if !self.lazy.enabled || self.lazy_key_of(owner).is_none() {
+        if self.lazy_key_of(owner).is_none() {
+            self.lazy_development(owner);
+            return;
+        }
+        if !self.lazy.enabled {
             return;
         }
         if let Err(reason) = capabilities::record(self, owner, &Value::Null) {
@@ -657,24 +746,66 @@ impl Host {
             self.lazy.classifying.insert(owner, now);
         }
     }
+    /// The listeners that keep `owner` running (the SDK's mirrors and wake
+    /// events left out), each as its SDK described it (`events.subscribe
+    /// { why }`, SDK 1.5.40: what listens and where the plugin added it):
+    /// every reason of an event, ` | ` between them: `; listens to
+    /// source.state: command "Save" enabled is a function that reads
+    /// plugin.player.state (main.ts:361) — use plugin.when | a listener added
+    /// at dialog.ts:183`. Empty without one.
+    pub(crate) fn lazy_listeners(&self, owner: u64) -> String {
+        let Some(plugin) = self.plugins.get(&owner) else {
+            return String::new();
+        };
+        let listeners = plugin
+            .subscriptions
+            .iter()
+            .filter(|(event, active)| {
+                **active && !capabilities::WAKE_EVENTS.contains(&event.as_str())
+            })
+            .map(|(event, _)| match plugin.listeners.get(event) {
+                Some(whys) => format!("{event}: {}", whys.join(" | ")),
+                None => event.clone(),
+            })
+            .collect::<Vec<_>>();
+        if listeners.is_empty() {
+            String::new()
+        } else {
+            format!("; listens to {}", listeners.join("; "))
+        }
+    }
+    /// A development load (`--plugin`) is never parked; at its ready the
+    /// log says whether it could be, and if not why, for its author
+    /// (§6.9). Only the host's half: what the playback worker holds for it
+    /// (a filter chain, a stream) is not asked.
+    fn lazy_development(&mut self, owner: u64) {
+        let Some(plugin) = self.plugins.get(&owner) else {
+            return;
+        };
+        if !matches!(plugin.data_key, process::DataKey::Development(_)) {
+            return;
+        }
+        let id = plugin.manifest.id.clone();
+        match capabilities::record(self, owner, &Value::Null) {
+            Err(reason) => diag!(
+                "plugin {id}: keeps running while idle: {reason}{}",
+                self.lazy_listeners(owner)
+            ),
+            Ok(_) => diag!(
+                "plugin {id}: may be stopped while idle (it holds nothing only its process can serve; a filter chain or a stream would keep it)"
+            ),
+        }
+    }
     /// `owner`'s class at its ready: kept for its recording; a resident one
     /// is recorded as such now (the next start launches it, even after a
     /// crash); a lazy first run is parked at once (§2.4).
     fn lazy_classified(&mut self, owner: u64, resident: Option<String>, backend: Value) {
         let id = self.plugin_id(owner);
         match &resident {
-            Some(reason) => {
-                // Which events it listens to (the SDK's mirrors left out).
-                let listening = self.plugins.get(&owner).map_or_else(Vec::new, |plugin| {
-                    plugin
-                        .subscriptions
-                        .iter()
-                        .filter(|(_, active)| **active)
-                        .map(|(event, _)| event.as_str())
-                        .collect()
-                });
-                diag!("lazy: {id} classified resident: {reason} {listening:?}")
-            }
+            Some(reason) => diag!(
+                "lazy: {id} classified resident: {reason}{}",
+                self.lazy_listeners(owner)
+            ),
             None => diag!("lazy: {id} classified lazy"),
         }
         let first_run = self.lazy.first_runs.contains(&owner);
@@ -778,6 +909,10 @@ impl Host {
             return;
         }
         self.lazy.next_check = now + CHECK_MS;
+        if self.lazy.settled_at.is_none() && self.lazy_settled() {
+            diag!("lazy: start-up settled");
+            self.lazy.settled_at = Some(now);
+        }
         self.lazy_classify_tick(now);
         self.lazy_first_runs_tick();
         let owners = self.plugins.keys().copied().collect::<Vec<_>>();
@@ -935,13 +1070,14 @@ impl Host {
                 self.lazy.touch(owner, now);
                 if self.lazy.told.insert(owner, reason) != Some(reason) {
                     diag!(
-                        "lazy: {} stays running: {reason}{}",
+                        "lazy: {} stays running: {reason}{}{}",
                         self.plugin_id(owner),
                         answer["live"]
                             .as_array()
                             .filter(|live| !live.is_empty())
                             .map(|live| format!(" {}", Value::Array(live.clone())))
-                            .unwrap_or_default()
+                            .unwrap_or_default(),
+                        self.lazy_listeners(owner)
                     );
                 }
                 return;
@@ -1146,6 +1282,28 @@ mod tests {
         };
         assert_eq!(missing.image_roots(), [package.path().to_owned()]);
         assert_eq!(missing.text("Hello"), "你好");
+    }
+
+    /// Review M1: a woken plugin receives wake events in order, only the
+    /// newest of each, after the trigger that came before them.
+    #[test]
+    fn held_events_keep_their_order_and_only_the_newest_of_each() {
+        let mut queue = vec![json!({"event":"commands.execute","data":{"id":"a"}})];
+        hold_event(&mut queue, json!({"event":"packages.changed","data":1}));
+        hold_event(&mut queue, json!({"event":"appearance.changed","data":"x"}));
+        hold_event(&mut queue, json!({"event":"packages.changed","data":2}));
+        let order = queue
+            .iter()
+            .map(|m| (m["event"].as_str().unwrap(), m["data"].clone()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            order,
+            [
+                ("commands.execute", json!({"id":"a"})),
+                ("appearance.changed", json!("x")),
+                ("packages.changed", json!(2)),
+            ]
+        );
     }
 
     #[test]

@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::conditions::{Conditions, Facts};
+
 pub type OwnerGeneration = u64;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -350,6 +352,11 @@ pub struct Registry {
     /// Each command as its plugin sent it (`declaration`, last `state`),
     /// for its recording.
     sent: BTreeMap<CommandKey, Sent>,
+    /// Commands whose `enabled` or `checked` is a condition on the
+    /// player's state (`plugin.when`, crate::conditions), evaluated here.
+    conditions: BTreeMap<CommandKey, Conditions>,
+    /// What the conditions were last evaluated against.
+    facts: Facts,
 }
 
 /// A command's registration and last state in the form its plugin sent
@@ -358,6 +365,8 @@ pub struct Registry {
 pub struct Sent {
     pub declaration: serde_json::Value,
     pub state: serde_json::Value,
+    /// Its conditions (`when`), `Null` without.
+    pub when: serde_json::Value,
 }
 
 fn text(value: &str, label: &str, limit: usize) -> Result<()> {
@@ -655,6 +664,7 @@ impl Registry {
                 self.commands.remove(&gone);
                 self.recorded.remove(&gone);
                 self.sent.remove(&gone);
+                self.conditions.remove(&gone);
             }
         }
         let sequence = match self.commands.get(&key).filter(|_| replaced) {
@@ -666,6 +676,7 @@ impl Registry {
         };
         self.recorded.remove(&key);
         self.sent.remove(&key);
+        self.conditions.remove(&key);
         self.commands.insert(
             key.clone(),
             CommandSnapshot {
@@ -689,6 +700,7 @@ impl Registry {
         id: &str,
         declaration: Option<serde_json::Value>,
         state: serde_json::Value,
+        when: serde_json::Value,
     ) {
         let key = CommandKey {
             owner,
@@ -699,9 +711,19 @@ impl Registry {
         }
         match (declaration, self.sent.get_mut(&key)) {
             (Some(declaration), _) => {
-                self.sent.insert(key, Sent { declaration, state });
+                self.sent.insert(
+                    key,
+                    Sent {
+                        declaration,
+                        state,
+                        when,
+                    },
+                );
             }
-            (None, Some(sent)) => sent.state = state,
+            (None, Some(sent)) => {
+                sent.state = state;
+                sent.when = when;
+            }
             (None, None) => (),
         }
     }
@@ -760,6 +782,7 @@ impl Registry {
         for key in &keys {
             self.recorded.remove(key);
             self.sent.remove(key);
+            self.conditions.remove(key);
             self.commands.remove(key);
         }
         self.revision = next;
@@ -790,6 +813,9 @@ impl Registry {
             }
             if self.recorded.remove(&key) {
                 self.recorded.insert(moved.clone());
+            }
+            if let Some(conditions) = self.conditions.remove(&key) {
+                self.conditions.insert(moved.clone(), conditions);
             }
             if let Some(sent) = self.sent.remove(&key) {
                 self.sent.insert(moved, sent);
@@ -847,6 +873,7 @@ impl Registry {
             self.commands.retain(|key, _| key.owner != owner);
             self.recorded.retain(|key| key.owner != owner);
             self.sent.retain(|key, _| key.owner != owner);
+            self.conditions.retain(|key, _| key.owner != owner);
             self.revision = next;
         }
         Ok(count)
@@ -865,8 +892,69 @@ impl Registry {
         self.commands.remove(&key);
         self.recorded.remove(&key);
         self.sent.remove(&key);
+        self.conditions.remove(&key);
         self.revision = next;
         Ok(())
+    }
+
+    /// The conditions of `id` after its register or update (`None`: its
+    /// state is what the plugin sent). The state just stored is the
+    /// plugin's; its condition fields are replaced by their value now.
+    pub fn set_conditions(
+        &mut self,
+        owner: OwnerGeneration,
+        id: &str,
+        conditions: Option<Conditions>,
+    ) -> Result<()> {
+        let key = CommandKey {
+            owner,
+            local_id: id.into(),
+        };
+        let entry = self
+            .commands
+            .get(&key)
+            .ok_or_else(|| CommandError::Missing(key.clone()))?;
+        let Some(mut conditions) = conditions else {
+            self.conditions.remove(&key);
+            return Ok(());
+        };
+        conditions.reason = entry.state.reason.clone();
+        let shown = conditions.apply(&entry.state, &self.facts);
+        if shown != entry.state {
+            let next = self.next_revision()?;
+            self.commands
+                .get_mut(&key)
+                .expect("entry checked in this serial method")
+                .state = shown;
+            self.revision = next;
+        }
+        self.conditions.insert(key, conditions);
+        Ok(())
+    }
+
+    /// The player's state changed: every condition is evaluated again.
+    /// Whether a command's state changed (menus and keys follow the
+    /// registry's revision).
+    pub fn set_facts(&mut self, facts: Facts) -> bool {
+        if facts == self.facts {
+            return false;
+        }
+        self.facts = facts;
+        let mut changed = false;
+        for (key, conditions) in &self.conditions {
+            let Some(entry) = self.commands.get_mut(key) else {
+                continue;
+            };
+            let shown = conditions.apply(&entry.state, &self.facts);
+            if shown != entry.state {
+                entry.state = shown;
+                changed = true;
+            }
+        }
+        if changed && let Ok(next) = self.next_revision() {
+            self.revision = next;
+        }
+        changed
     }
 
     pub fn get(&self, owner: OwnerGeneration, id: &str) -> Option<&CommandSnapshot> {
@@ -2065,9 +2153,16 @@ mod button_tests {
                 id,
                 Some(serde_json::json!({"title":path[1]})),
                 serde_json::json!({"enabled":true}),
+                serde_json::Value::Null,
             );
         }
-        registry.note_sent(2, "hello", None, serde_json::json!({"enabled":false}));
+        registry.note_sent(
+            2,
+            "hello",
+            None,
+            serde_json::json!({"enabled":false}),
+            serde_json::Value::Null,
+        );
         assert_eq!(registry.sent_of(2).len(), 2);
         assert_eq!(
             registry.sent_of(2)[1].2.state,
@@ -2145,5 +2240,80 @@ mod button_tests {
         // Removing an owner forgets its recorded marks and what it sent.
         registry.remove_owner(3).unwrap();
         assert!(registry.sent_of(3).is_empty());
+    }
+
+    /// `plugin.when`: the registry evaluates a command's conditions against
+    /// the player's state, again whenever it changes, for a parked owner
+    /// too, and through a wake.
+    #[test]
+    fn conditions_follow_the_players_state_through_park_and_wake() {
+        use crate::conditions::{Conditions, Facts};
+        let facts = |phase: &str, fullscreen: bool| {
+            Facts::new(
+                &serde_json::json!({"phase":phase,"capabilities":{"snapshotSource":true}}),
+                &serde_json::json!({"fullscreen":fullscreen}),
+                "vestra",
+                "system",
+            )
+        };
+        let when = |value| Conditions::parse(&value).unwrap();
+        let mut registry = Registry::new();
+        registry.set_facts(facts("empty", false));
+        let sent = CommandState {
+            enabled: true,
+            checked: Some(false),
+            busy: false,
+            reason: Some("No frame to capture".into()),
+        };
+        registry
+            .register(
+                2,
+                "capture",
+                "save".into(),
+                1,
+                Declaration::new("Save", &["Video", "Save"]),
+                sent.clone(),
+            )
+            .unwrap();
+        registry
+            .set_conditions(
+                2,
+                "save",
+                when(serde_json::json!({
+                    "enabled":{"all":[{"can":"snapshot"},{"phase":["ready","ended"]}]},
+                    "checked":{"fullscreen":true}})),
+            )
+            .unwrap();
+        let shown = |registry: &Registry, owner| registry.get(owner, "save").unwrap().state.clone();
+        assert!(!shown(&registry, 2).enabled);
+        assert_eq!(
+            shown(&registry, 2).reason.as_deref(),
+            Some("No frame to capture")
+        );
+        assert!(registry.resolve_execution(2, "save").is_err());
+        // Parked: the state still follows; the key resolves as shown.
+        registry.mark_recorded(2);
+        let revision = registry.revision();
+        assert!(registry.set_facts(facts("ready", true)));
+        assert!(registry.revision() > revision);
+        assert_eq!(
+            (shown(&registry, 2).enabled, shown(&registry, 2).checked),
+            (true, Some(true))
+        );
+        assert_eq!(shown(&registry, 2).reason, None);
+        assert!(registry.resolve_execution(2, "save").is_ok());
+        // The same facts again: nothing changes.
+        let revision = registry.revision();
+        assert!(!registry.set_facts(facts("ready", true)));
+        assert_eq!(registry.revision(), revision);
+        // Woken: the conditions move with the entry.
+        registry.rekey(2, 9).unwrap();
+        assert!(registry.set_facts(facts("empty", true)));
+        assert!(!shown(&registry, 9).enabled);
+        // An update without conditions: the plugin's own state again.
+        registry.update(9, "save", 2, sent.clone()).unwrap();
+        registry.set_conditions(9, "save", None).unwrap();
+        assert!(!registry.set_facts(facts("ready", false)));
+        assert_eq!(shown(&registry, 9), sent);
     }
 }

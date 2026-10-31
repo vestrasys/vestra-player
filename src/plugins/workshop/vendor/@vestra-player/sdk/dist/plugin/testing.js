@@ -86,6 +86,8 @@ import { nodeProblem, VIDEO_PROCESSING_LIMITS } from "../processing.js";
 import { shaderIdProblem, shaderListProblem } from "./shaders.js";
 import { RENDER_DEFAULTS, renderProblem, VIEW_DEFAULTS, viewProblem, } from "./view.js";
 import { createPlugin } from "./index.js";
+import { evaluate } from "./when.js";
+import { WAKE_EVENTS } from "./runtime.js";
 import { THEMES } from "./appearance.js";
 import { Catalog, format as formatTemplate, HOST_GROUPS, HOST_ZH_HANS, LOCALES, fitColumns, isTextValue, LIST_SEPARATORS, loadPackageCatalog, menuKeys, renderTemplateArgs, renderText, resolveTexts, TEXT_LIMITS, textKey, textProblem, } from "../i18n.js";
 /** Throw one of these from `host.handle(...)` to simulate a definite refusal. */
@@ -410,6 +412,16 @@ export class TestHost {
      * @since 1.5.38
      */
     listening = new Set();
+    /**
+     * Why the plugin listens to each event of {@link TestHost.listening}:
+     * every listener and every binding that reads its state, as the
+     * player's log says them (`a listener added at main.ts:12`,
+     * `command "Save" enabled is a function that reads plugin.player.state
+     * (main.ts:40) — use plugin.when`), in the order they came.
+     *
+     * @since 1.5.40
+     */
+    listeningWhy = new Map();
     /**
      * The player's source facts (phase, position, duration, paused, rate,
      * audio tracks, loop, ...). Wire-level shape; change it with
@@ -3525,6 +3537,79 @@ export class TestHost {
             },
         };
     }
+    /** A command's state as the player shows it: its conditions evaluated. */
+    #commandShown(sent, when) {
+        if (!when)
+            return sent;
+        const source = this.source;
+        const capabilities = source.capabilities;
+        const facts = {
+            phase: source.phase,
+            paused: source.paused,
+            kind: source.kind === "producer" ? "stream" : "media",
+            can: {
+                pause: capabilities.pause,
+                seek: capabilities.seek,
+                rate: capabilities.rate,
+                restart: capabilities.restart,
+                close: capabilities.close,
+                snapshot: capabilities.snapshotSource,
+                // As the player: the flags merged into the source state.
+                next: source.sequence?.next === true,
+                previous: source.sequence?.previous === true,
+            },
+            fullscreen: this.mainWindow.fullscreen,
+            theme: this.appearance,
+            language: this.language,
+        };
+        const shown = { ...sent };
+        if (when.enabled) {
+            shown.enabled = evaluate(when.enabled, facts);
+            if (shown.enabled && !shown.busy)
+                shown.reason = null;
+        }
+        if (when.checked)
+            shown.checked = evaluate(when.checked, facts);
+        return shown;
+    }
+    /**
+     * Why the player would keep this plugin running while nothing uses it
+     * (lazy activation, player 0.5.21), one line per reason, as the player's
+     * log says it: an event it listens to that is not one the player wakes
+     * it for (with what listens and where it was added), its mounted panel,
+     * its open windows. Empty: the player may stop it while idle and start
+     * it again on its next use. Filter chains, streams, jobs and the like
+     * (which also keep a plugin running) are not listed.
+     *
+     * @capability None.
+     * @since 1.5.40
+     *
+     * @example Check that a plugin can be stopped while idle
+     * The test fails if the plugin keeps running for no reason after it
+     * starts, and names the reason (a command whose `enabled` reads
+     * `plugin.player.state`, say: give it a `plugin.when` condition). The
+     * player stops such a plugin while nothing uses it and starts it again
+     * on its next use, so it costs no process meanwhile.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * assert.deepEqual(host.keepsRunning, []);
+     * ```
+     */
+    get keepsRunning() {
+        const reasons = [];
+        for (const event of this.listening)
+            if (!WAKE_EVENTS.includes(event))
+                for (const why of this.listeningWhy.get(event) ?? ["a listener"])
+                    reasons.push(`listens to ${event}: ${why}`);
+        if (this.panel)
+            reasons.push("a mounted panel");
+        for (const [id, window] of this.windows)
+            if (window.visible)
+                reasons.push(`an open window (${id})`);
+        return reasons;
+    }
     #defaults = {
         "events.subscribe": (p) => {
             const event = String(p.event);
@@ -3533,10 +3618,15 @@ export class TestHost {
                 this.listening.delete(event);
             else
                 this.listening.add(event);
+            if (p.mirror !== true && Array.isArray(p.why))
+                this.listeningWhy.set(event, p.why.map(String));
+            else
+                this.listeningWhy.delete(event);
         },
         "events.unsubscribe": (p) => {
             this.subscriptions.delete(String(p.event));
             this.listening.delete(String(p.event));
+            this.listeningWhy.delete(String(p.event));
         },
         "commands.register": (p) => {
             const id = String(p.id);
@@ -3577,12 +3667,19 @@ export class TestHost {
             for (const segment of [declaration.title, ...(declaration.path ?? [])])
                 this.#declared(segment, "a menu text");
             this.#checkReason(p.state);
+            let sent = p.state;
             this.commands.set(id, {
                 declaration,
                 get display() {
                     return host.#display(declaration.path ?? [], declaration.title, this.state.reason);
                 },
-                state: p.state,
+                ...(p.when ? { when: p.when } : {}),
+                get state() {
+                    return host.#commandShown(sent, this.when);
+                },
+                set state(state) {
+                    sent = state;
+                },
                 revision: Number(p.revision),
                 async run() {
                     if (this.state.busy || !this.state.enabled)
@@ -3604,6 +3701,10 @@ export class TestHost {
             this.#checkReason(p.state);
             command.revision = Number(p.revision);
             command.state = p.state;
+            if (p.when)
+                command.when = p.when;
+            else
+                delete command.when;
             return { revision: command.revision };
         },
         "ui.open": (p) => {
@@ -4941,6 +5042,24 @@ export class TestHost {
         },
     };
 }
+/** Lines `vestra-plugin test` printed already (one per plugin and reasons). */
+const told = new Set();
+/**
+ * Under `vestra-plugin test` (`VESTRA_PLUGIN_RESIDENCY=1`): say once per
+ * test file why the plugin would keep running after it starts.
+ */
+function tellResidency(host) {
+    if (process.env.VESTRA_PLUGIN_RESIDENCY !== "1")
+        return;
+    const reasons = host.keepsRunning;
+    if (!reasons.length)
+        return;
+    const line = `${host.manifestId} keeps running while idle (lazy activation): ${reasons.join("; ")}`;
+    if (told.has(line))
+        return;
+    told.add(line);
+    console.log(`# ${line}`);
+}
 /**
  * Activate a plugin against a test host, the way the player's runner does:
  * build the `plugin` object, call `activate(plugin)`, wait for every
@@ -5052,6 +5171,7 @@ export async function startPlugin(activate, options = {}) {
         }
     }
     await host.settle();
+    tellResidency(host);
     return {
         /** The test host the plugin talks to. */
         host,
