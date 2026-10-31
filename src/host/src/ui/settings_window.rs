@@ -96,6 +96,12 @@ pub struct Settings {
     /// The `settings-check` thread's queue: (page serial, options window
     /// source with that page alone).
     checker: Option<mpsc::Sender<(u64, String)>>,
+    /// Lazy activation: pages (by serial) kept for an owner without a
+    /// process; a live registration of the same id replaces one.
+    recorded: std::collections::BTreeSet<u64>,
+    /// Each page's `settings.register` as its plugin sent it, without the
+    /// properties (the page keeps the current ones): its recording.
+    sent: BTreeMap<u64, Value>,
 }
 
 /// Compiles each registered page on its own on a thread of its own, so that
@@ -287,9 +293,86 @@ impl Settings {
         let before = self.pages.len();
         self.pages.retain(|p| p.owner != owner);
         let changed = self.pages.len() != before;
+        self.forget_gone();
         self.stale |= changed && self.open.is_some();
         changed
     }
+    /// Drops the recorded marks and sent registrations of removed pages.
+    fn forget_gone(&mut self) {
+        let serials = self
+            .pages
+            .iter()
+            .chain(self.checking.iter().map(|(_, page, _)| page))
+            .map(|p| p.serial)
+            .collect::<std::collections::BTreeSet<_>>();
+        self.recorded.retain(|serial| serials.contains(serial));
+        self.sent.retain(|serial, _| serials.contains(serial));
+    }
+    fn is_recorded(&self, page: &Page) -> bool {
+        self.recorded.contains(&page.serial)
+    }
+    /// Park: `owner`'s pages stay, marked recorded.
+    pub fn mark_recorded(&mut self, owner: u64) {
+        let serials = self
+            .pages
+            .iter()
+            .filter(|p| p.owner == owner)
+            .map(|p| p.serial)
+            .collect::<Vec<_>>();
+        self.recorded.extend(serials);
+    }
+    /// At `runtime.ready` of a woken plugin: its recorded pages it did not
+    /// register again go.
+    pub fn remove_recorded(&mut self, owner: u64) -> bool {
+        let before = self.pages.len();
+        let recorded = std::mem::take(&mut self.recorded);
+        self.pages
+            .retain(|p| !(p.owner == owner && recorded.contains(&p.serial)));
+        self.recorded = recorded;
+        self.forget_gone();
+        let changed = self.pages.len() != before;
+        self.stale |= changed && self.open.is_some();
+        changed
+    }
+    /// Wake: `from`'s pages move to generation `to`. An open window is built
+    /// again, since its callbacks name the owner.
+    pub fn rekey(&mut self, from: u64, to: u64) {
+        let mut moved = false;
+        for page in self.pages.iter_mut().filter(|p| p.owner == from) {
+            page.owner = to;
+            moved = true;
+        }
+        self.stale |= moved && self.open.is_some();
+    }
+    /// `owner`'s pages as `settings.register` calls, each with its current
+    /// properties; `None` when one has no sent form (cannot be recorded).
+    pub fn recording(&self, owner: u64) -> Option<Vec<Value>> {
+        self.pages
+            .iter()
+            .filter(|p| p.owner == owner)
+            .map(|page| {
+                let mut call = self.sent.get(&page.serial)?.clone();
+                call["properties"] = json!(page.properties);
+                Some(call)
+            })
+            .collect()
+    }
+    /// Whether `owner` has a page compiling or showing in the open window
+    /// (it waits for, or answers, its plugin).
+    pub fn busy(&self, owner: u64) -> bool {
+        self.checking.iter().any(|(reply, ..)| reply.owner == owner)
+            || self.open.is_some() && self.pages.iter().any(|p| p.owner == owner)
+    }
+}
+
+/// A `settings.register` as recorded: what the plugin sent, without the
+/// initial properties (the recording carries the page's current ones).
+fn sent_page(params: &Value) -> Value {
+    let mut sent = params.clone();
+    if let Some(object) = sent.as_object_mut() {
+        object.remove("properties");
+    }
+    sent
 }
 
 fn params_page(params: &Value) -> std::result::Result<&str, RpcError> {
@@ -315,71 +398,54 @@ impl Host {
         let owner = reply.owner;
         match method {
             "settings.register" => {
-                let id = params_page(params)?.to_owned();
-                let category = CATEGORIES
-                    .iter()
-                    .position(|name| params["category"] == *name)
-                    .ok_or_else(|| RpcError::invalid("unknown settings category"))?;
-                let title = string(params, "title")?;
-                if title.trim().is_empty() || title.chars().count() > 24 {
-                    return Err(RpcError::invalid("title needs 1–24 characters"));
-                }
-                let order = match &params["order"] {
-                    Value::Null => 0,
-                    order => order
-                        .as_i64()
-                        .filter(|o| o.abs() <= 1_000_000)
-                        .ok_or_else(|| RpcError::invalid("order: an integer within ±1000000"))?,
-                };
-                let checking = || {
-                    self.settings
-                        .checking
-                        .iter()
-                        .map(|(_, page, _)| page)
-                        .filter(|p| p.owner == owner)
-                };
-                if self.settings.page(owner, &id).is_some() || checking().any(|p| p.id == id) {
-                    return Err(RpcError::invalid(format!("page {id} already exists")));
-                }
-                if self
+                let origin = self
+                    .plugins
+                    .get(&owner)
+                    .map(process::Plugin::origin)
+                    .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
+                let (page, refused) = self.settings_page(owner, &origin, params)?;
+                // A woken plugin registers its recorded page again: the same
+                // files need no compile (the recording is of this package).
+                if let Some(recorded) = self
                     .settings
                     .pages
                     .iter()
-                    .filter(|p| p.owner == owner)
-                    .count()
-                    + checking().count()
-                    >= MAX_PAGES
+                    .find(|p| p.owner == owner && p.id == page.id)
+                    .filter(|p| {
+                        self.settings.is_recorded(p)
+                            && p.file == page.file
+                            && p.component == page.component
+                            && p.global == page.global
+                    })
+                    .cloned()
                 {
-                    return Err(RpcError::invalid("a plugin has at most 8 settings pages"));
+                    let page = Page {
+                        serial: recorded.serial,
+                        ..page
+                    };
+                    self.settings.recorded.remove(&page.serial);
+                    self.settings.sent.insert(page.serial, sent_page(params));
+                    let changed = recorded.properties != page.properties
+                        || recorded.title != page.title
+                        || recorded.category != page.category
+                        || recorded.order != page.order;
+                    if let Some(slot) = self
+                        .settings
+                        .pages
+                        .iter_mut()
+                        .find(|p| p.serial == page.serial)
+                    {
+                        *slot = page;
+                    }
+                    self.settings.stale |= changed && self.settings.open.is_some();
+                    self.report_refused(owner, refused);
+                    return Ok(Some(Value::Null));
                 }
-                let plugin = self
-                    .plugins
-                    .get(&owner)
-                    .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
-                let file = process::package_file(&plugin.directory, string(params, "file")?)?;
-                let manifest = plugin.manifest.id.clone();
-                let mut properties: BTreeMap<String, Value> =
-                    serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
-                        .map_err(|e| RpcError::invalid(e.to_string()))?;
-                let refused = crate::host::refuse_initial(&mut properties);
-                self.settings.next_serial += 1;
-                let page = Page {
-                    owner,
-                    manifest,
-                    id,
-                    category,
-                    title: plugin.text(title),
-                    order,
-                    serial: self.settings.next_serial,
-                    file,
-                    component: string(params, "component")?.into(),
-                    global: string(params, "global")?.into(),
-                    properties,
-                };
                 // Compile the page alone, so a broken page fails its own
                 // registration instead of the shared window: on the
                 // `settings-check` thread (`spawn_checker`); the reply waits.
                 let checked = source(&[&page])?;
+                self.settings.sent.insert(page.serial, sent_page(params));
                 if self.settings.checker.is_none() {
                     self.settings.checker = spawn_checker(self.events.clone());
                 }
@@ -390,8 +456,10 @@ impl Host {
                 if !queued {
                     // No thread: compiled here, as before.
                     self.settings.checker = None;
-                    composition::build(checked, "OptionsWindow")
-                        .map_err(|e| RpcError::new("ui-prepare", format!("{e:#}")))?;
+                    if let Err(error) = composition::build(checked, "OptionsWindow") {
+                        self.settings.forget_gone();
+                        return Err(RpcError::new("ui-prepare", format!("{error:#}")));
+                    }
                     self.settings_add(page, refused);
                     return Ok(Some(Value::Null));
                 }
@@ -421,6 +489,7 @@ impl Host {
                 self.settings
                     .pages
                     .retain(|p| !(p.owner == owner && p.id == id));
+                self.settings.forget_gone();
                 if self.settings.pages.len() != before {
                     self.images.release_view(owner, &format!("$settings:{id}"));
                     self.settings.stale |= self.settings.open.is_some();
@@ -475,6 +544,94 @@ impl Host {
             }
             _ => Err(RpcError::new("unsupported", "unknown settings method")),
         }
+    }
+    /// A `settings.register` of `owner`'s (from `origin`, its package),
+    /// checked, with a new serial: the page and its refused initial
+    /// properties. A recorded page of the same id does not count against it.
+    fn settings_page(
+        &mut self,
+        owner: u64,
+        origin: &crate::host::Origin,
+        params: &Value,
+    ) -> std::result::Result<(Page, Vec<RpcError>), RpcError> {
+        let id = params_page(params)?.to_owned();
+        let category = CATEGORIES
+            .iter()
+            .position(|name| params["category"] == *name)
+            .ok_or_else(|| RpcError::invalid("unknown settings category"))?;
+        let title = string(params, "title")?;
+        if title.trim().is_empty() || title.chars().count() > 24 {
+            return Err(RpcError::invalid("title needs 1–24 characters"));
+        }
+        let order = match &params["order"] {
+            Value::Null => 0,
+            order => order
+                .as_i64()
+                .filter(|o| o.abs() <= 1_000_000)
+                .ok_or_else(|| RpcError::invalid("order: an integer within ±1000000"))?,
+        };
+        let settings = &self.settings;
+        let live = || {
+            settings
+                .pages
+                .iter()
+                .filter(|p| p.owner == owner && !settings.is_recorded(p))
+                .chain(
+                    settings
+                        .checking
+                        .iter()
+                        .map(|(_, page, _)| page)
+                        .filter(|p| p.owner == owner),
+                )
+        };
+        if live().any(|p| p.id == id) {
+            return Err(RpcError::invalid(format!("page {id} already exists")));
+        }
+        if live().count() >= MAX_PAGES {
+            return Err(RpcError::invalid("a plugin has at most 8 settings pages"));
+        }
+        let file = process::package_file(&origin.directory, string(params, "file")?)?;
+        let mut properties: BTreeMap<String, Value> =
+            serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
+                .map_err(|e| RpcError::invalid(e.to_string()))?;
+        let refused = crate::host::refuse_initial(&mut properties);
+        self.settings.next_serial += 1;
+        let page = Page {
+            owner,
+            manifest: origin.id.clone(),
+            id,
+            category,
+            title: origin.text(title),
+            order,
+            serial: self.settings.next_serial,
+            file,
+            component: string(params, "component")?.into(),
+            global: string(params, "global")?.into(),
+            properties,
+        };
+        Ok((page, refused))
+    }
+    /// Replays a recorded `settings.register` for a parked `owner`: the page
+    /// is added as recorded, without a compile (it compiled when recorded,
+    /// and the recording is of this package).
+    pub(crate) fn settings_replay(
+        &mut self,
+        owner: u64,
+        origin: &crate::host::Origin,
+        params: &Value,
+    ) -> std::result::Result<(), RpcError> {
+        let (page, _) = self.settings_page(owner, origin, params)?;
+        if self.settings.page(owner, &page.id).is_some() {
+            return Err(RpcError::invalid(format!(
+                "page {} already exists",
+                page.id
+            )));
+        }
+        self.settings.sent.insert(page.serial, sent_page(params));
+        self.settings.recorded.insert(page.serial);
+        self.settings.pages.push(page);
+        self.settings.stale |= self.settings.open.is_some();
+        Ok(())
     }
     /// Open (or rebuild) the window, select the current page, bring it front.
     fn settings_open(&mut self) -> Result<()> {
@@ -668,7 +825,19 @@ impl Host {
     }
     fn settings_add(&mut self, page: Page, refused: Vec<RpcError>) {
         let owner = page.owner;
-        self.settings.pages.push(page);
+        // A recorded page of the same id (a woken plugin's, with other
+        // files) is replaced.
+        let recorded = &self.settings.recorded;
+        match self
+            .settings
+            .pages
+            .iter()
+            .position(|p| p.owner == owner && p.id == page.id && recorded.contains(&p.serial))
+        {
+            Some(index) => self.settings.pages[index] = page,
+            None => self.settings.pages.push(page),
+        }
+        self.settings.forget_gone();
         self.settings.stale |= self.settings.open.is_some();
         self.report_refused(owner, refused);
     }
@@ -689,6 +858,7 @@ impl Host {
         };
         let (reply, page, refused) = self.settings.checking.remove(index);
         if !self.plugins.contains_key(&reply.owner) {
+            self.settings.forget_gone();
             return;
         }
         match result {
@@ -696,7 +866,10 @@ impl Host {
                 self.settings_add(page, refused);
                 self.respond(reply, Ok(Value::Null));
             }
-            Err(message) => self.respond(reply, Err(RpcError::new("ui-prepare", message))),
+            Err(message) => {
+                self.settings.forget_gone();
+                self.respond(reply, Err(RpcError::new("ui-prepare", message)))
+            }
         }
     }
     /// Pages added or removed while the window is open: rebuild it.
@@ -773,6 +946,48 @@ mod tests {
         assert_eq!(pick(&sorted, Some("x/gone"), Some(6)).unwrap().id, "first");
         assert_eq!(pick(&sorted, Some("x/gone"), Some(1)).unwrap().id, "keys");
         assert!(pick(&[], None, None).is_none());
+    }
+
+    /// Lazy activation: a parked owner's pages stay recorded with their
+    /// current properties, move to the woken generation, and the ones not
+    /// registered again go at ready.
+    #[test]
+    fn recorded_pages_record_rekey_and_prune() {
+        let mut settings = Settings::default();
+        for (serial, id) in [(1, "keys"), (2, "mouse")] {
+            let mut page = page("x.hotkeys", id, 5, 0, serial);
+            page.owner = 4;
+            page.properties.insert("value".into(), json!(serial));
+            settings.pages.push(page);
+            settings.sent.insert(
+                serial,
+                sent_page(&json!({"id":id,"title":id,"properties":{"value":0}})),
+            );
+        }
+        settings.pages.push(page("y.other", "other", 0, 0, 3));
+        let calls = settings.recording(4).unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(
+            calls[0],
+            json!({"id":"keys","title":"keys","properties":{"value":1}})
+        );
+        // A page without its sent form cannot be recorded.
+        assert!(settings.recording(3).is_none());
+        settings.mark_recorded(4);
+        assert!(settings.is_recorded(&settings.pages[0]));
+        assert!(!settings.is_recorded(&settings.pages[2]));
+        settings.rekey(4, 9);
+        assert!(settings.page(4, "keys").is_none());
+        assert!(settings.page(9, "keys").is_some());
+        // The live plugin registers "keys" again (its mark goes); "mouse" goes.
+        settings.recorded.remove(&1);
+        assert!(settings.remove_recorded(9));
+        assert!(settings.page(9, "keys").is_some());
+        assert!(settings.page(9, "mouse").is_none());
+        assert!(!settings.sent.contains_key(&2));
+        assert!(!settings.remove_recorded(9));
+        assert!(settings.remove_owner(9));
+        assert!(settings.sent.is_empty() && settings.recorded.is_empty());
     }
 
     #[test]

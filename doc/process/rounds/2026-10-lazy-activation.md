@@ -311,7 +311,8 @@ After the "no idle stop" ruling above (08:19), the user asked how to reclaim plu
 | --- | --- |
 | C1 | Done, pending review: `src/host/src/capabilities/`, `src/host/capabilities.json`, the agreement test reads the JSON |
 | C2 | Done 2026-10-28 (branch `refactor-c2`, two commits: moves, then the `main.rs` split; see §6.5) |
-| A1, B1 | Not started |
+| A1 | Done 2026-10-31, pending review (branch `lazy-a1`; see §6.6), off unless `VESTRA_LAZY=1` |
+| B1 | Not started |
 
 ### 6.1 C1: what landed
 
@@ -347,3 +348,34 @@ One difference that is not a table difference: a plugin that declares `source.re
 
 - SDK: generate `CAPABILITY_INFO`'s `label`, `risky`, `requires` and key order from `capabilities.json` by a script in the SDK repository (the `apis` lists stay hand-written); store `plugins/store/labels.ts` likewise. Not needed for C1: the agreement test already fails on any drift between the JSON and the installed SDK.
 - Host version unchanged (0.5.5): no user-visible, wire or error-code change (apart from the panic above), and the repository has no rule that asks for a bump on an internal change.
+
+### 6.6 A1: what landed (2026-10-31, branch `lazy-a1` from `main` b3cefd3, host 0.5.16)
+
+Off by default: `VESTRA_LAZY=1` turns it on (§5.2 makes lazy the eventual default; this step lacks B1's classification pieces, so the default waits for B1 and the coordinator's hardware checks). With it unset or `VESTRA_LAZY=0`, every plugin starts at launch as before; the only paths that change are `Host::disable`, which now revokes the five registries through `Capability::revoke`, and `drops.provide`, which no longer reports a provider's own extensions as taken when it provides them again.
+
+- Registries: `commands::Registry` (`recorded`, `sent` with each command's declaration and last state as the plugin sent them, `mark_recorded`, `rekey`, `remove_recorded`, `busy`; a live registration replaces a recorded entry in its menu place and the same owner's colliding recorded entries give way), `bindings::Table` (`rank`, kept by `rekey` and by a second `declare`, so a woken plugin keeps the keys it won), `settings_window::Settings` (recorded pages, the sent registration, `recording`, `rekey` rebuilds an open window since its callbacks name the owner), `drops::Drops` (recorded providers keep their place), `source_resolvers::Registry` (recorded entries hold their types against other plugins). One unit test each.
+- `Capability` trait: `record` and `rekey` required on all 27; `revoke`, `prune`, `replay` with defaults, implemented by the four recordable capabilities (`commands` covers the binding table). What the playback worker holds is answered by `owner.resources` as a whole (`{ live, resolvers }`): jobs and snapshots, processing chains, subtitle tracks and styles, producers, a resolution in flight, the audio device, the video view and render options, and upscaling (never parked, ai-upscaling.md §8.5).
+- Backend: `owner.parked` (as `owner.disabled`, resolvers kept), `owner.rekey { to }` (resolvers and waiting resolutions), `owner.prune`, `owner.replay`, `owner.resources`. All are commands, so the worker's event-driven wait is unchanged.
+- Host (`host/lazy.rs`): `Lazy` (parked, waking, last use per owner), `Host::send` wakes a parked owner on `commands.execute`, `source.resolveRequest`, `drops.drop` or `ui.callback` and holds triggers until `runtime.ready`, where unreplaced recorded entries are pruned and held commands are re-resolved (a disabled one shows its reason, a vanished one "<title> is no longer available"). "Starting <name>…" after 400 ms. The idle tick runs in the existing host loops every 250 ms and asks the worker only about plugins idle for `VESTRA_IDLE_MS` (default 60 000) with nothing in flight. A park waits 2 s for an own process (§5.4 item 6); a shared-runner member unloads its context as for any stop.
+- Recording: `<package store>/activation/<instance GUID>.json` (beside `catalog.json`, outside plugin data), keyed by package digest (a built-in's from `builtin.json`; a built-in listed without a digest is never parked), version, player version and build; written at park. `start_installed` replays a valid one instead of starting the plugin. Disable forgets the parked entries and keeps the file; reload, uninstall and install/upgrade remove it, parked or not and with lazy activation on or off. `packages.list` shows a parked plugin as `running`. A parked plugin keeps a catalog `Arc` of its own (the stopped plugin unregisters its own on the thread that drops it) and its package and data directories for images (`Host::image_roots`: its bar button and settings-page images).
+- Development loads are never parked or recorded.
+- A wake waits for the process the plugin was parked from to be gone and cleaned up (`Event::Reaped` and `BackendCleaned`, as `packages.reload` waits, at most 20 s, then "<name> could not start"): two instances never share its data directory. A wake that fails shows the same OSD. After a wake, triggers still addressed to the old generation (a resolution the worker asked for before `owner.rekey`) go to the new one.
+- What counts as in flight for the idle check: activation not `ready`, a dialog open (any plugin's), a package operation or reload on it, a busy command, a settings page compiling or the Options window open with its page, a `ui.open`/`ui.mount` in activation, a `source.state` reply, a request held for the built-ins' start; in the worker, a resolution its resolver has not answered, jobs and snapshots. Replies to requests the plugin sent to the worker are answered before `owner.resources` (one queue). A request the plugin sent elsewhere and awaits off the host (its own network fetch, a timer) is not seen: such a plugin is parked after the idle time as in Chrome MV3, and its work is lost (state it needs belongs in session storage). The B1 docs say so.
+- `VESTRA_TEST_EXECUTE=<manifest id>/<command id>@<ms>[,…]` (or `@park+<ms>`: that long after the plugin's next park) runs a plugin command as a menu click would. A test switch read in any build, like `VESTRA_TEST_REMOVE_DEVICE`, and like it not passed on to a player restarted after a device loss.
+- Headless test `tests/lazy_activation.rs` (ignored by default like `shared_runner.rs`): a trivial built-in is started and parked, replayed without a process at the next start, woken by `commands.execute` (the command runs), parked, woken again 100 ms after that park while its first process still runs a 1.2 s `onDispose` (the start waits for it; session storage carries its start count, "hello in start 2"), and parked again; `VESTRA_LAZY=0` starts it at launch; with the shared runner and with own processes.
+
+Host 0.5.17 (recordings are keyed on the player version).
+
+Not in A1 (B1 or later): recordings at quit and `residentAtReady: true` (a plugin woken into a live resource is not parked, but its recording stays and it is replayed at the next start instead of starting at launch); the SDK `mirror` flag and active subscriptions (until then any subscription counts as live, so plugins with `events` stay resident); the first-run throttle; `packages.list` `process`, the store's "Idle" label and keeping park/wake out of the `packages.changed` digest; waking when a settings page is shown (now: a plugin is not parked while the Options window shows its page, and a parked one wakes on its page's first callback); moving the rest of `disable()` into `revoke`; the park-and-wake-every-built-in registry diff test (§5.3); P4 measurements and the GUI test.
+
+### 6.7 Coordinator GUI checks (2026-10-31, release build of 9fb9cb1, host 0.5.17)
+
+Separate application data directory, internal panel, CPU mode.
+
+- Lazy off (default): the context menu has the same items and order as 0.5.16; playback normal; every plugin starts at launch.
+- `VESTRA_LAZY=1`, `VESTRA_IDLE_MS=5000`: as expected for A1 only `vestra.workshop` parks (2 recorded calls); every plugin with an event listener stays running, `vestra.video` stays for its processing chain and video view, `vestra.playlist` for its playback setting.
+- Context menu ▸ Vestra Player AI… on the parked plugin: "woken by commands.execute (owner 16 → 17)", ready after 39 ms, the window opens.
+- While the window is open the plugin stays running ("an open window"); after closing it parks again.
+- Restart with lazy on: "replayed (2 calls) … not started"; the bottom-bar AI button is present from the recording; clicking it wakes the plugin (ready after 63 ms).
+
+Not checked on hardware: a click within the 2 s after a park (M1 path is covered by the headless test), settings pages and images of a parked plugin, two players at once.

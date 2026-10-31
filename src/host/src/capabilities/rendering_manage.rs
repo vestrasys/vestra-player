@@ -2,7 +2,7 @@
 //! and restarting the player (host/rendering.rs; round record
 //! 2026-10-render-modes). Reading the state, `rendering.state`, needs no
 //! capability (uncapable.rs).
-use super::{Capability, Handled, Info, Method, Residency};
+use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
@@ -25,6 +25,10 @@ impl Capability for RenderingManage {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, _reply: &Reply, method: &str, params: &Value) -> Handled {
         host.rendering_dispatch(method, params).map(Some)
     }

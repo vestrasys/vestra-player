@@ -95,6 +95,7 @@ fn command_after_loss(
     let mut command = relaunch_command(exe, &lost.relaunch, source);
     // A test switch must not remove the restarted player's device too.
     command.env_remove("VESTRA_TEST_REMOVE_DEVICE");
+    command.env_remove("VESTRA_TEST_EXECUTE");
     if off {
         // `VESTRA_RENDER=gpu` overrides the guard; the child must not.
         command.env("VESTRA_RENDER", "software");
@@ -154,6 +155,7 @@ mod tests {
         let on = command_after_loss(path, &lost(None), &Value::Null, false);
         assert_eq!(env(&on, "VESTRA_RENDER"), None, "the environment as it is");
         assert_eq!(env(&on, "VESTRA_TEST_REMOVE_DEVICE"), Some(None), "removed");
+        assert_eq!(env(&on, "VESTRA_TEST_EXECUTE"), Some(None), "removed");
         let off = command_after_loss(path, &lost(None), &Value::Null, true);
         assert_eq!(env(&off, "VESTRA_RENDER"), Some(Some("software".into())));
         let args: Vec<_> = off.get_args().collect();

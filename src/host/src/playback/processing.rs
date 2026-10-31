@@ -572,6 +572,14 @@ impl Processing {
         self.config_revision += 1;
         Ok(result)
     }
+    /// `owner` has a chain applied (lazy activation: it stays running).
+    pub fn holds(&self, owner: u64) -> bool {
+        self.video
+            .keys()
+            .chain(self.audio.keys())
+            .chain(self.audio_offsets.keys())
+            .any(|(id, _)| *id == owner)
+    }
     pub fn disable(&mut self, mpv: &Mpv, owner: u64) -> Result<(), RpcError> {
         let removed_configuration = self
             .video

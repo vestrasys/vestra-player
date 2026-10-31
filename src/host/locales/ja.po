@@ -476,3 +476,21 @@ msgstr "障害のため内蔵プラグインを再起動しました"
 #, x-machine
 msgid "Built-in plugins run separately for this session after repeated faults"
 msgstr "障害が繰り返されたため、このセッションでは内蔵プラグインを個別に実行します"
+
+#. The OSD when a woken plugin no longer has the command a menu item or key ran (lazy activation).
+#: src/host/lazy.rs
+#, x-machine
+msgid "{} is no longer available"
+msgstr "{} は利用できなくなりました"
+
+#. The OSD while a plugin that was stopped when idle starts again for its first use.
+#: src/host/lazy.rs
+#, x-machine
+msgid "Starting {}…"
+msgstr "{} を起動しています…"
+
+#. The OSD when a plugin stopped while idle cannot start again for its first use.
+#: src/host/lazy.rs
+#, x-machine
+msgid "{} could not start"
+msgstr "{} を起動できませんでした"

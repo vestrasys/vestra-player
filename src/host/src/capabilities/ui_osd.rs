@@ -1,5 +1,5 @@
 //! `ui.osd`: messages on the video and the information panel.
-use super::{Capability, Handled, Info, Method, Residency};
+use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::{
     host::{Host, OSD_MS, Reply, RpcError},
     i18n,
@@ -32,6 +32,13 @@ impl Capability for UiOsd {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
+        if host.info_panels.contains_key(&owner) {
+            return Recorded::Live("an OSD panel");
+        }
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "osd.show" => show(host, reply, params)?,

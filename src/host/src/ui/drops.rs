@@ -35,6 +35,9 @@ pub struct Drops {
     pub panels: std::collections::BTreeSet<u64>,
     /// The drop being collected: window generation, paths, last arrival.
     pending: Option<(u64, Vec<PathBuf>, Instant)>,
+    /// Lazy activation: providers (owner, id) kept for an owner without a
+    /// process; a live `provide` of the same id replaces one in its place.
+    recorded: std::collections::BTreeSet<(u64, String)>,
 }
 
 /// The matching name of a path: `folder`, or its extension in lower case.
@@ -73,23 +76,83 @@ pub fn parse_extensions(value: &Value) -> std::result::Result<Vec<String>, Strin
 impl Drops {
     /// Register; returns the extensions an earlier provider already owns (logged).
     pub fn provide(&mut self, provider: Provider) -> Vec<String> {
+        let same = |p: &Provider| p.owner == provider.owner && p.id == provider.id;
+        // A woken plugin's live provider takes its recorded one's place:
+        // only the providers before that place are earlier.
+        let key = (provider.owner, provider.id.clone());
+        let place = self
+            .recorded
+            .contains(&key)
+            .then(|| self.providers.iter().position(same))
+            .flatten();
+        let earlier = &self.providers[..place.unwrap_or(self.providers.len())];
         let taken = provider
             .extensions
             .iter()
-            .filter(|e| self.providers.iter().any(|p| p.extensions.contains(e)))
+            .filter(|e| earlier.iter().any(|p| !same(p) && p.extensions.contains(e)))
             .cloned()
             .collect();
-        self.providers
-            .retain(|p| !(p.owner == provider.owner && p.id == provider.id));
-        self.providers.push(provider);
+        self.recorded.remove(&key);
+        match place {
+            Some(index) => self.providers[index] = provider,
+            None => {
+                self.providers.retain(|p| !same(p));
+                self.providers.push(provider);
+            }
+        }
         taken
     }
     pub fn withdraw(&mut self, owner: u64, id: &str) {
         self.providers.retain(|p| !(p.owner == owner && p.id == id));
+        self.recorded.remove(&(owner, id.to_owned()));
     }
     pub fn remove_owner(&mut self, owner: u64) {
         self.providers.retain(|p| p.owner != owner);
+        self.recorded.retain(|(each, _)| *each != owner);
         self.panels.remove(&owner);
+    }
+    /// `owner`'s providers, as `drops.provide` calls (its recording).
+    pub fn recording(&self, owner: u64) -> Vec<Value> {
+        self.providers
+            .iter()
+            .filter(|p| p.owner == owner)
+            .map(|p| json!({"id":p.id,"extensions":p.extensions}))
+            .collect()
+    }
+    /// Replays a recorded `drops.provide` for a parked owner.
+    pub fn provide_recorded(&mut self, provider: Provider) {
+        let key = (provider.owner, provider.id.clone());
+        self.provide(provider);
+        self.recorded.insert(key);
+    }
+    /// Park: `owner`'s providers stay, marked recorded (its panel is gone).
+    pub fn mark_recorded(&mut self, owner: u64) {
+        let keys = self
+            .providers
+            .iter()
+            .filter(|p| p.owner == owner)
+            .map(|p| (owner, p.id.clone()))
+            .collect::<Vec<_>>();
+        self.recorded.extend(keys);
+        self.panels.remove(&owner);
+    }
+    /// At `runtime.ready` of a woken plugin: its recorded providers it did
+    /// not provide again go.
+    pub fn remove_recorded(&mut self, owner: u64) {
+        let recorded = &self.recorded;
+        self.providers
+            .retain(|p| !(p.owner == owner && recorded.contains(&(owner, p.id.clone()))));
+        self.recorded.retain(|(each, _)| *each != owner);
+    }
+    /// Wake: `from`'s providers move to generation `to`, in place.
+    pub fn rekey(&mut self, from: u64, to: u64) {
+        for provider in self.providers.iter_mut().filter(|p| p.owner == from) {
+            provider.owner = to;
+        }
+        self.recorded = std::mem::take(&mut self.recorded)
+            .into_iter()
+            .map(|(owner, id)| (if owner == from { to } else { owner }, id))
+            .collect();
     }
     /// Paths by provider, each group in the order the paths came; paths no
     /// provider takes are dropped.
@@ -348,6 +411,44 @@ mod tests {
         for bad in [json!([]), json!([".mkv"]), json!(["MKV"]), json!("mkv")] {
             assert!(parse_extensions(&bad).is_err(), "{bad}");
         }
+    }
+
+    /// Lazy activation: a parked owner's providers keep their place (the
+    /// first provider of an extension wins it) through rekey and the live
+    /// `provide` that replaces them; the ones not provided again go.
+    #[test]
+    fn recorded_providers_keep_their_place_through_wake() {
+        let mut drops = Drops::default();
+        let provider = |owner: u64, id: &str, extension: &str| Provider {
+            owner,
+            id: id.into(),
+            extensions: vec![extension.into()],
+        };
+        drops.provide_recorded(provider(3, "roms", "nes"));
+        drops.provide_recorded(provider(3, "old", "fds"));
+        assert_eq!(drops.provide(provider(5, "other", "nes")), ["nes"]);
+        assert_eq!(
+            drops.recording(3),
+            [
+                json!({"id":"roms","extensions":["nes"]}),
+                json!({"id":"old","extensions":["fds"]})
+            ]
+        );
+        drops.panels.insert(3);
+        drops.mark_recorded(3);
+        assert!(!drops.panels.contains(&3));
+        drops.rekey(3, 8);
+        let paths = [PathBuf::from("/r/a.nes"), PathBuf::from("/r/b.fds")];
+        assert_eq!(drops.groups(&paths)[0].0, 8);
+        // Live again: no "taken" for its own extension, still first.
+        assert!(drops.provide(provider(8, "roms", "nes")).is_empty());
+        assert_eq!(drops.groups(&paths)[0].0, 8);
+        drops.remove_recorded(8);
+        let groups = drops.groups(&paths);
+        assert_eq!(groups.len(), 1, "the recorded fds provider went");
+        assert_eq!(drops.recording(8).len(), 1);
+        drops.remove_owner(8);
+        assert_eq!(drops.groups(&paths)[0].0, 5);
     }
 
     #[test]

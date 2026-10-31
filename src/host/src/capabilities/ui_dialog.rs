@@ -1,5 +1,5 @@
 //! `ui.dialog`: native file pickers and confirmations.
-use super::{Capability, Handled, Info, Method, Residency};
+use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::{
     host::{Event, Host, Reply, RpcError, string},
     i18n, platform,
@@ -26,6 +26,10 @@ impl Capability for UiDialog {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "dialogs.confirm" => ask(host, reply, params)?,

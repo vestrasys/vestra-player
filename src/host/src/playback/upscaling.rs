@@ -461,6 +461,14 @@ impl Upscaling {
         self.waker = Some(std::sync::Arc::new(wake));
     }
 
+    /// `owner` has upscaling on (or a request waiting for the check): a live
+    /// resource, so lazy activation never parks it (ai-upscaling.md §8.5).
+    pub fn holds(&self, owner: u64) -> bool {
+        self.owners.contains(&owner)
+            || self.pending.iter().any(|pending| match pending {
+                Pending::State(reply, _) | Pending::Set(reply, ..) => reply.owner == owner,
+            })
+    }
     /// The plugin stopped: its request goes, and with the last one the
     /// filter (plugin independence: a stopped plugin's resources are
     /// revoked); its unanswered requests are dropped.

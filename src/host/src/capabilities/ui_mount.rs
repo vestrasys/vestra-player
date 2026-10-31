@@ -1,6 +1,6 @@
 //! `ui.mount`: panels in the bottom bar, the sidebar and the backdrop, their
 //! menus and interaction locks, and the layout of those slots.
-use super::{Capability, Handled, Info, Method, Residency, plugin};
+use super::{Capability, Handled, Info, Method, Recorded, Residency, plugin};
 use crate::{
     host::{
         Host, LayoutChange, MenuMode, Mount, MountChange, Reply, RpcError, debug_keys,
@@ -39,6 +39,19 @@ impl Capability for UiMount {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
+        let queued = host.mount_queue.iter().any(|c| c.reply.owner == owner)
+            || host
+                .preparing
+                .as_ref()
+                .is_some_and(|(_, c)| c.reply.owner == owner)
+            || host.held_mounts.waiting(owner);
+        if host.mounts.contains_key(&owner) || queued {
+            return Recorded::Live("a panel");
+        }
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "ui.mount" | "ui.unmount" => {

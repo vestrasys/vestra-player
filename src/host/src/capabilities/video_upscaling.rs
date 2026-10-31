@@ -9,7 +9,7 @@
 //! runs, touches no data, and a stopped plugin's request is revoked (as a
 //! `processing.video` filter, which is not risky either). The GPU's power
 //! use is what the user turns it on for.
-use super::{Capability, Handled, Info, Method, Residency};
+use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::host::{Host, Reply, RpcError};
 use crate::playback::backend::Command;
 use serde_json::{Value, json};
@@ -33,6 +33,10 @@ impl Capability for VideoUpscaling {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         // Only the fields the worker reads; the rendering state is the
         // host's, never the plugin's.

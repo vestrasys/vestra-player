@@ -384,3 +384,18 @@ msgstr ""
 #: src/package_manager.rs
 msgid "Built-in plugins run separately for this session after repeated faults"
 msgstr ""
+
+#. The OSD when a woken plugin no longer has the command a menu item or key ran (lazy activation).
+#: src/host/lazy.rs
+msgid "{} is no longer available"
+msgstr ""
+
+#. The OSD while a plugin that was stopped when idle starts again for its first use.
+#: src/host/lazy.rs
+msgid "Starting {}…"
+msgstr ""
+
+#. The OSD when a plugin stopped while idle cannot start again for its first use.
+#: src/host/lazy.rs
+msgid "{} could not start"
+msgstr ""

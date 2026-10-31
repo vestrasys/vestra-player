@@ -476,3 +476,21 @@ msgstr "Complementos integrados reiniciados tras un fallo"
 #, x-machine
 msgid "Built-in plugins run separately for this session after repeated faults"
 msgstr "Tras fallos repetidos, los complementos integrados se ejecutan por separado en esta sesión"
+
+#. The OSD when a woken plugin no longer has the command a menu item or key ran (lazy activation).
+#: src/host/lazy.rs
+#, x-machine
+msgid "{} is no longer available"
+msgstr "{} ya no está disponible"
+
+#. The OSD while a plugin that was stopped when idle starts again for its first use.
+#: src/host/lazy.rs
+#, x-machine
+msgid "Starting {}…"
+msgstr "Iniciando {}…"
+
+#. The OSD when a plugin stopped while idle cannot start again for its first use.
+#: src/host/lazy.rs
+#, x-machine
+msgid "{} could not start"
+msgstr "No se pudo iniciar {}"

@@ -96,7 +96,6 @@ pub struct View {
     settings: Settings,
 }
 impl View {
-    #[cfg(test)]
     pub fn owner(&self) -> Option<u64> {
         self.owner
     }

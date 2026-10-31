@@ -1,7 +1,7 @@
 //! `window.control`: the main window's video area, always-on-top, cursor
 //! hiding and picture-in-picture. `window.state` needs no capability
 //! (uncapable.rs).
-use super::{Capability, Handled, Info, Method, Residency};
+use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::host::{Host, Reply, RpcError, string};
 use serde_json::Value;
 
@@ -26,6 +26,17 @@ impl Capability for WindowControl {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
+        if host.on_top.holds(owner)
+            || host.cursor_playing.holds(owner)
+            || host.pip.holds(owner)
+            || host.area_replies.iter().any(|a| a.reply.owner == owner)
+        {
+            return Recorded::Live("a window setting");
+        }
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "window.setVideoArea" => {

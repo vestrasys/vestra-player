@@ -84,6 +84,8 @@ pub struct Plugin {
     data_directory: Option<PathBuf>,
     pub subscriptions: BTreeSet<String>,
     runner: Runner,
+    /// How long dropping it waits for its own process (`set_stop_wait`).
+    stop_wait: Duration,
 }
 impl Plugin {
     /// A development load (`--plugin`): always its own process.
@@ -161,6 +163,7 @@ impl Plugin {
             data_directory,
             subscriptions: BTreeSet::new(),
             runner,
+            stop_wait: Duration::from_millis(300),
         })
     }
     pub fn send(&mut self, message: Value) -> Result<()> {
@@ -192,6 +195,21 @@ impl Plugin {
             .as_ref()
             .map_or(source, |catalog| catalog.text(source))
             .to_owned()
+    }
+    /// Its package, for what a running plugin and a parked one (lazy
+    /// activation) register alike.
+    pub fn origin(&self) -> crate::host::Origin {
+        crate::host::Origin {
+            id: self.manifest.id.clone(),
+            directory: self.directory.clone(),
+            catalog: self.catalog.clone(),
+            data_directory: self.data_directory.clone(),
+        }
+    }
+    /// How long a stop waits for its own process before killing it (a
+    /// park waits longer, `host/lazy.rs`).
+    pub fn set_stop_wait(&mut self, wait: Duration) {
+        self.stop_wait = wait;
     }
     /// Text values in the interface language, with this plugin's catalog
     /// (`i18n::text`).
@@ -298,7 +316,7 @@ impl Drop for Plugin {
             Runner::Shared(member) => member.stop(),
             Runner::Own { child, outbound } => {
                 let _ = outbound.try_send(json!({"event":"runtime.stop","data":null}));
-                let deadline = Instant::now() + Duration::from_millis(300);
+                let deadline = Instant::now() + self.stop_wait;
                 let mut exited = false;
                 while Instant::now() < deadline {
                     if child.try_wait().ok().flatten().is_some() {

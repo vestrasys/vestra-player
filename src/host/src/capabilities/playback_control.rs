@@ -1,6 +1,6 @@
 //! `playback.control`: opening media and controlling playback (the playback
 //! worker), Previous/Next, step seek and keeping the computer awake.
-use super::{Capability, Handled, Info, Method, Needs, Residency, forward};
+use super::{Capability, Handled, Info, Method, Needs, Recorded, Residency, forward};
 use crate::{
     core_actions,
     host::{Host, Reply, RpcError, string},
@@ -47,6 +47,19 @@ impl Capability for PlaybackControl {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    /// What it holds in the playback worker is answered there (`owner.resources`).
+    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
+        if host.step_seek.contains_key(&owner)
+            || host.power.holds(owner)
+            || host
+                .sequence
+                .is_some_and(|(provider, ..)| provider == owner)
+        {
+            return Recorded::Live("a playback setting, the sequence or a sleep lease");
+        }
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "player.setStepSeek" => {

@@ -1,5 +1,5 @@
 //! `clipboard`: reading and writing the system clipboard (crate::clipboard).
-use super::{Capability, Handled, Info, Method, Residency};
+use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::host::{Host, Reply, RpcError};
 use serde_json::Value;
 
@@ -23,6 +23,10 @@ impl Capability for Clipboard {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, _: &Reply, method: &str, params: &Value) -> Handled {
         if host.headless {
             return Err(RpcError::new(

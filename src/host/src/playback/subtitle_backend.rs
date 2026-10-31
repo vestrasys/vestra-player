@@ -593,6 +593,19 @@ impl Subtitles {
             }
         }
     }
+    /// `owner` contributed a track, a style or a file (lazy activation: it
+    /// stays running).
+    pub fn holds(&self, owner: u64) -> bool {
+        self.styles.contains_key(&owner)
+            || self.orphans.iter().any(|(id, _, _)| *id == owner)
+            || self.assets.keys().any(|(id, _, _)| *id == owner)
+            || self
+                .registry
+                .state()
+                .resources
+                .iter()
+                .any(|r| r.owner == owner)
+    }
     pub fn disable(&mut self, mpv: &Mpv, owner: u64) -> Result<(), RpcError> {
         self.books.remove(&owner);
         self.manifests.remove(&owner);

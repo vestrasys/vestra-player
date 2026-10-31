@@ -1,6 +1,6 @@
 //! `playback.read`: what is playing, the position, chapters, devices, stats
 //! and timeline marks; the playback worker answers most of it.
-use super::{Capability, Handled, Info, Method, Residency, forward};
+use super::{Capability, Handled, Info, Method, Recorded, Residency, forward};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
@@ -27,6 +27,10 @@ impl Capability for PlaybackRead {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "timeline.marks" => host

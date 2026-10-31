@@ -117,6 +117,11 @@ impl<T> Gate<T> {
         self.held.drain(..).map(|(_, request)| request).collect()
     }
 
+    /// A request of `owner`'s waits here.
+    pub fn waiting(&self, owner: u64) -> bool {
+        self.held.iter().any(|(o, _)| *o == owner)
+    }
+
     /// A stopped plugin's requests are dropped (it is no longer answered).
     pub fn forget(&mut self, owner: u64) {
         self.held.retain(|(o, _)| *o != owner);

@@ -7,6 +7,7 @@ mod dispatch;
 mod events;
 mod handle;
 mod input;
+pub(crate) mod lazy;
 mod lifecycle;
 mod menus;
 mod mounts;
@@ -61,6 +62,7 @@ pub(crate) use input::{
     debug_keys, double_click_interval, fire, inject_option_key, observe_key, release_modifiers,
     slint_mods,
 };
+pub(crate) use lazy::Origin;
 pub(crate) use lifecycle::activation_outcome;
 pub(crate) use menus::{
     debug_menu, debug_menu_pointer, menu_levels, set_menu_model, track_pointer,
@@ -300,6 +302,8 @@ pub(crate) struct Host {
     pub(crate) placements: view::Placements,
     /// Bottom-bar command buttons (`bar_buttons.rs`).
     pub(crate) bar: bar_buttons::Strip,
+    /// Lazy activation: parked and waking plugins, idle times (`lazy.rs`).
+    pub(crate) lazy: lazy::Lazy,
 }
 pub(crate) struct AreaReply {
     pub(crate) reply: Reply,

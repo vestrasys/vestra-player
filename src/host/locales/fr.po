@@ -478,3 +478,21 @@ msgstr "Plugins intégrés redémarrés après une erreur"
 #, x-machine
 msgid "Built-in plugins run separately for this session after repeated faults"
 msgstr "Après des erreurs répétées, les plugins intégrés s'exécutent séparément pour cette session"
+
+#. The OSD when a woken plugin no longer has the command a menu item or key ran (lazy activation).
+#: src/host/lazy.rs
+#, x-machine
+msgid "{} is no longer available"
+msgstr "{} n'est plus disponible"
+
+#. The OSD while a plugin that was stopped when idle starts again for its first use.
+#: src/host/lazy.rs
+#, x-machine
+msgid "Starting {}…"
+msgstr "Démarrage de {}…"
+
+#. The OSD when a plugin stopped while idle cannot start again for its first use.
+#: src/host/lazy.rs
+#, x-machine
+msgid "{} could not start"
+msgstr "Impossible de démarrer {}"
