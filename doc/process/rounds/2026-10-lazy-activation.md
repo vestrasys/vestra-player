@@ -367,3 +367,15 @@ Off by default: `VESTRA_LAZY=1` turns it on (§5.2 makes lazy the eventual defau
 Host 0.5.17 (recordings are keyed on the player version).
 
 Not in A1 (B1 or later): recordings at quit and `residentAtReady: true` (a plugin woken into a live resource is not parked, but its recording stays and it is replayed at the next start instead of starting at launch); the SDK `mirror` flag and active subscriptions (until then any subscription counts as live, so plugins with `events` stay resident); the first-run throttle; `packages.list` `process`, the store's "Idle" label and keeping park/wake out of the `packages.changed` digest; waking when a settings page is shown (now: a plugin is not parked while the Options window shows its page, and a parked one wakes on its page's first callback); moving the rest of `disable()` into `revoke`; the park-and-wake-every-built-in registry diff test (§5.3); P4 measurements and the GUI test.
+
+### 6.7 Coordinator GUI checks (2026-10-31, release build of 9fb9cb1, host 0.5.17)
+
+Separate application data directory, internal panel, CPU mode.
+
+- Lazy off (default): the context menu has the same items and order as 0.5.16; playback normal; every plugin starts at launch.
+- `VESTRA_LAZY=1`, `VESTRA_IDLE_MS=5000`: as expected for A1 only `vestra.workshop` parks (2 recorded calls); every plugin with an event listener stays running, `vestra.video` stays for its processing chain and video view, `vestra.playlist` for its playback setting.
+- Context menu ▸ Vestra Player AI… on the parked plugin: "woken by commands.execute (owner 16 → 17)", ready after 39 ms, the window opens.
+- While the window is open the plugin stays running ("an open window"); after closing it parks again.
+- Restart with lazy on: "replayed (2 calls) … not started"; the bottom-bar AI button is present from the recording; clicking it wakes the plugin (ready after 63 ms).
+
+Not checked on hardware: a click within the 2 s after a park (M1 path is covered by the headless test), settings pages and images of a parked plugin, two players at once.
