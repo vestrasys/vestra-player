@@ -40,6 +40,7 @@ import {
   UI_VALUE_LIMITS,
   LIST_SEPARATORS,
   TEXT_LIMITS,
+  VIDEO_PROCESSING_LIMITS,
 } from "@vestra-player/sdk/runtime";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { CAPABILITIES as STORE_CAPABILITIES } from "../../plugins/store/labels.ts";
@@ -689,6 +690,7 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   ],
   "Plugin.video.view": ["video.view.set", "video.view.release"],
   "Plugin.video.render": ["video.render.set", "video.render.release"],
+  "Plugin.video.shaders": ["video.shaders.set"],
   "Plugin.audio.filter": [
     "processing.state",
     "processing.replace:audio",
@@ -1038,6 +1040,38 @@ test("SUBTITLE_LIMITS are the player's (playback/subtitle_state.rs, subtitle_upl
     },
     { ...SUBTITLE_LIMITS },
     "SUBTITLE_LIMITS differ from the player's subtitle registries",
+  );
+});
+
+test("VIDEO_PROCESSING_LIMITS are the player's (playback/effects.rs, plugin_files.rs, video_shaders.rs; SDK 1.5.39, player 0.5.20)", () => {
+  // `pub const NAME: <type> = …;`, products of numbers (`16 * 1024`).
+  const constant = (file: string, name: string) => {
+    const value = new RegExp(`pub const ${name}: \\w+ = ([^;]+);`).exec(
+      host(file),
+    )?.[1];
+    assert.ok(value, `${name} in ${file}`);
+    return value
+      .split("*")
+      .map((part) => Number(part.trim()))
+      .reduce((a, b) => a * b, 1);
+  };
+  const effects = "src/playback/effects.rs";
+  const files = "src/playback/plugin_files.rs";
+  const shaders = "src/playback/video_shaders.rs";
+  assert.deepEqual(
+    {
+      shaders: constant(shaders, "MAX_SHADERS"),
+      shaderBytes: constant(files, "MAX_SHADER_BYTES"),
+      shaderIdBytes: constant(shaders, "MAX_ID"),
+      lutBytes: constant(files, "MAX_LUT_BYTES"),
+      lutSize: constant(files, "MAX_LUT_SIZE"),
+      lutPathBytes: constant(effects, "MAX_LUT_PATH"),
+      matrixValue: constant(effects, "MATRIX_VALUE"),
+      rdiv: constant(effects, "MAX_RDIV"),
+      bias: constant(effects, "MAX_BIAS"),
+    },
+    { ...VIDEO_PROCESSING_LIMITS },
+    "VIDEO_PROCESSING_LIMITS differ from the player's",
   );
 });
 

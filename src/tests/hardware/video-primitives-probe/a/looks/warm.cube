@@ -1,0 +1,10 @@
+# video-primitives-probe: a warm look (red up, blue down)
+LUT_3D_SIZE 2
+0.08 0 0
+1 0 0
+0.08 1 0
+1 1 0
+0.08 0 0.8
+1 0 0.8
+0.08 1 0.8
+1 1 0.8
