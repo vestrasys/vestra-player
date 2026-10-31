@@ -2,8 +2,8 @@
 
 ## 0.1.10
 
-- The About window's plugin list and the Playback Properties pages are Slint `ListView`s: only the rows in view are built, however many plugins or streams and tags a file has. Who must change: nobody. What users see: the same lists, rows, wrapping, scrolling and text selection.
-- Playback Properties no longer lays out every row's label (hidden) to size the label column. The plugin picks the page's widest label in the player's language (wide CJK characters count two columns) and sends it as `label-sample`; the window lays out that one label. The column is still 120px or the widest label.
+- The About window's plugin list and the Playback Properties pages are Slint `ListView`s: only the rows in view are built, however many plugins or streams and tags a file has. Who must change: nobody. What users see: the same lists, rows, wrapping and scrolling; a value's text can still be selected and copied. One change: a selection in a value is lost when its row scrolls out of view and back (the list builds rows only while they are shown).
+- Playback Properties no longer lays out every row's label (hidden) to size the label column. The plugin picks the page's widest label in the player's language by columns (wide CJK characters count two) and sends it as `label-sample`; the window lays out that one label and adds 8px, so a label about as long in a proportional font is not cut. The column is still at least 120px.
 - The page tabs are the shared library `Tabs` (`@vestra/widgets.slint`) instead of a local copy: the same 74px strip, now with the keyboard (Left/Right/Home/End once focused with Tab) and the tab-list accessibility role. Clicking the tab already shown no longer clears the status line.
 - Requires player 0.6.0 (`minPlayerVersion`), which ships the library `Tabs`.
 

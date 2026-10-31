@@ -437,7 +437,7 @@ test("I05: 保存为… writes the page as <name> 信息.txt; cancelling writes 
     assert.deepEqual(await readdir(folder), ["movie 信息.txt"], "no temporary file left");
     host.dialogAnswers.push([join(folder, "missing", "x.txt")]);
     window.emit("save-page");
-    await until(() => window.props.status === "save-failed");
+    await until(() => window.props.status === "save-failed" && /ENOENT/.test(String(window.props["status-detail"])));
     assert.match(String(window.props["status-detail"]), /ENOENT/);
   } finally {
     await stop();
