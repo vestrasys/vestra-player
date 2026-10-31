@@ -33,7 +33,8 @@ pub struct Command {
 /// How often the control worker looks while something it serves ends
 /// without an mpv event or a command (`Sources::polling`,
 /// `Geometry::polling`, `CoreActions::pending`): the poll it always ran
-/// before 0.5.15.
+/// before 0.5.15, with `thread::sleep` (a condvar timeout is rounded up to
+/// the system timer tick on Windows, about 15.6 ms).
 const POLL: Duration = Duration::from_millis(2);
 /// Commands the control worker takes per turn (continuous controls must not
 /// starve the rest); after a full turn it looks again after `POLL`.
@@ -747,23 +748,28 @@ impl Backend {
                         let _ =
                             events.send(Event::Broadcast("source.state".into(), source_snapshot));
                     }
-                    // Event-driven since 0.5.15 (before: a 2 ms sleep, about
-                    // 500 wake-ups a second): commands, mpv's events, the
-                    // stop and the render thread's switch wake this at once;
-                    // otherwise it sleeps until the next state push or audio
-                    // device check, or `POLL` while something ends without an
-                    // event (`polling`).
-                    let now = Instant::now();
+                    // While something ends without an event (`polling`), look
+                    // again after `POLL`, as before 0.5.15, with a sleep: on
+                    // Windows a condvar's timeout (`Wake::wait`) is rounded up
+                    // to the system timer tick (measured about 15.6 ms for
+                    // 2 ms), while `thread::sleep` uses a high-resolution
+                    // timer (about 2.4 ms), and a generated stream's frames
+                    // are taken here. Otherwise (0.5.15) wait for a command,
+                    // mpv's events, the stop or the render thread's switch,
+                    // at most until the next state push or audio device check
+                    // (before: a 2 ms sleep every turn, about 500 wake-ups a
+                    // second). A wake-up left from a polling turn costs only
+                    // one extra turn.
                     let polling = taken == COMMANDS_PER_TURN
                         || actions.pending()
                         || (!geometry_error && geometry.polling())
                         || sources.polling();
-                    let timeout = if polling {
-                        POLL
+                    if polling {
+                        thread::sleep(POLL);
                     } else {
-                        push.next(now).min(sources.device_check_in(now))
-                    };
-                    worker_wake.wait(timeout);
+                        let now = Instant::now();
+                        worker_wake.wait(push.next(now).min(sources.device_check_in(now)));
+                    }
                 }
                 drop(jobs);
                 render_stop.store(true, Ordering::Relaxed);
@@ -1357,15 +1363,15 @@ impl CoreActions {
         });
         Ok(None)
     }
-    /// Finish a step once the position moved and no seek is running, mpv hit
-    /// the end, or 1.5 s passed (nothing moved: a boundary).
-    /// What finished since the last call: a step, keyframe step seeks.
     /// Whether `poll` waits for something mpv announces with no event (a
     /// step or keyframe seek landing, read from properties), or has an
     /// outcome to send.
     fn pending(&self) -> bool {
         self.stepping.is_some() || self.key_seek.is_some() || !self.finished.is_empty()
     }
+    /// Finish a step once the position moved and no seek is running, mpv hit
+    /// the end, or 1.5 s passed (nothing moved: a boundary).
+    /// What finished since the last call: a step, keyframe step seeks.
     fn poll(&mut self, mpv: &Mpv, generation: u64) -> Vec<(Completion, Result<Value, RpcError>)> {
         self.poll_key_seek(mpv, generation);
         let mut done = std::mem::take(&mut self.finished);

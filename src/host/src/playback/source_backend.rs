@@ -547,9 +547,6 @@ impl Sources {
         self.follow_device(mpv);
         Ok(Value::Null)
     }
-    /// R-A3/R-H9: play on the requested device while it is present, else on
-    /// the system default; checked every second. mpv and generated streams
-    /// follow the same choice.
     /// How long until `follow_device` looks at the audio devices again.
     pub fn device_check_in(&self, now: std::time::Instant) -> std::time::Duration {
         self.audio_checked.map_or(std::time::Duration::ZERO, |at| {
@@ -574,6 +571,9 @@ impl Sources {
             || !self.resolution_events.is_empty()
             || self.late_covers.is_some()
     }
+    /// R-A3/R-H9: play on the requested device while it is present, else on
+    /// the system default; checked every second. mpv and generated streams
+    /// follow the same choice.
     pub fn follow_device(&mut self, mpv: &Mpv) {
         if self
             .audio_checked
