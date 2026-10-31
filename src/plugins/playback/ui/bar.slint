@@ -6,13 +6,12 @@ import { Icon } from "@vestra/icons.slint";
 import { Slider, ToolTipArea } from "@vestra/widgets.slint";
 import { BarButtons } from "@vestra/bar-buttons.slint";
 
-// B22: one mark of `timeline.marks`; `at` is the fraction of the duration,
-// `kind` chapter / bookmark / marker, `clock` the mark's time as text.
+// B22: one mark of `timeline.marks` for the hover search; `at` is the fraction
+// of the duration, `tip` the hover text ("Title  01:23", or the time alone).
+// The ticks are drawn from the `*-ticks` Path commands, not from these rows.
 export struct SeekMark {
     at: float,
-    kind: string,
-    title: string,
-    clock: string,
+    tip: string,
 }
 
 // A half-open index range of the binary search over the marks.
@@ -37,8 +36,13 @@ export global PlaybackBridge {
     in-out property <[int]> preview-map;
     in-out property <image> preview-sheet-a;
     in-out property <image> preview-sheet-b;
-    // B22: marks sorted by time, and the A-B loop, as fractions of the duration.
+    // B22: marks sorted by time (4096 at most), and the A-B loop, as fractions of the duration.
     in-out property <[SeekMark]> marks;
+    // B22: each kind's ticks as SVG path commands, `M<x> 0V1` per tick with x
+    // 0…100000 across the line (the Paths' viewbox): one Path per kind.
+    in-out property <string> chapter-ticks;
+    in-out property <string> bookmark-ticks;
+    in-out property <string> marker-ticks;
     in-out property <bool> has-loop;
     in-out property <float> loop-a;
     in-out property <float> loop-b;
@@ -153,6 +157,22 @@ component BarButton inherits Rectangle {
 // B22: 1×6 marks across the line (chapter Theme.text-dim, bookmark Theme.accent,
 // marker Theme.playing) and the A-B loop: a 2px Theme.playing band under the
 // line with 1×8 ends. Marks take no input: a click seeks as before.
+// The marks are one Path per kind (a 1px stroke from the plugin's commands,
+// scaled by the viewbox to the line's width), never an element per mark.
+component MarkTicks inherits Path {
+    in property <length> span;
+    // The stroke's centre sits 0.5px inside the element: x 0 of the viewbox
+    // draws over 4px…5px of the seek bar, as the line's 4px inset.
+    x: 4px;
+    y: 1.5px;
+    width: self.span + 1px;
+    height: 7px;
+    viewbox-width: 100000;
+    viewbox-height: 1;
+    fit: fill;
+    stroke-width: 1px;
+}
+
 component SeekBar inherits Rectangle {
     private property <float> ratio: clamp(PlaybackBridge.progress, 0, 1);
     private property <length> span: max(1px, root.width - 8px);
@@ -191,7 +211,8 @@ component SeekBar inherits Rectangle {
         }
         return { lo: r.lo, hi: mid };
     }
-    // 13 steps cover the 8192 marks the plugin sends at most (Slint has no loops).
+    // 13 steps cover the 4096 marks the plugin sends at most (a range of n rows
+    // needs floor(log2 n) + 1 halvings to close; Slint has no loops).
     pure function lower-bound(at: float) -> int {
         let r1 = root.narrow({ lo: 0, hi: PlaybackBridge.marks.length }, at);
         let r2 = root.narrow(r1, at);
@@ -243,12 +264,21 @@ component SeekBar inherits Rectangle {
         height: 2px;
         background: Theme.playing;
     }
-    for mark in PlaybackBridge.marks: Rectangle {
-        x: Math.floor((4px + mark.at * root.span) / 1px) * 1px;
-        y: 2px;
-        width: 1px;
-        height: 6px;
-        background: mark.kind == "bookmark" ? Theme.accent : mark.kind == "marker" ? Theme.playing : Theme.text-dim;
+    // Chapters under markers under bookmarks (the user's own on top).
+    MarkTicks {
+        span: root.span;
+        commands: PlaybackBridge.chapter-ticks;
+        stroke: Theme.text-dim;
+    }
+    MarkTicks {
+        span: root.span;
+        commands: PlaybackBridge.marker-ticks;
+        stroke: Theme.playing;
+    }
+    MarkTicks {
+        span: root.span;
+        commands: PlaybackBridge.bookmark-ticks;
+        stroke: Theme.accent;
     }
     if PlaybackBridge.has-loop: Rectangle {
         x: Math.floor((4px + PlaybackBridge.loop-a * root.span) / 1px) * 1px;
@@ -534,9 +564,7 @@ export component PlaybackBar inherits Rectangle {
             y: tip.picture ? 5px + 90px + 2px : 2px;
             width: parent.width - 10px;
             horizontal-alignment: center;
-            text: seek-bar.near-mark < 0 ? seek-bar.pointer-time
-                : PlaybackBridge.marks[seek-bar.near-mark].title == "" ? PlaybackBridge.marks[seek-bar.near-mark].clock
-                : PlaybackBridge.marks[seek-bar.near-mark].title + "  " + PlaybackBridge.marks[seek-bar.near-mark].clock;
+            text: seek-bar.near-mark < 0 ? seek-bar.pointer-time : PlaybackBridge.marks[seek-bar.near-mark].tip;
             color: Theme.text;
             font-size: Theme.font-body;
         }

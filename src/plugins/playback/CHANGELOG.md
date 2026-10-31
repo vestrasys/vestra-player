@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6
+
+- The seek line's marks (chapters, bookmarks, markers) are drawn as one Slint `Path` per kind, from commands the plugin builds when the marks change, instead of one `Rectangle` per mark in the main window: the bar keeps three elements however many marks there are. Same 1×6 ticks in the same colours; the hover tip ("Title  01:23" within 3px of a mark, found in the bar without a round trip) works as before, and a click on the line still seeks to the pointer (marks take no input). What users see: a tick sits at its exact position instead of being snapped to a whole pixel, so on some widths it is drawn softened across two pixels; where marks of different kinds meet, bookmarks draw over markers over chapters (before, the later mark drew on top).
+- Up to 4096 marks are shown (the player's rows per property value). Before, the bar tried to send up to 8192 and the player refused the whole list from 3,277 marks (five values a mark, 16,384 per value), so a file with that many showed none. When the marks' titles are long and very many (past 512 KiB of tip text), the later marks' hover tip shows the time alone.
+- Nobody needs to change anything: publishers of `timeline.marks` and users are unaffected.
+
 ## 0.2.5
 
 - The bottom bar places the player's strip of command buttons (`BarButtons` from `@vestra/bar-buttons.slint`, player 0.5.10) at the right end of the button row: the buttons other plugins give their commands (the AI workshop, the store…), left to right by their order, and the player's own **Toggle Sidebar** rightmost. The bar's own 23×22 playlist toggle is gone: the strip's toggle is the player's command `host/sidebar`, with the sidebar's state (accent while on, half opacity while on but hidden for want of room); its tooltip is "Toggle Sidebar", with no key unless the user binds one (the old toggle's was "Playlist (F6)"). The bar no longer reads or sets the sidebar position and sends no sidebar data.
