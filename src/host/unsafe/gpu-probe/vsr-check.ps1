@@ -22,7 +22,7 @@ RTX Video Super Resolution change the picture on this machine?
    (WMI Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine, all
    processes and the probe alone) every ~0.5 s during each run.
 
-Everything lands in -Out (default C:\vestra\rec\vsr): PNGs, the probe logs
+Everything lands in -Out (default C:\vestra\rec\vsr): PNG files, the probe logs
 (<label>.log, full mpv log at -Log level), summary.txt.
 
 .EXAMPLE
@@ -222,7 +222,7 @@ foreach ($r in $results) {
     Say ('  {0,-28} {1}' -f $r.Label, $ssim)
     Say ('  {0,-28} {1}' -f '', $psnr)
 }
-# Do the two NVIDIA runs differ at all? (identical PNGs = VSR did nothing)
+# Do the two NVIDIA runs differ at all? (identical PNG files = VSR did nothing)
 $vsr = Join-Path $Out 'nvidia-vsr.png'; $std = Join-Path $Out 'nvidia-std.png'
 if ((Test-Path $vsr) -and (Test-Path $std)) {
     $lines = Invoke-Ffmpeg @('-nostats', '-i', $vsr, '-i', $std, '-filter_complex',
