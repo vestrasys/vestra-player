@@ -954,10 +954,18 @@ fn nvidia_driver_name(version: [u16; 4]) -> String {
 /// it. Not detectable: the NVIDIA app's Super Resolution switch, its quality
 /// level and its battery policy.
 pub fn upscaler_probe() -> super::UpscalerProbe {
-    let adapters = vestra_win32::dxgi_adapters().unwrap_or_else(|error| {
-        diag!("upscaling: the graphics adapters are unknown ({error})");
-        Vec::new()
-    });
+    let adapters = match vestra_win32::dxgi_adapters() {
+        Ok(adapters) => adapters,
+        Err(error) => {
+            // Not "no NVIDIA GPU": the GPUs could not be listed at all.
+            let message = format!("the graphics adapters cannot be listed ({error})");
+            diag!("upscaling: {message}");
+            return Err(super::UpscalerRefusal {
+                code: "gpu-unsupported",
+                message,
+            });
+        }
+    };
     let mut found = Vec::new();
     let mut refusal = None::<super::UpscalerRefusal>;
     let mut refuse = |code: &'static str, message: String| {

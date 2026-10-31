@@ -62,6 +62,9 @@ pub enum Reason {
     /// The video is not decoded on the GPU that renders it (`decoding`;
     /// not fixed: another file or filter changes it).
     Decoding(String),
+    /// The system's check has not answered yet (`unchecked`): only in the
+    /// answer to `set(false)`, which never starts the check.
+    Unchecked,
 }
 
 impl Reason {
@@ -71,11 +74,15 @@ impl Reason {
             Self::Starting | Self::Rendering(_) => "rendering",
             Self::Adapter(_) => "adapter",
             Self::Decoding(_) => "decoding",
+            Self::Unchecked => "unchecked",
         }
     }
     pub fn message(&self) -> String {
         match self {
             Self::Starting => "upscaling needs GPU rendering, which is starting".into(),
+            Self::Unchecked => {
+                "the player has not checked the GPU yet; state() or set(true) checks it".into()
+            }
             Self::System { message, .. }
             | Self::Rendering(message)
             | Self::Adapter(message)
@@ -85,7 +92,7 @@ impl Reason {
     /// Whether it holds for the rest of this run: `set(true)` is then
     /// refused (`unsupported`) instead of waiting for it.
     pub fn fixed(&self) -> bool {
-        !matches!(self, Self::Starting | Self::Decoding(_))
+        !matches!(self, Self::Starting | Self::Decoding(_) | Self::Unchecked)
     }
     pub fn json(&self) -> Value {
         json!({"code":self.code(),"message":self.message()})
@@ -387,6 +394,12 @@ impl Upscaling {
                     }
                     self.owners.remove(&command.reply.owner);
                     self.update(mpv, render, Instant::now());
+                    // Answered now: turning off never needs the check, so
+                    // it does not start it (it wakes a sleeping discrete GPU);
+                    // before the check `available` is false with `unchecked`.
+                    let state = self.state(mpv, render, command.reply.owner, &rendering());
+                    let _ = events.send(Event::Reply(command.reply.clone(), Ok(state)));
+                    return true;
                 }
                 self.pending
                     .push(Pending::Set(command.reply.clone(), enabled, rendering()));
@@ -517,11 +530,11 @@ impl Upscaling {
         }
     }
 
-    /// [`check`] with what the worker sees now; `Starting` before the
+    /// [`check`] with what the worker sees now; `Unchecked` before the
     /// system's check is known.
     fn availability(&self, mpv: &Mpv, render: &Render, rendering: &Value) -> Result<(), Reason> {
         let Probe::Done(probe) = &self.probe else {
-            return Err(Reason::Starting);
+            return Err(Reason::Unchecked);
         };
         let (gpu_now, render_reason) = render.now();
         let gpu_now = gpu_now && render.gpu().is_some();
@@ -588,13 +601,21 @@ impl Upscaling {
                 Step::Stay
             }
             (Some(_), None) => Step::Remove,
-            (None, Some(next)) if self.refused == Some(next) => Step::Stay,
+            (None, Some(next)) if self.refused == Some(next) => {
+                self.wanted = None;
+                Step::Stay
+            }
             (None, Some(next)) => Step::Add(next),
             (Some(applied), Some(next)) if ((next - applied) / applied).abs() < STEP => {
                 self.wanted = None;
                 Step::KeepLast(applied)
             }
-            (Some(_), Some(next)) if self.refused == Some(next) => Step::Stay,
+            // Back at a refused factor: no settle is pending any more (a
+            // kept `wanted` would make `due_in` 0 and the worker spin).
+            (Some(_), Some(next)) if self.refused == Some(next) => {
+                self.wanted = None;
+                Step::Stay
+            }
             (Some(_), Some(next)) => match self.wanted {
                 Some((wanted, since)) if wanted == next => {
                     if now.duration_since(since) >= SETTLE {

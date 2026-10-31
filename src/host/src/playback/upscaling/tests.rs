@@ -570,3 +570,52 @@ fn the_check_wakes_the_worker_when_it_answers() {
         std::thread::sleep(Duration::from_millis(5));
     }
 }
+
+/// Review M1: a size that comes back to a factor mpv refused must not leave
+/// a settle behind, or `due_in` stays 0 and the worker's wait spins.
+#[test]
+fn returning_to_a_refused_factor_leaves_no_settle_and_no_spin() {
+    let mut upscaling = Upscaling::with_probe(rtx);
+    let start = Instant::now();
+    let at = |ms| start + Duration::from_millis(ms);
+    upscaling.owners.insert(1);
+    upscaling.applied = Some(1.5);
+    upscaling.refused = Some(2.); // mpv refused factor B
+    upscaling.checked = Some(at(0));
+    // Size C: a settle starts.
+    assert_eq!(upscaling.step(Some(2.5), at(10)), Step::Stay);
+    assert!(upscaling.wanted.is_some());
+    // Back at B within 300 ms: nothing to do, and nothing pending.
+    upscaling.checked = Some(at(200));
+    assert_eq!(upscaling.step(Some(2.), at(200)), Step::Stay);
+    assert_eq!(upscaling.wanted, None);
+    // Long after: the next look is a positive time away, never 0 for good.
+    upscaling.checked = Some(at(5000));
+    let due = upscaling.due_in(at(5000)).unwrap();
+    assert!(due > Duration::ZERO, "{due:?}");
+    // The same before any filter.
+    upscaling.applied = None;
+    upscaling.wanted = Some((2.5, at(5000)));
+    assert_eq!(upscaling.step(Some(2.), at(5010)), Step::Stay);
+    assert_eq!(upscaling.wanted, None);
+}
+
+/// Review L3: turning upscaling off never starts the GPU check.
+#[test]
+fn set_false_answers_at_once_without_the_check() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let render = starting();
+    let (events, received) = mpsc::channel();
+    let mut upscaling = Upscaling::with_probe(rtx);
+    let off = command(1, "video.upscaling.set", json!({"enabled":false}));
+    assert!(upscaling.command(&mpv, &render, &off, &events));
+    assert!(matches!(upscaling.probe, Probe::Idle), "no check started");
+    let Ok(Event::Reply(reply, Ok(state))) = received.try_recv() else {
+        panic!("answered at once");
+    };
+    assert_eq!(reply.owner, 1);
+    assert_eq!(state["enabled"], false);
+    assert_eq!(state["available"], false);
+    assert_eq!(state["reason"]["code"], "unchecked");
+}

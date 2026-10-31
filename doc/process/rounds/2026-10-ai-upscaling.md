@@ -89,6 +89,7 @@ Reason codes, in the order checked (first failure wins); the codes name no syste
 | `rendering` | GPU rendering is not drawing now. The message carries the rendering reason and what to do, from the host's `rendering.state`: "turn on Video ▸ GPU Rendering (Experimental) and restart the player"; "restart the player" when the preference is already `gpu`; the GPU reason when `gpu.available` is false; "stopped during this run" after a fallback | yes, except while GPU rendering is still starting (`pending`) |
 | `adapter` | GPU rendering runs on an adapter the check did not pass for (the window device's LUID): "choose the high-performance GPU for Vestra in Windows Settings ▸ System ▸ Display ▸ Graphics and restart the player" | yes |
 | `decoding` | mpv's `hwdec` is a copy-back mode (for example while a plugin's filter needs frames in memory) or `no`, or `hwdec-current` is not `d3d11va` | no: the request is kept and applied when it passes |
+| `unchecked` | only in the answer to `set(false)` before any check (it never starts one; review L3) | — |
 
 No "active" signal: `requested` only means the filter is in the chain. The docs (the type, the concept page, _Platforms_) say the NVIDIA app's Super Resolution switch must be on and cannot be read.
 
@@ -128,3 +129,12 @@ Common: this branch's player in release, `. C:\vestra\env.ps1 -Ffmpeg`, `VESTRA_
 - **Store plugin author**: `plugins/store/labels.ts` needs `"video.upscaling": { text: "Upscale the video with the GPU's video upscaler" }` (not risky) and its translations; until then `test:sdk`'s store wording test fails (as for `rendering.manage` in Store 0.2.4).
 - **V4 plugin author**: declare `video.upscaling` and `"minPlayerVersion": "0.5.16"`; call `state()` when the item is first needed (the first call wakes the discrete GPU), not on a timer; handle `unsupported` from `set(true)`; say next to the item that Super Resolution must be on in the NVIDIA app.
 - **Coordinator at merge**: the host version (0.5.16 here, 0.5.15 for the CPU fix); the three `backend.rs` hunks next to the wait-loop change; `src/package.json` to SDK 1.5.37 once tagged.
+- **Lazy activation, later (review L6)**: `video.upscaling` is residency `live` on purpose. When idle stop comes (MV3-style ruling), a plugin holding upscaling on must not be parked: stopping it revokes its request (`owner.disabled`) and the picture changes under the user. Idle stop must treat an `enabled` upscaling request like any other live resource.
+
+### 8.6 Review fixes (2026-10-31, after `1bce48d`)
+
+- **M1**: returning to a factor mpv refused (refused B → size C, a settle starts → back to B within 300 ms) left `wanted` set, so `due_in` stayed 0 and the worker's `Wake` wait spun until the size changed. Both "refused" arms of `Upscaling::step` now clear `wanted`; test `returning_to_a_refused_factor_leaves_no_settle_and_no_spin`.
+- **L1**: the SDK's `set` `@throws`, the reason table and CHANGELOG now say it: `set(true)` is refused for every reason except `decoding` and `rendering` while GPU rendering is still starting, which are accepted and kept. `TestHost.upscaling.renderingStarting` models the second.
+- **L2**: the SDK examples ask on the first pick of the item (`state ??= await …state()`), not at activation; the TestHost example asserts `checked` is still false after start.
+- **L3**: `set(false)` is answered at once and never starts the GPU check; before any check it reports `available: false` with the new reason code `unchecked` (also in the SDK union and the agreement test, which reads it from `Reason::code`).
+- **L5**: when DXGI cannot list the adapters, the probe reports `gpu-unsupported` with the error, not `no-gpu`.
