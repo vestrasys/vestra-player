@@ -62,6 +62,8 @@ export const SUBTITLE_LIMITS = Object.freeze({
     /** Loads of every plugin in progress at the same time (8). */
     uploads: 8,
 });
+/** The events the subtitle state follows (it has none of its own). */
+const EVENTS = ["source.state", "playback.backend"];
 const raws = new WeakMap();
 const targets = new WeakMap();
 const CHUNK = 32 * 1024;
@@ -85,6 +87,7 @@ class SubtitleService {
     constructor(runtime) {
         this.#runtime = runtime;
         // No subtitle event exists: re-read when the source or backend changes.
+        // Mirrors: a plugin listens through `watch` and bindings.
         runtime.on("source.state", (data) => {
             const raw = data;
             const source = `${raw.stamp.generation}:${raw.phase}`;
@@ -92,8 +95,8 @@ class SubtitleService {
                 return;
             this.#source = source;
             void this.refresh().catch(() => { });
-        });
-        runtime.on("playback.backend", () => void this.refresh().catch(() => { }));
+        }, "events", true);
+        runtime.on("playback.backend", () => void this.refresh().catch(() => { }), "events", true);
         this.style = new Latest(async ({ style, options }) => {
             const expected = await this.expected(options);
             await this.#mutate(++this.#operation, (operationId) => runtime.host.subtitles.style({
@@ -106,11 +109,19 @@ class SubtitleService {
     }
     watch(watcher) {
         this.#watchers.add(watcher);
+        const held = EVENTS.map((event) => this.#runtime.hold(event));
         return {
             dispose: async () => {
                 this.#watchers.delete(watcher);
+                for (const hold of held.splice(0))
+                    await hold.dispose();
             },
         };
+    }
+    /** A binding that reads the state follows both events. */
+    reading() {
+        for (const event of EVENTS)
+            this.#runtime.reading(event);
     }
     /** Keep the newest view: older generations and older revisions are dropped. */
     accept(raw) {
@@ -258,6 +269,7 @@ export function subtitles(scope) {
     const host = () => scope.runtime.host.subtitles;
     return {
         get state() {
+            service().reading();
             return service().state;
         },
         onChange(listener) {

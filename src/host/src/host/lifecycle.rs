@@ -314,7 +314,7 @@ impl Host {
         for (owner, plugin) in self
             .plugins
             .iter_mut()
-            .filter(|(_, p)| p.subscriptions.contains(event))
+            .filter(|(_, p)| p.subscriptions.contains_key(event))
         {
             if let Err(error) = plugin.send(json!({"event":event,"data":data})) {
                 failed.push((*owner, error));

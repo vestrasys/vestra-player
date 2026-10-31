@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.13
+
+- The vendored SDK is 1.5.38 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The reference the AI reads (`llms.txt` / `llms-full.txt`) and the declarations its type check and tests use now cover the player's lazy activation: the _Idle plugins are stopped_ section (what stays while a plugin is stopped, what keeps it running, and keeping state that must outlive a stop in `plugin.storage.session`, as in Chrome Manifest V3), mirror subscriptions (`events.subscribe { event, mirror: true }`, player 0.5.18), `PluginInfo.process` (`"running"` / `"idle"`) and `TestHost.listening`. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
 ## 2.2.12
 
 - The vendored SDK is 1.5.37 (`npm run vendor:sdk`), the version the player now uses. The reference the AI reads (`llms.txt` / `llms-full.txt`) and the declarations its type check and tests use now cover `plugin.video.upscaling` (the GPU's AI video upscaler, NVIDIA RTX Video Super Resolution on Windows; capability `video.upscaling`, player 0.5.16), its availability reasons and `TestHost.upscaling`. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.

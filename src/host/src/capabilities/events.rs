@@ -47,11 +47,13 @@ impl Capability for Events {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
-    /// A subscription is a listener the host pushes to. (Until the SDK marks
-    /// its own start-up subscriptions as mirrors, step B1, every one counts.)
+    /// A listener is a receiver the host pushes to (§3.2); a mirror is not:
+    /// the SDK reads the state again when the plugin starts (§3.1).
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
         match host.plugins.get(&owner) {
-            Some(plugin) if !plugin.subscriptions.is_empty() => Recorded::Live("an event listener"),
+            Some(plugin) if plugin.subscriptions.values().any(|active| *active) => {
+                Recorded::Live("an event listener")
+            }
             _ => Recorded::Nothing,
         }
     }
@@ -63,7 +65,10 @@ impl Capability for Events {
         }
         let plugin = host.plugins.get_mut(&reply.owner).unwrap();
         if method == "events.subscribe" {
-            plugin.subscriptions.insert(event.into());
+            // Again for the same event replaces the mark: the SDK switches
+            // between mirror and listener as listeners come and go.
+            let mirror = params["mirror"] == true;
+            plugin.subscriptions.insert(event.into(), !mirror);
         } else {
             plugin.subscriptions.remove(event);
         }

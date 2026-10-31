@@ -16,7 +16,7 @@ export declare class TimelineService {
     accept(marks: WireMark[]): void;
     read(): Promise<void>;
     watch(listener: (marks: readonly TimelineMark[]) => void): {
-        dispose: () => Promise<undefined>;
+        dispose: () => Promise<void>;
     };
 }
 export declare const timelineOf: (runtime: Runtime) => TimelineService;

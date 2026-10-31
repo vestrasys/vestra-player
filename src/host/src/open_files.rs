@@ -62,7 +62,7 @@ impl Host {
         self.open_files_tick();
     }
     pub(super) fn open_files_tick(&mut self) {
-        let settled = self.packages_started() && {
+        let settled = self.packages_started() && !self.builtin_first_run_queued() && {
             let now = self.now_ms();
             let owners = self.plugins.keys().copied().collect::<Vec<_>>();
             !owners.into_iter().any(|owner| {

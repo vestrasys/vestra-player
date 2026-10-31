@@ -10,7 +10,7 @@ use crate::process::shared_runner::{Member, SharedRunner};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use std::{
-    collections::BTreeSet,
+    collections::BTreeMap,
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::{Child, Stdio},
@@ -82,7 +82,10 @@ pub struct Plugin {
     pub data_key: DataKey,
     /// `plugin.dataDirectory`.
     data_directory: Option<PathBuf>,
-    pub subscriptions: BTreeSet<String>,
+    /// Its events: `true` for a listener of its own, `false` for a
+    /// mirror (the SDK's copy of the state, `events.subscribe { mirror }`,
+    /// SDK 1.5.38), which holds nothing for lazy activation.
+    pub subscriptions: BTreeMap<String, bool>,
     runner: Runner,
     /// How long dropping it waits for its own process (`set_stop_wait`).
     stop_wait: Duration,
@@ -161,7 +164,7 @@ impl Plugin {
             catalog,
             data_key,
             data_directory,
-            subscriptions: BTreeSet::new(),
+            subscriptions: BTreeMap::new(),
             runner,
             stop_wait: Duration::from_millis(300),
         })

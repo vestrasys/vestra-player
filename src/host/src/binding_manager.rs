@@ -133,15 +133,28 @@ impl Host {
         if self
             .plugins
             .values()
-            .any(|plugin| plugin.subscriptions.contains("packages.changed"))
+            .any(|plugin| plugin.subscriptions.contains_key("packages.changed"))
         {
             let list = self.package_list();
-            if list != self.packages_sent {
-                self.packages_sent = list.clone();
+            // A park or a wake alone changes only `process`: no event (§5.3).
+            let compared = without_process(&list);
+            if compared != self.packages_sent {
+                self.packages_sent = compared;
                 self.broadcast("packages.changed", list);
             }
         }
     }
+}
+
+/// `packages.list` without each plugin's `process`, to compare.
+fn without_process(list: &Value) -> Value {
+    let mut list = list.clone();
+    if let Some(plugins) = list.as_array_mut() {
+        for plugin in plugins.iter_mut().filter_map(Value::as_object_mut) {
+            plugin.remove("process");
+        }
+    }
+    list
 }
 
 #[cfg(test)]
