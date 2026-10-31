@@ -135,7 +135,8 @@ export class MousePage {
               .sort((a, b) => a.text.localeCompare(b.text, "zh-Hans-CN")),
           ].filter((item) => !filter || item.key === "" || item.text.toLowerCase().includes(filter));
     return {
-      modifiers,
+      // The radios show their labels: None translated, the modifiers as keys name them.
+      modifiers: modifiers.map((m) => (m ? m : this.#plugin.i18n.text("None"))),
       modifier: modifiers.indexOf(this.#modifier),
       rows: this.rows(),
       picking: row !== null,

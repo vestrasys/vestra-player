@@ -11,12 +11,12 @@ msgstr ""
 msgid "({})"
 msgstr "({})"
 
-#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195 ui/mouse.slint:111 ui/mouse.slint:157
+#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195 ui/mouse.slint:111 ui/mouse.slint:158
 #, x-machine
 msgid "Default"
 msgstr "Standard"
 
-#: export.ts:17 ui/keys.slint:100 ui/keys.slint:195 ui/keys.slint:208 ui/keys.slint:228
+#: export.ts:17 ui/keys.slint:100 ui/keys.slint:195 ui/keys.slint:208 ui/keys.slint:229
 #, x-machine
 msgid "Changed"
 msgstr "Geändert"
@@ -46,17 +46,17 @@ msgstr "Im Bereich"
 msgid "Global"
 msgstr "Global"
 
-#: export.ts:22 ui/parts.slint:60
+#: export.ts:22 keys-page.ts:192
 #, x-machine
 msgid "Player"
 msgstr "Player"
 
-#: export.ts:30 export.ts:40 ui/keys.slint:256
+#: export.ts:30 export.ts:40 ui/keys.slint:257
 #, x-machine
 msgid "Command"
 msgstr "Befehl"
 
-#: export.ts:30 export.ts:40 ui/keys.slint:264
+#: export.ts:30 export.ts:40 ui/keys.slint:265
 #, x-machine
 msgid "Shortcut"
 msgstr "Tastenkürzel"
@@ -71,7 +71,7 @@ msgstr "Gültigkeit"
 msgid "Source"
 msgstr "Quelle"
 
-#: export.ts:30 export.ts:40 ui/keys.slint:195 ui/keys.slint:270
+#: export.ts:30 export.ts:40 ui/keys.slint:195 ui/keys.slint:271
 #, x-machine
 msgid "Status"
 msgstr "Status"
@@ -106,64 +106,74 @@ msgstr "Standard-Tastenkürzel ignorieren: Ein"
 msgid "Ignore default shortcuts: Off"
 msgstr "Standard-Tastenkürzel ignorieren: Aus"
 
-#: keys-page.ts:116
+#: keys-page.ts:119
 #, x-machine
 msgid "Keyboard Shortcuts"
 msgstr "Tastenkürzel"
 
-#: keys-page.ts:405
+#: keys-page.ts:191
+#, x-machine
+msgid "All sources"
+msgstr "Alle Quellen"
+
+#: keys-page.ts:194
+#, x-machine
+msgid "Plugins not loaded"
+msgstr "Nicht geladene Plugins"
+
+#: keys-page.ts:416
 #, x-machine
 msgid "Shortcut updated: {0} = {1}"
 msgstr "Tastenkürzel geändert: {0} = {1}"
 
-#: keys-page.ts:408
+#: keys-page.ts:419
 #, x-machine
 msgid "Shortcut updated: {} = (none)"
 msgstr "Tastenkürzel geändert: {} = (keins)"
 
-#: keys-page.ts:460
+#: keys-page.ts:471
 #, x-machine
 msgid "Restore all default shortcuts?"
 msgstr "Alle Standard-Tastenkürzel wiederherstellen?"
 
-#: keys-page.ts:461
+#: keys-page.ts:472
 #, x-machine
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr "Damit werden Ihre Änderungen an Tastenkürzeln und Mausaktionen aller Befehle verworfen, auch die von Plugins, die nicht geladen sind."
 
-#: keys-page.ts:462
+#: keys-page.ts:473
 #, x-machine
 msgid "Restore All Defaults"
 msgstr "Alle Standardwerte wiederherstellen"
 
-#: keys-page.ts:474
+#: keys-page.ts:485
 #, x-machine
 msgid "Shortcuts restored to defaults"
 msgstr "Tastenkürzel auf Standard zurückgesetzt"
 
 #. only the part before the extension.
-#: keys-page.ts:485
+#: keys-page.ts:496
 #, x-machine
 msgid "Export Shortcut List"
 msgstr "Tastenkürzel-Liste exportieren"
 
 #. only the part before the extension.
-#: keys-page.ts:485
+#: keys-page.ts:496
 #, x-machine
 msgid "Vestra Player Shortcuts.csv"
 msgstr "Vestra Player Tastenkürzel.csv"
 
-#: main.ts:32
+#: main.ts:36
 #, x-machine
 msgid "Keyboard Shortcuts…"
 msgstr "Tastenkürzel…"
 
-#: main.ts:39
+#: main.ts:43
 #, x-machine
 msgid "Mouse…"
 msgstr "Maus…"
 
-#: main.ts:46
+#: main.ts:50
 #, x-machine
 msgid "Ignore Default Shortcuts"
 msgstr "Standard-Tastenkürzel ignorieren"
@@ -202,77 +212,82 @@ msgstr "Tastenkürzel"
 msgid "mouse"
 msgstr "Maus"
 
-#: mouse-page.ts:38
+#: mouse-page.ts:40
 #, x-machine
 msgid "Mouse"
 msgstr "Maus"
 
-#: mouse-page.ts:178 ui/parts.slint:41
+#: mouse-page.ts:139
+#, x-machine
+msgid "None"
+msgstr "Keine"
+
+#: mouse-page.ts:197 ui/parts.slint:41
 #, x-machine
 msgid "Left click"
 msgstr "Linksklick"
 
-#: mouse-page.ts:178 ui/parts.slint:42
+#: mouse-page.ts:197 ui/parts.slint:42
 #, x-machine
 msgid "Left double-click"
 msgstr "Doppelklick links"
 
-#: mouse-page.ts:178 ui/parts.slint:43
+#: mouse-page.ts:197 ui/parts.slint:43
 #, x-machine
 msgid "Left double-click (left half)"
 msgstr "Doppelklick links (linke Hälfte)"
 
-#: mouse-page.ts:178 ui/parts.slint:44
+#: mouse-page.ts:197 ui/parts.slint:44
 #, x-machine
 msgid "Left double-click (right half)"
 msgstr "Doppelklick links (rechte Hälfte)"
 
-#: mouse-page.ts:178 ui/parts.slint:45
+#: mouse-page.ts:197 ui/parts.slint:45
 #, x-machine
 msgid "Middle click"
 msgstr "Mittelklick"
 
-#: mouse-page.ts:178 ui/parts.slint:46
+#: mouse-page.ts:197 ui/parts.slint:46
 #, x-machine
 msgid "Back button"
 msgstr "Zurück-Taste"
 
-#: mouse-page.ts:178 ui/parts.slint:47
+#: mouse-page.ts:197 ui/parts.slint:47
 #, x-machine
 msgid "Forward button"
 msgstr "Vorwärts-Taste"
 
-#: mouse-page.ts:178 ui/parts.slint:48
+#: mouse-page.ts:197 ui/parts.slint:48
 #, x-machine
 msgid "Wheel up"
 msgstr "Mausrad nach oben"
 
-#: mouse-page.ts:178 ui/parts.slint:49
+#: mouse-page.ts:197 ui/parts.slint:49
 #, x-machine
 msgid "Wheel down"
 msgstr "Mausrad nach unten"
 
-#: mouse-page.ts:178 ui/parts.slint:50
+#: mouse-page.ts:197 ui/parts.slint:50
 #, x-machine
 msgid "Wheel left"
 msgstr "Mausrad links"
 
-#: mouse-page.ts:178 ui/parts.slint:51
+#: mouse-page.ts:197 ui/parts.slint:51
 #, x-machine
 msgid "Wheel right"
 msgstr "Mausrad rechts"
 
-#: mouse-page.ts:179
+#: mouse-page.ts:198
 #, x-machine
 msgid "{}+{}"
 msgstr "{}+{}"
 
-#: mouse-page.ts:182
+#: mouse-page.ts:201
 #, x-machine
 msgid "Mouse action updated: {0} = {1}"
 msgstr "Mausaktion geändert: {0} = {1}"
 
-#: mouse-page.ts:183
+#: mouse-page.ts:202
 #, x-machine
 msgid "Mouse action updated: {} = (none)"
 msgstr "Mausaktion geändert: {} = (keine)"
@@ -287,37 +302,37 @@ msgstr "Standard-Tastenkürzel werden ignoriert (Einstellungen ▸ Standard-Tast
 msgid "The plugin is not loaded; this change works again when it is back"
 msgstr "Das Plugin ist nicht geladen; diese Änderung gilt wieder, sobald es zurück ist"
 
-#: ui/keys.slint:199 ui/keys.slint:332
+#: ui/keys.slint:199 ui/keys.slint:333
 #, x-machine
 msgid "Add Key…"
 msgstr "Hinzufügen…"
 
-#: ui/keys.slint:202 ui/keys.slint:378 ui/keys.slint:397
+#: ui/keys.slint:202 ui/keys.slint:379 ui/keys.slint:398
 #, x-machine
 msgid "Delete Entry"
 msgstr "Eintrag löschen"
 
-#: ui/keys.slint:203 ui/keys.slint:378 ui/keys.slint:397
+#: ui/keys.slint:203 ui/keys.slint:379 ui/keys.slint:398
 #, x-machine
 msgid "Restore Default"
 msgstr "Standard wiederherstellen"
 
-#: ui/keys.slint:205 ui/keys.slint:384 ui/keys.slint:403
+#: ui/keys.slint:205 ui/keys.slint:385 ui/keys.slint:404
 #, x-machine
 msgid "Unbind All"
 msgstr "Alle Belegungen entfernen"
 
-#: ui/keys.slint:208 ui/keys.slint:228
+#: ui/keys.slint:208 ui/keys.slint:229
 #, x-machine
 msgid "All"
 msgstr "Alle"
 
-#: ui/keys.slint:208 ui/keys.slint:228
+#: ui/keys.slint:208 ui/keys.slint:229
 #, x-machine
 msgid "Conflicts"
 msgstr "Konflikte"
 
-#: ui/keys.slint:208 ui/keys.slint:228 ui/keys.slint:316
+#: ui/keys.slint:208 ui/keys.slint:229 ui/keys.slint:317
 #, x-machine
 msgid "Unbound"
 msgstr "Nicht belegt"
@@ -327,87 +342,87 @@ msgstr "Nicht belegt"
 msgid "Search commands or keys (e.g. Ctrl+)"
 msgstr "Befehle oder Tasten suchen (z. B. Ctrl+)"
 
-#: ui/keys.slint:288
+#: ui/keys.slint:289
 #, x-machine
 msgid "Loading…"
 msgstr "Wird geladen…"
 
-#: ui/keys.slint:288
+#: ui/keys.slint:289
 #, x-machine
 msgid "No matching commands"
 msgstr "Keine passenden Befehle"
 
-#: ui/keys.slint:296
+#: ui/keys.slint:297
 #, x-machine
 msgid "Select a command to change its shortcuts"
 msgstr "Wählen Sie einen Befehl, um seine Tastenkürzel zu ändern"
 
-#: ui/keys.slint:297
+#: ui/keys.slint:298
 #, x-machine
 msgid "{} (not loaded)"
 msgstr "{} (nicht geladen)"
 
-#: ui/keys.slint:298
+#: ui/keys.slint:299
 #, x-machine
 msgid "{} (Player · in panel)"
 msgstr "{} (Player · im Bereich)"
 
-#: ui/keys.slint:298
+#: ui/keys.slint:299
 #, x-machine
 msgid "{} (Player)"
 msgstr "{} (Player)"
 
-#: ui/keys.slint:299
+#: ui/keys.slint:300
 #, x-machine
 msgid "{0} ({1} · in panel)"
 msgstr "{0} ({1} · im Bereich)"
 
-#: ui/keys.slint:300
+#: ui/keys.slint:301
 #, x-machine
 msgid "{0} ({1})"
 msgstr "{0} ({1})"
 
-#: ui/keys.slint:348
+#: ui/keys.slint:349
 #, x-machine
 msgid "Press a shortcut (Esc cancels)"
 msgstr "Tasten drücken (Esc: Abbruch)"
 
-#: ui/keys.slint:416
+#: ui/keys.slint:417
 #, x-machine
 msgid "⌘Q is the default shortcut to quit Vestra Player. Change it to “{}”?"
 msgstr "⌘Q ist das Standard-Tastenkürzel zum Beenden von Vestra Player. In „{}“ ändern?"
 
-#: ui/keys.slint:417
+#: ui/keys.slint:418
 #, x-machine
 msgid "{0} is already used by “{1}”"
 msgstr "{0} wird bereits von „{1}“ verwendet"
 
-#: ui/keys.slint:423
+#: ui/keys.slint:424
 #, x-machine
 msgid "Replace"
 msgstr "Ersetzen"
 
-#: ui/keys.slint:424 ui/mouse.slint:182
+#: ui/keys.slint:425 ui/mouse.slint:183
 #, x-machine
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: ui/keys.slint:442
+#: ui/keys.slint:443
 #, x-machine
 msgid "Restore All Defaults…"
 msgstr "Alle Standardwerte wiederherstellen…"
 
-#: ui/keys.slint:446
+#: ui/keys.slint:447
 #, x-machine
 msgid "Export List…"
 msgstr "Exportieren…"
 
-#: ui/keys.slint:449
+#: ui/keys.slint:450
 #, x-machine
 msgid "Ignore default shortcuts"
 msgstr "Standardtasten ignorieren"
 
-#: ui/mouse.slint:67 ui/mouse.slint:146
+#: ui/mouse.slint:67 ui/mouse.slint:147
 #, x-machine
 msgid "(None)"
 msgstr "(Keine)"
@@ -417,137 +432,122 @@ msgstr "(Keine)"
 msgid "Modifier"
 msgstr "Taste"
 
-#: ui/mouse.slint:123
-#, x-machine
-msgid "None"
-msgstr "Keine"
-
-#: ui/mouse.slint:173
+#: ui/mouse.slint:174
 #, x-machine
 msgid "Command run by “{}”:"
 msgstr "Von „{}“ ausgeführter Befehl:"
 
-#: ui/mouse.slint:178
+#: ui/mouse.slint:179
 #, x-machine
 msgid "Type to filter"
 msgstr "Zum Filtern tippen"
 
-#: ui/mouse.slint:205
+#: ui/mouse.slint:206
 #, x-machine
 msgid "A left click may wait for the double-click interval while a double-click is bound; the right button always opens the menu."
 msgstr "Ist ein Doppelklick belegt, kann ein Linksklick auf das Doppelklick-Intervall warten; die rechte Taste öffnet immer das Menü."
 
-#: ui/parts.slint:59
-#, x-machine
-msgid "All sources"
-msgstr "Alle Quellen"
-
-#: ui/parts.slint:61
-#, x-machine
-msgid "Plugins not loaded"
-msgstr "Nicht geladene Plugins"
-
-#: ui/parts.slint:64
+#: ui/parts.slint:58
 #, x-machine
 msgid "{0} is taken by “{1}” and has no effect"
 msgstr "{0} ist durch „{1}“ belegt und wirkungslos"
 
-#: ui/parts.slint:67
+#: ui/parts.slint:61
 #, x-machine
 msgid "{0}; {1}"
 msgstr "{0}; {1}"
 
-#: ui/parts.slint:74
+#: ui/parts.slint:68
 #, x-machine
 msgid "The command no longer exists"
 msgstr "Der Befehl existiert nicht mehr"
 
-#: ui/parts.slint:75
+#: ui/parts.slint:69
 #, x-machine
 msgid "This key cannot be used"
 msgstr "Diese Taste kann nicht verwendet werden"
 
-#: ui/parts.slint:76
+#: ui/parts.slint:70
 #, x-machine
 msgid "This key is not recognized"
 msgstr "Diese Taste wird nicht erkannt"
 
-#: ui/parts.slint:77
+#: ui/parts.slint:71
 #, x-machine
 msgid "Change failed: {}"
 msgstr "Änderung fehlgeschlagen: {}"
 
-#: ui/parts.slint:79
+#: ui/parts.slint:73
 #, x-machine
 msgid "Press Esc to cancel; to bind Esc itself, click “Esc” next to the box"
 msgstr "Esc bricht ab; um Esc selbst zu belegen, klicken Sie auf „Esc“ neben dem Feld"
 
-#: ui/parts.slint:80
+#: ui/parts.slint:74
 #, x-machine
 msgid "{} is already a shortcut of this command"
 msgstr "{} ist bereits ein Tastenkürzel dieses Befehls"
 
-#: ui/parts.slint:81
+#: ui/parts.slint:75
 #, x-machine
 msgid "At most {} bindings per command"
 msgstr "Höchstens {} Belegungen pro Befehl"
 
-#: ui/parts.slint:82
+#: ui/parts.slint:76
 #, x-machine
 msgid "This key does something else while the “{0}” panel has focus: {1}"
 msgstr "Diese Taste hat eine andere Funktion, wenn der Bereich „{0}“ den Fokus hat: {1}"
 
-#: ui/parts.slint:83
+#: ui/parts.slint:77
 #, x-machine
 msgid "This key does something else while a panel of the player has focus: {}"
 msgstr "Diese Taste hat eine andere Funktion, wenn ein Bereich des Players den Fokus hat: {}"
 
-#: ui/parts.slint:84
+#: ui/parts.slint:78
 #, x-machine
 msgid "This key does something else outside the panel: {}"
 msgstr "Diese Taste hat außerhalb des Bereichs eine andere Funktion: {}"
 
-#: ui/parts.slint:85
+#: ui/parts.slint:79
 #, x-machine
 msgid "Updated: {}"
 msgstr "Geändert: {}"
 
-#: ui/parts.slint:86
+#: ui/parts.slint:80
 #, x-machine
 msgid "Updated: (none)"
 msgstr "Geändert: (keins)"
 
-#: ui/parts.slint:87
+#: ui/parts.slint:81
 #, x-machine
 msgid "Updated: {0} = {1}"
 msgstr "Geändert: {0} = {1}"
 
-#: ui/parts.slint:88
+#: ui/parts.slint:82
 #, x-machine
 msgid "Updated: {} = (none)"
 msgstr "Geändert: {} = (keins)"
 
-#: ui/parts.slint:89
+#: ui/parts.slint:83
 #, x-machine
 msgid "Deleted the changes of {}"
 msgstr "Änderungen an {} gelöscht"
 
-#: ui/parts.slint:90
+#: ui/parts.slint:84
 #, x-machine
 msgid "Cannot confirm: {}"
 msgstr "Bestätigen nicht möglich: {}"
 
-#: ui/parts.slint:91
+#: ui/parts.slint:85
 #, x-machine
 msgid "All defaults restored"
 msgstr "Alle Standardwerte wiederhergestellt"
 
-#: ui/parts.slint:92
+#: ui/parts.slint:86
 #, x-machine
 msgid "Cannot export: {}"
 msgstr "Export nicht möglich: {}"
 
-#: ui/parts.slint:93
+#: ui/parts.slint:87
 #, x-machine
 msgid "Exported {n} command"
 msgid_plural "Exported {n} commands"

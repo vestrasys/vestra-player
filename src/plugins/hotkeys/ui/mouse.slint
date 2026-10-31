@@ -8,8 +8,8 @@
 import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
-import { Button } from "@vestra/widgets.slint";
-import { Cell, Input, Label, Message, Radio, Words } from "parts.slint";
+import { Button, RadioGroup } from "@vestra/widgets.slint";
+import { Cell, Input, Label, Message, Words } from "parts.slint";
 
 export struct MouseRow {
     // the index in Words.mouse
@@ -72,9 +72,9 @@ component PickLine inherits Rectangle {
 }
 
 export global Mouse {
-    // "" is none
+    // The modifier radios as shown ("None" already translated by the plugin).
     in property <[string]> modifiers;
-    in property <int> modifier;
+    in-out property <int> modifier;
     in property <[MouseRow]> rows;
     in property <bool> picking;
     // The input whose command is being picked.
@@ -118,11 +118,12 @@ export component MousePage inherits Rectangle {
             height: Theme.button-height;
             spacing: 14px;
             Label { width: max(40px, self.preferred-width); text: @tr("Modifier"); color: Theme.text-list; }
-            for name[index] in Mouse.modifiers: Radio {
+            RadioGroup {
                 horizontal-stretch: 0;
-                text: name == "" ? @tr("None") : name;
-                checked: index == Mouse.modifier;
-                clicked => { Mouse.set-modifier(index); }
+                spacing: 14px;
+                model: Mouse.modifiers;
+                current-index <=> Mouse.modifier;
+                selected(index) => { Mouse.set-modifier(index); }
             }
             Rectangle { horizontal-stretch: 1; }
         }

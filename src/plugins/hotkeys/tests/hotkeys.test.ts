@@ -196,11 +196,12 @@ test("J01: the list shows every command with keys, scope, source, status", async
   assert.equal(row(host, VOLUME_UP)!.keys, "ArrowUp"); // mouse bindings are not keys
   const own = row(host, KEYS)!;
   assert.equal(own.keys, "");
+  // The library drop-down shows its model: the words arrive translated, plugin ids as they are.
   assert.deepEqual(
     (window.props["source-model"] as string[]).slice(0, 3),
-    ["*all", "host", "vestra.hotkeys"],
+    ["All sources", "Player", "vestra.hotkeys"],
   );
-  assert.equal((window.props["source-model"] as string[]).at(-1), "*orphans");
+  assert.equal((window.props["source-model"] as string[]).at(-1), "Plugins not loaded");
   assert.equal(window.props.loading, false);
   // Sorted by command text; the header flips the direction.
   const commands = rows(host).map((r) => r.command);
@@ -352,7 +353,7 @@ test("J01: filters by text (Ctrl+), status and source; orphans can be deleted", 
     rows(host).map((r) => r.command).sort(),
     [KEYS, "Settings ▸ Ignore Default Shortcuts", "Settings ▸ Mouse…"].sort(),
   );
-  await emit(host, "keys", "sourceFilter", sources.indexOf("*orphans"));
+  await emit(host, "keys", "sourceFilter", sources.indexOf("Plugins not loaded"));
   assert.deepEqual(rows(host).map((r) => [r.command, r.keys, r.state]), [["gone.plugin/thing", "Ctrl+T", ORPHAN]]);
   await emit(host, "keys", "select", rows(host)[0]!.key);
   assert.equal(window.props.orphan, true);
@@ -468,7 +469,7 @@ test("J02: mouse rows show the command each input runs; choosing moves the input
   // Left click: Play/Pause by default (player 0.5.2); double click: nothing.
   assert.deepEqual([mouseRows()[0]!.command, mouseRows()[0]!.bound], [PLAY, true]);
   assert.deepEqual([mouseRows()[1]!.command, mouseRows()[1]!.bound], ["", false]);
-  assert.deepEqual(window.props.modifiers, ["", "Ctrl", "Alt", "Shift", "Cmd"]);
+  assert.deepEqual(window.props.modifiers, ["None", "Ctrl", "Alt", "Shift", "Cmd"]);
 
   await emit(host, "mouse", "pick", 7);
   assert.equal(window.props.picking, true);
@@ -553,7 +554,7 @@ function hostOn(os: "macos" | "windows" | "linux") {
   host.systemInfo = { ...host.systemInfo, os };
   return host;
 }
-const MODS = ["", "Ctrl", "Alt", "Shift"];
+const MODS = ["None", "Ctrl", "Alt", "Shift"];
 
 test("J02: Cmd is a modifier on macOS only (Windows key elsewhere, as the menus)", async () => {
   for (const [os, modifiers] of [["macos", [...MODS, "Cmd"]], ["windows", MODS], ["linux", MODS]] as const) {
@@ -693,6 +694,36 @@ test("OSD messages and dialogs in Simplified Chinese, as before", async () => {
     ["恢复全部默认快捷键？", "恢复全部默认"],
   );
   assert.equal(host.osd.at(-1), "快捷键已恢复默认");
+});
+
+test("J01: the check box flips itself; a declined question pulls it back", async () => {
+  const host = new TestHost();
+  await start(host);
+  await openKeys(host);
+  const keys = page(host, "keys");
+  assert.equal(keys.props.ignore, false);
+  // The library Check sets `ignore` itself before `toggled` reaches the plugin.
+  keys.props.ignore = true;
+  host.dialogAnswers.push({ confirmed: false, checked: false });
+  await emit(host, "keys", "toggleIgnore");
+  assert.equal(host.command("ignore-defaults").state.checked, false);
+  assert.equal(keys.props.ignore, false, "sent back although the plugin's value did not change");
+  keys.props.ignore = true;
+  host.dialogAnswers.push({ confirmed: true, checked: false });
+  await emit(host, "keys", "toggleIgnore");
+  assert.equal(host.command("ignore-defaults").state.checked, true);
+  assert.equal(keys.props.ignore, true);
+});
+
+test("J01, J02: the drop-down and radio words arrive translated", async () => {
+  const host = new TestHost();
+  await start(host, undefined, "zh-Hans");
+  await openKeys(host);
+  const sources = page(host, "keys").props["source-model"] as string[];
+  assert.deepEqual([sources[0], sources[1], sources[2], sources.at(-1)], ["全部来源", "宿主", "vestra.hotkeys", "未加载的插件"]);
+  await host.command("mouse").run();
+  await host.settle(WAIT);
+  assert.equal((page(host, "mouse").props.modifiers as string[])[0], "无");
 });
 
 test("J03: checked at start; a half-finished switch-off is completed", async () => {
