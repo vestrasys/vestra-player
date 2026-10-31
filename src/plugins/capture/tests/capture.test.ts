@@ -354,6 +354,102 @@ test("save commands are disabled without a capturable source", async () => {
   await stop();
 });
 
+const SNAPSHOTS = ["capture.save", "capture.saveAs", "capture.copy", "capture.saveScreen", "capture.saveScreenAs", "capture.copyScreen"];
+
+test("lazy activation: the Snapshot items are player conditions that follow playback without the plugin; nothing keeps it running while idle", async () => {
+  const { host, stop } = await start();
+  try {
+    assert.deepEqual(host.keepsRunning, []);
+    assert.equal(host.listening.has("source.state"), false);
+    const revisions = SNAPSHOTS.map((id) => host.command(id).revision);
+    for (const id of SNAPSHOTS)
+      assert.deepEqual(host.command(id).when, { enabled: { all: [{ can: "snapshot" }, { phase: ["ready", "ended"] }, { not: { kind: "stream" } }] } }, id);
+    /** Each item's enabled state and reason as the player shows them; all six alike. */
+    const shown = () => {
+      const states = SNAPSHOTS.map((id) => host.command(id).state);
+      for (const state of states) assert.deepEqual([state.enabled, state.reason], [states[0]!.enabled, states[0]!.reason]);
+      return [states[0]!.enabled, states[0]!.reason];
+    };
+    const none = [false, "No frame to capture"];
+    assert.deepEqual(shown(), none);
+    assert.equal(host.translate(host.command("capture.save").state.reason!), "没有可截取的画面");
+    // A key of a disabled item: the player shows the reason and runs nothing.
+    assert.equal(await host.press("Ctrl+E"), "reason");
+    await host.settle();
+    assert.deepEqual(host.osd, ["没有可截取的画面"]);
+    assert.equal(host.sent("jobs.start").length, 0);
+    ready(host);
+    await host.settle();
+    assert.deepEqual(shown(), [true, null], "the reason shows only while disabled");
+    host.setSource({ phase: "ended" });
+    assert.deepEqual(shown(), [true, null], "a finished file keeps its last frame");
+    host.setSource({ capabilities: { ...host.source.capabilities, snapshotSource: false } });
+    assert.deepEqual(shown(), none);
+    host.setSource({ capabilities: { ...host.source.capabilities, snapshotSource: true }, phase: "loading" });
+    assert.deepEqual(shown(), none);
+    host.setSource({ phase: "ready", kind: "producer" });
+    assert.deepEqual(shown(), none, "a generated stream has no source frame");
+    host.setSource({ kind: "media" });
+    assert.deepEqual(shown(), [true, null]);
+    await host.settle();
+    // The player evaluated every change: the plugin sent nothing for them and still holds nothing.
+    assert.deepEqual(SNAPSHOTS.map((id) => host.command(id).revision), revisions);
+    assert.deepEqual(host.keepsRunning, []);
+    await host.press("Ctrl+E"); // the key runs once the condition holds
+    await host.settle();
+    assert.equal(host.sent("jobs.start").length, 1);
+  } finally {
+    await stop();
+  }
+});
+
+test("lazy activation: Burst… and Export Clip… read the player's state only while open, and afresh at each opening", async () => {
+  const host = new TestHost();
+  ready(host);
+  const { stop } = await start(host, "en");
+  const bind = /^a view's bind reads plugin\.player\.state \(main\.ts:\d+\)$/;
+  try {
+    await host.command("capture.burst").run();
+    await host.settle();
+    const burst = host.window("burst");
+    assert.equal(burst.props["can-capture"], true);
+    assert.equal(host.listeningWhy.get("source.state")?.length, 1);
+    assert.match(host.listeningWhy.get("source.state")![0]!, bind);
+    host.setSource({ capabilities: { ...host.source.capabilities, snapshotSource: false } });
+    await host.settle();
+    assert.equal(burst.props["can-capture"], false, "followed while open");
+    burst.userClose();
+    await host.settle();
+    assert.deepEqual(host.keepsRunning, []);
+    assert.equal(host.listening.has("source.state"), false);
+    host.setSource({ capabilities: { ...host.source.capabilities, snapshotSource: true } });
+    await host.command("capture.burst").run();
+    await host.settle();
+    assert.equal(host.window("burst").props["can-capture"], true, "read again when it opens");
+    host.window("burst").userClose();
+
+    await host.command("capture.clip").run();
+    await host.settle();
+    assert.deepEqual(host.window("clip").props["audio-labels"], ["No Audio", "Current Track"]);
+    assert.equal(host.window("clip").props["can-export"], true);
+    host.window("clip").userClose();
+    await host.settle();
+    assert.deepEqual(host.keepsRunning, []);
+    host.setSource({ audioTracks: [{ trackId: 7, selected: true, external: false, streamIndex: 1, codec: "aac", title: null, language: "en" }] });
+    await host.command("capture.clip").run();
+    await host.settle();
+    assert.deepEqual(host.window("clip").props["audio-labels"], ["No Audio", "Current Track", "Track 7 · en"]);
+    host.setSource({ phase: "loading" });
+    await host.settle();
+    assert.equal(host.window("clip").props["can-export"], false, "followed while open");
+    host.window("clip").userClose();
+    await host.settle();
+    assert.deepEqual(host.keepsRunning, []);
+  } finally {
+    await stop();
+  }
+});
+
 test("另存为 asks for a file; a source change while it is open captures nothing", async () => {
   const host = new TestHost();
   ready(host);
@@ -539,6 +635,9 @@ test("a dialog that cannot open is reported in a visible error window", async ()
   const { stop } = await start(host);
   await host.command("capture.burst").run();
   await host.settle();
+  assert.equal(host.windows.has("burst"), false);
+  assert.deepEqual(host.keepsRunning.filter((line) => line.includes("source.state")), [], "a failed open lets go of the player's state");
+  assert.equal(host.listening.has("source.state"), false);
   const error = host.window("error");
   assert.equal(error.file, "ui/error.slint");
   assert.deepEqual(error.callbacks, []);
