@@ -1,6 +1,6 @@
 import { rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
-import type { I18n, PlaybackStats, PlayerState, Plugin, TextArg } from "@vestra-player/sdk";
+import type { I18n, PlaybackStats, PlayerState, Plugin, Scope, TextArg } from "@vestra-player/sdk";
 import { filePage, isUrl, message, pageText, playbackPage, remotePage, saveName, systemPage } from "./properties.ts";
 import type { Row, SystemFacts } from "./properties.ts";
 import { readFacts } from "./sysinfo.ts";
@@ -32,7 +32,9 @@ function probeError(i18n: I18n, error: unknown) {
  * source with ffprobe (`plugin.tools`, aborted when the source changes); System
  * once per opening (`plugin.app.system()` and Node `os`). Closing the window (its
  * Close button or the title bar, `onClose`) stops the polling. Copy and save take
- * the current page's text.
+ * the current page's text. The window's binding and the source listener live in a
+ * child scope while it is open (lazy activation, player 0.5.21): a closed window
+ * reads no player state, so nothing keeps the plugin running while idle.
  */
 export function propertiesWindow(plugin: Plugin) {
   const { player } = plugin;
@@ -53,6 +55,8 @@ export function propertiesWindow(plugin: Plugin) {
   let facts: SystemFacts | null = null;
   let reading: AbortController | null = null;
   let timer: ReturnType<typeof setInterval> | undefined;
+  /** What follows the player while the window is open; `null` while closed. */
+  let open: Scope | null = null;
   let sourceId = player.state.sourceId;
 
   const page = (): Row[] => {
@@ -65,7 +69,6 @@ export function propertiesWindow(plugin: Plugin) {
   };
 
   const window = plugin.windows.create("ui/properties.slint");
-  window.bind(() => ({ tabIndex: tab, rows: page() as unknown as Record<string, string | boolean>[], status, statusDetail, canRefresh: tab !== 0 }));
 
   async function readStats() {
     try {
@@ -127,13 +130,40 @@ export function propertiesWindow(plugin: Plugin) {
     if (tab === 2) void readSystem();
   }
 
-  function stop() {
+  /** A source change: the stats and the File page belong to the old one. */
+  function sourceChanged(state: PlayerState) {
+    if (state.sourceId === sourceId) return false;
+    sourceId = state.sourceId;
+    stats = null;
+    return true;
+  }
+
+  /** Opening: bind the window and follow source changes until it closes; the source is read again now. */
+  function follow() {
+    if (open) return;
+    const scope = (open = plugin.scope());
+    sourceChanged(player.state);
+    scope.add(window.bind(() => ({ tabIndex: tab, rows: page() as unknown as Record<string, string | boolean>[], status, statusDetail, canRefresh: tab !== 0 })));
+    scope.player.onChange((state) => {
+      if (!sourceChanged(state) || !window.opened) return;
+      probe?.abort();
+      probe = null;
+      void readStats();
+      load();
+    });
+  }
+
+  /** Closing: stop polling and reading, and let go of the player's state (the SDK's update pass after a handler then drops what the binding held). */
+  async function stop() {
+    const following = open;
+    open = null;
     clearInterval(timer);
     timer = undefined;
     probe?.abort();
     probe = null;
     reading?.abort();
     reading = null;
+    await following?.dispose();
   }
 
   window.on("tabChanged", (index: number) => {
@@ -174,31 +204,30 @@ export function propertiesWindow(plugin: Plugin) {
     }
   });
   window.on("closeWindow", async () => {
-    stop();
+    // Stop at once, so that no show() lands between stopping and closing.
+    const stopping = stop();
     await window.close();
+    await stopping;
   });
   // Closed with the title bar: stop the 1-second stats polling and any read (reopening starts them again).
   window.onClose(stop);
 
-  player.onChange((state) => {
-    if (state.sourceId === sourceId) return;
-    sourceId = state.sourceId;
-    stats = null;
-    if (!window.opened) return;
-    probe?.abort();
-    probe = null;
-    void readStats();
-    load();
-  });
   plugin.onDispose(stop);
 
   /** Ctrl+F1: open, or bring the open window to the front. */
   return async function show() {
+    follow();
     if (!timer) {
-      await readStats();
+      // Claimed before the first read: an overlapping show() (two quick Ctrl+F1) starts no second interval.
       timer = setInterval(() => void readStats().then(() => plugin.update()), 1000);
+      await readStats();
     }
     load();
-    await window.show();
+    try {
+      await window.show();
+    } catch (error) {
+      if (!window.opened) await stop(); // it did not open: nothing to follow or poll
+      throw error;
+    }
   };
 }

@@ -1,6 +1,6 @@
 import { access, constants, mkdir, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import type { CommandOptions, Plugin, Window } from "@vestra-player/sdk";
+import type { CommandOptions, Plugin, Props, Scope, Window } from "@vestra-player/sdk";
 import { clipboard } from "./copy.ts";
 import { capturer } from "./form.ts";
 import {
@@ -79,6 +79,31 @@ export default async function activate(plugin: Plugin) {
   const list = plugin.windows.create("ui/tasks.slint");
   const settingsWindow = plugin.windows.create("ui/settings.slint");
   const errorWindow = plugin.windows.create("ui/error.slint");
+  /**
+   * What a window shows of the player's state is bound only while it is open
+   * (lazy activation, player 0.5.21): a closed window reads no player state,
+   * so nothing keeps the plugin running while idle. Each opening binds in a
+   * child scope; the user's close (or a failed open) disposes it, and the
+   * next opening reads the state afresh.
+   */
+  const liveProps = new Map<Window, () => Props>();
+  const live = new Map<Window, Scope>();
+  function whileOpen(window: Window, props: () => Props) {
+    liveProps.set(window, props);
+    window.onClose(() => release(window));
+  }
+  function bindLive(window: Window) {
+    const props = liveProps.get(window);
+    if (!props || live.has(window)) return;
+    const scope = plugin.scope();
+    scope.add(window.bind(props));
+    live.set(window, scope);
+  }
+  async function release(window: Window) {
+    const scope = live.get(window);
+    live.delete(window);
+    await scope?.dispose();
+  }
 
   /** A task reached its end: report it on screen and in its dialog. */
   function finished(task: Task) {
@@ -227,17 +252,13 @@ export default async function activate(plugin: Plugin) {
   settingsWindow.on("setScreenSubtitles", (value: boolean) => setFlag("screenSubtitles", value === true));
 
   // ---------------------------------------------------------------- Burst
-  burst.bind(() => {
-    const last = tasks.latest("burst");
-    return {
-      folder: shownFolder(player.state.source),
-      busy: ui.burstBusy,
-      canCapture: usable(player.state),
-      progress: tasks.progress(last),
-      status: ui.burstStatus,
-      formatIndex: FORMATS.indexOf(settings.format),
-    };
-  });
+  burst.bind(() => ({
+    busy: ui.burstBusy,
+    progress: tasks.progress(tasks.latest("burst")),
+    status: ui.burstStatus,
+    formatIndex: FORMATS.indexOf(settings.format),
+  }));
+  whileOpen(burst, () => ({ folder: shownFolder(player.state.source), canCapture: usable(player.state) }));
   burst.on("pickFolder", chooseFolder);
   burst.on("openFolder", openFolderSaying);
   burst.on("captureFrame", () => saveFrame(false));
@@ -265,12 +286,8 @@ export default async function activate(plugin: Plugin) {
     }
   });
   // ---------------------------------------------------------------- Export Clip
-  clip.bind(() => ({
-    busy: ui.clipBusy,
-    canExport: usable(player.state),
-    audioLabels: audioChoices(player.state, text).labels,
-    status: ui.clipStatus,
-  }));
+  clip.bind(() => ({ busy: ui.clipBusy, status: ui.clipStatus }));
+  whileOpen(clip, () => ({ canExport: usable(player.state), audioLabels: audioChoices(player.state, text).labels }));
   const mark = (field: "startTime" | "endTime") => async () => {
     if (!ui.clipBusy) clip.set({ [field]: String((await player.refresh()).position ?? 0) });
   };
@@ -330,9 +347,11 @@ export default async function activate(plugin: Plugin) {
   async function show(window: Window, first?: () => Promise<void>) {
     try {
       if (!window.opened) await first?.();
+      bindLive(window);
       await window.show();
       if (errorWindow.opened) await errorWindow.close();
     } catch (error) {
+      if (!window.opened) await release(window);
       console.error(`[capture] window failed to open: ${message(error)}`);
       try {
         await errorWindow.show(); // its text is in ui/error.slint
@@ -350,9 +369,16 @@ export default async function activate(plugin: Plugin) {
       ...(withEnd ? { endTime: String(Math.min((position ?? 0) + 10, duration ?? Infinity)), audioIndex: 1 } : {}),
     });
   };
-  const canCapture = { enabled: () => usable(player.state), reason: () => (usable(player.state) ? null : "No frame to capture" as const) };
+  /**
+   * A frame to capture (`usable` in model.ts) as a condition the player
+   * evaluates (`plugin.when`, player 0.5.21): the menu and the keys follow
+   * playback without this plugin running. The player shows the reason only
+   * while the condition is false.
+   */
+  const { when } = plugin;
+  const canCapture = { enabled: when.can("snapshot").and(when.phase("ready", "ended"), when.stream.not()), reason: "No frame to capture" as const };
   /** The options besides id, path, order and run; `reason` is typed so that extract finds its text. */
-  type Extra = Omit<CommandOptions, "id" | "path" | "title" | "order" | "run" | "reason"> & { reason?: () => "No frame to capture" | null };
+  type Extra = Omit<CommandOptions, "id" | "path" | "title" | "order" | "run" | "reason"> & { reason?: "No frame to capture" };
   // `@video` is the player's Video menu; "Snapshot" is this plugin's own submenu.
   const entry = (id: keyof typeof MENU, order: number, run: () => unknown, extra: Extra = {}) =>
     plugin.commands.add({ id, path: ["@video", "Snapshot", MENU[id]], order, run, ...extra });

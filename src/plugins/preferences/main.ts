@@ -79,6 +79,9 @@ export default async function activate(plugin: Plugin) {
   }));
   languages.on("pick", (language: unknown) => (isLanguage(language) ? chooseLanguage(language) : undefined));
 
+  // The check marks are conditions the player evaluates (`plugin.when`, player
+  // 0.5.21): they follow a switch made anywhere without this plugin running.
+  const { when } = plugin;
   plugin.commands.add({
     id: "options",
     path: [SETTINGS, "Options…"],
@@ -94,7 +97,7 @@ export default async function activate(plugin: Plugin) {
       order: 840 + index,
       group: "settings-look",
       radio: true,
-      checked: () => appearance.theme === row.id,
+      checked: when.theme(row.id),
       run: () => choose(row.id),
     }),
   );
@@ -104,7 +107,7 @@ export default async function activate(plugin: Plugin) {
     order: 850,
     group: "settings-look",
     radio: true,
-    checked: () => appearance.language === "system",
+    checked: when.language("system"),
     run: () => chooseLanguage("system"),
   });
   LANGUAGES.forEach((row, index) =>
@@ -114,7 +117,7 @@ export default async function activate(plugin: Plugin) {
       order: 851 + index,
       group: "settings-language",
       radio: true,
-      checked: () => appearance.language === row.id,
+      checked: when.language(row.id),
       run: () => chooseLanguage(row.id),
     }),
   );

@@ -487,6 +487,45 @@ test("I05: closing the window with the title bar stops the 1-second polling (onC
   await stop();
 });
 
+test("lazy activation: the window reads the player's state and follows the source only while open; a source opened meanwhile is read when it opens", async () => {
+  const media = await mkdtemp(join(tmpdir(), "info-media-"));
+  const [a, b] = [join(media, "a.mkv"), join(media, "b.mkv")];
+  await writeFile(a, "a");
+  await writeFile(b, "b");
+  const { host, stop } = await start(a);
+  try {
+    assert.deepEqual(host.keepsRunning, []);
+    assert.equal(host.listening.has("source.state"), false);
+    host.tools.handle("ffprobe", (args) => ({ stdout: JSON.stringify({ format: { format_name: args.at(-1) === a ? "first" : "second" } }) }));
+    await host.command("info.properties").run();
+    host.window("properties").emit("tab-changed", 1);
+    await until(() => value(host, "格式") === "first");
+    // While open: the source listener and the window's binding, both added when it opened.
+    const why = host.listeningWhy.get("source.state") ?? [];
+    assert.equal(why.length, 2, why.join("; "));
+    assert.ok(why.some((line) => /^a listener added at dialog\.ts:\d+$/.test(line)), why.join("; "));
+    assert.ok(why.some((line) => /^a view's bind reads plugin\.player\.state \(dialog\.ts:\d+\)$/.test(line)), why.join("; "));
+    host.window("properties").userClose();
+    await host.settle();
+    assert.deepEqual(host.keepsRunning, []);
+    assert.equal(host.listening.has("source.state"), false);
+    const reads = host.tools.calls.length;
+    host.openElsewhere(b);
+    await host.settle(50);
+    assert.equal(host.tools.calls.length, reads, "nothing is read while the window is closed");
+    await host.press("Ctrl+F1");
+    await until(() => value(host, "格式") === "second");
+    assert.equal(value(host, "路径"), b);
+    host.window("properties").emit("close-window");
+    await host.settle();
+    assert.equal(host.windows.has("properties"), false);
+    assert.deepEqual(host.keepsRunning, [], "its Close button lets go as well");
+  } finally {
+    await stop();
+    await rm(media, { recursive: true, force: true });
+  }
+});
+
 test("I05 in Simplified Chinese: the menu, the window's words and the messages of before", async () => {
   const { host, stop } = await start();
   assert.deepEqual(host.command("info.properties").display.path, ["播放属性…"]);
@@ -500,5 +539,48 @@ test("I05 in Simplified Chinese: the menu, the window's words and the messages o
     assert.match(po, new RegExp(`msgctxt "tab"\\nmsgid "${tab}"\\nmsgstr "${word}"`));
   }
   assert.equal(host.translate("System"), "系统");
+  await stop();
+});
+
+test("I05: two overlapping Ctrl+F1 start one 1-second poll; closing stops it", async () => {
+  const { host, stop } = await start();
+  let release!: () => void;
+  const held = new Promise<void>((done) => (release = done));
+  host.handle("playback.stats", async () => {
+    await held; // the first read is slow: the second Ctrl+F1 arrives meanwhile
+    return stats;
+  });
+  const first = host.command("info.properties").run();
+  const second = host.command("info.properties").run();
+  release();
+  await Promise.all([first, second]);
+  assert.equal(host.window("properties").visible, true);
+  const polled = () => host.sent("playback.stats").length;
+  const opened = polled();
+  await host.settle(2200);
+  assert.ok(polled() - opened <= 3, `one poll a second, not two (${polled() - opened} reads in 2.2 s)`);
+  host.window("properties").emit("close-window");
+  await host.settle();
+  assert.equal(host.windows.has("properties"), false);
+  const after = polled();
+  await host.settle(2200);
+  assert.equal(polled(), after, "no poll left running after closing");
+  assert.deepEqual(host.keepsRunning, []);
+  await stop();
+});
+
+test("I05: a window that cannot open neither polls nor follows the player", async () => {
+  const { host, stop } = await start();
+  host.handle("ui.open", () => {
+    throw new HostError("ui", "injected native open rejection");
+  });
+  await host.command("info.properties").run(); // the failure goes to the plugin's error handler
+  await host.settle();
+  assert.equal(host.windows.has("properties"), false);
+  assert.deepEqual(host.keepsRunning, []);
+  assert.equal(host.listening.has("source.state"), false);
+  const after = host.sent("playback.stats").length;
+  await host.settle(2200);
+  assert.equal(host.sent("playback.stats").length, after, "no stats reads after a failed open");
   await stop();
 });

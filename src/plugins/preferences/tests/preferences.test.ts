@@ -305,3 +305,26 @@ test("the pages' Slint has no colour literals", () => {
     assert.doesNotMatch(slint, /#[0-9a-fA-F]{3,8}\b/);
   }
 });
+
+test("lazy activation: the check marks are player conditions that follow a switch made elsewhere; nothing keeps the plugin running while idle", async () => {
+  const { host } = await start();
+  assert.deepEqual(host.keepsRunning, []);
+  for (const row of THEMES) assert.deepEqual(host.command(`theme.${row.id}`).when, { checked: { theme: row.id } }, row.id);
+  assert.deepEqual(host.command("language.system").when, { checked: { language: "system" } });
+  for (const row of LANGUAGES) assert.deepEqual(host.command(`language.${row.id}`).when, { checked: { language: row.id } }, row.id);
+  const ids = ["theme.vestra", "theme.vestra-light", "language.system", ...LANGUAGES.map((row) => `language.${row.id}`)];
+  const revisions = ids.map((id) => host.command(id).revision);
+  /** The ids that carry a check mark now. */
+  const marked = () => ids.filter((id) => host.command(id).state.checked);
+  assert.deepEqual(marked(), ["theme.vestra", "language.system"]);
+  host.setAppearance("vestra-light");
+  host.setLanguage("ja");
+  await host.settle();
+  assert.deepEqual(marked(), ["theme.vestra-light", "language.ja"]);
+  host.setLanguage("system");
+  await host.settle();
+  assert.deepEqual(marked(), ["theme.vestra-light", "language.system"]);
+  // The player evaluated each switch: the plugin sent no new state for its items.
+  assert.deepEqual(ids.map((id) => host.command(id).revision), revisions);
+  assert.deepEqual(host.keepsRunning, []);
+});

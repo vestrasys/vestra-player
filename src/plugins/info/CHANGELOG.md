@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.9
+
+- Lazy activation (player 0.5.21, SDK 1.5.40): the plugin no longer keeps running while idle. Who must change: nobody. What users see: nothing new; Playback Properties shows the same pages and follows the playing file while open. Under `VESTRA_LAZY=1` the player may now stop the plugin while nothing uses it and start it again on Tab, Ctrl+F1 or F1.
+- The Playback Properties window's source listener (`player.onChange`) and its binding (the rows read `plugin.player.state`) are made in a child scope when the window opens and disposed when it closes (Close, the title bar, or a failed open, which now also stops the 1-second statistics polling). When it opens, the source is read again: a file opened while it was closed is shown at once, with fresh statistics. Before, both were made at activation and kept the plugin listening to every playback update. About's `packages.onChange` is unchanged: the player wakes the plugin for a package change.
+- Two quick Ctrl+F1 (for example while the player starts the plugin) started two 1-second statistics polls, and closing the window stopped only one, so the other kept reading every second until the plugin stopped. The poll is now claimed before the first read, so an overlapping open starts none; the Close button stops polling before the window closes, so an open cannot land in between.
+- Requires player 0.5.21 (`minPlayerVersion`).
+
 ## 0.1.8
 
 - About Vestra Player shows how the video is rendered, below the component versions: **Rendering: GPU**, or **Rendering: Software — <reason>** with the player's own reason (for example that this player has no GPU renderer on Windows yet, or that the graphics driver is on the player's denylist, with where to choose another GPU in Windows' graphics settings). The reason is the player's English text, shown as it is; it wraps and the window grows to fit. Under GPU rendering a reason is shown only when it says more than "nothing rules GPU rendering out". Copy Info includes the same line.
