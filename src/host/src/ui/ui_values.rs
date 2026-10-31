@@ -564,19 +564,6 @@ pub fn from_json_rows_with(rows: &[&Json], hook: &mut Hook<'_>) -> Result<Vec<Va
         .collect()
 }
 
-/// `check` for the rows of a row patch (`from_json_rows_with`'s budget).
-pub fn check_rows(rows: &[&Json]) -> Result<()> {
-    from_json_rows_with(rows, &mut |node, _| {
-        if crate::ui::ui_image::reference(node).is_some() {
-            return Some(Ok((Value::Void, 0)));
-        }
-        let doc = crate::ui::ui_markdown::reference(node)?;
-        let text = doc.get("text").and_then(Json::as_str).map_or(0, str::len);
-        Some(Ok((Value::Void, text)))
-    })
-    .map(drop)
-}
-
 fn encode(value: &Json, depth: usize, budget: &mut Budget, hook: &mut Hook<'_>) -> Result<Value> {
     budget.node(depth)?;
     if let Some(converted) = hook(value, depth) {
@@ -648,6 +635,65 @@ pub fn check(value: &Json) -> Result<()> {
         Some(Ok((Value::Void, text)))
     })
     .map(drop)
+}
+
+/// What one value counts toward the totals above, as `check` counts it:
+/// every value one, an image one, a Markdown document one and its text,
+/// strings and field names their bytes. Kept per row of an array a view
+/// shows, so that a row patch checks the patched array's totals without
+/// converting the rows it keeps (`ui_patch`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Cost {
+    pub nodes: usize,
+    pub text: usize,
+}
+
+/// `value`'s `Cost`. For a value already converted or checked (its depth is
+/// within the limits).
+pub fn cost(value: &Json) -> Cost {
+    fn walk(value: &Json, cost: &mut Cost) {
+        cost.nodes += 1;
+        if crate::ui::ui_image::reference(value).is_some() {
+            return;
+        }
+        if let Some(doc) = crate::ui::ui_markdown::reference(value) {
+            cost.text += doc.get("text").and_then(Json::as_str).map_or(0, str::len);
+            return;
+        }
+        match value {
+            Json::String(text) => cost.text += text.len(),
+            Json::Array(items) => items.iter().for_each(|item| walk(item, cost)),
+            Json::Object(fields) => {
+                for (name, item) in fields {
+                    cost.text += name.len();
+                    walk(item, cost);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut cost = Cost::default();
+    walk(value, &mut cost);
+    cost
+}
+
+/// An array whose rows cost `rows` is within the totals (the array itself
+/// is one value): what converting it whole would refuse.
+pub fn check_totals<'a>(rows: impl IntoIterator<Item = &'a Cost>) -> Result<()> {
+    let (mut nodes, mut text) = (1usize, 0usize);
+    for row in rows {
+        nodes = nodes.saturating_add(row.nodes);
+        text = text.saturating_add(row.text);
+    }
+    if nodes > MAX_NODES {
+        return Err(over(format!("UI value exceeds {MAX_NODES} total nodes")));
+    }
+    if text > MAX_TEXT_BYTES {
+        return Err(over(format!(
+            "UI value text exceeds {MAX_TEXT_BYTES} total bytes"
+        )));
+    }
+    Ok(())
 }
 
 /// Unsupported types, non-finite numbers, missing rows and models changing size

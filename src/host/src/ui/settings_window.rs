@@ -580,8 +580,9 @@ impl Host {
     /// A row patch of a settings page's property (`ui_patch`): in place in
     /// the open window's model and in the stored properties (`None`), or,
     /// where the window's model cannot take it, the patched whole value
-    /// for the caller to write. A closed window's page checks the carried
-    /// rows against the value limits, as a closed page's whole write does.
+    /// for the caller to write. A closed window's page checks the patched
+    /// whole value against the value limits, as a closed page's whole write
+    /// does.
     fn patch_page(
         &mut self,
         owner: u64,
@@ -610,26 +611,33 @@ impl Host {
                     ui_patch::applicable(&current, ops.before, &ops.shapes, &rows.values)
                 });
             let Some(rows) = rows else {
-                let mut whole = match self
+                return match self
                     .settings
                     .page(owner, id)
                     .and_then(|page| page.properties.get(property))
                 {
-                    Some(Value::Array(stored)) => stored.clone(),
-                    _ => return Err(ui_patch::stale()),
+                    Some(Value::Array(stored)) => Ok(Some(ui_patch::patched(stored, &ops))),
+                    _ => Err(ui_patch::stale()),
                 };
-                ui_patch::apply_vec(
-                    &mut whole,
-                    &ops.shapes,
-                    ops.rows.iter().map(|row| (*row).clone()),
-                );
-                return Ok(Some(Value::Array(whole)));
             };
             ui_patch::apply(&current, &ops.shapes, rows.values);
-            self.images.patched_rows(owner, &view, property, rows.keys);
+            self.images
+                .patched_rows(owner, &view, property, rows.written);
         } else {
-            ui_values::check_rows(&ops.rows)
-                .map_err(|error| RpcError::from(error).for_property(property))?;
+            // The rows it keeps count toward the totals too.
+            let Some(Value::Array(stored)) = self
+                .settings
+                .page(owner, id)
+                .and_then(|page| page.properties.get(property))
+            else {
+                return Err(ui_patch::stale());
+            };
+            let whole = ui_patch::patched(stored, &ops);
+            RpcError::check_property(property, &whole)?;
+            if let Some(page) = self.settings.page_mut(owner, id) {
+                page.properties.insert(property.to_owned(), whole);
+            }
+            return Ok(None);
         }
         let rows: Vec<Value> = ops.rows.iter().map(|row| (*row).clone()).collect();
         if let Some(Value::Array(stored)) = self

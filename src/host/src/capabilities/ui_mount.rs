@@ -256,13 +256,7 @@ fn patched_mount(
         return Err(ui_patch::stale());
     };
     let ops = ui_patch::parse(ops, stored.len())?;
-    let mut rows = stored.clone();
-    ui_patch::apply_vec(
-        &mut rows,
-        &ops.shapes,
-        ops.rows.iter().map(|row| (*row).clone()),
-    );
-    Ok(Value::Array(rows))
+    Ok(ui_patch::patched(stored, &ops))
 }
 
 /// A row patch of a panel's property, in place in the shell and the
@@ -301,13 +295,13 @@ fn patch_mount(
         }
         converted.push((current, rows));
     }
-    let mut keys = None;
+    let mut written = None;
     for (current, rows) in converted {
         ui_patch::apply(&current, &ops.shapes, rows.values);
-        keys = Some(rows.keys);
+        written = Some(rows.written);
     }
-    if let Some(keys) = keys {
-        host.images.patched_rows(owner, "$mount", property, keys);
+    if let Some(written) = written {
+        host.images.patched_rows(owner, "$mount", property, written);
     }
     let rows: Vec<Value> = ops.rows.iter().map(|row| (*row).clone()).collect();
     let shapes = ops.shapes;

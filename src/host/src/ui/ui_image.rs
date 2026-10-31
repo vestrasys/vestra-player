@@ -11,6 +11,7 @@
 use crate::host::*;
 use crate::ui::ui_image;
 use crate::ui::ui_markdown;
+use crate::ui::ui_values;
 use serde_json::Value;
 use slint_interpreter::Value as SValue;
 use std::io::Read;
@@ -78,11 +79,19 @@ type Slot = (u64, String, String);
 
 /// What the last write of a property left for row patches (`ui_patch`):
 /// the write's `seq` (0: the initial properties), and for an array without
-/// Markdown documents the images each row shows, in row order.
+/// Markdown documents its rows, in order.
 #[derive(Default)]
 pub struct Written {
     pub seq: u64,
-    pub rows: Option<Vec<Vec<Key>>>,
+    pub rows: Option<Vec<Row>>,
+}
+
+/// One row of an array a view shows: the images it shows and what it counts
+/// toward the value totals (a patch checks the patched array's totals).
+#[derive(Clone, Debug, Default)]
+pub struct Row {
+    pub keys: Vec<Key>,
+    pub cost: ui_values::Cost,
 }
 
 #[derive(Default)]
@@ -278,21 +287,15 @@ impl Images {
             .or_default()
             .seq = seq;
     }
-    /// The images each row of the property's array shows (`None`: not an
-    /// array converted by `prop_value`, or one holding documents).
-    pub fn row_keys(&self, owner: u64, view: &str, property: &str) -> Option<&Vec<Vec<Key>>> {
+    /// The rows of the property's array as the view shows them (`None`: not
+    /// an array converted by `prop_value`, or one holding documents).
+    pub fn written_rows(&self, owner: u64, view: &str, property: &str) -> Option<&Vec<Row>> {
         self.written
             .get(&(owner, view.to_owned(), property.to_owned()))?
             .rows
             .as_ref()
     }
-    fn set_row_keys(
-        &mut self,
-        owner: u64,
-        view: &str,
-        property: &str,
-        rows: Option<Vec<Vec<Key>>>,
-    ) {
+    fn set_row_keys(&mut self, owner: u64, view: &str, property: &str, rows: Option<Vec<Row>>) {
         let slot = (owner, view.to_owned(), property.to_owned());
         match rows {
             Some(rows) => self.written.entry(slot).or_default().rows = Some(rows),
@@ -303,14 +306,14 @@ impl Images {
             }
         }
     }
-    /// A row patch applied: the images each row shows now. The property's
+    /// A row patch applied: the rows the property shows now. The property's
     /// shown images are replaced only when some row showed or shows one.
-    pub fn patched_rows(&mut self, owner: u64, view: &str, property: &str, rows: Vec<Vec<Key>>) {
+    pub fn patched_rows(&mut self, owner: u64, view: &str, property: &str, rows: Vec<Row>) {
         let before = self
-            .row_keys(owner, view, property)
-            .is_some_and(|rows| rows.iter().any(|row| !row.is_empty()));
-        if before || rows.iter().any(|row| !row.is_empty()) {
-            let keys = rows.iter().flatten().cloned().collect();
+            .written_rows(owner, view, property)
+            .is_some_and(|rows| rows.iter().any(|row| !row.keys.is_empty()));
+        if before || rows.iter().any(|row| !row.keys.is_empty()) {
+            let keys = rows.iter().flat_map(|row| &row.keys).cloned().collect();
             self.assign_many(owner, view, property, keys);
         }
         self.set_row_keys(owner, view, property, Some(rows));
@@ -483,7 +486,11 @@ impl Host {
                 let mut order = order.into_iter();
                 counts
                     .into_iter()
-                    .map(|count| order.by_ref().take(count).flatten().collect())
+                    .zip(value.as_array().into_iter().flatten())
+                    .map(|(count, row)| Row {
+                        keys: order.by_ref().take(count).flatten().collect(),
+                        cost: ui_values::cost(row),
+                    })
                     .collect()
             });
             self.images.set_row_keys(owner, view, property, rows);
