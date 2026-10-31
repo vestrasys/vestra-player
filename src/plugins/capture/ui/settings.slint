@@ -1,7 +1,7 @@
 // Snapshot Settings (F07, F04): format and quality, where captures go, the rendered frame.
-import { CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
+import { LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button, Slider } from "@vestra/widgets.slint";
+import { Button, Check, Choice, Slider } from "@vestra/widgets.slint";
 import { FormLabel, Group, Note } from "parts.slint";
 
 export component CaptureSettings inherits Window {
@@ -38,11 +38,10 @@ export component CaptureSettings inherits Window {
             HorizontalLayout {
                 spacing: 4px;
                 FormLabel { width: root.column; text: @tr("Format:"); }
-                ComboBox {
-                    height: Theme.input-height;
+                Choice {
                     model: ["PNG", "JPEG", "BMP"];
                     current-index <=> root.format-index;
-                    selected => { root.choose-format(self.current-index); }
+                    selected(index) => { root.choose-format(index); }
                 }
             }
             HorizontalLayout {
@@ -67,20 +66,18 @@ export component CaptureSettings inherits Window {
                 LineEdit { height: Theme.input-height; font-size: Theme.font-body; text: root.folder; read-only: true; }
                 Button { width: 30px; height: Theme.input-height; text: "…"; clicked => { root.pick-folder(); } }
             }
-            CheckBox {
-                height: Theme.checkbox-row-height;
+            Check {
                 text: @tr("Save to the media folder when possible");
                 checked <=> root.beside-media;
-                toggled => { root.set-beside-media(self.checked); }
+                toggled(on) => { root.set-beside-media(on); }
             }
         }
         Group {
             title: @tr("Rendered frame");
-            CheckBox {
-                height: Theme.checkbox-row-height;
+            Check {
                 text: @tr("Include subtitles");
                 checked <=> root.screen-subtitles;
-                toggled => { root.set-screen-subtitles(self.checked); }
+                toggled(on) => { root.set-screen-subtitles(on); }
             }
             Text {
                 text: @tr("The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included.");

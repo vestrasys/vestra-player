@@ -169,6 +169,31 @@ test("the reasons in model.ts and the windows' Words.reason in ui/parts.slint ar
   await stop();
 });
 
+test("the Export Tasks list is Slint's ListView over task-rows, not a ScrollView with a VerticalLayout", async () => {
+  const slint = await readFile(new URL("../ui/tasks.slint", import.meta.url), "utf8");
+  assert.match(slint, /import \{ ListView \} from "std-widgets\.slint";/);
+  assert.match(slint, /ListView \{\s*for task in root\.task-rows: Rectangle \{\s*height: 40px;/);
+  assert.doesNotMatch(slint, /ScrollView/);
+});
+
+test("the dialogs use the library's Choice and Check (one look with the player), not std ComboBox / CheckBox", async () => {
+  const count = (text: string, word: string) => text.match(new RegExp(`\\b${word} \\{`, "g"))?.length ?? 0;
+  const expected = { burst: [1, 3], clip: [1, 2], settings: [1, 2] } as const;
+  for (const [name, [choices, checks]] of Object.entries(expected)) {
+    const slint = await readFile(new URL(`../ui/${name}.slint`, import.meta.url), "utf8");
+    assert.doesNotMatch(slint, /ComboBox|CheckBox/, name);
+    assert.match(slint, /import \{ [^}]*\bCheck, Choice\b[^}]* \} from "@vestra\/widgets\.slint";/, name);
+    assert.equal(count(slint, "Choice"), choices, `${name}: Choice`);
+    assert.equal(count(slint, "Check"), checks, `${name}: Check`);
+  }
+  // selected(int) and toggled(bool) carry the new value; nothing reads self.current-index / self.checked.
+  const settings = await readFile(new URL("../ui/settings.slint", import.meta.url), "utf8");
+  assert.match(settings, /selected\(index\) => \{ root\.choose-format\(index\); \}/);
+  assert.match(settings, /toggled\(on\) => \{ root\.set-beside-media\(on\); \}/);
+  assert.match(settings, /toggled\(on\) => \{ root\.set-screen-subtitles\(on\); \}/);
+  assert.doesNotMatch(settings, /self\.(current-index|checked)/);
+});
+
 test("Ctrl+E saves the raw current frame into the capture folder with no dialog and an OSD", async () => {
   const host = new TestHost();
   ready(host);
