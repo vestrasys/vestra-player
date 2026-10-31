@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.5
+
+- The Audio Workbench uses the player's shared form controls (`@vestra/widgets.slint`, player 0.6.0): the Track, Channels, Device and Keep sync drop-downs are the library `Choice`, the Equalizer, Normalize, Crystalizer and auto-load switches the library `Check` (panel style), and the Equalizer / Effects / Output strip the library `Tabs`. Who must change: nobody. What users see: the same window, sizes, labels and translations, with the shared look and keyboard use: a control reached with Tab shows a focus ring; a drop-down opens with Space, Enter, F4 or Alt+Down and its list is walked with the arrows, Page Up/Down and Home/End (Enter picks, Escape closes); a closed drop-down changes with Up/Down/Home/End; Space switches a check; Left/Right/Home/End move between the pages. A click still takes no focus, so the player's Space and arrow shortcuts keep working after clicking in the window. The drop-down lists stay inside the window; the Track list now shows at most 10 rows and scrolls beyond them (it used to show every track), the Device list still 7. Picking the track that is already selected no longer sends the switch again (it did nothing). The 4-preset menu and the equalizer band sliders are unchanged.
+- The window's list labels (tracks, output devices and the device tip) now come from the plugin as text values, with the same words and translations as before. `minPlayerVersion` is 0.6.0.
+
 ## 1.5.4
 
 - "Load audio files with the same name automatically" now leaves a file to the video whose name it matches more closely, as the Subtitles plugin does for same-name subtitle files (0.4.5). With `Movie.mkv` and `Movie.Extended.mkv` in one folder, `Movie.Extended.ac3` and `Movie.Extended.jpn.mka` load only with `Movie.Extended.mkv`; `Movie.ac3` and `Movie.jpn.mka` still load with `Movie.mkv`. Before, `Movie.mkv` also picked up the other video's audio, since its name starts with `Movie.`. Only files with a video extension in the same folder count as other videos (`.mkv`, `.mp4`, `.avi`, `.mov`, `.webm`, `.ts`, `.m2ts` and the like); names are compared case-insensitively, like the match itself.

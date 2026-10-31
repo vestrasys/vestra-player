@@ -1,6 +1,6 @@
 {
   "id": "vestra.audio",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -23,5 +23,5 @@
     "audio track",
     "output device"
   ],
-  "minPlayerVersion": "0.4.3"
+  "minPlayerVersion": "0.6.0"
 }
