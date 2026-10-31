@@ -72,15 +72,21 @@ component MenuItem inherits Rectangle {
     callback hovered();
     callback activated();
     private property <bool> active: root.item.enabled && !root.item.busy;
-    private property <bool> lit: root.current || root.item.open;
+    // Two styles (0.6.0, user ruling; Windows menus): the cursor's row (the
+    // pointer's, set here at once, or the keyboard's) is lit in full; a row
+    // whose submenu is open but is not the cursor's shows only the accent
+    // bar. The open row follows the host (the held switch of G-15), the
+    // lit row never waits for it.
+    private property <bool> lit: root.current;
+    private property <bool> marked: root.current || root.item.open;
     height: 24px;
     border-radius: Theme.radius-control;
     background: root.lit ? Theme.selected-bg : transparent;
-    // The lit row: a 2px accent bar at its left edge (always present, hidden
-    // when not lit: creating and destroying an element per hover rebuilt the
-    // window's accessibility tree, 2026-10-27).
+    // The accent bar at the left edge, of the lit and the open row (always
+    // present, hidden by `visible`: creating and destroying an element per
+    // hover rebuilt the window's accessibility tree, 2026-10-27).
     Rectangle {
-        visible: root.lit;
+        visible: root.marked;
         x: 0;
         y: 5px;
         width: 2px;
@@ -169,18 +175,10 @@ export component MenuView inherits Rectangle {
 
     private property <int> cursor-level: 0;
     private property <int> cursor: -1;
-    // The cursor follows the pointer (not a key). A level with an open
-    // submenu then keeps only its open row lit: the row under the pointer
-    // lights when the host switches to it (its `open`, or the level's open
-    // row cleared). While a switch away is held (G-15, the pointer heading
-    // for the open submenu) the rows it crosses stay dark, as in macOS
-    // menus; one row per level is lit at any time.
-    private property <bool> pointer-cursor: false;
 
     public function focus-menu() {
         root.cursor-level = 0;
         root.cursor = -1;
-        root.pointer-cursor = false;
         keyboard.focus();
     }
     function rows-at(level: int) -> int {
@@ -222,7 +220,6 @@ export component MenuView inherits Rectangle {
 
     keyboard := FocusScope {
         key-pressed(event) => {
-            root.pointer-cursor = false;
             if event.text == Key.Escape {
                 // Close the deepest level first, like Left (IA-CORE-01).
                 if root.levels.length > 1 {
@@ -320,12 +317,10 @@ export component MenuView inherits Rectangle {
                 MenuItem {
                     width: parent.width;
                     item: row;
-                    current: root.cursor-level == k && root.cursor == i
-                        && (!root.pointer-cursor || level.open < 0 || level.open == i);
+                    current: root.cursor-level == k && root.cursor == i;
                     hovered => {
                         root.cursor-level = k;
                         root.cursor = i;
-                        root.pointer-cursor = true;
                         root.hovered(k, row.token, false);
                     }
                     activated => {

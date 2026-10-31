@@ -285,7 +285,8 @@ The full contents of the submenus and the plugin that owns each item are in [men
 .ctx-menu  { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; padding: 2px;
              box-shadow: 0 0 8px var(--menu-shadow); }   /* vestra #00000080, vestra-light #00000033 (theme.rs, MenuChrome.shadow) */
 .ctx-item  { height: 24px; border-radius: 4px; padding: 0 8px 0 4px; font-size: 12px; color: var(--text-list); }
-.ctx-item.lit      { background: var(--selected-bg); color: var(--text); }   /* hovered or keyboard-current item; 2×14 accent bar on the left edge (y 5) */
+.ctx-item.lit      { background: var(--selected-bg); color: var(--text); }   /* hovered or keyboard-current item, at once (one per level); 2×14 accent bar on the left edge (y 5) */
+.ctx-item.open     { }                                                       /* its submenu is open, not lit: only the 2×14 accent bar (0.6.0, Windows menus) */
 .ctx-item:disabled { color: var(--text-dim); }
 .ctx-shortcut      { font-size: 12px; color: var(--text-dim); text-align: right; }
 .ctx-arrow         { width: 10px; }                                          /* submenu arrow: submenu icon 5×8, x 3 */

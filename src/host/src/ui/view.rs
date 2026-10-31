@@ -2335,9 +2335,9 @@ export component MenuWindow inherits Window {
                 panel["y"].as_f64().unwrap() + row["y"].as_f64().unwrap() + 12.,
             )
         }
-        /// The rows of a level drawn lit: their 2px accent bar differs from
-        /// the row's own background beside it.
-        fn lit(&self, level: usize) -> Vec<String> {
+        /// The rows of a level whose pixel at `dx` from the panel's left
+        /// edge differs from the pixel at `against` on the row's middle line.
+        fn rows_where(&self, level: usize, dx: f64, against: f64) -> Vec<String> {
             let Some(panel) = self.levels.get(level) else {
                 return Vec::new();
             };
@@ -2352,17 +2352,69 @@ export component MenuWindow inherits Window {
                 .filter(|row| {
                     let x = panel["x"].as_f64().unwrap();
                     let y = panel["y"].as_f64().unwrap() + row["y"].as_f64().unwrap() + 12.;
-                    pixel(x + 3., y) != pixel(x + 14., y)
+                    pixel(x + dx, y) != pixel(x + against, y)
                 })
                 .map(|row| row["title"].as_str().unwrap().to_owned())
                 .collect()
+        }
+        /// The rows of a level drawn with the 2px accent bar (lit, or with
+        /// their submenu open): the bar differs from the row beside it.
+        fn marked(&self, level: usize) -> Vec<String> {
+            self.rows_where(level, 3., 14.)
+        }
+        /// The rows of a level lit in full: their background differs from
+        /// the panel's (1px inside its border, left of the row).
+        fn lit(&self, level: usize) -> Vec<String> {
+            self.rows_where(level, 14., 1.)
+        }
+        /// The level and row under the pointer (deepest panel first), if
+        /// the pointer is on a row.
+        fn under(&self) -> Option<(usize, String)> {
+            let levels = self.levels.as_array()?;
+            levels.iter().enumerate().rev().find_map(|(level, panel)| {
+                let number = |key: &str| panel[key].as_f64().unwrap();
+                let (x, y) = (self.pointer.x, self.pointer.y);
+                if x < number("x") + 2. || x >= number("x") + number("width") - 2. {
+                    return None;
+                }
+                panel["rows"].as_array()?.iter().find_map(|row| {
+                    let top = number("y") + row["y"].as_f64().unwrap();
+                    (y >= top && y < top + 24.)
+                        .then(|| (level, row["title"].as_str().unwrap().to_owned()))
+                })
+            })
+        }
+        /// After a frame: at most one row lit in full per level, the row
+        /// under the pointer lit at once, and the bar only on the lit row
+        /// and the row whose submenu is open.
+        fn check(&self, context: &str) {
+            for level in 0..self.levels.as_array().map_or(0, Vec::len) {
+                let lit = self.lit(level);
+                assert!(lit.len() <= 1, "{context}: level {level} lit {lit:?}");
+                let mut marked: Vec<&String> = lit.iter().chain(self.path.get(level)).collect();
+                marked.sort();
+                marked.dedup();
+                let mut drawn = self.marked(level);
+                drawn.sort();
+                assert_eq!(
+                    drawn.iter().collect::<Vec<_>>(),
+                    marked,
+                    "{context}: level {level} bars (path {:?})",
+                    self.path
+                );
+            }
+            if let Some((level, row)) = self.under() {
+                assert_eq!(self.lit(level), [row], "{context}: the pointer's row");
+            }
         }
     }
 
     /// Open Video, sweep its submenu up and down three times at `step` px
     /// per 1 ms (starting `phase` ms into a 16 ms host tick) and rest on
-    /// Reset; the open path and the lit rows of both levels.
-    fn sweep(step: f64, phase: u64) -> (Vec<String>, Vec<String>, Vec<String>) {
+    /// Reset; the open path, the rows with a bar in both levels and the
+    /// rows lit in full in both levels.
+    #[allow(clippy::type_complexity)]
+    fn sweep(step: f64, phase: u64) -> (Vec<String>, [Vec<String>; 2], [Vec<String>; 2]) {
         let mut sim = MenuSim::new();
         sim.now += phase;
         let (x, y) = sim.row(0, "Video");
@@ -2396,7 +2448,11 @@ export component MenuWindow inherits Window {
             sim.move_to(x, reset);
         }
         sim.draw();
-        let result = (sim.path.clone(), sim.lit(0), sim.lit(1));
+        let result = (
+            sim.path.clone(),
+            [sim.marked(0), sim.marked(1)],
+            [sim.lit(0), sim.lit(1)],
+        );
         sim.window.hide().unwrap();
         result
     }
@@ -2405,39 +2461,34 @@ export component MenuWindow inherits Window {
     /// up and down at about 6000 px/s left rows that open a submenu
     /// ("Image Processing") drawn lit beside the row under the pointer, with
     /// their submenus closed. Like native menus, only the row under the
-    /// pointer and the parents of open submenus may be lit. Before the fix
-    /// every combination below left one to five such rows.
+    /// pointer is lit, and the parents of open submenus carry the bar.
+    /// Before the fix every combination below left one to five such rows.
     #[test]
     fn a_fast_sweep_leaves_only_the_pointer_row_and_open_parents_lit() {
         let mut failures = Vec::new();
         for step in [2., 6., 14.] {
             for phase in [0, 5, 11] {
-                let (path, root, video) = sweep(step, phase);
-                if path != ["Video"] || root != ["Video"] || video != ["Reset"] {
+                let (path, marked, lit) = sweep(step, phase);
+                if path != ["Video"]
+                    || marked != [vec!["Video".to_owned()], vec!["Reset".to_owned()]]
+                    || lit != [Vec::<String>::new(), vec!["Reset".to_owned()]]
+                {
                     failures.push(format!(
-                        "step {step} phase {phase}: path {path:?} lit {root:?} {video:?}"
+                        "step {step} phase {phase}: path {path:?} bars {marked:?} lit {lit:?}"
                     ));
                 }
             }
         }
-        assert!(
-            failures.is_empty(),
-            "{}",
-            failures.join(
-                "
-"
-            )
-        );
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
     }
 
     /// Open Video ▸ Image Processing, then move the pointer from its row
     /// toward its submenu across Rotation (a held switch, G-15), checking
-    /// after every step that Video's level lights only `expected` (given
-    /// the sim). Returns the sim and the Rotation row's middle.
-    fn hold_across_rotation(expected: impl Fn(&MenuSim) -> Vec<String>) -> (MenuSim, (f64, f64)) {
+    /// every frame (`MenuSim::check`). Returns the sim and where the
+    /// pointer stopped, on the Rotation row.
+    fn hold_across_rotation() -> (MenuSim, (f64, f64)) {
         let mut sim = MenuSim::new();
         let (x, y) = sim.row(0, "Video");
-        sim.move_to(x + 30., y);
         for _ in 0..20 {
             sim.move_to(x + 30., y);
         }
@@ -2445,7 +2496,6 @@ export component MenuWindow inherits Window {
         let (_, rotation) = sim.row(1, "Rotation");
         assert_eq!(rotation - ip, 24., "Rotation is the row below");
         let width = sim.levels[1]["width"].as_f64().unwrap();
-        sim.move_to(sub_x + 40., ip);
         for _ in 0..20 {
             sim.move_to(sub_x + 40., ip);
         }
@@ -2464,67 +2514,62 @@ export component MenuWindow inherits Window {
                 ip + (target.1 - ip) * t,
             );
             sim.draw();
-            assert_eq!(
-                sim.lit(1),
-                expected(&sim),
-                "step {step} path {:?}",
-                sim.path
-            );
+            sim.check(&format!("step {step}"));
         }
         (sim, target)
     }
 
-    /// 0.6.0 user report: moving quickly through the menu lit several rows
-    /// at once: the open group row (kept `open` while a switch away is held,
-    /// G-15) and the row under the pointer. Like macOS menus, while the
-    /// switch is held only the open parent stays lit.
+    /// 0.6.0 user ruling (Windows menus): the row under the pointer is lit
+    /// at once, even while a switch away from the open submenu is held
+    /// (G-15); the open parent keeps only the accent bar. Before, the lit
+    /// row waited for the held switch (up to `AIM_GRACE_MS` and a tick).
     #[test]
-    fn a_held_switch_keeps_only_the_open_parent_lit() {
-        let (mut sim, _) = hold_across_rotation(|_| vec!["Image Processing".into()]);
+    fn during_a_held_switch_the_pointer_row_is_lit_and_the_open_parent_marked() {
+        let (mut sim, _) = hold_across_rotation();
         assert_eq!(
             sim.path,
             ["Video", "Image Processing"],
             "the switch is held"
         );
-        // Back on the open row: the hold is cancelled, the same row lit.
+        assert_eq!(sim.lit(1), ["Rotation"]);
+        assert_eq!(sim.marked(1), ["Image Processing", "Rotation"]);
+        // Back on the open row: the hold is cancelled, one row lit.
         let (sub_x, ip) = sim.row(1, "Image Processing");
-        for _ in 0..40 {
+        for step in 0..40 {
             sim.move_to(sub_x + 40., ip);
             sim.draw();
-            assert_eq!(sim.lit(1), ["Image Processing"]);
+            sim.check(&format!("back {step}"));
         }
         assert_eq!(sim.path, ["Video", "Image Processing"]);
-        assert_eq!(sim.lit(0), ["Video"]);
+        assert_eq!(sim.lit(1), ["Image Processing"]);
+        assert_eq!(sim.marked(1), ["Image Processing"]);
+        assert_eq!(sim.lit(0), Vec::<String>::new());
+        assert_eq!(sim.marked(0), ["Video"]);
     }
 
-    /// A held switch released (the pointer rests on Rotation): the lit row
-    /// moves to Rotation at the switch, never both lit, and stays alone.
+    /// A held switch released (the pointer rests on Rotation): Rotation
+    /// stays the lit row, its submenu opens and the bar leaves Image
+    /// Processing.
     #[test]
-    fn a_released_switch_moves_the_lit_row_to_the_pointer() {
-        let lit = |sim: &MenuSim| {
-            if sim.path.last().is_some_and(|g| g == "Rotation") {
-                vec!["Rotation".into()]
-            } else {
-                vec!["Image Processing".into()]
-            }
-        };
-        let (mut sim, target) = hold_across_rotation(lit);
-        for _ in 0..(crate::ui::menu::AIM_GRACE_MS * 3) {
+    fn a_released_switch_opens_the_lit_row() {
+        let (mut sim, target) = hold_across_rotation();
+        for step in 0..(crate::ui::menu::AIM_GRACE_MS * 3) {
             sim.move_to(target.0, target.1);
             sim.draw();
-            assert_eq!(sim.lit(1), lit(&sim), "path {:?}", sim.path);
+            sim.check(&format!("rest {step}"));
         }
         assert_eq!(sim.path, ["Video", "Rotation"], "the held switch happened");
         assert_eq!(sim.lit(1), ["Rotation"]);
+        assert_eq!(sim.marked(1), ["Rotation"]);
         assert_eq!(sim.lit(2), Vec::<String>::new());
     }
 
-    /// The pointer reaches the held submenu: the switch is cancelled, its
-    /// parent stays the one lit row of its level and the submenu lights the
-    /// row under the pointer.
+    /// The pointer reaches the held submenu: the switch is cancelled, the
+    /// submenu lights the row under the pointer and its parent keeps the
+    /// bar, not lit.
     #[test]
-    fn reaching_the_submenu_lights_its_row_and_keeps_the_parent() {
-        let (mut sim, target) = hold_across_rotation(|_| vec!["Image Processing".into()]);
+    fn reaching_the_submenu_lights_its_row_and_marks_the_parent() {
+        let (mut sim, target) = hold_across_rotation();
         let (sub2_x, deband) = sim.row(2, "Deband");
         let steps = 12;
         for step in 1..=steps {
@@ -2534,17 +2579,19 @@ export component MenuWindow inherits Window {
                 target.1 + (deband - target.1) * t,
             );
             sim.draw();
-            assert_eq!(sim.lit(1), ["Image Processing"], "step {step}");
-            assert!(sim.lit(2).len() <= 1, "step {step}: {:?}", sim.lit(2));
+            sim.check(&format!("step {step}"));
         }
-        for _ in 0..(crate::ui::menu::AIM_GRACE_MS * 2) {
+        for step in 0..(crate::ui::menu::AIM_GRACE_MS * 2) {
             sim.move_to(sub2_x + 30., deband);
+            sim.draw();
+            sim.check(&format!("rest {step}"));
         }
-        sim.draw();
         assert_eq!(sim.path, ["Video", "Image Processing"]);
-        assert_eq!(sim.lit(0), ["Video"]);
-        assert_eq!(sim.lit(1), ["Image Processing"]);
+        assert_eq!(sim.marked(0), ["Video"]);
+        assert_eq!(sim.lit(1), Vec::<String>::new());
+        assert_eq!(sim.marked(1), ["Image Processing"]);
         assert_eq!(sim.lit(2), ["Deband"]);
+        assert_eq!(sim.marked(2), ["Deband"]);
     }
 
     /// Host 0.5.26: a hover writes only the levels it changes. Before, every
