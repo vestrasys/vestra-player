@@ -1925,11 +1925,16 @@ export component W inherits Window {
             );
             // Known since Slint 1.16 (not new in 1.18): `sidebar-actual`
             // reads the window width that the sidebar's fixed width feeds.
+            // Slint names the loop from any of its members (0.5.24's video
+            // image change moved its first one), so match the members.
             let diagnostics: Vec<_> = result
                 .diagnostics()
                 .map(|d| d.to_string())
                 .filter(|d| {
-                    !d.contains("part of a binding loop (root.layoutinfo-h -> root.sidebar-actual")
+                    !(d.contains("part of a binding loop (")
+                        && d.contains(
+                            "root.layoutinfo-h -> root.sidebar-actual -> sidebar-keys.width",
+                        ))
                 })
                 .collect();
             assert!(diagnostics.is_empty(), "{diagnostics:#?}");

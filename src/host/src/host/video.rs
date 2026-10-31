@@ -232,8 +232,19 @@ impl Host {
         self.last_frame = Some(set);
         match texture {
             Some(texture) => {
+                // The reused texture is filled in place: set its image only
+                // when the video area shows another one (a new texture, a
+                // rebuilt shell, a cleared picture). Slint 1.18.1 never finds
+                // two wgpu texture images equal, so setting the same one again
+                // still counted as a change and redid everything that depends
+                // on the picture each frame (round record render-modes §11.7).
                 if let Some(texture) = texture
                     && !video_image_hidden()
+                    && !matches!(
+                        window.get_property("video-frame"),
+                        Ok(slint_interpreter::Value::Image(shown))
+                            if platform::same_video_image(&shown, &texture)
+                    )
                 {
                     let _ = window.set_property("video-frame", texture.into());
                 }

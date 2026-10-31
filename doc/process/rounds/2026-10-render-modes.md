@@ -469,3 +469,49 @@ Conclusion: folding removes most missed refreshes; the few left do not come from
 | --- | --- | --- |
 | H17 again | GPU preference, `VESTRA_GPU_WATCHDOG=0 VESTRA_TEST_GPU_STALL=3`, 10 s, then `WM_CLOSE` | the process ends within about 1–2 s |
 | H18 | GPU preference, `VESTRA_TEST_GPU_STALL=3` (default watchdog, 10 s), `WM_CLOSE` 2 s after the stall line (before the limit) | ends within about 1–2 s, no restart |
+
+### 11.7 Every video picture redid the window's layout (host maintainer, 2026-10-31; host 0.5.24)
+
+**Report (coordinator, 0.5.19 release, Radeon 780M laptop, windowed about 1400×860, a 60 fps YouTube stream through VestraTube, `VESTRA_FRAME_LOG=1`):** with the VestraTube sidebar tab visible (about 20 results; its view keeps 200 rows, the rest blank and hidden) only 20–22 of 60 pictures were shown; `ui: turn max` 50–72 ms, `timers max` 45–57 ms, `cpu paint` about 50 Mcycles (CPU mode) / 22 Mcycles (GPU mode). Same in CPU and GPU mode; with the playlist tab or the sidebar closed 60/60 (turn max 12–18 ms); paused fine. The user also found CPU mode smoother than GPU mode with a low-resolution YouTube video while dragging the window.
+
+**Ruled out (headless):**
+
+- *Plugin updates per position tick.* The SDK re-evaluates `panel.bind` on each `source.state` (10/s) but sends only changed properties: with the SDK test host, 50 position changes during playback sent 0 `ui.setMount` (13 during the search before); the evaluation itself takes 0.037 ms in the plugin's process.
+- *Drawing the sidebar.* A bench (femtovg on wgpu, Direct3D 12 on the 780M, into an offscreen texture; the real shell with the playlist and VestraTube tabs and the playback bar; 1400×860 logical at scale 1.75; Chinese titles with emoji), UI-thread CPU per frame, p50:
+
+| Sidebar | Redraw only | New `video-frame` each frame |
+| --- | --- | --- |
+| closed | 0.83 ms | 1.7 ms |
+| VestraTube, 20 rows + 180 blank | 2.5 ms | 4.2 ms |
+| VestraTube, a model of 20 rows | 2.2 ms | 3.5 ms |
+| VestraTube, 200 real rows | 4.4 ms | 6.2 ms |
+
+Variants (20 + 180, redraw only): no rounded clip 2.8 ms, no images 2.6 ms, no texts 2.1 ms, no title wrapping 2.6 ms, `ListView` 3.5 ms + 0.76 ms layout, `cache-rendering-hint` on the list 1.3 ms. femtovg has no partial rendering: every draw repaints the whole window; items outside the clip are not drawn but their children are visited.
+
+**Cause.**
+
+1. Every picture marks `video-frame` changed in both modes. GPU mode sets one of its ring's textures each frame. CPU mode sets its one reused texture again each frame, and Slint 1.18.1's `ImageInner` equality has no case for `WGPUTexture` (`_ => false`), so the same image never compares equal.
+2. The video `Image` in `host.slint` had no `x`/`y`. Slint merges the size constraints of such children into the parent's (`default_geometry::gen_layout_info_prop`), so the picture's implicit size fed the window's layout: every new picture made the whole layout, and the geometry of every item, dirty.
+3. While a UI Automation client is active (a screen reader, an input method, other assistive tools), Slint's winit AccessKit adapter rebuilds every accessibility node whose tracker went dirty, in a zero-delay timer (`rebuild_tree_of_dirty_nodes`): in the frame log's `timers` segment. VestraTube's 200 rows make 668 accessible nodes (a model of 20 rows: 128; sidebar closed: 35).
+
+The bench with that rebuild emulated (each accessible item's visibility, geometry, window position and accessible properties under its own tracker, as AccessKit does; without the UIA serialization), new `video-frame` each frame: 20 + 180 rows 31 ms p50 (max 42), 200 real rows 41 ms (max 53), a model of 20 rows 6 ms, sidebar closed 1.8 ms. That matches the report's `timers max`. Not yet confirmed on the hardware: that a UI Automation client was active there (case A/B below).
+
+**Fix.**
+
+- **H1** (`host.slint`): the video `Image` is placed (`x: 0px; y: 0px`), so its source no longer reaches the layout. Bench: the emulated rebuild per frame 31 ms → 0.02 ms, the picture still drawn. Test: `ui::composition::tests::a_new_video_picture_leaves_the_window_layout_alone` (the video area's size and place, read under a property tracker, stay clean when `video-frame` changes; a resize marks them; fails without the fix).
+- **H2** (`host/video.rs` `show_frame`, `platform::same_video_image`): CPU mode sets the reused texture's image only when the video area shows another one (a new texture after a size change, a rebuilt shell, a cleared picture); Windows compares the wgpu textures, elsewhere `Image` equality. GPU mode still sets one of three ring textures per frame, harmless after H1. Upstream: an issue text for Slint (`ImageInner` equality without `WGPUTexture`) is prepared, not filed.
+
+**Not changed, listed:**
+
+- Slint warns that `sidebar-actual` (clamped by `root.width`) and the window's `layoutinfo-h` form a binding loop (deprecated, "may cause panic at runtime"). Not a small change: the sidebar's width would have to move from a computed `width` to the layout's constraints, which changes how a narrow window shares its width; a round of its own. H1 changed the loop member Slint names first, so `ui::view::tests::host_generated_sources_compile_without_warnings` now recognises the known loop by its members instead of its first one.
+- VestraTube (plugin repo): send only the result rows, or a window of them as the playlist does, instead of 200 rows with hidden blanks (668 → 128 accessible nodes, 0.3 ms less drawing). It keeps 200 because the player replaces a model whose length changes; letting `ui_values` append rows in place would make that safe (host/SDK item).
+- The sidebar as a cached layer (`cache-rendering-hint`): 2.5 → 1.3 ms per redraw in the bench, to try with hover and selection.
+
+**For the coordinator (hardware; staged 0.5.24, `VESTRA_FRAME_LOG=1`, a separate application data directory, `quiet.flag` set, ≤ 60 s each):**
+
+| # | Case | Expected |
+| --- | --- | --- |
+| A | VestraTube tab visible, the same 60 fps YouTube stream, CPU mode then GPU mode, windowed | 60/60; `timers max` ≤ 5 ms; `turn max` close to the playlist tab's |
+| B | 0.5.22 and 0.5.24, playlist tab, a local 1080p60 file, Narrator on (Ctrl+Win+Enter) and off | 0.5.22 with Narrator: `timers` up (the accessibility rebuild); 0.5.24: no difference. Also note which other UI Automation clients run on the machine |
+| C | 640×360 30/60 fps YouTube, VestraTube tab, GPU vs CPU mode, still and dragging the window, small window and maximized | GPU mode's `render`/`complete` max, `done_waits`, `stuck`, `throttled`, ` ui-gpu wait/draw/present`, `pre`, `present` against CPU mode's; if GPU mode's cost grows with the window, mpv's scaling to the output size on the iGPU is the cost |
+| D | C's dragging case, GPU mode, with `VESTRA_GPU_CPU_WAIT=1` | whether the cross-API fences and the texture ring explain the stutter while dragging |
