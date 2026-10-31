@@ -34,6 +34,7 @@ fn facts<'a>(
         needed_hwdec: "d3d11va",
         hwdec: Some("auto-safe".into()),
         hwdec_current: Some("d3d11va".into()),
+        copy_back_owners: &[],
         os: "windows",
     }
 }
@@ -167,15 +168,27 @@ fn the_reasons_come_in_order_and_say_what_to_do() {
     );
 
     // Copy-back (another plugin's filter needs frames in memory), off,
-    // software or another decoder for this video: not fixed.
-    for (hwdec, current, words) in [
-        ("auto-copy-safe", None, "copy-back (auto-copy-safe)"),
-        ("no", None, "hardware decoding is off"),
-        ("auto-safe", Some("no"), "decoded in software"),
+    // software or another decoder for this video: not fixed, each with its
+    // `cause`.
+    for (hwdec, current, words, cause) in [
+        (
+            "auto-copy-safe",
+            None,
+            "copy-back (auto-copy-safe), for example because a video filter",
+            Cause::CopyBack,
+        ),
+        ("no", None, "hardware decoding is off", Cause::HwdecOff),
+        (
+            "auto-safe",
+            Some("no"),
+            "decoded in software",
+            Cause::Software,
+        ),
         (
             "auto-safe",
             Some("d3d11va-copy"),
             "decoded with d3d11va-copy",
+            Cause::OtherHwdec,
         ),
     ] {
         let error = check(&Facts {
@@ -185,9 +198,62 @@ fn the_reasons_come_in_order_and_say_what_to_do() {
         })
         .unwrap_err();
         assert_eq!((error.code(), error.fixed()), ("decoding", false));
+        assert!(
+            matches!(&error, Reason::Decoding { cause: c, plugins, .. } if *c == cause && plugins.is_empty()),
+            "{error:?}"
+        );
+        assert_eq!(error.json()["cause"], cause.as_str());
+        // `plugins` only with copy-back: none named, as the host did not
+        // switch for a chain here.
+        assert_eq!(
+            error.json().get("plugins"),
+            (cause == Cause::CopyBack).then(|| json!([])).as_ref()
+        );
         assert!(error.message().contains(words), "{}", error.message());
         assert!(error.message().contains("(d3d11va)"), "{}", error.message());
     }
+    // Copy-back the host switched to for a plugin's chain: that plugin is
+    // named (one, or several).
+    let owner = |id: &str, name: &str| ChainOwner {
+        id: id.into(),
+        name: name.into(),
+    };
+    let one = [owner("vestra.blur", "Vestra Blur")];
+    let error = check(&Facts {
+        hwdec: Some("auto-copy-safe".into()),
+        copy_back_owners: &one,
+        ..facts(&probe, &reason, &rendering)
+    })
+    .unwrap_err();
+    assert_eq!(error.json()["cause"], "copy-back");
+    assert!(
+        error
+            .message()
+            .contains("because the video filter of Vestra Blur needs the frames in memory"),
+        "{}",
+        error.message()
+    );
+    assert_eq!(
+        error.json()["plugins"],
+        json!([{"id":"vestra.blur","name":"Vestra Blur"}])
+    );
+    let two = [
+        owner("vestra.blur", "Vestra Blur"),
+        owner("examples.sharpen", "examples.sharpen"),
+    ];
+    let error = check(&Facts {
+        hwdec: Some("auto-copy-safe".into()),
+        copy_back_owners: &two,
+        ..facts(&probe, &reason, &rendering)
+    })
+    .unwrap_err();
+    assert!(
+        error.message().contains(
+            "because the video filters of Vestra Blur, examples.sharpen need the frames in memory"
+        ),
+        "{}",
+        error.message()
+    );
     // Before a video decodes, only the option counts.
     assert_eq!(
         check(&Facts {
@@ -203,6 +269,13 @@ fn reasons_have_the_api_shape() {
     let reason = Reason::Adapter("x".into());
     assert_eq!(reason.json(), json!({"code":"adapter","message":"x"}));
     assert_eq!(Reason::Starting.code(), "rendering");
+    // `cause` only with `decoding` (player 0.5.25).
+    let reason = decoding(Cause::Software, "y".into());
+    assert_eq!(
+        reason.json(),
+        json!({"code":"decoding","message":"y","cause":"software"})
+    );
+    assert!(Reason::Starting.json().get("cause").is_none());
 }
 
 // ------------------------------------------------------- with a real libmpv
@@ -274,7 +347,7 @@ fn reply(
             }
         }
         assert!(Instant::now() < deadline, "no reply");
-        upscaling.poll(mpv, render, events);
+        upscaling.poll(mpv, render, events, Vec::new);
         std::thread::sleep(Duration::from_millis(5));
     }
 }
@@ -618,4 +691,97 @@ fn set_false_answers_at_once_without_the_check() {
     assert_eq!(state["enabled"], false);
     assert_eq!(state["available"], false);
     assert_eq!(state["reason"]["code"], "unchecked");
+}
+
+/// Player 0.5.25: the state has what a window shows while it upscales
+/// (the video's and the area's size, the GPU, the decoder, whether the
+/// filter is in mpv's chain), and `video.upscaling.changed` carries it
+/// (without `enabled`) when it changes, never before the check answered.
+#[test]
+fn the_state_has_monitoring_fields_and_changes_are_published() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let render = starting();
+    let (events, received) = mpsc::channel();
+    let changed = |received: &mpsc::Receiver<Event>| {
+        received
+            .try_iter()
+            .filter_map(|event| match event {
+                Event::Broadcast(name, data) if name == CHANGED => Some(data),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let mut upscaling = Upscaling::with_probe(rtx);
+    // Before the check: nothing published.
+    upscaling.publish(&mpv, &render, &events);
+    assert!(changed(&received).is_empty());
+
+    upscaling.probe = Probe::Done(rtx());
+    let state = upscaling.state(&mpv, &render, 1, &Value::Null);
+    // No video loaded, GPU rendering still starting.
+    for field in ["video", "area", "gpu", "hwdecCurrent", "factor"] {
+        assert_eq!(state[field], Value::Null, "{field}: {state}");
+    }
+    assert_eq!(state["inChain"], false);
+    assert_eq!(state["enabled"], false);
+
+    upscaling.publish(&mpv, &render, &events);
+    let sent = changed(&received);
+    assert_eq!(sent.len(), 1);
+    assert!(sent[0].get("enabled").is_none(), "{}", sent[0]);
+    assert_eq!(sent[0]["reason"]["code"], "rendering");
+    // Unchanged: nothing more.
+    upscaling.publish(&mpv, &render, &events);
+    assert!(changed(&received).is_empty());
+
+    // The filter in the chain: `inChain`, `requested` and `factor` follow.
+    assert!(upscaling.add(&mpv, 1.5));
+    upscaling.publish(&mpv, &render, &events);
+    let sent = changed(&received);
+    assert_eq!(sent.len(), 1);
+    assert_eq!(
+        (
+            &sent[0]["inChain"],
+            &sent[0]["requested"],
+            &sent[0]["factor"]
+        ),
+        (&json!(true), &json!(true), &json!(1.5))
+    );
+    // A request that changes it publishes too: set(false) takes it out.
+    upscaling.owners.insert(3);
+    let off = command(3, "video.upscaling.set", json!({"enabled":false}));
+    assert!(upscaling.command(&mpv, &render, &off, &events));
+    let sent = changed(&received);
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    assert_eq!(sent[0]["inChain"], false);
+}
+
+/// The size fields come from mpv's `video-params` and `osd-dimensions`
+/// while a video plays (a generated test picture, no window).
+#[test]
+fn the_state_reports_the_video_size_while_a_video_plays() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    mpv.set_property("pause", true).unwrap();
+    mpv.command(&["loadfile", "av://lavfi:testsrc=size=320x240:rate=25"])
+        .unwrap();
+    let render = starting();
+    let mut upscaling = Upscaling::with_probe(rtx);
+    upscaling.probe = Probe::Done(rtx());
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let state = loop {
+        let state = upscaling.state(&mpv, &render, 1, &Value::Null);
+        if !state["video"].is_null() || Instant::now() > deadline {
+            break state;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    assert_eq!(
+        state["video"],
+        json!({"width":320,"height":240,"displayWidth":320,"displayHeight":240}),
+        "{state}"
+    );
+    // No window (`vo=null`): no video area.
+    assert_eq!(state["area"], Value::Null, "{state}");
 }

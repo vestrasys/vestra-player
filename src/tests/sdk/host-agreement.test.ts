@@ -748,6 +748,7 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   "Rendering.restartPlayer": ["rendering.restart"],
   "VideoUpscaling.state": ["video.upscaling.state"],
   "VideoUpscaling.set": ["video.upscaling.set"],
+  "VideoUpscaling.onChange": ["event:video.upscaling.changed"],
 };
 
 /**
@@ -942,24 +943,65 @@ test("WireRenderingState has the fields rendering.state answers with (host/rende
   );
 });
 
-test("WireUpscalingState has the fields video.upscaling answers with (playback/upscaling.rs Upscaling::state; SDK 1.5.37, player 0.5.16)", () => {
+test("WireUpscalingState has the fields video.upscaling answers with (playback/upscaling.rs Upscaling::state and shared_state; SDK 1.5.37 and 1.5.43, player 0.5.16 and 0.5.25)", () => {
   const wire = /export interface WireUpscalingState \{([\s\S]*?)\n\}/.exec(
     sdkFile("wire.d.ts"),
   )?.[1];
   assert.ok(wire, "WireUpscalingState in the SDK's wire.d.ts");
-  const sdk = [...wire.matchAll(/^\s+(\w+)\??:/gm)].map((m) => m[1]!).sort();
-  const state = /fn state\(&self[\s\S]*?\n {4}\}/.exec(
-    host("src/playback/upscaling.rs"),
-  )?.[0];
+  // Every field name, the nested sizes' included.
+  const sdk = [
+    ...new Set([...wire.matchAll(/(\w+)\??:/g)].map((m) => m[1]!)),
+  ].sort();
+  const upscaling = host("src/playback/upscaling.rs");
+  const state = /fn state\(&self[\s\S]*?\n {4}\}/.exec(upscaling)?.[0];
   assert.ok(state, "Upscaling::state in upscaling.rs");
-  const player = [...state.matchAll(/"(\w+)":/g)].map((m) => m[1]!).sort();
+  const shared = /fn shared_state\(&self[\s\S]*?\n {4}\}/.exec(upscaling)?.[0];
+  assert.ok(shared, "Upscaling::shared_state in upscaling.rs");
+  const player = [
+    ...new Set([
+      ...[...shared.matchAll(/"(\w+)":/g)].map((m) => m[1]!),
+      ...[...state.matchAll(/state\["(\w+)"\]/g)].map((m) => m[1]!),
+    ]),
+  ].sort();
   assert.deepEqual(sdk, player);
   assert.ok(
-    host("src/playback/upscaling.rs").includes(
-      `json!({"code":self.code(),"message":self.message()})`,
-    ),
-    "upscaling Reason::json is { code, message }",
+    upscaling.includes(`json!({"code":self.code(),"message":self.message()})`),
+    "upscaling Reason::json is { code, message } apart from decoding",
   );
+  // A decoding reason adds `cause`, and with copy-back `plugins` of { id, name }.
+  const reason =
+    /export interface WireUpscalingReason[^{]*\{([\s\S]*?)\n\}/.exec(
+      sdkFile("wire.d.ts"),
+    )?.[1];
+  assert.ok(reason, "WireUpscalingReason in the SDK's wire.d.ts");
+  assert.deepEqual(
+    [...new Set([...reason.matchAll(/(\w+)\??:/g)].map((m) => m[1]!))].sort(),
+    ["cause", "id", "name", "plugins"],
+  );
+  for (const field of [
+    `"cause":cause.as_str()`,
+    `reason["plugins"]`,
+    `json!({"id":owner.id,"name":owner.name})`,
+  ])
+    assert.ok(upscaling.includes(field), `Reason::json sends ${field}`);
+  assert.ok(
+    upscaling.includes(`pub const CHANGED: &str = "video.upscaling.changed";`),
+    "the event's name",
+  );
+});
+
+test("UpscalingDecodingCause names the player's causes (playback/upscaling.rs Cause::as_str; SDK 1.5.43, player 0.5.25)", () => {
+  const sdk = /export type UpscalingDecodingCause = ([^;]+);/.exec(
+    sdkFile("plugin/types.d.ts"),
+  )?.[1];
+  assert.ok(sdk, "UpscalingDecodingCause in the SDK's types.d.ts");
+  const own = /pub fn as_str\(self\) -> &'static str \{([\s\S]*?)\n {4}\}/.exec(
+    host("src/playback/upscaling.rs"),
+  )?.[1];
+  assert.ok(own, "Cause::as_str in upscaling.rs");
+  const values = (text: string) =>
+    [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!).sort();
+  assert.deepEqual(values(sdk), values(own));
 });
 
 test("UpscalingReasonCode names the player's upscaling reason codes (playback/upscaling.rs, platform; SDK 1.5.37, player 0.5.16)", () => {

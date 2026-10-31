@@ -20,11 +20,19 @@
 //!   driver does with it; `requested` means the filter is in the chain. The
 //!   NVIDIA app's Super Resolution switch must be on, and no program can
 //!   read it.
+//! - **Monitoring** (player 0.5.25). The state also has the video's size,
+//!   the video area, the rendering GPU, mpv's `hwdec-current` and whether
+//!   the filter is in mpv's chain; `video.upscaling.changed` carries it
+//!   (without the plugin's own `enabled`) when it changes, at the worker's
+//!   looks while upscaling is followed. A `decoding` reason says why
+//!   (`cause`) and, for copy-back the host switched to, whose video chain
+//!   (`plugins`, from `Processing::copy_back_owners`).
 #![forbid(unsafe_code)]
 
 use crate::host::{Event, Reply, RpcError};
 use crate::platform::{self, UpscalerProbe};
 use crate::playback::backend::Command;
+use crate::playback::processing::ChainOwner;
 use crate::playback::render_mode::Reason as RenderReason;
 use crate::playback::renderer::Render;
 use rsmpv::{Mpv, Node};
@@ -35,6 +43,9 @@ use std::time::{Duration, Instant};
 
 /// The filter's label in mpv's chain.
 pub const LABEL: &str = "vestra-upscale";
+/// The event with the shared state (`UpscalingState` without `enabled`),
+/// player 0.5.25; it needs `video.upscaling` (capabilities/events.rs).
+pub const CHANGED: &str = "video.upscaling.changed";
 /// How often the worker looks at the size and the decoding while upscaling
 /// is asked for.
 const CHECK_EVERY: Duration = Duration::from_millis(200);
@@ -60,11 +71,47 @@ pub enum Reason {
     /// GPU rendering runs on a GPU the upscaler does not work on (`adapter`).
     Adapter(String),
     /// The video is not decoded on the GPU that renders it (`decoding`;
-    /// not fixed: another file or filter changes it).
-    Decoding(String),
+    /// not fixed: another file or filter changes it), and why
+    /// (`UpscalingReason.cause`, player 0.5.25); with `copy-back` the
+    /// plugins whose video chain made the host switch to it
+    /// (`UpscalingReason.plugins`).
+    Decoding {
+        cause: Cause,
+        message: String,
+        plugins: Vec<ChainOwner>,
+    },
     /// The system's check has not answered yet (`unchecked`): only in the
     /// answer to `set(false)`, which never starts the check.
     Unchecked,
+}
+
+/// Why the video is not decoded on the GPU that renders it: the optional
+/// `cause` of an `UpscalingReason` with code `decoding` (player 0.5.25,
+/// SDK 1.5.43 `UpscalingDecodingCause`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cause {
+    /// `copy-back`: decoded on the GPU and copied back to memory, usually
+    /// because a plugin's video filter chain needs the frames in memory
+    /// (`Processing::copy_back_owners`).
+    CopyBack,
+    /// `hwdec-off`: mpv's `hwdec` option is `no`.
+    HwdecOff,
+    /// `software`: this video is decoded in software (a cover picture, a
+    /// format the GPU does not decode, a hardware decoder that failed).
+    Software,
+    /// `other-hwdec`: decoded with another hardware decoder.
+    OtherHwdec,
+}
+
+impl Cause {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::CopyBack => "copy-back",
+            Self::HwdecOff => "hwdec-off",
+            Self::Software => "software",
+            Self::OtherHwdec => "other-hwdec",
+        }
+    }
 }
 
 impl Reason {
@@ -73,7 +120,7 @@ impl Reason {
             Self::System { code, .. } => code,
             Self::Starting | Self::Rendering(_) => "rendering",
             Self::Adapter(_) => "adapter",
-            Self::Decoding(_) => "decoding",
+            Self::Decoding { .. } => "decoding",
             Self::Unchecked => "unchecked",
         }
     }
@@ -86,16 +133,39 @@ impl Reason {
             Self::System { message, .. }
             | Self::Rendering(message)
             | Self::Adapter(message)
-            | Self::Decoding(message) => message.clone(),
+            | Self::Decoding { message, .. } => message.clone(),
         }
     }
     /// Whether it holds for the rest of this run: `set(true)` is then
     /// refused (`unsupported`) instead of waiting for it.
     pub fn fixed(&self) -> bool {
-        !matches!(self, Self::Starting | Self::Decoding(_) | Self::Unchecked)
+        !matches!(
+            self,
+            Self::Starting | Self::Decoding { .. } | Self::Unchecked
+        )
     }
+    /// `UpscalingReason`: `cause` only with code `decoding`, `plugins` only
+    /// with cause `copy-back` (empty: the copy-back mode is not one the
+    /// host set for a plugin's chain).
     pub fn json(&self) -> Value {
-        json!({"code":self.code(),"message":self.message()})
+        match self {
+            Self::Decoding {
+                cause,
+                message,
+                plugins,
+            } => {
+                let mut reason =
+                    json!({"code":self.code(),"message":message,"cause":cause.as_str()});
+                if *cause == Cause::CopyBack {
+                    reason["plugins"] = plugins
+                        .iter()
+                        .map(|owner| json!({"id":owner.id,"name":owner.name}))
+                        .collect();
+                }
+                reason
+            }
+            _ => json!({"code":self.code(),"message":self.message()}),
+        }
     }
 }
 
@@ -115,6 +185,9 @@ pub struct Facts<'a> {
     /// mpv's `hwdec` option and, while a video decodes, `hwdec-current`.
     pub hwdec: Option<String>,
     pub hwdec_current: Option<String>,
+    /// The plugins whose video filter chain made the host switch to
+    /// copy-back decoding (`Processing::copy_back_owners`), for the message.
+    pub copy_back_owners: &'a [ChainOwner],
     /// The system (`std::env::consts::OS`), for the adapter advice.
     pub os: &'a str,
 }
@@ -151,26 +224,60 @@ pub fn check(facts: &Facts<'_>) -> Result<(), Reason> {
     let needed = facts.needed_hwdec;
     if let Some(mode) = facts.hwdec.as_deref() {
         if mode.contains("copy") {
-            return Err(Reason::Decoding(format!(
-                "the video is decoded with copy-back ({mode}), for example because a video filter needs the frames in memory; upscaling needs it decoded on the GPU that renders it ({needed})"
-            )));
+            let because = match facts.copy_back_owners {
+                [] => "for example because a video filter needs the frames in memory".to_owned(),
+                [one] => format!(
+                    "because the video filter of {} needs the frames in memory",
+                    one.name
+                ),
+                many => format!(
+                    "because the video filters of {} need the frames in memory",
+                    many.iter()
+                        .map(|owner| owner.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            };
+            return Err(Reason::Decoding {
+                cause: Cause::CopyBack,
+                message: format!(
+                    "the video is decoded with copy-back ({mode}), {because}; upscaling needs it decoded on the GPU that renders it ({needed})"
+                ),
+                plugins: facts.copy_back_owners.to_vec(),
+            });
         }
         if mode == "no" {
-            return Err(Reason::Decoding(format!(
-                "hardware decoding is off; upscaling needs the video decoded on the GPU that renders it ({needed})"
-            )));
+            return Err(decoding(
+                Cause::HwdecOff,
+                format!(
+                    "hardware decoding is off; upscaling needs the video decoded on the GPU that renders it ({needed})"
+                ),
+            ));
         }
     }
     match facts.hwdec_current.as_deref() {
-        Some("no") => Err(Reason::Decoding(format!(
-            "this video is decoded in software; upscaling needs it decoded on the GPU that renders it ({needed})"
-        ))),
-        Some(current) if !current.is_empty() && current != needed => {
-            Err(Reason::Decoding(format!(
+        Some("no") => Err(decoding(
+            Cause::Software,
+            format!(
+                "this video is decoded in software; upscaling needs it decoded on the GPU that renders it ({needed})"
+            ),
+        )),
+        Some(current) if !current.is_empty() && current != needed => Err(decoding(
+            Cause::OtherHwdec,
+            format!(
                 "this video is decoded with {current}; upscaling needs it decoded on the GPU that renders it ({needed})"
-            )))
-        }
+            ),
+        )),
         _ => Ok(()),
+    }
+}
+
+/// A `decoding` reason no plugin's chain is named in.
+fn decoding(cause: Cause, message: String) -> Reason {
+    Reason::Decoding {
+        cause,
+        message,
+        plugins: Vec::new(),
     }
 }
 
@@ -245,12 +352,34 @@ pub fn factor(geometry: Geometry) -> Option<f64> {
 /// quarter rotation (the orientation filter turns the frames before the
 /// upscaler sees them).
 fn geometry(mpv: &Mpv) -> Option<Geometry> {
-    let read = |name: &str| {
-        mpv.get_property::<f64>(name)
-            .ok()
-            .filter(|v| v.is_finite() && *v >= 1.)
-    };
-    let target = (read("osd-dimensions/w")?, read("osd-dimensions/h")?);
+    let target = area(mpv)?;
+    let (size, display) = video_size(mpv)?;
+    Some(Geometry {
+        target,
+        size,
+        display,
+    })
+}
+
+/// A size mpv reports, when it is one (finite, at least 1).
+fn read_size(mpv: &Mpv, name: &str) -> Option<f64> {
+    mpv.get_property::<f64>(name)
+        .ok()
+        .filter(|v| v.is_finite() && *v >= 1.)
+}
+
+/// The render target (`osd-dimensions`): the video area, in pixels.
+fn area(mpv: &Mpv) -> Option<(f64, f64)> {
+    Some((
+        read_size(mpv, "osd-dimensions/w")?,
+        read_size(mpv, "osd-dimensions/h")?,
+    ))
+}
+
+/// The video's storage and display size (`video-params`) as the upscaler
+/// gets it: swapped for a quarter rotation.
+fn video_size(mpv: &Mpv) -> Option<((f64, f64), (f64, f64))> {
+    let read = |name: &str| read_size(mpv, name);
     let mut size = (read("video-params/w")?, read("video-params/h")?);
     let mut display = (read("video-params/dw")?, read("video-params/dh")?);
     if mpv
@@ -262,11 +391,7 @@ fn geometry(mpv: &Mpv) -> Option<Geometry> {
         size = (size.1, size.0);
         display = (display.1, display.0);
     }
-    Some(Geometry {
-        target,
-        size,
-        display,
-    })
+    Some((size, display))
 }
 
 /// The labels of mpv's video filter chain, in order.
@@ -330,6 +455,11 @@ pub struct Upscaling {
     checked: Option<Instant>,
     /// Wakes the control worker when the check answers (`wake_with`).
     waker: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
+    /// The plugins whose video chain switched decoding to copy-back
+    /// (`note_copy_back`), named in the `decoding` message.
+    copy_back_owners: Vec<ChainOwner>,
+    /// The last `video.upscaling.changed` sent (`publish`).
+    published: Option<Value>,
 }
 
 impl Default for Upscaling {
@@ -351,6 +481,8 @@ impl Upscaling {
             refused: None,
             checked: None,
             waker: None,
+            copy_back_owners: Vec::new(),
+            published: None,
         }
     }
 
@@ -367,6 +499,7 @@ impl Upscaling {
         let rendering = || command.params["rendering"].clone();
         match command.method.as_str() {
             "owner.disabled" => {
+                // Published once its chains are gone too (`stopped`).
                 self.release(mpv, render, command.reply.owner);
                 false
             }
@@ -399,6 +532,7 @@ impl Upscaling {
                     // before the check `available` is false with `unchecked`.
                     let state = self.state(mpv, render, command.reply.owner, &rendering());
                     let _ = events.send(Event::Reply(command.reply.clone(), Ok(state)));
+                    self.publish(mpv, render, events);
                     return true;
                 }
                 self.pending
@@ -413,7 +547,16 @@ impl Upscaling {
     /// Every worker iteration: answer requests once the system's check is
     /// known; while upscaling is asked for, follow the size and the
     /// decoding (every [`CHECK_EVERY`]).
-    pub fn poll(&mut self, mpv: &Mpv, render: &Render, events: &mpsc::Sender<Event>) {
+    /// `copy_back`: [`Upscaling::note_copy_back`]'s list, read only when
+    /// this iteration checks the availability (the check answered, or a
+    /// look is due), not every worker iteration.
+    pub fn poll(
+        &mut self,
+        mpv: &Mpv,
+        render: &Render,
+        events: &mpsc::Sender<Event>,
+        copy_back: impl Fn() -> Vec<ChainOwner>,
+    ) {
         if let Probe::Running(receiver) = &self.probe {
             match receiver.try_recv() {
                 Ok(probe) => self.probe = Probe::Done(probe),
@@ -426,12 +569,15 @@ impl Upscaling {
                 }
             }
             if matches!(self.probe, Probe::Done(_)) {
+                self.copy_back_owners = copy_back();
                 self.answer(mpv, render, events);
             }
         }
         let now = Instant::now();
         if self.due_in(now).is_some_and(|due| due.is_zero()) {
+            self.copy_back_owners = copy_back();
             self.update(mpv, render, now);
+            self.publish(mpv, render, events);
         }
     }
 
@@ -459,6 +605,28 @@ impl Upscaling {
     /// (its thread calls it), so waiting requests are answered at once.
     pub fn wake_with(&mut self, wake: impl Fn() + Send + Sync + 'static) {
         self.waker = Some(std::sync::Arc::new(wake));
+    }
+
+    /// The plugins whose video filter chain made the host decode with
+    /// copy-back (`Processing::copy_back_owners`), kept current by the
+    /// control worker for the `decoding` message.
+    pub fn note_copy_back(&mut self, owners: Vec<ChainOwner>) {
+        self.copy_back_owners = owners;
+    }
+
+    /// A plugin stopped and the worker revoked everything it held (its
+    /// chains, which may have restored zero-copy decoding): publish the
+    /// state now, so `video.upscaling.changed` never names a stopped
+    /// plugin's chain.
+    pub fn stopped(
+        &mut self,
+        mpv: &Mpv,
+        render: &Render,
+        events: &mpsc::Sender<Event>,
+        copy_back: Vec<ChainOwner>,
+    ) {
+        self.copy_back_owners = copy_back;
+        self.publish(mpv, render, events);
     }
 
     /// `owner` has upscaling on (or a request waiting for the check): a live
@@ -536,6 +704,7 @@ impl Upscaling {
             };
             let _ = events.send(Event::Reply(reply, result));
         }
+        self.publish(mpv, render, events);
     }
 
     /// [`check`] with what the worker sees now; `Unchecked` before the
@@ -560,20 +729,69 @@ impl Upscaling {
             needed_hwdec: platform::UPSCALER_HWDEC,
             hwdec: text("hwdec"),
             hwdec_current: text("hwdec-current"),
+            copy_back_owners: &self.copy_back_owners,
             os: std::env::consts::OS,
         })
     }
 
     /// The `UpscalingState` for `owner`.
     fn state(&self, mpv: &Mpv, render: &Render, owner: u64, rendering: &Value) -> Value {
+        let mut state = self.shared_state(mpv, render, rendering);
+        state["enabled"] = self.owners.contains(&owner).into();
+        state
+    }
+
+    /// The `UpscalingState` without `enabled` (each plugin's own): what
+    /// `video.upscaling.changed` carries. The monitoring fields (player
+    /// 0.5.25) are read from mpv each time and never start the system's
+    /// check.
+    fn shared_state(&self, mpv: &Mpv, render: &Render, rendering: &Value) -> Value {
         let reason = self.availability(mpv, render, rendering).err();
+        // Whole pixels (mpv reports them as numbers).
+        let px = |v: f64| v.round() as u64;
+        let video = video_size(mpv);
+        let area = area(mpv);
+        let hwdec_current = mpv
+            .get_property::<String>("hwdec-current")
+            .ok()
+            .filter(|value| !value.is_empty());
+        let gpu = render
+            .gpu()
+            .and_then(|_| platform::gpu_render_adapter())
+            .map(|(_, name)| name);
         json!({
             "available": reason.is_none(),
             "reason": reason.as_ref().map(Reason::json),
-            "enabled": self.owners.contains(&owner),
             "requested": self.applied.is_some(),
             "factor": self.applied,
+            "video": video.map(|(size, display)| json!({
+                "width": px(size.0),
+                "height": px(size.1),
+                "displayWidth": px(display.0),
+                "displayHeight": px(display.1),
+            })),
+            "area": area.map(|(w, h)| json!({"width": px(w), "height": px(h)})),
+            "gpu": gpu,
+            "hwdecCurrent": hwdec_current,
+            "inChain": labels(mpv).iter().any(|label| label == LABEL),
         })
+    }
+
+    /// `video.upscaling.changed` (player 0.5.25) when the shared state
+    /// differs from the last one sent: after a request that changed it and
+    /// at each look while upscaling is followed ([`Upscaling::due_in`]), so
+    /// at most about 5 a second during a window resize, none while nobody
+    /// has it on. Nothing before the system's check answered.
+    fn publish(&mut self, mpv: &Mpv, render: &Render, events: &mpsc::Sender<Event>) {
+        if !matches!(self.probe, Probe::Done(_)) {
+            return;
+        }
+        let state = self.shared_state(mpv, render, &Value::Null);
+        if self.published.as_ref() == Some(&state) {
+            return;
+        }
+        self.published = Some(state.clone());
+        let _ = events.send(Event::Broadcast(CHANGED.into(), state));
     }
 
     /// Bring mpv's chain to what is wanted now: no filter, or the filter

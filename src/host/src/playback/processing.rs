@@ -39,10 +39,21 @@ pub struct FrozenProcessing {
     pub audio: Vec<Resource<AudioNode>>,
     pub audio_offset_ms: i32,
 }
+/// A plugin whose video chain needs frames in memory
+/// (`Processing::copy_back_owners`): `UpscalingReason.plugins` in the API.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChainOwner {
+    /// The manifest id.
+    pub id: String,
+    /// The manifest's name, the id without one.
+    pub name: String,
+}
 #[derive(Default)]
 pub struct Processing {
     config_revision: u64,
     manifests: BTreeMap<u64, String>,
+    /// The manifests' display names (`register`).
+    names: BTreeMap<u64, String>,
     operations: BTreeMap<u64, operations::Book>,
     uncertain: BTreeMap<String, String>,
     source_generation: u64,
@@ -67,9 +78,49 @@ pub struct Processing {
     hwdec_retries: u32,
 }
 impl Processing {
-    pub fn register(&mut self, owner: u64, id: String) {
+    /// `name`: the manifest's display name, for messages that name the
+    /// plugin (`copy_back_owners`); the id stands in without one.
+    pub fn register(&mut self, owner: u64, id: String, name: Option<String>) {
         self.manifests.insert(owner, id);
+        match name.filter(|name| !name.trim().is_empty()) {
+            Some(name) => self.names.insert(owner, name),
+            None => self.names.remove(&owner),
+        };
         self.operations.entry(owner).or_default();
+    }
+    /// The plugins whose video chain made the host switch decoding to
+    /// copy-back (`frames_in_memory`): manifest id and name (the id without
+    /// one), each once, in the order the plugins started (owner generation,
+    /// the video map's key order). Empty when the host made no such switch: the
+    /// decoding mode is then someone else's (software rendering's own
+    /// copy-back mode, the user's).
+    pub fn copy_back_owners(&self) -> Vec<ChainOwner> {
+        if self.hwdec.is_none() {
+            return Vec::new();
+        }
+        let mut owners: Vec<u64> = self
+            .video
+            .iter()
+            .filter(|(_, (_, resource))| effects::needs_frames_in_memory(std::iter::once(resource)))
+            .map(|((owner, _), _)| *owner)
+            .collect();
+        owners.dedup();
+        owners
+            .into_iter()
+            .map(|owner| {
+                let id = self
+                    .manifests
+                    .get(&owner)
+                    .cloned()
+                    .unwrap_or_else(|| format!("plugin {owner}"));
+                let name = self
+                    .names
+                    .get(&owner)
+                    .cloned()
+                    .unwrap_or_else(|| id.clone());
+                ChainOwner { id, name }
+            })
+            .collect()
     }
     pub fn state(&self) -> Value {
         json!({"configurationRevision":self.config_revision,"audioOffsetMs":self.audio_offsets.values().sum::<i32>(),"source":{"generation":self.source_generation,"phase":self.source_phase,"load":self.load.map(|(entry,t)|json!({"entry":entry,"generation":t.stamp.generation,"cycle":t.cycle})),"stages":self.confirmations},"backendUncertain":self.uncertain,"video":self.video.iter().map(|((owner,_),(revision,resource))|json!({"owner":owner,"revision":revision,"resource":resource})).collect::<Vec<_>>(),"audio":self.audio.iter().map(|((owner,_),(revision,resource))|json!({"owner":owner,"revision":revision,"resource":resource,"offsetMs":self.audio_offsets.get(&(*owner,resource.resource_id.clone())).copied().unwrap_or(0)})).collect::<Vec<_>>()})
@@ -594,6 +645,7 @@ impl Processing {
         self.audio_offsets.retain(|(id, _), _| *id != owner);
         let next_offset = combined_offset(&self.audio_offsets)?;
         self.manifests.remove(&owner);
+        self.names.remove(&owner);
         self.operations.remove(&owner);
         let after_video = self.video_graph();
         let after_audio = self.audio_graph();
@@ -729,6 +781,9 @@ impl Processing {
             let watch = HwdecWatch::before_switch(mpv, &copy);
             match mpv.set_property("hwdec", copy.as_str()) {
                 Ok(()) => {
+                    diag!(
+                        "processing: hwdec {current} -> {copy} (a video chain needs frames in memory)"
+                    );
                     self.hwdec = Some((current, copy));
                     self.hwdec_watch = watch;
                 }
@@ -739,7 +794,12 @@ impl Processing {
         {
             let watch = HwdecWatch::before_switch(mpv, &original);
             match mpv.set_property("hwdec", original.as_str()) {
-                Ok(()) => self.hwdec_watch = watch,
+                Ok(()) => {
+                    diag!(
+                        "processing: hwdec {copy} -> {original} (no video chain needs frames in memory)"
+                    );
+                    self.hwdec_watch = watch;
+                }
                 Err(error) => {
                     diag!("processing: restoring hwdec={original} failed: {error}");
                 }
@@ -1162,7 +1222,7 @@ mod tests {
     /// A processing book whose current source is ready (generation 1).
     fn ready() -> Processing {
         let mut processing = Processing::default();
-        processing.register(OWNER, "examples.blur".into());
+        processing.register(OWNER, "examples.blur".into(), None);
         processing.note_source(1, Phase::Ready);
         processing.load = Some((1, ticket(1)));
         processing
@@ -1570,6 +1630,70 @@ mod tests {
         }
     }
 
+    /// The upscaling `decoding` reason names whose chain switched decoding
+    /// to copy-back: by manifest name (the id without one), only chains
+    /// with nodes that need frames in memory, and nobody when the host did
+    /// not switch (software rendering's or the user's own copy-back mode).
+    #[test]
+    fn copy_back_owners_name_the_chains_that_switched_decoding() {
+        let names = |processing: &Processing| {
+            processing
+                .copy_back_owners()
+                .into_iter()
+                .map(|owner| owner.name)
+                .collect::<Vec<_>>()
+        };
+        const OTHER: u64 = 8;
+        const THIRD: u64 = 9;
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("auto-safe");
+        let mut processing = Processing::default();
+        processing.register(OWNER, "examples.blur".into(), Some("Vestra Blur".into()));
+        processing.register(OTHER, "examples.other".into(), Some("Deinterlacer".into()));
+        processing.register(THIRD, "examples.third".into(), Some("  ".into()));
+        processing.note_source(1, Phase::Ready);
+        processing.load = Some((1, ticket(1)));
+        assert!(processing.copy_back_owners().is_empty());
+
+        // Only the player's deinterlacer: zero-copy stays, nobody named.
+        processing
+            .replace(&mpv, OTHER, 1, Source::Decoded, &video(1, json!([auto()])))
+            .unwrap();
+        assert_eq!(hwdec(&mpv), "auto-safe");
+        assert!(processing.copy_back_owners().is_empty());
+
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, gblur(4.)))
+            .unwrap();
+        assert_eq!(hwdec(&mpv), "auto-copy-safe");
+        assert_eq!(names(&processing), ["Vestra Blur"]);
+        assert_eq!(processing.copy_back_owners()[0].id, "examples.blur");
+        // A blank name: the manifest id.
+        processing
+            .replace(&mpv, THIRD, 1, Source::Decoded, &video(1, gblur(2.)))
+            .unwrap();
+        assert_eq!(names(&processing), ["Vestra Blur", "examples.third"]);
+
+        processing.disable(&mpv, OWNER).unwrap();
+        assert_eq!(names(&processing), ["examples.third"]);
+        processing.disable(&mpv, THIRD).unwrap();
+        assert_eq!(hwdec(&mpv), "auto-safe");
+        assert!(processing.copy_back_owners().is_empty());
+
+        // Already copy-back (software rendering's mode): the host switched
+        // nothing, so the chain is not named as the cause.
+        drop(mpv);
+        let copy = self::mpv("auto-copy-safe");
+        let mut processing = Processing::default();
+        processing.register(OWNER, "examples.blur".into(), Some("Vestra Blur".into()));
+        processing.note_source(1, Phase::Ready);
+        processing.load = Some((1, ticket(1)));
+        processing
+            .replace(&copy, OWNER, 1, Source::Decoded, &video(1, gblur(4.)))
+            .unwrap();
+        assert!(processing.copy_back_owners().is_empty());
+    }
+
     /// mpv's `deinterlace` is one option: on while any owner's chain asks
     /// for it, off once the last one is removed or its plugin stops.
     #[test]
@@ -1578,7 +1702,7 @@ mod tests {
         let _one = one_mpv_at_a_time();
         let mpv = mpv("auto-safe");
         let mut processing = ready();
-        processing.register(OTHER, "examples.other".into());
+        processing.register(OTHER, "examples.other".into(), None);
         for owner in [OWNER, OTHER] {
             processing
                 .replace(&mpv, owner, 1, Source::Decoded, &video(1, json!([auto()])))
@@ -1592,7 +1716,7 @@ mod tests {
         assert_eq!(deinterlace(&mpv), "no");
 
         // Stopping a plugin whose chain had other nodes restores both.
-        processing.register(OWNER, "examples.blur".into());
+        processing.register(OWNER, "examples.blur".into(), None);
         let both = json!([auto(), {"kind":"gblur","sigma":4,"steps":3}]);
         processing
             .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, both))
