@@ -153,7 +153,17 @@ impl Condition {
                 Some(control) if CONTROLS.contains(&control) => Self::Can(control.to_owned()),
                 _ => return Err(format!("condition can is one of {}", CONTROLS.join(", "))),
             },
-            "theme" => Self::Theme(text("a theme id")?),
+            "theme" => match value.as_str() {
+                Some(theme) if crate::ui::theme::THEMES.contains(&theme) => {
+                    Self::Theme(theme.to_owned())
+                }
+                _ => {
+                    return Err(format!(
+                        "condition theme is one of {}",
+                        crate::ui::theme::THEMES.join(", ")
+                    ));
+                }
+            },
             "language" => {
                 let language = text("a language preference")?;
                 if !crate::i18n::valid_preference(&language) {
@@ -300,6 +310,7 @@ mod tests {
             json!({"kind":"file"}),
             json!({"can":"fly"}),
             json!({"theme":""}),
+            json!({"theme":"dark"}),
             json!({"language":"xx"}),
             json!({"all":[]}),
             json!({"phase":["ready"],"paused":true}),

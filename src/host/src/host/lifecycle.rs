@@ -318,12 +318,19 @@ impl Host {
         ) {
             capabilities::refresh_conditions(self);
         }
+        let wake = capabilities::WAKE_EVENTS.contains(&event);
         let mut failed = Vec::new();
         for (owner, plugin) in self
             .plugins
             .iter_mut()
             .filter(|(_, p)| p.subscriptions.contains_key(event))
         {
+            // A plugin woken for a wake event receives the held one at its
+            // ready: a newer one waits behind it, never before (§6.9).
+            if wake && let Some(waking) = self.lazy.waking.get_mut(owner) {
+                lazy::hold_event(&mut waking.queue, json!({"event":event,"data":data}));
+                continue;
+            }
             if let Err(error) = plugin.send(json!({"event":event,"data":data})) {
                 failed.push((*owner, error));
             }

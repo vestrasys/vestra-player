@@ -89,7 +89,7 @@ pub struct Plugin {
     /// What listens, as the SDK describes it (`events.subscribe { why }`,
     /// SDK 1.5.40: the listener and where the plugin added it), by event:
     /// for the log line that says why a plugin keeps running.
-    pub listeners: BTreeMap<String, String>,
+    pub listeners: BTreeMap<String, Vec<String>>,
     runner: Runner,
     /// How long dropping it waits for its own process (`set_stop_wait`).
     stop_wait: Duration,

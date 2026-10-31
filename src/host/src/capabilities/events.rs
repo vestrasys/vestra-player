@@ -53,8 +53,23 @@ pub(crate) const WAKE_EVENTS: &[&str] = &[
     "appearance.changed",
     "resolvers.fileTypes",
 ];
-/// The longest `why` kept (the SDK's description of a listener).
+/// The longest reason kept (the SDK's description of a listener), and how
+/// many per event.
 const WHY_LIMIT: usize = 300;
+const WHYS_LIMIT: usize = 16;
+
+/// `events.subscribe { why }`: the reasons, a list of strings (or one).
+fn reasons(why: &Value) -> Vec<String> {
+    let text = |value: &Value| {
+        value
+            .as_str()
+            .map(|why| why.chars().take(WHY_LIMIT).collect())
+    };
+    match why {
+        Value::Array(items) => items.iter().filter_map(text).take(WHYS_LIMIT).collect(),
+        other => text(other).into_iter().collect(),
+    }
+}
 
 impl Capability for Events {
     fn info(&self) -> &'static Info {
@@ -135,16 +150,13 @@ impl Capability for Events {
             // between mirror and listener as listeners come and go.
             let mirror = params["mirror"] == true;
             plugin.subscriptions.insert(event.into(), !mirror);
-            // SDK 1.5.40: what listens, and where the plugin added it.
-            match params["why"].as_str().filter(|_| !mirror) {
-                Some(why) => {
-                    plugin
-                        .listeners
-                        .insert(event.into(), why.chars().take(WHY_LIMIT).collect());
-                }
-                None => {
-                    plugin.listeners.remove(event);
-                }
+            // SDK 1.5.40: everything that listens, and where the plugin
+            // added it.
+            let whys = reasons(&params["why"]);
+            if mirror || whys.is_empty() {
+                plugin.listeners.remove(event);
+            } else {
+                plugin.listeners.insert(event.into(), whys);
             }
         } else {
             plugin.subscriptions.remove(event);

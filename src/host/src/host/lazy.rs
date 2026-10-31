@@ -43,6 +43,10 @@ const STARTING_OSD_MS: u64 = 400;
 /// How long a wake waits for the process its plugin was parked from (as
 /// `packages.reload` waits, `RELOAD_WAIT_MS`).
 const STOP_WAIT_MS: u64 = 20_000;
+/// How long after start-up settled wake events still wake nothing: a
+/// state change of start-up (a plugin starting → running) reaches the
+/// next announcement up to 200 ms later (`notify_tick`).
+const QUIET_AFTER_START_MS: u64 = 1_000;
 /// What a parked plugin is woken by (the recorded entries' triggers).
 const TRIGGERS: &[&str] = &[
     "commands.execute",
@@ -310,6 +314,9 @@ pub(crate) struct Lazy {
     /// `packages.changed` and `bindings.changed` of a run (nothing changed
     /// for a plugin that last ran in an earlier one).
     pub mute: bool,
+    /// When start-up settled (`lazy_settled`, latched once per run): wake
+    /// events wake nothing before `QUIET_AFTER_START_MS` after it.
+    settled_at: Option<u64>,
     /// First runs waiting for a place (manifest ids, in start order).
     pub first_queue: VecDeque<String>,
     /// First runs in flight: started, not yet resident or parked and gone.
@@ -401,6 +408,16 @@ impl Lazy {
             .find(|(_, parked)| parked.id == id)
             .map(|(owner, _)| *owner)
     }
+}
+
+/// Hold `message`, an event for a plugin that is not ready (parked or
+/// waking): one of the same event already held goes, so the plugin receives
+/// only the newest, after what came before it (§6.9; the data is a state,
+/// the list of plugins or the palette).
+pub(crate) fn hold_event(queue: &mut Vec<Value>, message: Value) {
+    let event = message["event"].clone();
+    queue.retain(|held| held["event"] != event);
+    queue.push(message);
 }
 
 fn event(message: &Value) -> Option<&str> {
@@ -496,7 +513,8 @@ impl Host {
     /// `Host::broadcast` of `event`: each parked plugin that listened to it
     /// (a wake event, §6.9) is woken and receives it at its ready; a newer
     /// one of the same event replaces one still held. Not while the player
-    /// starts (`lazy_settled`) or for the first announcement of a run
+    /// starts nor for `QUIET_AFTER_START_MS` after it settled
+    /// (`lazy_settled`), nor for the first announcement of a run
     /// (`Lazy::mute`): the plugins registering then are not a change, and a
     /// woken plugin reads the current state when it starts anyway.
     pub(crate) fn lazy_event(&mut self, event: &str, data: &Value) {
@@ -512,15 +530,19 @@ impl Host {
             .filter(|(_, events)| events.contains(event))
             .map(|(owner, _)| *owner)
             .collect::<Vec<_>>();
-        if owners.is_empty() || !self.lazy_settled() {
+        let now = self.now_ms();
+        let quiet = self
+            .lazy
+            .settled_at
+            .is_none_or(|at| now.saturating_sub(at) < QUIET_AFTER_START_MS);
+        if owners.is_empty() || quiet {
             return;
         }
         for owner in owners {
             let Some(parked) = self.lazy.parked.get_mut(&owner) else {
                 continue;
             };
-            parked.triggers.retain(|held| held["event"] != event);
-            parked.triggers.push(json!({"event":event,"data":data}));
+            hold_event(&mut parked.triggers, json!({"event":event,"data":data}));
             self.wake(owner);
         }
     }
@@ -727,8 +749,10 @@ impl Host {
     /// The listeners that keep `owner` running (the SDK's mirrors and wake
     /// events left out), each as its SDK described it (`events.subscribe
     /// { why }`, SDK 1.5.40: what listens and where the plugin added it):
-    /// `; listens to source.state: command "Save" enabled reads
-    /// player.state (main.ts:361)`. Empty without one.
+    /// every reason of an event, ` | ` between them: `; listens to
+    /// source.state: command "Save" enabled is a function that reads
+    /// plugin.player.state (main.ts:361) — use plugin.when | a listener added
+    /// at dialog.ts:183`. Empty without one.
     pub(crate) fn lazy_listeners(&self, owner: u64) -> String {
         let Some(plugin) = self.plugins.get(&owner) else {
             return String::new();
@@ -740,7 +764,7 @@ impl Host {
                 **active && !capabilities::WAKE_EVENTS.contains(&event.as_str())
             })
             .map(|(event, _)| match plugin.listeners.get(event) {
-                Some(why) => format!("{event}: {why}"),
+                Some(whys) => format!("{event}: {}", whys.join(" | ")),
                 None => event.clone(),
             })
             .collect::<Vec<_>>();
@@ -885,6 +909,10 @@ impl Host {
             return;
         }
         self.lazy.next_check = now + CHECK_MS;
+        if self.lazy.settled_at.is_none() && self.lazy_settled() {
+            diag!("lazy: start-up settled");
+            self.lazy.settled_at = Some(now);
+        }
         self.lazy_classify_tick(now);
         self.lazy_first_runs_tick();
         let owners = self.plugins.keys().copied().collect::<Vec<_>>();
@@ -1254,6 +1282,28 @@ mod tests {
         };
         assert_eq!(missing.image_roots(), [package.path().to_owned()]);
         assert_eq!(missing.text("Hello"), "你好");
+    }
+
+    /// Review M1: a woken plugin receives wake events in order, only the
+    /// newest of each, after the trigger that came before them.
+    #[test]
+    fn held_events_keep_their_order_and_only_the_newest_of_each() {
+        let mut queue = vec![json!({"event":"commands.execute","data":{"id":"a"}})];
+        hold_event(&mut queue, json!({"event":"packages.changed","data":1}));
+        hold_event(&mut queue, json!({"event":"appearance.changed","data":"x"}));
+        hold_event(&mut queue, json!({"event":"packages.changed","data":2}));
+        let order = queue
+            .iter()
+            .map(|m| (m["event"].as_str().unwrap(), m["data"].clone()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            order,
+            [
+                ("commands.execute", json!({"id":"a"})),
+                ("appearance.changed", json!("x")),
+                ("packages.changed", json!(2)),
+            ]
+        );
     }
 
     #[test]

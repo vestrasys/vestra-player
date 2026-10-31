@@ -269,7 +269,8 @@ pub(crate) fn refresh_conditions(host: &mut Host) {
     let facts = Facts::new(
         &host.last_source,
         &host.window_facts,
-        host.theme(),
+        // The palette shown: a retired id saved earlier shows the default.
+        crate::ui::theme::known(host.theme()),
         language.as_deref().unwrap_or(i18n::SYSTEM),
     );
     host.commands.set_facts(facts);
