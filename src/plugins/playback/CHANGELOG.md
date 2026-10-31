@@ -1,10 +1,16 @@
 # Changelog
 
+## 0.2.8
+
+- Mark ticks are whole physical pixels at every scale factor (125%, 150%, 175%, as well as 100% and 200%): at a fractional scale 0.2.7's 1px stroke was 1.5 physical px wide and still left a half-transparent column. The ticks are now drawn in physical pixels: the bar reports the seek line's span in whole physical px (`span-changed`, also when the scale factor changes), the plugin builds the commands at whole physical x in a viewbox that wide, and the Paths have a 1 physical px stroke (`1phx`) and their left edge and top on a physical pixel (from the seek bar's `absolute-position`). Each tick is one physical pixel wide and about 6 logical px tall in whole pixel rows; its column is within half a physical pixel of where the logical layout puts it.
+- A window resize no longer rebuilds and sends the three tick strings every frame: after the first report, span reports take effect once they pause for 100 ms (the last wins); meanwhile the ticks stretch with the line as before.
+- Above 4096 marks, the user's bookmarks are kept first (all of them, or 4096 picked evenly if they alone are more) and the chapters and markers are picked evenly into the room left, all in time order.
+
 ## 0.2.7
 
 - The seek line's mark ticks are whole pixels again, as before 0.2.6: each 1px tick fills exactly the pixel column the marks had then (`floor(4px + at × span)`) instead of being antialiased across two half-transparent columns. The bar reports the seek line's span to the plugin at start and when its width changes (`span-changed`); the plugin builds each kind's commands with the tick at the column's whole-pixel x in a viewbox as wide as that span (`tick-span`), drawn at scale 1, where Slint's half-stroke inset centres the stroke on the column. During a resize the ticks stretch to the new width until the plugin's update arrives. Ticks show once the bar has reported its span.
 - More marks than the 4096 the bar shows are now picked evenly in time order (by index, the first and the last kept) instead of dropping everything after the 4096th, so a long file's later marks still show and the hover search stays sorted.
-- The hover tips' text budget counts a control character (or a lone surrogate) as the 6 bytes of its JSON escape (`\u00XX`), not 3; each kind's tick string is capped at 60 KiB whatever the width.
+- The hover tips' text budget counts a control character (or a lone surrogate) as the 6 bytes of its JSON escape (`\u00XX`), not 3. Each kind's tick string also has a 60 KiB cap as a safety net under the player's 64 KiB per string (not reached in practice: one tick per mark, at most 4096).
 - The bottom bar's volume slider stays out of the Tab chain (`focusable: false` on the library `Slider`). The library slider now takes keyboard focus, so with Tab unbound (or "Ignore default shortcuts" on) Tab could move into it and the arrow keys then changed the volume instead of seeking. Dragging and clicking it work as before. The seek line is the bar's own `SeekBar` (a `TouchArea`, no `FocusScope`), which never took keyboard focus.
 - Nobody needs to change anything.
 
