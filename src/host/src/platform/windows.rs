@@ -1206,6 +1206,17 @@ pub fn direct_video_feed() -> Option<vestra_video_texture::Feed> {
     vestra_video_texture::direct(&device, &queue)
 }
 
+/// Whether two video area images show the same texture. Slint 1.18.1's
+/// `Image` equality has no case for wgpu textures, so an image made from a
+/// texture is never equal even to itself; the textures are compared here.
+pub fn same_video_image(shown: &slint::Image, next: &slint::Image) -> bool {
+    match (shown.to_wgpu_30_texture(), next.to_wgpu_30_texture()) {
+        (Some(shown), Some(next)) => shown == next,
+        (None, None) => shown == next,
+        _ => false,
+    }
+}
+
 /// GPU frames in a window without a notifier take the main window's frame
 /// pacing (`frame_pacing::accept_picture`): a new frame is taken only once
 /// the previous picture was drawn (`vestra-gpu-render`
