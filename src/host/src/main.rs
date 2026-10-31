@@ -337,6 +337,7 @@ fn main() -> Result<()> {
         last_image: None,
         video_texture: RefCell::new(None),
         video_target: Rc::default(),
+        winit_draws: Rc::default(),
         shell_generation: 1,
         next_shell_generation: 1,
         menu_path: Vec::new(),

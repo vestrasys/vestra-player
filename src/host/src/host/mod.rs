@@ -165,6 +165,11 @@ pub(crate) struct Host {
     /// textures on (`attach_gpu`): it outlives a shell, since a new
     /// composition replaces the tree in the same window (`retarget_shell`).
     pub(crate) video_target: Rc<RefCell<slint::Weak<slint_interpreter::ComponentInstance>>>,
+    /// The main window has neither a rendering notifier nor the pacing hook's
+    /// draw count (Slint's software renderer): its one winit event hook
+    /// counts its draws (`count_draws`, `bind_window_events`). Outlives a
+    /// shell, like that hook.
+    pub(crate) winit_draws: Rc<std::cell::Cell<bool>>,
     pub(crate) shell_generation: u64,
     pub(crate) next_shell_generation: u64,
     pub(crate) menu_path: Vec<String>,

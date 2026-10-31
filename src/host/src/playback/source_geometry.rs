@@ -75,6 +75,15 @@ impl Geometry {
         }
     }
 
+    /// Whether `tick` is preparing the current load's geometry from mpv's
+    /// properties (no event says when they are there), so the control worker
+    /// keeps calling it every few milliseconds. Not once confirmed or failed:
+    /// a new load comes with an mpv event or a command.
+    pub fn polling(&self) -> bool {
+        !self.publish_gate.load(Ordering::Acquire)
+            && !matches!(self.prepared, Some((_, Preparation::Failed)))
+    }
+
     pub fn ready_for(&self, load: (i64, IntentTicket)) -> bool {
         matches!(&self.prepared,Some((prepared,Preparation::Confirmed)) if *prepared==load)
             && self.publish_gate.load(Ordering::Acquire)

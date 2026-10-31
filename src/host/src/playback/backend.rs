@@ -30,8 +30,61 @@ pub struct Command {
     pub method: String,
     pub params: Value,
 }
+/// How often the control worker looks while something it serves ends
+/// without an mpv event or a command (`Sources::polling`,
+/// `Geometry::polling`, `CoreActions::pending`): the poll it always ran
+/// before 0.5.15.
+const POLL: Duration = Duration::from_millis(2);
+/// Commands the control worker takes per turn (continuous controls must not
+/// starve the rest); after a full turn it looks again after `POLL`.
+const COMMANDS_PER_TURN: usize = 32;
+
+/// Wakes the control worker: a command, mpv's wake-up callback (new
+/// events), the stop, the render thread leaving GPU rendering. A wake-up
+/// before the wait is kept, so none is lost.
+#[derive(Default)]
+pub struct Wake {
+    woken: std::sync::Mutex<bool>,
+    ready: std::sync::Condvar,
+}
+impl Wake {
+    pub fn notify(&self) {
+        *self
+            .woken
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = true;
+        self.ready.notify_one();
+    }
+    /// Block until woken or `timeout`; `true` when woken (the wake-up is
+    /// taken).
+    pub fn wait(&self, timeout: Duration) -> bool {
+        let woken = self
+            .woken
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (mut woken, _) = self
+            .ready
+            .wait_timeout_while(woken, timeout, |woken| !*woken)
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        std::mem::take(&mut *woken)
+    }
+}
+
+/// The control worker's command queue: a command sent also wakes it.
+pub struct Commands {
+    sender: mpsc::Sender<Command>,
+    wake: Arc<Wake>,
+}
+impl Commands {
+    pub fn send(&self, command: Command) -> std::result::Result<(), mpsc::SendError<Command>> {
+        self.sender.send(command)?;
+        self.wake.notify();
+        Ok(())
+    }
+}
+
 pub struct Backend {
-    pub commands: mpsc::Sender<Command>,
+    pub commands: Commands,
     /// The newest frame for the video area (C-SIZE / render cadence).
     pub frame: Arc<FrameSlot>,
     /// What size the renderer draws at (UI: area; display layer: zoom).
@@ -43,6 +96,7 @@ pub struct Backend {
     /// `{ mpv, ffmpeg }`: the linked libmpv's `mpv-version` / `ffmpeg-version`.
     pub versions: Value,
     stop: mpsc::Sender<()>,
+    wake: Arc<Wake>,
     worker: Option<thread::JoinHandle<()>>,
 }
 impl Backend {
@@ -54,6 +108,12 @@ impl Backend {
         render: &crate::playback::render_mode::Decision,
     ) -> Result<Self> {
         let (commands, receiver) = mpsc::channel::<Command>();
+        let wake = Arc::new(Wake::default());
+        let commands = Commands {
+            sender: commands,
+            wake: wake.clone(),
+        };
+        let worker_wake = wake.clone();
         let (stop, stopping) = mpsc::channel();
         let frame = FrameSlot::new();
         let out_frame = frame.clone();
@@ -98,6 +158,10 @@ impl Backend {
                 }
                 no_builtin_scripts(&builder)?;
                 let mpv = Arc::new(builder.build()?);
+                // New events wake the worker (it drains them with
+                // `poll_event`); the callback only signals.
+                let event_wake = worker_wake.clone();
+                mpv.set_wakeup_callback(move || event_wake.notify());
                 mpv.request_log_messages("v")?;
                 crate::playback::processing::observe_hwdec(&mpv)?;
                 let version = |name: &str| mpv.get_property::<String>(name).ok();
@@ -114,6 +178,16 @@ impl Backend {
                 let (render_ready, render_initialized) = mpsc::sync_channel(1);
                 let render_frame = out_frame.clone();
                 let render_mode = out_render.clone();
+                // Everything the software renderer waits for wakes it: mpv's
+                // update callback, a new target (UI: area; display layer:
+                // zoom), the stop. One slot: wake-ups coalesce, none is lost.
+                let (render_wake, render_woke) = mpsc::sync_channel::<()>(1);
+                let target_wake = render_wake.clone();
+                render_target.set_waker(Box::new(move || {
+                    let _ = target_wake.try_send(());
+                }));
+                let stop_wake = render_wake.clone();
+                let switched = worker_wake.clone();
                 let renderer = thread::spawn(move || {
                     let run = || -> Result<()> {
                         let mut ready = Some(&render_ready);
@@ -128,9 +202,13 @@ impl Backend {
                             if gpu.run(area, &mut ready) {
                                 return Ok(());
                             }
+                            // The control worker sets software rendering's
+                            // `hwdec` when it sees the switch: now, not at
+                            // its next state push.
+                            switched.notify();
                         }
                         let mut render = RenderContext::new_software(render_core.clone())?;
-                        let (wake, woke) = mpsc::sync_channel(1);
+                        let wake = render_wake;
                         // Callback only signals. It never calls into libmpv.
                         render.set_update_callback(move || {
                             let _ = wake.try_send(());
@@ -217,7 +295,13 @@ impl Backend {
                                     render_frame.put(Frame { buffer, sequence });
                                 }
                             }
-                            let _ = woke.recv_timeout(Duration::from_millis(5));
+                            // No timeout: nothing here is due at a time of its
+                            // own (mpv waits for a frame's display time inside
+                            // the render call). Before 0.5.15 this polled
+                            // every 5 ms (about 200 wake-ups a second).
+                            if render_woke.recv().is_err() {
+                                break;
+                            }
                         }
                         Ok(())
                     };
@@ -263,7 +347,9 @@ impl Backend {
                     processing.note_source(sources.generation(), sources.phase());
                     subtitles.note_source(sources.generation(), sources.phase());
                     // Bound work per iteration so continuous controls cannot starve video.
-                    for command in receiver.try_iter().take(32) {
+                    let mut taken = 0;
+                    for command in receiver.try_iter().take(COMMANDS_PER_TURN) {
+                        taken += 1;
                         #[cfg(feature = "producer-audio")]
                         if command.method == "host.physicalInput" {
                             if let Err(error) = sources.host_input(&command.params)
@@ -661,10 +747,27 @@ impl Backend {
                         let _ =
                             events.send(Event::Broadcast("source.state".into(), source_snapshot));
                     }
-                    thread::sleep(Duration::from_millis(2));
+                    // Event-driven since 0.5.15 (before: a 2 ms sleep, about
+                    // 500 wake-ups a second): commands, mpv's events, the
+                    // stop and the render thread's switch wake this at once;
+                    // otherwise it sleeps until the next state push or audio
+                    // device check, or `POLL` while something ends without an
+                    // event (`polling`).
+                    let now = Instant::now();
+                    let polling = taken == COMMANDS_PER_TURN
+                        || actions.pending()
+                        || (!geometry_error && geometry.polling())
+                        || sources.polling();
+                    let timeout = if polling {
+                        POLL
+                    } else {
+                        push.next(now).min(sources.device_check_in(now))
+                    };
+                    worker_wake.wait(timeout);
                 }
                 drop(jobs);
                 render_stop.store(true, Ordering::Relaxed);
+                let _ = stop_wake.try_send(());
                 let _ = renderer.join();
                 // Native fd:// streams must die before Sources releases their Files.
                 drop(mpv);
@@ -692,6 +795,7 @@ impl Backend {
             #[cfg(feature = "producer-audio")]
             input,
             stop,
+            wake,
             worker: Some(worker),
         })
     }
@@ -768,6 +872,7 @@ fn pace(
 impl Drop for Backend {
     fn drop(&mut self) {
         let _ = self.stop.send(());
+        self.wake.notify();
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
@@ -1255,6 +1360,12 @@ impl CoreActions {
     /// Finish a step once the position moved and no seek is running, mpv hit
     /// the end, or 1.5 s passed (nothing moved: a boundary).
     /// What finished since the last call: a step, keyframe step seeks.
+    /// Whether `poll` waits for something mpv announces with no event (a
+    /// step or keyframe seek landing, read from properties), or has an
+    /// outcome to send.
+    fn pending(&self) -> bool {
+        self.stepping.is_some() || self.key_seek.is_some() || !self.finished.is_empty()
+    }
     fn poll(&mut self, mpv: &Mpv, generation: u64) -> Vec<(Completion, Result<Value, RpcError>)> {
         self.poll_key_seek(mpv, generation);
         let mut done = std::mem::take(&mut self.finished);
@@ -1361,6 +1472,12 @@ impl StatePush {
     /// check publishes at once, so the controls follow without the period.
     pub fn soon(&mut self) {
         self.sent = None;
+    }
+    /// How long until the periodic broadcast is due (zero after `soon`).
+    pub fn next(&self, now: Instant) -> Duration {
+        self.sent.map_or(Duration::ZERO, |sent| {
+            (sent + Self::PERIOD).saturating_duration_since(now)
+        })
     }
     /// The phase the published state carries.
     pub fn seen(&mut self, generation: u64, phase: crate::playback::session::Phase) {
@@ -1520,5 +1637,58 @@ mod tests {
             push.due(2, Phase::Ended, soon + Duration::from_millis(102)),
             "periodic"
         );
+    }
+    /// 0.5.15: the control worker sleeps until the next push instead of
+    /// polling every 2 ms.
+    #[test]
+    fn the_worker_sleeps_until_the_next_push() {
+        let start = Instant::now();
+        let mut push = StatePush::new();
+        assert_eq!(push.next(start), Duration::ZERO, "never sent: due now");
+        assert!(push.due(1, Phase::Ready, start));
+        assert_eq!(push.next(start), StatePush::PERIOD);
+        let later = start + Duration::from_millis(30);
+        assert_eq!(push.next(later), Duration::from_millis(70));
+        assert_eq!(push.next(start + Duration::from_secs(1)), Duration::ZERO);
+        push.soon();
+        assert_eq!(push.next(later), Duration::ZERO, "after a core action");
+    }
+    #[test]
+    fn a_wake_up_is_kept_until_the_wait_takes_it() {
+        let wake = Arc::new(Wake::default());
+        wake.notify();
+        assert!(wake.wait(Duration::from_secs(5)), "woken before the wait");
+        assert!(!wake.wait(Duration::from_millis(1)), "taken");
+        let from = wake.clone();
+        let notifier = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(20));
+            from.notify();
+        });
+        let began = Instant::now();
+        assert!(wake.wait(Duration::from_secs(5)));
+        assert!(began.elapsed() < Duration::from_secs(5), "not the timeout");
+        let _ = notifier.join();
+    }
+    #[test]
+    fn commands_wake_the_worker() {
+        let (sender, receiver) = mpsc::channel();
+        let wake = Arc::new(Wake::default());
+        let commands = Commands {
+            sender,
+            wake: wake.clone(),
+        };
+        assert!(!wake.wait(Duration::ZERO));
+        let reply = Reply { owner: 1, id: 1 };
+        assert!(
+            commands
+                .send(Command {
+                    reply,
+                    method: "playback.stats".into(),
+                    params: Value::Null,
+                })
+                .is_ok()
+        );
+        assert!(wake.wait(Duration::ZERO));
+        assert_eq!(receiver.try_iter().count(), 1);
     }
 }
