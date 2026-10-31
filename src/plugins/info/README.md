@@ -7,7 +7,7 @@ Information about the media playing, the player and the system.
 - **Playback Info**: file, time, codecs, size, decoder (hardware or software), frame rate, the frames that really reach the screen (`Displayed: 30 fps (source 60)`), audio, dropped frames and more at the top left of the video, refreshed every second.
 - **Brief Info**: the file name, time, current chapter, codecs, decoder, displayed frame rate and subtitle track for a few seconds.
 - **Playback Properties**: three pages — Playback (decoder, hardware decoding, bitrates, A/V sync…), File (container, streams, chapters, metadata) and System (versions, system, displays, CPU, memory). Copy or save as text.
-- **About Vestra Player**: the version, component versions and the loaded plugins.
+- **About Vestra Player**: the version, component versions, how the video is rendered and why (`Rendering: Software — <the player's reason>`, `Rendering: GPU`; left out on players before 0.5.12, the reason before 0.5.13) and the loaded plugins.
 
 ## Entries
 
