@@ -20,6 +20,8 @@ const track = (trackId: number, selected = true) => ({
 const replaces = (host: TestHost) => host.sent("processing.replace");
 const latest = (host: TestHost) => replaces(host).at(-1)!;
 const own = (host: TestHost) => host.processing.resources.get("audio:workbench");
+/** What a drop-down of the window shows: its labels (text values) as the user reads them. */
+const listed = (host: TestHost, value: unknown) => (value as Parameters<TestHost["translate"]>[0][]).map((label) => host.translate(label));
 /** Let handlers and bindings run while a request is held (`host.settle()` waits for it). */
 const flush = async () => {
   for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 1));
@@ -705,10 +707,7 @@ test("A11: Load External Audio… adds and selects the file once; failures and a
   assert.equal(host.osd.at(-1), "Audio loaded: movie.jpn.mka");
   assert.deepEqual(host.sent("audio.addTrack").at(-1)!.path, "/music/movie.jpn.mka");
   assert.equal(host.sent("audio.addTrack").at(-1)!.select, true, "selected");
-  assert.deepEqual(window.props["track-rows"], [
-    { kind: "track", text: "", n: 1, codec: "aac", external: false, disconnected: false },
-    { kind: "track", text: "2. movie.jpn.mka", n: 2, codec: "", external: true, disconnected: false },
-  ]);
+  assert.deepEqual(listed(host, window.props["track-rows"]), ["Track 1 (aac)", "2. movie.jpn.mka (external)"]);
   assert.equal(window.props["track-index"], 1);
   assert.equal(host.command("audio.track.2").state.checked, true);
   host.dialogAnswers.push(["/music/movie.jpn.mka"]);
@@ -793,9 +792,7 @@ test("A11: auto-loading same-named audio adds same-named audio next to a local f
 
 const SPEAKERS = { id: "coreaudio/BuiltInSpeakerDevice", name: "MacBook Air 扬声器" };
 const PHONES = { id: "coreaudio/USB-1", name: "USB 耳机" };
-/** A row of the window's drop-downs (ui/workbench.slint `Row`). */
-const row = (kind: string, text = "", disconnected = false) => ({ kind, text, n: 0, codec: "", external: false, disconnected });
-const device = (name: string, disconnected = false) => row("device", name, disconnected);
+const device = (name: string, disconnected = false) => (disconnected ? `${name} (not connected)` : name);
 const deviceItems = (host: TestHost) =>
   [...host.commands.entries()]
     .filter(([, { declaration: d }]) => d.path[1] === "Output Device")
@@ -832,10 +829,10 @@ test("G16: Output Device lists System Default and the devices; choosing one swit
     // No source is needed, and the window shows the same choice.
     await host.command("audio.workbench").run();
     const window = host.window("audio-workbench");
-    assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name)]);
+    assert.deepEqual(listed(host, window.props["device-rows"]), ["System Default", device(SPEAKERS.name), device(PHONES.name)]);
     assert.equal(window.props["device-index"], 2);
     assert.equal(window.props["devices-available"], true);
-    assert.deepEqual(window.props["device-tip"], device(PHONES.name));
+    assert.equal(host.translate(window.props["device-tip"] as never), PHONES.name);
     window.emit("device-selected", 0);
     await host.settle();
     assert.deepEqual(host.sent("player.setAudioDevice").at(-1), { id: null });
@@ -877,9 +874,9 @@ test("G16: unplugging the chosen device falls back with an OSD; plugging it back
   ]);
   await host.command("audio.workbench").run();
   const window = host.window("audio-workbench");
-  assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name, true)]);
+  assert.deepEqual(listed(host, window.props["device-rows"]), ["System Default", device(SPEAKERS.name), device(PHONES.name, true)]);
   assert.equal(window.props["device-index"], 2);
-  assert.deepEqual(window.props["device-tip"], device(PHONES.name, true));
+  assert.equal(host.translate(window.props["device-tip"] as never), `${PHONES.name}: device not connected, using System Default`);
   const sent = host.sent("player.setAudioDevice").length;
   window.emit("device-selected", 2); // the disconnected entry cannot be picked
   await host.settle();
@@ -888,7 +885,7 @@ test("G16: unplugging the chosen device falls back with an OSD; plugging it back
   await host.settle();
   assert.equal(host.osd.at(-1), "Audio output: USB 耳机");
   assert.equal(deviceCommand(host, "USB 耳机").state.enabled, true);
-  assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name)]);
+  assert.deepEqual(listed(host, window.props["device-rows"]), ["System Default", device(SPEAKERS.name), device(PHONES.name)]);
   await stop();
 });
 
@@ -935,14 +932,14 @@ test("G16: a device plugged in later shows up within 5 s; no list means one disa
   ]);
   await host.command("audio.workbench").run();
   const window = host.window("audio-workbench");
-  assert.deepEqual(window.props["device-rows"], [row("no-devices")]);
-  assert.deepEqual(window.props["device-tip"], row("no-devices"));
+  assert.deepEqual(listed(host, window.props["device-rows"]), ["No output devices available"]);
+  assert.equal(host.translate(window.props["device-tip"] as never), "No output devices available");
   assert.equal(window.props["devices-available"], false);
   host.reset("player.audioDevices");
   host.audioDevices = [SPEAKERS, PHONES];
   await host.settle(5200);
   assert.deepEqual(deviceItems(host).map((item) => item[0]), ["System Default", "MacBook Air 扬声器", "USB 耳机"]);
-  assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name)]);
+  assert.deepEqual(listed(host, window.props["device-rows"]), ["System Default", device(SPEAKERS.name), device(PHONES.name)]);
   assert.deepEqual(host.osd, [], "a new device is not announced");
   await stop();
 });
@@ -1080,5 +1077,14 @@ test("zh-Hans: a track without title or codec, an external one, and unnamed devi
     deviceItems(host).map((item) => item[0]),
     ["系统默认", "未命名设备", "未命名设备 (2)", "USB 耳机", "USB 耳机 (2)"],
   );
+  // The window's lists arrive translated, with the words its .slint file used to put in.
+  await host.command("audio.workbench").run();
+  const window = host.window("audio-workbench");
+  assert.deepEqual(listed(host, window.props["track-rows"]), ["音轨 1", "音轨 2 (opus)（外部）"]);
+  assert.deepEqual(listed(host, window.props["device-rows"]), ["系统默认", "未命名设备", "未命名设备", "USB 耳机", "USB 耳机"]);
+  assert.equal(host.translate(window.props["device-tip"] as never), "系统默认");
+  host.setSource({ audioTracks: [] });
+  await host.settle();
+  assert.deepEqual(listed(host, window.props["track-rows"]), ["没有音轨"]);
   await stop();
 });

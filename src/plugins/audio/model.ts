@@ -221,11 +221,11 @@ export function deviceTitles(devices: readonly { id: string; name: string }[], m
 // ---------------------------------------------------------------- tracks (G03, G04) and external audio (A11)
 
 /**
- * A track as the window's list shows it (ui/workbench.slint `Row`, kind
- * "track"). `text` is data, "1. 日语 [jpn] (aac)" (at most 60 characters), or
- * empty for a track without title and language: the window then shows the
- * words "Track {n}" ("Track 2 (opus)"). An external track gets " (external)".
- * The menu and the OSD put the same words into a text value (main.ts `trackLabel`).
+ * A track as the window's list, the menu and the OSD show it. `text` is data,
+ * "1. 日语 [jpn] (aac)" (at most 60 characters), or empty for a track without
+ * title and language: it is then shown as the words "Track {n}" ("Track 2
+ * (opus)"). An external track gets " (external)". main.ts puts the words into
+ * text values (`trackItem` for the window's list, `trackLabel` for the menu and the OSD).
  */
 export type TrackRow = { kind: "track"; text: string; n: number; codec: string; external: boolean; disconnected: false };
 export function trackRow(track: AudioTrack, index: number): TrackRow {

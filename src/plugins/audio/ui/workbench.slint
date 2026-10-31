@@ -1,36 +1,8 @@
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
-import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
-
-// A row of a drop-down. `kind` "text", "device" and "track" show `text` (data); the other
-// kinds are words of this file. A "track" without `text` is "Track {n}" (with its codec);
-// `external` and `disconnected` add a note.
-struct Row { kind: string, text: string, n: int, codec: string, external: bool, disconnected: bool }
+import { Button, Check, Choice, Slider, Tabs, ToolTipArea } from "@vestra/widgets.slint";
 
 global Words {
-    pure public function track(r: Row) -> string {
-        if r.text != "" { return r.external ? @tr("{} (external)", r.text) : r.text; }
-        if r.codec != "" { return r.external ? @tr("Track {} ({}) (external)", r.n, r.codec) : @tr("Track {} ({})", r.n, r.codec); }
-        return r.external ? @tr("Track {} (external)", r.n) : @tr("Track {}", r.n);
-    }
-    pure public function name(r: Row) -> string {
-        return r.kind == "system-default" ? @tr("System Default")
-            : r.kind == "unnamed-device" ? @tr("Unnamed device")
-            : r.kind == "selected-device" ? @tr("Selected device")
-            : r.kind == "no-devices" ? @tr("No output devices available")
-            : r.kind == "loading" ? @tr("Loading")
-            : r.kind == "no-tracks" ? @tr("No audio tracks")
-            : r.kind == "track" ? Words.track(r)
-            : r.text;
-    }
-    // What the drop-down shows for the row.
-    pure public function row(r: Row) -> string {
-        return r.disconnected ? @tr("{} (not connected)", Words.name(r)) : Words.name(r);
-    }
-    // The output device's tip: its full name, and why it is not used.
-    pure public function device-tip(r: Row) -> string {
-        return r.disconnected ? @tr("{}: device not connected, using System Default", Words.name(r)) : Words.name(r);
-    }
     pure public function status(state: string) -> string {
         return state == "loading" ? @tr("Loading audio…")
             : state == "no-track" ? @tr("No audio track selected")
@@ -38,51 +10,6 @@ global Words {
             : state == "failed" ? @tr("Audio processing failed")
             : state == "applied" ? @tr("Applied")
             : @tr("Ready");
-    }
-}
-
-// 14px box + 11px text (the panel switch).
-component Check {
-    in-out property <bool> checked;
-    in property <string> text;
-    in property <bool> enabled: true;
-    callback toggled(bool);
-    min-height: Theme.checkbox-row-height;
-    accessible-role: checkbox;
-    accessible-checked: root.checked;
-    accessible-label: root.text;
-    accessible-enabled: root.enabled;
-    HorizontalLayout {
-        spacing: 4px;
-        alignment: start;
-        VerticalLayout {
-            alignment: center;
-            Rectangle {
-                width: 12px;
-                height: 12px;
-                background: Theme.bg-bar;
-                border-color: !root.enabled ? Theme.icon-disabled : touch.has-hover ? Theme.text-list : Theme.text-dim;
-                border-width: 1px;
-                if root.checked: Rectangle {
-                    width: 6px;
-                    height: 6px;
-                    background: root.enabled ? Theme.playing : Theme.icon-disabled;
-                }
-            }
-        }
-        Text {
-            text: root.text;
-            color: root.enabled ? Theme.text : Theme.text-dim;
-            font-size: Theme.font-body;
-            vertical-alignment: center;
-        }
-    }
-    touch := TouchArea {
-        enabled: root.enabled;
-        clicked => {
-            root.checked = !root.checked;
-            root.toggled(root.checked);
-        }
     }
 }
 
@@ -187,145 +114,6 @@ component EffectRow {
     }
 }
 
-// One popup row of a Choice: radio dot for the current item, menu-style hover.
-component ChoiceItem {
-    in property <string> text;
-    in property <bool> selected;
-    callback picked();
-    height: 20px;
-    Rectangle { background: touch.has-hover ? Theme.press-bg : transparent; }
-    HorizontalLayout {
-        padding-left: 5px;
-        spacing: 4px;
-        VerticalLayout {
-            alignment: center;
-            Rectangle {
-                width: 6px;
-                height: 6px;
-                border-radius: 3px;
-                background: root.selected ? Theme.playing : transparent;
-            }
-        }
-        Text {
-            text: root.text;
-            color: touch.has-hover ? Theme.accent : Theme.text-list;
-            font-size: Theme.font-body;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-    }
-    touch := TouchArea { clicked => { root.picked(); } }
-}
-
-// Compact 21px drop-down with an 11px label; the list opens below it. `max-rows` > 0 caps
-// the list's height (it scrolls with the wheel), so a long list stays inside the window.
-component Choice {
-    in property <[Row]> model;
-    in-out property <int> current-index;
-    in property <bool> enabled: true;
-    in property <int> max-rows: 0;
-    callback selected(int);
-    private property <int> rows: root.max-rows > 0 && root.model.length > root.max-rows ? root.max-rows : root.model.length;
-    height: 21px;
-    accessible-role: combobox;
-    accessible-enabled: root.enabled;
-    accessible-value: root.current-index >= 0 && root.current-index < root.model.length ? Words.row(root.model[root.current-index]) : "";
-    Rectangle {
-        border-radius: Theme.radius-control;
-        background: !root.enabled ? Theme.button-disabled
-            : touch.pressed ? Theme.button-press
-            : touch.has-hover ? Theme.button-hover : Theme.button-bg;
-    }
-    HorizontalLayout {
-        padding-left: 6px;
-        padding-right: 5px;
-        spacing: 2px;
-        Text {
-            horizontal-stretch: 1;
-            text: root.current-index >= 0 && root.current-index < root.model.length ? Words.row(root.model[root.current-index]) : "";
-            color: root.enabled ? Theme.text-list : Theme.text-dim;
-            font-size: Theme.font-body;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-        // The drop-down arrow: a small V.
-        VerticalLayout {
-            horizontal-stretch: 0;
-            alignment: center;
-            Icon { name: "caret-down"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; }
-        }
-    }
-    touch := TouchArea {
-        enabled: root.enabled;
-        clicked => { list.show(); }
-    }
-    list := PopupWindow {
-        x: 0;
-        y: root.height;
-        width: root.width;
-        height: root.rows * 20px + 2px;
-        Rectangle {
-            background: Theme.bg-list;
-            border-color: Theme.line;
-            border-width: 1px;
-            Flickable {
-                x: 1px;
-                y: 1px;
-                width: parent.width - 2px;
-                height: parent.height - 2px;
-                content-height: root.model.length * 20px;
-                VerticalLayout {
-                    width: root.width - 2px;
-                    for item[index] in root.model: ChoiceItem {
-                        text: Words.row(item);
-                        selected: index == root.current-index;
-                        picked => {
-                            root.current-index = index;
-                            root.selected(index);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// One 74×31 page tab of the strip (same strip as the playlist sidebar).
-component Tab {
-    in property <string> text;
-    in property <bool> selected;
-    callback picked();
-    width: max(74px, tab-label.preferred-width + 12px);
-    height: 31px;
-    accessible-role: tab;
-    accessible-label: root.text;
-    // Hover lights a rounded plate; the selected tab has a 28px gradient stroke under its label.
-    Rectangle {
-        x: 3px;
-        y: 4px;
-        width: parent.width - 6px;
-        height: parent.height - 8px;
-        border-radius: Theme.radius-control;
-        background: !root.selected && touch.has-hover ? Theme.hover-bg : transparent;
-    }
-    if root.selected: Rectangle {
-        x: (parent.width - 28px) / 2;
-        y: parent.height - 3px;
-        width: 28px;
-        height: 2px;
-        border-radius: 1px;
-        background: Theme.accent-fill;
-    }
-    tab-label := Text {
-        text: root.text;
-        color: root.selected ? Theme.text : Theme.text-dim;
-        font-size: Theme.font-tab;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-    touch := TouchArea { clicked => { root.picked(); } }
-}
-
 // One popup row: radio dot for the current preset, menu-style hover.
 component PresetItem {
     in property <string> text;
@@ -376,7 +164,8 @@ export component AudioWorkbench inherits Window {
     in property <bool> clarity-enabled;
     in property <float> clarity-db: 3;
     in property <int> sync-keep-index: 0;
-    in property <[Row]> track-rows: [{ kind: "no-tracks", text: "", n: 0, codec: "", external: false, disconnected: false }];
+    // The labels arrive translated (text values from main.ts).
+    in property <[string]> track-rows: [@tr("No audio tracks")];
     in property <int> track-index: 0;
     in property <bool> tracks-available;
     in property <bool> can-load;
@@ -384,10 +173,10 @@ export component AudioWorkbench inherits Window {
     in property <bool> channels-available;
     in property <bool> mono-track;
     in property <bool> auto-load;
-    in property <[Row]> device-rows: [{ kind: "system-default", text: "", n: 0, codec: "", external: false, disconnected: false }];
+    in property <[string]> device-rows: [@tr("System Default")];
     in property <int> device-index: 0;
     in property <bool> devices-available;
-    in property <Row> device-tip;
+    in property <string> device-tip;
     callback tab-changed(int);
     callback gain-changed(int, float);
     callback equalizer-changed(bool);
@@ -424,6 +213,7 @@ export component AudioWorkbench inherits Window {
         effects-check-measure := VerticalLayout {
             for text in [@tr("Normalize"), @tr("Crystalizer")]: Text { text: text; font-size: Theme.font-body; }
         }
+        auto-measure := Text { text: @tr("Auto-load audio files with the same name"); font-size: Theme.font-body; }
         output-measure := VerticalLayout {
             for text in [@tr("Track"), @tr("Channels"), @tr("Device"), @tr("Keep sync")]: Text { text: text; font-size: Theme.font-body; }
         }
@@ -444,20 +234,10 @@ export component AudioWorkbench inherits Window {
     changed device-rows => { device-combo.current-index = root.device-index; }
     VerticalLayout {
         // Page tabs, 31px; the last picked page is remembered by the plugin.
-        Rectangle {
-            height: 31px;
-            background: Theme.bg-bar;
-            tab-strip := HorizontalLayout {
-                for name[index] in root.tab-names: Tab {
-                    text: name;
-                    selected: index == root.tab-index;
-                    picked => {
-                        root.tab-index = index;
-                        root.tab-changed(index);
-                    }
-                }
-                Rectangle { horizontal-stretch: 1; }
-            }
+        tab-strip := Tabs {
+            model: root.tab-names;
+            current-index <=> root.tab-index;
+            selected(index) => { root.tab-changed(index); }
         }
         VerticalLayout {
             padding: 8px;
@@ -472,6 +252,7 @@ export component AudioWorkbench inherits Window {
                         height: 22px;
                         spacing: 6px;
                         eq := Check {
+                            panel: true;
                             width: max(82px, self.preferred-width);
                             text: @tr("Equalizer");
                             checked: root.equalizer-enabled;
@@ -539,6 +320,7 @@ export component AudioWorkbench inherits Window {
                     HorizontalLayout {
                         height: 24px;
                         norm := Check {
+                            panel: true;
                             width: root.effects-column;
                             text: @tr("Normalize");
                             checked: root.normalize-enabled;
@@ -552,6 +334,7 @@ export component AudioWorkbench inherits Window {
                         spacing: 4px;
                         alignment: start;
                         clarity-check := Check {
+                            panel: true;
                             width: root.effects-column;
                             text: @tr("Crystalizer");
                             checked: root.clarity-enabled;
@@ -616,11 +399,11 @@ export component AudioWorkbench inherits Window {
                                     enabled: root.channels-available;
                                     // The channel modes of model.ts, in the same order.
                                     model: [
-                                        { kind: "text", text: @tr("Stereo") },
-                                        { kind: "text", text: @tr("Left Channel") },
-                                        { kind: "text", text: @tr("Right Channel") },
-                                        { kind: "text", text: @tr("Mono Mix") },
-                                        { kind: "text", text: @tr("Swap Left and Right") },
+                                        @tr("Stereo"),
+                                        @tr("Left Channel"),
+                                        @tr("Right Channel"),
+                                        @tr("Mono Mix"),
+                                        @tr("Swap Left and Right"),
                                     ];
                                     current-index: root.channel-index;
                                     selected(i) => { root.channel-selected(i); }
@@ -632,7 +415,7 @@ export component AudioWorkbench inherits Window {
                     // opens at y ≈ 117 of 260, so 7 rows (142) fit below; longer lists scroll.
                     ToolTipArea {
                         height: 24px;
-                        text: Words.device-tip(root.device-tip);
+                        text: root.device-tip;
                         device-row := HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
@@ -641,7 +424,7 @@ export component AudioWorkbench inherits Window {
                                 alignment: center;
                                 device-combo := Choice {
                                     width: 200px;
-                                    max-rows: 7;
+                                    max-visible-rows: 7;
                                     enabled: root.devices-available;
                                     model: root.device-rows;
                                     current-index: root.device-index;
@@ -655,6 +438,9 @@ export component AudioWorkbench inherits Window {
                         height: 24px;
                         padding-left: root.output-column + 6px;
                         auto-check := Check {
+                            // One line, as before: a long translation widens the window instead of wrapping.
+                            min-width: auto-measure.preferred-width + 16px;
+                            panel: true;
                             text: @tr("Auto-load audio files with the same name");
                             checked: root.auto-load;
                             toggled(on) => { root.auto-load-changed(on); }
@@ -670,9 +456,9 @@ export component AudioWorkbench inherits Window {
                                 width: 140px;
                                 // The keep modes of model.ts, in the same order.
                                 model: [
-                                    { kind: "text", text: @tr("Don't Keep") },
-                                    { kind: "text", text: @tr("Keep for This Run") },
-                                    { kind: "text", text: @tr("Always Keep") },
+                                    @tr("Don't Keep"),
+                                    @tr("Keep for This Run"),
+                                    @tr("Always Keep"),
                                 ];
                                 current-index: root.sync-keep-index;
                                 selected(i) => { root.sync-keep-selected(i); }
