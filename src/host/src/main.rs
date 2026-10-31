@@ -338,8 +338,11 @@ fn main() -> Result<()> {
     let backend = Backend::start(events.clone(), silent, &render)?;
     // `plugin.app`, handed to every plugin process when it starts.
     let ffmpeg = &backend.versions["ffmpeg"];
+    // `features`: protocol additions the SDK detects (not part of the plugin
+    // API): row patches of property writes (ui_patch.rs).
     process::set_app_info(&json!({"version":env!("CARGO_PKG_VERSION"),
         "build":option_env!("VESTRA_BUILD"),
+        "features":[ui::ui_patch::FEATURE],
         "components":{"mpv":backend.versions["mpv"],
             "libav":if ffmpeg.is_string() { json!({"ffmpeg":ffmpeg}) } else { json!({}) },
             "slint":env!("VESTRA_SLINT_VERSION")}}));
