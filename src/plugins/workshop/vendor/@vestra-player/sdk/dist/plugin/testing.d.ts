@@ -271,7 +271,26 @@ export interface FakeCommand {
          */
         reason?: string | null;
     };
-    /** The command state the player last received (after the update pass). */
+    /**
+     * The conditions the plugin sent for `enabled` and `checked`
+     * (`plugin.when`, wire form), `undefined` without. Like the player, the
+     * host evaluates them in {@link FakeCommand.state} against `source`,
+     * `mainWindow.fullscreen`, `appearance` and `language`.
+     *
+     * @since 1.5.40
+     */
+    when?: {
+        /** The condition of `enabled`. */
+        enabled?: Json;
+        /** The condition of `checked`. */
+        checked?: Json;
+    };
+    /**
+     * The command state as the player shows it: what the plugin last sent
+     * (after the update pass), with the fields given as conditions
+     * (`plugin.when`) evaluated now. With an `enabled` condition, `reason`
+     * is `null` while the command is enabled and not busy.
+     */
     state: {
         /** `false` when the plugin disabled the command. */
         enabled: boolean;
@@ -548,6 +567,16 @@ export declare class TestHost implements Transport {
      * @since 1.5.38
      */
     readonly listening: Set<string>;
+    /**
+     * Why the plugin listens to each event of {@link TestHost.listening}:
+     * every listener and every binding that reads its state, as the
+     * player's log says them (`a listener added at main.ts:12`,
+     * `command "Save" enabled is a function that reads plugin.player.state
+     * (main.ts:40) — use plugin.when`), in the order they came.
+     *
+     * @since 1.5.40
+     */
+    readonly listeningWhy: Map<string, string[]>;
     /**
      * The player's source facts (phase, position, duration, paused, rate,
      * audio tracks, loop, ...). Wire-level shape; change it with
@@ -2588,6 +2617,32 @@ export declare class TestHost implements Transport {
      * @since 1.0.0
      */
     close(): void;
+    /**
+     * Why the player would keep this plugin running while nothing uses it
+     * (lazy activation, player 0.5.21), one line per reason, as the player's
+     * log says it: an event it listens to that is not one the player wakes
+     * it for (with what listens and where it was added), its mounted panel,
+     * its open windows. Empty: the player may stop it while idle and start
+     * it again on its next use. Filter chains, streams, jobs and the like
+     * (which also keep a plugin running) are not listed.
+     *
+     * @capability None.
+     * @since 1.5.40
+     *
+     * @example Check that a plugin can be stopped while idle
+     * The test fails if the plugin keeps running for no reason after it
+     * starts, and names the reason (a command whose `enabled` reads
+     * `plugin.player.state`, say: give it a `plugin.when` condition). The
+     * player stops such a plugin while nothing uses it and starts it again
+     * on its next use, so it costs no process meanwhile.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * assert.deepEqual(host.keepsRunning, []);
+     * ```
+     */
+    get keepsRunning(): string[];
 }
 /**
  * Activate a plugin against a test host, the way the player's runner does:

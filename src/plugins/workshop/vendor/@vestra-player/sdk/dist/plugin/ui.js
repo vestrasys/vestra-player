@@ -92,7 +92,8 @@ export class ViewBase {
     scope;
     handlers = new Map();
     #values = new Map();
-    #binders = new Set();
+    /** Each binding, with where the plugin added it (for the player's log). */
+    #binders = new Map();
     /** What the host currently shows, as far as this side knows. */
     #sent = new Map();
     /** Written by `set()`: sent even if equal to what was sent before. */
@@ -144,7 +145,7 @@ export class ViewBase {
         this.flush();
     }
     bind(props) {
-        this.#binders.add(props);
+        this.#binders.set(props, this.scope.runtime.callSite());
         this.scope.update();
         return this.scope.onDispose(() => {
             this.#binders.delete(props);
@@ -152,9 +153,10 @@ export class ViewBase {
     }
     /** Current desired properties (bound values win over earlier `set`). */
     snapshot() {
-        for (const binder of this.#binders) {
+        for (const [binder, site] of this.#binders) {
             try {
-                for (const [key, value] of Object.entries(encode(binder())))
+                const props = this.scope.runtime.reader("a view's bind", site, binder);
+                for (const [key, value] of Object.entries(encode(props)))
                     this.#values.set(key, value);
             }
             catch (error) {

@@ -1,5 +1,17 @@
 import type { Json, LocalServices, Transport, Wire } from "../wire.ts";
 import type { App, Disposable, Locale, PluginError, SystemInfo } from "./types.ts";
+/**
+ * Why something listens, for the player's log line that says why a plugin
+ * keeps running (`events.subscribe { why }`, player 0.5.21): computed
+ * only when the player is told.
+ */
+export type Why = () => string;
+/**
+ * Events the player wakes a stopped plugin for (player 0.5.21): a listener
+ * of one does not keep the plugin running. They follow deliberate changes
+ * (an install, a key edit, the palette, a resolver), not playback.
+ */
+export declare const WAKE_EVENTS: readonly string[];
 export interface PluginManifest {
     id: string;
     capabilities: string[];
@@ -58,6 +70,18 @@ export declare class Runtime {
      * on it, so the event counts as listened to while the binding reads it.
      */
     reading(event: string): void;
+    /**
+     * Evaluate `read` as `label`, added at `where`: the state it reads is
+     * reported as read by it. `field`: a command's `enabled` or `checked`,
+     * which a `plugin.when` condition can replace.
+     */
+    reader<T>(label: string, where: (() => string | undefined) | undefined, read: () => T, field?: boolean): T;
+    /**
+     * Where the plugin's code called into the SDK: the first stack frame
+     * outside the SDK, as a path relative to the plugin's directory and a
+     * line (`main.ts:353`). Captured now, formatted when asked.
+     */
+    callSite(): () => string | undefined;
     /** Coalesce: one evaluation pass per microtask turn, however many changes. */
     invalidate(): void;
     /**
@@ -74,7 +98,13 @@ export declare class Runtime {
      * state, a binding that reads it. Nothing when nothing subscribed to it
      * (no capability, or the service did not start).
      */
-    hold(event: string): Disposable;
+    hold(event: string, why?: Why): Disposable;
+    /**
+     * Why the plugin listens to each event it really listens to (mirrors
+     * left out), as the player's log says it: for {@link TestHost} and
+     * `vestra-plugin test`.
+     */
+    listening(): Map<string, string[]>;
     /** Raw transport events the host pushes without a subscription. */
     raw(event: string, listener: Listener): Disposable;
 }
