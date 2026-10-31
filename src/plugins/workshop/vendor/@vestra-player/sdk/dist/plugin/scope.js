@@ -10,6 +10,7 @@ import { i18n } from "./language.js";
 import { player } from "./player.js";
 import { audioFilters, videoFilters } from "./filters.js";
 import { videoRender, videoView } from "./view.js";
+import { videoShaders } from "./shaders.js";
 import { subtitles } from "./subtitles.js";
 import { mediaCapture } from "./media.js";
 import { resolvers } from "./resolvers.js";
@@ -49,6 +50,7 @@ export class ScopeImpl {
         ...videoFilters(this),
         view: () => videoView(this),
         render: () => videoRender(this),
+        shaders: (id) => videoShaders(this, id),
         upscaling: videoUpscaling(this),
     };
     audio = audioFilters(this);

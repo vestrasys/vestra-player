@@ -118,6 +118,7 @@ export const API_REQUESTS = Object.freeze({
     ],
     "Plugin.video.view": [{ method: "video.view.set" }],
     "Plugin.video.render": [{ method: "video.render.set" }],
+    "Plugin.video.shaders": [{ method: "video.shaders.set" }],
     "Plugin.audio.filter": [
         { method: "processing.replace", params: { stage: "audio" } },
     ],
