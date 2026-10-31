@@ -199,6 +199,17 @@ pub fn apply_vec<T>(items: &mut Vec<T>, shapes: &[Shape], rows: impl IntoIterato
     }
 }
 
+/// `stored` (a property's array as JSON) with checked ops applied.
+pub fn patched(stored: &[Json], ops: &Ops<'_>) -> Json {
+    let mut rows = stored.to_vec();
+    apply_vec(
+        &mut rows,
+        &ops.shapes,
+        ops.rows.iter().map(|row| (*row).clone()),
+    );
+    Json::Array(rows)
+}
+
 /// `current` (a live property) can take the patch in place: a host-owned
 /// model of `len` rows, no Markdown documents in its rows, and carried rows
 /// of the type of its first row (Slint checks the type of an installed
@@ -238,39 +249,71 @@ pub fn apply(current: &Value, shapes: &[Shape], rows: Vec<Value>) {
                     model.set_row_data(at, row);
                 }
             }
-            Shape::Insert(at, count) => {
-                for (offset, row) in rows.by_ref().take(count).enumerate() {
-                    model.insert(at + offset, row);
-                }
-            }
-            Shape::Remove(at, count) => {
-                for _ in 0..count {
-                    model.remove(at);
-                }
-            }
+            Shape::Insert(at, count) => insert(model, at, rows.by_ref().take(count)),
+            Shape::Remove(at, count) => remove(model, at, count),
             Shape::Move { from, count, to } => {
                 let moved: Vec<Value> = (from..from + count)
                     .filter_map(|row| model.row_data(row))
                     .collect();
-                for _ in 0..count {
-                    model.remove(from);
-                }
-                for (offset, row) in moved.into_iter().enumerate() {
-                    model.insert(to + offset, row);
-                }
+                remove(model, from, count);
+                insert(model, to, moved);
             }
         }
     }
 }
 
-/// The carried rows of a patch, converted for a view, with the images the
-/// property shows after it (one list per row).
+/// `VecModel` has no range insert or remove: rows at the end are appended
+/// with one notification (`extend`); elsewhere they go in one by one.
+fn insert(model: &VecModel<Value>, at: usize, rows: impl IntoIterator<Item = Value>) {
+    if at == model.row_count() {
+        model.extend(rows);
+        return;
+    }
+    for (offset, row) in rows.into_iter().enumerate() {
+        model.insert(at + offset, row);
+    }
+}
+
+/// Removed from the last row of the range back: each removal moves only
+/// the rows after the range (in the model and in a repeater's instances),
+/// not the rest of the range too.
+fn remove(model: &VecModel<Value>, at: usize, count: usize) {
+    for row in (at..at + count).rev() {
+        model.remove(row);
+    }
+}
+
+/// The carried rows of a patch, converted for a view, and the rows the
+/// property shows after it (`ui_image::Row`: images, value totals).
 pub struct Rows {
     pub values: Vec<Value>,
-    pub keys: Vec<Vec<ui_image::Key>>,
+    pub written: Vec<ui_image::Row>,
+}
+
+/// What a tool window's patch did (a window keeps no stored value).
+#[derive(Debug, PartialEq)]
+pub enum InWindow {
+    /// Written into the live model.
+    Applied,
+    /// Not in place: the shown rows with the ops applied, for the caller
+    /// to write whole (no round trip to the plugin).
+    Whole(Json),
 }
 
 impl Host {
+    /// `Images::patch_window` with `owner`'s image directories.
+    pub(crate) fn patch_window(
+        &mut self,
+        owner: u64,
+        view: &str,
+        property: &str,
+        current: &Value,
+        ops: &Json,
+    ) -> std::result::Result<InWindow, RpcError> {
+        let roots = self.image_roots(owner);
+        self.images
+            .patch_window(owner, &roots, view, property, current, ops)
+    }
     /// `Images::patch_rows` with `owner`'s image directories.
     pub(crate) fn patch_rows(
         &mut self,
@@ -285,11 +328,50 @@ impl Host {
 }
 
 impl ui_image::Images {
+    /// A row patch of a tool window's property shown as `current`. The ops
+    /// apply on the rows the base write left: known only for an array the
+    /// view converted, and only while its model still shows that many rows;
+    /// otherwise (the write never reached the model) `stale`, and the SDK
+    /// sends the whole value. Rows the model cannot take in place (a row of
+    /// another shape than the first, an empty model, a document) are
+    /// returned whole; rows holding images do not convert back: `stale`.
+    pub(crate) fn patch_window(
+        &mut self,
+        owner: u64,
+        roots: &[std::path::PathBuf],
+        view: &str,
+        property: &str,
+        current: &Value,
+        ops: &Json,
+    ) -> std::result::Result<InWindow, RpcError> {
+        let len = self
+            .written_rows(owner, view, property)
+            .map(Vec::len)
+            .ok_or_else(stale)?;
+        match current {
+            Value::Model(model) if model.row_count() == len => {}
+            _ => return Err(stale()),
+        }
+        let ops = parse(ops, len)?;
+        let rows = self
+            .patch_rows(owner, roots, view, property, &ops)?
+            .filter(|rows| applicable(current, ops.before, &ops.shapes, &rows.values));
+        if let Some(rows) = rows {
+            apply(current, &ops.shapes, rows.values);
+            self.patched_rows(owner, view, property, rows.written);
+            return Ok(InWindow::Applied);
+        }
+        let Ok(Json::Array(shown)) = ui_values::to_json(current) else {
+            return Err(stale());
+        };
+        Ok(InWindow::Whole(patched(&shown, &ops)))
+    }
     /// Convert the rows a patch carries for `owner`'s `view` (images loaded
-    /// from `roots` and checked as for a whole value), and the images each
-    /// row of the property shows after the ops, within the view's budget.
-    /// `None`: the property cannot be patched in place (a row holds a
-    /// Markdown document, or the images of its rows are not known).
+    /// from `roots` and checked as for a whole value), and the rows the
+    /// property shows after the ops: their images within the view's budget,
+    /// the whole array within the value totals (the rows it keeps count
+    /// too). `None`: the property cannot be patched in place (a row holds a
+    /// Markdown document, or the property's rows are not known).
     pub(crate) fn patch_rows(
         &mut self,
         owner: u64,
@@ -301,8 +383,8 @@ impl ui_image::Images {
         if ops.rows.iter().any(|row| ui_image::has_markdown(row)) {
             return Ok(None);
         }
-        let Some(mut keys) = self
-            .row_keys(owner, view, property)
+        let Some(mut written) = self
+            .written_rows(owner, view, property)
             .filter(|rows| rows.len() == ops.before)
             .cloned()
         else {
@@ -341,19 +423,23 @@ impl ui_image::Images {
             Err(error) => return Err(failure.into_inner().unwrap_or_else(|| error.into())),
         };
         let mut order = order.into_iter();
-        let carried: Vec<Vec<ui_image::Key>> = ops
+        let carried: Vec<ui_image::Row> = ops
             .rows
             .iter()
-            .map(|row| {
-                order
+            .map(|row| ui_image::Row {
+                keys: order
                     .by_ref()
                     .take(ui_image::image_count(row))
                     .flatten()
-                    .collect()
+                    .collect(),
+                cost: ui_values::cost(row),
             })
             .collect();
-        apply_vec(&mut keys, &ops.shapes, carried);
-        let distinct: std::collections::BTreeSet<&ui_image::Key> = keys.iter().flatten().collect();
+        apply_vec(&mut written, &ops.shapes, carried);
+        ui_values::check_totals(written.iter().map(|row| &row.cost))
+            .map_err(|error| RpcError::from(error).for_property(property))?;
+        let distinct: std::collections::BTreeSet<&ui_image::Key> =
+            written.iter().flat_map(|row| &row.keys).collect();
         if !distinct.is_empty() {
             let shown: usize = distinct.iter().map(|key| self.entry_bytes(key)).sum();
             if self.view_bytes(owner, view, property) + shown > ui_image::VIEW_BUDGET_BYTES {
@@ -364,7 +450,7 @@ impl ui_image::Images {
                 ));
             }
         }
-        Ok(Some(Rows { values, keys }))
+        Ok(Some(Rows { values, written }))
     }
 }
 
@@ -393,6 +479,23 @@ mod tests {
     }
     fn plain(rows: &[&Json]) -> Vec<Value> {
         ui_values::from_json_rows_with(rows, &mut |_, _| None).unwrap()
+    }
+    /// The images of each recorded row.
+    fn keys(rows: &[ui_image::Row]) -> Vec<Vec<ui_image::Key>> {
+        rows.iter().map(|row| row.keys.clone()).collect()
+    }
+    /// A record of `rows` (wire form) as `prop_value` leaves it, no images.
+    fn record(images: &mut Images, view: &str, rows: &Json) {
+        let rows = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| ui_image::Row {
+                keys: Vec::new(),
+                cost: ui_values::cost(row),
+            })
+            .collect();
+        images.patched_rows(1, view, "rows", rows);
     }
 
     /// `ops` written into the live model converted from `before`, and into
@@ -451,6 +554,16 @@ mod tests {
             json,
             rows(&["3", "4", "5", "6", "7", "8", "9", "10", "11", "12"])
         );
+        assert_eq!(to_json(&current).unwrap(), json);
+        // A run removed from the middle (back to front), rows put in the
+        // middle and appended at the end (one `extend`).
+        let ops = json!([
+            {"op": "remove", "at": 2, "count": 3},
+            {"op": "insert", "at": 1, "rows": [row("x", false), row("y", false)]},
+            {"op": "insert", "at": 6, "rows": [row("z", false)]},
+        ]);
+        let (current, json) = patched(&rows(&["0", "1", "2", "3", "4", "5", "6"]), &ops);
+        assert_eq!(json, rows(&["0", "x", "y", "1", "5", "6", "z"]));
         assert_eq!(to_json(&current).unwrap(), json);
         // A block moved down, then back.
         let ops = json!([
@@ -636,7 +749,13 @@ mod tests {
             1,
             "$mount",
             "rows",
-            vec![vec![ka.clone()], vec![], vec![kb.clone()]],
+            [vec![ka.clone()], vec![], vec![kb.clone()]]
+                .into_iter()
+                .map(|keys| ui_image::Row {
+                    keys,
+                    cost: ui_values::Cost::default(),
+                })
+                .collect(),
         );
         assert_eq!(images.view_bytes(1, "$mount", "other"), (4 + 9) * 4);
         let ops = json!([
@@ -651,7 +770,7 @@ mod tests {
             .unwrap();
         let kc = images.load(1, &roots, &c).unwrap().0;
         assert_eq!(
-            patch.keys,
+            keys(&patch.written),
             vec![vec![ka.clone()], vec![kc.clone()], vec![kb.clone()]]
         );
         let Value::Struct(first) = &patch.values[1] else {
@@ -659,8 +778,8 @@ mod tests {
         };
         assert!(matches!(first.get_field("logo"), Some(Value::Image(_))));
         // Nothing is recorded until the patch is applied.
-        assert_eq!(images.row_keys(1, "$mount", "rows").unwrap().len(), 3);
-        images.patched_rows(1, "$mount", "rows", patch.keys);
+        assert_eq!(images.written_rows(1, "$mount", "rows").unwrap().len(), 3);
+        images.patched_rows(1, "$mount", "rows", patch.written);
         assert_eq!(images.view_bytes(1, "$mount", "other"), (4 + 9 + 16) * 4);
         // A row without its image: the image is no longer shown.
         let parsed = parse(leak(json!([{"op": "remove", "at": 1, "count": 2}])), 3).unwrap();
@@ -668,7 +787,7 @@ mod tests {
             .patch_rows(1, &roots, "$mount", "rows", &parsed)
             .unwrap()
             .unwrap();
-        images.patched_rows(1, "$mount", "rows", patch.keys);
+        images.patched_rows(1, "$mount", "rows", patch.written);
         assert_eq!(images.view_bytes(1, "$mount", "other"), 4 * 4);
         // A file that fails its checks is an empty image, as in a whole value.
         let parsed = parse(
@@ -680,7 +799,7 @@ mod tests {
             .patch_rows(1, &roots, "$mount", "rows", &parsed)
             .unwrap()
             .unwrap();
-        assert_eq!(patch.keys, vec![Vec::<ui_image::Key>::new()]);
+        assert_eq!(keys(&patch.written), vec![Vec::<ui_image::Key>::new()]);
         // Over the view's budget: refused before anything is recorded.
         let big = file("big.png", 2900);
         let parsed = parse(
@@ -694,8 +813,8 @@ mod tests {
             .unwrap();
         assert_eq!(error.code, "limit");
         assert_eq!(
-            images.row_keys(1, "$mount", "rows").unwrap(),
-            &vec![vec![ka]]
+            keys(images.written_rows(1, "$mount", "rows").unwrap()),
+            vec![vec![ka]]
         );
         // A malformed reference refuses the patch.
         let parsed = parse(
@@ -757,6 +876,189 @@ mod tests {
             &parsed.shapes,
             &plain(&parsed.rows)
         ));
+    }
+
+    /// Each patch's rows are within the limits, but the rows it keeps count
+    /// too: successive patches cannot grow the array past the totals (the
+    /// stored value would then fail to convert when the view is rebuilt).
+    #[test]
+    fn successive_patches_are_checked_against_the_patched_arrays_totals() {
+        let big = "x".repeat(ui_values::MAX_STRING_BYTES);
+        let full = ui_values::MAX_TEXT_BYTES / ui_values::MAX_STRING_BYTES;
+        let mut images = Images::default();
+        record(&mut images, "$mount", &json!([]));
+        for len in 0..full {
+            let ops = leak(json!([{"op": "insert", "at": len, "rows": [big]}]));
+            let patch = images
+                .patch_rows(1, &[], "$mount", "rows", &parse(ops, len).unwrap())
+                .unwrap()
+                .unwrap();
+            images.patched_rows(1, "$mount", "rows", patch.written);
+        }
+        let whole = Json::Array(vec![Json::String(big.clone()); full]);
+        assert!(
+            ui_values::check(&whole).is_ok(),
+            "exactly at the text total"
+        );
+        let ops = leak(json!([{"op": "insert", "at": 0, "rows": ["y"]}]));
+        let error = images
+            .patch_rows(1, &[], "$mount", "rows", &parse(ops, full).unwrap())
+            .err()
+            .unwrap();
+        assert_eq!(error.code, "limit");
+        assert!(
+            error.message.starts_with("rows: UI value text exceeds"),
+            "{}",
+            error.message
+        );
+        assert_eq!(
+            images.written_rows(1, "$mount", "rows").unwrap().len(),
+            full
+        );
+        // Replacing a row by a smaller one keeps the total down: fine.
+        let ops = leak(json!([{"op": "set", "at": 0, "row": "y"}]));
+        assert!(
+            images
+                .patch_rows(1, &[], "$mount", "rows", &parse(ops, full).unwrap())
+                .is_ok()
+        );
+        // Values: 1 + 16 rows of 1023 values = 16369; a row of 16 more is over.
+        let wide = Json::Array(vec![Json::Null; 1022]);
+        record(&mut images, "w:a", &Json::Array(vec![wide.clone(); 16]));
+        let ops = leak(
+            json!([{"op": "insert", "at": 16, "rows": [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]]}]),
+        );
+        let parsed = parse(ops, 16).unwrap();
+        assert!(
+            images.patch_rows(1, &[], "w:a", "rows", &parsed).is_ok(),
+            "16384 values"
+        );
+        let ops = leak(
+            json!([{"op": "insert", "at": 16, "rows": [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]}]),
+        );
+        let error = images
+            .patch_rows(1, &[], "w:a", "rows", &parse(ops, 16).unwrap())
+            .err()
+            .unwrap();
+        assert_eq!(error.code, "limit");
+        assert!(
+            error.message.contains("16384 total nodes"),
+            "{}",
+            error.message
+        );
+    }
+
+    /// `cost` counts as `check` does: the totals agree with a whole check
+    /// at both limits, for images and documents too.
+    #[test]
+    fn row_costs_agree_with_the_whole_value_check() {
+        let image = json!({"$vestraImage": "/a.png", "ref": 1});
+        let doc = json!({"$vestraMarkdown": {"text": "héllo"}, "ref": 2});
+        let row = json!({"key": "a", "logo": image, "body": doc, "tags": ["x", null, 2.5]});
+        assert_eq!(
+            ui_values::cost(&row),
+            ui_values::Cost {
+                nodes: 8,
+                text: 3 + 1 + 4 + 4 + 6 + 4 + 1
+            }
+        );
+        let agree = |rows: Vec<Json>| {
+            let costs: Vec<_> = rows.iter().map(ui_values::cost).collect();
+            assert_eq!(
+                ui_values::check_totals(&costs).is_ok(),
+                ui_values::check(&Json::Array(rows)).is_ok()
+            );
+        };
+        // 1 + 4 × 4095 + 3 = 16384 values, then one more.
+        let row = Json::Array(vec![Json::Null; 4094]);
+        for extra in [2, 3] {
+            let mut rows = vec![row.clone(); 4];
+            rows.push(Json::Array(vec![Json::Null; extra]));
+            agree(rows);
+        }
+        let text = "x".repeat(ui_values::MAX_STRING_BYTES);
+        for extra in ["", "y"] {
+            let mut rows = vec![Json::String(text.clone()); 15];
+            rows.push(json!({ "k": "x".repeat(ui_values::MAX_STRING_BYTES - 1) + extra }));
+            agree(rows);
+        }
+    }
+
+    /// A tool window keeps no stored value: a patch applies on the rows the
+    /// base write left, while the model shows them; what the model cannot
+    /// take in place comes back whole, not `stale`.
+    #[test]
+    fn window_patches_apply_on_the_recorded_rows_and_fall_back_whole() {
+        let mut images = Images::default();
+        let set = json!([{"op": "set", "at": 1, "row": row("b", true)}]);
+        // No record of the property (not an array, or the write failed): stale.
+        let current = from_json(&rows(&["a", "b"])).unwrap();
+        let error = images
+            .patch_window(1, &[], "w:a", "rows", &current, &set)
+            .unwrap_err();
+        assert_eq!(error.code, "stale");
+        // Recorded, but the model does not show those rows (the property
+        // kept its default): stale, not an index error.
+        record(&mut images, "w:a", &rows(&["a", "b"]));
+        let default = from_json(&json!([])).unwrap();
+        let error = images
+            .patch_window(1, &[], "w:a", "rows", &default, &set)
+            .unwrap_err();
+        assert_eq!(error.code, "stale");
+        assert_eq!(
+            images
+                .patch_window(1, &[], "w:a", "rows", &Value::Number(1.), &set)
+                .unwrap_err()
+                .code,
+            "stale"
+        );
+        // In place.
+        assert_eq!(
+            images
+                .patch_window(1, &[], "w:a", "rows", &current, &set)
+                .unwrap(),
+            InWindow::Applied
+        );
+        assert_eq!(
+            to_json(&current).unwrap(),
+            json!([row("a", false), row("b", true)])
+        );
+        // A row with a field the first row omits: whole, with the ops applied.
+        let ops = json!([{"op": "insert", "at": 2, "rows": [{"key": "c", "selected": false, "note": "n"}]}]);
+        assert_eq!(
+            images
+                .patch_window(1, &[], "w:a", "rows", &current, &ops)
+                .unwrap(),
+            InWindow::Whole(json!([
+                row("a", false),
+                row("b", true),
+                {"key": "c", "selected": false, "note": "n"}
+            ]))
+        );
+        // An empty model: whole.
+        record(&mut images, "w:b", &json!([]));
+        let insert = json!([{"op": "insert", "at": 0, "rows": [row("a", false)]}]);
+        assert_eq!(
+            images
+                .patch_window(1, &[], "w:b", "rows", &default, &insert)
+                .unwrap(),
+            InWindow::Whole(json!([row("a", false)]))
+        );
+        // Ops checked against the recorded length.
+        assert_eq!(
+            images
+                .patch_window(
+                    1,
+                    &[],
+                    "w:a",
+                    "rows",
+                    &current,
+                    &json!([{"op": "set", "at": 2, "row": 1}])
+                )
+                .unwrap_err()
+                .code,
+            "invalid"
+        );
     }
 
     #[test]

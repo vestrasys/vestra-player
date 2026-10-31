@@ -128,19 +128,17 @@ fn change(
             .instance
             .get_property(property)
             .map_err(|e| RpcError::new("ui", e.to_string()))?;
-        let slint_interpreter::Value::Model(model) = &current else {
-            return Err(ui_patch::stale());
-        };
-        let ops = ui_patch::parse(ops, slint::Model::row_count(model))?;
-        // A window keeps no stored value: what its model cannot take in
-        // place is `stale`, and the SDK sends the whole value.
-        let rows = host
-            .patch_rows(reply.owner, &view_key, property, &ops)?
-            .filter(|rows| ui_patch::applicable(&current, ops.before, &ops.shapes, &rows.values))
-            .ok_or_else(ui_patch::stale)?;
-        ui_patch::apply(&current, &ops.shapes, rows.values);
-        host.images
-            .patched_rows(reply.owner, &view_key, property, rows.keys);
+        if let ui_patch::InWindow::Whole(whole) =
+            host.patch_window(reply.owner, &view_key, property, &current, ops)?
+        {
+            // Written whole, as a panel writes its patched stored value.
+            let next = host.prop_value(reply.owner, &view_key, property, &whole)?;
+            let view = &host.views[&key];
+            if !ui_values::reconcile_in(view.instance.window(), &current, &next)? {
+                ui_values::set(&view.instance, None, property, next)
+                    .map_err(|e| RpcError::new("ui", e.to_string()))?;
+            }
+        }
         host.images.set_seq(reply.owner, &view_key, property, seq);
         return Ok(());
     }
