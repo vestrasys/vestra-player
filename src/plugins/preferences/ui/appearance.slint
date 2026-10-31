@@ -5,7 +5,7 @@
 // @tr (English source; locales/<lang>.po translate it).
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
-import { Button } from "@vestra/widgets.slint";
+import { Button, RadioMark } from "@vestra/widgets.slint";
 
 struct Rgb { r: int, g: int, b: int }
 struct Swatch { video: Rgb, bar: Rgb, track: Rgb, text: Rgb, dim: Rgb, accent: Rgb, f0: Rgb, f1: Rgb, f2: Rgb, f3: Rgb }
@@ -66,21 +66,6 @@ component Preview inherits Rectangle {
     }
 }
 
-component Radio inherits Rectangle {
-    in property <bool> checked;
-    width: 14px;
-    height: 14px;
-    border-radius: 7px;
-    border-width: root.checked ? 1.5px : 1px;
-    border-color: root.checked ? Theme.accent : Theme.text-dim;
-    background: Theme.bg-list;
-    Rectangle {
-        width: 6px; height: 6px; border-radius: 3px;
-        visible: root.checked;
-        background: Theme.accent;
-    }
-}
-
 export component AppearancePage inherits Rectangle {
     // The palettes' names and notes (the plugin passes ids).
     pure function title-of(id: string) -> string {
@@ -111,6 +96,11 @@ export component AppearancePage inherits Rectangle {
             height: 52px;
             border-radius: Theme.radius-control;
             background: touch.has-hover ? Theme.hover-bg : transparent;
+            accessible-role: radio-button;
+            accessible-checkable: true;
+            accessible-checked: AppearanceBridge.theme == row.id;
+            accessible-label: root.title-of(row.id);
+            accessible-action-default => { AppearanceBridge.pick(row.id); }
             touch := TouchArea {
                 clicked => { AppearanceBridge.pick(row.id); }
             }
@@ -119,9 +109,11 @@ export component AppearancePage inherits Rectangle {
                 padding-right: 8px;
                 spacing: 8px;
                 alignment: stretch;
-                Radio {
+                // The library's radio mark (ui-spec ctx-radio, 12px).
+                RadioMark {
                     y: (parent.height - self.height) / 2;
                     checked: AppearanceBridge.theme == row.id;
+                    hover: touch.has-hover;
                 }
                 VerticalLayout {
                     horizontal-stretch: 1;
