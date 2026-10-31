@@ -1,14 +1,16 @@
 //! The context menu: opening, model, paths, levels and pointer aim.
 use super::*;
+use slint::Model as _;
 
-/// Projects the open chain at the origin the view recorded for this opening.
+/// Projects the open chain at the origin the view recorded for this opening
+/// (`menu::levels`, as JSON: `apply_menu_levels` writes only what changed).
 pub(crate) fn menu_levels(
     window: &slint_interpreter::ComponentInstance,
     roots: &[commands::MenuNode],
     path: &mut Vec<String>,
     scroll: &[f64],
     labels: &dyn Fn(u64, &str) -> Option<String>,
-) -> Result<(slint_interpreter::Value, Vec<menu::Rect>)> {
+) -> Result<(Value, Vec<menu::Rect>)> {
     *path = menu::valid_path(roots, path);
     let (origin, size) = menu_frame(window);
     let value = menu::levels(roots, path, origin, size, scroll, labels);
@@ -35,7 +37,8 @@ pub(crate) fn menu_levels(
             panels.join("; ")
         );
     }
-    Ok((ui_values::from_json(&value)?, menu::panels(&value)))
+    let panels = menu::panels(&value);
+    Ok((value, panels))
 }
 
 /// Where the menu opens and the window it must fit in, in logical px.
@@ -140,6 +143,163 @@ pub(crate) fn set_menu_model(
     // makes the next in-place write apply at once.
     view::settle_layout(window.window());
     Ok(())
+}
+
+/// The levels last written into a window's `menu-levels` (the model and
+/// the JSON it holds), so the next write changes only what differs.
+#[derive(Default)]
+pub(crate) struct ShownMenu {
+    model: Option<slint::ModelRc<SValue>>,
+    levels: Vec<Value>,
+}
+
+/// What `apply_menu_levels` wrote (the tests count it).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MenuWrite {
+    /// The whole value went through `set_menu_model` (first write to a
+    /// window, or its model was replaced).
+    pub full: bool,
+    /// Rows converted and written (changed, added) or removed.
+    pub rows: usize,
+    /// Levels whose own fields were written, added or removed.
+    pub levels: usize,
+    /// `view::settle_layout` ran.
+    pub settled: bool,
+}
+
+/// Write the projected `levels` (`menu::levels`) into `window`'s
+/// `menu-levels`, changing only what differs from the last write
+/// (`shown`). A hover that switches a submenu writes the hovered level's
+/// two rows whose `open` changed and that level's `open`, and the levels
+/// below it; the other levels are not converted or compared again (host
+/// 0.5.26: before, every hover converted and reconciled the whole menu and
+/// settled the window, about 3 ms). A republished state writes its row.
+///
+/// Rows are written in place (their elements stay, keeping a press in
+/// progress and the hover). Only a level's own fields (its open row, its
+/// geometry) and added or removed levels leave a repeater with a dirty
+/// model binding (`set_menu_model`): only then is the window settled.
+pub(crate) fn apply_menu_levels(
+    window: &slint_interpreter::ComponentInstance,
+    shown: &mut ShownMenu,
+    levels: &Value,
+) -> Result<MenuWrite> {
+    let next = levels.as_array().map(Vec::as_slice).unwrap_or_default();
+    let live = window.get_property("menu-levels")?;
+    let model = match (&live, &shown.model) {
+        (SValue::Model(live), Some(model)) if live == model => Some(model.clone()),
+        _ => None,
+    };
+    let write = match model
+        .as_ref()
+        .and_then(|model| model.as_any().downcast_ref::<slint::VecModel<SValue>>())
+    {
+        Some(model) => write_levels(model, &shown.levels, next)?,
+        None => None,
+    };
+    let write = match write {
+        Some(write) => {
+            if write.settled {
+                view::settle_layout(window.window());
+            }
+            write
+        }
+        None => {
+            set_menu_model(window, ui_values::from_json(levels)?)?;
+            shown.model = match window.get_property("menu-levels")? {
+                SValue::Model(model) => Some(model),
+                _ => None,
+            };
+            MenuWrite {
+                full: true,
+                rows: 0,
+                levels: next.len(),
+                settled: true,
+            }
+        }
+    };
+    shown.levels = next.to_vec();
+    Ok(write)
+}
+
+/// `apply_menu_levels` in place; `None` when the live model does not hold
+/// what `shown` says (the caller writes the whole value).
+fn write_levels(
+    model: &slint::VecModel<SValue>,
+    shown: &[Value],
+    next: &[Value],
+) -> Result<Option<MenuWrite>> {
+    if model.row_count() != shown.len() {
+        return Ok(None);
+    }
+    let mut write = MenuWrite::default();
+    let shared = shown.len().min(next.len());
+    for (index, (before, after)) in shown.iter().zip(next).enumerate() {
+        if before == after {
+            continue;
+        }
+        let Some(SValue::Struct(level)) = model.row_data(index) else {
+            return Ok(None);
+        };
+        let rows = match level.get_field("rows") {
+            Some(SValue::Model(rows)) => rows.clone(),
+            _ => return Ok(None),
+        };
+        let Some(rows_model) = rows.as_any().downcast_ref::<slint::VecModel<SValue>>() else {
+            return Ok(None);
+        };
+        let empty = Vec::new();
+        let old_rows = before["rows"].as_array().unwrap_or(&empty);
+        let new_rows = after["rows"].as_array().unwrap_or(&empty);
+        if rows_model.row_count() != old_rows.len() {
+            return Ok(None);
+        }
+        // The rows first: a row written after its level's own fields
+        // would wait for the settle (`set_menu_model`).
+        for (row, (old, new)) in old_rows.iter().zip(new_rows).enumerate() {
+            if old != new {
+                rows_model.set_row_data(row, ui_values::from_json(new)?);
+                write.rows += 1;
+            }
+        }
+        while rows_model.row_count() > new_rows.len() {
+            rows_model.remove(rows_model.row_count() - 1);
+            write.rows += 1;
+        }
+        for new in new_rows.iter().skip(old_rows.len()) {
+            rows_model.push(ui_values::from_json(new)?);
+            write.rows += 1;
+        }
+        // The level's own fields (open row, geometry, scrolling).
+        let changed: Vec<_> = after
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter(|(name, value)| {
+                name.as_str() != "rows" && before.get(name.as_str()) != Some(*value)
+            })
+            .collect();
+        if !changed.is_empty() {
+            let mut level = level;
+            for (name, value) in changed {
+                level.set_field(name.clone(), ui_values::from_json(value)?);
+            }
+            model.set_row_data(index, SValue::Struct(level));
+            write.levels += 1;
+            write.settled = true;
+        }
+    }
+    while model.row_count() > next.len() {
+        model.remove(model.row_count() - 1);
+        write.levels += 1;
+        write.settled = true;
+    }
+    for level in next.iter().skip(shared) {
+        model.push(ui_values::from_json(level)?);
+        write.levels += 1;
+        write.settled = true;
+    }
+    Ok(Some(write))
 }
 
 impl Host {
@@ -313,10 +473,14 @@ impl Host {
                     &labels,
                 );
                 self.menu_panels = menu::panels(&value);
-                ui_values::from_json(&value)?
+                value
             }
         };
-        set_menu_model(window, model)
+        let write = apply_menu_levels(window, &mut self.menu_shown, &model)?;
+        if debug_menu() {
+            diag!("menu: wrote {write:?}");
+        }
+        Ok(())
     }
     pub(crate) fn close_menu(&mut self) {
         self.menu_open = false;

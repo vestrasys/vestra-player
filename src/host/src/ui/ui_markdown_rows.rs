@@ -725,3 +725,68 @@ fn a_document_written_after_its_message_changed_shows_its_new_text() {
         assert_eq!(differ, 0, "case {index}: {differ} pixels show stale text");
     }
 }
+
+/// Host 0.5.26: `MarkdownView` is a `ListView` of its blocks (only the
+/// blocks in view exist). It draws what the column it replaced drew (a
+/// `ScrollView` around `MarkdownBlocks` with `inset` padding): a short
+/// document, and the top of a long one.
+#[test]
+fn markdown_view_as_a_list_draws_what_the_column_drew() {
+    let (instance, window) = compile(
+        r#"
+import { ScrollView } from "std-widgets.slint";
+import { MarkdownBlocks, MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
+export component W inherits Window {
+    width: 320px; height: 300px; background: white;
+    in property <[MarkdownBlock]> doc;
+    in property <bool> list;
+    if root.list: MarkdownView { blocks: root.doc; }
+    // The view before 0.5.26.
+    if !root.list: scroll := ScrollView {
+        content-width: self.visible-width;
+        content-height: column.preferred-height;
+        column := VerticalLayout {
+            width: scroll.visible-width;
+            padding: 10px;
+            alignment: start;
+            MarkdownBlocks { blocks: root.doc; }
+        }
+    }
+}"#,
+        (320, 300),
+    );
+    let short = "# 标题\n\n段落 **粗** [链接](https://a.example/)\n\n- 项\n  - 子项\n\n> 引用\n\n```\ncode\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n---\n";
+    let long = (0..40)
+        .map(|i| format!("段落 {i}: 一段较长的文字，换行以后还有一行，用来比较两种布局。"))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    for (name, text) in [("short", short.to_owned()), ("long", long)] {
+        let doc = Doc {
+            text,
+            ..Default::default()
+        };
+        instance
+            .set_property("doc", super::model(&doc, |_| None))
+            .unwrap();
+        instance.set_property("list", SValue::Bool(false)).unwrap();
+        let column = pixels(&window, 320, 300);
+        instance.set_property("list", SValue::Bool(true)).unwrap();
+        let list = pixels(&window, 320, 300);
+        let differ: Vec<(usize, usize)> = column
+            .iter()
+            .zip(&list)
+            .enumerate()
+            .filter(|(_, (a, b))| a != b)
+            .map(|(i, _)| (i % 320, i / 320))
+            // The scroll bar's handle may end a fraction of a pixel apart
+            // (the list sums its rows' heights; the column rounds its
+            // layout): its antialiased end differs by a shade.
+            .filter(|(x, _)| *x < 308)
+            .collect();
+        assert!(differ.is_empty(), "{name}: pixels differ at {differ:?}");
+        assert!(
+            draw(&window, 320, 300) > 500,
+            "{name}: the document is drawn"
+        );
+    }
+}

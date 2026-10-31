@@ -20,6 +20,10 @@
 // `reload_tree`), 120–160 ms on a 4K render target, which dropped the video
 // to 10–14 fps during a menu sweep. Use `visible:` or `opacity:` on a
 // persistent element; `if` only for state that changes by click, key or model.
+// A hover that switches a submenu rewrites the rows and levels in place
+// (host 0.5.26), so nothing a row or level shows depends on an `if` either:
+// the check, radio, key and arrow columns, the separator, the scroll bars
+// and the empty text are persistent and shown by `visible`.
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 
@@ -97,13 +101,15 @@ component MenuItem inherits Rectangle {
         spacing: 4px;
         Rectangle {
             width: 18px;
-            if root.item.checked && !root.item.radio: Rectangle {
+            Rectangle {
+                visible: root.item.checked && !root.item.radio;
                 width: 14px; height: 14px;
                 border-radius: 4px;
                 background: Theme.accent;
                 Icon { name: "menu-check"; color: #ffffff; }
             }
-            if root.item.checked && root.item.radio: Rectangle {
+            Rectangle {
+                visible: root.item.checked && root.item.radio;
                 width: 12px; height: 12px;
                 border-radius: 6px;
                 border-width: 1.5px;
@@ -111,24 +117,32 @@ component MenuItem inherits Rectangle {
                 Rectangle { width: 6px; height: 6px; border-radius: 3px; background: Theme.accent; }
             }
         }
-        Text {
+        // Title and keys: without keys the empty key text is 0px wide and
+        // the gap before it is 0, as if it were not there.
+        HorizontalLayout {
             horizontal-stretch: 1;
-            text: root.item.title + (root.item.busy ? " …" : "");
-            color: !root.active ? Theme.text-dim : root.lit ? Theme.text : Theme.text-list;
-            font-size: 12px;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-        if root.item.keys != "": Text {
-            text: root.item.keys;
-            color: Theme.text-dim;
-            font-size: 12px;
-            vertical-alignment: center;
-            horizontal-alignment: right;
+            spacing: root.item.keys != "" ? 4px : 0px;
+            Text {
+                horizontal-stretch: 1;
+                text: root.item.title + (root.item.busy ? " …" : "");
+                color: !root.active ? Theme.text-dim : root.lit ? Theme.text : Theme.text-list;
+                font-size: 12px;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            Text {
+                visible: root.item.keys != "";
+                text: root.item.keys;
+                color: Theme.text-dim;
+                font-size: 12px;
+                vertical-alignment: center;
+                horizontal-alignment: right;
+            }
         }
         Rectangle {
             width: 10px;
-            if root.item.has-children: Icon {
+            Icon {
+                visible: root.item.has-children;
                 x: 3px;
                 name: "submenu";
                 color: root.lit ? Theme.text : Theme.text-list;
@@ -286,7 +300,8 @@ export component MenuView inherits Rectangle {
                 y: (row.y - level.viewport-y) * 1px;
                 width: parent.width - 4px;
                 height: 24px;
-                if row.separator: Rectangle {
+                Rectangle {
+                    visible: row.separator;
                     x: 8px;
                     y: -4px;
                     width: parent.width - 16px;
@@ -309,7 +324,8 @@ export component MenuView inherits Rectangle {
                 }
             }
         }
-        if level.scroll: Rectangle {
+        Rectangle {
+            visible: level.scroll;
             y: 0px;
             height: 12px;
             width: parent.width;
@@ -320,11 +336,12 @@ export component MenuView inherits Rectangle {
             up := TouchArea { }
             Timer {
                 interval: 50ms;
-                running: up.has-hover && level.viewport-y > 0;
+                running: level.scroll && up.has-hover && level.viewport-y > 0;
                 triggered => { root.scrolled(k, level.viewport-y - 24); }
             }
         }
-        if level.scroll: Rectangle {
+        Rectangle {
+            visible: level.scroll;
             y: parent.height - 12px;
             height: 12px;
             width: parent.width;
@@ -335,11 +352,12 @@ export component MenuView inherits Rectangle {
             down := TouchArea { }
             Timer {
                 interval: 50ms;
-                running: down.has-hover;
+                running: level.scroll && down.has-hover;
                 triggered => { root.scrolled(k, level.viewport-y + 24); }
             }
         }
-        if level.rows.length == 0: Text {
+        Text {
+            visible: level.rows.length == 0;
             height: 24px;
             text: @tr("(No commands available)");
             color: Theme.text-dim;

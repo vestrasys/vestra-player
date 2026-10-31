@@ -165,6 +165,10 @@ impl Backend {
                 mpv.set_wakeup_callback(move || event_wake.notify());
                 mpv.request_log_messages("v")?;
                 crate::playback::processing::observe_hwdec(&mpv)?;
+                // A pause from anywhere (a plugin's `source.submit`, a key,
+                // keep-open at the end) wakes the worker and goes out at
+                // once (`StatePush::paused`), not on the next 100 ms push.
+                mpv.observe_property(PAUSE_OBSERVATION, "pause", rsmpv::Format::Flag)?;
                 let version = |name: &str| mpv.get_property::<String>(name).ok();
                 let versions =
                     json!({"mpv":version("mpv-version"),"ffmpeg":version("ffmpeg-version")});
@@ -698,6 +702,11 @@ impl Backend {
                         actions.source_request(&command.method, &command.params);
                         let result =
                             context.call(command.reply.owner, &command.method, &command.params);
+                        // A pause control (also a provider source's, which
+                        // mpv does not observe) goes out at once.
+                        if pause_control(&command.method, &command.params) {
+                            push.soon();
+                        }
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());
                         let _ = events.send(Event::Reply(command.reply, result));
@@ -739,6 +748,14 @@ impl Backend {
                         if let rsmpv::Event::PropertyChange { userdata, .. } = &event
                             && *userdata == crate::playback::processing::HWDEC_OBSERVATION
                         {
+                            continue;
+                        }
+                        if let rsmpv::Event::PropertyChange { userdata, data, .. } = &event
+                            && *userdata == PAUSE_OBSERVATION
+                        {
+                            if let rsmpv::PropertyData::Flag(paused) = data {
+                                push.paused(*paused);
+                            }
                             continue;
                         }
                         let accepted = sources.event(&event);
@@ -881,6 +898,7 @@ impl Backend {
                         subtitles.note_source(sources.generation(), sources.phase());
                         // Natural EOF is found by the snapshot itself and is in it.
                         push.seen(sources.generation(), sources.phase());
+                        push.published_paused(source_snapshot["paused"].as_bool());
                         let _ =
                             events.send(Event::Broadcast("source.state".into(), source_snapshot));
                     }
@@ -1585,11 +1603,25 @@ struct Stepping {
     started: Instant,
 }
 
+/// `Event::PropertyChange` userdata of the observed `pause` property
+/// (`StatePush::paused`); `processing::HWDEC_OBSERVATION` is 1.
+pub const PAUSE_OBSERVATION: u64 = 2;
+
+/// A `source.submit` that pauses or resumes the source.
+fn pause_control(method: &str, params: &Value) -> bool {
+    let intent = &params["intent"];
+    method == "source.submit" && intent["kind"] == "control" && intent["control"]["kind"] == "pause"
+}
+
 /// When to publish `source.state`: every 100 ms, and at once when the source
-/// phase (or source) changes, so `ready → ended` does not wait for the timer.
+/// phase (or source) changes, so `ready → ended` does not wait for the timer,
+/// or when its pause state changes, so a play/pause icon follows a click
+/// without the period's delay.
 pub struct StatePush {
     last: Option<(u64, crate::playback::session::Phase)>,
     sent: Option<Instant>,
+    /// The `paused` of the last published state.
+    published_paused: Option<bool>,
 }
 impl StatePush {
     pub const PERIOD: Duration = Duration::from_millis(100);
@@ -1597,7 +1629,19 @@ impl StatePush {
         Self {
             last: None,
             sent: None,
+            published_paused: None,
         }
+    }
+    /// mpv's `pause` is now `paused`: when the last published state says
+    /// otherwise, the next check publishes at once.
+    pub fn paused(&mut self, paused: bool) {
+        if self.published_paused != Some(paused) {
+            self.soon();
+        }
+    }
+    /// The `paused` the state just published carries.
+    pub fn published_paused(&mut self, paused: Option<bool>) {
+        self.published_paused = paused;
     }
     /// True when a broadcast is due now; records it as sent.
     pub fn due(
@@ -1785,6 +1829,35 @@ mod tests {
             push.due(2, Phase::Ended, soon + Duration::from_millis(102)),
             "periodic"
         );
+    }
+    /// 0.5.26: a pause or resume (mpv's observed `pause`, or a pause
+    /// control) is published at once, not up to 100 ms later; mpv's
+    /// repeats of the published value are not.
+    #[test]
+    fn a_pause_change_is_pushed_without_waiting_for_the_period() {
+        let start = Instant::now();
+        let mut push = StatePush::new();
+        assert!(push.due(1, Phase::Ready, start));
+        push.published_paused(Some(false));
+        let soon = start + Duration::from_millis(5);
+        push.paused(false);
+        assert!(!push.due(1, Phase::Ready, soon), "unchanged: periodic only");
+        push.paused(true);
+        assert_eq!(push.next(soon), Duration::ZERO, "the worker wakes at once");
+        assert!(push.due(1, Phase::Ready, soon), "paused goes out at once");
+        push.published_paused(Some(true));
+        push.paused(true);
+        assert!(!push.due(1, Phase::Ready, soon + Duration::from_millis(1)));
+        push.paused(false);
+        assert!(
+            push.due(1, Phase::Ready, soon + Duration::from_millis(2)),
+            "resumed goes out at once"
+        );
+        let pause = json!({"intent":{"kind":"control","control":{"kind":"pause","paused":true}}});
+        let seek = json!({"intent":{"kind":"control","control":{"kind":"seek","seconds":1}}});
+        assert!(pause_control("source.submit", &pause));
+        assert!(!pause_control("source.submit", &seek));
+        assert!(!pause_control("source.query", &pause));
     }
     /// 0.5.15: the control worker sleeps until the next push instead of
     /// polling every 2 ms.

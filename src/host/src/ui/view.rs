@@ -1271,13 +1271,11 @@ export component W inherits Window {
         let none = |_: u64, _: &str| None;
         let origin = Point { x: 100., y: 100. };
         let size = Point { x: 900., y: 600. };
+        // As the host writes it: only what changed (`apply_menu_levels`).
+        let shown = RefCell::new(crate::host::ShownMenu::default());
         let show = |path: &[String]| {
             let value = levels(&roots(), path, origin, size, &[], &none);
-            crate::host::set_menu_model(
-                &instance,
-                crate::ui::ui_values::from_json(&value).unwrap(),
-            )
-            .unwrap();
+            crate::host::apply_menu_levels(&instance, &mut shown.borrow_mut(), &value).unwrap();
         };
         let path = RefCell::new(Vec::<String>::new());
         let clock = Cell::new(0u64);
@@ -2138,6 +2136,9 @@ export component W inherits Window {
         aim: crate::ui::menu::HoverAim,
         panels: Vec<crate::ui::menu::Rect>,
         levels: serde_json::Value,
+        shown: crate::host::ShownMenu,
+        /// Each write's counts (`apply_menu_levels`).
+        writes: Vec<crate::host::MenuWrite>,
         hovers: std::rc::Rc<std::cell::RefCell<Vec<(usize, String, bool)>>>,
         pointer: crate::ui::menu::Point,
         now: u64,
@@ -2232,6 +2233,8 @@ export component MenuWindow inherits Window {
                 aim: crate::ui::menu::HoverAim::default(),
                 panels: Vec::new(),
                 levels: serde_json::Value::Null,
+                shown: Default::default(),
+                writes: Vec::new(),
                 hovers,
                 pointer: crate::ui::menu::Point { x: 0., y: 0. },
                 now: 1000,
@@ -2255,11 +2258,9 @@ export component MenuWindow inherits Window {
                 &|_, _| None,
             );
             self.panels = crate::ui::menu::panels(&self.levels);
-            crate::host::set_menu_model(
-                &self.window,
-                crate::ui::ui_values::from_json(&self.levels).unwrap(),
-            )
-            .unwrap();
+            let write = crate::host::apply_menu_levels(&self.window, &mut self.shown, &self.levels)
+                .unwrap();
+            self.writes.push(write);
         }
         fn set_path(&mut self, path: Vec<String>) {
             self.aim.clear();
@@ -2427,5 +2428,227 @@ export component MenuWindow inherits Window {
 "
             )
         );
+    }
+
+    /// Host 0.5.26: a hover writes only the levels it changes. Before, every
+    /// submenu switch converted, compared and wrote the whole menu and
+    /// settled the window (about 3 ms a hover on the user's machine).
+    #[test]
+    fn a_menu_hover_writes_only_what_it_changes() {
+        use crate::host::MenuWrite;
+        let mut sim = MenuSim::new();
+        assert!(sim.writes[0].full, "the first write installs the model");
+        sim.set_path(vec!["Video".into()]);
+        let opened = *sim.writes.last().unwrap();
+        assert!(!opened.full && opened.settled, "{opened:?}");
+        // Root: its Video row and its `open`; the Video level is added.
+        assert_eq!((opened.rows, opened.levels), (1, 2), "{opened:?}");
+        sim.set_path(vec!["Video".into(), "Pixel Shaders".into()]);
+        sim.draw();
+        sim.set_path(vec!["Video".into(), "Deinterlace".into()]);
+        let switched = *sim.writes.last().unwrap();
+        // The Video level: two rows' `open` and its own; the submenu: its
+        // one row and its position. The root level is not touched.
+        assert_eq!(
+            switched,
+            MenuWrite {
+                full: false,
+                rows: 3,
+                levels: 2,
+                settled: true
+            }
+        );
+        // A republished state that changes nothing writes nothing.
+        let count = sim.writes.len();
+        sim.refresh();
+        assert_eq!(sim.writes[count], MenuWrite::default());
+        // A changed command state writes its row, without a settle.
+        let mut levels = sim.levels.clone();
+        levels[2]["rows"][0]["checked"] = true.into();
+        let checked = crate::host::apply_menu_levels(&sim.window, &mut sim.shown, &levels).unwrap();
+        assert_eq!(
+            checked,
+            MenuWrite {
+                full: false,
+                rows: 1,
+                levels: 0,
+                settled: false
+            }
+        );
+        sim.draw();
+        // Closing the submenu removes its level.
+        sim.set_path(vec!["Video".into()]);
+        let closed = *sim.writes.last().unwrap();
+        assert_eq!((closed.full, closed.levels), (false, 2), "{closed:?}");
+        // What is drawn is what a whole write draws.
+        sim.draw();
+        let incremental = sim.buffer.clone();
+        crate::host::set_menu_model(
+            &sim.window,
+            crate::ui::ui_values::from_json(&sim.levels).unwrap(),
+        )
+        .unwrap();
+        headless_window().request_redraw();
+        sim.draw();
+        let rgba = |buffer: &[slint::platform::software_renderer::PremultipliedRgbaColor]| {
+            buffer
+                .iter()
+                .map(|p| (p.red, p.green, p.blue, p.alpha))
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            rgba(&incremental) == rgba(&sim.buffer),
+            "the same pixels as a whole write"
+        );
+        sim.window.hide().unwrap();
+    }
+
+    /// Perf probe (0.5.26): hovers that switch submenus in the real shell,
+    /// the whole write (before) against `apply_menu_levels` (after). Run with
+    /// `VESTRA_MENU_PROBE=1 cargo test --release menu_hover_probe -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "perf probe"]
+    fn menu_hover_probe() {
+        use crate::commands::{CommandState, Declaration, Registry};
+        use crate::ui::menu::{Point, levels};
+        use std::time::Instant;
+        if std::env::var_os("VESTRA_MENU_PROBE").is_none() {
+            return;
+        }
+        headless();
+        // A menu the size of the player's: 9 groups of 12 commands and 2
+        // submenus of 8.
+        let mut registry = Registry::new();
+        let state = CommandState {
+            enabled: true,
+            checked: None,
+            busy: false,
+            reason: None,
+        };
+        let mut index = 0;
+        let mut add = |path: Vec<String>| {
+            let title = path.last().unwrap().clone();
+            let path: Vec<&str> = path.iter().map(String::as_str).collect();
+            registry
+                .register(
+                    1 + index / 100,
+                    "test.menu",
+                    format!("c{index}"),
+                    1,
+                    Declaration::new(&title, &path),
+                    state.clone(),
+                )
+                .unwrap();
+            index += 1;
+        };
+        for g in 0..9 {
+            for c in 0..12 {
+                add(vec![format!("Group {g}"), format!("Command {g}.{c}")]);
+            }
+            for s in 0..2 {
+                for c in 0..8 {
+                    add(vec![
+                        format!("Group {g}"),
+                        format!("Sub {g}.{s}"),
+                        format!("Item {g}.{s}.{c}"),
+                    ]);
+                }
+            }
+        }
+        let roots = registry.snapshot().roots;
+        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
+        let shell = crate::ui::composition::compile_json(&bar_and_sidebar(), sender, 1).unwrap();
+        let (w, h) = (1280u32, 720u32);
+        shell.window().set_size(slint::PhysicalSize::new(w, h));
+        shell.set_property("menu-open", true.into()).unwrap();
+        shell.show().unwrap();
+        let mut buffer = vec![
+            slint::platform::software_renderer::PremultipliedRgbaColor::default();
+            (w * h) as usize
+        ];
+        let mut draw = || {
+            slint::platform::update_timers_and_animations();
+            headless_window().draw_if_needed(|renderer| {
+                renderer.render(&mut buffer, w as usize);
+            });
+        };
+        // Per group: switch to it (the open group changes), open a
+        // submenu, switch to its sibling, republish unchanged, close it.
+        const KINDS: [&str; 5] = [
+            "switch group",
+            "open submenu",
+            "switch submenu",
+            "republish",
+            "close submenu",
+        ];
+        let paths: Vec<Vec<String>> = (0..300)
+            .map(|i| {
+                let g = (i / 5) % 9;
+                match i % 5 {
+                    0 | 4 => vec![format!("Group {g}")],
+                    1 => vec![format!("Group {g}"), format!("Sub {g}.0")],
+                    _ => vec![format!("Group {g}"), format!("Sub {g}.1")],
+                }
+            })
+            .collect();
+        let origin = Point { x: 100., y: 50. };
+        let size = Point {
+            x: f64::from(w),
+            y: f64::from(h),
+        };
+        let none = |_: u64, _: &str| None;
+        let ms = |since: Instant| since.elapsed().as_secs_f64() * 1000.;
+        let report = |name: &str, samples: &mut Vec<f64>| {
+            samples.sort_by(f64::total_cmp);
+            let at = |p: f64| samples[((samples.len() - 1) as f64 * p).round() as usize];
+            diag!(
+                "{name}: p50 {:.3} ms, p95 {:.3} ms, max {:.3} ms",
+                at(0.5),
+                at(0.95),
+                at(1.)
+            );
+        };
+        let mut project = Vec::new();
+        // [round][kind]: the write, and the write with the next frame.
+        let mut write = vec![vec![Vec::new(); KINDS.len()]; 2];
+        let mut frame = vec![vec![Vec::new(); KINDS.len()]; 2];
+        for round in 0..2 {
+            shell
+                .set_property(
+                    "menu-levels",
+                    Value::Model(slint::ModelRc::new(slint::VecModel::<Value>::default())),
+                )
+                .unwrap();
+            let mut shown = crate::host::ShownMenu::default();
+            for (i, path) in paths.iter().enumerate() {
+                let start = Instant::now();
+                let value = levels(&roots, path, origin, size, &[], &none);
+                project.push(ms(start));
+                let start = Instant::now();
+                if round == 0 {
+                    crate::host::set_menu_model(
+                        &shell,
+                        crate::ui::ui_values::from_json(&value).unwrap(),
+                    )
+                    .unwrap();
+                } else {
+                    crate::host::apply_menu_levels(&shell, &mut shown, &value).unwrap();
+                }
+                write[round][i % 5].push(ms(start));
+                draw();
+                frame[round][i % 5].push(ms(start));
+            }
+        }
+        report("menu::levels", &mut project);
+        for (kind, name) in KINDS.iter().enumerate() {
+            for (round, label) in ["before", "after"].iter().enumerate() {
+                report(&format!("{name} write ({label})"), &mut write[round][kind]);
+                report(
+                    &format!("{name} write+frame ({label})"),
+                    &mut frame[round][kind],
+                );
+            }
+        }
+        shell.hide().unwrap();
     }
 }
