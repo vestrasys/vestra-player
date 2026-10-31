@@ -952,6 +952,14 @@ pub fn gate_gpu_frames(accept: Option<Box<dyn Fn() -> bool>>) {
     vestra_gpu_render::gate_direct_frames(accept);
 }
 
+/// The player quits: release the GPU renderer's shared fences and stop it,
+/// before the windows and their device go, so a frame that never finishes
+/// on the GPU (a stall) cannot hold up the quit (`vestra-gpu-render`
+/// `release_gpu_waits`).
+pub fn release_gpu_waits() {
+    vestra_gpu_render::release_gpu_waits();
+}
+
 /// After a draw: take a GPU frame the pacing refused before it.
 pub fn update_gpu_frames() {
     vestra_gpu_render::update_direct_views();

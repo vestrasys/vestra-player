@@ -517,6 +517,11 @@ pub fn direct_video_feed() -> Option<vestra_video_texture::Feed> {
 #[cfg(not(target_os = "windows"))]
 pub fn gate_gpu_frames(_accept: Option<Box<dyn Fn() -> bool>>) {}
 
+/// The player quits: release the GPU renderer's waits (Windows only; the
+/// macOS renderer has no cross-API fences).
+#[cfg(not(target_os = "windows"))]
+pub fn release_gpu_waits() {}
+
 /// Take a GPU frame the pacing refused (Windows only).
 #[cfg(not(target_os = "windows"))]
 pub fn update_gpu_frames() {}

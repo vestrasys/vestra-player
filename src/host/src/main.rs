@@ -725,6 +725,11 @@ fn main() -> Result<()> {
         // The loop also ends with an error when the windows' GPU device was
         // lost (a driver reset): tear down as usual first.
         let ran = slint::run_event_loop();
+        // However the loop ended (Quit, the last window closed, a restart):
+        // release the GPU renderer's fences before the windows, their
+        // device and the renderer go, so a stalled frame cannot hold up the
+        // teardown (record 2026-10-render-modes §11.6).
+        platform::release_gpu_waits();
         // Lazy activation: what each running plugin was at its ready.
         host.borrow_mut().lazy_quit();
         stop_handoffs();

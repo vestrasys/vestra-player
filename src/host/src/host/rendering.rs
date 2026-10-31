@@ -316,6 +316,8 @@ impl Host {
         diag!("restart: the new player is process {}", child.id());
         crate::stop_handoffs();
         self.ui_state.flush();
+        // Quitting: nothing may wait on a GPU frame any more (§11.6).
+        platform::release_gpu_waits();
         // After this request's reply went out.
         let _ = slint::invoke_from_event_loop(|| {
             let _ = slint::quit_event_loop();

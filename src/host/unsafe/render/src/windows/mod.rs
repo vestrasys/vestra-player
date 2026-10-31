@@ -58,6 +58,22 @@ static GPU: OnceLock<Arc<Gpu>> = OnceLock::new();
 /// rendering stalled (the watchdog), which the host handles the same way.
 static LOST: AtomicBool = AtomicBool::new(false);
 
+/// The renderers started in this process ([`release_gpu_waits`]).
+static LIVE: Mutex<Vec<std::sync::Weak<Shared>>> = Mutex::new(Vec::new());
+
+/// The player quits (any thread; call it before the windows and their
+/// device go): every live renderer releases its shared fences and stops,
+/// so no GPU wait on them (the windows' queue waiting for a frame mpv's GPU
+/// never finishes, a stall with `VESTRA_GPU_WATCHDOG=0` or before the
+/// watchdog's limit) can hold up the presents, the swapchains' teardown or
+/// the device's drain. Round record 2026-10-render-modes §11.6.
+pub fn release_gpu_waits() {
+    let live: Vec<Arc<Shared>> = lock(&LIVE).iter().filter_map(std::sync::Weak::upgrade).collect();
+    for shared in live {
+        shared.release_for_quit();
+    }
+}
+
 /// What [`WindowDevice::on_error`] runs when the device is lost; the
 /// watchdog runs it too when GPU rendering stalls.
 static ON_LOST: OnceLock<Arc<dyn Fn() + Send + Sync>> = OnceLock::new();
@@ -424,6 +440,9 @@ struct Shared {
     stats: Mutex<Stats>,
     /// Why the render thread stopped (`Handle::failed`).
     failed: Mutex<Option<String>>,
+    /// The player quits ([`release_gpu_waits`]): the fences are released,
+    /// nothing renders, claims or signals any more (not a failure).
+    quitting: AtomicBool,
     /// Tests: make the render thread take its failure path.
     #[cfg(test)]
     fail_now: AtomicBool,
@@ -459,12 +478,33 @@ impl Shared {
             diag: Mutex::default(),
             stats: Mutex::default(),
             failed: Mutex::default(),
+            quitting: AtomicBool::new(false),
             #[cfg(test)]
             fail_now: AtomicBool::new(false),
             #[cfg(test)]
             stall_now: AtomicBool::new(false),
             gpu,
         }
+    }
+    /// GPU rendering stopped for good: it failed, or the player quits.
+    fn halted(&self) -> bool {
+        self.quitting.load(Ordering::Acquire) || lock(&self.failed).is_some()
+    }
+    /// The player quits: release both fences (every GPU wait on them, on
+    /// mpv's queue and the windows', passes, so presenting, a swapchain's
+    /// teardown and the device's drain cannot wait for a frame that never
+    /// finishes, as in a stall with the watchdog off) and stop the render
+    /// thread; the windows stop claiming frames.
+    fn release_for_quit(&self) {
+        if self.quitting.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        self.stop.store(true, Ordering::Release);
+        if let Some(fences) = self.fences.get() {
+            fences.ready.release_all();
+            fences.done.release_all();
+        }
+        mpv::Wake::wake(self);
     }
     fn wait(&self, timeout: Duration) {
         let pending = lock(&self.pending.0);
@@ -541,6 +581,11 @@ impl Renderer {
         limit: Option<Duration>,
     ) -> Result<Self, String> {
         let shared = Arc::new(Shared::new(gpu, clamp(size)));
+        {
+            let mut live = lock(&LIVE);
+            live.retain(|weak| weak.strong_count() > 0);
+            live.push(Arc::downgrade(&shared));
+        }
         let (ready, started) = mpsc::sync_channel(1);
         let inner = shared.clone();
         let thread = thread::Builder::new().name("vestra-gpu-render".into());
@@ -847,7 +892,7 @@ fn produce(
     // The first failure stands: after the watchdog released the fences
     // (`u64::MAX`), this thread's next signal fails too.
     let fail = |reason: String| {
-        if lock(&shared.failed).is_some() {
+        if shared.halted() {
             return;
         }
         let reason = match d3d11.removed() {
@@ -869,7 +914,7 @@ fn produce(
             break;
         }
         // The watchdog stopped GPU rendering (it released the fences).
-        if lock(&shared.failed).is_some() {
+        if shared.halted() {
             break;
         }
         let pace = *lock(&shared.pace);
@@ -1010,7 +1055,7 @@ fn produce(
         // The watchdog stopped GPU rendering meanwhile: its release set the
         // fences to `u64::MAX`, and no signal may follow (a lower value),
         // nor may a frame be published.
-        if lock(&shared.failed).is_some() {
+        if shared.halted() {
             break;
         }
         // Published only with its `ready` signal enqueued: a window's queue
@@ -1068,7 +1113,7 @@ fn produce(
             render.report_swap();
         }
         drawn = Some(Instant::now());
-        if publish.load(Ordering::Acquire) && lock(&shared.failed).is_none() {
+        if publish.load(Ordering::Acquire) && !shared.halted() {
             let texture = slots[index].texture.clone();
             let payload = Payload { texture, ready: ready_value, size: slots_size.unwrap_or(size) };
             lock(&shared.exchange).ring.publish(index, payload);
@@ -1455,7 +1500,7 @@ impl View {
         let Some(fences) = shared.fences.get() else {
             return (None, false);
         };
-        if lock(&shared.failed).is_some() {
+        if shared.halted() {
             // The renderer stopped; the host shows software pictures now.
             self.showing = None;
             return (None, false);
@@ -1520,7 +1565,7 @@ impl View {
     /// The image to set, if the shown texture changed.
     fn direct(&mut self, shared: &Shared, accept: &dyn Fn() -> bool) -> Option<Image> {
         let fences = shared.fences.get()?;
-        if lock(&shared.failed).is_some() {
+        if shared.halted() {
             self.after(shared);
             self.showing = None;
             return None;
@@ -1579,7 +1624,7 @@ impl View {
         let Some(slot) = self.claim.take() else {
             return;
         };
-        if lock(&shared.failed).is_some() {
+        if shared.halted() {
             // The fences were released for good; nothing waits any more.
             lock(&shared.exchange).ring.release(slot);
             return;

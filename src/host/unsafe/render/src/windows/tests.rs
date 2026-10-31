@@ -225,6 +225,44 @@ fn warp_the_watchdog_stops_a_renderer_whose_fences_stop_moving() {
     drop(renderer);
 }
 
+/// H17 (record §11.6): a stall with the watchdog off, then the player
+/// quits. Releasing the fences ends every GPU wait (the frame mpv's queue
+/// held finishes), is not reported as a failure, stops the windows'
+/// claims, and the renderer then drops at once.
+#[test]
+fn warp_quitting_during_a_stall_releases_the_fences_and_stops_at_once() {
+    let mpv = player("no");
+    let renderer =
+        Renderer::start_watched(warp_gpu(), mpv.clone(), (64, 64), Arc::new(true.into()), None)
+            .expect("renderer");
+    let handle = renderer.handle();
+    mpv.command(&["loadfile", SOURCE]).expect("loadfile");
+    assert!(until(10, || handle.frames() > 0), "no frame");
+    let shared = handle.0.clone();
+    let mut view = View::default();
+    assert!(view.direct(&shared, &|| true).is_some());
+    shared.stall_now.store(true, Ordering::Release);
+    mpv::Wake::wake(&*shared);
+    let fences = shared.fences.get().unwrap();
+    // A frame is enqueued that the GPU never finishes.
+    assert!(
+        until(10, || shared.ready_enqueued.load(Ordering::Acquire) > fences.ready.completed()),
+        "no stalled frame"
+    );
+    thread::sleep(Duration::from_millis(300));
+    assert!(shared.ready_enqueued.load(Ordering::Acquire) > fences.ready.completed(), "stalled");
+    shared.release_for_quit();
+    assert_eq!((fences.ready.completed(), fences.done.completed()), (u64::MAX, u64::MAX));
+    assert!(handle.failed().is_none(), "quitting is not a failure");
+    let signalled = shared.signalled.load(Ordering::Relaxed);
+    view.after(&shared);
+    assert_eq!(shared.signalled.load(Ordering::Relaxed), signalled, "no done after quitting");
+    assert!(view.direct(&shared, &|| true).is_none(), "no claim after quitting");
+    let dropping = Instant::now();
+    drop(renderer);
+    assert!(dropping.elapsed() < Duration::from_millis(1500), "{:?}", dropping.elapsed());
+}
+
 /// Without the CPU wait (the default) the render thread publishes frames
 /// whose `ready` value a window's queue waits for, and their completion is
 /// still timed (`complete`) off the render thread.
