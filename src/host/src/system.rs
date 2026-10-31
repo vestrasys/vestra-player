@@ -126,6 +126,11 @@ pub fn rendering_json(gpu: bool) -> Value {
 /// Computed once per host process, off the UI thread.
 static FACTS: OnceLock<platform::OsFacts> = OnceLock::new();
 
+/// The operating system's facts, read once (blocking: off the UI thread).
+pub(crate) fn os_facts() -> &'static platform::OsFacts {
+    FACTS.get_or_init(platform::os_facts)
+}
+
 impl Host {
     pub(super) fn system_dispatch(
         &mut self,
@@ -185,11 +190,15 @@ impl Host {
                 } else {
                     displays_json(&platform::displays())
                 };
-                let rendering = rendering_json(self.backend.render.gpu().is_some());
+                let (gpu, reason) = self.backend.render.now();
+                let rendering = rendering_json(gpu);
+                // Player 0.5.13 (SDK 1.5.35): why it renders that way.
+                let reason = reason.json();
                 Box::new(move || {
-                    let mut value = facts_json(FACTS.get_or_init(platform::os_facts));
+                    let mut value = facts_json(os_facts());
                     value["displays"] = displays;
                     value["rendering"] = rendering;
+                    value["renderingReason"] = reason;
                     Ok(value)
                 })
             }

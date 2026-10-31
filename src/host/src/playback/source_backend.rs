@@ -150,6 +150,8 @@ pub struct Sources {
     cover_wait: CoverWait,
     /// The cover art of the current load that is still being listed.
     late_covers: Option<crate::playback::cover_listing::Late>,
+    /// `host.resume`: where a restarted player's first open continues.
+    resume: Option<ResumePoint>,
     /// `player.setLoop`: (a, b, count) as requested; mpv counts down in
     /// `remaining-ab-loops`, which is not passed on (ruling R-M2).
     ab_loop: Option<(f64, f64, Option<u64>)>,
@@ -1319,7 +1321,7 @@ impl Sources {
             .as_u64()
             .filter(|id| *id > 0)
             .ok_or_else(|| RpcError::invalid("operationId requires positive integer"))?;
-        let intent = serde_json::from_value::<SourceIntent>(params["intent"].clone())
+        let mut intent = serde_json::from_value::<SourceIntent>(params["intent"].clone())
             .map_err(|e| RpcError::invalid(e.to_string()))?;
         #[cfg(feature = "producer-audio")]
         let preflight = if matches!(intent, SourceIntent::Control { .. })
@@ -1371,6 +1373,10 @@ impl Sources {
         let resolver = resolution_source
             .as_deref()
             .and_then(|source| self.resolvers.find(source));
+        // A restarted player's first open (`host.resume`): its pause state
+        // goes into the intent and its position into this load's options;
+        // the resume point is taken only once the session admits the intent.
+        let claim = resume_claim(self.resume.as_ref(), &mut intent, resolver.is_some());
         let preflight = preflight.and_then(|()| {
             if resolver.is_some() && self.resolutions.len() >= 32 {
                 Err(crate::playback::session::RequestError::Busy)
@@ -1412,6 +1418,7 @@ impl Sources {
                 ));
             }
         };
+        let start = take_resume(&mut self.resume, claim);
         #[cfg(feature = "producer-audio")]
         if matches!(
             intent,
@@ -1531,7 +1538,7 @@ impl Sources {
                     .unwrap_or_else(|| source.clone());
                 // Keep the previous native load's File until its EndFile/new Ready.
                 let leased = media.as_ref().map(|media| (source.as_str(), media.remote));
-                let entry = self.load(mpv, &url, *start_paused, leased)?;
+                let entry = self.load(mpv, &url, *start_paused, leased, start)?;
                 self.current_local = media
                     .as_ref()
                     .map(|media| (ticket.stamp.generation, media.clone()));
@@ -1554,7 +1561,7 @@ impl Sources {
                     .unwrap_or_else(|| self.session.state().source.clone().unwrap_or_default());
                 let path = self.session.state().source.clone().unwrap_or_default();
                 let leased = media.as_ref().map(|media| (path.as_str(), media.remote));
-                self.load(mpv, &source, false, leased).map(|entry| {
+                self.load(mpv, &source, false, leased, None).map(|entry| {
                     if let Some(media) = media {
                         self.local_media.insert(entry, media);
                     }
@@ -1781,10 +1788,103 @@ fn added_external(
     let first = new.next()?.clone();
     new.next().is_none().then_some(first)
 }
-/// `leased`: `source` is a [`LocalMedia`] url (`fd://` on Unix,
-/// `vestra-lease://` on Windows) for the local file at this path, and
-/// whether that file is on a network file system ([`LocalMedia::remote`]).
+/// Where a restarted player's first file continues (`host.resume`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ResumePoint {
+    /// The path exactly as the restart passed it on the command line (and
+    /// so as the plugin that opens it names it).
+    pub source: String,
+    pub seconds: f64,
+    pub paused: bool,
+}
+
+/// What the pending resume point does to a source change.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Claim {
+    /// An open of exactly the resumed path: from `start` (`None`: from
+    /// its beginning, a resolved source), with the old pause state.
+    Resume { start: Option<f64> },
+    /// Another first source: the resume point is dropped.
+    Drop,
+}
+
+/// The first open, close or provider after `host.resume` claims the resume
+/// point: an open of that exact path gets its pause state (in the intent, so
+/// the session reports it) and its position for the load's `start=`
+/// option; anything else drops it. A resolved source (a resolver plugin
+/// claims it) opens paused as before but from its beginning. Nothing is
+/// taken here: [`take_resume`] does that once the session admitted the
+/// intent, so a refused open (stale, busy) leaves the resume point.
+fn resume_claim(
+    resume: Option<&ResumePoint>,
+    intent: &mut SourceIntent,
+    resolved: bool,
+) -> Option<Claim> {
+    let point = resume?;
+    match intent {
+        SourceIntent::Open {
+            source,
+            start_paused,
+            ..
+        } if *source == point.source => {
+            *start_paused = point.paused;
+            let start = (!resolved && point.seconds > 0.).then_some(point.seconds);
+            Some(Claim::Resume { start })
+        }
+        SourceIntent::Open { .. }
+        | SourceIntent::OpenProvider { .. }
+        | SourceIntent::Close { .. } => Some(Claim::Drop),
+        _ => None,
+    }
+}
+
+/// An admitted source change takes the resume point it claimed; returns
+/// the position for `start=`.
+fn take_resume(resume: &mut Option<ResumePoint>, claim: Option<Claim>) -> Option<f64> {
+    let point = match claim {
+        Some(_) => resume.take()?,
+        None => return None,
+    };
+    match claim {
+        Some(Claim::Resume { start: None }) => {
+            diag!(
+                "restart: a resolver opens {}; it starts from the beginning",
+                point.source
+            );
+            None
+        }
+        Some(Claim::Resume { start }) => start,
+        _ => {
+            diag!(
+                "restart: the first source opened is not {}; resuming dropped",
+                point.source
+            );
+            None
+        }
+    }
+}
+
+/// mpv's per-file `start` option (appended to a load's options).
+fn start_option(start: Option<f64>) -> String {
+    start
+        .filter(|seconds| seconds.is_finite() && *seconds > 0.)
+        .map(|seconds| format!(",start={seconds}"))
+        .unwrap_or_default()
+}
+
 impl Sources {
+    /// `host.resume`: the next open of `point.source` continues there.
+    pub fn resume_next_open(&mut self, point: ResumePoint) {
+        self.resume = Some(point);
+    }
+}
+
+impl Sources {
+    /// `leased`: `source` is a [`LocalMedia`] url (`fd://` on Unix,
+    /// `vestra-lease://` on Windows) for the local file at this path, and
+    /// whether that file is on a network file system ([`LocalMedia::remote`]).
+    /// `start`: the resumed position (`resume_claim`, `take_resume`), as `start=`.
+    ///
     /// `loadfile`; a leased load also gets what libmpv would derive from
     /// the path (`leased_options`). Its cover art is listed off this thread
     /// (`cover_listing`): pictures that are not listed in time are added to
@@ -1795,14 +1895,16 @@ impl Sources {
         source: &str,
         paused: bool,
         leased: Option<(&str, bool)>,
+        start: Option<f64>,
     ) -> Result<i64, String> {
         self.late_covers = None;
+        let start = start_option(start);
         let Some((path, remote)) = leased else {
-            return load_options(mpv, source, paused, "", false);
+            return load_options(mpv, source, paused, &start, false);
         };
         let (options, late) =
             leased_options(mpv, path, remote, &self.cover_listings.0, self.cover_wait.0);
-        let entry = load_options(mpv, source, paused, &options, true)?;
+        let entry = load_options(mpv, source, paused, &format!("{options}{start}"), true)?;
         self.late_covers =
             late.map(|listing| crate::playback::cover_listing::Late::new(entry, listing));
         Ok(entry)
@@ -2000,6 +2102,105 @@ fn load_options(
         return Ok(*entry);
     }
     Err("libmpv did not return playlist_entry_id; unsupported backend".into())
+}
+
+#[cfg(test)]
+mod resume_tests {
+    use super::*;
+
+    fn open(source: &str, paused: bool) -> SourceIntent {
+        SourceIntent::Open {
+            source: source.into(),
+            start_paused: paused,
+            expected: None,
+        }
+    }
+    fn point() -> Option<ResumePoint> {
+        Some(ResumePoint {
+            source: "/m/a.mkv".into(),
+            seconds: 61.25,
+            paused: true,
+        })
+    }
+
+    /// Claim, then take after admission (as `dispatch` does).
+    fn admitted(
+        resume: &mut Option<ResumePoint>,
+        intent: &mut SourceIntent,
+        resolved: bool,
+    ) -> Option<f64> {
+        let claim = resume_claim(resume.as_ref(), intent, resolved);
+        take_resume(resume, claim)
+    }
+
+    #[test]
+    fn the_resumed_file_opens_paused_at_its_position_and_only_once() {
+        let mut resume = point();
+        let mut intent = open("/m/a.mkv", false);
+        assert_eq!(admitted(&mut resume, &mut intent, false), Some(61.25));
+        assert_eq!(intent, open("/m/a.mkv", true), "paused in the intent");
+        assert_eq!(resume, None);
+        let mut again = open("/m/a.mkv", false);
+        assert_eq!(admitted(&mut resume, &mut again, false), None);
+        assert_eq!(again, open("/m/a.mkv", false));
+        assert_eq!(start_option(Some(61.25)), ",start=61.25");
+        assert_eq!(start_option(None), "");
+        assert_eq!(start_option(Some(0.)), "");
+    }
+
+    /// A plugin that opens another file first does not get the position;
+    /// the resumed file then opens from its beginning.
+    #[test]
+    fn another_first_open_drops_the_resume_point() {
+        let mut resume = point();
+        let mut other = open("/m/b.mkv", false);
+        assert_eq!(admitted(&mut resume, &mut other, false), None);
+        assert_eq!(other, open("/m/b.mkv", false));
+        assert_eq!(resume, None);
+        // Other intents before the open leave it.
+        let mut resume = point();
+        let mut restart = SourceIntent::Restart { expected: None };
+        assert_eq!(admitted(&mut resume, &mut restart, false), None);
+        assert!(resume.is_some());
+        // A resolved source: paused, from its beginning.
+        let mut resolved = open("/m/a.mkv", false);
+        assert_eq!(admitted(&mut resume, &mut resolved, true), None);
+        assert_eq!(resolved, open("/m/a.mkv", true));
+        assert_eq!(resume, None);
+    }
+
+    /// The player refuses the open (here: `stale`, an expected stamp that
+    /// is not the current one): the resume point stays for the next open.
+    #[test]
+    fn a_refused_open_does_not_take_the_resume_point() {
+        let mpv = Mpv::builder()
+            .unwrap()
+            .set_property("vo", "null")
+            .unwrap()
+            .set_property("ao", "null")
+            .unwrap()
+            .build()
+            .unwrap();
+        let mut sources = Sources::default();
+        sources.resume_next_open(point().unwrap());
+        let refused = sources.dispatch(
+            &mpv,
+            1,
+            "source.submit",
+            &json!({"operationId":1,"intent":{"kind":"open","source":"/m/a.mkv","startPaused":false,
+                "expected":{"generation":99,"intentVersion":99}}}),
+        );
+        assert_eq!(refused.unwrap_err().code, "stale");
+        assert_eq!(sources.resume, point(), "kept");
+        let malformed = sources.dispatch(
+            &mpv,
+            1,
+            "source.submit",
+            &json!({"operationId":2,"intent":{"kind":"open"}}),
+        );
+        assert_eq!(malformed.unwrap_err().code, "invalid");
+        assert_eq!(sources.resume, point(), "kept");
+    }
 }
 
 #[cfg(all(test, feature = "producer-audio"))]

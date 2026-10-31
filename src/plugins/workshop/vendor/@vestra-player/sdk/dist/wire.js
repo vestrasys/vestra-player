@@ -214,6 +214,17 @@ export function createWire(transport) {
         app: {
             system: () => transport.request("app.system"),
         },
+        /**
+         * The rendering choice (player 0.5.13): `state` needs no capability,
+         * `setPreference` and `restart` need `rendering.manage`.
+         */
+        rendering: {
+            state: () => transport.request("rendering.state"),
+            setPreference: (preference) => transport.request("rendering.setPreference", {
+                preference,
+            }),
+            restart: () => transport.request("rendering.restart"),
+        },
         power: {
             preventSleep: (mode) => transport.request("power.preventSleep", { mode }),
         },

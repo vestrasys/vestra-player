@@ -11,6 +11,8 @@ mod lifecycle;
 mod menus;
 mod mounts;
 pub mod package_activation;
+mod rendering;
+pub(crate) use rendering::{Relaunch, Rendering, startup as rendering_startup};
 mod rpc;
 mod shell;
 mod state;
@@ -195,6 +197,8 @@ pub(crate) struct Host {
     /// The sequence provider: owner, can-next, can-previous (C6).
     pub(crate) sequence: Option<(u64, bool, bool)>,
     pub(crate) last_source: Value,
+    /// The rendering API's facts, preference and restart (`rendering.rs`).
+    pub(crate) rendering: Rendering,
     pub(crate) source_state_replies: std::collections::BTreeSet<(u64, u64)>,
     pub(crate) floating: Option<Floating>,
     pub(crate) menu_mode: MenuMode,

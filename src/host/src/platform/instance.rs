@@ -66,6 +66,31 @@ pub fn single_instance(directory: &Path, files: &[PathBuf], wait: Duration) -> i
     }
 }
 
+/// A player that replaces one which restarted itself (`--vestra-restart`):
+/// wait up to `wait` for that player to release the lock, then claim it;
+/// never hand files over (the old player is quitting). An error means the
+/// old player did not end in time: the caller runs on its own, as after any
+/// failed claim.
+pub fn single_instance_restarted(directory: &Path, wait: Duration) -> io::Result<Launch> {
+    std::fs::create_dir_all(directory)?;
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(directory.join(LOCK))?;
+    let deadline = Instant::now() + wait;
+    loop {
+        match lock.try_lock() {
+            Ok(()) => return Primary::start(directory, lock).map(Launch::Primary),
+            Err(TryLockError::Error(error)) => return Err(error),
+            Err(TryLockError::WouldBlock) if Instant::now() >= deadline => {
+                return Err(io::Error::other("the previous player did not end"));
+            }
+            Err(TryLockError::WouldBlock) => std::thread::sleep(Duration::from_millis(50)),
+        }
+    }
+}
+
 impl Primary {
     fn start(directory: &Path, lock: File) -> io::Result<Self> {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
@@ -216,6 +241,20 @@ mod tests {
         let launch = single_instance(directory.path(), &files, Duration::from_millis(300));
         assert!(launch.is_err(), "refused, not handed off");
         assert_eq!(offered.recv_timeout(IO_TIMEOUT).unwrap(), files);
+    }
+
+    /// A restarted player waits for the lock and never hands off; once the
+    /// old player is gone it is the primary.
+    #[test]
+    fn a_restarted_launch_waits_for_the_lock_instead_of_handing_off() {
+        let directory = tempfile::tempdir().unwrap();
+        let old = single_instance(directory.path(), &[], Duration::ZERO).unwrap();
+        assert!(matches!(old, Launch::Primary(_)));
+        let refused = single_instance_restarted(directory.path(), Duration::from_millis(100));
+        assert!(refused.is_err(), "the old player still holds the lock");
+        drop(old);
+        let claimed = single_instance_restarted(directory.path(), Duration::from_secs(5)).unwrap();
+        assert!(matches!(claimed, Launch::Primary(_)));
     }
 
     #[test]

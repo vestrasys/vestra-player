@@ -598,6 +598,23 @@
       "requires": [],
       "residency": "none",
       "risky": true
+    },
+    {
+      "label": "Choose GPU or software rendering and restart the player",
+      "methods": [
+        {
+          "name": "rendering.setPreference",
+          "needs": "rendering.manage"
+        },
+        {
+          "name": "rendering.restart",
+          "needs": "rendering.manage"
+        }
+      ],
+      "name": "rendering.manage",
+      "requires": [],
+      "residency": "none",
+      "risky": true
     }
   ],
   "uncapable": [
@@ -643,6 +660,10 @@
     },
     {
       "name": "storage.session.keys",
+      "needs": null
+    },
+    {
+      "name": "rendering.state",
       "needs": null
     }
   ]

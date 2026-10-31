@@ -121,6 +121,8 @@ fn main() -> Result<()> {
         frame_evidence,
         files,
         urls,
+        restart,
+        resume,
     } = launch::parse(&args, &std::env::current_dir()?)?;
     for url in &urls {
         diag!("host.warning open: {url} is not a file; open links from a plugin's command");
@@ -138,11 +140,21 @@ fn main() -> Result<()> {
         });
     let mut primary = None;
     if let Some(directory) = instance_dir {
-        match platform::single_instance(&directory, &files, Duration::from_secs(5)) {
+        // A player that restarted itself (`rendering.restart`) is replaced
+        // by this one: wait up to 20 s for its lock and never hand over.
+        let claimed = match restart {
+            Some(_) => platform::single_instance_restarted(&directory, Duration::from_secs(20)),
+            None => platform::single_instance(&directory, &files, Duration::from_secs(5)),
+        };
+        match claimed {
             Ok(platform::Launch::HandedOff) => return Ok(()),
             Ok(platform::Launch::Primary(claimed)) => primary = Some(claimed),
+            // As any launch that cannot claim the lock: run on its own.
             Err(error) => diag!("single instance: {error}; running on its own"),
         }
+    }
+    if let Some(parent) = restart {
+        diag!("restart: this player replaces process {parent}");
     }
     let mut evidence = frame_evidence.map(FrameEvidence::new).transpose()?;
     // A packaged player missing its own files (the bundled Node above all)
@@ -165,16 +177,23 @@ fn main() -> Result<()> {
     }
     // The renderer pair and why (round record 2026-10-render-modes): GPU
     // rendering (SDK site, Concepts: render options) needs Slint's OpenGL
-    // renderer (femtovg); headless, `VESTRA_SOFTWARE_RENDER=1` and systems
-    // without a GPU renderer render in software.
-    let mut render = render_mode::decide(render_mode::Inputs {
-        headless,
-        gpu_backend: platform::GPU_RENDER,
-        software_env: render_mode::software_requested(
-            std::env::var_os("VESTRA_SOFTWARE_RENDER").as_deref(),
-        ),
-    });
+    // renderer (femtovg); headless, `VESTRA_RENDER`, the saved preference,
+    // the crash guard, the driver denylist and systems without a GPU
+    // renderer can make it software.
+    let startup = host::rendering_startup(headless);
+    let mut render = render_mode::decide(&startup.facts, startup.preference);
     diag!("{}", render.line());
+    for note in &render.notes {
+        diag!("{note}");
+    }
+    // The crash guard: armed until GPU rendering ran a few seconds, gave up
+    // on its own, or the player quit (`render_state`).
+    // `_armed` lives until `main` returns, by any path: only a process
+    // that dies leaves the guard armed.
+    let guard = startup.guard.clone();
+    let _armed = render
+        .is_gpu()
+        .then(|| guard.arm(startup.key.clone(), playback::render_state::now()));
     if !headless {
         // Windows: the main window draws at the display's vertical blanks
         // (`frame_pacing.rs`), not on Slint's timer.
@@ -193,10 +212,15 @@ fn main() -> Result<()> {
                         "the OpenGL window renderer is unavailable: {error}"
                     )));
                     diag!("{}", render.line());
+                    guard.settle();
                     winit().select()?;
                 }
             }
             render_mode::WindowKind::Default => winit().select()?,
+            // A driver whose OpenGL cannot draw the windows (denylist).
+            render_mode::WindowKind::Software => {
+                winit().renderer_name("software".into()).select()?;
+            }
         }
     }
     let mut observed_source = Value::Null;
@@ -272,6 +296,17 @@ fn main() -> Result<()> {
         info_panels: BTreeMap::new(),
         sequence: None,
         last_source: Value::Null,
+        rendering: host::Rendering {
+            facts: startup.facts,
+            started: render.mode,
+            preference: startup.preference,
+            file: startup.file,
+            relaunch: host::Relaunch {
+                directories: directories.clone(),
+                silent,
+            },
+            restarted_at: restart.map(|_| Instant::now()),
+        },
         source_state_replies: Default::default(),
         floating: None,
         menu_mode: MenuMode::Main,
@@ -361,6 +396,14 @@ fn main() -> Result<()> {
     }
     for directory in directories {
         host.load(&directory, 120_000)?;
+    }
+    // A restart continues its first file where the replaced player was.
+    if let (Some(resume), Some(file)) = (resume, files.first()) {
+        let _ = host.backend.commands.send(playback::backend::Command {
+            reply: host::Reply { owner: 0, id: 0 },
+            method: "host.resume".into(),
+            params: json!({"source":file.to_string_lossy(),"seconds":resume.seconds,"paused":resume.paused}),
+        });
     }
     host.open_files(files, false);
     let start = Instant::now();
@@ -564,8 +607,12 @@ fn main() -> Result<()> {
                 }
             },
         );
+        // GPU rendering that ran this long started: settle the crash guard.
+        let started = guard.clone();
+        slint::Timer::single_shot(Duration::from_secs(5), move || started.settle());
         let ran = slint::run_event_loop();
         stop_handoffs();
+        guard.settle();
         ran?;
         timer.stop();
         frame_pacing::stop();

@@ -15,8 +15,6 @@
 use glow::{HasContext, NativeFramebuffer, NativeTexture};
 use objc2_core_foundation::{CFDictionary, CFNumber, CFRetained, CFString};
 pub use objc2_io_surface::IOSurfaceRef;
-/// A published frame, as [`Handle::latest`] returns it.
-pub type Frame = CFRetained<IOSurfaceRef>;
 use rsmpv::{Mpv, render::OpenGlFbo, render::OwnedRenderContext};
 use slint::{BorrowedOpenGLTextureBuilder as Borrowed, BorrowedOpenGLTextureOrigin};
 use slint::{ComponentHandle, GraphicsAPI, Image, RenderingState};
@@ -24,6 +22,9 @@ use std::ffi::{CStr, CString, c_void};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, mpsc};
 use std::{num::NonZeroU32, thread, time::Duration, time::Instant};
+
+/// A published frame, as [`Handle::latest`] returns it.
+pub type Frame = CFRetained<IOSurfaceRef>;
 
 type Cgl = *mut c_void;
 type Size = (u32, u32);

@@ -742,6 +742,8 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   "Secrets.get": ["secrets.get"],
   "Secrets.set": ["secrets.set"],
   "Secrets.delete": ["secrets.delete"],
+  "Rendering.setPreference": ["rendering.setPreference"],
+  "Rendering.restartPlayer": ["rendering.restart"],
 };
 
 /**
@@ -883,7 +885,8 @@ test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (capabilities
 });
 
 test("SystemInfo.rendering has the values app.system reports (system.rs rendering_json)", () => {
-  const sdk = /readonly rendering\??: ([^;]+);/.exec(
+  // SystemInfo's field (`Plugin.rendering` is the SDK 1.5.35 service).
+  const sdk = /readonly rendering\??: ("[^;]+);/.exec(
     sdkFile("plugin/types.d.ts"),
   )?.[1];
   assert.ok(sdk, "SystemInfo.rendering in the SDK's types.d.ts");
@@ -899,6 +902,57 @@ test("SystemInfo.rendering has the values app.system reports (system.rs renderin
   assert.ok(
     system.includes(`value["rendering"] = rendering;`),
     "app.system sets rendering",
+  );
+});
+
+test("WireRenderingState has the fields rendering.state answers with (host/rendering.rs Rendering::state)", () => {
+  const wire = /export interface WireRenderingState \{([\s\S]*?)\n\}/.exec(
+    sdkFile("wire.d.ts"),
+  )?.[1];
+  assert.ok(wire, "WireRenderingState in the SDK's wire.d.ts");
+  // Top-level fields and the inline `gpu: { … }` object's fields.
+  const sdk = [
+    ...new Set([...wire.matchAll(/(\w+)\??:/g)].map((m) => m[1]!)),
+  ].sort();
+  const state = /pub fn state\(&self[\s\S]*?\n {4}\}/.exec(
+    host("src/host/rendering.rs"),
+  )?.[0];
+  assert.ok(state, "Rendering::state in rendering.rs");
+  const player = [
+    ...new Set([...state.matchAll(/"(\w+)":/g)].map((m) => m[1]!)),
+  ].sort();
+  assert.deepEqual(sdk, player);
+  const reason = /export interface WireRenderingReason \{([\s\S]*?)\n\}/.exec(
+    sdkFile("wire.d.ts"),
+  )?.[1];
+  assert.deepEqual(
+    [...(reason ?? "").matchAll(/(\w+)\??:/g)].map((m) => m[1]!).sort(),
+    ["code", "message"],
+    "WireRenderingReason is Reason::json's { code, message }",
+  );
+  assert.ok(
+    host("src/playback/render_mode.rs").includes(
+      `serde_json::json!({"code":self.code(),"message":self.message()})`,
+    ),
+    "Reason::json",
+  );
+});
+
+test("RenderingReasonCode names the player's reason codes (playback/render_mode.rs Reason::code; SDK 1.5.35, player 0.5.13)", () => {
+  const sdk = /export type RenderingReasonCode = ([^;]+);/.exec(
+    sdkFile("plugin/types.d.ts"),
+  )?.[1];
+  assert.ok(sdk, "RenderingReasonCode in the SDK's types.d.ts");
+  const body = /pub fn code\(&self\) -> &'static str \{([\s\S]*?)\n {4}\}/.exec(
+    host("src/playback/render_mode.rs"),
+  )?.[1];
+  assert.ok(body, "Reason::code in render_mode.rs");
+  const values = (text: string) =>
+    [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!).sort();
+  assert.deepEqual(values(sdk), values(body));
+  assert.ok(
+    host("src/system.rs").includes(`value["renderingReason"] = reason;`),
+    "app.system sets renderingReason",
   );
 });
 

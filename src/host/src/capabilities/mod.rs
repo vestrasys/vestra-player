@@ -31,6 +31,7 @@ mod plugins_manage;
 mod processing_audio;
 mod processing_video;
 mod producer_av;
+mod rendering_manage;
 mod secrets;
 mod source_resolve;
 mod subtitles_control;
@@ -171,6 +172,7 @@ pub static ALL: &[&dyn Capability] = &[
     &ui_settings::UiSettings,
     &ui_theme::UiTheme,
     &secrets::Secrets,
+    &rendering_manage::RenderingManage,
 ];
 
 /// Whether `name` is a manifest capability.

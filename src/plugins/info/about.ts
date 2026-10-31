@@ -1,4 +1,4 @@
-import type { AppInfo, I18n, PackageSource, Plugin, TextArg } from "@vestra-player/sdk";
+import type { AppInfo, I18n, PackageSource, Plugin, SystemInfo, TextArg } from "@vestra-player/sdk";
 
 /** The protocol version in manifest.json (the Plugin API rows of I05 and I09). */
 export const API_VERSION = "vestra/1";
@@ -40,6 +40,36 @@ export function components(i18n: I18n, app: AppInfo, node: string | null): [Text
 }
 
 /**
+ * The Rendering row: the renderer drawing now (`"gpu"` / `"software"`, a code
+ * about.slint words) and the player's reason (`""` = none shown). `mode` is
+ * `""` when the player does not report a renderer (before 0.5.12): the row is
+ * left out rather than guessed.
+ */
+export type RenderingRow = { mode: "" | "gpu" | "software"; reason: string };
+export const NO_RENDERING: RenderingRow = { mode: "", reason: "" };
+/**
+ * The row from `plugin.app.system()` (`null`: the read failed). The reason is
+ * the player's English message, shown as it is (it may point to Windows'
+ * graphics settings): always under software rendering, and under GPU rendering
+ * unless it only says nothing ruled the GPU out (`default`) or that it is
+ * starting (`pending`). Players before 0.5.13 report no reason: the mode alone.
+ */
+export function renderingRow(info: Pick<SystemInfo, "rendering" | "renderingReason"> | null): RenderingRow {
+  const mode = info?.rendering;
+  if (mode !== "gpu" && mode !== "software") return NO_RENDERING;
+  const reason = info?.renderingReason;
+  const quiet = mode === "gpu" && (reason?.code === "default" || reason?.code === "pending");
+  return { mode, reason: !reason || quiet ? "" : reason.message };
+}
+
+/** `Software — <reason>`, `GPU`: the Rendering row's value in the interface language (as about.slint words it). */
+export function renderingValue(i18n: I18n, row: RenderingRow) {
+  const { text } = i18n;
+  const mode = row.mode === "gpu" ? text("GPU") : text("Software");
+  return row.reason ? text("{} — {}", [mode, row.reason]) : mode;
+}
+
+/**
  * One row of the loaded-plugin list (`packages.list`): `origin` and `state`
  * are codes the window names (`about.slint`); `version` is `""` when unknown.
  */
@@ -65,10 +95,11 @@ const ORIGIN_WORDS = {
 const STATE_WORDS = { starting: "Starting", running: "Running", disabled: "Disabled", failed: "Failed", stopped: "Stopped" } as const;
 
 /** The whole window as plain text in the interface language, for Copy Info (it leaves the player: resolved here). */
-export function aboutText(i18n: I18n, app: AppInfo, node: string | null, plugins: PluginRow[] | null) {
+export function aboutText(i18n: I18n, app: AppInfo, node: string | null, plugins: PluginRow[] | null, rendering: RenderingRow = NO_RENDERING) {
   const { text, list, resolve } = i18n;
   const lines: TextArg[] = ["Vestra Player", app.build ? text("Version {} (build {})", [app.version, app.build]) : text("Version {}", [app.version]), ""];
   for (const [label, value] of components(i18n, app, node)) lines.push(text("{}: {}", [label, value]));
+  if (rendering.mode) lines.push(text("{}: {}", [text("Rendering"), renderingValue(i18n, rendering)]));
   lines.push("", text("Loaded plugins"));
   if (!plugins) lines.push(text("Unknown (cannot read the plugin list)"));
   else
@@ -81,14 +112,16 @@ export function aboutText(i18n: I18n, app: AppInfo, node: string | null, plugins
 }
 
 /**
- * I09 About Vestra Player: a fixed 360×420 tool window with the logo, the version,
- * component versions (`plugin.app`) and the loaded plugins (`packages.list`,
- * read on opening and kept current by `packages.onChange`). F1 opens it, or
- * brings the open window to the front.
+ * I09 About Vestra Player: a 360-wide tool window with the logo, the version,
+ * component versions (`plugin.app`), the renderer and why (`app.system()`,
+ * read on opening) and the loaded plugins (`packages.list`, read on opening
+ * and kept current by `packages.onChange`). F1 opens it, or brings the open
+ * window to the front.
  */
 export function aboutWindow(plugin: Plugin) {
   const node = process.versions.node ? `v${process.versions.node}` : null;
   let plugins: PluginRow[] | null = null;
+  let rendering = NO_RENDERING;
   /** `""`, or `copy-failed` (about.slint words it). */
   let status = "";
   /** Read the list now (each opening); a failure shows Unknown until the next read or change. */
@@ -101,6 +134,16 @@ export function aboutWindow(plugin: Plugin) {
     }
     plugin.update();
   }
+  /** The renderer now (each opening); a failed read leaves the row out, as an older player does. */
+  async function readRendering() {
+    try {
+      rendering = renderingRow(await plugin.app.system());
+    } catch (error) {
+      console.error(`[info] app.system: ${error instanceof Error ? error.message : String(error)}`);
+      rendering = NO_RENDERING;
+    }
+    plugin.update();
+  }
   // Starts, stops, failures, installs and uninstalls arrive here; the open window follows at once.
   plugin.packages.onChange((list) => void (plugins = pluginRows(list)));
   const window = plugin.windows.create("ui/about.slint");
@@ -110,11 +153,13 @@ export function aboutWindow(plugin: Plugin) {
     ...versions(plugin.app, node),
     plugins: plugins ?? [],
     pluginsUnknown: !plugins,
+    rendering: rendering.mode,
+    renderingReason: rendering.reason,
     status,
   }));
   window.on("copyInfo", async () => {
     try {
-      await plugin.clipboard.writeText(aboutText(plugin.i18n, plugin.app, node, plugins));
+      await plugin.clipboard.writeText(aboutText(plugin.i18n, plugin.app, node, plugins, rendering));
       status = "";
       void plugin.osd.show("Version info copied").catch(() => {});
     } catch (error) {
@@ -127,7 +172,7 @@ export function aboutWindow(plugin: Plugin) {
   window.onClose(() => void (status = ""));
   return async function show() {
     status = "";
-    if (!window.opened) await readPlugins();
+    if (!window.opened) await Promise.all([readPlugins(), readRendering()]);
     await window.show();
   };
 }

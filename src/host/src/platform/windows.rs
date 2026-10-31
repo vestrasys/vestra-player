@@ -505,6 +505,32 @@ pub fn allow_handoff_foreground() {
 
 // -------------------------------------------------------------------- facts
 
+/// DXGI's adapters in Windows' order for this process (the per-app graphics
+/// preference decides the first), with the user-mode driver's version
+/// (`vestra_win32::dxgi_adapters`). Microsoft's own adapters (WARP, Basic
+/// Render, vendor `0x1414`) count as software. None when DXGI is missing.
+pub fn gpu_adapters() -> Vec<super::GpuAdapter> {
+    const MICROSOFT: u32 = 0x1414;
+    match vestra_win32::dxgi_adapters() {
+        Ok(adapters) => adapters
+            .into_iter()
+            .map(|adapter| super::GpuAdapter {
+                software: adapter.software || adapter.vendor_id == MICROSOFT,
+                driver_version: adapter
+                    .driver_version
+                    .map(|parts| parts.map(|part| part.to_string()).join(".")),
+                name: adapter.name,
+                vendor_id: adapter.vendor_id,
+                device_id: adapter.device_id,
+            })
+            .collect(),
+        Err(error) => {
+            diag!("render: the graphics adapters are unknown ({error})");
+            Vec::new()
+        }
+    }
+}
+
 /// From `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` (version
 /// `23H2`, build `22631.4460`) and the firmware's product name.
 pub fn os_facts() -> OsFacts {

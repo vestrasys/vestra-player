@@ -1,0 +1,26 @@
+{
+  "about": "Graphics drivers the player does not render on with the GPU (round record doc/process/rounds/2026-10-render-modes.md §3.2). Built into the host (playback/render_denylist.rs); a file of the same shape at <app data>/render-denylist.json adds rules or replaces them by id ({\"id\": ..., \"disabled\": true} switches one off). Fields follow Chromium's software_rendering_list.json: os {type, build}, vendor_id, device_id, driver_version {op, value, value2}, exceptions; action cpu (software rendering), software-windows (software rendering and Slint's software renderer for the windows) or warn (a note only). Versions compare part by part as numbers; op is <, <=, =, >=, > or between (both ends included).",
+  "version": 1,
+  "rules": [
+    {
+      "id": "amd-780m-draw-stalls",
+      "description": "AMD Radeon 780M driver 31.0.14005: GPU draws stall for tens of milliseconds (p95 52 ms) and 4K60 video drops to about 40 fps",
+      "refs": ["doc/process/rounds/2026-10-windows-wgpu.md §14, §18"],
+      "os": { "type": "windows" },
+      "vendor_id": "0x1002",
+      "device_id": ["0x15BF"],
+      "driver_version": { "op": "between", "value": "31.0.14005.0", "value2": "31.0.14005.65535" },
+      "action": "cpu"
+    },
+    {
+      "id": "amd-780m-white-opengl-windows",
+      "description": "AMD Radeon 780M driver 32.0.32015.7029 (Adrenalin 26.10.1) and later: OpenGL (femtovg) windows show only white, plugin windows too, while the frame log counts 60 presented frames per second; Slint's software renderer draws them correctly",
+      "refs": ["doc/process/rounds/2026-10-render-modes.md §9"],
+      "os": { "type": "windows" },
+      "vendor_id": "0x1002",
+      "device_id": ["0x15BF"],
+      "driver_version": { "op": ">=", "value": "32.0.32015.7029" },
+      "action": "software-windows"
+    }
+  ]
+}

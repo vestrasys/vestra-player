@@ -159,13 +159,14 @@ The AMD kernel leak (every exited process; github.com/stablyai/orca/issues/28293
 ### 3.3 Reporting
 
 - One startup line, always: `render: GPU mode on AMD Radeon 780M (1002:15BF, driver 31.0.14005.21001; Windows' order); reason: default` or `render: CPU mode; reason: denylist amd-780m-draw-stalls (AMD Radeon 780M, driver 31.0.14005.21001)`. Later changes add one line each (`InitFailed`, `DeviceLost`, …).
-- `SystemInfo`: `rendering` stays `gpu`/`software` (0.5.12); add `renderingReason: { code, message }` with the `Reason` codes in kebab case (`default`, `headless`, `user`, `env`, `denylist`, `software-adapter`, `previous-crash`, `device-lost`, `init-failed`, `window-fallback`, `no-gpu-backend`). OS-independent: no DXGI ids; the adapter name and driver version are in `message`. SDK minor release.
+- `SystemInfo`: `rendering` stays `gpu`/`software` (0.5.12); add `renderingReason: { code, message }` with the `Reason` codes in kebab case. (Superseded: the codes M2 implements are in §8.1; `user` became `preference`, and `software-adapter` and `device-lost` wait for M3.) OS-independent: no DXGI ids; the adapter name and driver version are in `message`. SDK minor release.
 - User-visible: the built-in `info` plugin's About page (`src/plugins/info/about.ts`) shows "Rendering: software — your graphics driver is known to stall (update it, or choose …)" from `SystemInfo`. That is a plugin-author request, not host code.
 
 ### 3.4 User override
 
 - Env `VESTRA_RENDER=cpu|gpu|auto` (developers, support); `VESTRA_SOFTWARE_RENDER=1` stays an alias of `cpu`.
 - A persisted preference `Auto | Software | GPU` in a host settings file in app data. Choosing GPU against a rule shows the reason once and keeps a warning in the `render:` line and About. Where the UI for it lives is a product decision (§5 Q1); M2 can ship with env and the file only.
+- **Ruling (user, 2026-10-28; Chrome/Firefox behaviour):** the preference is saved at once, the current run does not change, and it applies at the next start whether or not the user restarts. The API keeps the mode in effect now apart from the preference and the mode of the next start, and reports `restartPending` (true while the next start's mode differs from the mode this run started with; false again when the user changes the preference back). A plugin shows its menu item as "GPU rendering (restart to apply)" while it is true. Implemented in M2 (§8).
 
 ### 3.5 Sticky fallback after a crash (Firefox `DriverCrashGuard` pattern)
 
@@ -193,9 +194,13 @@ CPU mode is undisturbed through M3 because `WindowKind::Gl` + software video is 
 ## 5. Questions for the user (real trade-offs only)
 
 1. **Where the rendering choice lives in the UI.** The host has no settings page of its own (all pages are plugin pages). Options: (a) env and the file only, plus the About note (no UI work; recommended for M2); (b) a host menu item "Video ▸ Rendering ▸ Automatic / Software / GPU" (needs the interaction design lead); (c) a host settings page (new host UI surface).
+   - **User answer (2026-10-28):** the host adds no UI. The rendering mode is an SDK API (`rendering.state` / `rendering.setPreference` / `rendering.restart`, capability `rendering.manage`); the switch is a checkable item in a built-in plugin's menu (the video plugin, §8.4), applied at the next start, which the user accepted. **When GPU rendering is offered to users (M3 nightly, M4), a simple switch "Use GPU acceleration when available" is a required condition of M3** (Chrome/Firefox practice; unchecked = software rendering).
 2. **Remote denylist updates.** Firefox fetches its graphics blocklist from a signed remote collection; Chromium only updates with releases. We could deliver the list through the plugin repository's signed index (no new server, but the player then fetches data at start). Recommended: not now (built-in + local file); revisit if a bad driver ships between releases.
+   - **User answer:** no remote updates.
 3. **Warn about drivers that hurt the system, not the player** (the AMD process leak)? A `warn` rule would tell users of affected drivers to update; it is outside "rendering". Recommended: no, unless the 26.10.1 test shows the leak gone (then the note has a clear fix to point at).
+   - **User answer:** no warning; no leak rule, and About does not mention it.
 4. **Hybrid laptops when the default adapter is denied.** Following the §18 ruling, a denied 780M gives CPU mode even though the RTX 4070 is fine; the About note then says "choose High performance for Vestra in Windows' graphics settings". The alternative (silently using the other GPU) overrides Windows' per-app order. Recommended: follow the ruling (CPU + note).
+   - **User answer:** software rendering, and the reason's message points to Windows Settings > System > Display > Graphics (the host adds the hint to a denylist reason on Windows; no chooser of our own).
 5. M3 and M4 themselves (table above).
 
 ## Insufficient evidence / to verify
@@ -212,7 +217,7 @@ CPU mode is undisturbed through M3 because `WindowKind::Gl` + software video is 
 
 ## 7. M1: the decision module (API maintainer, 2026-10-28)
 
-Branch `render-modes` (worktree `C:\vestra\wt-rm`, from main f53a76f), uncommitted. Pure refactor: the same renderer is chosen for every input as before (test `gpu_exactly_when_it_was_wanted_before` checks all eight input combinations against the old `renderer::wanted`); only the log text changes.
+Branch `render-modes` (worktree `C:\vestra\wt-rm`, from main f53a76f). Pure refactor: the same renderer is chosen for every input as before (test `gpu_exactly_when_it_was_wanted_before` checks all eight input combinations against the old `renderer::wanted`); only the log text changes.
 
 - **New `playback/render_mode.rs`** (safe, pure): `Mode {Cpu, Gpu}`, `WindowKind {Default, OpenGl}` (CPU mode keeps Slint's default window renderer, as `winit().select()` did; GPU mode asks for femtovg), `Reason` with stable codes (`default`, `headless`, `no-gpu-backend`, `env`, `init-failed`, `window-fallback`; the M2 reasons come with M2), `Inputs {headless, gpu_backend, software_env}`, `Decision {mode, windows, reason}` with `gpu()`, `fall_back(Reason)`, `line()`, and `decide()` (first match: headless, no GPU backend, `VESTRA_SOFTWARE_RENDER`, else GPU). `software_requested` moved here from `renderer::wanted`.
 - **`renderer.rs`**: `trait GpuBackend` (associated `Frame: Deref<Target = platform::GpuFrame>`; `set_size`, `set_display_fps`, `frames`, `shown`, `size`, `reshow`, `latest`, `on_frame`, `attach`, `retarget`). `Render::new(&Decision)` (was `new(bool)`), `Render::reason()`, `Render::start_failed(Reason)` (new: `gpu_start` refused), `Render::fall_back(Reason)` (was `&str`), `Render::gpu() -> Option<&impl GpuBackend>` (was `Option<&platform::GpuHandle>`: the host can only use the contract). `renderer::wanted` removed.
@@ -223,3 +228,82 @@ Branch `render-modes` (worktree `C:\vestra\wt-rm`, from main f53a76f), uncommitt
 **Checks (Windows):** `cargo fmt --check` (host and `unsafe/render`), `cargo clippy --locked --workspace --all-targets -- -D warnings` and without `--workspace`, `cargo test --locked --workspace` (host 556 passed / 13 ignored), `cargo shear`, `typos`; in `src/`: `npm run check`, `format:check`, `test:sdk` (55/55), `boundaries`, `portability` (clean), `node scripts/check-unsafe-policy.mjs` (137, ok). macOS cross-check: `cargo clippy --locked --target aarch64-apple-darwin -- -D warnings` passes (the macOS `GpuBackend` impl and `vestra-gpu-render` type-check); with `--all-targets` it stops on `lease_stream::register` unused in the macOS test build, untouched by this change. Not run: plugin builds and tests (no TypeScript changed), GUI, GPU, macOS tests.
 
 **For the Mac test list:** start the player normally (one `render: GPU rendering, OpenGL windows; reason: default` line, GPU video as before), with `VESTRA_SOFTWARE_RENDER=1` (`reason: env`, software video), and PiP once in GPU mode (frames still reach PiP through `GpuBackend::latest`).
+
+## 8. M2: driver check, crash guard, preference and the rendering API (API maintainer, 2026-10-28)
+
+Branch `render-modes` in `C:\vestra\wt-rm`, on main dfe8cf3 (M1 merged as #101), uncommitted; SDK 1.5.35 on the SDK repository's branch `rendering-api`. Split decided by the user (2026-10-28): the host owns the mechanism and the safety net, the SDK gets a narrow API, and a built-in plugin offers the switch; the host adds no menu. Architecture summary: `doc/architecture/README.md` §4.3.
+
+### 8.1 Host
+
+- **Facts** (`host/rendering.rs` `startup`): `VESTRA_RENDER` (`cpu`/`software`/`gpu`/`auto`; an unknown value is one `render:` warning, then ignored) and its alias `VESTRA_SOFTWARE_RENDER`; the system build; the first adapter of `platform::gpu_adapters` (Windows: `vestra_win32::dxgi_adapters`, DXGI in Windows' order, driver version from `CheckInterfaceSupport(IDXGIDevice)`; no device is created; macOS and Linux: none yet); the denylist; `render.json`; the crash guard. A headless player reads and writes none of the files and asks for no adapter.
+- **Decision** (`playback/render_mode.rs`): `decide(&Facts, Preference)`; order in architecture §4.3. Holding denylist rules are always logged (`render: denylist rule … holds for … (software rendering): …`), so Windows on main reports the 780M rule although it has no GPU renderer.
+- **Denylist** (`playback/render_denylist.rs`, data `src/host/render-denylist.json`): two rules: `amd-780m-draw-stalls` (`0x1002`/`0x15BF`, driver 31.0.14005.0–31.0.14005.65535, action `cpu`) and `amd-780m-white-opengl-windows` (same device, driver `>= 32.0.32015.7029`, action `software-windows`, §9). No leak rule (§5 Q3). The local file `<app data>/render-denylist.json` adds or replaces rules by id; a broken one is ignored with a `render:` line.
+- **Crash guard** (`playback/render_state.rs` `GuardFile`, `<app data>/render-state.json`): armed before GPU rendering starts, settled 5 s after the event loop starts, on a window-renderer fallback and at quit; key = adapter name, driver version (macOS: the system build), player version; blocks for 7 days.
+- **Preference** (`render.json`, `{"preference":"auto|gpu|software"}`): written whole (temporary file renamed over it) by `rendering.setPreference`; read at start; a broken file counts as `auto` with a `render:` line.
+- **Reasons**: `Render` starts at `pending` in GPU mode and takes the decision's reason when the render thread installs GPU rendering (M1 review); `Render::now` reads mode and reason together. Codes: `default`, `pending`, `headless`, `no-gpu-backend`, `env`, `preference`, `denylist`, `previous-crash`, `init-failed`, `window-fallback`. `no-gpu-backend` names the system as people write it ("Windows").
+- **Restart** (main had none): `rendering.restart` spawns the player with `--vestra-restart PID`, this run's `--plugin` directories and `--silent`, and the current local file with `--vestra-resume`, then quits like Quit. The new player waits up to 20 s for the instance lock (`platform::single_instance_restarted`); development runs (no instance directory) do not wait. Resume: `host.resume`, from the parked GPU branch. (Both changed in §8.6.)
+- **API** (`capabilities/rendering_manage.rs`, `host/rendering.rs`, `system.rs`): `rendering.state` (no capability), `rendering.setPreference` and `rendering.restart` (`rendering.manage`, risky); `app.system` adds `renderingReason`. Error codes: `invalid`, `unsupported` (GPU on a system without a GPU renderer, headless), `unavailable` (denylist, crash guard), `failed` (file or spawn), `busy` (restart under way).
+- **M1 review fixes**: `Render::reason` is `cfg_attr(not(test), allow(dead_code))`; `vestra_gpu_render::Frame` moved below the `use` block; the system name is capitalised; §7 no longer says "uncommitted"; the reason no longer disagrees with `rendering` before the render thread installs GPU rendering (`pending`); `lease_stream::register` no longer fails the macOS test build (`cfg_attr(not(windows), allow(dead_code))`).
+- Host version 0.5.13.
+
+### 8.2 What Windows on main reports now (this machine)
+
+`rendering.state`: `mode: "software"`, reason `no-gpu-backend`, `gpu: {available: false, reason: no-gpu-backend}`; `setPreference("gpu")` → `unsupported`. With the 780M on driver 31.0.14005 the start-up log also has the draw-stall line; on 32.0.32015.7029 (§6) it has the white-window line, and the windows use Slint's software renderer (`render: software rendering, Slint's software window renderer; reason: no-gpu-backend (…)`) unless `SLINT_BACKEND` is set.
+
+### 8.3 SDK 1.5.35 (branch `rendering-api` in the SDK repository, from `origin/main` b633d18 = 1.5.34)
+
+`plugin.rendering.state()`, `setPreference(preference)`, `restartPlayer()`; types `Rendering`, `RenderingState`, `RenderingMode`, `RenderingPreference`, `RenderingReason`, `RenderingReasonCode` (an open union: the listed codes `| (string & {})`, new for the SDK); `SystemInfo.renderingReason?`; capability `rendering.manage` last in `CAPABILITIES` (`src/host-capabilities.ts` matches the host's `capabilities.json`: `capabilities:sync --check` passes); `TestHost.rendering` (`reason`, `preference`, `startedWith`, `gpu`, `restarts`); how-to *Offer a GPU rendering switch*; CHANGELOG "Who must change: nobody." A plugin that declares `rendering.manage` does not load on players before 0.5.13 (the manifest check refuses unknown capabilities), so only `state()` can meet `unsupported` there.
+
+### 8.4 Requests to plugin authors (§4.1 format; the host side is done)
+
+1. **Picture Adjustments (`src/plugins/video`)**: in the Video menu, a checkable item "GPU Rendering (Experimental)" (menu title case as the SDK guide writes it).
+   - Read `plugin.rendering.state()` when the menu opens (no capability). Checked when `preference` is `gpu`, or `auto` with `nextMode` `gpu`.
+   - Disabled while `gpu.available` is false, with `gpu.reason.message` as the reason (Windows on main: `no-gpu-backend`, "this player has no GPU renderer on Windows yet"; a denylisted driver: the denylist message, which already points to Windows' graphics settings).
+   - Toggling calls `setPreference("gpu" | "software")` (needs `rendering.manage`, risky: the store shows it amber); while `restartPending` the item reads "GPU Rendering (Restart to Apply)", and an optional "Restart Player to Apply" calls `restartPlayer()`. The choice applies at the next start even without a restart.
+   - `minPlayerVersion` 0.5.13, SDK ^1.5.35. Tests with `TestHost.rendering`.
+2. **Store (`src/plugins/store/labels.ts`)**: add `"rendering.manage": { text: "Choose GPU or software rendering and restart the player", risky: true }` and its translations. Until then the player's `host-agreement` test "CAPABILITY_INFO's store wording is the store's" fails with SDK 1.5.35 installed.
+3. **Workshop (`src/plugins/workshop`)**: `npm run vendor:sdk` after the SDK upgrade (its test "vendor/ matches a fresh build from the player's SDK" fails with 1.5.35 installed, as at every SDK release).
+4. **Info (`src/plugins/info`, About)**: optionally show `SystemInfo.renderingReason.message` beside the renderer (no capability). Nothing about the AMD process leak (§5 Q3).
+
+### 8.5 Checks (Windows, this machine, 2026-10-28)
+
+- Host (`C:\vestra\target-rm`, build lock held, deleted afterwards): `cargo fmt --check` (host, `unsafe/win32`, `unsafe/render`) 0; `cargo clippy --locked --workspace --all-targets -- -D warnings` 0 and without `--workspace` 0; `cargo clippy --locked --target aarch64-apple-darwin --all-targets -- -D warnings` 0 (the macOS test build passes now that `lease_stream::register` is fixed); `cargo test --locked --workspace`: host 570 passed / 13 ignored, `vestra-win32` 3 passed / 2 ignored (DXGI lists this machine's adapters); `VESTRA_UPDATE_CAPABILITIES=1 cargo test capabilities` regenerated `capabilities.json`; `cargo shear` 0; `typos` 0. `cargo deny check`: advisories fail on RUSTSEC-2026-0414 (pulldown-cmark wikilinks) and a yanked `clipboard-win`, both already on main and unrelated (bans, licenses, sources ok).
+- `src/` with SDK 1.5.35 installed (`npm install --no-save C:\vestra\sdk`, restored with `npm ci` afterwards): `npm run check` 0, `format:check` 0, `boundaries` 0, `unsafe-policy` (141 blocks) 0, `docs:check` 0, `portability` clean, `plugins:build` 0; `test:sdk` 55 of 56 (the store-label test, 8.4 item 2); plugin tests: 15 of 16 pass, `workshop` fails only its vendored-SDK test (8.4 item 3).
+- SDK (`C:\vestra\sdk`, branch `rendering-api`): `npm run check` 0, `format:check` 0, `npm test` 246 passed / 1 skipped / 0 failed, `npm pack --dry-run` 1.5.35 (110 files); the SDK agent also ran `lint`, `docs:check`, `doc-lint`, `docs:llms -- --check`, `docs`, `build` (all 0).
+- Not run: GUI, GPU, a real restart (the coordinator's: start the player on a file, call `rendering.restart` from a plugin, check the new player continues at the position; and the 780M window rule with and without `SLINT_BACKEND`).
+
+### 8.6 Review fixes (2026-10-28)
+
+Should-fix:
+
+1. **Crash guard on ordinary errors.** `GuardFile::arm` returns `Armed`, which settles the guard when dropped; `main` keeps it until it returns, so an early `?` (`Backend::start`, `host.load`, `compile_json`…) or an unwind settles it and only a process that dies leaves `attempting`. Test: a start returning `Err` leaves `ok`; `mem::forget` (a dead process) leaves `attempting`.
+2. **Restart loop.** A player started with `--vestra-restart` refuses `rendering.restart` with `busy` for 30 s (`RESTART_COOLDOWN`, `restart_refused`, tested). SDK docs say so.
+3. **Windows foreground.** `platform::allow_handoff_foreground()` before the new player is spawned.
+4. **Field agreement.** `host-agreement` test "WireRenderingState has the fields rendering.state answers with": the SDK's `WireRenderingState` (and its inline `gpu`) keys vs the keys of `Rendering::state`'s `json!`, and `WireRenderingReason` vs `Reason::json`.
+
+Nits:
+
+- Resume (changed again after the second review): the resume point travels with the open intent instead of mpv's global options. `host.resume` stores it in `Sources` (`resume_next_open`); the first open, close or provider the session admits takes it (`source_backend::resume_claim`, then `take_resume` after admission, so an open refused as stale, busy or malformed keeps it): an open of exactly that path gets the old pause state in its intent (so the session reports it) and loads with `loadfile <src> replace -1 pause=…,start=<t>` (`start_option`, mpv's per-file options); any other first source drops it with one `restart:` line, so a plugin opening another file first neither gets the position nor makes the resumed file start from 0 with a global `start` left over. The global `start`/`pause` setting, their clearing and the match by file name are gone. A source a resolver plugin claims opens paused as before, from its start. Tested (`resume_tests`).
+- `os.build` on macOS: builds with letters (`25C56`) match only with `=`, as text; documented on the field and tested.
+- `merged()` refuses a file whose rule (or exception) has an unknown `op`, `between` without `value2`, or a vendor/device id that is not hexadecimal; the caller logs one `render:` line and keeps the built-in rules. Tested.
+- A restarted player that does not get the lock in 20 s runs on its own with the usual `single instance: …; running on its own` line instead of quitting.
+- `software-windows` rules are matched against every adapter with a GPU of its own, not only the first (a hybrid laptop with Vestra on "High performance" may still draw WGL windows on the 780M); `cpu` and `warn` rules stay on the first adapter. `Facts.adapters` replaces `Facts.adapter`. Tested.
+- `VESTRA_RENDER=gpu` no longer overrides a `software-windows` rule (it still overrides the crash guard and `cpu` rules). Tested.
+- SDK: `TestHost` computes the next start's reason in the player's order (`headless`/`no-gpu-backend` before the preference; GPU chosen and available is `default`), its default messages are the player's, and the `preference` code is documented as "the user chose software rendering".
+
+Checks after the fixes: host `cargo fmt --check` 0, `cargo clippy --locked --workspace --all-targets -D warnings` 0 and without `--workspace` 0, macOS cross-clippy `--all-targets` 0, `cargo test --locked --workspace` (host 572 passed / 13 ignored, `vestra-win32` 3 / 2 ignored), `cargo shear` 0; `src/` with the SDK branch installed: `check` 0, `format:check` 0, `test:sdk` 56 of 57 (the store label, 8.4 item 2); SDK: `build`, `check`, `format:check`, `lint`, `doc-lint`, `docs:check`, `docs:llms -- --check` all 0, `npm test` 246 / 1 skipped / 0 failed, `npm pack --dry-run` 1.5.35.
+
+### 8.7 Noted for M3 (second review)
+
+- With a `software-windows` rule holding, `Facts::blocked` also rules GPU mode out (and `gpu.available` is false), because on main GPU mode needs OpenGL windows. M3 brings wgpu (Direct3D 12) windows on Windows, which do not use the driver's OpenGL: there the rule must only replace OpenGL windows (the CPU mode ladder and an OpenGL fallback), not exclude GPU mode.
+
+## 9. The first real window rule: white OpenGL windows on Adrenalin 26.10.1 (2026-10-28)
+
+**Evidence (coordinator, this machine, main 0.5.12 on Windows, software video):** after the 780M's driver update to AMD Adrenalin 26.10.1 (`amdkmdag.sys` 32.0.32015.7029, §6), the player's default window renderer, Slint's femtovg on OpenGL (WGL), shows **whole white windows**, the main window and plugin pop-ups alike. The frame log still counts 60 presented frames per second, but a desktop-duplication screenshot is white. With `SLINT_BACKEND=winit-software` (Slint's software renderer) everything draws, and 4K60 shows 60 frames per second. On the old driver 31.0.14005 femtovg drew correctly. So the fault is in the new driver's OpenGL, and it hits CPU mode, which main uses on Windows.
+
+**Change to M2 (coordinator's instruction):**
+
+- `WindowKind::Software` (Slint's software renderer) joins `Default` and `OpenGl`. A new denylist action `software-windows` means software rendering **and** software windows; it applies whatever decided the mode (on Windows today `no-gpu-backend`) and rules GPU out like `cpu`. It is detected before any window or GL context exists: `platform::gpu_adapters` reads DXGI at start.
+- Rule `amd-780m-white-opengl-windows`: Windows, vendor `0x1002`, device `0x15BF` (the 780M only for now), driver `>= 32.0.32015.7029` (no upper bound until AMD fixes it), action `software-windows`. The draw-stall rule for 31.0.14005 (`cpu`) stays.
+- `SLINT_BACKEND`, when set, wins: the host leaves the window renderer to Slint and logs that the rule was not applied to the windows. The user's temporary `SLINT_BACKEND=winit-software` can be removed once this is merged.
+- Window ladder of CPU mode on a matching driver: software windows directly (no OpenGL attempt, which would "succeed" and draw white).

@@ -438,6 +438,23 @@ impl Backend {
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
+                        // A restarted player continues its first file where
+                        // the replaced one was (`host/rendering.rs`): the
+                        // next open of that file loads with `start=` and its
+                        // pause state (`source_backend::resume_claim`).
+                        if command.method == "host.resume" {
+                            sources.resume_next_open(
+                                crate::playback::source_backend::ResumePoint {
+                                    source: command.params["source"]
+                                        .as_str()
+                                        .unwrap_or_default()
+                                        .into(),
+                                    seconds: command.params["seconds"].as_f64().unwrap_or(0.),
+                                    paused: command.params["paused"].as_bool() == Some(true),
+                                },
+                            );
+                            continue;
+                        }
                         if command.method == "playback.stats" {
                             let frames = sequence.load(Ordering::Relaxed)
                                 + out_render.gpu().map_or(0, |gpu| gpu.frames());
