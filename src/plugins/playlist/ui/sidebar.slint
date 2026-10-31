@@ -1,12 +1,19 @@
 // Playlist sidebar (ui-spec §5): 31px tab strip, single-line 20px rows (62px rows with a thumbnail, 0.1.11) on
 // the list background, 35px bottom bar. Icons come from @vestra/icons.slint.
-import { Palette, ScrollView } from "std-widgets.slint";
+import { ListView, Palette } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { ToolTipArea } from "@vestra/widgets.slint";
 
+// One entry of the list. `id` is the row's stable key: the player's row patches (player 0.6.0)
+// match rows by it, so a reorder, an insertion or a removal moves row elements instead of
+// rewriting rows.
 export struct PlaylistRow {
-    rowId: string,
+    id: string,
+    // The row's place in the whole list (from 1) while a search filters; 0 otherwise, and the
+    // row shows its index in the list (so moving a row rewrites no other row).
+    number: int,
+    // The title.
     label: string,
     duration: string,
     // The source, and the player's message when it failed to play.
@@ -21,6 +28,9 @@ export struct PlaylistRow {
     // the line under the title (the file's folder, the link's host); "" without thumbnails.
     media: string,
     detail: string,
+    // The 96×54 thumbnail: a transparent 1×1 until one is made, and for rows away from the
+    // view or without thumbnails. Rows holding images update in place (player 0.5.1).
+    thumb: image,
 }
 
 // Glyphs of this panel only, in the V-Line style of @vestra/icons.slint (round-capped
@@ -50,17 +60,11 @@ component Glyph inherits Path {
 }
 
 export global PlaylistBridge {
-    // The list is `row-count` rows tall; `rows` holds at most 200 of them, from `first-row` on
-    // (the plugin sends the part around the view as it scrolls).
+    // Every shown row (the whole list, or a search's matches), drawn by a `ListView`: only the
+    // rows in view have elements.
     in property <[PlaylistRow]> rows;
     // Rows with a 96×54 thumbnail (62px), or compact single-line rows (20px).
     in property <bool> thumbnails;
-    // One picture per entry of `rows` (a transparent 1×1 until one is made). A list of its
-    // own: the player replaces a list holding images as a whole, and `rows` stays plain so
-    // its row elements are updated in place (a rebuilt row loses a click in progress).
-    in property <[image]> thumbs;
-    in property <int> row-count;
-    in property <int> first-row;
     // The total duration ("" when none is known), shown as "Filtered …" while `filtering`.
     in property <string> total;
     in property <bool> detached;
@@ -199,22 +203,49 @@ export component PlaylistSidebar inherits Rectangle {
     private property <length> row-height: PlaylistBridge.thumbnails ? 62px : 20px;
     // The selected-row background (ui-spec §5.2); the theme has no token for it.
     private property <color> selected-bg: Theme.selected-bg;
+    private property <int> row-count: PlaylistBridge.rows.length;
+    // Pointer handling is the list's, not the rows' (large lists P3): a `ListView` destroys the
+    // element of a row scrolled out of view, so a press, a drag (with edge scrolling) or a
+    // double-click is tracked by one TouchArea around the list, and the pointer's y maps to a
+    // row by the fixed row height and the list's scroll (`row-at`).
+    // The row pressed by the left button ("" below the rows), where, and whether a plain click
+    // on it collapses a multi-selection on release (kept for dragging otherwise).
+    private property <string> press-row;
+    private property <length> press-y;
+    private property <bool> collapse;
+    // Pressed during this hover: the row shows no tooltip until the pointer leaves it.
+    private property <string> quiet-row;
+    private property <int> hover-row: pointer.has-hover ? root.row-at(pointer.mouse-y) : -1;
+    changed hover-row => { root.quiet-row = ""; }
     private property <bool> dragging;
     private property <int> drop-index: -1;
-    // The dragged row (a row element can be reused for another row while the list scrolls).
+    // The dragged row.
     private property <string> drag-row;
     // G-08: the pointer's y in the list's frame while dragging; within 20px of the top or
     // bottom edge the list scrolls by one row per 50 ms, up to three nearer the edge.
     private property <length> drag-y;
-    private property <length> max-scroll: max(0px, PlaylistBridge.row-count * root.row-height - list.height);
+    private property <length> max-scroll: max(0px, root.row-count * root.row-height - list.visible-height);
     private property <length> edge-depth: root.drag-y < 20px ? 20px - root.drag-y
         : root.drag-y > list.height - 20px ? root.drag-y - (list.height - 20px) : 0px;
     private property <int> edge-rows: min(3, 1 + Math.floor(root.edge-depth / 7px));
 
     changed scroll-request => { list.content-y = -PlaylistBridge.scroll-to-y * 1px; }
     private property <int> scroll-request: PlaylistBridge.scroll-request;
-    function drop-index-at(y: length) -> int {
-        return clamp(Math.round((y - list.content-y) / root.row-height), 0, PlaylistBridge.row-count);
+    // The row at `y` in the list's frame (may be outside 0 … row-count - 1).
+    pure function row-at(y: length) -> int {
+        return Math.floor((y - list.content-y) / root.row-height);
+    }
+    pure function drop-index-at(y: length) -> int {
+        return clamp(Math.round((y - list.content-y) / root.row-height), 0, root.row-count);
+    }
+    function end-drag(drop: bool) {
+        root.dragging = false;
+        PlaylistBridge.dragging(false);
+        if drop { PlaylistBridge.drop-row(root.drag-row, root.drop-index); }
+        root.drop-index = -1;
+    }
+    function report-area() {
+        PlaylistBridge.list-area(-list.content-y / 1px, list-area.height / 1px, list-area.y / 1px);
     }
     edge-timer := Timer {
         interval: 50ms;
@@ -318,60 +349,116 @@ export component PlaylistSidebar inherits Rectangle {
                 background: Theme.bg-list;
                 init => {
                     list.content-y = -PlaylistBridge.show-y * 1px;
-                    PlaylistBridge.list-area(-list.content-y / 1px, self.height / 1px, self.y / 1px);
+                    root.report-area();
                 }
-                changed height => { PlaylistBridge.list-area(-list.content-y / 1px, self.height / 1px, self.y / 1px); }
-                changed y => { PlaylistBridge.list-area(-list.content-y / 1px, self.height / 1px, self.y / 1px); }
-                // The list menu opens when the right button is released (as the main menu, G-15).
-                TouchArea {
+                changed height => { root.report-area(); }
+                changed y => { root.report-area(); }
+                // Every press, drag, release and double-click on the list (see `press-row`). The
+                // rows hold no TouchArea, so presses reach this one through them; the scroll bar
+                // keeps its own.
+                pointer := TouchArea {
                     pointer-event(event) => {
                         if event.kind == PointerEventKind.down {
                             list-focus.focus();
-                        } else if event.kind == PointerEventKind.up && event.button == PointerEventButton.right {
+                            let at = root.row-at(self.mouse-y);
+                            let hit = at >= 0 && at < root.row-count;
+                            let pressed = hit ? PlaylistBridge.rows[at].id : "";
+                            root.quiet-row = pressed;
+                            if event.button == PointerEventButton.left {
+                                root.press-y = self.mouse-y;
+                                root.press-row = pressed;
+                                root.collapse = false;
+                                // Below the rows: focus only.
+                                if hit {
+                                    if event.modifiers.shift {
+                                        PlaylistBridge.select-row(pressed, false, true);
+                                    } else if event.modifiers.control || event.modifiers.meta {
+                                        PlaylistBridge.select-row(pressed, true, false);
+                                    } else if !PlaylistBridge.rows[at].selected {
+                                        PlaylistBridge.select-row(pressed, false, false);
+                                    } else {
+                                        // Keep a multi-selection for dragging; a plain click collapses it on release.
+                                        root.collapse = true;
+                                    }
+                                }
+                            }
+                            // Right press selects; the menu opens on release (G-15).
+                            if event.button == PointerEventButton.right && hit && !PlaylistBridge.rows[at].selected {
+                                PlaylistBridge.select-row(pressed, false, false);
+                            }
+                        }
+                        // The list menu opens when the right button is released (as the main menu, G-15).
+                        if event.kind == PointerEventKind.up && event.button == PointerEventButton.right {
                             PlaylistBridge.context-menu((self.absolute-position.x + self.mouse-x) / 1px, (self.absolute-position.y + self.mouse-y) / 1px);
                         }
-                    }
-                }
-                list := ScrollView {
-                    x: 0;
-                    y: 0;
-                    changed content-y => { PlaylistBridge.list-area(-self.content-y / 1px, list-area.height / 1px, list-area.y / 1px); }
-                    width: parent.width;
-                    height: min(parent.height, PlaylistBridge.row-count * root.row-height);
-                    horizontal-scrollbar-policy: always-off;
-                    content-width: self.visible-width;
-                    content-height: PlaylistBridge.row-count * root.row-height;
-                    for row[index] in PlaylistBridge.rows: Rectangle {
-                        // The row's place in the whole list.
-                        property <int> at: PlaylistBridge.first-row + index;
-                        property <length> press-y;
-                        property <bool> collapse;
-                        property <color> ink: row.current ? Theme.playing : row.selected ? Theme.text : row.played ? Theme.text-played : Theme.text-list;
-                        x: 0;
-                        y: self.at * root.row-height;
-                        width: list.visible-width;
-                        height: root.row-height;
-                        background: row.selected ? root.selected-bg : transparent;
-                        // The playing row: a 2px bar in the playing colour at its left edge. Elements
-                        // that come and go with a row's state, the pointer or a drag always exist and
-                        // use `visible` (a toggled `if` rebuilds the accessibility tree, host rule
-                        // 2026-10-27); a row element also takes another row's data as the list scrolls.
-                        Rectangle {
-                            visible: row.current;
-                            x: 0;
-                            y: 3px;
-                            width: 2px;
-                            height: parent.height - 6px;
-                            border-radius: 1px;
-                            background: Theme.playing;
+                        if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                            if root.dragging {
+                                root.end-drag(true);
+                            } else if root.collapse {
+                                PlaylistBridge.select-row(root.press-row, false, false);
+                            }
+                            root.collapse = false;
+                            root.press-row = "";
                         }
-                        ToolTipArea {
-                            width: parent.width;
-                            height: parent.height;
-                            text: row.problem == "missing" ? @tr("{}\nThe file does not exist", row.tooltip)
+                        // The grab was taken away (the window lost the pointer): no drop.
+                        if event.kind == PointerEventKind.cancel {
+                            if root.dragging { root.end-drag(false); }
+                            root.collapse = false;
+                            root.press-row = "";
+                        }
+                    }
+                    moved => {
+                        if !self.pressed { return; }
+                        if !root.dragging && PlaylistBridge.can-drag && root.press-row != "" && abs(self.mouse-y - root.press-y) > 4px {
+                            root.dragging = true;
+                            root.drag-row = root.press-row;
+                            PlaylistBridge.dragging(true);
+                        }
+                        if root.dragging {
+                            root.drag-y = self.mouse-y;
+                            root.drop-index = root.drop-index-at(root.drag-y);
+                        }
+                    }
+                    // Called before the release's pointer event: `press-row` is the second press's row.
+                    double-clicked => {
+                        if !root.dragging && root.press-row != "" { PlaylistBridge.play-row(root.press-row); }
+                    }
+                    list := ListView {
+                        x: 0;
+                        y: 0;
+                        width: parent.width;
+                        height: min(parent.height, root.row-count * root.row-height);
+                        horizontal-scrollbar-policy: always-off;
+                        changed content-y => { root.report-area(); }
+                        for row[index] in PlaylistBridge.rows: Rectangle {
+                            property <color> ink: row.current ? Theme.playing : row.selected ? Theme.text : row.played ? Theme.text-played : Theme.text-list;
+                            // Its place in the whole list (also while a search filters) and title.
+                            property <string> title: "\{row.number > 0 ? row.number : index + 1}. \{row.label}";
+                            property <string> tip: row.problem == "missing" ? @tr("{}\nThe file does not exist", row.tooltip)
                                 : row.problem == "unreadable" ? @tr("{}\nThe file does not exist or cannot be read now; can retry", row.tooltip)
                                 : row.problem == "unplayable" ? @tr("{}\nCannot open this media", row.tooltip)
                                 : row.tooltip;
+                            // Fixed per row style: the list maps the pointer to a row (and a drop
+                            // point to a row, A15) by this height.
+                            height: root.row-height;
+                            background: row.selected ? root.selected-bg : transparent;
+                            accessible-role: list-item;
+                            accessible-label: self.title;
+                            accessible-item-index: index;
+                            accessible-item-selectable: true;
+                            accessible-item-selected: row.selected;
+                            // The playing row: a 2px bar in the playing colour at its left edge. Elements
+                            // that come and go with a row's state always exist and use `visible` (a
+                            // toggled `if` rebuilds the accessibility tree, host rule 2026-10-27).
+                            Rectangle {
+                                visible: row.current;
+                                x: 0;
+                                y: 3px;
+                                width: 2px;
+                                height: parent.height - 6px;
+                                border-radius: 1px;
+                                background: Theme.playing;
+                            }
                             // The row style stays an `if`: it changes only with the bottom bar's toggle, and
                             // both styles always present would double every row's elements.
                             if !PlaylistBridge.thumbnails: HorizontalLayout {
@@ -383,7 +470,7 @@ export component PlaylistSidebar inherits Rectangle {
                                 // without it (a hidden element keeps its place in a layout).
                                 spacing: 0px;
                                 Text {
-                                    text: row.label;
+                                    text: title;
                                     color: ink;
                                     font-size: Theme.font-tab; // 12px (U-06)
                                     vertical-alignment: center;
@@ -414,7 +501,6 @@ export component PlaylistSidebar inherits Rectangle {
                             if PlaylistBridge.thumbnails: Rectangle {
                                 width: 100%;
                                 height: 100%;
-                                property <image> picture: index < PlaylistBridge.thumbs.length ? PlaylistBridge.thumbs[index] : @image-url("");
                                 Rectangle {
                                     x: 8px;
                                     y: 4px;
@@ -425,7 +511,7 @@ export component PlaylistSidebar inherits Rectangle {
                                     background: Theme.bg-bar;
                                     // Until a picture is made (and when there is none): an audio or link glyph.
                                     Glyph {
-                                        visible: picture.width <= 1 && (row.media == "audio" || row.media == "link");
+                                        visible: row.thumb.width <= 1 && (row.media == "audio" || row.media == "link");
                                         glyph: row.media == "audio" ? PlaylistGlyphs.audio : PlaylistGlyphs.link;
                                         box-width: 14px;
                                         box-height: 14px;
@@ -436,7 +522,7 @@ export component PlaylistSidebar inherits Rectangle {
                                     Image {
                                         width: 100%;
                                         height: 100%;
-                                        source: picture;
+                                        source: row.thumb;
                                         image-fit: contain;
                                     }
                                     Rectangle {
@@ -462,7 +548,7 @@ export component PlaylistSidebar inherits Rectangle {
                                     y: 5px;
                                     width: parent.width - 120px - (row.failed ? 18px : 0px);
                                     height: 32px;
-                                    text: row.label;
+                                    text: title;
                                     wrap: word-wrap;
                                     overflow: elide;
                                     color: ink;
@@ -487,76 +573,29 @@ export component PlaylistSidebar inherits Rectangle {
                                     color: Theme.accent;
                                 }
                             }
-                            TouchArea {
-                                pointer-event(event) => {
-                                    if event.kind == PointerEventKind.down {
-                                        list-focus.focus();
-                                        if event.button == PointerEventButton.left {
-                                            press-y = self.mouse-y;
-                                            collapse = false;
-                                            if event.modifiers.shift {
-                                                PlaylistBridge.select-row(row.rowId, false, true);
-                                            } else if event.modifiers.control || event.modifiers.meta {
-                                                PlaylistBridge.select-row(row.rowId, true, false);
-                                            } else if !row.selected {
-                                                PlaylistBridge.select-row(row.rowId, false, false);
-                                            } else {
-                                                // Keep a multi-selection for dragging; a plain click collapses it on release.
-                                                collapse = true;
-                                            }
-                                        }
-                                        // Right press selects; the menu opens on release (G-15).
-                                        if event.button == PointerEventButton.right && !row.selected {
-                                            PlaylistBridge.select-row(row.rowId, false, false);
-                                        }
-                                    }
-                                    if event.kind == PointerEventKind.up && event.button == PointerEventButton.right {
-                                        PlaylistBridge.context-menu((self.absolute-position.x + self.mouse-x) / 1px, (self.absolute-position.y + self.mouse-y) / 1px);
-                                    }
-                                    if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
-                                        if root.dragging {
-                                            root.dragging = false;
-                                            PlaylistBridge.dragging(false);
-                                            PlaylistBridge.drop-row(root.drag-row, root.drop-index);
-                                            root.drop-index = -1;
-                                        } else if collapse {
-                                            PlaylistBridge.select-row(row.rowId, false, false);
-                                        }
-                                        collapse = false;
-                                    }
-                                }
-                                moved => {
-                                    if !self.pressed { return; }
-                                    if !root.dragging && PlaylistBridge.can-drag && abs(self.mouse-y - press-y) > 4px {
-                                        root.dragging = true;
-                                        root.drag-row = row.rowId;
-                                        PlaylistBridge.dragging(true);
-                                    }
-                                    if root.dragging {
-                                        root.drag-y = at * root.row-height + list.content-y + self.mouse-y;
-                                        root.drop-index = root.drop-index-at(root.drag-y);
-                                    }
-                                }
-                                double-clicked => { PlaylistBridge.play-row(row.rowId); }
+                            // The tooltip only watches the pointer (presses go through to the list's
+                            // TouchArea); as the ToolTipArea, none after a press until the pointer leaves.
+                            if row.id != root.quiet-row: Tooltip {
+                                // Interpolated text is plain: `*` or `_` in it are not markup.
+                                text: @markdown("\{tip}");
                             }
                         }
-                        // Insertion marker while dragging.
-                        Rectangle {
-                            visible: root.dragging && root.drop-index == at;
-                            y: 0;
-                            height: 2px;
-                            background: Theme.accent;
-                        }
-                        Rectangle {
-                            visible: root.dragging && root.drop-index == PlaylistBridge.row-count && at == PlaylistBridge.row-count - 1;
-                            y: parent.height - 2px;
-                            height: 2px;
-                            background: Theme.accent;
-                        }
+                    }
+                    // Insertion marker while dragging: above the row at `drop-index`, or below the
+                    // last row; one element for the list (the row at the marker may have none).
+                    Rectangle {
+                        property <length> at: root.drop-index * root.row-height + list.content-y
+                            - (root.drop-index == root.row-count && root.row-count > 0 ? 2px : 0px);
+                        visible: root.dragging && root.drop-index >= 0 && self.at >= 0px && self.at <= list.height - 2px;
+                        x: 0;
+                        y: self.at;
+                        width: list.visible-width;
+                        height: 2px;
+                        background: Theme.accent;
                     }
                 }
                 Text {
-                    visible: PlaylistBridge.filtering && PlaylistBridge.row-count == 0;
+                    visible: PlaylistBridge.filtering && root.row-count == 0;
                     width: 100%;
                     height: 100%;
                     text: @tr("No matches");

@@ -116,7 +116,7 @@ async function start() {
       await host.settle();
     },
     play: async (index: number) => {
-      panel.emit("play-row", (app.rows()[index] as unknown as { rowId: string }).rowId);
+      panel.emit("play-row", (app.rows()[index] as unknown as { id: string }).id);
       await pause();
     },
     async close() {

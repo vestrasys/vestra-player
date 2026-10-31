@@ -38,8 +38,6 @@ import {
   THUMB_MARGIN,
   THUMB_SEND_MARGIN,
   USER_SCROLL_HOLD_MS,
-  WINDOW_ROWS,
-  windowStart,
 } from "./scroll.ts";
 import { defaults, PERSIST_CHECK_MS, Store, type Saved } from "./store.ts";
 import { ffmpegRunner, HOLD_AFTER_OPEN_MS, THUMB_WIDTH, Thumbnailer } from "./thumbs.ts";
@@ -220,19 +218,25 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   prober.import(store?.cache.value);
   thumbs.import(store?.thumbs.value);
   player.setFast(settings.gapless);
-  const snapshot = (): [Saved, string] => {
+  /**
+   * What the saved list depends on besides the rows, cheap to compare: the settings (a few
+   * fields), the sort and `queue.revision`, which every change of the rows, their lengths
+   * or the selection moves. The list's snapshot (every row) is taken only when this changed.
+   */
+  const signature = () => {
     settings.repeat = queue.repeat;
     settings.shuffle = queue.shuffle;
-    const value = Store.snapshot(queue, settings);
-    return [value, JSON.stringify(value)];
+    return `${queue.revision}\n${queue.sortKey}\n${queue.descending}\n${JSON.stringify(settings)}`;
   };
-  let saved = snapshot()[1];
+  let saved = signature();
+  /** Whether anything to save changed since the last `persist`. */
+  const dirty = () => signature() !== saved || prober.dirty || thumbs.dirty;
   /** Hand changes to the stores; they write within a second (C17). */
   const persist = () => {
     if (!store) return;
-    const [value, json] = snapshot();
-    if (json !== saved) store.lists.save(value);
-    saved = json;
+    const now = signature();
+    if (now !== saved) store.lists.save(Store.snapshot(queue, settings));
+    saved = now;
     if (prober.dirty) store.cache.save(prober.export());
     if (thumbs.dirty) store.thumbs.save(thumbs.export());
   };
@@ -243,11 +247,14 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       await Promise.all([store?.lists.flush(), store?.cache.flush(), store?.thumbs.flush()]);
     } catch (error) {
       queue.message = `Cannot save the list: ${errorText(error)}`;
+      // After an await, outside the SDK's handlers: show it now (SDK 1.5.45 precise invalidation).
+      plugin.update();
     }
   };
   let persistTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Called on every update pass: a timer only when something changed (it gathers a burst of changes). */
   const persistSoon = () => {
-    if (!store || persistTimer) return;
+    if (!store || persistTimer || !dirty()) return;
     persistTimer = setTimeout(() => {
       persistTimer = null;
       persist();
@@ -345,7 +352,11 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       try {
         const folder = await plugin.dialogs.openDirectory({ title: play ? "Open Folder" : "Add Folder to Playlist" });
         if (!folder) return;
-        const slow = setTimeout(() => queue.notice("Scanning folder…"), 1000);
+        // A timer is outside the SDK's handlers: ask for the update (SDK 1.5.45 precise invalidation).
+        const slow = setTimeout(() => {
+          queue.notice("Scanning folder…");
+          plugin.update();
+        }, 1000);
         let scan;
         try {
           scan = await scanFolder(folder, { signal: stop.signal });
@@ -803,7 +814,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const scroller = { request: 0, to: 0, sentAt: Number.NEGATIVE_INFINITY, userAt: Number.NEGATIVE_INFINITY };
   let lastPlaying: string | null = null;
   // The panel is created anew each time it shows (the player builds it when it appears), so
-  // it opens on the playing row: centred while hidden (`show-y`, and the rows sent around it),
+  // it opens on the playing row: centred while hidden (`show-y`),
   // then once more when it shows (`appeared.pending`), and again while its height settles.
   const appeared = { at: Number.NEGATIVE_INFINITY, pending: false, reported: false };
   const appear = () => {
@@ -860,10 +871,21 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     if (state) detachedNow = state.detached;
   });
 
-  // The list shows `rows`: at most `WINDOW_ROWS` of the shown rows from `firstRow` on, placed
-  // in a list `rowCount` rows tall (the player takes at most 1024 array rows and 4096 values
-  // per property; the whole list was ~1 MB per update with 3000 rows and was refused).
-  let firstRow = 0;
+  /** Per row: the thumbnail placeholder's kind and the line under the title (a row's source never changes). */
+  const looks = new WeakMap<Row, { media: string; detail: string }>();
+  const lookOf = (row: Row) => {
+    let look = looks.get(row);
+    if (!look) {
+      look = { media: row.kind === "url" ? "link" : (mediaKind(row.source) ?? ""), detail: detailOf(row) };
+      looks.set(row, look);
+    }
+    return look;
+  };
+
+  // 0.2.0 (large lists P3): `rows` is every shown row, drawn by a `ListView` (only the rows in
+  // view have elements). Each row carries its `id`: on player 0.6.0 the SDK sends what changed
+  // as row operations matched by it (a move is one operation, a changed row one `set`), and
+  // the player applies them to the live list.
   let onScreen = "";
   list.bind(() => {
     persistSoon();
@@ -878,8 +900,6 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     }
     const height = rowHeight();
     const pictures = settings.thumbnails;
-    firstRow = windowStart(firstRow, listArea.scroll, listArea.height, shown.length, height);
-    const page = shown.slice(firstRow, firstRow + WINDOW_ROWS);
     // Durations (and thumbnails) are read for the rows on screen only (never for the whole
     // list up front); with thumbnails, also for `THUMB_MARGIN` rows above and below.
     const top = Math.floor(Math.max(0, listArea.scroll) / height);
@@ -900,9 +920,12 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     }
     // Thumbnails only while the list is on screen and has its size.
     thumbs.want(pictures && sized && !hidden() ? near : []);
+    // Pictures go to the rows near the view only (the view's image budget); the others
+    // show the placeholder.
     const sendFrom = top - THUMB_SEND_MARGIN,
       sendTo = top + rowsOnScreen + THUMB_SEND_MARGIN;
-    // A row's number is its place in the whole list (also while a search filters).
+    // While a search filters, a row's number is its place in the whole list (sent with it);
+    // otherwise the list numbers rows by their index.
     const index = queue.filtering ? new Map(queue.rows.map((row, i) => [row.rowId, i])) : null;
     let sum = 0,
       known = 0,
@@ -917,33 +940,26 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     // "+": some row's length is not known (not read: off screen, ffprobe failed, or a URL that has not played).
     const total = known ? clock(sum) + (partial ? "+" : "") : "";
     return {
-      rowCount: shown.length,
-      firstRow,
-      // Plain values only: the player updates a changed row in place (it replaces a model
-      // holding images as a whole, rebuilding every row element). The pictures are `thumbs`.
-      rows: page.map((row: Row, i) => ({
-        rowId: row.rowId,
-        label: `${(index ? index.get(row.rowId)! : firstRow + i) + 1}. ${row.title}`,
-        duration: lengthOf(row) !== null ? clock(lengthOf(row)!) : row.probe === "failed" ? "--:--" : "",
-        tooltip: row.error?.kind === "message" ? `${row.source}\n${row.error.text}` : row.source,
-        problem: row.error && row.error.kind !== "message" ? row.error.kind : "",
-        selected: queue.selection.has(row.rowId),
-        current: row.rowId === queue.binding?.rowId,
-        played: row.played,
-        failed: row.status === "failed",
-        // The thumbnail's placeholder ("video", "audio", "link" or ""), and the line under the
-        // title: the file's folder, or the link's host.
-        media: !pictures ? "" : row.kind === "url" ? "link" : (mediaKind(row.source) ?? ""),
-        detail: pictures ? detailOf(row) : "",
-      })),
-      // One picture per row of `rows` (the placeholder until one is made, and outside
-      // `THUMB_SEND_MARGIN` rows of the view); empty without thumbnails.
-      thumbs: pictures
-        ? page.map((row, i) => {
-            const at = firstRow + i;
-            return (at >= sendFrom && at < sendTo && thumbs.picture(row.rowId)) || placeholder;
-          })
-        : [],
+      rows: shown.map((row: Row, at) => {
+        const look = pictures ? lookOf(row) : null;
+        return {
+          id: row.rowId,
+          number: index ? index.get(row.rowId)! + 1 : 0,
+          label: row.title,
+          duration: lengthOf(row) !== null ? clock(lengthOf(row)!) : row.probe === "failed" ? "--:--" : "",
+          tooltip: row.error?.kind === "message" ? `${row.source}\n${row.error.text}` : row.source,
+          problem: row.error && row.error.kind !== "message" ? row.error.kind : "",
+          selected: queue.selection.has(row.rowId),
+          current: row.rowId === queue.binding?.rowId,
+          played: row.played,
+          failed: row.status === "failed",
+          // The thumbnail's placeholder ("video", "audio", "link" or ""), and the line under the
+          // title: the file's folder, or the link's host.
+          media: look?.media ?? "",
+          detail: look?.detail ?? "",
+          thumb: (pictures && at >= sendFrom && at < sendTo && thumbs.picture(row.rowId)) || placeholder,
+        };
+      }),
       thumbnails: pictures,
       total,
       filtering: queue.filtering,

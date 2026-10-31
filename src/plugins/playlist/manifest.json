@@ -1,6 +1,6 @@
 {
   "id": "vestra.playlist",
-  "version": "0.1.12",
+  "version": "0.2.0",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -24,5 +24,5 @@
     "open",
     "drag and drop"
   ],
-  "minPlayerVersion": "0.5.1"
+  "minPlayerVersion": "0.6.0"
 }

@@ -175,6 +175,8 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
             queue.removeRow(rowId);
             queue.selected = duplicate.rowId;
             queue.notice("The file's canonical path matches an existing item; that item is selected");
+            // After an await (also from an advance nobody awaits): show it now (SDK 1.5.45).
+            scope.update();
             return;
           }
           row.key = key;
