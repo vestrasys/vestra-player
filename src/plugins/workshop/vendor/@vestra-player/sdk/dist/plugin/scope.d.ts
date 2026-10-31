@@ -15,6 +15,7 @@ export declare class ScopeImpl implements Plugin {
     readonly video: {
         view: () => import("./types.ts").VideoView;
         render: () => import("./types.ts").RenderOptions;
+        upscaling: import("./types.ts").VideoUpscaling;
         filter(id: string): import("./types.ts").VideoFilter;
     };
     readonly audio: {

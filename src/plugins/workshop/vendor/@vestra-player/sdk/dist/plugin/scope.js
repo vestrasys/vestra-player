@@ -17,7 +17,7 @@ import { packages } from "./packages.js";
 import { osd } from "./osd.js";
 import { mainWindow } from "./window.js";
 import { bindingsApi } from "./bindings.js";
-import { clipboard, host, power, rendering, secrets, storage, system, tools, } from "./services.js";
+import { clipboard, host, power, rendering, secrets, storage, system, tools, videoUpscaling, } from "./services.js";
 export class ScopeImpl {
     runtime;
     #parent;
@@ -49,6 +49,7 @@ export class ScopeImpl {
         ...videoFilters(this),
         view: () => videoView(this),
         render: () => videoRender(this),
+        upscaling: videoUpscaling(this),
     };
     audio = audioFilters(this);
     subtitles = subtitles(this);
