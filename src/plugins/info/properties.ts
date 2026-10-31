@@ -63,6 +63,31 @@ export function pageText(i18n: I18n, page: Row[]) {
   return `${resolve(list(lines, "lines"))}\n`;
 }
 
+/** Columns a text takes: wide (CJK, fullwidth) characters count two. */
+export function columns(text: string) {
+  let n = 0;
+  for (const char of text) n += /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|[\u{20000}-\u{3fffd}]/u.test(char) ? 2 : 1;
+  return n;
+}
+
+/**
+ * The label of a `label: value` row that takes the most columns in the
+ * player's language (`""` without one): properties.slint lays out this one
+ * label to size the label column, instead of every row's.
+ */
+export function widestLabel(i18n: I18n, page: Row[]): TextArg {
+  const { resolve } = i18n;
+  let widest: TextArg = "";
+  let most = 0;
+  for (const row of page) {
+    if (row.heading || row.label === "") continue;
+    // A text value in the player's language; a string or number is data, shown as it is.
+    const n = columns(typeof row.label === "object" ? resolve(row.label) : String(row.label));
+    if (n > most) [widest, most] = [row.label, n];
+  }
+  return widest;
+}
+
 const isUrl = (source: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(source);
 const size = (w: number | null | undefined, h: number | null | undefined) => (w && h ? `${w}×${h}` : null);
 const fps = (n: number | null | undefined) => (n ? `${Number(n.toFixed(3))} fps` : null);

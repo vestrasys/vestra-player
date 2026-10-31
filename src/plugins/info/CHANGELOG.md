@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.10
+
+- The About window's plugin list and the Playback Properties pages are Slint `ListView`s: only the rows in view are built, however many plugins or streams and tags a file has. Who must change: nobody. What users see: the same lists, rows, wrapping, scrolling and text selection.
+- Playback Properties no longer lays out every row's label (hidden) to size the label column. The plugin picks the page's widest label in the player's language (wide CJK characters count two columns) and sends it as `label-sample`; the window lays out that one label. The column is still 120px or the widest label.
+- The page tabs are the shared library `Tabs` (`@vestra/widgets.slint`) instead of a local copy: the same 74px strip, now with the keyboard (Left/Right/Home/End once focused with Tab) and the tab-list accessibility role. Clicking the tab already shown no longer clears the status line.
+- Requires player 0.6.0 (`minPlayerVersion`), which ships the library `Tabs`.
+
 ## 0.1.9
 
 - Lazy activation (player 0.5.21, SDK 1.5.40): the plugin no longer keeps running while idle. Who must change: nobody. What users see: nothing new; Playback Properties shows the same pages and follows the playing file while open. Under `VESTRA_LAZY=1` the player may now stop the plugin while nothing uses it and start it again on Tab, Ctrl+F1 or F1.

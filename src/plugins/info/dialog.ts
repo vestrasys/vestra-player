@@ -1,7 +1,7 @@
 import { rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import type { I18n, PlaybackStats, PlayerState, Plugin, Scope, TextArg } from "@vestra-player/sdk";
-import { filePage, isUrl, message, pageText, playbackPage, remotePage, saveName, systemPage } from "./properties.ts";
+import { filePage, isUrl, message, pageText, playbackPage, remotePage, saveName, systemPage, widestLabel } from "./properties.ts";
 import type { Row, SystemFacts } from "./properties.ts";
 import { readFacts } from "./sysinfo.ts";
 
@@ -143,7 +143,11 @@ export function propertiesWindow(plugin: Plugin) {
     if (open) return;
     const scope = (open = plugin.scope());
     sourceChanged(player.state);
-    scope.add(window.bind(() => ({ tabIndex: tab, rows: page() as unknown as Record<string, string | boolean>[], status, statusDetail, canRefresh: tab !== 0 })));
+    scope.add(window.bind(() => {
+      const rows = page();
+      // The label column's width: the host lays out this one label, not every row's.
+      return { tabIndex: tab, rows: rows as unknown as Record<string, string | boolean>[], labelSample: widestLabel(plugin.i18n, rows), status, statusDetail, canRefresh: tab !== 0 };
+    }));
     scope.player.onChange((state) => {
       if (!sourceChanged(state) || !window.opened) return;
       probe?.abort();
