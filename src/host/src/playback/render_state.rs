@@ -238,6 +238,22 @@ fn one_writer() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// Main-window draws after which CPU mode's Direct3D 12 windows count as
+/// started when no video is being opened.
+pub const FIRST_DRAWS: u64 = 3;
+
+/// Whether CPU mode's Direct3D 12 windows have started, so the crash guard
+/// settles (record 2026-10-render-modes §11.4, §11.5): the first video
+/// picture was shown (`pictures`, the presentation's presented frames: its
+/// upload into the windows' texture went through), or the window drew
+/// [`FIRST_DRAWS`] times and no source is being opened (`opening`: a start
+/// with a file, or a source loading), whose first upload would still come.
+/// A start that never gets there (audio only, an open that fails) settles
+/// on the 5 s timer, as GPU mode does.
+pub fn windows_started(draws: u64, pictures: u64, opening: bool) -> bool {
+    pictures >= 1 || (draws >= FIRST_DRAWS && !opening)
+}
+
 /// An armed crash guard (`GuardFile::arm`); settles it when dropped.
 pub struct Armed(GuardFile);
 
@@ -477,6 +493,20 @@ mod tests {
         // A broken or empty file is no record.
         std::fs::write(&path, b"{}").unwrap();
         assert_eq!(file.recover(400), Guard::default());
+    }
+
+    /// Re-review M (record §11.5): a start with a file waits for the first
+    /// picture, whose upload into the Direct3D 12 texture comes hundreds of
+    /// ms after the first draws.
+    #[test]
+    fn direct3d_12_windows_count_as_started_after_their_first_picture_when_opening() {
+        // Nothing opened: three draws.
+        assert!(!windows_started(2, 0, false));
+        assert!(windows_started(FIRST_DRAWS, 0, false));
+        // A file opening: draws alone are not enough.
+        assert!(!windows_started(60, 0, true));
+        assert!(windows_started(1, 1, true), "the first picture was shown");
+        assert!(windows_started(0, 1, false));
     }
 
     #[test]

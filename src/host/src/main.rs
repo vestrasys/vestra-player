@@ -113,9 +113,6 @@ static HANDOFFS: AtomicBool = AtomicBool::new(true);
 fn stop_handoffs() {
     HANDOFFS.store(false, Ordering::Release);
 }
-/// Main-window draws after which CPU mode's Direct3D 12 windows count as
-/// started (the crash guard settles; GPU mode keeps its 5 s).
-const FIRST_DRAWS: u64 = 3;
 /// CPU mode's windows other than wgpu ones (`render_mode::WindowKind`; wgpu
 /// windows are selected in `main` and fall back to
 /// `Decision::fallback_windows`): femtovg on OpenGL (Windows, named
@@ -495,6 +492,9 @@ fn main() -> Result<()> {
             params: json!({"source":file.to_string_lossy(),"seconds":resume.seconds,"paused":resume.paused}),
         });
     }
+    // A start with a file: CPU mode's Direct3D 12 windows count as started
+    // only once its first picture was shown (the crash guard, below).
+    let opened_at_start = !files.is_empty();
     host.open_files(files, false);
     let start = Instant::now();
     if headless {
@@ -620,9 +620,11 @@ fn main() -> Result<()> {
                 })
             });
         }));
-        // CPU mode's Direct3D 12 windows (record §11): the crash guard counts
-        // a crash only while they are made and draw their first frames, not
-        // one unrelated to the GPU later in the first 5 s of a start.
+        // CPU mode's Direct3D 12 windows (record §11.4, §11.5): the crash
+        // guard counts a crash only while they are made, draw their first
+        // frames and take the first video picture (a start with a file, or
+        // a source loading), not one unrelated to the GPU later in the first
+        // 5 s of a start; the 5 s timer below stays the backstop.
         let mut first_draws = (!render.is_gpu() && render.windows == render_mode::WindowKind::Wgpu)
             .then(|| guard.clone());
         let tick_host = host.clone();
@@ -638,11 +640,14 @@ fn main() -> Result<()> {
                 for event in receiver.try_iter().take(128) {
                     host.handle(event);
                 }
-                if first_draws.is_some()
-                    && host.backend.render.presentation.counts().0 >= FIRST_DRAWS
-                    && let Some(guard) = first_draws.take()
-                {
-                    guard.settle();
+                if first_draws.is_some() {
+                    let (draws, pictures) = host.backend.render.presentation.counts();
+                    let opening = opened_at_start || host.last_source["phase"] == "loading";
+                    if playback::render_state::windows_started(draws, pictures, opening)
+                        && let Some(guard) = first_draws.take()
+                    {
+                        guard.settle();
+                    }
                 }
                 host.placements.tick();
                 host.mount_callbacks();

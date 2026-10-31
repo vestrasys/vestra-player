@@ -980,11 +980,20 @@ fn produce(
             let bound = ready_value + 1 - IN_FLIGHT;
             if fences.ready.completed() < bound {
                 throttled = true;
-                if !wait_ready(&shared, &waiter, bound, FRAME_WAIT) && d3d11.removed().is_some() {
-                    fail("a frame did not finish on the GPU".into());
-                    break;
+                if !wait_ready(&shared, &waiter, bound, FRAME_WAIT) {
+                    if d3d11.removed().is_some() {
+                        fail("a frame did not finish on the GPU".into());
+                        break;
+                    }
+                    // Stopping: no render and no signal after a wait given up.
+                    if shared.stop.load(Ordering::Acquire) {
+                        break;
+                    }
                 }
             }
+        }
+        if shared.stop.load(Ordering::Acquire) {
+            break;
         }
         let began = Instant::now();
         shared.calls.fetch_add(1, Ordering::AcqRel);

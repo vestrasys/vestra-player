@@ -200,8 +200,10 @@ impl Rendering {
         };
         if let Some(windows) = windows.filter(|_| !gpu_now && !self.facts.headless) {
             // Why not Direct3D 12 ones, where the crash guard or a rule
-            // decided it.
-            let why = (self.windows != WindowKind::Wgpu)
+            // decided it, not `VESTRA_WINDOW_RENDERER` or `SLINT_BACKEND` (the
+            // conditions of `render_mode::windows`' note).
+            let chosen_elsewhere = self.facts.window_env.is_some() || self.facts.slint_backend;
+            let why = (self.windows != WindowKind::Wgpu && !chosen_elsewhere)
                 .then(|| self.facts.direct3d12_windows_off())
                 .flatten()
                 .map(|why| format!(" ({why})"))
@@ -500,6 +502,14 @@ mod tests {
             message.contains("the windows draw with OpenGL (the crash guard keeps"),
             "{message}"
         );
+        // Chosen by the environment: the guard is not blamed.
+        for (window_env, slint_backend) in [(Some(WindowKind::OpenGl), false), (None, true)] {
+            windows.facts.window_env = window_env;
+            windows.facts.slint_backend = slint_backend;
+            let reason = windows.reason_json(false, &Reason::OffByDefault);
+            let message = reason["message"].as_str().unwrap();
+            assert!(!message.contains("crash guard"), "{message}");
+        }
     }
 
     #[test]
