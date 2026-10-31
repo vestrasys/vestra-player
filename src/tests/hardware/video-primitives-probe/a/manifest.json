@@ -12,6 +12,7 @@
     "events",
     "processing.video",
     "media.read",
-    "media.control"
+    "media.control",
+    "subtitles.read"
   ]
 }
