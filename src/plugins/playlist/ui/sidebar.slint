@@ -268,7 +268,9 @@ export component PlaylistSidebar inherits Rectangle {
         }
         VerticalLayout {
             // Tab strip with the detach/attach and close buttons at its right end; the
-            // player draws its own (with the same buttons) when the sidebar has tabs.
+            // player draws its own (with the same buttons) when the sidebar has tabs. An `if`: it
+            // changes only when the sidebar gains or loses tabs, and a hidden strip would keep its
+            // 31px in the layout.
             if !PlaylistBridge.tabbed: Rectangle {
                 height: 31px;
                 background: Theme.bg-bar;
@@ -350,8 +352,12 @@ export component PlaylistSidebar inherits Rectangle {
                         width: list.visible-width;
                         height: root.row-height;
                         background: row.selected ? root.selected-bg : transparent;
-                        // The playing row: a 2px bar in the playing colour at its left edge.
-                        if row.current: Rectangle {
+                        // The playing row: a 2px bar in the playing colour at its left edge. Elements
+                        // that come and go with a row's state, the pointer or a drag always exist and
+                        // use `visible` (a toggled `if` rebuilds the accessibility tree, host rule
+                        // 2026-10-27); a row element also takes another row's data as the list scrolls.
+                        Rectangle {
+                            visible: row.current;
                             x: 0;
                             y: 3px;
                             width: 2px;
@@ -366,12 +372,16 @@ export component PlaylistSidebar inherits Rectangle {
                                 : row.problem == "unreadable" ? @tr("{}\nThe file does not exist or cannot be read now; can retry", row.tooltip)
                                 : row.problem == "unplayable" ? @tr("{}\nCannot open this media", row.tooltip)
                                 : row.tooltip;
+                            // The row style stays an `if`: it changes only with the bottom bar's toggle, and
+                            // both styles always present would double every row's elements.
                             if !PlaylistBridge.thumbnails: HorizontalLayout {
                                 width: 100%;
                                 height: 100%;
                                 padding-left: 6px;
                                 padding-right: 6px;
-                                spacing: 4px;
+                                // The 4px gaps are explicit, so the failed mark's slot is 0px wide
+                                // without it (a hidden element keeps its place in a layout).
+                                spacing: 0px;
                                 Text {
                                     text: row.label;
                                     color: ink;
@@ -380,11 +390,17 @@ export component PlaylistSidebar inherits Rectangle {
                                     overflow: elide;
                                     horizontal-stretch: 1;
                                 }
-                                if row.failed: Icon {
-                                    y: 5px;
-                                    name: "failed";
-                                    color: Theme.accent;
+                                Rectangle {
+                                    width: row.failed ? 4px + failed-mark.width : 0px;
+                                    failed-mark := Icon {
+                                        visible: row.failed;
+                                        x: 4px;
+                                        y: 5px;
+                                        name: "failed";
+                                        color: Theme.accent;
+                                    }
                                 }
+                                Rectangle { width: 4px; }
                                 Text {
                                     text: row.duration;
                                     color: ink;
@@ -408,7 +424,8 @@ export component PlaylistSidebar inherits Rectangle {
                                     clip: true;
                                     background: Theme.bg-bar;
                                     // Until a picture is made (and when there is none): an audio or link glyph.
-                                    if picture.width <= 1 && (row.media == "audio" || row.media == "link"): Glyph {
+                                    Glyph {
+                                        visible: picture.width <= 1 && (row.media == "audio" || row.media == "link");
                                         glyph: row.media == "audio" ? PlaylistGlyphs.audio : PlaylistGlyphs.link;
                                         box-width: 14px;
                                         box-height: 14px;
@@ -422,7 +439,8 @@ export component PlaylistSidebar inherits Rectangle {
                                         source: picture;
                                         image-fit: contain;
                                     }
-                                    if row.duration != "": Rectangle {
+                                    Rectangle {
+                                        visible: row.duration != "";
                                         x: parent.width - self.width - 3px;
                                         y: parent.height - self.height - 3px;
                                         width: badge.preferred-width + 6px;
@@ -461,7 +479,8 @@ export component PlaylistSidebar inherits Rectangle {
                                     font-size: Theme.font-xs;
                                     vertical-alignment: center;
                                 }
-                                if row.failed: Icon {
+                                Icon {
+                                    visible: row.failed;
                                     x: parent.width - 22px;
                                     y: 7px;
                                     name: "failed";
@@ -522,19 +541,22 @@ export component PlaylistSidebar inherits Rectangle {
                             }
                         }
                         // Insertion marker while dragging.
-                        if root.dragging && root.drop-index == at: Rectangle {
+                        Rectangle {
+                            visible: root.dragging && root.drop-index == at;
                             y: 0;
                             height: 2px;
                             background: Theme.accent;
                         }
-                        if root.dragging && root.drop-index == PlaylistBridge.row-count && at == PlaylistBridge.row-count - 1: Rectangle {
+                        Rectangle {
+                            visible: root.dragging && root.drop-index == PlaylistBridge.row-count && at == PlaylistBridge.row-count - 1;
                             y: parent.height - 2px;
                             height: 2px;
                             background: Theme.accent;
                         }
                     }
                 }
-                if PlaylistBridge.filtering && PlaylistBridge.row-count == 0: Text {
+                Text {
+                    visible: PlaylistBridge.filtering && PlaylistBridge.row-count == 0;
                     width: 100%;
                     height: 100%;
                     text: @tr("No matches");
@@ -622,7 +644,8 @@ export component PlaylistSidebar inherits Rectangle {
                 }
                 // C21 search box: about 24px high on `Theme.hover-bg` (UI-PL-09); width from `search-width`.
                 // The folded search box: a magnifier icon the size of the bar's other icons.
-                if root.folded: IconButton {
+                IconButton {
+                    visible: root.folded;
                     x: root.bar-fixed;
                     y: 1px;
                     height: parent.height - 1px;
@@ -674,7 +697,8 @@ export component PlaylistSidebar inherits Rectangle {
                                 root.fold-search();
                             }
                         }
-                        if search.text == "" && root.search-width >= 56px: Text {
+                        Text {
+                            visible: search.text == "" && root.search-width >= 56px;
                             x: 6px;
                             height: 100%;
                             text: @tr("Search");

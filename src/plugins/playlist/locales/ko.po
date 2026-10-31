@@ -206,7 +206,7 @@ msgstr "파일의 실제 경로가 기존 항목과 같아 그 항목을 선택�
 msgid "Close the other dialog first"
 msgstr "먼저 다른 대화 상자를 닫으세요"
 
-#: main.ts:202 main.ts:595 main.ts:618 main.ts:771 manifest.json ui/settings.slint:114 ui/sidebar.slint:290
+#: main.ts:202 main.ts:595 main.ts:618 main.ts:771 manifest.json ui/settings.slint:114 ui/sidebar.slint:292
 #, x-machine
 msgid "Playlist"
 msgstr "재생목록"
@@ -411,7 +411,7 @@ msgstr "현재 순서 뒤집기"
 msgid "Select All"
 msgstr "모두 선택"
 
-#: main.ts:584 ui/sidebar.slint:680
+#: main.ts:584 ui/sidebar.slint:704
 #, x-machine
 msgid "Search"
 msgstr "검색"
@@ -690,7 +690,7 @@ msgstr "재생목록에 추가할 웹 주소를 아래에 한 줄에 하나씩 �
 msgid "Example: {}"
 msgstr "예: {}"
 
-#: ui/link.slint:63 ui/sidebar.slint:592
+#: ui/link.slint:63 ui/sidebar.slint:614
 #, x-machine
 msgid "Add"
 msgstr "추가"
@@ -765,22 +765,22 @@ msgstr "모두 제거하기 전에 확인"
 msgid "Filtered {}"
 msgstr "검색 결과 {}"
 
-#: ui/sidebar.slint:299
+#: ui/sidebar.slint:301
 #, x-machine
 msgid "Attach to main window"
 msgstr "기본 창에 붙이기"
 
-#: ui/sidebar.slint:299
+#: ui/sidebar.slint:301
 #, x-machine
 msgid "Detach as floating window"
 msgstr "플로팅 창으로 분리"
 
-#: ui/sidebar.slint:305
+#: ui/sidebar.slint:307
 #, x-machine
 msgid "Close list"
 msgstr "목록 닫기"
 
-#: ui/sidebar.slint:365
+#: ui/sidebar.slint:371
 #, x-machine
 msgid ""
 "{}\n"
@@ -789,7 +789,7 @@ msgstr ""
 "{}\n"
 "파일이 없습니다"
 
-#: ui/sidebar.slint:366
+#: ui/sidebar.slint:372
 #, x-machine
 msgid ""
 "{}\n"
@@ -798,7 +798,7 @@ msgstr ""
 "{}\n"
 "파일이 없거나 지금은 읽을 수 없습니다. 다시 시도할 수 있습니다"
 
-#: ui/sidebar.slint:367
+#: ui/sidebar.slint:373
 #, x-machine
 msgid ""
 "{}\n"
@@ -807,50 +807,50 @@ msgstr ""
 "{}\n"
 "이 미디어를 열 수 없습니다"
 
-#: ui/sidebar.slint:540
+#: ui/sidebar.slint:562
 #, x-machine
 msgid "No matches"
 msgstr "일치하는 항목 없음"
 
-#: ui/sidebar.slint:567
+#: ui/sidebar.slint:589
 #, x-machine
 msgid "Move to top (Ctrl+Home)"
 msgstr "맨 위로 이동 (Ctrl+Home)"
 
-#: ui/sidebar.slint:573
+#: ui/sidebar.slint:595
 #, x-machine
 msgid "Move up (Ctrl+↑)"
 msgstr "위로 이동 (Ctrl+↑)"
 
-#: ui/sidebar.slint:579
+#: ui/sidebar.slint:601
 #, x-machine
 msgid "Move down (Ctrl+↓)"
 msgstr "아래로 이동 (Ctrl+↓)"
 
-#: ui/sidebar.slint:585
+#: ui/sidebar.slint:607
 #, x-machine
 msgid "Move to bottom (Ctrl+End)"
 msgstr "맨 아래로 이동 (Ctrl+End)"
 
-#: ui/sidebar.slint:600
+#: ui/sidebar.slint:622
 #, x-machine
 msgid "Delete"
 msgstr "삭제"
 
-#: ui/sidebar.slint:608
+#: ui/sidebar.slint:630
 #, x-machine
 msgid "Sort"
 msgstr "정렬"
 
-#: ui/sidebar.slint:617
+#: ui/sidebar.slint:639
 msgid "Hide Thumbnails"
 msgstr "미리보기 이미지 숨기기"
 
-#: ui/sidebar.slint:617
+#: ui/sidebar.slint:639
 msgid "Show Thumbnails"
 msgstr "미리보기 이미지 표시"
 
-#: ui/sidebar.slint:629
+#: ui/sidebar.slint:652
 #, x-machine
 msgid "Search (Ctrl+S)"
 msgstr "검색 (Ctrl+S)"
