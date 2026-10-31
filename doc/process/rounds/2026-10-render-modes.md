@@ -332,3 +332,8 @@ The independent review of 617ec2c asked for fixes first; the branch first merged
 - **L3**: every read-modify-write of `render-state.json` (`recover`, `arm`, `device_lost`, `settle`) holds one process-wide lock.
 - **L4**: "lost twice within a day" only when `Guard::crashed_by_losses` (crashed at the newest loss, the last two losses within a day); stale losses kept by `arm` do not count. Tested.
 - **L5**: the device-loss restart calls `platform::allow_handoff_foreground()` and `stop_handoffs()` as `rendering.restart` does.
+
+### 10.2 Re-review fixes (2026-10-31, on 199f567)
+
+- **N1**: a player started by a restart that loses its device within `RESTART_COOLDOWN` used to record the loss and exit (the shared once-per-process flag made the fallback call in `main.rs` a no-op), so it disappeared after a TDR right after "Restart Player to Apply". It now always relaunches, in software (`VESTRA_RENDER=software`) when the guard turned GPU off or a GPU relaunch is refused by the cooldown (`restart::software_after_loss`). Tested.
+- **N2**: `SLINT_BACKEND` again leaves CPU mode's windows to Slint on Windows (`WindowKind::Default`, `winit().select()`; an explicit `renderer_name` would win over it), as on main; GPU mode keeps its wgpu windows and logs that `SLINT_BACKEND` is not applied to them; the `software-windows` rule note says Slint chooses CPU mode's windows. Tested.

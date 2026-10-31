@@ -34,11 +34,12 @@ pub(crate) struct LostDevice {
 /// The new player gets the current source if it is a local file, with its
 /// position and paused state (`--vestra-resume`), the development plugins
 /// and `--silent`; not the launch's files. It waits for this process to end
-/// before it claims the single-instance lock (`--vestra-restart`). A player
-/// that was itself restarted less than `RESTART_COOLDOWN` ago only records
-/// the loss and does not restart; when the guard turned GPU rendering off,
-/// the new player is told to render in software even if `VESTRA_RENDER=gpu`
-/// is set (it would otherwise lose the device again, forever).
+/// before it claims the single-instance lock (`--vestra-restart`). The new
+/// player is told to render in software (`VESTRA_RENDER=software`, which
+/// also beats a `VESTRA_RENDER=gpu` that would otherwise lose the device
+/// again, forever) when the guard turned GPU rendering off, or when this
+/// player was itself restarted less than `RESTART_COOLDOWN` ago (a GPU
+/// relaunch is refused then; the player never just disappears).
 pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
     if RESTARTING.swap(true, Ordering::AcqRel) {
         return;
@@ -46,24 +47,16 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
     let off = lost
         .guard
         .device_lost(lost.key.clone(), render_state::now());
-    if let Some(why) = restart_refused(false, lost.restarted_at, std::time::Instant::now()) {
-        restart_log(&format!(
-            "render: the GPU device was lost; not restarting ({why})"
-        ));
-        return;
-    }
+    let why = software_after_loss(lost, off, std::time::Instant::now());
     let Ok(exe) = std::env::current_exe() else {
         restart_log("render: the GPU device was lost; the player could not restart itself");
         return;
     };
-    let mut command = command_after_loss(&exe, lost, source, off);
+    let mut command = command_after_loss(&exe, lost, source, why.is_some());
     restart_log(&format!(
         "render: the GPU device was lost; restarting the player{}",
-        if off {
-            " with software rendering (the second loss within a day; crash guard)"
-        } else {
-            ""
-        }
+        why.map(|why| format!(" with software rendering ({why})"))
+            .unwrap_or_default()
     ));
     restart_log(&format!("render: restarting with {command:?}"));
     // As `rendering.restart`: the new player may take the foreground, and
@@ -79,8 +72,20 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
     }
 }
 
-/// The new player's command line after a device loss (`off`: the crash
-/// guard turned GPU rendering off).
+/// Why the player restarted after a device loss renders in software, if it
+/// does: the crash guard turned GPU rendering off (`off`), or this player
+/// was itself restarted within the cooldown, where a GPU relaunch is
+/// refused (`rendering::restart_refused`).
+fn software_after_loss(lost: &LostDevice, off: bool, now: std::time::Instant) -> Option<String> {
+    if off {
+        Some("the second loss within a day; crash guard".into())
+    } else {
+        restart_refused(false, lost.restarted_at, now).map(|why| format!("{why}; no GPU relaunch"))
+    }
+}
+
+/// The new player's command line after a device loss (`off`: it renders in
+/// software).
 fn command_after_loss(
     exe: &std::path::Path,
     lost: &LostDevice,
@@ -155,14 +160,43 @@ mod tests {
         assert_eq!(args[0], "--vestra-restart");
     }
 
+    /// M3 re-review N1: a loss within the cooldown relaunches in software;
+    /// the player never just exits.
     #[test]
-    fn a_restarted_player_does_not_restart_again_within_the_cooldown() {
+    fn a_restarted_player_relaunches_in_software_within_the_cooldown() {
         let start = std::time::Instant::now();
         let restarted = lost(Some(start));
         let soon = start + std::time::Duration::from_secs(5);
-        assert!(restart_refused(false, restarted.restarted_at, soon).is_some());
+        let why = software_after_loss(&restarted, false, soon);
+        assert!(
+            why.as_deref().is_some_and(|why| why.contains("30 seconds")),
+            "{why:?}"
+        );
         let later = start + RESTART_COOLDOWN;
-        assert!(restart_refused(false, restarted.restarted_at, later).is_none());
-        assert!(restart_refused(false, lost(None).restarted_at, soon).is_none());
+        assert_eq!(
+            software_after_loss(&restarted, false, later),
+            None,
+            "GPU again"
+        );
+        assert_eq!(software_after_loss(&lost(None), false, soon), None);
+        assert!(
+            software_after_loss(&lost(None), true, soon).is_some(),
+            "guard off"
+        );
+        // Within the cooldown, guard crashed or not: software, never no restart.
+        for off in [false, true] {
+            let why = software_after_loss(&restarted, off, soon);
+            let command = command_after_loss(
+                std::path::Path::new("player"),
+                &restarted,
+                &Value::Null,
+                why.is_some(),
+            );
+            assert_eq!(
+                env(&command, "VESTRA_RENDER"),
+                Some(Some("software".into())),
+                "{off}"
+            );
+        }
     }
 }

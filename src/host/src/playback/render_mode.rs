@@ -438,13 +438,20 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
         // GPU mode's windows are wgpu; CPU mode's are femtovg on OpenGL,
         // as on main, named explicitly: with wgpu compiled in, Slint's
         // default renderer would be femtovg-wgpu (Slint 1.18.1 also drops
-        // OpenGL femtovg from its default fallbacks then).
+        // OpenGL femtovg from its default fallbacks then). `SLINT_BACKEND`
+        // leaves CPU mode's windows to Slint (an explicit renderer would
+        // win over it), as on main.
         if decision.mode == Mode::Gpu {
             decision.windows = WindowKind::Wgpu;
-        } else if decision.windows == WindowKind::Default {
+            if facts.slint_backend && !facts.headless {
+                decision.notes.push(
+                    "render: SLINT_BACKEND is set; GPU rendering needs Direct3D 12 (wgpu) windows, so it is not applied to them".into(),
+                );
+            }
+        } else if decision.windows == WindowKind::Default && !facts.slint_backend {
             decision.windows = WindowKind::OpenGl;
         }
-        if decision.cpu_windows == WindowKind::Default {
+        if decision.cpu_windows == WindowKind::Default && !facts.slint_backend {
             decision.cpu_windows = WindowKind::OpenGl;
         }
     }
@@ -453,7 +460,7 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
     {
         if facts.slint_backend {
             decision.notes.push(format!(
-                "render: SLINT_BACKEND is set; the windows keep it (denylist rule {} not applied to them)",
+                "render: SLINT_BACKEND is set; Slint chooses CPU mode's windows (denylist rule {} not applied to them)",
                 rule.id
             ));
         } else {
@@ -835,6 +842,43 @@ mod tests {
         );
         assert!(auto.notes.is_empty(), "{:?}", auto.notes);
         assert_eq!(stalls.gpu_available().unwrap_err().code(), "denylist");
+    }
+
+    /// N2 (M3 re-review): `SLINT_BACKEND` leaves CPU mode's windows to Slint
+    /// on Windows too (`WindowKind::Default`, `winit().select()`), with or
+    /// without a `software-windows` rule; the lines say so.
+    #[test]
+    fn slint_backend_leaves_cpu_windows_to_slint_on_windows() {
+        let mut windows = windows_gpu();
+        windows.slint_backend = true;
+        let auto = decide(&windows, Preference::Auto);
+        assert_eq!(
+            (auto.mode, auto.windows, auto.cpu_windows),
+            (Mode::Cpu, WindowKind::Default, WindowKind::Default)
+        );
+        assert!(auto.notes.is_empty(), "{:?}", auto.notes);
+        windows.adapters = vec![white_amd()];
+        let white = decide(&windows, Preference::Auto);
+        assert_eq!(white.windows, WindowKind::Default);
+        assert!(
+            white.notes[0].contains("Slint chooses CPU mode's windows"),
+            "{:?}",
+            white.notes
+        );
+        let gpu = decide(&windows, Preference::Gpu);
+        assert_eq!(
+            (gpu.windows, gpu.cpu_windows),
+            (WindowKind::Wgpu, WindowKind::Default)
+        );
+        assert!(
+            gpu.notes
+                .iter()
+                .any(|note| note.contains("not applied to them") && note.contains("wgpu"))
+        );
+        assert_eq!(
+            gpu.fall_back(Reason::InitFailed("x".into())).windows,
+            WindowKind::Default
+        );
     }
 
     /// H1 (M3 review): CPU mode on Windows never gets wgpu windows nor
