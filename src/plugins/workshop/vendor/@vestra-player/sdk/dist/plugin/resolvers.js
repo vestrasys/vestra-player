@@ -26,11 +26,12 @@ class FileTypesService {
         if (this.#started)
             return;
         this.#started = true;
+        // A mirror: a plugin listens through `watch` and bindings.
         this.#runtime.on("resolvers.fileTypes", (data) => {
             const types = data?.fileTypes;
             if (Array.isArray(types) && types.every((t) => typeof t === "string"))
                 this.accept(types);
-        });
+        }, "events", true);
         // What changed between the start-up read and the subscription.
         const window = windowOf(this.#runtime);
         void window.read().then(() => {
@@ -50,7 +51,13 @@ class FileTypesService {
     }
     watch(listener) {
         this.#listeners.add(listener);
-        return { dispose: async () => void this.#listeners.delete(listener) };
+        const held = this.#runtime.hold("resolvers.fileTypes");
+        return {
+            dispose: async () => {
+                this.#listeners.delete(listener);
+                await held.dispose();
+            },
+        };
     }
 }
 const fileTypesOf = (runtime) => runtime.service("fileTypes", () => new FileTypesService(runtime));
@@ -58,6 +65,7 @@ export const resolvers = (scope) => ({
     get fileTypes() {
         const service = fileTypesOf(scope.runtime);
         service.start();
+        scope.runtime.reading("resolvers.fileTypes");
         return service.types;
     },
     onFileTypesChange(listener) {

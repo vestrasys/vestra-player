@@ -27,13 +27,14 @@ export class TimelineService {
         if (this.#started)
             return;
         this.#started = true;
+        // A mirror: a plugin listens through `watch` and bindings.
         this.#runtime.on("timeline.changed", (data) => {
             const marks = data?.marks;
             if (Array.isArray(marks))
                 this.accept(marks);
             else
                 void this.read();
-        });
+        }, "events", true);
     }
     accept(marks) {
         const next = view(marks);
@@ -51,7 +52,13 @@ export class TimelineService {
     }
     watch(listener) {
         this.#listeners.add(listener);
-        return { dispose: async () => void this.#listeners.delete(listener) };
+        const held = this.#runtime.hold("timeline.changed");
+        return {
+            dispose: async () => {
+                this.#listeners.delete(listener);
+                await held.dispose();
+            },
+        };
     }
 }
 export const timelineOf = (runtime) => runtime.service("timeline", () => new TimelineService(runtime));
@@ -60,6 +67,7 @@ export function timeline(scope) {
     return {
         get marks() {
             service().start();
+            scope.runtime.reading("timeline.changed");
             return service().marks;
         },
         onChange(listener) {
