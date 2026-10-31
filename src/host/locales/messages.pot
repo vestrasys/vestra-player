@@ -293,6 +293,10 @@ msgstr ""
 msgid "libmpv · GPU rendering (OpenGL)"
 msgstr ""
 
+#: src/renderer.rs:18
+msgid "libmpv · GPU rendering (Direct3D)"
+msgstr ""
+
 #: src/renderer.rs:20
 msgid "libmpv · software rendering"
 msgstr ""

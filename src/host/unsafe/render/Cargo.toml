@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
-description = "libmpv OpenGL rendering shown in Slint windows (macOS; the host's GPU rendering)"
+description = "libmpv GPU rendering shown in Slint windows (macOS: OpenGL into IOSurfaces; Windows: Direct3D 11 into textures shared with Slint's wgpu/Direct3D 12 windows)"
 
 # One of the crates under src/host/unsafe/: the only place first-party Rust may
 # use `unsafe`. Every block carries a SAFETY comment; the public API is safe.
@@ -15,6 +15,35 @@ objc2-core-foundation = { version = "=0.3.2", default-features = false, features
 objc2-io-surface = { version = "=0.3.2", default-features = false, features = ["std", "IOSurfaceRef", "IOSurfaceTypes", "libc", "objc2-core-foundation"] }
 rsmpv = { version = "=0.2.1", features = ["render"] }
 slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2"] }
+
+# Windows (doc/process/rounds/2026-10-windows-wgpu.md): libmpv's Direct3D 11
+# render API (render API 2.6; rsmpv has no binding for it, so rsmpv-sys with
+# the two structs of mpv's render_d3d11.h), textures and fences shared with
+# the windows' Direct3D 12 device, wrapped for wgpu through its Direct3D 12
+# hal. `wgpu` and `wgpu-hal` must equal the versions of Slint's
+# `unstable-wgpu-30` (Slint 1.18.1: 30.0.1), or the texture Slint gets is of
+# another crate's type.
+[target.'cfg(windows)'.dependencies]
+pollster = "0.4"
+rsmpv = { version = "=0.2.1", features = ["render"] }
+rsmpv-sys = "=0.1.1"
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "unstable-wgpu-30"] }
+wgpu = { version = "=30.0.1", default-features = false, features = ["dx12", "wgsl"] }
+wgpu-hal = { version = "=30.0.1", default-features = false, features = ["dx12"] }
+windows = { version = "=0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Direct3D12",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Security",
+  "Win32_System_Threading",
+] }
+
+[features]
+# `start_on_warp` for the host's tests (a renderer on WARP, Windows).
+test-support = []
 
 # Not `workspace = true` (that would forbid unsafe); src/scripts/check-unsafe-policy.mjs
 # requires these entries.

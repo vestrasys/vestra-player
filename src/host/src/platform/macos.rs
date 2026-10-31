@@ -577,6 +577,10 @@ pub use vestra_gpu_render::IOSurfaceRef as GpuFrame;
 /// The raw GL and CGL calls are in the `vestra-gpu-render` crate.
 pub use vestra_gpu_render::{Draw as GpuDraw, Handle as GpuHandle, Renderer as GpuRenderer};
 pub const GPU_RENDER: bool = true;
+/// GPU mode's windows draw with OpenGL (femtovg) here.
+pub const GPU_WINDOWS_WGPU: bool = false;
+/// GPU rendering is the default here (`render_mode::Facts::gpu_opt_in`).
+pub const GPU_OPT_IN: bool = false;
 
 /// The host's GPU contract, delegated to `vestra-gpu-render`'s own methods.
 impl crate::playback::renderer::GpuBackend for GpuHandle {

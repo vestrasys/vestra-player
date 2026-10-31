@@ -363,6 +363,11 @@ msgstr "PIP 모드를 사용하려면 macOS 14 이상이 필요합니다"
 msgid "libmpv · GPU rendering (OpenGL)"
 msgstr "libmpv · GPU 렌더링 (OpenGL)"
 
+#: src/renderer.rs:18
+#, x-machine
+msgid "libmpv · GPU rendering (Direct3D)"
+msgstr "libmpv · GPU 렌더링 (Direct3D)"
+
 #: src/renderer.rs:20
 #, x-machine
 msgid "libmpv · software rendering"

@@ -720,6 +720,8 @@ impl GpuRun<'_> {
                     return false;
                 }
             };
+        // The renderer's own diagnostics (Windows: its device, failures).
+        crate::platform::gpu_started(&renderer.handle());
         let hwdec = crate::playback::renderer::hwdec(std::env::var("VESTRA_HWDEC").ok(), false);
         if let Err(error) = self.mpv.set_property("hwdec", hwdec.as_str()) {
             diag!("render: hwdec={hwdec} refused: {error}");
@@ -729,13 +731,20 @@ impl GpuRun<'_> {
             let _ = ready.send(Ok(()));
         }
         while !self.stop.load(Ordering::Relaxed) && !self.render.fallback_requested() {
+            // The renderer stopped on its own (Windows: its device was
+            // removed): software rendering, as for a window's fallback.
+            if let Some(reason) = crate::platform::gpu_failed(&renderer.handle()) {
+                self.render
+                    .fall_back(crate::playback::render_mode::Reason::WindowFallback(reason));
+                break;
+            }
             thread::sleep(Duration::from_millis(20));
         }
         if self.stop.load(Ordering::Relaxed) {
             return true;
         }
         self.render.deactivate();
-        // Stops the GPU renderer on macOS; a no-op type elsewhere.
+        // Stops the GPU renderer (macOS, Windows); a no-op type elsewhere.
         #[allow(clippy::drop_non_drop)]
         drop(renderer);
         // The control worker sets software rendering's `hwdec` when it sees

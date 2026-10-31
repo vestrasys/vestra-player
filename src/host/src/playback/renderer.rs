@@ -15,7 +15,11 @@ use std::sync::{
 
 /// `stats().backend` for each renderer, in the interface language.
 pub fn gpu_name() -> String {
-    crate::i18n::tr("libmpv · GPU rendering (OpenGL)")
+    if cfg!(target_os = "windows") {
+        crate::i18n::tr("libmpv · GPU rendering (Direct3D)")
+    } else {
+        crate::i18n::tr("libmpv · GPU rendering (OpenGL)")
+    }
 }
 pub fn software_name() -> String {
     crate::i18n::tr("libmpv · software rendering")
@@ -59,6 +63,11 @@ pub trait GpuBackend {
     ) -> Result<(), String>;
     /// A new shell took the attached window's place (same native window).
     fn retarget<T: slint::ComponentHandle + 'static>(&self, component: &T);
+    /// `VESTRA_FRAME_LOG`: the renderer's own numbers (Windows: the `gpu:`
+    /// segment); nothing by default.
+    fn log_text(&self) -> String {
+        String::new()
+    }
 }
 
 /// Shared by the backend's render thread, its control worker and the UI.
@@ -179,7 +188,7 @@ impl Render {
 /// falls back to software decoding by itself when no method works).
 ///
 /// The software renderer (`RenderContext::new_software`, the only renderer
-/// on systems without `GPU_RENDER`, e.g. Windows) has no hardware-decoding
+/// on systems without `GPU_RENDER`, e.g. Linux) has no hardware-decoding
 /// interop, so it gets the copy-back variant: `auto-copy-safe` picks
 /// `d3d11va-copy`, `nvdec-copy`, `videotoolbox-copy`… (decoding on the GPU,
 /// frames copied to memory), which mpv documents as working "with all video
@@ -207,7 +216,7 @@ mod tests {
         assert_eq!(hwdec(Some(String::new()), false), "auto-safe");
         assert_eq!(hwdec(Some("no".into()), false), "no");
         assert_eq!(hwdec(Some("d3d11va".into()), false), "d3d11va");
-        // Software rendering (Windows, headless, VESTRA_SOFTWARE_RENDER).
+        // Software rendering (headless, VESTRA_SOFTWARE_RENDER, a fallback).
         assert_eq!(hwdec(None, true), "auto-copy-safe");
         assert_eq!(hwdec(Some(String::new()), true), "auto-copy-safe");
         assert_eq!(hwdec(Some("no".into()), true), "no");

@@ -54,14 +54,15 @@ struct MpvD3d11Fbo {
     tex: *mut c_void,
 }
 
-const USAGE: &str = "usage: gpu-probe info | gpu-probe interop default|warp|<index> | gpu-probe run [--adapter default|warp|<index>] \
+const USAGE: &str = "usage: gpu-probe info | gpu-probe adapters | gpu-probe interop default|warp|<index> | gpu-probe run [--adapter default|warp|<index>] \
 [--src <path|url>] [--size WxH] [--seconds S] [--warmup S] [--hwdec MODE] [--gl] [--host-vf] \
-[--block] [--sync] [--lag N] [--png out.png] [--log LEVEL]";
+[--block] [--sync] [--lag N] [--png out.png] [--log LEVEL] [--vf FILTERS] [--at SECONDS]";
 
 pub fn main() -> i32 {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("info") => info(),
+        Some("adapters") => list_adapters(),
         Some("interop") => interop_one(&args[1..]),
         Some("run") => Options::parse(&args[1..]).and_then(|options| run(&options)),
         _ => Err(USAGE.into()),
@@ -100,6 +101,12 @@ struct Options {
     lag: usize,
     png: Option<String>,
     log: String,
+    /// mpv's `vf` (appended after the host chain with --host-vf), set as an
+    /// option before loadfile; e.g. `d3d11vpp=scale=2:scaling-mode=nvidia`.
+    vf: Option<String>,
+    /// After the measurement, pause on the frame at this time (exact seek)
+    /// and read that back, so every run captures (--png) the same frame.
+    at: Option<f64>,
 }
 
 impl Options {
@@ -118,6 +125,8 @@ impl Options {
             lag: 1,
             png: None,
             log: "info".into(),
+            vf: None,
+            at: None,
         };
         let mut args = args.iter();
         while let Some(flag) = args.next() {
@@ -147,11 +156,70 @@ impl Options {
                 "--lag" => options.lag = value()?.parse().map_err(|_| "bad --lag")?,
                 "--png" => options.png = Some(value()?),
                 "--log" => options.log = value()?,
+                "--vf" => options.vf = Some(value()?),
+                "--at" => {
+                    let at: f64 = value()?.parse().map_err(|_| "bad --at")?;
+                    if !(at.is_finite() && at >= 0.0) {
+                        return Err("bad --at".into());
+                    }
+                    options.at = Some(at);
+                }
                 _ => return Err(format!("unknown argument {flag}\n{USAGE}")),
             }
         }
         Ok(options)
     }
+
+    /// The `vf` option to set before loadfile, if any.
+    fn filter_chain(&self) -> Option<String> {
+        // The host's initial filter chain (source_geometry::INITIAL_FILTERS).
+        const HOST: &str =
+            "@vestra-orientation:lavfi=[null],@vestra-orientation-metadata:format=rotate=0";
+        match (self.host_vf, &self.vf) {
+            (false, None) => None,
+            (true, None) => Some(HOST.into()),
+            (false, Some(vf)) => Some(vf.clone()),
+            (true, Some(vf)) => Some(format!("{HOST},{vf}")),
+        }
+    }
+
+    /// The level asked of mpv: at least `v` with --vf, so the filter's
+    /// verbose lines reach the filter log summary even when the printed
+    /// level (--log) is lower. Without --vf it is --log, as before.
+    fn requested_log(&self) -> &str {
+        if self.vf.is_some() && log_rank(&self.log) < log_rank("v") { "v" } else { &self.log }
+    }
+}
+
+/// mpv log levels in increasing verbosity (client.h); unknown counts as info.
+fn log_rank(level: &str) -> u8 {
+    match level {
+        "no" => 0,
+        "fatal" => 1,
+        "error" => 2,
+        "warn" => 3,
+        "status" => 5,
+        "v" => 6,
+        "debug" => 7,
+        "trace" => 8,
+        _ => 4,
+    }
+}
+
+/// An mpv log line that is evidence for the filter chain and the decoder:
+/// prefixes `vf`, `vd`, `d3d11vpp` (also as a path component, as in
+/// `vf/d3d11vpp`), `user_filter_wrapper` (the filter's option parsing),
+/// `d3d11va` (the render context's hwdec device, `libmpv_render/d3d11va`),
+/// `ffmpeg/video`, and the NVIDIA/Intel super resolution and RTX Video HDR
+/// messages of vf_d3d11vpp.
+fn is_filter_line(prefix: &str, text: &str) -> bool {
+    prefix
+        .split('/')
+        .any(|part| matches!(part, "vf" | "vd" | "d3d11vpp" | "d3d11va" | "user_filter_wrapper"))
+        || prefix.starts_with("ffmpeg/video")
+        || text.contains("d3d11vpp")
+        || text.contains("Super Resolution")
+        || text.contains("RTX Video")
 }
 
 // --------------------------------------------------------------------- DXGI
@@ -228,6 +296,7 @@ struct Device {
     device: ID3D11Device,
     context: ID3D11DeviceContext,
     name: String,
+    vendor: u32,
     luid: LUID,
     level: D3D_FEATURE_LEVEL,
     video: bool,
@@ -282,13 +351,13 @@ fn create_device(choice: Adapter) -> Result<Device, String> {
                     let _ = mt.SetMultithreadProtected(true);
                 }
                 // SAFETY: the device is live; GetAdapter/GetDesc fill owned values.
-                let (name, luid) = unsafe {
+                let (name, vendor, luid) = unsafe {
                     let dxgi: IDXGIDevice = device.cast().map_err(|e| e.to_string())?;
                     let desc =
                         dxgi.GetAdapter().and_then(|a| a.GetDesc()).map_err(|e| e.to_string())?;
-                    (wide(&desc.Description), desc.AdapterLuid)
+                    (wide(&desc.Description), desc.VendorId, desc.AdapterLuid)
                 };
-                return Ok(Device { device, context, name, luid, level, video });
+                return Ok(Device { device, context, name, vendor, luid, level, video });
             }
             (made, _, _) => last = format!("{made:?}"),
         }
@@ -884,6 +953,23 @@ fn info() -> Result<(), String> {
     Ok(())
 }
 
+/// `gpu-probe adapters`: the DXGI adapter list only (no device, no GL), for
+/// scripts that pick `--adapter <index>` by vendor.
+fn list_adapters() -> Result<(), String> {
+    for a in adapters()? {
+        println!(
+            "[{}] {} vendor=0x{:04x} ({}) LUID={} software={}",
+            a.index,
+            a.name,
+            a.vendor,
+            vendor_name(a.vendor),
+            luid_text(a.luid),
+            a.software
+        );
+    }
+    Ok(())
+}
+
 /// `gpu-probe interop <adapter>`: one cell of the info matrix, traced.
 fn interop_one(args: &[String]) -> Result<(), String> {
     let choice = match args.first().map(String::as_str) {
@@ -1006,7 +1092,19 @@ fn error_text(code: c_int) -> String {
     unsafe { CStr::from_ptr(mpv::mpv_error_string(code)).to_string_lossy().into_owned() }
 }
 
-fn events(handle: Arc<Handle>, stop: Arc<AtomicBool>) {
+/// What the event thread does with mpv's log lines: print those up to
+/// `print_rank` (as before), and with `keep` also keep the filter/decoder
+/// lines for the summary at the end.
+struct LogSink {
+    print_rank: u8,
+    keep: bool,
+    /// The kept lines and the number of further matching lines not kept.
+    kept: Mutex<(Vec<String>, usize)>,
+}
+/// Filter log lines kept for the summary; the rest are only counted.
+const KEPT_LINES: usize = 400;
+
+fn events(handle: Arc<Handle>, stop: Arc<AtomicBool>, sink: Arc<LogSink>) {
     loop {
         // SAFETY: the handle stays alive until this thread is joined.
         let event = unsafe { &*mpv::mpv_wait_event(handle.0, 0.25) };
@@ -1022,12 +1120,20 @@ fn events(handle: Arc<Handle>, stop: Arc<AtomicBool>) {
                 let (prefix, level, text) = unsafe {
                     (CStr::from_ptr(m.prefix), CStr::from_ptr(m.level), CStr::from_ptr(m.text))
                 };
-                print!(
-                    "  [mpv {} {}] {}",
-                    level.to_string_lossy(),
-                    prefix.to_string_lossy(),
-                    text.to_string_lossy()
-                );
+                let (level, prefix, text) =
+                    (level.to_string_lossy(), prefix.to_string_lossy(), text.to_string_lossy());
+                let line = format!("  [mpv {level} {prefix}] {text}");
+                if log_rank(&level) <= sink.print_rank {
+                    print!("{line}");
+                }
+                if sink.keep && is_filter_line(&prefix, &text) {
+                    let mut kept = sink.kept.lock().unwrap_or_else(PoisonError::into_inner);
+                    if kept.0.len() < KEPT_LINES {
+                        kept.0.push(line);
+                    } else {
+                        kept.1 += 1;
+                    }
+                }
             }
             mpv::MPV_EVENT_END_FILE => println!("  [event] end-file"),
             mpv::MPV_EVENT_FILE_LOADED => println!("  [event] file-loaded"),
@@ -1191,6 +1297,88 @@ fn compare(d3d: &[u8], gl: &[u8], (w, h): (u32, u32)) -> String {
     )
 }
 
+/// One non-blocking `mpv_render_context_render` into `target` (a render
+/// target of the device the render context was created on).
+fn render_into(render: *mut mpv::mpv_render_context, target: &ID3D11Texture2D) -> c_int {
+    let mut fbo = MpvD3d11Fbo { tex: target.as_raw() };
+    let mut block: c_int = 0;
+    let mut rp = [
+        mpv::mpv_render_param {
+            type_: MPV_RENDER_PARAM_D3D11_FBO,
+            data: (&mut fbo as *mut MpvD3d11Fbo).cast(),
+        },
+        mpv::mpv_render_param {
+            type_: mpv::MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME,
+            data: (&mut block as *mut c_int).cast(),
+        },
+        mpv::mpv_render_param { type_: mpv::MPV_RENDER_PARAM_INVALID, data: std::ptr::null_mut() },
+    ];
+    // SAFETY: the render context is live and used from this thread only; the
+    // param array is terminated and its values outlive the call.
+    unsafe { mpv::mpv_render_context_render(render, rp.as_mut_ptr()) }
+}
+
+/// Pause, seek exactly to `at`, wait until mpv shows that frame, and render
+/// it into `target`. Returns a note on where it stopped.
+fn capture_at(
+    handle: &Handle,
+    render: *mut mpv::mpv_render_context,
+    wake: &Wake,
+    target: &ID3D11Texture2D,
+    at: f64,
+) -> String {
+    let started = Instant::now();
+    // Not fatal: without video (say a filter failed) there is nothing to
+    // seek, but the results and the mpv log still matter.
+    if let Err(e) = handle
+        .command(&["set", "pause", "yes"])
+        .and_then(|()| handle.command(&["seek", &format!("{at}"), "absolute+exact"]))
+    {
+        render_into(render, target);
+        return format!("WARNING: {e}; the readback is the frame mpv shows now");
+    }
+    // Shown: the first frame at or after `at` (hr-seek keeps frames down to
+    // 5 ms before the target); anything later than 100 ms is not it.
+    let shown = |pos: f64| pos >= at - 0.01 && pos < at + 0.1;
+    let (mut settled_at, mut frames) = (None::<Instant>, 0u32);
+    while started.elapsed() < Duration::from_secs(5) {
+        wake.wait(Duration::from_millis(20));
+        // SAFETY: live render context, this (render) thread only.
+        let flags = unsafe { mpv::mpv_render_context_update(render) };
+        if flags & mpv::MPV_RENDER_UPDATE_FRAME as u64 != 0 {
+            // Consume the frame (as a player would) so mpv moves on.
+            render_into(render, target);
+            frames += 1;
+            settled_at = None;
+            continue;
+        }
+        let pos: Option<f64> = handle.get("time-pos").parse().ok();
+        if frames > 0 && handle.get("seeking") == "no" && pos.is_some_and(shown) {
+            // Settled once nothing new arrived for 150 ms.
+            let since = *settled_at.get_or_insert_with(Instant::now);
+            if since.elapsed() >= Duration::from_millis(150) {
+                let r = render_into(render, target);
+                if r < 0 {
+                    return format!("WARNING: mpv_render_context_render: {}", error_text(r));
+                }
+                return format!(
+                    "paused on time-pos={} (estimated-frame-number={}) after {:.0} ms, {frames} frame(s) after the seek",
+                    handle.get("time-pos"),
+                    handle.get("estimated-frame-number"),
+                    started.elapsed().as_secs_f64() * 1e3
+                );
+            }
+        }
+    }
+    // Render whatever is current, but say so.
+    render_into(render, target);
+    format!(
+        "WARNING: the seek did not settle within 5 s (time-pos={}, seeking={}); the readback may be another frame",
+        handle.get("time-pos"),
+        handle.get("seeking")
+    )
+}
+
 fn run(o: &Options) -> Result<(), String> {
     let d = create_device(o.adapter)?;
     println!(
@@ -1224,25 +1412,34 @@ fn run(o: &Options) -> Result<(), String> {
     handle.set("loop-file", "inf")?;
     handle.set("keep-open", "yes")?;
     handle.set("terminal", "no")?;
-    if o.host_vf {
-        // The host's initial filter chain (source_geometry::INITIAL_FILTERS).
-        handle.set(
-            "vf",
-            "@vestra-orientation:lavfi=[null],@vestra-orientation-metadata:format=rotate=0",
-        )?;
+    // As an option before loadfile: mpv builds the chain when the file loads,
+    // after the render context below exists, so d3d11vpp finds the d3d11va
+    // device of that context.
+    if let Some(vf) = o.filter_chain() {
+        handle.set("vf", &vf)?;
+    }
+    if o.at.is_some() {
+        // Exact seeks (the capture at the end): the frame shown is the first
+        // one at or after the target, the same in every run.
+        handle.set("hr-seek", "yes")?;
     }
     // SAFETY: live handle.
     let r = unsafe { mpv::mpv_initialize(handle.0) };
     if r < 0 {
         return Err(format!("mpv_initialize: {}", error_text(r)));
     }
-    let level = CString::new(o.log.as_str()).unwrap_or_default();
+    let level = CString::new(o.requested_log()).unwrap_or_default();
     // SAFETY: live handle, NUL-terminated level.
     unsafe { mpv::mpv_request_log_messages(handle.0, level.as_ptr()) };
     let stop = Arc::new(AtomicBool::new(false));
+    let sink = Arc::new(LogSink {
+        print_rank: log_rank(&o.log),
+        keep: o.vf.is_some(),
+        kept: Mutex::new((Vec::new(), 0)),
+    });
     let event_thread = {
-        let (handle, stop) = (handle.clone(), stop.clone());
-        std::thread::spawn(move || events(handle, stop))
+        let (handle, stop, sink) = (handle.clone(), stop.clone(), sink.clone());
+        std::thread::spawn(move || events(handle, stop, sink))
     };
 
     // The render context on our device.
@@ -1420,6 +1617,14 @@ fn run(o: &Options) -> Result<(), String> {
                 sync_ms.0.push(t.elapsed().as_secs_f64() * 1e3);
             }
         }
+        if all_frames == 0 {
+            println!(
+                "  first frame: hwdec-current={} video-params={} video-out-params={}",
+                handle.get("hwdec-current"),
+                handle.get("video-params"),
+                handle.get("video-out-params")
+            );
+        }
         all_frames += 1;
         rendered.push_back(index);
         if rendered.len() > RING {
@@ -1452,6 +1657,14 @@ fn run(o: &Options) -> Result<(), String> {
     }
     let wall = measured_from.map_or(0.0, |t| t.elapsed().as_secs_f64());
     let cpu = process_cpu_seconds() - cpu_from;
+    if let Some(at) = o.at {
+        // Measurement done: pause on the frame at `at` and render it into a
+        // target of its own, which becomes "the last rendered frame" below.
+        let slot = (all_frames % RING as u64) as usize;
+        let note = capture_at(&handle, render, &wake, &targets[slot], at);
+        println!("  --at {at}: {note}");
+        rendered.push_back(slot);
+    }
     let cores = std::thread::available_parallelism().map_or(1, |n| n.get()) as f64;
     // Drain the outstanding GPU timers.
     // SAFETY: flushes this thread's own immediate-context work.
@@ -1483,9 +1696,29 @@ fn run(o: &Options) -> Result<(), String> {
         "decoder-frame-drop-count",
         "vo-delayed-frame-count",
         "mistimed-frame-count",
+        "vf",
+        "video-params",
+        "video-out-params",
+        "time-pos",
+        "estimated-frame-number",
     ] {
         println!("  {p} = {}", handle.get(p));
     }
+    println!(
+        "  adapter = {} vendor=0x{:04x} ({}) LUID={}",
+        d.name,
+        d.vendor,
+        vendor_name(d.vendor),
+        luid_text(d.luid)
+    );
+    let (out_w, out_h) = (handle.get("video-out-params/w"), handle.get("video-out-params/h"));
+    let same = out_w == o.size.0.to_string() && out_h == o.size.1.to_string();
+    println!(
+        "  render target {}x{}, filter output (video-out-params) {out_w}x{out_h}: {}",
+        o.size.0,
+        o.size.1,
+        if same { "same size, drawn 1:1" } else { "mpv scales it to the target" }
+    );
     println!(
         "  frames rendered: {frames} in {wall:.2} s = {:.2} fps ({all_frames} incl. warm-up, {errors} render errors)",
         frames as f64 / wall.max(1e-9)
@@ -1503,15 +1736,23 @@ fn run(o: &Options) -> Result<(), String> {
         println!("  interop lock+blit+unlock CPU: {}", blit_ms.summary());
         println!("  interop lock+blit+unlock+glFinish: {}", finish_ms.summary());
     }
-    println!(
-        "  process CPU: {cpu:.2} s over {wall:.2} s = {:.2} cores = {:.1}% of {cores} logical CPUs",
-        cpu / wall.max(1e-9),
-        100.0 * cpu / wall.max(1e-9) / cores
-    );
+    if measured_from.is_some() {
+        println!(
+            "  process CPU: {cpu:.2} s over {wall:.2} s = {:.2} cores = {:.1}% of {cores} logical CPUs",
+            cpu / wall.max(1e-9),
+            100.0 * cpu / wall.max(1e-9) / cores
+        );
+    } else {
+        // Paused (--at) or no frame after the warm-up: nothing was measured.
+        println!("  process CPU: n/a (no frame rendered after the warm-up)");
+    }
 
     // The last rendered frame, from D3D and (with --gl, after one more blit
     // of that same texture) from GL.
     let last = rendered.back().copied().unwrap_or(0);
+    if rendered.is_empty() {
+        println!("  WARNING: no frame was rendered; the readback is of an empty target");
+    }
     let pixels = read_back(&d, &targets[last], o.size)?;
     println!("  D3D readback: {}", picture_stats(&pixels));
     if let Some(path) = &o.png {
@@ -1531,6 +1772,19 @@ fn run(o: &Options) -> Result<(), String> {
     // SAFETY: live handle; wakes the event thread so it sees `stop`.
     unsafe { mpv::mpv_wakeup(handle.0) };
     let _ = event_thread.join();
+    if sink.keep {
+        let kept = sink.kept.lock().unwrap_or_else(PoisonError::into_inner);
+        println!(
+            "== mpv filter/decoder log (prefixes vf, vd, d3d11vpp, ffmpeg/video; Super Resolution, RTX Video; mpv level {})",
+            o.requested_log()
+        );
+        for line in &kept.0 {
+            print!("{line}");
+        }
+        if kept.1 > 0 {
+            println!("  ... {} more matching lines not kept", kept.1);
+        }
+    }
     // SAFETY: the render context is freed before the handle, both once; the
     // update callback cannot run after mpv_render_context_free returns, so
     // `wake` may drop after it.
@@ -1540,4 +1794,68 @@ fn run(o: &Options) -> Result<(), String> {
     }
     drop(wake);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Result<Options, String> {
+        Options::parse(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn vf_and_at_are_parsed_and_default_to_none() {
+        let o = parse(&[]).unwrap();
+        assert!(o.vf.is_none() && o.at.is_none() && o.filter_chain().is_none());
+        assert_eq!(o.requested_log(), "info");
+        let o = parse(&["--vf", "d3d11vpp=scale=2:scaling-mode=nvidia", "--at", "5"]).unwrap();
+        assert_eq!(o.filter_chain().as_deref(), Some("d3d11vpp=scale=2:scaling-mode=nvidia"));
+        assert_eq!(o.at, Some(5.0));
+        assert!(parse(&["--at", "-1"]).is_err());
+        assert!(parse(&["--at", "NaN"]).is_err());
+        assert!(parse(&["--at", "x"]).is_err());
+        assert!(parse(&["--vf"]).is_err());
+    }
+
+    #[test]
+    fn host_vf_comes_first() {
+        let o = parse(&["--host-vf", "--vf", "d3d11vpp=scale=2"]).unwrap();
+        let chain = o.filter_chain().unwrap();
+        assert!(chain.starts_with("@vestra-orientation:lavfi=[null],"));
+        assert!(chain.ends_with("rotate=0,d3d11vpp=scale=2"));
+        assert!(parse(&["--host-vf"]).unwrap().filter_chain().unwrap().ends_with("rotate=0"));
+    }
+
+    #[test]
+    fn vf_raises_only_the_requested_log_level() {
+        let o = parse(&["--vf", "d3d11vpp"]).unwrap();
+        assert_eq!((o.requested_log(), log_rank(&o.log)), ("v", log_rank("info")));
+        let o = parse(&["--vf", "d3d11vpp", "--log", "debug"]).unwrap();
+        assert_eq!(o.requested_log(), "debug");
+        let o = parse(&["--log", "warn"]).unwrap();
+        assert_eq!(o.requested_log(), "warn");
+        assert!(log_rank("warn") < log_rank("info") && log_rank("info") < log_rank("v"));
+    }
+
+    #[test]
+    fn filter_lines() {
+        for prefix in [
+            "vf",
+            "vd",
+            "d3d11vpp",
+            "vf/d3d11vpp",
+            "ffmpeg/video",
+            "user_filter_wrapper",
+            "libmpv_render/d3d11va",
+        ] {
+            assert!(is_filter_line(prefix, "x"), "{prefix}");
+        }
+        assert!(is_filter_line("cplayer", "NVIDIA RTX Super Resolution enabled.\n"));
+        assert!(is_filter_line("x", "Failed to enable NVIDIA RTX Super Resolution: E_FAIL\n"));
+        assert!(is_filter_line("x", "NVIDIA RTX Video HDR not supported.\n"));
+        for prefix in ["vo/libmpv", "ffmpeg/audio", "vdpau", "cplayer"] {
+            assert!(!is_filter_line(prefix, "x"), "{prefix}");
+        }
+    }
 }

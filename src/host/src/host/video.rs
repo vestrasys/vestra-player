@@ -11,6 +11,14 @@ thread_local! {
     pub(crate) static PIP_GPU_SINK: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
 }
 
+/// `VESTRA_TEST_NO_VIDEO_IMAGE=1` (diagnostics): frames are rendered,
+/// uploaded and counted, but never set on the video area, so the window's
+/// draw cost can be measured without the video in it.
+fn video_image_hidden() -> bool {
+    static HIDDEN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *HIDDEN.get_or_init(|| std::env::var("VESTRA_TEST_NO_VIDEO_IMAGE").as_deref() == Ok("1"))
+}
+
 impl Host {
     /// GPU rendering: show the renderer's texture in this window (before
     /// `show()`, so the rendering notifier sees the setup). A window that
@@ -28,22 +36,47 @@ impl Host {
         };
         let render = self.backend.render.clone();
         let drawn = move |draw: platform::GpuDraw| match draw {
-            platform::GpuDraw::Begin => render.presentation.draw_begin(Instant::now()),
+            platform::GpuDraw::Begin => {
+                let now = Instant::now();
+                frame_pacing::draw_began();
+                render.presentation.draw_begin(now);
+            }
             platform::GpuDraw::End { copied } => {
+                frame_pacing::draw_ended();
                 render.presentation.draw_end(Instant::now(), copied);
             }
         };
         self.backend.render.presentation.start_counting();
         let render = self.backend.render.clone();
         let target = self.video_target.clone();
+        let notifier = platform::window_notifiers();
+        // Without a notifier the window sets each frame's image between
+        // draws; paced, it takes one only after the previous one was drawn,
+        // and the image it sets owes the draw (wgpu round record §17).
+        let paced = !notifier && frame_pacing::gpu_frames_paced();
         let show = move |image: slint::Image| {
             // A generated stream's picture stays (its frames come as pixels).
-            if !render.producer()
-                && let Some(shell) = target.borrow().upgrade()
-            {
-                let _ = shell.set_property("video-frame", image.into());
+            if !render.producer() {
+                if !video_image_hidden()
+                    && let Some(shell) = target.borrow().upgrade()
+                {
+                    let _ = shell.set_property("video-frame", image.into());
+                }
+                if !notifier {
+                    // Each image is a new frame; the next draw presents it.
+                    render.presentation.picture_set(Duration::ZERO);
+                }
+                if paced {
+                    frame_pacing::picture_set();
+                }
             }
         };
+        if !notifier {
+            self.count_draws_without_notifier();
+        }
+        platform::gate_gpu_frames(
+            paced.then(|| Box::new(frame_pacing::accept_picture) as Box<dyn Fn() -> bool>),
+        );
         let render = self.backend.render.clone();
         let failed = move |reason: String| render.fall_back(Reason::WindowFallback(reason));
         if let Err(error) = gpu.attach(shell, show, failed, drawn) {
@@ -64,6 +97,12 @@ impl Host {
         &self,
         shell: &slint_interpreter::ComponentInstance,
     ) -> Option<vestra_video_texture::Feed> {
+        if !platform::window_notifiers() {
+            // wgpu windows (Windows): no notifier, the texture is filled in
+            // `show_frame` itself.
+            self.count_draws_without_notifier();
+            return platform::direct_video_feed();
+        }
         if platform::VIDEO_TEXTURE {
             let render = self.backend.render.clone();
             let drawn = move |draw| match draw {
@@ -73,6 +112,7 @@ impl Host {
                     render.presentation.draw_begin(now);
                 }
                 vestra_video_texture::Draw::End => {
+                    frame_pacing::draw_ended();
                     render.presentation.draw_end(Instant::now(), false);
                 }
             };
@@ -95,6 +135,7 @@ impl Host {
                 render.presentation.draw_begin(now);
             }
             slint::RenderingState::AfterRendering => {
+                frame_pacing::draw_ended();
                 render.presentation.draw_end(Instant::now(), false);
             }
             _ => (),
@@ -112,11 +153,23 @@ impl Host {
         self.backend.render.presentation.start_counting();
         None
     }
+    /// Count the main window's draws through the pacing hook, where the
+    /// window has no rendering notifier (`platform::window_notifiers`): no
+    /// draw times then, only the counts (`stats().presentedFps`).
+    fn count_draws_without_notifier(&self) {
+        let render = self.backend.render.clone();
+        frame_pacing::on_draw(Some(Box::new(move || {
+            render.presentation.draw_end(Instant::now(), false);
+        })));
+        self.backend.render.presentation.start_counting();
+    }
     /// A new shell took the main window's place inside the same native
     /// window (`prepare_mount_tick`): what was attached to the window stays
     /// (its rendering notifier and reused texture, its native window id and
     /// title bar) and now serves `shell`; what followed the old shell
-    /// follows the new one.
+    /// follows the new one. Windows wgpu windows: the GPU renderer's direct
+    /// update (no notifier) and the draw count through the pacing hook stay
+    /// too; the renderer sets its current texture on the new shell at once.
     pub(crate) fn retarget_shell(&self, shell: &slint_interpreter::ComponentInstance) {
         self.video_target.replace(shell.as_weak());
         if let Some(gpu) = self.backend.render.gpu() {
@@ -159,13 +212,17 @@ impl Host {
         self.last_frame = Some(set);
         match texture {
             Some(texture) => {
-                if let Some(texture) = texture {
+                if let Some(texture) = texture
+                    && !video_image_hidden()
+                {
                     let _ = window.set_property("video-frame", texture.into());
                 }
                 window.window().request_redraw();
             }
             None => {
-                let _ = window.set_property("video-frame", image.into());
+                if !video_image_hidden() {
+                    let _ = window.set_property("video-frame", image.into());
+                }
             }
         }
         self.backend.render.presentation.picture_set(set.elapsed());
@@ -221,6 +278,7 @@ impl Host {
         // to PiP (frames of the old shape are not pushed).
         self.apply_render_size();
         self.pip_gpu_hook();
+        self.gpu_pacing_hook();
         if self.pip.needs_frame() {
             if self.pip_gpu_frames() {
                 // Paused playback renders nothing new: start from the newest.
@@ -303,6 +361,48 @@ impl Host {
             }
         }
     }
+    /// GPU rendering where the host paces the main window (`frame_pacing`,
+    /// Windows): once, have each new frame owe that window a draw at the next
+    /// vertical blank, as a new software picture does (`show_frame`), instead
+    /// of waiting for Slint's timer to ask (coalesced: one wake-up of the UI
+    /// thread at a time). A generated stream's pictures are owed by
+    /// `show_frame` itself. Not for windows without a notifier when GPU
+    /// frames are paced (`frame_pacing::gpu_frames_paced`): there the image
+    /// set between draws owes the draw (`attach_gpu`), so a vertical blank
+    /// can no longer fall between a frame's image and the draw it owes.
+    pub(crate) fn gpu_pacing_hook(&mut self) {
+        if !frame_pacing::wanted()
+            || (!platform::window_notifiers() && frame_pacing::gpu_frames_paced())
+        {
+            return;
+        }
+        // No GPU renderer (any more, after a fallback): a later one is hooked
+        // again.
+        let Some(gpu) = self.backend.render.gpu() else {
+            self.gpu_paced = false;
+            return;
+        };
+        if self.gpu_paced {
+            return;
+        }
+        self.gpu_paced = true;
+        let (render, queued) = (
+            self.backend.render.clone(),
+            Arc::new(AtomicBool::new(false)),
+        );
+        gpu.on_frame(move || {
+            if queued.swap(true, Ordering::AcqRel) {
+                return;
+            }
+            let (render, queued) = (render.clone(), queued.clone());
+            let _ = slint::invoke_from_event_loop(move || {
+                queued.store(false, Ordering::Release);
+                if !render.producer() {
+                    frame_pacing::picture_set();
+                }
+            });
+        });
+    }
     /// GPU rendering: once, have the render thread's frame callback wake the
     /// UI thread for each new frame while PiP wants frames (coalesced; a
     /// wake-up that finds the host busy is dropped, the next frame comes).
@@ -369,7 +469,8 @@ impl Host {
             self.render_sent = Some(size);
             self.backend.target.set_area(size);
             if let Some(gpu) = self.backend.render.gpu() {
-                gpu.set_size(size);
+                // `VESTRA_RENDER_TARGET` (diagnostics) applies to GPU frames too.
+                gpu.set_size(render_target::forced().unwrap_or(size));
             }
         }
     }

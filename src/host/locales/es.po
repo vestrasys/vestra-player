@@ -363,6 +363,11 @@ msgstr "La imagen en imagen requiere macOS 14 o posterior"
 msgid "libmpv · GPU rendering (OpenGL)"
 msgstr "libmpv · renderizado por GPU (OpenGL)"
 
+#: src/renderer.rs:18
+#, x-machine
+msgid "libmpv · GPU rendering (Direct3D)"
+msgstr "libmpv · renderizado por GPU (Direct3D)"
+
 #: src/renderer.rs:20
 #, x-machine
 msgid "libmpv · software rendering"

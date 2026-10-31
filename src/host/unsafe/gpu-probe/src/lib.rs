@@ -22,6 +22,15 @@
 //!     and GPU time by timestamp queries), the process CPU time, and with
 //!     --gl the interop lock + blit + unlock per frame; then reads back the
 //!     last frame from D3D (and from GL with --gl) and compares them.
+//!     [--vf FILTERS] sets mpv's `vf` before loadfile (after the host chain
+//!     with --host-vf), asks mpv for at least `v` logs, and prints the
+//!     vf/vd/d3d11vpp/ffmpeg-video and "Super Resolution" lines at the end;
+//!     [--at T] after the measurement pauses on the frame at T (exact seek)
+//!     and reads that back, so --png captures the same frame in every run.
+//!     video-params, video-out-params and the adapter
+//!     are printed with the results (AI upscaling round, step V0).
+//! gpu-probe adapters
+//!     The DXGI adapter list only (index, name, vendor, LUID).
 //! ```
 //!
 //! `gpu-probe-dgpu` is the same program with the hybrid-GPU export hints.

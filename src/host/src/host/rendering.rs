@@ -8,7 +8,9 @@
 use super::*;
 use crate::launch::Resume;
 use crate::playback::render_denylist::Denylist;
-use crate::playback::render_mode::{Decision, Facts, Mode, Preference, Reason, decide, env_choice};
+use crate::playback::render_mode::{
+    Decision, Facts, Mode, Preference, Reason, decide, env_choice, window_env_choice,
+};
 use crate::playback::render_state::{self, GuardFile, GuardKey};
 
 /// What the rendering API reads and changes; built in `main.rs`.
@@ -35,7 +37,7 @@ pub(crate) const RESTART_COOLDOWN: std::time::Duration = std::time::Duration::fr
 /// Whether a restart is refused now (`busy`): one is under way in this
 /// process, or this process was itself started by a restart less than
 /// [`RESTART_COOLDOWN`] ago.
-fn restart_refused(
+pub(crate) fn restart_refused(
     restarting: bool,
     restarted_at: Option<std::time::Instant>,
     now: std::time::Instant,
@@ -79,6 +81,11 @@ pub(crate) fn startup(headless: bool) -> Startup {
         std::env::var_os("VESTRA_RENDER").as_deref(),
         std::env::var_os("VESTRA_SOFTWARE_RENDER").as_deref(),
     );
+    if let Some(warning) = warning {
+        diag!("{warning}");
+    }
+    let (window_env, warning) =
+        window_env_choice(std::env::var_os("VESTRA_WINDOW_RENDERER").as_deref());
     if let Some(warning) = warning {
         diag!("{warning}");
     }
@@ -127,9 +134,15 @@ pub(crate) fn startup(headless: bool) -> Startup {
         app: env!("CARGO_PKG_VERSION").into(),
     };
     let now = render_state::now();
-    let crashed = guard.recover(now).blocks(&key, now).map(|until| {
+    let recovered = guard.recover(now);
+    let crashed = recovered.blocks(&key, now).map(|until| {
         format!(
-            "GPU rendering stopped an earlier start of the player; it is tried again after a graphics driver or player update, or in {} days",
+            "{}; it is tried again after a graphics driver or player update, or in {} days",
+            if recovered.crashed_by_losses() {
+                "the graphics device was lost twice within a day while the player used it"
+            } else {
+                "GPU rendering stopped an earlier start of the player"
+            },
             until.saturating_sub(now).div_ceil(24 * 60 * 60)
         )
     });
@@ -144,6 +157,9 @@ pub(crate) fn startup(headless: bool) -> Startup {
             denylist,
             crashed,
             slint_backend: std::env::var_os("SLINT_BACKEND").is_some_and(|value| !value.is_empty()),
+            wgpu_windows: platform::GPU_WINDOWS_WGPU,
+            window_env,
+            gpu_opt_in: platform::GPU_OPT_IN,
         },
         preference,
         file,
@@ -263,13 +279,18 @@ impl Host {
     }
 }
 
-/// A restart was started (once per process).
-static RESTARTING: AtomicBool = AtomicBool::new(false);
+/// A restart was started (once per process): `rendering.restart` or a lost
+/// GPU device (`restart.rs`).
+pub(crate) static RESTARTING: AtomicBool = AtomicBool::new(false);
 
 /// The new player's command line: `--vestra-restart PID`, this run's
 /// development plugins and `--silent`, and the current local file with
 /// where it is (`--vestra-resume`); not a stream or another kind of source.
-fn relaunch_command(exe: &Path, relaunch: &Relaunch, source: &Value) -> std::process::Command {
+pub(crate) fn relaunch_command(
+    exe: &Path,
+    relaunch: &Relaunch,
+    source: &Value,
+) -> std::process::Command {
     let mut command = std::process::Command::new(exe);
     command.args([
         "--vestra-restart".to_string(),

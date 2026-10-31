@@ -12,6 +12,7 @@ mod menus;
 mod mounts;
 pub mod package_activation;
 mod rendering;
+mod restart;
 pub(crate) use rendering::{Relaunch, Rendering, startup as rendering_startup};
 mod rpc;
 mod shell;
@@ -65,6 +66,7 @@ pub(crate) use menus::{
     debug_menu, debug_menu_pointer, menu_levels, set_menu_model, track_pointer,
 };
 pub(crate) use mounts::refuse_initial;
+pub(crate) use restart::{LAST_SOURCE, LostDevice, restart_log, restart_player};
 pub(crate) use rpc::{Reply, Request, RpcError, string, ui_error};
 pub(crate) use state::{LayoutChange, layout_change, policy_slot};
 pub(crate) use video::{FRAME_SINK, PIP_GPU_SINK};
@@ -276,6 +278,9 @@ pub(crate) struct Host {
     /// GPU rendering: PiP wants the renderer's frames (read by its frame
     /// callback on the render thread), and that callback is registered.
     pub(crate) pip_gpu: (Arc<AtomicBool>, bool),
+    /// GPU rendering with host pacing: the frame callback that owes the main
+    /// window a draw is registered (`gpu_pacing_hook`).
+    pub(crate) gpu_paced: bool,
     /// File drops (R-U2).
     pub(crate) drops: drops::Drops,
     /// Files the system or another launch asked to open.

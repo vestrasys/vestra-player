@@ -25,9 +25,10 @@ pub struct Launch {
     /// own commands; a drop carries only paths (reported and skipped).
     pub urls: Vec<String>,
     /// Internal: this player replaces one that restarted itself
-    /// (`rendering.restart`; `--vestra-restart PID`, written by the host
-    /// only): it waits for that player's instance lock instead of handing
-    /// its files over.
+    /// (`rendering.restart`, or its windows' GPU device was lost;
+    /// `--vestra-restart PID`, written by the host only): it waits for that
+    /// player to end and for its instance lock instead of handing its files
+    /// over.
     pub restart: Option<u32>,
     /// Internal: continue the first file at this point
     /// (`--vestra-resume SECONDS:paused|playing`, written by the host only).

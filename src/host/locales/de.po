@@ -366,6 +366,11 @@ msgstr "Bild-in-Bild erfordert macOS 14 oder neuer"
 msgid "libmpv · GPU rendering (OpenGL)"
 msgstr "libmpv · GPU-Rendering (OpenGL)"
 
+#: src/renderer.rs:18
+#, x-machine
+msgid "libmpv · GPU rendering (Direct3D)"
+msgstr "libmpv · GPU-Rendering (Direct3D)"
+
 #: src/renderer.rs:20
 #, x-machine
 msgid "libmpv · software rendering"

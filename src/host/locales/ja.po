@@ -363,6 +363,11 @@ msgstr "ピクチャ・イン・ピクチャには macOS 14 以降が必要で�
 msgid "libmpv · GPU rendering (OpenGL)"
 msgstr "libmpv · GPU レンダリング（OpenGL）"
 
+#: src/renderer.rs:18
+#, x-machine
+msgid "libmpv · GPU rendering (Direct3D)"
+msgstr "libmpv · GPU レンダリング（Direct3D）"
+
 #: src/renderer.rs:20
 #, x-machine
 msgid "libmpv · software rendering"

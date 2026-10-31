@@ -31,7 +31,10 @@ pub mod ui;
 
 use anyhow::{Result, bail};
 use host::package_activation;
-use host::{Event, FRAME_SINK, Host, InputShared, MenuMode, PIP_GPU_SINK};
+use host::{
+    Event, FRAME_SINK, Host, InputShared, LAST_SOURCE, MenuMode, PIP_GPU_SINK, restart_log,
+    restart_player,
+};
 use packages::package_manager;
 use playback::{backend::Backend, frame_pacing, render_mode, render_target};
 use process::{Plugin, runtime_paths};
@@ -110,6 +113,30 @@ static HANDOFFS: AtomicBool = AtomicBool::new(true);
 fn stop_handoffs() {
     HANDOFFS.store(false, Ordering::Release);
 }
+/// CPU mode's windows (`render_mode::WindowKind`): femtovg on OpenGL
+/// (Windows always, named explicitly since Slint's default there would be
+/// femtovg-wgpu; `VESTRA_WINDOW_RENDERER=gl` elsewhere), with Slint's
+/// software renderer when OpenGL fails; Slint's software renderer (a
+/// `software-windows` denylist rule, `VESTRA_WINDOW_RENDERER=software`); or
+/// Slint's default (macOS and Linux). `decide` never gives CPU mode wgpu
+/// windows; if it did, they would get OpenGL ones here.
+fn select_cpu_windows(
+    windows: render_mode::WindowKind,
+    winit: impl Fn() -> slint::BackendSelector,
+) -> std::result::Result<(), slint::PlatformError> {
+    match windows {
+        render_mode::WindowKind::OpenGl | render_mode::WindowKind::Wgpu => {
+            if let Err(error) = winit().renderer_name("femtovg".into()).select() {
+                diag!("render: no OpenGL windows ({error}); Slint's software renderer");
+                winit().renderer_name("software".into()).select()?;
+            }
+            Ok(())
+        }
+        render_mode::WindowKind::Software => winit().renderer_name("software".into()).select(),
+        render_mode::WindowKind::Default => winit().select(),
+    }
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let launch::Launch {
@@ -138,6 +165,18 @@ fn main() -> Result<()> {
                 .then(platform::app_data_dir)
                 .flatten()
         });
+    // A restart (`rendering.restart`, or after the windows' GPU device was
+    // lost) first waits for the process it replaces to end: that one's
+    // crash guard and files are final then (Windows; elsewhere at once).
+    if let Some(parent) = restart {
+        if platform::wait_for_process_exit(parent, Duration::from_secs(20)) {
+            restart_log(&format!("render: the restart of process {parent} started"));
+        } else {
+            restart_log(&format!(
+                "render: the player this restart replaces (process {parent}) did not end in 20 s"
+            ));
+        }
+    }
     let mut primary = None;
     if let Some(directory) = instance_dir {
         // A player that restarted itself (`rendering.restart`) is replaced
@@ -176,10 +215,11 @@ fn main() -> Result<()> {
         bail!("{text}");
     }
     // The renderer pair and why (round record 2026-10-render-modes): GPU
-    // rendering (SDK site, Concepts: render options) needs Slint's OpenGL
-    // renderer (femtovg); headless, `VESTRA_RENDER`, the saved preference,
-    // the crash guard, the driver denylist and systems without a GPU
-    // renderer can make it software.
+    // rendering (SDK site, Concepts: render options) needs the windows the
+    // platform pairs with it (macOS: femtovg on OpenGL; Windows: femtovg on
+    // wgpu/Direct3D 12, and only when the user turned it on); headless,
+    // `VESTRA_RENDER`, the saved preference, the crash guard, the driver
+    // denylist and systems without a GPU renderer can make it software.
     let startup = host::rendering_startup(headless);
     let mut render = render_mode::decide(&startup.facts, startup.preference);
     diag!("{}", render.line());
@@ -194,33 +234,63 @@ fn main() -> Result<()> {
     let _armed = render
         .is_gpu()
         .then(|| guard.arm(startup.key.clone(), playback::render_state::now()));
+    // What a restart after a lost window device needs (Windows wgpu
+    // windows; `host/restart.rs`).
+    // When this player was started by a restart: another is refused for a
+    // while (`rendering::RESTART_COOLDOWN`).
+    let restarted_at = restart.map(|_| Instant::now());
+    let lost_device = host::LostDevice {
+        relaunch: host::Relaunch {
+            directories: directories.clone(),
+            silent,
+        },
+        guard: guard.clone(),
+        key: startup.key.clone(),
+        restarted_at,
+    };
     if !headless {
         // Windows: the main window draws at the display's vertical blanks
         // (`frame_pacing.rs`), not on Slint's timer.
         let winit = || {
             let selector = slint::BackendSelector::new().backend_name("winit".into());
-            if frame_pacing::wanted() {
+            if frame_pacing::hooked() {
                 selector.with_winit_custom_application_handler(frame_pacing::Handler)
             } else {
                 selector
             }
         };
-        match render.windows {
-            render_mode::WindowKind::OpenGl => {
-                if let Err(error) = winit().renderer_name("femtovg".into()).select() {
-                    render = render.fall_back(render_mode::Reason::InitFailed(format!(
-                        "the OpenGL window renderer is unavailable: {error}"
-                    )));
-                    diag!("{}", render.line());
-                    guard.settle();
-                    winit().select()?;
-                }
+        // The windows the decision chose; a GPU mode whose windows cannot be
+        // had falls back to software rendering with CPU mode's windows.
+        let gpu_windows = match render.windows {
+            render_mode::WindowKind::Wgpu => {
+                // A lost window device restarts the player at once, from
+                // the device's callback, after recording the loss in the
+                // crash guard: the new one waits for this process to end,
+                // however it ends (a lost device may also fail Slint's
+                // teardown).
+                let lost = lost_device.clone();
+                platform::on_window_device_lost(move || {
+                    let source = LAST_SOURCE
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone();
+                    restart_player(&lost, &source);
+                });
+                platform::select_wgpu_windows(winit)
             }
-            render_mode::WindowKind::Default => winit().select()?,
-            // A driver whose OpenGL cannot draw the windows (denylist).
-            render_mode::WindowKind::Software => {
-                winit().renderer_name("software".into()).select()?;
-            }
+            render_mode::WindowKind::OpenGl if render.is_gpu() => winit()
+                .renderer_name("femtovg".into())
+                .select()
+                .map_err(|error| format!("the OpenGL window renderer is unavailable: {error}")),
+            _ => Ok(()),
+        };
+        if let Err(error) = gpu_windows {
+            render = render.fall_back(render_mode::Reason::InitFailed(error));
+            diag!("{}", render.line());
+            guard.settle();
+        }
+        if !render.is_gpu() {
+            select_cpu_windows(render.windows, winit)?;
         }
     }
     let mut observed_source = Value::Null;
@@ -305,7 +375,7 @@ fn main() -> Result<()> {
                 directories: directories.clone(),
                 silent,
             },
-            restarted_at: restart.map(|_| Instant::now()),
+            restarted_at,
         },
         source_state_replies: Default::default(),
         floating: None,
@@ -352,6 +422,7 @@ fn main() -> Result<()> {
         render_area: None,
         render_sent: None,
         pip_gpu: Default::default(),
+        gpu_paced: false,
         drops: Default::default(),
         opens: Default::default(),
         settings: Default::default(),
@@ -394,8 +465,8 @@ fn main() -> Result<()> {
             host.policy.set_sidebar_width(sidebar.width);
         }
     }
-    for directory in directories {
-        host.load(&directory, 120_000)?;
+    for directory in &directories {
+        host.load(directory, 120_000)?;
     }
     // A restart continues its first file where the replaced player was.
     if let (Some(resume), Some(file)) = (resume, files.first()) {
@@ -508,7 +579,9 @@ fn main() -> Result<()> {
                 if let Some(deliver) = &*sink.borrow() {
                     deliver();
                 }
-            })
+            });
+            // A GPU frame a window without a notifier refused (Windows).
+            platform::update_gpu_frames();
         })));
         let pip_host = host.clone();
         PIP_GPU_SINK.with(|sink| {
@@ -610,10 +683,22 @@ fn main() -> Result<()> {
         // GPU rendering that ran this long started: settle the crash guard.
         let started = guard.clone();
         slint::Timer::single_shot(Duration::from_secs(5), move || started.settle());
+        // The loop also ends with an error when the windows' GPU device was
+        // lost (a driver reset): tear down as usual first.
         let ran = slint::run_event_loop();
         stop_handoffs();
-        guard.settle();
-        ran?;
+        // Read now: only a loss that ended the loop restarts the player.
+        if platform::window_device_lost() {
+            // Standard practice is a new device; Slint cannot give its
+            // windows one, so the player starts again where it was (already
+            // started from the device's callback; this is the fallback).
+            host.borrow_mut().ui_state.flush();
+            let source = host.borrow().last_source.clone();
+            restart_player(&lost_device, &source);
+        } else {
+            guard.settle();
+            ran?;
+        }
         timer.stop();
         frame_pacing::stop();
         frame_pacing::on_deliver(None);

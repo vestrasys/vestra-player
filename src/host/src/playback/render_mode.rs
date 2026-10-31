@@ -41,11 +41,15 @@ impl Mode {
 pub enum WindowKind {
     /// Slint's default renderer for the winit backend (CPU mode).
     Default,
-    /// femtovg on OpenGL: what GPU mode's texture sharing needs.
+    /// femtovg on OpenGL: what GPU mode's texture sharing needs on macOS.
     OpenGl,
     /// Slint's software renderer: a driver whose OpenGL cannot draw the
     /// windows (denylist action `software-windows`); CPU mode only.
     Software,
+    /// femtovg on wgpu (Direct3D 12): GPU mode's windows on Windows, which
+    /// show libmpv's Direct3D 11 textures directly. Not the driver's OpenGL,
+    /// so a `software-windows` rule does not touch them (record §8.7).
+    Wgpu,
 }
 
 /// The user's choice (`render.json`, `rendering.setPreference`), applied at
@@ -86,6 +90,10 @@ impl Preference {
 pub enum Reason {
     /// Nothing rules GPU rendering out.
     Default,
+    /// This system's GPU renderer is experimental and off until the user
+    /// turns it on (Windows): the platform's default is software rendering.
+    /// Code `default`, as the SDK documents it ("the platform's default").
+    OffByDefault,
     /// GPU rendering is starting (the render thread has not installed it).
     Pending,
     /// No windows (`--headless`).
@@ -111,7 +119,7 @@ impl Reason {
     /// A stable code (kebab case).
     pub fn code(&self) -> &'static str {
         match self {
-            Self::Default => "default",
+            Self::Default | Self::OffByDefault => "default",
             Self::Pending => "pending",
             Self::Headless => "headless",
             Self::NoGpuBackend => "no-gpu-backend",
@@ -127,6 +135,10 @@ impl Reason {
     pub fn message(&self) -> String {
         match self {
             Self::Default => "nothing rules GPU rendering out".into(),
+            Self::OffByDefault => format!(
+                "GPU rendering on {} is experimental and off until it is turned on",
+                system_name(std::env::consts::OS)
+            ),
             Self::Pending => "GPU rendering is starting".into(),
             Self::Headless => "the player runs without windows".into(),
             Self::NoGpuBackend => format!(
@@ -184,6 +196,17 @@ pub struct Facts {
     /// `SLINT_BACKEND` is set: Slint picks the window renderer itself and
     /// a denylist rule does not change it.
     pub slint_backend: bool,
+    /// GPU mode's windows draw with wgpu (Direct3D 12), not OpenGL
+    /// (`platform::GPU_WINDOWS_WGPU`, Windows): a `software-windows` rule
+    /// then changes only CPU mode's windows and does not rule GPU out.
+    pub wgpu_windows: bool,
+    /// GPU rendering only when the user or the environment asks for it
+    /// (`platform::GPU_OPT_IN`, Windows): `auto` resolves to software.
+    pub gpu_opt_in: bool,
+    /// `VESTRA_WINDOW_RENDERER=gl|software` (a test switch,
+    /// `window_env_choice`): these windows, and software rendering where GPU
+    /// mode needs other ones.
+    pub window_env: Option<WindowKind>,
 }
 
 /// The renderer pair and why.
@@ -191,6 +214,9 @@ pub struct Facts {
 pub struct Decision {
     pub mode: Mode,
     pub windows: WindowKind,
+    /// CPU mode's windows (`Default`, or `Software` under a
+    /// `software-windows` rule): what a GPU start that fails falls back to.
+    pub cpu_windows: WindowKind,
     pub reason: Reason,
     /// More `render:` lines: denylist rules that hold, overrides.
     pub notes: Vec<String>,
@@ -201,6 +227,7 @@ impl Decision {
         Self {
             mode: Mode::Cpu,
             windows: WindowKind::Default,
+            cpu_windows: WindowKind::Default,
             reason,
             notes: Vec::new(),
         }
@@ -209,6 +236,7 @@ impl Decision {
         Self {
             mode: Mode::Gpu,
             windows: WindowKind::OpenGl,
+            cpu_windows: WindowKind::Default,
             reason,
             notes: Vec::new(),
         }
@@ -217,9 +245,11 @@ impl Decision {
         self.mode == Mode::Gpu
     }
     /// GPU rendering could not start before the backend did (the window
-    /// renderer refused): CPU mode with Slint's default windows.
+    /// renderer refused): CPU mode with CPU mode's windows.
     pub fn fall_back(self, reason: Reason) -> Self {
         Self {
+            windows: self.cpu_windows,
+            cpu_windows: self.cpu_windows,
             notes: self.notes,
             ..Self::cpu(reason)
         }
@@ -235,6 +265,7 @@ impl Decision {
                 WindowKind::Default => "Slint's default window renderer",
                 WindowKind::OpenGl => "OpenGL windows",
                 WindowKind::Software => "Slint's software window renderer",
+                WindowKind::Wgpu => "Direct3D 12 (wgpu) windows",
             },
         );
         format!("render: {mode}, {windows}; reason: {}", self.reason)
@@ -249,16 +280,25 @@ struct Hit<'a> {
 
 impl Facts {
     /// What keeps GPU rendering off whatever the user prefers: the crash
-    /// guard, then the first rule whose action is `cpu` or
-    /// `software-windows`.
+    /// guard, then the first rule whose action is `cpu`, or
+    /// `software-windows` where GPU mode needs OpenGL windows (record §8.7).
     fn blocked(&self) -> Option<Reason> {
         if let Some(detail) = &self.crashed {
             return Some(Reason::PreviousCrash(detail.clone()));
         }
         self.hits()
             .into_iter()
-            .find(|hit| matches!(hit.rule.action, Some(Action::Cpu | Action::SoftwareWindows)))
+            .find(|hit| match hit.rule.action {
+                Some(Action::Cpu) => true,
+                Some(Action::SoftwareWindows) => !self.wgpu_windows,
+                _ => false,
+            })
             .map(|hit| self.denylist_reason(&hit))
+    }
+    /// The first `software-windows` rule that holds for GPU mode's windows
+    /// (OpenGL ones; wgpu windows do not use the driver's OpenGL).
+    fn gpu_window_rule(&self) -> Option<Hit<'_>> {
+        self.window_rule().filter(|_| !self.wgpu_windows)
     }
     /// The first `software-windows` rule that holds.
     fn window_rule(&self) -> Option<Hit<'_>> {
@@ -349,10 +389,12 @@ fn adapter_text(adapter: Option<&GpuAdapter>) -> String {
 
 /// First match wins: headless, no GPU renderer on this system, the
 /// environment, the preference `software`, the crash guard, a denylist rule,
+/// the preference `auto` where GPU rendering is opt-in (Windows: software),
 /// else GPU. Denylist rules that hold are noted even when something earlier
-/// decided (Windows without a GPU renderer reports them). Then the windows:
-/// a `software-windows` rule gives CPU mode Slint's software renderer,
-/// whatever decided the mode, unless `SLINT_BACKEND` is set.
+/// decided. Then the windows: GPU mode's are OpenGL, or wgpu where the
+/// platform says so; a `software-windows` rule gives CPU mode Slint's
+/// software renderer, whatever decided the mode, unless `SLINT_BACKEND` is
+/// set, and with OpenGL GPU windows it also rules GPU mode out (record §8.7).
 pub fn decide(facts: &Facts, preference: Preference) -> Decision {
     let blocked = facts.blocked();
     let mut decision = if facts.headless {
@@ -364,7 +406,7 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
             Some((Preference::Software, variable)) => Decision::cpu(Reason::Env(variable)),
             // It overrides the crash guard and `cpu` rules, not a driver
             // that cannot draw OpenGL windows.
-            Some((Preference::Gpu, variable)) => match facts.window_rule() {
+            Some((Preference::Gpu, variable)) => match facts.gpu_window_rule() {
                 Some(hit) => {
                     let mut decision = Decision::cpu(facts.denylist_reason(&hit));
                     decision.notes.push(format!(
@@ -384,22 +426,75 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
                 }
             },
             _ if preference == Preference::Software => Decision::cpu(Reason::Preference),
+            // GPU rendering is off until it is turned on: the driver check
+            // (crash guard, denylist) runs only then (user ruling, M3).
+            _ if facts.gpu_opt_in && preference == Preference::Auto => {
+                Decision::cpu(Reason::OffByDefault)
+            }
             _ => blocked.map_or_else(|| Decision::gpu(Reason::Default), Decision::cpu),
         }
     };
+    if facts.wgpu_windows {
+        // GPU mode's windows are wgpu; CPU mode's are femtovg on OpenGL,
+        // as on main, named explicitly: with wgpu compiled in, Slint's
+        // default renderer would be femtovg-wgpu (Slint 1.18.1 also drops
+        // OpenGL femtovg from its default fallbacks then). `SLINT_BACKEND`
+        // leaves CPU mode's windows to Slint (an explicit renderer would
+        // win over it), as on main.
+        if decision.mode == Mode::Gpu {
+            decision.windows = WindowKind::Wgpu;
+            if facts.slint_backend && !facts.headless {
+                decision.notes.push(
+                    "render: SLINT_BACKEND is set; GPU rendering needs Direct3D 12 (wgpu) windows, so it is not applied to them".into(),
+                );
+            }
+        } else if decision.windows == WindowKind::Default && !facts.slint_backend {
+            decision.windows = WindowKind::OpenGl;
+        }
+        if decision.cpu_windows == WindowKind::Default && !facts.slint_backend {
+            decision.cpu_windows = WindowKind::OpenGl;
+        }
+    }
     if let Some(Hit { rule, .. }) = facts.window_rule()
         && !facts.headless
     {
         if facts.slint_backend {
             decision.notes.push(format!(
-                "render: SLINT_BACKEND is set; the windows keep it (denylist rule {} not applied to them)",
+                "render: SLINT_BACKEND is set; Slint chooses CPU mode's windows (denylist rule {} not applied to them)",
                 rule.id
             ));
-        } else if decision.mode == Mode::Cpu {
-            decision.windows = WindowKind::Software;
+        } else {
+            decision.cpu_windows = WindowKind::Software;
+            if decision.mode == Mode::Cpu {
+                decision.windows = WindowKind::Software;
+            }
         }
     }
+    if let Some(kind) = facts.window_env
+        && !facts.headless
+    {
+        let gpu_windows = if facts.wgpu_windows {
+            WindowKind::Wgpu
+        } else {
+            WindowKind::OpenGl
+        };
+        if decision.mode == Mode::Gpu && kind != gpu_windows {
+            decision = Decision {
+                notes: std::mem::take(&mut decision.notes),
+                ..Decision::cpu(Reason::Env(WINDOW_RENDERER))
+            };
+        }
+        if decision.mode == Mode::Cpu {
+            decision.windows = kind;
+        }
+        decision.cpu_windows = kind;
+    }
+    // Off by default: only a rule that changes CPU mode's windows matters.
+    let off = decision.reason == Reason::OffByDefault;
     for Hit { rule, adapter } in facts.hits() {
+        if off && rule.action != Some(Action::SoftwareWindows) {
+            continue;
+        }
         let action = match rule.action {
             Some(Action::Cpu) => "software rendering",
             Some(Action::SoftwareWindows) => "software rendering and software windows",
@@ -413,6 +508,31 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
         ));
     }
     decision
+}
+
+const WINDOW_RENDERER: &str = "VESTRA_WINDOW_RENDERER";
+
+/// `VESTRA_WINDOW_RENDERER` (testing the window fallbacks): `gl` (femtovg on
+/// OpenGL) or `software` (Slint's software renderer) choose the windows;
+/// `wgpu` and empty choose nothing here (`wgpu` lets Windows' wgpu windows
+/// use an adapter without a GPU, `platform::select_wgpu_windows`); anything
+/// else is a warning.
+pub fn window_env_choice(value: Option<&OsStr>) -> (Option<WindowKind>, Option<String>) {
+    match value
+        .map(|value| value.to_string_lossy())
+        .as_deref()
+        .map(str::trim)
+    {
+        None | Some("" | "wgpu") => (None, None),
+        Some("gl") => (Some(WindowKind::OpenGl), None),
+        Some("software") => (Some(WindowKind::Software), None),
+        Some(other) => (
+            None,
+            Some(format!(
+                "render: {WINDOW_RENDERER}={other} is not gl, software or wgpu; ignored"
+            )),
+        ),
+    }
 }
 
 /// `VESTRA_RENDER` (`cpu`/`software`, `gpu`, `auto`/empty) and its older
@@ -644,6 +764,231 @@ mod tests {
             (Mode::Cpu, WindowKind::Software)
         );
         assert!(decision.notes[0].contains("does not override"));
+    }
+
+    /// M3 (record §4, §8.7): Windows has wgpu GPU windows and GPU rendering
+    /// only on request.
+    fn windows_gpu() -> Facts {
+        Facts {
+            wgpu_windows: true,
+            gpu_opt_in: true,
+            ..facts(false, true)
+        }
+    }
+    fn white_amd() -> GpuAdapter {
+        GpuAdapter {
+            driver_version: Some("32.0.32015.7029".into()),
+            ..bad_amd()
+        }
+    }
+
+    #[test]
+    fn on_windows_gpu_rendering_is_opt_in_and_draws_with_wgpu_windows() {
+        let windows = windows_gpu();
+        let auto = decide(&windows, Preference::Auto);
+        assert_eq!(
+            (auto.mode, auto.windows, auto.reason.clone()),
+            (Mode::Cpu, WindowKind::OpenGl, Reason::OffByDefault)
+        );
+        assert!(auto.line().contains("software rendering, OpenGL windows"));
+        assert_eq!(auto.reason.code(), "default", "the SDK's code");
+        assert!(auto.reason.message().contains("experimental"));
+        assert_eq!(windows.gpu_available(), Ok(()), "the switch can turn it on");
+        let chosen = decide(&windows, Preference::Gpu);
+        assert_eq!(
+            (chosen.mode, chosen.windows, chosen.reason.clone()),
+            (Mode::Gpu, WindowKind::Wgpu, Reason::Default)
+        );
+        assert_eq!(chosen.cpu_windows, WindowKind::OpenGl);
+        assert_eq!(
+            chosen
+                .clone()
+                .fall_back(Reason::InitFailed("no Direct3D 12".into()))
+                .windows,
+            WindowKind::OpenGl
+        );
+        assert!(chosen.line().contains("Direct3D 12 (wgpu) windows"));
+        let mut env = windows_gpu();
+        env.env = Some((Preference::Gpu, "VESTRA_RENDER"));
+        let forced = decide(&env, Preference::Auto);
+        assert_eq!(
+            (forced.mode, forced.windows, forced.reason.clone()),
+            (Mode::Gpu, WindowKind::Wgpu, Reason::Env("VESTRA_RENDER"))
+        );
+        assert_eq!(
+            decide(&windows, Preference::Software).reason,
+            Reason::Preference
+        );
+        // The crash guard (a crash or the second device loss) still wins
+        // once GPU rendering is turned on.
+        let mut crashed = windows_gpu();
+        crashed.crashed = Some("lost twice".into());
+        assert_eq!(
+            decide(&crashed, Preference::Gpu).reason.code(),
+            "previous-crash"
+        );
+        // Off by default, the driver check does not run: neither the guard
+        // nor a `cpu` rule is the reason, and the rule is not logged.
+        assert_eq!(
+            decide(&crashed, Preference::Auto).reason,
+            Reason::OffByDefault
+        );
+        let mut stalls = windows_gpu();
+        stalls.adapters = vec![bad_amd()];
+        let auto = decide(&stalls, Preference::Auto);
+        assert_eq!(
+            (auto.windows, auto.reason),
+            (WindowKind::OpenGl, Reason::OffByDefault)
+        );
+        assert!(auto.notes.is_empty(), "{:?}", auto.notes);
+        assert_eq!(stalls.gpu_available().unwrap_err().code(), "denylist");
+    }
+
+    /// N2 (M3 re-review): `SLINT_BACKEND` leaves CPU mode's windows to Slint
+    /// on Windows too (`WindowKind::Default`, `winit().select()`), with or
+    /// without a `software-windows` rule; the lines say so.
+    #[test]
+    fn slint_backend_leaves_cpu_windows_to_slint_on_windows() {
+        let mut windows = windows_gpu();
+        windows.slint_backend = true;
+        let auto = decide(&windows, Preference::Auto);
+        assert_eq!(
+            (auto.mode, auto.windows, auto.cpu_windows),
+            (Mode::Cpu, WindowKind::Default, WindowKind::Default)
+        );
+        assert!(auto.notes.is_empty(), "{:?}", auto.notes);
+        windows.adapters = vec![white_amd()];
+        let white = decide(&windows, Preference::Auto);
+        assert_eq!(white.windows, WindowKind::Default);
+        assert!(
+            white.notes[0].contains("Slint chooses CPU mode's windows"),
+            "{:?}",
+            white.notes
+        );
+        let gpu = decide(&windows, Preference::Gpu);
+        assert_eq!(
+            (gpu.windows, gpu.cpu_windows),
+            (WindowKind::Wgpu, WindowKind::Default)
+        );
+        assert!(
+            gpu.notes
+                .iter()
+                .any(|note| note.contains("not applied to them") && note.contains("wgpu"))
+        );
+        assert_eq!(
+            gpu.fall_back(Reason::InitFailed("x".into())).windows,
+            WindowKind::Default
+        );
+    }
+
+    /// H1 (M3 review): CPU mode on Windows never gets wgpu windows nor
+    /// Slint's default (which would be femtovg-wgpu there).
+    #[test]
+    fn cpu_mode_with_wgpu_compiled_in_never_draws_with_wgpu() {
+        let adapters = [vec![], vec![bad_amd()], vec![white_amd()]];
+        let envs = [None, SOFTWARE_ENV, Some((Preference::Gpu, "VESTRA_RENDER"))];
+        let window_envs = [None, Some(WindowKind::OpenGl), Some(WindowKind::Software)];
+        for adapters in &adapters {
+            for env in envs {
+                for window_env in window_envs {
+                    for crashed in [None, Some("crashed".to_string())] {
+                        for preference in [Preference::Auto, Preference::Gpu, Preference::Software]
+                        {
+                            let facts = Facts {
+                                adapters: adapters.clone(),
+                                env,
+                                window_env,
+                                crashed: crashed.clone(),
+                                ..windows_gpu()
+                            };
+                            let decision = decide(&facts, preference);
+                            let cpu = [WindowKind::OpenGl, WindowKind::Software];
+                            assert!(cpu.contains(&decision.cpu_windows), "{decision:?}");
+                            if decision.mode == Mode::Cpu {
+                                assert!(cpu.contains(&decision.windows), "{decision:?}");
+                            } else {
+                                assert_eq!(decision.windows, WindowKind::Wgpu);
+                                let failed = decision.fall_back(Reason::InitFailed("x".into()));
+                                assert!(cpu.contains(&failed.windows), "{failed:?}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn with_wgpu_windows_a_software_windows_rule_changes_only_cpu_windows() {
+        let mut windows = windows_gpu();
+        windows.adapters = vec![white_amd()];
+        assert_eq!(windows.gpu_available(), Ok(()), "§8.7: not ruled out");
+        let gpu = decide(&windows, Preference::Gpu);
+        assert_eq!(
+            (gpu.mode, gpu.windows, gpu.cpu_windows),
+            (Mode::Gpu, WindowKind::Wgpu, WindowKind::Software)
+        );
+        // A GPU start that fails falls back to software windows.
+        let failed = gpu.fall_back(Reason::InitFailed("no Direct3D 12".into()));
+        assert_eq!(
+            (failed.mode, failed.windows),
+            (Mode::Cpu, WindowKind::Software)
+        );
+        // Auto: CPU mode, software windows.
+        let auto = decide(&windows, Preference::Auto);
+        assert_eq!(
+            (auto.mode, auto.windows, auto.reason),
+            (Mode::Cpu, WindowKind::Software, Reason::OffByDefault)
+        );
+        // VESTRA_RENDER=gpu works with it too.
+        windows.env = Some((Preference::Gpu, "VESTRA_RENDER"));
+        assert!(decide(&windows, Preference::Auto).is_gpu());
+        // The 31.0.14005 draw stalls stay a `cpu` rule.
+        let mut stalls = windows_gpu();
+        stalls.adapters = vec![bad_amd()];
+        let denied = decide(&stalls, Preference::Gpu);
+        assert_eq!(
+            (denied.mode, denied.windows),
+            (Mode::Cpu, WindowKind::OpenGl)
+        );
+        assert_eq!(denied.reason.code(), "denylist");
+        assert_eq!(stalls.gpu_available().unwrap_err().code(), "denylist");
+    }
+
+    #[test]
+    fn the_window_renderer_switch_chooses_the_windows_and_software_where_it_must() {
+        let os = |text: &'static str| Some(OsStr::new(text));
+        assert_eq!(window_env_choice(None), (None, None));
+        assert_eq!(window_env_choice(os(" wgpu ")), (None, None));
+        assert_eq!(window_env_choice(os("gl")).0, Some(WindowKind::OpenGl));
+        assert_eq!(
+            window_env_choice(os("software")).0,
+            Some(WindowKind::Software)
+        );
+        let (choice, warning) = window_env_choice(os("vulkan"));
+        assert_eq!(choice, None);
+        assert!(warning.unwrap().contains("VESTRA_WINDOW_RENDERER=vulkan"));
+        let mut windows = windows_gpu();
+        windows.window_env = Some(WindowKind::OpenGl);
+        let gl = decide(&windows, Preference::Gpu);
+        assert_eq!(
+            (gl.mode, gl.windows, gl.reason),
+            (
+                Mode::Cpu,
+                WindowKind::OpenGl,
+                Reason::Env("VESTRA_WINDOW_RENDERER")
+            )
+        );
+        // macOS: OpenGL windows are GPU mode's own.
+        let mut mac = facts(false, true);
+        mac.window_env = Some(WindowKind::OpenGl);
+        assert!(decide(&mac, Preference::Auto).is_gpu());
+        mac.window_env = Some(WindowKind::Software);
+        let software = decide(&mac, Preference::Auto);
+        assert_eq!(
+            (software.mode, software.windows),
+            (Mode::Cpu, WindowKind::Software)
+        );
     }
 
     #[test]
