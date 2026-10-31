@@ -19,6 +19,25 @@ fn video_image_hidden() -> bool {
     *HIDDEN.get_or_init(|| std::env::var("VESTRA_TEST_NO_VIDEO_IMAGE").as_deref() == Ok("1"))
 }
 
+/// An event of the main window's winit event hook (`bind_window_events`):
+/// with `counting` (a window without a rendering notifier and without the
+/// pacing hook's count, `Host::count_draws`), each `RedrawRequested` the
+/// window dispatches is one draw. The hook runs after the frame pacing's
+/// (`frame_pacing::Handler`), so a redraw held for a vertical blank never
+/// reaches it. Returns whether the event counted.
+pub(crate) fn count_winit_draw(
+    counting: bool,
+    event: &slint::winit_030::winit::event::WindowEvent,
+    presentation: &crate::playback::render_target::Presentation,
+) -> bool {
+    use slint::winit_030::winit::event::WindowEvent;
+    let draw = counting && matches!(event, WindowEvent::RedrawRequested);
+    if draw {
+        presentation.draw_end(Instant::now(), false);
+    }
+    draw
+}
+
 impl Host {
     /// GPU rendering: show the renderer's texture in this window (before
     /// `show()`, so the rendering notifier sees the setup). A window that
@@ -34,6 +53,7 @@ impl Host {
         let Some(gpu) = self.backend.render.gpu() else {
             return self.count_draws(shell);
         };
+        self.winit_draws.set(false);
         let render = self.backend.render.clone();
         let drawn = move |draw: platform::GpuDraw| match draw {
             platform::GpuDraw::Begin => {
@@ -90,13 +110,16 @@ impl Host {
     }
     /// Software rendering: count the window's draws with its rendering
     /// notifier (femtovg); Slint's software renderer has none, so there each
-    /// winit redraw counts (without draw times). Where enabled
+    /// winit redraw the window dispatches counts (without draw times), in the
+    /// window's one event hook (`bind_window_events`, `winit_draws`). Where
+    /// enabled
     /// (`platform::VIDEO_TEXTURE`), the notifier also shows the pictures
     /// through one reused texture (`show_frame`), returned for `video_texture`.
     pub(crate) fn count_draws(
         &self,
         shell: &slint_interpreter::ComponentInstance,
     ) -> Option<vestra_video_texture::Feed> {
+        self.winit_draws.set(false);
         if !platform::window_notifiers() {
             // wgpu windows (Windows): no notifier, the texture is filled in
             // `show_frame` itself.
@@ -141,14 +164,11 @@ impl Host {
             _ => (),
         };
         if shell.window().set_rendering_notifier(notifier).is_err() {
-            use slint::winit_030::{EventResult, WinitWindowAccessor, winit::event::WindowEvent};
-            let render = self.backend.render.clone();
-            shell.window().on_winit_window_event(move |_, event| {
-                if matches!(event, WindowEvent::RedrawRequested) {
-                    render.presentation.draw_end(Instant::now(), false);
-                }
-                EventResult::Propagate
-            });
+            // Not a hook of its own: the window has one winit event hook, and
+            // `bind_window_events` sets it after this (before 0.5.15 a hook
+            // set here was replaced there, and `presented` stayed 0).
+            frame_pacing::on_draw(None);
+            self.winit_draws.set(true);
         }
         self.backend.render.presentation.start_counting();
         None
@@ -537,5 +557,46 @@ impl Host {
             ));
             self.handle(Event::Binding(click.generation, target.owner, target.id));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::count_winit_draw;
+    use crate::playback::render_target::Presentation;
+    use slint::winit_030::winit::event::WindowEvent;
+    use std::time::Duration;
+
+    /// 0.5.15: a software window counted its draws in a hook of its own,
+    /// which the shell's event hook then replaced (`presented 0`).
+    #[test]
+    fn a_software_window_counts_its_redraws_in_the_shell_hook() {
+        let presentation = Presentation::default();
+        presentation.start_counting();
+        presentation.picture_set(Duration::ZERO);
+        assert!(count_winit_draw(
+            true,
+            &WindowEvent::RedrawRequested,
+            &presentation
+        ));
+        assert!(!count_winit_draw(
+            true,
+            &WindowEvent::Focused(true),
+            &presentation
+        ));
+        // The old picture again: a redraw, not a presented frame.
+        assert!(count_winit_draw(
+            true,
+            &WindowEvent::RedrawRequested,
+            &presentation
+        ));
+        assert_eq!(presentation.counts(), (2, 1));
+        // Windows with a notifier or the pacing count: nothing here.
+        assert!(!count_winit_draw(
+            false,
+            &WindowEvent::RedrawRequested,
+            &presentation
+        ));
+        assert_eq!(presentation.counts(), (2, 1));
     }
 }

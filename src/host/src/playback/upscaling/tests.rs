@@ -527,3 +527,46 @@ fn a_stopped_plugin_revokes_the_filter_and_set_false_removes_it_at_once() {
     assert!(upscaling.command(&mpv, &render, &off, &events));
     assert!(!labels(&mpv).iter().any(|l| l == LABEL));
 }
+
+#[test]
+fn the_worker_may_wait_until_the_next_look_or_the_end_of_a_settle() {
+    let mut upscaling = Upscaling::with_probe(rtx);
+    let start = Instant::now();
+    let at = |ms| start + Duration::from_millis(ms);
+    // Nobody asked: no deadline (the worker waits for its own reasons).
+    assert_eq!(upscaling.due_in(start), None);
+    upscaling.owners.insert(1);
+    assert_eq!(
+        upscaling.due_in(start),
+        Some(Duration::ZERO),
+        "never looked"
+    );
+    upscaling.checked = Some(start);
+    assert_eq!(upscaling.due_in(at(50)), Some(Duration::from_millis(150)));
+    // A new size seen at 120 ms settles at 420 ms; the next look (200 ms)
+    // comes first, then the settle.
+    upscaling.wanted = Some((1.8, at(120)));
+    assert_eq!(upscaling.due_in(at(150)), Some(Duration::from_millis(50)));
+    upscaling.checked = Some(at(200));
+    assert_eq!(upscaling.due_in(at(300)), Some(Duration::from_millis(100)));
+    assert_eq!(upscaling.due_in(at(500)), Some(Duration::ZERO));
+    // Turned off with the filter still in the chain: it must be removed.
+    upscaling.owners.clear();
+    upscaling.wanted = None;
+    upscaling.applied = Some(1.5);
+    assert!(upscaling.due_in(at(500)).is_some());
+}
+
+#[test]
+fn the_check_wakes_the_worker_when_it_answers() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static WOKEN: AtomicBool = AtomicBool::new(false);
+    let mut upscaling = Upscaling::with_probe(rtx);
+    upscaling.wake_with(|| WOKEN.store(true, Ordering::Release));
+    upscaling.start_probe();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !WOKEN.load(Ordering::Acquire) {
+        assert!(Instant::now() < deadline, "not woken");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}

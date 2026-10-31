@@ -26,7 +26,11 @@ impl Host {
         let weak = window.as_weak();
         let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
         let menu_cursor = std::cell::Cell::new((f64::NAN, f64::NAN));
+        // Software windows: this hook also counts the window's draws.
+        let winit_draws = self.winit_draws.clone();
+        let render = self.backend.render.clone();
         window.window().on_winit_window_event(move |slint_window, event| {
+                video::count_winit_draw(winit_draws.get(), event, &render.presentation);
                 if debug_menu()
                     && weak.upgrade().is_some_and(|shell| {
                         matches!(shell.get_property("menu-open"), Ok(SValue::Bool(true)))

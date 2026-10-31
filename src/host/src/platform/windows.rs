@@ -652,11 +652,15 @@ pub struct VBlankWaiter {
 }
 impl VBlankWaiter {
     /// Block until the next vertical blank; `false` when the display clock
-    /// failed and could not be opened again.
-    pub fn wait(&mut self) -> bool {
-        // About once a second at 60 Hz: has the window moved to another display?
+    /// failed and could not be opened again. `moved`: the window moved or
+    /// changed its scale factor since the last wait (winit `Moved`,
+    /// `ScaleFactorChanged`), so it may be on another display now.
+    pub fn wait(&mut self, moved: bool) -> bool {
+        // After a move at once (0.5.15; before, up to 64 waits, about a
+        // second at 60 Hz), and about once a second for a display change
+        // without a move (the display arrangement changed).
         self.waits = self.waits.wrapping_add(1);
-        if self.waits.is_multiple_of(64)
+        if (moved || self.waits.is_multiple_of(64))
             && self.clock.moved(self.hwnd)
             && let Some(clock) = vestra_win32::VBlank::open(self.hwnd)
         {

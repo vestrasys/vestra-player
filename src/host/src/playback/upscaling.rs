@@ -321,6 +321,8 @@ pub struct Upscaling {
     /// A factor mpv refused: not tried again until the factor changes.
     refused: Option<f64>,
     checked: Option<Instant>,
+    /// Wakes the control worker when the check answers (`wake_with`).
+    waker: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
 }
 
 impl Default for Upscaling {
@@ -341,6 +343,7 @@ impl Upscaling {
             wanted: None,
             refused: None,
             checked: None,
+            waker: None,
         }
     }
 
@@ -414,14 +417,35 @@ impl Upscaling {
             }
         }
         let now = Instant::now();
-        if (self.owners.is_empty() && self.applied.is_none())
-            || self
-                .checked
-                .is_some_and(|at| now.duration_since(at) < CHECK_EVERY)
-        {
-            return;
+        if self.due_in(now).is_some_and(|due| due.is_zero()) {
+            self.update(mpv, render, now);
         }
-        self.update(mpv, render, now);
+    }
+
+    /// How long the control worker may wait before [`Upscaling::poll`] has
+    /// work: `None` while nobody asked for upscaling and no filter is in
+    /// the chain (nothing to follow); else the next look at the size and
+    /// the decoding ([`CHECK_EVERY`]) or the end of a new size's
+    /// [`SETTLE`], whichever comes first. A window resize does not wake
+    /// the worker, so it waits at most this long (a timer while upscaling
+    /// is on: about 5 wake-ups a second, not a 2 ms poll).
+    pub fn due_in(&self, now: Instant) -> Option<Duration> {
+        if self.owners.is_empty() && self.applied.is_none() {
+            return None;
+        }
+        let check = self.checked.map_or(Duration::ZERO, |at| {
+            CHECK_EVERY.saturating_sub(now.saturating_duration_since(at))
+        });
+        let settle = self
+            .wanted
+            .map(|(_, since)| SETTLE.saturating_sub(now.saturating_duration_since(since)));
+        Some(settle.map_or(check, |settle| settle.min(check)))
+    }
+
+    /// Wake the control worker with `wake` when the system's check answers
+    /// (its thread calls it), so waiting requests are answered at once.
+    pub fn wake_with(&mut self, wake: impl Fn() + Send + Sync + 'static) {
+        self.waker = Some(std::sync::Arc::new(wake));
     }
 
     /// The plugin stopped: its request goes, and with the last one the
@@ -443,10 +467,14 @@ impl Upscaling {
         }
         let (sender, receiver) = mpsc::sync_channel(1);
         let run = self.run_probe;
+        let waker = self.waker.clone();
         let spawned = std::thread::Builder::new()
             .name("vestra-upscaler-check".into())
             .spawn(move || {
                 let _ = sender.send(run());
+                if let Some(wake) = waker {
+                    wake();
+                }
             });
         self.probe = match spawned {
             Ok(_) => Probe::Running(receiver),
