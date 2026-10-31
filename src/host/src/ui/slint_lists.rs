@@ -431,9 +431,13 @@ fn long_lists_use_list_view() {
     let mut scanned = BTreeSet::new();
     for (name, source) in sources() {
         for finding in findings(&source) {
+            // Each entry allows one finding: a second identical list is reported.
             let entry = ALLOWED
                 .iter()
-                .position(|(file, text, _)| *file == name && finding.text.contains(text));
+                .enumerate()
+                .position(|(index, (file, text, _))| {
+                    *file == name && finding.text.contains(text) && !used.contains(&index)
+                });
             match entry {
                 Some(entry) => {
                     used.insert(entry);
