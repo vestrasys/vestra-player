@@ -22,7 +22,7 @@ Who does what, and how one piece of work travels from a request to `main`. The s
 ```mermaid
 flowchart TB
     U["User<br/>requirements · rulings (behaviour changes, API removals, trade-offs)"]
-    C["Coordinator<br/>assigns work · reviews deliveries · rules on deadlocks<br/>owns doc/product · git commits and merges · real GUI tests<br/>releases (SDK: tag → npm) · reports to the user<br/><i>≤ 3 background agents · one Rust build at a time (build.lock)<br/>quiet.flag while measuring · one role per agent</i>"]
+    C["Coordinator<br/>assigns work · reviews deliveries · rules on deadlocks<br/>owns doc/product · git commits and merges · real GUI tests<br/>releases (SDK: tag → npm) · reports to the user<br/><i>≤ 8 background agents · one Rust build at a time (build.lock)<br/>quiet.flag while measuring · one role per agent</i>"]
     U -- "requirements, rulings" --> C
     C -- "reports in Chinese" --> U
 
@@ -324,7 +324,7 @@ When escalating, give: the specific problem, reproduction evidence, the options 
 
 ## 8. Concurrency and reports
 
-- Usually no more than 4 agents run at the same time (including the coordinator). While the maintainer is busy with one module, the authors must not all be left waiting; shared modules can be split by file or interface and delegated.
+- **At most 8 background agents run at the same time** (user ruling 2026-10-31, raised from 3); Rust builds still run one at a time under `build.lock`, so agents beyond the build slot read, write code, review or run non-cargo checks while they wait. While the maintainer is busy with one module, the authors must not all be left waiting; shared modules can be split by file or interface and delegated.
 - **Parallel maintainer instances** (2026-10-27): when two maintainer tasks touch disjoint files, two maintainer agents may run at once; the brief lists the files each one must stay out of. Evidence: UI fixes ∥ render pacing, deinterlace ∥ shared runner and session storage ∥ shared runner merged with only a version-number conflict.
 - The coordinator schedules the time slots for building, integration and use of real devices centrally.
 - **Machine protocol (2026-10-27)** — the laptop is shared with the user and has limited RAM:
@@ -333,6 +333,7 @@ When escalating, give: the specific problem, reproduction evidence, the options 
   - **Hardware tests are the coordinator's call**: researchers run read-only queries only; GPU decode/render/interop tests run short (≤ 60 s), one at a time, and stop on any hang or driver reset (after an unexplained bugcheck on 2026-10-27).
   - To test an unreleased SDK in a player worktree, briefs say `npm install --no-save <clone>` and restore with `npm ci` (a plain `npm install` rewrites `package.json`/`package-lock.json` and `npm ci` cannot undo it).
   - **Low memory: check the `Proc` pool tag first** (2026-10-28). `NtQuerySystemInformation(SystemPoolTagInformation)` needs no admin; `Proc` live objects far above the running process count means exited processes are being held by a driver. Evidence: ~19 GB lost overnight to the AMD iGPU driver 31.0.14005 holding every exited process (agents start hundreds of thousands of processes); fixed by Adrenalin 26.10.1; until a fix, a reboot clears it. It is not the player's code.
+  - **Sub-agents do not start agents of their own**: the limit of 8 counts every agent on the machine, and a child agent escapes the coordinator's scheduling and review. A brief that is too big is split by the coordinator. Evidence (2026-10-31): the docs maintainer handed two pages to a child agent while three agents were already running.
   - **`npm run portability` is a cargo build** (it runs `cargo check` for the Windows target in `$CARGO_TARGET_DIR`): take `build.lock` for it like any cargo command. Evidence (2026-10-31): a reviewer ran it without the lock, alongside the coordinator's release build.
   - **Measurements wait for `quiet.flag` to be honoured**: an agent checks for `C:\vestra\quiet.flag` before every heavy step (build, test, package), not only before starting; a check run that started before the flag invalidates the coordinator's numbers. Evidence (2026-10-31): a frame-rate A/B overlapped a review build and had to be repeated.
   - **`ci:local` needs FFmpeg on PATH** (`. C:\vestra\env.ps1 -Ffmpeg`): five host tests call ffmpeg and fail with "program not found" otherwise.
