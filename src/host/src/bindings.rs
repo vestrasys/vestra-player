@@ -603,6 +603,11 @@ struct Declared {
     panel: bool,
     repeat: bool,
     sequence: u64,
+    /// Where its defaults rank against other owners' (lower first): the
+    /// owner generation that first declared it, kept when a parked plugin
+    /// wakes under a new generation (`rekey`), so that waking does not
+    /// change who wins a key.
+    rank: Owner,
 }
 
 #[derive(Default)]
@@ -674,7 +679,15 @@ impl Table {
             }
             defaults.push(input);
         }
-        self.next += 1;
+        // Declared again (a woken plugin's live registration): its rank and
+        // place stay.
+        let (rank, sequence) = match self.declared.get(&(owner, id.into())) {
+            Some(existing) => (existing.rank, existing.sequence),
+            None => {
+                self.next += 1;
+                (owner, self.next)
+            }
+        };
         self.declared.insert(
             (owner, id.into()),
             Declared {
@@ -682,11 +695,37 @@ impl Table {
                 defaults,
                 panel,
                 repeat,
-                sequence: self.next,
+                sequence,
+                rank,
             },
         );
         self.rebuild();
         Ok(())
+    }
+
+    /// Wake: `from`'s declarations move to generation `to`, keeping their
+    /// rank, so the same inputs go to the same commands.
+    pub fn rekey(&mut self, from: Owner, to: Owner) {
+        let keys = self
+            .declared
+            .keys()
+            .filter(|(owner, _)| *owner == from)
+            .cloned()
+            .collect::<Vec<_>>();
+        if keys.is_empty() {
+            return;
+        }
+        for key in keys {
+            if let Some(declared) = self.declared.remove(&key) {
+                self.declared.insert((to, key.1), declared);
+            }
+        }
+        // The registry's disabled mirror follows (until its next copy).
+        self.disabled = std::mem::take(&mut self.disabled)
+            .into_iter()
+            .map(|((owner, id), reason)| ((if owner == from { to } else { owner }, id), reason))
+            .collect();
+        self.rebuild();
     }
 
     /// One command's bindings go; claims it was shadowing become active.
@@ -817,7 +856,15 @@ impl Table {
                 None => (false, declared.defaults.clone()),
             };
             for input in inputs {
-                claims.push((!user, *owner, declared.sequence, scope, input, id.clone()));
+                claims.push((
+                    !user,
+                    declared.rank,
+                    declared.sequence,
+                    *owner,
+                    scope,
+                    input,
+                    id.clone(),
+                ));
             }
         }
         claims.sort();
@@ -825,7 +872,7 @@ impl Table {
         let mut conflicts = Vec::new();
         let mut shadowed: Shadows = BTreeMap::new();
         let mut fallback: BTreeMap<(Scope, Input), Vec<Target>> = BTreeMap::new();
-        for (default, owner, _, scope, input, id) in claims {
+        for (default, _, _, owner, scope, input, id) in claims {
             let target = Target {
                 owner,
                 id: id.clone(),
@@ -1881,5 +1928,49 @@ mod tests {
             .unwrap();
         assert!(table.has_left_click());
         assert_eq!(text(&key("Alt+Shift+Cmd+F5")), "Alt+Shift+Cmd+F5");
+    }
+
+    /// Lazy activation: a parked plugin woken under a later generation keeps
+    /// the keys it won, also after declaring them again live.
+    #[test]
+    fn a_rekeyed_owner_keeps_its_rank_and_its_panel_scope() {
+        let mut table = Table::default();
+        table
+            .declare(2, "early", "a.early", &["Space".into()], false, false)
+            .unwrap();
+        table
+            .declare(2, "pad", "a.early", &["Enter".into()], true, false)
+            .unwrap();
+        table
+            .declare(5, "late", "b.late", &["Space".into()], false, false)
+            .unwrap();
+        assert_eq!(table.resolve(&key("Space"), None).unwrap().id, "early");
+        let mut disabled = BTreeMap::new();
+        disabled.insert((2, "pad".to_owned()), Some("why".to_owned()));
+        table.set_disabled(disabled);
+        table.rekey(2, 9);
+        let target = table.resolve(&key("Space"), None).unwrap();
+        assert_eq!((target.owner, target.id.as_str()), (9, "early"));
+        assert!(matches!(
+            table.lookup(&key("Enter"), Some(9)),
+            Lookup::Disabled {
+                reason: Some("why"),
+                ..
+            }
+        ));
+        assert!(table.resolve(&key("Enter"), Some(2)).is_none());
+        // Declared again by the live plugin: still first.
+        table
+            .declare(9, "early", "a.early", &["Space".into()], false, false)
+            .unwrap();
+        assert_eq!(table.resolve(&key("Space"), None).unwrap().owner, 9);
+        assert!(
+            table
+                .conflicts()
+                .iter()
+                .all(|c| c.contains("ignored: b.late"))
+        );
+        table.remove_owner(9);
+        assert_eq!(table.resolve(&key("Space"), None).unwrap().id, "late");
     }
 }

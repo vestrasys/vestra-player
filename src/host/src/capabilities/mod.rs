@@ -13,7 +13,7 @@
 //! [`ALL`] (the order is the manifest order the SDK repeats), then
 //! `VESTRA_UPDATE_CAPABILITIES=1 cargo test capabilities` to rewrite the JSON.
 use crate::{
-    host::{Host, Reply, RpcError},
+    host::{Host, Origin, Reply, RpcError},
     playback::backend::Command,
 };
 use serde_json::{Map, Value, json};
@@ -62,7 +62,7 @@ pub struct Info {
     pub requires: &'static [&'static str],
     /// Whether what a plugin holds through it keeps the plugin running
     /// (lazy activation, doc/process/rounds/2026-10-lazy-activation.md §3.2).
-    /// A hint only: nothing reads it yet.
+    /// A hint for the JSON; what decides is the capability's `record`.
     pub residency: Residency,
 }
 
@@ -135,6 +135,34 @@ impl Method {
 
 pub type Handled = std::result::Result<Option<Value>, RpcError>;
 
+/// A request that recreates a registration without the plugin's process,
+/// in the form the plugin sent it (lazy activation, `host/lazy.rs`).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Call {
+    pub method: String,
+    pub params: Value,
+}
+impl Call {
+    pub fn new(method: &str, params: Value) -> Self {
+        Self {
+            method: method.into(),
+            params,
+        }
+    }
+}
+
+/// What an owner holds through a capability, for lazy activation
+/// (doc/process/rounds/2026-10-lazy-activation.md §3.2).
+#[derive(Debug, PartialEq)]
+pub enum Recorded {
+    /// Nothing the host keeps for it here.
+    Nothing,
+    /// Registrations the host shows and triggers without the process.
+    Calls(Vec<Call>),
+    /// Something only its process can serve (why): it stays running.
+    Live(&'static str),
+}
+
 /// A manifest capability: its metadata, its methods and their handling.
 pub trait Capability: Sync {
     fn info(&self) -> &'static Info;
@@ -143,6 +171,83 @@ pub trait Capability: Sync {
     /// Serves one of `methods()`, after the permission check and the text
     /// resolution of `Host::dispatch`. `Ok(None)`: answered later.
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled;
+    /// What `owner` holds through this capability: calls that recreate its
+    /// registrations, or `Live`. `backend` is the playback worker's answer
+    /// to `owner.resources` (`{ live, resolvers }`); what the worker holds
+    /// (chains, streams, tracks, jobs, upscaling) is judged from its `live`
+    /// list as a whole (`Host::lazy_answer`), so capabilities served there
+    /// record `Nothing` here.
+    fn record(&self, host: &Host, owner: u64, backend: &Value) -> Recorded;
+    /// A parked owner woke as generation `to`: its entries move. Only
+    /// recordable capabilities hold anything for a parked owner; the others
+    /// do nothing (an owner holding them is never parked).
+    fn rekey(&self, host: &mut Host, from: u64, to: u64);
+    /// The registry half of stopping `owner` (`Host::stop`): remove its
+    /// entries, or keep them marked recorded when it is parked. What the
+    /// other capabilities hold is still revoked by `Host::stop` itself.
+    fn revoke(&self, _host: &mut Host, _owner: u64, _keep_recorded: bool) {}
+    /// At `runtime.ready` of a woken owner: its recorded entries that it
+    /// did not register again go.
+    fn prune(&self, _host: &mut Host, _owner: u64) {}
+    /// Replays one recorded call for a parked `owner` of the package
+    /// `origin`, at start-up (no process, no reply).
+    fn replay(&self, _host: &mut Host, _owner: u64, _origin: &Origin, _call: &Call) -> Handled {
+        Err(RpcError::new("unsupported", "not a recorded method"))
+    }
+}
+
+/// Every capability's registry half of stopping `owner` (`Capability::revoke`).
+pub fn revoke(host: &mut Host, owner: u64, keep_recorded: bool) {
+    for capability in ALL {
+        capability.revoke(host, owner, keep_recorded);
+    }
+}
+
+/// Every capability's entries of `from` move to `to` (`Capability::rekey`).
+pub fn rekey(host: &mut Host, from: u64, to: u64) {
+    for capability in ALL {
+        capability.rekey(host, from, to);
+    }
+}
+
+/// Every capability's recorded entries of `owner` not registered again go.
+pub fn prune(host: &mut Host, owner: u64) {
+    for capability in ALL {
+        capability.prune(host, owner);
+    }
+}
+
+/// What `owner` holds: the calls of every capability, or the first `Live`.
+pub fn record(host: &Host, owner: u64, backend: &Value) -> Result<Vec<Call>, &'static str> {
+    let mut calls = Vec::new();
+    for capability in ALL {
+        match capability.record(host, owner, backend) {
+            Recorded::Nothing => (),
+            Recorded::Calls(more) => calls.extend(more),
+            Recorded::Live(reason) => return Err(reason),
+        }
+    }
+    Ok(calls)
+}
+
+/// Replays a recorded call: its capability, which the package must declare.
+pub fn replay(
+    host: &mut Host,
+    owner: u64,
+    origin: &Origin,
+    declared: &[String],
+    call: &Call,
+) -> Handled {
+    let capability = lookup(&call.method)
+        .and_then(|route| route.owner)
+        .ok_or_else(|| RpcError::new("unsupported", "unknown method"))?;
+    if !declared.iter().any(|c| c == capability.info().name) {
+        return Err(RpcError::new(
+            "capability",
+            "capability must be declared in manifest",
+        ));
+    }
+    capability.replay(host, owner, origin, call)
 }
 
 /// Every manifest capability, in the manifest order the SDK's

@@ -402,6 +402,10 @@ impl Producers {
             pixels: rgb,
         })
     }
+    /// `owner` has a producer (lazy activation: it stays running).
+    pub fn holds(&self, owner: u64) -> bool {
+        self.items.values().any(|p| p.owner == owner)
+    }
     pub fn disable(&mut self, owner: u64) {
         if self.active_owner() == Some(owner) {
             self.deactivate();

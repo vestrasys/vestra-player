@@ -1,7 +1,9 @@
 //! `processing.video`: the video filter chain, the video view and
 //! interpolated rendering. Also serves the requests the two filter chains
 //! share, which ask for `processing.video` or `processing.audio` by stage.
-use super::{Capability, Handled, Info, Method, Needs, Residency, forward, forward_media};
+use super::{
+    Capability, Handled, Info, Method, Needs, Recorded, Residency, forward, forward_media,
+};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
@@ -39,6 +41,10 @@ impl Capability for ProcessingVideo {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "processing.replace" | "processing.operation" => forward(host, reply, method, params),

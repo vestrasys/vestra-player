@@ -464,6 +464,14 @@ impl Upscaling {
     /// The plugin stopped: its request goes, and with the last one the
     /// filter (plugin independence: a stopped plugin's resources are
     /// revoked); its unanswered requests are dropped.
+    /// `owner` has upscaling on (or a request waiting for the check): a live
+    /// resource, so lazy activation never parks it (ai-upscaling.md §8.5).
+    pub fn holds(&self, owner: u64) -> bool {
+        self.owners.contains(&owner)
+            || self.pending.iter().any(|pending| match pending {
+                Pending::State(reply, _) | Pending::Set(reply, ..) => reply.owner == owner,
+            })
+    }
     pub fn release(&mut self, mpv: &Mpv, render: &Render, owner: u64) {
         self.pending.retain(|pending| match pending {
             Pending::State(reply, _) | Pending::Set(reply, _, _) => reply.owner != owner,

@@ -14,16 +14,16 @@ use std::collections::BTreeMap;
 /// File resolvers name at most this many extensions.
 const MAX_EXTENSIONS: usize = 16;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Declaration {
     pub id: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub schemes: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hosts: Vec<String>,
     /// Local files by extension (lower case, without the dot).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extensions: Vec<String>,
 }
 impl Declaration {
@@ -77,6 +77,9 @@ fn taken(holder: u64, what: String) -> RpcError {
 #[derive(Default)]
 pub struct Registry {
     entries: BTreeMap<(u64, String), Declaration>,
+    /// Lazy activation: entries kept for an owner without a process (parked
+    /// or replayed); a live registration of the same id replaces one.
+    recorded: std::collections::BTreeSet<(u64, String)>,
 }
 impl Registry {
     fn validate_id(id: &str) -> bool {
@@ -144,8 +147,14 @@ impl Registry {
         Ok(())
     }
     /// The registration already holding part of `declaration`, and what.
-    fn holder(&self, declaration: &Declaration) -> Option<(u64, String)> {
-        self.entries.iter().find_map(|((owner, _), existing)| {
+    fn holder(&self, key: &(u64, String), declaration: &Declaration) -> Option<(u64, String)> {
+        self.entries.iter().find_map(|(each, existing)| {
+            // The recorded entry a live registration replaces, and the same
+            // owner's other recorded ones (they give way, `register`).
+            if each == key || (each.0 == key.0 && self.recorded.contains(each)) {
+                return None;
+            }
+            let owner = &each.0;
             if let Some(extension) = existing
                 .extensions
                 .iter()
@@ -179,10 +188,11 @@ impl Registry {
             Self::validate_web(&mut declaration)?;
         }
         let key = (owner, declaration.id.clone());
-        if self.entries.contains_key(&key) {
+        let replaced = self.recorded.contains(&key);
+        if self.entries.contains_key(&key) && !replaced {
             return Err(RpcError::new("conflict", "resolver id already registered"));
         }
-        if let Some((holder, what)) = self.holder(&declaration) {
+        if let Some((holder, what)) = self.holder(&key, &declaration) {
             // The plugin's own other registration: a plain conflict (its mistake).
             if holder == owner {
                 return Err(RpcError::new(
@@ -192,11 +202,91 @@ impl Registry {
             }
             return Err(taken(holder, what));
         }
-        if self.entries.len() >= 16 {
+        if !replaced && self.entries.len() >= 16 {
             return Err(RpcError::new("busy", "resolver registry full"));
         }
+        // The same owner's recorded entries that overlap this one give way.
+        let overlapping = self
+            .entries
+            .iter()
+            .filter(|(each, existing)| {
+                **each != key
+                    && each.0 == owner
+                    && self.recorded.contains(*each)
+                    && (existing
+                        .extensions
+                        .iter()
+                        .any(|e| declaration.extensions.contains(e))
+                        || (existing.hosts.iter().any(|h| declaration.hosts.contains(h))
+                            && existing
+                                .schemes
+                                .iter()
+                                .any(|s| declaration.schemes.contains(s))))
+            })
+            .map(|(each, _)| each.clone())
+            .collect::<Vec<_>>();
+        for gone in overlapping {
+            self.entries.remove(&gone);
+            self.recorded.remove(&gone);
+        }
+        self.recorded.remove(&key);
         self.entries.insert(key, declaration);
         Ok(())
+    }
+    /// Replays a recorded registration for a parked owner: registered as
+    /// any, then marked recorded.
+    pub fn register_recorded(
+        &mut self,
+        owner: u64,
+        declaration: Declaration,
+    ) -> Result<(), RpcError> {
+        let id = declaration.id.clone();
+        self.register(owner, declaration)?;
+        self.recorded.insert((owner, id));
+        Ok(())
+    }
+    /// `owner`'s declarations (its recording).
+    pub fn recording(&self, owner: u64) -> Vec<&Declaration> {
+        self.entries
+            .iter()
+            .filter(|((each, _), _)| *each == owner)
+            .map(|(_, declaration)| declaration)
+            .collect()
+    }
+    /// Park: `owner`'s entries stay, marked recorded.
+    pub fn mark_recorded(&mut self, owner: u64) {
+        let keys = self
+            .entries
+            .keys()
+            .filter(|(each, _)| *each == owner)
+            .cloned()
+            .collect::<Vec<_>>();
+        self.recorded.extend(keys);
+    }
+    /// At `runtime.ready` of a woken plugin: the recorded entries it did not
+    /// register again go.
+    pub fn remove_recorded(&mut self, owner: u64) {
+        let recorded = &self.recorded;
+        self.entries
+            .retain(|key, _| !(key.0 == owner && recorded.contains(key)));
+        self.recorded.retain(|(each, _)| *each != owner);
+    }
+    /// Wake: `from`'s entries move to generation `to`.
+    pub fn rekey(&mut self, from: u64, to: u64) {
+        let keys = self
+            .entries
+            .keys()
+            .filter(|(each, _)| *each == from)
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in keys {
+            if let Some(declaration) = self.entries.remove(&key) {
+                self.entries.insert((to, key.1.clone()), declaration);
+            }
+            if self.recorded.remove(&key) {
+                self.recorded.insert((to, key.1));
+            }
+        }
     }
     pub fn find(&self, source: &str) -> Option<(u64, String)> {
         if let Some(extension) = file_extension(source) {
@@ -226,9 +316,11 @@ impl Registry {
     }
     pub fn remove(&mut self, owner: u64, id: &str) {
         self.entries.remove(&(owner, id.into()));
+        self.recorded.remove(&(owner, id.into()));
     }
     pub fn disable(&mut self, owner: u64) {
         self.entries.retain(|(id, _), _| *id != owner);
+        self.recorded.retain(|(id, _)| *id != owner);
     }
     /// `plugin.resolvers.fileTypes`: every registered file resolver's
     /// extensions, lower case, sorted, once each (not who registered them).
@@ -543,6 +635,38 @@ pub(crate) mod tests {
         r.disable(1);
         r.register(2, files("emu", &["gb", "nes"])).unwrap();
         assert_eq!(r.find(&rom("a.nes")), Some((2, "emu".into())));
+    }
+    /// Lazy activation: a parked owner keeps what it resolves (another
+    /// plugin is still refused), moves to the woken generation, its live
+    /// registration replaces the recorded one, the rest goes at ready.
+    #[test]
+    fn recorded_resolvers_hold_their_types_through_wake() {
+        let mut r = Registry::default();
+        r.register_recorded(3, files("nes", &["nes"])).unwrap();
+        r.register_recorded(3, files("old", &["fds"])).unwrap();
+        let json = serde_json::to_value(r.recording(3)[0]).unwrap();
+        assert_eq!(json, json!({"id":"nes","extensions":["nes"]}));
+        let replayed: Declaration = serde_json::from_value(json).unwrap();
+        assert_eq!(replayed.extensions, ["nes"]);
+        let error = r.register(5, files("emu", &["nes"])).unwrap_err();
+        assert_eq!(error.detail.as_ref().unwrap()["holder"], 3);
+        r.rekey(3, 8);
+        assert_eq!(r.find(&rom("a.nes")), Some((8, "nes".into())));
+        assert!(!r.contains(3, "nes"));
+        // Live: same id replaces; an overlapping new id of its own wins
+        // over its other recorded entry.
+        r.register(8, files("nes", &["nes"])).unwrap();
+        r.register(8, files("disk", &["fds"])).unwrap();
+        assert!(!r.contains(8, "old"));
+        assert!(r.register(8, files("nes", &["nes"])).is_err(), "live now");
+        r.register_recorded(8, files("left", &["unf"])).unwrap();
+        r.remove_recorded(8);
+        assert!(!r.contains(8, "left"));
+        assert_eq!(r.file_types(), ["fds", "nes"]);
+        r.mark_recorded(8);
+        r.disable(8);
+        assert!(r.find(&rom("a.nes")).is_none());
+        r.register(5, files("emu", &["nes"])).unwrap();
     }
     #[test]
     fn split_streams_preserve_headers_and_reject_different_audio_headers() {

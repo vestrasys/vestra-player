@@ -1,5 +1,5 @@
 //! `events`: the player's events pushed to a plugin as they happen.
-use super::{Capability, Handled, Info, Method, Needs, Residency};
+use super::{Capability, Handled, Info, Method, Needs, Recorded, Residency};
 use crate::host::{Host, Reply, RpcError, string};
 use serde_json::Value;
 
@@ -47,6 +47,15 @@ impl Capability for Events {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    /// A subscription is a listener the host pushes to. (Until the SDK marks
+    /// its own start-up subscriptions as mirrors, step B1, every one counts.)
+    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
+        match host.plugins.get(&owner) {
+            Some(plugin) if !plugin.subscriptions.is_empty() => Recorded::Live("an event listener"),
+            _ => Recorded::Nothing,
+        }
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         let event = string(params, "event")?;
         if !EVENTS.contains(&event) {

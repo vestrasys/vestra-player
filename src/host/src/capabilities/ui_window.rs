@@ -1,5 +1,5 @@
 //! `ui.window`: a plugin's own Slint windows (ui/view.rs).
-use super::{Capability, Handled, Info, Method, Residency, plugin};
+use super::{Capability, Handled, Info, Method, Recorded, Residency, plugin};
 use crate::{
     host::{Host, Reply, RpcError, string},
     platform, process,
@@ -32,6 +32,13 @@ impl Capability for UiWindow {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
+        if host.views.keys().any(|(each, _)| *each == owner) {
+            return Recorded::Live("an open window");
+        }
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "ui.open" => open(host, reply, params),

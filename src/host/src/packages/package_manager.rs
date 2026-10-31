@@ -636,6 +636,9 @@ impl Host {
             result.clone(),
             instance,
         )?;
+        // A parked version goes like a running one (an upgrade has a new
+        // digest: its recording is of no use).
+        self.forget_parked(&id, true);
         let waiting = self.running(&id);
         if let Some(owner) = waiting {
             self.disable(owner);
@@ -683,7 +686,10 @@ impl Host {
             .collect::<Vec<_>>();
         let installed = self.packages.store.installed();
         for (id, record) in installed {
-            if only.is_some_and(|only| only != id) || self.running(&id).is_some() {
+            if only.is_some_and(|only| only != id)
+                || self.running(&id).is_some()
+                || self.lazy.parked_id(&id).is_some()
+            {
                 continue;
             }
             // R-H10: a package the user disabled stays stopped; a
@@ -705,6 +711,19 @@ impl Host {
             else {
                 continue;
             };
+            // Lazy activation: a valid recording is replayed instead; the
+            // plugin starts on its first use (host/lazy.rs).
+            if self.lazy.enabled
+                && let Ok((directory, manifest)) = &package
+                && check_reserved(&id, Some(&instance)).is_ok()
+                && let Some(key) = self.lazy_key(&id)
+                && let Some(recording) = lazy::read(&self.packages.store.activation_dir(), &key)
+            {
+                match self.lazy_replay(&id, directory, manifest, &key, recording) {
+                    Ok(()) => continue,
+                    Err(error) => diag!("lazy: {id} replay failed, starting it: {error}"),
+                }
+            }
             let started = package
                 .map_err(anyhow::Error::msg)
                 .and_then(|(directory, manifest)| {
@@ -719,8 +738,66 @@ impl Host {
             }
         }
     }
+    /// Lazy activation: start the parked installed plugin `id` (its first
+    /// use woke it), as `start_installed` would.
+    pub(crate) fn start_package(&mut self, id: &str) -> Result<u64> {
+        let record = self.packages.store.get(id);
+        let instance = record
+            .instance
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("the installed package has no instance"))?;
+        let (directory, manifest) = self
+            .packages
+            .runs_from(id, &record)
+            .ok_or_else(|| anyhow::anyhow!("not installed"))?
+            .map_err(anyhow::Error::msg)?;
+        check_reserved(id, Some(&instance)).map_err(|refusal| anyhow::anyhow!(refusal.message))?;
+        self.load_package(&directory, &manifest, DataKey::Instance(instance.guid))
+    }
+    /// What a recording of installed plugin `id` is valid for: its instance,
+    /// its package digest (a library copy's, or the one `builtin.json`
+    /// lists) and version. `None`: it is not recorded (lazy activation
+    /// leaves it running), e.g. a built-in listed without a digest.
+    pub(crate) fn lazy_key(&self, id: &str) -> Option<lazy::Key> {
+        let record = self.packages.store.get(id);
+        let instance = record.instance.as_ref()?;
+        let (digest, version) = if instance.builtin {
+            let builtin = self.packages.builtins.get(id)?;
+            (builtin.digest.clone()?, Some(builtin.version.clone()))
+        } else {
+            let current = record.current.as_ref()?;
+            (current.digest.clone(), current.manifest.version.clone())
+        };
+        Some(lazy::Key {
+            guid: instance.guid.clone(),
+            digest,
+            version,
+        })
+    }
+    /// The directory recordings are kept in.
+    pub(crate) fn activation_dir(&self) -> PathBuf {
+        self.packages.store.activation_dir()
+    }
+    /// An installed (not development) plugin `owner` runs as installed:
+    /// its recording key.
+    pub(crate) fn lazy_key_of(&self, owner: u64) -> Option<lazy::Key> {
+        let plugin = self.plugins.get(&owner)?;
+        let DataKey::Instance(guid) = &plugin.data_key else {
+            return None;
+        };
+        let id = &plugin.manifest.id;
+        if self.development.contains_key(id) {
+            return None;
+        }
+        let record = self.packages.store.get(id);
+        let runs = self
+            .packages
+            .runs_from(id, &record)
+            .is_some_and(|package| package.is_ok_and(|(dir, _)| dir == plugin.directory));
+        self.lazy_key(id).filter(|key| runs && key.guid == *guid)
+    }
     /// An operation or a reload runs on `id`.
-    fn package_busy(&self, id: &str) -> bool {
+    pub(crate) fn package_busy(&self, id: &str) -> bool {
         self.operation_pending(id) || self.packages.reloads.contains_key(id)
     }
     /// While the `library-cleanup` thread scans the whole library (once, at
@@ -926,6 +1003,11 @@ impl Host {
             };
             let (state, error) = if self.package_busy(&id) {
                 ("starting", None)
+            } else if self.lazy.parked_id(&id).is_some() {
+                // Parked (lazy activation): it runs again on its first use.
+                // `state` stays `running` until the SDK and the store know
+                // an idle plugin (step B1: a `process` field).
+                ("running", None)
             } else {
                 stopped(
                     self.packages.store.disabled().contains(&id),
@@ -1061,6 +1143,9 @@ impl Host {
             if let Some(owner) = running {
                 self.disable(owner);
             }
+            // Parked: its recorded entries go; the recording stays (not
+            // replayed while it is disabled).
+            self.forget_parked(id, false);
             self.failures.remove(id);
             // The user switched it off: its session values go (a reload, an
             // upgrade or a crash keeps them; session_storage.rs).
@@ -1073,7 +1158,7 @@ impl Host {
             }
             return Ok(());
         }
-        if running.is_some() {
+        if running.is_some() || self.lazy.parked_id(id).is_some() {
             return Ok(());
         }
         self.start_stopped(id, installed, reserved, key, development)
@@ -1141,6 +1226,9 @@ impl Host {
                 "{id} is disabled: enable it instead of reloading it"
             )));
         }
+        // Parked: it has no process, so it starts now, observed fresh (its
+        // recording goes).
+        self.forget_parked(id, true);
         if let Some(owner) = self.running(id) {
             self.disable(owner);
             let now = self.now_ms();
@@ -1243,6 +1331,7 @@ impl Host {
             .flatten();
         let receipt =
             json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
+        self.forget_parked(&id, true);
         if let Some(owner) = self.running(&id) {
             self.disable(owner);
             // Delete the data after the process is gone (it flushes on stop).
@@ -1630,6 +1719,16 @@ fn display(manifest: &process::Manifest, catalog: Option<&crate::i18n::Catalog>)
         .collect();
     json!({"name":text(&manifest.name),"punchline":text(&manifest.punchline),
         "description":text(&manifest.description),"tags":tags})
+}
+
+/// A plugin's name as shown, else its id (lazy activation's "Starting…").
+pub(crate) fn display_name(
+    manifest: &process::Manifest,
+    catalog: Option<&crate::i18n::Catalog>,
+) -> String {
+    display(manifest, catalog)["name"]
+        .as_str()
+        .map_or_else(|| manifest.id.clone(), str::to_owned)
 }
 
 /// The 2026-10-24 ruling (ecosystem-plan.md): a reserved `vestra.` id

@@ -431,6 +431,7 @@ fn main() -> Result<()> {
         theme_pending: false,
         placements: view::Placements::default(),
         bar: bar_buttons::Strip::default(),
+        lazy: host::lazy::Lazy::from_env(),
         commands: commands::Registry::new(),
     };
     // The interface language of this run (doc/architecture/i18n.md §2):
@@ -500,6 +501,7 @@ fn main() -> Result<()> {
                 Err(_) => break,
             }
             host.activation_tick();
+            host.lazy_tick();
             host.power_tick();
             host.package_tick();
             host.notify_tick();
@@ -619,6 +621,7 @@ fn main() -> Result<()> {
                 host.prepare_mount_tick();
                 host.window_tick();
                 host.activation_tick();
+                host.lazy_tick();
                 host.power_tick();
                 host.package_tick();
                 host.notify_tick();

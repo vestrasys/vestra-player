@@ -1,9 +1,9 @@
 //! `commands`: menu commands with keys and state (crate::commands, the
 //! binding table), and running the player's own actions (`host.run`).
-use super::{Capability, Handled, Info, Method, Residency, plugin};
+use super::{Call, Capability, Handled, Info, Method, Recorded, Residency, plugin};
 use crate::{
     commands, core_actions,
-    host::{Host, Reply, RpcError, string},
+    host::{Host, Origin, Reply, RpcError, string},
     i18n, input_trace,
 };
 use serde_json::{Value, json};
@@ -28,6 +28,60 @@ impl Capability for Commands {
     }
     fn methods(&self) -> &'static [Method] {
         METHODS
+    }
+    /// Each command as its plugin registered it, with its last state (never
+    /// busy: a busy command keeps its plugin running, `Host::lazy_idle`).
+    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
+        if host.commands.unsent(owner) {
+            return Recorded::Live("a command without its registration");
+        }
+        let calls = host
+            .commands
+            .sent_of(owner)
+            .into_iter()
+            .map(|(id, revision, sent)| {
+                let mut state = sent.state.clone();
+                if let Some(state) = state.as_object_mut() {
+                    state.insert("busy".into(), false.into());
+                }
+                Call::new(
+                    "commands.register",
+                    json!({"id":id,"revision":revision,"declaration":sent.declaration,"state":state}),
+                )
+            })
+            .collect();
+        Recorded::Calls(calls)
+    }
+    fn rekey(&self, host: &mut Host, from: u64, to: u64) {
+        if let Err(error) = host.commands.rekey(from, to) {
+            diag!("lazy: commands of {from}: {error}");
+        }
+        host.input.borrow_mut().table.rekey(from, to);
+    }
+    fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
+        if keep_recorded {
+            host.commands.mark_recorded(owner);
+        } else {
+            let _ = host.commands.remove_owner(owner);
+            host.input.borrow_mut().table.remove_owner(owner);
+        }
+    }
+    fn prune(&self, host: &mut Host, owner: u64) {
+        match host.commands.remove_recorded(owner) {
+            Ok(gone) => {
+                let mut input = host.input.borrow_mut();
+                for id in gone {
+                    input.table.remove(owner, &id);
+                }
+            }
+            Err(error) => diag!("lazy: commands of {owner}: {error}"),
+        }
+    }
+    fn replay(&self, host: &mut Host, owner: u64, origin: &Origin, call: &Call) -> Handled {
+        match call.method.as_str() {
+            "commands.register" => register(host, owner, origin, &call.params).map(|()| None),
+            _ => Err(RpcError::new("unsupported", "not a recorded method")),
+        }
     }
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
@@ -69,100 +123,122 @@ fn register_or_update(
     method: &str,
     params: &Value,
 ) -> std::result::Result<Value, RpcError> {
-    let plugin = plugin(host, reply)?;
+    let origin = plugin(host, reply)?.origin();
+    if method == "commands.register" {
+        register(host, reply.owner, &origin, params)?;
+    } else {
+        let (id, revision, state) = parsed(&origin, params)?;
+        host.commands
+            .update(reply.owner, id, revision, state)
+            .map_err(|e| RpcError::new("command", e.to_string()))?;
+        host.commands
+            .note_sent(reply.owner, id, None, params["state"].clone());
+    }
+    Ok(json!({"revision":host.commands.revision()}))
+}
+
+/// The id, revision and state of a register or update; the disabled reason
+/// is one of the plugin's sentences: source text translated as a whole, or
+/// a text value.
+fn parsed<'a>(
+    origin: &Origin,
+    params: &'a Value,
+) -> std::result::Result<(&'a str, u64, commands::CommandState), RpcError> {
     let id = string(params, "id")?;
     let revision = params["revision"]
         .as_u64()
         .filter(|v| *v > 0)
         .ok_or_else(|| RpcError::invalid("positive revision required"))?;
-    let texts = plugin.texts();
-    // The disabled reason is one of the plugin's sentences: source
-    // text translated as a whole, or a text value.
     let mut state = params["state"].clone();
     if let Some(reason) = state.get_mut("reason").filter(|r| !r.is_null()) {
-        *reason = texts.declared(reason).map_err(RpcError::invalid)?.into();
+        *reason = origin
+            .texts()
+            .declared(reason)
+            .map_err(RpcError::invalid)?
+            .into();
     }
     let state: commands::CommandState =
         serde_json::from_value(state).map_err(|e| RpcError::invalid(e.to_string()))?;
-    if method == "commands.register" {
-        // Text values in the title and path: the key is their
-        // English rendering, the shown text their translation.
-        let mut raw = params["declaration"].clone();
-        // Player 0.5.10: the bottom-bar button, read apart (its image is
-        // the plugin's file); `Declaration` still refuses unknown fields.
-        let button = match raw.as_object_mut().and_then(|o| o.remove("button")) {
-            None | Some(Value::Null) => None,
-            Some(value) => Some(button(host, reply.owner, &value)?),
-        };
-        let mut shown_title = None;
-        let mut shown_path = Vec::new();
-        let menu_text = |value: &mut Value| {
-            if !i18n::text::is_text(value) {
-                return Ok(None);
-            }
-            if value.get(i18n::text::LIST_KEY).is_some() {
-                return Err(RpcError::invalid(
-                    "a menu text is a string or a text, not a list",
-                ));
-            }
-            i18n::text::check(value).map_err(RpcError::invalid)?;
-            let shown = texts.render(value);
-            *value = i18n::text::Texts::english().render(value).into();
-            Ok(Some(shown))
-        };
-        if let Some(title) = raw.get_mut("title") {
-            shown_title = menu_text(title)?;
+    Ok((id, revision, state))
+}
+
+/// A `commands.register` of `owner`'s, from its package `origin`: sent by
+/// its running plugin, or replayed from its recording (lazy activation).
+fn register(
+    host: &mut Host,
+    owner: u64,
+    origin: &Origin,
+    params: &Value,
+) -> std::result::Result<(), RpcError> {
+    let (id, revision, state) = parsed(origin, params)?;
+    let texts = origin.texts();
+    // Text values in the title and path: the key is their
+    // English rendering, the shown text their translation.
+    let mut raw = params["declaration"].clone();
+    // Player 0.5.10: the bottom-bar button, read apart (its image is
+    // the plugin's file); `Declaration` still refuses unknown fields.
+    let button = match raw.as_object_mut().and_then(|o| o.remove("button")) {
+        None | Some(Value::Null) => None,
+        Some(value) => Some(button(origin, &value)?),
+    };
+    let mut shown_title = None;
+    let mut shown_path = Vec::new();
+    let menu_text = |value: &mut Value| {
+        if !i18n::text::is_text(value) {
+            return Ok(None);
         }
-        if let Some(path) = raw.get_mut("path").and_then(Value::as_array_mut) {
-            for segment in path {
-                shown_path.push(menu_text(segment)?);
-            }
+        if value.get(i18n::text::LIST_KEY).is_some() {
+            return Err(RpcError::invalid(
+                "a menu text is a string or a text, not a list",
+            ));
         }
-        let mut declaration: commands::Declaration =
-            serde_json::from_value(raw).map_err(|e| RpcError::invalid(e.to_string()))?;
-        declaration.button = button;
-        // Keys first (`@video`, old Chinese titles), then the
-        // shown text from this plugin's catalog.
-        let declared = declaration.path.clone();
-        commands::normalize(&mut declaration.path)
-            .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
-        declaration.localize_declared(&declared, |text| plugin.text(text));
-        declaration.show_texts(shown_title, &shown_path);
-        let manifest = plugin.manifest.id.clone();
-        let bindings = declaration.bindings.clone();
-        let panel = declaration.focus == Some(commands::Focus::Panel);
-        let repeat = declaration.repeat;
-        host.commands
-            .register(
-                reply.owner,
-                &manifest,
-                id.into(),
-                revision,
-                declaration,
-                state,
-            )
-            .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
-        host.input
-            .borrow_mut()
-            .table
-            .declare(reply.owner, id, &manifest, &bindings, panel, repeat)
-            .map_err(RpcError::invalid)?;
-    } else {
-        host.commands
-            .update(reply.owner, id, revision, state)
-            .map_err(|e| RpcError::new("command", e.to_string()))?;
+        i18n::text::check(value).map_err(RpcError::invalid)?;
+        let shown = texts.render(value);
+        *value = i18n::text::Texts::english().render(value).into();
+        Ok(Some(shown))
+    };
+    if let Some(title) = raw.get_mut("title") {
+        shown_title = menu_text(title)?;
     }
-    Ok(json!({"revision":host.commands.revision()}))
+    if let Some(path) = raw.get_mut("path").and_then(Value::as_array_mut) {
+        for segment in path {
+            shown_path.push(menu_text(segment)?);
+        }
+    }
+    let mut declaration: commands::Declaration =
+        serde_json::from_value(raw).map_err(|e| RpcError::invalid(e.to_string()))?;
+    declaration.button = button;
+    // Keys first (`@video`, old Chinese titles), then the
+    // shown text from this plugin's catalog.
+    let declared = declaration.path.clone();
+    commands::normalize(&mut declaration.path)
+        .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
+    declaration.localize_declared(&declared, |text| origin.text(text));
+    declaration.show_texts(shown_title, &shown_path);
+    let bindings = declaration.bindings.clone();
+    let panel = declaration.focus == Some(commands::Focus::Panel);
+    let repeat = declaration.repeat;
+    host.commands
+        .register(owner, &origin.id, id.into(), revision, declaration, state)
+        .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
+    host.commands.note_sent(
+        owner,
+        id,
+        Some(params["declaration"].clone()),
+        params["state"].clone(),
+    );
+    host.input
+        .borrow_mut()
+        .table
+        .declare(owner, id, &origin.id, &bindings, panel, repeat)
+        .map_err(RpcError::invalid)?;
+    Ok(())
 }
 
 /// `declaration.button`: `{ icon, order }`, the icon a name of the icon
 /// set (checked by the registry) or an image reference to one of the
 /// plugin's files (checked here, like a property's image).
-fn button(
-    host: &Host,
-    owner: u64,
-    value: &Value,
-) -> std::result::Result<commands::Button, RpcError> {
+fn button(origin: &Origin, value: &Value) -> std::result::Result<commands::Button, RpcError> {
     let object = value
         .as_object()
         .filter(|o| o.keys().all(|key| key == "icon" || key == "order"))
@@ -181,7 +257,7 @@ fn button(
         Some(Value::String(name)) => commands::ButtonIcon::Name(name.clone()),
         Some(image) if crate::ui::ui_image::reference(image).is_some() => {
             let (path, max_side) = crate::ui::ui_image::parts(image)?;
-            crate::ui::ui_image::locate(path, &host.image_roots(owner))?;
+            crate::ui::ui_image::locate(path, &origin.image_roots())?;
             commands::ButtonIcon::Image {
                 path: path.to_owned(),
                 max_side,

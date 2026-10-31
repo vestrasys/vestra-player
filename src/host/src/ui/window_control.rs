@@ -26,6 +26,10 @@ impl<T: Copy + PartialEq> LastWrite<T> {
     pub fn remove(&mut self, owner: u64) {
         self.writes.remove(&owner);
     }
+    /// `owner` wrote a value that is in effect until it stops.
+    pub fn holds(&self, owner: u64) -> bool {
+        self.writes.contains_key(&owner)
+    }
     pub fn get(&self) -> T {
         self.writes
             .values()

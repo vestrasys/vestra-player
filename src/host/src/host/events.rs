@@ -75,4 +75,7 @@ pub(crate) enum Event {
     RuntimeFault(u64, String),
     /// A bottom-bar button clicked: (window generation, its token).
     BarButton(u64, String),
+    /// The playback worker's answer to `owner.resources` (lazy activation):
+    /// (owner, `{ live, resolvers }`).
+    OwnerResources(u64, Value),
 }

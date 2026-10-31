@@ -389,3 +389,13 @@ msgstr "内置插件因故障已重启"
 #: src/package_manager.rs
 msgid "Built-in plugins run separately for this session after repeated faults"
 msgstr "内置插件多次故障，本次运行改为分别运行"
+
+#. The OSD when a woken plugin no longer has the command a menu item or key ran (lazy activation).
+#: src/host/lazy.rs
+msgid "{} is no longer available"
+msgstr "{} 已不可用"
+
+#. The OSD while a plugin that was stopped when idle starts again for its first use.
+#: src/host/lazy.rs
+msgid "Starting {}…"
+msgstr "正在启动 {}…"

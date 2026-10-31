@@ -476,3 +476,15 @@ msgstr "오류로 인해 내장 플러그인을 다시 시작했습니다"
 #, x-machine
 msgid "Built-in plugins run separately for this session after repeated faults"
 msgstr "오류가 반복되어 이번 세션에서는 내장 플러그인을 개별적으로 실행합니다"
+
+#. The OSD when a woken plugin no longer has the command a menu item or key ran (lazy activation).
+#: src/host/lazy.rs
+#, x-machine
+msgid "{} is no longer available"
+msgstr "{}을(를) 더 이상 사용할 수 없습니다"
+
+#. The OSD while a plugin that was stopped when idle starts again for its first use.
+#: src/host/lazy.rs
+#, x-machine
+msgid "Starting {}…"
+msgstr "{} 시작 중…"

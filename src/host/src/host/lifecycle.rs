@@ -152,6 +152,12 @@ impl Host {
         Ok(())
     }
     pub(crate) fn disable(&mut self, owner: u64) {
+        self.stop(owner, false);
+    }
+    /// Stop a running plugin and revoke what it holds. `park` (lazy
+    /// activation, `lazy.rs`): its recordable registrations stay, marked
+    /// recorded, and its process gets longer to finish.
+    pub(crate) fn stop(&mut self, owner: u64, park: bool) {
         // Process exit commonly follows an explicit disable. The first revoke
         // owns cleanup: a duplicate notification must not cancel its id=0
         // rebuild, clear another instance, or repeat backend/resource cleanup.
@@ -159,12 +165,12 @@ impl Host {
             return;
         }
         self.archive_activation(owner, "plugin disabled before activation completed");
+        self.lazy.forget_running(owner);
         self.held_mounts.forget(owner);
         self.warnings.remove(&owner);
-        let _ = self.commands.remove_owner(owner);
+        capabilities::revoke(self, owner, park);
         {
             let mut input = self.input.borrow_mut();
-            input.table.remove_owner(owner);
             if input.bottom == Some(owner) {
                 input.bottom = None;
             }
@@ -198,8 +204,6 @@ impl Host {
         self.power.remove_owner(owner);
         self.timeline.remove_owner(owner);
         self.images.release_owner(owner);
-        self.drops.remove_owner(owner);
-        self.settings.remove_owner(owner);
         self.on_top.remove(owner);
         self.cursor_playing.remove(owner);
         self.pip.remove_owner(owner);
@@ -230,9 +234,15 @@ impl Host {
                 announced: false,
             });
         }
+        // Parked: the worker keeps its resolvers (recorded).
         let _ = self.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
-            method: "owner.disabled".into(),
+            method: if park {
+                "owner.parked"
+            } else {
+                "owner.disabled"
+            }
+            .into(),
             params: Value::Null,
         });
         let keys: Vec<_> = self
@@ -248,7 +258,11 @@ impl Host {
         }
         self.cleanup.insert(owner, (false, false));
         // Waiting for graceful disposal/killing belongs off the Slint event loop.
-        if let Some(plugin) = self.plugins.remove(&owner) {
+        if let Some(mut plugin) = self.plugins.remove(&owner) {
+            if park {
+                // A routine stop, not a fault: its `onDispose` gets time.
+                plugin.set_stop_wait(lazy::PARK_WAIT);
+            }
             let events = self.events.clone();
             std::thread::spawn(move || {
                 drop(plugin);
@@ -257,6 +271,12 @@ impl Host {
         }
     }
     pub(crate) fn send(&mut self, owner: u64, message: Value) {
+        // Lazy activation: a parked owner has no process; a trigger wakes
+        // it, and is held (as are triggers for a plugin still waking) until
+        // its `runtime.ready`.
+        if !self.lazy_deliver(owner, &message) {
+            return;
+        }
         let failed = self
             .plugins
             .get_mut(&owner)

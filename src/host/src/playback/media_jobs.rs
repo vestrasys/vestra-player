@@ -170,6 +170,11 @@ impl Jobs {
         }
         self.workers = pending;
     }
+    /// `owner` holds a snapshot or a job (lazy activation: it stays running).
+    pub fn holds(&self, owner: u64) -> bool {
+        self.snapshots.values().any(|s| s.owner == owner)
+            || self.jobs.values().any(|job| job.owner == owner)
+    }
     pub fn disable(&mut self, owner: u64) {
         self.books.remove(&owner);
         self.snapshots.retain(|_, s| s.owner != owner);

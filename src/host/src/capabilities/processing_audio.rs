@@ -1,7 +1,7 @@
 //! `processing.audio`: the audio filter chain. Its requests
 //! (`processing.replace` and `processing.operation` for the audio stage) are
 //! served by processing_video.rs, which asks for this capability by stage.
-use super::{Capability, Handled, Info, Method, Residency};
+use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::host::{Host, Reply, RpcError};
 use serde_json::Value;
 
@@ -20,6 +20,10 @@ impl Capability for ProcessingAudio {
     fn methods(&self) -> &'static [Method] {
         &[]
     }
+    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+        Recorded::Nothing
+    }
+    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, _: &mut Host, _: &Reply, _: &str, _: &Value) -> Handled {
         // Never routed here: this capability owns no method.
         Err(RpcError::new("unsupported", "unknown method"))

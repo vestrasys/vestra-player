@@ -1131,8 +1131,64 @@ impl Sources {
     ) -> Result<Value, String> {
         Err("unsupported: producer not enabled in this build".into())
     }
+    /// Lazy activation: a parked plugin's resolvers stay (recorded), the
+    /// rest of what it held goes as for any stop (`disable`).
+    pub fn park(&mut self, owner: u64) {
+        self.resolvers.mark_recorded(owner);
+        self.release(owner);
+    }
+    /// Replays a recorded `sourceResolvers.register` for a parked owner.
+    pub fn replay_resolver(&mut self, owner: u64, params: &Value) -> Result<(), RpcError> {
+        let declaration =
+            serde_json::from_value(params.clone()).map_err(|e| RpcError::invalid(e.to_string()))?;
+        self.resolvers.register_recorded(owner, declaration)
+    }
+    /// A parked plugin woken as generation `to`: its resolvers and the
+    /// resolutions waiting for them follow.
+    pub fn rekey(&mut self, from: u64, to: u64) {
+        self.resolvers.rekey(from, to);
+        for resolution in self.resolutions.values_mut() {
+            if resolution.resolver == from {
+                resolution.resolver = to;
+            }
+        }
+    }
+    /// At `runtime.ready` of a woken plugin: the recorded resolvers it did
+    /// not register again go.
+    pub fn prune(&mut self, owner: u64) {
+        self.resolvers.remove_recorded(owner);
+    }
+    /// `owner`'s resolver declarations (its recording).
+    pub fn resolvers_of(&self, owner: u64) -> Vec<Value> {
+        self.resolvers
+            .recording(owner)
+            .into_iter()
+            .filter_map(|declaration| serde_json::to_value(declaration).ok())
+            .collect()
+    }
+    /// What `owner` holds here that only its process can serve (lazy
+    /// activation, §3.2): a stream, an open waiting for its answer, the
+    /// audio device it chose, operations it submitted.
+    pub fn holds(&self, owner: u64) -> Vec<&'static str> {
+        let mut held = Vec::new();
+        if self.resolutions.values().any(|r| r.resolver == owner) {
+            held.push("a source resolution in flight");
+        }
+        if self.audio_owner == Some(owner) {
+            held.push("the audio device");
+        }
+        #[cfg(feature = "producer-audio")]
+        if self.producers.holds(owner) {
+            held.push("a producer stream");
+        }
+        held
+    }
     pub fn disable(&mut self, owner: u64) {
         self.resolvers.disable(owner);
+        self.release(owner);
+    }
+    /// What a stopped plugin held here, its resolvers aside.
+    fn release(&mut self, owner: u64) {
         // Like the window level: a stopped plugin's device choice goes with it.
         if self.audio_owner == Some(owner) {
             self.audio_owner = None;

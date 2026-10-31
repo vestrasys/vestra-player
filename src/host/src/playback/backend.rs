@@ -372,9 +372,67 @@ impl Backend {
                         if upscaling.command(&mpv, &out_render, &command, &events) {
                             continue;
                         }
-                        if command.method == "owner.disabled" {
+                        // Lazy activation (host/lazy.rs): what a plugin
+                        // holds here, its resolvers kept while it is parked,
+                        // moved when it wakes, pruned at its ready.
+                        match command.method.as_str() {
+                            "owner.resources" => {
+                                let owner = command.reply.owner;
+                                let mut live = sources.holds(owner);
+                                if jobs.holds(owner) {
+                                    live.push("a snapshot or a job");
+                                }
+                                if processing.holds(owner) {
+                                    live.push("a processing chain");
+                                }
+                                if subtitles.holds(owner) {
+                                    live.push("a subtitle track or style");
+                                }
+                                if view.owner() == Some(owner) {
+                                    live.push("the video view");
+                                }
+                                if render_options.owner() == Some(owner) {
+                                    live.push("the video render options");
+                                }
+                                if upscaling.holds(owner) {
+                                    live.push("video upscaling");
+                                }
+                                let answer = json!({"live":live,
+                                    "resolvers":sources.resolvers_of(owner)});
+                                let _ = events.send(Event::OwnerResources(owner, answer));
+                                continue;
+                            }
+                            "owner.rekey" => {
+                                if let Some(to) = command.params["to"].as_u64() {
+                                    sources.rekey(command.reply.owner, to);
+                                }
+                                continue;
+                            }
+                            "owner.prune" => {
+                                sources.prune(command.reply.owner);
+                                continue;
+                            }
+                            "owner.replay" => {
+                                if let Err(error) =
+                                    sources.replay_resolver(command.reply.owner, &command.params)
+                                {
+                                    diag!(
+                                        "lazy: replayed resolver of {}: {}",
+                                        command.reply.owner,
+                                        error.message
+                                    );
+                                }
+                                continue;
+                            }
+                            _ => (),
+                        }
+                        if matches!(command.method.as_str(), "owner.disabled" | "owner.parked") {
                             jobs.disable(command.reply.owner);
-                            sources.disable(command.reply.owner);
+                            if command.method == "owner.parked" {
+                                sources.park(command.reply.owner);
+                            } else {
+                                sources.disable(command.reply.owner);
+                            }
                             if let Err(error) = subtitles.disable(&mpv, command.reply.owner) {
                                 let _ = events.send(Event::Broadcast(
                                     "host.error".into(),

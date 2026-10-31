@@ -85,6 +85,10 @@ impl Timeline {
             self.revision += 1;
         }
     }
+    /// `owner` has a layer.
+    pub fn holds(&self, owner: u64) -> bool {
+        self.layers.contains_key(&owner)
+    }
     pub fn remove_owner(&mut self, owner: u64) {
         self.set(owner, Vec::new());
     }

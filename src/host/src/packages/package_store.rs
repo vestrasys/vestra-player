@@ -1048,6 +1048,13 @@ impl Store {
         }
     }
 
+    /// Where lazy activation keeps its recordings, one file per installed
+    /// instance (`host/lazy.rs`): beside the catalog, outside every
+    /// plugin's data directory.
+    pub fn activation_dir(&self) -> PathBuf {
+        self.root.join("activation")
+    }
+
     /// The library entries the catalog refers to: every installed current
     /// version and every pending target, and the packages of the records
     /// `quarantine.json` lists (`kept`). Anything else in the library is

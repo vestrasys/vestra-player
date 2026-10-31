@@ -343,6 +343,21 @@ pub struct Registry {
     commands: BTreeMap<CommandKey, CommandSnapshot>,
     revision: u64,
     sequence: u64,
+    /// Lazy activation (doc/process/rounds/2026-10-lazy-activation.md §2):
+    /// entries kept for an owner without a process (parked, or replayed from
+    /// its recording). A live registration of the same key replaces one.
+    recorded: std::collections::BTreeSet<CommandKey>,
+    /// Each command as its plugin sent it (`declaration`, last `state`),
+    /// for its recording.
+    sent: BTreeMap<CommandKey, Sent>,
+}
+
+/// A command's registration and last state in the form its plugin sent
+/// them (before localization): what a recording replays.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Sent {
+    pub declaration: serde_json::Value,
+    pub state: serde_json::Value,
 }
 
 fn text(value: &str, label: &str, limit: usize) -> Result<()> {
@@ -582,7 +597,10 @@ impl Registry {
             owner,
             local_id: id,
         };
-        if self.commands.contains_key(&key) {
+        // A recorded entry of the same key is replaced; its menu place (the
+        // registration sequence) is kept.
+        let replaced = self.recorded.contains(&key);
+        if self.commands.contains_key(&key) && !replaced {
             return Err(CommandError::Conflict(
                 "owner/localId already registered".into(),
             ));
@@ -590,7 +608,12 @@ impl Registry {
         if !declaration.path.is_empty() {
             for entry in self.commands.values() {
                 let existing = &entry.declaration.path;
-                if existing.is_empty() {
+                // The entry this replaces and the same owner's other recorded
+                // entries (the live one wins below) do not collide.
+                if existing.is_empty()
+                    || entry.key == key
+                    || (entry.key.owner == owner && self.recorded.contains(&entry.key))
+                {
                     continue;
                 }
                 if existing.starts_with(&declaration.path) || declaration.path.starts_with(existing)
@@ -601,18 +624,48 @@ impl Registry {
                 }
             }
         }
-        if self.commands.len() >= Self::MAX_COMMANDS
-            || self
-                .commands
-                .keys()
-                .filter(|key| key.owner == owner)
-                .count()
-                >= Self::MAX_PER_OWNER
+        if !replaced
+            && (self.commands.len() >= Self::MAX_COMMANDS
+                || self
+                    .commands
+                    .keys()
+                    .filter(|key| key.owner == owner)
+                    .count()
+                    >= Self::MAX_PER_OWNER)
         {
             return Err(CommandError::Limit);
         }
         let next = self.next_revision()?;
-        self.sequence += 1;
+        // The same owner's recorded entries on this path give way.
+        if !declaration.path.is_empty() {
+            let colliding = self
+                .commands
+                .values()
+                .filter(|entry| {
+                    entry.key != key
+                        && entry.key.owner == owner
+                        && self.recorded.contains(&entry.key)
+                        && !entry.declaration.path.is_empty()
+                        && (entry.declaration.path.starts_with(&declaration.path)
+                            || declaration.path.starts_with(&entry.declaration.path))
+                })
+                .map(|entry| entry.key.clone())
+                .collect::<Vec<_>>();
+            for gone in colliding {
+                self.commands.remove(&gone);
+                self.recorded.remove(&gone);
+                self.sent.remove(&gone);
+            }
+        }
+        let sequence = match self.commands.get(&key).filter(|_| replaced) {
+            Some(entry) => entry.sequence,
+            None => {
+                self.sequence += 1;
+                self.sequence
+            }
+        };
+        self.recorded.remove(&key);
+        self.sent.remove(&key);
         self.commands.insert(
             key.clone(),
             CommandSnapshot {
@@ -621,9 +674,127 @@ impl Registry {
                 declaration,
                 state,
                 manifest: manifest.into(),
-                sequence: self.sequence,
+                sequence,
             },
         );
+        self.revision = next;
+        Ok(())
+    }
+
+    /// Keep what the plugin sent for `id`, for its recording: the
+    /// declaration at `commands.register` (`Some`), the state every time.
+    pub fn note_sent(
+        &mut self,
+        owner: OwnerGeneration,
+        id: &str,
+        declaration: Option<serde_json::Value>,
+        state: serde_json::Value,
+    ) {
+        let key = CommandKey {
+            owner,
+            local_id: id.into(),
+        };
+        if !self.commands.contains_key(&key) {
+            return;
+        }
+        match (declaration, self.sent.get_mut(&key)) {
+            (Some(declaration), _) => {
+                self.sent.insert(key, Sent { declaration, state });
+            }
+            (None, Some(sent)) => sent.state = state,
+            (None, None) => (),
+        }
+    }
+
+    /// An owner's commands as sent: local id, current revision, what was sent.
+    pub fn sent_of(&self, owner: OwnerGeneration) -> Vec<(&str, u64, &Sent)> {
+        self.sent
+            .iter()
+            .filter(|(key, _)| key.owner == owner)
+            .filter_map(|(key, sent)| {
+                let entry = self.commands.get(key)?;
+                Some((key.local_id.as_str(), entry.revision, sent))
+            })
+            .collect()
+    }
+
+    /// A command of `owner`'s is busy (its run is in progress).
+    pub fn busy(&self, owner: OwnerGeneration) -> bool {
+        self.commands
+            .values()
+            .any(|entry| entry.key.owner == owner && entry.state.busy)
+    }
+
+    /// Whether `owner` has an entry that was not sent by its plugin (the
+    /// host's own commands, or a test's): such an owner cannot be recorded.
+    pub fn unsent(&self, owner: OwnerGeneration) -> bool {
+        self.commands
+            .keys()
+            .any(|key| key.owner == owner && !self.sent.contains_key(key))
+    }
+
+    /// Park: every entry of `owner` stays, marked recorded.
+    pub fn mark_recorded(&mut self, owner: OwnerGeneration) {
+        let keys = self
+            .commands
+            .keys()
+            .filter(|key| key.owner == owner)
+            .cloned()
+            .collect::<Vec<_>>();
+        self.recorded.extend(keys);
+    }
+
+    /// At `runtime.ready` of a woken plugin: its recorded entries it did not
+    /// register again go. Returns their local ids.
+    pub fn remove_recorded(&mut self, owner: OwnerGeneration) -> Result<Vec<String>> {
+        let keys = self
+            .recorded
+            .iter()
+            .filter(|key| key.owner == owner)
+            .cloned()
+            .collect::<Vec<_>>();
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
+        let next = self.next_revision()?;
+        for key in &keys {
+            self.recorded.remove(key);
+            self.sent.remove(key);
+            self.commands.remove(key);
+        }
+        self.revision = next;
+        Ok(keys.into_iter().map(|key| key.local_id).collect())
+    }
+
+    /// Wake: `from`'s entries move to the new generation `to`, keeping their
+    /// menu place, state and recorded mark.
+    pub fn rekey(&mut self, from: OwnerGeneration, to: OwnerGeneration) -> Result<()> {
+        let keys = self
+            .commands
+            .keys()
+            .filter(|key| key.owner == from)
+            .cloned()
+            .collect::<Vec<_>>();
+        if keys.is_empty() {
+            return Ok(());
+        }
+        let next = self.next_revision()?;
+        for key in keys {
+            let moved = CommandKey {
+                owner: to,
+                local_id: key.local_id.clone(),
+            };
+            if let Some(mut entry) = self.commands.remove(&key) {
+                entry.key = moved.clone();
+                self.commands.insert(moved.clone(), entry);
+            }
+            if self.recorded.remove(&key) {
+                self.recorded.insert(moved.clone());
+            }
+            if let Some(sent) = self.sent.remove(&key) {
+                self.sent.insert(moved, sent);
+            }
+        }
         self.revision = next;
         Ok(())
     }
@@ -674,6 +845,8 @@ impl Registry {
         if count != 0 {
             let next = self.next_revision()?;
             self.commands.retain(|key, _| key.owner != owner);
+            self.recorded.retain(|key| key.owner != owner);
+            self.sent.retain(|key, _| key.owner != owner);
             self.revision = next;
         }
         Ok(count)
@@ -690,6 +863,8 @@ impl Registry {
         }
         let next = self.next_revision()?;
         self.commands.remove(&key);
+        self.recorded.remove(&key);
+        self.sent.remove(&key);
         self.revision = next;
         Ok(())
     }
@@ -1853,5 +2028,122 @@ mod button_tests {
             })
             .collect();
         assert_eq!(names, BUTTON_ICONS);
+    }
+
+    /// Lazy activation: a parked owner's entries stay recorded, move to the
+    /// woken generation in their menu place, are replaced by the live
+    /// registrations, and the ones not registered again go at ready.
+    #[test]
+    fn recorded_entries_rekey_are_replaced_by_live_ones_and_the_rest_pruned() {
+        let decl = |path: &[&str]| Declaration::new(path.last().unwrap(), path);
+        let st = |enabled| CommandState {
+            enabled,
+            checked: None,
+            busy: false,
+            reason: None,
+        };
+        fn flatten(nodes: &[MenuNode], out: &mut Vec<String>) {
+            for node in nodes {
+                match node {
+                    MenuNode::Group { children, .. } => flatten(children, out),
+                    MenuNode::Command { entry } => out.push(entry.declaration.title.clone()),
+                }
+            }
+        }
+        let mut registry = Registry::new();
+        for (owner, manifest, id, path) in [
+            (1, "a", "first", ["Tools", "A first"]),
+            (2, "b", "hello", ["Tools", "Hello"]),
+            (2, "b", "gone", ["Tools", "Gone"]),
+            (3, "c", "last", ["Tools", "Z last"]),
+        ] {
+            registry
+                .register(owner, manifest, id.into(), 1, decl(&path), st(true))
+                .unwrap();
+            registry.note_sent(
+                owner,
+                id,
+                Some(serde_json::json!({"title":path[1]})),
+                serde_json::json!({"enabled":true}),
+            );
+        }
+        registry.note_sent(2, "hello", None, serde_json::json!({"enabled":false}));
+        assert_eq!(registry.sent_of(2).len(), 2);
+        assert_eq!(
+            registry.sent_of(2)[1].2.state,
+            serde_json::json!({"enabled":false})
+        );
+        let order = |registry: &Registry| {
+            let mut out = Vec::new();
+            flatten(&registry.snapshot().roots, &mut out);
+            out
+        };
+        let before = order(&registry);
+        // Parked: still in the menu, still resolvable.
+        registry.mark_recorded(2);
+        assert!(registry.resolve_execution(2, "hello").is_ok());
+        // Woken as generation 9: same menu, the old generation is gone.
+        registry.rekey(2, 9).unwrap();
+        assert_eq!(order(&registry), before);
+        assert!(registry.resolve_execution(2, "hello").is_err());
+        assert!(registry.resolve_execution(9, "hello").is_ok());
+        // The live registration replaces the recorded one (no conflict) and
+        // keeps its place; another owner still collides.
+        registry
+            .register(
+                9,
+                "b",
+                "hello".into(),
+                1,
+                decl(&["Tools", "Hello"]),
+                st(false),
+            )
+            .unwrap();
+        assert_eq!(order(&registry), before);
+        assert!(registry.sent_of(9).iter().all(|(id, ..)| *id != "hello"));
+        assert!(matches!(
+            registry.register(
+                9,
+                "b",
+                "hello".into(),
+                1,
+                decl(&["Tools", "Hello"]),
+                st(true)
+            ),
+            Err(CommandError::Conflict(_))
+        ));
+        assert!(matches!(
+            registry.register(
+                4,
+                "d",
+                "clash".into(),
+                1,
+                decl(&["Tools", "Gone"]),
+                st(true)
+            ),
+            Err(CommandError::Conflict(_))
+        ));
+        // At ready the entry not registered again goes, and only it.
+        assert_eq!(registry.remove_recorded(9).unwrap(), vec!["gone"]);
+        assert!(registry.get(9, "gone").is_none());
+        assert!(registry.get(9, "hello").is_some());
+        assert_eq!(registry.remove_recorded(9).unwrap(), Vec::<String>::new());
+        // A live path that collides with the same owner's recorded entry wins.
+        registry.mark_recorded(1);
+        registry
+            .register(
+                1,
+                "a",
+                "renamed".into(),
+                1,
+                decl(&["Tools", "A first"]),
+                st(true),
+            )
+            .unwrap();
+        assert!(registry.get(1, "first").is_none());
+        assert!(registry.get(1, "renamed").is_some());
+        // Removing an owner forgets its recorded marks and what it sent.
+        registry.remove_owner(3).unwrap();
+        assert!(registry.sent_of(3).is_empty());
     }
 }
