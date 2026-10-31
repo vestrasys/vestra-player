@@ -5,50 +5,14 @@
 //   table row       label 120 + 8 + value ≥ 240 (scroll bar 12 inside)  = 380
 //   button row      status ≥ 50 + Refresh 66 + Copy 84 + Save As… 66 + Close 66 + 4 × 4 = 348 of 380
 // Height at the minimum 320: tabs 31 + 10 + table ≥ 237 + 10 + buttons 21 + 10 = 319.
-import { Palette, ScrollView } from "std-widgets.slint";
+import { ListView, Palette } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button } from "@vestra/widgets.slint";
+import { Button, Tabs } from "@vestra/widgets.slint";
 
 export struct PropertyRow {
     label: string,
     value: string,
     heading: bool,
-}
-
-// One 74×31 page tab (same strip as the picture and audio workbenches).
-component Tab {
-    in property <string> text;
-    in property <bool> selected;
-    callback picked();
-    width: max(74px, tab-label.preferred-width + 12px);
-    height: 31px;
-    accessible-role: tab;
-    accessible-label: root.text;
-    // Hover lights a rounded plate; the selected tab has a 28px gradient stroke under its label.
-    Rectangle {
-        x: 3px;
-        y: 4px;
-        width: parent.width - 6px;
-        height: parent.height - 8px;
-        border-radius: Theme.radius-control;
-        background: !root.selected && touch.has-hover ? Theme.hover-bg : transparent;
-    }
-    if root.selected: Rectangle {
-        x: (parent.width - 28px) / 2;
-        y: parent.height - 3px;
-        width: 28px;
-        height: 2px;
-        border-radius: 1px;
-        background: Theme.accent-fill;
-    }
-    tab-label := Text {
-        text: root.text;
-        color: root.selected ? Theme.text : Theme.text-dim;
-        font-size: Theme.font-tab;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-    touch := TouchArea { clicked => { root.picked(); } }
 }
 
 export component PropertiesWindow inherits Window {
@@ -60,6 +24,8 @@ export component PropertiesWindow inherits Window {
     background: Theme.bg-panel;
     in-out property <int> tab-index: 0;
     in property <[PropertyRow]> rows;
+    // The page's widest label (dialog.ts picks it, properties.ts `widestLabel`); "" = none.
+    in property <string> label-sample;
     // "", "copy-failed", or "save-failed" with the reason in status-detail.
     in property <string> status;
     in property <string> status-detail;
@@ -70,32 +36,23 @@ export component PropertiesWindow inherits Window {
     callback save-page();
     callback close-window();
     private property <[string]> tab-names: [@tr("tab" => "Playback"), @tr("tab" => "File"), @tr("tab" => "System")];
-    // The label column: 120px, or the page's widest label.
-    private property <length> label-width: max(120px, label-measure.preferred-width);
+    // The label column: 120px, or the page's widest label. Only that one label is laid out
+    // here; the list builds the rows in view.
+    // The sample is the widest by columns, not pixels: 8px spare keeps a label of about
+    // the same length from eliding in a proportional font.
+    private property <length> label-width: max(120px, label-measure.preferred-width + 8px);
     Rectangle {
         visible: false;
         width: 0;
         height: 0;
-        label-measure := VerticalLayout {
-            for row in root.rows: Text { text: row.heading ? "" : row.label; font-size: Theme.font-body; }
-        }
+        label-measure := Text { text: root.label-sample; font-size: Theme.font-body; }
     }
 
     VerticalLayout {
-        Rectangle {
-            height: 31px;
-            background: Theme.bg-bar;
-            HorizontalLayout {
-                for name[index] in root.tab-names: Tab {
-                    text: name;
-                    selected: index == root.tab-index;
-                    picked => {
-                        root.tab-index = index;
-                        root.tab-changed(index);
-                    }
-                }
-                Rectangle { horizontal-stretch: 1; }
-            }
+        Tabs {
+            model: root.tab-names;
+            current-index <=> root.tab-index;
+            selected(index) => { root.tab-changed(index); }
         }
         VerticalLayout {
             padding: 10px;
@@ -105,48 +62,47 @@ export component PropertiesWindow inherits Window {
                 background: Theme.bg-list;
                 border-width: 1px;
                 border-color: Theme.line;
-                scroll := ScrollView {
+                // Rows differ in height (a value wraps); 6px around the list, 2px between rows.
+                ListView {
                     x: 1px;
                     y: 1px;
                     width: parent.width - 2px;
                     height: parent.height - 2px;
-                    VerticalLayout {
-                        width: scroll.visible-width;
-                        padding: 6px;
+                    for row[index] in root.rows: VerticalLayout {
+                        padding-left: 6px;
                         padding-right: 8px;
-                        spacing: 2px;
-                        for row in root.rows: VerticalLayout {
-                            if row.heading: Text {
-                                height: 20px;
+                        padding-top: index == 0 ? 6px : 0px;
+                        padding-bottom: index == root.rows.length - 1 ? 6px : 2px;
+                        if row.heading: Text {
+                            height: 20px;
+                            text: row.label;
+                            color: Theme.text;
+                            font-size: Theme.font-body;
+                            font-weight: 700;
+                            vertical-alignment: bottom;
+                        }
+                        if !row.heading: HorizontalLayout {
+                            spacing: row.label == "" ? 0px : 8px;
+                            Text {
+                                width: row.label == "" ? 0px : root.label-width;
                                 text: row.label;
+                                color: Theme.text-dim;
+                                font-size: Theme.font-body;
+                                horizontal-alignment: right;
+                                overflow: elide;
+                            }
+                            TextInput {
+                                horizontal-stretch: 1;
+                                text: row.value;
+                                read-only: true;
+                                single-line: false;
+                                wrap: char-wrap;
                                 color: Theme.text;
                                 font-size: Theme.font-body;
-                                font-weight: 700;
-                                vertical-alignment: bottom;
-                            }
-                            if !row.heading: HorizontalLayout {
-                                spacing: row.label == "" ? 0px : 8px;
-                                Text {
-                                    width: row.label == "" ? 0px : root.label-width;
-                                    text: row.label;
-                                    color: Theme.text-dim;
-                                    font-size: Theme.font-body;
-                                    horizontal-alignment: right;
-                                    overflow: elide;
-                                }
-                                TextInput {
-                                    horizontal-stretch: 1;
-                                    text: row.value;
-                                    read-only: true;
-                                    single-line: false;
-                                    wrap: char-wrap;
-                                    color: Theme.text;
-                                    font-size: Theme.font-body;
-                                    // The std-widgets LineEdit's selection colours, legible in both palettes
-                                    // (Theme.selected-bg is close to the field in the dark one).
-                                    selection-background-color: Palette.selection-background;
-                                    selection-foreground-color: Palette.selection-foreground;
-                                }
+                                // The std-widgets LineEdit's selection colours, legible in both palettes
+                                // (Theme.selected-bg is close to the field in the dark one).
+                                selection-background-color: Palette.selection-background;
+                                selection-foreground-color: Palette.selection-foreground;
                             }
                         }
                     }

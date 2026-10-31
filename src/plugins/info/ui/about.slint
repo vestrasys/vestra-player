@@ -10,7 +10,7 @@
 //   buttons     status ≥ 50 + 4 + Copy Info 66 + 4 + Close 66 = 190 of 332
 // Texts are @tr (English source; locales/<lang>.po translate them); versions, ids and
 // the plugin's origin and state codes are data from main.ts.
-import { ScrollView } from "std-widgets.slint";
+import { ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 
@@ -219,22 +219,20 @@ export component AboutWindow inherits Window {
                     vertical-alignment: center;
                     overflow: elide;
                 }
-                list := ScrollView {
+                // A ListView: only the lines in view exist, however many plugins there are.
+                ListView {
                     x: 1px;
                     y: 1px;
                     width: parent.width - 2px;
                     height: parent.height - 2px;
-                    VerticalLayout {
-                        width: list.visible-width;
-                        for plugin in root.plugins: PluginLine {
-                            version-width: root.version-width;
-                            origin-width: root.origin-width;
-                            state-width: root.state-width;
-                            id: plugin.id;
-                            version: root.known(plugin.version);
-                            origin: root.origin-name(plugin.origin);
-                            state: root.state-name(plugin.state);
-                        }
+                    for plugin in root.plugins: PluginLine {
+                        version-width: root.version-width;
+                        origin-width: root.origin-width;
+                        state-width: root.state-width;
+                        id: plugin.id;
+                        version: root.known(plugin.version);
+                        origin: root.origin-name(plugin.origin);
+                        state: root.state-name(plugin.state);
                     }
                 }
             }

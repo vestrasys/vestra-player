@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { cut, filePage, hwdec, pageText, sampleFormat, saveName, systemPage, VALUE_MAX } from "../properties.ts";
+import { columns, cut, filePage, hwdec, pageText, sampleFormat, saveName, systemPage, VALUE_MAX, widestLabel } from "../properties.ts";
 import type { Probe, Row } from "../properties.ts";
 import { displayLine, systemVersion } from "../sysinfo.ts";
 
@@ -156,6 +156,53 @@ test("I05 Playback in English", async () => {
   await host.settle(1100);
   assert.equal(value(host, "Hardware decoding"), "Not used");
   await stop();
+});
+
+test("I05: the label column is sized by the page's widest label (label-sample), one per page", async () => {
+  const { host, stop } = await start("/videos/movie.mkv", undefined, undefined, "en");
+  await host.command("info.properties").run();
+  await host.settle();
+  const sample = () => host.window("properties").props["label-sample"];
+  assert.equal(sample(), "Display frame rate");
+  host.window("properties").emit("tab-changed", 2);
+  await host.settle();
+  assert.equal(sample(), "Vestra Player version");
+  await stop();
+  const zh = await start("/videos/movie.mkv");
+  await zh.host.command("info.properties").run();
+  await zh.host.settle();
+  // In the player's language: the widest label of 播放信息 in Simplified Chinese.
+  const shown = rows(zh.host).filter((r) => !r.heading && r.label !== "");
+  const most = Math.max(...shown.map((r) => columns(r.label)));
+  assert.equal(columns(zh.host.window("properties").props["label-sample"] as string), most);
+  await zh.stop();
+});
+
+test("I05 widestLabel: wide characters count two columns; headings and messages are left out; none = empty", async () => {
+  const { i18n, stop } = await start(null);
+  assert.equal(columns("Size"), 4);
+  assert.equal(columns("尺寸"), 4);
+  assert.equal(columns("ｓｉｚｅ"), 8);
+  assert.equal(columns("크기"), 4);
+  const row = (label: string, heading = false): Row => ({ label, value: "v", heading });
+  assert.equal(widestLabel(i18n, [row("A very long heading", true), row("Codec"), row("尺寸大小"), row("")]), "尺寸大小");
+  assert.equal(widestLabel(i18n, [row("Heading", true), row("")]), "");
+  assert.equal(widestLabel(i18n, []), "");
+  await stop();
+});
+
+test("I05: lists are Slint ListViews; no hidden layout of every row; tabs are the library's", async () => {
+  const slint = await readFile(new URL("../ui/properties.slint", import.meta.url), "utf8");
+  assert.match(slint, /import \{[^}]*\bListView\b[^}]*\} from "std-widgets\.slint"/);
+  assert.match(slint, /import \{[^}]*\bTabs\b[^}]*\} from "@vestra\/widgets\.slint"/);
+  assert.match(slint, /ListView \{[\s\S]*for row\[index\] in root\.rows:/);
+  assert.doesNotMatch(slint, /ScrollView/);
+  assert.doesNotMatch(slint, /component Tab\b/, "no local tab");
+  assert.equal([...slint.matchAll(/for row\b/g)].length, 1, "the rows are instantiated by the list only");
+  assert.match(slint, /label-measure := Text \{ text: root\.label-sample;/);
+  const about = await readFile(new URL("../ui/about.slint", import.meta.url), "utf8");
+  assert.match(about, /ListView \{[\s\S]*for plugin in root\.plugins: PluginLine/);
+  assert.doesNotMatch(about, /ScrollView/);
 });
 
 test("I05: without media 播放信息 and 文件信息 say 未打开媒体; 系统信息 still shows", async () => {
@@ -390,7 +437,7 @@ test("I05: 保存为… writes the page as <name> 信息.txt; cancelling writes 
     assert.deepEqual(await readdir(folder), ["movie 信息.txt"], "no temporary file left");
     host.dialogAnswers.push([join(folder, "missing", "x.txt")]);
     window.emit("save-page");
-    await until(() => window.props.status === "save-failed");
+    await until(() => window.props.status === "save-failed" && /ENOENT/.test(String(window.props["status-detail"])));
     assert.match(String(window.props["status-detail"]), /ENOENT/);
   } finally {
     await stop();
