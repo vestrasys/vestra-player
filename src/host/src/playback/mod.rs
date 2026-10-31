@@ -44,6 +44,7 @@ pub(crate) mod render_mode;
 pub(crate) mod render_state;
 pub(crate) mod render_target;
 pub(crate) mod renderer;
+pub(crate) mod upscaling;
 pub(crate) mod video_click;
 pub(crate) mod video_render;
 pub(crate) mod video_view;

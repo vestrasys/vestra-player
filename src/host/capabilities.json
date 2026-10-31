@@ -615,6 +615,23 @@
       "requires": [],
       "residency": "none",
       "risky": true
+    },
+    {
+      "label": "Upscale the video with the GPU's video upscaler",
+      "methods": [
+        {
+          "name": "video.upscaling.state",
+          "needs": "video.upscaling"
+        },
+        {
+          "name": "video.upscaling.set",
+          "needs": "video.upscaling"
+        }
+      ],
+      "name": "video.upscaling",
+      "requires": [],
+      "residency": "live",
+      "risky": false
     }
   ],
   "uncapable": [

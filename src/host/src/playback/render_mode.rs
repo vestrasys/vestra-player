@@ -166,7 +166,7 @@ impl fmt::Display for Reason {
 }
 
 /// `windows` → `Windows`, as people write it.
-fn system_name(os: &str) -> &str {
+pub(crate) fn system_name(os: &str) -> &str {
     match os {
         "windows" => "Windows",
         "macos" => "macOS",

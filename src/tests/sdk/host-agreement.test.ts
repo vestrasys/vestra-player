@@ -744,6 +744,8 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   "Secrets.delete": ["secrets.delete"],
   "Rendering.setPreference": ["rendering.setPreference"],
   "Rendering.restartPlayer": ["rendering.restart"],
+  "VideoUpscaling.state": ["video.upscaling.state"],
+  "VideoUpscaling.set": ["video.upscaling.set"],
 };
 
 /**
@@ -935,6 +937,54 @@ test("WireRenderingState has the fields rendering.state answers with (host/rende
       `serde_json::json!({"code":self.code(),"message":self.message()})`,
     ),
     "Reason::json",
+  );
+});
+
+test("WireUpscalingState has the fields video.upscaling answers with (playback/upscaling.rs Upscaling::state; SDK 1.5.37, player 0.5.16)", () => {
+  const wire = /export interface WireUpscalingState \{([\s\S]*?)\n\}/.exec(
+    sdkFile("wire.d.ts"),
+  )?.[1];
+  assert.ok(wire, "WireUpscalingState in the SDK's wire.d.ts");
+  const sdk = [...wire.matchAll(/^\s+(\w+)\??:/gm)].map((m) => m[1]!).sort();
+  const state = /fn state\(&self[\s\S]*?\n {4}\}/.exec(
+    host("src/playback/upscaling.rs"),
+  )?.[0];
+  assert.ok(state, "Upscaling::state in upscaling.rs");
+  const player = [...state.matchAll(/"(\w+)":/g)].map((m) => m[1]!).sort();
+  assert.deepEqual(sdk, player);
+  assert.ok(
+    host("src/playback/upscaling.rs").includes(
+      `json!({"code":self.code(),"message":self.message()})`,
+    ),
+    "upscaling Reason::json is { code, message }",
+  );
+});
+
+test("UpscalingReasonCode names the player's upscaling reason codes (playback/upscaling.rs, platform; SDK 1.5.37, player 0.5.16)", () => {
+  const sdk = /export type UpscalingReasonCode = ([^;]+);/.exec(
+    sdkFile("plugin/types.d.ts"),
+  )?.[1];
+  assert.ok(sdk, "UpscalingReasonCode in the SDK's types.d.ts");
+  const own = /pub fn code\(&self\) -> &'static str \{([\s\S]*?)\n {4}\}/.exec(
+    host("src/playback/upscaling.rs"),
+  )?.[1];
+  assert.ok(own, "Reason::code in upscaling.rs");
+  // The system's refusals: `code: "…"` and `refuse("…", …)` in the
+  // platform modules (and the worker's own failed check).
+  const refusals = [
+    "src/platform/mod.rs",
+    "src/platform/windows.rs",
+    "src/playback/upscaling.rs",
+  ].flatMap((file) =>
+    [...host(file).matchAll(/code: "([a-z-]+)"|refuse\(\s*"([a-z-]+)"/g)].map(
+      (m) => (m[1] ?? m[2])!,
+    ),
+  );
+  const values = (text: string) =>
+    [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+  assert.deepEqual(
+    [...new Set(values(sdk))].sort(),
+    [...new Set([...values(own), ...refusals])].sort(),
   );
 });
 

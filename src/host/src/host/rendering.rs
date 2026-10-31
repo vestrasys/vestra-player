@@ -238,7 +238,7 @@ impl Host {
             _ => Err(RpcError::new("unsupported", "unknown rendering method")),
         }
     }
-    fn rendering_state(&self) -> Value {
+    pub(crate) fn rendering_state(&self) -> Value {
         let (gpu, reason) = self.backend.render.now();
         self.rendering.state(gpu, &reason)
     }

@@ -45,6 +45,7 @@ mod ui_settings;
 mod ui_theme;
 mod ui_window;
 mod uncapable;
+mod video_upscaling;
 mod window_control;
 
 /// What a capability is, as the manifest, the store and the SDK name it.
@@ -173,6 +174,7 @@ pub static ALL: &[&dyn Capability] = &[
     &ui_theme::UiTheme,
     &secrets::Secrets,
     &rendering_manage::RenderingManage,
+    &video_upscaling::VideoUpscaling,
 ];
 
 /// Whether `name` is a manifest capability.

@@ -252,6 +252,7 @@ impl Backend {
                 let mut jobs = crate::playback::media_jobs::Jobs::default();
                 let mut push = StatePush::new();
                 let mut actions = CoreActions::default();
+                let mut upscaling = crate::playback::upscaling::Upscaling::default();
                 loop {
                     if stopping.try_recv().is_ok() {
                         break;
@@ -260,6 +261,7 @@ impl Backend {
                         let _ = events.send(Event::PluginMessage(owner, event, data));
                     }
                     jobs.poll();
+                    upscaling.poll(&mpv, &out_render, &events);
                     processing.note_source(sources.generation(), sources.phase());
                     subtitles.note_source(sources.generation(), sources.phase());
                     // Bound work per iteration so continuous controls cannot starve video.
@@ -274,6 +276,11 @@ impl Backend {
                                     json!({"code":error.code,"message":error.message}),
                                 ));
                             }
+                            continue;
+                        }
+                        // Video upscaling (`upscaling.rs`): its requests; a
+                        // stopped plugin's filter goes, then on below.
+                        if upscaling.command(&mpv, &out_render, &command, &events) {
                             continue;
                         }
                         if command.method == "owner.disabled" {

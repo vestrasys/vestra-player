@@ -4,16 +4,17 @@ version = "0.0.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
-description = "Win32 calls the host's Windows platform module needs (pointer, modifier keys, double-click time, menu show delay, sleep prevention, dark title bars, vertical blank waits, files on network file systems, the DXGI adapters and their driver versions)"
+description = "Win32 calls the host's Windows platform module needs (pointer, modifier keys, double-click time, menu show delay, sleep prevention, dark title bars, vertical blank waits, files on network file systems, the DXGI adapters and their driver versions, whether a GPU's driver offers RTX Video Super Resolution)"
 
 # One of the crates under src/host/unsafe/: the only place first-party Rust may
 # use `unsafe`. Every block carries a SAFETY comment; the public API is safe.
 # Empty on other systems.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Wdk_Graphics_Direct3D", "Wdk_Storage_FileSystem", "Wdk_System_SystemServices", "Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_System_IO", "Win32_System_Power", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
-# DXGI is COM: the `windows` crate's interfaces (the version Slint already
-# brings in through accesskit_windows).
-windows = { version = "=0.62.2", features = ["Win32_Graphics_Dxgi"] }
+# DXGI and Direct3D 11 are COM: the `windows` crate's interfaces (the version
+# Slint already brings in through accesskit_windows). Direct3D 11's video
+# device: the video upscaler check (`video_super_resolution`).
+windows = { version = "=0.62.2", features = ["Win32_Foundation", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common"] }
 
 # Not `workspace = true` (that would forbid unsafe); src/scripts/check-unsafe-policy.mjs
 # requires these entries.

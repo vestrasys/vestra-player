@@ -924,6 +924,134 @@ pub fn window_device_lost() -> bool {
     vestra_gpu_render::device_lost()
 }
 
+// --------------------------------------------------------- video upscaling
+
+/// NVIDIA's PCI vendor id.
+const NVIDIA: u32 = 0x10DE;
+
+/// The NVIDIA driver RTX Video Super Resolution needs: 530 or newer, which
+/// DXGI reports as `x.x.15.3000` and above (VLC's check; AI upscaling round
+/// record §2).
+fn nvidia_driver_new_enough(version: [u16; 4]) -> bool {
+    (version[2], version[3]) >= (15, 3000)
+}
+
+/// An NVIDIA driver version as NVIDIA writes it: `31.0.15.3118` → `531.18`.
+fn nvidia_driver_name(version: [u16; 4]) -> String {
+    let release = u32::from(version[2] % 10) * 10000 + u32::from(version[3]);
+    format!("{}.{:02}", release / 100, release % 100)
+}
+
+/// Where RTX Video Super Resolution works (AI upscaling round record §2):
+/// every NVIDIA adapter (vendor `0x10DE`) with a driver of 530 or newer
+/// whose driver answers the PPE stream extension query on a test video
+/// processor (`vestra_win32::video_super_resolution`). Blocking, and it
+/// wakes a sleeping discrete GPU: ask when the answer is needed and keep
+/// it. Not detectable: the NVIDIA app's Super Resolution switch, its quality
+/// level and its battery policy.
+pub fn upscaler_probe() -> super::UpscalerProbe {
+    let adapters = vestra_win32::dxgi_adapters().unwrap_or_else(|error| {
+        diag!("upscaling: the graphics adapters are unknown ({error})");
+        Vec::new()
+    });
+    let mut found = Vec::new();
+    let mut refusal = None::<super::UpscalerRefusal>;
+    let mut refuse = |code: &'static str, message: String| {
+        diag!("upscaling: {message}");
+        // The furthest check that failed explains it best.
+        let rank = |code: &str| {
+            ["no-gpu", "driver", "gpu-unsupported"]
+                .iter()
+                .position(|c| *c == code)
+        };
+        if refusal.as_ref().is_none_or(|r| rank(code) > rank(r.code)) {
+            refusal = Some(super::UpscalerRefusal { code, message });
+        }
+    };
+    for adapter in adapters
+        .iter()
+        .filter(|adapter| adapter.vendor_id == NVIDIA && !adapter.software)
+    {
+        if let Some(version) = adapter.driver_version
+            && !nvidia_driver_new_enough(version)
+        {
+            refuse(
+                "driver",
+                format!(
+                    "the NVIDIA driver {} on {} is too old for RTX Video Super Resolution, which needs 530 or newer; update the driver",
+                    nvidia_driver_name(version),
+                    adapter.name
+                ),
+            );
+            continue;
+        }
+        let started = std::time::Instant::now();
+        let answer = vestra_win32::video_super_resolution(adapter.luid);
+        let took = started.elapsed();
+        match answer {
+            Ok(answer) if answer.supported() => {
+                diag!(
+                    "upscaling: RTX Video Super Resolution is offered on {} (LUID {:016x}; checked in {took:?})",
+                    adapter.name,
+                    adapter.luid
+                );
+                found.push(super::UpscalerGpu {
+                    id: adapter.luid,
+                    name: adapter.name.clone(),
+                });
+            }
+            Ok(answer) => refuse(
+                "gpu-unsupported",
+                format!(
+                    "the NVIDIA driver does not offer RTX Video Super Resolution on {}, which needs an RTX GPU (query result 0x{:08X}, value {})",
+                    adapter.name, answer.result as u32, answer.value
+                ),
+            ),
+            Err(error) => refuse(
+                "gpu-unsupported",
+                format!(
+                    "RTX Video Super Resolution cannot be checked on {} ({error})",
+                    adapter.name
+                ),
+            ),
+        }
+    }
+    if !found.is_empty() {
+        return Ok(found);
+    }
+    Err(refusal.unwrap_or_else(|| super::UpscalerRefusal {
+        code: "no-gpu",
+        message: "no NVIDIA GPU: the player upscales video with NVIDIA RTX Video Super Resolution, which needs an NVIDIA RTX GPU".into(),
+    }))
+}
+
+/// The adapter GPU rendering runs on (its LUID, as `upscaler_probe`
+/// reports GPUs, and its name); `None` while the windows do not draw with
+/// Direct3D 12.
+pub fn gpu_render_adapter() -> Option<(u64, String)> {
+    vestra_gpu_render::window_adapter()
+}
+
+/// mpv's filter for RTX Video Super Resolution at `factor` (more than 1):
+/// `d3d11vpp` scales by it with NVIDIA's scaling mode (mpv 0.39 and later).
+/// `VESTRA_UPSCALER_MODE=standard` (a test switch, AI upscaling round record
+/// §8 V3 case U5) asks for the driver's standard scaler instead, to compare
+/// pixels in the same chain.
+pub fn upscaler_filter(factor: f64) -> Option<String> {
+    let standard =
+        std::env::var("VESTRA_UPSCALER_MODE").is_ok_and(|mode| mode.trim() == "standard");
+    Some(d3d11vpp_filter(factor, standard))
+}
+
+fn d3d11vpp_filter(factor: f64, standard: bool) -> String {
+    let mode = if standard { "standard" } else { "nvidia" };
+    format!("d3d11vpp=scale={factor:.2}:scaling-mode={mode}")
+}
+
+/// The hardware decoding `d3d11vpp` needs: Direct3D 11 frames on mpv's own
+/// device (not copied back).
+pub const UPSCALER_HWDEC: &str = "d3d11va";
+
 /// Windows 11 still says "Windows 10" in `ProductName`; the build decides.
 pub fn windows_name(build: Option<u32>) -> String {
     match build {
@@ -992,6 +1120,30 @@ mod tests {
         cfg!(target_feature = "crt-static"),
         "build with +crt-static (src/host/.cargo/config.toml; RUSTFLAGS replaces it)"
     );
+
+    #[test]
+    fn rtx_video_super_resolution_needs_driver_530() {
+        assert!(nvidia_driver_new_enough([31, 0, 15, 3000]), "530.00");
+        assert!(nvidia_driver_new_enough([32, 0, 15, 6094]), "560.94");
+        assert!(nvidia_driver_new_enough([32, 0, 16, 100]), "a later branch");
+        assert!(!nvidia_driver_new_enough([31, 0, 15, 2647]), "526.47");
+        assert!(!nvidia_driver_new_enough([30, 0, 14, 7212]), "472.12");
+        assert_eq!(nvidia_driver_name([31, 0, 15, 3118]), "531.18");
+        assert_eq!(nvidia_driver_name([32, 0, 15, 6094]), "560.94");
+        assert_eq!(nvidia_driver_name([30, 0, 14, 7212]), "472.12");
+    }
+
+    #[test]
+    fn the_upscaler_filter_scales_with_nvidia_mode() {
+        assert_eq!(
+            d3d11vpp_filter(1.5, false),
+            "d3d11vpp=scale=1.50:scaling-mode=nvidia"
+        );
+        assert_eq!(
+            d3d11vpp_filter(2., true),
+            "d3d11vpp=scale=2.00:scaling-mode=standard"
+        );
+    }
 
     #[test]
     fn the_build_number_names_the_release() {
