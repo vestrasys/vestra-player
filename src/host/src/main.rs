@@ -113,6 +113,9 @@ static HANDOFFS: AtomicBool = AtomicBool::new(true);
 fn stop_handoffs() {
     HANDOFFS.store(false, Ordering::Release);
 }
+/// Main-window draws after which CPU mode's Direct3D 12 windows count as
+/// started (the crash guard settles; GPU mode keeps its 5 s).
+const FIRST_DRAWS: u64 = 3;
 /// CPU mode's windows other than wgpu ones (`render_mode::WindowKind`; wgpu
 /// windows are selected in `main` and fall back to
 /// `Decision::fallback_windows`): femtovg on OpenGL (Windows, named
@@ -617,6 +620,11 @@ fn main() -> Result<()> {
                 })
             });
         }));
+        // CPU mode's Direct3D 12 windows (record §11): the crash guard counts
+        // a crash only while they are made and draw their first frames, not
+        // one unrelated to the GPU later in the first 5 s of a start.
+        let mut first_draws = (!render.is_gpu() && render.windows == render_mode::WindowKind::Wgpu)
+            .then(|| guard.clone());
         let tick_host = host.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
@@ -629,6 +637,12 @@ fn main() -> Result<()> {
                 let mut host = tick_host.borrow_mut();
                 for event in receiver.try_iter().take(128) {
                     host.handle(event);
+                }
+                if first_draws.is_some()
+                    && host.backend.render.presentation.counts().0 >= FIRST_DRAWS
+                    && let Some(guard) = first_draws.take()
+                {
+                    guard.settle();
                 }
                 host.placements.tick();
                 host.mount_callbacks();

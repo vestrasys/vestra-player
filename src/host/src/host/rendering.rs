@@ -199,7 +199,14 @@ impl Rendering {
             WindowKind::Default => None,
         };
         if let Some(windows) = windows.filter(|_| !gpu_now && !self.facts.headless) {
-            json["message"] = format!("{}; {windows}", reason.message()).into();
+            // Why not Direct3D 12 ones, where the crash guard or a rule
+            // decided it.
+            let why = (self.windows != WindowKind::Wgpu)
+                .then(|| self.facts.direct3d12_windows_off())
+                .flatten()
+                .map(|why| format!(" ({why})"))
+                .unwrap_or_default();
+            json["message"] = format!("{}; {windows}{why}", reason.message()).into();
         }
         json
     }
@@ -482,6 +489,16 @@ mod tests {
         assert_eq!(
             windows.reason_json(false, &Reason::Preference),
             Reason::Preference.json()
+        );
+        // The crash guard kept them off Direct3D 12: About says so.
+        windows.facts.wgpu_windows = true;
+        windows.facts.crashed = Some("GPU rendering stopped an earlier start".into());
+        windows.windows = WindowKind::OpenGl;
+        let reason = windows.reason_json(false, &Reason::OffByDefault);
+        let message = reason["message"].as_str().unwrap();
+        assert!(
+            message.contains("the windows draw with OpenGL (the crash guard keeps"),
+            "{message}"
         );
     }
 

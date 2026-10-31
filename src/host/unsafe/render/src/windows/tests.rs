@@ -193,7 +193,7 @@ fn warp_a_failed_renderer_releases_its_fences_and_windows_stop_claiming() {
     drop(renderer);
 }
 
-/// The watchdog (record 搂11 item 4): mpv's device waits on the GPU for a
+/// The watchdog (record §11 item 4): mpv's device waits on the GPU for a
 /// `done` value no window signals, so `ready` stops moving; after the limit
 /// the renderer stops as after a lost device, with both fences released.
 /// Without a stall (playing, then paused) it never fires.
@@ -297,7 +297,7 @@ fn the_adapter_choice_reads_the_environment_value() {
 
 // ------------------------------------------------- real-machine measurements
 
-/// The spike's measurement (round record 2026-10-wgpu-d3d-spike 搂3) on the
+/// The spike's measurement (round record 2026-10-wgpu-d3d-spike §3) on the
 /// GPU this process gets by default, with a real 4K60 clip: mpv publishes at
 /// the clip's rate through the shared ring, a simulated window takes the
 /// newest frame 60 times a second, and the last frame reads the same

@@ -317,6 +317,23 @@ impl Facts {
     pub fn render_adapter(&self) -> Option<&GpuAdapter> {
         self.adapters.get(self.render_adapter)
     }
+    /// Why the windows do not draw with Direct3D 12 where they could
+    /// (Windows): a Direct3D 12 window rule, or the crash guard. For the
+    /// `render:` notes and the software rendering reason (About).
+    pub fn direct3d12_windows_off(&self) -> Option<String> {
+        if !self.wgpu_windows {
+            return None;
+        }
+        if let Some(hit) = self.window_rule(WindowApi::Direct3d12) {
+            return Some(format!(
+                "Direct3D 12 windows are off: denylist rule {}",
+                hit.rule.id
+            ));
+        }
+        self.crashed
+            .as_ref()
+            .map(|detail| format!("the crash guard keeps the windows off Direct3D 12 ({detail})"))
+    }
     /// The API of GPU mode's windows.
     fn gpu_window_api(&self) -> WindowApi {
         if self.wgpu_windows {
@@ -580,7 +597,24 @@ fn windows(facts: &Facts, decision: &mut Decision) {
         if decision.mode == Mode::Cpu {
             decision.windows = kind;
         }
-        (decision.cpu_windows, decision.fallback_windows) = (kind, kind);
+        // The fallback is never wgpu windows (the ones that failed).
+        let kind_fallback = if kind == WindowKind::Wgpu {
+            fallback
+        } else {
+            kind
+        };
+        (decision.cpu_windows, decision.fallback_windows) = (kind, kind_fallback);
+    }
+    // Why CPU mode left Direct3D 12 windows, where the crash guard did it
+    // (a denylist rule has its own note below).
+    if decision.mode == Mode::Cpu
+        && decision.windows != WindowKind::Wgpu
+        && facts.window_env.is_none()
+        && !facts.slint_backend
+        && facts.window_rule(WindowApi::Direct3d12).is_none()
+        && let Some(why) = facts.direct3d12_windows_off()
+    {
+        decision.notes.push(format!("render: {why}"));
     }
 }
 
@@ -921,10 +955,15 @@ mod tests {
             (WindowKind::Wgpu, Reason::OffByDefault)
         );
         // After a crash or the second device loss CPU mode keeps away from
-        // Direct3D 12 too.
-        assert_eq!(
-            decide(&crashed, Preference::Auto).windows,
-            WindowKind::OpenGl
+        // Direct3D 12 too, and a note says why.
+        let off = decide(&crashed, Preference::Auto);
+        assert_eq!(off.windows, WindowKind::OpenGl);
+        assert!(
+            off.notes
+                .iter()
+                .any(|note| note.contains("crash guard keeps the windows off Direct3D 12")),
+            "{:?}",
+            off.notes
         );
         assert!(auto.notes.is_empty(), "{:?}", auto.notes);
         assert_eq!(stalls.gpu_available().unwrap_err().code(), "denylist");
@@ -1162,6 +1201,14 @@ mod tests {
         assert_eq!(
             window_env_choice(os("software")).0,
             Some(WindowKind::Software)
+        );
+        // Even forced wgpu windows never fall back to wgpu ones.
+        let mut forced = windows_gpu();
+        forced.window_env = Some(WindowKind::Wgpu);
+        let wgpu = decide(&forced, Preference::Auto);
+        assert_eq!(
+            (wgpu.windows, wgpu.fallback_windows),
+            (WindowKind::Wgpu, WindowKind::OpenGl)
         );
         let (choice, warning) = window_env_choice(os("vulkan"));
         assert_eq!(choice, None);

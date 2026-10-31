@@ -642,11 +642,9 @@ impl Completion {
     fn start(shared: Arc<Shared>) -> Self {
         let (frames, received) = mpsc::channel::<(u64, Instant)>();
         let thread = thread::Builder::new().name("vestra-gpu-complete".into()).spawn(move || {
-            let (Ok(waiter), Some(fences)) = (Waiter::new(), shared.fences.get()) else {
-                return;
-            };
+            let Ok(waiter) = Waiter::new() else { return };
             for (value, signalled) in received {
-                if waiter.wait(&fences.ready, value, 2000) {
+                if wait_ready(&shared, &waiter, value, FRAME_WAIT) {
                     let ms = signalled.elapsed().as_secs_f64() * 1e3;
                     let mut stats = lock(&shared.stats);
                     stats.completes += 1;
@@ -687,6 +685,32 @@ fn cpu_wait_on() -> bool {
 /// latency bounds a swapchain), so a GPU slower than the video does not
 /// queue frames without end.
 const IN_FLIGHT: u64 = 2;
+
+/// Wait on the CPU up to `timeout` for `ready` to reach `value`, in steps,
+/// giving up once the renderer stops: a renderer dropped while the fences
+/// do not move (a stall, `VESTRA_GPU_WATCHDOG=0`) must not wait 2 s per
+/// wait. `false` when it was not reached.
+fn wait_ready(shared: &Shared, waiter: &Waiter, value: u64, timeout: Duration) -> bool {
+    let Some(fences) = shared.fences.get() else { return false };
+    let deadline = Instant::now() + timeout;
+    loop {
+        let stopped = shared.stop.load(Ordering::Acquire);
+        let left = if stopped {
+            Duration::ZERO
+        } else {
+            deadline.saturating_duration_since(Instant::now()).min(WATCH_POLL)
+        };
+        if waiter.wait(&fences.ready, value, left.as_millis().max(1) as u32) {
+            return true;
+        }
+        if stopped || Instant::now() >= deadline {
+            return false;
+        }
+    }
+}
+
+/// How long the render thread waits for one frame on the CPU.
+const FRAME_WAIT: Duration = Duration::from_secs(2);
 
 /// `VESTRA_TEST_GPU_STALL=<seconds>` (a hardware test switch for the
 /// watchdog): that long after the first frame, mpv's device waits on the GPU
@@ -877,7 +901,7 @@ fn produce(
                     // rare; Direct3D 11 would defer the release anyway).
                     Ok(made) => {
                         if !cpu_wait {
-                            let _ = waiter.wait(&fences.ready, ready_value, 2000);
+                            let _ = wait_ready(&shared, &waiter, ready_value, FRAME_WAIT);
                         }
                         slots = made;
                         ring_failures = 0;
@@ -956,7 +980,7 @@ fn produce(
             let bound = ready_value + 1 - IN_FLIGHT;
             if fences.ready.completed() < bound {
                 throttled = true;
-                if !waiter.wait(&fences.ready, bound, 2000) && d3d11.removed().is_some() {
+                if !wait_ready(&shared, &waiter, bound, FRAME_WAIT) && d3d11.removed().is_some() {
                     fail("a frame did not finish on the GPU".into());
                     break;
                 }
@@ -974,6 +998,12 @@ fn produce(
             continue;
         }
         let rendered = began.elapsed();
+        // The watchdog stopped GPU rendering meanwhile: its release set the
+        // fences to `u64::MAX`, and no signal may follow (a lower value),
+        // nor may a frame be published.
+        if lock(&shared.failed).is_some() {
+            break;
+        }
         // Published only with its `ready` signal enqueued: a window's queue
         // waits for that value.
         if let Err(error) = d3d11.try_signal(&fences.ready, ready_value + 1) {
@@ -997,7 +1027,7 @@ fn produce(
             }
             None => {
                 let completing = Instant::now();
-                if !waiter.wait(&fences.ready, ready_value, 2000) {
+                if !wait_ready(&shared, &waiter, ready_value, FRAME_WAIT) {
                     if d3d11.removed().is_some() {
                         fail("a frame did not finish on the GPU".into());
                         break;
@@ -1029,7 +1059,7 @@ fn produce(
             render.report_swap();
         }
         drawn = Some(Instant::now());
-        if publish.load(Ordering::Acquire) {
+        if publish.load(Ordering::Acquire) && lock(&shared.failed).is_none() {
             let texture = slots[index].texture.clone();
             let payload = Payload { texture, ready: ready_value, size: slots_size.unwrap_or(size) };
             lock(&shared.exchange).ring.publish(index, payload);
@@ -1037,11 +1067,14 @@ fn produce(
             lock(&shared.notify).iter().for_each(|notify| notify());
         }
     }
-    // mpv's last frame finishes before its textures go (without the CPU
-    // wait it may still be on the GPU; after a failure the fence is
-    // released, so this returns at once).
-    if !cpu_wait {
-        let _ = waiter.wait(&fences.ready, ready_value, 2000);
+    // mpv's last frame finishes before its textures go (after a failure
+    // the fence is released, so this returns at once); a renderer stopped
+    // while its fences do not move (a stall with the watchdog off) gives up
+    // after a short wait instead: both are released, as on a failure, so
+    // nothing waits on them any more.
+    if !waiter.wait(&fences.ready, ready_value, 250) {
+        fences.ready.release_all();
+        fences.done.release_all();
     }
     drop(completion);
     // mpv's render context goes before the textures, the device and
