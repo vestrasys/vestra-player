@@ -394,6 +394,30 @@ test("B21 window: rows by time, select and edit a bookmark, menu follows", async
   assert.deepEqual(rows(), []);
 });
 
+test("B21 window: chapters read after the ready state show after settle, without a later state event", async () => {
+  const host = new TestHost();
+  host.chapters = [
+    { title: "Opening", start: 0 },
+    { title: "Main", start: 40 },
+  ];
+  await start(host);
+  await press(host, "H");
+  const window = host.window("marks");
+  host.openElsewhere(file());
+  await host.settle();
+  // Ready: the plugin asks for the chapters; they resolve after the state handler returned.
+  host.setSource({ duration: 600, position: 20 });
+  await host.settle(); // no wait for timers (the SDK's ~1 s safety pass)
+  assert.equal(window.props.media, true);
+  assert.deepEqual(
+    (window.props.rows as WindowRow[]).map((r) => [r.chapter, r.time, rowName(r)]),
+    [
+      [true, "0:00.0", "Opening"],
+      [true, "0:40.0", "Main"],
+    ],
+  );
+});
+
 test("B21 window: add selects the new bookmark, remove keeps the place, clear asks first", async () => {
   const host = new TestHost();
   await start(host);
