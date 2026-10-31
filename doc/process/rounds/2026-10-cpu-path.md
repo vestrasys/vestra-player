@@ -60,3 +60,17 @@ Measured (maintainer, Windows, headless `--headless --silent`, no file, `VESTRA_
 - F3: playing (software rendering, 1080p60 and 4K60) and idle (no file, paused): Performance Monitor `\Processor(_Total)\Interrupts/sec`, `\System\Context Switches/sec` and the per-thread `\Thread(vestra-host/*)\Context Switches/sec` (or the `Win32_PerfRawData_PerfProc_Thread` query above) before (0.5.14) and after; expected: two threads at about 500–1000 a second disappear, idle total about 2300 → about 350. Functional: open, seek (keyboard and seek bar), frame step and keyframe step, pause/resume, resize while paused (the picture follows the new size), plugin install/uninstall, quit (no hang), a generated stream (VestraNES) still at full rate, GPU mode fallback (`VESTRA_RENDER=gpu` then a window that cannot show GPU frames) switching `hwdec`.
 - F5: two displays with different refresh rates (or the external 4K and the internal panel): move the window across while playing; the frame log's `refresh` and the pacing line's blank-to-draw times settle within one or two lines (before: up to a second on the old display's phase, visible as `held`/`close` changes).
 - The user's symptoms (tearing, 30–40 fps at 4K, game stutter) are not expected to change from these three fixes; F2/F4 and GPU mode address them.
+
+## Hardware checks (coordinator, 2026-10-31, release builds 0.5.14 installed vs 0.5.15 staged from a4c8f2a)
+
+Internal 2560x1600 60 Hz panel, 780M, AMD 26.10.1 (software windows by the denylist), HEVC 2160p60 10-bit, separate application data directory; two alternating rounds per build on a quiet machine (the first set overlapped a review build and was discarded).
+
+| Build | Shown/s | Presented/s | Player context switches/s | System interrupts/s | Player CPU |
+| --- | --- | --- | --- | --- | --- |
+| 0.5.14 | 59–60 | 0 (not counted) | 3,286 / 3,317 | 12,589 / 13,436 | 14.2 / 14.7 % |
+| 0.5.15 | 57–60 | 58–60 | 2,824 / 2,547 | 13,263 / 12,104 | 15.6 / 15.2 % |
+
+- F1: presented is now counted on software windows and matches shown.
+- F3: about 15–23 % fewer context switches while playing; frame rate unchanged; system interrupts within noise.
+- Scripted regression on 0.5.15: keyboard seek, pause, maximise while paused (picture follows the new size), Alt+F4 exits in 0.5 s.
+- Not checked on hardware: VestraNES frame rate (a `.nes` file opened with Open Media in a `--plugin` dev instance showed a warning in the playlist on both builds; the generated-stream polling is the unchanged 0.5.14 `thread::sleep(2 ms)`), frame stepping, F5 (no second monitor).
