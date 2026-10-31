@@ -469,6 +469,123 @@ export component W inherits Window {
     assert_eq!(number(&w, "value"), 0.);
 }
 
+/// Plugin-decided (`self-toggle: false`): the box does not flip, `toggled`
+/// asks for the other state, and the one-way binding stays (the hotkeys
+/// plugin confirms "Ignore default shortcuts" before it turns on).
+#[test]
+fn check_without_self_toggle_asks_and_keeps_its_binding() {
+    let w = build(
+        r#"
+import { Check } from "@vestra/widgets.slint";
+export component W inherits Window {
+    in-out property <bool> on;
+    in-out property <string> log;
+    out property <bool> shown: c.checked;
+    public function focus-check() { c.focus(); }
+    c := Check { x: 10px; y: 10px; width: 200px; height: 18px; text: "Ignore"; self-toggle: false;
+        checked: root.on; toggled(want) => { root.log += want ? "want-on;" : "want-off;"; }
+        clicked => { root.log += "clicked;"; } }
+}"#,
+        300.,
+        100.,
+    );
+    click(&w, 15., 19.);
+    assert!(!boolean(&w, "shown"), "the box waits for the plugin");
+    w.set_property("on", true.into()).unwrap();
+    settle();
+    assert!(boolean(&w, "shown"), "the binding is still there");
+    call(&w, "focus-check");
+    key(&w, SPACE);
+    assert!(boolean(&w, "shown"));
+    assert_eq!(string(&w, "log"), "want-on;clicked;want-off;clicked;");
+}
+
+/// Tabs passes `emphasis` per tab: the store's "Updates (2)" label is drawn
+/// in the accent colour, the others are not.
+#[test]
+fn tabs_emphasise_single_tabs() {
+    let w = build(
+        r#"
+import { Theme } from "@vestra/theme.slint";
+import { Tabs } from "@vestra/widgets.slint";
+export component W inherits Window {
+    out property <color> accent: Theme.accent;
+    Tabs { x: 0px; y: 0px; width: 300px; model: ["All", "Installed", "Updates (2)"]; emphasis: [false, false, true]; }
+}"#,
+        300.,
+        31.,
+    );
+    let Value::Brush(accent) = get(&w, "accent") else {
+        panic!("accent")
+    };
+    let accent = accent.color();
+    let picture = render(&w, 1., 300., 31.);
+    let accent_pixels = |from: u32, to: u32| {
+        picture
+            .enumerate_pixels()
+            .filter(|(x, _, p)| {
+                (from..to).contains(x)
+                    && [p[0], p[1], p[2]]
+                        .iter()
+                        .zip([accent.red(), accent.green(), accent.blue()])
+                        .all(|(a, b)| a.abs_diff(b) < 40)
+            })
+            .count()
+    };
+    // Tabs are 74px or wider; "Updates (2)" is the third.
+    assert_eq!(accent_pixels(74, 148), 0, "Installed");
+    assert!(accent_pixels(148, 300) > 5, "Updates (2)");
+}
+
+/// `focusable: false` keeps a slider out of the Tab chain (the bottom bar),
+/// `focus()` still reaches it.
+#[test]
+fn slider_out_of_the_tab_chain() {
+    let w = build(
+        r#"
+import { Check, Slider } from "@vestra/widgets.slint";
+export component W inherits Window {
+    out property <bool> slider-focused: s.has-focus;
+    out property <bool> check-focused: c.has-focus;
+    public function focus-slider() { s.focus(); }
+    s := Slider { x: 10px; y: 10px; width: 100px; height: 10px; focusable: false; }
+    c := Check { x: 10px; y: 40px; width: 100px; height: 18px; text: "After"; }
+}"#,
+        200.,
+        100.,
+    );
+    key(&w, Key::Tab);
+    assert!(!boolean(&w, "slider-focused"));
+    assert!(boolean(&w, "check-focused"));
+    call(&w, "focus-slider");
+    assert!(boolean(&w, "slider-focused"));
+}
+
+/// In a window shorter than the list, `window-height` cuts the list to the
+/// window and the last row can still be reached and picked.
+#[test]
+fn choice_list_fits_a_short_window() {
+    let w = build(
+        r#"
+import { Choice } from "@vestra/widgets.slint";
+export component W inherits Window {
+    in-out property <int> index;
+    public function focus-choice() { c.focus(); }
+    c := Choice { x: 10px; y: 10px; width: 140px; window-height: root.height; current-index <=> root.index;
+        model: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]; }
+}"#,
+        300.,
+        100.,
+    );
+    call(&w, "focus-choice");
+    key(&w, Key::Return);
+    key(&w, Key::End);
+    // The list is 100px high, moved up to y 0; scrolled to the end, row 9
+    // ends at the list's bottom border.
+    click(&w, 50., 90.);
+    assert_eq!(number(&w, "index"), 9.);
+}
+
 /// Draws the controls in their states, both palettes, to
 /// `VESTRA_WIDGET_SHOTS` (PNG, one pixel per logical pixel, scale 2 copies
 /// beside them): `controls-<palette>.png`, `choice-open-<palette>.png`.
@@ -515,6 +632,11 @@ fn render_widget_gallery() {
 }
 
 fn shoot(w: &ComponentInstance, scale: f32, width: f32, height: f32, png: &std::path::Path) {
+    render(w, scale, width, height).save(png).unwrap();
+}
+
+/// The window drawn at `width` × `height` logical pixels and `scale`.
+fn render(w: &ComponentInstance, scale: f32, width: f32, height: f32) -> image::RgbaImage {
     let window = headless();
     w.window().dispatch_event(WindowEvent::ScaleFactorChanged {
         scale_factor: scale,
@@ -545,10 +667,7 @@ fn shoot(w: &ComponentInstance, scale: f32, width: f32, height: f32, png: &std::
             p.alpha,
         ]);
     }
-    image::RgbaImage::from_raw(pw, ph, pixels)
-        .unwrap()
-        .save(png)
-        .unwrap();
+    image::RgbaImage::from_raw(pw, ph, pixels).unwrap()
 }
 
 const GALLERY: &str = r#"
