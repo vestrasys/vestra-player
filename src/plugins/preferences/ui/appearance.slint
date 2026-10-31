@@ -97,6 +97,7 @@ export component AppearancePage inherits Rectangle {
             border-radius: Theme.radius-control;
             background: touch.has-hover ? Theme.hover-bg : transparent;
             accessible-role: radio-button;
+            accessible-checkable: true;
             accessible-checked: AppearanceBridge.theme == row.id;
             accessible-label: root.title-of(row.id);
             accessible-action-default => { AppearanceBridge.pick(row.id); }

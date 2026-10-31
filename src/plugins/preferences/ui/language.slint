@@ -22,6 +22,7 @@ component Choice inherits Rectangle {
     border-radius: Theme.radius-control;
     background: touch.has-hover ? Theme.hover-bg : transparent;
     accessible-role: radio-button;
+    accessible-checkable: true;
     accessible-checked: root.checked;
     accessible-label: root.text;
     accessible-action-default => { root.clicked(); }

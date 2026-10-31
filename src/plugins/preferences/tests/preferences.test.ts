@@ -313,7 +313,7 @@ test("the pages' radios are the library's RadioMark, with radio-button rows for 
     assert.doesNotMatch(slint, /component Radio\b/, file);
     assert.match(slint, /RadioMark \{[^}]*hover: touch\.has-hover;/, file);
     assert.match(slint, /accessible-role: radio-button;/, file);
-    assert.match(slint, /accessible-checked: /, file);
+    assert.match(slint, /accessible-checkable: true;\s*accessible-checked: /, file);
   }
 });
 
