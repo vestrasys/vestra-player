@@ -1,6 +1,7 @@
 /** Scopes own handles. Disposal runs newest first and never throws. */
 import { failure, toError } from "./runtime.js";
 import { commands } from "./commands.js";
+import { WHEN } from "./when.js";
 import { dialogs, panels, ui, windows } from "./ui.js";
 import { timeline } from "./timeline.js";
 import { drops } from "./drops.js";
@@ -42,6 +43,7 @@ export class ScopeImpl {
         return this.#disposed || (this.#parent?.disposed ?? false);
     }
     commands = commands(this);
+    when = WHEN;
     windows = windows(this);
     panels = panels(this);
     dialogs = dialogs(this);

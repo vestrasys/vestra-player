@@ -446,3 +446,206 @@ fn built_in_first_runs_go_before_other_plugins() {
     assert!(!log.contains("timed out"), "{log}");
     assert_eq!(recordings(root.path()).len(), 10);
 }
+
+const WHEN: &str = "vestra.fixture-when";
+const OPENER: &str = "vestra.fixture-opener";
+
+/// §6.9 (B2): a command whose `enabled` is a `plugin.when` condition is
+/// evaluated by the host, so its plugin holds nothing and is parked, and
+/// its state follows playback while it is parked: disabled (with its
+/// reason, no wake) before a file is open, enabled once it is ready, when
+/// its use wakes it. The condition is recorded and replayed with the
+/// command. A resident fixture opens a generated audio file (ffmpeg on
+/// `PATH` or `VESTRA_FFMPEG`, as for ci:local).
+#[test]
+#[ignore = "needs Node 26, libmpv and ffmpeg: run with --include-ignored (ci:local)"]
+fn a_when_command_is_parked_and_its_state_follows_playback() {
+    let media = tempfile::tempdir().unwrap();
+    let audio = media.path().join("tone.wav");
+    let ffmpeg = std::env::var("VESTRA_FFMPEG").unwrap_or_else(|_| "ffmpeg".into());
+    let made = Command::new(ffmpeg)
+        .args(["-v", "error", "-f", "lavfi", "-i", "sine=duration=20", "-y"])
+        .arg(&audio)
+        .status()
+        .unwrap();
+    assert!(made.success());
+    let path = serde_json::to_string(&audio.to_string_lossy()).unwrap();
+    let root = root_with(|plugins| {
+        vec![
+            package(
+                plugins,
+                WHEN,
+                &["commands"],
+                format!(
+                    "export default function activate(plugin) {{\n\
+                     console.error(`{WHEN} start`);\n\
+                     plugin.commands.add({{ id: \"save\", path: [\"Tools\", \"Save\"],\n\
+                     enabled: plugin.when.ready, reason: \"Nothing open\",\n\
+                     run: () => console.error(`{WHEN} saved`) }});\n}}\n"
+                ),
+            ),
+            package(
+                plugins,
+                OPENER,
+                &["events", "playback.read", "playback.control"],
+                format!(
+                    "export default function activate(plugin) {{\n\
+                     plugin.player.onChange(() => {{}});\n\
+                     setTimeout(() => plugin.player.open({path}).then(\n\
+                     () => console.error(`{OPENER} opened`),\n\
+                     (error) => console.error(`{OPENER} failed ${{error}}`)), 3500);\n}}\n"
+                ),
+            ),
+        ]
+    });
+    let lazy = [
+        ("VESTRA_SHARED", "1"),
+        ("VESTRA_LAZY", "1"),
+        ("VESTRA_IDLE_MS", "500"),
+    ];
+    let mut executes = lazy.to_vec();
+    executes.push((
+        "VESTRA_TEST_EXECUTE",
+        "vestra.fixture-when/save@2500,vestra.fixture-when/save@7500",
+    ));
+    let first = run(root.path(), 10, &executes);
+    let parked = first
+        .find(&format!("lazy: {WHEN} parked (1 recorded calls)"))
+        .unwrap_or_else(|| panic!("{first}"));
+    // Parked, and still disabled with its reason: the use wakes nothing.
+    let refused = first
+        .find("lazy: VESTRA_TEST_EXECUTE: command disabled: Nothing open")
+        .unwrap_or_else(|| panic!("{first}"));
+    assert!(parked < refused, "{first}");
+    let opened = first
+        .find(&format!("{OPENER} opened"))
+        .unwrap_or_else(|| panic!("{first}"));
+    let woken = first
+        .find(&format!("lazy: {WHEN} woken by commands.execute"))
+        .unwrap_or_else(|| panic!("enabled once ready, while parked: {first}"));
+    assert!(refused < opened && opened < woken, "{first}");
+    assert_eq!(count(&first, &format!("] {WHEN} start")), 2, "{first}");
+    assert!(first.contains(&format!("{WHEN} saved")), "{first}");
+    let reason = format!(
+        "lazy: {OPENER} classified resident: an event listener; listens to source.state: a listener added at main.js:"
+    );
+    assert!(first.contains(&reason), "the reason names where: {first}");
+    let recorded = recordings(root.path());
+    let save = recorded
+        .iter()
+        .flat_map(|r| r["calls"].as_array().cloned().unwrap_or_default())
+        .find(|call| call["params"]["id"] == "save")
+        .unwrap_or_else(|| panic!("{recorded:?}"));
+    assert_eq!(
+        save["params"]["when"],
+        serde_json::json!({"enabled":{"phase":["ready"]}})
+    );
+
+    // Replayed: the recorded condition is evaluated without a process.
+    let mut replayed = lazy.to_vec();
+    replayed.push(("VESTRA_TEST_EXECUTE", "vestra.fixture-when/save@2500"));
+    let second = run(root.path(), 4, &replayed);
+    assert!(
+        second.contains(&format!("lazy: {WHEN} replayed (1 calls)")),
+        "{second}"
+    );
+    assert!(
+        second.contains("lazy: VESTRA_TEST_EXECUTE: command disabled: Nothing open"),
+        "{second}"
+    );
+    assert!(!second.contains(&format!("] {WHEN} start")), "{second}");
+}
+
+const PACKAGES: &str = "vestra.fixture-packages";
+const CHANGER: &str = "vestra.fixture-changer";
+
+/// §6.9 (B2): a listener of `packages.changed` (a wake event) does not keep
+/// its plugin running: it is parked with its subscription recorded, and a
+/// package change wakes it to receive the event. On the next start it is
+/// replayed, not launched.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_packages_listener_is_parked_and_woken_by_a_package_change() {
+    let root = root_with(|plugins| {
+        vec![
+            package(
+                plugins,
+                PACKAGES,
+                &["commands"],
+                format!(
+                    "export default function activate(plugin) {{\n\
+                     console.error(`{PACKAGES} start`);\n\
+                     plugin.packages.onChange((list) => console.error(`{PACKAGES} heard ${{\n\
+                     list.filter((p) => p.id === \"aa.fixture-target\").map((p) => p.state)}}`));\n}}\n"
+                ),
+            ),
+            package(
+                plugins,
+                CHANGER,
+                &["events", "playback.read", "plugins.manage"],
+                format!(
+                    "export default function activate(plugin) {{\n\
+                     plugin.player.onChange(() => {{}});\n\
+                     setTimeout(() => plugin.packages.setEnabled(\"aa.fixture-target\", false).then(\n\
+                     () => console.error(`{CHANGER} disabled`)), 3000);\n}}\n"
+                ),
+            ),
+        ]
+    });
+    let store = root.path().join("store");
+    let mut catalog =
+        serde_json::json!({"installed":{},"pending":{},"operations":{},"lastCommit":{}});
+    install(
+        &store,
+        &mut catalog,
+        1,
+        "aa.fixture-target",
+        "export default function activate() {}\n".into(),
+    );
+    std::fs::write(store.join("catalog.json"), catalog.to_string()).unwrap();
+    let lazy = [
+        ("VESTRA_SHARED", "1"),
+        ("VESTRA_LAZY", "1"),
+        ("VESTRA_IDLE_MS", "500"),
+    ];
+    let first = run(root.path(), 7, &lazy);
+    for expected in [
+        format!("lazy: {PACKAGES} classified lazy"),
+        format!("lazy: {PACKAGES} parked (1 recorded calls)"),
+        format!("{CHANGER} disabled"),
+        format!("lazy: {PACKAGES} woken by packages.changed"),
+        format!("{PACKAGES} heard disabled"),
+    ] {
+        assert!(first.contains(&expected), "{expected}: {first}");
+    }
+    let parked = first.find(&format!("lazy: {PACKAGES} parked")).unwrap();
+    let woken = first
+        .find(&format!("lazy: {PACKAGES} woken by packages.changed"))
+        .unwrap();
+    assert!(parked < woken, "{first}");
+    // Woken for each change: the target's own start, then its disable.
+    assert!(
+        count(&first, &format!("] {PACKAGES} start")) >= 2,
+        "{first}"
+    );
+    // Parked again once idle after the event.
+    assert!(
+        first[woken..].contains(&format!("lazy: {PACKAGES} parked")),
+        "{first}"
+    );
+    let subscribed =
+        serde_json::json!([{"method":"events.subscribe","params":{"event":"packages.changed"}}]);
+    let recorded = recordings(root.path());
+    assert!(
+        recorded.iter().any(|r| r["calls"] == subscribed),
+        "{recorded:?}"
+    );
+
+    // The next start replays it; nothing changes, nothing wakes it.
+    let second = run(root.path(), 3, &lazy);
+    assert!(
+        second.contains(&format!("lazy: {PACKAGES} replayed (1 calls)")),
+        "{second}"
+    );
+    assert!(!second.contains(&format!("] {PACKAGES} start")), "{second}");
+}

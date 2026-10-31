@@ -260,6 +260,9 @@ pub(crate) struct Host {
     pub(crate) session_storage: session_storage::SessionStorage,
     /// What `bindings.changed` / `packages.changed` last announced.
     pub(crate) bindings_sent: u64,
+    /// The binding list `bindings.changed` last announced: a table rebuilt
+    /// to the same list (a plugin woken or parked) announces nothing.
+    pub(crate) bindings_list_sent: Value,
     pub(crate) packages_sent: Value,
     pub(crate) notified_at: u64,
     /// `plugin.timeline` layers (R-M3).

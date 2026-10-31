@@ -4,7 +4,20 @@ import { checkBindings } from "./bindings.js";
 import { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, MENU_IDS } from "../commands.js";
 import { ImageHandle } from "./ui.js";
 import { isTextValue, textProblem } from "../i18n.js";
+import { conditionJson, isCondition } from "./when.js";
 const value = (item) => typeof item === "function" ? item() : item;
+/** A field's value, or `fallback` (and its condition noted) for a condition. */
+function field(item, fallback, name, when) {
+    if (!isCondition(item))
+        return value(item);
+    when[name] = conditionJson(item);
+    return fallback;
+}
+/** How the player's log names a command: its title, else its id. */
+const label = (options) => {
+    const title = options.title ?? options.path?.at(-1);
+    return `command "${typeof title === "string" ? title : options.id}"`;
+};
 /** Validate options and build the wire declaration. */
 function declare(options) {
     const path = options.path ?? [];
@@ -88,13 +101,18 @@ class CommandHandle {
     #disposed = false;
     #registered = false;
     #pump;
+    #label;
+    /** Where the plugin added it, for the player's log. */
+    #where;
     #binding;
     constructor(scope, options) {
         const runtime = scope.runtime;
+        this.#where = runtime.callSite();
         if (runtime.commands.has(options.id))
             throw failure("conflict", `command ${options.id} is already declared`);
         this.id = options.id;
         this.#scope = scope;
+        this.#label = label(options);
         this.#spec = {
             enabled: options.enabled ?? true,
             checked: options.checked ?? null,
@@ -105,15 +123,15 @@ class CommandHandle {
         // The host requires a strictly increasing revision per update; the
         // registration itself is revision 1, so every later state follows it.
         const previous = removing(runtime).get(this.id);
-        this.#pump = new Latest(async (state) => {
+        this.#pump = new Latest(async ({ state, when }) => {
             const revision = ++this.#revision;
             if (revision === 1) {
                 await previous;
-                await runtime.host.commands.register(this.id, 1, declaration, state);
+                await runtime.host.commands.register(this.id, 1, declaration, state, when);
                 this.#registered = true;
             }
             else
-                await runtime.host.commands.update(this.id, revision, state);
+                await runtime.host.commands.update(this.id, revision, state, when);
         });
         const initial = this.#state();
         this.#last = JSON.stringify(initial);
@@ -127,8 +145,22 @@ class CommandHandle {
         this.#binding = runtime.bind(() => this.#sync());
         scope.add(this);
     }
+    /**
+     * The state to send. A condition field is sent as a placeholder with the
+     * condition in `when`: the player evaluates it. Each function field is
+     * evaluated under its own name, so what it reads is reported as this
+     * command's (`Runtime.reader`).
+     */
     #state() {
-        const reason = value(this.#spec.reason);
+        const runtime = this.#scope.runtime;
+        const spec = this.#spec;
+        const as = (name, read) => runtime.reader(`${this.#label} ${name}`, this.#where, read, name === "enabled" || name === "checked");
+        // enabled and checked first: what they read is reported as theirs
+        // (a condition can replace them), not as the reason's.
+        const when = {};
+        const enabled = as("enabled", () => field(spec.enabled, true, "enabled", when));
+        const checked = as("checked", () => field(spec.checked, false, "checked", when));
+        const reason = as("reason", () => value(spec.reason));
         if (reason !== null && typeof reason !== "string") {
             const problem = isTextValue(reason)
                 ? textProblem(reason)
@@ -136,12 +168,13 @@ class CommandHandle {
             if (problem)
                 throw failure("invalid", `command ${this.id}: ${problem}`);
         }
-        return {
-            enabled: value(this.#spec.enabled),
-            checked: value(this.#spec.checked),
-            busy: value(this.#spec.busy),
+        const state = {
+            enabled,
+            checked,
+            busy: as("busy", () => value(spec.busy)),
             reason,
         };
+        return Object.keys(when).length ? { state, when } : { state };
     }
     #sync() {
         if (this.#disposed)

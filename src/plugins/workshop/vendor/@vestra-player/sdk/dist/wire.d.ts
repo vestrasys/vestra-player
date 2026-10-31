@@ -376,11 +376,11 @@ export declare function createWire(transport: Transport): {
         operation: (token: import("./processing.ts").ProcessingToken) => Promise<import("./processing.ts").ProcessingOperation>;
     };
     commands: {
-        register: (id: string, revision: number, declaration: import("./commands.ts").CommandDeclaration, state: import("./commands.ts").CommandState) => Promise<{
+        register: (id: string, revision: number, declaration: import("./commands.ts").CommandDeclaration, state: import("./commands.ts").CommandState, when?: import("./commands.ts").CommandWhen) => Promise<{
             revision: number;
         }>;
         unregister: (id: string) => Promise<void>;
-        update: (id: string, revision: number, state: import("./commands.ts").CommandState) => Promise<{
+        update: (id: string, revision: number, state: import("./commands.ts").CommandState, when?: import("./commands.ts").CommandWhen) => Promise<{
             revision: number;
         }>;
     };
@@ -615,14 +615,14 @@ export declare function createWire(transport: Transport): {
          * only the SDK keeps a copy of the state (player 0.5.18; older
          * players ignore it); `listen` changes it.
          */
-        subscribe(event: HostEvent, listener: (data: unknown) => void, mirror?: boolean): Promise<() => Promise<void>>;
+        subscribe(event: HostEvent, listener: (data: unknown) => void, mirror?: boolean, why?: string[]): Promise<() => Promise<void>>;
         /**
          * Tell the player whether a subscribed event has a real listener
          * (`active`) or only the SDK's copy of the state: `events.subscribe`
          * again, which replaces the mark (player 0.5.18; older players keep
          * one subscription per name and ignore the mark).
          */
-        listen: (event: HostEvent, active: boolean) => Promise<void>;
+        listen: (event: HostEvent, active: boolean, why?: string[]) => Promise<void>;
     };
     ui: {
         /** Player 0.2.0: the remote images a Markdown document shows. */

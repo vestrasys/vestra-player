@@ -637,13 +637,13 @@ Changes only to host behaviour or semantics, with no API change: G-01 (`SlotStat
 
 | State | Condition | Appearance |
 | --- | --- | --- |
-| Off | `preferred === false` | Normal colour |
-| On | `preferred && effective`, or `reason === "fullscreen"` | Accent colour (pressed state) |
-| On but not visible | `preferred && !effective && reason === "space"` | Accent colour at 50% opacity; tooltip "Toggle Sidebar (the window is too narrow for the sidebar)", with the key when the user bound one |
+| Off | `preferred === false` | Accent icon, no dot (player 0.5.22; before: normal colour) |
+| On | `preferred && effective`, or `reason === "fullscreen"` | Accent icon with the dot under it (0.5.22; before: accent icon) |
+| On but not visible | `preferred && !effective && reason === "space"` | Icon and dot at 50% opacity; tooltip "Toggle Sidebar (the window is too narrow for the sidebar)", with the key when the user bound one |
 
 In fullscreen, `reason === "fullscreen"` means the overlay is retracted (G-01) and becomes visible when the pointer moves to the right edge, so it shows as "On". When the window is narrower than 638 (video 318 + divider 3 + sidebar 317), the sidebar is hidden for lack of space and the preference is unchanged.
 
-**Acceptance**: with the list open, drag the window narrower to 600: the list disappears, the bottom bar button becomes half-lit, and the hover tooltip explains why; drag it wider: the list comes back and the button is fully lit.
+**Acceptance**: with the list open, drag the window narrower to 600: the list disappears, the bottom bar button (icon and dot) becomes half-lit, and the hover tooltip explains why; drag it wider: the list comes back and the button is fully lit.
 
 ### IA-PB-01 Seek bar hover time is off by default (P2)
 
