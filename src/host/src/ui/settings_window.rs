@@ -224,7 +224,9 @@ export component OptionsWindow inherits Window {{
                     for row in root.rows: Rectangle {{
                         height: 20px;
                         background: row.selected ? Theme.selected-bg : touch.has-hover && !row.header ? Theme.hover-bg : transparent;
-                        if row.selected: Rectangle {{ x: 8px; y: 4px; width: 2px; height: 12px; border-radius: 1px; background: Theme.accent; }}
+                        // Always present, shown by `visible`: selecting a
+                        // page creates or destroys no element in a row.
+                        Rectangle {{ visible: row.selected; x: 8px; y: 4px; width: 2px; height: 12px; border-radius: 1px; background: Theme.accent; }}
                         Text {{
                             x: row.header ? 8px : 20px;
                             width: parent.width - self.x - 4px;

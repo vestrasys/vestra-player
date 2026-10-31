@@ -286,19 +286,21 @@ impl Host {
         )?;
         let roots = self.commands.snapshot().roots;
         let labels = self.labels();
-        set_menu_model(
+        // Through `apply_menu_levels`, so `menu_shown` follows the window:
+        // a new shell's `menu-levels` is not the model it remembers, so this
+        // is a whole write, and later hovers write in place again. A
+        // candidate shell that is then dropped leaves `menu_shown` naming
+        // its model, which the kept shell does not hold: its next write is
+        // a whole one too.
+        let levels = menu_levels(
             window,
-            ui_values::from_json(
-                &menu_levels(
-                    window,
-                    &roots,
-                    &mut self.menu_path.clone(),
-                    &self.menu_scroll,
-                    &labels,
-                )?
-                .0,
-            )?,
-        )?;
+            &roots,
+            &mut self.menu_path.clone(),
+            &self.menu_scroll,
+            &labels,
+        )?
+        .0;
+        apply_menu_levels(window, &mut self.menu_shown.borrow_mut(), &levels)?;
         if let Some(image) = &self.last_image {
             window.set_property("video-frame", image.clone().into())?;
         }

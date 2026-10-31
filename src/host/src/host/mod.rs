@@ -65,9 +65,9 @@ pub(crate) use input::{
 pub(crate) use lazy::Origin;
 pub(crate) use lifecycle::activation_outcome;
 #[cfg(test)]
-pub(crate) use menus::{MenuWrite, ShownMenu, apply_menu_levels};
+pub(crate) use menus::{MenuWrite, ShownMenu, set_menu_model};
 pub(crate) use menus::{
-    debug_menu, debug_menu_pointer, menu_levels, set_menu_model, track_pointer,
+    apply_menu_levels, debug_menu, debug_menu_pointer, menu_levels, track_pointer,
 };
 pub(crate) use mounts::refuse_initial;
 pub(crate) use restart::{LAST_SOURCE, LostDevice, restart_log, restart_player};
@@ -182,8 +182,9 @@ pub(crate) struct Host {
     /// G-15: submenu aim, and the open panels it aims at (by depth).
     pub(crate) menu_aim: menu::HoverAim,
     pub(crate) menu_panels: Vec<menu::Rect>,
-    /// What the menu's window shows (`apply_menu_levels`).
-    pub(crate) menu_shown: menus::ShownMenu,
+    /// What the menu's window shows (`apply_menu_levels`); a cell, as
+    /// `bind_shell` (which takes `&self`) writes it too.
+    pub(crate) menu_shown: RefCell<menus::ShownMenu>,
     pub(crate) policy: window_state::Policy,
     pub(crate) clock: Instant,
     pub(crate) window_facts: Value,

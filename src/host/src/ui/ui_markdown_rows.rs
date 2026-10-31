@@ -729,7 +729,8 @@ fn a_document_written_after_its_message_changed_shows_its_new_text() {
 /// Host 0.5.26: `MarkdownView` is a `ListView` of its blocks (only the
 /// blocks in view exist). It draws what the column it replaced drew (a
 /// `ScrollView` around `MarkdownBlocks` with `inset` padding): a short
-/// document, and the top of a long one.
+/// document, the top of a long one, and a long one of blocks of many
+/// heights at its top, scrolled to the middle and scrolled to the end.
 #[test]
 fn markdown_view_as_a_list_draws_what_the_column_drew() {
     let (instance, window) = compile(
@@ -760,7 +761,55 @@ export component W inherits Window {
         .map(|i| format!("段落 {i}: 一段较长的文字，换行以后还有一行，用来比较两种布局。"))
         .collect::<Vec<_>>()
         .join("\n\n");
-    for (name, text) in [("short", short.to_owned()), ("long", long)] {
+    // Blocks of many heights: headings, paragraphs of one to four lines,
+    // lists, code of one to five lines, quotes, tables, rules.
+    let varied = (0..16)
+        .map(|i| {
+            let mut part = format!("## 第 {i} 节\n\n");
+            part += &"一段长短不一的文字，用来让块的高度各不相同。".repeat(i % 4 + 1);
+            part += "\n\n";
+            for item in 0..i % 3 + 1 {
+                part += &format!("- 项 {item}\n");
+            }
+            part += "\n```\n";
+            for line in 0..i % 5 + 1 {
+                part += &format!("line {line}\n");
+            }
+            part += "```\n\n";
+            if i % 2 == 0 {
+                part += "> 引用一句\n\n";
+            }
+            if i % 3 == 0 {
+                part += "| a | b |\n|---|---|\n| 1 | 2 |\n\n";
+            }
+            if i % 4 == 0 {
+                part += "---\n\n";
+            }
+            part
+        })
+        .collect::<String>();
+    // Wheel steps of 40px from the top: none, to the middle, past the end.
+    let wheel = |steps: usize| {
+        for _ in 0..steps {
+            instance
+                .window()
+                .dispatch_event(slint::platform::WindowEvent::PointerScrolled {
+                    position: slint::LogicalPosition::new(160., 150.),
+                    delta_x: 0.,
+                    delta_y: -40.,
+                });
+        }
+        slint::platform::update_timers_and_animations();
+    };
+    let cases = [
+        ("short", short.to_owned(), 0),
+        ("long", long, 0),
+        ("varied, top", varied.clone(), 0),
+        ("varied, middle", varied.clone(), 40),
+        ("varied, end", varied, 400),
+    ];
+    let mut frames = Vec::new();
+    for (name, text, steps) in cases {
         let doc = Doc {
             text,
             ..Default::default()
@@ -768,9 +817,14 @@ export component W inherits Window {
         instance
             .set_property("doc", super::model(&doc, |_| None))
             .unwrap();
+        // Each switch makes a new view, at the top.
         instance.set_property("list", SValue::Bool(false)).unwrap();
+        pixels(&window, 320, 300);
+        wheel(steps);
         let column = pixels(&window, 320, 300);
         instance.set_property("list", SValue::Bool(true)).unwrap();
+        pixels(&window, 320, 300);
+        wheel(steps);
         let list = pixels(&window, 320, 300);
         let differ: Vec<(usize, usize)> = column
             .iter()
@@ -783,10 +837,19 @@ export component W inherits Window {
             // layout): its antialiased end differs by a shade.
             .filter(|(x, _)| *x < 308)
             .collect();
-        assert!(differ.is_empty(), "{name}: pixels differ at {differ:?}");
+        assert!(
+            differ.is_empty(),
+            "{name}: {} pixels differ, first at {:?}",
+            differ.len(),
+            &differ[..differ.len().min(20)]
+        );
         assert!(
             draw(&window, 320, 300) > 500,
             "{name}: the document is drawn"
         );
+        frames.push(list);
     }
+    // The wheel moved the view: top, middle and end of the varied
+    // document all show something different.
+    assert!(frames[2] != frames[3] && frames[3] != frames[4] && frames[2] != frames[4]);
 }

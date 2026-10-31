@@ -194,7 +194,15 @@ pub(crate) fn apply_menu_levels(
         .as_ref()
         .and_then(|model| model.as_any().downcast_ref::<slint::VecModel<SValue>>())
     {
-        Some(model) => write_levels(model, &shown.levels, next)?,
+        // A write that fails midway leaves some rows written and `shown`
+        // stale: forget what is shown, so the next write is a whole one.
+        Some(model) => match write_levels(model, &shown.levels, next) {
+            Ok(write) => write,
+            Err(error) => {
+                *shown = ShownMenu::default();
+                return Err(error);
+            }
+        },
         None => None,
     };
     let write = match write {
@@ -205,6 +213,8 @@ pub(crate) fn apply_menu_levels(
             write
         }
         None => {
+            // Same if the whole write fails.
+            *shown = ShownMenu::default();
             set_menu_model(window, ui_values::from_json(levels)?)?;
             shown.model = match window.get_property("menu-levels")? {
                 SValue::Model(model) => Some(model),
@@ -476,7 +486,7 @@ impl Host {
                 value
             }
         };
-        let write = apply_menu_levels(window, &mut self.menu_shown, &model)?;
+        let write = apply_menu_levels(window, &mut self.menu_shown.borrow_mut(), &model)?;
         if debug_menu() {
             diag!("menu: wrote {write:?}");
         }
