@@ -26,6 +26,8 @@ use std::collections::{BTreeSet, VecDeque};
 
 /// First runs (no recording) in flight at once (§2.4).
 const FIRST_RUNS: usize = 8;
+/// How long the classification at ready waits for the playback worker.
+const CLASSIFY_WAIT_MS: u64 = 5_000;
 
 /// How long a park waits for its process (§5.4 item 6; disable and quit
 /// keep 300 ms).
@@ -203,6 +205,10 @@ pub(crate) struct Parked {
     pub triggers: Vec<Value>,
     /// Since when they wait for the process it was parked from to go.
     pub waiting: Option<u64>,
+    /// What it was refused while it ran (`packages.list` `warnings`, and
+    /// as text `error`): kept, so a park alone changes nothing there.
+    pub warnings: Vec<Value>,
+    pub warning: Option<String>,
 }
 impl Parked {
     fn new(id: String, guid: String, origin: Origin, name: String) -> Self {
@@ -216,6 +222,8 @@ impl Parked {
             name,
             triggers: Vec::new(),
             waiting: None,
+            warnings: Vec::new(),
+            warning: None,
         }
     }
     /// It is no longer parked: its catalog goes (if still this one).
@@ -289,8 +297,9 @@ pub(crate) struct Lazy {
     /// way to the old one while the registries moved (a resolution the
     /// worker asked for before `owner.rekey`).
     moved: BTreeMap<u64, u64>,
-    /// Ready plugins whose worker half of the classification is asked.
-    classifying: BTreeSet<u64>,
+    /// Ready plugins whose worker half of the classification is asked,
+    /// and when.
+    classifying: BTreeMap<u64, u64>,
     /// Each running plugin's class at its last ready (§3.4).
     classes: BTreeMap<u64, Class>,
     /// First runs waiting for a place (manifest ids, in start order).
@@ -346,6 +355,24 @@ impl Lazy {
     /// Installed plugin `owner` started for its first run.
     pub fn first_run(&mut self, owner: u64) {
         self.first_runs.insert(owner);
+    }
+    /// Queue a first run: a built-in before every other plugin (third-party
+    /// first runs must not hold the places while their mounts, sequence and
+    /// resolvers wait for the built-ins, `builtins_starting`).
+    pub fn queue_first_run(&mut self, id: String, builtin: impl Fn(&str) -> bool) {
+        if self.first_queue.contains(&id) {
+            return;
+        }
+        if builtin(&id) {
+            let at = self
+                .first_queue
+                .iter()
+                .position(|queued| !builtin(queued))
+                .unwrap_or(self.first_queue.len());
+            self.first_queue.insert(at, id);
+        } else {
+            self.first_queue.push_back(id);
+        }
     }
     /// Whether a built-in waits for its first run (`builtins` names them).
     pub fn builtin_queued(&self, builtin: impl Fn(&str) -> bool) -> bool {
@@ -626,7 +653,8 @@ impl Host {
             params: Value::Null,
         });
         if asked.is_ok() {
-            self.lazy.classifying.insert(owner);
+            let now = self.now_ms();
+            self.lazy.classifying.insert(owner, now);
         }
     }
     /// `owner`'s class at its ready: kept for its recording; a resident one
@@ -750,6 +778,7 @@ impl Host {
             return;
         }
         self.lazy.next_check = now + CHECK_MS;
+        self.lazy_classify_tick(now);
         self.lazy_first_runs_tick();
         let owners = self.plugins.keys().copied().collect::<Vec<_>>();
         for owner in owners {
@@ -764,6 +793,29 @@ impl Host {
             });
             if asked.is_ok() {
                 self.lazy.asking.insert(owner, now);
+            }
+        }
+    }
+    /// The worker did not answer a classification within
+    /// `CLASSIFY_WAIT_MS`: resident (the safe side; its first-run place
+    /// frees), and said so.
+    fn lazy_classify_tick(&mut self, now: u64) {
+        let late = self
+            .lazy
+            .classifying
+            .iter()
+            .filter(|(_, asked)| now.saturating_sub(**asked) >= CLASSIFY_WAIT_MS)
+            .map(|(owner, _)| *owner)
+            .collect::<Vec<_>>();
+        for owner in late {
+            self.lazy.classifying.remove(&owner);
+            if self.plugins.contains_key(&owner) {
+                diag!(
+                    "lazy: {}: the playback worker did not answer within {CLASSIFY_WAIT_MS} ms",
+                    self.plugin_id(owner)
+                );
+                let reason = "no answer from the playback worker".to_owned();
+                self.lazy_classified(owner, Some(reason), Value::Null);
             }
         }
     }
@@ -812,6 +864,10 @@ impl Host {
             && let Some(id) = self.lazy.first_queue.pop_front()
         {
             self.start_installed(Some(&id));
+            // Queued again: it waits for a built-in still to start.
+            if self.lazy.first_queue.contains(&id) {
+                break;
+            }
         }
     }
     /// What the host itself knows of `owner` being idle (§2.3): installed,
@@ -821,7 +877,7 @@ impl Host {
         let since = *self.lazy.active.entry(owner).or_insert(now);
         if (!immediate && now.saturating_sub(since) < self.lazy.idle_ms)
             || self.lazy.waking.contains_key(&owner)
-            || self.lazy.classifying.contains(&owner)
+            || self.lazy.classifying.contains_key(&owner)
             || self.lazy_key_of(owner).is_none()
         {
             return false;
@@ -841,7 +897,7 @@ impl Host {
     /// still idle and nothing it holds is live.
     pub(crate) fn lazy_answer(&mut self, owner: u64, answer: &Value) {
         // The worker's half of the classification at ready (asked first).
-        if self.lazy.classifying.remove(&owner) {
+        if self.lazy.classifying.remove(&owner).is_some() {
             if !self.plugins.contains_key(&owner) {
                 return;
             }
@@ -923,6 +979,7 @@ impl Host {
             self.lazy.touch(owner, now);
             return;
         }
+        let (warnings, warning) = (self.warnings_of(owner), self.warning_text(owner));
         self.stop(owner, true);
         self.lazy.stopping.insert(id.clone(), owner);
         diag!("lazy: {id} parked ({count} recorded calls)");
@@ -938,9 +995,14 @@ impl Host {
             test.at = When::At(now + ms);
         }
         // Its settings pages still show in its language.
-        self.lazy
-            .parked
-            .insert(owner, Parked::new(id, key.guid, origin, name));
+        self.lazy.parked.insert(
+            owner,
+            Parked {
+                warnings,
+                warning,
+                ..Parked::new(id, key.guid, origin, name)
+            },
+        );
     }
     /// `VESTRA_TEST_EXECUTE`: the due commands run, by manifest id.
     fn lazy_test_execute(&mut self, now: u64) {

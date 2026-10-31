@@ -430,7 +430,20 @@ So 1 of 16 is lazy today, against 8–9 expected. The rule and the host work as 
 - **subtitle-online**: stays resident while it offers the automatic search on a new source (a transition, §3.3); lazy only if the automatic search becomes an explicit command.
 - **store "Idle" label** (record §5.1 B1 row): `store.ts:1025` `#status` shows "Running" for a parked plugin; add `info.process === "idle"` → "Idle" (needs `msg("Idle")` in `text.ts` and its six translations in `locales/`, a CHANGELOG entry and SDK 1.5.38 in the player). Listed for the store author, not done here: it is translation and wording, not a mechanical change.
 
-#### 6.8.2 Not in B1
+#### 6.8.2 Decisions and notes for the merge
+
+- **Binding-dependency tracking is a coordinator-accepted decision** (2026-10-31): a command's `enabled`, `checked`, `busy` or `reason` function, or a view binding, that reads a service's state counts as listening to that state's event, beyond §3.1's "only listeners". It keeps a menu that follows playback current instead of showing a stale recorded state while parked; it is why capture and preferences are resident (§6.8.1).
+- **SDK 1.5.38 in the player**: the player commit that moves `src/package.json` to SDK 1.5.38 must also run `npm run vendor:sdk` for the workshop (its vendored SDK copy); the coordinator does that through the workshop author.
+
+#### 6.8.3 Review fixes (independent review of 1df8ca5 / SDK b2704ed; lazy on only)
+
+- **M, first-run throttle vs `builtins_starting`**: start-up goes in id order, so other plugins whose ids sort before `vestra.` could take all eight first-run places while their mounts, sequence and resolvers waited for the built-ins (`builtins_starting`), until their activation timed out. Now a first run of a plugin that is not built in waits while a built-in is still to start (`to_start`) or queued, and the queue keeps built-ins ahead of the others (`Lazy::queue_first_run`); the tick stops when the plugin it popped is queued again. Test `built_in_first_runs_go_before_other_plugins`: nine installed plugins `aa.fixture-0..8` registering a resolver at activation and one built-in; the built-in starts first, none times out, all ten are parked and recorded (headless does not hold those requests, so the order is what it checks).
+- **L2**: a parked plugin keeps the `warnings` and `error` text it had when it ran (`Parked.warnings`, `warning`), so a park or wake of a plugin with warnings does not fire `packages.changed` either.
+- **L3**: a disabled plugin left in the first-run queue is listed `disabled`, not `starting`.
+- **L4 (SDK)**: the mark `events.subscribe { event, mirror? }` sent during activation is part of `startup`, so `runtime.ready` never comes before it (test: a listener added in `activate` is marked when `startPlugin` returns).
+- **L5**: the classification at ready waits at most 5 s for the worker's `owner.resources`; without an answer the plugin is classified resident (logged), which frees its first-run place.
+
+#### 6.8.4 Not in B1
 
 - The rest of `disable()` into `Capability::revoke` (a pure refactor; A1 left it, B1 does not need it).
 - The park-and-wake-every-built-in registry diff test (§5.3): with 1 of 16 built-ins lazy it would cover only workshop; worth writing once the built-ins above change.

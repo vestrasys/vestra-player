@@ -738,10 +738,16 @@ impl Host {
                             Err(error) => diag!("lazy: {id} replay failed, starting it: {error}"),
                         }
                     }
-                    None if !self.lazy.first_run_free() => {
-                        if !self.lazy.first_queue.contains(&id) {
-                            self.lazy.first_queue.push_back(id.clone());
-                        }
+                    // Built-ins first: another plugin's first run waits
+                    // while a built-in is still to start or queued, since
+                    // what it claims at activation waits for them.
+                    None if !self.lazy.first_run_free()
+                        || !self.packages.builtins.contains_key(&id)
+                            && self.builtin_first_run_pending() =>
+                    {
+                        let builtins = &self.packages.builtins;
+                        self.lazy
+                            .queue_first_run(id.clone(), |id| builtins.contains_key(id));
                         continue;
                     }
                     None => first_run = true,
@@ -937,6 +943,15 @@ impl Host {
             )
         })
     }
+    /// A built-in is still to start at start-up (`to_start`) or waits for
+    /// its first run: other plugins' first runs wait for it.
+    fn builtin_first_run_pending(&self) -> bool {
+        self.packages
+            .to_start
+            .iter()
+            .any(|id| self.packages.builtins.contains_key(id))
+            || self.builtin_first_run_queued()
+    }
     /// A built-in waits for its first run (lazy activation, §2.4).
     pub(crate) fn builtin_first_run_queued(&self) -> bool {
         self.lazy
@@ -1057,18 +1072,23 @@ impl Host {
                 continue;
             };
             // Waiting for its first run (lazy activation) counts as starting.
-            let (state, error) = if self.package_busy(&id) || self.lazy.first_queue.contains(&id) {
-                ("starting", None)
-            } else if self.lazy.parked_id(&id).is_some() {
-                // Parked (lazy activation): it runs again on its first use;
-                // `state` stays `running`, `process` says `idle`.
-                ("running", None)
-            } else {
-                stopped(
-                    self.packages.store.disabled().contains(&id),
-                    self.failures.get(&id),
-                )
-            };
+            let disabled = self.packages.store.disabled().contains(&id);
+            let parked = self
+                .lazy
+                .parked_id(&id)
+                .and_then(|owner| self.lazy.parked.get(&owner));
+            let (state, error) =
+                if self.package_busy(&id) || !disabled && self.lazy.first_queue.contains(&id) {
+                    ("starting", None)
+                } else if let Some(parked) = parked {
+                    // Parked (lazy activation): it runs again on its first use;
+                    // `state` stays `running`, `process` says `idle`, and what
+                    // it was refused while it ran stays listed.
+                    ("running", parked.warning.clone())
+                } else {
+                    stopped(disabled, self.failures.get(&id))
+                };
+            let warnings = parked.map_or_else(Vec::new, |parked| parked.warnings.clone());
             let data = record
                 .instance
                 .as_ref()
@@ -1082,7 +1102,7 @@ impl Host {
                     "origin":"installed","state":state,"error":error,"process":process,
                     "capabilities":manifest.capabilities,"directory":directory,
                     "builtin":builtin,"source":source,
-                    "dataDirectory":data,"warnings":[],
+                    "dataDirectory":data,"warnings":warnings,
                     "display":display(&manifest, crate::i18n::load(&directory).as_deref())}),
                 // A built-in whose copy in the installation failed its
                 // checks, or a package whose library copy could not be read

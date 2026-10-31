@@ -366,3 +366,83 @@ fn first_runs_start_eight_at_a_time() {
     }
     assert_eq!(recordings(root.path()).len(), 10);
 }
+
+/// Installs `id` in the library under `store` as a package from a file:
+/// its files in `store/packages/<digest>`, its record in `catalog.json`
+/// (`installed`, the rest left empty). `n` makes its instance GUID.
+fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, main: String) {
+    let manifest = serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
+        "entry":"main.js","capabilities":["source.resolve"]});
+    let files = [
+        ("manifest.json", manifest.to_string()),
+        ("package.json", r#"{"type":"module"}"#.to_owned()),
+        ("main.js", main),
+    ];
+    let digest = digest(&files);
+    let directory = store.join("packages").join(&digest);
+    std::fs::create_dir_all(&directory).unwrap();
+    for (name, text) in &files {
+        std::fs::write(directory.join(name), text).unwrap();
+    }
+    catalog["installed"][id] = serde_json::json!({"revision":1,
+        "current":{"digest":digest,"manifest":manifest,"directory":directory},
+        "previous":null,
+        "instance":{"guid":format!("00000000-0000-4000-8000-{n:012x}"),
+            "source":{"kind":"file"},"installedAt":1}});
+}
+
+/// Review M (B1): first runs of other plugins never take the places while a
+/// built-in waits for its first run. Their mounts, sequence and resolvers
+/// wait for the built-ins (`builtins_starting`, not headless), so nine
+/// installed plugins whose ids sort before `vestra.` and register a
+/// resolver at activation must not start before the built-in, or all
+/// eight places would wait on it until their activation timed out. Headless
+/// does not hold those requests, so the order is what is checked: the
+/// built-in starts first, all ten run, none times out, all are parked.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn built_in_first_runs_go_before_other_plugins() {
+    let root = root_with(|plugins| vec![fixture(plugins)]);
+    let store = root.path().join("store");
+    let mut catalog =
+        serde_json::json!({"installed":{},"pending":{},"operations":{},"lastCommit":{}});
+    let ids = (0..9)
+        .map(|n| format!("aa.fixture-{n}"))
+        .collect::<Vec<_>>();
+    for (n, id) in ids.iter().enumerate() {
+        install(
+            &store,
+            &mut catalog,
+            n + 1,
+            id,
+            format!(
+                "export default function activate(plugin) {{\n\
+                 plugin.resolvers.add({{ id: \"r\", schemes: [\"https\"], hosts: [\"{id}.example\"],\n\
+                 resolve: async () => {{ throw new Error(\"no\"); }} }});\n}}\n"
+            ),
+        );
+    }
+    std::fs::write(store.join("catalog.json"), catalog.to_string()).unwrap();
+    let log = run(
+        root.path(),
+        10,
+        &[
+            ("VESTRA_SHARED", "1"),
+            ("VESTRA_LAZY", "1"),
+            ("VESTRA_IDLE_MS", "60000"),
+        ],
+    );
+    let builtin = log
+        .find(&format!("lazy: {ID} starts for its first run"))
+        .unwrap_or_else(|| panic!("{log}"));
+    for id in &ids {
+        let started = log
+            .find(&format!("lazy: {id} starts for its first run"))
+            .unwrap_or_else(|| panic!("{id}: {log}"));
+        assert!(builtin < started, "{id} before the built-in: {log}");
+        let parked = format!("lazy: {id} parked (1 recorded calls)");
+        assert!(log.contains(&parked), "{parked}: {log}");
+    }
+    assert!(!log.contains("timed out"), "{log}");
+    assert_eq!(recordings(root.path()).len(), 10);
+}
