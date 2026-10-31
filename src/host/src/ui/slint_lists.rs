@@ -17,34 +17,14 @@ use std::path::{Path, PathBuf};
 /// (file under `src/`, or `generated:<name>`; `for`s allowed; why).
 const ALLOWED: &[(&str, usize, &str)] = &[
     (
-        "plugins/audio/ui/workbench.slint",
-        1,
-        "audio workbench popup: its author migrates it",
-    ),
-    (
-        "plugins/capture/ui/tasks.slint",
-        1,
-        "capture tasks: its author migrates it",
-    ),
-    (
-        "plugins/info/ui/about.slint",
-        1,
-        "info about: its author migrates it",
-    ),
-    (
-        "plugins/info/ui/properties.slint",
-        1,
-        "info properties: its author migrates it",
-    ),
-    (
         "plugins/playlist/ui/sidebar.slint",
         1,
-        "playlist sidebar: its author migrates it",
+        "playlist sidebar: moves to a ListView with the whole list in the host (large lists P3)",
     ),
     (
         "plugins/video/ui/shaders.slint",
         1,
-        "video shaders / picture popup: its author migrates it",
+        "video shaders: the built-in video plugin is left unchanged for now (user ruling 2026-10-31)",
     ),
 ];
 
