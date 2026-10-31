@@ -69,6 +69,13 @@ pub(crate) struct Startup {
     /// `render-state.json` and what it is keyed on.
     pub guard: GuardFile,
     pub keys: Keys,
+    /// The same for CPU mode's Direct3D 12 windows (their adapter may be
+    /// another one, record §12).
+    pub windows_keys: Keys,
+    /// The adapters the two modes open (`select_wgpu_windows`), as resolved
+    /// here for the keys and the denylist.
+    pub gpu_adapter: platform::AdapterPick,
+    pub windows_adapter: platform::AdapterPick,
 }
 
 /// Gather the facts (round record 2026-10-render-modes §3): the
@@ -94,28 +101,46 @@ pub(crate) fn startup(headless: bool) -> Startup {
     let build = (!headless)
         .then(|| crate::system::os_facts().build.clone())
         .flatten();
-    let (adapters, render_adapter) = if headless {
-        (Vec::new(), None)
+    let found = if headless {
+        platform::GpuAdapters::default()
     } else {
         platform::gpu_adapters()
     };
+    let adapters = found.list;
     for (index, adapter) in adapters.iter().enumerate() {
+        let role = match (
+            found.gpu.index == Some(index),
+            found.windows.index == Some(index),
+        ) {
+            (true, true) => "; GPU rendering's and CPU mode's windows'",
+            (true, false) => "; GPU rendering's",
+            (false, true) => "; CPU mode's windows'",
+            (false, false) => "",
+        };
         diag!(
-            "render: adapter {} ({:04X}:{:04X}, driver {}{}{})",
+            "render: adapter {} ({:04X}:{:04X}, driver {}{}{role})",
             adapter.name,
             adapter.vendor_id,
             adapter.device_id,
             adapter.driver_version.as_deref().unwrap_or("unknown"),
             if adapter.software { ", software" } else { "" },
-            if render_adapter == Some(index) {
-                "; GPU rendering's"
-            } else {
-                ""
-            }
+        );
+    }
+    // Why (user ruling 2026-10-31, record §12).
+    // Systems without adapter facts (macOS, Linux) say nothing here.
+    if !headless && !found.gpu.how.is_empty() {
+        diag!(
+            "render: GPU rendering's adapter is chosen by {}",
+            found.gpu.how
+        );
+        diag!(
+            "render: CPU mode's Direct3D 12 windows' adapter is chosen by {}",
+            found.windows.how
         );
     }
     // Out of range: no adapter (`Facts::render_adapter`).
-    let render_adapter = render_adapter.unwrap_or(usize::MAX);
+    let render_adapter = found.gpu.index.unwrap_or(usize::MAX);
+    let windows_adapter = found.windows.index.unwrap_or(usize::MAX);
     let mut denylist = Denylist::built_in();
     if let Some(local) = path("render-denylist.json")
         && let Ok(text) = std::fs::read_to_string(&local)
@@ -143,23 +168,40 @@ pub(crate) fn startup(headless: bool) -> Startup {
             .unwrap_or_default(),
         app: env!("CARGO_PKG_VERSION").into(),
     };
+    // GPU rendering and CPU mode's Direct3D 12 windows may use different
+    // adapters (record §12): each is guarded on its own.
     let keys = Keys {
         key: key_of(adapters.get(render_adapter)),
         legacy: key_of(adapters.first()),
     };
+    let windows_keys = Keys {
+        key: key_of(adapters.get(windows_adapter)),
+        legacy: key_of(adapters.first()),
+    };
     let now = render_state::now();
     let recovered = guard.recover(now);
-    let crashed = recovered.blocks(&keys, now).map(|until| {
-        format!(
-            "{}; it is tried again after a graphics driver or player update, or in {} days",
-            if recovered.crashed_by_losses() {
-                "the graphics device was lost twice within a day while the player used it"
-            } else {
-                "GPU rendering stopped an earlier start of the player"
-            },
-            until.saturating_sub(now).div_ceil(24 * 60 * 60)
-        )
-    });
+    // Each mode's own record (`render_state` keeps one per adapter).
+    let blocked = |keys: &Keys, what: &str| {
+        recovered.blocking(keys, now).map(|(until, by_losses)| {
+            format!(
+                "{}; it is tried again after a graphics driver or player update, or in {} days",
+                if by_losses {
+                    "the graphics device was lost twice within a day while the player used it"
+                } else {
+                    what
+                },
+                until.saturating_sub(now).div_ceil(24 * 60 * 60)
+            )
+        })
+    };
+    let crashed = blocked(
+        &keys,
+        "GPU rendering stopped an earlier start of the player",
+    );
+    let crashed_windows = blocked(
+        &windows_keys,
+        "the Direct3D 12 windows stopped an earlier start of the player",
+    );
     Startup {
         facts: Facts {
             headless,
@@ -169,8 +211,10 @@ pub(crate) fn startup(headless: bool) -> Startup {
             build,
             adapters,
             render_adapter,
+            windows_adapter,
             denylist,
             crashed,
+            crashed_windows,
             slint_backend: std::env::var_os("SLINT_BACKEND").is_some_and(|value| !value.is_empty()),
             wgpu_windows: platform::GPU_WINDOWS_WGPU,
             window_env,
@@ -180,6 +224,9 @@ pub(crate) fn startup(headless: bool) -> Startup {
         file,
         guard,
         keys,
+        windows_keys,
+        gpu_adapter: found.gpu,
+        windows_adapter: found.windows,
     }
 }
 

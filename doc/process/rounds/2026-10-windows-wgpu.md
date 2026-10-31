@@ -683,6 +683,8 @@ Reading the results: if presented is still below drawn with the gate on, compare
 
 **User ruling (2026-10-28):** on hybrid laptops the player follows the mpv approach: Windows' per-app GPU order by default (Settings ▸ Display ▸ Graphics decides; the integrated GPU unless the user picks "High performance" for Vestra), `VESTRA_GPU_ADAPTER` stays as an override. When the nightly ships, its notes tell users where to choose the GPU.
 
+**Superseded (user ruling 2026-10-31, `2026-10-render-modes.md` §12):** GPU rendering now defaults to the high-performance GPU unless the user set an explicit preference for Vestra in Windows Settings (then Windows' order); CPU mode keeps Windows' order; `VESTRA_GPU_ADAPTER` stays an override.
+
 ## 19. After the AMD driver update (coordinator, 2026-10-28, Adrenalin 26.10.1, `amdkmdag.sys` 32.0.32015.7029)
 
 H.264 2160p60 windowed, 25 s, frame gate on, after start-up:

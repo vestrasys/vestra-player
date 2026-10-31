@@ -43,25 +43,24 @@ fn luid64(luid: LUID) -> u64 {
     (u64::from(luid.HighPart as u32) << 32) | u64::from(luid.LowPart)
 }
 
-/// Which adapter the windows and the renderer use (`VESTRA_GPU_ADAPTER`).
-///
-/// The default does what mpv (`--d3d11-adapter` empty: a null adapter, so
-/// Direct3D's default one), Chromium's Dawn without a power preference and
-/// Firefox do on hybrid laptops: the adapter Windows lists first for this
-/// process. That order follows the per-app choice in Settings > System >
-/// Display > Graphics, so the user picks the GPU there, as for those
-/// programs. None of them switches by power source on its own (wgpu round
-/// record §17). The adapter is chosen once per process; a change needs a
-/// restart.
+/// Which adapter the windows and the renderer use. Which one to choose is
+/// the host's policy (its platform module: GPU rendering takes the
+/// high-performance GPU unless the user chose one for Vestra in Windows
+/// Settings, CPU mode Windows' order, `VESTRA_GPU_ADAPTER` overrides both;
+/// round record 2026-10-render-modes §12); the host passes the adapter it
+/// resolved (`Luid`) with its reason. The adapter is chosen once per
+/// process; a change needs a restart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Choice {
-    /// DXGI's first adapter: the one Windows lists first for this process,
-    /// which follows the per-app graphics preference and drives the screen
-    /// on hybrid laptops by default (round record 2026-10-windows-render
-    /// C.3).
+    /// DXGI's first adapter: the one Windows lists first for this process
+    /// (it follows the per-app preference in Settings > System > Display >
+    /// Graphics).
     Default,
     /// DXGI's adapter with this index.
     Index(u32),
+    /// The adapter with this LUID (`IDXGIFactory4::EnumAdapterByLuid`): the
+    /// one the host already looked at (denylist, crash guard).
+    Luid(u64),
     /// The first adapter of `IDXGIFactory6::EnumAdapterByGpuPreference`
     /// with `DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE` (external, then discrete,
     /// then integrated GPUs), whatever the per-app setting says.
@@ -73,7 +72,8 @@ pub enum Choice {
 }
 impl Choice {
     /// `None`/empty: `Default`; `warp`; `high-performance`; `minimum-power`;
-    /// a number: that index. Anything else: `Default`.
+    /// a number: that index. Anything else: `Default` (the host checks the
+    /// value first and ignores an unknown one with a line).
     pub fn parse(value: Option<&str>) -> Self {
         match value.map(str::trim) {
             Some("warp") => Self::Warp,
@@ -90,6 +90,7 @@ impl Choice {
                 "Windows' order for this process (Settings > Display > Graphics)".into()
             }
             Self::Index(index) => format!("VESTRA_GPU_ADAPTER={index}"),
+            Self::Luid(luid) => format!("the adapter with LUID {luid:016x}"),
             Self::HighPerformance => "VESTRA_GPU_ADAPTER=high-performance".into(),
             Self::MinimumPower => "VESTRA_GPU_ADAPTER=minimum-power".into(),
             Self::Warp => "VESTRA_GPU_ADAPTER=warp".into(),
@@ -119,7 +120,7 @@ fn adapter_facts(adapter: &IDXGIAdapter1) -> Result<(String, u64, bool), String>
     Ok((name, luid64(desc.AdapterLuid), software))
 }
 
-fn dxgi_adapter(choice: Choice) -> Result<(IDXGIAdapter1, Facts), String> {
+fn dxgi_adapter(choice: Choice, how: Option<&str>) -> Result<(IDXGIAdapter1, Facts), String> {
     // SAFETY: plain factory creation; an owned interface comes back.
     let factory: IDXGIFactory4 =
         unsafe { CreateDXGIFactory1() }.map_err(|e| format!("CreateDXGIFactory1: {e}"))?;
@@ -135,6 +136,12 @@ fn dxgi_adapter(choice: Choice) -> Result<(IDXGIAdapter1, Facts), String> {
         Choice::Default => unsafe { factory.EnumAdapters1(0) },
         // SAFETY: as above.
         Choice::Index(index) => unsafe { factory.EnumAdapters1(index) },
+        Choice::Luid(luid) => {
+            let luid = LUID { LowPart: luid as u32, HighPart: (luid >> 32) as i32 };
+            // SAFETY: a live factory and a plain LUID value; an owned
+            // adapter or an error (no adapter with it) comes back.
+            unsafe { factory.EnumAdapterByLuid::<IDXGIAdapter1>(luid) }
+        }
         Choice::HighPerformance => by_preference(DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE),
         Choice::MinimumPower => by_preference(DXGI_GPU_PREFERENCE_MINIMUM_POWER),
         // SAFETY: as above.
@@ -156,8 +163,12 @@ fn dxgi_adapter(choice: Choice) -> Result<(IDXGIAdapter1, Facts), String> {
         }
     }
     let how = match others.as_slice() {
-        [] => choice.how(),
-        others => format!("{}; other GPUs: {}", choice.how(), others.join(", ")),
+        [] => how.map_or_else(|| choice.how(), str::to_owned),
+        others => format!(
+            "{}; other GPUs: {}",
+            how.map_or_else(|| choice.how(), str::to_owned),
+            others.join(", ")
+        ),
     };
     Ok((adapter, Facts { name, luid, software, how }))
 }
@@ -184,8 +195,17 @@ pub struct Gpu {
 }
 
 impl Gpu {
+    /// Tests and the host's test support (WARP); the host opens its device
+    /// through [`Gpu::open_described`].
+    #[cfg(any(test, feature = "test-support"))]
     pub fn open(choice: Choice) -> Result<Self, String> {
-        let (dxgi, facts) = dxgi_adapter(choice)?;
+        Self::open_described(choice, None)
+    }
+
+    /// As `open`; `how` says why this adapter was chosen (the `render:`
+    /// line), instead of the choice's own wording.
+    pub fn open_described(choice: Choice, how: Option<&str>) -> Result<Self, String> {
+        let (dxgi, facts) = dxgi_adapter(choice, how)?;
         // wgpu's own environment variables apply (as for Slint's own
         // instances): `WGPU_DX12_USE_FRAME_LATENCY_WAITABLE_OBJECT`
         // (`Wait`, the default: the swapchain acquire waits on DXGI's

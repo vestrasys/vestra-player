@@ -48,14 +48,23 @@ pub struct GuardKey {
     pub app: String,
 }
 
-/// What a record's key names (`Guard::schema`). 0 (a file written before
-/// host 0.5.19, without the field): the first graphics adapter, whatever
-/// `VESTRA_GPU_ADAPTER` chose. [`SCHEMA`]: the adapter GPU rendering used.
-pub const SCHEMA: u32 = 2;
+/// What a record's key names (`Guard::schema`). Below [`KEYED`] (a file
+/// written before host 0.5.19, without the field): the first graphics
+/// adapter, whatever `VESTRA_GPU_ADAPTER` chose. From [`KEYED`] on: the
+/// adapter the mode used. [`SCHEMA`] (0.5.23) also keeps a record per key
+/// (`Guard::others`).
+pub const SCHEMA: u32 = 3;
+/// The first schema whose key names the adapter in use.
+pub const KEYED: u32 = 2;
 
+/// `render-state.json`: the current record (the key armed or lost last) at
+/// the top level, as before, and the records of other keys still worth
+/// keeping in `others` (record 2026-10-render-modes §12: GPU rendering and
+/// CPU mode's Direct3D 12 windows may use different adapters on a hybrid
+/// laptop, and one must not overwrite the other's crash).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Guard {
-    /// Which adapter `key` names ([`SCHEMA`]); 0 for older files.
+    /// Which adapter `key` names ([`KEYED`]); 0 for older files.
     #[serde(default)]
     pub schema: u32,
     #[serde(default)]
@@ -69,6 +78,9 @@ pub struct Guard {
     /// the last day.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub losses: Vec<u64>,
+    /// The records of other keys (none of their own `others`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub others: Vec<Guard>,
 }
 
 impl Guard {
@@ -83,21 +95,71 @@ impl Guard {
             && self.at.saturating_sub(self.losses[n - LOSSES]) < DAY
     }
     /// Whether this record is about `keys`: a current record by the adapter
-    /// GPU rendering uses (`keys.key`); one written before 0.5.19 by the
-    /// first adapter (`keys.legacy`), as it was then, so an earlier crash
-    /// keeps protecting exactly what it protected (L1, record §11).
+    /// the mode uses (`keys.key`); one written before 0.5.19 by the first
+    /// adapter (`keys.legacy`), as it was then, so an earlier crash keeps
+    /// protecting exactly what it protected (L1, record §11).
     pub fn is_for(&self, keys: &Keys) -> bool {
-        if self.schema >= SCHEMA {
+        if self.schema >= KEYED {
             self.key == keys.key
         } else {
             self.key == keys.legacy
         }
     }
-    /// Until when (Unix seconds) GPU rendering stays off for `keys`, if it
-    /// does.
+    /// The top-level record and the others.
+    fn records(&self) -> impl Iterator<Item = &Guard> {
+        std::iter::once(self).chain(self.others.iter())
+    }
+    /// One record, without `others`.
+    fn bare(&self) -> Guard {
+        Guard {
+            others: Vec::new(),
+            ..self.clone()
+        }
+    }
+    /// The record about `keys`, if the file has one.
+    fn record_for(&self, keys: &Keys) -> Option<Guard> {
+        self.records()
+            .find(|record| record.is_for(keys) && **record != Guard::default())
+            .map(Guard::bare)
+    }
+    /// A record of another key worth keeping: of this player version (a new
+    /// one tries again anyway), crashed within [`GUARD_DAYS`], or with a
+    /// device loss within the last day.
+    fn worth_keeping(&self, app: &str, now: u64) -> bool {
+        self.key.app == app
+            && ((self.state == GuardState::Crashed
+                && now < self.at.saturating_add(GUARD_DAYS * DAY))
+                || self.state == GuardState::Attempting
+                || self
+                    .losses
+                    .iter()
+                    .any(|&at| at <= now && now.saturating_sub(at) < DAY))
+    }
+    /// The file with `record` (about `keys`) as the current one, the other
+    /// keys' records kept where still worth it.
+    fn with_current(&self, record: Guard, keys: &Keys, now: u64) -> Guard {
+        let others = self
+            .records()
+            .filter(|old| !old.is_for(keys) && **old != Guard::default())
+            .filter(|old| old.worth_keeping(&keys.key.app, now))
+            .map(Guard::bare)
+            .collect();
+        Guard { others, ..record }
+    }
+    /// Until when (Unix seconds) the mode keyed on `keys` stays off, and
+    /// whether for device losses, if it does: the matching record of the
+    /// file.
+    pub fn blocking(&self, keys: &Keys, now: u64) -> Option<(u64, bool)> {
+        self.records().find_map(|record| {
+            let until = record.at.saturating_add(GUARD_DAYS * DAY);
+            (record.state == GuardState::Crashed && record.is_for(keys) && now < until)
+                .then(|| (until, record.crashed_by_losses()))
+        })
+    }
+    /// Until when (Unix seconds) the mode keyed on `keys` stays off (tests).
+    #[cfg(test)]
     pub fn blocks(&self, keys: &Keys, now: u64) -> Option<u64> {
-        let until = self.at.saturating_add(GUARD_DAYS * DAY);
-        (self.state == GuardState::Crashed && self.is_for(keys) && now < until).then_some(until)
+        self.blocking(keys, now).map(|(until, _)| until)
     }
 }
 
@@ -149,56 +211,66 @@ impl GuardFile {
             diag!("render: {} cannot be written ({error})", path.display());
         }
     }
-    /// At start: an `attempting` left by the last run becomes `crashed`
-    /// (now). Returns the guard as it stands.
+    /// At start: an `attempting` left by the last run (in any key's record)
+    /// becomes `crashed` (now). Returns the guard as it stands.
     pub fn recover(&self, now: u64) -> Guard {
         let _one = one_writer();
         let mut guard = self.read();
-        if guard.state == GuardState::Attempting {
-            guard.state = GuardState::Crashed;
-            guard.at = now;
+        let crash = |record: &mut Guard| {
+            if record.state != GuardState::Attempting {
+                return false;
+            }
+            (record.state, record.at) = (GuardState::Crashed, now);
             diag!(
-                "render: the last run ended while GPU rendering started ({} {}); software rendering until the driver or the player changes, or for {GUARD_DAYS} days",
-                guard.key.adapter,
-                guard.key.driver
+                "render: the last run ended while the GPU started ({} {}); it stays off until the driver or the player changes, or for {GUARD_DAYS} days",
+                record.key.adapter,
+                record.key.driver
             );
+            true
+        };
+        let mut changed = crash(&mut guard);
+        for other in &mut guard.others {
+            changed |= crash(other);
+        }
+        if changed {
             self.write(&guard);
         }
         guard
     }
-    /// Before GPU rendering starts. Keep the returned [`Armed`] until the
+    /// Before GPU rendering (or CPU mode's Direct3D 12 windows) starts, for
+    /// the adapter `keys` names. Keep the returned [`Armed`] until the
     /// player ends: dropping it settles the guard, so a start that returns
     /// with an ordinary error (or unwinds) is not taken for a crash; only a
-    /// process that dies leaves `attempting` behind.
+    /// process that dies leaves `attempting` behind. Only this key's record
+    /// changes; other keys' records still in force are kept.
     #[must_use = "dropping it settles the guard at once"]
     pub fn arm(&self, keys: &Keys, now: u64) -> Armed {
         let _one = one_writer();
+        let file = self.read();
         // Earlier device losses count while the key stays the same.
-        let previous = self.read();
-        let losses = if previous.is_for(keys) {
-            previous.losses
-        } else {
-            Vec::new()
-        };
-        self.write(&Guard {
+        let losses = file
+            .record_for(keys)
+            .map(|record| record.losses)
+            .unwrap_or_default();
+        let record = Guard {
             schema: SCHEMA,
             state: GuardState::Attempting,
             key: keys.key.clone(),
             at: now,
             losses,
-        });
+            others: Vec::new(),
+        };
+        self.write(&file.with_current(record, keys, now));
         Armed(self.clone())
     }
-    /// The GPU device was lost (the player restarts): record it; the
-    /// [`LOSSES`]th loss within a day for the same key turns the guard to
-    /// `crashed`. Returns whether it did. The record is rewritten with the
-    /// current key and schema.
+    /// The GPU device was lost (the player restarts): record it for `keys`;
+    /// the [`LOSSES`]th loss within a day for the same key turns its record
+    /// to `crashed`. Returns whether it did. Only this key's record changes
+    /// (rewritten with the current key and schema).
     pub fn device_lost(&self, keys: &Keys, now: u64) -> bool {
         let _one = one_writer();
-        let mut guard = self.read();
-        if !guard.is_for(keys) {
-            guard = Guard::default();
-        }
+        let file = self.read();
+        let mut guard = file.record_for(keys).unwrap_or_default();
         (guard.schema, guard.key) = (SCHEMA, keys.key.clone());
         guard
             .losses
@@ -212,7 +284,7 @@ impl GuardFile {
             // The restarted player must not take this run for a crash.
             guard.state = GuardState::Ok;
         }
-        self.write(&guard);
+        self.write(&file.with_current(guard, keys, now));
         crashed
     }
     /// GPU rendering started (or gave up on its own, or the player quits):
@@ -507,6 +579,101 @@ mod tests {
         assert!(!windows_started(60, 0, true));
         assert!(windows_started(1, 1, true), "the first picture was shown");
         assert!(windows_started(0, 1, false));
+    }
+
+    /// Review item 1 (record §12): on a hybrid laptop GPU rendering (the
+    /// 4070) and CPU mode's Direct3D 12 windows (the 780M) have their own
+    /// keys; arming, settling or losing one must not erase the other's
+    /// crash, or every other start would crash again.
+    #[test]
+    fn each_adapter_keeps_its_own_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = GuardFile::new(Some(dir.path().join("render-state.json")));
+        let gpu = Keys::same(GuardKey {
+            adapter: "NVIDIA GeForce RTX 4070 Laptop GPU".into(),
+            driver: "32.0.16.1062".into(),
+            app: "0.5.23".into(),
+        });
+        let windows = Keys::same(GuardKey {
+            adapter: "AMD Radeon 780M".into(),
+            driver: "32.0.32015.7029".into(),
+            app: "0.5.23".into(),
+        });
+        // GPU rendering crashes on the 4070.
+        std::mem::forget(file.arm(&gpu, 100));
+        assert!(file.recover(200).blocks(&gpu, 200).is_some());
+        // The next start renders in software with the 780M's windows,
+        // which start fine.
+        drop(file.arm(&windows, 210));
+        let guard = file.recover(300);
+        assert!(guard.blocks(&gpu, 300).is_some(), "the 4070 crash is kept");
+        assert!(guard.blocks(&windows, 300).is_none());
+        // A device loss of the windows does not erase it either.
+        assert!(!file.device_lost(&windows, 310));
+        assert!(file.recover(320).blocks(&gpu, 320).is_some());
+        // The other way round: the windows crash on the 780M, then GPU
+        // rendering on the 4070 starts and settles.
+        let dir = tempfile::tempdir().unwrap();
+        let file = GuardFile::new(Some(dir.path().join("render-state.json")));
+        std::mem::forget(file.arm(&windows, 100));
+        assert!(file.recover(200).blocks(&windows, 200).is_some());
+        drop(file.arm(&gpu, 210));
+        assert!(!file.device_lost(&gpu, 220), "one loss");
+        let guard = file.recover(300);
+        assert!(
+            guard.blocks(&windows, 300).is_some(),
+            "the 780M crash is kept"
+        );
+        assert!(guard.blocks(&gpu, 300).is_none());
+        assert_eq!(guard.others.len(), 1);
+        // The 4070's loss is kept too while the windows arm again.
+        drop(file.arm(&windows, 400));
+        let guard = file.read();
+        let gpu_record = guard.others.iter().find(|r| r.is_for(&gpu)).unwrap();
+        assert_eq!(gpu_record.losses, [220]);
+        // Records that no longer matter go: expired, or of another player.
+        let later = 200 + GUARD_DAYS * DAY;
+        drop(file.arm(&gpu, later));
+        assert!(file.read().others.is_empty(), "{:?}", file.read());
+        let mut older = gpu.clone();
+        older.key.app = "0.5.22".into();
+        std::mem::forget(file.arm(&older, later + 10));
+        file.recover(later + 20);
+        drop(file.arm(&gpu, later + 30));
+        assert!(
+            file.read().others.is_empty(),
+            "another player version's crash"
+        );
+    }
+
+    /// A player before 0.5.23 (schema 2, no `others`) reads a schema-3 file:
+    /// the top-level record is what it sees, the others are ignored.
+    #[test]
+    fn an_older_player_reads_the_current_record_of_a_schema_3_file() {
+        #[derive(Debug, Deserialize)]
+        struct Schema2 {
+            schema: u32,
+            state: GuardState,
+            #[serde(flatten)]
+            key: GuardKey,
+            at: u64,
+            #[serde(default)]
+            losses: Vec<u64>,
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("render-state.json");
+        let file = GuardFile::new(Some(path.clone()));
+        let other = Keys::same(key("other"));
+        std::mem::forget(file.arm(&other, 100));
+        file.recover(150);
+        assert!(!file.device_lost(&Keys::same(key("1")), 200));
+        let text = std::fs::read(&path).unwrap();
+        assert!(String::from_utf8_lossy(&text).contains("\"others\""));
+        let old: Schema2 = serde_json::from_slice(&text).unwrap();
+        assert_eq!(
+            (old.schema, old.state, old.key, old.at, old.losses),
+            (SCHEMA, GuardState::Ok, key("1"), 0, vec![200])
+        );
     }
 
     #[test]

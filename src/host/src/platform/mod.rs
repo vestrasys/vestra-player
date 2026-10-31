@@ -288,13 +288,44 @@ pub struct GpuAdapter {
     pub luid: u64,
 }
 
+/// The adapter a mode uses, resolved once at start (`gpu_adapters`) and
+/// opened as it is (`select_wgpu_windows`), so the crash guard and the
+/// denylist look at the adapter the device is made on.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AdapterPick {
+    /// Its index in `GpuAdapters::list`; `None`: no adapter (an index or a
+    /// preference `VESTRA_GPU_ADAPTER` names that does not exist).
+    pub index: Option<usize>,
+    /// Its identity for opening it (Windows: the LUID).
+    pub luid: Option<u64>,
+    /// The software rasterizer (`VESTRA_GPU_ADAPTER=warp`).
+    pub warp: bool,
+    /// Why it was chosen (the `render:` lines).
+    pub how: String,
+}
+
+/// The system's graphics adapters and which ones the two modes would use
+/// (`gpu_adapters`).
+#[derive(Clone, Debug, Default)]
+pub struct GpuAdapters {
+    /// In the order the system offers them to this process.
+    pub list: Vec<GpuAdapter>,
+    /// GPU rendering's (Windows: the high-performance GPU unless the user
+    /// set a preference for Vestra in Windows Settings, or what
+    /// `VESTRA_GPU_ADAPTER` chooses).
+    pub gpu: AdapterPick,
+    /// CPU mode's Direct3D 12 windows' (Windows' order, or
+    /// `VESTRA_GPU_ADAPTER`).
+    pub windows: AdapterPick,
+}
+
 /// The adapters in the order the system offers them to this process, and
-/// the index of the one GPU rendering would use (Windows: the first, or the
-/// one `VESTRA_GPU_ADAPTER` chooses), before any window or device. Windows:
-/// DXGI through `vestra-win32`; elsewhere none yet.
+/// which ones GPU rendering and CPU mode's GPU windows would use, before any
+/// window or device. Windows: DXGI through `vestra-win32`; elsewhere none
+/// yet.
 #[cfg(not(target_os = "windows"))]
-pub fn gpu_adapters() -> (Vec<GpuAdapter>, Option<usize>) {
-    (Vec::new(), None)
+pub fn gpu_adapters() -> GpuAdapters {
+    GpuAdapters::default()
 }
 
 /// A GPU on which the system's video upscaler works (`upscaler_probe`).
@@ -460,6 +491,7 @@ pub use no_gpu::*;
 #[cfg(not(target_os = "windows"))]
 pub fn select_wgpu_windows(
     _winit: impl Fn() -> slint::BackendSelector,
+    _adapter: &AdapterPick,
 ) -> std::result::Result<(), String> {
     Err(format!("no wgpu windows on {}", std::env::consts::OS))
 }
