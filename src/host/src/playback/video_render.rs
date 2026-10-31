@@ -4,6 +4,10 @@
 //! writes mpv's defaults back. Only the GPU renderer applies them; the
 //! software renderer refuses with `unsupported` (the caller checks). They act
 //! at render time, so snapshots and exports never contain them.
+//!
+//! mpv's `glsl-shaders` is written only here: the owner's `shaders`, then
+//! the shader channel's joined list (`video_shaders`, any number of
+//! plugins, player 0.5.20).
 #![forbid(unsafe_code)]
 
 use crate::host::RpcError;
@@ -171,6 +175,9 @@ pub struct Options {
     settings: Settings,
     /// A shader failure was reported for the current settings.
     reported: bool,
+    /// The shader channel's joined list (`video_shaders`), written to mpv
+    /// after `settings.shaders`: this is the only writer of `glsl-shaders`.
+    channel: Vec<String>,
 }
 impl Options {
     pub fn owner(&self) -> Option<u64> {
@@ -210,30 +217,32 @@ impl Options {
         self.write(None, 60., player)?;
         Ok(true)
     }
-    /// The status push for a shader mpv could not compile (a `libmpv_render`
-    /// error log line carrying a compiler message, `compile_error`), once per
-    /// setting.
-    pub fn shader_failure(
-        &mut self,
-        prefix: &str,
-        level: &str,
-        text: &str,
-    ) -> Option<(u64, Value)> {
-        let owner = self.owner?;
-        let text = text.trim();
-        if self.reported
-            || self.settings.shaders.is_empty()
-            || prefix != "libmpv_render"
-            || level != "error"
-            || !compile_error(text)
-        {
-            return None;
-        }
+    /// The owner holds shaders it has not been told a compile failure for
+    /// (`video_shaders::Channel::compile_failure` reports to it).
+    pub fn unreported_shaders(&self) -> bool {
+        self.owner.is_some() && !self.reported && !self.settings.shaders.is_empty()
+    }
+    /// A compile failure was reported for the current settings: the owner.
+    pub fn mark_reported(&mut self) -> Option<u64> {
         self.reported = true;
-        Some((
-            owner,
-            status_failed("failed", &format!("shader compile failed: {text}")),
-        ))
+        self.owner
+    }
+    /// The shader channel's new joined list: `glsl-shaders` becomes the
+    /// render options' shaders, then `list`. On a refusal the previous list
+    /// is written back (best effort) and the call fails with `backend`.
+    pub fn set_channel(
+        &mut self,
+        list: Vec<String>,
+        player: &mut impl Player,
+    ) -> Result<(), RpcError> {
+        let own = self.owner.map_or(&[][..], |_| &self.settings.shaders[..]);
+        let joined = |channel: &[String]| [own, channel].concat();
+        if let Err(error) = player.shaders(&joined(&list)) {
+            let _ = player.shaders(&joined(&self.channel));
+            return Err(RpcError::new("backend", format!("glsl-shaders: {error}")));
+        }
+        self.channel = list;
+        Ok(())
     }
     /// Writes every option; on a refusal the previous values are restored
     /// (best effort) and the call fails with `backend`.
@@ -248,10 +257,13 @@ impl Options {
                 .iter()
                 .find_map(|(name, value)| player(name, value).err().map(|e| format!("{name}: {e}")))
         };
+        let channel = &self.channel;
+        let joined = |settings: Option<&Settings>| {
+            [settings.map_or(&[][..], |s| &s.shaders[..]), channel].concat()
+        };
         let failed = attempt(&mut |name, value| player.set(name, value)).or_else(|| {
-            let paths = next.as_ref().map_or(&[][..], |s| &s.shaders[..]);
             player
-                .shaders(paths)
+                .shaders(&joined(next.as_ref()))
                 .err()
                 .map(|e| format!("glsl-shaders: {e}"))
         });
@@ -260,7 +272,7 @@ impl Options {
             for (name, value) in properties(previous.as_ref(), refresh) {
                 let _ = player.set(name, &value);
             }
-            let _ = player.shaders(previous.as_ref().map_or(&[][..], |s| &s.shaders[..]));
+            let _ = player.shaders(&joined(previous.as_ref()));
             return Err(RpcError::new("backend", error));
         }
         self.settings = next.unwrap_or_default();
@@ -280,6 +292,13 @@ impl Options {
 ///
 /// mpv also logs the shader source with numbered lines (`[ 42] …`), which
 /// may contain any text, so those never count.
+///
+/// A log line of libmpv's renderer that is such a message (reported to the
+/// holders of shaders, `video_shaders::Channel::compile_failure`).
+pub fn compile_line(prefix: &str, level: &str, text: &str) -> bool {
+    prefix == "libmpv_render" && level == "error" && compile_error(text.trim())
+}
+
 fn compile_error(text: &str) -> bool {
     !text.starts_with('[')
         && (text.starts_with("ERROR:")
@@ -310,15 +329,35 @@ impl Player for Mpv<'_> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
     #[derive(Default)]
-    struct Fake {
+    pub(crate) struct Fake {
         props: BTreeMap<String, String>,
-        shaders: Vec<String>,
+        /// The last `glsl-shaders` list written.
+        pub(crate) shaders: Vec<String>,
         refuse: Option<&'static str>,
+    }
+    impl Options {
+        /// What the render owner hears for a log line (the backend asks
+        /// `compile_line`, then the shader channel, which reports to it).
+        fn shader_failure(
+            &mut self,
+            prefix: &str,
+            level: &str,
+            text: &str,
+        ) -> Option<(u64, Value)> {
+            if !compile_line(prefix, level, text) {
+                return None;
+            }
+            crate::playback::video_shaders::Channel::default()
+                .compile_failure(self, text)
+                .into_iter()
+                .next()
+                .map(|(owner, _, status)| (owner, status))
+        }
     }
     impl Player for Fake {
         fn set(&mut self, name: &str, value: &str) -> Result<(), String> {

@@ -331,6 +331,7 @@ impl Backend {
                 let frame_log = std::env::var("VESTRA_FRAME_LOG").as_deref() == Ok("1");
                 let mut view = crate::playback::video_view::View::default();
                 let mut render_options = crate::playback::video_render::Options::default();
+                let mut shaders = crate::playback::video_shaders::Channel::default();
                 let mut render_was_gpu = out_render.gpu().is_some();
                 let mut cover_art = CoverArt::default();
                 let mut subtitles = crate::playback::subtitle_backend::Subtitles::new(fonts);
@@ -393,6 +394,9 @@ impl Backend {
                                 }
                                 if render_options.owner() == Some(owner) {
                                     live.push("the video render options");
+                                }
+                                if shaders.holds(owner) {
+                                    live.push("video shaders");
                                 }
                                 if upscaling.holds(owner) {
                                     live.push("video upscaling");
@@ -460,6 +464,16 @@ impl Backend {
                             }
                             if let Err(error) = render_options.release(
                                 command.reply.owner,
+                                &mut crate::playback::video_render::Mpv(&mpv),
+                            ) {
+                                let _ = events.send(Event::Broadcast(
+                                    "host.error".into(),
+                                    json!({"code":error.code,"message":error.message}),
+                                ));
+                            }
+                            if let Err(error) = shaders.disable(
+                                command.reply.owner,
+                                &mut render_options,
                                 &mut crate::playback::video_render::Mpv(&mpv),
                             ) {
                                 let _ = events.send(Event::Broadcast(
@@ -592,6 +606,21 @@ impl Backend {
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
+                        // The shader channel (`video_shaders.rs`); the
+                        // capability layer checked the files.
+                        if command.method == "video.shaders.set" {
+                            let ready = sources.snapshot(&mpv)["phase"] == "ready";
+                            let result = shaders.set(
+                                command.reply.owner,
+                                &command.params,
+                                ready,
+                                out_render.gpu().is_some(),
+                                &mut render_options,
+                                &mut crate::playback::video_render::Mpv(&mpv),
+                            );
+                            let _ = events.send(Event::Reply(command.reply, result));
+                            continue;
+                        }
                         // A restarted player continues its first file where
                         // the replaced one was (`host/rendering.rs`): the
                         // next open of that file loads with `start=` and its
@@ -662,17 +691,23 @@ impl Backend {
                     }
                     while let Some(event) = mpv.poll_event() {
                         if let rsmpv::Event::LogMessage(message) = &event {
-                            if let Some((owner, status)) = render_options.shader_failure(
+                            if crate::playback::video_render::compile_line(
                                 &message.prefix,
                                 &message.level,
                                 &message.text,
                             ) {
-                                diag!("libmpv: {}", message.text.trim_end());
-                                let _ = events.send(Event::PluginMessage(
-                                    owner,
-                                    "video.render.status".into(),
-                                    status,
-                                ));
+                                let pushes =
+                                    shaders.compile_failure(&mut render_options, &message.text);
+                                if !pushes.is_empty() {
+                                    diag!("libmpv: {}", message.text.trim_end());
+                                }
+                                for (owner, event, status) in pushes {
+                                    let _ = events.send(Event::PluginMessage(
+                                        owner,
+                                        event.into(),
+                                        status,
+                                    ));
+                                }
                             }
                             if message.prefix == "sub/ass"
                                 && (message.text.contains("fontselect")
@@ -745,6 +780,15 @@ impl Backend {
                             "video.render.status".into(),
                             status,
                         ));
+                    }
+                    if render_was_gpu && !render_is_gpu {
+                        for (owner, status) in shaders.software_fallback() {
+                            let _ = events.send(Event::PluginMessage(
+                                owner,
+                                "video.shaders.status".into(),
+                                status,
+                            ));
+                        }
                     }
                     render_was_gpu = render_is_gpu;
                     #[cfg(feature = "producer-audio")]

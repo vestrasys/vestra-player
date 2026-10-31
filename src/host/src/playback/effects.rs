@@ -79,6 +79,148 @@ pub enum VideoNode {
     FrameBlend {
         fps: f64,
     },
+    /// FFmpeg `convolution`: one integer matrix per plane (0–3 of the
+    /// decoded format: luma, Cb, Cr, alpha for YUV), `None` or a missing
+    /// entry leaves the plane as it is (SDK 1.5.39, player 0.5.20).
+    Convolution {
+        planes: Vec<Option<ConvolutionPlane>>,
+    },
+    /// FFmpeg `lut3d` with a `.cube` file. `file` is the canonical path the
+    /// capability layer resolved inside the plugin's package or data
+    /// directory (`plugin_files::lut`); here only its form is checked.
+    Lut3d {
+        file: String,
+        interpolation: Lut3dInterpolation,
+    },
+}
+
+/// One plane of a `convolution` node.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConvolutionPlane {
+    pub mode: ConvolutionMode,
+    /// Integers; `square`: 9, 25 or 49 (3×3, 5×5, 7×7), row by row;
+    /// `row`/`column`: an odd count 1–49.
+    pub matrix: Vec<f64>,
+    /// The sum is multiplied by it; 0: 1 / (sum of the matrix), or 1 when
+    /// that is 0 (FFmpeg's default).
+    pub rdiv: f64,
+    /// Added after the multiplication, in the plane's sample units.
+    pub bias: f64,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConvolutionMode {
+    Square,
+    Row,
+    Column,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Lut3dInterpolation {
+    Nearest,
+    Trilinear,
+    Tetrahedral,
+    Pyramid,
+    Prism,
+}
+
+/// Bounds of the `convolution` and `lut3d` nodes (the SDK's
+/// `VIDEO_PROCESSING_LIMITS` repeats them; host-agreement test).
+pub const MATRIX_VALUE: f64 = 1024.0;
+pub const MAX_RDIV: f64 = 256.0;
+pub const MAX_BIAS: f64 = 65535.0;
+/// Longest `lut3d` path in bytes.
+pub const MAX_LUT_PATH: usize = 4096;
+
+/// A path as one value of an FFmpeg filter option inside a filter graph:
+/// quoted for the option parser (`'` written as `'\''`), then escaped for
+/// the graph parser (`\ ' , ;` with a backslash). The player wraps the graph
+/// in mpv's `[...]`, which ends at an unbalanced bracket, so paths with `[`
+/// or `]` are refused before (`Lut3d` validation).
+fn lavfi_path(path: &str) -> String {
+    let quoted = format!("'{}'", path.replace('\'', r"'\''"));
+    let mut escaped = String::with_capacity(quoted.len() + 8);
+    for c in quoted.chars() {
+        if matches!(c, '\\' | '\'' | ',' | ';') {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped
+}
+
+impl ConvolutionPlane {
+    fn validate(&self, index: usize) -> Result<()> {
+        let count = self.matrix.len();
+        let sized = match self.mode {
+            ConvolutionMode::Square => matches!(count, 9 | 25 | 49),
+            ConvolutionMode::Row | ConvolutionMode::Column => count % 2 == 1 && count <= 49,
+        };
+        if !sized {
+            return Err(ValidationError(format!(
+                "convolution plane {index}: a square matrix has 9, 25 or 49 entries, a row or column an odd number up to 49 (got {count})"
+            )));
+        }
+        for value in &self.matrix {
+            integer(
+                &format!("convolution plane {index} matrix entry"),
+                *value,
+                -MATRIX_VALUE,
+                MATRIX_VALUE,
+            )?;
+        }
+        range(
+            &format!("convolution plane {index} rdiv"),
+            self.rdiv,
+            0.0,
+            MAX_RDIV,
+        )?;
+        range(
+            &format!("convolution plane {index} bias"),
+            self.bias,
+            0.0,
+            MAX_BIAS,
+        )
+    }
+    fn mode(&self) -> &'static str {
+        match self.mode {
+            ConvolutionMode::Square => "square",
+            ConvolutionMode::Row => "row",
+            ConvolutionMode::Column => "column",
+        }
+    }
+}
+
+/// The form of a `lut3d` file path: absolute, `.cube`, bounded, and
+/// without characters the player's graph cannot carry (`[`, `]`, control
+/// characters). Where it is and what it holds is checked when the request
+/// arrives (`plugin_files::lut`).
+pub fn lut_path(file: &str) -> Result<()> {
+    if file.len() > MAX_LUT_PATH || file.chars().any(char::is_control) {
+        return Err(ValidationError(format!(
+            "lut3d file must be a path of at most {MAX_LUT_PATH} bytes without control characters"
+        )));
+    }
+    if file.contains(['[', ']']) {
+        return Err(ValidationError(
+            "lut3d file path must not contain [ or ]".into(),
+        ));
+    }
+    let path = std::path::Path::new(file);
+    if !path.is_absolute() {
+        return Err(ValidationError(
+            "lut3d file must be an absolute path".into(),
+        ));
+    }
+    if !path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("cube"))
+    {
+        return Err(ValidationError("lut3d file must be a .cube file".into()));
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -343,6 +485,25 @@ impl Node for VideoNode {
                 range("y", *y, -1.0, 1.0)
             }
             Self::FrameBlend { fps } => integer("fps", *fps, 24.0, 120.0),
+            Self::Convolution { planes } => {
+                if planes.is_empty() || planes.len() > 4 {
+                    return Err(ValidationError(
+                        "convolution planes must have 1 to 4 entries".into(),
+                    ));
+                }
+                if planes.iter().all(Option::is_none) {
+                    return Err(ValidationError(
+                        "convolution needs at least one plane with a matrix".into(),
+                    ));
+                }
+                for (index, plane) in planes.iter().enumerate() {
+                    if let Some(plane) = plane {
+                        plane.validate(index)?;
+                    }
+                }
+                Ok(())
+            }
+            Self::Lut3d { file, .. } => lut_path(file),
         }
     }
     fn last(&self) -> bool {
@@ -385,6 +546,8 @@ impl Node for VideoNode {
             Self::Deinterlace { .. } => "bwdif",
             Self::Reframe { .. } => "reframe",
             Self::FrameBlend { .. } => "framerate",
+            Self::Convolution { .. } => "convolution",
+            Self::Lut3d { .. } => "lut3d",
         }
     }
     fn filters(&self) -> Vec<Filter> {
@@ -520,6 +683,52 @@ impl Node for VideoNode {
                 ),
             ],
             Self::FrameBlend { fps } => vec![parameter("fps", fps, false)],
+            Self::Convolution { planes } => {
+                const NAMES: [[&str; 4]; 4] = [
+                    ["0m", "0rdiv", "0bias", "0mode"],
+                    ["1m", "1rdiv", "1bias", "1mode"],
+                    ["2m", "2rdiv", "2bias", "2mode"],
+                    ["3m", "3rdiv", "3bias", "3mode"],
+                ];
+                planes
+                    .iter()
+                    .zip(NAMES)
+                    .filter_map(|(plane, names)| plane.as_ref().map(|plane| (plane, names)))
+                    .flat_map(|(plane, [m, rdiv, bias, mode])| {
+                        // Integers (validated), written without a fraction:
+                        // FFmpeg reads the entries as integers.
+                        let matrix = plane
+                            .matrix
+                            .iter()
+                            .map(|v| format!("{v:.0}"))
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        [
+                            parameter(m, format!("'{matrix}'"), false),
+                            parameter(rdiv, plane.rdiv, false),
+                            parameter(bias, plane.bias, false),
+                            parameter(mode, plane.mode(), false),
+                        ]
+                    })
+                    .collect()
+            }
+            Self::Lut3d {
+                file,
+                interpolation,
+            } => vec![
+                parameter("file", lavfi_path(file), false),
+                parameter(
+                    "interp",
+                    match interpolation {
+                        Lut3dInterpolation::Nearest => "nearest",
+                        Lut3dInterpolation::Trilinear => "trilinear",
+                        Lut3dInterpolation::Tetrahedral => "tetrahedral",
+                        Lut3dInterpolation::Pyramid => "pyramid",
+                        Lut3dInterpolation::Prism => "prism",
+                    },
+                    false,
+                ),
+            ],
             Self::Transform { .. } | Self::Reframe { .. } => Vec::new(),
         }
     }
@@ -1441,5 +1650,203 @@ mod tests {
             .unwrap();
         assert_eq!(bypass.target, "dynaudnorm@n1");
         assert_eq!(bypass.value, "0");
+    }
+
+    fn plane(mode: ConvolutionMode, matrix: &[f64], rdiv: f64, bias: f64) -> ConvolutionPlane {
+        ConvolutionPlane {
+            mode,
+            matrix: matrix.to_vec(),
+            rdiv,
+            bias,
+        }
+    }
+    const SHARPEN: [f64; 9] = [0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0];
+
+    #[test]
+    fn convolution_writes_each_given_plane_and_leaves_the_others() {
+        let graph = video(vec![VideoNode::Convolution {
+            planes: vec![
+                Some(plane(ConvolutionMode::Square, &SHARPEN, 1.0, 0.0)),
+                None,
+                Some(plane(ConvolutionMode::Row, &[1.0, 2.0, 1.0], 0.25, 16.0)),
+            ],
+        }]);
+        assert_eq!(
+            graph,
+            "convolution@n0=0m='0 -1 0 -1 5 -1 0 -1 0':0rdiv=1:0bias=0:0mode=square:2m='1 2 1':2rdiv=0.25:2bias=16:2mode=row"
+        );
+        // 5×5 and 7×7 squares, a column of 49, a row of 1.
+        for (mode, count) in [
+            (ConvolutionMode::Square, 25),
+            (ConvolutionMode::Square, 49),
+            (ConvolutionMode::Column, 49),
+            (ConvolutionMode::Row, 1),
+        ] {
+            let node = VideoNode::Convolution {
+                planes: vec![Some(plane(mode, &vec![1.0; count], 0.0, 0.0))],
+            };
+            assert!(node.validate().is_ok(), "{mode:?} {count}");
+        }
+    }
+
+    #[test]
+    fn convolution_values_are_checked_strictly() {
+        let bad = [
+            vec![Some(plane(ConvolutionMode::Square, &[1.0; 8], 0.0, 0.0))],
+            vec![Some(plane(ConvolutionMode::Square, &[1.0; 16], 0.0, 0.0))],
+            vec![Some(plane(ConvolutionMode::Row, &[1.0; 2], 0.0, 0.0))],
+            vec![Some(plane(ConvolutionMode::Column, &[1.0; 51], 0.0, 0.0))],
+            vec![Some(plane(ConvolutionMode::Row, &[], 0.0, 0.0))],
+            vec![Some(plane(ConvolutionMode::Row, &[0.5], 0.0, 0.0))],
+            vec![Some(plane(ConvolutionMode::Row, &[1025.0], 0.0, 0.0))],
+            vec![Some(plane(ConvolutionMode::Row, &[-1025.0], 0.0, 0.0))],
+            vec![Some(plane(ConvolutionMode::Row, &[f64::NAN], 0.0, 0.0))],
+            vec![Some(plane(ConvolutionMode::Row, &[1.0], -0.5, 0.0))],
+            vec![Some(plane(ConvolutionMode::Row, &[1.0], 257.0, 0.0))],
+            vec![Some(plane(
+                ConvolutionMode::Row,
+                &[1.0],
+                f64::INFINITY,
+                0.0,
+            ))],
+            vec![Some(plane(ConvolutionMode::Row, &[1.0], 1.0, -1.0))],
+            vec![Some(plane(ConvolutionMode::Row, &[1.0], 1.0, 65536.0))],
+            vec![],
+            vec![None],
+            vec![None; 5],
+        ];
+        for planes in bad {
+            let node = VideoNode::Convolution {
+                planes: planes.clone(),
+            };
+            assert!(node.validate().is_err(), "{planes:?}");
+        }
+        // No raw strings: unknown fields and string matrices are refused.
+        for text in [
+            r#"{"kind":"convolution","planes":[{"mode":"square","matrix":"1 1 1","rdiv":0,"bias":0}]}"#,
+            r#"{"kind":"convolution","planes":[{"mode":"square","matrix":[1],"rdiv":0,"bias":0,"m":"x"}]}"#,
+            r#"{"kind":"convolution","planes":[{"mode":"diagonal","matrix":[1],"rdiv":0,"bias":0}]}"#,
+            r#"{"kind":"convolution","planes":[{"mode":"row","matrix":[1]}]}"#,
+            r#"{"kind":"lut3d","file":"/a.cube","interpolation":"tetrahedral","clut":"first"}"#,
+        ] {
+            assert!(serde_json::from_str::<VideoNode>(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn lut3d_paths_are_quoted_for_both_graph_parsers() {
+        let file = if cfg!(windows) {
+            r"C:\Users\O'Brien\looks, warm; v2\film.cube"
+        } else {
+            "/Users/O'Brien/looks, warm; v2/film.cube"
+        };
+        let node = VideoNode::Lut3d {
+            file: file.into(),
+            interpolation: Lut3dInterpolation::Tetrahedral,
+        };
+        let graph = video(vec![node.clone()]);
+        let expected = if cfg!(windows) {
+            r"lut3d@n0=file=\'C:\\Users\\O\'\\\'\'Brien\\looks\, warm\; v2\\film.cube\':interp=tetrahedral"
+        } else {
+            r"lut3d@n0=file=\'/Users/O\'\\\'\'Brien/looks\, warm\; v2/film.cube\':interp=tetrahedral"
+        };
+        assert_eq!(graph, expected);
+        assert!(needs_frames_in_memory(
+            [resource("a", "r", vec![node])].iter()
+        ));
+        for bad in [
+            "relative/film.cube",
+            if cfg!(windows) {
+                r"C:\looks\film.3dl"
+            } else {
+                "/looks/film.3dl"
+            },
+            if cfg!(windows) {
+                r"C:\looks[1]\film.cube"
+            } else {
+                "/looks[1]/film.cube"
+            },
+            if cfg!(windows) {
+                "C:\\looks\n\\film.cube"
+            } else {
+                "/looks\n/film.cube"
+            },
+        ] {
+            let node = VideoNode::Lut3d {
+                file: bad.into(),
+                interpolation: Lut3dInterpolation::Trilinear,
+            };
+            assert!(node.validate().is_err(), "{bad}");
+        }
+    }
+
+    /// The graphs above, run by FFmpeg (the offline path of snapshots and
+    /// exports): a box blur smooths an edge, a sharpening matrix changes
+    /// one, and a LUT in a directory named with a quote, a comma and a
+    /// semicolon inverts grey. Needs `ffmpeg` (`VESTRA_FFMPEG` or PATH):
+    /// `cargo test --locked -- --ignored ffmpeg_runs`.
+    #[test]
+    #[ignore = "needs ffmpeg"]
+    fn ffmpeg_runs_convolution_and_lut3d_graphs() {
+        let ffmpeg = std::env::var("VESTRA_FFMPEG").unwrap_or_else(|_| "ffmpeg".into());
+        let run = |source: &str, graph: &str| -> Vec<u8> {
+            let output = std::process::Command::new(&ffmpeg)
+                .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i"])
+                .arg(source)
+                .arg("-vf")
+                .arg(format!("{graph},format=gray"))
+                .args(["-frames:v", "1", "-f", "rawvideo", "-"])
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{graph}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            output.stdout
+        };
+        // A vertical edge: left half black, right half white.
+        let edge = "color=black:s=16x16,format=gray,drawbox=x=8:y=0:w=8:h=16:color=white:t=fill";
+        let blur = video(vec![VideoNode::Convolution {
+            planes: vec![Some(plane(ConvolutionMode::Square, &[1.0; 9], 0.0, 0.0))],
+        }]);
+        let blurred = run(edge, &blur);
+        let row = &blurred[16 * 8..16 * 9];
+        assert!(row[7] > 40 && row[7] < 215, "blurred edge {row:?}");
+        let identity = video(vec![VideoNode::Convolution {
+            planes: vec![Some(plane(
+                ConvolutionMode::Square,
+                &[0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                1.0,
+                0.0,
+            ))],
+        }]);
+        let unchanged = run(edge, &identity);
+        assert!(unchanged[16 * 8 + 7] < 20, "identity keeps the edge");
+        let sharpen = video(vec![VideoNode::Convolution {
+            planes: vec![Some(plane(ConvolutionMode::Square, &SHARPEN, 1.0, 0.0))],
+        }]);
+        let gray = "color=gray:s=16x16,format=gray,drawbox=x=8:y=0:w=8:h=16:color=0xa0a0a0:t=fill";
+        assert_ne!(run(gray, &sharpen), run(gray, "null"), "sharpening");
+        // An inverting 2-point LUT, in a directory the graph must escape.
+        let dir = tempfile::tempdir().unwrap();
+        let looks = dir.path().join("O'Brien, looks; v2");
+        std::fs::create_dir(&looks).unwrap();
+        let cube = looks.join("invert.cube");
+        let mut text = String::from("LUT_3D_SIZE 2\n");
+        for b in [1, 0] {
+            for g in [1, 0] {
+                for r in [1, 0] {
+                    text.push_str(&format!("{r} {g} {b}\n"));
+                }
+            }
+        }
+        std::fs::write(&cube, text).unwrap();
+        let lut = video(vec![VideoNode::Lut3d {
+            file: cube.to_str().unwrap().into(),
+            interpolation: Lut3dInterpolation::Trilinear,
+        }]);
+        let inverted = run("color=0x202020:s=16x16", &lut);
+        assert!(inverted.iter().all(|v| *v > 200), "{:?}", &inverted[..4]);
     }
 }
