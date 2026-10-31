@@ -194,7 +194,7 @@ pub fn source(pages: &[&Page]) -> Result<String> {
         ));
     }
     source.push_str(&format!(
-        r#"import {{ ScrollView }} from "std-widgets.slint";
+        r#"import {{ ListView, ScrollView }} from "std-widgets.slint";
 import {{ Theme }} from "@vestra/theme.slint";
 import {{ Button }} from "@vestra/widgets.slint";
 export {{ VestraPalette }} from "palette.slint";
@@ -215,27 +215,28 @@ export component OptionsWindow inherits Window {{
             Rectangle {{
                 width: 160px;
                 background: Theme.bg-list;
-                tree := ScrollView {{
-                    VerticalLayout {{
-                        alignment: start;
-                        padding-top: 4px;
-                        for row in root.rows: Rectangle {{
-                            height: 20px;
-                            background: row.selected ? Theme.selected-bg : touch.has-hover && !row.header ? Theme.hover-bg : transparent;
-                            if row.selected: Rectangle {{ x: 8px; y: 4px; width: 2px; height: 12px; border-radius: 1px; background: Theme.accent; }}
-                            Text {{
-                                x: row.header ? 8px : 20px;
-                                width: parent.width - self.x - 4px;
-                                text: row.label;
-                                font-size: Theme.font-body;
-                                vertical-alignment: center;
-                                overflow: elide;
-                                color: row.header ? Theme.text-dim : row.selected ? Theme.text : Theme.text-list;
-                            }}
-                            touch := TouchArea {{
-                                enabled: !row.header;
-                                clicked => {{ root.select(row.page); }}
-                            }}
+                // A virtualized list (only the rows in view exist), 4px
+                // below the top as the tree always was.
+                tree := ListView {{
+                    width: parent.width;
+                    y: 4px;
+                    height: parent.height - 4px;
+                    for row in root.rows: Rectangle {{
+                        height: 20px;
+                        background: row.selected ? Theme.selected-bg : touch.has-hover && !row.header ? Theme.hover-bg : transparent;
+                        if row.selected: Rectangle {{ x: 8px; y: 4px; width: 2px; height: 12px; border-radius: 1px; background: Theme.accent; }}
+                        Text {{
+                            x: row.header ? 8px : 20px;
+                            width: parent.width - self.x - 4px;
+                            text: row.label;
+                            font-size: Theme.font-body;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            color: row.header ? Theme.text-dim : row.selected ? Theme.text : Theme.text-list;
+                        }}
+                        touch := TouchArea {{
+                            enabled: !row.header;
+                            clicked => {{ root.select(row.page); }}
                         }}
                     }}
                 }}
@@ -1098,7 +1099,8 @@ mod tests {
                 );
                 assert_eq!(pages_y, 0.0, "{label}");
                 assert_eq!(pages_h, height - footer, "{label}: page height");
-                assert_eq!(tree, height - footer, "{label}: tree height");
+                // The tree's list starts 4px down (its top padding).
+                assert_eq!(tree, height - footer - 4.0, "{label}: tree height");
             }
         }
     }

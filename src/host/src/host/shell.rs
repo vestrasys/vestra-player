@@ -288,14 +288,16 @@ impl Host {
         let labels = self.labels();
         set_menu_model(
             window,
-            menu_levels(
-                window,
-                &roots,
-                &mut self.menu_path.clone(),
-                &self.menu_scroll,
-                &labels,
-            )?
-            .0,
+            ui_values::from_json(
+                &menu_levels(
+                    window,
+                    &roots,
+                    &mut self.menu_path.clone(),
+                    &self.menu_scroll,
+                    &labels,
+                )?
+                .0,
+            )?,
         )?;
         if let Some(image) = &self.last_image {
             window.set_property("video-frame", image.clone().into())?;

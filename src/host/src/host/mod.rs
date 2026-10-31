@@ -64,6 +64,8 @@ pub(crate) use input::{
 };
 pub(crate) use lazy::Origin;
 pub(crate) use lifecycle::activation_outcome;
+#[cfg(test)]
+pub(crate) use menus::{MenuWrite, ShownMenu, apply_menu_levels};
 pub(crate) use menus::{
     debug_menu, debug_menu_pointer, menu_levels, set_menu_model, track_pointer,
 };
@@ -180,6 +182,8 @@ pub(crate) struct Host {
     /// G-15: submenu aim, and the open panels it aims at (by depth).
     pub(crate) menu_aim: menu::HoverAim,
     pub(crate) menu_panels: Vec<menu::Rect>,
+    /// What the menu's window shows (`apply_menu_levels`).
+    pub(crate) menu_shown: menus::ShownMenu,
     pub(crate) policy: window_state::Policy,
     pub(crate) clock: Instant,
     pub(crate) window_facts: Value,
