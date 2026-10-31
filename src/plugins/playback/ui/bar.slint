@@ -39,10 +39,13 @@ export global PlaybackBridge {
     // B22: marks sorted by time (4096 at most), and the A-B loop, as fractions of the duration.
     in-out property <[SeekMark]> marks;
     // B22: each kind's ticks as SVG path commands, `M<x> 0V1` per tick with x
-    // 0…100000 across the line (the Paths' viewbox): one Path per kind.
+    // the whole px column on the line (0…tick-span): one Path per kind.
     in-out property <string> chapter-ticks;
     in-out property <string> bookmark-ticks;
     in-out property <string> marker-ticks;
+    // The line's span (px) the plugin built the ticks for (0: none yet); it
+    // answers `span-changed`.
+    in-out property <float> tick-span;
     in-out property <bool> has-loop;
     in-out property <float> loop-a;
     in-out property <float> loop-b;
@@ -98,6 +101,9 @@ export global PlaybackBridge {
     // I07: the pointer came onto the seek line (hover or drag) or left it; the
     // sprite sheets are sent only meanwhile (the player decodes each on its UI thread).
     callback pointing(bool);
+    // B22: the seek line's span (its width less the 4px insets) in px, at
+    // start and whenever the width changes; the plugin rebuilds the ticks.
+    callback span-changed(float);
     callback volume-changed(float);
     callback volume-released(float);
     callback toggle-time();
@@ -157,17 +163,22 @@ component BarButton inherits Rectangle {
 // B22: 1×6 marks across the line (chapter Theme.text-dim, bookmark Theme.accent,
 // marker Theme.playing) and the A-B loop: a 2px Theme.playing band under the
 // line with 1×8 ends. Marks take no input: a click seeks as before.
-// The marks are one Path per kind (a 1px stroke from the plugin's commands,
-// scaled by the viewbox to the line's width), never an element per mark.
+// The marks are one Path per kind (a 1px stroke from the plugin's commands),
+// never an element per mark. Each tick fills one whole pixel column, as the
+// 1px Rectangles before 0.2.6 did: Slint fits the viewbox into the element
+// less the stroke width and offsets it by half the stroke
+// (`Path::fitted_path_events`), so a viewbox `span` wide over an element
+// `span + 1px` wide is drawn at scale 1 and x n of the commands (a whole
+// number) puts the stroke's centre at 4px + n + 0.5px: column 4px + n.
 component MarkTicks inherits Path {
     in property <length> span;
-    // The stroke's centre sits 0.5px inside the element: x 0 of the viewbox
-    // draws over 4px…5px of the seek bar, as the line's 4px inset.
     x: 4px;
     y: 1.5px;
     width: self.span + 1px;
     height: 7px;
-    viewbox-width: 100000;
+    // The span the commands were built for; while the plugin catches up with a
+    // resize, the ticks stretch to the new width for that moment.
+    viewbox-width: PlaybackBridge.tick-span > 0 ? PlaybackBridge.tick-span : self.span / 1px;
     viewbox-height: 1;
     fit: fill;
     stroke-width: 1px;
@@ -185,6 +196,12 @@ component SeekBar inherits Rectangle {
     // I07: the fraction under the pointer; the preview box picks its cell from it.
     out property <float> pointer-fraction: root.fraction(touch.mouse-x);
     changed pointing => { PlaybackBridge.pointing(self.pointing); }
+    // B22: the plugin builds the ticks for this span (pixel columns).
+    init => { PlaybackBridge.span-changed(root.span / 1px); }
+    changed span => { PlaybackBridge.span-changed(self.span / 1px); }
+    // Again when marks come for another span (a report the plugin never got).
+    private property <bool> stale-ticks: PlaybackBridge.marks.length > 0 && PlaybackBridge.tick-span != root.span / 1px;
+    changed stale-ticks => { if self.stale-ticks { PlaybackBridge.span-changed(root.span / 1px); } }
     height: 10px;
     function fraction(x: length) -> float {
         return clamp((x - 4px) / root.span, 0, 1);
@@ -374,9 +391,13 @@ export component PlaybackBar inherits Rectangle {
             width: 70px;
             height: 10px;
             text: PlaybackBridge.tip-volume;
+            // Out of the Tab chain: with Tab unbound (or the default shortcuts
+            // ignored), Tab must not land here and turn the arrows from seeking
+            // into volume steps. The mouse works as before.
             Slider {
                 width: 100%;
                 height: 100%;
+                focusable: false;
                 minimum: 0;
                 maximum: 100;
                 enabled: PlaybackBridge.can-volume;

@@ -265,3 +265,33 @@ test("UI-BAR-10 the threshold stays put while the time runs and when it shows th
   const unknown = textWidth(" / --:--");
   assert.equal(timeWidth(textWidth("1:00:00"), textWidth("---:--"), unknown), textWidth("1:00:00") + unknown);
 });
+
+/**
+ * 0.2.7: the bar keeps keyboard focus out of its sliders. The library Slider
+ * takes Tab focus unless `focusable: false`; with Tab unbound (or the default
+ * shortcuts ignored) Tab would land in it and the arrows would change it
+ * instead of seeking. The seek line is the bar's own SeekBar, with no
+ * FocusScope, so it never takes focus.
+ */
+test("0.2.7 bar.slint: every library Slider is focusable: false; the SeekBar has no FocusScope", () => {
+  const code = slint.replace(/\/\/.*$/gm, "");
+  const bodies: string[] = [];
+  for (const match of code.matchAll(/\bSlider\s*\{/g)) {
+    let depth = 0;
+    let end = match.index;
+    for (let i = match.index + match[0].length - 1; i < code.length; i++) {
+      if (code[i] === "{") depth++;
+      else if (code[i] === "}" && --depth === 0) {
+        end = i;
+        break;
+      }
+    }
+    bodies.push(code.slice(match.index, end));
+  }
+  assert.ok(bodies.length >= 1, "the volume slider is a library Slider");
+  for (const body of bodies) assert.match(body, /^\s*focusable:\s*false;/m, body);
+  const seekBar = code.slice(code.indexOf("component SeekBar"), code.indexOf("component MuteButton"));
+  assert.ok(seekBar.length > 0);
+  assert.doesNotMatch(seekBar, /FocusScope|forward-focus/);
+  assert.doesNotMatch(code, /FocusScope/, "the bar has no focus scope of its own");
+});
