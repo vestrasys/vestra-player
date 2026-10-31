@@ -87,7 +87,10 @@ export class Runtime {
     startup = new Set();
     #activating = true;
     #transport;
-    #bindings = new Set();
+    /** Each binding with the events whose state it read last time (held). */
+    #bindings = new Map();
+    /** The events read by the binding being evaluated. */
+    #reads;
     #scheduled = false;
     #events = new Map();
     views = new Map();
@@ -149,13 +152,46 @@ export class Runtime {
         this.#activating = false;
     }
     bind(evaluate) {
-        this.#bindings.add(evaluate);
+        const held = new Map();
+        this.#bindings.set(evaluate, held);
         this.invalidate();
         return {
             dispose: async () => {
+                if (this.#bindings.get(evaluate) !== held)
+                    return;
                 this.#bindings.delete(evaluate);
+                for (const hold of held.values())
+                    await hold.dispose();
+                held.clear();
             },
         };
+    }
+    /**
+     * A service's state for `event` is read: a binding evaluated now depends
+     * on it, so the event counts as listened to while the binding reads it.
+     */
+    reading(event) {
+        this.#reads?.add(event);
+    }
+    /** Evaluate one binding, holding the events whose state it read. */
+    #evaluate(evaluate, held) {
+        const reads = new Set();
+        const outer = this.#reads;
+        this.#reads = reads;
+        try {
+            evaluate();
+        }
+        finally {
+            this.#reads = outer;
+            for (const [event, hold] of held)
+                if (!reads.has(event)) {
+                    held.delete(event);
+                    void hold.dispose();
+                }
+            for (const event of reads)
+                if (!held.has(event))
+                    held.set(event, this.hold(event));
+        }
     }
     /** Coalesce: one evaluation pass per microtask turn, however many changes. */
     invalidate() {
@@ -164,9 +200,11 @@ export class Runtime {
         this.#scheduled = true;
         queueMicrotask(() => {
             this.#scheduled = false;
-            for (const evaluate of this.#bindings) {
+            for (const [evaluate, held] of [...this.#bindings]) {
+                if (this.#bindings.get(evaluate) !== held)
+                    continue;
                 try {
-                    evaluate();
+                    this.#evaluate(evaluate, held);
                 }
                 catch (error) {
                     console.error(`[${this.manifest.id}] binding failed:`, error);
@@ -177,35 +215,88 @@ export class Runtime {
     /**
      * Host events with one `events.subscribe` per name, however many listeners.
      * Without the `events` capability the listener simply never fires.
+     * `mirror`: the SDK's own copy of the state (`plugin.player.state` and
+     * the like), not a listener of the plugin's (see {@link EventGroup}).
      */
     on(event, listener, 
     /** The capability the event needs; `null`: none. */
-    needs = "events") {
+    needs = "events", mirror = false) {
         let entry = this.#events.get(event);
+        const created = !entry;
         if (!entry) {
-            entry = { listeners: new Set() };
+            entry = { listeners: new Set(), active: 0 };
             this.#events.set(event, entry);
-            if (needs === null || this.can(needs)) {
-                const group = entry;
-                entry.off = this.host.events.subscribe(event, (data) => {
-                    for (const each of [...group.listeners])
-                        each(data);
-                });
-                this.starting(entry.off, (error) => console.error(`[${this.manifest.id}] subscribe ${event}:`, error));
-            }
         }
-        entry.listeners.add(listener);
         const group = entry;
+        group.listeners.add(listener);
+        if (!mirror)
+            group.active++;
+        if (created && (needs === null || this.can(needs))) {
+            group.told = group.active > 0;
+            group.off = this.host.events.subscribe(event, (data) => {
+                for (const each of [...group.listeners])
+                    each(data);
+            }, !group.told);
+            this.starting(group.off, (error) => console.error(`[${this.manifest.id}] subscribe ${event}:`, error));
+        }
+        else
+            this.#tell(event, group);
+        let listening = true;
         return {
             dispose: async () => {
-                group.listeners.delete(listener);
-                if (group.listeners.size || this.#events.get(event) !== group)
+                if (!listening)
                     return;
+                listening = false;
+                group.listeners.delete(listener);
+                if (!mirror)
+                    group.active--;
+                if (this.#events.get(event) !== group)
+                    return;
+                if (group.listeners.size)
+                    return this.#tell(event, group);
                 this.#events.delete(event);
                 const off = await group.off?.catch(() => undefined);
                 await off?.().catch(() => { });
             },
         };
+    }
+    /**
+     * Count `event` as listened to while held: a watcher of a service's
+     * state, a binding that reads it. Nothing when nothing subscribed to it
+     * (no capability, or the service did not start).
+     */
+    hold(event) {
+        const group = this.#events.get(event);
+        if (!group)
+            return { dispose: async () => { } };
+        group.active++;
+        this.#tell(event, group);
+        let held = true;
+        return {
+            dispose: async () => {
+                if (!held)
+                    return;
+                held = false;
+                group.active--;
+                if (this.#events.get(event) === group)
+                    this.#tell(event, group);
+            },
+        };
+    }
+    /** Tell the player when `group` changes between mirror and listener. */
+    #tell(event, group) {
+        const off = group.off;
+        const active = group.active > 0;
+        if (!off || group.told === active)
+            return;
+        group.told = active;
+        // Part of activation while it runs: the player classifies the plugin
+        // at its ready, which must see this mark. A failure is not one of
+        // activation (an older player never refuses it).
+        const told = off
+            .then(() => this.host.events.listen(event, active))
+            .catch(() => { });
+        this.starting(told, () => { });
     }
     /** Raw transport events the host pushes without a subscription. */
     raw(event, listener) {

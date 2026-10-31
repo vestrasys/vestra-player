@@ -526,6 +526,8 @@ fn main() -> Result<()> {
                 evidence.sample(&host.backend, &observed_source, start)?;
             }
         }
+        // Lazy activation: what each running plugin was at its ready.
+        host.lazy_quit();
         stop_handoffs();
     } else {
         let native_before = platform::capture_windows().ok();
@@ -690,6 +692,8 @@ fn main() -> Result<()> {
         // The loop also ends with an error when the windows' GPU device was
         // lost (a driver reset): tear down as usual first.
         let ran = slint::run_event_loop();
+        // Lazy activation: what each running plugin was at its ready.
+        host.borrow_mut().lazy_quit();
         stop_handoffs();
         // Read now: only a loss that ended the loop restarts the player.
         if platform::window_device_lost() {

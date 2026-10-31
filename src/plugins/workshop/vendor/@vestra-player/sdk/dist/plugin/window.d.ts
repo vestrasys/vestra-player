@@ -26,7 +26,7 @@ export declare class WindowService {
     accept(facts: WindowFacts): void;
     read(): Promise<void>;
     watch(listener: (state: WindowState) => void): {
-        dispose: () => Promise<undefined>;
+        dispose: () => Promise<void>;
     };
 }
 export declare const windowOf: (runtime: Runtime) => WindowService;

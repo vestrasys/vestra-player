@@ -255,14 +255,18 @@ export function createWire(transport) {
             set: (options) => transport.request("layout.set", options),
         },
         events: {
-            /** One `events.subscribe` per name however many listeners. */
-            async subscribe(event, listener) {
+            /**
+             * One `events.subscribe` per name however many listeners. `mirror`:
+             * only the SDK keeps a copy of the state (player 0.5.18; older
+             * players ignore it); `listen` changes it.
+             */
+            async subscribe(event, listener, mirror = false) {
                 const off = transport.on(event, listener);
                 let subscription = subscriptions.get(event);
                 if (!subscription) {
                     subscription = {
                         count: 0,
-                        ready: transport.request("events.subscribe", { event }),
+                        ready: transport.request("events.subscribe", mirror ? { event, mirror: true } : { event }),
                     };
                     subscriptions.set(event, subscription);
                 }
@@ -287,6 +291,13 @@ export function createWire(transport) {
                     }
                 };
             },
+            /**
+             * Tell the player whether a subscribed event has a real listener
+             * (`active`) or only the SDK's copy of the state: `events.subscribe`
+             * again, which replaces the mark (player 0.5.18; older players keep
+             * one subscription per name and ignore the mark).
+             */
+            listen: (event, active) => transport.request("events.subscribe", active ? { event } : { event, mirror: true }),
         },
         ui: {
             /** Player 0.2.0: the remote images a Markdown document shows. */
