@@ -164,7 +164,8 @@
           "needs": {
             "cases": {
               "bindings.changed": "bindings.manage",
-              "packages.changed": null
+              "packages.changed": null,
+              "video.upscaling.changed": "video.upscaling"
             },
             "otherwise": "events",
             "param": "event"
@@ -175,7 +176,8 @@
           "needs": {
             "cases": {
               "bindings.changed": "bindings.manage",
-              "packages.changed": null
+              "packages.changed": null,
+              "video.upscaling.changed": "video.upscaling"
             },
             "otherwise": "events",
             "param": "event"

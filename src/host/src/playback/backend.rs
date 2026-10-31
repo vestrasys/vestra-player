@@ -349,7 +349,7 @@ impl Backend {
                         let _ = events.send(Event::PluginMessage(owner, event, data));
                     }
                     jobs.poll();
-                    upscaling.poll(&mpv, &out_render, &events);
+                    upscaling.poll(&mpv, &out_render, &events, || processing.copy_back_owners());
                     processing.note_source(sources.generation(), sources.phase());
                     subtitles.note_source(sources.generation(), sources.phase());
                     // Bound work per iteration so continuous controls cannot starve video.
@@ -369,7 +369,12 @@ impl Backend {
                             continue;
                         }
                         // Video upscaling (`upscaling.rs`): its requests; a
-                        // stopped plugin's filter goes, then on below.
+                        // stopped plugin's filter goes, then on below. The
+                        // chains that switched decoding to copy-back are
+                        // named in a `decoding` reason, as they are now.
+                        if command.method.starts_with("video.upscaling.") {
+                            upscaling.note_copy_back(processing.copy_back_owners());
+                        }
                         if upscaling.command(&mpv, &out_render, &command, &events) {
                             continue;
                         }
@@ -449,6 +454,14 @@ impl Backend {
                                     json!({"code":error.code,"message":error.message}),
                                 ));
                             }
+                            // Its chains are gone (decoding may be zero-copy
+                            // again): the upscaling state without them.
+                            upscaling.stopped(
+                                &mpv,
+                                &out_render,
+                                &events,
+                                processing.copy_back_owners(),
+                            );
                             match view.release(
                                 command.reply.owner,
                                 crate::playback::video_view::mpv_writer(&mpv),
@@ -487,7 +500,12 @@ impl Backend {
                         }
                         if command.method == "owner.registered" {
                             if let Some(id) = command.params["manifestId"].as_str() {
-                                processing.register(command.reply.owner, id.into());
+                                let name = command.params["manifestName"].as_str();
+                                processing.register(
+                                    command.reply.owner,
+                                    id.into(),
+                                    name.map(Into::into),
+                                );
                                 subtitles.register(command.reply.owner, id.into());
                                 jobs.register(command.reply.owner);
                             }

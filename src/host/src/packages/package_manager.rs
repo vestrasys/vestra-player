@@ -431,11 +431,12 @@ impl Host {
                 )?
             }
         };
+        let name = plugin.manifest.name.clone();
         self.plugins.insert(owner, plugin);
         self.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
             method: "owner.registered".into(),
-            params: json!({"manifestId":id}),
+            params: json!({"manifestId":id,"manifestName":name}),
         })?;
         Ok(owner)
     }

@@ -134,6 +134,7 @@ impl Host {
             }
         };
         let manifest_id = plugin.manifest.id.clone();
+        let plugin_name = plugin.manifest.name.clone();
         // `packages.list` keeps this run's development loads after they stop.
         self.development.insert(
             manifest_id.clone(),
@@ -147,7 +148,7 @@ impl Host {
                 id: 0,
             },
             method: "owner.registered".into(),
-            params: json!({"manifestId":manifest_id}),
+            params: json!({"manifestId":manifest_id,"manifestName":plugin_name}),
         })?;
         Ok(())
     }

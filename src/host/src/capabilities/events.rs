@@ -17,6 +17,8 @@ const BY_EVENT: Needs = Needs::Param {
     cases: &[
         ("packages.changed", None),
         ("bindings.changed", Some("bindings.manage")),
+        // Player 0.5.25: the upscaler's state as it changes (playback/upscaling.rs).
+        ("video.upscaling.changed", Some("video.upscaling")),
     ],
     otherwise: Some("events"),
 };
@@ -39,6 +41,7 @@ const EVENTS: &[&str] = &[
     "timeline.changed",
     "appearance.changed",
     "resolvers.fileTypes",
+    "video.upscaling.changed",
 ];
 /// Events a parked plugin is woken for (lazy activation §6.9): they follow
 /// a user's or a plugin's deliberate change (an install, a key edit, the
