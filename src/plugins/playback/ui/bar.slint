@@ -39,12 +39,12 @@ export global PlaybackBridge {
     // B22: marks sorted by time (4096 at most), and the A-B loop, as fractions of the duration.
     in-out property <[SeekMark]> marks;
     // B22: each kind's ticks as SVG path commands, `M<x> 0V1` per tick with x
-    // the whole px column on the line (0…tick-span): one Path per kind.
+    // the whole physical px column on the line (0…tick-span): one Path per kind.
     in-out property <string> chapter-ticks;
     in-out property <string> bookmark-ticks;
     in-out property <string> marker-ticks;
-    // The line's span (px) the plugin built the ticks for (0: none yet); it
-    // answers `span-changed`.
+    // The line's span in physical px the plugin built the ticks for (0: none
+    // yet); it answers `span-changed`.
     in-out property <float> tick-span;
     in-out property <bool> has-loop;
     in-out property <float> loop-a;
@@ -101,8 +101,9 @@ export global PlaybackBridge {
     // I07: the pointer came onto the seek line (hover or drag) or left it; the
     // sprite sheets are sent only meanwhile (the player decodes each on its UI thread).
     callback pointing(bool);
-    // B22: the seek line's span (its width less the 4px insets) in px, at
-    // start and whenever the width changes; the plugin rebuilds the ticks.
+    // B22: the seek line's span (its width less the 4px insets) in whole
+    // physical px, at start and whenever it changes (width or scale factor);
+    // the plugin rebuilds the ticks (after a 100 ms pause while it changes).
     callback span-changed(float);
     callback volume-changed(float);
     callback volume-released(float);
@@ -163,25 +164,35 @@ component BarButton inherits Rectangle {
 // B22: 1×6 marks across the line (chapter Theme.text-dim, bookmark Theme.accent,
 // marker Theme.playing) and the A-B loop: a 2px Theme.playing band under the
 // line with 1×8 ends. Marks take no input: a click seeks as before.
-// The marks are one Path per kind (a 1px stroke from the plugin's commands),
-// never an element per mark. Each tick fills one whole pixel column, as the
-// 1px Rectangles before 0.2.6 did: Slint fits the viewbox into the element
-// less the stroke width and offsets it by half the stroke
-// (`Path::fitted_path_events`), so a viewbox `span` wide over an element
-// `span + 1px` wide is drawn at scale 1 and x n of the commands (a whole
-// number) puts the stroke's centre at 4px + n + 0.5px: column 4px + n.
+// The marks are one Path per kind (a 1 physical px stroke from the plugin's
+// commands), never an element per mark. Each tick fills one whole physical
+// pixel column and whole pixels top to bottom at any scale factor (125%,
+// 150%…), as the snapped 1px Rectangles before 0.2.6 did. Slint fits the
+// viewbox into the element less the stroke width and offsets it by half the
+// stroke (`Path::fitted_path_events`); the software renderer draws that at
+// the element's unrounded physical position. So: the element's left edge on a
+// physical pixel (from the seek bar's `absolute-position`), `columns + 1`
+// physical px wide over a viewbox `columns` wide (scale 1phx a unit), and x n
+// of the commands (a whole number) centres the stroke on that edge + n + 0.5
+// physical px: one column. Vertically the element starts half a physical px
+// above a pixel row, so the butt-capped tick (viewbox 0…1 over `rows`
+// physical px) runs from that row over whole rows: about 2px…8px of the bar.
 component MarkTicks inherits Path {
-    in property <length> span;
-    x: 4px;
-    y: 1.5px;
-    width: self.span + 1px;
-    height: 7px;
+    // The seek bar's position in the window, and the line's span in physical px.
+    in property <length> origin-x;
+    in property <length> origin-y;
+    in property <int> columns;
+    private property <int> rows: Math.round(6px / 1phx);
+    x: Math.round((self.origin-x + 4px) / 1phx) * 1phx - self.origin-x;
+    y: Math.round((self.origin-y + 2px) / 1phx) * 1phx - 0.5phx - self.origin-y;
+    width: (self.columns + 1) * 1phx;
+    height: (self.rows + 1) * 1phx;
     // The span the commands were built for; while the plugin catches up with a
     // resize, the ticks stretch to the new width for that moment.
-    viewbox-width: PlaybackBridge.tick-span > 0 ? PlaybackBridge.tick-span : self.span / 1px;
+    viewbox-width: PlaybackBridge.tick-span > 0 ? PlaybackBridge.tick-span : max(1, self.columns);
     viewbox-height: 1;
     fit: fill;
-    stroke-width: 1px;
+    stroke-width: 1phx;
 }
 
 component SeekBar inherits Rectangle {
@@ -196,12 +207,14 @@ component SeekBar inherits Rectangle {
     // I07: the fraction under the pointer; the preview box picks its cell from it.
     out property <float> pointer-fraction: root.fraction(touch.mouse-x);
     changed pointing => { PlaybackBridge.pointing(self.pointing); }
-    // B22: the plugin builds the ticks for this span (pixel columns).
-    init => { PlaybackBridge.span-changed(root.span / 1px); }
-    changed span => { PlaybackBridge.span-changed(self.span / 1px); }
+    // B22: the plugin builds the ticks for this span in whole physical pixels
+    // (it follows the width and the scale factor).
+    private property <int> columns: Math.floor(root.span / 1phx);
+    init => { PlaybackBridge.span-changed(root.columns); }
+    changed columns => { PlaybackBridge.span-changed(self.columns); }
     // Again when marks come for another span (a report the plugin never got).
-    private property <bool> stale-ticks: PlaybackBridge.marks.length > 0 && PlaybackBridge.tick-span != root.span / 1px;
-    changed stale-ticks => { if self.stale-ticks { PlaybackBridge.span-changed(root.span / 1px); } }
+    private property <bool> stale-ticks: PlaybackBridge.marks.length > 0 && PlaybackBridge.tick-span != root.columns;
+    changed stale-ticks => { if self.stale-ticks { PlaybackBridge.span-changed(root.columns); } }
     height: 10px;
     function fraction(x: length) -> float {
         return clamp((x - 4px) / root.span, 0, 1);
@@ -283,17 +296,23 @@ component SeekBar inherits Rectangle {
     }
     // Chapters under markers under bookmarks (the user's own on top).
     MarkTicks {
-        span: root.span;
+        origin-x: root.absolute-position.x;
+        origin-y: root.absolute-position.y;
+        columns: root.columns;
         commands: PlaybackBridge.chapter-ticks;
         stroke: Theme.text-dim;
     }
     MarkTicks {
-        span: root.span;
+        origin-x: root.absolute-position.x;
+        origin-y: root.absolute-position.y;
+        columns: root.columns;
         commands: PlaybackBridge.marker-ticks;
         stroke: Theme.playing;
     }
     MarkTicks {
-        span: root.span;
+        origin-x: root.absolute-position.x;
+        origin-y: root.absolute-position.y;
+        columns: root.columns;
         commands: PlaybackBridge.bookmark-ticks;
         stroke: Theme.accent;
     }

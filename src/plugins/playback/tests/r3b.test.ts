@@ -53,9 +53,9 @@ test("B22 the seek line gets everyone's marks as fractions with their time text;
   assert.equal(bar.props["chapter-ticks"], "M0 0V1M300 0V1");
   assert.equal(bar.props["bookmark-ticks"], "M166 0V1");
   assert.equal(bar.props["marker-ticks"], "M200 0V1");
-  // A resize: the ticks follow the new span.
+  // A resize: the ticks follow the new span (whole physical px) once the reports pause.
   bar.emit("spanChanged", 250.5);
-  await until(() => bar.props["tick-span"] === 250.5);
+  await until(() => bar.props["tick-span"] === 250);
   assert.equal(bar.props["chapter-ticks"], "M0 0V1M187 0V1");
   assert.equal(bar.props["bookmark-ticks"], "M103 0V1");
   // The marks' publisher is disabled (its layer cleared): nothing of it stays.
@@ -67,6 +67,30 @@ test("B22 the seek line gets everyone's marks as fractions with their time text;
   host.setSource({ duration: 50 });
   await until(() => (bar.props.marks as unknown[]).length === 0);
   assert.equal(bar.props["marker-ticks"], "");
+  await stop();
+});
+
+test("B22 span reports during a resize are debounced: the first at once, then the last after a pause", async () => {
+  const host = withMedia(new TestHost(), "/movie.mkv", 200);
+  const { stop } = await start(host);
+  const bar = host.mounted();
+  host.setTimelineLayer("vestra.marks", [{ time: 100, kind: "bookmark", title: null }]);
+  await until(() => (bar.props.marks as unknown[]).length === 1);
+  bar.emit("spanChanged", 400);
+  await until(() => bar.props["tick-span"] === 400);
+  const sent = () => host.mounted().props["bookmark-ticks"];
+  assert.equal(sent(), "M200 0V1");
+  // A drag of the window edge: a report a frame.
+  for (const px of [401, 405, 410, 420, 431]) {
+    bar.emit("spanChanged", px);
+    await new Promise((resolve) => setTimeout(resolve, 16));
+  }
+  assert.equal(bar.props["tick-span"], 400, "nothing rebuilt while the reports keep coming");
+  assert.equal(sent(), "M200 0V1");
+  await until(() => bar.props["tick-span"] === 431);
+  assert.equal(sent(), "M215 0V1");
+  // Stopped with a report pending: nothing runs after.
+  bar.emit("spanChanged", 500);
   await stop();
 });
 
@@ -94,10 +118,14 @@ test("B22 marks need a known duration, stay inside the line, and are capped at t
   assert.deepEqual(shown.rows.at(-1), { at: (MAX_MARKS + 4) / 10_000, tip: "1:08:20" });
 });
 
+type Kind = "chapter" | "bookmark" | "marker";
+const timed = (count: number, kind: (i: number) => Kind) =>
+  Array.from({ length: count }, (_, i) => ({ time: i, kind: kind(i), title: null, plugin: "x" }));
+
 test("B22 more marks than the cap: picked evenly by index, first and last kept, in time order", () => {
-  const all = Array.from({ length: 5000 }, (_, i) => i);
+  const all = timed(5000, () => "marker");
   assert.equal(sampled(all.slice(0, MAX_MARKS)).length, MAX_MARKS);
-  const picked = sampled(all);
+  const picked = sampled(all).map((mark) => mark.time);
   assert.equal(picked.length, MAX_MARKS);
   assert.equal(picked[0], 0);
   assert.equal(picked.at(-1), 4999);
@@ -107,6 +135,22 @@ test("B22 more marks than the cap: picked evenly by index, first and last kept, 
     const inQuarter = picked.filter((v) => v >= q * 1250 && v < (q + 1) * 1250).length;
     assert.ok(Math.abs(inQuarter - MAX_MARKS / 4) <= 1, `quarter ${q}: ${inQuarter}`);
   }
+});
+
+test("B22 past the cap the user's bookmarks are kept first; the other kinds are sampled into the rest", () => {
+  // 6000 marks, every 20th a bookmark (300), the rest chapters and markers.
+  const all = timed(6000, (i) => (i % 20 === 0 ? "bookmark" : i % 2 ? "chapter" : "marker"));
+  const picked = sampled(all);
+  assert.equal(picked.length, MAX_MARKS);
+  assert.equal(picked.filter((mark) => mark.kind === "bookmark").length, 300);
+  assert.ok(picked.every((mark, i) => i === 0 || mark.time > picked[i - 1]!.time), "time order");
+  assert.equal(picked.at(-1)!.time, 5999, "the others still reach the end");
+  // More bookmarks than the cap: bookmarks only, sampled evenly.
+  const bookmarks = sampled(timed(6000, (i) => (i % 5 ? "bookmark" : "chapter")));
+  assert.equal(bookmarks.length, MAX_MARKS);
+  assert.ok(bookmarks.every((mark) => mark.kind === "bookmark"));
+  assert.equal(bookmarks[0]!.time, 1);
+  assert.equal(bookmarks.at(-1)!.time, 5999);
 });
 
 test("B22 a kind's ticks in the same pixel column are drawn once; the hover rows keep every mark", () => {
@@ -120,35 +164,65 @@ test("B22 a kind's ticks in the same pixel column are drawn once; the hover rows
 });
 
 /**
- * Where Slint 1.18.1 draws a viewbox x of a MarkTicks Path, in the seek bar's
- * px (`Path::fitted_path_events`: the viewbox is stretched into the element
- * less the stroke width, then offset by half the stroke).
+ * Where Slint 1.18.1 draws a MarkTicks tick, in the window's physical px, at
+ * scale factor `s`. The element's geometry is `bar.slint`'s MarkTicks,
+ * written out (1phx = 1/s px); `Path::fitted_path_events` stretches the
+ * viewbox into the element less the stroke width and offsets it by half the
+ * stroke; the software renderer (`draw_path`, `convert_path_data_to_zeno`)
+ * maps a point to (element's window position + offset + point) × s,
+ * unrounded. `origin` is the seek bar's `absolute-position`.
  */
-function strokeCentre(x: number, span: number, tickSpan: number) {
-  const stroke = 1;
-  const element = { x: 4, width: span + 1 };
-  return element.x + stroke / 2 + (x * (element.width - stroke)) / tickSpan;
+function drawnTick(x: number, s: number, origin: { x: number; y: number }, columns: number, tickSpan: number) {
+  const phx = 1 / s;
+  const rows = Math.round(6 / phx);
+  const element = {
+    x: Math.round((origin.x + 4) / phx) * phx - origin.x,
+    y: Math.round((origin.y + 2) / phx) * phx - 0.5 * phx - origin.y,
+    width: (columns + 1) * phx,
+    height: (rows + 1) * phx,
+  };
+  const stroke = phx;
+  const left = (origin.x + element.x) * s;
+  const centre = (origin.x + element.x + stroke / 2 + (x * (element.width - stroke)) / tickSpan) * s;
+  const top = (origin.y + element.y + stroke / 2) * s;
+  const bottom = (origin.y + element.y + stroke / 2 + (element.height - stroke)) * s;
+  return { left, centre, top, bottom, rows };
 }
 
-test("B22 each tick is centred on a pixel column (n + 0.5): the column the 1px Rectangles drew before 0.2.6", () => {
+const near = (value: number, target: number) => Math.abs(value - target) < 1e-6;
+
+test("B22 at 100/125/150/175/200% each tick fills one whole physical pixel column and whole rows", () => {
   const mark = (time: number) => ({ time, kind: "marker" as const, title: null, plugin: "x" });
-  for (const span of [1, 100, 467, 512.75, 1203.5, 3832]) {
-    // A duration of 1024 s: every `at` is exact, so no column depends on a rounding of the last bit.
-    const times = [...Array.from({ length: 103 }, (_, i) => i * 10 - 3).slice(1), 1024];
-    const shown = seekMarks(times.map(mark), 1024, span);
-    assert.equal(shown.tickSpan, span);
-    const xs = [...shown.markerTicks.matchAll(/M(\d+) 0V1/g)].map((m) => Number(m[1]));
-    assert.ok(xs.length > 0);
-    const columns = new Set(times.map((t) => Math.floor(4 + Math.min(1, t / 1024) * span)));
-    for (const x of xs) {
-      assert.ok(Number.isInteger(x), `${x}`);
-      const centre = strokeCentre(x, span, shown.tickSpan);
-      // The stroke covers centre ± 0.5: exactly one whole column, no antialiased halves.
-      assert.equal(centre % 1, 0.5, `span ${span} x ${x}: centre ${centre}`);
-      assert.ok(columns.has(centre - 0.5), `span ${span}: column ${centre - 0.5} is a pre-0.2.6 column`);
-    }
-    assert.equal(xs.length, columns.size, `span ${span}: one tick per column`);
-  }
+  // A duration of 1024 s: every `at` is exact, so no column depends on a rounding of the last bit.
+  const times = [...Array.from({ length: 103 }, (_, i) => i * 10 - 3).slice(1), 1024];
+  // The seek bar sits at 15px in the bar; the bar where the window puts it (fractional too).
+  const origins = [{ x: 15, y: 6 }, { x: 15, y: 433.6 }, { x: 15.4, y: 6.2 }, { x: 15.8, y: 917.75 }];
+  for (const s of [1, 1.25, 1.5, 1.75, 2])
+    for (const origin of origins)
+      for (const span of [100, 467, 512.75, 1203.5]) {
+        const where = `scale ${s}, origin ${origin.x},${origin.y}, span ${span}px`;
+        // What the bar reports: the span in whole physical px.
+        const columns = Math.floor(span * s);
+        const shown = seekMarks(times.map(mark), 1024, columns);
+        assert.equal(shown.tickSpan, columns);
+        const xs = [...shown.markerTicks.matchAll(/M(\d+) 0V1/g)].map((m) => Number(m[1]));
+        const wanted = new Set(times.map((t) => Math.floor(Math.min(1, t / 1024) * columns)));
+        assert.equal(xs.length, wanted.size, `${where}: one tick per physical column`);
+        for (const x of xs) {
+          assert.ok(Number.isInteger(x) && wanted.has(x), `${where}: x ${x}`);
+          const tick = drawnTick(x, s, origin, columns, shown.tickSpan);
+          // The line's left edge is on a physical pixel; the 1 physical px stroke is
+          // centred on edge + x + 0.5: exactly column edge + x, no antialiased halves.
+          assert.ok(near(tick.left, Math.round(tick.left)), `${where}: left ${tick.left}`);
+          assert.ok(near(tick.centre, Math.round(tick.left) + x + 0.5), `${where}: x ${x} centre ${tick.centre}`);
+          // Butt caps: from a pixel row down over whole rows, 6 logical px rounded.
+          assert.ok(near(tick.top, Math.round(tick.top)), `${where}: top ${tick.top}`);
+          assert.ok(near(tick.bottom - tick.top, tick.rows), `${where}: rows`);
+          // Within a physical px of where the logical layout puts the line (4px…4px + span).
+          assert.ok(Math.abs(tick.left - (origin.x + 4) * s) <= 0.5 + 1e-9, `${where}: left at the inset`);
+          assert.ok(tick.centre <= (origin.x + 4 + span) * s + 1, `${where}: inside the line`);
+        }
+      }
 });
 
 test("B22 a kind's tick string stays under its cap however wide the line", () => {
@@ -239,15 +313,27 @@ test("B22 the bar draws marks as one Path per kind in Theme colours and finds th
   assert.match(slint, /commands: PlaybackBridge\.chapter-ticks;\s+stroke: Theme\.text-dim;/);
   assert.match(slint, /commands: PlaybackBridge\.marker-ticks;\s+stroke: Theme\.playing;/);
   assert.match(slint, /commands: PlaybackBridge\.bookmark-ticks;\s+stroke: Theme\.accent;/);
-  // Scale 1: the viewbox is the span the ticks were built for, the element 1px wider (the stroke).
-  assert.match(slint, /x: 4px;\s+y: 1\.5px;\s+width: self\.span \+ 1px;/);
-  assert.match(slint, /viewbox-width: PlaybackBridge\.tick-span > 0 \? PlaybackBridge\.tick-span : self\.span \/ 1px;/);
-  assert.match(slint, /fit: fill;\s+stroke-width: 1px;/);
-  // The bar reports its span at start, on a resize, and when ticks come for another span.
-  assert.match(slint, /init => \{ PlaybackBridge\.span-changed\(root\.span \/ 1px\); \}/);
-  assert.match(slint, /changed span => \{ PlaybackBridge\.span-changed\(self\.span \/ 1px\); \}/);
+  // The geometry `drawnTick` models, in physical px: snapped origin, scale 1phx a unit, 1phx stroke.
+  const geometry = [
+    "private property <int> rows: Math.round(6px / 1phx);",
+    "x: Math.round((self.origin-x + 4px) / 1phx) * 1phx - self.origin-x;",
+    "y: Math.round((self.origin-y + 2px) / 1phx) * 1phx - 0.5phx - self.origin-y;",
+    "width: (self.columns + 1) * 1phx;",
+    "height: (self.rows + 1) * 1phx;",
+  ];
+  const ticks = slint.slice(slint.indexOf("component MarkTicks"), slint.indexOf("component SeekBar"));
+  for (const line of geometry) assert.ok(ticks.includes(line), line);
+  assert.match(ticks, /viewbox-width: PlaybackBridge\.tick-span > 0 \? PlaybackBridge\.tick-span : max\(1, self\.columns\);\s+viewbox-height: 1;\s+fit: fill;\s+stroke-width: 1phx;/);
+  // The bar reports its span in whole physical px at start, on a change, and when ticks come for another span.
+  assert.ok(slint.includes("private property <int> columns: Math.floor(root.span / 1phx);"));
+  assert.ok(slint.includes("init => { PlaybackBridge.span-changed(root.columns); }"));
+  assert.ok(slint.includes("changed columns => { PlaybackBridge.span-changed(self.columns); }"));
   assert.match(slint, /changed stale-ticks => /);
-  assert.match(slint, /span: root\.span;\s+commands: PlaybackBridge\.chapter-ticks;/);
+  for (const kind of ["chapter", "marker", "bookmark"])
+    assert.match(
+      slint,
+      new RegExp(`origin-x: root\\.absolute-position\\.x;\\s+origin-y: root\\.absolute-position\\.y;\\s+columns: root\\.columns;\\s+commands: PlaybackBridge\\.${kind}-ticks;`),
+    );
   assert.match(slint, /left <= 3px/);
   assert.match(slint, /PlaybackBridge\.marks\[seek-bar\.near-mark\]\.tip/);
   // The lower-bound search closes a range of MAX_MARKS rows: floor(log2 n) + 1 halvings.

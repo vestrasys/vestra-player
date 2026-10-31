@@ -11,9 +11,11 @@ import { barTips, Keys } from "./tips.ts";
  * The marks the bar shows: the rows of one property value the player takes
  * (`UI_VALUE_LIMITS.arrayRows`; `marks` is 1 + 3 values a row, under its 16384).
  * The bar's lower-bound search (`bar.slint`) takes 13 halvings for 4096 rows.
- * More marks than that are sampled evenly in time order (`sampled`).
+ * More marks than that are sampled (`sampled`): the user's bookmarks first.
  */
 export const MAX_MARKS = 4096;
+/** The bar's span reports while a resize goes on: the last one wins after this pause. */
+export const SPAN_DEBOUNCE_MS = 100;
 /**
  * The hover tips' text, at most (an upper bound of the JSON the player gets:
  * 3 bytes a UTF-16 unit covers UTF-8 and the 2-byte escapes `\"` and `\\`, but
@@ -24,7 +26,11 @@ export const MAX_MARKS = 4096;
  * characters fit, any script.
  */
 export const MARK_TIP_BYTES = 512 * 1024;
-/** A kind's tick commands, at most: under the player's 64 KiB per string, whatever the width. */
+/**
+ * A kind's tick commands, at most: a safety net under the player's 64 KiB per
+ * string. It is not reached in practice: one tick per mark (≤ 4096) of at most
+ * 10 bytes while the line is under 100000 physical px is 40 KiB.
+ */
 export const TICK_BYTES = 60 * 1024;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
@@ -34,27 +40,42 @@ const SIX_BYTES = /[\u0000-\u001f]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud80
 /** An upper bound of `text`'s bytes inside a JSON string (without the quotes). */
 export const jsonBytes = (text: string) => 3 * text.length + 3 * (text.match(SIX_BYTES)?.length ?? 0);
 
+/** `count` of `indices` picked evenly (the first and the last kept), in order. */
+function evenly(indices: readonly number[], count: number): number[] {
+  if (indices.length <= count) return [...indices];
+  if (count <= 0) return [];
+  if (count === 1) return [indices[0]!];
+  const step = (indices.length - 1) / (count - 1);
+  return Array.from({ length: count }, (_, i) => indices[Math.round(i * step)]!);
+}
+
 /**
- * At most MAX_MARKS of the time-sorted marks: all of them, or MAX_MARKS
- * picked evenly by index (the first and the last kept), so the shown marks
- * still run across the whole duration (dropping the tail would leave the end
- * of a long file bare), in proportion to where the marks are, and stay sorted
- * for the bar's search.
+ * At most MAX_MARKS of the time-sorted marks: all of them, or else the user's
+ * bookmarks first (all of them, or MAX_MARKS picked evenly if they alone are
+ * more) and the other kinds picked evenly by index into the room left (the
+ * first and the last kept), so the shown marks still run across the whole
+ * duration (dropping the tail would leave the end of a long file bare), in
+ * proportion to where the marks are, and stay in time order for the bar's
+ * search.
  */
-export function sampled<T>(marks: readonly T[]): readonly T[] {
+export function sampled(marks: readonly TimelineMark[]): readonly TimelineMark[] {
   if (marks.length <= MAX_MARKS) return marks;
-  const step = (marks.length - 1) / (MAX_MARKS - 1);
-  return Array.from({ length: MAX_MARKS }, (_, i) => marks[Math.round(i * step)]!);
+  const bookmarks: number[] = [];
+  const others: number[] = [];
+  marks.forEach((mark, i) => (mark.kind === "bookmark" ? bookmarks : others).push(i));
+  const kept = evenly(bookmarks, MAX_MARKS);
+  const picked = [...kept, ...evenly(others, MAX_MARKS - kept.length)].sort((a, b) => a - b);
+  return picked.map((i) => marks[i]!);
 }
 
 export interface SeekMarks {
   /** Sorted by time: `at` the fraction of the duration (the bar's hover search), `tip` "Title  01:23". */
   rows: Json[];
-  /** One Path's commands per kind: a 1px tick `M<x> 0V1` per distinct pixel column. */
+  /** One Path's commands per kind: a 1 physical px tick `M<x> 0V1` per distinct physical pixel column. */
   chapterTicks: string;
   bookmarkTicks: string;
   markerTicks: string;
-  /** The seek line's span (px) the ticks were built for: the Paths' `viewbox-width` (0: none yet). */
+  /** The seek line's span in physical px the ticks were built for: the Paths' `viewbox-width` (0: none yet). */
   tickSpan: number;
 }
 
@@ -65,14 +86,15 @@ const NO_MARKS: SeekMarks = { rows: [], chapterTicks: "", bookmarkTicks: "", mar
  * player merges them), at most MAX_MARKS: the hover rows, and the ticks as
  * one Path per kind (no element per mark).
  *
- * `span` is the seek line's width less its two 4px insets, in px, as the bar
- * reports it (`spanChanged`; 0 before the first report: no ticks yet). A tick
- * covers the whole pixel column the marks had before 0.2.6, `floor(4px + at *
- * span)`: x = `floor(at * span)` in a viewbox `span` wide over a Path `span +
- * 1px` wide at 4px, so the scale is 1; Slint insets the path by half the
- * stroke (`Path::fitted_path_events`), so the 1px stroke is centred on
- * x + 0.5 and fills exactly that column, never two half-transparent ones.
- * Each string stays under TICK_BYTES (one tick per column, ≤ 10 bytes each).
+ * `span` is the seek line's width less its two 4px insets in whole physical
+ * pixels (`floor(span / 1phx)`), as the bar reports it (`spanChanged`; 0
+ * before the first report: no ticks yet). A tick fills exactly one physical
+ * pixel column at any scale factor: x = `floor(at * span)` in a viewbox
+ * `span` wide over a Path `span + 1` physical px wide whose left edge the bar
+ * puts on a physical pixel, so the scale is 1 physical px per unit; Slint
+ * insets the path by half the 1phx stroke (`Path::fitted_path_events`), so
+ * the stroke is centred on x + 0.5 physical px: one whole column, never two
+ * half-transparent ones (`bar.slint`, MarkTicks).
  */
 export function seekMarks(marks: readonly TimelineMark[], duration: number | null, span = 0): SeekMarks {
   if (!duration || duration <= 0) return NO_MARKS;
@@ -162,12 +184,31 @@ export function wireBar(
   // G-07: tooltips name the keys the user has bound (read again when bindings change).
   const keys = new Keys(scope, () => scope.update());
   void keys.refresh();
-  // B22: the seek line's span in px, which the bar reports when its width changes.
+  // B22: the seek line's span in physical px, which the bar reports when its
+  // width (or the scale factor) changes. The first report is taken at once
+  // (there are no ticks before it); later ones wait for a pause of
+  // SPAN_DEBOUNCE_MS, the last winning, so a window resize does not rebuild
+  // and send the ticks every frame (they stretch with the line meanwhile).
   let span = 0;
-  bar.on("spanChanged", (px: number) => {
-    if (!(px > 0) || px === span) return;
+  let pending: ReturnType<typeof setTimeout> | null = null;
+  const takeSpan = (px: number) => {
+    if (px === span) return;
     span = px;
     scope.update();
+  };
+  bar.on("spanChanged", (reported: number) => {
+    const px = Math.floor(reported);
+    if (!(px > 0)) return;
+    if (pending !== null) clearTimeout(pending);
+    pending = null;
+    if (span === 0) return takeSpan(px);
+    pending = setTimeout(() => {
+      pending = null;
+      takeSpan(px);
+    }, SPAN_DEBOUNCE_MS);
+  });
+  scope.onDispose(() => {
+    if (pending !== null) clearTimeout(pending);
   });
   let drawn: { marks: readonly TimelineMark[]; duration: number | null; span: number; shown: SeekMarks } | null = null;
   const marks = (duration: number | null) => {
