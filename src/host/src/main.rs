@@ -234,8 +234,15 @@ fn main() -> Result<()> {
     // (`render_state`). `_armed` lives until `main` returns, by any path:
     // only a process that dies leaves the guard armed.
     let guard = startup.guard.clone();
+    // Keyed on the adapter the mode uses: GPU rendering's, or CPU mode's
+    // Direct3D 12 windows' (they may differ on a hybrid laptop, record §12).
+    let keys = if render.is_gpu() {
+        startup.keys.clone()
+    } else {
+        startup.windows_keys.clone()
+    };
     let _armed = (render.is_gpu() || render.uses_wgpu_windows())
-        .then(|| guard.arm(&startup.keys, playback::render_state::now()));
+        .then(|| guard.arm(&keys, playback::render_state::now()));
     // What a restart after a lost window device needs (Windows wgpu
     // windows; `host/restart.rs`).
     // When this player was started by a restart: another is refused for a
@@ -247,7 +254,7 @@ fn main() -> Result<()> {
             silent,
         },
         guard: guard.clone(),
-        keys: startup.keys.clone(),
+        keys,
         restarted_at,
     };
     if !headless {
@@ -264,7 +271,7 @@ fn main() -> Result<()> {
         // The windows the decision chose; a GPU mode whose windows cannot be
         // had falls back to software rendering with CPU mode's fallback
         // windows, and CPU mode's wgpu windows fall back to them too.
-        let wgpu_windows = || {
+        let wgpu_windows = |gpu_mode: bool| {
             // A lost window device (or a stalled GPU renderer) restarts the
             // player at once, from the device's callback, after recording
             // the loss in the crash guard: the new one waits for this
@@ -278,10 +285,16 @@ fn main() -> Result<()> {
                     .clone();
                 restart_player(&lost, &source);
             });
-            platform::select_wgpu_windows(winit)
+            // The adapter resolved once at start, for the keys and the denylist.
+            let adapter = if gpu_mode {
+                &startup.gpu_adapter
+            } else {
+                &startup.windows_adapter
+            };
+            platform::select_wgpu_windows(winit, adapter)
         };
         let gpu_windows = match render.windows {
-            render_mode::WindowKind::Wgpu if render.is_gpu() => wgpu_windows(),
+            render_mode::WindowKind::Wgpu if render.is_gpu() => wgpu_windows(true),
             render_mode::WindowKind::OpenGl if render.is_gpu() => winit()
                 .renderer_name("femtovg".into())
                 .select()
@@ -296,7 +309,7 @@ fn main() -> Result<()> {
         if !render.is_gpu() && render.windows == render_mode::WindowKind::Wgpu {
             // CPU mode in Direct3D 12 windows (record §11 item 5): software
             // video uploaded once per frame, flip model with vsync.
-            if let Err(error) = wgpu_windows() {
+            if let Err(error) = wgpu_windows(false) {
                 diag!("render: no Direct3D 12 windows for software rendering ({error})");
                 render = render.without_wgpu_windows();
                 diag!("{}", render.line());

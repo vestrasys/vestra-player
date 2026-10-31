@@ -189,14 +189,20 @@ pub struct Facts {
     pub build: Option<String>,
     /// The system's adapters in its order.
     pub adapters: Vec<GpuAdapter>,
-    /// The index in `adapters` of the one GPU rendering (and Windows'
-    /// Direct3D 12 windows) would use: 0, the first, unless
-    /// `VESTRA_GPU_ADAPTER` chooses another; out of range: none
-    /// (`platform::gpu_adapters`).
+    /// The index in `adapters` of the one GPU rendering (and GPU mode's
+    /// Direct3D 12 windows) would use (`platform::gpu_adapters`; Windows:
+    /// the high-performance GPU unless the user chose one for Vestra in
+    /// Windows Settings, record §12); out of range: none.
     pub render_adapter: usize,
+    /// The index of the one CPU mode's Direct3D 12 windows would use
+    /// (Windows' order, record §12); out of range: none.
+    pub windows_adapter: usize,
     pub denylist: Denylist,
     /// The crash guard keeps GPU rendering off: why, with until when.
     pub crashed: Option<String>,
+    /// The same for CPU mode's Direct3D 12 windows when they use another
+    /// adapter than GPU rendering (keyed on theirs).
+    pub crashed_windows: Option<String>,
     /// `SLINT_BACKEND` is set: Slint picks the window renderer itself and
     /// a denylist rule does not change it.
     pub slint_backend: bool,
@@ -313,25 +319,51 @@ struct Hit<'a> {
 }
 
 impl Facts {
-    /// The adapter GPU rendering and Direct3D 12 windows would use.
+    /// The adapter GPU rendering (and its Direct3D 12 windows) would use.
     pub fn render_adapter(&self) -> Option<&GpuAdapter> {
         self.adapters.get(self.render_adapter)
     }
-    /// Why the windows do not draw with Direct3D 12 where they could
+    /// The first rule for windows of `api` that holds for adapter `index`.
+    fn rule_on(&self, index: usize, api: WindowApi) -> Option<Hit<'_>> {
+        let adapter = self.adapters.get(index);
+        self.denylist
+            .matches(render_denylist::Facts {
+                os: self.os,
+                build: self.build.as_deref(),
+                adapter,
+            })
+            .into_iter()
+            .find(|rule| rule.windows() == Some(api))
+            .map(|rule| Hit { rule, adapter })
+    }
+    /// A Direct3D 12 window rule for CPU mode's Direct3D 12 windows (their
+    /// adapter, `windows_adapter`).
+    fn cpu_direct3d12_rule(&self) -> Option<Hit<'_>> {
+        self.rule_on(self.windows_adapter, WindowApi::Direct3d12)
+    }
+    /// The crash guard for CPU mode's Direct3D 12 windows: GPU rendering's
+    /// record where both use the same adapter, else their own.
+    fn crashed_for_windows(&self) -> Option<&String> {
+        if self.windows_adapter == self.render_adapter {
+            self.crashed.as_ref()
+        } else {
+            self.crashed_windows.as_ref()
+        }
+    }
+    /// Why CPU mode's windows do not draw with Direct3D 12 where they could
     /// (Windows): a Direct3D 12 window rule, or the crash guard. For the
     /// `render:` notes and the software rendering reason (About).
     pub fn direct3d12_windows_off(&self) -> Option<String> {
         if !self.wgpu_windows {
             return None;
         }
-        if let Some(hit) = self.window_rule(WindowApi::Direct3d12) {
+        if let Some(hit) = self.cpu_direct3d12_rule() {
             return Some(format!(
                 "Direct3D 12 windows are off: denylist rule {}",
                 hit.rule.id
             ));
         }
-        self.crashed
-            .as_ref()
+        self.crashed_for_windows()
             .map(|detail| format!("the crash guard keeps the windows off Direct3D 12 ({detail})"))
     }
     /// The API of GPU mode's windows.
@@ -352,15 +384,17 @@ impl Facts {
         }
         self.hits()
             .into_iter()
-            .find(|hit| {
-                hit.rule.action == Some(Action::Cpu)
-                    || hit.rule.windows() == Some(self.gpu_window_api())
-            })
+            .find(|hit| hit.rule.action == Some(Action::Cpu))
+            .or_else(|| self.gpu_window_rule())
             .map(|hit| self.denylist_reason(&hit))
     }
-    /// The first window rule that holds for GPU mode's windows.
+    /// The first window rule that holds for GPU mode's windows: OpenGL ones
+    /// on any adapter with a GPU, Direct3D 12 ones on GPU rendering's.
     fn gpu_window_rule(&self) -> Option<Hit<'_>> {
-        self.window_rule(self.gpu_window_api())
+        match self.gpu_window_api() {
+            WindowApi::Opengl => self.window_rule(WindowApi::Opengl),
+            WindowApi::Direct3d12 => self.rule_on(self.render_adapter, WindowApi::Direct3d12),
+        }
     }
     /// The first `software-windows` rule that holds for windows of `api`.
     fn window_rule(&self, api: WindowApi) -> Option<Hit<'_>> {
@@ -369,10 +403,11 @@ impl Facts {
             .find(|hit| hit.rule.windows() == Some(api))
     }
     /// The rules that hold: every rule for the adapter GPU rendering would
-    /// use (`render_adapter`; Direct3D 12 windows draw on it too); OpenGL
-    /// window rules also for any other adapter with a GPU of its own,
-    /// because OpenGL windows may draw on another GPU (a hybrid laptop's
-    /// per-app choice).
+    /// use (`render_adapter`, which GPU mode's Direct3D 12 windows draw on);
+    /// the Direct3D 12 window rule of CPU mode's windows' adapter
+    /// (`windows_adapter`) where that is another one; OpenGL window rules
+    /// also for any other adapter with a GPU of its own, because OpenGL
+    /// windows may draw on another GPU (a hybrid laptop's per-app choice).
     fn hits(&self) -> Vec<Hit<'_>> {
         let render = self.render_adapter();
         let matches = |adapter: Option<&GpuAdapter>| {
@@ -405,6 +440,13 @@ impl Facts {
                     });
                 }
             }
+        }
+        // CPU mode's Direct3D 12 windows on another adapter (record §12).
+        if self.windows_adapter != self.render_adapter
+            && let Some(hit) = self.cpu_direct3d12_rule()
+            && !hits.iter().any(|known| known.rule.id == hit.rule.id)
+        {
+            hits.push(hit);
         }
         hits
     }
@@ -515,8 +557,21 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
         }
         let action = match (rule.action, rule.windows()) {
             (Some(Action::Cpu), _) => "software rendering",
+            // Scoped to the mode whose adapter it holds for (record §12).
             (_, Some(WindowApi::Direct3d12)) => {
-                "no Direct3D 12 windows: OpenGL ones, and software rendering"
+                let on = |index: usize| {
+                    adapter.is_some_and(|a| {
+                        facts
+                            .adapters
+                            .get(index)
+                            .is_some_and(|b| std::ptr::eq(a, b))
+                    })
+                };
+                match (on(facts.render_adapter), on(facts.windows_adapter)) {
+                    (true, false) => "no GPU rendering (it needs Direct3D 12 windows)",
+                    (false, true) => "CPU mode's Direct3D 12 windows: OpenGL ones",
+                    _ => "no Direct3D 12 windows: OpenGL ones, and software rendering",
+                }
             }
             (_, Some(WindowApi::Opengl)) if facts.wgpu_windows => {
                 "no OpenGL windows: Slint's software renderer where Direct3D 12 windows cannot be had"
@@ -548,8 +603,8 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
 fn windows(facts: &Facts, decision: &mut Decision) {
     let gl_rule = facts.window_rule(WindowApi::Opengl);
     let wgpu_allowed = facts.wgpu_windows
-        && facts.window_rule(WindowApi::Direct3d12).is_none()
-        && facts.crashed.is_none();
+        && facts.cpu_direct3d12_rule().is_none()
+        && facts.crashed_for_windows().is_none();
     let fallback = if facts.slint_backend {
         WindowKind::Default
     } else if gl_rule.is_some() {
@@ -611,7 +666,7 @@ fn windows(facts: &Facts, decision: &mut Decision) {
         && decision.windows != WindowKind::Wgpu
         && facts.window_env.is_none()
         && !facts.slint_backend
-        && facts.window_rule(WindowApi::Direct3d12).is_none()
+        && facts.cpu_direct3d12_rule().is_none()
         && let Some(why) = facts.direct3d12_windows_off()
     {
         decision.notes.push(format!("render: {why}"));
@@ -1152,7 +1207,7 @@ mod tests {
         // The windows draw on the AMD GPU (`VESTRA_GPU_ADAPTER=1`): the
         // NVIDIA rule does not hold for them.
         windows.env = None;
-        windows.render_adapter = 1;
+        (windows.render_adapter, windows.windows_adapter) = (1, 1);
         assert_eq!(decide(&windows, Preference::Gpu).windows, WindowKind::Wgpu);
         assert_eq!(decide(&windows, Preference::Auto).windows, WindowKind::Wgpu);
         // macOS: a Direct3D 12 rule means nothing to OpenGL windows.
@@ -1163,6 +1218,81 @@ mod tests {
             ..facts(false, true)
         };
         assert!(decide(&mac, Preference::Auto).is_gpu());
+    }
+
+    /// User ruling 2026-10-31 (record §12): on a hybrid laptop GPU
+    /// rendering uses the high-performance GPU while CPU mode's Direct3D 12
+    /// windows follow Windows' order; a Direct3D 12 rule and the crash guard
+    /// each look at the adapter the mode uses.
+    #[test]
+    fn gpu_rendering_and_cpu_windows_check_their_own_adapters() {
+        let denylist = Denylist::built_in()
+            .merged(
+                r#"{"version":1,"rules":[{"id":"d3d12-igpu","description":"test",
+                    "action":"software-windows","window_api":"direct3d12",
+                    "vendor_id":"0x1002","device_id":["0x15BF"]}]}"#,
+            )
+            .unwrap();
+        let amd = GpuAdapter {
+            driver_version: Some("32.0.21000.1".into()),
+            ..bad_amd()
+        };
+        let nvidia = GpuAdapter {
+            name: "NVIDIA GeForce RTX 4070 Laptop GPU".into(),
+            vendor_id: 0x10DE,
+            device_id: 0x2820,
+            driver_version: Some("32.0.16.1062".into()),
+            ..GpuAdapter::default()
+        };
+        // Windows' order: the 780M first; GPU rendering on the 4070.
+        let mut hybrid = Facts {
+            denylist,
+            adapters: vec![amd, nvidia],
+            render_adapter: 1,
+            windows_adapter: 0,
+            ..windows_gpu()
+        };
+        // The rule holds for the 780M only: GPU rendering on the 4070 is
+        // fine, CPU mode's windows on the 780M are not Direct3D 12 ones.
+        let gpu = decide(&hybrid, Preference::Gpu);
+        assert_eq!((gpu.mode, gpu.windows), (Mode::Gpu, WindowKind::Wgpu));
+        assert_eq!(hybrid.gpu_available(), Ok(()));
+        let auto = decide(&hybrid, Preference::Auto);
+        assert_eq!((auto.mode, auto.windows), (Mode::Cpu, WindowKind::OpenGl));
+        assert!(
+            auto.notes.iter().any(|note| note.contains("d3d12-igpu")
+                && note.contains("CPU mode's Direct3D 12 windows: OpenGL ones")),
+            "{:?}",
+            auto.notes
+        );
+        // A crash recorded for GPU rendering's adapter keeps GPU rendering
+        // off, not CPU mode's windows on the other adapter; and the other
+        // way round.
+        hybrid.denylist = Denylist::built_in();
+        hybrid.crashed = Some("crashed on the 4070".into());
+        assert_eq!(
+            decide(&hybrid, Preference::Gpu).reason.code(),
+            "previous-crash"
+        );
+        assert_eq!(decide(&hybrid, Preference::Auto).windows, WindowKind::Wgpu);
+        hybrid.crashed = None;
+        hybrid.crashed_windows = Some("crashed on the 780M".into());
+        assert!(decide(&hybrid, Preference::Gpu).is_gpu());
+        let off = decide(&hybrid, Preference::Auto);
+        assert_eq!(off.windows, WindowKind::OpenGl);
+        assert!(
+            off.notes.iter().any(|note| note.contains("780M")),
+            "{:?}",
+            off.notes
+        );
+        // One adapter for both: GPU rendering's record counts for both.
+        hybrid.windows_adapter = 1;
+        hybrid.crashed_windows = None;
+        hybrid.crashed = Some("crashed".into());
+        assert_eq!(
+            decide(&hybrid, Preference::Auto).windows,
+            WindowKind::OpenGl
+        );
     }
 
     /// L1 (record §11): `cpu` rules hold for the adapter GPU rendering uses
