@@ -8,7 +8,7 @@ Adjusts the sound and picks the audio track and the output device.
 - **Audio sync**: ±10 seconds in 50 ms steps; Don't Keep, Keep for This Run or Always Keep.
 - **Processing**: Normalize (evens out the loudness), Crystalizer (brightens the treble, adjustable strength).
 - **Channels**: Stereo, Left Channel, Right Channel, Mono Mix, Swap Left and Right.
-- **Audio tracks**: pick or cycle through the tracks, load an external audio file; optionally load audio files with the same name as the video automatically.
+- **Audio tracks**: pick or cycle through the tracks, load an external audio file; optionally load audio files with the same name as the video automatically (a file whose name matches another video of the folder more closely, such as `Movie.Extended.ac3` next to `Movie.Extended.mkv`, is left to that video).
 - **Output device**: the sound device to play on; when it is unplugged the system default takes over, and the choice returns when it is plugged back in.
 
 These settings are kept across files and restarts (the audio sync as its keep mode says).

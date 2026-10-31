@@ -16,6 +16,8 @@ pub static METHODS: &[Method] = &[
     Method::free("storage.session.set"),
     Method::free("storage.session.delete"),
     Method::free("storage.session.keys"),
+    // SDK 1.5.35, player 0.5.13: reading the rendering state (host/rendering.rs).
+    Method::free("rendering.state"),
 ];
 
 pub fn handle(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
@@ -23,6 +25,7 @@ pub fn handle(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> H
         "packages.list" => host.package_dispatch(reply.owner, method, params).map(Some),
         "window.state" => Ok(Some(host.window_state())),
         "ui.markdownScan" => host.markdown_scan(params).map(Some),
+        "rendering.state" => host.rendering_dispatch(method, params).map(Some),
         method if method.starts_with("storage.session.") => {
             // Keyed by the plugin's data identity, not by `reply.owner`: the
             // values outlive this process (session_storage.rs).

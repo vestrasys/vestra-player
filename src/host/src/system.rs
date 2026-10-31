@@ -2,7 +2,8 @@
 //! `system.reveal` / `openPath` / `openUrl` (show files, open them with the
 //! default application, open links in the browser), `secrets.get` / `set` /
 //! `delete` (the system's secret store, capability `secrets`) and
-//! `app.system` (system facts and displays for `plugin.app.system()`).
+//! `app.system` (system facts, displays and the renderer for
+//! `plugin.app.system()`).
 //!
 //! Arguments are checked here; the system calls are `platform::*`. They can
 //! block (Finder, keychain prompts), so they run on a worker thread and the
@@ -114,8 +115,21 @@ pub fn displays_json(displays: &[platform::Display]) -> Value {
         .collect()
 }
 
+/// `rendering` of `plugin.app.system()`: whether the GPU renderer draws the
+/// video now (render options apply) or the software renderer does. It can
+/// change once during a run, from `gpu` to `software` (a window that cannot
+/// show GPU frames), never back.
+pub fn rendering_json(gpu: bool) -> Value {
+    json!(if gpu { "gpu" } else { "software" })
+}
+
 /// Computed once per host process, off the UI thread.
 static FACTS: OnceLock<platform::OsFacts> = OnceLock::new();
+
+/// The operating system's facts, read once (blocking: off the UI thread).
+pub(crate) fn os_facts() -> &'static platform::OsFacts {
+    FACTS.get_or_init(platform::os_facts)
+}
 
 impl Host {
     pub(super) fn system_dispatch(
@@ -176,9 +190,15 @@ impl Host {
                 } else {
                     displays_json(&platform::displays())
                 };
+                let (gpu, reason) = self.backend.render.now();
+                let rendering = rendering_json(gpu);
+                // Player 0.5.13 (SDK 1.5.35): why it renders that way.
+                let reason = reason.json();
                 Box::new(move || {
-                    let mut value = facts_json(FACTS.get_or_init(platform::os_facts));
+                    let mut value = facts_json(os_facts());
                     value["displays"] = displays;
+                    value["rendering"] = rendering;
+                    value["renderingReason"] = reason;
                     Ok(value)
                 })
             }
@@ -312,6 +332,12 @@ mod tests {
             json!([{"name":"Built-in Retina Display","width":3024,"height":1964,
                 "scale":2.0,"refreshRate":120.0,"primary":true}])
         );
+    }
+
+    #[test]
+    fn rendering_is_gpu_or_software() {
+        assert_eq!(rendering_json(true), json!("gpu"));
+        assert_eq!(rendering_json(false), json!("software"));
     }
 
     #[test]

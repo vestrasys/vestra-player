@@ -43,6 +43,24 @@ test.afterEach(async () => {
   for (const stop of [...running]) await stop();
 });
 
+/**
+ * A store file once `done` holds for it. The debounced write is the plugin's own
+ * work, which `settle` does not wait for (on a loaded machine it ends later):
+ * poll, 20 ms at a time, for up to 2 s; the last content read is returned either way.
+ */
+async function written<T>(host: TestHost, path: string, done: (saved: T) => boolean): Promise<T | undefined> {
+  let saved: T | undefined;
+  for (let i = 0; i < 100; i++) {
+    try {
+      saved = JSON.parse(readFileSync(path, "utf8")) as T;
+      if (done(saved)) break;
+    } catch {
+      // not written yet
+    }
+    await host.settle(20);
+  }
+  return saved;
+}
 /** Another plugin (or the bar) opens `source`; it becomes ready, then the duration arrives. */
 async function play(host: TestHost, source: string, duration: number | null = 600, position = 0) {
   host.openElsewhere(source);
@@ -304,9 +322,13 @@ test("A12 keeps 100 records, shows 20 numbered 1–9, 0, then none; a same-named
   assert.equal(lines[10], "v10.mkv");
   assert.equal(lines[14], "vsame.mkv");
   assert.equal(lines[19], "v19.mkv");
-  await play(host, file("new.mkv"));
+  const fresh = file("new.mkv");
+  await play(host, fresh);
   await host.settle(WAIT);
-  const saved = JSON.parse(readFileSync(join(data, "recent.json"), "utf8"));
+  type Saved = { items: { key: string }[] };
+  const saved = await written<Saved>(host, join(data, "recent.json"), (s) => s.items[0]?.key === fresh);
+  assert.ok(saved, "recent.json written");
+  assert.equal(saved.items[0]?.key, fresh);
   assert.equal(saved.items.length, 100);
   assert.equal(records(host)[0], "1  new.mkv");
   await stop();
@@ -568,7 +590,10 @@ test("B25 the playing position is saved every tick, so a forced quit loses littl
   await play(host, a);
   host.setSource({ position: 300 });
   await host.settle(timing.positionTick * 2 + WAIT);
-  const saved = JSON.parse(readFileSync(join(data, "positions.json"), "utf8"));
+  // Read while still playing (before stop() writes it anyway).
+  type Saved = { version: number; mode: string; audio: boolean; items: Record<string, { position: number; duration: number; size: number }> };
+  const saved = await written<Saved>(host, join(data, "positions.json"), (s) => s.items?.[a] !== undefined);
+  assert.ok(saved, "positions.json written while playing");
   assert.equal(saved.version, 1);
   assert.equal(saved.mode, "auto");
   assert.equal(saved.audio, false);
@@ -604,6 +629,30 @@ test("B25 stopping the plugin remembers the last position", async () => {
   assert.deepEqual(pluginSeeks(next.host), [121]);
   assert.equal(next.host.osd.at(-1), "从 02:03 继续播放");
   await next.stop();
+});
+
+test("stopping: a menu change during the teardown rebuilds nothing (no 'already declared')", async () => {
+  const { host, stop } = await start();
+  await play(host, file("a.mkv"));
+  host.setSource({ position: 300, paused: true });
+  await host.settle(WAIT);
+  assert.equal(records(host)[0], "1  a.mkv（05:00）");
+  // The points are cleared (the menu lines change) just before stop(); the
+  // merge window ends while stop() is removing the submenu.
+  let removing = false;
+  host.handle("commands.unregister", async (p) => {
+    if (!removing && String(p.id).startsWith("recent.")) {
+      removing = true;
+      await new Promise((resolve) => setTimeout(resolve, timing.menuRebuild + WAIT));
+    }
+    host.commands.delete(String(p.id));
+    return null;
+  });
+  const cleared = host.command("resume.clear").run();
+  await stop();
+  await cleared;
+  assert.ok(removing, "the submenu was removed");
+  assert.deepEqual(recentMenu(host), []);
 });
 
 test("storage: records saved under the 0.1.3 keys (file: URLs; Windows paths) are read, resumed and moved to the new key", async () => {

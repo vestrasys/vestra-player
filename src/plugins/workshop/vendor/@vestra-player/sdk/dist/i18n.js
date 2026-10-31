@@ -14,6 +14,9 @@ import { join } from "node:path";
  * The player's interface languages: English (the source language) first,
  * then the translations, as the player's own table (its tests check that
  * they agree).
+ *
+ * @since 1.5.9
+ * @category Testing
  */
 export const LOCALES = ["en", "zh-Hans", "ja", "ko", "de", "fr", "es"];
 /** The catalog key: `msgid`, or `msgctxt` U+0004 `msgid`. */
@@ -359,6 +362,9 @@ export const LIST_STYLES = [
 /**
  * The separator of each list style per interface language, as the player's
  * table (`i18n::text::SEPARATORS`; its tests check that they agree).
+ *
+ * @since 1.5.11
+ * @category Testing
  */
 export const LIST_SEPARATORS = {
     en: {
@@ -416,6 +422,9 @@ export const LIST_SEPARATORS = {
  * {@link @vestra-player/sdk!Text | Text} or
  * {@link @vestra-player/sdk!TextList | TextList} with everything nested in it), as the player's
  * `i18n::text` (its tests check that they agree).
+ *
+ * @since 1.5.11
+ * @category Testing
  */
 export const TEXT_LIMITS = {
     /** Nesting depth of texts and lists; the value itself is depth 0 (8). */

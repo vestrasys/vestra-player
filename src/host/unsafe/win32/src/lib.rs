@@ -8,8 +8,10 @@
 //! (`VBlank`, the redraw clock) and keeping a full-screen window from
 //! matching its display exactly (`unmatch_display`), whether an open
 //! file is on a network file system (`file_is_remote`), waiting for a
-//! process to end (`wait_for_process_exit`), and the thread's CPU cycles
-//! (`thread_cycles`). Each is one call with plain integer arguments, a
+//! process to end (`wait_for_process_exit`), the thread's CPU cycles
+//! (`thread_cycles`), and the DXGI adapters with their driver versions
+//! (`dxgi_adapters`, through the `windows` crate's COM interfaces; no device
+//! is created). Each is one call with plain integer arguments, a
 //! borrowed handle, or local out-parameters; the public
 //! API is safe. Compiled only on Windows (cross-checked from macOS by
 //! `npm run portability`, not yet run on Windows).
@@ -358,10 +360,97 @@ fn monitor_of(hwnd: isize) -> isize {
     unsafe { MonitorFromWindow(hwnd as HWND, MONITOR_DEFAULTTOPRIMARY) as isize }
 }
 
+/// A DXGI adapter as the driver check sees it (round record
+/// 2026-10-render-modes §3.1).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DxgiAdapter {
+    pub name: String,
+    /// PCI vendor, device, subsystem and revision.
+    pub vendor_id: u32,
+    pub device_id: u32,
+    pub subsys_id: u32,
+    pub revision: u32,
+    pub luid: u64,
+    /// The DXGI software flag (WARP, Basic Render).
+    pub software: bool,
+    /// The user-mode driver's version, four parts, from
+    /// `CheckInterfaceSupport(IDXGIDevice)`; `None` when DXGI does not say.
+    pub driver_version: Option<[u16; 4]>,
+}
+
+/// The DXGI adapters in Windows' order for this process
+/// (`IDXGIFactory1::EnumAdapters1`: the per-app graphics preference picks
+/// the first). No device is created. An error only when DXGI itself is
+/// unavailable.
+pub fn dxgi_adapters() -> Result<Vec<DxgiAdapter>, String> {
+    use windows::Win32::Graphics::Dxgi::{
+        CreateDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE, IDXGIDevice, IDXGIFactory1,
+    };
+    use windows::core::Interface;
+    // SAFETY: plain factory creation; an owned interface or an error comes
+    // back.
+    let factory: IDXGIFactory1 =
+        unsafe { CreateDXGIFactory1() }.map_err(|e| format!("CreateDXGIFactory1: {e}"))?;
+    let mut adapters = Vec::new();
+    for index in 0..64 {
+        // SAFETY: a live factory; each call returns an owned adapter, or
+        // DXGI_ERROR_NOT_FOUND past the last one.
+        let Ok(adapter) = (unsafe { factory.EnumAdapters1(index) }) else {
+            break;
+        };
+        // SAFETY: a live adapter; GetDesc1 fills a plain struct it returns
+        // by value.
+        let Ok(desc) = (unsafe { adapter.GetDesc1() }) else {
+            continue;
+        };
+        // SAFETY: a live adapter and a static interface id; the call only
+        // writes the version it returns.
+        let umd = unsafe { adapter.CheckInterfaceSupport(&IDXGIDevice::IID) }.ok();
+        let end = desc
+            .Description
+            .iter()
+            .position(|&c| c == 0)
+            .unwrap_or(desc.Description.len());
+        adapters.push(DxgiAdapter {
+            name: String::from_utf16_lossy(&desc.Description[..end]),
+            vendor_id: desc.VendorId,
+            device_id: desc.DeviceId,
+            subsys_id: desc.SubSysId,
+            revision: desc.Revision,
+            luid: (u64::from(desc.AdapterLuid.HighPart as u32) << 32)
+                | u64::from(desc.AdapterLuid.LowPart),
+            software: desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0,
+            driver_version: umd.map(version_parts),
+        });
+    }
+    Ok(adapters)
+}
+
+/// A `LARGE_INTEGER` driver version as its four 16-bit parts, high first.
+fn version_parts(value: i64) -> [u16; 4] {
+    let value = value as u64;
+    [48, 32, 16, 0].map(|shift| (value >> shift) as u16)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{VBlank, file_is_remote};
+    use super::{VBlank, dxgi_adapters, file_is_remote, version_parts};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_driver_version_splits_into_four_parts() {
+        let value = (31i64 << 48) | (14005 << 16) | 21001;
+        assert_eq!(version_parts(value), [31, 0, 14005, 21001]);
+        assert_eq!(version_parts(-1), [u16::MAX; 4]);
+    }
+
+    /// Every Windows has at least Microsoft's Basic Render adapter or a GPU.
+    #[test]
+    fn dxgi_lists_the_adapters_with_names() {
+        let adapters = dxgi_adapters().unwrap();
+        assert!(!adapters.is_empty());
+        assert!(adapters.iter().all(|adapter| !adapter.name.is_empty()));
+    }
 
     /// A file on a local disk (this test executable) is not remote.
     #[test]

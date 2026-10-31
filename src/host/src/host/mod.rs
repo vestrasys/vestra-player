@@ -11,7 +11,9 @@ mod lifecycle;
 mod menus;
 mod mounts;
 pub mod package_activation;
+mod rendering;
 mod restart;
+pub(crate) use rendering::{Relaunch, Rendering, startup as rendering_startup};
 mod rpc;
 mod shell;
 mod state;
@@ -64,7 +66,7 @@ pub(crate) use menus::{
     debug_menu, debug_menu_pointer, menu_levels, set_menu_model, track_pointer,
 };
 pub(crate) use mounts::refuse_initial;
-pub(crate) use restart::{LAST_SOURCE, restart_log, restart_player};
+pub(crate) use restart::{LAST_SOURCE, LostDevice, restart_log, restart_player};
 pub(crate) use rpc::{Reply, Request, RpcError, string, ui_error};
 pub(crate) use state::{LayoutChange, layout_change, policy_slot};
 pub(crate) use video::{FRAME_SINK, PIP_GPU_SINK};
@@ -197,6 +199,8 @@ pub(crate) struct Host {
     /// The sequence provider: owner, can-next, can-previous (C6).
     pub(crate) sequence: Option<(u64, bool, bool)>,
     pub(crate) last_source: Value,
+    /// The rendering API's facts, preference and restart (`rendering.rs`).
+    pub(crate) rendering: Rendering,
     pub(crate) source_state_replies: std::collections::BTreeSet<(u64, u64)>,
     pub(crate) floating: Option<Floating>,
     pub(crate) menu_mode: MenuMode,

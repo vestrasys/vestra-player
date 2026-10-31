@@ -1,5 +1,6 @@
 //! One persistent libmpv core. Rendering and all control calls stay off the UI thread.
 use crate::host::{Event, Reply, RpcError};
+use crate::playback::renderer::GpuBackend as _;
 use anyhow::Result;
 use rsmpv::{
     Mpv,
@@ -45,8 +46,13 @@ pub struct Backend {
     worker: Option<thread::JoinHandle<()>>,
 }
 impl Backend {
-    /// `gpu`: try GPU rendering first (`renderer::wanted`).
-    pub fn start(events: mpsc::Sender<Event>, silent: bool, gpu: bool) -> Result<Self> {
+    /// `render`: the start-up decision (`render_mode::decide`); GPU mode tries
+    /// GPU rendering first.
+    pub fn start(
+        events: mpsc::Sender<Event>,
+        silent: bool,
+        render: &crate::playback::render_mode::Decision,
+    ) -> Result<Self> {
         let (commands, receiver) = mpsc::channel::<Command>();
         let (stop, stopping) = mpsc::channel();
         let frame = FrameSlot::new();
@@ -58,7 +64,7 @@ impl Backend {
         let input = Arc::new(Mutex::new(None));
         #[cfg(feature = "producer-audio")]
         let out_input = input.clone();
-        let render = crate::playback::renderer::Render::new(gpu);
+        let render = crate::playback::renderer::Render::new(render);
         let out_render = render.clone();
         let (ready, initialized) = mpsc::sync_channel(1);
         let worker = thread::spawn(move || {
@@ -242,8 +248,6 @@ impl Backend {
                 let mut render_options = crate::playback::video_render::Options::default();
                 let mut render_was_gpu = out_render.gpu().is_some();
                 let mut cover_art = CoverArt::default();
-                // `host.resume`: where a restarted player's first file continues.
-                let mut resume = None::<Value>;
                 let mut subtitles = crate::playback::subtitle_backend::Subtitles::new(fonts);
                 let mut jobs = crate::playback::media_jobs::Jobs::default();
                 let mut push = StatePush::new();
@@ -435,9 +439,20 @@ impl Backend {
                             continue;
                         }
                         // A restarted player continues its first file where
-                        // the replaced one was (`main.rs` `restart_player`).
+                        // the replaced one was (`host/rendering.rs`): the
+                        // next open of that file loads with `start=` and its
+                        // pause state (`source_backend::resume_claim`).
                         if command.method == "host.resume" {
-                            resume = Some(command.params);
+                            sources.resume_next_open(
+                                crate::playback::source_backend::ResumePoint {
+                                    source: command.params["source"]
+                                        .as_str()
+                                        .unwrap_or_default()
+                                        .into(),
+                                    seconds: command.params["seconds"].as_f64().unwrap_or(0.),
+                                    paused: command.params["paused"].as_bool() == Some(true),
+                                },
+                            );
                             continue;
                         }
                         if command.method == "playback.stats" {
@@ -487,6 +502,7 @@ impl Backend {
                         let _ = events.send(Event::Reply(command.reply, result));
                     }
                     sources.follow_device(&mpv);
+                    sources.late_cover_art(&mpv);
                     for (done, result) in actions.poll(&mpv, sources.generation()) {
                         done.send(&events, result);
                     }
@@ -544,24 +560,6 @@ impl Backend {
                             "playback.backend".into(),
                             json!({"currentSession":sources.generation(),"event":format!("{event:?}")}),
                         ));
-                    }
-                    if let Some(point) = &resume
-                        && sources.phase() == crate::playback::session::Phase::Ready
-                        // By file name: the session may name the file as a URL or
-                        // a canonical path.
-                        && sources.current_source().map(file_name) == point["source"].as_str().map(file_name)
-                    {
-                        let seconds = point["seconds"].as_f64().unwrap_or(0.);
-                        if seconds > 0.
-                            && let Err(error) =
-                                mpv.command(&["seek", &seconds.to_string(), "absolute"])
-                        {
-                            diag!("render: resuming at {seconds} s failed: {error}");
-                        }
-                        if point["paused"].as_bool() == Some(true) {
-                            let _ = mpv.set_property("pause", true);
-                        }
-                        resume = None;
                     }
                     if !geometry_error && let Err(error) = geometry.tick(&mpv, &sources) {
                         geometry_error = true;
@@ -715,7 +713,10 @@ impl GpuRun<'_> {
             match crate::platform::gpu_start(self.mpv.clone(), area, self.publish.clone()) {
                 Ok(renderer) => renderer,
                 Err(error) => {
-                    diag!("render: GPU rendering unavailable ({error}); software rendering");
+                    self.render
+                        .start_failed(crate::playback::render_mode::Reason::InitFailed(format!(
+                            "GPU rendering unavailable: {error}"
+                        )));
                     return false;
                 }
             };
@@ -733,7 +734,8 @@ impl GpuRun<'_> {
             // The renderer stopped on its own (Windows: its device was
             // removed): software rendering, as for a window's fallback.
             if let Some(reason) = crate::platform::gpu_failed(&renderer.handle()) {
-                self.render.fall_back(&reason);
+                self.render
+                    .fall_back(crate::playback::render_mode::Reason::WindowFallback(reason));
                 break;
             }
             thread::sleep(Duration::from_millis(20));
@@ -1432,11 +1434,6 @@ fn no_builtin_scripts(builder: &rsmpv::Builder) -> Result<()> {
         }
     }
     Ok(())
-}
-
-/// The last path component of a path or URL (`host.resume`).
-fn file_name(source: &str) -> &str {
-    source.rsplit(['/', '\\']).next().unwrap_or(source)
 }
 
 #[cfg(test)]

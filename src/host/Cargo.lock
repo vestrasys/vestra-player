@@ -5230,7 +5230,7 @@ dependencies = [
 
 [[package]]
 name = "vestra-host"
-version = "0.5.11"
+version = "0.5.14"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5313,6 +5313,7 @@ dependencies = [
 name = "vestra-win32"
 version = "0.0.0"
 dependencies = [
+ "windows",
  "windows-sys 0.61.2",
 ]
 

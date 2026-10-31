@@ -3,6 +3,7 @@
 //! render targets and frame pacing).
 
 pub(crate) mod backend;
+pub(crate) mod cover_listing;
 pub(crate) mod effects;
 pub(crate) mod media_jobs;
 pub(crate) mod media_tracks;
@@ -38,6 +39,9 @@ pub mod subtitle_upload;
 pub(crate) mod frame_pacing;
 #[cfg(any(windows, test))]
 pub(crate) mod lease_stream;
+pub(crate) mod render_denylist;
+pub(crate) mod render_mode;
+pub(crate) mod render_state;
 pub(crate) mod render_target;
 pub(crate) mod renderer;
 pub(crate) mod video_click;

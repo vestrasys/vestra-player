@@ -24,53 +24,22 @@ pub struct Launch {
     /// `http(s)` and other non-file URLs: plugins open those through their
     /// own commands; a drop carries only paths (reported and skipped).
     pub urls: Vec<String>,
-    /// Internal: this player restarts one whose GPU device was lost
-    /// (`--vestra-restart PID:COUNT[:gl]`, written by the host only).
-    pub restart: Option<Restart>,
-    /// Internal: continue the restarted player's source at this point
+    /// Internal: this player replaces one that restarted itself
+    /// (`rendering.restart`, or its windows' GPU device was lost;
+    /// `--vestra-restart PID`, written by the host only): it waits for that
+    /// player to end and for its instance lock instead of handing its files
+    /// over.
+    pub restart: Option<u32>,
+    /// Internal: continue the first file at this point
     /// (`--vestra-resume SECONDS:paused|playing`, written by the host only).
     pub resume: Option<Resume>,
 }
 
-/// A restart after a lost GPU device (`host/restart.rs` `restart_player`).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Restart {
-    /// The process it replaces: waited for before the instance lock.
-    pub parent: u32,
-    /// Restarts in a row, this one included.
-    pub count: u32,
-    /// The windows draw with OpenGL (a second loss in a row).
-    pub opengl_windows: bool,
-}
-
-/// Where the restarted player's first source continues.
+/// Where a restarted player's first file continues.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Resume {
     pub seconds: f64,
     pub paused: bool,
-}
-
-impl Restart {
-    /// The argument `parse` reads back.
-    pub fn arg(&self) -> String {
-        let gl = if self.opengl_windows { ":gl" } else { "" };
-        format!("{}:{}{gl}", self.parent, self.count)
-    }
-    fn parse(value: &str) -> Option<Self> {
-        let mut parts = value.split(':');
-        let parent = parts.next()?.parse().ok()?;
-        let count = parts.next()?.parse().ok()?;
-        let opengl_windows = match parts.next() {
-            None => false,
-            Some("gl") => true,
-            Some(_) => return None,
-        };
-        parts.next().is_none().then_some(Self {
-            parent,
-            count,
-            opengl_windows,
-        })
-    }
 }
 
 impl Resume {
@@ -125,9 +94,10 @@ pub fn parse(args: &[String], cwd: &Path) -> Result<Launch> {
             "--plugin" => launch.directories.push(PathBuf::from(value("directory")?)),
             "--seconds" => launch.seconds = Some(value("number")?.parse::<f64>()?),
             "--vestra-restart" => {
-                let text = value("PID:COUNT")?;
+                let text = value("PID")?;
                 launch.restart = Some(
-                    Restart::parse(&text).ok_or_else(|| anyhow!("bad --vestra-restart {text}"))?,
+                    text.parse()
+                        .map_err(|_| anyhow!("bad --vestra-restart {text}"))?,
                 );
             }
             "--vestra-resume" => {
@@ -178,6 +148,40 @@ mod tests {
     fn args(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()
     }
+    /// The host's own restart arguments read back as written.
+    #[test]
+    fn restart_and_resume_arguments_round_trip() {
+        let resume = Resume {
+            seconds: 61.25,
+            paused: true,
+        };
+        let base = cwd();
+        let launch = parse(
+            &args(&[
+                "--vestra-restart",
+                "4242",
+                "--vestra-resume",
+                &resume.arg(),
+                "--",
+                "movie.mp4",
+            ]),
+            &base,
+        )
+        .unwrap();
+        assert_eq!(launch.restart, Some(4242));
+        assert_eq!(launch.resume, Some(resume));
+        assert_eq!(launch.files, [base.join("movie.mp4")]);
+        let playing = Resume {
+            seconds: 0.,
+            paused: false,
+        };
+        assert_eq!(Resume::parse(&playing.arg()), Some(playing));
+        for bad in ["1.5", "-1:paused", "NaN:playing", "2:stopped"] {
+            assert_eq!(Resume::parse(bad), None, "{bad}");
+        }
+        assert!(parse(&args(&["--vestra-restart", "nope"]), &base).is_err());
+    }
+
     fn cwd() -> PathBuf {
         std::env::temp_dir().join("launch-cwd")
     }
@@ -212,49 +216,6 @@ mod tests {
         }
         let message = parse(&args(&["--bogus"]), &cwd()).unwrap_err().to_string();
         assert!(message.contains("unknown argument --bogus"), "{message}");
-    }
-
-    /// The host's own restart arguments read back as written.
-    #[test]
-    fn restart_and_resume_arguments_round_trip() {
-        let restart = Restart {
-            parent: 4242,
-            count: 2,
-            opengl_windows: true,
-        };
-        let resume = Resume {
-            seconds: 61.25,
-            paused: true,
-        };
-        let base = cwd();
-        let launch = parse(
-            &args(&[
-                "--vestra-restart",
-                &restart.arg(),
-                "--vestra-resume",
-                &resume.arg(),
-                "--",
-                "movie.mp4",
-            ]),
-            &base,
-        )
-        .unwrap();
-        assert_eq!(launch.restart, Some(restart));
-        assert_eq!(launch.resume, Some(resume));
-        assert_eq!(launch.files, [base.join("movie.mp4")]);
-        let plain = Restart {
-            parent: 7,
-            count: 1,
-            opengl_windows: false,
-        };
-        assert_eq!(Restart::parse(&plain.arg()), Some(plain));
-        for bad in ["7", "x:1", "7:1:vulkan", "7:1:gl:x"] {
-            assert_eq!(Restart::parse(bad), None, "{bad}");
-        }
-        for bad in ["1.5", "-1:paused", "NaN:playing", "2:stopped"] {
-            assert_eq!(Resume::parse(bad), None, "{bad}");
-        }
-        assert!(parse(&args(&["--vestra-restart", "nope"]), &base).is_err());
     }
 
     #[test]

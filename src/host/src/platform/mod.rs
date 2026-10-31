@@ -20,7 +20,7 @@
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | opening the player | `on_open_files` (macOS: open-documents Apple events through `vestra-open-files`; elsewhere files come on the command line), `single_instance` / `single_instance_restarted` → `Launch` / `Primary` (shared, in `instance.rs`), `allow_handoff_foreground` (Windows: `AllowSetForegroundWindow`) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
-//! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
+//! | facts | `os_facts` (blocking), `gpu_adapters` (Windows: DXGI through `vestra-win32`; elsewhere none yet), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
 //! | installation | `install_layout` (pure, in `layout.rs`, for every system) → `current_install_layout` |
 //! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
@@ -29,7 +29,7 @@
 //! | full screen | `fullscreen_resized` (Windows: a full-screen window is kept one pixel off its display's rectangle; elsewhere nothing) |
 //! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, OpenGL or wgpu, `vestra-video-texture`; elsewhere a new image per frame) |
 //! | redraw pacing | `VBLANK_CLOCK`, `vblank_waiter` → `VBlankWaiter` (Windows: vertical blanks through `vestra-win32`; elsewhere `no_vblank` below: Slint paces, with a display link on macOS) |
-//! | rendering | `window_refresh` (here, through winit on every system), `select_window_renderer`, `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` / `GpuFrame` / `GpuDraw`, `gpu_started`, `gpu_log_text`, `gpu_failed`, `window_device_lost` (macOS: OpenGL windows, `vestra-gpu-render` with OpenGL; Windows: wgpu/Direct3D 12 windows, `vestra-gpu-render` with Direct3D 11 into shared textures; elsewhere `no_gpu` below refuses, so the host renders in software) |
+//! | rendering | `window_refresh` (here, through winit on every system), `select_wgpu_windows`, `GPU_RENDER`, `GPU_WINDOWS_WGPU`, `GPU_OPT_IN`, `gpu_start` → `GpuRenderer` / `GpuHandle` (implements `playback::renderer::GpuBackend`) / `GpuFrame` / `GpuDraw`, `gpu_started`, `gpu_failed`, `window_device_lost` (macOS: OpenGL windows, `vestra-gpu-render` with OpenGL; Windows: wgpu/Direct3D 12 windows, `vestra-gpu-render` with Direct3D 11 into shared textures; elsewhere `no_gpu` below refuses, so the host renders in software) |
 //! | picture-in-picture | `pip_supported`, `PipWindow` (UI thread; macOS: AVKit through `vestra-pip`; elsewhere `pip_unsupported.rs`: `unsupported`) |
 //!
 //! Window rectangles are logical points. macOS uses the Cocoa lower-left
@@ -270,6 +270,28 @@ pub struct OsFacts {
     pub model: Option<String>,
 }
 
+/// A graphics adapter as the driver check sees it (`gpu_adapters`;
+/// `playback::render_denylist`), without system-specific concepts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GpuAdapter {
+    pub name: String,
+    /// PCI vendor and device (`0x1002`, `0x15BF`).
+    pub vendor_id: u32,
+    pub device_id: u32,
+    /// Dotted, as the system reports it (`31.0.14005.21001`).
+    pub driver_version: Option<String>,
+    /// No GPU of its own (a software rasterizer or a remote session's).
+    pub software: bool,
+}
+
+/// The adapters in the order the system offers them to this process (the
+/// first is what GPU rendering would use), before any window or device.
+/// Windows: DXGI through `vestra-win32`; elsewhere none yet.
+#[cfg(not(target_os = "windows"))]
+pub fn gpu_adapters() -> Vec<GpuAdapter> {
+    Vec::new()
+}
+
 /// One display for `plugin.app.system()`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Display {
@@ -313,12 +335,14 @@ fn unsupported(what: &str) -> crate::host::RpcError {
 
 /// GPU rendering on systems without an implementation yet (Linux and the
 /// rest): `gpu_start` refuses, so the host renders in software and never
-/// holds a `GpuHandle`; its methods are inert.
+/// holds a `GpuHandle`; its `GpuBackend` methods are inert.
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod no_gpu {
     use std::sync::{Arc, atomic::AtomicBool};
 
     pub const GPU_RENDER: bool = false;
+    pub const GPU_WINDOWS_WGPU: bool = false;
+    pub const GPU_OPT_IN: bool = false;
     pub struct GpuRenderer(());
     #[derive(Clone)]
     pub struct GpuHandle(());
@@ -345,24 +369,25 @@ mod no_gpu {
             GpuHandle(())
         }
     }
-    impl GpuHandle {
-        pub fn set_size(&self, _size: (u32, u32)) {}
-        pub fn set_display_fps(&self, _fps: Option<f64>) {}
-        pub fn frames(&self) -> u64 {
+    impl crate::playback::renderer::GpuBackend for GpuHandle {
+        type Frame = Box<GpuFrame>;
+        fn set_size(&self, _size: (u32, u32)) {}
+        fn set_display_fps(&self, _fps: Option<f64>) {}
+        fn frames(&self) -> u64 {
             0
         }
-        pub fn shown(&self) -> u64 {
+        fn shown(&self) -> u64 {
             0
         }
-        pub fn size(&self) -> Option<(u32, u32)> {
+        fn size(&self) -> Option<(u32, u32)> {
             None
         }
-        pub fn reshow(&self) {}
-        pub fn latest(&self) -> Option<(u64, Box<GpuFrame>)> {
+        fn reshow(&self) {}
+        fn latest(&self) -> Option<(u64, Box<GpuFrame>)> {
             None
         }
-        pub fn on_frame(&self, _notify: impl Fn() + Send + 'static) {}
-        pub fn attach<T: slint::ComponentHandle + 'static>(
+        fn on_frame(&self, _notify: impl Fn() + Send + 'static) {}
+        fn attach<T: slint::ComponentHandle + 'static>(
             &self,
             _component: &T,
             _show: impl Fn(slint::Image) + 'static,
@@ -371,45 +396,25 @@ mod no_gpu {
         ) -> Result<(), String> {
             Err("GPU rendering is not available".into())
         }
-        pub fn retarget<T: slint::ComponentHandle + 'static>(&self, _component: &T) {}
+        fn retarget<T: slint::ComponentHandle + 'static>(&self, _component: &T) {}
     }
 }
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub use no_gpu::*;
 
-/// Choose Slint's window renderer (before the event loop; not headless).
-/// `gpu`: GPU rendering is wanted; returns whether it still is with the
-/// renderer chosen. Here: femtovg on OpenGL, which GPU rendering needs
-/// (macOS), else the winit default. The Windows version (wgpu on
-/// Direct3D 12 first; `opengl_windows`: a restart after a lost GPU device
-/// asks for OpenGL windows) is in `windows.rs`.
+/// GPU mode's wgpu windows (`render_mode::WindowKind::Wgpu`): Windows only
+/// (`windows.rs`); `decide` never asks for them here (`GPU_WINDOWS_WGPU`).
 #[cfg(not(target_os = "windows"))]
-pub fn select_window_renderer(
-    gpu: bool,
-    _opengl_windows: bool,
-    winit: impl Fn() -> slint::BackendSelector,
-) -> std::result::Result<bool, slint::PlatformError> {
-    if gpu && let Err(error) = winit().renderer_name("femtovg".into()).select() {
-        diag!("render: the OpenGL window renderer is unavailable ({error}); software rendering");
-        winit().select()?;
-        return Ok(false);
-    } else if !gpu {
-        winit().select()?;
-    }
-    Ok(gpu)
+pub fn select_wgpu_windows(
+    _winit: impl Fn() -> slint::BackendSelector,
+) -> std::result::Result<(), String> {
+    Err(format!("no wgpu windows on {}", std::env::consts::OS))
 }
 
 /// The GPU renderer started: route its diagnostics (Windows: `render:`
 /// lines of its device and failures; nothing here).
 #[cfg(not(target_os = "windows"))]
 pub fn gpu_started(_handle: &GpuHandle) {}
-
-/// `VESTRA_FRAME_LOG`: the GPU renderer's own numbers for the line (Windows;
-/// nothing here).
-#[cfg(not(target_os = "windows"))]
-pub fn gpu_log_text(_handle: &GpuHandle) -> String {
-    String::new()
-}
 
 /// Whether the windows' GPU device was lost (Windows; never here).
 #[cfg(not(target_os = "windows"))]

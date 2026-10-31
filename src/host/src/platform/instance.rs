@@ -66,9 +66,11 @@ pub fn single_instance(directory: &Path, files: &[PathBuf], wait: Duration) -> i
     }
 }
 
-/// A restart of this player (the previous process is ending after its
-/// window device was lost): wait up to `wait` for that process's lock
-/// instead of handing the files to it.
+/// A player that replaces one which restarted itself (`--vestra-restart`):
+/// wait up to `wait` for that player to release the lock, then claim it;
+/// never hand files over (the old player is quitting). An error means the
+/// old player did not end in time: the caller runs on its own, as after any
+/// failed claim.
 pub fn single_instance_restarted(directory: &Path, wait: Duration) -> io::Result<Launch> {
     std::fs::create_dir_all(directory)?;
     let lock = OpenOptions::new()
@@ -239,6 +241,20 @@ mod tests {
         let launch = single_instance(directory.path(), &files, Duration::from_millis(300));
         assert!(launch.is_err(), "refused, not handed off");
         assert_eq!(offered.recv_timeout(IO_TIMEOUT).unwrap(), files);
+    }
+
+    /// A restarted player waits for the lock and never hands off; once the
+    /// old player is gone it is the primary.
+    #[test]
+    fn a_restarted_launch_waits_for_the_lock_instead_of_handing_off() {
+        let directory = tempfile::tempdir().unwrap();
+        let old = single_instance(directory.path(), &[], Duration::ZERO).unwrap();
+        assert!(matches!(old, Launch::Primary(_)));
+        let refused = single_instance_restarted(directory.path(), Duration::from_millis(100));
+        assert!(refused.is_err(), "the old player still holds the lock");
+        drop(old);
+        let claimed = single_instance_restarted(directory.path(), Duration::from_secs(5)).unwrap();
+        assert!(matches!(claimed, Launch::Primary(_)));
     }
 
     #[test]

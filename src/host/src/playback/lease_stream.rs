@@ -117,7 +117,8 @@ pub fn on_network(file: &File) -> bool {
     vestra_win32::file_is_remote(file)
 }
 
-/// Lets `mpv` play [`Registration`] urls.
+/// Lets `mpv` play [`Registration`] urls (Windows; the tests on every system).
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn register(mpv: &rsmpv::Mpv) -> rsmpv::Result<()> {
     mpv.register_protocol(PROTOCOL, open)
 }

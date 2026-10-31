@@ -1,7 +1,7 @@
 /**
  * Shared services: the clipboard, sleep prevention, showing and opening files
- * and links, secrets and session storage go to the host; external tools and
- * settings files run in this plugin's own process.
+ * and links, secrets, session storage and the rendering choice go to the
+ * host; external tools and settings files run in this plugin's own process.
  */
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { mkdir, open, rename, rm, stat } from "node:fs/promises";
@@ -247,16 +247,36 @@ class Store {
  * with the key and the request around the value). The player's tests check
  * that these agree with the player.
  *
- * @example
+ * @example Remember a position per URL without breaking the limits
+ * The plugin keeps the last position of each URL for this player session
+ * and skips a URL too long to be a key. Keys are counted in UTF-8 bytes, so
+ * the length is measured with `Buffer.byteLength`, not `length`; a `set`
+ * that would take the plugin's entries over 1 MiB rejects with `limit` and
+ * changes nothing, so the plugin clears the old entries and goes on.
  * ```ts
- * import assert from "node:assert/strict";
+ * import type { Plugin, PluginError } from "@vestra-player/sdk";
+ * declare const plugin: Plugin;
+ * declare const url: string;
+ * declare const position: number;
+ * // ---cut---
  * import { SESSION_STORAGE_LIMITS } from "@vestra-player/sdk/testing";
  *
- * const key = "https://example.com/a.mkv";
- * assert.ok(Buffer.byteLength(key) <= SESSION_STORAGE_LIMITS.keyBytes);
+ * const session = plugin.storage.session;
+ * if (Buffer.byteLength(url) <= SESSION_STORAGE_LIMITS.keyBytes) {
+ *   try {
+ *     await session.set(url, position);
+ *   } catch (error) {
+ *     if ((error as PluginError).code !== "limit") throw error;
+ *     // Full: start over rather than lose the newest position.
+ *     for (const key of await session.keys()) await session.delete(key);
+ *     await session.set(url, position);
+ *   }
+ * }
  * ```
  *
  * @since 1.5.25
+ *
+ * @category Testing
  */
 export const SESSION_STORAGE_LIMITS = Object.freeze({
     /** UTF-8 bytes of a key (1024, at least 1; no NUL character). */
@@ -390,14 +410,39 @@ export function system(scope) {
  * fails with code `invalid`; a new name beyond `names` fails with `limit`.
  * The player's tests check that these agree with the player.
  *
- * @example
+ * @example Store an API token only when it fits
+ * The plugin keeps a token the user pasted, or tells them it is empty or
+ * too long. Values are 1–1024 bytes counted in UTF-8, so the check uses
+ * `Buffer.byteLength`; `secrets.set` would refuse other values with
+ * `invalid`. The store itself can still refuse (`unsupported` without a
+ * system store, `unavailable` when it cannot be reached, `failed` when the
+ * user denies access): only
+ * those codes get the "could not be saved" message, anything else (a
+ * missing `secrets` capability) is a bug and is thrown on.
  * ```ts
+ * import type { Plugin, PluginError } from "@vestra-player/sdk";
+ * declare const plugin: Plugin;
+ * declare const token: string;
+ * // ---cut---
  * import { SECRET_LIMITS } from "@vestra-player/sdk/testing";
  *
- * assert.ok(Buffer.byteLength(token) <= SECRET_LIMITS.valueBytes);
+ * if (!token || Buffer.byteLength(token) > SECRET_LIMITS.valueBytes) {
+ *   await plugin.osd.show("Paste a token of at most 1024 bytes.");
+ * } else {
+ *   try {
+ *     await plugin.secrets.set("api-token", token);
+ *   } catch (error) {
+ *     const { code } = error as PluginError;
+ *     if (!["unsupported", "unavailable", "failed"].includes(code)) throw error;
+ *     // No keychain or access denied: ask again next time.
+ *     await plugin.osd.show("The token could not be saved.");
+ *   }
+ * }
  * ```
  *
  * @since 1.5.14
+ *
+ * @category Testing
  */
 export const SECRET_LIMITS = Object.freeze({
     /**
@@ -430,5 +475,25 @@ export const secrets = (scope) => {
             await scope.runtime.host.secrets.set(named(name), value);
         },
         delete: async (name) => scope.runtime.host.secrets.delete(named(name)),
+    };
+};
+const PREFERENCES = new Set(["auto", "gpu", "software"]);
+export const rendering = (scope) => {
+    const manage = () => {
+        if (!scope.runtime.can("rendering.manage"))
+            throw failure("capability", "rendering.manage must be declared in manifest");
+    };
+    return {
+        state: async () => (await scope.runtime.host.rendering.state()),
+        async setPreference(preference) {
+            manage();
+            if (typeof preference !== "string" || !PREFERENCES.has(preference))
+                throw failure("invalid", 'the rendering preference is "auto", "gpu" or "software"');
+            return (await scope.runtime.host.rendering.setPreference(preference));
+        },
+        async restartPlayer() {
+            manage();
+            await scope.runtime.host.rendering.restart();
+        },
     };
 };

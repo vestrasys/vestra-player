@@ -32,6 +32,7 @@ export declare class ScopeImpl implements Plugin {
     readonly storage: import("./types.ts").Storage;
     readonly system: import("./types.ts").System;
     readonly secrets: import("./types.ts").Secrets;
+    readonly rendering: import("./types.ts").Rendering;
     readonly window: import("./types.ts").MainWindow;
     readonly bindings: import("./types.ts").Bindings;
     readonly ui: import("./types.ts").Ui;

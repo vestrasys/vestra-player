@@ -23,6 +23,9 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, mpsc};
 use std::{num::NonZeroU32, thread, time::Duration, time::Instant};
 
+/// A published frame, as [`Handle::latest`] returns it.
+pub type Frame = CFRetained<IOSurfaceRef>;
+
 type Cgl = *mut c_void;
 type Size = (u32, u32);
 /// Frames in flight: one being drawn, one being shown, one spare.
@@ -383,7 +386,7 @@ impl Handle {
         *reshow = (reshow.0 + 1, hold);
     }
     /// The newest frame: its number and surface (for picture-in-picture).
-    pub fn latest(&self) -> Option<(u64, CFRetained<IOSurfaceRef>)> {
+    pub fn latest(&self) -> Option<(u64, Frame)> {
         lock(&self.0.latest).as_ref().map(|frame| (frame.sequence, frame.surface.0.clone()))
     }
     /// Call `notify` on the render thread after each new frame.

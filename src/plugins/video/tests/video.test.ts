@@ -273,6 +273,7 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
     ["Saturation +1%", 447, "video-color", "U"],
     ["Hue -1%", 448, "video-color", "I"],
     ["Hue +1%", 449, "video-color", "O"],
+    ["GPU Rendering (Experimental)", 460, "video-rendering", ""],
   ];
   assert.deepEqual(
     declared,
@@ -350,6 +351,7 @@ test("Simplified Chinese: the 视频 menu shows the titles of before", async () 
       "画面调节…",
       "复位",
       ...["亮度", "对比度", "饱和度", "色调"].flatMap((t) => [`${t} -1%`, `${t} +1%`]),
+      "GPU 渲染（实验性）",
     ].map((path) => `视频 ▸ ${path}`),
   );
   // The player translates the reason with the plugin's catalog.
@@ -1553,5 +1555,263 @@ test("render options owned by another plugin: silent at start, a reason on use, 
   assert.equal(host.videoRender.owner, "vestra.video");
   assert.equal(host.videoRender.values.toneMapping, "clip");
   assert.equal(window.props.status, "");
+  await stop();
+});
+
+// ---------------------------------------------------------------- GPU Rendering (Experimental): the player's renderer choice
+const gpuItem = (host: TestHost) => host.command("video.gpu-rendering");
+const gpuTitle = (host: TestHost) => gpuItem(host).declaration.path.at(-1);
+const restartItem = "video.gpu-rendering.restart";
+/** The item's state with the reason as the menu shows it (the player's message is passed as data). */
+const shownState = (host: TestHost) => ({ ...gpuItem(host).state, reason: gpuItem(host).display.reason ?? null });
+
+test("GPU rendering: macOS defaults to Auto on the GPU, so the item is checked and enabled, last in the Video menu", async () => {
+  const host = new TestHost();
+  const { stop } = await start(host);
+  await host.settle();
+  assert.equal(gpuTitle(host), "GPU Rendering (Experimental)");
+  assert.equal(gpuItem(host).declaration.order, 460);
+  assert.deepEqual(shownState(host), { enabled: true, checked: true, busy: false, reason: null });
+  assert.deepEqual(host.sent("rendering.setPreference"), [], "reading the state changes nothing");
+  await stop();
+});
+
+test("GPU rendering: Windows without a GPU renderer greys the item out with the player's reason", async () => {
+  const host = new TestHost();
+  host.videoRender.gpu = false;
+  host.rendering.startedWith = "software";
+  host.rendering.reason = { code: "no-gpu-backend", message: "This player has no GPU renderer on Windows yet" };
+  host.rendering.gpu = { available: false, reason: host.rendering.reason };
+  const { stop } = await start(host);
+  await host.settle();
+  assert.equal(gpuTitle(host), "GPU Rendering (Experimental)");
+  assert.deepEqual(shownState(host), { enabled: false, checked: false, busy: false, reason: "This player has no GPU renderer on Windows yet" });
+  await stop();
+});
+
+test("GPU rendering: a denylisted driver greys the item out with the denylist message", async () => {
+  const host = new TestHost();
+  host.videoRender.gpu = false;
+  host.rendering.startedWith = "software";
+  const denied = { code: "denylist", message: "Your graphics driver (AMD Radeon 780M, 31.0.14005.21001) is known to stall; update it" };
+  host.rendering.reason = denied;
+  host.rendering.gpu = { available: false, reason: denied };
+  const { stop } = await start(host);
+  await host.settle();
+  assert.deepEqual(shownState(host), { enabled: false, checked: false, busy: false, reason: denied.message });
+  await stop();
+});
+
+test("GPU rendering: switching off waits for a restart; Later keeps the choice; switching back clears it", async () => {
+  const host = new TestHost();
+  const { stop } = await start(host);
+  host.dialogAnswers.push({ confirmed: false, checked: false });
+  await gpuItem(host).run();
+  await host.settle();
+  assert.deepEqual(
+    host.sent("rendering.setPreference").map((r) => r.preference),
+    ["software"],
+  );
+  assert.equal(host.rendering.preference, "software", "saved by the player at once");
+  assert.equal(gpuTitle(host), "GPU Rendering (Restart to Apply)");
+  assert.equal(gpuItem(host).state.checked, false);
+  assert.equal(host.confirms.length, 1);
+  assert.equal(host.confirms[0]!.message, "Restart Vestra Player now to apply?");
+  assert.deepEqual([host.confirms[0]!.confirm, host.confirms[0]!.cancel], ["Restart Now", "Later"]);
+  assert.equal(host.rendering.restarts, 0, "Later does not restart");
+  assert.equal(host.osd.at(-1), "GPU rendering: off (applies at the next start)");
+  assert.deepEqual(host.command(restartItem).declaration.path, ["@video", "Restart Player to Apply"], "the restart stays offered");
+  assert.equal(host.command(restartItem).declaration.order, 460);
+  // Back to the mode this run started with: nothing waits, no dialog.
+  await gpuItem(host).run();
+  await host.settle();
+  assert.equal(host.rendering.preference, "gpu");
+  assert.equal(gpuTitle(host), "GPU Rendering (Experimental)");
+  assert.equal(gpuItem(host).state.checked, true);
+  assert.equal(host.confirms.length, 1, "no restart is offered when nothing would change");
+  assert.equal(host.commands.has(restartItem), false, "the restart item goes with the pending choice");
+  assert.equal(host.osd.at(-1), "GPU rendering: on");
+  await stop();
+});
+
+test("GPU rendering: switching on from software rendering offers the restart, and Restart Now restarts", async () => {
+  // A player that can draw on the GPU but started in software mode by the user's choice.
+  const host = new TestHost();
+  host.videoRender.gpu = false;
+  host.rendering.startedWith = "software";
+  host.rendering.preference = "software";
+  host.rendering.reason = { code: "preference", message: "You chose software rendering" };
+  const { stop } = await start(host);
+  await host.settle();
+  assert.deepEqual(shownState(host), { enabled: true, checked: false, busy: false, reason: null });
+  host.dialogAnswers.push({ confirmed: true, checked: false });
+  await gpuItem(host).run();
+  await host.settle();
+  assert.equal(host.rendering.preference, "gpu");
+  assert.equal(gpuTitle(host), "GPU Rendering (Restart to Apply)");
+  assert.equal(gpuItem(host).state.checked, true);
+  assert.equal(host.confirms.length, 1);
+  assert.equal(host.rendering.restarts, 1);
+  await stop();
+});
+
+test("GPU rendering: a refused choice says why and greys the item out; a new source reads the state again; a failed save says so", async () => {
+  const host = new TestHost();
+  host.rendering.preference = "software";
+  host.rendering.startedWith = "software";
+  host.videoRender.gpu = false;
+  const { stop } = await start(host);
+  await host.settle();
+  assert.equal(gpuItem(host).state.enabled, true);
+  // The GPU is ruled out after the item was built (as the player would after a crash guard).
+  const crashed = { code: "previous-crash", message: "GPU rendering was turned off after a crash" };
+  host.rendering.gpu = { available: false, reason: crashed };
+  await gpuItem(host).run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "GPU rendering unavailable: GPU rendering was turned off after a crash");
+  assert.equal(host.rendering.preference, "software", "the old choice stays");
+  assert.deepEqual(shownState(host), { enabled: false, checked: false, busy: false, reason: crashed.message });
+  assert.deepEqual(host.confirms, []);
+  // Available again; a new source reads the state again.
+  host.rendering.gpu = { available: true, reason: null };
+  host.openElsewhere("/movie.mp4");
+  await until(host, () => gpuItem(host).state.enabled, "the item enabled again");
+  // The settings file cannot be written.
+  host.handle("rendering.setPreference", () => {
+    throw new HostError("failed", "disk full");
+  });
+  await gpuItem(host).run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "Could not save the rendering choice: disk full");
+  assert.equal(gpuTitle(host), "GPU Rendering (Experimental)");
+  assert.deepEqual(host.confirms, []);
+  await stop();
+});
+
+test("GPU rendering: a restart the player cannot start is said; the choice stays", async () => {
+  const host = new TestHost();
+  host.handle("rendering.restart", () => {
+    throw new HostError("failed", "could not start the new player");
+  });
+  const { stop } = await start(host);
+  host.dialogAnswers.push({ confirmed: true, checked: false });
+  await gpuItem(host).run();
+  await host.settle();
+  assert.equal(host.rendering.preference, "software");
+  assert.equal(host.osd.at(-1), "Could not restart the player: could not start the new player");
+  await stop();
+});
+
+test("GPU rendering: Simplified Chinese titles, dialog and on-screen text", async () => {
+  const host = new TestHost();
+  const { stop } = await start(host, undefined, zh);
+  assert.equal(gpuItem(host).display.path.join(" ▸ "), "视频 ▸ GPU 渲染（实验性）");
+  host.dialogAnswers.push({ confirmed: false, checked: false });
+  await gpuItem(host).run();
+  await host.settle();
+  assert.equal(gpuItem(host).display.path.join(" ▸ "), "视频 ▸ GPU 渲染（重启后生效）");
+  assert.equal(host.confirmTexts.at(-1)!.message, "现在重启 Vestra Player 以应用更改？");
+  assert.equal(host.confirmTexts.at(-1)!.cancel, "稍后");
+  assert.equal(host.osd.at(-1), "GPU 渲染: 关（下次启动时生效）");
+  await stop();
+});
+
+test("GPU rendering: Restart Player to Apply restarts later; a failed restart is said", async () => {
+  const host = new TestHost();
+  const { stop } = await start(host);
+  host.dialogAnswers.push({ confirmed: false, checked: false });
+  await gpuItem(host).run();
+  await host.settle();
+  assert.equal(host.rendering.restarts, 0);
+  host.handle("rendering.restart", () => {
+    throw new HostError("failed", "could not start the new player");
+  });
+  await host.command(restartItem).run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "Could not restart the player: could not start the new player");
+  host.reset("rendering.restart");
+  await host.command(restartItem).run();
+  await host.settle();
+  assert.equal(host.rendering.restarts, 1);
+  assert.equal(host.rendering.preference, "software", "the choice is not touched by the restart");
+  await stop();
+});
+
+test("GPU rendering: a checked item stays usable when the GPU is ruled out, so the user can leave it", async () => {
+  // The user chose the GPU; then GPU rendering crashed at a start, so this run draws in software.
+  const host = new TestHost();
+  host.videoRender.gpu = false;
+  host.rendering.preference = "gpu";
+  host.rendering.startedWith = "software";
+  const crashed = { code: "previous-crash", message: "GPU rendering was turned off after a crash" };
+  host.rendering.reason = crashed;
+  host.rendering.gpu = { available: false, reason: crashed };
+  const { stop } = await start(host);
+  await host.settle();
+  assert.deepEqual(shownState(host), { enabled: true, checked: true, busy: false, reason: null }, "no reason while it can be used");
+  await gpuItem(host).run();
+  await host.settle();
+  assert.deepEqual(
+    host.sent("rendering.setPreference").map((r) => r.preference),
+    ["software"],
+  );
+  assert.equal(host.rendering.preference, "software");
+  assert.equal(host.osd.at(-1), "GPU rendering: off");
+  assert.deepEqual(host.confirms, [], "this run already draws in software: nothing to restart");
+  assert.deepEqual(shownState(host), { enabled: false, checked: false, busy: false, reason: crashed.message }, "now unchecked, it greys out with the reason");
+  await stop();
+});
+
+test("GPU rendering: chosen but still ruled out at the next start (VESTRA_RENDER), the on-screen text says why", async () => {
+  const host = new TestHost();
+  host.rendering.preference = "software";
+  host.rendering.startedWith = "software";
+  host.videoRender.gpu = false;
+  const env = { code: "env", message: "VESTRA_RENDER=cpu asks for software rendering" };
+  host.handle("rendering.setPreference", () => ({
+    mode: "software",
+    reason: env,
+    preference: "gpu",
+    nextMode: "software",
+    nextReason: env,
+    restartPending: false,
+    gpu: { available: true, reason: null },
+  }));
+  const { stop } = await start(host);
+  await gpuItem(host).run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "GPU rendering chosen; the next start still uses software rendering: VESTRA_RENDER=cpu asks for software rendering");
+  assert.deepEqual(host.confirms, []);
+  await stop();
+});
+
+test("GPU rendering: while a switch is under way the item is busy with a reason and a second pick does nothing", async () => {
+  const host = new TestHost();
+  const { stop } = await start(host);
+  let release!: () => void;
+  const held = new Promise<void>((done) => (release = done));
+  let answered = 0;
+  host.handle("dialogs.confirm", async () => {
+    answered++;
+    await held;
+    return { confirmed: false, checked: false };
+  });
+  // `run()` and `settle()` wait for an idle host, which the open question holds: poll by hand.
+  const first = gpuItem(host).run();
+  for (let i = 0; i < 1200 && !(answered === 1 && gpuItem(host).state.busy); i++) await new Promise((done) => setTimeout(done, 5));
+  assert.deepEqual(shownState(host), { enabled: true, checked: false, busy: true, reason: "Switching…" });
+  // The player does not run a busy command; the plugin also ignores a pick that slips through.
+  await assert.rejects(Promise.resolve().then(() => gpuItem(host).run()), { code: "command" }, "a busy item does not run");
+  release();
+  await first;
+  await host.settle();
+  assert.deepEqual(
+    host.sent("rendering.setPreference").map((r) => r.preference),
+    ["software"],
+    "one switch only",
+  );
+  assert.equal(answered, 1);
+  assert.equal(gpuItem(host).state.busy, false);
+  assert.equal(shownState(host).reason, null);
   await stop();
 });

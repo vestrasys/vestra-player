@@ -9,15 +9,29 @@ import { isTextValue, textProblem } from "../i18n.js";
  * rejects, `OsdPanel.set` reports to `Scope.onError`. The player's tests
  * check that these agree with the player.
  *
- * @example
+ * @example Keep a long list inside the information block's limits
+ * The block shows the first 32 rows of a list, each cut at 60 columns. The
+ * player counts the text as shown (after it is translated and formatted); a
+ * block over `panelLines` lines or `panelBytes` bytes is refused whole with
+ * `invalid`, reported to `Scope.onError` because `set` never throws, so
+ * the plugin trims the list itself (for very long non-ASCII rows, check the
+ * bytes too).
  * ```ts
+ * import type { Plugin } from "@vestra-player/sdk";
+ * declare const plugin: Plugin;
+ * declare const rows: string[];
+ * // ---cut---
  * import { OSD_LIMITS } from "@vestra-player/sdk/testing";
  *
+ * const panel = plugin.osd.panel();
  * const lines = rows.slice(0, OSD_LIMITS.panelLines);
+ * // maxColumns cuts each longer line and ends it with "…".
  * panel.set(lines.join("\n"), null, { maxColumns: 60 });
  * ```
  *
  * @since 1.5.14
+ *
+ * @category Testing
  */
 export const OSD_LIMITS = Object.freeze({
     /**
