@@ -337,3 +337,25 @@ The independent review of 617ec2c asked for fixes first; the branch first merged
 
 - **N1**: a player started by a restart that loses its device within `RESTART_COOLDOWN` used to record the loss and exit (the shared once-per-process flag made the fallback call in `main.rs` a no-op), so it disappeared after a TDR right after "Restart Player to Apply". It now always relaunches, in software (`VESTRA_RENDER=software`) when the guard turned GPU off or a GPU relaunch is refused by the cooldown (`restart::software_after_loss`). Tested.
 - **N2**: `SLINT_BACKEND` again leaves CPU mode's windows to Slint on Windows (`WindowKind::Default`, `winit().select()`; an explicit `renderer_name` would win over it), as on main; GPU mode keeps its wgpu windows and logs that `SLINT_BACKEND` is not applied to them; the `software-windows` rule note says Slint chooses CPU mode's windows. Tested.
+
+- Known limit (review of bbbee56): a player relaunched in software after a device loss carries `VESTRA_RENDER=software` in its environment, so a later "Restart Player to Apply" from it still starts in software (reason `env`) until the user opens the player again. A command-line marker instead of the environment would avoid it.
+
+### 10.3 Hardware checks (coordinator, 2026-10-31, staged release 0.5.14 from bbbee56)
+
+Separate application data directory; each run ≤ 60 s; `VESTRA_FRAME_LOG`; 4K60 HEVC 10-bit or a 10-minute 1080p clip; internal 2560x1600 60 Hz panel.
+
+| Case | Result |
+| --- | --- |
+| Auto, no environment (780M first, AMD 26.10.1) | `software rendering, Slint's software window renderer; reason: default (… experimental …)`; only the `software-windows` rule logged; no Direct3D 12; 60/60 shown, paint mean ~10 ms |
+| Preference `gpu` on the 780M | `GPU rendering, Direct3D 12 (wgpu) windows`, mpv Direct3D 11 on the 780M, shared textures; windows not white; presented 60–61/s, paint mean 3.1–3.3 ms |
+| `gpu` + `VESTRA_GPU_ADAPTER=high-performance` | windows and mpv on the RTX 4070; presented 59–61/s, paint mean 3.5–3.7 ms |
+| `VESTRA_RENDER=gpu` with Auto / `VESTRA_RENDER=software` with `gpu` | GPU, reason `env` / software, reason `env` |
+| `VESTRA_RENDER_TARGET=3840x2160` (780M GPU, 4070 GPU, CPU) | 60 presented on both GPUs; CPU 60 shown. The forced target scales mpv's render only, not Slint's composition, so an external 4K screen still needs a real check |
+| `VESTRA_TEST_REMOVE_DEVICE=15`, first loss | one restart with `--vestra-resume 13:playing`; one new process; resumed at 0:13 and playing; `losses` 1, state ok |
+| second loss the same day (new start) | "restarting the player with software rendering (the second loss within a day; crash guard)"; state `crashed`; one new process |
+| next normal start | software, reason `previous-crash` ("lost twice within a day … tried again after a driver or player update, or in 7 days") |
+| `SLINT_BACKEND=winit-software`, Auto | "Slint's default window renderer", "Slint chooses CPU mode's windows" |
+| Real menu: Video ▸ GPU Rendering (Experimental) → dialog → Restart Now | `render.json` `gpu`; one new process; resumed in place and playing; About shows Rendering GPU; the About tool window draws with wgpu |
+| Switch off → Later → next start | `render.json` `software`; software rendering, reason `preference` |
+
+Not run on hardware (unit tests only): a loss inside the 30 s cooldown (N1), the 31.0.14005 rule on Auto, wgpu unavailable (Remote Desktop / WARP), an external 4K monitor, a running game.
