@@ -1,9 +1,11 @@
-// About Vestra Player (I09): a fixed 360×420 window: the product, then the loaded plugins.
+// About Vestra Player (I09): a fixed 360-wide window: the product, then the loaded plugins.
 // Heights (padding 12 top and bottom):
-//   12 + header 96 + 6 + components 5 × 18 + 6 + list head 18 + list 8 × 18 + 2 + 6 + spacer ≥ 0 + 6 + buttons 21 + 12 = 419 of 420
+//   12 + header 96 + 6 + components 5 × 18 + rendering + 6 + list head 18 + list 8 × 18 + 2 + 6 + spacer ≥ 0 + 6 + buttons 21 + 12 = 419 of 420 + rendering
+//   rendering   0 when the player does not report it (before 0.5.12), else one 18px row or
+//               more: its reason wraps, and the window grows by exactly that height
 // Widths (content 360 − 28 = 332):
 //   header      logo 96 + 12 + name / version text (elided)
-//   components  label 100 + 8 + value 224 (elided)
+//   components  label 100 + 8 + value 224 (elided; the rendering value wraps)
 //   plugin list 1 + 6 + id ≥ 100 + 6 + version 56 + 6 + origin 56 + 6 + state 48 + 6 + scroll bar 12 + 1 ≤ 332
 //   buttons     status ≥ 50 + 4 + Copy Info 66 + 4 + Close 66 = 190 of 332
 // Texts are @tr (English source; locales/<lang>.po translate them); versions, ids and
@@ -59,11 +61,11 @@ component PluginLine {
 export component AboutWindow inherits Window {
     title: @tr("About Vestra Player");
     preferred-width: 360px;
-    preferred-height: 420px;
+    preferred-height: 420px + rendering-line.height;
     min-width: 360px;
     max-width: 360px;
-    min-height: 420px;
-    max-height: 420px;
+    min-height: 420px + rendering-line.height;
+    max-height: 420px + rendering-line.height;
     background: Theme.bg-panel;
     in property <string> version;
     // "" without a build hash.
@@ -77,6 +79,11 @@ export component AboutWindow inherits Window {
     in property <[PluginRow]> plugins;
     // packages.list failed: the list is empty and says so.
     in property <bool> plugins-unknown;
+    // The renderer drawing now: "gpu", "software", or "" when the player does not
+    // report it (the row is left out).
+    in property <string> rendering;
+    // The player's reason (English, shown as it is); "" = none shown.
+    in property <string> rendering-reason;
     // "" or "copy-failed".
     in property <string> status;
     callback copy-info();
@@ -96,6 +103,13 @@ export component AboutWindow inherits Window {
             : code == "development" ? @tr("Development")
             : code;
     }
+    // "Software — <reason>", "GPU" (about.ts renderingValue words the copied text the same way).
+    pure function rendering-name(mode: string) -> string {
+        return mode == "gpu" ? @tr("GPU") : @tr("Software");
+    }
+    pure function rendering-value(mode: string, reason: string) -> string {
+        return reason == "" ? root.rendering-name(mode) : @tr("{} — {}", root.rendering-name(mode), reason);
+    }
     pure function state-name(code: string) -> string {
         return code == "starting" ? @tr("Starting")
             : code == "running" ? @tr("Running")
@@ -113,7 +127,10 @@ export component AboutWindow inherits Window {
         visible: false;
         width: 0;
         height: 0;
-        label-measure := Text { text: @tr("Plugin API"); font-size: Theme.font-body; }
+        label-measure := VerticalLayout {
+            Text { text: @tr("Plugin API"); font-size: Theme.font-body; }
+            Text { text: @tr("Rendering"); font-size: Theme.font-body; }
+        }
         // Headings are bold.
         version-measure := VerticalLayout {
             Text { text: @tr("Version"); font-size: Theme.font-body; font-weight: 700; }
@@ -165,6 +182,24 @@ export component AboutWindow inherits Window {
             VersionLine { label-width: root.label-width; label: "Slint"; value: root.known(root.slint); }
             // i18n-ignore
             VersionLine { label-width: root.label-width; label: "Node"; value: root.known(root.node); }
+            // Rendering: label and value top-aligned, 2px down, so a one-line value sits like
+            // a VersionLine; the reason wraps (it can name the adapter, the driver and where to
+            // choose a GPU). Height 0 when the player does not report the renderer.
+            rendering-line := HorizontalLayout {
+                height: root.rendering == "" ? 0px : max(18px, rendering-text.preferred-height + 4px);
+                padding-top: 2px;
+                padding-bottom: 2px;
+                spacing: 8px;
+                Text { width: root.label-width; text: root.rendering == "" ? "" : @tr("Rendering"); color: Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: top; overflow: elide; }
+                rendering-text := Text {
+                    horizontal-stretch: 1;
+                    text: root.rendering == "" ? "" : root.rendering-value(root.rendering, root.rendering-reason);
+                    color: Theme.text;
+                    font-size: Theme.font-body;
+                    vertical-alignment: top;
+                    wrap: word-wrap;
+                }
+            }
         }
         VerticalLayout {
             PluginLine { version-width: root.version-width; origin-width: root.origin-width; state-width: root.state-width; id: @tr("Loaded plugins"); version: @tr("Version"); origin: @tr("Source"); state: @tr("State"); heading: true; }
