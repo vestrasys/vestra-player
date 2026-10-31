@@ -11,6 +11,7 @@ mod bindings;
 mod capabilities;
 mod clipboard;
 mod commands;
+mod conditions;
 mod core_actions;
 pub mod font_asset;
 pub mod font_carrier;
@@ -410,6 +411,7 @@ fn main() -> Result<()> {
         data_removals: BTreeMap::new(),
         session_storage: Default::default(),
         bindings_sent: 0,
+        bindings_list_sent: Value::Null,
         packages_sent: Value::Null,
         notified_at: 0,
         timeline: Default::default(),

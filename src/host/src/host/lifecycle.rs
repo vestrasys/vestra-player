@@ -310,6 +310,14 @@ impl Host {
         if event == "host.error" {
             diag!("host.error {data}");
         }
+        // Commands whose state is a condition on this state (`plugin.when`)
+        // follow it, whether their plugin runs or not.
+        if matches!(
+            event,
+            "source.state" | "window.state" | "appearance.changed"
+        ) {
+            capabilities::refresh_conditions(self);
+        }
         let mut failed = Vec::new();
         for (owner, plugin) in self
             .plugins
@@ -323,6 +331,9 @@ impl Host {
         for (owner, error) in failed {
             self.transport_failed(owner, &error);
         }
+        // A parked plugin that listens to a low-frequency event is woken
+        // to receive it (lazy activation §6.9).
+        self.lazy_event(event, &data);
     }
     /// Why a plugin stopped on its own (`packages.list` state `failed`).
     pub(crate) fn record_failure(&mut self, owner: u64, message: &str) {

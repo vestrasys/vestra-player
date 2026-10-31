@@ -86,6 +86,10 @@ pub struct Plugin {
     /// mirror (the SDK's copy of the state, `events.subscribe { mirror }`,
     /// SDK 1.5.38), which holds nothing for lazy activation.
     pub subscriptions: BTreeMap<String, bool>,
+    /// What listens, as the SDK describes it (`events.subscribe { why }`,
+    /// SDK 1.5.40: the listener and where the plugin added it), by event:
+    /// for the log line that says why a plugin keeps running.
+    pub listeners: BTreeMap<String, String>,
     runner: Runner,
     /// How long dropping it waits for its own process (`set_stop_wait`).
     stop_wait: Duration,
@@ -165,6 +169,7 @@ impl Plugin {
             data_key,
             data_directory,
             subscriptions: BTreeMap::new(),
+            listeners: BTreeMap::new(),
             runner,
             stop_wait: Duration::from_millis(300),
         })

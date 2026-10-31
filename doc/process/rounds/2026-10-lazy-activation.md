@@ -313,6 +313,7 @@ After the "no idle stop" ruling above (08:19), the user asked how to reclaim plu
 | C2 | Done 2026-10-28 (branch `refactor-c2`, two commits: moves, then the `main.rs` split; see §6.5) |
 | A1 | Done 2026-10-31, pending review (branch `lazy-a1`; see §6.6), off unless `VESTRA_LAZY=1` |
 | B1 | Done 2026-10-31, pending review (branch `lazy-b1`; see §6.8), off unless `VESTRA_LAZY=1`; SDK 1.5.38 prepared, not tagged |
+| B2 | Done 2026-10-31, pending review (branch `lazy-b2`; see §6.9), off unless `VESTRA_LAZY=1`; host 0.5.21, SDK 1.5.40 prepared, not tagged |
 
 ### 6.1 C1: what landed
 
@@ -449,3 +450,102 @@ So 1 of 16 is lazy today, against 8–9 expected. The rule and the host work as 
 - The park-and-wake-every-built-in registry diff test (§5.3): with 1 of 16 built-ins lazy it would cover only workshop; worth writing once the built-ins above change.
 - P4 measurements (the 2000-plugin library, click-to-dialog timing) and the GUI test with lazy on.
 - Turning lazy on by default (coordinator, after the hardware checks).
+
+### 6.9 B2: declarative command state and event wake (2026-10-31, branch `lazy-b2` from `main` 1a5353b, host 0.5.21, SDK 1.5.40 on the SDK branch `lazy-b2`, not tagged)
+
+User approval (2026-10-31): B2 as proposed after §6.8.1, with VS Code's `when` clauses and Chrome MV3's event wake as precedent. Lazy activation stays off by default (`VESTRA_LAZY=1`). Version plan: SDK 1.5.39 goes to video-primitives, so this is SDK **1.5.40** and host **0.5.21** (gpu-polish 0.5.19, video-primitives 0.5.20); the coordinator reconciles the numbers at merge.
+
+#### 6.9.1 Declarative command state (`plugin.when`)
+
+A command's `enabled` or `checked` may be a condition the **player** evaluates, so a parked plugin's menu state stays current without its process. The function form keeps working and keeps the plugin resident (B1's binding tracking, unchanged). A condition is data, not a listener: it holds nothing.
+
+Vocabulary (only state the host already owns; names as in the SDK's `PlayerState`):
+
+| TS (`plugin.when`) | Wire | Host source |
+| --- | --- | --- |
+| `open` | `{ not: { phase: ["empty"] } }` | `Host.last_source.phase` |
+| `ready` | `{ phase: ["ready"] }` | same |
+| `playing` / `paused` | `{ all: [{ phase: ["ready"] }, { paused: false / true }] }` | `phase`, `paused` |
+| `stream` | `{ kind: "stream" }` | `kind == "producer"` |
+| `phase(...phases)` | `{ phase: [...] }` | `phase` |
+| `can(control)` | `{ can: "seek" }` (pause, seek, rate, restart, close, snapshot, next, previous) | `capabilities.*` (`snapshot` = `snapshotSource`), `sequence.next/previous` |
+| `fullscreen` | `{ fullscreen: true }` | `Host.window_facts.fullscreen` |
+| `theme(id)` | `{ theme: "vestra-light" }` | `Host::theme()` |
+| `language(pref)` | `{ language: "system" }` | `Host::language_preference()` or `system` |
+| `a.and(b…)`, `a.or(b…)`, `a.not()` | `all`, `any`, `not` | |
+
+Not in the vocabulary: "has video" (not in the public `PlayerState`; `can("snapshot")` covers capture), window size, panels, subtitles, a plugin's own settings. Those stay functions or values set with `command.set`.
+
+- **TS API**: `plugin.when` (on every scope); `const { when } = plugin; enabled: when.can("snapshot").and(when.phase("ready", "ended"), when.stream.not())`, `checked: when.theme("vestra-light")`. Types `When`, `Condition` (category Commands, in `STRICT_CATEGORIES`); `CommandOptions.enabled`/`checked` and `Command.set` accept a condition. Plugins import types only, so `when` comes from the `plugin` object (the player's own SDK copy), not an import.
+- **Wire**: `commands.register` and `commands.update` carry an optional `when: { enabled?, checked? }`; a condition is an object of exactly one key (`phase`, `paused`, `kind`, `can`, `fullscreen`, `theme`, `language`, `all`, `any`, `not`), at most 32 nodes and 6 levels (`invalid` otherwise). The state fields a condition covers carry a placeholder (`enabled: true`, `checked: false`). An update is a complete fact: without `when` the command's conditions go. Older players ignore `when` (unknown top-level params are not read), but they never run SDK 1.5.40, since the player builds the `plugin` object with its own SDK.
+- **Reason**: with an `enabled` condition the host shows the sent `reason` only while the condition is false or the command is busy (the menu shows any non-empty reason otherwise), so `reason: "No frame to capture"` with `enabled: when…` behaves like capture's function pair today.
+- **Host evaluation** (`src/host/src/conditions.rs`, `commands::Registry`): the registry keeps each command's `Conditions` and the `Facts` it last evaluated against; `set_conditions` (after every register/update, live or replayed) replaces the condition fields of the stored state; `set_facts` re-evaluates every condition and bumps the registry revision only when a state changed, so menus, the key table's disabled set and bar buttons follow through the existing revision check in the host loop. `Host::broadcast` refreshes the facts for `source.state`, `window.state` and `appearance.changed`, whether or not any plugin listens; the register path refreshes them first. Rekey, remove, prune and owner removal carry or drop the conditions with the entry.
+- **Recording/replay**: `Sent.when` is kept with each command; `Commands::record` puts it into the recorded `commands.register`; replay goes through the same `register`, so a replayed command's state is evaluated at once (headless test below: a replayed `when.ready` command is refused with its reason, without waking the plugin).
+- **TestHost**: `FakeCommand.when` (what was sent) and `FakeCommand.state` evaluated against `source`, `mainWindow.fullscreen`, `appearance` and `language` with the host's reason rule.
+
+#### 6.9.2 Wake on low-frequency events
+
+A listener of a **wake event** no longer keeps its plugin resident: `Events::record` returns the listener as a recorded `events.subscribe { event }` call; a listener of any other event is still `Live`. Parked owners' wake events are in `Lazy.wakes` (filled by `Events::revoke` at park and by `Events::replay` at start-up, dropped at rekey and when the entries go). `Host::broadcast` calls `lazy_event`: each parked owner listening to that event gets the message queued as a trigger (a newer one of the same event replaces a held one) and is woken; it receives the event at its `runtime.ready` like a held command. `capabilities::replay` now checks the capability the request needs (`Route::needs`), so a recorded `packages.changed` subscription needs none and `bindings.changed` needs `bindings.manage`, as live.
+
+Event list, with the evidence for each frequency (code):
+
+| Event | Sent when | Code | Rate | B2 |
+| --- | --- | --- | --- | --- |
+| `source.state` | every phase change and every 100 ms while playing | `playback/backend.rs` `push.due` | ~10/s | keeps resident |
+| `window.state` | any change of the window facts: each resize step, menu open/close, dialog, focus, slot state | `host/window.rs` (`facts != window_facts`) | many/s while resizing | keeps resident (`when.fullscreen` covers the menu case) |
+| `playback.backend` | every accepted mpv event except log messages and hwdec property changes | `playback/backend.rs` loop over `mpv.poll_event` | dozens per open, more while playing | keeps resident |
+| `timeline.changed` | every source (layers cleared) and every mark change of any plugin | `timeline.rs` `timeline_tick` | per source and per mark | keeps resident (tied to playback, like a transition) |
+| `packages.changed` | the plugin list changed (install, uninstall, enable, state, warnings; not `process`), checked at most every 200 ms | `binding_manager.rs` `notify_tick` | user and store actions | **wakes** |
+| `bindings.changed` | the binding list changed (now compared by content, see below), at most every 200 ms | same | key edits, plugin installs | **wakes** |
+| `appearance.changed` | `appearance.set`/`setLanguage` with a new value | `ui/theme.rs` | user actions | **wakes** |
+| `resolvers.fileTypes` | the resolvers' file types changed | `playback/backend.rs` | resolver plugins installed, enabled, disabled | **wakes** |
+
+Changes that keep the wake events honest:
+
+- **`bindings.changed` is announced only when the binding list changes.** The table rebuilds on every declaration, including a wake's rekey and a woken plugin's identical re-registration; announcing each rebuild would wake hotkeys whenever any plugin woke. The list (`bindings.list`, sorted by plugin and command) is compared with the last one announced. Running listeners get fewer redundant `null` events and no event they could act on is lost (the list is what the event stands for). Listed for the reviewer as the one behaviour change outside lazy activation.
+- **No wake during start-up or for the first announcement of a run** (`Lazy.mute`, `lazy_settled`): the plugins registering at start-up are not a change for a plugin that last ran in an earlier session, and a woken plugin reads the current state when it starts. Without this, a replayed `packages.changed` listener was woken at every launch (seen in the first run of the headless test).
+- `packages.changed` and `bindings.changed` are also computed while only a parked plugin listens (`Host::listened`).
+- A wake event arriving while the plugin is waking but has not subscribed yet is not queued: it reads the state at activation.
+
+#### 6.9.3 Why a plugin stays resident
+
+- **SDK**: every listener and every hold carries a reason, captured lazily from the stack (the first frame outside the SDK's own `src/` or `dist/`, relative to the plugin directory): `a listener added at main.ts:570`; a command field evaluated under its name: `command "Snapshot" enabled is a function that reads plugin.player.state (main.ts:353) — use plugin.when` (the hint only for state the vocabulary covers: player, window, appearance); a view binding: `a view's bind reads plugin.player.state (main.ts:230)`. Sent as `events.subscribe { event, why }` when the event becomes listened to or its first reason changes (older players ignore `why`). Stack capture is one `new Error()` per command, listener and view binding; it is formatted only when the player is told.
+- **Host log** (`Plugin.listeners`, `Host::lazy_listeners`): `lazy: <id> classified resident: an event listener; listens to source.state: a listener added at main.js:2` and the same detail on `stays running`. Wake events are left out of the detail (they do not keep it).
+- **Development loads** (`--plugin`, never parked): at ready, `plugin <id>: keeps running while idle: <reason>; listens to …` or `plugin <id>: may be stopped while idle (…)`, always (not only with `VESTRA_LAZY=1`), host half only.
+- **TestHost**: `listeningWhy` (event → reason) and `keepsRunning` (listeners of non-wake events with reasons, a mounted panel, open windows; filter chains and streams not listed). `vestra-plugin test` sets `VESTRA_PLUGIN_RESIDENCY=1`; `startPlugin` then prints `# <id> keeps running while idle (lazy activation): …` once per test file when `keepsRunning` is not empty.
+
+#### 6.9.4 What each built-in's author must change (not done here; from `npm run plugin -- test <name>` with SDK 1.5.40 and the code)
+
+| Plugin | Output of `vestra-plugin test` | Change |
+| --- | --- | --- |
+| capture | `listens to source.state: a view's bind reads plugin.player.state (main.ts:230)` | **Two changes.** (1) The six Snapshot commands: `enabled: when.can("snapshot").and(when.phase("ready", "ended"), when.stream.not())`, `reason: "No frame to capture"` (fixed text; `model.ts:148` `usable`). (2) The Burst and Export Clip windows' `bind` (`main.ts:230`, `:269`) read `player.state` at activation although the windows are closed; bind them in a child scope opened with the window and disposed on close (or compute `canCapture`/`canExport` when the window opens and refresh from a listener in that scope). With (1) only, capture stays resident. `minPlayerVersion` 0.5.21. |
+| preferences | nothing (lazy already) | Its `checked` functions read `plugin.appearance`, whose event is now a wake event, so it parks and is woken to re-register on a theme or language change. Recommended anyway: `checked: when.theme(row.id)`, `when.language("system")`, `when.language(row.id)` (`main.ts:97`, `:107`, `:117`): the checkmark is right at once and no process starts for it. `minPlayerVersion` 0.5.21. |
+| info | `listens to source.state: a listener added at dialog.ts:183` | Subscribe the properties window's `player.onChange` (`dialog.ts:183`) only while the window is open (in the window's scope, re-read the source when it opens). `packages.onChange` (`about.ts:148`) needs no change. |
+| hotkeys | nothing | None: `bindings.onChange` (`ignore.ts:32`) is a wake event. Confirmed. |
+| store | nothing | None: `packages.onChange` (`store.ts:268`) is a wake event. Confirmed. The revocation pass runs when the store is woken (a package change, its command, its page), per §5.4 item 2. The "Idle" label of §6.8.1 is still open. |
+
+subtitle-online stays resident by design (§6.8.1). Expected with the changes above: capture, preferences, info, hotkeys, store and workshop lazy (6 of 16), resident: playback, playlist, visualizer, video, audio, subtitles, window, history, marks, subtitle-online.
+
+#### 6.9.5 Checks and tests
+
+- Host unit tests: `conditions::tests` (facts from the wire state, evaluation and combinators, refusals, the reason rule), `commands::tests::conditions_follow_the_players_state_through_park_and_wake`.
+- Headless (`tests/lazy_activation.rs`, ignored by default): `a_when_command_is_parked_and_its_state_follows_playback` (a built-in with `enabled: plugin.when.ready` parks at its first ready; its use while nothing is open is refused with its reason without waking it; a resident fixture opens a generated WAV; the next use wakes it and the command runs; the recording carries `when`; the next start replays it and refuses again without a process; the resident fixture's log line names `main.js:2`); `a_packages_listener_is_parked_and_woken_by_a_package_change` (a built-in with only `packages.onChange` is classified lazy and parked with one recorded `events.subscribe`; another fixture disables an installed plugin; the parked one is woken by `packages.changed`, hears `disabled`, parks again; the next start replays it and nothing wakes it).
+- SDK: `test/conditions.test.ts` (wire form, TestHost evaluation and reason rule, no listener for a condition, `set` between condition and function, vocabulary refusals, `keepsRunning`/`listeningWhy` with call sites).
+
+#### 6.9.6 For the coordinator: hardware and GUI cases (not run: no GUI for agents)
+
+With `VESTRA_LAZY=1`, `VESTRA_IDLE_MS=5000`, a build with SDK 1.5.40, after the plugin authors' changes (or with a test plugin using `plugin.when`):
+
+1. Video ▸ Snapshot items of a parked capture: greyed with "No frame to capture" before a file is open, enabled while a video plays, greyed again after File ▸ Close; the plugin stays parked throughout (log: no `woken`); Ctrl+E while nothing is open shows the reason on the OSD without starting it.
+2. Settings ▸ Appearance radio of a parked preferences after `when.theme`: switch the palette from another place (or from the menu itself), the dot follows at once; with the function form, the log shows `woken by appearance.changed`.
+3. Install or disable a plugin from the store while info, hotkeys and store are parked: each is woken once (`woken by packages.changed`), then parks after the idle time; no wake at the next launch.
+4. Edit a key in Options ▸ Keys while hotkeys is parked: one `woken by bindings.changed`; opening other plugins' commands (waking them) wakes nothing else.
+5. Enter and leave fullscreen with a test plugin using `when.fullscreen`: the item follows; resize the window continuously: no wake, no extra CPU from parked plugins.
+6. Development load of capture (`--plugin`): the log line `plugin vestra.capture: keeps running while idle: …` names `main.ts:230`.
+
+#### 6.9.7 Not in B2
+
+- An SDK option that would make capture's window bindings free: do not count what a closed window's `bind` reads (evaluate its binders when it opens). It changes when a closed window's properties are computed, so it is left for a ruling; the plugin-side change above needs nothing from the SDK.
+- `timeline.changed` and `window.state` as wake events (both too frequent; `when.fullscreen` covers the menu case).
+- The store's "Idle" label, the registry diff test over every built-in, P4 measurements and the default switch (as in §6.8.4).
+- The workshop's vendored SDK (`npm run vendor:sdk`, workshop author) when the player moves to SDK 1.5.40.
