@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- The drag insertion marker, the playing row's bar, the failed mark, the thumbnail placeholder and duration badge, "No matches", the folded search icon and the search box's hint are now always present and shown or hidden, instead of being created and removed as the pointer moves, the list scrolls or a row changes. Screen readers no longer see the list's accessibility tree rebuilt during a drag. Nothing looks different.
+
 ## 0.1.11
 
 - Each row shows a thumbnail by default, like the VestraTube list: a 96×54 picture with the duration on its bottom right, the title on up to two lines and the file's folder (a link's host) below it. Video files show a keyframe from a tenth of the way in, audio files their embedded cover art; links, audio without cover art and files the player cannot read show a placeholder.

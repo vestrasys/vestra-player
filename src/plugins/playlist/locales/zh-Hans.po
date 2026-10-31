@@ -165,7 +165,7 @@ msgstr "文件规范路径与已有项重复，已选择已有项"
 msgid "Close the other dialog first"
 msgstr "请先关闭另一个对话框"
 
-#: main.ts:202 main.ts:595 main.ts:618 main.ts:771 manifest.json ui/settings.slint:114 ui/sidebar.slint:290
+#: main.ts:202 main.ts:595 main.ts:618 main.ts:771 manifest.json ui/settings.slint:114 ui/sidebar.slint:292
 msgid "Playlist"
 msgstr "播放列表"
 
@@ -329,7 +329,7 @@ msgstr "倒置当前顺序"
 msgid "Select All"
 msgstr "全选"
 
-#: main.ts:584 ui/sidebar.slint:680
+#: main.ts:584 ui/sidebar.slint:704
 msgid "Search"
 msgstr "搜索"
 
@@ -553,7 +553,7 @@ msgstr "在下方输入要加入播放列表的网址，每行一个。"
 msgid "Example: {}"
 msgstr "例) {}"
 
-#: ui/link.slint:63 ui/sidebar.slint:592
+#: ui/link.slint:63 ui/sidebar.slint:614
 msgid "Add"
 msgstr "添加"
 
@@ -613,19 +613,19 @@ msgstr "移除全部前确认"
 msgid "Filtered {}"
 msgstr "筛选 {}"
 
-#: ui/sidebar.slint:299
+#: ui/sidebar.slint:301
 msgid "Attach to main window"
 msgstr "附着到主窗口"
 
-#: ui/sidebar.slint:299
+#: ui/sidebar.slint:301
 msgid "Detach as floating window"
 msgstr "分离为浮动窗口"
 
-#: ui/sidebar.slint:305
+#: ui/sidebar.slint:307
 msgid "Close list"
 msgstr "关闭列表"
 
-#: ui/sidebar.slint:365
+#: ui/sidebar.slint:371
 msgid ""
 "{}\n"
 "The file does not exist"
@@ -633,7 +633,7 @@ msgstr ""
 "{}\n"
 "文件不存在"
 
-#: ui/sidebar.slint:366
+#: ui/sidebar.slint:372
 msgid ""
 "{}\n"
 "The file does not exist or cannot be read now; can retry"
@@ -641,7 +641,7 @@ msgstr ""
 "{}\n"
 "文件不存在或暂不可读取，可重试"
 
-#: ui/sidebar.slint:367
+#: ui/sidebar.slint:373
 msgid ""
 "{}\n"
 "Cannot open this media"
@@ -649,42 +649,42 @@ msgstr ""
 "{}\n"
 "无法打开此媒体"
 
-#: ui/sidebar.slint:540
+#: ui/sidebar.slint:562
 msgid "No matches"
 msgstr "无匹配项"
 
-#: ui/sidebar.slint:567
+#: ui/sidebar.slint:589
 msgid "Move to top (Ctrl+Home)"
 msgstr "置顶 (Ctrl+Home)"
 
-#: ui/sidebar.slint:573
+#: ui/sidebar.slint:595
 msgid "Move up (Ctrl+↑)"
 msgstr "上移 (Ctrl+↑)"
 
-#: ui/sidebar.slint:579
+#: ui/sidebar.slint:601
 msgid "Move down (Ctrl+↓)"
 msgstr "下移 (Ctrl+↓)"
 
-#: ui/sidebar.slint:585
+#: ui/sidebar.slint:607
 msgid "Move to bottom (Ctrl+End)"
 msgstr "置底 (Ctrl+End)"
 
-#: ui/sidebar.slint:600
+#: ui/sidebar.slint:622
 msgid "Delete"
 msgstr "删除"
 
-#: ui/sidebar.slint:608
+#: ui/sidebar.slint:630
 msgid "Sort"
 msgstr "排序"
 
-#: ui/sidebar.slint:617
+#: ui/sidebar.slint:639
 msgid "Hide Thumbnails"
 msgstr "隐藏缩略图"
 
-#: ui/sidebar.slint:617
+#: ui/sidebar.slint:639
 msgid "Show Thumbnails"
 msgstr "显示缩略图"
 
-#: ui/sidebar.slint:629
+#: ui/sidebar.slint:652
 msgid "Search (Ctrl+S)"
 msgstr "搜索 (Ctrl+S)"
