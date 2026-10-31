@@ -1627,6 +1627,11 @@ msgstr "다른 플러그인 설치, 제거, 사용 중지"
 msgid "Choose GPU or software rendering and restart the player"
 msgstr "GPU 렌더링과 소프트웨어 렌더링 선택, 플레이어 다시 시작"
 
+#: store.ts:499 store.ts:514 store.ts:515 text.ts:393
+#, x-machine
+msgid "Upscale the video with the GPU's video upscaler"
+msgstr "GPU 비디오 업스케일러로 영상 업스케일링"
+
 #: store.ts:516 store.ts:517 store.ts:519
 #, x-machine
 msgid "Replace"

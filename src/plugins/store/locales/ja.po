@@ -1627,6 +1627,11 @@ msgstr "他のプラグインのインストール、アンインストール、
 msgid "Choose GPU or software rendering and restart the player"
 msgstr "GPU レンダリングとソフトウェアレンダリングの切り替え、プレーヤーの再起動"
 
+#: store.ts:499 store.ts:514 store.ts:515 text.ts:393
+#, x-machine
+msgid "Upscale the video with the GPU's video upscaler"
+msgstr "GPU のビデオアップスケーラーによる映像のアップスケール"
+
 #: store.ts:516 store.ts:517 store.ts:519
 #, x-machine
 msgid "Replace"

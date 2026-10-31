@@ -1288,6 +1288,10 @@ msgstr ""
 msgid "Choose GPU or software rendering and restart the player"
 msgstr ""
 
+#: store.ts:499 store.ts:514 store.ts:515 text.ts:393
+msgid "Upscale the video with the GPU's video upscaler"
+msgstr ""
+
 #: store.ts:516 store.ts:517 store.ts:519
 msgid "Replace"
 msgstr ""
