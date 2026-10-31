@@ -779,6 +779,7 @@ impl Host {
         };
         // A removed page falls back to its category (the one last shown), then 常规.
         let chosen = pick(&pages, wanted.as_deref(), self.settings_category);
+        let shown = chosen.map(|page| page.owner);
         let (key, chosen_serial, category) = match chosen {
             Some(page) => (Some(page.key()), Some(page.serial), Some(page.category)),
             None => (None, None, None),
@@ -805,6 +806,13 @@ impl Host {
                 let now = self.now_ms();
                 self.ui_state.touch(now);
             }
+        }
+        // Lazy activation: a parked plugin's page shown starts it (its
+        // values and callbacks are its own).
+        if let Some(owner) = shown
+            && self.settings.open.is_some()
+        {
+            self.lazy_page_shown(owner);
         }
         Ok(())
     }

@@ -8,12 +8,24 @@
 //! the entries move to it (`Capability::rekey`), its live registrations
 //! replace them, and the trigger is delivered at its `runtime.ready`.
 //!
-//! Off unless `VESTRA_LAZY=1` in this first step (the record's B1 step adds
-//! what the default needs: mirror subscriptions, recordings at quit, the
-//! first-run throttle and an idle state in `packages.list`).
+//! Step B1 (§3): whether a plugin is resident is observed, not declared.
+//! At each `runtime.ready` the host notes whether it holds a live resource
+//! (an event listener, a panel, a chain...; the SDK's mirror subscriptions
+//! do not count); the recording keeps it (`residentAtReady`), written at a
+//! park, at that ready when it is resident, and at quit. The next start
+//! launches a resident plugin and replays a lazy one. A plugin without a
+//! recording (its first run) starts at most `FIRST_RUNS` at a time and, if
+//! lazy at its ready, is parked at once: a background index.
+//!
+//! Off unless `VESTRA_LAZY=1` (the coordinator turns it on after the
+//! hardware checks).
 use super::*;
 use crate::capabilities::{self, Call};
 use crate::i18n::Catalog;
+use std::collections::{BTreeSet, VecDeque};
+
+/// First runs (no recording) in flight at once (§2.4).
+const FIRST_RUNS: usize = 8;
 
 /// How long a park waits for its process (§5.4 item 6; disable and quit
 /// keep 300 ms).
@@ -96,14 +108,14 @@ pub(crate) struct Recording {
     pub digest: String,
     #[serde(default)]
     pub version: Option<String>,
-    /// Whether it held a live resource at its `runtime.ready` (§3.4). A
-    /// recording is written only at a park in this step, so it is `false`.
+    /// Whether it held a live resource at its last `runtime.ready` (§3.4):
+    /// the next start launches it instead of replaying `calls`.
     pub resident_at_ready: bool,
     pub recorded_at: u64,
     pub calls: Vec<Call>,
 }
 impl Recording {
-    fn new(key: &Key, calls: Vec<Call>) -> Self {
+    fn new(key: &Key, calls: Vec<Call>, resident_at_ready: bool) -> Self {
         let recorded_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_millis() as u64);
@@ -113,7 +125,7 @@ impl Recording {
             build: option_env!("VESTRA_BUILD").map(str::to_owned),
             digest: key.digest.clone(),
             version: key.version.clone(),
-            resident_at_ready: false,
+            resident_at_ready,
             recorded_at,
             calls,
         }
@@ -125,7 +137,6 @@ impl Recording {
             && self.build.as_deref() == option_env!("VESTRA_BUILD")
             && self.digest == key.digest
             && self.version == key.version
-            && !self.resident_at_ready
     }
 }
 
@@ -152,11 +163,17 @@ pub(crate) fn read(directory: &Path, key: &Key) -> Option<Recording> {
 }
 
 /// Writes `key`'s recording (a temporary file renamed over the old one).
-pub(crate) fn write(directory: &Path, key: &Key, calls: Vec<Call>) -> Result<()> {
+pub(crate) fn write(
+    directory: &Path,
+    key: &Key,
+    calls: Vec<Call>,
+    resident_at_ready: bool,
+) -> Result<()> {
     std::fs::create_dir_all(directory)?;
     let path = file(directory, &key.guid);
     let temporary = path.with_extension("json.tmp");
-    std::fs::write(&temporary, serde_json::to_vec(&Recording::new(key, calls))?)?;
+    let recording = Recording::new(key, calls, resident_at_ready);
+    std::fs::write(&temporary, serde_json::to_vec(&recording)?)?;
     std::fs::rename(&temporary, &path)?;
     Ok(())
 }
@@ -272,6 +289,27 @@ pub(crate) struct Lazy {
     /// way to the old one while the registries moved (a resolution the
     /// worker asked for before `owner.rekey`).
     moved: BTreeMap<u64, u64>,
+    /// Ready plugins whose worker half of the classification is asked.
+    classifying: BTreeSet<u64>,
+    /// Each running plugin's class at its last ready (§3.4).
+    classes: BTreeMap<u64, Class>,
+    /// First runs waiting for a place (manifest ids, in start order).
+    pub first_queue: VecDeque<String>,
+    /// First runs in flight: started, not yet resident or parked and gone.
+    first_runs: BTreeSet<u64>,
+    /// The owner of each plugin's last parked process (by id), until it is
+    /// gone: a start of that plugin waits for it (wake, reload, enable,
+    /// install), so two instances never share its data directory.
+    stopping: BTreeMap<String, u64>,
+}
+
+/// A plugin's class at its `runtime.ready` (§3.4).
+pub(crate) struct Class {
+    /// Why it is resident (a live resource), `None`: lazy.
+    resident: Option<String>,
+    /// The playback worker's answer then (`{ live, resolvers }`): its
+    /// resolvers, for a recording at quit.
+    backend: Value,
 }
 impl Lazy {
     pub fn from_env() -> Self {
@@ -298,6 +336,24 @@ impl Lazy {
         self.told.remove(&owner);
         self.waking.remove(&owner);
         self.moved.retain(|_, to| *to != owner);
+        self.classifying.remove(&owner);
+        self.classes.remove(&owner);
+    }
+    /// A first run may start now (fewer than `FIRST_RUNS` in flight).
+    pub fn first_run_free(&self) -> bool {
+        self.first_runs.len() < FIRST_RUNS
+    }
+    /// Installed plugin `owner` started for its first run.
+    pub fn first_run(&mut self, owner: u64) {
+        self.first_runs.insert(owner);
+    }
+    /// Whether a built-in waits for its first run (`builtins` names them).
+    pub fn builtin_queued(&self, builtin: impl Fn(&str) -> bool) -> bool {
+        self.first_queue.iter().any(|id| builtin(id))
+    }
+    /// The process plugin `id` was last parked from, while it still goes.
+    pub fn stopping(&self, id: &str) -> Option<u64> {
+        self.stopping.get(id).copied()
     }
     /// `owner` was used now.
     pub fn touch(&mut self, owner: u64, now: u64) {
@@ -380,7 +436,11 @@ impl Host {
                 diag!(
                     "lazy: {} woken by {} (owner {from} → {to})",
                     parked.id,
-                    parked.triggers.first().and_then(event).unwrap_or("?")
+                    parked
+                        .triggers
+                        .first()
+                        .and_then(event)
+                        .unwrap_or("its settings page")
                 );
                 capabilities::rekey(self, from, to);
                 self.lazy.moved.insert(from, to);
@@ -398,9 +458,17 @@ impl Host {
             Err(error) => self.wake_failed(from, parked, &error.to_string()),
         }
     }
+    /// A settings page of `owner` is shown (§2.1): a parked plugin starts,
+    /// so the page shows its current values and its callbacks have a
+    /// receiver (nothing is held for its ready).
+    pub(crate) fn lazy_page_shown(&mut self, owner: u64) {
+        if self.lazy.parked.contains_key(&owner) {
+            self.wake(owner);
+        }
+    }
     /// The process `owner` ran in is gone and the worker cleaned up after it
     /// (a replayed owner never had one).
-    fn process_gone(&self, owner: u64) -> bool {
+    pub(crate) fn process_gone(&self, owner: u64) -> bool {
         self.cleanup
             .get(&owner)
             .is_none_or(|done| *done == (true, true))
@@ -492,6 +560,7 @@ impl Host {
         let now = self.now_ms();
         self.lazy.touch(owner, now);
         let Some(waking) = self.lazy.waking.remove(&owner) else {
+            self.lazy_classify(owner);
             return;
         };
         // The titles of the commands triggered, before their entries may go.
@@ -511,6 +580,9 @@ impl Host {
             now.saturating_sub(waking.since),
             waking.queue.len()
         );
+        // Before its triggers run: what they open is not what it holds at
+        // its ready.
+        self.lazy_classify(owner);
         for message in waking.queue {
             if event(&message) != Some("commands.execute") {
                 self.send(owner, message);
@@ -532,6 +604,106 @@ impl Host {
                     self.show_osd(&i18n::tr_args("{} is no longer available", &json!([title])));
                 }
                 Err(error) => diag!("lazy: execute {id}: {error}"),
+            }
+        }
+    }
+    /// §3.4: at `runtime.ready`, whether installed plugin `owner` holds a
+    /// live resource. The host's half is read now (before any trigger it
+    /// was woken by runs); the playback worker's half is asked, and its
+    /// answer comes before anything the plugin asks it after this
+    /// (`lazy_answer`).
+    fn lazy_classify(&mut self, owner: u64) {
+        if !self.lazy.enabled || self.lazy_key_of(owner).is_none() {
+            return;
+        }
+        if let Err(reason) = capabilities::record(self, owner, &Value::Null) {
+            self.lazy_classified(owner, Some(reason.to_owned()), Value::Null);
+            return;
+        }
+        let asked = self.backend.commands.send(Command {
+            reply: Reply { owner, id: 0 },
+            method: "owner.resources".into(),
+            params: Value::Null,
+        });
+        if asked.is_ok() {
+            self.lazy.classifying.insert(owner);
+        }
+    }
+    /// `owner`'s class at its ready: kept for its recording; a resident one
+    /// is recorded as such now (the next start launches it, even after a
+    /// crash); a lazy first run is parked at once (§2.4).
+    fn lazy_classified(&mut self, owner: u64, resident: Option<String>, backend: Value) {
+        let id = self.plugin_id(owner);
+        match &resident {
+            Some(reason) => {
+                // Which events it listens to (the SDK's mirrors left out).
+                let listening = self.plugins.get(&owner).map_or_else(Vec::new, |plugin| {
+                    plugin
+                        .subscriptions
+                        .iter()
+                        .filter(|(_, active)| **active)
+                        .map(|(event, _)| event.as_str())
+                        .collect()
+                });
+                diag!("lazy: {id} classified resident: {reason} {listening:?}")
+            }
+            None => diag!("lazy: {id} classified lazy"),
+        }
+        let first_run = self.lazy.first_runs.contains(&owner);
+        if resident.is_some() {
+            // Its place goes to the next first run.
+            self.lazy.first_runs.remove(&owner);
+            if let Some(key) = self.lazy_key_of(owner) {
+                let directory = self.activation_dir();
+                let recorded = read(&directory, &key).is_some_and(|r| r.resident_at_ready);
+                if !recorded && let Err(error) = write(&directory, &key, Vec::new(), true) {
+                    diag!("lazy: {id}: its recording: {error}");
+                }
+            }
+        }
+        let lazy = resident.is_none();
+        self.lazy.classes.insert(owner, Class { resident, backend });
+        let now = self.now_ms();
+        if lazy && first_run && self.lazy_idle(owner, now, true) {
+            let backend = self.lazy.classes[&owner].backend.clone();
+            if let Ok(calls) = capabilities::record(self, owner, &backend) {
+                self.park(owner, calls);
+            }
+        }
+    }
+    /// At quit (§2.1): every running installed plugin classified at its
+    /// ready is recorded: a resident one as resident, a lazy one with its
+    /// registrations as they are now (left as it was when it holds a live
+    /// resource at this moment: an open window, say).
+    pub(crate) fn lazy_quit(&mut self) {
+        if !self.lazy.enabled {
+            return;
+        }
+        let directory = self.activation_dir();
+        let owners = self.lazy.classes.keys().copied().collect::<Vec<_>>();
+        for owner in owners {
+            let Some(key) = self.lazy_key_of(owner) else {
+                continue;
+            };
+            let id = self.plugin_id(owner);
+            let class = &self.lazy.classes[&owner];
+            let (calls, resident) = if class.resident.is_some() {
+                if read(&directory, &key).is_some_and(|r| r.resident_at_ready) {
+                    continue;
+                }
+                (Vec::new(), true)
+            } else {
+                match capabilities::record(self, owner, &class.backend) {
+                    Ok(calls) => (calls, false),
+                    Err(reason) => {
+                        diag!("lazy: {id} not recorded at quit: {reason}");
+                        continue;
+                    }
+                }
+            };
+            match write(&directory, &key, calls, resident) {
+                Ok(()) => diag!("lazy: {id} recorded at quit"),
+                Err(error) => diag!("lazy: {id}: its recording: {error}"),
             }
         }
     }
@@ -578,9 +750,11 @@ impl Host {
             return;
         }
         self.lazy.next_check = now + CHECK_MS;
+        self.lazy_first_runs_tick();
         let owners = self.plugins.keys().copied().collect::<Vec<_>>();
         for owner in owners {
-            if self.lazy.asking.contains_key(&owner) || !self.lazy_idle(owner, now) {
+            let immediate = self.lazy_first_lazy(owner);
+            if self.lazy.asking.contains_key(&owner) || !self.lazy_idle(owner, now, immediate) {
                 continue;
             }
             let asked = self.backend.commands.send(Command {
@@ -593,12 +767,61 @@ impl Host {
             }
         }
     }
+    /// A first run classified lazy: parked without an idle time (§2.4).
+    fn lazy_first_lazy(&self, owner: u64) -> bool {
+        self.lazy.first_runs.contains(&owner)
+            && self
+                .lazy
+                .classes
+                .get(&owner)
+                .is_some_and(|class| class.resident.is_none())
+    }
+    /// First runs free their place once resident, or once parked and their
+    /// process is gone (or gone otherwise); the queue starts in the freed
+    /// places. Parked processes that are gone are no longer waited for.
+    fn lazy_first_runs_tick(&mut self) {
+        let first_runs = std::mem::take(&mut self.lazy.first_runs);
+        let now = self.now_ms();
+        self.lazy.first_runs = first_runs
+            .into_iter()
+            .filter(|owner| {
+                // Running and not failed (a failed activation is never
+                // classified), or parked and its process still going.
+                if self.plugins.contains_key(owner) {
+                    !matches!(
+                        self.activations.status(*owner, now),
+                        Ok(package_activation::Status::Failed { .. }
+                            | package_activation::Status::TimedOut)
+                    )
+                } else {
+                    self.lazy.parked.contains_key(owner) && !self.process_gone(*owner)
+                }
+            })
+            .collect();
+        let gone = self
+            .lazy
+            .stopping
+            .iter()
+            .filter(|(_, owner)| self.process_gone(**owner))
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        for id in gone {
+            self.lazy.stopping.remove(&id);
+        }
+        while self.lazy.first_run_free()
+            && let Some(id) = self.lazy.first_queue.pop_front()
+        {
+            self.start_installed(Some(&id));
+        }
+    }
     /// What the host itself knows of `owner` being idle (§2.3): installed,
     /// ready, unused for `VESTRA_IDLE_MS`, nothing of its in flight.
-    fn lazy_idle(&mut self, owner: u64, now: u64) -> bool {
+    /// `immediate`: no idle time (a lazy first run, §2.4).
+    fn lazy_idle(&mut self, owner: u64, now: u64, immediate: bool) -> bool {
         let since = *self.lazy.active.entry(owner).or_insert(now);
-        if now.saturating_sub(since) < self.lazy.idle_ms
+        if (!immediate && now.saturating_sub(since) < self.lazy.idle_ms)
             || self.lazy.waking.contains_key(&owner)
+            || self.lazy.classifying.contains(&owner)
             || self.lazy_key_of(owner).is_none()
         {
             return false;
@@ -617,13 +840,31 @@ impl Host {
     /// The playback worker answered `owner.resources`: park `owner` if it is
     /// still idle and nothing it holds is live.
     pub(crate) fn lazy_answer(&mut self, owner: u64, answer: &Value) {
+        // The worker's half of the classification at ready (asked first).
+        if self.lazy.classifying.remove(&owner) {
+            if !self.plugins.contains_key(&owner) {
+                return;
+            }
+            let resident = answer["live"]
+                .as_array()
+                .filter(|live| !live.is_empty())
+                .map(|live| {
+                    format!(
+                        "a resource in the playback worker {}",
+                        Value::Array(live.clone())
+                    )
+                });
+            self.lazy_classified(owner, resident, answer.clone());
+            return;
+        }
         let Some(asked) = self.lazy.asking.remove(&owner) else {
             return;
         };
         let now = self.now_ms();
+        let immediate = self.lazy_first_lazy(owner);
         if !self.plugins.contains_key(&owner)
             || self.lazy.active.get(&owner).is_some_and(|at| *at >= asked)
-            || !self.lazy_idle(owner, now)
+            || !self.lazy_idle(owner, now, immediate)
         {
             return;
         }
@@ -669,13 +910,21 @@ impl Host {
             origin.catalog.as_deref(),
         );
         let count = calls.len();
-        if let Err(error) = write(&self.activation_dir(), &key, calls) {
+        // A plugin resident at its ready that let go of everything since is
+        // parked, but the next start still launches it (§3.4).
+        let resident = self
+            .lazy
+            .classes
+            .get(&owner)
+            .is_some_and(|class| class.resident.is_some());
+        if let Err(error) = write(&self.activation_dir(), &key, calls, resident) {
             diag!("lazy: {id} not parked: its recording: {error}");
             let now = self.now_ms();
             self.lazy.touch(owner, now);
             return;
         }
         self.stop(owner, true);
+        self.lazy.stopping.insert(id.clone(), owner);
         diag!("lazy: {id} parked ({count} recorded calls)");
         // `VESTRA_TEST_EXECUTE` entries timed from this park.
         let now = self.now_ms();
@@ -744,10 +993,15 @@ mod tests {
             "commands.register",
             json!({"id":"hello","revision":1,"declaration":{"title":"Hello"},"state":{"enabled":true}}),
         )];
-        write(directory.path(), &key(), calls.clone()).unwrap();
+        write(directory.path(), &key(), calls.clone(), false).unwrap();
         let read_back = read(directory.path(), &key()).unwrap();
         assert_eq!(read_back.calls, calls);
         assert!(!read_back.resident_at_ready);
+        // Resident at its ready: read back as such (the start launches it).
+        write(directory.path(), &key(), Vec::new(), true).unwrap();
+        let resident = read(directory.path(), &key()).unwrap();
+        assert!(resident.resident_at_ready && resident.calls.is_empty());
+        write(directory.path(), &key(), calls.clone(), false).unwrap();
         // Another digest, version or instance: not this package's.
         for other in [
             Key {

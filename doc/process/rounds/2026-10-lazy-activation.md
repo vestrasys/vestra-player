@@ -312,7 +312,7 @@ After the "no idle stop" ruling above (08:19), the user asked how to reclaim plu
 | C1 | Done, pending review: `src/host/src/capabilities/`, `src/host/capabilities.json`, the agreement test reads the JSON |
 | C2 | Done 2026-10-28 (branch `refactor-c2`, two commits: moves, then the `main.rs` split; see §6.5) |
 | A1 | Done 2026-10-31, pending review (branch `lazy-a1`; see §6.6), off unless `VESTRA_LAZY=1` |
-| B1 | Not started |
+| B1 | Done 2026-10-31, pending review (branch `lazy-b1`; see §6.8), off unless `VESTRA_LAZY=1`; SDK 1.5.38 prepared, not tagged |
 
 ### 6.1 C1: what landed
 
@@ -379,3 +379,60 @@ Separate application data directory, internal panel, CPU mode.
 - Restart with lazy on: "replayed (2 calls) … not started"; the bottom-bar AI button is present from the recording; clicking it wakes the plugin (ready after 63 ms).
 
 Not checked on hardware: a click within the 2 s after a park (M1 path is covered by the headless test), settings pages and images of a parked plugin, two players at once.
+
+### 6.8 B1: what landed (2026-10-31, branch `lazy-b1` from `main` 8fdf89b, host 0.5.18, SDK 1.5.38 prepared on the SDK branch `lazy-b1-138`, not tagged)
+
+Still off by default (`VESTRA_LAZY=1` turns it on).
+
+- **SDK 1.5.38 (mirror subscriptions, §3.1).** `Runtime.on` takes a `mirror` flag; the services' own subscriptions (`source.state` for `player` and `subtitles`, `playback.backend`, `window.state` for `window` and the panel layout, `timeline.changed`, `appearance.changed`, `resolvers.fileTypes`) are mirrors and subscribe with `events.subscribe { event, mirror: true }`. A service `watch` (every `onChange`, `onEnd`, `onFileTypesChange`, the SDK's own waits such as `media.loaded`, scrubs, filters and views) holds the event as a listener; so does a **binding that reads the state**: the update pass records which service states each binding read (`Runtime.reading`, called by the `state`/`marks`/`theme`/`language`/`fileTypes` getters) and holds those events while it reads them. This goes beyond §3.1, which counted only listeners: a command whose `enabled`, `checked` or `reason` is a function of `plugin.player.state` is kept current by the mirror alone, so without it such a plugin would be parked with a stale menu (§2.3 assumed every such plugin has a listener; capture and preferences do not). Transitions send `events.subscribe { event }` or `{ event, mirror: true }` again; the host's subscribe replaces the mark. Older players ignore the field. `PluginInfo.process` (`"running"`/`"idle"`), `TestHost.listening`, a new section _Idle plugins are stopped_ in `docs/concepts/plugins.md` (MV3 semantics: what stays, what keeps a plugin running, and that network requests, timers and awaited promises do not; session storage for what must outlive the process), CHANGELOG, `test/mirror-subscriptions.test.ts`.
+- **Host: active subscriptions.** `Plugin.subscriptions` is `event → listener?`; `events.subscribe` with `mirror: true` stores `false`; broadcasts go to both; `Events::record` is `Live` only for a listener.
+- **`residentAtReady` (§3.4).** At every `runtime.ready` of an installed plugin (a start, a wake, a first run) the host evaluates `capabilities::record` on its own state at once (before a woken plugin's triggers run) and asks the worker (`owner.resources`) for its half; the answer is its class. A resident plugin's recording is written then (`residentAtReady: true`, no calls) unless it already says so, so the next start launches it even after a crash; a lazy one keeps its recording from its park. `start_installed`: resident recording → start at launch ("starts: resident at its last ready"); lazy recording → replay; none → first run. A park writes the ready class into the recording (a plugin resident at ready that let go of everything later is parked, and still launched at the next start). Self-healing both ways: every ready reclassifies.
+- **Recordings at quit** (both event loops, before the plugins stop): a resident one as resident (if not already), a lazy one with its registrations now (with the resolvers the worker reported at its ready); one that holds a live resource at that moment keeps its file as it was.
+- **First-run throttle (§2.4).** A plugin without a valid recording starts as a first run, at most 8 in flight; the others wait in `Lazy.first_queue` (listed as `starting`). A first run classified lazy is parked at once (no idle time); its place frees when its process is gone; a resident one frees its place at classification, a failed or timed-out activation when it fails. While a built-in waits there, `builtins_starting` stays true (other plugins' mounts wait, slot claims unchanged) and opened files wait (bounded by `SETTLE_LIMIT` as before).
+- **`packages.list`**: `process: "running"` for a running plugin, `"idle"` for a parked one (state stays `running`); a woken plugin activating is `running`, not `starting`; `packages.changed` compares the list without `process`, so a park or wake alone sends no event (§5.3).
+- **Settings page shown** wakes its parked plugin (A1 left: only its first callback did). `Host::lazy_page_shown` from `settings_select` while the Options window is open.
+- **A1 review open low: a start right after a park waits for the parked process.** `Lazy.stopping` keeps each plugin's last parked owner until its process is gone and the worker cleaned up. `packages.reload` of a just-parked plugin goes through `reloads` (started by `reload_tick` once gone, as for a running one); install/upgrade's operation waits on it (`Operation.waiting`); `setEnabled(true)` right after disable-of-a-parked plugin waits the same way; uninstall with `removeData` deletes the data after its `Reaped`.
+- **Headless test** `tests/lazy_activation.rs`: the A1 test unchanged (now its first run parks at once); `mirror_subscriptions_park_and_wake_a_listener_keeps_a_plugin_resident` (a plugin whose only subscription is the SDK's `source.state` mirror is classified lazy, parked at its first ready, replayed, woken by its command, which prints `plugin.player.state.phase` read at its start, and parked again; a plugin with `player.onChange` is resident, recorded `residentAtReady: true` at its ready and started at launch the next time, never replayed; shared runner and own processes); `first_runs_start_eight_at_a_time` (10 trivial built-ins on a fresh profile: the 9th starts only after the first park; all 10 parked and recorded).
+
+Host 0.5.18 (recordings are keyed on the player version: every recording of 0.5.17 is a first run again).
+
+#### 6.8.1 Observed classification (headless, `VESTRA_LAZY=1`, `VESTRA_IDLE_MS=3000`, staged built-ins, shared runner, fresh profile then second start)
+
+16 built-ins: `vestra.nes` left the player (it is VestraNES in the plugins repository). The reason is the host's log line; the event names are the subscriptions the plugin really listens to.
+
+| Plugin | Record §3.5 | Observed | Why (code) |
+| --- | --- | --- | --- |
+| playback | resident | resident (headless: activation never ready) | bottom bar mount; headless refuses mounts and its activation does not complete, so it is a first run on every headless start (on a display it mounts and is resident) |
+| playlist | resident | as playback | sidebar mount |
+| visualizer | resident | as playback | backdrop mount |
+| video | resident | resident: listener `source.state`; the worker holds the video view | `player.onChange` in `main.ts` |
+| audio | resident | resident: `source.state` | `player.onChange` in `main.ts` |
+| subtitles | resident | resident: `source.state`, `playback.backend` | `subtitles.onChange` |
+| window | resident | resident: `source.state`, `window.state` | `window.onChange`, `player.onChange` |
+| history | resident | resident: `source.state` | `player.onChange` in `main.ts:25` |
+| marks | resident (verify) | resident: `source.state` | `player.onChange` in `main.ts:48` |
+| info | lazy (verify) | **resident**: `packages.changed`, `source.state` | at activation: `packages.onChange` (`about.ts:148`) and the properties window's `player.onChange` (`dialog.ts:183`), both registered when the plugin starts, not when the window opens |
+| hotkeys | lazy (verify) | **resident**: `bindings.changed` | `IgnoreDefaults` subscribes `bindings.onChange` in its constructor at activation (`ignore.ts:32`); `main.ts:53` reads it for a checkmark |
+| capture | lazy | **resident**: `source.state` | its commands' state is a function of the player (`main.ts:353`: `enabled: () => usable(player.state)`, `reason` likewise): the new binding tracking keeps it so the menu does not go stale |
+| subtitle-online | lazy | **resident**: `source.state` | `player.onChange` at activation for the automatic search on a new source (`main.ts:570`): a transition listener, rightly resident by §3.3 |
+| preferences | lazy | **resident**: `appearance.changed` | theme and language checkmarks are functions of `plugin.appearance` (`main.ts:97`, `:107`, `:117`) |
+| store | lazy | **resident**: `packages.changed` | `packages.onChange` at activation (`store.ts:268`) |
+| workshop | lazy | **lazy**: parked at its first ready (2 recorded calls), replayed at the second start without a process | |
+| nes | lazy | — | not a built-in any more |
+
+So 1 of 16 is lazy today, against 8–9 expected. The rule and the host work as designed (the fixtures and workshop show it); the difference is that the built-ins listen at activation. That is plugin-author work; per plugin, what would make it lazy and what it costs:
+
+- **capture**: compute `enabled`/`reason` when run instead of as bindings (a disabled-looking item becomes "No frame to capture" on the OSD when chosen), or accept residency: its menu state follows playback.
+- **preferences**: set `checked` with `command.set(...)` after its own `setTheme`/`setLanguage` instead of a function of `plugin.appearance`. A theme changed by another plugin (`ui.theme`) then shows a stale checkmark until the next wake; the user's only theme menu is this plugin's, so that is acceptable.
+- **hotkeys**: subscribe `bindings.onChange` only while the Keys page or window is open (open a child scope with the page), and read `bindings.list()` when a command runs.
+- **info**: register `packages.onChange` and the properties window's `player.onChange` inside the window's scope (when it opens), not at activation.
+- **store**: subscribe `packages.onChange` when its window opens. The revocation pass then runs at its first use (the user's §5.4 item 2 ruling allows it); `revocations.ts:85` needs no change, since a parked plugin keeps `state: "running"`.
+- **subtitle-online**: stays resident while it offers the automatic search on a new source (a transition, §3.3); lazy only if the automatic search becomes an explicit command.
+- **store "Idle" label** (record §5.1 B1 row): `store.ts:1025` `#status` shows "Running" for a parked plugin; add `info.process === "idle"` → "Idle" (needs `msg("Idle")` in `text.ts` and its six translations in `locales/`, a CHANGELOG entry and SDK 1.5.38 in the player). Listed for the store author, not done here: it is translation and wording, not a mechanical change.
+
+#### 6.8.2 Not in B1
+
+- The rest of `disable()` into `Capability::revoke` (a pure refactor; A1 left it, B1 does not need it).
+- The park-and-wake-every-built-in registry diff test (§5.3): with 1 of 16 built-ins lazy it would cover only workshop; worth writing once the built-ins above change.
+- P4 measurements (the 2000-plugin library, click-to-dialog timing) and the GUI test with lazy on.
+- Turning lazy on by default (coordinator, after the hardware checks).
