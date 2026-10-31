@@ -507,27 +507,64 @@ pub fn allow_handoff_foreground() {
 
 /// DXGI's adapters in Windows' order for this process (the per-app graphics
 /// preference decides the first), with the user-mode driver's version
-/// (`vestra_win32::dxgi_adapters`). Microsoft's own adapters (WARP, Basic
-/// Render, vendor `0x1414`) count as software. None when DXGI is missing.
-pub fn gpu_adapters() -> Vec<super::GpuAdapter> {
+/// (`vestra_win32::dxgi_adapters`), and the index of the one GPU rendering
+/// and the Direct3D 12 windows use (`VESTRA_GPU_ADAPTER`, as
+/// `select_wgpu_windows` opens it; unset: the first). Microsoft's own
+/// adapters (WARP, Basic Render, vendor `0x1414`) count as software. None
+/// when DXGI is missing.
+pub fn gpu_adapters() -> (Vec<super::GpuAdapter>, Option<usize>) {
     const MICROSOFT: u32 = 0x1414;
-    match vestra_win32::dxgi_adapters() {
-        Ok(adapters) => adapters
-            .into_iter()
-            .map(|adapter| super::GpuAdapter {
-                software: adapter.software || adapter.vendor_id == MICROSOFT,
-                driver_version: adapter
-                    .driver_version
-                    .map(|parts| parts.map(|part| part.to_string()).join(".")),
-                name: adapter.name,
-                vendor_id: adapter.vendor_id,
-                device_id: adapter.device_id,
-            })
-            .collect(),
+    let adapters = match vestra_win32::dxgi_adapters() {
+        Ok(adapters) => adapters,
         Err(error) => {
             diag!("render: the graphics adapters are unknown ({error})");
-            Vec::new()
+            return (Vec::new(), None);
         }
+    };
+    let choice =
+        vestra_gpu_render::Choice::parse(std::env::var("VESTRA_GPU_ADAPTER").ok().as_deref());
+    let preferred = match choice {
+        vestra_gpu_render::Choice::HighPerformance => {
+            vestra_win32::dxgi_preferred_adapter(true).ok()
+        }
+        vestra_gpu_render::Choice::MinimumPower => vestra_win32::dxgi_preferred_adapter(false).ok(),
+        _ => None,
+    };
+    let list: Vec<super::GpuAdapter> = adapters
+        .into_iter()
+        .map(|adapter| super::GpuAdapter {
+            software: adapter.software || adapter.vendor_id == MICROSOFT,
+            driver_version: adapter
+                .driver_version
+                .map(|parts| parts.map(|part| part.to_string()).join(".")),
+            name: adapter.name,
+            vendor_id: adapter.vendor_id,
+            device_id: adapter.device_id,
+            luid: adapter.luid,
+        })
+        .collect();
+    let render = render_adapter(choice, &list, preferred);
+    (list, render)
+}
+
+/// Which of `adapters` (DXGI's order) `choice` opens: the first by default,
+/// an index if it exists, the one whose LUID the preference query gave
+/// (`preferred`), or the first software adapter for `warp`.
+fn render_adapter(
+    choice: vestra_gpu_render::Choice,
+    adapters: &[super::GpuAdapter],
+    preferred: Option<u64>,
+) -> Option<usize> {
+    use vestra_gpu_render::Choice;
+    match choice {
+        Choice::Default => (!adapters.is_empty()).then_some(0),
+        Choice::Index(index) => usize::try_from(index)
+            .ok()
+            .filter(|&index| index < adapters.len()),
+        Choice::HighPerformance | Choice::MinimumPower => {
+            preferred.and_then(|luid| adapters.iter().position(|a| a.luid == luid))
+        }
+        Choice::Warp => adapters.iter().position(|adapter| adapter.software),
     }
 }
 
@@ -601,15 +638,41 @@ pub fn displays() -> Vec<Display> {
 /// graphics driver to the panel's native variable-refresh timing (on the
 /// 60-240 Hz test panel: 60 → 240 Hz and back), which blanks the display and
 /// blocks every present for up to seconds (round doc, Appendix B).
+/// `exact` is the switch for testing Independent Flip without the extra
+/// pixel (round record 2026-10-render-modes §11 item 6).
 fn fullscreen_extra() -> Option<i32> {
     static EXTRA: std::sync::OnceLock<Option<i32>> = std::sync::OnceLock::new();
-    *EXTRA.get_or_init(
-        || match std::env::var("VESTRA_FULLSCREEN_MATCH").as_deref() {
-            Ok("exact") => None,
-            Ok("shorter") => Some(-1),
-            _ => Some(1),
-        },
-    )
+    *EXTRA.get_or_init(|| {
+        let value = std::env::var("VESTRA_FULLSCREEN_MATCH").ok();
+        let (extra, line) = fullscreen_match(value.as_deref());
+        if let Some(line) = line {
+            diag!("{line}");
+        }
+        extra
+    })
+}
+
+/// `VESTRA_FULLSCREEN_MATCH`: the pixels a full-screen window is made
+/// taller (`None`: winit's exact rectangle), and a line to log when the
+/// value is not the default.
+fn fullscreen_match(value: Option<&str>) -> (Option<i32>, Option<String>) {
+    match value.map(str::trim) {
+        None | Some("" | "taller") => (Some(1), None),
+        Some("exact") => (
+            None,
+            Some("ui: VESTRA_FULLSCREEN_MATCH=exact: a full-screen window covers its display exactly".into()),
+        ),
+        Some("shorter") => (
+            Some(-1),
+            Some("ui: VESTRA_FULLSCREEN_MATCH=shorter: a full-screen window is one pixel short of its display".into()),
+        ),
+        Some(other) => (
+            Some(1),
+            Some(format!(
+                "ui: VESTRA_FULLSCREEN_MATCH={other} is not taller, shorter or exact; ignored"
+            )),
+        ),
+    }
 }
 
 /// After a resize of `window`: a borderless full-screen window that covers
@@ -784,16 +847,17 @@ pub fn gpu_failed(handle: &GpuHandle) -> Option<String> {
     handle.failed()
 }
 
-/// GPU mode's windows (`render_mode::WindowKind::Wgpu`; before the event
-/// loop, not headless): every window draws with femtovg on wgpu, on one
-/// Direct3D 12 device of DXGI's first adapter (`VESTRA_GPU_ADAPTER`:
-/// another index, `high-performance`, `minimum-power` or `warp`), which GPU
-/// rendering shares its textures with. Only applies the kind: whether GPU
-/// mode is wanted is `render_mode::decide`'s. `Err` with why when the
-/// windows cannot draw that way (no Direct3D 12, an adapter without a GPU of
-/// its own such as WARP in a remote session or a virtual machine, or Slint
-/// refusing): the host then falls back to software rendering and CPU mode's
-/// windows. `VESTRA_WINDOW_RENDERER=wgpu` (a test switch) accepts an adapter
+/// Direct3D 12 windows (`render_mode::WindowKind::Wgpu`: GPU mode's, and
+/// since 0.5.19 CPU mode's; before the event loop, not headless): every
+/// window draws with femtovg on wgpu, on one Direct3D 12 device of DXGI's
+/// first adapter (`VESTRA_GPU_ADAPTER`: another index, `high-performance`,
+/// `minimum-power` or `warp`), which GPU rendering shares its textures
+/// with; software rendering uploads its pictures into a texture of it. Only
+/// applies the kind: what is wanted is `render_mode::decide`'s. `Err` with
+/// why when the windows cannot draw that way (no Direct3D 12, an adapter
+/// without a GPU of its own such as WARP in a remote session or a virtual
+/// machine, or Slint refusing): the host then falls back to software
+/// rendering (GPU mode) and CPU mode's fallback windows. `VESTRA_WINDOW_RENDERER=wgpu` (a test switch) accepts an adapter
 /// without a GPU. A lost device later ends the event loop
 /// (`window_device_lost`; the host restarts the player).
 pub fn select_wgpu_windows(
@@ -886,6 +950,14 @@ pub fn direct_video_feed() -> Option<vestra_video_texture::Feed> {
 /// `gate_direct_frames`). `None`: every frame at once.
 pub fn gate_gpu_frames(accept: Option<Box<dyn Fn() -> bool>>) {
     vestra_gpu_render::gate_direct_frames(accept);
+}
+
+/// The player quits: release the GPU renderer's shared fences and stop it,
+/// before the windows and their device go, so a frame that never finishes
+/// on the GPU (a stall) cannot hold up the quit (`vestra-gpu-render`
+/// `release_gpu_waits`).
+pub fn release_gpu_waits() {
+    vestra_gpu_render::release_gpu_waits();
 }
 
 /// After a draw: take a GPU frame the pacing refused before it.
@@ -1155,6 +1227,48 @@ mod tests {
             d3d11vpp_filter(2., true),
             "d3d11vpp=scale=2.00:scaling-mode=standard"
         );
+    }
+
+    /// L1 (record §11): the crash guard and the denylist look at the
+    /// adapter `VESTRA_GPU_ADAPTER` makes GPU rendering use.
+    #[test]
+    fn the_render_adapter_follows_the_adapter_choice() {
+        use vestra_gpu_render::Choice;
+        let adapter = |luid: u64, software: bool| crate::platform::GpuAdapter {
+            name: format!("GPU {luid}"),
+            vendor_id: 0x1002,
+            device_id: 0x15BF,
+            driver_version: None,
+            software,
+            luid,
+        };
+        let list = [adapter(7, false), adapter(9, false), adapter(3, true)];
+        assert_eq!(render_adapter(Choice::Default, &list, None), Some(0));
+        assert_eq!(render_adapter(Choice::Default, &[], None), None);
+        assert_eq!(render_adapter(Choice::Index(1), &list, None), Some(1));
+        assert_eq!(render_adapter(Choice::Index(5), &list, None), None);
+        assert_eq!(
+            render_adapter(Choice::HighPerformance, &list, Some(9)),
+            Some(1)
+        );
+        assert_eq!(
+            render_adapter(Choice::MinimumPower, &list, Some(7)),
+            Some(0)
+        );
+        assert_eq!(render_adapter(Choice::HighPerformance, &list, None), None);
+        assert_eq!(render_adapter(Choice::Warp, &list, None), Some(2));
+    }
+
+    /// Item 6 (record §11): `exact` turns the extra pixel off.
+    #[test]
+    fn the_fullscreen_match_switch_reads_its_values() {
+        assert_eq!(fullscreen_match(None), (Some(1), None));
+        assert_eq!(fullscreen_match(Some("taller")), (Some(1), None));
+        assert_eq!(fullscreen_match(Some(" exact ")).0, None);
+        assert_eq!(fullscreen_match(Some("shorter")).0, Some(-1));
+        let (extra, line) = fullscreen_match(Some("off"));
+        assert_eq!(extra, Some(1));
+        assert!(line.unwrap().contains("ignored"));
     }
 
     #[test]
