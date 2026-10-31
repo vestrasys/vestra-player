@@ -21,5 +21,7 @@ pub(crate) mod ui_state;
 pub(crate) mod ui_types;
 pub(crate) mod ui_values;
 pub(crate) mod view;
+#[cfg(test)]
+mod widgets_tests;
 pub mod window_control;
 pub mod window_state;
