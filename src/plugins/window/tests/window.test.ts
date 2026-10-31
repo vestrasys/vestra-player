@@ -401,6 +401,21 @@ test("settings page: 选项 ▶ 播放 ▶ 窗口 shows and sets the same prefer
   assert.equal(state(host, "auto.fit").checked, true);
 });
 
+test("settings page: the radios and checks are the library's, bound two-way to the page's state", () => {
+  const slint = readFileSync(new URL("../ui/page.slint", import.meta.url), "utf8");
+  assert.match(slint, /import \{ Check, RadioGroup \} from "@vestra\/widgets\.slint";/);
+  assert.doesNotMatch(slint, /std-widgets|CheckBox|component Radio|component Choices/, "no std or hand-rolled controls left");
+  // Each RadioGroup keeps the page's index (two-way) and reports a pick with the index.
+  for (const [index, callback] of [["auto-index", "set-auto"], ["top-index", "set-top"]]) {
+    assert.match(slint, new RegExp(`current-index <=> WindowPage\\.${index};\\s*selected\\(index\\) => \\{ WindowPage\\.${callback}\\(index\\); \\}`));
+  }
+  // Each Check flips itself (two-way) and reports the new state; no fixed height, so a long label wraps.
+  for (const [prop, callback] of [["auto-once", "set-auto-once"], ["hide-cursor", "set-hide-cursor"]]) {
+    assert.match(slint, new RegExp(`checked <=> WindowPage\\.${prop};\\s*toggled\\(on\\) => \\{ WindowPage\\.${callback}\\(on\\); \\}`));
+  }
+  assert.doesNotMatch(slint, /checkbox-row-height/);
+});
+
 // ------------------------------------------------------------------ H03
 
 test("H03: disabled without video and in fullscreen; enabled once the video size is known", async () => {

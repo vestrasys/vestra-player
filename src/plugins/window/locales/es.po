@@ -37,25 +37,25 @@ msgid "Picture-in-Picture"
 msgstr "Imagen en imagen"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 #, x-machine
 msgid "0.5×"
 msgstr "0.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 #, x-machine
 msgid "1×"
 msgstr "1×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 #, x-machine
 msgid "1.5×"
 msgstr "1.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 #, x-machine
 msgid "2×"
 msgstr "2×"
@@ -136,13 +136,13 @@ msgid "Cycle Mode"
 msgstr "Alternar modo"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:193 ui/page.slint:121
+#: main.ts:193 ui/page.slint:66
 #, x-machine
 msgid "Never"
 msgstr "Nunca"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:193 ui/page.slint:121
+#: main.ts:193 ui/page.slint:66
 #, x-machine
 msgid "Always"
 msgstr "Siempre"
@@ -172,7 +172,7 @@ msgstr "Ocultar puntero durante la reproducción: desactivado"
 msgid "Hide Pointer While Playing"
 msgstr "Ocultar puntero durante la reproducción"
 
-#: main.ts:219 ui/page.slint:90
+#: main.ts:219 ui/page.slint:34
 #, x-machine
 msgid "Window"
 msgstr "Ventana"
@@ -286,56 +286,56 @@ msgstr "Tamaño mini: activado"
 msgid "Cannot resize the window: {}"
 msgstr "No se puede cambiar el tamaño de la ventana: {}"
 
-#: ui/page.slint:96
+#: ui/page.slint:40
 #, x-machine
 msgid "Window size when playback starts"
 msgstr "Tamaño de la ventana al iniciar la reproducción"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:99
+#: ui/page.slint:44
 #, x-machine
 msgid "Off"
 msgstr "No"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:99
+#: ui/page.slint:44
 #, x-machine
 msgid "Fit aspect ratio"
 msgstr "Ajustar aspecto"
 
-#: ui/page.slint:105
+#: ui/page.slint:50
 #, x-machine
 msgid "Only once (only the first video of this run)"
 msgstr "Solo una vez (solo el primer video de esta sesión)"
 
-#: ui/page.slint:111
+#: ui/page.slint:56
 #, x-machine
 msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
 msgstr "Cada archivo nuevo se redimensiona una vez, cuando se conoce el tamaño de su video, manteniendo la esquina superior izquierda de la ventana. No en pantalla completa, tamaño mini ni imagen en imagen; si arrastras la ventana durante la reproducción, ese archivo ya no se redimensiona."
 
-#: ui/page.slint:118
+#: ui/page.slint:63
 #, x-machine
 msgid "Always on top"
 msgstr "Siempre visible"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:121
+#: ui/page.slint:66
 #, x-machine
 msgid "While playing"
 msgstr "Al reproducir"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:121
+#: ui/page.slint:66
 #, x-machine
 msgid "Playing in fullscreen"
 msgstr "En pantalla completa"
 
-#: ui/page.slint:126
+#: ui/page.slint:71
 #, x-machine
 msgid "Mouse pointer"
 msgstr "Puntero del mouse"
 
-#: ui/page.slint:129
+#: ui/page.slint:73
 #, x-machine
 msgid "Hide the pointer while playing"
 msgstr "Ocultar el puntero durante la reproducción"

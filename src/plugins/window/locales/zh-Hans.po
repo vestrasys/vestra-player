@@ -30,22 +30,22 @@ msgid "Picture-in-Picture"
 msgstr "画中画"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 msgid "0.5×"
 msgstr "0.5倍"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 msgid "1×"
 msgstr "1倍"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 msgid "1.5×"
 msgstr "1.5倍"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 msgid "2×"
 msgstr "2倍"
 
@@ -110,12 +110,12 @@ msgid "Cycle Mode"
 msgstr "切换置顶方式"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:193 ui/page.slint:121
+#: main.ts:193 ui/page.slint:66
 msgid "Never"
 msgstr "不置顶"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:193 ui/page.slint:121
+#: main.ts:193 ui/page.slint:66
 msgid "Always"
 msgstr "总是置顶"
 
@@ -139,7 +139,7 @@ msgstr "播放时隐藏鼠标: 关"
 msgid "Hide Pointer While Playing"
 msgstr "播放时隐藏鼠标指针"
 
-#: main.ts:219 ui/page.slint:90
+#: main.ts:219 ui/page.slint:34
 msgid "Window"
 msgstr "窗口"
 
@@ -231,46 +231,46 @@ msgstr "迷你尺寸: 开"
 msgid "Cannot resize the window: {}"
 msgstr "无法调整窗口：{}"
 
-#: ui/page.slint:96
+#: ui/page.slint:40
 msgid "Window size when playback starts"
 msgstr "开始播放时的窗口尺寸"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:99
+#: ui/page.slint:44
 msgid "Off"
 msgstr "不调整"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:99
+#: ui/page.slint:44
 msgid "Fit aspect ratio"
 msgstr "适应视频比例"
 
-#: ui/page.slint:105
+#: ui/page.slint:50
 msgid "Only once (only the first video of this run)"
 msgstr "只调整一次（只调整本次运行的第一个视频）"
 
-#: ui/page.slint:111
+#: ui/page.slint:56
 msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
 msgstr "每个新文件拿到视频尺寸时调整一次，保持窗口左上角。全屏、迷你尺寸、画中画时不调整；播放中拖动过窗口后，这个文件不再调整。"
 
-#: ui/page.slint:118
+#: ui/page.slint:63
 msgid "Always on top"
 msgstr "置顶"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:121
+#: ui/page.slint:66
 msgid "While playing"
 msgstr "播放时置顶"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:121
+#: ui/page.slint:66
 msgid "Playing in fullscreen"
 msgstr "全屏播放时置顶"
 
-#: ui/page.slint:126
+#: ui/page.slint:71
 msgid "Mouse pointer"
 msgstr "鼠标指针"
 
-#: ui/page.slint:129
+#: ui/page.slint:73
 msgid "Hide the pointer while playing"
 msgstr "播放时隐藏鼠标指针"
