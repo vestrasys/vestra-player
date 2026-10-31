@@ -1,4 +1,4 @@
-import type { Json } from "../wire.ts";
+import type { Json, PropertyWrite } from "../wire.ts";
 import type { ScopeImpl } from "./scope.ts";
 import type { Dialogs, Disposable, ImageOptions, ImageRef, Panels, PropValue, Props, Ui, View, Windows } from "./types.ts";
 /** Slint names are kebab-case; plugin code may use camelCase. */
@@ -29,7 +29,7 @@ export declare abstract class ViewBase implements View {
     protected closed: boolean;
     constructor(scope: ScopeImpl);
     protected abstract live(): boolean;
-    protected abstract write(property: string, value: Json): Promise<void>;
+    protected abstract write(property: string, write: PropertyWrite): Promise<void>;
     /**
      * Initial properties in wire form. A released image is left out (the
      * property keeps its default) and reported, like a failed write.

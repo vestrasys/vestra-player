@@ -146,4 +146,5 @@ export const API_REQUESTS = Object.freeze({
     "Rendering.restartPlayer": [{ method: "rendering.restart" }],
     "VideoUpscaling.state": [{ method: "video.upscaling.state" }],
     "VideoUpscaling.set": [{ method: "video.upscaling.set" }],
+    "VideoUpscaling.onChange": [listen("video.upscaling.changed")],
 });

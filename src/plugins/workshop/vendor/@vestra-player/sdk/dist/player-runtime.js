@@ -22,3 +22,4 @@ export { Catalog, HOST_ZH_HANS, LIST_SEPARATORS, LOCALES, MENU_KEYS, matchLocale
 export { MANIFEST_FIELDS, MANIFEST_LIMITS } from "./manifest.js";
 export { MARKDOWN_LIMITS } from "./plugin/markdown.js";
 export { IMAGE_LIMITS, UI_VALUE_LIMITS } from "./plugin/values.js";
+export { PATCH_FEATURE, PATCH_OPS } from "./plugin/patch.js";

@@ -86,6 +86,7 @@ import { nodeProblem, VIDEO_PROCESSING_LIMITS } from "../processing.js";
 import { shaderIdProblem, shaderListProblem } from "./shaders.js";
 import { RENDER_DEFAULTS, renderProblem, VIEW_DEFAULTS, viewProblem, } from "./view.js";
 import { createPlugin } from "./index.js";
+import { applyOps, PATCH_FEATURE, PATCH_OPS } from "./patch.js";
 import { evaluate } from "./when.js";
 import { WAKE_EVENTS } from "./runtime.js";
 import { THEMES } from "./appearance.js";
@@ -928,6 +929,54 @@ export class TestHost {
         const reason = state?.reason;
         if (reason !== null && reason !== undefined)
             this.#declared(reason, "reason");
+    }
+    /**
+     * Row patches (player 0.6.0): the `seq` of each property's last write, by
+     * view and property (none: 0, the initial properties).
+     */
+    #writes = new Map();
+    #resetWrites(view) {
+        for (const slot of [...this.#writes.keys()])
+            if (slot.startsWith(`${view}\u0000`))
+                this.#writes.delete(slot);
+    }
+    /**
+     * A property write as the player takes it, returning the value the
+     * property shows after it: a whole `value`, or a `patch` of the array
+     * `current` applying on the write numbered `base` (code `stale`
+     * otherwise). The result is checked against the value limits whole: the
+     * player counts the rows a patch keeps too.
+     */
+    #write(view, property, p, current) {
+        const slot = `${view}\u0000${property}`;
+        const patch = p.patch;
+        if (patch === undefined) {
+            const value = this.#shownValues(p.value);
+            this.#checkValues({ [property]: value });
+            this.#seeImages([value]);
+            this.#writes.set(slot, typeof p.seq === "number" ? p.seq : 0);
+            return value;
+        }
+        const { base, seq } = patch;
+        if (!Number.isInteger(base) ||
+            !Number.isInteger(seq) ||
+            base < 0 ||
+            seq < 1)
+            throw new HostError("invalid", "patch.base and patch.seq require non-negative integers (seq ≥ 1)");
+        const stale = () => new HostError("stale", "the property changed since the write this patch applies on; send the whole value");
+        if ((this.#writes.get(slot) ?? 0) !== base || !Array.isArray(current))
+            throw stale();
+        const ops = patchOps(patch.ops, current.length);
+        const resolved = ops.map((op) => op.op === "set"
+            ? { ...op, row: this.#shownValues(op.row) }
+            : op.op === "insert"
+                ? { ...op, rows: op.rows.map((row) => this.#shownValues(row)) }
+                : op);
+        const value = applyOps(current, resolved);
+        this.#checkValues({ [property]: value });
+        this.#seeImages(resolved.flatMap((op) => op.op === "set" ? [op.row] : op.op === "insert" ? op.rows : []));
+        this.#writes.set(slot, seq);
+        return value;
     }
     /**
      * Refuse property values over the player's limits ({@link UI_VALUE_LIMITS})
@@ -1837,7 +1886,104 @@ export class TestHost {
         factor: 2,
         checked: false,
         renderingStarting: false,
+        video: {
+            width: 1920,
+            height: 1080,
+            displayWidth: 1920,
+            displayHeight: 1080,
+        },
+        area: { width: 3840, height: 2160 },
+        gpu: "NVIDIA GeForce RTX 4070 Laptop GPU",
+        hwdecCurrent: "d3d11va",
     };
+    /**
+     * Make the upscaler's reason `decoding` with `cause`, with the player's
+     * message (player 0.5.25), and set `upscaling.hwdecCurrent` to match
+     * (`d3d11va-copy`, `no`, `nvdec`). `plugins` are named for `copy-back`
+     * only, as the player does. Returns the reason; call
+     * {@link TestHost.upscalingChanged} to tell a listening plugin.
+     *
+     * @example Test the window's advice for each cause
+     * The plugin's window explains why upscaling waits. The test fakes the
+     * copy-back cause that Picture Adjustments' filters cause and checks
+     * that the window names the plugin.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.upscalingDecoding("copy-back", [{ id: "vestra.video", name: "Picture Adjustments" }]);
+     * host.upscalingChanged();
+     * await host.settle();
+     * assert.match(String(host.window("upscale").props.blocker), /Picture Adjustments/);
+     * ```
+     *
+     * @capability None.
+     * @since 1.5.43
+     */
+    upscalingDecoding(cause, plugins = []) {
+        const needs = "upscaling needs it decoded on the GPU that renders it (d3d11va)";
+        const names = plugins.map((p) => p.name);
+        const because = names.length === 0
+            ? "for example because a video filter needs the frames in memory"
+            : names.length === 1
+                ? `because the video filter of ${names[0]} needs the frames in memory`
+                : `because the video filters of ${names.join(", ")} need the frames in memory`;
+        const [message, current] = cause === "copy-back"
+            ? [
+                `the video is decoded with copy-back (auto-copy-safe), ${because}; ${needs}`,
+                "d3d11va-copy",
+            ]
+            : cause === "hwdec-off"
+                ? [
+                    "hardware decoding is off; upscaling needs the video decoded on the GPU that renders it (d3d11va)",
+                    "no",
+                ]
+                : cause === "software"
+                    ? [`this video is decoded in software; ${needs}`, "no"]
+                    : [`this video is decoded with nvdec; ${needs}`, "nvdec"];
+        const reason = cause === "copy-back"
+            ? {
+                code: "decoding",
+                message,
+                cause,
+                plugins: plugins.map(({ id, name }) => ({ id, name })),
+            }
+            : { code: "decoding", message, cause };
+        this.upscaling.reason = reason;
+        this.upscaling.hwdecCurrent = current;
+        return reason;
+    }
+    /**
+     * Send `video.upscaling.changed` with the state {@link TestHost.upscaling}
+     * describes now (without `enabled`), as the player does when it changes
+     * (player 0.5.25); a plugin listening with
+     * `plugin.video.upscaling.onChange` receives it. Nothing reaches a plugin
+     * that does not listen.
+     *
+     * @capability None.
+     *
+     * @example Show the new factor in the plugin's window
+     * The window resized: the test changes the area and the factor, sends
+     * the change, and checks that the plugin's window shows the new factor.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.upscaling.area = { width: 2560, height: 1440 };
+     * host.upscaling.factor = 1.33; // 1080p in a 1440p area
+     * host.upscalingChanged(); // as the player after the resize settled
+     * await host.settle();
+     * assert.equal(host.window("upscale").props.factor, "×1.33");
+     * ```
+     *
+     * @since 1.5.43
+     */
+    upscalingChanged() {
+        if (!this.subscriptions.has("video.upscaling.changed"))
+            return;
+        const { enabled: _, ...state } = this.#upscalingState(false);
+        this.emit("video.upscaling.changed", state);
+    }
     /** What `player.chapters()` lists while media is ready. */
     chapters = [];
     #overrides = new Map();
@@ -3481,12 +3627,20 @@ export class TestHost {
                 message: "the player has not checked the GPU yet; state() or set(true) checks it",
             };
         const requested = enabled && reason === null && factor !== null && factor > 1;
+        const { video, area, gpu, hwdecCurrent } = this.upscaling;
         return {
             available: reason === null,
-            reason: reason ? { ...reason } : null,
+            reason: reason
+                ? structuredClone(reason)
+                : null,
             enabled,
             requested,
             factor: requested ? factor : null,
+            video: video ? { ...video } : null,
+            area: area ? { ...area } : null,
+            gpu,
+            hwdecCurrent,
+            inChain: requested,
         };
     }
     /** `rendering.state` from {@link TestHost.rendering} and `videoRender.gpu`. */
@@ -3711,6 +3865,7 @@ export class TestHost {
             const id = String(p.id);
             if (this.windows.has(id))
                 throw new HostError("conflict", "view already exists");
+            this.#resetWrites(`w:${id}`);
             const properties = this.#shownValues(p.properties);
             this.#checkValues(properties);
             this.#seeImages(properties);
@@ -3736,10 +3891,8 @@ export class TestHost {
             const window = this.windows.get(String(p.id));
             if (!window)
                 throw new HostError("missing", "view not found");
-            const value = this.#shownValues(p.value);
-            this.#checkValues({ [String(p.property)]: value });
-            this.#seeImages([value]);
-            window.props[String(p.property)] = value;
+            const property = String(p.property);
+            window.props[property] = this.#write(`w:${String(p.id)}`, property, p, window.props[property]);
         },
         "ui.show": (p) => {
             const window = this.windows.get(String(p.id));
@@ -3773,6 +3926,7 @@ export class TestHost {
                 ]));
             const properties = this.#initialValues(this.#shownValues(p.properties));
             this.#seeImages(properties);
+            this.#resetWrites("$mount");
             const host = this;
             this.panel = {
                 slot: String(p.slot),
@@ -4097,11 +4251,9 @@ export class TestHost {
             this.emit("sequence.step", { direction });
         },
         "ui.setMount": (p) => {
-            this.mounted();
-            const value = this.#shownValues(p.value);
-            this.#checkValues({ [String(p.property)]: value });
-            this.#seeImages([value]);
-            this.mounted().props[String(p.property)] = value;
+            const panel = this.mounted();
+            const property = String(p.property);
+            panel.props[property] = this.#write("$mount", property, p, panel.props[property]);
         },
         "timeline.marks": () => ({ marks: this.timeline.marks }),
         "drops.provide": (p) => {
@@ -4140,6 +4292,7 @@ export class TestHost {
                 throw new HostError("invalid", "a plugin has at most 8 settings pages");
             const properties = this.#initialValues(this.#shownValues(p.properties));
             this.#seeImages(properties);
+            this.#resetWrites(`$settings:${id}`);
             const host = this;
             this.settings.pages.set(id, {
                 category: String(p.category),
@@ -4162,10 +4315,8 @@ export class TestHost {
             const page = this.settings.pages.get(String(p.id));
             if (!page)
                 throw new HostError("missing", "page not registered");
-            const value = this.#shownValues(p.value);
-            this.#checkValues({ [String(p.property)]: value });
-            this.#seeImages([value]);
-            page.props[String(p.property)] = value;
+            const property = String(p.property);
+            page.props[property] = this.#write(`$settings:${String(p.id)}`, property, p, page.props[property]);
         },
         "settings.unregister": (p) => {
             this.settings.pages.delete(String(p.id));
@@ -5156,7 +5307,10 @@ export async function startPlugin(activate, options = {}) {
     mkdirSync(data, { recursive: true });
     if (host.fileRoots.length === 0)
         host.fileRoots = [directory, data];
-    const instance = await createPlugin(host, manifest, directory, data, host.app);
+    const instance = await createPlugin(host, manifest, directory, data, 
+    // Like the player: protocol additions it takes (`app.features` set on
+    // the host replaces them, e.g. `[]` for an older player's behaviour).
+    { features: [PATCH_FEATURE], ...host.app });
     await activate(instance.plugin);
     // Like the player: a position or resolver another plugin holds is not an
     // activation failure.
@@ -5184,4 +5338,73 @@ export async function startPlugin(activate, options = {}) {
             host.close();
         },
     };
+}
+/**
+ * A patch's ops checked against an array of `length` rows, as the player
+ * checks them (`ui_patch.rs`): in order, each on the result of the ones
+ * before; at most {@link PATCH_OPS}; the result at most
+ * `UI_VALUE_LIMITS.arrayRows` rows.
+ */
+function patchOps(ops, length) {
+    if (!Array.isArray(ops))
+        throw new HostError("invalid", "patch.ops requires an array");
+    if (ops.length > PATCH_OPS)
+        throw new HostError("limit", `a patch carries at most ${PATCH_OPS} operations`);
+    const index = (op, key) => {
+        const value = op[key];
+        if (!Number.isInteger(value) || value < 0)
+            throw new HostError("invalid", `patch op ${key} requires a non-negative integer`);
+        return value;
+    };
+    const count = (op) => {
+        const value = index(op, "count");
+        if (value === 0)
+            throw new HostError("invalid", "patch op count must be at least 1");
+        return value;
+    };
+    const past = (what) => new HostError("invalid", `${what} is past the end of the list`);
+    let len = length;
+    return ops.map((raw) => {
+        const op = (raw ?? {});
+        switch (op.op) {
+            case "set": {
+                const at = index(op, "at");
+                if (at >= len)
+                    throw past(`set at ${at}`);
+                if (!("row" in op))
+                    throw new HostError("invalid", "patch op set requires row");
+                return { op: "set", at, row: op.row };
+            }
+            case "insert": {
+                const at = index(op, "at");
+                const rows = op.rows;
+                if (!Array.isArray(rows) || rows.length === 0)
+                    throw new HostError("invalid", "patch op insert requires rows");
+                if (at > len)
+                    throw past(`insert at ${at}`);
+                len += rows.length;
+                if (len > UI_VALUE_LIMITS.arrayRows)
+                    throw new HostError("limit", `UI array exceeds ${UI_VALUE_LIMITS.arrayRows} rows`);
+                return { op: "insert", at, rows: rows };
+            }
+            case "remove": {
+                const at = index(op, "at");
+                const n = count(op);
+                if (at + n > len)
+                    throw past(`remove ${n} at ${at}`);
+                len -= n;
+                return { op: "remove", at, count: n };
+            }
+            case "move": {
+                const from = index(op, "from");
+                const n = count(op);
+                const to = index(op, "to");
+                if (from + n > len || to + n > len)
+                    throw past(`move ${n} from ${from} to ${to}`);
+                return { op: "move", from, count: n, to };
+            }
+            default:
+                throw new HostError("invalid", "patch op must be set, insert, remove or move");
+        }
+    });
 }

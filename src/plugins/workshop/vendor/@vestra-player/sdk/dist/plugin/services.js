@@ -508,16 +508,38 @@ export const videoUpscaling = (scope) => {
         if (!scope.runtime.can("video.upscaling"))
             throw failure("capability", "video.upscaling must be declared in manifest");
     };
+    // This plugin's own request, kept from every answer for `onChange`: the
+    // event leaves it out (it is each plugin's own), and only this plugin's
+    // `set` changes it.
+    const noted = (state) => {
+        enabledOf.set(scope.runtime, state.enabled);
+        return state;
+    };
     return {
         async state() {
             declared();
-            return (await scope.runtime.host.video.upscalingState());
+            return noted(await scope.runtime.host.video.upscalingState());
         },
         async set(enabled) {
             declared();
             if (typeof enabled !== "boolean")
                 throw failure("invalid", "enabled must be true or false");
-            return (await scope.runtime.host.video.upscalingSet(enabled));
+            return noted(await scope.runtime.host.video.upscalingSet(enabled));
+        },
+        onChange(listener) {
+            declared();
+            const watch = scope.runtime.on("video.upscaling.changed", (data) => scope.run(listener, {
+                ...data,
+                enabled: enabledOf.get(scope.runtime) ?? false,
+            }), "video.upscaling");
+            return scope.add({
+                dispose: async () => {
+                    scope.forget(watch);
+                    await watch.dispose();
+                },
+            });
         },
     };
 };
+/** Each plugin's own upscaling request, as its last answer said. */
+const enabledOf = new WeakMap();

@@ -54,6 +54,12 @@ export declare class Runtime {
     readonly app: App;
     /** `plugin.i18n.locale`, from the start-up handshake; English when unknown. */
     readonly locale: Locale;
+    /**
+     * Protocol additions the player advertises at start-up (`features` in the
+     * handshake's app data, player 0.6.0): `ui.patch` (row patches of
+     * property writes). Not part of the plugin API; empty for older players.
+     */
+    readonly features: ReadonlySet<string>;
     constructor(transport: Transport, manifest: PluginManifest, directory: string, dataDirectory?: string, app?: unknown);
     can(capability: string): boolean;
     /** Lazily created singletons shared by every scope of this plugin. */

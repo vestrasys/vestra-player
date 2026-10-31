@@ -132,6 +132,12 @@ export class Runtime {
     app;
     /** `plugin.i18n.locale`, from the start-up handshake; English when unknown. */
     locale;
+    /**
+     * Protocol additions the player advertises at start-up (`features` in the
+     * handshake's app data, player 0.6.0): `ui.patch` (row patches of
+     * property writes). Not part of the plugin API; empty for older players.
+     */
+    features;
     constructor(transport, manifest, directory, dataDirectory, app) {
         this.#transport = transport;
         this.dataDirectory = dataDirectory;
@@ -139,6 +145,11 @@ export class Runtime {
         this.host = createWire(transport);
         const host = this.host;
         this.app = appInfo(app, () => host.app.system());
+        const features = app
+            ?.features;
+        this.features = new Set(Array.isArray(features)
+            ? features.filter((name) => typeof name === "string")
+            : []);
         this.locale = LOCALES.includes(transport.locale ?? "")
             ? transport.locale
             : "en";

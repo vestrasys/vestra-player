@@ -125,7 +125,7 @@ export function createWire(transport) {
         /** Settings pages in the player's options window (`ui.settings`). */
         settings: {
             register: (options) => transport.request("settings.register", options),
-            set: (id, property, value) => transport.request("settings.set", { id, property, value }),
+            set: (id, property, write) => transport.request("settings.set", { id, property, ...write }),
             unregister: (id) => transport.request("settings.unregister", { id }),
             show: (id) => transport.request("settings.show", id === undefined ? {} : { id }),
         },
@@ -321,12 +321,12 @@ export function createWire(transport) {
                 base,
             }),
             mount: (options) => transport.request("ui.mount", options),
-            setMount: (property, value) => transport.request("ui.setMount", { property, value }),
+            setMount: (property, write) => transport.request("ui.setMount", { property, ...write }),
             interaction: (locks) => transport.request("ui.interaction", locks),
             unmount: () => transport.request("ui.unmount"),
             menu: (items, x, y) => transport.request("ui.menu", { items, x, y }),
             open: (id, file, properties = {}, callbacks = []) => transport.request("ui.open", { id, file, properties, callbacks }),
-            set: (id, property, value) => transport.request("ui.set", { id, property, value }),
+            set: (id, property, write) => transport.request("ui.set", { id, property, ...write }),
             show: (id, visible) => transport.request("ui.show", { id, visible }),
             close: (id) => transport.request("ui.close", { id }),
         },
