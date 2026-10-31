@@ -156,8 +156,11 @@ export class Tasks {
           for (let index = 0; index < task.spec.count; index++) {
             if (task.cancel || this.#stopped) break;
             const { job, state } = await this.#run(task, index);
-            if (state.status === "completed" && state.outcome && "destination" in state.outcome)
-              task.outputs.push({ job, path: state.outcome.destination }); else if (state.status === "failed")
+            if (state.status === "completed" && state.outcome && "destination" in state.outcome) {
+              task.outputs.push({ job, path: state.outcome.destination });
+              // Past the job's await: the row's "n/total" changed outside SDK-invoked code.
+              this.#plugin.update();
+            } else if (state.status === "failed")
               throw new Failure(state.outcome && "error" in state.outcome ? jobError(state.outcome.error) : jobError({ code: "unknown", message: "no error outcome" }));
             else if (state.status === "cancelled") {
               task.cancel = true;

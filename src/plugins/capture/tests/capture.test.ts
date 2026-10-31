@@ -746,3 +746,23 @@ test("SDK 1.5.45: task rows changed after an await call plugin.update() (trimmin
   await until(() => seen.at(-1)?.status === "running");
   assert.equal(tasks.list.at(-1)!.status, "running");
 });
+
+test("SDK 1.5.45: each finished frame of a burst calls plugin.update(), so the row's n/total is current", async () => {
+  const done: number[] = [];
+  const scope = { update: () => done.push(tasks.list.at(-1)?.outputs.length ?? 0) } as never;
+  const tasks: Tasks = new Tasks(scope, () => {});
+  const spec = { kind: "burst", start: 0, count: 3, step: 1, processed: false, subtitles: false, track: "none", current: false } as const;
+  const job = (state: unknown, finished: Promise<unknown>) => ({ state, done: finished, onChange: () => ({ dispose: async () => {} }), cancel: async () => {} });
+  let exports = 0;
+  const snapshot = {
+    // The first frame completes after an await; the second export never returns, so only the push can update.
+    export: async ({ destination }: { destination: string }) =>
+      exports++ === 0
+        ? job({ status: "running" }, new Promise((ok) => setTimeout(() => ok({ status: "completed", outcome: { destination } }), 5)))
+        : new Promise(() => {}),
+    dispose: async () => {},
+  } as never;
+  tasks.add({ spec, sourceId: 1, source: "a", snapshot, destination: "burst" });
+  await until(() => done.at(-1) === 1);
+  assert.equal(tasks.list.at(-1)!.outputs.length, 1);
+});
