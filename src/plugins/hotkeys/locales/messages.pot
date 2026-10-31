@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.hotkeys 0.1.4\n"
+"Project-Id-Version: vestra.hotkeys 0.1.8\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -8,11 +8,11 @@ msgstr ""
 msgid "({})"
 msgstr ""
 
-#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195 ui/mouse.slint:111 ui/mouse.slint:157
+#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195 ui/mouse.slint:111 ui/mouse.slint:158
 msgid "Default"
 msgstr ""
 
-#: export.ts:17 ui/keys.slint:100 ui/keys.slint:195 ui/keys.slint:208 ui/keys.slint:228
+#: export.ts:17 ui/keys.slint:100 ui/keys.slint:195 ui/keys.slint:208 ui/keys.slint:229
 msgid "Changed"
 msgstr ""
 
@@ -36,15 +36,15 @@ msgstr ""
 msgid "Global"
 msgstr ""
 
-#: export.ts:22 ui/parts.slint:60
+#: export.ts:22 keys-page.ts:192
 msgid "Player"
 msgstr ""
 
-#: export.ts:30 export.ts:40 ui/keys.slint:256
+#: export.ts:30 export.ts:40 ui/keys.slint:257
 msgid "Command"
 msgstr ""
 
-#: export.ts:30 export.ts:40 ui/keys.slint:264
+#: export.ts:30 export.ts:40 ui/keys.slint:265
 msgid "Shortcut"
 msgstr ""
 
@@ -56,7 +56,7 @@ msgstr ""
 msgid "Source"
 msgstr ""
 
-#: export.ts:30 export.ts:40 ui/keys.slint:195 ui/keys.slint:270
+#: export.ts:30 export.ts:40 ui/keys.slint:195 ui/keys.slint:271
 msgid "Status"
 msgstr ""
 
@@ -84,53 +84,61 @@ msgstr ""
 msgid "Ignore default shortcuts: Off"
 msgstr ""
 
-#: keys-page.ts:116
+#: keys-page.ts:119
 msgid "Keyboard Shortcuts"
 msgstr ""
 
-#: keys-page.ts:405
+#: keys-page.ts:191
+msgid "All sources"
+msgstr ""
+
+#: keys-page.ts:194
+msgid "Plugins not loaded"
+msgstr ""
+
+#: keys-page.ts:416
 msgid "Shortcut updated: {0} = {1}"
 msgstr ""
 
-#: keys-page.ts:408
+#: keys-page.ts:419
 msgid "Shortcut updated: {} = (none)"
 msgstr ""
 
-#: keys-page.ts:460
+#: keys-page.ts:471
 msgid "Restore all default shortcuts?"
 msgstr ""
 
-#: keys-page.ts:461
+#: keys-page.ts:472
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr ""
 
-#: keys-page.ts:462
+#: keys-page.ts:473
 msgid "Restore All Defaults"
 msgstr ""
 
-#: keys-page.ts:474
+#: keys-page.ts:485
 msgid "Shortcuts restored to defaults"
 msgstr ""
 
 #. only the part before the extension.
-#: keys-page.ts:485
+#: keys-page.ts:496
 msgid "Export Shortcut List"
 msgstr ""
 
 #. only the part before the extension.
-#: keys-page.ts:485
+#: keys-page.ts:496
 msgid "Vestra Player Shortcuts.csv"
 msgstr ""
 
-#: main.ts:32
+#: main.ts:36
 msgid "Keyboard Shortcuts…"
 msgstr ""
 
-#: main.ts:39
+#: main.ts:43
 msgid "Mouse…"
 msgstr ""
 
-#: main.ts:46
+#: main.ts:50
 msgid "Ignore Default Shortcuts"
 msgstr ""
 
@@ -160,63 +168,67 @@ msgstr ""
 msgid "mouse"
 msgstr ""
 
-#: mouse-page.ts:38
+#: mouse-page.ts:40
 msgid "Mouse"
 msgstr ""
 
-#: mouse-page.ts:178 ui/parts.slint:41
+#: mouse-page.ts:139
+msgid "None"
+msgstr ""
+
+#: mouse-page.ts:197 ui/parts.slint:41
 msgid "Left click"
 msgstr ""
 
-#: mouse-page.ts:178 ui/parts.slint:42
+#: mouse-page.ts:197 ui/parts.slint:42
 msgid "Left double-click"
 msgstr ""
 
-#: mouse-page.ts:178 ui/parts.slint:43
+#: mouse-page.ts:197 ui/parts.slint:43
 msgid "Left double-click (left half)"
 msgstr ""
 
-#: mouse-page.ts:178 ui/parts.slint:44
+#: mouse-page.ts:197 ui/parts.slint:44
 msgid "Left double-click (right half)"
 msgstr ""
 
-#: mouse-page.ts:178 ui/parts.slint:45
+#: mouse-page.ts:197 ui/parts.slint:45
 msgid "Middle click"
 msgstr ""
 
-#: mouse-page.ts:178 ui/parts.slint:46
+#: mouse-page.ts:197 ui/parts.slint:46
 msgid "Back button"
 msgstr ""
 
-#: mouse-page.ts:178 ui/parts.slint:47
+#: mouse-page.ts:197 ui/parts.slint:47
 msgid "Forward button"
 msgstr ""
 
-#: mouse-page.ts:178 ui/parts.slint:48
+#: mouse-page.ts:197 ui/parts.slint:48
 msgid "Wheel up"
 msgstr ""
 
-#: mouse-page.ts:178 ui/parts.slint:49
+#: mouse-page.ts:197 ui/parts.slint:49
 msgid "Wheel down"
 msgstr ""
 
-#: mouse-page.ts:178 ui/parts.slint:50
+#: mouse-page.ts:197 ui/parts.slint:50
 msgid "Wheel left"
 msgstr ""
 
-#: mouse-page.ts:178 ui/parts.slint:51
+#: mouse-page.ts:197 ui/parts.slint:51
 msgid "Wheel right"
 msgstr ""
 
-#: mouse-page.ts:179
+#: mouse-page.ts:198
 msgid "{}+{}"
 msgstr ""
 
-#: mouse-page.ts:182
+#: mouse-page.ts:201
 msgid "Mouse action updated: {0} = {1}"
 msgstr ""
 
-#: mouse-page.ts:183
+#: mouse-page.ts:202
 msgid "Mouse action updated: {} = (none)"
 msgstr ""
 
@@ -228,31 +240,31 @@ msgstr ""
 msgid "The plugin is not loaded; this change works again when it is back"
 msgstr ""
 
-#: ui/keys.slint:199 ui/keys.slint:332
+#: ui/keys.slint:199 ui/keys.slint:333
 msgid "Add Key…"
 msgstr ""
 
-#: ui/keys.slint:202 ui/keys.slint:378 ui/keys.slint:397
+#: ui/keys.slint:202 ui/keys.slint:379 ui/keys.slint:398
 msgid "Delete Entry"
 msgstr ""
 
-#: ui/keys.slint:203 ui/keys.slint:378 ui/keys.slint:397
+#: ui/keys.slint:203 ui/keys.slint:379 ui/keys.slint:398
 msgid "Restore Default"
 msgstr ""
 
-#: ui/keys.slint:205 ui/keys.slint:384 ui/keys.slint:403
+#: ui/keys.slint:205 ui/keys.slint:385 ui/keys.slint:404
 msgid "Unbind All"
 msgstr ""
 
-#: ui/keys.slint:208 ui/keys.slint:228
+#: ui/keys.slint:208 ui/keys.slint:229
 msgid "All"
 msgstr ""
 
-#: ui/keys.slint:208 ui/keys.slint:228
+#: ui/keys.slint:208 ui/keys.slint:229
 msgid "Conflicts"
 msgstr ""
 
-#: ui/keys.slint:208 ui/keys.slint:228 ui/keys.slint:316
+#: ui/keys.slint:208 ui/keys.slint:229 ui/keys.slint:317
 msgid "Unbound"
 msgstr ""
 
@@ -260,71 +272,71 @@ msgstr ""
 msgid "Search commands or keys (e.g. Ctrl+)"
 msgstr ""
 
-#: ui/keys.slint:288
+#: ui/keys.slint:289
 msgid "Loading…"
 msgstr ""
 
-#: ui/keys.slint:288
+#: ui/keys.slint:289
 msgid "No matching commands"
 msgstr ""
 
-#: ui/keys.slint:296
+#: ui/keys.slint:297
 msgid "Select a command to change its shortcuts"
 msgstr ""
 
-#: ui/keys.slint:297
+#: ui/keys.slint:298
 msgid "{} (not loaded)"
 msgstr ""
 
-#: ui/keys.slint:298
+#: ui/keys.slint:299
 msgid "{} (Player · in panel)"
 msgstr ""
 
-#: ui/keys.slint:298
+#: ui/keys.slint:299
 msgid "{} (Player)"
 msgstr ""
 
-#: ui/keys.slint:299
+#: ui/keys.slint:300
 msgid "{0} ({1} · in panel)"
 msgstr ""
 
-#: ui/keys.slint:300
+#: ui/keys.slint:301
 msgid "{0} ({1})"
 msgstr ""
 
-#: ui/keys.slint:348
+#: ui/keys.slint:349
 msgid "Press a shortcut (Esc cancels)"
 msgstr ""
 
-#: ui/keys.slint:416
+#: ui/keys.slint:417
 msgid "⌘Q is the default shortcut to quit Vestra Player. Change it to “{}”?"
 msgstr ""
 
-#: ui/keys.slint:417
+#: ui/keys.slint:418
 msgid "{0} is already used by “{1}”"
 msgstr ""
 
-#: ui/keys.slint:423
+#: ui/keys.slint:424
 msgid "Replace"
 msgstr ""
 
-#: ui/keys.slint:424 ui/mouse.slint:182
+#: ui/keys.slint:425 ui/mouse.slint:183
 msgid "Cancel"
 msgstr ""
 
-#: ui/keys.slint:442
+#: ui/keys.slint:443
 msgid "Restore All Defaults…"
 msgstr ""
 
-#: ui/keys.slint:446
+#: ui/keys.slint:447
 msgid "Export List…"
 msgstr ""
 
-#: ui/keys.slint:449
+#: ui/keys.slint:450
 msgid "Ignore default shortcuts"
 msgstr ""
 
-#: ui/mouse.slint:67 ui/mouse.slint:146
+#: ui/mouse.slint:67 ui/mouse.slint:147
 msgid "(None)"
 msgstr ""
 
@@ -332,111 +344,99 @@ msgstr ""
 msgid "Modifier"
 msgstr ""
 
-#: ui/mouse.slint:123
-msgid "None"
-msgstr ""
-
-#: ui/mouse.slint:173
+#: ui/mouse.slint:174
 msgid "Command run by “{}”:"
 msgstr ""
 
-#: ui/mouse.slint:178
+#: ui/mouse.slint:179
 msgid "Type to filter"
 msgstr ""
 
-#: ui/mouse.slint:205
+#: ui/mouse.slint:206
 msgid "A left click may wait for the double-click interval while a double-click is bound; the right button always opens the menu."
 msgstr ""
 
-#: ui/parts.slint:59
-msgid "All sources"
-msgstr ""
-
-#: ui/parts.slint:61
-msgid "Plugins not loaded"
-msgstr ""
-
-#: ui/parts.slint:64
+#: ui/parts.slint:58
 msgid "{0} is taken by “{1}” and has no effect"
 msgstr ""
 
-#: ui/parts.slint:67
+#: ui/parts.slint:61
 msgid "{0}; {1}"
 msgstr ""
 
-#: ui/parts.slint:74
+#: ui/parts.slint:68
 msgid "The command no longer exists"
 msgstr ""
 
-#: ui/parts.slint:75
+#: ui/parts.slint:69
 msgid "This key cannot be used"
 msgstr ""
 
-#: ui/parts.slint:76
+#: ui/parts.slint:70
 msgid "This key is not recognized"
 msgstr ""
 
-#: ui/parts.slint:77
+#: ui/parts.slint:71
 msgid "Change failed: {}"
 msgstr ""
 
-#: ui/parts.slint:79
+#: ui/parts.slint:73
 msgid "Press Esc to cancel; to bind Esc itself, click “Esc” next to the box"
 msgstr ""
 
-#: ui/parts.slint:80
+#: ui/parts.slint:74
 msgid "{} is already a shortcut of this command"
 msgstr ""
 
-#: ui/parts.slint:81
+#: ui/parts.slint:75
 msgid "At most {} bindings per command"
 msgstr ""
 
-#: ui/parts.slint:82
+#: ui/parts.slint:76
 msgid "This key does something else while the “{0}” panel has focus: {1}"
 msgstr ""
 
-#: ui/parts.slint:83
+#: ui/parts.slint:77
 msgid "This key does something else while a panel of the player has focus: {}"
 msgstr ""
 
-#: ui/parts.slint:84
+#: ui/parts.slint:78
 msgid "This key does something else outside the panel: {}"
 msgstr ""
 
-#: ui/parts.slint:85
+#: ui/parts.slint:79
 msgid "Updated: {}"
 msgstr ""
 
-#: ui/parts.slint:86
+#: ui/parts.slint:80
 msgid "Updated: (none)"
 msgstr ""
 
-#: ui/parts.slint:87
+#: ui/parts.slint:81
 msgid "Updated: {0} = {1}"
 msgstr ""
 
-#: ui/parts.slint:88
+#: ui/parts.slint:82
 msgid "Updated: {} = (none)"
 msgstr ""
 
-#: ui/parts.slint:89
+#: ui/parts.slint:83
 msgid "Deleted the changes of {}"
 msgstr ""
 
-#: ui/parts.slint:90
+#: ui/parts.slint:84
 msgid "Cannot confirm: {}"
 msgstr ""
 
-#: ui/parts.slint:91
+#: ui/parts.slint:85
 msgid "All defaults restored"
 msgstr ""
 
-#: ui/parts.slint:92
+#: ui/parts.slint:86
 msgid "Cannot export: {}"
 msgstr ""
 
-#: ui/parts.slint:93
+#: ui/parts.slint:87
 msgid "Exported {n} command"
 msgid_plural "Exported {n} commands"
 msgstr[0] ""

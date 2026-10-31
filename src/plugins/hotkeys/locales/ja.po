@@ -11,12 +11,12 @@ msgstr ""
 msgid "({})"
 msgstr "（{}）"
 
-#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195 ui/mouse.slint:111 ui/mouse.slint:157
+#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195 ui/mouse.slint:111 ui/mouse.slint:158
 #, x-machine
 msgid "Default"
 msgstr "デフォルト"
 
-#: export.ts:17 ui/keys.slint:100 ui/keys.slint:195 ui/keys.slint:208 ui/keys.slint:228
+#: export.ts:17 ui/keys.slint:100 ui/keys.slint:195 ui/keys.slint:208 ui/keys.slint:229
 #, x-machine
 msgid "Changed"
 msgstr "変更済み"
@@ -46,17 +46,17 @@ msgstr "パネル内"
 msgid "Global"
 msgstr "グローバル"
 
-#: export.ts:22 ui/parts.slint:60
+#: export.ts:22 keys-page.ts:192
 #, x-machine
 msgid "Player"
 msgstr "プレーヤー"
 
-#: export.ts:30 export.ts:40 ui/keys.slint:256
+#: export.ts:30 export.ts:40 ui/keys.slint:257
 #, x-machine
 msgid "Command"
 msgstr "コマンド"
 
-#: export.ts:30 export.ts:40 ui/keys.slint:264
+#: export.ts:30 export.ts:40 ui/keys.slint:265
 #, x-machine
 msgid "Shortcut"
 msgstr "ショートカット"
@@ -71,7 +71,7 @@ msgstr "範囲"
 msgid "Source"
 msgstr "提供元"
 
-#: export.ts:30 export.ts:40 ui/keys.slint:195 ui/keys.slint:270
+#: export.ts:30 export.ts:40 ui/keys.slint:195 ui/keys.slint:271
 #, x-machine
 msgid "Status"
 msgstr "状態"
@@ -106,64 +106,74 @@ msgstr "デフォルトのショートカットを無視：オン"
 msgid "Ignore default shortcuts: Off"
 msgstr "デフォルトのショートカットを無視：オフ"
 
-#: keys-page.ts:116
+#: keys-page.ts:119
 #, x-machine
 msgid "Keyboard Shortcuts"
 msgstr "キーボードショートカット"
 
-#: keys-page.ts:405
+#: keys-page.ts:191
+#, x-machine
+msgid "All sources"
+msgstr "すべての提供元"
+
+#: keys-page.ts:194
+#, x-machine
+msgid "Plugins not loaded"
+msgstr "読み込まれていないプラグイン"
+
+#: keys-page.ts:416
 #, x-machine
 msgid "Shortcut updated: {0} = {1}"
 msgstr "ショートカットを更新しました：{0} = {1}"
 
-#: keys-page.ts:408
+#: keys-page.ts:419
 #, x-machine
 msgid "Shortcut updated: {} = (none)"
 msgstr "ショートカットを更新しました：{} = （なし）"
 
-#: keys-page.ts:460
+#: keys-page.ts:471
 #, x-machine
 msgid "Restore all default shortcuts?"
 msgstr "すべてのショートカットをデフォルトに戻しますか？"
 
-#: keys-page.ts:461
+#: keys-page.ts:472
 #, x-machine
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr "すべてのコマンド（読み込まれていないプラグインのものも含む）のショートカットとマウス操作への変更が消去されます。"
 
-#: keys-page.ts:462
+#: keys-page.ts:473
 #, x-machine
 msgid "Restore All Defaults"
 msgstr "すべてデフォルトに戻す"
 
-#: keys-page.ts:474
+#: keys-page.ts:485
 #, x-machine
 msgid "Shortcuts restored to defaults"
 msgstr "ショートカットをデフォルトに戻しました"
 
 #. only the part before the extension.
-#: keys-page.ts:485
+#: keys-page.ts:496
 #, x-machine
 msgid "Export Shortcut List"
 msgstr "ショートカット一覧を書き出す"
 
 #. only the part before the extension.
-#: keys-page.ts:485
+#: keys-page.ts:496
 #, x-machine
 msgid "Vestra Player Shortcuts.csv"
 msgstr "Vestra Player ショートカット.csv"
 
-#: main.ts:32
+#: main.ts:36
 #, x-machine
 msgid "Keyboard Shortcuts…"
 msgstr "キーボードショートカット…"
 
-#: main.ts:39
+#: main.ts:43
 #, x-machine
 msgid "Mouse…"
 msgstr "マウス…"
 
-#: main.ts:46
+#: main.ts:50
 #, x-machine
 msgid "Ignore Default Shortcuts"
 msgstr "デフォルトのショートカットを無視"
@@ -202,77 +212,82 @@ msgstr "ショートカット"
 msgid "mouse"
 msgstr "マウス"
 
-#: mouse-page.ts:38
+#: mouse-page.ts:40
 #, x-machine
 msgid "Mouse"
 msgstr "マウス"
 
-#: mouse-page.ts:178 ui/parts.slint:41
+#: mouse-page.ts:139
+#, x-machine
+msgid "None"
+msgstr "なし"
+
+#: mouse-page.ts:197 ui/parts.slint:41
 #, x-machine
 msgid "Left click"
 msgstr "左クリック"
 
-#: mouse-page.ts:178 ui/parts.slint:42
+#: mouse-page.ts:197 ui/parts.slint:42
 #, x-machine
 msgid "Left double-click"
 msgstr "左ダブルクリック"
 
-#: mouse-page.ts:178 ui/parts.slint:43
+#: mouse-page.ts:197 ui/parts.slint:43
 #, x-machine
 msgid "Left double-click (left half)"
 msgstr "左ダブルクリック（左半分）"
 
-#: mouse-page.ts:178 ui/parts.slint:44
+#: mouse-page.ts:197 ui/parts.slint:44
 #, x-machine
 msgid "Left double-click (right half)"
 msgstr "左ダブルクリック（右半分）"
 
-#: mouse-page.ts:178 ui/parts.slint:45
+#: mouse-page.ts:197 ui/parts.slint:45
 #, x-machine
 msgid "Middle click"
 msgstr "中クリック"
 
-#: mouse-page.ts:178 ui/parts.slint:46
+#: mouse-page.ts:197 ui/parts.slint:46
 #, x-machine
 msgid "Back button"
 msgstr "戻るボタン"
 
-#: mouse-page.ts:178 ui/parts.slint:47
+#: mouse-page.ts:197 ui/parts.slint:47
 #, x-machine
 msgid "Forward button"
 msgstr "進むボタン"
 
-#: mouse-page.ts:178 ui/parts.slint:48
+#: mouse-page.ts:197 ui/parts.slint:48
 #, x-machine
 msgid "Wheel up"
 msgstr "ホイール上"
 
-#: mouse-page.ts:178 ui/parts.slint:49
+#: mouse-page.ts:197 ui/parts.slint:49
 #, x-machine
 msgid "Wheel down"
 msgstr "ホイール下"
 
-#: mouse-page.ts:178 ui/parts.slint:50
+#: mouse-page.ts:197 ui/parts.slint:50
 #, x-machine
 msgid "Wheel left"
 msgstr "ホイール左"
 
-#: mouse-page.ts:178 ui/parts.slint:51
+#: mouse-page.ts:197 ui/parts.slint:51
 #, x-machine
 msgid "Wheel right"
 msgstr "ホイール右"
 
-#: mouse-page.ts:179
+#: mouse-page.ts:198
 #, x-machine
 msgid "{}+{}"
 msgstr "{}+{}"
 
-#: mouse-page.ts:182
+#: mouse-page.ts:201
 #, x-machine
 msgid "Mouse action updated: {0} = {1}"
 msgstr "マウス操作を更新しました：{0} = {1}"
 
-#: mouse-page.ts:183
+#: mouse-page.ts:202
 #, x-machine
 msgid "Mouse action updated: {} = (none)"
 msgstr "マウス操作を更新しました：{} = （なし）"
@@ -287,37 +302,37 @@ msgstr "デフォルトのショートカットは無視されています（設
 msgid "The plugin is not loaded; this change works again when it is back"
 msgstr "プラグインが読み込まれていません。プラグインが戻るとこの変更は再び有効になります"
 
-#: ui/keys.slint:199 ui/keys.slint:332
+#: ui/keys.slint:199 ui/keys.slint:333
 #, x-machine
 msgid "Add Key…"
 msgstr "キーを追加…"
 
-#: ui/keys.slint:202 ui/keys.slint:378 ui/keys.slint:397
+#: ui/keys.slint:202 ui/keys.slint:379 ui/keys.slint:398
 #, x-machine
 msgid "Delete Entry"
 msgstr "この項目を削除"
 
-#: ui/keys.slint:203 ui/keys.slint:378 ui/keys.slint:397
+#: ui/keys.slint:203 ui/keys.slint:379 ui/keys.slint:398
 #, x-machine
 msgid "Restore Default"
 msgstr "デフォルトに戻す"
 
-#: ui/keys.slint:205 ui/keys.slint:384 ui/keys.slint:403
+#: ui/keys.slint:205 ui/keys.slint:385 ui/keys.slint:404
 #, x-machine
 msgid "Unbind All"
 msgstr "すべて割り当て解除"
 
-#: ui/keys.slint:208 ui/keys.slint:228
+#: ui/keys.slint:208 ui/keys.slint:229
 #, x-machine
 msgid "All"
 msgstr "すべて"
 
-#: ui/keys.slint:208 ui/keys.slint:228
+#: ui/keys.slint:208 ui/keys.slint:229
 #, x-machine
 msgid "Conflicts"
 msgstr "競合あり"
 
-#: ui/keys.slint:208 ui/keys.slint:228 ui/keys.slint:316
+#: ui/keys.slint:208 ui/keys.slint:229 ui/keys.slint:317
 #, x-machine
 msgid "Unbound"
 msgstr "未割り当て"
@@ -327,87 +342,87 @@ msgstr "未割り当て"
 msgid "Search commands or keys (e.g. Ctrl+)"
 msgstr "コマンドまたはキーを検索（例：Ctrl+）"
 
-#: ui/keys.slint:288
+#: ui/keys.slint:289
 #, x-machine
 msgid "Loading…"
 msgstr "読み込み中…"
 
-#: ui/keys.slint:288
+#: ui/keys.slint:289
 #, x-machine
 msgid "No matching commands"
 msgstr "一致するコマンドはありません"
 
-#: ui/keys.slint:296
+#: ui/keys.slint:297
 #, x-machine
 msgid "Select a command to change its shortcuts"
 msgstr "ショートカットを変更するコマンドを選択してください"
 
-#: ui/keys.slint:297
+#: ui/keys.slint:298
 #, x-machine
 msgid "{} (not loaded)"
 msgstr "{}（未読み込み）"
 
-#: ui/keys.slint:298
+#: ui/keys.slint:299
 #, x-machine
 msgid "{} (Player · in panel)"
 msgstr "{}（プレーヤー · パネル内）"
 
-#: ui/keys.slint:298
+#: ui/keys.slint:299
 #, x-machine
 msgid "{} (Player)"
 msgstr "{}（プレーヤー）"
 
-#: ui/keys.slint:299
+#: ui/keys.slint:300
 #, x-machine
 msgid "{0} ({1} · in panel)"
 msgstr "{0}（{1} · パネル内）"
 
-#: ui/keys.slint:300
+#: ui/keys.slint:301
 #, x-machine
 msgid "{0} ({1})"
 msgstr "{0}（{1}）"
 
-#: ui/keys.slint:348
+#: ui/keys.slint:349
 #, x-machine
 msgid "Press a shortcut (Esc cancels)"
 msgstr "ショートカットを押してください（Esc でキャンセル）"
 
-#: ui/keys.slint:416
+#: ui/keys.slint:417
 #, x-machine
 msgid "⌘Q is the default shortcut to quit Vestra Player. Change it to “{}”?"
 msgstr "⌘Q は Vestra Player を終了するデフォルトのショートカットです。「{}」に変更しますか？"
 
-#: ui/keys.slint:417
+#: ui/keys.slint:418
 #, x-machine
 msgid "{0} is already used by “{1}”"
 msgstr "{0} はすでに「{1}」で使用されています"
 
-#: ui/keys.slint:423
+#: ui/keys.slint:424
 #, x-machine
 msgid "Replace"
 msgstr "置き換える"
 
-#: ui/keys.slint:424 ui/mouse.slint:182
+#: ui/keys.slint:425 ui/mouse.slint:183
 #, x-machine
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: ui/keys.slint:442
+#: ui/keys.slint:443
 #, x-machine
 msgid "Restore All Defaults…"
 msgstr "すべてデフォルトに戻す…"
 
-#: ui/keys.slint:446
+#: ui/keys.slint:447
 #, x-machine
 msgid "Export List…"
 msgstr "一覧を書き出す…"
 
-#: ui/keys.slint:449
+#: ui/keys.slint:450
 #, x-machine
 msgid "Ignore default shortcuts"
 msgstr "デフォルトのショートカットを無視"
 
-#: ui/mouse.slint:67 ui/mouse.slint:146
+#: ui/mouse.slint:67 ui/mouse.slint:147
 #, x-machine
 msgid "(None)"
 msgstr "（なし）"
@@ -417,137 +432,122 @@ msgstr "（なし）"
 msgid "Modifier"
 msgstr "修飾キー"
 
-#: ui/mouse.slint:123
-#, x-machine
-msgid "None"
-msgstr "なし"
-
-#: ui/mouse.slint:173
+#: ui/mouse.slint:174
 #, x-machine
 msgid "Command run by “{}”:"
 msgstr "「{}」で実行するコマンド："
 
-#: ui/mouse.slint:178
+#: ui/mouse.slint:179
 #, x-machine
 msgid "Type to filter"
 msgstr "入力して絞り込み"
 
-#: ui/mouse.slint:205
+#: ui/mouse.slint:206
 #, x-machine
 msgid "A left click may wait for the double-click interval while a double-click is bound; the right button always opens the menu."
 msgstr "ダブルクリックが割り当てられていると、左クリックはダブルクリック間隔だけ待つことがあります。右ボタンは常にメニューを開きます。"
 
-#: ui/parts.slint:59
-#, x-machine
-msgid "All sources"
-msgstr "すべての提供元"
-
-#: ui/parts.slint:61
-#, x-machine
-msgid "Plugins not loaded"
-msgstr "読み込まれていないプラグイン"
-
-#: ui/parts.slint:64
+#: ui/parts.slint:58
 #, x-machine
 msgid "{0} is taken by “{1}” and has no effect"
 msgstr "{0} は「{1}」が使用しているため無効です"
 
-#: ui/parts.slint:67
+#: ui/parts.slint:61
 #, x-machine
 msgid "{0}; {1}"
 msgstr "{0}／{1}"
 
-#: ui/parts.slint:74
+#: ui/parts.slint:68
 #, x-machine
 msgid "The command no longer exists"
 msgstr "このコマンドはもう存在しません"
 
-#: ui/parts.slint:75
+#: ui/parts.slint:69
 #, x-machine
 msgid "This key cannot be used"
 msgstr "このキーは使用できません"
 
-#: ui/parts.slint:76
+#: ui/parts.slint:70
 #, x-machine
 msgid "This key is not recognized"
 msgstr "このキーを認識できません"
 
-#: ui/parts.slint:77
+#: ui/parts.slint:71
 #, x-machine
 msgid "Change failed: {}"
 msgstr "変更に失敗しました：{}"
 
-#: ui/parts.slint:79
+#: ui/parts.slint:73
 #, x-machine
 msgid "Press Esc to cancel; to bind Esc itself, click “Esc” next to the box"
 msgstr "Esc でキャンセルします。Esc 自体を割り当てるには、入力欄の横の「Esc」をクリックしてください"
 
-#: ui/parts.slint:80
+#: ui/parts.slint:74
 #, x-machine
 msgid "{} is already a shortcut of this command"
 msgstr "{} はすでにこのコマンドのショートカットです"
 
-#: ui/parts.slint:81
+#: ui/parts.slint:75
 #, x-machine
 msgid "At most {} bindings per command"
 msgstr "1 つのコマンドに割り当てられるのは最大 {} 個です"
 
-#: ui/parts.slint:82
+#: ui/parts.slint:76
 #, x-machine
 msgid "This key does something else while the “{0}” panel has focus: {1}"
 msgstr "このキーは「{0}」パネルにフォーカスがあるとき別の操作になります：{1}"
 
-#: ui/parts.slint:83
+#: ui/parts.slint:77
 #, x-machine
 msgid "This key does something else while a panel of the player has focus: {}"
 msgstr "このキーはプレーヤーのパネルにフォーカスがあるとき別の操作になります：{}"
 
-#: ui/parts.slint:84
+#: ui/parts.slint:78
 #, x-machine
 msgid "This key does something else outside the panel: {}"
 msgstr "このキーはパネルの外では別の操作になります：{}"
 
-#: ui/parts.slint:85
+#: ui/parts.slint:79
 #, x-machine
 msgid "Updated: {}"
 msgstr "更新しました：{}"
 
-#: ui/parts.slint:86
+#: ui/parts.slint:80
 #, x-machine
 msgid "Updated: (none)"
 msgstr "更新しました：（なし）"
 
-#: ui/parts.slint:87
+#: ui/parts.slint:81
 #, x-machine
 msgid "Updated: {0} = {1}"
 msgstr "更新しました：{0} = {1}"
 
-#: ui/parts.slint:88
+#: ui/parts.slint:82
 #, x-machine
 msgid "Updated: {} = (none)"
 msgstr "更新しました：{} = （なし）"
 
-#: ui/parts.slint:89
+#: ui/parts.slint:83
 #, x-machine
 msgid "Deleted the changes of {}"
 msgstr "{} の変更を削除しました"
 
-#: ui/parts.slint:90
+#: ui/parts.slint:84
 #, x-machine
 msgid "Cannot confirm: {}"
 msgstr "確認できません：{}"
 
-#: ui/parts.slint:91
+#: ui/parts.slint:85
 #, x-machine
 msgid "All defaults restored"
 msgstr "すべてデフォルトに戻しました"
 
-#: ui/parts.slint:92
+#: ui/parts.slint:86
 #, x-machine
 msgid "Cannot export: {}"
 msgstr "書き出せません：{}"
 
-#: ui/parts.slint:93
+#: ui/parts.slint:87
 #, x-machine
 msgid "Exported {n} command"
 msgid_plural "Exported {n} commands"

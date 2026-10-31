@@ -11,12 +11,12 @@ msgstr ""
 msgid "({})"
 msgstr "({})"
 
-#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195 ui/mouse.slint:111 ui/mouse.slint:157
+#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195 ui/mouse.slint:111 ui/mouse.slint:158
 #, x-machine
 msgid "Default"
 msgstr "기본값"
 
-#: export.ts:17 ui/keys.slint:100 ui/keys.slint:195 ui/keys.slint:208 ui/keys.slint:228
+#: export.ts:17 ui/keys.slint:100 ui/keys.slint:195 ui/keys.slint:208 ui/keys.slint:229
 #, x-machine
 msgid "Changed"
 msgstr "변경됨"
@@ -46,17 +46,17 @@ msgstr "패널 내"
 msgid "Global"
 msgstr "전역"
 
-#: export.ts:22 ui/parts.slint:60
+#: export.ts:22 keys-page.ts:192
 #, x-machine
 msgid "Player"
 msgstr "플레이어"
 
-#: export.ts:30 export.ts:40 ui/keys.slint:256
+#: export.ts:30 export.ts:40 ui/keys.slint:257
 #, x-machine
 msgid "Command"
 msgstr "명령"
 
-#: export.ts:30 export.ts:40 ui/keys.slint:264
+#: export.ts:30 export.ts:40 ui/keys.slint:265
 #, x-machine
 msgid "Shortcut"
 msgstr "단축키"
@@ -71,7 +71,7 @@ msgstr "범위"
 msgid "Source"
 msgstr "출처"
 
-#: export.ts:30 export.ts:40 ui/keys.slint:195 ui/keys.slint:270
+#: export.ts:30 export.ts:40 ui/keys.slint:195 ui/keys.slint:271
 #, x-machine
 msgid "Status"
 msgstr "상태"
@@ -106,64 +106,74 @@ msgstr "기본 단축키 무시: 켬"
 msgid "Ignore default shortcuts: Off"
 msgstr "기본 단축키 무시: 끔"
 
-#: keys-page.ts:116
+#: keys-page.ts:119
 #, x-machine
 msgid "Keyboard Shortcuts"
 msgstr "키보드 단축키"
 
-#: keys-page.ts:405
+#: keys-page.ts:191
+#, x-machine
+msgid "All sources"
+msgstr "모든 출처"
+
+#: keys-page.ts:194
+#, x-machine
+msgid "Plugins not loaded"
+msgstr "로드되지 않은 플러그인"
+
+#: keys-page.ts:416
 #, x-machine
 msgid "Shortcut updated: {0} = {1}"
 msgstr "단축키를 변경했습니다: {0} = {1}"
 
-#: keys-page.ts:408
+#: keys-page.ts:419
 #, x-machine
 msgid "Shortcut updated: {} = (none)"
 msgstr "단축키를 변경했습니다: {} = (없음)"
 
-#: keys-page.ts:460
+#: keys-page.ts:471
 #, x-machine
 msgid "Restore all default shortcuts?"
 msgstr "모든 단축키를 기본값으로 복원할까요?"
 
-#: keys-page.ts:461
+#: keys-page.ts:472
 #, x-machine
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr "로드되지 않은 플러그인을 포함해 모든 명령의 단축키와 마우스 동작에 대한 변경 사항이 지워집니다."
 
-#: keys-page.ts:462
+#: keys-page.ts:473
 #, x-machine
 msgid "Restore All Defaults"
 msgstr "모두 기본값으로 복원"
 
-#: keys-page.ts:474
+#: keys-page.ts:485
 #, x-machine
 msgid "Shortcuts restored to defaults"
 msgstr "단축키를 기본값으로 복원했습니다"
 
 #. only the part before the extension.
-#: keys-page.ts:485
+#: keys-page.ts:496
 #, x-machine
 msgid "Export Shortcut List"
 msgstr "단축키 목록 내보내기"
 
 #. only the part before the extension.
-#: keys-page.ts:485
+#: keys-page.ts:496
 #, x-machine
 msgid "Vestra Player Shortcuts.csv"
 msgstr "Vestra Player 단축키.csv"
 
-#: main.ts:32
+#: main.ts:36
 #, x-machine
 msgid "Keyboard Shortcuts…"
 msgstr "키보드 단축키…"
 
-#: main.ts:39
+#: main.ts:43
 #, x-machine
 msgid "Mouse…"
 msgstr "마우스…"
 
-#: main.ts:46
+#: main.ts:50
 #, x-machine
 msgid "Ignore Default Shortcuts"
 msgstr "기본 단축키 무시"
@@ -202,77 +212,82 @@ msgstr "단축키"
 msgid "mouse"
 msgstr "마우스"
 
-#: mouse-page.ts:38
+#: mouse-page.ts:40
 #, x-machine
 msgid "Mouse"
 msgstr "마우스"
 
-#: mouse-page.ts:178 ui/parts.slint:41
+#: mouse-page.ts:139
+#, x-machine
+msgid "None"
+msgstr "없음"
+
+#: mouse-page.ts:197 ui/parts.slint:41
 #, x-machine
 msgid "Left click"
 msgstr "왼쪽 클릭"
 
-#: mouse-page.ts:178 ui/parts.slint:42
+#: mouse-page.ts:197 ui/parts.slint:42
 #, x-machine
 msgid "Left double-click"
 msgstr "왼쪽 더블 클릭"
 
-#: mouse-page.ts:178 ui/parts.slint:43
+#: mouse-page.ts:197 ui/parts.slint:43
 #, x-machine
 msgid "Left double-click (left half)"
 msgstr "왼쪽 더블 클릭 (왼쪽 절반)"
 
-#: mouse-page.ts:178 ui/parts.slint:44
+#: mouse-page.ts:197 ui/parts.slint:44
 #, x-machine
 msgid "Left double-click (right half)"
 msgstr "왼쪽 더블 클릭 (오른쪽 절반)"
 
-#: mouse-page.ts:178 ui/parts.slint:45
+#: mouse-page.ts:197 ui/parts.slint:45
 #, x-machine
 msgid "Middle click"
 msgstr "가운데 클릭"
 
-#: mouse-page.ts:178 ui/parts.slint:46
+#: mouse-page.ts:197 ui/parts.slint:46
 #, x-machine
 msgid "Back button"
 msgstr "뒤로 버튼"
 
-#: mouse-page.ts:178 ui/parts.slint:47
+#: mouse-page.ts:197 ui/parts.slint:47
 #, x-machine
 msgid "Forward button"
 msgstr "앞으로 버튼"
 
-#: mouse-page.ts:178 ui/parts.slint:48
+#: mouse-page.ts:197 ui/parts.slint:48
 #, x-machine
 msgid "Wheel up"
 msgstr "휠 위로"
 
-#: mouse-page.ts:178 ui/parts.slint:49
+#: mouse-page.ts:197 ui/parts.slint:49
 #, x-machine
 msgid "Wheel down"
 msgstr "휠 아래로"
 
-#: mouse-page.ts:178 ui/parts.slint:50
+#: mouse-page.ts:197 ui/parts.slint:50
 #, x-machine
 msgid "Wheel left"
 msgstr "휠 왼쪽"
 
-#: mouse-page.ts:178 ui/parts.slint:51
+#: mouse-page.ts:197 ui/parts.slint:51
 #, x-machine
 msgid "Wheel right"
 msgstr "휠 오른쪽"
 
-#: mouse-page.ts:179
+#: mouse-page.ts:198
 #, x-machine
 msgid "{}+{}"
 msgstr "{}+{}"
 
-#: mouse-page.ts:182
+#: mouse-page.ts:201
 #, x-machine
 msgid "Mouse action updated: {0} = {1}"
 msgstr "마우스 동작을 변경했습니다: {0} = {1}"
 
-#: mouse-page.ts:183
+#: mouse-page.ts:202
 #, x-machine
 msgid "Mouse action updated: {} = (none)"
 msgstr "마우스 동작을 변경했습니다: {} = (없음)"
@@ -287,37 +302,37 @@ msgstr "기본 단축키를 무시하고 있습니다 (설정 ▸ 기본 단축�
 msgid "The plugin is not loaded; this change works again when it is back"
 msgstr "플러그인이 로드되지 않았습니다. 플러그인이 다시 로드되면 이 변경 사항이 적용됩니다"
 
-#: ui/keys.slint:199 ui/keys.slint:332
+#: ui/keys.slint:199 ui/keys.slint:333
 #, x-machine
 msgid "Add Key…"
 msgstr "키 추가…"
 
-#: ui/keys.slint:202 ui/keys.slint:378 ui/keys.slint:397
+#: ui/keys.slint:202 ui/keys.slint:379 ui/keys.slint:398
 #, x-machine
 msgid "Delete Entry"
 msgstr "항목 삭제"
 
-#: ui/keys.slint:203 ui/keys.slint:378 ui/keys.slint:397
+#: ui/keys.slint:203 ui/keys.slint:379 ui/keys.slint:398
 #, x-machine
 msgid "Restore Default"
 msgstr "기본값 복원"
 
-#: ui/keys.slint:205 ui/keys.slint:384 ui/keys.slint:403
+#: ui/keys.slint:205 ui/keys.slint:385 ui/keys.slint:404
 #, x-machine
 msgid "Unbind All"
 msgstr "모두 해제"
 
-#: ui/keys.slint:208 ui/keys.slint:228
+#: ui/keys.slint:208 ui/keys.slint:229
 #, x-machine
 msgid "All"
 msgstr "전체"
 
-#: ui/keys.slint:208 ui/keys.slint:228
+#: ui/keys.slint:208 ui/keys.slint:229
 #, x-machine
 msgid "Conflicts"
 msgstr "충돌"
 
-#: ui/keys.slint:208 ui/keys.slint:228 ui/keys.slint:316
+#: ui/keys.slint:208 ui/keys.slint:229 ui/keys.slint:317
 #, x-machine
 msgid "Unbound"
 msgstr "지정 안 됨"
@@ -327,87 +342,87 @@ msgstr "지정 안 됨"
 msgid "Search commands or keys (e.g. Ctrl+)"
 msgstr "명령 또는 키 검색 (예: Ctrl+)"
 
-#: ui/keys.slint:288
+#: ui/keys.slint:289
 #, x-machine
 msgid "Loading…"
 msgstr "불러오는 중…"
 
-#: ui/keys.slint:288
+#: ui/keys.slint:289
 #, x-machine
 msgid "No matching commands"
 msgstr "일치하는 명령이 없습니다"
 
-#: ui/keys.slint:296
+#: ui/keys.slint:297
 #, x-machine
 msgid "Select a command to change its shortcuts"
 msgstr "단축키를 변경할 명령을 선택하세요"
 
-#: ui/keys.slint:297
+#: ui/keys.slint:298
 #, x-machine
 msgid "{} (not loaded)"
 msgstr "{} (로드 안 됨)"
 
-#: ui/keys.slint:298
+#: ui/keys.slint:299
 #, x-machine
 msgid "{} (Player · in panel)"
 msgstr "{} (플레이어 · 패널 내)"
 
-#: ui/keys.slint:298
+#: ui/keys.slint:299
 #, x-machine
 msgid "{} (Player)"
 msgstr "{} (플레이어)"
 
-#: ui/keys.slint:299
+#: ui/keys.slint:300
 #, x-machine
 msgid "{0} ({1} · in panel)"
 msgstr "{0} ({1} · 패널 내)"
 
-#: ui/keys.slint:300
+#: ui/keys.slint:301
 #, x-machine
 msgid "{0} ({1})"
 msgstr "{0} ({1})"
 
-#: ui/keys.slint:348
+#: ui/keys.slint:349
 #, x-machine
 msgid "Press a shortcut (Esc cancels)"
 msgstr "단축키를 누르세요 (Esc로 취소)"
 
-#: ui/keys.slint:416
+#: ui/keys.slint:417
 #, x-machine
 msgid "⌘Q is the default shortcut to quit Vestra Player. Change it to “{}”?"
 msgstr "⌘Q는 Vestra Player를 종료하는 기본 단축키입니다. “{}” 명령에 지정할까요?"
 
-#: ui/keys.slint:417
+#: ui/keys.slint:418
 #, x-machine
 msgid "{0} is already used by “{1}”"
 msgstr "{0}: 이미 “{1}”에서 사용 중입니다"
 
-#: ui/keys.slint:423
+#: ui/keys.slint:424
 #, x-machine
 msgid "Replace"
 msgstr "바꾸기"
 
-#: ui/keys.slint:424 ui/mouse.slint:182
+#: ui/keys.slint:425 ui/mouse.slint:183
 #, x-machine
 msgid "Cancel"
 msgstr "취소"
 
-#: ui/keys.slint:442
+#: ui/keys.slint:443
 #, x-machine
 msgid "Restore All Defaults…"
 msgstr "모두 기본값으로 복원…"
 
-#: ui/keys.slint:446
+#: ui/keys.slint:447
 #, x-machine
 msgid "Export List…"
 msgstr "목록 내보내기…"
 
-#: ui/keys.slint:449
+#: ui/keys.slint:450
 #, x-machine
 msgid "Ignore default shortcuts"
 msgstr "기본 단축키 무시"
 
-#: ui/mouse.slint:67 ui/mouse.slint:146
+#: ui/mouse.slint:67 ui/mouse.slint:147
 #, x-machine
 msgid "(None)"
 msgstr "(없음)"
@@ -417,137 +432,122 @@ msgstr "(없음)"
 msgid "Modifier"
 msgstr "보조 키"
 
-#: ui/mouse.slint:123
-#, x-machine
-msgid "None"
-msgstr "없음"
-
-#: ui/mouse.slint:173
+#: ui/mouse.slint:174
 #, x-machine
 msgid "Command run by “{}”:"
 msgstr "“{}”에 지정할 명령:"
 
-#: ui/mouse.slint:178
+#: ui/mouse.slint:179
 #, x-machine
 msgid "Type to filter"
 msgstr "입력하여 필터링"
 
-#: ui/mouse.slint:205
+#: ui/mouse.slint:206
 #, x-machine
 msgid "A left click may wait for the double-click interval while a double-click is bound; the right button always opens the menu."
 msgstr "더블 클릭이 지정되어 있으면 왼쪽 클릭이 더블 클릭 간격만큼 기다릴 수 있습니다. 오른쪽 버튼은 항상 메뉴를 엽니다."
 
-#: ui/parts.slint:59
-#, x-machine
-msgid "All sources"
-msgstr "모든 출처"
-
-#: ui/parts.slint:61
-#, x-machine
-msgid "Plugins not loaded"
-msgstr "로드되지 않은 플러그인"
-
-#: ui/parts.slint:64
+#: ui/parts.slint:58
 #, x-machine
 msgid "{0} is taken by “{1}” and has no effect"
 msgstr "{0}: “{1}”에서 사용 중이어서 적용되지 않습니다"
 
-#: ui/parts.slint:67
+#: ui/parts.slint:61
 #, x-machine
 msgid "{0}; {1}"
 msgstr "{0}; {1}"
 
-#: ui/parts.slint:74
+#: ui/parts.slint:68
 #, x-machine
 msgid "The command no longer exists"
 msgstr "명령이 더 이상 없습니다"
 
-#: ui/parts.slint:75
+#: ui/parts.slint:69
 #, x-machine
 msgid "This key cannot be used"
 msgstr "이 키는 사용할 수 없습니다"
 
-#: ui/parts.slint:76
+#: ui/parts.slint:70
 #, x-machine
 msgid "This key is not recognized"
 msgstr "인식할 수 없는 키입니다"
 
-#: ui/parts.slint:77
+#: ui/parts.slint:71
 #, x-machine
 msgid "Change failed: {}"
 msgstr "변경 실패: {}"
 
-#: ui/parts.slint:79
+#: ui/parts.slint:73
 #, x-machine
 msgid "Press Esc to cancel; to bind Esc itself, click “Esc” next to the box"
 msgstr "Esc를 누르면 취소됩니다. Esc 자체를 지정하려면 상자 옆의 “Esc”를 클릭하세요"
 
-#: ui/parts.slint:80
+#: ui/parts.slint:74
 #, x-machine
 msgid "{} is already a shortcut of this command"
 msgstr "{}: 이미 이 명령의 단축키입니다"
 
-#: ui/parts.slint:81
+#: ui/parts.slint:75
 #, x-machine
 msgid "At most {} bindings per command"
 msgstr "명령마다 최대 {}개까지 지정할 수 있습니다"
 
-#: ui/parts.slint:82
+#: ui/parts.slint:76
 #, x-machine
 msgid "This key does something else while the “{0}” panel has focus: {1}"
 msgstr "이 키는 “{0}” 패널에 포커스가 있을 때 다른 동작을 합니다: {1}"
 
-#: ui/parts.slint:83
+#: ui/parts.slint:77
 #, x-machine
 msgid "This key does something else while a panel of the player has focus: {}"
 msgstr "이 키는 플레이어 패널에 포커스가 있을 때 다른 동작을 합니다: {}"
 
-#: ui/parts.slint:84
+#: ui/parts.slint:78
 #, x-machine
 msgid "This key does something else outside the panel: {}"
 msgstr "이 키는 패널 밖에서 다른 동작을 합니다: {}"
 
-#: ui/parts.slint:85
+#: ui/parts.slint:79
 #, x-machine
 msgid "Updated: {}"
 msgstr "변경됨: {}"
 
-#: ui/parts.slint:86
+#: ui/parts.slint:80
 #, x-machine
 msgid "Updated: (none)"
 msgstr "변경됨: (없음)"
 
-#: ui/parts.slint:87
+#: ui/parts.slint:81
 #, x-machine
 msgid "Updated: {0} = {1}"
 msgstr "변경됨: {0} = {1}"
 
-#: ui/parts.slint:88
+#: ui/parts.slint:82
 #, x-machine
 msgid "Updated: {} = (none)"
 msgstr "변경됨: {} = (없음)"
 
-#: ui/parts.slint:89
+#: ui/parts.slint:83
 #, x-machine
 msgid "Deleted the changes of {}"
 msgstr "{}의 변경 사항을 삭제했습니다"
 
-#: ui/parts.slint:90
+#: ui/parts.slint:84
 #, x-machine
 msgid "Cannot confirm: {}"
 msgstr "확인할 수 없습니다: {}"
 
-#: ui/parts.slint:91
+#: ui/parts.slint:85
 #, x-machine
 msgid "All defaults restored"
 msgstr "모두 기본값으로 복원했습니다"
 
-#: ui/parts.slint:92
+#: ui/parts.slint:86
 #, x-machine
 msgid "Cannot export: {}"
 msgstr "내보낼 수 없습니다: {}"
 
-#: ui/parts.slint:93
+#: ui/parts.slint:87
 #, x-machine
 msgid "Exported {n} command"
 msgid_plural "Exported {n} commands"
