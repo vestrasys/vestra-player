@@ -6,45 +6,74 @@
 //!
 //! The test scans the host's Slint files (`host/ui`), the built-in plugins'
 //! (`plugins/*`, without `dist`, `vendor` and `node_modules`) and the Slint
-//! the host generates (shell, floating window, Options window). A place not
-//! migrated yet, or a small fixed set where a `ListView` buys nothing, is in
-//! [`ALLOWED`] with a reason and its count: lower the count (or remove the
-//! entry) when a place is migrated; the test fails while an entry allows
-//! more than it finds, so the list only shrinks.
+//! the host generates (shell, floating window, Options window). It finds:
+//!
+//! - a `for` with a `ScrollView` or `Flickable` around it in the same
+//!   component (or a component that inherits one);
+//! - an element whose type is a component of the same file that holds such
+//!   a `for` outside any scrolling element of its own (directly, through
+//!   another such component, or through the component it inherits), placed
+//!   in a `ScrollView` or `Flickable`: `ScrollView { Rows {} }`.
+//!
+//! A `PopupWindow` or `ListView` between the `for` and the scrolling element
+//! ends the search: a popup is not part of the scrolled content, and a
+//! `ListView`'s rows are virtualized.
+//!
+//! Not found (a text scan, not the Slint compiler):
+//! - components imported from another file (also under an alias), so
+//!   `ScrollView { MarkdownBlocks {} }` in a plugin that imports it;
+//! - a `for` that reaches a scrolling element through `@children` (a wrapper
+//!   component whose `@children` sit in its `ScrollView`, filled by the user
+//!   of the wrapper);
+//! - lists built in Rust code rather than in Slint.
+//!
+//! A place not migrated yet, or a small fixed set where a `ListView` buys
+//! nothing, is in [`ALLOWED`] with its line's text and a reason. The test
+//! fails on a finding no entry names and on an entry that names nothing, so
+//! moving or replacing an allowed `for` needs a new entry, not just the same
+//! count.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-/// (file under `src/`, or `generated:<name>`; `for`s allowed; why).
-const ALLOWED: &[(&str, usize, &str)] = &[
+/// (file under `src/`, or `generated:<name>`; the found line's text, trimmed,
+/// or a part of it that names it in that file; why).
+const ALLOWED: &[(&str, &str, &str)] = &[
     (
         "plugins/playlist/ui/sidebar.slint",
-        1,
+        "for row[index] in PlaylistBridge.rows: Rectangle {",
         "playlist sidebar: moves to a ListView with the whole list in the host (large lists P3)",
     ),
     (
         "plugins/video/ui/shaders.slint",
-        1,
+        "for name[index] in root.model: Rectangle {",
         "video shaders: the built-in video plugin is left unchanged for now (user ruling 2026-10-31)",
     ),
 ];
 
-/// A `for` inside a scrolling element: its line and the scrolling element.
+/// A `for` inside a scrolling element, or a local component holding one
+/// placed in a scrolling element: its line, the line's text and the
+/// scrolling element.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Finding {
     pub line: usize,
+    pub text: String,
     pub scroll: String,
+    /// The local component the `for` is in, for a placed component.
+    pub via: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 enum Frame {
-    /// An element (its type name), or a component (the type it inherits).
+    /// An element (its type name).
     Element(String),
     /// A callback, function or `changed` body: code, not elements.
     Code,
     /// A struct, global, enum, `states`/`transitions` entry, binding braces.
     Other,
-    /// A component boundary: scrolling elements outside it do not count.
-    Component(String),
+    /// A component boundary (its name, the type it inherits): scrolling
+    /// elements outside it do not count.
+    Component(String, String),
 }
 
 /// Comments and string contents blanked (newlines kept, for line numbers).
@@ -119,8 +148,8 @@ fn classify(header: &str, inside_code: bool) -> (Frame, bool) {
             .and_then(|i| words.get(i + 1))
             .copied()
             .unwrap_or("component");
-        if at + 1 < words.len() {
-            return (Frame::Component(base.to_owned()), false);
+        if let Some(name) = words.get(at + 1) {
+            return (Frame::Component((*name).to_owned(), base.to_owned()), false);
         }
     }
     if words
@@ -153,11 +182,55 @@ fn scrolls(name: &str) -> bool {
     matches!(name, "ScrollView" | "Flickable")
 }
 
+/// Ends the search for a scrolling element: a popup is not the scrolled
+/// content, a `ListView`'s rows are virtualized.
+fn stops(name: &str) -> bool {
+    matches!(name, "PopupWindow" | "ListView")
+}
+
+/// The scrolling element around the top of `stack` in its component (the
+/// component itself when it inherits one), if any.
+fn scroll_around(stack: &[Frame]) -> Option<String> {
+    for frame in stack.iter().rev() {
+        match frame {
+            Frame::Element(name) if stops(name) => return None,
+            Frame::Element(name) if scrolls(name) => return Some(name.clone()),
+            Frame::Component(_, base) => return scrolls(base).then(|| base.clone()),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The component the top of `stack` is in.
+fn component_of(stack: &[Frame]) -> Option<&str> {
+    stack.iter().rev().find_map(|frame| match frame {
+        Frame::Component(name, _) => Some(name.as_str()),
+        _ => None,
+    })
+}
+
+/// What one component holds, for the second pass.
+#[derive(Default)]
+struct Component {
+    /// A `for` outside any scrolling element of the component's own.
+    list: bool,
+    /// Element types placed outside any scrolling element (and the type it
+    /// inherits): a list in one of them is a list here.
+    uses: BTreeSet<String>,
+    /// (line, element type, scrolling element) of elements placed in one.
+    scrolled: Vec<(usize, String, String)>,
+}
+
 /// Every `for` in `source` with a scrolling element around it (in the
-/// same component).
+/// same component), and every local component holding an unscrolled `for`
+/// placed in a scrolling element.
 pub(crate) fn findings(source: &str) -> Vec<Finding> {
     let text = strip(source);
+    let lines: Vec<&str> = source.lines().collect();
+    let line_text = |line: usize| lines.get(line - 1).map_or("", |l| l.trim()).to_owned();
     let mut stack: Vec<Frame> = Vec::new();
+    let mut components: BTreeMap<String, Component> = BTreeMap::new();
     let mut header = String::new();
     let mut header_line = 1;
     let mut line = 1;
@@ -167,28 +240,52 @@ pub(crate) fn findings(source: &str) -> Vec<Finding> {
             '{' => {
                 let inside_code = matches!(stack.last(), Some(Frame::Code));
                 let (frame, repeated) = classify(&header, inside_code);
+                let scroll = scroll_around(&stack);
+                let owner = component_of(&stack).map(str::to_owned);
+                if let Frame::Component(name, base) = &frame {
+                    components
+                        .entry(name.clone())
+                        .or_default()
+                        .uses
+                        .insert(base.clone());
+                }
+                if let (Some(owner), Frame::Element(kind)) = (&owner, &frame) {
+                    let component = components.entry(owner.clone()).or_default();
+                    match &scroll {
+                        Some(scroll) => {
+                            component
+                                .scrolled
+                                .push((header_line, kind.clone(), scroll.clone()))
+                        }
+                        // In a popup or a list view a use is not this
+                        // component's list either.
+                        None if !stack
+                            .iter()
+                            .rev()
+                            .any(|f| matches!(f, Frame::Element(name) if stops(name))) =>
+                        {
+                            component.uses.insert(kind.clone());
+                        }
+                        None => {}
+                    }
+                }
                 if repeated {
-                    let scroll = stack
-                        .iter()
-                        .rev()
-                        .take_while(|f| !matches!(f, Frame::Component(_)))
-                        .chain(
-                            stack
-                                .iter()
-                                .rev()
-                                .find(|f| matches!(f, Frame::Component(_))),
-                        )
-                        .find_map(|f| match f {
-                            Frame::Element(name) | Frame::Component(name) if scrolls(name) => {
-                                Some(name.clone())
-                            }
-                            _ => None,
-                        });
-                    if let Some(scroll) = scroll {
-                        found.push(Finding {
+                    match &scroll {
+                        Some(scroll) => found.push(Finding {
                             line: header_line,
-                            scroll,
-                        });
+                            text: line_text(header_line),
+                            scroll: scroll.clone(),
+                            via: None,
+                        }),
+                        None => {
+                            let open = !stack.iter().any(|f| match f {
+                                Frame::Element(name) | Frame::Component(_, name) => stops(name),
+                                _ => false,
+                            });
+                            if let (Some(owner), true) = (&owner, open) {
+                                components.entry(owner.clone()).or_default().list = true;
+                            }
+                        }
                     }
                 }
                 stack.push(frame);
@@ -210,6 +307,36 @@ pub(crate) fn findings(source: &str) -> Vec<Finding> {
             line += 1;
         }
     }
+    // Which local components hold a list, through the ones they use.
+    let mut lists: BTreeSet<String> = components
+        .iter()
+        .filter(|(_, c)| c.list)
+        .map(|(name, _)| name.clone())
+        .collect();
+    loop {
+        let more: Vec<String> = components
+            .iter()
+            .filter(|(name, c)| !lists.contains(*name) && c.uses.iter().any(|u| lists.contains(u)))
+            .map(|(name, _)| name.clone())
+            .collect();
+        if more.is_empty() {
+            break;
+        }
+        lists.extend(more);
+    }
+    for component in components.values() {
+        for (line, kind, scroll) in &component.scrolled {
+            if lists.contains(kind) {
+                found.push(Finding {
+                    line: *line,
+                    text: line_text(*line),
+                    scroll: scroll.clone(),
+                    via: Some(kind.clone()),
+                });
+            }
+        }
+    }
+    found.sort_by_key(|f| f.line);
     found
 }
 
@@ -300,35 +427,41 @@ fn sources() -> Vec<(String, String)> {
 #[test]
 fn long_lists_use_list_view() {
     let mut problems = Vec::new();
-    let mut seen = std::collections::BTreeMap::new();
+    let mut used = BTreeSet::new();
+    let mut scanned = BTreeSet::new();
     for (name, source) in sources() {
-        let found = findings(&source);
-        let allowed = ALLOWED
-            .iter()
-            .find(|(file, ..)| *file == name)
-            .map_or(0, |(_, count, _)| *count);
-        if found.len() > allowed {
-            let lines: Vec<String> = found
+        for finding in findings(&source) {
+            let entry = ALLOWED
                 .iter()
-                .map(|f| format!("line {} (in a {})", f.line, f.scroll))
-                .collect();
-            problems.push(format!(
-                "{name}: `for` inside a scrolling element at {}; use a `ListView` (or, for a \
-                 small fixed set, add it to slint_lists::ALLOWED with the reason)",
-                lines.join(", ")
-            ));
+                .position(|(file, text, _)| *file == name && finding.text.contains(text));
+            match entry {
+                Some(entry) => {
+                    used.insert(entry);
+                }
+                None => problems.push(format!(
+                    "{name}:{}: `{}` is a list inside a {}{}; use a `ListView` (or, for a small \
+                     fixed set, add it to slint_lists::ALLOWED with the reason)",
+                    finding.line,
+                    finding.text,
+                    finding.scroll,
+                    finding
+                        .via
+                        .map(|via| format!(" (through the `for` in {via})"))
+                        .unwrap_or_default()
+                )),
+            }
         }
-        seen.insert(name, found.len());
+        scanned.insert(name);
     }
-    for (file, count, _) in ALLOWED {
-        match seen.get(*file) {
-            None => problems.push(format!(
+    for (index, (file, text, _)) in ALLOWED.iter().enumerate() {
+        if !scanned.contains(*file) {
+            problems.push(format!(
                 "ALLOWED names {file}, which is not scanned: remove it"
-            )),
-            Some(found) if found < count => problems.push(format!(
-                "{file}: ALLOWED allows {count}, {found} found: lower it to {found}"
-            )),
-            _ => {}
+            ));
+        } else if !used.contains(&index) {
+            problems.push(format!(
+                "ALLOWED names `{text}` in {file}, which is not found there: remove the entry"
+            ));
         }
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
@@ -363,17 +496,63 @@ export component W inherits Window {
 }
 "#;
     let found = findings(source);
+    let lines: Vec<(usize, &str)> = found.iter().map(|f| (f.line, f.scroll.as_str())).collect();
+    assert_eq!(lines, [(5, "ScrollView"), (13, "ScrollView")]);
+    assert_eq!(found[1].text, "for row[i] in root.rows: Rectangle {");
+}
+
+#[test]
+fn the_scanner_follows_local_components_and_skips_popups() {
+    let source = r#"
+component Rows {
+    VerticalLayout {
+        for row in root.rows: Text { }
+    }
+}
+component Wrapped inherits Rows { }
+component Uses {
+    Rows { }
+}
+component Listed {
+    ListView {
+        for row in root.rows: Text { }
+    }
+}
+component Scrolls {
+    ScrollView {
+        for row in root.rows: Text { }
+    }
+}
+export component W inherits Window {
+    ScrollView {
+        VerticalLayout {
+            Rows { }
+            Uses { }
+            Wrapped { }
+            Listed { }
+            Scrolls { }
+            Text { }
+            popup := PopupWindow {
+                for item in root.items: Text { }
+                Rows { }
+            }
+        }
+    }
+}
+"#;
+    let found: Vec<(usize, String, Option<String>)> = findings(source)
+        .into_iter()
+        .map(|f| (f.line, f.scroll, f.via))
+        .collect();
+    let scroll = || "ScrollView".to_owned();
     assert_eq!(
         found,
         [
-            Finding {
-                line: 5,
-                scroll: "ScrollView".into()
-            },
-            Finding {
-                line: 13,
-                scroll: "ScrollView".into()
-            },
+            // The `for` in Scrolls, inside its own ScrollView.
+            (18, scroll(), None),
+            (24, scroll(), Some("Rows".into())),
+            (25, scroll(), Some("Uses".into())),
+            (26, scroll(), Some("Wrapped".into())),
         ]
     );
 }
