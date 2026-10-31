@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.7
+
+- The seek line's mark ticks are whole pixels again, as before 0.2.6: each 1px tick fills exactly the pixel column the marks had then (`floor(4px + at × span)`) instead of being antialiased across two half-transparent columns. The bar reports the seek line's span to the plugin at start and when its width changes (`span-changed`); the plugin builds each kind's commands with the tick at the column's whole-pixel x in a viewbox as wide as that span (`tick-span`), drawn at scale 1, where Slint's half-stroke inset centres the stroke on the column. During a resize the ticks stretch to the new width until the plugin's update arrives. Ticks show once the bar has reported its span.
+- More marks than the 4096 the bar shows are now picked evenly in time order (by index, the first and the last kept) instead of dropping everything after the 4096th, so a long file's later marks still show and the hover search stays sorted.
+- The hover tips' text budget counts a control character (or a lone surrogate) as the 6 bytes of its JSON escape (`\u00XX`), not 3; each kind's tick string is capped at 60 KiB whatever the width.
+- The bottom bar's volume slider stays out of the Tab chain (`focusable: false` on the library `Slider`). The library slider now takes keyboard focus, so with Tab unbound (or "Ignore default shortcuts" on) Tab could move into it and the arrow keys then changed the volume instead of seeking. Dragging and clicking it work as before. The seek line is the bar's own `SeekBar` (a `TouchArea`, no `FocusScope`), which never took keyboard focus.
+- Nobody needs to change anything.
+
 ## 0.2.6
 
 - The seek line's marks (chapters, bookmarks, markers) are drawn as one Slint `Path` per kind, from commands the plugin builds when the marks change, instead of one `Rectangle` per mark in the main window: the bar keeps three elements however many marks there are. Same 1×6 ticks in the same colours; the hover tip ("Title  01:23" within 3px of a mark, found in the bar without a round trip) works as before, and a click on the line still seeks to the pointer (marks take no input). What users see: a tick sits at its exact position instead of being snapped to a whole pixel, so on some widths it is drawn softened across two pixels; where marks of different kinds meet, bookmarks draw over markers over chapters (before, the later mark drew on top).
