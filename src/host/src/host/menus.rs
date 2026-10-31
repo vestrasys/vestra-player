@@ -192,7 +192,7 @@ pub(crate) fn apply_menu_levels(
     };
     let write = match model
         .as_ref()
-        .and_then(|model| model.as_any().downcast_ref::<slint::VecModel<SValue>>())
+        .and_then(|model| model.as_any().downcast_ref::<crate::ui::ui_rows::Rows>())
     {
         // A write that fails midway leaves some rows written and `shown`
         // stale: forget what is shown, so the next write is a whole one.
@@ -235,7 +235,7 @@ pub(crate) fn apply_menu_levels(
 /// `apply_menu_levels` in place; `None` when the live model does not hold
 /// what `shown` says (the caller writes the whole value).
 fn write_levels(
-    model: &slint::VecModel<SValue>,
+    model: &crate::ui::ui_rows::Rows,
     shown: &[Value],
     next: &[Value],
 ) -> Result<Option<MenuWrite>> {
@@ -255,7 +255,7 @@ fn write_levels(
             Some(SValue::Model(rows)) => rows.clone(),
             _ => return Ok(None),
         };
-        let Some(rows_model) = rows.as_any().downcast_ref::<slint::VecModel<SValue>>() else {
+        let Some(rows_model) = rows.as_any().downcast_ref::<crate::ui::ui_rows::Rows>() else {
             return Ok(None);
         };
         let empty = Vec::new();

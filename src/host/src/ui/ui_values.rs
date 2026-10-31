@@ -18,22 +18,32 @@ use std::rc::Rc;
 
 use anyhow::{Context, Result, bail};
 use serde_json::{Map, Number, Value as Json};
-use slint::{Model, ModelRc, VecModel};
+use slint::{Model, ModelRc};
+
+use crate::ui::ui_rows::{self, Rows};
 use slint_interpreter::{Struct, Value};
 
 // The limits of one property value, in both directions (plugin writes and
-// callback arguments). They bound what one write costs the UI thread: about
-// 0.35 µs per value to convert and reconcile (release build, Apple M-series),
-// so a full value of 16384 is about 6 ms. The text total cannot
-// usefully grow past the 1 MiB protocol line (`process/mod.rs`). The SDK repeats
-// them (`UI_VALUE_LIMITS`) and its TestHost enforces them; the player's
-// tests check that the two agree (src/tests/sdk/host-agreement.test.ts; SDK site, Reference: Limits).
+// callback arguments). Player 0.6.0 (doc/architecture/large-lists.md §4)
+// raised them from 4,096 rows, 16,384 values and 1 MiB of text so that a
+// plugin hands a whole list to the player (the playlist: up to 20,000
+// items; 50,000 playlist rows of 14 values and about 330 bytes of text
+// fit). A value larger than one protocol line (1 MiB, `process/mod.rs`)
+// arrives as its first rows and `insert` patches of the rest (SDK 1.5.46).
+// What the limits bound now is memory and the work off the UI thread: a
+// property's array, or the rows of a patch, are converted to plain rows
+// (`ui_rows`) on the plugin's reader thread when they are many
+// (`prepare_request`), and the UI thread checks the rows' shape and
+// installs them in one range (measurements in the design document). The
+// SDK repeats them (`UI_VALUE_LIMITS`) and its TestHost enforces them; the
+// player's tests check that the two agree
+// (src/tests/sdk/host-agreement.test.ts; SDK site, Reference: Limits).
 pub const MAX_DEPTH: usize = 8;
-pub const MAX_NODES: usize = 16384;
-pub const MAX_ARRAY: usize = 4096;
+pub const MAX_NODES: usize = 1024 * 1024;
+pub const MAX_ARRAY: usize = 100 * 1000;
 pub const MAX_STRING_BYTES: usize = 64 * 1024;
 /// Includes object field names, in both directions.
-pub const MAX_TEXT_BYTES: usize = 1024 * 1024;
+pub const MAX_TEXT_BYTES: usize = 32 * 1024 * 1024;
 
 /// A value over one of the limits above: the plugin sees code `limit`.
 #[derive(Debug)]
@@ -136,7 +146,7 @@ pub fn own_default_models(
         let Value::Model(model) = &current else {
             continue;
         };
-        if model.as_any().is::<VecModel<Value>>() {
+        if model.as_any().is::<Rows>() {
             continue;
         }
         // Models outside the bounded JSON bridge (e.g. image rows) keep their
@@ -170,10 +180,33 @@ pub fn set(
     value: Value,
 ) -> Result<()> {
     let shown = value.clone();
+    // Slint checks the type of every row of a model it is given (a copy of
+    // each row, `check_and_coerce`): 20,000 rows took about 20 ms. A host
+    // model whose rows all have its first row's shape is installed with
+    // that row alone, and the others are added in one `row_added` once
+    // Slint has accepted it.
+    let tail = match &value {
+        Value::Model(model) => ui_rows::rows(model).and_then(|rows| {
+            let images = rows.images();
+            let fit = rows.row_count() > 1
+                && rows.with_rows(|all| {
+                    all.iter()
+                        .skip(1)
+                        .all(|row| rows.fits(&all[0], row, &images))
+                });
+            fit.then(|| (model.clone(), rows.remove_rows(1, usize::MAX)))
+        }),
+        _ => None,
+    };
     let result = match global {
         Some(global) => instance.set_global_property(global, name, value),
         None => instance.set_property(name, value),
     };
+    if let Some((model, rows)) = tail
+        && let Some(installed) = ui_rows::rows(&model)
+    {
+        installed.insert_rows(1, rows);
+    }
     result.map_err(|error| {
         let current = match global {
             Some(global) => instance.get_global_property(global, name).ok(),
@@ -295,6 +328,18 @@ fn reconcile_settled(current: &Value, next: &Value, settle: &dyn Fn()) -> Result
     if matches!(current, Value::Image(_)) || matches!(next, Value::Image(_)) {
         return Ok(false);
     }
+    // A property's array of plain rows (`Host::prop_value`, player 0.6.0)
+    // into a host model: compared and written row by row without
+    // converting either side, images included (by reference).
+    if let (Value::Model(current_model), Value::Model(next_model)) = (current, next)
+        && let (Some(rows), Some(incoming)) =
+            (ui_rows::rows(current_model), ui_rows::rows(next_model))
+        && incoming.with_rows(|all| all.iter().all(|row| matches!(row, ui_rows::Row::Plain(_))))
+    {
+        let done = reconcile_rows(rows, incoming);
+        trace_reconciliation(if done { "in-place" } else { "replace" }, rows.row_count());
+        return Ok(done);
+    }
     if has_documents(current) || has_documents(next) {
         // Checked before anything changes: a different shape is installed
         // whole, so Slint checks its type.
@@ -315,7 +360,7 @@ fn reconcile_settled(current: &Value, next: &Value, settle: &dyn Fn()) -> Result
         return Ok(true);
     }
     if let (Value::Model(current_model), Value::Model(next_model)) = (current, next)
-        && let Some(rows) = current_model.as_any().downcast_ref::<VecModel<Value>>()
+        && let Some(rows) = current_model.as_any().downcast_ref::<Rows>()
         && let (Json::Array(before), Json::Array(after)) = (&current_json, &next_json)
         // A length change keeps the model too (rows appended by a page, a
         // row removed): the shared rows update in place and the tail is
@@ -353,9 +398,7 @@ fn reconcile_settled(current: &Value, next: &Value, settle: &dyn Fn()) -> Result
         for (index, value) in changes {
             rows.set_row_data(index, value);
         }
-        while rows.row_count() > after.len() {
-            rows.remove(rows.row_count() - 1);
-        }
+        rows.truncate(after.len());
         rows.extend(added);
         return Ok(true);
     }
@@ -364,6 +407,71 @@ fn reconcile_settled(current: &Value, next: &Value, settle: &dyn Fn()) -> Result
     }
     Ok(false)
 }
+/// More changed rows than this, and more than half of the rows the two
+/// arrays share, replace every row with one `reset` instead of a
+/// `row_changed` each (a new list loaded).
+const RESET_ROWS: usize = 64;
+
+/// `reconcile` of a host model (`rows`) with `incoming` (plain rows): the
+/// changed rows written, rows removed or appended at the end in one range,
+/// or false (nothing changed) where a row would change the declared row
+/// type, which Slint checks only when a model is installed.
+fn reconcile_rows(rows: &Rows, incoming: &Rows) -> bool {
+    let changed = rows.changed_images(incoming);
+    let pictures = incoming.images();
+    let plan = rows.with_rows(|current| {
+        incoming.with_rows(|next| {
+            if current.len() != next.len() {
+                // Rows written in may not change the declared row type,
+                // which only a current row shows.
+                let sample = current.first()?;
+                let added = next.get(current.len()..).unwrap_or_default();
+                if !added.iter().all(|row| rows.fits(sample, row, &pictures)) {
+                    return None;
+                }
+            }
+            let mut changes = Vec::new();
+            for (index, (before, after)) in current.iter().zip(next).enumerate() {
+                if !Rows::same(before, after, &changed) {
+                    if !rows.fits(before, after, &pictures) {
+                        return None;
+                    }
+                    changes.push(index);
+                }
+            }
+            Some(changes)
+        })
+    });
+    let Some(changes) = plan else {
+        return false;
+    };
+    let (old, len) = (rows.row_count(), incoming.row_count());
+    let mut next = incoming.take_rows();
+    // The pictures of exactly the rows the write leaves: the kept rows
+    // show the same references (a changed picture made its rows change).
+    rows.set_images(incoming.images());
+    if changes.len() > RESET_ROWS && changes.len() * 2 > old.min(len) {
+        rows.set_rows(next);
+        return true;
+    }
+    let tail = if len > old {
+        next.split_off(old)
+    } else {
+        Vec::new()
+    };
+    for index in changes {
+        if let Some(row) = next.get_mut(index) {
+            rows.set_row(
+                index,
+                std::mem::replace(row, ui_rows::Row::Value(Value::Void)),
+            );
+        }
+    }
+    rows.truncate(len);
+    rows.insert_rows(old, tail);
+    true
+}
+
 /// The rows `next` has beyond `current`'s have the shape of `current`'s first
 /// row (Slint checks the type of an installed model, not of a pushed row).
 fn appended_fit(current: &ModelRc<Value>, next: &ModelRc<Value>) -> bool {
@@ -404,6 +512,15 @@ fn documents(model: &ModelRc<Value>) -> Option<&crate::ui::ui_markdown::Rows> {
 fn has_documents(value: &Value) -> bool {
     match value {
         Value::Model(model) => {
+            if let Some(rows) = ui_rows::rows(model) {
+                // Not converted: a plain row's images are references.
+                return rows.with_rows(|all| {
+                    all.iter().any(|row| match row {
+                        ui_rows::Row::Plain(plain) => plain.has_image(),
+                        ui_rows::Row::Value(v) => matches!(v, Value::Image(_)) || has_documents(v),
+                    })
+                });
+            }
             documents(model).is_some()
                 || (0..model.row_count()).any(|row| {
                     model
@@ -424,6 +541,13 @@ fn has_documents(value: &Value) -> bool {
 pub(crate) fn has_markdown(value: &Value) -> bool {
     match value {
         Value::Model(model) => {
+            if let Some(rows) = ui_rows::rows(model) {
+                // Plain rows hold no documents.
+                return rows.with_rows(|all| {
+                    all.iter()
+                        .any(|row| matches!(row, ui_rows::Row::Value(v) if has_markdown(v)))
+                });
+            }
             documents(model).is_some()
                 || (0..model.row_count())
                     .any(|row| model.row_data(row).is_some_and(|v| has_markdown(&v)))
@@ -445,7 +569,7 @@ pub(crate) fn fits(current: &Value, next: &Value) -> bool {
                 (None, None) => {}
                 _ => return false,
             }
-            if !current.as_any().is::<VecModel<Value>>() {
+            if !current.as_any().is::<Rows>() {
                 return false;
             }
             let shared = current.row_count().min(next.row_count());
@@ -483,7 +607,7 @@ fn merge(current: &Value, next: &Value) -> (Value, bool) {
         (Value::Model(model), Value::Model(incoming)) => {
             if let (Some(rows), Some(new)) = (documents(model), documents(incoming)) {
                 rows.update(new);
-            } else if let Some(rows) = model.as_any().downcast_ref::<VecModel<Value>>() {
+            } else if let Some(rows) = model.as_any().downcast_ref::<Rows>() {
                 let shared = rows.row_count().min(incoming.row_count());
                 for index in 0..shared {
                     let (Some(before), Some(after)) =
@@ -491,19 +615,20 @@ fn merge(current: &Value, next: &Value) -> (Value, bool) {
                     else {
                         continue;
                     };
+                    // A plain row is converted on each read: its nested
+                    // models are copies, so it is written whole.
+                    let plain = matches!(rows.row(index), Some(ui_rows::Row::Plain(_)));
                     let (value, store) = merge(&before, &after);
-                    if store {
+                    if plain {
+                        rows.set_row_data(index, after);
+                    } else if store {
                         rows.set_row_data(index, value);
                     }
                 }
-                while rows.row_count() > incoming.row_count() {
-                    rows.remove(rows.row_count() - 1);
-                }
-                for index in shared..incoming.row_count() {
-                    if let Some(row) = incoming.row_data(index) {
-                        rows.push(row);
-                    }
-                }
+                rows.truncate(incoming.row_count());
+                rows.extend(
+                    (shared..incoming.row_count()).filter_map(|index| incoming.row_data(index)),
+                );
             }
             (current.clone(), false)
         }
@@ -552,9 +677,11 @@ pub fn from_json_with(value: &Json, hook: &mut Hook<'_>) -> Result<Value> {
     encode(value, 0, &mut Budget::default(), hook)
 }
 
-/// Rows for an array (a row patch's, `ui_patch`): converted as the rows of
-/// one array value would be, at depth 1 with one budget for all of them
-/// (the array itself counts as one value).
+/// Rows for an array, converted as the rows of one array value would be,
+/// at depth 1 with one budget for all of them (the array itself counts as
+/// one value). Row patches convert to plain rows instead (`plain_rows`);
+/// this is the reference the tests hold `plain_rows` to.
+#[cfg(test)]
 pub fn from_json_rows_with(rows: &[&Json], hook: &mut Hook<'_>) -> Result<Vec<Value>> {
     let mut budget = Budget::default();
     budget.node(0)?;
@@ -593,7 +720,7 @@ fn encode(value: &Json, depth: usize, budget: &mut Budget, hook: &mut Hook<'_>) 
             for value in values {
                 rows.push(encode(value, depth + 1, budget, hook)?);
             }
-            let model: ModelRc<Value> = Rc::new(VecModel::from(rows)).into();
+            let model: ModelRc<Value> = Rc::new(Rows::from(rows)).into();
             Value::Model(model)
         }
         Json::Object(fields) => {
@@ -615,6 +742,234 @@ fn encode(value: &Json, depth: usize, budget: &mut Budget, hook: &mut Hook<'_>) 
             Value::Struct(object)
         }
     })
+}
+
+/// Arrays of at least this many rows (a whole value's, or the rows of one
+/// patch) are converted on the plugin's reader thread (`prepare_request`);
+/// smaller ones on the UI thread, the same way (`plain_rows`).
+pub const PREPARE_ROWS: usize = 256;
+
+/// An array's rows as plain values (`plain_rows`).
+#[derive(Clone, Debug, Default)]
+pub struct PlainRows {
+    pub rows: Vec<ui_rows::Plain>,
+    /// What each row counts toward the value totals (`cost`).
+    pub costs: Vec<Cost>,
+    /// The distinct image references, in the order the rows show them.
+    pub images: Vec<std::sync::Arc<ui_rows::ImageRef>>,
+    /// Each row's image references (indices into `images`), in the order
+    /// `ui_image::image_count` meets them.
+    pub row_images: Vec<Box<[u32]>>,
+}
+
+/// Why rows are not converted to plain values.
+#[derive(Debug)]
+pub enum NotPlain {
+    /// A row holds a Markdown document (converted as before, not plain).
+    Markdown,
+    /// A malformed image reference (code `invalid`).
+    Image(crate::host::RpcError),
+    /// What `from_json` refuses, with the same error.
+    Refused(anyhow::Error),
+}
+
+impl From<anyhow::Error> for NotPlain {
+    fn from(error: anyhow::Error) -> Self {
+        Self::Refused(error)
+    }
+}
+
+/// Convert `rows` as the rows of one array value (`from_json_rows_with`:
+/// the array is one value at depth 0, its rows at depth 1, one budget for
+/// all of them) to plain rows. Accepts and refuses exactly what
+/// `from_json_rows_with` with the image hook of `prop_value` does.
+pub fn plain_rows(rows: &[&Json]) -> std::result::Result<PlainRows, NotPlain> {
+    let mut encoder = PlainEncoder::default();
+    encoder.budget.node(0)?;
+    encoder.budget.array(rows.len())?;
+    let mut out = PlainRows {
+        rows: Vec::with_capacity(rows.len()),
+        costs: Vec::with_capacity(rows.len()),
+        ..PlainRows::default()
+    };
+    for row in rows {
+        let (nodes, text) = (encoder.budget.nodes, encoder.budget.text);
+        out.rows.push(encoder.plain(row, 1)?);
+        out.costs.push(Cost {
+            nodes: encoder.budget.nodes - nodes,
+            text: encoder.budget.text - text,
+        });
+        out.row_images
+            .push(std::mem::take(&mut encoder.row_images).into_boxed_slice());
+    }
+    out.images = encoder.images;
+    Ok(out)
+}
+
+#[derive(Default)]
+struct PlainEncoder<'a> {
+    budget: Budget,
+    names: std::collections::HashMap<&'a str, ui_rows::Name>,
+    seen: std::collections::HashMap<ui_rows::ImageRef, u32>,
+    images: Vec<std::sync::Arc<ui_rows::ImageRef>>,
+    row_images: Vec<u32>,
+}
+
+/// `name` is in Slint's canonical spelling (`set_field` would not rename
+/// it): no `-` first, no `_` after the first character.
+fn canonical(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    bytes.first() != Some(&b'-') && !bytes[1.min(bytes.len())..].contains(&b'_')
+}
+
+impl<'a> PlainEncoder<'a> {
+    /// `encode`, to a plain value; the same budget, in the same order.
+    fn plain(
+        &mut self,
+        value: &'a Json,
+        depth: usize,
+    ) -> std::result::Result<ui_rows::Plain, NotPlain> {
+        use ui_rows::Plain;
+        self.budget.node(depth)?;
+        if depth > 0 && crate::ui::ui_image::reference(value).is_some() {
+            let (path, side) = crate::ui::ui_image::parts(value).map_err(NotPlain::Image)?;
+            let image = ui_rows::ImageRef {
+                path: path.into(),
+                side,
+            };
+            let index = match self.seen.get(&image) {
+                Some(index) => *index,
+                None => {
+                    let index = u32::try_from(self.images.len()).unwrap_or(u32::MAX);
+                    self.images.push(std::sync::Arc::new(image.clone()));
+                    self.seen.insert(image, index);
+                    index
+                }
+            };
+            self.row_images.push(index);
+            let shared = self.images.get(index as usize).cloned();
+            return shared.map(Plain::Image).ok_or(NotPlain::Markdown);
+        }
+        if crate::ui::ui_markdown::reference(value).is_some() {
+            return Err(NotPlain::Markdown);
+        }
+        Ok(match value {
+            Json::Null => Plain::Void,
+            Json::Bool(value) => Plain::Bool(*value),
+            Json::Number(value) => {
+                let number = value
+                    .as_f64()
+                    .context("UI number cannot be represented as f64")?;
+                if !number.is_finite() {
+                    return Err(anyhow::anyhow!("UI number must be finite").into());
+                }
+                Plain::Number(number)
+            }
+            Json::String(value) => {
+                self.budget.text(value)?;
+                Plain::String(value.as_str().into())
+            }
+            Json::Array(values) => {
+                self.budget.array(values.len())?;
+                let mut rows = Vec::with_capacity(values.len());
+                for value in values {
+                    rows.push(self.plain(value, depth + 1)?);
+                }
+                Plain::Array(rows.into())
+            }
+            Json::Object(fields) => {
+                if fields.len() > MAX_NODES - self.budget.nodes {
+                    return Err(over("UI object cannot fit in remaining node budget".into()).into());
+                }
+                let mut out = Vec::with_capacity(fields.len());
+                for (name, value) in fields {
+                    self.budget.text(name)?;
+                    let value = self.plain(value, depth + 1)?;
+                    if !canonical(name) {
+                        return Err(anyhow::anyhow!(
+                            "UI object field {name:?} is not in Slint canonical spelling"
+                        )
+                        .into());
+                    }
+                    let name = self
+                        .names
+                        .entry(name.as_str())
+                        .or_insert_with(|| name.as_str().into())
+                        .clone();
+                    out.push((name, value));
+                }
+                Plain::Struct(out.into())
+            }
+        })
+    }
+}
+
+/// A large property write converted on the plugin's reader thread
+/// (`prepare_request`), handed to the UI thread with the request
+/// (`Host::take_prepared`).
+#[derive(Debug)]
+pub struct Prepared {
+    /// A whole value, taken out of the request (whose `params.value` is
+    /// then null: the handler reads it here).
+    pub whole: Option<Json>,
+    /// The whole value's rows, or the rows the patch carries, in op order.
+    pub rows: PlainRows,
+    /// A patch's carried rows (wire form), copied here for the stored
+    /// properties.
+    pub carried: Vec<Json>,
+}
+
+/// The property writes whose large arrays are prepared.
+pub const PREPARED_METHODS: [&str; 3] = ["ui.setMount", "ui.set", "settings.set"];
+
+/// On the plugin's reader thread: convert a property write's large array
+/// (a whole value of at least `PREPARE_ROWS` rows, or a patch carrying as
+/// many) to plain rows. A whole value is moved out of `message`. `None`:
+/// the UI thread converts as usual (not such a write, smaller, Markdown in
+/// a row, or refused: the UI thread then reports the same error).
+pub fn prepare_request(message: &mut Json) -> Option<Box<Prepared>> {
+    let method = message.get("method")?.as_str()?;
+    if !PREPARED_METHODS.contains(&method) {
+        return None;
+    }
+    let params = message.get_mut("params")?;
+    if let Some(patch) = params.get("patch") {
+        let carried: Vec<&Json> = patch
+            .get("ops")?
+            .as_array()?
+            .iter()
+            .flat_map(|op| match op.get("op").and_then(Json::as_str) {
+                Some("set") => op.get("row").into_iter().collect::<Vec<_>>(),
+                Some("insert") => op
+                    .get("rows")
+                    .and_then(Json::as_array)
+                    .map(|rows| rows.iter().collect())
+                    .unwrap_or_default(),
+                _ => Vec::new(),
+            })
+            .collect();
+        if carried.len() < PREPARE_ROWS {
+            return None;
+        }
+        let rows = plain_rows(&carried).ok()?;
+        let carried = carried.into_iter().cloned().collect();
+        return Some(Box::new(Prepared {
+            whole: None,
+            rows,
+            carried,
+        }));
+    }
+    let value = params.get("value")?.as_array()?;
+    if value.len() < PREPARE_ROWS {
+        return None;
+    }
+    let rows = plain_rows(&value.iter().collect::<Vec<_>>()).ok()?;
+    let whole = params.get_mut("value").map(Json::take);
+    Some(Box::new(Prepared {
+        whole,
+        rows,
+        carried: Vec::new(),
+    }))
 }
 
 /// Refuse now what `from_json` would refuse later: a property value (wire
@@ -786,39 +1141,37 @@ mod tests {
         let converted = from_json(&array).unwrap();
         assert_eq!(to_json(&converted).unwrap(), array);
         assert!(from_json(&Json::Array(vec![Json::Null; MAX_ARRAY + 1])).is_err());
-        let oversized =
-            Value::Model(Rc::new(VecModel::from(vec![Value::Void; MAX_ARRAY + 1])).into());
+        let oversized = Value::Model(Rc::new(Rows::from(vec![Value::Void; MAX_ARRAY + 1])).into());
         assert!(to_json(&oversized).is_err());
         let mut deep = Value::Void;
         for _ in 0..=MAX_DEPTH {
-            deep = Value::Model(Rc::new(VecModel::from(vec![deep])).into());
+            deep = Value::Model(Rc::new(Rows::from(vec![deep])).into());
         }
         assert!(to_json(&deep).is_err());
     }
 
     #[test]
     fn nested_containers_share_one_total_node_budget() {
-        // root + 4 arrays + (3 × 4096 + 4091) nulls = MAX_NODES.
-        let last = MAX_NODES - 5 - 3 * MAX_ARRAY;
-        let exact = Json::Array(vec![
-            Json::Array(vec![Json::Null; MAX_ARRAY]),
-            Json::Array(vec![Json::Null; MAX_ARRAY]),
-            Json::Array(vec![Json::Null; MAX_ARRAY]),
-            Json::Array(vec![Json::Null; last]),
-        ]);
+        // root + (full + 1) arrays + full × MAX_ARRAY + last nulls = MAX_NODES.
+        let full = (MAX_NODES - 2) / (MAX_ARRAY + 1);
+        let last = MAX_NODES - 2 - full - full * MAX_ARRAY;
+        assert!(last <= MAX_ARRAY);
+        let mut arrays = vec![Json::Array(vec![Json::Null; MAX_ARRAY]); full];
+        arrays.push(Json::Array(vec![Json::Null; last]));
+        let exact = Json::Array(arrays);
         let converted = from_json(&exact).unwrap();
         assert_eq!(to_json(&converted).unwrap(), exact);
         let mut too_many = exact;
-        too_many.as_array_mut().unwrap()[3]
+        too_many.as_array_mut().unwrap()[full]
             .as_array_mut()
             .unwrap()
             .push(Json::Null);
         assert!(from_json(&too_many).is_err());
-        let rows: Vec<_> = [MAX_ARRAY, MAX_ARRAY, MAX_ARRAY, last + 1]
-            .into_iter()
-            .map(|count| Value::Model(Rc::new(VecModel::from(vec![Value::Void; count])).into()))
+        let rows: Vec<_> = std::iter::repeat_n(MAX_ARRAY, full)
+            .chain([last + 1])
+            .map(|count| Value::Model(Rc::new(Rows::from(vec![Value::Void; count])).into()))
             .collect();
-        assert!(to_json(&Value::Model(Rc::new(VecModel::from(rows)).into())).is_err());
+        assert!(to_json(&Value::Model(Rc::new(Rows::from(rows)).into())).is_err());
     }
 
     #[test]
@@ -830,11 +1183,14 @@ mod tests {
             assert!(error.downcast_ref::<OverLimit>().is_some(), "{error}");
             error.to_string()
         };
-        // D1: a playlist row of 8 fields is 9 values.
-        let row = json!({"a":"1","b":"","c":"","d":"","e":false,"f":false,"g":false,"h":false});
-        let fits = Json::Array(vec![row.clone(); MAX_NODES / 9 - 1]);
+        // D1: a playlist row of 8 fields is 9 values; of 16 fields, 17
+        // (more rows of 9 than the values total holds are over the rows
+        // limit first).
+        let row = json!({"a":"1","b":"","c":"","d":"","e":false,"f":false,"g":false,"h":false,
+            "i":"","j":"","k":"","l":"","m":false,"n":false,"o":false,"p":false});
+        let fits = Json::Array(vec![row.clone(); MAX_NODES / 17 - 1]);
         check(&fits).unwrap();
-        let rows = Json::Array(vec![row; MAX_NODES / 9 + 1]);
+        let rows = Json::Array(vec![row; MAX_NODES / 17 + 1]);
         assert!(over(&rows).contains("node"));
         assert!(over(&Json::Array(vec![Json::Null; MAX_ARRAY + 1])).contains("rows"));
         assert!(over(&json!("x".repeat(MAX_STRING_BYTES + 1))).contains("bytes"));
@@ -852,7 +1208,8 @@ mod tests {
             .unwrap();
         let doc = |n: usize| json!({"$vestraMarkdown": {"text": "x".repeat(n)}, "ref": 1});
         check(&json!([doc(200_000), doc(200_000)])).unwrap();
-        assert!(over(&Json::Array(vec![doc(200_000); 6])).contains("total bytes"));
+        let docs = MAX_TEXT_BYTES / 200_000 + 1;
+        assert!(over(&Json::Array(vec![doc(200_000); docs])).contains("total bytes"));
     }
 
     #[test]
@@ -871,12 +1228,23 @@ mod tests {
         let mut object = Struct::default();
         object.set_field(too_long, Value::Void);
         assert!(to_json(&Value::Struct(object)).is_err());
-        let within = Json::Array(vec![Json::String(exact.clone()); 16]);
+        let within = Json::Array(vec![
+            Json::String(exact.clone());
+            MAX_TEXT_BYTES / MAX_STRING_BYTES
+        ]);
         assert!(from_json(&within).is_ok());
-        let over = Json::Array(vec![Json::String(exact.clone()); 17]);
+        let over = Json::Array(vec![
+            Json::String(exact.clone());
+            MAX_TEXT_BYTES / MAX_STRING_BYTES + 1
+        ]);
         assert!(from_json(&over).is_err());
-        let model =
-            Value::Model(Rc::new(VecModel::from(vec![Value::String(exact.into()); 17])).into());
+        let model = Value::Model(
+            Rc::new(Rows::from(vec![
+                Value::String(exact.into());
+                MAX_TEXT_BYTES / MAX_STRING_BYTES + 1
+            ]))
+            .into(),
+        );
         assert!(to_json(&model).is_err());
     }
 
@@ -1002,7 +1370,7 @@ mod image_rows {
         Value::Struct(row)
     }
     fn list(rows: Vec<Value>) -> Value {
-        Value::Model(Rc::new(VecModel::from(rows)).into())
+        Value::Model(Rc::new(Rows::from(rows)).into())
     }
 
     /// STORE-ROW-LOGO: rows with an image each update in place (the list

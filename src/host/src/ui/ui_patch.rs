@@ -17,11 +17,11 @@
 #![forbid(unsafe_code)]
 
 use crate::host::{Host, RpcError};
+use crate::ui::ui_rows::{self, Row};
 use crate::ui::{ui_image, ui_values};
 use serde_json::Value as Json;
-use slint::{Model, VecModel};
+use slint::Model;
 use slint_interpreter::Value;
-use std::cell::RefCell;
 
 /// The feature the player advertises in `plugin.app` (`features`): the SDK
 /// sends patches and `seq` only to a player that lists it.
@@ -211,82 +211,74 @@ pub fn patched(stored: &[Json], ops: &Ops<'_>) -> Json {
 }
 
 /// `current` (a live property) can take the patch in place: a host-owned
-/// model of `len` rows, no Markdown documents in its rows, and carried rows
-/// of the type of its first row (Slint checks the type of an installed
-/// model, not of a written row). An empty model does not show its row type.
-pub fn applicable(current: &Value, len: usize, shapes: &[Shape], rows: &[Value]) -> bool {
+/// model (`ui_rows::Rows`) of `len` rows, no Markdown documents in its rows,
+/// and carried rows of the type of its first row (Slint checks the type of
+/// an installed model, not of a written row). An empty model does not show
+/// its row type.
+pub fn applicable(current: &Value, len: usize, shapes: &[Shape], rows: &Rows) -> bool {
     let Value::Model(model) = current else {
         return false;
     };
-    if !model.as_any().is::<VecModel<Value>>() || model.row_count() != len {
+    let Some(model) = ui_rows::rows(model) else {
+        return false;
+    };
+    if model.row_count() != len {
         return false;
     }
     if shapes.is_empty() {
         return true;
     }
-    let Some(sample) = model.row_data(0) else {
-        return rows.is_empty();
+    let Some(sample) = model.row(0) else {
+        return rows.values.is_empty();
     };
-    !ui_values::has_markdown(&sample)
-        && rows
-            .iter()
-            .all(|row| ui_values::fits(&sample, row) && !ui_values::has_markdown(row))
+    if matches!(&sample, Row::Value(value) if ui_values::has_markdown(value)) {
+        return false;
+    }
+    rows.values
+        .iter()
+        .all(|row| model.fits(&sample, row, &rows.images))
 }
 
-/// Write an `applicable` patch into `current`.
-pub fn apply(current: &Value, shapes: &[Shape], rows: Vec<Value>) {
+/// Write an `applicable` patch into `current`: each op is one model
+/// operation, a run of rows inserted, removed or moved with one
+/// notification each.
+pub fn apply(current: &Value, shapes: &[Shape], values: Vec<Row>, images: &ui_rows::Images) {
     let Value::Model(model) = current else {
         return;
     };
-    let Some(model) = model.as_any().downcast_ref::<VecModel<Value>>() else {
+    let Some(model) = ui_rows::rows(model) else {
         return;
     };
-    let mut rows = rows.into_iter();
+    model.add_images(images);
+    let mut carried = values.into_iter();
     for shape in shapes {
         match *shape {
             Shape::Set(at) => {
-                if let Some(row) = rows.next() {
-                    model.set_row_data(at, row);
+                if let Some(row) = carried.next() {
+                    model.set_row(at, row);
                 }
             }
-            Shape::Insert(at, count) => insert(model, at, rows.by_ref().take(count)),
-            Shape::Remove(at, count) => remove(model, at, count),
+            Shape::Insert(at, count) => {
+                model.insert_rows(at, carried.by_ref().take(count));
+            }
+            Shape::Remove(at, count) => {
+                model.remove_rows(at, count);
+            }
             Shape::Move { from, count, to } => {
-                let moved: Vec<Value> = (from..from + count)
-                    .filter_map(|row| model.row_data(row))
-                    .collect();
-                remove(model, from, count);
-                insert(model, to, moved);
+                let moved = model.remove_rows(from, count);
+                model.insert_rows(to, moved);
             }
         }
     }
 }
 
-/// `VecModel` has no range insert or remove: rows at the end are appended
-/// with one notification (`extend`); elsewhere they go in one by one.
-fn insert(model: &VecModel<Value>, at: usize, rows: impl IntoIterator<Item = Value>) {
-    if at == model.row_count() {
-        model.extend(rows);
-        return;
-    }
-    for (offset, row) in rows.into_iter().enumerate() {
-        model.insert(at + offset, row);
-    }
-}
-
-/// Removed from the last row of the range back: each removal moves only
-/// the rows after the range (in the model and in a repeater's instances),
-/// not the rest of the range too.
-fn remove(model: &VecModel<Value>, at: usize, count: usize) {
-    for row in (at..at + count).rev() {
-        model.remove(row);
-    }
-}
-
-/// The carried rows of a patch, converted for a view, and the rows the
-/// property shows after it (`ui_image::Row`: images, value totals).
+/// The carried rows of a patch, converted for a view (plain rows, their
+/// pictures), and the rows the property shows after it (`ui_image::Row`:
+/// images, value totals).
+#[derive(Clone)]
 pub struct Rows {
-    pub values: Vec<Value>,
+    pub values: Vec<Row>,
+    pub images: ui_rows::Images,
     pub written: Vec<ui_image::Row>,
 }
 
@@ -309,10 +301,11 @@ impl Host {
         property: &str,
         current: &Value,
         ops: &Json,
+        prepared: Option<&ui_values::PlainRows>,
     ) -> std::result::Result<InWindow, RpcError> {
         let roots = self.image_roots(owner);
         self.images
-            .patch_window(owner, &roots, view, property, current, ops)
+            .patch_window(owner, &roots, view, property, current, ops, prepared)
     }
     /// `Images::patch_rows` with `owner`'s image directories.
     pub(crate) fn patch_rows(
@@ -321,9 +314,11 @@ impl Host {
         view: &str,
         property: &str,
         ops: &Ops<'_>,
+        prepared: Option<&ui_values::PlainRows>,
     ) -> std::result::Result<Option<Rows>, RpcError> {
         let roots = self.image_roots(owner);
-        self.images.patch_rows(owner, &roots, view, property, ops)
+        self.images
+            .patch_rows(owner, &roots, view, property, ops, prepared)
     }
 }
 
@@ -335,6 +330,7 @@ impl ui_image::Images {
     /// sends the whole value. Rows the model cannot take in place (a row of
     /// another shape than the first, an empty model, a document) are
     /// returned whole; rows holding images do not convert back: `stale`.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn patch_window(
         &mut self,
         owner: u64,
@@ -343,6 +339,7 @@ impl ui_image::Images {
         property: &str,
         current: &Value,
         ops: &Json,
+        prepared: Option<&ui_values::PlainRows>,
     ) -> std::result::Result<InWindow, RpcError> {
         let len = self
             .written_rows(owner, view, property)
@@ -354,10 +351,10 @@ impl ui_image::Images {
         }
         let ops = parse(ops, len)?;
         let rows = self
-            .patch_rows(owner, roots, view, property, &ops)?
-            .filter(|rows| applicable(current, ops.before, &ops.shapes, &rows.values));
+            .patch_rows(owner, roots, view, property, &ops, prepared)?
+            .filter(|rows| applicable(current, ops.before, &ops.shapes, rows));
         if let Some(rows) = rows {
-            apply(current, &ops.shapes, rows.values);
+            apply(current, &ops.shapes, rows.values, &rows.images);
             self.patched_rows(owner, view, property, rows.written);
             return Ok(InWindow::Applied);
         }
@@ -366,12 +363,14 @@ impl ui_image::Images {
         };
         Ok(InWindow::Whole(patched(&shown, &ops)))
     }
-    /// Convert the rows a patch carries for `owner`'s `view` (images loaded
-    /// from `roots` and checked as for a whole value), and the rows the
-    /// property shows after the ops: their images within the view's budget,
-    /// the whole array within the value totals (the rows it keeps count
-    /// too). `None`: the property cannot be patched in place (a row holds a
-    /// Markdown document, or the property's rows are not known).
+    /// Convert the rows a patch carries for `owner`'s `view` to plain rows
+    /// (`prepared` on the plugin's reader thread, or here; images loaded
+    /// from `roots` once per reference and checked as for a whole value),
+    /// and the rows the property shows after the ops: their images within
+    /// the view's budget, the whole array within the value totals (the
+    /// rows it keeps count too). `None`: the property cannot be patched in
+    /// place (a row holds a Markdown document, or the property's rows are
+    /// not known).
     pub(crate) fn patch_rows(
         &mut self,
         owner: u64,
@@ -379,8 +378,10 @@ impl ui_image::Images {
         view: &str,
         property: &str,
         ops: &Ops<'_>,
+        prepared: Option<&ui_values::PlainRows>,
     ) -> std::result::Result<Option<Rows>, RpcError> {
-        if ops.rows.iter().any(|row| ui_image::has_markdown(row)) {
+        let prepared = prepared.filter(|prepared| prepared.rows.len() == ops.rows.len());
+        if prepared.is_none() && ops.rows.iter().any(|row| ui_image::has_markdown(row)) {
             return Ok(None);
         }
         let Some(mut written) = self
@@ -392,47 +393,30 @@ impl ui_image::Images {
             // while the view was closed: nothing is patched in place.
             return Ok(None);
         };
-        let failure: RefCell<Option<RpcError>> = RefCell::new(None);
-        let mut order: Vec<Option<ui_image::Key>> = Vec::new();
-        let converted = ui_values::from_json_rows_with(&ops.rows, &mut |node, depth| {
-            if depth == 0 || ui_image::reference(node).is_none() {
-                return None;
+        let converted;
+        let plain = match prepared {
+            Some(prepared) => prepared,
+            None => {
+                converted = match ui_values::plain_rows(&ops.rows) {
+                    Ok(plain) => plain,
+                    Err(ui_values::NotPlain::Markdown) => return Ok(None),
+                    Err(ui_values::NotPlain::Image(error)) => return Err(error),
+                    Err(ui_values::NotPlain::Refused(error)) => return Err(error.into()),
+                };
+                &converted
             }
-            let (path, side) = match ui_image::parts(node) {
-                Ok(parts) => parts,
-                Err(error) => {
-                    let message = error.message.clone();
-                    *failure.borrow_mut() = Some(error);
-                    return Some(Err(anyhow::anyhow!(message)));
-                }
-            };
-            Some(Ok(match self.load_within(owner, roots, path, side) {
-                Ok((key, image)) => {
-                    order.push(Some(key));
-                    (Value::Image(image), 0)
-                }
-                Err(error) => {
-                    diag!("ui.image {path}: not shown: {}", error.message);
-                    order.push(None);
-                    (Value::Image(slint::Image::default()), 0)
-                }
-            }))
-        });
-        let values = match converted {
-            Ok(values) => values,
-            Err(error) => return Err(failure.into_inner().unwrap_or_else(|| error.into())),
         };
-        let mut order = order.into_iter();
-        let carried: Vec<ui_image::Row> = ops
-            .rows
+        let (pictures, keys) = self.load_refs(owner, roots, &plain.images);
+        let carried: Vec<ui_image::Row> = plain
+            .row_images
             .iter()
-            .map(|row| ui_image::Row {
-                keys: order
-                    .by_ref()
-                    .take(ui_image::image_count(row))
-                    .flatten()
+            .zip(&plain.costs)
+            .map(|(images, cost)| ui_image::Row {
+                keys: images
+                    .iter()
+                    .filter_map(|index| keys.get(*index as usize).cloned().flatten())
                     .collect(),
-                cost: ui_values::cost(row),
+                cost: *cost,
             })
             .collect();
         apply_vec(&mut written, &ops.shapes, carried);
@@ -450,7 +434,11 @@ impl ui_image::Images {
                 ));
             }
         }
-        Ok(Some(Rows { values, written }))
+        Ok(Some(Rows {
+            values: plain.rows.iter().cloned().map(Row::Plain).collect(),
+            images: pictures,
+            written,
+        }))
     }
 }
 
@@ -477,8 +465,14 @@ mod tests {
     fn leak(value: Json) -> &'static Json {
         Box::leak(Box::new(value))
     }
-    fn plain(rows: &[&Json]) -> Vec<Value> {
-        ui_values::from_json_rows_with(rows, &mut |_, _| None).unwrap()
+    /// Carried rows as `patch_rows` converts them (no images).
+    fn plain(rows: &[&Json]) -> Rows {
+        let plain = ui_values::plain_rows(rows).unwrap();
+        Rows {
+            values: plain.rows.into_iter().map(Row::Plain).collect(),
+            images: ui_rows::Images::default(),
+            written: Vec::new(),
+        }
     }
     /// The images of each recorded row.
     fn keys(rows: &[ui_image::Row]) -> Vec<Vec<ui_image::Key>> {
@@ -506,7 +500,7 @@ mod tests {
         let parsed = parse(ops, before.as_array().unwrap().len()).unwrap();
         let values = plain(&parsed.rows);
         assert!(applicable(&current, parsed.before, &parsed.shapes, &values));
-        apply(&current, &parsed.shapes, values);
+        apply(&current, &parsed.shapes, values.values, &values.images);
         let mut json = before.as_array().unwrap().clone();
         apply_vec(
             &mut json,
@@ -583,7 +577,7 @@ mod tests {
         )
         .unwrap();
         let values = plain(&parsed.rows);
-        apply(&current, &parsed.shapes, values);
+        apply(&current, &parsed.shapes, values.values, &values.images);
         assert_eq!(
             to_json(&current).unwrap(),
             json!([row("a", true), row("b", true)])
@@ -706,9 +700,9 @@ mod tests {
         .unwrap();
         assert!(!applicable(&empty, 0, &parsed.shapes, &plain(&parsed.rows)));
         // Not a model.
-        assert!(!applicable(&Value::Number(1.), 0, &[], &[]));
+        assert!(!applicable(&Value::Number(1.), 0, &[], &plain(&[])));
         // Nothing to do on a model is fine.
-        assert!(applicable(&empty, 0, &[], &[]));
+        assert!(applicable(&empty, 0, &[], &plain(&[])));
         assert_eq!(to_json(&current).unwrap(), rows(&["a", "b"]), "untouched");
     }
 
@@ -765,7 +759,7 @@ mod tests {
         ]);
         let parsed = parse(&ops, 3).unwrap();
         let patch = images
-            .patch_rows(1, &roots, "$mount", "rows", &parsed)
+            .patch_rows(1, &roots, "$mount", "rows", &parsed, None)
             .unwrap()
             .unwrap();
         let kc = images.load(1, &roots, &c).unwrap().0;
@@ -773,10 +767,15 @@ mod tests {
             keys(&patch.written),
             vec![vec![ka.clone()], vec![kc.clone()], vec![kb.clone()]]
         );
-        let Value::Struct(first) = &patch.values[1] else {
+        // The inserted row (c, 4×4): its logo is a picture of the patch's own.
+        let shown = ui_rows::Rows::from_rows(vec![patch.values[0].clone()], patch.images.clone());
+        let Some(Value::Struct(first)) = shown.row_data(0) else {
             panic!("a row")
         };
-        assert!(matches!(first.get_field("logo"), Some(Value::Image(_))));
+        let Some(Value::Image(picture)) = first.get_field("logo") else {
+            panic!("an image")
+        };
+        assert_eq!((picture.size().width, picture.size().height), (4, 4));
         // Nothing is recorded until the patch is applied.
         assert_eq!(images.written_rows(1, "$mount", "rows").unwrap().len(), 3);
         images.patched_rows(1, "$mount", "rows", patch.written);
@@ -784,7 +783,7 @@ mod tests {
         // A row without its image: the image is no longer shown.
         let parsed = parse(leak(json!([{"op": "remove", "at": 1, "count": 2}])), 3).unwrap();
         let patch = images
-            .patch_rows(1, &roots, "$mount", "rows", &parsed)
+            .patch_rows(1, &roots, "$mount", "rows", &parsed, None)
             .unwrap()
             .unwrap();
         images.patched_rows(1, "$mount", "rows", patch.written);
@@ -796,7 +795,7 @@ mod tests {
         )
         .unwrap();
         let patch = images
-            .patch_rows(1, &roots, "$mount", "rows", &parsed)
+            .patch_rows(1, &roots, "$mount", "rows", &parsed, None)
             .unwrap()
             .unwrap();
         assert_eq!(keys(&patch.written), vec![Vec::<ui_image::Key>::new()]);
@@ -808,7 +807,7 @@ mod tests {
         )
         .unwrap();
         let error = images
-            .patch_rows(1, &roots, "$mount", "rows", &parsed)
+            .patch_rows(1, &roots, "$mount", "rows", &parsed, None)
             .err()
             .unwrap();
         assert_eq!(error.code, "limit");
@@ -824,7 +823,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             images
-                .patch_rows(1, &roots, "$mount", "rows", &parsed)
+                .patch_rows(1, &roots, "$mount", "rows", &parsed, None)
                 .err()
                 .unwrap()
                 .code,
@@ -836,7 +835,7 @@ mod tests {
         let parsed = parse(leak(json!([{"op": "set", "at": 0, "row": doc}])), 1).unwrap();
         assert!(
             images
-                .patch_rows(1, &roots, "$mount", "rows", &parsed)
+                .patch_rows(1, &roots, "$mount", "rows", &parsed, None)
                 .unwrap()
                 .is_none()
         );
@@ -847,7 +846,7 @@ mod tests {
         .unwrap();
         assert!(
             images
-                .patch_rows(1, &roots, "$mount", "other", &parsed)
+                .patch_rows(1, &roots, "$mount", "other", &parsed, None)
                 .unwrap()
                 .is_none()
         );
@@ -858,13 +857,18 @@ mod tests {
         .unwrap();
         assert!(
             images
-                .patch_rows(1, &roots, "$mount", "rows", &parsed)
+                .patch_rows(1, &roots, "$mount", "rows", &parsed, None)
                 .unwrap()
                 .is_none()
         );
         // Rows with images are written into the live model like others.
-        let current =
-            Value::Model(std::rc::Rc::new(VecModel::from(plain(&[&row("a", false)]))).into());
+        let current = Value::Model(
+            std::rc::Rc::new(ui_rows::Rows::from_rows(
+                plain(&[&row("a", false)]).values,
+                ui_rows::Images::default(),
+            ))
+            .into(),
+        );
         let parsed = parse(
             leak(json!([{"op": "set", "at": 0, "row": row("b", true)}])),
             1,
@@ -890,7 +894,7 @@ mod tests {
         for len in 0..full {
             let ops = leak(json!([{"op": "insert", "at": len, "rows": [big]}]));
             let patch = images
-                .patch_rows(1, &[], "$mount", "rows", &parse(ops, len).unwrap())
+                .patch_rows(1, &[], "$mount", "rows", &parse(ops, len).unwrap(), None)
                 .unwrap()
                 .unwrap();
             images.patched_rows(1, "$mount", "rows", patch.written);
@@ -902,7 +906,7 @@ mod tests {
         );
         let ops = leak(json!([{"op": "insert", "at": 0, "rows": ["y"]}]));
         let error = images
-            .patch_rows(1, &[], "$mount", "rows", &parse(ops, full).unwrap())
+            .patch_rows(1, &[], "$mount", "rows", &parse(ops, full).unwrap(), None)
             .err()
             .unwrap();
         assert_eq!(error.code, "limit");
@@ -919,30 +923,32 @@ mod tests {
         let ops = leak(json!([{"op": "set", "at": 0, "row": "y"}]));
         assert!(
             images
-                .patch_rows(1, &[], "$mount", "rows", &parse(ops, full).unwrap())
+                .patch_rows(1, &[], "$mount", "rows", &parse(ops, full).unwrap(), None)
                 .is_ok()
         );
-        // Values: 1 + 16 rows of 1023 values = 16369; a row of 16 more is over.
+        // Values: 1 + 1024 rows of 1023 values, and a row that fills the
+        // total exactly; one value more is over.
         let wide = Json::Array(vec![Json::Null; 1022]);
-        record(&mut images, "w:a", &Json::Array(vec![wide.clone(); 16]));
-        let ops = leak(
-            json!([{"op": "insert", "at": 16, "rows": [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]]}]),
-        );
-        let parsed = parse(ops, 16).unwrap();
+        record(&mut images, "w:a", &Json::Array(vec![wide.clone(); 1024]));
+        let room = ui_values::MAX_NODES - 1 - 1024 * 1023;
+        let ops = leak(json!([{"op": "insert", "at": 1024, "rows": [vec![Json::Null; room - 1]]}]));
+        let parsed = parse(ops, 1024).unwrap();
         assert!(
-            images.patch_rows(1, &[], "w:a", "rows", &parsed).is_ok(),
-            "16384 values"
+            images
+                .patch_rows(1, &[], "w:a", "rows", &parsed, None)
+                .is_ok(),
+            "exactly the values total"
         );
-        let ops = leak(
-            json!([{"op": "insert", "at": 16, "rows": [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]}]),
-        );
+        let ops = leak(json!([{"op": "insert", "at": 1024, "rows": [vec![Json::Null; room]]}]));
         let error = images
-            .patch_rows(1, &[], "w:a", "rows", &parse(ops, 16).unwrap())
+            .patch_rows(1, &[], "w:a", "rows", &parse(ops, 1024).unwrap(), None)
             .err()
             .unwrap();
         assert_eq!(error.code, "limit");
         assert!(
-            error.message.contains("16384 total nodes"),
+            error
+                .message
+                .contains(&format!("{} total nodes", ui_values::MAX_NODES)),
             "{}",
             error.message
         );
@@ -994,7 +1000,7 @@ mod tests {
         // No record of the property (not an array, or the write failed): stale.
         let current = from_json(&rows(&["a", "b"])).unwrap();
         let error = images
-            .patch_window(1, &[], "w:a", "rows", &current, &set)
+            .patch_window(1, &[], "w:a", "rows", &current, &set, None)
             .unwrap_err();
         assert_eq!(error.code, "stale");
         // Recorded, but the model does not show those rows (the property
@@ -1002,12 +1008,12 @@ mod tests {
         record(&mut images, "w:a", &rows(&["a", "b"]));
         let default = from_json(&json!([])).unwrap();
         let error = images
-            .patch_window(1, &[], "w:a", "rows", &default, &set)
+            .patch_window(1, &[], "w:a", "rows", &default, &set, None)
             .unwrap_err();
         assert_eq!(error.code, "stale");
         assert_eq!(
             images
-                .patch_window(1, &[], "w:a", "rows", &Value::Number(1.), &set)
+                .patch_window(1, &[], "w:a", "rows", &Value::Number(1.), &set, None)
                 .unwrap_err()
                 .code,
             "stale"
@@ -1015,7 +1021,7 @@ mod tests {
         // In place.
         assert_eq!(
             images
-                .patch_window(1, &[], "w:a", "rows", &current, &set)
+                .patch_window(1, &[], "w:a", "rows", &current, &set, None)
                 .unwrap(),
             InWindow::Applied
         );
@@ -1027,7 +1033,7 @@ mod tests {
         let ops = json!([{"op": "insert", "at": 2, "rows": [{"key": "c", "selected": false, "note": "n"}]}]);
         assert_eq!(
             images
-                .patch_window(1, &[], "w:a", "rows", &current, &ops)
+                .patch_window(1, &[], "w:a", "rows", &current, &ops, None)
                 .unwrap(),
             InWindow::Whole(json!([
                 row("a", false),
@@ -1040,7 +1046,7 @@ mod tests {
         let insert = json!([{"op": "insert", "at": 0, "rows": [row("a", false)]}]);
         assert_eq!(
             images
-                .patch_window(1, &[], "w:b", "rows", &default, &insert)
+                .patch_window(1, &[], "w:b", "rows", &default, &insert, None)
                 .unwrap(),
             InWindow::Whole(json!([row("a", false)]))
         );
@@ -1053,7 +1059,8 @@ mod tests {
                     "w:a",
                     "rows",
                     &current,
-                    &json!([{"op": "set", "at": 2, "row": 1}])
+                    &json!([{"op": "set", "at": 2, "row": 1}]),
+                    None,
                 )
                 .unwrap_err()
                 .code,

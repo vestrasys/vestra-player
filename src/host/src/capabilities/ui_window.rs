@@ -120,6 +120,7 @@ fn change(
         && let Some(patch) = params.get("patch")
     {
         let property = string(params, "property")?;
+        let prepared = host.take_prepared(reply);
         let (base, seq, ops) = ui_patch::request(patch)?;
         if host.images.seq(reply.owner, &view_key, property) != base {
             return Err(ui_patch::stale());
@@ -128,9 +129,14 @@ fn change(
             .instance
             .get_property(property)
             .map_err(|e| RpcError::new("ui", e.to_string()))?;
-        if let ui_patch::InWindow::Whole(whole) =
-            host.patch_window(reply.owner, &view_key, property, &current, ops)?
-        {
+        if let ui_patch::InWindow::Whole(whole) = host.patch_window(
+            reply.owner,
+            &view_key,
+            property,
+            &current,
+            ops,
+            prepared.as_ref().map(|prepared| &prepared.rows),
+        )? {
             // Written whole, as a panel writes its patched stored value.
             let next = host.prop_value(reply.owner, &view_key, property, &whole)?;
             let view = &host.views[&key];
@@ -143,12 +149,25 @@ fn change(
         return Ok(());
     }
     let next = match method {
-        "ui.set" => Some(host.prop_value(
-            reply.owner,
-            &format!("w:{}", key.1),
-            string(params, "property")?,
-            &params["value"],
-        )?),
+        "ui.set" => {
+            // A large array converted on the reader thread (P3): its whole
+            // value was taken out of `params`.
+            let prepared = host.take_prepared(reply).map(|prepared| *prepared);
+            let (value, rows) = match prepared {
+                Some(prepared) => (
+                    std::borrow::Cow::Owned(prepared.whole.unwrap_or_default()),
+                    Some(prepared.rows),
+                ),
+                None => (std::borrow::Cow::Borrowed(&params["value"]), None),
+            };
+            Some(host.prop_value_with(
+                reply.owner,
+                &format!("w:{}", key.1),
+                string(params, "property")?,
+                &value,
+                rows.as_ref(),
+            )?)
+        }
         _ => None,
     };
     let view = &host.views[&key];

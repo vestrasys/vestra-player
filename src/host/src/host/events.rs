@@ -37,6 +37,10 @@ pub(crate) enum Event {
     FloatingClosed(u64),
     MenuAction(u64, MenuAction),
     Request(u64, Value),
+    /// A request whose large array its reader thread converted already
+    /// (`ui_values::prepare_request`; a whole value is taken out of the
+    /// message): answered as a `Request` with `Host::prepared` set.
+    Prepared(u64, Value, Box<crate::ui::ui_values::Prepared>),
     Reply(Reply, std::result::Result<Value, RpcError>),
     /// A core action finished on the control worker: (requester, action, `{ osd }`).
     ActionDone(Reply, String, std::result::Result<Value, RpcError>),

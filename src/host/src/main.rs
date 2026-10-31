@@ -421,6 +421,7 @@ fn main() -> Result<()> {
         activation_receipts: Default::default(),
         file_types: json!([]),
         held_mounts: Default::default(),
+        prepared: None,
         warnings: BTreeMap::new(),
         packages: package_manager::Manager::open()?,
         cleanup: Default::default(),

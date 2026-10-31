@@ -189,6 +189,9 @@ fn set_mount(
     reply: &Reply,
     params: &Value,
 ) -> std::result::Result<Value, RpcError> {
+    // A large array converted on the plugin's reader thread: its whole
+    // value was taken out of `params` (P3).
+    let mut prepared = host.take_prepared(reply);
     let spec = host
         .mounts
         .get(&reply.owner)
@@ -211,7 +214,15 @@ fn set_mount(
         if host.images.seq(reply.owner, "$mount", property) != base {
             return Err(ui_patch::stale());
         }
-        if patch_mount(host, reply.owner, &shell, floating.as_ref(), property, ops)? {
+        if patch_mount(
+            host,
+            reply.owner,
+            &shell,
+            floating.as_ref(),
+            property,
+            ops,
+            prepared.take(),
+        )? {
             host.images.set_seq(reply.owner, "$mount", property, seq);
             return Ok(Value::Null);
         }
@@ -220,22 +231,26 @@ fn set_mount(
         params["seq"].as_u64().unwrap_or(0)
     };
     // A whole value, or a patched one that a live model could not take in place.
-    let whole;
-    let value = match params.get("patch") {
-        Some(patch) => {
-            whole = patched_mount(host, reply.owner, property, &patch["ops"])?;
-            &whole
+    let (value, rows) = match (params.get("patch"), prepared) {
+        (Some(patch), _) => (
+            patched_mount(host, reply.owner, property, &patch["ops"])?,
+            None,
+        ),
+        (None, Some(prepared)) => {
+            let prepared = *prepared;
+            (prepared.whole.unwrap_or_default(), Some(prepared.rows))
         }
-        None => &params["value"],
+        (None, None) => (params["value"].clone(), None),
     };
-    let converted = host.prop_value(reply.owner, "$mount", property, value)?;
+    let converted = host.prop_value_with(reply.owner, "$mount", property, &value, rows.as_ref())?;
     composition::set_global_value(&shell, &spec, property, converted)?;
     if let Some(floating) = floating {
-        let converted = host.prop_value(reply.owner, "$mount", property, value)?;
+        let converted =
+            host.prop_value_with(reply.owner, "$mount", property, &value, rows.as_ref())?;
         composition::set_global_value(&floating, &spec, property, converted)?;
     }
     if let Some(mount) = host.mounts.get_mut(&reply.owner) {
-        mount.properties.insert(property.into(), value.clone());
+        mount.properties.insert(property.into(), value);
     }
     host.images.set_seq(reply.owner, "$mount", property, seq);
     Ok(Value::Null)
@@ -270,6 +285,7 @@ fn patch_mount(
     floating: Option<&slint_interpreter::ComponentInstance>,
     property: &str,
     ops: &Value,
+    prepared: Option<Box<crate::ui::ui_values::Prepared>>,
 ) -> std::result::Result<bool, RpcError> {
     let Some(Value::Array(stored)) = host
         .mounts
@@ -282,35 +298,49 @@ fn patch_mount(
     let alias = composition::global_alias(owner);
     let mut instances = vec![shell];
     instances.extend(floating);
-    let mut converted = Vec::new();
+    // Converted once (on the reader thread when large), written into each
+    // instance's model.
+    let Some(rows) = host.patch_rows(
+        owner,
+        "$mount",
+        property,
+        &ops,
+        prepared.as_ref().map(|prepared| &prepared.rows),
+    )?
+    else {
+        return Ok(false);
+    };
+    let mut currents = Vec::new();
     for instance in &instances {
         let current = instance
             .get_global_property(&alias, property)
             .map_err(anyhow::Error::from)?;
-        let Some(rows) = host.patch_rows(owner, "$mount", property, &ops)? else {
-            return Ok(false);
-        };
-        if !ui_patch::applicable(&current, ops.before, &ops.shapes, &rows.values) {
+        if !ui_patch::applicable(&current, ops.before, &ops.shapes, &rows) {
             return Ok(false);
         }
-        converted.push((current, rows));
+        currents.push(current);
     }
-    let mut written = None;
-    for (current, rows) in converted {
-        ui_patch::apply(&current, &ops.shapes, rows.values);
-        written = Some(rows.written);
+    let ui_patch::Rows {
+        values,
+        images,
+        written,
+    } = rows;
+    for current in currents {
+        ui_patch::apply(&current, &ops.shapes, values.clone(), &images);
     }
-    if let Some(written) = written {
-        host.images.patched_rows(owner, "$mount", property, written);
-    }
-    let rows: Vec<Value> = ops.rows.iter().map(|row| (*row).clone()).collect();
+    host.images.patched_rows(owner, "$mount", property, written);
+    // The stored rows: copied on the reader thread when large.
+    let carried: Vec<Value> = match prepared {
+        Some(prepared) if prepared.carried.len() == ops.rows.len() => prepared.carried,
+        _ => ops.rows.iter().map(|row| (*row).clone()).collect(),
+    };
     let shapes = ops.shapes;
     if let Some(Value::Array(stored)) = host
         .mounts
         .get_mut(&owner)
         .and_then(|mount| mount.properties.get_mut(property))
     {
-        ui_patch::apply_vec(stored, &shapes, rows);
+        ui_patch::apply_vec(stored, &shapes, carried);
     }
     Ok(true)
 }
