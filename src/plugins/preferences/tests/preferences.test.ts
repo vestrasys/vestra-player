@@ -306,6 +306,17 @@ test("the pages' Slint has no colour literals", () => {
   }
 });
 
+test("the pages' radios are the library's RadioMark, with radio-button rows for screen readers", () => {
+  for (const file of ["appearance", "language"]) {
+    const slint = readFileSync(new URL(`../ui/${file}.slint`, import.meta.url), "utf8");
+    assert.match(slint, /import \{[^}]*\bRadioMark\b[^}]*\} from "@vestra\/widgets\.slint";/, file);
+    assert.doesNotMatch(slint, /component Radio\b/, file);
+    assert.match(slint, /RadioMark \{[^}]*hover: touch\.has-hover;/, file);
+    assert.match(slint, /accessible-role: radio-button;/, file);
+    assert.match(slint, /accessible-checked: /, file);
+  }
+});
+
 test("lazy activation: the check marks are player conditions that follow a switch made elsewhere; nothing keeps the plugin running while idle", async () => {
   const { host } = await start();
   assert.deepEqual(host.keepsRunning, []);

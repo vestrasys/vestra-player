@@ -2,6 +2,7 @@
 // used from the next start. The languages are named in their own words (the
 // plugin passes them; they are not translated); every other text is @tr.
 import { Theme } from "@vestra/theme.slint";
+import { RadioMark } from "@vestra/widgets.slint";
 
 struct LanguageRow { id: string, name: string }
 
@@ -11,21 +12,8 @@ export global LanguageBridge {
     callback pick(string);
 }
 
-component Radio inherits Rectangle {
-    in property <bool> checked;
-    width: 14px;
-    height: 14px;
-    border-radius: 7px;
-    border-width: root.checked ? 1.5px : 1px;
-    border-color: root.checked ? Theme.accent : Theme.text-dim;
-    background: Theme.bg-list;
-    Rectangle {
-        width: 6px; height: 6px; border-radius: 3px;
-        visible: root.checked;
-        background: Theme.accent;
-    }
-}
-
+// One language: a 24px row with a hover plate and the library's radio mark
+// (ui-spec ctx-radio, 12px). The plugin owns the state: a click asks.
 component Choice inherits Rectangle {
     in property <string> text;
     in property <bool> checked;
@@ -33,12 +21,16 @@ component Choice inherits Rectangle {
     height: 24px;
     border-radius: Theme.radius-control;
     background: touch.has-hover ? Theme.hover-bg : transparent;
+    accessible-role: radio-button;
+    accessible-checked: root.checked;
+    accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
     touch := TouchArea { clicked => { root.clicked(); } }
     HorizontalLayout {
         padding-left: 8px;
         padding-right: 8px;
         spacing: 8px;
-        Radio { y: (parent.height - self.height) / 2; checked: root.checked; }
+        RadioMark { y: (parent.height - self.height) / 2; checked: root.checked; hover: touch.has-hover; }
         Text {
             text: root.text;
             font-size: Theme.font-tab;
