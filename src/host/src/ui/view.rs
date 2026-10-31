@@ -2430,6 +2430,123 @@ export component MenuWindow inherits Window {
         );
     }
 
+    /// Open Video ▸ Image Processing, then move the pointer from its row
+    /// toward its submenu across Rotation (a held switch, G-15), checking
+    /// after every step that Video's level lights only `expected` (given
+    /// the sim). Returns the sim and the Rotation row's middle.
+    fn hold_across_rotation(expected: impl Fn(&MenuSim) -> Vec<String>) -> (MenuSim, (f64, f64)) {
+        let mut sim = MenuSim::new();
+        let (x, y) = sim.row(0, "Video");
+        sim.move_to(x + 30., y);
+        for _ in 0..20 {
+            sim.move_to(x + 30., y);
+        }
+        let (sub_x, ip) = sim.row(1, "Image Processing");
+        let (_, rotation) = sim.row(1, "Rotation");
+        assert_eq!(rotation - ip, 24., "Rotation is the row below");
+        let width = sim.levels[1]["width"].as_f64().unwrap();
+        sim.move_to(sub_x + 40., ip);
+        for _ in 0..20 {
+            sim.move_to(sub_x + 40., ip);
+        }
+        sim.draw();
+        assert_eq!(sim.path, ["Video", "Image Processing"]);
+        assert_eq!(sim.lit(1), ["Image Processing"]);
+        // Toward the submenu's near edge, 1 px down per 2 px right, into
+        // the Rotation row (the submenu spans Image Processing's height
+        // and the next row: the move heads for it).
+        let target = (sub_x + width - 4., rotation + 4.);
+        let steps = 40;
+        for step in 1..=steps {
+            let t = f64::from(step) / f64::from(steps);
+            sim.move_to(
+                sub_x + 40. + (target.0 - sub_x - 40.) * t,
+                ip + (target.1 - ip) * t,
+            );
+            sim.draw();
+            assert_eq!(
+                sim.lit(1),
+                expected(&sim),
+                "step {step} path {:?}",
+                sim.path
+            );
+        }
+        (sim, target)
+    }
+
+    /// 0.6.0 user report: moving quickly through the menu lit several rows
+    /// at once: the open group row (kept `open` while a switch away is held,
+    /// G-15) and the row under the pointer. Like macOS menus, while the
+    /// switch is held only the open parent stays lit.
+    #[test]
+    fn a_held_switch_keeps_only_the_open_parent_lit() {
+        let (mut sim, _) = hold_across_rotation(|_| vec!["Image Processing".into()]);
+        assert_eq!(
+            sim.path,
+            ["Video", "Image Processing"],
+            "the switch is held"
+        );
+        // Back on the open row: the hold is cancelled, the same row lit.
+        let (sub_x, ip) = sim.row(1, "Image Processing");
+        for _ in 0..40 {
+            sim.move_to(sub_x + 40., ip);
+            sim.draw();
+            assert_eq!(sim.lit(1), ["Image Processing"]);
+        }
+        assert_eq!(sim.path, ["Video", "Image Processing"]);
+        assert_eq!(sim.lit(0), ["Video"]);
+    }
+
+    /// A held switch released (the pointer rests on Rotation): the lit row
+    /// moves to Rotation at the switch, never both lit, and stays alone.
+    #[test]
+    fn a_released_switch_moves_the_lit_row_to_the_pointer() {
+        let lit = |sim: &MenuSim| {
+            if sim.path.last().is_some_and(|g| g == "Rotation") {
+                vec!["Rotation".into()]
+            } else {
+                vec!["Image Processing".into()]
+            }
+        };
+        let (mut sim, target) = hold_across_rotation(lit);
+        for _ in 0..(crate::ui::menu::AIM_GRACE_MS * 3) {
+            sim.move_to(target.0, target.1);
+            sim.draw();
+            assert_eq!(sim.lit(1), lit(&sim), "path {:?}", sim.path);
+        }
+        assert_eq!(sim.path, ["Video", "Rotation"], "the held switch happened");
+        assert_eq!(sim.lit(1), ["Rotation"]);
+        assert_eq!(sim.lit(2), Vec::<String>::new());
+    }
+
+    /// The pointer reaches the held submenu: the switch is cancelled, its
+    /// parent stays the one lit row of its level and the submenu lights the
+    /// row under the pointer.
+    #[test]
+    fn reaching_the_submenu_lights_its_row_and_keeps_the_parent() {
+        let (mut sim, target) = hold_across_rotation(|_| vec!["Image Processing".into()]);
+        let (sub2_x, deband) = sim.row(2, "Deband");
+        let steps = 12;
+        for step in 1..=steps {
+            let t = f64::from(step) / f64::from(steps);
+            sim.move_to(
+                target.0 + (sub2_x + 30. - target.0) * t,
+                target.1 + (deband - target.1) * t,
+            );
+            sim.draw();
+            assert_eq!(sim.lit(1), ["Image Processing"], "step {step}");
+            assert!(sim.lit(2).len() <= 1, "step {step}: {:?}", sim.lit(2));
+        }
+        for _ in 0..(crate::ui::menu::AIM_GRACE_MS * 2) {
+            sim.move_to(sub2_x + 30., deband);
+        }
+        sim.draw();
+        assert_eq!(sim.path, ["Video", "Image Processing"]);
+        assert_eq!(sim.lit(0), ["Video"]);
+        assert_eq!(sim.lit(1), ["Image Processing"]);
+        assert_eq!(sim.lit(2), ["Deband"]);
+    }
+
     /// Host 0.5.26: a hover writes only the levels it changes. Before, every
     /// submenu switch converted, compared and wrote the whole menu and
     /// settled the window (about 3 ms a hover on the user's machine).
