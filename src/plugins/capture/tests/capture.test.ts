@@ -7,6 +7,8 @@ import { isDeepStrictEqual } from "node:util";
 import type { Locale } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
+import { Tasks } from "../tasks.ts";
+import type { Task } from "../tasks.ts";
 import { clock, frameName, parseRange, REASON, sampleTimes, uniqueFile } from "../model.ts";
 import { words } from "./fakes.ts";
 
@@ -719,4 +721,28 @@ test("Burst… is checked while its dialog is open; a title-bar close clears it 
   } finally {
     await stop();
   }
+});
+
+test("SDK 1.5.45: task rows changed after an await call plugin.update() (trimming history, a job's first state)", async () => {
+  // Each update records what taskRows would show then: the number of tasks and the newest one's status.
+  const seen: { length: number; status: string }[] = [];
+  const scope = { update: () => seen.push({ length: tasks.list.length, status: tasks.list.at(-1)!.status }) } as never;
+  const tasks: Tasks = new Tasks(scope, () => {});
+  const spec = { kind: "image", start: 0, count: 1, step: 0, processed: false, subtitles: false, track: "none", current: false } as const;
+  const later = <T>(value: T) => new Promise<T>((done) => setTimeout(() => done(value), 5));
+  for (let i = 0; i < 21; i++) {
+    const snapshot = { dispose: () => later(undefined) } as never;
+    tasks.list.push({ id: `old${i}`, spec, sourceId: 1, source: "a", snapshot, destination: "x.png", status: "completed", cancel: false, jobs: [], outputs: [] } as Task);
+  }
+  let exported!: (job: unknown) => void;
+  const job = { state: { status: "running" }, done: new Promise(() => {}), onChange: () => ({ dispose: async () => {} }), cancel: async () => {} };
+  const snapshot = { export: () => new Promise((done) => (exported = done)), dispose: async () => {} } as never;
+  tasks.add({ spec, sourceId: 1, source: "a", snapshot, destination: "new.png" });
+  // The second old task goes after the first one's snapshot is released, outside SDK-invoked code.
+  await until(() => seen.at(-1)?.length === 20);
+  assert.equal(tasks.list.length, 20);
+  // The export resolves later; the row's "preparing" becomes the job's state with an update.
+  exported(job);
+  await until(() => seen.at(-1)?.status === "running");
+  assert.equal(tasks.list.at(-1)!.status, "running");
 });

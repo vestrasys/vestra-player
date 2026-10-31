@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.8
+
+- Export Tasks: the list no longer lags while a video plays. With SDK 1.5.45's precise invalidation, state changed outside SDK-invoked code is drawn only at the next update (up to about a second later while playing), and two task-row changes happened after an `await`: the history trim (beyond 20 tasks, each further old task is removed after the previous one's snapshot is released) and a task's first job state once the export call returns (`Preparing` becoming `Exporting`). Both now call `plugin.update()`. Who must change: nobody. What users see: the rows change at once.
+
 ## 1.0.7
 
 - The Burst, Export Clip and Snapshot Settings dialogs use the player library's `Choice` and `Check` (`@vestra/widgets.slint`) instead of std-widgets' `ComboBox` (3) and `CheckBox` (7), so every drop-down and check box in the player has one look. What users see: Vestra-style drop-downs (21px, the list below with at most 10 rows, arrow keys / Home / End change the choice, Space / Enter / F4 open it) and check boxes (13px accent box, a label that wraps instead of widening the dialog); a control reached with Tab draws a 1px accent focus ring, and clicking one no longer takes the keyboard focus from the player. The Format choice reports a pick only when it changes. Who must change: nobody; the dialogs' properties and callbacks (`format-index`, `audio-index`, `choose-format(int)`, `set-beside-media(bool)`, `set-screen-subtitles(bool)`) are unchanged.
