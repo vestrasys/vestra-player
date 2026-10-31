@@ -113,13 +113,14 @@ static HANDOFFS: AtomicBool = AtomicBool::new(true);
 fn stop_handoffs() {
     HANDOFFS.store(false, Ordering::Release);
 }
-/// CPU mode's windows (`render_mode::WindowKind`): femtovg on OpenGL
-/// (Windows always, named explicitly since Slint's default there would be
-/// femtovg-wgpu; `VESTRA_WINDOW_RENDERER=gl` elsewhere), with Slint's
-/// software renderer when OpenGL fails; Slint's software renderer (a
-/// `software-windows` denylist rule, `VESTRA_WINDOW_RENDERER=software`); or
-/// Slint's default (macOS and Linux). `decide` never gives CPU mode wgpu
-/// windows; if it did, they would get OpenGL ones here.
+/// CPU mode's windows other than wgpu ones (`render_mode::WindowKind`; wgpu
+/// windows are selected in `main` and fall back to
+/// `Decision::fallback_windows`): femtovg on OpenGL (Windows, named
+/// explicitly since Slint's default there would be femtovg-wgpu;
+/// `VESTRA_WINDOW_RENDERER=gl` elsewhere), with Slint's software renderer
+/// when OpenGL fails; Slint's software renderer (an OpenGL window denylist
+/// rule, `VESTRA_WINDOW_RENDERER=software`); or Slint's default (macOS and
+/// Linux, `SLINT_BACKEND`). `Wgpu` here gets OpenGL ones.
 fn select_cpu_windows(
     windows: render_mode::WindowKind,
     winit: impl Fn() -> slint::BackendSelector,
@@ -226,14 +227,14 @@ fn main() -> Result<()> {
     for note in &render.notes {
         diag!("{note}");
     }
-    // The crash guard: armed until GPU rendering ran a few seconds, gave up
-    // on its own, or the player quit (`render_state`).
-    // `_armed` lives until `main` returns, by any path: only a process
-    // that dies leaves the guard armed.
+    // The crash guard: armed until GPU rendering (or, on Windows, CPU mode's
+    // Direct3D 12 windows: a driver that crashes there would crash every
+    // start) ran a few seconds, gave up on its own, or the player quit
+    // (`render_state`). `_armed` lives until `main` returns, by any path:
+    // only a process that dies leaves the guard armed.
     let guard = startup.guard.clone();
-    let _armed = render
-        .is_gpu()
-        .then(|| guard.arm(startup.key.clone(), playback::render_state::now()));
+    let _armed = (render.is_gpu() || render.uses_wgpu_windows())
+        .then(|| guard.arm(&startup.keys, playback::render_state::now()));
     // What a restart after a lost window device needs (Windows wgpu
     // windows; `host/restart.rs`).
     // When this player was started by a restart: another is refused for a
@@ -245,7 +246,7 @@ fn main() -> Result<()> {
             silent,
         },
         guard: guard.clone(),
-        key: startup.key.clone(),
+        keys: startup.keys.clone(),
         restarted_at,
     };
     if !headless {
@@ -260,24 +261,26 @@ fn main() -> Result<()> {
             }
         };
         // The windows the decision chose; a GPU mode whose windows cannot be
-        // had falls back to software rendering with CPU mode's windows.
+        // had falls back to software rendering with CPU mode's fallback
+        // windows, and CPU mode's wgpu windows fall back to them too.
+        let wgpu_windows = || {
+            // A lost window device (or a stalled GPU renderer) restarts the
+            // player at once, from the device's callback, after recording
+            // the loss in the crash guard: the new one waits for this
+            // process to end, however it ends (a lost device may also fail
+            // Slint's teardown).
+            let lost = lost_device.clone();
+            platform::on_window_device_lost(move || {
+                let source = LAST_SOURCE
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                restart_player(&lost, &source);
+            });
+            platform::select_wgpu_windows(winit)
+        };
         let gpu_windows = match render.windows {
-            render_mode::WindowKind::Wgpu => {
-                // A lost window device restarts the player at once, from
-                // the device's callback, after recording the loss in the
-                // crash guard: the new one waits for this process to end,
-                // however it ends (a lost device may also fail Slint's
-                // teardown).
-                let lost = lost_device.clone();
-                platform::on_window_device_lost(move || {
-                    let source = LAST_SOURCE
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone();
-                    restart_player(&lost, &source);
-                });
-                platform::select_wgpu_windows(winit)
-            }
+            render_mode::WindowKind::Wgpu if render.is_gpu() => wgpu_windows(),
             render_mode::WindowKind::OpenGl if render.is_gpu() => winit()
                 .renderer_name("femtovg".into())
                 .select()
@@ -289,7 +292,17 @@ fn main() -> Result<()> {
             diag!("{}", render.line());
             guard.settle();
         }
-        if !render.is_gpu() {
+        if !render.is_gpu() && render.windows == render_mode::WindowKind::Wgpu {
+            // CPU mode in Direct3D 12 windows (record §11 item 5): software
+            // video uploaded once per frame, flip model with vsync.
+            if let Err(error) = wgpu_windows() {
+                diag!("render: no Direct3D 12 windows for software rendering ({error})");
+                render = render.without_wgpu_windows();
+                diag!("{}", render.line());
+                guard.settle();
+            }
+        }
+        if !render.is_gpu() && render.windows != render_mode::WindowKind::Wgpu {
             select_cpu_windows(render.windows, winit)?;
         }
     }
@@ -370,6 +383,7 @@ fn main() -> Result<()> {
         rendering: host::Rendering {
             facts: startup.facts,
             started: render.mode,
+            windows: render.windows,
             preference: startup.preference,
             file: startup.file,
             relaunch: host::Relaunch {

@@ -9,9 +9,9 @@ use super::*;
 use crate::launch::Resume;
 use crate::playback::render_denylist::Denylist;
 use crate::playback::render_mode::{
-    Decision, Facts, Mode, Preference, Reason, decide, env_choice, window_env_choice,
+    Decision, Facts, Mode, Preference, Reason, WindowKind, decide, env_choice, window_env_choice,
 };
-use crate::playback::render_state::{self, GuardFile, GuardKey};
+use crate::playback::render_state::{self, GuardFile, GuardKey, Keys};
 
 /// What the rendering API reads and changes; built in `main.rs`.
 pub(crate) struct Rendering {
@@ -19,6 +19,8 @@ pub(crate) struct Rendering {
     pub facts: Facts,
     /// The mode this run started with (after a window renderer fallback).
     pub started: Mode,
+    /// The windows this run draws with (after a window renderer fallback).
+    pub windows: WindowKind,
     /// The saved preference (`render.json`).
     pub preference: Preference,
     /// `render.json`; `None` keeps the preference in memory (headless).
@@ -66,7 +68,7 @@ pub(crate) struct Startup {
     pub file: Option<PathBuf>,
     /// `render-state.json` and what it is keyed on.
     pub guard: GuardFile,
-    pub key: GuardKey,
+    pub keys: Keys,
 }
 
 /// Gather the facts (round record 2026-10-render-modes §3): the
@@ -92,21 +94,28 @@ pub(crate) fn startup(headless: bool) -> Startup {
     let build = (!headless)
         .then(|| crate::system::os_facts().build.clone())
         .flatten();
-    let adapters = if headless {
-        Vec::new()
+    let (adapters, render_adapter) = if headless {
+        (Vec::new(), None)
     } else {
         platform::gpu_adapters()
     };
-    for adapter in &adapters {
+    for (index, adapter) in adapters.iter().enumerate() {
         diag!(
-            "render: adapter {} ({:04X}:{:04X}, driver {}{})",
+            "render: adapter {} ({:04X}:{:04X}, driver {}{}{})",
             adapter.name,
             adapter.vendor_id,
             adapter.device_id,
             adapter.driver_version.as_deref().unwrap_or("unknown"),
-            if adapter.software { ", software" } else { "" }
+            if adapter.software { ", software" } else { "" },
+            if render_adapter == Some(index) {
+                "; GPU rendering's"
+            } else {
+                ""
+            }
         );
     }
+    // Out of range: no adapter (`Facts::render_adapter`).
+    let render_adapter = render_adapter.unwrap_or(usize::MAX);
     let mut denylist = Denylist::built_in();
     if let Some(local) = path("render-denylist.json")
         && let Ok(text) = std::fs::read_to_string(&local)
@@ -122,8 +131,9 @@ pub(crate) fn startup(headless: bool) -> Startup {
         diag!("render: render.json is ignored ({warning})");
     }
     let guard = GuardFile::new(path("render-state.json"));
-    let adapter = adapters.first();
-    let key = GuardKey {
+    // Keyed on the adapter GPU rendering uses (L1, record §11); files from
+    // before 0.5.19 on the first one (`render_state::Keys`).
+    let key_of = |adapter: Option<&platform::GpuAdapter>| GuardKey {
         adapter: adapter
             .map(|adapter| adapter.name.clone())
             .unwrap_or_default(),
@@ -133,9 +143,13 @@ pub(crate) fn startup(headless: bool) -> Startup {
             .unwrap_or_default(),
         app: env!("CARGO_PKG_VERSION").into(),
     };
+    let keys = Keys {
+        key: key_of(adapters.get(render_adapter)),
+        legacy: key_of(adapters.first()),
+    };
     let now = render_state::now();
     let recovered = guard.recover(now);
-    let crashed = recovered.blocks(&key, now).map(|until| {
+    let crashed = recovered.blocks(&keys, now).map(|until| {
         format!(
             "{}; it is tried again after a graphics driver or player update, or in {} days",
             if recovered.crashed_by_losses() {
@@ -154,6 +168,7 @@ pub(crate) fn startup(headless: bool) -> Startup {
             os: std::env::consts::OS,
             build,
             adapters,
+            render_adapter,
             denylist,
             crashed,
             slint_backend: std::env::var_os("SLINT_BACKEND").is_some_and(|value| !value.is_empty()),
@@ -164,13 +179,29 @@ pub(crate) fn startup(headless: bool) -> Startup {
         preference,
         file,
         guard,
-        key,
+        keys,
     }
 }
 
 impl Rendering {
     fn next(&self) -> Decision {
         decide(&self.facts, self.preference)
+    }
+    /// `{ code, message }` of what draws now: in software rendering the
+    /// message also names the windows (0.5.19: on Windows they may be
+    /// Direct3D 12 ones), so About and the logs say which path draws.
+    pub fn reason_json(&self, gpu_now: bool, reason: &Reason) -> Value {
+        let mut json = reason.json();
+        let windows = match self.windows {
+            WindowKind::Wgpu => Some("the windows draw with Direct3D 12 (wgpu)"),
+            WindowKind::OpenGl => Some("the windows draw with OpenGL"),
+            WindowKind::Software => Some("the windows draw with Slint's software renderer"),
+            WindowKind::Default => None,
+        };
+        if let Some(windows) = windows.filter(|_| !gpu_now && !self.facts.headless) {
+            json["message"] = format!("{}; {windows}", reason.message()).into();
+        }
+        json
     }
     /// The `rendering.state` value, given what draws now.
     pub fn state(&self, gpu_now: bool, reason: &Reason) -> Value {
@@ -181,7 +212,7 @@ impl Rendering {
         };
         json!({
             "mode": if gpu_now { Mode::Gpu } else { Mode::Cpu }.name(),
-            "reason": reason.json(),
+            "reason": self.reason_json(gpu_now, reason),
             "preference": self.preference.name(),
             "nextMode": next.mode.name(),
             "nextReason": next.reason.json(),
@@ -241,6 +272,11 @@ impl Host {
     pub(crate) fn rendering_state(&self) -> Value {
         let (gpu, reason) = self.backend.render.now();
         self.rendering.state(gpu, &reason)
+    }
+    /// Whether the GPU renders now, and `SystemInfo.renderingReason`.
+    pub(crate) fn rendering_reason(&self) -> (bool, Value) {
+        let (gpu, reason) = self.backend.render.now();
+        (gpu, self.rendering.reason_json(gpu, &reason))
     }
     /// Start a new player now (it waits for this one's instance lock), then
     /// quit as the Quit command does.
@@ -342,6 +378,7 @@ mod tests {
         };
         Rendering {
             started: decide(&facts, Preference::Auto).mode,
+            windows: WindowKind::Default,
             facts,
             preference: Preference::Auto,
             file,
@@ -411,11 +448,41 @@ mod tests {
             device_id: 0x15BF,
             driver_version: Some("31.0.14005.21001".into()),
             software: false,
+            luid: 0,
         }];
         let error = denied.set_preference(Preference::Gpu).unwrap_err();
         assert_eq!(error.code, "unavailable");
         assert!(error.message.contains("denylist"), "{}", error.message);
         assert_eq!(denied.preference, Preference::Auto, "not saved");
+    }
+
+    /// Item 5 (record §11): the reason of software rendering names the
+    /// windows, so About tells Direct3D 12 windows from OpenGL ones.
+    #[test]
+    fn the_software_reason_names_the_windows() {
+        let mut windows = rendering(true, None);
+        windows.windows = WindowKind::Wgpu;
+        let reason = windows.reason_json(false, &Reason::OffByDefault);
+        assert_eq!(reason["code"], "default");
+        let message = reason["message"].as_str().unwrap();
+        assert!(
+            message.contains("experimental") && message.ends_with("Direct3D 12 (wgpu)"),
+            "{message}"
+        );
+        assert_eq!(
+            windows.state(false, &Reason::OffByDefault)["reason"],
+            reason
+        );
+        // GPU rendering: the reason alone.
+        assert_eq!(
+            windows.reason_json(true, &Reason::Default),
+            Reason::Default.json()
+        );
+        windows.windows = WindowKind::Default;
+        assert_eq!(
+            windows.reason_json(false, &Reason::Preference),
+            Reason::Preference.json()
+        );
     }
 
     #[test]

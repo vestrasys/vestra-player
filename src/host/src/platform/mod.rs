@@ -273,7 +273,7 @@ pub struct OsFacts {
 
 /// A graphics adapter as the driver check sees it (`gpu_adapters`;
 /// `playback::render_denylist`), without system-specific concepts.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GpuAdapter {
     pub name: String,
     /// PCI vendor and device (`0x1002`, `0x15BF`).
@@ -283,14 +283,18 @@ pub struct GpuAdapter {
     pub driver_version: Option<String>,
     /// No GPU of its own (a software rasterizer or a remote session's).
     pub software: bool,
+    /// The system's id of the adapter for this boot (Windows: the LUID;
+    /// 0 where unknown). Not stable across restarts: never a guard key.
+    pub luid: u64,
 }
 
-/// The adapters in the order the system offers them to this process (the
-/// first is what GPU rendering would use), before any window or device.
-/// Windows: DXGI through `vestra-win32`; elsewhere none yet.
+/// The adapters in the order the system offers them to this process, and
+/// the index of the one GPU rendering would use (Windows: the first, or the
+/// one `VESTRA_GPU_ADAPTER` chooses), before any window or device. Windows:
+/// DXGI through `vestra-win32`; elsewhere none yet.
 #[cfg(not(target_os = "windows"))]
-pub fn gpu_adapters() -> Vec<GpuAdapter> {
-    Vec::new()
+pub fn gpu_adapters() -> (Vec<GpuAdapter>, Option<usize>) {
+    (Vec::new(), None)
 }
 
 /// A GPU on which the system's video upscaler works (`upscaler_probe`).

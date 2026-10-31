@@ -18,11 +18,27 @@ const BUILT_IN: &str = include_str!("../../render-denylist.json");
 pub enum Action {
     /// Software rendering.
     Cpu,
-    /// Software rendering, and Slint's software renderer for the windows
-    /// (the driver's OpenGL cannot draw them).
+    /// The player does not draw its windows with the rule's `window_api`
+    /// (the driver cannot draw them): the next window renderer takes over
+    /// (Direct3D 12 → OpenGL → Slint's software renderer), and where GPU
+    /// rendering needs those windows it renders in software.
     SoftwareWindows,
     /// A `render:` note only.
     Warn,
+}
+
+/// The graphics API of the windows a `software-windows` rule is about.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum WindowApi {
+    /// femtovg on the driver's OpenGL (the default, as before 0.5.19).
+    /// Matched against every adapter with a GPU of its own: OpenGL windows
+    /// may draw on another GPU than the one GPU rendering uses.
+    #[default]
+    Opengl,
+    /// femtovg on wgpu, Direct3D 12 (Windows). Matched against the adapter
+    /// GPU rendering uses, which the windows' device is opened on.
+    Direct3d12,
 }
 
 /// A version condition: `op` is `<`, `<=`, `=`, `>=`, `>` or `between`
@@ -75,6 +91,10 @@ pub struct Rule {
     pub disabled: bool,
     #[serde(default)]
     pub action: Option<Action>,
+    /// With `software-windows`: which windows (`opengl`, the default, or
+    /// `direct3d12`). Refused with another action.
+    #[serde(default)]
+    pub window_api: Option<WindowApi>,
     #[serde(flatten)]
     pub conditions: Conditions,
     #[serde(default)]
@@ -122,6 +142,12 @@ impl Denylist {
             if !rule.disabled && rule.action.is_none() {
                 return Err(format!("rule {} has no action", rule.id));
             }
+            if rule.window_api.is_some() && rule.action != Some(Action::SoftwareWindows) {
+                return Err(format!(
+                    "rule {}: window_api needs the action software-windows",
+                    rule.id
+                ));
+            }
             for conditions in std::iter::once(&rule.conditions).chain(&rule.exceptions) {
                 conditions
                     .check()
@@ -145,6 +171,14 @@ impl Denylist {
                         .any(|exception| exception.hold(facts))
             })
             .collect()
+    }
+}
+
+impl Rule {
+    /// The windows a `software-windows` rule is about (`None` for another
+    /// action).
+    pub fn windows(&self) -> Option<WindowApi> {
+        (self.action == Some(Action::SoftwareWindows)).then(|| self.window_api.unwrap_or_default())
     }
 }
 
@@ -265,6 +299,7 @@ mod tests {
             device_id: device,
             driver_version: Some(driver.into()),
             software: false,
+            luid: 0,
         }
     }
     fn on_windows(adapter: &GpuAdapter) -> Facts<'_> {
@@ -370,6 +405,48 @@ mod tests {
         ] {
             assert!(Denylist::default().merged(bad_file).is_err(), "{bad_file}");
         }
+    }
+
+    /// Item 2 (record §11): a rule can name Direct3D 12 (wgpu) windows; a
+    /// `software-windows` rule without `window_api` is about OpenGL ones,
+    /// as before.
+    #[test]
+    fn a_window_rule_names_its_windows_api() {
+        let list = Denylist::default()
+            .merged(
+                r#"{"version":1,"rules":[
+                    {"id":"d3d","action":"software-windows","window_api":"direct3d12","vendor_id":"0x8086"},
+                    {"id":"gl","action":"software-windows","vendor_id":"0x8086"},
+                    {"id":"cpu","action":"cpu","vendor_id":"0x8086"}]}"#,
+            )
+            .unwrap();
+        let intel = adapter(0x8086, 0x46A6, "31.0.101.5186");
+        let windows: Vec<_> = list
+            .matches(on_windows(&intel))
+            .iter()
+            .map(|rule| (rule.id.as_str(), rule.windows()))
+            .collect();
+        assert_eq!(
+            windows,
+            [
+                ("d3d", Some(WindowApi::Direct3d12)),
+                ("gl", Some(WindowApi::Opengl)),
+                ("cpu", None)
+            ]
+        );
+        for bad in [
+            r#"{"version":1,"rules":[{"id":"x","action":"cpu","window_api":"direct3d12"}]}"#,
+            r#"{"version":1,"rules":[{"id":"x","action":"software-windows","window_api":"vulkan"}]}"#,
+        ] {
+            assert!(Denylist::default().merged(bad).is_err(), "{bad}");
+        }
+        // The built-in white-window rule is about OpenGL windows.
+        let white = adapter(0x1002, 0x15BF, "32.0.32015.7029");
+        let built_in = Denylist::built_in();
+        assert_eq!(
+            built_in.matches(on_windows(&white))[0].windows(),
+            Some(WindowApi::Opengl)
+        );
     }
 
     #[test]

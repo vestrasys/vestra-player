@@ -190,10 +190,10 @@ impl Host {
                 } else {
                     displays_json(&platform::displays())
                 };
-                let (gpu, reason) = self.backend.render.now();
+                // Player 0.5.13 (SDK 1.5.35): why it renders that way (0.5.19:
+                // in software rendering with the windows named).
+                let (gpu, reason) = self.rendering_reason();
                 let rendering = rendering_json(gpu);
-                // Player 0.5.13 (SDK 1.5.35): why it renders that way.
-                let reason = reason.json();
                 Box::new(move || {
                     let mut value = facts_json(os_facts());
                     value["displays"] = displays;

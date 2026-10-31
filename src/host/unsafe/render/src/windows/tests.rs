@@ -120,6 +120,9 @@ fn warp_renderer_publishes_shows_resizes_and_honours_reshow() {
     assert!(until(10, || handle.frames() > 0), "no frame once open");
     let (_, frame) = handle.latest().expect("latest");
     assert_eq!(frame.size(), (64, 64));
+    // Without the CPU wait the frame may still be on mpv's GPU queue.
+    let ready = &handle.0.fences.get().unwrap().ready;
+    assert!(until(5, || ready.completed() >= frame.0.ready));
     let pixels = d3d::readback::wgpu(&gpu, &frame.0.texture);
     assert!(red(&pixels, 64, 2) > 200 && red(&pixels, 64, 61) < 50);
 
@@ -190,6 +193,67 @@ fn warp_a_failed_renderer_releases_its_fences_and_windows_stop_claiming() {
     drop(renderer);
 }
 
+/// The watchdog (record 搂11 item 4): mpv's device waits on the GPU for a
+/// `done` value no window signals, so `ready` stops moving; after the limit
+/// the renderer stops as after a lost device, with both fences released.
+/// Without a stall (playing, then paused) it never fires.
+#[test]
+fn warp_the_watchdog_stops_a_renderer_whose_fences_stop_moving() {
+    let mpv = player("no");
+    let limit = Some(Duration::from_millis(600));
+    let renderer =
+        Renderer::start_watched(warp_gpu(), mpv.clone(), (64, 64), Arc::new(true.into()), limit)
+            .expect("renderer");
+    let handle = renderer.handle();
+    mpv.command(&["loadfile", SOURCE]).expect("loadfile");
+    assert!(until(10, || handle.frames() > 0), "no frame");
+    let shared = &handle.0;
+    // Playing, then paused: well past the limit, no stall.
+    thread::sleep(Duration::from_millis(1200));
+    mpv.set_property("pause", true).expect("pause");
+    thread::sleep(Duration::from_millis(1200));
+    assert!(handle.failed().is_none(), "{:?}", handle.failed());
+    // Playing again, then the deadlock.
+    mpv.set_property("pause", false).expect("play");
+    shared.stall_now.store(true, Ordering::Release);
+    mpv::Wake::wake(&**shared);
+    assert!(until(15, || handle.failed().is_some()), "the watchdog did not fire");
+    let reason = handle.failed().unwrap();
+    assert!(reason.contains("stalled"), "{reason}");
+    let fences = shared.fences.get().unwrap();
+    assert_eq!((fences.ready.completed(), fences.done.completed()), (u64::MAX, u64::MAX));
+    drop(renderer);
+}
+
+/// Without the CPU wait (the default) the render thread publishes frames
+/// whose `ready` value a window's queue waits for, and their completion is
+/// still timed (`complete`) off the render thread.
+#[test]
+fn warp_frames_are_published_without_the_cpu_wait_and_timed_off_thread() {
+    assert!(!cpu_wait_on(), "VESTRA_GPU_CPU_WAIT is set for the tests");
+    let mpv = player("no");
+    let renderer = Renderer::start_on(warp_gpu(), mpv.clone(), (64, 64), Arc::new(true.into()))
+        .expect("renderer");
+    let handle = renderer.handle();
+    mpv.command(&["loadfile", SOURCE]).expect("loadfile");
+    assert!(until(10, || handle.frames() > 2), "no frames");
+    // Paused: the newest frame stays the newest while it is read back.
+    mpv.set_property("pause", true).expect("pause");
+    thread::sleep(Duration::from_millis(300));
+    let shared = &handle.0;
+    let fences = shared.fences.get().unwrap();
+    let enqueued = shared.ready_enqueued.load(Ordering::Acquire);
+    assert!(enqueued >= 3);
+    assert!(until(5, || fences.ready.completed() >= enqueued), "frames do not finish");
+    assert!(until(5, || lock(&shared.stats).completes > 0), "completion not timed");
+    let text = handle.log_text();
+    assert!(text.contains(" throttled "), "{text}");
+    let (_, frame) = handle.latest().expect("latest");
+    let pixels = d3d::readback::wgpu(&warp_gpu(), &frame.0.texture);
+    assert!(red(&pixels, 64, 2) > 200 && red(&pixels, 64, 61) < 50);
+    drop(renderer);
+}
+
 /// Without a rendering notifier a window keeps its texture claimed until a
 /// newer frame replaces it; then the old one gets its `done` signal.
 #[test]
@@ -233,7 +297,7 @@ fn the_adapter_choice_reads_the_environment_value() {
 
 // ------------------------------------------------- real-machine measurements
 
-/// The spike's measurement (round record 2026-10-wgpu-d3d-spike §3) on the
+/// The spike's measurement (round record 2026-10-wgpu-d3d-spike 搂3) on the
 /// GPU this process gets by default, with a real 4K60 clip: mpv publishes at
 /// the clip's rate through the shared ring, a simulated window takes the
 /// newest frame 60 times a second, and the last frame reads the same
@@ -278,6 +342,8 @@ fn real_gpu_hands_4k60_frames_over_at_the_clip_rate() {
     assert!(produced >= 58., "produced {produced:.1}/s");
     assert!(taken >= 40., "taken {taken:.1}/s");
     let (_, frame) = handle.latest().unwrap();
+    let ready = &handle.0.fences.get().unwrap().ready;
+    assert!(until(5, || ready.completed() >= frame.0.ready));
     let pixels = d3d::readback::wgpu(&gpu, &frame.0.texture);
     assert!(pixels.iter().any(|&byte| byte > 16), "the frame is black");
     drop(renderer);
