@@ -205,7 +205,10 @@ export interface BuiltinCommand {
  * a menu place and default keys that do not collide with the player's (the
  * user's own changes come on top; see {@link @vestra-player/sdk!Bindings | Bindings}). Menu items built
  * from content (tracks, recent files, output devices) are not listed; their
- * placeholders (`No Audio Tracks`) are. The player's tests check that this
+ * placeholders (`No Audio Tracks`) are. Items that appear only in a
+ * passing state are not listed either: the Picture Adjustments plugin's
+ * `Video ▸ Restart Player to Apply` (`video.gpu-rendering.restart`), shown
+ * while a rendering choice waits for the next start. The player's tests check that this
  * list agrees with what the player and its built-in plugins register.
  *
  * @example Check in a test that a default key is still free

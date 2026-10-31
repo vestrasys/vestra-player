@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.11
+
+- The vendored SDK is 1.5.36 (`npm run vendor:sdk`), the version the player now uses. `BUILTIN_COMMANDS` and the reference the AI reads (`llms.txt` / `llms-full.txt`) list the player's `Video ▸ GPU Rendering (Experimental)` item (`video.gpu-rendering`), so the AI sees that menu item and keeps it in mind when it picks menu places and default keys. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
 ## 2.2.10
 
 - The vendored SDK is 1.5.35 (`npm run vendor:sdk`). The reference the AI reads (`llms.txt` / `llms-full.txt`) and the declarations its type check and tests use now cover `plugin.rendering` (the GPU or software rendering choice, capability `rendering.manage`, player 0.5.13), `SystemInfo.renderingReason`, `TestHost.rendering` and the how-to guide *Offer a GPU rendering switch*. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
