@@ -6,8 +6,9 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 import type { Locale } from "@vestra-player/sdk";
 import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
-import { clock, displayName, fileSize, isLocal, keyOf, legacyKeyOf, mediaKind, middle } from "../identity.ts";
+import { bytes, clock, displayName, fileSize, isLocal, keyOf, legacyKeyOf, mediaKind, menuText, middle, middleBytes } from "../identity.ts";
 import activate from "../main.ts";
+import { POINT_BYTES, segmentValid } from "../menu.ts";
 import { timing } from "../store.ts";
 
 Object.assign(timing, { recentWrite: 10, menuRebuild: 10, positionsWrite: 10, positionTick: 25, askTimeout: 400 });
@@ -332,6 +333,138 @@ test("A12 keeps 100 records, shows 20 numbered 1–9, 0, then none; a same-named
   assert.equal(saved.items.length, 100);
   assert.equal(records(host)[0], "1  new.mkv");
   await stop();
+});
+
+/** A record line as the player checks and keys it: the English rendering of `{} ({})`. */
+const englishLine = (segment: unknown) => {
+  if (typeof segment === "string") return segment;
+  const { $vestraText, args = [] } = segment as { $vestraText: string; args?: unknown[] };
+  let next = 0;
+  return $vestraText.replace(/\{\}/g, () => String(args[next++]));
+};
+/** Every record line passes the player's check of a path segment (and its title, 128 bytes), as declared and as shown. */
+function assertPlayerAccepts(host: TestHost) {
+  const lines = [...host.commands.entries()].filter(([id]) => id.startsWith("recent.item."));
+  const keys = new Set<string>();
+  for (const [id, { declaration, display }] of lines) {
+    const key = englishLine(declaration.path!.at(-1));
+    const shown = display.path.at(-1)!;
+    for (const text of [key, shown]) {
+      assert.ok(segmentValid(text), `${id}: ${JSON.stringify(text)} (${bytes(text)} bytes)`);
+      assert.equal(Buffer.from(text).toString(), text, `${id}: no broken character in ${JSON.stringify(text)}`);
+    }
+    keys.add(key);
+  }
+  assert.equal(keys.size, lines.length, "every line is its own menu path");
+  return lines.map(([, { display }]) => display.path.at(-1)!);
+}
+
+test("A12 lines fit the player's 80 bytes: long CJK names with a point in Chinese, emoji, edge spaces, controls, duplicates past the tenth", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  const cjk = "超长的中文文件名".repeat(12) + ".mkv"; // 100 characters, 292 bytes
+  const family = "👨‍👩‍👧‍👦".repeat(10) + ".mkv"; // ZWJ sequences of 25 bytes
+  const names = [
+    cjk,
+    "  spaced name.mkv  ",
+    family,
+    "tab\there\u0007.mkv",
+    " \t ",
+    "a.mkv",
+    "b.mkv",
+    "c.mkv",
+    "d.mkv",
+    "e.mkv",
+    ...Array.from({ length: 10 }, () => cjk), // 11th to 20th: the same name, shortened alike
+  ];
+  const items = names.map((name, i) => ({ key: `/m/${i}/${name}`, source: `/m/${i}/${name}`, kind: "file", openedAt: new Date(0).toISOString() }));
+  // Points (one past an hour), shown in Chinese brackets.
+  const memo = (position: number) => ({ position, duration: 7200, size: null, updatedAt: 1 });
+  const points = Object.fromEntries(items.filter((_, i) => [0, 1, 2].includes(i)).map((item, i) => [item.key, memo(i ? 300 : 3723)]));
+  writeFileSync(join(data, "recent.json"), JSON.stringify({ version: 1, enabled: true, items }));
+  writeFileSync(join(data, "positions.json"), JSON.stringify({ version: 1, mode: "auto", audio: false, items: points }));
+  const { host, stop } = await start(undefined, data);
+  const lines = assertPlayerAccepts(host);
+  assert.equal(lines.length, 20, "no record left out");
+  assert.match(lines[0]!, /^1 {2}超长的中文.*….*\.mkv（1:02:03）$/u);
+  assert.equal(lines[1], "2  spaced name.mkv（05:00）", "edge whitespace trimmed");
+  assert.match(lines[2]!, /^3 {2}(👨‍👩‍👧‍👦)+…(👨‍👩‍👧‍👦)*\.mkv（05:00）$/u, "whole emoji sequences");
+  assert.equal(lines[3], "4  tab here .mkv", "controls become spaces");
+  assert.ok(lines[4]!.startsWith("5  /m/4"), "a name of whitespace only shows its path");
+  for (const [i, line] of lines.slice(10).entries())
+    assert.match(line, i ? new RegExp(`^超长.*….*\\.mkv \\(${i + 1}\\)$`, "u") : /^超长.*….*\.mkv$/u, line);
+  await stop();
+
+  // In English, with a leading space past the tenth (no number in front).
+  const english = mkdtempSync(join(scratch, "data-"));
+  const plain = Array.from({ length: 10 }, (_, i) => `p${i}.mkv`);
+  const items2 = [...plain, "   leading.mkv", cjk].map((name, i) => ({ key: `/e/${i}/${name}`, source: `/e/${i}/${name}`, kind: "file", openedAt: new Date(0).toISOString() }));
+  writeFileSync(join(english, "recent.json"), JSON.stringify({ version: 1, enabled: true, items: items2 }));
+  writeFileSync(join(english, "positions.json"), JSON.stringify({ version: 1, mode: "auto", audio: false, items: { [items2[11]!.key]: memo(3723) } }));
+  const en = await start(undefined, english, "en");
+  const shown = assertPlayerAccepts(en.host);
+  assert.equal(shown[10], "leading.mkv");
+  assert.match(shown[11]!, /^超长.*….*\.mkv \(1:02:03\)$/u);
+  await en.stop();
+});
+
+test("A12 no line repeats another as the player keys them: a name like a line with its point, the fixed items", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  const plain = Array.from({ length: 10 }, (_, i) => `p${i}.mkv`);
+  const names = [...plain, "X (1:02:03)", "X", "Clear Entries", "Remove Invalid Entries", "Record Playback History", "(No Entries)"];
+  const items = names.map((name, i) => ({ key: `/k/${i}/${name}`, source: `/k/${i}/${name}`, kind: "file", openedAt: new Date(0).toISOString() }));
+  const points = { [items[11]!.key]: { position: 3723, duration: 7200, size: null, updatedAt: 1 } };
+  writeFileSync(join(data, "recent.json"), JSON.stringify({ version: 1, enabled: true, items }));
+  writeFileSync(join(data, "positions.json"), JSON.stringify({ version: 1, mode: "auto", audio: false, items: points }));
+  const { host, stop } = await start(undefined, data, "en");
+  const shown = assertPlayerAccepts(host);
+  assert.deepEqual(shown.slice(10), [
+    "X (1:02:03)",
+    "X (2) (1:02:03)",
+    "Clear Entries (2)",
+    "Remove Invalid Entries (2)",
+    "Record Playback History (2)",
+    "(No Entries) (2)",
+  ]);
+  const keys = [...host.commands.values()]
+    .filter((c) => c.declaration.path?.[1] === "Recently Played")
+    .map((c) => englishLine(c.declaration.path!.at(-1)));
+  assert.equal(keys.length, 16 + 3);
+  assert.equal(new Set(keys).size, keys.length, "no two lines of the submenu share a key");
+  await stop();
+});
+
+test("identity: middleBytes shortens by UTF-8 bytes in the middle, whole characters only; segmentValid is the player's rule", () => {
+  assert.equal(middleBytes("abcdefghij", 8), "abc…ij");
+  assert.equal(middleBytes("abc", 3), "abc");
+  for (const [text, max] of [
+    ["电影电影电影电影电影", 13],
+    ["😀😀😀😀😀😀", 15],
+    ["e\u0301e\u0301e\u0301e\u0301e\u0301", 10],
+  ] as const) {
+    const short = middleBytes(text, max);
+    assert.ok(bytes(short) <= max, short);
+    assert.equal(Buffer.from(short).toString(), short);
+    assert.ok(short.includes("…"));
+  }
+  assert.equal(middleBytes("电影电影电影电影电影", 13), "电…电影"); // 3 + 3 + 6: no half character
+  assert.equal(middleBytes("e\u0301e\u0301e\u0301e\u0301", 8), "e\u0301…", "an accent stays with its letter");
+  assert.equal(menuText(" \u0000a\tb\u0085 "), "a b");
+  assert.ok(segmentValid("x".repeat(80)));
+  assert.ok(!segmentValid("x".repeat(81)));
+  assert.ok(!segmentValid("电".repeat(27)), "81 bytes");
+  assert.ok(!segmentValid(" a") && !segmentValid("a\u3000") && !segmentValid("a\nb") && !segmentValid(""));
+});
+
+test("locales: no translation of {} ({}) adds more than POINT_BYTES around the name and the point", () => {
+  const checked: string[] = [];
+  for (const file of readdirSync(new URL("../locales/", import.meta.url)).filter((name) => name.endsWith(".po"))) {
+    const po = readFileSync(new URL(`../locales/${file}`, import.meta.url), "utf8");
+    const translated = /msgid "\{\} \(\{\}\)"\r?\nmsgstr "(.*)"/.exec(po)?.[1];
+    assert.ok(translated, `${file}: {} ({}) is translated`);
+    assert.ok(bytes(translated.replaceAll("{}", "")) <= POINT_BYTES, `${file}: ${translated}`);
+    checked.push(file);
+  }
+  for (const file of ["ja.po", "zh-Hans.po"]) assert.ok(checked.includes(file), file);
 });
 
 test("A12 menu rebuilds within the merge window are one rebuild", async () => {
