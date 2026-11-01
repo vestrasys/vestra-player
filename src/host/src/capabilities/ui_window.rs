@@ -212,8 +212,7 @@ fn change(
                 .as_bool()
                 .ok_or_else(|| RpcError::invalid("visible requires boolean"))?
             {
-                view.instance.show().map_err(anyhow::Error::from)?;
-                platform::shown(&view.instance);
+                show(&view.instance, platform::app_in_foreground())?;
             } else {
                 view.instance.hide().map_err(anyhow::Error::from)?;
             }
@@ -225,4 +224,64 @@ fn change(
         }
     }
     Ok(())
+}
+
+/// `ui.show` with `visible: true`: show the window, and when it is open
+/// already (minimized, or behind other windows) bring it back
+/// (`view::show_again`: to the front with the focus while the user works
+/// in the player, `foreground`; a taskbar flash or Dock bounce otherwise).
+fn show(
+    instance: &slint_interpreter::ComponentInstance,
+    foreground: bool,
+) -> std::result::Result<view::ShownAgain, RpcError> {
+    instance.show().map_err(anyhow::Error::from)?;
+    platform::shown(instance);
+    Ok(view::show_again(instance, foreground))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `ui.show` of an open tool window that the user minimized (Workshop,
+    /// Plugin Store: its menu item chosen again) un-minimizes it while the
+    /// player is in the foreground, and leaves it minimized otherwise (an
+    /// automatic show, such as the resume prompt, takes nothing from the
+    /// app the user works in). Slint's `show()` alone left it minimized.
+    /// The winit half (raise and focus, `SetForegroundWindow`, the taskbar
+    /// flash) has no test platform here: checked by hand in the player.
+    #[test]
+    fn showing_an_open_minimized_window_restores_it_only_in_the_foreground() {
+        let calls = view::recording_platform();
+        let instance = view::compile_source(
+            "export component W inherits Window { width: 100px; height: 100px; }".into(),
+            std::path::Path::new("w.slint"),
+        )
+        .unwrap();
+        instance.show().unwrap();
+        let minimized = || {
+            // The user minimizes it (the winit backend mirrors the system's
+            // state into the window like this).
+            instance.window().set_minimized(true);
+            calls();
+        };
+        // Only the minimized state is checked: `show()` on a shown window
+        // may repeat `set_visible`, which changes no state.
+        let states = || -> Vec<String> {
+            calls()
+                .into_iter()
+                .filter(|call| call.starts_with("minimized"))
+                .collect()
+        };
+        minimized();
+        assert_eq!(show(&instance, false).unwrap(), view::ShownAgain::Attention);
+        assert_eq!(states(), Vec::<String>::new());
+        assert!(instance.window().is_minimized());
+        assert_eq!(show(&instance, true).unwrap(), view::ShownAgain::Front);
+        assert_eq!(states(), ["minimized false"]);
+        assert!(!instance.window().is_minimized());
+        // Shown again while already restored: no state change.
+        assert_eq!(show(&instance, true).unwrap(), view::ShownAgain::Front);
+        assert_eq!(states(), Vec::<String>::new());
+    }
 }

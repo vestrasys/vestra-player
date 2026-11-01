@@ -4,7 +4,9 @@
 //! drags), the modifier keys held right now, the double-click time, the
 //! submenu show delay, the thread's sleep-prevention state, a window's
 //! dark title bar, letting the running player take the foreground for a
-//! second launch's files, waiting for a display's vertical blank
+//! second launch's files, whether this process owns the foreground window
+//! and bringing one of its windows to the front (`foreground_is_ours`,
+//! `set_foreground`), waiting for a display's vertical blank
 //! (`VBlank`, the redraw clock) and keeping a full-screen window from
 //! matching its display exactly (`unmatch_display`), whether an open
 //! file is on a network file system (`file_is_remote`), waiting for a
@@ -153,6 +155,41 @@ pub fn allow_any_foreground() -> bool {
     // SAFETY: AllowSetForegroundWindow takes a process id by value
     // (ASFW_ANY: any process) and has no memory-safety preconditions.
     unsafe { AllowSetForegroundWindow(ASFW_ANY) != 0 }
+}
+
+/// Whether the foreground window (the one the user works in) belongs to
+/// this process. `false` when there is none (a secure desktop, a window
+/// being activated).
+pub fn foreground_is_ours() -> bool {
+    use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowThreadProcessId,
+    };
+    // SAFETY: GetForegroundWindow takes no arguments and returns a handle
+    // value (possibly null), which is not dereferenced here.
+    let window = unsafe { GetForegroundWindow() };
+    if window.is_null() {
+        return false;
+    }
+    let mut process = 0u32;
+    // SAFETY: `window` is passed by value (a stale handle makes the call
+    // return 0, it is not dereferenced); the out-parameter points at the
+    // local `process`, alive and writable for the call.
+    let thread = unsafe { GetWindowThreadProcessId(window, &mut process) };
+    // SAFETY: GetCurrentProcessId takes no arguments.
+    thread != 0 && process == unsafe { GetCurrentProcessId() }
+}
+
+/// Bring window `hwnd` (a raw HWND value) to the front and give it the
+/// keyboard focus with a plain `SetForegroundWindow`: no synthetic input,
+/// so the system's foreground lock applies and the call succeeds only
+/// while this process may take the foreground (it owns the foreground
+/// window, or the user just acted in it). `false` when the system refused.
+pub fn set_foreground(hwnd: isize) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+    // SAFETY: SetForegroundWindow takes the handle by value; an invalid or
+    // foreign HWND makes it return 0, it does not touch memory through it.
+    unsafe { SetForegroundWindow(hwnd as HWND) != 0 }
 }
 
 /// CPU cycles the calling thread has run so far (`QueryThreadCycleTime`):

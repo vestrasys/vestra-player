@@ -41,6 +41,19 @@ fn app() -> Result<objc2::rc::Retained<NSApplication>> {
 /// Nothing to record: AppKit lists the application's windows itself.
 pub fn shown(_instance: &slint_interpreter::ComponentInstance) {}
 
+/// Whether the player is the active application (the user works in one of
+/// its windows).
+pub fn app_in_foreground() -> bool {
+    app().is_ok_and(|app| app.isActive())
+}
+
+/// Bring `window` to the front with the focus while the player is the
+/// active application: winit's `focus_window` (key window, ordered front).
+pub fn focus_own_window(window: &slint::Window) {
+    use slint::winit_030::WinitWindowAccessor;
+    window.with_winit_window(|native| native.focus_window());
+}
+
 /// Capture immediately before showing a newly created host window. Hidden
 /// windows count too: showing an existing native window is not evidence that
 /// the caller created a new one.

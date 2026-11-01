@@ -357,6 +357,97 @@ pub fn perform(window: &slint::Window, action: crate::platform::WindowAction) {
         }
     }
 }
+/// What an explicit show did with a window that was open already.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShownAgain {
+    /// Un-minimized (if it was), in front and focused: the user works in
+    /// the player.
+    Front,
+    /// Left where it is (minimized, or behind another app), its taskbar
+    /// button flashing or the Dock icon bouncing once: the user works in
+    /// another app, and an automatic show (the resume prompt on a file with
+    /// a saved position, an online subtitle search) must not take the
+    /// keyboard from it.
+    Attention,
+}
+
+/// Show a window that is open already again, as an explicit "show" does in
+/// other desktop apps (VS Code, Chrome): Slint's `show()` on a visible
+/// window does nothing, so a minimized tool window or one behind the main
+/// window stayed where it was. `foreground` (`platform::app_in_foreground`):
+/// the user works in one of the player's windows, so the window comes back
+/// un-minimized, in front, with the focus (a plain foreground change, which
+/// the system allows the foreground process; no synthetic input). Otherwise
+/// the protocol cannot tell a user's command from a plugin's own call, so
+/// the window stays where it is and asks for attention instead.
+pub fn show_again(instance: &ComponentInstance, foreground: bool) -> ShownAgain {
+    let window = instance.window();
+    if !foreground {
+        use slint::winit_030::WinitWindowAccessor;
+        window.with_winit_window(|native| {
+            native.request_user_attention(Some(
+                slint::winit_030::winit::window::UserAttentionType::Informational,
+            ))
+        });
+        return ShownAgain::Attention;
+    }
+    let restored = unminimize(window);
+    crate::platform::focus_own_window(window);
+    if restored {
+        focus_after_restore(instance, crate::platform::focus_own_window);
+    }
+    ShownAgain::Front
+}
+
+/// Bring the main window to the front from another app, for files the user
+/// opened in Explorer or Finder (a second launch hands over its foreground
+/// rights): winit's `focus_window`, which on Windows gets past the
+/// foreground lock.
+pub fn raise(instance: &ComponentInstance) {
+    use slint::winit_030::WinitWindowAccessor;
+    let focus = |window: &slint::Window| {
+        window.with_winit_window(|native| native.focus_window());
+    };
+    if unminimize(instance.window()) {
+        focus_after_restore(instance, focus);
+    }
+    focus(instance.window());
+}
+
+/// Un-minimize `window`; whether it was minimized. Slint's own flag goes
+/// first (the winit backend keeps it equal to the system's on every state
+/// change); winit's is checked as well in case a state event has not
+/// arrived yet. Focusing a minimized window does nothing in winit, so this
+/// comes first.
+fn unminimize(window: &slint::Window) -> bool {
+    let mut was = window.is_minimized();
+    if was {
+        window.set_minimized(false);
+    }
+    use slint::winit_030::WinitWindowAccessor;
+    window.with_winit_window(|native| {
+        if native.is_minimized() == Some(true) {
+            was = true;
+            native.set_minimized(false);
+        }
+    });
+    was
+}
+
+/// macOS restores a minimized window with an animation that ends after the
+/// call returns, and winit does not focus a window it still sees minimized:
+/// focus once more on the next turn of the event loop. Windows restores
+/// synchronously.
+fn focus_after_restore(instance: &ComponentInstance, focus: fn(&slint::Window)) {
+    if cfg!(target_os = "macos") {
+        let weak = instance.as_weak();
+        slint::Timer::single_shot(std::time::Duration::ZERO, move || {
+            if let Some(instance) = weak.upgrade() {
+                focus(instance.window());
+            }
+        });
+    }
+}
 /// The main window's close request (its title bar's close button, Alt+F4;
 /// ⌘W does nothing in the main window) quits the player, as in mpv, VLC and PotPlayer: `quit` starts the
 /// player's Quit (the menu's), which ends the event loop, saves the state and
@@ -439,6 +530,10 @@ pub fn open(
     crate::platform::shown(&instance);
     Ok(View { instance })
 }
+
+/// For window tests in other modules (`capabilities::ui_window`).
+#[cfg(test)]
+pub(crate) use tests::recording_platform;
 
 #[cfg(test)]
 mod tests {
@@ -1809,6 +1904,14 @@ export component W inherits Window {
         window.set_maximized(true);
         native_calls();
         (old, sender)
+    }
+
+    /// The recording platform for this thread's windows (other modules'
+    /// tests of window behaviour); returns a function that takes the native
+    /// calls made so far.
+    pub(crate) fn recording_platform() -> fn() -> Vec<String> {
+        slint::platform::set_platform(Box::new(Recording)).unwrap();
+        native_calls
     }
 
     fn video_width(shell: &ComponentInstance) -> f32 {
