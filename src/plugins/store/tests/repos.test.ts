@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { allRows, AVAILABLE, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, other, props, publish, rows, said, signWith, start, tab, THIRD, until, UPDATES } from "./helpers.ts";
+import { allRows, AVAILABLE, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, other, props, publish, rows, said, showBuiltins, signWith, start, tab, THIRD, until, UPDATES } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-repos-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -17,6 +17,7 @@ test("the official index is read, verified and listed when the window opens", as
   const { host, store, stop } = await start({ net });
   try {
     await openStore(host);
+    await showBuiltins(host);
     // Installed is the first tab; Available lists what the index offers.
     assert.equal(props(host)["category"], INSTALLED);
     assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video"]);
@@ -99,6 +100,7 @@ test("offline: the verified cache is used after a restart; a tampered cache is n
   try {
     assert.equal(second.store.repos.official.index?.plugins.length, 2, "cache loaded at start");
     await openStore(second.host);
+    await showBuiltins(second.host);
     // Fresh enough not to be refreshed on opening; 「刷新」 tries the network.
     assert.equal(net.count(OFFICIAL), before);
     second.host.window("store").emit("refresh");
@@ -121,6 +123,7 @@ test("offline: the verified cache is used after a restart; a tampered cache is n
     assert.equal(third.store.repos.official.index, null);
     assert.ok(third.logs.some((line) => line.includes("cached index does not verify")));
     await openStore(third.host);
+    await showBuiltins(third.host);
     await until(third.host, () => /暂时看不到/.test(said(third.store.repos.official.status.text)));
     // Only the built-in plugin is left in the list.
     assert.deepEqual(rows(third.host).map((r) => r.name), ["vestra.video"]);
@@ -162,6 +165,7 @@ test("offline: installed details come from the package; Updates does not claim u
   const third = await start({ net, dataDirectory: join(scratch, "offline-empty"), packages: [BUILTIN, yt] });
   try {
     await openStore(third.host);
+    await showBuiltins(third.host);
     await until(third.host, () => !third.store.repos.official.refreshing && /无法连接/.test(said(third.store.repos.official.status.text)));
     await tab(third.host, UPDATES);
     assert.deepEqual(rows(third.host), []);

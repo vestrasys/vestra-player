@@ -250,4 +250,11 @@ export const isInstalledRow = (item: Item) =>
   item.state === "local" ||
   (item.state === "builtin" && item.repo === null);
 
+/**
+ * A built-in plugin's row (shipped with the player; it cannot be uninstalled
+ * or disabled): its own row under Installed, and a repository's entry for it
+ * under Available ("builtin", or "reserved" for a `vestra.` id).
+ */
+export const isBuiltinRow = (item: Item) => item.installed?.builtin === true;
+
 export const updateCount = (items: readonly Item[]) => items.filter((item) => item.state === "update").length;

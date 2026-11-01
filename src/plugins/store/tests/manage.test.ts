@@ -26,6 +26,7 @@ import {
   props,
   publish,
   rows,
+  showBuiltins,
   start,
   tab,
   until,
@@ -72,6 +73,7 @@ test("row logos: an installed plugin's own icon (offline too), else the store's;
   const { host, stop } = await start({ net, packages: [BUILTIN, own, plain], dataDirectory: join(scratch, "data-offline") });
   try {
     await openStore(host);
+    await showBuiltins(host);
     await until(host, () => logoOf(host, "x.own") !== null && logoOf(host, "x.plain") !== null, "logos");
     // A copy in the store's data folder (the player shows images only from the store's own folders).
     assert.match(String(logoOf(host, "x.own")), /data-offline[\\/]icons[\\/][0-9a-f]+\.png$/);
@@ -109,6 +111,7 @@ test("row logos: repository icons through ui.remoteImage for the rows shown; the
   host.remoteImages.set(broken, null);
   try {
     await openStore(host);
+    await showBuiltins(host);
     await until(host, () => rows(host).length === 1, "installed");
     assert.equal(host.images.filter((image) => image.path.includes(".vestra-cache")).length, 0, "Available not shown yet: nothing fetched");
     await tab(host, AVAILABLE);
@@ -135,6 +138,7 @@ test("reload: busy, invalid (disabled meanwhile), missing (list read again) and 
   });
   try {
     await openStore(host);
+    await showBuiltins(host);
     await until(host, () => rows(host).length === 5, "rows");
     const window = host.window("store");
     const status = () => props(host)["status-text"];
@@ -216,6 +220,7 @@ test("development loads: under Installed with a Dev tag; disable and enable for 
   const { host, stop } = await start({ net, packages: [BUILTIN, dev] });
   try {
     await openStore(host);
+    await showBuiltins(host);
     await until(host, () => row(host, "d.dev") !== undefined, "dev row");
     assert.deepEqual(row(host, "d.dev")!.flags, [{ text: "开发", tone: 1 }]);
     assert.equal(row(host, "d.dev")!.badge, "");
@@ -256,6 +261,7 @@ test("a refused uninstall or a missing plugin: the store reads the list again", 
   const { host, stop } = await start({ net, packages: [BUILTIN, info("u.gone"), info("u.busy")] });
   try {
     await openStore(host);
+    await showBuiltins(host);
     await until(host, () => rows(host).length === 3, "rows");
     const window = host.window("store");
 

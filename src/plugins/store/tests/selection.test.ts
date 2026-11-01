@@ -7,7 +7,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AVAILABLE, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, start, tab, until, UPDATES, yes } from "./helpers.ts";
+import { AVAILABLE, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, until, UPDATES, yes } from "./helpers.ts";
 
 const fromRepo = { kind: "repository", url: OFFICIAL } as const;
 
@@ -32,6 +32,7 @@ async function ready() {
     ],
   });
   await openStore(started.host);
+  await showBuiltins(started.host);
   await until(started.host, () => started.store.items.length === 6, "rows");
   return started;
 }
@@ -62,7 +63,8 @@ const search = async (host: Host, text: string) => {
 test("a tab switch selects the new list's first row, or keeps the selection that it lists", async () => {
   const { host, store, stop } = await ready();
   try {
-    assert.equal(details(host), "vestra.video");
+    // Alpha was the first row while the built-in was hidden; showing it keeps the selection.
+    assert.equal(details(host), "Alpha");
     await tab(host, AVAILABLE);
     assert.deepEqual(rows(host).map((r) => r.name), ["Beta", "Delta", "Gamma"]);
     assert.equal(details(host), "Beta");
@@ -125,6 +127,7 @@ test("an empty tab has no details; the next tab selects its first row again", as
   const { host, store, stop } = await start({ net });
   try {
     await openStore(host);
+    await showBuiltins(host);
     await until(host, () => store.items.length === 2, "rows");
     assert.equal(details(host), "vestra.video");
     await tab(host, UPDATES);

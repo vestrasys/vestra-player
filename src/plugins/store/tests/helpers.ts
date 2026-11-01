@@ -359,6 +359,12 @@ export async function tab(host: TestHost, index: number) {
   await host.settle();
 }
 
+/** Untick "Hide built-in plugins" (on by default): the lists show the built-ins again. */
+export async function showBuiltins(host: TestHost) {
+  host.window("store").emit("setHideBuiltins", false);
+  await host.settle();
+}
+
 /** The rows of every tab (Installed, Available, Updates; an update row shows under Installed too). */
 export async function allRows(host: TestHost) {
   const current = (props(host)["category"] as number | undefined) ?? INSTALLED;

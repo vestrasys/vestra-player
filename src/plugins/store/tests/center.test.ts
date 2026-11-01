@@ -29,6 +29,7 @@ import {
   props,
   publish,
   rows,
+  showBuiltins,
   start,
   tab,
   until,
@@ -66,6 +67,8 @@ async function center() {
   ];
   const started = await start({ net, packages });
   await openStore(started.host);
+  // The built-in row is part of the center: shown ("Hide built-in plugins" is on by default).
+  await showBuiltins(started.host);
   await until(started.host, () => started.store.items.length === 6, "rows");
   return started;
 }
@@ -277,6 +280,7 @@ test("offline on open: a short wait for the headers, then a calm note; Installed
   try {
     const opened = Date.now();
     await openStore(host);
+    await showBuiltins(host);
     assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video"], "the Installed tab needs no network");
     await tab(host, AVAILABLE);
     assert.equal(props(host)["available-known"], false);
@@ -369,6 +373,8 @@ test("installed plugins show the player's translation (PluginInfo.display), Engl
     assert.deepEqual(rows(host).map((r) => r.name), ["时钟"]);
     host.window("store").emit("search", "");
     await host.settle();
+    assert.equal((await allRows(host)).length, 2, "the built-in is hidden");
+    await showBuiltins(host);
     assert.equal((await allRows(host)).length, 3);
   } finally {
     await stop();
