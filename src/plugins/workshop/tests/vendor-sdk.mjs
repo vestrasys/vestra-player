@@ -8,8 +8,9 @@
 // vendor/ is laid out like a node_modules folder without being one (git
 // ignores node_modules/): the CLI finds TypeScript through NODE_PATH.
 //
-//   vendor/@vestra-player/sdk/   package.json, LICENSE, README.md, bin/ (vestra-plugin CLI),
-//                                dist/ (manifest rules, TestHost, .d.ts), slint/ (widget library)
+//   vendor/@vestra-player/sdk/   package.json, LICENSE, README.md, llms.txt, bin/ (vestra-plugin CLI),
+//                                dist/ (manifest rules, TestHost, .d.ts, the docs tree
+//                                docs.js + docs-tree.json.gz), slint/ (widget library)
 //   vendor/typescript/           the SDK's TypeScript: tsc and the compiler API, lib .d.ts
 //   vendor/@types/node/          the SDK's @types/node, and its undici-types
 //   vendor/undici-types/
@@ -17,9 +18,10 @@
 // Maintainer's alternative to R-h (round 2026-10-vestra-ai): the player's
 // runtime does not ship the CLI, so this plugin brings it along.
 //
-// The reference the agent reads is the SDK's own llms.txt / llms-full.txt
-// (shipped since 1.5.6), copied with the package; an SDK without them is
-// refused.
+// The reference the agent reads is the SDK's own documentation tree
+// (@vestra-player/sdk/docs: dist/docs.js and dist/docs-tree.json.gz, since
+// 1.5.50; the agent's docs and docs_search tools), copied with the package
+// together with its short llms.txt; an SDK without them is refused.
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
@@ -42,7 +44,7 @@ export function sources() {
 }
 
 const TREES = ["vendor/@vestra-player", "vendor/typescript", "vendor/@types", "vendor/undici-types"];
-const SDK_FILES = ["package.json", "LICENSE", "README.md", "bin", "dist", "slint", "llms.txt", "llms-full.txt"];
+const SDK_FILES = ["package.json", "LICENSE", "README.md", "bin", "dist", "slint", "llms.txt"];
 /** tsc (lib/tsc.js loads lib/_tsc.js), the compiler API the CLI transpiles with, and the lib declarations. */
 const TS_FILE = (name) => /^(tsc|_tsc|typescript)\.js$/.test(name) || /^lib\..*\.d\.ts$/.test(name);
 
@@ -60,8 +62,8 @@ async function copyTree(from, to, keep = () => true) {
 /** Writes vendor/ under `out` (a plugin-shaped directory). */
 export async function vendor(out) {
   const from = sources();
-  for (const file of ["llms.txt", "llms-full.txt"])
-    if (!existsSync(path.join(from.sdk, file))) throw new Error(`@vestra-player/sdk at ${from.sdk} has no ${file} (needs 1.5.6 or later)`);
+  for (const file of ["llms.txt", "dist/docs.js", "dist/docs-tree.json.gz"])
+    if (!existsSync(path.join(from.sdk, file))) throw new Error(`@vestra-player/sdk at ${from.sdk} has no ${file} (needs 1.5.50 or later)`);
   for (const rel of TREES) await fs.rm(path.join(out, rel), { recursive: true, force: true });
   await copyTree(from.sdk, path.join(out, "vendor/@vestra-player/sdk"), (name) => SDK_FILES.includes(name));
   await copyTree(from.typescript, path.join(out, "vendor/typescript"), (name) => ["package.json", "LICENSE.txt", "ThirdPartyNoticeText.txt", "lib"].includes(name));
@@ -106,7 +108,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (process.argv.includes("--write")) {
     await vendor(plugin);
     const { version } = JSON.parse(await fs.readFile(path.join(plugin, "vendor/@vestra-player/sdk/package.json"), "utf8"));
-    console.log(`vendor/: @vestra-player/sdk ${version} (with its llms.txt / llms-full.txt), its TypeScript and @types/node`);
+    console.log(`vendor/: @vestra-player/sdk ${version} (with its documentation tree and llms.txt), its TypeScript and @types/node`);
   } else {
     const changed = await differences();
     console.log(changed.length ? `out of date:\n${changed.join("\n")}` : "vendored SDK toolchain is current");

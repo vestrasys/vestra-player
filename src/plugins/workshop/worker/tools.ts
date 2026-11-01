@@ -1,9 +1,10 @@
 // The agent's tools: pi's read/write/edit/ls/find on our WorkFolder, a
 // pure-JS grep (pi's grep always starts ripgrep; the worker may not spawn)
-// and delete (so a debug file does not have to stay in the project).
-// read, ls, find and grep also reach the read-only reference folders (the
-// SDK package with its llms.txt) by a short name, sdk/… (also their absolute
-// path); write, edit and delete only the work folder.
+// delete (so a debug file does not have to stay in the project) and the SDK
+// documentation (docs, docs_search). read, ls, find and grep also reach the
+// read-only reference folders (the SDK package: its .d.ts declarations and
+// Slint library) by a short name, sdk/… (also their absolute path); write,
+// edit and delete only the work folder.
 import path from "node:path";
 import {
   Type,
@@ -14,17 +15,18 @@ import {
   createWriteToolDefinition,
   type ToolDefinition,
 } from "../vendor/pi/pi.mjs";
+import { DOCS_TOOL_NAMES, docsTools } from "./docs-tools.ts";
 import { MAX_FILE, TooLargeError, WorkFolder, megabytes } from "./files.ts";
 
 /** Most files one grep walks. */
 const GREP_FILES = 5000;
 
-export const TOOL_NAMES = ["read", "write", "edit", "ls", "find", "grep", "delete"];
+export const TOOL_NAMES = ["read", "write", "edit", "ls", "find", "grep", "delete", ...DOCS_TOOL_NAMES];
 
 /**
  * The folder a path belongs to: a reference folder it lies in, else the work
  * folder (which refuses it if outside). A reference folder also goes by its
- * folder name relative to the work folder (`sdk/llms.txt`, pi drops a leading
+ * folder name relative to the work folder (`sdk/dist/plugin/types.d.ts`, pi drops a leading
  * `@`): models copy a 100-character absolute path wrong (field test
  * 2026-10-24: 23 of 28 failed calls). Project folders are ids with a dot, so
  * the names never meet a project.
@@ -157,9 +159,9 @@ function deleteTool(folders: Folders): ToolDefinition {
 }
 
 /**
- * The agent's tools; `extra`: tools the plugin process answers (the plugin
- * tools; also where the SDK docs tools, docs(path) and docs_search(query),
- * will join once the SDK ships its docs entry).
+ * The agent's tools: the file tools, grep, delete, the SDK documentation
+ * (docs, docs_search; docs-tools.ts) and `extra`, the tools the plugin
+ * process answers (the plugin tools).
  */
 export function createTools(folders: Folders, extra: ToolDefinition[] = []): ToolDefinition[] {
   const folder = folders.work;
@@ -196,6 +198,7 @@ export function createTools(folders: Folders, extra: ToolDefinition[] = []): Too
     }),
     grepTool(folders),
     deleteTool(folders),
+    ...docsTools(),
     ...extra,
   ] as ToolDefinition[];
 }

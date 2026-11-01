@@ -51,7 +51,7 @@ export async function runTask(task, model, { timeoutMs = 15 * 60_000, owner = "e
           workDir: session.work,
           sessionFile: null,
           ...model,
-          systemPrompt: systemPrompt({ sdk: toolchain.sdk, index: toolchain.docsIndex(), sdkVersion: toolchain.sdkVersion, owner, delivery: false }),
+          systemPrompt: systemPrompt({ sdk: toolchain.sdk, sdkVersion: toolchain.sdkVersion, owner, delivery: false }),
           docsRoots: toolchain.docsRoots(),
           pluginTools: BUILD_TOOLS,
         },

@@ -88,7 +88,7 @@ test("a message streams back; the write tool shows one tool line and the file la
   assert.match(body.messages[0].content, /Vestra Player AI/);
   assert.deepEqual(
     body.tools.map((t) => t.function.name).sort(),
-    ["check", "delete", "edit", "find", "grep", "install_plugin", "ls", "pack", "read", "scaffold_plugin", "test", "typecheck", "write"],
+    ["check", "delete", "docs", "docs_search", "edit", "find", "grep", "install_plugin", "ls", "pack", "read", "scaffold_plugin", "test", "typecheck", "write"],
   );
 
   await ai.send("toggle", tools.id);

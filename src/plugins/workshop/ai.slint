@@ -119,6 +119,8 @@ component Message inherits VerticalLayout {
             : tool == "find" ? @tr("Find")
             : tool == "grep" ? @tr("Search")
             : tool == "delete" ? @tr("Delete")
+            : tool == "docs" ? @tr("Docs")
+            : tool == "docs_search" ? @tr("Search docs")
             : tool == "scaffold_plugin" ? @tr("Create plugin")
             : tool == "typecheck" ? @tr("Type check")
             : tool == "test" ? @tr("Run tests")
@@ -128,7 +130,7 @@ component Message inherits VerticalLayout {
             : tool
     }
     pure function target(call: ToolCall) -> string {
-        // TRANSLATORS: a file of the read-only reference, e.g. "reference/sdk/llms.txt".
+        // TRANSLATORS: a file of the read-only reference, e.g. "reference/sdk/dist/plugin/types.d.ts".
         call.reference ? @tr("reference/{}", call.target) : call.target
     }
     pure function label(call: ToolCall) -> string {

@@ -19,13 +19,10 @@ test("vendor/ matches a fresh build from the player's SDK (run `npm run vendor:s
   assert.equal(new Toolchain(plugin, "/unused").sdkVersion, installed);
 });
 
-test("the reference is the SDK's own llms.txt: an index with the modules and capabilities, the full text with the examples", async () => {
+test("the reference is the SDK's own documentation tree, vendored with the package (no llms-full.txt)", async () => {
   const toolchain = new Toolchain(plugin, "/unused");
-  const index = await fs.readFile(toolchain.docsIndex(), "utf8");
-  const full = await fs.readFile(path.join(path.dirname(toolchain.docsIndex()), "llms-full.txt"), "utf8");
-  assert.ok(index.length < 64 * 1024, `llms.txt is ${index.length} bytes`);
-  for (const word of ["plugin.commands", "Windows.create", "ui.window", "dist/plugin/"]) assert.ok(index.includes(word), word);
-  for (const example of ["hello", "blur", "signal-generator", "bookmark", "panel-menu", "menus", "theme-widgets", "markdown"]) assert.ok(full.includes(`examples/${example}`), example);
+  for (const file of ["dist/docs.js", "dist/docs-tree.json.gz", "dist/plugin/types.d.ts", "dist/plugin/testing.d.ts", "llms.txt"]) await fs.access(path.join(toolchain.sdk, file));
+  await assert.rejects(fs.access(path.join(toolchain.sdk, "llms-full.txt")));
   assert.ok(toolchain.docsRoots().every((root) => root.startsWith(plugin)));
 });
 
@@ -35,7 +32,7 @@ test("the agent's tools read the reference but write only the work folder", asyn
   const toolchain = new Toolchain(plugin, root);
   const docs = await Promise.all(toolchain.docsRoots().map((r) => WorkFolder.open(r)));
   const folders = new Folders(await WorkFolder.open(path.join(root, "work")), docs);
-  const index = await fs.realpath(toolchain.docsIndex());
+  const index = await fs.realpath(path.join(toolchain.sdk, "llms.txt"));
   assert.notEqual(folders.of(index), folders.work);
   assert.match((await folders.of(index).readFile(index)).toString(), /SDK/);
   assert.equal(folders.of("notes.md"), folders.work);
@@ -50,7 +47,7 @@ test("the reference by its short name: sdk/… reads, lists and greps the SDK; w
   const folders = await Folders.open(path.join(root, "work"), toolchain.docsRoots());
   const tools = Object.fromEntries(createTools(folders).map((t) => [t.name, t]));
   const run = async (name, args) => (await tools[name].execute("1", args, undefined, undefined, undefined)).content.map((c) => c.text).join("");
-  const index = await fs.readFile(toolchain.docsIndex(), "utf8");
+  const index = await fs.readFile(path.join(toolchain.sdk, "llms.txt"), "utf8");
   assert.equal(await run("read", { path: "sdk/llms.txt", limit: 3 }).then((t) => t.split("\n")[0]), index.split("\n")[0]);
   assert.equal(await run("read", { path: "@sdk/llms.txt", limit: 1 }).then((t) => t.split("\n")[0]), index.split("\n")[0]);
   assert.match(await run("ls", { path: "sdk/dist/plugin" }), /types\.d\.ts/);
@@ -59,13 +56,13 @@ test("the reference by its short name: sdk/… reads, lists and greps the SDK; w
   await assert.rejects(run("write", { path: "sdk/llms.txt", content: "x" }), /read-only/);
   await assert.rejects(run("write", { path: "sdk/new.txt", content: "x" }), /read-only/);
   await assert.rejects(run("delete", { path: "sdk/llms.txt" }), /read-only/);
-  assert.equal(await fs.readFile(toolchain.docsIndex(), "utf8"), index);
+  assert.equal(await fs.readFile(path.join(toolchain.sdk, "llms.txt"), "utf8"), index);
   await assert.rejects(fs.access(path.join(root, "work", "sdk")));
 });
 
 test("a write into the reference fails and the file stays as it is", async () => {
   const toolchain = new Toolchain(plugin, "/unused");
-  const index = await fs.realpath(toolchain.docsIndex());
+  const index = await fs.realpath(path.join(toolchain.sdk, "llms.txt"));
   const before = await fs.readFile(index, "utf8");
   const mock = await server((req) => {
     const last = req.body.messages.at(-1);
@@ -106,4 +103,46 @@ test("grep names the files it skipped as too large instead of reporting no match
   assert.equal(await run("grep", { pattern: "hay|needle", path: "local.big" }), `local.big/small.txt:1: hay\n${skipped}`);
   assert.equal(await run("grep", { pattern: "nothing", path: "local.big/small.txt" }), "No matches found");
   await assert.rejects(run("read", { path: "local.big/huge.txt", limit: 1 }), /File larger than 1\.0 MB \(1\.0 MB\): local\.big\/huge\.txt/);
+});
+
+/** The agent's docs tools, as createTools gives them to the worker. */
+async function docsTool() {
+  const { run } = await agentTools();
+  return run;
+}
+
+test("docs: the vendored SDK's tree from the root down to a member", async () => {
+  const run = await docsTool();
+  const root = await run("docs", {});
+  assert.match(root, /^\/ · Vestra Player SDK 1\.5\.\d+ documentation/);
+  for (const path of ["/Overview", "/Guides", "/API"]) assert.ok(root.includes(`- ${path}`), path);
+  assert.equal(await run("docs", { path: "/" }), root);
+  const member = await run("docs", { path: "/API/Media/Snapshot/export" });
+  assert.match(member, /^\/API\/Media\/Snapshot\/export · Method/);
+  assert.match(member, /export\(options: ExportOptions\): Promise<ExportJob>/);
+  // A name alone finds its declaration.
+  assert.match(await run("docs", { path: "Snapshot.export" }), /^\/API\/Media\/Snapshot\/export/);
+  for (const answer of [root, member]) assert.ok(Buffer.byteLength(answer) <= 8192);
+});
+
+test("docs_search: the best match first, and long answers in pages", async () => {
+  const run = await docsTool();
+  const first = await run("docs_search", { query: "add a menu item" });
+  assert.match(first, /^Search: add a menu item · page 1 of (\d+)/);
+  const hits = first.split("\n").filter((line) => line.startsWith("- /"));
+  assert.match(hits[0], /^- \/API\/Commands\/Commands\/add /);
+  const pages = Number(/page 1 of (\d+)/.exec(first)[1]);
+  assert.ok(pages > 1);
+  const second = await run("docs_search", { query: "add a menu item", page: 2 });
+  assert.match(second, /· page 2 of /);
+  assert.notEqual(second, first);
+  assert.ok(Buffer.byteLength(first) <= 8192 && Buffer.byteLength(second) <= 8192);
+  // A bad page number is the first page, not an error.
+  assert.equal(await run("docs_search", { query: "add a menu item", page: 0 }), first);
+});
+
+test("the docs tools come from the vendored SDK, not from a node_modules folder", async () => {
+  const source = await fs.readFile(path.join(plugin, "worker", "docs-tools.ts"), "utf8");
+  assert.match(source, /from "\.\.\/vendor\/@vestra-player\/sdk\/dist\/docs\.js"/);
+  assert.doesNotMatch(source, /from "@vestra-player\/sdk/);
 });

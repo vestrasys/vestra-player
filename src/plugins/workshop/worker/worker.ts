@@ -83,7 +83,7 @@ function targetOf(args: unknown): { target: string; reference: boolean } {
   // The short name, sdk/… (see Folders).
   const short = p.replace(/^@/, "").replace(/^\.\//, "");
   if (docsRoots.some((r) => short === path.basename(r) || short.startsWith(`${path.basename(r)}/`))) return { target: short, reference: true };
-  for (const key of ["path", "pattern", "file", "id", "name"]) if (typeof value[key] === "string") return { target: value[key] as string, reference: false };
+  for (const key of ["path", "pattern", "query", "file", "id", "name"]) if (typeof value[key] === "string") return { target: value[key] as string, reference: false };
   return { target: "", reference: false };
 }
 

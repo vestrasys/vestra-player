@@ -36,467 +36,477 @@ msgstr "Encontrar"
 msgid "Search"
 msgstr "Buscar"
 
-#: ai.slint:121 main.ts:543 settings.slint:197
+#: ai.slint:121 main.ts:542 settings.slint:197
 #, x-machine
 msgid "Delete"
 msgstr "Eliminar"
 
 #: ai.slint:122
 #, x-machine
+msgid "Docs"
+msgstr "Documentación"
+
+#: ai.slint:123
+#, x-machine
+msgid "Search docs"
+msgstr "Buscar en la documentación"
+
+#: ai.slint:124
+#, x-machine
 msgid "Create plugin"
 msgstr "Crear complemento"
 
-#: ai.slint:123
+#: ai.slint:125
 #, x-machine
 msgid "Type check"
 msgstr "Comprobar tipos"
 
-#: ai.slint:124
+#: ai.slint:126
 #, x-machine
 msgid "Run tests"
 msgstr "Ejecutar pruebas"
 
-#: ai.slint:125
+#: ai.slint:127
 #, x-machine
 msgid "Check"
 msgstr "Comprobar"
 
-#: ai.slint:126
+#: ai.slint:128
 #, x-machine
 msgid "Pack"
 msgstr "Empaquetar"
 
-#: ai.slint:127 ai.slint:362 ai.slint:689 delivery.ts:169
+#: ai.slint:129 ai.slint:364 ai.slint:691 delivery.ts:169
 #, x-machine
 msgid "Install"
 msgstr "Instalar"
 
-#. a file of the read-only reference, e.g. "reference/sdk/llms.txt".
-#: ai.slint:132
+#. a file of the read-only reference, e.g. "reference/sdk/dist/plugin/types.d.ts".
+#: ai.slint:134
 #, x-machine
 msgid "reference/{}"
 msgstr "reference/{}"
 
 #. a tool and what it is about, e.g. "Read main.ts".
-#: ai.slint:136
+#: ai.slint:138
 #, x-machine
 msgid "{0} {1}"
 msgstr "{0} {1}"
 
-#: ai.slint:142
+#: ai.slint:144
 #, x-machine
 msgid "Replying…"
 msgstr "Respondiendo…"
 
-#: ai.slint:142 ai.slint:156
+#: ai.slint:144 ai.slint:158
 #, x-machine
 msgid "Thinking…"
 msgstr "Pensando…"
 
-#: ai.slint:149
+#: ai.slint:151
 #, x-machine
 msgid "{0}, {1} failed"
 msgstr "{0}, {1} con error"
 
-#: ai.slint:153
+#: ai.slint:155
 #, x-machine
 msgid "{n} tool call"
 msgid_plural "{n} tool calls"
 msgstr[0] "{n} llamada a herramienta"
 msgstr[1] "{n} llamadas a herramientas"
 
-#: ai.slint:157
+#: ai.slint:159
 #, x-machine
 msgid "Thought for {n} second"
 msgid_plural "Thought for {n} seconds"
 msgstr[0] "Pensó durante {n} segundo"
 msgstr[1] "Pensó durante {n} segundos"
 
-#: ai.slint:158
+#: ai.slint:160
 #, x-machine
 msgid "Thought process"
 msgstr "Razonamiento"
 
-#: ai.slint:159
+#: ai.slint:161
 #, x-machine
 msgid "{n} progress note"
 msgid_plural "{n} progress notes"
 msgstr[0] "{n} nota de progreso"
 msgstr[1] "{n} notas de progreso"
 
-#: ai.slint:162
+#: ai.slint:164
 #, x-machine
 msgid "Stopped"
 msgstr "Detenido"
 
-#: ai.slint:163
+#: ai.slint:165
 #, x-machine
 msgid "The last reply was interrupted (the player or the plugin quit)"
 msgstr "Se interrumpió la última respuesta (se cerró el reproductor o el complemento)"
 
-#: ai.slint:164
+#: ai.slint:166
 #, x-machine
 msgid "Connection failed; retrying ({0}/{1})…"
 msgstr "Error de conexión; reintentando ({0}/{1})…"
 
-#: ai.slint:165
+#: ai.slint:167
 #, x-machine
 msgid "Compacting the context…"
 msgstr "Compactando el contexto…"
 
-#: ai.slint:166
+#: ai.slint:168
 #, x-machine
 msgid "Context compacted"
 msgstr "Contexto compactado"
 
-#: ai.slint:167
+#: ai.slint:169
 #, x-machine
 msgid "Could not delete “{0}”: {1}"
 msgstr "No se pudo eliminar «{0}»: {1}"
 
-#: ai.slint:168
+#: ai.slint:170
 #, x-machine
 msgid "{n} earlier message is not shown (the full record is in the session folder)"
 msgid_plural "{n} earlier messages are not shown (the full record is in the session folder)"
 msgstr[0] "No se muestra {n} mensaje anterior (el registro completo está en la carpeta de la sesión)"
 msgstr[1] "No se muestran {n} mensajes anteriores (el registro completo está en la carpeta de la sesión)"
 
-#: ai.slint:172
+#: ai.slint:174
 #, x-machine
 msgid "The API key is invalid or has no permission; check it in the settings."
 msgstr "La clave de API no es válida o no tiene permiso; revísala en la configuración."
 
-#: ai.slint:173
+#: ai.slint:175
 #, x-machine
 msgid "The model “{}” is not available; choose another model in the settings."
 msgstr "El modelo «{}» no está disponible; elige otro modelo en la configuración."
 
-#: ai.slint:174
+#: ai.slint:176
 #, x-machine
 msgid "The model is not available; choose another model in the settings."
 msgstr "El modelo no está disponible; elige otro modelo en la configuración."
 
-#: ai.slint:175
+#: ai.slint:177
 #, x-machine
 msgid "The model does not accept the thinking settings: in the settings, set Thinking to Off, or clear “This model can think before it answers”."
 msgstr "El modelo no acepta los ajustes de razonamiento: en los ajustes, pon Razonamiento en Desactivado o desmarca «Este modelo piensa antes de responder»."
 
-#: ai.slint:176
+#: ai.slint:178
 #, x-machine
 msgid "Out of quota or too many requests; try again later."
 msgstr "Cuota agotada o demasiadas solicitudes; inténtalo más tarde."
 
-#: ai.slint:177
+#: ai.slint:179
 #, x-machine
 msgid "Network error: cannot reach the provider."
 msgstr "Error de red: no se puede contactar con el proveedor."
 
-#: ai.slint:178
+#: ai.slint:180
 #, x-machine
 msgid "No reply from the provider for {} seconds; stopped."
 msgstr "Sin respuesta del proveedor durante {} segundos; se detuvo."
 
-#: ai.slint:179
+#: ai.slint:181
 #, x-machine
 msgid "The agent process quit unexpectedly."
 msgstr "El proceso del agente se cerró inesperadamente."
 
-#: ai.slint:181
+#: ai.slint:183
 #, x-machine
 msgid "Something went wrong."
 msgstr "Algo salió mal."
 
-#: ai.slint:257 ai.slint:288
+#: ai.slint:259 ai.slint:290
 #, x-machine
 msgid "Collapse ▾"
 msgstr "Contraer ▾"
 
-#: ai.slint:257
+#: ai.slint:259
 #, x-machine
 msgid "Show ▸"
 msgstr "Mostrar ▸"
 
-#: ai.slint:268 ai.slint:318 ai.slint:325
+#: ai.slint:270 ai.slint:320 ai.slint:327
 #, x-machine
 msgid "… (too long; the rest is not shown)"
 msgstr "… (demasiado largo; no se muestra el resto)"
 
-#: ai.slint:288
+#: ai.slint:290
 #, x-machine
 msgid "All ▸"
 msgstr "Todo ▸"
 
-#: ai.slint:321
+#: ai.slint:323
 #, x-machine
 msgid "Copy"
 msgstr "Copiar"
 
-#: ai.slint:343
+#: ai.slint:345
 #, x-machine
 msgid "Retry"
 msgstr "Reintentar"
 
-#: ai.slint:344
+#: ai.slint:346
 #, x-machine
 msgid "Open Settings"
 msgstr "Abrir configuración"
 
-#: ai.slint:363 ai.slint:690
+#: ai.slint:365 ai.slint:692
 #, x-machine
 msgid "Export .vxp"
 msgstr "Exportar .vxp"
 
-#: ai.slint:364 ai.slint:691
+#: ai.slint:366 ai.slint:693
 #, x-machine
 msgid "Export Source .zip"
 msgstr "Exportar código fuente .zip"
 
-#: ai.slint:365 ai.slint:582 ai.slint:692
+#: ai.slint:367 ai.slint:584 ai.slint:694
 #, x-machine
 msgid "Open Folder"
 msgstr "Abrir carpeta"
 
-#: ai.slint:431
+#: ai.slint:433
 #, x-machine
 msgid "Reading the API key from the keychain… (the system may ask for permission)"
 msgstr "Leyendo la clave de API del llavero… (el sistema puede pedir permiso)"
 
-#: ai.slint:432
+#: ai.slint:434
 #, x-machine
 msgid "Cannot read the key from the keychain; save it again in the settings. ({})"
 msgstr "No se puede leer la clave del llavero; vuelve a guardarla en la configuración. ({})"
 
-#: ai.slint:433
+#: ai.slint:435
 #, x-machine
 msgid "Cannot read the key from the keychain; save it again in the settings. (The key is not in the keychain)"
 msgstr "No se puede leer la clave del llavero; vuelve a guardarla en la configuración. (La clave no está en el llavero)"
 
-#: ai.slint:434
+#: ai.slint:436
 #, x-machine
 msgid "The API key has not been read yet."
 msgstr "Aún no se ha leído la clave de API."
 
-#: ai.slint:435
+#: ai.slint:437
 #, x-machine
 msgid "No provider set up: choose a provider in the settings and save its API key first."
 msgstr "No hay ningún proveedor configurado: elige primero un proveedor en la configuración y guarda su clave de API."
 
-#: ai.slint:440
+#: ai.slint:442
 #, x-machine
 msgid "Install {0} {1}"
 msgstr "Instalar {0} {1}"
 
-#: ai.slint:443
+#: ai.slint:445
 #, x-machine
 msgid "done"
 msgstr "completado"
 
-#: ai.slint:444
+#: ai.slint:446
 #, x-machine
 msgid "cancelled"
 msgstr "cancelado"
 
-#: ai.slint:445
+#: ai.slint:447
 #, x-machine
 msgid "failed"
 msgstr "error"
 
-#: ai.slint:446
+#: ai.slint:448
 #, x-machine
 msgid "failed; the previous version could not be fully restored"
 msgstr "error; no se pudo restaurar por completo la versión anterior"
 
-#: ai.slint:447
+#: ai.slint:449
 #, x-machine
 msgid "too late to cancel"
 msgstr "demasiado tarde para cancelar"
 
-#: ai.slint:451
+#: ai.slint:453
 #, x-machine
 msgid "Packing {}…"
 msgstr "Empaquetando {}…"
 
-#: ai.slint:452
+#: ai.slint:454
 #, x-machine
 msgid "The player is validating {}…"
 msgstr "El reproductor está validando {}…"
 
-#: ai.slint:453
+#: ai.slint:455
 #, x-machine
 msgid "The player's validation failed ({0}): {1}"
 msgstr "Falló la validación del reproductor ({0}): {1}"
 
-#: ai.slint:454
+#: ai.slint:456
 #, x-machine
 msgid "Checks before packing failed: {} problem(s)"
 msgstr "Fallaron las comprobaciones previas al empaquetado: {} problema(s)"
 
-#: ai.slint:455
+#: ai.slint:457
 #, x-machine
 msgid "Packing failed: {} type error(s)"
 msgstr "Error al empaquetar: {} error(es) de tipos"
 
-#: ai.slint:456
+#: ai.slint:458
 #, x-machine
 msgid "Packing failed"
 msgstr "Error al empaquetar"
 
-#: ai.slint:457
+#: ai.slint:459
 #, x-machine
 msgid "Packing failed: no .vxp was written"
 msgstr "Error al empaquetar: no se escribió ningún .vxp"
 
-#: ai.slint:458
+#: ai.slint:460
 #, x-machine
 msgid "Packing cancelled"
 msgstr "Empaquetado cancelado"
 
-#: ai.slint:459
+#: ai.slint:461
 #, x-machine
 msgid "Packing timed out and was stopped"
 msgstr "El empaquetado superó el tiempo de espera y se detuvo"
 
-#: ai.slint:460
+#: ai.slint:462
 #, x-machine
 msgid "Not installed (cancelled)."
 msgstr "No instalado (cancelado)."
 
-#: ai.slint:461
+#: ai.slint:463
 #, x-machine
 msgid "Installing {}…"
 msgstr "Instalando {}…"
 
-#: ai.slint:462
+#: ai.slint:464
 #, x-machine
 msgid "{} has the name of a plugin built into the player and cannot be installed; choose another id."
 msgstr "{} tiene el nombre de un complemento integrado en el reproductor y no se puede instalar; elige otro id."
 
-#: ai.slint:463
+#: ai.slint:465
 #, x-machine
 msgid "Not installed: the installed plugin was kept."
 msgstr "No instalado: se mantuvo el complemento instalado."
 
-#: ai.slint:464
+#: ai.slint:466
 #, x-machine
 msgid "{0}: {1}…"
 msgstr "{0}: {1}…"
 
-#: ai.slint:465
+#: ai.slint:467
 #, x-machine
 msgid "{0}: {1} ({2})"
 msgstr "{0}: {1} ({2})"
 
-#: ai.slint:466
+#: ai.slint:468
 #, x-machine
 msgid "{0}: {1}"
 msgstr "{0}: {1}"
 
-#: ai.slint:467
+#: ai.slint:469
 #, x-machine
 msgid "Installed {0} {1}. Shortcuts not in effect:"
 msgstr "Se instaló {0} {1}. Atajos sin efecto:"
 
-#: ai.slint:468
+#: ai.slint:470
 #, x-machine
 msgid "Installed {0} {1}."
 msgstr "Se instaló {0} {1}."
 
-#: ai.slint:469
+#: ai.slint:471
 #, x-machine
 msgid "Exported {}"
 msgstr "Exportado: {}"
 
-#: ai.slint:470
+#: ai.slint:472
 #, x-machine
 msgid "Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "Exportado: {}. El id empieza por local.: antes de publicar, cambia el id en manifest.json a <tu nombre de GitHub>.<nombre>; LICENSE es un marcador de posición: antes de publicar, sustitúyelo por el texto completo de la licencia que elijas y define license en manifest.json."
 
-#: ai.slint:471
+#: ai.slint:473
 #, x-machine
 msgid "Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "Exportado: {}. LICENSE es un marcador de posición: antes de publicar, sustitúyelo por el texto completo de la licencia que elijas y define license en manifest.json."
 
-#: ai.slint:472
+#: ai.slint:474
 #, x-machine
 msgid "Something went wrong: {}"
 msgstr "Algo salió mal: {}"
 
-#: ai.slint:478
+#: ai.slint:480
 #, x-machine
 msgid "{0} ({1}) is taken by {2}"
 msgstr "{0} ({1}) lo ocupa {2}"
 
-#: ai.slint:481
+#: ai.slint:483
 #, x-machine
 msgid "the player “{}”"
 msgstr "el reproductor «{}»"
 
-#: ai.slint:481
+#: ai.slint:483
 #, x-machine
 msgid "{0} “{1}”"
 msgstr "{0} «{1}»"
 
-#: ai.slint:513
+#: ai.slint:515
 #, x-machine
 msgid "+ New Chat"
 msgstr "+ Nuevo chat"
 
-#: ai.slint:530 ai.slint:572
+#: ai.slint:532 ai.slint:574
 #, x-machine
 msgid "New chat"
 msgstr "Nuevo chat"
 
-#: ai.slint:530
+#: ai.slint:532
 #, x-machine
 msgid "Today"
 msgstr "Hoy"
 
-#: ai.slint:530
+#: ai.slint:532
 #, x-machine
 msgid "Earlier"
 msgstr "Anteriores"
 
-#: ai.slint:543 ai.slint:587
+#: ai.slint:545 ai.slint:589
 #, x-machine
 msgid "Delete Chat"
 msgstr "Eliminar chat"
 
-#: ai.slint:550
+#: ai.slint:552
 #, x-machine
 msgid "⚙ Settings"
 msgstr "⚙ Configuración"
 
-#: ai.slint:608
+#: ai.slint:610
 #, x-machine
 msgid "Go to Settings"
 msgstr "Ir a la configuración"
 
-#: ai.slint:622
+#: ai.slint:624
 #, x-machine
 msgid "What plugin would you like to make, or what would you like to ask?"
 msgstr "¿Qué complemento quieres crear o qué quieres preguntar?"
 
-#: ai.slint:669
+#: ai.slint:671
 #, x-machine
 msgid "Plugin: {}"
 msgstr "Complemento: {}"
 
-#: ai.slint:723
+#: ai.slint:725
 #, x-machine
 msgid "Another conversation is generating; please wait…"
 msgstr "Otra conversación está generando; espera…"
 
-#: ai.slint:723
+#: ai.slint:725
 #, x-machine
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr "Escribe un mensaje… Enter para enviar · Mayús+Enter para nueva línea"
 
-#: ai.slint:740
+#: ai.slint:742
 #, x-machine
 msgid "Send"
 msgstr "Enviar"
 
-#: ai.slint:744
+#: ai.slint:746
 #, x-machine
 msgid "■ Stop"
 msgstr "■ Detener"
@@ -539,12 +549,12 @@ msgstr "Se instaló desde otro origen (no lo creó Vestra Player AI). Tras el re
 msgid "Replace"
 msgstr "Reemplazar"
 
-#: labels.slint:6 main.ts:632
+#: labels.slint:6 main.ts:633
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "Personalizado · formato OpenAI"
 
-#: labels.slint:7 main.ts:634
+#: labels.slint:7 main.ts:635
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "Personalizado · formato Anthropic"
@@ -554,47 +564,47 @@ msgstr "Personalizado · formato Anthropic"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "El proveedor que elegiste antes, «{}», ya no se ofrece; usa otro proveedor o «Personalizado · formato OpenAI/Anthropic»."
 
-#: main.ts:539
+#: main.ts:538
 #, x-machine
 msgid "Delete the conversation “{}”?"
 msgstr "¿Eliminar la conversación «{}»?"
 
-#: main.ts:539
+#: main.ts:538
 #, x-machine
 msgid "Delete this conversation?"
 msgstr "¿Eliminar esta conversación?"
 
-#: main.ts:540
+#: main.ts:539
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr "Se eliminan sus mensajes y los proyectos de plugin creados en ella (carpetas de código y archivos .vxp empaquetados); los archivos que exportaste se conservan. Los plugins instalados desde ella siguen instalados en el reproductor ({1}); quítalos en el gestor de plugins si ya no los quieres."
 
-#: main.ts:540
+#: main.ts:539
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr "Se eliminan sus mensajes y los proyectos de plugin creados en ella (carpetas de código y archivos .vxp empaquetados); los archivos que exportaste se conservan."
 
-#: main.ts:600
+#: main.ts:601
 #, x-machine
 msgid "Export Plugin Package"
 msgstr "Exportar paquete de complemento"
 
-#: main.ts:615
+#: main.ts:616
 #, x-machine
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "Exportar código fuente (listo para usar como repositorio de GitHub)"
 
-#: main.ts:636 manifest.json
+#: main.ts:637 manifest.json
 #, x-machine
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:644
+#: main.ts:645
 #, x-machine
 msgid "{} (no longer offered)"
 msgstr "{} (ya no se ofrece)"
 
-#: main.ts:867
+#: main.ts:868
 #, x-machine
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"

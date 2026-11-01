@@ -381,7 +381,6 @@ export default async function activate(plugin: Plugin) {
           reasoning: reasoning(),
           systemPrompt: systemPrompt({
             sdk: toolchain.sdk,
-            index: toolchain.docsIndex(),
             sdkVersion: toolchain.sdkVersion,
             owner: owner(),
             delivery: true,

@@ -61,7 +61,7 @@ test("notes between tool calls go to the thought row; the answer is what the mod
   chat.apply({ kind: "text", delta: "I'll start by reading " });
   chat.apply({ kind: "text", delta: "the SDK documentation.\n\n" });
   chat.apply({ kind: "assistant_end", text: "", stopReason: "toolUse", error: null });
-  chat.apply({ kind: "tool_start", id: "a", name: "read", target: "sdk/llms.txt" });
+  chat.apply({ kind: "tool_start", id: "a", name: "docs", target: "/" });
   chat.apply({ kind: "tool_end", id: "a", name: "read", ok: true, summary: "" });
   chat.apply({ kind: "assistant_start" });
   chat.apply({ kind: "text", delta: "测试失败是因为绑定写法不对。" });
@@ -103,7 +103,7 @@ test("thinking shows as one collapsed row, timed while live: Thinking…, then T
   assert.equal(chat.rows[1].state, 0);
   clock += 4000;
   chat.apply({ kind: "assistant_end", text: "", stopReason: "toolUse", error: null });
-  chat.apply({ kind: "tool_start", id: "a", name: "read", target: "sdk/llms.txt" });
+  chat.apply({ kind: "tool_start", id: "a", name: "docs", target: "/" });
   chat.apply({ kind: "tool_end", id: "a", name: "read", ok: true, summary: "" });
   chat.apply({ kind: "assistant_start" });
   chat.apply({ kind: "thinking", delta: "Now the code." });

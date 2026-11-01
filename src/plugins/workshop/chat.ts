@@ -422,7 +422,7 @@ export class Chat {
           else if (part.type === "thinking") chat.thinking(String(part.thinking ?? ""), false);
           else if (part.type === "toolCall") {
             const args = (part.arguments ?? {}) as Record<string, unknown>;
-            const target = ["path", "pattern", "file", "id", "name"].map((k) => args[k]).find((v) => typeof v === "string") as string | undefined;
+            const target = ["path", "pattern", "query", "file", "id", "name"].map((k) => args[k]).find((v) => typeof v === "string") as string | undefined;
             chat.messageEnd("toolUse");
             chat.toolCall(String(part.id), { tool: String(part.name), target: target ?? "", reference: false }, 1);
           }

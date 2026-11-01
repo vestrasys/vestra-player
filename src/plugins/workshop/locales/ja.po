@@ -36,463 +36,473 @@ msgstr "ファイル検索"
 msgid "Search"
 msgstr "テキスト検索"
 
-#: ai.slint:121 main.ts:543 settings.slint:197
+#: ai.slint:121 main.ts:542 settings.slint:197
 #, x-machine
 msgid "Delete"
 msgstr "削除"
 
 #: ai.slint:122
 #, x-machine
+msgid "Docs"
+msgstr "ドキュメント"
+
+#: ai.slint:123
+#, x-machine
+msgid "Search docs"
+msgstr "ドキュメントを検索"
+
+#: ai.slint:124
+#, x-machine
 msgid "Create plugin"
 msgstr "プラグインを作成"
 
-#: ai.slint:123
+#: ai.slint:125
 #, x-machine
 msgid "Type check"
 msgstr "型チェック"
 
-#: ai.slint:124
+#: ai.slint:126
 #, x-machine
 msgid "Run tests"
 msgstr "テストを実行"
 
-#: ai.slint:125
+#: ai.slint:127
 #, x-machine
 msgid "Check"
 msgstr "チェック"
 
-#: ai.slint:126
+#: ai.slint:128
 #, x-machine
 msgid "Pack"
 msgstr "パッケージ化"
 
-#: ai.slint:127 ai.slint:362 ai.slint:689 delivery.ts:169
+#: ai.slint:129 ai.slint:364 ai.slint:691 delivery.ts:169
 #, x-machine
 msgid "Install"
 msgstr "インストール"
 
-#. a file of the read-only reference, e.g. "reference/sdk/llms.txt".
-#: ai.slint:132
+#. a file of the read-only reference, e.g. "reference/sdk/dist/plugin/types.d.ts".
+#: ai.slint:134
 #, x-machine
 msgid "reference/{}"
 msgstr "reference/{}"
 
 #. a tool and what it is about, e.g. "Read main.ts".
-#: ai.slint:136
+#: ai.slint:138
 #, x-machine
 msgid "{0} {1}"
 msgstr "{0} {1}"
 
-#: ai.slint:142
+#: ai.slint:144
 #, x-machine
 msgid "Replying…"
 msgstr "返信中…"
 
-#: ai.slint:142 ai.slint:156
+#: ai.slint:144 ai.slint:158
 #, x-machine
 msgid "Thinking…"
 msgstr "考え中…"
 
-#: ai.slint:149
+#: ai.slint:151
 #, x-machine
 msgid "{0}, {1} failed"
 msgstr "{0}、{1} 件失敗"
 
-#: ai.slint:153
+#: ai.slint:155
 #, x-machine
 msgid "{n} tool call"
 msgid_plural "{n} tool calls"
 msgstr[0] "ツール呼び出し {n} 件"
 
-#: ai.slint:157
+#: ai.slint:159
 #, x-machine
 msgid "Thought for {n} second"
 msgid_plural "Thought for {n} seconds"
 msgstr[0] "{n} 秒間思考しました"
 
-#: ai.slint:158
+#: ai.slint:160
 #, x-machine
 msgid "Thought process"
 msgstr "思考プロセス"
 
-#: ai.slint:159
+#: ai.slint:161
 #, x-machine
 msgid "{n} progress note"
 msgid_plural "{n} progress notes"
 msgstr[0] "進捗メモ {n} 件"
 
-#: ai.slint:162
+#: ai.slint:164
 #, x-machine
 msgid "Stopped"
 msgstr "停止しました"
 
-#: ai.slint:163
+#: ai.slint:165
 #, x-machine
 msgid "The last reply was interrupted (the player or the plugin quit)"
 msgstr "前回の返信は中断されました（プレーヤーまたはプラグインが終了しました）"
 
-#: ai.slint:164
+#: ai.slint:166
 #, x-machine
 msgid "Connection failed; retrying ({0}/{1})…"
 msgstr "接続に失敗しました。再試行中（{0}/{1}）…"
 
-#: ai.slint:165
+#: ai.slint:167
 #, x-machine
 msgid "Compacting the context…"
 msgstr "コンテキストを圧縮中…"
 
-#: ai.slint:166
+#: ai.slint:168
 #, x-machine
 msgid "Context compacted"
 msgstr "コンテキストを圧縮しました"
 
-#: ai.slint:167
+#: ai.slint:169
 #, x-machine
 msgid "Could not delete “{0}”: {1}"
 msgstr "「{0}」を削除できませんでした：{1}"
 
-#: ai.slint:168
+#: ai.slint:170
 #, x-machine
 msgid "{n} earlier message is not shown (the full record is in the session folder)"
 msgid_plural "{n} earlier messages are not shown (the full record is in the session folder)"
 msgstr[0] "以前のメッセージ {n} 件は表示されていません（完全な記録はセッションフォルダにあります）"
 
-#: ai.slint:172
+#: ai.slint:174
 #, x-machine
 msgid "The API key is invalid or has no permission; check it in the settings."
 msgstr "API キーが無効か、権限がありません。設定で確認してください。"
 
-#: ai.slint:173
+#: ai.slint:175
 #, x-machine
 msgid "The model “{}” is not available; choose another model in the settings."
 msgstr "モデル「{}」は使用できません。設定で別のモデルを選択してください。"
 
-#: ai.slint:174
+#: ai.slint:176
 #, x-machine
 msgid "The model is not available; choose another model in the settings."
 msgstr "モデルは使用できません。設定で別のモデルを選択してください。"
 
-#: ai.slint:175
+#: ai.slint:177
 #, x-machine
 msgid "The model does not accept the thinking settings: in the settings, set Thinking to Off, or clear “This model can think before it answers”."
 msgstr "モデルが思考の設定を受け付けません。設定で「思考」を「オフ」にするか、「このモデルは回答の前に思考します」のチェックを外してください。"
 
-#: ai.slint:176
+#: ai.slint:178
 #, x-machine
 msgid "Out of quota or too many requests; try again later."
 msgstr "利用枠を超えたか、リクエストが多すぎます。しばらくしてからもう一度お試しください。"
 
-#: ai.slint:177
+#: ai.slint:179
 #, x-machine
 msgid "Network error: cannot reach the provider."
 msgstr "ネットワークエラー：プロバイダに接続できません。"
 
-#: ai.slint:178
+#: ai.slint:180
 #, x-machine
 msgid "No reply from the provider for {} seconds; stopped."
 msgstr "プロバイダから {} 秒間応答がないため、停止しました。"
 
-#: ai.slint:179
+#: ai.slint:181
 #, x-machine
 msgid "The agent process quit unexpectedly."
 msgstr "エージェントのプロセスが予期せず終了しました。"
 
-#: ai.slint:181
+#: ai.slint:183
 #, x-machine
 msgid "Something went wrong."
 msgstr "問題が発生しました。"
 
-#: ai.slint:257 ai.slint:288
+#: ai.slint:259 ai.slint:290
 #, x-machine
 msgid "Collapse ▾"
 msgstr "折りたたむ ▾"
 
-#: ai.slint:257
+#: ai.slint:259
 #, x-machine
 msgid "Show ▸"
 msgstr "表示 ▸"
 
-#: ai.slint:268 ai.slint:318 ai.slint:325
+#: ai.slint:270 ai.slint:320 ai.slint:327
 #, x-machine
 msgid "… (too long; the rest is not shown)"
 msgstr "…（長すぎるため、残りは表示されていません）"
 
-#: ai.slint:288
+#: ai.slint:290
 #, x-machine
 msgid "All ▸"
 msgstr "すべて ▸"
 
-#: ai.slint:321
+#: ai.slint:323
 #, x-machine
 msgid "Copy"
 msgstr "コピー"
 
-#: ai.slint:343
+#: ai.slint:345
 #, x-machine
 msgid "Retry"
 msgstr "再試行"
 
-#: ai.slint:344
+#: ai.slint:346
 #, x-machine
 msgid "Open Settings"
 msgstr "設定を開く"
 
-#: ai.slint:363 ai.slint:690
+#: ai.slint:365 ai.slint:692
 #, x-machine
 msgid "Export .vxp"
 msgstr ".vxp を書き出す"
 
-#: ai.slint:364 ai.slint:691
+#: ai.slint:366 ai.slint:693
 #, x-machine
 msgid "Export Source .zip"
 msgstr "ソースの .zip を書き出す"
 
-#: ai.slint:365 ai.slint:582 ai.slint:692
+#: ai.slint:367 ai.slint:584 ai.slint:694
 #, x-machine
 msgid "Open Folder"
 msgstr "フォルダを開く"
 
-#: ai.slint:431
+#: ai.slint:433
 #, x-machine
 msgid "Reading the API key from the keychain… (the system may ask for permission)"
 msgstr "キーチェーンから API キーを読み取り中…（システムが許可を求めることがあります）"
 
-#: ai.slint:432
+#: ai.slint:434
 #, x-machine
 msgid "Cannot read the key from the keychain; save it again in the settings. ({})"
 msgstr "キーチェーンからキーを読み取れません。設定でもう一度保存してください。（{}）"
 
-#: ai.slint:433
+#: ai.slint:435
 #, x-machine
 msgid "Cannot read the key from the keychain; save it again in the settings. (The key is not in the keychain)"
 msgstr "キーチェーンからキーを読み取れません。設定でもう一度保存してください。（キーがキーチェーンにありません）"
 
-#: ai.slint:434
+#: ai.slint:436
 #, x-machine
 msgid "The API key has not been read yet."
 msgstr "API キーはまだ読み取られていません。"
 
-#: ai.slint:435
+#: ai.slint:437
 #, x-machine
 msgid "No provider set up: choose a provider in the settings and save its API key first."
 msgstr "プロバイダが設定されていません。先に設定でプロバイダを選択し、その API キーを保存してください。"
 
-#: ai.slint:440
+#: ai.slint:442
 #, x-machine
 msgid "Install {0} {1}"
 msgstr "{0} {1} をインストール"
 
-#: ai.slint:443
+#: ai.slint:445
 #, x-machine
 msgid "done"
 msgstr "完了"
 
-#: ai.slint:444
+#: ai.slint:446
 #, x-machine
 msgid "cancelled"
 msgstr "キャンセル済み"
 
-#: ai.slint:445
+#: ai.slint:447
 #, x-machine
 msgid "failed"
 msgstr "失敗"
 
-#: ai.slint:446
+#: ai.slint:448
 #, x-machine
 msgid "failed; the previous version could not be fully restored"
 msgstr "失敗しました。以前のバージョンを完全には復元できませんでした"
 
-#: ai.slint:447
+#: ai.slint:449
 #, x-machine
 msgid "too late to cancel"
 msgstr "キャンセルするには遅すぎます"
 
-#: ai.slint:451
+#: ai.slint:453
 #, x-machine
 msgid "Packing {}…"
 msgstr "{} をパッケージ化中…"
 
-#: ai.slint:452
+#: ai.slint:454
 #, x-machine
 msgid "The player is validating {}…"
 msgstr "プレーヤーが {} を検証中…"
 
-#: ai.slint:453
+#: ai.slint:455
 #, x-machine
 msgid "The player's validation failed ({0}): {1}"
 msgstr "プレーヤーの検証に失敗しました（{0}）：{1}"
 
-#: ai.slint:454
+#: ai.slint:456
 #, x-machine
 msgid "Checks before packing failed: {} problem(s)"
 msgstr "パッケージ化前のチェックに失敗しました：問題 {} 件"
 
-#: ai.slint:455
+#: ai.slint:457
 #, x-machine
 msgid "Packing failed: {} type error(s)"
 msgstr "パッケージ化に失敗しました：型エラー {} 件"
 
-#: ai.slint:456
+#: ai.slint:458
 #, x-machine
 msgid "Packing failed"
 msgstr "パッケージ化に失敗しました"
 
-#: ai.slint:457
+#: ai.slint:459
 #, x-machine
 msgid "Packing failed: no .vxp was written"
 msgstr "パッケージ化に失敗しました：.vxp が作成されませんでした"
 
-#: ai.slint:458
+#: ai.slint:460
 #, x-machine
 msgid "Packing cancelled"
 msgstr "パッケージ化をキャンセルしました"
 
-#: ai.slint:459
+#: ai.slint:461
 #, x-machine
 msgid "Packing timed out and was stopped"
 msgstr "パッケージ化がタイムアウトしたため、停止しました"
 
-#: ai.slint:460
+#: ai.slint:462
 #, x-machine
 msgid "Not installed (cancelled)."
 msgstr "インストールしませんでした（キャンセル）。"
 
-#: ai.slint:461
+#: ai.slint:463
 #, x-machine
 msgid "Installing {}…"
 msgstr "{} をインストール中…"
 
-#: ai.slint:462
+#: ai.slint:464
 #, x-machine
 msgid "{} has the name of a plugin built into the player and cannot be installed; choose another id."
 msgstr "{} はプレーヤーの内蔵プラグインと同じ名前のため、インストールできません。別の ID を選択してください。"
 
-#: ai.slint:463
+#: ai.slint:465
 #, x-machine
 msgid "Not installed: the installed plugin was kept."
 msgstr "インストールしませんでした：インストール済みのプラグインはそのままです。"
 
-#: ai.slint:464
+#: ai.slint:466
 #, x-machine
 msgid "{0}: {1}…"
 msgstr "{0}：{1}…"
 
-#: ai.slint:465
+#: ai.slint:467
 #, x-machine
 msgid "{0}: {1} ({2})"
 msgstr "{0}：{1}（{2}）"
 
-#: ai.slint:466
+#: ai.slint:468
 #, x-machine
 msgid "{0}: {1}"
 msgstr "{0}：{1}"
 
-#: ai.slint:467
+#: ai.slint:469
 #, x-machine
 msgid "Installed {0} {1}. Shortcuts not in effect:"
 msgstr "{0} {1} をインストールしました。有効になっていないショートカット："
 
-#: ai.slint:468
+#: ai.slint:470
 #, x-machine
 msgid "Installed {0} {1}."
 msgstr "{0} {1} をインストールしました。"
 
-#: ai.slint:469
+#: ai.slint:471
 #, x-machine
 msgid "Exported {}"
 msgstr "{} を書き出しました"
 
-#: ai.slint:470
+#: ai.slint:472
 #, x-machine
 msgid "Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "{} を書き出しました。ID が local. で始まっています。公開する前に、manifest.json の id を <GitHub のユーザー名>.<名前> に変更してください。LICENSE はプレースホルダです。公開する前に、選んだライセンスの全文に置き換え、manifest.json の license を設定してください。"
 
-#: ai.slint:471
+#: ai.slint:473
 #, x-machine
 msgid "Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "{} を書き出しました。LICENSE はプレースホルダです。公開する前に、選んだライセンスの全文に置き換え、manifest.json の license を設定してください。"
 
-#: ai.slint:472
+#: ai.slint:474
 #, x-machine
 msgid "Something went wrong: {}"
 msgstr "問題が発生しました：{}"
 
-#: ai.slint:478
+#: ai.slint:480
 #, x-machine
 msgid "{0} ({1}) is taken by {2}"
 msgstr "{0}（{1}）は {2} が使用しています"
 
-#: ai.slint:481
+#: ai.slint:483
 #, x-machine
 msgid "the player “{}”"
 msgstr "プレーヤーの「{}」"
 
-#: ai.slint:481
+#: ai.slint:483
 #, x-machine
 msgid "{0} “{1}”"
 msgstr "{0}「{1}」"
 
-#: ai.slint:513
+#: ai.slint:515
 #, x-machine
 msgid "+ New Chat"
 msgstr "+ 新しいチャット"
 
-#: ai.slint:530 ai.slint:572
+#: ai.slint:532 ai.slint:574
 #, x-machine
 msgid "New chat"
 msgstr "新しいチャット"
 
-#: ai.slint:530
+#: ai.slint:532
 #, x-machine
 msgid "Today"
 msgstr "今日"
 
-#: ai.slint:530
+#: ai.slint:532
 #, x-machine
 msgid "Earlier"
 msgstr "それ以前"
 
-#: ai.slint:543 ai.slint:587
+#: ai.slint:545 ai.slint:589
 #, x-machine
 msgid "Delete Chat"
 msgstr "会話を削除"
 
-#: ai.slint:550
+#: ai.slint:552
 #, x-machine
 msgid "⚙ Settings"
 msgstr "⚙ 設定"
 
-#: ai.slint:608
+#: ai.slint:610
 #, x-machine
 msgid "Go to Settings"
 msgstr "設定へ移動"
 
-#: ai.slint:622
+#: ai.slint:624
 #, x-machine
 msgid "What plugin would you like to make, or what would you like to ask?"
 msgstr "どんなプラグインを作りますか？　それとも、何か質問がありますか？"
 
-#: ai.slint:669
+#: ai.slint:671
 #, x-machine
 msgid "Plugin: {}"
 msgstr "プラグイン：{}"
 
-#: ai.slint:723
+#: ai.slint:725
 #, x-machine
 msgid "Another conversation is generating; please wait…"
 msgstr "別の会話が生成中です。しばらくお待ちください…"
 
-#: ai.slint:723
+#: ai.slint:725
 #, x-machine
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr "メッセージを入力… Enter で送信 · Shift+Enter で改行"
 
-#: ai.slint:740
+#: ai.slint:742
 #, x-machine
 msgid "Send"
 msgstr "送信"
 
-#: ai.slint:744
+#: ai.slint:746
 #, x-machine
 msgid "■ Stop"
 msgstr "■ 停止"
@@ -535,12 +545,12 @@ msgstr "このプラグインは別の場所からインストールされてい
 msgid "Replace"
 msgstr "置き換える"
 
-#: labels.slint:6 main.ts:632
+#: labels.slint:6 main.ts:633
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "カスタム · OpenAI 形式"
 
-#: labels.slint:7 main.ts:634
+#: labels.slint:7 main.ts:635
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "カスタム · Anthropic 形式"
@@ -550,47 +560,47 @@ msgstr "カスタム · Anthropic 形式"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "以前に選択したプロバイダ「{}」は提供が終了しました。別のプロバイダか「カスタム · OpenAI/Anthropic 形式」を使用してください。"
 
-#: main.ts:539
+#: main.ts:538
 #, x-machine
 msgid "Delete the conversation “{}”?"
 msgstr "会話「{}」を削除しますか？"
 
-#: main.ts:539
+#: main.ts:538
 #, x-machine
 msgid "Delete this conversation?"
 msgstr "この会話を削除しますか？"
 
-#: main.ts:540
+#: main.ts:539
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr "メッセージと、この会話で作ったプラグインプロジェクト（ソースフォルダーとパッケージ済みの .vxp ファイル）が削除されます。書き出したファイルは残ります。この会話からインストールしたプラグインはプレーヤーに残ります（{1}）。不要ならプラグインマネージャーで削除してください。"
 
-#: main.ts:540
+#: main.ts:539
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr "メッセージと、この会話で作ったプラグインプロジェクト（ソースフォルダーとパッケージ済みの .vxp ファイル）が削除されます。書き出したファイルは残ります。"
 
-#: main.ts:600
+#: main.ts:601
 #, x-machine
 msgid "Export Plugin Package"
 msgstr "プラグインパッケージを書き出す"
 
-#: main.ts:615
+#: main.ts:616
 #, x-machine
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "ソースを書き出す（そのまま GitHub リポジトリとして使用可能）"
 
-#: main.ts:636 manifest.json
+#: main.ts:637 manifest.json
 #, x-machine
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:644
+#: main.ts:645
 #, x-machine
 msgid "{} (no longer offered)"
 msgstr "{}（提供終了）"
 
-#: main.ts:867
+#: main.ts:868
 #, x-machine
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
