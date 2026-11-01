@@ -11,6 +11,9 @@ import type { ConditionJson } from "./plugin/when.ts";
  * already registered are unaffected, and disposing a command frees its slot
  * at once. {@link TestHost} enforces the same caps.
  *
+ * The other fields are the player's rules for one declaration (since
+ * 1.5.48): a command past them is refused with `invalid`, the same way.
+ *
  * For menus built from media content (tracks, chapters, presets), set your
  * own sensible display cap well below `perPlugin`.
  *
@@ -41,6 +44,53 @@ export declare const COMMAND_LIMITS: {
     readonly perPlugin: 160;
     /** Commands of every plugin plus the player's own, together (1024). */
     readonly total: 1024;
+    /**
+     * Segments of a menu path, the leaf included.
+     *
+     * @since 1.5.48
+     */
+    readonly depth: 8;
+    /**
+     * UTF-8 bytes of a command's local id: ASCII letters, digits, `.`,
+     * `_` and `-`.
+     *
+     * @since 1.5.48
+     */
+    readonly idBytes: 128;
+    /**
+     * UTF-8 bytes of a title, a text value counted by its English
+     * rendering. Like every command text: not empty, no control characters,
+     * no whitespace at either end.
+     *
+     * @since 1.5.48
+     */
+    readonly titleBytes: 128;
+    /**
+     * UTF-8 bytes of a menu path segment, a text value counted by its
+     * English rendering.
+     *
+     * @since 1.5.48
+     */
+    readonly segmentBytes: 80;
+    /**
+     * UTF-8 bytes of a group.
+     *
+     * @since 1.5.48
+     */
+    readonly groupBytes: 80;
+    /**
+     * UTF-8 bytes of a state's reason, as shown in the player's
+     * language.
+     *
+     * @since 1.5.48
+     */
+    readonly reasonBytes: 512;
+    /**
+     * The largest `order` either way: an order is within ±1,000,000.
+     *
+     * @since 1.5.48
+     */
+    readonly order: 1000000;
 };
 /**
  * The player's built-in top-level menus, by id. Write `@<id>` as the first

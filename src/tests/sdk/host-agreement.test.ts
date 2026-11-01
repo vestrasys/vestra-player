@@ -1477,6 +1477,77 @@ test("BUILTIN_COMMANDS and BUILTIN_SUBMENUS are what the player and its built-in
   );
 });
 
+test("COMMAND_LIMITS' declaration limits are the player's (commands.rs Registry::register; SDK 1.5.48)", () => {
+  const rust = host("src/commands.rs");
+  const text = (label: string) =>
+    Number(new RegExp(`text\\([^,]+, "${label}", (\\d+)\\)`).exec(rust)?.[1]);
+  const order = /order\.unsigned_abs\(\) > ([\d_]+)/.exec(rust)?.[1];
+  assert.deepEqual(
+    {
+      depth: Number(/const MAX_DEPTH: usize = (\d+);/.exec(rust)?.[1]),
+      idBytes: text("localId"),
+      titleBytes: text("title"),
+      segmentBytes: text("path segment"),
+      groupBytes: text("group"),
+      reasonBytes: text("reason"),
+      order: Number(order?.replaceAll("_", "")),
+    },
+    {
+      depth: COMMAND_LIMITS.depth,
+      idBytes: COMMAND_LIMITS.idBytes,
+      titleBytes: COMMAND_LIMITS.titleBytes,
+      segmentBytes: COMMAND_LIMITS.segmentBytes,
+      groupBytes: COMMAND_LIMITS.groupBytes,
+      reasonBytes: COMMAND_LIMITS.reasonBytes,
+      order: COMMAND_LIMITS.order,
+    },
+  );
+});
+
+test("TestHost refuses a menu text with the player's message (commands.rs text; SDK 1.5.48)", async () => {
+  const rust = host("src/commands.rs");
+  const rule = /"\{label\} requires 1\.\.=\{limit\} bytes, ([^"]+)"/.exec(
+    rust,
+  )?.[1];
+  assert.ok(rule, "text() message in commands.rs");
+  const prefix =
+    /Self::Invalid\(message\) => write!\(f, "([^"{]*)\{message\}"\)/.exec(
+      rust,
+    )?.[1];
+  assert.ok(prefix, "CommandError::Invalid's Display in commands.rs");
+  await assert.rejects(
+    startPlugin(
+      (plugin) => {
+        plugin.commands.add({ id: "a", path: ["Tools ", "A"], run() {} });
+      },
+      { capabilities: ["commands"] },
+    ),
+    {
+      code: "invalid",
+      message: `${prefix}path segment requires 1..=${COMMAND_LIMITS.segmentBytes} bytes, ${rule}`,
+    },
+  );
+});
+
+test("TestHost refuses a plugin item on or under each of the player's own menu items (SDK 1.5.48)", async () => {
+  const paths = hostCommands()
+    .map((row) => row.path)
+    .filter((path) => path.length > 0);
+  // Toggle Fullscreen and Quit (host_declarations) and the core actions.
+  assert.ok(paths.some((path) => path.join() === "Quit"));
+  for (const taken of [...paths, ...paths.map((path) => [...path, "Item"])])
+    await assert.rejects(
+      startPlugin(
+        (plugin) => {
+          plugin.commands.add({ id: "a", path: [...taken], run() {} });
+        },
+        { capabilities: ["commands"] },
+      ),
+      { code: "conflict" },
+      `a plugin item at ${taken.join(" ▸ ")}`,
+    );
+});
+
 test("SESSION_STORAGE_LIMITS are the player's (session_storage.rs; SDK 1.5.25, player 0.5.5)", async (t) => {
   const runtime: { SESSION_STORAGE_LIMITS?: object } =
     await import("@vestra-player/sdk/runtime");
