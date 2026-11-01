@@ -2728,8 +2728,11 @@ export declare class TestHost implements Transport {
  *
  * Rejects when `manifest.json` cannot be read or parsed, when `activate`
  * throws, or when a registration made during activation fails (for example
- * `limit`, `conflict`, `invalid`), which is when the player would fail the
- * activation.
+ * `limit`, `conflict`, `invalid`). Stricter than the player's runner for
+ * commands (SDK 1.5.49): there the SDK logs a command declaration the
+ * player refuses during activation, skips it and activates the rest of the
+ * plugin (`onError` hears it); `startPlugin` fails, so a test shows the
+ * bad declaration.
  *
  * @param activate - The plugin's default-exported `activate` function.
  * @param options - Where the plugin lives and how to start it.

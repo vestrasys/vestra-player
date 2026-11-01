@@ -86,6 +86,16 @@ function merge(into, from) {
  * without `update()`) still shows within about this long.
  */
 export const SAFETY_PASS_MS = 1000;
+/**
+ * The player's answers to a declaration that refuse that one declaration
+ * (a command's path, texts or count): during activation they skip it
+ * instead of failing the plugin (`Runtime.declaring`, SDK 1.5.49).
+ */
+const DECLARATION_REFUSALS = new Set([
+    "invalid",
+    "conflict",
+    "limit",
+]);
 export const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 /** One value in flight, only the newest waiting. Each push learns its fate. */
 export class Latest {
@@ -149,6 +159,10 @@ export class Runtime {
     /** Registrations that activation must wait for before reporting ready. */
     startup = new Set();
     #activating = true;
+    /** `RuntimeOptions.strictDeclarations`. */
+    #strict;
+    /** Declarations skipped during activation: reported once it completes. */
+    #refusals = [];
     #transport;
     /** Each binding with the events whose state it read last time (held). */
     #bindings = new Map();
@@ -187,8 +201,9 @@ export class Runtime {
      * property writes). Not part of the plugin API; empty for older players.
      */
     features;
-    constructor(transport, manifest, directory, dataDirectory, app) {
+    constructor(transport, manifest, directory, dataDirectory, app, options = {}) {
         this.#transport = transport;
+        this.#strict = options.strictDeclarations ?? false;
         this.dataDirectory = dataDirectory;
         this.local = transport.local;
         this.host = createWire(transport);
@@ -233,6 +248,32 @@ export class Runtime {
         work.catch(() => { });
         return work;
     }
+    /**
+     * A declaration the player checks on its own (`what`: "command x"),
+     * started like `starting`. In the player's runner a refusal of it during
+     * activation (`invalid`, `conflict`, `limit`) does not fail the plugin:
+     * it is logged, skipped and reported to the scope once activation
+     * completes, so an `onError` added anywhere in `activate` hears it (SDK
+     * 1.5.49; VS Code logs a bad contribution and activates the extension).
+     * Under `strictDeclarations` (TestHost) it fails activation as before.
+     */
+    declaring(work, what, report) {
+        if (!this.#activating || this.#strict)
+            return this.starting(work, report);
+        const settled = work.then(() => { }, (error) => {
+            if (!(error instanceof HostError) ||
+                !DECLARATION_REFUSALS.has(error.code))
+                throw error;
+            console.error(`[${this.manifest.id}] ${what} skipped, the player refused it (${error.code}): ${error.message}`);
+            this.#refusals.push(() => report(error));
+        });
+        // Observed now: `activated()` may come after `activate` awaits, and
+        // its `allSettled` still sees the rejection.
+        settled.catch(() => { });
+        this.startup.add(settled);
+        work.catch(() => { });
+        return work;
+    }
     async activated() {
         while (this.startup.size) {
             const pending = [...this.startup];
@@ -242,6 +283,8 @@ export class Runtime {
                     throw result.reason;
         }
         this.#activating = false;
+        for (const report of this.#refusals.splice(0))
+            report();
     }
     bind(evaluate) {
         const held = new Map();

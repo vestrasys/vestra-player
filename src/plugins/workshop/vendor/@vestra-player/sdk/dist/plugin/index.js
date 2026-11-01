@@ -5,8 +5,10 @@ import { windowOf } from "./window.js";
 import { timelineOf } from "./timeline.js";
 export async function createPlugin(transport, manifest, directory, dataDirectory, 
 /** `plugin.app` (the runner passes the player's `VESTRA_APP_INFO`). */
-app) {
-    const runtime = new Runtime(transport, manifest, directory, dataDirectory, app);
+app, 
+/** `TestHost` sets `strictDeclarations`; the player's runner does not. */
+options) {
+    const runtime = new Runtime(transport, manifest, directory, dataDirectory, app, options);
     // Player, window and timeline state are synchronous for plugins: read them first.
     await Promise.all([
         playerOf(runtime).init(),

@@ -37,6 +37,15 @@ export type Change = ReadonlyMap<string, ReadonlySet<string>>;
  * without `update()`) still shows within about this long.
  */
 export declare const SAFETY_PASS_MS = 1000;
+/** How the plugin is run: the player's runner, or `TestHost`. */
+export interface RuntimeOptions {
+    /**
+     * A declaration the player refuses during activation fails activation
+     * (`startPlugin`, so a plugin's tests show it) instead of being logged,
+     * reported to `onError` and skipped (the player's runner).
+     */
+    strictDeclarations?: boolean;
+}
 export declare const same: (a: Json | undefined, b: Json | undefined) => boolean;
 /** One value in flight, only the newest waiting. Each push learns its fate. */
 export declare class Latest<T> {
@@ -74,7 +83,7 @@ export declare class Runtime {
      * property writes). Not part of the plugin API; empty for older players.
      */
     readonly features: ReadonlySet<string>;
-    constructor(transport: Transport, manifest: PluginManifest, directory: string, dataDirectory?: string, app?: unknown);
+    constructor(transport: Transport, manifest: PluginManifest, directory: string, dataDirectory?: string, app?: unknown, options?: RuntimeOptions);
     can(capability: string): boolean;
     /** Lazily created singletons shared by every scope of this plugin. */
     service<T>(name: string, create: () => T): T;
@@ -83,6 +92,16 @@ export declare class Runtime {
      * plugin reports ready; later ones report failures to their scope.
      */
     starting<T>(work: Promise<T>, report: (error: unknown) => void): Promise<T>;
+    /**
+     * A declaration the player checks on its own (`what`: "command x"),
+     * started like `starting`. In the player's runner a refusal of it during
+     * activation (`invalid`, `conflict`, `limit`) does not fail the plugin:
+     * it is logged, skipped and reported to the scope once activation
+     * completes, so an `onError` added anywhere in `activate` hears it (SDK
+     * 1.5.49; VS Code logs a bad contribution and activates the extension).
+     * Under `strictDeclarations` (TestHost) it fails activation as before.
+     */
+    declaring<T>(work: Promise<T>, what: string, report: (error: unknown) => void): Promise<T>;
     activated(): Promise<void>;
     bind(evaluate: () => void): Disposable;
     /**
