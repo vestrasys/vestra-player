@@ -59,8 +59,8 @@ pub(crate) use events::{Event, Injected, MenuAction};
 #[cfg(feature = "producer-audio")]
 pub(crate) use input::host_key;
 pub(crate) use input::{
-    debug_keys, double_click_interval, fire, inject_option_key, observe_key, release_modifiers,
-    slint_mods,
+    debug_keys, double_click_interval, fire, inject_option_key, observe_key, observe_side_button,
+    release_modifiers, slint_mods,
 };
 pub(crate) use lazy::Origin;
 pub(crate) use lifecycle::activation_outcome;

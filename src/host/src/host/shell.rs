@@ -45,6 +45,12 @@ impl Host {
                 track_pointer(&input, generation, slint_window, event);
                 let dead = observe_key(&input, &modifiers, event);
                 release_modifiers(&input, &events, generation);
+                // Side buttons anywhere in the window (browser precedent).
+                observe_side_button(&input, &modifiers, &events, generation, event, || {
+                    weak.upgrade().is_some_and(|shell| {
+                        matches!(shell.get_property("menu-open"), Ok(SValue::Bool(true)))
+                    })
+                });
                 if let winit::event::WindowEvent::DroppedFile(path) = event {
                     let _ = events.send(Event::Dropped(generation, path.clone()));
                 }

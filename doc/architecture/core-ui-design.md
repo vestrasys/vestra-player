@@ -252,8 +252,9 @@ impl Table {
 
 | Command | Default bindings | Menu | State |
 | --- | --- | --- | --- |
-| `host/fullscreen` Fullscreen | `Enter`, `Alt+Enter` (interaction alignment IA-CORE-04), `F11` (`Mouse:LeftDoubleClick` until host 0.5.1) | top level, `group: "screen"`, `order: 700`, checked = whether fullscreen | always available |
-| `host/exit-fullscreen` Exit fullscreen | `Escape` | not in the menu | only available in fullscreen |
+| `host/fullscreen` Toggle Fullscreen | `Escape` (user ruling 2026-11-01, IA-CORE-04; `Enter`, `Alt+Enter`, `F11` up to 0.5.x; `Mouse:LeftDoubleClick` until host 0.5.1) | top level, `group: "screen"`, `order: 700`, checked = whether fullscreen | always available |
+| `host/enter-fullscreen` Enter Fullscreen | none | not in the menu | only available in windowed mode |
+| `host/exit-fullscreen` Leave Fullscreen | none (`Escape` up to 0.5.x) | not in the menu | only available in fullscreen |
 | `host/quit` Quit | `Cmd+Q` (the menu shows it on macOS only: on Windows and Linux `Cmd` is the Windows / Super key, whose combinations the system takes, so menus show no `Cmd` binding, `platform::MENU_SHOWS_CMD`; there the close button and Alt+F4 quit) | top level, `group: "exit"`, `order: 990` | always available |
 
   Whether "Fullscreen" and "Quit" appear in the menu this round, see §18 Q2.

@@ -311,13 +311,13 @@ Without an API change: the host takes the first Latin letter of the title automa
 
 **Acceptance**: maximise the window (on macOS double-click the title bar or Option-click the green button), quit and restart: the window has the size and position from before maximising.
 
-### IA-CORE-04 Fullscreen entries: Enter, Alt+Enter, fullscreen+, fullscreen on another display (P2 / P3)
+### IA-CORE-04 Fullscreen entries: Esc, Enter / Leave Fullscreen, fullscreen+, fullscreen on another display (P2 / P3)
 
 **Status**: partially implemented. Item 1 is implemented; items 2 and 3 are not implemented.
 
 **Requirements**:
 
-1. (P2) The default bindings of the host's "Toggle Fullscreen" are `Enter`, `Alt+Enter`, `F11` (host 0.5.2, user ruling 2026-10-26: no longer `Mouse:LeftDoubleClick`; a left click on the video is Play/Pause, and the user can bind the double click under Settings ▸ Mouse…); Esc exits fullscreen (Esc does nothing in windowed mode). The shortcut text of the menu's "Toggle Fullscreen" row shows the first key, `Enter`. Plugins toggle it with `host.run("fullscreen")` (player 0.5.2), the same as the key.
+1. (P2) The only default binding of the host's "Toggle Fullscreen" is `Escape` (user ruling 2026-11-01): Esc toggles, so in windowed mode an Esc that no menu, dialog or text field handles enters fullscreen. Up to 0.5.x the defaults were `Enter`, `Alt+Enter`, `F11` and Esc was "Leave Fullscreen"'s, doing nothing in windowed mode; until host 0.5.1 a double click toggled too (user ruling 2026-10-26: a left click on the video is Play/Pause, and the user can bind the double click under Settings ▸ Mouse…). "Enter Fullscreen" (`host/enter-fullscreen`, enabled only in windowed mode) and "Leave Fullscreen" (`host/exit-fullscreen`, enabled only in fullscreen) are separate host commands with no default key and no menu row, bindable in Keyboard Shortcuts. The shortcut text of the menu's "Toggle Fullscreen" row shows its first key, `Esc`. Plugins toggle it with `host.run("fullscreen")` (player 0.5.2), the same as the key.
 2. (P3) Host command "fullscreen+" Ctrl+Enter: enters fullscreen and at the same time stretches the picture to fill the screen (aspect ratio not kept); pressing it again during stretched fullscreen exits fullscreen. Menu position after "Toggle Fullscreen", group `screen`, order 701.
 3. (P3) Host command "fullscreen on another display" Ctrl+Shift+Enter: moves the main window to the next display and then enters fullscreen; disabled when there is only one display, with the reason "only one display".
 
@@ -325,7 +325,7 @@ Without an API change: the host takes the first Latin letter of the title automa
 
 **Cross-platform**: on macOS ⌥↩ and ⌃↩ are not taken by the system; Ctrl bindings also fire with ⌘ on macOS. macOS fullscreen creates a new space, so changing displays must first exit fullscreen, move the window, then enter again.
 
-**Acceptance**: Alt+Enter enters fullscreen; Ctrl+Enter makes the picture fill the screen with no black bars; with two displays, Ctrl+Shift+Enter goes fullscreen on the other screen.
+**Acceptance**: Esc enters fullscreen in windowed mode and leaves it in fullscreen; Esc in an open menu, a dialog or a text field only closes or cancels it; Ctrl+Enter makes the picture fill the screen with no black bars; with two displays, Ctrl+Shift+Enter goes fullscreen on the other screen.
 
 ### IA-CORE-05 Windowed-mode "auto-hide the control bar" switch (P3)
 
@@ -1270,7 +1270,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | F-09 | Pointer | Hidden after 3 seconds idle while playing; not hidden while paused; not hidden over the bottom bar or the pop-out (nor in the bar's band); independent of the bar | G-06, FS-BAR-1 |
 | F-10 | Title bar | Not shown (on macOS the system shows the menu bar when the pointer moves to the top) | IA-CORE-07 |
 | F-11 | OSD and info layer | Same as windowed mode; misc info can be set to "show only in fullscreen" (not implemented) | IA-INFO-02 |
-| F-12 | Entering fullscreen | Enter, Alt+Enter, F11 (a double click only when the user binds it); Esc exits; Ctrl+Enter stretched fullscreen, Ctrl+Shift+Enter fullscreen on another display (not implemented) | IA-CORE-04 |
+| F-12 | Entering fullscreen | Esc toggles (user ruling 2026-11-01; Enter, Alt+Enter and F11 up to 0.5.x; a double click only when the user binds it); Enter / Leave Fullscreen without a default key; Ctrl+Enter stretched fullscreen, Ctrl+Shift+Enter fullscreen on another display (not implemented) | IA-CORE-04 |
 | F-13 | Always on top | Default "While Playing in Fullscreen" | IA-WIN-03 |
 | F-14 | Window size commands | Disabled, with the reason "Not available in fullscreen" | |
 | F-15 | Other displays | System behaviour, not filled with black | |
@@ -1326,7 +1326,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | M-03 | Picture | Right click | Pops up the main menu on release | G-15 |
 | M-04 | Picture | Right double-click | Bindable (not implemented) | IA-CORE-08 |
 | M-05 | Picture | Middle click, double-click | Click bindable, not bound by default; double-click bindable (not implemented) | IA-CORE-08 |
-| M-06 | Picture | Side buttons X1, X2 | Click defaults to previous / next; double-click bindable (not implemented) | IA-CORE-08 |
+| M-06 | Window | Side buttons X1 (back), X2 (forward) | Click defaults to next / previous (user setting, 2026-11-01), anywhere in the window (browser precedent, host 0.6.0); double-click bindable (not implemented) | IA-CORE-08 |
 | M-07 | Picture | Push (left / right / middle / X1 / X2) | Bindable, 500 ms (not implemented) | IA-CORE-08 |
 | M-08 | Picture | Wheel up, down | Volume ±5, limit 100 | G-13a |
 | M-09 | Picture | Wheel left, right | Bindable, not bound by default | |
@@ -1368,7 +1368,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | K-09 | Floating playlist window | Both global and list bindings are in effect | |
 | K-10 | While a menu is open | All keys stay in the menu; bindings are paused | |
 | K-11 | Menu keyboard operation | ↑↓←→, Enter, Space, Esc; mnemonics (not implemented) | IA-CORE-02 |
-| K-12 | Esc: fullscreen | Exits fullscreen | IA-CORE-04 |
+| K-12 | Esc: fullscreen | Toggles fullscreen (enters it in windowed mode, user ruling 2026-11-01) unless a menu, dialog or text field handles it | IA-CORE-04 |
 | K-13 | Esc: windowed mode | No effect | |
 | K-14 | Esc: menu | Closes one level at a time | IA-CORE-01 |
 | K-15 | Esc: tool windows and dialogs | Closes the window in small dialogs (seek, open URL, aspect ratio, confirmation); not handled in large tool windows (Picture Adjustments, audio, subtitles, snapshot) | |

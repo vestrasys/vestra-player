@@ -116,6 +116,74 @@ pub(crate) fn observe_key(
     }
 }
 
+/// The side buttons (back = `Mouse:X1`, forward = `Mouse:X2`) are
+/// window-level, as in browsers (host 0.6.0): a press resolves against the
+/// binding table wherever the pointer is in the window (video, bottom bar,
+/// sidebar, a floating panel), except over an open menu. Before, only the
+/// video area's `TouchArea` reported them, so over the bar they did
+/// nothing. No element handles them today; one that should would need its
+/// own rule here. The event still goes on to Slint (focus and activity as
+/// before); no `TouchArea` acts on these buttons, so they fire once.
+pub(crate) fn observe_side_button(
+    input: &Rc<RefCell<InputShared>>,
+    modifiers: &std::cell::Cell<slint::winit_030::winit::keyboard::ModifiersState>,
+    events: &mpsc::Sender<Event>,
+    generation: u64,
+    event: &slint::winit_030::winit::event::WindowEvent,
+    menu_open: impl FnOnce() -> bool,
+) -> bool {
+    use slint::winit_030::winit::event::WindowEvent;
+    let WindowEvent::MouseInput { state, button, .. } = event else {
+        return false;
+    };
+    if side_button_input(*state, *button, bindings::Mods::default()).is_none() || menu_open() {
+        return false;
+    }
+    let state_mods = modifiers.get();
+    let mods = bindings::Mods {
+        ctrl: state_mods.control_key(),
+        alt: state_mods.alt_key(),
+        shift: state_mods.shift_key(),
+        cmd: state_mods.super_key(),
+    };
+    side_button(input, events, generation, *state, *button, mods)
+}
+
+/// The binding input of a side button's press (`None` for any other
+/// button, and for releases: a side button fires on its press).
+pub(crate) fn side_button_input(
+    state: slint::winit_030::winit::event::ElementState,
+    button: slint::winit_030::winit::event::MouseButton,
+    mods: bindings::Mods,
+) -> Option<bindings::Input> {
+    use slint::winit_030::winit::event::{ElementState, MouseButton};
+    if state != ElementState::Pressed {
+        return None;
+    }
+    let name = match button {
+        MouseButton::Back => "X1",
+        MouseButton::Forward => "X2",
+        _ => return None,
+    };
+    Some(bindings::Input {
+        mods,
+        name: format!("Mouse:{name}"),
+    })
+}
+
+/// Fire a side button's press (`side_button_input`); true = bound.
+pub(crate) fn side_button(
+    input: &Rc<RefCell<InputShared>>,
+    events: &mpsc::Sender<Event>,
+    generation: u64,
+    state: slint::winit_030::winit::event::ElementState,
+    button: slint::winit_030::winit::event::MouseButton,
+    mods: bindings::Mods,
+) -> bool {
+    side_button_input(state, button, mods)
+        .is_some_and(|event| fire(input, events, generation, &event, false, None))
+}
+
 /// Option + a named key (⌥⌦, ⌥←): macOS delivers it in a form Slint does not
 /// route to the focused item, and its input handling then stalls until the
 /// next ordinary key. Such a press and release are kept from Slint and handed
@@ -275,6 +343,7 @@ impl Host {
         let events = self.events.clone();
         let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
         let shortcuts = view::WindowShortcuts::default();
+        let floating = window.as_weak();
         window.window().on_winit_window_event(move |window, event| {
             if shortcuts.filter(window, event) {
                 return EventResult::PreventDefault;
@@ -282,6 +351,13 @@ impl Host {
             track_pointer(&input, generation, window, event);
             let _ = observe_key(&input, &modifiers, event);
             release_modifiers(&input, &events, generation);
+            // The floating panel window too: its keys reach the global
+            // bindings, so do its side buttons (`observe_side_button`).
+            observe_side_button(&input, &modifiers, &events, generation, event, || {
+                floating.upgrade().is_some_and(|instance| {
+                    matches!(instance.get_property("menu-open"), Ok(SValue::Bool(true)))
+                })
+            });
             if let winit::event::WindowEvent::DroppedFile(path) = event {
                 let _ = events.send(Event::Dropped(generation, path.clone()));
             }
@@ -346,5 +422,64 @@ impl Host {
             SValue::Bool(fire(&input, &events, generation, &event, flag(4), panel))
         })?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slint::winit_030::winit::event::{ElementState, MouseButton};
+
+    /// The side buttons fire their bindings once per press, with the
+    /// defaults of core_actions.rs (user setting 2026-11-01: back = next,
+    /// forward = previous); releases and other buttons fire nothing.
+    #[test]
+    fn side_buttons_fire_their_binding_once_per_press() {
+        let input = Rc::new(RefCell::new(InputShared::default()));
+        for (id, keys) in [
+            ("previous", ["PageUp", "Mouse:X2"]),
+            ("next", ["PageDown", "Mouse:X1"]),
+        ] {
+            let keys: Vec<String> = keys.map(String::from).to_vec();
+            input
+                .borrow_mut()
+                .table
+                .declare(bindings::HOST, id, "host", &keys, false, false)
+                .unwrap();
+        }
+        let (events, received) = mpsc::channel();
+        let fired = |received: &mpsc::Receiver<Event>| -> Vec<String> {
+            received
+                .try_iter()
+                .map(|event| match event {
+                    Event::Binding(7, bindings::HOST, id) => id,
+                    _ => panic!("not a binding of window 7"),
+                })
+                .collect()
+        };
+        let mods = bindings::Mods::default();
+        let press = |button| side_button(&input, &events, 7, ElementState::Pressed, button, mods);
+        assert!(press(MouseButton::Back));
+        assert_eq!(fired(&received), ["next"]);
+        assert!(press(MouseButton::Forward));
+        assert_eq!(fired(&received), ["previous"]);
+        for button in [MouseButton::Back, MouseButton::Forward] {
+            assert!(!side_button(
+                &input,
+                &events,
+                7,
+                ElementState::Released,
+                button,
+                mods
+            ));
+        }
+        for button in [MouseButton::Left, MouseButton::Right, MouseButton::Middle] {
+            assert!(!press(button));
+        }
+        assert!(fired(&received).is_empty());
+        // An input block (a modal) holds them like keys.
+        input.borrow_mut().blocked = true;
+        assert!(!press(MouseButton::Back));
+        assert!(fired(&received).is_empty());
     }
 }

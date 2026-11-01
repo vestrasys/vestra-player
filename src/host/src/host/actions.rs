@@ -18,7 +18,8 @@ impl Host {
         self.send(execution.owner,json!({"event":"commands.execute","data":{"id":execution.local_id,"revision":execution.revision}}));
         Ok(())
     }
-    /// The host's own commands (owner 0): fullscreen, exit fullscreen, quit.
+    /// The host's own commands (owner 0): toggle, enter and leave
+    /// fullscreen, quit, the sidebar toggle.
     pub(crate) fn register_host_commands(&mut self) -> Result<()> {
         let state = |enabled: bool, checked: Option<bool>| commands::CommandState {
             enabled,
@@ -30,13 +31,20 @@ impl Host {
             commands::Declaration::new("Toggle Fullscreen", &["Toggle Fullscreen"]);
         fullscreen.group = "screen".into();
         fullscreen.order = 700;
-        // IA-CORE-04: Enter and Alt+Enter toggle full screen; F11 too. No
-        // mouse default (user ruling 2026-10-26): a click on the video is
-        // play/pause, and a double click does nothing unless the user binds it.
-        fullscreen.bindings = vec!["Enter".into(), "Alt+Enter".into(), "F11".into()];
+        // IA-CORE-04 (user ruling 2026-11-01): Escape toggles full screen,
+        // its only default key (up to 0.5.x Enter, Alt+Enter and F11 did,
+        // and Escape was Leave Fullscreen's). An Escape a menu, dialog or
+        // text field handles never reaches a binding. No mouse default (user
+        // ruling 2026-10-26): a click on the video is play/pause, and a
+        // double click does nothing unless the user binds it.
+        fullscreen.bindings = vec!["Escape".into()];
         fullscreen.localize(|_| i18n::tr("Toggle Fullscreen"));
+        // Enter and Leave Fullscreen (user ruling 2026-11-01): outside the
+        // menu, no default key, each enabled only where it does something;
+        // bindable in Keyboard Shortcuts.
+        let mut enter = commands::Declaration::new("Enter Fullscreen", &[]);
+        enter.localize(|_| i18n::tr("Enter Fullscreen"));
         let mut exit = commands::Declaration::new("Leave Fullscreen", &[]);
-        exit.bindings = vec!["Escape".into()];
         exit.localize(|_| i18n::tr("Leave Fullscreen"));
         let mut quit = commands::Declaration::new("Quit", &["Quit"]);
         quit.localize(|_| i18n::tr("Quit"));
@@ -51,6 +59,7 @@ impl Host {
         sidebar.localize(|_| i18n::tr("Toggle Sidebar"));
         for (id, declaration, state) in [
             ("fullscreen", fullscreen, state(true, Some(false))),
+            ("enter-fullscreen", enter, state(true, None)),
             ("exit-fullscreen", exit, state(false, None)),
             ("quit", quit, state(true, None)),
             // `bar_buttons::SIDEBAR` (a literal: tests/sdk/host-agreement.test.ts reads it).
@@ -295,17 +304,19 @@ impl Host {
                 reason: None,
             },
         );
-        let _ = self.commands.update(
-            bindings::HOST,
-            "exit-fullscreen",
-            revision,
-            commands::CommandState {
-                enabled: fullscreen,
-                checked: None,
-                busy: false,
-                reason: None,
-            },
-        );
+        for (id, enabled) in fullscreen_command_states(fullscreen) {
+            let _ = self.commands.update(
+                bindings::HOST,
+                id,
+                revision,
+                commands::CommandState {
+                    enabled,
+                    checked: None,
+                    busy: false,
+                    reason: None,
+                },
+            );
+        }
     }
     pub(crate) fn host_command(&mut self, id: &str) {
         if core_actions::ACTIONS.contains(&id) && !core_actions::WINDOW_ACTIONS.contains(&id) {
@@ -330,7 +341,8 @@ impl Host {
     }
     /// The main window's commands, for a key, the menu and `host.run`:
     /// `fullscreen` toggles (in when windowed, out when fullscreen),
-    /// `exit-fullscreen` leaves. False without a window.
+    /// `enter-fullscreen` enters, `exit-fullscreen` leaves. False without
+    /// a window.
     pub(crate) fn window_command(&self, id: &str) -> bool {
         let Some(shell) = &self.shell else {
             return false;
@@ -338,9 +350,82 @@ impl Host {
         let window = shell.window();
         match id {
             "fullscreen" => window.set_fullscreen(!window.is_fullscreen()),
+            "enter-fullscreen" => window.set_fullscreen(true),
             "exit-fullscreen" => window.set_fullscreen(false),
             _ => {}
         }
         true
+    }
+}
+
+/// Enter and Leave Fullscreen are enabled only where they do something:
+/// Enter while windowed, Leave in fullscreen (`host_command_states`).
+pub(crate) fn fullscreen_command_states(fullscreen: bool) -> [(&'static str, bool); 2] {
+    [
+        ("enter-fullscreen", !fullscreen),
+        ("exit-fullscreen", fullscreen),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fullscreen_command_states;
+    use crate::bindings::{HOST, Input, Lookup, Mods, Table};
+
+    #[test]
+    fn enter_and_leave_fullscreen_are_enabled_only_where_they_act() {
+        assert_eq!(
+            fullscreen_command_states(false),
+            [("enter-fullscreen", true), ("exit-fullscreen", false)]
+        );
+        assert_eq!(
+            fullscreen_command_states(true),
+            [("enter-fullscreen", false), ("exit-fullscreen", true)]
+        );
+    }
+
+    /// User ruling 2026-11-01: Escape is Toggle Fullscreen's only key;
+    /// Enter and Leave Fullscreen have none, and Enter, Alt+Enter and F11
+    /// are free. A panel command bound to Escape still wins while its panel
+    /// has the focus.
+    #[test]
+    fn escape_toggles_fullscreen_and_enter_and_leave_have_no_key() {
+        let mut table = Table::default();
+        // As register_host_commands declares them.
+        table
+            .declare(HOST, "fullscreen", "host", &["Escape".into()], false, false)
+            .unwrap();
+        table
+            .declare(HOST, "enter-fullscreen", "host", &[], false, false)
+            .unwrap();
+        table
+            .declare(HOST, "exit-fullscreen", "host", &[], false, false)
+            .unwrap();
+        let key = |name: &str| Input {
+            mods: Mods::default(),
+            name: name.into(),
+        };
+        match table.lookup(&key("Escape"), None) {
+            Lookup::Fire(target) => assert_eq!(target.id, "fullscreen"),
+            other => panic!("{other:?}"),
+        }
+        for name in ["Enter", "F11"] {
+            assert_eq!(table.lookup(&key(name), None), Lookup::Unbound, "{name}");
+        }
+        let alt_enter = Input {
+            mods: Mods {
+                alt: true,
+                ..Default::default()
+            },
+            name: "Enter".into(),
+        };
+        assert_eq!(table.lookup(&alt_enter, None), Lookup::Unbound);
+        table
+            .declare(4, "close", "p.panel", &["Escape".into()], true, false)
+            .unwrap();
+        match table.lookup(&key("Escape"), Some(4)) {
+            Lookup::Fire(target) => assert_eq!(target.id, "close"),
+            other => panic!("{other:?}"),
+        }
     }
 }

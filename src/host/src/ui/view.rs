@@ -1451,6 +1451,101 @@ export component W inherits Window {
         ]
     }
 
+    /// Host 0.6.0: the side buttons are window-level (the window's winit
+    /// hook, `observe_side_button`, fires them once wherever the pointer
+    /// is), so the shell reports them nowhere itself: over the video it no
+    /// longer calls `mouse-input` with X1/X2 (which would fire them twice),
+    /// over the bar it never did. Left presses on the video and a left
+    /// click on a bar button act as before.
+    #[test]
+    fn side_buttons_are_not_reported_by_the_shell_and_left_clicks_are_unchanged() {
+        use slint::platform::{PointerEventButton, WindowEvent};
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        headless();
+        let specs = bar_and_sidebar();
+        let (sender, receiver) = std::sync::mpsc::sync_channel(8);
+        let shell = crate::ui::composition::compile_json(&specs, sender, 1).unwrap();
+        shell.set_property("bottom-visible", true.into()).unwrap();
+        shell.set_property("sidebar-visible", false.into()).unwrap();
+        crate::ui::composition::set_global_value(&shell, &specs[0], "can-pause", true.into())
+            .unwrap();
+        let mouse: Rc<RefCell<Vec<String>>> = Rc::default();
+        let sink = mouse.clone();
+        shell
+            .set_callback("mouse-input", move |args| {
+                if let Some(slint_interpreter::Value::String(name)) = args.first() {
+                    sink.borrow_mut().push(name.to_string());
+                }
+                slint_interpreter::Value::Bool(false)
+            })
+            .unwrap();
+        let presses = Rc::new(std::cell::Cell::new(0));
+        let count = presses.clone();
+        shell
+            .set_callback("left-press", move |_| {
+                count.set(count.get() + 1);
+                slint_interpreter::Value::Void
+            })
+            .unwrap();
+        shell.window().set_size(slint::LogicalSize::new(800., 600.));
+        shell.show().unwrap();
+        settle_layout(shell.window());
+        let number = |name: &str| match shell.get_property(name).unwrap() {
+            slint_interpreter::Value::Number(n) => n as f32,
+            other => panic!("{name}: {other:?}"),
+        };
+        let (x, y, w, h) = (
+            number("video-x"),
+            number("video-y"),
+            number("video-width"),
+            number("video-height"),
+        );
+        assert!(h < 600., "the bar is below the video");
+        let video = (x + w / 2., y + h / 2.);
+        // The fixture bar's Pause button: 8px padding, then the button.
+        let bar_button = (x + 30., y + h + 30.);
+        let click = |at: (f32, f32), button: PointerEventButton| {
+            let position = slint::LogicalPosition::new(at.0, at.1);
+            shell
+                .window()
+                .dispatch_event(WindowEvent::PointerMoved { position });
+            shell
+                .window()
+                .dispatch_event(WindowEvent::PointerPressed { position, button });
+            shell
+                .window()
+                .dispatch_event(WindowEvent::PointerReleased { position, button });
+            slint::platform::update_timers_and_animations();
+        };
+        for at in [video, bar_button] {
+            for button in [PointerEventButton::Back, PointerEventButton::Forward] {
+                click(at, button);
+            }
+        }
+        assert!(
+            mouse.borrow().is_empty(),
+            "the shell reported {:?}",
+            mouse.borrow()
+        );
+        // The bar's own callbacks (focus reports aside): none.
+        let actions =
+            |receiver: &std::sync::mpsc::Receiver<crate::ui::composition::JsonCallback>| {
+                receiver
+                    .try_iter()
+                    .filter(|event| event.callback != "interaction")
+                    .map(|event| (event.owner, event.callback))
+                    .collect::<Vec<_>>()
+            };
+        assert_eq!(actions(&receiver), [], "no bar action");
+        click(video, PointerEventButton::Left);
+        assert_eq!(presses.get(), 1, "a left press on the video");
+        click(bar_button, PointerEventButton::Left);
+        assert_eq!(actions(&receiver), [(10, "set-paused".to_owned())]);
+        assert_eq!(presses.get(), 1, "the bar is not the video");
+        shell.hide().unwrap();
+    }
+
     /// Slint 1.17+ (see `settle_layout`): hiding the docked sidebar (an `if`
     /// in the shell's layout) and reading the video area in the same turn,
     /// as the window tick and `window.setVideoArea` do.

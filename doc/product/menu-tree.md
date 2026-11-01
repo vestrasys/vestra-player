@@ -30,8 +30,8 @@ Context menu
 ├─ ────────
 ├─ Playback ▸
 │  ├─ Play/Pause  [Space]   ‹core›
-│  ├─ Previous  [PageUp / Mouse:X1]   ‹core›
-│  ├─ Next  [PageDown / Mouse:X2]   ‹core›
+│  ├─ Previous  [PageUp / Mouse:X2]   ‹core›
+│  ├─ Next  [PageDown / Mouse:X1]   ‹core›
 │  ├─ ────────
 │  ├─ Seek ▸
 │  │  ├─ Previous Frame  [D]   ‹core›
@@ -349,7 +349,7 @@ Context menu
 │  └─ Show Album Cover for Audio Only   ‹visualizer›
 ├─ Games ▸   (appears only when a plugin adds items; e.g. the store plugin VestraNES adds VestraNES ▸ Load ROM… · Stop · VestraNES Window…)
 ├─ ────────
-├─ Toggle Fullscreen  [Enter / F11]   ‹host›
+├─ Toggle Fullscreen  [Esc]   ‹host›
 ├─ Screen ▸
 │  ├─ Picture-in-Picture   ‹window›
 │  ├─ Mini Size  [`]   ‹window›

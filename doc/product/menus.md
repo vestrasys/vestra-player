@@ -35,8 +35,8 @@ The labels below are the English interface text (the English source text of each
 | Copy to Clipboard ▸ File Name · Folder Path · Full Path | playback | | |
 | —— | | | |
 | Playback ▸ Play/Pause | core | Space, left click on the video | |
-| Playback ▸ Previous | core | PgUp, mouse side button X1 | |
-| Playback ▸ Next | core | PgDn, mouse side button X2 | |
+| Playback ▸ Previous | core | PgUp, mouse side button X2 (forward) | |
+| Playback ▸ Next | core | PgDn, mouse side button X1 (back) | |
 | Playback ▸ Seek ▸ Previous Frame · Next Frame | core | D · F | |
 | Playback ▸ Seek ▸ Previous Keyframe · Next Keyframe | playback | Ctrl+Shift+← · Ctrl+Shift+→ | |
 | Playback ▸ Seek ▸ Back 5 s · Forward 5 s | core | ← · → | |
@@ -154,7 +154,7 @@ The labels below are the English interface text (the English source text of each
 | Audio ▸ Show Album Cover for Audio Only | visualizer | | Checked |
 | Games ▸ (appears only when a plugin adds items, e.g. VestraNES ▸ Load ROM… · Stop · VestraNES Window…) | third-party | | The built-in NES emulator left the player on 2026-10-27 (user ruling) |
 | —— | | | |
-| Fullscreen | host | Enter, Alt+Enter, F11 | Checked; key `Toggle Fullscreen` (id `fullscreen`); in fullscreen Esc leaves fullscreen (command "Leave Fullscreen", key `Leave Fullscreen`, not in the menu) |
+| Fullscreen | host | Esc | Checked; key `Toggle Fullscreen` (id `fullscreen`); Esc is its only default (user ruling 2026-11-01; Enter, Alt+Enter, F11 up to 0.5.x). "Enter Fullscreen" (`enter-fullscreen`, only windowed) and "Leave Fullscreen" (`exit-fullscreen`, only in fullscreen) are not in the menu and have no default key |
 | Screen ▸ Picture-in-Picture | window | | Checked; appears only when the main window reports support for the system's picture-in-picture (macOS 14+) (id `pip`, IA-WIN-01); disabled without video (can still be left while in picture-in-picture); if mini size is active, the original size is restored first |
 | Screen ▸ Mini Size | window | `` ` `` | Checked; all systems (id `mini`, IA-WIN-01); not on top (IA-WIN-02); disabled without video and in fullscreen; run in picture-in-picture, it leaves picture-in-picture first |
 | Screen ▸ 0.5× · 1× · 1.5× · 2× | window | 1 · 2 · 3 · 4 | Radio; disabled without video |
@@ -181,7 +181,7 @@ The labels below are the English interface text (the English source text of each
 | —— | | | |
 | Quit | host | Cmd+Q (shown on macOS; on Windows and Linux the menu shows no shortcut, the close button and Alt+F4 quit) | key `Quit` |
 
-Global keys not in the menu: Shift+Tab brief info (info), Esc "Leave Fullscreen" (host; only in fullscreen; in windowed mode the key goes to the focused control as usual).
+Global keys not in the menu: Shift+Tab brief info (info). Esc is Toggle Fullscreen's (above): a menu, dialog or text field that handles Esc keeps it; otherwise it enters or leaves fullscreen.
 
 ### When the playlist has focus
 
