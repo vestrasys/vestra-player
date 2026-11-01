@@ -413,6 +413,8 @@ VestraPlayer-<version>-windows-x64-setup.exe
 VestraPlayer-<version>-windows-x64-portable.zip
 VestraPlayer-<version>-source.tar.gz            (GPL, §5.4)
 VestraPlayer-<version>-third-party-sources.txt  (or the source bundle itself)
+VestraPlayer-macos-arm64.dmg                    (fixed-name copies for releases/latest/download/,
+VestraPlayer-windows-x64-setup.exe               see doc/releases/README.md "Stable download links")
 SHA256SUMS
 ```
 
