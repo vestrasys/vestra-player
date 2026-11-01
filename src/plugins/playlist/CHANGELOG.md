@@ -5,6 +5,7 @@
 Who must change: nobody. What users see: with long lists a click shows a little sooner (20,000 rows: about 40 to 21 ms in the plugin with SDK 1.5.47). Needs player 0.6.0.
 
 - Each row the list is sent is frozen and stays the same object while it does not change, so SDK 1.5.47 reuses its encoding instead of encoding all rows on every update.
+- The comparison of a row with the one sent last covers every field of the row; the type check fails if a new field is left out.
 
 ## 0.2.2
 

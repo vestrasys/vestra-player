@@ -893,21 +893,22 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     detail: string;
     thumb: ImageRef | null;
   };
-  const viewKeys: readonly (keyof ViewRow)[] = [
-    "id",
-    "number",
-    "label",
-    "duration",
-    "tooltip",
-    "problem",
-    "selected",
-    "current",
-    "played",
-    "failed",
-    "media",
-    "detail",
-    "thumb",
-  ];
+  /** Every field of `ViewRow`: the type check fails when one is missing (or unknown). */
+  const viewKeys = Object.keys({
+    id: true,
+    number: true,
+    label: true,
+    duration: true,
+    tooltip: true,
+    problem: true,
+    selected: true,
+    current: true,
+    played: true,
+    failed: true,
+    media: true,
+    detail: true,
+    thumb: true,
+  } satisfies Record<keyof ViewRow, true>) as (keyof ViewRow)[];
   /**
    * The object sent last for each row: an unchanged row is the same object on the next pass
    * (0.2.1), and it is frozen (0.2.3), which lets SDK 1.5.47 reuse its encoding instead of
