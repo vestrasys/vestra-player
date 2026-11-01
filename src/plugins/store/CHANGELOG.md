@@ -6,6 +6,7 @@ Needs Vestra Player 0.6.0.
 
 - A "Hide built-in plugins" check box under the tag and sort drop-downs, on by default (also for people who used the store before). When on, the plugins that ship with the player (they can be neither uninstalled nor disabled) are left out of every tab: their own rows under Installed and a repository's entries for them under Available. The tab titles count what the tabs list ("Installed (3)" leaves the built-ins out while they are hidden), and the tag list offers only tags of the listed plugins. Search and the tag combine with it. Unticking shows them as before, built-ins first under Installed. The choice is kept in the store's settings and survives a restart.
 - Hiding the selected plugin selects the list's first plugin, or nothing when the list is empty, as a search or a tag does; a tag only built-ins have goes back to "Tags: All". The check box is reached with Tab after the drop-downs and toggled with Space.
+- With only built-in plugins installed and hidden, the Installed tab says so ("No plugins installed besides the built-in ones, which are hidden") instead of "No plugins installed yet". A built-in shown for you (`select`) while hidden turns the option off first, and keeps the tab, tag and search when they already list it.
 
 ## 0.2.7
 

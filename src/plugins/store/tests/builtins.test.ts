@@ -182,3 +182,48 @@ test("the choice is kept in settings.json; settings saved before the option hide
     await third.stop();
   }
 });
+
+test("select(key) of a hidden built-in shows the built-ins first and keeps the search that lists it", async () => {
+  const { host, store, stop } = await ready();
+  try {
+    host.window("store").emit("search", "vestra");
+    await host.settle();
+    assert.deepEqual(names(host), []);
+    const clear = props(host)["clear-search"];
+    store.select("\nvestra.video");
+    await host.settle();
+    assert.equal(store.hideBuiltins, false);
+    assert.equal(props(host)["hide-builtins"], false);
+    assert.equal(store.search, "vestra", "the search still lists it");
+    assert.equal(props(host)["clear-search"], clear);
+    assert.equal(props(host)["category"], INSTALLED);
+    assert.deepEqual(names(host), ["vestra.video"]);
+    assert.equal(details(host), "vestra.video");
+  } finally {
+    await stop();
+  }
+});
+
+test("only built-ins installed and hidden: the Installed tab says they are hidden", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  const { host, stop } = await start({ net, packages: [BUILTIN] });
+  try {
+    await openStore(host);
+    assert.deepEqual(names(host), []);
+    assert.equal(props(host)["empty-text"], "除内置插件外还没有安装插件（内置插件已隐藏）");
+    assert.equal(props(host)["installed-count"], 0);
+    await showBuiltins(host);
+    assert.deepEqual(names(host), ["vestra.video"]);
+  } finally {
+    await stop();
+  }
+  // Nothing installed at all: as before.
+  const empty = await start({ net, packages: [] });
+  try {
+    await openStore(empty.host);
+    assert.equal(props(empty.host)["empty-text"], "还没有安装插件");
+  } finally {
+    await empty.stop();
+  }
+});

@@ -98,6 +98,7 @@ export const WINDOW = [
   "No plugins match",
   "All plugins are up to date",
   "No plugins installed yet",
+  "No plugins installed besides the built-in ones, which are hidden",
   "Reading repositories…",
   "Can't reach the repositories. Showing nothing until you're online; click Refresh to retry.",
   "The repositories have no plugins yet",

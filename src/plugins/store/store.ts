@@ -355,17 +355,27 @@ export class Store {
     this.changed();
   }
 
-  /** Bring a row into the list: its tab, then without the tag, then without the search, then with the built-ins. */
+  /**
+   * Bring a row into the list: a hidden built-in shows the built-ins first,
+   * then its tab, then without the tag, then without the search, each only
+   * while the row is still not listed.
+   */
   #reveal(item: Item) {
     this.#pending = null;
     if (this.#shows(item.key)) return;
+    if (isBuiltinRow(item) && this.hideBuiltins) {
+      this.settings.save({ ...this.settings.value, hideBuiltins: false });
+      if (this.#shows(item.key)) {
+        this.#scroll++;
+        return;
+      }
+    }
     this.category = homeOf(item);
     if (!this.#shows(item.key)) this.tag = null;
     if (!this.#shows(item.key)) {
       this.search = "";
       this.#clearSearch++;
     }
-    if (!this.#shows(item.key) && isBuiltinRow(item)) this.settings.save({ ...this.settings.value, hideBuiltins: false });
     this.#scroll++;
   }
 
@@ -676,7 +686,11 @@ export class Store {
   #emptyText(visible: Item[]): Msg | null {
     if (visible.length) return null;
     if (this.search || this.tag) return msg("No plugins match");
-    if (this.category === INSTALLED) return msg("No plugins installed yet");
+    if (this.category === INSTALLED)
+      // Only built-ins are installed and they are hidden: say so rather than "nothing installed".
+      return this.hideBuiltins && this.items.some((item) => isBuiltinRow(item) && isInstalledRow(item))
+        ? msg("No plugins installed besides the built-in ones, which are hidden")
+        : msg("No plugins installed yet");
     // Available and Updates need an index (fresh or cached); "up to date" only after one was read.
     if (!this.#known()) {
       if (this.repos.list.some((repo) => repo.refreshing)) return msg("Reading repositories…");
