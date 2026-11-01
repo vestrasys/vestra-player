@@ -39,25 +39,25 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
             │ one message per line    │                       │
 ┌───────────┴──────────┐     ┌────────┴───────┐      ┌────────┴───────┐
 │ Shared runner (Node) │     │ Node process   │      │ Node process   │
-│ all built-in plugins │     │ store plugin   │ ...  │ store plugin   │
+│ all built-in plugins │     │ other plugin   │ ...  │ other plugin   │
 │ + SDK + .slint       │     │ + SDK + .slint │      │ + SDK + .slint │
 └──────────────────────┘     └────────────────┘      └────────────────┘
 ```
 
 Plugins describe their windows and panels in `.slint` files; the host compiles them, places them in the main window or a tool window, and forwards their callbacks back to the plugin. Plugins send values and row changes, not pixels, so a 20,000-row playlist is a native `ListView` over rows the host holds ([large lists](doc/architecture/large-lists.md)).
 
-Built-in plugins share one Node process, the shared runner; every other plugin gets its own, apart from the player and from each other. A Node process costs about 50 MB, one more plugin in the shared runner about 1 MB: on Windows, the 14 built-ins of a headless start measured 704 MB as separate processes and 61 MB shared ([measurements](doc/process/rounds/2026-10-shared-runner.md#163-measurements)).
+Built-in plugins share one Node process, the shared runner; every other plugin gets its own, apart from the player and from each other. A Node process costs about 50 MB, one more plugin in the shared runner [about 1 MB](doc/process/rounds/2026-10-plugin-memory.md): on Windows, the 14 built-ins that run in a headless start measured 704 MB of working set as separate processes and 61 MB shared ([measurements](doc/process/rounds/2026-10-shared-runner.md#163-measurements)).
 
-[Lazy activation](doc/process/rounds/2026-10-lazy-activation.md), behind `VESTRA_LAZY=1` until its hardware checks pass, bounds how many plugins run at once. As with a Chrome MV3 service worker, a plugin holding nothing live (a mounted panel such as the playback bar, an open window, a filter chain, a playback listener) is stopped after a minute idle; the host keeps its menus, keys and file types, the next use starts it again in tens of milliseconds, and session storage carries state across the stop. An installed plugin nobody uses costs no process after its first run.
+[Lazy activation](doc/process/rounds/2026-10-lazy-activation.md), behind `VESTRA_LAZY=1` until its hardware checks pass, keeps plugins that are not in use from running. As with a Chrome MV3 service worker, a plugin holding nothing live (a mounted panel such as the playback bar, an open window, a filter chain, a playback listener) is stopped after a minute idle; the host keeps its menus, keys and file types, and the next use starts it again: tens of milliseconds for a built-in, a few hundred for a plugin in its own process. Session storage carries state across the stop. Most built-ins hold a mounted panel or a playback listener, so they stay running.
 
-Faults stay with their plugin. The host checks each call against the declared capabilities and caps messages at 1 MiB; a stopped plugin loses everything it owned and has 300 ms to exit; a crashed plugin process takes down only its plugin. In the shared runner, an exception traced to one plugin moves that plugin to a process of its own; a crash or hang of the runner (2 s heartbeat) restarts the built-ins in about 1.3 s while playback continues, and a third restart within a minute splits them up until the player quits. More in the [architecture overview](doc/architecture/README.md#2-loading-and-stopping-plugins).
+The host checks each call against the declared capabilities and caps messages at 1 MiB. A stopped plugin loses everything it owned and has 300 ms to exit; a crashed plugin process takes only its plugin down, and playback, which runs in the host, goes on. In the shared runner, an uncaught exception traced to one plugin stops that plugin, which runs in its own process if started again; a runner exit, an unattributed fault, five missed 2 s heartbeats or a full input queue restarts every built-in in a new runner (panels and windows gone for 1.2–1.4 s in a kill drill), and the third restart within a minute leaves them in separate processes until the player quits. More in the [architecture overview](doc/architecture/README.md#2-loading-and-stopping-plugins).
 
 ## Repository layout
 
 | Path | Contents |
 | --- | --- |
 | `src/host/` | The Rust host: playback, UI composition, plugin and package management, platform layer |
-| `src/runtime/` | The Node.js runners: one shared by the built-in plugins, one per other plugin |
+| `src/runtime/` | The Node.js runners: `shared-runner` for the built-ins, `runner` for each other plugin's process |
 | `src/plugins/` | The built-in product plugins |
 | `src/packaging/` | Installer builds for macOS and Windows |
 | `doc/` | Design documents, architecture and process notes ([index](doc/README.md)) |
