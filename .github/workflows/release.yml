@@ -204,7 +204,10 @@ jobs:
   sign-macos:
     name: sign macOS (TODO)
     needs: package-macos
-    if: ${{ !inputs.dry_run }}
+    # !cancelled(): the implicit success() also fails when a job further up
+    # was skipped (the build-test jobs are, when main.yml already tested the
+    # commit), which skipped signing and the draft release in v0.6.2.
+    if: ${{ !cancelled() && !inputs.dry_run && needs.package-macos.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release
@@ -219,7 +222,7 @@ jobs:
   sign-windows:
     name: sign Windows (TODO)
     needs: package-windows
-    if: ${{ !inputs.dry_run }}
+    if: ${{ !cancelled() && !inputs.dry_run && needs.package-windows.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release
@@ -231,7 +234,10 @@ jobs:
   draft-release:
     name: draft GitHub release
     needs: [verify, checksums, sign-macos, sign-windows]
-    if: ${{ !inputs.dry_run && github.ref_type == 'tag' }}
+    if: >-
+      ${{ !cancelled() && !inputs.dry_run && github.ref_type == 'tag'
+      && needs.verify.result == 'success' && needs.checksums.result == 'success'
+      && needs.sign-macos.result == 'success' && needs.sign-windows.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
