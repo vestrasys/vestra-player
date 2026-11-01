@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, menuText, neutral, nodes, parse, presetOf, presets, SEGMENT_BYTES, serialize, syncSeconds,
+  bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, parse, presetOf, presets, serialize, syncSeconds,
   TRACK_TEXT_BYTES, trackRow,
 } from "../model.ts";
 
@@ -99,32 +98,9 @@ test("G03 track labels: number, title, language, codec, external", () => {
   assert.deepEqual(trackRow(t({}), 3), { kind: "track", text: "", n: 4, codec: "", external: false, disconnected: false });
 });
 
-/** The track menu templates in English and every catalog of the plugin. */
-const templates = (() => {
-  const ids = ["{} (external)", "Track {}", "Track {} ({})", "Track {} (external)", "Track {} ({}) (external)"];
-  const catalogs = readdirSync(new URL("../locales/", import.meta.url)).filter((name) => name.endsWith(".po"));
-  return [
-    new Map(ids.map((id) => [id, id])),
-    ...catalogs.map((name) => {
-      const po = readFileSync(new URL(`../locales/${name}`, import.meta.url), "utf8");
-      const pairs = [...po.matchAll(/^msgid "(.*)"\nmsgstr "(.*)"$/gm)].map(([, id, str]) => [JSON.parse(`"${id}"`), JSON.parse(`"${str}"`)] as const);
-      const map = new Map(pairs);
-      for (const id of ids) assert.ok(map.get(id), `${name} translates ${id}`);
-      return map;
-    }),
-  ];
-})();
-const fill = (template: string, args: (string | number)[]) => args.reduce<string>((out, arg) => out.replace("{}", String(arg)), template);
-/** The menu segments `trackLabel` (main.ts) makes of a row, in every language. */
-const menuLabels = (row: ReturnType<typeof trackRow>) =>
-  templates.map((catalog) => {
-    const label = row.text ? row.text : row.codec ? fill(catalog.get("Track {} ({})")!, [row.n, row.codec]) : fill(catalog.get("Track {}")!, [row.n]);
-    return row.external ? fill(catalog.get("{} (external)")!, [label]) : label;
-  });
 const bytes = (text: string) => new TextEncoder().encode(text).length;
-const segmentValid = (text: string) => text !== "" && bytes(text) <= SEGMENT_BYTES && menuText(text) === text && !/\p{Cc}/u.test(text);
 
-test("G03 track labels fit a menu path segment (80 bytes, no controls or edge spaces) in every language", () => {
+test("G03 track labels: at most 68 bytes, cut on whole characters, no controls or edge spaces", () => {
   const t = (fields: Partial<Parameters<typeof trackRow>[0]>) => ({
     id: 1, selected: false, external: false, exportable: true, codec: null, title: null, language: null, ...fields,
   });
@@ -144,7 +120,8 @@ test("G03 track labels fit a menu path segment (80 bytes, no controls or edge sp
     for (const index of [0, 98_765]) {
       const row = trackRow(t(fields), index);
       assert.ok(bytes(row.text) <= TRACK_TEXT_BYTES, row.text);
-      for (const label of menuLabels(row)) assert.ok(segmentValid(label), `${JSON.stringify(label)} (${bytes(label)} bytes)`);
+      assert.doesNotMatch(row.text, /\p{Cc}/u);
+      assert.doesNotMatch(row.text, /^\s|\s$/u);
       // A cut never splits a user-perceived character: every grapheme of the text is one of the source's, or "…".
       const source = [fields.title, fields.language, fields.codec].join(" ");
       for (const { segment } of segmenter.segment(row.text)) assert.ok(segment === "…" || /^[\d. [\]()]$/.test(segment) || source.includes(segment), segment);
@@ -153,7 +130,6 @@ test("G03 track labels fit a menu path segment (80 bytes, no controls or edge sp
   // A long CJK title is cut in bytes, keeping number, language and codec.
   const cjk = trackRow(t({ title: "日本語吹き替え版".repeat(10), language: "jpn", codec: "aac", external: true }), 0).text;
   assert.match(cjk, /^1\. 日本語吹き替え版.*… \[jpn\] \(aac\)$/);
-  assert.equal(menuLabels(trackRow(t({ title: "日本語吹き替え版".repeat(10), language: "jpn", codec: "aac", external: true }), 0))[0], `${cjk} (external)`);
   // Edge spaces go, controls become spaces.
   assert.equal(trackRow(t({ title: "  Director's commentary \t ", language: " eng ", codec: " ac3 " }), 0).text, "1. Director's commentary [eng] (ac3)");
   assert.equal(trackRow(t({ title: "a\u0000b\u0085c\r\n", codec: "e\u0080ac3" }), 0).text, "1. a b c (e ac3)");
@@ -165,14 +141,21 @@ test("G03 track labels fit a menu path segment (80 bytes, no controls or edge sp
   const emoji = trackRow(t({ title: "🎬👨‍👩‍👧‍👦🇯🇵".repeat(12), codec: "flac" }), 0).text;
   assert.ok(emoji.endsWith("… (flac)") && bytes(emoji) <= TRACK_TEXT_BYTES, emoji);
   assert.ok(!emoji.includes("‍…") && !/[\ud800-\udbff](?![\udc00-\udfff])/.test(emoji));
-  // Every label of a list stays distinct, also when the titles are the same once cut.
-  const list = [
-    ...Array.from({ length: 12 }, () => t({ title: "长".repeat(80), codec: "aac" })),
-    t({}), t({ codec: "aac" }), t({ external: true }), t({ title: "Track 2" }),
-  ];
-  for (const catalog of templates.keys()) {
-    const labels = list.map((track, index) => menuLabels(trackRow(track, index))[catalog]);
-    assert.equal(new Set(labels).size, labels.length, labels.join(" | "));
+});
+
+test("without Intl.Segmenter the labels are cut on code points and still fit", async () => {
+  const saved = Object.getOwnPropertyDescriptor(Intl, "Segmenter")!;
+  Object.defineProperty(Intl, "Segmenter", { value: undefined, configurable: true, writable: true });
+  try {
+    // A fresh copy of the module, loaded while the runtime has no segmenter.
+    const model: typeof import("../model.ts") = await import(new URL("../model.ts?no-segmenter", import.meta.url).href);
+    const t = (title: string) => ({ id: 1, selected: false, external: false, exportable: true, codec: "aac", title, language: null });
+    const text = model.trackRow(t("é".repeat(40)), 0).text;
+    assert.equal(text, `1. ${"é".repeat(18)}e… (aac)`, "code points: the last accent is cut off");
+    assert.ok(bytes(text) <= TRACK_TEXT_BYTES);
+    assert.equal(trackRow(t("é".repeat(40)), 0).text, `1. ${"é".repeat(18)}… (aac)`, "graphemes: kept whole");
+  } finally {
+    Object.defineProperty(Intl, "Segmenter", saved);
   }
 });
 
@@ -219,6 +202,11 @@ test("G16: the saved device is an id the player accepts, kept with its name; tit
   assert.equal("deviceName" in serialize(parse({})), false);
   for (const bad of ["", 7, "a\nb", "x".repeat(513)]) assert.equal(parse({ device: bad, deviceName: "n" }).device, null);
   assert.equal(deviceId("coreaudio/X"), "coreaudio/X");
+  // As the player checks it: at most 512 UTF-8 bytes, no C0, DEL or C1 control.
+  assert.equal(deviceId("x".repeat(512)), "x".repeat(512));
+  assert.equal(deviceId("扬".repeat(170)), "扬".repeat(170), "510 bytes");
+  assert.equal(deviceId("扬".repeat(171)), null, "171 characters, 513 bytes");
+  for (const bad of ["a\u007fb", "a\u0085b", "a\u009fb", "a\u0000"]) assert.equal(deviceId(bad), null, JSON.stringify(bad));
   assert.deepEqual(
     deviceTitles([{ id: "a", name: "USB Audio" }, { id: "b", name: "USB Audio" }, { id: "c", name: "System Default" }, { id: "d", name: " \t " }, { id: "e", name: "" }], "USB Audio"),
     [

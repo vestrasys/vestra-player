@@ -180,13 +180,17 @@ export const NO_DEVICES = "No Output Devices";
 export const UNNAMED_DEVICE = "Unnamed device";
 export const SELECTED_DEVICE = "Selected device";
 export const DEVICE_POLL_MS = 5000;
-/** A saved id the player would accept: 1–512 characters, no control characters. */
-export function deviceId(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 && value.length <= 512 && !/[\u0000-\u001f\u007f]/.test(value) ? value : null;
-}
 const utf8 = new TextEncoder();
 const bytes = (text: string) => utf8.encode(text).length;
-const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+/** A saved id the player would accept: 1–512 UTF-8 bytes, no control characters (C0, DEL, C1), as the player checks it. */
+export function deviceId(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 && bytes(value) <= 512 && !/\p{Cc}/u.test(value) ? value : null;
+}
+/** User-perceived characters; code points where the runtime has no `Intl.Segmenter`. */
+const graphemes: (text: string) => Iterable<string> =
+  typeof Intl.Segmenter === "function"
+    ? ((segmenter) => (text) => Array.from(segmenter.segment(text), ({ segment }) => segment))(new Intl.Segmenter(undefined, { granularity: "grapheme" }))
+    : (text) => text;
 /** The player's limit for one menu path segment, in UTF-8 bytes. */
 export const SEGMENT_BYTES = 80;
 /**
@@ -204,7 +208,7 @@ function fit(text: string, max: number) {
   if (bytes(text) <= max) return text;
   let out = "";
   let room = max - bytes("…");
-  for (const { segment } of graphemes.segment(text)) {
+  for (const segment of graphemes(text)) {
     const size = bytes(segment);
     if (size > room) break;
     out += segment;
