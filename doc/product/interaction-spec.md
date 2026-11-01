@@ -919,7 +919,7 @@ None. This chapter uses only the existing API.
 1. Setting "Window size when playback starts": Don't Resize / 0.5× / 1× (default) / 1.5× / 2× / Fit to Video Aspect Ratio. The menu "Screen ▸ When Playback Starts ▸" has six radio items (order 716–721, group `screen-auto`); the settings page "Options ▸ Playback ▸ Window" (order 30) offers the same.
 2. Setting "Only Once" (off by default): the first source with video in this run uses up the one time (even if it was not resized because of fullscreen or similar). Menu "Screen ▸ When Playback Starts ▸ Only Once" (checkable, order 722, group `screen-auto-once`).
 3. Trigger: each new source (`sourceId` changes) is resized once, when it first gets a video size (read `stats()` after `ready`, retrying every 500 ms at most 10 times). Replaying, pausing or seeking within the same source does not trigger. A source already playing when the plugin activates is treated as a new source.
-4. No resizing when: fullscreen; mini size in effect; in picture-in-picture; audio only or no video; a plugin-generated stream with no size.
+4. No resizing when: fullscreen; maximised (as MPC-HC's auto-zoom and mpv's autofit leave a maximised window alone; `WindowState.maximized`, player 0.6.3, Window plugin 0.1.6); mini size in effect; in picture-in-picture; audio only or no video; a plugin-generated stream with no size. The manual multipliers (H03) are explicit requests: `setVideoArea` on a maximised window restores it first and then resizes it on Windows, as MPC-HC's View ▸ Zoom does; on macOS it resizes the zoomed window directly as before (unzooming animates and would fight the new size).
 5. The size rules are the same as for the manual multipliers (feature requirements H03): the target is the video area, the core adds the bottom bar and the attached sidebar, keeps the top-left corner, shrinks to the screen when it does not fit and enlarges to the minimum size when too small.
 6. Automatic resizing shows no OSD; nothing is shown when it is shrunk to the screen either. Changing the setting from the menu shows "When playback starts: 1×", "When playback starts: Don't resize the window", "Resize only once when playback starts: On / Off"; changing it on the settings page shows nothing; changing the setting does not resize the current window immediately, it takes effect with the next source.
 7. If, after the source is ready and before the size is known, the user changes the window manually (in windowed mode the video area changes by more than 1 point; fullscreen toggling and picture-in-picture do not count), this source is no longer resized automatically.
@@ -934,6 +934,7 @@ None. This chapter uses only the existing API.
 4. Open an mp3: the window is unchanged.
 5. In fullscreen, switch to the next video through the list: no resizing; after exiting fullscreen the window has its size from before fullscreen.
 6. Set "Don't Resize": the window is unchanged when opening files; set "Only Once": only the first video resizes it.
+7. Maximise the window and open another video: the window stays maximised. Then choose Screen ▸ 1×: the video area becomes the video size (on Windows the window is restored first).
 
 ### G-06 Hiding the pointer while playing is on by default (P1)
 

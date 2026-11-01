@@ -827,91 +827,15 @@ impl CustomApplicationHandler for Handler {
         _: Option<&slint::Window>,
         event: &winit::event::WindowEvent,
     ) -> EventResult {
-        PACING.with(|pacing| {
-            let mut pacing = pacing.borrow_mut();
-            let Some(pacing) = pacing
-                .as_mut()
-                .filter(|p| p.window == window_id && !p.failed)
-            else {
-                return EventResult::Propagate;
-            };
-            pacing.cycles.close_paint();
-            let now = Instant::now();
-            if matches!(
-                event,
-                winit::event::WindowEvent::Moved(_)
-                    | winit::event::WindowEvent::ScaleFactorChanged { .. }
-            ) {
-                // Perhaps onto another display: its vertical blanks from the
-                // next wait on, not up to a second later.
-                pacing.clock.moved.store(true, Ordering::Release);
-            }
-            if matches!(event, winit::event::WindowEvent::RedrawRequested) {
-                pacing.counts.requested += 1;
-            }
-            if matches!(
-                event,
-                winit::event::WindowEvent::CursorMoved { .. }
-                    | winit::event::WindowEvent::CursorEntered { .. }
-                    | winit::event::WindowEvent::CursorLeft { .. }
-                    | winit::event::WindowEvent::MouseInput { .. }
-                    | winit::event::WindowEvent::MouseWheel { .. }
-                    | winit::event::WindowEvent::KeyboardInput { .. }
-                    | winit::event::WindowEvent::Touch(_)
-            ) {
-                // UI changes after input draw at the next blank (`INPUT`).
-                pacing.gate.input(now);
-            }
-            let kind = match event {
-                winit::event::WindowEvent::RedrawRequested => Segment::Paint,
-                winit::event::WindowEvent::CursorMoved { .. } => Segment::Cursor,
-                _ => Segment::Other,
-            };
-            pacing.stats.event(now, kind);
-            if kind != Segment::Paint {
-                return EventResult::Propagate;
-            }
-            if pacing.passive {
-                pacing.stats.draw(now, false, false);
-                pacing
-                    .counts
-                    .drawn(now, pacing.stats.last_blank, pacing.stats.period);
-                pacing.cycles.paint_at = Some(crate::platform::thread_cycles());
-                drew();
-                return EventResult::Propagate;
-            }
-            let decision = pacing.gate.redraw_requested(now);
-            if decision.arm {
-                pacing.arm();
-            }
-            if decision.draw {
-                let carried = pacing.gate.take_carried();
-                pacing.stats.draw(now, decision.arm, carried);
-                pacing
-                    .counts
-                    .drawn(now, pacing.stats.last_blank, pacing.stats.period);
-                pacing.cycles.paint_at = Some(crate::platform::thread_cycles());
-                drew();
-            } else {
-                pacing.stats.held();
-            }
-            if decision.deliver {
-                // Runs after this draw (a posted message): the refused
-                // picture is set and drawn at the next vertical blank.
-                let _ = slint::invoke_from_event_loop(|| {
-                    DELIVER.with(|deliver| {
-                        if let Some(deliver) = &*deliver.borrow() {
-                            deliver();
-                        }
-                    });
-                });
-            }
-            if decision.draw {
-                EventResult::Propagate
-            } else {
-                EventResult::PreventDefault
-            }
-        })
+        let result = pace(window_id, event);
+        // Any window Slint draws now: one hidden until its first draw shows
+        // after it (Windows, `platform::cloak_until_drawn`).
+        if matches!(event, winit::event::WindowEvent::RedrawRequested)
+            && matches!(result, EventResult::Propagate)
+        {
+            crate::platform::window_drawing(u64::from(window_id));
+        }
+        result
     }
     fn about_to_wait(&mut self, _: &winit::event_loop::ActiveEventLoop) -> EventResult {
         PACING.with(|pacing| {
@@ -922,6 +846,96 @@ impl CustomApplicationHandler for Handler {
         });
         EventResult::Propagate
     }
+}
+
+/// `Handler::window_event` for the main window: the gate holds or lets
+/// through its redraw requests; other windows' events pass.
+fn pace(window_id: winit::window::WindowId, event: &winit::event::WindowEvent) -> EventResult {
+    PACING.with(|pacing| {
+        let mut pacing = pacing.borrow_mut();
+        let Some(pacing) = pacing
+            .as_mut()
+            .filter(|p| p.window == window_id && !p.failed)
+        else {
+            return EventResult::Propagate;
+        };
+        pacing.cycles.close_paint();
+        let now = Instant::now();
+        if matches!(
+            event,
+            winit::event::WindowEvent::Moved(_)
+                | winit::event::WindowEvent::ScaleFactorChanged { .. }
+        ) {
+            // Perhaps onto another display: its vertical blanks from the
+            // next wait on, not up to a second later.
+            pacing.clock.moved.store(true, Ordering::Release);
+        }
+        if matches!(event, winit::event::WindowEvent::RedrawRequested) {
+            pacing.counts.requested += 1;
+        }
+        if matches!(
+            event,
+            winit::event::WindowEvent::CursorMoved { .. }
+                | winit::event::WindowEvent::CursorEntered { .. }
+                | winit::event::WindowEvent::CursorLeft { .. }
+                | winit::event::WindowEvent::MouseInput { .. }
+                | winit::event::WindowEvent::MouseWheel { .. }
+                | winit::event::WindowEvent::KeyboardInput { .. }
+                | winit::event::WindowEvent::Touch(_)
+        ) {
+            // UI changes after input draw at the next blank (`INPUT`).
+            pacing.gate.input(now);
+        }
+        let kind = match event {
+            winit::event::WindowEvent::RedrawRequested => Segment::Paint,
+            winit::event::WindowEvent::CursorMoved { .. } => Segment::Cursor,
+            _ => Segment::Other,
+        };
+        pacing.stats.event(now, kind);
+        if kind != Segment::Paint {
+            return EventResult::Propagate;
+        }
+        if pacing.passive {
+            pacing.stats.draw(now, false, false);
+            pacing
+                .counts
+                .drawn(now, pacing.stats.last_blank, pacing.stats.period);
+            pacing.cycles.paint_at = Some(crate::platform::thread_cycles());
+            drew();
+            return EventResult::Propagate;
+        }
+        let decision = pacing.gate.redraw_requested(now);
+        if decision.arm {
+            pacing.arm();
+        }
+        if decision.draw {
+            let carried = pacing.gate.take_carried();
+            pacing.stats.draw(now, decision.arm, carried);
+            pacing
+                .counts
+                .drawn(now, pacing.stats.last_blank, pacing.stats.period);
+            pacing.cycles.paint_at = Some(crate::platform::thread_cycles());
+            drew();
+        } else {
+            pacing.stats.held();
+        }
+        if decision.deliver {
+            // Runs after this draw (a posted message): the refused
+            // picture is set and drawn at the next vertical blank.
+            let _ = slint::invoke_from_event_loop(|| {
+                DELIVER.with(|deliver| {
+                    if let Some(deliver) = &*deliver.borrow() {
+                        deliver();
+                    }
+                });
+            });
+        }
+        if decision.draw {
+            EventResult::Propagate
+        } else {
+            EventResult::PreventDefault
+        }
+    })
 }
 
 /// Slint begins drawing the main window (its rendering notifier's

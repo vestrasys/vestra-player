@@ -263,6 +263,127 @@ pub fn set_dark_title_bars(dark: bool) {
     }
 }
 
+// ------------------------------------------------- no white frame at a show
+
+/// winit's window class (`WindowAttributesExtWindows::with_class_name`'s
+/// default; the host sets none): every Slint window of the host, and no
+/// system dialog (file dialogs, task dialogs) or helper window.
+const WINIT_CLASS: &str = "Window Class";
+
+/// How long a window stays cloaked without a draw before it is shown anyway
+/// (minimized, a draw skipped, a held redraw that never comes).
+const CLOAK_LIMIT: std::time::Duration = std::time::Duration::from_millis(500);
+/// How often the windows still cloaked are checked against [`CLOAK_LIMIT`].
+const CLOAK_CHECK: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Windows cloaked at their show (`cloak_until_drawn`) that have not drawn
+/// yet: raw HWND, when.
+#[derive(Default)]
+struct Cloaked(Vec<(isize, std::time::Instant)>);
+impl Cloaked {
+    /// `hwnd` was cloaked at `now` (again: from `now`).
+    fn add(&mut self, hwnd: isize, now: std::time::Instant) {
+        self.0.retain(|(known, _)| *known != hwnd);
+        self.0.push((hwnd, now));
+    }
+    /// `hwnd` draws: when it was cloaked, if it still is; it is no longer
+    /// waited for.
+    fn drawn(&mut self, hwnd: isize) -> Option<std::time::Instant> {
+        let index = self.0.iter().position(|(known, _)| *known == hwnd)?;
+        Some(self.0.remove(index).1)
+    }
+    /// The windows cloaked `limit` or longer before `now`, no longer waited for.
+    fn overdue(&mut self, now: std::time::Instant, limit: std::time::Duration) -> Vec<isize> {
+        let mut late = Vec::new();
+        self.0.retain(|(hwnd, at)| {
+            let waiting = now.saturating_duration_since(*at) < limit;
+            if !waiting {
+                late.push(*hwnd);
+            }
+            waiting
+        });
+        late
+    }
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+thread_local! {
+    /// `cloak_until_drawn` (UI thread).
+    static CLOAKED: RefCell<Cloaked> = RefCell::new(Cloaked::default());
+    /// Checks [`CLOAKED`] against [`CLOAK_LIMIT`] while it is not empty.
+    static CLOAK_TIMER: slint::Timer = slint::Timer::default();
+}
+
+/// No white frame when a window opens. Slint draws a window's first frame
+/// before it shows it, but Windows discards what is drawn into a hidden
+/// window, so the compositor shows the empty client area (white) until the
+/// next draw, during the open animation (two frames of white for the Plugin
+/// Store, Options and the main window). As Chromium and Windows Terminal
+/// do, each host window is cloaked (DWMWA_CLOAK) just before it shows, its
+/// title bar set to the palette then too, and uncloaked after its first
+/// draw (`window_drawing`), or after [`CLOAK_LIMIT`] without one. Call once
+/// on the UI thread before the first window shows. `VESTRA_CLOAK_ON_SHOW=0`
+/// (A/B tests) leaves windows as Slint shows them.
+pub fn cloak_until_drawn() {
+    if std::env::var("VESTRA_CLOAK_ON_SHOW").as_deref() == Ok("0") {
+        diag!("ui: VESTRA_CLOAK_ON_SHOW=0: windows show before their first draw");
+        return;
+    }
+    let installed = vestra_win32::cloak_on_show(WINIT_CLASS, |hwnd| {
+        if !vestra_win32::set_dark_title_bar(hwnd, DARK.get()) {
+            diag!("platform: the system refused a dark/light title bar");
+        }
+        CLOAKED.with_borrow_mut(|cloaked| cloaked.add(hwnd, std::time::Instant::now()));
+        CLOAK_TIMER.with(|timer| {
+            if !timer.running() {
+                timer.start(slint::TimerMode::Repeated, CLOAK_CHECK, uncloak_overdue);
+            }
+        });
+    });
+    if !installed {
+        diag!("ui: windows cannot be cloaked until their first draw; they may open white");
+    }
+}
+
+fn uncloak_overdue() {
+    let late =
+        CLOAKED.with_borrow_mut(|cloaked| cloaked.overdue(std::time::Instant::now(), CLOAK_LIMIT));
+    for hwnd in late {
+        vestra_win32::set_cloaked(hwnd, false);
+        diag!(
+            "ui: a window showed without a draw after {} ms",
+            CLOAK_LIMIT.as_millis()
+        );
+    }
+    if CLOAKED.with_borrow(Cloaked::is_empty) {
+        CLOAK_TIMER.with(slint::Timer::stop);
+    }
+}
+
+/// winit delivers a `RedrawRequested` to window `id` (a winit `WindowId`:
+/// the HWND on Windows) that Slint draws now: a window cloaked at its show
+/// is uncloaked right after this draw (a posted callback, after Slint's
+/// draw and present).
+pub fn window_drawing(id: u64) {
+    let hwnd = id as isize;
+    let Some(at) = CLOAKED.with_borrow_mut(|cloaked| cloaked.drawn(hwnd)) else {
+        return;
+    };
+    let waited = at.elapsed();
+    let uncloak = move || {
+        vestra_win32::set_cloaked(hwnd, false);
+        diag!(
+            "ui: a window showed after its first draw ({} ms)",
+            waited.as_millis()
+        );
+    };
+    if slint::invoke_from_event_loop(uncloak).is_err() {
+        vestra_win32::set_cloaked(hwnd, false);
+    }
+}
+
 /// Every window of the host stays above other applications' windows (or
 /// returns to the normal level), including windows shown later.
 pub fn set_floating(on: bool) -> Result<usize> {
@@ -1503,6 +1624,43 @@ mod tests {
         cfg!(target_feature = "crt-static"),
         "build with +crt-static (src/host/.cargo/config.toml; RUSTFLAGS replaces it)"
     );
+
+    /// The show sequence of `cloak_until_drawn`: a window cloaked at its show
+    /// is uncloaked by its first draw, once; a window never cloaked is left
+    /// alone; one that does not draw within the limit is shown anyway, and
+    /// one that drew is not shown a second time by the limit.
+    #[test]
+    fn a_cloaked_window_shows_at_its_first_draw_or_after_the_limit() {
+        use std::time::{Duration, Instant};
+        let start = Instant::now();
+        let limit = Duration::from_millis(500);
+        let mut cloaked = Cloaked::default();
+        assert_eq!(cloaked.drawn(7), None, "never cloaked");
+        cloaked.add(7, start);
+        cloaked.add(9, start + Duration::from_millis(100));
+        assert_eq!(cloaked.drawn(7), Some(start));
+        assert_eq!(cloaked.drawn(7), None, "uncloaked once");
+        assert!(
+            cloaked
+                .overdue(start + Duration::from_millis(599), limit)
+                .is_empty()
+        );
+        assert_eq!(
+            cloaked.overdue(start + Duration::from_millis(600), limit),
+            vec![9]
+        );
+        assert!(cloaked.is_empty());
+        assert_eq!(cloaked.drawn(9), None, "already shown by the limit");
+        // Shown again (hidden in between): waited for from the new show.
+        cloaked.add(7, start);
+        cloaked.add(7, start + Duration::from_secs(1));
+        assert!(
+            cloaked
+                .overdue(start + Duration::from_millis(1400), limit)
+                .is_empty()
+        );
+        assert_eq!(cloaked.drawn(7), Some(start + Duration::from_secs(1)));
+    }
 
     #[test]
     fn rtx_video_super_resolution_needs_driver_530() {

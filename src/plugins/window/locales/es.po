@@ -310,8 +310,8 @@ msgstr "Solo una vez (solo el primer video de esta sesión)"
 
 #: ui/page.slint:56
 #, x-machine
-msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
-msgstr "Cada archivo nuevo se redimensiona una vez, cuando se conoce el tamaño de su video, manteniendo la esquina superior izquierda de la ventana. No en pantalla completa, tamaño mini ni imagen en imagen; si arrastras la ventana durante la reproducción, ese archivo ya no se redimensiona."
+msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, maximized, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
+msgstr "Cada archivo nuevo se redimensiona una vez, cuando se conoce el tamaño de su video, manteniendo la esquina superior izquierda de la ventana. No en pantalla completa, maximizada, tamaño mini ni imagen en imagen; si arrastras la ventana durante la reproducción, ese archivo ya no se redimensiona."
 
 #: ui/page.slint:63
 #, x-machine

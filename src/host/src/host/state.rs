@@ -52,6 +52,12 @@ pub(crate) fn layout_change(
     })
 }
 
+/// `WindowState.maximized` from the main window's facts (`window_tick`):
+/// never while fullscreen, false before the window was measured.
+fn reported_maximized(facts: &Value) -> bool {
+    facts["maximized"] == true && facts["fullscreen"] != true
+}
+
 pub(crate) fn policy_slot(slot: composition::Slot) -> Option<window_state::Slot> {
     match slot {
         composition::Slot::Bottom => Some(window_state::Slot::Bottom),
@@ -196,12 +202,14 @@ impl Host {
             }
         }
     }
-    /// `{ fullscreen, videoArea, pictureInPicture }` of the main window
-    /// (zero without one), with the palette and the file resolvers'
-    /// extensions (`plugin.resolvers.fileTypes`).
+    /// `{ fullscreen, maximized, videoArea, pictureInPicture }` of the main
+    /// window (zero without one; `maximized` is false while fullscreen),
+    /// with the palette and the file resolvers' extensions
+    /// (`plugin.resolvers.fileTypes`).
     pub(crate) fn window_state(&self) -> Value {
         let facts = &self.window_facts;
         json!({"fullscreen":facts["fullscreen"] == true,
+            "maximized":reported_maximized(facts),
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
                 "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)},
             "pictureInPicture":self.pip_state(),
@@ -237,15 +245,29 @@ impl Host {
         if shell.window().is_fullscreen() {
             return Err(unavailable(&i18n::tr("Not available in fullscreen")));
         }
+        let id = self
+            .native_window
+            .ok_or_else(|| unavailable("the native window is not known"))?;
+        let screen = platform::screen_for(id).map_err(|e| unavailable(e.0))?;
+        // A size asked for while maximized is the size of a normal window:
+        // on Windows, restore it first, then resize it, as MPC-HC's View ▸
+        // Zoom does (`ZoomVideoWindow` restores a zoomed window before sizing
+        // it), and measure the restored frame. Not on macOS: `zoom:` animates
+        // there and would fight the content size set right after, so a zoomed
+        // window is resized directly, as before 0.6.3.
+        // Automatic sizing leaves a maximized window alone on every system
+        // (`WindowState.maximized`, the Window plugin's G-02).
+        let screen = if cfg!(target_os = "windows") && shell.window().is_maximized() {
+            shell.window().set_maximized(false);
+            platform::screen_for(id).map_err(|e| unavailable(e.0))?
+        } else {
+            screen
+        };
         view::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
             Ok(SValue::Number(n)) if n.is_finite() => n,
             _ => 0.,
         };
-        let id = self
-            .native_window
-            .ok_or_else(|| unavailable("the native window is not known"))?;
-        let screen = platform::screen_for(id).map_err(|e| unavailable(e.0))?;
         let sidebar = &self.window_facts["slots"]["sidebar"];
         let docked = sidebar["preferred"] == true && sidebar["detached"] == false;
         let frame = window_control::Frame {
@@ -336,6 +358,22 @@ impl Host {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `window.state` reports `maximized` next to `fullscreen`, false in
+    /// fullscreen and before the first measurement; a maximize or restore
+    /// alone changes the facts, so `window_tick` broadcasts it.
+    #[test]
+    fn maximized_is_reported_and_a_change_of_it_alone_is_a_change() {
+        let facts = |fullscreen: bool, maximized: bool| json!({"fullscreen":fullscreen,"maximized":maximized,"videoArea":{"width":800.,"height":450.}});
+        assert!(reported_maximized(&facts(false, true)));
+        assert!(!reported_maximized(&facts(false, false)));
+        assert!(
+            !reported_maximized(&facts(true, true)),
+            "never in fullscreen"
+        );
+        assert!(!reported_maximized(&Value::Null), "not measured yet");
+        assert_ne!(facts(false, true), facts(false, false));
+    }
 
     #[test]
     fn layout_set_reads_the_current_tab_by_plugin_id() {

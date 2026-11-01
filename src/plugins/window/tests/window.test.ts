@@ -297,6 +297,34 @@ test("G-02: not in fullscreen (the window keeps its size), with 迷你尺寸 or 
   assert.equal(host.sent("window.setVideoArea").length, sent);
 });
 
+test("G-02: not while maximized (MPC-HC, mpv); restored, the next file is sized; a size command still sizes it", async () => {
+  const { host } = await start();
+  host.setMainWindow({ maximized: true, videoArea: { width: 2560, height: 1340 } });
+  await host.settle();
+  await play(host, { width: 1280, height: 720 });
+  await play(host, { width: 640, height: 480 });
+  assert.deepEqual(host.sent("window.setVideoArea"), [], "a maximized window is left alone");
+  assert.deepEqual(host.mainWindow.videoArea, { width: 2560, height: 1340 });
+
+  // Fullscreen from maximized and back: still maximized, still left alone.
+  host.setMainWindow({ fullscreen: true, videoArea: { width: 2560, height: 1440 } });
+  host.setMainWindow({ fullscreen: false, videoArea: { width: 2560, height: 1340 } });
+  await play(host, { width: 1920, height: 1080 });
+  assert.deepEqual(host.sent("window.setVideoArea"), []);
+
+  // Restored: the next file is sized again.
+  host.setMainWindow({ maximized: false, videoArea: { width: 800, height: 450 } });
+  await play(host, { width: 1280, height: 720 });
+  assert.deepEqual(host.sent("window.setVideoArea"), [{ width: 1280, height: 720 }]);
+
+  // An explicit size command while maximized is sent (on Windows the player restores the window first).
+  host.setMainWindow({ maximized: true, videoArea: { width: 2560, height: 1340 } });
+  await host.settle();
+  await host.command("size.1").run();
+  await host.settle();
+  assert.deepEqual(host.sent("window.setVideoArea").at(-1), { width: 1280, height: 720 });
+});
+
 test("G-02: not over the user's own size: dragging the window while it plays, before the size is known", async () => {
   const { host } = await start();
   // Dragged while playing, before the size is known.
@@ -1090,7 +1118,7 @@ test("zh-Hans: the reasons and the settings page texts are translated", async ()
     ["没有视频", "全屏时不可用", "正在调整窗口", "正在切换画中画"],
   );
   assert.equal(
-    host.translate("Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."),
-    "每个新文件拿到视频尺寸时调整一次，保持窗口左上角。全屏、迷你尺寸、画中画时不调整；播放中拖动过窗口后，这个文件不再调整。",
+    host.translate("Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, maximized, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."),
+    "每个新文件拿到视频尺寸时调整一次，保持窗口左上角。全屏、最大化、迷你尺寸、画中画时不调整；播放中拖动过窗口后，这个文件不再调整。",
   );
 });

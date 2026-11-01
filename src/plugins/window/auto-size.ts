@@ -7,7 +7,9 @@ import type { Sizer } from "./size.ts";
 /**
  * G-02 window size when playback starts (default 1.0x): each
  * new source (`sourceId`) is sized once, when its video size first becomes
- * known. Not when the source has no video, in fullscreen, with Mini Size on,
+ * known. Not when the source has no video, in fullscreen, maximized (as
+ * MPC-HC's auto-zoom and mpv's autofit leave a maximized window alone; the
+ * size commands still restore and resize it), with Mini Size on,
  * in picture-in-picture, or when the user dragged the window while it played (the size
  * commands stay disabled until the size is known); with Only Once, only the
  * run's first video source. Replaying the same source, pausing and seeking do not trigger it
@@ -51,7 +53,8 @@ export class AutoSize {
     const { autoSize, autoSizeOnce } = this.#preferences.value;
     if (autoSize === "off" || (autoSizeOnce && !first)) return;
     const { state } = this.#plugin.window;
-    if (state.fullscreen || state.pictureInPicture.active || this.#pip.switching) return;
+    // `maximized` reads false on players before 0.6.3, which do not report it.
+    if (state.fullscreen || state.maximized || state.pictureInPicture.active || this.#pip.switching) return;
     if (this.#sizer.mini || this.#sizer.resizing) return;
     await this.#sizer.auto(autoSize, video);
   }
