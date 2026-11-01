@@ -7,7 +7,7 @@ import activate from "../main.ts";
 
 /**
  * 0.2.4, UI-BAR-05 / UI-BAR-10: the bottom bar's Fullscreen button. A click
- * runs the core action `fullscreen` (the same toggle as Enter / F11); the
+ * runs the core action `fullscreen` (the same toggle as the Toggle Fullscreen key, Escape by default); the
  * icon follows `window.state.fullscreen`; the button is the first thing the
  * bar hides when it is too narrow, from the time label's measured width.
  */
@@ -31,7 +31,7 @@ async function until(predicate: () => boolean) {
 /** The icon `bar.slint` draws from the bar's data (the test host does not run Slint). */
 const icon = (props: Record<string, unknown>) => (props["fullscreen"] ? "exit-fullscreen" : "fullscreen");
 
-test("UI-BAR-05 a click enters fullscreen, a second click leaves it, through host.run like Enter", async () => {
+test("UI-BAR-05 a click enters fullscreen, a second click leaves it, through host.run like the Toggle Fullscreen key", async () => {
   const { host, stop } = await start(withMedia());
   try {
     const bar = host.mounted();
@@ -106,7 +106,7 @@ test("UI-BAR-05 the tooltip is translated and names the Toggle Fullscreen key", 
     host.emit("bindings.changed", null);
     await until(() => bar.props["key-open"] === "Ctrl+O");
     // The test host's binding table has no host/fullscreen command (the
-    // player's does, Enter by default): no key here.
+    // player's does, Escape by default): no key here.
     assert.equal(bar.props["key-fullscreen"], "");
     assert.equal(host.translate("Fullscreen"), "全屏");
     assert.equal(host.translate("Leave fullscreen"), "退出全屏");
@@ -294,4 +294,9 @@ test("0.2.7 bar.slint: every library Slider is focusable: false; the SeekBar has
   assert.ok(seekBar.length > 0);
   assert.doesNotMatch(seekBar, /FocusScope|forward-focus/);
   assert.doesNotMatch(code, /FocusScope/, "the bar has no focus scope of its own");
+});
+
+test("0.2.9 the fallback key for Toggle Fullscreen is Escape (player 0.6.0 default)", async () => {
+  const { DEFAULT_KEYS } = await import("../tips.ts");
+  assert.equal(DEFAULT_KEYS.fullscreen, "Escape");
 });

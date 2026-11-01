@@ -495,7 +495,7 @@ export component PlaybackBar inherits Rectangle {
                 enabled: PlaybackBridge.can-open;
                 clicked => { PlaybackBridge.action("open"); }
             }
-            // UI-BAR-05 (0.2.4): toggles fullscreen like Enter / F11 (`host.run("fullscreen")`).
+            // UI-BAR-05 (0.2.4): toggles fullscreen like the Toggle Fullscreen key, Escape by default (`host.run("fullscreen")`).
             BarButton {
                 visible: row.fullscreen-fits;
                 // Hidden: not actionable from the accessibility tree either.

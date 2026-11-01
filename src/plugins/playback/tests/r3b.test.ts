@@ -107,8 +107,9 @@ test("B22 marks need a known duration, stay inside the line, and are capped at t
     chapterTicks: "M500 0V1",
     tickSpan: 500,
   });
-  // The cap is what one property value may hold (rows; 1 + 3 values a row).
-  assert.equal(MAX_MARKS, UI_VALUE_LIMITS.arrayRows);
+  // The cap fits in one property value (rows; 1 + 3 values a row). It is the
+  // bar's own (13 halvings of the search); SDK 1.5.46 raised the host's rows.
+  assert.ok(MAX_MARKS <= UI_VALUE_LIMITS.arrayRows);
   assert.ok(1 + 3 * MAX_MARKS <= UI_VALUE_LIMITS.values);
   const many = Array.from({ length: MAX_MARKS + 5 }, (_, i) => ({ ...marks[0]!, time: i }));
   const shown = seekMarks(many, 10_000, 100_000);

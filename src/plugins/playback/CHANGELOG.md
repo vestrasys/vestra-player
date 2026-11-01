@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.9
+
+- The Fullscreen button's tooltip falls back to **Escape** as the Toggle Fullscreen key when the player's binding table cannot be read (it said Enter): the player's default for Toggle Fullscreen is now Escape only (Enter, Alt+Enter and F11 removed). With the table readable the tooltip shows the user's binding, as before. Comments say "the Toggle Fullscreen key" instead of "Enter / F11".
+- Nobody needs to change anything.
+
 ## 0.2.8
 
 - Mark ticks are whole physical pixels at every scale factor (125%, 150%, 175%, as well as 100% and 200%): at a fractional scale 0.2.7's 1px stroke was 1.5 physical px wide and still left a half-transparent column. The ticks are now drawn in physical pixels: the bar reports the seek line's span in whole physical px (`span-changed`, also when the scale factor changes), the plugin builds the commands at whole physical x in a viewbox that wide, and the Paths have a 1 physical px stroke (`1phx`) and their left edge and top on a physical pixel (from the seek bar's `absolute-position`). Each tick is one physical pixel wide and about 6 logical px tall in whole pixel rows; its column is within half a physical pixel of where the logical layout puts it.

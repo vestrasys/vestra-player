@@ -16,7 +16,8 @@ export const DEFAULT_KEYS: Record<TipKey, string> = {
   next: "PgDn",
   mute: "M",
   open: "Ctrl+O",
-  fullscreen: "Enter",
+  // Player 0.6.0: Toggle Fullscreen is Escape only by default (Enter, Alt+Enter and F11 removed).
+  fullscreen: "Escape",
 };
 
 /** The host's menu text of a command's first active keyboard binding (`null`: none). */

@@ -8,9 +8,9 @@ import type { Preview, Thumbnails } from "./thumbs.ts";
 import { barTips, Keys } from "./tips.ts";
 
 /**
- * The marks the bar shows: the rows of one property value the player takes
- * (`UI_VALUE_LIMITS.arrayRows`; `marks` is 1 + 3 values a row, under its 16384).
- * The bar's lower-bound search (`bar.slint`) takes 13 halvings for 4096 rows.
+ * The marks the bar shows, at most: within the rows and values of one property
+ * value the player takes (`UI_VALUE_LIMITS`; `marks` is 1 + 3 values a row),
+ * and what the bar's lower-bound search (`bar.slint`) closes in 13 halvings.
  * More marks than that are sampled (`sampled`): the user's bookmarks first.
  */
 export const MAX_MARKS = 4096;
@@ -162,7 +162,7 @@ const CORE: ReadonlySet<string> = new Set<HostAction>([
   "previous",
   "next",
   "mute",
-  // UI-BAR-05 (0.2.4): toggles the main window's fullscreen, as Enter / F11 do.
+  // UI-BAR-05 (0.2.4): toggles the main window's fullscreen, as the Toggle Fullscreen key (Escape by default) does.
   "fullscreen",
 ]);
 
