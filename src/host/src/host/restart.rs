@@ -74,8 +74,35 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
 }
 
 /// How long this player may take to end after a device loss started the new
-/// one, which waits 20 s for it (`main.rs`).
-const EXIT_AFTER: std::time::Duration = std::time::Duration::from_secs(15);
+/// one, which waits 20 s for it (`main.rs`) and shows nothing until then.
+/// What must survive is saved before the teardown: the crash guard and the
+/// resume position here, the UI state and the lazy-activation records first
+/// thing after the event loop (`main.rs`); clean teardowns after a loss took
+/// 1 to 5 s (restart.log of the M3 and 0.5.19 hardware tests). Up to host
+/// 0.6.3 this was 15 s, which a teardown stuck in the driver used in full
+/// (0.6.2, shader upscaling at 4K: a black, unresponsive window for 15 s).
+const EXIT_AFTER: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The step of the teardown this process is in, for the line that says it
+/// was ended ([`teardown_step`]).
+static TEARDOWN: std::sync::Mutex<&str> = std::sync::Mutex::new("the device-loss callback");
+
+/// The teardown reached `step` (`main.rs`, after the event loop): if the
+/// process has to be ended after a device loss, restart.log says where it
+/// was stuck.
+pub(crate) fn teardown_step(step: &'static str) {
+    *TEARDOWN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = step;
+}
+
+/// The restart.log line of a player ended after a device loss.
+fn stuck_line(after: std::time::Duration, step: &str) -> String {
+    format!(
+        "render: the player did not end {} s after the device loss (teardown at: {step}); ending it",
+        after.as_secs()
+    )
+}
 
 /// After a device loss or a GPU stall (`vestra-gpu-render`'s watchdog) the
 /// teardown can hang in the driver, the render thread being stuck in it;
@@ -87,10 +114,10 @@ fn exit_if_stuck(after: std::time::Duration) {
         .name("vestra-exit-after-loss".into())
         .spawn(move || {
             std::thread::sleep(after);
-            restart_log(&format!(
-                "render: the player did not end {} s after the device loss; ending it",
-                after.as_secs()
-            ));
+            let step = *TEARDOWN
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            restart_log(&stuck_line(after, step));
             std::process::exit(3);
         });
 }
@@ -169,6 +196,23 @@ mod tests {
             .get_envs()
             .find(|(key, _)| *key == name)
             .map(|(_, value)| value.map(|value| value.to_string_lossy().into_owned()))
+    }
+
+    /// 0.6.2 shader-upscaling loss: a teardown stuck in the driver left a
+    /// black, unresponsive window for 15 s. The process is now ended well
+    /// before the restarted player stops waiting for it (20 s), and the line
+    /// says which teardown step it was stuck in.
+    #[test]
+    fn a_stuck_teardown_is_ended_soon_and_says_where_it_was() {
+        assert!(EXIT_AFTER <= std::time::Duration::from_secs(5));
+        assert!(EXIT_AFTER < std::time::Duration::from_secs(20) / 2);
+        teardown_step("hiding the main window");
+        let step = *TEARDOWN.lock().unwrap();
+        let line = stuck_line(EXIT_AFTER, step);
+        assert_eq!(
+            line,
+            "render: the player did not end 5 s after the device loss (teardown at: hiding the main window); ending it"
+        );
     }
 
     /// M3 review M1: with `VESTRA_RENDER=gpu` a device that keeps getting

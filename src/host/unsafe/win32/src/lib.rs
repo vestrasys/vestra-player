@@ -4,7 +4,9 @@
 //! drags), the modifier keys held right now, the double-click time, the
 //! submenu show delay, the thread's sleep-prevention state, a window's
 //! dark title bar, cloaking a window until its first frame (`set_cloaked`,
-//! `cloak_on_show`: a thread-local `WH_CALLWNDPROC` hook), letting the running player take the foreground for a
+//! `cloak_on_show`: a thread-local `WH_CALLWNDPROC` hook) and every window
+//! of the process once its GPU device was lost (`cloak_process_windows`),
+//! letting the running player take the foreground for a
 //! second launch's files, whether this process owns the foreground window
 //! and bringing one of its windows to the front (`foreground_is_ours`,
 //! `set_foreground`), waiting for a display's vertical blank
@@ -170,6 +172,49 @@ pub fn set_cloaked(hwnd: isize, cloaked: bool) -> bool {
         )
     };
     result >= 0
+}
+
+/// Cloak every visible top-level window of this process ([`set_cloaked`]),
+/// from any thread: the windows' GPU device was lost, nothing can draw in
+/// them any more, and the restarted player replaces them. Neither the
+/// enumeration nor the cloak sends the windows a message, so it works while
+/// the thread that owns them is busy (or stuck in a driver call). Returns
+/// how many were cloaked.
+pub fn cloak_process_windows() -> usize {
+    use windows_sys::Win32::Foundation::LPARAM;
+    use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowThreadProcessId, IsWindowVisible,
+    };
+    unsafe extern "system" fn each(window: HWND, found: LPARAM) -> i32 {
+        let mut process = 0u32;
+        // SAFETY: `window` comes from EnumWindows and is passed by value (a
+        // window destroyed meanwhile makes the call return 0); the
+        // out-parameter points at the local `process`.
+        let thread = unsafe { GetWindowThreadProcessId(window, &mut process) };
+        // SAFETY: GetCurrentProcessId takes no arguments; IsWindowVisible
+        // takes the handle by value and only reads the window's state.
+        let ours = thread != 0
+            && process == unsafe { GetCurrentProcessId() }
+            && unsafe { IsWindowVisible(window) } != 0;
+        if ours {
+            // SAFETY: `found` is the address of the `Vec<isize>` that
+            // `cloak_process_windows` passed; EnumWindows calls back on that
+            // thread, synchronously, while the vector is alive and not
+            // otherwise borrowed.
+            unsafe { (*(found as *mut Vec<isize>)).push(window as isize) };
+        }
+        1
+    }
+    let mut found: Vec<isize> = Vec::new();
+    // SAFETY: the callback matches WNDENUMPROC; the LPARAM is the address of
+    // `found`, alive (and not used otherwise) until EnumWindows returns,
+    // which calls the callback only before it returns.
+    unsafe { EnumWindows(Some(each), (&raw mut found) as LPARAM) };
+    found
+        .into_iter()
+        .filter(|&window| set_cloaked(window, true))
+        .count()
 }
 
 /// What [`cloak_on_show`] installed on this thread: the window class it
@@ -888,6 +933,14 @@ mod tests {
         let adapters = dxgi_adapters().unwrap();
         assert!(!adapters.is_empty());
         assert!(adapters.iter().all(|adapter| !adapter.name.is_empty()));
+    }
+
+    /// A test process has no visible top-level window of its own (its
+    /// console belongs to the console host): nothing is cloaked, and other
+    /// processes' windows are never touched.
+    #[test]
+    fn a_process_without_windows_cloaks_nothing() {
+        assert_eq!(super::cloak_process_windows(), 0);
     }
 
     /// A file on a local disk (this test executable) is not remote.

@@ -1286,8 +1286,13 @@ pub fn select_wgpu_windows(
     device.on_error(
         |line| diag!("render: {line}"),
         || {
-            // Restart now (whatever the teardown does), then end the loop:
-            // the windows cannot draw any more.
+            // The windows cannot draw any more: take them off the screen at
+            // once, from whatever thread noticed (a black window that stops
+            // responding while the teardown runs is worse than none; the
+            // restarted player shows its own). Then restart now (whatever
+            // the teardown does) and end the loop.
+            let cloaked = vestra_win32::cloak_process_windows();
+            diag!("render: {cloaked} window(s) cloaked after the device loss");
             if let Some(hook) = LOST_HOOK.get() {
                 hook();
             }

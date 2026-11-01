@@ -29,6 +29,15 @@
 //!     and reads that back, so --png captures the same frame in every run.
 //!     video-params, video-out-params and the adapter
 //!     are printed with the results (AI upscaling round, step V0).
+//!     [--glsl-shaders A;B] sets mpv's `glsl-shaders` (the shader upscaling
+//!     plugin's chains), [--set NAME=VALUE] any further mpv option, both
+//!     before loadfile; [--sample S] prints every S seconds the frame rate,
+//!     render CPU/GPU times, this process's video memory (local and
+//!     non-local, `QueryVideoMemoryInfo`), private bytes, the system commit
+//!     charge and `GetDeviceRemovedReason`, and stops on a removed device;
+//!     [--hog-mb N] commits and touches N MiB first (memory pressure) and
+//!     [--max-commit PCT] (default 92) keeps the system commit below PCT:
+//!     the hog stops short of it and the run ends once it is passed.
 //! gpu-probe adapters
 //!     The DXGI adapter list only (index, name, vendor, LUID).
 //! ```

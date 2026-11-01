@@ -596,8 +596,14 @@ impl Renderer {
         started.recv().map_err(|_| "render thread died".to_string())??;
         if let Some(limit) = limit {
             let inner = renderer.shared.clone();
+            // The render thread's handle, for its CPU time: valid while
+            // `renderer.thread` is, and `Drop` joins the watchdog first.
+            let render = renderer.thread.as_ref().map(|t| {
+                use std::os::windows::io::AsRawHandle;
+                RenderThread(t.as_raw_handle() as isize)
+            });
             let thread = thread::Builder::new().name("vestra-gpu-watchdog".into());
-            renderer.watchdog = thread.spawn(move || watch(&inner, limit)).ok();
+            renderer.watchdog = thread.spawn(move || watch(&inner, limit, render)).ok();
         }
         Ok(renderer)
     }
@@ -626,7 +632,7 @@ const WATCH_POLL: Duration = Duration::from_millis(100);
 /// The watchdog thread: until the renderer stops or fails, look at the
 /// fences and the render call every [`WATCH_POLL`]; a stall ends GPU
 /// rendering like a lost device ([`stalled`]).
-fn watch(shared: &Arc<Shared>, limit: Duration) {
+fn watch(shared: &Arc<Shared>, limit: Duration, render: Option<RenderThread>) {
     let mut clocks = watchdog::Watch::new(limit);
     loop {
         thread::park_timeout(WATCH_POLL);
@@ -642,11 +648,44 @@ fn watch(shared: &Arc<Shared>, limit: Duration) {
             ready: (ready, fences.ready.completed()),
             done: (done, fences.done.completed()),
             call: shared.calls.load(Ordering::Acquire),
+            cpu: render.as_ref().map_or(Duration::ZERO, RenderThread::cpu),
         };
         if let Some(reason) = clocks.observe(Instant::now(), sample) {
             stalled(shared, reason);
             return;
         }
+    }
+}
+
+/// The render thread's handle (a raw `HANDLE` value borrowed from its
+/// `JoinHandle`, which outlives the watchdog thread that reads it).
+struct RenderThread(isize);
+
+impl RenderThread {
+    /// The CPU time (kernel and user) the thread has used so far; zero when
+    /// the system does not say.
+    fn cpu(&self) -> Duration {
+        use windows::Win32::Foundation::{FILETIME, HANDLE};
+        use windows::Win32::System::Threading::GetThreadTimes;
+        let (mut created, mut exited, mut kernel, mut user) =
+            (FILETIME::default(), FILETIME::default(), FILETIME::default(), FILETIME::default());
+        // SAFETY: the handle is the live render thread's (see the type); the
+        // four out-parameters are live locals.
+        let ok = unsafe {
+            GetThreadTimes(
+                HANDLE(self.0 as *mut std::ffi::c_void),
+                &mut created,
+                &mut exited,
+                &mut kernel,
+                &mut user,
+            )
+        };
+        let ticks = |t: FILETIME| u64::from(t.dwHighDateTime) << 32 | u64::from(t.dwLowDateTime);
+        if ok.is_err() {
+            return Duration::ZERO;
+        }
+        // FILETIME counts 100 ns.
+        Duration::from_nanos((ticks(kernel) + ticks(user)).saturating_mul(100))
     }
 }
 

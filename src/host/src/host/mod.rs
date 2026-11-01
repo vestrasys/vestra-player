@@ -71,7 +71,7 @@ pub(crate) use menus::{
     apply_menu_levels, debug_menu, debug_menu_pointer, menu_levels, track_pointer,
 };
 pub(crate) use mounts::refuse_initial;
-pub(crate) use restart::{LAST_SOURCE, LostDevice, restart_log, restart_player};
+pub(crate) use restart::{LAST_SOURCE, LostDevice, restart_log, restart_player, teardown_step};
 pub(crate) use rpc::{Reply, Request, RpcError, string, ui_error};
 pub(crate) use state::{LayoutChange, layout_change, policy_slot};
 pub(crate) use video::{FRAME_SINK, PIP_GPU_SINK};
