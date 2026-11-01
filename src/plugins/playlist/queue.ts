@@ -144,6 +144,8 @@ export class Queue {
    * selection): the plugin takes a snapshot of the list only when this moved.
    */
   revision = 0;
+  /** Counts the changes of the rows' order or membership (a subset of `revision`). */
+  order = 0;
   private cursor: string | null = null;
   private anchor: string | null = null;
   private nextId = 0;
@@ -152,9 +154,35 @@ export class Queue {
   /** Folded search text per row (its title and source do not change). */
   private folded = new WeakMap<Row, string>();
 
-  /** Something saved changed (see `revision`). */
-  touch() {
+  /** Something saved changed (see `revision`); `order`: the rows' order or membership too. */
+  touch(order = false) {
     this.revision++;
+    if (order) this.order++;
+  }
+  /**
+   * Answers derived from the rows, the selection and the search (each O(rows)), kept until
+   * one of them changes: the list asks them on every update pass (0.2.1, 20,000 rows).
+   */
+  private memos = new Map<string, unknown>();
+  private memoKey = "";
+  private memo<T>(key: string, make: () => T): T {
+    const at = `${this.revision}\n${this.terms.join(" ")}`;
+    if (at !== this.memoKey) {
+      this.memos.clear();
+      this.memoKey = at;
+    }
+    if (!this.memos.has(key)) this.memos.set(key, make());
+    return this.memos.get(key) as T;
+  }
+  private positionsAt = -1;
+  private positionMap = new Map<string, number>();
+  /** Each row's index in the whole list (rebuilt only when the order changed). */
+  positions(): ReadonlyMap<string, number> {
+    if (this.positionsAt !== this.order) {
+      this.positionMap = new Map(this.rows.map((row, i) => [row.rowId, i]));
+      this.positionsAt = this.order;
+    }
+    return this.positionMap;
   }
   get filtering() {
     return this.terms.length > 0;
@@ -169,9 +197,9 @@ export class Queue {
     }
     return this.terms.every((term) => text.includes(term));
   }
-  /** The rows shown (all of them unless a search filters). */
-  visible() {
-    return this.terms.length ? this.rows.filter((row) => this.matches(row)) : this.rows;
+  /** The rows shown (all of them unless a search filters). Do not change the array. */
+  visible(): Row[] {
+    return this.terms.length ? this.memo("visible", () => this.rows.filter((row) => this.matches(row))) : this.rows;
   }
   /** C21: filter by the words of `query`; hidden rows lose their selection. */
   setFilter(query: string) {
@@ -250,9 +278,9 @@ export class Queue {
     if (extend) this.extend(next.rowId);
     else this.selected = next.rowId;
   }
-  /** The rows marked for DEL / move, in list order. */
-  marked() {
-    return this.rows.filter((row) => this.selection.has(row.rowId));
+  /** The rows marked for DEL / move, in list order. Do not change the array. */
+  marked(): Row[] {
+    return this.memo("marked", () => this.rows.filter((row) => this.selection.has(row.rowId)));
   }
 
   /** Manual previous / next from the failed row, the playing row or the selection. */
@@ -350,6 +378,7 @@ export class Queue {
       const others = this.rows.filter((row) => !fresh.has(row));
       const at = Math.max(0, Math.min(others.length, Math.floor(options.before)));
       this.rows = [...others.slice(0, at), ...result.fresh, ...others.slice(at)];
+      this.touch(true);
     }
     return result;
   }
@@ -425,12 +454,15 @@ export class Queue {
     };
     this.rows.push(row);
     this.byId.set(row.rowId, row);
-    this.touch();
+    this.touch(true);
     return row;
   }
 
   /** Whether `place` would move any marked row. */
-  canPlace(place: Placement) {
+  canPlace(place: Placement): boolean {
+    return this.memo(`place ${place}`, () => this.placeable(place));
+  }
+  private placeable(place: Placement) {
     if (this.filtering || !this.selection.size) return false;
     const rows = this.rows,
       marked = (i: number) => this.selection.has(rows[i]!.rowId);
@@ -441,7 +473,7 @@ export class Queue {
   }
   /** Move the marked rows one step or to an end, keeping their relative order. */
   place(place: Placement) {
-    this.touch();
+    this.touch(true);
     const marked = (row: Row) => this.selection.has(row.rowId);
     if (place === "top") this.rows = [...this.rows.filter(marked), ...this.rows.filter((row) => !marked(row))];
     else if (place === "bottom")
@@ -472,7 +504,7 @@ export class Queue {
     const kept = this.rows.filter((row) => !this.selection.has(row.rowId));
     const at = before.filter((row) => !this.selection.has(row.rowId)).length;
     this.rows = [...kept.slice(0, at), ...moving, ...kept.slice(at)];
-    this.touch();
+    this.touch(true);
   }
   /**
    * C11: stable sort by `key` in the current direction; rows without a value stay last
@@ -480,7 +512,7 @@ export class Queue {
    * `shuffle` ignores the direction; `reverse` only reverses the current order.
    */
   sort(key: SortKey, options: { values?: Map<string, number>; random?: () => number } = {}) {
-    this.touch();
+    this.touch(true);
     if (key === "reverse") return void this.rows.reverse();
     if (key === "shuffle") {
       const random = options.random ?? Math.random;
@@ -540,10 +572,12 @@ export class Queue {
     return doomed.length;
   }
   /** Whether "Remove Unselected" would remove anything and keep something. */
-  canRemoveUnselected() {
-    const rows = this.visible();
-    const marked = rows.filter((row) => this.selection.has(row.rowId)).length;
-    return marked > 0 && marked < rows.length;
+  canRemoveUnselected(): boolean {
+    return this.memo("remove unselected", () => {
+      const rows = this.visible();
+      const marked = rows.filter((row) => this.selection.has(row.rowId)).length;
+      return marked > 0 && marked < rows.length;
+    });
   }
   /** Remove one row without touching the selection of the others. */
   removeRow(rowId: string) {
@@ -553,7 +587,7 @@ export class Queue {
   removeRows(ids: ReadonlySet<string>) {
     const gone = ids.size ? [...ids].filter((id) => this.byId.has(id)) : [];
     if (!gone.length) return;
-    this.touch();
+    this.touch(true);
     this.rows = this.rows.filter((row) => !ids.has(row.rowId));
     const bound = this.binding?.rowId;
     let detach = false;
@@ -573,7 +607,7 @@ export class Queue {
     for (const row of this.rows) this.removed(row.rowId);
     this.rows = [];
     this.byId.clear();
-    this.touch();
+    this.touch(true);
     this.selected = null;
     this.failed = null;
     this.shuffled.clear();

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+Who must change: nobody. What users see: turning thumbnails on or off keeps the row at the top of the list where it was (before, the list could jump far away); long lists react faster to clicks. Needs player 0.6.0.
+
+- The thumbnail toggle no longer asks the list to scroll: the list keeps its top row itself when the row height changes. The folder and media kind are sent in both row styles, so the toggle changes only the pictures near the view.
+- An unchanged row is the same object from one update to the next, the search numbering is rebuilt only when the order changes, and the selection-dependent command states (move, remove unselected, show in folder) are computed once per change instead of on every update.
+- The list tells screen readers how many rows it has; a drag keeps its drop position right when rows are added or removed meanwhile.
+
 ## 0.2.0
 
 Who must change: nobody. What users see: nothing new; long lists scroll and update more smoothly. Needs player 0.6.0 (row patches, and the higher row limits of large lists P3 for long lists).
