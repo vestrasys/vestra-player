@@ -148,7 +148,13 @@ export const bytes = (text: string) => encoder.encode(text).length;
  * are trimmed (Unicode White_Space; NEL is a control).
  */
 export const menuText = (text: string) => text.replace(/\p{Cc}/gu, " ").replace(/^\s+|\s+$/gu, "");
-const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+/** User-perceived characters; code points where the runtime has no `Intl.Segmenter`. */
+const graphemes: (text: string) => Iterable<string> =
+  typeof Intl.Segmenter === "function"
+    ? ((segmenter) => (text: string) => [...segmenter.segment(text)].map(({ segment }) => segment))(
+        new Intl.Segmenter(undefined, { granularity: "grapheme" }),
+      )
+    : (text: string) => text;
 /**
  * `menuText` cut to at most `count` user-perceived characters and `max` UTF-8
  * bytes, from the end: a surrogate pair, emoji sequence or accented letter is
@@ -157,7 +163,7 @@ const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
  */
 export function menuCut(text: string, count: number, max: number): string {
   let kept = "", room = max, left = count;
-  for (const { segment } of graphemes.segment(menuText(text))) {
+  for (const segment of graphemes(menuText(text))) {
     const size = bytes(segment);
     if (left === 0 || size > room) break;
     kept += segment;
@@ -166,5 +172,9 @@ export function menuCut(text: string, count: number, max: number): string {
   }
   return menuText(kept);
 }
-/** What the player accepts as a path segment: 1–80 bytes, no controls, no surrounding whitespace. */
-export const segmentValid = (text: string) => text !== "" && bytes(text) <= SEGMENT_BYTES && menuText(text) === text;
+/**
+ * What the player accepts as a path segment: 1–80 bytes, no control characters
+ * (Rust `char::is_control`, Cc), no edge White_Space (Rust `trim`). Independent of `menuText`.
+ */
+export const segmentValid = (text: string) =>
+  text !== "" && bytes(text) <= SEGMENT_BYTES && !/\p{Cc}/u.test(text) && !/^\p{White_Space}|\p{White_Space}$/u.test(text);

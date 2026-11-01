@@ -127,3 +127,54 @@ test("an embedded track without a number is \"Track N\", not \"Embedded \" with 
     await stop();
   }
 });
+
+test("a track titled \"Position\" (or \"Off\", \"Cycle\") does not take a fixed item's or submenu's name", async () => {
+  const shown = await check([
+    { id: 1, title: "Position", language: null },
+    { id: 2, title: "Off", language: null },
+    { id: 3, title: "Cycle", language: null },
+  ]);
+  assert.deepEqual(shown.en, ["Position (1)", "Off (2)", "Cycle (3)"]);
+});
+
+test("the OSD and the window lists name an id-less embedded track \"Track N\" like the menu", async () => {
+  const host = new TestHost();
+  host.openElsewhere("/movie.mkv");
+  host.subtitles.tracks.push(
+    { target: { kind: "embedded", id: 1 }, title: "English", language: "en", styleSupported: true, styleReason: null, text: true },
+    { target: { kind: "embedded", id: undefined as unknown as number }, title: "", language: null, styleSupported: true, styleReason: null, text: true },
+  );
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.settle();
+  assert.equal(host.command("track-2").display.path.at(-1), "Track 2");
+  await host.command("tune").run();
+  const props = host.window("subtitle-tune").props;
+  assert.deepEqual(props["track-labels"], ["Subtitles Off", "English · en", "Track 2"]);
+  assert.deepEqual(props["secondary-labels"], ["Secondary Off", "English · en", "Track 2"]);
+  await host.command("track-2").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "Subtitles: Track 2");
+  await stop();
+});
+
+test("segmentValid matches the player's rule: 1–80 bytes, no Cc, no edge White_Space", () => {
+  for (const ok of ["a", "a b", "a  b", "字".repeat(26), "😀", "a b", "﻿a"]) assert.ok(segmentValid(ok), JSON.stringify(ok));
+  for (const bad of ["", " a", "a ", " a", "a　", " a", "a\u0085", "a\u0080b", "a\u009fb", "a\tb", "a\u007fb", "字".repeat(27)])
+    assert.ok(!segmentValid(bad), JSON.stringify(bad));
+});
+
+test("without Intl.Segmenter the cut falls back to whole code points", async () => {
+  const saved = Object.getOwnPropertyDescriptor(Intl, "Segmenter")!;
+  try {
+    Reflect.deleteProperty(Intl, "Segmenter"); // a runtime without Intl.Segmenter
+    // A fresh copy of the module, evaluated without it.
+    const fresh = new URL("../model.ts?no-segmenter", import.meta.url).href;
+    const model = (await import(fresh)) as typeof import("../model.ts");
+    assert.equal(model.menuCut("abc😀def", 4, 80), "abc😀", "a surrogate pair is one code point");
+    assert.equal(model.menuCut("abc😀def", 80, 6), "abc");
+    assert.equal(model.menuCut("étude", 1, 80), "e", "code points, not graphemes: the fallback is in use");
+    assert.equal(model.menuCut("Director's cut commentary", 15, 80), "Director's cut");
+  } finally {
+    Object.defineProperty(Intl, "Segmenter", saved);
+  }
+});

@@ -41,8 +41,12 @@ const COLORS = ["white", "yellow", "cyan"] as const;
 /** Subtitles ▸ Subtitle Track lists at most this many tracks (orders 303–310); the rest are in Subtitle Tuning. */
 const MENU_TRACKS = 8;
 const SIZE_STEP = 2;
-/** Menu keys the track items must not take: the fixed items of Subtitle Track ▸ (menus merge by these words). */
-const RESERVED = new Set(["Off", "Cycle"]);
+/**
+ * Menu keys the track items must not take: the fixed items of Subtitle Track ▸ (Off, Cycle)
+ * and Secondary Subtitle ▸ (Off, Position ▸). Menus merge by these words, and the player
+ * refuses a leaf that is also a submenu's name. Both lists share the names, so one set.
+ */
+const RESERVED = new Set(["Off", "Cycle", "Position"]);
 /** A style with every optional field filled in. */
 type FullStyle = Required<SubtitleStyle>;
 const BASE_FIELDS: Pick<FullStyle, "bold" | "shadow" | "box" | "assOverride"> = {
@@ -105,9 +109,19 @@ const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest(
 export default async function activate(plugin: Plugin) {
   const { subtitles, osd } = plugin;
   const { text } = plugin.i18n;
-  /** A track without a title: "Embedded 3" / "External subtitle", translated. */
-  const fallbackName = (t: SubtitleTrack): Text =>
-    t.kind === "embedded" ? text("Embedded {}", [t.embeddedId ?? ""]) : text("External subtitle");
+  /**
+   * A track without a title: "Embedded 3" / "External subtitle", translated; an
+   * embedded track without a number is "Track N" (its place in the list), as in the menu.
+   */
+  const fallbackName = (t: SubtitleTrack, index = subtitles.state?.tracks.findIndex((x) => x.id === t.id) ?? -1): Text =>
+    t.kind === "external"
+      ? text("External subtitle")
+      : t.embeddedId == null
+        ? text("Track {}", [index + 1])
+        : text("Embedded {}", [t.embeddedId]);
+  /** The English rendering of `fallbackName` (menu keys). */
+  const fallbackKey = (t: SubtitleTrack, index: number) =>
+    t.kind === "external" ? "External subtitle" : t.embeddedId == null ? `Track ${index + 1}` : `Embedded ${t.embeddedId}`;
   /** A track's name: its title and language (data), or the translated fallback name and the language. */
   const titled = (t: SubtitleTrack) => `${t.title}${t.language ? ` · ${t.language}` : ""}`;
   const label = (t: SubtitleTrack): TextArg =>
@@ -925,10 +939,9 @@ export default async function activate(plugin: Plugin) {
         key ||= `Track ${i + 1}`;
       } else {
         const language = menuCut(t.language ?? "", 16, 32);
-        // An embedded track without a number would be "Embedded " (an edge space the player refuses): "Track N".
-        const numberless = t.kind === "embedded" && t.embeddedId == null;
-        const english = numberless ? `Track ${i + 1}` : t.kind === "embedded" ? `Embedded ${t.embeddedId}` : "External subtitle";
-        const name = numberless ? text("Track {}", [i + 1]) : fallbackName(t);
+        // An embedded track without a number is "Track N", not "Embedded " (an edge space the player refuses).
+        const english = fallbackKey(t, i);
+        const name = fallbackName(t, i);
         title = language ? text("{} · {}", [name, language]) : name;
         key = language ? `${english} · ${language}` : english;
       }

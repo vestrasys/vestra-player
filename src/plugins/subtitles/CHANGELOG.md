@@ -3,8 +3,9 @@
 ## 0.4.7
 
 - Track names in Subtitles ▸ Subtitle Track ▸ and Secondary Subtitle ▸ are always menu texts the player accepts. A title (with its language) is cut to 24 characters and 70 bytes, a language without a title to 16 characters and 32 bytes, by whole user-perceived characters (an emoji, emoji sequence or accented letter is kept or dropped as one; a surrogate pair is never split), and the edges are trimmed after the cut, so a title whose cut ends in a space no longer gives a menu text the player refuses. C1 control characters (U+0080–U+009F, NEL among them) become spaces like C0 controls and DEL; a title of controls only falls back to "Track N". With the fallback name, " · " and a duplicate's " (n)" (Japanese "（n）"), each track item stays within the player's 80 bytes in every language of the plugin.
-- An embedded track without a title and without a track number is listed as "Track N" (with its language when it has one) instead of "Embedded " with a trailing space, which the player refused.
-- A track titled like another track's duplicate name (for example "A (3)" next to two tracks titled "A") gets the next free number, so the menu items stay distinct.
+- An embedded track without a title and without a track number is named "Track N" (its place in the list, with its language when it has one) in the menus, the on-screen messages and the Subtitle Tuning lists, instead of "Embedded " with a trailing space, which the player refused in the menu.
+- A track titled like another track's duplicate name (for example "A (3)" next to two tracks titled "A") gets the next free number, so the menu items stay distinct. A track titled "Position" gets a number too ("Position (1)"), like "Off" and "Cycle" already did: Secondary Subtitle ▸ has a Position ▸ submenu, and the player refused a track item of the same name.
+- Where the runtime has no `Intl.Segmenter`, names are cut by whole code points instead of user-perceived characters (a surrogate pair is still never split).
 
 ## 0.4.6
 
