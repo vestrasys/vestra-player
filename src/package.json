@@ -23,7 +23,7 @@
     "ci:local": "node scripts/ci-local.mjs"
   },
   "dependencies": {
-    "@vestra-player/sdk": "^1.5.46"
+    "@vestra-player/sdk": "^1.5.47"
   },
   "devDependencies": {
     "@types/node": "^25.0.0",

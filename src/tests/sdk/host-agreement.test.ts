@@ -1339,10 +1339,7 @@ function hostCommands(): Row[] {
     [...text.matchAll(/"([^"]*)"/g)].map((m) => m[1]!);
   const rows: Row[] = [];
   // host_declarations: `let mut x = Declaration::new("Title", &["Path"])`, `x.bindings = vec![..]`.
-  const own = braces(
-    host("src/host/actions.rs"),
-    "fn host_declarations()",
-  );
+  const own = braces(host("src/host/actions.rs"), "fn host_declarations()");
   for (const [, id, variable] of own.matchAll(
     /\("([a-z-]+)", (\w+), state\(/g,
   )) {

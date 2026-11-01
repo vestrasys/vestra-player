@@ -618,11 +618,11 @@ test("previous/next are the core's: PageUp/PageDown and right-click on back/forw
   assert.equal(bar.props["can-next"], true);
   assert.equal(bar.props["can-previous"], true);
   await host.press("PageDown");
-  await host.press("Mouse:X1");
+  await host.press("Mouse:X1"); // next from player 0.6.0 (SDK 1.5.47)
   bar.emit("action", "previous"); // right-click on 后退
   bar.emit("action", "next"); // right-click on 前进
   await host.settle();
-  assert.deepEqual(host.coreRuns, ["next", "previous", "previous", "next"]);
+  assert.deepEqual(host.coreRuns, ["next", "next", "previous", "next"]);
   // No sequence any more: the core refuses, the bar says nothing.
   host.sequence = null;
   const shown = host.osd.length;

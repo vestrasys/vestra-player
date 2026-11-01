@@ -2254,7 +2254,7 @@ export class TestHost {
                 ["Playback", "Previous"],
                 202,
                 "domain",
-                ["PageUp", "Mouse:X1"],
+                ["PageUp", "Mouse:X2"],
                 false,
             ],
             [
@@ -2262,7 +2262,7 @@ export class TestHost {
                 ["Playback", "Next"],
                 203,
                 "domain",
-                ["PageDown", "Mouse:X2"],
+                ["PageDown", "Mouse:X1"],
                 false,
             ],
             [
@@ -4248,7 +4248,7 @@ export class TestHost {
                     throw new HostError("invalid", "seconds must be 0.1..3600 in tenths");
                 seconds = p.seconds;
             }
-            // SDK 1.5.21: the main window's Toggle Fullscreen, like Enter: in when
+            // SDK 1.5.21: the main window's Toggle Fullscreen, like Escape: in when
             // windowed, out when fullscreen, then `window.state`.
             if (p.action === "fullscreen") {
                 this.coreRuns.push("fullscreen");

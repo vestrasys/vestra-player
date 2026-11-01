@@ -83,8 +83,113 @@ const isPrimitive = (value) => value === null ||
     (typeof value === "number" && Number.isFinite(value));
 /** A row as `JSON.stringify` writes it inside an array. */
 const encodeRow = (row) => JSON.stringify(row) ?? "null";
+/** What a row's encoding holds: a Markdown document, an image. */
+const HAS_MARKDOWN = 1;
+const HAS_IMAGE = 2;
+const marksOf = (enc) => (enc.includes('"$vestraMarkdown"') ? HAS_MARKDOWN : 0) |
+    (enc.includes('"$vestraImage"') ? HAS_IMAGE : 0);
+/**
+ * Row encodings by row object, shared by every property (a row's JSON does
+ * not depend on where it is bound). Only rows that cannot change are kept
+ * ({@link settled}): a plugin that mutates its rows in place sees no
+ * difference, and one that keeps unchanged rows as the same deep-frozen
+ * objects skips encoding them on every pass. Weak: a row the plugin drops
+ * goes with its entry.
+ */
+const settledRows = new WeakMap();
+/**
+ * Frozen rows seen once. A frozen row is verified and kept on its second
+ * pass, so rows frozen afresh on every pass cost one set entry, not a
+ * verification each.
+ */
+const seenRows = new WeakSet();
+/** Frozen rows that can still change (a mutable part, a getter): never kept. */
+const unsettledRows = new WeakSet();
+/**
+ * `value` can never change what `JSON.stringify` writes for it: a primitive,
+ * an image or document handle (their wire form is fixed when made), or a
+ * frozen plain object or array whose own enumerable properties are data
+ * properties (no getter, no own `toJSON`) holding such values. Freezing
+ * fixes the properties and the prototype for good, so the answer holds as
+ * long as the object lives.
+ */
+function settled(value, depth) {
+    if (value === null || typeof value !== "object")
+        return typeof value !== "function";
+    if (value instanceof ImageHandle || value instanceof MarkdownHandle)
+        return true;
+    if (depth > UI_VALUE_LIMITS.depth || !Object.isFrozen(value))
+        return false;
+    const proto = Object.getPrototypeOf(value);
+    if (Array.isArray(value)
+        ? proto !== Array.prototype
+        : proto !== Object.prototype && proto !== null)
+        return false;
+    // An own `toJSON`, enumerable or not, is called by `JSON.stringify`.
+    if (Object.prototype.hasOwnProperty.call(value, "toJSON"))
+        return false;
+    for (const key of Object.keys(value)) {
+        const property = Object.getOwnPropertyDescriptor(value, key);
+        if (!property || !("value" in property))
+            return false;
+        if (!settled(property.value, depth + 1))
+            return false;
+    }
+    return true;
+}
+/** A row's encoding and marks, from {@link settledRows} when it is kept. */
+function rowEncoding(row, cache) {
+    if (cache && row !== null && typeof row === "object") {
+        // A kept row is frozen: looked up first, `isFrozen` only on a miss.
+        const kept = settledRows.get(row);
+        if (kept)
+            return kept;
+    }
+    if (cache &&
+        row !== null &&
+        typeof row === "object" &&
+        Object.isFrozen(row)) {
+        const enc = encodeRow(row);
+        const entry = { enc, marks: marksOf(enc) };
+        if (!seenRows.has(row))
+            seenRows.add(row);
+        else if (!unsettledRows.has(row)) {
+            if (settled(row, 1))
+                settledRows.set(row, entry);
+            else
+                unsettledRows.add(row);
+        }
+        return entry;
+    }
+    const enc = encodeRow(row);
+    return { enc, marks: marksOf(enc) };
+}
 /** Each row of an array as `JSON.stringify` writes it; a hole is `null`. */
-const encodeRows = (rows) => Array.from(rows, encodeRow);
+function encodeRows(rows) {
+    // A `toJSON` added to the shared prototypes would change any row's JSON:
+    // then nothing is taken from (or kept in) the cache.
+    const cache = !("toJSON" in Object.prototype) && !("toJSON" in Array.prototype);
+    const enc = [];
+    const marks = new Uint8Array(rows.length);
+    let markdown = false;
+    for (let i = 0; i < rows.length; i++) {
+        const row = rowEncoding(rows[i], cache);
+        enc[i] = row.enc;
+        marks[i] = row.marks;
+        if (row.marks & HAS_MARKDOWN)
+            markdown = true;
+    }
+    return { enc, marks, markdown, cache };
+}
+/** A row's limit counts, kept with its encoding when the row cannot change. */
+function rowCount(row, cache) {
+    const kept = cache && row !== null && typeof row === "object"
+        ? settledRows.get(row)
+        : undefined;
+    if (!kept)
+        return countRow(row);
+    return (kept.count ??= countRow(row));
+}
 function sameRows(a, b) {
     if (a.length !== b.length)
         return false;
@@ -102,7 +207,7 @@ function sentOf(value, patches) {
         return {
             kind: "rows",
             rows: {
-                enc: encodeRows(value),
+                enc: encodeRows(value).enc,
                 field: keyed?.field ?? null,
                 keys: keyed?.keys ?? null,
                 counts: [],
@@ -142,7 +247,7 @@ function tooLarge(key, ops) {
 function rowPatch(sent, next, rows) {
     if (sent.enc.length === 0)
         return null;
-    if (next.enc.some((row) => row.includes('"$vestraMarkdown"')))
+    if (next.markdown)
         return null;
     const nextKeyed = sent.field === null ? null : next.keyed();
     const keyed = nextKeyed !== null && nextKeyed.field === sent.field;
@@ -152,11 +257,12 @@ function rowPatch(sent, next, rows) {
     // A released image is refused wherever it is, as in a whole write: the
     // rows the patch does not carry are checked too (those holding images).
     for (let j = 0; j < rows.length; j++)
-        if (plan.from[j] >= 0 && next.enc[j].includes('"$vestraImage"'))
+        if (plan.from[j] >= 0 && next.marks[j] & HAS_IMAGE)
             wireValue(rows[j] ?? null);
     const counts = next.enc.map((_, j) => {
         const from = plan.from[j];
-        return (from >= 0 ? sent.counts[from] : undefined) ?? countRow(rows[j]);
+        return ((from >= 0 ? sent.counts[from] : undefined) ??
+            rowCount(rows[j], next.cache));
     });
     if (!withinLimits(counts))
         return null;
@@ -372,8 +478,10 @@ export class ViewBase {
         }
         if (Array.isArray(value) && this.#patches) {
             // Row by row: the same work as one `JSON.stringify`, and the rows to
-            // diff against those last sent.
-            const enc = encodeRows(value);
+            // diff against those last sent. Rows that cannot change (deep-frozen
+            // objects bound again, SDK 1.5.47) are taken from `settledRows`.
+            const encoded = encodeRows(value);
+            const { enc } = encoded;
             const signature = () => `[${enc.join(",")}]`;
             const changed = sent?.kind === "rows"
                 ? !sameRows(sent.rows.enc, enc)
@@ -386,7 +494,7 @@ export class ViewBase {
                 value,
                 changed,
                 signature,
-                rows: { enc, keyed },
+                rows: { ...encoded, keyed },
                 sent: (counts = []) => ({
                     kind: "rows",
                     rows: {
@@ -470,9 +578,7 @@ export class ViewBase {
         const seq = ++this.#seq;
         // Rows holding Markdown documents go whole, as before: the player
         // merges documents in place and takes no parts of them.
-        if (Array.isArray(value) &&
-            pending.rows &&
-            !pending.rows.enc.some((row) => row.includes(MARKDOWN_KEY))) {
+        if (Array.isArray(value) && pending.rows && !pending.rows.markdown) {
             const sizes = pending.rows.enc.map(jsonBytes);
             const count = prefixWithin(sizes, CHUNK_BYTES);
             if (count < value.length) {
