@@ -69,15 +69,19 @@ export struct MenuLevel {
 component MenuItem inherits Rectangle {
     in property <MenuRow> item;
     in property <bool> current;
+    // Its submenu is open and the cursor is in it (or deeper): the parent
+    // chain stays lit, as in Windows and macOS menus.
+    in property <bool> parent-lit;
     callback hovered();
     callback activated();
     private property <bool> active: root.item.enabled && !root.item.busy;
     // Two styles (0.6.0, user ruling; Windows menus): the cursor's row (the
-    // pointer's, set here at once, or the keyboard's) is lit in full; a row
-    // whose submenu is open but is not the cursor's shows only the accent
-    // bar. The open row follows the host (the held switch of G-15), the
-    // lit row never waits for it.
-    private property <bool> lit: root.current;
+    // pointer's, set here at once, or the keyboard's) and, on the levels
+    // above the cursor, the open rows leading to it are lit in full: one
+    // row per level. A row whose submenu is open while the cursor is on
+    // another row of its own level shows only the accent bar. The open row
+    // follows the host (the held switch of G-15), the lit row never waits.
+    private property <bool> lit: root.current || root.parent-lit;
     private property <bool> marked: root.current || root.item.open;
     height: 24px;
     border-radius: Theme.radius-control;
@@ -318,6 +322,7 @@ export component MenuView inherits Rectangle {
                     width: parent.width;
                     item: row;
                     current: root.cursor-level == k && root.cursor == i;
+                    parent-lit: level.open == i && root.cursor-level > k;
                     hovered => {
                         root.cursor-level = k;
                         root.cursor = i;
