@@ -2307,6 +2307,16 @@ export component MenuWindow inherits Window {
                 renderer.render(buffer, SIM_SIZE.0 as usize);
             });
         }
+        /// A key pressed and released, then a host tick and a frame.
+        fn key(&mut self, key: slint::platform::Key) {
+            for event in [
+                slint::platform::WindowEvent::KeyPressed { text: key.into() },
+                slint::platform::WindowEvent::KeyReleased { text: key.into() },
+            ] {
+                self.window.window().dispatch_event(event);
+            }
+            self.tick();
+        }
         /// One pointer step, 1 ms after the last; a host tick every 16 ms.
         fn move_to(&mut self, x: f64, y: f64) {
             self.pointer = crate::ui::menu::Point { x, y };
@@ -2384,13 +2394,24 @@ export component MenuWindow inherits Window {
                 })
             })
         }
-        /// After a frame: at most one row lit in full per level, the row
-        /// under the pointer lit at once, and the bar only on the lit row
-        /// and the row whose submenu is open.
+        /// After a frame: at most one row lit in full per level; with the
+        /// pointer on a row, that row lit at once and exactly one row lit
+        /// on each level above it (the open row leading to it); the bar
+        /// only on the lit row and the row whose submenu is open.
         fn check(&self, context: &str) {
+            let under = self.under();
             for level in 0..self.levels.as_array().map_or(0, Vec::len) {
                 let lit = self.lit(level);
                 assert!(lit.len() <= 1, "{context}: level {level} lit {lit:?}");
+                if let Some((cursor, _)) = &under
+                    && level < *cursor
+                {
+                    assert_eq!(
+                        lit.iter().collect::<Vec<_>>(),
+                        self.path.get(level).into_iter().collect::<Vec<_>>(),
+                        "{context}: level {level} above the pointer's keeps its open row lit"
+                    );
+                }
                 let mut marked: Vec<&String> = lit.iter().chain(self.path.get(level)).collect();
                 marked.sort();
                 marked.dedup();
@@ -2403,7 +2424,7 @@ export component MenuWindow inherits Window {
                     self.path
                 );
             }
-            if let Some((level, row)) = self.under() {
+            if let Some((level, row)) = under {
                 assert_eq!(self.lit(level), [row], "{context}: the pointer's row");
             }
         }
@@ -2460,8 +2481,8 @@ export component MenuWindow inherits Window {
     /// User report (0.5.9, Windows, software rendering): sweeping a submenu
     /// up and down at about 6000 px/s left rows that open a submenu
     /// ("Image Processing") drawn lit beside the row under the pointer, with
-    /// their submenus closed. Like native menus, only the row under the
-    /// pointer is lit, and the parents of open submenus carry the bar.
+    /// their submenus closed. Like native menus, the row under the pointer
+    /// and the open parents leading to it are lit, one per level.
     /// Before the fix every combination below left one to five such rows.
     #[test]
     fn a_fast_sweep_leaves_only_the_pointer_row_and_open_parents_lit() {
@@ -2471,7 +2492,7 @@ export component MenuWindow inherits Window {
                 let (path, marked, lit) = sweep(step, phase);
                 if path != ["Video"]
                     || marked != [vec!["Video".to_owned()], vec!["Reset".to_owned()]]
-                    || lit != [Vec::<String>::new(), vec!["Reset".to_owned()]]
+                    || lit != [vec!["Video".to_owned()], vec!["Reset".to_owned()]]
                 {
                     failures.push(format!(
                         "step {step} phase {phase}: path {path:?} bars {marked:?} lit {lit:?}"
@@ -2521,8 +2542,9 @@ export component MenuWindow inherits Window {
 
     /// 0.6.0 user ruling (Windows menus): the row under the pointer is lit
     /// at once, even while a switch away from the open submenu is held
-    /// (G-15); the open parent keeps only the accent bar. Before, the lit
-    /// row waited for the held switch (up to `AIM_GRACE_MS` and a tick).
+    /// (G-15); the open row of its level keeps only the accent bar, the
+    /// open row of the level above stays lit. Before, the lit row waited
+    /// for the held switch (up to `AIM_GRACE_MS` and a tick).
     #[test]
     fn during_a_held_switch_the_pointer_row_is_lit_and_the_open_parent_marked() {
         let (mut sim, _) = hold_across_rotation();
@@ -2531,6 +2553,7 @@ export component MenuWindow inherits Window {
             ["Video", "Image Processing"],
             "the switch is held"
         );
+        assert_eq!(sim.lit(0), ["Video"]);
         assert_eq!(sim.lit(1), ["Rotation"]);
         assert_eq!(sim.marked(1), ["Image Processing", "Rotation"]);
         // Back on the open row: the hold is cancelled, one row lit.
@@ -2543,7 +2566,7 @@ export component MenuWindow inherits Window {
         assert_eq!(sim.path, ["Video", "Image Processing"]);
         assert_eq!(sim.lit(1), ["Image Processing"]);
         assert_eq!(sim.marked(1), ["Image Processing"]);
-        assert_eq!(sim.lit(0), Vec::<String>::new());
+        assert_eq!(sim.lit(0), ["Video"]);
         assert_eq!(sim.marked(0), ["Video"]);
     }
 
@@ -2565,10 +2588,10 @@ export component MenuWindow inherits Window {
     }
 
     /// The pointer reaches the held submenu: the switch is cancelled, the
-    /// submenu lights the row under the pointer and its parent keeps the
-    /// bar, not lit.
+    /// submenu lights the row under the pointer and the parent chain
+    /// (Video, Image Processing) stays lit, as in Windows and macOS menus.
     #[test]
-    fn reaching_the_submenu_lights_its_row_and_marks_the_parent() {
+    fn reaching_the_submenu_lights_its_row_and_keeps_the_parents_lit() {
         let (mut sim, target) = hold_across_rotation();
         let (sub2_x, deband) = sim.row(2, "Deband");
         let steps = 12;
@@ -2588,10 +2611,69 @@ export component MenuWindow inherits Window {
         }
         assert_eq!(sim.path, ["Video", "Image Processing"]);
         assert_eq!(sim.marked(0), ["Video"]);
-        assert_eq!(sim.lit(1), Vec::<String>::new());
+        assert_eq!(sim.lit(0), ["Video"]);
+        assert_eq!(sim.lit(1), ["Image Processing"]);
         assert_eq!(sim.marked(1), ["Image Processing"]);
         assert_eq!(sim.lit(2), ["Deband"]);
         assert_eq!(sim.marked(2), ["Deband"]);
+    }
+
+    /// The keyboard: Right into a submenu keeps its parent lit; Down on
+    /// that level moves the one lit row; Left back and Down past the open
+    /// row leaves one lit row and the bar on the open one.
+    #[test]
+    fn keys_keep_one_lit_row_per_level_and_the_parent_lit() {
+        let mut sim = MenuSim::new();
+        let title = |sim: &MenuSim, level: usize, index: usize| {
+            sim.levels[level]["rows"][index]["title"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        for _ in 0..10 {
+            if sim.lit(0) == ["Video"] {
+                break;
+            }
+            sim.key(slint::platform::Key::DownArrow);
+        }
+        assert_eq!(sim.lit(0), ["Video"]);
+        sim.key(slint::platform::Key::RightArrow);
+        assert_eq!(sim.path, ["Video"]);
+        let first = title(&sim, 1, 0);
+        assert_eq!(sim.lit(0), ["Video"], "Right keeps the parent lit");
+        assert_eq!(sim.lit(1), std::slice::from_ref(&first));
+        sim.key(slint::platform::Key::DownArrow);
+        let second = title(&sim, 1, 1);
+        assert_eq!(
+            sim.levels[1]["rows"][1]["has-children"], true,
+            "{second} is a group"
+        );
+        assert_eq!(sim.lit(0), ["Video"]);
+        assert_eq!(
+            sim.lit(1),
+            std::slice::from_ref(&second),
+            "Down moves the one lit row"
+        );
+        // Into the second row's submenu and back: it stays open (the sim
+        // does not close it on Left), the cursor on it.
+        sim.key(slint::platform::Key::RightArrow);
+        assert_eq!(sim.path, ["Video".to_owned(), second.clone()]);
+        assert_eq!(sim.lit(1), std::slice::from_ref(&second));
+        assert_eq!(sim.lit(2), [title(&sim, 2, 0)]);
+        sim.key(slint::platform::Key::LeftArrow);
+        assert_eq!(sim.lit(1), std::slice::from_ref(&second));
+        assert_eq!(sim.lit(2), Vec::<String>::new());
+        // Down past the open row: one lit row, the bar stays on the open one.
+        sim.key(slint::platform::Key::DownArrow);
+        let third = title(&sim, 1, 2);
+        assert_eq!(sim.path, ["Video".to_owned(), second.clone()]);
+        assert_eq!(sim.lit(0), ["Video"]);
+        assert_eq!(sim.lit(1), std::slice::from_ref(&third));
+        let mut marked = vec![second, third];
+        marked.sort();
+        let mut drawn = sim.marked(1);
+        drawn.sort();
+        assert_eq!(drawn, marked);
     }
 
     /// Host 0.5.26: a hover writes only the levels it changes. Before, every
