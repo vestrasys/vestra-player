@@ -155,3 +155,6 @@ Common: this branch's player in release, `. C:\vestra\env.ps1 -Ffmpeg`, `VESTRA_
 | U8 probe's node process killed | `upscaling: off`; playback continues |
 
 Not run: U5 pixel comparison (the NVIDIA indicator shows VSR is active), U9 device loss with upscaling on, U10 HDR10 source, U11 two plugins. The review fixes (23865d9: refused-factor spin, `set(false)` without the check, DXGI failure reason) came after these runs; they change no path exercised above except that `set(false)` before any check now answers `unchecked`.
+## Follow-up 2026-11-01: VSR and the next source
+
+User report: after a local video, a VestraTube video sometimes played its audio while the picture stayed on the previous video. Cause: the publish gate waited for `video-out-params` to equal the decoded size, which VSR's `d3d11vpp=scale=F` never satisfies. Fixed in host 0.6.3 (`vsr-publish-gate`: the filter leaves the chain while the gate is closed; geometry also confirms by aspect ratio or, after a new frame, by timeout). Coordinator hardware check to add to every VSR round: a local file, then a VestraTube video with VSR on; a portrait file followed by a landscape stream; the picture must follow each source within about 2 s.
