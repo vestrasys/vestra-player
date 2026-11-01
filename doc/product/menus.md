@@ -190,7 +190,7 @@ Items (Subtitles 0.4.8, Video 1.1.9, Audio 1.5.7, Visualizer 0.1.8; `minPlayerVe
 | --- | --- | --- | --- |
 | Reset ▸ Subtitle Position | subtitles | Alt+Home | `move-reset`, from Subtitles ▸ Subtitle Style ▸ Reset Position; `order` 330, group `reset-subtitles` |
 | Reset ▸ Subtitle Sync | subtitles | `/` | `sync-reset`, from Subtitles ▸ Sync ▸ Reset; 331, `reset-subtitles` |
-| Reset ▸ Picture | video | Q | `video.reset`, from Video ▸ Reset (brightness, contrast, saturation, hue and the other picture values); 440, `reset-video` |
+| Reset ▸ Picture | video | Q | `video.reset`, from Video ▸ Reset (brightness, contrast, saturation, hue and the other picture values, and the Gaussian blur); 440, `reset-video`. Since Video 1.1.9 it also turns off this plugin's image processing (sharpen, edge sharpen, 3D / gradual / temporal denoise, deblock, deband, frame doubling, motion interpolation); strengths are kept. Flip, rotation, crop/stretch, aspect, framing, deinterlace and the shaders / HDR options are left alone |
 | Reset ▸ Framing | video | Numpad5, Alt+Backspace | `video.frame.reset`, from Video ▸ Framing ▸ Reset Framing; 441, `reset-video`. "Center Frame" (Ctrl+Numpad5, pan only) stays in Framing |
 | Reset ▸ Crop Position | video | | `video.reframe.reset`, from Video ▸ Crop/Stretch ▸ Reset Position; 442, `reset-video` |
 | Reset ▸ Audio Sync | audio | `?` | `audio.sync.reset`, from Audio ▸ Audio Sync ▸ Reset; 530, `reset-audio` |
