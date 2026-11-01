@@ -14,7 +14,10 @@ import {
   createWriteToolDefinition,
   type ToolDefinition,
 } from "../vendor/pi/pi.mjs";
-import { MAX_FILE, type WorkFolder } from "./files.ts";
+import { MAX_FILE, TooLargeError, WorkFolder, megabytes } from "./files.ts";
+
+/** Most files one grep walks. */
+const GREP_FILES = 5000;
 
 export const TOOL_NAMES = ["read", "write", "edit", "ls", "find", "grep", "delete"];
 
@@ -32,6 +35,10 @@ export class Folders {
   constructor(work: WorkFolder, docs: WorkFolder[]) {
     this.work = work;
     this.docs = docs;
+  }
+  /** The work folder and the read-only reference folders (StartMessage.docsRoots). */
+  static async open(workDir: string, docsRoots: string[]): Promise<Folders> {
+    return new Folders(await WorkFolder.open(workDir), await Promise.all(docsRoots.map((root) => WorkFolder.open(root))));
   }
   /** The real path of `file`: sdk/… → the reference folder; anything else as given. */
   real(file: string): string {
@@ -87,20 +94,30 @@ function grepTool(folders: Folders): ToolDefinition {
       const folder = folders.of(params.path ?? ".");
       const start = await folder.resolve(folders.real(params.path ?? "."));
       const single = !(await folder.isDirectory(start));
-      const files = single ? [path.basename(start)] : await folder.walk(start, 5000);
+      const files = single ? [path.basename(start)] : await folder.walk(start, GREP_FILES);
       const base = single ? path.dirname(start) : start;
       const lines: string[] = [];
+      // Files it could not search: said in the result, so that "No matches"
+      // never stands for "not searched" (a 1 MB cap once hid the whole
+      // reference this way).
+      const skipped: string[] = [];
       for (const file of files) {
         if (signal?.aborted) throw new Error("Operation aborted");
         if (params.glob && !matches(file, params.glob)) continue;
+        const shown = folders.shown(path.join(base, file));
         let buffer: Buffer;
         try {
           buffer = await folder.readFile(path.join(base, file));
-        } catch {
-          continue; // too large or vanished
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; // vanished
+          skipped.push(error instanceof TooLargeError ? `skipped ${shown}: larger than ${megabytes(MAX_FILE)}` : `skipped ${shown}: ${(error as Error).message}`);
+          continue;
         }
-        if (buffer.length > MAX_FILE || buffer.includes(0)) continue; // binary
-        const shown = folders.shown(path.join(base, file));
+        if (buffer.includes(0)) {
+          // Binary: named only when it was the file asked for (images in a folder are expected).
+          if (single) skipped.push(`skipped ${shown}: binary file`);
+          continue;
+        }
         for (const [index, line] of buffer.toString("utf8").split("\n").entries()) {
           if (!regex.test(line)) continue;
           lines.push(`${shown}:${index + 1}: ${line.length > 300 ? `${line.slice(0, 300)}…` : line}`);
@@ -108,7 +125,13 @@ function grepTool(folders: Folders): ToolDefinition {
         }
         if (lines.length >= limit) break;
       }
-      const text = lines.length ? lines.join("\n") + (lines.length >= limit ? `\n(stopped at ${limit} matches)` : "") : "No matches found";
+      const notes = [
+        ...(lines.length >= limit ? [`(stopped at ${limit} matches)`] : []),
+        ...(!single && files.length >= GREP_FILES ? [`(searched only the first ${GREP_FILES} files; give a narrower path)`] : []),
+        ...skipped.slice(0, 20),
+        ...(skipped.length > 20 ? [`(${skipped.length - 20} more files skipped)`] : []),
+      ];
+      const text = [lines.length ? lines.join("\n") : skipped.length ? "No matches found in the files searched" : "No matches found", ...notes].join("\n");
       return { content: [{ type: "text", text }], details: undefined };
     },
   } as ToolDefinition;
@@ -133,14 +156,21 @@ function deleteTool(folders: Folders): ToolDefinition {
   } as ToolDefinition;
 }
 
+/**
+ * The agent's tools; `extra`: tools the plugin process answers (the plugin
+ * tools; also where the SDK docs tools, docs(path) and docs_search(query),
+ * will join once the SDK ships its docs entry).
+ */
 export function createTools(folders: Folders, extra: ToolDefinition[] = []): ToolDefinition[] {
   const folder = folders.work;
   const root = folder.root;
   const of = (file: string) => folders.of(file);
   const real = (file: string) => folders.real(file);
   const own = (file: string) => folders.writable(file);
-  const readAny = { readFile: (file: string) => of(file).readFile(real(file)), access: async (file: string) => void (await of(file).readFile(real(file))) };
-  const read = { readFile: (file: string) => folder.readFile(own(file)), access: async (file: string) => void (await folder.readFile(own(file))) };
+  // access checks (path, plain file, size) without reading the file; pi's
+  // read then reads it once and returns the requested lines (≤ 2000 lines / 50 KB).
+  const readAny = { readFile: (file: string) => of(file).readFile(real(file)), access: async (file: string) => void (await of(file).readable(real(file))) };
+  const read = { readFile: (file: string) => folder.readFile(own(file)), access: async (file: string) => void (await folder.readable(own(file))) };
   return [
     createReadToolDefinition(root, { autoResizeImages: false, operations: { ...readAny, detectImageMimeType: async () => null } }),
     createWriteToolDefinition(root, {

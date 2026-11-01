@@ -63,9 +63,9 @@ test("Custom · Anthropic format: listed model, streamed reply and a tool call o
   assert.deepEqual(ai.page.props.models, ["mock-1", "mock-2"]);
   assert.equal(ai.modelLine(), "自定义 · Anthropic 格式 · mock-1");
   await ai.ask("写 a.md");
-  assert.equal(ai.kinds(), "user,tools,assistant");
-  // 「好的」 before the first tool call is an opening line, not shown (Chat.opening).
-  assert.equal(ai.rows()[2].text, "写好了");
+  assert.equal(ai.kinds(), "user,thought,tools,assistant");
+  // 「好的」 came before a tool call: a progress note in the collapsed thought row, not the answer.
+  assert.equal(ai.rows()[3].text, "写好了");
   const chat = mock.requests.filter((r) => r.method === "POST");
   assert.equal(new URL(chat[0].url, "http://x").pathname, "/v1/messages");
   assert.equal(chat[0].headers["x-api-key"], KEY);

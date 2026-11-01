@@ -21,6 +21,13 @@ const CHANGE_TEXT: Record<string, string> = {
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const code = (error: unknown) => (error as PluginError)?.code;
 
+/** The player refused the id as one of its built-in plugins' (`reserved` vestra.*, or `unsupported`). */
+const builtinId = (id: string): ToolResult => ({
+  ok: false,
+  text: `${id} has the name of a plugin built into the player and cannot be installed; choose another id.`,
+  say: { code: "builtin-id", args: [id] },
+});
+
 /** A binding of the installed plugin that another command holds (the player ignores it). */
 export type Shadowed = {
   /** The input, e.g. "]". */
@@ -91,6 +98,7 @@ export class Delivering {
       // Manifest, package and Slint problems the player found (check runs the
       // same validation; this stays as the last line of defence).
       const kind = playerCode(error);
+      if (kind === "reserved") return { failure: builtinId(id) };
       return {
         failure: {
           ok: false,
@@ -178,9 +186,12 @@ export class Delivering {
       try {
         change = await candidate.install(options);
       } catch (error) {
-        if (code(error) === "unsupported") {
-          this.say("builtin-id", [id]);
-          return { ok: false, text: `${id} has the name of a plugin built into the player and cannot be installed; choose another id.` };
+        // `reserved`: a vestra.* id (the player refuses it already when
+        // validating, see candidate()); `unsupported`: a built-in's id.
+        if (code(error) === "reserved" || code(error) === "unsupported") {
+          const failure = builtinId(id);
+          this.say(failure.say!.code, failure.say!.args);
+          return failure;
         }
         if (code(error) !== "conflict") throw error;
         const answer = await this.plugin.dialogs.confirm({

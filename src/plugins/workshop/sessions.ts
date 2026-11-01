@@ -43,12 +43,30 @@ export class Sessions {
   }
 
   private writes = new Map<string, Promise<void>>();
+  private removed = new Set<string>();
+
+  /**
+   * Deletes a session: its folder sessions/<sid>/ with the transcript, the
+   * work folder (the plugin projects) and dist/ (packed .vxp files). Files
+   * the user exported elsewhere are not touched. The caller stops the
+   * session's worker first; a file a closing process still holds (Windows)
+   * is retried for a moment.
+   */
+  async remove(id: string): Promise<void> {
+    const directory = this.directory(id);
+    this.removed.add(id);
+    await (this.writes.get(id) ?? Promise.resolve()).catch(() => {});
+    this.writes.delete(id);
+    await fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
 
   /**
    * Atomic (a crash leaves the old or the new meta.json, never half of one)
    * and in call order per session: the last save is what stays on disk.
    */
   save(meta: Meta): Promise<void> {
+    // A late save (a run that ended) must not bring a deleted session back.
+    if (this.removed.has(meta.id)) return Promise.resolve();
     const file = path.join(this.directory(meta.id), "meta.json");
     const text = `${JSON.stringify(meta, null, 2)}\n`;
     const write = async () => {

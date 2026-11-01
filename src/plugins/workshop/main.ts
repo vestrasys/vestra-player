@@ -11,6 +11,7 @@ import { MessageDocs, cut } from "./messages.ts";
 import {
   BaseUrlError,
   DEFAULT_SETTINGS,
+  DEFAULT_THINKING,
   LEGACY_COMPAT,
   NoModelsError,
   checkBaseUrl,
@@ -21,8 +22,11 @@ import {
   masked,
   migrate,
   pickListed,
+  reasoningKey,
+  reasons,
   say as text,
   secretName,
+  THINKING,
   validSettings,
   type AiSettings,
   type Provider,
@@ -106,6 +110,16 @@ export default async function activate(plugin: Plugin) {
     providers.find((p) => p.id === settings.value.provider) ?? { id: settings.value.provider, label: settings.value.provider, models: [], defaultModel: "", api: null };
   const gone = () => !providers.some((p) => p.id === settings.value.provider);
   const model = () => settings.value.models[provider().id] || provider().defaultModel;
+  /**
+   * A custom endpoint's model reasons: the user's choice in the settings, or
+   * guessed from its id. null for pi's providers (its catalog knows).
+   */
+  const reasoning = (): boolean | null => {
+    const p = provider();
+    if (!p.api) return null;
+    return settings.value.reasoning?.[reasoningKey(p.id, model())] ?? reasons(model());
+  };
+  const thinking = () => settings.value.thinking ?? DEFAULT_THINKING;
   /**
    * The first slice kept the custom endpoint's key under another name: move
    * it once. Idempotent and retried until it succeeds (settings.migrateKeys).
@@ -343,6 +357,8 @@ export default async function activate(plugin: Plugin) {
           baseUrl: p.api ? settings.value.baseUrls[p.id] : null,
           api: p.api,
           key,
+          thinking: thinking(),
+          reasoning: reasoning(),
           systemPrompt: systemPrompt({
             sdk: toolchain.sdk,
             index: toolchain.docsIndex(),
@@ -464,6 +480,56 @@ export default async function activate(plugin: Plugin) {
   window.on("retry", () => send(shown.lastPrompt));
   window.on("newChat", () => select(null));
   window.on("selectSession", (id: string) => select(metas.find((m) => m.id === id) ?? null));
+
+  /**
+   * Deletes a conversation after the user confirmed: its record, its plugin
+   * projects and their packed files (sessions/<sid>/), never what was
+   * exported elsewhere. A run in it is stopped first; plugins installed from
+   * it stay installed (the player owns them, the dialog says so). The open
+   * conversation gives way to a new, empty one.
+   */
+  const removeSession = async (id: string) => {
+    const meta = metas.find((m) => m.id === id);
+    if (!meta) return;
+    let installed: string[] = [];
+    try {
+      const made = new Set((await toolchain.projects(pathsOf(id))).map((p) => p.id));
+      installed = (await plugin.packages.list()).filter((p) => made.has(p.id) && p.source?.kind === "workshop").map((p) => p.id);
+    } catch (error) {
+      console.error(`installed plugins: ${error}`);
+    }
+    const answer = await plugin.dialogs.confirm({
+      message: meta.title ? "Delete the conversation “{}”?" : "Delete this conversation?",
+      detail: installed.length
+        ? "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
+        : "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept.",
+      confirm: "Delete",
+      destructive: true,
+      args: [meta.title, plugin.i18n.list(installed)],
+    });
+    if (!answer.confirmed || !metas.includes(meta)) return;
+    const run = runs.get(id);
+    if (run) {
+      runs.delete(id);
+      stopWatchdog(run);
+      if (run.running) {
+        run.running = false;
+        run.worker.abort();
+      }
+      await run.worker.stop();
+    }
+    metas = metas.filter((m) => m !== meta);
+    chats.delete(id);
+    if (active?.id === id) await select(null);
+    plugin.update();
+    try {
+      await sessions.remove(id);
+    } catch (error) {
+      console.error(`delete ${id}: ${error}`);
+    }
+  };
+  window.on("deleteSession", (id: string) => removeSession(id));
+  window.on("deleteChat", () => active && removeSession(active.id));
   window.on("toggle", (id: string) => shown.toggle(id));
   window.on("copy", (id: string) => {
     const row = shown.rows.find((r) => r.id === id);
@@ -560,6 +626,8 @@ export default async function activate(plugin: Plugin) {
       message: pageMessage,
       messageWarn: pageWarn,
       ownerText: settings.value.owner ?? "",
+      thinkingIndex: THINKING.indexOf(thinking()),
+      reasons: reasoning() ?? false,
       ownerHint: ownerHint(),
     };
   });
@@ -727,6 +795,18 @@ export default async function activate(plugin: Plugin) {
     changed();
   });
   page.on("fetchModels", () => fetchModels(true));
+  page.on("chooseThinking", (index: number) => {
+    const level = THINKING[index];
+    if (!level) return;
+    settings.save({ ...settings.value, thinking: level });
+    changed();
+  });
+  page.on("setReasons", (on: boolean) => {
+    const p = provider();
+    if (!p.api) return;
+    settings.save({ ...settings.value, reasoning: { ...settings.value.reasoning, [reasoningKey(p.id, model())]: on } });
+    changed();
+  });
 
   plugin.onDispose(async () => {
     clearTimeout(refresh);

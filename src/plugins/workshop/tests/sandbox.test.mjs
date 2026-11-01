@@ -48,7 +48,7 @@ test("the work folder: inside is fine, outside, links and hidden names are refus
   assert.deepEqual(await work.readdir("."), ["src"]);
   assert.deepEqual(await work.walk(".", 100), ["src/main.ts"]);
 
-  await assert.rejects(work.writeFile("big.txt", "x".repeat(1024 * 1024 + 1)), /1 MB/);
+  await assert.rejects(work.writeFile("big.txt", "x".repeat(1024 * 1024 + 1)), /larger than 1.0 MB/);
 
   // delete: a file or an empty folder inside; never through a link, never outside or the folder itself.
   await work.writeFile("src/debug.test.ts", "x");

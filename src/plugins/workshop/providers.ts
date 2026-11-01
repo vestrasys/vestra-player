@@ -130,7 +130,47 @@ export interface AiSettings {
   savedKeys?: Record<string, boolean>;
   /** The user's GitHub name: the id prefix of new plugins (unset: local.). */
   owner?: string;
+  /** How much reasoning models think before they answer (unset: "low"). */
+  thinking?: Thinking;
+  /**
+   * Custom endpoints: whether the model reasons, by "<provider> <model>"; unset:
+   * guessed from the model id (reasons()). pi's catalog knows it for its own providers.
+   */
+  reasoning?: Record<string, boolean>;
 }
+
+/** The thinking levels the settings offer, cheapest first; "low" is the default (cost-aware). */
+export const THINKING = ["off", "low", "medium"] as const;
+export type Thinking = (typeof THINKING)[number];
+export const DEFAULT_THINKING: Thinking = "low";
+
+/**
+ * Model families that reason (think before they answer), for a custom
+ * endpoint's model pi's catalog cannot describe: OpenAI o-series and GPT-5,
+ * Claude 3.7 and 4+, Gemini 2.5+, DeepSeek R1 / reasoner / V3.1+, Qwen3 and
+ * QwQ, MiniMax M, GLM 4.5+, Kimi K2, Grok 3+, and ids that say so.
+ */
+const REASONING_IDS = [
+  /(^|[/:])o[1-9](-|$)/,
+  /gpt-5/,
+  /gpt-oss/,
+  /claude-3-7/,
+  /claude-(opus|sonnet|haiku|fable)-([4-9]|\d{2})/,
+  /gemini-(2\.5|[3-9])/,
+  /deepseek-(r1|reasoner|v3\.[1-9]|v[4-9])/,
+  /(^|[/:-])r1([-:]|$)/,
+  /qwen-?3/,
+  /qwq/,
+  /minimax-m/,
+  /glm-(4\.[5-9]|[5-9])/,
+  /kimi-k2/,
+  /grok-[3-9]/,
+  /magistral/,
+  /think|reason/,
+];
+export const reasons = (model: string) => REASONING_IDS.some((pattern) => pattern.test(model.toLowerCase()));
+/** The key of a custom model in AiSettings.reasoning. */
+export const reasoningKey = (provider: string, model: string) => `${provider} ${model}`;
 
 export const DEFAULT_SETTINGS: AiSettings = { provider: "anthropic", models: {}, baseUrls: {}, lastSession: null, migrateKeys: false, savedKeys: {} };
 
@@ -148,7 +188,9 @@ export function validSettings(value: unknown): value is AiSettings {
     (record(v.baseUrls) || typeof v.baseUrl === "string") &&
     (v.lastSession === null || v.lastSession === undefined || typeof v.lastSession === "string") &&
     (v.savedKeys === undefined || (!!v.savedKeys && typeof v.savedKeys === "object")) &&
-    (v.owner === undefined || typeof v.owner === "string")
+    (v.owner === undefined || typeof v.owner === "string") &&
+    (v.thinking === undefined || THINKING.includes(v.thinking)) &&
+    (v.reasoning === undefined || (!!v.reasoning && typeof v.reasoning === "object" && Object.values(v.reasoning).every((x) => typeof x === "boolean")))
   );
 }
 

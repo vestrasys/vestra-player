@@ -18,7 +18,6 @@ import {
   type ResourceLoader,
 } from "../vendor/pi/pi.mjs";
 import path from "node:path";
-import { WorkFolder } from "./files.ts";
 import { resolveModel } from "./models.ts";
 import { pluginTools } from "./plugin-tools.ts";
 import { type StartMessage, type ToPlugin, type ToolReply, type ToWorker, type WorkerEvent } from "./protocol.ts";
@@ -132,10 +131,9 @@ function forward(e: AgentSessionEvent) {
 
 async function start(message: StartMessage) {
   secret = message.key;
-  const folder = await WorkFolder.open(message.workDir);
   docsRoots = message.docsRoots ?? [];
-  const docs = await Promise.all((message.docsRoots ?? []).map((root) => WorkFolder.open(root)));
-  const folders = new Folders(folder, docs);
+  const folders = await Folders.open(message.workDir, docsRoots);
+  const folder = folders.work;
   const modelRuntime = await ModelRuntime.create({
     credentials: new InMemoryCredentialStore(),
     modelsPath: null,
@@ -151,11 +149,14 @@ async function start(message: StartMessage) {
           type: "chat",
           id: message.modelId,
           name: message.modelId,
-          reasoning: false,
+          reasoning: !!message.reasoning,
           input: ["text"],
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
           contextWindow: 128000,
-          maxTokens: 8192,
+          // Thinking and the answer share max_tokens (pi takes the thinking
+          // budget out of it: low 2048, medium 8192 tokens), so a reasoning
+          // model gets room for a full answer with a tool call after it.
+          maxTokens: message.reasoning ? 16384 : 8192,
         },
       ],
     } as Parameters<ModelRuntime["registerProvider"]>[1]);
@@ -188,7 +189,8 @@ async function start(message: StartMessage) {
     // worker may not write there anyway (only the session folder).
     agentDir: message.sessionDir,
     model,
-    thinkingLevel: "off",
+    // pi clamps the level to what the model supports ("off" for one that does not reason).
+    thinkingLevel: message.thinking ?? "low",
     modelRuntime,
     resourceLoader,
     sessionManager,

@@ -47,8 +47,7 @@ test("the reference by its short name: sdk/… reads, lists and greps the SDK; w
   const root = await dataDirectory();
   await fs.mkdir(path.join(root, "work"));
   const toolchain = new Toolchain(plugin, root);
-  const docs = await Promise.all(toolchain.docsRoots().map((r) => WorkFolder.open(r)));
-  const folders = new Folders(await WorkFolder.open(path.join(root, "work")), docs);
+  const folders = await Folders.open(path.join(root, "work"), toolchain.docsRoots());
   const tools = Object.fromEntries(createTools(folders).map((t) => [t.name, t]));
   const run = async (name, args) => (await tools[name].execute("1", args, undefined, undefined, undefined)).content.map((c) => c.text).join("");
   const index = await fs.readFile(toolchain.docsIndex(), "utf8");
@@ -81,4 +80,30 @@ test("a write into the reference fails and the file stays as it is", async () =>
   assert.equal(await ai.calls(-2), "✗ 写入 参考资料/sdk/llms.txt");
   assert.equal(await fs.readFile(index, "utf8"), before);
   await ai.stop();
+});
+
+/** The agent's own tools on a fresh work folder, opened as the worker opens them (Folders.open). */
+async function agentTools() {
+  const root = await dataDirectory();
+  await fs.mkdir(path.join(root, "work"));
+  const toolchain = new Toolchain(plugin, root);
+  const folders = await Folders.open(path.join(root, "work"), toolchain.docsRoots());
+  const tools = Object.fromEntries(createTools(folders).map((t) => [t.name, t]));
+  const run = async (name, args) => (await tools[name].execute("1", args, undefined, undefined, undefined)).content.map((c) => c.text).join("");
+  return { root, run };
+}
+
+test("grep names the files it skipped as too large instead of reporting no matches; read refuses a project file over 1 MB", async () => {
+  const { root, run } = await agentTools();
+  await fs.mkdir(path.join(root, "work", "local.big"));
+  await fs.writeFile(path.join(root, "work", "local.big", "huge.txt"), `needle\n${"x".repeat(1024 * 1024)}\n`);
+  await fs.writeFile(path.join(root, "work", "local.big", "small.txt"), "hay\n");
+
+  const skipped = "skipped local.big/huge.txt: larger than 1.0 MB";
+  assert.equal(await run("grep", { pattern: "needle", path: "local.big" }), `No matches found in the files searched\n${skipped}`);
+  assert.equal(await run("grep", { pattern: "needle", path: "local.big/huge.txt" }), `No matches found in the files searched\n${skipped}`);
+  // Matches elsewhere come with the note too.
+  assert.equal(await run("grep", { pattern: "hay|needle", path: "local.big" }), `local.big/small.txt:1: hay\n${skipped}`);
+  assert.equal(await run("grep", { pattern: "nothing", path: "local.big/small.txt" }), "No matches found");
+  await assert.rejects(run("read", { path: "local.big/huge.txt", limit: 1 }), /File larger than 1\.0 MB \(1\.0 MB\): local\.big\/huge\.txt/);
 });

@@ -21,6 +21,10 @@ export interface StartMessage {
   /** The API key, from the keychain; kept in the worker's memory only. */
   key: string;
   systemPrompt: string;
+  /** pi's thinking level for the session; a model that does not reason runs without (pi clamps it). */
+  thinking: "off" | "low" | "medium";
+  /** A custom endpoint's model reasons (pi's catalog says so for its own providers: null). */
+  reasoning: boolean | null;
   /**
    * Read-only folders the file tools may also read (the SDK package and the
    * generated reference): real paths, outside the session folder.

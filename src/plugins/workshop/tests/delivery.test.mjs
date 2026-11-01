@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { HostError } from "@vestra-player/sdk/testing";
 import { dataDirectory, server, startAi } from "./fixture.mjs";
 import { shadowedText } from "./texts.mjs";
 import { unzip } from "./unzip.mjs";
@@ -218,5 +219,33 @@ test("the card shows once the turn has ended, not while the agent still works; a
   assert.equal(ai.props["has-project"], false);
   await ai.until(() => ai.props.busy === false && ai.props.rows.at(-1).state !== 0, "second reply");
   await ai.until(() => ai.props["has-project"] === true, "card after the second turn");
+  await ai.stop();
+});
+
+test("the player's reserved refusal (a vestra.* id), at validation or at install, reads as a built-in plugin's name", async () => {
+  const mock = await server(
+    scripted({
+      做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo", title: "演示" } }] }],
+      安装: [{ toolCalls: [{ name: "install_plugin", args: { id: "local.demo" } }] }],
+    }),
+  );
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
+  await ai.ask("做个插件");
+  // The id rules refuse vestra.* before packing; the player's answer is simulated for local.demo.
+  const reserved = () => {
+    throw new HostError("reserved", "vestra.* ids belong to the player's built-in plugins");
+  };
+  ai.host.handle("packages.validateArchive", reserved);
+  ai.host.dialogAnswers.push({ confirmed: true, checked: false });
+  await ai.ask("安装");
+  assert.match(toolText(mock, mock.chats.length - 1), /local\.demo has the name of a plugin built into the player and cannot be installed; choose another id\./);
+  assert.equal(ai.props["card-status"].code, "builtin-id");
+
+  player(ai);
+  ai.host.handle("packages.install", reserved);
+  ai.host.dialogAnswers.push({ confirmed: true, checked: false });
+  await ai.ask("安装");
+  assert.match(toolText(mock, mock.chats.length - 1), /local\.demo has the name of a plugin built into the player and cannot be installed; choose another id\./);
+  assert.equal(ai.card(), "local.demo 和播放器内置插件同名，不能安装，请换一个 id。");
   await ai.stop();
 });

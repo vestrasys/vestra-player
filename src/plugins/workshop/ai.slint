@@ -4,6 +4,7 @@
 import { ComboBox, ListView, TextEdit } from "std-widgets.slint";
 import { MarkdownBlock, MarkdownBlocks } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
+import { Icons } from "@vestra/icons.slint";
 import { Button } from "@vestra/widgets.slint";
 import { Labels } from "labels.slint";
 
@@ -18,7 +19,7 @@ export struct ToolCall {
 
 export struct ChatRow {
     id: string,
-    // "user" | "tools" | "assistant" | "notice" | "error"
+    // "user" | "thought" | "tools" | "assistant" | "notice" | "error"
     kind: string,
     // user, assistant: the message.
     text: string,
@@ -151,6 +152,12 @@ component Message inherits VerticalLayout {
     pure function calls-text(n: int) -> string {
         @tr("{n} tool call" | "{n} tool calls" % n)
     }
+    pure function thought-text(row: ChatRow) -> string {
+        row.code == "thinking" ? @tr("Thinking…")
+            : row.code == "thought" ? @tr("Thought for {n} second" | "Thought for {n} seconds" % row.n)
+            : row.code == "thought-untimed" ? @tr("Thought process")
+            : @tr("{n} progress note" | "{n} progress notes" % row.n)
+    }
     pure function notice-text(row: ChatRow) -> string {
         row.code == "stopped" ? @tr("Stopped")
             : row.code == "interrupted" ? @tr("The last reply was interrupted (the player or the plugin quit)")
@@ -198,6 +205,36 @@ component Message inherits VerticalLayout {
                 padding: 9px;
                 // An explicit width: the wrapped height is measured for it.
                 Body { text: item.text; width: root.width - 2 * 18px - root.bubble-indent - 2 * 9px; }
+            }
+        }
+    }
+
+    // The model's thinking and its notes between tool calls, collapsed as in
+    // ChatGPT / Claude: "Thought for 12 seconds"; click to read them (dimmed).
+    if item.kind == "thought": VerticalLayout {
+        spacing: 4px;
+        Rectangle {
+            height: 20px;
+            HorizontalLayout {
+                spacing: 6px;
+                Small {
+                    width: 14px;
+                    text: item.state == 0 ? "●" : "◦";
+                    color: item.state == 0 ? Theme.accent : Theme.text-dim;
+                }
+                Small { text: root.thought-text(item); horizontal-stretch: 1; }
+                Small { horizontal-stretch: 0; text: item.expanded ? @tr("Collapse ▾") : @tr("Show ▸"); color: thought-touch.has-hover ? Theme.accent : Theme.text-dim; }
+            }
+            thought-touch := TouchArea { mouse-cursor: pointer; clicked => { root.toggle(item.id); } }
+        }
+        if item.expanded: Rectangle {
+            background: Theme.bg-list;
+            border-radius: Theme.radius-control;
+            VerticalLayout {
+                padding: 8px;
+                spacing: 4px;
+                Small { text: item.text; wrap: word-wrap; overflow: clip; width: root.width - 2 * 18px - 2 * 8px; }
+                if item.truncated: Small { text: @tr("… (too long; the rest is not shown)"); }
             }
         }
     }
@@ -337,6 +374,10 @@ export component AiWindow inherits Window {
     callback stop();
     callback new-chat();
     callback select-session(string);
+    // Delete a conversation (the plugin asks first): a row's button, or the open one
+    // (the header's Delete Chat, Ctrl+Shift+Backspace / ⌘⇧⌫ as in ChatGPT).
+    callback delete-session(string);
+    callback delete-chat();
     callback open-settings();
     callback retry();
     callback copy(string);
@@ -417,233 +458,260 @@ export component AiWindow inherits Window {
         }
     }
 
-    HorizontalLayout {
-        // ---- sidebar
-        Rectangle {
-            width: 220px;
-            background: Theme.bg-bar;
-            VerticalLayout {
-                padding: 10px;
-                spacing: 8px;
-                // Buttons have a minimum height but no maximum: in a layout
-                // with spare height they need a fixed one.
-                Button { height: Theme.button-primary-height; text: @tr("+ New Chat"); clicked => { root.new-chat(); } }
-                ListView {
-                    vertical-stretch: 1;
-                    for s in root.sessions: Rectangle {
-                        height: s.header ? 24px : 28px;
-                        border-radius: Theme.radius-control;
-                        background: s.active ? Theme.selected-bg : session-touch.has-hover && !s.header ? Theme.hover-bg : transparent;
-                        HorizontalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            spacing: 4px;
-                            Text {
-                                text: !s.header ? (s.title == "" ? @tr("New chat") : s.title) : s.title == "today" ? @tr("Today") : @tr("Earlier");
-                                color: s.header ? Theme.text-dim : Theme.text;
-                                font-size: s.header ? Theme.font-xs : Theme.font-body;
-                                vertical-alignment: s.header ? bottom : center;
-                                overflow: elide;
-                                horizontal-stretch: 1;
+    // Ctrl+Shift+Backspace (⌘⇧⌫ on macOS) deletes the open conversation, as in
+    // ChatGPT; captured before the message field, which would delete a word.
+    FocusScope {
+        focus-on-click: false;
+        capture-key-pressed(event) => {
+            if event.modifiers.control && event.modifiers.shift && event.text == Key.Backspace && root.has-folder {
+                root.delete-chat();
+                return accept;
+            }
+            reject
+        }
+        HorizontalLayout {
+            // ---- sidebar
+            Rectangle {
+                width: 220px;
+                background: Theme.bg-bar;
+                VerticalLayout {
+                    padding: 10px;
+                    spacing: 8px;
+                    // Buttons have a minimum height but no maximum: in a layout
+                    // with spare height they need a fixed one.
+                    Button { height: Theme.button-primary-height; text: @tr("+ New Chat"); clicked => { root.new-chat(); } }
+                    ListView {
+                        vertical-stretch: 1;
+                        for s in root.sessions: Rectangle {
+                            height: s.header ? 24px : 28px;
+                            border-radius: Theme.radius-control;
+                            background: s.active ? Theme.selected-bg : session-touch.has-hover && !s.header ? Theme.hover-bg : transparent;
+                            // The row's layout is inside its TouchArea, so hovering the
+                            // delete button keeps the row hovered (and the button shown).
+                            session-touch := TouchArea {
+                                enabled: !s.header;
+                                clicked => { root.select-session(s.id); }
+                                HorizontalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 6px;
+                                    spacing: 4px;
+                                    Text {
+                                        text: !s.header ? (s.title == "" ? @tr("New chat") : s.title) : s.title == "today" ? @tr("Today") : @tr("Earlier");
+                                        color: s.header ? Theme.text-dim : Theme.text;
+                                        font-size: s.header ? Theme.font-xs : Theme.font-body;
+                                        vertical-alignment: s.header ? bottom : center;
+                                        overflow: elide;
+                                        horizontal-stretch: 1;
+                                    }
+                                    if s.running: Text { text: "●"; color: Theme.accent; font-size: Theme.font-xs; vertical-alignment: center; }
+                                    // Delete, on the hovered or open row (as chat apps do).
+                                    if !s.header && (s.active || session-touch.has-hover): Button {
+                                        width: 18px;
+                                        icon: Icons.commands("close");
+                                        stroked: true;
+                                        accessible-label: @tr("Delete Chat");
+                                        clicked => { root.delete-session(s.id); }
+                                    }
+                                }
                             }
-                            if s.running: Text { text: "●"; color: Theme.accent; font-size: Theme.font-xs; vertical-alignment: center; }
-                        }
-                        session-touch := TouchArea {
-                            enabled: !s.header;
-                            clicked => { root.select-session(s.id); }
                         }
                     }
-                }
-                Button { height: Theme.button-primary-height; text: @tr("⚙ Settings"); clicked => { root.open-settings(); } }
-                HorizontalLayout {
-                    spacing: 6px;
-                    height: 18px;
-                    Image { source: @image-url("assets/pi-logo.svg"); width: 16px; height: 16px; }
-                    // i18n-ignore: pi's own wording
-                    Link { text: "powered by pi"; clicked => { root.open-pi(); } }
-                    Rectangle { horizontal-stretch: 1; }
+                    Button { height: Theme.button-primary-height; text: @tr("⚙ Settings"); clicked => { root.open-settings(); } }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        height: 18px;
+                        Image { source: @image-url("assets/pi-logo.svg"); width: 16px; height: 16px; }
+                        // i18n-ignore: pi's own wording
+                        Link { text: "powered by pi"; clicked => { root.open-pi(); } }
+                        Rectangle { horizontal-stretch: 1; }
+                    }
                 }
             }
-        }
-        Rectangle { width: 1px; background: Theme.line; }
+            Rectangle { width: 1px; background: Theme.line; }
 
-        // ---- conversation
-        VerticalLayout {
-            horizontal-stretch: 1;
-            HorizontalLayout {
-                height: 34px;
-                padding-left: 18px;
-                padding-right: 12px;
-                spacing: 8px;
-                Text {
-                    text: root.session-title == "" ? @tr("New chat") : root.session-title;
-                    color: Theme.text;
-                    font-size: Theme.font-title;
-                    vertical-alignment: center;
-                    overflow: elide;
-                    horizontal-stretch: 1;
-                }
-                if root.has-folder: VerticalLayout {
-                    alignment: center;
-                    horizontal-stretch: 0;
-                    Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); clicked => { root.open-folder(); } }
-                }
-            }
-            if root.banner.code != "": Rectangle {
-                vertical-stretch: 0;
-                background: Theme.bg-list;
+            // ---- conversation
+            VerticalLayout {
+                horizontal-stretch: 1;
                 HorizontalLayout {
-                    padding: 10px;
+                    height: 34px;
                     padding-left: 18px;
+                    padding-right: 12px;
                     spacing: 8px;
                     Text {
-                        text: root.banner-text(root.banner);
+                        text: root.session-title == "" ? @tr("New chat") : root.session-title;
                         color: Theme.text;
-                        font-size: Theme.font-body;
+                        font-size: Theme.font-title;
                         vertical-alignment: center;
+                        overflow: elide;
                         horizontal-stretch: 1;
-                        wrap: word-wrap;
                     }
-                    VerticalLayout {
+                    if root.has-folder: VerticalLayout {
                         alignment: center;
                         horizontal-stretch: 0;
-                        Button { horizontal-stretch: 0; text: @tr("Go to Settings"); clicked => { root.open-settings(); } }
+                        Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); clicked => { root.open-folder(); } }
+                    }
+                    if root.has-folder: VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 0;
+                        Button { small: true; width: max(72px, self.preferred-width); text: @tr("Delete Chat"); clicked => { root.delete-chat(); } }
                     }
                 }
-            }
-
-            if root.rows.length == 0: VerticalLayout {
-                vertical-stretch: 1;
-                alignment: center;
-                spacing: 12px;
-                HorizontalLayout {
-                    alignment: center;
-                    Image { source: @image-url("assets/pi-logo.svg"); width: 56px; height: 56px; }
-                }
-                Text {
-                    text: @tr("What plugin would you like to make, or what would you like to ask?");
-                    color: Theme.text;
-                    font-size: Theme.font-title;
-                    horizontal-alignment: center;
-                }
-            }
-            if root.rows.length > 0: list := ListView {
-                vertical-stretch: 1;
-                scrolled => {
-                    root.stick = self.content-y <= self.visible-height - self.content-height + 24px;
-                }
-                changed content-height => {
-                    if root.stick {
-                        self.content-y = min(0px, self.visible-height - self.content-height);
-                    }
-                }
-                for row[index] in root.rows: Message {
-                    item: row;
-                    last: index == root.rows.length - 1;
-                    can-retry: root.can-retry;
-                    copy(id) => { root.copy(id); }
-                    copy-code(code) => { root.copy-code(code); }
-                    open-link(url) => { root.open-link(url); }
-                    toggle(id) => { root.toggle(id); }
-                    retry => { root.retry(); }
-                    open-settings => { root.open-settings(); }
-                }
-            }
-
-            // ---- result card: the session's plugin and what can be done with it
-            if root.has-project: VerticalLayout {
-              vertical-stretch: 0;
-              padding-left: 12px;
-              padding-right: 12px;
-              padding-top: 6px;
-              Rectangle {
-                border-width: 1px;
-                border-color: Theme.line;
-                border-radius: Theme.radius-panel;
-                background: Theme.bg-list;
-                VerticalLayout {
-                    padding: 8px;
-                    spacing: 6px;
+                if root.banner.code != "": Rectangle {
+                    vertical-stretch: 0;
+                    background: Theme.bg-list;
                     HorizontalLayout {
+                        padding: 10px;
+                        padding-left: 18px;
                         spacing: 8px;
-                        height: Theme.input-height;
                         Text {
-                            text: @tr("Plugin: {}", root.project-title);
+                            text: root.banner-text(root.banner);
                             color: Theme.text;
                             font-size: Theme.font-body;
                             vertical-alignment: center;
-                            overflow: elide;
                             horizontal-stretch: 1;
+                            wrap: word-wrap;
                         }
-                        if root.projects.length > 1: ComboBox {
-                            width: 180px;
-                            height: Theme.input-height;
+                        VerticalLayout {
+                            alignment: center;
                             horizontal-stretch: 0;
-                            model: root.projects;
-                            current-index <=> root.project-index;
-                            selected => { root.choose-project(self.current-index); }
+                            Button { horizontal-stretch: 0; text: @tr("Go to Settings"); clicked => { root.open-settings(); } }
                         }
                     }
+                }
+
+                if root.rows.length == 0: VerticalLayout {
+                    vertical-stretch: 1;
+                    alignment: center;
+                    spacing: 12px;
                     HorizontalLayout {
-                        alignment: start;
+                        alignment: center;
+                        Image { source: @image-url("assets/pi-logo.svg"); width: 56px; height: 56px; }
+                    }
+                    Text {
+                        text: @tr("What plugin would you like to make, or what would you like to ask?");
+                        color: Theme.text;
+                        font-size: Theme.font-title;
+                        horizontal-alignment: center;
+                    }
+                }
+                if root.rows.length > 0: list := ListView {
+                    vertical-stretch: 1;
+                    scrolled => {
+                        root.stick = self.content-y <= self.visible-height - self.content-height + 24px;
+                    }
+                    changed content-height => {
+                        if root.stick {
+                            self.content-y = min(0px, self.visible-height - self.content-height);
+                        }
+                    }
+                    for row[index] in root.rows: Message {
+                        item: row;
+                        last: index == root.rows.length - 1;
+                        can-retry: root.can-retry;
+                        copy(id) => { root.copy(id); }
+                        copy-code(code) => { root.copy-code(code); }
+                        open-link(url) => { root.open-link(url); }
+                        toggle(id) => { root.toggle(id); }
+                        retry => { root.retry(); }
+                        open-settings => { root.open-settings(); }
+                    }
+                }
+
+                // ---- result card: the session's plugin and what can be done with it
+                if root.has-project: VerticalLayout {
+                  vertical-stretch: 0;
+                  padding-left: 12px;
+                  padding-right: 12px;
+                  padding-top: 6px;
+                  Rectangle {
+                    border-width: 1px;
+                    border-color: Theme.line;
+                    border-radius: Theme.radius-panel;
+                    background: Theme.bg-list;
+                    VerticalLayout {
+                        padding: 8px;
                         spacing: 6px;
-                        height: Theme.button-small-height;
-                        Button { small: true; width: max(52px, self.preferred-width); text: @tr("Install"); enabled: !root.card-busy; clicked => { root.install(); } }
-                        Button { small: true; width: max(80px, self.preferred-width); text: @tr("Export .vxp"); enabled: !root.card-busy; clicked => { root.export-vxp(); } }
-                        Button { small: true; width: max(96px, self.preferred-width); text: @tr("Export Source .zip"); enabled: !root.card-busy; clicked => { root.export-source(); } }
-                        Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); clicked => { root.open-project(); } }
-                    }
-                    if root.card-status.code != "": Text {
-                        text: root.card-text(root.card-status);
-                        color: Theme.text-dim;
-                        font-size: Theme.font-body;
-                        wrap: word-wrap;
-                    }
-                    if root.card-status.code == "installed": VerticalLayout {
-                        for key in root.card-keys: Text {
-                            text: root.shadowed-text(key);
+                        HorizontalLayout {
+                            spacing: 8px;
+                            height: Theme.input-height;
+                            Text {
+                                text: @tr("Plugin: {}", root.project-title);
+                                color: Theme.text;
+                                font-size: Theme.font-body;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                horizontal-stretch: 1;
+                            }
+                            if root.projects.length > 1: ComboBox {
+                                width: 180px;
+                                height: Theme.input-height;
+                                horizontal-stretch: 0;
+                                model: root.projects;
+                                current-index <=> root.project-index;
+                                selected => { root.choose-project(self.current-index); }
+                            }
+                        }
+                        HorizontalLayout {
+                            alignment: start;
+                            spacing: 6px;
+                            height: Theme.button-small-height;
+                            Button { small: true; width: max(52px, self.preferred-width); text: @tr("Install"); enabled: !root.card-busy; clicked => { root.install(); } }
+                            Button { small: true; width: max(80px, self.preferred-width); text: @tr("Export .vxp"); enabled: !root.card-busy; clicked => { root.export-vxp(); } }
+                            Button { small: true; width: max(96px, self.preferred-width); text: @tr("Export Source .zip"); enabled: !root.card-busy; clicked => { root.export-source(); } }
+                            Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); clicked => { root.open-project(); } }
+                        }
+                        if root.card-status.code != "": Text {
+                            text: root.card-text(root.card-status);
                             color: Theme.text-dim;
                             font-size: Theme.font-body;
                             wrap: word-wrap;
                         }
-                    }
-                }
-              }
-            }
-
-            // ---- composer: anchored at the bottom, its own height only
-            VerticalLayout {
-                vertical-stretch: 0;
-                padding: 12px;
-                padding-top: 6px;
-                spacing: 6px;
-                input := TextEdit {
-                    height: 72px;
-                    font-size: Theme.font-tab;
-                    wrap: word-wrap;
-                    enabled: root.configured;
-                    placeholder-text: root.blocked ? @tr("Another conversation is generating; please wait…") : @tr("Type a message… Enter to send · Shift+Enter for a new line");
-                    text <=> root.draft;
-                    edited => { root.draft-changed(self.text); }
-                    key-pressed(event) => {
-                        if event.text == Key.Return && !event.modifiers.shift {
-                            root.submit();
-                            return accept;
+                        if root.card-status.code == "installed": VerticalLayout {
+                            for key in root.card-keys: Text {
+                                text: root.shadowed-text(key);
+                                color: Theme.text-dim;
+                                font-size: Theme.font-body;
+                                wrap: word-wrap;
+                            }
                         }
-                        return reject;
                     }
+                  }
                 }
-                HorizontalLayout {
-                    height: Theme.button-height;
-                    spacing: 8px;
-                    Small { text: root.model-text == "" ? "" : Labels.provider(root.provider-id, root.provider-name) + " · " + root.model-text; horizontal-stretch: 1; }
-                    if !root.busy: Button {
-                        horizontal-stretch: 0;
-                        text: @tr("Send");
-                        enabled: root.can-send && root.draft != "";
-                        clicked => { root.submit(); }
+
+                // ---- composer: anchored at the bottom, its own height only
+                VerticalLayout {
+                    vertical-stretch: 0;
+                    padding: 12px;
+                    padding-top: 6px;
+                    spacing: 6px;
+                    input := TextEdit {
+                        height: 72px;
+                        font-size: Theme.font-tab;
+                        wrap: word-wrap;
+                        enabled: root.configured;
+                        placeholder-text: root.blocked ? @tr("Another conversation is generating; please wait…") : @tr("Type a message… Enter to send · Shift+Enter for a new line");
+                        text <=> root.draft;
+                        edited => { root.draft-changed(self.text); }
+                        key-pressed(event) => {
+                            if event.text == Key.Return && !event.modifiers.shift {
+                                root.submit();
+                                return accept;
+                            }
+                            return reject;
+                        }
                     }
-                    if root.busy: Button { horizontal-stretch: 0; text: @tr("■ Stop"); clicked => { root.stop(); } }
+                    HorizontalLayout {
+                        height: Theme.button-height;
+                        spacing: 8px;
+                        Small { text: root.model-text == "" ? "" : Labels.provider(root.provider-id, root.provider-name) + " · " + root.model-text; horizontal-stretch: 1; }
+                        if !root.busy: Button {
+                            horizontal-stretch: 0;
+                            text: @tr("Send");
+                            enabled: root.can-send && root.draft != "";
+                            clicked => { root.submit(); }
+                        }
+                        if root.busy: Button { horizontal-stretch: 0; text: @tr("■ Stop"); clicked => { root.stop(); } }
+                    }
                 }
             }
         }

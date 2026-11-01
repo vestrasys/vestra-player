@@ -6,10 +6,21 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-/** Largest file the tools read or write. */
+/**
+ * Largest file the tools read or write. A plugin project has no use for a
+ * bigger text file: the agent writes every file whole (write, edit), and edit
+ * holds the old text, the new text and a diff in memory and in the session
+ * file, so a larger file is runaway generated output, not source.
+ */
 export const MAX_FILE = 1024 * 1024;
 
+/** A size for messages: "1.0 MB". */
+export const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
 export class OutsideError extends Error {}
+
+/** A file over its folder's size limit. */
+export class TooLargeError extends Error {}
 
 export class WorkFolder {
   readonly root: string;
@@ -62,16 +73,25 @@ export class WorkFolder {
     return this.root;
   }
 
-  async readFile(file: string): Promise<Buffer> {
+  /** The absolute path of `file` if it is a plain file within MAX_FILE, without reading it. */
+  async readable(file: string): Promise<string> {
     const absolute = await this.resolve(file);
     const stat = await fs.stat(absolute);
     if (!stat.isFile()) throw new Error(`Not a file: ${this.relative(absolute)}`);
-    if (stat.size > MAX_FILE) throw new Error(`File larger than 1 MB: ${this.relative(absolute)}`);
-    return fs.readFile(absolute);
+    if (stat.size > MAX_FILE) throw new TooLargeError(`File larger than ${megabytes(MAX_FILE)} (${megabytes(stat.size)}): ${this.relative(absolute)}`);
+    return absolute;
+  }
+
+  async readFile(file: string): Promise<Buffer> {
+    const absolute = await this.readable(file);
+    const buffer = await fs.readFile(absolute);
+    // It grew after the check.
+    if (buffer.length > MAX_FILE) throw new TooLargeError(`File larger than ${megabytes(MAX_FILE)} (${megabytes(buffer.length)}): ${this.relative(absolute)}`);
+    return buffer;
   }
 
   async writeFile(file: string, content: string): Promise<void> {
-    if (Buffer.byteLength(content) > MAX_FILE) throw new Error("Content larger than 1 MB");
+    if (Buffer.byteLength(content) > MAX_FILE) throw new TooLargeError(`Content larger than ${megabytes(MAX_FILE)}`);
     const absolute = await this.resolve(file, true);
     await this.mkdir(path.dirname(absolute));
     // Re-checked after mkdir: nothing on the way may have become a link.
