@@ -12,7 +12,16 @@ import type {
   Scope,
   Window,
 } from "@vestra-player/sdk";
-import { buildItems, checkVersion, isDevelopmentRow, isInstalledRow, updateCount, type Display, type Item } from "./catalog.ts";
+import {
+  buildItems,
+  checkVersion,
+  isBuiltinRow,
+  isDevelopmentRow,
+  isInstalledRow,
+  updateCount,
+  type Display,
+  type Item,
+} from "./catalog.ts";
 import { clean } from "./index-format.ts";
 import { Icons } from "./icons.ts";
 import * as installer from "./installer.ts";
@@ -34,9 +43,11 @@ export type Settings = {
   lastCheck: number;
   /** `revocationKey(...)` → handled: auto-disabled once, or the user accepted the risk. */
   revocations: Record<string, "disabled" | "accepted">;
+  /** The window leaves built-in plugins out of its lists; on unless turned off (absent from files before store 0.2.8). */
+  hideBuiltins?: boolean;
 };
 
-const DEFAULTS: Settings = { repos: [], autoCheck: true, lastCheck: 0, revocations: {} };
+const DEFAULTS: Settings = { repos: [], autoCheck: true, lastCheck: 0, revocations: {}, hideBuiltins: true };
 
 const validSettings = (value: unknown): value is Settings => {
   const v = value as Settings;
@@ -48,7 +59,8 @@ const validSettings = (value: unknown): value is Settings => {
     typeof v.autoCheck === "boolean" &&
     typeof v.lastCheck === "number" &&
     typeof v.revocations === "object" &&
-    v.revocations !== null
+    v.revocations !== null &&
+    (v.hideBuiltins === undefined || typeof v.hideBuiltins === "boolean")
   );
 };
 
@@ -216,6 +228,11 @@ export class Store {
       this.sort = index === 1 ? 1 : 0;
       this.#listChanged();
     });
+    // The check box's new state (not a flip), kept in settings.json.
+    window.on("setHideBuiltins", (on: boolean) => {
+      this.#setHideBuiltins(on === true);
+      this.changed();
+    });
     window.on("select", (key: string) => {
       if (this.selected === key) return;
       this.#pending = null;
@@ -338,10 +355,21 @@ export class Store {
     this.changed();
   }
 
-  /** Bring a row into the list: its tab, then without the tag, then without the search. */
+  /**
+   * Bring a row into the list: a hidden built-in shows the built-ins first,
+   * then its tab, then without the tag, then without the search, each only
+   * while the row is still not listed.
+   */
   #reveal(item: Item) {
     this.#pending = null;
     if (this.#shows(item.key)) return;
+    if (isBuiltinRow(item) && this.hideBuiltins) {
+      this.settings.save({ ...this.settings.value, hideBuiltins: false });
+      if (this.#shows(item.key)) {
+        this.#scroll++;
+        return;
+      }
+    }
     this.category = homeOf(item);
     if (!this.#shows(item.key)) this.tag = null;
     if (!this.#shows(item.key)) {
@@ -349,6 +377,21 @@ export class Store {
       this.#clearSearch++;
     }
     this.#scroll++;
+  }
+
+  /** "Hide built-in plugins" is on: the default, also for settings saved before the option. */
+  get hideBuiltins(): boolean {
+    return this.settings.value.hideBuiltins !== false;
+  }
+
+  /** The check box: the details follow the list as for a tag or a search. */
+  #setHideBuiltins(on: boolean) {
+    if (on === this.hideBuiltins) return;
+    this.settings.save({ ...this.settings.value, hideBuiltins: on });
+    // A tag only built-ins have would empty the list under "Tags: All".
+    const tag = this.tag?.toLowerCase();
+    if (tag !== undefined && !this.#tags().some((each) => each.toLowerCase() === tag)) this.tag = null;
+    this.#listChanged();
   }
 
   /** The list shows this row now. */
@@ -535,7 +578,7 @@ export class Store {
     return this.items.find((item) => item.key === this.selected) ?? null;
   }
 
-  /** The current tab, searched, tag-filtered and sorted (design §2.1); built-ins first under Installed. */
+  /** The current tab, searched, tag-filtered and sorted (design §2.1); built-ins (when shown) first under Installed. */
   visible(): Item[] {
     const query = this.search.trim().toLowerCase();
     let items = this.#inCategory().filter((item) =>
@@ -556,10 +599,16 @@ export class Store {
     return items.sort((a, b) => group(a) - group(b) || order(a, b));
   }
 
+  /** The rows "Hide built-in plugins" leaves in: every tab's list, its tags and its count draw on these. */
+  #listed(): Item[] {
+    return this.hideBuiltins ? this.items.filter((item) => !isBuiltinRow(item)) : this.items;
+  }
+
   #inCategory(): Item[] {
-    if (this.category === INSTALLED) return this.items.filter(isInstalledRow);
-    if (this.category === UPDATES) return this.items.filter((item) => item.state === "update");
-    return this.items.filter((item) => !isInstalledRow(item));
+    const items = this.#listed();
+    if (this.category === INSTALLED) return items.filter(isInstalledRow);
+    if (this.category === UPDATES) return items.filter((item) => item.state === "update");
+    return items.filter((item) => !isInstalledRow(item));
   }
 
   #tags(): string[] {
@@ -586,16 +635,19 @@ export class Store {
       : this.repos.list.flatMap((repo) => (repo.status.text ? [repo.status.text] : []));
     const shown = (text: Msg | null) => this.shown(text);
     const action = (a: Action | null) => (a ? { id: a.id, text: shown(a.text), enabled: a.enabled } : { id: "", text: "", enabled: false });
+    // The tab titles count what the tabs list before a search or a tag: built-ins only when shown.
+    const listed = this.#listed();
     const base = {
       category: this.category,
-      installedCount: this.items.filter(isInstalledRow).length,
-      availableCount: this.items.filter((each) => !isInstalledRow(each)).length,
+      installedCount: listed.filter(isInstalledRow).length,
+      availableCount: listed.filter((each) => !isInstalledRow(each)).length,
       availableKnown: this.#known(),
       updates: updateCount(this.items),
       // The first entry stands for all tags (the library drop-down shows the model as it is).
       tagModel: [shown(msg("Tags: All")), ...tags],
       tagIndex: this.tag ? Math.max(0, tags.findIndex((t) => t.toLowerCase() === this.tag!.toLowerCase()) + 1) : 0,
       sortIndex: this.sort,
+      hideBuiltins: this.hideBuiltins,
       rows: visible.map((each) => this.#row(each, action)),
       emptyText: shown(this.#emptyText(visible)),
       linkOpen: this.linkOpen,
@@ -634,7 +686,11 @@ export class Store {
   #emptyText(visible: Item[]): Msg | null {
     if (visible.length) return null;
     if (this.search || this.tag) return msg("No plugins match");
-    if (this.category === INSTALLED) return msg("No plugins installed yet");
+    if (this.category === INSTALLED)
+      // Only built-ins are installed and they are hidden: say so rather than "nothing installed".
+      return this.hideBuiltins && this.items.some((item) => isBuiltinRow(item) && isInstalledRow(item))
+        ? msg("No plugins installed besides the built-in ones, which are hidden")
+        : msg("No plugins installed yet");
     // Available and Updates need an index (fresh or cached); "up to date" only after one was read.
     if (!this.#known()) {
       if (this.repos.list.some((repo) => repo.refreshing)) return msg("Reading repositories…");

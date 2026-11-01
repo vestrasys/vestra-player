@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { timing } from "../store.ts";
-import { actions, AVAILABLE, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
+import { actions, AVAILABLE, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
 
 const path = (host: Awaited<ReturnType<typeof start>>["host"]) => host.command("open").declaration.path;
 
@@ -160,6 +160,7 @@ test("list: filters, search, tags, sort; incompatible and fully revoked plugins"
   });
   try {
     await openStore(host);
+    await showBuiltins(host);
     await until(host, () => store.items.length === 5);
     const window = host.window("store");
     // Installed (the first tab): built-ins first, then third-party; tags of this tab only.

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { CAPABILITIES } from "../labels.ts";
 import { HOST, LABELS, PART, WINDOW } from "../text.ts";
-import { allRows, BUILTIN, FakeNet, OFFICIAL, openStore, props, publish, rows, start, until } from "./helpers.ts";
+import { allRows, BUILTIN, FakeNet, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, until } from "./helpers.ts";
 
 const pot = readFileSync(new URL("../locales/messages.pot", import.meta.url), "utf8");
 const po = readFileSync(new URL("../locales/zh-Hans.po", import.meta.url), "utf8");
@@ -29,6 +29,7 @@ test("English by default: the menu, the list and the OSD", async () => {
   try {
     assert.deepEqual(host.command("open").display.path, ["Plugin Store…"]);
     await openStore(host);
+    await showBuiltins(host);
     await until(host, () => store.items.length === 2);
     assert.deepEqual(
       (await allRows(host)).map((r) => [r.name, r.badge, (r as { meta?: string }).meta]),

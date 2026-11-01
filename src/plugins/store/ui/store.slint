@@ -10,7 +10,7 @@
 import { LineEdit, ListView } from "std-widgets.slint";
 import { MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button, Choice, Tabs, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
+import { Button, Check, Choice, Tabs, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
 import { Cell, MenuButton, MenuEntry, StoreIcons, Tone } from "parts.slint";
 
 // A row's small tag before the badge (Dev, Warning).
@@ -199,6 +199,8 @@ export component StoreWindow inherits Window {
     // In-out: the drop-downs set them on a pick (then ask with set-tag / set-sort).
     in-out property <int> tag-index;
     in-out property <int> sort-index;
+    // In-out: "Hide built-in plugins" sets it on a click or Space (then asks with set-hide-builtins).
+    in-out property <bool> hide-builtins: true;
     in property <[StoreRow]> rows;
     in property <string> empty-text;
     in property <bool> link-open;
@@ -235,6 +237,7 @@ export component StoreWindow inherits Window {
     callback row-act(string, string);
     callback set-tag(int);
     callback set-sort(int);
+    callback set-hide-builtins(bool);
     callback select(string);
     callback set-tab(int);
     callback act(string);
@@ -376,7 +379,22 @@ export component StoreWindow inherits Window {
                 selected(index) => { root.set-sort(index); }
             }
         }
-        Cell { height: Theme.button-height; text: @tr("You can also drop a .vxp plugin package on the player's video area to install it"); color: Theme.text-dim; }
+        HorizontalLayout {
+            spacing: 6px;
+            height: Theme.button-height;
+            Cell {
+                horizontal-stretch: 1;
+                text: @tr("You can also drop a .vxp plugin package on the player's video area to install it");
+                color: Theme.text-dim;
+            }
+            // Under the two drop-downs, as wide as both; Tab reaches it after them.
+            Check {
+                width: root.tag-width + 6px + root.sort-width;
+                text: @tr("Hide built-in plugins");
+                checked <=> root.hide-builtins;
+                toggled(on) => { root.set-hide-builtins(on); }
+            }
+        }
         if root.link-open: link-row := UrlInputRow {
             text <=> root.link-text;
             placeholder: @tr("Plugin package link (https://…/name-version.vxp)");

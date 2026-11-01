@@ -4,7 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
 import { installFromRepository } from "../installer.ts";
-import { actions, allRows, banners, BUILTIN, choose, FakeNet, info, no, OFFICIAL, openStore, props, publish, start, THIRD, until, yes } from "./helpers.ts";
+import { actions, allRows, banners, BUILTIN, choose, FakeNet, info, no, OFFICIAL, openStore, props, publish, showBuiltins, start, THIRD, until, yes } from "./helpers.ts";
 
 const YT = {
   id: "zysilm.youtube",
@@ -186,6 +186,7 @@ test("vestra. ids in any repository: refused before downloading (reserved for bu
     store.settings.save({ ...store.settings.value, repos: [THIRD] });
     store.repos.sync([THIRD]);
     await openStore(host);
+    await showBuiltins(host);
     await until(host, () => store.items.some((i) => i.name === "Extra") && store.items.some((i) => i.name === "Fake Video"), "rows");
     const fake = await choose(host, "Fake Video");
     assert.equal(fake.badge, "不能安装");

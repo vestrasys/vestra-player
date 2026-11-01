@@ -138,7 +138,8 @@ test("a cached icon whose bytes no longer match its hash is fetched again", asyn
   const data = join(scratch, "icon");
   const first = await start({ net, dataDirectory: data });
   await openStore(first.host);
-  await until(first.host, () => (first.host.window("store").props["rows"] as unknown[]).length >= 1);
+  // The index was read (Installed is empty: the built-in is hidden).
+  await until(first.host, () => first.store.items.some((item) => item.id === "a.good"), "index");
   await choose(first.host, "Good");
   await until(first.host, () => net.count("https://plugins.test/i.png") === 1);
   await until(first.host, () => readdirSync(join(data, "icons")).length === 1);
