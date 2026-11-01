@@ -171,14 +171,23 @@ test("B22 a kind's ticks in the same pixel column are drawn once; the hover rows
  * viewbox into the element less the stroke width and offsets it by half the
  * stroke; the software renderer (`draw_path`, `convert_path_data_to_zeno`)
  * maps a point to (element's window position + offset + point) × s,
- * unrounded. `origin` is the seek bar's `absolute-position`.
+ * unrounded. `origin` is the seek bar's `absolute-position`, `inset` where
+ * the line's box starts in it (0.2.10: `lead` 10px, `line-top` 6px; before:
+ * none, the seek bar was the line's box).
  */
-function drawnTick(x: number, s: number, origin: { x: number; y: number }, columns: number, tickSpan: number) {
+function drawnTick(
+  x: number,
+  s: number,
+  origin: { x: number; y: number },
+  columns: number,
+  tickSpan: number,
+  inset = { x: 10, y: 6 },
+) {
   const phx = 1 / s;
   const rows = Math.round(6 / phx);
   const element = {
-    x: Math.round((origin.x + 4) / phx) * phx - origin.x,
-    y: Math.round((origin.y + 2) / phx) * phx - 0.5 * phx - origin.y,
+    x: Math.round((origin.x + inset.x + 4) / phx) * phx - origin.x,
+    y: Math.round((origin.y + inset.y + 2) / phx) * phx - 0.5 * phx - origin.y,
     width: (columns + 1) * phx,
     height: (rows + 1) * phx,
   };
@@ -196,11 +205,13 @@ test("B22 at 100/125/150/175/200% each tick fills one whole physical pixel colum
   const mark = (time: number) => ({ time, kind: "marker" as const, title: null, plugin: "x" });
   // A duration of 1024 s: every `at` is exact, so no column depends on a rounding of the last bit.
   const times = [...Array.from({ length: 103 }, (_, i) => i * 10 - 3).slice(1), 1024];
-  // The seek bar sits at 15px in the bar; the bar where the window puts it (fractional too).
-  const origins = [{ x: 15, y: 6 }, { x: 15, y: 433.6 }, { x: 15.4, y: 6.2 }, { x: 15.8, y: 917.75 }];
+  // The line's box sits at 15px, 6px in the bar; the bar where the window puts it (fractional too).
+  const lines = [{ x: 15, y: 6 }, { x: 15, y: 433.6 }, { x: 15.4, y: 6.2 }, { x: 15.8, y: 917.75 }];
   for (const s of [1, 1.25, 1.5, 1.75, 2])
-    for (const origin of origins)
+    for (const line of lines)
       for (const span of [100, 467, 512.75, 1203.5]) {
+        // 0.2.10: the seek bar is the pointer band, 10px left of and 6px above the line's box.
+        const origin = { x: line.x - 10, y: line.y - 6 };
         const where = `scale ${s}, origin ${origin.x},${origin.y}, span ${span}px`;
         // What the bar reports: the span in whole physical px.
         const columns = Math.floor(span * s);
@@ -220,8 +231,12 @@ test("B22 at 100/125/150/175/200% each tick fills one whole physical pixel colum
           assert.ok(near(tick.top, Math.round(tick.top)), `${where}: top ${tick.top}`);
           assert.ok(near(tick.bottom - tick.top, tick.rows), `${where}: rows`);
           // Within a physical px of where the logical layout puts the line (4px…4px + span).
-          assert.ok(Math.abs(tick.left - (origin.x + 4) * s) <= 0.5 + 1e-9, `${where}: left at the inset`);
-          assert.ok(tick.centre <= (origin.x + 4 + span) * s + 1, `${where}: inside the line`);
+          assert.ok(Math.abs(tick.left - (line.x + 4) * s) <= 0.5 + 1e-9, `${where}: left at the inset`);
+          assert.ok(tick.centre <= (line.x + 4 + span) * s + 1, `${where}: inside the line`);
+          // 0.2.10 draws every tick exactly where 0.2.9 did (its seek bar was the line's box).
+          const before = drawnTick(x, s, line, columns, shown.tickSpan, { x: 0, y: 0 });
+          for (const key of ["left", "centre", "top", "bottom"] as const)
+            assert.ok(near(tick[key], before[key]), `${where}: ${key} ${tick[key]} was ${before[key]}`);
         }
       }
 });
@@ -317,8 +332,8 @@ test("B22 the bar draws marks as one Path per kind in Theme colours and finds th
   // The geometry `drawnTick` models, in physical px: snapped origin, scale 1phx a unit, 1phx stroke.
   const geometry = [
     "private property <int> rows: Math.round(6px / 1phx);",
-    "x: Math.round((self.origin-x + 4px) / 1phx) * 1phx - self.origin-x;",
-    "y: Math.round((self.origin-y + 2px) / 1phx) * 1phx - 0.5phx - self.origin-y;",
+    "x: Math.round((self.origin-x + self.inset-x + 4px) / 1phx) * 1phx - self.origin-x;",
+    "y: Math.round((self.origin-y + self.inset-y + 2px) / 1phx) * 1phx - 0.5phx - self.origin-y;",
     "width: (self.columns + 1) * 1phx;",
     "height: (self.rows + 1) * 1phx;",
   ];
@@ -333,7 +348,9 @@ test("B22 the bar draws marks as one Path per kind in Theme colours and finds th
   for (const kind of ["chapter", "marker", "bookmark"])
     assert.match(
       slint,
-      new RegExp(`origin-x: root\\.absolute-position\\.x;\\s+origin-y: root\\.absolute-position\\.y;\\s+columns: root\\.columns;\\s+commands: PlaybackBridge\\.${kind}-ticks;`),
+      new RegExp(
+        `origin-x: root\\.absolute-position\\.x;\\s+origin-y: root\\.absolute-position\\.y;\\s+inset-x: root\\.lead;\\s+inset-y: root\\.line-top;\\s+columns: root\\.columns;\\s+commands: PlaybackBridge\\.${kind}-ticks;`,
+      ),
     );
   assert.match(slint, /left <= 3px/);
   assert.match(slint, /PlaybackBridge\.marks\[seek-bar\.near-mark\]\.tip/);

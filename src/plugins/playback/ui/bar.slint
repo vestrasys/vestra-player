@@ -159,8 +159,12 @@ component BarButton inherits Rectangle {
     }
 }
 
-// Seek line: 10px click area, 2px round-ended line (unplayed Theme.line, played
+// Seek line: 2px round-ended line (unplayed Theme.line, played
 // Theme.accent-fill), 8px thumb: a white core in a 2px accent ring.
+// 0.2.10: the pointer area (hover, preview, press and drag) is the whole 22px
+// seek row, as PotPlayer's, from 10px left of the line to 8px before the mute
+// button; the drawing is where it was (the line 10px below the row's top).
+// Outside the line a press or hover takes its nearer end.
 // B22: 1×6 marks across the line (chapter Theme.text-dim, bookmark Theme.accent,
 // marker Theme.playing) and the A-B loop: a 2px Theme.playing band under the
 // line with 1×8 ends. Marks take no input: a click seeks as before.
@@ -176,15 +180,19 @@ component BarButton inherits Rectangle {
 // of the commands (a whole number) centres the stroke on that edge + n + 0.5
 // physical px: one column. Vertically the element starts half a physical px
 // above a pixel row, so the butt-capped tick (viewbox 0…1 over `rows`
-// physical px) runs from that row over whole rows: about 2px…8px of the bar.
+// physical px) runs from that row over whole rows: 2px…8px below the line's
+// box (`inset-y` above it), as before 0.2.10.
 component MarkTicks inherits Path {
     // The seek bar's position in the window, and the line's span in physical px.
     in property <length> origin-x;
     in property <length> origin-y;
+    // Where the line's box starts in the seek bar (0.2.10: the pointer band around it).
+    in property <length> inset-x;
+    in property <length> inset-y;
     in property <int> columns;
     private property <int> rows: Math.round(6px / 1phx);
-    x: Math.round((self.origin-x + 4px) / 1phx) * 1phx - self.origin-x;
-    y: Math.round((self.origin-y + 2px) / 1phx) * 1phx - 0.5phx - self.origin-y;
+    x: Math.round((self.origin-x + self.inset-x + 4px) / 1phx) * 1phx - self.origin-x;
+    y: Math.round((self.origin-y + self.inset-y + 2px) / 1phx) * 1phx - 0.5phx - self.origin-y;
     width: (self.columns + 1) * 1phx;
     height: (self.rows + 1) * 1phx;
     // The span the commands were built for; while the plugin catches up with a
@@ -196,8 +204,14 @@ component MarkTicks inherits Path {
 }
 
 component SeekBar inherits Rectangle {
+    // 0.2.10: the pointer band around the line's 10px box (which the drawing
+    // keeps): `lead` left of it, `trail` right of it, `line-top` above it; the band
+    // is the seek row's 22px.
+    in property <length> lead: 10px;
+    in property <length> trail: 12px;
+    in property <length> line-top: 6px;
     private property <float> ratio: clamp(PlaybackBridge.progress, 0, 1);
-    private property <length> span: max(1px, root.width - 8px);
+    private property <length> span: max(1px, root.width - root.lead - root.trail - 8px);
     // I06: the pointer is over the click area (or dragging), and the time under it.
     out property <bool> pointing: touch.has-hover || touch.pressed;
     out property <length> pointer-x: touch.mouse-x;
@@ -215,9 +229,10 @@ component SeekBar inherits Rectangle {
     // Again when marks come for another span (a report the plugin never got).
     private property <bool> stale-ticks: PlaybackBridge.marks.length > 0 && PlaybackBridge.tick-span != root.columns;
     changed stale-ticks => { if self.stale-ticks { PlaybackBridge.span-changed(root.columns); } }
-    height: 10px;
+    height: 22px;
+    // The line's fraction under `x` (the band's own x), clamped to the ends.
     function fraction(x: length) -> float {
-        return clamp((x - 4px) / root.span, 0, 1);
+        return clamp((x - root.lead - 4px) / root.span, 0, 1);
     }
     // `MM:SS`, or `H:MM:SS` from one hour: the same text as the plugin's time labels.
     pure function two-digits(value: int) -> string {
@@ -273,23 +288,26 @@ component SeekBar inherits Rectangle {
         }
         return right <= 3px ? i : -1;
     }
+    // The line's box: `lead`…width - `trail`, `line-top`…`line-top` + 10px.
     Rectangle {
-        y: 4px;
+        x: root.lead;
+        y: root.line-top + 4px;
+        width: root.width - root.lead - root.trail;
         height: 2px;
         border-radius: 1px;
         background: Theme.line;
     }
     Rectangle {
-        x: 0;
-        y: 4px;
+        x: root.lead;
+        y: root.line-top + 4px;
         width: 4px + root.ratio * root.span;
         height: 2px;
         border-radius: 1px;
         background: PlaybackBridge.can-seek ? Theme.accent-fill : Theme.icon-disabled;
     }
     if PlaybackBridge.has-loop: Rectangle {
-        x: 4px + PlaybackBridge.loop-a * root.span;
-        y: 6px;
+        x: root.lead + 4px + PlaybackBridge.loop-a * root.span;
+        y: root.line-top + 6px;
         width: max(1px, (PlaybackBridge.loop-b - PlaybackBridge.loop-a) * root.span);
         height: 2px;
         background: Theme.playing;
@@ -298,6 +316,8 @@ component SeekBar inherits Rectangle {
     MarkTicks {
         origin-x: root.absolute-position.x;
         origin-y: root.absolute-position.y;
+        inset-x: root.lead;
+        inset-y: root.line-top;
         columns: root.columns;
         commands: PlaybackBridge.chapter-ticks;
         stroke: Theme.text-dim;
@@ -305,6 +325,8 @@ component SeekBar inherits Rectangle {
     MarkTicks {
         origin-x: root.absolute-position.x;
         origin-y: root.absolute-position.y;
+        inset-x: root.lead;
+        inset-y: root.line-top;
         columns: root.columns;
         commands: PlaybackBridge.marker-ticks;
         stroke: Theme.playing;
@@ -312,27 +334,29 @@ component SeekBar inherits Rectangle {
     MarkTicks {
         origin-x: root.absolute-position.x;
         origin-y: root.absolute-position.y;
+        inset-x: root.lead;
+        inset-y: root.line-top;
         columns: root.columns;
         commands: PlaybackBridge.bookmark-ticks;
         stroke: Theme.accent;
     }
     if PlaybackBridge.has-loop: Rectangle {
-        x: Math.floor((4px + PlaybackBridge.loop-a * root.span) / 1px) * 1px;
-        y: 1px;
+        x: root.lead + Math.floor((4px + PlaybackBridge.loop-a * root.span) / 1px) * 1px;
+        y: root.line-top + 1px;
         width: 1px;
         height: 8px;
         background: Theme.playing;
     }
     if PlaybackBridge.has-loop: Rectangle {
-        x: Math.floor((4px + PlaybackBridge.loop-b * root.span) / 1px) * 1px;
-        y: 1px;
+        x: root.lead + Math.floor((4px + PlaybackBridge.loop-b * root.span) / 1px) * 1px;
+        y: root.line-top + 1px;
         width: 1px;
         height: 8px;
         background: Theme.playing;
     }
     if PlaybackBridge.can-seek: Rectangle {
-        x: root.ratio * root.span;
-        y: 1px;
+        x: root.lead + root.ratio * root.span;
+        y: root.line-top + 1px;
         width: 8px;
         height: 8px;
         border-radius: 4px;
@@ -340,7 +364,12 @@ component SeekBar inherits Rectangle {
         border-width: 2px;
         border-color: touch.pressed ? Theme.accent-press : Theme.accent;
     }
+    // The whole band (the seek bar's own size, nothing outside it).
     touch := TouchArea {
+        x: 0;
+        y: 0;
+        width: 100%;
+        height: 100%;
         enabled: PlaybackBridge.can-seek;
         pointer-event(event) => {
             if event.kind == PointerEventKind.cancel {
@@ -395,10 +424,14 @@ export component PlaybackBar inherits Rectangle {
         y: 0;
         height: 22px;
         Rectangle { y: 0; height: 1px; background: Theme.line; }
+        // 0.2.10: the band is the whole row, x 5px to 8px before the mute
+        // button (at width - 97px); the line's box stays at 15px…width - 117px,
+        // y 6px…16px.
         seek-bar := SeekBar {
-            x: 15px;
-            y: 6px;
-            width: max(0px, root.width - 132px);
+            x: 5px;
+            y: 0;
+            height: 22px;
+            width: max(0px, root.width - 110px);
         }
         MuteButton {
             x: root.width - 97px;
@@ -558,7 +591,8 @@ export component PlaybackBar inherits Rectangle {
         property <bool> picture: PlaybackBridge.hover-thumbnail;
         // 5px at the sides; above: 5px over a picture, 2px over the text alone; 2px between and below.
         x: clamp(seek-bar.x + seek-bar.pointer-x - self.width / 2, 2px, max(2px, root.width - self.width - 2px));
-        y: seek-bar.y + 4px - 4px - self.height;
+        // 4px above the line (its top at the band's `line-top` + 4px), as before 0.2.10.
+        y: seek-bar.y + seek-bar.line-top + 4px - 4px - self.height;
         width: (self.picture ? max(160px, label.preferred-width) : label.preferred-width) + 10px;
         height: (self.picture ? 5px + 90px + 2px : 2px) + label.preferred-height + 2px;
         background: Theme.bg-panel;
