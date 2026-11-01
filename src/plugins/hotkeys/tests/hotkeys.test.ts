@@ -126,7 +126,11 @@ test("labels, same key, safe exits", () => {
   assert.ok(!sameKey("Q", "Ctrl+Q"));
   assert.ok(exempt({ plugin: "host", command: "quit" }));
   assert.ok(exempt({ plugin: "host", command: "exit-fullscreen" }));
-  assert.ok(!exempt({ plugin: "host", command: "fullscreen" }));
+  // Esc is Toggle Fullscreen's default (player 0.6.0): it stays, so fullscreen can be left.
+  assert.ok(exempt({ plugin: "host", command: "fullscreen" }));
+  assert.ok(!exempt({ plugin: "host", command: "enter-fullscreen" }));
+  assert.ok(!exempt({ plugin: "host", command: "play-pause" }));
+  assert.ok(!exempt({ plugin: "vestra.other", command: "fullscreen" }));
 });
 
 // ------------------------------------------------------------------ menu
@@ -737,6 +741,37 @@ test("J01, J02: the drop-down and radio words arrive translated", async () => {
   await host.command("mouse").run();
   await host.settle(WAIT);
   assert.equal((page(host, "mouse").props.modifiers as string[])[0], "无");
+});
+
+test("J03: Toggle Fullscreen ignored by 0.1.9 gets Escape back (now exempt)", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  writeFileSync(
+    join(data, "ignore-defaults.json"),
+    JSON.stringify({ version: 1, enabled: true, written: [{ plugin: "host", command: "fullscreen" }, { plugin: "host", command: "stop" }] }),
+  );
+  const host = new TestHost();
+  // The player's Toggle Fullscreen (not among the test host's core actions): Esc since 0.6.0.
+  const runs: string[] = [];
+  host.coreCommands.set("host/fullscreen", {
+    declaration: { title: "Toggle Fullscreen", path: ["Toggle Fullscreen"], order: 900, group: "window", bindings: ["Escape"] },
+    display: { title: "Toggle Fullscreen", path: ["Toggle Fullscreen"] },
+    state: { enabled: true, checked: false, busy: false, reason: null },
+    revision: 1,
+    async run() {
+      runs.push("fullscreen");
+    },
+  } as unknown as Parameters<typeof host.coreCommands.set>[1]);
+  host.bindings.overlay.set("host/fullscreen", []); // 0.1.9's empty override
+  host.bindings.overlay.set("host/stop", []);
+  await start(host, data);
+  await host.settle(WAIT);
+  assert.equal(host.bindings.overlay.has("host/fullscreen"), false, "reset to its defaults");
+  assert.deepEqual(overlay(host)["host/stop"], [], "the rest stays ignored");
+  const written = JSON.parse(readFileSync(join(data, "ignore-defaults.json"), "utf8")).written;
+  assert.ok(!written.some((ref: { command: string }) => ref.command === "fullscreen"));
+  assert.ok(written.some((ref: { command: string }) => ref.command === "stop"));
+  await host.press("Escape");
+  assert.deepEqual(runs, ["fullscreen"]);
 });
 
 test("J03: checked at start; a half-finished switch-off is completed", async () => {

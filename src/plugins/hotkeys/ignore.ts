@@ -10,7 +10,8 @@ import { type IgnoreRecord, jsonStore, readRecord } from "./store.ts";
  * ignore-defaults.json records which overrides this plugin wrote. Turning
  * it off resets only those (a command the user changed meanwhile left the
  * record). Commands that appear later (a plugin loaded or enabled) are
- * caught on `bindings.onChange`. Quit and Leave Fullscreen are never ignored.
+ * caught on `bindings.onChange`. Quit, Toggle Fullscreen (Esc) and Leave
+ * Fullscreen are never ignored (`exempt`), so fullscreen can always be left.
  */
 export class IgnoreDefaults {
   readonly #plugin: Plugin;
@@ -46,7 +47,7 @@ export class IgnoreDefaults {
     const answer = await this.#plugin.dialogs.confirm({
       message: "Ignore default shortcuts?",
       detail:
-        "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Leave Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts.",
+        "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts.",
       confirm: "Ignore",
     });
     if (answer.confirmed) await this.set(true);
@@ -101,7 +102,21 @@ export class IgnoreDefaults {
     }
     let changed = false;
     for (const c of commands) {
-      if (exempt(c)) continue;
+      if (exempt(c)) {
+        // Exempt since this plugin ignored it (Toggle Fullscreen before 0.1.10): give its
+        // defaults back if our empty override is still there; either way it is not ours now.
+        if (!this.ignores(c)) continue;
+        if (c.overridden && c.current.length === 0) {
+          try {
+            await bindings.reset({ plugin: c.plugin, command: c.command });
+            changed = true;
+          } catch {
+            continue; // gone meanwhile; the next change notice brings the next run
+          }
+        }
+        this.forget(c);
+        continue;
+      }
       if (!c.overridden && c.defaults.length) {
         try {
           await bindings.set({ plugin: c.plugin, command: c.command }, []);
