@@ -237,8 +237,8 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
     ["Crop/Stretch ▸ None", 405, "video-display", ""],
     ...ratios.map((r) => [`Crop/Stretch ▸ Stretch to ${r}`, 405, "video-display", ""]),
     ...ratios.map((r) => [`Crop/Stretch ▸ Crop to ${r}`, 405, "video-display", ""]),
-    ...["Reset Position", "Move Left", "Move Right", "Move Up", "Move Down"].map((t) => [`Crop/Stretch ▸ ${t}`, 405, "video-reframe-position", ""]),
-    ["Framing ▸ Reset Framing", 406, "video-display", "Numpad5,Alt+Backspace"],
+    ...["Move Left", "Move Right", "Move Up", "Move Down"].map((t) => [`Crop/Stretch ▸ ${t}`, 405, "video-reframe-position", ""]),
+    ["@reset", "Crop Position", 442, "reset-video", ""],
     ["Framing ▸ Zoom In", 406, "video-display", "Numpad9,Alt+Plus"],
     ["Framing ▸ Zoom Out", 406, "video-display", "Numpad1,Alt+-"],
     ["Framing ▸ Pan →", 406, "video-frame-pan", "Ctrl+Numpad6,Alt+ArrowRight"],
@@ -246,6 +246,7 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
     ["Framing ▸ Pan ↑", 406, "video-frame-pan", "Ctrl+Numpad8,Alt+ArrowUp"],
     ["Framing ▸ Pan ↓", 406, "video-frame-pan", "Ctrl+Numpad2,Alt+ArrowDown"],
     ["Framing ▸ Center Frame", 406, "video-frame-pan", "Ctrl+Numpad5"],
+    ["@reset", "Framing", 441, "reset-video", "Numpad5,Alt+Backspace"],
     ["Image Processing ▸ Flip Vertically", 408, "video-effects", "Ctrl+P"],
     ["Image Processing ▸ Flip Horizontally", 408, "video-effects", "Ctrl+Z"],
     ["Image Processing ▸ Gaussian Blur", 408, "video-sharpness", "Ctrl+B"],
@@ -264,7 +265,7 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
     ["Rotation ▸ 180°", 409, "video-effects", ""],
     ["Rotation ▸ 270°", 409, "video-effects", ""],
     ["Picture Adjustments…", 440, "video-color", ""],
-    ["Reset", 441, "video-color", "Q"],
+    ["@reset", "Picture", 440, "reset-video", "Q"],
     ["Brightness -1%", 442, "video-color", "W"],
     ["Brightness +1%", 443, "video-color", "E"],
     ["Contrast -1%", 444, "video-color", "R"],
@@ -277,7 +278,8 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
   ];
   assert.deepEqual(
     declared,
-    expected.map((row) => ["@video", ...row]),
+    // The resets are in the Reset menu (user ruling 2026-11-01), with the same ids and keys.
+    expected.map((row) => (row[0] === "@reset" ? row : ["@video", ...row])),
   );
   assert.deepEqual(host.conflicts, []);
   await host.settle();
@@ -337,8 +339,8 @@ test("Simplified Chinese: the 视频 menu shows the titles of before", async () 
       "裁剪/拉伸 ▸ 不使用",
       ...ratios.map((r) => `裁剪/拉伸 ▸ 按 ${r} 拉伸`),
       ...ratios.map((r) => `裁剪/拉伸 ▸ 按 ${r} 裁剪`),
-      ...["位置复位", "左移", "右移", "上移", "下移"].map((t) => `裁剪/拉伸 ▸ ${t}`),
-      "帧位 ▸ 帧位复位",
+      ...["左移", "右移", "上移", "下移"].map((t) => `裁剪/拉伸 ▸ ${t}`),
+      "复位 ▸ 裁剪位置",
       "帧位 ▸ 全帧 +",
       "帧位 ▸ 全帧 -",
       "帧位 ▸ 偏移 →",
@@ -346,13 +348,14 @@ test("Simplified Chinese: the 视频 menu shows the titles of before", async () 
       "帧位 ▸ 偏移 ↑",
       "帧位 ▸ 偏移 ↓",
       "帧位 ▸ 帧位居中",
+      "复位 ▸ 帧位",
       ...["上下翻转", "左右翻转", "高斯模糊", "锐化", "边缘锐化", "去块", "消色带", "3D 降噪", "渐进降噪", "瞬态降噪", "倍帧", "运动补偿"].map((t) => `图像处理 ▸ ${t}`),
       ...["按序切换", "不旋转", "90°", "180°", "270°"].map((t) => `图像旋转 ▸ ${t}`),
       "画面调节…",
-      "复位",
+      "复位 ▸ 画面",
       ...["亮度", "对比度", "饱和度", "色调"].flatMap((t) => [`${t} -1%`, `${t} +1%`]),
       "GPU 渲染（实验性）",
-    ].map((path) => `视频 ▸ ${path}`),
+    ].map((path) => (path.startsWith("复位 ▸ ") ? path : `视频 ▸ ${path}`)),
   );
   // The player translates the reason with the plugin's catalog.
   assert.equal(host.translate(host.command("video.aspect.custom").state.reason!), "先用「自定义比例…」输入");

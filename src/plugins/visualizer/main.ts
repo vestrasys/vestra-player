@@ -250,9 +250,9 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "reset-logo",
-    path: [...LOOK, "Restore Default Logo"],
-    order: 847,
-    group: "settings-logo",
+    path: ["@reset", "Idle Logo"],
+    order: 850,
+    group: "reset-appearance",
     enabled: () => logo.custom,
     reason: () => (logo.custom ? null : "Using the default logo"),
     run: () => logo.reset(),

@@ -42,6 +42,11 @@ export const neutral = (): Settings => ({
   clarity: neutralClarity(),
   channels: "stereo",
 });
+/** Reset ▸ Audio Processing: the equalizer, Normalize and Crystalizer back to neutral; sync and channels kept. */
+export const neutralProcessing = (value: Settings): Settings => {
+  const { equalizer, gains, normalize, clarity } = neutral();
+  return { ...value, equalizer, gains, normalize, clarity };
+};
 
 /** Audio Sync ▸ keep mode: reset per source, keep for this run, or keep across restarts. */
 export const syncKeeps = [

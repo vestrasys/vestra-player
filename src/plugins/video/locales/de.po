@@ -528,7 +528,7 @@ msgstr "Pixel-Shader"
 msgid "Use Shaders"
 msgstr "Shader verwenden"
 
-#: main.ts:865 main.ts:870 main.ts:879 main.ts:888 main.ts:891 main.ts:1117 picture.slint:369 ui/shaders.slint:131
+#: main.ts:865 main.ts:870 main.ts:879 main.ts:888 main.ts:891 main.ts:1126 picture.slint:369 ui/shaders.slint:131
 #, x-machine
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr "Erfordert GPU-Rendering (derzeit Software-Rendering)"
@@ -603,7 +603,7 @@ msgstr "HDR-Einstellungen…"
 msgid "Deinterlace"
 msgstr "Deinterlacing"
 
-#: main.ts:896 main.ts:1123
+#: main.ts:896 main.ts:1132
 #, x-machine
 msgid "Cycle"
 msgstr "Durchschalten"
@@ -678,7 +678,7 @@ msgstr "Zuerst unter „Benutzerdefiniertes Seitenverhältnis…“ eingeben"
 msgid "Custom Aspect Ratio…"
 msgstr "Benutzerdefiniertes Seitenverhältnis…"
 
-#: main.ts:1001 main.ts:1012 main.ts:1030
+#: main.ts:1001 main.ts:1012 main.ts:1029
 #, x-machine
 msgid "Crop/Stretch"
 msgstr "Zuschneiden/Strecken"
@@ -738,40 +738,35 @@ msgstr "Auf 1.85:1 zuschneiden"
 msgid "Crop to 2.35:1"
 msgstr "Auf 2.35:1 zuschneiden"
 
-#: main.ts:1030
-#, x-machine
-msgid "Reset Position"
-msgstr "Position zurücksetzen"
-
-#: main.ts:1030
+#: main.ts:1029
 #, x-machine
 msgid "Move Left"
 msgstr "Nach links"
 
-#: main.ts:1030
+#: main.ts:1029
 #, x-machine
 msgid "Move Right"
 msgstr "Nach rechts"
 
-#: main.ts:1030 ui/shaders.slint:91 ui/shaders.slint:114
+#: main.ts:1029 ui/shaders.slint:91 ui/shaders.slint:114
 #, x-machine
 msgid "Move Up"
 msgstr "Nach oben"
 
-#: main.ts:1030 ui/shaders.slint:91 ui/shaders.slint:115
+#: main.ts:1029 ui/shaders.slint:91 ui/shaders.slint:115
 #, x-machine
 msgid "Move Down"
 msgstr "Nach unten"
 
-#: main.ts:1048
+#: main.ts:1036
+#, x-machine
+msgid "Crop Position"
+msgstr "Zuschnittposition"
+
+#: main.ts:1048 main.ts:1051
 #, x-machine
 msgid "Framing"
 msgstr "Bildausschnitt"
-
-#: main.ts:1048
-#, x-machine
-msgid "Reset Framing"
-msgstr "Bildausschnitt zurücksetzen"
 
 #: main.ts:1048
 #, x-machine
@@ -808,243 +803,243 @@ msgstr "Verschieben ↓"
 msgid "Center Frame"
 msgstr "Bild zentrieren"
 
-#: main.ts:1052 main.ts:1061 main.ts:1070 main.ts:1094 main.ts:1105 main.ts:1113
+#: main.ts:1061 main.ts:1070 main.ts:1079 main.ts:1103 main.ts:1114 main.ts:1122
 #, x-machine
 msgid "Image Processing"
 msgstr "Bildverarbeitung"
 
-#: main.ts:1052
+#: main.ts:1061
 #, x-machine
 msgid "Flip Vertically"
 msgstr "Vertikal spiegeln"
 
-#: main.ts:1061
+#: main.ts:1070
 #, x-machine
 msgid "Flip Horizontally"
 msgstr "Horizontal spiegeln"
 
-#: main.ts:1070
+#: main.ts:1079
 #, x-machine
 msgid "Gaussian Blur"
 msgstr "Gaußscher Weichzeichner"
 
-#: main.ts:1078
+#: main.ts:1087
 #, x-machine
 msgid "Gaussian blur: on"
 msgstr "Gaußscher Weichzeichner: Ein"
 
-#: main.ts:1078
+#: main.ts:1087
 #, x-machine
 msgid "Gaussian blur: off"
 msgstr "Gaußscher Weichzeichner: Aus"
 
-#: main.ts:1094 picture.slint:424 picture.slint:490
+#: main.ts:1103 picture.slint:424 picture.slint:490
 #, x-machine
 msgid "Sharpen"
 msgstr "Schärfen"
 
-#: main.ts:1094
+#: main.ts:1103
 #, x-machine
 msgid "Edge Sharpen"
 msgstr "Kantenschärfung"
 
-#: main.ts:1094 picture.slint:424 picture.slint:545
+#: main.ts:1103 picture.slint:424 picture.slint:545
 #, x-machine
 msgid "Deblock"
 msgstr "Deblocking"
 
-#: main.ts:1094 picture.slint:424 picture.slint:556
+#: main.ts:1103 picture.slint:424 picture.slint:556
 #, x-machine
 msgid "Deband"
 msgstr "Debanding"
 
-#: main.ts:1094
+#: main.ts:1103
 #, x-machine
 msgid "3D Denoise"
 msgstr "3D-Rauschunterdrückung"
 
-#: main.ts:1094
+#: main.ts:1103
 #, x-machine
 msgid "Gradual Denoise"
 msgstr "Graduelle Rauschunterdrückung"
 
-#: main.ts:1094
+#: main.ts:1103
 #, x-machine
 msgid "Temporal Denoise"
 msgstr "Temporale Rauschunterdrückung"
 
-#: main.ts:1105
+#: main.ts:1114
 #, x-machine
 msgid "Frame Doubling"
 msgstr "Bildverdopplung"
 
-#: main.ts:1113
+#: main.ts:1122
 #, x-machine
 msgid "Motion Interpolation"
 msgstr "Bewegungsinterpolation"
 
-#: main.ts:1123 main.ts:1132
+#: main.ts:1132 main.ts:1141
 #, x-machine
 msgid "Rotation"
 msgstr "Drehung"
 
-#: main.ts:1132
+#: main.ts:1141
 #, x-machine
 msgid "No Rotation"
 msgstr "Keine Drehung"
 
-#: main.ts:1132
+#: main.ts:1141
 #, x-machine
 msgid "90°"
 msgstr "90°"
 
-#: main.ts:1132
+#: main.ts:1141
 #, x-machine
 msgid "180°"
 msgstr "180°"
 
-#: main.ts:1132
+#: main.ts:1141
 #, x-machine
 msgid "270°"
 msgstr "270°"
 
-#: main.ts:1140
+#: main.ts:1149
 #, x-machine
 msgid "Picture Adjustments…"
 msgstr "Bildeinstellungen…"
 
-#: main.ts:1141
+#: main.ts:1150 picture.slint:408
 #, x-machine
-msgid "Reset"
-msgstr "Zurücksetzen"
+msgid "Picture"
+msgstr "Bild"
 
-#: main.ts:1146
+#: main.ts:1155
 #, x-machine
 msgid "Brightness -1%"
 msgstr "Helligkeit −1 %"
 
-#: main.ts:1146
+#: main.ts:1155
 #, x-machine
 msgid "Contrast -1%"
 msgstr "Kontrast −1 %"
 
-#: main.ts:1146
+#: main.ts:1155
 #, x-machine
 msgid "Saturation -1%"
 msgstr "Sättigung −1 %"
 
-#: main.ts:1146
+#: main.ts:1155
 #, x-machine
 msgid "Hue -1%"
 msgstr "Farbton −1 %"
 
-#: main.ts:1155
+#: main.ts:1164
 #, x-machine
 msgid "Brightness +1%"
 msgstr "Helligkeit +1 %"
 
-#: main.ts:1155
+#: main.ts:1164
 #, x-machine
 msgid "Contrast +1%"
 msgstr "Kontrast +1 %"
 
-#: main.ts:1155
+#: main.ts:1164
 #, x-machine
 msgid "Saturation +1%"
 msgstr "Sättigung +1 %"
 
-#: main.ts:1155
+#: main.ts:1164
 #, x-machine
 msgid "Hue +1%"
 msgstr "Farbton +1 %"
 
 #. {} is the player's own message, already in the interface language.
-#: main.ts:1178
+#: main.ts:1187
 #, x-machine
 msgid "{}"
 msgstr "{}"
 
-#: main.ts:1190
+#: main.ts:1199
 #, x-machine
 msgid "GPU Rendering (Restart to Apply)"
 msgstr "GPU-Rendering (Neustart zum Anwenden)"
 
-#: main.ts:1190
+#: main.ts:1199
 #, x-machine
 msgid "GPU Rendering (Experimental)"
 msgstr "GPU-Rendering (experimentell)"
 
-#: main.ts:1198
+#: main.ts:1207
 #, x-machine
 msgid "Switching…"
 msgstr "Wird umgeschaltet…"
 
-#: main.ts:1207
+#: main.ts:1216
 #, x-machine
 msgid "Restart Player to Apply"
 msgstr "Player neu starten, um anzuwenden"
 
-#: main.ts:1240
+#: main.ts:1249
 #, x-machine
 msgid "GPU rendering unavailable: {}"
 msgstr "GPU-Rendering nicht verfügbar: {}"
 
-#: main.ts:1241
+#: main.ts:1250
 #, x-machine
 msgid "Could not save the rendering choice: {}"
 msgstr "Die Rendering-Auswahl konnte nicht gespeichert werden: {}"
 
-#: main.ts:1250
+#: main.ts:1259
 #, x-machine
 msgid "GPU rendering chosen; the next start still uses software rendering: {}"
 msgstr "GPU-Rendering gewählt; der nächste Start verwendet trotzdem Software-Rendering: {}"
 
-#: main.ts:1251
+#: main.ts:1260
 #, x-machine
 msgid "GPU rendering: on"
 msgstr "GPU-Rendering: Ein"
 
-#: main.ts:1251
+#: main.ts:1260
 #, x-machine
 msgid "GPU rendering: off"
 msgstr "GPU-Rendering: Aus"
 
-#: main.ts:1261
+#: main.ts:1270
 #, x-machine
 msgid "Restart Vestra Player now to apply?"
 msgstr "Vestra Player jetzt neu starten, um die Änderung anzuwenden?"
 
-#: main.ts:1262
+#: main.ts:1271
 #, x-machine
 msgid "Vestra Player will draw on the GPU from the restart on. A local file continues where it is. If you choose Later, GPU rendering starts the next time you open Vestra Player."
 msgstr "Nach dem Neustart zeichnet Vestra Player auf der GPU. Eine lokale Datei wird an derselben Stelle fortgesetzt. Mit „Später“ beginnt das GPU-Rendering beim nächsten Start von Vestra Player."
 
-#: main.ts:1262
+#: main.ts:1271
 #, x-machine
 msgid "Vestra Player will use software rendering from the restart on. A local file continues where it is. If you choose Later, software rendering starts the next time you open Vestra Player."
 msgstr "Nach dem Neustart verwendet Vestra Player Software-Rendering. Eine lokale Datei wird an derselben Stelle fortgesetzt. Mit „Später“ beginnt das Software-Rendering beim nächsten Start von Vestra Player."
 
-#: main.ts:1265
+#: main.ts:1274
 #, x-machine
 msgid "Restart Now"
 msgstr "Jetzt neu starten"
 
-#: main.ts:1266
+#: main.ts:1275
 #, x-machine
 msgid "Later"
 msgstr "Später"
 
-#: main.ts:1271
+#: main.ts:1280
 #, x-machine
 msgid "GPU rendering: on (applies at the next start)"
 msgstr "GPU-Rendering: Ein (gilt ab dem nächsten Start)"
 
-#: main.ts:1271
+#: main.ts:1280
 #, x-machine
 msgid "GPU rendering: off (applies at the next start)"
 msgstr "GPU-Rendering: Aus (gilt ab dem nächsten Start)"
 
-#: main.ts:1283
+#: main.ts:1292
 #, x-machine
 msgid "Could not restart the player: {}"
 msgstr "Der Player konnte nicht neu gestartet werden: {}"
@@ -1137,11 +1132,6 @@ msgstr "Farbe"
 #, x-machine
 msgid "Effects"
 msgstr "Effekte"
-
-#: picture.slint:408
-#, x-machine
-msgid "Picture"
-msgstr "Bild"
 
 #: picture.slint:408
 #, x-machine

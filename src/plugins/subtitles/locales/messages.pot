@@ -1,354 +1,354 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.subtitles 0.4.5\n"
+"Project-Id-Version: vestra.subtitles 0.4.7\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: main.ts:111
-msgid "Embedded {}"
-msgstr ""
-
-#: main.ts:111
+#: main.ts:118
 msgid "External subtitle"
 msgstr ""
 
-#: main.ts:115 main.ts:927
-msgid "{} · {}"
-msgstr ""
-
-#: main.ts:158
-msgid "Subtitle sync: 0 s"
-msgstr ""
-
-#: main.ts:159
-msgid "Subtitle sync: {} s earlier"
-msgstr ""
-
-#: main.ts:159
-msgid "Subtitle sync: {} s later"
-msgstr ""
-
-#: main.ts:284
-msgid "Add Secondary Subtitle"
-msgstr ""
-
-#: main.ts:284
-msgid "Open Subtitle"
-msgstr ""
-
-#: main.ts:698
-msgid "Subtitles Off"
-msgstr ""
-
-#: main.ts:701
-msgid "Secondary Off"
-msgstr ""
-
-#: main.ts:875
-msgid "Open Subtitle…"
-msgstr ""
-
-#: main.ts:875 main.ts:882 main.ts:886 main.ts:891 main.ts:897 main.ts:957 main.ts:965 main.ts:1239
-msgid "Subtitle operation in progress"
-msgstr ""
-
-#: main.ts:880
-msgid "Add Secondary Subtitle…"
-msgstr ""
-
-#: main.ts:882
-msgid "No media to play"
-msgstr ""
-
-#: main.ts:886
-msgid "Show Subtitles"
-msgstr ""
-
-#: main.ts:891 main.ts:964 main.ts:973
-msgid "Subtitle Track"
-msgstr ""
-
-#: main.ts:891 main.ts:897
-msgid "Off"
-msgstr ""
-
-#: main.ts:897 main.ts:903 main.ts:954
-msgid "Secondary Subtitle"
-msgstr ""
-
-#: main.ts:903
-msgid "Position"
-msgstr ""
-
-#: main.ts:903
-msgid "Top"
-msgstr ""
-
-#: main.ts:903
-msgid "Above Main Subtitle"
-msgstr ""
-
-#: main.ts:922
+#: main.ts:120 main.ts:938
 msgid "Track {}"
 msgstr ""
 
-#: main.ts:931
+#: main.ts:121
+msgid "Embedded {}"
+msgstr ""
+
+#: main.ts:128 main.ts:945
+msgid "{} · {}"
+msgstr ""
+
+#: main.ts:171
+msgid "Subtitle sync: 0 s"
+msgstr ""
+
+#: main.ts:172
+msgid "Subtitle sync: {} s earlier"
+msgstr ""
+
+#: main.ts:172
+msgid "Subtitle sync: {} s later"
+msgstr ""
+
+#: main.ts:297
+msgid "Add Secondary Subtitle"
+msgstr ""
+
+#: main.ts:297
+msgid "Open Subtitle"
+msgstr ""
+
+#: main.ts:711
+msgid "Subtitles Off"
+msgstr ""
+
+#: main.ts:714
+msgid "Secondary Off"
+msgstr ""
+
+#: main.ts:888
+msgid "Open Subtitle…"
+msgstr ""
+
+#: main.ts:888 main.ts:895 main.ts:899 main.ts:904 main.ts:910 main.ts:978 main.ts:986 main.ts:1260
+msgid "Subtitle operation in progress"
+msgstr ""
+
+#: main.ts:893
+msgid "Add Secondary Subtitle…"
+msgstr ""
+
+#: main.ts:895
+msgid "No media to play"
+msgstr ""
+
+#: main.ts:899
+msgid "Show Subtitles"
+msgstr ""
+
+#: main.ts:904 main.ts:985 main.ts:994
+msgid "Subtitle Track"
+msgstr ""
+
+#: main.ts:904 main.ts:910
+msgid "Off"
+msgstr ""
+
+#: main.ts:910 main.ts:916 main.ts:975
+msgid "Secondary Subtitle"
+msgstr ""
+
+#: main.ts:916
+msgid "Position"
+msgstr ""
+
+#: main.ts:916
+msgid "Top"
+msgstr ""
+
+#: main.ts:916
+msgid "Above Main Subtitle"
+msgstr ""
+
+#: main.ts:952
 msgid "{} ({})"
 msgstr ""
 
-#: main.ts:957
+#: main.ts:978
 msgid "Only text subtitles can be secondary"
 msgstr ""
 
-#: main.ts:957
+#: main.ts:978
 msgid "Already the primary subtitle"
 msgstr ""
 
-#: main.ts:973
+#: main.ts:994
 msgid "Cycle"
 msgstr ""
 
-#: main.ts:975
+#: main.ts:996
 msgid "No subtitle tracks"
 msgstr ""
 
-#: main.ts:992 main.ts:996 main.ts:1000 main.ts:1004 main.ts:1008 main.ts:1016 main.ts:1024 main.ts:1032
+#: main.ts:1013 main.ts:1017 main.ts:1021 main.ts:1025 main.ts:1037 main.ts:1045 main.ts:1053
 msgid "Subtitle Style"
 msgstr ""
 
-#: main.ts:992
+#: main.ts:1013
 msgid "Size +"
 msgstr ""
 
-#: main.ts:993
+#: main.ts:1014
 msgid "Subtitle size: larger ({})"
 msgstr ""
 
-#: main.ts:996
+#: main.ts:1017
 msgid "Size −"
 msgstr ""
 
-#: main.ts:997
+#: main.ts:1018
 msgid "Subtitle size: smaller ({})"
 msgstr ""
 
-#: main.ts:1000
+#: main.ts:1021
 msgid "Move Up"
 msgstr ""
 
-#: main.ts:1001
+#: main.ts:1022
 msgid "Subtitle position: up ({}%)"
 msgstr ""
 
-#: main.ts:1004
+#: main.ts:1025
 msgid "Move Down"
 msgstr ""
 
-#: main.ts:1005
+#: main.ts:1026
 msgid "Subtitle position: down ({}%)"
 msgstr ""
 
-#: main.ts:1008
-msgid "Reset Position"
-msgstr ""
-
-#: main.ts:1011
-msgid "Subtitle position: default ({}%)"
-msgstr ""
-
-#: main.ts:1016 ui/settings.slint:119
-msgid "Bold"
-msgstr ""
-
-#: main.ts:1020
-msgid "Bold subtitles"
-msgstr ""
-
-#: main.ts:1020
-msgid "Bold subtitles off"
-msgstr ""
-
-#: main.ts:1024
-msgid "Shadow"
-msgstr ""
-
-#: main.ts:1028
-msgid "Subtitle shadow: on ({})"
-msgstr ""
-
-#: main.ts:1028
-msgid "Subtitle shadow: off"
+#: main.ts:1029
+msgid "Subtitle Position"
 msgstr ""
 
 #: main.ts:1032
+msgid "Subtitle position: default ({}%)"
+msgstr ""
+
+#: main.ts:1037 ui/settings.slint:119
+msgid "Bold"
+msgstr ""
+
+#: main.ts:1041
+msgid "Bold subtitles"
+msgstr ""
+
+#: main.ts:1041
+msgid "Bold subtitles off"
+msgstr ""
+
+#: main.ts:1045
+msgid "Shadow"
+msgstr ""
+
+#: main.ts:1049
+msgid "Subtitle shadow: on ({})"
+msgstr ""
+
+#: main.ts:1049
+msgid "Subtitle shadow: off"
+msgstr ""
+
+#: main.ts:1053
 msgid "Opaque Box"
 msgstr ""
 
-#: main.ts:1036
+#: main.ts:1057
 msgid "Opaque subtitle box: on"
 msgstr ""
 
-#: main.ts:1036
+#: main.ts:1057
 msgid "Opaque subtitle box: off"
 msgstr ""
 
-#: main.ts:1046
+#: main.ts:1067
 msgid "ASS/SSA animated subtitles: on"
 msgstr ""
 
-#: main.ts:1046
+#: main.ts:1067
 msgid "ASS/SSA animated subtitles: off"
 msgstr ""
 
-#: main.ts:1052
+#: main.ts:1073
 msgid "Original ASS/SSA Styles"
 msgstr ""
 
-#: main.ts:1086
+#: main.ts:1107
 msgid "Secondary subtitle position: top"
 msgstr ""
 
-#: main.ts:1086
+#: main.ts:1107
 msgid "Secondary subtitle position: above the main subtitle"
 msgstr ""
 
-#: main.ts:1122 main.ts:1187 main.ts:1191 main.ts:1195
+#: main.ts:1143 main.ts:1208 main.ts:1212 main.ts:1216
 msgid "Reading subtitles…"
 msgstr ""
 
-#: main.ts:1160 main.ts:1187 main.ts:1191 main.ts:1195
+#: main.ts:1181 main.ts:1208 main.ts:1212 main.ts:1216
 msgid "The current media cannot seek"
 msgstr ""
 
-#: main.ts:1160 main.ts:1171 main.ts:1187 main.ts:1191 main.ts:1195
+#: main.ts:1181 main.ts:1192 main.ts:1208 main.ts:1212 main.ts:1216
 msgid "No text subtitles available"
 msgstr ""
 
-#: main.ts:1167
+#: main.ts:1188
 msgid "ffmpeg is needed to read embedded subtitles"
 msgstr ""
 
-#: main.ts:1167
+#: main.ts:1188
 msgid "Reading embedded subtitles timed out"
 msgstr ""
 
-#: main.ts:1167
+#: main.ts:1188
 msgid "Cannot read embedded subtitles"
 msgstr ""
 
-#: main.ts:1177
+#: main.ts:1198
 msgid "No previous dialogue"
 msgstr ""
 
-#: main.ts:1177
+#: main.ts:1198
 msgid "No next dialogue"
 msgstr ""
 
-#: main.ts:1177
+#: main.ts:1198
 msgid "No dialogue to jump to"
 msgstr ""
 
-#: main.ts:1178
+#: main.ts:1199
 msgid "Seek: previous dialogue {}"
 msgstr ""
 
-#: main.ts:1178
+#: main.ts:1199
 msgid "Seek: next dialogue {}"
 msgstr ""
 
-#: main.ts:1178
+#: main.ts:1199
 msgid "Seek: start of current dialogue {}"
 msgstr ""
 
-#: main.ts:1186 main.ts:1190 main.ts:1194
+#: main.ts:1207 main.ts:1211 main.ts:1215
 msgid "Seek"
 msgstr ""
 
-#: main.ts:1186
+#: main.ts:1207
 msgid "Previous Dialogue"
 msgstr ""
 
-#: main.ts:1190
+#: main.ts:1211
 msgid "Next Dialogue"
 msgstr ""
 
-#: main.ts:1194
+#: main.ts:1215
 msgid "Current Subtitle Start"
 msgstr ""
 
-#: main.ts:1214 main.ts:1218 main.ts:1225 main.ts:1229
+#: main.ts:1235 main.ts:1239 main.ts:1250
 msgid "Sync"
 msgstr ""
 
-#: main.ts:1214
+#: main.ts:1235
 msgid "Earlier 0.05 s"
 msgstr ""
 
-#: main.ts:1214
+#: main.ts:1235
 msgid "Earlier 0.1 s"
 msgstr ""
 
-#: main.ts:1214
+#: main.ts:1235
 msgid "Earlier 0.25 s"
 msgstr ""
 
-#: main.ts:1214
+#: main.ts:1235
 msgid "Earlier 0.5 s"
 msgstr ""
 
-#: main.ts:1214
+#: main.ts:1235
 msgid "Earlier 1 s"
 msgstr ""
 
-#: main.ts:1214
+#: main.ts:1235
 msgid "Earlier 5 s"
 msgstr ""
 
-#: main.ts:1218
+#: main.ts:1239
 msgid "Later 0.05 s"
 msgstr ""
 
-#: main.ts:1218
+#: main.ts:1239
 msgid "Later 0.1 s"
 msgstr ""
 
-#: main.ts:1218
+#: main.ts:1239
 msgid "Later 0.25 s"
 msgstr ""
 
-#: main.ts:1218
+#: main.ts:1239
 msgid "Later 0.5 s"
 msgstr ""
 
-#: main.ts:1218
+#: main.ts:1239
 msgid "Later 1 s"
 msgstr ""
 
-#: main.ts:1218
+#: main.ts:1239
 msgid "Later 5 s"
 msgstr ""
 
-#: main.ts:1225
-msgid "Reset"
+#: main.ts:1246
+msgid "Subtitle Sync"
 msgstr ""
 
-#: main.ts:1229
+#: main.ts:1250
 msgid "Adjust Sync…"
 msgstr ""
 
-#: main.ts:1239
+#: main.ts:1260
 msgid "Reload Subtitles"
 msgstr ""
 
-#: main.ts:1239
+#: main.ts:1260
 msgid "Refresh Subtitle Tracks"
 msgstr ""
 
-#: main.ts:1239
+#: main.ts:1260
 msgid "Subtitle Tuning…"
 msgstr ""
 
-#: main.ts:1239
+#: main.ts:1260
 msgid "Subtitle Settings…"
 msgstr ""
 

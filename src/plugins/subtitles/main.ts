@@ -1026,7 +1026,7 @@ export default async function activate(plugin: Plugin) {
     run: styleRun(() => moveBy(-1), (s) => osd.show("Subtitle position: down ({}%)", [s.marginPercent])),
   });
   plugin.commands.add({
-    id: "move-reset", path: [...STYLE, "Reset Position"], order: 334, group: "style-move", bindings: ["Alt+Home"], repeat: false,
+    id: "move-reset", path: ["@reset", "Subtitle Position"], order: 330, group: "reset-subtitles", bindings: ["Alt+Home"], repeat: false,
     run: styleRun(
       () => styleChange(() => ({ marginPercent: BASE.marginPercent })),
       (s) => osd.show("Subtitle position: default ({}%)", [s.marginPercent]),
@@ -1243,7 +1243,7 @@ export default async function activate(plugin: Plugin) {
   }
   syncSyncMenu();
   plugin.commands.add({
-    id: "sync-reset", path: ["@subtitles", "Sync", "Reset"], order: 341, group: "subtitle-sync",
+    id: "sync-reset", path: ["@reset", "Subtitle Sync"], order: 331, group: "reset-subtitles",
     bindings: ["/"], repeat: true, run: styleRun(syncReset, offsetText),
   });
   plugin.commands.add({

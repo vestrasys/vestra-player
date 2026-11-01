@@ -1,6 +1,6 @@
 {
   "id": "vestra.visualizer",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -21,5 +21,5 @@
     "appearance",
     "cover"
   ],
-  "minPlayerVersion": "0.4.3"
+  "minPlayerVersion": "0.6.3"
 }

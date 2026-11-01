@@ -15,6 +15,7 @@ import {
   matches,
   neutral,
   neutralClarity,
+  neutralProcessing,
   nodes,
   parse,
   presetOf,
@@ -605,17 +606,20 @@ export default async function activate(plugin: Plugin) {
   const syncSteps = [
     { id: "audio.sync.earlier", title: "50 ms Earlier", binding: ">", run: () => syncBy(-1) },
     { id: "audio.sync.later", title: "50 ms Later", binding: "<", run: () => syncBy(1) },
-    {
-      id: "audio.sync.reset",
-      title: "Reset",
-      binding: "?",
-      run: () => {
-        if (edit({ ...settings, delayMs: 0 })) quiet(plugin.osd.show("Audio sync: {} s", [syncSeconds(0)]));
-      },
-    },
   ] as const;
   for (const { id, title, binding, run } of syncSteps)
     plugin.commands.add({ id, path: [AUDIO, "Audio Sync", title], order: 515, group: "audio-eq", bindings: [binding], ...repeating, run });
+  plugin.commands.add({
+    id: "audio.sync.reset",
+    path: ["@reset", "Audio Sync"],
+    order: 530,
+    group: "reset-audio",
+    bindings: ["?"],
+    ...repeating,
+    run: () => {
+      if (edit({ ...settings, delayMs: 0 })) quiet(plugin.osd.show("Audio sync: {} s", [syncSeconds(0)]));
+    },
+  });
   syncKeeps.forEach(({ id, label }) =>
     plugin.commands.add({
       id: `audio.sync.keep.${id}`,
@@ -654,12 +658,13 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "audio.reset",
-    path: [AUDIO, "Reset"],
-    order: 517,
-    group: "audio-eq",
+    path: ["@reset", "Audio Processing"],
+    order: 531,
+    group: "reset-audio",
     ...editing,
+    // The processing only: Audio Sync has its own item, channels are a radio choice.
     run: () => {
-      if (edit(neutral())) quiet(plugin.osd.show("Audio processing reset"));
+      if (edit(neutralProcessing(settings))) quiet(plugin.osd.show("Audio processing reset"));
     },
   });
 

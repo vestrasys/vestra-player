@@ -1069,11 +1069,11 @@ The top-level "Subtitles ▸" uses 300–399 (`doc/product/menus.md`). Existing 
 | Subtitles ▸ Subtitle Style ▸ Bold (checkbox) | 324 | style-font | Alt+B | D09 |
 | Subtitles ▸ Subtitle Style ▸ Size + / Size − | 325 / 326 | style-font | Alt+PageUp / Alt+PageDown | D06 |
 | Subtitles ▸ Subtitle Style ▸ Move Up / Move Down | 330–331 | style-move | none (user ruling 2026-10-27: Alt+↑/↓ pan the video; bind them in Settings ▸ Keyboard Shortcuts) | D07 |
-| Subtitles ▸ Subtitle Style ▸ Reset Position | 334 | style-move | Alt+Home | D07 |
+| Reset ▸ Subtitle Position (moved to Reset ▸ 2026-11-01, see menus.md) | 330 | reset-subtitles | Alt+Home | D07 |
 | Subtitles ▸ Subtitle Style ▸ Shadow (checkbox) | 335 | style-box | — | D11 |
 | Subtitles ▸ Subtitle Style ▸ Opaque Box (checkbox) | 336 | style-box | — | D11 |
 | Subtitles ▸ Original ASS/SSA Styles (checkbox) | 337 | subtitle-render | — | D17 |
-| Subtitles ▸ Sync ▸ Earlier / Later / Reset | 339–341 | subtitle-sync | `.` `,` `/` (now `>` `<` `/`; `>` `<` go to audio sync, see the conflict check) | |
+| Subtitles ▸ Sync ▸ Earlier / Later; Reset ▸ Subtitle Sync (moved to Reset ▸ 2026-11-01, see menus.md) | 339–340; 331 | subtitle-sync; reset-subtitles | `.` `,` `/` (now `>` `<` `/`; `>` `<` go to audio sync, see the conflict check) | |
 | Subtitles ▸ Sync ▸ Adjust Sync… | 342 | subtitle-sync-input | — | D05 |
 | (360–369 used by `subtitle-online`) | | | | |
 | Subtitles ▸ Reload Subtitles | 370 | subtitle-tools | Ctrl+Alt+Y | A09 |
@@ -1264,7 +1264,7 @@ Conflict check (against the current bindings in menus.md):
 
 **Requirement**: Move Up and Move Down (no default key, user ruling 2026-10-27: Alt+↑/↓ pan the video) move the subtitles 1% per step (bottom margin `marginPercent`), range 2–15, default 5; Alt+Home resets the position.
 
-**Entry point**: `Subtitles ▸ Subtitle Style ▸ Move Up / Move Down / Reset Position`.
+**Entry point**: `Subtitles ▸ Subtitle Style ▸ Move Up / Move Down`, and `Reset ▸ Subtitle Position` (Subtitle Style ▸ Reset Position until 2026-11-01).
 
 **Behavior details**:
 1. Shares state with the tuning window; `repeat: true`.
@@ -1432,13 +1432,13 @@ Menu order: Pixel Shaders → Deinterlace → Aspect → Crop/Stretch → Framin
 | Video ▸ Pixel Shaders ▸ Use Shaders (checkbox) · Shader List… · Open Shader Folder · Reload Shaders · —— · HDR Tone Mapping ▸ (radio: Auto / Off / BT.2390 / Hable / Mobius / Reinhard / Clip · —— · Dynamic Peak Detection (checkbox)) · HDR Settings… | 402 | video-source (the two HDR items video-hdr, peak detection video-hdr-peak) | Use Shaders Shift+P | E16, E17 |
 | Video ▸ Deinterlace ▸ Cycle · Auto · Always · Never (radio) · —— · Output ▸ By Frame / By Field (Double Rate) (radio) | 403 | video-source | Cycle Ctrl+I | E10 |
 | Video ▸ Aspect ▸ Keep Aspect Ratio · Ignore Aspect Ratio · Fill Window (Crop Excess) (radio) · —— · Cycle Aspect Ratio · Default (Source) · 4:3 · 16:9 · 16:10 · 1.85:1 · 2.35:1 · Custom (x:y) (radio) · Custom Aspect Ratio… | 404 | video-display | Cycle Aspect Ratio Shift+F6 (Ctrl+F6 is taken by macOS) | E11 |
-| Video ▸ Crop/Stretch ▸ None · Stretch to 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 · Crop to 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 (radio) · —— · Reset Position · Move Left · Move Right · Move Up · Move Down | 405 | video-display | None (not Ctrl+Q, see below) | E12 |
-| Video ▸ Framing ▸ Reset Framing · Zoom In · Zoom Out · —— · Pan → · Pan ← · Pan ↑ · Pan ↓ · Center Frame | 406 | video-display | See the table below | E13 |
+| Video ▸ Crop/Stretch ▸ None · Stretch to 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 · Crop to 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 (radio) · —— · Move Left · Move Right · Move Up · Move Down (the reset: Reset ▸ Crop Position, 442, reset-video) | 405 | video-display | None (not Ctrl+Q, see below) | E12 |
+| Video ▸ Framing ▸ Zoom In · Zoom Out · —— · Pan → · Pan ← · Pan ↑ · Pan ↓ · Center Frame (the reset: Reset ▸ Framing, 441, reset-video) | 406 | video-display | See the table below | E13 |
 | Video ▸ Image Processing ▸ Flip Vertically · Flip Horizontally · —— · Gaussian Blur · Sharpen · Edge Sharpen · —— · Deblock · Deband · 3D Denoise · Gradual Denoise · Temporal Denoise · —— · Frame Doubling · Motion Interpolation (all checkboxes) | 408 | video-effects | Ctrl+P · Ctrl+Z · Ctrl+B · Ctrl+R · — · Ctrl+H · — · Ctrl+N · — · Ctrl+M | E04–E06, E08, E18 |
 | Video ▸ Rotation ▸ Cycle · No Rotation · 90° · 180° · 270° (radio) | 409 | video-effects | Cycle Alt+K | E09 |
 | Video ▸ Snapshot ▸ … (capture, unchanged) | 420 | — | — | — |
 | Video ▸ Picture Adjustments… | 440 | video-color | | Existing |
-| Video ▸ Reset | 441 | video-color | Q | Existing |
+| Reset ▸ Picture (moved to Reset ▸ 2026-11-01, see menus.md) | 440 | reset-video | Q | Existing |
 | Video ▸ Brightness −1% / +1%, contrast, saturation | 442–447 | video-color | W/E, R/T, Y/U | Existing |
 | Video ▸ Hue −1% / +1% | 448 / 449 | video-color | I / O (`repeat`) | E02 |
 
@@ -1452,7 +1452,7 @@ Framing shortcuts (E13). The binding syntax has no numpad key names now (the inp
 
 | Command | Numpad key (needs core Numpad names) | Fallback key (existing syntax) |
 | --- | --- | --- |
-| Reset Framing | Numpad5 | Alt+Backspace |
+| Reset Framing (Reset ▸ Framing) | Numpad5 | Alt+Backspace |
 | Zoom In / Out | Numpad9 / Numpad1 | Alt+Plus / Alt+- |
 | Pan → ← ↑ ↓ | Ctrl+Numpad6 / 4 / 8 / 2 | Alt+ArrowRight / Left / Up / Down |
 | Center Frame | Ctrl+Numpad5 | — |
@@ -2037,9 +2037,9 @@ Menu structure: select audio (including channels) → output device → volume (
 | Audio ▸ Output Device ▸ System Default · [each device] (radio) (round 3a) | 512 | audio-tools | | G16 |
 | Audio ▸ Equalizer (checkbox) | 513 | audio-eq | Shift+E | Existing |
 | Audio ▸ Preset ▸ Flat / Voice / Music / Cinema (radio) | 514 | audio-eq | | Existing |
-| Audio ▸ Audio Sync ▸ 50 ms Earlier · 50 ms Later · Reset · —— · Don't Keep · Keep for This Run · Always Keep (radio) | 515 | audio-eq | `>` / `<` / `?` (see below) | G09 |
+| Audio ▸ Audio Sync ▸ 50 ms Earlier · 50 ms Later · —— · Don't Keep · Keep for This Run · Always Keep (radio) | 515 | audio-eq | `>` / `<` / `?` (`?` is Reset ▸ Audio Sync, 530, reset-audio, since 2026-11-01; see below) | G09 |
 | Audio ▸ Processing ▸ Normalize · Crystalizer (checkboxes) | 516 | audio-eq | Shift+N · Shift+C | G10 (entry point only), G11 |
-| Audio ▸ Reset | 517 | audio-eq | | Existing |
+| Reset ▸ Audio Processing (moved to Reset ▸ 2026-11-01, see menus.md); equalizer, Normalize and Crystalizer only, sync and channels kept | 531 | reset-audio | | Existing |
 
 "Open ▸ Load External Audio…" goes in the "Open" menu, right after subtitles' "Open Subtitle…" (113), and is not repeated under "Audio ▸ Audio Track". Normalize (G10, an existing feature) only gets an entry point and Shift+N in the "Processing" submenu, because it belongs to the audio processing group, which would be incomplete without it.
 
@@ -3909,7 +3909,7 @@ Manifest capabilities: `commands`, `playback.read`, `events`, `ui.mount`, `ui.di
 | Audio ▸ Show Album Cover for Audio Only (checkbox) | 530 | visual | |
 | Settings ▸ Appearance ▸ Show Logo When Idle (checkbox) | 845 | settings-logo | |
 | Settings ▸ Appearance ▸ Choose Logo Image… | 846 | settings-logo | |
-| Settings ▸ Appearance ▸ Restore Default Logo | 847 | settings-logo | |
+| Reset ▸ Idle Logo (moved to Reset ▸ 2026-11-01, see menus.md) | 850 | reset-appearance | |
 
 In the "Audio ▸" submenu, playback uses 501–503, audio uses 510–529, and this plugin uses 530–539. The album cover goes in the audio domain because it only appears when audio is playing. The logo goes in "Settings ▸ Appearance", next to the color schemes. No default shortcuts.
 
@@ -3988,7 +3988,7 @@ In the "Audio ▸" submenu, playback uses 501–503, audio uses 510–529, and t
 - A custom logo image (PNG/JPEG) can be chosen; restoring the default goes back to the brand logo.
 - The toggle "Show Logo When Idle" is on by default. When off, the idle screen is a plain color (as now).
 
-**Entry points**: Settings ▸ Appearance ▸ Show Logo When Idle / Choose Logo Image… / Restore Default Logo; also a "Logo and Album Cover" page registered in the "Appearance" category of the options window (`settings.page`, id `logo-cover`, order 20; with the J11 toggle, the logo preview with choose/restore, and the cover cache size with clearing).
+**Entry points**: Settings ▸ Appearance ▸ Show Logo When Idle / Choose Logo Image…, Reset ▸ Idle Logo (Settings ▸ Appearance ▸ Restore Default Logo until 2026-11-01); also a "Logo and Album Cover" page registered in the "Appearance" category of the options window (`settings.page`, id `logo-cover`, order 20; with the J11 toggle, the logo preview with choose/restore, and the cover cache size with clearing).
 
 **Behavior details**
 - When to show: the source has `phase === "empty"` (decided by the plugin). During `loading` it changes to the loading screen (G-16b; the former "keep the logo" is void); once the source is ready, the video picture or the J11 layer takes over.

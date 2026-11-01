@@ -157,7 +157,6 @@ Context menu
 │  │  ├─ ────────
 │  │  ├─ Move Up   ‹subtitles›
 │  │  ├─ Move Down   ‹subtitles›
-│  │  ├─ Reset Position  [Alt+Home]   ‹subtitles›
 │  │  ├─ ────────
 │  │  ├─ Shadow   ‹subtitles›
 │  │  └─ Opaque Box   ‹subtitles›
@@ -167,7 +166,6 @@ Context menu
 │  ├─ Sync ▸
 │  │  ├─ Earlier 0.5 s  [.]   ‹subtitles›
 │  │  ├─ Later 0.5 s  [,]   ‹subtitles›
-│  │  ├─ Reset  [/]   ‹subtitles›
 │  │  ├─ ────────
 │  │  └─ Adjust Sync…   ‹subtitles›
 │  ├─ ────────
@@ -235,13 +233,11 @@ Context menu
 │  │  ├─ (radio) Crop to 1.85:1   ‹video›
 │  │  ├─ (radio) Crop to 2.35:1   ‹video›
 │  │  ├─ ────────
-│  │  ├─ Reset Position   ‹video›
 │  │  ├─ Move Left   ‹video›
 │  │  ├─ Move Right   ‹video›
 │  │  ├─ Move Up   ‹video›
 │  │  └─ Move Down   ‹video›
 │  ├─ Framing ▸
-│  │  ├─ Reset Framing  [Numpad5 / Alt+Backspace]   ‹video›
 │  │  ├─ Zoom In  [Numpad9 / Alt+Plus]   ‹video›
 │  │  ├─ Zoom Out  [Numpad1 / Alt+-]   ‹video›
 │  │  ├─ ────────
@@ -298,7 +294,6 @@ Context menu
 │  │  └─ Open Snapshot Folder   ‹capture›
 │  ├─ ────────
 │  ├─ Picture Adjustments…   ‹video›
-│  ├─ Reset  [Q]   ‹video›
 │  ├─ Brightness -1%  [W]   ‹video›
 │  ├─ Brightness +1%  [E]   ‹video›
 │  ├─ Contrast -1%  [R]   ‹video›
@@ -336,7 +331,6 @@ Context menu
 │  ├─ Audio Sync ▸
 │  │  ├─ 50 ms Earlier  [>]   ‹audio›
 │  │  ├─ 50 ms Later  [<]   ‹audio›
-│  │  ├─ Reset  [?]   ‹audio›
 │  │  ├─ ────────
 │  │  ├─ (radio) Don't Keep   ‹audio›
 │  │  ├─ (radio) Keep for This Run   ‹audio›
@@ -344,7 +338,6 @@ Context menu
 │  ├─ Processing ▸
 │  │  ├─ Normalize  [Shift+N]   ‹audio›
 │  │  └─ Crystalizer  [Shift+C]   ‹audio›
-│  ├─ Reset   ‹audio›
 │  ├─ ────────
 │  └─ Show Album Cover for Audio Only   ‹visualizer›
 ├─ Games ▸   (appears only when a plugin adds items; e.g. the store plugin VestraNES adds VestraNES ▸ Load ROM… · Stop · VestraNES Window…)
@@ -395,8 +388,19 @@ Context menu
 │     ├─ (radio) Vestra   ‹preferences›
 │     ├─ ────────
 │     ├─ Show Logo When Idle   ‹visualizer›
-│     ├─ Choose Logo Image…   ‹visualizer›
-│     └─ Restore Default Logo   ‹visualizer›
+│     └─ Choose Logo Image…   ‹visualizer›
+├─ Reset ▸   (same group as Settings; added 2026-11-01, see menus.md Reset submenu)
+│  ├─ Subtitle Position  [Alt+Home]   ‹subtitles›
+│  ├─ Subtitle Sync  [/]   ‹subtitles›
+│  ├─ ────────
+│  ├─ Picture  [Q]   ‹video›
+│  ├─ Framing  [Numpad5 / Alt+Backspace]   ‹video›
+│  ├─ Crop Position   ‹video›
+│  ├─ ────────
+│  ├─ Audio Sync  [?]   ‹audio›
+│  ├─ Audio Processing   ‹audio›
+│  ├─ ────────
+│  └─ Idle Logo   ‹visualizer›
 ├─ ────────
 ├─ About Vestra Player…  [F1]   ‹info›
 ├─ ────────

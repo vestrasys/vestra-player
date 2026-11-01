@@ -1018,7 +1018,6 @@ export default async function activate(plugin: Plugin) {
       }),
     );
   const positions = [
-    { id: "reset", title: "Reset Position", dx: 0, dy: 0 },
     { id: "left", title: "Move Left", dx: -POSITION_STEP, dy: 0 },
     { id: "right", title: "Move Right", dx: POSITION_STEP, dy: 0 },
     { id: "up", title: "Move Up", dx: 0, dy: -POSITION_STEP },
@@ -1030,12 +1029,13 @@ export default async function activate(plugin: Plugin) {
       path: ["@video", "Crop/Stretch", title],
       order: 405,
       group: "video-reframe-position",
-      repeat: id !== "reset",
+      repeat: true,
       run: () => move(dx, dy),
     });
+  // Resets live in the Reset menu (user ruling 2026-11-01); the ids stay, so keys keep working.
+  commands.add({ id: "video.reframe.reset", path: ["@reset", "Crop Position"], order: 442, group: "reset-video", repeat: false, run: () => move(0, 0) });
   // 406 帧位 (E13): keypad keys plus mpv-style Alt keys for keyboards without one.
   const frames = [
-    { id: "reset", title: "Reset Framing", group: "video-display", bindings: ["Numpad5", "Alt+Backspace"], run: () => resetFrame(false), repeat: false },
     { id: "zoom-in", title: "Zoom In", group: "video-display", bindings: ["Numpad9", "Alt+Plus"], run: () => zoomBy(ZOOM_STEP), repeat: true },
     { id: "zoom-out", title: "Zoom Out", group: "video-display", bindings: ["Numpad1", "Alt+-"], run: () => zoomBy(1 / ZOOM_STEP), repeat: true },
     { id: "right", title: "Pan →", group: "video-frame-pan", bindings: ["Ctrl+Numpad6", "Alt+ArrowRight"], run: () => panBy(PAN_STEP, 0, PAN.right), repeat: true },
@@ -1046,6 +1046,15 @@ export default async function activate(plugin: Plugin) {
   ] as const;
   for (const { id, title, group, bindings, run, repeat } of frames)
     commands.add({ id: `video.frame.${id}`, path: ["@video", "Framing", title], order: 406, group, bindings: [...bindings], repeat, run });
+  commands.add({
+    id: "video.frame.reset",
+    path: ["@reset", "Framing"],
+    order: 441,
+    group: "reset-video",
+    bindings: ["Numpad5", "Alt+Backspace"],
+    repeat: false,
+    run: () => resetFrame(false),
+  });
   // 408 图像处理 (E04–E06, E08; 高斯模糊 moved here, same id and key).
   commands.add({
     id: "video.flip.vertical",
@@ -1138,7 +1147,7 @@ export default async function activate(plugin: Plugin) {
     });
   // 440–449 the window and the colour keys.
   commands.add({ id: "video.picture", path: ["@video", "Picture Adjustments…"], order: 440, group: "video-color", run: () => showWindow() });
-  commands.add({ id: "video.reset", path: ["@video", "Reset"], order: 441, group: "video-color", bindings: ["Q"], run: reset });
+  commands.add({ id: "video.reset", path: ["@reset", "Picture"], order: 440, group: "reset-video", bindings: ["Q"], run: reset });
   for (const { field, keys, order, down, up } of steps) {
     // All colour steps repeat while held.
     commands.add({

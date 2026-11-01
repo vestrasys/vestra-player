@@ -422,7 +422,7 @@ msgstr ""
 msgid "Use Shaders"
 msgstr ""
 
-#: main.ts:865 main.ts:870 main.ts:879 main.ts:888 main.ts:891 main.ts:1117 picture.slint:369 ui/shaders.slint:131
+#: main.ts:865 main.ts:870 main.ts:879 main.ts:888 main.ts:891 main.ts:1126 picture.slint:369 ui/shaders.slint:131
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr ""
 
@@ -482,7 +482,7 @@ msgstr ""
 msgid "Deinterlace"
 msgstr ""
 
-#: main.ts:896 main.ts:1123
+#: main.ts:896 main.ts:1132
 msgid "Cycle"
 msgstr ""
 
@@ -542,7 +542,7 @@ msgstr ""
 msgid "Custom Aspect Ratio…"
 msgstr ""
 
-#: main.ts:1001 main.ts:1012 main.ts:1030
+#: main.ts:1001 main.ts:1012 main.ts:1029
 msgid "Crop/Stretch"
 msgstr ""
 
@@ -590,32 +590,28 @@ msgstr ""
 msgid "Crop to 2.35:1"
 msgstr ""
 
-#: main.ts:1030
-msgid "Reset Position"
-msgstr ""
-
-#: main.ts:1030
+#: main.ts:1029
 msgid "Move Left"
 msgstr ""
 
-#: main.ts:1030
+#: main.ts:1029
 msgid "Move Right"
 msgstr ""
 
-#: main.ts:1030 ui/shaders.slint:91 ui/shaders.slint:114
+#: main.ts:1029 ui/shaders.slint:91 ui/shaders.slint:114
 msgid "Move Up"
 msgstr ""
 
-#: main.ts:1030 ui/shaders.slint:91 ui/shaders.slint:115
+#: main.ts:1029 ui/shaders.slint:91 ui/shaders.slint:115
 msgid "Move Down"
 msgstr ""
 
-#: main.ts:1048
-msgid "Framing"
+#: main.ts:1036
+msgid "Crop Position"
 msgstr ""
 
-#: main.ts:1048
-msgid "Reset Framing"
+#: main.ts:1048 main.ts:1051
+msgid "Framing"
 msgstr ""
 
 #: main.ts:1048
@@ -646,196 +642,196 @@ msgstr ""
 msgid "Center Frame"
 msgstr ""
 
-#: main.ts:1052 main.ts:1061 main.ts:1070 main.ts:1094 main.ts:1105 main.ts:1113
+#: main.ts:1061 main.ts:1070 main.ts:1079 main.ts:1103 main.ts:1114 main.ts:1122
 msgid "Image Processing"
 msgstr ""
 
-#: main.ts:1052
+#: main.ts:1061
 msgid "Flip Vertically"
 msgstr ""
 
-#: main.ts:1061
+#: main.ts:1070
 msgid "Flip Horizontally"
 msgstr ""
 
-#: main.ts:1070
+#: main.ts:1079
 msgid "Gaussian Blur"
 msgstr ""
 
-#: main.ts:1078
+#: main.ts:1087
 msgid "Gaussian blur: on"
 msgstr ""
 
-#: main.ts:1078
+#: main.ts:1087
 msgid "Gaussian blur: off"
 msgstr ""
 
-#: main.ts:1094 picture.slint:424 picture.slint:490
+#: main.ts:1103 picture.slint:424 picture.slint:490
 msgid "Sharpen"
 msgstr ""
 
-#: main.ts:1094
+#: main.ts:1103
 msgid "Edge Sharpen"
 msgstr ""
 
-#: main.ts:1094 picture.slint:424 picture.slint:545
+#: main.ts:1103 picture.slint:424 picture.slint:545
 msgid "Deblock"
 msgstr ""
 
-#: main.ts:1094 picture.slint:424 picture.slint:556
+#: main.ts:1103 picture.slint:424 picture.slint:556
 msgid "Deband"
 msgstr ""
 
-#: main.ts:1094
+#: main.ts:1103
 msgid "3D Denoise"
 msgstr ""
 
-#: main.ts:1094
+#: main.ts:1103
 msgid "Gradual Denoise"
 msgstr ""
 
-#: main.ts:1094
+#: main.ts:1103
 msgid "Temporal Denoise"
 msgstr ""
 
-#: main.ts:1105
+#: main.ts:1114
 msgid "Frame Doubling"
 msgstr ""
 
-#: main.ts:1113
+#: main.ts:1122
 msgid "Motion Interpolation"
 msgstr ""
 
-#: main.ts:1123 main.ts:1132
+#: main.ts:1132 main.ts:1141
 msgid "Rotation"
 msgstr ""
 
-#: main.ts:1132
+#: main.ts:1141
 msgid "No Rotation"
 msgstr ""
 
-#: main.ts:1132
+#: main.ts:1141
 msgid "90°"
 msgstr ""
 
-#: main.ts:1132
+#: main.ts:1141
 msgid "180°"
 msgstr ""
 
-#: main.ts:1132
+#: main.ts:1141
 msgid "270°"
 msgstr ""
 
-#: main.ts:1140
+#: main.ts:1149
 msgid "Picture Adjustments…"
 msgstr ""
 
-#: main.ts:1141
-msgid "Reset"
+#: main.ts:1150 picture.slint:408
+msgid "Picture"
 msgstr ""
 
-#: main.ts:1146
+#: main.ts:1155
 msgid "Brightness -1%"
 msgstr ""
 
-#: main.ts:1146
+#: main.ts:1155
 msgid "Contrast -1%"
 msgstr ""
 
-#: main.ts:1146
+#: main.ts:1155
 msgid "Saturation -1%"
 msgstr ""
 
-#: main.ts:1146
+#: main.ts:1155
 msgid "Hue -1%"
 msgstr ""
 
-#: main.ts:1155
+#: main.ts:1164
 msgid "Brightness +1%"
 msgstr ""
 
-#: main.ts:1155
+#: main.ts:1164
 msgid "Contrast +1%"
 msgstr ""
 
-#: main.ts:1155
+#: main.ts:1164
 msgid "Saturation +1%"
 msgstr ""
 
-#: main.ts:1155
+#: main.ts:1164
 msgid "Hue +1%"
 msgstr ""
 
 #. {} is the player's own message, already in the interface language.
-#: main.ts:1178
+#: main.ts:1187
 msgid "{}"
 msgstr ""
 
-#: main.ts:1190
+#: main.ts:1199
 msgid "GPU Rendering (Restart to Apply)"
 msgstr ""
 
-#: main.ts:1190
+#: main.ts:1199
 msgid "GPU Rendering (Experimental)"
 msgstr ""
 
-#: main.ts:1198
+#: main.ts:1207
 msgid "Switching…"
 msgstr ""
 
-#: main.ts:1207
+#: main.ts:1216
 msgid "Restart Player to Apply"
 msgstr ""
 
-#: main.ts:1240
+#: main.ts:1249
 msgid "GPU rendering unavailable: {}"
 msgstr ""
 
-#: main.ts:1241
+#: main.ts:1250
 msgid "Could not save the rendering choice: {}"
 msgstr ""
 
-#: main.ts:1250
+#: main.ts:1259
 msgid "GPU rendering chosen; the next start still uses software rendering: {}"
 msgstr ""
 
-#: main.ts:1251
+#: main.ts:1260
 msgid "GPU rendering: on"
 msgstr ""
 
-#: main.ts:1251
+#: main.ts:1260
 msgid "GPU rendering: off"
 msgstr ""
 
-#: main.ts:1261
+#: main.ts:1270
 msgid "Restart Vestra Player now to apply?"
 msgstr ""
 
-#: main.ts:1262
+#: main.ts:1271
 msgid "Vestra Player will draw on the GPU from the restart on. A local file continues where it is. If you choose Later, GPU rendering starts the next time you open Vestra Player."
 msgstr ""
 
-#: main.ts:1262
+#: main.ts:1271
 msgid "Vestra Player will use software rendering from the restart on. A local file continues where it is. If you choose Later, software rendering starts the next time you open Vestra Player."
 msgstr ""
 
-#: main.ts:1265
+#: main.ts:1274
 msgid "Restart Now"
 msgstr ""
 
-#: main.ts:1266
+#: main.ts:1275
 msgid "Later"
 msgstr ""
 
-#: main.ts:1271
+#: main.ts:1280
 msgid "GPU rendering: on (applies at the next start)"
 msgstr ""
 
-#: main.ts:1271
+#: main.ts:1280
 msgid "GPU rendering: off (applies at the next start)"
 msgstr ""
 
-#: main.ts:1283
+#: main.ts:1292
 msgid "Could not restart the player: {}"
 msgstr ""
 
@@ -907,10 +903,6 @@ msgstr ""
 
 #: picture.slint:408
 msgid "Effects"
-msgstr ""
-
-#: picture.slint:408
-msgid "Picture"
 msgstr ""
 
 #: picture.slint:408
