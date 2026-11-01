@@ -209,38 +209,48 @@ fn set_mount(
         .as_ref()
         .filter(|f| f.owners.contains(&reply.owner))
         .map(|f| f.instance.clone_strong());
-    let seq = if let Some(patch) = params.get("patch") {
-        let (base, seq, ops) = ui_patch::request(patch)?;
-        if host.images.seq(reply.owner, "$mount", property) != base {
-            return Err(ui_patch::stale());
+    // A part of a whole value sent in parts: held until the last (P3).
+    let parted = host.parts(reply.owner, "$mount", property, params, prepared.as_deref())?;
+    let (seq, value, rows) = match parted {
+        ui_patch::Parted::Held => return Ok(Value::Null),
+        ui_patch::Parted::Done(value, rows, seq) => (seq, value, Some(rows)),
+        ui_patch::Parted::Not => {
+            let seq = if let Some(patch) = params.get("patch") {
+                let (base, seq, ops) = ui_patch::request(patch)?;
+                if host.images.seq(reply.owner, "$mount", property) != base {
+                    return Err(ui_patch::stale());
+                }
+                if patch_mount(
+                    host,
+                    reply.owner,
+                    &shell,
+                    floating.as_ref(),
+                    property,
+                    ops,
+                    prepared.take(),
+                )? {
+                    host.images.set_seq(reply.owner, "$mount", property, seq);
+                    return Ok(Value::Null);
+                }
+                seq
+            } else {
+                params["seq"].as_u64().unwrap_or(0)
+            };
+            // A whole value, or a patched one that a live model could not
+            // take in place.
+            match (params.get("patch"), prepared) {
+                (Some(patch), _) => (
+                    seq,
+                    patched_mount(host, reply.owner, property, &patch["ops"])?,
+                    None,
+                ),
+                (None, Some(prepared)) => {
+                    let prepared = *prepared;
+                    (seq, prepared.whole.unwrap_or_default(), Some(prepared.rows))
+                }
+                (None, None) => (seq, params["value"].clone(), None),
+            }
         }
-        if patch_mount(
-            host,
-            reply.owner,
-            &shell,
-            floating.as_ref(),
-            property,
-            ops,
-            prepared.take(),
-        )? {
-            host.images.set_seq(reply.owner, "$mount", property, seq);
-            return Ok(Value::Null);
-        }
-        seq
-    } else {
-        params["seq"].as_u64().unwrap_or(0)
-    };
-    // A whole value, or a patched one that a live model could not take in place.
-    let (value, rows) = match (params.get("patch"), prepared) {
-        (Some(patch), _) => (
-            patched_mount(host, reply.owner, property, &patch["ops"])?,
-            None,
-        ),
-        (None, Some(prepared)) => {
-            let prepared = *prepared;
-            (prepared.whole.unwrap_or_default(), Some(prepared.rows))
-        }
-        (None, None) => (params["value"].clone(), None),
     };
     let converted = host.prop_value_with(reply.owner, "$mount", property, &value, rows.as_ref())?;
     composition::set_global_value(&shell, &spec, property, converted)?;

@@ -513,8 +513,16 @@ impl Host {
                     .ok_or_else(|| RpcError::new("missing", "page not registered"))?;
                 let (view, serial) = (page.view(), page.serial);
                 let window = self.settings.window().map(ComponentHandle::clone_strong);
-                let (value, rows, seq) = match params.get("patch") {
-                    Some(patch) => {
+                // A part of a whole value sent in parts: held until the last.
+                let parted = self.parts(owner, &view, &property, params, prepared.as_deref())?;
+                let done = match parted {
+                    ui_patch::Parted::Held => return Ok(Some(Value::Null)),
+                    ui_patch::Parted::Done(value, rows, seq) => Some((value, Some(rows), seq)),
+                    ui_patch::Parted::Not => None,
+                };
+                let (value, rows, seq) = match (done, params.get("patch")) {
+                    (Some(done), _) => done,
+                    (None, Some(patch)) => {
                         let (base, seq, ops) = ui_patch::request(patch)?;
                         if self.images.seq(owner, &view, &property) != base {
                             return Err(ui_patch::stale());
@@ -535,7 +543,7 @@ impl Host {
                             Some(patched) => (patched, None, seq),
                         }
                     }
-                    None => {
+                    (None, None) => {
                         let seq = params["seq"].as_u64().unwrap_or(0);
                         match prepared.map(|prepared| *prepared) {
                             Some(prepared) => {

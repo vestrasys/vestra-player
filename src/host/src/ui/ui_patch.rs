@@ -270,6 +270,8 @@ pub fn apply(current: &Value, shapes: &[Shape], values: Vec<Row>, images: &ui_ro
             }
         }
     }
+    // Pictures of rows replaced or removed, and of carried rows not kept.
+    model.prune();
 }
 
 /// The carried rows of a patch, converted for a view (plain rows, their
@@ -322,6 +324,191 @@ impl Host {
     }
 }
 
+/// A whole array value larger than one request arrives in parts (player
+/// 0.6.0, SDK 1.5.46; doc/architecture/large-lists.md §4.2): a whole write
+/// of its first rows, then `insert` patches of the rest, each applying on
+/// the one before; every part but the last carries `more: true`. The parts
+/// are held here, not shown, and the last one writes the whole value at
+/// once, so a list already shown is reconciled once (its rows, scroll
+/// position and selection stay) instead of shrinking to the first part.
+#[derive(Debug, Default)]
+pub struct Parts {
+    /// The `seq` of the last part (the next one's `base`).
+    pub seq: u64,
+    /// The rows so far, wire form (for the stored properties).
+    pub rows: Vec<Json>,
+    /// The rows so far, converted.
+    pub plain: ui_values::PlainRows,
+}
+
+/// What `Host::parts` did with a write.
+#[derive(Debug)]
+pub enum Parted {
+    /// Not a part: the caller writes as usual.
+    Not,
+    /// A part held: nothing to show yet (the request is answered `null`).
+    Held,
+    /// The last part: the whole value, its rows converted, and its `seq`.
+    Done(Json, ui_values::PlainRows, u64),
+}
+
+/// `plain` with `shapes` applied, taking the carried rows from `carried`
+/// (their image references merged into `plain`'s).
+fn apply_plain(plain: &mut ui_values::PlainRows, shapes: &[Shape], carried: ui_values::PlainRows) {
+    let mut index: std::collections::HashMap<std::sync::Arc<ui_rows::ImageRef>, u32> = plain
+        .images
+        .iter()
+        .enumerate()
+        .map(|(i, image)| (image.clone(), u32::try_from(i).unwrap_or(u32::MAX)))
+        .collect();
+    let mapped: Vec<u32> = carried
+        .images
+        .into_iter()
+        .map(|image| {
+            let next = u32::try_from(plain.images.len()).unwrap_or(u32::MAX);
+            *index.entry(image.clone()).or_insert_with(|| {
+                plain.images.push(image);
+                next
+            })
+        })
+        .collect();
+    let row_images = carried.row_images.into_iter().map(|images| {
+        images
+            .iter()
+            .map(|i| mapped.get(*i as usize).copied().unwrap_or(u32::MAX))
+            .collect::<Box<[u32]>>()
+    });
+    apply_vec(&mut plain.rows, shapes, carried.rows);
+    apply_vec(&mut plain.costs, shapes, carried.costs);
+    apply_vec(&mut plain.row_images, shapes, row_images);
+}
+
+/// The rows of a part, converted (on the reader thread when it was large).
+fn part_rows(
+    rows: &[&Json],
+    prepared: Option<&ui_values::PlainRows>,
+) -> std::result::Result<ui_values::PlainRows, RpcError> {
+    if let Some(prepared) = prepared.filter(|prepared| prepared.rows.len() == rows.len()) {
+        return Ok(prepared.clone());
+    }
+    match ui_values::plain_rows(rows) {
+        Ok(plain) => Ok(plain),
+        Err(ui_values::NotPlain::Markdown) => Err(RpcError::invalid(
+            "a value sent in parts holds no Markdown documents",
+        )),
+        Err(ui_values::NotPlain::Image(error)) => Err(error),
+        Err(ui_values::NotPlain::Refused(error)) => Err(error.into()),
+    }
+}
+
+impl ui_image::Images {
+    /// `Host::parts` (images are loaded when the last part is written).
+    pub(crate) fn parts(
+        &mut self,
+        owner: u64,
+        view: &str,
+        property: &str,
+        params: &Json,
+        prepared: Option<&ui_values::Prepared>,
+    ) -> std::result::Result<Parted, RpcError> {
+        let more = params.get("more").and_then(Json::as_bool) == Some(true);
+        let held = self.take_parts(owner, view, property);
+        let result = self.part(params, more, held, prepared, property);
+        match result {
+            Ok((Parted::Held, Some(parts))) => {
+                self.put_parts(owner, view, property, parts);
+                Ok(Parted::Held)
+            }
+            Ok((parted, _)) => Ok(parted),
+            Err(error) => Err(error),
+        }
+    }
+    fn part(
+        &self,
+        params: &Json,
+        more: bool,
+        held: Option<Parts>,
+        prepared: Option<&ui_values::Prepared>,
+        property: &str,
+    ) -> std::result::Result<(Parted, Option<Parts>), RpcError> {
+        let total = |parts: &Parts| {
+            if parts.plain.rows.len() > ui_values::MAX_ARRAY {
+                return Err(RpcError::new(
+                    "limit",
+                    format!("{property}: UI array exceeds {} rows", ui_values::MAX_ARRAY),
+                ));
+            }
+            ui_values::check_totals(&parts.plain.costs)
+                .map_err(|error| RpcError::from(error).for_property(property))
+        };
+        match (params.get("patch"), held) {
+            // The first part: the value's first rows.
+            (None, _) if more => {
+                let value = match prepared.and_then(|prepared| prepared.whole.as_ref()) {
+                    Some(value) => value,
+                    None => &params["value"],
+                };
+                let rows = value
+                    .as_array()
+                    .ok_or_else(|| RpcError::invalid("a value sent in parts is an array"))?;
+                let refs: Vec<&Json> = rows.iter().collect();
+                let plain = part_rows(&refs, prepared.map(|prepared| &prepared.rows))?;
+                let parts = Parts {
+                    seq: params["seq"].as_u64().unwrap_or(0),
+                    rows: rows.clone(),
+                    plain,
+                };
+                total(&parts)?;
+                Ok((Parted::Held, Some(parts)))
+            }
+            // A further part, on the one before.
+            (Some(patch), Some(mut parts)) if patch["base"].as_u64() == Some(parts.seq) => {
+                let (_, seq, ops) = request(patch)?;
+                let ops = parse(ops, parts.rows.len())?;
+                let carried = part_rows(&ops.rows, prepared.map(|prepared| &prepared.rows))?;
+                let wire: Vec<Json> = match prepared {
+                    Some(prepared) if prepared.carried.len() == ops.rows.len() => {
+                        prepared.carried.clone()
+                    }
+                    _ => ops.rows.iter().map(|row| (*row).clone()).collect(),
+                };
+                apply_vec(&mut parts.rows, &ops.shapes, wire);
+                apply_plain(&mut parts.plain, &ops.shapes, carried);
+                parts.seq = seq;
+                total(&parts)?;
+                if more {
+                    return Ok((Parted::Held, Some(parts)));
+                }
+                Ok((
+                    Parted::Done(Json::Array(parts.rows), parts.plain, seq),
+                    None,
+                ))
+            }
+            // A part with nothing held (or held for another base): the
+            // sequence broke (a part refused, the view reopened).
+            (Some(_), _) if more => Err(stale()),
+            // Any other write ends what was held.
+            _ => Ok((Parted::Not, None)),
+        }
+    }
+}
+
+impl Host {
+    /// A write that is a part of a larger whole value (`Parts`): held, or
+    /// at its last part the whole value to write as usual (`Parted::Done`).
+    /// A part that does not apply on the one before is `stale`; a part over
+    /// the limits is refused, and what was held is dropped either way.
+    pub(crate) fn parts(
+        &mut self,
+        owner: u64,
+        view: &str,
+        property: &str,
+        params: &Json,
+        prepared: Option<&ui_values::Prepared>,
+    ) -> std::result::Result<Parted, RpcError> {
+        self.images.parts(owner, view, property, params, prepared)
+    }
+}
 impl ui_image::Images {
     /// A row patch of a tool window's property shown as `current`. The ops
     /// apply on the rows the base write left: known only for an array the

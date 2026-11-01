@@ -184,7 +184,10 @@ pub fn set(
     // each row, `check_and_coerce`): 20,000 rows took about 20 ms. A host
     // model whose rows all have its first row's shape is installed with
     // that row alone, and the others are added in one `row_added` once
-    // Slint has accepted it.
+    // Slint has accepted it. The rows are moved out of the model and back
+    // (on a refusal too): `value` is always a model just converted for
+    // this write (`prop_value`, `from_json`), shown nowhere yet, so no
+    // view sees it with one row.
     let tail = match &value {
         Value::Model(model) => ui_rows::rows(model).and_then(|rows| {
             let images = rows.images();
@@ -469,6 +472,7 @@ fn reconcile_rows(rows: &Rows, incoming: &Rows) -> bool {
     }
     rows.truncate(len);
     rows.insert_rows(old, tail);
+    rows.prune();
     true
 }
 
@@ -926,7 +930,9 @@ pub const PREPARED_METHODS: [&str; 3] = ["ui.setMount", "ui.set", "settings.set"
 /// (a whole value of at least `PREPARE_ROWS` rows, or a patch carrying as
 /// many) to plain rows. A whole value is moved out of `message`. `None`:
 /// the UI thread converts as usual (not such a write, smaller, Markdown in
-/// a row, or refused: the UI thread then reports the same error).
+/// a row, text values (`$vestraText`, `$vestraList`: the dispatcher
+/// resolves them in the plugin's catalog first, on the UI thread), or
+/// refused: the UI thread then reports the same error).
 pub fn prepare_request(message: &mut Json) -> Option<Box<Prepared>> {
     let method = message.get("method")?.as_str()?;
     if !PREPARED_METHODS.contains(&method) {
@@ -948,7 +954,9 @@ pub fn prepare_request(message: &mut Json) -> Option<Box<Prepared>> {
                 _ => Vec::new(),
             })
             .collect();
-        if carried.len() < PREPARE_ROWS {
+        if carried.len() < PREPARE_ROWS
+            || carried.iter().any(|row| crate::i18n::text::contains(row))
+        {
             return None;
         }
         let rows = plain_rows(&carried).ok()?;
@@ -960,7 +968,7 @@ pub fn prepare_request(message: &mut Json) -> Option<Box<Prepared>> {
         }));
     }
     let value = params.get("value")?.as_array()?;
-    if value.len() < PREPARE_ROWS {
+    if value.len() < PREPARE_ROWS || value.iter().any(crate::i18n::text::contains) {
         return None;
     }
     let rows = plain_rows(&value.iter().collect::<Vec<_>>()).ok()?;

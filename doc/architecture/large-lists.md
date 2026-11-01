@@ -164,26 +164,25 @@ Host part: player 0.6.0 (`ui_rows.rs`, `ui_values.rs`, `ui_patch.rs`, `ui_image.
 
 ### 4.1 Limits
 
-| Limit | Before | Player 0.6.0 | Why |
-|---|---|---|---|
-| `MAX_ARRAY` (rows of one array) | 4,096 | 100,000 | at least 50,000 playlist rows, with room |
-| `MAX_NODES` (values) | 16,384 | 1,048,576 | 50,000 rows of 14 values (playlist 0.2.0's `PlaylistRow`) and their array are 700,001 |
-| `MAX_TEXT_BYTES` (strings and field names) | 1 MiB | 32 MiB | a local-file row is about 330 bytes of text (389 bytes of JSON, measured by the playlist author): 50,000 rows are about 16.5 MB |
-| `MAX_STRING_BYTES`, `MAX_DEPTH` | 64 KiB, 8 | unchanged | |
-| `MAX_PATCH_OPS` | 1,024 | unchanged | |
-| `MAX_MESSAGE_BYTES` (protocol line) | 1 MiB | unchanged | see §4.2 |
+The values are on the SDK site (Reference: Limits; `UI_VALUE_LIMITS`). What changed and why:
+
+- `MAX_ARRAY` (rows of one array), 4,096 before: room for at least 50,000 playlist rows.
+- `MAX_NODES` (values), 16,384 before: 50,000 rows of 14 values (playlist 0.2.0's `PlaylistRow`) and their array are 700,001.
+- `MAX_TEXT_BYTES` (strings and field names), 1 MiB before: a local-file row is about 330 bytes of text (389 bytes of JSON, measured by the playlist author), so 50,000 rows are about 16.5 MB.
+- Unchanged: the string and depth limits, `MAX_PATCH_OPS` (1,024 operations per patch) and the 1 MiB protocol line (§4.2).
 
 What the totals bound now is memory, not UI-thread time (§4.3): a value at the totals holds at most 32 MiB of text and a million values (about 100 bytes each as plain rows, §4.4). The guards stay: one value is checked whole against all limits (a patch against the patched array's totals, through the recorded row costs, as in P1), every line is at most 1 MiB, and a view's images stay within 32 MB of decoded pixels.
 
 ### 4.2 Larger than one line: split writes (SDK 1.5.46)
 
-The protocol line stays 1 MiB. A value larger than one request is sent in parts by the SDK, with the P1 wire and nothing new:
+The protocol line stays 1 MiB. A value larger than one request is sent in parts by the SDK, with the P1 wire and one flag (`more`), under the same `ui.patch` feature (both arrive with player 0.6.0):
 
-- **A whole array** of more than `CHUNK_BYTES` (512 KiB) of rows: a whole write of its first rows (`seq` n), then `insert` patches of the rest at the end, each applying on the one before (`base` n, `seq` n+1, and so on). The player shows the list growing for a few frames.
-- **A patch** carrying more than 512 KiB of rows (a new list loaded is a `remove` and a large `insert`): several patches, each applying on the one before; an `insert` too large for one is split into consecutive runs.
-- **Initial properties** (`ui.mount`, `ui.open`, `settings.register`): the arrays of one request carry at most 512 KiB of rows together; the rest follows as patches on the first flush (base 0). A remembered 20,000-row playlist mounts at once.
+- **A whole array** of more than `CHUNK_BYTES` (512 KiB) of rows: a whole write of its first rows (`seq` n), then `insert` patches of the rest at the end, each applying on the one before (`base` n, `seq` n+1, and so on). Every part but the last carries `more: true` (wire: next to `value` or `patch`). The player holds the parts (`ui_patch::Parts`, kept with the property's write record and released with it; each part is checked, and the rows so far against the limits) and writes the whole value at the last part through the usual whole-write path: a list it already shows is reconciled once, so its model, scroll position and selection stay (a whole write after two `stale` answers, a diff of more than 16,384 operations or 1,024 moves). A part that does not apply on the one before is `stale`; any other write of the property ends what was held.
+- **A patch** carrying more than 512 KiB of rows (a new list loaded is a `remove` and a large `insert`), or more than 1,024 operations: several patches of at most 512 KiB and 1,024 operations, each applying on the one before; an `insert` too large for one is split into consecutive runs. They apply as they come (the diff removes before it inserts, so the list is never longer midway than at either end; the SDK checks the lengths and sends whole otherwise).
+- **Initial properties** (`ui.mount`, `ui.open`, `settings.register`): the arrays of one request carry at most 512 KiB of rows together; the rest follows as patches on the first flush (base 0). A remembered 20,000-row playlist mounts with its first rows shown, and the rest grows in over the next frames.
 - An array over the value limits is refused by the SDK before any part is sent, with the player's message (`limit`; an initial property of a panel or settings page is left out and reported, a window's `show` rejects), as the player refused it whole before.
-- A failure part-way (a code other than `stale`) leaves no base: the next write of the property is whole, in parts again. `stale` on the first part sends the whole value, as in P1.
+- Only a property's top-level array is split: any other value, and each row, must fit in one request; the SDK refuses a row of more than 512 KiB with `limit` before any part is sent.
+- A failure part-way (a code other than `stale`) leaves no base: the next write of the property is whole, in parts again. `stale` on the first part sends the whole value, as in P1. When the view closes or shows its initial properties again while parts are on their way, the SDK drops the rest without an error (the view's next flush sends what it shows).
 
 Why not a longer line: the built-ins share one reader thread (the shared runner); one 8 MB line is about 80 ms of reading and parsing during which no other built-in's request (the playback bar's) is read. Parts of 512 KiB interleave with the other plugins' lines, keep each read buffer at 1 MiB, and cost the UI thread under 1 ms each (§4.4).
 
@@ -194,7 +193,7 @@ Why not a longer line: the built-ins share one reader thread (the shared runner)
 - **`ui_rows::Rows`** replaces `VecModel<Value>` for every array the host converts (`from_json`, `prop_value`, patches, menus): a row is a Slint value, or a plain value converted when Slint reads it. A `ListView` reads only the rows it shows; nothing else reads every row. `insert_rows` and `remove_rows` are one `row_added` or `row_removed` per range, `set_rows` and `take_rows` one `reset`.
 - **Install**: Slint checks the type of every row of a model it is given (`check_and_coerce` copies each row: about 20 ms at 20,000 rows). `ui_values::set` gives it the model with its first row and adds the rest in one range once Slint accepted it, when every row has the first row's shape (`Plain::fits`); otherwise Slint checks the whole model and a refusal names the row as before.
 - **Whole writes into a live model** (`reconcile_rows`): plain rows are compared by value without converting either side; changed rows are written, rows added or removed at the end are one range, and more than 64 changed rows that are over half of the shared rows are one `reset`; a row of another shape returns false (the caller installs the value and Slint checks it). A row the view wrote itself (`set_row_data`) compares by its wire form.
-- **Images in rows**: each distinct reference is loaded once (`Images::load_refs`) into the model's picture table; per-row keys and the 32 MB budget are recorded as in P1; `shown` slots are per distinct image (20,000 rows with one placeholder are one slot). A whole write where a file changed on disk rewrites the rows that show it (`Rows::changed_images`). `Key.path` is shared (`Arc<Path>`), so recording 20,000 rows' keys copies no paths.
+- **Images in rows**: each distinct reference is loaded once (`Images::load_refs`) into the model's picture table, which counts the references its rows make to each picture and drops a picture no row uses after each patch or whole write (thumbnails replaced as the user scrolls do not pile up; a move keeps them); per-row keys and the 32 MB budget are recorded as in P1; `shown` slots are per distinct image (20,000 rows with one placeholder are one slot). A whole write where a file changed on disk rewrites the rows that show it (`Rows::changed_images`). `Key.path` is shared (`Arc<Path>`), so recording 20,000 rows' keys copies no paths.
 - **`null` in a row is an empty image** (no Slint type takes `null`, so nothing that worked before changes): rows without a thumbnail need no placeholder reference (about 90 bytes a row for the playlist).
 - **Stored JSON** (panels' and settings pages' properties, for rebuilds) stays; a rebuild converts it to plain rows on the UI thread.
 
@@ -230,7 +229,10 @@ A patch costs the UI thread O(rows) of bookkeeping only (the recorded rows' cost
 - VestraTube drops its padding to 200 rows and uses a `ListView`.
 - The `ListView` risks of the plan (a gesture on a row that scrolls out, an approximate scrollbar with varying row heights, no viewport anchoring when rows are inserted above) are the plugins' spike.
 - A closed settings page still applies a patch to a copy of its stored array and checks it whole (P1; O(n) per patch on the UI thread). No settings page holds a large list.
-- Rebuilds (a shell rebuild, the floating pop-out, reopening the Options window) convert stored arrays on the UI thread (as plain rows: about 3 ms per 1,000 playlist rows).
+- Open: rebuilds (a shell rebuild, the floating pop-out, reopening the Options window) convert stored arrays on the UI thread (as plain rows: about 3 ms per 1,000 playlist rows, so about 60 ms for 20,000; a candidate for the reader-thread conversion or a conversion kept with the stored value).
+- Open: thumbnails (and other row images) are decoded on the UI thread when first loaded (`Images::load_refs`, as before P3); a list that brings many new pictures at once decodes them in one turn. A candidate for decoding off the UI thread.
+- Large writes holding text values (`$vestraText`, `$vestraList`) are converted on the UI thread: the dispatcher resolves them in the plugin's catalog there, so the reader thread leaves them alone (`prepare_request`).
+- A plain `for` repeater builds every row of its model: long lists should use a `ListView` (the SDK documentation says so; the host's `slint_lists` test holds the built-ins to it). Third-party plugins are not restricted (user ruling, 2026-11-01).
 
 ---
 
@@ -241,6 +243,7 @@ A patch costs the UI thread O(rows) of bookkeeping only (the recorded rows' cost
 - Player `src/tests/sdk/host-agreement.test.ts`: the op limit and the feature name agree between host and SDK.
 - Benches (investigation code, not merged): `biglist_bench.rs` with patch scenarios next to D/E/F, and `playlist_pass_bench.ts` (§2.7), run on the Windows laptop (CI budget paused); macOS checks go on the Mac test list.
 - P3, host (`ui_rows.rs` tests): one notification per range; `plain_rows` accepts and refuses as `from_json` does (costs agree; `null` in a row an empty image); whole writes of plain rows (only changed rows written, ranges at the end, a reset for a new list, another row type refused before anything changes, a row the view wrote); a 20,000-row model installed in a compiled component after its first row is checked (refusals still named); images in a 5,000-row list (each file loaded once, a missing file, a changed file rewrites only its rows, a patch moves keys and pictures); the reader thread converts large writes in line order (whole value moved out, a small patch after it applied after it, a 1,000-row patch converted there and inserted in one range). The limit tests of `ui_values.rs`, `ui_patch.rs`, `ui_markdown_rows.rs` and `rpc.rs` follow the new totals. SDK (`test/big-writes.test.ts`): `chunkOps` parts within the budget give the same result; a 20,000-row list as parts within `MESSAGE_LIMIT`, each on the one before, then ordinary patches; a new 20,000-row list as several patches; initial properties within one request; `test/ui-limits.test.ts` follows the new limits. Bench: `p3_bench.rs` (§4.4).
+- P3 review fixes: host (`ui_rows.rs` `review_tests`): a 300-row write or patch holding text values is not prepared on the reader thread (prepared without them); a whole value in parts is held and written once into the list shown (one row notified), a part on another base is `stale`, another write ends the parts, the parts together are checked against the totals, the parts go with the view; a model drops the pictures no row shows after patches (removed, replaced, moved, twenty thumbnails replaced in turn). SDK (`test/big-writes.test.ts`): `more` on all parts but the last and the shown list unchanged until the last; a row over 512 KiB refused before any part; a window closed and shown again midway (no error, the reopened window gets the whole list); a new list in several patches never longer than either end; `test/row-patches.test.ts`: the diff plans up to 16,384 operations and at most 1,024 moves. Not covered by a unit test (the host has no harness for a whole `Host`): `Event::Prepared` through `Host::handle` to a closed settings page and a floating panel; the request flows were checked by reading and by the SDK's TestHost tests, and need a check in the real player.
 
 ## 6. Versioning
 

@@ -61,13 +61,53 @@ pub struct ImageRef {
 /// failed its checks is an empty image, as in a whole conversion).
 pub type Images = Rc<HashMap<Arc<ImageRef>, slint::Image>>;
 
+/// Where `Plain::to_value` finds the picture of an image reference.
+pub trait Pictures {
+    fn picture(&self, image: &Arc<ImageRef>) -> slint::Image;
+}
+impl Pictures for HashMap<Arc<ImageRef>, slint::Image> {
+    fn picture(&self, image: &Arc<ImageRef>) -> slint::Image {
+        self.get(image).cloned().unwrap_or_default()
+    }
+}
+
+/// A picture a model shows, and how many references of its rows use it.
+#[derive(Clone, Debug)]
+struct Picture {
+    image: slint::Image,
+    uses: usize,
+}
+impl Pictures for HashMap<Arc<ImageRef>, Picture> {
+    fn picture(&self, image: &Arc<ImageRef>) -> slint::Image {
+        self.get(image)
+            .map(|picture| picture.image.clone())
+            .unwrap_or_default()
+    }
+}
+
+/// `f` for each image reference in `row` (a plain row; a Slint value holds
+/// its pictures itself).
+fn each_image(row: &Row, f: &mut dyn FnMut(&Arc<ImageRef>)) {
+    fn walk(value: &Plain, f: &mut dyn FnMut(&Arc<ImageRef>)) {
+        match value {
+            Plain::Image(image) => f(image),
+            Plain::Array(rows) => rows.iter().for_each(|row| walk(row, f)),
+            Plain::Struct(fields) => fields.iter().for_each(|(_, value)| walk(value, f)),
+            _ => {}
+        }
+    }
+    if let Row::Plain(plain) = row {
+        walk(plain, f);
+    }
+}
+
 /// Image references whose picture differs between two models.
 pub type Changed = HashSet<Arc<ImageRef>>;
 
 impl Plain {
     /// The Slint value (a nested array becomes a new `Rows` model with the
     /// same pictures).
-    pub fn to_value(&self, images: &Images) -> Value {
+    pub fn to_value(&self, images: &dyn Pictures) -> Value {
         match self {
             // No Slint property type takes `null`: in a row it is an empty
             // image (player 0.6.0), so a row without a picture costs 4 bytes
@@ -76,11 +116,22 @@ impl Plain {
             Self::Bool(value) => Value::Bool(*value),
             Self::Number(value) => Value::Number(*value),
             Self::String(value) => Value::String(value.clone()),
-            Self::Image(image) => Value::Image(images.get(image).cloned().unwrap_or_default()),
-            Self::Array(rows) => Value::Model(ModelRc::new(Rows::from_plain(
-                rows.to_vec(),
-                images.clone(),
-            ))),
+            Self::Image(image) => Value::Image(images.picture(image)),
+            Self::Array(rows) => {
+                // The nested rows get the pictures they show.
+                let mut table = HashMap::new();
+                for row in rows.iter() {
+                    each_image(&Row::Plain(row.clone()), &mut |image| {
+                        table
+                            .entry(image.clone())
+                            .or_insert_with(|| images.picture(image));
+                    });
+                }
+                Value::Model(ModelRc::new(Rows::from_plain(
+                    rows.to_vec(),
+                    Rc::new(table),
+                )))
+            }
             Self::Struct(fields) => Value::Struct(
                 fields
                     .iter()
@@ -182,7 +233,11 @@ impl Row {
 #[derive(Default)]
 pub struct Rows {
     rows: RefCell<Vec<Row>>,
-    images: RefCell<Images>,
+    /// The pictures of the plain rows' image references, with how many
+    /// references use each: a picture no row uses any more is dropped, so a
+    /// list whose rows change pictures (thumbnails made as the user
+    /// scrolls) keeps only what it shows.
+    pictures: RefCell<HashMap<Arc<ImageRef>, Picture>>,
     /// Notifications sent (tests: a range is one).
     #[cfg(test)]
     pub notified: std::cell::Cell<usize>,
@@ -200,13 +255,16 @@ impl From<Vec<Value>> for Rows {
 
 impl Rows {
     pub fn from_rows(rows: Vec<Row>, images: Images) -> Self {
-        Self {
+        let model = Self {
             rows: RefCell::new(rows),
-            images: RefCell::new(images),
+            pictures: RefCell::default(),
             #[cfg(test)]
             notified: std::cell::Cell::default(),
             notify: ModelNotify::default(),
-        }
+        };
+        model.set_images(images);
+        model.prune();
+        model
     }
     pub fn from_plain(rows: Vec<Plain>, images: Images) -> Self {
         Self::from_rows(rows.into_iter().map(Row::Plain).collect(), images)
@@ -219,47 +277,105 @@ impl Rows {
     fn count(&self) {}
     /// The pictures of the model's plain rows.
     pub fn images(&self) -> Images {
-        self.images.borrow().clone()
+        Rc::new(
+            self.pictures
+                .borrow()
+                .iter()
+                .map(|(key, picture)| (key.clone(), picture.image.clone()))
+                .collect(),
+        )
+    }
+    /// How many pictures the model keeps (tests).
+    #[cfg(test)]
+    pub fn picture_count(&self) -> usize {
+        self.pictures.borrow().len()
     }
     /// Use `images` for the plain rows from now on (a whole write: the
-    /// pictures of exactly the rows it leaves).
+    /// pictures of the rows it leaves), counted for the rows now; those at
+    /// no use are dropped by `prune`.
     pub fn set_images(&self, images: Images) {
-        *self.images.borrow_mut() = images;
+        let mut pictures: HashMap<Arc<ImageRef>, Picture> = images
+            .iter()
+            .map(|(key, image)| {
+                (
+                    key.clone(),
+                    Picture {
+                        image: image.clone(),
+                        uses: 0,
+                    },
+                )
+            })
+            .collect();
+        if !pictures.is_empty() {
+            for row in self.rows.borrow().iter() {
+                each_image(row, &mut |image| {
+                    if let Some(picture) = pictures.get_mut(image) {
+                        picture.uses += 1;
+                    }
+                });
+            }
+        }
+        *self.pictures.borrow_mut() = pictures;
     }
-    /// Add pictures for plain rows about to be written (a patch's rows).
+    /// Add pictures for plain rows about to be written (a patch's rows):
+    /// counted as the rows go in, dropped by `prune` if none does.
     pub fn add_images(&self, images: &Images) {
         if images.is_empty() {
             return;
         }
-        let mut current = self.images.borrow_mut();
-        let mut merged = (**current).clone();
-        merged.extend(
-            images
-                .iter()
-                .map(|(key, image)| (key.clone(), image.clone())),
-        );
-        *current = Rc::new(merged);
+        let mut pictures = self.pictures.borrow_mut();
+        for (key, image) in images.iter() {
+            pictures.entry(key.clone()).or_insert_with(|| Picture {
+                image: image.clone(),
+                uses: 0,
+            });
+        }
+    }
+    /// Drop the pictures no row uses.
+    pub fn prune(&self) {
+        self.pictures
+            .borrow_mut()
+            .retain(|_, picture| picture.uses > 0);
+    }
+    /// Count the image references of `rows` going in or out (a picture at
+    /// no use is dropped by `prune`, after a whole patch or write).
+    fn uses(&self, rows: &[Row], going_in: bool) {
+        let mut pictures = self.pictures.borrow_mut();
+        if pictures.is_empty() {
+            return;
+        }
+        for row in rows {
+            each_image(row, &mut |image| {
+                if let Some(picture) = pictures.get_mut(image) {
+                    if going_in {
+                        picture.uses += 1;
+                    } else {
+                        picture.uses = picture.uses.saturating_sub(1);
+                    }
+                }
+            });
+        }
     }
     /// `row` (of this model) as Slint sees it.
     pub fn value(&self, row: &Row) -> Value {
         match row {
             Row::Value(value) => value.clone(),
-            Row::Plain(plain) => plain.to_value(&self.images.borrow()),
+            Row::Plain(plain) => plain.to_value(&*self.pictures.borrow()),
         }
     }
     /// Image references whose picture differs in `next` (a model about to
     /// be written into this one).
     pub fn changed_images(&self, next: &Self) -> Changed {
-        let current = self.images.borrow();
-        next.images
+        let current = self.pictures.borrow();
+        next.pictures
             .borrow()
             .iter()
-            .filter(|(key, image)| {
+            .filter(|(key, next)| {
                 // Two empty pictures (files that failed their checks) are the same.
                 let empty = |picture: &slint::Image| picture.size().width == 0;
-                current
-                    .get(*key)
-                    .is_some_and(|shown| shown != *image && !(empty(shown) && empty(image)))
+                current.get(*key).is_some_and(|shown| {
+                    shown.image != next.image && !(empty(&shown.image) && empty(&next.image))
+                })
             })
             .map(|(key, _)| key.clone())
             .collect()
@@ -278,7 +394,7 @@ impl Rows {
         match (current, next) {
             (Row::Plain(a), Row::Plain(b)) => a.fits(b),
             (_, Row::Plain(b)) => {
-                crate::ui::ui_values::fits(&self.value(current), &b.to_value(next_images))
+                crate::ui::ui_values::fits(&self.value(current), &b.to_value(&**next_images))
             }
             (_, Row::Value(b)) => crate::ui::ui_values::fits(&self.value(current), b),
         }
@@ -293,15 +409,21 @@ impl Rows {
     }
     /// Replace row `index` (one `row_changed`).
     pub fn set_row(&self, index: usize, row: Row) {
-        match self.rows.borrow_mut().get_mut(index) {
-            Some(slot) => *slot = row,
+        let old = match self.rows.borrow_mut().get_mut(index) {
+            Some(slot) => {
+                self.uses(std::slice::from_ref(&row), true);
+                std::mem::replace(slot, row)
+            }
             None => return,
-        }
+        };
+        self.uses(&[old], false);
         self.count();
         self.notify.row_changed(index);
     }
     /// Insert `rows` at `at` (at most the row count) with one `row_added`.
     pub fn insert_rows(&self, at: usize, rows: impl IntoIterator<Item = Row>) {
+        let rows: Vec<Row> = rows.into_iter().collect();
+        self.uses(&rows, true);
         let (at, count) = {
             let mut stored = self.rows.borrow_mut();
             let before = stored.len();
@@ -314,7 +436,8 @@ impl Rows {
             self.notify.row_added(at, count);
         }
     }
-    /// Remove `count` rows from `at` with one `row_removed`; the removed rows.
+    /// Remove `count` rows from `at` with one `row_removed`; the removed
+    /// rows (their pictures stay until `prune`, so a move keeps them).
     pub fn remove_rows(&self, at: usize, count: usize) -> Vec<Row> {
         let (at, removed) = {
             let mut stored = self.rows.borrow_mut();
@@ -323,21 +446,25 @@ impl Rows {
             (at, stored.drain(at..end).collect::<Vec<Row>>())
         };
         if !removed.is_empty() {
+            self.uses(&removed, false);
             self.count();
             self.notify.row_removed(at, removed.len());
         }
         removed
     }
-    /// Take every row out (one `reset`).
+    /// Take every row out (one `reset`); the pictures stay (`images`).
     pub fn take_rows(&self) -> Vec<Row> {
         let rows = std::mem::take(&mut *self.rows.borrow_mut());
         self.count();
         self.notify.reset();
         rows
     }
-    /// Replace every row (one `reset`).
+    /// Replace every row (one `reset`); pictures counted again.
     pub fn set_rows(&self, rows: Vec<Row>) {
         *self.rows.borrow_mut() = rows;
+        let images = self.images();
+        self.set_images(images);
+        self.prune();
         self.count();
         self.notify.reset();
     }
@@ -874,5 +1001,262 @@ mod tests {
             &events[3],
             crate::host::Event::Request(9, m) if m["params"]["value"].is_array()
         ));
+    }
+}
+
+#[cfg(test)]
+mod review_tests {
+    use super::*;
+    use crate::ui::ui_image;
+    use crate::ui::ui_patch;
+    use crate::ui::ui_values::{self, plain_rows};
+    use serde_json::json;
+
+    fn row(i: usize) -> Json {
+        json!({"key": format!("r{i}"), "label": format!("{i}. Episode {i}.mkv"), "selected": false})
+    }
+    fn list(range: std::ops::Range<usize>) -> Vec<Json> {
+        range.map(row).collect()
+    }
+    fn model_of(rows: &[Json]) -> Rc<Rows> {
+        let plain = plain_rows(&rows.iter().collect::<Vec<_>>()).unwrap();
+        Rc::new(Rows::from_plain(plain.rows, Images::default()))
+    }
+
+    /// Review item 1: text values (`$vestraText`) are resolved by the
+    /// dispatcher in the plugin's catalog on the UI thread, so a large write
+    /// holding one is not converted on the reader thread (it would become a
+    /// struct, and a closed settings page would store it unresolved).
+    #[test]
+    fn writes_with_text_values_are_left_to_the_ui_thread() {
+        let mut rows = list(0..300);
+        rows[150]["label"] = json!({"$vestraText": "Episode", "args": {}});
+        let whole = json!({"id": 1, "method": "settings.set",
+            "params": {"id": "p", "property": "rows", "value": rows, "seq": 1}});
+        let crate::host::Event::Request(3, message) = crate::process::request(3, whole) else {
+            panic!("not prepared")
+        };
+        assert_eq!(
+            message["params"]["value"][150]["label"]["$vestraText"],
+            "Episode"
+        );
+        let mut carried = list(0..300);
+        carried[7]["label"] = json!({"$vestraList": ["a", "b"]});
+        let patch = json!({"id": 2, "method": "ui.setMount", "params": {"property": "rows",
+            "patch": {"base": 1, "seq": 2, "ops": [{"op": "insert", "at": 0, "rows": carried}]}}});
+        assert!(matches!(
+            crate::process::request(3, patch),
+            crate::host::Event::Request(3, _)
+        ));
+        // Without text values the same writes are prepared.
+        let plain = json!({"id": 3, "method": "ui.set",
+            "params": {"id": "w", "property": "rows", "value": list(0..300), "seq": 1}});
+        assert!(matches!(
+            crate::process::request(3, plain),
+            crate::host::Event::Prepared(3, _, _)
+        ));
+    }
+
+    /// Review item 2: a whole value sent in parts is held until its last
+    /// part, then written once: a list already shown keeps its model and
+    /// changes only the rows that differ (it never shrinks to the first
+    /// part). A part on another base is `stale`, any other write drops what
+    /// was held, and the parts together are checked against the limits.
+    #[test]
+    fn parts_of_a_whole_write_are_held_and_written_once() {
+        let mut images = ui_image::Images::default();
+        let view = ("$mount", "rows");
+        let mut next = list(0..2000);
+        next[1500]["selected"] = json!(true);
+        let first = json!({"property": "rows", "value": next[..700], "seq": 4, "more": true});
+        let part = |base: u64, at: usize, rows: &[Json], more: bool| {
+            let mut params = json!({"property": "rows",
+                "patch": {"base": base, "seq": base + 1, "ops": [{"op": "insert", "at": at, "rows": rows}]}});
+            if more {
+                params["more"] = json!(true);
+            }
+            params
+        };
+        let parts = |images: &mut ui_image::Images, params: &Json| {
+            images.parts(1, view.0, view.1, params, None)
+        };
+        assert!(matches!(
+            parts(&mut images, &first).unwrap(),
+            ui_patch::Parted::Held
+        ));
+        assert!(matches!(
+            parts(&mut images, &part(4, 700, &next[700..1400], true)).unwrap(),
+            ui_patch::Parted::Held
+        ));
+        let ui_patch::Parted::Done(value, plain, seq) =
+            parts(&mut images, &part(5, 1400, &next[1400..], false)).unwrap()
+        else {
+            panic!("done")
+        };
+        assert_eq!(
+            (seq, value.as_array().unwrap().len(), plain.rows.len()),
+            (6, 2000, 2000)
+        );
+        assert_eq!(value, Json::Array(next.clone()));
+        assert_eq!(
+            plain.costs,
+            next.iter().map(ui_values::cost).collect::<Vec<_>>()
+        );
+        // Written into the list shown: one row changes, nothing else.
+        let live = model_of(&list(0..2000));
+        let current = Value::Model(ModelRc::from(live.clone()));
+        let incoming = Value::Model(ModelRc::new(Rows::from_plain(
+            plain.rows,
+            Images::default(),
+        )));
+        assert!(ui_values::reconcile(&current, &incoming).unwrap());
+        assert_eq!(live.notified.get(), 1);
+        // A part on another base: stale, and nothing stays held.
+        assert!(matches!(
+            parts(&mut images, &first).unwrap(),
+            ui_patch::Parted::Held
+        ));
+        assert_eq!(
+            parts(&mut images, &part(9, 700, &next[700..800], true))
+                .unwrap_err()
+                .code,
+            "stale"
+        );
+        assert_eq!(
+            parts(&mut images, &part(4, 700, &next[700..800], true))
+                .unwrap_err()
+                .code,
+            "stale"
+        );
+        // Another write ends the parts.
+        assert!(matches!(
+            parts(&mut images, &first).unwrap(),
+            ui_patch::Parted::Held
+        ));
+        let other = json!({"property": "rows", "value": [], "seq": 7});
+        assert!(matches!(
+            parts(&mut images, &other).unwrap(),
+            ui_patch::Parted::Not
+        ));
+        assert!(matches!(
+            parts(&mut images, &part(4, 700, &next[700..800], false)).unwrap(),
+            ui_patch::Parted::Not
+        ));
+        // The parts together within the limits (text total here).
+        let big = json!("x".repeat(ui_values::MAX_STRING_BYTES));
+        let rows = vec![big; ui_values::MAX_TEXT_BYTES / ui_values::MAX_STRING_BYTES];
+        let start = json!({"property": "rows", "value": rows, "seq": 1, "more": true});
+        assert!(matches!(
+            parts(&mut images, &start).unwrap(),
+            ui_patch::Parted::Held
+        ));
+        let over = part(1, 0, &[json!("y")], false);
+        let error = parts(&mut images, &over).unwrap_err();
+        assert_eq!(error.code, "limit");
+        assert!(
+            error.message.starts_with("rows: UI value text exceeds"),
+            "{}",
+            error.message
+        );
+        // Released with the view.
+        assert!(matches!(
+            parts(&mut images, &first).unwrap(),
+            ui_patch::Parted::Held
+        ));
+        images.release_view(1, "$mount");
+        assert!(images.take_parts(1, "$mount", "rows").is_none());
+    }
+
+    fn png(side: u32) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        let mut encoder = png::Encoder::new(&mut bytes, side, side);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder
+            .write_header()
+            .unwrap()
+            .write_image_data(&vec![60; (side * side * 4) as usize])
+            .unwrap();
+        bytes
+    }
+
+    /// Review item 3: a model keeps the pictures its rows show and drops
+    /// the others when patches replace or remove rows (thumbnails made as
+    /// the user scrolls do not pile up); a move keeps them.
+    #[test]
+    fn pictures_no_row_shows_are_dropped() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let roots = [root.clone()];
+        let path = |name: &str, side: u32| {
+            let path = root.join(name);
+            std::fs::write(&path, png(side)).unwrap();
+            path.to_str().unwrap().to_owned()
+        };
+        let [a, b, c, d] = [
+            path("a.png", 2),
+            path("b.png", 3),
+            path("c.png", 4),
+            path("d.png", 5),
+        ];
+        let thumb =
+            |key: &str, path: &str| json!({"key": key, "thumb": {"$vestraImage": path, "ref": 1}});
+        let wire = [
+            thumb("0", &a),
+            thumb("1", &b),
+            thumb("2", &c),
+            thumb("3", &a),
+        ];
+        let plain = plain_rows(&wire.iter().collect::<Vec<_>>()).unwrap();
+        let mut images = ui_image::Images::default();
+        let (pictures, keys) = images.load_refs(1, &roots, &plain.images);
+        let written = plain
+            .row_images
+            .iter()
+            .zip(&plain.costs)
+            .map(|(refs, cost)| ui_image::Row {
+                keys: refs
+                    .iter()
+                    .filter_map(|i| keys[*i as usize].clone())
+                    .collect(),
+                cost: *cost,
+            })
+            .collect();
+        images.patched_rows(1, "$mount", "rows", written);
+        let model = Rc::new(Rows::from_plain(plain.rows, pictures));
+        assert_eq!(model.picture_count(), 3);
+        let current = Value::Model(ModelRc::from(model.clone()));
+        let mut patch = |ops: Json, len: usize| {
+            let parsed = ui_patch::parse(&ops, len).unwrap();
+            let rows = images
+                .patch_rows(1, &roots, "$mount", "rows", &parsed, None)
+                .unwrap()
+                .unwrap();
+            ui_patch::apply(&current, &parsed.shapes, rows.values, &rows.images);
+            images.patched_rows(1, "$mount", "rows", rows.written);
+        };
+        // c's only row removed: c goes.
+        patch(json!([{"op": "remove", "at": 2, "count": 1}]), 4);
+        assert_eq!(model.picture_count(), 2);
+        // a's rows: one replaced by d, then the other moved: a stays, d comes.
+        patch(json!([{"op": "set", "at": 0, "row": thumb("0", &d)}]), 3);
+        assert_eq!(model.picture_count(), 3);
+        patch(json!([{"op": "move", "from": 2, "count": 1, "to": 0}]), 3);
+        assert_eq!(model.picture_count(), 3, "a move keeps its picture");
+        patch(json!([{"op": "remove", "at": 0, "count": 1}]), 3);
+        assert_eq!(model.picture_count(), 2, "a's last row gone");
+        // A thousand thumbnails replaced one after another stay one.
+        for side in 0..20 {
+            let e = path(&format!("e{side}.png"), 6 + side);
+            patch(json!([{"op": "set", "at": 0, "row": thumb("0", &e)}]), 2);
+        }
+        assert_eq!(model.picture_count(), 2);
+        let Some(Value::Struct(row)) = model.row_data(0) else {
+            panic!("a row")
+        };
+        let Some(Value::Image(picture)) = row.get_field("thumb") else {
+            panic!("a picture")
+        };
+        assert_eq!(picture.size().width, 25);
     }
 }

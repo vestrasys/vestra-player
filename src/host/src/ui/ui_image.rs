@@ -84,6 +84,9 @@ type Slot = (u64, String, String);
 #[derive(Default)]
 pub struct Written {
     pub seq: u64,
+    /// A whole write arriving in parts (`more`, player 0.6.0), held until
+    /// its last part (`ui_patch::Parts`).
+    pub parts: Option<crate::ui::ui_patch::Parts>,
     pub rows: Option<Vec<Row>>,
 }
 
@@ -312,6 +315,30 @@ impl Images {
         self.written
             .get(&(owner, view.to_owned(), property.to_owned()))
             .map_or(0, |written| written.seq)
+    }
+    /// The parts of a whole write held for the property (`ui_patch::Parts`), taken.
+    pub fn take_parts(
+        &mut self,
+        owner: u64,
+        view: &str,
+        property: &str,
+    ) -> Option<crate::ui::ui_patch::Parts> {
+        self.written
+            .get_mut(&(owner, view.to_owned(), property.to_owned()))
+            .and_then(|written| written.parts.take())
+    }
+    /// Hold the parts of a whole write until its last part.
+    pub fn put_parts(
+        &mut self,
+        owner: u64,
+        view: &str,
+        property: &str,
+        parts: crate::ui::ui_patch::Parts,
+    ) {
+        self.written
+            .entry((owner, view.to_owned(), property.to_owned()))
+            .or_default()
+            .parts = Some(parts);
     }
     pub fn set_seq(&mut self, owner: u64, view: &str, property: &str, seq: u64) {
         self.written

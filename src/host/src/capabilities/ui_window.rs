@@ -116,11 +116,31 @@ fn change(
         return Err(RpcError::new("missing", "view not found"));
     }
     let view_key = format!("w:{}", key.1);
+    // A large array converted on the reader thread (P3): a whole value was
+    // taken out of `params`. A part of a whole value sent in parts is held
+    // until the last.
+    let mut prepared = None;
+    let mut done = None;
+    if method == "ui.set" {
+        let property = string(params, "property")?;
+        prepared = host.take_prepared(reply);
+        match host.parts(
+            reply.owner,
+            &view_key,
+            property,
+            params,
+            prepared.as_deref(),
+        )? {
+            ui_patch::Parted::Held => return Ok(()),
+            ui_patch::Parted::Done(value, rows, seq) => done = Some((value, rows, seq)),
+            ui_patch::Parted::Not => {}
+        }
+    }
     if method == "ui.set"
+        && done.is_none()
         && let Some(patch) = params.get("patch")
     {
         let property = string(params, "property")?;
-        let prepared = host.take_prepared(reply);
         let (base, seq, ops) = ui_patch::request(patch)?;
         if host.images.seq(reply.owner, &view_key, property) != base {
             return Err(ui_patch::stale());
@@ -148,17 +168,19 @@ fn change(
         host.images.set_seq(reply.owner, &view_key, property, seq);
         return Ok(());
     }
+    let mut seq = params["seq"].as_u64().unwrap_or(0);
     let next = match method {
         "ui.set" => {
-            // A large array converted on the reader thread (P3): its whole
-            // value was taken out of `params`.
-            let prepared = host.take_prepared(reply).map(|prepared| *prepared);
-            let (value, rows) = match prepared {
-                Some(prepared) => (
+            let (value, rows) = match (done, prepared.map(|prepared| *prepared)) {
+                (Some((value, rows, last)), _) => {
+                    seq = last;
+                    (std::borrow::Cow::Owned(value), Some(rows))
+                }
+                (None, Some(prepared)) => (
                     std::borrow::Cow::Owned(prepared.whole.unwrap_or_default()),
                     Some(prepared.rows),
                 ),
-                None => (std::borrow::Cow::Borrowed(&params["value"]), None),
+                (None, None) => (std::borrow::Cow::Borrowed(&params["value"]), None),
             };
             Some(host.prop_value_with(
                 reply.owner,
@@ -183,7 +205,6 @@ fn change(
                 ui_values::set(&view.instance, None, name, next)
                     .map_err(|e| RpcError::new("ui", e.to_string()))?;
             }
-            let seq = params["seq"].as_u64().unwrap_or(0);
             host.images.set_seq(reply.owner, &view_key, name, seq);
         }
         "ui.show" => {
