@@ -60,7 +60,7 @@ test("official install: confirm with permissions, download through a redirect, c
     // Under Installed now (Available stayed, without it): the row's button and Disable (formerly in the Plugin Manager).
     assert.equal(props(host)["has-selection"], false);
     await choose(host, "YouTube");
-    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…", "停用"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…"]);
   } finally {
     await stop();
   }
@@ -263,7 +263,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
   try {
     const row = await choose(host, "YouTube");
     assert.equal(row.badge, "可更新 → 0.3.0");
-    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "卸载…", "停用"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "停用", "卸载…"]);
     assert.ok(banners(host).includes("新版本需要新的权限：读写剪贴板"));
     // The Updates chip shows the count ("Updates {}", in Slint).
     assert.equal(props(host)["updates"], 1);
@@ -286,7 +286,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
     );
     await until(host, () => !store.busy);
     // No Roll Back / Restore.
-    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…", "停用"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…"]);
     await until(host, () => (props(host)["versions"] as Version[]).some((v) => v.version === "0.3.0" && v.status === "当前"));
     assert.deepEqual(versions(), [
       ["0.3.0", "当前", false],
@@ -308,6 +308,59 @@ test("update and uninstall from the same repository; no rollback and no older ve
     await until(host, () => host.osd.includes("已卸载 YouTube（数据已删除）"));
     assert.deepEqual(host.packageCalls.at(-1), { method: "uninstall", id: "zysilm.youtube", removeData: true });
     assert.equal(host.confirmTexts.at(-1)!.checkbox, "同时删除它的设置与数据？");
+  } finally {
+    await stop();
+  }
+});
+
+test("updating a disabled plugin keeps it disabled (VS Code); a failure to keep it so is reported", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [
+    {
+      ...YT,
+      versions: [
+        { version: "0.4.0", capabilities: ["commands"] },
+        { version: "0.3.0", capabilities: ["commands"] },
+        { version: "0.2.0", capabilities: ["commands"] },
+      ],
+    },
+  ]);
+  const installed = info("zysilm.youtube", {
+    version: "0.2.0",
+    state: "disabled",
+    capabilities: ["commands"],
+    source: { kind: "repository", url: OFFICIAL },
+  });
+  const { host, store, stop } = await ready(net, [BUILTIN, installed]);
+  const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
+  try {
+    await choose(host, "YouTube");
+    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.4.0", "启用", "卸载…"]);
+    // Through the Versions tab, to 0.3.0 first.
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("installVersion", "0.3.0");
+    await until(host, () => host.osd.includes("已更新 YouTube 到 0.3.0（仍停用）"), "still disabled");
+    await until(host, () => !store.busy);
+    assert.deepEqual(
+      host.packageCalls.map((c) => [c.method, c.id, (c as { enabled?: boolean }).enabled]),
+      [
+        ["install", "zysilm.youtube", undefined],
+        ["setEnabled", "zysilm.youtube", false],
+      ],
+    );
+    assert.equal(state(), "disabled");
+    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.4.0", "启用", "卸载…"]);
+
+    // The player refuses to disable it: the update stands, the status line says so.
+    host.handle("packages.setEnabled", () => {
+      throw new HostError("busy", "reloading");
+    });
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("act", "update");
+    await until(host, () => host.osd.some((text) => text.startsWith("已更新 YouTube 到 0.4.0，但未能保持停用：")), "failure reported");
+    await until(host, () => !store.busy);
+    assert.equal(props(host)["status-warn"], true);
+    assert.equal(state(), "running");
   } finally {
     await stop();
   }

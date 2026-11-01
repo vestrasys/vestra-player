@@ -42,6 +42,11 @@ export const WINDOW = [
   "Not installed",
   "Installed {} {}",
   "Updated {} to {}",
+  // A plugin the user disabled stays disabled after an update or reinstall.
+  "Installed {} {} (still disabled)",
+  "Updated {} to {} (still disabled)",
+  "Installed {} {}, but couldn't keep it disabled: {}",
+  "Updated {} to {}, but couldn't keep it disabled: {}",
   "Uninstalled {} (data deleted)",
   "Uninstalled {} (data kept)",
   "Built-in plugins cannot be uninstalled",

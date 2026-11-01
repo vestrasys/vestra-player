@@ -51,11 +51,11 @@ No `events` and no `playback.*`: the store has nothing to do with playback state
 | Operation | Where in the store | API |
 | --- | --- | --- |
 | Browse repositories, search, README, permissions, version history | Available / Updates tabs, details | index (§3) |
-| Install (repository, link, file, drop), replace another source, update | Row button, details, ⚙ menu | `packages.validateArchive`, `install` |
-| Uninstall (with or without data) | Row button or `…` menu, details | `packages.uninstall` |
-| Disable / enable (no confirmation, user ruling: it can be undone at once) | `…` menu or row button, details | `packages.setEnabled` |
-| Reload (running plugins, built-ins included, and failed ones) | `…` menu, or the button of a failed row | `packages.reload` (player 0.5.1) |
-| Open the data folder; status, package, data folder, data size, failure reason | `…` menu, details | `PluginInfo`, `system.openPath` |
+| Install (repository, link, file, drop), replace another source, update (a plugin disabled before an update or reinstall stays disabled, as in VS Code: the host enables it on commit, so the store calls `setEnabled(id, false)` right after; a revoked version the store disabled is enabled by updating it to the fix, §3.10) | Row button (Install, Update), details, ⚙ menu | `packages.validateArchive`, `install`, `setEnabled` |
+| Uninstall (with or without data) | `…` menu, details | `packages.uninstall` |
+| Disable / enable (no confirmation, user ruling: it can be undone at once) | Row button (when there is no update), else `…` menu; details | `packages.setEnabled` |
+| Reload (running plugins, built-ins included, and failed ones; not a disabled one) | `…` menu; details for a failed plugin (last button) | `packages.reload` (player 0.5.1) |
+| Open the data folder; status, package, data folder, data size, failure reason | `…` menu (last entry), details | `PluginInfo`, `system.openPath` |
 | What a running plugin was refused (a panel position, Previous/Next, a file type held by another plugin) | Warning tag on the row, notices in the details | `PluginInfo.warnings` |
 | Development loads (`--plugin`) | Installed tab with a Dev tag; disable/enable for this run only, never uninstalled | `PluginInfo.origin` |
 | Revocation handling (automatically disable revoked versions) | Notice, details | §3.10 |
@@ -79,7 +79,7 @@ The host's install library is the single source of truth: the store follows `pac
 │ zysilm · Official   Installed │ │icon│ zysilm · Official repository                  │
 │ Paste a link to play or dow…  │ └────┘ Paste a link to play or download a single     │
 │                               │        public YouTube video                          │
-│───────────────────────────────│        [Update to 0.2.1] [Uninstall…] │
+│───────────────────────────────│        [Update to 0.2.1] [Disable] [Uninstall…] │
 │ Bilibili Video         0.2.0  │ ⚠ Hint bar (revoked / unofficial / incompatible / source conflict, see 2.3) │
 │ zysilm · Official             │ ┌──────────────────────────────────┬────────────────┐ │
 │ Paste a link to play a sing…  │ │ (Description) (Changelog) (Versions) │ Version 0.2.0 │ │
@@ -123,20 +123,22 @@ The host's install library is the single source of truth: the store follows `pac
 
 ### 2.3 States and buttons
 
+An installed third-party plugin's buttons keep one fixed order, so disabling or enabling it changes words, never places (store 0.2.9, VS Code's extension page): the row button is the first of Update / Disable·Enable / Uninstall…; the `…` menu holds the rest, then Reload (not while disabled) and Open Data Folder; the details page shows the same buttons in the same places, with Reload last, only for a failed plugin.
+
 The state is derived by comparing "this row (repository R, id)" with the install library entry of the same id (`packages.list()`); `v*` is the "latest installable version" chosen in §3.5.
 
 | State | Condition | Main button | Hint bar |
 | --- | --- | --- | --- |
 | Not installed | The install library has no such id | "Install" (installs `v*`) | Third-party repository: amber "Unofficial repository: not reviewed by Vestra Player" |
-| Installed (latest) | Same id, source = R, version ≥ `v*` | "Uninstall…" | — |
-| Update available | Same id, source = R, `v*` higher | "Update to x.y.z", "Uninstall…" | When the new version adds permissions: "The new version needs new permissions: …" |
+| Installed (latest) | Same id, source = R, version ≥ `v*` | "Disable" ("Enable" while disabled), "Uninstall…" | — |
+| Update available | Same id, source = R, `v*` higher | "Update to x.y.z" (also while disabled; the plugin stays disabled), "Disable" or "Enable", "Uninstall…" | When the new version adds permissions: "The new version needs new permissions: …" |
 | Installed from another source | Same id, source ≠ R, not built-in | "Replace…" | "Installed <version> from <source>. Replacing it uses new, empty data; the original data is kept" |
 | Same id as a built-in plugin | The id is `builtin: true` in the install library | None (button disabled, hover "Built-in plugins are updated with the player") | "Same id as a built-in plugin of the player; cannot be installed from here" |
 | Incompatible | No version satisfies `apiVersion` and `minPlayerVersion` | None | "Needs Vestra Player ≥ x.y.z (current a.b.c)" or "Needs a newer plugin API (vestra/2)" |
-| Revoked (installed version) | The installed version falls in R's `revoked` range | "Update to x.y.z" when a fixed version exists; "Enable Anyway…" while the plugin is disabled (confirm the risk first, §3.10); "Uninstall…" | Red "This version has been revoked: <reason>. The store has disabled it." (after the risk is confirmed and it is enabled again: "…You confirmed the risk and enabled it again; the store will not disable it again.") |
+| Revoked (installed version) | The installed version falls in R's `revoked` range | "Update to x.y.z" when a fixed version exists (updating a version the store disabled enables the fix); "Enable Anyway…" while the plugin is disabled (confirm the risk first, §3.10), "Disable" otherwise; "Uninstall…" | Red "This version has been revoked: <reason>. The store has disabled it." (after the risk is confirmed and it is enabled again: "…You confirmed the risk and enabled it again; the store will not disable it again.") |
 | All versions revoked | Not installed and all compatible versions are revoked | None | "This plugin has been revoked: <reason>" |
 | In progress | A download / install / uninstall is running for this row | "Cancel" | Progress |
-| Only on this machine (not in any repository) | In the install library, but no repository has this id or the source repository was removed | "Uninstall…" | When the source is a link / file / workshop: "Sideloaded plugin: not reviewed; the store does not check it for updates" |
+| Only on this machine (not in any repository) | In the install library, but no repository has this id or the source repository was removed | "Disable" or "Enable", "Uninstall…" | When the source is a link / file / workshop: "Sideloaded plugin: not reviewed; the store does not check it for updates" |
 
 Development loads (`origin: "development"`) and test loads are not in "Installed" and do not affect the table above (they take precedence for this run; the store shows the install library's state as usual and writes "This run uses the development-loaded version" in the hint bar).
 

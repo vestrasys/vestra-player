@@ -211,3 +211,51 @@ test("review A: a delisted plugin revoked with '*' is still disabled (and one wh
     await stop();
   }
 });
+
+test("updating a revoked version the store disabled enables the fix (design §3.10)", async () => {
+  const net = new FakeNet();
+  serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
+  const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
+  const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
+  try {
+    host.dialogAnswers.push(no);
+    await store.refreshAll(true);
+    await until(host, () => disables(host) === 1, "disabled by the store");
+    await openStore(host);
+    await choose(host, "YouTube");
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("act", "update");
+    await until(host, () => host.osd.includes("已更新 YouTube 到 0.2.1"), "updated");
+    await until(host, () => !store.busy);
+    assert.equal(state(), "running", "the fix runs");
+    assert.equal(disables(host), 1, "not disabled again");
+  } finally {
+    await stop();
+  }
+});
+
+test("a revoked version accepted, then disabled by the user, stays disabled after the update", async () => {
+  const net = new FakeNet();
+  serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
+  const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
+  const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
+  try {
+    host.dialogAnswers.push(no);
+    await store.refreshAll(true);
+    await until(host, () => disables(host) === 1, "disabled by the store");
+    await openStore(host);
+    await choose(host, "YouTube");
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("act", "enable");
+    await until(host, () => state() === "running", "enabled anyway");
+    host.window("store").emit("act", "disable");
+    await until(host, () => state() === "disabled", "disabled by the user");
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("act", "update");
+    await until(host, () => host.osd.includes("已更新 YouTube 到 0.2.1（仍停用）"), "still disabled");
+    await until(host, () => !store.busy);
+    assert.equal(state(), "disabled");
+  } finally {
+    await stop();
+  }
+});

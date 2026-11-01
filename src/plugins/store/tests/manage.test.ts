@@ -234,12 +234,15 @@ test("development loads: under Installed with a Dev tag; disable and enable for 
     );
     await choose(host, "d.dev");
     assert.ok(!actions(host).some((a) => a.id === "uninstall"), "a development load is not uninstalled from the store");
+    assert.deepEqual(actions(host).map((a) => a.id), ["disable"]);
     assert.deepEqual(banners(host), ["本次运行以开发方式加载（--plugin）：停用只到播放器退出为止，也不能在这里卸载"], "not called sideloaded");
 
     host.window("store").emit("rowAct", "\nd.dev", "disable");
     await until(host, () => controls(host, "d.dev").dim && props(host)["status-text"] === "已停用「d.dev」，到播放器退出为止", "disabled");
     assert.equal(host.confirms.length, 0, "no question (user ruling)");
     assert.deepEqual(controls(host, "d.dev").primary, { id: "enable", text: "启用", enabled: true });
+    assert.deepEqual(controls(host, "d.dev").menu.map((m) => m.id), ["openData"], "not reloaded while disabled");
+    assert.deepEqual(actions(host).map((a) => a.id), ["enable"], "Enable in Disable's place");
     assert.deepEqual(row(host, "d.dev")!.badge, "已停用");
     host.window("store").emit("rowAct", "\nd.dev", "enable");
     await until(host, () => !controls(host, "d.dev").dim && props(host)["status-text"] === "已启用「d.dev」", "enabled");
@@ -250,6 +253,12 @@ test("development loads: under Installed with a Dev tag; disable and enable for 
         ["setEnabled", "d.dev", true],
       ],
     );
+    // Failed: the same places, Reload after them.
+    host.setPackages(host.packages.map((p) => (p.id === "d.dev" ? { ...p, state: "failed", error: "boom" } : p)));
+    await until(host, () => row(host, "d.dev")!.badge === "失败", "failed");
+    assert.deepEqual(controls(host, "d.dev").primary, { id: "disable", text: "停用", enabled: true });
+    assert.deepEqual(controls(host, "d.dev").menu.map((m) => m.id), ["reload", "openData"]);
+    assert.deepEqual(actions(host).map((a) => a.id), ["disable", "reload"]);
   } finally {
     await stop();
   }

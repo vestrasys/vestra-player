@@ -858,8 +858,9 @@ export class Store {
    * A row's one button and its `…` menu by state (plugin-center spec, "List
    * rows"); `detail` words the install and update buttons with the version.
    * Built-ins have no button; their menu offers only Reload and Open Data
-   * Folder. A development load cannot be uninstalled: its button disables or
-   * enables it for this run.
+   * Folder. An installed plugin's actions keep one fixed order (`#ordered`):
+   * the button is the first of them, the menu the rest, so Disable and Enable
+   * swap only their words and nothing changes place (VS Code's extension page).
    */
   #controls(item: Item, detail: boolean): { primary: Action | null; menu: Action[] } {
     const idle = !this.busy && this.#working === null;
@@ -872,26 +873,37 @@ export class Store {
       return { primary: null, menu: [] };
     }
     const openData = a("openData", msg("Open Data Folder"), info.dataDirectory !== null);
-    // `packages.reload` restarts any plugin but this one; a disabled one is enabled instead, a starting one is busy.
+    // `packages.reload` restarts any plugin but this one; a starting one is busy.
     const reload = a("reload", msg("Reload"), info.id !== this.plugin.id && info.state !== "starting");
     if (info.builtin) return { primary: null, menu: [reload, openData] };
-    const disable = a("disable", msg("Disable"));
-    if (isDevelopmentRow(item)) {
-      if (info.state === "disabled") return { primary: a("enable", msg("Enable")), menu: [openData] };
-      if (info.state === "failed") return { primary: reload, menu: [disable, openData] };
-      return { primary: disable, menu: [reload, openData] };
-    }
-    const uninstall = a("uninstall", msg("Uninstall…"));
-    const update = a("update", detail ? msg("Update to {}", item.best?.version ?? "") : msg("Update"));
-    if (info.state === "disabled") {
-      const enable = a("enable", item.state === "revoked" ? msg("Enable Anyway…") : msg("Enable"));
-      // A revoked version the store disabled: updating to the fixed one comes first.
-      if (item.state === "revoked" && this.#newer(item)) return { primary: update, menu: [enable, uninstall, openData] };
-      return { primary: enable, menu: [uninstall, openData] };
-    }
-    if (this.#newer(item)) return { primary: update, menu: [disable, uninstall, reload, openData] };
-    if (info.state === "failed") return { primary: reload, menu: [disable, uninstall, openData] };
-    return { primary: uninstall, menu: [disable, reload, openData] };
+    const [primary, ...rest] = this.#ordered(item, detail);
+    // A disabled plugin is not reloaded (the player refuses it: enable it instead).
+    const menu = info.state === "disabled" ? [...rest, openData] : [...rest, reload, openData];
+    return { primary: primary ?? null, menu };
+  }
+
+  /**
+   * An installed third-party or development plugin's actions in their fixed
+   * order: Update (only while a newer version exists, in either state, so a
+   * revoked one's fix comes first), Disable or Enable (Enable Anyway… for a
+   * revoked one), then Uninstall… (not for a development load). Reload and Open
+   * Data Folder follow in the `…` menu.
+   */
+  #ordered(item: Item, detail: boolean): Action[] {
+    const idle = !this.busy && this.#working === null;
+    const a = (id: string, text: Msg): Action => ({ id, text, enabled: idle });
+    const info = item.installed!;
+    const list: Action[] = [];
+    const development = isDevelopmentRow(item);
+    if (!development && this.#newer(item))
+      list.push(a("update", detail ? msg("Update to {}", item.best?.version ?? "") : msg("Update")));
+    list.push(
+      info.state === "disabled"
+        ? a("enable", item.state === "revoked" && !development ? msg("Enable Anyway…") : msg("Enable"))
+        : a("disable", msg("Disable")),
+    );
+    if (!development) list.push(a("uninstall", msg("Uninstall…")));
+    return list;
   }
 
   /** The details' icon: as the row's, but the repository's icon is checked against the index's size and sha256. */
@@ -919,20 +931,24 @@ export class Store {
     return ref;
   }
 
-  /** The detail's buttons: the row's button, then Enable, Uninstall… and Disable for a third-party plugin. */
+  /**
+   * The detail's buttons in fixed places: [Update to x] [Disable | Enable]
+   * [Uninstall…] for a third-party plugin, the same as its row's button and
+   * menu, plus Reload last for a failed one (last, so disabling it moves
+   * nothing). Replace… for another source's entry, Install for an available one.
+   */
   #actions(item: Item): Action[] {
-    const { primary } = this.#controls(item, true);
-    const list: Action[] = primary ? [primary] : [];
     const idle = !this.busy && this.#working === null;
-    if (item.state === "otherSource" && item.best) list.push({ id: "replace", text: msg("Replace…"), enabled: idle });
     const info = item.installed;
-    if (info && !info.builtin && isInstalledRow(item) && this.#working !== item.key) {
-      if (info.state === "disabled" && primary?.id !== "enable")
-        list.push({ id: "enable", text: item.state === "revoked" ? msg("Enable Anyway…") : msg("Enable"), enabled: idle });
-      if (primary?.id !== "uninstall" && !isDevelopmentRow(item))
-        list.push({ id: "uninstall", text: msg("Uninstall…"), enabled: idle });
-      if (info.state !== "disabled" && primary?.id !== "disable") list.push({ id: "disable", text: msg("Disable"), enabled: idle });
+    if (this.#working === item.key || !info || info.builtin || !isInstalledRow(item)) {
+      const { primary } = this.#controls(item, true);
+      const list: Action[] = primary ? [primary] : [];
+      if (item.state === "otherSource" && item.best) list.push({ id: "replace", text: msg("Replace…"), enabled: idle });
+      return list;
     }
+    const list = this.#ordered(item, true);
+    if (info.state === "failed")
+      list.push({ id: "reload", text: msg("Reload"), enabled: idle && info.id !== this.plugin.id });
     return list;
   }
 

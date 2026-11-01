@@ -202,7 +202,9 @@ export async function installFromRepository(store: Store, item: Item, version: I
     const candidate = await store.plugin.packages.validateArchive(file);
     const mismatch = compare(candidate, item.id, version);
     if (mismatch) return store.report(mismatch, true);
-    await installCandidate(store, candidate, { kind: "repository", url: repo.url }, replace, name, sameSource ? info : null);
+    // A revoked version the store disabled: its fix runs (design §3.10).
+    const enable = store.revocations.disabledByStore(item);
+    await installCandidate(store, candidate, { kind: "repository", url: repo.url }, replace, name, sameSource ? info : null, enable);
   } catch (error) {
     store.report(failureText(store, error, item.id), true);
   } finally {
@@ -277,6 +279,12 @@ async function download(
  * `install` with the conflict → confirm → replace flow, then follow the
  * change. `previous` is the same-source version being upgraded (for the
  * wording), `replace` when the user already agreed to replace.
+ *
+ * The player clears the disabled flag when an install commits ("installing
+ * is asking for the package to run"). A plugin the user disabled stays
+ * disabled after an update or reinstall, as in VS Code: the store disables it
+ * again right after the commit. `enable` overrides that for a revoked
+ * version the store disabled, whose fix is meant to run.
  */
 async function installCandidate(
   store: Store,
@@ -285,6 +293,7 @@ async function installCandidate(
   replace: boolean,
   name: string,
   previous: PluginInfo | null,
+  enable = false,
 ) {
   const version = candidate.manifest.version;
   store.progress(msg("Installing {}…", name), null);
@@ -308,10 +317,28 @@ async function installCandidate(
     if (!answer?.confirmed) return store.report(msg("Not installed"));
     change = await candidate.install({ source, replace: true });
   }
-  await follow(store, change, "install", () => {
+  const keepDisabled = !enable && previous?.state === "disabled";
+  if (await follow(store, change, "install")) {
+    const id = candidate.manifest.id;
     const upgraded = previous?.version && isVersion(previous.version) && compareVersions(version, previous.version) > 0;
-    return upgraded ? msg("Updated {} to {}", name, version) : msg("Installed {} {}", name, version);
-  });
+    if (!keepDisabled) store.report(upgraded ? msg("Updated {} to {}", name, version) : msg("Installed {} {}", name, version));
+    else
+      try {
+        await store.plugin.packages.setEnabled(id, false);
+        store.report(
+          upgraded
+            ? msg("Updated {} to {} (still disabled)", name, version)
+            : msg("Installed {} {} (still disabled)", name, version),
+        );
+      } catch (error) {
+        store.report(
+          upgraded
+            ? msg("Updated {} to {}, but couldn't keep it disabled: {}", name, version, failureText(store, error, id))
+            : msg("Installed {} {}, but couldn't keep it disabled: {}", name, version, failureText(store, error, id)),
+          true,
+        );
+      }
+  }
   // From a repository the row was already selected; it stays on its tab (the list picks its neighbour if it
   // left). A file or link has no row yet: show it where it lands.
   if (source.kind !== "repository") store.select(selectKey(store, candidate.manifest.id, source));
@@ -344,7 +371,8 @@ const FOLLOW = {
   },
 } satisfies Record<Verb, unknown>;
 
-async function follow(store: Store, change: PackageChange, verb: Verb, committed: () => Msg) {
+/** Follow a change to its end; reports every outcome but a commit, which the caller reports (true). */
+async function follow(store: Store, change: PackageChange, verb: Verb): Promise<boolean> {
   const words = FOLLOW[verb];
   store.progress(change.status === "activating" ? words.activating : words.preparing, () => void change.cancel().catch(() => {}));
   change.onChange((status) => {
@@ -353,17 +381,23 @@ async function follow(store: Store, change: PackageChange, verb: Verb, committed
   const status = await change.done;
   switch (status) {
     case "committed":
-      return store.report(committed());
+      return true;
     case "tooLate":
-      return store.report(words.tooLate);
+      store.report(words.tooLate);
+      return false;
     case "failedDegraded":
       // Only an install reports this (the player kept what was installed before); an uninstall never does.
-      if ("failedDegraded" in words) return store.report(words.failedDegraded, true);
+      if ("failedDegraded" in words) {
+        store.report(words.failedDegraded, true);
+        return false;
+      }
       break;
     case "cancelled":
-      return store.report(words.cancelled);
+      store.report(words.cancelled);
+      return false;
   }
-  return store.report(words.failed(raw(change.message ?? status)), true);
+  store.report(words.failed(raw(change.message ?? status)), true);
+  return false;
 }
 
 // ------------------------------------------------------------ side-loading
@@ -481,9 +515,8 @@ export async function uninstall(store: Store, item: Item) {
   if (!store.begin(msg("Uninstalling {}…", item.name))) return;
   try {
     const change = await store.plugin.packages.uninstall(info.id, { removeData: answer.checked });
-    await follow(store, change, "uninstall", () =>
-      answer.checked ? msg("Uninstalled {} (data deleted)", item.name) : msg("Uninstalled {} (data kept)", item.name),
-    );
+    if (await follow(store, change, "uninstall"))
+      store.report(answer.checked ? msg("Uninstalled {} (data deleted)", item.name) : msg("Uninstalled {} (data kept)", item.name));
   } catch (error) {
     store.report(errorCode(error) === "unsupported" ? msg("Built-in plugins cannot be uninstalled") : failureText(store, error, info.id), true);
     // A refusal (`missing`, `unsupported`, `busy`) changes nothing `packages.onChange` would report: read the list again.
