@@ -1390,6 +1390,17 @@ pub fn thread_cycles() -> u64 {
     vestra_win32::thread_cycles()
 }
 
+/// The host log's memory line: this process's private bytes and the system
+/// commit charge.
+pub fn memory_status() -> Option<super::MemoryStatus> {
+    vestra_win32::memory_status().map(|status| super::MemoryStatus {
+        private_bytes: status.private_bytes,
+        commit_used: status.commit_used,
+        commit_limit: status.commit_limit,
+        physical_load: Some(status.physical_load),
+    })
+}
+
 /// The main window starts a draw (frame log: ` ui-gpu`).
 pub fn ui_draw_started() {
     vestra_gpu_render::ui_draw_started();

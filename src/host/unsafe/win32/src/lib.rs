@@ -12,7 +12,8 @@
 //! matching its display exactly (`unmatch_display`), whether an open
 //! file is on a network file system (`file_is_remote`), waiting for a
 //! process to end (`wait_for_process_exit`), the thread's CPU cycles
-//! (`thread_cycles`), the DXGI adapters with their driver versions
+//! (`thread_cycles`), the process's private memory and the system commit
+//! charge (`memory_status`, the host log's memory line), the DXGI adapters with their driver versions
 //! (`dxgi_adapters`, through the `windows` crate's COM interfaces; no device
 //! is created), and whether an adapter's driver offers RTX Video Super
 //! Resolution (`video_super_resolution`: a short-lived Direct3D 11 device
@@ -351,6 +352,64 @@ pub fn thread_cycles() -> u64 {
     // live local out-parameter.
     let ok = unsafe { QueryThreadCycleTime(GetCurrentThread(), &mut cycles) };
     if ok != 0 { cycles } else { 0 }
+}
+
+/// The process's private bytes and the system's memory (`memory_status`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MemoryStatus {
+    /// This process's private committed bytes (Task Manager's "Commit size").
+    pub private_bytes: u64,
+    /// The system commit charge, in bytes.
+    pub commit_used: u64,
+    /// The system commit limit (physical memory plus page files), in bytes.
+    pub commit_limit: u64,
+    /// Physical memory in use, percent.
+    pub physical_load: u32,
+}
+
+/// This process's private bytes (`K32GetProcessMemoryInfo`) and the system
+/// commit charge (`GlobalMemoryStatusEx`: the commit limit is
+/// `ullTotalPageFile`, what is left of it `ullAvailPageFile`). `None` when
+/// either call fails.
+pub fn memory_status() -> Option<MemoryStatus> {
+    use windows_sys::Win32::System::ProcessStatus::{
+        K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
+    };
+    use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+    let mut process = PROCESS_MEMORY_COUNTERS_EX {
+        cb: std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: the current process's pseudo-handle (no close needed) and a
+    // live local out-parameter whose size is passed in `cb`; the EX
+    // structure begins with the plain one, as the API documents.
+    let ok = unsafe {
+        K32GetProcessMemoryInfo(
+            GetCurrentProcess(),
+            (&raw mut process).cast::<PROCESS_MEMORY_COUNTERS>(),
+            process.cb,
+        )
+    };
+    if ok == 0 {
+        return None;
+    }
+    let mut system = MEMORYSTATUSEX {
+        dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: a live local out-parameter with `dwLength` set, as required.
+    if unsafe { GlobalMemoryStatusEx(&mut system) } == 0 {
+        return None;
+    }
+    Some(MemoryStatus {
+        private_bytes: process.PrivateUsage as u64,
+        commit_used: system
+            .ullTotalPageFile
+            .saturating_sub(system.ullAvailPageFile),
+        commit_limit: system.ullTotalPageFile,
+        physical_load: system.dwMemoryLoad,
+    })
 }
 
 /// Wait up to `timeout_ms` for process `pid` to end (a player restarting
@@ -799,6 +858,17 @@ mod tests {
         assert!(!answer(0, 0), "succeeded without saying yes");
         // E_INVALIDARG with a stale value: not supported.
         assert!(!answer(0x8007_0057_u32 as i32, 1));
+    }
+
+    /// The memory line's numbers: this process uses some private memory,
+    /// within the system's commit charge, within its limit.
+    #[test]
+    fn memory_status_reads_this_process_and_the_commit_charge() {
+        let status = super::memory_status().expect("both calls succeed");
+        assert!(status.private_bytes > 0, "{status:?}");
+        assert!(status.commit_used >= status.private_bytes, "{status:?}");
+        assert!(status.commit_limit >= status.commit_used, "{status:?}");
+        assert!(status.physical_load <= 100, "{status:?}");
     }
 
     /// An adapter that does not exist is an error, not "unsupported".

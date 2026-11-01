@@ -66,7 +66,24 @@ impl Capability for ProcessingVideo {
             "processing.operation" => forward(host, reply, method, params),
             "video.shaders.set" => {
                 let params = shader_request(host, reply.owner, params)?;
+                // The crash guard (`host/diagnostics.rs`): refused after a
+                // run that ended with plugin shaders on, else armed first.
+                let handle = format!("shaders:{}", params["id"].as_str().unwrap_or_default());
+                let files = params["paths"].as_array().map_or(0, Vec::len);
+                host.plugin_shaders(reply.owner, &handle, files)?;
                 forward_media(host, reply, method, &params)
+            }
+            "video.render.set" => {
+                // Only a request that names `shaders` changes them (the
+                // values merge into the owner's render options).
+                if let Some(list) = params["values"]["shaders"].as_array() {
+                    host.plugin_shaders(reply.owner, "render", list.len())?;
+                }
+                forward_media(host, reply, method, params)
+            }
+            "video.render.release" => {
+                host.plugin_shaders(reply.owner, "render", 0)?;
+                forward_media(host, reply, method, params)
             }
             _ => forward_media(host, reply, method, params),
         }

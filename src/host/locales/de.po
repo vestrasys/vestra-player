@@ -508,3 +508,9 @@ msgstr "{} wird gestartet…"
 #, x-machine
 msgid "{} could not start"
 msgstr "{} konnte nicht gestartet werden"
+
+#. The OSD once per start when plugin shaders are kept off because the last run ended while they were on.
+#: src/host/diagnostics.rs
+#, x-machine
+msgid "Plugin shaders are off: the player ended unexpectedly while they were on"
+msgstr "Plugin-Shader sind aus: Der Player wurde unerwartet beendet, während sie aktiv waren"

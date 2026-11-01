@@ -20,7 +20,7 @@
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | opening the player | `on_open_files` (macOS: open-documents Apple events through `vestra-open-files`; elsewhere files come on the command line), `single_instance` / `single_instance_restarted` → `Launch` / `Primary` (shared, in `instance.rs`), `allow_handoff_foreground` (Windows: `AllowSetForegroundWindow`) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
-//! | facts | `os_facts` (blocking), `gpu_adapters` (Windows: DXGI through `vestra-win32`; elsewhere none yet), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
+//! | facts | `os_facts` (blocking), `gpu_adapters` (Windows: DXGI through `vestra-win32`; elsewhere none yet), `memory_status` (Windows: private bytes and commit charge through `vestra-win32`; elsewhere none yet), `displays` (UI thread),`app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
 //! | installation | `install_layout` (pure, in `layout.rs`, for every system) → `current_install_layout` |
 //! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
@@ -512,6 +512,24 @@ pub fn window_device_lost() -> bool {
 #[cfg(not(target_os = "windows"))]
 pub fn thread_cycles() -> u64 {
     0
+}
+
+/// The host log's memory line (`diag::memory_line`): this process's
+/// private bytes and the system commit charge.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MemoryStatus {
+    pub private_bytes: u64,
+    pub commit_used: u64,
+    pub commit_limit: u64,
+    /// Physical memory in use, percent, where the system says.
+    pub physical_load: Option<u32>,
+}
+
+/// Windows only (`vestra-win32`); macOS would need the Mach task calls in
+/// an unsafe crate, so no memory line there yet.
+#[cfg(not(target_os = "windows"))]
+pub fn memory_status() -> Option<MemoryStatus> {
+    None
 }
 
 /// The main window starts a draw (Windows only).
