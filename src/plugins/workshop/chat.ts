@@ -60,6 +60,12 @@ export interface Row {
  * names), and whether the key is the likely cause.
  */
 export function classify(message: string, model = ""): { code: string; args: string[]; settings: boolean } {
+  // The endpoint refuses the reasoning parameters (thinking, reasoning_effort, budget_tokens…).
+  if (
+    /(reasoning|thinking|budget_tokens|enable_thinking)/i.test(message) &&
+    /not supported|unsupported|does not support|doesn't support|not allowed|not permitted|unknown|unrecognized|unexpected|invalid|extra (inputs|fields)/i.test(message)
+  )
+    return { code: "thinking", args: [], settings: true };
   if (/\b(401|403)\b|invalid.{0,20}(api.?key|x-api-key|token)|incorrect api key|authentication|authenticate|unauthori[sz]ed/i.test(message))
     return { code: "key", args: [], settings: true };
   if (
@@ -96,6 +102,8 @@ export class Chat {
   /** Thinking came from the record (no durations). */
   private untimed = false;
   private notes = 0;
+  /** The turn's latest progress note: the answer after all if the turn ends without one. */
+  private lastNote = "";
   /** Where the current model message's text starts in the answer row (-1: none open). */
   private messageStart = -1;
   private readonly now: () => number;
@@ -289,14 +297,32 @@ export class Chat {
     }
     if (note) {
       this.notes++;
+      this.lastNote = note;
       this.addThought("note", note);
     }
+  }
+
+  /**
+   * A turn that ends without an answer (the summary came with the last tool
+   * call; Stop, a timeout or an error after it): its latest note is the answer.
+   */
+  private restoreAnswer() {
+    const row = this.thought;
+    const note = this.lastNote;
+    if (this.assistant || !note || !row) return;
+    if (row.text.endsWith(note)) row.text = row.text.slice(0, row.text.length - note.length).replace(/\s+$/, "");
+    this.notes--;
+    this.refreshThought();
+    if (!row.text) this.rows.splice(this.rows.indexOf(row), 1);
+    this.assistant = this.push({ kind: "assistant", text: note, state: 1 });
   }
 
   /** Closes the current turn: no more text or calls join its rows. */
   endTurn() {
     this.stopThinking();
     this.messageStart = -1;
+    this.restoreAnswer();
+    this.lastNote = "";
     if (this.assistant) this.assistant.state = 1;
     this.thought = undefined;
     this.segment = "";

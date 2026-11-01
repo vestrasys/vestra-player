@@ -164,6 +164,7 @@ component Message inherits VerticalLayout {
             : row.code == "retry" ? @tr("Connection failed; retrying ({0}/{1})…", row.args[0], row.args[1])
             : row.code == "compacting" ? @tr("Compacting the context…")
             : row.code == "compacted" ? @tr("Context compacted")
+            : row.code == "chat-delete-failed" ? @tr("Could not delete “{0}”: {1}", row.args[0], row.args[1])
             : row.code == "hidden" ? @tr("{n} earlier message is not shown (the full record is in the session folder)" | "{n} earlier messages are not shown (the full record is in the session folder)" % row.n)
             : row.code
     }
@@ -171,6 +172,7 @@ component Message inherits VerticalLayout {
         row.code == "key" ? @tr("The API key is invalid or has no permission; check it in the settings.")
             : row.code == "model" ? @tr("The model “{}” is not available; choose another model in the settings.", row.args[0])
             : row.code == "model-unnamed" ? @tr("The model is not available; choose another model in the settings.")
+            : row.code == "thinking" ? @tr("The model does not accept the thinking settings: in the settings, set Thinking to Off, or clear “This model can think before it answers”.")
             : row.code == "quota" ? @tr("Out of quota or too many requests; try again later.")
             : row.code == "network" ? @tr("Network error: cannot reach the provider.")
             : row.code == "timeout" ? @tr("No reply from the provider for {} seconds; stopped.", row.args[0])
@@ -211,10 +213,39 @@ component Message inherits VerticalLayout {
 
     // The model's thinking and its notes between tool calls, collapsed as in
     // ChatGPT / Claude: "Thought for 12 seconds"; click to read them (dimmed).
+    // Keyboard: Tab reaches the line (a focus ring), Space or Enter expands it;
+    // screen readers see an expandable button.
     if item.kind == "thought": VerticalLayout {
         spacing: 4px;
         Rectangle {
             height: 20px;
+            accessible-role: button;
+            accessible-label: root.thought-text(item);
+            accessible-expandable: true;
+            accessible-expanded: item.expanded;
+            accessible-action-default => { root.toggle(item.id); }
+            Rectangle {
+                visible: thought-keys.has-focus;
+                x: -3px;
+                width: parent.width + 6px;
+                border-width: 1px;
+                border-color: Theme.accent;
+                border-radius: Theme.radius-control;
+            }
+            thought-keys := FocusScope {
+                x: 0;
+                y: 0;
+                width: 0;
+                height: 0;
+                focus-on-click: false;
+                key-pressed(event) => {
+                    if event.text == Key.Space || event.text == Key.Return {
+                        root.toggle(item.id);
+                        return accept;
+                    }
+                    reject
+                }
+            }
             HorizontalLayout {
                 spacing: 6px;
                 Small {

@@ -16,6 +16,8 @@ export interface Meta {
   file: string | null;
   /** A run was in progress when the plugin stopped. */
   running: boolean;
+  /** Plugin ids installed from this session (by the agent or the card), for the delete dialog. */
+  installed?: string[];
 }
 
 const ID = /^s-[0-9a-z]+-[0-9a-f]{6}$/;
@@ -58,6 +60,26 @@ export class Sessions {
     await (this.writes.get(id) ?? Promise.resolve()).catch(() => {});
     this.writes.delete(id);
     await fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+
+  /** remove() was called for the session (late writers check it). */
+  isRemoved(id: string): boolean {
+    return this.removed.has(id);
+  }
+
+  /**
+   * After a remove() that failed: true when the session's meta.json is still
+   * there, so it stays a session (and can be saved again); false when only
+   * leftovers remain.
+   */
+  async restore(meta: Meta): Promise<boolean> {
+    try {
+      await fs.access(path.join(this.directory(meta.id), "meta.json"));
+    } catch {
+      return false;
+    }
+    this.removed.delete(meta.id);
+    return true;
   }
 
   /**

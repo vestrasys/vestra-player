@@ -179,3 +179,64 @@ test("rows from pi's JSONL", () => {
   assert.equal(chat.rows[1].expanded, false, "older sessions' thinking is collapsed too");
   assert.equal(chat.lastPrompt, "再来");
 });
+
+test("a turn that ends without an answer shows its last note as the answer: summary with the last tool call, Stop, an error", () => {
+  const note = (chat, text, id) => {
+    chat.apply({ kind: "assistant_start" });
+    chat.apply({ kind: "text", delta: text });
+    chat.apply({ kind: "assistant_end", text: "", stopReason: "toolUse", error: null });
+    chat.apply({ kind: "tool_start", id, name: "check", target: "local.demo" });
+    chat.apply({ kind: "tool_end", id, name: "check", ok: true, summary: "" });
+  };
+  const chat = new Chat();
+  chat.user("做个插件");
+  note(chat, "先检查。", "a");
+  note(chat, "插件做好了，可以安装。", "b");
+  // The model's last message is empty.
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "assistant_end", text: "", stopReason: "stop", error: null });
+  chat.apply({ kind: "settled", aborted: false });
+  assert.deepEqual(chat.rows.map((r) => [r.kind, r.kind === "thought" ? thoughtLine(zh, r) : shown(r)]), [
+    ["user", "做个插件"],
+    ["thought", "1 条进度说明"],
+    ["tools", "2 个工具调用"],
+    ["assistant", "插件做好了，可以安装。"],
+  ]);
+  assert.equal(chat.rows[1].text, "先检查。");
+
+  // Stop after one note: the note is the answer, and no thought row stays empty.
+  chat.user("再改改");
+  note(chat, "改好了一半。", "c");
+  chat.apply({ kind: "assistant_end", text: "", stopReason: "aborted", error: null });
+  assert.deepEqual(chat.rows.slice(4).map((r) => [r.kind, r.kind === "notice" ? notice(zh, r) : shown(r)]), [
+    ["user", "再改改"],
+    ["tools", "1 个工具调用"],
+    ["assistant", "改好了一半。"],
+    ["notice", "已停止"],
+  ]);
+
+  // An error after a note: the note, then the error.
+  chat.user("继续");
+  note(chat, "正在测试。", "d");
+  chat.apply({ kind: "assistant_end", text: "", stopReason: "error", error: "Connection error." });
+  assert.deepEqual(chat.rows.slice(-3).map((r) => r.kind), ["tools", "assistant", "error"]);
+  assert.equal(chat.rows.at(-2).text, "正在测试。");
+});
+
+test("an endpoint that refuses the reasoning parameters: an error that points to Settings ▸ Thinking", () => {
+  for (const message of [
+    "400 Unrecognized request argument supplied: reasoning_effort",
+    "400 thinking: Extra inputs are not permitted",
+    "400 invalid value for budget_tokens",
+    "400 This model does not support thinking",
+  ]) {
+    const found = classify(message, "m");
+    assert.equal(found.code, "thinking", message);
+    assert.equal(found.settings, true);
+  }
+  assert.equal(classify("401 invalid x-api-key").code, "key");
+  assert.equal(
+    error(zh, classify("400 This model does not support thinking")),
+    "模型不接受思考设置：请在设置中把「思考」设为「关闭」，或取消勾选「这个模型会先思考再回答」。",
+  );
+});

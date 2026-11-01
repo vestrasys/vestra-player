@@ -3,7 +3,7 @@
 // choose the level and, for a custom endpoint, whether its model reasons.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { reasons } from "../providers.ts";
+import { DEFAULT_SETTINGS, reasoningOf, reasons, thinkingOf, validSettings } from "../providers.ts";
 import { server, startAi } from "./fixture.mjs";
 
 /** Thinks, writes a note and calls ls; after the tool result, thinks again and answers. */
@@ -66,7 +66,7 @@ test("thinking off in the settings, or a model marked as not reasoning, sends no
 });
 
 test("an OpenAI-format endpoint's reasoning_content arrives as thinking, not as the answer", async () => {
-  const mock = await server(() => ({ thinking: ["Short question."], text: ["你好！"] }), { models: ["qwen3:8b"] });
+  const mock = await server(() => ({ thinking: ["Short question."], text: ["你好！"] }), { models: ["qwq-32b"] });
   const ai = await startAi({ locale: "zh-Hans" });
   await ai.configure(mock.url);
   await ai.ask("你好");
@@ -75,8 +75,40 @@ test("an OpenAI-format endpoint's reasoning_content arrives as thinking, not as 
   await ai.stop();
 });
 
-test("which custom models reason, by id", () => {
-  for (const id of ["MiniMax-M3", "minimax-m3.1-flash", "deepseek-reasoner", "qwen3:8b", "o3-mini", "gpt-5-mini", "claude-sonnet-4-5", "gemini-2.5-flash", "glm-4.6", "kimi-k2-thinking"])
-    assert.equal(reasons(id), true, id);
-  for (const id of ["gpt-4o", "deepseek-chat", "llama3.1:8b", "claude-3-5-sonnet", "gemini-2.0-flash", "mock-1", "gemma3"]) assert.equal(reasons(id), false, id);
+test("which custom models reason, by id: only clear reasoning models; when unsure, not", () => {
+  const yes = ["MiniMax-M3", "minimax-m3.1-flash", "deepseek-reasoner", "deepseek-r1", "o3-mini", "gpt-5-mini", "gpt-oss-120b", "claude-sonnet-4-5", "gemini-2.5-flash"];
+  const thinkingVariants = ["qwen3-235b-a22b-thinking-2507", "kimi-k2-thinking", "grok-3-mini", "grok-4-fast-reasoning", "qwq-32b", "magistral-medium"];
+  for (const id of [...yes, ...thinkingVariants]) assert.equal(reasons(id), true, id);
+  const no = ["gpt-4o", "gpt-5-chat-latest", "deepseek-chat", "deepseek-v3.1", "llama3.1:8b", "claude-3-5-sonnet", "gemini-2.0-flash", "mock-1", "gemma3"];
+  const unsure = ["qwen3:8b", "qwen3-coder-480b", "Qwen3-235B-A22B-Instruct-2507", "kimi-k2-instruct", "grok-3", "grok-4", "grok-4-fast-non-reasoning", "glm-4.6"];
+  for (const id of [...no, ...unsure]) assert.equal(reasons(id), false, id);
+});
+
+test("an unknown thinking level or a damaged reasoning map keeps the other settings", () => {
+  const saved = { ...DEFAULT_SETTINGS, provider: "custom-openai", models: { "custom-openai": "m" }, thinking: "high", reasoning: { "custom-openai m": "yes" } };
+  assert.equal(validSettings(saved), true);
+  assert.equal(thinkingOf(saved), "low");
+  assert.equal(reasoningOf(saved, "custom-openai m"), undefined);
+  assert.equal(reasoningOf({ ...saved, reasoning: { "custom-openai m": false } }, "custom-openai m"), false);
+});
+
+test("a thinking change while the agent generates applies to the next message (a new worker continues the conversation)", async () => {
+  let first = true;
+  const mock = await server(() => {
+    const answer = first ? { text: ["一"], delayMs: 1500 } : { text: ["二"] };
+    first = false;
+    return answer;
+  }, { models: ["MiniMax-M3"] });
+  const ai = await startAi({ locale: "zh-Hans" });
+  await ai.configure(mock.url, { format: "Anthropic" });
+  await ai.ask("一", { wait: false });
+  await ai.until(() => ai.props.busy === true && mock.chats.length === 1, "generating");
+  ai.page.emit("choose-thinking", 0);
+  await ai.until(() => ai.props.busy === false, "first reply");
+  assert.equal(mock.chats[0].body.thinking.type, "enabled");
+  await ai.ask("二");
+  const second = mock.chats.at(-1).body;
+  assert.deepEqual(second.thinking, { type: "disabled" });
+  assert.deepEqual(second.messages.map((m) => m.role), ["user", "assistant", "user"], "the same conversation");
+  await ai.stop();
 });

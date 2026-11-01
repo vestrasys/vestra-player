@@ -107,7 +107,7 @@ export component AiSettingsPage inherits Rectangle {
             : s.code == "owner-chars" ? @tr("A GitHub name has only letters, digits and “-”, at most 39 characters (new plugins use local.<name> for now)")
             : ""
     }
-    height: 450px;
+    height: 480px;
     // The label column: 76px, or the widest label.
     private property <length> column: max(76px, label-measure.preferred-width);
     Rectangle {
@@ -251,6 +251,17 @@ export component AiSettingsPage inherits Rectangle {
                 model: [@tr("Off"), @tr("Low (recommended)"), @tr("Medium")];
                 current-index <=> AiSettings.thinking-index;
                 selected => { AiSettings.choose-thinking(self.current-index); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Label { column: root.column; text: ""; }
+            Text {
+                text: @tr("For reasoning models. Thinking tokens are billed by the provider like the answer.");
+                color: Theme.text-dim;
+                font-size: Theme.font-body;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
             }
         }
         if AiSettings.custom: HorizontalLayout {
