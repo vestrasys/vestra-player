@@ -325,7 +325,7 @@ Without an API change: the host takes the first Latin letter of the title automa
 
 **Cross-platform**: on macOS ⌥↩ and ⌃↩ are not taken by the system; Ctrl bindings also fire with ⌘ on macOS. macOS fullscreen creates a new space, so changing displays must first exit fullscreen, move the window, then enter again.
 
-**Acceptance**: Esc enters fullscreen in windowed mode and leaves it in fullscreen; Esc in an open menu, a dialog or a text field only closes or cancels it; Ctrl+Enter makes the picture fill the screen with no black bars; with two displays, Ctrl+Shift+Enter goes fullscreen on the other screen.
+**Acceptance**: Esc enters fullscreen in windowed mode and leaves it in fullscreen; Esc in an open menu or a dialog that handles it, or in a text field that handles it (the shared input widgets and the playlist search do), only closes or cancels it; a plain text field lets Esc bubble (Slint `TextInput` does not take it), and then it toggles fullscreen; Ctrl+Enter makes the picture fill the screen with no black bars; with two displays, Ctrl+Shift+Enter goes fullscreen on the other screen.
 
 ### IA-CORE-05 Windowed-mode "auto-hide the control bar" switch (P3)
 
@@ -1369,7 +1369,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | K-10 | While a menu is open | All keys stay in the menu; bindings are paused | |
 | K-11 | Menu keyboard operation | ↑↓←→, Enter, Space, Esc; mnemonics (not implemented) | IA-CORE-02 |
 | K-12 | Esc: fullscreen | Toggles fullscreen (enters it in windowed mode, user ruling 2026-11-01) unless a menu, dialog or text field handles it | IA-CORE-04 |
-| K-13 | Esc: windowed mode | No effect | |
+| K-13 | Esc: windowed mode | Enters fullscreen (see K-12; up to 0.5.x no effect) | IA-CORE-04 |
 | K-14 | Esc: menu | Closes one level at a time | IA-CORE-01 |
 | K-15 | Esc: tool windows and dialogs | Closes the window in small dialogs (seek, open URL, aspect ratio, confirmation); not handled in large tool windows (Picture Adjustments, audio, subtitles, snapshot) | |
 | K-16 | Esc: list search box | Clears the search and returns focus to the list | |

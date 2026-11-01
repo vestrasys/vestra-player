@@ -489,8 +489,21 @@ fn main() -> Result<()> {
     }
     host.register_host_commands()?;
     {
-        if core_actions::migrate_overlay(&mut host.ui_state.state.bindings) {
-            // Old playback-plugin keys now name the core actions; saved once.
+        let renamed = core_actions::migrate_overlay(&mut host.ui_state.state.bindings);
+        // Host 0.6.0: an override of Toggle Fullscreen gets its new
+        // default Escape, once (`migrate_fullscreen_escape`).
+        let holders = bindings::parse("Escape")
+            .map(|escape| host.input.borrow().table.default_holders(&escape))
+            .unwrap_or_default();
+        let state = &mut host.ui_state.state;
+        let escape = host::migrate_fullscreen_escape(
+            &mut state.bindings,
+            &mut state.bindings_migrated,
+            &holders,
+        );
+        if renamed || escape {
+            // Old playback-plugin keys now name the core actions, and the
+            // migrations are recorded; saved once.
             let now = host.now_ms();
             host.ui_state.touch(now);
             host.ui_state.flush();

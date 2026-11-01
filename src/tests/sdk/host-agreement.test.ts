@@ -1338,10 +1338,10 @@ function hostCommands(): Row[] {
   const literals = (text: string) =>
     [...text.matchAll(/"([^"]*)"/g)].map((m) => m[1]!);
   const rows: Row[] = [];
-  // register_host_commands: `let mut x = Declaration::new("Title", &["Path"])`, `x.bindings = vec![..]`.
+  // host_declarations: `let mut x = Declaration::new("Title", &["Path"])`, `x.bindings = vec![..]`.
   const own = braces(
     host("src/host/actions.rs"),
-    "fn register_host_commands(&mut self)",
+    "fn host_declarations()",
   );
   for (const [, id, variable] of own.matchAll(
     /\("([a-z-]+)", (\w+), state\(/g,
@@ -1349,7 +1349,7 @@ function hostCommands(): Row[] {
     const made = new RegExp(
       `let mut ${variable} =\\s*commands::Declaration::new\\("([^"]+)", &\\[([^\\]]*)\\]\\)`,
     ).exec(own);
-    assert.ok(made, `register_host_commands: the declaration of ${id}`);
+    assert.ok(made, `host_declarations: the declaration of ${id}`);
     const bindings =
       new RegExp(`${variable}\\.bindings = vec!\\[([^\\]]*)\\]`).exec(
         own,
@@ -1405,7 +1405,7 @@ test("BUILTIN_COMMANDS and BUILTIN_SUBMENUS are what the player and its built-in
   assertRows(
     hostCommands(),
     BUILTIN_COMMANDS.filter((row) => row.owner === "host"),
-    "the player's own commands (host/actions.rs register_host_commands, core_actions.rs) differ from BUILTIN_COMMANDS",
+    "the player's own commands (host/actions.rs host_declarations, core_actions.rs) differ from BUILTIN_COMMANDS",
   );
   const root = new URL("../../plugins/", import.meta.url);
   const rows: Row[] = [];

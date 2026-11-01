@@ -3,6 +3,7 @@
 //! menu, mount and input handling. Capabilities (`crate::capabilities`) and
 //! a few other modules add their own `impl Host` blocks.
 mod actions;
+pub(crate) use actions::migrate_fullscreen_escape;
 mod dispatch;
 mod events;
 mod handle;

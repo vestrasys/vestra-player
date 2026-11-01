@@ -136,25 +136,21 @@ pub(crate) fn observe_side_button(
     let WindowEvent::MouseInput { state, button, .. } = event else {
         return false;
     };
-    if side_button_input(*state, *button, bindings::Mods::default()).is_none() || menu_open() {
-        return false;
-    }
-    let state_mods = modifiers.get();
-    let mods = bindings::Mods {
-        ctrl: state_mods.control_key(),
-        alt: state_mods.alt_key(),
-        shift: state_mods.shift_key(),
-        cmd: state_mods.super_key(),
-    };
-    side_button(input, events, generation, *state, *button, mods)
+    side_button_press(*state, *button, modifiers.get(), menu_open)
+        .is_some_and(|event| fire(input, events, generation, &event, false, None))
 }
 
-/// The binding input of a side button's press (`None` for any other
-/// button, and for releases: a side button fires on its press).
-pub(crate) fn side_button_input(
+/// What a mouse button event over a window binds, if it is a side button's
+/// press: `Mouse:X1` (back) or `Mouse:X2` (forward) with the window's
+/// modifiers (winit's control is Ctrl, its super is ⌘ / the Windows key,
+/// as for keys). `None` for other buttons, for releases (a side button
+/// fires on its press) and while a menu is open (`menu_open` is asked only
+/// for a side button's press).
+pub(crate) fn side_button_press(
     state: slint::winit_030::winit::event::ElementState,
     button: slint::winit_030::winit::event::MouseButton,
-    mods: bindings::Mods,
+    modifiers: slint::winit_030::winit::keyboard::ModifiersState,
+    menu_open: impl FnOnce() -> bool,
 ) -> Option<bindings::Input> {
     use slint::winit_030::winit::event::{ElementState, MouseButton};
     if state != ElementState::Pressed {
@@ -165,23 +161,18 @@ pub(crate) fn side_button_input(
         MouseButton::Forward => "X2",
         _ => return None,
     };
+    if menu_open() {
+        return None;
+    }
     Some(bindings::Input {
-        mods,
+        mods: bindings::Mods {
+            ctrl: modifiers.control_key(),
+            alt: modifiers.alt_key(),
+            shift: modifiers.shift_key(),
+            cmd: modifiers.super_key(),
+        },
         name: format!("Mouse:{name}"),
     })
-}
-
-/// Fire a side button's press (`side_button_input`); true = bound.
-pub(crate) fn side_button(
-    input: &Rc<RefCell<InputShared>>,
-    events: &mpsc::Sender<Event>,
-    generation: u64,
-    state: slint::winit_030::winit::event::ElementState,
-    button: slint::winit_030::winit::event::MouseButton,
-    mods: bindings::Mods,
-) -> bool {
-    side_button_input(state, button, mods)
-        .is_some_and(|event| fire(input, events, generation, &event, false, None))
 }
 
 /// Option + a named key (⌥⌦, ⌥←): macOS delivers it in a form Slint does not
@@ -429,22 +420,121 @@ impl Host {
 mod tests {
     use super::*;
     use slint::winit_030::winit::event::{ElementState, MouseButton};
+    use slint::winit_030::winit::keyboard::ModifiersState;
 
-    /// The side buttons fire their bindings once per press, with the
-    /// defaults of core_actions.rs (user setting 2026-11-01: back = next,
-    /// forward = previous); releases and other buttons fire nothing.
+    fn closed() -> bool {
+        false
+    }
+
+    /// Back is `Mouse:X1`, forward `Mouse:X2`, on their press only; other
+    /// buttons and releases are none of them.
+    #[test]
+    fn side_button_presses_name_x1_and_x2() {
+        let none = ModifiersState::empty();
+        let press = |button| side_button_press(ElementState::Pressed, button, none, closed);
+        assert_eq!(press(MouseButton::Back).unwrap().name, "Mouse:X1");
+        assert_eq!(press(MouseButton::Forward).unwrap().name, "Mouse:X2");
+        for button in [
+            MouseButton::Left,
+            MouseButton::Right,
+            MouseButton::Middle,
+            MouseButton::Other(9),
+        ] {
+            assert_eq!(press(button), None, "{button:?}");
+        }
+        for button in [MouseButton::Back, MouseButton::Forward] {
+            assert_eq!(
+                side_button_press(ElementState::Released, button, none, closed),
+                None
+            );
+        }
+    }
+
+    /// An open menu keeps them (and is asked only for a side button).
+    #[test]
+    fn side_buttons_do_nothing_while_a_menu_is_open() {
+        let none = ModifiersState::empty();
+        for button in [MouseButton::Back, MouseButton::Forward] {
+            assert_eq!(
+                side_button_press(ElementState::Pressed, button, none, || true),
+                None
+            );
+        }
+        let asked = std::cell::Cell::new(false);
+        let ask = || {
+            asked.set(true);
+            true
+        };
+        assert_eq!(
+            side_button_press(ElementState::Pressed, MouseButton::Left, none, ask),
+            None
+        );
+        assert!(!asked.get(), "not asked for the left button");
+    }
+
+    /// The window's modifiers: winit's control is Ctrl and its super ⌘ (or
+    /// the Windows key), as for keys.
+    #[test]
+    fn side_buttons_carry_the_window_modifiers() {
+        let mods = |modifiers| {
+            side_button_press(ElementState::Pressed, MouseButton::Back, modifiers, closed)
+                .unwrap()
+                .mods
+        };
+        assert_eq!(mods(ModifiersState::empty()), bindings::Mods::default());
+        assert_eq!(
+            mods(ModifiersState::CONTROL),
+            bindings::Mods {
+                ctrl: true,
+                ..Default::default()
+            }
+        );
+        assert_eq!(
+            mods(ModifiersState::SUPER),
+            bindings::Mods {
+                cmd: true,
+                ..Default::default()
+            }
+        );
+        assert_eq!(
+            mods(ModifiersState::SHIFT | ModifiersState::ALT),
+            bindings::Mods {
+                shift: true,
+                alt: true,
+                ..Default::default()
+            }
+        );
+        assert_eq!(
+            bindings::text(
+                &side_button_press(
+                    ElementState::Pressed,
+                    MouseButton::Forward,
+                    ModifiersState::CONTROL,
+                    closed
+                )
+                .unwrap()
+            ),
+            "Ctrl+Mouse:X2"
+        );
+    }
+
+    /// With the defaults of core_actions.rs (user setting 2026-11-01: back
+    /// is Next, forward Previous), each press fires its command once.
     #[test]
     fn side_buttons_fire_their_binding_once_per_press() {
         let input = Rc::new(RefCell::new(InputShared::default()));
-        for (id, keys) in [
-            ("previous", ["PageUp", "Mouse:X2"]),
-            ("next", ["PageDown", "Mouse:X1"]),
-        ] {
-            let keys: Vec<String> = keys.map(String::from).to_vec();
+        for (id, declaration) in crate::core_actions::declarations(5.) {
             input
                 .borrow_mut()
                 .table
-                .declare(bindings::HOST, id, "host", &keys, false, false)
+                .declare(
+                    bindings::HOST,
+                    id,
+                    "host",
+                    &declaration.bindings,
+                    false,
+                    false,
+                )
                 .unwrap();
         }
         let (events, received) = mpsc::channel();
@@ -457,26 +547,19 @@ mod tests {
                 })
                 .collect()
         };
-        let mods = bindings::Mods::default();
-        let press = |button| side_button(&input, &events, 7, ElementState::Pressed, button, mods);
+        let press = |button| {
+            side_button_press(
+                ElementState::Pressed,
+                button,
+                ModifiersState::empty(),
+                closed,
+            )
+            .is_some_and(|event| fire(&input, &events, 7, &event, false, None))
+        };
         assert!(press(MouseButton::Back));
         assert_eq!(fired(&received), ["next"]);
         assert!(press(MouseButton::Forward));
         assert_eq!(fired(&received), ["previous"]);
-        for button in [MouseButton::Back, MouseButton::Forward] {
-            assert!(!side_button(
-                &input,
-                &events,
-                7,
-                ElementState::Released,
-                button,
-                mods
-            ));
-        }
-        for button in [MouseButton::Left, MouseButton::Right, MouseButton::Middle] {
-            assert!(!press(button));
-        }
-        assert!(fired(&received).is_empty());
         // An input block (a modal) holds them like keys.
         input.borrow_mut().blocked = true;
         assert!(!press(MouseButton::Back));

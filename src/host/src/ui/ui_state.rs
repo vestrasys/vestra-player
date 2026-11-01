@@ -151,6 +151,10 @@ pub struct UiState {
     /// `"<manifest id>/<command id>"` → bindings; read only this round, kept on save.
     #[serde(default)]
     pub bindings: BTreeMap<String, Vec<String>>,
+    /// One-time migrations of `bindings` already applied (host 0.6.0:
+    /// `actions::FULLSCREEN_ESCAPE_MIGRATION`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bindings_migrated: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appearance: Option<Appearance>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -198,6 +202,8 @@ impl UiState {
                     .collect()
             })
             .unwrap_or_default();
+        let bindings_migrated =
+            serde_json::from_value(field("bindingsMigrated")).unwrap_or_default();
         // A palette this player does not have (one retired in an earlier
         // version) becomes the default, silently.
         let appearance = serde_json::from_value::<Appearance>(field("appearance"))
@@ -225,6 +231,7 @@ impl UiState {
             sidebar,
             sidebar_slot,
             bindings,
+            bindings_migrated,
             appearance,
             settings,
         }
@@ -359,6 +366,7 @@ mod tests {
             .state
             .bindings
             .insert("vestra.playback/toggle-pause".into(), vec!["Space".into()]);
+        store.state.bindings_migrated = vec!["fullscreen-escape-0.6.0".into()];
         // A palette other than the default survives a restart.
         store.state.appearance = Some(Appearance {
             theme: "vestra-light".into(),
@@ -375,6 +383,7 @@ mod tests {
         assert_eq!(reopened.state, store.state);
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("\"version\": 1"));
+        assert!(text.contains("\"bindingsMigrated\""), "{text}");
     }
 
     #[test]
