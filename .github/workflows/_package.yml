@@ -78,6 +78,8 @@ jobs:
 
       - name: Smoke test (macOS, the DMG's app)
         if: inputs.os == 'macos'
+        # The host runs 15 s (smoke.mjs kills it 60 s later): a hang fails here.
+        timeout-minutes: 10
         run: |
           dmg=$(ls "$RUNNER_TEMP"/upload/*.dmg)
           mount=$(mktemp -d)
@@ -92,6 +94,9 @@ jobs:
 
       - name: Smoke test (Windows, silent install → run → uninstall)
         if: inputs.os == 'windows'
+        # Install, a 45 s headless run and uninstall take about a minute; a
+        # hung installer or uninstaller fails here instead of at the job limit.
+        timeout-minutes: 10
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -108,3 +113,12 @@ jobs:
           Start-Sleep -Seconds 3
           if (Test-Path "$dir\vestra-host.exe") { throw 'uninstall left vestra-host.exe behind' }
           if ($smoke -ne 0) { throw "smoke test failed ($smoke)" }
+
+      # MSVC's link.exe leaves its telemetry process (vctip.exe) running; the
+      # runner's orphan clean-up once hung on it for an hour after every step
+      # had finished (nightly run 41284977594). Stop it ourselves.
+      - name: Stop MSVC telemetry (vctip)
+        if: always() && inputs.os == 'windows'
+        timeout-minutes: 2
+        shell: pwsh
+        run: Stop-Process -Name vctip -Force -ErrorAction SilentlyContinue; exit 0

@@ -76,6 +76,9 @@ export const clock = {
   clearTimeout: (timer: unknown) => clearTimeout(timer as ReturnType<typeof setTimeout>),
 };
 
+/** How a sprite's `index.json` is written; tests hold it to play a slow disk. */
+export const indexFile = { write: writeIndex };
+
 /** Cells one ffmpeg run makes at most: fewer process starts (each costs ~0.2 s, and virus scanners react to it). */
 export const BATCH = 5;
 
@@ -255,6 +258,8 @@ type Job = {
   wroteAt: number;
   /** Sheets written to disk since the bar last got them (`SHOW_MS` throttle while pointing). */
   unshown: Set<number>;
+  /** The index writes, one after another in call order (the newest lands last). */
+  indexed: Promise<void>;
 };
 
 /** The part a cell belongs to (every queued cell has one; a cell without is decoded from the start on its own). */
@@ -505,6 +510,7 @@ export class Thumbnails {
       writing: false,
       wroteAt: 0,
       unshown: new Set(),
+      indexed: Promise.resolve(),
     };
   }
 
@@ -751,7 +757,7 @@ export class Thumbnails {
   #fallback(job: Job) {
     if (this.#job !== job) return;
     job.abort.abort();
-    void this.#saveIndex(job, true);
+    const remembered = this.#saveIndex(job, true);
     const next = this.#fresh(job.sourceId, job.path, job.duration);
     next.video = job.video;
     next.keyframesOnly = true;
@@ -759,7 +765,11 @@ export class Thumbnails {
     this.#job = next;
     this.preview = null;
     this.#scope.update();
-    void this.#start(next);
+    // After the exact folder's index is on disk: the new job's start evicts
+    // folders without a valid index, and that one is not kept.
+    void remembered.then(() => {
+      if (this.#job === next) void this.#start(next);
+    });
   }
 
   /** Write the changed sheets (raw → JPEG by ffmpeg, then renamed into place) and show them. */
@@ -791,7 +801,10 @@ export class Thumbnails {
       if (this.#job !== job || job.abort.signal.aborted) return;
       for (const s of sheets) job.unshown.add(s);
       this.#publish(job);
-      await this.#saveIndex(job);
+      // Not awaited: while `writing` is set no sheet write starts, so a slow index
+      // write would hand a landed run's free slot to the next cells and keep the
+      // changed sheets off the disk (and the bar) until another run ends.
+      void this.#saveIndex(job);
     } catch {
       if (job.abort.signal.aborted) return;
       for (const s of sheets) job.dirty.add(s); // tried again at the next write
@@ -832,8 +845,10 @@ export class Thumbnails {
     this.#scope.update();
   }
 
-  async #saveIndex(job: Job, keyframesOnly = false) {
-    if (!job.dir) return;
+  /** Write the job's index as it is now, after the job's earlier index writes (so the newest lands last). */
+  #saveIndex(job: Job, keyframesOnly = false): Promise<void> {
+    const dir = job.dir;
+    if (!dir) return job.indexed;
     const made: number[] = [];
     job.made.forEach((m, i) => void (m && made.push(i)));
     const index: CacheIndex = {
@@ -845,7 +860,8 @@ export class Thumbnails {
       usedAt: Date.now(),
       ...(keyframesOnly ? { keyframesOnly } : {}),
     };
-    await writeIndex(job.dir, index).catch(() => {});
+    job.indexed = job.indexed.then(() => indexFile.write(dir, index).catch(() => {}));
+    return job.indexed;
   }
 
   #finish(job: Job) {

@@ -445,6 +445,10 @@ pub struct Upscaling {
     owners: BTreeSet<u64>,
     probe: Probe,
     run_probe: fn() -> UpscalerProbe,
+    /// The filter for a factor (`platform::upscaler_filter`; `None` where
+    /// the platform has no upscaler). Tests put in a stand-in every mpv
+    /// build accepts, so the chain handling is tested off Windows too.
+    filter: fn(f64) -> Option<String>,
     pending: Vec<Pending>,
     /// The factor of the filter in mpv's chain.
     applied: Option<f64>,
@@ -475,6 +479,7 @@ impl Upscaling {
             owners: BTreeSet::new(),
             probe: Probe::Idle,
             run_probe,
+            filter: platform::upscaler_filter,
             pending: Vec::new(),
             applied: None,
             wanted: None,
@@ -863,7 +868,7 @@ impl Upscaling {
     /// refused it (not tried again at this factor).
     fn add(&mut self, mpv: &Mpv, factor: f64) -> bool {
         self.wanted = None;
-        let Some(filter) = platform::upscaler_filter(factor) else {
+        let Some(filter) = (self.filter)(factor) else {
             return false;
         };
         match mpv.command(&["vf", "add", &format!("@{LABEL}:{filter}")]) {

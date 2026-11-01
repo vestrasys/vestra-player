@@ -210,6 +210,11 @@ component SeekBar inherits Rectangle {
     in property <length> lead: 10px;
     in property <length> trail: 12px;
     in property <length> line-top: 6px;
+    // 0.2.11 (user request): the pointer band also reaches `reach` above the
+    // seek bar, over the bottom of the video (nothing below the row). The
+    // player does not clip the bottom bar, and the bar lies in front of the
+    // video's own pointer area, so these rows hover, press and drag like the rest.
+    in property <length> reach: 4px;
     private property <float> ratio: clamp(PlaybackBridge.progress, 0, 1);
     private property <length> span: max(1px, root.width - root.lead - root.trail - 8px);
     // I06: the pointer is over the click area (or dragging), and the time under it.
@@ -364,12 +369,12 @@ component SeekBar inherits Rectangle {
         border-width: 2px;
         border-color: touch.pressed ? Theme.accent-press : Theme.accent;
     }
-    // The whole band (the seek bar's own size, nothing outside it).
+    // The whole band: the seek bar's own size and `reach` above it.
     touch := TouchArea {
         x: 0;
-        y: 0;
+        y: -root.reach;
         width: 100%;
-        height: 100%;
+        height: root.height + root.reach;
         enabled: PlaybackBridge.can-seek;
         pointer-event(event) => {
             if event.kind == PointerEventKind.cancel {

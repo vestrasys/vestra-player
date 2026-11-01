@@ -66,6 +66,21 @@ test("FS-BAR-1 keyboard seeks and speed in fullscreen show the OSD but never loc
   }
 });
 
+test("0.2.11 the pointer on the seek band holds the bar (also in the 4px above it, which the player counts as neither bar nor video) and lets go when it leaves", async () => {
+  const { host, stop } = await start(fullscreenWithMedia());
+  try {
+    const bar = host.mounted();
+    const popup = () => (bar.locks as { popupOpen?: boolean } | null)?.popupOpen === true;
+    bar.emit("pointing", true);
+    await until(popup);
+    assert.equal(dragging(bar.locks), false, "hovering is not a drag");
+    bar.emit("pointing", false);
+    await until(() => !held(bar.locks));
+  } finally {
+    await stop();
+  }
+});
+
 test("FS-BAR-1 a drag on the bar holds it while dragging and lets go on release", async () => {
   const { host, stop } = await start(fullscreenWithMedia());
   try {

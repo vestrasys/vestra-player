@@ -352,25 +352,58 @@ fn reply(
     }
 }
 
+/// The platform's filter is Windows only (`d3d11vpp`, which mpv has only
+/// on Windows; elsewhere `platform::upscaler_filter` is `None`). The chain
+/// handling is the same for any filter, so these tests put in one that
+/// every mpv build accepts; `mpv_takes_the_platform_filter` checks the real
+/// one where there is one.
+fn stand_in(factor: f64) -> Option<String> {
+    Some(format!("lavfi=[scale=w=iw*{factor:.2}:h=ih*{factor:.2}]"))
+}
+
+/// `Upscaling` with the RTX check and the stand-in filter.
+fn with_stand_in() -> Upscaling {
+    let mut upscaling = Upscaling::with_probe(rtx);
+    upscaling.filter = stand_in;
+    upscaling
+}
+
+#[test]
+fn mpv_takes_the_platform_filter() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let mut upscaling = Upscaling::with_probe(rtx);
+    let added = upscaling.add(&mpv, 1.5);
+    if cfg!(target_os = "windows") {
+        assert!(added);
+        let filter = mpv.get_property::<String>("vf").unwrap();
+        // mpv quotes the value (`scale=%4%1.50`).
+        assert!(filter.contains("1.50:scaling-mode=nvidia"), "{filter}");
+        assert_eq!(labels(&mpv).last().map(String::as_str), Some(LABEL));
+    } else {
+        // No upscaler: nothing goes in the chain, and nothing is marked
+        // refused (there is nothing to try again).
+        assert!(!added);
+        assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+        assert_eq!((upscaling.applied, upscaling.refused), (None, None));
+    }
+}
+
 #[test]
 fn the_filter_goes_last_replaces_in_place_and_comes_back_after_another_filter() {
     let _one = one_mpv_at_a_time();
     let mpv = mpv();
-    let mut upscaling = Upscaling::with_probe(rtx);
+    let mut upscaling = with_stand_in();
     assert!(upscaling.add(&mpv, 1.5));
     let chain = labels(&mpv);
     assert_eq!(chain.last().map(String::as_str), Some(LABEL), "{chain:?}");
     let filter = mpv.get_property::<String>("vf").unwrap();
-    // mpv quotes the value (`scale=%4%1.50`).
-    assert!(filter.contains("1.50:scaling-mode=nvidia"), "{filter}");
+    assert!(filter.contains("iw*1.50"), "{filter}");
     // A new factor replaces the filter where it stands.
     assert!(upscaling.add(&mpv, 2.));
     assert_eq!(labels(&mpv).iter().filter(|l| *l == LABEL).count(), 1);
-    assert!(
-        mpv.get_property::<String>("vf")
-            .unwrap()
-            .contains("2.00:scaling-mode=nvidia")
-    );
+    let filter = mpv.get_property::<String>("vf").unwrap();
+    assert!(filter.contains("iw*2.00"), "{filter}");
     // A plugin's first filter chain lands after it; it moves back.
     mpv.command(&["vf", "add", "@vestra-owned:lavfi=[null]"])
         .unwrap();
@@ -429,7 +462,7 @@ fn unavailable_upscaling_takes_the_filter_out_at_once() {
     let _one = one_mpv_at_a_time();
     let mpv = mpv();
     let render = starting();
-    let mut upscaling = Upscaling::with_probe(rtx);
+    let mut upscaling = with_stand_in();
     assert!(upscaling.add(&mpv, 1.5));
     upscaling.owners.insert(1);
     upscaling.probe = Probe::Done(rtx());
@@ -580,7 +613,7 @@ fn a_stopped_plugin_revokes_the_filter_and_set_false_removes_it_at_once() {
     let mpv = mpv();
     let render = starting();
     let (events, _received) = mpsc::channel();
-    let mut upscaling = Upscaling::with_probe(rtx);
+    let mut upscaling = with_stand_in();
     upscaling.probe = Probe::Done(rtx());
     // Two plugins asked; the filter is in the chain.
     upscaling.owners.extend([1, 2]);
@@ -712,7 +745,8 @@ fn the_state_has_monitoring_fields_and_changes_are_published() {
             })
             .collect::<Vec<_>>()
     };
-    let mut upscaling = Upscaling::with_probe(rtx);
+    // The stand-in filter: `add` below must work off Windows too.
+    let mut upscaling = with_stand_in();
     // Before the check: nothing published.
     upscaling.publish(&mpv, &render, &events);
     assert!(changed(&received).is_empty());

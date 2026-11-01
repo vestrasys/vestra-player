@@ -90,14 +90,27 @@ const failed = output
   .split("\n")
   .filter((line) => /failed to start/.test(line));
 if (failed.length) problems.push(`${failed.length} plugin(s) failed to start`);
-const ready = output
+// Counted per plugin, so one plugin reporting twice cannot stand in for
+// another that never got there. The host logs `runtime <owner>
+// runtime.ready: …` (one owner per plugin instance).
+const ready = new Set(
+  output
+    .split("\n")
+    .map((line) => /\bruntime (\d+) runtime\.ready\b/.exec(line)?.[1])
+    .filter(Boolean),
+).size;
+// The shared runner prefixes a built-in's output with its id
+// (`[vestra.playlist] HostError: …`); a plugin in its own runner has no
+// prefix, so each such line counts on its own.
+const headlessLines = output
   .split("\n")
-  .filter((line) => /runtime\.ready/.test(line)).length;
-const headlessOnly = output
-  .split("\n")
-  .filter((line) =>
-    /^HostError: mounts require a native shell/.test(line),
-  ).length;
+  .map((line) =>
+    /^(?:\[([^\]\s]+)\] )?HostError: mounts require a native shell/.exec(line),
+  )
+  .filter(Boolean);
+const headlessOnly =
+  new Set(headlessLines.filter((m) => m[1]).map((m) => m[1])).size +
+  headlessLines.filter((m) => !m[1]).length;
 if (ready + headlessOnly < builtins.length)
   problems.push(
     `${ready} ready + ${headlessOnly} headless-only < ${builtins.length} built-in plugins`,

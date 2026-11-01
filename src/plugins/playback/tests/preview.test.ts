@@ -34,6 +34,7 @@ import {
   cellsArgs,
   clock,
   exactArgs,
+  indexFile,
   keyframesArgs,
   MAX_FAILURES,
   NEEDS_FFMPEG,
@@ -105,6 +106,29 @@ const partOf = (args: string[]) => ({ n: Number(args[args.indexOf("-frames:v") +
 /** The seek times of one run (one per cell it makes). */
 const seeksOf = (args: string[]) => args.flatMap((arg, i) => (arg === "-ss" ? [args[i + 1]!] : []));
 const cellsMade = (host: TestHost) => cellRuns(host).reduce((n, c) => n + seeksOf(c.args).length, 0);
+/**
+ * Hold every `index.json` write until `release()` (a slow disk): a sheet write
+ * must not wait for its index, or the freed slot goes to the next cells first.
+ */
+function holdIndexWrites() {
+  const write = indexFile.write;
+  const held: (() => void)[] = [];
+  let open = false;
+  indexFile.write = async (dir, index) => {
+    if (!open) await new Promise<void>((resolve) => held.push(resolve));
+    return write(dir, index);
+  };
+  return {
+    held: () => held.length,
+    release() {
+      open = true;
+      for (const resolve of held.splice(0)) resolve();
+    },
+    restore: () => void (indexFile.write = write),
+  };
+}
+/** Sheet writes: one ffmpeg per changed sheet, raw pixels to `sheet-N.new.jpg`. */
+const sheetWrites = (host: TestHost) => host.tools.calls.filter((c) => c.tool === "ffmpeg" && c.args.at(-1)!.endsWith(".new.jpg")).length;
 
 /**
  * ffmpeg as the plugin uses it: a run of cells writes `CELL_BYTES` per input
@@ -477,12 +501,16 @@ test("0.2.2 exact mode: a part ended for a drag is made again whole; a pass that
       return (bar2.props["preview-map"] as number[]).join() === "0,1,2,3,4,5,6,7,8,9";
     });
     assert.equal(cellsMade(again), 10);
-    await second.stop();
-    // The exact folder remembers the fallback; the next open of the file goes straight to keyframes.
     const real = (await import("node:fs")).realpathSync(media.file);
     const { size, mtimeMs } = (await import("node:fs")).statSync(real);
+    // The keyframe sprite's last index write (complete) is not awaited by anyone: wait for it before stopping.
+    const keyframeDir = join(data, "thumbs", cacheKey({ path: real, size, mtimeMs }, 10));
+    await until(async () => (await readIndex(keyframeDir))?.complete === true);
+    await second.stop();
+    // The exact folder remembers the fallback; the next open of the file goes straight to keyframes.
     const exactDir = join(data, "thumbs", cacheKey({ path: real, size, mtimeMs }, 40, "exact"));
-    assert.equal((await readIndex(exactDir))?.keyframesOnly, true);
+    // The fallback's index write is not awaited by anyone: wait for it to land.
+    await until(async () => (await readIndex(exactDir))?.keyframesOnly === true);
     const third = new TestHost();
     playing(third, media.file);
     third.stats = { ...third.stats, video: SMALL_VIDEO };
@@ -748,6 +776,7 @@ test("0.2.3 while the pointer is on the bar a changed sheet goes out at most eve
   const media = mediaFile();
   const host = new TestHost();
   const time = fakeClock(host);
+  const indexes = holdIndexWrites(); // a slow disk: no index write lands until the end
   try {
     playing(host, media.file, 400); // 200 cells on two sheets, five per run
     const releases: (() => void)[] = [];
@@ -761,11 +790,14 @@ test("0.2.3 while the pointer is on the bar a changed sheet goes out at most eve
     const made = () => new Set((bar.props["preview-map"] as number[] | undefined) ?? []).size;
     // Let one run land: its slot is free for the sheet write, then the next run starts.
     const land = async () => {
+      const wrote = sheetWrites(host);
       releases.shift()!();
       await until(async () => {
         await time.advance(0);
         return releases.length === WORKERS;
       });
+      // The write took the freed slot before the next run did, and is done (its hand-over decided).
+      assert.ok(sheetWrites(host) > wrote, "the landed cells are written before the next run starts");
     };
     bar.emit("pointing", true);
     await host.settle();
@@ -809,10 +841,13 @@ test("0.2.3 while the pointer is on the bar a changed sheet goes out at most eve
     await host.settle();
     assert.equal(made(), 20);
     assert.notEqual(sheet(), third);
+    assert.ok(indexes.held() > 0, "index writes were held all along");
+    indexes.release();
     for (const release of releases.splice(0)) release();
     await stop();
   } finally {
     time.restore();
+    indexes.restore();
     media.done();
   }
 });
@@ -821,6 +856,7 @@ test("0.2.3 a sheet without new cells keeps its image reference across a hand-ov
   const media = mediaFile();
   const host = new TestHost();
   const time = fakeClock(host);
+  const indexes = holdIndexWrites(); // a slow disk: no index write lands until the end
   try {
     playing(host, media.file, 400); // 200 cells on two sheets, five per run
     const releases: (() => void)[] = [];
@@ -832,11 +868,14 @@ test("0.2.3 a sheet without new cells keeps its image reference across a hand-ov
     const ref = (sheet: "a" | "b") => JSON.stringify(bar.props[`preview-sheet-${sheet}`] ?? null);
     // Runs land in queue order; after each the slot is free for the write (PUBLISH_MS has passed) and the next run starts.
     const land = async () => {
+      const wrote = sheetWrites(host);
       releases.shift()!();
       await until(async () => {
         await time.advance(0);
         return releases.length === WORKERS;
       });
+      // The write took the freed slot before the next run did, and is done (its hand-over decided).
+      assert.ok(sheetWrites(host) > wrote, "the landed cells are written before the next run starts");
     };
     // Coarse to fine, five per run: runs 0–3 touch both sheets, run 4 only sheet B
     // (cells 120–184), run 5 only sheet A (cells 4–36).
@@ -858,10 +897,13 @@ test("0.2.3 a sheet without new cells keeps its image reference across a hand-ov
     await land(); // run 5: sheet A only
     assert.notEqual(ref("a"), a0);
     assert.equal(ref("b"), b1, "sheet B unchanged this time");
+    assert.ok(indexes.held() > 0, "index writes were held all along");
+    indexes.release();
     for (const release of releases.splice(0)) release();
     await stop();
   } finally {
     time.restore();
+    indexes.restore();
     media.done();
   }
 });
@@ -976,9 +1018,10 @@ test("I07 one bad position fails only its own cell: the rest of its run is made,
     });
     assert.equal(bar.props["hover-thumbnail"], true);
     const dir = join(data, "thumbs", readdirSync(join(data, "thumbs"))[0]!);
-    await until(() => {
-      const index = JSON.parse(readFileSync(join(dir, "index.json"), "utf8"));
-      return index.complete && index.failed.join() === "4" && index.made.length === 9;
+    // Not written yet at first: keep waiting.
+    await until(async () => {
+      const index = await readIndex(dir);
+      return index !== null && index.complete && index.failed.join() === "4" && index.made.length === 9;
     });
     await stop();
   } finally {
