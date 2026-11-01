@@ -44,7 +44,14 @@ async function start(count = 1000, compact = true) {
   return launch({ root, files, compact });
 }
 
-async function launch(options: { root: string; files: string[]; compact: boolean; data?: string }) {
+async function launch(options: {
+  root: string;
+  files: string[];
+  compact: boolean;
+  data?: string;
+  /** Each value the panel's binder returns, as the plugin made it (before the SDK encodes it). */
+  bound?: (value: Record<string, unknown>) => void;
+}) {
   const { root, files } = options;
   const host = new TestHost();
   settleFiles(host);
@@ -77,7 +84,24 @@ async function launch(options: { root: string; files: string[]; compact: boolean
     }
     return result;
   }) as typeof host.request;
-  const { stop } = await startPlugin((plugin) => activate(plugin), {
+  const { stop } = await startPlugin((plugin) => {
+    const bound = options.bound;
+    if (bound) {
+      const mount = plugin.panels.mount.bind(plugin.panels);
+      plugin.panels.mount = ((...args: Parameters<typeof mount>) => {
+        const panel = mount(...args);
+        const bind = panel.bind.bind(panel);
+        panel.bind = ((binder: Parameters<typeof bind>[0]) =>
+          bind(() => {
+            const value = binder();
+            bound(value as Record<string, unknown>);
+            return value;
+          })) as typeof panel.bind;
+        return panel;
+      }) as typeof mount;
+    }
+    return activate(plugin);
+  }, {
     directory: new URL("..", import.meta.url),
     host,
     ...(options.data ? { dataDirectory: options.data } : {}),
@@ -555,9 +579,13 @@ test("persistence: no snapshot of the list for updates that change nothing saved
     await app.host.command("playlist.add").run();
     await app.until(() => app.count() === 1000, "the files to be added");
     await app.scroll(0);
-    await app.until(() => app.rows().slice(0, 41).every((row) => row.duration === "01:01"), "the durations");
-    await pause(PERSIST_CHECK_MS + 200); // the burst's snapshot
-    snapshots = 0;
+    // The first 50 rows are read before the list reports its height.
+    await app.until(() => app.rows().slice(0, 50).every((row) => row.duration === "01:01"), "the durations");
+    // Until the bursts' snapshots are done (a loaded machine may take longer).
+    do {
+      snapshots = 0;
+      await pause(PERSIST_CHECK_MS + 200);
+    } while (snapshots);
     // Scrolls within read rows and position ticks: updates, nothing saved changes.
     for (let i = 0; i < 10; i++) {
       await app.scroll(i * 20);
@@ -608,4 +636,34 @@ test("sidebar.slint draws the rows with a ListView over `rows` (no ScrollView wi
   assert.match(code, /Math\.floor\(\(y - list\.content-y\) \/ root\.row-height\)/);
   // Every row has the fixed height of its style (the pointer and A15 drop mapping rely on it).
   assert.match(row, /^\s*height: root\.row-height;$/m);
+});
+
+test("unchanged rows are the same objects on the next pass (the SDK's encode cache can skip them)", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vestra-playlist-large-"));
+  const files: string[] = [];
+  for (let i = 0; i < 300; i++) {
+    const file = join(root, `Clip ${String(i).padStart(3, "0")}.mkv`);
+    await writeFile(file, "");
+    files.push(file);
+  }
+  let last: object[] = [];
+  const app = await launch({ root, files, compact: true, bound: (value) => void (last = value.rows as object[]) });
+  try {
+    app.host.dialogAnswers.push(files);
+    await app.host.command("playlist.add").run();
+    await app.until(() => app.count() === 300, "the files to be added");
+    await app.scroll(0);
+    await app.until(() => app.rows().slice(0, 41).every((row) => row.duration === "01:01"), "the durations");
+    await app.emit("select-row", app.rows()[5]!.id, false, false);
+    await app.host.settle(50);
+    const before = last;
+    // A click moves the selection from row 6 to row 8: every other row is the object of the last pass.
+    await app.emit("select-row", app.rows()[7]!.id, false, false);
+    const after = last;
+    assert.notEqual(after, before, "a new pass ran");
+    const changed = after.flatMap((row, at) => (row === before[at] ? [] : [at]));
+    assert.deepEqual(changed, [5, 7], "only the rows whose selection changed are new objects");
+  } finally {
+    await app.close();
+  }
 });

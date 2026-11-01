@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import type { Command, CommandOptions, ConfirmOptions, Panel, Plugin, PluginError } from "@vestra-player/sdk";
+import type { Command, CommandOptions, ConfirmOptions, ImageRef, Panel, Plugin, PluginError } from "@vestra-player/sdk";
 import {
   DROP_EXTENSIONS,
   dropProblems,
@@ -877,6 +877,35 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     return look;
   };
 
+  /** One row as the list shows it (`ui/sidebar.slint` `PlaylistRow`). */
+  type ViewRow = {
+    id: string;
+    number: number;
+    label: string;
+    duration: string;
+    tooltip: string;
+    problem: string;
+    selected: boolean;
+    current: boolean;
+    played: boolean;
+    failed: boolean;
+    media: string;
+    detail: string;
+    thumb: ImageRef | null;
+  };
+  /**
+   * The object sent last for each row: an unchanged row is the same object on the next pass
+   * (0.2.1), so the SDK can skip encoding it again (an encode cache by identity), which at
+   * 20,000 rows is most of a pass's cost.
+   */
+  const sentRows = new WeakMap<Row, ViewRow>();
+  const viewRow = (row: Row, next: ViewRow) => {
+    const last = sentRows.get(row);
+    if (last && (Object.keys(next) as (keyof ViewRow)[]).every((key) => last[key] === next[key])) return last;
+    sentRows.set(row, next);
+    return next;
+  };
+
   // 0.2.0 (large lists P3): `rows` is every shown row, drawn by a `ListView` (only the rows in
   // view have elements). Each row carries its `id`: on player 0.6.0 the SDK sends what changed
   // as row operations matched by it (a move is one operation, a changed row one `set`), and
@@ -921,7 +950,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       sendTo = top + rowsOnScreen + THUMB_SEND_MARGIN;
     // While a search filters, a row's number is its place in the whole list (sent with it);
     // otherwise the list numbers rows by their index.
-    const index = queue.filtering ? new Map(queue.rows.map((row, i) => [row.rowId, i])) : null;
+    const index = queue.filtering ? queue.positions() : null;
     let sum = 0,
       known = 0,
       partial = false;
@@ -936,8 +965,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     const total = known ? clock(sum) + (partial ? "+" : "") : "";
     return {
       rows: shown.map((row: Row, at) => {
-        const look = pictures ? lookOf(row) : null;
-        return {
+        const look = lookOf(row);
+        return viewRow(row, {
           id: row.rowId,
           number: index ? index.get(row.rowId)! + 1 : 0,
           label: row.title,
@@ -949,12 +978,13 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
           played: row.played,
           failed: row.status === "failed",
           // The thumbnail's placeholder ("video", "audio", "link" or ""), and the line under the
-          // title: the file's folder, or the link's host.
-          media: look?.media ?? "",
-          detail: look?.detail ?? "",
+          // title: the file's folder, or the link's host. Sent in both row styles (0.2.1), so
+          // the thumbnail toggle changes only the pictures near the view.
+          media: look.media,
+          detail: look.detail,
           // `null`: no picture (an empty image, player 0.6.0).
           thumb: (pictures && at >= sendFrom && at < sendTo && thumbs.picture(row.rowId)) || null,
-        };
+        });
       }),
       thumbnails: pictures,
       total,
@@ -1021,7 +1051,10 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     ),
   );
   // 0.1.11: the bottom bar's thumbnail toggle (saved with the settings). The row at the
-  // top of the view stays there while the rows change height.
+  // top of the view stays there while the rows change height: the list keeps it itself
+  // (0.2.1, `changed row-height` in `ui/sidebar.slint`); a scroll request in the same
+  // frame as the new heights could land on another row. The plugin expects the scroll the
+  // list will report, so that report is not taken for the user's.
   list.on("toggleThumbnails", () => {
     const before = rowHeight();
     settings.thumbnails = !settings.thumbnails;
@@ -1029,7 +1062,6 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     if (!settings.thumbnails) thumbs.want([]);
     if (!Number.isFinite(listArea.height)) return;
     const to = limit(Math.floor(listArea.scroll / before) * after, listArea.height, queue.visible().length, after);
-    scroller.request++;
     scroller.to = to;
     scroller.sentAt = Date.now();
     listArea.scroll = to;

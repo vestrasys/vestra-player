@@ -204,6 +204,20 @@ export component PlaylistSidebar inherits Rectangle {
     // The selected-row background (ui-spec §5.2); the theme has no token for it.
     private property <color> selected-bg: Theme.selected-bg;
     private property <int> row-count: PlaylistBridge.rows.length;
+    // The thumbnail toggle changes every row's height: the row at the top of the view stays
+    // there (0.2.1). `top-row` follows the scroll while the rows keep the height it was
+    // measured with (`settled-height`); a scroll reported with the new height before
+    // `changed row-height` ran is not taken.
+    private property <int> top-row;
+    private property <length> settled-height;
+    changed row-height => {
+        list.content-y = -clamp(root.top-row * root.row-height, 0px, root.max-scroll);
+        root.settled-height = root.row-height;
+    }
+    // Rows removed or added while dragging: the drop index follows the list.
+    changed row-count => {
+        if root.dragging { root.drop-index = root.drop-index-at(root.drag-y); }
+    }
     // Pointer handling is the list's, not the rows' (large lists P3): a `ListView` destroys the
     // element of a row scrolled out of view, so a press, a drag (with edge scrolling) or a
     // double-click is tracked by one TouchArea around the list, and the pointer's y maps to a
@@ -349,13 +363,16 @@ export component PlaylistSidebar inherits Rectangle {
                 background: Theme.bg-list;
                 init => {
                     list.content-y = -PlaylistBridge.show-y * 1px;
+                    root.settled-height = root.row-height;
+                    root.top-row = Math.floor(PlaylistBridge.show-y * 1px / root.row-height);
                     root.report-area();
                 }
                 changed height => { root.report-area(); }
                 changed y => { root.report-area(); }
                 // Every press, drag, release and double-click on the list (see `press-row`). The
                 // rows hold no TouchArea, so presses reach this one through them; the scroll bar
-                // keeps its own.
+                // keeps its own. Touch is not a target (user ruling 2026-11-01): on a list that
+                // scrolls, the ListView takes a touch press to pan it, so a tap may not select.
                 pointer := TouchArea {
                     pointer-event(event) => {
                         if event.kind == PointerEventKind.down {
@@ -429,7 +446,11 @@ export component PlaylistSidebar inherits Rectangle {
                         width: parent.width;
                         height: min(parent.height, root.row-count * root.row-height);
                         horizontal-scrollbar-policy: always-off;
-                        changed content-y => { root.report-area(); }
+                        accessible-item-count: root.row-count;
+                        changed content-y => {
+                            if root.row-height == root.settled-height { root.top-row = Math.floor(-self.content-y / root.row-height); }
+                            root.report-area();
+                        }
                         for row[index] in PlaylistBridge.rows: Rectangle {
                             property <color> ink: row.current ? Theme.playing : row.selected ? Theme.text : row.played ? Theme.text-played : Theme.text-list;
                             // Its place in the whole list (also while a search filters) and title.

@@ -25,6 +25,7 @@ The playlist in the right sidebar.
 
 - Fast Advance to Next is not gapless playback; there is still a short pause at the switch.
 - Thumbnails are sent to the interface only for the rows on screen and 20 above and below; when you drag the scroll bar far in one go, the pictures at the new position appear a moment later.
+- Touch screens are not a target: a tap on a row of a list long enough to scroll may scroll instead of selecting it.
 - Links are resolved by the installed site plugins; this plugin does not resolve links. Link rows have no thumbnail of their own (the playlist does not know a site's pictures).
 - A thumbnail is made from a keyframe, so it may come from slightly before a tenth of the video; a file changed on disk gets a new one the next time its row is shown.
 - Files that other plugins take over by extension (such as emulator ROMs) can be added with Add Files… and play normally, including previous/next; dropping onto the list, scanning folders and "similar files" only recognize audio and video extensions and do not include these files yet.

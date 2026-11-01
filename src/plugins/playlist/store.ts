@@ -147,6 +147,7 @@ export class Store {
         const id = at(index);
         if (id) queue.selection.add(id);
       }
+    queue.touch();
   }
 
   /** What is saved for `settings` and (when remembered) the queue. */

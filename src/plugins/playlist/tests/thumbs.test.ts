@@ -270,11 +270,12 @@ test("thumbnails: the bottom bar's toggle turns them off (no work, compact rows)
     await app.host.settle();
     assert.equal(app.panel.props.thumbnails, false);
     assert.ok(app.pictures().every((path) => path === null), "no pictures sent: every row shows the placeholder");
-    assert.equal(app.rows()[0]!.media, "");
-    assert.equal(app.rows()[0]!.detail, "");
-    // The row at the top of the view stays there: row 10 of 20 px rows.
-    assert.ok((app.panel.props["scroll-request"] as number) > asked);
-    assert.equal(app.panel.props["scroll-to-y"], 10 * 20);
+    // The row at the top of the view stays there (row 10 of 20 px rows): the list keeps it
+    // itself (0.2.1); no scroll request, which could land on another row while the heights change.
+    assert.equal(app.panel.props["scroll-request"], asked, "no scroll request");
+    assert.equal(app.panel.props["show-y"], 10 * 20, "the plugin expects row 10 at the top");
+    // Only the pictures change: the folder and kind stay in every row in both styles.
+    assert.equal(app.rows()[0]!.media, "video");
     await app.scroll(10 * 20, LIST_HEIGHT);
     await app.scroll(150 * 20, LIST_HEIGHT);
     for (const gate of app.gates.splice(0)) gate.release();
