@@ -92,6 +92,50 @@ export function middle(text: string, max: number): string {
   return `${chars.slice(0, head).join("")}…${tail ? chars.slice(-tail).join("") : ""}`;
 }
 
+const encoder = new TextEncoder();
+/** UTF-8 length: the player counts menu texts in bytes. */
+export const bytes = (text: string) => encoder.encode(text).length;
+
+/** User-perceived characters; code points where the runtime has no `Intl.Segmenter`. */
+const characters: (text: string) => string[] =
+  typeof Intl.Segmenter === "function"
+    ? ((graphemes) => (text: string) => [...graphemes.segment(text)].map(({ segment }) => segment))(
+        new Intl.Segmenter(undefined, { granularity: "grapheme" }),
+      )
+    : (text: string) => [...text];
+
+/**
+ * Shorten to at most `max` UTF-8 bytes by eliding the middle (`…`, 3 bytes),
+ * whole user-perceived characters only: a code point, surrogate pair, emoji
+ * sequence or accented letter is kept or dropped as one.
+ */
+export function middleBytes(text: string, max: number): string {
+  if (bytes(text) <= max) return text;
+  const parts = characters(text).map((segment) => ({ segment, size: bytes(segment) }));
+  const room = Math.max(0, max - bytes("…"));
+  const take = (from: typeof parts, budget: number) => {
+    const kept: string[] = [];
+    for (const { segment, size } of from) {
+      if (size > budget) break;
+      kept.push(segment);
+      budget -= size;
+    }
+    return kept;
+  };
+  const head = take(parts, Math.ceil(room / 2));
+  const used = head.reduce((sum, segment) => sum + bytes(segment), 0);
+  const tail = take(parts.slice(head.length).reverse(), room - used).reverse();
+  return `${head.join("")}…${tail.join("")}`;
+}
+
+/**
+ * Data made fit for a menu line: the player refuses control characters and
+ * surrounding whitespace, so a control becomes a space and the edges are
+ * trimmed (Unicode White_Space; NEL is a control).
+ */
+export const menuText = (text: string) =>
+  text.replace(/\p{Cc}/gu, " ").replace(/^\s+|\s+$/gu, "");
+
 const decode = (text: string) => {
   try {
     return decodeURIComponent(text);

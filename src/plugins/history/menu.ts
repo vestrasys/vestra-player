@@ -1,5 +1,5 @@
 import type { I18n, Osd, Plugin, Scope, Text } from "@vestra-player/sdk";
-import { clock, displayName, middle } from "./identity.ts";
+import { bytes, clock, displayName, menuText, middleBytes } from "./identity.ts";
 import { MENU_ITEMS, present, type Recent, type RecentItem } from "./recent.ts";
 import type { Mode, Resume } from "./resume.ts";
 import { timing } from "./store.ts";
@@ -10,28 +10,53 @@ const RECENT_ORDER = 114;
 /** Headless hosts refuse the display; that never fails the action itself. */
 export const quiet = (shown: Promise<void>) => void shown.catch(() => {});
 
-/** A menu line is at most this long. */
-const TITLE_MAX = 80;
+/** The player's limit on a menu path segment (a menu line), in UTF-8 bytes. */
+export const SEGMENT_BYTES = 80;
+/**
+ * The most `{} ({})` adds around the name and the point, in bytes: the player
+ * checks (and keys the command by) the English rendering, ` (` and `)` (3);
+ * Chinese and Japanese show `{}（{}）` (6). A line fits in every language.
+ */
+export const POINT_BYTES = 6;
+
+/** The English titles of the fixed items of Open ▸ Recently Played (the literals stay in each `commands.add` for `i18n extract`). */
+const FIXED_TITLES = ["(No Entries)", "Remove Invalid Entries", "Clear Entries", "Record Playback History"];
 
 /** `1`–`9`, `0`, then nothing: the number in front of the first ten records. */
 const number = (index: number) => (index < 9 ? `${index + 1}  ` : index === 9 ? "0  " : "");
 
+/** What the player accepts as a menu text: 1–80 bytes, no controls, no surrounding whitespace. */
+export const segmentValid = (text: string) => text !== "" && bytes(text) <= SEGMENT_BYTES && menuText(text) === text;
+
 /**
  * The menu lines of the records: number and display name (data), with the B25
  * point when there is one as a text value (`{} ({})`, in Chinese `{}（{}）`).
+ * Each line fits the player's 80 bytes in every language: the name loses
+ * controls and edge whitespace and is shortened in the middle by bytes; a
+ * duplicate gets ` (2)`, ` (3)`, …. `null` for a line that still would not
+ * pass (not expected; the menu leaves it out).
  */
-export function recentTitles(items: RecentItem[], resume: Resume, { text }: I18n): (string | Text)[] {
-  const used = new Set<string>();
+export function recentTitles(items: RecentItem[], resume: Resume, { text }: I18n): (string | Text | null)[] {
+  // The player tells the lines of a submenu apart by their English rendering
+  // (a second one is refused, asynchronously): the fixed items count too.
+  const used = new Set<string>(FIXED_TITLES);
   return items.slice(0, MENU_ITEMS).map((item, index) => {
     const memo = resume.memo(item);
     const prefix = number(index);
     const point = memo ? clock(memo.position) : null;
-    // The point and its two brackets.
-    const room = TITLE_MAX - [...prefix].length - (point ? point.length + 2 : 0);
-    let name = `${prefix}${middle(displayName(item.source), room)}`;
-    // Two records with the same name past the tenth would be the same menu path.
-    for (let n = 2; used.has(`${name} ${point}`); n++) name = `${prefix}${middle(displayName(item.source), room - 4)} (${n})`;
-    used.add(`${name} ${point}`);
+    const shown = menuText(displayName(item.source)) || menuText(item.source) || "…";
+    const room = SEGMENT_BYTES - bytes(prefix) - (point ? bytes(point) + POINT_BYTES : 0);
+    const english = (name: string) => (point ? `${name} (${point})` : name);
+    let name = `${prefix}${middleBytes(shown, room)}`;
+    // Two records with the same name past the tenth (or shortened alike, or a
+    // name that reads like another line with its point) would be the same menu path.
+    for (let n = 2; used.has(english(name)); n++) {
+      const suffix = ` (${n})`;
+      name = `${prefix}${middleBytes(shown, room - bytes(suffix))}${suffix}`;
+    }
+    used.add(english(name));
+    // The English rendering is what the player checks.
+    if (!segmentValid(english(name))) return null;
     return point ? text("{} ({})", [name, point]) : name;
   });
 }
@@ -103,17 +128,29 @@ export class RecentMenu {
         enabled: false,
         run: () => {},
       });
-    // The titles are data (number, name), with the point as a text value.
-    // i18n-ignore
-    items.forEach((item, index) =>
-      scope.commands.add({
-        id: `recent.item.${index}`,
-        path: [...RECENT, titles[index]!],
-        order,
-        group: "recent",
-        run: () => this.open(item),
-      }),
-    );
+    items.forEach((item, index) => {
+      const title = titles[index];
+      // A line the player would refuse must not cost the others nor the plugin.
+      // The player's refusal arrives asynchronously and during activation still
+      // fails it (the SDK joins every registration to the activation), so the
+      // check in `recentTitles` (`segmentValid`, distinct English renderings)
+      // is what protects activation: such a line is left out and logged. The
+      // try/catch below only covers what `commands.add` throws synchronously.
+      if (!title) return console.warn(`[vestra.history] Recently Played: line ${index + 1} left out (not a valid menu text)`);
+      try {
+        // The titles are data (number, name), with the point as a text value.
+        // i18n-ignore
+        scope.commands.add({
+          id: `recent.item.${index}`,
+          path: [...RECENT, title],
+          order,
+          group: "recent",
+          run: () => this.open(item),
+        });
+      } catch (error) {
+        console.warn(`[vestra.history] Recently Played: line ${index + 1} left out:`, error);
+      }
+    });
     const some = () => this.#recent.items.length > 0;
     scope.commands.add({
       id: "recent.prune",
