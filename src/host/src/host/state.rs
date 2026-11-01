@@ -52,6 +52,12 @@ pub(crate) fn layout_change(
     })
 }
 
+/// `WindowState.maximized` from the main window's facts (`window_tick`):
+/// never while fullscreen, false before the window was measured.
+fn reported_maximized(facts: &Value) -> bool {
+    facts["maximized"] == true && facts["fullscreen"] != true
+}
+
 pub(crate) fn policy_slot(slot: composition::Slot) -> Option<window_state::Slot> {
     match slot {
         composition::Slot::Bottom => Some(window_state::Slot::Bottom),
@@ -196,12 +202,14 @@ impl Host {
             }
         }
     }
-    /// `{ fullscreen, videoArea, pictureInPicture }` of the main window
-    /// (zero without one), with the palette and the file resolvers'
-    /// extensions (`plugin.resolvers.fileTypes`).
+    /// `{ fullscreen, maximized, videoArea, pictureInPicture }` of the main
+    /// window (zero without one; `maximized` is false while fullscreen),
+    /// with the palette and the file resolvers' extensions
+    /// (`plugin.resolvers.fileTypes`).
     pub(crate) fn window_state(&self) -> Value {
         let facts = &self.window_facts;
         json!({"fullscreen":facts["fullscreen"] == true,
+            "maximized":reported_maximized(facts),
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
                 "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)},
             "pictureInPicture":self.pip_state(),
@@ -236,6 +244,14 @@ impl Host {
             .ok_or_else(|| unavailable("the video area needs a native window"))?;
         if shell.window().is_fullscreen() {
             return Err(unavailable(&i18n::tr("Not available in fullscreen")));
+        }
+        // A size asked for while maximized is the size of a normal window:
+        // restore it first, then resize it, as MPC-HC's View ▸ Zoom does
+        // (`ZoomVideoWindow` restores a zoomed window before sizing it).
+        // Automatic sizing leaves a maximized window alone instead
+        // (`WindowState.maximized`, the Window plugin's G-02).
+        if shell.window().is_maximized() {
+            shell.window().set_maximized(false);
         }
         view::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
@@ -336,6 +352,22 @@ impl Host {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `window.state` reports `maximized` next to `fullscreen`, false in
+    /// fullscreen and before the first measurement; a maximize or restore
+    /// alone changes the facts, so `window_tick` broadcasts it.
+    #[test]
+    fn maximized_is_reported_and_a_change_of_it_alone_is_a_change() {
+        let facts = |fullscreen: bool, maximized: bool| json!({"fullscreen":fullscreen,"maximized":maximized,"videoArea":{"width":800.,"height":450.}});
+        assert!(reported_maximized(&facts(false, true)));
+        assert!(!reported_maximized(&facts(false, false)));
+        assert!(
+            !reported_maximized(&facts(true, true)),
+            "never in fullscreen"
+        );
+        assert!(!reported_maximized(&Value::Null), "not measured yet");
+        assert_ne!(facts(false, true), facts(false, false));
+    }
 
     #[test]
     fn layout_set_reads_the_current_tab_by_plugin_id() {

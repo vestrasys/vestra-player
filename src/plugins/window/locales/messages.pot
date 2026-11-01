@@ -247,7 +247,7 @@ msgid "Only once (only the first video of this run)"
 msgstr ""
 
 #: ui/page.slint:56
-msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
+msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, maximized, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
 msgstr ""
 
 #: ui/page.slint:63

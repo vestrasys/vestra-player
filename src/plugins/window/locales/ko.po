@@ -310,8 +310,8 @@ msgstr "한 번만 (이번 실행의 첫 비디오만)"
 
 #: ui/page.slint:56
 #, x-machine
-msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
-msgstr "새 파일마다 비디오 크기를 알게 되면 창의 왼쪽 위 모서리를 유지한 채 한 번 크기를 조정합니다. 전체 화면, 미니 크기, PIP 모드에서는 조정하지 않으며, 재생 중에 창을 끌어 옮기면 그 파일은 더 이상 조정하지 않습니다."
+msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, maximized, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
+msgstr "새 파일마다 비디오 크기를 알게 되면 창의 왼쪽 위 모서리를 유지한 채 한 번 크기를 조정합니다. 전체 화면, 최대화, 미니 크기, PIP 모드에서는 조정하지 않으며, 재생 중에 창을 끌어 옮기면 그 파일은 더 이상 조정하지 않습니다."
 
 #: ui/page.slint:63
 #, x-machine

@@ -11,6 +11,9 @@ impl Host {
         };
         let now = self.now_ms();
         let fullscreen = shell.window().is_fullscreen();
+        // `WindowState.maximized`: never while fullscreen (a window maximized
+        // before fullscreen reads maximized again after it).
+        let maximized = !fullscreen && shell.window().is_maximized();
         if self.native_window.is_none()
             && let Some(before) = &self.native_before
         {
@@ -119,7 +122,7 @@ impl Host {
         }
         // IA-CORE-03: only the normal size is remembered (not fullscreen, not
         // maximized), and the player always starts at it (`RestoreLastState=0`).
-        if !fullscreen && !shell.window().is_maximized() && !self.headless {
+        if !fullscreen && !maximized && !self.headless {
             self.remember_window(&shell);
         }
         // G-04 / G-01: where the pointer is. A hover counts only while its
@@ -197,7 +200,7 @@ impl Host {
                 (playing && ((fullscreen && idle) || windowed)).into(),
             )?;
             Ok(
-                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_state()}),
+                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_state()}),
             )
         })();
         self.answer_video_area(video, now);

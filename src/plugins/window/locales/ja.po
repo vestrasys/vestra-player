@@ -310,8 +310,8 @@ msgstr "一度だけ（今回の起動で最初のビデオのみ）"
 
 #: ui/page.slint:56
 #, x-machine
-msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
-msgstr "新しいファイルごとに、ビデオのサイズがわかった時点で一度だけ、ウインドウの左上の位置を保ったままサイズを変更します。フルスクリーン、ミニサイズ、ピクチャ・イン・ピクチャのときは変更しません。再生中にウインドウをドラッグした場合、そのファイルではそれ以上変更しません。"
+msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, maximized, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
+msgstr "新しいファイルごとに、ビデオのサイズがわかった時点で一度だけ、ウインドウの左上の位置を保ったままサイズを変更します。フルスクリーン、最大化、ミニサイズ、ピクチャ・イン・ピクチャのときは変更しません。再生中にウインドウをドラッグした場合、そのファイルではそれ以上変更しません。"
 
 #: ui/page.slint:63
 #, x-machine

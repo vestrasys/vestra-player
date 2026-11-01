@@ -250,8 +250,9 @@ msgid "Only once (only the first video of this run)"
 msgstr "只调整一次（只调整本次运行的第一个视频）"
 
 #: ui/page.slint:56
-msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
-msgstr "每个新文件拿到视频尺寸时调整一次，保持窗口左上角。全屏、迷你尺寸、画中画时不调整；播放中拖动过窗口后，这个文件不再调整。"
+#, x-machine
+msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, maximized, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
+msgstr "每个新文件拿到视频尺寸时调整一次，保持窗口左上角。全屏、最大化、迷你尺寸、画中画时不调整；播放中拖动过窗口后，这个文件不再调整。"
 
 #: ui/page.slint:63
 msgid "Always on top"
