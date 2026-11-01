@@ -118,9 +118,9 @@ export function compareVersions(a: string, b: string): number | null {
   for (let i = 0; i < Math.min(x.pre.length, y.pre.length); i++) {
     const [p, q] = [x.pre[i]!, y.pre[i]!];
     if (p === q) continue;
-    const [pn, qn] = [/^\d+$/.test(p), /^\d+$/.test(q)];
-    if (pn && qn) return Number(p) - Number(q);
-    if (pn !== qn) return pn ? -1 : 1;
+    const [pNum, qNum] = [/^\d+$/.test(p), /^\d+$/.test(q)];
+    if (pNum && qNum) return Number(p) - Number(q);
+    if (pNum !== qNum) return pNum ? -1 : 1;
     return p < q ? -1 : 1;
   }
   return x.pre.length - y.pre.length;
