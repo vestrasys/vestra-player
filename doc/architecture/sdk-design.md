@@ -21,68 +21,19 @@ export default async function activate(plugin: Plugin) {
 
 ## 2. Modules and handles at a glance
 
-`Plugin` is the root scope; a `Scope` has the same modules (handles created by a child scope belong only to that child scope).
-
-| Module | Factory / members | Handle | Operations on the handle | Plugins using it |
-| --- | --- | --- | --- | --- |
-| `commands` | `add({ id, path?, title?, order?, group?, radio?, bindings?, focus?, repeat?, enabled?, checked?, busy?, reason?, run })` | `Command` | `set(state)`, `ready` | all |
-| `windows` | `create(file, { id? })` | `Window` | `on`, `set`, `bind`, `show`, `hide`, `close`, `opened` | video, audio, subtitles, capture, nes, bilibili, youtube, workshop, playlist |
-| `panels` | `mount("bottom" \| "sidebar", file, { component?, global?, title? })`; `bottom`, `sidebar` (slot state) | `Panel`; `PanelSlot` / `SidebarSlot` | Panel: `on`, `set`, `bind`, `setInteraction`, `showMenu`, `ready`; Slot: `state`, `onChange`, `setVisible`, `toggle`, `setDetached` (sidebar) | playback, playlist |
-| `dialogs` | `openFile`, `openFiles`, `openDirectory`, `saveFile` | — (returns a path or `null`) | | playback, playlist, subtitles, capture, nes, youtube, workshop |
-| `player` | `state`, `onChange`, `refresh`, `isCurrent`, `open`, `setPaused`, `seek`, `setRate`, `restart`, `close`, `scrub`, `setOutput`, `openStream`, `provideSequence`, `next`, `previous`, `stats` | `Media`, `Scrub`, `Stream` | Media: `current`, `ready`, `onEnd`, `close`; Scrub: `seek`, `active`, `end`; Stream: `running`, `onStop`, `stop` | playback, playlist, audio, capture, nes, bilibili, youtube |
-| `video` / `audio` | `filter(id)` | `VideoFilter` / `AudioFilter` | `set`, `status`, `onStatus`, `retry` | video, audio |
-| `subtitles` | `state`, `onChange`, `refresh`, `select`, `load(bytes, { ifCurrent?, signal? })`, `remove`, `setStyle` | `SubtitleTrack` (value object: `id`, `kind`, `embeddedId?`, `title`, `language`, `styleSupported`, `styleReason`, `owned`) | | subtitles |
-| `media` | `capture({ at?, processed?, subtitles?, audio?, ifCurrent? })` | `Snapshot` → `ExportJob` | Snapshot: `export`, read-only description; Job: `state`, `onChange`, `done`, `cancel`, `refresh` | capture |
-| `resolvers` | `add({ id, schemes, hosts, resolve })` | `Resolver` | `ready` | bilibili, youtube |
-| `packages` | `validate(dir)` (`rollback(id)` removed in 1.5.17) | `PackageCandidate` → `PackageChange` | Candidate: `install`; Change: `status`, `message`, `onChange`, `done`, `cancel` | workshop |
-| `osd` | `show(text)`, `panel()` | `OsdPanel` | `set(text \| null)` | info |
-| Scope | `scope()`, `add`, `onDispose`, `onError`, `update`, `dispose` | `Scope` | | all (`onError`, `update` as needed) |
-
-The manifest capabilities each module needs (the host grants by capability; the SDK does not change that) are on the SDK documentation site, [Reference: Capabilities](https://vestrasys.github.io/vestra-player-sdk/documents/Capabilities.html) (generated from the SDK's `CAPABILITY_INFO`, and checked by `src/tests/sdk/host-agreement.test.ts` against the host's per-method checks in `dispatch`). Without the events capability, `media.ready()` polls the source state automatically.
-
-Subtitle notes: compare subtitle tracks by `track.id` (an opaque string; do not parse its format); the track number of an embedded track is `track.embeddedId` (external tracks have no such field). The `signal` of `load` is checked between chunks and before the commit: if already aborted, the upload is discarded and the call rejects with `AbortError`; once the commit has been sent it is no longer aborted (a commit already handed to the host may have taken effect). Upload ids start at 1 for each plugin instance: the host assigns a new owner generation each time it loads a plugin, and removes the owner's upload high-water mark when the owner is released.
-
-Naming choices: user-visible domain nouns (`player`, `filter`, `panel`, `stream`, `snapshot`, `job`, `resolver`); host-internal names (`processing`, `producer`, `source`, `mount`, `$mount`) do not appear in the plugin API. There is no `ctx`: the object a plugin receives is simply called `plugin`, and a feature module receives a `Scope` or a specific handle.
+Moved to the SDK site, which is generated from the SDK's own types and stays current: the modules and their handles are in the [API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html) and [How a plugin runs: Handles and scopes](https://vestrasys.github.io/vestra-player-sdk/documents/How_a_plugin_runs.html#handles-and-scopes); the capability each module needs is in [Capabilities](https://vestrasys.github.io/vestra-player-sdk/documents/Capabilities.html).
 
 ## 3. Lifecycle and release
 
-1. **Activation**: the runner loads the entry module. It first creates the plugin object (with `playback.read` it reads the source state once; with `events` it subscribes to `source.state`), calls `activate(plugin)`, then waits for all registrations started during activation (commands, panel mounts, resolvers, event subscriptions) to finish, and only then reports `runtime.ready`. If any registration fails, activation fails (`runtime.failed`). Plugin code does not need to `await` these registrations.
-2. **Declaring is registering**: `commands.add`, `panels.mount` and `resolvers.add` return a handle synchronously, and registration is queued in the background; `await handle.ready` when needed. For handles created after activation, registration failures go to the `onError` of their scope.
-3. **Scopes**: every handle joins the current scope when created. `scope.dispose()` releases all its handles and child scopes in reverse creation order; calling `handle.dispose()` directly removes it from its scope. Releasing twice is harmless, and release never throws (failures are only logged).
-4. **Plugin deactivation**: the host sends `runtime.stop` → the runner refuses new requests and releases the root scope. By then the host has already revoked all of the plugin's resources by owner (menus, windows, panels, processing resources, subtitle resources, snapshots, jobs, resolvers, producers), so release only does local cleanup (stopping timers, aborting signals, closing producer sockets), and requests to the host are rejected immediately and ignored. A plugin does **not** need to return a cleanup function.
-5. **What each handle does on release** (applies when a child scope is released while running):
-
-| Handle | Release |
-| --- | --- |
-| Command | No longer dispatched; `commands.unregister` removes it from the menu and binding table (a re-registration with the same id is ordered after the removal) |
-| Window | `ui.close` |
-| Panel | `ui.unmount` |
-| Sequence provider (`provideSequence`) | `sequence.set(null)` |
-| OsdPanel | `osd.panel(null)` if it has shown text |
-| VideoFilter / AudioFilter | If it was ever applied, replaces this resource with an empty chain (only withdraws its own contribution) |
-| Snapshot | `snapshot.release` |
-| ExportJob | `jobs.cancel` if not finished |
-| Stream | Stops rendering, closes the source if it is still current, releases the producer |
-| Resolver | `sourceResolvers.unregister`, aborts resolutions in progress |
-| Listeners (`onChange`, `onEnd`, `on`, `bind`…) | Unsubscribe |
-
-`Media` does not close the source with its scope: when the plugin is deactivated, current playback continues (the playlist's existing behaviour). Call `media.close()` explicitly when it should close.
+Activation, declaring as registering, scopes, stopping and what each handle releases: [How a plugin runs](https://vestrasys.github.io/vestra-player-sdk/documents/How_a_plugin_runs.html) (sections Activation, Handles and scopes, Stopping).
 
 ## 4. State sync: values, bindings and update passes
 
-Continuously changing values only describe the desired state; the SDK merges, de-duplicates and sends them in order:
-
-- `window.set(props)` / `panel.set(props)`: writes the desired value immediately.
-- `window.bind(() => props)` / `panel.bind(...)`, and functions in command options (`enabled: () => ...`): **bindings**, re-evaluated in every update pass.
-- **Update pass**: the SDK schedules a pass automatically at these points (several requests within one microtask run only one pass): after any plugin handler called by the SDK (command `run`, window/panel callbacks, `onChange`, `onStatus`, `onEnd`, `onStop`, etc.) returns synchronously and after its promise settles; after changes to the player, subtitles, panel visibility, filter status or export job status. When a plugin changes state in its own timer or in the middle of a long task, it calls `plugin.update()`.
-- Each target has only one request in flight at a time; changes in the meantime are merged into the next send. A `bind` value is sent only when the **desired value changes**; a value written with `set()` is always sent once (even if identical to the previous one), so `set()` is also the explicit way to "pull a control the user changed back to the model value". Callbacks themselves do not trigger a resend: in-out properties the user changed in Slint (input text, tab, slider position) stay unchanged after other callbacks.
-- Write failures: a binding value that failed is not resent automatically until it changes; a `set()` value is retried with backoff (starting at 0.25 s, doubling, up to 30 s); a run of consecutive failures reports only the first error. So writing state to a broken window inside `onError` does not create a retry loop.
-- A window opens on its first `show()` with the current desired properties as its initial properties, so default values never flash first; `show()` after `close()` reopens it with the latest properties.
-- Name conversion: TS uses camelCase (`effectEnabled`, `toggleEffect`), and the SDK converts to Slint's kebab-case; names already in kebab-case are used as is. Struct fields (such as `rowId` of a list row) are not converted.
-
-This is a deliberately small "reactive" system: no dependency tracking, no virtual DOM, only "evaluate, compare, send changes". Plugin state is plain variables.
+`set`, `bind`, update passes, one write in flight per target and name conversion: [How a plugin runs: The update pass](https://vestrasys.github.io/vestra-player-sdk/documents/How_a_plugin_runs.html#the-update-pass) and [Windows, panels, settings pages, dialogs and the OSD](https://vestrasys.github.io/vestra-player-sdk/documents/Windows,_panels,_settings_pages,_dialogs_and_the_OSD.html). Since SDK 1.5.45 a pass re-runs only the bindings that read the changed state ([large-lists.md §3](large-lists.md#3-p2-precise-invalidation-sdk-only-shipped-in-sdk-1545)).
 
 ## 5. How protocol details are absorbed
+
+_SDK internals, kept here until they move to the SDK repository's `docs/maintaining.md`._
 
 | Host protocol concept | What the SDK does | What the plugin sees |
 | --- | --- | --- |
@@ -120,32 +71,11 @@ The root cause of the audio workbench getting stuck on "result of the previous o
 
 ## 6. Explicit conditional submission
 
-Default semantics: **an operation applies to the state the plugin sees**.
-
-- Source control (`setPaused`, `seek`, `setRate`, `restart`, `close`) and `media.capture` are conditioned on `player.state` by default: if another plugin or the user has changed the source since then (open, pause and seek all advance the source stamp), the call fails with `code: "stale"` and does nothing. The SDK refreshes `player.state` after each of its own operations completes, so consecutive operations of your own do not make each other stale.
-- `player.open` replaces the current source **unconditionally** by default (as a user-initiated open should).
-- Subtitle selection, removal and style are conditioned by default on the current selection read before submission.
-- Processing resources are always conditioned on the current source at submission time (the host requires it); this is transparent to the plugin.
-
-To bind to an earlier snapshot, keep a `PlayerState` (or `SubtitlesState`) and pass `{ ifCurrent: state }`:
-
-| Scenario | How to write it | Plugin |
-| --- | --- | --- |
-| Auto-advance after natural end: open the next item only if nobody changed the source after it ended | `media.onEnd((ended) => player.open(next, { ifCurrent: ended }))` | playlist |
-| Snapshot: freeze the source of the frame the user saw before confirming | `const seen = player.state; …confirm…; media.capture({ ifCurrent: seen })` | capture |
-| Dragging the seek bar: each seek in one gesture is conditioned on the result of the previous one, and any external change ends the gesture | `const scrub = player.scrub(); scrub.seek(t)` | playback |
-| Subtitle style applies only to the track selected when the user started adjusting | `subtitles.setStyle(style, { ifCurrent: editing })` | subtitles |
-| Check only, without submitting | `player.isCurrent(state)` | capture (warns during a form that the source has changed) |
-
-For example code, see "Playback bar", "Playlist", "Snapshot export" and "Subtitles" in the usage documentation.
+Default conditions and `ifCurrent`: [Playback state, controls and sources: Conditional controls](https://vestrasys.github.io/vestra-player-sdk/documents/Playback_state,_controls_and_sources.html#conditional-controls).
 
 ## 7. Error model
 
-- Every failure rejects/throws a plain `Error` with a stable `code` (type `PluginError`): host error codes are kept as is (`stale`, `busy`, `unsupported`, `unavailable`, `conflict`, `invalid`…); a `{ backend }` source operation failure maps to `code: "backend"` with the backend's text as `message`; the SDK's own codes are `replaced`, `failed`, `ended` (`media.ready`), `aborted` (`AbortError`), `backend-uncertain`, and `unknown`/`rejected`/`expired` (see 5.1).
-- Error codes of `player.open()` / `openStream()`: `stale` (with `ifCurrent`, the source had changed and nothing was done); `replaced` (the host accepted it, but before it finished it was replaced or withdrawn by another source, e.g. the user opened another file while the URL was still resolving; same meaning as `replaced` from `media.ready()`, not a failure of this item); `backend` (loading/resolution failed, `message` is the backend's text); `invalid`, `busy`, `conflict`, `unavailable`, `unsupported` (the host refused to accept it; not executed); `aborted` (`AbortError`, aborted by `signal`; an accepted one is closed). `openStream` also has `stream` (the producer reported an error, `message` is the host's reason), `device` (audio device not ready), and `timeout` (type `StreamStartError`, `error.stage` is `"prefill"`: the first audio/video buffers were not ready within 10 seconds, or `"activation"`: not activated within 10 seconds after the host selected it; tell them apart by `stage`, not by message text). When `openStream` is aborted by `signal` after the select request has been sent, the SDK first waits for the host's reply to get the source generation, closes only that generation's source, and then releases the producer.
-- Errors thrown in handlers called by the SDK (including rejections of async handlers) go to the `onError` of their scope; without a listener they go up to the parent scope, and finally to the plugin log. Plugins do not need `.catch(report)` everywhere.
-- Persistent targets such as filters express failure through status: `filter.status` (`waiting`/`applying`/`applied`/`failed`). After `failed` there is no automatic retry until `set()`, `retry()` or a source change.
-- The runner has an `unhandledRejection` safety net for plugins (log only), so a forgotten `await` does not crash the plugin process.
+Error codes, `onError` and recovery: [Error codes](https://vestrasys.github.io/vestra-player-sdk/documents/Error_codes.html) and [How a plugin runs: Failures and recovery](https://vestrasys.github.io/vestra-player-sdk/documents/How_a_plugin_runs.html#failures-and-recovery).
 
 ## 8. Known limitations
 

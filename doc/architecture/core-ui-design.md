@@ -1,5 +1,7 @@
 # Core UI and input capability design (C1–C11, C14)
 
+> Historical design record (core UI round C1–C11, C14, 2026-10-20). Current behaviour: [architecture overview §4](README.md#4-slint-composition-and-input), [Windows, panels, settings pages, dialogs and the OSD](https://vestrasys.github.io/vestra-player-sdk/documents/Windows,_panels,_settings_pages,_dialogs_and_the_OSD.html), [Commands, menus and key bindings](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_key_bindings.html). Not maintained.
+
 Date: 2026-10-20. Stage: P1a design; the P2 review has passed (rulings in [this round's task](../process/rounds/2026-10-core-ui.md) §8 "P2 review", merged into this document); P1b implements this document.
 Basis: [this round's task](../process/rounds/2026-10-core-ui.md) §2, §5; [UI spec](../product/ui-spec.md) §2, §3, §6, §8, §9, §10.
 Current code: `src/host/src/{main,commands}.rs`, `src/host/src/host/`, `src/host/src/ui/{menu,composition,window_state,view}.rs`, `src/host/src/process/mod.rs`, `src/host/ui/*.slint`, `src/sdk/plugin/*.ts`, `src/runtime/runner.ts`.

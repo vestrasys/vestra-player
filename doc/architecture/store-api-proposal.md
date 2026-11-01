@@ -1,5 +1,7 @@
 # S4 core API change proposal: install instances, sources, built-in protection, manifest fields, Markdown component
 
+> Historical design record (S4 core API round, 2026-10-21). Current behaviour: [Manifest](https://vestrasys.github.io/vestra-player-sdk/documents/Manifest.html), [Capabilities](https://vestrasys.github.io/vestra-player-sdk/documents/Capabilities.html), the [architecture overview](README.md) code map (`packages/`). Not maintained.
+
 Date: 2026-10-21. Author: API maintainer. Status: **confirmed (2026-10-21)**, see "Coordinator confirmation" at the end.
 Based on: [Ecosystem plan](../product/ecosystem-plan.md) chapter 1 (1.2, 1.3, 1.4, 1.5a, 1.6) and chapter 4 S4; [Workflow](../../agentic-workflow.md) §1, §1.5, §1.6, §4.3.
 
@@ -259,19 +261,7 @@ When a `--plugin` development load has the same id as an installed plugin: the d
 
 ### 4.1 Fields and validation (one table for host and CLI)
 
-| Field | Type | Rule |
-| --- | --- | --- |
-| `name` | string | 1–64 characters (Unicode scalars), no control characters, no leading/trailing whitespace |
-| `author` | string | 1–64 characters, same as above |
-| `punchline` | string | 1–120 characters, single line |
-| `description` | string | 1–2000 characters, line breaks allowed, plain text |
-| `tags` | string[] | At most 8, each 1–24 characters, single line, deduplicated case-insensitively |
-| `icon` | string | Relative path inside the package (same path rules as `entry`: no `..`, `\`, absolute paths, symbolic links); extension `.png`/`.jpg`/`.jpeg`; the file must be in the package; ≤ 512 KB; PNG/JPEG by content, side length ≤ 1024 (256×256 square recommended) |
-| `readme` | string | Relative path inside the package, `.md`, UTF-8, ≤ 256 KB. If omitted and the package has `README.md`, that file is used |
-| `changelog` | string | Same as `readme`; if omitted and there is `CHANGELOG.md`, that file is used |
-| `sourceUrl` | string | `https:` address, parses successfully per WHATWG, ≤ 2048 bytes |
-| `license` | string | 1–64 characters (an SPDX expression is recommended; not checked against the SPDX list) |
-| `minPlayerVersion` | string | Strict `x.y.z`, same as `version` (§6) |
+The fields and their rules, as the host and the CLI check them today, are in [Manifest](https://vestrasys.github.io/vestra-player-sdk/documents/Manifest.html).
 
 - An explicitly given `icon` / `readme` / `changelog` whose file is missing → rejected; a missing default `README.md` / `CHANGELOG.md` → no error.
 - The fields are for display only; apart from validation the host does not use them (except `minPlayerVersion`). The host does not render the README or show the icon.

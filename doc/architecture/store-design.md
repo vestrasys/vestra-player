@@ -1,5 +1,7 @@
 # Plugin Store (`vestra.store`): design and API gaps
 
+> Historical design record (S5 plugin store round, 2026-10-22). Current behaviour: the store plugin's [README](../../src/plugins/store/README.md) and [CHANGELOG](../../src/plugins/store/CHANGELOG.md). Not maintained.
+
 > **2026-10-26 ([plugin management round](../process/rounds/2026-10-plugin-management.md), user rulings Q2/Q3; store 0.1.6):** the player has no rollback, and the store neither rolls back nor installs an older version: Roll Back / Restore is gone, the confirmations no longer say you can roll back or restore, and the Versions tab offers no version older than the installed one from the same source. To go back, the user uninstalls the plugin and installs a `.vxp`. Plugin management has exactly three operations: install, uninstall, disable/enable. This design has been updated accordingly; the decisions in §9.3, §11 and §12 that allowed rollback or older versions are kept as the record and marked superseded. ("Rollback detection" of a stale repository index, §3.4, is a different thing and stays.)
 
 Date: 2026-10-22. Author: the store plugin author (ecosystem plan S5, [this round](../process/rounds/2026-10-slint-store.md) step 2.1). Status: **adopted** (coordinator decisions in [the round record](../process/rounds/2026-10-slint-store.md) "Coordinator decisions → 2026-10-22, step 2.2"), **implemented** (step 2.4, `src/plugins/store/` 0.1.0). Where the decisions or the implementation differ from the first draft, the text has been changed, and the differences are summarized in §12.
@@ -9,7 +11,7 @@ Sources: [ecosystem plan](../product/ecosystem-plan.md) 1.1–1.6 (in particular
 ## 0. Conclusion
 
 - The store is a **separate built-in plugin** `vestra.store`, in `src/plugins/store/`, released with the player (1.6 item 6). It is responsible for "discover → install → update → uninstall" and, since the Plugin Manager was removed on 2026-10-26, also for disabling, enabling and reloading: it is the only plugin management interface (§1.3). It works on the install library only through the public `plugin.packages`.
-- The main interface is a tool window: a list on the left, details on the right (three tabs README / Changelog / Versions, with a right column for information and permissions); there is also an "Options ▸ Plugins ▸ Plugin Store" settings page that manages third-party repositories and automatic checks.
+- The main interface is a tool window: a list on the left, details on the right (three tabs Description / Changelog / Versions, with a right column for information and permissions); there is also an "Options ▸ Plugins ▸ Plugin Store" settings page that manages third-party repositories and automatic checks.
 - The official index is verified with a built-in Ed25519 public key (Node's built-in `crypto`), packages are verified with `sha256` and `size`, and installation goes through `packages.validateArchive` → `install({ source, replace })`.
 - **v1 needs no new host or SDK API.** Evidence in §9.1. Two optional improvements (list icons, drag and drop onto tool windows) and one contract clarification (installing a lower version from the same source) are listed as well; none of them blocks implementation.
 

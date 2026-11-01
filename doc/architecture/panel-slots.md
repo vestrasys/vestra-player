@@ -22,7 +22,7 @@ A sidebar or bottom-bar conflict is only discovered at compile time, reported as
 
 ## Step 1: sidebar tabs
 
-Status (2026-10-24): implemented in the host and SDK 1.5.2 (branches `feat/sidebar-tabs` and SDK `feat/panel-tabs`); adapting the playlist is done separately. Trade-offs made during implementation:
+Status: implemented in the host and SDK 1.5.2 (2026-10-24); the playlist is one of the sidebar's tabs. Trade-offs made during implementation:
 
 - The tab list is in `PanelSlot.panels` (not in `SlotState`), so `deepEqual` on `state` in plugin tests does not fail because of a new field; on the wire it is still `LayoutSlot.panels`.
 - `"otherTab"` only appears in `Panel.state.reason`; `SlotState.reason` is for the whole sidebar and is unchanged.
@@ -61,11 +61,7 @@ Status (2026-10-24): implemented in the host and SDK 1.5.2 (branches `feat/sideb
 
 ## What a plugin gets when it cannot get a slot
 
-It must not fail silently:
-
-- Registered but not currently shown: `ready` resolves, `panel.state.active === false`, `reason` is `"otherTab"`, and state changes are reported through `onChange`.
-- Exclusive slot taken: `ready` rejects with `conflict`, and the message contains the occupying plugin's id.
-- Neither case fails activation; the plugin manager shows a notice.
+A background tab (`reason: "otherTab"`) or a taken exclusive slot (`conflict`, `slot-occupied`) never fails activation; what the plugin sees is on the SDK site: [Panel](https://vestrasys.github.io/vestra-player-sdk/documents/Windows,_panels,_settings_pages,_dialogs_and_the_OSD.html#panel).
 
 ## Tests
 
@@ -107,5 +103,5 @@ flowchart LR
 - **Clicks.** A click sends the cell's token; the host runs it only when the token is in the strip's list (the plugins' buttons and the toggle). A cell hidden for want of room is not clickable at all: its TouchArea is disabled and its accessibility action guarded.
 - **Cost per tick.** `bar_tick` runs on every window tick but compares `bar_buttons::Inputs` first (the registry and binding revisions, the sidebar's state, the language, the window generations) and rebuilds only when it changed (UI frame-rate rule; `bar_buttons::tests::an_unchanged_tick_does_not_rebuild`).
 - **Images** are decoded when the strip is rebuilt (at most 64 px); one that cannot be loaded shows the icon set's `failed` icon instead of an empty cell, and stays clickable.
-- **Lazy activation (open item).** Buttons are runtime contributions: a plugin adds them while it runs. When idle stop lands (lazy activation's record/replay of a plugin's contributions), the `button` must be part of the recorded command declaration, so a parked plugin's button stays in the strip and a click wakes the plugin like its menu item does.
+- **Lazy activation.** The `button` is part of the recorded command declaration (host 0.5.17, off by default behind `VESTRA_LAZY=1`): a parked plugin's button stays in the strip from the recording and a click wakes the plugin like its menu item does (checked on hardware, [lazy activation record §6.7](../process/rounds/2026-10-lazy-activation.md#67-coordinator-gui-checks-2026-10-31-release-build-of-9fb9cb1-host-0517)).
 - **Release note for 0.5.10** (coordinator ruling S4): the sidebar toggle in the bottom bar is now the player's **Toggle Sidebar** command; its tooltip reads "Toggle Sidebar", with no key unless the user binds one in Keyboard Shortcuts (it used to read "Playlist (F6)": F6 stays the playlist's own tab action).
