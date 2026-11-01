@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.9
+
+Needs Vestra Player 0.6.0.
+
+- Buttons keep their places when a plugin is disabled or enabled (as on VS Code's extension page): only Disable and Enable swap their words. The details show [Update to x.y.z] (while a newer version exists) [Disable | Enable] [Uninstall…], plus Reload last for a failed plugin; formerly Enable jumped to the first place after Disable. A development load shows [Disable | Enable] (and Reload when failed).
+- A row's button is the first of the same order (Update, else Disable or Enable) and its … menu the rest in a fixed order: Disable or Enable, Uninstall…, Reload, Open Data Folder. Reload is left out for a disabled plugin (the player does not reload one). Formerly the button was Uninstall… for a running plugin and Enable for a disabled one, and Reload for a failed one.
+- A disabled plugin with an update offers Update as well (formerly only a revoked one did).
+
 ## 0.2.8
 
 Needs Vestra Player 0.6.0.

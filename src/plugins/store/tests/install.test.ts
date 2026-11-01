@@ -60,7 +60,7 @@ test("official install: confirm with permissions, download through a redirect, c
     // Under Installed now (Available stayed, without it): the row's button and Disable (formerly in the Plugin Manager).
     assert.equal(props(host)["has-selection"], false);
     await choose(host, "YouTube");
-    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…", "停用"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…"]);
   } finally {
     await stop();
   }
@@ -263,7 +263,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
   try {
     const row = await choose(host, "YouTube");
     assert.equal(row.badge, "可更新 → 0.3.0");
-    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "卸载…", "停用"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "停用", "卸载…"]);
     assert.ok(banners(host).includes("新版本需要新的权限：读写剪贴板"));
     // The Updates chip shows the count ("Updates {}", in Slint).
     assert.equal(props(host)["updates"], 1);
@@ -286,7 +286,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
     );
     await until(host, () => !store.busy);
     // No Roll Back / Restore.
-    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…", "停用"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…"]);
     await until(host, () => (props(host)["versions"] as Version[]).some((v) => v.version === "0.3.0" && v.status === "当前"));
     assert.deepEqual(versions(), [
       ["0.3.0", "当前", false],

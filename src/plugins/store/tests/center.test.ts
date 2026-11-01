@@ -108,20 +108,21 @@ test("row buttons and … menus by state", async () => {
     assert.equal(builtin.badge, "内置");
 
     const running = controls(host, "A Run");
-    assert.deepEqual(running.primary, { id: "uninstall", text: "卸载…", enabled: true });
-    assert.deepEqual(ids(running.menu), ["disable", "reload", "openData"]);
-    assert.deepEqual(running.menu.map((m) => m.text), ["停用", "重新加载", "打开数据目录"]);
+    // One fixed order (Update, Disable/Enable, Uninstall…, Reload, Open Data Folder): the button is the first, the menu the rest.
+    assert.deepEqual(running.primary, { id: "disable", text: "停用", enabled: true });
+    assert.deepEqual(ids(running.menu), ["uninstall", "reload", "openData"]);
+    assert.deepEqual(running.menu.map((m) => m.text), ["卸载…", "重新加载", "打开数据目录"]);
     assert.equal(running.dim, false);
 
     const disabled = controls(host, "B Off");
     assert.deepEqual(disabled.primary, { id: "enable", text: "启用", enabled: true });
-    assert.deepEqual(ids(disabled.menu), ["uninstall", "openData"]);
+    assert.deepEqual(ids(disabled.menu), ["uninstall", "openData"], "a disabled plugin is not reloaded");
     assert.equal(disabled.dim, true);
     assert.equal(disabled.badge, "已停用");
 
     const failed = controls(host, "C Bad");
-    assert.deepEqual(failed.primary, { id: "reload", text: "重新加载", enabled: true });
-    assert.deepEqual(ids(failed.menu), ["disable", "uninstall", "openData"]);
+    assert.deepEqual(failed.primary, { id: "disable", text: "停用", enabled: true });
+    assert.deepEqual(ids(failed.menu), ["uninstall", "reload", "openData"]);
     assert.equal(failed.badge, "失败");
     assert.equal((rows(host).find((r) => r.name === "C Bad") as { tip?: string }).tip, "boom", "the reason on hover");
 
@@ -151,8 +152,9 @@ test("… menu: disable and enable through packages.setEnabled; the row dims and
     assert.equal(controls(host, "A Run").badge, "已停用");
     assert.equal(props(host)["status-text"], "已停用「A Run」");
     assert.ok(host.osd.includes("已停用「A Run」"));
-    // The row's key selected it: the detail mirrors the row.
+    // The row's key selected it: the detail mirrors the row, Enable in Disable's place.
     assert.deepEqual(actions(host).map((a) => a.text), ["启用", "卸载…"]);
+    assert.deepEqual(ids(controls(host, "A Run").menu), ["uninstall", "openData"]);
 
     window.emit("rowAct", key, "enable");
     await until(host, () => !controls(host, "A Run").dim, "enabled again");
@@ -161,7 +163,7 @@ test("… menu: disable and enable through packages.setEnabled; the row dims and
       ["a.run", true],
     ]);
     assert.equal(props(host)["status-text"], "已启用「A Run」");
-    assert.deepEqual(actions(host).map((a) => a.text), ["卸载…", "停用"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…"]);
   } finally {
     await stop();
   }
@@ -434,4 +436,30 @@ test("translations in index.json: English limits, invalid values dropped, field 
   assert.deepEqual(zh.tags, ["一", `${"x".repeat(23)}…`]);
   assert.deepEqual(translationFor(withT!.translations, "ja"), {}, "no entry: English");
   assert.deepEqual(without!.translations, {});
+});
+
+test("buttons keep their places: Disable and Enable swap only their words (VS Code's extension page)", async () => {
+  const { host, stop } = await center();
+  try {
+    const detail = async (name: string) => {
+      await choose(host, name);
+      return ids(actions(host));
+    };
+    assert.deepEqual(await detail("A Run"), ["disable", "uninstall"], "enabled");
+    assert.deepEqual(await detail("B Off"), ["enable", "uninstall"], "disabled");
+    // A failed one: Reload last, so disabling it moves nothing.
+    assert.deepEqual(await detail("C Bad"), ["disable", "uninstall", "reload"], "failed");
+    assert.deepEqual(await detail("D Old"), ["update", "disable", "uninstall"], "update available");
+    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 2.0.0", "停用", "卸载…"]);
+    assert.deepEqual(ids(controls(host, "D Old").menu), ["disable", "uninstall", "reload", "openData"]);
+
+    // Disabled with an update: Update stays first, Enable takes Disable's place.
+    host.setPackages(host.packages.map((p) => (p.id === "d.old" ? { ...p, state: "disabled" } : p)));
+    await until(host, () => controls(host, "D Old").dim, "D Old disabled");
+    assert.deepEqual(ids(actions(host)), ["update", "enable", "uninstall"]);
+    assert.deepEqual(controls(host, "D Old").primary, { id: "update", text: "更新", enabled: true });
+    assert.deepEqual(ids(controls(host, "D Old").menu), ["enable", "uninstall", "openData"]);
+  } finally {
+    await stop();
+  }
 });
