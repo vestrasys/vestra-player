@@ -79,12 +79,15 @@ export const clock = {
 /** How a sprite's `index.json` is written; tests hold it to play a slow disk. */
 export const indexFile = { write: writeIndex };
 /**
- * 0.2.12: on stop the plugin waits this long at most (real time) for its
- * pending index writes and clean-ups, so none of them touches the data
- * directory afterwards; a cache clean-up waits as long for an ended source's
- * index writes, so it does not delete a folder that is still being written.
+ * 0.2.12, best effort: on stop the plugin waits this long at most (real time)
+ * for its pending disk work (index and sheet writes, clean-ups); a cache
+ * clean-up waits as long for an ended source's index writes. Short: the
+ * player gives a stopping plugin 300 ms in the shared runner (more counts as
+ * leaked). Folders still being written are kept by the clean-up in any case.
  */
-export const SETTLE_MS = 2000;
+export const SETTLE_MS = 250;
+/** The wait in use (`SETTLE_MS`); tests lengthen it to hold a clean-up back. */
+export const settle = { ms: SETTLE_MS };
 
 /** Cells one ffmpeg run makes at most: fewer process starts (each costs ~0.2 s, and virus scanners react to it). */
 export const BATCH = 5;
@@ -312,6 +315,8 @@ export class Thumbnails {
   #last: { position: number; at: number; paused: boolean; rate: number } | null = null;
   /** Disk work nobody awaits: ended sources' index writes and file removals, cache clean-ups. */
   readonly #pending = new Set<Promise<unknown>>();
+  /** Ended jobs whose index writes have not landed: a clean-up keeps their folders. */
+  readonly #ending = new Set<Job>();
   readonly #scope: Plugin;
   readonly #settings: SettingsStore;
   readonly #video: (sourceId: number) => boolean | null;
@@ -539,9 +544,9 @@ export class Thumbnails {
       job.made = new Uint8Array(made.count);
       const key = cacheKey({ path: real, size, mtimeMs }, job.count, made.mode);
       const dir = join(this.#root!, key);
+      job.key = key; // before the folder exists: a clean-up running meanwhile keeps it
       await mkdir(dir, { recursive: true });
       if (this.#job !== job || job.abort.signal.aborted) return;
-      job.key = key;
       job.dir = dir;
       const index = await readIndex(dir);
       const sheets = sheetCount(job.count);
@@ -567,7 +572,7 @@ export class Thumbnails {
       job.stage = "running";
       if (job.made.some(Boolean)) this.#show(job);
       void this.#saveIndex(job);
-      this.#evict(new Set([key]));
+      this.#evict(key);
       if (job.queue.length === 0) return this.#finish(job);
       this.#pump(job);
     } catch {
@@ -767,7 +772,7 @@ export class Thumbnails {
     if (this.#job !== job) return;
     job.abort.abort();
     const remembered = this.#saveIndex(job, true);
-    this.#track(remembered); // a stop meanwhile waits for it too
+    this.#hold(job); // a stop meanwhile waits for it too; clean-ups keep the folder
     const next = this.#fresh(job.sourceId, job.path, job.duration);
     next.video = job.video;
     next.keyframesOnly = true;
@@ -789,8 +794,8 @@ export class Thumbnails {
     const sheets = [...job.dirty];
     job.dirty.clear();
     try {
-      // One slot for all of them, taken now (the pump saw it free).
-      await this.#take(async () => {
+      // One slot for all of them, taken now (the pump saw it free). Tracked: a stop waits for it.
+      await this.#tracked(this.#take(async () => {
         for (const s of sheets) {
           const { width, height } = sheetSize(s, job.count);
           const raw = join(job.dir!, `sheet-${s}.rgb`);
@@ -807,7 +812,7 @@ export class Thumbnails {
             await unlink(raw).catch(() => {});
           }
         }
-      });
+      }));
       if (this.#job !== job || job.abort.signal.aborted) return;
       for (const s of sheets) job.unshown.add(s);
       this.#publish(job);
@@ -879,7 +884,7 @@ export class Thumbnails {
     job.stage = "done";
     job.sheets = []; // the pixels live on in the sheet files
     void this.#saveIndex(job);
-    this.#evict(new Set(job.key ? [job.key] : []));
+    this.#evict(job.key);
   }
 
   /** Keep `promise` in `#pending` until it settles. */
@@ -889,29 +894,49 @@ export class Thumbnails {
     void tracked.then(() => this.#pending.delete(tracked));
   }
 
+  /** `#track`, handing `promise` back (its outcome unchanged). */
+  #tracked<T>(promise: Promise<T>): Promise<T> {
+    this.#track(promise);
+    return promise;
+  }
+
+  /** A job that no longer runs but has index writes on the way: tracked, and its folder kept until they land. */
+  #hold(job: Job) {
+    this.#ending.add(job);
+    this.#track(job.indexed.finally(() => this.#ending.delete(job)));
+  }
+
   /** `#pending` as it is now has settled, or `SETTLE_MS` (real time) passed. */
   #settled(): Promise<void> {
     if (this.#pending.size === 0) return Promise.resolve();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const limit = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, SETTLE_MS);
+      timer = setTimeout(resolve, settle.ms);
       timer.unref?.();
     });
     return Promise.race([Promise.all([...this.#pending]).then(() => {}), limit]).finally(() => clearTimeout(timer));
   }
 
-  /** Clean the cache (`keep`: the folders in use) once ended sources' index writes landed. */
-  #evict(keep: ReadonlySet<string>) {
+  /**
+   * Clean the cache once ended sources' index writes landed (at most
+   * `SETTLE_MS`). Kept: `key`, and, as it is when each folder is looked at,
+   * the current job's folder (it may have begun meanwhile, without an index
+   * yet) and those of ended jobs whose index writes are still on the way.
+   */
+  #evict(key: string | null) {
     const root = this.#root!;
+    const keep = {
+      has: (name: string) => name === key || this.#job?.key === name || [...this.#ending].some((job) => job.key === name),
+    };
     this.#track(this.#settled().then(() => evict(root, keep)));
   }
 
   /**
    * The source changed or the plugin stops: end its ffmpeg and forget its
-   * sprite (the files stay). Resolves once its index writes and the pending
-   * clean-ups are done (at most `SETTLE_MS`); stop awaits it (0.2.12), so
-   * nothing writes into the data directory, or into a folder a clean-up
-   * removed, after the plugin stopped.
+   * sprite (the files stay). Resolves once its index and sheet writes and the
+   * pending clean-ups are done, or after `SETTLE_MS`; stop awaits it (0.2.12),
+   * so as a rule nothing touches the data directory after the plugin stopped
+   * (best effort: a disk slower than that still lands later).
    */
   #end(): Promise<void> {
     const job = this.#job;
@@ -921,7 +946,7 @@ export class Thumbnails {
     this.#clearTimer();
     if (job) {
       job.abort.abort();
-      this.#track(job.indexed);
+      this.#hold(job);
       if (job.dir) {
         for (let s = 0; s < sheetCount(job.count); s++) this.#track(rm(join(job.dir, `sheet-${s}.new.jpg`), { force: true }));
       }

@@ -76,6 +76,8 @@ export const WRITE_GRACE_MS = 60_000;
 export const RENAME_TRIES = 5;
 const TRANSIENT = new Set(["EPERM", "EACCES", "EBUSY"]);
 let temps = 0;
+/** The file calls of `writeIndex`; tests replace them to play a failing disk or a refused rename. */
+export const indexFs = { writeFile, rename };
 
 type Look = { index: CacheIndex } | { invalid: true } | { unreadable: true };
 
@@ -106,14 +108,15 @@ export async function readIndex(dir: string): Promise<CacheIndex | null> {
 /** Write a sprite folder's index atomically: a temporary file in the folder, renamed over `index.json`. */
 export async function writeIndex(dir: string, index: CacheIndex): Promise<void> {
   const temp = join(dir, `${INDEX_FILE}.${process.pid}.${++temps}.tmp`);
-  await writeFile(temp, JSON.stringify(index));
   try {
+    // Inside the try: a write that fails half way leaves no temporary file behind.
+    await indexFs.writeFile(temp, JSON.stringify(index));
     // Node's rename replaces an existing file on Windows too (libuv: MoveFileExW
     // with MOVEFILE_REPLACE_EXISTING); it is refused while another program holds
     // the target open without delete sharing: wait a little and try again.
     for (let attempt = 1; ; attempt++) {
       try {
-        return await rename(temp, join(dir, INDEX_FILE));
+        return await indexFs.rename(temp, join(dir, INDEX_FILE));
       } catch (error) {
         if (attempt >= RENAME_TRIES || !TRANSIENT.has((error as NodeJS.ErrnoException).code ?? "")) throw error;
         await new Promise((resolve) => setTimeout(resolve, 20 * attempt));
@@ -151,12 +154,13 @@ async function folderBytes(dir: string): Promise<number> {
 /**
  * Keep `root` under `limit` bytes: folders without a valid index (an older
  * version's pictures, a broken write) are removed, then the least recently
- * used sprites until the rest fits. `keep` (the sources in use) is never removed,
+ * used sprites until the rest fits. `keep` (the sources in use) is never removed
+ * (asked for each folder as it is looked at, so it may change meanwhile),
  * nor (0.2.12) a folder whose index cannot be read just now or is being
  * written (a fresh temporary index): the next clean-up looks again.
  * Returns the removed folder names.
  */
-export async function evict(root: string, keep: ReadonlySet<string>, limit = CACHE_LIMIT_BYTES): Promise<string[]> {
+export async function evict(root: string, keep: { has(name: string): boolean }, limit = CACHE_LIMIT_BYTES): Promise<string[]> {
   const removed: string[] = [];
   const entries: { name: string; usedAt: number; bytes: number }[] = [];
   let total = 0;
