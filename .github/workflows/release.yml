@@ -3,7 +3,8 @@
 # only in docs (.github/scripts/main-green.sh); the unsigned packages (macOS
 # .dmg + .app zip, Windows setup.exe + portable zip, plus copies of the
 # installers under fixed names for releases/latest/download/), SHA256SUMS,
-# and a draft GitHub release in this repository with the notes from
+# latest.json (the release's description of itself, for update checks and
+# the download page) and a draft GitHub release in this repository with the notes from
 # doc/releases/v<version>.md. Signing and notarization are TODO
 # jobs in the `release` environment. How to cut a release: doc/releases/README.md.
 name: release
@@ -160,7 +161,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: .github/scripts
+          sparse-checkout: |
+            .github/scripts
+            src/packaging/windows
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: vestra-unsigned-*
@@ -176,6 +179,16 @@ jobs:
           sha256sum ./* | sed 's| \./| |' > SHA256SUMS
           cat SHA256SUMS
           ls -l
+      # Dry runs exercise latest.json here (written after SHA256SUMS, so not
+      # listed in it); it is not uploaded: draft-release writes it again
+      # from the files it uploads.
+      - name: latest.json (check only)
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          bash .github/scripts/latest-json.sh write dist "$VERSION" "$REPO"
+          bash .github/scripts/latest-json.sh check dist "$VERSION" "$REPO"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vestra-unsigned-SHA256SUMS
@@ -191,7 +204,10 @@ jobs:
   sign-macos:
     name: sign macOS (TODO)
     needs: package-macos
-    if: ${{ !inputs.dry_run }}
+    # !cancelled(): the implicit success() also fails when a job further up
+    # was skipped (the build-test jobs are, when main.yml already tested the
+    # commit), which skipped signing and the draft release in v0.6.2.
+    if: ${{ !cancelled() && !inputs.dry_run && needs.package-macos.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release
@@ -206,7 +222,7 @@ jobs:
   sign-windows:
     name: sign Windows (TODO)
     needs: package-windows
-    if: ${{ !inputs.dry_run }}
+    if: ${{ !cancelled() && !inputs.dry_run && needs.package-windows.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release
@@ -218,7 +234,10 @@ jobs:
   draft-release:
     name: draft GitHub release
     needs: [verify, checksums, sign-macos, sign-windows]
-    if: ${{ !inputs.dry_run && github.ref_type == 'tag' }}
+    if: >-
+      ${{ !cancelled() && !inputs.dry_run && github.ref_type == 'tag'
+      && needs.verify.result == 'success' && needs.checksums.result == 'success'
+      && needs.sign-macos.result == 'success' && needs.sign-windows.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -230,6 +249,7 @@ jobs:
           sparse-checkout: |
             doc/releases
             .github/scripts
+            src/packaging/windows
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: vestra-unsigned-*
@@ -243,13 +263,20 @@ jobs:
           VERSION: ${{ needs.verify.outputs.version }}
         # The fixed-name copies are made here, from the files that are
         # uploaded (the signed ones once sign-* sign), and checked with the
-        # rest: releases/latest/download/<fixed name> serves them.
+        # rest: releases/latest/download/<fixed name> serves them. Then
+        # latest.json describes them (releases/latest/download/latest.json;
+        # not in SHA256SUMS, see doc/releases/README.md) and is checked
+        # before upload: parses, version is the tag's, files match.
         run: |
           bash .github/scripts/stable-names.sh dist "$VERSION"
           (cd dist && sha256sum -c SHA256SUMS)
           for f in VestraPlayer-windows-x64-setup.exe VestraPlayer-macos-arm64.dmg; do
             test -f "dist/$f" || { echo "::error::dist/$f is missing"; exit 1; }
           done
+          bash .github/scripts/latest-json.sh write dist "$VERSION" "$GH_REPO"
+          bash .github/scripts/latest-json.sh check dist "$VERSION" "$GH_REPO"
+          jq -e '.downloads["windows-x64"] and .downloads["macos-arm64"]' dist/latest.json > /dev/null \
+            || { echo "::error::latest.json must list windows-x64 and macos-arm64"; exit 1; }
           gh release create "$TAG" --draft --verify-tag \
             --title "Vestra Player $VERSION (unsigned test build)" \
             --notes-file "doc/releases/v$VERSION.md" dist/*
