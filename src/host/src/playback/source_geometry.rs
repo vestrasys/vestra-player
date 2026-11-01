@@ -11,8 +11,8 @@
 //! orientation is prepared). The output confirms the orientation when it
 //! has the expected size ([`Evidence::Exact`]), or the expected aspect at
 //! another scale while the other orientation's aspect does not fit
-//! ([`Evidence::Aspect`]); otherwise, after [`TIMEOUT`] with some output,
-//! the gate opens without evidence ([`Evidence::Timeout`], a diagnostic
+//! ([`Evidence::Aspect`]); otherwise, after [`TIMEOUT`] and once a frame
+//! went through the new chain ([`Mark`]), the gate opens without evidence ([`Evidence::Timeout`], a diagnostic
 //! line), so the picture never stays frozen while the audio plays.
 #![forbid(unsafe_code)]
 
@@ -69,15 +69,18 @@ fn same_aspect(output: (i64, i64), expected: (i64, i64)) -> bool {
 }
 
 /// What the output (`video-out-params` w, h, rotate) says about the
-/// prepared orientation after `waited`. Only rotate 0 counts (the metadata
-/// filter). A frame turned the other way (still filtered by the previous
-/// file's orientation until `vf pre` replaces it) has the other aspect, so
-/// it never passes as `Aspect`; a picture within a few pixels of square has
-/// both aspects and passes only as `Exact` or by the timeout.
+/// prepared orientation after `waited`; `passed`: a frame has gone through
+/// the new chain since the orientation filter went in ([`Mark::passed`]).
+/// Only rotate 0 counts (the metadata filter). A frame turned the other way
+/// (still filtered by the previous file's orientation until `vf pre`
+/// replaces it) has the other aspect, so it never passes as `Aspect`; a
+/// picture within a few pixels of square has both aspects and passes only
+/// as `Exact` or by the timeout.
 pub fn evidence(
     expected: (i64, i64),
     output: (i64, i64, i64),
     waited: Duration,
+    passed: bool,
 ) -> Option<Evidence> {
     let (w, h, rotate) = output;
     if rotate != 0 || w <= 0 || h <= 0 {
@@ -87,10 +90,62 @@ pub fn evidence(
         return Some(Evidence::Exact);
     }
     let swapped = (expected.1, expected.0);
+    // Evidence about the shape, not about each frame: a stale frame of the
+    // previous chain with the same aspect passes too, for example one
+    // turned by 180° or flipped and then scaled (the size check before it
+    // had the same blind spot for those at the same size).
     if same_aspect((w, h), expected) && !same_aspect((w, h), swapped) {
         return Some(Evidence::Aspect);
     }
-    (waited >= TIMEOUT).then_some(Evidence::Timeout)
+    // `video-out-params` keeps the last frame's values until a frame of the
+    // new chain reaches the output: a stream that stalls after its first
+    // frame, or starts paused, may still show the previous file's chain
+    // (a sideways picture after a portrait file). The timeout opens only
+    // once a frame went through the new chain.
+    (passed && waited >= TIMEOUT).then_some(Evidence::Timeout)
+}
+
+/// How far the playback position must move past the [`Mark`] before it
+/// shows that frames went through the new chain: more than the few frames
+/// filtered before `vf pre` that the output may still hold.
+const PASSED_SECONDS: f64 = 0.25;
+
+/// What mpv reports when the orientation filter goes in, to tell when a
+/// frame went through the new chain: the output (a new frame that changes
+/// it) and the playback position (frames shown since).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Mark {
+    output: Option<(i64, i64, i64)>,
+    position: Option<f64>,
+}
+
+impl Mark {
+    fn read(mpv: &Mpv) -> Self {
+        let output = match (
+            mpv.get_property::<i64>("video-out-params/w"),
+            mpv.get_property::<i64>("video-out-params/h"),
+            mpv.get_property::<i64>("video-out-params/rotate"),
+        ) {
+            (Ok(w), Ok(h), Ok(rotate)) => Some((w, h, rotate)),
+            _ => None,
+        };
+        Self {
+            output,
+            position: mpv.get_property::<f64>("time-pos").ok(),
+        }
+    }
+
+    /// Whether a frame went through the new chain: the output changed (mpv
+    /// reconfigures it only for a frame with other parameters), or playback
+    /// moved on by [`PASSED_SECONDS`] or more (a seek lands a new frame
+    /// too). Neither while a stream stalls or stays paused on a frame
+    /// filtered before (a paused start's refresh that keeps the same output
+    /// is not seen: the gate then waits for playback).
+    pub fn passed(&self, output: (i64, i64, i64), position: Option<f64>) -> bool {
+        self.output != Some(output)
+            || matches!((self.position, position),
+                (Some(at), Some(now)) if (now - at).abs() >= PASSED_SECONDS)
+    }
 }
 
 type Load = (i64, IntentTicket);
@@ -129,10 +184,20 @@ fn plan(width: i64, height: i64, clockwise: i64) -> Result<Plan, RpcError> {
 }
 
 enum Preparation {
-    /// The orientation filter is in the chain since then.
-    WaitingOutput(Plan, Instant),
+    WaitingOutput(Waiting),
     Confirmed,
     Failed,
+}
+
+/// The orientation filter is in the chain, its output not confirmed yet.
+struct Waiting {
+    plan: Plan,
+    /// When the filter went in.
+    since: Instant,
+    /// What mpv reported then.
+    mark: Mark,
+    /// A frame went through the new chain since (kept once seen).
+    passed: bool,
 }
 
 pub struct Geometry {
@@ -198,8 +263,8 @@ impl Geometry {
         {
             self.begin();
         }
-        if let Some((_, preparation)) = &self.prepared {
-            if let Preparation::WaitingOutput(expected, since) = preparation {
+        if let Some((_, preparation)) = &mut self.prepared {
+            if let Preparation::WaitingOutput(waiting) = preparation {
                 let (Ok(width), Ok(height), Ok(rotation)) = (
                     mpv.get_property::<i64>("video-out-params/w"),
                     mpv.get_property::<i64>("video-out-params/h"),
@@ -207,7 +272,12 @@ impl Geometry {
                 ) else {
                     return Ok(());
                 };
-                let waited = since.elapsed();
+                if !waiting.passed {
+                    let position = mpv.get_property::<f64>("time-pos").ok();
+                    waiting.passed = waiting.mark.passed((width, height, rotation), position);
+                }
+                let expected = waiting.plan;
+                let waited = waiting.since.elapsed();
                 // `evidence` counts against TIMEOUT; a shorter `timeout`
                 // (tests) counts as if it had waited the difference.
                 let counted = waited + TIMEOUT.saturating_sub(timeout);
@@ -215,6 +285,7 @@ impl Geometry {
                     (expected.width, expected.height),
                     (width, height, rotation),
                     counted,
+                    waiting.passed,
                 ) {
                     let note = if evidence == Evidence::Timeout {
                         format!(
@@ -301,7 +372,17 @@ impl Geometry {
                 format!("orientation filter failed: {error}"),
             )
         })?;
-        self.prepared = Some((load, Preparation::WaitingOutput(expected, Instant::now())));
+        // Read after `vf pre`: a change missed here only makes the timeout
+        // wait for playback, never takes an old-chain frame for a new one.
+        self.prepared = Some((
+            load,
+            Preparation::WaitingOutput(Waiting {
+                plan: expected,
+                since: Instant::now(),
+                mark: Mark::read(mpv),
+                passed: false,
+            }),
+        ));
         // Deliberately do not inspect output in the configuration tick.
         Ok(())
     }
@@ -367,6 +448,8 @@ mod tests {
     #[test]
     fn the_output_confirms_by_size_by_aspect_or_after_the_timeout() {
         let now = Duration::ZERO;
+        // Frames have gone through the new chain (see the next test).
+        let evidence = |expected, output, waited| evidence(expected, output, waited, true);
         // The expected size, at once.
         assert_eq!(
             evidence((1920, 1080), (1920, 1080, 0), now),
@@ -413,6 +496,63 @@ mod tests {
         assert_eq!(evidence((1920, 1080), (0, 1080, 0), TIMEOUT), None);
     }
 
+    /// Review M1: `video-out-params` keeps the previous chain's values until
+    /// a frame of the new chain reaches the output. A portrait file (its
+    /// quarter turn in the chain), then a landscape stream that stalls after
+    /// its first frame or starts paused: the stale output is the swapped
+    /// aspect, and the timeout must not publish that sideways picture.
+    #[test]
+    fn the_timeout_waits_for_a_frame_through_the_new_chain() {
+        let expected = (1920, 1080);
+        let stale = (1080, 1920, 0);
+        let long = TIMEOUT * 5;
+        // Marked when the orientation filter went in, at 12.0 s.
+        let mark = Mark {
+            output: Some(stale),
+            position: Some(12.0),
+        };
+        // No new frame: the same output, the position where it was (paused,
+        // or a stall); closed however long it waits.
+        for position in [Some(12.0), Some(12.1), None] {
+            let passed = mark.passed(stale, position);
+            assert!(!passed, "{position:?}");
+            assert_eq!(evidence(expected, stale, long, passed), None);
+        }
+        // A frame of the new chain: the output changes (here to the
+        // expected size, which confirms at once anyway) ...
+        let fresh = (1920, 1080, 0);
+        assert!(mark.passed(fresh, Some(12.0)));
+        assert_eq!(
+            evidence(expected, fresh, Duration::ZERO, true),
+            Some(Evidence::Exact)
+        );
+        // ... or, with a crop after the orientation that keeps the output's
+        // size, playback moves on (or a seek lands): then the timeout.
+        let cropped = (1920, 816, 0);
+        let mark = Mark {
+            output: Some(cropped),
+            position: Some(12.0),
+        };
+        assert!(!mark.passed(cropped, Some(12.2)));
+        assert_eq!(evidence(expected, cropped, long, false), None);
+        assert!(mark.passed(cropped, Some(12.3)));
+        assert!(mark.passed(cropped, Some(3.0)));
+        assert_eq!(
+            evidence(expected, cropped, TIMEOUT, true),
+            Some(Evidence::Timeout)
+        );
+        assert_eq!(
+            evidence(expected, cropped, TIMEOUT - Duration::from_millis(1), true),
+            None
+        );
+        // No output when the filter went in: the first one came after it.
+        let unset = Mark {
+            output: None,
+            position: Some(0.0),
+        };
+        assert!(unset.passed(cropped, Some(0.0)));
+    }
+
     // --------------------------------------------------- with a real libmpv
 
     fn one_mpv_at_a_time() -> std::sync::MutexGuard<'static, ()> {
@@ -453,22 +593,37 @@ mod tests {
         )
     }
 
-    /// Loads a generated 320×240 picture and ticks the geometry (as the
-    /// control worker does, every 2 ms) until the gate opens; returns how
-    /// long after the orientation filter went in.
-    fn opens(mpv: &Mpv, timeout: Duration) -> Duration {
+    /// A new load of a generated 320×240 picture (closed gate), up to its
+    /// FileLoaded: the presentation load exists from then on (before it the
+    /// track list is empty, which would read as audio only).
+    fn start(mpv: &Mpv, paused: bool) -> (Arc<AtomicBool>, Geometry) {
         let gate = Arc::new(AtomicBool::new(true));
         let mut geometry = Geometry::new(gate.clone());
         geometry.begin();
+        mpv.set_property("pause", paused).unwrap();
         mpv.command(&["loadfile", "av://lavfi:testsrc=size=320x240:rate=25"])
             .unwrap();
         let deadline = Instant::now() + Duration::from_secs(10);
-        // The presentation load exists from FileLoaded on (before it the
-        // track list is empty, which would read as audio only).
         while !matches!(mpv.poll_event(), Some(rsmpv::Event::FileLoaded)) {
             assert!(Instant::now() < deadline, "not loaded");
             std::thread::sleep(Duration::from_millis(1));
         }
+        (gate, geometry)
+    }
+
+    fn output(mpv: &Mpv) -> (i64, i64) {
+        (
+            mpv.get_property::<i64>("video-out-params/w").unwrap(),
+            mpv.get_property::<i64>("video-out-params/h").unwrap(),
+        )
+    }
+
+    /// Loads a generated 320×240 picture and ticks the geometry (as the
+    /// control worker does, every 2 ms) until the gate opens; returns how
+    /// long after the orientation filter went in.
+    fn opens(mpv: &Mpv, timeout: Duration) -> Duration {
+        let (gate, mut geometry) = start(mpv, false);
+        let deadline = Instant::now() + Duration::from_secs(10);
         let mut prepared = None;
         while !geometry.ready_for(load()) {
             assert!(Instant::now() < deadline, "the gate never opened");
@@ -510,5 +665,47 @@ mod tests {
         let waited = opens(&mpv, timeout);
         assert!(waited >= timeout, "{waited:?}");
         assert_eq!(mpv.get_property::<i64>("video-out-params/h").unwrap(), 136);
+    }
+
+    /// Review M1 with a real mpv: the previous (portrait) file's quarter
+    /// turn is still the orientation filter and a plugin's crop follows it;
+    /// a landscape picture starts paused. Its first frame went through the
+    /// old chain (240×160, sideways). Past the timeout the gate opens only
+    /// on a frame of the new chain (320×120): at once if mpv refreshed the
+    /// paused frame, else once playback goes on.
+    #[test]
+    fn a_stale_output_of_the_previous_chain_never_opens_the_gate() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("@vestra-owned:lavfi=[crop=w=iw:h=ih/2]");
+        mpv.command(&["vf", "add", "@vestra-orientation:lavfi=[transpose=clock]"])
+            .unwrap();
+        let (gate, mut geometry) = start(&mpv, true);
+        let timeout = Duration::from_millis(300);
+        let tick = |geometry: &mut Geometry| {
+            geometry
+                .advance(&mpv, Phase::Ready, Some(load()), timeout)
+                .unwrap();
+            std::thread::sleep(Duration::from_millis(2));
+            gate.load(Ordering::Acquire)
+        };
+        // Paused, well past the timeout.
+        let paused = Instant::now() + timeout * 5;
+        while Instant::now() < paused {
+            if tick(&mut geometry) {
+                assert_eq!(output(&mpv), (320, 120), "opened on a stale frame");
+                return;
+            }
+        }
+        assert!(
+            matches!(geometry.prepared, Some((_, Preparation::WaitingOutput(_)))),
+            "prepared while paused"
+        );
+        // Playback goes on: frames of the new chain.
+        mpv.set_property("pause", false).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !tick(&mut geometry) {
+            assert!(Instant::now() < deadline, "the gate never opened");
+        }
+        assert_eq!(output(&mpv), (320, 120));
     }
 }
