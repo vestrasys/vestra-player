@@ -185,18 +185,35 @@ export function deviceId(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 && value.length <= 512 && !/[\u0000-\u001f\u007f]/.test(value) ? value : null;
 }
 const utf8 = new TextEncoder();
-/** At most `bytes` UTF-8 bytes, cut on a character with "…". */
-function fit(text: string, bytes: number) {
-  if (utf8.encode(text).length <= bytes) return text;
+const bytes = (text: string) => utf8.encode(text).length;
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+/** The player's limit for one menu path segment, in UTF-8 bytes. */
+export const SEGMENT_BYTES = 80;
+/**
+ * Data made fit for a menu line: the player refuses control characters (C0, DEL and C1) and
+ * surrounding whitespace in a menu path segment, so a control becomes a space and the edges
+ * are trimmed.
+ */
+export const menuText = (text: string) => text.replace(/\p{Cc}/gu, " ").replace(/^\s+|\s+$/gu, "");
+/**
+ * At most `max` UTF-8 bytes, cut with "…" on whole user-perceived characters: a code point,
+ * surrogate pair, emoji sequence or accented letter is kept or dropped as one. Spaces before
+ * the "…" are dropped.
+ */
+function fit(text: string, max: number) {
+  if (bytes(text) <= max) return text;
   let out = "";
-  for (const char of text) {
-    if (utf8.encode(`${out}${char}…`).length > bytes) break;
-    out += char;
+  let room = max - bytes("…");
+  for (const { segment } of graphemes.segment(text)) {
+    const size = bytes(segment);
+    if (size > room) break;
+    out += segment;
+    room -= size;
   }
-  return `${out}…`;
+  return `${menuText(out)}…`;
 }
 /** A device name without control characters or edge spaces, ≤ 72 bytes; empty for a blank name. */
-export const cleanName = (name: string) => fit(name.replace(/[\u0000-\u001f\u007f]/g, " ").trim(), 72);
+export const cleanName = (name: string) => fit(menuText(name), 72);
 /** A device name as a menu item: `cleanName`, never empty. */
 export const deviceLabel = (name: string) => cleanName(name) || UNNAMED_DEVICE;
 /**
@@ -222,19 +239,29 @@ export function deviceTitles(devices: readonly { id: string; name: string }[], m
 
 /**
  * A track as the window's list, the menu and the OSD show it. `text` is data,
- * "1. 日语 [jpn] (aac)" (at most 60 characters), or empty for a track without
- * title and language: it is then shown as the words "Track {n}" ("Track 2
- * (opus)"). An external track gets " (external)". main.ts puts the words into
- * text values (`trackItem` for the window's list, `trackLabel` for the menu and the OSD).
+ * "1. 日语 [jpn] (aac)", or empty for a track without title and language: it is
+ * then shown as the words "Track {n}" ("Track 2 (opus)"). An external track gets
+ * " (external)". main.ts puts the words into text values (`trackItem` for the
+ * window's list, `trackLabel` for the menu and the OSD).
+ *
+ * The menu label is a menu path segment, which the player limits to 80 UTF-8
+ * bytes without controls or edge whitespace. Title, language and codec lose
+ * their controls and edge spaces; language and codec are cut to 16 and 24 bytes,
+ * then the title to what is left of `TRACK_TEXT_BYTES`, so the number, language
+ * and codec stay visible. The number in front keeps the labels of a list distinct.
  */
 export type TrackRow = { kind: "track"; text: string; n: number; codec: string; external: boolean; disconnected: false };
+/** Room for `text`: 80 bytes less the widest " (external)" of the plugin's languages ("（外部）", 12 bytes). */
+export const TRACK_TEXT_BYTES = SEGMENT_BYTES - 12;
 export function trackRow(track: AudioTrack, index: number): TrackRow {
   const n = index + 1;
-  const title = track.title?.trim() || null;
-  const language = track.language ? `[${track.language}]` : null;
-  const codec = track.codec ? `(${track.codec})` : null;
-  const text = title || language ? [`${n}.`, title, language, codec].filter(Boolean).join(" ") : "";
-  return { kind: "track", text: clip(text, 60), n, codec: track.codec ?? "", external: track.external, disconnected: false };
+  const codec = fit(menuText(track.codec ?? ""), 24);
+  const language = fit(menuText(track.language ?? ""), 16);
+  const tail = [language && `[${language}]`, codec && `(${codec})`].filter(Boolean).join(" ");
+  // The title gets what the number, the tail and the spaces between leave.
+  const title = fit(menuText(track.title ?? ""), TRACK_TEXT_BYTES - bytes([`${n}.`, tail].filter(Boolean).join(" ")) - 1);
+  const text = title || language ? fit([`${n}.`, title, tail].filter(Boolean).join(" "), TRACK_TEXT_BYTES) : "";
+  return { kind: "track", text, n, codec, external: track.external, disconnected: false };
 }
 /** At most `length` characters, cut with "…". */
 export const clip = (text: string, length: number) => ([...text].length > length ? `${[...text].slice(0, length - 1).join("")}…` : text);

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
-import { bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, parse, presetOf, presets, serialize, syncSeconds, trackRow } from "../model.ts";
+import {
+  bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, menuText, neutral, nodes, parse, presetOf, presets, SEGMENT_BYTES, serialize, syncSeconds,
+  TRACK_TEXT_BYTES, trackRow,
+} from "../model.ts";
 
 test("reset clears the owned chain and preset gains stay inside the ±6 dB EQ range", () => {
   assert.deepEqual(nodes(neutral()), []);
@@ -88,12 +92,88 @@ test("G03 track labels: number, title, language, codec, external", () => {
   assert.equal(label({ title: "日语", language: "jpn", codec: "aac" }, 0), "1. 日语 [jpn] (aac)");
   assert.equal(label({ title: "movie.ac3", codec: "ac3", external: true }, 2), "3. movie.ac3 (ac3)");
   assert.equal(label({ language: "eng" }, 0), "1. [eng]");
-  assert.equal([...label({ title: "长".repeat(80) }, 0)].length, 60);
   // Without title and language the window, the menu and the OSD put the words around the data.
   assert.deepEqual(trackRow(t({ codec: "opus", external: true }), 1), {
     kind: "track", text: "", n: 2, codec: "opus", external: true, disconnected: false,
   });
   assert.deepEqual(trackRow(t({}), 3), { kind: "track", text: "", n: 4, codec: "", external: false, disconnected: false });
+});
+
+/** The track menu templates in English and every catalog of the plugin. */
+const templates = (() => {
+  const ids = ["{} (external)", "Track {}", "Track {} ({})", "Track {} (external)", "Track {} ({}) (external)"];
+  const catalogs = readdirSync(new URL("../locales/", import.meta.url)).filter((name) => name.endsWith(".po"));
+  return [
+    new Map(ids.map((id) => [id, id])),
+    ...catalogs.map((name) => {
+      const po = readFileSync(new URL(`../locales/${name}`, import.meta.url), "utf8");
+      const pairs = [...po.matchAll(/^msgid "(.*)"\nmsgstr "(.*)"$/gm)].map(([, id, str]) => [JSON.parse(`"${id}"`), JSON.parse(`"${str}"`)] as const);
+      const map = new Map(pairs);
+      for (const id of ids) assert.ok(map.get(id), `${name} translates ${id}`);
+      return map;
+    }),
+  ];
+})();
+const fill = (template: string, args: (string | number)[]) => args.reduce<string>((out, arg) => out.replace("{}", String(arg)), template);
+/** The menu segments `trackLabel` (main.ts) makes of a row, in every language. */
+const menuLabels = (row: ReturnType<typeof trackRow>) =>
+  templates.map((catalog) => {
+    const label = row.text ? row.text : row.codec ? fill(catalog.get("Track {} ({})")!, [row.n, row.codec]) : fill(catalog.get("Track {}")!, [row.n]);
+    return row.external ? fill(catalog.get("{} (external)")!, [label]) : label;
+  });
+const bytes = (text: string) => new TextEncoder().encode(text).length;
+const segmentValid = (text: string) => text !== "" && bytes(text) <= SEGMENT_BYTES && menuText(text) === text && !/\p{Cc}/u.test(text);
+
+test("G03 track labels fit a menu path segment (80 bytes, no controls or edge spaces) in every language", () => {
+  const t = (fields: Partial<Parameters<typeof trackRow>[0]>) => ({
+    id: 1, selected: false, external: false, exportable: true, codec: null, title: null, language: null, ...fields,
+  });
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const cases: Partial<Parameters<typeof trackRow>[0]>[] = [
+    { title: "长".repeat(80) },
+    { title: "日本語吹き替え版".repeat(10), language: "jpn", codec: "aac", external: true },
+    { title: "x".repeat(200), language: "l".repeat(40), codec: "c".repeat(60), external: true },
+    { title: "  Director's commentary \t ", language: " eng ", codec: " ac3 " },
+    { title: "a\u0000b\u0007c\u001bd\u007fe\u0085f\u009fg\r\n", codec: "e\u0080ac3" },
+    { title: "\u0000\u0085　", codec: "opus", external: true },
+    { title: "🎬👨‍👩‍👧‍👦🇯🇵".repeat(12), codec: "flac" },
+    { title: "é".repeat(50) },
+    { codec: "\u0001" + "z".repeat(100), external: true },
+  ];
+  for (const fields of cases) {
+    for (const index of [0, 98_765]) {
+      const row = trackRow(t(fields), index);
+      assert.ok(bytes(row.text) <= TRACK_TEXT_BYTES, row.text);
+      for (const label of menuLabels(row)) assert.ok(segmentValid(label), `${JSON.stringify(label)} (${bytes(label)} bytes)`);
+      // A cut never splits a user-perceived character: every grapheme of the text is one of the source's, or "…".
+      const source = [fields.title, fields.language, fields.codec].join(" ");
+      for (const { segment } of segmenter.segment(row.text)) assert.ok(segment === "…" || /^[\d. [\]()]$/.test(segment) || source.includes(segment), segment);
+    }
+  }
+  // A long CJK title is cut in bytes, keeping number, language and codec.
+  const cjk = trackRow(t({ title: "日本語吹き替え版".repeat(10), language: "jpn", codec: "aac", external: true }), 0).text;
+  assert.match(cjk, /^1\. 日本語吹き替え版.*… \[jpn\] \(aac\)$/);
+  assert.equal(menuLabels(trackRow(t({ title: "日本語吹き替え版".repeat(10), language: "jpn", codec: "aac", external: true }), 0))[0], `${cjk} (external)`);
+  // Edge spaces go, controls become spaces.
+  assert.equal(trackRow(t({ title: "  Director's commentary \t ", language: " eng ", codec: " ac3 " }), 0).text, "1. Director's commentary [eng] (ac3)");
+  assert.equal(trackRow(t({ title: "a\u0000b\u0085c\r\n", codec: "e\u0080ac3" }), 0).text, "1. a b c (e ac3)");
+  // A title of controls and spaces only is no title: the words "Track 1 (opus)" are shown.
+  assert.deepEqual(trackRow(t({ title: "\u0000\u0085　", codec: "opus", external: true }), 0), {
+    kind: "track", text: "", n: 1, codec: "opus", external: true, disconnected: false,
+  });
+  // Emoji sequences are kept or dropped whole.
+  const emoji = trackRow(t({ title: "🎬👨‍👩‍👧‍👦🇯🇵".repeat(12), codec: "flac" }), 0).text;
+  assert.ok(emoji.endsWith("… (flac)") && bytes(emoji) <= TRACK_TEXT_BYTES, emoji);
+  assert.ok(!emoji.includes("‍…") && !/[\ud800-\udbff](?![\udc00-\udfff])/.test(emoji));
+  // Every label of a list stays distinct, also when the titles are the same once cut.
+  const list = [
+    ...Array.from({ length: 12 }, () => t({ title: "长".repeat(80), codec: "aac" })),
+    t({}), t({ codec: "aac" }), t({ external: true }), t({ title: "Track 2" }),
+  ];
+  for (const catalog of templates.keys()) {
+    const labels = list.map((track, index) => menuLabels(trackRow(track, index))[catalog]);
+    assert.equal(new Set(labels).size, labels.length, labels.join(" | "));
+  }
 });
 
 test("A11 same-name scan: audio files that start with the video's name, at most 8", () => {
@@ -152,4 +232,5 @@ test("G16: the saved device is an id the player accepts, kept with its name; tit
   );
   const long = deviceLabel("扬声器".repeat(40));
   assert.ok(new TextEncoder().encode(long).length <= 72 && long.endsWith("…"));
+  assert.equal(deviceLabel(" Speakers\u0085(USB)\u009b "), "Speakers (USB)", "C1 controls become spaces too");
 });
