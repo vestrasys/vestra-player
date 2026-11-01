@@ -126,7 +126,11 @@ test("labels, same key, safe exits", () => {
   assert.ok(!sameKey("Q", "Ctrl+Q"));
   assert.ok(exempt({ plugin: "host", command: "quit" }));
   assert.ok(exempt({ plugin: "host", command: "exit-fullscreen" }));
-  assert.ok(!exempt({ plugin: "host", command: "fullscreen" }));
+  // Esc is Toggle Fullscreen's default (player 0.6.0): it stays, so fullscreen can be left.
+  assert.ok(exempt({ plugin: "host", command: "fullscreen" }));
+  assert.ok(!exempt({ plugin: "host", command: "enter-fullscreen" }));
+  assert.ok(!exempt({ plugin: "host", command: "play-pause" }));
+  assert.ok(!exempt({ plugin: "vestra.other", command: "fullscreen" }));
 });
 
 // ------------------------------------------------------------------ menu

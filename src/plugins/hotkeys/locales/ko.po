@@ -81,27 +81,27 @@ msgstr "상태"
 msgid "Vestra Player shortcuts"
 msgstr "Vestra Player 단축키"
 
-#: ignore.ts:47
+#: ignore.ts:48
 #, x-machine
 msgid "Ignore default shortcuts?"
 msgstr "기본 단축키를 무시할까요?"
 
-#: ignore.ts:49
-#, x-machine
-msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Leave Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
-msgstr "키보드 단축키에서 변경한 키만 작동하고, Space나 화살표 키 같은 기본 키는 작동하지 않습니다. 종료(⌘Q)와 전체 화면 종료(Esc)는 영향을 받지 않습니다. 설정 ▸ 기본 단축키 무시에서 언제든 끌 수 있습니다."
-
 #: ignore.ts:50
+#, x-machine
+msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
+msgstr "키보드 단축키에서 변경한 키만 작동하고, Space나 화살표 키 같은 기본 키는 작동하지 않습니다. 종료(⌘Q)와 전체 화면(Esc)은 영향을 받지 않습니다. 설정 ▸ 기본 단축키 무시에서 언제든 끌 수 있습니다."
+
+#: ignore.ts:51
 #, x-machine
 msgid "Ignore"
 msgstr "무시"
 
-#: ignore.ts:58
+#: ignore.ts:59
 #, x-machine
 msgid "Ignore default shortcuts: On"
 msgstr "기본 단축키 무시: 켬"
 
-#: ignore.ts:58
+#: ignore.ts:59
 #, x-machine
 msgid "Ignore default shortcuts: Off"
 msgstr "기본 단축키 무시: 끔"

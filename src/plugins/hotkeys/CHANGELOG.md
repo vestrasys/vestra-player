@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- Ignore Default Shortcuts keeps a way out of fullscreen: Esc now belongs to Toggle Fullscreen (player 0.6.0), so Toggle Fullscreen is never ignored, like Quit and Leave Fullscreen. Enter Fullscreen has no default and is not exempt. The confirmation now names Toggle Fullscreen (Esc) instead of Leave Fullscreen; translations updated.
+
 ## 0.1.9
 
 - Keyboard Shortcuts…: the “Ignore default shortcuts” check box no longer shows checked while the confirmation is open; it is checked only after you confirm. If the question cannot be shown, the box returns to the real setting instead of staying checked.
