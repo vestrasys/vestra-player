@@ -23,7 +23,7 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
 
 - **Everything is a plugin.** The Rust host only provides shared infrastructure: playback, UI composition, processing chains, plugin lifecycle. Product features live in plugins.
 - **One public API for everyone.** Built-in and third-party plugins use the same API, `vestra/1`, through the [`@vestra-player/sdk`](https://www.npmjs.com/package/@vestra-player/sdk) package. If a built-in plugin needs something, the public API grows; there are no private back doors.
-- **Isolated plugins.** Each plugin runs in its own Node.js process. The host checks every call against the capabilities the plugin declares, and stopping a plugin releases everything it owns.
+- **Plugins out of process.** Plugins run in Node.js, outside the host: the built-ins share one process, every other plugin has its own. The host checks every call against the capabilities the plugin declares, and stopping a plugin releases everything it owns.
 - **Native UI.** Plugin windows and panels are Slint components, compiled and composed by the host with a shared theme and widget set.
 - **Signed plugin store.** Plugins install from a signed index (Ed25519), built from source in [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins).
 - **Cross-platform.** All OS-specific code sits in a thin platform layer (`src/host/src/platform/`), one module per system; everything else is shared.
@@ -34,25 +34,30 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
 ┌──────────────────────── Host process (Rust) ────────────────────────┐
 │  Playback (libmpv)        Slint UI composition     Package store    │
 │  Processing chains        Plugin process manager   Platform layer   │
-└──────────────────────────────────▲──────────────────────────────────┘
-                                   │  JSON-RPC (one JSON message per line)
-                                   │  over stdin/stdout, protocol vestra/1
-        ┌──────────────────────────┼──────────────────────────┐
-┌───────┴────────┐        ┌────────┴───────┐        ┌─────────┴──────┐
-│ Node process   │        │ Node process   │        │ Node process   │
-│ plugin (TS)    │        │ plugin (TS)    │  ...   │ plugin (TS)    │
-│ + SDK + .slint │        │ + SDK + .slint │        │ + SDK + .slint │
-└────────────────┘        └────────────────┘        └────────────────┘
+└───────────▲─────────────────────────▲───────────────────────▲───────┘
+            │ JSON-RPC, stdin/stdout  │ protocol vestra/1     │
+            │ one message per line    │                       │
+┌───────────┴──────────┐     ┌────────┴───────┐      ┌────────┴───────┐
+│ Shared runner (Node) │     │ Node process   │      │ Node process   │
+│ all built-in plugins │     │ other plugin   │ ...  │ other plugin   │
+│ + SDK + .slint       │     │ + SDK + .slint │      │ + SDK + .slint │
+└──────────────────────┘     └────────────────┘      └────────────────┘
 ```
 
-Plugins describe their windows and panels in `.slint` files; the host compiles them, places them in the main window or a tool window, and forwards their callbacks back to the plugin.
+Plugins describe their windows and panels in `.slint` files; the host compiles them, places them in the main window or a tool window, and forwards their callbacks back to the plugin. Plugins send values and row changes, not pixels, so a 20,000-row playlist is a native `ListView` over rows the host holds ([large lists](doc/architecture/large-lists.md)).
+
+Built-in plugins share one Node process, the shared runner; every other plugin gets its own, apart from the player and from each other. A Node process costs about 50 MB, one more plugin in the shared runner [about 1 MB](doc/process/rounds/2026-10-plugin-memory.md): on Windows, the 14 built-ins that run in a headless start measured 704 MB of working set as separate processes and 61 MB shared ([measurements](doc/process/rounds/2026-10-shared-runner.md#163-measurements)).
+
+[Lazy activation](doc/process/rounds/2026-10-lazy-activation.md), behind `VESTRA_LAZY=1` until its hardware checks pass, keeps plugins that are not in use from running. As with a Chrome MV3 service worker, a plugin holding nothing live (a mounted panel such as the playback bar, an open window, a filter chain, a playback listener) is stopped after a minute idle; the host keeps its menus, keys and file types, and the next use starts it again: tens of milliseconds for a built-in, a few hundred for a plugin in its own process. Session storage carries state across the stop. Most built-ins hold a mounted panel or a playback listener, so they stay running.
+
+The host checks each call against the declared capabilities and caps messages at 1 MiB. A stopped plugin loses everything it owned and has 300 ms to exit; a crashed plugin process takes only its plugin down, and playback, which runs in the host, goes on. In the shared runner, an uncaught exception traced to one plugin stops that plugin, which runs in its own process if started again; a runner exit, an unattributed fault, five missed 2 s heartbeats or a full input queue restarts every built-in in a new runner (panels and windows gone for 1.2–1.4 s in a kill drill), and the third restart within a minute leaves them in separate processes until the player quits. More in the [architecture overview](doc/architecture/README.md#2-loading-and-stopping-plugins).
 
 ## Repository layout
 
 | Path | Contents |
 | --- | --- |
 | `src/host/` | The Rust host: playback, UI composition, plugin and package management, platform layer |
-| `src/runtime/` | The runner that starts each plugin in its Node.js process |
+| `src/runtime/` | The Node.js runners: `shared-runner` for the built-ins, `runner` for each other plugin's process |
 | `src/plugins/` | The built-in product plugins |
 | `src/packaging/` | Installer builds for macOS and Windows |
 | `doc/` | Design documents, architecture and process notes ([index](doc/README.md)) |
