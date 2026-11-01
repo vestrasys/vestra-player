@@ -9,11 +9,11 @@ msgstr ""
 msgid "{} (build {})"
 msgstr "{}（构建 {}）"
 
-#: about.ts:33 about.ts:110 properties.ts:221 properties.ts:310 properties.ts:311 ui/about.slint:112 ui/about.slint:199
+#: about.ts:33 about.ts:110 properties.ts:221 properties.ts:310 properties.ts:311 ui/about.slint:112 ui/about.slint:202
 msgid "Unknown"
 msgstr "未知"
 
-#: about.ts:35 ui/about.slint:192 ui/about.slint:238
+#: about.ts:35 ui/about.slint:195 ui/about.slint:241
 msgid "Plugin API"
 msgstr "插件 API"
 
@@ -29,11 +29,11 @@ msgstr "软件"
 msgid "{} — {}"
 msgstr "{}——{}"
 
-#: about.ts:101 ui/about.slint:234
+#: about.ts:101 ui/about.slint:237
 msgid "Version {} (build {})"
 msgstr "版本 {}（构建 {}）"
 
-#: about.ts:101 ui/about.slint:234
+#: about.ts:101 ui/about.slint:237
 msgid "Version {}"
 msgstr "版本 {}"
 
@@ -41,15 +41,15 @@ msgstr "版本 {}"
 msgid "{}: {}"
 msgstr "{}：{}"
 
-#: about.ts:103 ui/about.slint:193 ui/about.slint:255
+#: about.ts:103 ui/about.slint:196 ui/about.slint:258
 msgid "Rendering"
 msgstr "渲染"
 
-#: about.ts:104 ui/about.slint:328
+#: about.ts:104 ui/about.slint:335
 msgid "Loaded plugins"
 msgstr "已加载插件"
 
-#: about.ts:105 ui/about.slint:339
+#: about.ts:105 ui/about.slint:346
 msgid "Unknown (cannot read the plugin list)"
 msgstr "未知（无法读取插件列表）"
 
@@ -81,23 +81,23 @@ msgstr "已安装"
 msgid "Development"
 msgstr "开发加载"
 
-#: about.ts:109 ui/about.slint:175
+#: about.ts:109 ui/about.slint:178
 msgid "Starting"
 msgstr "启动中"
 
-#: about.ts:109 ui/about.slint:176
+#: about.ts:109 ui/about.slint:179
 msgid "Running"
 msgstr "运行中"
 
-#: about.ts:109 ui/about.slint:177
+#: about.ts:109 ui/about.slint:180
 msgid "Disabled"
 msgstr "已停用"
 
-#: about.ts:109 ui/about.slint:178
+#: about.ts:109 ui/about.slint:181
 msgid "Failed"
 msgstr "失败"
 
-#: about.ts:109 ui/about.slint:179
+#: about.ts:109 ui/about.slint:182
 msgid "Stopped"
 msgstr "已停止"
 
@@ -278,7 +278,7 @@ msgstr "关于 Vestra Player…"
 msgid "Check for Updates…"
 msgstr "检查更新…"
 
-#: main.ts:302 ui/about.slint:194 ui/about.slint:276 ui/updates.slint:21
+#: main.ts:302 ui/about.slint:197 ui/about.slint:279 ui/updates.slint:21
 #, x-machine
 msgid "Updates"
 msgstr "更新"
@@ -551,7 +551,7 @@ msgstr "编码器"
 msgid "Creation time"
 msgstr "创建时间"
 
-#: properties.ts:247 properties.ts:275 ui/about.slint:202 ui/about.slint:328
+#: properties.ts:247 properties.ts:275 ui/about.slint:205 ui/about.slint:335
 msgid "Source"
 msgstr "来源"
 
@@ -712,142 +712,152 @@ msgstr "服务器未及时响应"
 
 #: ui/about.slint:136
 #, x-machine
+msgid "no data arrived for 30 seconds"
+msgstr "30 秒内没有收到数据"
+
+#: ui/about.slint:137
+#, x-machine
 msgid "no release information was found (HTTP 404)"
 msgstr "未找到发布信息（HTTP 404）"
 
-#: ui/about.slint:137
+#: ui/about.slint:138
 #, x-machine
 msgid "GitHub is limiting requests (HTTP {}); try again later"
 msgstr "GitHub 正在限制请求（HTTP {}），请稍后再试"
 
-#: ui/about.slint:138
+#: ui/about.slint:139
 #, x-machine
 msgid "the server answered HTTP {}"
 msgstr "服务器返回 HTTP {}"
 
-#: ui/about.slint:139
+#: ui/about.slint:140
 #, x-machine
 msgid "the update information is not valid"
 msgstr "更新信息无效"
 
-#: ui/about.slint:140
+#: ui/about.slint:141
 #, x-machine
 msgid "the update information needs a newer player; see the release notes"
 msgstr "更新信息需要更新版本的播放器读取，请查看发行说明"
 
-#: ui/about.slint:141
+#: ui/about.slint:142
 #, x-machine
 msgid "the file size does not match the release"
 msgstr "文件大小与发布信息不符"
 
-#: ui/about.slint:142
+#: ui/about.slint:143
 #, x-machine
 msgid "the file's checksum does not match the release"
 msgstr "文件校验和与发布信息不符"
 
-#: ui/about.slint:143
+#: ui/about.slint:144
 #, x-machine
 msgid "the Downloads folder cannot be written"
 msgstr "无法写入“下载”文件夹"
 
-#: ui/about.slint:144
+#: ui/about.slint:145
 #, x-machine
 msgid "the installer could not be started"
 msgstr "无法启动安装程序"
 
-#: ui/about.slint:152
+#: ui/about.slint:153
 #, x-machine
 msgid "Checking for updates…"
 msgstr "正在检查更新…"
 
-#: ui/about.slint:153
+#: ui/about.slint:154
 #, x-machine
 msgid "Vestra Player is up to date (latest version {})."
 msgstr "Vestra Player 已是最新版本（最新版本 {}）。"
 
-#: ui/about.slint:154
+#: ui/about.slint:156
+#, x-machine
+msgid "The latest version is {}."
+msgstr "最新版本是 {}。"
+
+#: ui/about.slint:157
 #, x-machine
 msgid "Version {} is available (released {})."
 msgstr "新版本 {} 可用（发布于 {}）。"
 
-#: ui/about.slint:154
+#: ui/about.slint:157
 #, x-machine
 msgid "Version {} is available."
 msgstr "新版本 {} 可用。"
 
 #. {0} is the version, {1} and {2} megabytes downloaded and in all.
-#: ui/about.slint:156
+#: ui/about.slint:159
 #, x-machine
 msgid "Downloading version {0}: {1} of {2} MB"
 msgstr "正在下载版本 {0}：{1} / {2} MB"
 
-#: ui/about.slint:157
+#: ui/about.slint:160
 #, x-machine
 msgid "Version {} is downloaded to {}. Run the installer to update."
 msgstr "版本 {} 已下载到 {}。运行安装程序即可更新。"
 
-#: ui/about.slint:158
+#: ui/about.slint:161
 #, x-machine
 msgid "Could not check for updates: {}."
 msgstr "无法检查更新：{}。"
 
-#: ui/about.slint:159
+#: ui/about.slint:162
 #, x-machine
 msgid "Could not download version {}: {}."
 msgstr "无法下载版本 {}：{}。"
 
-#: ui/about.slint:160
+#: ui/about.slint:163
 #, x-machine
 msgid "Not checked yet."
 msgstr "尚未检查。"
 
-#: ui/about.slint:163
+#: ui/about.slint:166
 #, x-machine
 msgid "Download"
 msgstr "下载"
 
-#: ui/about.slint:164
+#: ui/about.slint:167
 #, x-machine
 msgid "Open Release Page"
 msgstr "打开发布页面"
 
-#: ui/about.slint:165
+#: ui/about.slint:168
 #, x-machine
 msgid "Cancel"
 msgstr "取消"
 
-#: ui/about.slint:166
+#: ui/about.slint:169
 #, x-machine
 msgid "Run Installer"
 msgstr "运行安装程序"
 
-#: ui/about.slint:167
+#: ui/about.slint:170
 #, x-machine
 msgid "Check Now"
 msgstr "立即检查"
 
-#: ui/about.slint:198 ui/about.slint:328
+#: ui/about.slint:201 ui/about.slint:335
 msgid "Version"
 msgstr "版本"
 
-#: ui/about.slint:206 ui/about.slint:328
+#: ui/about.slint:209 ui/about.slint:335
 msgid "State"
 msgstr "状态"
 
-#: ui/about.slint:312
+#: ui/about.slint:321
 #, x-machine
 msgid "Release Notes"
 msgstr "发行说明"
 
-#: ui/about.slint:369 ui/properties.slint:116
+#: ui/about.slint:376 ui/properties.slint:116
 msgid "Copy failed"
 msgstr "复制失败"
 
-#: ui/about.slint:375
+#: ui/about.slint:382
 msgid "Copy Info"
 msgstr "复制信息"
 
-#: ui/about.slint:376 ui/properties.slint:127
+#: ui/about.slint:383 ui/properties.slint:127
 msgid "Close"
 msgstr "关闭"
 
@@ -896,13 +906,13 @@ msgstr "自动检查播放器更新（启动 30 秒后，之后每天最多一�
 msgid "When a new version is out, a message shows once on the video and About Vestra Player… offers to download it. Nothing is installed without you: the installer is saved to your Downloads folder and you start it. When off, the player looks for updates only when you choose “Check for Updates…” in the menu."
 msgstr "有新版本时，视频上会显示一次提示，“关于 Vestra Player…”中可以下载。不会自动安装：安装程序保存到“下载”文件夹，由你来运行。关闭后，只有在菜单中选择“检查更新…”时才会检查。"
 
-#: updates.ts:520
+#: updates.ts:651
 #, x-machine
 msgid "Vestra Player {} is available. Open About Vestra Player… to download it."
 msgstr "Vestra Player {} 已发布。打开“关于 Vestra Player…”即可下载。"
 
 #. why "Check for Updates…" is greyed out: an installer is being downloaded.
-#: updates.ts:561
+#: updates.ts:694
 #, x-machine
 msgid "Downloading the update…"
 msgstr "正在下载更新…"

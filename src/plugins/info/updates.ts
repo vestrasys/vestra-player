@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, open, rename, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import type { Command, Plugin } from "@vestra-player/sdk";
 
 /**
@@ -13,8 +13,13 @@ import type { Command, Plugin } from "@vestra-player/sdk";
 export const REPOSITORY = "vestrasys/vestra-player";
 export const RELEASES_URL = `https://github.com/${REPOSITORY}/releases`;
 export const LATEST_URL = `${RELEASES_URL}/latest/download/latest.json`;
-/** A release's installer, served under a fixed name from the latest release. */
-export const downloadUrl = (file: string) => `${RELEASES_URL}/latest/download/${encodeURIComponent(file)}`;
+/**
+ * A release's installer, from that release's own tag (not `releases/latest`):
+ * a release published between the check and the download cannot swap the file
+ * under the size and sha256 read from `latest.json` (Tauri's updater and
+ * electron-updater pin the version the same way).
+ */
+export const downloadUrl = (version: string, file: string) => `${RELEASES_URL}/download/v${encodeURIComponent(version)}/${encodeURIComponent(file)}`;
 /** The release page of `version` (its notes). */
 export const releasePage = (version: string) => `${RELEASES_URL}/tag/v${encodeURIComponent(version)}`;
 
@@ -32,10 +37,14 @@ export const timing = {
   firstCheck: 30_000,
   /** At most once in this long, across player runs (`lastCheck` is persisted). */
   interval: 24 * 60 * 60 * 1000,
+  /** After a failed check, the next automatic one comes this much later instead. */
+  retry: 60 * 60 * 1000,
   /** The deadline of `latest.json`. */
   checkTimeout: 20_000,
   /** The deadline of the installer's response headers; the transfer itself has none (it can be cancelled). */
   headerTimeout: 30_000,
+  /** A download that receives nothing for this long fails (`stalled`). */
+  stallTimeout: 30_000,
 };
 
 export type Fetch = (input: string, init: RequestInit) => Promise<Response>;
@@ -54,6 +63,7 @@ export const deps = {
 export type FailCode =
   | "offline" // DNS, TLS, connection
   | "timeout"
+  | "stalled" // the installer's transfer received nothing for timing.stallTimeout
   | "not-found" // 404: no published release (or the repository is private)
   | "rate-limited" // 403 / 429
   | "http" // another status
@@ -128,6 +138,16 @@ const isObject = (value: unknown): value is Record<string, unknown> => typeof va
 const isFileName = (name: unknown): name is string =>
   typeof name === "string" && name.length > 0 && name.length <= 128 && /^[A-Za-z0-9][A-Za-z0-9._ ()+-]*$/.test(name) && !name.includes("..");
 
+/** The installer type this system opens: `.exe` (the setup program) on Windows, `.dmg` on macOS; `null` elsewhere. */
+export function installerExtension(platform: string | null): string | null {
+  return platform?.startsWith("windows-") ? ".exe" : platform?.startsWith("macos-") ? ".dmg" : null;
+}
+/** Whether `file` is an installer this platform may download and open. */
+export const isInstallerFor = (file: string, platform: string | null) => {
+  const extension = installerExtension(platform);
+  return extension !== null && extname(file).toLowerCase() === extension;
+};
+
 /**
  * Read `latest.json` for `platform`. Unknown fields are ignored; a schema
  * whose major is not {@link SCHEMA} is `schema`, anything else unusable
@@ -152,7 +172,7 @@ export function parseLatest(json: unknown, platform: string | null): Release {
   if (entry !== undefined) {
     if (!isObject(entry)) throw invalid(`downloads.${platform} is not an object`);
     const { file, size, sha256 } = entry;
-    if (!isFileName(file)) throw invalid(`downloads.${platform}.file`);
+    if (!isFileName(file) || !isInstallerFor(file, platform)) throw invalid(`downloads.${platform}.file`);
     if (typeof size !== "number" || !Number.isSafeInteger(size) || size <= 0 || size > MAX_INSTALLER) throw invalid(`downloads.${platform}.size`);
     if (typeof sha256 !== "string" || !/^[0-9a-fA-F]{64}$/.test(sha256)) throw invalid(`downloads.${platform}.sha256`);
     installer = { file, size, sha256: sha256.toLowerCase() };
@@ -161,11 +181,12 @@ export function parseLatest(json: unknown, platform: string | null): Release {
 }
 
 /** `fetch failed` hides the reason in `cause`. */
-function networkError(error: unknown, timedOut: boolean, cancelled: boolean): UpdateError {
+function networkError(error: unknown, timedOut: UpdateError | null, cancelled: boolean): UpdateError {
   // The user's Cancel wins over what the cut-off transfer looked like.
   if (cancelled) return new UpdateError("cancelled", "cancelled");
+  // A deadline cut the transfer off: that, not what the cut-off body looked like.
+  if (timedOut) return timedOut;
   if (error instanceof UpdateError) return error;
-  if (timedOut) return new UpdateError("timeout", "timed out");
   const cause = (error as { cause?: { code?: string; message?: string } }).cause;
   return new UpdateError("offline", cause?.message || (error as Error)?.message || String(error));
 }
@@ -173,20 +194,32 @@ function networkError(error: unknown, timedOut: boolean, cancelled: boolean): Up
 /**
  * GET over https only (every redirect hop too, at most 5), with a deadline
  * for the headers; `onBody` reads the body of the 2xx answer. 404, 403 / 429
- * and other statuses become `not-found`, `rate-limited` and `http`.
+ * and other statuses become `not-found`, `rate-limited` and `http`. With
+ * `stallTimeout`, the body must keep arriving: `onBody` calls `alive()` for
+ * every chunk, and that long without one aborts with `stalled`.
  */
-async function get<T>(url: string, options: { headerTimeout: number; totalTimeout?: number; signal?: AbortSignal }, onBody: (response: Response) => Promise<T>): Promise<T> {
+async function get<T>(
+  url: string,
+  options: { headerTimeout: number; totalTimeout?: number; stallTimeout?: number; signal?: AbortSignal },
+  onBody: (response: Response, alive: () => void) => Promise<T>,
+): Promise<T> {
   const controller = new AbortController();
-  let timedOut = false;
-  const expire = () => {
-    timedOut = true;
+  let timedOut: UpdateError | null = null;
+  const expire = (error = new UpdateError("timeout", "timed out")) => {
+    timedOut ??= error;
     controller.abort();
+  };
+  let stall: ReturnType<typeof setTimeout> | undefined;
+  const alive = () => {
+    if (!options.stallTimeout) return;
+    clearTimeout(stall);
+    stall = setTimeout(() => expire(new UpdateError("stalled", `no data for ${options.stallTimeout} ms`)), options.stallTimeout);
   };
   const cancel = () => controller.abort();
   if (options.signal?.aborted) throw new UpdateError("cancelled", "cancelled");
   options.signal?.addEventListener("abort", cancel, { once: true });
-  const headers = setTimeout(expire, options.headerTimeout);
-  const total = options.totalTimeout ? setTimeout(expire, options.totalTimeout) : undefined;
+  const headers = setTimeout(() => expire(), options.headerTimeout);
+  const total = options.totalTimeout ? setTimeout(() => expire(), options.totalTimeout) : undefined;
   try {
     let current = url;
     for (let hop = 0; ; hop++) {
@@ -207,13 +240,15 @@ async function get<T>(url: string, options: { headerTimeout: number; totalTimeou
         if (status === 403 || status === 429) throw new UpdateError("rate-limited", `HTTP ${status}`, String(status));
         throw new UpdateError("http", `HTTP ${status}`, String(status));
       }
-      return await onBody(response);
+      alive();
+      return await onBody(response, alive);
     }
   } catch (error) {
     throw networkError(error, timedOut, options.signal?.aborted === true);
   } finally {
     clearTimeout(headers);
     clearTimeout(total);
+    clearTimeout(stall);
     options.signal?.removeEventListener("abort", cancel);
   }
 }
@@ -266,27 +301,57 @@ export async function matches(path: string, installer: Installer) {
   return (await digest(path))?.sha256 === installer.sha256;
 }
 
+/** `name.ext`, then `name (1).ext`, `name (2).ext`… (how browsers name a second download of the same file). */
+export function numberedName(file: string, n: number) {
+  if (n === 0) return file;
+  const extension = extname(file);
+  return `${file.slice(0, file.length - extension.length)} (${n})${extension}`;
+}
 /**
- * Download `installer` into `folder`: to `<file>.part`, its size counted
- * while it streams (cut off past `size`) and hashed, then renamed to `<file>`
- * once size and sha256 match; a mismatch deletes the part file. A file of that
- * name that already matches is kept and not downloaded again.
+ * Where `installer` goes in `folder`: the first of `file`, `file (1)`, …
+ * that is free, or one that already is this installer (`ready`). A file of
+ * the same name that is something else is never overwritten.
  */
-export async function downloadInstaller(installer: Installer, folder: string, onProgress: (received: number) => void, signal: AbortSignal): Promise<string> {
-  const target = join(folder, installer.file);
+async function destination(folder: string, installer: Installer): Promise<{ path: string; ready: boolean }> {
+  for (let n = 0; n < 100; n++) {
+    const path = join(folder, numberedName(installer.file, n));
+    const info = await stat(path).catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : error));
+    if (info === null) return { path, ready: false };
+    if (info instanceof Error) continue;
+    if (await matches(path, installer)) return { path, ready: true };
+  }
+  throw new UpdateError("disk", `no free name for ${installer.file}`);
+}
+
+/**
+ * Download `installer` of release `version` into `folder`: to `<name>.part`,
+ * its size counted while it streams (cut off past `size`, failed after
+ * `timing.stallTimeout` without data) and hashed, then renamed to `<name>`
+ * once size and sha256 match; a failure deletes the part file. `<name>` is
+ * the release's file name, numbered when another file has it; a file there
+ * that already is this installer is kept and not downloaded again.
+ */
+export async function downloadInstaller(
+  installer: Installer,
+  version: string,
+  folder: string,
+  onProgress: (received: number) => void,
+  signal: AbortSignal,
+): Promise<string> {
   try {
     await mkdir(folder, { recursive: true });
   } catch (error) {
     throw new UpdateError("disk", (error as Error).message);
   }
-  if (await matches(target, installer)) {
+  let { path: target, ready } = await destination(folder, installer);
+  if (ready) {
     onProgress(installer.size);
     return target;
   }
   const part = `${target}.part`;
   let created = false;
   try {
-    await get(downloadUrl(installer.file), { headerTimeout: timing.headerTimeout, signal }, async (response) => {
+    await get(downloadUrl(version, installer.file), { headerTimeout: timing.headerTimeout, stallTimeout: timing.stallTimeout, signal }, async (response, alive) => {
       const declared = (response.headers.get("content-encoding") ?? "identity").trim().toLowerCase() === "identity" ? response.headers.get("content-length") : null;
       if (declared !== null && Number(declared) !== installer.size) {
         await response.body?.cancel().catch(() => {});
@@ -307,6 +372,7 @@ export async function downloadInstaller(installer: Installer, folder: string, on
         while (reader) {
           const { done, value } = await reader.read();
           if (done) break;
+          alive();
           received += value.byteLength;
           if (received > installer.size) {
             await reader.cancel().catch(() => {});
@@ -328,7 +394,10 @@ export async function downloadInstaller(installer: Installer, folder: string, on
       if (hash.digest("hex") !== installer.sha256) throw new UpdateError("sha256", "checksum mismatch");
     });
     try {
-      await rename(part, target);
+      // A file of that name that appeared while downloading is not replaced either.
+      if (await stat(target).then(() => true, () => false)) ({ path: target, ready } = await destination(folder, installer));
+      if (ready) await rm(part, { force: true });
+      else await rename(part, target);
     } catch (error) {
       throw new UpdateError("disk", (error as Error).message);
     }
@@ -345,12 +414,14 @@ export interface UpdateSettings {
   auto: boolean;
   /** When the last check started (ms since the epoch), automatic or not; 0 = never. */
   lastCheck: number;
+  /** Whether that check failed: the next automatic one comes `timing.retry` after it instead of a day later (absent: it did not). */
+  lastFailed?: boolean;
   /** The newest version an OSD notice was shown for ("" = none): one notice per version. */
   notified: string;
   /** The last release read, so the About window can show it without going online. */
   latest: Release | null;
 }
-export const UPDATE_DEFAULTS: UpdateSettings = { auto: true, lastCheck: 0, notified: "", latest: null };
+export const UPDATE_DEFAULTS: UpdateSettings = { auto: true, lastCheck: 0, lastFailed: false, notified: "", latest: null };
 const isRelease = (v: unknown): v is Release =>
   isObject(v) &&
   typeof v.version === "string" &&
@@ -359,14 +430,20 @@ const isRelease = (v: unknown): v is Release =>
   (v.installer === null ||
     (isObject(v.installer) && isFileName(v.installer.file) && typeof v.installer.size === "number" && typeof v.installer.sha256 === "string"));
 export const isUpdateSettings = (v: unknown): v is UpdateSettings =>
-  isObject(v) && typeof v.auto === "boolean" && typeof v.lastCheck === "number" && typeof v.notified === "string" && (v.latest === null || isRelease(v.latest));
+  isObject(v) &&
+  typeof v.auto === "boolean" &&
+  typeof v.lastCheck === "number" &&
+  (v.lastFailed === undefined || typeof v.lastFailed === "boolean") &&
+  typeof v.notified === "string" &&
+  (v.latest === null || isRelease(v.latest));
 
 /**
  * The update state the About window shows (`about.slint` words the codes):
- * `""` not checked yet, `checking`, `current`, `available`, `downloading`,
- * `downloaded`, `failed` (the check) and `download-failed`.
+ * `""` not checked yet, `checking`, `current`, `available`, `unknown` (the
+ * latest release is known, but this player's version cannot be compared with
+ * it), `downloading`, `downloaded`, `failed` (the check) and `download-failed`.
  */
-export type UpdateState = "" | "checking" | "current" | "available" | "downloading" | "downloaded" | "failed" | "download-failed";
+export type UpdateState = "" | "checking" | "current" | "available" | "unknown" | "downloading" | "downloaded" | "failed" | "download-failed";
 /** The About window's update properties. */
 export interface UpdateProps {
   updateState: UpdateState;
@@ -388,11 +465,11 @@ export interface UpdateProps {
 /**
  * The update check of the player itself (J10). One instance per activation:
  * the automatic check runs `timing.firstCheck` after activation when the
- * last one is a day old, then once a day while the plugin runs. Its timer
- * does not keep the plugin running (lazy activation stops an idle plugin;
- * the next activation schedules again from the persisted `lastCheck`). A
- * download marks the "Check for Updates…" command busy, which keeps the
- * plugin running until it ends.
+ * last one is a day old (an hour, after a failed one), then again while the
+ * plugin runs. Its timer does not keep the plugin running (lazy activation
+ * stops an idle plugin; the next activation schedules again from the
+ * persisted `lastCheck`). A download marks the "Check for Updates…" command
+ * busy, which keeps the plugin running until it ends.
  */
 export class Updater {
   readonly plugin: Plugin;
@@ -400,9 +477,15 @@ export class Updater {
   #state: UpdateState = "";
   #error: UpdateError | null = null;
   #checking: Promise<void> | null = null;
+  /** The user asked for the check in flight (it may have started as the automatic one): its result and any failure are shown. */
+  #manual = false;
   #download: AbortController | null = null;
   #received = 0;
   #installer = "";
+  /** This system's `downloads` key; `undefined` until asked. */
+  #platform: string | null | undefined;
+  /** The unreadable player version already logged. */
+  #badVersion = "";
   #timer: ReturnType<typeof setTimeout> | undefined;
   #disposed = false;
   #lastDraw = 0;
@@ -418,7 +501,10 @@ export class Updater {
     }
     this.#settings = settings;
     const latest = settings.value.latest;
-    if (latest) this.#state = this.#newer(latest) ? "available" : settings.value.lastCheck ? "current" : "";
+    if (latest) {
+      const state = this.#stateFor(latest);
+      this.#state = state === "available" || settings.value.lastCheck ? state : "";
+    }
     plugin.onDispose(() => {
       this.#disposed = true;
       clearTimeout(this.#timer);
@@ -433,11 +519,41 @@ export class Updater {
     return this.#state;
   }
 
+  /** `release` against this player; `null` when the player's version cannot be read (logged once). */
+  #compare(release: Release) {
+    const running = this.plugin.app.version;
+    const order = compareVersions(release.version, running);
+    if (order === null && this.#badVersion !== running) {
+      this.#badVersion = running;
+      console.warn(`[info] update check: cannot read this player's version "${running}"; not claiming it is up to date`);
+    }
+    return order;
+  }
   #newer(release: Release) {
-    return (compareVersions(release.version, this.plugin.app.version) ?? 0) > 0;
+    return (this.#compare(release) ?? 0) > 0;
+  }
+  #stateFor(release: Release): "available" | "current" | "unknown" {
+    const order = this.#compare(release);
+    return order === null ? "unknown" : order > 0 ? "available" : "current";
   }
   #save(patch: Partial<UpdateSettings>) {
     this.#settings.save({ ...this.#settings.value, ...patch });
+  }
+  /** This system's `downloads` key, from the player (else from Node). */
+  async #platformKey() {
+    if (this.#platform !== undefined) return this.#platform;
+    try {
+      const system = await this.plugin.app.system();
+      this.#platform = platformKey(system.os, system.arch);
+    } catch {
+      this.#platform = platformKey(process.platform, process.arch);
+    }
+    return this.#platform;
+  }
+  /** When the next automatic check is due: a day after the last check, an hour after a failed one. */
+  #due() {
+    const value = this.#settings.value;
+    return value.lastCheck + (value.lastFailed ? timing.retry : timing.interval);
   }
 
   /** Turn the automatic check on or off (the settings page). */
@@ -447,12 +563,12 @@ export class Updater {
     this.schedule();
   }
 
-  /** (Re)arm the automatic check: `firstCheck` from now at the earliest, a day after the last check at the latest. */
+  /** (Re)arm the automatic check: `firstCheck` from now at the earliest, when due at the latest. */
   schedule() {
     clearTimeout(this.#timer);
     this.#timer = undefined;
     if (this.#disposed || !this.#settings.value.auto) return;
-    const due = this.#settings.value.lastCheck + timing.interval - deps.now();
+    const due = this.#due() - deps.now();
     const delay = Math.min(2 ** 31 - 1, Math.max(timing.firstCheck, due));
     this.#timer = setTimeout(() => void this.autoCheck(), delay);
     // The plugin's connection keeps the process alive; this timer alone must not (a test that never stops the plugin).
@@ -463,57 +579,69 @@ export class Updater {
   async autoCheck() {
     this.#timer = undefined;
     if (this.#disposed || !this.#settings.value.auto) return;
-    if (deps.now() - this.#settings.value.lastCheck < timing.interval) return this.schedule();
+    if (deps.now() < this.#due()) return this.schedule();
     await this.check(false);
     this.schedule();
   }
 
   /**
-   * Check now. `manual`: the user asked (the About window shows any failure);
-   * otherwise a failure is only logged and the window keeps what it showed.
+   * Check now. `manual`: the user asked; the About window shows "checking"
+   * and the result or the failure, also when this joins an automatic check
+   * already running. Otherwise a failure is only logged and the window keeps
+   * what it showed. Nothing is checked while a download runs, and a check
+   * that ends while one runs (it started before) leaves the download, its
+   * state, its release and the installer alone.
    */
   check(manual: boolean): Promise<void> {
+    if (this.#download) return Promise.resolve();
+    if (manual) {
+      this.#manual = true;
+      this.#set("checking");
+    }
     if (this.#checking) return this.#checking;
-    if (this.#state === "downloading") return Promise.resolve();
-    const before = this.#state;
-    if (manual) this.#set("checking");
     this.#save({ lastCheck: deps.now() });
     this.#checking = (async () => {
-      let platform: string | null = null;
+      const platform = await this.#platformKey();
+      let release: Release;
       try {
-        const system = await this.plugin.app.system();
-        platform = platformKey(system.os, system.arch);
-      } catch {
-        platform = platformKey(process.platform, process.arch);
-      }
-      try {
-        const release = await fetchLatest(platform);
-        if (this.#disposed) return;
-        const previous = this.#settings.value.latest;
-        this.#save({ latest: release });
-        this.#error = null;
-        if (!this.#newer(release)) {
-          this.#installer = "";
-          return this.#set("current");
-        }
-        // A manual check shows it in the window: no notice for this version later either.
-        if (!manual && this.#settings.value.notified !== release.version) this.#notify(release);
-        this.#save({ notified: release.version });
-        // The installer downloaded for the same release stays ready to run.
-        const same = previous?.version === release.version && previous.installer?.sha256 === release.installer?.sha256;
-        if (this.#installer && same) return this.#set("downloaded");
-        this.#installer = "";
-        this.#set("available");
+        release = await fetchLatest(platform);
       } catch (error) {
         const failure = error instanceof UpdateError ? error : new UpdateError("invalid", String(error));
-        console.warn(`[info] update check (${manual ? "manual" : "automatic"}): ${failure.code}: ${failure.message}`);
-        if (this.#disposed) return;
-        if (manual) {
+        console.warn(`[info] update check (${this.#manual ? "manual" : "automatic"}): ${failure.code}: ${failure.message}`);
+        this.#save({ lastFailed: true });
+        if (this.#disposed || this.#download) return;
+        if (this.#manual) {
           this.#error = failure;
           this.#set("failed");
-        } else this.#set(before);
+        }
+        return;
       }
-    })().finally(() => (this.#checking = null));
+      this.#save({ lastFailed: false });
+      if (this.#disposed) return;
+      if (this.#download) {
+        console.warn(`[info] update check: read ${release.version} while a download runs; left for the next check`);
+        return;
+      }
+      const previous = this.#settings.value.latest;
+      this.#save({ latest: release });
+      this.#error = null;
+      const state = this.#stateFor(release);
+      if (state !== "available") {
+        this.#installer = "";
+        return this.#set(state);
+      }
+      // A manual check shows it in the window: no notice for this version later either.
+      if (!this.#manual && this.#settings.value.notified !== release.version) this.#notify(release);
+      this.#save({ notified: release.version });
+      // The installer downloaded for the same release stays ready to run.
+      const same = previous?.version === release.version && previous.installer?.sha256 === release.installer?.sha256;
+      if (this.#installer && same) return this.#set("downloaded");
+      this.#installer = "";
+      this.#set("available");
+    })().finally(() => {
+      this.#checking = null;
+      this.#manual = false;
+    });
     return this.#checking;
   }
 
@@ -543,7 +671,7 @@ export class Updater {
       case "run":
         return this.run();
       case "download":
-        if (latest?.installer) return this.download(latest.installer);
+        if (latest) return this.download(latest);
     }
   }
 
@@ -553,8 +681,10 @@ export class Updater {
     await this.plugin.system.openUrl(latest?.notesUrl ?? `${RELEASES_URL}/latest`).catch((error) => console.warn(`[info] release notes: ${(error as Error).message}`));
   }
 
-  async download(installer: Installer) {
-    if (this.#download) return;
+  /** Download `release`'s installer for this system, from that release's own address. */
+  async download(release: Release) {
+    const installer = release.installer;
+    if (this.#download || !installer) return;
     const controller = (this.#download = new AbortController());
     this.#received = 0;
     this.#error = null;
@@ -563,8 +693,12 @@ export class Updater {
     // TRANSLATORS: why "Check for Updates…" is greyed out: an installer is being downloaded.
     this.command?.set({ busy: true, reason: "Downloading the update…" });
     try {
+      // Only what this system opens as an installer: .exe on Windows, .dmg on macOS.
+      const platform = await this.#platformKey();
+      if (!isInstallerFor(installer.file, platform)) throw new UpdateError("invalid", `${installer.file} is not an installer for ${platform ?? "this system"}`);
       const path = await downloadInstaller(
         installer,
+        release.version,
         deps.downloads(),
         (received) => {
           this.#received = received;
@@ -583,6 +717,7 @@ export class Updater {
       const failure = error instanceof UpdateError ? error : new UpdateError("disk", String(error));
       console.warn(`[info] update download: ${failure.code}: ${failure.message}`);
       if (this.#disposed) return;
+      this.#received = 0;
       if (failure.code === "cancelled") {
         this.#error = null;
         this.#set("available");
@@ -600,11 +735,13 @@ export class Updater {
   async run() {
     const installer = this.#settings.value.latest?.installer;
     if (!installer || !this.#installer) return;
-    if (!(await matches(this.#installer, installer))) {
-      this.#error = new UpdateError("sha256", "the downloaded file changed");
+    const fail = (error: UpdateError) => {
+      this.#error = error;
       this.#installer = "";
-      return this.#set("download-failed");
-    }
+      this.#set("download-failed");
+    };
+    if (!isInstallerFor(this.#installer, await this.#platformKey())) return fail(new UpdateError("invalid", `${this.#installer} is not an installer for this system`));
+    if (!(await matches(this.#installer, installer))) return fail(new UpdateError("sha256", "the downloaded file changed"));
     try {
       await this.plugin.system.openPath(this.#installer);
     } catch (error) {

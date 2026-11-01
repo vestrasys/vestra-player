@@ -11,12 +11,12 @@ msgstr ""
 msgid "{} (build {})"
 msgstr "{}（ビルド {}）"
 
-#: about.ts:33 about.ts:110 properties.ts:221 properties.ts:310 properties.ts:311 ui/about.slint:112 ui/about.slint:199
+#: about.ts:33 about.ts:110 properties.ts:221 properties.ts:310 properties.ts:311 ui/about.slint:112 ui/about.slint:202
 #, x-machine
 msgid "Unknown"
 msgstr "不明"
 
-#: about.ts:35 ui/about.slint:192 ui/about.slint:238
+#: about.ts:35 ui/about.slint:195 ui/about.slint:241
 #, x-machine
 msgid "Plugin API"
 msgstr "プラグイン API"
@@ -36,12 +36,12 @@ msgstr "ソフトウェア"
 msgid "{} — {}"
 msgstr "{} — {}"
 
-#: about.ts:101 ui/about.slint:234
+#: about.ts:101 ui/about.slint:237
 #, x-machine
 msgid "Version {} (build {})"
 msgstr "バージョン {}（ビルド {}）"
 
-#: about.ts:101 ui/about.slint:234
+#: about.ts:101 ui/about.slint:237
 #, x-machine
 msgid "Version {}"
 msgstr "バージョン {}"
@@ -51,17 +51,17 @@ msgstr "バージョン {}"
 msgid "{}: {}"
 msgstr "{}：{}"
 
-#: about.ts:103 ui/about.slint:193 ui/about.slint:255
+#: about.ts:103 ui/about.slint:196 ui/about.slint:258
 #, x-machine
 msgid "Rendering"
 msgstr "レンダリング"
 
-#: about.ts:104 ui/about.slint:328
+#: about.ts:104 ui/about.slint:335
 #, x-machine
 msgid "Loaded plugins"
 msgstr "読み込まれたプラグイン"
 
-#: about.ts:105 ui/about.slint:339
+#: about.ts:105 ui/about.slint:346
 #, x-machine
 msgid "Unknown (cannot read the plugin list)"
 msgstr "不明（プラグイン一覧を読み取れません）"
@@ -101,27 +101,27 @@ msgstr "インストール済み"
 msgid "Development"
 msgstr "開発用読み込み"
 
-#: about.ts:109 ui/about.slint:175
+#: about.ts:109 ui/about.slint:178
 #, x-machine
 msgid "Starting"
 msgstr "起動中"
 
-#: about.ts:109 ui/about.slint:176
+#: about.ts:109 ui/about.slint:179
 #, x-machine
 msgid "Running"
 msgstr "実行中"
 
-#: about.ts:109 ui/about.slint:177
+#: about.ts:109 ui/about.slint:180
 #, x-machine
 msgid "Disabled"
 msgstr "無効"
 
-#: about.ts:109 ui/about.slint:178
+#: about.ts:109 ui/about.slint:181
 #, x-machine
 msgid "Failed"
 msgstr "失敗"
 
-#: about.ts:109 ui/about.slint:179
+#: about.ts:109 ui/about.slint:182
 #, x-machine
 msgid "Stopped"
 msgstr "停止"
@@ -336,7 +336,7 @@ msgstr "Vestra Player について…"
 msgid "Check for Updates…"
 msgstr "アップデートを確認…"
 
-#: main.ts:302 ui/about.slint:194 ui/about.slint:276 ui/updates.slint:21
+#: main.ts:302 ui/about.slint:197 ui/about.slint:279 ui/updates.slint:21
 #, x-machine
 msgid "Updates"
 msgstr "アップデート"
@@ -676,7 +676,7 @@ msgstr "エンコーダ"
 msgid "Creation time"
 msgstr "作成日時"
 
-#: properties.ts:247 properties.ts:275 ui/about.slint:202 ui/about.slint:328
+#: properties.ts:247 properties.ts:275 ui/about.slint:205 ui/about.slint:335
 #, x-machine
 msgid "Source"
 msgstr "ソース"
@@ -874,146 +874,156 @@ msgstr "サーバーが時間内に応答しませんでした"
 
 #: ui/about.slint:136
 #, x-machine
+msgid "no data arrived for 30 seconds"
+msgstr "30 秒間データを受信できませんでした"
+
+#: ui/about.slint:137
+#, x-machine
 msgid "no release information was found (HTTP 404)"
 msgstr "リリース情報が見つかりません（HTTP 404）"
 
-#: ui/about.slint:137
+#: ui/about.slint:138
 #, x-machine
 msgid "GitHub is limiting requests (HTTP {}); try again later"
 msgstr "GitHub がリクエストを制限しています（HTTP {}）。後でもう一度お試しください"
 
-#: ui/about.slint:138
+#: ui/about.slint:139
 #, x-machine
 msgid "the server answered HTTP {}"
 msgstr "サーバーの応答は HTTP {} でした"
 
-#: ui/about.slint:139
+#: ui/about.slint:140
 #, x-machine
 msgid "the update information is not valid"
 msgstr "アップデート情報が無効です"
 
-#: ui/about.slint:140
+#: ui/about.slint:141
 #, x-machine
 msgid "the update information needs a newer player; see the release notes"
 msgstr "アップデート情報の読み取りには新しいプレーヤーが必要です。リリースノートをご覧ください"
 
-#: ui/about.slint:141
+#: ui/about.slint:142
 #, x-machine
 msgid "the file size does not match the release"
 msgstr "ファイルサイズがリリース情報と一致しません"
 
-#: ui/about.slint:142
+#: ui/about.slint:143
 #, x-machine
 msgid "the file's checksum does not match the release"
 msgstr "ファイルのチェックサムがリリース情報と一致しません"
 
-#: ui/about.slint:143
+#: ui/about.slint:144
 #, x-machine
 msgid "the Downloads folder cannot be written"
 msgstr "ダウンロードフォルダーに書き込めません"
 
-#: ui/about.slint:144
+#: ui/about.slint:145
 #, x-machine
 msgid "the installer could not be started"
 msgstr "インストーラーを起動できませんでした"
 
-#: ui/about.slint:152
+#: ui/about.slint:153
 #, x-machine
 msgid "Checking for updates…"
 msgstr "アップデートを確認しています…"
 
-#: ui/about.slint:153
+#: ui/about.slint:154
 #, x-machine
 msgid "Vestra Player is up to date (latest version {})."
 msgstr "Vestra Player は最新です（最新バージョン {}）。"
 
-#: ui/about.slint:154
+#: ui/about.slint:156
+#, x-machine
+msgid "The latest version is {}."
+msgstr "最新バージョンは {} です。"
+
+#: ui/about.slint:157
 #, x-machine
 msgid "Version {} is available (released {})."
 msgstr "バージョン {} が利用可能です（{} 公開）。"
 
-#: ui/about.slint:154
+#: ui/about.slint:157
 #, x-machine
 msgid "Version {} is available."
 msgstr "バージョン {} が利用可能です。"
 
 #. {0} is the version, {1} and {2} megabytes downloaded and in all.
-#: ui/about.slint:156
+#: ui/about.slint:159
 #, x-machine
 msgid "Downloading version {0}: {1} of {2} MB"
 msgstr "バージョン {0} をダウンロード中：{1} / {2} MB"
 
-#: ui/about.slint:157
+#: ui/about.slint:160
 #, x-machine
 msgid "Version {} is downloaded to {}. Run the installer to update."
 msgstr "バージョン {} を {} にダウンロードしました。インストーラーを実行して更新してください。"
 
-#: ui/about.slint:158
+#: ui/about.slint:161
 #, x-machine
 msgid "Could not check for updates: {}."
 msgstr "アップデートを確認できませんでした：{}。"
 
-#: ui/about.slint:159
+#: ui/about.slint:162
 #, x-machine
 msgid "Could not download version {}: {}."
 msgstr "バージョン {} をダウンロードできませんでした：{}。"
 
-#: ui/about.slint:160
+#: ui/about.slint:163
 #, x-machine
 msgid "Not checked yet."
 msgstr "まだ確認していません。"
 
-#: ui/about.slint:163
+#: ui/about.slint:166
 #, x-machine
 msgid "Download"
 msgstr "ダウンロード"
 
-#: ui/about.slint:164
+#: ui/about.slint:167
 #, x-machine
 msgid "Open Release Page"
 msgstr "リリースページを開く"
 
-#: ui/about.slint:165
+#: ui/about.slint:168
 #, x-machine
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: ui/about.slint:166
+#: ui/about.slint:169
 #, x-machine
 msgid "Run Installer"
 msgstr "インストーラーを実行"
 
-#: ui/about.slint:167
+#: ui/about.slint:170
 #, x-machine
 msgid "Check Now"
 msgstr "今すぐ確認"
 
-#: ui/about.slint:198 ui/about.slint:328
+#: ui/about.slint:201 ui/about.slint:335
 #, x-machine
 msgid "Version"
 msgstr "バージョン"
 
-#: ui/about.slint:206 ui/about.slint:328
+#: ui/about.slint:209 ui/about.slint:335
 #, x-machine
 msgid "State"
 msgstr "状態"
 
-#: ui/about.slint:312
+#: ui/about.slint:321
 #, x-machine
 msgid "Release Notes"
 msgstr "リリースノート"
 
-#: ui/about.slint:369 ui/properties.slint:116
+#: ui/about.slint:376 ui/properties.slint:116
 #, x-machine
 msgid "Copy failed"
 msgstr "コピーに失敗しました"
 
-#: ui/about.slint:375
+#: ui/about.slint:382
 #, x-machine
 msgid "Copy Info"
 msgstr "情報をコピー"
 
-#: ui/about.slint:376 ui/properties.slint:127
+#: ui/about.slint:383 ui/properties.slint:127
 #, x-machine
 msgid "Close"
 msgstr "閉じる"
@@ -1071,13 +1081,13 @@ msgstr "プレーヤーのアップデートを自動的に確認する（起動
 msgid "When a new version is out, a message shows once on the video and About Vestra Player… offers to download it. Nothing is installed without you: the installer is saved to your Downloads folder and you start it. When off, the player looks for updates only when you choose “Check for Updates…” in the menu."
 msgstr "新しいバージョンが出ると、ビデオ上に一度だけメッセージが表示され、「Vestra Player について…」からダウンロードできます。勝手にインストールされることはありません。インストーラーはダウンロードフォルダーに保存され、ご自身で起動します。オフにすると、メニューの「アップデートを確認…」を選んだときだけ確認します。"
 
-#: updates.ts:520
+#: updates.ts:651
 #, x-machine
 msgid "Vestra Player {} is available. Open About Vestra Player… to download it."
 msgstr "Vestra Player {} が利用可能です。「Vestra Player について…」からダウンロードできます。"
 
 #. why "Check for Updates…" is greyed out: an installer is being downloaded.
-#: updates.ts:561
+#: updates.ts:694
 #, x-machine
 msgid "Downloading the update…"
 msgstr "アップデートをダウンロードしています…"

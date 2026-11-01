@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test, { afterEach, beforeEach } from "node:test";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { compareVersions, deps, downloadUrl, LATEST_URL, parseLatest, platformKey, releasePage, timing, UpdateError } from "../updates.ts";
+import { compareVersions, deps, downloadUrl, installerExtension, isInstallerFor, LATEST_URL, numberedName, parseLatest, platformKey, releasePage, timing, UpdateError } from "../updates.ts";
 
 const directory = new URL("..", import.meta.url);
 const tick = () => new Promise((done) => setTimeout(done, 5));
@@ -283,7 +283,7 @@ test("J10: turning the automatic check off in Options stops it; Check for Update
 
 test("J10 download: into Downloads with progress, size and sha256 checked, then Run Installer opens it", async () => {
   net.routes.set(LATEST_URL, { body: latest("0.6.3") });
-  net.routes.set(downloadUrl(FILE), { status: 302, headers: { location: "https://objects.githubusercontent.com/setup.exe" } });
+  net.routes.set(downloadUrl("0.6.3", FILE), { status: 302, headers: { location: "https://objects.githubusercontent.com/setup.exe" } });
   net.routes.set("https://objects.githubusercontent.com/setup.exe", { body: INSTALLER });
   const { host, stop } = await start();
   try {
@@ -323,12 +323,13 @@ test("J10 download: a size or checksum mismatch is rejected and nothing is kept"
   ];
   for (const [body, code] of cases) {
     net.routes.set(LATEST_URL, { body: latest("0.6.3") });
-    net.routes.set(downloadUrl(FILE), { body });
+    net.routes.set(downloadUrl("0.6.3", FILE), { body });
     const { host, stop } = await start();
     try {
       const window = await manualCheck(host);
       window.emit("update-action");
       await until(() => window.props["update-state"] === "download-failed", code);
+      await host.settle();
       assert.equal(window.props["update-error"], code);
       assert.equal(window.props["update-button"], "download", "Download tries again");
       assert.deepEqual(await readdir(downloads), [], `${code}: no file left`);
@@ -345,7 +346,7 @@ test("J10 download: the command is busy while it runs (keeps the plugin running)
   const gate = new Promise<void>((done) => (release = done));
   const fetch = net.fetch;
   deps.fetch = async (url, init) => {
-    if (url !== downloadUrl(FILE)) return fetch(url, init);
+    if (url !== downloadUrl("0.6.3", FILE)) return fetch(url, init);
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         controller.enqueue(new Uint8Array(INSTALLER.subarray(0, 100)));
@@ -388,6 +389,15 @@ test("J10 pure rules: versions, platforms, latest.json", () => {
   assert.equal(platformKey("macos", "aarch64"), "macos-arm64");
   assert.equal(platformKey("darwin", "arm64"), "macos-arm64");
   assert.equal(platformKey("other", "x86_64"), null);
+  assert.equal(numberedName(FILE, 0), FILE);
+  assert.equal(numberedName(FILE, 2), "VestraPlayer-windows-x64-setup (2).exe");
+  assert.equal(numberedName("noext", 1), "noext (1)");
+  assert.equal(
+    downloadUrl("0.6.3", FILE),
+    "https://github.com/vestrasys/vestra-player/releases/download/v0.6.3/VestraPlayer-windows-x64-setup.exe",
+    "pinned to the release's tag, never releases/latest",
+  );
+  assert.equal(LATEST_URL, "https://github.com/vestrasys/vestra-player/releases/latest/download/latest.json");
 
   const ok = parseLatest(JSON.parse(latest("0.6.3")), "windows-x64");
   assert.deepEqual(ok, {
@@ -417,6 +427,16 @@ test("J10 pure rules: versions, platforms, latest.json", () => {
   assert.equal(code(entry({ size: -1 })), "invalid");
   assert.equal(code(entry({ size: 2 * 1024 * 1024 * 1024 })), "invalid");
   assert.equal(code(entry({ sha256: "abc" })), "invalid");
+  // Only what this system opens as an installer: .exe on Windows, .dmg on macOS.
+  assert.equal(code(entry({ file: "VestraPlayer-windows-x64.zip" })), "invalid");
+  assert.equal(code(entry({ file: "VestraPlayer-windows-x64.dmg" })), "invalid");
+  assert.equal(code(entry({ file: "VestraPlayer-setup.EXE" })), "ok");
+  assert.equal(parseLatest({ schema: 1, version: "0.7.0", downloads: { "macos-arm64": { file: "VestraPlayer.dmg", size: 10, sha256: SHA } } }, "macos-arm64").installer?.file, "VestraPlayer.dmg");
+  assert.equal(installerExtension("windows-x64"), ".exe");
+  assert.equal(installerExtension("macos-x64"), ".dmg");
+  assert.equal(installerExtension("linux-x64"), null);
+  assert.equal(isInstallerFor("a.exe", "macos-arm64"), false);
+  assert.equal(isInstallerFor("a.exe", null), false);
   // Another platform's broken entry does not matter.
   assert.equal(code({ schema: 1, version: "0.7.0", downloads: { "windows-x64": { file: FILE, size: 10, sha256: SHA }, "macos-arm64": 5 } }), "ok");
 });
@@ -439,7 +459,10 @@ test("J10 in Simplified Chinese: menu, settings page and notice", async () => {
 
 test("J10: the new texts are machine translated in every language and marked for review", async () => {
   const pot = await readFile(new URL("../locales/messages.pot", import.meta.url), "utf8");
-  const ids = ["Check for Updates…", "Updates", "Check Now", "Download", "Run Installer", "Release Notes", "Downloading version {0}: {1} of {2} MB", "the file's checksum does not match the release"];
+  const ids = [
+    "Check for Updates…", "Updates", "Check Now", "Download", "Run Installer", "Release Notes", "Downloading version {0}: {1} of {2} MB",
+    "the file's checksum does not match the release", "no data arrived for 30 seconds", "The latest version is {}.",
+  ];
   for (const id of ids) assert.ok(pot.includes(`msgid "${id}"`), id);
   for (const lang of ["zh-Hans", "ja", "ko", "de", "fr", "es"]) {
     const po = await readFile(new URL(`../locales/${lang}.po`, import.meta.url), "utf8");
@@ -468,6 +491,271 @@ test("J10: an About window opened before any check offers Check Now; a refused r
     window.emit("update-action");
     await until(() => window.props["update-state"] === "available");
   } finally {
+    await stop();
+  }
+});
+
+/** A promise and the function that settles it. */
+function gate() {
+  let open!: () => void;
+  const promise = new Promise<void>((done) => (open = done));
+  return { promise, open };
+}
+/** A download answer that sends the installer's first `first` bytes, then the rest once `rest` settles; it errors when aborted. */
+function slowInstaller(init: RequestInit, first: number, rest: Promise<void>) {
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      init.signal?.addEventListener("abort", () => {
+        try {
+          controller.error(new DOMException("aborted", "AbortError"));
+        } catch {}
+      });
+      controller.enqueue(new Uint8Array(INSTALLER.subarray(0, first)));
+      await rest;
+      try {
+        controller.enqueue(new Uint8Array(INSTALLER.subarray(first)));
+        controller.close();
+      } catch {}
+    },
+  });
+  return new Response(stream, { status: 200, headers: { "content-length": String(INSTALLER.length) } });
+}
+
+test("J10 download: from the release's own tag (pinned version), never releases/latest", async () => {
+  net.routes.set(LATEST_URL, { body: latest("0.6.3") });
+  net.routes.set(downloadUrl("0.6.3", FILE), { body: INSTALLER });
+  const { host, stop } = await start();
+  try {
+    const window = await manualCheck(host);
+    window.emit("update-action");
+    await until(() => window.props["update-state"] === "downloaded", "the download");
+    assert.deepEqual(net.requests, [LATEST_URL, "https://github.com/vestrasys/vestra-player/releases/download/v0.6.3/VestraPlayer-windows-x64-setup.exe"]);
+  } finally {
+    await stop();
+  }
+});
+
+test("J10 race: an automatic check that ends during a download leaves the download, its state and its release alone", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-info-data-"));
+  try {
+    net.routes.set(LATEST_URL, { body: latest("0.6.3") });
+    let run = await start({ dataDirectory: data });
+    assert.equal((await manualCheck(run.host)).props["update-state"], "available");
+    await run.stop();
+
+    // A day later the automatic check is slow to answer, and the user starts the download meanwhile.
+    now += timing.interval;
+    Object.assign(timing, { firstCheck: 20 });
+    const check = gate();
+    const transfer = gate();
+    const fetch = net.fetch;
+    deps.fetch = async (url, init) => {
+      if (url === LATEST_URL) {
+        net.requests.push(url);
+        await check.promise;
+        return new Response(latest("0.6.4"), { status: 200 });
+      }
+      if (url === downloadUrl("0.6.3", FILE)) return slowInstaller(init, 100, transfer.promise);
+      return fetch(url, init);
+    };
+    run = await start({ dataDirectory: data });
+    await run.host.command("info.about").run();
+    await run.host.settle();
+    const window = run.host.window("about");
+    assert.equal(window.props["update-button"], "download");
+    await until(() => net.count(LATEST_URL) === 2, "the automatic check");
+    window.emit("update-action");
+    await until(() => window.props["update-state"] === "downloading" && window.props.received === 100, "progress");
+    check.open();
+    await new Promise((done) => setTimeout(done, 50));
+    await run.host.settle();
+    assert.equal(window.props["update-state"], "downloading", "the check's answer does not change the state");
+    assert.equal(window.props["latest-version"], "0.6.3", "nor the release being downloaded");
+    assert.deepEqual(run.host.osd, []);
+    transfer.open();
+    await until(() => window.props["update-state"] === "downloaded", "the download");
+    await run.host.settle();
+    assert.equal(window.props["installer-path"], join(downloads, FILE));
+    assert.equal(window.props["update-button"], "run");
+    await run.stop();
+  } finally {
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("J10 race: Check for Updates… during the automatic check shows checking and reports its failure", async () => {
+  Object.assign(timing, { firstCheck: 20 });
+  const answer = gate();
+  deps.fetch = async (url) => {
+    net.requests.push(url);
+    await answer.promise;
+    throw new TypeError("fetch failed", { cause: { code: "ENOTFOUND", message: "getaddrinfo ENOTFOUND github.com" } });
+  };
+  const { host, stop } = await start();
+  try {
+    await until(() => net.count(LATEST_URL) === 1, "the automatic check");
+    await host.command("info.update").run();
+    await host.settle();
+    const window = host.window("about");
+    assert.equal(window.props["update-state"], "checking");
+    assert.equal(window.props["update-button"], "");
+    answer.open();
+    await until(() => window.props["update-state"] !== "checking", "the result");
+    await host.settle();
+    assert.equal(window.props["update-state"], "failed");
+    assert.equal(window.props["update-error"], "offline");
+    assert.equal(net.count(LATEST_URL), 1, "the running check is reused, not started twice");
+  } finally {
+    answer.open();
+    await stop();
+  }
+});
+
+test("J10 download: another file of the same name in Downloads is kept, the installer gets a numbered name, a matching one is reused", async () => {
+  const numbered = "VestraPlayer-windows-x64-setup (1).exe";
+  net.routes.set(LATEST_URL, { body: latest("0.6.3") });
+  net.routes.set(downloadUrl("0.6.3", FILE), { body: INSTALLER });
+  await writeFile(join(downloads, FILE), "another file");
+  const first = await start();
+  try {
+    const window = await manualCheck(first.host);
+    window.emit("update-action");
+    await until(() => window.props["update-state"] === "downloaded", "the download");
+    await first.host.settle();
+    assert.equal(window.props["installer-path"], join(downloads, numbered));
+    assert.equal(await readFile(join(downloads, FILE), "utf8"), "another file", "never overwritten");
+    assert.deepEqual(await readFile(join(downloads, numbered)), INSTALLER);
+    window.emit("update-action");
+    await until(() => first.host.system.opened.length === 1, "the installer");
+    assert.deepEqual(first.host.system.opened, [join(downloads, numbered)]);
+  } finally {
+    await first.stop();
+  }
+
+  // The next download finds the numbered file already is this installer: no second copy, no request.
+  const again = await start();
+  try {
+    const window = await manualCheck(again.host);
+    const before = net.count(downloadUrl("0.6.3", FILE));
+    window.emit("update-action");
+    await until(() => window.props["update-state"] === "downloaded", "the reuse");
+    await again.host.settle();
+    assert.equal(window.props["installer-path"], join(downloads, numbered));
+    assert.equal(net.count(downloadUrl("0.6.3", FILE)), before);
+    assert.deepEqual((await readdir(downloads)).sort(), [FILE, numbered].sort());
+  } finally {
+    await again.stop();
+  }
+});
+
+test("J10 download: no data for the stall timeout fails it, deletes the part file and says why", async () => {
+  Object.assign(timing, { stallTimeout: 60 });
+  net.routes.set(LATEST_URL, { body: latest("0.6.3") });
+  const never = gate();
+  const fetch = net.fetch;
+  deps.fetch = async (url, init) => (url === downloadUrl("0.6.3", FILE) ? slowInstaller(init, 100, never.promise) : fetch(url, init));
+  const { host, stop } = await start();
+  try {
+    const window = await manualCheck(host);
+    window.emit("update-action");
+    await until(() => window.props["update-state"] === "download-failed", "the stall");
+    await host.settle();
+    assert.equal(window.props["update-error"], "stalled");
+    assert.equal(window.props.received, 0);
+    assert.equal(window.props["update-button"], "download", "Download tries again");
+    assert.equal(host.command("info.update").state.busy, false);
+    assert.deepEqual(await readdir(downloads), [], "no part file left");
+  } finally {
+    never.open();
+    await stop();
+  }
+});
+
+test("J10 automatic check: after a failure it tries again an hour later, after a success a day later", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-info-data-"));
+  try {
+    Object.assign(timing, { firstCheck: 20 });
+    net.routes.set(LATEST_URL, "offline");
+    let run = await start({ dataDirectory: data });
+    await until(() => net.count(LATEST_URL) === 1, "the failed check");
+    await new Promise((done) => setTimeout(done, 20));
+    await run.stop();
+
+    now += 30 * 60 * 1000;
+    run = await start({ dataDirectory: data });
+    await new Promise((done) => setTimeout(done, 100));
+    assert.equal(net.count(LATEST_URL), 1, "not before the hour");
+    await run.stop();
+
+    now += 31 * 60 * 1000;
+    net.routes.set(LATEST_URL, { body: latest("0.6.3") });
+    run = await start({ dataDirectory: data });
+    await until(() => run.host.osd.length === 1, "the retry and its notice");
+    assert.equal(net.count(LATEST_URL), 2);
+    await run.stop();
+
+    now += 2 * timing.retry;
+    run = await start({ dataDirectory: data });
+    await new Promise((done) => setTimeout(done, 100));
+    assert.equal(net.count(LATEST_URL), 2, "a success keeps the daily cadence");
+    await run.stop();
+  } finally {
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+/** The `updates.json` the plugin keeps under `data`. */
+async function settingsFile(data: string): Promise<string> {
+  for (const entry of await readdir(data, { recursive: true, withFileTypes: true })) {
+    if (entry.isFile() && entry.name === "updates.json") return join(entry.parentPath, entry.name);
+  }
+  return assert.fail("no updates.json");
+}
+
+test("J10: an installer that is not this system's type (.exe on Windows) is neither downloaded nor opened", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-info-data-"));
+  try {
+    net.routes.set(LATEST_URL, { body: latest("0.6.3") });
+    let run = await start({ dataDirectory: data });
+    await manualCheck(run.host);
+    await run.stop();
+    // A stored release whose file is something else (edited by hand, say).
+    const path = await settingsFile(data);
+    const stored = JSON.parse(await readFile(path, "utf8"));
+    stored.latest.installer.file = "VestraPlayer-windows-x64.zip";
+    await writeFile(path, JSON.stringify(stored));
+    run = await start({ dataDirectory: data });
+    await run.host.command("info.about").run();
+    await run.host.settle();
+    const window = run.host.window("about");
+    assert.equal(window.props["update-button"], "download");
+    window.emit("update-action");
+    await until(() => window.props["update-state"] === "download-failed", "the refusal");
+    assert.equal(window.props["update-error"], "invalid");
+    assert.equal(net.requests.filter((url) => url.includes("/releases/download/")).length, 0, "nothing downloaded");
+    assert.deepEqual(await readdir(downloads), []);
+    assert.deepEqual(run.host.system.opened, []);
+    await run.stop();
+  } finally {
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("J10: a player version that is not a version is logged and never called up to date", async () => {
+  net.routes.set(LATEST_URL, { body: latest("0.6.3") });
+  const warnings: string[] = [];
+  const warn = console.warn;
+  console.warn = (...args: unknown[]) => void warnings.push(args.map(String).join(" "));
+  const { host, stop } = await start({ version: "dev-build" });
+  try {
+    const window = await manualCheck(host);
+    assert.equal(window.props["update-state"], "unknown");
+    assert.equal(window.props["latest-version"], "0.6.3");
+    assert.equal(window.props["update-button"], "check");
+    assert.deepEqual(host.osd, []);
+    assert.ok(warnings.some((line) => line.includes('"dev-build"')), warnings.join("\n"));
+  } finally {
+    console.warn = warn;
     await stop();
   }
 });

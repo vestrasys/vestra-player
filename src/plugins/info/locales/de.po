@@ -11,12 +11,12 @@ msgstr ""
 msgid "{} (build {})"
 msgstr "{} (Build {})"
 
-#: about.ts:33 about.ts:110 properties.ts:221 properties.ts:310 properties.ts:311 ui/about.slint:112 ui/about.slint:199
+#: about.ts:33 about.ts:110 properties.ts:221 properties.ts:310 properties.ts:311 ui/about.slint:112 ui/about.slint:202
 #, x-machine
 msgid "Unknown"
 msgstr "Unbekannt"
 
-#: about.ts:35 ui/about.slint:192 ui/about.slint:238
+#: about.ts:35 ui/about.slint:195 ui/about.slint:241
 #, x-machine
 msgid "Plugin API"
 msgstr "Plugin-API"
@@ -36,12 +36,12 @@ msgstr "Software"
 msgid "{} — {}"
 msgstr "{} — {}"
 
-#: about.ts:101 ui/about.slint:234
+#: about.ts:101 ui/about.slint:237
 #, x-machine
 msgid "Version {} (build {})"
 msgstr "Version {} (Build {})"
 
-#: about.ts:101 ui/about.slint:234
+#: about.ts:101 ui/about.slint:237
 #, x-machine
 msgid "Version {}"
 msgstr "Version {}"
@@ -51,17 +51,17 @@ msgstr "Version {}"
 msgid "{}: {}"
 msgstr "{}: {}"
 
-#: about.ts:103 ui/about.slint:193 ui/about.slint:255
+#: about.ts:103 ui/about.slint:196 ui/about.slint:258
 #, x-machine
 msgid "Rendering"
 msgstr "Rendering"
 
-#: about.ts:104 ui/about.slint:328
+#: about.ts:104 ui/about.slint:335
 #, x-machine
 msgid "Loaded plugins"
 msgstr "Geladene Plugins"
 
-#: about.ts:105 ui/about.slint:339
+#: about.ts:105 ui/about.slint:346
 #, x-machine
 msgid "Unknown (cannot read the plugin list)"
 msgstr "Unbekannt (Plugin-Liste kann nicht gelesen werden)"
@@ -101,27 +101,27 @@ msgstr "Installiert"
 msgid "Development"
 msgstr "Entwicklung"
 
-#: about.ts:109 ui/about.slint:175
+#: about.ts:109 ui/about.slint:178
 #, x-machine
 msgid "Starting"
 msgstr "Startet"
 
-#: about.ts:109 ui/about.slint:176
+#: about.ts:109 ui/about.slint:179
 #, x-machine
 msgid "Running"
 msgstr "Läuft"
 
-#: about.ts:109 ui/about.slint:177
+#: about.ts:109 ui/about.slint:180
 #, x-machine
 msgid "Disabled"
 msgstr "Inaktiv"
 
-#: about.ts:109 ui/about.slint:178
+#: about.ts:109 ui/about.slint:181
 #, x-machine
 msgid "Failed"
 msgstr "Fehler"
 
-#: about.ts:109 ui/about.slint:179
+#: about.ts:109 ui/about.slint:182
 #, x-machine
 msgid "Stopped"
 msgstr "Gestoppt"
@@ -336,7 +336,7 @@ msgstr "Über Vestra Player…"
 msgid "Check for Updates…"
 msgstr "Nach Updates suchen…"
 
-#: main.ts:302 ui/about.slint:194 ui/about.slint:276 ui/updates.slint:21
+#: main.ts:302 ui/about.slint:197 ui/about.slint:279 ui/updates.slint:21
 #, x-machine
 msgid "Updates"
 msgstr "Updates"
@@ -676,7 +676,7 @@ msgstr "Encoder"
 msgid "Creation time"
 msgstr "Erstellungszeit"
 
-#: properties.ts:247 properties.ts:275 ui/about.slint:202 ui/about.slint:328
+#: properties.ts:247 properties.ts:275 ui/about.slint:205 ui/about.slint:335
 #, x-machine
 msgid "Source"
 msgstr "Quelle"
@@ -874,146 +874,156 @@ msgstr "der Server hat nicht rechtzeitig geantwortet"
 
 #: ui/about.slint:136
 #, x-machine
+msgid "no data arrived for 30 seconds"
+msgstr "30 Sekunden lang sind keine Daten angekommen"
+
+#: ui/about.slint:137
+#, x-machine
 msgid "no release information was found (HTTP 404)"
 msgstr "keine Release-Informationen gefunden (HTTP 404)"
 
-#: ui/about.slint:137
+#: ui/about.slint:138
 #, x-machine
 msgid "GitHub is limiting requests (HTTP {}); try again later"
 msgstr "GitHub begrenzt die Anfragen (HTTP {}); später erneut versuchen"
 
-#: ui/about.slint:138
+#: ui/about.slint:139
 #, x-machine
 msgid "the server answered HTTP {}"
 msgstr "der Server antwortete mit HTTP {}"
 
-#: ui/about.slint:139
+#: ui/about.slint:140
 #, x-machine
 msgid "the update information is not valid"
 msgstr "die Update-Informationen sind ungültig"
 
-#: ui/about.slint:140
+#: ui/about.slint:141
 #, x-machine
 msgid "the update information needs a newer player; see the release notes"
 msgstr "die Update-Informationen erfordern einen neueren Player; siehe Versionshinweise"
 
-#: ui/about.slint:141
+#: ui/about.slint:142
 #, x-machine
 msgid "the file size does not match the release"
 msgstr "die Dateigröße stimmt nicht mit dem Release überein"
 
-#: ui/about.slint:142
+#: ui/about.slint:143
 #, x-machine
 msgid "the file's checksum does not match the release"
 msgstr "die Prüfsumme der Datei stimmt nicht mit dem Release überein"
 
-#: ui/about.slint:143
+#: ui/about.slint:144
 #, x-machine
 msgid "the Downloads folder cannot be written"
 msgstr "in den Ordner „Downloads“ kann nicht geschrieben werden"
 
-#: ui/about.slint:144
+#: ui/about.slint:145
 #, x-machine
 msgid "the installer could not be started"
 msgstr "das Installationsprogramm konnte nicht gestartet werden"
 
-#: ui/about.slint:152
+#: ui/about.slint:153
 #, x-machine
 msgid "Checking for updates…"
 msgstr "Suche nach Updates…"
 
-#: ui/about.slint:153
+#: ui/about.slint:154
 #, x-machine
 msgid "Vestra Player is up to date (latest version {})."
 msgstr "Vestra Player ist aktuell (neueste Version {})."
 
-#: ui/about.slint:154
+#: ui/about.slint:156
+#, x-machine
+msgid "The latest version is {}."
+msgstr "Die neueste Version ist {}."
+
+#: ui/about.slint:157
 #, x-machine
 msgid "Version {} is available (released {})."
 msgstr "Version {} ist verfügbar (veröffentlicht am {})."
 
-#: ui/about.slint:154
+#: ui/about.slint:157
 #, x-machine
 msgid "Version {} is available."
 msgstr "Version {} ist verfügbar."
 
 #. {0} is the version, {1} and {2} megabytes downloaded and in all.
-#: ui/about.slint:156
+#: ui/about.slint:159
 #, x-machine
 msgid "Downloading version {0}: {1} of {2} MB"
 msgstr "Version {0} wird geladen: {1} von {2} MB"
 
-#: ui/about.slint:157
+#: ui/about.slint:160
 #, x-machine
 msgid "Version {} is downloaded to {}. Run the installer to update."
 msgstr "Version {} wurde nach {} geladen. Zum Aktualisieren das Installationsprogramm ausführen."
 
-#: ui/about.slint:158
+#: ui/about.slint:161
 #, x-machine
 msgid "Could not check for updates: {}."
 msgstr "Suche nach Updates fehlgeschlagen: {}."
 
-#: ui/about.slint:159
+#: ui/about.slint:162
 #, x-machine
 msgid "Could not download version {}: {}."
 msgstr "Version {} konnte nicht geladen werden: {}."
 
-#: ui/about.slint:160
+#: ui/about.slint:163
 #, x-machine
 msgid "Not checked yet."
 msgstr "Noch nicht gesucht."
 
-#: ui/about.slint:163
+#: ui/about.slint:166
 #, x-machine
 msgid "Download"
 msgstr "Herunterladen"
 
-#: ui/about.slint:164
+#: ui/about.slint:167
 #, x-machine
 msgid "Open Release Page"
 msgstr "Release-Seite öffnen"
 
-#: ui/about.slint:165
+#: ui/about.slint:168
 #, x-machine
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: ui/about.slint:166
+#: ui/about.slint:169
 #, x-machine
 msgid "Run Installer"
 msgstr "Installer starten"
 
-#: ui/about.slint:167
+#: ui/about.slint:170
 #, x-machine
 msgid "Check Now"
 msgstr "Jetzt suchen"
 
-#: ui/about.slint:198 ui/about.slint:328
+#: ui/about.slint:201 ui/about.slint:335
 #, x-machine
 msgid "Version"
 msgstr "Version"
 
-#: ui/about.slint:206 ui/about.slint:328
+#: ui/about.slint:209 ui/about.slint:335
 #, x-machine
 msgid "State"
 msgstr "Status"
 
-#: ui/about.slint:312
+#: ui/about.slint:321
 #, x-machine
 msgid "Release Notes"
 msgstr "Versionshinweise"
 
-#: ui/about.slint:369 ui/properties.slint:116
+#: ui/about.slint:376 ui/properties.slint:116
 #, x-machine
 msgid "Copy failed"
 msgstr "Kopieren fehlgeschlagen"
 
-#: ui/about.slint:375
+#: ui/about.slint:382
 #, x-machine
 msgid "Copy Info"
 msgstr "Kopieren"
 
-#: ui/about.slint:376 ui/properties.slint:127
+#: ui/about.slint:383 ui/properties.slint:127
 #, x-machine
 msgid "Close"
 msgstr "Schließen"
@@ -1071,13 +1081,13 @@ msgstr "Automatisch nach Player-Updates suchen (30 Sekunden nach dem Start, dann
 msgid "When a new version is out, a message shows once on the video and About Vestra Player… offers to download it. Nothing is installed without you: the installer is saved to your Downloads folder and you start it. When off, the player looks for updates only when you choose “Check for Updates…” in the menu."
 msgstr "Wenn eine neue Version erscheint, wird einmal eine Meldung auf dem Video angezeigt, und „Über Vestra Player…“ bietet den Download an. Nichts wird ohne Sie installiert: Das Installationsprogramm wird im Ordner „Downloads“ gespeichert, und Sie starten es selbst. Wenn aus, sucht der Player nur, wenn Sie im Menü „Nach Updates suchen…“ wählen."
 
-#: updates.ts:520
+#: updates.ts:651
 #, x-machine
 msgid "Vestra Player {} is available. Open About Vestra Player… to download it."
 msgstr "Vestra Player {} ist verfügbar. Zum Herunterladen „Über Vestra Player…“ öffnen."
 
 #. why "Check for Updates…" is greyed out: an installer is being downloaded.
-#: updates.ts:561
+#: updates.ts:694
 #, x-machine
 msgid "Downloading the update…"
 msgstr "Update wird geladen…"

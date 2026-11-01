@@ -8,11 +8,11 @@ msgstr ""
 msgid "{} (build {})"
 msgstr ""
 
-#: about.ts:33 about.ts:110 properties.ts:221 properties.ts:310 properties.ts:311 ui/about.slint:112 ui/about.slint:199
+#: about.ts:33 about.ts:110 properties.ts:221 properties.ts:310 properties.ts:311 ui/about.slint:112 ui/about.slint:202
 msgid "Unknown"
 msgstr ""
 
-#: about.ts:35 ui/about.slint:192 ui/about.slint:238
+#: about.ts:35 ui/about.slint:195 ui/about.slint:241
 msgid "Plugin API"
 msgstr ""
 
@@ -28,11 +28,11 @@ msgstr ""
 msgid "{} — {}"
 msgstr ""
 
-#: about.ts:101 ui/about.slint:234
+#: about.ts:101 ui/about.slint:237
 msgid "Version {} (build {})"
 msgstr ""
 
-#: about.ts:101 ui/about.slint:234
+#: about.ts:101 ui/about.slint:237
 msgid "Version {}"
 msgstr ""
 
@@ -40,15 +40,15 @@ msgstr ""
 msgid "{}: {}"
 msgstr ""
 
-#: about.ts:103 ui/about.slint:193 ui/about.slint:255
+#: about.ts:103 ui/about.slint:196 ui/about.slint:258
 msgid "Rendering"
 msgstr ""
 
-#: about.ts:104 ui/about.slint:328
+#: about.ts:104 ui/about.slint:335
 msgid "Loaded plugins"
 msgstr ""
 
-#: about.ts:105 ui/about.slint:339
+#: about.ts:105 ui/about.slint:346
 msgid "Unknown (cannot read the plugin list)"
 msgstr ""
 
@@ -80,23 +80,23 @@ msgstr ""
 msgid "Development"
 msgstr ""
 
-#: about.ts:109 ui/about.slint:175
+#: about.ts:109 ui/about.slint:178
 msgid "Starting"
 msgstr ""
 
-#: about.ts:109 ui/about.slint:176
+#: about.ts:109 ui/about.slint:179
 msgid "Running"
 msgstr ""
 
-#: about.ts:109 ui/about.slint:177
+#: about.ts:109 ui/about.slint:180
 msgid "Disabled"
 msgstr ""
 
-#: about.ts:109 ui/about.slint:178
+#: about.ts:109 ui/about.slint:181
 msgid "Failed"
 msgstr ""
 
-#: about.ts:109 ui/about.slint:179
+#: about.ts:109 ui/about.slint:182
 msgid "Stopped"
 msgstr ""
 
@@ -269,7 +269,7 @@ msgstr ""
 msgid "Check for Updates…"
 msgstr ""
 
-#: main.ts:302 ui/about.slint:194 ui/about.slint:276 ui/updates.slint:21
+#: main.ts:302 ui/about.slint:197 ui/about.slint:279 ui/updates.slint:21
 msgid "Updates"
 msgstr ""
 
@@ -541,7 +541,7 @@ msgstr ""
 msgid "Creation time"
 msgstr ""
 
-#: properties.ts:247 properties.ts:275 ui/about.slint:202 ui/about.slint:328
+#: properties.ts:247 properties.ts:275 ui/about.slint:205 ui/about.slint:335
 msgid "Source"
 msgstr ""
 
@@ -699,119 +699,127 @@ msgid "the server did not answer in time"
 msgstr ""
 
 #: ui/about.slint:136
-msgid "no release information was found (HTTP 404)"
+msgid "no data arrived for 30 seconds"
 msgstr ""
 
 #: ui/about.slint:137
-msgid "GitHub is limiting requests (HTTP {}); try again later"
+msgid "no release information was found (HTTP 404)"
 msgstr ""
 
 #: ui/about.slint:138
-msgid "the server answered HTTP {}"
+msgid "GitHub is limiting requests (HTTP {}); try again later"
 msgstr ""
 
 #: ui/about.slint:139
-msgid "the update information is not valid"
+msgid "the server answered HTTP {}"
 msgstr ""
 
 #: ui/about.slint:140
-msgid "the update information needs a newer player; see the release notes"
+msgid "the update information is not valid"
 msgstr ""
 
 #: ui/about.slint:141
-msgid "the file size does not match the release"
+msgid "the update information needs a newer player; see the release notes"
 msgstr ""
 
 #: ui/about.slint:142
-msgid "the file's checksum does not match the release"
+msgid "the file size does not match the release"
 msgstr ""
 
 #: ui/about.slint:143
-msgid "the Downloads folder cannot be written"
+msgid "the file's checksum does not match the release"
 msgstr ""
 
 #: ui/about.slint:144
+msgid "the Downloads folder cannot be written"
+msgstr ""
+
+#: ui/about.slint:145
 msgid "the installer could not be started"
 msgstr ""
 
-#: ui/about.slint:152
+#: ui/about.slint:153
 msgid "Checking for updates…"
 msgstr ""
 
-#: ui/about.slint:153
+#: ui/about.slint:154
 msgid "Vestra Player is up to date (latest version {})."
 msgstr ""
 
-#: ui/about.slint:154
+#: ui/about.slint:156
+msgid "The latest version is {}."
+msgstr ""
+
+#: ui/about.slint:157
 msgid "Version {} is available (released {})."
 msgstr ""
 
-#: ui/about.slint:154
+#: ui/about.slint:157
 msgid "Version {} is available."
 msgstr ""
 
 #. {0} is the version, {1} and {2} megabytes downloaded and in all.
-#: ui/about.slint:156
+#: ui/about.slint:159
 msgid "Downloading version {0}: {1} of {2} MB"
 msgstr ""
 
-#: ui/about.slint:157
+#: ui/about.slint:160
 msgid "Version {} is downloaded to {}. Run the installer to update."
 msgstr ""
 
-#: ui/about.slint:158
+#: ui/about.slint:161
 msgid "Could not check for updates: {}."
 msgstr ""
 
-#: ui/about.slint:159
+#: ui/about.slint:162
 msgid "Could not download version {}: {}."
 msgstr ""
 
-#: ui/about.slint:160
+#: ui/about.slint:163
 msgid "Not checked yet."
 msgstr ""
 
-#: ui/about.slint:163
+#: ui/about.slint:166
 msgid "Download"
 msgstr ""
 
-#: ui/about.slint:164
+#: ui/about.slint:167
 msgid "Open Release Page"
 msgstr ""
 
-#: ui/about.slint:165
+#: ui/about.slint:168
 msgid "Cancel"
 msgstr ""
 
-#: ui/about.slint:166
+#: ui/about.slint:169
 msgid "Run Installer"
 msgstr ""
 
-#: ui/about.slint:167
+#: ui/about.slint:170
 msgid "Check Now"
 msgstr ""
 
-#: ui/about.slint:198 ui/about.slint:328
+#: ui/about.slint:201 ui/about.slint:335
 msgid "Version"
 msgstr ""
 
-#: ui/about.slint:206 ui/about.slint:328
+#: ui/about.slint:209 ui/about.slint:335
 msgid "State"
 msgstr ""
 
-#: ui/about.slint:312
+#: ui/about.slint:321
 msgid "Release Notes"
 msgstr ""
 
-#: ui/about.slint:369 ui/properties.slint:116
+#: ui/about.slint:376 ui/properties.slint:116
 msgid "Copy failed"
 msgstr ""
 
-#: ui/about.slint:375
+#: ui/about.slint:382
 msgid "Copy Info"
 msgstr ""
 
-#: ui/about.slint:376 ui/properties.slint:127
+#: ui/about.slint:383 ui/properties.slint:127
 msgid "Close"
 msgstr ""
 
@@ -858,11 +866,11 @@ msgstr ""
 msgid "When a new version is out, a message shows once on the video and About Vestra Player… offers to download it. Nothing is installed without you: the installer is saved to your Downloads folder and you start it. When off, the player looks for updates only when you choose “Check for Updates…” in the menu."
 msgstr ""
 
-#: updates.ts:520
+#: updates.ts:651
 msgid "Vestra Player {} is available. Open About Vestra Player… to download it."
 msgstr ""
 
 #. why "Check for Updates…" is greyed out: an installer is being downloaded.
-#: updates.ts:561
+#: updates.ts:694
 msgid "Downloading the update…"
 msgstr ""

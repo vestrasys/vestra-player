@@ -133,6 +133,7 @@ export component AboutWindow inherits Window {
     pure function update-reason(code: string, detail: string) -> string {
         return code == "offline" ? @tr("no connection to GitHub")
             : code == "timeout" ? @tr("the server did not answer in time")
+            : code == "stalled" ? @tr("no data arrived for 30 seconds")
             : code == "not-found" ? @tr("no release information was found (HTTP 404)")
             : code == "rate-limited" ? @tr("GitHub is limiting requests (HTTP {}); try again later", detail)
             : code == "http" ? @tr("the server answered HTTP {}", detail)
@@ -151,6 +152,8 @@ export component AboutWindow inherits Window {
     pure function update-text() -> string {
         return root.update-state == "checking" ? @tr("Checking for updates…")
             : root.update-state == "current" ? @tr("Vestra Player is up to date (latest version {}).", root.latest-version)
+            // The player's own version could not be read: the latest one is named, without claiming either way.
+            : root.update-state == "unknown" ? @tr("The latest version is {}.", root.latest-version)
             : root.update-state == "available" ? (root.latest-date != "" ? @tr("Version {} is available (released {}).", root.latest-version, root.latest-date) : @tr("Version {} is available.", root.latest-version))
             // TRANSLATORS: {0} is the version, {1} and {2} megabytes downloaded and in all.
             : root.update-state == "downloading" ? @tr("Downloading version {0}: {1} of {2} MB", root.latest-version, root.megabytes(root.received), root.megabytes(root.total))
