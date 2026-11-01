@@ -313,6 +313,59 @@ test("update and uninstall from the same repository; no rollback and no older ve
   }
 });
 
+test("updating a disabled plugin keeps it disabled (VS Code); a failure to keep it so is reported", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [
+    {
+      ...YT,
+      versions: [
+        { version: "0.4.0", capabilities: ["commands"] },
+        { version: "0.3.0", capabilities: ["commands"] },
+        { version: "0.2.0", capabilities: ["commands"] },
+      ],
+    },
+  ]);
+  const installed = info("zysilm.youtube", {
+    version: "0.2.0",
+    state: "disabled",
+    capabilities: ["commands"],
+    source: { kind: "repository", url: OFFICIAL },
+  });
+  const { host, store, stop } = await ready(net, [BUILTIN, installed]);
+  const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
+  try {
+    await choose(host, "YouTube");
+    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.4.0", "启用", "卸载…"]);
+    // Through the Versions tab, to 0.3.0 first.
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("installVersion", "0.3.0");
+    await until(host, () => host.osd.includes("已更新 YouTube 到 0.3.0（仍停用）"), "still disabled");
+    await until(host, () => !store.busy);
+    assert.deepEqual(
+      host.packageCalls.map((c) => [c.method, c.id, (c as { enabled?: boolean }).enabled]),
+      [
+        ["install", "zysilm.youtube", undefined],
+        ["setEnabled", "zysilm.youtube", false],
+      ],
+    );
+    assert.equal(state(), "disabled");
+    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.4.0", "启用", "卸载…"]);
+
+    // The player refuses to disable it: the update stands, the status line says so.
+    host.handle("packages.setEnabled", () => {
+      throw new HostError("busy", "reloading");
+    });
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("act", "update");
+    await until(host, () => host.osd.some((text) => text.startsWith("已更新 YouTube 到 0.4.0，但未能保持停用：")), "failure reported");
+    await until(host, () => !store.busy);
+    assert.equal(props(host)["status-warn"], true);
+    assert.equal(state(), "running");
+  } finally {
+    await stop();
+  }
+});
+
 test("third-party repository: warning banner, unofficial confirmation, remote README images blocked until asked", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [YT]);

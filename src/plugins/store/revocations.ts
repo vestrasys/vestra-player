@@ -45,6 +45,17 @@ export class Revocations {
     return revocationKey(item.repo!.url, item.id, item.installed!.version ?? "", item.revocation!.versions);
   }
 
+  /**
+   * The store disabled this revoked version and the user has not accepted it
+   * since: updating it to the fixed version enables it again (the notice's
+   * "You can update to x"), unlike a plugin the user disabled, which stays
+   * disabled after an update.
+   */
+  disabledByStore(item: Item): boolean {
+    if (item.state !== "revoked" || !item.repo || !item.revocation || !item.installed) return false;
+    return this.#state(this.#key(item)) === "disabled";
+  }
+
   /** After every refresh and install-library change. */
   async check(): Promise<void> {
     if (this.#running) {

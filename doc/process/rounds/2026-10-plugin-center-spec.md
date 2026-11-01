@@ -61,6 +61,8 @@ The icons come from the player's existing icon set if suitable ones exist (`doc/
 
 ### List rows
 
+> **Superseded by Store 0.2.9** (2026-11-01): an installed plugin's actions now keep one fixed order, Update / Disable·Enable / Uninstall…; the row button is the first of them, the `…` menu holds the rest plus Reload (not while disabled) and Open Data Folder, and the details page shows the same buttons, with Reload last only for a failed plugin. A plugin disabled before an update stays disabled. The table below is the original spec; see [store design §1.3 and §2.3](../../architecture/store-design.md).
+
 ```text
 [logo 32] Name                         version
           Author · Source / Built-in

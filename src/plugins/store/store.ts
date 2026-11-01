@@ -854,7 +854,7 @@ export class Store {
     );
   }
 
- /**
+  /**
    * A row's one button and its `…` menu by state (plugin-center spec, "List
    * rows"); `detail` words the install and update buttons with the version.
    * Built-ins have no button; their menu offers only Reload and Open Data
@@ -931,7 +931,7 @@ export class Store {
     return ref;
   }
 
- /**
+  /**
    * The detail's buttons in fixed places: [Update to x] [Disable | Enable]
    * [Uninstall…] for a third-party plugin, the same as its row's button and
    * menu, plus Reload last for a failed one (last, so disabling it moves
