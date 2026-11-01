@@ -11,92 +11,92 @@ msgstr ""
 msgid "Choose Logo Image"
 msgstr "Logobild auswählen"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Image too large (max 4096×4096, 16 MB)"
 msgstr "Bild zu groß (max. 4096×4096, 16 MB)"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Only PNG or JPEG images can be used"
 msgstr "Nur PNG- oder JPEG-Bilder können verwendet werden"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "The logo image cannot be read; using the default logo"
 msgstr "Das Logobild kann nicht gelesen werden; das Standardlogo wird verwendet"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Cannot read the selected image"
 msgstr "Das ausgewählte Bild kann nicht gelesen werden"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Using the custom logo"
 msgstr "Eigenes Logo wird verwendet"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Default logo restored"
 msgstr "Standardlogo wiederhergestellt"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Album cover for audio only: On"
 msgstr "Albumcover bei reinem Audio: Ein"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Album cover for audio only: Off"
 msgstr "Albumcover bei reinem Audio: Aus"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Logo when idle: On"
 msgstr "Logo im Leerlauf: Ein"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Logo when idle: Off"
 msgstr "Logo im Leerlauf: Aus"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Cover cache cleared"
 msgstr "Cover-Cache geleert"
 
-#: main.ts:227
+#: main.ts:229
 #, x-machine
 msgid "Show Album Cover for Audio Only"
 msgstr "Albumcover bei reinem Audio anzeigen"
 
-#: main.ts:235 main.ts:243 main.ts:251
+#: main.ts:237 main.ts:245
 #, x-machine
 msgid "Appearance"
 msgstr "Darstellung"
 
-#: main.ts:235
+#: main.ts:237
 #, x-machine
 msgid "Show Logo When Idle"
 msgstr "Logo im Leerlauf anzeigen"
 
-#: main.ts:243
+#: main.ts:245
 #, x-machine
 msgid "Choose Logo Image…"
 msgstr "Logobild auswählen…"
 
-#: main.ts:251
+#: main.ts:253
 #, x-machine
-msgid "Restore Default Logo"
-msgstr "Standardlogo wiederherstellen"
+msgid "Idle Logo"
+msgstr "Leerlauf-Logo"
 
-#: main.ts:255
+#: main.ts:257
 #, x-machine
 msgid "Using the default logo"
 msgstr "Standardlogo wird verwendet"
 
-#: main.ts:263 ui/page.slint:40
+#: main.ts:265 ui/page.slint:40
 #, x-machine
 msgid "Logo and Album Cover"
 msgstr "Logo und Albumcover"

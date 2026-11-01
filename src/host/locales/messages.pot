@@ -34,6 +34,11 @@ msgstr ""
 msgid "Settings"
 msgstr ""
 
+#. The top-level menu that gathers every reset-to-default command.
+#: src/commands.rs
+msgid "Reset"
+msgstr ""
+
 #: src/commands.rs:334
 msgid "Speed"
 msgstr ""

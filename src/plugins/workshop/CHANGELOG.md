@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.24
+
+- The vendored SDK is 1.5.51 (`npm run vendor:sdk`): the AI's documentation now has the `@reset` menu and the built-in reset commands under **Reset**. No change to the plugin's own behaviour.
+
 ## 2.2.23
 
 - The AI reads the SDK documentation with two new tools, `docs(path)` and `docs_search(query)`, backed by the SDK's documentation tree (`@vestra-player/sdk/docs`, SDK 1.5.50): pages read by path like `go doc`, from `/` (Overview, Guides, API) down to one declaration (`/API/Media/Snapshot/export`: signature, parameters, errors, capability, player version, examples), a name alone finding its declaration (`Snapshot.export`), a search by words whose best match comes first ("add a menu item" → `/API/Commands/Commands/add`), and every answer at most 8 KB with further pages on request (`page`). The system prompt tells the AI to start at `docs /`, drill down by path, search when unsure and read the vendored `.d.ts` only for exact types. The tools load the vendored SDK's copy (`vendor/@vestra-player/sdk/dist/docs.js`, which reads `dist/docs-tree.json.gz` next to it inside the plugin folder the agent process may read), so they work the same in the packaged player. The window names them "Docs" and "Search docs".

@@ -237,8 +237,8 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
     ["Crop/Stretch ▸ None", 405, "video-display", ""],
     ...ratios.map((r) => [`Crop/Stretch ▸ Stretch to ${r}`, 405, "video-display", ""]),
     ...ratios.map((r) => [`Crop/Stretch ▸ Crop to ${r}`, 405, "video-display", ""]),
-    ...["Reset Position", "Move Left", "Move Right", "Move Up", "Move Down"].map((t) => [`Crop/Stretch ▸ ${t}`, 405, "video-reframe-position", ""]),
-    ["Framing ▸ Reset Framing", 406, "video-display", "Numpad5,Alt+Backspace"],
+    ...["Move Left", "Move Right", "Move Up", "Move Down"].map((t) => [`Crop/Stretch ▸ ${t}`, 405, "video-reframe-position", ""]),
+    ["@reset", "Crop Position", 442, "reset-video", ""],
     ["Framing ▸ Zoom In", 406, "video-display", "Numpad9,Alt+Plus"],
     ["Framing ▸ Zoom Out", 406, "video-display", "Numpad1,Alt+-"],
     ["Framing ▸ Pan →", 406, "video-frame-pan", "Ctrl+Numpad6,Alt+ArrowRight"],
@@ -246,6 +246,7 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
     ["Framing ▸ Pan ↑", 406, "video-frame-pan", "Ctrl+Numpad8,Alt+ArrowUp"],
     ["Framing ▸ Pan ↓", 406, "video-frame-pan", "Ctrl+Numpad2,Alt+ArrowDown"],
     ["Framing ▸ Center Frame", 406, "video-frame-pan", "Ctrl+Numpad5"],
+    ["@reset", "Framing", 441, "reset-video", "Numpad5,Alt+Backspace"],
     ["Image Processing ▸ Flip Vertically", 408, "video-effects", "Ctrl+P"],
     ["Image Processing ▸ Flip Horizontally", 408, "video-effects", "Ctrl+Z"],
     ["Image Processing ▸ Gaussian Blur", 408, "video-sharpness", "Ctrl+B"],
@@ -264,7 +265,7 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
     ["Rotation ▸ 180°", 409, "video-effects", ""],
     ["Rotation ▸ 270°", 409, "video-effects", ""],
     ["Picture Adjustments…", 440, "video-color", ""],
-    ["Reset", 441, "video-color", "Q"],
+    ["@reset", "Picture", 440, "reset-video", "Q"],
     ["Brightness -1%", 442, "video-color", "W"],
     ["Brightness +1%", 443, "video-color", "E"],
     ["Contrast -1%", 444, "video-color", "R"],
@@ -277,7 +278,8 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
   ];
   assert.deepEqual(
     declared,
-    expected.map((row) => ["@video", ...row]),
+    // The resets are in the Reset menu (user ruling 2026-11-01), with the same ids and keys.
+    expected.map((row) => (row[0] === "@reset" ? row : ["@video", ...row])),
   );
   assert.deepEqual(host.conflicts, []);
   await host.settle();
@@ -337,8 +339,8 @@ test("Simplified Chinese: the 视频 menu shows the titles of before", async () 
       "裁剪/拉伸 ▸ 不使用",
       ...ratios.map((r) => `裁剪/拉伸 ▸ 按 ${r} 拉伸`),
       ...ratios.map((r) => `裁剪/拉伸 ▸ 按 ${r} 裁剪`),
-      ...["位置复位", "左移", "右移", "上移", "下移"].map((t) => `裁剪/拉伸 ▸ ${t}`),
-      "帧位 ▸ 帧位复位",
+      ...["左移", "右移", "上移", "下移"].map((t) => `裁剪/拉伸 ▸ ${t}`),
+      "复位 ▸ 裁剪位置",
       "帧位 ▸ 全帧 +",
       "帧位 ▸ 全帧 -",
       "帧位 ▸ 偏移 →",
@@ -346,13 +348,14 @@ test("Simplified Chinese: the 视频 menu shows the titles of before", async () 
       "帧位 ▸ 偏移 ↑",
       "帧位 ▸ 偏移 ↓",
       "帧位 ▸ 帧位居中",
+      "复位 ▸ 帧位",
       ...["上下翻转", "左右翻转", "高斯模糊", "锐化", "边缘锐化", "去块", "消色带", "3D 降噪", "渐进降噪", "瞬态降噪", "倍帧", "运动补偿"].map((t) => `图像处理 ▸ ${t}`),
       ...["按序切换", "不旋转", "90°", "180°", "270°"].map((t) => `图像旋转 ▸ ${t}`),
       "画面调节…",
-      "复位",
+      "复位 ▸ 画面",
       ...["亮度", "对比度", "饱和度", "色调"].flatMap((t) => [`${t} -1%`, `${t} +1%`]),
       "GPU 渲染（实验性）",
-    ].map((path) => `视频 ▸ ${path}`),
+    ].map((path) => (path.startsWith("复位 ▸ ") ? path : `视频 ▸ ${path}`)),
   );
   // The player translates the reason with the plugin's catalog.
   assert.equal(host.translate(host.command("video.aspect.custom").state.reason!), "先用「自定义比例…」输入");
@@ -529,6 +532,70 @@ test("Reset (Q) removes the eq node; so does the menu command", async () => {
   await host.command("video.deinterlace.off").run();
   await host.settle();
   assert.deepEqual(chain(host), []);
+  await stop();
+});
+
+test("Reset (Q) also turns every image-processing switch off, keeps strengths and geometry, and empties the chain", async () => {
+  await withData(async (data) => {
+    const host = new TestHost();
+    setFps(host, 24);
+    host.openElsewhere("/movie.mp4");
+    const { stop } = await start(host, data);
+    await host.command("video.picture").run();
+    const window = host.window("picture");
+    await host.command("video.deinterlace.off").run();
+    await host.command("video.reframe.crop.1").run();
+    await host.press("Ctrl+P");
+    await host.press("E");
+    await host.press("Ctrl+B");
+    for (const id of ["video.sharpen", "video.edge", "video.denoise.d3", "video.denoise.gradual", "video.denoise.temporal", "video.deblock", "video.deband", "video.frame-blend"])
+      await host.command(id).run();
+    window.emit("commit", "denoise", 90);
+    await until(host, blendNode(host, 48), "the 24 fps rate read");
+    assert.deepEqual(kinds(host), ["reframe", "transform", "denoise", "denoise", "denoise", "deblock", "deband", "eq", "sharpen", "sharpen", "gblur", "frameBlend"]);
+    await host.press("Q");
+    await host.settle();
+    assert.equal(host.osd.at(-1), "Picture reset; image processing off");
+    assert.deepEqual(kinds(host), ["reframe", "transform"], "flip and crop have their own resets");
+    for (const id of ["video.gaussian", "video.sharpen", "video.edge", "video.denoise.d3", "video.denoise.gradual", "video.denoise.temporal", "video.deblock", "video.deband", "video.frame-blend"])
+      assert.equal(host.command(id).state.checked, false, id);
+    assert.equal(host.command("video.flip.vertical").state.checked, true);
+    assert.equal(window.props["denoise-enabled"], false);
+    assert.equal(window.props["blend-enabled"], false);
+    assert.equal(window.props["denoise-strength"], 90, "off keeps the strength");
+    // Nothing of this plugin left on: no filter, so zero-copy decoding can resume.
+    await host.press("Ctrl+P");
+    await host.command("video.reframe.none").run();
+    await host.settle();
+    assert.deepEqual(chain(host), []);
+    // A switch turned back on comes back at its strength; a second Q with nothing on says the short text.
+    await host.press("Ctrl+N");
+    await host.settle();
+    assert.equal(chain(host)[0]!.lumaSpatial, 9);
+    await host.press("Q");
+    await host.press("Q");
+    await host.settle();
+    assert.equal(host.osd.at(-1), "Picture reset");
+    await stop();
+    const saved = JSON.parse(await readFile(join(data, "settings.json"), "utf8"));
+    assert.equal(saved.effects.denoise.d3.on, false, "the reset is saved");
+    assert.equal(saved.effects.denoise.d3.strength, 90);
+    assert.equal(saved.effects.frameBlend, false);
+  });
+});
+
+test("Reset (Q) turns motion interpolation off too, with the translated text", async () => {
+  const host = new TestHost();
+  host.openElsewhere("/movie.mp4");
+  const { stop } = await start(host, undefined, zh);
+  await host.command("video.interpolation").run();
+  await host.settle();
+  assert.equal(host.videoRender.values.interpolation, true);
+  await host.press("Q");
+  await host.settle();
+  assert.equal(host.osd.at(-1), "画面调节已复位，图像处理已关闭");
+  assert.equal(host.videoRender.values.interpolation, false);
+  assert.equal(host.command("video.interpolation").state.checked, false);
   await stop();
 });
 

@@ -404,8 +404,11 @@ fn local_id(value: &str) -> Result<()> {
 ///
 /// A top-level submenu with one of these keys sits at this order, not at its
 /// first command: a plugin item inside cannot move the menu.
-/// doc/product/menus.md lists the orders.
-pub const MENU_ANCHORS: [(&str, &str, i32); 7] = [
+/// doc/product/menus.md lists the orders. Reset (`@reset`) gathers every
+/// reset-to-default command, directly below Settings and in its separator
+/// group (`SHARES_GROUP_WITH`); like every built-in menu it shows only once
+/// a command is in it.
+pub const MENU_ANCHORS: [(&str, &str, i32); 8] = [
     ("open", "Open", 110),
     ("playback", "Playback", 200),
     ("subtitles", "Subtitles", 300),
@@ -413,7 +416,13 @@ pub const MENU_ANCHORS: [(&str, &str, i32); 7] = [
     ("audio", "Audio", 500),
     ("screen", "Screen", 710),
     ("settings", "Settings", 830),
+    ("reset", "Reset", 840),
 ];
+
+/// Built-in top-level menus drawn in the separator group of another (key,
+/// key it joins): Reset belongs with Settings, whatever groups the commands
+/// inside either declare.
+const SHARES_GROUP_WITH: [(&str, &str); 1] = [("Reset", "Settings")];
 
 /// The player's Chinese menu titles from before English keys (players up
 /// to 0.4.2): a plugin that still declares one lands in the same menu.
@@ -446,6 +455,7 @@ pub fn host_group_label(path: &[String]) -> Option<String> {
         ["Audio"] => tr("Audio"),
         ["Screen"] => tr("Screen"),
         ["Settings"] => tr("Settings"),
+        ["Reset"] => tr("Reset"),
         ["Playback", "Speed"] => tr("Speed"),
         ["Playback", "Seek"] => tr("Seek"),
         _ => return None,
@@ -1130,7 +1140,30 @@ fn tree(entries: &[&CommandSnapshot], depth: usize, appended: bool) -> Vec<MenuN
         ));
     }
     nodes.sort_by(|a, b| a.0.cmp(&b.0));
-    nodes.into_iter().map(|(_, node)| node).collect()
+    let mut nodes: Vec<MenuNode> = nodes.into_iter().map(|(_, node)| node).collect();
+    if depth == 0 {
+        share_groups(&mut nodes);
+    }
+    nodes
+}
+
+/// A top-level built-in menu in `SHARES_GROUP_WITH` takes the separator
+/// group of the menu it joins, when that menu is shown.
+fn share_groups(nodes: &mut [MenuNode]) {
+    for (key, joins) in SHARES_GROUP_WITH {
+        let shared = nodes.iter().find_map(|node| match node {
+            MenuNode::Group { title, group, .. } if title == joins => Some(group.clone()),
+            _ => None,
+        });
+        let Some(shared) = shared else { continue };
+        for node in nodes.iter_mut() {
+            if let MenuNode::Group { title, group, .. } = node
+                && title == key
+            {
+                *group = shared.clone();
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1458,7 +1491,7 @@ mod tests {
             registry.get(3, "at").unwrap().declaration.path,
             ["Audio", "@home", "X"]
         );
-        assert_eq!(MENU_ANCHORS.len(), 7);
+        assert_eq!(MENU_ANCHORS.len(), 8);
     }
 
     /// A plugin item in a built-in menu, with no `order` (0), does not move
@@ -1524,6 +1557,86 @@ mod tests {
                 "▸Settings",
                 "X",
             ]
+        );
+    }
+
+    /// `@reset` sits directly below Settings and in its separator group,
+    /// whatever its items declare; with no item in it, it is not shown.
+    #[test]
+    fn reset_follows_settings_in_its_group_and_hides_when_empty() {
+        let mut registry = Registry::new();
+        let add = |registry: &mut Registry, id: &str, path: &[&str], order, group: &str| {
+            let mut declaration = ordered(path, order);
+            declaration.group = group.into();
+            registry
+                .register(1, "m", id.into(), 1, declaration, state(true))
+                .unwrap();
+        };
+        add(&mut registry, "store", &["Plugin Store…"], 822, "windows");
+        add(
+            &mut registry,
+            "options",
+            &["@settings", "Options…"],
+            830,
+            "settings-main",
+        );
+        add(&mut registry, "about", &["About…"], 880, "windows");
+        let shown = |registry: &Registry| {
+            registry
+                .snapshot()
+                .roots
+                .iter()
+                .map(|node| match node {
+                    MenuNode::Group { title, group, .. } => format!("▸{title}:{group}"),
+                    MenuNode::Command { entry } => {
+                        format!("{}:{}", entry.declaration.title, entry.declaration.group)
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            shown(&registry),
+            [
+                "Plugin Store…:windows",
+                "▸Settings:settings-main",
+                "About…:windows"
+            ]
+        );
+        add(
+            &mut registry,
+            "picture",
+            &["@reset", "Picture"],
+            100,
+            "reset-video",
+        );
+        add(
+            &mut registry,
+            "sync",
+            &["Reset", "Subtitle Sync"],
+            300,
+            "reset-subtitles",
+        );
+        assert_eq!(
+            shown(&registry),
+            [
+                "Plugin Store…:windows",
+                "▸Settings:settings-main",
+                "▸Reset:settings-main",
+                "About…:windows",
+            ]
+        );
+        let roots = registry.snapshot().roots;
+        let MenuNode::Group {
+            label, children, ..
+        } = &roots[2]
+        else {
+            panic!("Reset is a submenu");
+        };
+        assert_eq!(label, "Reset");
+        // Inside, the items keep their own groups (separators between domains).
+        assert_eq!(
+            children.iter().map(MenuNode::group).collect::<Vec<_>>(),
+            ["reset-video", "reset-subtitles"]
         );
     }
 

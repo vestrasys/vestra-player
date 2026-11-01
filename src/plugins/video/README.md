@@ -15,7 +15,8 @@ Adjusts the picture's color, effects, aspect ratio and how it is shown.
 
 ## Entries
 
-- Right-click menu Video: Pixel Shaders, Deinterlace (Ctrl+I), Aspect (Shift+F6), Crop/Stretch, Framing, Image Processing, Rotation (Alt+K), Picture Adjustments…, Reset (Q), GPU Rendering (Experimental).
+- Right-click menu Video: Pixel Shaders, Deinterlace (Ctrl+I), Aspect (Shift+F6), Crop/Stretch, Framing, Image Processing, Rotation (Alt+K), Picture Adjustments…, GPU Rendering (Experimental).
+- Right-click menu Reset: Picture (Q), Framing (Numpad5, Alt+Backspace), Crop Position.
 - Brightness W/E, contrast R/T, saturation Y/U, hue I/O.
 - The Picture Adjustments… window has four tabs: Color, Effects, Picture, Advanced.
 

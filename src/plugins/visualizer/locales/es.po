@@ -11,92 +11,92 @@ msgstr ""
 msgid "Choose Logo Image"
 msgstr "Elegir imagen del logotipo"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Image too large (max 4096×4096, 16 MB)"
 msgstr "Imagen demasiado grande (máx. 4096×4096, 16 MB)"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Only PNG or JPEG images can be used"
 msgstr "Solo se pueden usar imágenes PNG o JPEG"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "The logo image cannot be read; using the default logo"
 msgstr "No se puede leer la imagen del logotipo; se usa el logotipo predeterminado"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Cannot read the selected image"
 msgstr "No se puede leer la imagen seleccionada"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Using the custom logo"
 msgstr "Se usa el logotipo personalizado"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Default logo restored"
 msgstr "Se restauró el logotipo predeterminado"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Album cover for audio only: On"
 msgstr "Portada del álbum para solo audio: activada"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Album cover for audio only: Off"
 msgstr "Portada del álbum para solo audio: desactivada"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Logo when idle: On"
 msgstr "Logotipo en reposo: activado"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Logo when idle: Off"
 msgstr "Logotipo en reposo: desactivado"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Cover cache cleared"
 msgstr "Se vació la caché de portadas"
 
-#: main.ts:227
+#: main.ts:229
 #, x-machine
 msgid "Show Album Cover for Audio Only"
 msgstr "Mostrar portada del álbum para solo audio"
 
-#: main.ts:235 main.ts:243 main.ts:251
+#: main.ts:237 main.ts:245
 #, x-machine
 msgid "Appearance"
 msgstr "Apariencia"
 
-#: main.ts:235
+#: main.ts:237
 #, x-machine
 msgid "Show Logo When Idle"
 msgstr "Mostrar logotipo en reposo"
 
-#: main.ts:243
+#: main.ts:245
 #, x-machine
 msgid "Choose Logo Image…"
 msgstr "Elegir imagen del logotipo…"
 
-#: main.ts:251
+#: main.ts:253
 #, x-machine
-msgid "Restore Default Logo"
-msgstr "Restaurar logotipo predeterminado"
+msgid "Idle Logo"
+msgstr "Logotipo en reposo"
 
-#: main.ts:255
+#: main.ts:257
 #, x-machine
 msgid "Using the default logo"
 msgstr "Se usa el logotipo predeterminado"
 
-#: main.ts:263 ui/page.slint:40
+#: main.ts:265 ui/page.slint:40
 #, x-machine
 msgid "Logo and Album Cover"
 msgstr "Logotipo y portada del álbum"

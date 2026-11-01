@@ -11,7 +11,7 @@ The product's context menu tree is merged from the commands registered by each o
 The labels below are the English interface text (the English source text of each string); the Simplified Chinese interface shows the translations from the `zh-Hans.po` catalogs.
 
 - Order is ascending by declared `order`; for equal `order`, by plugin id, then registration order. A submenu takes the smallest `order` among its items, and a group (`group`) takes the group of its first item.
-- Exception: the positions of the 7 built-in top-level menus (`@open` … `@settings`) are fixed and do not follow the commands inside them: Open 110, Playback 200, Subtitles 300, Video 400, Audio 500, Screen 710, Settings 830 (`MENU_ANCHORS` in `src/host/src/commands.rs`). A plugin writing `["@video", …]`, the English key `["Video", …]` or the old Chinese title `["视频", …]` (Video) cannot move it. In the level directly below a built-in menu, items with `order` 0 (the plugin omitted `order`) come last ([Order and separators](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_key_bindings.html#order-and-separators)); built-in commands at that level all use an `order` of 100 or more, never 0. To change the top-level position of a built-in menu, change this table, not the commands' `order`.
+- Exception: the positions of the 8 built-in top-level menus (`@open` … `@settings`, `@reset`) are fixed and do not follow the commands inside them: Open 110, Playback 200, Subtitles 300, Video 400, Audio 500, Screen 710, Settings 830, Reset 840 (`MENU_ANCHORS` in `src/host/src/commands.rs`). Reset also takes Settings' separator group whatever its items declare (`SHARES_GROUP_WITH`), so it sits directly below Settings with no separator between them; like every built-in menu it is not shown while no command is in it. A plugin writing `["@video", …]`, the English key `["Video", …]` or the old Chinese title `["视频", …]` (Video) cannot move it. In the level directly below a built-in menu, items with `order` 0 (the plugin omitted `order`) come last ([Order and separators](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_key_bindings.html#order-and-separators)); built-in commands at that level all use an `order` of 100 or more, never 0. To change the top-level position of a built-in menu, change this table, not the commands' `order`.
 - "Plugin" column: "core" is a host core action (`host/<id>`), "host" is the host's own command.
 - Top-level separators are drawn as "——" rows (two adjacent items with different `group`). Inside a submenu a separator is also drawn between adjacent items with different `group`; the table does not draw each one.
 - Shortcuts work in the global scope (when the video area, bottom bar or sidebar has focus; not inside tool windows). Shortcuts written with `Ctrl` can be triggered on macOS by both ⌃ and ⌘. Users can rebind them in "Settings ▸ Keyboard Shortcuts…", or turn off all default bindings with "Ignore Default Shortcuts".
@@ -86,10 +86,10 @@ The labels below are the English interface text (the English source text of each
 | Subtitles ▸ Secondary Subtitle ▸ Position ▸ Top · Above Main Subtitle | subtitles | | Radio |
 | Subtitles ▸ Subtitle Style ▸ Bold | subtitles | Alt+B | Checked |
 | Subtitles ▸ Subtitle Style ▸ Size + · Size − | subtitles | Alt+PgUp · Alt+PgDn | |
-| Subtitles ▸ Subtitle Style ▸ Move Up · Move Down · Reset Position | subtitles | none · none · Alt+Home | Move Up/Down have no default key (user ruling 2026-10-27, see Conflict check) |
+| Subtitles ▸ Subtitle Style ▸ Move Up · Move Down | subtitles | | No default key (user ruling 2026-10-27, see Conflict check); the reset is Reset ▸ Subtitle Position |
 | Subtitles ▸ Subtitle Style ▸ Shadow · Opaque Box | subtitles | | Checked |
 | Subtitles ▸ Original ASS/SSA Styles | subtitles | | Checked |
-| Subtitles ▸ Sync ▸ Earlier 0.5 s · Later 0.5 s · Reset | subtitles | `.` · `,` · `/` | |
+| Subtitles ▸ Sync ▸ Earlier 0.5 s · Later 0.5 s | subtitles | `.` · `,` | The reset is Reset ▸ Subtitle Sync |
 | Subtitles ▸ Sync ▸ Adjust Sync… | subtitles | | |
 | Subtitles ▸ Online Subtitles ▸ Search and Download Subtitles… · Online Subtitle Settings… | subtitle-online | | |
 | Subtitles ▸ Reload Subtitles | subtitles | Ctrl+Alt+Y | |
@@ -109,11 +109,10 @@ The labels below are the English interface text (the English source text of each
 | Video ▸ Aspect ▸ Default (Source) · 4:3 · 16:9 · 16:10 · 1.85:1 · 2.35:1 · Custom (x:y) | video | | Radio; "Custom" is disabled until a ratio has been entered, after which its title becomes e.g. "Custom (21:9)" |
 | Video ▸ Aspect ▸ Custom Aspect Ratio… | video | | |
 | Video ▸ Crop/Stretch ▸ None · Stretch to 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 · Crop to the same 5 ratios | video | | Radio |
-| Video ▸ Crop/Stretch ▸ Reset Position · Move Left · Move Right · Move Up · Move Down | video | | |
-| Video ▸ Framing ▸ Reset Framing | video | Numpad5, Alt+Backspace | |
+| Video ▸ Crop/Stretch ▸ Move Left · Move Right · Move Up · Move Down | video | | The reset is Reset ▸ Crop Position |
 | Video ▸ Framing ▸ Zoom In · Zoom Out | video | Numpad9, Alt+Plus · Numpad1, Alt+- | |
 | Video ▸ Framing ▸ Pan → · ← · ↑ · ↓ | video | Ctrl+Numpad6, Alt+→ · Ctrl+Numpad4, Alt+← · Ctrl+Numpad8, Alt+↑ · Ctrl+Numpad2, Alt+↓ | |
-| Video ▸ Framing ▸ Center Frame | video | Ctrl+Numpad5 | |
+| Video ▸ Framing ▸ Center Frame | video | Ctrl+Numpad5 | Pan only; the full reset is Reset ▸ Framing |
 | Video ▸ Image Processing ▸ Flip Vertically · Flip Horizontally | video | Ctrl+P · Ctrl+Z | Checked |
 | Video ▸ Image Processing ▸ Gaussian Blur · Sharpen · Edge Sharpen | video | Ctrl+B · Ctrl+R · none | Checked |
 | Video ▸ Image Processing ▸ Deblock · Deband · 3D Denoise · Gradual Denoise · Temporal Denoise | video | Ctrl+H · none · Ctrl+N · none · Ctrl+M | Checked |
@@ -130,7 +129,6 @@ The labels below are the English interface text (the English source text of each
 | Video ▸ Snapshot ▸ Snapshot Settings… | capture | | |
 | Video ▸ Snapshot ▸ Snapshot Folder… · Open Snapshot Folder | capture | | |
 | Video ▸ Picture Adjustments… | video | | |
-| Video ▸ Reset | video | Q | |
 | Video ▸ Brightness −1% · +1% | video | W · E | |
 | Video ▸ Contrast −1% · +1% | video | R · T | |
 | Video ▸ Saturation −1% · +1% | video | Y · U | |
@@ -147,10 +145,9 @@ The labels below are the English interface text (the English source text of each
 | Audio ▸ Output Device ▸ (one item per output device) | audio | | Radio; dynamic; disconnected devices are greyed out ("Device not connected"); with no devices shows a greyed-out "No Output Devices" |
 | Audio ▸ Equalizer | audio | Shift+E | Checked |
 | Audio ▸ Preset ▸ Flat · Voice · Music · Cinema | audio | | Radio |
-| Audio ▸ Audio Sync ▸ 50 ms Earlier · 50 ms Later · Reset | audio | `>` · `<` · `?` | |
+| Audio ▸ Audio Sync ▸ 50 ms Earlier · 50 ms Later | audio | `>` · `<` | The reset is Reset ▸ Audio Sync |
 | Audio ▸ Audio Sync ▸ Don't Keep · Keep for This Run · Always Keep | audio | | Radio |
 | Audio ▸ Processing ▸ Normalize · Crystalizer | audio | Shift+N · Shift+C | Checked |
-| Audio ▸ Reset | audio | | |
 | Audio ▸ Show Album Cover for Audio Only | visualizer | | Checked |
 | Games ▸ (appears only when a plugin adds items, e.g. VestraNES ▸ Load ROM… · Stop · VestraNES Window…) | third-party | | The built-in NES emulator left the player on 2026-10-27 (user ruling) |
 | —— | | | |
@@ -175,11 +172,31 @@ The labels below are the English interface text (the English source text of each
 | Settings ▸ Ignore Default Shortcuts | hotkeys | | Checked |
 | Settings ▸ Appearance ▸ Vestra Dark · Vestra Light | preferences | | Radio (palette); `order` 840, 841. Dark is the default; with Light the video area stays dark |
 | Settings ▸ Appearance ▸ Show Logo When Idle | visualizer | | Checked |
-| Settings ▸ Appearance ▸ Choose Logo Image… · Restore Default Logo | visualizer | | "Restore Default Logo" is disabled while the default logo is in use |
+| Settings ▸ Appearance ▸ Choose Logo Image… | visualizer | | The default logo comes back with Reset ▸ Idle Logo |
+| Reset ▸ (every reset-to-default command) | subtitles · video · audio · visualizer | | Directly below Settings, in its group; items in [Reset submenu](#reset-submenu) |
 | —— | | | |
 | About Vestra Player… | info | F1 | |
 | —— | | | |
 | Quit | host | Cmd+Q (shown on macOS; on Windows and Linux the menu shows no shortcut, the close button and Alt+F4 quit) | key `Quit` |
+
+### Reset submenu
+
+User ruling 2026-11-01: every reset-to-default command is gathered in one top-level **Reset ▸** submenu (`@reset`, host side in place, SDK 1.5.51), directly below Settings in the same group, so users do not hunt for resets through Video, Audio and Subtitles; the reset items elsewhere in the menus are removed (third-party plugins put theirs here too). Rules ([SDK guidelines: menus, Reset](https://vestrasys.github.io/vestra-player-sdk/documents/Menu_guidelines.html#reset)): the title names what is reset, without the word "Reset"; `order` in the domain's range and one group per domain (`reset-subtitles`, `reset-video`, `reset-audio`, …), so separators set the domains apart; command ids stay the same, so default keys and users' own keys keep working.
+
+Items (Subtitles 0.4.8, Video 1.1.9, Audio 1.5.7, Visualizer 0.1.8; `minPlayerVersion` 0.6.3), in menu order:
+
+| Menu path | Plugin | Shortcut | Notes |
+| --- | --- | --- | --- |
+| Reset ▸ Subtitle Position | subtitles | Alt+Home | `move-reset`, from Subtitles ▸ Subtitle Style ▸ Reset Position; `order` 330, group `reset-subtitles` |
+| Reset ▸ Subtitle Sync | subtitles | `/` | `sync-reset`, from Subtitles ▸ Sync ▸ Reset; 331, `reset-subtitles` |
+| Reset ▸ Picture | video | Q | `video.reset`, from Video ▸ Reset (brightness, contrast, saturation, hue and the other picture values); 440, `reset-video` |
+| Reset ▸ Framing | video | Numpad5, Alt+Backspace | `video.frame.reset`, from Video ▸ Framing ▸ Reset Framing; 441, `reset-video`. "Center Frame" (Ctrl+Numpad5, pan only) stays in Framing |
+| Reset ▸ Crop Position | video | | `video.reframe.reset`, from Video ▸ Crop/Stretch ▸ Reset Position; 442, `reset-video` |
+| Reset ▸ Audio Sync | audio | `?` | `audio.sync.reset`, from Audio ▸ Audio Sync ▸ Reset; 530, `reset-audio` |
+| Reset ▸ Audio Processing | audio | | `audio.reset`, from Audio ▸ Reset; 531, `reset-audio`. The processing only: equalizer on with all bands at 0 dB (Flat), Normalize and Crystalizer off; the audio sync and the channel mode are kept (they have their own items; up to Audio 1.5.6 this item reset them too). The Audio Workbench window's Reset button still resets everything in the window |
+| Reset ▸ Idle Logo | visualizer | | `reset-logo`, from Settings ▸ Appearance ▸ Restore Default Logo; 850, `reset-appearance`; disabled while the default logo is in use |
+
+Not resets, staying where they are: Playback ▸ Speed ▸ Normal (Z) and the other "default" radios (Aspect ▸ Default (Source), Crop/Stretch ▸ None, Rotation ▸ No Rotation, Audio ▸ Preset ▸ Flat, Audio Sync ▸ Don't Keep) pick one value among others; A-B Loop ▸ Clear Start/End Point, Recently Played ▸ Clear Entries · Remove Invalid Entries and Resume Playback ▸ Clear All Saved Positions remove what the user made; Ignore Default Shortcuts is a toggle.
 
 Global keys not in the menu: Shift+Tab brief info (info). Esc is Toggle Fullscreen's (above): a menu, dialog or text field that handles Esc keeps it; otherwise it enters or leaves fullscreen.
 

@@ -74,13 +74,13 @@ test("menu under Audio follows the allocation, and editing commands wait for a s
       ...presets.map((p) => [`@audio ▸ Preset ▸ ${p.label}`, 514, "audio-eq", "", true, false]),
       ["@audio ▸ Audio Sync ▸ 50 ms Earlier", 515, "audio-eq", ">", false, true],
       ["@audio ▸ Audio Sync ▸ 50 ms Later", 515, "audio-eq", "<", false, true],
-      ["@audio ▸ Audio Sync ▸ Reset", 515, "audio-eq", "?", false, true],
+      ["@reset ▸ Audio Sync", 530, "reset-audio", "?", false, true],
       ["@audio ▸ Audio Sync ▸ Don't Keep", 515, "audio-sync-keep", "", true, false],
       ["@audio ▸ Audio Sync ▸ Keep for This Run", 515, "audio-sync-keep", "", true, false],
       ["@audio ▸ Audio Sync ▸ Always Keep", 515, "audio-sync-keep", "", true, false],
       ["@audio ▸ Processing ▸ Normalize", 516, "audio-eq", "Shift+N", false, false],
       ["@audio ▸ Processing ▸ Crystalizer", 516, "audio-eq", "Shift+C", false, false],
-      ["@audio ▸ Reset", 517, "audio-eq", "", false, false],
+      ["@reset ▸ Audio Processing", 531, "reset-audio", "", false, false],
       ["@audio ▸ Audio Track ▸ No Audio Tracks", 511, "audio-tools", "", false, false],
       ["@audio ▸ Output Device ▸ No Output Devices", 512, "audio-tools", "", false, false],
     ],
@@ -204,8 +204,42 @@ test("presets change the EQ only and the window follows them after a drag; reset
   window.emit("delay-changed", 40);
   await host.settle();
   await host.command("audio.reset").run();
+  await host.settle();
+  assert.equal(own(host)?.offsetMs, 40, "Reset ▸ Audio Processing leaves the sync alone");
+  assert.equal(window.props["delay-ms"], 40);
+  await host.command("audio.sync.reset").run();
+  await host.settle();
   assert.equal(own(host)?.offsetMs ?? 0, 0);
   assert.equal(window.props["delay-ms"], 0);
+  await stop();
+});
+
+test("Reset ▸ Audio Processing clears the equalizer, Normalize and Crystalizer, and keeps the sync and the channels", async () => {
+  const host = new TestHost();
+  host.stats = { ...host.stats, audio: { codec: "aac", sampleRate: 48000, channels: 6, decoder: "aac", format: "floatp", channelLayout: "5.1", bitrate: null } };
+  const { window, stop } = await open(host);
+  await host.settle();
+  await host.command("audio.channels.left").run();
+  await host.command("audio.preset.2").run();
+  await host.press("Shift+E"); // equalizer bypassed, gains kept
+  await host.press("Shift+N");
+  await host.press("Shift+C");
+  window.emit("delay-changed", 120);
+  await host.settle();
+  assert.equal(host.command("audio.equalizer").state.checked, false);
+  assert.deepEqual((own(host)?.nodes as { kind: string }[]).map((n) => n.kind), ["channels", "treble", "dynaudnorm"]);
+  await host.command("audio.reset").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "Audio processing reset");
+  assert.deepEqual(own(host)?.nodes, [{ kind: "channels", mode: "left" }]);
+  assert.equal(own(host)?.offsetMs, 120);
+  assert.equal(host.command("audio.channels.left").state.checked, true);
+  assert.equal(host.command("audio.equalizer").state.checked, true);
+  assert.equal(host.command("audio.normalize").state.checked, false);
+  assert.equal(host.command("audio.clarity").state.checked, false);
+  assert.equal(host.command("audio.preset.0").state.checked, true);
+  assert.deepEqual(window.props["gain-values"], [0, 0, 0, 0, 0, 0]);
+  assert.equal(window.props["delay-ms"], 120);
   await stop();
 });
 
@@ -962,13 +996,13 @@ test("zh-Hans: the menu, its reasons and the on-screen messages read as before t
       ...["平直", "人声", "音乐", "影院"].map((label) => `声音 ▸ 预设 ▸ ${label}`),
       "声音 ▸ 声音同步 ▸ 超前 50 毫秒",
       "声音 ▸ 声音同步 ▸ 滞后 50 毫秒",
-      "声音 ▸ 声音同步 ▸ 复位",
+      "复位 ▸ 声音同步",
       "声音 ▸ 声音同步 ▸ 不保持",
       "声音 ▸ 声音同步 ▸ 本次运行内保持",
       "声音 ▸ 声音同步 ▸ 始终保持",
       "声音 ▸ 声音处理 ▸ 规格化",
       "声音 ▸ 声音处理 ▸ 晶化",
-      "声音 ▸ 复位",
+      "复位 ▸ 声音处理",
       "声音 ▸ 音轨 ▸ 没有音轨",
       "声音 ▸ 输出设备 ▸ 系统默认",
       "声音 ▸ 输出设备 ▸ MacBook Air 扬声器",

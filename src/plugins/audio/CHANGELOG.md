@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.7
+
+- The audio resets moved to the player's **Reset** menu (below Settings, player 0.6.3; user ruling 2026-11-01): **Reset ▸ Audio Sync** (was Audio ▸ Audio Sync ▸ Reset, `?`) and **Reset ▸ Audio Processing** (was Audio ▸ Reset). The command ids (`audio.sync.reset`, `audio.reset`) and the default key are the same, so keys a user bound to them keep working.
+- **Reset ▸ Audio Processing** now resets the processing only: the equalizer (back on, all bands 0 dB, so the Flat preset), Normalize and Crystalizer (off, at the default 3 dB). It no longer zeroes the audio sync or sets the channels back to Stereo: the sync has its own reset, and the channels are a choice in Audio Track ▸ like the other radio items. Who must change: nobody; a user who relied on the old item to clear the sync too uses Reset ▸ Audio Sync (`?`). The window's Reset button is unchanged and still resets the whole window (sync and channels included).
+- Requires player 0.6.3 (`minPlayerVersion`), whose menus have the Reset menu.
+
 ## 1.5.6
 
 - A track with a long title no longer breaks the Audio Track menu. The menu item was cut to 60 characters, but the player takes at most 80 bytes per menu item: 60 Chinese or Japanese characters are 180 bytes, so the player refused the item, and while the plugin was starting this could stop the whole plugin. Now the label is cut by bytes so that it fits in every language of the plugin with " (external)" added (the widest is the Japanese and Chinese "（外部）", 12 bytes), on whole characters: an emoji sequence, a flag or an accented letter is kept or dropped as one (on a runtime without `Intl.Segmenter`, on whole code points). The text is at most 68 bytes; the language (up to 16 bytes) and codec (up to 24) are cut first on their own, so "[jpn] (aac)" is always kept, and the title gets the rest ("1. 日本語吹き替え版日本語吹き替え版… [jpn] (aac)"); before, the codec went first. The window's Track list and the "Audio track: …" on-screen message show the same shortened text as the menu. Who must change: nobody. What users see: every track shows up; long titles are a little shorter in the menu, the window's Track list and the on-screen message.

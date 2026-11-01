@@ -11,92 +11,92 @@ msgstr ""
 msgid "Choose Logo Image"
 msgstr "로고 이미지 선택"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Image too large (max 4096×4096, 16 MB)"
 msgstr "이미지가 너무 큽니다 (최대 4096×4096, 16MB)"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Only PNG or JPEG images can be used"
 msgstr "PNG 또는 JPEG 이미지만 사용할 수 있습니다"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "The logo image cannot be read; using the default logo"
 msgstr "로고 이미지를 읽을 수 없어 기본 로고를 사용합니다"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Cannot read the selected image"
 msgstr "선택한 이미지를 읽을 수 없습니다"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Using the custom logo"
 msgstr "사용자 지정 로고를 사용합니다"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Default logo restored"
 msgstr "기본 로고를 복원했습니다"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Album cover for audio only: On"
 msgstr "오디오 전용일 때 앨범 커버: 켬"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Album cover for audio only: Off"
 msgstr "오디오 전용일 때 앨범 커버: 끔"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Logo when idle: On"
 msgstr "대기 중 로고: 켬"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Logo when idle: Off"
 msgstr "대기 중 로고: 끔"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Cover cache cleared"
 msgstr "커버 캐시를 지웠습니다"
 
-#: main.ts:227
+#: main.ts:229
 #, x-machine
 msgid "Show Album Cover for Audio Only"
 msgstr "오디오 전용일 때 앨범 커버 표시"
 
-#: main.ts:235 main.ts:243 main.ts:251
+#: main.ts:237 main.ts:245
 #, x-machine
 msgid "Appearance"
 msgstr "모양"
 
-#: main.ts:235
+#: main.ts:237
 #, x-machine
 msgid "Show Logo When Idle"
 msgstr "대기 중 로고 표시"
 
-#: main.ts:243
+#: main.ts:245
 #, x-machine
 msgid "Choose Logo Image…"
 msgstr "로고 이미지 선택…"
 
-#: main.ts:251
+#: main.ts:253
 #, x-machine
-msgid "Restore Default Logo"
-msgstr "기본 로고 복원"
+msgid "Idle Logo"
+msgstr "대기 화면 로고"
 
-#: main.ts:255
+#: main.ts:257
 #, x-machine
 msgid "Using the default logo"
 msgstr "기본 로고 사용 중"
 
-#: main.ts:263 ui/page.slint:40
+#: main.ts:265 ui/page.slint:40
 #, x-machine
 msgid "Logo and Album Cover"
 msgstr "로고 및 앨범 커버"

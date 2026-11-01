@@ -13,92 +13,92 @@ msgstr ""
 msgid "Choose Logo Image"
 msgstr "Choisir l'image du logo"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Image too large (max 4096×4096, 16 MB)"
 msgstr "Image trop grande (max. 4096×4096, 16 Mo)"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Only PNG or JPEG images can be used"
 msgstr "Seules les images PNG ou JPEG peuvent être utilisées"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "The logo image cannot be read; using the default logo"
 msgstr "Impossible de lire l'image du logo ; utilisation du logo par défaut"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Cannot read the selected image"
 msgstr "Impossible de lire l'image sélectionnée"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Using the custom logo"
 msgstr "Utilisation du logo personnalisé"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Default logo restored"
 msgstr "Logo par défaut rétabli"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Album cover for audio only: On"
 msgstr "Pochette d'album pour l'audio seul : activée"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Album cover for audio only: Off"
 msgstr "Pochette d'album pour l'audio seul : désactivée"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Logo when idle: On"
 msgstr "Logo sur l'écran d'attente : activé"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Logo when idle: Off"
 msgstr "Logo sur l'écran d'attente : désactivé"
 
-#: main.ts:66
+#: main.ts:68
 #, x-machine
 msgid "Cover cache cleared"
 msgstr "Cache des pochettes vidé"
 
-#: main.ts:227
+#: main.ts:229
 #, x-machine
 msgid "Show Album Cover for Audio Only"
 msgstr "Afficher la pochette d'album pour l'audio seul"
 
-#: main.ts:235 main.ts:243 main.ts:251
+#: main.ts:237 main.ts:245
 #, x-machine
 msgid "Appearance"
 msgstr "Apparence"
 
-#: main.ts:235
+#: main.ts:237
 #, x-machine
 msgid "Show Logo When Idle"
 msgstr "Afficher le logo sur l'écran d'attente"
 
-#: main.ts:243
+#: main.ts:245
 #, x-machine
 msgid "Choose Logo Image…"
 msgstr "Choisir l'image du logo…"
 
-#: main.ts:251
+#: main.ts:253
 #, x-machine
-msgid "Restore Default Logo"
-msgstr "Rétablir le logo par défaut"
+msgid "Idle Logo"
+msgstr "Logo de l'écran d'attente"
 
-#: main.ts:255
+#: main.ts:257
 #, x-machine
 msgid "Using the default logo"
 msgstr "Utilisation du logo par défaut"
 
-#: main.ts:263 ui/page.slint:40
+#: main.ts:265 ui/page.slint:40
 #, x-machine
 msgid "Logo and Album Cover"
 msgstr "Logo et pochette d'album"

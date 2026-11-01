@@ -99,7 +99,7 @@ async function chooseLogo(host: TestHost, answer: string[] | null) {
   for (let i = 0; i < 250 && answer && host.osd.length === before; i++) await host.settle(20);
   await host.settle();
 }
-/** Settings ▸ Appearance ▸ Restore Default Logo: the plugin deletes the copy itself, then shows its notice. */
+/** Reset ▸ Idle Logo: the plugin deletes the copy itself, then shows its notice. */
 async function resetLogo(host: TestHost) {
   const before = host.osd.length;
   await host.command("reset-logo").run();
@@ -206,7 +206,7 @@ test("activation: backdrop, settings page and menu entries, in English", async (
     ["@audio ▸ Show Album Cover for Audio Only", 530, "visual"],
     ["@settings ▸ Appearance ▸ Show Logo When Idle", 845, "settings-logo"],
     ["@settings ▸ Appearance ▸ Choose Logo Image…", 846, "settings-logo"],
-    ["@settings ▸ Appearance ▸ Restore Default Logo", 847, "settings-logo"],
+    ["@reset ▸ Idle Logo", 850, "reset-appearance"],
   ]);
   assert.deepEqual(
     [...host.commands.values()].map((c) => c.display.path.join(" ▸ ")),
@@ -214,7 +214,7 @@ test("activation: backdrop, settings page and menu entries, in English", async (
       "Audio ▸ Show Album Cover for Audio Only",
       "Settings ▸ Appearance ▸ Show Logo When Idle",
       "Settings ▸ Appearance ▸ Choose Logo Image…",
-      "Settings ▸ Appearance ▸ Restore Default Logo",
+      "Reset ▸ Idle Logo",
     ],
   );
   assert.equal(host.command("reset-logo").state.reason, "Using the default logo");
@@ -582,7 +582,7 @@ test("Simplified Chinese: menus, settings page and messages from locales/zh-Hans
   assert.equal(host.settingsPage(PAGE_ID).title, "徽标与专辑封面");
   assert.deepEqual(
     [...host.commands.values()].map((c) => c.display.path.join(" ▸ ")),
-    ["声音 ▸ 纯音频时显示专辑封面", "设置 ▸ 外观 ▸ 空闲时显示徽标", "设置 ▸ 外观 ▸ 选择徽标图片…", "设置 ▸ 外观 ▸ 恢复默认徽标"],
+    ["声音 ▸ 纯音频时显示专辑封面", "设置 ▸ 外观 ▸ 空闲时显示徽标", "设置 ▸ 外观 ▸ 选择徽标图片…", "复位 ▸ 空闲徽标"],
   );
   // The player translates the reason with the plugin's catalog when it shows it.
   assert.equal(host.translate(host.command("reset-logo").state.reason!), "正在使用默认徽标");

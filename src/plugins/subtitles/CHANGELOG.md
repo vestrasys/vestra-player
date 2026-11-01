@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.8
+
+- The two subtitle resets moved to the player's **Reset** menu (below Settings, player 0.6.3; user ruling 2026-11-01): **Reset ▸ Subtitle Position** (was Subtitles ▸ Subtitle Style ▸ Reset Position, Alt+Home) and **Reset ▸ Subtitle Sync** (was Subtitles ▸ Sync ▸ Reset, `/`). Who must change: nobody. The command ids (`move-reset`, `sync-reset`) and default keys are the same, so keys a user bound to them keep working; the items are gone from Subtitle Style and Sync. Requires player 0.6.3 (`minPlayerVersion`), whose menus have the Reset menu.
+
 ## 0.4.7
 
 - Track names in Subtitles ▸ Subtitle Track ▸ and Secondary Subtitle ▸ are always menu texts the player accepts. A title (with its language) is cut to 24 characters and 70 bytes, a language without a title to 16 characters and 32 bytes, by whole user-perceived characters (an emoji, emoji sequence or accented letter is kept or dropped as one; a surrogate pair is never split), and the edges are trimmed after the cut, so a title whose cut ends in a space no longer gives a menu text the player refuses. C1 control characters (U+0080–U+009F, NEL among them) become spaces like C0 controls and DEL; a title of controls only falls back to "Track N". With the fallback name, " · " and a duplicate's " (n)" (Japanese "（n）"), each track item stays within the player's 80 bytes in every language of the plugin.

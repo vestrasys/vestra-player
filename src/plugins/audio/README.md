@@ -15,7 +15,8 @@ These settings are kept across files and restarts (the audio sync as its keep mo
 
 ## Entries
 
-- Right-click menu Audio: Audio Workbench…, Audio Track, Output Device, Equalizer (Shift+E), Preset, Audio Sync (`>` earlier, `<` later, `?` reset), Processing (Normalize Shift+N, Crystalizer Shift+C), Reset.
+- Right-click menu Audio: Audio Workbench…, Audio Track, Output Device, Equalizer (Shift+E), Preset, Audio Sync (`>` earlier, `<` later), Processing (Normalize Shift+N, Crystalizer Shift+C).
+- Right-click menu Reset: Audio Sync (`?`), Audio Processing (equalizer, Normalize and Crystalizer back to neutral; sync and channels kept).
 - Audio ▸ Audio Track ▸ Cycle Tracks: Alt+A.
 - Open ▸ Load External Audio….
 - The Audio Workbench… window has three tabs: Equalizer, Effects, Output.

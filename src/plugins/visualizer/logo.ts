@@ -97,7 +97,7 @@ export class Logo {
     return true;
   }
 
-  /** Settings ▸ Appearance ▸ Restore Default Logo. */
+  /** Reset ▸ Idle Logo. */
   async reset() {
     const name = this.#settings.value.idle.logo;
     this.image = null;
