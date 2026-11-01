@@ -556,10 +556,26 @@ export default async function activate(plugin: Plugin) {
   };
 
   // ---------------------------------------------------------------- actions (menu and keys)
+  /** The 图像处理 switches with a strength (Gaussian blur is part of the picture). */
+  const switches = (): Toggle[] => [effects.sharpen, effects.edge, ...DENOISE_MODES.map((mode) => effects.denoise[mode]), effects.deblock, effects.deband];
+  /**
+   * 复位 (Q) returns the picture to normal: the colours and the blur back to their defaults, and
+   * every image-processing switch off (sharpen, edges, the three denoisers, deblock, deband, 倍帧,
+   * 运动补偿). Strengths stay, as when a switch is turned off by hand. Flip, rotation,
+   * crop/stretch, aspect, framing, deinterlace and the pixel shaders / HDR options have their
+   * own items and are left alone.
+   */
   const reset = () => {
+    const processing =
+      look.picture.blurEnabled || switches().some((t) => t.on) || effects.frameBlend || look.render.interpolation;
     look.picture = { ...defaults };
+    for (const toggle of switches()) toggle.on = false;
+    switchBlend(false);
+    const interpolation = look.render.interpolation;
+    look.render.interpolation = false;
     change();
-    shown(plugin.osd.show("Picture reset"));
+    if (interpolation) applyRender(true);
+    shown(plugin.osd.show(processing ? "Picture reset; image processing off" : "Picture reset"));
   };
   const step = (texts: Step, field: Color, delta: number) => {
     look.picture[field] = clamp(Math.round(look.picture[field]) + delta, -100, 100);
