@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.11
+
+- Seek-bar preview: newly made thumbnails reach the disk (and the bar) as soon as their cells land, also when the disk is slow. Before, a sheet write counted as busy until its `index.json` was saved too; a run of cells that landed meanwhile freed its ffmpeg slot to the next run instead of the write, so the new sheet (and its hand-over to the bar) waited until another run ended: a few seconds for keyframe cells, up to a whole part in exact mode. The index is now saved after the write without holding it up; index saves of one sprite run in order, so the newest always lands last.
+- When the exact pass falls back to keyframes, the keyframe sprite starts once the exact folder's index (`keyframesOnly`) is on disk. Before, the new sprite's cache clean-up could run while that index was still being written, see the exact folder without a valid index and delete it, so the next open tried (and failed) the exact pass again.
+- Nobody needs to change anything.
+
 ## 0.2.10
 
 - The seek line is easier to hit (user request; PotPlayer's seek row works the same way): hovering (the time tip, the mark tip and the preview thumbnail), pressing and dragging now work anywhere in the whole 22px seek row, from the bar's top edge down to the button row and from 5px at the left to 8px before the mute button, instead of only the 10px around the line. Outside the line's ends a press or hover takes the nearer end. The look is unchanged: the line, knob, A-B loop and mark ticks are drawn exactly where they were (ticks keep their physical-pixel snapping at every scale factor), and the tip stays 4px above the line. Drag behaviour is unchanged (grabs on press, follows the pointer outside the row, clamps at the ends, cancel restores). The video above and the button row below do not take part.
