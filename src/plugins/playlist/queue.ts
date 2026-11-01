@@ -139,6 +139,11 @@ export class Queue {
   /** C11 last sort key and direction. */
   sortKey: Exclude<SortKey, "shuffle" | "reverse"> | null = null;
   descending = false;
+  /**
+   * Counts the changes of what the plugin saves (rows, their order and lengths, the
+   * selection): the plugin takes a snapshot of the list only when this moved.
+   */
+  revision = 0;
   private cursor: string | null = null;
   private anchor: string | null = null;
   private nextId = 0;
@@ -147,6 +152,10 @@ export class Queue {
   /** Folded search text per row (its title and source do not change). */
   private folded = new WeakMap<Row, string>();
 
+  /** Something saved changed (see `revision`). */
+  touch() {
+    this.revision++;
+  }
   get filtering() {
     return this.terms.length > 0;
   }
@@ -168,6 +177,7 @@ export class Queue {
   setFilter(query: string) {
     this.terms = fold(query).split(/\s+/).filter(Boolean);
     if (!this.terms.length) return;
+    this.touch();
     for (const row of this.rows) if (!this.matches(row)) this.selection.delete(row.rowId);
     if (this.cursor && !this.selection.has(this.cursor) && !this.matches(this.row(this.cursor)!)) this.cursor = null;
     if (this.anchor && !this.row(this.anchor)) this.anchor = null;
@@ -181,6 +191,7 @@ export class Queue {
     this.cursor = id;
     this.anchor = id;
     this.selection = new Set(id ? [id] : []);
+    this.touch();
   }
   /** `plugin.i18n`, for the notices made of parts. */
   readonly texts: Texts;
@@ -208,6 +219,7 @@ export class Queue {
     else this.selection.add(id);
     this.cursor = id;
     this.anchor = id;
+    this.touch();
   }
   /** Shift-click or Shift+arrow: the range from the anchor to `id`. */
   extend(id: string) {
@@ -219,6 +231,7 @@ export class Queue {
     const [low, high] = from < to ? [from, to] : [to, from];
     this.selection = new Set(rows.slice(low, high + 1).map((row) => row.rowId));
     this.cursor = id;
+    this.touch();
   }
   /** Ctrl+A: every shown row. */
   selectAll() {
@@ -226,6 +239,7 @@ export class Queue {
     this.selection = new Set(rows.map((row) => row.rowId));
     if (!this.cursor || !this.selection.has(this.cursor)) this.cursor = rows[0]?.rowId ?? null;
     this.anchor ??= this.cursor;
+    this.touch();
   }
   /** Move the cursor by `delta` among the shown rows (clamped); `extend` grows the range like Shift+arrow. */
   selectNeighbor(delta: number, extend = false) {
@@ -411,6 +425,7 @@ export class Queue {
     };
     this.rows.push(row);
     this.byId.set(row.rowId, row);
+    this.touch();
     return row;
   }
 
@@ -426,6 +441,7 @@ export class Queue {
   }
   /** Move the marked rows one step or to an end, keeping their relative order. */
   place(place: Placement) {
+    this.touch();
     const marked = (row: Row) => this.selection.has(row.rowId);
     if (place === "top") this.rows = [...this.rows.filter(marked), ...this.rows.filter((row) => !marked(row))];
     else if (place === "bottom")
@@ -456,6 +472,7 @@ export class Queue {
     const kept = this.rows.filter((row) => !this.selection.has(row.rowId));
     const at = before.filter((row) => !this.selection.has(row.rowId)).length;
     this.rows = [...kept.slice(0, at), ...moving, ...kept.slice(at)];
+    this.touch();
   }
   /**
    * C11: stable sort by `key` in the current direction; rows without a value stay last
@@ -463,6 +480,7 @@ export class Queue {
    * `shuffle` ignores the direction; `reverse` only reverses the current order.
    */
   sort(key: SortKey, options: { values?: Map<string, number>; random?: () => number } = {}) {
+    this.touch();
     if (key === "reverse") return void this.rows.reverse();
     if (key === "shuffle") {
       const random = options.random ?? Math.random;
@@ -535,6 +553,7 @@ export class Queue {
   removeRows(ids: ReadonlySet<string>) {
     const gone = ids.size ? [...ids].filter((id) => this.byId.has(id)) : [];
     if (!gone.length) return;
+    this.touch();
     this.rows = this.rows.filter((row) => !ids.has(row.rowId));
     const bound = this.binding?.rowId;
     let detach = false;
@@ -554,6 +573,7 @@ export class Queue {
     for (const row of this.rows) this.removed(row.rowId);
     this.rows = [];
     this.byId.clear();
+    this.touch();
     this.selected = null;
     this.failed = null;
     this.shuffled.clear();
@@ -619,7 +639,10 @@ export class Queue {
       this.failed = null;
       return this.detach("Switched to a source outside the list");
     }
-    if (state.duration !== null && state.duration > 0) row.duration = state.duration;
+    if (state.duration !== null && state.duration > 0 && row.duration !== state.duration) {
+      row.duration = state.duration;
+      this.touch();
+    }
     if (state.phase === "error") {
       this.fail(row.rowId, state.error ?? { kind: "unplayable" });
     } else if (state.phase === "ready") {

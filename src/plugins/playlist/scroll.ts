@@ -41,43 +41,14 @@ export const SHOW_SETTLE_MS = 1000;
 export const USER_SCROLL_HOLD_MS = 2000;
 
 /**
- * The list sends at most this many rows (the player takes at most 1024 array
- * rows and 4096 values per property; a row is 12 values, and `thumbs` one picture per row).
- */
-export const WINDOW_ROWS = 200;
-/** The window moves once the view comes within this many rows of its edge. */
-export const WINDOW_MARGIN = 40;
-/** Rows assumed on screen before the list reports its height. */
-const DEFAULT_VISIBLE = 50;
-/**
  * Thumbnails are made for the rows on screen and this many above and below
  * (a short scroll finds them ready); their durations are read too.
  */
 export const THUMB_MARGIN = 3;
 /**
- * Pictures already made are sent for this many rows around the view (the rest of the
- * 200 rows sent show the placeholder): a write then names at most ~60 pictures,
- * each one the player checks, and keeps the view far below its 32 MB image budget.
+ * Pictures already made are sent for this many rows around the view (every other row
+ * shows the placeholder): a write then names at most ~60 pictures, each one the player
+ * checks, and keeps the view far below its 32 MB image budget (a 192 px picture is
+ * about 80 KB decoded, so a few hundred would fill it).
  */
 export const THUMB_SEND_MARGIN = 20;
-
-/**
- * The first of the `WINDOW_ROWS` rows sent, for a list scrolled by `scroll`
- * (`height` tall, `count` shown rows). `current` stays while the view is at
- * least `WINDOW_MARGIN` rows inside it (or the window touches that end of the
- * list); otherwise the window is centred on the view. The window keeps its
- * length while `count` stays, so the list's row elements are only refilled.
- */
-export function windowStart(current: number, scroll: number, height: number, count: number, row = ROW_HEIGHT) {
-  const size = Math.min(count, WINDOW_ROWS);
-  const last = count - size;
-  if (last <= 0) return 0;
-  const visible = Number.isFinite(height) && height > 0 ? Math.ceil(height / row) + 1 : DEFAULT_VISIBLE;
-  const top = Math.max(0, Math.floor(Math.max(0, scroll) / row));
-  const bottom = Math.min(count, top + visible);
-  const start = Math.max(0, Math.min(Math.floor(current), last));
-  const aboveOk = start === 0 || top - start >= WINDOW_MARGIN;
-  const belowOk = start === last || start + size - bottom >= WINDOW_MARGIN;
-  if (start === current && top >= start && bottom <= start + size && aboveOk && belowOk) return start;
-  return Math.max(0, Math.min(last, top - Math.floor((size - (bottom - top)) / 2)));
-}

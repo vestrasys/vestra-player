@@ -12,7 +12,8 @@ import { Queue } from "../queue.ts";
 import { chineseTexts } from "./texts.ts";
 
 type ViewRow = {
-  rowId: string;
+  id: string;
+  number: number;
   label: string;
   duration: string;
   tooltip: string;
@@ -89,7 +90,7 @@ async function start(probe = fakeProbe(), locale: "en" | "zh-Hans" = "zh-Hans") 
     c,
     alias,
     rows: () => (panel.props.rows ?? []) as unknown as ViewRow[],
-    names: () => app.rows().map((row) => row.label.replace(/^\d+\. /, "")),
+    names: () => app.rows().map((row) => row.label),
     prop: (name: string) => panel.props[name],
     command: (name: string) => host.command(`playlist.${name}`),
     /** The last on-screen notice. */
@@ -110,7 +111,7 @@ async function start(probe = fakeProbe(), locale: "en" | "zh-Hans" = "zh-Hans") 
       await host.settle();
     },
     click: (index: number, modifiers: { ctrl?: boolean; shift?: boolean } = {}) =>
-      app.emit("select-row", app.rows()[index].rowId, !!modifiers.ctrl, !!modifiers.shift),
+      app.emit("select-row", app.rows()[index].id, !!modifiers.ctrl, !!modifiers.shift),
     /**
      * Wait (bounded) for something the plugin does on its own; not settle(), which
      * never returns while a test holds a reply back.
@@ -121,7 +122,7 @@ async function start(probe = fakeProbe(), locale: "en" | "zh-Hans" = "zh-Hans") 
     },
     /** Double-click a row while an open is held back (settling would wait for it). */
     playNow: async (index = app.rows().findIndex((row) => row.selected)) => {
-      panel.emit("play-row", app.rows()[index].rowId);
+      panel.emit("play-row", app.rows()[index].id);
       await pause();
     },
     /**
@@ -406,8 +407,8 @@ test("adding files dedups by realpath and never plays; Enter plays with startPau
     assert.deepEqual(
       app.rows().map(({ label, current, played }) => ({ label, current, played })),
       [
-        { label: "1. a.mp4", current: false, played: true },
-        { label: "2. b.mp4", current: true, played: true },
+        { label: "a.mp4", current: false, played: true },
+        { label: "b.mp4", current: true, played: true },
       ],
     );
     assert.equal(app.prop("total"), "1:01:05");
@@ -486,11 +487,11 @@ test("Ctrl+arrows, the bottom-bar icons and dragging reorder the selection", asy
     // Drag b and c (selected together) below a.
     await app.click(0);
     await app.click(1, { shift: true });
-    await app.emit("drop-row", app.rows()[0].rowId, 3);
+    await app.emit("drop-row", app.rows()[0].id, 3);
     assert.deepEqual(app.names(), ["a.mp4", "b.mp4", "c.mp4"]);
     assert.deepEqual(app.rows().map((row) => row.selected), [false, true, true]);
     // Dragging an unselected row moves only that row.
-    await app.emit("drop-row", app.rows()[0].rowId, 2);
+    await app.emit("drop-row", app.rows()[0].id, 2);
     assert.deepEqual(app.names(), ["b.mp4", "a.mp4", "c.mp4"]);
     assert.deepEqual(app.rows().map((row) => row.selected), [false, true, false]);
   } finally {
@@ -687,7 +688,7 @@ test("natural end advances once in current order, conditional on the ended state
     await app.click(0);
     await app.press("Ctrl+ArrowDown");
     assert.deepEqual(app.names(), ["a.mp4", "https://example.org/c", "b.mp4"]);
-    const c = app.rows()[1].rowId;
+    const c = app.rows()[1].id;
     await app.click(0);
     await app.press("Enter");
     app.host.setSource({ phase: "ready" });
@@ -703,7 +704,7 @@ test("natural end advances once in current order, conditional on the ended state
     assert.equal(app.rows()[0].current, false);
     assert.equal(app.rows()[0].played, true, "the finished row is drawn as played");
     assert.equal(app.rows()[1].current, true);
-    assert.equal(app.rows().find((row) => row.rowId === c)?.selected, false);
+    assert.equal(app.rows().find((row) => row.id === c)?.selected, false);
     assert.equal(app.rows()[2].selected, true, "auto-next keeps selection");
   } finally {
     await app.close();
@@ -852,7 +853,7 @@ test("a failed open stays on its row, keeps the navigation anchor and can be ret
     await app.addUrl("https://example.org/a");
     await app.addUrl("https://example.org/b");
     await app.addUrl("https://example.org/c");
-    const [a, b, c] = app.rows().map((row) => row.rowId);
+    const [a, b, c] = app.rows().map((row) => row.id);
     await app.click(1);
     // Like the player: an accepted open whose resolution failed leaves the source in `error`
     // (`backend` with an empty source is a resolution cancelled by a close, §11).
@@ -870,13 +871,13 @@ test("a failed open stays on its row, keeps the navigation anchor and can be ret
     await app.host.step("next"); // from the failed row b, not from the selection a
     await app.host.settle();
     assert.equal(app.opens()[1].source, "https://example.org/c");
-    assert.equal(app.rows().find((row) => row.rowId === c)?.failed, false);
+    assert.equal(app.rows().find((row) => row.id === c)?.failed, false);
     app.host.setSource({ phase: "ready" });
     await app.emit("select-row", b, false, false);
     await app.run("play"); // retry
     assert.equal(app.opens()[2].source, "https://example.org/b");
     assert.equal(app.rows().length, 3);
-    assert.equal(app.rows()[1].rowId, b);
+    assert.equal(app.rows()[1].id, b);
     assert.equal(app.rows()[1].failed, false);
     assert.ok(a);
   } finally {
@@ -946,8 +947,8 @@ test("a lost open reply is resolved by the same operation, never resubmitted", a
     });
     const { stamp, cycle } = { stamp: { generation: 1, intentVersion: 1 }, cycle: 1 };
     app.host.handle("source.operation", () => ({ status: "completed", ticket: { stamp, cycle, owner: 1 } }));
-    await app.emit("play-row", app.rows()[0].rowId);
-    await app.emit("play-row", app.rows()[0].rowId);
+    await app.emit("play-row", app.rows()[0].id);
+    await app.emit("play-row", app.rows()[0].id);
     app.host.setSource({ phase: "ready" });
     await app.host.settle();
     assert.equal(app.rows()[0].current, true);
@@ -990,7 +991,7 @@ test("an accepted URL open replaced by another source while resolving is not a r
     await app.leaveOutsideSources();
     await app.addUrl("https://example.org/a");
     await app.addUrl("https://example.org/b");
-    const [, b] = app.rows().map((row) => row.rowId);
+    const [, b] = app.rows().map((row) => row.id);
     // Accepted (pending while the resolver runs); then another source takes over.
     let outcome: Json = null;
     app.host.handle("source.submit", async (params) => {
