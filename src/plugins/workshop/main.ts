@@ -545,6 +545,8 @@ export default async function activate(plugin: Plugin) {
       args: [meta.title, plugin.i18n.list(installed)],
     });
     if (!answer.confirmed || !metas.includes(meta)) return;
+    // Before any await: a send whose worker is still starting sees it and bails.
+    sessions.markRemoved(id);
     const run = runs.get(id);
     if (run) {
       runs.delete(id);

@@ -104,6 +104,8 @@ export class Chat {
   private notes = 0;
   /** The turn's latest progress note: the answer after all if the turn ends without one. */
   private lastNote = "";
+  /** Where that note is in the thought row's text (thinking may follow it). */
+  private lastNoteAt: [number, number] = [0, 0];
   /** Where the current model message's text starts in the answer row (-1: none open). */
   private messageStart = -1;
   private readonly now: () => number;
@@ -298,7 +300,9 @@ export class Chat {
     if (note) {
       this.notes++;
       this.lastNote = note;
+      const start = this.thought?.text.length ?? 0;
       this.addThought("note", note);
+      this.lastNoteAt = [start, this.thought!.text.length];
     }
   }
 
@@ -310,7 +314,13 @@ export class Chat {
     const row = this.thought;
     const note = this.lastNote;
     if (this.assistant || !note || !row) return;
-    if (row.text.endsWith(note)) row.text = row.text.slice(0, row.text.length - note.length).replace(/\s+$/, "");
+    // Cut the note out where it is, also when thinking came after it.
+    const [start, end] = this.lastNoteAt;
+    if (row.text.slice(start, end).trim() === note) {
+      const head = row.text.slice(0, start).replace(/\s+$/, "");
+      const tail = row.text.slice(end).replace(/^\s+/, "");
+      row.text = head && tail ? `${head}\n\n${tail}` : head + tail;
+    }
     this.notes--;
     this.refreshThought();
     if (!row.text) this.rows.splice(this.rows.indexOf(row), 1);

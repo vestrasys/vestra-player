@@ -240,3 +240,21 @@ test("an endpoint that refuses the reasoning parameters: an error that points to
     "模型不接受思考设置：请在设置中把「思考」设为「关闭」，或取消勾选「这个模型会先思考再回答」。",
   );
 });
+
+test("the last note becomes the answer also when thinking came after it: it leaves the thought row, the thinking stays", () => {
+  const chat = new Chat();
+  chat.user("做个插件");
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "thinking", delta: "Plan it." });
+  chat.apply({ kind: "text", delta: "插件做好了。" });
+  chat.apply({ kind: "assistant_end", text: "", stopReason: "toolUse", error: null });
+  chat.apply({ kind: "tool_start", id: "a", name: "check", target: "local.demo" });
+  chat.apply({ kind: "tool_end", id: "a", name: "check", ok: true, summary: "" });
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "thinking", delta: "Done, nothing to add." });
+  chat.apply({ kind: "assistant_end", text: "", stopReason: "stop", error: null });
+  chat.apply({ kind: "settled", aborted: false });
+  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "thought", "tools", "assistant"]);
+  assert.equal(chat.rows[1].text, "Plan it.\n\nDone, nothing to add.");
+  assert.equal(chat.rows[3].text, "插件做好了。");
+});

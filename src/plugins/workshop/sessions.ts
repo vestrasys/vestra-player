@@ -54,9 +54,18 @@ export class Sessions {
    * session's worker first; a file a closing process still holds (Windows)
    * is retried for a moment.
    */
+  /**
+   * Marks the session as being deleted, synchronously: from here on saves are
+   * dropped and isRemoved() is true, so a send still starting its worker bails.
+   */
+  markRemoved(id: string) {
+    this.directory(id); // a session id
+    this.removed.add(id);
+  }
+
   async remove(id: string): Promise<void> {
     const directory = this.directory(id);
-    this.removed.add(id);
+    this.markRemoved(id);
     await (this.writes.get(id) ?? Promise.resolve()).catch(() => {});
     this.writes.delete(id);
     await fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
