@@ -1,6 +1,7 @@
 import type { I18n, PlaybackStats, PlayerState, Plugin, TextArg, TextList, TextValue } from "@vestra-player/sdk";
 import { aboutWindow } from "./about.ts";
 import { propertiesWindow } from "./dialog.ts";
+import { Updater } from "./updates.ts";
 
 /** "mm:ss", or "h:mm:ss" from one hour. */
 function clock(seconds: number | null) {
@@ -178,6 +179,8 @@ const BRIEF_MS = 3000;
  * short information for three seconds. Both share this plugin's one panel,
  * short first, a blank line between; each refreshes every second while shown.
  * Ctrl+F1 opens Playback Properties (I05) and F1 About Vestra Player (I09), tool windows.
+ * Check for Updates… (J10) opens About and checks the player's releases; the
+ * automatic check (Options ▸ General ▸ Updates) runs at most once a day.
  */
 export default async function activate(plugin: Plugin) {
   const panel = plugin.osd.panel();
@@ -274,14 +277,32 @@ export default async function activate(plugin: Plugin) {
     bindings: ["Ctrl+F1"],
     run: showProperties,
   });
+  const updater = new Updater(plugin);
+  const showAbout = aboutWindow(plugin, updater);
   plugin.commands.add({
     id: "info.about",
     path: ["About Vestra Player…"],
     order: 880,
     group: "windows",
     bindings: ["F1"],
-    run: aboutWindow(plugin),
+    run: showAbout,
   });
+  // J10: right after About; the About window shows the result and the actions.
+  updater.command = plugin.commands.add({
+    id: "info.update",
+    path: ["Check for Updates…"],
+    order: 881,
+    group: "windows",
+    run: async () => {
+      await showAbout();
+      await updater.check(true);
+    },
+  });
+  // Options ▸ General ▸ Updates: the automatic check on or off.
+  const page = plugin.settings.page("ui/updates.slint", { id: "info.updates", category: "general", title: "Updates", order: 20 });
+  page.bind(() => ({ autoCheck: updater.settings.value.auto }));
+  page.on("toggleAuto", (on: boolean) => updater.setAuto(on));
+  updater.schedule();
   plugin.onDispose(() => {
     clearInterval(timer);
     clearTimeout(briefTimer);

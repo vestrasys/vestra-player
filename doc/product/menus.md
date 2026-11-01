@@ -176,6 +176,7 @@ The labels below are the English interface text (the English source text of each
 | Reset ▸ (every reset-to-default command) | subtitles · video · audio · visualizer | | Directly below Settings, in its group; items in [Reset submenu](#reset-submenu) |
 | —— | | | |
 | About Vestra Player… | info | F1 | |
+| Check for Updates… | info | | J10 (restored 2026-11-01); `order` 881, `group: "windows"`, right after About. Opens About Vestra Player and checks at once; busy ("Downloading the update…") while an installer downloads. The automatic check is on the "Options ▸ General ▸ Updates" settings page |
 | —— | | | |
 | Quit | host | Cmd+Q (shown on macOS; on Windows and Linux the menu shows no shortcut, the close button and Alt+F4 quit) | key `Quit` |
 

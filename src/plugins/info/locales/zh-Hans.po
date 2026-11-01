@@ -5,107 +5,107 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: about.ts:6
+#: about.ts:7
 msgid "{} (build {})"
 msgstr "{}（构建 {}）"
 
-#: about.ts:32 about.ts:109 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:93 ui/about.slint:137
+#: about.ts:33 about.ts:110 properties.ts:221 properties.ts:310 properties.ts:311 ui/about.slint:112 ui/about.slint:202
 msgid "Unknown"
 msgstr "未知"
 
-#: about.ts:34 ui/about.slint:131 ui/about.slint:176
+#: about.ts:35 ui/about.slint:195 ui/about.slint:241
 msgid "Plugin API"
 msgstr "插件 API"
 
-#: about.ts:68 ui/about.slint:108
+#: about.ts:69 ui/about.slint:127
 msgid "GPU"
 msgstr "GPU"
 
-#: about.ts:68 ui/about.slint:108
+#: about.ts:69 ui/about.slint:127
 msgid "Software"
 msgstr "软件"
 
-#: about.ts:69 ui/about.slint:111
+#: about.ts:70 ui/about.slint:130
 msgid "{} — {}"
 msgstr "{}——{}"
 
-#: about.ts:100 ui/about.slint:172
+#: about.ts:101 ui/about.slint:237
 msgid "Version {} (build {})"
 msgstr "版本 {}（构建 {}）"
 
-#: about.ts:100 ui/about.slint:172
+#: about.ts:101 ui/about.slint:237
 msgid "Version {}"
 msgstr "版本 {}"
 
-#: about.ts:101 about.ts:102 properties.ts:61
+#: about.ts:102 about.ts:103 properties.ts:61
 msgid "{}: {}"
 msgstr "{}：{}"
 
-#: about.ts:102 ui/about.slint:132 ui/about.slint:193
+#: about.ts:103 ui/about.slint:196 ui/about.slint:258
 msgid "Rendering"
 msgstr "渲染"
 
-#: about.ts:103 ui/about.slint:205
+#: about.ts:104 ui/about.slint:335
 msgid "Loaded plugins"
 msgstr "已加载插件"
 
-#: about.ts:104 ui/about.slint:216
+#: about.ts:105 ui/about.slint:346
 msgid "Unknown (cannot read the plugin list)"
 msgstr "未知（无法读取插件列表）"
 
-#: about.ts:107 ui/about.slint:97
+#: about.ts:108 ui/about.slint:116
 msgid "Built-in"
 msgstr "内置"
 
-#: about.ts:107 ui/about.slint:98
+#: about.ts:108 ui/about.slint:117
 msgid "Repository"
 msgstr "仓库"
 
-#: about.ts:107 ui/about.slint:99
+#: about.ts:108 ui/about.slint:118
 msgid "Link"
 msgstr "链接"
 
-#: about.ts:107 ui/about.slint:100
+#: about.ts:108 ui/about.slint:119
 msgid "Local file"
 msgstr "本地文件"
 
-#: about.ts:107 ui/about.slint:101
+#: about.ts:108 ui/about.slint:120
 msgid "Workshop"
 msgstr "插件工坊"
 
-#: about.ts:107 ui/about.slint:102
+#: about.ts:108 ui/about.slint:121
 msgid "Installed"
 msgstr "已安装"
 
-#: about.ts:107 ui/about.slint:103
+#: about.ts:108 ui/about.slint:122
 msgid "Development"
 msgstr "开发加载"
 
-#: about.ts:108 ui/about.slint:114
+#: about.ts:109 ui/about.slint:178
 msgid "Starting"
 msgstr "启动中"
 
-#: about.ts:108 ui/about.slint:115
+#: about.ts:109 ui/about.slint:179
 msgid "Running"
 msgstr "运行中"
 
-#: about.ts:108 ui/about.slint:116
+#: about.ts:109 ui/about.slint:180
 msgid "Disabled"
 msgstr "已停用"
 
-#: about.ts:108 ui/about.slint:117
+#: about.ts:109 ui/about.slint:181
 msgid "Failed"
 msgstr "失败"
 
-#: about.ts:108 ui/about.slint:118
+#: about.ts:109 ui/about.slint:182
 msgid "Stopped"
 msgstr "已停止"
 
-#: about.ts:109
+#: about.ts:110
 msgid "{}  {}  {}  {}"
 msgstr "{}  {}  {}  {}"
 
-#: about.ts:164
+#: about.ts:168
 msgid "Version info copied"
 msgstr "已复制版本信息"
 
@@ -125,153 +125,163 @@ msgstr "无法读取文件信息：{}"
 msgid "ffprobe failed"
 msgstr "ffprobe 失败"
 
-#: dialog.ts:62 main.ts:58 main.ts:149 properties.ts:126
+#: dialog.ts:66 main.ts:59 main.ts:150 properties.ts:151
 msgid "No media open"
 msgstr "未打开媒体"
 
-#: dialog.ts:64 properties.ts:127 properties.ts:297
+#: dialog.ts:68 properties.ts:152 properties.ts:322
 msgid "Reading…"
 msgstr "正在读取…"
 
-#: dialog.ts:89
+#: dialog.ts:92
 msgid "File not found"
 msgstr "文件不存在"
 
-#: dialog.ts:96
+#: dialog.ts:99
 msgid "Cannot parse the ffprobe output"
 msgstr "ffprobe 输出无法解析"
 
-#: dialog.ts:154
+#: dialog.ts:188
 msgid "Playback info copied"
 msgstr "已复制播放信息"
 
-#: dialog.ts:162
+#: dialog.ts:196
 msgid "Save As"
 msgstr "保存为"
 
-#: dialog.ts:169
+#: dialog.ts:203
 msgid "Saved to {}"
 msgstr "已保存到 {}"
 
 #. how the video is decoded, after "Decoder:": by the CPU.
-#: main.ts:33
+#: main.ts:34
 #, x-machine
 msgid "software"
 msgstr "软件"
 
 #. how the video is decoded, after "Decoder:": by the GPU; {} is the method, e.g. d3d11va-copy.
-#: main.ts:37
+#: main.ts:38
 #, x-machine
 msgid "hardware ({})"
 msgstr "硬件（{}）"
 
 #. how the video is decoded, after "Decoder:": by the GPU.
-#: main.ts:40
+#: main.ts:41
 #, x-machine
 msgid "hardware"
 msgstr "硬件"
 
 #. frames per second the window showed; "source" is the video's own frame rate.
-#: main.ts:49
+#: main.ts:50
 #, x-machine
 msgid "{} fps"
 msgstr "{} fps"
 
 #. frames per second the window showed; "source" is the video's own frame rate.
-#: main.ts:49
+#: main.ts:50
 #, x-machine
 msgid "{} fps (source {})"
 msgstr "{} fps（源 {}）"
 
-#: main.ts:58
+#: main.ts:59
 msgid "File: {}"
 msgstr "文件：{}"
 
-#: main.ts:59
+#: main.ts:60
 msgid "Time: {} / {}"
 msgstr "时间：{} / {}"
 
-#: main.ts:60
+#: main.ts:61
 msgid "Video: {} {}"
 msgstr "视频：{} {}"
 
-#: main.ts:61 main.ts:167
+#: main.ts:62 main.ts:168
 #, x-machine
 msgid "Decoder: {}"
 msgstr "解码：{}"
 
-#: main.ts:62
+#: main.ts:63
 msgid "Frame rate: {}"
 msgstr "帧率：{}"
 
-#: main.ts:64 main.ts:168
+#: main.ts:65 main.ts:169
 #, x-machine
 msgid "Displayed: {}"
 msgstr "实际显示：{}"
 
-#: main.ts:65
+#: main.ts:66
 msgid "Audio: {} {} {}"
 msgstr "音频：{} {} {}"
 
-#: main.ts:65 properties.ts:256
+#: main.ts:66 properties.ts:281
 msgid "{} channels"
 msgstr "{} 声道"
 
-#: main.ts:66
+#: main.ts:67
 msgid "Backend: {} (session {})"
 msgstr "后端：{}（会话 {}）"
 
-#: main.ts:67
+#: main.ts:68
 msgid "Frames shown: {}"
 msgstr "已显示帧：{}"
 
-#: main.ts:68
+#: main.ts:69
 msgid "Dropped frames: {}"
 msgstr "丢帧：{}"
 
-#: main.ts:130
+#: main.ts:131
 msgid "Chapter {}"
 msgstr "第 {} 章"
 
-#: main.ts:136 properties.ts:196
+#: main.ts:137 properties.ts:221
 msgid "Subtitles"
 msgstr "字幕"
 
-#: main.ts:152
+#: main.ts:153
 msgid "{} ch"
 msgstr "{} 声道"
 
-#: main.ts:156
+#: main.ts:157
 msgid "{} / {}"
 msgstr "{} / {}"
 
-#: main.ts:156 properties.ts:252
+#: main.ts:157 properties.ts:277
 msgid "Live"
 msgstr "直播"
 
-#: main.ts:160
+#: main.ts:161
 msgid "{} {}"
 msgstr "{} {}"
 
-#: main.ts:163 main.ts:169 properties.ts:79
+#: main.ts:164 main.ts:170 properties.ts:104
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: main.ts:238 manifest.json
+#: main.ts:241 manifest.json
 msgid "Playback Info"
 msgstr "播放信息"
 
-#: main.ts:252
+#: main.ts:255
 msgid "Brief Info"
 msgstr "简要信息"
 
-#: main.ts:271
+#: main.ts:274
 msgid "Playback Properties…"
 msgstr "播放属性…"
 
-#: main.ts:279
+#: main.ts:284
 msgid "About Vestra Player…"
 msgstr "关于 Vestra Player…"
+
+#: main.ts:293
+#, x-machine
+msgid "Check for Updates…"
+msgstr "检查更新…"
+
+#: main.ts:302 ui/about.slint:197 ui/about.slint:279 ui/updates.slint:21
+#, x-machine
+msgid "Updates"
+msgstr "更新"
 
 #: manifest.json
 msgid "Playback info overlay, playback properties and the About window"
@@ -297,450 +307,612 @@ msgstr "关于"
 msgid "(The rest is too long and was left out)"
 msgstr "（其余内容过长，已省略）"
 
-#: properties.ts:91
+#: properties.ts:116
 msgid "8-bit ({})"
 msgstr "8 位（{}）"
 
-#: properties.ts:91
+#: properties.ts:116
 msgid "16-bit ({})"
 msgstr "16 位（{}）"
 
-#: properties.ts:91
+#: properties.ts:116
 msgid "32-bit ({})"
 msgstr "32 位（{}）"
 
-#: properties.ts:91
+#: properties.ts:116
 msgid "64-bit ({})"
 msgstr "64 位（{}）"
 
-#: properties.ts:91
+#: properties.ts:116
 msgid "32-bit float ({})"
 msgstr "32 位浮点（{}）"
 
-#: properties.ts:91
+#: properties.ts:116
 msgid "64-bit float ({})"
 msgstr "64 位浮点（{}）"
 
-#: properties.ts:113
+#: properties.ts:138
 msgid "{} bytes"
 msgstr "{} 字节"
 
-#: properties.ts:114
+#: properties.ts:139
 msgid "{} KB ({})"
 msgstr "{} KB（{}）"
 
-#: properties.ts:114
+#: properties.ts:139
 msgid "{} MB ({})"
 msgstr "{} MB（{}）"
 
-#: properties.ts:114
+#: properties.ts:139
 msgid "{} GB ({})"
 msgstr "{} GB（{}）"
 
-#: properties.ts:114
+#: properties.ts:139
 msgid "{} TB ({})"
 msgstr "{} TB（{}）"
 
-#: properties.ts:120
+#: properties.ts:145
 msgid "Not used"
 msgstr "未使用"
 
-#: properties.ts:130 properties.ts:196 properties.ts:255
+#: properties.ts:155 properties.ts:221 properties.ts:280
 msgid "Video"
 msgstr "视频"
 
-#: properties.ts:131 properties.ts:140
+#: properties.ts:156 properties.ts:165
 msgid "Decoder"
 msgstr "解码器"
 
-#: properties.ts:132
+#: properties.ts:157
 msgid "Hardware decoding"
 msgstr "硬件解码"
 
-#: properties.ts:133
+#: properties.ts:158
 msgid "Input format"
 msgstr "输入格式"
 
-#: properties.ts:134 properties.ts:205
+#: properties.ts:159 properties.ts:230
 msgid "Size"
 msgstr "尺寸"
 
-#: properties.ts:135
+#: properties.ts:160
 msgid "Source frame rate"
 msgstr "源帧率"
 
-#: properties.ts:136
+#: properties.ts:161
 msgid "Display frame rate"
 msgstr "当前帧率"
 
-#: properties.ts:137
+#: properties.ts:162
 msgid "Video bitrate"
 msgstr "视频码率"
 
-#: properties.ts:139 properties.ts:196 properties.ts:256
+#: properties.ts:164 properties.ts:221 properties.ts:281
 msgid "Audio"
 msgstr "音频"
 
-#: properties.ts:141 properties.ts:200
+#: properties.ts:166 properties.ts:225
 msgid "Codec"
 msgstr "编码"
 
-#: properties.ts:142 properties.ts:212
+#: properties.ts:167 properties.ts:237
 msgid "Sample rate"
 msgstr "采样率"
 
-#: properties.ts:143
+#: properties.ts:168
 msgid "Bit depth"
 msgstr "采样位数"
 
-#: properties.ts:144
+#: properties.ts:169
 msgid "Channel count"
 msgstr "声道数"
 
-#: properties.ts:144 properties.ts:184 sysinfo.ts:31
+#: properties.ts:169 properties.ts:209 sysinfo.ts:31
 msgid "{} ({})"
 msgstr "{}（{}）"
 
-#: properties.ts:145
+#: properties.ts:170
 msgid "Audio bitrate"
 msgstr "音频码率"
 
-#: properties.ts:147
+#: properties.ts:172
 msgid "Other"
 msgstr "其它"
 
-#: properties.ts:148
+#: properties.ts:173
 msgid "Backend"
 msgstr "后端"
 
-#: properties.ts:149
+#: properties.ts:174
 msgid "Session"
 msgstr "会话"
 
-#: properties.ts:150
+#: properties.ts:175
 msgid "Frames shown"
 msgstr "已显示帧"
 
-#: properties.ts:151
+#: properties.ts:176
 msgid "Dropped frames"
 msgstr "丢帧"
 
-#: properties.ts:152
+#: properties.ts:177
 msgid "A/V sync offset"
 msgstr "音画同步偏差"
 
-#: properties.ts:153
+#: properties.ts:178
 msgid "Cache"
 msgstr "缓冲时长"
 
-#: properties.ts:153
+#: properties.ts:178
 msgid "{} s"
 msgstr "{} 秒"
 
-#: properties.ts:193
+#: properties.ts:218
 msgid "Default"
 msgstr "默认"
 
-#: properties.ts:193
+#: properties.ts:218
 msgid "Forced"
 msgstr "强制"
 
-#: properties.ts:194
+#: properties.ts:219
 msgid "None"
 msgstr "无"
 
-#: properties.ts:196
+#: properties.ts:221
 msgid "Data"
 msgstr "数据"
 
-#: properties.ts:196
+#: properties.ts:221
 msgid "Attachment"
 msgstr "附件"
 
-#: properties.ts:198
+#: properties.ts:223
 msgid "Stream #{}: {}"
 msgstr "流 #{}：{}"
 
-#: properties.ts:201
+#: properties.ts:226
 msgid "Language"
 msgstr "语言"
 
-#: properties.ts:202 properties.ts:220
+#: properties.ts:227 properties.ts:245
 msgid "Title"
 msgstr "标题"
 
-#: properties.ts:203
+#: properties.ts:228
 msgid "Flags"
 msgstr "标记"
 
-#: properties.ts:206
+#: properties.ts:231
 msgid "Frame rate"
 msgstr "帧率"
 
-#: properties.ts:207
+#: properties.ts:232
 msgid "Pixel format"
 msgstr "像素格式"
 
-#: properties.ts:208
+#: properties.ts:233
 msgid "Color space"
 msgstr "色彩空间"
 
-#: properties.ts:209 properties.ts:215
+#: properties.ts:234 properties.ts:240
 msgid "Bitrate"
 msgstr "码率"
 
-#: properties.ts:213
+#: properties.ts:238
 msgid "Channels"
 msgstr "声道"
 
-#: properties.ts:214
+#: properties.ts:239
 msgid "Sample format"
 msgstr "采样格式"
 
-#: properties.ts:220
+#: properties.ts:245
 msgid "Artist"
 msgstr "艺术家"
 
-#: properties.ts:220
+#: properties.ts:245
 msgid "Album artist"
 msgstr "专辑艺术家"
 
-#: properties.ts:220
+#: properties.ts:245
 msgid "Album"
 msgstr "专辑"
 
-#: properties.ts:220
+#: properties.ts:245
 msgid "Date"
 msgstr "日期"
 
-#: properties.ts:220
+#: properties.ts:245
 msgid "Genre"
 msgstr "流派"
 
-#: properties.ts:220
+#: properties.ts:245
 msgid "Track"
 msgstr "音轨号"
 
-#: properties.ts:220
+#: properties.ts:245
 msgid "Comment"
 msgstr "注释"
 
-#: properties.ts:220
+#: properties.ts:245
 msgid "Composer"
 msgstr "作曲"
 
-#: properties.ts:220
+#: properties.ts:245
 msgid "Copyright"
 msgstr "版权"
 
-#: properties.ts:220
+#: properties.ts:245
 msgid "Encoder"
 msgstr "编码器"
 
-#: properties.ts:220
+#: properties.ts:245
 msgid "Creation time"
 msgstr "创建时间"
 
-#: properties.ts:222 properties.ts:250 ui/about.slint:140 ui/about.slint:205
+#: properties.ts:247 properties.ts:275 ui/about.slint:205 ui/about.slint:335
 msgid "Source"
 msgstr "来源"
 
-#: properties.ts:223
+#: properties.ts:248
 msgid "Path"
 msgstr "路径"
 
-#: properties.ts:224
+#: properties.ts:249
 msgid "File size"
 msgstr "文件大小"
 
-#: properties.ts:225
+#: properties.ts:250
 msgid "Modified"
 msgstr "修改时间"
 
-#: properties.ts:227
+#: properties.ts:252
 msgid "Container"
 msgstr "容器"
 
-#: properties.ts:228
+#: properties.ts:253
 msgid "Format"
 msgstr "格式"
 
-#: properties.ts:229 properties.ts:252
+#: properties.ts:254 properties.ts:277
 msgid "Duration"
 msgstr "总时长"
 
-#: properties.ts:230
+#: properties.ts:255
 msgid "Overall bitrate"
 msgstr "总码率"
 
-#: properties.ts:231
+#: properties.ts:256
 msgid "Stream count"
 msgstr "流数量"
 
-#: properties.ts:232
+#: properties.ts:257
 msgid "Chapters"
 msgstr "章节数"
 
-#: properties.ts:235
+#: properties.ts:260
 msgid "Metadata"
 msgstr "元数据"
 
-#: properties.ts:236
+#: properties.ts:261
 msgid "Embedded resources"
 msgstr "内嵌资源"
 
-#: properties.ts:238
+#: properties.ts:263
 msgid "Attachment #{}"
 msgstr "附件 #{}"
 
-#: properties.ts:238
+#: properties.ts:263
 msgid "(no file name)"
 msgstr "（无文件名）"
 
-#: properties.ts:239
+#: properties.ts:264
 msgid "Cover #{}"
 msgstr "封面 #{}"
 
-#: properties.ts:248
+#: properties.ts:273
 msgid "Network source: only what the player reports"
 msgstr "网络来源：只显示播放器报告的信息"
 
-#: properties.ts:251
+#: properties.ts:276
 msgid "Address"
 msgstr "地址"
 
-#: properties.ts:254
+#: properties.ts:279
 msgid "Streams"
 msgstr "流"
 
-#: properties.ts:257
+#: properties.ts:282
 msgid "Audio tracks"
 msgstr "音轨数"
 
-#: properties.ts:280
+#: properties.ts:305
 msgid "{} ({} cores)"
 msgstr "{}（{} 核）"
 
-#: properties.ts:282
+#: properties.ts:307
 msgid "Player"
 msgstr "播放器"
 
-#: properties.ts:283
+#: properties.ts:308
 msgid "Vestra Player version"
 msgstr "Vestra Player 版本"
 
-#: properties.ts:284
+#: properties.ts:309
 msgid "Plugin API version"
 msgstr "插件 API 版本"
 
-#: properties.ts:285
+#: properties.ts:310
 msgid "mpv version"
 msgstr "mpv 版本"
 
-#: properties.ts:286
+#: properties.ts:311
 msgid "FFmpeg version"
 msgstr "FFmpeg 版本"
 
-#: properties.ts:288
+#: properties.ts:313
 msgid "System"
 msgstr "系统"
 
-#: properties.ts:289
+#: properties.ts:314
 msgid "System version"
 msgstr "系统版本"
 
-#: properties.ts:290
+#: properties.ts:315
 msgid "Model"
 msgstr "机型"
 
-#: properties.ts:291
+#: properties.ts:316
 msgid "CPU"
 msgstr "CPU"
 
-#: properties.ts:292
+#: properties.ts:317
 msgid "Total memory"
 msgstr "内存总量"
 
-#: properties.ts:293
+#: properties.ts:318
 msgid "Free memory"
 msgstr "可用内存"
 
-#: properties.ts:295
+#: properties.ts:320
 msgid "Display {}"
 msgstr "显示器 {}"
 
-#: properties.ts:295 properties.ts:296
+#: properties.ts:320 properties.ts:321
 msgid "Display"
 msgstr "显示器"
 
-#: properties.ts:297
+#: properties.ts:322
 msgid "Status"
 msgstr "状态"
 
-#: properties.ts:303
+#: properties.ts:328
 msgid "Vestra Player info.txt"
 msgstr "Vestra Player 信息.txt"
 
 #. only the part before the extension; {} is the media's file name.
-#: properties.ts:315
+#: properties.ts:340
 msgid "{} info.txt"
 msgstr "{} 信息.txt"
 
-#: ui/about.slint:62
+#: ui/about.slint:65
 msgid "About Vestra Player"
 msgstr "关于 Vestra Player"
 
-#: ui/about.slint:136 ui/about.slint:205
+#: ui/about.slint:134
+#, x-machine
+msgid "no connection to GitHub"
+msgstr "无法连接 GitHub"
+
+#: ui/about.slint:135
+#, x-machine
+msgid "the server did not answer in time"
+msgstr "服务器未及时响应"
+
+#: ui/about.slint:136
+#, x-machine
+msgid "no data arrived for 30 seconds"
+msgstr "30 秒内没有收到数据"
+
+#: ui/about.slint:137
+#, x-machine
+msgid "no release information was found (HTTP 404)"
+msgstr "未找到发布信息（HTTP 404）"
+
+#: ui/about.slint:138
+#, x-machine
+msgid "GitHub is limiting requests (HTTP {}); try again later"
+msgstr "GitHub 正在限制请求（HTTP {}），请稍后再试"
+
+#: ui/about.slint:139
+#, x-machine
+msgid "the server answered HTTP {}"
+msgstr "服务器返回 HTTP {}"
+
+#: ui/about.slint:140
+#, x-machine
+msgid "the update information is not valid"
+msgstr "更新信息无效"
+
+#: ui/about.slint:141
+#, x-machine
+msgid "the update information needs a newer player; see the release notes"
+msgstr "更新信息需要更新版本的播放器读取，请查看发行说明"
+
+#: ui/about.slint:142
+#, x-machine
+msgid "the file size does not match the release"
+msgstr "文件大小与发布信息不符"
+
+#: ui/about.slint:143
+#, x-machine
+msgid "the file's checksum does not match the release"
+msgstr "文件校验和与发布信息不符"
+
+#: ui/about.slint:144
+#, x-machine
+msgid "the Downloads folder cannot be written"
+msgstr "无法写入“下载”文件夹"
+
+#: ui/about.slint:145
+#, x-machine
+msgid "the installer could not be started"
+msgstr "无法启动安装程序"
+
+#: ui/about.slint:153
+#, x-machine
+msgid "Checking for updates…"
+msgstr "正在检查更新…"
+
+#: ui/about.slint:154
+#, x-machine
+msgid "Vestra Player is up to date (latest version {})."
+msgstr "Vestra Player 已是最新版本（最新版本 {}）。"
+
+#: ui/about.slint:156
+#, x-machine
+msgid "The latest version is {}."
+msgstr "最新版本是 {}。"
+
+#: ui/about.slint:157
+#, x-machine
+msgid "Version {} is available (released {})."
+msgstr "新版本 {} 可用（发布于 {}）。"
+
+#: ui/about.slint:157
+#, x-machine
+msgid "Version {} is available."
+msgstr "新版本 {} 可用。"
+
+#. {0} is the version, {1} and {2} megabytes downloaded and in all.
+#: ui/about.slint:159
+#, x-machine
+msgid "Downloading version {0}: {1} of {2} MB"
+msgstr "正在下载版本 {0}：{1} / {2} MB"
+
+#: ui/about.slint:160
+#, x-machine
+msgid "Version {} is downloaded to {}. Run the installer to update."
+msgstr "版本 {} 已下载到 {}。运行安装程序即可更新。"
+
+#: ui/about.slint:161
+#, x-machine
+msgid "Could not check for updates: {}."
+msgstr "无法检查更新：{}。"
+
+#: ui/about.slint:162
+#, x-machine
+msgid "Could not download version {}: {}."
+msgstr "无法下载版本 {}：{}。"
+
+#: ui/about.slint:163
+#, x-machine
+msgid "Not checked yet."
+msgstr "尚未检查。"
+
+#: ui/about.slint:166
+#, x-machine
+msgid "Download"
+msgstr "下载"
+
+#: ui/about.slint:167
+#, x-machine
+msgid "Open Release Page"
+msgstr "打开发布页面"
+
+#: ui/about.slint:168
+#, x-machine
+msgid "Cancel"
+msgstr "取消"
+
+#: ui/about.slint:169
+#, x-machine
+msgid "Run Installer"
+msgstr "运行安装程序"
+
+#: ui/about.slint:170
+#, x-machine
+msgid "Check Now"
+msgstr "立即检查"
+
+#: ui/about.slint:201 ui/about.slint:335
 msgid "Version"
 msgstr "版本"
 
-#: ui/about.slint:144 ui/about.slint:205
+#: ui/about.slint:209 ui/about.slint:335
 msgid "State"
 msgstr "状态"
 
-#: ui/about.slint:248 ui/properties.slint:160
+#: ui/about.slint:321
+#, x-machine
+msgid "Release Notes"
+msgstr "发行说明"
+
+#: ui/about.slint:376 ui/properties.slint:116
 msgid "Copy failed"
 msgstr "复制失败"
 
-#: ui/about.slint:254
+#: ui/about.slint:382
 msgid "Copy Info"
 msgstr "复制信息"
 
-#: ui/about.slint:255 ui/properties.slint:171
+#: ui/about.slint:383 ui/properties.slint:127
 msgid "Close"
 msgstr "关闭"
 
-#: ui/properties.slint:55
+#: ui/properties.slint:19
 msgid "Playback Properties"
 msgstr "播放属性"
 
-#: ui/properties.slint:72
+#: ui/properties.slint:38
 msgctxt "tab"
 msgid "Playback"
 msgstr "播放信息"
 
-#: ui/properties.slint:72
+#: ui/properties.slint:38
 msgctxt "tab"
 msgid "File"
 msgstr "文件信息"
 
-#: ui/properties.slint:72
+#: ui/properties.slint:38
 msgctxt "tab"
 msgid "System"
 msgstr "系统信息"
 
-#: ui/properties.slint:161
+#: ui/properties.slint:117
 msgid "Save failed: {}"
 msgstr "保存失败：{}"
 
-#: ui/properties.slint:168
+#: ui/properties.slint:124
 msgid "Refresh"
 msgstr "刷新"
 
-#: ui/properties.slint:169
+#: ui/properties.slint:125
 msgid "Copy"
 msgstr "复制到剪贴板"
 
-#: ui/properties.slint:170
+#: ui/properties.slint:126
 msgid "Save As…"
 msgstr "保存为…"
+
+#: ui/updates.slint:28
+#, x-machine
+msgid "Check for player updates automatically (30 seconds after start, then at most once a day)"
+msgstr "自动检查播放器更新（启动 30 秒后，之后每天最多一次）"
+
+#: ui/updates.slint:33
+#, x-machine
+msgid "When a new version is out, a message shows once on the video and About Vestra Player… offers to download it. Nothing is installed without you: the installer is saved to your Downloads folder and you start it. When off, the player looks for updates only when you choose “Check for Updates…” in the menu."
+msgstr "有新版本时，视频上会显示一次提示，“关于 Vestra Player…”中可以下载。不会自动安装：安装程序保存到“下载”文件夹，由你来运行。关闭后，只有在菜单中选择“检查更新…”时才会检查。"
+
+#: updates.ts:651
+#, x-machine
+msgid "Vestra Player {} is available. Open About Vestra Player… to download it."
+msgstr "Vestra Player {} 已发布。打开“关于 Vestra Player…”即可下载。"
+
+#. why "Check for Updates…" is greyed out: an installer is being downloaded.
+#: updates.ts:694
+#, x-machine
+msgid "Downloading the update…"
+msgstr "正在下载更新…"

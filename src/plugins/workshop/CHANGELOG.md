@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.25
+
+- The vendored SDK is 1.5.53 (`npm run vendor:sdk`): the AI's documentation knows `plugin.window.state.maximized` and lists **Check for Updates…** among the built-in commands. No change to the plugin's own behaviour.
+
 ## 2.2.24
 
 - The vendored SDK is 1.5.51 (`npm run vendor:sdk`): the AI's documentation now has the `@reset` menu and the built-in reset commands under **Reset**. No change to the plugin's own behaviour.
