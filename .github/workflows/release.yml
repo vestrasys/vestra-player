@@ -150,8 +150,8 @@ jobs:
   checksums:
     name: SHA256SUMS
     needs: [verify, package-windows, package-macos]
-    # One system may be skipped in a dry run (platforms).
-    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && contains(needs.*.result, 'success') }}
+    # One system may be skipped in a dry run (platforms); at least one must have packaged.
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && (needs.package-windows.result == 'success' || needs.package-macos.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
