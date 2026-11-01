@@ -1,8 +1,9 @@
 # Tag v* (or a manual dry run): the static checks and both build-tests (no
 # caches) unless main.yml already passed this commit or one it differs from
 # only in docs (.github/scripts/main-green.sh); the unsigned packages (macOS
-# .dmg + .app zip, Windows setup.exe + portable zip), SHA256SUMS, and a draft
-# GitHub release in this repository with the notes from
+# .dmg + .app zip, Windows setup.exe + portable zip, plus copies of the
+# installers under fixed names for releases/latest/download/), SHA256SUMS,
+# and a draft GitHub release in this repository with the notes from
 # doc/releases/v<version>.md. Signing and notarization are TODO
 # jobs in the `release` environment. How to cut a release: doc/releases/README.md.
 name: release
@@ -140,9 +141,15 @@ jobs:
     with:
       os: macos
 
+  # SHA256SUMS lists the fixed-name copies too (same hash as the versioned
+  # file): whoever downloads releases/latest/download/<fixed name> can check
+  # it with `sha256sum -c --ignore-missing SHA256SUMS`. The copies are not
+  # uploaded as an artifact (the 500 MB artifact quota); draft-release makes
+  # them again from the uploaded files and checks them against this list.
+  # TODO(S7 signing): hash the signed files (needs the sign-* jobs).
   checksums:
     name: SHA256SUMS
-    needs: [package-windows, package-macos]
+    needs: [verify, package-windows, package-macos]
     # One system may be skipped in a dry run (platforms).
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && contains(needs.*.result, 'success') }}
     runs-on: ubuntu-24.04
@@ -150,11 +157,19 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: vestra-unsigned-*
           path: dist
           merge-multiple: true
+      - name: Fixed-name copies of the installers
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: bash .github/scripts/stable-names.sh dist "$VERSION"
       - name: sha256sum
         working-directory: dist
         run: |
@@ -212,7 +227,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: doc/releases
+          sparse-checkout: |
+            doc/releases
+            .github/scripts
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: vestra-unsigned-*
@@ -224,8 +241,15 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
           VERSION: ${{ needs.verify.outputs.version }}
+        # The fixed-name copies are made here, from the files that are
+        # uploaded (the signed ones once sign-* sign), and checked with the
+        # rest: releases/latest/download/<fixed name> serves them.
         run: |
+          bash .github/scripts/stable-names.sh dist "$VERSION"
           (cd dist && sha256sum -c SHA256SUMS)
+          for f in VestraPlayer-windows-x64-setup.exe VestraPlayer-macos-arm64.dmg; do
+            test -f "dist/$f" || { echo "::error::dist/$f is missing"; exit 1; }
+          done
           gh release create "$TAG" --draft --verify-tag \
             --title "Vestra Player $VERSION (unsigned test build)" \
             --notes-file "doc/releases/v$VERSION.md" dist/*
