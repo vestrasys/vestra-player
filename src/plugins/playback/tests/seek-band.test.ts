@@ -8,6 +8,8 @@ import activate from "../main.ts";
  * 0.2.10 (user request): the seek line is easier to hit. The pointer area
  * (hover, time tip and preview, press and drag) is the whole 22px seek row,
  * as PotPlayer's, not the 10px around the 2px line; the drawing is unchanged.
+ * 0.2.11 (user request): the pointer area also reaches 4px above the bar's
+ * top edge, over the bottom of the video; not below the seek row.
  * The test host does not run Slint: the geometry is `bar.slint`'s, written
  * out below and checked against the source; the plugin side is driven with
  * the callbacks the band sends at its edges.
@@ -23,9 +25,12 @@ function layout(width: number) {
   const trail = 12;
   const lineTop = 6;
   const band = { x: 5, y: 0, width: Math.max(0, width - 110), height: 22 };
+  const reach = 4;
   const span = Math.max(1, band.width - lead - trail - 8);
   return {
     band,
+    /** The pointer area (the TouchArea): the band and `reach` above it, in the seek row's y. */
+    touch: { x: band.x, y: band.y - reach, width: band.width, height: band.height + reach },
     // The line's box, which the drawing keeps (before 0.2.10 it was the seek bar itself).
     box: { x: band.x + lead, y: band.y + lineTop, width: band.width - lead - trail, height: 10 },
     line: { y: band.y + lineTop + 4, height: 2 },
@@ -38,12 +43,18 @@ function layout(width: number) {
   };
 }
 
-test("0.2.10 the band is the whole seek row, inside the bar, short of the mute button", () => {
+test("0.2.11 the band is the whole seek row and 4px above the bar's top edge, short of the mute button", () => {
   for (const width of [320, 640, 1280, 3840]) {
-    const { band, box, line, knob, mute, tipBottom } = layout(width);
-    // Rows 0…21: from the bar's top edge (not into the video) to the button row (y 22), exclusive.
+    const { band, touch, box, line, knob, mute, tipBottom } = layout(width);
+    // The seek bar (what the drawing is placed in) is the seek row, rows 0…21.
     assert.equal(band.y, 0);
     assert.equal(band.y + band.height, 22);
+    // The pointer area: rows -4…21, from 4px over the video (0.2.10: the bar's top
+    // edge) down to the button row (y 22), exclusive: not into the buttons.
+    assert.equal(touch.y, -4);
+    assert.equal(touch.y + touch.height, 22);
+    assert.equal(touch.x, band.x);
+    assert.equal(touch.width, band.width);
     // Left to x 5, right to 8px before the mute button.
     assert.equal(band.x, 5);
     assert.equal(mute - (band.x + band.width), 8);
@@ -70,16 +81,22 @@ test("0.2.10 a pointer anywhere in the band maps to the line, clamped to its end
   assert.equal(fraction(14 + (band.width - 30) / 2), 0.5);
 });
 
-test("0.2.10 bar.slint: the band geometry, a TouchArea that fills it, and the drawing moved into it", () => {
+test("0.2.11 bar.slint: the band geometry, a TouchArea that fills it and reaches 4px above, and the drawing moved into it", () => {
   // The band in the seek row.
   assert.match(row, /seek-bar := SeekBar \{\s+x: 5px;\s+y: 0;\s+height: 22px;\s+width: max\(0px, root\.width - 110px\);\s+\}/);
   assert.match(row, /MuteButton \{\s+x: root\.width - 97px;/);
   assert.match(seekBar, /in property <length> lead: 10px;\s+in property <length> trail: 12px;\s+in property <length> line-top: 6px;/);
+  assert.ok(seekBar.includes("in property <length> reach: 4px;"));
   assert.ok(seekBar.includes("private property <length> span: max(1px, root.width - root.lead - root.trail - 8px);"));
   assert.ok(seekBar.includes("height: 22px;"));
   assert.ok(seekBar.includes("return clamp((x - root.lead - 4px) / root.span, 0, 1);"));
-  // The TouchArea is the seek bar's own size: nothing sticks out of it.
-  assert.match(seekBar, /touch := TouchArea \{\s+x: 0;\s+y: 0;\s+width: 100%;\s+height: 100%;\s+enabled: PlaybackBridge\.can-seek;/);
+  // The TouchArea is the seek bar's width and height plus `reach` above it: nothing
+  // sticks out sideways or below. (The player does not clip the bottom bar, and the
+  // bar lies in front of the video's TouchArea: host composition.rs and host.slint.)
+  assert.match(
+    seekBar,
+    /touch := TouchArea \{\s+x: 0;\s+y: -root\.reach;\s+width: 100%;\s+height: root\.height \+ root\.reach;\s+enabled: PlaybackBridge\.can-seek;/,
+  );
   assert.equal((seekBar.match(/TouchArea/g) ?? []).length, 1);
   // Hover (tip, preview) and drag still come from that TouchArea.
   assert.ok(seekBar.includes("out property <bool> pointing: touch.has-hover || touch.pressed;"));

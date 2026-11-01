@@ -76,6 +76,9 @@ export const clock = {
   clearTimeout: (timer: unknown) => clearTimeout(timer as ReturnType<typeof setTimeout>),
 };
 
+/** How a sprite's `index.json` is written; tests hold it to play a slow disk. */
+export const indexFile = { write: writeIndex };
+
 /** Cells one ffmpeg run makes at most: fewer process starts (each costs ~0.2 s, and virus scanners react to it). */
 export const BATCH = 5;
 
@@ -857,7 +860,7 @@ export class Thumbnails {
       usedAt: Date.now(),
       ...(keyframesOnly ? { keyframesOnly } : {}),
     };
-    job.indexed = job.indexed.then(() => writeIndex(dir, index).catch(() => {}));
+    job.indexed = job.indexed.then(() => indexFile.write(dir, index).catch(() => {}));
     return job.indexed;
   }
 

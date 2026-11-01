@@ -34,6 +34,7 @@ import {
   cellsArgs,
   clock,
   exactArgs,
+  indexFile,
   keyframesArgs,
   MAX_FAILURES,
   NEEDS_FFMPEG,
@@ -105,6 +106,27 @@ const partOf = (args: string[]) => ({ n: Number(args[args.indexOf("-frames:v") +
 /** The seek times of one run (one per cell it makes). */
 const seeksOf = (args: string[]) => args.flatMap((arg, i) => (arg === "-ss" ? [args[i + 1]!] : []));
 const cellsMade = (host: TestHost) => cellRuns(host).reduce((n, c) => n + seeksOf(c.args).length, 0);
+/**
+ * Hold every `index.json` write until `release()` (a slow disk): a sheet write
+ * must not wait for its index, or the freed slot goes to the next cells first.
+ */
+function holdIndexWrites() {
+  const write = indexFile.write;
+  const held: (() => void)[] = [];
+  let open = false;
+  indexFile.write = async (dir, index) => {
+    if (!open) await new Promise<void>((resolve) => held.push(resolve));
+    return write(dir, index);
+  };
+  return {
+    held: () => held.length,
+    release() {
+      open = true;
+      for (const resolve of held.splice(0)) resolve();
+    },
+    restore: () => void (indexFile.write = write),
+  };
+}
 /** Sheet writes: one ffmpeg per changed sheet, raw pixels to `sheet-N.new.jpg`. */
 const sheetWrites = (host: TestHost) => host.tools.calls.filter((c) => c.tool === "ffmpeg" && c.args.at(-1)!.endsWith(".new.jpg")).length;
 
@@ -754,6 +776,7 @@ test("0.2.3 while the pointer is on the bar a changed sheet goes out at most eve
   const media = mediaFile();
   const host = new TestHost();
   const time = fakeClock(host);
+  const indexes = holdIndexWrites(); // a slow disk: no index write lands until the end
   try {
     playing(host, media.file, 400); // 200 cells on two sheets, five per run
     const releases: (() => void)[] = [];
@@ -818,10 +841,13 @@ test("0.2.3 while the pointer is on the bar a changed sheet goes out at most eve
     await host.settle();
     assert.equal(made(), 20);
     assert.notEqual(sheet(), third);
+    assert.ok(indexes.held() > 0, "index writes were held all along");
+    indexes.release();
     for (const release of releases.splice(0)) release();
     await stop();
   } finally {
     time.restore();
+    indexes.restore();
     media.done();
   }
 });
@@ -830,6 +856,7 @@ test("0.2.3 a sheet without new cells keeps its image reference across a hand-ov
   const media = mediaFile();
   const host = new TestHost();
   const time = fakeClock(host);
+  const indexes = holdIndexWrites(); // a slow disk: no index write lands until the end
   try {
     playing(host, media.file, 400); // 200 cells on two sheets, five per run
     const releases: (() => void)[] = [];
@@ -870,10 +897,13 @@ test("0.2.3 a sheet without new cells keeps its image reference across a hand-ov
     await land(); // run 5: sheet A only
     assert.notEqual(ref("a"), a0);
     assert.equal(ref("b"), b1, "sheet B unchanged this time");
+    assert.ok(indexes.held() > 0, "index writes were held all along");
+    indexes.release();
     for (const release of releases.splice(0)) release();
     await stop();
   } finally {
     time.restore();
+    indexes.restore();
     media.done();
   }
 });
@@ -988,9 +1018,10 @@ test("I07 one bad position fails only its own cell: the rest of its run is made,
     });
     assert.equal(bar.props["hover-thumbnail"], true);
     const dir = join(data, "thumbs", readdirSync(join(data, "thumbs"))[0]!);
-    await until(() => {
-      const index = JSON.parse(readFileSync(join(dir, "index.json"), "utf8"));
-      return index.complete && index.failed.join() === "4" && index.made.length === 9;
+    // Not written yet at first: keep waiting.
+    await until(async () => {
+      const index = await readIndex(dir);
+      return index !== null && index.complete && index.failed.join() === "4" && index.made.length === 9;
     });
     await stop();
   } finally {

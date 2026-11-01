@@ -224,6 +224,7 @@ export function wireBar(
   bar.on("pointing", (on: boolean) => {
     pointing = on;
     thumbnails.pointing(on); // 0.2.3: new sheets are handed over less often meanwhile
+    locks();
     scope.update();
   });
   bar.bind(() => {
@@ -271,8 +272,12 @@ export function wireBar(
       ...barTips(keys, { volume, step: settings.value.seekSteps[0] }),
     };
   });
+  // 0.2.11: the pointer on the seek band holds the bar too (`popupOpen`: its time
+  // tip and preview are up). The band reaches 4px above the bar, over the video,
+  // where the player sees the pointer over neither, so without this the
+  // fullscreen bar would start hiding under it.
   const locks = () =>
-    bar.setInteraction({ focused: false, dragging: p.dragging || volumeDragging, popupOpen: false });
+    bar.setInteraction({ focused: false, dragging: p.dragging || volumeDragging, popupOpen: pointing });
 
   bar.on("action", async (id: string) => {
     if (id === "open") return p.open();
