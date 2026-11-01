@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.12
+
+- Seek-bar preview cache: a sprite's `index.json` is written atomically, as a temporary file in the same folder (`index.json.<pid>.<n>.tmp`) renamed over it. Before, it was written in place, so another source's cache clean-up could read half of it, take the folder for a broken one and delete it (the sprite was made again on the next open). A rename refused for a moment on Windows (a reader such as a clean-up, a virus scanner or the indexer has the file open) is tried again a few times. Readers only read `index.json`. A clean-up no longer deletes a folder whose index cannot be read just then (a sharing violation, too many open files) or that has a temporary index less than a minute old (a write in progress); one left over from a crash is removed once it is older.
+- Stopping the plugin waits for the sprite's pending index writes and cache clean-ups, two seconds at most, so nothing is written into (or deleted from) the data directory after the plugin stopped. A new source's cache clean-up likewise waits for the previous source's index writes, so it does not remove a folder that is still being written.
+- Nobody needs to change anything.
+
 ## 0.2.11
 
 - Seek-bar preview: newly made thumbnails reach the disk (and the bar) as soon as their cells land, also when the disk is slow. Before, a sheet write counted as busy until its `index.json` was saved too; a run of cells that landed meanwhile freed its ffmpeg slot to the next run instead of the write, so the new sheet (and its hand-over to the bar) waited until another run ended: a few seconds for keyframe cells, up to a whole part in exact mode. The index is now saved after the write without holding it up; index saves of one sprite run in order, so the newest always lands last.
