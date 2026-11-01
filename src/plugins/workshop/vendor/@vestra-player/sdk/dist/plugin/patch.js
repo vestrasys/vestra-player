@@ -10,6 +10,12 @@ export const PATCH_FEATURE = "ui.patch";
 /** The most operations one patch carries (the player's `MAX_PATCH_OPS`). */
 export const PATCH_OPS = 1024;
 /**
+ * The most operations one diff plans (SDK 1.5.46): its patch is sent as
+ * several of at most {@link PATCH_OPS} each (`chunkOps`); more is sent whole
+ * (in parts, which the player writes at once).
+ */
+export const DIFF_OPS = 16 * PATCH_OPS;
+/**
  * Fields that identify a row, in the order they are tried. A field is used
  * when every row has it, as a string or a number, and no two rows share it.
  */
@@ -159,7 +165,8 @@ function increasing(values) {
 }
 /**
  * The operations that turn the old rows into the new ones (`null`: more
- * than {@link PATCH_OPS} would be needed), and for each new row the old row
+ * than {@link DIFF_OPS} would be needed, or more than {@link PATCH_OPS}
+ * moves), and for each new row the old row
  * whose JSON it keeps (`-1`: a new or changed row). Keyed when both arrays
  * have keys from the same field; otherwise by index.
  */
@@ -168,7 +175,7 @@ export function diff(old, next) {
     const ops = old.keys && next.keys
         ? keyed(old.enc, old.keys, next.enc, next.keys, from)
         : byIndex(old.enc, next.enc, from);
-    return ops && ops.length <= PATCH_OPS ? { ops, from } : null;
+    return ops && ops.length <= DIFF_OPS ? { ops, from } : null;
 }
 function byIndex(old, next, from) {
     const min = Math.min(old.length, next.length);
@@ -236,7 +243,7 @@ function keyed(oldEnc, oldKeys, newEnc, newKeys, from) {
         }
         else
             ops.push({ op: "remove", at: i, count: 1 });
-        if (ops.length > PATCH_OPS)
+        if (ops.length > DIFF_OPS)
             return null;
     }
     for (let i = p; i < oldEnd; i++)
@@ -248,7 +255,10 @@ function keyed(oldEnc, oldKeys, newEnc, newKeys, from) {
     // positions goes right after the kept row before it in the new order.
     const positions = kept.map((key) => target.get(key));
     const stay = increasing(positions);
-    if (kept.length - stay.size + ops.length > PATCH_OPS)
+    // Moves cost a search each: at most PATCH_OPS of them.
+    if (kept.length - stay.size > PATCH_OPS)
+        return null;
+    if (kept.length - stay.size + ops.length > DIFF_OPS)
         return null;
     const stays = new Set();
     for (const index of stay)
@@ -281,13 +291,13 @@ function keyed(oldEnc, oldKeys, newEnc, newKeys, from) {
             last.rows.push(j);
         else
             ops.push({ op: "insert", at: j, rows: [j] });
-        if (ops.length > PATCH_OPS)
+        if (ops.length > DIFF_OPS)
             return null;
     }
     sets.sort((a, b) => a.at - b.at);
     for (const set of sets) {
         ops.push(set);
-        if (ops.length > PATCH_OPS)
+        if (ops.length > DIFF_OPS)
             return null;
     }
     return ops;
@@ -335,3 +345,91 @@ export function applyOps(rows, ops) {
         }
     return out;
 }
+/**
+ * The bytes of rows one write carries at most (SDK 1.5.46, player 0.6.0):
+ * half the 1 MiB protocol line, which leaves room for the request around
+ * them. A larger whole write is sent as its first rows and `insert`
+ * patches of the rest; a larger patch as several patches, each applying on
+ * the one before (the player's doc/architecture/large-lists.md §4).
+ */
+export const CHUNK_BYTES = 512 * 1024;
+/** About what an operation adds to a request besides its rows. */
+const OP_BYTES = 64;
+/** UTF-8 bytes of `text` (JSON of a row), without encoding it. */
+function utf8Bytes(text) {
+    let bytes = text.length;
+    for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+        if (code >= 0x80)
+            bytes += code >= 0x800 && (code < 0xd800 || code > 0xdfff) ? 2 : 1;
+    }
+    return bytes;
+}
+/** The bytes a row adds to a write (its JSON and a separator). */
+export const rowBytes = (row) => utf8Bytes(JSON.stringify(row) ?? "null") + 1;
+/**
+ * How many of the first rows (by their sizes, `rowBytes`) fit in `budget`
+ * bytes; at least one when there are rows (a row over the budget alone is
+ * left to the player's limits).
+ */
+export function prefixWithin(sizes, budget) {
+    let used = 0;
+    for (let i = 0; i < sizes.length; i++) {
+        used += sizes[i];
+        if (used > budget)
+            return Math.max(i, 1);
+    }
+    return sizes.length;
+}
+/**
+ * `ops` as consecutive patches of at most {@link CHUNK_BYTES} of rows and
+ * {@link PATCH_OPS} operations each, in order: applying them one after the
+ * other gives what `ops` give. An `insert` of more rows than fit is split
+ * into inserts of consecutive runs.
+ */
+export function chunkOps(ops) {
+    const groups = [];
+    let group = [];
+    let bytes = 0;
+    const push = (op, size) => {
+        if (group.length &&
+            (bytes + size > CHUNK_BYTES || group.length >= PATCH_OPS)) {
+            groups.push(group);
+            group = [];
+            bytes = 0;
+        }
+        group.push(op);
+        bytes += size;
+    };
+    for (const op of ops) {
+        if (op.op !== "insert") {
+            push(op, OP_BYTES + (op.op === "set" ? rowBytes(op.row) : 0));
+            continue;
+        }
+        const sizes = op.rows.map(rowBytes);
+        let start = 0;
+        while (start < sizes.length) {
+            const room = Math.max(CHUNK_BYTES - bytes - OP_BYTES, 0);
+            let count = prefixWithin(sizes.slice(start), room);
+            // Nothing fits beside this group's rows: the run starts a new patch.
+            if (room === 0 ||
+                sizes.slice(start, start + count).reduce((a, b) => a + b, 0) > room) {
+                if (group.length) {
+                    groups.push(group);
+                    group = [];
+                    bytes = 0;
+                }
+                count = prefixWithin(sizes.slice(start), CHUNK_BYTES - OP_BYTES);
+            }
+            const rows = op.rows.slice(start, start + count);
+            const size = OP_BYTES + sizes.slice(start, start + count).reduce((a, b) => a + b, 0);
+            push({ op: "insert", at: op.at + start, rows }, size);
+            start += count;
+        }
+    }
+    if (group.length)
+        groups.push(group);
+    return groups;
+}
+/** The bytes a row already in JSON adds to a write (and a separator). */
+export const jsonBytes = (json) => utf8Bytes(json) + 1;

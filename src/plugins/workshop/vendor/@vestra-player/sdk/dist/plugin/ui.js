@@ -7,7 +7,8 @@ import { failure, Latest, quiet } from "./runtime.js";
 import { dropsOf } from "./drops.js";
 import { MarkdownHandle, markdown, remoteImageFile } from "./markdown.js";
 import { HostError } from "../wire.js";
-import { countRow, diff, keyOf, PATCH_FEATURE, replay, withinLimits, } from "./patch.js";
+import { countRow, diff, keyOf, CHUNK_BYTES, chunkOps, PATCH_FEATURE, prefixWithin, jsonBytes, rowBytes, replay, withinLimits, } from "./patch.js";
+import { UI_VALUE_LIMITS, valueLimitProblem } from "./values.js";
 /** Slint names are kebab-case; plugin code may use camelCase. */
 export const kebab = (name) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 const encode = (props) => Object.fromEntries(Object.entries(props).map(([k, v]) => [kebab(k), v]));
@@ -111,6 +112,26 @@ function sentOf(value, patches) {
     return { kind: "json", enc: JSON.stringify(value) };
 }
 /**
+ * A write sent in parts stopped because its view closed or showed its
+ * initial properties again: not a failure.
+ */
+class Abandoned extends Error {
+}
+/** The wire key of a Markdown document: rows holding one are never sent in parts. */ const MARKDOWN_KEY = '"$vestraMarkdown"';
+/** A row larger than one request can carry (`limit`). */
+const rowTooLarge = (key, bytes) => new HostError("limit", `${key}: a row of ${bytes} bytes is larger than one request takes (${CHUNK_BYTES} bytes)`);
+/** Refuse a patch carrying a row larger than one request, before sending it. */
+function tooLarge(key, ops) {
+    for (const op of ops) {
+        const rows = op.op === "set" ? [op.row] : op.op === "insert" ? op.rows : [];
+        for (const row of rows) {
+            const bytes = rowBytes(row);
+            if (bytes > CHUNK_BYTES)
+                throw rowTooLarge(key, bytes);
+        }
+    }
+}
+/**
  * The row patch from `sent` to `next` (the bound `rows`), in wire form, and
  * the new rows' limit counts; `null` when the whole value is to be sent:
  * nothing to type the rows by (no rows sent), a Markdown document in a row
@@ -194,6 +215,8 @@ export class ViewBase {
      */
     #stales = new Map();
     #seq = 0;
+    /** Counts the times the view showed its initial properties (`shown`). */
+    #generation = 0;
     /** Written by `set()`: sent even if equal to what was sent before. */
     #forced = new Set();
     /** The last value of each property whose write failed; not retried until it changes. */
@@ -215,18 +238,51 @@ export class ViewBase {
     }
     /**
      * Initial properties in wire form. A released image is left out (the
-     * property keeps its default) and reported, like a failed write.
+     * property keeps its default) and reported, like a failed write. With a
+     * player that takes row patches, the arrays of one request carry at most
+     * {@link CHUNK_BYTES} of rows together (SDK 1.5.46): an array over that
+     * goes with its first rows, and the first flush sends the rest as patches.
+     * An array over the value limits is refused here, as the player would
+     * refuse it whole: left out and reported (a panel, a settings page), or,
+     * with `refuse` (a window's `show`), thrown.
      */
-    wired(values) {
+    wired(values, refuse = false) {
         const out = {};
+        let room = CHUNK_BYTES;
         for (const [key, value] of Object.entries(values)) {
+            let wire;
             try {
-                out[key] = wireValue(value);
+                wire = wireValue(value);
             }
             catch (error) {
                 this.#failed.set(key, JSON.stringify(value));
                 this.scope.report(error);
+                continue;
             }
+            if (this.#patches && Array.isArray(wire)) {
+                const sizes = wire.map(rowBytes);
+                const total = sizes.reduce((a, b) => a + b, 0);
+                if (total > room && !JSON.stringify(wire).includes(MARKDOWN_KEY)) {
+                    const largest = sizes.reduce((a, b) => Math.max(a, b), 0);
+                    const problem = valueLimitProblem(wire);
+                    if (problem || largest > CHUNK_BYTES) {
+                        const error = problem
+                            ? new HostError("limit", `${key}: ${problem}`)
+                            : rowTooLarge(key, largest);
+                        if (refuse)
+                            throw error;
+                        this.#failed.set(key, JSON.stringify(value));
+                        this.scope.report(error);
+                        continue;
+                    }
+                    const count = room > 0 ? prefixWithin(sizes, room) : 0;
+                    wire = wire.slice(0, count);
+                    room -= sizes.slice(0, count).reduce((a, b) => a + b, 0);
+                }
+                else
+                    room -= total;
+            }
+            out[key] = wire;
         }
         return out;
     }
@@ -289,6 +345,7 @@ export class ViewBase {
     }
     /** The host already shows these values (e.g. sent as initial properties). */
     shown(values) {
+        this.#generation++;
         const patches = this.#patches;
         this.#sent = new Map(Object.entries(values).map(([k, v]) => [k, sentOf(v, patches)]));
         this.#bases = new Map(patches ? Object.keys(values).map((key) => [key, 0]) : []);
@@ -354,7 +411,10 @@ export class ViewBase {
      * Write one property: a row patch when the player takes them and one
      * applies (else the whole value); a `stale` patch is followed by the whole
      * value at once. The base is forgotten on any failure, so the next write
-     * of the property is whole.
+     * of the property is whole. A write larger than one request
+     * ({@link CHUNK_BYTES} of rows, SDK 1.5.46) is sent in parts: a whole
+     * array as its first rows and `insert` patches of the rest, a patch as
+     * several, each applying on the one before.
      */
     async #send(pending) {
         const { key, value } = pending;
@@ -362,33 +422,120 @@ export class ViewBase {
             await this.write(key, { value: wireValue(value) });
             return pending.sent();
         }
+        const generation = this.#generation;
         const base = this.#bases.get(key);
         this.#bases.delete(key);
         const sent = this.#sent.get(key);
-        const plan = base !== undefined &&
+        let plan = base !== undefined &&
             sent?.kind === "rows" &&
             pending.rows &&
             (this.#stales.get(key) ?? 0) < 2
             ? rowPatch(sent.rows, pending.rows, value)
             : null;
+        // A patch sent in several never passes the row limit midway (the diff
+        // removes before it inserts; checked anyway); otherwise whole.
+        if (plan && sent?.kind === "rows") {
+            let length = sent.rows.enc.length;
+            for (const op of plan.ops) {
+                if (op.op === "insert")
+                    length += op.rows.length;
+                else if (op.op === "remove")
+                    length -= op.count;
+                if (length > UI_VALUE_LIMITS.arrayRows) {
+                    plan = null;
+                    break;
+                }
+            }
+        }
         if (plan) {
+            tooLarge(key, plan.ops);
+            const [first, ...rest] = chunkOps(plan.ops);
             const seq = ++this.#seq;
+            let applied = false;
             try {
-                await this.write(key, { patch: { base: base, seq, ops: plan.ops } });
-                this.#bases.set(key, seq);
-                this.#stales.delete(key);
-                return pending.sent(plan.counts);
+                await this.write(key, { patch: { base: base, seq, ops: first } });
+                applied = true;
             }
             catch (error) {
                 if (!(error instanceof HostError && error.code === "stale"))
                     throw error;
                 this.#stales.set(key, (this.#stales.get(key) ?? 0) + 1);
             }
+            if (applied) {
+                this.#stales.delete(key);
+                await this.#parts(key, seq, rest, false, generation);
+                return pending.sent(plan.counts);
+            }
         }
         const seq = ++this.#seq;
+        // Rows holding Markdown documents go whole, as before: the player
+        // merges documents in place and takes no parts of them.
+        if (Array.isArray(value) &&
+            pending.rows &&
+            !pending.rows.enc.some((row) => row.includes(MARKDOWN_KEY))) {
+            const sizes = pending.rows.enc.map(jsonBytes);
+            const count = prefixWithin(sizes, CHUNK_BYTES);
+            if (count < value.length) {
+                const rows = value;
+                // Over the limits, or a row larger than one request: refused here,
+                // as the player would refuse the whole value, before any part is
+                // sent (a part refused midway would leave the list half sent).
+                const problem = valueLimitProblem(wireValue(value));
+                if (problem)
+                    throw new HostError("limit", `${key}: ${problem}`);
+                const largest = sizes.reduce((a, b) => Math.max(a, b), 0);
+                if (largest > CHUNK_BYTES)
+                    throw rowTooLarge(key, largest);
+                // Every part but the last carries `more`: the player holds them
+                // and writes the whole value at the last, so a list it shows is
+                // written once (player 0.6.0).
+                await this.write(key, {
+                    value: wireValue(rows.slice(0, count)),
+                    seq,
+                    more: true,
+                });
+                const insert = {
+                    op: "insert",
+                    at: count,
+                    rows: rows.slice(count).map((row) => wireValue(row ?? null)),
+                };
+                await this.#parts(key, seq, chunkOps([insert]), true, generation);
+                return pending.sent();
+            }
+        }
         await this.write(key, { value: wireValue(value), seq });
         this.#bases.set(key, seq);
         return pending.sent();
+    }
+    /**
+     * The rest of a write sent in parts: each patch applies on the one
+     * before (`base`), and the property's base is the last one's; with
+     * `more`, every part but the last says so. A failure leaves no base: the
+     * next write of the property is whole. When the view closed or showed its
+     * initial properties again meanwhile (`generation`), the rest is dropped
+     * quietly ({@link Abandoned}): the view's next flush sends what it shows.
+     */
+    async #parts(key, base, groups, more, generation) {
+        let last = base;
+        for (const [i, ops] of groups.entries()) {
+            if (!this.live() || this.#generation !== generation)
+                throw new Abandoned();
+            const seq = ++this.#seq;
+            try {
+                await this.write(key, {
+                    patch: { base: last, seq, ops },
+                    ...(more && i < groups.length - 1 ? { more: true } : {}),
+                });
+            }
+            catch (error) {
+                // Refused because the view went meanwhile: not a failure.
+                if (!this.live() || this.#generation !== generation)
+                    throw new Abandoned();
+                throw error;
+            }
+            last = seq;
+        }
+        this.#bases.set(key, last);
     }
     /**
      * Send what changed. A bound value is sent when it differs from the last one
@@ -431,6 +578,13 @@ export class ViewBase {
                             this.#broken = false;
                         }
                         catch (error) {
+                            // The view closed or showed its initial properties again while
+                            // a write was sent in parts: nothing failed (the next flush
+                            // sends what the view shows).
+                            if (error instanceof Abandoned) {
+                                queueMicrotask(() => this.flush());
+                                return;
+                            }
                             failed = true;
                             // Report the start of a failing streak only.
                             if (!this.#broken)
@@ -530,7 +684,7 @@ class WindowHandle extends ViewBase {
             const ui = this.scope.runtime.host.ui;
             if (this.#opened)
                 return ui.show(this.#id, true);
-            const initial = this.wired(this.snapshot());
+            const initial = this.wired(this.snapshot(), true);
             await ui.open(this.#id, this.#file, initial, [...this.handlers.keys()]);
             this.#opened = true;
             this.shown(initial);

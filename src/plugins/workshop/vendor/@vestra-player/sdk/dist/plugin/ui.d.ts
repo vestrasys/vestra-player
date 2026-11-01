@@ -32,9 +32,15 @@ export declare abstract class ViewBase implements View {
     protected abstract write(property: string, write: PropertyWrite): Promise<void>;
     /**
      * Initial properties in wire form. A released image is left out (the
-     * property keeps its default) and reported, like a failed write.
+     * property keeps its default) and reported, like a failed write. With a
+     * player that takes row patches, the arrays of one request carry at most
+     * {@link CHUNK_BYTES} of rows together (SDK 1.5.46): an array over that
+     * goes with its first rows, and the first flush sends the rest as patches.
+     * An array over the value limits is refused here, as the player would
+     * refuse it whole: left out and reported (a panel, a settings page), or,
+     * with `refuse` (a window's `show`), thrown.
      */
-    protected wired(values: Record<string, PropValue>): Record<string, Json>;
+    protected wired(values: Record<string, PropValue>, refuse?: boolean): Record<string, Json>;
     on<A extends Json[]>(callback: string, handler: (...args: A) => unknown): Disposable;
     set(props: Props): void;
     bind(props: () => Props): Disposable;
