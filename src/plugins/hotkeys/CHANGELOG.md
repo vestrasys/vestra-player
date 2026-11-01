@@ -3,6 +3,8 @@
 ## 0.1.10
 
 - Ignore Default Shortcuts keeps a way out of fullscreen: Esc now belongs to Toggle Fullscreen (player 0.6.0), so Toggle Fullscreen is never ignored, like Quit and Leave Fullscreen. Enter Fullscreen has no default and is not exempt. The confirmation now names Toggle Fullscreen (Esc) instead of Leave Fullscreen; translations updated.
+- A user who turned Ignore Default Shortcuts on with 0.1.9 or earlier had Toggle Fullscreen switched off too; at start (or the next change) its empty override is reset, so Esc works again, and it is no longer shown as Ignored. Other ignored commands are unchanged.
+- README: the side buttons work anywhere in the window; Back (X1) is the next item, Forward (X2) the previous one (player 0.6.0).
 
 ## 0.1.9
 

@@ -102,7 +102,21 @@ export class IgnoreDefaults {
     }
     let changed = false;
     for (const c of commands) {
-      if (exempt(c)) continue;
+      if (exempt(c)) {
+        // Exempt since this plugin ignored it (Toggle Fullscreen before 0.1.10): give its
+        // defaults back if our empty override is still there; either way it is not ours now.
+        if (!this.ignores(c)) continue;
+        if (c.overridden && c.current.length === 0) {
+          try {
+            await bindings.reset({ plugin: c.plugin, command: c.command });
+            changed = true;
+          } catch {
+            continue; // gone meanwhile; the next change notice brings the next run
+          }
+        }
+        this.forget(c);
+        continue;
+      }
       if (!c.overridden && c.defaults.length) {
         try {
           await bindings.set({ plugin: c.plugin, command: c.command }, []);
