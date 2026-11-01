@@ -245,23 +245,29 @@ impl Host {
         if shell.window().is_fullscreen() {
             return Err(unavailable(&i18n::tr("Not available in fullscreen")));
         }
+        let id = self
+            .native_window
+            .ok_or_else(|| unavailable("the native window is not known"))?;
+        let screen = platform::screen_for(id).map_err(|e| unavailable(e.0))?;
         // A size asked for while maximized is the size of a normal window:
-        // restore it first, then resize it, as MPC-HC's View ▸ Zoom does
-        // (`ZoomVideoWindow` restores a zoomed window before sizing it).
-        // Automatic sizing leaves a maximized window alone instead
+        // on Windows, restore it first, then resize it, as MPC-HC's View ▸
+        // Zoom does (`ZoomVideoWindow` restores a zoomed window before sizing
+        // it), and measure the restored frame. Not on macOS: `zoom:` animates
+        // there and would fight the content size set right after, so a zoomed
+        // window is resized directly, as before 0.6.3.
+        // Automatic sizing leaves a maximized window alone on every system
         // (`WindowState.maximized`, the Window plugin's G-02).
-        if shell.window().is_maximized() {
+        let screen = if cfg!(target_os = "windows") && shell.window().is_maximized() {
             shell.window().set_maximized(false);
-        }
+            platform::screen_for(id).map_err(|e| unavailable(e.0))?
+        } else {
+            screen
+        };
         view::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
             Ok(SValue::Number(n)) if n.is_finite() => n,
             _ => 0.,
         };
-        let id = self
-            .native_window
-            .ok_or_else(|| unavailable("the native window is not known"))?;
-        let screen = platform::screen_for(id).map_err(|e| unavailable(e.0))?;
         let sidebar = &self.window_facts["slots"]["sidebar"];
         let docked = sidebar["preferred"] == true && sidebar["detached"] == false;
         let frame = window_control::Frame {

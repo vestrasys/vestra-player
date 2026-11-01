@@ -2,7 +2,7 @@
 
 ## 0.1.6
 
-- Window size when playback starts (G-02) leaves a maximized window alone, as MPC-HC's auto-zoom and mpv's autofit do: a new file no longer takes the window out of maximized and resizes it to the video. It reads `WindowState.maximized` (SDK 1.5.52, player 0.6.3). Who must change: nobody. What users see: with player 0.6.3 and later a maximized window stays maximized when a file starts; with older players, which do not report `maximized`, nothing changes (it reads `false`), so `minPlayerVersion` stays 0.6.0. The size commands (Screen ▸ 0.5×–2×, fit) still resize a maximized window: the player restores it first.
+- Window size when playback starts (G-02) leaves a maximized window alone, as MPC-HC's auto-zoom and mpv's autofit do: a new file no longer takes the window out of maximized and resizes it to the video. It reads `WindowState.maximized` (SDK 1.5.52, player 0.6.3). Who must change: nobody. What users see: with player 0.6.3 and later a maximized window stays maximized when a file starts; with older players, which do not report `maximized`, nothing changes (it reads `false`), so `minPlayerVersion` stays 0.6.0. The size commands (Screen ▸ 0.5×–2×, fit) still resize a maximized window: on Windows the player restores it first.
 - The settings text under Options ▸ Playback ▸ Window says so ("Not in fullscreen, maximized, mini size or picture-in-picture"); the new wording is a machine translation in every language, marked `x-machine` (also in zh-Hans).
 
 ## 0.1.5

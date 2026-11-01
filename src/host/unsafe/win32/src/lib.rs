@@ -186,43 +186,55 @@ thread_local! {
 
 /// Whether a message sent to a window is its own show from hidden
 /// (`WM_SHOWWINDOW` with `wParam` TRUE and `lParam` 0, not a show because
-/// its owner was restored), of a top-level window (`style` without
-/// `WS_CHILD`) that is not visible yet.
-fn shows_hidden_top_level(
-    message: u32,
-    wparam: usize,
-    lparam: isize,
-    style: u32,
-    visible: bool,
-) -> bool {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{WM_SHOWWINDOW, WS_CHILD};
-    message == WM_SHOWWINDOW && wparam != 0 && lparam == 0 && style & WS_CHILD == 0 && !visible
+/// its owner was restored). Checked first: the hook sees every message.
+fn is_own_show(message: u32, wparam: usize, lparam: isize) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::WM_SHOWWINDOW;
+    message == WM_SHOWWINDOW && wparam != 0 && lparam == 0
+}
+
+/// Whether a window being shown is a top-level window (`style` without
+/// `WS_CHILD`) that is not visible yet (a draw will follow to uncloak it).
+fn hidden_top_level(style: u32, visible: bool) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::WS_CHILD;
+    style & WS_CHILD == 0 && !visible
 }
 
 /// The `WH_CALLWNDPROC` hook of [`cloak_on_show`]: sees each message sent to
 /// a window of this thread before the window does.
-extern "system" fn cloak_on_show_hook(code: i32, wparam: usize, lparam: isize) -> isize {
+///
+/// # Safety
+///
+/// Called only by the system as a `WH_CALLWNDPROC` hook procedure: with
+/// `code == HC_ACTION`, `lparam` points at a `CWPSTRUCT` valid for the call.
+unsafe extern "system" fn cloak_on_show_hook(code: i32, wparam: usize, lparam: isize) -> isize {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CWPSTRUCT, CallNextHookEx, GWL_STYLE, GetClassNameW, GetWindowLongW, HC_ACTION,
         IsWindowVisible,
     };
     if code == HC_ACTION as i32 && lparam != 0 {
         // SAFETY: for WH_CALLWNDPROC with HC_ACTION, `lparam` points at the
-        // system's CWPSTRUCT for this message, valid for the hook call; it is
-        // only read, before the call returns.
+        // system's CWPSTRUCT for this message, valid for the hook call (this
+        // function's contract); it is only read, before the call returns.
         let sent = unsafe { &*(lparam as *const CWPSTRUCT) };
         let hwnd = sent.hwnd;
         // SAFETY: both take the HWND by value (a window of this thread, being
         // sent a message) and touch no memory of ours.
-        let (style, visible) = unsafe {
+        let window = || unsafe {
             (
                 GetWindowLongW(hwnd, GWL_STYLE) as u32,
                 IsWindowVisible(hwnd) != 0,
             )
         };
-        if shows_hidden_top_level(sent.message, sent.wParam, sent.lParam, style, visible) {
-            CLOAK_ON_SHOW.with_borrow(|hook| {
-                let Some(hook) = hook else {
+        if is_own_show(sent.message, sent.wParam, sent.lParam) && {
+            let (style, visible) = window();
+            hidden_top_level(style, visible)
+        } {
+            // `try_with`: nothing while the thread's locals are torn down.
+            let _ = CLOAK_ON_SHOW.try_with(|hook| {
+                let Ok(hook) = hook.try_borrow() else {
+                    return;
+                };
+                let Some(hook) = hook.as_ref() else {
                     return;
                 };
                 let mut name = [0u16; 64];
@@ -231,10 +243,15 @@ extern "system" fn cloak_on_show_hook(code: i32, wparam: usize, lparam: isize) -
                 let length = unsafe { GetClassNameW(hwnd, name.as_mut_ptr(), name.len() as i32) };
                 let length = usize::try_from(length).unwrap_or(0);
                 if name[..length] == hook.class[..] && set_cloaked(hwnd as isize, true) {
-                    // A panic must not unwind into the system's call.
-                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    // A panic must not unwind into the system's call; the
+                    // caller then never learned of the window, so it is
+                    // uncloaked at once rather than left hidden for good.
+                    let told = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         (hook.cloaked)(hwnd as isize);
                     }));
+                    if told.is_err() {
+                        set_cloaked(hwnd as isize, false);
+                    }
                 }
             });
         }
@@ -770,7 +787,7 @@ pub fn video_super_resolution(luid: u64) -> Result<SuperResolution, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        SuperResolution, VBlank, dxgi_adapters, file_is_remote, shows_hidden_top_level,
+        SuperResolution, VBlank, dxgi_adapters, file_is_remote, hidden_top_level, is_own_show,
         version_parts, video_super_resolution,
     };
     use std::time::{Duration, Instant};
@@ -834,6 +851,10 @@ mod tests {
             SW_PARENTOPENING, WM_SHOWWINDOW, WM_SIZE, WS_CHILD, WS_OVERLAPPEDWINDOW,
         };
         let top = WS_OVERLAPPEDWINDOW;
+        // As the hook decides: the message first, then the window.
+        let shows_hidden_top_level = |message, wparam, lparam, style, visible| {
+            is_own_show(message, wparam, lparam) && hidden_top_level(style, visible)
+        };
         assert!(shows_hidden_top_level(WM_SHOWWINDOW, 1, 0, top, false));
         assert!(
             !shows_hidden_top_level(WM_SHOWWINDOW, 0, 0, top, false),

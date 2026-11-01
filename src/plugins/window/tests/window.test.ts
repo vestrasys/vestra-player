@@ -317,7 +317,7 @@ test("G-02: not while maximized (MPC-HC, mpv); restored, the next file is sized;
   await play(host, { width: 1280, height: 720 });
   assert.deepEqual(host.sent("window.setVideoArea"), [{ width: 1280, height: 720 }]);
 
-  // An explicit size command while maximized is sent (the player restores the window first).
+  // An explicit size command while maximized is sent (on Windows the player restores the window first).
   host.setMainWindow({ maximized: true, videoArea: { width: 2560, height: 1340 } });
   await host.settle();
   await host.command("size.1").run();
