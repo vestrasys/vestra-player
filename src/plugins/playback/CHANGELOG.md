@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.10
+
+- The seek line is easier to hit (user request; PotPlayer's seek row works the same way): hovering (the time tip, the mark tip and the preview thumbnail), pressing and dragging now work anywhere in the whole 22px seek row, from the bar's top edge down to the button row and from 5px at the left to 8px before the mute button, instead of only the 10px around the line. Outside the line's ends a press or hover takes the nearer end. The look is unchanged: the line, knob, A-B loop and mark ticks are drawn exactly where they were (ticks keep their physical-pixel snapping at every scale factor), and the tip stays 4px above the line. Drag behaviour is unchanged (grabs on press, follows the pointer outside the row, clamps at the ends, cancel restores). The video above and the button row below do not take part.
+
 ## 0.2.9
 
 - The Fullscreen button's tooltip falls back to **Escape** as the Toggle Fullscreen key when the player's binding table cannot be read (it said Enter): the player's default for Toggle Fullscreen is now Escape only (Enter, Alt+Enter and F11 removed). With the table readable the tooltip shows the user's binding, as before. Comments say "the Toggle Fullscreen key" instead of "Enter / F11".
