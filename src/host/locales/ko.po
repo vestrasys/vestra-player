@@ -252,6 +252,11 @@ msgstr "전체 화면"
 msgid "Leave Fullscreen"
 msgstr "전체 화면 종료"
 
+#: src/host/actions.rs
+#, x-machine
+msgid "Enter Fullscreen"
+msgstr "전체 화면으로 전환"
+
 #: src/main.rs
 #, x-machine
 msgid "Toggle Sidebar"

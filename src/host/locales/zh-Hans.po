@@ -204,6 +204,11 @@ msgstr "全屏"
 msgid "Leave Fullscreen"
 msgstr "仅退出全屏"
 
+#: src/host/actions.rs
+#, x-machine
+msgid "Enter Fullscreen"
+msgstr "仅进入全屏"
+
 #: src/main.rs
 #, x-machine
 msgid "Toggle Sidebar"
