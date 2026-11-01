@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { readdir, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
@@ -63,18 +63,83 @@ const isIndex = (value: unknown): value is CacheIndex => {
   );
 };
 
-/** The index of a sprite folder, `null` when missing, broken or of another version. */
-export async function readIndex(dir: string): Promise<CacheIndex | null> {
+/**
+ * 0.2.12: `index.json` is written as `index.json.<pid>.<n>.tmp` in the same
+ * folder, then renamed over it, so a reader sees the old index or the new one,
+ * never half of one. Readers only read `index.json`; eviction leaves a folder
+ * alone while such a write is fresh (`WRITE_GRACE_MS`).
+ */
+export const INDEX_TEMP = /^index\.json\.\d+\.\d+\.tmp$/;
+/** A temporary index younger than this is a write in progress; an older one is left over from a crash. */
+export const WRITE_GRACE_MS = 60_000;
+/** Renames refused for a moment on Windows (a virus scanner or the indexer has the file open) are tried this often. */
+export const RENAME_TRIES = 5;
+const TRANSIENT = new Set(["EPERM", "EACCES", "EBUSY"]);
+let temps = 0;
+/** The file calls of `writeIndex`; tests replace them to play a failing disk or a refused rename. */
+export const indexFs = { writeFile, rename };
+
+type Look = { index: CacheIndex } | { invalid: true } | { unreadable: true };
+
+/** What a folder's index says: valid, invalid (missing, broken, another version) or not readable just now. */
+async function look(dir: string): Promise<Look> {
+  let text: string;
   try {
-    const value: unknown = JSON.parse(await readFile(join(dir, INDEX_FILE), "utf8"));
-    return isIndex(value) ? value : null;
+    text = await readFile(join(dir, INDEX_FILE), "utf8");
+  } catch (error) {
+    // Missing: no index. Anything else (a sharing violation while it is being
+    // replaced, too many open files): ask again later.
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? { invalid: true } : { unreadable: true };
+  }
+  try {
+    const value: unknown = JSON.parse(text);
+    return isIndex(value) ? { index: value } : { invalid: true };
   } catch {
-    return null;
+    return { invalid: true };
   }
 }
 
-export const writeIndex = (dir: string, index: CacheIndex) =>
-  writeFile(join(dir, INDEX_FILE), JSON.stringify(index));
+/** The index of a sprite folder, `null` when missing, broken or of another version. */
+export async function readIndex(dir: string): Promise<CacheIndex | null> {
+  const found = await look(dir);
+  return "index" in found ? found.index : null;
+}
+
+/** Write a sprite folder's index atomically: a temporary file in the folder, renamed over `index.json`. */
+export async function writeIndex(dir: string, index: CacheIndex): Promise<void> {
+  const temp = join(dir, `${INDEX_FILE}.${process.pid}.${++temps}.tmp`);
+  try {
+    // Inside the try: a write that fails half way leaves no temporary file behind.
+    await indexFs.writeFile(temp, JSON.stringify(index));
+    // Node's rename replaces an existing file on Windows too (libuv: MoveFileExW
+    // with MOVEFILE_REPLACE_EXISTING); it is refused while another program holds
+    // the target open without delete sharing: wait a little and try again.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await indexFs.rename(temp, join(dir, INDEX_FILE));
+      } catch (error) {
+        if (attempt >= RENAME_TRIES || !TRANSIENT.has((error as NodeJS.ErrnoException).code ?? "")) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 20 * attempt));
+      }
+    }
+  } catch (error) {
+    await unlink(temp).catch(() => {});
+    throw error;
+  }
+}
+
+/** The folder has a temporary index written less than `WRITE_GRACE_MS` before `now`: a write is in progress. */
+async function writing(dir: string, now: number): Promise<boolean> {
+  for (const name of await readdir(dir).catch(() => [] as string[])) {
+    if (!INDEX_TEMP.test(name)) continue;
+    const fresh = await stat(join(dir, name)).then(
+      (s) => now - s.mtimeMs < WRITE_GRACE_MS,
+      () => false,
+    );
+    if (fresh) return true;
+  }
+  return false;
+}
 
 async function folderBytes(dir: string): Promise<number> {
   let total = 0;
@@ -89,25 +154,29 @@ async function folderBytes(dir: string): Promise<number> {
 /**
  * Keep `root` under `limit` bytes: folders without a valid index (an older
  * version's pictures, a broken write) are removed, then the least recently
- * used sprites until the rest fits. `keep` (the sources in use) is never removed.
+ * used sprites until the rest fits. `keep` (the sources in use) is never removed
+ * (asked for each folder as it is looked at, so it may change meanwhile),
+ * nor (0.2.12) a folder whose index cannot be read just now or is being
+ * written (a fresh temporary index): the next clean-up looks again.
  * Returns the removed folder names.
  */
-export async function evict(root: string, keep: ReadonlySet<string>, limit = CACHE_LIMIT_BYTES): Promise<string[]> {
+export async function evict(root: string, keep: { has(name: string): boolean }, limit = CACHE_LIMIT_BYTES): Promise<string[]> {
   const removed: string[] = [];
   const entries: { name: string; usedAt: number; bytes: number }[] = [];
   let total = 0;
   for (const name of await readdir(root).catch(() => [] as string[])) {
     const dir = join(root, name);
-    const index = await readIndex(dir);
-    if (!index) {
+    const found = await look(dir);
+    if (!("index" in found)) {
       if (keep.has(name)) continue; // being made: its index comes with the first sheet
+      if ("unreadable" in found || (await writing(dir, Date.now()))) continue;
       await rm(dir, { recursive: true, force: true }).catch(() => {});
       removed.push(name);
       continue;
     }
     const bytes = await folderBytes(dir);
     total += bytes;
-    entries.push({ name, usedAt: index.usedAt, bytes });
+    entries.push({ name, usedAt: found.index.usedAt, bytes });
   }
   entries.sort((a, b) => a.usedAt - b.usedAt);
   for (const entry of entries) {

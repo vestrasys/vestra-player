@@ -1,12 +1,34 @@
 import assert from "node:assert/strict";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import test from "node:test";
 import type { PlaybackStats } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { CACHE_VERSION, cacheKey, evict, readIndex } from "../preview-cache.ts";
+import {
+  CACHE_VERSION,
+  cacheKey,
+  evict,
+  INDEX_TEMP,
+  indexFs,
+  readIndex,
+  RENAME_TRIES,
+  WRITE_GRACE_MS,
+  writeIndex,
+} from "../preview-cache.ts";
 import {
   CELL_BYTES,
   cellAt,
@@ -42,6 +64,8 @@ import {
   PART_TIMEOUT_MS,
   PUBLISH_MS,
   SEEK_QUIET_MS,
+  SETTLE_MS,
+  settle,
   SHOW_MS,
   START_DELAY_MS,
   START_FALLBACK_MS,
@@ -608,6 +632,281 @@ test("I07 cache: over the limit the least recently used go first; old or broken 
     assert.deepEqual(await evict(root, new Set(), 1_000_000), []);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("0.2.12 cache: index.json is replaced atomically (temporary file, rename, retried while a reader holds it)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vestra-preview-atomic-"));
+  try {
+    const index = (usedAt: number) => ({ version: CACHE_VERSION, count: 10, made: [0, 1], failed: [], complete: false, usedAt });
+    await writeIndex(dir, index(1));
+    assert.deepEqual(readdirSync(dir), ["index.json"], "no temporary file left");
+    await writeIndex(dir, index(2));
+    assert.equal((await readIndex(dir))?.usedAt, 2, "an existing index is replaced");
+    // A reader (another source's clean-up) has it open: Windows refuses the
+    // rename for that moment (EPERM); the write tries again and lands.
+    const reader = openSync(join(dir, "index.json"), "r");
+    const closing = new Promise<void>((resolve) =>
+      setTimeout(() => {
+        closeSync(reader);
+        resolve();
+      }, 30),
+    );
+    await writeIndex(dir, index(3));
+    await closing;
+    assert.equal((await readIndex(dir))?.usedAt, 3);
+    assert.deepEqual(readdirSync(dir), ["index.json"]);
+    // Readers read index.json only: a temporary file alone is no index.
+    rmSync(join(dir, "index.json"));
+    writeFileSync(join(dir, "index.json.1.1.tmp"), JSON.stringify(index(4)));
+    assert.ok(INDEX_TEMP.test("index.json.1.1.tmp"));
+    assert.equal(await readIndex(dir), null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("0.2.12 cache: a refused rename is tried again (EPERM, EACCES, EBUSY) up to RENAME_TRIES; a failed write leaves no temporary file", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vestra-preview-retry-"));
+  const saved = { ...indexFs };
+  const refuse = (code: string) => Object.assign(new Error(code), { code });
+  try {
+    const index = (usedAt: number) => ({ version: CACHE_VERSION, count: 10, made: [0], failed: [], complete: false, usedAt });
+    // Refused twice (a reader holds index.json), then it goes through.
+    let calls = 0;
+    indexFs.rename = async (from, to) => {
+      if (++calls <= 2) throw refuse(calls === 1 ? "EPERM" : "EBUSY");
+      return saved.rename(from, to);
+    };
+    await writeIndex(dir, index(1));
+    assert.equal(calls, 3);
+    assert.equal((await readIndex(dir))?.usedAt, 1);
+    assert.deepEqual(readdirSync(dir), ["index.json"]);
+    // Refused every time: it gives up after RENAME_TRIES, removes its temporary file, keeps the old index.
+    calls = 0;
+    indexFs.rename = async () => {
+      calls++;
+      throw refuse("EACCES");
+    };
+    await assert.rejects(writeIndex(dir, index(2)), { code: "EACCES" });
+    assert.equal(calls, RENAME_TRIES);
+    assert.deepEqual(readdirSync(dir), ["index.json"]);
+    assert.equal((await readIndex(dir))?.usedAt, 1);
+    // Any other error is not tried again.
+    calls = 0;
+    indexFs.rename = async () => {
+      calls++;
+      throw refuse("EXDEV");
+    };
+    await assert.rejects(writeIndex(dir, index(3)), { code: "EXDEV" });
+    assert.equal(calls, 1);
+    assert.deepEqual(readdirSync(dir), ["index.json"]);
+    // A write that fails half way (disk full): the partial temporary file is removed.
+    indexFs.rename = saved.rename;
+    indexFs.writeFile = async (file, text) => {
+      await saved.writeFile(file, String(text).slice(0, 10));
+      throw refuse("ENOSPC");
+    };
+    await assert.rejects(writeIndex(dir, index(4)), { code: "ENOSPC" });
+    assert.deepEqual(readdirSync(dir), ["index.json"]);
+    assert.equal((await readIndex(dir))?.usedAt, 1);
+  } finally {
+    Object.assign(indexFs, saved);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("0.2.12 cache: a folder whose index is being written is never evicted for it; one left over from a crash is", async () => {
+  const root = mkdtempSync(join(tmpdir(), "vestra-preview-midwrite-"));
+  try {
+    const text = JSON.stringify({ version: CACHE_VERSION, count: 10, made: [0], failed: [], complete: false, usedAt: 1 });
+    const folder = (name: string, files: Record<string, string>) => {
+      mkdirSync(join(root, name));
+      writeFileSync(join(root, name, "sheet-0.jpg"), "x");
+      for (const [file, content] of Object.entries(files)) writeFileSync(join(root, name, file), content);
+    };
+    // Half an index.json (an older version's in-place write) beside a fresh temporary one.
+    folder("partial", { "index.json": text.slice(0, 20), "index.json.7.1.tmp": text });
+    // The first index of a folder, not renamed into place yet.
+    folder("first", { "index.json.7.2.tmp": text });
+    // A crash during a write, long ago: broken, and the temporary file is stale.
+    folder("crashed", { "index.json": text.slice(0, 20), "index.json.7.3.tmp": text.slice(0, 10) });
+    const old = (Date.now() - 2 * WRITE_GRACE_MS) / 1000;
+    utimesSync(join(root, "crashed", "index.json.7.3.tmp"), old, old);
+    assert.deepEqual(await evict(root, new Set()), ["crashed"]);
+    assert.deepEqual(readdirSync(root).sort(), ["first", "partial"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("0.2.12 cache: one source's index writes and another source's clean-ups at once: the folder is never removed", async () => {
+  const root = mkdtempSync(join(tmpdir(), "vestra-preview-race-"));
+  try {
+    const dir = join(root, "busy");
+    mkdirSync(dir);
+    // A big index (about 1 MB): an in-place write of it is seen half done.
+    const count = 150_000;
+    const index = (usedAt: number) => ({
+      version: CACHE_VERSION,
+      count,
+      made: Array.from({ length: count }, (_, i) => i),
+      failed: [],
+      complete: true,
+      usedAt,
+    });
+    await writeIndex(dir, index(0));
+    let writing = true;
+    const writes = (async () => {
+      try {
+        for (let n = 1; n <= 15; n++) await writeIndex(dir, index(n));
+      } finally {
+        writing = false;
+      }
+    })();
+    let looks = 0;
+    while (writing) {
+      assert.deepEqual(await evict(root, new Set(["other"])), [], "the busy folder is never removed");
+      assert.ok(existsSync(dir));
+      looks++;
+    }
+    await writes;
+    assert.ok(looks > 0);
+    assert.equal((await readIndex(dir))?.usedAt, 15);
+    assert.deepEqual(readdirSync(dir), ["index.json"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("0.2.12 stop waits for the pending index writes (at most SETTLE_MS): nothing is written after it", async () => {
+  const media = mediaFile();
+  const data = mkdtempSync(join(tmpdir(), "vestra-preview-stop-"));
+  const host = new TestHost();
+  const time = fakeClock(host);
+  const indexes = holdIndexWrites(); // a slow disk
+  try {
+    playing(host, media.file);
+    fakeFfmpeg(host);
+    const { stop } = await start(host, data);
+    await generating(host, time);
+    await until(async () => {
+      await time.advance(500);
+      return indexes.held() > 0;
+    });
+    let stopped = false;
+    const stopping = stop().then(() => void (stopped = true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(stopped, false, "stop waits for the held index writes");
+    indexes.release();
+    await stopping;
+    const thumbs = join(data, "thumbs");
+    assert.equal(readdirSync(thumbs).length, 1);
+    const dir = join(thumbs, readdirSync(thumbs)[0]!);
+    assert.notEqual(await readIndex(dir), null, "the index landed before stop returned");
+    const after = { files: readdirSync(dir).sort(), index: readFileSync(join(dir, "index.json"), "utf8") };
+    assert.ok(!after.files.some((f) => INDEX_TEMP.test(f) || f.endsWith(".new.jpg")));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.deepEqual(readdirSync(dir).sort(), after.files, "nothing new in the folder after stop");
+    assert.equal(readFileSync(join(dir, "index.json"), "utf8"), after.index);
+  } finally {
+    time.restore();
+    indexes.restore();
+    media.done();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("0.2.12 a write that never finishes holds stop up for SETTLE_MS at most", async () => {
+  const media = mediaFile();
+  const data = mkdtempSync(join(tmpdir(), "vestra-preview-stuck-"));
+  const host = new TestHost();
+  const time = fakeClock(host);
+  const indexes = holdIndexWrites(); // never released
+  try {
+    playing(host, media.file);
+    fakeFfmpeg(host);
+    const { stop } = await start(host, data);
+    await generating(host, time);
+    await until(async () => {
+      await time.advance(500);
+      return indexes.held() > 0;
+    });
+    const began = Date.now();
+    await stop();
+    const took = Date.now() - began;
+    assert.ok(took >= SETTLE_MS - 50, `stop waited (${took} ms)`);
+    assert.ok(took < SETTLE_MS + 3000, `but not for ever (${took} ms)`);
+  } finally {
+    time.restore();
+    indexes.restore();
+    media.done();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("0.2.12 a clean-up held back by an ended source's index writes keeps the folder a newer source began meanwhile", async () => {
+  const files = [mediaFile("first.mkv"), mediaFile("second.mkv"), mediaFile("third.mkv")];
+  const data = mkdtempSync(join(tmpdir(), "vestra-preview-deferred-"));
+  const host = new TestHost();
+  const time = fakeClock(host);
+  settle.ms = 60_000; // the clean-ups wait for the held writes however long the test takes
+  // Index writes held per folder until let go.
+  const write = indexFile.write;
+  const held: { dir: string; go: () => void }[] = [];
+  const dirs: string[] = [];
+  let open = (_dir: string) => false;
+  indexFile.write = async (dir, index) => {
+    if (!dirs.includes(dir)) dirs.push(dir);
+    if (!open(dir)) await new Promise<void>((go) => held.push({ dir, go }));
+    return write(dir, index);
+  };
+  const next = async (n: number) => {
+    await generating(host, time);
+    await until(async () => {
+      await time.advance(100);
+      return dirs.length === n;
+    });
+  };
+  try {
+    playing(host, files[0]!.file);
+    fakeFfmpeg(host);
+    const { stop } = await start(host, data);
+    await next(1);
+    for (const media of files.slice(1)) {
+      // A new source: the old one ends with its index writes held, and the new
+      // one's clean-up (from its start) waits for them.
+      host.openElsewhere(media.file, "loading");
+      await host.settle();
+      host.setSource({ phase: "ready", duration: 20 });
+      await next(dirs.length + 1);
+    }
+    const [first, second, third] = dirs as [string, string, string];
+    // The first two sources' writes land (all of them, also those chained
+    // after): the waiting clean-ups run now. The third source's folder has no
+    // index yet (its first write is still held).
+    open = (dir) => dir !== third;
+    for (const h of held.filter((h) => h.dir !== third)) {
+      held.splice(held.indexOf(h), 1);
+      h.go();
+    }
+    await until(async () => (await readIndex(first)) !== null && (await readIndex(second)) !== null);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await host.settle();
+    assert.equal(await readIndex(third), null, "no index yet");
+    assert.ok(existsSync(third), "the current source's folder is kept by a clean-up that began before it");
+    assert.ok(existsSync(first) && existsSync(second));
+    indexFile.write = write;
+    for (const h of held.splice(0)) h.go();
+    settle.ms = SETTLE_MS;
+    await stop();
+  } finally {
+    indexFile.write = write;
+    for (const h of held.splice(0)) h.go();
+    settle.ms = SETTLE_MS;
+    time.restore();
+    for (const media of files) media.done();
+    rmSync(data, { recursive: true, force: true });
   }
 });
 
