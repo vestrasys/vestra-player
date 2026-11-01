@@ -232,6 +232,9 @@ fn register(
     let bindings = declaration.bindings.clone();
     let panel = declaration.focus == Some(commands::Focus::Panel);
     let repeat = declaration.repeat;
+    // Everything that can refuse the registration (bindings parsed and not
+    // repeated, the id, path, conflict and limits) is checked by the
+    // registry before it changes; what follows only records it.
     host.commands
         .register(owner, &origin.id, id.into(), revision, declaration, state)
         .map_err(|e| RpcError::new(e.code(), e.to_string()))?;

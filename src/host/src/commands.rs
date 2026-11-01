@@ -598,9 +598,10 @@ impl Registry {
         if let Some(button) = &declaration.button {
             button_valid(button, &declaration.path)?;
         }
-        for binding in &declaration.bindings {
-            crate::bindings::parse(binding).map_err(CommandError::Invalid)?;
-        }
+        // Parsed and without repeats, as the binding table declares them: a
+        // binding it would refuse refuses the registration before anything
+        // changes (SDK 1.5.48 review: no menu item behind a failed RPC).
+        crate::bindings::Table::canonical(&declaration.bindings).map_err(CommandError::Invalid)?;
         state_valid(&state)?;
         let key = CommandKey {
             owner,
@@ -1569,6 +1570,39 @@ mod tests {
             registry.register(1, "m", "keys".into(), 1, bad, state(true)),
             Err(CommandError::Invalid(_))
         ));
+    }
+
+    /// SDK 1.5.48 review: a binding listed twice refuses the registration
+    /// before anything changes, so no menu item stays behind a failed RPC.
+    #[test]
+    fn a_repeated_binding_refuses_the_registration_unchanged() {
+        let mut registry = Registry::new();
+        registry
+            .register(
+                1,
+                "m",
+                "kept".into(),
+                1,
+                declaration(&["Tools", "Kept"]),
+                state(true),
+            )
+            .unwrap();
+        let (before, revision) = (registry.snapshot(), registry.revision());
+        let mut twice = declaration(&["Tools", "Twice"]);
+        twice.bindings = vec!["Ctrl+K".into(), "F2".into(), "Ctrl+K".into()];
+        let refused = registry.register(1, "m", "twice".into(), 1, twice.clone(), state(true));
+        assert!(
+            matches!(&refused, Err(CommandError::Invalid(why)) if why.contains("Ctrl+K is listed twice")),
+            "{refused:?}"
+        );
+        assert!(registry.get(1, "twice").is_none());
+        assert_eq!(registry.snapshot(), before);
+        assert_eq!(registry.revision(), revision);
+        // The plugin's corrected registration takes the id and the path.
+        twice.bindings.pop();
+        registry
+            .register(1, "m", "twice".into(), 1, twice, state(true))
+            .unwrap();
     }
 
     #[test]
