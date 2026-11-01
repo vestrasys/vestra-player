@@ -745,7 +745,8 @@ fn the_state_has_monitoring_fields_and_changes_are_published() {
             })
             .collect::<Vec<_>>()
     };
-    let mut upscaling = Upscaling::with_probe(rtx);
+    // The stand-in filter: `add` below must work off Windows too.
+    let mut upscaling = with_stand_in();
     // Before the check: nothing published.
     upscaling.publish(&mpv, &render, &events);
     assert!(changed(&received).is_empty());
