@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
+import { HostError, LOCALES, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { presets } from "../model.ts";
 
@@ -1087,4 +1087,55 @@ test("zh-Hans: a track without title or codec, an external one, and unnamed devi
   await host.settle();
   assert.deepEqual(listed(host, window.props["track-rows"]), ["没有音轨"]);
   await stop();
+});
+
+test("G03: every Audio Track menu item fits the player's menu path segment in every language", async () => {
+  const awkward = [
+    { title: "长".repeat(80), language: null, codec: "aac", external: false },
+    { title: "日本語吹き替え版".repeat(10), language: "jpn", codec: "aac", external: true },
+    { title: "x".repeat(200), language: "l".repeat(40), codec: "c".repeat(60), external: true },
+    { title: "  Director's commentary \t ", language: " eng ", codec: " ac3 ", external: false },
+    { title: "a\u0000b\u0007c\u001bd\u007fe\u0085f\u009fg\r\n", language: null, codec: "e\u0080ac3", external: true },
+    { title: "\u0000\u0085　", language: null, codec: "opus", external: true },
+    { title: "🎬👨‍👩‍👧‍👦🇯🇵".repeat(12), language: null, codec: "flac", external: true },
+    { title: "é".repeat(50), language: null, codec: null, external: false },
+    { title: null, language: null, codec: "\u0001" + "z".repeat(100), external: true },
+    { title: null, language: null, codec: null, external: true },
+    { title: "长".repeat(80), language: null, codec: "aac", external: false },
+  ];
+  const tracks = awkward.map((fields, index) => ({ ...track(index + 1, index === 0), ...fields }));
+  const bytes = (text: string) => new TextEncoder().encode(text).length;
+  const shown = new Map<string, string[]>();
+  for (const locale of LOCALES) {
+    const host = new TestHost();
+    host.openElsewhere("/movie.mkv");
+    host.setSource({ audioTracks: tracks });
+    const { stop } = await startPlugin(activate, { directory, host, locale });
+    try {
+      await host.settle();
+      const items = tracks.map(({ trackId }) => host.command(`audio.track.${trackId}`));
+      for (const item of items) {
+        // What the player checks (commands.rs): 1..=80 bytes, no control, no surrounding whitespace.
+        for (const segment of item.display.path) {
+          assert.ok(segment.length > 0 && bytes(segment) <= 80, `${locale}: ${JSON.stringify(segment)} is ${bytes(segment)} bytes`);
+          assert.doesNotMatch(segment, /\p{Cc}/u, `${locale}: ${JSON.stringify(segment)}`);
+          assert.doesNotMatch(segment, /^\s|\s$/u, `${locale}: ${JSON.stringify(segment)}`);
+        }
+      }
+      const labels = items.map((item) => item.display.path[2]!);
+      assert.equal(new Set(labels).size, labels.length, `${locale}: distinct items`);
+      shown.set(locale, labels);
+    } finally {
+      await stop();
+    }
+  }
+  // The catalogs were read: the words around the data are translated in each language.
+  const english = shown.get("en")!;
+  assert.ok(LOCALES.length > 1);
+  for (const locale of LOCALES.slice(1)) assert.notEqual(shown.get(locale)!.at(-2), english.at(-2), `${locale}: "Track 10 (external)" is translated`);
+  assert.equal(shown.get("ja")!.at(-2), "トラック 10（外部）");
+  assert.match(shown.get("ja")![1]!, /^2\. 日本語吹き替え版.*… \[jpn\] \(aac\)（外部）$/);
+  assert.equal(english[3], "4. Director's commentary [eng] (ac3)");
+  assert.equal(english[4], "5. a b c d e f g (e ac3) (external)");
+  assert.equal(english[5], "Track 6 (opus) (external)");
 });

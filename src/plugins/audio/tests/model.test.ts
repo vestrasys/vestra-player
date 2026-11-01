@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, parse, presetOf, presets, serialize, syncSeconds, trackRow } from "../model.ts";
+import {
+  bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, parse, presetOf, presets, serialize, syncSeconds,
+  TRACK_TEXT_BYTES, trackRow,
+} from "../model.ts";
 
 test("reset clears the owned chain and preset gains stay inside the ±6 dB EQ range", () => {
   assert.deepEqual(nodes(neutral()), []);
@@ -88,12 +91,72 @@ test("G03 track labels: number, title, language, codec, external", () => {
   assert.equal(label({ title: "日语", language: "jpn", codec: "aac" }, 0), "1. 日语 [jpn] (aac)");
   assert.equal(label({ title: "movie.ac3", codec: "ac3", external: true }, 2), "3. movie.ac3 (ac3)");
   assert.equal(label({ language: "eng" }, 0), "1. [eng]");
-  assert.equal([...label({ title: "长".repeat(80) }, 0)].length, 60);
   // Without title and language the window, the menu and the OSD put the words around the data.
   assert.deepEqual(trackRow(t({ codec: "opus", external: true }), 1), {
     kind: "track", text: "", n: 2, codec: "opus", external: true, disconnected: false,
   });
   assert.deepEqual(trackRow(t({}), 3), { kind: "track", text: "", n: 4, codec: "", external: false, disconnected: false });
+});
+
+const bytes = (text: string) => new TextEncoder().encode(text).length;
+
+test("G03 track labels: at most 68 bytes, cut on whole characters, no controls or edge spaces", () => {
+  const t = (fields: Partial<Parameters<typeof trackRow>[0]>) => ({
+    id: 1, selected: false, external: false, exportable: true, codec: null, title: null, language: null, ...fields,
+  });
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const cases: Partial<Parameters<typeof trackRow>[0]>[] = [
+    { title: "长".repeat(80) },
+    { title: "日本語吹き替え版".repeat(10), language: "jpn", codec: "aac", external: true },
+    { title: "x".repeat(200), language: "l".repeat(40), codec: "c".repeat(60), external: true },
+    { title: "  Director's commentary \t ", language: " eng ", codec: " ac3 " },
+    { title: "a\u0000b\u0007c\u001bd\u007fe\u0085f\u009fg\r\n", codec: "e\u0080ac3" },
+    { title: "\u0000\u0085　", codec: "opus", external: true },
+    { title: "🎬👨‍👩‍👧‍👦🇯🇵".repeat(12), codec: "flac" },
+    { title: "é".repeat(50) },
+    { codec: "\u0001" + "z".repeat(100), external: true },
+  ];
+  for (const fields of cases) {
+    for (const index of [0, 98_765]) {
+      const row = trackRow(t(fields), index);
+      assert.ok(bytes(row.text) <= TRACK_TEXT_BYTES, row.text);
+      assert.doesNotMatch(row.text, /\p{Cc}/u);
+      assert.doesNotMatch(row.text, /^\s|\s$/u);
+      // A cut never splits a user-perceived character: every grapheme of the text is one of the source's, or "…".
+      const source = [fields.title, fields.language, fields.codec].join(" ");
+      for (const { segment } of segmenter.segment(row.text)) assert.ok(segment === "…" || /^[\d. [\]()]$/.test(segment) || source.includes(segment), segment);
+    }
+  }
+  // A long CJK title is cut in bytes, keeping number, language and codec.
+  const cjk = trackRow(t({ title: "日本語吹き替え版".repeat(10), language: "jpn", codec: "aac", external: true }), 0).text;
+  assert.match(cjk, /^1\. 日本語吹き替え版.*… \[jpn\] \(aac\)$/);
+  // Edge spaces go, controls become spaces.
+  assert.equal(trackRow(t({ title: "  Director's commentary \t ", language: " eng ", codec: " ac3 " }), 0).text, "1. Director's commentary [eng] (ac3)");
+  assert.equal(trackRow(t({ title: "a\u0000b\u0085c\r\n", codec: "e\u0080ac3" }), 0).text, "1. a b c (e ac3)");
+  // A title of controls and spaces only is no title: the words "Track 1 (opus)" are shown.
+  assert.deepEqual(trackRow(t({ title: "\u0000\u0085　", codec: "opus", external: true }), 0), {
+    kind: "track", text: "", n: 1, codec: "opus", external: true, disconnected: false,
+  });
+  // Emoji sequences are kept or dropped whole.
+  const emoji = trackRow(t({ title: "🎬👨‍👩‍👧‍👦🇯🇵".repeat(12), codec: "flac" }), 0).text;
+  assert.ok(emoji.endsWith("… (flac)") && bytes(emoji) <= TRACK_TEXT_BYTES, emoji);
+  assert.ok(!emoji.includes("‍…") && !/[\ud800-\udbff](?![\udc00-\udfff])/.test(emoji));
+});
+
+test("without Intl.Segmenter the labels are cut on code points and still fit", async () => {
+  const saved = Object.getOwnPropertyDescriptor(Intl, "Segmenter")!;
+  Object.defineProperty(Intl, "Segmenter", { value: undefined, configurable: true, writable: true });
+  try {
+    // A fresh copy of the module, loaded while the runtime has no segmenter.
+    const model: typeof import("../model.ts") = await import(new URL("../model.ts?no-segmenter", import.meta.url).href);
+    const t = (title: string) => ({ id: 1, selected: false, external: false, exportable: true, codec: "aac", title, language: null });
+    const text = model.trackRow(t("é".repeat(40)), 0).text;
+    assert.equal(text, `1. ${"é".repeat(18)}e… (aac)`, "code points: the last accent is cut off");
+    assert.ok(bytes(text) <= TRACK_TEXT_BYTES);
+    assert.equal(trackRow(t("é".repeat(40)), 0).text, `1. ${"é".repeat(18)}… (aac)`, "graphemes: kept whole");
+  } finally {
+    Object.defineProperty(Intl, "Segmenter", saved);
+  }
 });
 
 test("A11 same-name scan: audio files that start with the video's name, at most 8", () => {
@@ -139,6 +202,11 @@ test("G16: the saved device is an id the player accepts, kept with its name; tit
   assert.equal("deviceName" in serialize(parse({})), false);
   for (const bad of ["", 7, "a\nb", "x".repeat(513)]) assert.equal(parse({ device: bad, deviceName: "n" }).device, null);
   assert.equal(deviceId("coreaudio/X"), "coreaudio/X");
+  // As the player checks it: at most 512 UTF-8 bytes, no C0, DEL or C1 control.
+  assert.equal(deviceId("x".repeat(512)), "x".repeat(512));
+  assert.equal(deviceId("扬".repeat(170)), "扬".repeat(170), "510 bytes");
+  assert.equal(deviceId("扬".repeat(171)), null, "171 characters, 513 bytes");
+  for (const bad of ["a\u007fb", "a\u0085b", "a\u009fb", "a\u0000"]) assert.equal(deviceId(bad), null, JSON.stringify(bad));
   assert.deepEqual(
     deviceTitles([{ id: "a", name: "USB Audio" }, { id: "b", name: "USB Audio" }, { id: "c", name: "System Default" }, { id: "d", name: " \t " }, { id: "e", name: "" }], "USB Audio"),
     [
@@ -152,4 +220,5 @@ test("G16: the saved device is an id the player accepts, kept with its name; tit
   );
   const long = deviceLabel("扬声器".repeat(40));
   assert.ok(new TextEncoder().encode(long).length <= 72 && long.endsWith("…"));
+  assert.equal(deviceLabel(" Speakers\u0085(USB)\u009b "), "Speakers (USB)", "C1 controls become spaces too");
 });
