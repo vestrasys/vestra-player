@@ -159,7 +159,7 @@ test("the OSD and the window lists name an id-less embedded track \"Track N\" li
 
 test("segmentValid matches the player's rule: 1–80 bytes, no Cc, no edge White_Space", () => {
   for (const ok of ["a", "a b", "a  b", "字".repeat(26), "😀", "a b", "﻿a"]) assert.ok(segmentValid(ok), JSON.stringify(ok));
-  for (const bad of ["", " a", "a ", " a", "a　", " a", "a\u0085", "a\u0080b", "a\u009fb", "a\tb", "a\u007fb", "字".repeat(27)])
+  for (const bad of ["", " a", "a ", " a", "a　", "\u2028a", "a\u0085", "a\u0080b", "a\u009fb", "a\tb", "a\u007fb", "字".repeat(27)])
     assert.ok(!segmentValid(bad), JSON.stringify(bad));
 });
 
@@ -169,7 +169,7 @@ test("without Intl.Segmenter the cut falls back to whole code points", async () 
     Reflect.deleteProperty(Intl, "Segmenter"); // a runtime without Intl.Segmenter
     // A fresh copy of the module, evaluated without it.
     const fresh = new URL("../model.ts?no-segmenter", import.meta.url).href;
-    const model = (await import(fresh)) as typeof import("../model.ts");
+    const model = (await import(fresh)) as typeof import("../model.ts"); // boundary-reviewed: the package's own model.ts, reloaded
     assert.equal(model.menuCut("abc😀def", 4, 80), "abc😀", "a surrogate pair is one code point");
     assert.equal(model.menuCut("abc😀def", 80, 6), "abc");
     assert.equal(model.menuCut("étude", 1, 80), "e", "code points, not graphemes: the fallback is in use");

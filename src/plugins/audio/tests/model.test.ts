@@ -148,7 +148,7 @@ test("without Intl.Segmenter the labels are cut on code points and still fit", a
   Object.defineProperty(Intl, "Segmenter", { value: undefined, configurable: true, writable: true });
   try {
     // A fresh copy of the module, loaded while the runtime has no segmenter.
-    const model: typeof import("../model.ts") = await import(new URL("../model.ts?no-segmenter", import.meta.url).href);
+    const model: typeof import("../model.ts") = await import(new URL("../model.ts?no-segmenter", import.meta.url).href); // boundary-reviewed: the package's own model.ts, reloaded
     const t = (title: string) => ({ id: 1, selected: false, external: false, exportable: true, codec: "aac", title, language: null });
     const text = model.trackRow(t("é".repeat(40)), 0).text;
     assert.equal(text, `1. ${"é".repeat(18)}e… (aac)`, "code points: the last accent is cut off");
