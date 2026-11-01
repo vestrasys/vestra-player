@@ -130,7 +130,52 @@ export interface AiSettings {
   savedKeys?: Record<string, boolean>;
   /** The user's GitHub name: the id prefix of new plugins (unset: local.). */
   owner?: string;
+  /** How much reasoning models think before they answer (unset: "low"). */
+  thinking?: Thinking;
+  /**
+   * Custom endpoints: whether the model reasons, by "<provider> <model>"; unset:
+   * guessed from the model id (reasons()). pi's catalog knows it for its own providers.
+   */
+  reasoning?: Record<string, boolean>;
 }
+
+/** The thinking levels the settings offer, cheapest first; "low" is the default (cost-aware). */
+export const THINKING = ["off", "low", "medium"] as const;
+export type Thinking = (typeof THINKING)[number];
+export const DEFAULT_THINKING: Thinking = "low";
+
+/**
+ * Custom endpoint models that clearly reason (think before they answer) and
+ * take the reasoning parameters: OpenAI o-series, GPT-5 (not its chat
+ * variant) and gpt-oss, Claude 3.7 and 4+, Gemini 2.5+, DeepSeek R1 and
+ * reasoner, MiniMax M1+, QwQ, Grok 3 mini, Magistral, and ids that say
+ * "thinking" or "reasoning". Hybrid or unclear families (Qwen3 base and
+ * instruct, DeepSeek V3.x, GLM, Kimi K2, Grok 3/4) are left out: when unsure,
+ * no reasoning, which the settings' check box can change.
+ */
+const REASONING_IDS = [
+  /(^|[/:])o[1-9](-(mini|pro|preview|high|low))*($|[-:@])/,
+  /gpt-5(?!(\.\d+)?-chat)/,
+  /gpt-oss/,
+  /claude-3-7/,
+  /claude-(opus|sonnet|haiku|fable)-([4-9]|\d{2})/,
+  /gemini-(2\.5|[3-9])/,
+  /deepseek-(r1|reasoner)/,
+  /(^|[/:-])r1([-:]|$)/,
+  /minimax-m\d/,
+  /qwq/,
+  /grok-3-mini/,
+  /magistral/,
+  /thinking|reasoning|reasoner/,
+];
+/** Ids that say they do not reason, whatever else they match. */
+const NOT_REASONING = /non-?reasoning|no-?think|instruct/;
+export const reasons = (model: string) => {
+  const id = model.toLowerCase();
+  return !NOT_REASONING.test(id) && REASONING_IDS.some((pattern) => pattern.test(id));
+};
+/** The key of a custom model in AiSettings.reasoning. */
+export const reasoningKey = (provider: string, model: string) => `${provider} ${model}`;
 
 export const DEFAULT_SETTINGS: AiSettings = { provider: "anthropic", models: {}, baseUrls: {}, lastSession: null, migrateKeys: false, savedKeys: {} };
 
@@ -149,7 +194,19 @@ export function validSettings(value: unknown): value is AiSettings {
     (v.lastSession === null || v.lastSession === undefined || typeof v.lastSession === "string") &&
     (v.savedKeys === undefined || (!!v.savedKeys && typeof v.savedKeys === "object")) &&
     (v.owner === undefined || typeof v.owner === "string")
+    // thinking and reasoning are not checked here: an unknown level (a later
+    // version's) or a damaged map must not throw away the provider, keys and
+    // models; thinkingOf / reasoningOf fall back to the defaults instead.
   );
+}
+
+/** The saved thinking level, or the default for a missing or unknown one. */
+export const thinkingOf = (settings: AiSettings): Thinking => (THINKING.includes(settings.thinking as Thinking) ? (settings.thinking as Thinking) : DEFAULT_THINKING);
+
+/** The user's choice for a custom model ("<provider> <model>"), if a valid one was saved. */
+export function reasoningOf(settings: AiSettings, key: string): boolean | undefined {
+  const value = settings.reasoning && typeof settings.reasoning === "object" ? (settings.reasoning as Record<string, unknown>)[key] : undefined;
+  return typeof value === "boolean" ? value : undefined;
 }
 
 /**

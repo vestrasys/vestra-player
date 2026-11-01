@@ -16,6 +16,8 @@ export interface Meta {
   file: string | null;
   /** A run was in progress when the plugin stopped. */
   running: boolean;
+  /** Plugin ids installed from this session (by the agent or the card), for the delete dialog. */
+  installed?: string[];
 }
 
 const ID = /^s-[0-9a-z]+-[0-9a-f]{6}$/;
@@ -43,12 +45,59 @@ export class Sessions {
   }
 
   private writes = new Map<string, Promise<void>>();
+  private removed = new Set<string>();
+
+  /**
+   * Deletes a session: its folder sessions/<sid>/ with the transcript, the
+   * work folder (the plugin projects) and dist/ (packed .vxp files). Files
+   * the user exported elsewhere are not touched. The caller stops the
+   * session's worker first; a file a closing process still holds (Windows)
+   * is retried for a moment.
+   */
+  /**
+   * Marks the session as being deleted, synchronously: from here on saves are
+   * dropped and isRemoved() is true, so a send still starting its worker bails.
+   */
+  markRemoved(id: string) {
+    this.directory(id); // a session id
+    this.removed.add(id);
+  }
+
+  async remove(id: string): Promise<void> {
+    const directory = this.directory(id);
+    this.markRemoved(id);
+    await (this.writes.get(id) ?? Promise.resolve()).catch(() => {});
+    this.writes.delete(id);
+    await fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+
+  /** remove() was called for the session (late writers check it). */
+  isRemoved(id: string): boolean {
+    return this.removed.has(id);
+  }
+
+  /**
+   * After a remove() that failed: true when the session's meta.json is still
+   * there, so it stays a session (and can be saved again); false when only
+   * leftovers remain.
+   */
+  async restore(meta: Meta): Promise<boolean> {
+    try {
+      await fs.access(path.join(this.directory(meta.id), "meta.json"));
+    } catch {
+      return false;
+    }
+    this.removed.delete(meta.id);
+    return true;
+  }
 
   /**
    * Atomic (a crash leaves the old or the new meta.json, never half of one)
    * and in call order per session: the last save is what stays on disk.
    */
   save(meta: Meta): Promise<void> {
+    // A late save (a run that ended) must not bring a deleted session back.
+    if (this.removed.has(meta.id)) return Promise.resolve();
     const file = path.join(this.directory(meta.id), "meta.json");
     const text = `${JSON.stringify(meta, null, 2)}\n`;
     const write = async () => {

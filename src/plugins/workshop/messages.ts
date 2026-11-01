@@ -71,6 +71,11 @@ export type PropRow = {
 const textLimit = (row: Row) => (row.kind === "assistant" ? MAX_DOC_BYTES : MAX_FIELD_BYTES);
 /** The calls sent for a row: only an expanded tool line lists them. */
 const callsOf = (row: Row) => (row.kind === "tools" && row.expanded ? row.calls : []);
+/**
+ * The text sent for a row: a thought row's (thinking and progress notes, often
+ * long) only while it is expanded, so collapsed ones cost the list nothing.
+ */
+const textOf = (row: Row) => (row.kind === "thought" && !row.expanded ? "" : row.text);
 
 export class MessageDocs {
   private readonly docs = new Map<string, { text: string; ref: MarkdownRef }>();
@@ -92,7 +97,7 @@ export class MessageDocs {
       const row = rows[first - 1];
       const calls = callsOf(row);
       const size =
-        bytes(cut(row.text, textLimit(row))) +
+        bytes(cut(textOf(row), textLimit(row))) +
         bytes(cut(row.detail, MAX_FIELD_BYTES)) +
         row.args.reduce((sum, arg) => sum + bytes(arg), 0) +
         [...calls, row.call].reduce((sum, call) => sum + bytes(call.tool) + bytes(call.target), 0);
@@ -167,7 +172,7 @@ export class MessageDocs {
       out.push({
         id: row.id,
         kind: row.kind,
-        text: doc ? "" : cut(row.text, MAX_FIELD_BYTES),
+        text: doc ? "" : cut(textOf(row), MAX_FIELD_BYTES),
         detail: cut(row.detail, MAX_FIELD_BYTES),
         state: row.state,
         expanded: row.expanded,
@@ -180,7 +185,7 @@ export class MessageDocs {
         call: row.call,
         phase: row.phase,
         failed: row.failed,
-        truncated: bytes(row.text) > (doc ? MAX_DOC_BYTES : MAX_FIELD_BYTES),
+        truncated: bytes(textOf(row)) > (doc ? MAX_DOC_BYTES : MAX_FIELD_BYTES),
       });
     }
     return out;

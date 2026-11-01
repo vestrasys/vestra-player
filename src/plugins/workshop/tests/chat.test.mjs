@@ -61,12 +61,14 @@ test("a message streams back; the write tool shows one tool line and the file la
   const mock = await server(writeThenDone);
   const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
   await ai.ask("写一个 notes.md");
-  assert.equal(ai.kinds(), "user,tools,assistant");
-  const [user, tools, reply] = ai.rows();
+  assert.equal(ai.kinds(), "user,thought,tools,assistant");
+  const [user, thought, tools, reply] = ai.rows();
   assert.equal(user.text, "写一个 notes.md");
-  assert.equal(ai.shown(1), "1 个工具调用");
-  assert.equal(await ai.calls(1), "✓ 写入 notes.md");
-  // 「好的，我来写。」 opened the turn before its first tool call: not shown (Chat.opening).
+  // 「好的，我来写。」 came before a tool call: a progress note in the collapsed thought row, not the answer.
+  assert.equal(ai.shown(1), "1 条进度说明");
+  assert.equal(thought.text, "", "collapsed: no text sent");
+  assert.equal(ai.shown(2), "1 个工具调用");
+  assert.equal(await ai.calls(2), "✓ 写入 notes.md");
   assert.equal(reply.text, "写好了：notes.md。");
 
   const [meta] = (await fs.readdir(path.join(ai.plugin.dataDirectory, "sessions"))).map((id) => path.join(ai.plugin.dataDirectory, "sessions", id));
@@ -86,11 +88,13 @@ test("a message streams back; the write tool shows one tool line and the file la
   assert.match(body.messages[0].content, /Vestra Player AI/);
   assert.deepEqual(
     body.tools.map((t) => t.function.name).sort(),
-    ["check", "delete", "edit", "find", "grep", "install_plugin", "ls", "pack", "read", "scaffold_plugin", "test", "typecheck", "write"],
+    ["check", "delete", "docs", "docs_search", "edit", "find", "grep", "install_plugin", "ls", "pack", "read", "scaffold_plugin", "test", "typecheck", "write"],
   );
 
   await ai.send("toggle", tools.id);
-  assert.equal(ai.rows()[1].expanded, true);
+  assert.equal(ai.rows()[2].expanded, true);
+  await ai.send("toggle", thought.id);
+  assert.equal(ai.rows()[1].text, "好的，我来写。");
   await ai.send("copy", reply.id);
   assert.equal(ai.host.clipboard.text, reply.text);
   await ai.send("open-folder");
@@ -99,7 +103,7 @@ test("a message streams back; the write tool shows one tool line and the file la
 });
 
 test("text appears while it streams", async () => {
-  // The first line shows once the second starts (an opening line is held back, see Chat.opening).
+  // A reply without tool calls is the answer from its first chunk on.
   const mock = await server(() => ({ text: ["第一段\n\n", "第二段\n\n", "第三段"], pauseMs: 400 }));
   const ai = await startAi({ compat: mock.url });
   await ai.ask("讲点什么", { wait: false });

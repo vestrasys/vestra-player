@@ -103,3 +103,11 @@ export function translator(locale = "zh-Hans") {
 /** A binding that did not take effect, as AiWindow.shadowed-text in ai.slint. */
 export const shadowedText = (host, k) =>
   host.translate("{0} ({1}) is taken by {2}", [k.input, k.title, k.plugin === "host" ? host.translate("the player “{}”", [k.holder]) : host.translate("{0} “{1}”", [k.plugin, k.holder])]);
+
+/** The line of a "thought" row, as Message.thought-text in ai.slint. */
+export function thoughtLine(host, row) {
+  if (row.code === "thinking") return host.translate("Thinking…");
+  if (row.code === "thought") return plural(host, "Thought for {n} second", "Thought for {n} seconds", row.n);
+  if (row.code === "thought-untimed") return host.translate("Thought process");
+  return plural(host, "{n} progress note", "{n} progress notes", row.n);
+}

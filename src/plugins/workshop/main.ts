@@ -21,8 +21,13 @@ import {
   masked,
   migrate,
   pickListed,
+  reasoningKey,
+  reasoningOf,
+  reasons,
   say as text,
   secretName,
+  THINKING,
+  thinkingOf,
   validSettings,
   type AiSettings,
   type Provider,
@@ -44,6 +49,8 @@ interface Run {
   watchdog?: ReturnType<typeof setTimeout>;
   /** Plugin tool calls in progress (a test run, a dialog): no quiet timeout meanwhile. */
   tools: number;
+  /** The settings it started with (see `generation` in activate). */
+  generation: number;
 }
 
 /** Vestra Player AI: chat with a model of the user's choice (BYOK); the agent works in the session folder. */
@@ -66,8 +73,18 @@ export default async function activate(plugin: Plugin) {
     }
   };
   const delivering = new Delivering(plugin, toolchain, owner);
+  /** Installs from a session; a done install is recorded in its meta.json (installed), for the delete dialog. */
+  const installFrom = async (session: SessionPaths, id: string, ask: boolean, signal?: AbortSignal) => {
+    const result = await delivering.install(session, id, ask, signal);
+    const meta = metas.find((m) => sessions.directory(m.id) === session.dir);
+    if (result.ok && meta && !meta.installed?.includes(id)) {
+      meta.installed = [...(meta.installed ?? []), id];
+      await sessions.save(meta).catch((error) => console.error(`meta.json: ${error}`));
+    }
+    return result;
+  };
   const delivery = {
-    install: (session: SessionPaths, id: string, signal: AbortSignal) => delivering.install(session, id, true, signal),
+    install: (session: SessionPaths, id: string, signal: AbortSignal) => installFrom(session, id, true, signal),
   };
   /**
    * provider → key, read from the keychain once, on demand. Never during
@@ -106,6 +123,22 @@ export default async function activate(plugin: Plugin) {
     providers.find((p) => p.id === settings.value.provider) ?? { id: settings.value.provider, label: settings.value.provider, models: [], defaultModel: "", api: null };
   const gone = () => !providers.some((p) => p.id === settings.value.provider);
   const model = () => settings.value.models[provider().id] || provider().defaultModel;
+  /**
+   * A custom endpoint's model reasons: the user's choice in the settings, or
+   * guessed from its id. null for pi's providers (its catalog knows).
+   */
+  const reasoning = (): boolean | null => {
+    const p = provider();
+    if (!p.api) return null;
+    return reasoningOf(settings.value, reasoningKey(p.id, model())) ?? reasons(model());
+  };
+  const thinking = () => thinkingOf(settings.value);
+  /**
+   * Bumped by every change of service, key, model or thinking: a worker
+   * started before runs the next message with a new worker (the session
+   * file continues), also one that was generating when the change came.
+   */
+  let generation = 0;
   /**
    * The first slice kept the custom endpoint's key under another name: move
    * it once. Idempotent and retried until it succeeds (settings.migrateKeys).
@@ -333,6 +366,7 @@ export default async function activate(plugin: Plugin) {
       chat,
       running: false,
       tools: 0,
+      generation,
       worker: new AgentWorker(
         {
           sessionDir: directory,
@@ -343,9 +377,10 @@ export default async function activate(plugin: Plugin) {
           baseUrl: p.api ? settings.value.baseUrls[p.id] : null,
           api: p.api,
           key,
+          thinking: thinking(),
+          reasoning: reasoning(),
           systemPrompt: systemPrompt({
             sdk: toolchain.sdk,
-            index: toolchain.docsIndex(),
             sdkVersion: toolchain.sdkVersion,
             owner: owner(),
             delivery: true,
@@ -360,6 +395,8 @@ export default async function activate(plugin: Plugin) {
             runTool(toolchain, pathsOf(meta.id), owner(), name, args, signal, delivery)
               .then((reply) => run.worker.reply(call, reply))
               .finally(() => {
+                // A tool that finished after its session was deleted may have written there again.
+                if (sessions.isRemoved(meta.id)) sessions.remove(meta.id).catch(() => {});
                 run.tools--;
                 feed(run);
                 if (active?.id === meta.id) refreshProjects();
@@ -431,11 +468,24 @@ export default async function activate(plugin: Plugin) {
     chat.model = model();
     chat.begin();
     let run = runs.get(meta.id);
+    if (run && !run.worker.exited && run.generation !== generation) {
+      // Started with other settings (thinking, model, key): a new worker continues the session file.
+      runs.delete(meta.id);
+      await run.worker.stop();
+      run = undefined;
+    }
     if (!run || run.worker.exited) run = await startWorker(meta, chat);
+    // Deleted while the worker started: nothing more for it to do.
+    if (sessions.isRemoved(meta.id)) {
+      runs.delete(meta.id);
+      await run.worker.stop();
+      return;
+    }
     run.running = true;
     meta.running = true;
     meta.updated = Date.now();
     await sessions.save(meta);
+    if (sessions.isRemoved(meta.id)) return;
     metas = [meta, ...metas.filter((m) => m.id !== meta.id)];
     feed(run);
     run.worker.prompt(message).catch(() => {}); // start failures arrive through `failed`
@@ -464,6 +514,65 @@ export default async function activate(plugin: Plugin) {
   window.on("retry", () => send(shown.lastPrompt));
   window.on("newChat", () => select(null));
   window.on("selectSession", (id: string) => select(metas.find((m) => m.id === id) ?? null));
+
+  /**
+   * Deletes a conversation after the user confirmed: its record, its plugin
+   * projects and their packed files (sessions/<sid>/), never what was
+   * exported elsewhere. A run in it is stopped first; plugins installed from
+   * it stay installed (the player owns them, the dialog says so). The open
+   * conversation gives way to a new, empty one.
+   */
+  const removeSession = async (id: string) => {
+    const meta = metas.find((m) => m.id === id);
+    if (!meta) return;
+    // What this session installed (recorded at each install) and is still installed from the Workshop.
+    let installed: string[] = [];
+    if (meta.installed?.length)
+      try {
+        const mine = new Set(meta.installed);
+        installed = (await plugin.packages.list()).filter((p) => mine.has(p.id) && p.source?.kind === "workshop").map((p) => p.id);
+      } catch (error) {
+        console.error(`installed plugins: ${error}`);
+      }
+    const answer = await plugin.dialogs.confirm({
+      message: meta.title ? "Delete the conversation “{}”?" : "Delete this conversation?",
+      detail: installed.length
+        ? "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
+        : "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept.",
+      confirm: "Delete",
+      destructive: true,
+      args: [meta.title, plugin.i18n.list(installed)],
+    });
+    if (!answer.confirmed || !metas.includes(meta)) return;
+    // Before any await: a send whose worker is still starting sees it and bails.
+    sessions.markRemoved(id);
+    const run = runs.get(id);
+    if (run) {
+      runs.delete(id);
+      stopWatchdog(run);
+      if (run.running) {
+        run.running = false;
+        run.worker.abort();
+      }
+      await run.worker.stop();
+    }
+    metas = metas.filter((m) => m !== meta);
+    chats.delete(id);
+    if (active?.id === id) await select(null);
+    plugin.update();
+    try {
+      await sessions.remove(id);
+    } catch (error) {
+      console.error(`delete ${id}: ${error}`);
+      // Said in the conversation shown; a session whose meta.json is still there stays listed.
+      shown.notice("chat-delete-failed", [meta.title, (error as Error).message.split("\n")[0]]);
+      if (await sessions.restore(meta)) metas = [...metas, meta].sort((a, b) => b.updated - a.updated);
+      await docs.sync(shown.rows);
+      plugin.update();
+    }
+  };
+  window.on("deleteSession", (id: string) => removeSession(id));
+  window.on("deleteChat", () => active && removeSession(active.id));
   window.on("toggle", (id: string) => shown.toggle(id));
   window.on("copy", (id: string) => {
     const row = shown.rows.find((r) => r.id === id);
@@ -480,7 +589,7 @@ export default async function activate(plugin: Plugin) {
     chosen = projects[index]?.id ?? chosen;
     delivering.say("");
   });
-  window.on("install", action((meta, p) => delivering.install(pathsOf(meta.id), p.id, false)));
+  window.on("install", action((meta, p) => installFrom(pathsOf(meta.id), p.id, false)));
   window.on(
     "exportVxp",
     action(async (meta, p) => {
@@ -560,6 +669,8 @@ export default async function activate(plugin: Plugin) {
       message: pageMessage,
       messageWarn: pageWarn,
       ownerText: settings.value.owner ?? "",
+      thinkingIndex: THINKING.indexOf(thinking()),
+      reasons: reasoning() ?? false,
       ownerHint: ownerHint(),
     };
   });
@@ -583,7 +694,10 @@ export default async function activate(plugin: Plugin) {
     pageWarn = warn;
   };
   /** A change of service, key or model applies to the next message. */
-  const changed = () => releaseIdle();
+  const changed = () => {
+    generation++;
+    releaseIdle();
+  };
   /** Pulls the lists back to the model values (a one-way index stops following after a pick). */
   const syncIndexes = () => {
     const p = provider();
@@ -727,6 +841,19 @@ export default async function activate(plugin: Plugin) {
     changed();
   });
   page.on("fetchModels", () => fetchModels(true));
+  page.on("chooseThinking", (index: number) => {
+    const level = THINKING[index];
+    if (!level) return;
+    settings.save({ ...settings.value, thinking: level });
+    changed();
+  });
+  page.on("setReasons", (on: boolean) => {
+    const p = provider();
+    if (!p.api) return;
+    const saved = settings.value.reasoning && typeof settings.value.reasoning === "object" ? settings.value.reasoning : {};
+    settings.save({ ...settings.value, reasoning: { ...saved, [reasoningKey(p.id, model())]: on } });
+    changed();
+  });
 
   plugin.onDispose(async () => {
     clearTimeout(refresh);

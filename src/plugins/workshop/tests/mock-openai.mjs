@@ -25,7 +25,8 @@ export async function listenFetchable(server) {
 
 /**
  * `reply(request, index)` → one of
- *   { text: ["chunk", …], toolCalls?: [{ name, args }], pauseMs?, delayMs? }
+ *   { text: ["chunk", …], toolCalls?: [{ name, args }], thinking?: ["chunk", …], pauseMs?, delayMs? }
+ *     (thinking: a thinking block first, Anthropic's thinking_delta or OpenAI's reasoning_content)
  *     (delayMs: before the reply starts; pauseMs: between text chunks)
  *   { status: 401, error: "Incorrect API key provided" }
  *   { hang: true }   (never answers; for stop and timeout tests)
@@ -66,6 +67,12 @@ export async function mockOpenAI(reply, { models = ["mock-1", "mock-2"] } = {}) 
       const send = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
       send("message_start", { message: { id: "msg_test", type: "message", role: "assistant", model: request.body.model, content: [], stop_reason: null, usage: { input_tokens: 1, output_tokens: 0 } } });
       let index = 0;
+      if (answer.thinking?.length) {
+        send("content_block_start", { index, content_block: { type: "thinking", thinking: "" } });
+        for (const thinking of answer.thinking) send("content_block_delta", { index, delta: { type: "thinking_delta", thinking } });
+        send("content_block_delta", { index, delta: { type: "signature_delta", signature: "sig-test" } });
+        send("content_block_stop", { index: index++ });
+      }
       if (answer.text?.length) {
         send("content_block_start", { index, content_block: { type: "text", text: "" } });
         for (const text of answer.text) send("content_block_delta", { index, delta: { type: "text_delta", text } });
@@ -86,6 +93,7 @@ export async function mockOpenAI(reply, { models = ["mock-1", "mock-2"] } = {}) 
         `data: ${JSON.stringify({ id: "chatcmpl-test", object: "chat.completion.chunk", created: 0, model: request.body.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`,
       );
     chunk({ role: "assistant", content: "" });
+    for (const reasoning of answer.thinking ?? []) chunk({ reasoning_content: reasoning });
     for (const text of answer.text ?? []) {
       chunk({ content: text });
       if (answer.pauseMs) await new Promise((resolve) => setTimeout(resolve, answer.pauseMs));

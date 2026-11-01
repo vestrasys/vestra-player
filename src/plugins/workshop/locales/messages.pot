@@ -1,408 +1,448 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.workshop 2.2.5\n"
+"Project-Id-Version: vestra.workshop 2.2.23\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: ai.slint:114
+#: ai.slint:115
 msgid "Read"
 msgstr ""
 
-#: ai.slint:115
+#: ai.slint:116
 msgid "Write"
 msgstr ""
 
-#: ai.slint:116
+#: ai.slint:117
 msgid "Edit"
 msgstr ""
 
-#: ai.slint:117
+#: ai.slint:118
 msgid "List"
 msgstr ""
 
-#: ai.slint:118
+#: ai.slint:119
 msgid "Find"
 msgstr ""
 
-#: ai.slint:119
+#: ai.slint:120
 msgid "Search"
 msgstr ""
 
-#: ai.slint:120 settings.slint:191
+#: ai.slint:121 main.ts:542 settings.slint:197
 msgid "Delete"
 msgstr ""
 
-#: ai.slint:121
-msgid "Create plugin"
-msgstr ""
-
 #: ai.slint:122
-msgid "Type check"
+msgid "Docs"
 msgstr ""
 
 #: ai.slint:123
-msgid "Run tests"
+msgid "Search docs"
 msgstr ""
 
 #: ai.slint:124
-msgid "Check"
+msgid "Create plugin"
 msgstr ""
 
 #: ai.slint:125
+msgid "Type check"
+msgstr ""
+
+#: ai.slint:126
+msgid "Run tests"
+msgstr ""
+
+#: ai.slint:127
+msgid "Check"
+msgstr ""
+
+#: ai.slint:128
 msgid "Pack"
 msgstr ""
 
-#: ai.slint:126 ai.slint:294 ai.slint:591 delivery.ts:156
+#: ai.slint:129 ai.slint:364 ai.slint:691 delivery.ts:169
 msgid "Install"
 msgstr ""
 
-#. a file of the read-only reference, e.g. "reference/sdk/llms.txt".
-#: ai.slint:131
+#. a file of the read-only reference, e.g. "reference/sdk/dist/plugin/types.d.ts".
+#: ai.slint:134
 msgid "reference/{}"
 msgstr ""
 
 #. a tool and what it is about, e.g. "Read main.ts".
-#: ai.slint:135
+#: ai.slint:138
 msgid "{0} {1}"
 msgstr ""
 
-#: ai.slint:141
+#: ai.slint:144
 msgid "Replying…"
 msgstr ""
 
-#: ai.slint:141
+#: ai.slint:144 ai.slint:158
 msgid "Thinking…"
 msgstr ""
 
-#: ai.slint:148
+#: ai.slint:151
 msgid "{0}, {1} failed"
 msgstr ""
 
-#: ai.slint:152
+#: ai.slint:155
 msgid "{n} tool call"
 msgid_plural "{n} tool calls"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ai.slint:155
+#: ai.slint:159
+msgid "Thought for {n} second"
+msgid_plural "Thought for {n} seconds"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ai.slint:160
+msgid "Thought process"
+msgstr ""
+
+#: ai.slint:161
+msgid "{n} progress note"
+msgid_plural "{n} progress notes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ai.slint:164
 msgid "Stopped"
 msgstr ""
 
-#: ai.slint:156
+#: ai.slint:165
 msgid "The last reply was interrupted (the player or the plugin quit)"
 msgstr ""
 
-#: ai.slint:157
+#: ai.slint:166
 msgid "Connection failed; retrying ({0}/{1})…"
 msgstr ""
 
-#: ai.slint:158
+#: ai.slint:167
 msgid "Compacting the context…"
 msgstr ""
 
-#: ai.slint:159
+#: ai.slint:168
 msgid "Context compacted"
 msgstr ""
 
-#: ai.slint:160
+#: ai.slint:169
+msgid "Could not delete “{0}”: {1}"
+msgstr ""
+
+#: ai.slint:170
 msgid "{n} earlier message is not shown (the full record is in the session folder)"
 msgid_plural "{n} earlier messages are not shown (the full record is in the session folder)"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ai.slint:164
+#: ai.slint:174
 msgid "The API key is invalid or has no permission; check it in the settings."
 msgstr ""
 
-#: ai.slint:165
+#: ai.slint:175
 msgid "The model “{}” is not available; choose another model in the settings."
 msgstr ""
 
-#: ai.slint:166
+#: ai.slint:176
 msgid "The model is not available; choose another model in the settings."
 msgstr ""
 
-#: ai.slint:167
+#: ai.slint:177
+msgid "The model does not accept the thinking settings: in the settings, set Thinking to Off, or clear “This model can think before it answers”."
+msgstr ""
+
+#: ai.slint:178
 msgid "Out of quota or too many requests; try again later."
 msgstr ""
 
-#: ai.slint:168
+#: ai.slint:179
 msgid "Network error: cannot reach the provider."
 msgstr ""
 
-#: ai.slint:169
+#: ai.slint:180
 msgid "No reply from the provider for {} seconds; stopped."
 msgstr ""
 
-#: ai.slint:170
+#: ai.slint:181
 msgid "The agent process quit unexpectedly."
 msgstr ""
 
-#: ai.slint:172
+#: ai.slint:183
 msgid "Something went wrong."
 msgstr ""
 
-#: ai.slint:220
+#: ai.slint:259 ai.slint:290
 msgid "Collapse ▾"
 msgstr ""
 
-#: ai.slint:220
-msgid "All ▸"
+#: ai.slint:259
+msgid "Show ▸"
 msgstr ""
 
-#: ai.slint:250 ai.slint:257
+#: ai.slint:270 ai.slint:320 ai.slint:327
 msgid "… (too long; the rest is not shown)"
 msgstr ""
 
-#: ai.slint:253
+#: ai.slint:290
+msgid "All ▸"
+msgstr ""
+
+#: ai.slint:323
 msgid "Copy"
 msgstr ""
 
-#: ai.slint:275
+#: ai.slint:345
 msgid "Retry"
 msgstr ""
 
-#: ai.slint:276
+#: ai.slint:346
 msgid "Open Settings"
 msgstr ""
 
-#: ai.slint:295 ai.slint:592
+#: ai.slint:365 ai.slint:692
 msgid "Export .vxp"
 msgstr ""
 
-#: ai.slint:296 ai.slint:593
+#: ai.slint:366 ai.slint:693
 msgid "Export Source .zip"
 msgstr ""
 
-#: ai.slint:297 ai.slint:489 ai.slint:594
+#: ai.slint:367 ai.slint:584 ai.slint:694
 msgid "Open Folder"
 msgstr ""
 
-#: ai.slint:359
+#: ai.slint:433
 msgid "Reading the API key from the keychain… (the system may ask for permission)"
 msgstr ""
 
-#: ai.slint:360
+#: ai.slint:434
 msgid "Cannot read the key from the keychain; save it again in the settings. ({})"
 msgstr ""
 
-#: ai.slint:361
+#: ai.slint:435
 msgid "Cannot read the key from the keychain; save it again in the settings. (The key is not in the keychain)"
 msgstr ""
 
-#: ai.slint:362
+#: ai.slint:436
 msgid "The API key has not been read yet."
 msgstr ""
 
-#: ai.slint:363
+#: ai.slint:437
 msgid "No provider set up: choose a provider in the settings and save its API key first."
 msgstr ""
 
-#: ai.slint:368
+#: ai.slint:442
 msgid "Install {0} {1}"
 msgstr ""
 
-#: ai.slint:371
+#: ai.slint:445
 msgid "done"
 msgstr ""
 
-#: ai.slint:372
+#: ai.slint:446
 msgid "cancelled"
 msgstr ""
 
-#: ai.slint:373
+#: ai.slint:447
 msgid "failed"
 msgstr ""
 
-#: ai.slint:374
+#: ai.slint:448
 msgid "failed; the previous version could not be fully restored"
 msgstr ""
 
-#: ai.slint:375
+#: ai.slint:449
 msgid "too late to cancel"
 msgstr ""
 
-#: ai.slint:379
+#: ai.slint:453
 msgid "Packing {}…"
 msgstr ""
 
-#: ai.slint:380
+#: ai.slint:454
 msgid "The player is validating {}…"
 msgstr ""
 
-#: ai.slint:381
+#: ai.slint:455
 msgid "The player's validation failed ({0}): {1}"
 msgstr ""
 
-#: ai.slint:382
+#: ai.slint:456
 msgid "Checks before packing failed: {} problem(s)"
 msgstr ""
 
-#: ai.slint:383
+#: ai.slint:457
 msgid "Packing failed: {} type error(s)"
 msgstr ""
 
-#: ai.slint:384
+#: ai.slint:458
 msgid "Packing failed"
 msgstr ""
 
-#: ai.slint:385
+#: ai.slint:459
 msgid "Packing failed: no .vxp was written"
 msgstr ""
 
-#: ai.slint:386
+#: ai.slint:460
 msgid "Packing cancelled"
 msgstr ""
 
-#: ai.slint:387
+#: ai.slint:461
 msgid "Packing timed out and was stopped"
 msgstr ""
 
-#: ai.slint:388
+#: ai.slint:462
 msgid "Not installed (cancelled)."
 msgstr ""
 
-#: ai.slint:389
+#: ai.slint:463
 msgid "Installing {}…"
 msgstr ""
 
-#: ai.slint:390
+#: ai.slint:464
 msgid "{} has the name of a plugin built into the player and cannot be installed; choose another id."
 msgstr ""
 
-#: ai.slint:391
+#: ai.slint:465
 msgid "Not installed: the installed plugin was kept."
 msgstr ""
 
-#: ai.slint:392
+#: ai.slint:466
 msgid "{0}: {1}…"
 msgstr ""
 
-#: ai.slint:393
+#: ai.slint:467
 msgid "{0}: {1} ({2})"
 msgstr ""
 
-#: ai.slint:394
+#: ai.slint:468
 msgid "{0}: {1}"
 msgstr ""
 
-#: ai.slint:395
+#: ai.slint:469
 msgid "Installed {0} {1}. Shortcuts not in effect:"
 msgstr ""
 
-#: ai.slint:396
+#: ai.slint:470
 msgid "Installed {0} {1}."
 msgstr ""
 
-#: ai.slint:397
+#: ai.slint:471
 msgid "Exported {}"
 msgstr ""
 
-#: ai.slint:398
+#: ai.slint:472
 msgid "Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr ""
 
-#: ai.slint:399
+#: ai.slint:473
 msgid "Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr ""
 
-#: ai.slint:400
+#: ai.slint:474
 msgid "Something went wrong: {}"
 msgstr ""
 
-#: ai.slint:406
+#: ai.slint:480
 msgid "{0} ({1}) is taken by {2}"
 msgstr ""
 
-#: ai.slint:409
+#: ai.slint:483
 msgid "the player “{}”"
 msgstr ""
 
-#: ai.slint:409
+#: ai.slint:483
 msgid "{0} “{1}”"
 msgstr ""
 
-#: ai.slint:430
+#: ai.slint:515
 msgid "+ New Chat"
 msgstr ""
 
-#: ai.slint:442 ai.slint:479
+#: ai.slint:532 ai.slint:574
 msgid "New chat"
 msgstr ""
 
-#: ai.slint:442
+#: ai.slint:532
 msgid "Today"
 msgstr ""
 
-#: ai.slint:442
+#: ai.slint:532
 msgid "Earlier"
 msgstr ""
 
-#: ai.slint:457
+#: ai.slint:545 ai.slint:589
+msgid "Delete Chat"
+msgstr ""
+
+#: ai.slint:552
 msgid "⚙ Settings"
 msgstr ""
 
-#: ai.slint:510
+#: ai.slint:610
 msgid "Go to Settings"
 msgstr ""
 
-#: ai.slint:524
+#: ai.slint:624
 msgid "What plugin would you like to make, or what would you like to ask?"
 msgstr ""
 
-#: ai.slint:571
+#: ai.slint:671
 msgid "Plugin: {}"
 msgstr ""
 
-#: ai.slint:625
+#: ai.slint:725
 msgid "Another conversation is generating; please wait…"
 msgstr ""
 
-#: ai.slint:625
+#: ai.slint:725
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr ""
 
-#: ai.slint:642
+#: ai.slint:742
 msgid "Send"
 msgstr ""
 
-#: ai.slint:646
+#: ai.slint:746
 msgid "■ Stop"
 msgstr ""
 
-#: delivery.ts:154
+#: delivery.ts:167
 msgid "Install the AI-generated plugin “{}”?"
 msgstr ""
 
-#: delivery.ts:155
+#: delivery.ts:168
 msgid ""
 "{1} {2}\n"
 "Capabilities: {3}"
 msgstr ""
 
-#: delivery.ts:155
+#: delivery.ts:168
 msgid ""
 "{1} {2}\n"
 "Capabilities: none"
 msgstr ""
 
-#: delivery.ts:182
+#: delivery.ts:198
 msgid "Replace the installed {}?"
 msgstr ""
 
-#: delivery.ts:184
+#: delivery.ts:200
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr ""
 
-#: delivery.ts:185
+#: delivery.ts:201
 msgid "Replace"
 msgstr ""
 
-#: labels.slint:6 main.ts:519
+#: labels.slint:6 main.ts:633
 msgid "Custom · OpenAI format"
 msgstr ""
 
-#: labels.slint:7 main.ts:521
+#: labels.slint:7 main.ts:635
 msgid "Custom · Anthropic format"
 msgstr ""
 
@@ -410,23 +450,39 @@ msgstr ""
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr ""
 
-#: main.ts:487
+#: main.ts:538
+msgid "Delete the conversation “{}”?"
+msgstr ""
+
+#: main.ts:538
+msgid "Delete this conversation?"
+msgstr ""
+
+#: main.ts:539
+msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
+msgstr ""
+
+#: main.ts:539
+msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
+msgstr ""
+
+#: main.ts:601
 msgid "Export Plugin Package"
 msgstr ""
 
-#: main.ts:502
+#: main.ts:616
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr ""
 
-#: main.ts:523 manifest.json
+#: main.ts:637 manifest.json
 msgid "Vestra Player AI"
 msgstr ""
 
-#: main.ts:531
+#: main.ts:645
 msgid "{} (no longer offered)"
 msgstr ""
 
-#: main.ts:736
+#: main.ts:868
 msgid "Vestra Player AI…"
 msgstr ""
 
@@ -455,180 +511,204 @@ msgstr ""
 msgid "Experimental"
 msgstr ""
 
-#: settings.slint:64
+#: settings.slint:70
 msgid "The old provider's key is not deleted automatically"
 msgstr ""
 
-#: settings.slint:65
+#: settings.slint:71
 msgid "Reading the keychain…"
 msgstr ""
 
-#: settings.slint:66
+#: settings.slint:72
 msgid "Cannot read the key from the keychain; save it again"
 msgstr ""
 
-#: settings.slint:67
+#: settings.slint:73
 msgid "Not read yet (read when the AI window opens)"
 msgstr ""
 
-#: settings.slint:68
+#: settings.slint:74
 msgid "Not saved (a local service may need none)"
 msgstr ""
 
-#: settings.slint:69
+#: settings.slint:75
 msgid "Saved ••••{}"
 msgstr ""
 
-#: settings.slint:70
+#: settings.slint:76
 msgid "Not saved"
 msgstr ""
 
-#: settings.slint:74
+#: settings.slint:80
 msgid "Choose a provider first, then save the key."
 msgstr ""
 
-#: settings.slint:75
+#: settings.slint:81
 msgid "Could not save to the keychain: {}"
 msgstr ""
 
-#: settings.slint:76
+#: settings.slint:82
 msgid "Could not delete from the keychain: {}"
 msgstr ""
 
-#: settings.slint:77
+#: settings.slint:83
 msgid "The old provider's key was deleted."
 msgstr ""
 
-#: settings.slint:78
+#: settings.slint:84
 msgid "The key for {} was saved."
 msgstr ""
 
-#: settings.slint:79
+#: settings.slint:85
 msgid "The key for {} was deleted."
 msgstr ""
 
-#: settings.slint:80
+#: settings.slint:86
 msgid "Base URL is not a valid address"
 msgstr ""
 
-#: settings.slint:81
+#: settings.slint:87
 msgid "Base URL must be an http(s) address"
 msgstr ""
 
-#: settings.slint:82
+#: settings.slint:88
 msgid "Do not put a user name or password in the Base URL; enter the key under API Key"
 msgstr ""
 
-#: settings.slint:83
+#: settings.slint:89
 msgid "Enter the Base URL first."
 msgstr ""
 
-#: settings.slint:84
+#: settings.slint:90
 msgid "This provider does not list its models."
 msgstr ""
 
-#: settings.slint:86
+#: settings.slint:92
 msgid "{0} “{1}” is not in the list; now using “{2}”."
 msgstr ""
 
-#: settings.slint:87
+#: settings.slint:93
 msgid "Could not get the model list ({}); enter the model ID directly."
 msgstr ""
 
-#: settings.slint:88
+#: settings.slint:94
 msgid "Could not get the model list ({}); you can choose from pi's own list."
 msgstr ""
 
-#: settings.slint:89
+#: settings.slint:95
 msgid "Could not get the model list (no models listed); enter the model ID directly."
 msgstr ""
 
-#: settings.slint:90
+#: settings.slint:96
 msgid "Could not get the model list (no models listed); you can choose from pi's own list."
 msgstr ""
 
-#: settings.slint:94
+#: settings.slint:100
 msgid "Found {n} model."
 msgid_plural "Found {n} models."
 msgstr[0] ""
 msgstr[1] ""
 
-#: settings.slint:97
+#: settings.slint:103
 msgid "New plugins get the id {}.<name> (the official plugin repository requires the id prefix to be the GitHub user or organization that owns the source repository)."
 msgstr ""
 
-#: settings.slint:98
+#: settings.slint:104
 msgid "Not set: new plugins get the id local.<name>, for this computer only; to publish to the official plugin repository, enter your GitHub name."
 msgstr ""
 
-#: settings.slint:99
+#: settings.slint:105
 msgid "“vestra” is reserved for official plugins; enter your own GitHub name (new plugins use local.<name> for now)"
 msgstr ""
 
-#: settings.slint:100
+#: settings.slint:106
 msgid "“local” means no name was entered; enter your own GitHub name (new plugins use local.<name> for now)"
 msgstr ""
 
-#: settings.slint:101
+#: settings.slint:107
 msgid "A GitHub name has only letters, digits and “-”, at most 39 characters (new plugins use local.<name> for now)"
 msgstr ""
 
-#: settings.slint:112 settings.slint:137
+#: settings.slint:118 settings.slint:143
 msgid "Provider"
 msgstr ""
 
-#: settings.slint:112 settings.slint:148
+#: settings.slint:118 settings.slint:154
 msgid "Base URL"
 msgstr ""
 
-#: settings.slint:112 settings.slint:162
+#: settings.slint:118 settings.slint:168
 msgid "API key"
 msgstr ""
 
-#: settings.slint:112 settings.slint:196 settings.slint:219
+#: settings.slint:118 settings.slint:202 settings.slint:225
 msgid "Model"
 msgstr ""
 
-#: settings.slint:112 settings.slint:219
+#: settings.slint:118 settings.slint:225
 msgid "Model ID"
 msgstr ""
 
-#: settings.slint:112 settings.slint:241
+#: settings.slint:118 settings.slint:247
+msgid "Thinking"
+msgstr ""
+
+#: settings.slint:118 settings.slint:281
 msgid "Plugin author"
 msgstr ""
 
-#: settings.slint:132
+#: settings.slint:138
 msgid "Delete Old Key"
 msgstr ""
 
-#: settings.slint:168
+#: settings.slint:174
 msgid "A local service may leave this empty"
 msgstr ""
 
-#: settings.slint:168
+#: settings.slint:174
 msgid "Paste the API key"
 msgstr ""
 
-#: settings.slint:175
+#: settings.slint:181
 msgid "Save"
 msgstr ""
 
-#: settings.slint:210 settings.slint:233
+#: settings.slint:216 settings.slint:239
 msgid "Fetching…"
 msgstr ""
 
-#: settings.slint:210 settings.slint:233
+#: settings.slint:216 settings.slint:239
 msgid "Fetch Models"
 msgstr ""
 
-#: settings.slint:224
+#: settings.slint:230
 msgid "Model ID, e.g. qwen3:8b"
 msgstr ""
 
-#: settings.slint:246
+#: settings.slint:251
+msgid "Off"
+msgstr ""
+
+#: settings.slint:251
+msgid "Low (recommended)"
+msgstr ""
+
+#: settings.slint:251
+msgid "Medium"
+msgstr ""
+
+#: settings.slint:260
+msgid "For reasoning models. Thinking tokens are billed by the provider like the answer."
+msgstr ""
+
+#: settings.slint:273
+msgid "This model can think before it answers (a reasoning model)"
+msgstr ""
+
+#: settings.slint:286
 msgid "Your GitHub name (the prefix of plugin ids)"
 msgstr ""
 
-#: settings.slint:264
+#: settings.slint:304
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr ""

@@ -5,375 +5,413 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: ai.slint:114
+#: ai.slint:115
 msgid "Read"
 msgstr "读取"
 
-#: ai.slint:115
+#: ai.slint:116
 msgid "Write"
 msgstr "写入"
 
-#: ai.slint:116
+#: ai.slint:117
 msgid "Edit"
 msgstr "修改"
 
-#: ai.slint:117
+#: ai.slint:118
 msgid "List"
 msgstr "列出"
 
-#: ai.slint:118
+#: ai.slint:119
 msgid "Find"
 msgstr "查找"
 
-#: ai.slint:119
+#: ai.slint:120
 msgid "Search"
 msgstr "搜索"
 
-#: ai.slint:120 settings.slint:191
+#: ai.slint:121 main.ts:542 settings.slint:197
 msgid "Delete"
 msgstr "删除"
 
-#: ai.slint:121
+#: ai.slint:122
+msgid "Docs"
+msgstr "查阅文档"
+
+#: ai.slint:123
+msgid "Search docs"
+msgstr "搜索文档"
+
+#: ai.slint:124
 msgid "Create plugin"
 msgstr "创建插件"
 
-#: ai.slint:122
+#: ai.slint:125
 msgid "Type check"
 msgstr "类型检查"
 
-#: ai.slint:123
+#: ai.slint:126
 msgid "Run tests"
 msgstr "运行测试"
 
-#: ai.slint:124
+#: ai.slint:127
 msgid "Check"
 msgstr "检查"
 
-#: ai.slint:125
+#: ai.slint:128
 msgid "Pack"
 msgstr "打包"
 
-#: ai.slint:126 ai.slint:294 ai.slint:591 delivery.ts:156
+#: ai.slint:129 ai.slint:364 ai.slint:691 delivery.ts:169
 msgid "Install"
 msgstr "安装"
 
-#. a file of the read-only reference, e.g. "reference/sdk/llms.txt".
-#: ai.slint:131
+#. a file of the read-only reference, e.g. "reference/sdk/dist/plugin/types.d.ts".
+#: ai.slint:134
 msgid "reference/{}"
 msgstr "参考资料/{}"
 
 #. a tool and what it is about, e.g. "Read main.ts".
-#: ai.slint:135
+#: ai.slint:138
 msgid "{0} {1}"
 msgstr "{0} {1}"
 
-#: ai.slint:141
+#: ai.slint:144
 msgid "Replying…"
 msgstr "回复中…"
 
-#: ai.slint:141
+#: ai.slint:144 ai.slint:158
 msgid "Thinking…"
 msgstr "思考中…"
 
-#: ai.slint:148
+#: ai.slint:151
 msgid "{0}, {1} failed"
 msgstr "{0}，{1} 个失败"
 
-#: ai.slint:152
+#: ai.slint:155
 msgid "{n} tool call"
 msgid_plural "{n} tool calls"
 msgstr[0] "{n} 个工具调用"
 
-#: ai.slint:155
+#: ai.slint:159
+msgid "Thought for {n} second"
+msgid_plural "Thought for {n} seconds"
+msgstr[0] "已思考 {n} 秒"
+
+#: ai.slint:160
+msgid "Thought process"
+msgstr "思考过程"
+
+#: ai.slint:161
+msgid "{n} progress note"
+msgid_plural "{n} progress notes"
+msgstr[0] "{n} 条进度说明"
+
+#: ai.slint:164
 msgid "Stopped"
 msgstr "已停止"
 
-#: ai.slint:156
+#: ai.slint:165
 msgid "The last reply was interrupted (the player or the plugin quit)"
 msgstr "上次的生成被中断（播放器或插件已退出）"
 
-#: ai.slint:157
+#: ai.slint:166
 msgid "Connection failed; retrying ({0}/{1})…"
 msgstr "连接失败，正在重试（{0}/{1}）…"
 
-#: ai.slint:158
+#: ai.slint:167
 msgid "Compacting the context…"
 msgstr "正在压缩上下文…"
 
-#: ai.slint:159
+#: ai.slint:168
 msgid "Context compacted"
 msgstr "上下文已压缩"
 
-#: ai.slint:160
+#: ai.slint:169
+msgid "Could not delete “{0}”: {1}"
+msgstr "无法删除「{0}」：{1}"
+
+#: ai.slint:170
 msgid "{n} earlier message is not shown (the full record is in the session folder)"
 msgid_plural "{n} earlier messages are not shown (the full record is in the session folder)"
 msgstr[0] "更早的 {n} 条消息没有显示（完整记录在会话文件夹里）"
 
-#: ai.slint:164
+#: ai.slint:174
 msgid "The API key is invalid or has no permission; check it in the settings."
 msgstr "API key 无效或没有权限，请在设置中检查。"
 
-#: ai.slint:165
+#: ai.slint:175
 msgid "The model “{}” is not available; choose another model in the settings."
 msgstr "模型「{}」不可用，请在设置中换一个模型。"
 
-#: ai.slint:166
+#: ai.slint:176
 msgid "The model is not available; choose another model in the settings."
 msgstr "模型不可用，请在设置中换一个模型。"
 
-#: ai.slint:167
+#: ai.slint:177
+msgid "The model does not accept the thinking settings: in the settings, set Thinking to Off, or clear “This model can think before it answers”."
+msgstr "模型不接受思考设置：请在设置中把「思考」设为「关闭」，或取消勾选「这个模型会先思考再回答」。"
+
+#: ai.slint:178
 msgid "Out of quota or too many requests; try again later."
 msgstr "额度不足或请求过于频繁，请稍后重试。"
 
-#: ai.slint:168
+#: ai.slint:179
 msgid "Network error: cannot reach the provider."
 msgstr "网络错误：无法连接服务商。"
 
-#: ai.slint:169
+#: ai.slint:180
 msgid "No reply from the provider for {} seconds; stopped."
 msgstr "超过 {} 秒没有收到服务商的回复，已停止。"
 
-#: ai.slint:170
+#: ai.slint:181
 msgid "The agent process quit unexpectedly."
 msgstr "agent 进程意外退出。"
 
-#: ai.slint:172
+#: ai.slint:183
 msgid "Something went wrong."
 msgstr "出错了。"
 
-#: ai.slint:220
+#: ai.slint:259 ai.slint:290
 msgid "Collapse ▾"
 msgstr "收起 ▾"
 
-#: ai.slint:220
-msgid "All ▸"
-msgstr "全部 ▸"
+#: ai.slint:259
+msgid "Show ▸"
+msgstr "展开 ▸"
 
-#: ai.slint:250 ai.slint:257
+#: ai.slint:270 ai.slint:320 ai.slint:327
 msgid "… (too long; the rest is not shown)"
 msgstr "…（内容过长，后面没有显示）"
 
-#: ai.slint:253
+#: ai.slint:290
+msgid "All ▸"
+msgstr "全部 ▸"
+
+#: ai.slint:323
 msgid "Copy"
 msgstr "复制"
 
-#: ai.slint:275
+#: ai.slint:345
 msgid "Retry"
 msgstr "重试"
 
-#: ai.slint:276
+#: ai.slint:346
 msgid "Open Settings"
 msgstr "打开设置"
 
-#: ai.slint:295 ai.slint:592
+#: ai.slint:365 ai.slint:692
 msgid "Export .vxp"
 msgstr "导出 .vxp"
 
-#: ai.slint:296 ai.slint:593
+#: ai.slint:366 ai.slint:693
 msgid "Export Source .zip"
 msgstr "导出源码 zip"
 
-#: ai.slint:297 ai.slint:489 ai.slint:594
+#: ai.slint:367 ai.slint:584 ai.slint:694
 msgid "Open Folder"
 msgstr "打开文件夹"
 
-#: ai.slint:359
+#: ai.slint:433
 msgid "Reading the API key from the keychain… (the system may ask for permission)"
 msgstr "正在读取钥匙串中的 API key…（系统可能会请求授权）"
 
-#: ai.slint:360
+#: ai.slint:434
 msgid "Cannot read the key from the keychain; save it again in the settings. ({})"
 msgstr "无法读取钥匙串中的 key，请在设置中重新保存。（{}）"
 
-#: ai.slint:361
+#: ai.slint:435
 msgid "Cannot read the key from the keychain; save it again in the settings. (The key is not in the keychain)"
 msgstr "无法读取钥匙串中的 key，请在设置中重新保存。（钥匙串里没有这个 key）"
 
-#: ai.slint:362
+#: ai.slint:436
 msgid "The API key has not been read yet."
 msgstr "尚未读取 API key。"
 
-#: ai.slint:363
+#: ai.slint:437
 msgid "No provider set up: choose a provider in the settings and save its API key first."
 msgstr "尚未配置服务商：请先在设置中选择服务商并保存 API key。"
 
-#: ai.slint:368
+#: ai.slint:442
 msgid "Install {0} {1}"
 msgstr "安装 {0} {1}"
 
-#: ai.slint:371
+#: ai.slint:445
 msgid "done"
 msgstr "完成"
 
-#: ai.slint:372
+#: ai.slint:446
 msgid "cancelled"
 msgstr "已取消"
 
-#: ai.slint:373
+#: ai.slint:447
 msgid "failed"
 msgstr "失败"
 
-#: ai.slint:374
+#: ai.slint:448
 msgid "failed; the previous version could not be fully restored"
 msgstr "失败，未能完全恢复原版本"
 
-#: ai.slint:375
+#: ai.slint:449
 msgid "too late to cancel"
 msgstr "已无法取消"
 
-#: ai.slint:379
+#: ai.slint:453
 msgid "Packing {}…"
 msgstr "正在打包 {}…"
 
-#: ai.slint:380
+#: ai.slint:454
 msgid "The player is validating {}…"
 msgstr "正在由播放器校验 {}…"
 
-#: ai.slint:381
+#: ai.slint:455
 msgid "The player's validation failed ({0}): {1}"
 msgstr "播放器校验没有通过（{0}）：{1}"
 
-#: ai.slint:382
+#: ai.slint:456
 msgid "Checks before packing failed: {} problem(s)"
 msgstr "打包前的检查未通过：{} 个问题"
 
-#: ai.slint:383
+#: ai.slint:457
 msgid "Packing failed: {} type error(s)"
 msgstr "打包失败：{} 个类型错误"
 
-#: ai.slint:384
+#: ai.slint:458
 msgid "Packing failed"
 msgstr "打包失败"
 
-#: ai.slint:385
+#: ai.slint:459
 msgid "Packing failed: no .vxp was written"
 msgstr "打包失败：没有生成 .vxp"
 
-#: ai.slint:386
+#: ai.slint:460
 msgid "Packing cancelled"
 msgstr "打包已取消"
 
-#: ai.slint:387
+#: ai.slint:461
 msgid "Packing timed out and was stopped"
 msgstr "打包超时，已停止"
 
-#: ai.slint:388
+#: ai.slint:462
 msgid "Not installed (cancelled)."
 msgstr "没有安装（已取消）。"
 
-#: ai.slint:389
+#: ai.slint:463
 msgid "Installing {}…"
 msgstr "正在安装 {}…"
 
-#: ai.slint:390
+#: ai.slint:464
 msgid "{} has the name of a plugin built into the player and cannot be installed; choose another id."
 msgstr "{} 和播放器内置插件同名，不能安装，请换一个 id。"
 
-#: ai.slint:391
+#: ai.slint:465
 msgid "Not installed: the installed plugin was kept."
 msgstr "没有安装：保留了已安装的插件。"
 
-#: ai.slint:392
+#: ai.slint:466
 msgid "{0}: {1}…"
 msgstr "{0}：{1}…"
 
-#: ai.slint:393
+#: ai.slint:467
 msgid "{0}: {1} ({2})"
 msgstr "{0}{1}（{2}）"
 
-#: ai.slint:394
+#: ai.slint:468
 msgid "{0}: {1}"
 msgstr "{0}{1}"
 
-#: ai.slint:395
+#: ai.slint:469
 msgid "Installed {0} {1}. Shortcuts not in effect:"
 msgstr "已安装 {0} {1}。快捷键没有生效："
 
-#: ai.slint:396
+#: ai.slint:470
 msgid "Installed {0} {1}."
 msgstr "已安装 {0} {1}。"
 
-#: ai.slint:397
+#: ai.slint:471
 msgid "Exported {}"
 msgstr "已导出 {}"
 
-#: ai.slint:398
+#: ai.slint:472
 msgid "Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "已导出 {}。id 以 local. 开头：发布前把 manifest.json 的 id 改成 <你的 GitHub 用户名>.<名字>；LICENSE 是占位文件：发布前换成你选的许可证全文，并在 manifest.json 填 license。"
 
-#: ai.slint:399
+#: ai.slint:473
 msgid "Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "已导出 {}。LICENSE 是占位文件：发布前换成你选的许可证全文，并在 manifest.json 填 license。"
 
-#: ai.slint:400
+#: ai.slint:474
 msgid "Something went wrong: {}"
 msgstr "出错了：{}"
 
-#: ai.slint:406
+#: ai.slint:480
 msgid "{0} ({1}) is taken by {2}"
 msgstr "{0}（{1}）已被{2}占用"
 
-#: ai.slint:409
+#: ai.slint:483
 msgid "the player “{}”"
 msgstr "播放器「{}」"
 
-#: ai.slint:409
+#: ai.slint:483
 msgid "{0} “{1}”"
 msgstr "{0}「{1}」"
 
-#: ai.slint:430
+#: ai.slint:515
 msgid "+ New Chat"
 msgstr "+ 新对话"
 
-#: ai.slint:442 ai.slint:479
+#: ai.slint:532 ai.slint:574
 msgid "New chat"
 msgstr "新对话"
 
-#: ai.slint:442
+#: ai.slint:532
 msgid "Today"
 msgstr "今天"
 
-#: ai.slint:442
+#: ai.slint:532
 msgid "Earlier"
 msgstr "更早"
 
-#: ai.slint:457
+#: ai.slint:545 ai.slint:589
+msgid "Delete Chat"
+msgstr "删除对话"
+
+#: ai.slint:552
 msgid "⚙ Settings"
 msgstr "⚙ 设置"
 
-#: ai.slint:510
+#: ai.slint:610
 msgid "Go to Settings"
 msgstr "去设置"
 
-#: ai.slint:524
+#: ai.slint:624
 msgid "What plugin would you like to make, or what would you like to ask?"
 msgstr "想做什么插件，或者问点什么？"
 
-#: ai.slint:571
+#: ai.slint:671
 msgid "Plugin: {}"
 msgstr "插件：{}"
 
-#: ai.slint:625
+#: ai.slint:725
 msgid "Another conversation is generating; please wait…"
 msgstr "另一会话正在生成，请稍候…"
 
-#: ai.slint:625
+#: ai.slint:725
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr "输入消息… Enter 发送 · Shift+Enter 换行"
 
-#: ai.slint:642
+#: ai.slint:742
 msgid "Send"
 msgstr "发送"
 
-#: ai.slint:646
+#: ai.slint:746
 msgid "■ Stop"
 msgstr "■ 停止"
 
-#: delivery.ts:154
+#: delivery.ts:167
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "安装 AI 生成的插件「{}」？"
 
-#: delivery.ts:155
+#: delivery.ts:168
 msgid ""
 "{1} {2}\n"
 "Capabilities: {3}"
@@ -381,7 +419,7 @@ msgstr ""
 "{1} {2}\n"
 "能力：{3}"
 
-#: delivery.ts:155
+#: delivery.ts:168
 msgid ""
 "{1} {2}\n"
 "Capabilities: none"
@@ -389,23 +427,23 @@ msgstr ""
 "{1} {2}\n"
 "能力：无"
 
-#: delivery.ts:182
+#: delivery.ts:198
 msgid "Replace the installed {}?"
 msgstr "替换已安装的 {}？"
 
-#: delivery.ts:184
+#: delivery.ts:200
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "它是从别处安装的（不是 Vestra Player AI 生成的）。替换后新插件使用新的空数据目录；原插件的数据保留，以后从原来源重新安装时接上。"
 
-#: delivery.ts:185
+#: delivery.ts:201
 msgid "Replace"
 msgstr "替换"
 
-#: labels.slint:6 main.ts:519
+#: labels.slint:6 main.ts:633
 msgid "Custom · OpenAI format"
 msgstr "自定义 · OpenAI 格式"
 
-#: labels.slint:7 main.ts:521
+#: labels.slint:7 main.ts:635
 msgid "Custom · Anthropic format"
 msgstr "自定义 · Anthropic 格式"
 
@@ -413,23 +451,39 @@ msgstr "自定义 · Anthropic 格式"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "之前选择的服务商「{}」已不再提供，请改用其他服务商或「自定义 · OpenAI/Anthropic 格式」。"
 
-#: main.ts:487
+#: main.ts:538
+msgid "Delete the conversation “{}”?"
+msgstr "删除对话「{}」？"
+
+#: main.ts:538
+msgid "Delete this conversation?"
+msgstr "删除这个对话？"
+
+#: main.ts:539
+msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
+msgstr "对话记录和其中做的插件项目（源码文件夹和打包好的 .vxp 文件）都会删除；你导出的文件不受影响。从这个对话安装的插件仍留在播放器中（{1}）；不再需要的话，请在插件管理中移除。"
+
+#: main.ts:539
+msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
+msgstr "对话记录和其中做的插件项目（源码文件夹和打包好的 .vxp 文件）都会删除；你导出的文件不受影响。"
+
+#: main.ts:601
 msgid "Export Plugin Package"
 msgstr "导出插件包"
 
-#: main.ts:502
+#: main.ts:616
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "导出源码（可以直接作为 GitHub 仓库）"
 
-#: main.ts:523 manifest.json
+#: main.ts:637 manifest.json
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:531
+#: main.ts:645
 msgid "{} (no longer offered)"
 msgstr "{}（已不再提供）"
 
-#: main.ts:736
+#: main.ts:868
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
 
@@ -463,179 +517,203 @@ msgstr "插件开发"
 msgid "Experimental"
 msgstr "实验性"
 
-#: settings.slint:64
+#: settings.slint:70
 msgid "The old provider's key is not deleted automatically"
 msgstr "旧服务商的 key 不会自动删除"
 
-#: settings.slint:65
+#: settings.slint:71
 msgid "Reading the keychain…"
 msgstr "正在读取钥匙串…"
 
-#: settings.slint:66
+#: settings.slint:72
 msgid "Cannot read the key from the keychain; save it again"
 msgstr "无法读取钥匙串中的 key，请重新保存"
 
-#: settings.slint:67
+#: settings.slint:73
 msgid "Not read yet (read when the AI window opens)"
 msgstr "尚未读取（打开 AI 窗口时读取）"
 
-#: settings.slint:68
+#: settings.slint:74
 msgid "Not saved (a local service may need none)"
 msgstr "未保存（本地服务可以不填）"
 
-#: settings.slint:69
+#: settings.slint:75
 msgid "Saved ••••{}"
 msgstr "已保存 ••••{}"
 
-#: settings.slint:70
+#: settings.slint:76
 msgid "Not saved"
 msgstr "未保存"
 
-#: settings.slint:74
+#: settings.slint:80
 msgid "Choose a provider first, then save the key."
 msgstr "请先选择一个服务商，再保存 key。"
 
-#: settings.slint:75
+#: settings.slint:81
 msgid "Could not save to the keychain: {}"
 msgstr "没能保存到钥匙串：{}"
 
-#: settings.slint:76
+#: settings.slint:82
 msgid "Could not delete from the keychain: {}"
 msgstr "没能从钥匙串删除：{}"
 
-#: settings.slint:77
+#: settings.slint:83
 msgid "The old provider's key was deleted."
 msgstr "旧服务商的 key 已删除。"
 
-#: settings.slint:78
+#: settings.slint:84
 msgid "The key for {} was saved."
 msgstr "{} 的 key 已保存。"
 
-#: settings.slint:79
+#: settings.slint:85
 msgid "The key for {} was deleted."
 msgstr "{} 的 key 已删除。"
 
-#: settings.slint:80
+#: settings.slint:86
 msgid "Base URL is not a valid address"
 msgstr "Base URL 不是有效地址"
 
-#: settings.slint:81
+#: settings.slint:87
 msgid "Base URL must be an http(s) address"
 msgstr "Base URL 须为 http(s) 地址"
 
-#: settings.slint:82
+#: settings.slint:88
 msgid "Do not put a user name or password in the Base URL; enter the key under API Key"
 msgstr "Base URL 里不要写用户名或密码，key 请填在 API Key 中"
 
-#: settings.slint:83
+#: settings.slint:89
 msgid "Enter the Base URL first."
 msgstr "请先填写 Base URL。"
 
-#: settings.slint:84
+#: settings.slint:90
 msgid "This provider does not list its models."
 msgstr "这个服务商不提供模型列表。"
 
-#: settings.slint:86
+#: settings.slint:92
 msgid "{0} “{1}” is not in the list; now using “{2}”."
 msgstr "{0}「{1}」不在列表中，已改用「{2}」。"
 
-#: settings.slint:87
+#: settings.slint:93
 msgid "Could not get the model list ({}); enter the model ID directly."
 msgstr "没能获取模型列表（{}），请直接填写模型 ID。"
 
-#: settings.slint:88
+#: settings.slint:94
 msgid "Could not get the model list ({}); you can choose from pi's own list."
 msgstr "没能获取模型列表（{}），可以从 pi 自带的列表中选择。"
 
-#: settings.slint:89
+#: settings.slint:95
 msgid "Could not get the model list (no models listed); enter the model ID directly."
 msgstr "没能获取模型列表（没有列出任何模型），请直接填写模型 ID。"
 
-#: settings.slint:90
+#: settings.slint:96
 msgid "Could not get the model list (no models listed); you can choose from pi's own list."
 msgstr "没能获取模型列表（没有列出任何模型），可以从 pi 自带的列表中选择。"
 
-#: settings.slint:94
+#: settings.slint:100
 msgid "Found {n} model."
 msgid_plural "Found {n} models."
 msgstr[0] "获取到 {n} 个模型。"
 
-#: settings.slint:97
+#: settings.slint:103
 msgid "New plugins get the id {}.<name> (the official plugin repository requires the id prefix to be the GitHub user or organization that owns the source repository)."
 msgstr "新插件的 id 是 {}.<名字>（官方插件仓库要求 id 前缀就是源码仓库所属的 GitHub 用户或组织）。"
 
-#: settings.slint:98
+#: settings.slint:104
 msgid "Not set: new plugins get the id local.<name>, for this computer only; to publish to the official plugin repository, enter your GitHub name."
 msgstr "没有填写：新插件的 id 用 local.<名字>，只适合在本机使用；要发布到官方插件仓库，请填你的 GitHub 用户名。"
 
-#: settings.slint:99
+#: settings.slint:105
 msgid "“vestra” is reserved for official plugins; enter your own GitHub name (new plugins use local.<name> for now)"
 msgstr "「vestra」留给官方插件，请填你自己的 GitHub 用户名（新插件暂时用 local.<名字>）"
 
-#: settings.slint:100
+#: settings.slint:106
 msgid "“local” means no name was entered; enter your own GitHub name (new plugins use local.<name> for now)"
 msgstr "「local」表示没有填用户名，请填你自己的 GitHub 用户名（新插件暂时用 local.<名字>）"
 
-#: settings.slint:101
+#: settings.slint:107
 msgid "A GitHub name has only letters, digits and “-”, at most 39 characters (new plugins use local.<name> for now)"
 msgstr "GitHub 用户名只能有字母、数字和「-」，最多 39 个字符（新插件暂时用 local.<名字>）"
 
-#: settings.slint:112 settings.slint:137
+#: settings.slint:118 settings.slint:143
 msgid "Provider"
 msgstr "服务商"
 
-#: settings.slint:112 settings.slint:148
+#: settings.slint:118 settings.slint:154
 msgid "Base URL"
 msgstr "Base URL"
 
-#: settings.slint:112 settings.slint:162
+#: settings.slint:118 settings.slint:168
 msgid "API key"
 msgstr "API Key"
 
-#: settings.slint:112 settings.slint:196 settings.slint:219
+#: settings.slint:118 settings.slint:202 settings.slint:225
 msgid "Model"
 msgstr "模型"
 
-#: settings.slint:112 settings.slint:219
+#: settings.slint:118 settings.slint:225
 msgid "Model ID"
 msgstr "模型 ID"
 
-#: settings.slint:112 settings.slint:241
+#: settings.slint:118 settings.slint:247
+msgid "Thinking"
+msgstr "思考"
+
+#: settings.slint:118 settings.slint:281
 msgid "Plugin author"
 msgstr "插件作者"
 
-#: settings.slint:132
+#: settings.slint:138
 msgid "Delete Old Key"
 msgstr "删除旧 key"
 
-#: settings.slint:168
+#: settings.slint:174
 msgid "A local service may leave this empty"
 msgstr "本地服务可以留空"
 
-#: settings.slint:168
+#: settings.slint:174
 msgid "Paste the API key"
 msgstr "粘贴 API key"
 
-#: settings.slint:175
+#: settings.slint:181
 msgid "Save"
 msgstr "保存"
 
-#: settings.slint:210 settings.slint:233
+#: settings.slint:216 settings.slint:239
 msgid "Fetching…"
 msgstr "获取中…"
 
-#: settings.slint:210 settings.slint:233
+#: settings.slint:216 settings.slint:239
 msgid "Fetch Models"
 msgstr "获取模型"
 
-#: settings.slint:224
+#: settings.slint:230
 msgid "Model ID, e.g. qwen3:8b"
 msgstr "模型 ID，如 qwen3:8b"
 
-#: settings.slint:246
+#: settings.slint:251
+msgid "Off"
+msgstr "关闭"
+
+#: settings.slint:251
+msgid "Low (recommended)"
+msgstr "低（推荐）"
+
+#: settings.slint:251
+msgid "Medium"
+msgstr "中"
+
+#: settings.slint:260
+msgid "For reasoning models. Thinking tokens are billed by the provider like the answer."
+msgstr "用于推理模型。思考产生的 token 和回答一样由服务商计费。"
+
+#: settings.slint:273
+msgid "This model can think before it answers (a reasoning model)"
+msgstr "这个模型会先思考再回答（推理模型）"
+
+#: settings.slint:286
 msgid "Your GitHub name (the prefix of plugin ids)"
 msgstr "你的 GitHub 用户名（插件 id 的前缀）"
 
-#: settings.slint:264
+#: settings.slint:304
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr "key 只保存在系统钥匙串（macOS）或凭据管理器（Windows）里，不写入任何文件、日志或会话记录。"

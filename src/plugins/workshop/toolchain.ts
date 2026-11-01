@@ -265,14 +265,9 @@ export class Toolchain {
     return (this.version ??= (JSON.parse(readFileSync(path.join(this.sdk, "package.json"), "utf8")) as { version: string }).version);
   }
 
-  /** The read-only folders the agent may read: the SDK package, which carries the reference. */
+  /** The read-only folders the agent may read: the SDK package (its .d.ts and Slint library; the documentation is read with the docs tools). */
   docsRoots(): string[] {
     return [this.sdk];
-  }
-
-  /** The SDK's llms.txt (llms-full.txt is next to it). */
-  docsIndex(): string {
-    return path.join(this.sdk, "llms.txt");
   }
 
   /** <data>/node_modules: the SDK and its types where the projects resolve them. */
