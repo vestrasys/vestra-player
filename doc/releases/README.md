@@ -51,7 +51,7 @@ Every release also carries `latest.json`, a small description of that release (u
 https://github.com/vestrasys/vestra-player/releases/latest/download/latest.json
 ```
 
-Consumers: the player's update check (planned: compares `version` with its own, links `notes`, fetches `file`), and the download page, which reads it at build time for the version, links, sizes and minimum systems.
+Consumers: the player's update check (the Info plugin's Check for Updates, shipped with 0.6.3: compares `version` with its own, links `notes`, downloads `file` from that release's own URL `releases/download/v<version>/<file>` and checks its `size` and `sha256`), and the download page, which reads it at build time for the version, links, sizes and minimum systems.
 
 ```json
 {

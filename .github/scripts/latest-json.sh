@@ -59,7 +59,10 @@ minimum_os() {
     macos-*)
       zip="$dir/VestraPlayer-$version-$platform.app.zip"
       [ -f "$zip" ] || fail "${zip##*/} is missing (LSMinimumSystemVersion of $platform)"
-      value=$(unzip -p "$zip" "Vestra Player.app/Contents/Info.plist" |
+      # unzip fails when the zip has no Info.plist; "|| true" keeps set -e and
+      # pipefail from ending the script here without a message, so the fail
+      # below says why.
+      value=$( (unzip -p "$zip" "Vestra Player.app/Contents/Info.plist" || true) |
         tr -d '\r' |
         sed -n '/<key>LSMinimumSystemVersion<\/key>/{n;s/.*<string>\([0-9.]*\)<\/string>.*/\1/p;}' |
         head -1)
