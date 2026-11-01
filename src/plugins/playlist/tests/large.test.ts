@@ -638,7 +638,7 @@ test("sidebar.slint draws the rows with a ListView over `rows` (no ScrollView wi
   assert.match(row, /^\s*height: root\.row-height;$/m);
 });
 
-test("unchanged rows are the same objects on the next pass (lets SDK 1.5.47's identity cache skip them)", async () => {
+test("unchanged rows are the same frozen objects on the next pass (SDK 1.5.47 reuses their encoding)", async () => {
   const root = await mkdtemp(join(tmpdir(), "vestra-playlist-large-"));
   const files: string[] = [];
   for (let i = 0; i < 300; i++) {
@@ -663,6 +663,14 @@ test("unchanged rows are the same objects on the next pass (lets SDK 1.5.47's id
     assert.notEqual(after, before, "a new pass ran");
     const changed = after.flatMap((row, at) => (row === before[at] ? [] : [at]));
     assert.deepEqual(changed, [5, 7], "only the rows whose selection changed are new objects");
+    // Every row is deeply frozen (0.2.3): SDK 1.5.47 reuses the encoding of a frozen row it
+    // saw before. A row's only nested value is its picture (an image reference or null).
+    for (const row of after as Record<string, unknown>[]) {
+      assert.ok(Object.isFrozen(row), "the row is frozen");
+      for (const value of Object.values(row))
+        assert.ok(value === null || typeof value !== "object" || Object.isFrozen(value) || "toJSON" in value, "nested values are frozen or image references");
+    }
+    assert.equal(after[5]!.constructor, Object, "a plain object");
   } finally {
     await app.close();
   }

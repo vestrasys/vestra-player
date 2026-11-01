@@ -893,17 +893,34 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     detail: string;
     thumb: ImageRef | null;
   };
+  const viewKeys: readonly (keyof ViewRow)[] = [
+    "id",
+    "number",
+    "label",
+    "duration",
+    "tooltip",
+    "problem",
+    "selected",
+    "current",
+    "played",
+    "failed",
+    "media",
+    "detail",
+    "thumb",
+  ];
   /**
    * The object sent last for each row: an unchanged row is the same object on the next pass
-   * (0.2.1), which lets SDK 1.5.47's encode cache by identity skip encoding it again (at
-   * 20,000 rows most of a pass's cost).
+   * (0.2.1), and it is frozen (0.2.3), which lets SDK 1.5.47 reuse its encoding instead of
+   * encoding it again (at 20,000 rows most of a pass's cost). A changed row is a new frozen
+   * object. Its only nested value, the picture, is an image reference (a leaf to the SDK).
    */
-  const sentRows = new WeakMap<Row, ViewRow>();
-  const viewRow = (row: Row, next: ViewRow) => {
+  const sentRows = new WeakMap<Row, Readonly<ViewRow>>();
+  const viewRow = (row: Row, next: ViewRow): Readonly<ViewRow> => {
     const last = sentRows.get(row);
-    if (last && (Object.keys(next) as (keyof ViewRow)[]).every((key) => last[key] === next[key])) return last;
-    sentRows.set(row, next);
-    return next;
+    if (last && viewKeys.every((key) => last[key] === next[key])) return last;
+    const frozen = Object.freeze(next);
+    sentRows.set(row, frozen);
+    return frozen;
   };
 
   // 0.2.0 (large lists P3): `rows` is every shown row, drawn by a `ListView` (only the rows in

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+Who must change: nobody. What users see: with long lists a click shows a little sooner (20,000 rows: about 40 to 21 ms in the plugin with SDK 1.5.47). Needs player 0.6.0.
+
+- Each row the list is sent is frozen and stays the same object while it does not change, so SDK 1.5.47 reuses its encoding instead of encoding all rows on every update.
+
 ## 0.2.2
 
 Who must change: nobody. What users see: turning thumbnails on or off now really keeps the row at the top of the list (0.2.1 could still jump far away). Needs player 0.6.0.
