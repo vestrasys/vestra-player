@@ -4,6 +4,8 @@
 //! a few other modules add their own `impl Host` blocks.
 mod actions;
 pub(crate) use actions::migrate_fullscreen_escape;
+mod diagnostics;
+pub(crate) use diagnostics::{ShaderGuard, register_shader_writer, session_end};
 mod dispatch;
 mod events;
 mod handle;
@@ -317,6 +319,10 @@ pub(crate) struct Host {
     pub(crate) bar: bar_buttons::Strip,
     /// Lazy activation: parked and waking plugins, idle times (`lazy.rs`).
     pub(crate) lazy: lazy::Lazy,
+    /// The plugin shaders' crash guard (`diagnostics.rs`).
+    pub(crate) shader_guard: ShaderGuard,
+    /// When the memory line last went to the host log (`diagnostics.rs`).
+    pub(crate) memory_logged: Option<Instant>,
 }
 pub(crate) struct AreaReply {
     pub(crate) reply: Reply,

@@ -505,3 +505,9 @@ msgstr "{} を起動しています…"
 #, x-machine
 msgid "{} could not start"
 msgstr "{} を起動できませんでした"
+
+#. The OSD once per start when plugin shaders are kept off because the last run ended while they were on.
+#: src/host/diagnostics.rs
+#, x-machine
+msgid "Plugin shaders are off: the player ended unexpectedly while they were on"
+msgstr "プラグインのシェーダーはオフです: 有効中にプレーヤーが予期せず終了しました"

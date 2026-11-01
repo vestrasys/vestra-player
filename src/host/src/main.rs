@@ -194,8 +194,33 @@ fn main() -> Result<()> {
             Err(error) => diag!("single instance: {error}; running on its own"),
         }
     }
+    // The host log (`diag.rs`): a release build with windows writes a few
+    // lines to `<app data>/logs/host.log`; opened once this process is the
+    // player (a launch that handed its files over has returned above).
+    if let Some(path) = diag::log_path(
+        std::env::var_os("VESTRA_LOG_FILE"),
+        cfg!(not(debug_assertions)),
+        headless,
+        !directories.is_empty(),
+        platform::app_data_dir(),
+    ) {
+        match diag::open_log(path) {
+            Ok(()) => diag::log_panics(),
+            Err(error) => diag!("log: the host log cannot be opened ({error})"),
+        }
+    }
+    logged!(
+        "start: Vestra Player {}{} on {} {}{}",
+        env!("CARGO_PKG_VERSION"),
+        option_env!("VESTRA_BUILD")
+            .map(|build| format!(" ({build})"))
+            .unwrap_or_default(),
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        if headless { ", headless" } else { "" }
+    );
     if let Some(parent) = restart {
-        diag!("restart: this player replaces process {parent}");
+        logged!("restart: this player replaces process {parent}");
     }
     let mut evidence = frame_evidence.map(FrameEvidence::new).transpose()?;
     // A packaged player missing its own files (the bundled Node above all)
@@ -224,7 +249,7 @@ fn main() -> Result<()> {
     // denylist and systems without a GPU renderer can make it software.
     let startup = host::rendering_startup(headless);
     let mut render = render_mode::decide(&startup.facts, startup.preference);
-    diag!("{}", render.line());
+    logged!("{}", render.line());
     for note in &render.notes {
         diag!("{note}");
     }
@@ -257,6 +282,24 @@ fn main() -> Result<()> {
         keys,
         restarted_at,
     };
+    // The GPU the mode uses (GPU rendering's, else CPU mode's windows'
+    // adapter); macOS names no adapter yet, only its system build.
+    if !headless {
+        let key = &lost_device.keys.key;
+        logged!(
+            "render: this mode's adapter is {} (driver {})",
+            if key.adapter.is_empty() {
+                "unknown"
+            } else {
+                &key.adapter
+            },
+            if key.driver.is_empty() {
+                "unknown"
+            } else {
+                &key.driver
+            }
+        );
+    }
     if !headless {
         // Windows: the main window draws at the display's vertical blanks
         // (`frame_pacing.rs`), not on Slint's timer.
@@ -303,7 +346,7 @@ fn main() -> Result<()> {
         };
         if let Err(error) = gpu_windows {
             render = render.fall_back(render_mode::Reason::InitFailed(error));
-            diag!("{}", render.line());
+            logged!("{}", render.line());
             guard.settle();
         }
         if !render.is_gpu() && render.windows == render_mode::WindowKind::Wgpu {
@@ -312,13 +355,42 @@ fn main() -> Result<()> {
             if let Err(error) = wgpu_windows(false) {
                 diag!("render: no Direct3D 12 windows for software rendering ({error})");
                 render = render.without_wgpu_windows();
-                diag!("{}", render.line());
+                logged!("{}", render.line());
                 guard.settle();
             }
         }
         if !render.is_gpu() && render.windows != render_mode::WindowKind::Wgpu {
             select_cpu_windows(render.windows, winit)?;
         }
+    }
+    // The plugin shaders' crash guard (`render_state`, `host/diagnostics.rs`):
+    // GPU rendering only, keyed on its adapter. A run that ended while
+    // plugin shaders were on keeps them off here.
+    let shader_block = render
+        .is_gpu()
+        .then(|| guard.shader_start(&startup.keys.key, playback::render_state::now()))
+        .flatten();
+    if let Some(block) = &shader_block {
+        logged!(
+            "shaders: plugin shaders are off for {} (the last run ended while those of {} were on)",
+            if block.until.is_some() {
+                "a while"
+            } else {
+                "this start"
+            },
+            block.plugins.join(", ")
+        );
+    }
+    let shader_guard =
+        host::ShaderGuard::new(guard.clone(), startup.keys.key.clone(), shader_block);
+    if !headless {
+        // Shutdown, restart, logoff (Windows): the shader guard settles and
+        // the exit line is written before the system ends the process.
+        let writer = shader_guard.writer();
+        platform::on_session_end(move |event| host::session_end(&writer, event));
+        // A device loss restarts the player from any thread: the guard's
+        // pending write goes to disk first (`host::persist_shader_guard`).
+        host::register_shader_writer(shader_guard.writer());
     }
     let mut observed_source = Value::Null;
     let (events, receiver) = mpsc::channel();
@@ -467,6 +539,8 @@ fn main() -> Result<()> {
         bar: bar_buttons::Strip::default(),
         lazy: host::lazy::Lazy::from_env(),
         commands: commands::Registry::new(),
+        shader_guard,
+        memory_logged: None,
     };
     // The interface language of this run (doc/architecture/i18n.md §2):
     // `VESTRA_LANGUAGE` (development and tests), else the saved choice, else
@@ -553,6 +627,7 @@ fn main() -> Result<()> {
             host.activation_tick();
             host.lazy_tick();
             host.power_tick();
+            host.diagnostics_tick();
             host.package_tick();
             host.notify_tick();
             host.timeline_tick();
@@ -579,6 +654,8 @@ fn main() -> Result<()> {
         // Lazy activation: what each running plugin was at its ready.
         host.lazy_quit();
         stop_handoffs();
+        host.shader_guard.quit();
+        logged!("exit: normal");
     } else {
         // Windows: no window opens white (cloaked until its first draw).
         platform::cloak_until_drawn();
@@ -693,6 +770,7 @@ fn main() -> Result<()> {
                 host.activation_tick();
                 host.lazy_tick();
                 host.power_tick();
+                host.diagnostics_tick();
                 host.package_tick();
                 host.notify_tick();
                 host.timeline_tick();
@@ -775,10 +853,18 @@ fn main() -> Result<()> {
             // started from the device's callback; this is the fallback).
             host.borrow_mut().ui_state.flush();
             let source = host.borrow().last_source.clone();
+            // Plugin shaders stay `applying` if they were: a device lost
+            // while they were on keeps them off in the restarted player.
+            logged!("exit: restarting, the windows' GPU device was lost");
             restart_player(&lost_device, &source);
         } else {
             guard.settle();
+            host.borrow_mut().shader_guard.quit();
+            if let Err(error) = &ran {
+                logged!("exit: the event loop failed ({error})");
+            }
             ran?;
+            logged!("exit: normal");
         }
         timer.stop();
         frame_pacing::stop();

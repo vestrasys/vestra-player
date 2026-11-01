@@ -235,6 +235,8 @@ impl Host {
                 announced: false,
             });
         }
+        // The worker drops its shader lists too (`diagnostics.rs`).
+        self.plugin_shaders_gone(owner);
         // Parked: the worker keeps its resolvers (recorded).
         let _ = self.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
@@ -310,6 +312,8 @@ impl Host {
     pub(crate) fn broadcast(&mut self, event: &str, data: Value) {
         if event == "host.error" {
             diag!("host.error {data}");
+            // The host log: the code and the message up to any path or link.
+            crate::diag::log_only(&super::diagnostics::host_error_line(&data));
         }
         // Commands whose state is a condition on this state (`plugin.when`)
         // follow it, whether their plugin runs or not.

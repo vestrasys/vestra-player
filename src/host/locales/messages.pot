@@ -408,3 +408,8 @@ msgstr ""
 #: src/host/lazy.rs
 msgid "{} could not start"
 msgstr ""
+
+#. The OSD once per start when plugin shaders are kept off because the last run ended while they were on.
+#: src/host/diagnostics.rs
+msgid "Plugin shaders are off: the player ended unexpectedly while they were on"
+msgstr ""

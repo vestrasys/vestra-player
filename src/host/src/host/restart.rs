@@ -44,14 +44,16 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
     if RESTARTING.swap(true, Ordering::AcqRel) {
         return;
     }
+    // The shader guard's pending `applying` reaches the disk first.
+    super::diagnostics::persist_shader_guard();
     let off = lost.guard.device_lost(&lost.keys, render_state::now());
     let why = software_after_loss(lost, off, std::time::Instant::now());
     let Ok(exe) = std::env::current_exe() else {
-        restart_log("render: the GPU device was lost; the player could not restart itself");
+        restart_logged("render: the GPU device was lost; the player could not restart itself");
         return;
     };
     let mut command = command_after_loss(&exe, lost, source, why.is_some());
-    restart_log(&format!(
+    restart_logged(&format!(
         "render: the GPU device was lost; restarting the player{}",
         why.map(|why| format!(" with software rendering ({why})"))
             .unwrap_or_default()
@@ -63,13 +65,13 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
     crate::stop_handoffs();
     match command.spawn() {
         Ok(child) => {
-            restart_log(&format!(
+            restart_logged(&format!(
                 "render: the restarted player is process {}",
                 child.id()
             ));
             exit_if_stuck(EXIT_AFTER);
         }
-        Err(error) => restart_log(&format!("render: the restart failed: {error}")),
+        Err(error) => restart_logged(&format!("render: the restart failed: {error}")),
     }
 }
 
@@ -87,7 +89,7 @@ fn exit_if_stuck(after: std::time::Duration) {
         .name("vestra-exit-after-loss".into())
         .spawn(move || {
             std::thread::sleep(after);
-            restart_log(&format!(
+            restart_logged(&format!(
                 "render: the player did not end {} s after the device loss; ending it",
                 after.as_secs()
             ));
@@ -127,11 +129,22 @@ fn command_after_loss(
     command
 }
 
+/// `restart_log` that also goes to the host log (`diag.rs`): only for lines
+/// without the restart's command line (it names the file played).
+pub(crate) fn restart_logged(line: &str) {
+    logged!("{line}");
+    append_restart_log(line);
+}
+
 /// A `render:` line about a restart: to stderr, and appended to
 /// `logs/restart.log` in the application data directory, so a restarted
 /// player that exits early (its stderr goes nowhere) still says why.
 pub(crate) fn restart_log(line: &str) {
     diag!("{line}");
+    append_restart_log(line);
+}
+
+fn append_restart_log(line: &str) {
     let Some(directory) = platform::app_data_dir().map(|dir| dir.join("logs")) else {
         return;
     };
