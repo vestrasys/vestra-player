@@ -18,7 +18,7 @@ Installers are published on this repository's own GitHub Releases (coordinator d
    ```
    git tag -a v<version> -m "Vestra Player <version>" && git push origin v<version>
    ```
-   `release.yml` checks that the tag matches the version and that the release notes exist, runs the full checks and packaging; the two TODO jobs `sign-*` must be approved in the `release` environment; finally it creates a **draft** release. The assets are `VestraPlayer-<version>-macos-arm64.dmg`, `…-macos-arm64.app.zip`, `…-windows-x64-setup.exe`, `…-windows-x64-portable.zip`, the fixed-name copies of the installers (see "Stable download links" below) and `SHA256SUMS`.
+   `release.yml` checks that the tag matches the version and that the release notes exist, runs the full checks and packaging; the two TODO jobs `sign-*` must be approved in the `release` environment; finally it creates a **draft** release. The assets are `VestraPlayer-<version>-macos-arm64.dmg`, `…-macos-arm64.app.zip`, `…-windows-x64-setup.exe`, `…-windows-x64-portable.zip`, the fixed-name copies of the installers (see "Stable download links" below), `SHA256SUMS` and `latest.json` (see "latest.json" below).
 6. **Check the draft**, and when it is correct publish it on GitHub (or `gh release edit v<version> --draft=false`).
 
 If something fails, fix it and push a tag for a new patch version; do not move a tag that has already been pushed.
@@ -42,6 +42,56 @@ So every release also carries byte-identical copies of the installers under fixe
 The portable zip and the `.app.zip` keep only their versioned names. The names come from one place, `.github/scripts/stable-names.sh` (`VestraPlayer-<version>-<platform><kind>` → `VestraPlayer-<platform><kind>`, with `<platform>` as the bundle scripts pass it to `artifactBase`): a new platform or architecture (for example `macos-x64`) gets its fixed name by producing its versioned installer, and the download page needs the new link. `release.yml` runs it in the `SHA256SUMS` job, so the copies are listed in `SHA256SUMS` (same hash as the versioned file, so a file fetched by its fixed name checks with `sha256sum -c --ignore-missing SHA256SUMS`), and again in `draft-release` on the files it uploads (the signed ones once signing exists), which must match `SHA256SUMS`. A dry run does not upload the copies as artifacts (the 500 MB artifact quota); its `vestra-unsigned-SHA256SUMS` artifact and the job log list them.
 
 `releases/latest` is the newest published release that is neither a draft nor a pre-release, so the links only work once a release is published that way (and, for visitors without access, once the repository is public); until then they return 404.
+
+## latest.json
+
+Every release also carries `latest.json`, a small description of that release (user ruling 2026-11-01; the same idea as Tauri's `latest.json` and electron-updater's `latest.yml`), at the stable URL
+
+```
+https://github.com/vestrasys/vestra-player/releases/latest/download/latest.json
+```
+
+Consumers: the player's update check (planned: compares `version` with its own, links `notes`, fetches `file`), and the download page, which reads it at build time for the version, links, sizes and minimum systems.
+
+```json
+{
+  "schema": 1,
+  "version": "0.6.2",
+  "published": "2026-11-01T12:34:56Z",
+  "notes": "https://github.com/vestrasys/vestra-player/releases/tag/v0.6.2",
+  "downloads": {
+    "macos-arm64": {
+      "file": "VestraPlayer-macos-arm64.dmg",
+      "size": 123456789,
+      "sha256": "…64 hex digits…",
+      "minimumOs": "15.0"
+    },
+    "windows-x64": {
+      "file": "VestraPlayer-windows-x64-setup.exe",
+      "size": 123456789,
+      "sha256": "…64 hex digits…",
+      "minimumOs": "10.0"
+    }
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `schema` | Format version, `1`. A change that old readers would misread (a field renamed, removed or with a new meaning) raises it; new optional fields do not. Readers ignore fields they do not know and treat an unknown `schema` as "no update information". |
+| `version` | The release's version, the tag without `v` (`src/host/Cargo.toml`). |
+| `published` | UTC time (`YYYY-MM-DDThh:mm:ssZ`) the `draft-release` job wrote the file, that is, when the release was built; not when the draft was published. |
+| `notes` | The release page, `https://github.com/<repo>/releases/tag/v<version>`. |
+| `downloads` | One entry per installer, keyed by the platform as in the artifact names (`windows-x64`, `macos-arm64`; `linux-x86_64` once it exists). |
+| `downloads.*.file` | The installer's fixed name (see "Stable download links"): fetch `releases/latest/download/<file>`. |
+| `downloads.*.size`, `.sha256` | Byte size and SHA-256 (lowercase hex) of that file as uploaded. |
+| `downloads.*.minimumOs` | Lowest OS version the installer runs on, present only where the packaging defines it: Windows from `MinVersion` in `src/packaging/windows/vestra.iss` (`10.0`, the Windows NT version, so Windows 10), macOS from `LSMinimumSystemVersion` of the build's `Info.plist` (14.0 or the dependency bundle's higher minimum, read from the release's `.app.zip`). |
+
+`.github/scripts/latest-json.sh` writes and checks it. `release.yml` runs it in the `SHA256SUMS` job, after the fixed-name copies (so dry runs exercise it; it is not uploaded there), and in `draft-release`, after the copies are made again and `SHA256SUMS` is checked: it writes `latest.json` from the files that are uploaded, then checks that it parses, that `schema` is 1, `version` is the tag's, `notes` is this release's page, every listed file exists with that size and SHA-256 and the expected `minimumOs`, and that both `windows-x64` and `macos-arm64` are listed, before `gh release create` uploads it with the rest.
+
+`latest.json` is not listed in `SHA256SUMS`: it is metadata about the files and carries their SHA-256 itself, and both come from the same release over the same HTTPS connection, so a checksum of it next to it proves nothing a reader cannot already check. It is also written after `SHA256SUMS`, which keeps `SHA256SUMS` the same in the `SHA256SUMS` job and in `draft-release`. Authenticity comes later from signing (the installers' signatures), not from either file.
+
+A pre-release still gets a `latest.json` describing itself (reachable as `releases/download/v<version>/latest.json`), but `releases/latest` never points at a pre-release or a draft, so the update check and the download page keep seeing the newest full release.
 
 ## Installing an unsigned test build
 
