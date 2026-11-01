@@ -70,7 +70,7 @@ fn same_aspect(output: (i64, i64), expected: (i64, i64)) -> bool {
 
 /// What the output (`video-out-params` w, h, rotate) says about the
 /// prepared orientation after `waited`; `passed`: a frame has gone through
-/// the new chain since the orientation filter went in ([`Mark::passed`]).
+/// the new chain since the orientation filter went in ([`Mark::see`]).
 /// Only rotate 0 counts (the metadata filter). A frame turned the other way
 /// (still filtered by the previous file's orientation until `vf pre`
 /// replaces it) has the other aspect, so it never passes as `Aspect`; a
@@ -105,47 +105,112 @@ pub fn evidence(
     (passed && waited >= TIMEOUT).then_some(Evidence::Timeout)
 }
 
-/// How far the playback position must move past the [`Mark`] before it
-/// shows that frames went through the new chain: more than the few frames
-/// filtered before `vf pre` that the output may still hold.
+/// How far playback must move on before it shows that frames went through
+/// the new chain: more than the few frames filtered before `vf pre` that
+/// the output may still hold.
 const PASSED_SECONDS: f64 = 0.25;
 
-/// What mpv reports when the orientation filter goes in, to tell when a
-/// frame went through the new chain: the output (a new frame that changes
-/// it) and the playback position (frames shown since).
+/// The side-data removal after the transform in the orientation filter.
+const SIDEDATA: &str = "sidedata=mode=delete:type=DISPLAYMATRIX";
+
+/// Whether a frame went through the new chain since the orientation filter
+/// went in ([`Mark::see`], once per tick with mpv's output and position).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Mark {
-    output: Option<(i64, i64, i64)>,
-    position: Option<f64>,
+    /// The first output and position seen after `vf pre`. Not read at
+    /// `vf pre` itself: before the new file's first frame shows, `time-pos`
+    /// is still where the load started (0), and jumps to the video's start
+    /// when that frame (maybe filtered by the old chain) shows.
+    base: Option<((i64, i64, i64), Option<f64>)>,
+    /// Where playback first moved after the base: the first frame shown,
+    /// which the old chain may have filtered; forward movement counts from
+    /// here.
+    moved: Option<f64>,
+    passed: bool,
 }
 
 impl Mark {
-    fn read(mpv: &Mpv) -> Self {
-        let output = match (
-            mpv.get_property::<i64>("video-out-params/w"),
-            mpv.get_property::<i64>("video-out-params/h"),
-            mpv.get_property::<i64>("video-out-params/rotate"),
-        ) {
-            (Ok(w), Ok(h), Ok(rotate)) => Some((w, h, rotate)),
-            _ => None,
-        };
+    /// `same`: the orientation filter before `vf pre` turned the picture as
+    /// the new one does, so a frame of the old chain is already right.
+    pub fn new(same: bool) -> Self {
         Self {
-            output,
-            position: mpv.get_property::<f64>("time-pos").ok(),
+            base: None,
+            moved: None,
+            passed: same,
         }
     }
 
-    /// Whether a frame went through the new chain: the output changed (mpv
-    /// reconfigures it only for a frame with other parameters), or playback
-    /// moved on by [`PASSED_SECONDS`] or more (a seek lands a new frame
-    /// too). Neither while a stream stalls or stays paused on a frame
-    /// filtered before (a paused start's refresh that keeps the same output
-    /// is not seen: the gate then waits for playback).
-    pub fn passed(&self, output: (i64, i64, i64), position: Option<f64>) -> bool {
-        self.output != Some(output)
-            || matches!((self.position, position),
-                (Some(at), Some(now)) if (now - at).abs() >= PASSED_SECONDS)
+    /// Whether a frame went through the new chain (kept once seen): the
+    /// output changed from the first one seen (mpv reconfigures it only for
+    /// a frame with other parameters); playback went back (a seek flushes
+    /// the chain); or playback moved forward by [`PASSED_SECONDS`] from
+    /// where it first moved. None of these while a stream stalls or stays
+    /// paused on a frame filtered before: the gate then waits for playback,
+    /// unless the orientation stayed the same ([`Mark::new`]).
+    pub fn see(&mut self, output: (i64, i64, i64), position: Option<f64>) -> bool {
+        if self.passed {
+            return true;
+        }
+        let Some((first, base)) = self.base else {
+            self.base = Some((output, position));
+            return false;
+        };
+        if output != first {
+            self.passed = true;
+            return true;
+        }
+        match (base, position) {
+            (None, Some(now)) => self.base = Some((first, Some(now))),
+            (Some(at), Some(now)) => {
+                let from = self.moved.unwrap_or(at);
+                if now <= from - PASSED_SECONDS {
+                    self.passed = true;
+                } else if self.moved.is_some() {
+                    self.passed = now - from >= PASSED_SECONDS;
+                } else if now != at {
+                    self.moved = Some(now);
+                }
+            }
+            _ => {}
+        }
+        self.passed
     }
+}
+
+/// The transform the `@vestra-orientation` filter applies now: its graph
+/// without the side-data removal; `null` when the chain has none. `None`
+/// when mpv's chain cannot be read as expected (then nothing is assumed).
+fn current_transform(mpv: &Mpv) -> Option<String> {
+    let Ok(Node::Array(filters)) = mpv.get_property::<Node>("vf") else {
+        return None;
+    };
+    let field = |fields: &[(String, Node)], key: &str| {
+        fields
+            .iter()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value.clone())
+    };
+    for filter in &filters {
+        let Node::Map(fields) = filter else {
+            return None;
+        };
+        if !matches!(field(fields, "label"), Some(Node::String(label)) if label == "vestra-orientation")
+        {
+            continue;
+        }
+        let Some(Node::Map(params)) = field(fields, "params") else {
+            return None;
+        };
+        let Some(Node::String(graph)) = field(&params, "graph") else {
+            return None;
+        };
+        let graph = graph.trim().trim_start_matches('[').trim_end_matches(']');
+        let transform = graph
+            .strip_suffix(SIDEDATA)
+            .map_or(graph, |rest| rest.trim_end_matches(','));
+        return Some(transform.to_owned());
+    }
+    Some("null".into())
 }
 
 type Load = (i64, IntentTicket);
@@ -194,10 +259,8 @@ struct Waiting {
     plan: Plan,
     /// When the filter went in.
     since: Instant,
-    /// What mpv reported then.
+    /// Whether a frame went through the new chain since.
     mark: Mark,
-    /// A frame went through the new chain since (kept once seen).
-    passed: bool,
 }
 
 pub struct Geometry {
@@ -272,10 +335,8 @@ impl Geometry {
                 ) else {
                     return Ok(());
                 };
-                if !waiting.passed {
-                    let position = mpv.get_property::<f64>("time-pos").ok();
-                    waiting.passed = waiting.mark.passed((width, height, rotation), position);
-                }
+                let position = mpv.get_property::<f64>("time-pos").ok();
+                let passed = waiting.mark.see((width, height, rotation), position);
                 let expected = waiting.plan;
                 let waited = waiting.since.elapsed();
                 // `evidence` counts against TIMEOUT; a shorter `timeout`
@@ -285,7 +346,7 @@ impl Geometry {
                     (expected.width, expected.height),
                     (width, height, rotation),
                     counted,
-                    waiting.passed,
+                    passed,
                 ) {
                     let note = if evidence == Evidence::Timeout {
                         format!(
@@ -352,18 +413,24 @@ impl Geometry {
         // Generated constants only: no paths, expressions, or plugin input.
         // vf pre replaces this reserved label before the metadata-zero filter.
         let filter = format!(
-            "@vestra-orientation:lavfi=[{},sidedata=mode=delete:type=DISPLAYMATRIX]",
+            "@vestra-orientation:lavfi=[{},{SIDEDATA}]",
             expected.transform
         );
+        // The transform before it: when it is the same, the frames the old
+        // chain filtered are already turned right (a paused resume of the
+        // next episode with a plugin's crop: no frame changes anything).
+        let previous = current_transform(mpv);
+        let same = previous.as_deref() == Some(expected.transform);
         diag!(
-            "source geometry prepare entry={} generation={} cycle={} decoder={}x{} rotate={} filter={}",
+            "source geometry prepare entry={} generation={} cycle={} decoder={}x{} rotate={} filter={} previous={}",
             load.0,
             load.1.stamp.generation,
             load.1.cycle,
             width,
             height,
             rotation,
-            filter
+            filter,
+            previous.as_deref().unwrap_or("unknown")
         );
         self.prepared = Some((load, Preparation::Failed));
         mpv.command(&["vf", "pre", &filter]).map_err(|error| {
@@ -372,15 +439,13 @@ impl Geometry {
                 format!("orientation filter failed: {error}"),
             )
         })?;
-        // Read after `vf pre`: a change missed here only makes the timeout
-        // wait for playback, never takes an old-chain frame for a new one.
+        // The mark takes its base from the first tick that sees an output.
         self.prepared = Some((
             load,
             Preparation::WaitingOutput(Waiting {
                 plan: expected,
                 since: Instant::now(),
-                mark: Mark::read(mpv),
-                passed: false,
+                mark: Mark::new(same),
             }),
         ));
         // Deliberately do not inspect output in the configuration tick.
@@ -506,37 +571,39 @@ mod tests {
         let expected = (1920, 1080);
         let stale = (1080, 1920, 0);
         let long = TIMEOUT * 5;
-        // Marked when the orientation filter went in, at 12.0 s.
-        let mark = Mark {
-            output: Some(stale),
-            position: Some(12.0),
+        // Seen at 12.0 s on the first tick after the filter went in.
+        let seen = |output, position| {
+            let mut mark = Mark::new(false);
+            assert!(!mark.see(output, position));
+            mark
         };
         // No new frame: the same output, the position where it was (paused,
         // or a stall); closed however long it waits.
-        for position in [Some(12.0), Some(12.1), None] {
-            let passed = mark.passed(stale, position);
-            assert!(!passed, "{position:?}");
+        let mut mark = seen(stale, Some(12.0));
+        for _ in 0..3 {
+            let passed = mark.see(stale, Some(12.0));
+            assert!(!passed);
             assert_eq!(evidence(expected, stale, long, passed), None);
         }
+        assert!(!mark.see(stale, None));
         // A frame of the new chain: the output changes (here to the
-        // expected size, which confirms at once anyway) ...
+        // expected size, which confirms at once anyway).
         let fresh = (1920, 1080, 0);
-        assert!(mark.passed(fresh, Some(12.0)));
+        assert!(mark.see(fresh, Some(12.0)));
+        assert!(mark.see(stale, Some(12.0)), "kept once seen");
         assert_eq!(
             evidence(expected, fresh, Duration::ZERO, true),
             Some(Evidence::Exact)
         );
-        // ... or, with a crop after the orientation that keeps the output's
-        // size, playback moves on (or a seek lands): then the timeout.
+        // With a crop after the orientation that keeps the output's size:
+        // playback moves on. The first move (one frame, 40 ms) may be a
+        // frame of the old chain; 0.25 s from there counts.
         let cropped = (1920, 816, 0);
-        let mark = Mark {
-            output: Some(cropped),
-            position: Some(12.0),
-        };
-        assert!(!mark.passed(cropped, Some(12.2)));
+        let mut mark = seen(cropped, Some(12.0));
+        assert!(!mark.see(cropped, Some(12.04)));
+        assert!(!mark.see(cropped, Some(12.2)));
         assert_eq!(evidence(expected, cropped, long, false), None);
-        assert!(mark.passed(cropped, Some(12.3)));
-        assert!(mark.passed(cropped, Some(3.0)));
+        assert!(mark.see(cropped, Some(12.3)));
         assert_eq!(
             evidence(expected, cropped, TIMEOUT, true),
             Some(Evidence::Timeout)
@@ -545,12 +612,44 @@ mod tests {
             evidence(expected, cropped, TIMEOUT - Duration::from_millis(1), true),
             None
         );
-        // No output when the filter went in: the first one came after it.
-        let unset = Mark {
-            output: None,
-            position: Some(0.0),
-        };
-        assert!(unset.passed(cropped, Some(0.0)));
+        // A seek back flushes the chain: the next frames are the new chain's.
+        let mut mark = seen(cropped, Some(12.0));
+        assert!(mark.see(cropped, Some(3.0)));
+        // No position at first: the first one seen is the base, not a move.
+        let mut mark = seen(cropped, None);
+        assert!(!mark.see(cropped, Some(7.0)));
+        assert!(!mark.see(cropped, Some(7.0)));
+        assert!(!mark.see(cropped, Some(7.04)));
+        assert!(mark.see(cropped, Some(7.3)));
+    }
+
+    /// Review 2: the video starts later than the audio. The first tick sees
+    /// the position where the load started (0) with the previous output;
+    /// the first frame (maybe filtered by the old chain) then moves it to
+    /// the video's start, 5 s on. That jump is no evidence; only playback
+    /// from there is.
+    #[test]
+    fn a_late_video_start_is_not_a_frame_through_the_new_chain() {
+        let stale = (1080, 1920, 0);
+        let mut mark = Mark::new(false);
+        assert!(!mark.see(stale, Some(0.0)));
+        assert!(!mark.see(stale, Some(5.0)), "the first frame shows");
+        // It stalls there.
+        for _ in 0..3 {
+            assert!(!mark.see(stale, Some(5.0)));
+        }
+        assert!(!mark.see(stale, Some(5.2)));
+        assert!(mark.see(stale, Some(5.25)));
+    }
+
+    /// Review 1: the same transform before and after `vf pre` (consecutive
+    /// episodes in one orientation): an old-chain frame is already right,
+    /// so the timeout needs no new frame.
+    #[test]
+    fn the_same_orientation_needs_no_new_frame() {
+        let mut mark = Mark::new(true);
+        assert!(mark.see((1920, 816, 0), Some(0.0)));
+        assert!(mark.see((1920, 816, 0), None));
     }
 
     // --------------------------------------------------- with a real libmpv
@@ -665,6 +764,36 @@ mod tests {
         let waited = opens(&mpv, timeout);
         assert!(waited >= timeout, "{waited:?}");
         assert_eq!(mpv.get_property::<i64>("video-out-params/h").unwrap(), 136);
+    }
+
+    /// Review 1 with a real mpv: the next episode in the same orientation
+    /// resumes paused (`pause=yes`) with a plugin's crop. The old and the
+    /// new chain give the same output and time does not move, so no frame
+    /// shows anything; the transform is the same, so the gate opens after
+    /// the timeout without play.
+    #[test]
+    fn the_same_orientation_paused_with_a_crop_opens_without_play() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("@vestra-owned:lavfi=[crop=w=iw:h=ih/2]");
+        assert_eq!(current_transform(&mpv).as_deref(), Some("null"));
+        let (gate, mut geometry) = start(&mpv, true);
+        let timeout = Duration::from_millis(300);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !gate.load(Ordering::Acquire) {
+            assert!(Instant::now() < deadline, "the gate never opened");
+            geometry
+                .advance(&mpv, Phase::Ready, Some(load()), timeout)
+                .unwrap();
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(mpv.get_property::<bool>("pause").unwrap(), "still paused");
+        assert_eq!(output(&mpv), (320, 120));
+        // The orientation filter as `vf pre` left it reads back as its
+        // transform; another one is told apart.
+        assert_eq!(current_transform(&mpv).as_deref(), Some("null"));
+        mpv.command(&["vf", "add", "@vestra-orientation:lavfi=[transpose=clock]"])
+            .unwrap();
+        assert_eq!(current_transform(&mpv).as_deref(), Some("transpose=clock"));
     }
 
     /// Review M1 with a real mpv: the previous (portrait) file's quarter
