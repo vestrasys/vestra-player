@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.2.21
+
+- The vendored SDK is 1.5.48 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The plugins the AI writes are now tested against a TestHost that refuses command declarations as the player does (menu texts within their UTF-8 byte limits, no control characters or surrounding whitespace, no path that collides with another command, the player's own included), so a menu the player would refuse fails the AI's test run instead of the player. The reference covers the new `COMMAND_LIMITS` fields. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
+## 2.2.20
+
+- The vendored SDK is 1.5.47 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The reference the AI reads (`llms.txt` / `llms-full.txt`) and the declarations its type check and tests use now give player 0.6.0's default keys: Toggle Fullscreen is Escape only, the new Enter Fullscreen and Leave Fullscreen have none, and Next / Previous are the mouse's X1 / X2 side buttons. Encoding frozen list rows is cached. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
+## 2.2.19
+
+- The vendored SDK is 1.5.46 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The reference the AI reads (`llms.txt` / `llms-full.txt`) and the declarations its type check and tests use now cover the shader channel `plugin.video.shaders(id?)` (`VideoShaders`, several plugins' mpv user shaders at once, GPU rendering only), the `convolution` and `lut3d` video nodes (`ConvolutionPlane`, `.cube` files from the plugin's package or data directory), `VIDEO_PROCESSING_LIMITS`, and TestHost's `videoShaders`, `fileRoots` and `failVideoShaders`; all of it needs player 0.5.20. The reference also no longer says only macOS renders on the GPU. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
+## 2.2.18
+
+- The vendored SDK is 1.5.45 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The reference the AI reads (`llms.txt` / `llms-full.txt`) and the declarations its type check and tests use now cover the shader channel `plugin.video.shaders(id?)` (`VideoShaders`, several plugins' mpv user shaders at once, GPU rendering only), the `convolution` and `lut3d` video nodes (`ConvolutionPlane`, `.cube` files from the plugin's package or data directory), `VIDEO_PROCESSING_LIMITS`, and TestHost's `videoShaders`, `fileRoots` and `failVideoShaders`; all of it needs player 0.5.20. The reference also no longer says only macOS renders on the GPU. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
+## 2.2.17
+
+- The vendored SDK is 1.5.44 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The reference the AI reads (`llms.txt` / `llms-full.txt`) and the declarations its type check and tests use now cover the shader channel `plugin.video.shaders(id?)` (`VideoShaders`, several plugins' mpv user shaders at once, GPU rendering only), the `convolution` and `lut3d` video nodes (`ConvolutionPlane`, `.cube` files from the plugin's package or data directory), `VIDEO_PROCESSING_LIMITS`, and TestHost's `videoShaders`, `fileRoots` and `failVideoShaders`; all of it needs player 0.5.20. The reference also no longer says only macOS renders on the GPU. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
 ## 2.2.16
 
 - The vendored SDK is 1.5.41 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The reference the AI reads (`llms.txt` / `llms-full.txt`) and the declarations its type check and tests use now cover the shader channel `plugin.video.shaders(id?)` (`VideoShaders`, several plugins' mpv user shaders at once, GPU rendering only), the `convolution` and `lut3d` video nodes (`ConvolutionPlane`, `.cube` files from the plugin's package or data directory), `VIDEO_PROCESSING_LIMITS`, and TestHost's `videoShaders`, `fileRoots` and `failVideoShaders`; all of it needs player 0.5.20. The reference also no longer says only macOS renders on the GPU. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.

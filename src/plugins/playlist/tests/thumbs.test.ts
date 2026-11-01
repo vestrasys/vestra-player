@@ -11,7 +11,7 @@ import activate from "../main.ts";
 import { THUMB_MARGIN } from "../scroll.ts";
 import { HOLD_AFTER_OPEN_MS, THUMB_LIMIT, thumbArgs } from "../thumbs.ts";
 
-type ViewRow = { rowId: string; label: string; duration: string; media: string; detail: string };
+type ViewRow = { id: string; label: string; duration: string; media: string; detail: string; thumb: Json };
 /** A JPEG as far as the plugin cares (the test host does not decode pictures). */
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 const pause = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -60,8 +60,13 @@ async function start(
   const writes: { property: string; value: Json }[] = [];
   const request = host.request.bind(host);
   host.request = (async (method: string, params: Record<string, Json> = {}) => {
-    if (method === "ui.setMount") writes.push({ property: String(params.property), value: params.value as Json });
-    return request(method, params);
+    const result = await request(method, params);
+    // The value the panel shows after the write (a row patch, SDK 1.5.44, carries operations).
+    if (method === "ui.setMount") {
+      const property = String(params.property);
+      writes.push({ property, value: structuredClone("patch" in params ? (host.mounted().props[property] as Json) : (params.value as Json)) });
+    }
+    return result;
   }) as typeof host.request;
   const data = options.data ?? (await mkdtemp(join(tmpdir(), "vestra-playlist-thumbs-data-")));
   const { stop } = await startPlugin((plugin) => activate(plugin), {
@@ -82,11 +87,11 @@ async function start(
     /** ffmpeg runs so far: the file each one was for. */
     made: () => host.tools.calls.filter((call) => call.tool === "ffmpeg").map((call) => call.args[call.args.indexOf("-i") + 1]!),
     rows: () => (panel.props.rows ?? []) as unknown as ViewRow[],
-    thumbs: () => (panel.props.thumbs ?? []) as Json[],
-    /** The file each row's picture shows (null: the placeholder). */
+    /** Each row's picture (0.2.0: in the row). */
+    thumbs: () => app.rows().map((row) => row.thumb),
+    /** The file each row's picture shows (null: none, the row holds `null`). */
     pictures: () => app.thumbs().map((value) => {
-      const path = host.imagePath(value);
-      return path && !path.endsWith("placeholder.png") ? path : null;
+      return value === null ? null : (host.imagePath(value) ?? null);
     }),
     until: async (check: () => boolean, what: string) => {
       for (const deadline = Date.now() + 15_000; !check(); await host.settle(5))
@@ -100,7 +105,7 @@ async function start(
     async add() {
       host.dialogAnswers.push(files);
       await host.command("playlist.add").run();
-      await app.until(() => panel.props["row-count"] === files.length, "the files to be added");
+      await app.until(() => app.rows().length === files.length, "the files to be added");
     },
     stop,
     async close() {
@@ -152,16 +157,19 @@ test("thumbnails on by default: made only for the rows on screen and a few aroun
     const first = app.host.tools.calls.find((call) => call.tool === "ffmpeg")!.args;
     assert.equal(first[first.indexOf("-ss") + 1], "10.000");
 
-    const rowWrites = () => app.writes.filter((write) => write.property === "rows").length;
-    const before = rowWrites();
-    const thumbWrites = app.writes.filter((write) => write.property === "thumbs").length;
+    const rowWrites = () => app.writes.filter((write) => write.property === "rows");
+    const before = rowWrites().length;
+    const shown = app.rows().map((row) => JSON.stringify(row));
     // Lookups finish in any order; whichever row runs first gets its picture.
     const released = app.gates.shift()!;
     released.release();
     const at = app.files.indexOf(released.file);
     await app.until(() => app.pictures()[at] !== null, "the first picture");
-    assert.ok(app.writes.filter((write) => write.property === "thumbs").length > thumbWrites);
-    assert.equal(rowWrites(), before, "a picture arriving does not resend (or rebuild) the rows");
+    assert.ok(rowWrites().length > before);
+    // 0.2.0: the picture is in its row; the other rows are unchanged (on player 0.6.0 the
+    // write is one `set` of that row).
+    const changed = app.rows().flatMap((row, i) => (JSON.stringify(row) === shown[i] ? [] : [i]));
+    assert.deepEqual(changed, [at], "a picture arriving changes its row only");
     assert.equal(app.pictures().filter(Boolean).length, 1, "the others keep the placeholder");
 
     // Release the rest: exactly the rows on screen and THUMB_MARGIN below get a picture.
@@ -170,6 +178,8 @@ test("thumbnails on by default: made only for the rows on screen and a few aroun
       app.gates.shift()!.release();
       await app.host.settle(5);
     }
+    // A run's picture reaches the rows a step after its file is made: wait for what is checked.
+    await app.until(() => app.pictures().slice(0, near).every((path) => path !== null), "the pictures near the view");
     await app.host.settle(50);
     assert.equal(app.made().length, near);
     assert.deepEqual(app.made().sort(), app.files.slice(0, near).sort());
@@ -261,12 +271,13 @@ test("thumbnails: the bottom bar's toggle turns them off (no work, compact rows)
     app.panel.emit("toggle-thumbnails");
     await app.host.settle();
     assert.equal(app.panel.props.thumbnails, false);
-    assert.deepEqual(app.thumbs(), [], "no pictures sent");
-    assert.equal(app.rows()[0]!.media, "");
-    assert.equal(app.rows()[0]!.detail, "");
-    // The row at the top of the view stays there: row 10 of 20 px rows.
-    assert.ok((app.panel.props["scroll-request"] as number) > asked);
-    assert.equal(app.panel.props["scroll-to-y"], 10 * 20);
+    assert.ok(app.pictures().every((path) => path === null), "no pictures sent: every row shows the placeholder");
+    // The row at the top of the view stays there (row 10 of 20 px rows): the list keeps it
+    // itself (0.2.1); no scroll request, which could land on another row while the heights change.
+    assert.equal(app.panel.props["scroll-request"], asked, "no scroll request");
+    assert.equal(app.panel.props["show-y"], 10 * 20, "the plugin expects row 10 at the top");
+    // Only the pictures change: the folder and kind stay in every row in both styles.
+    assert.equal(app.rows()[0]!.media, "video");
     await app.scroll(10 * 20, LIST_HEIGHT);
     await app.scroll(150 * 20, LIST_HEIGHT);
     for (const gate of app.gates.splice(0)) gate.release();
@@ -298,7 +309,7 @@ test("thumbnails: ffmpeg waits while a source opens and for its first seconds", 
   const app = await start({ names: ["a.mp4", "b.mp4", "c.mp4", "d.mp4", "e.mp4", "f.mp4"] });
   try {
     await app.add();
-    app.panel.emit("play-row", app.rows()[0]!.rowId);
+    app.panel.emit("play-row", app.rows()[0]!.id);
     await app.host.settle();
     app.host.setSource({ phase: "loading" });
     await app.host.settle();
@@ -310,7 +321,8 @@ test("thumbnails: ffmpeg waits while a source opens and for its first seconds", 
     assert.equal(app.made().length, 0, "nor in its first seconds");
     await pause(HOLD_AFTER_OPEN_MS);
     await app.until(() => app.made().length === 6, "the runs after the hold");
-    assert.ok(app.pictures().slice(0, 6).every(Boolean));
+    // The pictures reach the rows a step after the runs: wait for them, not only the runs.
+    await app.until(() => app.pictures().slice(0, 6).every(Boolean), "the six pictures");
   } finally {
     await app.close();
   }
@@ -324,7 +336,7 @@ test("thumbnails: a link row shows the link placeholder and its host; nothing is
     await writeFile(list, "#EXTM3U\nhttps://example.com/watch?v=1\n");
     app.host.dialogAnswers.push([list]);
     await app.host.command("playlist.open-list").run();
-    await app.until(() => app.panel.props["row-count"] === 1, "the link row");
+    await app.until(() => app.rows().length === 1, "the link row");
     await app.scroll(0);
     await app.host.settle(50);
     assert.equal(app.rows()[0]!.media, "link");

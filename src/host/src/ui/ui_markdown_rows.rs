@@ -149,14 +149,15 @@ fn nested_images_limits_and_failures() {
             .code,
         "invalid"
     );
-    // Per value: 1 MiB of text in all, documents included.
+    // Per value: 16 MiB of text in all (player 0.6.0), documents included.
     let part = "段".repeat(70_000);
-    let five = [part.as_str(); 5];
+    let fit = crate::ui::ui_values::MAX_TEXT_BYTES / part.len() - 1;
+    let many = vec![part.as_str(); fit + 2];
     assert!(
         convert(
             &mut cache,
             SLOT,
-            &chat(&five[..4]),
+            &chat(&many[..fit]),
             &mut |_| None,
             &mut no_images
         )
@@ -165,7 +166,7 @@ fn nested_images_limits_and_failures() {
     let error = convert(
         &mut cache,
         SLOT,
-        &chat(&five),
+        &chat(&many),
         &mut |_| None,
         &mut no_images,
     )
@@ -173,7 +174,7 @@ fn nested_images_limits_and_failures() {
     assert!(error.message.contains("total bytes"), "{}", error.message);
     // A failed write keeps the documents the property still shows.
     let before = cache.parsed;
-    convert_plain(&mut cache, SLOT, &chat(&five[..4]));
+    convert_plain(&mut cache, SLOT, &chat(&many[..fit]));
     assert_eq!(cache.parsed, before);
     // Malformed documents are `invalid` at any depth.
     let bad = json!({"a": [{"$vestraMarkdown": {"text": 1}}]});
@@ -724,4 +725,132 @@ fn a_document_written_after_its_message_changed_shows_its_new_text() {
         let differ = shown.iter().zip(&expected).filter(|(a, b)| a != b).count();
         assert_eq!(differ, 0, "case {index}: {differ} pixels show stale text");
     }
+}
+
+/// Host 0.5.26: `MarkdownView` is a `ListView` of its blocks (only the
+/// blocks in view exist). It draws what the column it replaced drew (a
+/// `ScrollView` around `MarkdownBlocks` with `inset` padding): a short
+/// document, the top of a long one, and a long one of blocks of many
+/// heights at its top, scrolled to the middle and scrolled to the end.
+#[test]
+fn markdown_view_as_a_list_draws_what_the_column_drew() {
+    let (instance, window) = compile(
+        r#"
+import { ScrollView } from "std-widgets.slint";
+import { MarkdownBlocks, MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
+export component W inherits Window {
+    width: 320px; height: 300px; background: white;
+    in property <[MarkdownBlock]> doc;
+    in property <bool> list;
+    if root.list: MarkdownView { blocks: root.doc; }
+    // The view before 0.5.26.
+    if !root.list: scroll := ScrollView {
+        content-width: self.visible-width;
+        content-height: column.preferred-height;
+        column := VerticalLayout {
+            width: scroll.visible-width;
+            padding: 10px;
+            alignment: start;
+            MarkdownBlocks { blocks: root.doc; }
+        }
+    }
+}"#,
+        (320, 300),
+    );
+    let short = "# 标题\n\n段落 **粗** [链接](https://a.example/)\n\n- 项\n  - 子项\n\n> 引用\n\n```\ncode\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n---\n";
+    let long = (0..40)
+        .map(|i| format!("段落 {i}: 一段较长的文字，换行以后还有一行，用来比较两种布局。"))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    // Blocks of many heights: headings, paragraphs of one to four lines,
+    // lists, code of one to five lines, quotes, tables, rules.
+    let varied = (0..16)
+        .map(|i| {
+            let mut part = format!("## 第 {i} 节\n\n");
+            part += &"一段长短不一的文字，用来让块的高度各不相同。".repeat(i % 4 + 1);
+            part += "\n\n";
+            for item in 0..i % 3 + 1 {
+                part += &format!("- 项 {item}\n");
+            }
+            part += "\n```\n";
+            for line in 0..i % 5 + 1 {
+                part += &format!("line {line}\n");
+            }
+            part += "```\n\n";
+            if i % 2 == 0 {
+                part += "> 引用一句\n\n";
+            }
+            if i % 3 == 0 {
+                part += "| a | b |\n|---|---|\n| 1 | 2 |\n\n";
+            }
+            if i % 4 == 0 {
+                part += "---\n\n";
+            }
+            part
+        })
+        .collect::<String>();
+    // Wheel steps of 40px from the top: none, to the middle, past the end.
+    let wheel = |steps: usize| {
+        for _ in 0..steps {
+            instance
+                .window()
+                .dispatch_event(slint::platform::WindowEvent::PointerScrolled {
+                    position: slint::LogicalPosition::new(160., 150.),
+                    delta_x: 0.,
+                    delta_y: -40.,
+                });
+        }
+        slint::platform::update_timers_and_animations();
+    };
+    let cases = [
+        ("short", short.to_owned(), 0),
+        ("long", long, 0),
+        ("varied, top", varied.clone(), 0),
+        ("varied, middle", varied.clone(), 40),
+        ("varied, end", varied, 400),
+    ];
+    let mut frames = Vec::new();
+    for (name, text, steps) in cases {
+        let doc = Doc {
+            text,
+            ..Default::default()
+        };
+        instance
+            .set_property("doc", super::model(&doc, |_| None))
+            .unwrap();
+        // Each switch makes a new view, at the top.
+        instance.set_property("list", SValue::Bool(false)).unwrap();
+        pixels(&window, 320, 300);
+        wheel(steps);
+        let column = pixels(&window, 320, 300);
+        instance.set_property("list", SValue::Bool(true)).unwrap();
+        pixels(&window, 320, 300);
+        wheel(steps);
+        let list = pixels(&window, 320, 300);
+        let differ: Vec<(usize, usize)> = column
+            .iter()
+            .zip(&list)
+            .enumerate()
+            .filter(|(_, (a, b))| a != b)
+            .map(|(i, _)| (i % 320, i / 320))
+            // The scroll bar's handle may end a fraction of a pixel apart
+            // (the list sums its rows' heights; the column rounds its
+            // layout): its antialiased end differs by a shade.
+            .filter(|(x, _)| *x < 308)
+            .collect();
+        assert!(
+            differ.is_empty(),
+            "{name}: {} pixels differ, first at {:?}",
+            differ.len(),
+            &differ[..differ.len().min(20)]
+        );
+        assert!(
+            draw(&window, 320, 300) > 500,
+            "{name}: the document is drawn"
+        );
+        frames.push(list);
+    }
+    // The wheel moved the view: top, middle and end of the varied
+    // document all show something different.
+    assert!(frames[2] != frames[3] && frames[3] != frames[4] && frames[2] != frames[4]);
 }

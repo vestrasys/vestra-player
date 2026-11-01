@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
+import { HostError, LOCALES, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { presets } from "../model.ts";
 
@@ -20,6 +20,8 @@ const track = (trackId: number, selected = true) => ({
 const replaces = (host: TestHost) => host.sent("processing.replace");
 const latest = (host: TestHost) => replaces(host).at(-1)!;
 const own = (host: TestHost) => host.processing.resources.get("audio:workbench");
+/** What a drop-down of the window shows: its labels (text values) as the user reads them. */
+const listed = (host: TestHost, value: unknown) => (value as Parameters<TestHost["translate"]>[0][]).map((label) => host.translate(label));
 /** Let handlers and bindings run while a request is held (`host.settle()` waits for it). */
 const flush = async () => {
   for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 1));
@@ -705,10 +707,7 @@ test("A11: Load External Audio… adds and selects the file once; failures and a
   assert.equal(host.osd.at(-1), "Audio loaded: movie.jpn.mka");
   assert.deepEqual(host.sent("audio.addTrack").at(-1)!.path, "/music/movie.jpn.mka");
   assert.equal(host.sent("audio.addTrack").at(-1)!.select, true, "selected");
-  assert.deepEqual(window.props["track-rows"], [
-    { kind: "track", text: "", n: 1, codec: "aac", external: false, disconnected: false },
-    { kind: "track", text: "2. movie.jpn.mka", n: 2, codec: "", external: true, disconnected: false },
-  ]);
+  assert.deepEqual(listed(host, window.props["track-rows"]), ["Track 1 (aac)", "2. movie.jpn.mka (external)"]);
   assert.equal(window.props["track-index"], 1);
   assert.equal(host.command("audio.track.2").state.checked, true);
   host.dialogAnswers.push(["/music/movie.jpn.mka"]);
@@ -793,9 +792,7 @@ test("A11: auto-loading same-named audio adds same-named audio next to a local f
 
 const SPEAKERS = { id: "coreaudio/BuiltInSpeakerDevice", name: "MacBook Air 扬声器" };
 const PHONES = { id: "coreaudio/USB-1", name: "USB 耳机" };
-/** A row of the window's drop-downs (ui/workbench.slint `Row`). */
-const row = (kind: string, text = "", disconnected = false) => ({ kind, text, n: 0, codec: "", external: false, disconnected });
-const device = (name: string, disconnected = false) => row("device", name, disconnected);
+const device = (name: string, disconnected = false) => (disconnected ? `${name} (not connected)` : name);
 const deviceItems = (host: TestHost) =>
   [...host.commands.entries()]
     .filter(([, { declaration: d }]) => d.path[1] === "Output Device")
@@ -832,10 +829,10 @@ test("G16: Output Device lists System Default and the devices; choosing one swit
     // No source is needed, and the window shows the same choice.
     await host.command("audio.workbench").run();
     const window = host.window("audio-workbench");
-    assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name)]);
+    assert.deepEqual(listed(host, window.props["device-rows"]), ["System Default", device(SPEAKERS.name), device(PHONES.name)]);
     assert.equal(window.props["device-index"], 2);
     assert.equal(window.props["devices-available"], true);
-    assert.deepEqual(window.props["device-tip"], device(PHONES.name));
+    assert.equal(host.translate(window.props["device-tip"] as never), PHONES.name);
     window.emit("device-selected", 0);
     await host.settle();
     assert.deepEqual(host.sent("player.setAudioDevice").at(-1), { id: null });
@@ -877,9 +874,9 @@ test("G16: unplugging the chosen device falls back with an OSD; plugging it back
   ]);
   await host.command("audio.workbench").run();
   const window = host.window("audio-workbench");
-  assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name, true)]);
+  assert.deepEqual(listed(host, window.props["device-rows"]), ["System Default", device(SPEAKERS.name), device(PHONES.name, true)]);
   assert.equal(window.props["device-index"], 2);
-  assert.deepEqual(window.props["device-tip"], device(PHONES.name, true));
+  assert.equal(host.translate(window.props["device-tip"] as never), `${PHONES.name}: device not connected, using System Default`);
   const sent = host.sent("player.setAudioDevice").length;
   window.emit("device-selected", 2); // the disconnected entry cannot be picked
   await host.settle();
@@ -888,7 +885,7 @@ test("G16: unplugging the chosen device falls back with an OSD; plugging it back
   await host.settle();
   assert.equal(host.osd.at(-1), "Audio output: USB 耳机");
   assert.equal(deviceCommand(host, "USB 耳机").state.enabled, true);
-  assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name)]);
+  assert.deepEqual(listed(host, window.props["device-rows"]), ["System Default", device(SPEAKERS.name), device(PHONES.name)]);
   await stop();
 });
 
@@ -935,14 +932,14 @@ test("G16: a device plugged in later shows up within 5 s; no list means one disa
   ]);
   await host.command("audio.workbench").run();
   const window = host.window("audio-workbench");
-  assert.deepEqual(window.props["device-rows"], [row("no-devices")]);
-  assert.deepEqual(window.props["device-tip"], row("no-devices"));
+  assert.deepEqual(listed(host, window.props["device-rows"]), ["No output devices available"]);
+  assert.equal(host.translate(window.props["device-tip"] as never), "No output devices available");
   assert.equal(window.props["devices-available"], false);
   host.reset("player.audioDevices");
   host.audioDevices = [SPEAKERS, PHONES];
   await host.settle(5200);
   assert.deepEqual(deviceItems(host).map((item) => item[0]), ["System Default", "MacBook Air 扬声器", "USB 耳机"]);
-  assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name)]);
+  assert.deepEqual(listed(host, window.props["device-rows"]), ["System Default", device(SPEAKERS.name), device(PHONES.name)]);
   assert.deepEqual(host.osd, [], "a new device is not announced");
   await stop();
 });
@@ -1080,5 +1077,65 @@ test("zh-Hans: a track without title or codec, an external one, and unnamed devi
     deviceItems(host).map((item) => item[0]),
     ["系统默认", "未命名设备", "未命名设备 (2)", "USB 耳机", "USB 耳机 (2)"],
   );
+  // The window's lists arrive translated, with the words its .slint file used to put in.
+  await host.command("audio.workbench").run();
+  const window = host.window("audio-workbench");
+  assert.deepEqual(listed(host, window.props["track-rows"]), ["音轨 1", "音轨 2 (opus)（外部）"]);
+  assert.deepEqual(listed(host, window.props["device-rows"]), ["系统默认", "未命名设备", "未命名设备", "USB 耳机", "USB 耳机"]);
+  assert.equal(host.translate(window.props["device-tip"] as never), "系统默认");
+  host.setSource({ audioTracks: [] });
+  await host.settle();
+  assert.deepEqual(listed(host, window.props["track-rows"]), ["没有音轨"]);
   await stop();
+});
+
+test("G03: every Audio Track menu item fits the player's menu path segment in every language", async () => {
+  const awkward = [
+    { title: "长".repeat(80), language: null, codec: "aac", external: false },
+    { title: "日本語吹き替え版".repeat(10), language: "jpn", codec: "aac", external: true },
+    { title: "x".repeat(200), language: "l".repeat(40), codec: "c".repeat(60), external: true },
+    { title: "  Director's commentary \t ", language: " eng ", codec: " ac3 ", external: false },
+    { title: "a\u0000b\u0007c\u001bd\u007fe\u0085f\u009fg\r\n", language: null, codec: "e\u0080ac3", external: true },
+    { title: "\u0000\u0085　", language: null, codec: "opus", external: true },
+    { title: "🎬👨‍👩‍👧‍👦🇯🇵".repeat(12), language: null, codec: "flac", external: true },
+    { title: "é".repeat(50), language: null, codec: null, external: false },
+    { title: null, language: null, codec: "\u0001" + "z".repeat(100), external: true },
+    { title: null, language: null, codec: null, external: true },
+    { title: "长".repeat(80), language: null, codec: "aac", external: false },
+  ];
+  const tracks = awkward.map((fields, index) => ({ ...track(index + 1, index === 0), ...fields }));
+  const bytes = (text: string) => new TextEncoder().encode(text).length;
+  const shown = new Map<string, string[]>();
+  for (const locale of LOCALES) {
+    const host = new TestHost();
+    host.openElsewhere("/movie.mkv");
+    host.setSource({ audioTracks: tracks });
+    const { stop } = await startPlugin(activate, { directory, host, locale });
+    try {
+      await host.settle();
+      const items = tracks.map(({ trackId }) => host.command(`audio.track.${trackId}`));
+      for (const item of items) {
+        // What the player checks (commands.rs): 1..=80 bytes, no control, no surrounding whitespace.
+        for (const segment of item.display.path) {
+          assert.ok(segment.length > 0 && bytes(segment) <= 80, `${locale}: ${JSON.stringify(segment)} is ${bytes(segment)} bytes`);
+          assert.doesNotMatch(segment, /\p{Cc}/u, `${locale}: ${JSON.stringify(segment)}`);
+          assert.doesNotMatch(segment, /^\s|\s$/u, `${locale}: ${JSON.stringify(segment)}`);
+        }
+      }
+      const labels = items.map((item) => item.display.path[2]!);
+      assert.equal(new Set(labels).size, labels.length, `${locale}: distinct items`);
+      shown.set(locale, labels);
+    } finally {
+      await stop();
+    }
+  }
+  // The catalogs were read: the words around the data are translated in each language.
+  const english = shown.get("en")!;
+  assert.ok(LOCALES.length > 1);
+  for (const locale of LOCALES.slice(1)) assert.notEqual(shown.get(locale)!.at(-2), english.at(-2), `${locale}: "Track 10 (external)" is translated`);
+  assert.equal(shown.get("ja")!.at(-2), "トラック 10（外部）");
+  assert.match(shown.get("ja")![1]!, /^2\. 日本語吹き替え版.*… \[jpn\] \(aac\)（外部）$/);
+  assert.equal(english[3], "4. Director's commentary [eng] (ac3)");
+  assert.equal(english[4], "5. a b c d e f g (e ac3) (external)");
+  assert.equal(english[5], "Track 6 (opus) (external)");
 });

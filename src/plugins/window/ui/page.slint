@@ -1,9 +1,10 @@
 // Options ▸ Playback ▸ Window: the settings page for G-02, H05 / IA-WIN-03 and B30 / G-06
 // (440 wide, the options window's page area). The same preferences as the menu items.
-// Heights (padding 14, spacing 6): title 24, section 14, radios 18, check 18,
+// The radios and checks are the library's (@vestra/widgets.slint).
+// Heights (padding 14, spacing 6): title 24, section 14, radios 18, check 18 (more if it wraps),
 //   note (its wrapped height: two lines at 412 wide), gap 8, section 14, radios 18, gap 8, section 14, check 18.
-import { CheckBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
+import { Check, RadioGroup } from "@vestra/widgets.slint";
 
 export global WindowPage {
     in-out property <int> auto-index: 2;
@@ -22,63 +23,6 @@ component Section inherits Text {
     color: Theme.text-dim;
 }
 
-component Radio {
-    in property <string> text;
-    in property <bool> checked;
-    callback clicked();
-    height: Theme.checkbox-row-height;
-    accessible-role: radio-button;
-    accessible-label: root.text;
-    accessible-checked: root.checked;
-    HorizontalLayout {
-        spacing: 4px;
-        VerticalLayout {
-            alignment: center;
-            Rectangle {
-                width: 12px;
-                height: 12px;
-                border-radius: 6px;
-                border-width: 1px;
-                border-color: touch.has-hover ? Theme.accent : Theme.text-dim;
-                background: Theme.bg-list;
-                Rectangle {
-                    width: 6px;
-                    height: 6px;
-                    border-radius: 3px;
-                    background: root.checked ? Theme.accent : transparent;
-                }
-            }
-        }
-        Text {
-            text: root.text;
-            color: root.checked ? Theme.text : Theme.text-list;
-            font-size: Theme.font-body;
-            vertical-alignment: center;
-        }
-    }
-    touch := TouchArea { clicked => { root.clicked(); } }
-}
-
-// One row of radio choices.
-component Choices {
-    in property <[string]> model;
-    in-out property <int> current;
-    callback picked(int);
-    HorizontalLayout {
-        height: Theme.checkbox-row-height;
-        spacing: 12px;
-        alignment: start;
-        for text[index] in root.model: Radio {
-            text: text;
-            checked: index == root.current;
-            clicked => {
-                root.current = index;
-                root.picked(index);
-            }
-        }
-    }
-}
-
 export component WindowSettingsPage inherits Rectangle {
     background: Theme.bg-panel;
     VerticalLayout {
@@ -94,17 +38,18 @@ export component WindowSettingsPage inherits Rectangle {
             color: Theme.text;
         }
         Section { text: @tr("Window size when playback starts"); }
-        Choices {
+        // One row of radios, 12px apart; one Tab stop, the arrows move the choice.
+        RadioGroup {
             // TRANSLATORS: one row of radio buttons on a 412-point-wide page; keep them short.
             model: [@tr("Off"), @tr("0.5×"), @tr("1×"), @tr("1.5×"), @tr("2×"), @tr("Fit aspect ratio")];
-            current <=> WindowPage.auto-index;
-            picked(index) => { WindowPage.set-auto(index); }
+            current-index <=> WindowPage.auto-index;
+            selected(index) => { WindowPage.set-auto(index); }
         }
-        CheckBox {
-            height: Theme.checkbox-row-height;
+        // No fixed height: a long translation wraps (one row is the check's minimum).
+        Check {
             text: @tr("Only once (only the first video of this run)");
             checked <=> WindowPage.auto-once;
-            toggled => { WindowPage.set-auto-once(self.checked); }
+            toggled(on) => { WindowPage.set-auto-once(on); }
         }
         // No fixed height: the layout gives the wrapped text all its lines.
         Text {
@@ -116,19 +61,18 @@ export component WindowSettingsPage inherits Rectangle {
         }
         Rectangle { height: 8px; }
         Section { text: @tr("Always on top"); }
-        Choices {
+        RadioGroup {
             // TRANSLATORS: one row of radio buttons on a 412-point-wide page; keep them short.
             model: [@tr("Never"), @tr("Always"), @tr("While playing"), @tr("Playing in fullscreen")];
-            current <=> WindowPage.top-index;
-            picked(index) => { WindowPage.set-top(index); }
+            current-index <=> WindowPage.top-index;
+            selected(index) => { WindowPage.set-top(index); }
         }
         Rectangle { height: 8px; }
         Section { text: @tr("Mouse pointer"); }
-        CheckBox {
-            height: Theme.checkbox-row-height;
+        Check {
             text: @tr("Hide the pointer while playing");
             checked <=> WindowPage.hide-cursor;
-            toggled => { WindowPage.set-hide-cursor(self.checked); }
+            toggled(on) => { WindowPage.set-hide-cursor(on); }
         }
     }
 }

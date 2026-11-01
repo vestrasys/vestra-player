@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { cut, filePage, hwdec, pageText, sampleFormat, saveName, systemPage, VALUE_MAX } from "../properties.ts";
+import { columns, cut, filePage, hwdec, pageText, sampleFormat, saveName, systemPage, VALUE_MAX, widestLabel } from "../properties.ts";
 import type { Probe, Row } from "../properties.ts";
 import { displayLine, systemVersion } from "../sysinfo.ts";
 
@@ -156,6 +156,53 @@ test("I05 Playback in English", async () => {
   await host.settle(1100);
   assert.equal(value(host, "Hardware decoding"), "Not used");
   await stop();
+});
+
+test("I05: the label column is sized by the page's widest label (label-sample), one per page", async () => {
+  const { host, stop } = await start("/videos/movie.mkv", undefined, undefined, "en");
+  await host.command("info.properties").run();
+  await host.settle();
+  const sample = () => host.window("properties").props["label-sample"];
+  assert.equal(sample(), "Display frame rate");
+  host.window("properties").emit("tab-changed", 2);
+  await host.settle();
+  assert.equal(sample(), "Vestra Player version");
+  await stop();
+  const zh = await start("/videos/movie.mkv");
+  await zh.host.command("info.properties").run();
+  await zh.host.settle();
+  // In the player's language: the widest label of 播放信息 in Simplified Chinese.
+  const shown = rows(zh.host).filter((r) => !r.heading && r.label !== "");
+  const most = Math.max(...shown.map((r) => columns(r.label)));
+  assert.equal(columns(zh.host.window("properties").props["label-sample"] as string), most);
+  await zh.stop();
+});
+
+test("I05 widestLabel: wide characters count two columns; headings and messages are left out; none = empty", async () => {
+  const { i18n, stop } = await start(null);
+  assert.equal(columns("Size"), 4);
+  assert.equal(columns("尺寸"), 4);
+  assert.equal(columns("ｓｉｚｅ"), 8);
+  assert.equal(columns("크기"), 4);
+  const row = (label: string, heading = false): Row => ({ label, value: "v", heading });
+  assert.equal(widestLabel(i18n, [row("A very long heading", true), row("Codec"), row("尺寸大小"), row("")]), "尺寸大小");
+  assert.equal(widestLabel(i18n, [row("Heading", true), row("")]), "");
+  assert.equal(widestLabel(i18n, []), "");
+  await stop();
+});
+
+test("I05: lists are Slint ListViews; no hidden layout of every row; tabs are the library's", async () => {
+  const slint = await readFile(new URL("../ui/properties.slint", import.meta.url), "utf8");
+  assert.match(slint, /import \{[^}]*\bListView\b[^}]*\} from "std-widgets\.slint"/);
+  assert.match(slint, /import \{[^}]*\bTabs\b[^}]*\} from "@vestra\/widgets\.slint"/);
+  assert.match(slint, /ListView \{[\s\S]*for row\[index\] in root\.rows:/);
+  assert.doesNotMatch(slint, /ScrollView/);
+  assert.doesNotMatch(slint, /component Tab\b/, "no local tab");
+  assert.equal([...slint.matchAll(/for row\b/g)].length, 1, "the rows are instantiated by the list only");
+  assert.match(slint, /label-measure := Text \{ text: root\.label-sample;/);
+  const about = await readFile(new URL("../ui/about.slint", import.meta.url), "utf8");
+  assert.match(about, /ListView \{[\s\S]*for plugin in root\.plugins: PluginLine/);
+  assert.doesNotMatch(about, /ScrollView/);
 });
 
 test("I05: without media 播放信息 and 文件信息 say 未打开媒体; 系统信息 still shows", async () => {
@@ -390,7 +437,7 @@ test("I05: 保存为… writes the page as <name> 信息.txt; cancelling writes 
     assert.deepEqual(await readdir(folder), ["movie 信息.txt"], "no temporary file left");
     host.dialogAnswers.push([join(folder, "missing", "x.txt")]);
     window.emit("save-page");
-    await until(() => window.props.status === "save-failed");
+    await until(() => window.props.status === "save-failed" && /ENOENT/.test(String(window.props["status-detail"])));
     assert.match(String(window.props["status-detail"]), /ENOENT/);
   } finally {
     await stop();
@@ -487,6 +534,45 @@ test("I05: closing the window with the title bar stops the 1-second polling (onC
   await stop();
 });
 
+test("lazy activation: the window reads the player's state and follows the source only while open; a source opened meanwhile is read when it opens", async () => {
+  const media = await mkdtemp(join(tmpdir(), "info-media-"));
+  const [a, b] = [join(media, "a.mkv"), join(media, "b.mkv")];
+  await writeFile(a, "a");
+  await writeFile(b, "b");
+  const { host, stop } = await start(a);
+  try {
+    assert.deepEqual(host.keepsRunning, []);
+    assert.equal(host.listening.has("source.state"), false);
+    host.tools.handle("ffprobe", (args) => ({ stdout: JSON.stringify({ format: { format_name: args.at(-1) === a ? "first" : "second" } }) }));
+    await host.command("info.properties").run();
+    host.window("properties").emit("tab-changed", 1);
+    await until(() => value(host, "格式") === "first");
+    // While open: the source listener and the window's binding, both added when it opened.
+    const why = host.listeningWhy.get("source.state") ?? [];
+    assert.equal(why.length, 2, why.join("; "));
+    assert.ok(why.some((line) => /^a listener added at dialog\.ts:\d+$/.test(line)), why.join("; "));
+    assert.ok(why.some((line) => /^a view's bind reads plugin\.player\.state \(dialog\.ts:\d+\)$/.test(line)), why.join("; "));
+    host.window("properties").userClose();
+    await host.settle();
+    assert.deepEqual(host.keepsRunning, []);
+    assert.equal(host.listening.has("source.state"), false);
+    const reads = host.tools.calls.length;
+    host.openElsewhere(b);
+    await host.settle(50);
+    assert.equal(host.tools.calls.length, reads, "nothing is read while the window is closed");
+    await host.press("Ctrl+F1");
+    await until(() => value(host, "格式") === "second");
+    assert.equal(value(host, "路径"), b);
+    host.window("properties").emit("close-window");
+    await host.settle();
+    assert.equal(host.windows.has("properties"), false);
+    assert.deepEqual(host.keepsRunning, [], "its Close button lets go as well");
+  } finally {
+    await stop();
+    await rm(media, { recursive: true, force: true });
+  }
+});
+
 test("I05 in Simplified Chinese: the menu, the window's words and the messages of before", async () => {
   const { host, stop } = await start();
   assert.deepEqual(host.command("info.properties").display.path, ["播放属性…"]);
@@ -500,5 +586,48 @@ test("I05 in Simplified Chinese: the menu, the window's words and the messages o
     assert.match(po, new RegExp(`msgctxt "tab"\\nmsgid "${tab}"\\nmsgstr "${word}"`));
   }
   assert.equal(host.translate("System"), "系统");
+  await stop();
+});
+
+test("I05: two overlapping Ctrl+F1 start one 1-second poll; closing stops it", async () => {
+  const { host, stop } = await start();
+  let release!: () => void;
+  const held = new Promise<void>((done) => (release = done));
+  host.handle("playback.stats", async () => {
+    await held; // the first read is slow: the second Ctrl+F1 arrives meanwhile
+    return stats;
+  });
+  const first = host.command("info.properties").run();
+  const second = host.command("info.properties").run();
+  release();
+  await Promise.all([first, second]);
+  assert.equal(host.window("properties").visible, true);
+  const polled = () => host.sent("playback.stats").length;
+  const opened = polled();
+  await host.settle(2200);
+  assert.ok(polled() - opened <= 3, `one poll a second, not two (${polled() - opened} reads in 2.2 s)`);
+  host.window("properties").emit("close-window");
+  await host.settle();
+  assert.equal(host.windows.has("properties"), false);
+  const after = polled();
+  await host.settle(2200);
+  assert.equal(polled(), after, "no poll left running after closing");
+  assert.deepEqual(host.keepsRunning, []);
+  await stop();
+});
+
+test("I05: a window that cannot open neither polls nor follows the player", async () => {
+  const { host, stop } = await start();
+  host.handle("ui.open", () => {
+    throw new HostError("ui", "injected native open rejection");
+  });
+  await host.command("info.properties").run(); // the failure goes to the plugin's error handler
+  await host.settle();
+  assert.equal(host.windows.has("properties"), false);
+  assert.deepEqual(host.keepsRunning, []);
+  assert.equal(host.listening.has("source.state"), false);
+  const after = host.sent("playback.stats").length;
+  await host.settle(2200);
+  assert.equal(host.sent("playback.stats").length, after, "no stats reads after a failed open");
   await stop();
 });

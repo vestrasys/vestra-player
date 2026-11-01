@@ -30,9 +30,6 @@ import type { ChannelMode, Settings, SyncKeep, TrackRow } from "./model.ts";
 /** The player's Audio menu. */
 const AUDIO = "@audio";
 
-/** A row of the window's drop-downs (ui/workbench.slint `Row`): data, or a kind the window puts into words. */
-type Row = { kind: string; text: string; n: number; codec: string; external: boolean; disconnected: boolean };
-const row = (kind: string, text = "", disconnected = false): Row => ({ kind, text, n: 0, codec: "", external: false, disconnected });
 /** Template arguments that are data (file names, device names, errors) are cut so the message fits the OSD's 200 characters. */
 const arg = (text: string) => clip(text, 120);
 /** Best-effort feedback: a missing OSD (headless) must not look like a processing failure. */
@@ -53,6 +50,15 @@ export default async function activate(plugin: Plugin) {
   const trackLabel = (row: TrackRow) => {
     const label = row.text ? text("{}", [row.text]) : row.codec ? text("Track {} ({})", [row.n, row.codec]) : text("Track {}", [row.n]);
     return row.external ? text("{} (external)", [label]) : label;
+  };
+  /**
+   * The same track in the window's Track list (a text value the player translates): its data,
+   * or "Track 2 (opus)"; an external one says so in one sentence ("Track 2 (opus) (external)").
+   */
+  const trackItem = (row: TrackRow) => {
+    if (row.text) return row.external ? text("{} (external)", [row.text]) : text("{}", [row.text]);
+    if (row.codec) return row.external ? text("Track {} ({}) (external)", [row.n, row.codec]) : text("Track {} ({})", [row.n, row.codec]);
+    return row.external ? text("Track {} (external)", [row.n]) : text("Track {}", [row.n]);
   };
   const filter = plugin.audio.filter("workbench");
   const window = plugin.windows.create("ui/workbench.slint", { id: "audio-workbench" });
@@ -442,7 +448,7 @@ export default async function activate(plugin: Plugin) {
       clarityEnabled: settings.clarity.on,
       clarityDb: settings.clarity.db,
       syncKeepIndex: syncKeeps.findIndex((k) => k.id === syncKeep),
-      trackRows: list.length > 0 ? list.map(trackRow) : [row(loadingTracks() ? "loading" : "no-tracks")],
+      trackRows: list.length > 0 ? list.map((t, index) => trackItem(trackRow(t, index))) : [loadingTracks() ? text("Loading") : text("No audio tracks")],
       trackIndex: list.length > 0 ? list.findIndex((t) => t.selected) : 0,
       tracksAvailable: list.length > 0,
       canLoad: !loading && loadReason() === null,
@@ -500,22 +506,27 @@ export default async function activate(plugin: Plugin) {
   /** Output device drop-down: names cut with an ellipsis by the control, the full one on hover. */
   function deviceProps() {
     const entries = deviceEntries();
-    if (!entries) return { deviceRows: [row("no-devices")], deviceIndex: 0, devicesAvailable: false, deviceTip: row("no-devices") };
+    if (!entries) {
+      const none = text("No output devices available");
+      return { deviceRows: [none], deviceIndex: 0, devicesAvailable: false, deviceTip: none };
+    }
     const index = Math.max(0, entries.findIndex((e) => e.id === device));
     const chosen = entries[index]!;
-    const deviceRow = (entry: (typeof entries)[number], name: (text: string) => string) => {
-      const disconnected = !entry.connected;
-      if (entry.id === null) return row("system-default");
-      if (entry.name === null) return row("selected-device", "", disconnected);
-      const text = name(entry.name);
-      return text ? row("device", text, disconnected) : row("unnamed-device", "", disconnected);
+    /** A device's name as text (`name` cleans it for the list or keeps it whole for the tip). */
+    const label = (entry: (typeof entries)[number], name: (text: string) => string) => {
+      if (entry.id === null) return text("System Default");
+      if (entry.name === null) return text("Selected device");
+      const shown = name(entry.name);
+      return shown ? text("{}", [shown]) : text("Unnamed device");
     };
     return {
-      deviceRows: entries.map((e) => deviceRow(e, cleanName)),
+      deviceRows: entries.map((e) => (e.connected ? label(e, cleanName) : text("{} (not connected)", [label(e, cleanName)]))),
       deviceIndex: index,
       devicesAvailable: switching === 0,
-      // The tip has the full name.
-      deviceTip: deviceRow(chosen, (name) => name),
+      // The tip has the full name, and why a disconnected device is not used.
+      deviceTip: chosen.connected
+        ? label(chosen, (name) => name)
+        : text("{}: device not connected, using System Default", [label(chosen, (name) => name)]),
     };
   }
 

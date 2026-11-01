@@ -161,7 +161,10 @@ export class Prober {
     }
     if (signal.aborted) return;
     // A length from a list file or the last run (C17/C18) stays when ffprobe has none.
-    if (value !== null) row.probed = value;
+    if (value !== null && row.probed !== value) {
+      row.probed = value;
+      this.queue.touch();
+    }
     row.probe = row.probed === null ? "failed" : "done";
     this.answered();
   }

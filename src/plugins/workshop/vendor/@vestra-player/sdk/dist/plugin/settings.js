@@ -61,8 +61,8 @@ class Page extends ViewBase {
     live() {
         return this.#registered && !this.closed;
     }
-    write(property, value) {
-        return this.scope.runtime.host.settings.set(this.#id, property, value);
+    write(property, write) {
+        return this.scope.runtime.host.settings.set(this.#id, property, write);
     }
     async dispose() {
         if (this.closed)

@@ -29,22 +29,22 @@ msgid "Picture-in-Picture"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 msgid "0.5×"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 msgid "1×"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 msgid "1.5×"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:99
+#: main.ts:120 main.ts:159 ui/page.slint:44
 msgid "2×"
 msgstr ""
 
@@ -109,12 +109,12 @@ msgid "Cycle Mode"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:193 ui/page.slint:121
+#: main.ts:193 ui/page.slint:66
 msgid "Never"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:193 ui/page.slint:121
+#: main.ts:193 ui/page.slint:66
 msgid "Always"
 msgstr ""
 
@@ -138,7 +138,7 @@ msgstr ""
 msgid "Hide Pointer While Playing"
 msgstr ""
 
-#: main.ts:219 ui/page.slint:90
+#: main.ts:219 ui/page.slint:34
 msgid "Window"
 msgstr ""
 
@@ -228,46 +228,46 @@ msgstr ""
 msgid "Cannot resize the window: {}"
 msgstr ""
 
-#: ui/page.slint:96
+#: ui/page.slint:40
 msgid "Window size when playback starts"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:99
+#: ui/page.slint:44
 msgid "Off"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:99
+#: ui/page.slint:44
 msgid "Fit aspect ratio"
 msgstr ""
 
-#: ui/page.slint:105
+#: ui/page.slint:50
 msgid "Only once (only the first video of this run)"
 msgstr ""
 
-#: ui/page.slint:111
+#: ui/page.slint:56
 msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
 msgstr ""
 
-#: ui/page.slint:118
+#: ui/page.slint:63
 msgid "Always on top"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:121
+#: ui/page.slint:66
 msgid "While playing"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: ui/page.slint:121
+#: ui/page.slint:66
 msgid "Playing in fullscreen"
 msgstr ""
 
-#: ui/page.slint:126
+#: ui/page.slint:71
 msgid "Mouse pointer"
 msgstr ""
 
-#: ui/page.slint:129
+#: ui/page.slint:73
 msgid "Hide the pointer while playing"
 msgstr ""

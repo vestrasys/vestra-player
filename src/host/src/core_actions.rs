@@ -208,7 +208,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
                 tr("Previous"),
                 202,
                 "domain",
-                &["PageUp", "Mouse:X1"],
+                &["PageUp", "Mouse:X2"],
                 false,
             ),
         ),
@@ -219,7 +219,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
                 tr("Next"),
                 203,
                 "domain",
-                &["PageDown", "Mouse:X2"],
+                &["PageDown", "Mouse:X1"],
                 false,
             ),
         ),
@@ -817,7 +817,7 @@ mod tests {
             find("seek-forward").repeat && find("volume-up").repeat && find("frame-forward").repeat
         );
         assert!(!find("play-pause").repeat && !find("mute").repeat);
-        assert_eq!(find("previous").bindings, ["PageUp", "Mouse:X1"]);
+        assert_eq!(find("previous").bindings, ["PageUp", "Mouse:X2"]);
         assert_eq!(
             find("volume-down").bindings,
             ["ArrowDown", "Mouse:WheelDown"]

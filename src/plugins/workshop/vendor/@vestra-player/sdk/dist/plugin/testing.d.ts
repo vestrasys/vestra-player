@@ -16,7 +16,7 @@ import type { CommandDeclaration } from "../commands.ts";
 import type { SourceState } from "../source.ts";
 import type { SubtitleState } from "../subtitles.ts";
 import { VIDEO_PROCESSING_LIMITS } from "../processing.ts";
-import type { RenderingMode, RenderingPreference, RenderingReason, RenderSettings, UpscalingReason, ViewSettings } from "./types.ts";
+import type { RenderingMode, RenderingPreference, RenderingReason, RenderSettings, UpscalingDecodingCause, UpscalingPlugin, UpscalingReason, UpscalingVideoSize, ViewSettings } from "./types.ts";
 import type { MediaJob } from "../media.ts";
 import type { LanguagePreference, Locale, Plugin, TemplateArgs, TextValue, ThemeId } from "./types.ts";
 import { LOCALES, LIST_SEPARATORS, TEXT_LIMITS } from "../i18n.ts";
@@ -1862,7 +1862,71 @@ export declare class TestHost implements Transport {
         checked: boolean;
         /** GPU rendering is still starting: a `rendering` reason then lets `set(true)` keep the request. */
         renderingStarting: boolean;
+        /** The video's size the state reports (player 0.5.25); `null`: no video. */
+        video: UpscalingVideoSize | null;
+        /** The video area the state reports (player 0.5.25); `null`: none. */
+        area: {
+            /** Width in physical pixels. */
+            width: number;
+            /** Height in physical pixels. */
+            height: number;
+        } | null;
+        /** The rendering GPU's name the state reports (player 0.5.25). */
+        gpu: string | null;
+        /** mpv's decoder the state reports (player 0.5.25); `null`: no video. */
+        hwdecCurrent: string | null;
     };
+    /**
+     * Make the upscaler's reason `decoding` with `cause`, with the player's
+     * message (player 0.5.25), and set `upscaling.hwdecCurrent` to match
+     * (`d3d11va-copy`, `no`, `nvdec`). `plugins` are named for `copy-back`
+     * only, as the player does. Returns the reason; call
+     * {@link TestHost.upscalingChanged} to tell a listening plugin.
+     *
+     * @example Test the window's advice for each cause
+     * The plugin's window explains why upscaling waits. The test fakes the
+     * copy-back cause that Picture Adjustments' filters cause and checks
+     * that the window names the plugin.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.upscalingDecoding("copy-back", [{ id: "vestra.video", name: "Picture Adjustments" }]);
+     * host.upscalingChanged();
+     * await host.settle();
+     * assert.match(String(host.window("upscale").props.blocker), /Picture Adjustments/);
+     * ```
+     *
+     * @capability None.
+     * @since 1.5.43
+     */
+    upscalingDecoding(cause: UpscalingDecodingCause, plugins?: readonly UpscalingPlugin[]): UpscalingReason;
+    /**
+     * Send `video.upscaling.changed` with the state {@link TestHost.upscaling}
+     * describes now (without `enabled`), as the player does when it changes
+     * (player 0.5.25); a plugin listening with
+     * `plugin.video.upscaling.onChange` receives it. Nothing reaches a plugin
+     * that does not listen.
+     *
+     * @capability None.
+     *
+     * @example Show the new factor in the plugin's window
+     * The window resized: the test changes the area and the factor, sends
+     * the change, and checks that the plugin's window shows the new factor.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.upscaling.area = { width: 2560, height: 1440 };
+     * host.upscaling.factor = 1.33; // 1080p in a 1440p area
+     * host.upscalingChanged(); // as the player after the resize settled
+     * await host.settle();
+     * assert.equal(host.window("upscale").props.factor, "×1.33");
+     * ```
+     *
+     * @since 1.5.43
+     */
+    upscalingChanged(): void;
     /** What `player.chapters()` lists while media is ready. */
     chapters: {
         /** The chapter title, `null` without one. */
@@ -2556,6 +2620,13 @@ export declare class TestHost implements Transport {
      * or parsing a file, a child process, a network request) is not waited
      * for: on a loaded machine it can finish after `settle()` returns. Poll
      * the result you assert on instead (second example).
+     *
+     * `settle()` does not wait for the SDK's once-a-second full update pass
+     * (SDK 1.5.45). After `setSource` (or another player state change) only
+     * the bindings that read a changed field of `plugin.player.state` run
+     * again; state the plugin changed outside a handler without
+     * `plugin.update()` shows only in the next full pass. Have the plugin
+     * call `plugin.update()` after such a change, or wait `settle(1000)`.
      *
      * @param ms - Extra time to wait, for debounces and timers (default 0).
      *

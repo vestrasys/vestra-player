@@ -1,4 +1,4 @@
-import type { Runtime } from "./runtime.ts";
+import type { Change, Runtime } from "./runtime.ts";
 import type { Disposable, Plugin, PluginError, Scope } from "./types.ts";
 export declare class ScopeImpl implements Plugin {
     #private;
@@ -54,6 +54,14 @@ export declare class ScopeImpl implements Plugin {
     report(error: unknown): void;
     /** Invoke plugin code on its behalf: report failures, then refresh bindings. */
     run(handler: (...args: never[]) => unknown, ...args: unknown[]): void;
+    /**
+     * Run a listener of a state change (`player.onChange`) like `run`, except
+     * that the full pass after it is left out when it returned synchronously
+     * and read only fields of the state that `change` left alone: its result
+     * then depends on nothing new. The precise pass for the change runs
+     * anyway, and a full pass follows within `SAFETY_PASS_MS`.
+     */
+    runOn(change: Change, handler: (...args: never[]) => unknown, ...args: unknown[]): void;
     update(): void;
     dispose(): Promise<void>;
 }

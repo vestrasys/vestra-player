@@ -10,8 +10,8 @@
 import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
-import { Button, ToolTipArea } from "@vestra/widgets.slint";
-import { Cell, Check, Choice, Conflict, Input, Label, Message, Words } from "parts.slint";
+import { Button, Check, Choice, ToolTipArea } from "@vestra/widgets.slint";
+import { Cell, Conflict, Input, Label, Message, Words } from "parts.slint";
 
 export struct KeyRow {
     key: string,
@@ -225,14 +225,15 @@ export component KeysPage inherits Rectangle {
             }
             Choice {
                 width: root.filter-width;
+                popup-min-width: 120px;
                 model: [@tr("All"), @tr("Changed"), @tr("Conflicts"), @tr("Unbound")];
                 current-index <=> Keys.status-index;
                 selected(index) => { Keys.status-filter(index); }
             }
             Choice {
                 width: 128px;
-                popup-height: 240px;
-                sources: true;
+                max-visible-rows: 12;
+                popup-min-width: 120px;
                 model: Keys.source-model;
                 current-index <=> Keys.source-index;
                 selected(index) => { Keys.source-filter(index); }
@@ -445,10 +446,13 @@ export component KeysPage inherits Rectangle {
                 alignment: center;
                 Button { horizontal-stretch: 0; width: max(72px, self.preferred-width); text: @tr("Export List…"); clicked => { Keys.export(); } }
             }
+            // The plugin owns the state: turning it on asks first, so the box
+            // stays clear while the question is open and follows `ignore` after.
             Check {
                 text: @tr("Ignore default shortcuts");
+                self-toggle: false;
                 checked: Keys.ignore;
-                clicked => { Keys.toggle-ignore(); }
+                toggled(on) => { Keys.toggle-ignore(); }
             }
             Rectangle { horizontal-stretch: 1; }
         }

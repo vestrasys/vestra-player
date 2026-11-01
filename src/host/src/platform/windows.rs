@@ -505,30 +505,284 @@ pub fn allow_handoff_foreground() {
 
 // -------------------------------------------------------------------- facts
 
+/// The per-app GPU preferences Windows Settings > System > Display >
+/// Graphics writes: one string value per program, named by its path.
+const USER_GPU_PREFERENCES: &str = r"Software\Microsoft\DirectX\UserGpuPreferences";
+
+/// `GpuPreference=N` in a `UserGpuPreferences` value (`GpuPreference=2;`,
+/// possibly among other settings such as `SwapEffectUpgradeEnable=1;`).
+fn gpu_preference(value: &str) -> Option<u32> {
+    value.split(';').find_map(|setting| {
+        let (name, number) = setting.split_once('=')?;
+        name.trim()
+            .eq_ignore_ascii_case("GpuPreference")
+            .then(|| number.trim().parse().ok())
+            .flatten()
+    })
+}
+
+/// An explicit choice for Vestra in Windows Settings: `1` power saving, `2`
+/// high performance (and any later non-zero value, such as a specific GPU);
+/// `0` is "Let Windows decide", which is no choice.
+fn explicit_gpu_preference(value: &str) -> Option<u32> {
+    gpu_preference(value).filter(|&preference| preference != 0)
+}
+
+/// The value among `entries` (name, data) that is this executable's:
+/// `same(name)` says whether a value name is the same file (its path in
+/// another form: a short 8.3 path, a `subst` drive, a junction, a mapped
+/// drive). The first that is.
+fn matching_entry(
+    entries: &[(String, String)],
+    same: impl Fn(&str) -> bool,
+) -> Option<&(String, String)> {
+    entries.iter().find(|(name, _)| same(name))
+}
+
+/// A path in one comparable form: canonical (long names, links and `subst`
+/// resolved), lower case. `None` when it does not exist.
+fn comparable(path: &Path) -> Option<String> {
+    dunce::canonicalize(path)
+        .ok()
+        .map(|path| path.to_string_lossy().to_lowercase())
+}
+
+/// The user's explicit Windows Settings preference for this executable
+/// (`HKCU\…\UserGpuPreferences`), and a line worth logging. The value is
+/// looked up by the executable's path; when no value has exactly that name,
+/// every value's name is compared as a canonical path (the setting may name
+/// the player by another form of its path), and when none is this
+/// executable the line says so.
+fn user_gpu_preference() -> (Option<u32>, Option<String>) {
+    let Ok(exe) = std::env::current_exe() else {
+        return (
+            None,
+            Some(
+                "the player's path is unknown, so its Windows Settings GPU preference is not read"
+                    .into(),
+            ),
+        );
+    };
+    let Ok(key) = windows_registry::CURRENT_USER.open(USER_GPU_PREFERENCES) else {
+        return (None, None);
+    };
+    if let Some(name) = exe.to_str()
+        && let Ok(value) = key.get_string(name)
+    {
+        return (explicit_gpu_preference(&value), None);
+    }
+    let entries: Vec<(String, String)> = key
+        .values()
+        .map(|values| {
+            values
+                .filter_map(|(name, value)| String::try_from(value).ok().map(|value| (name, value)))
+                .collect()
+        })
+        .unwrap_or_default();
+    // Only entries for a program of the same file name are resolved (a
+    // canonical path may touch an offline network drive): other programs'
+    // preferences and settings such as `DirectXUserGlobalSettings` are not.
+    let file_name = exe
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let candidates: Vec<(String, String)> = entries
+        .into_iter()
+        .filter(|(name, _)| same_file_name(name, &file_name))
+        .collect();
+    if candidates.is_empty() {
+        return (None, None);
+    }
+    let ours = comparable(&exe);
+    let found = ours.as_ref().and_then(|ours| {
+        matching_entry(&candidates, |name| {
+            comparable(Path::new(name)).is_some_and(|theirs| theirs == *ours)
+        })
+    });
+    match found {
+        Some((name, value)) => (
+            explicit_gpu_preference(value),
+            Some(format!(
+                "the Windows Settings GPU preference for this player is under {name}"
+            )),
+        ),
+        None => (
+            None,
+            Some(format!(
+                "Windows Settings has a GPU preference for {} but not for this copy of the player ({})",
+                candidates[0].0,
+                exe.display()
+            )),
+        ),
+    }
+}
+
+/// Whether registry value `name` is a path (it has a separator) whose file
+/// name is `file_name` (case-insensitive).
+fn same_file_name(name: &str, file_name: &str) -> bool {
+    !file_name.is_empty()
+        && name
+            .rsplit_once(['\\', '/'])
+            .is_some_and(|(_, last)| last.eq_ignore_ascii_case(file_name))
+}
+
+/// How the adapter of a mode is chosen (user ruling 2026-10-31, round
+/// record 2026-10-render-modes §12).
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Policy {
+    /// `VESTRA_GPU_ADAPTER` names one (its value).
+    Env(vestra_gpu_render::Choice, String),
+    /// Windows' order for the process (why).
+    Order(String),
+    /// The high-performance GPU (GPU rendering's default).
+    HighPerformance,
+}
+
+const ORDER: &str = "Windows' order for this process (Settings > Display > Graphics)";
+
+/// `VESTRA_GPU_ADAPTER`: an index, `high-performance`, `minimum-power` or
+/// `warp`; empty is unset; anything else is ignored, with a line, as if it
+/// were unset (it must not switch the high-performance default off).
+fn env_adapter(
+    value: Option<&str>,
+) -> (Option<(vestra_gpu_render::Choice, String)>, Option<String>) {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return (None, None);
+    };
+    let known = matches!(value, "warp" | "high-performance" | "minimum-power")
+        || value.parse::<u32>().is_ok();
+    if known {
+        (
+            Some((
+                vestra_gpu_render::Choice::parse(Some(value)),
+                format!("VESTRA_GPU_ADAPTER={value}"),
+            )),
+            None,
+        )
+    } else {
+        (
+            None,
+            Some(format!(
+                "render: VESTRA_GPU_ADAPTER={value} is not an index, high-performance, minimum-power or warp; ignored"
+            )),
+        )
+    }
+}
+
+/// The policy of a mode: `VESTRA_GPU_ADAPTER` (`env`) wins; CPU mode
+/// follows Windows' order; GPU rendering follows Windows' order only where
+/// the user set a preference for Vestra in Windows Settings (`preference`,
+/// read only then), and otherwise takes the high-performance GPU.
+fn adapter_policy(
+    env: Option<(vestra_gpu_render::Choice, String)>,
+    gpu_mode: bool,
+    preference: impl FnOnce() -> Option<u32>,
+) -> Policy {
+    if let Some((choice, how)) = env {
+        return Policy::Env(choice, how);
+    }
+    if !gpu_mode {
+        return Policy::Order(ORDER.into());
+    }
+    match preference() {
+        Some(preference) => Policy::Order(format!(
+            "Vestra's preference in Windows Settings > System > Display > Graphics ({})",
+            match preference {
+                1 => "Power saving".to_owned(),
+                2 => "High performance".to_owned(),
+                other => format!("GpuPreference={other}"),
+            }
+        )),
+        None => Policy::HighPerformance,
+    }
+}
+
+/// The adapter `policy` gives among `adapters` (DXGI's order): `preferred`
+/// answers `EnumAdapterByGpuPreference` (`true`: high performance, `false`:
+/// minimum power) with a LUID. Where the high-performance default cannot
+/// be resolved (no `IDXGIFactory6`, an error, a LUID not in the list), it
+/// falls back to Windows' order and says why; an explicit
+/// `VESTRA_GPU_ADAPTER` that cannot be resolved gives no adapter.
+fn resolve_adapter(
+    policy: &Policy,
+    adapters: &[super::GpuAdapter],
+    preferred: impl Fn(bool) -> std::result::Result<u64, String>,
+) -> super::AdapterPick {
+    use vestra_gpu_render::Choice;
+    let at = |index: Option<usize>, how: String| super::AdapterPick {
+        index,
+        luid: index.and_then(|index| adapters.get(index)).map(|a| a.luid),
+        warp: false,
+        how,
+    };
+    let by_preference = |high: bool| {
+        preferred(high).and_then(|luid| {
+            adapters
+                .iter()
+                .position(|a| a.luid == luid)
+                .ok_or_else(|| format!("its LUID {luid:016x} is not among the adapters"))
+        })
+    };
+    let first = (!adapters.is_empty()).then_some(0);
+    match policy {
+        Policy::Order(how) => at(first, how.clone()),
+        Policy::HighPerformance => match by_preference(true) {
+            Ok(index) => at(
+                Some(index),
+                "GPU rendering's default, the high-performance GPU (no preference for Vestra in Windows Settings > System > Display > Graphics)".into(),
+            ),
+            Err(error) => at(
+                first,
+                format!("{ORDER}, as the high-performance GPU could not be determined ({error})"),
+            ),
+        },
+        Policy::Env(choice, how) => match *choice {
+            Choice::Warp => super::AdapterPick {
+                index: adapters.iter().position(|adapter| adapter.software),
+                luid: None,
+                warp: true,
+                how: how.clone(),
+            },
+            Choice::Index(index) => at(
+                usize::try_from(index)
+                    .ok()
+                    .filter(|&index| index < adapters.len()),
+                how.clone(),
+            ),
+            Choice::HighPerformance | Choice::MinimumPower => {
+                match by_preference(*choice == Choice::HighPerformance) {
+                    Ok(index) => at(Some(index), how.clone()),
+                    Err(error) => at(None, format!("{how}, which could not be resolved ({error})")),
+                }
+            }
+            Choice::Default | Choice::Luid(_) => at(first, how.clone()),
+        },
+    }
+}
+
 /// DXGI's adapters in Windows' order for this process (the per-app graphics
 /// preference decides the first), with the user-mode driver's version
-/// (`vestra_win32::dxgi_adapters`), and the index of the one GPU rendering
-/// and the Direct3D 12 windows use (`VESTRA_GPU_ADAPTER`, as
-/// `select_wgpu_windows` opens it; unset: the first). Microsoft's own
-/// adapters (WARP, Basic Render, vendor `0x1414`) count as software. None
-/// when DXGI is missing.
-pub fn gpu_adapters() -> (Vec<super::GpuAdapter>, Option<usize>) {
+/// (`vestra_win32::dxgi_adapters`), and the adapters GPU rendering and CPU
+/// mode's Direct3D 12 windows use, resolved once here (the environment and
+/// the registry are read once) and opened as they are
+/// (`select_wgpu_windows`). Microsoft's own adapters (WARP, Basic Render,
+/// vendor `0x1414`) count as software. None when DXGI is missing.
+pub fn gpu_adapters() -> super::GpuAdapters {
     const MICROSOFT: u32 = 0x1414;
     let adapters = match vestra_win32::dxgi_adapters() {
         Ok(adapters) => adapters,
         Err(error) => {
             diag!("render: the graphics adapters are unknown ({error})");
-            return (Vec::new(), None);
+            let unknown = super::AdapterPick {
+                how: format!("nothing: the graphics adapters are unknown ({error})"),
+                ..super::AdapterPick::default()
+            };
+            return super::GpuAdapters {
+                list: Vec::new(),
+                gpu: unknown.clone(),
+                windows: unknown,
+            };
         }
-    };
-    let choice =
-        vestra_gpu_render::Choice::parse(std::env::var("VESTRA_GPU_ADAPTER").ok().as_deref());
-    let preferred = match choice {
-        vestra_gpu_render::Choice::HighPerformance => {
-            vestra_win32::dxgi_preferred_adapter(true).ok()
-        }
-        vestra_gpu_render::Choice::MinimumPower => vestra_win32::dxgi_preferred_adapter(false).ok(),
-        _ => None,
     };
     let list: Vec<super::GpuAdapter> = adapters
         .into_iter()
@@ -543,28 +797,24 @@ pub fn gpu_adapters() -> (Vec<super::GpuAdapter>, Option<usize>) {
             luid: adapter.luid,
         })
         .collect();
-    let render = render_adapter(choice, &list, preferred);
-    (list, render)
-}
-
-/// Which of `adapters` (DXGI's order) `choice` opens: the first by default,
-/// an index if it exists, the one whose LUID the preference query gave
-/// (`preferred`), or the first software adapter for `warp`.
-fn render_adapter(
-    choice: vestra_gpu_render::Choice,
-    adapters: &[super::GpuAdapter],
-    preferred: Option<u64>,
-) -> Option<usize> {
-    use vestra_gpu_render::Choice;
-    match choice {
-        Choice::Default => (!adapters.is_empty()).then_some(0),
-        Choice::Index(index) => usize::try_from(index)
-            .ok()
-            .filter(|&index| index < adapters.len()),
-        Choice::HighPerformance | Choice::MinimumPower => {
-            preferred.and_then(|luid| adapters.iter().position(|a| a.luid == luid))
+    let env = std::env::var("VESTRA_GPU_ADAPTER").ok();
+    let (env, warning) = env_adapter(env.as_deref());
+    if let Some(warning) = warning {
+        diag!("{warning}");
+    }
+    let gpu_policy = adapter_policy(env.clone(), true, || {
+        let (preference, note) = user_gpu_preference();
+        if let Some(note) = note {
+            diag!("render: {note}");
         }
-        Choice::Warp => adapters.iter().position(|adapter| adapter.software),
+        preference
+    });
+    let windows_policy = adapter_policy(env, false, || None);
+    let preferred = |high: bool| vestra_win32::dxgi_preferred_adapter(high);
+    super::GpuAdapters {
+        gpu: resolve_adapter(&gpu_policy, &list, preferred),
+        windows: resolve_adapter(&windows_policy, &list, preferred),
+        list,
     }
 }
 
@@ -849,10 +1099,13 @@ pub fn gpu_failed(handle: &GpuHandle) -> Option<String> {
 
 /// Direct3D 12 windows (`render_mode::WindowKind::Wgpu`: GPU mode's, and
 /// since 0.5.19 CPU mode's; before the event loop, not headless): every
-/// window draws with femtovg on wgpu, on one Direct3D 12 device of DXGI's
-/// first adapter (`VESTRA_GPU_ADAPTER`: another index, `high-performance`,
-/// `minimum-power` or `warp`), which GPU rendering shares its textures
-/// with; software rendering uploads its pictures into a texture of it. Only
+/// window draws with femtovg on wgpu, on one Direct3D 12 device of the
+/// adapter `gpu_adapters` resolved for the mode (`adapter`: GPU rendering's
+/// is the high-performance GPU unless the user chose one for Vestra in
+/// Windows Settings, CPU mode's follows Windows' order,
+/// `VESTRA_GPU_ADAPTER` overrides both), opened by its LUID, which GPU
+/// rendering shares its textures with; software rendering uploads its
+/// pictures into a texture of it. Only
 /// applies the kind: what is wanted is `render_mode::decide`'s. `Err` with
 /// why when the windows cannot draw that way (no Direct3D 12, an adapter
 /// without a GPU of its own such as WARP in a remote session or a virtual
@@ -862,9 +1115,18 @@ pub fn gpu_failed(handle: &GpuHandle) -> Option<String> {
 /// (`window_device_lost`; the host restarts the player).
 pub fn select_wgpu_windows(
     winit: impl Fn() -> slint::BackendSelector,
+    adapter: &super::AdapterPick,
 ) -> std::result::Result<(), String> {
-    let adapter = std::env::var("VESTRA_GPU_ADAPTER").ok();
-    let device = vestra_gpu_render::WindowDevice::open(adapter.as_deref())
+    // The adapter the crash guard and the denylist looked at, by LUID.
+    use vestra_gpu_render::Choice;
+    let choice = if adapter.warp {
+        Choice::Warp
+    } else if let Some(luid) = adapter.luid {
+        Choice::Luid(luid)
+    } else {
+        return Err(format!("no graphics adapter ({})", adapter.how));
+    };
+    let device = vestra_gpu_render::WindowDevice::open(choice, &adapter.how)
         .map_err(|error| format!("no Direct3D 12 device ({error})"))?;
     let any_adapter =
         std::env::var("VESTRA_WINDOW_RENDERER").is_ok_and(|value| value.trim() == "wgpu");
@@ -942,6 +1204,17 @@ pub fn window_notifiers() -> bool {
 pub fn direct_video_feed() -> Option<vestra_video_texture::Feed> {
     let (device, queue) = vestra_gpu_render::window_wgpu()?;
     vestra_video_texture::direct(&device, &queue)
+}
+
+/// Whether two video area images show the same texture. Slint 1.18.1's
+/// `Image` equality has no case for wgpu textures, so an image made from a
+/// texture is never equal even to itself; the textures are compared here.
+pub fn same_video_image(shown: &slint::Image, next: &slint::Image) -> bool {
+    match (shown.to_wgpu_30_texture(), next.to_wgpu_30_texture()) {
+        (Some(shown), Some(next)) => shown == next,
+        (None, None) => shown == next,
+        _ => false,
+    }
 }
 
 /// GPU frames in a window without a notifier take the main window's frame
@@ -1229,34 +1502,203 @@ mod tests {
         );
     }
 
-    /// L1 (record §11): the crash guard and the denylist look at the
-    /// adapter `VESTRA_GPU_ADAPTER` makes GPU rendering use.
+    /// Windows Settings > System > Display > Graphics writes
+    /// `GpuPreference=N;` per program; `0` is "Let Windows decide".
     #[test]
-    fn the_render_adapter_follows_the_adapter_choice() {
+    fn the_settings_gpu_preference_is_read_from_its_value() {
+        assert_eq!(gpu_preference("GpuPreference=2;"), Some(2));
+        assert_eq!(gpu_preference("GpuPreference=1;"), Some(1));
+        assert_eq!(gpu_preference("GpuPreference=0;"), Some(0));
+        assert_eq!(
+            gpu_preference("SwapEffectUpgradeEnable=1;GpuPreference=2;"),
+            Some(2)
+        );
+        assert_eq!(gpu_preference(" gpupreference = 1 ;"), Some(1));
+        assert_eq!(gpu_preference("SwapEffectUpgradeEnable=1;"), None);
+        assert_eq!(gpu_preference(""), None);
+        assert_eq!(gpu_preference("GpuPreference=fast;"), None);
+        // Only a choice counts as explicit.
+        assert_eq!(explicit_gpu_preference("GpuPreference=0;"), None);
+        assert_eq!(explicit_gpu_preference("GpuPreference=1;"), Some(1));
+        assert_eq!(explicit_gpu_preference("GpuPreference=2;"), Some(2));
+        assert_eq!(explicit_gpu_preference("AutoHDREnable=1;"), None);
+    }
+
+    /// User ruling 2026-10-31 (record §12): GPU rendering defaults to the
+    /// high-performance GPU, unless the user chose one for Vestra in
+    /// Windows Settings; CPU mode follows Windows' order;
+    /// `VESTRA_GPU_ADAPTER` overrides both; an unknown value of it is
+    /// ignored (and does not switch the default off).
+    #[test]
+    fn gpu_rendering_defaults_to_the_high_performance_gpu() {
         use vestra_gpu_render::Choice;
-        let adapter = |luid: u64, software: bool| crate::platform::GpuAdapter {
+        let none = || None;
+        assert_eq!(adapter_policy(None, true, none), Policy::HighPerformance);
+        for preference in [1, 2] {
+            let Policy::Order(how) = adapter_policy(None, true, || Some(preference)) else {
+                panic!("{preference}: not Windows' order");
+            };
+            assert!(how.contains("Windows Settings"), "{how}");
+        }
+        let how = |preference| match adapter_policy(None, true, || Some(preference)) {
+            Policy::Order(how) => how,
+            other => panic!("{other:?}"),
+        };
+        assert!(how(2).contains("High performance"));
+        assert!(how(1).contains("Power saving"));
+        // CPU mode never reads the preference.
+        assert_eq!(
+            adapter_policy(None, false, || panic!("not read")),
+            Policy::Order(ORDER.into())
+        );
+        // The environment wins in both modes, preference or not.
+        let (one, warning) = env_adapter(Some(" 1 "));
+        assert_eq!(warning, None);
+        for gpu_mode in [true, false] {
+            assert_eq!(
+                adapter_policy(one.clone(), gpu_mode, || Some(2)),
+                Policy::Env(Choice::Index(1), "VESTRA_GPU_ADAPTER=1".into())
+            );
+        }
+        assert_eq!(
+            env_adapter(Some("minimum-power"))
+                .0
+                .map(|(choice, _)| choice),
+            Some(Choice::MinimumPower)
+        );
+        assert_eq!(
+            env_adapter(Some("warp")).0.map(|(choice, _)| choice),
+            Some(Choice::Warp)
+        );
+        // Empty is unset; an unknown value is ignored with a line.
+        assert_eq!(env_adapter(Some("")), (None, None));
+        let (unknown, warning) = env_adapter(Some("nvidia"));
+        assert_eq!(unknown, None);
+        assert!(warning.unwrap().contains("VESTRA_GPU_ADAPTER=nvidia"));
+        assert_eq!(adapter_policy(unknown, true, none), Policy::HighPerformance);
+    }
+
+    fn adapter(luid: u64, software: bool) -> crate::platform::GpuAdapter {
+        crate::platform::GpuAdapter {
             name: format!("GPU {luid}"),
             vendor_id: 0x1002,
             device_id: 0x15BF,
             driver_version: None,
             software,
             luid,
-        };
+        }
+    }
+
+    /// Review items 2 and 3 (record §12): the adapter is resolved once to a
+    /// concrete one (its index for the guard and the denylist, its LUID for
+    /// the device); the high-performance default falls back to Windows'
+    /// order when it cannot be resolved, an explicit choice does not.
+    #[test]
+    fn the_chosen_adapter_is_resolved_once_with_a_fallback_for_the_default() {
+        use vestra_gpu_render::Choice;
         let list = [adapter(7, false), adapter(9, false), adapter(3, true)];
-        assert_eq!(render_adapter(Choice::Default, &list, None), Some(0));
-        assert_eq!(render_adapter(Choice::Default, &[], None), None);
-        assert_eq!(render_adapter(Choice::Index(1), &list, None), Some(1));
-        assert_eq!(render_adapter(Choice::Index(5), &list, None), None);
+        let found = |luid: u64| move |_: bool| Ok::<u64, String>(luid);
+        let failed = |_: bool| Err::<u64, String>("no IDXGIFactory6".into());
+        // The default: the 4070 (LUID 9) by its LUID.
+        let pick = resolve_adapter(&Policy::HighPerformance, &list, found(9));
         assert_eq!(
-            render_adapter(Choice::HighPerformance, &list, Some(9)),
-            Some(1)
+            (pick.index, pick.luid, pick.warp),
+            (Some(1), Some(9), false)
+        );
+        assert!(pick.how.contains("high-performance GPU"), "{}", pick.how);
+        // It cannot be resolved: Windows' order, and why.
+        for broken in [
+            resolve_adapter(&Policy::HighPerformance, &list, failed),
+            resolve_adapter(&Policy::HighPerformance, &list, found(42)),
+        ] {
+            assert_eq!((broken.index, broken.luid), (Some(0), Some(7)));
+            assert!(broken.how.starts_with("Windows' order"), "{}", broken.how);
+            assert!(
+                broken.how.contains("could not be determined"),
+                "{}",
+                broken.how
+            );
+        }
+        // Windows' order; no adapters at all.
+        let order = resolve_adapter(&Policy::Order(ORDER.into()), &list, failed);
+        assert_eq!((order.index, order.luid), (Some(0), Some(7)));
+        assert_eq!(
+            resolve_adapter(&Policy::Order(ORDER.into()), &[], failed).index,
+            None
+        );
+        // Explicit choices: no fallback.
+        let env = |choice| Policy::Env(choice, "VESTRA_GPU_ADAPTER=x".into());
+        assert_eq!(
+            resolve_adapter(&env(Choice::Index(1)), &list, failed).luid,
+            Some(9)
         );
         assert_eq!(
-            render_adapter(Choice::MinimumPower, &list, Some(7)),
+            resolve_adapter(&env(Choice::Index(5)), &list, failed).index,
+            None
+        );
+        assert_eq!(
+            resolve_adapter(&env(Choice::MinimumPower), &list, found(7)).index,
             Some(0)
         );
-        assert_eq!(render_adapter(Choice::HighPerformance, &list, None), None);
-        assert_eq!(render_adapter(Choice::Warp, &list, None), Some(2));
+        let unresolved = resolve_adapter(&env(Choice::HighPerformance), &list, failed);
+        assert_eq!((unresolved.index, unresolved.luid), (None, None));
+        assert!(
+            unresolved.how.contains("could not be resolved"),
+            "{}",
+            unresolved.how
+        );
+        let warp = resolve_adapter(&env(Choice::Warp), &list, failed);
+        assert_eq!((warp.index, warp.warp), (Some(2), true));
+    }
+
+    /// Review item 6: the setting may name the player by another form of
+    /// its path; values are matched by the comparison given.
+    #[test]
+    fn a_settings_entry_is_found_under_another_form_of_the_path() {
+        let entries = vec![
+            (
+                r"C:\Games\other.exe".to_owned(),
+                "GpuPreference=2;".to_owned(),
+            ),
+            (
+                r"C:\PROGRA~1\Vestra\vestra-host.exe".to_owned(),
+                "GpuPreference=1;".to_owned(),
+            ),
+        ];
+        let same = |name: &str| name.to_lowercase().contains("progra~1");
+        let (name, value) = matching_entry(&entries, same).unwrap();
+        assert!(name.contains("PROGRA~1"));
+        assert_eq!(explicit_gpu_preference(value), Some(1));
+        assert!(matching_entry(&entries, |_| false).is_none());
+        // Only paths of the same file name are looked at.
+        assert!(same_file_name(
+            r"C:\PROGRA~1\Vestra\VESTRA-HOST.exe",
+            "vestra-host.exe"
+        ));
+        assert!(same_file_name(
+            r"\\server\share\vestra-host.exe",
+            "vestra-host.exe"
+        ));
+        assert!(!same_file_name(r"C:\Games\other.exe", "vestra-host.exe"));
+        assert!(!same_file_name(
+            "DirectXUserGlobalSettings",
+            "vestra-host.exe"
+        ));
+        assert!(
+            !same_file_name("vestra-host.exe", "vestra-host.exe"),
+            "no path"
+        );
+        assert!(!same_file_name(r"C:\x\vestra-host.exe", ""));
+        // A path that exists compares in one form; one that does not, not at all.
+        let exe = std::env::current_exe().unwrap();
+        assert_eq!(
+            comparable(&exe),
+            comparable(&exe.with_file_name(exe.file_name().unwrap()))
+        );
+        assert_eq!(
+            comparable(std::path::Path::new(r"C:\no\such\player.exe")),
+            None
+        );
     }
 
     /// Item 6 (record §11): `exact` turns the extra pixel off.

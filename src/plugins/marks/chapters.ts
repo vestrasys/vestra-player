@@ -14,18 +14,22 @@ export const chapterName = (text: I18n["text"], chapter: Chapter, index: number)
 /**
  * B21 chapters: read with `player.chapters()` once per source, when it first is
  * ready (the player does not push them). Cleared as soon as the source
- * changes, so an old file's chapters never show for a new one.
+ * changes, so an old file's chapters never show for a new one. The list
+ * arrives after the state event that asked for it, outside any SDK handler,
+ * so `update` (`plugin.update()`) asks for the pass that shows it.
  */
 export class Chapters {
   readonly #player: Player;
+  readonly #update: () => void;
   readonly #listeners: (() => void)[] = [];
   #sourceId: number | null = null;
   #loaded: number | null = null;
   #list: Chapter[] = [];
   version = 0;
 
-  constructor(player: Player) {
+  constructor(player: Player, update: () => void) {
     this.#player = player;
+    this.#update = update;
   }
   onChange(listener: () => void) {
     this.#listeners.push(listener);
@@ -51,6 +55,8 @@ export class Chapters {
             .filter((chapter) => Number.isFinite(chapter.start) && chapter.start >= 0)
             .sort((a, b) => a.start - b.start),
         );
+        // No player field changed: without this the window's rows wait for the SDK's safety pass.
+        this.#update();
       },
       () => {
         // Refused (source gone meanwhile): try again on the next ready state.

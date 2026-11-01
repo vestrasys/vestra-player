@@ -11,11 +11,6 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": [
-    "runtime/**/*.ts",
-    "examples/**/*.ts",
-    "plugins/**/*.ts",
-    "tests/**/*.ts"
-  ],
+  "include": ["runtime/**/*.ts", "plugins/**/*.ts", "tests/**/*.ts"],
   "exclude": ["**/node_modules/**", "**/vendor/**", "**/dist/**"]
 }

@@ -766,6 +766,15 @@ impl Table {
         Ok(seen.iter().map(self::text).collect())
     }
 
+    /// The declared commands (`<manifest>/<id>`) whose defaults include `input`.
+    pub fn default_holders(&self, input: &Input) -> Vec<String> {
+        self.declared
+            .iter()
+            .filter(|(_, declared)| declared.defaults.contains(input))
+            .map(|((_, id), declared)| format!("{}/{id}", declared.manifest))
+            .collect()
+    }
+
     /// Whether `<manifest>/<id>` is a declared command.
     pub fn declares(&self, manifest: &str, id: &str) -> bool {
         self.declared

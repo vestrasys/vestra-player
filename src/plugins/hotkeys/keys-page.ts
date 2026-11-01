@@ -1,5 +1,5 @@
 import { renameSync, writeFileSync } from "node:fs";
-import type { BindingInfo, BindingRef, JsonStore, Plugin } from "@vestra-player/sdk";
+import type { BindingInfo, BindingRef, JsonStore, Plugin, TextArg } from "@vestra-player/sdk";
 import { exportCsv, exportText } from "./export.ts";
 import type { IgnoreDefaults } from "./ignore.ts";
 import type { Osd } from "./main.ts";
@@ -147,7 +147,16 @@ export class KeysPage {
     });
     page.on("resetAll", () => this.#resetAll());
     page.on("export", () => this.#export());
-    page.on("toggleIgnore", () => ignore.toggle());
+    // The check box does not flip itself (`self-toggle: false`); the plugin decides
+    // (turning it on asks first) and pushes the state back afterwards, also when it
+    // did not change (a declined question) or the toggle failed.
+    page.on("toggleIgnore", async () => {
+      try {
+        await ignore.toggle();
+      } finally {
+        page.set({ ignore: ignore.enabled });
+      }
+    });
     page.bind(() => this.#props());
     model.onChange(() => {
       // A command that went away (plugin stopped) drops the selection.
@@ -174,18 +183,19 @@ export class KeysPage {
 
   /**
    * Source filter: all, the player, each plugin with commands, plugins not
-   * loaded. `title` is what the Slint drop-down gets: plugin ids, and codes
-   * it shows in words (ui/parts.slint Words.source).
+   * loaded. `title` is what the Slint drop-down shows: plugin ids as they
+   * are, the other entries translated (the library Choice shows its model).
    */
-  #sources(): { title: string; value: string }[] {
+  #sources(): { title: TextArg; value: string }[] {
+    const i18n = this.#plugin.i18n;
     const plugins = [...new Set(this.#model.commands.map((c) => c.plugin))]
       .filter((id) => id !== "host")
       .sort();
     return [
-      { title: "*all", value: "" },
-      { title: "host", value: "host" },
+      { title: i18n.text("All sources"), value: "" },
+      { title: i18n.text("Player"), value: "host" },
       ...plugins.map((id) => ({ title: id, value: id })),
-      { title: ORPHANS, value: ORPHANS },
+      { title: i18n.text("Plugins not loaded"), value: ORPHANS },
     ];
   }
 

@@ -109,16 +109,17 @@ pub fn device_lost() -> bool {
 pub struct WindowDevice(Arc<Gpu>);
 
 impl WindowDevice {
-    /// Open a device (the installed one, if any). `adapter`
-    /// (`VESTRA_GPU_ADAPTER`): unset for DXGI's first adapter, an index,
-    /// `high-performance`, `minimum-power` or
-    /// `warp`. Dropped unless [`install`](Self::install)ed (an OpenGL
-    /// fallback keeps no Direct3D 12 device).
-    pub fn open(adapter: Option<&str>) -> Result<Self, String> {
+    /// Open a device (the installed one, if any) on the adapter `choice`
+    /// names; `how` says why it was chosen (the host's policy: an explicit
+    /// `VESTRA_GPU_ADAPTER`, the high-performance default of GPU rendering,
+    /// the user's Windows Settings preference, Windows' order), for the
+    /// `render:` line. Dropped unless [`install`](Self::install)ed (an
+    /// OpenGL fallback keeps no Direct3D 12 device).
+    pub fn open(choice: Choice, how: &str) -> Result<Self, String> {
         if let Some(gpu) = GPU.get() {
             return Ok(Self(gpu.clone()));
         }
-        Ok(Self(Arc::new(Gpu::open(Choice::parse(adapter))?)))
+        Ok(Self(Arc::new(Gpu::open_described(choice, Some(how))?)))
     }
     /// The windows draw with this device: keep it for the process, for
     /// [`Renderer::start`].

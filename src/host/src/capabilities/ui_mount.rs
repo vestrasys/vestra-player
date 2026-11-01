@@ -9,6 +9,7 @@ use crate::{
     i18n, process,
     ui::composition,
     ui::slot_claims,
+    ui::ui_patch,
     ui::window_state,
 };
 use serde_json::{Value, json};
@@ -171,6 +172,10 @@ fn mount(
         None
     };
     host.report_refused(reply.owner, refused);
+    if contribution.is_some() {
+        // Row patches apply on the initial properties again (seq 0).
+        host.images.reset_writes(reply.owner, "$mount");
+    }
     host.mount_queue.push_back(MountChange {
         reply: reply.clone(),
         contribution,
@@ -184,6 +189,9 @@ fn set_mount(
     reply: &Reply,
     params: &Value,
 ) -> std::result::Result<Value, RpcError> {
+    // A large array converted on the plugin's reader thread: its whole
+    // value was taken out of `params` (P3).
+    let mut prepared = host.take_prepared(reply);
     let spec = host
         .mounts
         .get(&reply.owner)
@@ -196,23 +204,155 @@ fn set_mount(
         .map(ComponentHandle::clone_strong)
         .ok_or_else(|| RpcError::new("unavailable", "native shell unavailable"))?;
     let property = string(params, "property")?;
-    let value = host.prop_value(reply.owner, "$mount", property, &params["value"])?;
-    composition::set_global_value(&shell, &spec, property, value)?;
-    if let Some(floating) = host
+    let floating = host
         .floating
         .as_ref()
         .filter(|f| f.owners.contains(&reply.owner))
-        .map(|f| f.instance.clone_strong())
-    {
-        let value = host.prop_value(reply.owner, "$mount", property, &params["value"])?;
-        composition::set_global_value(&floating, &spec, property, value)?;
+        .map(|f| f.instance.clone_strong());
+    // A part of a whole value sent in parts: held until the last (P3).
+    let parted = host.parts(reply.owner, "$mount", property, params, prepared.as_deref())?;
+    let (seq, value, rows) = match parted {
+        ui_patch::Parted::Held => return Ok(Value::Null),
+        ui_patch::Parted::Done(value, rows, seq) => (seq, value, Some(rows)),
+        ui_patch::Parted::Not => {
+            let seq = if let Some(patch) = params.get("patch") {
+                let (base, seq, ops) = ui_patch::request(patch)?;
+                if host.images.seq(reply.owner, "$mount", property) != base {
+                    return Err(ui_patch::stale());
+                }
+                if patch_mount(
+                    host,
+                    reply.owner,
+                    &shell,
+                    floating.as_ref(),
+                    property,
+                    ops,
+                    prepared.take(),
+                )? {
+                    host.images.set_seq(reply.owner, "$mount", property, seq);
+                    return Ok(Value::Null);
+                }
+                seq
+            } else {
+                params["seq"].as_u64().unwrap_or(0)
+            };
+            // A whole value, or a patched one that a live model could not
+            // take in place.
+            match (params.get("patch"), prepared) {
+                (Some(patch), _) => (
+                    seq,
+                    patched_mount(host, reply.owner, property, &patch["ops"])?,
+                    None,
+                ),
+                (None, Some(prepared)) => {
+                    let prepared = *prepared;
+                    (seq, prepared.whole.unwrap_or_default(), Some(prepared.rows))
+                }
+                (None, None) => (seq, params["value"].clone(), None),
+            }
+        }
+    };
+    let converted = host.prop_value_with(reply.owner, "$mount", property, &value, rows.as_ref())?;
+    composition::set_global_value(&shell, &spec, property, converted)?;
+    if let Some(floating) = floating {
+        let converted =
+            host.prop_value_with(reply.owner, "$mount", property, &value, rows.as_ref())?;
+        composition::set_global_value(&floating, &spec, property, converted)?;
     }
     if let Some(mount) = host.mounts.get_mut(&reply.owner) {
-        mount
-            .properties
-            .insert(property.into(), params["value"].clone());
+        mount.properties.insert(property.into(), value);
     }
+    host.images.set_seq(reply.owner, "$mount", property, seq);
     Ok(Value::Null)
+}
+
+/// The stored array of a panel's property with `ops` applied.
+fn patched_mount(
+    host: &Host,
+    owner: u64,
+    property: &str,
+    ops: &Value,
+) -> std::result::Result<Value, RpcError> {
+    let Some(Value::Array(stored)) = host
+        .mounts
+        .get(&owner)
+        .and_then(|mount| mount.properties.get(property))
+    else {
+        return Err(ui_patch::stale());
+    };
+    let ops = ui_patch::parse(ops, stored.len())?;
+    Ok(ui_patch::patched(stored, &ops))
+}
+
+/// A row patch of a panel's property, in place in the shell and the
+/// floating pop-out and in the stored properties. False: a live model
+/// cannot take it in place (nothing changed; the caller writes the patched
+/// whole value).
+fn patch_mount(
+    host: &mut Host,
+    owner: u64,
+    shell: &slint_interpreter::ComponentInstance,
+    floating: Option<&slint_interpreter::ComponentInstance>,
+    property: &str,
+    ops: &Value,
+    prepared: Option<Box<crate::ui::ui_values::Prepared>>,
+) -> std::result::Result<bool, RpcError> {
+    let Some(Value::Array(stored)) = host
+        .mounts
+        .get(&owner)
+        .and_then(|mount| mount.properties.get(property))
+    else {
+        return Err(ui_patch::stale());
+    };
+    let ops = ui_patch::parse(ops, stored.len())?;
+    let alias = composition::global_alias(owner);
+    let mut instances = vec![shell];
+    instances.extend(floating);
+    // Converted once (on the reader thread when large), written into each
+    // instance's model.
+    let Some(rows) = host.patch_rows(
+        owner,
+        "$mount",
+        property,
+        &ops,
+        prepared.as_ref().map(|prepared| &prepared.rows),
+    )?
+    else {
+        return Ok(false);
+    };
+    let mut currents = Vec::new();
+    for instance in &instances {
+        let current = instance
+            .get_global_property(&alias, property)
+            .map_err(anyhow::Error::from)?;
+        if !ui_patch::applicable(&current, ops.before, &ops.shapes, &rows) {
+            return Ok(false);
+        }
+        currents.push(current);
+    }
+    let ui_patch::Rows {
+        values,
+        images,
+        written,
+    } = rows;
+    for current in currents {
+        ui_patch::apply(&current, &ops.shapes, values.clone(), &images);
+    }
+    host.images.patched_rows(owner, "$mount", property, written);
+    // The stored rows: copied on the reader thread when large.
+    let carried: Vec<Value> = match prepared {
+        Some(prepared) if prepared.carried.len() == ops.rows.len() => prepared.carried,
+        _ => ops.rows.iter().map(|row| (*row).clone()).collect(),
+    };
+    let shapes = ops.shapes;
+    if let Some(Value::Array(stored)) = host
+        .mounts
+        .get_mut(&owner)
+        .and_then(|mount| mount.properties.get_mut(property))
+    {
+        ui_patch::apply_vec(stored, &shapes, carried);
+    }
+    Ok(true)
 }
 
 fn interaction(

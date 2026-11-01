@@ -7,6 +7,8 @@ import { isDeepStrictEqual } from "node:util";
 import type { Locale } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
+import { Tasks } from "../tasks.ts";
+import type { Task } from "../tasks.ts";
 import { clock, frameName, parseRange, REASON, sampleTimes, uniqueFile } from "../model.ts";
 import { words } from "./fakes.ts";
 
@@ -167,6 +169,31 @@ test("the reasons in model.ts and the windows' Words.reason in ui/parts.slint ar
   assert.equal(status({ kind: "clip-failed", reason: "space", raw: "", count: 0, name: "" }), "导出失败：磁盘空间不足");
   assert.equal(status({ kind: "started", reason: "", raw: "", count: 4, name: "" }), "已开始连拍 4 张");
   await stop();
+});
+
+test("the Export Tasks list is Slint's ListView over task-rows, not a ScrollView with a VerticalLayout", async () => {
+  const slint = await readFile(new URL("../ui/tasks.slint", import.meta.url), "utf8");
+  assert.match(slint, /import \{ ListView \} from "std-widgets\.slint";/);
+  assert.match(slint, /ListView \{\s*for task in root\.task-rows: Rectangle \{\s*height: 40px;/);
+  assert.doesNotMatch(slint, /ScrollView/);
+});
+
+test("the dialogs use the library's Choice and Check (one look with the player), not std ComboBox / CheckBox", async () => {
+  const count = (text: string, word: string) => text.match(new RegExp(`\\b${word} \\{`, "g"))?.length ?? 0;
+  const expected = { burst: [1, 3], clip: [1, 2], settings: [1, 2] } as const;
+  for (const [name, [choices, checks]] of Object.entries(expected)) {
+    const slint = await readFile(new URL(`../ui/${name}.slint`, import.meta.url), "utf8");
+    assert.doesNotMatch(slint, /ComboBox|CheckBox/, name);
+    assert.match(slint, /import \{ [^}]*\bCheck, Choice\b[^}]* \} from "@vestra\/widgets\.slint";/, name);
+    assert.equal(count(slint, "Choice"), choices, `${name}: Choice`);
+    assert.equal(count(slint, "Check"), checks, `${name}: Check`);
+  }
+  // selected(int) and toggled(bool) carry the new value; nothing reads self.current-index / self.checked.
+  const settings = await readFile(new URL("../ui/settings.slint", import.meta.url), "utf8");
+  assert.match(settings, /selected\(index\) => \{ root\.choose-format\(index\); \}/);
+  assert.match(settings, /toggled\(on\) => \{ root\.set-beside-media\(on\); \}/);
+  assert.match(settings, /toggled\(on\) => \{ root\.set-screen-subtitles\(on\); \}/);
+  assert.doesNotMatch(settings, /self\.(current-index|checked)/);
 });
 
 test("Ctrl+E saves the raw current frame into the capture folder with no dialog and an OSD", async () => {
@@ -354,6 +381,102 @@ test("save commands are disabled without a capturable source", async () => {
   await stop();
 });
 
+const SNAPSHOTS = ["capture.save", "capture.saveAs", "capture.copy", "capture.saveScreen", "capture.saveScreenAs", "capture.copyScreen"];
+
+test("lazy activation: the Snapshot items are player conditions that follow playback without the plugin; nothing keeps it running while idle", async () => {
+  const { host, stop } = await start();
+  try {
+    assert.deepEqual(host.keepsRunning, []);
+    assert.equal(host.listening.has("source.state"), false);
+    const revisions = SNAPSHOTS.map((id) => host.command(id).revision);
+    for (const id of SNAPSHOTS)
+      assert.deepEqual(host.command(id).when, { enabled: { all: [{ can: "snapshot" }, { phase: ["ready", "ended"] }, { not: { kind: "stream" } }] } }, id);
+    /** Each item's enabled state and reason as the player shows them; all six alike. */
+    const shown = () => {
+      const states = SNAPSHOTS.map((id) => host.command(id).state);
+      for (const state of states) assert.deepEqual([state.enabled, state.reason], [states[0]!.enabled, states[0]!.reason]);
+      return [states[0]!.enabled, states[0]!.reason];
+    };
+    const none = [false, "No frame to capture"];
+    assert.deepEqual(shown(), none);
+    assert.equal(host.translate(host.command("capture.save").state.reason!), "没有可截取的画面");
+    // A key of a disabled item: the player shows the reason and runs nothing.
+    assert.equal(await host.press("Ctrl+E"), "reason");
+    await host.settle();
+    assert.deepEqual(host.osd, ["没有可截取的画面"]);
+    assert.equal(host.sent("jobs.start").length, 0);
+    ready(host);
+    await host.settle();
+    assert.deepEqual(shown(), [true, null], "the reason shows only while disabled");
+    host.setSource({ phase: "ended" });
+    assert.deepEqual(shown(), [true, null], "a finished file keeps its last frame");
+    host.setSource({ capabilities: { ...host.source.capabilities, snapshotSource: false } });
+    assert.deepEqual(shown(), none);
+    host.setSource({ capabilities: { ...host.source.capabilities, snapshotSource: true }, phase: "loading" });
+    assert.deepEqual(shown(), none);
+    host.setSource({ phase: "ready", kind: "producer" });
+    assert.deepEqual(shown(), none, "a generated stream has no source frame");
+    host.setSource({ kind: "media" });
+    assert.deepEqual(shown(), [true, null]);
+    await host.settle();
+    // The player evaluated every change: the plugin sent nothing for them and still holds nothing.
+    assert.deepEqual(SNAPSHOTS.map((id) => host.command(id).revision), revisions);
+    assert.deepEqual(host.keepsRunning, []);
+    await host.press("Ctrl+E"); // the key runs once the condition holds
+    await host.settle();
+    assert.equal(host.sent("jobs.start").length, 1);
+  } finally {
+    await stop();
+  }
+});
+
+test("lazy activation: Burst… and Export Clip… read the player's state only while open, and afresh at each opening", async () => {
+  const host = new TestHost();
+  ready(host);
+  const { stop } = await start(host, "en");
+  const bind = /^a view's bind reads plugin\.player\.state \(main\.ts:\d+\)$/;
+  try {
+    await host.command("capture.burst").run();
+    await host.settle();
+    const burst = host.window("burst");
+    assert.equal(burst.props["can-capture"], true);
+    assert.equal(host.listeningWhy.get("source.state")?.length, 1);
+    assert.match(host.listeningWhy.get("source.state")![0]!, bind);
+    host.setSource({ capabilities: { ...host.source.capabilities, snapshotSource: false } });
+    await host.settle();
+    assert.equal(burst.props["can-capture"], false, "followed while open");
+    burst.userClose();
+    await host.settle();
+    assert.deepEqual(host.keepsRunning, []);
+    assert.equal(host.listening.has("source.state"), false);
+    host.setSource({ capabilities: { ...host.source.capabilities, snapshotSource: true } });
+    await host.command("capture.burst").run();
+    await host.settle();
+    assert.equal(host.window("burst").props["can-capture"], true, "read again when it opens");
+    host.window("burst").userClose();
+
+    await host.command("capture.clip").run();
+    await host.settle();
+    assert.deepEqual(host.window("clip").props["audio-labels"], ["No Audio", "Current Track"]);
+    assert.equal(host.window("clip").props["can-export"], true);
+    host.window("clip").userClose();
+    await host.settle();
+    assert.deepEqual(host.keepsRunning, []);
+    host.setSource({ audioTracks: [{ trackId: 7, selected: true, external: false, streamIndex: 1, codec: "aac", title: null, language: "en" }] });
+    await host.command("capture.clip").run();
+    await host.settle();
+    assert.deepEqual(host.window("clip").props["audio-labels"], ["No Audio", "Current Track", "Track 7 · en"]);
+    host.setSource({ phase: "loading" });
+    await host.settle();
+    assert.equal(host.window("clip").props["can-export"], false, "followed while open");
+    host.window("clip").userClose();
+    await host.settle();
+    assert.deepEqual(host.keepsRunning, []);
+  } finally {
+    await stop();
+  }
+});
+
 test("另存为 asks for a file; a source change while it is open captures nothing", async () => {
   const host = new TestHost();
   ready(host);
@@ -539,6 +662,9 @@ test("a dialog that cannot open is reported in a visible error window", async ()
   const { stop } = await start(host);
   await host.command("capture.burst").run();
   await host.settle();
+  assert.equal(host.windows.has("burst"), false);
+  assert.deepEqual(host.keepsRunning.filter((line) => line.includes("source.state")), [], "a failed open lets go of the player's state");
+  assert.equal(host.listening.has("source.state"), false);
   const error = host.window("error");
   assert.equal(error.file, "ui/error.slint");
   assert.deepEqual(error.callbacks, []);
@@ -595,4 +721,48 @@ test("Burst… is checked while its dialog is open; a title-bar close clears it 
   } finally {
     await stop();
   }
+});
+
+test("SDK 1.5.45: task rows changed after an await call plugin.update() (trimming history, a job's first state)", async () => {
+  // Each update records what taskRows would show then: the number of tasks and the newest one's status.
+  const seen: { length: number; status: string }[] = [];
+  const scope = { update: () => seen.push({ length: tasks.list.length, status: tasks.list.at(-1)!.status }) } as never;
+  const tasks: Tasks = new Tasks(scope, () => {});
+  const spec = { kind: "image", start: 0, count: 1, step: 0, processed: false, subtitles: false, track: "none", current: false } as const;
+  const later = <T>(value: T) => new Promise<T>((done) => setTimeout(() => done(value), 5));
+  for (let i = 0; i < 21; i++) {
+    const snapshot = { dispose: () => later(undefined) } as never;
+    tasks.list.push({ id: `old${i}`, spec, sourceId: 1, source: "a", snapshot, destination: "x.png", status: "completed", cancel: false, jobs: [], outputs: [] } as Task);
+  }
+  let exported!: (job: unknown) => void;
+  const job = { state: { status: "running" }, done: new Promise(() => {}), onChange: () => ({ dispose: async () => {} }), cancel: async () => {} };
+  const snapshot = { export: () => new Promise((done) => (exported = done)), dispose: async () => {} } as never;
+  tasks.add({ spec, sourceId: 1, source: "a", snapshot, destination: "new.png" });
+  // The second old task goes after the first one's snapshot is released, outside SDK-invoked code.
+  await until(() => seen.at(-1)?.length === 20);
+  assert.equal(tasks.list.length, 20);
+  // The export resolves later; the row's "preparing" becomes the job's state with an update.
+  exported(job);
+  await until(() => seen.at(-1)?.status === "running");
+  assert.equal(tasks.list.at(-1)!.status, "running");
+});
+
+test("SDK 1.5.45: each finished frame of a burst calls plugin.update(), so the row's n/total is current", async () => {
+  const done: number[] = [];
+  const scope = { update: () => done.push(tasks.list.at(-1)?.outputs.length ?? 0) } as never;
+  const tasks: Tasks = new Tasks(scope, () => {});
+  const spec = { kind: "burst", start: 0, count: 3, step: 1, processed: false, subtitles: false, track: "none", current: false } as const;
+  const job = (state: unknown, finished: Promise<unknown>) => ({ state, done: finished, onChange: () => ({ dispose: async () => {} }), cancel: async () => {} });
+  let exports = 0;
+  const snapshot = {
+    // The first frame completes after an await; the second export never returns, so only the push can update.
+    export: async ({ destination }: { destination: string }) =>
+      exports++ === 0
+        ? job({ status: "running" }, new Promise((ok) => setTimeout(() => ok({ status: "completed", outcome: { destination } }), 5)))
+        : new Promise(() => {}),
+    dispose: async () => {},
+  } as never;
+  tasks.add({ spec, sourceId: 1, source: "a", snapshot, destination: "burst" });
+  await until(() => done.at(-1) === 1);
+  assert.equal(tasks.list.at(-1)!.outputs.length, 1);
 });

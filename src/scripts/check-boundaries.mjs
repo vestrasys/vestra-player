@@ -29,7 +29,7 @@ async function files(directory) {
 function inside(path, root) {
   return path === root || path.startsWith(root + sep);
 }
-for (const collection of ["examples", "plugins"]) {
+for (const collection of ["plugins"]) {
   const root = resolve(source, collection);
   let packages;
   try {

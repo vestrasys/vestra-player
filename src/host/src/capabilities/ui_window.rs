@@ -4,6 +4,7 @@ use crate::{
     host::{Host, Reply, RpcError, string},
     platform, process,
     ui::theme,
+    ui::ui_patch,
     ui::ui_values,
     ui::view,
 };
@@ -68,6 +69,8 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     )
     .map_err(|e| RpcError::invalid(e.to_string()))?;
     let view_key = format!("w:{id}");
+    // Row patches apply on these initial properties (seq 0).
+    host.images.reset_writes(reply.owner, &view_key);
     let mut values = Vec::new();
     for (name, value) in &properties {
         match host.prop_value(reply.owner, &view_key, name, value) {
@@ -112,13 +115,81 @@ fn change(
     if !host.views.contains_key(&key) {
         return Err(RpcError::new("missing", "view not found"));
     }
-    let next = match method {
-        "ui.set" => Some(host.prop_value(
+    let view_key = format!("w:{}", key.1);
+    // A large array converted on the reader thread (P3): a whole value was
+    // taken out of `params`. A part of a whole value sent in parts is held
+    // until the last.
+    let mut prepared = None;
+    let mut done = None;
+    if method == "ui.set" {
+        let property = string(params, "property")?;
+        prepared = host.take_prepared(reply);
+        match host.parts(
             reply.owner,
-            &format!("w:{}", key.1),
-            string(params, "property")?,
-            &params["value"],
-        )?),
+            &view_key,
+            property,
+            params,
+            prepared.as_deref(),
+        )? {
+            ui_patch::Parted::Held => return Ok(()),
+            ui_patch::Parted::Done(value, rows, seq) => done = Some((value, rows, seq)),
+            ui_patch::Parted::Not => {}
+        }
+    }
+    if method == "ui.set"
+        && done.is_none()
+        && let Some(patch) = params.get("patch")
+    {
+        let property = string(params, "property")?;
+        let (base, seq, ops) = ui_patch::request(patch)?;
+        if host.images.seq(reply.owner, &view_key, property) != base {
+            return Err(ui_patch::stale());
+        }
+        let current = host.views[&key]
+            .instance
+            .get_property(property)
+            .map_err(|e| RpcError::new("ui", e.to_string()))?;
+        if let ui_patch::InWindow::Whole(whole) = host.patch_window(
+            reply.owner,
+            &view_key,
+            property,
+            &current,
+            ops,
+            prepared.as_ref().map(|prepared| &prepared.rows),
+        )? {
+            // Written whole, as a panel writes its patched stored value.
+            let next = host.prop_value(reply.owner, &view_key, property, &whole)?;
+            let view = &host.views[&key];
+            if !ui_values::reconcile_in(view.instance.window(), &current, &next)? {
+                ui_values::set(&view.instance, None, property, next)
+                    .map_err(|e| RpcError::new("ui", e.to_string()))?;
+            }
+        }
+        host.images.set_seq(reply.owner, &view_key, property, seq);
+        return Ok(());
+    }
+    let mut seq = params["seq"].as_u64().unwrap_or(0);
+    let next = match method {
+        "ui.set" => {
+            let (value, rows) = match (done, prepared.map(|prepared| *prepared)) {
+                (Some((value, rows, last)), _) => {
+                    seq = last;
+                    (std::borrow::Cow::Owned(value), Some(rows))
+                }
+                (None, Some(prepared)) => (
+                    std::borrow::Cow::Owned(prepared.whole.unwrap_or_default()),
+                    Some(prepared.rows),
+                ),
+                (None, None) => (std::borrow::Cow::Borrowed(&params["value"]), None),
+            };
+            Some(host.prop_value_with(
+                reply.owner,
+                &format!("w:{}", key.1),
+                string(params, "property")?,
+                &value,
+                rows.as_ref(),
+            )?)
+        }
         _ => None,
     };
     let view = &host.views[&key];
@@ -134,6 +205,7 @@ fn change(
                 ui_values::set(&view.instance, None, name, next)
                     .map_err(|e| RpcError::new("ui", e.to_string()))?;
             }
+            host.images.set_seq(reply.owner, &view_key, name, seq);
         }
         "ui.show" => {
             if params["visible"]

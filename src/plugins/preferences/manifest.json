@@ -1,6 +1,6 @@
 {
   "id": "vestra.preferences",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -20,5 +20,5 @@
     "palette",
     "language"
   ],
-  "minPlayerVersion": "0.4.3"
+  "minPlayerVersion": "0.6.0"
 }

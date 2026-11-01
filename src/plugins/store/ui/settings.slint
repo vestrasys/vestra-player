@@ -3,8 +3,8 @@
 // 428; a repository row is name / address (stretch) and a 50px Remove button.
 import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button } from "@vestra/widgets.slint";
-import { Cell, Check, Tone } from "parts.slint";
+import { Button, Check } from "@vestra/widgets.slint";
+import { Cell, Tone } from "parts.slint";
 
 export struct RepoRow {
     name: string,
@@ -16,14 +16,15 @@ export struct RepoRow {
 }
 
 export global StoreSettings {
-    in property <bool> auto-check: true;
+    // In-out: the check box flips it itself (then asks with toggle-auto, passing the new value).
+    in-out property <bool> auto-check: true;
     in property <[RepoRow]> repos;
     in property <bool> adding;
     in-out property <string> add-text;
     in property <bool> can-add: true;
     in property <string> message;
     in property <bool> message-warn;
-    callback toggle-auto();
+    callback toggle-auto(bool);
     callback start-add();
     callback add(string);
     callback cancel-add();
@@ -49,8 +50,8 @@ export component StorePage inherits Rectangle {
         spacing: 6px;
         Check {
             text: @tr("Check for updates automatically (30 seconds after the player starts, then every 24 hours)");
-            checked: StoreSettings.auto-check;
-            clicked => { StoreSettings.toggle-auto(); }
+            checked <=> StoreSettings.auto-check;
+            toggled(on) => { StoreSettings.toggle-auto(on); }
         }
         Text {
             text: @tr("When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many.");

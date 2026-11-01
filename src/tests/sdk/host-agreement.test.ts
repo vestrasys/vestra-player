@@ -32,6 +32,8 @@ import {
   MESSAGE_LIMIT,
   OSD_LIMITS,
   parsePo,
+  PATCH_FEATURE,
+  PATCH_OPS,
   rewriteSlint,
   scanSlint,
   SECRET_LIMITS,
@@ -78,6 +80,20 @@ test("UI_VALUE_LIMITS match the player's (host/src/ui/ui_values.rs)", () => {
     },
     { ...UI_VALUE_LIMITS },
   );
+});
+
+test("row patches: the SDK's op limit and feature name match the player's (host/src/ui/ui_patch.rs)", () => {
+  const rust = host("src/ui/ui_patch.rs");
+  assert.equal(
+    Number(/pub const MAX_PATCH_OPS: usize = (\d+);/.exec(rust)?.[1]),
+    PATCH_OPS,
+  );
+  assert.equal(
+    /pub const FEATURE: &str = "([^"]+)";/.exec(rust)?.[1],
+    PATCH_FEATURE,
+  );
+  // The player advertises it in plugin.app's start-up data.
+  assert.match(host("src/main.rs"), /"features":\[ui::ui_patch::FEATURE\]/);
 });
 
 test("TEXT_LIMITS and LIST_SEPARATORS match the player's (host/src/i18n/text.rs)", () => {
@@ -748,6 +764,7 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   "Rendering.restartPlayer": ["rendering.restart"],
   "VideoUpscaling.state": ["video.upscaling.state"],
   "VideoUpscaling.set": ["video.upscaling.set"],
+  "VideoUpscaling.onChange": ["event:video.upscaling.changed"],
 };
 
 /**
@@ -942,24 +959,65 @@ test("WireRenderingState has the fields rendering.state answers with (host/rende
   );
 });
 
-test("WireUpscalingState has the fields video.upscaling answers with (playback/upscaling.rs Upscaling::state; SDK 1.5.37, player 0.5.16)", () => {
+test("WireUpscalingState has the fields video.upscaling answers with (playback/upscaling.rs Upscaling::state and shared_state; SDK 1.5.37 and 1.5.43, player 0.5.16 and 0.5.25)", () => {
   const wire = /export interface WireUpscalingState \{([\s\S]*?)\n\}/.exec(
     sdkFile("wire.d.ts"),
   )?.[1];
   assert.ok(wire, "WireUpscalingState in the SDK's wire.d.ts");
-  const sdk = [...wire.matchAll(/^\s+(\w+)\??:/gm)].map((m) => m[1]!).sort();
-  const state = /fn state\(&self[\s\S]*?\n {4}\}/.exec(
-    host("src/playback/upscaling.rs"),
-  )?.[0];
+  // Every field name, the nested sizes' included.
+  const sdk = [
+    ...new Set([...wire.matchAll(/(\w+)\??:/g)].map((m) => m[1]!)),
+  ].sort();
+  const upscaling = host("src/playback/upscaling.rs");
+  const state = /fn state\(&self[\s\S]*?\n {4}\}/.exec(upscaling)?.[0];
   assert.ok(state, "Upscaling::state in upscaling.rs");
-  const player = [...state.matchAll(/"(\w+)":/g)].map((m) => m[1]!).sort();
+  const shared = /fn shared_state\(&self[\s\S]*?\n {4}\}/.exec(upscaling)?.[0];
+  assert.ok(shared, "Upscaling::shared_state in upscaling.rs");
+  const player = [
+    ...new Set([
+      ...[...shared.matchAll(/"(\w+)":/g)].map((m) => m[1]!),
+      ...[...state.matchAll(/state\["(\w+)"\]/g)].map((m) => m[1]!),
+    ]),
+  ].sort();
   assert.deepEqual(sdk, player);
   assert.ok(
-    host("src/playback/upscaling.rs").includes(
-      `json!({"code":self.code(),"message":self.message()})`,
-    ),
-    "upscaling Reason::json is { code, message }",
+    upscaling.includes(`json!({"code":self.code(),"message":self.message()})`),
+    "upscaling Reason::json is { code, message } apart from decoding",
   );
+  // A decoding reason adds `cause`, and with copy-back `plugins` of { id, name }.
+  const reason =
+    /export interface WireUpscalingReason[^{]*\{([\s\S]*?)\n\}/.exec(
+      sdkFile("wire.d.ts"),
+    )?.[1];
+  assert.ok(reason, "WireUpscalingReason in the SDK's wire.d.ts");
+  assert.deepEqual(
+    [...new Set([...reason.matchAll(/(\w+)\??:/g)].map((m) => m[1]!))].sort(),
+    ["cause", "id", "name", "plugins"],
+  );
+  for (const field of [
+    `"cause":cause.as_str()`,
+    `reason["plugins"]`,
+    `json!({"id":owner.id,"name":owner.name})`,
+  ])
+    assert.ok(upscaling.includes(field), `Reason::json sends ${field}`);
+  assert.ok(
+    upscaling.includes(`pub const CHANGED: &str = "video.upscaling.changed";`),
+    "the event's name",
+  );
+});
+
+test("UpscalingDecodingCause names the player's causes (playback/upscaling.rs Cause::as_str; SDK 1.5.43, player 0.5.25)", () => {
+  const sdk = /export type UpscalingDecodingCause = ([^;]+);/.exec(
+    sdkFile("plugin/types.d.ts"),
+  )?.[1];
+  assert.ok(sdk, "UpscalingDecodingCause in the SDK's types.d.ts");
+  const own = /pub fn as_str\(self\) -> &'static str \{([\s\S]*?)\n {4}\}/.exec(
+    host("src/playback/upscaling.rs"),
+  )?.[1];
+  assert.ok(own, "Cause::as_str in upscaling.rs");
+  const values = (text: string) =>
+    [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!).sort();
+  assert.deepEqual(values(sdk), values(own));
 });
 
 test("UpscalingReasonCode names the player's upscaling reason codes (playback/upscaling.rs, platform; SDK 1.5.37, player 0.5.16)", () => {
@@ -1280,18 +1338,15 @@ function hostCommands(): Row[] {
   const literals = (text: string) =>
     [...text.matchAll(/"([^"]*)"/g)].map((m) => m[1]!);
   const rows: Row[] = [];
-  // register_host_commands: `let mut x = Declaration::new("Title", &["Path"])`, `x.bindings = vec![..]`.
-  const own = braces(
-    host("src/host/actions.rs"),
-    "fn register_host_commands(&mut self)",
-  );
+  // host_declarations: `let mut x = Declaration::new("Title", &["Path"])`, `x.bindings = vec![..]`.
+  const own = braces(host("src/host/actions.rs"), "fn host_declarations()");
   for (const [, id, variable] of own.matchAll(
     /\("([a-z-]+)", (\w+), state\(/g,
   )) {
     const made = new RegExp(
       `let mut ${variable} =\\s*commands::Declaration::new\\("([^"]+)", &\\[([^\\]]*)\\]\\)`,
     ).exec(own);
-    assert.ok(made, `register_host_commands: the declaration of ${id}`);
+    assert.ok(made, `host_declarations: the declaration of ${id}`);
     const bindings =
       new RegExp(`${variable}\\.bindings = vec!\\[([^\\]]*)\\]`).exec(
         own,
@@ -1347,7 +1402,7 @@ test("BUILTIN_COMMANDS and BUILTIN_SUBMENUS are what the player and its built-in
   assertRows(
     hostCommands(),
     BUILTIN_COMMANDS.filter((row) => row.owner === "host"),
-    "the player's own commands (host/actions.rs register_host_commands, core_actions.rs) differ from BUILTIN_COMMANDS",
+    "the player's own commands (host/actions.rs host_declarations, core_actions.rs) differ from BUILTIN_COMMANDS",
   );
   const root = new URL("../../plugins/", import.meta.url);
   const rows: Row[] = [];
@@ -1420,6 +1475,77 @@ test("BUILTIN_COMMANDS and BUILTIN_SUBMENUS are what the player and its built-in
     shown(BUILTIN_SUBMENUS),
     "the built-in plugins' submenus differ from BUILTIN_SUBMENUS",
   );
+});
+
+test("COMMAND_LIMITS' declaration limits are the player's (commands.rs Registry::register; SDK 1.5.48)", () => {
+  const rust = host("src/commands.rs");
+  const text = (label: string) =>
+    Number(new RegExp(`text\\([^,]+, "${label}", (\\d+)\\)`).exec(rust)?.[1]);
+  const order = /order\.unsigned_abs\(\) > ([\d_]+)/.exec(rust)?.[1];
+  assert.deepEqual(
+    {
+      depth: Number(/const MAX_DEPTH: usize = (\d+);/.exec(rust)?.[1]),
+      idBytes: text("localId"),
+      titleBytes: text("title"),
+      segmentBytes: text("path segment"),
+      groupBytes: text("group"),
+      reasonBytes: text("reason"),
+      order: Number(order?.replaceAll("_", "")),
+    },
+    {
+      depth: COMMAND_LIMITS.depth,
+      idBytes: COMMAND_LIMITS.idBytes,
+      titleBytes: COMMAND_LIMITS.titleBytes,
+      segmentBytes: COMMAND_LIMITS.segmentBytes,
+      groupBytes: COMMAND_LIMITS.groupBytes,
+      reasonBytes: COMMAND_LIMITS.reasonBytes,
+      order: COMMAND_LIMITS.order,
+    },
+  );
+});
+
+test("TestHost refuses a menu text with the player's message (commands.rs text; SDK 1.5.48)", async () => {
+  const rust = host("src/commands.rs");
+  const rule = /"\{label\} requires 1\.\.=\{limit\} bytes, ([^"]+)"/.exec(
+    rust,
+  )?.[1];
+  assert.ok(rule, "text() message in commands.rs");
+  const prefix =
+    /Self::Invalid\(message\) => write!\(f, "([^"{]*)\{message\}"\)/.exec(
+      rust,
+    )?.[1];
+  assert.ok(prefix, "CommandError::Invalid's Display in commands.rs");
+  await assert.rejects(
+    startPlugin(
+      (plugin) => {
+        plugin.commands.add({ id: "a", path: ["Tools ", "A"], run() {} });
+      },
+      { capabilities: ["commands"] },
+    ),
+    {
+      code: "invalid",
+      message: `${prefix}path segment requires 1..=${COMMAND_LIMITS.segmentBytes} bytes, ${rule}`,
+    },
+  );
+});
+
+test("TestHost refuses a plugin item on or under each of the player's own menu items (SDK 1.5.48)", async () => {
+  const paths = hostCommands()
+    .map((row) => row.path)
+    .filter((path) => path.length > 0);
+  // Toggle Fullscreen and Quit (host_declarations) and the core actions.
+  assert.ok(paths.some((path) => path.join() === "Quit"));
+  for (const taken of [...paths, ...paths.map((path) => [...path, "Item"])])
+    await assert.rejects(
+      startPlugin(
+        (plugin) => {
+          plugin.commands.add({ id: "a", path: [...taken], run() {} });
+        },
+        { capabilities: ["commands"] },
+      ),
+      { code: "conflict" },
+      `a plugin item at ${taken.join(" ▸ ")}`,
+    );
 });
 
 test("SESSION_STORAGE_LIMITS are the player's (session_storage.rs; SDK 1.5.25, player 0.5.5)", async (t) => {

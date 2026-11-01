@@ -167,7 +167,7 @@ Two rows, 62px high in total, all icon buttons, no text buttons.
 | UI-BAR-02 | The bottom bar shows no source path and no status text. The source name is in the window title (C9); status goes into on-screen messages (C5) | playback + host |
 | UI-BAR-03 | Seek bar as in the CSS above: a 2px round-capped line in a 10px hit area, unplayed `line`, played `accent-fill`; 8px round thumb, white core + 2px `accent` ring, ring `accent-press` when pressed | playback |
 | UI-BAR-04 | Mute icon 13×10 + volume bar 70×10 at the right end of the seek bar row; the volume bar is fixed at 70px and does not stretch | playback |
-| UI-BAR-05 | Six 41×40 icon buttons on the left of the button row: play/pause, stop (close the source), back, forward, open, fullscreen; right-click on back/forward = previous/next. Fullscreen (2026-10-26, user request) toggles the main window's fullscreen like Enter/F11 (`host.run("fullscreen")`, player 0.5.2): icon `fullscreen` when windowed and `exit-fullscreen` in fullscreen (`window.state`) | playback (previous/next through C6; fullscreen through `host.run`) |
+| UI-BAR-05 | Six 41×40 icon buttons on the left of the button row: play/pause, stop (close the source), back, forward, open, fullscreen; right-click on back/forward = previous/next. Fullscreen (2026-10-26, user request) toggles the main window's fullscreen like its key, Esc (`host.run("fullscreen")`, player 0.5.2; Enter/F11 up to 0.5.x): icon `fullscreen` when windowed and `exit-fullscreen` in fullscreen (`window.state`) | playback (previous/next through C6; fullscreen through `host.run`) |
 | UI-BAR-06 | Icons from `@vestra/icons.slint` (§2.5); normal `text`, disabled `icon-disabled` (the command strip at the right end is the exception: `accent`, see UI-BAR-09); hover/press lights a 32×32 rounded plate in the middle of the button; no separators between buttons | playback |
 | UI-BAR-07 | The time is a text label `current / total`: current in `text`, the slash and total in `text-dim`, 11px, 10px after the last shown button (fullscreen, or open while fullscreen is hidden, UI-BAR-10); clicking the current time toggles between "elapsed / remaining" | playback |
 | UI-BAR-08 | The bottom bar has no speed button and no inline edit field. Speed is set through the menu and Z/X/C; seeking to a time through the "Jump to Time…" dialog (G, §7.5); volume through the slider, ↑/↓, M | playback |
@@ -285,7 +285,8 @@ The full contents of the submenus and the plugin that owns each item are in [men
 .ctx-menu  { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; padding: 2px;
              box-shadow: 0 0 8px var(--menu-shadow); }   /* vestra #00000080, vestra-light #00000033 (theme.rs, MenuChrome.shadow) */
 .ctx-item  { height: 24px; border-radius: 4px; padding: 0 8px 0 4px; font-size: 12px; color: var(--text-list); }
-.ctx-item.lit      { background: var(--selected-bg); color: var(--text); }   /* hovered or keyboard-current item; 2×14 accent bar on the left edge (y 5) */
+.ctx-item.lit      { background: var(--selected-bg); color: var(--text); }   /* hovered or keyboard-current item, at once, and on the levels above it the open items leading to it (one per level); 2×14 accent bar on the left edge (y 5) */
+.ctx-item.open     { }                                                       /* its submenu is open: only the 2×14 accent bar while the cursor is on another item of the same level (0.6.0, Windows menus) */
 .ctx-item:disabled { color: var(--text-dim); }
 .ctx-shortcut      { font-size: 12px; color: var(--text-dim); text-align: right; }
 .ctx-arrow         { width: 10px; }                                          /* submenu arrow: submenu icon 5×8, x 3 */
@@ -407,7 +408,7 @@ Default bindings (the complete list and conflict check are in [menus.md](menus.m
 | Jump to Time | G | playback |
 | Open file / link / subtitles | Ctrl+O (F3) / Ctrl+U / Alt+O | playback, subtitles |
 | Close | F4 | core |
-| Fullscreen | Enter, Alt+Enter, F11; Esc leaves fullscreen | host |
+| Fullscreen | Esc toggles (user ruling 2026-11-01; Enter, Alt+Enter, F11 up to 0.5.x); Enter / Leave Fullscreen have no default key | host |
 | Playlist | F6 | playlist |
 | Playback Info | Tab; Brief Info Shift+Tab | info |
 | Screenshot save/copy | Ctrl+E / Ctrl+C | capture |
@@ -430,7 +431,7 @@ Default bindings (the complete list and conflict check are in [menus.md](menus.m
 | UI-MOUSE-04 | Right-click | Menu | host |
 | UI-MOUSE-05 | Drag the video in windowed mode | Move the window | host |
 
-Side buttons X1/X2 default to previous/next.
+Side buttons X1 (back) / X2 (forward) default to next / previous (user setting, 2026-11-01) and work anywhere in the window (browser precedent, host 0.6.0).
 
 ## 9. On-screen messages and playback information
 
@@ -462,7 +463,7 @@ This section lists the core capabilities the interface depends on. Principle: th
 | --- | --- | --- | --- |
 | C1 | Main window shell | Video flush with the edges, `bg-video`; the sidebar takes the full height to the right of the video, 3px draggable splitter (video ≥318, sidebar ≥317, default 317); bottom bar only under the video; default window 780×671, minimum 320×182; in fullscreen the bottom bar overlays the video, shown only on hover over its band (FS-BAR-1); the pointer hides after 3 seconds idle; in a narrow window the video is shrunk first, then the sidebar is hidden | UI-SHELL-01–09 |
 | C2 | Theme | Importable Slint theme (§2.1 both palettes, §2.2 font sizes, §2.3 control sizes, §2.5 icons) + controls that follow the palette (buttons, sliders, input boxes, checkboxes, dropdowns, scroll bars, tooltips); the default font is the system UI font | UI-THEME-01–03, UI-TOOL-02/03, UI-PL-10/11 |
-| C3 | Input binding table | Commands declare `bindings`. Bindable inputs: all keys × modifiers (Ctrl/Shift/Alt/Cmd); on the video area, mouse left click/double-click, double-click on the left half/right half, right double-click, middle button, side buttons X1/X2, wheel up/down/left/right, long press, all with optional modifiers. Scope: global, or while a given panel/window has focus. The host keeps the plugin defaults + a user override layer (persisted); when the same input is declared by two commands, a conflict is reported, with no silent override. Right-click is reserved for the menu | UI-KEY-01–02, UI-MOUSE-01–05, §8.1 |
+| C3 | Input binding table | Commands declare `bindings`. Bindable inputs: all keys × modifiers (Ctrl/Shift/Alt/Cmd); on the video area, mouse left click/double-click, double-click on the left half/right half, right double-click, middle button, side buttons X1/X2 (window-level, host 0.6.0), wheel up/down/left/right, long press, all with optional modifiers. Scope: global, or while a given panel/window has focus. The host keeps the plugin defaults + a user override layer (persisted); when the same input is declared by two commands, a conflict is reported, with no silent override. Right-click is reserved for the menu | UI-KEY-01–02, UI-MOUSE-01–05, §8.1 |
 | C4 | Menu structure | Commands declare `path` (any depth, including direct commands at the top level), `group` (recommended skeleton: open / domain / picture / window entries / quit) and `order`; sorted by `order` within a group, separators between groups; `radio` groups; shortcut text generated from the binding table; style as in §6.3 | UI-MENU-02/06–08, §6.2 |
 | C5 | On-screen messages | `plugin.osd.show(text)`, specified in UI-OSD-01 | UI-OSD-01–02, UI-BAR-02/11, UI-PL-07/10 |
 | C6 | Play sequence | One plugin registers as the sequence provider: `plugin.player.provideSequence({ next, previous, canNext, canPrevious })` (only one at a time); any plugin calls `player.next()` / `player.previous()` and reads `player.state.can.next/previous`; with no provider these are unavailable | UI-BAR-05, PgUp/PgDn, side buttons |

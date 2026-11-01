@@ -21,9 +21,23 @@ use std::{
 
 pub const API: &str = "vestra/1";
 /// The longest protocol line a plugin may write, newline included (1 MiB);
-/// a longer one stops the plugin. The SDK repeats it (`MESSAGE_LIMIT`);
-/// src/tests/sdk/host-agreement.test.ts checks they agree.
+/// a longer one stops the plugin. A property value may be larger than one
+/// line (`ui_values`: 32 MiB of text): the SDK sends a large whole write as
+/// its first rows and `insert` patches of the rest, each line within this
+/// (player 0.6.0, SDK 1.5.46; doc/architecture/large-lists.md §4). The SDK
+/// repeats it (`MESSAGE_LIMIT`); src/tests/sdk/host-agreement.test.ts checks
+/// they agree.
 pub const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
+
+/// The event for a plugin's line (`message`, parsed on its reader thread):
+/// a property write's large array is converted here, off the UI thread
+/// (`ui_values::prepare_request`).
+pub(crate) fn request(owner: u64, mut message: Value) -> Event {
+    match crate::ui::ui_values::prepare_request(&mut message) {
+        Some(prepared) => Event::Prepared(owner, message, prepared),
+        None => Event::Request(owner, message),
+    }
+}
 pub use crate::packages::manifest::Manifest;
 
 /// Whose data directory and secrets a plugin process gets.
@@ -278,7 +292,7 @@ fn own_process(
     thread::spawn(move || {
         let mut reader = BufReader::new(stdout);
         loop {
-            // Protocol lines are capped at 1 MiB. Oversize/malformed output terminates the instance.
+            // Protocol lines are capped at MAX_MESSAGE_BYTES. Oversize/malformed output terminates the instance.
             let mut bytes = Vec::new();
             let read = std::io::Read::by_ref(&mut reader)
                 .take(MAX_MESSAGE_BYTES as u64 + 1)
@@ -288,13 +302,13 @@ fn own_process(
                 Ok(_) if bytes.len() > MAX_MESSAGE_BYTES => {
                     let _ = events.send(Event::RuntimeFault(
                         generation,
-                        "protocol message exceeds 1 MiB".into(),
+                        format!("protocol message exceeds {} MiB", MAX_MESSAGE_BYTES >> 20),
                     ));
                     break;
                 }
                 Ok(_) => match serde_json::from_slice(&bytes) {
                     Ok(message) => {
-                        if events.send(Event::Request(generation, message)).is_err() {
+                        if events.send(request(generation, message)).is_err() {
                             return;
                         }
                     }

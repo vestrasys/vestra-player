@@ -252,6 +252,11 @@ msgstr "フルスクリーン切り替え"
 msgid "Leave Fullscreen"
 msgstr "フルスクリーンを終了"
 
+#: src/host/actions.rs
+#, x-machine
+msgid "Enter Fullscreen"
+msgstr "フルスクリーンにする"
+
 #: src/main.rs
 #, x-machine
 msgid "Toggle Sidebar"

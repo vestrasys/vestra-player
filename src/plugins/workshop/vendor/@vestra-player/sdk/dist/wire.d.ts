@@ -57,6 +57,48 @@ export interface UiCallback {
     args: Json[];
 }
 /**
+ * One row operation of a patch, by index, applied to the result of the
+ * ones before (player 0.6.0, feature `ui.patch`). `move` takes `count` rows
+ * out at `from` and puts them back at `to`, an index of the list without
+ * them.
+ */
+export type RowOp = {
+    op: "set";
+    at: number;
+    row: Json;
+} | {
+    op: "insert";
+    at: number;
+    rows: Json[];
+} | {
+    op: "remove";
+    at: number;
+    count: number;
+} | {
+    op: "move";
+    from: number;
+    count: number;
+    to: number;
+};
+/**
+ * A property write: a whole value (with its `seq` to players that take
+ * patches), or a row patch of an array applying on the write numbered
+ * `base` (0: the initial properties).
+ */
+export type PropertyWrite = {
+    value: Json;
+    seq?: number;
+    more?: boolean;
+} | {
+    patch: {
+        base: number;
+        seq: number;
+        ops: RowOp[];
+    };
+    /** A part of a whole value sent in parts, not the last (player 0.6.0). */
+    more?: boolean;
+};
+/**
  * A definite refusal from the player (or the plugin runner), with a stable
  * `code`. Plugin code sees it as a `PluginError` (an `Error` with `code`);
  * branch on `code`, never on `message`.
@@ -338,14 +380,41 @@ export interface WireRenderingState {
         reason: WireRenderingReason | null;
     };
 }
-/** `video.upscaling.state` and `video.upscaling.set` (player 0.5.16). */
+/**
+ * An upscaling reason: `{ code, message }` as a rendering reason; with
+ * `decoding` a `cause`, with cause `copy-back` the `plugins` (player 0.5.25).
+ */
+export interface WireUpscalingReason extends WireRenderingReason {
+    cause?: string;
+    plugins?: {
+        id: string;
+        name: string;
+    }[];
+}
+/**
+ * `video.upscaling.state` and `video.upscaling.set` (player 0.5.16); the
+ * monitoring fields from player 0.5.25, which also sends the state without
+ * `enabled` as the event `video.upscaling.changed`.
+ */
 export interface WireUpscalingState {
     available: boolean;
-    /** The same `{ code, message }` shape as a rendering reason. */
-    reason: WireRenderingReason | null;
+    reason: WireUpscalingReason | null;
     enabled: boolean;
     requested: boolean;
     factor: number | null;
+    video?: {
+        width: number;
+        height: number;
+        displayWidth: number;
+        displayHeight: number;
+    } | null;
+    area?: {
+        width: number;
+        height: number;
+    } | null;
+    gpu?: string | null;
+    hwdecCurrent?: string | null;
+    inChain?: boolean;
 }
 /**
  * Template arguments on the wire (`osd.show`, `osd.panel`, `dialogs.confirm`,
@@ -368,7 +437,7 @@ export interface Transport {
     locale?: string;
 }
 /** The events a plugin subscribes to (`events.subscribe`). */
-type HostEvent = "source.state" | "playback.backend" | "window.state" | "packages.changed" | "bindings.changed" | "timeline.changed" | "appearance.changed" | "resolvers.fileTypes";
+type HostEvent = "source.state" | "playback.backend" | "window.state" | "packages.changed" | "bindings.changed" | "timeline.changed" | "appearance.changed" | "resolvers.fileTypes" | "video.upscaling.changed";
 export declare function createWire(transport: Transport): {
     processing: {
         state: () => Promise<import("./processing.ts").ProcessingState>;
@@ -454,7 +523,7 @@ export declare function createWire(transport: Transport): {
             global: string;
             properties: Record<string, Json>;
         }) => Promise<void>;
-        set: (id: string, property: string, value: Json) => Promise<void>;
+        set: (id: string, property: string, write: PropertyWrite) => Promise<void>;
         unregister: (id: string) => Promise<void>;
         show: (id?: string) => Promise<void>;
     };
@@ -641,7 +710,7 @@ export declare function createWire(transport: Transport): {
             prepareMs: number;
             shellGeneration: number;
         }>;
-        setMount: (property: string, value: Json) => Promise<void>;
+        setMount: (property: string, write: PropertyWrite) => Promise<void>;
         interaction: (locks: {
             focused: boolean;
             dragging: boolean;
@@ -650,7 +719,7 @@ export declare function createWire(transport: Transport): {
         unmount: () => Promise<void>;
         menu: (items: (string | null)[], x: number, y: number) => Promise<void>;
         open: (id: string, file: string, properties?: Record<string, Json>, callbacks?: string[]) => Promise<void>;
-        set: (id: string, property: string, value: Json) => Promise<void>;
+        set: (id: string, property: string, write: PropertyWrite) => Promise<void>;
         show: (id: string, visible: boolean) => Promise<void>;
         close: (id: string) => Promise<void>;
     };

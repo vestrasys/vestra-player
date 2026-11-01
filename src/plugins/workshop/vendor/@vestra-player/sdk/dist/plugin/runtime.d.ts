@@ -23,6 +23,20 @@ export declare const failure: (code: string, message?: string) => PluginError;
 export declare const uncertain: (error: unknown) => boolean;
 /** Mark a promise as observed so an unused `ready` never crashes the runner. */
 export declare function quiet<T>(promise: Promise<T>): Promise<T>;
+/**
+ * The fields of the SDK's state copies that a binding or listener read, by
+ * state (`player`: `plugin.player.state`). An empty set: the state was
+ * taken whole (no field read was seen), so any change of it counts.
+ */
+export type Deps = Map<string, Set<string>>;
+/** A change of the SDK's state copies: the fields that changed, by state. */
+export type Change = ReadonlyMap<string, ReadonlySet<string>>;
+/**
+ * The longest a binding waits for a full pass while precise passes skip
+ * it: state a plugin changes outside code the SDK runs (its own timer,
+ * without `update()`) still shows within about this long.
+ */
+export declare const SAFETY_PASS_MS = 1000;
 export declare const same: (a: Json | undefined, b: Json | undefined) => boolean;
 /** One value in flight, only the newest waiting. Each push learns its fate. */
 export declare class Latest<T> {
@@ -54,6 +68,12 @@ export declare class Runtime {
     readonly app: App;
     /** `plugin.i18n.locale`, from the start-up handshake; English when unknown. */
     readonly locale: Locale;
+    /**
+     * Protocol additions the player advertises at start-up (`features` in the
+     * handshake's app data, player 0.6.0): `ui.patch` (row patches of
+     * property writes). Not part of the plugin API; empty for older players.
+     */
+    readonly features: ReadonlySet<string>;
     constructor(transport: Transport, manifest: PluginManifest, directory: string, dataDirectory?: string, app?: unknown);
     can(capability: string): boolean;
     /** Lazily created singletons shared by every scope of this plugin. */
@@ -71,6 +91,36 @@ export declare class Runtime {
      */
     reading(event: string): void;
     /**
+     * A field of the SDK's copy of a state (`key`) is read; without `field`,
+     * the state is taken (`plugin.player.state`). What is being evaluated
+     * then depends on it: a precise pass after a change of that field runs
+     * it again.
+     */
+    depends(key: string, field?: string): void;
+    /**
+     * Evaluate one part of the binding being evaluated (one `view.bind`
+     * function), identified by `token`. A precise pass skips it when nothing
+     * it read last time changed, and returns `undefined`; what it read then
+     * still counts for the binding.
+     */
+    part<T>(token: object, read: () => T): {
+        value: T;
+    } | undefined;
+    /**
+     * Run plugin code (a state listener) and return the state copy fields it
+     * read; they are not counted as a binding's.
+     */
+    observe<T>(run: () => T): {
+        value: T;
+        deps: Deps;
+    };
+    /**
+     * Whether code that read `deps` while `change` was delivered needs a full
+     * pass after it: it read a field that changed, or no field of that state
+     * at all (so the SDK cannot tell what it depends on).
+     */
+    needsFull(deps: Deps, change: Change): boolean;
+    /**
      * Evaluate `read` as `label`, added at `where`: the state it reads is
      * reported as read by it. `field`: a command's `enabled` or `checked`,
      * which a `plugin.when` condition can replace.
@@ -82,8 +132,21 @@ export declare class Runtime {
      * line (`main.ts:353`). Captured now, formatted when asked.
      */
     callSite(): () => string | undefined;
-    /** Coalesce: one evaluation pass per microtask turn, however many changes. */
+    /**
+     * A full pass: every binding is evaluated. Requested after plugin code
+     * the SDK ran, by `plugin.update()`, and on any change other than a state
+     * copy's fields. Coalesced: one pass per microtask turn, however many
+     * requests.
+     */
     invalidate(): void;
+    /**
+     * Fields of the SDK's copy of a state (`key`) changed: a precise pass
+     * evaluates only the bindings (and view bind functions) that read one of
+     * them, unless a full pass is due anyway.
+     */
+    changed(key: string, fields: Iterable<string>): void;
+    /** The plugin was disposed: cancel the pending safety pass, arm no more. */
+    stop(): void;
     /**
      * Host events with one `events.subscribe` per name, however many listeners.
      * Without the `events` capability the listener simply never fires.

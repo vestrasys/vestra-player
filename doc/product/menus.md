@@ -2,11 +2,11 @@
 
 > This table records the current implementation and corresponds to the top-level structure in [UI spec](ui-spec.md) §6.2.
 
-The product's context menu tree is merged from the commands registered by each of the 19 plugins (since 2026-10-22 there is also one item from the built-in plugin store `store`, see the table below) (`youtube` and `bilibili` have moved to the plugin repository and are installed through the store; their two items only exist once they are installed), the host's 14 core actions, and the host's own "Fullscreen" and "Quit" (compiled on 2026-10-21 from what the plugin code on main fafa40d actually registers). Menus are organised by user domain, not by plugin. Before adding or moving an entry, check it against this table to make sure there is no duplicate entry and nothing is scattered into the wrong domain ([interaction requirements §1](interaction-requirements.md#1-menus-are-organised-by-user-domain)).
+The product's context menu tree is merged from the commands registered by each of the 19 plugins (since 2026-10-22 there is also one item from the built-in plugin store `store`, see the table below) (`youtube` and `bilibili` have moved to the plugin repository and are installed through the store; their two items only exist once they are installed), the host's 14 core actions, and the host's own "Toggle Fullscreen" and "Quit" (since host 0.6.0 also "Enter Fullscreen" and "Leave Fullscreen", outside the menu) (compiled on 2026-10-21 from what the plugin code on main fafa40d actually registers). Menus are organised by user domain, not by plugin. Before adding or moving an entry, check it against this table to make sure there is no duplicate entry and nothing is scattered into the wrong domain ([interaction requirements §1](interaction-requirements.md#1-menus-are-organised-by-user-domain)).
 
 ## Menu tree
 
-2026-10-21, baseline main fafa40d. Compiled from the snapshot exported by `OUT=<file> node --test doc/process/rounds/menus-snapshot.test.ts` ([assignment table](../process/rounds/2026-10-plugin-ui.md) §3; at the time the script's default list covered all 19 plugins under `src/plugins`; after `youtube` and `bilibili` moved out, the default list is the other 17); the host's "Fullscreen", "Leave Fullscreen", "Quit" and "Toggle Sidebar" (`host/sidebar`, player 0.5.10: no menu entry and no default key; the bottom bar's sidebar button, listed in Keyboard Shortcuts) are in `src/host/src/main.rs` (`register_host_commands`) and are not in the snapshot. Checked, radio and initially disabled states come from each command's `state` in the same test host.
+2026-10-21, baseline main fafa40d. Compiled from the snapshot exported by `OUT=<file> node --test doc/process/rounds/menus-snapshot.test.ts` ([assignment table](../process/rounds/2026-10-plugin-ui.md) §3; at the time the script's default list covered all 19 plugins under `src/plugins`; after `youtube` and `bilibili` moved out, the default list is the other 17); the host's "Toggle Fullscreen", "Enter Fullscreen" (host 0.6.0), "Leave Fullscreen", "Quit" and "Toggle Sidebar" (`host/sidebar`, player 0.5.10: no menu entry and no default key; the bottom bar's sidebar button, listed in Keyboard Shortcuts) are in `src/host/src/main.rs` (`register_host_commands`) and are not in the snapshot. Checked, radio and initially disabled states come from each command's `state` in the same test host.
 
 The labels below are the English interface text (the English source text of each string); the Simplified Chinese interface shows the translations from the `zh-Hans.po` catalogs.
 
@@ -35,8 +35,8 @@ The labels below are the English interface text (the English source text of each
 | Copy to Clipboard ▸ File Name · Folder Path · Full Path | playback | | |
 | —— | | | |
 | Playback ▸ Play/Pause | core | Space, left click on the video | |
-| Playback ▸ Previous | core | PgUp, mouse side button X1 | |
-| Playback ▸ Next | core | PgDn, mouse side button X2 | |
+| Playback ▸ Previous | core | PgUp, mouse side button X2 (forward) | |
+| Playback ▸ Next | core | PgDn, mouse side button X1 (back) | |
 | Playback ▸ Seek ▸ Previous Frame · Next Frame | core | D · F | |
 | Playback ▸ Seek ▸ Previous Keyframe · Next Keyframe | playback | Ctrl+Shift+← · Ctrl+Shift+→ | |
 | Playback ▸ Seek ▸ Back 5 s · Forward 5 s | core | ← · → | |
@@ -154,7 +154,7 @@ The labels below are the English interface text (the English source text of each
 | Audio ▸ Show Album Cover for Audio Only | visualizer | | Checked |
 | Games ▸ (appears only when a plugin adds items, e.g. VestraNES ▸ Load ROM… · Stop · VestraNES Window…) | third-party | | The built-in NES emulator left the player on 2026-10-27 (user ruling) |
 | —— | | | |
-| Fullscreen | host | Enter, Alt+Enter, F11 | Checked; key `Toggle Fullscreen` (id `fullscreen`); in fullscreen Esc leaves fullscreen (command "Leave Fullscreen", key `Leave Fullscreen`, not in the menu) |
+| Fullscreen | host | Esc | Checked; key `Toggle Fullscreen` (id `fullscreen`); Esc is its only default (user ruling 2026-11-01; Enter, Alt+Enter, F11 up to 0.5.x). "Enter Fullscreen" (`enter-fullscreen`, only windowed) and "Leave Fullscreen" (`exit-fullscreen`, only in fullscreen) are not in the menu and have no default key |
 | Screen ▸ Picture-in-Picture | window | | Checked; appears only when the main window reports support for the system's picture-in-picture (macOS 14+) (id `pip`, IA-WIN-01); disabled without video (can still be left while in picture-in-picture); if mini size is active, the original size is restored first |
 | Screen ▸ Mini Size | window | `` ` `` | Checked; all systems (id `mini`, IA-WIN-01); not on top (IA-WIN-02); disabled without video and in fullscreen; run in picture-in-picture, it leaves picture-in-picture first |
 | Screen ▸ 0.5× · 1× · 1.5× · 2× | window | 1 · 2 · 3 · 4 | Radio; disabled without video |
@@ -181,7 +181,7 @@ The labels below are the English interface text (the English source text of each
 | —— | | | |
 | Quit | host | Cmd+Q (shown on macOS; on Windows and Linux the menu shows no shortcut, the close button and Alt+F4 quit) | key `Quit` |
 
-Global keys not in the menu: Shift+Tab brief info (info), Esc "Leave Fullscreen" (host; only in fullscreen; in windowed mode the key goes to the focused control as usual).
+Global keys not in the menu: Shift+Tab brief info (info). Esc is Toggle Fullscreen's (above): a menu, dialog or text field that handles Esc keeps it; otherwise it enters or leaves fullscreen.
 
 ### When the playlist has focus
 
@@ -251,5 +251,5 @@ System-reserved keys (not duplicates within this table, but the system may take 
 - macOS ⌃F1–⌃F8 are system keyboard-navigation keys. This table only uses **Ctrl+F1 (Playback Properties…)**: ⌃F1 is "Turn keyboard access on or off" by default, so only ⌘F1 triggers it reliably. ⌃F2–⌃F8 are unused.
 - macOS ⌃← / ⌃→ (switch Spaces) and ⌃↑ / ⌃↓ (Mission Control, application windows) are taken by the system by default: this affects "Back/Forward 30 s" (Ctrl+←/→, global) and the list's "Move Up/Move Down" (Ctrl+↑/↓, panel). The ⌘ versions work.
 - macOS ⌘H (hide) and ⌘M (minimise): if the system takes the ⌘ versions of Deblock (Ctrl+H) and Temporal Denoise (Ctrl+M) first, only ⌃H and ⌃M work (a trade-off accepted in round 4a).
-- On macOS F11 is "Show Desktop" by default, and on Apple keyboards F1–F12 are media keys by default (fn needed): fullscreen also has Enter; the commands on F1–F6 need fn on such keyboards.
+- On macOS F11 is "Show Desktop" by default, and on Apple keyboards F1–F12 are media keys by default (fn needed): Toggle Fullscreen is Esc (host 0.6.0) and F11 is unbound; the commands on F1–F6 need fn on such keyboards.
 - Windows: some graphics drivers use Ctrl+Alt+arrow keys for screen rotation and may intercept "Back/Forward 300 s" (Ctrl+Alt+←/→). No other binding uses a Windows reserved combination (Alt+Tab, Alt+F4, Alt+Space, Ctrl+Esc, Win key combinations).

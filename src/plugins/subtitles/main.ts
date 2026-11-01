@@ -26,6 +26,7 @@ import {
   clock,
   dialogueTarget,
   isObject,
+  menuCut,
   parse,
   parseStyle,
   parseSync,
@@ -40,8 +41,12 @@ const COLORS = ["white", "yellow", "cyan"] as const;
 /** Subtitles ▸ Subtitle Track lists at most this many tracks (orders 303–310); the rest are in Subtitle Tuning. */
 const MENU_TRACKS = 8;
 const SIZE_STEP = 2;
-/** Menu keys the track items must not take: the fixed items of Subtitle Track ▸ (menus merge by these words). */
-const RESERVED = new Set(["Off", "Cycle"]);
+/**
+ * Menu keys the track items must not take: the fixed items of Subtitle Track ▸ (Off, Cycle)
+ * and Secondary Subtitle ▸ (Off, Position ▸). Menus merge by these words, and the player
+ * refuses a leaf that is also a submenu's name. Both lists share the names, so one set.
+ */
+const RESERVED = new Set(["Off", "Cycle", "Position"]);
 /** A style with every optional field filled in. */
 type FullStyle = Required<SubtitleStyle>;
 const BASE_FIELDS: Pick<FullStyle, "bold" | "shadow" | "box" | "assOverride"> = {
@@ -79,8 +84,6 @@ function errorText(e: unknown): Status {
       return message("failed");
   }
 }
-/** Path segments: no control characters or edge spaces. */
-const clean = (s: string) => s.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
 const seconds = (ms: number) => `${ms > 0 ? "+" : ms < 0 ? "−" : ""}${Math.abs(ms) / 1000}`;
 /** "Cannot reload: …" for each error of reading a subtitle file. */
 const RELOAD: Record<FileError, StatusId> = {
@@ -106,9 +109,19 @@ const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest(
 export default async function activate(plugin: Plugin) {
   const { subtitles, osd } = plugin;
   const { text } = plugin.i18n;
-  /** A track without a title: "Embedded 3" / "External subtitle", translated. */
-  const fallbackName = (t: SubtitleTrack): Text =>
-    t.kind === "embedded" ? text("Embedded {}", [t.embeddedId ?? ""]) : text("External subtitle");
+  /**
+   * A track without a title: "Embedded 3" / "External subtitle", translated; an
+   * embedded track without a number is "Track N" (its place in the list), as in the menu.
+   */
+  const fallbackName = (t: SubtitleTrack, index = subtitles.state?.tracks.findIndex((x) => x.id === t.id) ?? -1): Text =>
+    t.kind === "external"
+      ? text("External subtitle")
+      : t.embeddedId == null
+        ? text("Track {}", [index + 1])
+        : text("Embedded {}", [t.embeddedId]);
+  /** The English rendering of `fallbackName` (menu keys). */
+  const fallbackKey = (t: SubtitleTrack, index: number) =>
+    t.kind === "external" ? "External subtitle" : t.embeddedId == null ? `Track ${index + 1}` : `Embedded ${t.embeddedId}`;
   /** A track's name: its title and language (data), or the translated fallback name and the language. */
   const titled = (t: SubtitleTrack) => `${t.title}${t.language ? ` · ${t.language}` : ""}`;
   const label = (t: SubtitleTrack): TextArg =>
@@ -912,24 +925,32 @@ export default async function activate(plugin: Plugin) {
   /**
    * The track items' titles and menu keys (the English rendering; menus merge by it).
    * A path segment is 1–80 bytes without control characters or edge spaces; keys must differ.
+   * A title is cut to 24 characters and 70 bytes, a language to 16 and 32 (whole
+   * characters, edges trimmed after the cut), so that with the fallback name, " · "
+   * and a duplicate's " (n)" (Japanese "（n）") every locale's rendering stays within 80.
    */
   function menuTitles(tracks: SubtitleTrack[]) {
     const used = new Set<string>();
     return tracks.slice(0, MENU_TRACKS).map((t, i) => {
       let title: string | Text, key: string;
       if (t.title) {
-        key = clean(titled(t)).slice(0, 24);
+        key = menuCut(titled(t), 24, 70);
         title = key || text("Track {}", [i + 1]);
         key ||= `Track ${i + 1}`;
       } else {
-        const language = clean(t.language ?? "").slice(0, 16);
-        const english = t.kind === "embedded" ? `Embedded ${t.embeddedId ?? ""}` : "External subtitle";
-        title = language ? text("{} · {}", [fallbackName(t), language]) : fallbackName(t);
+        const language = menuCut(t.language ?? "", 16, 32);
+        // An embedded track without a number is "Track N", not "Embedded " (an edge space the player refuses).
+        const english = fallbackKey(t, i);
+        const name = fallbackName(t, i);
+        title = language ? text("{} · {}", [name, language]) : name;
         key = language ? `${english} · ${language}` : english;
       }
       if (used.has(key) || RESERVED.has(key)) {
-        title = typeof title === "string" ? `${title} (${i + 1})` : text("{} ({})", [title, i + 1]);
-        key = `${key} (${i + 1})`;
+        // A track may itself be titled "X (3)": take the next free number.
+        let n = i + 1;
+        while (used.has(`${key} (${n})`)) n++;
+        title = typeof title === "string" ? `${title} (${n})` : text("{} ({})", [title, n]);
+        key = `${key} (${n})`;
       }
       used.add(key);
       return { title, key };

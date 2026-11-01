@@ -27,7 +27,7 @@
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
 //! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file) |
 //! | full screen | `fullscreen_resized` (Windows: a full-screen window is kept one pixel off its display's rectangle; elsewhere nothing) |
-//! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, OpenGL or wgpu, `vestra-video-texture`; elsewhere a new image per frame) |
+//! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, OpenGL or wgpu, `vestra-video-texture`; elsewhere a new image per frame), `same_video_image` (Windows: also compares wgpu textures; elsewhere `Image` equality) |
 //! | redraw pacing | `VBLANK_CLOCK`, `vblank_waiter` → `VBlankWaiter` (Windows: vertical blanks through `vestra-win32`; elsewhere `no_vblank` below: Slint paces, with a display link on macOS) |
 //! | rendering | `window_refresh` (here, through winit on every system), `select_wgpu_windows`, `GPU_RENDER`, `GPU_WINDOWS_WGPU`, `GPU_OPT_IN`, `gpu_start` → `GpuRenderer` / `GpuHandle` (implements `playback::renderer::GpuBackend`) / `GpuFrame` / `GpuDraw`, `gpu_started`, `gpu_failed`, `window_device_lost` (macOS: OpenGL windows, `vestra-gpu-render` with OpenGL; Windows: wgpu/Direct3D 12 windows, `vestra-gpu-render` with Direct3D 11 into shared textures; elsewhere `no_gpu` below refuses, so the host renders in software) |
 //! | video upscaling | `upscaler_probe` → `UpscalerProbe` (blocking: it wakes a sleeping discrete GPU), `gpu_render_adapter`, `upscaler_filter`, `UPSCALER_HWDEC` (Windows: NVIDIA RTX Video Super Resolution through mpv's `d3d11vpp`, checked through `vestra-win32`; elsewhere `no_upscaler` below: `platform`) |
@@ -288,13 +288,44 @@ pub struct GpuAdapter {
     pub luid: u64,
 }
 
+/// The adapter a mode uses, resolved once at start (`gpu_adapters`) and
+/// opened as it is (`select_wgpu_windows`), so the crash guard and the
+/// denylist look at the adapter the device is made on.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AdapterPick {
+    /// Its index in `GpuAdapters::list`; `None`: no adapter (an index or a
+    /// preference `VESTRA_GPU_ADAPTER` names that does not exist).
+    pub index: Option<usize>,
+    /// Its identity for opening it (Windows: the LUID).
+    pub luid: Option<u64>,
+    /// The software rasterizer (`VESTRA_GPU_ADAPTER=warp`).
+    pub warp: bool,
+    /// Why it was chosen (the `render:` lines).
+    pub how: String,
+}
+
+/// The system's graphics adapters and which ones the two modes would use
+/// (`gpu_adapters`).
+#[derive(Clone, Debug, Default)]
+pub struct GpuAdapters {
+    /// In the order the system offers them to this process.
+    pub list: Vec<GpuAdapter>,
+    /// GPU rendering's (Windows: the high-performance GPU unless the user
+    /// set a preference for Vestra in Windows Settings, or what
+    /// `VESTRA_GPU_ADAPTER` chooses).
+    pub gpu: AdapterPick,
+    /// CPU mode's Direct3D 12 windows' (Windows' order, or
+    /// `VESTRA_GPU_ADAPTER`).
+    pub windows: AdapterPick,
+}
+
 /// The adapters in the order the system offers them to this process, and
-/// the index of the one GPU rendering would use (Windows: the first, or the
-/// one `VESTRA_GPU_ADAPTER` chooses), before any window or device. Windows:
-/// DXGI through `vestra-win32`; elsewhere none yet.
+/// which ones GPU rendering and CPU mode's GPU windows would use, before any
+/// window or device. Windows: DXGI through `vestra-win32`; elsewhere none
+/// yet.
 #[cfg(not(target_os = "windows"))]
-pub fn gpu_adapters() -> (Vec<GpuAdapter>, Option<usize>) {
-    (Vec::new(), None)
+pub fn gpu_adapters() -> GpuAdapters {
+    GpuAdapters::default()
 }
 
 /// A GPU on which the system's video upscaler works (`upscaler_probe`).
@@ -460,6 +491,7 @@ pub use no_gpu::*;
 #[cfg(not(target_os = "windows"))]
 pub fn select_wgpu_windows(
     _winit: impl Fn() -> slint::BackendSelector,
+    _adapter: &AdapterPick,
 ) -> std::result::Result<(), String> {
     Err(format!("no wgpu windows on {}", std::env::consts::OS))
 }
@@ -511,6 +543,13 @@ pub fn window_notifiers() -> bool {
 #[cfg(not(target_os = "windows"))]
 pub fn direct_video_feed() -> Option<vestra_video_texture::Feed> {
     None
+}
+
+/// Whether two video area images are the same picture source (Windows also
+/// compares wgpu textures, which Slint's `Image` equality does not).
+#[cfg(not(target_os = "windows"))]
+pub fn same_video_image(shown: &slint::Image, next: &slint::Image) -> bool {
+    shown == next
 }
 
 /// Pace GPU frames of windows without a notifier (Windows only).

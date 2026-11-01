@@ -213,7 +213,7 @@ mod tests {
     fn by_default_a_click_plays_or_pauses_on_release() {
         let (mut table, mut commands) = (Table::default(), Registry::new());
         // host/actions.rs register_host_commands: fullscreen keeps only its keys.
-        let keys: Vec<String> = ["Enter", "Alt+Enter", "F11"].map(String::from).to_vec();
+        let keys: Vec<String> = vec!["Escape".into()];
         table
             .declare(0, "fullscreen", "host", &keys, false, false)
             .unwrap();

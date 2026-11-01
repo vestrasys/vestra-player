@@ -105,6 +105,22 @@ fn convert(value: &Json) -> Result<Value> {
     if crate::ui::ui_image::reference(&value).is_some() {
         return Ok(Value::Image(Default::default()));
     }
+    // An array without documents: plain rows, as `prop_value` converts it
+    // (a nested image is an empty picture; `null` in a row reads as one).
+    if let Some(rows) = value.as_array() {
+        match crate::ui::ui_values::plain_rows(&rows.iter().collect::<Vec<_>>()) {
+            Ok(plain) => {
+                return Ok(Value::Model(slint::ModelRc::new(
+                    crate::ui::ui_rows::Rows::from_plain(plain.rows, Default::default()),
+                )));
+            }
+            Err(crate::ui::ui_values::NotPlain::Markdown) => {}
+            Err(crate::ui::ui_values::NotPlain::Image(error)) => {
+                return Err(anyhow!(error.message));
+            }
+            Err(crate::ui::ui_values::NotPlain::Refused(error)) => return Err(error),
+        }
+    }
     let mut cache = crate::ui::ui_markdown::Cache::default();
     crate::ui::ui_markdown::convert(
         &mut cache,

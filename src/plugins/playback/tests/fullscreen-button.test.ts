@@ -7,7 +7,7 @@ import activate from "../main.ts";
 
 /**
  * 0.2.4, UI-BAR-05 / UI-BAR-10: the bottom bar's Fullscreen button. A click
- * runs the core action `fullscreen` (the same toggle as Enter / F11); the
+ * runs the core action `fullscreen` (the same toggle as the Toggle Fullscreen key, Escape by default); the
  * icon follows `window.state.fullscreen`; the button is the first thing the
  * bar hides when it is too narrow, from the time label's measured width.
  */
@@ -31,7 +31,7 @@ async function until(predicate: () => boolean) {
 /** The icon `bar.slint` draws from the bar's data (the test host does not run Slint). */
 const icon = (props: Record<string, unknown>) => (props["fullscreen"] ? "exit-fullscreen" : "fullscreen");
 
-test("UI-BAR-05 a click enters fullscreen, a second click leaves it, through host.run like Enter", async () => {
+test("UI-BAR-05 a click enters fullscreen, a second click leaves it, through host.run like the Toggle Fullscreen key", async () => {
   const { host, stop } = await start(withMedia());
   try {
     const bar = host.mounted();
@@ -106,7 +106,7 @@ test("UI-BAR-05 the tooltip is translated and names the Toggle Fullscreen key", 
     host.emit("bindings.changed", null);
     await until(() => bar.props["key-open"] === "Ctrl+O");
     // The test host's binding table has no host/fullscreen command (the
-    // player's does, Enter by default): no key here.
+    // player's does, Escape by default): no key here.
     assert.equal(bar.props["key-fullscreen"], "");
     assert.equal(host.translate("Fullscreen"), "全屏");
     assert.equal(host.translate("Leave fullscreen"), "退出全屏");
@@ -264,4 +264,39 @@ test("UI-BAR-10 the threshold stays put while the time runs and when it shows th
   // Without a duration ("--:--") a long elapsed text still gets its room.
   const unknown = textWidth(" / --:--");
   assert.equal(timeWidth(textWidth("1:00:00"), textWidth("---:--"), unknown), textWidth("1:00:00") + unknown);
+});
+
+/**
+ * 0.2.7: the bar keeps keyboard focus out of its sliders. The library Slider
+ * takes Tab focus unless `focusable: false`; with Tab unbound (or the default
+ * shortcuts ignored) Tab would land in it and the arrows would change it
+ * instead of seeking. The seek line is the bar's own SeekBar, with no
+ * FocusScope, so it never takes focus.
+ */
+test("0.2.7 bar.slint: every library Slider is focusable: false; the SeekBar has no FocusScope", () => {
+  const code = slint.replace(/\/\/.*$/gm, "");
+  const bodies: string[] = [];
+  for (const match of code.matchAll(/\bSlider\s*\{/g)) {
+    let depth = 0;
+    let end = match.index;
+    for (let i = match.index + match[0].length - 1; i < code.length; i++) {
+      if (code[i] === "{") depth++;
+      else if (code[i] === "}" && --depth === 0) {
+        end = i;
+        break;
+      }
+    }
+    bodies.push(code.slice(match.index, end));
+  }
+  assert.ok(bodies.length >= 1, "the volume slider is a library Slider");
+  for (const body of bodies) assert.match(body, /^\s*focusable:\s*false;/m, body);
+  const seekBar = code.slice(code.indexOf("component SeekBar"), code.indexOf("component MuteButton"));
+  assert.ok(seekBar.length > 0);
+  assert.doesNotMatch(seekBar, /FocusScope|forward-focus/);
+  assert.doesNotMatch(code, /FocusScope/, "the bar has no focus scope of its own");
+});
+
+test("0.2.9 the fallback key for Toggle Fullscreen is Escape (player 0.6.0 default)", async () => {
+  const { DEFAULT_KEYS } = await import("../tips.ts");
+  assert.equal(DEFAULT_KEYS.fullscreen, "Escape");
 });

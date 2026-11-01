@@ -6,13 +6,14 @@ import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import type { Json } from "@vestra-player/sdk";
-import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
+import { HostError, startPlugin, TestHost, UI_VALUE_LIMITS } from "@vestra-player/sdk/testing";
 import { settleFiles } from "./settle.ts";
 import { DROP_EXTENSIONS, dropRow } from "../drop.ts";
 import activate from "../main.ts";
 
 type ViewRow = {
-  rowId: string;
+  id: string;
+  number: number;
   label: string;
   duration: string;
   tooltip: string;
@@ -60,7 +61,7 @@ async function start(
     host,
     root,
     rows: () => (panel.props.rows ?? []) as unknown as ViewRow[],
-    names: () => app.rows().map((row) => row.label.replace(/^\d+\. /, "")),
+    names: () => app.rows().map((row) => row.label),
     prop: (name: string) => panel.props[name],
     command: (name: string) => host.command(`playlist.${name}`),
     osd: () => host.osd.at(-1),
@@ -78,7 +79,7 @@ async function start(
       await host.settle(20);
     },
     click: (index: number, modifiers: { ctrl?: boolean; shift?: boolean } = {}) =>
-      app.emit("select-row", app.rows()[index]!.rowId, !!modifiers.ctrl, !!modifiers.shift),
+      app.emit("select-row", app.rows()[index]!.id, !!modifiers.ctrl, !!modifiers.shift),
     /** Wait (bounded) for something the plugin does on its own (file I/O); settle() waits for host calls only. */
     until: async (check: () => boolean, what: string) => {
       for (const deadline = Date.now() + 15_000; !check(); await host.settle(10))
@@ -677,7 +678,11 @@ test("C21: search filters by all words (NFKC, any case), keeps numbers, limits a
     assert.equal(app.prop("filtering"), true);
     await app.emit("search-changed", "Ｓ01  1080"); // full-width S
     await app.host.settle(200);
-    assert.deepEqual(app.rows().map((row) => row.label), ["1. Show.S01E01.1080p.mkv", "3. Other.S01.1080P.mkv"]);
+    // Numbered by their place in the whole list (sent with the rows while a search filters).
+    assert.deepEqual(
+      app.rows().map((row) => `${row.number}. ${row.label}`),
+      ["1. Show.S01E01.1080p.mkv", "3. Other.S01.1080P.mkv"],
+    );
     assert.equal(app.command("move-down").state.enabled, false);
     await app.click(0);
     assert.equal(app.host.translate(app.command("move-down").state.reason!), "搜索时不能调整顺序");
@@ -894,7 +899,11 @@ test("A13: \"仅打开该文件\" leaves only that file, adopted; with 「追加
   }
 });
 
-test("C17: a list above 20 000 rows is refused", async () => {
+// The panel takes the whole list: 20 000 rows need the large lists P3 player and SDK (player
+// 0.6.0, SDK 1.5.46); with an older SDK this test waits.
+const P3_ROWS = UI_VALUE_LIMITS.arrayRows >= 20_000 ? false : "needs the large lists P3 SDK (UI_VALUE_LIMITS.arrayRows ≥ 20,000)";
+
+test("C17: a list above 20 000 rows is refused", { skip: P3_ROWS }, async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-playlist-data-"));
   const rows = Array.from({ length: 20_000 }, (_, i) => ({ kind: "url", source: `https://example.org/${i}`, title: null, duration: null }));
   await writeFile(
@@ -903,9 +912,8 @@ test("C17: a list above 20 000 rows is refused", async () => {
   );
   const app = await start({ data });
   try {
-    // The list is 20 000 rows tall; the panel gets the 200 around the view.
-    assert.equal(app.prop("row-count"), 20_000);
-    assert.equal(app.rows().length, 200);
+    // The panel gets the whole list (large lists P3).
+    assert.equal(app.rows().length, 20_000);
     const [a] = await app.files(["a.mp4"]);
     await app.addFiles([a!]);
     assert.equal(app.osd(), "已添加 0 项，列表已达上限 20000 项");
@@ -1382,7 +1390,7 @@ test("G-08: a newly playing row out of view is centred, unless the user scrolled
     await app.emit("list-area", 0, 200);
     const request = () => app.prop("scroll-request") as number;
     // Row 60 plays (double click while scrolled there is not needed: next / auto-advance alike).
-    await app.emit("play-row", app.rows()[59]!.rowId);
+    await app.emit("play-row", app.rows()[59]!.id);
     app.host.setSource({ phase: "ready" });
     await app.host.settle();
     assert.equal(app.prop("scroll-to-y"), 59 * 20 + 10 - 100);
@@ -1397,7 +1405,7 @@ test("G-08: a newly playing row out of view is centred, unless the user scrolled
 
     // The user scrolls to the top; a change right after leaves the list alone.
     await app.emit("list-area", 0, 200);
-    await app.emit("play-row", app.rows()[89]!.rowId);
+    await app.emit("play-row", app.rows()[89]!.id);
     app.host.setSource({ phase: "ready" });
     await app.host.settle();
     assert.equal(request(), asked);

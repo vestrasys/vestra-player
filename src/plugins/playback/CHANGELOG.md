@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.2.10
+
+- The seek line is easier to hit (user request; PotPlayer's seek row works the same way): hovering (the time tip, the mark tip and the preview thumbnail), pressing and dragging now work anywhere in the whole 22px seek row, from the bar's top edge down to the button row and from 5px at the left to 8px before the mute button, instead of only the 10px around the line. Outside the line's ends a press or hover takes the nearer end. The look is unchanged: the line, knob, A-B loop and mark ticks are drawn exactly where they were (ticks keep their physical-pixel snapping at every scale factor), and the tip stays 4px above the line. Drag behaviour is unchanged (grabs on press, follows the pointer outside the row, clamps at the ends, cancel restores). The video above and the button row below do not take part.
+
+## 0.2.9
+
+- The Fullscreen button's tooltip falls back to **Escape** as the Toggle Fullscreen key when the player's binding table cannot be read (it said Enter): the player's default for Toggle Fullscreen is now Escape only (Enter, Alt+Enter and F11 removed). With the table readable the tooltip shows the user's binding, as before. Comments say "the Toggle Fullscreen key" instead of "Enter / F11".
+- Nobody needs to change anything.
+
+## 0.2.8
+
+- Mark ticks are whole physical pixels at every scale factor (125%, 150%, 175%, as well as 100% and 200%): at a fractional scale 0.2.7's 1px stroke was 1.5 physical px wide and still left a half-transparent column. The ticks are now drawn in physical pixels: the bar reports the seek line's span in whole physical px (`span-changed`, also when the scale factor changes), the plugin builds the commands at whole physical x in a viewbox that wide, and the Paths have a 1 physical px stroke (`1phx`) and their left edge and top on a physical pixel (from the seek bar's `absolute-position`). Each tick is one physical pixel wide and about 6 logical px tall in whole pixel rows; its column is within half a physical pixel of where the logical layout puts it.
+- A window resize no longer rebuilds and sends the three tick strings every frame: after the first report, span reports take effect once they pause for 100 ms (the last wins); meanwhile the ticks stretch with the line as before.
+- Above 4096 marks, the user's bookmarks are kept first (all of them, or 4096 picked evenly if they alone are more) and the chapters and markers are picked evenly into the room left, all in time order.
+
+## 0.2.7
+
+- The seek line's mark ticks are whole pixels again, as before 0.2.6: each 1px tick fills exactly the pixel column the marks had then (`floor(4px + at × span)`) instead of being antialiased across two half-transparent columns. The bar reports the seek line's span to the plugin at start and when its width changes (`span-changed`); the plugin builds each kind's commands with the tick at the column's whole-pixel x in a viewbox as wide as that span (`tick-span`), drawn at scale 1, where Slint's half-stroke inset centres the stroke on the column. During a resize the ticks stretch to the new width until the plugin's update arrives. Ticks show once the bar has reported its span.
+- More marks than the 4096 the bar shows are now picked evenly in time order (by index, the first and the last kept) instead of dropping everything after the 4096th, so a long file's later marks still show and the hover search stays sorted.
+- The hover tips' text budget counts a control character (or a lone surrogate) as the 6 bytes of its JSON escape (`\u00XX`), not 3. Each kind's tick string also has a 60 KiB cap as a safety net under the player's 64 KiB per string (not reached in practice: one tick per mark, at most 4096).
+- The bottom bar's volume slider stays out of the Tab chain (`focusable: false` on the library `Slider`). The library slider now takes keyboard focus, so with Tab unbound (or "Ignore default shortcuts" on) Tab could move into it and the arrow keys then changed the volume instead of seeking. Dragging and clicking it work as before. The seek line is the bar's own `SeekBar` (a `TouchArea`, no `FocusScope`), which never took keyboard focus.
+- Nobody needs to change anything.
+
+## 0.2.6
+
+- The seek line's marks (chapters, bookmarks, markers) are drawn as one Slint `Path` per kind, from commands the plugin builds when the marks change, instead of one `Rectangle` per mark in the main window: the bar keeps three elements however many marks there are. Same 1×6 ticks in the same colours; the hover tip ("Title  01:23" within 3px of a mark, found in the bar without a round trip) works as before, and a click on the line still seeks to the pointer (marks take no input). What users see: a tick sits at its exact position instead of being snapped to a whole pixel, so on some widths it is drawn softened across two pixels; where marks of different kinds meet, bookmarks draw over markers over chapters (before, the later mark drew on top).
+- Up to 4096 marks are shown (the player's rows per property value). Before, the bar tried to send up to 8192 and the player refused the whole list from 3,277 marks (five values a mark, 16,384 per value), so a file with that many showed none. When the marks' titles are long and very many (past 512 KiB of tip text), the later marks' hover tip shows the time alone.
+- Nobody needs to change anything: publishers of `timeline.marks` and users are unaffected.
+
 ## 0.2.5
 
 - The bottom bar places the player's strip of command buttons (`BarButtons` from `@vestra/bar-buttons.slint`, player 0.5.10) at the right end of the button row: the buttons other plugins give their commands (the AI workshop, the store…), left to right by their order, and the player's own **Toggle Sidebar** rightmost. The bar's own 23×22 playlist toggle is gone: the strip's toggle is the player's command `host/sidebar`, with the sidebar's state (accent while on, half opacity while on but hidden for want of room); its tooltip is "Toggle Sidebar", with no key unless the user binds one (the old toggle's was "Playlist (F6)"). The bar no longer reads or sets the sidebar position and sends no sidebar data.

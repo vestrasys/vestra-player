@@ -138,6 +138,8 @@ export class Tasks {
       const index = this.list.findIndex(terminal);
       if (index < 0) break;
       const [old] = this.list.splice(index, 1);
+      // After the first pass this runs past an await, outside SDK-invoked code: say so.
+      this.#plugin.update();
       await this.release(old!);
       for (const job of old!.jobs) await job.dispose();
     }
@@ -154,8 +156,11 @@ export class Tasks {
           for (let index = 0; index < task.spec.count; index++) {
             if (task.cancel || this.#stopped) break;
             const { job, state } = await this.#run(task, index);
-            if (state.status === "completed" && state.outcome && "destination" in state.outcome)
-              task.outputs.push({ job, path: state.outcome.destination }); else if (state.status === "failed")
+            if (state.status === "completed" && state.outcome && "destination" in state.outcome) {
+              task.outputs.push({ job, path: state.outcome.destination });
+              // Past the job's await: the row's "n/total" changed outside SDK-invoked code.
+              this.#plugin.update();
+            } else if (state.status === "failed")
               throw new Failure(state.outcome && "error" in state.outcome ? jobError(state.outcome.error) : jobError({ code: "unknown", message: "no error outcome" }));
             else if (state.status === "cancelled") {
               task.cancel = true;
@@ -200,6 +205,8 @@ export class Tasks {
       task.status = TERMINAL.includes(state.status) ? "running" : state.status;
     };
     show(job.state);
+    // Past the export's await: the row's status changed outside SDK-invoked code.
+    this.#plugin.update();
     const watching = job.onChange(show);
     try {
       return { job, state: await job.done };

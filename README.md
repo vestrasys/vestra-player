@@ -54,7 +54,6 @@ Plugins describe their windows and panels in `.slint` files; the host compiles t
 | `src/host/` | The Rust host: playback, UI composition, plugin and package management, platform layer |
 | `src/runtime/` | The runner that starts each plugin in its Node.js process |
 | `src/plugins/` | The built-in product plugins |
-| `src/examples/` | Example plugins |
 | `src/packaging/` | Installer builds for macOS and Windows |
 | `doc/` | Design documents, architecture and process notes ([index](doc/README.md)) |
 

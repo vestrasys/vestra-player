@@ -7,24 +7,129 @@ import { sourceFailure } from "./texts.ts";
 import type { Preview, Thumbnails } from "./thumbs.ts";
 import { barTips, Keys } from "./tips.ts";
 
-/** The bar finds the hovered mark with a fixed-depth binary search (`bar.slint`): 2^13 marks at most. */
-export const MAX_MARKS = 8192;
+/**
+ * The marks the bar shows, at most: within the rows and values of one property
+ * value the player takes (`UI_VALUE_LIMITS`; `marks` is 1 + 3 values a row),
+ * and what the bar's lower-bound search (`bar.slint`) closes in 13 halvings.
+ * More marks than that are sampled (`sampled`): the user's bookmarks first.
+ */
+export const MAX_MARKS = 4096;
+/** The bar's span reports while a resize goes on: the last one wins after this pause. */
+export const SPAN_DEBOUNCE_MS = 100;
+/**
+ * The hover tips' text, at most (an upper bound of the JSON the player gets:
+ * 3 bytes a UTF-16 unit covers UTF-8 and the 2-byte escapes `\"` and `\\`, but
+ * a control character or a lone surrogate is written as a 6-byte `\u00XX` /
+ * `\udXXX` escape and counts 6, see `jsonBytes`), so the bar's write stays well
+ * inside the player's 1 MiB per value and per message whatever the titles;
+ * past it a mark's tip is its time alone. 4096 marks with titles of 30
+ * characters fit, any script.
+ */
+export const MARK_TIP_BYTES = 512 * 1024;
+/**
+ * A kind's tick commands, at most: a safety net under the player's 64 KiB per
+ * string. It is not reached in practice: one tick per mark (≤ 4096) of at most
+ * 10 bytes while the line is under 100000 physical px is 40 KiB.
+ */
+export const TICK_BYTES = 60 * 1024;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
+/** What JSON writes as a 6-byte `\uXXXX` escape: control characters and lone surrogates. */
+const SIX_BYTES = /[\u0000-\u001f]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
+/** An upper bound of `text`'s bytes inside a JSON string (without the quotes). */
+export const jsonBytes = (text: string) => 3 * text.length + 3 * (text.match(SIX_BYTES)?.length ?? 0);
+
+/** `count` of `indices` picked evenly (the first and the last kept), in order. */
+function evenly(indices: readonly number[], count: number): number[] {
+  if (indices.length <= count) return [...indices];
+  if (count <= 0) return [];
+  if (count === 1) return [indices[0]!];
+  const step = (indices.length - 1) / (count - 1);
+  return Array.from({ length: count }, (_, i) => indices[Math.round(i * step)]!);
+}
+
 /**
- * B22: `timeline.marks` as the seek line draws them, sorted by time (as the
- * player merges them): `at` is the fraction of the duration, `clock` the
- * mark's time for the hover tip "Title  01:23".
+ * At most MAX_MARKS of the time-sorted marks: all of them, or else the user's
+ * bookmarks first (all of them, or MAX_MARKS picked evenly if they alone are
+ * more) and the other kinds picked evenly by index into the room left (the
+ * first and the last kept), so the shown marks still run across the whole
+ * duration (dropping the tail would leave the end of a long file bare), in
+ * proportion to where the marks are, and stay in time order for the bar's
+ * search.
  */
-export function seekMarks(marks: readonly TimelineMark[], duration: number | null): Json[] {
-  if (!duration || duration <= 0) return [];
-  return marks.slice(0, MAX_MARKS).map((mark) => ({
-    at: clamp01(mark.time / duration),
-    kind: mark.kind,
-    title: mark.title ?? "",
-    clock: time(mark.time),
-  }));
+export function sampled(marks: readonly TimelineMark[]): readonly TimelineMark[] {
+  if (marks.length <= MAX_MARKS) return marks;
+  const bookmarks: number[] = [];
+  const others: number[] = [];
+  marks.forEach((mark, i) => (mark.kind === "bookmark" ? bookmarks : others).push(i));
+  const kept = evenly(bookmarks, MAX_MARKS);
+  const picked = [...kept, ...evenly(others, MAX_MARKS - kept.length)].sort((a, b) => a - b);
+  return picked.map((i) => marks[i]!);
+}
+
+export interface SeekMarks {
+  /** Sorted by time: `at` the fraction of the duration (the bar's hover search), `tip` "Title  01:23". */
+  rows: Json[];
+  /** One Path's commands per kind: a 1 physical px tick `M<x> 0V1` per distinct physical pixel column. */
+  chapterTicks: string;
+  bookmarkTicks: string;
+  markerTicks: string;
+  /** The seek line's span in physical px the ticks were built for: the Paths' `viewbox-width` (0: none yet). */
+  tickSpan: number;
+}
+
+const NO_MARKS: SeekMarks = { rows: [], chapterTicks: "", bookmarkTicks: "", markerTicks: "", tickSpan: 0 };
+
+/**
+ * B22: `timeline.marks` as the seek line shows them, sorted by time (as the
+ * player merges them), at most MAX_MARKS: the hover rows, and the ticks as
+ * one Path per kind (no element per mark).
+ *
+ * `span` is the seek line's width less its two 4px insets in whole physical
+ * pixels (`floor(span / 1phx)`), as the bar reports it (`spanChanged`; 0
+ * before the first report: no ticks yet). A tick fills exactly one physical
+ * pixel column at any scale factor: x = `floor(at * span)` in a viewbox
+ * `span` wide over a Path `span + 1` physical px wide whose left edge the bar
+ * puts on a physical pixel, so the scale is 1 physical px per unit; Slint
+ * insets the path by half the 1phx stroke (`Path::fitted_path_events`), so
+ * the stroke is centred on x + 0.5 physical px: one whole column, never two
+ * half-transparent ones (`bar.slint`, MarkTicks).
+ */
+export function seekMarks(marks: readonly TimelineMark[], duration: number | null, span = 0): SeekMarks {
+  if (!duration || duration <= 0) return NO_MARKS;
+  const rows: Json[] = [];
+  const ticks = { chapter: [] as string[], bookmark: [] as string[], marker: [] as string[] };
+  const bytes = { chapter: 0, bookmark: 0, marker: 0 };
+  const last = { chapter: -1, bookmark: -1, marker: -1 };
+  const drawn = span > 0;
+  let budget = MARK_TIP_BYTES;
+  for (const mark of sampled(marks)) {
+    const at = clamp01(mark.time / duration);
+    const clock = time(mark.time);
+    const title = mark.title ?? "";
+    const tip = `${title}  ${clock}`;
+    const cost = jsonBytes(tip);
+    const titled = title !== "" && cost <= budget;
+    if (titled) budget -= cost;
+    rows.push({ at, tip: titled ? tip : clock });
+    if (!drawn) continue;
+    // Marks in time order: a tick in the same column as the kind's previous one adds nothing.
+    const x = Math.floor(at * span);
+    if (x === last[mark.kind]) continue;
+    last[mark.kind] = x;
+    const command = `M${x} 0V1`;
+    if (bytes[mark.kind] + command.length > TICK_BYTES) continue;
+    bytes[mark.kind] += command.length;
+    ticks[mark.kind].push(command);
+  }
+  return {
+    rows,
+    chapterTicks: ticks.chapter.join(""),
+    bookmarkTicks: ticks.bookmark.join(""),
+    markerTicks: ticks.marker.join(""),
+    tickSpan: drawn ? span : 0,
+  };
 }
 
 /**
@@ -57,7 +162,7 @@ const CORE: ReadonlySet<string> = new Set<HostAction>([
   "previous",
   "next",
   "mute",
-  // UI-BAR-05 (0.2.4): toggles the main window's fullscreen, as Enter / F11 do.
+  // UI-BAR-05 (0.2.4): toggles the main window's fullscreen, as the Toggle Fullscreen key (Escape by default) does.
   "fullscreen",
 ]);
 
@@ -79,12 +184,38 @@ export function wireBar(
   // G-07: tooltips name the keys the user has bound (read again when bindings change).
   const keys = new Keys(scope, () => scope.update());
   void keys.refresh();
-  let drawn: { marks: readonly TimelineMark[]; duration: number | null; rows: Json[] } | null = null;
+  // B22: the seek line's span in physical px, which the bar reports when its
+  // width (or the scale factor) changes. The first report is taken at once
+  // (there are no ticks before it); later ones wait for a pause of
+  // SPAN_DEBOUNCE_MS, the last winning, so a window resize does not rebuild
+  // and send the ticks every frame (they stretch with the line meanwhile).
+  let span = 0;
+  let pending: ReturnType<typeof setTimeout> | null = null;
+  const takeSpan = (px: number) => {
+    if (px === span) return;
+    span = px;
+    scope.update();
+  };
+  bar.on("spanChanged", (reported: number) => {
+    const px = Math.floor(reported);
+    if (!(px > 0)) return;
+    if (pending !== null) clearTimeout(pending);
+    pending = null;
+    if (span === 0) return takeSpan(px);
+    pending = setTimeout(() => {
+      pending = null;
+      takeSpan(px);
+    }, SPAN_DEBOUNCE_MS);
+  });
+  scope.onDispose(() => {
+    if (pending !== null) clearTimeout(pending);
+  });
+  let drawn: { marks: readonly TimelineMark[]; duration: number | null; span: number; shown: SeekMarks } | null = null;
   const marks = (duration: number | null) => {
     const current = scope.timeline.marks;
-    if (drawn?.marks !== current || drawn.duration !== duration)
-      drawn = { marks: current, duration, rows: seekMarks(current, duration) };
-    return drawn.rows;
+    if (drawn?.marks !== current || drawn.duration !== duration || drawn.span !== span)
+      drawn = { marks: current, duration, span, shown: seekMarks(current, duration, span) };
+    return drawn.shown;
   };
   const p = playback;
   let volumeDragging = false;
@@ -101,6 +232,7 @@ export function wireBar(
     const volume = p.volumeDraft ?? state.volume;
     const remaining = settings.value.remainingTime;
     const left = remaining && position !== null && state.duration !== null;
+    const shown = marks(state.duration);
     return {
       elapsedLabel: left ? `-${time(state.duration! - position!)}` : time(position),
       totalLabel: time(state.duration),
@@ -112,7 +244,11 @@ export function wireBar(
       // I07: the picture box, and the sprite the bar crops the pointer's cell from (hover and drag).
       ...previewProps(thumbnails.active(state), thumbnails.preview, pointing),
       // B22: everyone's marks, and the A-B loop (whoever set it).
-      marks: marks(state.duration),
+      marks: shown.rows,
+      chapterTicks: shown.chapterTicks,
+      bookmarkTicks: shown.bookmarkTicks,
+      markerTicks: shown.markerTicks,
+      tickSpan: shown.tickSpan,
       hasLoop: Boolean(state.loop && state.duration),
       loopA: state.loop && state.duration ? clamp01(state.loop.a / state.duration) : 0,
       loopB: state.loop && state.duration ? clamp01(state.loop.b / state.duration) : 0,

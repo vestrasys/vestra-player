@@ -27,7 +27,7 @@ export default async function activate(plugin: Plugin) {
   });
 
   const settings = new Settings(plugin);
-  const chapters = new Chapters(player);
+  const chapters = new Chapters(player, () => plugin.update());
   const bookmarks = new Bookmarks(plugin);
   const actions = new Actions(plugin, chapters, bookmarks, osd);
   const loop = new AbLoop(plugin, settings, osd);

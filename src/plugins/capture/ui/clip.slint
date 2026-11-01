@@ -1,7 +1,7 @@
 // Export Clip: options in group boxes (B§6.8; UI-DLG-05).
-import { CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
+import { LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button } from "@vestra/widgets.slint";
+import { Button, Check, Choice } from "@vestra/widgets.slint";
 import { FormLabel, Group, Note, Status, Words } from "parts.slint";
 
 export component ClipDialog inherits Window {
@@ -61,13 +61,13 @@ export component ClipDialog inherits Window {
             HorizontalLayout {
                 spacing: 4px;
                 FormLabel { width: root.column; text: @tr("Audio:"); }
-                ComboBox { height: Theme.input-height; model: root.audio-labels; current-index <=> root.audio-index; enabled: !root.busy; }
+                Choice { model: root.audio-labels; current-index <=> root.audio-index; enabled: !root.busy; }
             }
             HorizontalLayout {
                 spacing: 4px;
                 Rectangle { width: root.column; }
-                CheckBox { height: Theme.checkbox-row-height; text: @tr("Include video effects"); checked <=> root.processed; enabled: !root.busy; }
-                CheckBox { height: Theme.checkbox-row-height; text: @tr("Export subtitles too"); checked <=> root.subtitles; enabled: root.processed && !root.busy; }
+                Check { text: @tr("Include video effects"); checked <=> root.processed; enabled: !root.busy; }
+                Check { text: @tr("Export subtitles too"); checked <=> root.subtitles; enabled: root.processed && !root.busy; }
             }
         }
         Group {

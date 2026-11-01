@@ -206,7 +206,7 @@ msgstr "Der kanonische Pfad der Datei entspricht einem vorhandenen Eintrag; dies
 msgid "Close the other dialog first"
 msgstr "Schließen Sie zuerst den anderen Dialog"
 
-#: main.ts:202 main.ts:595 main.ts:618 main.ts:771 manifest.json ui/settings.slint:114 ui/sidebar.slint:290
+#: main.ts:202 main.ts:595 main.ts:618 main.ts:771 manifest.json ui/settings.slint:114 ui/sidebar.slint:292
 #, x-machine
 msgid "Playlist"
 msgstr "Wiedergabeliste"
@@ -411,7 +411,7 @@ msgstr "Aktuelle Reihenfolge umkehren"
 msgid "Select All"
 msgstr "Alle auswählen"
 
-#: main.ts:584 ui/sidebar.slint:680
+#: main.ts:584 ui/sidebar.slint:704
 #, x-machine
 msgid "Search"
 msgstr "Suchen"
@@ -690,7 +690,7 @@ msgstr "Geben Sie unten die Webadressen ein, die zur Wiedergabeliste hinzugefüg
 msgid "Example: {}"
 msgstr "Beispiel: {}"
 
-#: ui/link.slint:63 ui/sidebar.slint:592
+#: ui/link.slint:63 ui/sidebar.slint:614
 #, x-machine
 msgid "Add"
 msgstr "Hinzufügen"
@@ -765,22 +765,22 @@ msgstr "Vor dem Entfernen aller Einträge bestätigen"
 msgid "Filtered {}"
 msgstr "Gefiltert: {}"
 
-#: ui/sidebar.slint:299
+#: ui/sidebar.slint:301
 #, x-machine
 msgid "Attach to main window"
 msgstr "An das Hauptfenster andocken"
 
-#: ui/sidebar.slint:299
+#: ui/sidebar.slint:301
 #, x-machine
 msgid "Detach as floating window"
 msgstr "Als schwebendes Fenster abdocken"
 
-#: ui/sidebar.slint:305
+#: ui/sidebar.slint:307
 #, x-machine
 msgid "Close list"
 msgstr "Liste schließen"
 
-#: ui/sidebar.slint:365
+#: ui/sidebar.slint:371
 #, x-machine
 msgid ""
 "{}\n"
@@ -789,7 +789,7 @@ msgstr ""
 "{}\n"
 "Die Datei existiert nicht"
 
-#: ui/sidebar.slint:366
+#: ui/sidebar.slint:372
 #, x-machine
 msgid ""
 "{}\n"
@@ -798,7 +798,7 @@ msgstr ""
 "{}\n"
 "Die Datei existiert nicht oder ist derzeit nicht lesbar; erneuter Versuch möglich"
 
-#: ui/sidebar.slint:367
+#: ui/sidebar.slint:373
 #, x-machine
 msgid ""
 "{}\n"
@@ -807,50 +807,50 @@ msgstr ""
 "{}\n"
 "Dieses Medium kann nicht geöffnet werden"
 
-#: ui/sidebar.slint:540
+#: ui/sidebar.slint:562
 #, x-machine
 msgid "No matches"
 msgstr "Keine Treffer"
 
-#: ui/sidebar.slint:567
+#: ui/sidebar.slint:589
 #, x-machine
 msgid "Move to top (Ctrl+Home)"
 msgstr "Ganz nach oben (Ctrl+Home)"
 
-#: ui/sidebar.slint:573
+#: ui/sidebar.slint:595
 #, x-machine
 msgid "Move up (Ctrl+↑)"
 msgstr "Nach oben (Ctrl+↑)"
 
-#: ui/sidebar.slint:579
+#: ui/sidebar.slint:601
 #, x-machine
 msgid "Move down (Ctrl+↓)"
 msgstr "Nach unten (Ctrl+↓)"
 
-#: ui/sidebar.slint:585
+#: ui/sidebar.slint:607
 #, x-machine
 msgid "Move to bottom (Ctrl+End)"
 msgstr "Ganz nach unten (Ctrl+End)"
 
-#: ui/sidebar.slint:600
+#: ui/sidebar.slint:622
 #, x-machine
 msgid "Delete"
 msgstr "Löschen"
 
-#: ui/sidebar.slint:608
+#: ui/sidebar.slint:630
 #, x-machine
 msgid "Sort"
 msgstr "Sortieren"
 
-#: ui/sidebar.slint:617
+#: ui/sidebar.slint:639
 msgid "Hide Thumbnails"
 msgstr "Miniaturen ausblenden"
 
-#: ui/sidebar.slint:617
+#: ui/sidebar.slint:639
 msgid "Show Thumbnails"
 msgstr "Miniaturen einblenden"
 
-#: ui/sidebar.slint:629
+#: ui/sidebar.slint:652
 #, x-machine
 msgid "Search (Ctrl+S)"
 msgstr "Suchen (Ctrl+S)"

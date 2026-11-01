@@ -11,6 +11,7 @@
 use crate::host::*;
 use crate::ui::ui_image;
 use crate::ui::ui_markdown;
+use crate::ui::ui_values;
 use serde_json::Value;
 use slint_interpreter::Value as SValue;
 use std::io::Read;
@@ -59,7 +60,8 @@ pub fn parts(value: &Value) -> std::result::Result<(&str, u32), RpcError> {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key {
     owner: u64,
-    path: PathBuf,
+    /// Shared: rows of a large list hold the same key many times.
+    path: std::sync::Arc<Path>,
     size: u64,
     modified: u128,
     /// `maxSide`, 0 for the full size.
@@ -76,6 +78,26 @@ struct Entry {
 /// windows), `$mount` (the panel, docked or floating).
 type Slot = (u64, String, String);
 
+/// What the last write of a property left for row patches (`ui_patch`):
+/// the write's `seq` (0: the initial properties), and for an array without
+/// Markdown documents its rows, in order.
+#[derive(Default)]
+pub struct Written {
+    pub seq: u64,
+    /// A whole write arriving in parts (`more`, player 0.6.0), held until
+    /// its last part (`ui_patch::Parts`).
+    pub parts: Option<crate::ui::ui_patch::Parts>,
+    pub rows: Option<Vec<Row>>,
+}
+
+/// One row of an array a view shows: the images it shows and what it counts
+/// toward the value totals (a patch checks the patched array's totals).
+#[derive(Clone, Debug, Default)]
+pub struct Row {
+    pub keys: Vec<Key>,
+    pub cost: ui_values::Cost,
+}
+
 #[derive(Default)]
 pub struct Images {
     entries: BTreeMap<Key, Entry>,
@@ -83,6 +105,8 @@ pub struct Images {
     clock: u64,
     /// The Markdown documents properties show, released with them.
     pub markdown: ui_markdown::Cache,
+    /// Per property, released with its view like the images it shows.
+    written: BTreeMap<Slot, Written>,
 }
 
 fn fail(code: &str, message: impl Into<String>) -> RpcError {
@@ -189,7 +213,7 @@ impl Images {
         let (path, size, modified) = locate(path, roots)?;
         let key = Key {
             owner,
-            path,
+            path: path.into(),
             size,
             modified,
             side,
@@ -226,25 +250,132 @@ impl Images {
             None => self.shown.remove(&slot),
         };
     }
-    /// A Markdown property shows several images: `<property>#<n>` slots.
+    /// A Markdown property, or an array's rows, show several images:
+    /// `<property>#<n>` slots, one per distinct image (what is shown
+    /// matters, not how often: 20,000 rows with the same placeholder are
+    /// one slot).
     pub fn assign_many(&mut self, owner: u64, view: &str, property: &str, keys: Vec<Key>) {
         let prefix = format!("{property}#");
         self.shown
             .retain(|(o, v, p), _| !(*o == owner && v == view && p.starts_with(&prefix)));
         self.assign(owner, view, property, None);
-        for (index, key) in keys.into_iter().enumerate() {
+        let distinct: std::collections::BTreeSet<Key> = keys.into_iter().collect();
+        for (index, key) in distinct.into_iter().enumerate() {
             self.assign(owner, view, &format!("{prefix}{index}"), Some(key));
         }
+    }
+    /// Load the image references of plain rows (`ui_rows`), each once: the
+    /// pictures by reference, and each reference's file in `refs` order
+    /// (`None`: it failed its checks and shows as an empty image, as in a
+    /// whole conversion).
+    pub fn load_refs(
+        &mut self,
+        owner: u64,
+        roots: &[PathBuf],
+        refs: &[std::sync::Arc<crate::ui::ui_rows::ImageRef>],
+    ) -> (crate::ui::ui_rows::Images, Vec<Option<Key>>) {
+        let mut pictures = std::collections::HashMap::with_capacity(refs.len());
+        let mut keys = Vec::with_capacity(refs.len());
+        for image in refs {
+            match self.load_within(owner, roots, &image.path, image.side) {
+                Ok((key, picture)) => {
+                    pictures.insert(image.clone(), picture);
+                    keys.push(Some(key));
+                }
+                Err(error) => {
+                    diag!("ui.image {}: not shown: {}", image.path, error.message);
+                    pictures.insert(image.clone(), slint::Image::default());
+                    keys.push(None);
+                }
+            }
+        }
+        (std::rc::Rc::new(pictures), keys)
     }
     pub fn release_view(&mut self, owner: u64, view: &str) {
         self.shown
             .retain(|(o, v, _), _| !(*o == owner && v == view));
         self.markdown.release(owner, Some(view), None);
+        self.reset_writes(owner, view);
     }
     pub fn release_owner(&mut self, owner: u64) {
         self.shown.retain(|(o, ..), _| *o != owner);
         self.markdown.release(owner, None, None);
         self.entries.retain(|key, _| key.owner != owner);
+        self.written.retain(|(o, ..), _| *o != owner);
+    }
+    /// The view shows its initial properties again (`ui.mount`, `ui.open`,
+    /// `settings.register`): every property's write record is back at 0.
+    pub fn reset_writes(&mut self, owner: u64, view: &str) {
+        self.written
+            .retain(|(o, v, _), _| !(*o == owner && v == view));
+    }
+    /// The `seq` of the property's last write (0: none since the initial
+    /// properties).
+    pub fn seq(&self, owner: u64, view: &str, property: &str) -> u64 {
+        self.written
+            .get(&(owner, view.to_owned(), property.to_owned()))
+            .map_or(0, |written| written.seq)
+    }
+    /// The parts of a whole write held for the property (`ui_patch::Parts`), taken.
+    pub fn take_parts(
+        &mut self,
+        owner: u64,
+        view: &str,
+        property: &str,
+    ) -> Option<crate::ui::ui_patch::Parts> {
+        self.written
+            .get_mut(&(owner, view.to_owned(), property.to_owned()))
+            .and_then(|written| written.parts.take())
+    }
+    /// Hold the parts of a whole write until its last part.
+    pub fn put_parts(
+        &mut self,
+        owner: u64,
+        view: &str,
+        property: &str,
+        parts: crate::ui::ui_patch::Parts,
+    ) {
+        self.written
+            .entry((owner, view.to_owned(), property.to_owned()))
+            .or_default()
+            .parts = Some(parts);
+    }
+    pub fn set_seq(&mut self, owner: u64, view: &str, property: &str, seq: u64) {
+        self.written
+            .entry((owner, view.to_owned(), property.to_owned()))
+            .or_default()
+            .seq = seq;
+    }
+    /// The rows of the property's array as the view shows them (`None`: not
+    /// an array converted by `prop_value`, or one holding documents).
+    pub fn written_rows(&self, owner: u64, view: &str, property: &str) -> Option<&Vec<Row>> {
+        self.written
+            .get(&(owner, view.to_owned(), property.to_owned()))?
+            .rows
+            .as_ref()
+    }
+    fn set_row_keys(&mut self, owner: u64, view: &str, property: &str, rows: Option<Vec<Row>>) {
+        let slot = (owner, view.to_owned(), property.to_owned());
+        match rows {
+            Some(rows) => self.written.entry(slot).or_default().rows = Some(rows),
+            None => {
+                if let Some(written) = self.written.get_mut(&slot) {
+                    written.rows = None;
+                }
+            }
+        }
+    }
+    /// A row patch applied: the rows the property shows now. The property's
+    /// shown images are replaced only when some row showed or shows one.
+    pub fn patched_rows(&mut self, owner: u64, view: &str, property: &str, rows: Vec<Row>) {
+        let before = self
+            .written_rows(owner, view, property)
+            .is_some_and(|rows| rows.iter().any(|row| !row.keys.is_empty()));
+        if before || rows.iter().any(|row| !row.keys.is_empty()) {
+            let keys = rows.iter().flat_map(|row| &row.keys).cloned().collect();
+            self.assign_many(owner, view, property, keys);
+        }
+        self.set_row_keys(owner, view, property, Some(rows));
     }
     /// Decoded pixels `view` shows, each image once, leaving out what
     /// `property` shows (the value being replaced).
@@ -292,6 +423,31 @@ impl Images {
     }
 }
 
+/// A Markdown document (wire form) anywhere in `value`.
+pub fn has_markdown(value: &Value) -> bool {
+    if ui_markdown::reference(value).is_some() {
+        return true;
+    }
+    match value {
+        Value::Array(items) => items.iter().any(has_markdown),
+        Value::Object(fields) => reference(value).is_none() && fields.values().any(has_markdown),
+        _ => false,
+    }
+}
+
+/// Nested image references (wire form) in `value`, as the image hook of
+/// `prop_value` meets them.
+pub fn image_count(value: &Value) -> usize {
+    if reference(value).is_some() {
+        return 1;
+    }
+    match value {
+        Value::Array(items) => items.iter().map(image_count).sum(),
+        Value::Object(fields) => fields.values().map(image_count).sum(),
+        _ => 0,
+    }
+}
+
 impl Host {
     /// Where a plugin's images may live: its package and data directories;
     /// a parked plugin's too (lazy activation: its bar button and settings
@@ -317,7 +473,19 @@ impl Host {
         property: &str,
         value: &Value,
     ) -> std::result::Result<SValue, RpcError> {
-        self.convert_prop(owner, view, property, value)
+        self.prop_value_with(owner, view, property, value, None)
+    }
+    /// `prop_value` of a whole write whose rows the plugin's reader thread
+    /// converted already (`ui_values::prepare_request`).
+    pub(crate) fn prop_value_with(
+        &mut self,
+        owner: u64,
+        view: &str,
+        property: &str,
+        value: &Value,
+        prepared: Option<&ui_values::PlainRows>,
+    ) -> std::result::Result<SValue, RpcError> {
+        self.convert_prop(owner, view, property, value, prepared)
             .map_err(|error| error.for_property(property))
     }
     fn convert_prop(
@@ -326,9 +494,71 @@ impl Host {
         view: &str,
         property: &str,
         value: &Value,
+        prepared: Option<&ui_values::PlainRows>,
     ) -> std::result::Result<SValue, RpcError> {
         let roots = self.image_roots(owner);
+        // An array without documents: plain rows (`ui_rows`), images
+        // loaded once per reference.
+        if let Some(rows) = value.as_array()
+            && let Some(plain) = match prepared {
+                Some(prepared) if prepared.rows.len() == rows.len() => {
+                    Some(std::borrow::Cow::Borrowed(prepared))
+                }
+                _ if rows.iter().any(has_markdown) => None,
+                _ => match ui_values::plain_rows(&rows.iter().collect::<Vec<_>>()) {
+                    Ok(plain) => Some(std::borrow::Cow::Owned(plain)),
+                    Err(ui_values::NotPlain::Markdown) => None,
+                    Err(ui_values::NotPlain::Image(error)) => return Err(error),
+                    Err(ui_values::NotPlain::Refused(error)) => return Err(error.into()),
+                },
+            }
+        {
+            let base = self.images.view_bytes(owner, view, property);
+            let (pictures, keys) = self.images.load_refs(owner, &roots, &plain.images);
+            let distinct: std::collections::BTreeSet<&Key> = keys.iter().flatten().collect();
+            let shown: usize = distinct
+                .iter()
+                .map(|key| self.images.entry_bytes(key))
+                .sum();
+            if base + shown > VIEW_BUDGET_BYTES {
+                return Err(RpcError::new(
+                    "limit",
+                    "the images of one view exceed 32 MB of decoded pixels \
+                     (use maxSide, or send fewer rows)",
+                ));
+            }
+            let distinct = distinct.into_iter().cloned().collect();
+            let written = plain
+                .row_images
+                .iter()
+                .zip(&plain.costs)
+                .map(|(images, cost)| Row {
+                    keys: images
+                        .iter()
+                        .filter_map(|index| keys.get(*index as usize).cloned().flatten())
+                        .collect(),
+                    cost: *cost,
+                })
+                .collect();
+            self.images
+                .markdown
+                .release(owner, Some(view), Some(property));
+            self.images.assign_many(owner, view, property, distinct);
+            self.images
+                .set_row_keys(owner, view, property, Some(written));
+            return Ok(SValue::Model(slint::ModelRc::new(
+                crate::ui::ui_rows::Rows::from_plain(plain.rows.clone(), pictures),
+            )));
+        }
         if ui_image::reference(value).is_none() {
+            // An array without documents: the images of each row, for row
+            // patches (`ui_patch`). The image hook runs once per nested
+            // image, in row order; a file that fails its checks is `None`.
+            let per_row = value
+                .as_array()
+                .filter(|rows| !rows.iter().any(has_markdown))
+                .map(|rows| rows.iter().map(image_count).collect::<Vec<_>>());
+            let mut order: Vec<Option<Key>> = Vec::new();
             let mut cache = std::mem::take(&mut self.images.markdown);
             let mut total = self.images.view_bytes(owner, view, property);
             let mut counted = std::collections::BTreeSet::new();
@@ -363,10 +593,12 @@ impl Host {
                                      (use maxSide, or send fewer rows)",
                                 ));
                             }
+                            order.push(Some(key.clone()));
                             Ok((Some(key), image))
                         }
                         Err(error) => {
                             diag!("ui.image {path}: not shown: {}", error.message);
+                            order.push(None);
                             Ok((None, slint::Image::default()))
                         }
                     }
@@ -375,10 +607,23 @@ impl Host {
             self.images.markdown = cache;
             let (converted, shown) = converted?;
             self.images.assign_many(owner, view, property, shown);
+            let rows = per_row.map(|counts| {
+                let mut order = order.into_iter();
+                counts
+                    .into_iter()
+                    .zip(value.as_array().into_iter().flatten())
+                    .map(|(count, row)| Row {
+                        keys: order.by_ref().take(count).flatten().collect(),
+                        cost: ui_values::cost(row),
+                    })
+                    .collect()
+            });
+            self.images.set_row_keys(owner, view, property, rows);
             return Ok(converted);
         }
         let (path, side) = ui_image::parts(value)?;
         let (key, image) = self.images.load_within(owner, &roots, path, side)?;
+        self.images.set_row_keys(owner, view, property, None);
         self.images.assign_many(owner, view, property, Vec::new());
         self.images
             .markdown
@@ -489,7 +734,7 @@ mod tests {
             1,
             &Key {
                 owner: 1,
-                path: PathBuf::new(),
+                path: Path::new("").into(),
                 size: 0,
                 modified: 0,
                 side: 0,

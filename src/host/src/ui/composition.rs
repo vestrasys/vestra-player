@@ -959,4 +959,78 @@ mod tests {
         assert!(floating.global_properties("Owner30Bridge").is_some());
         assert!(floating.properties().any(|(name, _)| name == "panel-title"));
     }
+
+    /// Render-modes record §11.7: a new video picture must not touch the
+    /// window's layout. When the picture's size fed it, every frame redid the
+    /// layout and everything that depends on it (with a UI Automation client,
+    /// Slint's accessibility nodes: about 30 ms a frame with VestraTube's
+    /// 200 rows on the Radeon 780M laptop).
+    #[test]
+    fn a_new_video_picture_leaves_the_window_layout_alone() {
+        use slint::ComponentHandle as _;
+        struct Headless;
+        impl slint::platform::Platform for Headless {
+            fn create_window_adapter(
+                &self,
+            ) -> std::result::Result<
+                std::rc::Rc<dyn slint::platform::WindowAdapter>,
+                slint::PlatformError,
+            > {
+                Ok(
+                    slint::platform::software_renderer::MinimalSoftwareWindow::new(
+                        Default::default(),
+                    ),
+                )
+            }
+        }
+        thread_local! {
+            static PLATFORM: () = slint::platform::set_platform(Box::new(Headless)).unwrap();
+        }
+        PLATFORM.with(|_| {});
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let specs = [CompileSpec {
+            owner: 20,
+            file: base.join("sidebar.slint"),
+            component: "RowsSidebar".into(),
+            global: Some("Bridge".into()),
+            slot: Slot::Sidebar,
+        }];
+        let instance = compile_definition(&specs).unwrap().create().unwrap();
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(1000., 600.));
+        instance
+            .set_property("no-video", Value::Bool(false))
+            .unwrap();
+        let picture = |width, height| {
+            Value::Image(slint::Image::from_rgb8(slint::SharedPixelBuffer::new(
+                width, height,
+            )))
+        };
+        instance
+            .set_property("video-frame", picture(64, 36))
+            .unwrap();
+        // What depends on the layout: the video area's size and place.
+        let tracker: std::pin::Pin<Box<slint::private_unstable_api::re_exports::PropertyTracker>> =
+            Box::pin(Default::default());
+        let probe = || {
+            ["video-width", "video-height", "video-x", "sidebar-actual"]
+                .map(|name| instance.get_property(name).unwrap())
+        };
+        let before = tracker.as_ref().evaluate(probe);
+        assert!(!tracker.is_dirty());
+        instance
+            .set_property("video-frame", picture(1920, 1080))
+            .unwrap();
+        assert!(
+            !tracker.is_dirty(),
+            "a new video picture marked the window layout dirty"
+        );
+        assert_eq!(tracker.as_ref().evaluate(probe), before);
+        // The probe does see the layout: a resize marks it.
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(1200., 600.));
+        assert!(tracker.is_dirty());
+    }
 }

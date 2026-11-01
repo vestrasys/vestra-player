@@ -1,4 +1,4 @@
-import type { Json } from "../wire.ts";
+import type { Json, PropertyWrite } from "../wire.ts";
 import type { ScopeImpl } from "./scope.ts";
 import type { Dialogs, Disposable, ImageOptions, ImageRef, Panels, PropValue, Props, Ui, View, Windows } from "./types.ts";
 /** Slint names are kebab-case; plugin code may use camelCase. */
@@ -29,16 +29,26 @@ export declare abstract class ViewBase implements View {
     protected closed: boolean;
     constructor(scope: ScopeImpl);
     protected abstract live(): boolean;
-    protected abstract write(property: string, value: Json): Promise<void>;
+    protected abstract write(property: string, write: PropertyWrite): Promise<void>;
     /**
      * Initial properties in wire form. A released image is left out (the
-     * property keeps its default) and reported, like a failed write.
+     * property keeps its default) and reported, like a failed write. With a
+     * player that takes row patches, the arrays of one request carry at most
+     * {@link CHUNK_BYTES} of rows together (SDK 1.5.46): an array over that
+     * goes with its first rows, and the first flush sends the rest as patches.
+     * An array over the value limits is refused here, as the player would
+     * refuse it whole: left out and reported (a panel, a settings page), or,
+     * with `refuse` (a window's `show`), thrown.
      */
-    protected wired(values: Record<string, PropValue>): Record<string, Json>;
+    protected wired(values: Record<string, PropValue>, refuse?: boolean): Record<string, Json>;
     on<A extends Json[]>(callback: string, handler: (...args: A) => unknown): Disposable;
     set(props: Props): void;
     bind(props: () => Props): Disposable;
-    /** Current desired properties (bound values win over earlier `set`). */
+    /**
+     * Current desired properties (bound values win over earlier `set`). A
+     * precise pass (`Runtime.part`) skips a bind function that read none of
+     * the changed state: its last values stay.
+     */
     protected snapshot(): Record<string, PropValue>;
     protected evaluate(): void;
     /** The host already shows these values (e.g. sent as initial properties). */

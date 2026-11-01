@@ -107,7 +107,11 @@ export component HostWindow inherits Window {
                     changed has-focus => { if !self.has-focus { root.window-input("canvasFocusLost"); } }
                     Rectangle {
                         background: Theme.bg-video;
-                        Image { visible: !root.no-video && !root.picture-in-picture; width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain; }
+                        // Placed (x, y): Slint takes the size constraints of a child without
+                        // them into the parent's, so the picture's size fed the window's layout
+                        // and every new picture redid the layout and everything that depends
+                        // on it, the accessibility nodes too (render-modes record §11.7).
+                        Image { x: 0px; y: 0px; visible: !root.no-video && !root.picture-in-picture; width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain; }
                         if root.picture-in-picture: Text {
                             width: parent.width;
                             height: parent.height;
@@ -175,12 +179,9 @@ export component HostWindow inherits Window {
                                     if event.button == PointerEventButton.middle {
                                         root.mouse-input("MiddleClick", event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
                                     }
-                                    if event.button == PointerEventButton.back {
-                                        root.mouse-input("X1", event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
-                                    }
-                                    if event.button == PointerEventButton.forward {
-                                        root.mouse-input("X2", event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
-                                    }
+                                    // The side buttons (X1/X2) are window-level: the
+                                    // window's winit hook fires them wherever the
+                                    // pointer is (host 0.6.0, `observe_side_button`).
                                 }
                                 // G-15: the menu opens where the right button is
                                 // released, if it was also pressed on the video.

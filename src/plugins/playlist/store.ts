@@ -78,9 +78,10 @@ const isCache = (value: unknown): value is unknown[] => Array.isArray(value);
 /** C17: a change is written within a second (the plugin looks for changes, then the stores debounce). */
 export const SAVE_DELAY_MS = 1000;
 /**
- * How often the plugin compares the list with what was saved: the snapshot covers
- * every row, so taking it on every update (each scroll step, each player state) cost
- * milliseconds per update with thousands of rows.
+ * After a change to save (the queue's `revision`, the settings or a cache moved), the
+ * plugin waits this long before it takes the snapshot, so a burst of changes is one
+ * snapshot. The snapshot covers every row; updates that change nothing saved (a scroll
+ * step, a position tick) take none (0.2.0).
  */
 export const PERSIST_CHECK_MS = 200;
 
@@ -146,6 +147,7 @@ export class Store {
         const id = at(index);
         if (id) queue.selection.add(id);
       }
+    queue.touch();
   }
 
   /** What is saved for `settings` and (when remembered) the queue. */

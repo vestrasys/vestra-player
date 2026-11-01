@@ -252,6 +252,11 @@ msgstr "Activar/desactivar pantalla completa"
 msgid "Leave Fullscreen"
 msgstr "Salir de pantalla completa"
 
+#: src/host/actions.rs
+#, x-machine
+msgid "Enter Fullscreen"
+msgstr "Entrar en pantalla completa"
+
 #: src/main.rs
 #, x-machine
 msgid "Toggle Sidebar"

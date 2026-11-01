@@ -1,0 +1,435 @@
+/**
+ * Row patches of array properties (player 0.6.0, feature `ui.patch`): the
+ * diff between the rows last sent and the rows bound now, as `set`,
+ * `insert`, `remove` and `move` operations by index. Internal; plugins see
+ * none of it (the player's doc/architecture/large-lists.md §2).
+ */
+import { UI_VALUE_LIMITS } from "./values.js";
+/** The player feature that takes row patches. */
+export const PATCH_FEATURE = "ui.patch";
+/** The most operations one patch carries (the player's `MAX_PATCH_OPS`). */
+export const PATCH_OPS = 1024;
+/**
+ * The most operations one diff plans (SDK 1.5.46): its patch is sent as
+ * several of at most {@link PATCH_OPS} each (`chunkOps`); more is sent whole
+ * (in parts, which the player writes at once).
+ */
+export const DIFF_OPS = 16 * PATCH_OPS;
+/**
+ * Fields that identify a row, in the order they are tried. A field is used
+ * when every row has it, as a string or a number, and no two rows share it.
+ */
+export const KEY_FIELDS = ["key", "id", "rowId", "row-id"];
+const plain = (value) => {
+    if (value === null || typeof value !== "object" || Array.isArray(value))
+        return false;
+    const proto = Object.getPrototypeOf(value);
+    return proto === Object.prototype || proto === null;
+};
+/**
+ * The field that identifies `rows`, and each row's key; `null` when no
+ * field of {@link KEY_FIELDS} does (rows are then matched by index).
+ */
+export function keyOf(rows) {
+    const first = rows[0];
+    if (!plain(first))
+        return null;
+    for (const field of KEY_FIELDS) {
+        if (!(field in first))
+            continue;
+        const keys = [];
+        const seen = new Set();
+        let ok = true;
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const key = plain(row) ? row[field] : undefined;
+            if ((typeof key !== "string" && typeof key !== "number") ||
+                seen.has(key)) {
+                ok = false;
+                break;
+            }
+            seen.add(key);
+            keys.push(key);
+        }
+        if (ok)
+            return { field, keys };
+    }
+    return null;
+}
+const bytes = (text) => Buffer.byteLength(text, "utf8");
+/**
+ * `value` as `JSON.stringify` writes it: an object's `toJSON` result
+ * (once), `undefined` for what it leaves out (a function, a symbol).
+ */
+function jsonOf(value) {
+    if (value !== null &&
+        typeof value === "object" &&
+        !("__vestraImage" in value) &&
+        !("__vestraMarkdown" in value) &&
+        typeof value.toJSON === "function")
+        return value.toJSON();
+    return typeof value === "function" || typeof value === "symbol"
+        ? undefined
+        : value;
+}
+/**
+ * What `row` counts toward the value limits as a row of an array (depth
+ * 1), like `valueLimitProblem` on the row as sent: every value one, an
+ * image one, a document one and its text, strings and field names their
+ * UTF-8 bytes. Any other object with `toJSON` counts as what it returns.
+ */
+export function countRow(row) {
+    const count = { values: 0, text: 0, over: false };
+    const L = UI_VALUE_LIMITS;
+    const text = (s) => {
+        const n = bytes(s);
+        if (n > L.stringBytes)
+            count.over = true;
+        count.text += n;
+    };
+    const walk = (value, depth) => {
+        if (count.over)
+            return;
+        if (depth > L.depth) {
+            count.over = true;
+            return;
+        }
+        count.values += 1;
+        if (value !== null && typeof value === "object") {
+            if ("__vestraImage" in value)
+                return;
+            if ("__vestraMarkdown" in value) {
+                count.text += bytes(value.text);
+                return;
+            }
+        }
+        if (typeof value === "string")
+            return text(value);
+        if (Array.isArray(value)) {
+            if (value.length > L.arrayRows)
+                count.over = true;
+            // Array.from: a hole is `null`, as `JSON.stringify` writes it.
+            for (const item of Array.from(value))
+                walk(jsonOf(item) ?? null, depth + 1);
+            return;
+        }
+        if (value !== null && typeof value === "object")
+            for (const [name, raw] of Object.entries(value)) {
+                const item = jsonOf(raw);
+                if (item === undefined)
+                    continue;
+                text(name);
+                walk(item, depth + 1);
+            }
+    };
+    walk(jsonOf(row) ?? null, 1);
+    return count;
+}
+/** The new array is within the value limits (counted per row). */
+export function withinLimits(counts) {
+    const L = UI_VALUE_LIMITS;
+    if (counts.length > L.arrayRows)
+        return false;
+    let values = 1;
+    let text = 0;
+    for (const count of counts) {
+        if (count.over)
+            return false;
+        values += count.values;
+        text += count.text;
+    }
+    return values <= L.values && text <= L.textBytes;
+}
+/** The longest increasing subsequence of `values`, as a set of indices. */
+function increasing(values) {
+    const tails = [];
+    const before = new Int32Array(values.length).fill(-1);
+    for (let i = 0; i < values.length; i++) {
+        let lo = 0;
+        let hi = tails.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (values[tails[mid]] < values[i])
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+        if (lo > 0)
+            before[i] = tails[lo - 1];
+        tails[lo] = i;
+    }
+    const out = new Set();
+    for (let i = tails.at(-1) ?? -1; i >= 0; i = before[i])
+        out.add(i);
+    return out;
+}
+/**
+ * The operations that turn the old rows into the new ones (`null`: more
+ * than {@link DIFF_OPS} would be needed, or more than {@link PATCH_OPS}
+ * moves), and for each new row the old row
+ * whose JSON it keeps (`-1`: a new or changed row). Keyed when both arrays
+ * have keys from the same field; otherwise by index.
+ */
+export function diff(old, next) {
+    const from = new Int32Array(next.enc.length).fill(-1);
+    const ops = old.keys && next.keys
+        ? keyed(old.enc, old.keys, next.enc, next.keys, from)
+        : byIndex(old.enc, next.enc, from);
+    return ops && ops.length <= DIFF_OPS ? { ops, from } : null;
+}
+function byIndex(old, next, from) {
+    const min = Math.min(old.length, next.length);
+    let p = 0;
+    while (p < min && old[p] === next[p])
+        from[p] = p++;
+    let s = 0;
+    while (s < min - p && old[old.length - 1 - s] === next[next.length - 1 - s]) {
+        from[next.length - 1 - s] = old.length - 1 - s;
+        s++;
+    }
+    const ops = [];
+    const middle = Math.min(old.length, next.length) - p - s;
+    for (let i = p; i < p + middle; i++)
+        if (old[i] === next[i])
+            from[i] = i;
+        else
+            ops.push({ op: "set", at: i, row: i });
+    const at = p + middle;
+    if (next.length > old.length)
+        ops.push({
+            op: "insert",
+            at,
+            rows: Array.from({ length: next.length - old.length }, (_, k) => at + k),
+        });
+    else if (old.length > next.length)
+        ops.push({ op: "remove", at, count: old.length - next.length });
+    return ops;
+}
+function keyed(oldEnc, oldKeys, newEnc, newKeys, from) {
+    const sets = [];
+    const keep = (j, i) => {
+        if (oldEnc[i] === newEnc[j])
+            from[j] = i;
+        else
+            sets.push({ op: "set", at: j, row: j });
+    };
+    const min = Math.min(oldKeys.length, newKeys.length);
+    let p = 0;
+    while (p < min && oldKeys[p] === newKeys[p])
+        keep(p, p++);
+    let s = 0;
+    while (s < min - p &&
+        oldKeys[oldKeys.length - 1 - s] === newKeys[newKeys.length - 1 - s]) {
+        keep(newKeys.length - 1 - s, oldKeys.length - 1 - s);
+        s++;
+    }
+    const oldEnd = oldKeys.length - s;
+    const newEnd = newKeys.length - s;
+    // The new middle's keys, by position (relative to p).
+    const target = new Map();
+    for (let j = p; j < newEnd; j++)
+        target.set(newKeys[j], j - p);
+    const ops = [];
+    // Removes, from the end so that indices stay valid; runs merged.
+    const kept = [];
+    const oldAt = new Map();
+    for (let i = oldEnd - 1; i >= p; i--) {
+        if (target.has(oldKeys[i]))
+            continue;
+        const last = ops.at(-1);
+        if (last?.op === "remove" && last.at === i + 1) {
+            last.at = i;
+            last.count++;
+        }
+        else
+            ops.push({ op: "remove", at: i, count: 1 });
+        if (ops.length > DIFF_OPS)
+            return null;
+    }
+    for (let i = p; i < oldEnd; i++)
+        if (target.has(oldKeys[i])) {
+            oldAt.set(oldKeys[i], i);
+            kept.push(oldKeys[i]);
+        }
+    // Moves: every kept row outside a longest increasing run of target
+    // positions goes right after the kept row before it in the new order.
+    const positions = kept.map((key) => target.get(key));
+    const stay = increasing(positions);
+    // Moves cost a search each: at most PATCH_OPS of them.
+    if (kept.length - stay.size > PATCH_OPS)
+        return null;
+    if (kept.length - stay.size + ops.length > DIFF_OPS)
+        return null;
+    const stays = new Set();
+    for (const index of stay)
+        stays.add(kept[index]);
+    const current = kept.slice();
+    let previous;
+    for (let j = p; j < newEnd; j++) {
+        const key = newKeys[j];
+        if (!oldAt.has(key))
+            continue;
+        if (!stays.has(key)) {
+            const at = current.indexOf(key);
+            current.splice(at, 1);
+            const to = previous === undefined ? 0 : current.indexOf(previous) + 1;
+            current.splice(to, 0, key);
+            if (at !== to)
+                ops.push({ op: "move", from: p + at, count: 1, to: p + to });
+        }
+        previous = key;
+    }
+    // Inserts, from the top; runs merged.
+    for (let j = p; j < newEnd; j++) {
+        const key = newKeys[j];
+        if (oldAt.has(key)) {
+            keep(j, oldAt.get(key));
+            continue;
+        }
+        const last = ops.at(-1);
+        if (last?.op === "insert" && last.at + last.rows.length === j)
+            last.rows.push(j);
+        else
+            ops.push({ op: "insert", at: j, rows: [j] });
+        if (ops.length > DIFF_OPS)
+            return null;
+    }
+    sets.sort((a, b) => a.at - b.at);
+    for (const set of sets) {
+        ops.push(set);
+        if (ops.length > DIFF_OPS)
+            return null;
+    }
+    return ops;
+}
+/**
+ * Apply planned operations to a copy of `old` (the rows' JSON), taking new
+ * rows from `next`: the check that a diff produces exactly the new rows.
+ */
+export function replay(old, ops, next) {
+    const rows = old.slice();
+    for (const op of ops)
+        switch (op.op) {
+            case "set":
+                rows[op.at] = next[op.row];
+                break;
+            case "insert":
+                rows.splice(op.at, 0, ...op.rows.map((j) => next[j]));
+                break;
+            case "remove":
+                rows.splice(op.at, op.count);
+                break;
+            case "move":
+                rows.splice(op.to, 0, ...rows.splice(op.from, op.count));
+                break;
+        }
+    return rows;
+}
+/** Apply wire operations to an array (the TestHost's copy of a value). */
+export function applyOps(rows, ops) {
+    const out = rows.slice();
+    for (const op of ops)
+        switch (op.op) {
+            case "set":
+                out[op.at] = op.row;
+                break;
+            case "insert":
+                out.splice(op.at, 0, ...op.rows);
+                break;
+            case "remove":
+                out.splice(op.at, op.count);
+                break;
+            case "move":
+                out.splice(op.to, 0, ...out.splice(op.from, op.count));
+                break;
+        }
+    return out;
+}
+/**
+ * The bytes of rows one write carries at most (SDK 1.5.46, player 0.6.0):
+ * half the 1 MiB protocol line, which leaves room for the request around
+ * them. A larger whole write is sent as its first rows and `insert`
+ * patches of the rest; a larger patch as several patches, each applying on
+ * the one before (the player's doc/architecture/large-lists.md §4).
+ */
+export const CHUNK_BYTES = 512 * 1024;
+/** About what an operation adds to a request besides its rows. */
+const OP_BYTES = 64;
+/** UTF-8 bytes of `text` (JSON of a row), without encoding it. */
+function utf8Bytes(text) {
+    let bytes = text.length;
+    for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+        if (code >= 0x80)
+            bytes += code >= 0x800 && (code < 0xd800 || code > 0xdfff) ? 2 : 1;
+    }
+    return bytes;
+}
+/** The bytes a row adds to a write (its JSON and a separator). */
+export const rowBytes = (row) => utf8Bytes(JSON.stringify(row) ?? "null") + 1;
+/**
+ * How many of the first rows (by their sizes, `rowBytes`) fit in `budget`
+ * bytes; at least one when there are rows (a row over the budget alone is
+ * left to the player's limits).
+ */
+export function prefixWithin(sizes, budget) {
+    let used = 0;
+    for (let i = 0; i < sizes.length; i++) {
+        used += sizes[i];
+        if (used > budget)
+            return Math.max(i, 1);
+    }
+    return sizes.length;
+}
+/**
+ * `ops` as consecutive patches of at most {@link CHUNK_BYTES} of rows and
+ * {@link PATCH_OPS} operations each, in order: applying them one after the
+ * other gives what `ops` give. An `insert` of more rows than fit is split
+ * into inserts of consecutive runs.
+ */
+export function chunkOps(ops) {
+    const groups = [];
+    let group = [];
+    let bytes = 0;
+    const push = (op, size) => {
+        if (group.length &&
+            (bytes + size > CHUNK_BYTES || group.length >= PATCH_OPS)) {
+            groups.push(group);
+            group = [];
+            bytes = 0;
+        }
+        group.push(op);
+        bytes += size;
+    };
+    for (const op of ops) {
+        if (op.op !== "insert") {
+            push(op, OP_BYTES + (op.op === "set" ? rowBytes(op.row) : 0));
+            continue;
+        }
+        const sizes = op.rows.map(rowBytes);
+        let start = 0;
+        while (start < sizes.length) {
+            const room = Math.max(CHUNK_BYTES - bytes - OP_BYTES, 0);
+            let count = prefixWithin(sizes.slice(start), room);
+            // Nothing fits beside this group's rows: the run starts a new patch.
+            if (room === 0 ||
+                sizes.slice(start, start + count).reduce((a, b) => a + b, 0) > room) {
+                if (group.length) {
+                    groups.push(group);
+                    group = [];
+                    bytes = 0;
+                }
+                count = prefixWithin(sizes.slice(start), CHUNK_BYTES - OP_BYTES);
+            }
+            const rows = op.rows.slice(start, start + count);
+            const size = OP_BYTES + sizes.slice(start, start + count).reduce((a, b) => a + b, 0);
+            push({ op: "insert", at: op.at + start, rows }, size);
+            start += count;
+        }
+    }
+    if (group.length)
+        groups.push(group);
+    return groups;
+}
+/** The bytes a row already in JSON adds to a write (and a separator). */
+export const jsonBytes = (json) => utf8Bytes(json) + 1;

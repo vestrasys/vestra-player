@@ -10,8 +10,8 @@
 import { LineEdit, ListView } from "std-widgets.slint";
 import { MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
-import { Cell, Choice, MenuButton, MenuEntry, StoreIcons, Tone } from "parts.slint";
+import { Button, Choice, Tabs, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
+import { Cell, MenuButton, MenuEntry, StoreIcons, Tone } from "parts.slint";
 
 // A row's small tag before the badge (Dev, Warning).
 export struct StoreTag {
@@ -176,30 +176,6 @@ component ListRow inherits Rectangle {
     Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
 }
 
-component Tab inherits Rectangle {
-    in property <string> text;
-    in property <bool> active;
-    // Drawn in the accent colour while not current (updates waiting).
-    in property <bool> emphasis;
-    callback clicked();
-    height: 22px;
-    width: label.preferred-width + 20px;
-    accessible-role: tab;
-    accessible-label: root.text;
-    label := Text {
-        text: root.text;
-        font-size: Theme.font-tab;
-        color: root.active ? Theme.text : root.emphasis ? Theme.accent : touch.has-hover ? Theme.text-list : Theme.text-dim;
-        vertical-alignment: center;
-    }
-    Rectangle {
-        y: parent.height - 2px;
-        height: 2px;
-        background: root.active ? Theme.accent : transparent;
-    }
-    touch := TouchArea { clicked => { root.clicked(); } }
-}
-
 export component StoreWindow inherits Window {
     title: @tr("Plugin Store");
     preferred-width: 900px;
@@ -210,17 +186,19 @@ export component StoreWindow inherits Window {
 
     // Tabs and list: 0 Installed, 1 Available, 2 Updates.
     in-out property <string> search-text;
-    in property <int> category;
+    // In-out: the tab strip sets it on a click or an arrow key (then asks with set-category).
+    in-out property <int> category;
     in property <int> installed-count;
     in property <int> available-count;
     // Some repository index was read (fresh or cached); otherwise Available counts "—".
     in property <bool> available-known;
     // Plugins with an update (0: none).
     in property <int> updates;
-    // Tags; the first entry stands for all of them.
+    // Tags; the first entry ("Tags: All", translated by the plugin) stands for all of them.
     in property <[string]> tag-model;
-    in property <int> tag-index;
-    in property <int> sort-index;
+    // In-out: the drop-downs set them on a pick (then ask with set-tag / set-sort).
+    in-out property <int> tag-index;
+    in-out property <int> sort-index;
     in property <[StoreRow]> rows;
     in property <string> empty-text;
     in property <bool> link-open;
@@ -238,7 +216,8 @@ export component StoreWindow inherits Window {
     in property <image> d-icon;
     in property <[StoreAction]> actions;
     in property <[StoreBanner]> banners;
-    in property <int> tab;
+    // In-out: the detail tab strip sets it (then asks with set-tab).
+    in-out property <int> tab;
     in property <[MarkdownBlock]> doc;
     in property <string> doc-note;
     in property <[StoreVersion]> versions;
@@ -323,19 +302,21 @@ export component StoreWindow inherits Window {
         HorizontalLayout {
             spacing: 6px;
             height: 22px;
-            Tab { text: @tr("Installed ({})", root.installed-count); active: root.category == 0; clicked => { root.set-category(0); } }
-            Tab {
-                text: root.available-known ? @tr("Available ({})", root.available-count) : @tr("Available (—)");
-                active: root.category == 1;
-                clicked => { root.set-category(1); }
+            // The library Tabs (Left/Right/Home/End, tab-list role) at the row's 22px on
+            // the panel background: Updates is in the accent colour while updates wait.
+            Tabs {
+                height: 22px;
+                horizontal-stretch: 1;
+                background: transparent;
+                model: [
+                    @tr("Installed ({})", root.installed-count),
+                    root.available-known ? @tr("Available ({})", root.available-count) : @tr("Available (—)"),
+                    @tr("Updates ({})", root.updates),
+                ];
+                emphasis: [false, false, root.updates > 0];
+                current-index <=> root.category;
+                selected(index) => { root.set-category(index); }
             }
-            Tab {
-                text: @tr("Updates ({})", root.updates);
-                active: root.category == 2;
-                emphasis: root.updates > 0;
-                clicked => { root.set-category(2); }
-            }
-            Rectangle { horizontal-stretch: 1; }
             ToolTipArea {
                 width: 23px;
                 text: @tr("Refresh");
@@ -381,15 +362,17 @@ export component StoreWindow inherits Window {
                 width: root.tag-width;
                 y: 1px;
                 model: root.tag-model;
-                first-label: @tr("Tags: All");
-                current-index: root.tag-index;
+                max-visible-rows: 11;
+                popup-min-width: 120px;
+                current-index <=> root.tag-index;
                 selected(index) => { root.set-tag(index); }
             }
             Choice {
                 width: root.sort-width;
                 y: 1px;
                 model: [@tr("Sort: Name"), @tr("Sort: Updated")];
-                current-index: root.sort-index;
+                popup-min-width: 120px;
+                current-index <=> root.sort-index;
                 selected(index) => { root.set-sort(index); }
             }
         }
@@ -510,11 +493,12 @@ export component StoreWindow inherits Window {
                         VerticalLayout {
                             horizontal-stretch: 1;
                             spacing: 0px;
-                            HorizontalLayout {
-                                alignment: start;
-                                Tab { text: @tr("Description"); active: root.tab == 0; clicked => { root.set-tab(0); } }
-                                Tab { text: @tr("Changelog"); active: root.tab == 1; clicked => { root.set-tab(1); } }
-                                Tab { text: @tr("Versions"); active: root.tab == 2; clicked => { root.set-tab(2); } }
+                            Tabs {
+                                height: 22px;
+                                background: transparent;
+                                model: [@tr("Description"), @tr("Changelog"), @tr("Versions")];
+                                current-index <=> root.tab;
+                                selected(index) => { root.set-tab(index); }
                             }
                             Rectangle {
                                 vertical-stretch: 1;

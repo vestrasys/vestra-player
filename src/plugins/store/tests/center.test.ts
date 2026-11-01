@@ -316,7 +316,7 @@ test("index translations: the interface language, its base language, then Englis
     await until(host, () => rows(host).length === 3);
     assert.deepEqual(rows(host).map((r) => r.name).sort(), ["No Translation", "基础", "管道播放器"].sort());
     assert.equal((rows(host).find((r) => r.name === "管道播放器") as { punchline?: string }).punchline, "播放管道");
-    assert.deepEqual(props(host)["tag-model"], ["", "视频", "audio", "online"]);
+    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "视频", "audio", "online"]);
     const window = host.window("store");
     for (const query of ["tube", "管道", "video"]) {
       window.emit("search", query);

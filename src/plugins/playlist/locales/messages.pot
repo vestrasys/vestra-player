@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.playlist 0.1.11\n"
+"Project-Id-Version: vestra.playlist 0.1.12\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -164,7 +164,7 @@ msgstr ""
 msgid "Close the other dialog first"
 msgstr ""
 
-#: main.ts:202 main.ts:595 main.ts:618 main.ts:771 manifest.json ui/settings.slint:114 ui/sidebar.slint:290
+#: main.ts:202 main.ts:595 main.ts:618 main.ts:771 manifest.json ui/settings.slint:114 ui/sidebar.slint:292
 msgid "Playlist"
 msgstr ""
 
@@ -328,7 +328,7 @@ msgstr ""
 msgid "Select All"
 msgstr ""
 
-#: main.ts:584 ui/sidebar.slint:680
+#: main.ts:584 ui/sidebar.slint:704
 msgid "Search"
 msgstr ""
 
@@ -550,7 +550,7 @@ msgstr ""
 msgid "Example: {}"
 msgstr ""
 
-#: ui/link.slint:63 ui/sidebar.slint:592
+#: ui/link.slint:63 ui/sidebar.slint:614
 msgid "Add"
 msgstr ""
 
@@ -610,72 +610,72 @@ msgstr ""
 msgid "Filtered {}"
 msgstr ""
 
-#: ui/sidebar.slint:299
+#: ui/sidebar.slint:301
 msgid "Attach to main window"
 msgstr ""
 
-#: ui/sidebar.slint:299
+#: ui/sidebar.slint:301
 msgid "Detach as floating window"
 msgstr ""
 
-#: ui/sidebar.slint:305
+#: ui/sidebar.slint:307
 msgid "Close list"
 msgstr ""
 
-#: ui/sidebar.slint:365
+#: ui/sidebar.slint:371
 msgid ""
 "{}\n"
 "The file does not exist"
 msgstr ""
 
-#: ui/sidebar.slint:366
+#: ui/sidebar.slint:372
 msgid ""
 "{}\n"
 "The file does not exist or cannot be read now; can retry"
 msgstr ""
 
-#: ui/sidebar.slint:367
+#: ui/sidebar.slint:373
 msgid ""
 "{}\n"
 "Cannot open this media"
 msgstr ""
 
-#: ui/sidebar.slint:540
+#: ui/sidebar.slint:562
 msgid "No matches"
 msgstr ""
 
-#: ui/sidebar.slint:567
+#: ui/sidebar.slint:589
 msgid "Move to top (Ctrl+Home)"
 msgstr ""
 
-#: ui/sidebar.slint:573
+#: ui/sidebar.slint:595
 msgid "Move up (Ctrl+↑)"
 msgstr ""
 
-#: ui/sidebar.slint:579
+#: ui/sidebar.slint:601
 msgid "Move down (Ctrl+↓)"
 msgstr ""
 
-#: ui/sidebar.slint:585
+#: ui/sidebar.slint:607
 msgid "Move to bottom (Ctrl+End)"
 msgstr ""
 
-#: ui/sidebar.slint:600
+#: ui/sidebar.slint:622
 msgid "Delete"
 msgstr ""
 
-#: ui/sidebar.slint:608
+#: ui/sidebar.slint:630
 msgid "Sort"
 msgstr ""
 
-#: ui/sidebar.slint:617
+#: ui/sidebar.slint:639
 msgid "Hide Thumbnails"
 msgstr ""
 
-#: ui/sidebar.slint:617
+#: ui/sidebar.slint:639
 msgid "Show Thumbnails"
 msgstr ""
 
-#: ui/sidebar.slint:629
+#: ui/sidebar.slint:652
 msgid "Search (Ctrl+S)"
 msgstr ""

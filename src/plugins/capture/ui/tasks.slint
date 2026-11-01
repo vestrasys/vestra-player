@@ -1,5 +1,5 @@
 // Export Tasks: one two-line row per accepted export (UI-DLG-05).
-import { ScrollView } from "std-widgets.slint";
+import { ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 import { Note, Progress, Status, Words } from "parts.slint";
@@ -42,35 +42,35 @@ export component TasksWindow inherits Window {
                 horizontal-alignment: center;
                 color: Theme.text-dim;
             }
-            ScrollView {
-                VerticalLayout {
-                    for task in root.task-rows: Rectangle {
-                        height: 40px;
-                        HorizontalLayout {
-                            padding-left: 6px;
-                            padding-right: 6px;
-                            spacing: 3px;
-                            VerticalLayout {
-                                alignment: center;
-                                Note {
-                                    text: task.kind == "burst" ? @tr("Burst · {}", task.name) : task.kind == "clip" ? @tr("Clip · {}", task.name) : @tr("Snapshot · {}", task.name);
-                                    color: Theme.text;
-                                }
-                                // TRANSLATORS: {0} is the time or time range, {1} the progress (Completed).
-                                Note { text: @tr("{0} · {1}", task.range, Words.progress(task.progress)); }
+            // Slint's ListView: only the rows in view are instantiated, so a long
+            // session's task list stays cheap (the playlist and marks lists do the same).
+            ListView {
+                for task in root.task-rows: Rectangle {
+                    height: 40px;
+                    HorizontalLayout {
+                        padding-left: 6px;
+                        padding-right: 6px;
+                        spacing: 3px;
+                        VerticalLayout {
+                            alignment: center;
+                            Note {
+                                text: task.kind == "burst" ? @tr("Burst · {}", task.name) : task.kind == "clip" ? @tr("Clip · {}", task.name) : @tr("Snapshot · {}", task.name);
+                                color: Theme.text;
                             }
-                            VerticalLayout {
-                                alignment: center;
-                                HorizontalLayout {
-                                    spacing: 3px;
-                                    Button { small: true; text: @tr("Cancel"); enabled: task.cancellable; clicked => { root.cancel-task(task.id); } }
-                                    Button { small: true; text: @tr("Open"); enabled: task.openable; clicked => { root.open-output(task.id); } }
-                                    Button { small: true; text: @tr("Retry"); enabled: task.retryable; clicked => { root.retry-task(task.id); } }
-                                }
+                            // TRANSLATORS: {0} is the time or time range, {1} the progress (Completed).
+                            Note { text: @tr("{0} · {1}", task.range, Words.progress(task.progress)); }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            HorizontalLayout {
+                                spacing: 3px;
+                                Button { small: true; text: @tr("Cancel"); enabled: task.cancellable; clicked => { root.cancel-task(task.id); } }
+                                Button { small: true; text: @tr("Open"); enabled: task.openable; clicked => { root.open-output(task.id); } }
+                                Button { small: true; text: @tr("Retry"); enabled: task.retryable; clicked => { root.retry-task(task.id); } }
                             }
                         }
-                        Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
                     }
+                    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
                 }
             }
         }

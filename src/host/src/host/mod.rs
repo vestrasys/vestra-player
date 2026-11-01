@@ -3,6 +3,7 @@
 //! menu, mount and input handling. Capabilities (`crate::capabilities`) and
 //! a few other modules add their own `impl Host` blocks.
 mod actions;
+pub(crate) use actions::migrate_fullscreen_escape;
 mod dispatch;
 mod events;
 mod handle;
@@ -59,13 +60,15 @@ pub(crate) use events::{Event, Injected, MenuAction};
 #[cfg(feature = "producer-audio")]
 pub(crate) use input::host_key;
 pub(crate) use input::{
-    debug_keys, double_click_interval, fire, inject_option_key, observe_key, release_modifiers,
-    slint_mods,
+    debug_keys, double_click_interval, fire, inject_option_key, observe_key, observe_side_button,
+    release_modifiers, slint_mods,
 };
 pub(crate) use lazy::Origin;
 pub(crate) use lifecycle::activation_outcome;
+#[cfg(test)]
+pub(crate) use menus::{MenuWrite, ShownMenu, set_menu_model};
 pub(crate) use menus::{
-    debug_menu, debug_menu_pointer, menu_levels, set_menu_model, track_pointer,
+    apply_menu_levels, debug_menu, debug_menu_pointer, menu_levels, track_pointer,
 };
 pub(crate) use mounts::refuse_initial;
 pub(crate) use restart::{LAST_SOURCE, LostDevice, restart_log, restart_player};
@@ -180,6 +183,9 @@ pub(crate) struct Host {
     /// G-15: submenu aim, and the open panels it aims at (by depth).
     pub(crate) menu_aim: menu::HoverAim,
     pub(crate) menu_panels: Vec<menu::Rect>,
+    /// What the menu's window shows (`apply_menu_levels`); a cell, as
+    /// `bind_shell` (which takes `&self`) writes it too.
+    pub(crate) menu_shown: RefCell<menus::ShownMenu>,
     pub(crate) policy: window_state::Policy,
     pub(crate) clock: Instant,
     pub(crate) window_facts: Value,
@@ -222,6 +228,10 @@ pub(crate) struct Host {
     pub(crate) file_types: Value,
     /// Mount requests of other plugins waiting for the built-ins to start: reply, method, params.
     pub(crate) held_mounts: slot_claims::Gate<(Reply, String, Value)>,
+    /// The large array of the request being answered, converted on its
+    /// plugin's reader thread (`Event::Prepared`, `take_prepared`): owner,
+    /// request id, rows.
+    pub(crate) prepared: Option<(u64, u64, Box<crate::ui::ui_values::Prepared>)>,
     /// What a running plugin was refused because another holds it: the
     /// `packages.list` `warnings` entry and its text, per owner.
     pub(crate) warnings: BTreeMap<u64, Vec<(Value, String)>>,

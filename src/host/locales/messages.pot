@@ -203,6 +203,10 @@ msgstr ""
 msgid "Leave Fullscreen"
 msgstr ""
 
+#: src/host/actions.rs
+msgid "Enter Fullscreen"
+msgstr ""
+
 #: src/main.rs
 msgid "Toggle Sidebar"
 msgstr ""

@@ -60,8 +60,13 @@ test("the settings page: add a third-party repository with a warning, refuse bad
       ["非官方：Foo 仓库（third.example）", THIRD, true],
     ],
   );
-  page.emit("toggleAuto");
+  page.emit("toggleAuto", false);
   await until(host, () => pageProps(host)["auto-check"] === false, "automatic check off");
+  // The check box's value, not a flip: a repeated event leaves it off.
+  page.emit("toggleAuto", false);
+  await host.settle(20);
+  assert.equal(store.settings.value.autoCheck, false);
+  assert.equal(pageProps(host)["auto-check"], false);
   await first.stop();
 
   // Settings survive a restart.

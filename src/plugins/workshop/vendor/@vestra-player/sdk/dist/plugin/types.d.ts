@@ -520,7 +520,7 @@ export interface Scope extends Disposable {
  * `dataDirectory`.
  *
  * @capability That of each module (see the modules).
- * @see [How a plugin runs](../../docs/concepts/plugins.md)
+ * @see [How a plugin runs](../../docs/explanation/plugins.md)
  * @since 1.0.0
  * @category Plugin
  */
@@ -540,7 +540,7 @@ export interface Plugin extends Scope {
      * {@link PluginInfo.dataDirectory}). Write files atomically (to a
      * temporary name, then rename); for JSON settings prefer
      * {@link Scope.storage}. Throws `unavailable` when the player provided
-     * none. See [How a plugin runs](../../docs/concepts/plugins.md#the-data-directory).
+     * none. See [How a plugin runs](../../docs/explanation/plugins.md#the-data-directory).
      */
     readonly dataDirectory: string;
 }
@@ -565,14 +565,16 @@ export interface CommandState {
     reason: TextValue | null;
 }
 /**
- * A value, or a function the SDK re-evaluates on every update pass (see
- * {@link Scope.update}); only changes are sent to the player.
+ * A value, or a function the SDK re-evaluates on every full update pass,
+ * and after a player state change only if it read a field of
+ * `plugin.player.state` that changed (see {@link Scope.update}); only
+ * changes are sent to the player.
  *
  * @example Mix a computed state with a fixed one
  * The Loop item carries a check mark while a loop is set and is always
- * enabled. A function is evaluated again in every update pass (after each
- * handler and player state change) and only changes are sent; a plain
- * value never changes.
+ * enabled. A function is evaluated again in every full update pass (after
+ * each handler), and after a player state change only if it read a changed
+ * field; only changes are sent, and a plain value never changes.
  * ```ts
  * plugin.commands.add({
  *   id: "loop",
@@ -915,10 +917,12 @@ export interface CommandButton {
  * give it an order in the menu's range (Video: 400–499).
  *
  * {@link Commands.add} throws `invalid` synchronously for a bad path,
- * order, group or binding. The same path registered twice, or a path that
+ * order or binding; the player refuses an empty or overlong text, a control
+ * character or whitespace at either end (`COMMAND_LIMITS`) with
+ * `invalid` (through `ready`). The same path registered twice, or a path that
  * is both an item and a submenu, fails with `conflict` (through `ready`).
  *
- * @see {@link Commands.add}, [Commands, menus and key bindings](../../docs/concepts/commands.md)
+ * @see {@link Commands.add}, [Commands, menus and key bindings](../../docs/explanation/commands.md)
  * @since 1.0.0
  * @category Commands
  */
@@ -997,9 +1001,12 @@ export interface CommandOptions {
      * `Home`, `End`, `PageUp`, `PageDown`, `ArrowLeft`/`Right`/`Up`/`Down`,
      * `Plus`, any other single symbol as typed (`">"`, not `"Shift+."`),
      * `Numpad0`–`Numpad9`, `NumpadPlus`, `NumpadMinus`, `NumpadMultiply`,
-     * `NumpadDivide`, `NumpadEnter`, `NumpadDecimal`, and the video-area mouse
+     * `NumpadDivide`, `NumpadEnter`, `NumpadDecimal`, the video-area mouse
      * inputs `Mouse:LeftClick`, `Mouse:LeftDoubleClick[:LeftHalf|:RightHalf]`,
-     * `Mouse:MiddleClick`, `Mouse:X1`, `Mouse:X2`, `Mouse:WheelUp`/`Down`/`Left`/`Right`.
+     * `Mouse:MiddleClick`, `Mouse:WheelUp`/`Down`/`Left`/`Right`, and the side
+     * buttons `Mouse:X1` (back), `Mouse:X2` (forward), from 0.6.0 on anywhere
+     * in the main window or the floating sidebar window, except while a menu
+     * is open.
      *
      * Platforms: on macOS `Ctrl+X` fires for both ⌃X and ⌘X while `Cmd+X`
      * means ⌘X only; on Windows `Cmd` is the Windows logo key, so write
@@ -1060,8 +1067,9 @@ export interface CommandOptions {
  * @remarks
  * The handle of one menu item and its keys. Its state (`enabled`, `checked`,
  * `busy`, `reason`) is bound: functions given to {@link Commands.add} or
- * {@link Command.set} are evaluated again in every update pass and only
- * changes reach the player. Its title, path, bindings and button cannot
+ * {@link Command.set} are evaluated again in every full update pass (after
+ * a player state change only if they read a changed field of
+ * `plugin.player.state`) and only changes reach the player. Its title, path, bindings and button cannot
  * change in place; dispose the command (or a child {@link Scope}) and add it
  * again. Disposing it, its scope or stopping the plugin removes the menu
  * item, its keys and its bar button.
@@ -1081,11 +1089,11 @@ export interface CommandOptions {
  *   path: ["@video", "Export…"],
  *   run: runExport,
  * });
- * // A function: re-evaluated in every update pass.
+ * // A function: re-evaluated in every full pass and when `phase` changes.
  * exportCommand.set({ enabled: () => plugin.player.state.phase === "ready" });
  * ```
  *
- * @see {@link Commands.add}, [Commands, menus and key bindings](../../docs/concepts/commands.md)
+ * @see {@link Commands.add}, [Commands, menus and key bindings](../../docs/explanation/commands.md)
  * @since 1.0.0
  * @category Commands
  */
@@ -1171,7 +1179,7 @@ export interface Command extends Disposable {
  * });
  * ```
  *
- * @see {@link Command}, {@link CommandOptions}, [Commands, menus and key bindings](../../docs/concepts/commands.md)
+ * @see {@link Command}, {@link CommandOptions}, [Commands, menus and key bindings](../../docs/explanation/commands.md)
  * @since 1.0.0
  * @category Commands
  */
@@ -1184,8 +1192,15 @@ export interface Commands {
      * lists, presets) in a child {@link Scope} and rebuild it.
      *
      * @throws `invalid` synchronously for a malformed path (including an
-     *   unknown `@` menu id), order, group or binding; `conflict` for an id this
+     *   unknown `@` menu id), order or binding; `conflict` for an id this
      *   plugin has already declared and not disposed.
+     * @throws `invalid` (`ready` rejects; during activation, activation
+     *   fails) for a text the player refuses: an id, title, path segment,
+     *   group or reason that is empty, longer than its `COMMAND_LIMITS`
+     *   bytes (a text value counted by its English rendering), has a control
+     *   character or whitespace at either end, or an id with other characters
+     *   than ASCII letters, digits, `.`, `_` and `-`. `TestHost`
+     *   refuses the same (SDK 1.5.48).
      *
      * @example Pause playback from a menu item
      * Playback ▸ Pause (and Ctrl+P) pauses and resumes, shows a check mark
@@ -1261,7 +1276,7 @@ export interface Commands {
  * }));
  * ```
  *
- * @see {@link Ui.image}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md)
+ * @see {@link Ui.image}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md)
  * @since 1.0.0
  * @category UI
  */
@@ -1381,20 +1396,23 @@ export interface MarkdownOptions {
  * thumbnails.
  *
  * Limits per value (`UI_VALUE_LIMITS` in `@vestra-player/sdk/testing`,
- * player 0.4.3; older players: 4096 values and 1024 rows): nesting depth 8,
- * 16384 values in total (every array, object, string, number, boolean and
- * null counts, the value itself included; a document or an image is one), 4096 rows
- * per array, 64 KiB per string or field name and 1 MiB of text in total,
- * field names and the text of its Markdown documents included (256 KB per
- * document). A list of rows with 8 fields is 9 values per row, so about
- * 1800 rows fit. The whole request must also fit the player's 1 MiB
- * message. A value over a limit is refused with code `limit` and the
- * property keeps what it showed (see {@link View.set}); `TestHost` refuses
- * it the same way.
+ * player 0.6.0; players 0.4.3 to 0.5: 16384 values, 4096 rows, 1 MiB of
+ * text): nesting depth 8, 1,048,576 values in total (every array, object,
+ * string, number, boolean and null counts, the value itself included; a
+ * document or an image is one), 100,000 rows per array, 64 KiB per string
+ * or field name and 32 MiB of text in total, field names and the text of
+ * its Markdown documents included (256 KB per document). A list of rows
+ * with 13 fields is 14 values per row, so 50,000 such rows fit. An array
+ * property larger than one 1 MiB request is sent in parts (SDK 1.5.46, a
+ * player that takes row patches); only the top-level array is split, so
+ * any other value, and each row, must fit in one request (a row of more
+ * than 512 KiB is refused with `limit`). A value over a limit is refused
+ * with code
+ * `limit` and the property keeps what it showed (see {@link View.set});
+ * `TestHost` refuses it the same way.
  *
- * The limits bound the work of one write, not the size of your data: for
- * a list that can grow without bound, send the rows near the view and the
- * row count, and move that window as the user scrolls.
+ * Bind a whole list and draw it with a Slint `ListView`, which builds only
+ * the rows on screen; the SDK sends what changed (row patches).
  *
  * @since 1.0.0
  * @category UI
@@ -1471,7 +1489,7 @@ export type Props = Record<string, PropValue>;
  *
  * {@includeCode ../../examples/markdown/ui/document.slint}
  *
- * @see {@link ImageRef}, {@link MarkdownRef}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md)
+ * @see {@link ImageRef}, {@link MarkdownRef}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md)
  * @since 1.0.0
  * @category UI
  */
@@ -1706,8 +1724,9 @@ export interface Ui {
  * callback.
  *
  * `bind` is the usual way: the SDK re-evaluates bound functions in every
- * update pass (after each handler it calls, after player state changes, on
- * {@link Scope.update}) and sends only what changed, at most one write in
+ * full update pass (after each handler it calls, on {@link Scope.update}),
+ * and after a player state change those that read a changed field of
+ * `plugin.player.state`, and sends only what changed, at most one write in
  * flight per view. `set` sends now, even an unchanged value.
  *
  * Writes that fail (a name the Slint file does not declare, a value of the
@@ -1736,7 +1755,7 @@ export interface Ui {
  *
  * {@includeCode ../../examples/bookmark/ui/bookmark.slint}
  *
- * @see {@link Window}, {@link Panel}, {@link SettingsPage}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md), [Keep a slider responsive while dragging](../../docs/how-to/slider.md)
+ * @see {@link Window}, {@link Panel}, {@link SettingsPage}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md), [Keep a slider responsive while dragging](../../docs/how-to/slider.md)
  * @since 1.0.0
  * @category UI
  */
@@ -1843,7 +1862,11 @@ export interface View {
      *
      * @remarks
      * The SDK calls `props` in every update pass (and right after `bind`) and
-     * sends the values that differ from the ones it sent last. Because an
+     * sends the values that differ from the ones it sent last. After a change
+     * of the player state alone it calls `props` only if it read a field of
+     * `plugin.player.state` that changed (SDK 1.5.45); a full pass follows
+     * after each handler, on {@link Scope.update} and at least once a second
+     * while the player state keeps changing. Because an
      * unchanged value is not sent again, text the user typed into an `in-out`
      * property stays until the plugin's value for it changes.
      *
@@ -1864,8 +1887,9 @@ export interface View {
      * @example Show what is playing and whether it can seek
      * The status window always shows the current file and enables its seek
      * controls only for seekable sources. The SDK calls the function right
-     * away and again in every update pass (after player state changes and
-     * after each handler) and sends only the values that changed.
+     * away, again in every full update pass (after each handler) and after
+     * each change of `source` or `can`, and sends only the values that
+     * changed.
      * ```ts
      * const status = plugin.windows.create("ui/status.slint");
      * status.bind(() => ({
@@ -1947,7 +1971,7 @@ export interface View {
  * });
  * ```
  *
- * @see {@link Windows.create}, {@link View}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md), [Remember a window's state between runs](../../docs/how-to/window-state.md)
+ * @see {@link Windows.create}, {@link View}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md), [Remember a window's state between runs](../../docs/how-to/window-state.md)
  * @since 1.0.0
  * @category UI
  */
@@ -2129,7 +2153,7 @@ export interface Window extends View, Disposable {
  *
  * {@includeCode ../../examples/bookmark/main.ts#window,command}
  *
- * @see {@link Window}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md)
+ * @see {@link Window}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md)
  * @since 1.0.0
  * @category UI
  */
@@ -2534,7 +2558,7 @@ export interface SidebarSlot extends PanelSlot {
  *
  * {@includeCode ../../examples/panel-menu/ui/panel.slint}
  *
- * @see {@link Panels.mount}, {@link PanelSlot}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md)
+ * @see {@link Panels.mount}, {@link PanelSlot}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md)
  * @since 1.0.0
  * @category UI
  */
@@ -2972,7 +2996,7 @@ export type ThemeId = "vestra" | "vestra-light";
  * });
  * ```
  *
- * @see [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md) (theme tokens)
+ * @see [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md) (theme tokens)
  * @since 1.0.0
  * @category UI
  */
@@ -3493,7 +3517,7 @@ export type SettingsCategory = "general" | "playback" | "subtitles" | "video" | 
  * }
  * ```
  *
- * @see {@link Settings.page}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md)
+ * @see {@link Settings.page}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md)
  * @since 1.0.0
  * @category UI
  */
@@ -3554,7 +3578,7 @@ export type SettingsPage = View & Disposable & {
  * page.on("resumeToggled", (on: boolean) => store.save({ ...store.value, resume: on }));
  * ```
  *
- * @see {@link SettingsPage}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md)
+ * @see {@link SettingsPage}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md)
  * @since 1.0.0
  * @category UI
  */
@@ -3746,7 +3770,7 @@ export interface BackdropSlot {
  *
  * {@includeCode ../../examples/panel-menu/ui/panel.slint}
  *
- * @see {@link Panel}, {@link PanelSlot}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md)
+ * @see {@link Panel}, {@link PanelSlot}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md)
  * @since 1.0.0
  * @category UI
  */
@@ -4469,7 +4493,7 @@ export interface ConfirmOptions {
  * }
  * ```
  *
- * @see [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md)
+ * @see [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md)
  * @since 1.0.0
  * @category UI
  */
@@ -4683,7 +4707,7 @@ export interface AudioTrack {
  * Without `events`, {@link Player.state} only updates at start and after
  * this plugin's own operations.
  *
- * @see {@link Player.state}, [Playback state, controls and sources](../../docs/concepts/playback.md)
+ * @see {@link Player.state}, [Playback state, controls and sources](../../docs/explanation/playback.md)
  * @since 1.0.0
  * @category Playback
  */
@@ -4816,7 +4840,7 @@ export interface Chapter {
  * });
  * ```
  *
- * @see [Playback state, controls and sources](../../docs/concepts/playback.md)
+ * @see [Playback state, controls and sources](../../docs/explanation/playback.md)
  * @since 1.0.0
  * @category Playback
  */
@@ -5335,7 +5359,7 @@ export interface PlaybackStats {
  * `events` to follow changes made elsewhere; `producer.av` for
  * {@link Player.openStream}.
  *
- * @see [Playback state, controls and sources](../../docs/concepts/playback.md), [Control playback](../../docs/how-to/control-playback.md)
+ * @see [Playback state, controls and sources](../../docs/explanation/playback.md), [Control playback](../../docs/how-to/control-playback.md)
  * @since 1.0.0
  * @category Playback
  */
@@ -5697,8 +5721,8 @@ export interface Player {
      * @example Drive the player's Next and Previous from a playlist
      * The player's Next and Previous items and keys play the plugin's list.
      * The player calls `next` and `previous` when the user asks; `canNext`
-     * and `canPrevious` are evaluated again after every handler the SDK runs,
-     * and while they return false the player disables its items ("No next
+     * and `canPrevious` are evaluated again after every handler the SDK runs
+     * (and after a player state change if they read a changed field), and while they return false the player disables its items ("No next
      * item").
      * ```ts
      * declare const items: string[];
@@ -6049,13 +6073,13 @@ export interface Player {
  * | --- | --- | --- |
  * | `stop` | F4 | close the source |
  * | `play-pause` | Space, a left click on the video (player 0.5.2) | pause / resume, replay after the end |
- * | `previous` / `next` | PageUp, Mouse:X1 / PageDown, Mouse:X2 | ask the sequence provider |
+ * | `previous` / `next` | PageUp, Mouse:X2 / PageDown, Mouse:X1 (from 0.6.0; up to 0.5.x X1 was previous and X2 next) | ask the sequence provider |
  * | `frame-back` / `frame-forward` | D / F | `player.step("frame", …)` |
  * | `seek-backward` / `seek-forward` | ← / → | relative seek by `setStepSeek` seconds (or `host.run`'s `seconds`), exact or to keyframes as `setStepSeek` says |
  * | `rate-normal`, `rate-down`, `rate-up` | Z, X, C | 1×, ±0.1 within 0.25–4 |
  * | `volume-up` / `volume-down` | ↑ / ↓, wheel | ±5 (`volume-up` stops at 100) |
  * | `mute` | M | toggle mute |
- * | `fullscreen` | Enter, Alt+Enter, F11 | toggle the main window's fullscreen: enter it when windowed, leave it when fullscreen, as the Toggle Fullscreen command does (SDK 1.5.21, player 0.5.2; `unavailable` when the player has no window) |
+ * | `fullscreen` | Escape (from 0.6.0; up to 0.5.x Enter, Alt+Enter, F11) | toggle the main window's fullscreen: enter it when windowed, leave it when fullscreen, as the Toggle Fullscreen command does (SDK 1.5.21, player 0.5.2; `unavailable` when the player has no window) |
  *
  * In the binding overlay their keys are `host/<action>`. `fullscreen`
  * changes no playback state: read the result from `window.state.fullscreen`
@@ -6298,7 +6322,7 @@ export interface OsdPanelOptions {
  * say("Blur on");
  * ```
  *
- * @see {@link OsdPanel}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/concepts/ui.md)
+ * @see {@link OsdPanel}, [Windows, panels, settings pages, dialogs and the OSD](../../docs/explanation/ui.md)
  * @since 1.0.0
  * @category UI
  */
@@ -6463,7 +6487,7 @@ interface Filter<T> extends Disposable {
  * never throws: a refused chain shows as `failed` in `status`.
  *
  * @capability processing.video, playback.read and events
- * @see [Video and audio processing](../../docs/concepts/processing.md)
+ * @see [Video and audio processing](../../docs/explanation/processing.md)
  * @since 1.0.0
  * @category Processing
  */
@@ -6492,7 +6516,7 @@ export type VideoFilter = Filter<VideoNode[]>;
  * result, `retry` applies it again, `dispose` withdraws it.
  *
  * @capability processing.audio, playback.read and events
- * @see [Video and audio processing](../../docs/concepts/processing.md)
+ * @see [Video and audio processing](../../docs/explanation/processing.md)
  * @since 1.0.0
  * @category Processing
  */
@@ -6551,7 +6575,7 @@ export interface ViewSettings {
  *
  * @capability processing.video, playback.read and events (like
  * {@link VideoFilter})
- * @see [Video and audio processing](../../docs/concepts/processing.md)
+ * @see [Video and audio processing](../../docs/explanation/processing.md)
  * @since 1.0.0
  * @category Processing
  */
@@ -6662,7 +6686,7 @@ export interface RenderSettings {
  *
  * @capability processing.video, playback.read and events (like
  * {@link VideoFilter})
- * @see [Video and audio processing](../../docs/concepts/processing.md)
+ * @see [Video and audio processing](../../docs/explanation/processing.md)
  * @since 1.0.0
  * @category Processing
  */
@@ -6766,7 +6790,7 @@ export interface RenderOptions extends Disposable {
  *
  * @capability processing.video
  * @player 0.5.20; older players refuse the request.
- * @see [Video and audio processing](../../docs/concepts/processing.md)
+ * @see [Video and audio processing](../../docs/explanation/processing.md)
  * @since 1.5.39
  * @category Processing
  */
@@ -6870,7 +6894,7 @@ export interface VideoShaders extends Disposable {
  * | `gpu-unsupported` | The driver does not offer upscaling on this GPU (Windows: not an RTX GPU), or the check failed. |
  * | `rendering` | The player renders in software, or GPU rendering is still starting; upscaling needs GPU rendering ({@link Rendering}). |
  * | `adapter` | GPU rendering runs on another GPU than the one that can upscale (a laptop with two GPUs; Windows: choose the high-performance GPU for Vestra in Settings ▸ System ▸ Display ▸ Graphics). |
- * | `decoding` | The video is not decoded on the GPU that renders it: copy-back or software decoding, for example while a {@link VideoFilter} needs the frames in memory. |
+ * | `decoding` | The video is not decoded on the GPU that renders it: copy-back or software decoding, for example while a {@link VideoFilter} needs the frames in memory. {@link UpscalingReason.cause} says which, and {@link UpscalingReason.plugins} whose filters (newer players; see there). |
  * | `unchecked` | The player has not checked the GPU yet. Only in the answer to `set(false)`, which never starts the check; `state()` and `set(true)` always check first. |
  *
  * `decoding` and `rendering` while GPU rendering is still starting can pass
@@ -6925,6 +6949,93 @@ export interface UpscalingReason {
      * and what to change; never branch on it.
      */
     readonly message: string;
+    /**
+     * With code `decoding` only: why the video is not decoded on the GPU
+     * that renders it ({@link UpscalingDecodingCause}). Absent with every
+     * other code, and from players before 0.5.25.
+     *
+     * @player 0.5.25; older players send `decoding` without a cause.
+     * @since 1.5.43
+     */
+    readonly cause?: UpscalingDecodingCause;
+    /**
+     * With cause `copy-back` only: the plugins whose video filters need the
+     * frames in memory, which is why the player switched to copy-back
+     * decoding, in the order the plugins started (each plugin once). Name
+     * them to the user, who can turn the filters off there. Empty when
+     * the copy-back decoding is not one the player chose for a filter (the
+     * user's own `hwdec` setting). Absent with any other cause, and from
+     * players before 0.5.25.
+     *
+     * @player 0.5.25
+     * @since 1.5.43
+     */
+    readonly plugins?: readonly UpscalingPlugin[];
+}
+/**
+ * Why the video is not decoded on the GPU that renders it: the
+ * {@link UpscalingReason.cause} of a `decoding` reason (player 0.5.25). A
+ * newer player may add causes: show {@link UpscalingReason.message} for the
+ * ones you do not handle.
+ *
+ * | Cause | Meaning |
+ * | --- | --- |
+ * | `copy-back` | Decoded on the GPU and copied back to memory, because a plugin's video filter needs the frames there ({@link UpscalingReason.plugins} names it), or because of the user's `hwdec` setting. |
+ * | `hwdec-off` | Hardware decoding is turned off (mpv's `hwdec` is `no`). |
+ * | `software` | This video is decoded in software: a cover picture, a format the GPU does not decode, or a hardware decoder that failed. It passes with the next video. |
+ * | `other-hwdec` | This video is decoded with another hardware decoder than the one the upscaler needs. |
+ *
+ * @example Name the plugins whose filters block upscaling
+ * A plugin's upscaling window explains a `decoding` reason by its cause,
+ * and for `copy-back` names the plugins whose filters stand in the way, so
+ * the user can turn them off there (a plugin cannot run another plugin's
+ * commands).
+ * ```ts
+ * const { reason } = await plugin.video.upscaling.state();
+ * if (reason?.code === "decoding" && reason.cause === "copy-back") {
+ *   const names = (reason.plugins ?? []).map((p) => p.name).join(", ");
+ *   // Ask the user to reset those filters; the manifest names are not translated.
+ *   console.log(names ? `Turn off the video filters of ${names}` : reason.message);
+ * } else if (reason) console.log(reason.message);
+ * ```
+ *
+ * @player 0.5.25
+ * @since 1.5.43
+ * @category Processing
+ */
+export type UpscalingDecodingCause = "copy-back" | "hwdec-off" | "software" | "other-hwdec" | (string & {});
+/**
+ * A plugin named in an {@link UpscalingReason}: its manifest id and its
+ * name for people, as its manifest gives it (not translated).
+ *
+ * @player 0.5.25
+ * @since 1.5.43
+ * @category Processing
+ */
+export interface UpscalingPlugin {
+    /** The plugin's manifest id, for example `vestra.video`. */
+    readonly id: string;
+    /** The manifest's `name` as is (its id without one), for people. */
+    readonly name: string;
+}
+/**
+ * The video's size as the upscaler gets it ({@link UpscalingState.video}):
+ * the decoder's frame size, width and height swapped for the file's
+ * quarter-turn rotation metadata.
+ *
+ * @player 0.5.25
+ * @since 1.5.43
+ * @category Processing
+ */
+export interface UpscalingVideoSize {
+    /** The frames' stored width in pixels. */
+    readonly width: number;
+    /** The frames' stored height in pixels. */
+    readonly height: number;
+    /** The width the video is meant to be shown at (non-square pixels). */
+    readonly displayWidth: number;
+    /** The height the video is meant to be shown at. */
+    readonly displayHeight: number;
 }
 /**
  * What {@link VideoUpscaling.state} and {@link VideoUpscaling.set} report:
@@ -6980,6 +7091,59 @@ export interface UpscalingState {
      * nothing is requested.
      */
     readonly factor: number | null;
+    /**
+     * The video's size as the upscaler gets it; `null` while no video
+     * decodes. With {@link UpscalingState.area} it explains the factor.
+     * Absent from players before 0.5.25.
+     *
+     * @player 0.5.25
+     * @since 1.5.43
+     */
+    readonly video?: UpscalingVideoSize | null;
+    /**
+     * The area the video is shown in, in pixels (the upscaler scales the
+     * video to fit it); `null` while the player shows no video area. Absent
+     * from players before 0.5.25.
+     *
+     * @player 0.5.25
+     * @since 1.5.43
+     */
+    readonly area?: {
+        /** Width in physical pixels. */
+        readonly width: number;
+        /** Height in physical pixels. */
+        readonly height: number;
+    } | null;
+    /**
+     * The name of the GPU that renders, for example `NVIDIA GeForce RTX 4070
+     * Laptop GPU`; `null` in software rendering and where the player does not
+     * know it (macOS, Linux). Absent from players before 0.5.25.
+     *
+     * @player 0.5.25
+     * @since 1.5.43
+     */
+    readonly gpu?: string | null;
+    /**
+     * The hardware decoder in use for this video, as mpv names it (`d3d11va`,
+     * `d3d11va-copy`; `no` for software decoding); `null` while no video
+     * decodes. For people and logs: branch on {@link UpscalingReason.cause}.
+     * Absent from players before 0.5.25.
+     *
+     * @player 0.5.25
+     * @since 1.5.43
+     */
+    readonly hwdecCurrent?: string | null;
+    /**
+     * The upscaler is in the player's video filter chain now, read from the
+     * chain itself (`requested` is what the player asked for; they differ
+     * only for a moment, while the chain changes). Still not a sign that the
+     * GPU upscales: the driver gives none (see the remarks). Absent from
+     * players before 0.5.25.
+     *
+     * @player 0.5.25
+     * @since 1.5.43
+     */
+    readonly inChain?: boolean;
 }
 /**
  * `plugin.video.upscaling`: the GPU's video upscaler, NVIDIA RTX Video
@@ -7119,6 +7283,57 @@ export interface VideoUpscaling {
      * @since 1.5.37
      */
     set(enabled: boolean): Promise<UpscalingState>;
+    /**
+     * Call `listener` with the new state whenever it changes while some
+     * plugin has upscaling on: the factor, whether the upscaler is in the
+     * chain, the reason, the video's and the area's size, the decoder. A
+     * window that shows how upscaling runs listens instead of polling
+     * {@link VideoUpscaling.state}.
+     *
+     * @remarks
+     * The player looks about five times a second while upscaling is on for
+     * any plugin (a window resize sends at most that many), and sends a
+     * change only when something differs; after the last plugin turns it
+     * off one more change says so, then nothing until it is on again: read
+     * {@link VideoUpscaling.state} when you need the state then. Nothing is
+     * sent before the player's GPU check ran (the first `state()` or
+     * `set(true)` of any plugin). `enabled` is this plugin's own request, as
+     * in `state()`. The message of a `rendering` reason can be shorter than
+     * the one `state()` gives (it may leave out what to do).
+     *
+     * **A listener keeps the plugin running.** `video.upscaling.changed` is
+     * not an event the player wakes a stopped plugin for: while the plugin
+     * listens, the player does not stop it while idle (lazy activation), even
+     * with upscaling off. Listen only while a window that shows the state is
+     * open, and dispose of the listener when it closes. Players before 0.5.25 do not know the event: the listener
+     * never fires and the SDK logs that the player refused the subscription.
+     *
+     * @capability video.upscaling
+     * @param listener - Receives the new state.
+     * @returns Stops listening; also when the scope that added it is
+     *   disposed.
+     * @throws `capability` (synchronously) The manifest does not declare
+     *   `video.upscaling`.
+     *
+     * @example Show how upscaling runs while a window is open
+     * The plugin's window shows the factor, the sizes and the GPU while it
+     * is open; the listener goes when the window closes, so the plugin can
+     * be stopped while idle again.
+     * ```ts
+     * // When the window opens:
+     * const watch = plugin.video.upscaling.onChange((state) => {
+     *   const video = state.video ? `${state.video.width}×${state.video.height}` : "no video";
+     *   const area = state.area ? `${state.area.width}×${state.area.height}` : "—";
+     *   console.log(`${video} → ${area}, ×${state.factor ?? 1}, ${state.gpu ?? "no GPU"}`);
+     * });
+     * // When it closes: stop listening (it keeps the plugin running).
+     * await watch.dispose();
+     * ```
+     *
+     * @player 0.5.25
+     * @since 1.5.43
+     */
+    onChange(listener: (state: UpscalingState) => void): Disposable;
 }
 /**
  * A subtitle track of the current source.
@@ -7977,7 +8192,7 @@ export interface Resolver extends Disposable {
  * another plugin), so the plugin does not intercept opens itself.
  *
  * @capability source.resolve (file resolvers also `producer.av`)
- * @see [Playback state, controls and sources](../../docs/concepts/playback.md)
+ * @see [Playback state, controls and sources](../../docs/explanation/playback.md)
  * @since 1.0.0
  * @category Sources
  */
@@ -8751,7 +8966,7 @@ export interface BindingInfo extends BindingRef {
  * applies the change at once to every running plugin.
  *
  * @capability bindings.manage
- * @see [Commands, menus and key bindings](../../docs/concepts/commands.md)
+ * @see [Commands, menus and key bindings](../../docs/explanation/commands.md)
  * @since 1.0.0
  * @category Commands
  */

@@ -207,7 +207,7 @@ Rules:
 - **Letters** match by key name, regardless of Caps Lock: `E` = press E; `Shift+E` = Shift plus E.
 - **Symbol keys** match the character actually typed, and cannot also be written with `Shift`: subtitle sync's `>` is written `">"`, not `"Shift+."`. `+` is written `Plus`. The same for digits: `"Shift+1"` is invalid; write `"!"`.
 - **Ctrl and Cmd on macOS**: on macOS `Ctrl+X` fires on both ⌃X and ⌘X (UI spec §0); `Cmd+X` only accepts ⌘X. For one event, an exact match is looked up first (⌘X looks for `Cmd+X` first); if none is found, it is looked up as `Ctrl+X`. On other platforms `Cmd` is the Win/Super key. (On macOS Slint reports ⌘ as `control` and ⌃ as `meta`; the host swaps them back in Rust.)
-- **Mouse** bindings only apply in the video area and can have modifiers. `LeftDoubleClick:LeftHalf`/`:RightHalf` distinguish by whether the double-click is on the left or right half of the video; when bindings with and without a zone exist at the same time, the one with the zone wins, and this does not count as a conflict. The wheel counts steps by accumulated distance (the threshold is set in P1b by testing with trackpad and mouse), firing once per step. `X1`/`X2` are the mouse side buttons (Slint `back`/`forward`).
+- **Mouse** bindings only apply in the video area (except `X1`/`X2`, see below) and can have modifiers. `LeftDoubleClick:LeftHalf`/`:RightHalf` distinguish by whether the double-click is on the left or right half of the video; when bindings with and without a zone exist at the same time, the one with the zone wins, and this does not count as a conflict. The wheel counts steps by accumulated distance (the threshold is set in P1b by testing with trackpad and mouse), firing once per step. `X1`/`X2` are the mouse side buttons (winit `Back`/`Forward`); since host 0.6.0 they are window-level, as in browsers: the window's winit hook resolves them wherever the pointer is (video, bottom bar, sidebar, a floating panel), not over an open menu (`input.rs` `observe_side_button`).
 - The right button is reserved for the menu and cannot be bound. Left single click, long press, and right double-click are not done this round (§18 Q3). Default mouse bindings, as history: until host 0.5.1 the host bound `Mouse:LeftDoubleClick` to fullscreen and nothing to a single click; from 0.5.2 (user ruling 2026-10-26) `Mouse:LeftClick` (added in round 3a) is Play/Pause and nothing is bound to a double click.
 - Default bindings **fire only on press and ignore the auto-repeat of a held key** (same as Space/←/→ today); when a command declares `repeat: true`, the system auto-repeat of keys also fires (§18 Q6). Mouse events have no repeat.
 - While the menu is open or a system dialog is open, all bindings are paused (same as today).
@@ -252,8 +252,9 @@ impl Table {
 
 | Command | Default bindings | Menu | State |
 | --- | --- | --- | --- |
-| `host/fullscreen` Fullscreen | `Enter`, `Alt+Enter` (interaction alignment IA-CORE-04), `F11` (`Mouse:LeftDoubleClick` until host 0.5.1) | top level, `group: "screen"`, `order: 700`, checked = whether fullscreen | always available |
-| `host/exit-fullscreen` Exit fullscreen | `Escape` | not in the menu | only available in fullscreen |
+| `host/fullscreen` Toggle Fullscreen | `Escape` (user ruling 2026-11-01, IA-CORE-04; `Enter`, `Alt+Enter`, `F11` up to 0.5.x; `Mouse:LeftDoubleClick` until host 0.5.1) | top level, `group: "screen"`, `order: 700`, checked = whether fullscreen | always available |
+| `host/enter-fullscreen` Enter Fullscreen | none | not in the menu | only available in windowed mode |
+| `host/exit-fullscreen` Leave Fullscreen | none (`Escape` up to 0.5.x) | not in the menu | only available in fullscreen |
 | `host/quit` Quit | `Cmd+Q` (the menu shows it on macOS only: on Windows and Linux `Cmd` is the Windows / Super key, whose combinations the system takes, so menus show no `Cmd` binding, `platform::MENU_SHOWS_CMD`; there the close button and Alt+F4 quit) | top level, `group: "exit"`, `order: 990` | always available |
 
   Whether "Fullscreen" and "Quit" appear in the menu this round, see §18 Q2.

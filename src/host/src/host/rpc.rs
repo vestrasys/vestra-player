@@ -126,9 +126,10 @@ mod tests {
 
     #[test]
     fn a_value_over_the_limits_is_limit_naming_the_property() {
-        // D1: 3000 playlist rows of 8 fields; refused when stored, not later.
+        // D1: more playlist rows of 8 fields than fit in the values total
+        // (9 values each); refused when stored, not later.
         let row = json!({"a":"1","b":"","c":"","d":"","e":false,"f":false,"g":false,"h":false});
-        let rows = Value::Array(vec![row; 3000]);
+        let rows = Value::Array(vec![row; crate::ui::ui_values::MAX_NODES / 9 + 1]);
         let error = RpcError::check_property("rows", &rows).unwrap_err();
         assert_eq!(error.code, "limit");
         assert!(error.message.starts_with("rows: UI "), "{}", error.message);

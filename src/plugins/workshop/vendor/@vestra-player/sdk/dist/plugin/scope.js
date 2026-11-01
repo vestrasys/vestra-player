@@ -145,6 +145,30 @@ export class ScopeImpl {
         }
         this.update();
     }
+    /**
+     * Run a listener of a state change (`player.onChange`) like `run`, except
+     * that the full pass after it is left out when it returned synchronously
+     * and read only fields of the state that `change` left alone: its result
+     * then depends on nothing new. The precise pass for the change runs
+     * anyway, and a full pass follows within `SAFETY_PASS_MS`.
+     */
+    runOn(change, handler, ...args) {
+        if (this.disposed)
+            return;
+        let full = true;
+        try {
+            const { value, deps } = this.runtime.observe(() => handler(...args));
+            if (value instanceof Promise)
+                value.catch((error) => this.report(error)).finally(() => this.update());
+            else
+                full = this.runtime.needsFull(deps, change);
+        }
+        catch (error) {
+            this.report(error);
+        }
+        if (full)
+            this.update();
+    }
     update() {
         this.runtime.invalidate();
     }
