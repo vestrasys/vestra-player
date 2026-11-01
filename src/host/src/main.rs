@@ -580,6 +580,8 @@ fn main() -> Result<()> {
         host.lazy_quit();
         stop_handoffs();
     } else {
+        // Windows: no window opens white (cloaked until its first draw).
+        platform::cloak_until_drawn();
         let native_before = platform::capture_windows().ok();
         let window = composition::compile_json(&[], host.mount_events.clone(), 1)?;
         let position = host.ui_state.state.window.map(|frame| {

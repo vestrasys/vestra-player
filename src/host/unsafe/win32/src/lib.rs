@@ -3,7 +3,8 @@
 //! while a file is dragged over a window (winit 0.30 reports no position for
 //! drags), the modifier keys held right now, the double-click time, the
 //! submenu show delay, the thread's sleep-prevention state, a window's
-//! dark title bar, letting the running player take the foreground for a
+//! dark title bar, cloaking a window until its first frame (`set_cloaked`,
+//! `cloak_on_show`: a thread-local `WH_CALLWNDPROC` hook), letting the running player take the foreground for a
 //! second launch's files, whether this process owns the foreground window
 //! and bringing one of its windows to the front (`foreground_is_ours`,
 //! `set_foreground`), waiting for a display's vertical blank
@@ -146,6 +147,137 @@ pub fn set_dark_title_bar(hwnd: isize, dark: bool) -> bool {
         }
     };
     set(DWMWA_USE_IMMERSIVE_DARK_MODE as u32) >= 0 || set(BEFORE_20H1) >= 0
+}
+
+/// Cloak or uncloak window `hwnd` (a raw HWND value, a top-level window of
+/// this process): a cloaked window keeps its place, size and visibility but
+/// the desktop compositor does not show it (DWMWA_CLOAK, Windows 8 and
+/// later). Returns false when the system refused (`hwnd` is no longer a
+/// window, or not a top-level window of this process).
+pub fn set_cloaked(hwnd: isize, cloaked: bool) -> bool {
+    use windows_sys::Win32::Graphics::Dwm::DWMWA_CLOAK;
+    let value: i32 = i32::from(cloaked);
+    // SAFETY: DwmSetWindowAttribute reads `size_of::<i32>()` bytes (a BOOL)
+    // from the pointer, which points at `value`, alive for the call. An
+    // invalid or foreign HWND makes it return an error HRESULT, it does not
+    // touch memory through it.
+    let result = unsafe {
+        DwmSetWindowAttribute(
+            hwnd as HWND,
+            DWMWA_CLOAK as u32,
+            (&value as *const i32).cast(),
+            size_of::<i32>() as u32,
+        )
+    };
+    result >= 0
+}
+
+/// What [`cloak_on_show`] installed on this thread: the window class it
+/// cloaks (UTF-16, no terminator) and whom it tells.
+struct CloakOnShow {
+    class: Vec<u16>,
+    cloaked: Box<dyn Fn(isize)>,
+}
+
+thread_local! {
+    static CLOAK_ON_SHOW: std::cell::RefCell<Option<CloakOnShow>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Whether a message sent to a window is its own show from hidden
+/// (`WM_SHOWWINDOW` with `wParam` TRUE and `lParam` 0, not a show because
+/// its owner was restored), of a top-level window (`style` without
+/// `WS_CHILD`) that is not visible yet.
+fn shows_hidden_top_level(
+    message: u32,
+    wparam: usize,
+    lparam: isize,
+    style: u32,
+    visible: bool,
+) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{WM_SHOWWINDOW, WS_CHILD};
+    message == WM_SHOWWINDOW && wparam != 0 && lparam == 0 && style & WS_CHILD == 0 && !visible
+}
+
+/// The `WH_CALLWNDPROC` hook of [`cloak_on_show`]: sees each message sent to
+/// a window of this thread before the window does.
+extern "system" fn cloak_on_show_hook(code: i32, wparam: usize, lparam: isize) -> isize {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CWPSTRUCT, CallNextHookEx, GWL_STYLE, GetClassNameW, GetWindowLongW, HC_ACTION,
+        IsWindowVisible,
+    };
+    if code == HC_ACTION as i32 && lparam != 0 {
+        // SAFETY: for WH_CALLWNDPROC with HC_ACTION, `lparam` points at the
+        // system's CWPSTRUCT for this message, valid for the hook call; it is
+        // only read, before the call returns.
+        let sent = unsafe { &*(lparam as *const CWPSTRUCT) };
+        let hwnd = sent.hwnd;
+        // SAFETY: both take the HWND by value (a window of this thread, being
+        // sent a message) and touch no memory of ours.
+        let (style, visible) = unsafe {
+            (
+                GetWindowLongW(hwnd, GWL_STYLE) as u32,
+                IsWindowVisible(hwnd) != 0,
+            )
+        };
+        if shows_hidden_top_level(sent.message, sent.wParam, sent.lParam, style, visible) {
+            CLOAK_ON_SHOW.with_borrow(|hook| {
+                let Some(hook) = hook else {
+                    return;
+                };
+                let mut name = [0u16; 64];
+                // SAFETY: GetClassNameW writes at most `name.len()` UTF-16
+                // units (with the terminator) into `name`, a live local.
+                let length = unsafe { GetClassNameW(hwnd, name.as_mut_ptr(), name.len() as i32) };
+                let length = usize::try_from(length).unwrap_or(0);
+                if name[..length] == hook.class[..] && set_cloaked(hwnd as isize, true) {
+                    // A panic must not unwind into the system's call.
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        (hook.cloaked)(hwnd as isize);
+                    }));
+                }
+            });
+        }
+    }
+    // SAFETY: passes this hook's arguments on unchanged, as every hook must
+    // (the first argument is ignored since Windows NT).
+    unsafe { CallNextHookEx(std::ptr::null_mut(), code, wparam, lparam) }
+}
+
+/// From now on, cloak (`set_cloaked`) each top-level window of window class
+/// `class` that this thread shows from hidden, just before it shows, and
+/// call `cloaked` with it; the caller uncloaks it once it has drawn. Without
+/// this, a window shown before its first frame reaches the screen shows the
+/// system's empty client area (white) during the open animation; Chromium
+/// and Windows Terminal cloak their new windows until their first frame for
+/// the same reason. Installed once per thread (a thread-local
+/// `WH_CALLWNDPROC` hook, kept until the thread ends); false when it is
+/// already installed or the system refused.
+pub fn cloak_on_show(class: &str, cloaked: impl Fn(isize) + 'static) -> bool {
+    use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SetWindowsHookExW, WH_CALLWNDPROC};
+    if CLOAK_ON_SHOW.with_borrow(Option::is_some) {
+        return false;
+    }
+    CLOAK_ON_SHOW.set(Some(CloakOnShow {
+        class: class.encode_utf16().collect(),
+        cloaked: Box::new(cloaked),
+    }));
+    // SAFETY: a thread-local hook (no module handle, this thread's id) whose
+    // procedure is a plain function of this crate, alive for the process.
+    let hook = unsafe {
+        SetWindowsHookExW(
+            WH_CALLWNDPROC,
+            Some(cloak_on_show_hook),
+            std::ptr::null_mut(),
+            GetCurrentThreadId(),
+        )
+    };
+    if hook.is_null() {
+        CLOAK_ON_SHOW.set(None);
+        return false;
+    }
+    true
 }
 
 /// Let another process (the running player a second launch hands its files
@@ -638,8 +770,8 @@ pub fn video_super_resolution(luid: u64) -> Result<SuperResolution, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        SuperResolution, VBlank, dxgi_adapters, file_is_remote, version_parts,
-        video_super_resolution,
+        SuperResolution, VBlank, dxgi_adapters, file_is_remote, shows_hidden_top_level,
+        version_parts, video_super_resolution,
     };
     use std::time::{Duration, Instant};
 
@@ -690,6 +822,36 @@ mod tests {
                 started.elapsed()
             );
         }
+    }
+
+    /// `cloak_on_show` cloaks a top-level window's own show from hidden
+    /// only: not a child window, not a show because its owner was restored
+    /// (`SW_PARENTOPENING`), not a hide, not a window already visible (no
+    /// draw would follow to uncloak it), not another message.
+    #[test]
+    fn only_a_hidden_top_level_windows_own_show_is_cloaked() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            SW_PARENTOPENING, WM_SHOWWINDOW, WM_SIZE, WS_CHILD, WS_OVERLAPPEDWINDOW,
+        };
+        let top = WS_OVERLAPPEDWINDOW;
+        assert!(shows_hidden_top_level(WM_SHOWWINDOW, 1, 0, top, false));
+        assert!(
+            !shows_hidden_top_level(WM_SHOWWINDOW, 0, 0, top, false),
+            "a hide"
+        );
+        assert!(
+            !shows_hidden_top_level(WM_SHOWWINDOW, 1, SW_PARENTOPENING as isize, top, false),
+            "owner restored"
+        );
+        assert!(
+            !shows_hidden_top_level(WM_SHOWWINDOW, 1, 0, top | WS_CHILD, false),
+            "a child window"
+        );
+        assert!(
+            !shows_hidden_top_level(WM_SHOWWINDOW, 1, 0, top, true),
+            "already visible"
+        );
+        assert!(!shows_hidden_top_level(WM_SIZE, 1, 0, top, false));
     }
 
     #[test]

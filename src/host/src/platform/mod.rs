@@ -26,6 +26,7 @@
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
 //! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file) |
+//! | opening windows | `cloak_until_drawn`, `window_drawing` (Windows: each window is cloaked from its show to its first draw, so it never opens white, through `vestra-win32`; elsewhere nothing) |
 //! | full screen | `fullscreen_resized` (Windows: a full-screen window is kept one pixel off its display's rectangle; elsewhere nothing) |
 //! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, OpenGL or wgpu, `vestra-video-texture`; elsewhere a new image per frame), `same_video_image` (Windows: also compares wgpu textures; elsewhere `Image` equality) |
 //! | redraw pacing | `VBLANK_CLOCK`, `vblank_waiter` → `VBlankWaiter` (Windows: vertical blanks through `vestra-win32`; elsewhere `no_vblank` below: Slint paces, with a display link on macOS) |
@@ -613,6 +614,17 @@ pub const VIDEO_TEXTURE: bool = false;
 /// is in `windows.rs`.
 #[cfg(not(target_os = "windows"))]
 pub fn fullscreen_resized(_window: &slint::Window) {}
+
+/// Windows hides each window until its first draw (no white frame when it
+/// opens; `windows.rs`). Elsewhere nothing: Slint's winit backend already
+/// reveals a macOS window at its first frame.
+#[cfg(not(target_os = "windows"))]
+pub fn cloak_until_drawn() {}
+
+/// A window is about to draw (winit `RedrawRequested` let through): nothing
+/// here; on Windows a window hidden until its first draw shows after it.
+#[cfg(not(target_os = "windows"))]
+pub fn window_drawing(_id: u64) {}
 
 /// Durability barrier for the entries of `directory`: after it returns, the
 /// names created, renamed or removed in it survive a crash (the package
