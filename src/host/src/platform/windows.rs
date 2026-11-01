@@ -113,6 +113,32 @@ fn native_of(window: &slint::Window) -> Option<Arc<winit::window::Window>> {
     }
 }
 
+/// Whether the user works in one of the player's windows right now (the
+/// foreground window is this process's).
+pub fn app_in_foreground() -> bool {
+    vestra_win32::foreground_is_ours()
+}
+
+/// Bring `window` to the front with the focus while the player is in the
+/// foreground: a plain `SetForegroundWindow`. winit's `focus_window` would
+/// press a synthetic Alt first to get past the foreground lock, which is
+/// for taking the foreground from another app, and can leave a menu bar
+/// activated.
+pub fn focus_own_window(window: &slint::Window) {
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let Some(native) = native_of(window) else {
+        return;
+    };
+    let Ok(handle) = native.window_handle() else {
+        return;
+    };
+    if let RawWindowHandle::Win32(handle) = handle.as_raw()
+        && !vestra_win32::set_foreground(handle.hwnd.get())
+    {
+        diag!("platform: the system refused to bring a window to the front");
+    }
+}
+
 /// How long `shown` waits for a window's native window (ticks of
 /// [`PENDING_TICK`]): 5 s.
 const PENDING_TRIES: u32 = 300;

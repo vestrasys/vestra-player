@@ -775,7 +775,7 @@ impl Host {
         if let Some(open) = &self.settings.open {
             open.instance.show()?;
             crate::platform::shown(&open.instance);
-            crate::ui::view::raise(open.instance.window());
+            crate::ui::view::show_again(&open.instance, crate::platform::app_in_foreground());
         }
         Ok(())
     }

@@ -15,7 +15,6 @@
 #![forbid(unsafe_code)]
 use crate::host::*;
 use serde_json::json;
-use slint::ComponentHandle;
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
@@ -95,7 +94,7 @@ impl Host {
     }
     fn bring_to_front(&mut self) {
         if let Some(shell) = &self.shell {
-            crate::ui::view::raise(shell.window());
+            crate::ui::view::raise(shell);
         }
     }
 }

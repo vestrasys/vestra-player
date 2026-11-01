@@ -25,6 +25,16 @@ pub const MENU_SHOWS_CMD: bool = false;
 const WINDOWS: Unavailable = Unavailable("native windows are not supported on this system");
 
 pub fn shown(_instance: &slint_interpreter::ComponentInstance) {}
+/// Not known here: the window manager decides (its focus-stealing
+/// prevention applies to `focus_own_window`).
+pub fn app_in_foreground() -> bool {
+    true
+}
+/// winit's `focus_window` (a request the window manager may refuse).
+pub fn focus_own_window(window: &slint::Window) {
+    use slint::winit_030::WinitWindowAccessor;
+    window.with_winit_window(|native| native.focus_window());
+}
 pub fn capture_windows() -> Result<NativeSnapshot> {
     Err(WINDOWS)
 }
