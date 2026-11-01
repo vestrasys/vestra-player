@@ -178,6 +178,8 @@ test("thumbnails on by default: made only for the rows on screen and a few aroun
       app.gates.shift()!.release();
       await app.host.settle(5);
     }
+    // A run's picture reaches the rows a step after its file is made: wait for what is checked.
+    await app.until(() => app.pictures().slice(0, near).every((path) => path !== null), "the pictures near the view");
     await app.host.settle(50);
     assert.equal(app.made().length, near);
     assert.deepEqual(app.made().sort(), app.files.slice(0, near).sort());
@@ -319,7 +321,8 @@ test("thumbnails: ffmpeg waits while a source opens and for its first seconds", 
     assert.equal(app.made().length, 0, "nor in its first seconds");
     await pause(HOLD_AFTER_OPEN_MS);
     await app.until(() => app.made().length === 6, "the runs after the hold");
-    assert.ok(app.pictures().slice(0, 6).every(Boolean));
+    // The pictures reach the rows a step after the runs: wait for them, not only the runs.
+    await app.until(() => app.pictures().slice(0, 6).every(Boolean), "the six pictures");
   } finally {
     await app.close();
   }
