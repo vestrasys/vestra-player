@@ -371,6 +371,9 @@ test("1000 files with thumbnails: the list shows as fast as without; ffmpeg runs
     await app.until(() => on.made() === 17 + 20, "the new screen's thumbnails");
     await app.host.settle(100);
     assert.equal(on.made(), 37);
+    // The pictures reach the rows a step after the runs.
+    // Counted within the rows checked below (the old top rows may still hold theirs).
+    await app.until(() => app.rows().slice(700 - 20, 700 + 14 + 20).filter(picture).length === 20, "the new screen's pictures");
     const shown = app.rows().flatMap((row, at) => (picture(row) ? [at] : []));
     assert.ok(shown.every((at) => at >= 700 - 20 && at < 700 + 14 + 20), `pictures in rows ${shown.join(", ")}`);
     assert.equal(shown.length, 20);
