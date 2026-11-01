@@ -204,16 +204,9 @@ export component PlaylistSidebar inherits Rectangle {
     // The selected-row background (ui-spec §5.2); the theme has no token for it.
     private property <color> selected-bg: Theme.selected-bg;
     private property <int> row-count: PlaylistBridge.rows.length;
-    // The thumbnail toggle changes every row's height: the row at the top of the view stays
-    // there (0.2.1). `top-row` follows the scroll while the rows keep the height it was
-    // measured with (`settled-height`); a scroll reported with the new height before
-    // `changed row-height` ran is not taken.
-    private property <int> top-row;
-    private property <length> settled-height;
-    changed row-height => {
-        list.content-y = -clamp(root.top-row * root.row-height, 0px, root.max-scroll);
-        root.settled-height = root.row-height;
-    }
+    // The thumbnail toggle changes every row's height: the ListView keeps the row at the top
+    // of the view itself (0.2.2). Setting `content-y` in `changed row-height` ran before the
+    // ListView's layout, which still placed rows by the old height, and landed far away.
     // Rows removed or added while dragging: the drop index follows the list.
     changed row-count => {
         if root.dragging { root.drop-index = root.drop-index-at(root.drag-y); }
@@ -363,8 +356,6 @@ export component PlaylistSidebar inherits Rectangle {
                 background: Theme.bg-list;
                 init => {
                     list.content-y = -PlaylistBridge.show-y * 1px;
-                    root.settled-height = root.row-height;
-                    root.top-row = Math.floor(PlaylistBridge.show-y * 1px / root.row-height);
                     root.report-area();
                 }
                 changed height => { root.report-area(); }
@@ -447,10 +438,7 @@ export component PlaylistSidebar inherits Rectangle {
                         height: min(parent.height, root.row-count * root.row-height);
                         horizontal-scrollbar-policy: always-off;
                         accessible-item-count: root.row-count;
-                        changed content-y => {
-                            if root.row-height == root.settled-height { root.top-row = Math.floor(-self.content-y / root.row-height); }
-                            root.report-area();
-                        }
+                        changed content-y => { root.report-area(); }
                         for row[index] in PlaylistBridge.rows: Rectangle {
                             property <color> ink: row.current ? Theme.playing : row.selected ? Theme.text : row.played ? Theme.text-played : Theme.text-list;
                             // Its place in the whole list (also while a search filters) and title.
