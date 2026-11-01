@@ -40,7 +40,7 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
   </tr>
 </table>
 
-<sub>Footage: Big Buck Bunny and Spring, © Blender Foundation, CC BY; Concentration Room © 2010 Damian Yerrick, GPL-3.0-or-later.</sub>
+<sub>Footage: Big Buck Bunny © 2008 Blender Foundation, <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a>; Spring © Blender Foundation, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>; Concentration Room © 2010 Damian Yerrick, GPL-3.0-or-later.</sub>
 
 ## Core ideas
 
