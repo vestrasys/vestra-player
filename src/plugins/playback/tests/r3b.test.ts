@@ -61,11 +61,14 @@ test("B22 the seek line gets everyone's marks as fractions with their time text;
   // The marks' publisher is disabled (its layer cleared): nothing of it stays.
   host.setTimelineLayer("vestra.marks", []);
   await until(() => (bar.props.marks as unknown[]).length === 1);
+  // Properties are written one at a time, `marks` before the ticks: let the rest arrive.
+  await host.settle();
   assert.equal(bar.props["chapter-ticks"], "");
   assert.equal(bar.props["bookmark-ticks"], "");
   host.openElsewhere("/other.mkv");
   host.setSource({ duration: 50 });
   await until(() => (bar.props.marks as unknown[]).length === 0);
+  await host.settle(); // the ticks come after `marks`
   assert.equal(bar.props["marker-ticks"], "");
   await stop();
 });

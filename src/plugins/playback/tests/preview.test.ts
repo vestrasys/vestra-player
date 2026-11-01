@@ -105,6 +105,8 @@ const partOf = (args: string[]) => ({ n: Number(args[args.indexOf("-frames:v") +
 /** The seek times of one run (one per cell it makes). */
 const seeksOf = (args: string[]) => args.flatMap((arg, i) => (arg === "-ss" ? [args[i + 1]!] : []));
 const cellsMade = (host: TestHost) => cellRuns(host).reduce((n, c) => n + seeksOf(c.args).length, 0);
+/** Sheet writes: one ffmpeg per changed sheet, raw pixels to `sheet-N.new.jpg`. */
+const sheetWrites = (host: TestHost) => host.tools.calls.filter((c) => c.tool === "ffmpeg" && c.args.at(-1)!.endsWith(".new.jpg")).length;
 
 /**
  * ffmpeg as the plugin uses it: a run of cells writes `CELL_BYTES` per input
@@ -477,12 +479,16 @@ test("0.2.2 exact mode: a part ended for a drag is made again whole; a pass that
       return (bar2.props["preview-map"] as number[]).join() === "0,1,2,3,4,5,6,7,8,9";
     });
     assert.equal(cellsMade(again), 10);
-    await second.stop();
-    // The exact folder remembers the fallback; the next open of the file goes straight to keyframes.
     const real = (await import("node:fs")).realpathSync(media.file);
     const { size, mtimeMs } = (await import("node:fs")).statSync(real);
+    // The keyframe sprite's last index write (complete) is not awaited by anyone: wait for it before stopping.
+    const keyframeDir = join(data, "thumbs", cacheKey({ path: real, size, mtimeMs }, 10));
+    await until(async () => (await readIndex(keyframeDir))?.complete === true);
+    await second.stop();
+    // The exact folder remembers the fallback; the next open of the file goes straight to keyframes.
     const exactDir = join(data, "thumbs", cacheKey({ path: real, size, mtimeMs }, 40, "exact"));
-    assert.equal((await readIndex(exactDir))?.keyframesOnly, true);
+    // The fallback's index write is not awaited by anyone: wait for it to land.
+    await until(async () => (await readIndex(exactDir))?.keyframesOnly === true);
     const third = new TestHost();
     playing(third, media.file);
     third.stats = { ...third.stats, video: SMALL_VIDEO };
@@ -761,11 +767,14 @@ test("0.2.3 while the pointer is on the bar a changed sheet goes out at most eve
     const made = () => new Set((bar.props["preview-map"] as number[] | undefined) ?? []).size;
     // Let one run land: its slot is free for the sheet write, then the next run starts.
     const land = async () => {
+      const wrote = sheetWrites(host);
       releases.shift()!();
       await until(async () => {
         await time.advance(0);
         return releases.length === WORKERS;
       });
+      // The write took the freed slot before the next run did, and is done (its hand-over decided).
+      assert.ok(sheetWrites(host) > wrote, "the landed cells are written before the next run starts");
     };
     bar.emit("pointing", true);
     await host.settle();
@@ -832,11 +841,14 @@ test("0.2.3 a sheet without new cells keeps its image reference across a hand-ov
     const ref = (sheet: "a" | "b") => JSON.stringify(bar.props[`preview-sheet-${sheet}`] ?? null);
     // Runs land in queue order; after each the slot is free for the write (PUBLISH_MS has passed) and the next run starts.
     const land = async () => {
+      const wrote = sheetWrites(host);
       releases.shift()!();
       await until(async () => {
         await time.advance(0);
         return releases.length === WORKERS;
       });
+      // The write took the freed slot before the next run did, and is done (its hand-over decided).
+      assert.ok(sheetWrites(host) > wrote, "the landed cells are written before the next run starts");
     };
     // Coarse to fine, five per run: runs 0–3 touch both sheets, run 4 only sheet B
     // (cells 120–184), run 5 only sheet A (cells 4–36).
