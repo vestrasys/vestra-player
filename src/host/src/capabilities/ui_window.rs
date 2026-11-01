@@ -214,6 +214,9 @@ fn change(
             {
                 view.instance.show().map_err(anyhow::Error::from)?;
                 platform::shown(&view.instance);
+                // Open already (minimized, or behind other windows): it
+                // comes back to the front with the focus.
+                view::raise(view.instance.window());
             } else {
                 view.instance.hide().map_err(anyhow::Error::from)?;
             }

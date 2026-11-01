@@ -775,10 +775,7 @@ impl Host {
         if let Some(open) = &self.settings.open {
             open.instance.show()?;
             crate::platform::shown(&open.instance);
-            use slint::winit_030::WinitWindowAccessor;
-            open.instance
-                .window()
-                .with_winit_window(|window| window.focus_window());
+            crate::ui::view::raise(open.instance.window());
         }
         Ok(())
     }

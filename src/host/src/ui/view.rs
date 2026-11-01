@@ -357,6 +357,30 @@ pub fn perform(window: &slint::Window, action: crate::platform::WindowAction) {
         }
     }
 }
+/// Bring a shown window back to the user: un-minimize it, raise it above
+/// the other windows and give it the focus, as an explicit "show" does in
+/// other desktop apps (VS Code, Chrome). Slint's `show()` on a window that
+/// is already visible does nothing, so a minimized tool window or one
+/// behind the main window stayed where it was.
+///
+/// Slint's own minimized flag goes first (the winit backend keeps it equal
+/// to the system's on every state change); winit's is checked as well in
+/// case a state event has not arrived yet. winit's `focus_window` raises
+/// and activates (Windows: past the foreground lock; macOS: key window and
+/// app activation) and does nothing for a minimized or hidden window, so
+/// the un-minimize comes first.
+pub fn raise(window: &slint::Window) {
+    if window.is_minimized() {
+        window.set_minimized(false);
+    }
+    use slint::winit_030::WinitWindowAccessor;
+    window.with_winit_window(|native| {
+        if native.is_minimized() == Some(true) {
+            native.set_minimized(false);
+        }
+        native.focus_window();
+    });
+}
 /// The main window's close request (its title bar's close button, Alt+F4;
 /// ⌘W does nothing in the main window) quits the player, as in mpv, VLC and PotPlayer: `quit` starts the
 /// player's Quit (the menu's), which ends the event loop, saves the state and
@@ -1809,6 +1833,45 @@ export component W inherits Window {
         window.set_maximized(true);
         native_calls();
         (old, sender)
+    }
+
+    /// Showing a tool window that is open but minimized (Workshop, Plugin
+    /// Store: its menu item chosen again) un-minimizes it; `show()` alone
+    /// left it minimized. A window that is not minimized is left as it is
+    /// (the raise and focus are winit's, checked by hand in the player).
+    #[test]
+    fn showing_an_open_minimized_window_restores_it() {
+        slint::platform::set_platform(Box::new(Recording)).unwrap();
+        let instance = compile_source(
+            "export component W inherits Window { width: 100px; height: 100px; }".into(),
+            Path::new("w.slint"),
+        )
+        .unwrap();
+        instance.show().unwrap();
+        // The user minimizes it (the winit backend mirrors the system's
+        // state into the window like this).
+        instance.window().set_minimized(true);
+        native_calls();
+        // Only the minimized state is checked: `show()` on a shown window
+        // may repeat `set_visible`, which changes no state.
+        let states = || -> Vec<String> {
+            native_calls()
+                .into_iter()
+                .filter(|call| call.starts_with("minimized"))
+                .collect()
+        };
+        // What `ui.show` did before: the system is not asked to restore it.
+        instance.show().unwrap();
+        assert_eq!(states(), Vec::<String>::new());
+        assert!(instance.window().is_minimized());
+        // What it does now.
+        instance.show().unwrap();
+        raise(instance.window());
+        assert_eq!(states(), ["minimized false"]);
+        assert!(!instance.window().is_minimized());
+        // Shown again while already restored: no state change.
+        raise(instance.window());
+        assert_eq!(states(), Vec::<String>::new());
     }
 
     fn video_width(shell: &ComponentInstance) -> f32 {

@@ -94,14 +94,8 @@ impl Host {
         }
     }
     fn bring_to_front(&mut self) {
-        use slint::winit_030::WinitWindowAccessor;
         if let Some(shell) = &self.shell {
-            shell.window().with_winit_window(|window| {
-                if window.is_minimized() == Some(true) {
-                    window.set_minimized(false);
-                }
-                window.focus_window();
-            });
+            crate::ui::view::raise(shell.window());
         }
     }
 }
