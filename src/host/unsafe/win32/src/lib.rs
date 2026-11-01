@@ -13,7 +13,8 @@
 //! file is on a network file system (`file_is_remote`), waiting for a
 //! process to end (`wait_for_process_exit`), the thread's CPU cycles
 //! (`thread_cycles`), the process's private memory and the system commit
-//! charge (`memory_status`, the host log's memory line), the DXGI adapters with their driver versions
+//! charge (`memory_status`, the host log's memory line), the session
+//! ending (`on_session_end`, a thread-local `WH_CALLWNDPROC` hook), the DXGI adapters with their driver versions
 //! (`dxgi_adapters`, through the `windows` crate's COM interfaces; no device
 //! is created), and whether an adapter's driver offers RTX Video Super
 //! Resolution (`video_super_resolution`: a short-lived Direct3D 11 device
@@ -262,6 +263,101 @@ unsafe extern "system" fn cloak_on_show_hook(code: i32, wparam: usize, lparam: i
     unsafe { CallNextHookEx(std::ptr::null_mut(), code, wparam, lparam) }
 }
 
+/// What a session-end message says (`on_session_end`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionEnd {
+    /// `WM_QUERYENDSESSION`: the system asks whether the session may end
+    /// (shutdown, restart, logoff, an update's restart).
+    Query,
+    /// `WM_ENDSESSION` with `wParam` TRUE: it ends; the process may be
+    /// ended any time after this message returns.
+    Ending,
+    /// `WM_ENDSESSION` with `wParam` FALSE: the end was cancelled.
+    Cancelled,
+}
+
+/// Which session message `message`/`wparam` is, if any.
+fn session_end(message: u32, wparam: usize) -> Option<SessionEnd> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{WM_ENDSESSION, WM_QUERYENDSESSION};
+    match message {
+        WM_QUERYENDSESSION => Some(SessionEnd::Query),
+        WM_ENDSESSION if wparam != 0 => Some(SessionEnd::Ending),
+        WM_ENDSESSION => Some(SessionEnd::Cancelled),
+        _ => None,
+    }
+}
+
+/// What [`on_session_end`] calls.
+type SessionHook = Box<dyn Fn(SessionEnd)>;
+
+thread_local! {
+    static ON_SESSION_END: std::cell::RefCell<Option<SessionHook>> =
+        const { std::cell::RefCell::new(None) };
+    /// The last message told, so the copies sent to each top-level window
+    /// of the thread are told once.
+    static SESSION_TOLD: std::cell::Cell<Option<SessionEnd>> = const { std::cell::Cell::new(None) };
+}
+
+/// The `WH_CALLWNDPROC` hook of [`on_session_end`].
+///
+/// # Safety
+///
+/// Called only by the system as a `WH_CALLWNDPROC` hook procedure: with
+/// `code == HC_ACTION`, `lparam` points at a `CWPSTRUCT` valid for the call.
+unsafe extern "system" fn session_end_hook(code: i32, wparam: usize, lparam: isize) -> isize {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{CWPSTRUCT, CallNextHookEx, HC_ACTION};
+    if code == HC_ACTION as i32 && lparam != 0 {
+        // SAFETY: for WH_CALLWNDPROC with HC_ACTION, `lparam` points at the
+        // system's CWPSTRUCT for this message, valid for the hook call (this
+        // function's contract); it is only read, before the call returns.
+        let sent = unsafe { &*(lparam as *const CWPSTRUCT) };
+        if let Some(what) = session_end(sent.message, sent.wParam)
+            && SESSION_TOLD.try_with(|told| told.replace(Some(what))) != Ok(Some(what))
+        {
+            let _ = ON_SESSION_END.try_with(|hook| {
+                if let Ok(hook) = hook.try_borrow()
+                    && let Some(hook) = hook.as_ref()
+                {
+                    // A panic must not unwind into the system's call.
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| hook(what)));
+                }
+            });
+        }
+    }
+    // SAFETY: passes this hook's arguments on unchanged, as every hook must.
+    unsafe { CallNextHookEx(std::ptr::null_mut(), code, wparam, lparam) }
+}
+
+/// From now on, call `ended` on this thread when the system sends its
+/// windows `WM_QUERYENDSESSION` or `WM_ENDSESSION` (shutdown, restart,
+/// logoff, an update's restart): winit does not report them. The window
+/// procedures still answer as before (the session may end). Once per
+/// thread (a thread-local `WH_CALLWNDPROC` hook, kept until the thread
+/// ends); false when already installed or the system refused.
+pub fn on_session_end(ended: impl Fn(SessionEnd) + 'static) -> bool {
+    use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SetWindowsHookExW, WH_CALLWNDPROC};
+    if ON_SESSION_END.with_borrow(Option::is_some) {
+        return false;
+    }
+    ON_SESSION_END.set(Some(Box::new(ended)));
+    // SAFETY: a thread-local hook (no module handle, this thread's id) whose
+    // procedure is a plain function of this crate, alive for the process.
+    let hook = unsafe {
+        SetWindowsHookExW(
+            WH_CALLWNDPROC,
+            Some(session_end_hook),
+            std::ptr::null_mut(),
+            GetCurrentThreadId(),
+        )
+    };
+    if hook.is_null() {
+        ON_SESSION_END.set(None);
+        return false;
+    }
+    true
+}
+
 /// From now on, cloak (`set_cloaked`) each top-level window of window class
 /// `class` that this thread shows from hidden, just before it shows, and
 /// call `cloaked` with it; the caller uncloaks it once it has drawn. Without
@@ -367,13 +463,14 @@ pub struct MemoryStatus {
     pub physical_load: u32,
 }
 
-/// This process's private bytes (`K32GetProcessMemoryInfo`) and the system
-/// commit charge (`GlobalMemoryStatusEx`: the commit limit is
-/// `ullTotalPageFile`, what is left of it `ullAvailPageFile`). `None` when
-/// either call fails.
+/// This process's private bytes (`K32GetProcessMemoryInfo`), the system
+/// commit charge and limit (`K32GetPerformanceInfo`: `CommitTotal` and
+/// `CommitLimit`, in pages, as Task Manager's "Committed") and the physical
+/// memory load (`GlobalMemoryStatusEx`). `None` when a call fails.
 pub fn memory_status() -> Option<MemoryStatus> {
     use windows_sys::Win32::System::ProcessStatus::{
-        K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
+        K32GetPerformanceInfo, K32GetProcessMemoryInfo, PERFORMANCE_INFORMATION,
+        PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
     };
     use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
     use windows_sys::Win32::System::Threading::GetCurrentProcess;
@@ -394,6 +491,14 @@ pub fn memory_status() -> Option<MemoryStatus> {
     if ok == 0 {
         return None;
     }
+    let mut performance = PERFORMANCE_INFORMATION {
+        cb: std::mem::size_of::<PERFORMANCE_INFORMATION>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: a live local out-parameter whose size is passed in `cb`.
+    if unsafe { K32GetPerformanceInfo(&mut performance, performance.cb) } == 0 {
+        return None;
+    }
     let mut system = MEMORYSTATUSEX {
         dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32,
         ..Default::default()
@@ -402,12 +507,11 @@ pub fn memory_status() -> Option<MemoryStatus> {
     if unsafe { GlobalMemoryStatusEx(&mut system) } == 0 {
         return None;
     }
+    let page = performance.PageSize as u64;
     Some(MemoryStatus {
         private_bytes: process.PrivateUsage as u64,
-        commit_used: system
-            .ullTotalPageFile
-            .saturating_sub(system.ullAvailPageFile),
-        commit_limit: system.ullTotalPageFile,
+        commit_used: (performance.CommitTotal as u64).saturating_mul(page),
+        commit_limit: (performance.CommitLimit as u64).saturating_mul(page),
         physical_load: system.dwMemoryLoad,
     })
 }
@@ -858,6 +962,18 @@ mod tests {
         assert!(!answer(0, 0), "succeeded without saying yes");
         // E_INVALIDARG with a stale value: not supported.
         assert!(!answer(0x8007_0057_u32 as i32, 1));
+    }
+
+    #[test]
+    fn session_messages_are_told_apart() {
+        use super::{SessionEnd, session_end};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            WM_ENDSESSION, WM_QUERYENDSESSION, WM_SHOWWINDOW,
+        };
+        assert_eq!(session_end(WM_QUERYENDSESSION, 0), Some(SessionEnd::Query));
+        assert_eq!(session_end(WM_ENDSESSION, 1), Some(SessionEnd::Ending));
+        assert_eq!(session_end(WM_ENDSESSION, 0), Some(SessionEnd::Cancelled));
+        assert_eq!(session_end(WM_SHOWWINDOW, 1), None);
     }
 
     /// The memory line's numbers: this process uses some private memory,

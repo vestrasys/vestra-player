@@ -275,6 +275,10 @@ impl GuardFile {
     pub fn new(path: Option<PathBuf>) -> Self {
         Self { path }
     }
+    /// Without a path (headless): nothing is read or written.
+    pub fn is_off(&self) -> bool {
+        self.path.is_none()
+    }
     pub fn read(&self) -> Guard {
         self.path
             .as_deref()

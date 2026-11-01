@@ -5,7 +5,7 @@
 mod actions;
 pub(crate) use actions::migrate_fullscreen_escape;
 mod diagnostics;
-pub(crate) use diagnostics::ShaderGuard;
+pub(crate) use diagnostics::{ShaderGuard, session_end};
 mod dispatch;
 mod events;
 mod handle;

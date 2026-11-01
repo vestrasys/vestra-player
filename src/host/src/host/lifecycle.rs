@@ -236,7 +236,7 @@ impl Host {
             });
         }
         // The worker drops its shader lists too (`diagnostics.rs`).
-        self.shader_guard.owner_gone(owner);
+        self.plugin_shaders_gone(owner);
         // Parked: the worker keeps its resolvers (recorded).
         let _ = self.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },

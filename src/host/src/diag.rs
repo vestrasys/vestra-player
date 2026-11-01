@@ -82,21 +82,36 @@ impl LogFile {
         PathBuf::from(name)
     }
     /// The file becomes `<path>.1` (replacing the older one) and a new one
-    /// starts; where the rename fails, the file starts again empty.
+    /// starts. Where the rename fails, writing goes on in the same file
+    /// (never truncated: another player may be writing it), until it is
+    /// twice the cap; then this log stops.
+    ///
+    /// Two players at once (a development run with `VESTRA_LOG_FILE`, a
+    /// player that could not claim the single-instance lock): each has its
+    /// own handle in append mode, so lines interleave but are not lost.
+    /// Rust opens files with `FILE_SHARE_DELETE` on Windows, so one player
+    /// can rename the file while the other still has it open; the other then
+    /// keeps writing into `<path>.1` until its own next roll-over.
     fn roll_over(&mut self) {
-        // Closed first: Windows does not rename an open file.
+        // Closed first: our own handle need not stay on the renamed file.
         self.file = None;
         let renamed = std::fs::rename(&self.path, Self::older(&self.path)).is_ok();
         self.file = OpenOptions::new()
             .create(true)
             .append(true)
-            .truncate(false)
             .open(&self.path)
             .ok();
-        if !renamed && let Some(file) = &self.file {
-            let _ = file.set_len(0);
-        }
         self.size = 0;
+        if !renamed {
+            let size = self
+                .file
+                .as_ref()
+                .and_then(|file| file.metadata().ok())
+                .map_or(0, |meta| meta.len());
+            if size >= self.cap.saturating_mul(2) {
+                self.file = None;
+            }
+        }
     }
     /// One line (a newline is added); a write that fails is dropped.
     pub fn write(&mut self, line: &str) {
@@ -197,14 +212,20 @@ pub fn utc(seconds: u64, millis: u32) -> String {
 }
 
 /// A message for the host log without the user's paths, links or file
-/// names: cut at the first word that has a path separator, a scheme or a
-/// quote (error messages quote what they could not open), and at 160
-/// characters.
+/// names: cut at the first word that has a path separator, a scheme, a
+/// quote (error messages quote what they could not open) or a file
+/// extension (`holiday.mkv`), and at 160 characters. A backstop only:
+/// `host.error` messages are logged for known codes alone
+/// (`host::diagnostics::host_error_line`).
 pub fn redact(text: &str) -> String {
     let mut kept = Vec::new();
     let mut cut = false;
     for word in text.split_whitespace() {
-        if word.contains(['/', '\\', '"', '`']) || word.starts_with('\'') || word.ends_with('\'') {
+        if word.contains(['/', '\\', '"', '`'])
+            || word.starts_with('\'')
+            || word.ends_with('\'')
+            || has_extension(word)
+        {
             cut = true;
             break;
         }
@@ -219,6 +240,37 @@ pub fn redact(text: &str) -> String {
         out.push_str(" …");
     }
     out
+}
+
+/// Whether `word` looks like a file name: a stem, a dot and 1 to 5 letters
+/// or digits with at least one letter (`a.mkv`, `x.mp4`), punctuation after
+/// it aside; `0.5`, `1.18.1` and a sentence's full stop are not.
+fn has_extension(word: &str) -> bool {
+    let word = word.trim_end_matches([',', ';', ':', ')', ']', '!', '?']);
+    let word = word.strip_suffix('.').unwrap_or(word);
+    word.rsplit_once('.').is_some_and(|(stem, extension)| {
+        !stem.is_empty()
+            && (1..=5).contains(&extension.len())
+            && extension.chars().all(|c| c.is_ascii_alphanumeric())
+            && extension.chars().any(|c| c.is_ascii_alphabetic())
+    })
+}
+
+/// An identifier a plugin or the worker chose (an error code, a shader
+/// handle id) for the host log: ASCII letters, digits, `-` and `_`
+/// only (no dots: no file names), at most `max` of them; `unknown` when
+/// nothing is left.
+pub fn token(text: &str, max: usize) -> String {
+    let token: String = text
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+        .take(max)
+        .collect();
+    if token.is_empty() {
+        "unknown".into()
+    } else {
+        token
+    }
 }
 
 /// The memory line: this process's private bytes and the system commit
@@ -377,6 +429,44 @@ mod tests {
             "the player's renderer stopped"
         );
         assert_eq!(redact(&"word ".repeat(100)).chars().count(), 162);
+        // Bare file names (review item 4).
+        assert_eq!(redact("cannot open holiday.mkv"), "cannot open …");
+        assert_eq!(redact("cannot open holiday.MP4: denied"), "cannot open …");
+        assert_eq!(redact("failed on a.b.webm."), "failed on …");
+        // Versions, numbers and full stops are not file names.
+        assert_eq!(
+            redact("mpv 0.40.0 needs 1.5 s. Retry."),
+            "mpv 0.40.0 needs 1.5 s. Retry."
+        );
+    }
+
+    #[test]
+    fn tokens_keep_only_identifier_characters() {
+        assert_eq!(token("source-load", 64), "source-load");
+        assert_eq!(token("x y\nz", 64), "xyz");
+        assert_eq!(token("holiday.mkv", 64), "holidaymkv", "no dots");
+        assert_eq!(token("C:\\Users\\me", 64), "CUsersme");
+        assert_eq!(token("abcdef", 3), "abc");
+        assert_eq!(token("/ \\ ..", 64), "unknown");
+    }
+
+    /// A rename that fails (the file is held elsewhere without delete
+    /// sharing) never truncates: lines go on, then stop at twice the cap.
+    #[cfg(windows)]
+    #[test]
+    fn a_failed_roll_over_keeps_appending_and_never_truncates() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("host.log");
+        let mut log = LogFile::open(path.clone(), 40).unwrap();
+        // The older file is a directory: renaming over it fails.
+        std::fs::create_dir(LogFile::older(&path)).unwrap();
+        for n in 0..10 {
+            log.write(&format!("line {n} xxxxxxxxxx"));
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.starts_with("line 0"), "{text:?}");
+        assert!(text.len() as u64 <= 3 * 40, "{}", text.len());
+        assert!(!text.contains("line 9"), "stopped past twice the cap");
     }
 
     #[test]

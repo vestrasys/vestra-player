@@ -1390,6 +1390,16 @@ pub fn thread_cycles() -> u64 {
     vestra_win32::thread_cycles()
 }
 
+/// The session ends, or asks to (shutdown, restart, logoff, an update's
+/// restart): `ended(true)` for `WM_QUERYENDSESSION` and `WM_ENDSESSION`
+/// with TRUE, `ended(false)` when the end was cancelled. On the UI thread,
+/// inside the message; keep it short.
+pub fn on_session_end(ended: impl Fn(bool) + 'static) {
+    vestra_win32::on_session_end(move |what| {
+        ended(what != vestra_win32::SessionEnd::Cancelled);
+    });
+}
+
 /// The host log's memory line: this process's private bytes and the system
 /// commit charge.
 pub fn memory_status() -> Option<super::MemoryStatus> {

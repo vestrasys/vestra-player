@@ -383,6 +383,12 @@ fn main() -> Result<()> {
     }
     let shader_guard =
         host::ShaderGuard::new(guard.clone(), startup.keys.key.clone(), shader_block);
+    if !headless {
+        // Shutdown, restart, logoff (Windows): the shader guard settles and
+        // the exit line is written before the system ends the process.
+        let writer = shader_guard.writer();
+        platform::on_session_end(move |ending| host::session_end(&writer, ending));
+    }
     let mut observed_source = Value::Null;
     let (events, receiver) = mpsc::channel();
     if !headless {
