@@ -89,6 +89,11 @@ struct WriterShared {
     /// the record was settled when it was asked, so an armed guard writes
     /// `applying` again at the next tick.
     cancelled: std::sync::atomic::AtomicBool,
+    /// The session is ending (`WM_QUERYENDSESSION`, `WM_ENDSESSION` TRUE):
+    /// no `applying` is written any more, until a cancel.
+    ending: std::sync::atomic::AtomicBool,
+    /// The `exit:` line for the session's end was written (once).
+    exit_logged: std::sync::atomic::AtomicBool,
 }
 
 /// Writes the shaders' record off the UI thread (`write_replacing` syncs
@@ -116,7 +121,13 @@ impl ShaderWriter {
             .unwrap_or_else(PoisonError::into_inner)
     }
     fn send(&self, op: Op) {
-        if self.file.is_off() {
+        if self.file.is_off()
+            || (matches!(op, Op::Applying(..))
+                && self
+                    .shared
+                    .ending
+                    .load(std::sync::atomic::Ordering::Acquire))
+        {
             return;
         }
         let mut state = self.lock();
@@ -181,6 +192,27 @@ impl ShaderWriter {
         state.busy = false;
         state.written += 1;
         self.shared.changed.notify_all();
+    }
+    /// Wait up to `limit` for the requests handed over to be on disk (a
+    /// device loss restarts the player and this process ends next: a
+    /// pending `applying` must not be lost). Whether everything was
+    /// written.
+    pub(crate) fn persist(&self, limit: Duration) -> bool {
+        let deadline = Instant::now() + limit;
+        let mut state = self.lock();
+        while state.next.is_some() || state.busy {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return false;
+            }
+            state = self
+                .shared
+                .changed
+                .wait_timeout(state, left)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+        }
+        true
     }
     /// Wait until every request was written (tests).
     #[cfg(test)]
@@ -430,19 +462,57 @@ impl ShaderGuard {
     }
 }
 
-/// The session ends (`ending`) or its end was cancelled: settle at once,
-/// on the UI thread inside the message (Windows may end the process soon
-/// after); a cancelled end arms the guard again at the next tick.
-pub(crate) fn session_end(writer: &ShaderWriter, ending: bool) {
-    if ending {
-        writer.settle_now();
-        logged!("exit: the session ends (shutdown, restart or logoff)");
-    } else {
-        writer
-            .shared
-            .cancelled
-            .store(true, std::sync::atomic::Ordering::Release);
-        logged!("session: the end of the session was cancelled");
+/// The session asks to end, ends, or its end was cancelled. Asked or
+/// ending: settled at once, on the UI thread inside the message (Windows may
+/// end the process soon after), and no `applying` is written any more;
+/// ending also writes the `exit:` line, once. Cancelled: a `session:` line
+/// (no `exit:` came before it), and an armed guard writes `applying` again
+/// at the next tick.
+pub(crate) fn session_end(writer: &ShaderWriter, event: platform::SessionEvent) {
+    use std::sync::atomic::Ordering;
+    let shared = &writer.shared;
+    match event {
+        platform::SessionEvent::Query | platform::SessionEvent::Ending => {
+            shared.ending.store(true, Ordering::Release);
+            writer.settle_now();
+            if event == platform::SessionEvent::Ending
+                && !shared.exit_logged.swap(true, Ordering::AcqRel)
+            {
+                logged!("exit: the session ends (shutdown, restart or logoff)");
+            }
+        }
+        platform::SessionEvent::Cancelled => {
+            shared.ending.store(false, Ordering::Release);
+            shared.exit_logged.store(false, Ordering::Release);
+            shared.cancelled.store(true, Ordering::Release);
+            logged!("session: the end of the session was cancelled; the player goes on");
+        }
+    }
+}
+
+/// The writer the device-loss restart waits for (`register_shader_writer`).
+static RESTART_WRITER: Mutex<Option<ShaderWriter>> = Mutex::new(None);
+
+/// The writer `persist_shader_guard` waits for (`main.rs`, once).
+pub(crate) fn register_shader_writer(writer: ShaderWriter) {
+    *RESTART_WRITER
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner) = Some(writer);
+}
+
+/// Before a device loss restarts the player (`host/restart.rs`,
+/// `restart_player`; any thread): a shader record handed to the writer is
+/// put on disk first, for at most 2 s, so the `applying` of shaders that
+/// were on survives this process and keeps them off in the restarted one.
+pub(crate) fn persist_shader_guard() {
+    let writer = RESTART_WRITER
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    if let Some(writer) = writer
+        && !writer.persist(Duration::from_secs(2))
+    {
+        diag!("shaders: the crash guard's last write did not finish before the restart");
     }
 }
 
@@ -516,7 +586,9 @@ impl Host {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::SessionEvent;
     use crate::playback::render_state::{ShaderState, now as unix_now};
+    use std::sync::atomic::Ordering;
 
     fn key() -> GuardKey {
         GuardKey {
@@ -689,11 +761,60 @@ mod tests {
         guard.set(1, "render", "acme.a", 1, 0);
         guard.tick(playing(FIRST_FRAMES), Instant::now());
         assert_eq!(state(&guard, &file), Some(ShaderState::Applying));
-        session_end(&guard.writer(), true);
+        session_end(&guard.writer(), SessionEvent::Query);
         assert_eq!(file.read().shaders.unwrap().state, ShaderState::Ok);
-        session_end(&guard.writer(), false);
+        let shared = &guard.writer.shared;
+        assert!(!shared.exit_logged.load(Ordering::Acquire), "no exit yet");
+        session_end(&guard.writer(), SessionEvent::Cancelled);
         guard.tick(playing(3), Instant::now());
         assert_eq!(state(&guard, &file), Some(ShaderState::Applying));
+        // Ending: one exit line, however often it is told.
+        session_end(&guard.writer(), SessionEvent::Ending);
+        session_end(&guard.writer(), SessionEvent::Ending);
+        assert!(guard.writer.shared.exit_logged.load(Ordering::Acquire));
+        assert_eq!(file.read().shaders.unwrap().state, ShaderState::Ok);
+    }
+
+    /// Re-review item 2: once the session ends, no tick writes `applying`
+    /// again (a list drawn later, a pending one), until a cancel.
+    #[test]
+    fn nothing_is_armed_after_the_session_ended() {
+        let (_dir, file, mut guard) = guard();
+        guard.set(1, "render", "acme.a", 1, 0);
+        guard.tick(playing(FIRST_FRAMES), Instant::now());
+        assert_eq!(state(&guard, &file), Some(ShaderState::Applying));
+        session_end(&guard.writer(), SessionEvent::Ending);
+        // Paused and resumed, a new plugin's list drawn: nothing written.
+        guard.tick(Observed::default(), Instant::now());
+        guard.set(2, "render", "acme.b", 1, 10);
+        guard.tick(playing(20), Instant::now());
+        guard.tick(playing(21), Instant::now());
+        assert_eq!(state(&guard, &file), Some(ShaderState::Ok));
+        assert_eq!(file.read().shaders.unwrap().plugins, ["acme.a"]);
+        // Cancelled: armed again.
+        session_end(&guard.writer(), SessionEvent::Cancelled);
+        guard.tick(playing(22), Instant::now());
+        assert_eq!(state(&guard, &file), Some(ShaderState::Applying));
+        assert_eq!(file.read().shaders.unwrap().plugins, ["acme.a", "acme.b"]);
+    }
+
+    /// Re-review item 1: before a device-loss restart the pending
+    /// `applying` reaches the disk (the writer is waited for, not skipped).
+    #[test]
+    fn a_pending_applying_is_on_disk_once_persisted() {
+        let (_dir, file, mut guard) = guard();
+        guard.set(1, "render", "acme.a", 1, 0);
+        guard.tick(playing(FIRST_FRAMES), Instant::now());
+        // No `flush`: what the restart path does.
+        assert!(guard.writer().persist(Duration::from_secs(5)));
+        assert_eq!(file.read().shaders.unwrap().state, ShaderState::Applying);
+        // A writer that is busy too long: `persist` gives up and says so.
+        let stuck = guard.writer();
+        stuck.lock().busy = true;
+        assert!(!stuck.persist(Duration::from_millis(20)));
+        stuck.lock().busy = false;
+        // Without a registered writer the restart path does nothing.
+        persist_shader_guard();
     }
 
     /// The run after a crash with shaders on: non-empty lists are refused

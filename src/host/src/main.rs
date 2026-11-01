@@ -387,7 +387,10 @@ fn main() -> Result<()> {
         // Shutdown, restart, logoff (Windows): the shader guard settles and
         // the exit line is written before the system ends the process.
         let writer = shader_guard.writer();
-        platform::on_session_end(move |ending| host::session_end(&writer, ending));
+        platform::on_session_end(move |event| host::session_end(&writer, event));
+        // A device loss restarts the player from any thread: the guard's
+        // pending write goes to disk first (`host::persist_shader_guard`).
+        host::register_shader_writer(shader_guard.writer());
     }
     let mut observed_source = Value::Null;
     let (events, receiver) = mpsc::channel();

@@ -44,6 +44,8 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
     if RESTARTING.swap(true, Ordering::AcqRel) {
         return;
     }
+    // The shader guard's pending `applying` reaches the disk first.
+    super::diagnostics::persist_shader_guard();
     let off = lost.guard.device_lost(&lost.keys, render_state::now());
     let why = software_after_loss(lost, off, std::time::Instant::now());
     let Ok(exe) = std::env::current_exe() else {

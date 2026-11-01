@@ -1391,12 +1391,16 @@ pub fn thread_cycles() -> u64 {
 }
 
 /// The session ends, or asks to (shutdown, restart, logoff, an update's
-/// restart): `ended(true)` for `WM_QUERYENDSESSION` and `WM_ENDSESSION`
-/// with TRUE, `ended(false)` when the end was cancelled. On the UI thread,
-/// inside the message; keep it short.
-pub fn on_session_end(ended: impl Fn(bool) + 'static) {
+/// restart): `WM_QUERYENDSESSION` is `Query`, `WM_ENDSESSION` TRUE
+/// `Ending`, FALSE `Cancelled`. On the UI thread, inside the message;
+/// keep it short.
+pub fn on_session_end(ended: impl Fn(super::SessionEvent) + 'static) {
     vestra_win32::on_session_end(move |what| {
-        ended(what != vestra_win32::SessionEnd::Cancelled);
+        ended(match what {
+            vestra_win32::SessionEnd::Query => super::SessionEvent::Query,
+            vestra_win32::SessionEnd::Ending => super::SessionEvent::Ending,
+            vestra_win32::SessionEnd::Cancelled => super::SessionEvent::Cancelled,
+        });
     });
 }
 

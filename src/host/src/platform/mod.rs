@@ -525,11 +525,23 @@ pub struct MemoryStatus {
     pub physical_load: Option<u32>,
 }
 
+/// What `on_session_end` reports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+pub enum SessionEvent {
+    /// The system asks whether the session may end.
+    Query,
+    /// It ends; the process may be ended any time after.
+    Ending,
+    /// The end was cancelled.
+    Cancelled,
+}
+
 /// The session ends (Windows: `WM_QUERYENDSESSION`/`WM_ENDSESSION` through
 /// `vestra-win32`). macOS: a logout or shutdown asks the app to quit, which
 /// ends the event loop like Quit, so nothing more is needed here.
 #[cfg(not(target_os = "windows"))]
-pub fn on_session_end(_ended: impl Fn(bool) + 'static) {}
+pub fn on_session_end(_ended: impl Fn(SessionEvent) + 'static) {}
 
 /// Windows only (`vestra-win32`); macOS would need the Mach task calls in
 /// an unsafe crate, so no memory line there yet.
