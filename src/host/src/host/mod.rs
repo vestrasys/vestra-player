@@ -227,6 +227,10 @@ pub(crate) struct Host {
     pub(crate) file_types: Value,
     /// Mount requests of other plugins waiting for the built-ins to start: reply, method, params.
     pub(crate) held_mounts: slot_claims::Gate<(Reply, String, Value)>,
+    /// The large array of the request being answered, converted on its
+    /// plugin's reader thread (`Event::Prepared`, `take_prepared`): owner,
+    /// request id, rows.
+    pub(crate) prepared: Option<(u64, u64, Box<crate::ui::ui_values::Prepared>)>,
     /// What a running plugin was refused because another holds it: the
     /// `packages.list` `warnings` entry and its text, per owner.
     pub(crate) warnings: BTreeMap<u64, Vec<(Value, String)>>,

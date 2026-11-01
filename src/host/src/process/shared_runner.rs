@@ -554,7 +554,7 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
                 Some(g) if g > 0 && link.is_member(g) => {
                     let _ = events.send(Event::RuntimeFault(
                         g,
-                        "protocol message exceeds 1 MiB".into(),
+                        format!("protocol message exceeds {} MiB", MAX_MESSAGE_BYTES >> 20),
                     ));
                     if !bytes.ends_with(b"\n") && reader.skip_until(b'\n').unwrap_or(0) == 0 {
                         return;
@@ -575,7 +575,9 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
                 Ok((g, message)) => {
                     // A plugin already stopped (its last lines), or none of
                     // this runner's: never another owner's.
-                    if link.is_member(g) && events.send(Event::Request(g, message)).is_err() {
+                    if link.is_member(g)
+                        && events.send(crate::process::request(g, message)).is_err()
+                    {
                         return;
                     }
                 }

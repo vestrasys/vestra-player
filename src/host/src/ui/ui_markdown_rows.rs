@@ -149,14 +149,15 @@ fn nested_images_limits_and_failures() {
             .code,
         "invalid"
     );
-    // Per value: 1 MiB of text in all, documents included.
+    // Per value: 16 MiB of text in all (player 0.6.0), documents included.
     let part = "段".repeat(70_000);
-    let five = [part.as_str(); 5];
+    let fit = crate::ui::ui_values::MAX_TEXT_BYTES / part.len() - 1;
+    let many = vec![part.as_str(); fit + 2];
     assert!(
         convert(
             &mut cache,
             SLOT,
-            &chat(&five[..4]),
+            &chat(&many[..fit]),
             &mut |_| None,
             &mut no_images
         )
@@ -165,7 +166,7 @@ fn nested_images_limits_and_failures() {
     let error = convert(
         &mut cache,
         SLOT,
-        &chat(&five),
+        &chat(&many),
         &mut |_| None,
         &mut no_images,
     )
@@ -173,7 +174,7 @@ fn nested_images_limits_and_failures() {
     assert!(error.message.contains("total bytes"), "{}", error.message);
     // A failed write keeps the documents the property still shows.
     let before = cache.parsed;
-    convert_plain(&mut cache, SLOT, &chat(&five[..4]));
+    convert_plain(&mut cache, SLOT, &chat(&many[..fit]));
     assert_eq!(cache.parsed, before);
     // Malformed documents are `invalid` at any depth.
     let bad = json!({"a": [{"$vestraMarkdown": {"text": 1}}]});

@@ -502,6 +502,9 @@ impl Host {
                 Ok(Some(Value::Null))
             }
             "settings.set" => {
+                // A large array converted on the reader thread (P3): its
+                // whole value was taken out of `params`.
+                let mut prepared = self.take_prepared(reply);
                 let id = params_page(params)?.to_owned();
                 let property = string(params, "property")?.to_owned();
                 let page = self
@@ -510,9 +513,16 @@ impl Host {
                     .ok_or_else(|| RpcError::new("missing", "page not registered"))?;
                 let (view, serial) = (page.view(), page.serial);
                 let window = self.settings.window().map(ComponentHandle::clone_strong);
-                let whole;
-                let (value, seq) = match params.get("patch") {
-                    Some(patch) => {
+                // A part of a whole value sent in parts: held until the last.
+                let parted = self.parts(owner, &view, &property, params, prepared.as_deref())?;
+                let done = match parted {
+                    ui_patch::Parted::Held => return Ok(Some(Value::Null)),
+                    ui_patch::Parted::Done(value, rows, seq) => Some((value, Some(rows), seq)),
+                    ui_patch::Parted::Not => None,
+                };
+                let (value, rows, seq) = match (done, params.get("patch")) {
+                    (Some(done), _) => done,
+                    (None, Some(patch)) => {
                         let (base, seq, ops) = ui_patch::request(patch)?;
                         if self.images.seq(owner, &view, &property) != base {
                             return Err(ui_patch::stale());
@@ -524,21 +534,28 @@ impl Host {
                             window.as_ref(),
                             &property,
                             ops,
+                            prepared.take(),
                         )? {
                             None => {
                                 self.images.set_seq(owner, &view, &property, seq);
                                 return Ok(Some(Value::Null));
                             }
-                            Some(patched) => {
-                                whole = patched;
-                                (&whole, seq)
-                            }
+                            Some(patched) => (patched, None, seq),
                         }
                     }
-                    None => (&params["value"], params["seq"].as_u64().unwrap_or(0)),
+                    (None, None) => {
+                        let seq = params["seq"].as_u64().unwrap_or(0);
+                        match prepared.map(|prepared| *prepared) {
+                            Some(prepared) => {
+                                (prepared.whole.unwrap_or_default(), Some(prepared.rows), seq)
+                            }
+                            None => (params["value"].clone(), None, seq),
+                        }
+                    }
                 };
                 if let Some(window) = window {
-                    let value = self.prop_value(owner, &view, &property, value)?;
+                    let value =
+                        self.prop_value_with(owner, &view, &property, &value, rows.as_ref())?;
                     let alias = alias(serial);
                     let current = window
                         .get_global_property(&alias, &property)
@@ -547,13 +564,13 @@ impl Host {
                         ui_values::set(&window, Some(&alias), &property, value)
                             .map_err(|e| RpcError::new("ui", e.to_string()))?;
                     }
-                } else if ui_image::reference(value).is_some() {
+                } else if ui_image::reference(&value).is_some() {
                     // Checked now, shown when the window opens.
-                    self.prop_value(owner, &view, &property, value)?;
-                } else {
-                    RpcError::check_property(&property, value)?;
+                    self.prop_value(owner, &view, &property, &value)?;
+                } else if rows.is_none() {
+                    // Prepared rows were checked on the reader thread.
+                    RpcError::check_property(&property, &value)?;
                 }
-                let value = value.clone();
                 if let Some(page) = self.settings.page_mut(owner, &id) {
                     page.properties.insert(property.clone(), value);
                 }
@@ -585,6 +602,7 @@ impl Host {
     /// for the caller to write. A closed window's page checks the patched
     /// whole value against the value limits, as a closed page's whole write
     /// does.
+    #[allow(clippy::too_many_arguments)]
     fn patch_page(
         &mut self,
         owner: u64,
@@ -593,6 +611,7 @@ impl Host {
         window: Option<&slint_interpreter::ComponentInstance>,
         property: &str,
         ops: &Value,
+        prepared: Option<Box<ui_values::Prepared>>,
     ) -> std::result::Result<Option<Value>, RpcError> {
         let page = self
             .settings
@@ -608,10 +627,14 @@ impl Host {
                 .get_global_property(&alias(serial), property)
                 .map_err(|e| RpcError::new("ui", e.to_string()))?;
             let rows = self
-                .patch_rows(owner, &view, property, &ops)?
-                .filter(|rows| {
-                    ui_patch::applicable(&current, ops.before, &ops.shapes, &rows.values)
-                });
+                .patch_rows(
+                    owner,
+                    &view,
+                    property,
+                    &ops,
+                    prepared.as_ref().map(|prepared| &prepared.rows),
+                )?
+                .filter(|rows| ui_patch::applicable(&current, ops.before, &ops.shapes, rows));
             let Some(rows) = rows else {
                 return match self
                     .settings
@@ -622,7 +645,7 @@ impl Host {
                     _ => Err(ui_patch::stale()),
                 };
             };
-            ui_patch::apply(&current, &ops.shapes, rows.values);
+            ui_patch::apply(&current, &ops.shapes, rows.values, &rows.images);
             self.images
                 .patched_rows(owner, &view, property, rows.written);
         } else {
@@ -641,7 +664,11 @@ impl Host {
             }
             return Ok(None);
         }
-        let rows: Vec<Value> = ops.rows.iter().map(|row| (*row).clone()).collect();
+        // The stored rows: copied on the reader thread when large.
+        let rows: Vec<Value> = match prepared {
+            Some(prepared) if prepared.carried.len() == ops.rows.len() => prepared.carried,
+            _ => ops.rows.iter().map(|row| (*row).clone()).collect(),
+        };
         if let Some(Value::Array(stored)) = self
             .settings
             .page_mut(owner, id)

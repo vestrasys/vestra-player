@@ -2,8 +2,26 @@
 use super::*;
 
 impl Host {
+    /// The prepared rows of the request `reply` answers (`Event::Prepared`),
+    /// taken: each request has one value.
+    pub(crate) fn take_prepared(
+        &mut self,
+        reply: &Reply,
+    ) -> Option<Box<crate::ui::ui_values::Prepared>> {
+        match &self.prepared {
+            Some((owner, id, _)) if *owner == reply.owner && *id == reply.id => {
+                self.prepared.take().map(|(_, _, prepared)| prepared)
+            }
+            _ => None,
+        }
+    }
     pub(crate) fn handle(&mut self, event: Event) {
         match event {
+            Event::Prepared(owner, message, prepared) => {
+                self.prepared = message["id"].as_u64().map(|id| (owner, id, prepared));
+                self.handle(Event::Request(owner, message));
+                self.prepared = None;
+            }
             Event::Request(owner, message) => {
                 if !self.plugins.contains_key(&owner) {
                     return;
