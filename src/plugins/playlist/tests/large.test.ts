@@ -579,8 +579,8 @@ test("persistence: no snapshot of the list for updates that change nothing saved
     await app.host.command("playlist.add").run();
     await app.until(() => app.count() === 1000, "the files to be added");
     await app.scroll(0);
-    // The first 50 rows are read before the list reports its height.
-    await app.until(() => app.rows().slice(0, 50).every((row) => row.duration === "01:01"), "the durations");
+    // The 41 rows on screen in an 800 px list (rows read before the height came may be dropped).
+    await app.until(() => app.rows().slice(0, 41).every((row) => row.duration === "01:01"), "the durations");
     // Until the bursts' snapshots are done (a loaded machine may take longer).
     do {
       snapshots = 0;
@@ -588,7 +588,7 @@ test("persistence: no snapshot of the list for updates that change nothing saved
     } while (snapshots);
     // Scrolls within read rows and position ticks: updates, nothing saved changes.
     for (let i = 0; i < 10; i++) {
-      await app.scroll(i * 20);
+      await app.scroll(i * 2); // within row 0: rows 0–40 stay on screen
       app.host.setSource({ phase: "ready", position: i });
       await app.host.settle();
     }
@@ -638,7 +638,7 @@ test("sidebar.slint draws the rows with a ListView over `rows` (no ScrollView wi
   assert.match(row, /^\s*height: root\.row-height;$/m);
 });
 
-test("unchanged rows are the same objects on the next pass (the SDK's encode cache can skip them)", async () => {
+test("unchanged rows are the same objects on the next pass (lets SDK 1.5.47's identity cache skip them)", async () => {
   const root = await mkdtemp(join(tmpdir(), "vestra-playlist-large-"));
   const files: string[] = [];
   for (let i = 0; i < 300; i++) {

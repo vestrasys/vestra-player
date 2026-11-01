@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+Who must change: nobody. What users see: turning thumbnails on or off now really keeps the row at the top of the list (0.2.1 could still jump far away). Needs player 0.6.0.
+
+- The list keeps its top row itself when the row height changes; the sidebar no longer sets the scroll position then (that ran before the list's layout, which still used the old height).
+- The scroll the list reports after the toggle is no longer taken for the user's (it may differ from the expected one by less than a row), so following the playing row does not pause for 2 seconds.
+
 ## 0.2.1
 
 Who must change: nobody. What users see: turning thumbnails on or off keeps the row at the top of the list where it was (before, the list could jump far away); long lists react faster to clicks. Needs player 0.6.0.

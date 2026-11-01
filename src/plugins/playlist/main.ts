@@ -895,8 +895,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   };
   /**
    * The object sent last for each row: an unchanged row is the same object on the next pass
-   * (0.2.1), so the SDK can skip encoding it again (an encode cache by identity), which at
-   * 20,000 rows is most of a pass's cost.
+   * (0.2.1), which lets SDK 1.5.47's encode cache by identity skip encoding it again (at
+   * 20,000 rows most of a pass's cost).
    */
   const sentRows = new WeakMap<Row, ViewRow>();
   const viewRow = (row: Row, next: ViewRow) => {
@@ -1119,7 +1119,9 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     // A new panel's first report, and a resize while it settles, are layout, not the user.
     const settled = settling() && (!appeared.reported || resized);
     appeared.reported = true;
-    const ours = (Math.abs(next - scroller.to) < 1 && Date.now() - scroller.sentAt < 500) || settled;
+    // Within a row of the scroll asked for or expected: the list keeps the top row's partial
+    // offset (the thumbnail toggle, 0.2.2), so its report can differ by less than a row.
+    const ours = (Math.abs(next - scroller.to) < rowHeight() && Date.now() - scroller.sentAt < 500) || settled;
     if (Math.abs(next - listArea.scroll) >= 1 && !ours) scroller.userAt = Date.now();
     listArea.scroll = next;
     const known = Number.isFinite(listArea.height);
