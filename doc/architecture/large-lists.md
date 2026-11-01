@@ -1,6 +1,6 @@
 # Large lists and incremental row updates in plugin views
 
-Status: P1 implemented (player 0.6.0, SDK 1.5.44); P2 implemented (SDK 1.5.45, pending release); P3 host part implemented (player 0.6.0, SDK 1.5.46), the playlist migration in progress. Author: API maintainer. Date: 2026-11-01.
+Status: P1 shipped (player 0.6.0, SDK 1.5.44); P2 shipped (SDK 1.5.45); P3 shipped (player 0.6.0, SDK 1.5.46), and the playlist draws its list with a `ListView` since 0.2.0 (now 0.2.3). VestraTube is not migrated yet (§4.5). Author: API maintainer. Date: 2026-11-01.
 Baseline: player `release-0.6.0` (host 0.6.0, Slint 1.18.1), SDK 1.5.43.
 
 This replaces the earlier draft that proposed sparse lists (`plugin.ui.list`, on-demand rows, placeholders). The user simplified the plan on 2026-10-31: no sparse or on-demand rows, no placeholders, no `plugin.ui.list`, and no new plugin API at all. What remains is three steps that make the existing plain-array properties cheap:
@@ -145,14 +145,14 @@ Windows laptop (Ryzen 9 7940HS, Radeon 780M), 2026-10-31. Host: `biglist_bench.r
 
 ---
 
-## 3. P2: precise invalidation (SDK only, planned)
+## 3. P2: precise invalidation (SDK only, shipped in SDK 1.5.45)
 
-Today `Runtime.invalidate()` re-runs every binding (one per view, which evaluates all of the view's binders, and one per command) on any cause, including a `source.state` mirror update every 100 ms. Read tracking already exists (`#reads`, `held`) but only tells the player which events are listened to (lazy activation).
+Before P2, `Runtime.invalidate()` re-ran every binding (one per view, which evaluates all of the view's binders, and one per command) on any cause, including a `source.state` mirror update every 100 ms. Read tracking already existed (`#reads`, `held`) but only told the player which events are listened to (lazy activation).
 
-Plan, with no API change:
+What SDK 1.5.45 does, with no API change:
 
 - **Field-level read tracking for host state mirrors.** `plugin.player.state` and the other mirrors record which fields a binder or command state read (`position` versus `paused`). A host state event computes the changed fields and re-runs only the binders and command states that read one of them.
-- **A full pass** after any plugin code the SDK invokes (a command's `run`, a window callback handler, an event listener) and after `plugin.update()`: plugin state may have changed in ways the SDK cannot see, so every binder runs, as today.
+- **A full pass** after any plugin code the SDK invokes (a command's `run`, a window callback handler, an event listener) and after `plugin.update()`: plugin state may have changed in ways the SDK cannot see, so every binder runs, as before.
 - **A 1 s safety full pass** while anything is bound, for state changed outside SDK-invoked code (a timer that does not call `plugin.update()`).
 - Effect for the playlist: a position tick no longer re-runs the O(n) `list.bind`, while every user action still does.
 
@@ -225,7 +225,6 @@ A patch costs the UI thread O(rows) of bookkeeping only (the recorded rows' cost
 
 ### 4.5 Remaining
 
-- The playlist (0.2.0, branch `playlist-listview`) passes its 4,000- and 20,000-row tests with SDK 1.5.46 (run with their skip conditions lifted locally; all 125 of its tests pass). Their skip conditions (`MESSAGE_LIMIT` of 4 or 8 MiB) and the 4,000-row test's "one write" must follow the split writes.
 - VestraTube drops its padding to 200 rows and uses a `ListView`.
 - The `ListView` risks of the plan (a gesture on a row that scrolls out, an approximate scrollbar with varying row heights, no viewport anchoring when rows are inserted above) are the plugins' spike.
 - A closed settings page still applies a patch to a copy of its stored array and checks it whole (P1; O(n) per patch on the UI thread). No settings page holds a large list.
@@ -250,7 +249,7 @@ A patch costs the UI thread O(rows) of bookkeeping only (the recorded rows' cost
 | Phase | Player | SDK |
 |---|---|---|
 | P1 | 0.6.0 (`features: ["ui.patch"]`) | 1.5.44 ("Who must change: nobody") |
-| P2 | none needed | a later patch release |
+| P2 | none needed | 1.5.45 |
 | P3 | 0.6.0 (the higher limits, plain rows off the UI thread, range notifications; `minPlayerVersion` of the migrated playlist follows it) | 1.5.46 (`UI_VALUE_LIMITS` follow; split writes) |
 
 ## 7. Risks

@@ -47,7 +47,7 @@ The preferred size uses Slint's private `WindowInner` / `ItemTreeRc::layout_info
 
 Compared with the coordinator's screenshots of the real player on Windows (plugin store, plugin manager, Vestra Player AI):
 
-- **Renderer**: Slint's software renderer, not femtovg (OpenGL), which the player uses on most machines: text antialiasing and the edges of rounded rectangles differ by a pixel or so; layout, sizes, colours, fonts and fallback are the same.
+- **Renderer**: Slint's software renderer, not the player's femtovg windows (OpenGL; on Windows since 0.5.19 Direct3D 12 through wgpu where available, in CPU mode too): text antialiasing and the edges of rounded rectangles differ by a pixel or so; layout, sizes, colours, fonts and fallback are the same.
 - **Scale**: one pixel per logical pixel by default; the player draws at the display's scale factor (`--scale 1.5` or `2` gives the same layout at that density).
 - **Size**: the declared size, which is what the player opens a plugin window at; a window the user resized is of course different.
 - **No title bar** and no window shadow: they are the system's.
@@ -55,5 +55,5 @@ Compared with the coordinator's screenshots of the real player on Windows (plugi
 - **Images**: a runtime image or Markdown image whose file no longer exists (recorded in a test's temporary data folder) is left empty and named as a problem in the index. The real player shows remote README images only after they are downloaded; the tool shows only local files.
 - **Time**: no animation runs (a spinner or fade shows its first frame), and a field the view focuses at start (the store's search field) is drawn focused (cursor, accent underline) as in an active window.
 
-Checked on 2026-10-26 against the coordinator's Windows screenshots: the Vestra Player AI window without a provider matches (the real one is 720×620 logical at scale 1.75, the same as the render; layout, banner wrapping, icon, button sizes and fonts agree); the plugin store and the Plugin Manager page match in controls, colours, fonts and layout. The store in that screenshot is about 900×480 logical, shorter than its declared 900×600 (probably resized by hand; the render shows the declared size), and the real Options tree lists every plugin's pages.
+Checked on 2026-10-26 against the coordinator's Windows screenshots: the Vestra Player AI window without a provider matches (the real one is 720×620 logical at scale 1.75, the same as the render; layout, banner wrapping, icon, button sizes and fonts agree); the plugin store and the Plugin Manager page (since removed: the store absorbed it) matched in controls, colours, fonts and layout. The store in that screenshot is about 900×480 logical, shorter than its declared 900×600 (probably resized by hand; the render shows the declared size), and the real Options tree lists every plugin's pages.
 - **States are the tests'**: a state no test reaches is not shown; sample data such as plugin names and dates are the tests' fixtures.
