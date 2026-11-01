@@ -430,6 +430,49 @@ fn the_filter_goes_last_replaces_in_place_and_comes_back_after_another_filter() 
     assert_eq!(upscaling.applied, None);
 }
 
+/// The bug: the filter went in (or stayed) while a new source's geometry
+/// was prepared, the output was scaled, the gate never saw the size it
+/// waited for, and the picture stayed on the last file's frame. No `vf add`
+/// while the gate is closed; out at once when it closes, back at once when
+/// it opens.
+#[test]
+fn the_filter_stays_out_of_the_chain_while_the_publish_gate_is_closed() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let mut upscaling = with_stand_in();
+    let gate = Arc::new(AtomicBool::new(false));
+    upscaling.follow_gate(gate.clone());
+    upscaling.owners.insert(1);
+    let now = Instant::now();
+    let in_chain = |mpv: &Mpv| labels(mpv).iter().any(|l| l == LABEL);
+    // A slow stream starts (gate closed) and the size asks for ×1.5.
+    upscaling.follow(&mpv, Some(1.5), now);
+    assert!(!in_chain(&mpv), "{:?}", labels(&mpv));
+    assert_eq!(upscaling.applied, None);
+    upscaling.follow(&mpv, Some(1.5), now + CHECK_EVERY);
+    assert!(!in_chain(&mpv));
+    // The geometry confirmed: looked at at once, and in.
+    gate.store(true, Ordering::Release);
+    assert_eq!(upscaling.due_in(now), Some(Duration::ZERO));
+    upscaling.follow(&mpv, Some(1.5), now);
+    assert_eq!(labels(&mpv).last().map(String::as_str), Some(LABEL));
+    assert_eq!(upscaling.applied, Some(1.5));
+    assert_eq!(upscaling.due_in(now), Some(CHECK_EVERY));
+    // The next file starts: out at once, the orientation filters stay.
+    gate.store(false, Ordering::Release);
+    assert_eq!(upscaling.due_in(now), Some(Duration::ZERO));
+    upscaling.follow(&mpv, Some(1.5), now);
+    assert!(!in_chain(&mpv), "{:?}", labels(&mpv));
+    assert!(labels(&mpv).iter().any(|l| l == "vestra-orientation"));
+    assert_eq!(upscaling.applied, None);
+    assert_eq!(upscaling.due_in(now), Some(CHECK_EVERY));
+    // Without a gate (tests, before the worker wires it) it is always open.
+    let mut ungated = with_stand_in();
+    ungated.follow(&mpv, Some(1.5), now);
+    assert!(in_chain(&mpv));
+    ungated.remove(&mpv);
+}
+
 #[test]
 fn a_new_size_waits_until_it_settles() {
     let mut upscaling = Upscaling::with_probe(rtx);
