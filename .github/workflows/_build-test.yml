@@ -115,3 +115,12 @@ jobs:
             }
           }
           Get-ChildItem target\debug\deps\*.exe | ForEach-Object { Write-Host "== $($_.Name)"; Show-Imports $_.FullName 0 }
+
+      # MSVC's link.exe leaves its telemetry process (vctip.exe) running; the
+      # runner's orphan clean-up once hung on it for an hour (nightly run
+      # 41284977594, package job). Stop it ourselves.
+      - name: Stop MSVC telemetry (vctip)
+        if: always() && inputs.os == 'windows'
+        timeout-minutes: 2
+        shell: pwsh
+        run: Stop-Process -Name vctip -Force -ErrorAction SilentlyContinue; exit 0

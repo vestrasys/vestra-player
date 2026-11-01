@@ -93,10 +93,12 @@ if (failed.length) problems.push(`${failed.length} plugin(s) failed to start`);
 const ready = output
   .split("\n")
   .filter((line) => /runtime\.ready/.test(line)).length;
+// The shared runner prefixes a built-in's output with its id
+// (`[vestra.playlist] HostError: …`); a plugin in its own runner does not.
 const headlessOnly = output
   .split("\n")
   .filter((line) =>
-    /^HostError: mounts require a native shell/.test(line),
+    /^(?:\[[^\]\s]+\] )?HostError: mounts require a native shell/.test(line),
   ).length;
 if (ready + headlessOnly < builtins.length)
   problems.push(
