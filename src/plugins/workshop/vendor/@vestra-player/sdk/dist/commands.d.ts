@@ -98,8 +98,11 @@ export declare const COMMAND_LIMITS: {
  * command into that menu whatever language the player's menus are in. The
  * player stores the menu's title (视频 today); later segments are titles.
  * Needs player 0.3.0 (`"minPlayerVersion": "0.3.0"`); older players show
- * `@video` as a menu of its own. The player's tests check that this list
- * agrees with the player's.
+ * `@video` as a menu of its own. `reset` (SDK 1.5.51) needs player 0.6.3:
+ * the Reset menu, directly below Settings, gathers every command that puts
+ * something back to its default; older players refuse `@reset` with
+ * `invalid`. The player's tests check that this list agrees with the
+ * player's.
  *
  * @example Put a command into the built-in Video menu
  * "Blur" appears in the player's Video menu in every interface language.
@@ -121,7 +124,7 @@ export declare const COMMAND_LIMITS: {
  * @since 1.3.0
  * @category Testing
  */
-export declare const MENU_IDS: readonly ["open", "playback", "subtitles", "video", "audio", "screen", "settings"];
+export declare const MENU_IDS: readonly ["open", "playback", "subtitles", "video", "audio", "screen", "settings", "reset"];
 /**
  * The icons a bottom-bar button may name (`CommandOptions.button.icon`):
  * every icon of the player's V-Line set, `@vestra/icons.slint` (draw one
