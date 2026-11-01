@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.7
+
+- Track names in Subtitles ▸ Subtitle Track ▸ and Secondary Subtitle ▸ are always menu texts the player accepts. A title (with its language) is cut to 24 characters and 70 bytes, a language without a title to 16 characters and 32 bytes, by whole user-perceived characters (an emoji, emoji sequence or accented letter is kept or dropped as one; a surrogate pair is never split), and the edges are trimmed after the cut, so a title whose cut ends in a space no longer gives a menu text the player refuses. C1 control characters (U+0080–U+009F, NEL among them) become spaces like C0 controls and DEL; a title of controls only falls back to "Track N". With the fallback name, " · " and a duplicate's " (n)" (Japanese "（n）"), each track item stays within the player's 80 bytes in every language of the plugin.
+- An embedded track without a title and without a track number is listed as "Track N" (with its language when it has one) instead of "Embedded " with a trailing space, which the player refused.
+- A track titled like another track's duplicate name (for example "A (3)" next to two tracks titled "A") gets the next free number, so the menu items stay distinct.
+
 ## 0.4.6
 
 - Subtitle Style ▸ Move Up / Move Down no longer default to Alt+↑ / Alt+↓, which pan the video (Video ▸ Framing ▸ Pan ↑/↓; user ruling 2026-10-27). The two defaults clashed and the player kept only one of them. Bind them yourself in Settings ▸ Keyboard Shortcuts if wanted; a key you already bound to them yourself stays. The commands, the menu items and Reset Position (Alt+Home) are unchanged.

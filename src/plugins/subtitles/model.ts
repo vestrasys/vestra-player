@@ -136,3 +136,35 @@ export function clock(seconds: number) {
   const pad = (n: number, w = 2) => String(n).padStart(w, "0");
   return `${pad(Math.floor(ms / 3600000))}:${pad(Math.floor(ms / 60000) % 60)}:${pad(Math.floor(ms / 1000) % 60)}.${pad(ms % 1000, 3)}`;
 }
+
+/** The player's limit for one menu path segment, in UTF-8 bytes. */
+export const SEGMENT_BYTES = 80;
+const encoder = new TextEncoder();
+/** UTF-8 length: the player counts menu texts in bytes. */
+export const bytes = (text: string) => encoder.encode(text).length;
+/**
+ * Data made fit for a menu line: the player refuses control characters (C0, DEL
+ * and C1) and surrounding whitespace, so a control becomes a space and the edges
+ * are trimmed (Unicode White_Space; NEL is a control).
+ */
+export const menuText = (text: string) => text.replace(/\p{Cc}/gu, " ").replace(/^\s+|\s+$/gu, "");
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+/**
+ * `menuText` cut to at most `count` user-perceived characters and `max` UTF-8
+ * bytes, from the end: a surrogate pair, emoji sequence or accented letter is
+ * kept or dropped as one, and the edges are trimmed again after the cut. May be
+ * empty (the caller has a fallback).
+ */
+export function menuCut(text: string, count: number, max: number): string {
+  let kept = "", room = max, left = count;
+  for (const { segment } of graphemes.segment(menuText(text))) {
+    const size = bytes(segment);
+    if (left === 0 || size > room) break;
+    kept += segment;
+    room -= size;
+    left--;
+  }
+  return menuText(kept);
+}
+/** What the player accepts as a path segment: 1–80 bytes, no controls, no surrounding whitespace. */
+export const segmentValid = (text: string) => text !== "" && bytes(text) <= SEGMENT_BYTES && menuText(text) === text;
