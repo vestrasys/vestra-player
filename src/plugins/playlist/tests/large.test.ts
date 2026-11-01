@@ -26,24 +26,6 @@ type ViewRow = {
 const pause = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * The row limits of the player with large lists P3 (≥ 20,000 rows per array, about 15
- * values per playlist row). Until the SDK's limits follow, a test with more rows than the
- * current limits take raises the test host's (`UI_VALUE_LIMITS`, which it enforces) for its
- * own run. The 1 MiB protocol line (`MESSAGE_LIMIT`) stays: it bounds one write anyway.
- */
-async function withP3Limits(run: () => Promise<void>) {
-  const limits = UI_VALUE_LIMITS as { values: number; arrayRows: number };
-  const before = { values: limits.values, arrayRows: limits.arrayRows };
-  limits.arrayRows = Math.max(before.arrayRows, 20_000);
-  limits.values = Math.max(before.values, 20_000 * 16);
-  try {
-    await run();
-  } finally {
-    Object.assign(limits, before);
-  }
-}
-
-/**
  * `count` empty media files in folders of 100, the playlist plugin, and a record of every
  * panel write (the value the panel shows after it) and of every write the host refused.
  */
@@ -228,6 +210,9 @@ test("drag reorder past the view: a drop after the list scrolled moves the dragg
     // before row 901 of the order the list showed while dragging.
     for (let y = 0; y <= 880 * 20; y += 60 * 20) await app.scroll(y);
     await app.scroll(880 * 20);
+    // The durations of the rows now on screen arrive first (they change those rows).
+    await app.until(() => app.rows().slice(880, 921).every((row) => row.duration === "01:01"), "the durations on screen");
+    await app.host.settle(50);
     const before = byId(app.rows());
     const ids = app.rows().map((row) => row.id);
     await app.emit("drop-row", third, 900);
@@ -354,8 +339,7 @@ test("1000 files with thumbnails: the list shows as fast as without; ffmpeg runs
     assert.equal(on.made(), 17, "nothing beyond the rows near the view");
     assert.equal(app.probes(), 17, "durations: the same rows");
     const picture = (row: ViewRow) => {
-      const path = app.host.imagePath(row.thumb);
-      return !!path && !path.endsWith("placeholder.png");
+      return row.thumb !== null && !!app.host.imagePath(row.thumb);
     };
     await app.until(() => app.rows().filter(picture).length === 17, "the pictures");
     // Far down: only the rows near the new view; pictures only within 20 rows of the view.
@@ -366,9 +350,9 @@ test("1000 files with thumbnails: the list shows as fast as without; ffmpeg runs
     const shown = app.rows().flatMap((row, at) => (picture(row) ? [at] : []));
     assert.ok(shown.every((at) => at >= 700 - 20 && at < 700 + 14 + 20), `pictures in rows ${shown.join(", ")}`);
     assert.equal(shown.length, 20);
-    // One reference per picture (the same one in every write), plus the placeholder.
+    // One reference per picture (the same one in every write); rows without one hold `null`.
     const images = new Set(app.host.images.map((image) => image.ref)).size;
-    assert.equal(images, 38, "37 pictures and the placeholder");
+    assert.equal(images, 37, "37 pictures");
     assert.deepEqual(app.refused, []);
   } finally {
     await on.app.close();
@@ -501,16 +485,15 @@ test("1000 files: the list opens on the playing row, centred (F6, its tab, detac
 });
 
 /**
- * One write of the whole list must fit the 1 MiB protocol line the SDK's test host (and the
- * player) take: 4000 rows do not (about 300 bytes a row with the placeholder picture).
- * Large lists P3 has to raise it (or split the first write); until then this test waits.
+ * Lists above 4,096 rows need the large lists P3 player and SDK (player 0.6.0, SDK 1.5.46:
+ * 100,000 rows per array; the SDK splits a write over 512 KiB into parts below the 1 MiB
+ * protocol line). With an older SDK these tests wait.
  */
-const P3_LINE = MESSAGE_LIMIT >= 4 * 1024 * 1024 ? false : "needs the large lists P3 player and SDK: one write of 4000 rows is over the 1 MiB protocol line";
+const P3_ROWS = UI_VALUE_LIMITS.arrayRows >= 20_000 ? false : "needs the large lists P3 SDK (UI_VALUE_LIMITS.arrayRows ≥ 20,000)";
 
-test("4000 rows (P3 limits): sent whole once, then scrolling, selecting and moving write only what changed", { skip: P3_LINE }, async (t) => {
-  await withP3Limits(async () => {
-    // A remembered list of 4000 links (short sources: one write of 4000 rows must stay under
-    // the 1 MiB protocol line; see the measurement below).
+test("4000 rows (P3 limits): sent whole once, then scrolling, selecting and moving write only what changed", { skip: P3_ROWS }, async (t) => {
+  {
+    // A remembered list of 4000 links.
     const data = await mkdtemp(join(tmpdir(), "vestra-playlist-large-data-"));
     const rows = Array.from({ length: 4000 }, (_, i) => ({ kind: "url", source: `https://e.org/${i}`, title: null, duration: null }));
     await writeFile(
@@ -522,9 +505,17 @@ test("4000 rows (P3 limits): sent whole once, then scrolling, selecting and movi
     try {
       await app.scroll(0);
       await app.until(() => app.count() === 4000, "the remembered list");
-      const whole = app.writes.filter((write) => write.property === "rows").at(-1)!;
-      t.diagnostic(`one write of 4000 link rows: ${whole.bytes} bytes (${(whole.bytes / 4000).toFixed(0)} per row)`);
-      assert.ok(whole.bytes < MESSAGE_LIMIT);
+      // The whole list arrived (the SDK may split it into several messages, each one under
+      // the protocol line): every row, in order, each with its id.
+      assert.deepEqual(
+        app.rows().map((row) => row.label),
+        rows.map((row) => row.source),
+      );
+      assert.equal(new Set(app.rows().map((row) => row.id)).size, 4000);
+      const parts = app.writes.filter((write) => write.property === "rows");
+      const total = parts.reduce((sum, write) => sum + write.bytes, 0);
+      t.diagnostic(`4000 link rows: ${parts.length} message(s), ${total} bytes (${(total / 4000).toFixed(0)} per row)`);
+      assert.ok(parts.every((write) => write.bytes < MESSAGE_LIMIT));
       const sent = app.rowWrites();
       for (const y of [1000, 20_000, 79_200, 40_000]) await app.scroll(y);
       assert.equal(app.rowWrites(), sent, "scrolling writes no rows (links have no duration to read)");
@@ -547,7 +538,7 @@ test("4000 rows (P3 limits): sent whole once, then scrolling, selecting and movi
       await app.close();
       await rm(data, { recursive: true, force: true });
     }
-  });
+  }
 });
 
 test("persistence: no snapshot of the list for updates that change nothing saved", async () => {

@@ -6,7 +6,7 @@ Who must change: nobody. What users see: nothing new; long lists scroll and upda
 
 - The list is a `ListView` over every shown row (large lists P3) instead of a hand-made window of 200 rows in a scroll view: only the rows in view have elements, and the plugin no longer moves a window as the list scrolls. Each row carries a stable `id`, so on player 0.6.0 a change is sent as row operations (a move, an insertion, a removal, one changed row) instead of rewriting rows; row numbers come from the row's place in the list (and are sent with the rows only while a search filters), so moving a row changes no other row.
 - Pressing, dragging (with edge scrolling), releasing and double-clicking are handled once for the whole list, which maps the pointer to a row by the row height and the scroll: a row scrolled out of view during a drag no longer takes the drag with it. One insertion marker is drawn for the list. Rows tell screen readers their place and whether they are selected.
-- Each row holds its thumbnail (the placeholder away from the view), so a picture moves with its row; the separate list of pictures is gone.
+- Each row holds its thumbnail (none away from the view: an empty image, player 0.6.0), so a picture moves with its row; the separate list of pictures and the placeholder picture file are gone.
 - The list is saved only when something saved changed, not checked every 200 ms while the list updates.
 
 ## 0.1.12

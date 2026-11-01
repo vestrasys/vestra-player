@@ -6,7 +6,7 @@ import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import type { Json } from "@vestra-player/sdk";
-import { HostError, MESSAGE_LIMIT, startPlugin, TestHost, UI_VALUE_LIMITS } from "@vestra-player/sdk/testing";
+import { HostError, startPlugin, TestHost, UI_VALUE_LIMITS } from "@vestra-player/sdk/testing";
 import { settleFiles } from "./settle.ts";
 import { DROP_EXTENSIONS, dropRow } from "../drop.ts";
 import activate from "../main.ts";
@@ -899,10 +899,9 @@ test("A13: \"仅打开该文件\" leaves only that file, adopted; with 「追加
   }
 });
 
-// The panel takes the whole list in one write: 20 000 rows need the large lists P3 player and
-// SDK (higher row limits and a protocol line above 1 MiB); until then this test waits.
-const P3_ROWS =
-  UI_VALUE_LIMITS.arrayRows >= 20_000 && MESSAGE_LIMIT >= 8 * 1024 * 1024 ? false : "needs the large lists P3 player and SDK (20 000 rows in one write)";
+// The panel takes the whole list: 20 000 rows need the large lists P3 player and SDK (player
+// 0.6.0, SDK 1.5.46); with an older SDK this test waits.
+const P3_ROWS = UI_VALUE_LIMITS.arrayRows >= 20_000 ? false : "needs the large lists P3 SDK (UI_VALUE_LIMITS.arrayRows ≥ 20,000)";
 
 test("C17: a list above 20 000 rows is refused", { skip: P3_ROWS }, async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-playlist-data-"));
@@ -913,8 +912,8 @@ test("C17: a list above 20 000 rows is refused", { skip: P3_ROWS }, async () => 
   );
   const app = await start({ data });
   try {
-    // The panel gets the whole list (on a player with the higher row limits of large lists P3;
-    // `large.test.ts` checks lists the current limits take).
+    // The panel gets the whole list (large lists P3).
+    assert.equal(app.rows().length, 20_000);
     const [a] = await app.files(["a.mp4"]);
     await app.addFiles([a!]);
     assert.equal(app.osd(), "已添加 0 项，列表已达上限 20000 项");

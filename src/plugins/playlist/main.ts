@@ -1,7 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import type { Command, CommandOptions, ConfirmOptions, ImageRef, Panel, Plugin, PluginError } from "@vestra-player/sdk";
+import type { Command, CommandOptions, ConfirmOptions, Panel, Plugin, PluginError } from "@vestra-player/sdk";
 import {
   DROP_EXTENSIONS,
   dropProblems,
@@ -41,9 +40,6 @@ import {
 } from "./scroll.ts";
 import { defaults, PERSIST_CHECK_MS, Store, type Saved } from "./store.ts";
 import { ffmpegRunner, HOLD_AFTER_OPEN_MS, THUMB_WIDTH, Thumbnailer } from "./thumbs.ts";
-
-/** A transparent 1×1 picture: the rows' thumbnail until (or unless) one is made. */
-const PLACEHOLDER = fileURLToPath(new URL("./placeholder.png", import.meta.url));
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const repeats = [
@@ -174,7 +170,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   try {
     thumbDir = join(plugin.dataDirectory, "thumbs");
   } catch {
-    /* no data directory: rows show the placeholder */
+    /* no data directory: rows show no picture */
   }
   const thumbs = new Thumbnailer(
     queue,
@@ -183,7 +179,6 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     (path) => plugin.ui.image(path, { maxSide: THUMB_WIDTH }),
     () => plugin.update(),
   );
-  const placeholder: ImageRef = plugin.ui.image(PLACEHOLDER);
   queue.removed = (rowId) => {
     prober.cancel(rowId);
     thumbs.cancel(rowId);
@@ -921,7 +916,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     // Thumbnails only while the list is on screen and has its size.
     thumbs.want(pictures && sized && !hidden() ? near : []);
     // Pictures go to the rows near the view only (the view's image budget); the others
-    // show the placeholder.
+    // hold `null` (no picture).
     const sendFrom = top - THUMB_SEND_MARGIN,
       sendTo = top + rowsOnScreen + THUMB_SEND_MARGIN;
     // While a search filters, a row's number is its place in the whole list (sent with it);
@@ -957,7 +952,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
           // title: the file's folder, or the link's host.
           media: look?.media ?? "",
           detail: look?.detail ?? "",
-          thumb: (pictures && at >= sendFrom && at < sendTo && thumbs.picture(row.rowId)) || placeholder,
+          // `null`: no picture (an empty image, player 0.6.0).
+          thumb: (pictures && at >= sendFrom && at < sendTo && thumbs.picture(row.rowId)) || null,
         };
       }),
       thumbnails: pictures,

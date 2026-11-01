@@ -28,8 +28,8 @@ export struct PlaylistRow {
     // the line under the title (the file's folder, the link's host); "" without thumbnails.
     media: string,
     detail: string,
-    // The 96×54 thumbnail: a transparent 1×1 until one is made, and for rows away from the
-    // view or without thumbnails. Rows holding images update in place (player 0.5.1).
+    // The 96×54 thumbnail; empty (`null` from the plugin, player 0.6.0) until one is made, and for
+    // rows away from the view or without thumbnails. Rows holding images update in place.
     thumb: image,
 }
 

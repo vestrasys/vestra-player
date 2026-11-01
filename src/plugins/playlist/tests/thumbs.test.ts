@@ -89,10 +89,9 @@ async function start(
     rows: () => (panel.props.rows ?? []) as unknown as ViewRow[],
     /** Each row's picture (0.2.0: in the row). */
     thumbs: () => app.rows().map((row) => row.thumb),
-    /** The file each row's picture shows (null: the placeholder). */
+    /** The file each row's picture shows (null: none, the row holds `null`). */
     pictures: () => app.thumbs().map((value) => {
-      const path = host.imagePath(value);
-      return path && !path.endsWith("placeholder.png") ? path : null;
+      return value === null ? null : (host.imagePath(value) ?? null);
     }),
     until: async (check: () => boolean, what: string) => {
       for (const deadline = Date.now() + 15_000; !check(); await host.settle(5))
