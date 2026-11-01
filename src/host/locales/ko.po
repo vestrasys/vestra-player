@@ -42,6 +42,12 @@ msgstr "화면"
 msgid "Settings"
 msgstr "설정"
 
+#. The top-level menu that gathers every reset-to-default command.
+#: src/commands.rs
+#, x-machine
+msgid "Reset"
+msgstr "재설정"
+
 #: src/commands.rs:334
 #, x-machine
 msgid "Speed"

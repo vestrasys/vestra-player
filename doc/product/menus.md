@@ -11,7 +11,7 @@ The product's context menu tree is merged from the commands registered by each o
 The labels below are the English interface text (the English source text of each string); the Simplified Chinese interface shows the translations from the `zh-Hans.po` catalogs.
 
 - Order is ascending by declared `order`; for equal `order`, by plugin id, then registration order. A submenu takes the smallest `order` among its items, and a group (`group`) takes the group of its first item.
-- Exception: the positions of the 7 built-in top-level menus (`@open` … `@settings`) are fixed and do not follow the commands inside them: Open 110, Playback 200, Subtitles 300, Video 400, Audio 500, Screen 710, Settings 830 (`MENU_ANCHORS` in `src/host/src/commands.rs`). A plugin writing `["@video", …]`, the English key `["Video", …]` or the old Chinese title `["视频", …]` (Video) cannot move it. In the level directly below a built-in menu, items with `order` 0 (the plugin omitted `order`) come last ([Order and separators](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_key_bindings.html#order-and-separators)); built-in commands at that level all use an `order` of 100 or more, never 0. To change the top-level position of a built-in menu, change this table, not the commands' `order`.
+- Exception: the positions of the 8 built-in top-level menus (`@open` … `@settings`, `@reset`) are fixed and do not follow the commands inside them: Open 110, Playback 200, Subtitles 300, Video 400, Audio 500, Screen 710, Settings 830, Reset 840 (`MENU_ANCHORS` in `src/host/src/commands.rs`). Reset also takes Settings' separator group whatever its items declare (`SHARES_GROUP_WITH`), so it sits directly below Settings with no separator between them; like every built-in menu it is not shown while no command is in it. A plugin writing `["@video", …]`, the English key `["Video", …]` or the old Chinese title `["视频", …]` (Video) cannot move it. In the level directly below a built-in menu, items with `order` 0 (the plugin omitted `order`) come last ([Order and separators](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_key_bindings.html#order-and-separators)); built-in commands at that level all use an `order` of 100 or more, never 0. To change the top-level position of a built-in menu, change this table, not the commands' `order`.
 - "Plugin" column: "core" is a host core action (`host/<id>`), "host" is the host's own command.
 - Top-level separators are drawn as "——" rows (two adjacent items with different `group`). Inside a submenu a separator is also drawn between adjacent items with different `group`; the table does not draw each one.
 - Shortcuts work in the global scope (when the video area, bottom bar or sidebar has focus; not inside tool windows). Shortcuts written with `Ctrl` can be triggered on macOS by both ⌃ and ⌘. Users can rebind them in "Settings ▸ Keyboard Shortcuts…", or turn off all default bindings with "Ignore Default Shortcuts".
@@ -180,6 +180,25 @@ The labels below are the English interface text (the English source text of each
 | About Vestra Player… | info | F1 | |
 | —— | | | |
 | Quit | host | Cmd+Q (shown on macOS; on Windows and Linux the menu shows no shortcut, the close button and Alt+F4 quit) | key `Quit` |
+
+### Reset submenu
+
+User ruling 2026-11-01: every reset-to-default command is gathered in one top-level **Reset ▸** submenu (`@reset`, host side in place, SDK 1.5.51), directly below Settings in the same group, so users do not hunt for resets through Video, Audio and Subtitles; the reset items elsewhere in the menus are removed (third-party plugins put theirs here too). Rules ([SDK guidelines: menus, Reset](https://vestrasys.github.io/vestra-player-sdk/documents/Menu_guidelines.html#reset)): the title names what is reset, without the word "Reset"; `order` in the domain's range and one group per domain (`reset-subtitles`, `reset-video`, `reset-audio`, …), so separators set the domains apart; command ids stay the same, so default keys and users' own keys keep working.
+
+Draft, to be confirmed row by row by the plugin authors when they move their commands (until then the items are still at the old paths in the table above):
+
+| Menu path | Plugin | Shortcut | Notes |
+| --- | --- | --- | --- |
+| Reset ▸ Subtitle Position | subtitles | Alt+Home | `move-reset`, from Subtitles ▸ Subtitle Style ▸ Reset Position; proposed `order` 330, group `reset-subtitles` |
+| Reset ▸ Subtitle Sync | subtitles | `/` | `sync-reset`, from Subtitles ▸ Sync ▸ Reset; 331, `reset-subtitles` |
+| Reset ▸ Picture | video | Q | `video.reset`, from Video ▸ Reset (brightness, contrast, saturation, hue and the other picture values); 440, `reset-video` |
+| Reset ▸ Framing | video | Numpad5, Alt+Backspace | `video.frame.reset`, from Video ▸ Framing ▸ Reset Framing; 441, `reset-video`. "Center Frame" (Ctrl+Numpad5, pan only) stays in Framing |
+| Reset ▸ Crop Position | video | | `video.reframe.reset`, from Video ▸ Crop/Stretch ▸ Reset Position; 442, `reset-video` |
+| Reset ▸ Audio Sync | audio | `?` | `audio.sync.reset`, from Audio ▸ Audio Sync ▸ Reset; 530, `reset-audio` |
+| Reset ▸ Audio Processing | audio | | `audio.reset`, from Audio ▸ Reset; 531, `reset-audio`. Today it also zeroes the audio sync and sets channels to Stereo (`neutral()`): the audio author decides whether to narrow it to the processing (equalizer gains, Normalize, Crystalizer) or title it by everything it resets |
+| Reset ▸ Idle Logo | visualizer | | `reset-logo`, from Settings ▸ Appearance ▸ Restore Default Logo; 850, `reset-appearance`; disabled while the default logo is in use |
+
+Not resets, staying where they are: Playback ▸ Speed ▸ Normal (Z) and the other "default" radios (Aspect ▸ Default (Source), Crop/Stretch ▸ None, Rotation ▸ No Rotation, Audio ▸ Preset ▸ Flat, Audio Sync ▸ Don't Keep) pick one value among others; A-B Loop ▸ Clear Start/End Point, Recently Played ▸ Clear Entries · Remove Invalid Entries and Resume Playback ▸ Clear All Saved Positions remove what the user made; Ignore Default Shortcuts is a toggle.
 
 Global keys not in the menu: Shift+Tab brief info (info). Esc is Toggle Fullscreen's (above): a menu, dialog or text field that handles Esc keeps it; otherwise it enters or leaves fullscreen.
 

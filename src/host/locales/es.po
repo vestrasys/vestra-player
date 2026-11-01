@@ -42,6 +42,12 @@ msgstr "Pantalla"
 msgid "Settings"
 msgstr "Configuración"
 
+#. The top-level menu that gathers every reset-to-default command.
+#: src/commands.rs
+#, x-machine
+msgid "Reset"
+msgstr "Restablecer"
+
 #: src/commands.rs:334
 #, x-machine
 msgid "Speed"

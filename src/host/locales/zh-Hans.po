@@ -35,6 +35,11 @@ msgstr "屏幕"
 msgid "Settings"
 msgstr "设置"
 
+#. The top-level menu that gathers every reset-to-default command.
+#: src/commands.rs
+msgid "Reset"
+msgstr "复位"
+
 #: src/commands.rs:334
 msgid "Speed"
 msgstr "速度"
