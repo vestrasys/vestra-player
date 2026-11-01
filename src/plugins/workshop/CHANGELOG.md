@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.22
+
+- The vendored SDK is 1.5.49 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The reference the AI reads now says that a command declaration the player refuses during activation is logged and skipped rather than failing the plugin, while `startPlugin` in the AI's tests stays strict. It also says that long lists use `ListView`. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
 ## 2.2.21
 
 - The vendored SDK is 1.5.48 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The plugins the AI writes are now tested against a TestHost that refuses command declarations as the player does (menu texts within their UTF-8 byte limits, no control characters or surrounding whitespace, no path that collides with another command, the player's own included), so a menu the player would refuse fails the AI's test run instead of the player. The reference covers the new `COMMAND_LIMITS` fields. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.

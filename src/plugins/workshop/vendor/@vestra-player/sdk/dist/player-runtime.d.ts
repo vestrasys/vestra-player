@@ -8,7 +8,7 @@
  * @packageDocumentation
  */
 export { createPlugin } from "./plugin/index.ts";
-export type { PluginInstance, PluginManifest } from "./plugin/index.ts";
+export type { PluginInstance, PluginManifest, RuntimeOptions, } from "./plugin/index.ts";
 export { HostError } from "./wire.ts";
 export type { Json, Transport } from "./wire.ts";
 export { API_VERSION, CAPABILITIES, CAPABILITY_INFO, MESSAGE_LIMIT, } from "./capabilities.ts";
