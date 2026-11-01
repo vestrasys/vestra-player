@@ -8,12 +8,14 @@ Information about the media playing, the player and the system.
 - **Brief Info**: the file name, time, current chapter, codecs, decoder, displayed frame rate and subtitle track for a few seconds.
 - **Playback Properties**: three pages — Playback (decoder, hardware decoding, bitrates, A/V sync…), File (container, streams, chapters, metadata) and System (versions, system, displays, CPU, memory). Copy or save as text.
 - **About Vestra Player**: the version, component versions, how the video is rendered and why (`Rendering: Software — <the player's reason>`, `Rendering: GPU`; left out on players before 0.5.12, the reason before 0.5.13) and the loaded plugins.
+- **Check for Updates**: the latest release of Vestra Player on GitHub, its date and release notes; downloads the installer for this system into the Downloads folder, checks its size and SHA-256, and starts it when you choose Run Installer (never silently). An automatic check runs 30 seconds after start and at most once a day, with one message per new version; turn it off in Options ▸ General ▸ Updates.
 
 ## Entries
 
 - Context menu **Playback Info** (Tab); Brief Info with Shift+Tab.
 - Context menu **Playback Properties…** (Ctrl+F1).
 - Context menu **About Vestra Player…** (F1).
+- Context menu **Check for Updates…**; Options ▸ General ▸ **Updates**.
 
 ## Languages
 

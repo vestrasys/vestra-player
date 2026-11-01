@@ -241,7 +241,7 @@ Date: 2026-10-20. Implementation status checked against the current Vestra `main
 | J07 | Plugin management (list, disable, enable, uninstall) | ✅ | store: the plugin center's Installed tab (the separate Plugin Manager `vestra.plugins` was removed on 2026-10-26) |
 | J08 | Plugin Workshop (AI-generated plugins) | ✅ | workshop |
 | J09 | Emulator (NES) | ✅ | VestraNES, plugin repository (not built in since 2026-10-27) |
-| J10 | Check for updates | ⊘ | Not needed for now. Dropped in the cut review (2026-10-20). |
+| J10 | Check for updates | ✅ | info 0.1.11: "Check for Updates…" after About, the Updates row in About Vestra Player (downloads this system's installer to the Downloads folder, checks size and SHA-256, Run Installer opens it) and Options ▸ General ▸ Updates (automatic check, at most once a day, one notice per version). Dropped in the cut review (2026-10-20); restored by the user ruling of 2026-11-01: built-in plugins ship with the player, so the player itself needs an update check. |
 | J11 | Visualization (animation and album art for audio-only playback) | ✗ | new plugin + core (drawing in the video area) |
 | J12 | Live-streaming, chat and broadcast tools | ⊘ | Third-party live-streaming services |
 
@@ -251,10 +251,10 @@ Date: 2026-10-20. Implementation status checked against the current Vestra `main
 
 | Status | Count |
 | --- | --- |
-| ✅ Implemented | 48 |
+| ✅ Implemented | 49 |
 | ◐ Partly implemented | 13 |
 | ✗ Not implemented | 66 |
-| ⊘ Won't do | 56 |
+| ⊘ Won't do | 55 |
 | Total | 183 |
 
 Of the unimplemented items, about 60% first need a capability from the core (mostly things mpv already has and only need to be exposed: frame stepping, rotate and flip, sharpen and denoise, aspect ratio, audio track choice, A-B loop, chapters, stay on top, etc.). The rest can be done in existing plugins or new plugins.

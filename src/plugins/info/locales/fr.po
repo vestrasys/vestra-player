@@ -8,132 +8,132 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: about.ts:6
+#: about.ts:7
 #, x-machine
 msgid "{} (build {})"
 msgstr "{} (build {})"
 
-#: about.ts:32 about.ts:109 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:93 ui/about.slint:137
+#: about.ts:33 about.ts:110 properties.ts:221 properties.ts:310 properties.ts:311 ui/about.slint:112 ui/about.slint:199
 #, x-machine
 msgid "Unknown"
 msgstr "Inconnu"
 
-#: about.ts:34 ui/about.slint:131 ui/about.slint:176
+#: about.ts:35 ui/about.slint:192 ui/about.slint:238
 #, x-machine
 msgid "Plugin API"
 msgstr "API des plugins"
 
-#: about.ts:68 ui/about.slint:108
+#: about.ts:69 ui/about.slint:127
 #, x-machine
 msgid "GPU"
 msgstr "GPU"
 
-#: about.ts:68 ui/about.slint:108
+#: about.ts:69 ui/about.slint:127
 #, x-machine
 msgid "Software"
 msgstr "Logiciel"
 
-#: about.ts:69 ui/about.slint:111
+#: about.ts:70 ui/about.slint:130
 #, x-machine
 msgid "{} — {}"
 msgstr "{} — {}"
 
-#: about.ts:100 ui/about.slint:172
+#: about.ts:101 ui/about.slint:234
 #, x-machine
 msgid "Version {} (build {})"
 msgstr "Version {} (build {})"
 
-#: about.ts:100 ui/about.slint:172
+#: about.ts:101 ui/about.slint:234
 #, x-machine
 msgid "Version {}"
 msgstr "Version {}"
 
-#: about.ts:101 about.ts:102 properties.ts:61
+#: about.ts:102 about.ts:103 properties.ts:61
 #, x-machine
 msgid "{}: {}"
 msgstr "{} : {}"
 
-#: about.ts:102 ui/about.slint:132 ui/about.slint:193
+#: about.ts:103 ui/about.slint:193 ui/about.slint:255
 #, x-machine
 msgid "Rendering"
 msgstr "Rendu"
 
-#: about.ts:103 ui/about.slint:205
+#: about.ts:104 ui/about.slint:328
 #, x-machine
 msgid "Loaded plugins"
 msgstr "Plugins chargés"
 
-#: about.ts:104 ui/about.slint:216
+#: about.ts:105 ui/about.slint:339
 #, x-machine
 msgid "Unknown (cannot read the plugin list)"
 msgstr "Inconnu (impossible de lire la liste des plugins)"
 
-#: about.ts:107 ui/about.slint:97
+#: about.ts:108 ui/about.slint:116
 #, x-machine
 msgid "Built-in"
 msgstr "Intégré"
 
-#: about.ts:107 ui/about.slint:98
+#: about.ts:108 ui/about.slint:117
 #, x-machine
 msgid "Repository"
 msgstr "Dépôt"
 
-#: about.ts:107 ui/about.slint:99
+#: about.ts:108 ui/about.slint:118
 #, x-machine
 msgid "Link"
 msgstr "Lien"
 
-#: about.ts:107 ui/about.slint:100
+#: about.ts:108 ui/about.slint:119
 #, x-machine
 msgid "Local file"
 msgstr "Fichier"
 
-#: about.ts:107 ui/about.slint:101
+#: about.ts:108 ui/about.slint:120
 #, x-machine
 msgid "Workshop"
 msgstr "Atelier"
 
-#: about.ts:107 ui/about.slint:102
+#: about.ts:108 ui/about.slint:121
 #, x-machine
 msgid "Installed"
 msgstr "Installé"
 
-#: about.ts:107 ui/about.slint:103
+#: about.ts:108 ui/about.slint:122
 #, x-machine
 msgid "Development"
 msgstr "Dév."
 
-#: about.ts:108 ui/about.slint:114
+#: about.ts:109 ui/about.slint:175
 #, x-machine
 msgid "Starting"
 msgstr "Démarrage"
 
-#: about.ts:108 ui/about.slint:115
+#: about.ts:109 ui/about.slint:176
 #, x-machine
 msgid "Running"
 msgstr "Actif"
 
-#: about.ts:108 ui/about.slint:116
+#: about.ts:109 ui/about.slint:177
 #, x-machine
 msgid "Disabled"
 msgstr "Désactivé"
 
-#: about.ts:108 ui/about.slint:117
+#: about.ts:109 ui/about.slint:178
 #, x-machine
 msgid "Failed"
 msgstr "Échec"
 
-#: about.ts:108 ui/about.slint:118
+#: about.ts:109 ui/about.slint:179
 #, x-machine
 msgid "Stopped"
 msgstr "Arrêté"
 
-#: about.ts:109
+#: about.ts:110
 #, x-machine
 msgid "{}  {}  {}  {}"
 msgstr "{}  {}  {}  {}"
 
-#: about.ts:164
+#: about.ts:168
 #, x-machine
 msgid "Version info copied"
 msgstr "Informations de version copiées"
@@ -158,180 +158,190 @@ msgstr "Impossible de lire les informations du fichier : {}"
 msgid "ffprobe failed"
 msgstr "Échec de ffprobe"
 
-#: dialog.ts:62 main.ts:58 main.ts:149 properties.ts:126
+#: dialog.ts:66 main.ts:59 main.ts:150 properties.ts:151
 #, x-machine
 msgid "No media open"
 msgstr "Aucun média ouvert"
 
-#: dialog.ts:64 properties.ts:127 properties.ts:297
+#: dialog.ts:68 properties.ts:152 properties.ts:322
 #, x-machine
 msgid "Reading…"
 msgstr "Lecture des informations…"
 
-#: dialog.ts:89
+#: dialog.ts:92
 #, x-machine
 msgid "File not found"
 msgstr "Fichier introuvable"
 
-#: dialog.ts:96
+#: dialog.ts:99
 #, x-machine
 msgid "Cannot parse the ffprobe output"
 msgstr "Impossible d'analyser la sortie de ffprobe"
 
-#: dialog.ts:154
+#: dialog.ts:188
 #, x-machine
 msgid "Playback info copied"
 msgstr "Informations de lecture copiées"
 
-#: dialog.ts:162
+#: dialog.ts:196
 #, x-machine
 msgid "Save As"
 msgstr "Enregistrer sous"
 
-#: dialog.ts:169
+#: dialog.ts:203
 #, x-machine
 msgid "Saved to {}"
 msgstr "Enregistré dans {}"
 
 #. how the video is decoded, after "Decoder:": by the CPU.
-#: main.ts:33
+#: main.ts:34
 #, x-machine
 msgid "software"
 msgstr "logiciel"
 
 #. how the video is decoded, after "Decoder:": by the GPU; {} is the method, e.g. d3d11va-copy.
-#: main.ts:37
+#: main.ts:38
 #, x-machine
 msgid "hardware ({})"
 msgstr "matériel ({})"
 
 #. how the video is decoded, after "Decoder:": by the GPU.
-#: main.ts:40
+#: main.ts:41
 #, x-machine
 msgid "hardware"
 msgstr "matériel"
 
 #. frames per second the window showed; "source" is the video's own frame rate.
-#: main.ts:49
+#: main.ts:50
 #, x-machine
 msgid "{} fps"
 msgstr "{} fps"
 
 #. frames per second the window showed; "source" is the video's own frame rate.
-#: main.ts:49
+#: main.ts:50
 #, x-machine
 msgid "{} fps (source {})"
 msgstr "{} fps (source {})"
 
-#: main.ts:58
+#: main.ts:59
 #, x-machine
 msgid "File: {}"
 msgstr "Fichier : {}"
 
-#: main.ts:59
+#: main.ts:60
 #, x-machine
 msgid "Time: {} / {}"
 msgstr "Temps : {} / {}"
 
-#: main.ts:60
+#: main.ts:61
 #, x-machine
 msgid "Video: {} {}"
 msgstr "Vidéo : {} {}"
 
-#: main.ts:61 main.ts:167
+#: main.ts:62 main.ts:168
 #, x-machine
 msgid "Decoder: {}"
 msgstr "Décodage : {}"
 
-#: main.ts:62
+#: main.ts:63
 #, x-machine
 msgid "Frame rate: {}"
 msgstr "Fréquence d'images : {}"
 
-#: main.ts:64 main.ts:168
+#: main.ts:65 main.ts:169
 #, x-machine
 msgid "Displayed: {}"
 msgstr "Affiché : {}"
 
-#: main.ts:65
+#: main.ts:66
 #, x-machine
 msgid "Audio: {} {} {}"
 msgstr "Audio : {} {} {}"
 
-#: main.ts:65 properties.ts:256
+#: main.ts:66 properties.ts:281
 #, x-machine
 msgid "{} channels"
 msgstr "{} canaux"
 
-#: main.ts:66
+#: main.ts:67
 #, x-machine
 msgid "Backend: {} (session {})"
 msgstr "Moteur : {} (session {})"
 
-#: main.ts:67
+#: main.ts:68
 #, x-machine
 msgid "Frames shown: {}"
 msgstr "Images affichées : {}"
 
-#: main.ts:68
+#: main.ts:69
 #, x-machine
 msgid "Dropped frames: {}"
 msgstr "Images perdues : {}"
 
-#: main.ts:130
+#: main.ts:131
 #, x-machine
 msgid "Chapter {}"
 msgstr "Chapitre {}"
 
-#: main.ts:136 properties.ts:196
+#: main.ts:137 properties.ts:221
 #, x-machine
 msgid "Subtitles"
 msgstr "Sous-titres"
 
-#: main.ts:152
+#: main.ts:153
 #, x-machine
 msgid "{} ch"
 msgstr "{} canaux"
 
-#: main.ts:156
+#: main.ts:157
 #, x-machine
 msgid "{} / {}"
 msgstr "{} / {}"
 
-#: main.ts:156 properties.ts:252
+#: main.ts:157 properties.ts:277
 #, x-machine
 msgid "Live"
 msgstr "En direct"
 
-#: main.ts:160
+#: main.ts:161
 #, x-machine
 msgid "{} {}"
 msgstr "{} {}"
 
-#: main.ts:163 main.ts:169 properties.ts:79
+#: main.ts:164 main.ts:170 properties.ts:104
 #, x-machine
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: main.ts:238 manifest.json
+#: main.ts:241 manifest.json
 #, x-machine
 msgid "Playback Info"
 msgstr "Informations de lecture"
 
-#: main.ts:252
+#: main.ts:255
 #, x-machine
 msgid "Brief Info"
 msgstr "Informations résumées"
 
-#: main.ts:271
+#: main.ts:274
 #, x-machine
 msgid "Playback Properties…"
 msgstr "Propriétés de lecture…"
 
-#: main.ts:279
+#: main.ts:284
 #, x-machine
 msgid "About Vestra Player…"
 msgstr "À propos de Vestra Player…"
+
+#: main.ts:293
+#, x-machine
+msgid "Check for Updates…"
+msgstr "Rechercher des mises à jour…"
+
+#: main.ts:302 ui/about.slint:194 ui/about.slint:276 ui/updates.slint:21
+#, x-machine
+msgid "Updates"
+msgstr "Mises à jour"
 
 #: manifest.json
 #, x-machine
@@ -363,561 +373,713 @@ msgstr "À propos"
 msgid "(The rest is too long and was left out)"
 msgstr "(La suite est trop longue et a été omise)"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "8-bit ({})"
 msgstr "8 bits ({})"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "16-bit ({})"
 msgstr "16 bits ({})"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "32-bit ({})"
 msgstr "32 bits ({})"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "64-bit ({})"
 msgstr "64 bits ({})"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "32-bit float ({})"
 msgstr "32 bits flottant ({})"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "64-bit float ({})"
 msgstr "64 bits flottant ({})"
 
-#: properties.ts:113
+#: properties.ts:138
 #, x-machine
 msgid "{} bytes"
 msgstr "{} octets"
 
-#: properties.ts:114
+#: properties.ts:139
 #, x-machine
 msgid "{} KB ({})"
 msgstr "{} Ko ({})"
 
-#: properties.ts:114
+#: properties.ts:139
 #, x-machine
 msgid "{} MB ({})"
 msgstr "{} Mo ({})"
 
-#: properties.ts:114
+#: properties.ts:139
 #, x-machine
 msgid "{} GB ({})"
 msgstr "{} Go ({})"
 
-#: properties.ts:114
+#: properties.ts:139
 #, x-machine
 msgid "{} TB ({})"
 msgstr "{} To ({})"
 
-#: properties.ts:120
+#: properties.ts:145
 #, x-machine
 msgid "Not used"
 msgstr "Non utilisé"
 
-#: properties.ts:130 properties.ts:196 properties.ts:255
+#: properties.ts:155 properties.ts:221 properties.ts:280
 #, x-machine
 msgid "Video"
 msgstr "Vidéo"
 
-#: properties.ts:131 properties.ts:140
+#: properties.ts:156 properties.ts:165
 #, x-machine
 msgid "Decoder"
 msgstr "Décodeur"
 
-#: properties.ts:132
+#: properties.ts:157
 #, x-machine
 msgid "Hardware decoding"
 msgstr "Décodage matériel"
 
-#: properties.ts:133
+#: properties.ts:158
 #, x-machine
 msgid "Input format"
 msgstr "Format d'entrée"
 
-#: properties.ts:134 properties.ts:205
+#: properties.ts:159 properties.ts:230
 #, x-machine
 msgid "Size"
 msgstr "Taille"
 
-#: properties.ts:135
+#: properties.ts:160
 #, x-machine
 msgid "Source frame rate"
 msgstr "Fréquence d'images source"
 
-#: properties.ts:136
+#: properties.ts:161
 #, x-machine
 msgid "Display frame rate"
 msgstr "Fréquence d'images affichée"
 
-#: properties.ts:137
+#: properties.ts:162
 #, x-machine
 msgid "Video bitrate"
 msgstr "Débit vidéo"
 
-#: properties.ts:139 properties.ts:196 properties.ts:256
+#: properties.ts:164 properties.ts:221 properties.ts:281
 #, x-machine
 msgid "Audio"
 msgstr "Audio"
 
-#: properties.ts:141 properties.ts:200
+#: properties.ts:166 properties.ts:225
 #, x-machine
 msgid "Codec"
 msgstr "Codec"
 
-#: properties.ts:142 properties.ts:212
+#: properties.ts:167 properties.ts:237
 #, x-machine
 msgid "Sample rate"
 msgstr "Fréquence d'échantillonnage"
 
-#: properties.ts:143
+#: properties.ts:168
 #, x-machine
 msgid "Bit depth"
 msgstr "Profondeur de bits"
 
-#: properties.ts:144
+#: properties.ts:169
 #, x-machine
 msgid "Channel count"
 msgstr "Nombre de canaux"
 
-#: properties.ts:144 properties.ts:184 sysinfo.ts:31
+#: properties.ts:169 properties.ts:209 sysinfo.ts:31
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: properties.ts:145
+#: properties.ts:170
 #, x-machine
 msgid "Audio bitrate"
 msgstr "Débit audio"
 
-#: properties.ts:147
+#: properties.ts:172
 #, x-machine
 msgid "Other"
 msgstr "Autre"
 
-#: properties.ts:148
+#: properties.ts:173
 #, x-machine
 msgid "Backend"
 msgstr "Moteur"
 
-#: properties.ts:149
+#: properties.ts:174
 #, x-machine
 msgid "Session"
 msgstr "Session"
 
-#: properties.ts:150
+#: properties.ts:175
 #, x-machine
 msgid "Frames shown"
 msgstr "Images affichées"
 
-#: properties.ts:151
+#: properties.ts:176
 #, x-machine
 msgid "Dropped frames"
 msgstr "Images perdues"
 
-#: properties.ts:152
+#: properties.ts:177
 #, x-machine
 msgid "A/V sync offset"
 msgstr "Décalage A/V"
 
-#: properties.ts:153
+#: properties.ts:178
 #, x-machine
 msgid "Cache"
 msgstr "Cache"
 
-#: properties.ts:153
+#: properties.ts:178
 #, x-machine
 msgid "{} s"
 msgstr "{} s"
 
-#: properties.ts:193
+#: properties.ts:218
 #, x-machine
 msgid "Default"
 msgstr "Par défaut"
 
-#: properties.ts:193
+#: properties.ts:218
 #, x-machine
 msgid "Forced"
 msgstr "Forcé"
 
-#: properties.ts:194
+#: properties.ts:219
 #, x-machine
 msgid "None"
 msgstr "Aucun"
 
-#: properties.ts:196
+#: properties.ts:221
 #, x-machine
 msgid "Data"
 msgstr "Données"
 
-#: properties.ts:196
+#: properties.ts:221
 #, x-machine
 msgid "Attachment"
 msgstr "Pièce jointe"
 
-#: properties.ts:198
+#: properties.ts:223
 #, x-machine
 msgid "Stream #{}: {}"
 msgstr "Flux n° {} : {}"
 
-#: properties.ts:201
+#: properties.ts:226
 #, x-machine
 msgid "Language"
 msgstr "Langue"
 
-#: properties.ts:202 properties.ts:220
+#: properties.ts:227 properties.ts:245
 #, x-machine
 msgid "Title"
 msgstr "Titre"
 
-#: properties.ts:203
+#: properties.ts:228
 #, x-machine
 msgid "Flags"
 msgstr "Indicateurs"
 
-#: properties.ts:206
+#: properties.ts:231
 #, x-machine
 msgid "Frame rate"
 msgstr "Fréquence d'images"
 
-#: properties.ts:207
+#: properties.ts:232
 #, x-machine
 msgid "Pixel format"
 msgstr "Format de pixel"
 
-#: properties.ts:208
+#: properties.ts:233
 #, x-machine
 msgid "Color space"
 msgstr "Espace colorimétrique"
 
-#: properties.ts:209 properties.ts:215
+#: properties.ts:234 properties.ts:240
 #, x-machine
 msgid "Bitrate"
 msgstr "Débit"
 
-#: properties.ts:213
+#: properties.ts:238
 #, x-machine
 msgid "Channels"
 msgstr "Canaux"
 
-#: properties.ts:214
+#: properties.ts:239
 #, x-machine
 msgid "Sample format"
 msgstr "Format d'échantillon"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Artist"
 msgstr "Artiste"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Album artist"
 msgstr "Artiste de l'album"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Album"
 msgstr "Album"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Date"
 msgstr "Date"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Genre"
 msgstr "Genre"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Track"
 msgstr "Piste"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Comment"
 msgstr "Commentaire"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Composer"
 msgstr "Compositeur"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Copyright"
 msgstr "Copyright"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Encoder"
 msgstr "Encodeur"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Creation time"
 msgstr "Date de création"
 
-#: properties.ts:222 properties.ts:250 ui/about.slint:140 ui/about.slint:205
+#: properties.ts:247 properties.ts:275 ui/about.slint:202 ui/about.slint:328
 #, x-machine
 msgid "Source"
 msgstr "Source"
 
-#: properties.ts:223
+#: properties.ts:248
 #, x-machine
 msgid "Path"
 msgstr "Chemin"
 
-#: properties.ts:224
+#: properties.ts:249
 #, x-machine
 msgid "File size"
 msgstr "Taille du fichier"
 
-#: properties.ts:225
+#: properties.ts:250
 #, x-machine
 msgid "Modified"
 msgstr "Modifié le"
 
-#: properties.ts:227
+#: properties.ts:252
 #, x-machine
 msgid "Container"
 msgstr "Conteneur"
 
-#: properties.ts:228
+#: properties.ts:253
 #, x-machine
 msgid "Format"
 msgstr "Format"
 
-#: properties.ts:229 properties.ts:252
+#: properties.ts:254 properties.ts:277
 #, x-machine
 msgid "Duration"
 msgstr "Durée"
 
-#: properties.ts:230
+#: properties.ts:255
 #, x-machine
 msgid "Overall bitrate"
 msgstr "Débit global"
 
-#: properties.ts:231
+#: properties.ts:256
 #, x-machine
 msgid "Stream count"
 msgstr "Nombre de flux"
 
-#: properties.ts:232
+#: properties.ts:257
 #, x-machine
 msgid "Chapters"
 msgstr "Chapitres"
 
-#: properties.ts:235
+#: properties.ts:260
 #, x-machine
 msgid "Metadata"
 msgstr "Métadonnées"
 
-#: properties.ts:236
+#: properties.ts:261
 #, x-machine
 msgid "Embedded resources"
 msgstr "Ressources intégrées"
 
-#: properties.ts:238
+#: properties.ts:263
 #, x-machine
 msgid "Attachment #{}"
 msgstr "Pièce jointe n° {}"
 
-#: properties.ts:238
+#: properties.ts:263
 #, x-machine
 msgid "(no file name)"
 msgstr "(sans nom de fichier)"
 
-#: properties.ts:239
+#: properties.ts:264
 #, x-machine
 msgid "Cover #{}"
 msgstr "Pochette n° {}"
 
-#: properties.ts:248
+#: properties.ts:273
 #, x-machine
 msgid "Network source: only what the player reports"
 msgstr "Source réseau : uniquement ce que signale le lecteur"
 
-#: properties.ts:251
+#: properties.ts:276
 #, x-machine
 msgid "Address"
 msgstr "Adresse"
 
-#: properties.ts:254
+#: properties.ts:279
 #, x-machine
 msgid "Streams"
 msgstr "Flux"
 
-#: properties.ts:257
+#: properties.ts:282
 #, x-machine
 msgid "Audio tracks"
 msgstr "Pistes audio"
 
-#: properties.ts:280
+#: properties.ts:305
 #, x-machine
 msgid "{} ({} cores)"
 msgstr "{} ({} cœurs)"
 
-#: properties.ts:282
+#: properties.ts:307
 #, x-machine
 msgid "Player"
 msgstr "Lecteur"
 
-#: properties.ts:283
+#: properties.ts:308
 #, x-machine
 msgid "Vestra Player version"
 msgstr "Version de Vestra Player"
 
-#: properties.ts:284
+#: properties.ts:309
 #, x-machine
 msgid "Plugin API version"
 msgstr "Version de l'API des plugins"
 
-#: properties.ts:285
+#: properties.ts:310
 #, x-machine
 msgid "mpv version"
 msgstr "Version de mpv"
 
-#: properties.ts:286
+#: properties.ts:311
 #, x-machine
 msgid "FFmpeg version"
 msgstr "Version de FFmpeg"
 
-#: properties.ts:288
+#: properties.ts:313
 #, x-machine
 msgid "System"
 msgstr "Système"
 
-#: properties.ts:289
+#: properties.ts:314
 #, x-machine
 msgid "System version"
 msgstr "Version du système"
 
-#: properties.ts:290
+#: properties.ts:315
 #, x-machine
 msgid "Model"
 msgstr "Modèle"
 
-#: properties.ts:291
+#: properties.ts:316
 #, x-machine
 msgid "CPU"
 msgstr "Processeur"
 
-#: properties.ts:292
+#: properties.ts:317
 #, x-machine
 msgid "Total memory"
 msgstr "Mémoire totale"
 
-#: properties.ts:293
+#: properties.ts:318
 #, x-machine
 msgid "Free memory"
 msgstr "Mémoire libre"
 
-#: properties.ts:295
+#: properties.ts:320
 #, x-machine
 msgid "Display {}"
 msgstr "Écran {}"
 
-#: properties.ts:295 properties.ts:296
+#: properties.ts:320 properties.ts:321
 #, x-machine
 msgid "Display"
 msgstr "Écran"
 
-#: properties.ts:297
+#: properties.ts:322
 #, x-machine
 msgid "Status"
 msgstr "État"
 
-#: properties.ts:303
+#: properties.ts:328
 #, x-machine
 msgid "Vestra Player info.txt"
 msgstr "Infos Vestra Player.txt"
 
 #. only the part before the extension; {} is the media's file name.
-#: properties.ts:315
+#: properties.ts:340
 #, x-machine
 msgid "{} info.txt"
 msgstr "{} infos.txt"
 
-#: ui/about.slint:62
+#: ui/about.slint:65
 #, x-machine
 msgid "About Vestra Player"
 msgstr "À propos de Vestra Player"
 
-#: ui/about.slint:136 ui/about.slint:205
+#: ui/about.slint:134
+#, x-machine
+msgid "no connection to GitHub"
+msgstr "pas de connexion à GitHub"
+
+#: ui/about.slint:135
+#, x-machine
+msgid "the server did not answer in time"
+msgstr "le serveur n’a pas répondu à temps"
+
+#: ui/about.slint:136
+#, x-machine
+msgid "no release information was found (HTTP 404)"
+msgstr "aucune information de version trouvée (HTTP 404)"
+
+#: ui/about.slint:137
+#, x-machine
+msgid "GitHub is limiting requests (HTTP {}); try again later"
+msgstr "GitHub limite les requêtes (HTTP {}) ; réessayez plus tard"
+
+#: ui/about.slint:138
+#, x-machine
+msgid "the server answered HTTP {}"
+msgstr "le serveur a répondu HTTP {}"
+
+#: ui/about.slint:139
+#, x-machine
+msgid "the update information is not valid"
+msgstr "les informations de mise à jour ne sont pas valides"
+
+#: ui/about.slint:140
+#, x-machine
+msgid "the update information needs a newer player; see the release notes"
+msgstr "les informations de mise à jour nécessitent un lecteur plus récent ; consultez les notes de version"
+
+#: ui/about.slint:141
+#, x-machine
+msgid "the file size does not match the release"
+msgstr "la taille du fichier ne correspond pas à la version"
+
+#: ui/about.slint:142
+#, x-machine
+msgid "the file's checksum does not match the release"
+msgstr "la somme de contrôle du fichier ne correspond pas à la version"
+
+#: ui/about.slint:143
+#, x-machine
+msgid "the Downloads folder cannot be written"
+msgstr "impossible d’écrire dans le dossier Téléchargements"
+
+#: ui/about.slint:144
+#, x-machine
+msgid "the installer could not be started"
+msgstr "impossible de lancer le programme d’installation"
+
+#: ui/about.slint:152
+#, x-machine
+msgid "Checking for updates…"
+msgstr "Recherche de mises à jour…"
+
+#: ui/about.slint:153
+#, x-machine
+msgid "Vestra Player is up to date (latest version {})."
+msgstr "Vestra Player est à jour (dernière version {})."
+
+#: ui/about.slint:154
+#, x-machine
+msgid "Version {} is available (released {})."
+msgstr "La version {} est disponible (publiée le {})."
+
+#: ui/about.slint:154
+#, x-machine
+msgid "Version {} is available."
+msgstr "La version {} est disponible."
+
+#. {0} is the version, {1} and {2} megabytes downloaded and in all.
+#: ui/about.slint:156
+#, x-machine
+msgid "Downloading version {0}: {1} of {2} MB"
+msgstr "Téléchargement de la version {0} : {1} sur {2} Mo"
+
+#: ui/about.slint:157
+#, x-machine
+msgid "Version {} is downloaded to {}. Run the installer to update."
+msgstr "La version {} a été téléchargée dans {}. Lancez le programme d’installation pour mettre à jour."
+
+#: ui/about.slint:158
+#, x-machine
+msgid "Could not check for updates: {}."
+msgstr "Impossible de rechercher des mises à jour : {}."
+
+#: ui/about.slint:159
+#, x-machine
+msgid "Could not download version {}: {}."
+msgstr "Impossible de télécharger la version {} : {}."
+
+#: ui/about.slint:160
+#, x-machine
+msgid "Not checked yet."
+msgstr "Pas encore vérifié."
+
+#: ui/about.slint:163
+#, x-machine
+msgid "Download"
+msgstr "Télécharger"
+
+#: ui/about.slint:164
+#, x-machine
+msgid "Open Release Page"
+msgstr "Ouvrir la page de version"
+
+#: ui/about.slint:165
+#, x-machine
+msgid "Cancel"
+msgstr "Annuler"
+
+#: ui/about.slint:166
+#, x-machine
+msgid "Run Installer"
+msgstr "Lancer l’installation"
+
+#: ui/about.slint:167
+#, x-machine
+msgid "Check Now"
+msgstr "Vérifier"
+
+#: ui/about.slint:198 ui/about.slint:328
 #, x-machine
 msgid "Version"
 msgstr "Version"
 
-#: ui/about.slint:144 ui/about.slint:205
+#: ui/about.slint:206 ui/about.slint:328
 #, x-machine
 msgid "State"
 msgstr "État"
 
-#: ui/about.slint:248 ui/properties.slint:160
+#: ui/about.slint:312
+#, x-machine
+msgid "Release Notes"
+msgstr "Notes de version"
+
+#: ui/about.slint:369 ui/properties.slint:116
 #, x-machine
 msgid "Copy failed"
 msgstr "Échec de la copie"
 
-#: ui/about.slint:254
+#: ui/about.slint:375
 #, x-machine
 msgid "Copy Info"
 msgstr "Copier"
 
-#: ui/about.slint:255 ui/properties.slint:171
+#: ui/about.slint:376 ui/properties.slint:127
 #, x-machine
 msgid "Close"
 msgstr "Fermer"
 
-#: ui/properties.slint:55
+#: ui/properties.slint:19
 #, x-machine
 msgid "Playback Properties"
 msgstr "Propriétés de lecture"
 
-#: ui/properties.slint:72
+#: ui/properties.slint:38
 #, x-machine
 msgctxt "tab"
 msgid "Playback"
 msgstr "Lecture"
 
-#: ui/properties.slint:72
+#: ui/properties.slint:38
 #, x-machine
 msgctxt "tab"
 msgid "File"
 msgstr "Fichier"
 
-#: ui/properties.slint:72
+#: ui/properties.slint:38
 #, x-machine
 msgctxt "tab"
 msgid "System"
 msgstr "Système"
 
-#: ui/properties.slint:161
+#: ui/properties.slint:117
 #, x-machine
 msgid "Save failed: {}"
 msgstr "Échec de l'enregistrement : {}"
 
-#: ui/properties.slint:168
+#: ui/properties.slint:124
 #, x-machine
 msgid "Refresh"
 msgstr "Actualiser"
 
-#: ui/properties.slint:169
+#: ui/properties.slint:125
 #, x-machine
 msgid "Copy"
 msgstr "Copier"
 
-#: ui/properties.slint:170
+#: ui/properties.slint:126
 #, x-machine
 msgid "Save As…"
 msgstr "Enregistrer…"
+
+#: ui/updates.slint:28
+#, x-machine
+msgid "Check for player updates automatically (30 seconds after start, then at most once a day)"
+msgstr "Rechercher automatiquement les mises à jour du lecteur (30 secondes après le démarrage, puis au plus une fois par jour)"
+
+#: ui/updates.slint:33
+#, x-machine
+msgid "When a new version is out, a message shows once on the video and About Vestra Player… offers to download it. Nothing is installed without you: the installer is saved to your Downloads folder and you start it. When off, the player looks for updates only when you choose “Check for Updates…” in the menu."
+msgstr "Quand une nouvelle version sort, un message s’affiche une fois sur la vidéo et « À propos de Vestra Player… » propose de la télécharger. Rien n’est installé sans vous : le programme d’installation est enregistré dans le dossier Téléchargements et c’est vous qui le lancez. Désactivé, le lecteur ne recherche des mises à jour que lorsque vous choisissez « Rechercher des mises à jour… » dans le menu."
+
+#: updates.ts:520
+#, x-machine
+msgid "Vestra Player {} is available. Open About Vestra Player… to download it."
+msgstr "Vestra Player {} est disponible. Ouvrez « À propos de Vestra Player… » pour la télécharger."
+
+#. why "Check for Updates…" is greyed out: an installer is being downloaded.
+#: updates.ts:561
+#, x-machine
+msgid "Downloading the update…"
+msgstr "Téléchargement de la mise à jour…"

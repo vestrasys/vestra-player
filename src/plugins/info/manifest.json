@@ -1,6 +1,6 @@
 {
   "id": "vestra.info",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -11,6 +11,7 @@
     "ui.osd",
     "ui.window",
     "ui.dialog",
+    "ui.settings",
     "clipboard"
   ],
   "name": "Playback Info",

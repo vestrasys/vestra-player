@@ -1,0 +1,40 @@
+// Options ▸ General ▸ Updates (J10, id info.updates): the automatic update check on or off
+// (440 wide, the options window's page area). The check is the library's (@vestra/widgets.slint).
+// Heights (padding 14, spacing 6): title 24, check 18 (more if it wraps), note (its wrapped height).
+import { Theme } from "@vestra/theme.slint";
+import { Check } from "@vestra/widgets.slint";
+
+export global UpdatesPage {
+    // In-out: the check box flips it itself (then asks with toggle-auto, passing the new value).
+    in-out property <bool> auto-check: true;
+    callback toggle-auto(bool);
+}
+
+export component UpdatesSettingsPage inherits Rectangle {
+    background: Theme.bg-panel;
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 6px;
+        alignment: start;
+        Text {
+            height: 24px;
+            text: @tr("Updates");
+            font-size: Theme.font-title;
+            font-weight: 700;
+            vertical-alignment: center;
+            color: Theme.text;
+        }
+        Check {
+            text: @tr("Check for player updates automatically (30 seconds after start, then at most once a day)");
+            checked <=> UpdatesPage.auto-check;
+            toggled(on) => { UpdatesPage.toggle-auto(on); }
+        }
+        Text {
+            text: @tr("When a new version is out, a message shows once on the video and About Vestra Player… offers to download it. Nothing is installed without you: the installer is saved to your Downloads folder and you start it. When off, the player looks for updates only when you choose “Check for Updates…” in the menu.");
+            font-size: Theme.font-body;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+            line-height-factor: 1.25;
+        }
+    }
+}

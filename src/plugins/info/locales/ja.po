@@ -6,132 +6,132 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: about.ts:6
+#: about.ts:7
 #, x-machine
 msgid "{} (build {})"
 msgstr "{}（ビルド {}）"
 
-#: about.ts:32 about.ts:109 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:93 ui/about.slint:137
+#: about.ts:33 about.ts:110 properties.ts:221 properties.ts:310 properties.ts:311 ui/about.slint:112 ui/about.slint:199
 #, x-machine
 msgid "Unknown"
 msgstr "不明"
 
-#: about.ts:34 ui/about.slint:131 ui/about.slint:176
+#: about.ts:35 ui/about.slint:192 ui/about.slint:238
 #, x-machine
 msgid "Plugin API"
 msgstr "プラグイン API"
 
-#: about.ts:68 ui/about.slint:108
+#: about.ts:69 ui/about.slint:127
 #, x-machine
 msgid "GPU"
 msgstr "GPU"
 
-#: about.ts:68 ui/about.slint:108
+#: about.ts:69 ui/about.slint:127
 #, x-machine
 msgid "Software"
 msgstr "ソフトウェア"
 
-#: about.ts:69 ui/about.slint:111
+#: about.ts:70 ui/about.slint:130
 #, x-machine
 msgid "{} — {}"
 msgstr "{} — {}"
 
-#: about.ts:100 ui/about.slint:172
+#: about.ts:101 ui/about.slint:234
 #, x-machine
 msgid "Version {} (build {})"
 msgstr "バージョン {}（ビルド {}）"
 
-#: about.ts:100 ui/about.slint:172
+#: about.ts:101 ui/about.slint:234
 #, x-machine
 msgid "Version {}"
 msgstr "バージョン {}"
 
-#: about.ts:101 about.ts:102 properties.ts:61
+#: about.ts:102 about.ts:103 properties.ts:61
 #, x-machine
 msgid "{}: {}"
 msgstr "{}：{}"
 
-#: about.ts:102 ui/about.slint:132 ui/about.slint:193
+#: about.ts:103 ui/about.slint:193 ui/about.slint:255
 #, x-machine
 msgid "Rendering"
 msgstr "レンダリング"
 
-#: about.ts:103 ui/about.slint:205
+#: about.ts:104 ui/about.slint:328
 #, x-machine
 msgid "Loaded plugins"
 msgstr "読み込まれたプラグイン"
 
-#: about.ts:104 ui/about.slint:216
+#: about.ts:105 ui/about.slint:339
 #, x-machine
 msgid "Unknown (cannot read the plugin list)"
 msgstr "不明（プラグイン一覧を読み取れません）"
 
-#: about.ts:107 ui/about.slint:97
+#: about.ts:108 ui/about.slint:116
 #, x-machine
 msgid "Built-in"
 msgstr "内蔵"
 
-#: about.ts:107 ui/about.slint:98
+#: about.ts:108 ui/about.slint:117
 #, x-machine
 msgid "Repository"
 msgstr "リポジトリ"
 
-#: about.ts:107 ui/about.slint:99
+#: about.ts:108 ui/about.slint:118
 #, x-machine
 msgid "Link"
 msgstr "リンク"
 
-#: about.ts:107 ui/about.slint:100
+#: about.ts:108 ui/about.slint:119
 #, x-machine
 msgid "Local file"
 msgstr "ローカルファイル"
 
-#: about.ts:107 ui/about.slint:101
+#: about.ts:108 ui/about.slint:120
 #, x-machine
 msgid "Workshop"
 msgstr "ワークショップ"
 
-#: about.ts:107 ui/about.slint:102
+#: about.ts:108 ui/about.slint:121
 #, x-machine
 msgid "Installed"
 msgstr "インストール済み"
 
-#: about.ts:107 ui/about.slint:103
+#: about.ts:108 ui/about.slint:122
 #, x-machine
 msgid "Development"
 msgstr "開発用読み込み"
 
-#: about.ts:108 ui/about.slint:114
+#: about.ts:109 ui/about.slint:175
 #, x-machine
 msgid "Starting"
 msgstr "起動中"
 
-#: about.ts:108 ui/about.slint:115
+#: about.ts:109 ui/about.slint:176
 #, x-machine
 msgid "Running"
 msgstr "実行中"
 
-#: about.ts:108 ui/about.slint:116
+#: about.ts:109 ui/about.slint:177
 #, x-machine
 msgid "Disabled"
 msgstr "無効"
 
-#: about.ts:108 ui/about.slint:117
+#: about.ts:109 ui/about.slint:178
 #, x-machine
 msgid "Failed"
 msgstr "失敗"
 
-#: about.ts:108 ui/about.slint:118
+#: about.ts:109 ui/about.slint:179
 #, x-machine
 msgid "Stopped"
 msgstr "停止"
 
-#: about.ts:109
+#: about.ts:110
 #, x-machine
 msgid "{}  {}  {}  {}"
 msgstr "{}  {}  {}  {}"
 
-#: about.ts:164
+#: about.ts:168
 #, x-machine
 msgid "Version info copied"
 msgstr "バージョン情報をコピーしました"
@@ -156,180 +156,190 @@ msgstr "ファイル情報を読み取れません：{}"
 msgid "ffprobe failed"
 msgstr "ffprobe が失敗しました"
 
-#: dialog.ts:62 main.ts:58 main.ts:149 properties.ts:126
+#: dialog.ts:66 main.ts:59 main.ts:150 properties.ts:151
 #, x-machine
 msgid "No media open"
 msgstr "メディアが開かれていません"
 
-#: dialog.ts:64 properties.ts:127 properties.ts:297
+#: dialog.ts:68 properties.ts:152 properties.ts:322
 #, x-machine
 msgid "Reading…"
 msgstr "読み取り中…"
 
-#: dialog.ts:89
+#: dialog.ts:92
 #, x-machine
 msgid "File not found"
 msgstr "ファイルが見つかりません"
 
-#: dialog.ts:96
+#: dialog.ts:99
 #, x-machine
 msgid "Cannot parse the ffprobe output"
 msgstr "ffprobe の出力を解析できません"
 
-#: dialog.ts:154
+#: dialog.ts:188
 #, x-machine
 msgid "Playback info copied"
 msgstr "再生情報をコピーしました"
 
-#: dialog.ts:162
+#: dialog.ts:196
 #, x-machine
 msgid "Save As"
 msgstr "名前を付けて保存"
 
-#: dialog.ts:169
+#: dialog.ts:203
 #, x-machine
 msgid "Saved to {}"
 msgstr "{} に保存しました"
 
 #. how the video is decoded, after "Decoder:": by the CPU.
-#: main.ts:33
+#: main.ts:34
 #, x-machine
 msgid "software"
 msgstr "ソフトウェア"
 
 #. how the video is decoded, after "Decoder:": by the GPU; {} is the method, e.g. d3d11va-copy.
-#: main.ts:37
+#: main.ts:38
 #, x-machine
 msgid "hardware ({})"
 msgstr "ハードウェア（{}）"
 
 #. how the video is decoded, after "Decoder:": by the GPU.
-#: main.ts:40
+#: main.ts:41
 #, x-machine
 msgid "hardware"
 msgstr "ハードウェア"
 
 #. frames per second the window showed; "source" is the video's own frame rate.
-#: main.ts:49
+#: main.ts:50
 #, x-machine
 msgid "{} fps"
 msgstr "{} fps"
 
 #. frames per second the window showed; "source" is the video's own frame rate.
-#: main.ts:49
+#: main.ts:50
 #, x-machine
 msgid "{} fps (source {})"
 msgstr "{} fps（ソース {}）"
 
-#: main.ts:58
+#: main.ts:59
 #, x-machine
 msgid "File: {}"
 msgstr "ファイル：{}"
 
-#: main.ts:59
+#: main.ts:60
 #, x-machine
 msgid "Time: {} / {}"
 msgstr "時間：{} / {}"
 
-#: main.ts:60
+#: main.ts:61
 #, x-machine
 msgid "Video: {} {}"
 msgstr "ビデオ：{} {}"
 
-#: main.ts:61 main.ts:167
+#: main.ts:62 main.ts:168
 #, x-machine
 msgid "Decoder: {}"
 msgstr "デコード：{}"
 
-#: main.ts:62
+#: main.ts:63
 #, x-machine
 msgid "Frame rate: {}"
 msgstr "フレームレート：{}"
 
-#: main.ts:64 main.ts:168
+#: main.ts:65 main.ts:169
 #, x-machine
 msgid "Displayed: {}"
 msgstr "実際の表示：{}"
 
-#: main.ts:65
+#: main.ts:66
 #, x-machine
 msgid "Audio: {} {} {}"
 msgstr "オーディオ：{} {} {}"
 
-#: main.ts:65 properties.ts:256
+#: main.ts:66 properties.ts:281
 #, x-machine
 msgid "{} channels"
 msgstr "{} チャンネル"
 
-#: main.ts:66
+#: main.ts:67
 #, x-machine
 msgid "Backend: {} (session {})"
 msgstr "バックエンド：{}（セッション {}）"
 
-#: main.ts:67
+#: main.ts:68
 #, x-machine
 msgid "Frames shown: {}"
 msgstr "表示したフレーム：{}"
 
-#: main.ts:68
+#: main.ts:69
 #, x-machine
 msgid "Dropped frames: {}"
 msgstr "ドロップしたフレーム：{}"
 
-#: main.ts:130
+#: main.ts:131
 #, x-machine
 msgid "Chapter {}"
 msgstr "チャプター {}"
 
-#: main.ts:136 properties.ts:196
+#: main.ts:137 properties.ts:221
 #, x-machine
 msgid "Subtitles"
 msgstr "字幕"
 
-#: main.ts:152
+#: main.ts:153
 #, x-machine
 msgid "{} ch"
 msgstr "{} ch"
 
-#: main.ts:156
+#: main.ts:157
 #, x-machine
 msgid "{} / {}"
 msgstr "{} / {}"
 
-#: main.ts:156 properties.ts:252
+#: main.ts:157 properties.ts:277
 #, x-machine
 msgid "Live"
 msgstr "ライブ"
 
-#: main.ts:160
+#: main.ts:161
 #, x-machine
 msgid "{} {}"
 msgstr "{} {}"
 
-#: main.ts:163 main.ts:169 properties.ts:79
+#: main.ts:164 main.ts:170 properties.ts:104
 #, x-machine
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: main.ts:238 manifest.json
+#: main.ts:241 manifest.json
 #, x-machine
 msgid "Playback Info"
 msgstr "再生情報"
 
-#: main.ts:252
+#: main.ts:255
 #, x-machine
 msgid "Brief Info"
 msgstr "簡易情報"
 
-#: main.ts:271
+#: main.ts:274
 #, x-machine
 msgid "Playback Properties…"
 msgstr "再生のプロパティ…"
 
-#: main.ts:279
+#: main.ts:284
 #, x-machine
 msgid "About Vestra Player…"
 msgstr "Vestra Player について…"
+
+#: main.ts:293
+#, x-machine
+msgid "Check for Updates…"
+msgstr "アップデートを確認…"
+
+#: main.ts:302 ui/about.slint:194 ui/about.slint:276 ui/updates.slint:21
+#, x-machine
+msgid "Updates"
+msgstr "アップデート"
 
 #: manifest.json
 #, x-machine
@@ -361,561 +371,713 @@ msgstr "バージョン情報"
 msgid "(The rest is too long and was left out)"
 msgstr "（残りは長すぎるため省略しました）"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "8-bit ({})"
 msgstr "8 ビット（{}）"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "16-bit ({})"
 msgstr "16 ビット（{}）"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "32-bit ({})"
 msgstr "32 ビット（{}）"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "64-bit ({})"
 msgstr "64 ビット（{}）"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "32-bit float ({})"
 msgstr "32 ビット浮動小数点（{}）"
 
-#: properties.ts:91
+#: properties.ts:116
 #, x-machine
 msgid "64-bit float ({})"
 msgstr "64 ビット浮動小数点（{}）"
 
-#: properties.ts:113
+#: properties.ts:138
 #, x-machine
 msgid "{} bytes"
 msgstr "{} バイト"
 
-#: properties.ts:114
+#: properties.ts:139
 #, x-machine
 msgid "{} KB ({})"
 msgstr "{} KB（{}）"
 
-#: properties.ts:114
+#: properties.ts:139
 #, x-machine
 msgid "{} MB ({})"
 msgstr "{} MB（{}）"
 
-#: properties.ts:114
+#: properties.ts:139
 #, x-machine
 msgid "{} GB ({})"
 msgstr "{} GB（{}）"
 
-#: properties.ts:114
+#: properties.ts:139
 #, x-machine
 msgid "{} TB ({})"
 msgstr "{} TB（{}）"
 
-#: properties.ts:120
+#: properties.ts:145
 #, x-machine
 msgid "Not used"
 msgstr "未使用"
 
-#: properties.ts:130 properties.ts:196 properties.ts:255
+#: properties.ts:155 properties.ts:221 properties.ts:280
 #, x-machine
 msgid "Video"
 msgstr "ビデオ"
 
-#: properties.ts:131 properties.ts:140
+#: properties.ts:156 properties.ts:165
 #, x-machine
 msgid "Decoder"
 msgstr "デコーダ"
 
-#: properties.ts:132
+#: properties.ts:157
 #, x-machine
 msgid "Hardware decoding"
 msgstr "ハードウェアデコード"
 
-#: properties.ts:133
+#: properties.ts:158
 #, x-machine
 msgid "Input format"
 msgstr "入力形式"
 
-#: properties.ts:134 properties.ts:205
+#: properties.ts:159 properties.ts:230
 #, x-machine
 msgid "Size"
 msgstr "サイズ"
 
-#: properties.ts:135
+#: properties.ts:160
 #, x-machine
 msgid "Source frame rate"
 msgstr "ソースのフレームレート"
 
-#: properties.ts:136
+#: properties.ts:161
 #, x-machine
 msgid "Display frame rate"
 msgstr "表示のフレームレート"
 
-#: properties.ts:137
+#: properties.ts:162
 #, x-machine
 msgid "Video bitrate"
 msgstr "ビデオのビットレート"
 
-#: properties.ts:139 properties.ts:196 properties.ts:256
+#: properties.ts:164 properties.ts:221 properties.ts:281
 #, x-machine
 msgid "Audio"
 msgstr "オーディオ"
 
-#: properties.ts:141 properties.ts:200
+#: properties.ts:166 properties.ts:225
 #, x-machine
 msgid "Codec"
 msgstr "コーデック"
 
-#: properties.ts:142 properties.ts:212
+#: properties.ts:167 properties.ts:237
 #, x-machine
 msgid "Sample rate"
 msgstr "サンプルレート"
 
-#: properties.ts:143
+#: properties.ts:168
 #, x-machine
 msgid "Bit depth"
 msgstr "ビット深度"
 
-#: properties.ts:144
+#: properties.ts:169
 #, x-machine
 msgid "Channel count"
 msgstr "チャンネル数"
 
-#: properties.ts:144 properties.ts:184 sysinfo.ts:31
+#: properties.ts:169 properties.ts:209 sysinfo.ts:31
 #, x-machine
 msgid "{} ({})"
 msgstr "{}（{}）"
 
-#: properties.ts:145
+#: properties.ts:170
 #, x-machine
 msgid "Audio bitrate"
 msgstr "オーディオのビットレート"
 
-#: properties.ts:147
+#: properties.ts:172
 #, x-machine
 msgid "Other"
 msgstr "その他"
 
-#: properties.ts:148
+#: properties.ts:173
 #, x-machine
 msgid "Backend"
 msgstr "バックエンド"
 
-#: properties.ts:149
+#: properties.ts:174
 #, x-machine
 msgid "Session"
 msgstr "セッション"
 
-#: properties.ts:150
+#: properties.ts:175
 #, x-machine
 msgid "Frames shown"
 msgstr "表示したフレーム"
 
-#: properties.ts:151
+#: properties.ts:176
 #, x-machine
 msgid "Dropped frames"
 msgstr "ドロップしたフレーム"
 
-#: properties.ts:152
+#: properties.ts:177
 #, x-machine
 msgid "A/V sync offset"
 msgstr "音声と映像のずれ"
 
-#: properties.ts:153
+#: properties.ts:178
 #, x-machine
 msgid "Cache"
 msgstr "キャッシュ"
 
-#: properties.ts:153
+#: properties.ts:178
 #, x-machine
 msgid "{} s"
 msgstr "{} 秒"
 
-#: properties.ts:193
+#: properties.ts:218
 #, x-machine
 msgid "Default"
 msgstr "デフォルト"
 
-#: properties.ts:193
+#: properties.ts:218
 #, x-machine
 msgid "Forced"
 msgstr "強制"
 
-#: properties.ts:194
+#: properties.ts:219
 #, x-machine
 msgid "None"
 msgstr "なし"
 
-#: properties.ts:196
+#: properties.ts:221
 #, x-machine
 msgid "Data"
 msgstr "データ"
 
-#: properties.ts:196
+#: properties.ts:221
 #, x-machine
 msgid "Attachment"
 msgstr "添付ファイル"
 
-#: properties.ts:198
+#: properties.ts:223
 #, x-machine
 msgid "Stream #{}: {}"
 msgstr "ストリーム #{}：{}"
 
-#: properties.ts:201
+#: properties.ts:226
 #, x-machine
 msgid "Language"
 msgstr "言語"
 
-#: properties.ts:202 properties.ts:220
+#: properties.ts:227 properties.ts:245
 #, x-machine
 msgid "Title"
 msgstr "タイトル"
 
-#: properties.ts:203
+#: properties.ts:228
 #, x-machine
 msgid "Flags"
 msgstr "フラグ"
 
-#: properties.ts:206
+#: properties.ts:231
 #, x-machine
 msgid "Frame rate"
 msgstr "フレームレート"
 
-#: properties.ts:207
+#: properties.ts:232
 #, x-machine
 msgid "Pixel format"
 msgstr "ピクセル形式"
 
-#: properties.ts:208
+#: properties.ts:233
 #, x-machine
 msgid "Color space"
 msgstr "色空間"
 
-#: properties.ts:209 properties.ts:215
+#: properties.ts:234 properties.ts:240
 #, x-machine
 msgid "Bitrate"
 msgstr "ビットレート"
 
-#: properties.ts:213
+#: properties.ts:238
 #, x-machine
 msgid "Channels"
 msgstr "チャンネル"
 
-#: properties.ts:214
+#: properties.ts:239
 #, x-machine
 msgid "Sample format"
 msgstr "サンプル形式"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Artist"
 msgstr "アーティスト"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Album artist"
 msgstr "アルバムアーティスト"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Album"
 msgstr "アルバム"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Date"
 msgstr "日付"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Genre"
 msgstr "ジャンル"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Track"
 msgstr "トラック番号"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Comment"
 msgstr "コメント"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Composer"
 msgstr "作曲者"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Copyright"
 msgstr "著作権"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Encoder"
 msgstr "エンコーダ"
 
-#: properties.ts:220
+#: properties.ts:245
 #, x-machine
 msgid "Creation time"
 msgstr "作成日時"
 
-#: properties.ts:222 properties.ts:250 ui/about.slint:140 ui/about.slint:205
+#: properties.ts:247 properties.ts:275 ui/about.slint:202 ui/about.slint:328
 #, x-machine
 msgid "Source"
 msgstr "ソース"
 
-#: properties.ts:223
+#: properties.ts:248
 #, x-machine
 msgid "Path"
 msgstr "パス"
 
-#: properties.ts:224
+#: properties.ts:249
 #, x-machine
 msgid "File size"
 msgstr "ファイルサイズ"
 
-#: properties.ts:225
+#: properties.ts:250
 #, x-machine
 msgid "Modified"
 msgstr "変更日時"
 
-#: properties.ts:227
+#: properties.ts:252
 #, x-machine
 msgid "Container"
 msgstr "コンテナ"
 
-#: properties.ts:228
+#: properties.ts:253
 #, x-machine
 msgid "Format"
 msgstr "形式"
 
-#: properties.ts:229 properties.ts:252
+#: properties.ts:254 properties.ts:277
 #, x-machine
 msgid "Duration"
 msgstr "長さ"
 
-#: properties.ts:230
+#: properties.ts:255
 #, x-machine
 msgid "Overall bitrate"
 msgstr "全体のビットレート"
 
-#: properties.ts:231
+#: properties.ts:256
 #, x-machine
 msgid "Stream count"
 msgstr "ストリーム数"
 
-#: properties.ts:232
+#: properties.ts:257
 #, x-machine
 msgid "Chapters"
 msgstr "チャプター数"
 
-#: properties.ts:235
+#: properties.ts:260
 #, x-machine
 msgid "Metadata"
 msgstr "メタデータ"
 
-#: properties.ts:236
+#: properties.ts:261
 #, x-machine
 msgid "Embedded resources"
 msgstr "埋め込みリソース"
 
-#: properties.ts:238
+#: properties.ts:263
 #, x-machine
 msgid "Attachment #{}"
 msgstr "添付ファイル #{}"
 
-#: properties.ts:238
+#: properties.ts:263
 #, x-machine
 msgid "(no file name)"
 msgstr "（ファイル名なし）"
 
-#: properties.ts:239
+#: properties.ts:264
 #, x-machine
 msgid "Cover #{}"
 msgstr "カバー #{}"
 
-#: properties.ts:248
+#: properties.ts:273
 #, x-machine
 msgid "Network source: only what the player reports"
 msgstr "ネットワークソース：プレーヤーが報告する情報のみ"
 
-#: properties.ts:251
+#: properties.ts:276
 #, x-machine
 msgid "Address"
 msgstr "アドレス"
 
-#: properties.ts:254
+#: properties.ts:279
 #, x-machine
 msgid "Streams"
 msgstr "ストリーム"
 
-#: properties.ts:257
+#: properties.ts:282
 #, x-machine
 msgid "Audio tracks"
 msgstr "音声トラック数"
 
-#: properties.ts:280
+#: properties.ts:305
 #, x-machine
 msgid "{} ({} cores)"
 msgstr "{}（{} コア）"
 
-#: properties.ts:282
+#: properties.ts:307
 #, x-machine
 msgid "Player"
 msgstr "プレーヤー"
 
-#: properties.ts:283
+#: properties.ts:308
 #, x-machine
 msgid "Vestra Player version"
 msgstr "Vestra Player のバージョン"
 
-#: properties.ts:284
+#: properties.ts:309
 #, x-machine
 msgid "Plugin API version"
 msgstr "プラグイン API のバージョン"
 
-#: properties.ts:285
+#: properties.ts:310
 #, x-machine
 msgid "mpv version"
 msgstr "mpv のバージョン"
 
-#: properties.ts:286
+#: properties.ts:311
 #, x-machine
 msgid "FFmpeg version"
 msgstr "FFmpeg のバージョン"
 
-#: properties.ts:288
+#: properties.ts:313
 #, x-machine
 msgid "System"
 msgstr "システム"
 
-#: properties.ts:289
+#: properties.ts:314
 #, x-machine
 msgid "System version"
 msgstr "システムのバージョン"
 
-#: properties.ts:290
+#: properties.ts:315
 #, x-machine
 msgid "Model"
 msgstr "機種"
 
-#: properties.ts:291
+#: properties.ts:316
 #, x-machine
 msgid "CPU"
 msgstr "CPU"
 
-#: properties.ts:292
+#: properties.ts:317
 #, x-machine
 msgid "Total memory"
 msgstr "メモリ総量"
 
-#: properties.ts:293
+#: properties.ts:318
 #, x-machine
 msgid "Free memory"
 msgstr "空きメモリ"
 
-#: properties.ts:295
+#: properties.ts:320
 #, x-machine
 msgid "Display {}"
 msgstr "ディスプレイ {}"
 
-#: properties.ts:295 properties.ts:296
+#: properties.ts:320 properties.ts:321
 #, x-machine
 msgid "Display"
 msgstr "ディスプレイ"
 
-#: properties.ts:297
+#: properties.ts:322
 #, x-machine
 msgid "Status"
 msgstr "状態"
 
-#: properties.ts:303
+#: properties.ts:328
 #, x-machine
 msgid "Vestra Player info.txt"
 msgstr "Vestra Player 情報.txt"
 
 #. only the part before the extension; {} is the media's file name.
-#: properties.ts:315
+#: properties.ts:340
 #, x-machine
 msgid "{} info.txt"
 msgstr "{} 情報.txt"
 
-#: ui/about.slint:62
+#: ui/about.slint:65
 #, x-machine
 msgid "About Vestra Player"
 msgstr "Vestra Player について"
 
-#: ui/about.slint:136 ui/about.slint:205
+#: ui/about.slint:134
+#, x-machine
+msgid "no connection to GitHub"
+msgstr "GitHub に接続できません"
+
+#: ui/about.slint:135
+#, x-machine
+msgid "the server did not answer in time"
+msgstr "サーバーが時間内に応答しませんでした"
+
+#: ui/about.slint:136
+#, x-machine
+msgid "no release information was found (HTTP 404)"
+msgstr "リリース情報が見つかりません（HTTP 404）"
+
+#: ui/about.slint:137
+#, x-machine
+msgid "GitHub is limiting requests (HTTP {}); try again later"
+msgstr "GitHub がリクエストを制限しています（HTTP {}）。後でもう一度お試しください"
+
+#: ui/about.slint:138
+#, x-machine
+msgid "the server answered HTTP {}"
+msgstr "サーバーの応答は HTTP {} でした"
+
+#: ui/about.slint:139
+#, x-machine
+msgid "the update information is not valid"
+msgstr "アップデート情報が無効です"
+
+#: ui/about.slint:140
+#, x-machine
+msgid "the update information needs a newer player; see the release notes"
+msgstr "アップデート情報の読み取りには新しいプレーヤーが必要です。リリースノートをご覧ください"
+
+#: ui/about.slint:141
+#, x-machine
+msgid "the file size does not match the release"
+msgstr "ファイルサイズがリリース情報と一致しません"
+
+#: ui/about.slint:142
+#, x-machine
+msgid "the file's checksum does not match the release"
+msgstr "ファイルのチェックサムがリリース情報と一致しません"
+
+#: ui/about.slint:143
+#, x-machine
+msgid "the Downloads folder cannot be written"
+msgstr "ダウンロードフォルダーに書き込めません"
+
+#: ui/about.slint:144
+#, x-machine
+msgid "the installer could not be started"
+msgstr "インストーラーを起動できませんでした"
+
+#: ui/about.slint:152
+#, x-machine
+msgid "Checking for updates…"
+msgstr "アップデートを確認しています…"
+
+#: ui/about.slint:153
+#, x-machine
+msgid "Vestra Player is up to date (latest version {})."
+msgstr "Vestra Player は最新です（最新バージョン {}）。"
+
+#: ui/about.slint:154
+#, x-machine
+msgid "Version {} is available (released {})."
+msgstr "バージョン {} が利用可能です（{} 公開）。"
+
+#: ui/about.slint:154
+#, x-machine
+msgid "Version {} is available."
+msgstr "バージョン {} が利用可能です。"
+
+#. {0} is the version, {1} and {2} megabytes downloaded and in all.
+#: ui/about.slint:156
+#, x-machine
+msgid "Downloading version {0}: {1} of {2} MB"
+msgstr "バージョン {0} をダウンロード中：{1} / {2} MB"
+
+#: ui/about.slint:157
+#, x-machine
+msgid "Version {} is downloaded to {}. Run the installer to update."
+msgstr "バージョン {} を {} にダウンロードしました。インストーラーを実行して更新してください。"
+
+#: ui/about.slint:158
+#, x-machine
+msgid "Could not check for updates: {}."
+msgstr "アップデートを確認できませんでした：{}。"
+
+#: ui/about.slint:159
+#, x-machine
+msgid "Could not download version {}: {}."
+msgstr "バージョン {} をダウンロードできませんでした：{}。"
+
+#: ui/about.slint:160
+#, x-machine
+msgid "Not checked yet."
+msgstr "まだ確認していません。"
+
+#: ui/about.slint:163
+#, x-machine
+msgid "Download"
+msgstr "ダウンロード"
+
+#: ui/about.slint:164
+#, x-machine
+msgid "Open Release Page"
+msgstr "リリースページを開く"
+
+#: ui/about.slint:165
+#, x-machine
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: ui/about.slint:166
+#, x-machine
+msgid "Run Installer"
+msgstr "インストーラーを実行"
+
+#: ui/about.slint:167
+#, x-machine
+msgid "Check Now"
+msgstr "今すぐ確認"
+
+#: ui/about.slint:198 ui/about.slint:328
 #, x-machine
 msgid "Version"
 msgstr "バージョン"
 
-#: ui/about.slint:144 ui/about.slint:205
+#: ui/about.slint:206 ui/about.slint:328
 #, x-machine
 msgid "State"
 msgstr "状態"
 
-#: ui/about.slint:248 ui/properties.slint:160
+#: ui/about.slint:312
+#, x-machine
+msgid "Release Notes"
+msgstr "リリースノート"
+
+#: ui/about.slint:369 ui/properties.slint:116
 #, x-machine
 msgid "Copy failed"
 msgstr "コピーに失敗しました"
 
-#: ui/about.slint:254
+#: ui/about.slint:375
 #, x-machine
 msgid "Copy Info"
 msgstr "情報をコピー"
 
-#: ui/about.slint:255 ui/properties.slint:171
+#: ui/about.slint:376 ui/properties.slint:127
 #, x-machine
 msgid "Close"
 msgstr "閉じる"
 
-#: ui/properties.slint:55
+#: ui/properties.slint:19
 #, x-machine
 msgid "Playback Properties"
 msgstr "再生のプロパティ"
 
-#: ui/properties.slint:72
+#: ui/properties.slint:38
 #, x-machine
 msgctxt "tab"
 msgid "Playback"
 msgstr "再生"
 
-#: ui/properties.slint:72
+#: ui/properties.slint:38
 #, x-machine
 msgctxt "tab"
 msgid "File"
 msgstr "ファイル"
 
-#: ui/properties.slint:72
+#: ui/properties.slint:38
 #, x-machine
 msgctxt "tab"
 msgid "System"
 msgstr "システム"
 
-#: ui/properties.slint:161
+#: ui/properties.slint:117
 #, x-machine
 msgid "Save failed: {}"
 msgstr "保存に失敗しました：{}"
 
-#: ui/properties.slint:168
+#: ui/properties.slint:124
 #, x-machine
 msgid "Refresh"
 msgstr "更新"
 
-#: ui/properties.slint:169
+#: ui/properties.slint:125
 #, x-machine
 msgid "Copy"
 msgstr "コピー"
 
-#: ui/properties.slint:170
+#: ui/properties.slint:126
 #, x-machine
 msgid "Save As…"
 msgstr "名前を付けて保存…"
+
+#: ui/updates.slint:28
+#, x-machine
+msgid "Check for player updates automatically (30 seconds after start, then at most once a day)"
+msgstr "プレーヤーのアップデートを自動的に確認する（起動の 30 秒後、以降は 1 日 1 回まで）"
+
+#: ui/updates.slint:33
+#, x-machine
+msgid "When a new version is out, a message shows once on the video and About Vestra Player… offers to download it. Nothing is installed without you: the installer is saved to your Downloads folder and you start it. When off, the player looks for updates only when you choose “Check for Updates…” in the menu."
+msgstr "新しいバージョンが出ると、ビデオ上に一度だけメッセージが表示され、「Vestra Player について…」からダウンロードできます。勝手にインストールされることはありません。インストーラーはダウンロードフォルダーに保存され、ご自身で起動します。オフにすると、メニューの「アップデートを確認…」を選んだときだけ確認します。"
+
+#: updates.ts:520
+#, x-machine
+msgid "Vestra Player {} is available. Open About Vestra Player… to download it."
+msgstr "Vestra Player {} が利用可能です。「Vestra Player について…」からダウンロードできます。"
+
+#. why "Check for Updates…" is greyed out: an installer is being downloaded.
+#: updates.ts:561
+#, x-machine
+msgid "Downloading the update…"
+msgstr "アップデートをダウンロードしています…"

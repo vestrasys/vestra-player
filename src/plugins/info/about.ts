@@ -1,4 +1,5 @@
 import type { AppInfo, I18n, PackageSource, Plugin, SystemInfo, TextArg } from "@vestra-player/sdk";
+import type { Updater } from "./updates.ts";
 
 /** The protocol version in manifest.json (the Plugin API rows of I05 and I09). */
 export const API_VERSION = "vestra/1";
@@ -115,10 +116,10 @@ export function aboutText(i18n: I18n, app: AppInfo, node: string | null, plugins
  * I09 About Vestra Player: a 360-wide tool window with the logo, the version,
  * component versions (`plugin.app`), the renderer and why (`app.system()`,
  * read on opening) and the loaded plugins (`packages.list`, read on opening
- * and kept current by `packages.onChange`). F1 opens it, or brings the open
- * window to the front.
+ * and kept current by `packages.onChange`) and the update check (J10,
+ * `updates.ts`). F1 opens it, or brings the open window to the front.
  */
-export function aboutWindow(plugin: Plugin) {
+export function aboutWindow(plugin: Plugin, updater: Updater) {
   const node = process.versions.node ? `v${process.versions.node}` : null;
   let plugins: PluginRow[] | null = null;
   let rendering = NO_RENDERING;
@@ -156,7 +157,10 @@ export function aboutWindow(plugin: Plugin) {
     rendering: rendering.mode,
     renderingReason: rendering.reason,
     status,
+    ...updater.props(),
   }));
+  window.on("updateAction", () => updater.action());
+  window.on("releaseNotes", () => updater.releaseNotes());
   window.on("copyInfo", async () => {
     try {
       await plugin.clipboard.writeText(aboutText(plugin.i18n, plugin.app, node, plugins, rendering));

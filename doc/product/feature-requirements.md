@@ -129,7 +129,7 @@ The 2026-10-20 cut review removed the following 47 items because few people use 
 - **Capture**: F06 thumbnail contact sheet, F08 file name template, F10 delete latest screenshot, F12 live recording
 - **Audio**: G06 channel swap (merged into the options of G05), G07 equalizer expanded to 10 bands, G12 noise reduction, G13 reverb, G14 vocal removal
 - **Window and info**: H02 fullscreen stretch, H06 move to a screen corner, H11 window opacity, I04 miscellaneous info
-- **Settings**: J05 settings import / export, J10 check for updates
+- **Settings**: J05 settings import / export, J10 check for updates (J10 restored by the user ruling of 2026-11-01, see [feature catalog](feature-catalog.md) J10)
 
 Two further changes:
 - J11 keeps only the album art; the audio animation is removed.
@@ -2645,7 +2645,7 @@ Shortcut conflict check: Shift+Tab, Ctrl+F1 and F1 are not in [menus.md](menus.m
 - After "Copy Info", pasting gives plain text containing the versions and the plugin list.
 - The logo is clear on a dark background and not distorted.
 
-**Notes**: only one page, including "loaded plugins"; the "shortcut list" is provided by J01; "check for updates" is not done.
+**Notes**: only one page, including "loaded plugins"; the "shortcut list" is provided by J01. "Check for updates" (J10, restored 2026-11-01) adds an Updates row to this window (info 0.1.11): the latest release from `latest.json`, Release Notes, and Check Now / Download / Run Installer.
 
 ### Chapter core API request summary
 

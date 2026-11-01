@@ -1,8 +1,11 @@
 // About Vestra Player (I09): a fixed 360-wide window: the product, then the loaded plugins.
 // Heights (padding 12 top and bottom):
-//   12 + header 96 + 6 + components 5 × 18 + rendering + 6 + list head 18 + list 8 × 18 + 2 + 6 + spacer ≥ 0 + 6 + buttons 21 + 12 = 419 of 420 + rendering
+//   12 + header 96 + 6 + components 5 × 18 + rendering + updates + 6 + list head 18 + list 8 × 18 + 2 + 6 + spacer ≥ 0 + 6 + buttons 21 + 12
+//     = 419 of 420 + rendering + updates
 //   rendering   0 when the player does not report it (before 0.5.12), else one 18px row or
 //               more: its reason wraps, and the window grows by exactly that height
+//   updates     4 + status (18, or its wrapped height + 4) + [downloading: 4 + bar 3] + 4 + action row 18 (J10);
+//               the window grows by exactly that height
 // Widths (content 360 − 28 = 332):
 //   header      logo 96 + 12 + name / version text (elided)
 //   components  label 100 + 8 + value 224 (elided; the rendering value wraps)
@@ -61,11 +64,11 @@ component PluginLine {
 export component AboutWindow inherits Window {
     title: @tr("About Vestra Player");
     preferred-width: 360px;
-    preferred-height: 420px + rendering-line.height;
+    preferred-height: 420px + rendering-line.height + root.updates-height;
     min-width: 360px;
     max-width: 360px;
-    min-height: 420px + rendering-line.height;
-    max-height: 420px + rendering-line.height;
+    min-height: 420px + rendering-line.height + root.updates-height;
+    max-height: 420px + rendering-line.height + root.updates-height;
     background: Theme.bg-panel;
     in property <string> version;
     // "" without a build hash.
@@ -86,8 +89,24 @@ export component AboutWindow inherits Window {
     in property <string> rendering-reason;
     // "" or "copy-failed".
     in property <string> status;
+    // J10 update check (updates.ts `UpdateProps`): the state code, the latest release's
+    // version and date ("" = unknown), the action button's code ("" = none now), why it
+    // failed (a code, and the HTTP status for "http"), the download's progress in bytes,
+    // the downloaded installer's path, and whether a release notes page is known.
+    in property <string> update-state;
+    in property <string> latest-version;
+    in property <string> latest-date;
+    in property <string> update-button;
+    in property <string> update-error;
+    in property <string> update-detail;
+    in property <float> received;
+    in property <float> total;
+    in property <string> installer-path;
+    in property <bool> has-notes;
     callback copy-info();
     callback close-window();
+    callback update-action();
+    callback release-notes();
 
     pure function known(version: string) -> string {
         return version != "" ? version : @tr("Unknown");
@@ -110,6 +129,48 @@ export component AboutWindow inherits Window {
     pure function rendering-value(mode: string, reason: string) -> string {
         return reason == "" ? root.rendering-name(mode) : @tr("{} — {}", root.rendering-name(mode), reason);
     }
+    // Why a check or a download failed (updates.ts `FailCode`).
+    pure function update-reason(code: string, detail: string) -> string {
+        return code == "offline" ? @tr("no connection to GitHub")
+            : code == "timeout" ? @tr("the server did not answer in time")
+            : code == "not-found" ? @tr("no release information was found (HTTP 404)")
+            : code == "rate-limited" ? @tr("GitHub is limiting requests (HTTP {}); try again later", detail)
+            : code == "http" ? @tr("the server answered HTTP {}", detail)
+            : code == "invalid" ? @tr("the update information is not valid")
+            : code == "schema" ? @tr("the update information needs a newer player; see the release notes")
+            : code == "size" ? @tr("the file size does not match the release")
+            : code == "sha256" ? @tr("the file's checksum does not match the release")
+            : code == "disk" ? @tr("the Downloads folder cannot be written")
+            : code == "open" ? @tr("the installer could not be started")
+            : code;
+    }
+    // Megabytes with one decimal.
+    pure function megabytes(bytes: float) -> float {
+        return round(bytes / 104857.6) / 10;
+    }
+    pure function update-text() -> string {
+        return root.update-state == "checking" ? @tr("Checking for updates…")
+            : root.update-state == "current" ? @tr("Vestra Player is up to date (latest version {}).", root.latest-version)
+            : root.update-state == "available" ? (root.latest-date != "" ? @tr("Version {} is available (released {}).", root.latest-version, root.latest-date) : @tr("Version {} is available.", root.latest-version))
+            // TRANSLATORS: {0} is the version, {1} and {2} megabytes downloaded and in all.
+            : root.update-state == "downloading" ? @tr("Downloading version {0}: {1} of {2} MB", root.latest-version, root.megabytes(root.received), root.megabytes(root.total))
+            : root.update-state == "downloaded" ? @tr("Version {} is downloaded to {}. Run the installer to update.", root.latest-version, root.installer-path)
+            : root.update-state == "failed" ? @tr("Could not check for updates: {}.", root.update-reason(root.update-error, root.update-detail))
+            : root.update-state == "download-failed" ? @tr("Could not download version {}: {}.", root.latest-version, root.update-reason(root.update-error, root.update-detail))
+            : @tr("Not checked yet.");
+    }
+    pure function update-button-text(code: string) -> string {
+        return code == "download" ? @tr("Download")
+            : code == "release-page" ? @tr("Open Release Page")
+            : code == "cancel" ? @tr("Cancel")
+            : code == "run" ? @tr("Run Installer")
+            : @tr("Check Now");
+    }
+    // A newer version is known: the status is drawn in the accent colour (the marker).
+    private property <bool> update-newer: root.update-state == "available" || root.update-state == "downloading" || root.update-state == "downloaded";
+    private property <length> update-status-height: max(18px, update-status.preferred-height + 4px);
+    private property <length> updates-height: 4px + root.update-status-height + (root.update-state == "downloading" ? 7px : 0px) + 4px + Theme.button-small-height;
+
     pure function state-name(code: string) -> string {
         return code == "starting" ? @tr("Starting")
             : code == "running" ? @tr("Running")
@@ -130,6 +191,7 @@ export component AboutWindow inherits Window {
         label-measure := VerticalLayout {
             Text { text: @tr("Plugin API"); font-size: Theme.font-body; }
             Text { text: @tr("Rendering"); font-size: Theme.font-body; }
+            Text { text: @tr("Updates"); font-size: Theme.font-body; }
         }
         // Headings are bold.
         version-measure := VerticalLayout {
@@ -198,6 +260,71 @@ export component AboutWindow inherits Window {
                     font-size: Theme.font-body;
                     vertical-alignment: top;
                     wrap: word-wrap;
+                }
+            }
+            // J10 Updates: the status (it wraps), a progress bar while downloading, then the
+            // action button and the release notes link under the value column.
+            VerticalLayout {
+                height: root.updates-height;
+                padding-top: 4px;
+                spacing: 4px;
+                HorizontalLayout {
+                    height: root.update-status-height;
+                    padding-top: 2px;
+                    padding-bottom: 2px;
+                    spacing: 8px;
+                    Text { width: root.label-width; text: @tr("Updates"); color: Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: top; overflow: elide; }
+                    update-status := Text {
+                        horizontal-stretch: 1;
+                        text: root.update-text();
+                        color: root.update-newer ? Theme.accent : root.update-state == "failed" || root.update-state == "download-failed" ? Theme.text-list : Theme.text;
+                        font-size: Theme.font-body;
+                        vertical-alignment: top;
+                        wrap: word-wrap;
+                    }
+                }
+                if root.update-state == "downloading": HorizontalLayout {
+                    height: 3px;
+                    padding-left: root.label-width + 8px;
+                    Rectangle {
+                        background: Theme.line;
+                        border-radius: 1.5px;
+                        Rectangle {
+                            x: 0px;
+                            width: root.total > 0 ? parent.width * clamp(root.received / root.total, 0, 1) : 0px;
+                            background: Theme.accent;
+                            border-radius: 1.5px;
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    height: Theme.button-small-height;
+                    padding-left: root.label-width + 8px;
+                    spacing: 10px;
+                    alignment: start;
+                    Button {
+                        small: true;
+                        text: root.update-button-text(root.update-button);
+                        enabled: root.update-button != "";
+                        clicked => { root.update-action(); }
+                    }
+                    // A link: accent text that opens the release page in the browser.
+                    if root.has-notes && root.update-state != "checking": Rectangle {
+                        width: notes-text.preferred-width;
+                        accessible-role: button;
+                        accessible-label: notes-text.text;
+                        accessible-action-default => { root.release-notes(); }
+                        notes-text := Text {
+                            text: @tr("Release Notes");
+                            color: notes-touch.has-hover ? Theme.accent-press : Theme.accent;
+                            font-size: Theme.font-body;
+                            vertical-alignment: center;
+                        }
+                        notes-touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.release-notes(); }
+                        }
+                    }
                 }
             }
         }
