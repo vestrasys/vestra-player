@@ -287,8 +287,9 @@ async function download(
  * again right after the commit (harmless on a newer player). `enable` is
  * for a revoked version the store disabled, whose fix is meant to run: the
  * store enables it after the commit (a newer player kept it disabled; on an
- * older one it already runs). The result is described from the plugin list
- * read again after the commit, not from what the store saw before.
+ * older one it already runs), waits for it to leave `starting` and reports
+ * an activation failure. The result is described from the plugin list read
+ * again after the commit, not from what the store saw before.
  */
 async function installCandidate(
   store: Store,
@@ -301,7 +302,8 @@ async function installCandidate(
 ) {
   const version = candidate.manifest.version;
   const id = candidate.manifest.id;
-  // Whatever is installed now (any source): a disabled plugin stays disabled.
+  // Whatever is installed now (any source; read again, the list may be old): a disabled plugin stays disabled.
+  await store.reread();
   const keepDisabled = !enable && installedOf(store, id)?.state === "disabled";
   store.progress(msg("Installing {}…", name), null);
   let change: PackageChange;
@@ -333,9 +335,11 @@ async function installCandidate(
       } catch (error) {
         failure = failureText(store, error, id);
       }
-    // The player's word on the result, not the list from before the install.
-    await store.reread();
-    const disabled = installedOf(store, id)?.state === "disabled";
+    // The player's word on the result, not the list from before the install. Enabling only starts the
+    // plugin: wait for it to leave `starting` (it may still fail to activate).
+    const now = await settled(store, id);
+    const disabled = now?.state === "disabled";
+    if (failure === null && enable && now?.state === "failed") failure = now.error ? raw(now.error) : msg("Failed");
     if (failure !== null)
       store.report(
         enable
@@ -356,6 +360,19 @@ async function installCandidate(
   // From a repository the row was already selected; it stays on its tab (the list picks its neighbour if it
   // left). A file or link has no row yet: show it where it lands.
   if (source.kind !== "repository") store.select(selectKey(store, candidate.manifest.id, source));
+}
+
+/** How long the store waits for an enabled plugin to leave `starting`, and how often it reads the list meanwhile. */
+export const installTiming = { startWait: 5_000, poll: 250 };
+
+/** The installed plugin `id` as the player reports it, once it left `starting` (or after `installTiming.startWait`). */
+async function settled(store: Store, id: string): Promise<PluginInfo | null> {
+  await store.reread();
+  for (const deadline = Date.now() + installTiming.startWait; installedOf(store, id)?.state === "starting" && Date.now() < deadline; ) {
+    await new Promise((resolve) => setTimeout(resolve, installTiming.poll));
+    await store.reread();
+  }
+  return installedOf(store, id);
 }
 
 /** After an install: select the row that now stands for it. */
