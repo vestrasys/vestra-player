@@ -170,6 +170,15 @@ struct Catalog {
     dropped: Vec<(String, String)>,
 }
 
+/// Whether a package runs once its install commits: `requested` when the
+/// installer said so (`packages.install`'s `enabled`); otherwise a first
+/// install runs, and an update or reinstall of an installed package keeps
+/// its state, so one the user disabled stays disabled and never runs (as in
+/// VS Code).
+pub fn enables_after_install(before: &Installed, disabled: bool, requested: Option<bool>) -> bool {
+    requested.unwrap_or(before.current.is_none() || !disabled)
+}
+
 pub struct Store {
     root: PathBuf,
     catalog: Catalog,
@@ -1178,14 +1187,19 @@ impl Store {
             id,
             operation_id,
             serde_json::json!({"operationId":operation_id,"packageId":id,"status":"committed"}),
+            None,
         )
     }
 
+    /// Commit `id`'s pending install. `enabled` is whether the package runs
+    /// afterwards (its disabled flag, written in the same catalog
+    /// replacement); `None` follows `enables_after_install`.
     pub fn commit_with_receipt(
         &mut self,
         id: &str,
         operation_id: &str,
         receipt: Value,
+        enabled: Option<bool>,
     ) -> Result<Installed> {
         identifier(id)?;
         identifier(operation_id)?;
@@ -1207,7 +1221,8 @@ impl Store {
             "package operation conflict"
         );
         self.verify_package(&recovery.target)?;
-        let (next, installed) = Self::committed(self.catalog.clone(), id, operation_id, receipt)?;
+        let (next, installed) =
+            Self::committed(self.catalog.clone(), id, operation_id, receipt, enabled)?;
         self.publish(next)?;
         Ok(installed)
     }
@@ -1219,6 +1234,7 @@ impl Store {
         id: &str,
         operation_id: &str,
         mut receipt: Value,
+        enabled: Option<bool>,
     ) -> Result<(Catalog, Installed)> {
         let recovery = next
             .pending
@@ -1235,6 +1251,8 @@ impl Store {
             .filter(|n| *n <= MAX_SAFE)
             .context("installed revision exhausted")?;
         let before = recovery.before;
+        let enabled = enabled
+            .unwrap_or_else(|| enables_after_install(&before, next.disabled.contains(id), None));
         let instance = recovery
             .instance
             .or_else(|| before.instance.clone())
@@ -1247,6 +1265,8 @@ impl Store {
             retire(&mut next, id, old, &before);
         }
         next.dormant.remove(&instance.guid);
+        // Built-ins always run (user ruling 2026-10-26).
+        let enabled = enabled || instance.builtin;
         // The replaced version is not kept (nothing goes back to it): its
         // directory is garbage once this is published.
         let installed = Installed {
@@ -1261,8 +1281,13 @@ impl Store {
         insert_receipt(&mut next, operation_id, receipt)?;
         next.installed.insert(id.into(), installed.clone());
         next.last_commit.insert(id.into(), operation_id.into());
-        // Installing is asking for the package to run.
-        next.disabled.remove(id);
+        // An update or reinstall keeps a disabled package disabled (as in
+        // VS Code); a first install runs, and so does an explicit `enabled`.
+        if enabled {
+            next.disabled.remove(id);
+        } else {
+            next.disabled.insert(id.into());
+        }
         Ok((next, installed))
     }
 
@@ -1830,6 +1855,59 @@ pub(crate) mod tests {
         );
     }
 
+    /// As in VS Code: an update or reinstall of a package the user disabled
+    /// replaces its files and leaves it disabled; a first install runs; the
+    /// installer can say `enabled` either way (a revoked version the store
+    /// disabled, replaced by its fix).
+    #[test]
+    fn an_update_keeps_a_disabled_package_disabled_unless_asked() {
+        let root = tempfile::tempdir().unwrap();
+        let (_dir1, first) = candidate("1.0.0");
+        let (_dir2, second) = candidate("1.1.0");
+        let (_dir3, third) = candidate("1.2.0");
+        let mut store = Store::open(root.path().into()).unwrap();
+        let first = store.stage(&first).unwrap();
+        let second = store.stage(&second).unwrap();
+        let third = store.stage(&third).unwrap();
+        let fresh = Installed::default();
+        assert!(enables_after_install(&fresh, false, None), "first install");
+        assert!(!enables_after_install(&fresh, false, Some(false)));
+
+        store.prepare("counter", 0, &first, "one").unwrap();
+        store.commit("counter", "one").unwrap();
+        assert!(!store.disabled().contains("counter"), "first install runs");
+        store.set_disabled("counter", true).unwrap();
+        let before = store.get("counter");
+        assert!(!enables_after_install(&before, true, None), "update");
+        assert!(enables_after_install(&before, false, None));
+        assert!(enables_after_install(&before, true, Some(true)));
+
+        store.prepare("counter", 1, &second, "two").unwrap();
+        let updated = store.commit("counter", "two").unwrap();
+        assert_eq!(updated.current.unwrap().digest, second.digest, "replaced");
+        assert!(store.disabled().contains("counter"), "stays disabled");
+        drop(store);
+        let mut store = Store::open(root.path().into()).unwrap();
+        assert!(store.disabled().contains("counter"), "persisted");
+
+        // The installer asks for it to run.
+        store.prepare("counter", 2, &third, "three").unwrap();
+        store
+            .commit_with_receipt("counter", "three", serde_json::json!({}), Some(true))
+            .unwrap();
+        assert!(!store.disabled().contains("counter"), "explicitly enabled");
+        // A retried commit reply changes nothing.
+        store.commit("counter", "three").unwrap();
+        assert!(!store.disabled().contains("counter"));
+
+        // ...or for it to stay stopped.
+        store.prepare("counter", 3, &first, "four").unwrap();
+        store
+            .commit_with_receipt("counter", "four", serde_json::json!({}), Some(false))
+            .unwrap();
+        assert!(store.disabled().contains("counter"), "explicitly disabled");
+    }
+
     #[test]
     fn changed_candidate_or_library_bytes_cannot_commit() {
         let root = tempfile::tempdir().unwrap();
@@ -1876,6 +1954,7 @@ pub(crate) mod tests {
                 "counter",
                 "one",
                 serde_json::json!({"status":"committed","fingerprint":"one"}),
+                None,
             )
             .unwrap();
         store
@@ -1981,7 +2060,8 @@ pub(crate) mod tests {
                 .commit_with_receipt(
                     "counter",
                     "a-pending",
-                    serde_json::json!({"status":"committed","message":"x".repeat(64*1024)})
+                    serde_json::json!({"status":"committed","message":"x".repeat(64*1024)}),
+                    None,
                 )
                 .is_err()
         );

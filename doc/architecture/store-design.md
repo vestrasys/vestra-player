@@ -51,7 +51,7 @@ No `events` and no `playback.*`: the store has nothing to do with playback state
 | Operation | Where in the store | API |
 | --- | --- | --- |
 | Browse repositories, search, README, permissions, version history | Available / Updates tabs, details | index (§3) |
-| Install (repository, link, file, drop), replace another source, update (a plugin disabled before an update or reinstall stays disabled, as in VS Code: the host enables it on commit, so the store calls `setEnabled(id, false)` right after; a revoked version the store disabled is enabled by updating it to the fix, §3.10) | Row button (Install, Update), details, ⚙ menu | `packages.validateArchive`, `install`, `setEnabled` |
+| Install (repository, link, file, drop), replace another source, update (a plugin disabled before an update or reinstall stays disabled and never runs, as in VS Code: after host 0.6.3 the host keeps it disabled and does not activate it, [store API §1.3](store-api-proposal.md#13-rules); up to 0.6.3 the host enabled it on commit, so Store 0.2.9 calls `setEnabled(id, false)` right after, which is harmless on a newer host; a revoked version the store disabled is enabled by updating it to the fix with `install({ enabled: true })`, §3.10) | Row button (Install, Update), details, ⚙ menu | `packages.validateArchive`, `install`, `setEnabled` |
 | Uninstall (with or without data) | `…` menu, details | `packages.uninstall` |
 | Disable / enable (no confirmation, user ruling: it can be undone at once) | Row button (when there is no update), else `…` menu; details | `packages.setEnabled` |
 | Reload (running plugins, built-ins included, and failed ones; not a disabled one) | `…` menu; details for a failed plugin (last button) | `packages.reload` (player 0.5.1) |
