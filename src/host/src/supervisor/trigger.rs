@@ -82,11 +82,11 @@ pub enum Delivery {
 /// Why an `Answer` replies failed (§4.6, i18n texts in the adapter).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AnswerReason {
-    /// "<name> is busy" (backlog or lane full).
+    /// `"<name> is busy"` (backlog or lane full).
     Busy,
-    /// "<name> could not start".
+    /// `"<name> could not start"`.
     CouldNotStart,
-    /// "<name> is disabled".
+    /// `"<name> is disabled"`.
     Disabled,
     /// Uninstalled.
     Removed,

@@ -23,7 +23,7 @@ pub(super) enum TimerKind {
     Verify,
     /// A job's `not_before` (backoff, `hold_until`).
     NotBefore,
-    /// "Starting <name>…" after 400 ms.
+    /// `"Starting <name>…"` after 400 ms.
     Notice,
     /// `CLASSIFY_WAIT_MS` 5 s.
     Classify,

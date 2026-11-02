@@ -89,7 +89,7 @@ pub struct Tunables {
     pub stop_wait: Ms,
     pub verify_wait: Ms,
     pub classify_wait: Ms,
-    /// "Starting <name>…" after (`STARTING_OSD_MS`).
+    /// `"Starting <name>…"` after (`STARTING_OSD_MS`).
     pub starting_notice: Ms,
     /// Wake events wake nothing this long after start-up settled.
     pub quiet_after_start: Ms,
@@ -127,10 +127,10 @@ pub struct Tunables {
 
     // Switches between today's behaviour (`legacy()`, B1–B2: the core
     // reproduces today exactly) and the design's (supervisor.md §17.7).
-    /// "<name> stopped" / "…ran out of memory" after a crash (T25; B4).
+    /// `"<name> stopped"` / `"…ran out of memory"` after a crash (T25; B4).
     /// Today a crash only records the failure.
     pub crash_notice: bool,
-    /// "<name> could not start" for every failed start (B3). Today only a
+    /// `"<name> could not start"` for every failed start (B3). Today only a
     /// wake's failure shows it (`wake_failed`); a failed boot, first run,
     /// enable or reload only records the failure.
     pub start_failure_notice: bool,

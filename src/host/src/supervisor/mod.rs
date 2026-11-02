@@ -57,11 +57,11 @@ use timers::{Target, TimerKind, Timers};
 /// A user-visible notice (OSD; i18n texts in the adapter).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Notice {
-    /// "Starting <name>…" (a wake slower than 400 ms).
+    /// `"Starting <name>…"` (a wake slower than 400 ms).
     Starting,
-    /// "<name> could not start".
+    /// `"<name> could not start"`.
     CouldNotStart,
-    /// "<name> stopped" / "…ran out of memory" (T25).
+    /// `"<name> stopped"` / `"…ran out of memory"` (T25).
     Crashed(ExitCause),
     /// Start limit hit (T27).
     StartLimitHit,

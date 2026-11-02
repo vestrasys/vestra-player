@@ -2266,7 +2266,7 @@ fn uninstall_after_a_stuck_stop_removes_data_once_the_process_goes() {
     assert!(actions.contains(&Action::RemoveData { unit: u }));
 }
 
-/// "Starting <name>…" 400 ms after the spawn (today `lazy.waking.since`,
+/// `"Starting <name>…"` 400 ms after the spawn (today `lazy.waking.since`,
 /// T7), also for a wake that first waited for the old process.
 #[test]
 fn starting_notice_counts_from_the_spawn() {
