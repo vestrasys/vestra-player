@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.26
+
+- After an install, the AI and the card say what the player really did with the plugin instead of always "The plugin is enabled in the player." Players after 0.6.3 keep a plugin the user disabled disabled when it is updated or reinstalled, and do not start it (as in VS Code; a first install enables it). The install tool now reads `packages.list` once the install committed (waiting up to 5 s while it is starting): running reads "enabled and running"; disabled tells the AI that the user turned it off, that only the user can enable it in the Plugin Store, and that it must not try to enable it or work around it, and the card says "Installed {name} {version}. It stays disabled, as you set it; enable it in the Plugin Store."; a plugin that failed once it ran gives its error to the AI and the card ("Installed …, but it failed: …"). The workshop never calls `setEnabled`. On older players, which enable on commit, the list says running, so the text stays right there too. Three new card texts in all six languages.
+- Tests: the disabled update (first install runs, the user disables it, the next install stays disabled with no `setEnabled`, the AI and card texts) and a plugin listed as failed after the install, on a test host that keeps a disabled plugin disabled as the newer player does.
+
 ## 2.2.25
 
 - The vendored SDK is 1.5.53 (`npm run vendor:sdk`): the AI's documentation knows `plugin.window.state.maximized` and lists **Check for Updates…** among the built-in commands. No change to the plugin's own behaviour.

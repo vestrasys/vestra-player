@@ -95,7 +95,7 @@ test("install_plugin asks the user first; there is no undo, and a click on 安�
     cancel: ai.host.confirmTexts.at(-1).cancel,
   });
   const told = toolText(mock, mock.chats.length - 1);
-  assert.match(told, /Install 演示 0\.1\.0: done\. The plugin is enabled in the player\./);
+  assert.match(told, /Install 演示 0\.1\.0: done\. The plugin is enabled and running in the player\./);
   assert.doesNotMatch(told, /Roll Back|undo/i);
   assert.equal(ai.card(), "已安装 演示 0.1.0。");
   assert.deepEqual(ai.host.packageCalls.map((c) => [c.method, c.id, c.source?.kind]), [["install", "local.demo", "workshop"]]);
@@ -117,6 +117,69 @@ test("install_plugin asks the user first; there is no undo, and a click on 安�
       ["install", "local.demo", "workshop"],
     ],
   );
+  await ai.stop();
+});
+
+/**
+ * The player after 0.6.3 (as in VS Code): an update or reinstall keeps a
+ * disabled plugin disabled and does not start it; a first install runs.
+ * `after` sets the listed state of other cases (e.g. a plugin that failed).
+ */
+function keepsDisabled(ai, after = (entry) => entry) {
+  const { host } = ai;
+  host.handle("packages.install", (p) => {
+    const manifest = host.candidates.get(String(p.token));
+    const before = host.packages.find((each) => each.id === manifest.id);
+    host.packageCalls.push({ method: "install", id: manifest.id, source: p.source, replace: p.replace === true });
+    const state = before?.state === "disabled" ? "disabled" : "running";
+    const next = after({ id: manifest.id, version: manifest.version, origin: "installed", state, error: null, capabilities: [...manifest.capabilities], directory: `/test-host/packages/${manifest.id}`, builtin: false, source: p.source, dataDirectory: null });
+    host.setPackages([...host.packages.filter((each) => each.id !== manifest.id), next]);
+    return { operationId: String(p.requestId), status: "committed" };
+  });
+}
+
+test("an update of a plugin the user disabled stays disabled: the agent and the card say so, and the workshop does not enable it", async () => {
+  const mock = await server(
+    scripted({
+      做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo", title: "演示" } }] }],
+      安装: [{ toolCalls: [{ name: "install_plugin", args: { id: "local.demo" } }] }],
+    }),
+  );
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
+  await ai.ask("做个插件");
+  player(ai);
+  keepsDisabled(ai);
+  // The first install enables and runs it.
+  ai.host.dialogAnswers.push({ confirmed: true, checked: false });
+  await ai.ask("安装");
+  assert.match(toolText(mock, mock.chats.length - 1), /Install 演示 0\.1\.0: done\. The plugin is enabled and running in the player\./);
+  assert.equal(ai.card(), "已安装 演示 0.1.0。");
+
+  // The user disables it in the Plugin Store; the agent installs an iteration.
+  ai.host.setPackages(ai.host.packages.map((p) => (p.id === "local.demo" ? { ...p, state: "disabled" } : p)));
+  ai.host.dialogAnswers.push({ confirmed: true, checked: false });
+  await ai.ask("安装");
+  const told = toolText(mock, mock.chats.length - 1);
+  assert.match(told, /Install 演示 0\.1\.0: done\. The plugin is installed but disabled: the user turned it off in the player/);
+  assert.match(told, /Only the user can enable it, in the Plugin Store/);
+  assert.match(told, /do not try to enable it yourself/);
+  assert.doesNotMatch(told, /enabled and running/);
+  assert.equal(ai.props["card-status"].code, "installed-disabled");
+  assert.equal(ai.card(), "已安装 演示 0.1.0。它保持你设置的停用状态；要启用，请在插件商城中操作。");
+  assert.equal(ai.host.packages.find((p) => p.id === "local.demo").state, "disabled");
+  assert.deepEqual(
+    ai.host.packageCalls.map((c) => c.method),
+    ["install", "install"],
+    "no setEnabled",
+  );
+
+  // A plugin that failed once it ran: installed (recorded), the error reaches the agent and the card.
+  keepsDisabled(ai, (entry) => ({ ...entry, state: "failed", error: "activate threw: boom" }));
+  ai.host.setPackages(ai.host.packages.filter((p) => p.id !== "local.demo"));
+  ai.host.dialogAnswers.push({ confirmed: true, checked: false });
+  await ai.ask("安装");
+  assert.match(toolText(mock, mock.chats.length - 1), /Install 演示 0\.1\.0: done, but the plugin then failed in the player: activate threw: boom\. Fix the cause/);
+  assert.equal(ai.card(), "已安装 演示 0.1.0，但它出错了：activate threw: boom");
   await ai.stop();
 });
 

@@ -280,11 +280,16 @@ async function download(
  * change. `previous` is the same-source version being upgraded (for the
  * wording), `replace` when the user already agreed to replace.
  *
- * The player clears the disabled flag when an install commits ("installing
- * is asking for the package to run"). A plugin the user disabled stays
- * disabled after an update or reinstall, as in VS Code: the store disables it
- * again right after the commit. `enable` overrides that for a revoked
- * version the store disabled, whose fix is meant to run.
+ * A plugin the user disabled stays disabled after an update or reinstall
+ * (also one that replaces it from another source), as in VS Code. Players
+ * after 0.6.3 keep the disabled flag across an install themselves; older
+ * ones clear it when the install commits, so the store disables the plugin
+ * again right after the commit (harmless on a newer player). `enable` is
+ * for a revoked version the store disabled, whose fix is meant to run: the
+ * store enables it after the commit (a newer player kept it disabled; on an
+ * older one it already runs), waits for it to leave `starting` and reports
+ * an activation failure. The result is described from the plugin list read
+ * again after the commit, not from what the store saw before.
  */
 async function installCandidate(
   store: Store,
@@ -296,6 +301,10 @@ async function installCandidate(
   enable = false,
 ) {
   const version = candidate.manifest.version;
+  const id = candidate.manifest.id;
+  // Whatever is installed now (any source; read again, the list may be old): a disabled plugin stays disabled.
+  await store.reread();
+  const keepDisabled = !enable && installedOf(store, id)?.state === "disabled";
   store.progress(msg("Installing {}…", name), null);
   let change: PackageChange;
   try {
@@ -317,31 +326,53 @@ async function installCandidate(
     if (!answer?.confirmed) return store.report(msg("Not installed"));
     change = await candidate.install({ source, replace: true });
   }
-  const keepDisabled = !enable && previous?.state === "disabled";
   if (await follow(store, change, "install")) {
-    const id = candidate.manifest.id;
     const upgraded = previous?.version && isVersion(previous.version) && compareVersions(version, previous.version) > 0;
-    if (!keepDisabled) store.report(upgraded ? msg("Updated {} to {}", name, version) : msg("Installed {} {}", name, version));
-    else
+    let failure: Msg | null = null;
+    if (enable || keepDisabled)
       try {
-        await store.plugin.packages.setEnabled(id, false);
-        store.report(
-          upgraded
-            ? msg("Updated {} to {} (still disabled)", name, version)
-            : msg("Installed {} {} (still disabled)", name, version),
-        );
+        await store.plugin.packages.setEnabled(id, enable);
       } catch (error) {
-        store.report(
-          upgraded
-            ? msg("Updated {} to {}, but couldn't keep it disabled: {}", name, version, failureText(store, error, id))
-            : msg("Installed {} {}, but couldn't keep it disabled: {}", name, version, failureText(store, error, id)),
-          true,
-        );
+        failure = failureText(store, error, id);
       }
+    // The player's word on the result, not the list from before the install. Enabling only starts the
+    // plugin: wait for it to leave `starting` (it may still fail to activate).
+    const now = await settled(store, id);
+    const disabled = now?.state === "disabled";
+    if (failure === null && enable && now?.state === "failed") failure = now.error ? raw(now.error) : msg("Failed");
+    if (failure !== null)
+      store.report(
+        enable
+          ? upgraded
+            ? msg("Updated {} to {}, but couldn't enable it: {}", name, version, failure)
+            : msg("Installed {} {}, but couldn't enable it: {}", name, version, failure)
+          : upgraded
+            ? msg("Updated {} to {}, but couldn't keep it disabled: {}", name, version, failure)
+            : msg("Installed {} {}, but couldn't keep it disabled: {}", name, version, failure),
+        true,
+      );
+    else if (disabled)
+      store.report(
+        upgraded ? msg("Updated {} to {} (still disabled)", name, version) : msg("Installed {} {} (still disabled)", name, version),
+      );
+    else store.report(upgraded ? msg("Updated {} to {}", name, version) : msg("Installed {} {}", name, version));
   }
   // From a repository the row was already selected; it stays on its tab (the list picks its neighbour if it
   // left). A file or link has no row yet: show it where it lands.
   if (source.kind !== "repository") store.select(selectKey(store, candidate.manifest.id, source));
+}
+
+/** How long the store waits for an enabled plugin to leave `starting`, and how often it reads the list meanwhile. */
+export const installTiming = { startWait: 5_000, poll: 250 };
+
+/** The installed plugin `id` as the player reports it, once it left `starting` (or after `installTiming.startWait`). */
+async function settled(store: Store, id: string): Promise<PluginInfo | null> {
+  await store.reread();
+  for (const deadline = Date.now() + installTiming.startWait; installedOf(store, id)?.state === "starting" && Date.now() < deadline; ) {
+    await new Promise((resolve) => setTimeout(resolve, installTiming.poll));
+    await store.reread();
+  }
+  return installedOf(store, id);
 }
 
 /** After an install: select the row that now stands for it. */
