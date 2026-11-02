@@ -51,9 +51,11 @@ fn b_resolve_drop_callback_are_kept_in_order() {
     assert_eq!(deliver_all(&mut sim, u), vec![1, 2, 3, 1]);
 }
 
+// A9 answers per held trigger arrive with B3 (`answer_held`, §17.7 item 5):
+// run under `Profile::b3()`; the `…_today` twin pins today's silence.
 #[test]
 fn b_cancel_answers_each_non_event_trigger_events_silent() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::b3());
     let (u, h) = woken_unit(&mut sim);
     sim.wake(h, cmd(1));
     sim.wake(h, resolve(2));
@@ -75,15 +77,54 @@ fn b_cancel_answers_each_non_event_trigger_events_silent() {
     assert_eq!(sim.backlog_len(u), 0);
 }
 
+// Today a canceled start drops its held triggers silently (`lazy.waking`
+// is dropped; §17.7 item 5).
+#[test]
+fn b_cancel_today_drops_held_triggers_silently() {
+    let mut sim = Sim::new(&Profile::b1());
+    let (u, h) = woken_unit(&mut sim);
+    sim.wake(h, cmd(1));
+    sim.wake(h, resolve(2));
+    sim.wake(h, event("playback.state", 3));
+    sim.set_enabled(u, false);
+    sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
+    let acts = sim.run();
+    assert!(answers(&acts).is_empty(), "{:?}", answers(&acts));
+    assert!(deliveries(&acts).is_empty());
+    assert!(spawns(&acts).is_empty());
+    assert_eq!(sim.backlog_len(u), 0);
+}
+
 #[test]
 fn b_start_failure_answers_could_not_start() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::b3());
     let (u, h) = woken_unit(&mut sim);
     sim.wake(h, cmd(1));
     sim.wake(h, event("playback.state", 2));
     sim.run();
     let acts = sim.spawned(sim.pid(u), false);
     assert_eq!(answers(&acts), vec![(1, Why::CouldNotStart)]);
+}
+
+// Today a wake's failure shows one "could not start" notice and answers
+// no held trigger (`wake_failed`; §17.7 item 5).
+#[test]
+fn b_start_failure_today_notifies_once_and_answers_nothing() {
+    let mut sim = Sim::new(&Profile::b1());
+    let (u, h) = woken_unit(&mut sim);
+    sim.wake(h, cmd(1));
+    sim.wake(h, cmd(2));
+    sim.wake(h, event("playback.state", 3));
+    sim.run();
+    let acts = sim.spawned(sim.pid(u), false);
+    assert!(answers(&acts).is_empty(), "{:?}", answers(&acts));
+    assert_eq!(
+        acts.iter().filter(|a| is_could_not_start_notice(a)).count(),
+        1,
+        "{:?}",
+        names(&acts)
+    );
+    assert_eq!(sim.backlog_len(u), 0);
 }
 
 #[test]

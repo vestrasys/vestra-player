@@ -388,18 +388,35 @@ both! {
         assert!(!has(&acts, "QueryResources"));
         assert!(!has(&sim.pressure_low(), "QueryResources"));
         sim.classified(pid, false);
+        sim.after(10 * p.idle);
         assert_eq!(sim.st(u), S::Active(pid), "Development never goes to standby");
+        // Never classified or checkpointed either (§17.7 item 2): no
+        // standby record for a development load, across its whole run.
+        assert!(!has(&sim.log, "Checkpoint"), "{:?}", names(&sim.log));
     }
 }
 
-// Idle timeout: Resident never
-both! {
-    fn p_resident_never_idles(p) {
-        let mut sim = Sim::new(p);
-        let (u, pid) = sim.in_active(resident("r"));
-        assert!(!has(&sim.after(10 * p.idle), "QueryResources"));
-        assert_eq!(sim.st(u), S::Active(pid));
-    }
+// Idle timeout: Resident never (§3.3) — the target. Today's `lazy_idle`
+// does not look at the class (coordinator ruling D3, §17.7): the `…_today`
+// twin below.
+#[test]
+fn p_resident_never_idles() {
+    let p = Profile::target();
+    let mut sim = Sim::new(&p);
+    let (u, pid) = sim.in_active(resident("r"));
+    assert!(!has(&sim.after(10 * p.idle), "QueryResources"));
+    assert_eq!(sim.st(u), S::Active(pid));
+}
+
+// Today a resident plugin idles like any other: asked for its resources
+// after the idle timeout, and parked when it has none (`park` keeps
+// `resident` in the checkpoint) (D3).
+#[test]
+fn p_resident_idles_today() {
+    let mut sim = Sim::new(&Profile::b1());
+    let (u, pid) = sim.in_active(resident("r"));
+    sim.idle_out(pid);
+    assert_eq!(sim.st(u).then(), Some(Then::Standby), "{:?}", sim.st(u));
 }
 
 // Idle timeout: Builtin yes (own process and shared members)

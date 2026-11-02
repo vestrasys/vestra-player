@@ -4,7 +4,14 @@
 use super::*;
 
 fn sim() -> Sim {
-    let mut s = Sim::new(&Profile::b1());
+    sim_with(&Profile::b1())
+}
+
+/// The cells whose answers per held trigger (A9) or carried backlog (§4.3)
+/// arrive with B3 (§17.7 item 5) run under `Profile::b3()`, with a
+/// `…_today` twin under `b1()`.
+fn sim_with(p: &Profile) -> Sim {
+    let mut s = Sim::new(p);
     s.settle();
     s
 }
@@ -135,13 +142,25 @@ fn m_start_waiting_standby_is_dropped() {
 
 #[test]
 fn m_start_waiting_stop_replaces_and_answers_backlog() {
-    let mut sim = sim();
+    let mut sim = sim_with(&Profile::b3());
     let (u, _) = start_waiting(&mut sim);
     sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
     assert_eq!(sim.job(u).map(|j| j.kind()), Some("Stop"));
     let acts = sim.run();
     assert_eq!(answers(&acts).len(), 1, "backlog answered (§4.6)");
     assert!(spawns(&acts).is_empty());
+}
+
+#[test]
+fn m_start_waiting_stop_replaces_and_drops_backlog_today() {
+    let mut sim = sim();
+    let (u, _) = start_waiting(&mut sim);
+    sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
+    assert_eq!(sim.job(u).map(|j| j.kind()), Some("Stop"));
+    let acts = sim.run();
+    assert!(answers(&acts).is_empty(), "today: dropped silently");
+    assert!(spawns(&acts).is_empty());
+    assert_eq!(sim.backlog_len(u), 0);
 }
 
 #[test]
@@ -174,7 +193,7 @@ fn m_start_running_standby_is_dropped() {
 
 #[test]
 fn m_start_running_stop_terminates_activating_and_answers() {
-    let mut sim = sim();
+    let mut sim = sim_with(&Profile::b3());
     let (u, _, pid) = start_running(&mut sim);
     sim.spawned(pid, true);
     sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
@@ -188,8 +207,23 @@ fn m_start_running_stop_terminates_activating_and_answers() {
 }
 
 #[test]
-fn m_start_running_restart_terminates_then_starts_again_keeping_backlog() {
+fn m_start_running_stop_terminates_activating_today_answers_nothing() {
     let mut sim = sim();
+    let (u, _, pid) = start_running(&mut sim);
+    sim.spawned(pid, true);
+    sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
+    let acts = sim.run();
+    assert_eq!(sim.job(u).map(|j| j.kind()), Some("Stop"));
+    assert_eq!(
+        terminates(&acts).iter().map(|t| t.3).collect::<Vec<_>>(),
+        vec![pid]
+    );
+    assert!(answers(&acts).is_empty(), "today: dropped silently");
+}
+
+#[test]
+fn m_start_running_restart_terminates_then_starts_again_keeping_backlog() {
+    let mut sim = sim_with(&Profile::b3());
     let (u, _, pid) = start_running(&mut sim);
     sim.spawned(pid, true);
     sim.restart(u, true, None).unwrap();
@@ -204,6 +238,26 @@ fn m_start_running_restart_terminates_then_starts_again_keeping_backlog() {
         deliveries(&sim.ready(new[0])),
         vec![1],
         "held trigger carried to the new run"
+    );
+}
+
+#[test]
+fn m_start_running_restart_today_drops_backlog_at_the_new_start() {
+    let mut sim = sim();
+    let (u, _, pid) = start_running(&mut sim);
+    sim.spawned(pid, true);
+    sim.restart(u, true, None).unwrap();
+    let acts = sim.run();
+    assert_eq!(terminates(&acts).len(), 1);
+    assert!(answers(&acts).is_empty());
+    let acts = sim.gone(pid);
+    let new = spawns(&acts);
+    assert_eq!(new.len(), 1);
+    assert!(answers(&acts).is_empty(), "today: dropped silently");
+    sim.spawned(new[0], true);
+    assert!(
+        deliveries(&sim.ready(new[0])).is_empty(),
+        "today the held trigger is lost with lazy.waking"
     );
 }
 
@@ -276,16 +330,20 @@ fn m_standby_running_standby_stays() {
     ));
 }
 
-#[test]
-fn m_standby_running_stop_changes_then_and_revokes_at_reap() {
-    let mut sim = sim();
-    let (u, pid) = standby_running(&mut sim);
-    sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
-    sim.run();
-    assert_eq!(sim.st(u).then(), Some(Then::Inactive));
-    let acts = sim.gone(pid);
-    assert!(has(&acts, "Revoke"), "registrations revoked at reap");
-    assert_eq!(sim.st(u), S::Inactive);
+// §4.2 cell as amended by the coordinator ruling (§17.7 item 6): the kept
+// registrations are revoked at the stop, not again at reap, in both presets.
+both! {
+    fn m_standby_running_stop_changes_then_and_revokes_at_once(p) {
+        let mut sim = sim_with(p);
+        let (u, pid) = standby_running(&mut sim);
+        sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
+        let acts = sim.run();
+        assert_eq!(sim.st(u).then(), Some(Then::Inactive));
+        assert_eq!(count(&acts, "Revoke"), 1, "revoked at the stop: {:?}", names(&acts));
+        let acts = sim.gone(pid);
+        assert!(!has(&acts, "Revoke"), "not again at reap: {:?}", names(&acts));
+        assert_eq!(sim.st(u), S::Inactive);
+    }
 }
 
 #[test]

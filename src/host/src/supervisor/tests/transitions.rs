@@ -273,6 +273,10 @@ fn t08_spawn_error_without_retries_or_recording_fails() {
 // `Restart=no` + revoke) what is today's outcome — `Failed{spawn}` with
 // `Revoke` (today `wake_failed` → `forget_entries`), or `Inactive`? Best
 // reading: Failed + Revoke + the held interactive trigger answered.
+// §17.7 item 5: today's `wake_failed` shows one "could not start" notice and
+// answers no held trigger (`answer_held` is B3); the answer and the kept
+// registrations (`start_failure_keeps_registrations`) are checked under
+// `b3()` below.
 #[test]
 fn t08_spawn_error_b1_fails_and_revokes() {
     let mut sim = Sim::new(&Profile::b1());
@@ -283,7 +287,30 @@ fn t08_spawn_error_b1_fails_and_revokes() {
     let acts = sim.spawned(sim.pid(u), false);
     assert!(sim.st(u).is_failed(), "{:?}", sim.st(u));
     assert!(has(&acts, "Revoke"));
+    assert!(answers(&acts).is_empty(), "today: no answer per trigger");
+    assert_eq!(
+        acts.iter().filter(|a| is_could_not_start_notice(a)).count(),
+        1,
+        "{:?}",
+        names(&acts)
+    );
+}
+
+// T8 from B3 without B4's retries: a recorded unit keeps its entry points in
+// Standby (no Revoke) and the held interactive trigger is answered.
+#[test]
+fn t08_spawn_error_b3_answers_and_keeps_registrations() {
+    let mut sim = Sim::new(&Profile::b3());
+    let (u, holder) = sim.in_standby(normal("a"));
+    sim.settle();
+    sim.wake(holder, cmd(1));
+    sim.wake(holder, event("playback.state", 2));
+    sim.run();
+    let acts = sim.spawned(sim.pid(u), false);
+    assert!(matches!(sim.st(u), S::Standby { .. }), "{:?}", sim.st(u));
+    assert!(!has(&acts, "Revoke"), "{:?}", names(&acts));
     assert_eq!(answers(&acts), vec![(1, Why::CouldNotStart)]);
+    assert!(acts.iter().any(is_could_not_start_notice));
 }
 
 // T9 Activating{Ready} --process_ready--> Active; Deliver backlog in order; arm idle; job done
@@ -524,8 +551,39 @@ fn t18_stuck_stop_fails_waiting_reload_with_text() {
     assert!(sim.st(u).is_failed(), "{:?}", sim.st(u));
 }
 
+// "interactive answered" is A9 (B3, §17.7 item 5): `b3()`, and a `…_today`
+// twin with the notice and no answer.
 #[test]
 fn t18_stuck_standby_stop_fails_waiting_wake_and_answers() {
+    let mut sim = Sim::new(&Profile::b3());
+    let (u, pid) = sim.deactivating_to_standby(normal("a"));
+    let t = sim.now;
+    sim.wake(pid, cmd(1));
+    sim.cleaned(pid); // never reaped
+    let acts = sim.at(t + STOP_WAIT);
+    assert!(sim.stuck(u));
+    assert_eq!(answers(&acts), vec![(1, Why::CouldNotStart)]);
+    assert!(
+        spawns(&acts).is_empty(),
+        "no second instance while the old one may still run"
+    );
+    // §17.2 Q9/Q10: lands at `then`, then the wake's failed Start marks the
+    // unit Failed with the wake text (today `wake_failed`). B3's
+    // `start_failure_keeps_registrations` is for a spawn failure (Q7, §17.6
+    // F1); a stuck stop is not one: the old process may still run, so
+    // keeping its entry points in Standby would let the next trigger start
+    // a second instance on the same data.
+    assert_eq!(sim.st(u), S::Failed("stuck".into()));
+    assert_eq!(sim.failure_text(u).as_deref(), Some(TEXT_WAKE_STUCK));
+    assert!(
+        has(&acts, "Revoke"),
+        "entry points revoked: {:?}",
+        names(&acts)
+    );
+}
+
+#[test]
+fn t18_stuck_standby_stop_fails_waiting_wake_today() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, pid) = sim.deactivating_to_standby(normal("a"));
     let t = sim.now;
@@ -533,15 +591,20 @@ fn t18_stuck_standby_stop_fails_waiting_wake_and_answers() {
     sim.cleaned(pid); // never reaped
     let acts = sim.at(t + STOP_WAIT);
     assert!(sim.stuck(u));
-    // §17.2 Q9/Q10: lands at `then`, then the wake's failed Start marks the
-    // unit Failed with the wake text (today `wake_failed`).
     assert_eq!(sim.st(u), S::Failed("stuck".into()));
     assert_eq!(sim.failure_text(u).as_deref(), Some(TEXT_WAKE_STUCK));
-    assert_eq!(answers(&acts), vec![(1, Why::CouldNotStart)]);
     assert!(
-        spawns(&acts).is_empty(),
-        "no second instance while the old one may still run"
+        has(&acts, "Revoke"),
+        "entry points revoked: {:?}",
+        names(&acts)
     );
+    assert!(answers(&acts).is_empty(), "{:?}", answers(&acts));
+    assert!(
+        acts.iter().any(is_could_not_start_notice),
+        "{:?}",
+        names(&acts)
+    );
+    assert!(spawns(&acts).is_empty());
 }
 
 // T19 Standby --wake(pid, trigger)--> Standby + Start job (trigger in backlog)
@@ -605,9 +668,10 @@ fn t20_wake_during_hold_waits_and_answers_interactive() {
 }
 
 // T21 Standby --Stop job (disable)--> Inactive, disabled; Revoke; checkpoint kept; backlog answered
+// ("backlog answered" is A9: `b3()`; the `…_today` twin drops it silently)
 #[test]
 fn t21_disable_in_standby_revokes_keeps_checkpoint() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::b3());
     let (u, holder) = sim.in_standby(normal("a"));
     sim.settle();
     sim.wake(holder, cmd(1));
@@ -620,6 +684,24 @@ fn t21_disable_in_standby_revokes_keeps_checkpoint() {
     assert!(!has(&acts, "DropCheckpoint"), "checkpoint kept");
     assert!(spawns(&acts).is_empty());
     assert_eq!(answers(&acts), vec![(1, Why::Disabled)]);
+}
+
+#[test]
+fn t21_disable_in_standby_revokes_keeps_checkpoint_today() {
+    let mut sim = Sim::new(&Profile::b1());
+    let (u, holder) = sim.in_standby(normal("a"));
+    sim.settle();
+    sim.wake(holder, cmd(1));
+    sim.set_enabled(u, false);
+    sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
+    let acts = sim.run();
+    assert_eq!(sim.st(u), S::Inactive);
+    assert!(!sim.enabled(u));
+    assert_eq!(count(&acts, "Revoke"), 1);
+    assert!(!has(&acts, "DropCheckpoint"), "checkpoint kept");
+    assert!(spawns(&acts).is_empty());
+    assert!(answers(&acts).is_empty(), "today: dropped silently");
+    assert_eq!(sim.backlog_len(u), 0);
 }
 
 // T22 Standby --Restart fresh (reload, upgrade)--> Inactive + Start part; Revoke; DropCheckpoint

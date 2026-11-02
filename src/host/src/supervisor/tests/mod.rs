@@ -19,6 +19,10 @@
 //! reserve, backlog 64, lane 256, start retry 3, per-class restart policy,
 //! request timeout 5 min, a process budget). Tests whose expected values
 //! differ between the two are generated for both with `both!`.
+//! `Profile::b3()` is today plus B3 (`Tunables::today().with_b3(8)`): the
+//! A9/§4.3 cases (answers per held trigger, triggers carried across a
+//! restart) run under it, each with a `…_today` twin under `b1()` that
+//! pins today's behaviour (supervisor.md §17.7 items 5 and 6, D1).
 //!
 //! Lines marked `// ANSWERED (… §17.2 Qn)` were design questions, answered
 //! in supervisor.md §17.2; lines marked `// DESIGN QUESTION:` are open:
@@ -105,6 +109,23 @@ impl Profile {
             restart: false,
             request_timeout: None,
             budget: None,
+        }
+    }
+    /// B3 on top of today (`Tunables::today().with_b3(8)`): the queue
+    /// limits and the B3 switches of §17.7 (`answer_held`: §4.6 answers per
+    /// held trigger, A9; `restart_keeps_backlog`: held triggers carried
+    /// across a restart, §4.3), with today's timeouts and no restart policy
+    /// (B4). The A9/§4.3 cases run here: the behaviour they check arrives
+    /// with B3 and stays in the target.
+    pub fn b3() -> Self {
+        Profile {
+            name: "b3",
+            max_active: 4,
+            limit_wakes: true,
+            reserve: 1,
+            backlog_max: Some(64),
+            lane_max: Some(256),
+            ..Profile::b1()
         }
     }
     pub fn target() -> Self {
@@ -363,10 +384,10 @@ const PHYS_MIB: u64 = 16_384;
 /// the profile; `t00_presets_match_design_values` checks the rest against
 /// the design's numbers.
 fn tunables(p: &Profile) -> Tunables {
-    let mut t = if p.restart {
-        Tunables::target(8, PHYS_MIB)
-    } else {
-        Tunables::today()
+    let mut t = match p.name {
+        "b1" => Tunables::today(),
+        "b3" => Tunables::today().with_b3(8),
+        _ => Tunables::target(8, PHYS_MIB),
     };
     t.process_budget = p.budget;
     t
@@ -549,6 +570,16 @@ pub(super) fn terminate(a: &Act) -> Option<(Ms, bool, String, Pid)> {
         } => Some((*grace, *keep_registrations, norm(reason), *pid)),
         _ => None,
     }
+}
+/// A "<name> could not start" notice (T8; today's `wake_failed`).
+pub(super) fn is_could_not_start_notice(a: &Act) -> bool {
+    matches!(
+        a,
+        Action::Notify {
+            notice: Notice::CouldNotStart,
+            ..
+        }
+    )
 }
 /// A "…ran out of memory" notice (T25).
 pub(super) fn is_oom_notice(a: &Act) -> bool {
@@ -859,7 +890,7 @@ impl Sim {
 /// The core's presets carry the design's numbers (§3.3, §11).
 #[test]
 fn t00_presets_match_design_values() {
-    for p in [Profile::b1(), Profile::target()] {
+    for p in [Profile::b1(), Profile::b3(), Profile::target()] {
         let t = tunables(&p);
         let n = t.policy(Class::Normal);
         assert_eq!(t.idle_timeout, p.idle, "{}", p.name);
@@ -881,12 +912,18 @@ fn t00_presets_match_design_values() {
             assert_eq!(t.max_active, None, "B1: wakes unlimited");
             assert_eq!(t.first_run_limit, Some(p.max_active), "B1: 8 first runs");
         }
-        let bf = if p.restart {
-            BuiltinsFirst::Installed
-        } else {
+        let today = p.name == "b1";
+        let bf = if today {
             BuiltinsFirst::Queued
+        } else {
+            BuiltinsFirst::Installed
         };
         assert_eq!(t.builtins_first, bf, "{}", p.name);
+        // §17.7 switches that `with_b3` sets.
+        assert_eq!(t.answer_held, !today, "{}", p.name);
+        assert_eq!(t.restart_keeps_backlog, !today, "{}", p.name);
+        assert_eq!(t.start_failure_notice, !today, "{}", p.name);
+        assert_eq!(t.start_failure_keeps_registrations, !today, "{}", p.name);
         let retries = n.start_retry.map_or(0, |r| r.count);
         assert_eq!(retries, p.start_retries, "{}", p.name);
         for c in [
