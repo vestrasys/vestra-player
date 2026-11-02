@@ -650,6 +650,9 @@ pub struct Table {
     conflicts: BTreeMap<Slot, Vec<(Claim, String)>>,
     /// How many of `conflicts` carry each message.
     conflict_texts: BTreeMap<String, usize>,
+    /// What `refresh` logged, for tests to compare.
+    #[cfg(test)]
+    logged: Vec<String>,
     next: u64,
     /// Advances on every change of declarations or overlay.
     revision: u64,
@@ -1076,6 +1079,8 @@ impl Table {
         fresh.sort_by(|a, b| conflict_order(&a.0).cmp(&conflict_order(&b.0)));
         for (_, text) in fresh {
             diag!("{text}");
+            #[cfg(test)]
+            self.logged.push(text);
         }
         self.revision += 1;
     }
@@ -2251,10 +2256,12 @@ mod tests {
                 .map(|text| (*text).to_owned())
                 .collect::<Vec<_>>()
         };
+        let mut logged_total = 0;
         for step in 0..3000 {
             let owner = steps.next(6);
             let id = IDS[steps.next(IDS.len() as u64) as usize];
             let before = table.revision();
+            let previous = table.conflicts();
             match steps.next(10) {
                 0..=4 => {
                     let bindings = pick(&mut steps);
@@ -2286,6 +2293,15 @@ mod tests {
             assert_eq!(table.active, active, "step {step}");
             assert_eq!(table.fallback, fallback, "step {step}");
             assert_eq!(table.conflicts(), conflicts, "step {step}");
+            // Logged as the full recompute logged them: each conflict not
+            // in the previous list, repeats included, in rank order.
+            let logged = conflicts
+                .iter()
+                .filter(|text| !previous.contains(text))
+                .cloned()
+                .collect::<Vec<_>>();
+            assert_eq!(std::mem::take(&mut table.logged), logged, "step {step}");
+            logged_total += logged.len();
             for info in table.infos() {
                 let expected = shadowed
                     .get(&(info.owner, info.id.clone()))
@@ -2300,6 +2316,7 @@ mod tests {
             }
             assert!(table.revision() >= before, "step {step}");
         }
+        assert!(logged_total > 100, "{logged_total} conflicts logged");
     }
 
     /// perf-registry round: 6000 commands (2000 plugins of three, one

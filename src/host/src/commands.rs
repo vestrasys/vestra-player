@@ -2778,10 +2778,11 @@ mod index_tests {
             ..Registry::default()
         };
         let mut revision = 1;
+        let (mut updated, mut changed) = (0, 0);
         for step in 0..4000 {
             let owner = steps.next(5);
             let id = IDS[steps.next(IDS.len() as u64) as usize];
-            match steps.next(10) {
+            match steps.next(13) {
                 0..=5 => {
                     let path = (0..steps.next(4))
                         .map(|_| SEGMENTS[steps.next(SEGMENTS.len() as u64) as usize])
@@ -2823,6 +2824,38 @@ mod index_tests {
                     let _ = registry.remove_owner(owner);
                 }
                 8 => registry.rekey(owner, steps.next(7)).unwrap(),
+                // State changes advance the revision too: the cached
+                // tree (checked below) must follow them.
+                9 => {
+                    revision += 1;
+                    let state = CommandState {
+                        enabled: steps.next(2) == 0,
+                        checked: Some(steps.next(2) == 0),
+                        busy: false,
+                        reason: Some("why".into()),
+                    };
+                    updated += usize::from(registry.update(owner, id, revision, state).is_ok());
+                }
+                10 => {
+                    let conditions = if steps.next(3) == 0 {
+                        None
+                    } else {
+                        Conditions::parse(&serde_json::json!({
+                            "enabled":{"phase":["ready"]},
+                            "checked":{"fullscreen":true}}))
+                        .unwrap()
+                    };
+                    let _ = registry.set_conditions(owner, id, conditions);
+                }
+                11 => {
+                    let phase = ["empty", "ready"][steps.next(2) as usize];
+                    changed += usize::from(registry.set_facts(Facts::new(
+                        &serde_json::json!({"phase":phase}),
+                        &serde_json::json!({"fullscreen":steps.next(2) == 0}),
+                        "vestra",
+                        "system",
+                    )));
+                }
                 _ => {
                     if steps.next(2) == 0 {
                         registry.mark_recorded(owner);
@@ -2833,6 +2866,10 @@ mod index_tests {
             }
             check(&registry, step);
         }
+        assert!(
+            updated > 20 && changed > 5,
+            "{updated} updates, {changed} fact changes"
+        );
     }
 
     /// perf-registry round: 2000 plugins of three commands (the probe's
