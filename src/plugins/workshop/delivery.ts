@@ -3,8 +3,10 @@
 // install the user confirmed. Used by the agent's install_plugin and by the
 // result card's buttons. After an install, bindings the player ignored
 // because another command holds the key (bindings.list, `shadowed`) are
-// reported to the user and the agent.
-import type { PackageCandidate, PackageChange, Plugin, PluginError } from "@vestra-player/sdk";
+// reported to the user and the agent, and so is the plugin's real state: an
+// update of a plugin the user disabled keeps it disabled (player after
+// 0.6.3), which the workshop respects and never changes.
+import type { PackageCandidate, PackageChange, Plugin, PluginError, PluginInfo } from "@vestra-player/sdk";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { PLAYER_NEXT, playerCode, playerMessage, type SessionPaths, type ToolResult, type Toolchain } from "./toolchain.ts";
@@ -17,6 +19,22 @@ const CHANGE_TEXT: Record<string, string> = {
   failedDegraded: "failed, the previous version could not be fully restored",
   tooLate: "too late to cancel",
 };
+
+/**
+ * What the model reads for the plugin's state after a committed install
+ * (packages.list). "disabled" and "failed" have their own texts.
+ */
+const STATE_TEXT: Record<string, string> = {
+  running: "The plugin is enabled and running in the player.",
+  starting: "The plugin is enabled and still starting in the player.",
+  stopped: "The plugin is installed and enabled but not running in the player.",
+  missing: "The player does not list the plugin.",
+};
+
+/** The model's text when an update kept the plugin the user disabled disabled. */
+const DISABLED_TEXT =
+  "The plugin is installed but disabled: the user turned it off in the player, so the new version did not start. " +
+  "Only the user can enable it, in the Plugin Store (Installed tab). Tell the user; do not try to enable it yourself or work around it: respect their choice.";
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const code = (error: unknown) => (error as PluginError)?.code;
@@ -47,6 +65,13 @@ export type Shadowed = {
 export type CardSay = {
   code: string;
   args: string[];
+};
+
+/** The plugin's state after an install (`state` null: the list is unavailable). */
+type Settled = {
+  state: PluginInfo["state"] | "missing" | null;
+  error: string | null;
+  shadowed: Shadowed[];
 };
 
 type Action = [action: "install", a: string, b: string];
@@ -110,28 +135,39 @@ export class Delivering {
   }
 
   /**
-   * Inputs of `id`'s commands that another command holds: the player
-   * ignores them silently (its log only). Read once the plugin has left
-   * "starting"; [] when it is not running or the list is unavailable.
+   * Where `id` stands once the install committed, as the player lists it:
+   * its state once it has left "starting" (at most 5 s), and the inputs of
+   * its commands another command holds (the player ignores them silently,
+   * its log only; [] unless it runs). An update or reinstall of a plugin the
+   * user disabled keeps it disabled and does not start it (player after
+   * 0.6.3, as in VS Code); older players enable it on commit, so either
+   * way the list says what is true. `state` is null when the list is
+   * unavailable.
    */
-  private async shadowed(id: string): Promise<Shadowed[]> {
+  private async settle(id: string): Promise<Settled> {
+    let entry: PluginInfo | undefined;
     try {
       for (let wait = 0; wait < 25; wait++) {
-        const entry = (await this.plugin.packages.list()).find((p) => p.id === id);
-        if (entry?.state !== "starting") {
-          if (entry?.state !== "running") return [];
-          break;
-        }
+        entry = (await this.plugin.packages.list()).find((p) => p.id === id);
+        if (entry?.state !== "starting") break;
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
+    } catch {
+      return { state: null, error: null, shadowed: [] };
+    }
+    const state = entry?.state ?? "missing";
+    const error = entry?.error ?? null;
+    if (state !== "running") return { state, error, shadowed: [] };
+    try {
       const { commands } = await this.plugin.bindings.list();
       const holder = (ref: { plugin: string; command: string }) =>
         commands.find((c) => c.plugin === ref.plugin && c.command === ref.command)?.title || ref.command;
-      return commands
+      const shadowed = commands
         .filter((c) => c.plugin === id)
         .flatMap((c) => c.shadowed.map((s) => ({ input: s.input, title: c.title, plugin: s.by.plugin, holder: holder(s.by) })));
+      return { state, error, shadowed };
     } catch {
-      return [];
+      return { state, error, shadowed: [] };
     }
   }
 
@@ -213,13 +249,28 @@ export class Delivering {
         this.plugin.update();
         return { ok, text };
       }
-      const shadowed = await this.shadowed(id);
+      const { state, error, shadowed } = await this.settle(id);
+      if (state === "disabled") {
+        // The user turned it off and an update keeps their choice; only
+        // they turn it back on (the workshop never calls setEnabled).
+        this.say("installed-disabled", [name, version]);
+        return { ok, text: `${text}. ${DISABLED_TEXT}` };
+      }
+      if (state === "failed") {
+        // Installed (ok: recorded for the delete dialog), but it stopped
+        // with an error once it ran.
+        this.say("installed-failed", [name, version, error ?? ""]);
+        return {
+          ok,
+          text: `${text}, but the plugin then failed in the player${error ? `: ${error}` : ""}. Fix the cause in the source, run check and the tests again, then install again.`,
+        };
+      }
       this.say("installed", [name, version], shadowed);
       const keys = shadowed.map((s) => `${s.input} (${s.title}) is taken by ${s.plugin === "host" ? "the player" : s.plugin} "${s.holder}"`);
       return {
         ok,
         text:
-          `${text}. The plugin is enabled in the player.` +
+          `${text}. ${(state && STATE_TEXT[state]) ?? "The player did not report the plugin's state."}` +
           (keys.length
             ? `\nShortcuts not in effect: ${keys.join("; ")}. The player ignored these keys (on a conflict the user's settings come first, then the player and the plugins loaded earlier). Tell the user and suggest keys that are free, then install again.`
             : ""),

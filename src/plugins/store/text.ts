@@ -47,6 +47,9 @@ export const WINDOW = [
   "Updated {} to {} (still disabled)",
   "Installed {} {}, but couldn't keep it disabled: {}",
   "Updated {} to {}, but couldn't keep it disabled: {}",
+  // A revoked version the store disabled: its fix is enabled after the install.
+  "Installed {} {}, but couldn't enable it: {}",
+  "Updated {} to {}, but couldn't enable it: {}",
   "Uninstalled {} (data deleted)",
   "Uninstalled {} (data kept)",
   "Built-in plugins cannot be uninstalled",
