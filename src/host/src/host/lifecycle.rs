@@ -95,6 +95,11 @@ impl Host {
     pub(crate) fn physical_revoke(&self, reason: producer_input::RevokeReason) {
         self.physical_input(json!({"kind":"revoke","reason":reason}));
     }
+    /// `plugin` runs as `owner` (`plugins` and its index `plugin_ids`).
+    pub(crate) fn add_plugin(&mut self, owner: u64, plugin: Plugin) {
+        self.plugin_ids.insert(plugin.manifest.id.clone(), owner);
+        self.plugins.insert(owner, plugin);
+    }
     /// Load a development package (`--plugin DIR`).
     pub(crate) fn load(&mut self, directory: &Path, timeout_ms: u64) -> Result<()> {
         if !(1_000..=120_000).contains(&timeout_ms) {
@@ -102,7 +107,7 @@ impl Host {
         }
         // Validate before spawning, preventing duplicate plugin activation side effects.
         let candidate = manifest::read_development(directory)?;
-        if self.plugins.values().any(|p| p.manifest.id == candidate.id) {
+        if self.running(&candidate.id).is_some() {
             bail!("plugin already running: {}", candidate.id);
         }
         // Built-in plugins are developed with `--plugin`, so a reserved id
@@ -141,7 +146,7 @@ impl Host {
             (plugin.directory.clone(), plugin.manifest.clone()),
         );
         self.failures.remove(&manifest_id);
-        self.plugins.insert(self.next_generation, plugin);
+        self.add_plugin(self.next_generation, plugin);
         self.backend.commands.send(Command {
             reply: Reply {
                 owner: self.next_generation,
@@ -267,6 +272,9 @@ impl Host {
         self.cleanup.insert(owner, (false, false));
         // Waiting for graceful disposal/killing belongs off the Slint event loop.
         if let Some(mut plugin) = self.plugins.remove(&owner) {
+            if self.plugin_ids.get(&plugin.manifest.id) == Some(&owner) {
+                self.plugin_ids.remove(&plugin.manifest.id);
+            }
             plugin.set_stop_reason(reason);
             if park {
                 // A routine stop, not a fault: its `onDispose` gets time.

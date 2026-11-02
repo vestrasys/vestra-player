@@ -34,7 +34,7 @@ pub struct Manager {
     receipts: BTreeMap<String, Value>,
     booted: bool,
     /// Installed plugins still to start at start-up (`start_queued`).
-    to_start: VecDeque<String>,
+    to_start: StartQueue,
     /// The installation's built-in plugins (`builtin.json`) by id; empty
     /// when it has none (a development run).
     builtins: BTreeMap<String, builtin::Builtin>,
@@ -55,6 +55,57 @@ pub struct Manager {
     ),
     /// `packages.validate*` on their threads (package_validate.rs).
     validations: crate::packages::package_validate::Validations,
+}
+/// Installed plugins still to start, in start order, and how many of them
+/// are built-ins (`builtin_first_run_pending` asks once per plugin started).
+#[derive(Default)]
+struct StartQueue {
+    ids: VecDeque<(String, bool)>,
+    builtins: usize,
+}
+impl StartQueue {
+    /// Built-ins first, then the others, each in id order: the built-ins
+    /// (playback, video, subtitles) do not wait behind third-party plugins.
+    fn new(ids: impl IntoIterator<Item = String>, builtin: impl Fn(&str) -> bool) -> Self {
+        let (builtins, others): (Vec<_>, Vec<_>) = ids
+            .into_iter()
+            .map(|id| {
+                let is_builtin = builtin(&id);
+                (id, is_builtin)
+            })
+            .partition(|(_, is_builtin)| *is_builtin);
+        Self {
+            builtins: builtins.len(),
+            ids: builtins.into_iter().chain(others).collect(),
+        }
+    }
+    fn push_back(&mut self, id: String, builtin: bool) {
+        self.builtins += usize::from(builtin);
+        self.ids.push_back((id, builtin));
+    }
+    /// The id at `at` (0: the next to start).
+    fn get(&self, at: usize) -> Option<&str> {
+        self.ids.get(at).map(|(id, _)| id.as_str())
+    }
+    /// Takes the id at `at` out of the queue.
+    fn remove(&mut self, at: usize) -> Option<String> {
+        let (id, builtin) = self.ids.remove(at)?;
+        self.builtins -= usize::from(builtin);
+        Some(id)
+    }
+    fn contains(&self, id: &str) -> bool {
+        self.ids.iter().any(|(queued, _)| queued == id)
+    }
+    fn is_empty(&self) -> bool {
+        self.ids.is_empty()
+    }
+    fn len(&self) -> usize {
+        self.ids.len()
+    }
+    /// A built-in is still to start.
+    fn builtin_pending(&self) -> bool {
+        self.builtins > 0
+    }
 }
 /// A finished digest check: id, serial, outcome.
 type VerifyResult = (String, u64, std::result::Result<(), String>);
@@ -158,7 +209,7 @@ impl Manager {
             next: 0,
             receipts,
             booted: false,
-            to_start: VecDeque::new(),
+            to_start: StartQueue::default(),
             builtins,
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
@@ -358,7 +409,8 @@ impl Host {
                 self.packages.verify(&plugin);
             }
             if !self.packages.to_start.contains(&plugin) {
-                self.packages.to_start.push_back(plugin);
+                let builtin = self.packages.builtins.contains_key(&plugin);
+                self.packages.to_start.push_back(plugin, builtin);
             }
         }
         let text = if failed_open {
@@ -385,10 +437,7 @@ impl Host {
         self.next_generation += 1;
         let owner = self.next_generation;
         let id = manifest.id.clone();
-        anyhow::ensure!(
-            !self.plugins.values().any(|p| p.manifest.id == id),
-            "plugin already running"
-        );
+        anyhow::ensure!(self.running(&id).is_none(), "plugin already running");
         self.activations.begin(owner, self.now_ms() + 15_000)?;
         let manifest = process::Manifest {
             id: id.clone(),
@@ -438,7 +487,7 @@ impl Host {
             }
         };
         let name = plugin.manifest.name.clone();
-        self.plugins.insert(owner, plugin);
+        self.add_plugin(owner, plugin);
         self.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
             method: "owner.registered".into(),
@@ -721,23 +770,28 @@ impl Host {
     /// operation. Built-ins run in place from the installation
     /// (`runs_from`); nothing is copied.
     pub(crate) fn start_installed(&mut self, only: Option<&str>) {
-        let pending = self
-            .packages
-            .operations
-            .values()
-            .map(|o| o.package.clone())
-            .collect::<Vec<_>>();
-        let installed = self.packages.store.installed();
-        for (id, record) in installed {
-            if only.is_some_and(|only| only != id)
-                || self.running(&id).is_some()
-                || self.lazy.parked_id(&id).is_some()
-            {
+        // One record (the start-up queue starts them one by one), not a
+        // copy of the whole catalog per plugin.
+        let ids = match only {
+            Some(only) => self
+                .packages
+                .store
+                .record(only)
+                .map(|_| only.to_owned())
+                .into_iter()
+                .collect(),
+            None => self.packages.store.installed_ids(),
+        };
+        for id in ids {
+            if self.running(&id).is_some() || self.lazy.parked_id(&id).is_some() {
                 continue;
             }
+            let Some(record) = self.packages.store.record(&id).cloned() else {
+                continue;
+            };
             // R-H10: a package the user disabled stays stopped; a
             // development load of the same id runs instead this run.
-            if pending.contains(&id)
+            if self.packages.operations.values().any(|o| o.package == id)
                 || self.packages.store.disabled().contains(&id)
                 || self.development.contains_key(&id)
             {
@@ -1003,16 +1057,11 @@ impl Host {
     /// A built-in is still to start at start-up (`to_start`) or waits for
     /// its first run: other plugins' first runs wait for it.
     fn builtin_first_run_pending(&self) -> bool {
-        self.packages
-            .to_start
-            .iter()
-            .any(|id| self.packages.builtins.contains_key(id))
-            || self.builtin_first_run_queued()
+        self.packages.to_start.builtin_pending() || self.builtin_first_run_queued()
     }
     /// A built-in waits for its first run (lazy activation, §2.4).
     pub(crate) fn builtin_first_run_queued(&self) -> bool {
-        self.lazy
-            .builtin_queued(|id| self.packages.builtins.contains_key(id))
+        self.lazy.builtin_queued()
     }
     /// A built-in still activating that may mount a panel (it declares
     /// `ui.mount`) and has not asked yet: at start-up the shell waits a
@@ -1045,11 +1094,18 @@ impl Host {
                 )
         })
     }
-    fn running(&self, id: &str) -> Option<u64> {
-        self.plugins
-            .iter()
-            .find(|(_, plugin)| plugin.manifest.id == id)
-            .map(|(owner, _)| *owner)
+    /// The running owner of plugin `id` (`Host::plugin_ids`).
+    pub(crate) fn running(&self, id: &str) -> Option<u64> {
+        let owner = self.plugin_ids.get(id).copied();
+        debug_assert_eq!(
+            owner,
+            self.plugins
+                .iter()
+                .find(|(_, plugin)| plugin.manifest.id == id)
+                .map(|(owner, _)| *owner),
+            "plugin_ids follows plugins"
+        );
+        owner
     }
     fn operation_pending(&self, id: &str) -> bool {
         self.packages.operations.values().any(|op| {
@@ -1133,7 +1189,7 @@ impl Host {
             let parked = self
                 .lazy
                 .parked_id(&id)
-                .and_then(|owner| self.lazy.parked.get(&owner));
+                .and_then(|owner| self.lazy.parked(owner));
             let (state, error) =
                 if self.package_busy(&id) || !disabled && self.lazy.first_queue.contains(&id) {
                     ("starting", None)
@@ -1558,23 +1614,22 @@ impl Host {
         }
         let began = std::time::Instant::now();
         let mut started = 0;
-        // A built-in whose digest is still being checked stays queued (it
-        // starts once the check is done, shared or alone); the others do not
+        // A built-in whose digest is still being checked stays queued, in
+        // its place (it starts once the check is done, shared or alone, and
+        // other plugins' first runs still wait for it); the others do not
         // wait for it: a large package's first read can take seconds.
-        let mut checking = VecDeque::new();
-        while let Some(id) = self.packages.to_start.pop_front() {
+        let mut at = 0;
+        while let Some(id) = self.packages.to_start.get(at).map(str::to_owned) {
             if self.packages.verifying(&id) {
-                checking.push_back(id);
+                at += 1;
                 continue;
             }
+            self.packages.to_start.remove(at);
             self.start_installed(Some(&id));
             started += 1;
             if began.elapsed() >= START_BUDGET {
                 break;
             }
-        }
-        while let Some(id) = checking.pop_back() {
-            self.packages.to_start.push_front(id);
         }
         if self.frame_log.is_some() {
             diag!(
@@ -1647,7 +1702,11 @@ impl Host {
             self.collect_garbage();
             // Start committed packages and the built-ins independently of
             // the authoring plugin: queued, a few per tick (`START_BUDGET`).
-            self.packages.to_start = self.packages.store.installed().into_keys().collect();
+            // Built-ins first (`StartQueue::new`).
+            let builtins = &self.packages.builtins;
+            self.packages.to_start = StartQueue::new(self.packages.store.installed_ids(), |id| {
+                builtins.contains_key(id)
+            });
             // The shared runner admits a built-in once its digest checked
             // out, off this thread (`verify`).
             if shared_runner::enabled() {
@@ -2340,6 +2399,27 @@ fn install_instance(
 mod tests {
     use super::*;
     use crate::packages::package_store::Installed;
+
+    #[test]
+    fn start_queue_starts_builtins_first_and_counts_them() {
+        let builtin = |id: &str| id.starts_with("vestra.");
+        // `installed_ids` gives them in id order.
+        let ids = ["a.one", "b.two", "vestra.audio", "vestra.video"].map(String::from);
+        let mut queue = StartQueue::new(ids, builtin);
+        assert_eq!(queue.get(0), Some("vestra.audio"));
+        // `start_queued` skips a built-in still being checked: it stays
+        // queued, and counted, while the others start.
+        assert_eq!(queue.remove(1).as_deref(), Some("vestra.video"));
+        assert_eq!(queue.remove(1).as_deref(), Some("a.one"));
+        assert!(queue.builtin_pending());
+        assert_eq!(queue.remove(0).as_deref(), Some("vestra.audio"));
+        assert!(!queue.builtin_pending());
+        assert_eq!(queue.remove(0).as_deref(), Some("b.two"));
+        assert_eq!(queue.remove(0), None);
+        assert!(!queue.builtin_pending() && queue.is_empty());
+        queue.push_back("vestra.subtitles".into(), true);
+        assert!(queue.builtin_pending() && queue.contains("vestra.subtitles"));
+    }
     use crate::ui::composition;
 
     fn candidate(dir: &Path, id: &str, version: &str) -> Candidate {
@@ -2732,7 +2812,7 @@ mod tests {
             next: 0,
             receipts: BTreeMap::new(),
             booted: false,
-            to_start: VecDeque::new(),
+            to_start: StartQueue::default(),
             builtins,
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
