@@ -1486,13 +1486,13 @@ mod tests {
         assert!(!lazy.enabled && lazy.first_run_free());
     }
 
-    /// B0: a wake event held for a parked or waking plugin replaces an
-    /// older one of the same event (newest wins) but never a trigger:
-    /// triggers are queued as they come (`lazy_deliver` pushes them), so two
-    /// commands both run, in order, at the ready; a resolution's cancel
-    /// follows its request.
+    /// B0: `hold_event` (how a wake event is held for a parked or waking
+    /// plugin) replaces only an older message of its own event name (newest
+    /// wins, at the end) and keeps every other held message in its order.
+    /// What `lazy_deliver` queues (triggers pushed as they come) needs a
+    /// `Host`; tests/lifecycle_baseline.rs pins two held commands end to end.
     #[test]
-    fn b0_held_triggers_are_all_kept_and_wake_events_merge() {
+    fn b0_hold_event_replaces_only_its_own_event() {
         let mut queue = vec![json!({"event":"commands.execute","data":{"id":"a"}})];
         hold_event(&mut queue, json!({"event":"packages.changed","data":1}));
         queue.push(json!({"event":"commands.execute","data":{"id":"b"}}));

@@ -3499,12 +3499,13 @@ mod tests {
         assert_eq!(RELOAD_WAIT_MS, 20_000);
     }
 
-    /// B0: a verifying built-in keeps its place at the front, and its
-    /// count, while the plugins behind it start (`start_queued` walks past
-    /// it with `get(at)`), so third-party first runs keep waiting
-    /// (`builtin_pending`).
+    /// B0: the `StartQueue` semantics `start_queued` relies on (it needs a
+    /// `Host`, so its walk is written out here): `get(at)` and
+    /// `remove(at)` let the plugins behind a held built-in start while it
+    /// keeps its place at the front and its count (`builtin_pending`, which
+    /// keeps third-party first runs waiting).
     #[test]
-    fn b0_a_verifying_builtin_holds_its_place_and_the_others_pass_it() {
+    fn b0_start_queue_lets_others_pass_a_held_builtin() {
         let builtin = |id: &str| id.starts_with("vestra.");
         let ids = ["a.one", "vestra.slow", "vestra.fast"].map(String::from);
         let mut queue = StartQueue::new(ids, builtin);
