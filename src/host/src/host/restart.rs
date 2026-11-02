@@ -89,7 +89,7 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
 /// with `wgpu::util::DeviceExt::create_buffer_init` (its viewport bind
 /// group) whenever a draw switches between a layer texture and the window;
 /// on a lost device that buffer cannot be mapped and wgpu panics (host
-/// 0.6.3 and 0.6.4). Unwinding out of `main` skipped the teardown (no
+/// 0.6.3 and 0.6.4; fixed in 0.6.5). Unwinding out of `main` skipped the teardown (no
 /// `exit: restarting`, plugins told `host-lost`, not `quit`), and the host,
 /// still held by the UI thread's thread-locals, dropped only at process
 /// exit, after Windows had ended its other threads: joining one of them
