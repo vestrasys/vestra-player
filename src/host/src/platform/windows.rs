@@ -1189,6 +1189,20 @@ impl crate::playback::renderer::GpuBackend for GpuHandle {
     fn frames(&self) -> u64 {
         vestra_gpu_render::Handle::frames(self)
     }
+    fn progress(&self) -> Option<crate::playback::renderer::Progress> {
+        let progress = vestra_gpu_render::Handle::progress(self);
+        Some(crate::playback::renderer::Progress {
+            calls: progress.calls,
+            started: progress.started,
+            ready: progress.ready,
+            completed: progress.completed,
+            rings: progress.rings,
+            halted: progress.halted,
+        })
+    }
+    fn device_removed(&self) -> bool {
+        vestra_gpu_render::Handle::device_removed(self)
+    }
     fn shown(&self) -> u64 {
         vestra_gpu_render::Handle::shown(self)
     }

@@ -70,24 +70,39 @@ impl Capability for ProcessingVideo {
                 // run that ended with plugin shaders on, else armed first.
                 let handle = format!("shaders:{}", params["id"].as_str().unwrap_or_default());
                 let files = params["paths"].as_array().map_or(0, Vec::len);
-                host.plugin_shaders(reply.owner, &handle, files)?;
-                forward_media(host, reply, method, &params)
+                let seq = host.plugin_shaders(reply.owner, &handle, files)?;
+                forward_media(host, reply, method, &guard_seq(&params, Some(seq)))
             }
             "video.render.set" => {
                 // Only a request that names `shaders` changes them (the
                 // values merge into the owner's render options).
-                if let Some(list) = params["values"]["shaders"].as_array() {
-                    host.plugin_shaders(reply.owner, "render", list.len())?;
-                }
-                forward_media(host, reply, method, params)
+                let seq = match params["values"]["shaders"].as_array() {
+                    Some(list) => Some(host.plugin_shaders(reply.owner, "render", list.len())?),
+                    None => None,
+                };
+                forward_media(host, reply, method, &guard_seq(params, seq))
             }
             "video.render.release" => {
-                host.plugin_shaders(reply.owner, "render", 0)?;
-                forward_media(host, reply, method, params)
+                let seq = host.plugin_shaders(reply.owner, "render", 0)?;
+                forward_media(host, reply, method, &guard_seq(params, Some(seq)))
             }
             _ => forward_media(host, reply, method, params),
         }
     }
+}
+
+/// `params` with the shader guard's request number (`guardSeq`; the worker
+/// reports it processed, `backend::guard_processed`), or without one: a
+/// plugin cannot set it.
+fn guard_seq(params: &Value, seq: Option<u64>) -> Value {
+    let mut params = params.clone();
+    if let Some(fields) = params.as_object_mut() {
+        match seq {
+            Some(seq) => fields.insert("guardSeq".into(), seq.into()),
+            None => fields.remove("guardSeq"),
+        };
+    }
+    params
 }
 
 /// A video change with its `lut3d` files resolved to their canonical paths
@@ -158,4 +173,19 @@ fn shader_request(host: &Host, owner: u64, params: &Value) -> Result<Value, RpcE
         .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
     let (tier, installed_at) = host.install_rank(owner);
     Ok(json!({"id":id,"paths":paths,"manifestId":manifest,"rank":[tier, installed_at]}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The shader guard's request number is the host's: one a plugin sends
+    /// is replaced, or dropped when the request is not numbered.
+    #[test]
+    fn the_guard_seq_is_set_by_the_host_only() {
+        let sent = json!({"values":{"toneMapping":"auto"},"guardSeq":99});
+        assert_eq!(guard_seq(&sent, Some(4))["guardSeq"], 4);
+        assert!(guard_seq(&sent, None).get("guardSeq").is_none());
+        assert_eq!(guard_seq(&sent, None)["values"]["toneMapping"], "auto");
+    }
 }
