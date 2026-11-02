@@ -989,4 +989,32 @@ mod tests {
         assert!(policy.restart(500_000), "for the rest of the run");
         assert_eq!((policy.next_id(), policy.next_id()), (1, 2));
     }
+
+    /// B0 (supervisor.md §7.4, §11): the shared runner's tunables as they
+    /// are today.
+    #[test]
+    fn b0_runner_tunables() {
+        assert_eq!(STOP_WAIT, Duration::from_millis(300));
+        assert_eq!(MEMBER_GONE, Duration::from_secs(6));
+        assert_eq!(MEMBER_QUEUE, 1024);
+        assert_eq!(QUEUE, 16 * 1024);
+        assert_eq!(MAX_OLD_SPACE, "--max-old-space-size=1024");
+        assert_eq!((PING_MS, MISSED_LIMIT), (2_000, 5));
+        assert_eq!((RESTART_LIMIT, RESTART_WINDOW_MS), (3, 60_000));
+    }
+
+    /// B0: restarts at the edge of the window (one exactly 60 s old has
+    /// left it); quarantine is a set of ids, never cleared in a run.
+    #[test]
+    fn b0_restart_window_edge_and_quarantine() {
+        let mut policy = Policy::default();
+        assert!(!policy.restart(1_000));
+        assert!(!policy.restart(2_000));
+        assert!(!policy.restart(61_000));
+        assert!(!policy.failed_open);
+        assert!(policy.restart(61_999), "2 000, 61 000 and 61 999: three");
+        policy.quarantined.insert("vestra.a".into());
+        policy.quarantined.insert("vestra.a".into());
+        assert_eq!(policy.quarantined.len(), 1);
+    }
 }
