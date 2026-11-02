@@ -226,9 +226,12 @@ pub struct Quarantined {
     pub reason: String,
 }
 
-/// Records kept in `quarantine.json`: more than one start can set aside
-/// (`MAX_PACKAGES` installed and 64 pending), so that the packages of the
-/// records one start sets aside all stay referenced.
+/// Records kept in `quarantine.json`: more than one start can set aside (a
+/// catalog this player accepts holds `MAX_PACKAGES` third-party installed
+/// records plus the built-ins, and 64 pending), so that the packages of the
+/// records one start sets aside usually all stay referenced. The real bound
+/// on records set aside for failed checks is the catalog's `MAX_CATALOG`
+/// bytes: a corrupt or foreign catalog can hold more than this many.
 const MAX_QUARANTINED: usize = 512;
 
 /// The package digests a record set aside may refer to: every string in
@@ -659,11 +662,13 @@ impl Store {
             })
             .collect::<Vec<_>>();
         by_age.sort();
+        // Accepted above, so their GUIDs are unique among the installed
+        // records and stay in `guids`: a dormant entry with the same GUID
+        // (a corrupt catalog) is then set aside below as a duplicate, and
+        // this record's instance takes its place.
+        let mut over = BTreeSet::new();
         for (_, id) in by_age.into_iter().skip(MAX_PACKAGES) {
-            if let Some(instance) = &catalog.installed[&id].instance {
-                // Accepted above, so its GUID is unique: free it for `dormant`.
-                guids.remove(&instance.guid);
-            }
+            over.insert(id.clone());
             set_aside_installed.push((id, anyhow::anyhow!("installed package limit exceeded")));
         }
         let mut retired = Vec::new();
@@ -675,12 +680,14 @@ impl Store {
             aside.push(Aside::new("installed", &id, format!("{error:#}"), entry));
             catalog.last_commit.remove(&id);
             catalog.disabled.remove(&id);
+            // Out of the catalog: nothing to retry at the next start.
+            deferred.remove(&id);
             // Its data stays reachable: installing it again from the same
             // source (a built-in: the next start) reconnects to it.
             if let Some(instance) = &installed.instance
                 && identifier(&id).is_ok()
                 && valid_guid(&instance.guid)
-                && !guids.contains(&instance.guid)
+                && (over.contains(&id) || !guids.contains(&instance.guid))
             {
                 let dormant = Dormant {
                     id: id.clone(),
@@ -2692,28 +2699,155 @@ pub(crate) mod tests {
             "built-ins present"
         );
         // One more is refused.
+        assert_eq!(
+            try_one_more(&mut store).err().unwrap().to_string(),
+            "installed package limit reached"
+        );
+        // Updating an installed one still works at the limit.
+        store.prepare("counter", 1, &package, "again").unwrap();
+        store.commit("counter", "again").unwrap();
+    }
+
+    /// Whether an install of a new id, `one.more`, may start
+    /// (`prepared` is what every install goes through).
+    fn try_one_more(store: &mut Store) -> Result<Catalog> {
         let more = tempfile::tempdir().unwrap();
         fs::write(more.path().join("manifest.json"), serde_json::to_vec(&serde_json::json!({"id":"one.more","apiVersion":crate::process::API,"version":"1.0.0","entry":"main.js","capabilities":[]})).unwrap()).unwrap();
         fs::write(more.path().join("main.js"), "export default () => {}").unwrap();
         let more = store
             .stage(&Candidate::capture(more.path()).unwrap())
             .unwrap();
-        let refused = store
-            .prepared(
-                &store.catalog,
-                "one.more",
-                0,
-                &more,
-                "more",
-                serde_json::json!({}),
-                None,
-            )
-            .err()
-            .unwrap();
-        assert_eq!(refused.to_string(), "installed package limit reached");
-        // Updating an installed one still works at the limit.
-        store.prepare("counter", 1, &package, "again").unwrap();
-        store.commit("counter", "again").unwrap();
+        store.prepared(
+            &store.catalog,
+            "one.more",
+            0,
+            &more,
+            "more",
+            serde_json::json!({}),
+            None,
+        )
+    }
+
+    /// With built-ins present, a pending install of a new id holds its
+    /// place against the limit until it is aborted.
+    #[test]
+    fn a_pending_new_install_counts_against_the_limit_built_ins_do_not() {
+        let root = tempfile::tempdir().unwrap();
+        let (_, first) = candidate("1.0.0");
+        let mut store = Store::open(root.path().into()).unwrap();
+        store.sync_builtins(&builtin_ids()).unwrap();
+        fill_third_party(&mut store, MAX_PACKAGES - 1, |n| n as u64 + 1);
+        let package = store.stage(&first).unwrap();
+        store.prepare("counter", 0, &package, "pending").unwrap();
+        assert_eq!(
+            try_one_more(&mut store).err().unwrap().to_string(),
+            "installed package limit reached"
+        );
+        store.abort("counter", "pending").unwrap();
+        try_one_more(&mut store).unwrap();
+    }
+
+    /// The installed records `Store::open` set aside, with their reasons.
+    fn installed_aside(store: &Store) -> Vec<(String, String)> {
+        let mut aside = store
+            .quarantined()
+            .iter()
+            .filter(|q| q.section == "installed")
+            .map(|q| (q.id.clone(), q.reason.clone()))
+            .collect::<Vec<_>>();
+        aside.sort();
+        aside
+    }
+
+    fn over_limit(ids: &[&str]) -> Vec<(String, String)> {
+        ids.iter()
+            .map(|id| (id.to_string(), "installed package limit exceeded".into()))
+            .collect()
+    }
+
+    /// A record from before instances counts as the oldest install.
+    #[test]
+    fn over_the_limit_a_record_without_an_instance_is_the_oldest() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        fill_third_party(&mut store, MAX_PACKAGES + 1, |n| (n as u64 + 1) * 10);
+        // The newest by time, but without an instance.
+        let newest = format!("p{MAX_PACKAGES:03}");
+        let mut next = store.catalog.clone();
+        next.installed.get_mut(&newest).unwrap().instance = None;
+        store.publish(next).unwrap();
+        drop(store);
+        let store = Store::open(root.path().into()).unwrap();
+        let second = format!("p{:03}", MAX_PACKAGES - 1);
+        assert_eq!(installed_aside(&store), over_limit(&[&second]));
+        assert!(store.installed().contains_key(&newest), "kept");
+    }
+
+    /// Equal install times: the last ids go.
+    #[test]
+    fn over_the_limit_equal_install_times_go_by_id() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        fill_third_party(&mut store, MAX_PACKAGES + 2, |_| 5);
+        drop(store);
+        let store = Store::open(root.path().into()).unwrap();
+        let last = [MAX_PACKAGES, MAX_PACKAGES + 1].map(|n| format!("p{n:03}"));
+        assert_eq!(installed_aside(&store), over_limit(&[&last[0], &last[1]]));
+    }
+
+    /// A corrupt catalog's dormant entry with the GUID of a record set aside
+    /// for the limit (under another id) does not survive: the record's own
+    /// instance is retired instead, so its data cannot attach to that id.
+    #[test]
+    fn over_the_limit_a_dormant_entry_with_the_same_guid_gives_way() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        fill_third_party(&mut store, MAX_PACKAGES + 1, |n| n as u64 + 1);
+        let newest = format!("p{MAX_PACKAGES:03}");
+        let guid = store.get(&newest).instance.unwrap().guid;
+        let mut next = store.catalog.clone();
+        next.dormant.insert(
+            guid.clone(),
+            Dormant {
+                id: "someone.else".into(),
+                source: Source::File,
+                version: None,
+                installed_at: 1,
+                retired_at: 1,
+            },
+        );
+        store.publish(next).unwrap();
+        drop(store);
+        let store = Store::open(root.path().into()).unwrap();
+        assert_eq!(installed_aside(&store), over_limit(&[&newest]));
+        assert!(store.quarantined().contains(&Quarantined {
+            section: "dormant",
+            id: guid.clone(),
+            reason: "duplicate instance GUID".into(),
+        }));
+        assert_eq!(store.dormant()[&guid].id, newest);
+        assert_eq!(store.dormant().len(), 1);
+    }
+
+    /// A record whose library copy could not be read and that is set aside
+    /// for the limit is not left in `deferred`.
+    #[test]
+    fn over_the_limit_a_deferred_record_leaves_deferred() {
+        let first = tempfile::tempdir().unwrap();
+        let first_path = dunce::canonicalize(first.path()).unwrap();
+        let (counter, _) = two_installed(&first_path);
+        // Older than `counter` and `other`, which go.
+        let mut store = Store::open(first_path.clone()).unwrap();
+        fill_third_party(&mut store, MAX_PACKAGES, |n| n as u64 + 1);
+        drop(store);
+        let (_moved, moved_path) = moved_copy(&first_path);
+        let copy = moved_path.join("packages").join(&counter.digest);
+        let Some(_held) = hold_unreadable(&copy.join("main.js")) else {
+            return;
+        };
+        let store = Store::open(moved_path).unwrap();
+        assert_eq!(installed_aside(&store), over_limit(&["counter", "other"]));
+        assert!(store.deferred().is_empty(), "{:?}", store.deferred());
     }
 
     /// A catalog over the limit sets aside the newest third-party installs
