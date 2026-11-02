@@ -78,8 +78,11 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
 }
 
 /// Run the event loop (`run`, `slint::run_event_loop`). A panic out of it
-/// once the windows' GPU device was lost (`lost`) ends the loop as the
-/// quit the loss asked for would (`None`); any other panic goes on.
+/// once the windows' GPU device was lost (`lost`; a watchdog stall sets it
+/// too, with the device healthy) ends the loop as the quit the loss asked
+/// for would (`None`), whatever panicked; a panic before that goes on. Not
+/// covered: an out-of-memory `create_buffer` on a healthy device, which
+/// wgpu-core does not treat as a loss (`doc/architecture/README.md`).
 ///
 /// Slint's femtovg-wgpu renderer keeps drawing the frames already asked for
 /// until the loop sees that quit, and femtovg makes a new uniform buffer

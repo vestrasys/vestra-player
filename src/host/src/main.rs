@@ -843,7 +843,7 @@ fn main() -> Result<()> {
         let ran = run_through_loss(slint::run_event_loop, platform::window_device_lost)
             .unwrap_or_else(|| {
                 restart_logged(
-                    "render: a draw on the lost GPU device panicked; the event loop ended, the teardown runs",
+                    "render: the event loop panicked after the GPU device loss (see the panic: line); the event loop ended, the teardown runs",
                 );
                 Ok(())
             });
