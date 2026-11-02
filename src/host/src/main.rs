@@ -34,7 +34,7 @@ use anyhow::{Result, bail};
 use host::package_activation;
 use host::{
     Event, FRAME_SINK, Host, InputShared, LAST_SOURCE, MenuMode, PIP_GPU_SINK, event_loop_ended,
-    restart_log, restart_player, teardown_step,
+    restart_log, restart_logged, restart_player, run_through_loss, teardown_step,
 };
 use packages::package_manager;
 use playback::{backend::Backend, frame_pacing, render_mode, render_target};
@@ -836,8 +836,17 @@ fn main() -> Result<()> {
         let started = guard.clone();
         slint::Timer::single_shot(Duration::from_secs(5), move || started.settle());
         // The loop also ends with an error when the windows' GPU device was
-        // lost (a driver reset): tear down as usual first.
-        let ran = slint::run_event_loop();
+        // lost (a driver reset): tear down as usual first. A draw on the
+        // lost device may panic in Slint's renderer before the loop sees the
+        // quit; that panic ends the loop too (`run_through_loss`), so the
+        // teardown below still runs.
+        let ran = run_through_loss(slint::run_event_loop, platform::window_device_lost)
+            .unwrap_or_else(|| {
+                restart_logged(
+                    "render: the event loop panicked after the GPU device loss (see the panic: line); the event loop ended, the teardown runs",
+                );
+                Ok(())
+            });
         // The steps below name themselves (`teardown_step`): a player ended
         // because its teardown after a device loss took too long says in
         // restart.log where it was. After a device loss the teardown has 5 s
