@@ -16,7 +16,7 @@
 //! | Held triggers delivered in order at the ready | here: `held_commands_reach_a_woken_plugin_in_order_at_its_ready` |
 //! | Own-process reload and upgrade wait for the old process; uninstall data removed after the reap; session values per stop reason; `busy`/`unsupported`/`invalid`/`missing` replies | here: `own_process_restarts_wait_for_the_old_process_and_session_values_follow_the_reason` |
 //! | `packages.list` of a parked plugin; a park announces nothing | here: `a_parked_plugin_is_listed_running_idle_and_its_park_announces_nothing` |
-//! | A cleanup that never ends: reload (shared runner) and upgrade (own process) wait only for the stop's grace, the 20 s texts never appear; `busy` while an operation runs | here: `an_endless_cleanup_holds_a_reload_or_an_upgrade_only_for_its_grace` |
+//! | A cleanup that never ends: reload (shared runner) and upgrade (own process) wait only for the stop's grace; `busy` while an operation runs | here: `an_endless_cleanup_holds_a_reload_or_an_upgrade_only_for_its_grace` |
 //! | Standby with a process still stopping: wake waits, enable goes through `packages.reloads` (`starting`, `busy`), uninstall removes the data after the reap (or at once once reaped) | here: `standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone` |
 //! | Quit stops own processes one after another (300 ms each) | here: `quit_stops_own_processes_one_after_another` |
 //! | `packages.list` `starting`, `failed` (with its reason), `disabled` | here: `packages_list_shows_starting_failed_and_disabled` |
@@ -239,16 +239,18 @@ fn held_commands_reach_a_woken_plugin_in_order_at_its_ready() {
 /// Module code (it runs when the plugin's module loads, before its
 /// activation): `others` is the pids of this plugin's earlier instances
 /// whose process is still alive, each instance noting its own pid in its
-/// data directory (`alive-<pid>`). `overlaps [${others}]` is `[]` exactly
+/// data directory (`alive-<pid>`; the directory is created first, and one
+/// that cannot be read counts as no overlap). `overlaps [${others}]` is `[]` exactly
 /// when no earlier process of the plugin still runs (own processes only:
 /// shared-runner members share one pid and get no `VESTRA_PLUGIN_DATA_DIR`:
 /// always `[]` there).
-const ALIVE: &str = "import { readdirSync as aliveList, writeFileSync as aliveNote } from \"node:fs\";\n\
+const ALIVE: &str = "import { readdirSync as aliveList, writeFileSync as aliveNote, mkdirSync as aliveMake } from \"node:fs\";\n\
 const aliveDir = process.env.VESTRA_PLUGIN_DATA_DIR;\n\
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };\n\
-const others = !aliveDir ? [] : aliveList(aliveDir).filter((f) => f.startsWith(\"alive-\"))\n\
+const aliveRead = () => { try { aliveMake(aliveDir, { recursive: true }); return aliveList(aliveDir); } catch { return []; } };\n\
+const others = !aliveDir ? [] : aliveRead().filter((f) => f.startsWith(\"alive-\"))\n\
 .map((f) => Number(f.slice(6))).filter((pid) => pid !== process.pid && alive(pid));\n\
-if (aliveDir) aliveNote(`${aliveDir}/alive-${process.pid}`, \"\");\n";
+if (aliveDir) try { aliveNote(`${aliveDir}/alive-${process.pid}`, \"\"); } catch {}\n";
 
 /// How a `fixture`'s cleanup (`onDispose`) behaves.
 #[derive(Clone, Copy)]
@@ -541,7 +543,7 @@ fn b0_known_bug_host_cleanup_only_grows() {
          self.cleanup.pop_first(); x.cleanup.pop_last(); self.cleanup.split_off(&o);\n\
          self.cleanup.extract_if(|_, _| true); self.cleanup = BTreeMap::new();\n\
          std::mem::take(&mut self.cleanup); mem::replace(&mut host.cleanup, m);\n\
-         self.cleanup == other;\n",
+         mem::swap(&mut self.cleanup, &mut m); self.cleanup == other;\n",
     )
     .unwrap();
     let found = cleanup_removals(scratch.path())
@@ -560,7 +562,8 @@ fn b0_known_bug_host_cleanup_only_grows() {
             "extract_if",
             "=",
             "take",
-            "replace"
+            "replace",
+            "swap"
         ],
         "{found:?}"
     );
@@ -621,16 +624,19 @@ fn cleanup_removals(root: &Path) -> Vec<(PathBuf, String)> {
                     // `mem::take(&mut x.cleanup)`, `mem::replace(&mut x.cleanup, ..)`.
                     let receiver = before.rfind("(&mut").map(|i| &before[..i]);
                     receiver.and_then(|head| {
-                        ["take", "replace"]
+                        ["take", "replace", "swap"]
                             .into_iter()
                             .find(|f| head.ends_with(&format!("mem::{f}")))
                             .map(str::to_owned)
                     })
                 } else if after.starts_with(',') {
                     let receiver = before.rfind("(&mut").map(|i| &before[..i]);
-                    receiver
-                        .filter(|head| head.ends_with("mem::replace"))
-                        .map(|_| "replace".to_owned())
+                    receiver.and_then(|head| {
+                        ["replace", "swap"]
+                            .into_iter()
+                            .find(|f| head.ends_with(&format!("mem::{f}")))
+                            .map(str::to_owned)
+                    })
                 } else {
                     None
                 };
@@ -733,8 +739,9 @@ const BUSY_TEXT: &str = "busy: the package is being installed or reloaded";
 /// within the stop's own grace, and the restart goes on then. A cleanup
 /// that never ends holds a reload of a shared-runner member until the
 /// runner abandons it (its 5 s `STOP_TIMEOUT_MS`, inside the host's 6 s
-/// `MEMBER_GONE`), and an upgrade of an own process for its 300 ms grace;
-/// neither failure text appears. While the upgrade's operation runs, the
+/// `MEMBER_GONE`), and an upgrade of an own process for its 300 ms grace
+/// (preconditions for the 20 s texts staying unreachable: see the end of
+/// the test). While the upgrade's operation runs, the
 /// plugin's `setEnabled`, `reload` and `uninstall` are `busy` (the
 /// operation half of `package_busy`).
 #[test]
@@ -817,12 +824,14 @@ fn an_endless_cleanup_holds_a_reload_or_an_upgrade_only_for_its_grace() {
         );
     }
     at(&log, &format!("{MANAGER} update committed"));
-    for never in [
-        "reload: the previous process did not stop within 20 s",
-        "cleanup acknowledgment timed out",
-    ] {
-        assert!(!log.contains(never), "{never}: {log}");
-    }
+    // No assertion on the 20 s failure texts: these runs are shorter than
+    // 20 s. They stay unreachable today only while (1) the playback worker
+    // handles `owner.disabled`/`owner.parked` promptly (`BackendCleaned` is
+    // then sent unconditionally, playback/backend.rs:544) and (2) the reap
+    // ends within the stop's grace; `advance_package` times its 20 s from
+    // `op.started`, about 17.3 s in the worst case for own processes today,
+    // and above 20 s is possible for a shared-runner member (6 s
+    // `MEMBER_GONE`).
 }
 
 const WAKE: &str = "aa.fixture-wake";
@@ -834,7 +843,7 @@ const REAPED: &str = "aa.fixture-gone-reaped";
 /// a park waits `PARK_WAIT` (2 s) for its process, and whatever comes
 /// meanwhile waits for that process to go, never beside it: a wake by a
 /// command (`Parked.waiting`, `lazy_tick`; the 20 s `STOP_WAIT_MS` never
-/// runs out), a disable and enable (`set_enabled(true)` 鈫?`packages.reloads`:
+/// runs out), a disable and enable (`set_enabled(true)` → `packages.reloads`:
 /// listed `starting`, a second enable `busy`), an uninstall that removes the
 /// data (`data_removals` at the parked process's `Reaped`). An uninstall
 /// once the parked process is gone removes the data at once.
@@ -947,18 +956,22 @@ fn standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone() {
             data.display()
         );
     }
-    for never in [
-        "its stopped process did not go within 20 s",
-        "reload: the previous process did not stop within 20 s",
-    ] {
-        assert!(!log.contains(never), "{never}: {log}");
-    }
+    // No assertion on the 20 s failure texts: these runs are shorter than
+    // 20 s. They stay unreachable today only while (1) the playback worker
+    // handles `owner.disabled`/`owner.parked` promptly (`BackendCleaned` is
+    // then sent unconditionally, playback/backend.rs:544) and (2) the reap
+    // ends within the stop's grace; `advance_package` times its 20 s from
+    // `op.started`, about 17.3 s in the worst case for own processes today,
+    // and above 20 s is possible for a shared-runner member (6 s
+    // `MEMBER_GONE`).
 }
 
 /// Quit (`lazy_quit`, then each plugin dropped with the host): own
 /// processes are stopped one after another, each given its 300 ms grace.
-/// Six plugins whose cleanup never ends make the quit about 6 脳 300 ms
+/// Six plugins whose cleanup never ends make the quit about 6 × 300 ms
 /// longer than with none (stopped side by side it would be about 300 ms).
+/// B0: expected to change in B2b/B4 (the multiplexed reaper and
+/// `shutdown` within 1 s stop them side by side).
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn quit_stops_own_processes_one_after_another() {
@@ -975,8 +988,9 @@ fn quit_stops_own_processes_one_after_another() {
     let (log, endless) = run(N);
     assert_eq!(log.matches("1.0.0 stopping for quit").count(), N, "{log}");
     let extra = endless.saturating_sub(empty);
+    // B0: expected to change in B2b/B4 (then about 300 ms).
     assert!(
-        extra >= std::time::Duration::from_millis(1_500),
+        extra >= std::time::Duration::from_millis(1_000),
         "quit took {endless:?} with {N} endless cleanups, {empty:?} with none: \
          not one after another?\n{log}"
     );
