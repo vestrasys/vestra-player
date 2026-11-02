@@ -33,8 +33,8 @@ A map for API maintainers: how the components divide the work, how plugins are l
 
   | Reason | Where the host stops it | Delivered? |
   | --- | --- | --- |
-  | `quit` | The player quits: the host is dropped (the shared runner first, one `runner.stop`; then each own process) | Yes, 300 ms, then killed |
-  | `disable` | `packages.setEnabled(id, false)` of a running plugin; an install with `enabled: false` over a running version (the new version is committed disabled and does not start) | Yes |
+  | `quit` | The player quits: the host is dropped (the shared runner first, one `runner.stop`; then each own process). Also a restart after a lost GPU device, except when its teardown is stuck: the process is then ended at once (`platform::exit_now`, 5 s after the event loop ended or 15 s after the restart, `host/restart.rs`), and every plugin whose stop had not run yet reads `host-lost` (its pipes close) | Yes, 300 ms, then killed |
+  | `disable` | `packages.setEnabled(id, false)` of a running plugin; an install with `enabled: false` over a running version (the new version is committed disabled and does not start). Such an install cancelled while `preparing` restores the old version: it was stopped for `disable` and is started again (a new instance, which later stops with its own reason) | Yes |
   | `uninstall` | `packages.uninstall` of a running plugin; also a first install (no previous version) cancelled while the new plugin activates | Yes (its data is removed after the process is gone) |
   | `reload` | `packages.reload` of a running plugin | Yes |
   | `upgrade` | An install over a running package that runs on stops the old version: an update, a reinstall of the same version, and a `replace` from another source (fresh data) alike (an update of a disabled package has no process to stop); also a new version stopped because its install was cancelled while the previous version comes back | Yes |
