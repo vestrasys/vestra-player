@@ -212,9 +212,16 @@ impl Member {
             }
         }
     }
-    /// `runtime.stop` for this member, then wait for its `runner.stopped`.
-    /// Called where an own process would be waited for and killed (`Drop
-    /// for Plugin`, on the host's reaper thread); the runner lives on. A
+    /// The whole stop at once (`begin_stop`, then `MemberStop::wait`).
+    #[cfg(test)]
+    pub fn stop(&self, reason: StopReason) {
+        self.begin_stop(reason).wait();
+    }
+    /// `runtime.stop` for this member; the wait for its `runner.stopped` is
+    /// the returned [`MemberStop`]'s, where an own process would be waited
+    /// for and killed: polled by the plugin reaper beside every other
+    /// stopping plugin (`process/reaper.rs`, supervisor.md §7.1), or waited
+    /// for at once (`Drop for Plugin`, at quit). The runner lives on. A
     /// cleanup longer than an own process's window ([`STOP_WAIT`]) counts as
     /// a leak, and the wait goes on until the runner reports the member gone
     /// (its own deadline, [`MEMBER_GONE`]): the host reports the plugin
@@ -225,50 +232,127 @@ impl Member {
     /// backed up, for one), can still overlap the new instance; both are
     /// logged. An own process is killed instead; a member cannot be.
     /// `reason` goes with the `runtime.stop` (`process::StopReason`).
-    pub fn stop(&self, reason: StopReason) {
+    pub fn begin_stop(&self, reason: StopReason) -> MemberStop {
         let (done, wait) = mpsc::channel();
+        let mut stop = MemberStop {
+            link: self.link.clone(),
+            g: self.g,
+            wait: None,
+            began: Instant::now(),
+            leaked: false,
+        };
         {
             let mut state = self.link.state();
             if !state.alive {
-                state.members.remove(&self.g);
-                return;
+                return stop;
             }
             state.waiters.insert(self.g, done);
         }
-        let began = Instant::now();
+        stop.began = Instant::now();
         let sent = self.link.outbound.try_send(Line {
             g: self.g,
             message: stop_message(reason),
             queued: None,
         });
-        let mut outcome = match sent {
-            Ok(()) => wait.recv_timeout(STOP_WAIT),
-            Err(_) => Err(mpsc::RecvTimeoutError::Disconnected),
+        // Not sent: the runner is gone, nothing waits.
+        stop.wait = sent.is_ok().then_some(wait);
+        stop
+    }
+}
+
+/// A member's stop under way (`Member::begin_stop`): done when the runner
+/// reports it gone, its link closes, or [`MEMBER_GONE`] passes; a cleanup
+/// still running after [`STOP_WAIT`] counts as leaked. Either way the
+/// member leaves the link (its lines are no longer accepted).
+pub struct MemberStop {
+    link: Arc<Link>,
+    g: u64,
+    /// The runner's `runner.stopped` (`timedOut`); `None`: nothing to wait
+    /// for (the runner is gone, or the stop could not be queued).
+    wait: Option<mpsc::Receiver<bool>>,
+    began: Instant,
+    /// Counted and logged as leaked already.
+    leaked: bool,
+}
+impl MemberStop {
+    /// Without blocking: whether the stop is over at `now` (the plugin
+    /// reaper's poll).
+    pub fn poll(&mut self, now: Instant) -> bool {
+        let Some(wait) = &self.wait else {
+            self.finish();
+            return true;
         };
+        match wait.try_recv() {
+            Ok(timed_out) => {
+                if timed_out {
+                    self.abandoned();
+                }
+                self.finish();
+                true
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.finish();
+                true
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                let elapsed = now.saturating_duration_since(self.began);
+                if !self.leaked && elapsed >= STOP_WAIT {
+                    self.leak();
+                }
+                if elapsed < MEMBER_GONE {
+                    return false;
+                }
+                self.not_reported();
+                self.finish();
+                true
+            }
+        }
+    }
+    /// Blocking until the stop is over (a plugin dropped where it is, at
+    /// quit): what `Member::stop` always did.
+    pub fn wait(mut self) {
+        let Some(wait) = self.wait.take() else {
+            self.finish();
+            return;
+        };
+        let mut outcome = wait.recv_timeout(STOP_WAIT);
         if matches!(outcome, Err(mpsc::RecvTimeoutError::Timeout)) {
-            self.link.state().leaked += 1;
-            diag!(
-                "shared runner {}: member {} still cleaning up after {} ms; waiting for the runner",
-                self.link.id,
-                self.g,
-                STOP_WAIT.as_millis()
-            );
-            outcome = wait.recv_timeout(MEMBER_GONE.saturating_sub(began.elapsed()));
+            self.leak();
+            outcome = wait.recv_timeout(MEMBER_GONE.saturating_sub(self.began.elapsed()));
         }
         match outcome {
-            Ok(true) => diag!(
-                "shared runner {}: member {}'s cleanup was abandoned after the runner's deadline",
-                self.link.id,
-                self.g
-            ),
-            Err(mpsc::RecvTimeoutError::Timeout) => diag!(
-                "shared runner {}: member {} not reported gone within {} s",
-                self.link.id,
-                self.g,
-                MEMBER_GONE.as_secs()
-            ),
+            Ok(true) => self.abandoned(),
+            Err(mpsc::RecvTimeoutError::Timeout) => self.not_reported(),
             _ => {}
         }
+        self.finish();
+    }
+    fn leak(&mut self) {
+        self.leaked = true;
+        self.link.state().leaked += 1;
+        diag!(
+            "shared runner {}: member {} still cleaning up after {} ms; waiting for the runner",
+            self.link.id,
+            self.g,
+            STOP_WAIT.as_millis()
+        );
+    }
+    fn abandoned(&self) {
+        diag!(
+            "shared runner {}: member {}'s cleanup was abandoned after the runner's deadline",
+            self.link.id,
+            self.g
+        );
+    }
+    fn not_reported(&self) {
+        diag!(
+            "shared runner {}: member {} not reported gone within {} s",
+            self.link.id,
+            self.g,
+            MEMBER_GONE.as_secs()
+        );
+    }
+    fn finish(&self) {
         let mut state = self.link.state();
         state.waiters.remove(&self.g);
         state.members.remove(&self.g);
@@ -461,9 +545,11 @@ impl SharedRunner {
 
     /// Let it go without waiting on the caller's thread: `runner.stop`
     /// (every member's cleanup, then exit) when `graceful`, else killed at
-    /// once; killed after [`STOP_WAIT`] either way. Graceful only when it
-    /// has no member left (`idle`), so its `runner.stop` carries no reason.
-    pub fn retire(mut self, graceful: bool) {
+    /// once; killed after [`STOP_WAIT`] either way, by the plugin reaper
+    /// (once a `shared-runner-reap` thread of its own, supervisor.md §7.1).
+    /// Graceful only when it has no member left (`idle`), so its
+    /// `runner.stop` carries no reason.
+    pub fn retire(mut self, graceful: bool, reaper: &crate::process::reaper::Reaper) {
         self.link.close();
         let Some(mut child) = self.child.take() else {
             return;
@@ -477,12 +563,7 @@ impl SharedRunner {
         } else {
             let _ = child.kill();
         }
-        let spawned = thread::Builder::new()
-            .name("shared-runner-reap".into())
-            .spawn(move || wait_or_kill(&mut child));
-        if let Err(error) = spawned {
-            diag!("shared runner: {error}");
-        }
+        reaper.child(child, STOP_WAIT);
     }
 }
 impl Drop for SharedRunner {
@@ -875,6 +956,43 @@ mod tests {
         let began = Instant::now();
         member.stop(StopReason::Idle);
         assert!(began.elapsed() < Duration::from_millis(50));
+    }
+
+    /// The plugin reaper's half (`MemberStop::poll`, supervisor.md §7.1):
+    /// the same outcomes as the blocking stop, at the times it is polled.
+    #[test]
+    fn a_polled_member_stop_ends_as_the_blocking_one() {
+        let (link, _output) = link(&[4]);
+        let link = Arc::new(link);
+        let member = Member {
+            link: link.clone(),
+            g: 4,
+            queued: Arc::new(AtomicUsize::new(0)),
+        };
+        // Reported gone (here: abandoned by the runner) after a leak.
+        let mut stop = member.begin_stop(StopReason::Idle);
+        let began = Instant::now();
+        assert!(!stop.poll(began));
+        assert!(!stop.poll(began + STOP_WAIT));
+        assert_eq!(link.leaked(), 1);
+        assert!(!stop.poll(began + STOP_WAIT * 2), "counted once");
+        assert_eq!(link.leaked(), 1);
+        link.stopped(4, true);
+        assert!(stop.poll(began + STOP_WAIT * 2));
+        assert_eq!(link.members(), 0);
+        // Never reported: over at the runner's own deadline.
+        link.state().members.insert(4);
+        let mut stop = member.begin_stop(StopReason::Idle);
+        let began = Instant::now();
+        assert!(!stop.poll(began + MEMBER_GONE - Duration::from_millis(200)));
+        assert!(stop.poll(began + MEMBER_GONE));
+        assert_eq!((link.leaked(), link.members()), (2, 0));
+        // Gone: over at once.
+        link.state().members.insert(4);
+        link.close();
+        let mut stop = member.begin_stop(StopReason::Idle);
+        assert!(stop.poll(Instant::now()));
+        assert_eq!(link.members(), 0);
     }
 
     #[test]

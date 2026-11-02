@@ -19,8 +19,8 @@ Coordinator record and blackboard for the supervisor project. Design: [superviso
 | B0 | approved (321ebd44), PR batched with B1 | `supervisor-b0` C:\vestra\wt-sup-b0 | — | reviewer 3× 10/10 (90 s each); for B2b: time the 20 s waits from the start of the wait (not `op.started`) and handle a stuck backend worker | fixes done; lifecycle_baseline 10/10 ×3; finding: the three 20 s timeout branches are unreachable today (reap ≤ 6 s, BackendCleaned unconditional) — pinned as "continues after grace, 20 s texts never appear"; B2b covers them in the core's simulation tests | 787 unit + lifecycle_baseline 6/6; known bugs pinned; not pinned: 20 s timeouts, member queue full, busy checks, per-tick budget (need a Host test constructor) |
 | B0+B1 | approved (bb8530e1, B0 merged in); PR open | `supervisor-b1` C:\vestra\wt-sup-b1 | — | four fix rounds; 1164 workspace tests, supervisor 342, lifecycle_baseline 10/10 ×3 |
 | B1 (history) | fix rounds done | spec tests 243/243; | B1 maintainer: F1–F4 fixed, rulings R5–R7 in (switch `BuiltinsFirst::{Queued, Installed}`), §17.6; 295 supervisor tests, 1074 host tests pass | `supervisor-b1` C:\vestra\wt-sup-b1 (a2dc0e95 core; a09036d7 merged spec tests) | API maintainer (B1): mod tests line + answers to the 27 questions in supervisor.md §17.2 + ListChanged check; spec test author: adapter to the real API | core: 825 host tests incl. 46 own; API deviations in supervisor.md §17.1; ruling: shared members (built-ins) stay outside max_active (A7), §4.4 to be corrected |
-| B2a | in review (dc802559) | `supervisor-b2a` C:\vestra\wt-sup-b2a (from 800e2bb1) | API maintainer | zero-diff evidence: B0 tests ×3 + VESTRA_TEST_REGISTRY dump diff (lazy on/off); flips A18 leak-1 test |
-| B2b | not started | | | |
+| B2a | **merged #144 (767fad55)** | `supervisor-b2a` C:\vestra\wt-sup-b2a (from 800e2bb1) | API maintainer | zero-diff evidence: B0 tests ×3 + VESTRA_TEST_REGISTRY dump diff (lazy on/off); flips A18 leak-1 test |
+| B2b | **merged** (17114d53 + 2b0257fa) | `supervisor-b2b` C:\vestra\wt-sup-b2b (from 767fad55) | API maintainer | fixes A18 leak 2, D13; running-uninstall-reinstall test; narrow job-API dead_code allow |
 | B2c | not started | | | |
 | B2d | not started | | | |
 | B3 | not started | | | |
@@ -65,6 +65,8 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 
 ## Open items
 
+- **Needs the user:** SDK v1.5.56 not on npm. Release run 41502365359: macOS jobs never get a runner (cancelled after 15 min, twice; started after the paid budget went to 0 at ~19:00 — macOS runners appear to be affected even for the public SDK repo), so `publish` is skipped. Options: user re-enables macOS runners/budget for the SDK; or allow a release workflow change making macOS non-blocking for publish. Not blocking the supervisor batches; the player keeps SDK 1.5.55 until then.
+
 - B2c follow-up: host `appearance.changed` gains a "what changed" field (theme/language; pure wire addition), SDK `appearance.ts` uses it when present → closes the woken-by-language extra callback and the rare lost theme change (review-sdkwake r2). Then bump the player's SDK.
 
 - **Transitional unit fields `process`/`parked` (B2a) — user 2026-11-02:** do not preserve "one id with both a running process and a parked owner" long-term; it is the D13 class the new core forbids by construction (one process per unit). Hard deadline: removed in B2b (jobs drive units, the waits are replaced); B2b done check includes `git grep -n "\.parked\b\|\.process\b" src/host/src/supervisor` showing no transitional fields and the §17.8 entry marked closed. If the B2a review shows the overlap can be dropped already in B2a without a visible difference, do it in B2a. Same rule for every "transitional" item: each gets a named removal batch and a grep check in that batch's brief, so none survives silently.
@@ -96,6 +98,16 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 - Known bugs to pin in B0: Book entry leaked when spawn fails after `activations.begin` (`load_package`); `Host.cleanup` only grows; disable then immediate enable can run two processes on one data directory (D13).
 
 ## Log
+
+- 2026-11-02 ~21:55: B2b follow-up 2b0257fa re-checked → merge (non-blocking reaper, panic isolation, supervisor_tick back at reload_tick's place; wake-start owner order within a tick judged unobservable). Nit for B2c: §13 B2b row "same busy" → "except the D13 fix". B2b PR next.
+
+- 2026-11-02 ~21:20: B2b review → merge (all checks, rulings 1–3 match, no blocking issue). Non-blocking notes sent back for a short fix round before merge: single reaper thread blocking `child.wait()` after kill (robustness vs old per-thread), reaper panic losing items, §17.9/§16 wording, `process_stopping` debug_assert → reported value, `package_wait` default. Reviewer re-checks the diff after.
+
+- 2026-11-02 ~21:00: B2b committed (17114d53, 22 files): Unit::stopping, waits as core jobs via host_start, package_rpc_busy, data dir resolved at uninstall and removed at reap, multiplexed reaper (5 ms, kept for timing). A18 leak 2 and D13 fixed (B0 tests flipped); B2-2 not reproducible end-to-end on main (new instance loads after the 300 ms grace), pinned by a core test; item 20 left for B4. 1186 workspace tests; real-node suites pass (lifecycle 11/11 ×3); registry diff 9 scenarios: only pre-existing noise + the D13 busy reply. Rulings: (1) every start waits for the previous process (D13 class incl. crash-then-enable/reload, disable-then-install, uninstall data) accepted; (2) second install wait from its own start accepted; (3) enable no digest wait accepted (built-ins can't be disabled). Independent review started.
+
+- 2026-11-02 20:15: SDK v1.5.56 release run 41502365359: all checks green except the two macOS jobs, which never got a runner (no steps, cancelled after 15 min) → publish skipped. Re-ran the failed jobs once. If macOS runners stay unavailable, ask the user (publishing without the macOS gate would need a workflow change). B2b maintainer working (20 files changed so far).
+
+- 2026-11-02 ~21:05: B2a follow-up a8530443 (displaced owner returned, adapter reports; kind change = conflict) checked by the coordinator (core has no diag/print). **#144 (B2a) squash-merged → main 767fad55** on local evidence. SDK v1.5.56 release workflow queued (npm still 1.5.55); player SDK bump after npm shows it. B2b worktree created; maintainer briefed.
 
 - 2026-11-02 ~20:45: SDK #71 CI green (Linux/macOS/Windows), squash-merged (3b2e07d), origin/main package.json = 1.5.56, tag v1.5.56 pushed → release workflow publishes to npm. Player bumps the SDK after npm shows 1.5.56 (with B2b or a small batch). B2a re-review → fix first on one point: `diag!` in the pure core (`identity.rs:227`) → move the report to the adapter; same-pid kind change also asserted; §17.8 wording. Maintainer resumed; reviewer said no full re-review needed after that — coordinator checks the diff.
 

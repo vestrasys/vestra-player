@@ -251,7 +251,9 @@ pub(crate) struct Host {
     /// `packages.list` `warnings` entry and its text, per owner.
     pub(crate) warnings: BTreeMap<u64, Vec<(Value, String)>>,
     pub(crate) packages: package_manager::Manager,
-    pub(crate) cleanup: BTreeMap<u64, (bool, bool)>,
+    /// The `plugin-reaper` thread: every plugin the host stops is waited
+    /// for (and killed after its grace) there (supervisor.md §7.1).
+    pub(crate) reaper: process::reaper::Reaper,
     pub(crate) power: power::Power,
     /// When the shell last received a video frame (`power` keeps the display awake).
     pub(crate) last_frame: Option<Instant>,
@@ -279,8 +281,6 @@ pub(crate) struct Host {
     pub(crate) dev_disabled: std::collections::BTreeSet<String>,
     /// Why a plugin last stopped on its own, by id.
     pub(crate) failures: BTreeMap<String, String>,
-    /// `uninstall({ removeData })`: data directories to delete once reaped.
-    pub(crate) data_removals: BTreeMap<u64, PathBuf>,
     /// `plugin.storage.session`: per plugin identity, for this player run.
     pub(crate) session_storage: session_storage::SessionStorage,
     /// What `bindings.changed` / `packages.changed` last announced.

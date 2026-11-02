@@ -148,7 +148,7 @@ impl Host {
                 plugin.manifest.id
             );
             // Its stop waits for the process: off the event loop, as `stop`.
-            std::thread::spawn(move || drop(plugin));
+            self.reaper.discard(plugin);
             return Err(error);
         }
         let manifest_id = plugin.manifest.id.clone();
@@ -279,20 +279,19 @@ impl Host {
                 let _ = view.instance.hide();
             }
         }
-        self.cleanup.insert(owner, (false, false));
-        // Waiting for graceful disposal/killing belongs off the Slint event loop.
+        // Waiting for graceful disposal/killing belongs off the Slint event
+        // loop: the reaper thread's, which reports `Event::Reaped`; until
+        // then (and the playback worker's `BackendCleaned`) the unit is
+        // deactivating, and every start of it waits (supervisor.md §17.9).
         if let Some(mut plugin) = self.plugins.remove(&owner) {
+            self.unit_stopping(&plugin.manifest.id, owner, reason);
             self.unit_stopped(&plugin.manifest.id, owner);
             plugin.set_stop_reason(reason);
             if park {
                 // A routine stop, not a fault: its `onDispose` gets time.
                 plugin.set_stop_wait(lazy::PARK_WAIT);
             }
-            let events = self.events.clone();
-            std::thread::spawn(move || {
-                drop(plugin);
-                let _ = events.send(Event::Reaped(owner));
-            });
+            self.reaper.reap(owner, plugin);
         }
     }
     pub(crate) fn send(&mut self, owner: u64, message: Value) {

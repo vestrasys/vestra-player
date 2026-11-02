@@ -101,6 +101,8 @@ pub enum ActivatingSub {
     /// Process creation in flight.
     Spawn,
     /// Waiting for `runtime.ready` + UI activation (systemd `Type=notify`).
+    // B2c: readiness of a start the core runs.
+    #[cfg_attr(not(test), allow(dead_code))]
     Ready,
     /// No process; waiting `RestartSec` (systemd `activating (auto-restart)`).
     AutoRestart { until: Ms },
@@ -121,6 +123,8 @@ pub enum DeactivatingSub {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FailResult {
     /// The process could not be created (`process_spawned(Err)`).
+    // B2c: `process_spawned`.
+    #[cfg_attr(not(test), allow(dead_code))]
     Spawn,
     /// The process ended or was ended (§7.3).
     Exit(ExitCause),
@@ -173,7 +177,7 @@ impl UnitState {
         }
     }
     /// systemd's `ActiveState` word.
-    // Diagnostics from B2b (the job machinery's `diag!`).
+    // Diagnostics from B2c (the adapter's `diag!` of a unit's state).
     #[allow(dead_code)]
     pub fn name(&self) -> &'static str {
         match self {
@@ -361,6 +365,12 @@ pub struct Unit<P> {
     /// may still write the data is reaped (and cleaned up after, with
     /// `Tunables::remove_data_waits_cleanup`), at once without one (§17.7).
     pub(super) remove_data: bool,
+    /// What the owed `RemoveData` deletes, as the Host resolved it at the
+    /// uninstall request (`remove_data_after`, B2b): never resolved from
+    /// the unit when the action comes, since a reinstall may own the unit
+    /// by then (§17.7 item 19). `None`: nothing to delete (an uninstall
+    /// without `removeData`, or one the core asked for itself).
+    pub(super) data: Option<P>,
     pub(super) shared: bool,
     pub(super) verify: bool,
     pub(super) verifiable: bool,
@@ -413,9 +423,12 @@ pub struct Unit<P> {
     pub(super) listed: Option<ListState>,
     /// B2a (identity.rs): the one owner the Host has for this unit, running
     /// (today's `Host.plugin_ids` entry) or holding its registrations in
-    /// standby (today's `Lazy.parked_ids` entry), never both (§17.8). The
-    /// state's pid and `UnitState::Standby::holder` take its place once
-    /// jobs drive the unit (B2b–B2c).
+    /// standby (today's `Lazy.parked_ids` entry), never both (§17.8). From
+    /// B2b the state follows it too (`adopt_process`: `Active`,
+    /// `adopt_holder`: `Standby`), since the waits read the state.
+    /// Transitional: the state's pid and `UnitState::Standby::holder` take
+    /// its place once jobs drive the unit: B2c for standby (wake, park),
+    /// B2d for the running process (every start a job).
     pub(super) hosted: Option<(Pid, Hosted)>,
     /// The activation of the run being started (activation.rs, MOVE of
     /// the Host's `Book` entry, B2a).
@@ -445,6 +458,7 @@ impl<P> Unit<P> {
             removed: false,
             stopping: None,
             remove_data: false,
+            data: None,
             shared: spec.shared,
             verify: spec.verify,
             verifiable: spec.verify,

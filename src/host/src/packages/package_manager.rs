@@ -44,9 +44,6 @@ pub struct Manager {
     /// Package directories an operation freed while the thread ran; they
     /// go on its next run.
     cleanup_queue: BTreeSet<String>,
-    /// `packages.reload`: plugins stopped to start again, by id: the stopped
-    /// process and when; started once that process is gone (`reload_tick`).
-    reloads: BTreeMap<String, (u64, u64)>,
     /// Built-in digest checks for the shared runner (`verify`), by id.
     verified: BTreeMap<String, Verified>,
     verify_serial: u64,
@@ -138,8 +135,6 @@ pub(crate) enum Trust {
 /// package read for the first time, scanned by an antivirus, can take
 /// seconds); then it starts in its own process.
 const VERIFY_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
-/// How long a reload waits for the stopped process to go, as installs do.
-const RELOAD_WAIT_MS: u64 = 20_000;
 struct Operation {
     id: String,
     package: String,
@@ -157,10 +152,13 @@ struct Operation {
     enabled: bool,
     phase: String,
     owner: Option<u64>,
-    waiting: Option<u64>,
+    /// The supervisor's job that waits for the package's previous process
+    /// (the running or parked version it stopped, or its own target after a
+    /// failed or cancelled activation) before the next start
+    /// (`Host::host_start`; today's `Operation.waiting` until B2b).
+    stop_job: Option<crate::supervisor::JobId>,
     cancel: bool,
     failure: Option<String>,
-    started: u64,
     result: Value,
     request: Value,
 }
@@ -221,7 +219,6 @@ impl Manager {
             builtins,
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
-            reloads: BTreeMap::new(),
             verified: BTreeMap::new(),
             verify_serial: 0,
             verify_results: std::sync::mpsc::channel(),
@@ -291,8 +288,10 @@ impl Manager {
         };
         self.verified.insert(id.to_owned(), state);
     }
-    /// Take the finished digest checks.
-    fn poll_verified(&mut self) {
+    /// Take the finished digest checks: their ids (a reload waiting for
+    /// one goes on, `Host::unit_verified`).
+    fn poll_verified(&mut self) -> Vec<String> {
+        let mut finished = Vec::new();
         while let Ok((id, serial, result)) = self.verify_results.1.try_recv() {
             if !matches!(self.verified.get(&id), Some(Verified::Running(s, _)) if *s == serial) {
                 continue;
@@ -300,7 +299,19 @@ impl Manager {
             if let Err(error) = &result {
                 diag!("built-in plugin {id}: {error}");
             }
-            self.verified.insert(id, Verified::Done(result));
+            self.verified.insert(id.clone(), Verified::Done(result));
+            finished.push(id);
+        }
+        finished
+    }
+    /// How much longer a start of `id` waits for its digest check
+    /// (`verifying`), if one runs.
+    fn verify_left(&self, id: &str) -> Option<std::time::Duration> {
+        match self.verified.get(id) {
+            Some(Verified::Running(_, since)) => VERIFY_WAIT
+                .checked_sub(since.elapsed())
+                .filter(|left| !left.is_zero()),
+            _ => None,
         }
     }
     /// A digest check of `id` is running and its start may still wait for
@@ -343,7 +354,7 @@ impl Host {
         if shared.idle(now) {
             if let Some(runner) = self.shared.take() {
                 diag!("shared runner {}: no plugin left; stopped", runner.link.id);
-                runner.retire(true);
+                runner.retire(true, &self.reaper);
             }
             return;
         }
@@ -399,7 +410,7 @@ impl Host {
             runner.link.leaked(),
             runner.stats
         );
-        runner.retire(false);
+        runner.retire(false, &self.reaper);
         let failed_open = self.shared_policy.restart(self.now_ms());
         let members = self
             .plugins
@@ -412,6 +423,8 @@ impl Host {
         for (owner, _) in &members {
             self.disable(*owner, StopReason::Failed);
         }
+        let owners = members.iter().map(|(owner, _)| *owner).collect::<Vec<_>>();
+        self.units_killed_with_runner(&owners);
         for (_, plugin) in members {
             if !failed_open {
                 self.packages.verify(&plugin);
@@ -432,9 +445,6 @@ impl Host {
             i18n::tr("Built-in plugins restarted after a fault")
         };
         self.show_osd(&text);
-    }
-    fn cleanup_done(&self, owner: u64) -> bool {
-        self.cleanup.get(&owner) == Some(&(true, true))
     }
     fn load_package(
         &mut self,
@@ -744,6 +754,7 @@ impl Host {
         // digest: its recording is of no use).
         self.forget_parked(&id, true);
         let running = self.running(&id);
+        let image = target.digest.clone();
         // `upgrade` for every install over a running version that runs on:
         // an update, a reinstall of the same version, and a `replace` from
         // another source (`fresh` data) alike. An install that leaves it
@@ -759,9 +770,11 @@ impl Host {
             };
             self.disable(owner, reason);
         }
-        // Parked just now: its process may still be finishing; the new
-        // version starts once it is gone, as after a running one.
-        let waiting = running.or_else(|| self.parked_process(&id));
+        // The version it stopped (running, or parked just now: its process
+        // may still be finishing), or any other stopped process of it still
+        // going (an uninstall's, the D13 fix): the new version starts once
+        // it is gone.
+        let stop_job = self.package_stop_job(&id, image);
         let fresh_data = fresh
             .then(|| process::data_root().map(|root| root.join(&target_guid)))
             .flatten();
@@ -778,10 +791,9 @@ impl Host {
                 enabled,
                 phase: "preparing".into(),
                 owner: None,
-                waiting,
+                stop_job,
                 cancel: false,
                 failure: None,
-                started: self.now_ms(),
                 result: result.clone(),
                 request: request_spec,
             },
@@ -956,9 +968,23 @@ impl Host {
             .is_some_and(|package| package.is_ok_and(|(dir, _)| dir == plugin.directory));
         self.lazy_key(id).filter(|key| runs && key.guid == *guid)
     }
-    /// An operation or a reload runs on `id`.
-    pub(crate) fn package_busy(&self, id: &str) -> bool {
-        self.operation_pending(id) || self.packages.reloads.contains_key(id)
+    /// A package RPC on `id` is answered `busy`: an operation runs on it
+    /// (its phases stay the Host's until B2d), or the supervisor has a
+    /// package-RPC job of it installed (`JobMode::Fail`: a reload, an enable
+    /// or an operation waiting for the previous process; today's
+    /// `packages.reloads` entry).
+    pub(crate) fn package_rpc_busy(&self, id: &str) -> bool {
+        self.operation_pending(id) || self.package_job_busy(id)
+    }
+    /// The supervisor's wait of a package operation on `id` for its
+    /// previous process (`HostStart::Install`), if there is one to wait
+    /// for (today's `Operation.waiting`).
+    fn package_stop_job(&mut self, id: &str, image: String) -> Option<crate::supervisor::JobId> {
+        // `Replace` mode: never `Busy` (the operation is the busy RPC).
+        match self.host_start(id, crate::supervisor::HostStart::Install { image }) {
+            Ok(crate::supervisor::HostStarted::Waits { job, .. }) => Some(job),
+            _ => None,
+        }
     }
     /// While the `library-cleanup` thread scans the whole library (once, at
     /// start), installs and uninstalls wait; later runs remove only the
@@ -1206,7 +1232,7 @@ impl Host {
                 .parked_id(&self.supervisor, &id)
                 .and_then(|owner| self.lazy.parked(owner));
             let (state, error) =
-                if self.package_busy(&id) || !disabled && self.lazy.first_queue.contains(&id) {
+                if self.package_rpc_busy(&id) || !disabled && self.lazy.first_queue.contains(&id) {
                     ("starting", None)
                 } else if let Some(parked) = parked {
                     // Parked (lazy activation): it runs again on its first use;
@@ -1283,7 +1309,7 @@ impl Host {
             if list.contains_key(id) {
                 continue;
             }
-            let (state, error) = if self.packages.reloads.contains_key(id) {
+            let (state, error) = if self.package_job_busy(id) {
                 ("starting", None)
             } else {
                 stopped(self.dev_disabled.contains(id), self.failures.get(id))
@@ -1312,11 +1338,8 @@ impl Host {
             return Err(RpcError::invalid("a plugin cannot disable itself"));
         }
         let running = self.running(id);
-        if self.package_busy(id) {
-            return Err(RpcError::new(
-                "busy",
-                "the package is being installed or reloaded",
-            ));
+        if self.package_rpc_busy(id) {
+            return Err(busy());
         }
         let record = self.packages.store.get(id);
         // User ruling 2026-10-26: users manage third-party plugins only;
@@ -1367,22 +1390,15 @@ impl Host {
         if running.is_some() || self.lazy.parked_id(&self.supervisor, id).is_some() {
             return Ok(());
         }
-        // Disabled right after a park: it starts once that process is gone
-        // (`reload_tick`), never beside it on the same data.
-        if let Some(owner) = self.parked_process(id) {
-            let now = self.now_ms();
-            self.packages.reloads.insert(id.into(), (owner, now));
-            return Ok(());
+        // Its previous process (parked, disabled or failed just now) still
+        // going: it starts once that is gone (`restart_finished`), never
+        // beside it on the same data (D13), and is `busy` meanwhile.
+        match self.host_start(id, crate::supervisor::HostStart::Enable) {
+            Ok(crate::supervisor::HostStarted::Now) => {}
+            Ok(crate::supervisor::HostStarted::Waits { .. }) => return Ok(()),
+            Err(crate::supervisor::Busy) => return Err(busy()),
         }
         self.start_stopped(id, installed, reserved, key, development)
-    }
-    /// The process installed plugin `id` was parked from (lazy activation),
-    /// while it is still finishing: what a start of `id` waits for, as for
-    /// a running one it stops.
-    fn parked_process(&self, id: &str) -> Option<u64> {
-        self.lazy
-            .stopping(id)
-            .filter(|owner| !self.process_gone(*owner))
     }
     /// Start a stopped plugin: its development load, else its installed
     /// package (`set_enabled`, `reload`). The disabled flag is not touched.
@@ -1417,19 +1433,16 @@ impl Host {
     }
     /// `packages.reload { id }` (SDK 1.5.19, STORE-RELOAD-BUILTIN): stop the
     /// running plugin and start it again from the same package and data, once
-    /// its process is gone (`reload_tick`); a stopped or failed one starts
-    /// now. Built-ins included; the disabled flag is never written, so a
-    /// reload never leaves a plugin disabled. Same caller rules as
-    /// `setEnabled`: `plugins.manage`, never itself.
+    /// its process is gone (the supervisor's job, `restart_finished`); a
+    /// stopped or failed one starts now. Built-ins included; the disabled
+    /// flag is never written, so a reload never leaves a plugin disabled.
+    /// Same caller rules as `setEnabled`: `plugins.manage`, never itself.
     fn reload(&mut self, caller: u64, id: &str) -> std::result::Result<(), RpcError> {
         if self.plugins[&caller].manifest.id == id {
             return Err(RpcError::invalid("a plugin cannot reload itself"));
         }
-        if self.package_busy(id) {
-            return Err(RpcError::new(
-                "busy",
-                "the package is being installed or reloaded",
-            ));
+        if self.package_rpc_busy(id) {
+            return Err(busy());
         }
         let record = self.packages.store.get(id);
         let installed = self.packages.runs_from(id, &record);
@@ -1454,58 +1467,51 @@ impl Host {
         if let Some(owner) = running {
             self.disable(owner, StopReason::Reload);
         }
-        if let Some(owner) = running.or_else(|| self.parked_process(id)) {
-            let now = self.now_ms();
-            self.packages.reloads.insert(id.into(), (owner, now));
+        if self.previous_process(id).is_some() {
             // A built-in's files are checked again before it shares the
-            // runner (`reload_tick` waits for the check).
+            // runner (its start waits for the check too).
             if shared_runner::enabled() {
                 self.packages.verify(id);
             }
-            return Ok(());
+            let verify_until = self
+                .packages
+                .verify_left(id)
+                .map(|left| self.now_ms() + left.as_millis() as u64);
+            return match self.host_start(id, crate::supervisor::HostStart::Reload { verify_until })
+            {
+                Err(crate::supervisor::Busy) => Err(busy()),
+                Ok(_) => Ok(()),
+            };
         }
         let reserved = check_reserved(id, record.instance.as_ref());
         let key = record.instance.map(|i| DataKey::Instance(i.guid));
         self.start_stopped(id, installed, reserved, key, development)
     }
-    /// Start the reloaded plugins whose stopped process is gone; one that
-    /// does not go within `RELOAD_WAIT_MS` is listed as failed instead.
-    fn reload_tick(&mut self) {
-        if self.packages.reloads.is_empty() {
+    /// A reload or an enable of `id` that waited for the previous process
+    /// ended (`JobFinished`; today's `reload_tick`): it starts now, or,
+    /// that process not gone within 20 s, it is listed as failed instead.
+    pub(crate) fn restart_finished(&mut self, id: &str, result: crate::supervisor::JobResult) {
+        match result {
+            crate::supervisor::JobResult::Done => {}
+            crate::supervisor::JobResult::Failed(text) => {
+                self.failures.insert(id.into(), format!("reload: {text}"));
+                return;
+            }
+            crate::supervisor::JobResult::Canceled | crate::supervisor::JobResult::Dropped => {
+                return;
+            }
+        }
+        if self.running(id).is_some() {
             return;
         }
-        let now = self.now_ms();
-        let due = self
-            .packages
-            .reloads
-            .iter()
-            .filter(|(id, (owner, since))| {
-                (self.cleanup_done(*owner) && !self.packages.verifying(id))
-                    || now.saturating_sub(*since) >= RELOAD_WAIT_MS
-            })
-            .map(|(id, (owner, _))| (id.clone(), *owner))
-            .collect::<Vec<_>>();
-        for (id, owner) in due {
-            self.packages.reloads.remove(&id);
-            if !self.cleanup_done(owner) {
-                self.failures.insert(
-                    id,
-                    "reload: the previous process did not stop within 20 s".into(),
-                );
-                continue;
-            }
-            if self.running(&id).is_some() {
-                continue;
-            }
-            let record = self.packages.store.get(&id);
-            let installed = self.packages.runs_from(&id, &record);
-            let reserved = check_reserved(&id, record.instance.as_ref());
-            let key = record.instance.map(|i| DataKey::Instance(i.guid));
-            let development = self.development.get(&id).cloned();
-            if let Err(error) = self.start_stopped(&id, installed, reserved, key, development) {
-                diag!("packages.reload {id}: {}", error.message);
-                self.failures.entry(id).or_insert(error.message);
-            }
+        let record = self.packages.store.get(id);
+        let installed = self.packages.runs_from(id, &record);
+        let reserved = check_reserved(id, record.instance.as_ref());
+        let key = record.instance.map(|i| DataKey::Instance(i.guid));
+        let development = self.development.get(id).cloned();
+        if let Err(error) = self.start_stopped(id, installed, reserved, key, development) {
+            diag!("packages.reload {id}: {}", error.message);
+            self.failures.entry(id.into()).or_insert(error.message);
         }
     }
     /// `packages.uninstall { id, removeData, expectedRevision, requestId }`:
@@ -1538,11 +1544,8 @@ impl Host {
             params["expectedRevision"].as_u64(),
         )?;
         self.library_busy(None)?;
-        if self.package_busy(&id) {
-            return Err(RpcError::new(
-                "busy",
-                "the package is being installed or reloaded",
-            ));
+        if self.package_rpc_busy(&id) {
+            return Err(busy());
         }
         let remove_data = params["removeData"] == true;
         let data = remove_data
@@ -1556,22 +1559,14 @@ impl Host {
         let receipt =
             json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
         self.forget_parked(&id, true);
-        // Parked just now: its process may still be writing its data.
-        let parked = self
-            .parked_process(&id)
-            .filter(|owner| self.cleanup.get(owner).is_some_and(|(reaped, _)| !reaped));
         if let Some(owner) = self.running(&id) {
             self.disable(owner, StopReason::Uninstall);
-            // Delete the data after the process is gone (it flushes on stop).
-            if let Some(directory) = data.clone() {
-                self.data_removals.insert(owner, directory);
-            }
-        } else if let Some(owner) = parked
-            && let Some(directory) = data.clone()
-        {
-            self.data_removals.insert(owner, directory);
-        } else if let Some(directory) = &data {
-            let _ = std::fs::remove_dir_all(directory);
+        }
+        // Deleted once its process is gone (it flushes on stop): one
+        // running, parked just now, or stopped otherwise and still going;
+        // at once without one.
+        if let Some(directory) = data {
+            self.remove_data_after(&id, directory);
         }
         self.packages
             .store
@@ -1701,13 +1696,12 @@ impl Host {
                         enabled: false,
                         phase: "restoring".into(),
                         owner: None,
-                        waiting: None,
+                        stop_job: None,
                         cancel: false,
                         failure: Some(
                             "application stopped before commit; restoring last committed version"
                                 .into(),
                         ),
-                        started: self.now_ms(),
                         result,
                         request,
                     },
@@ -1735,11 +1729,16 @@ impl Host {
                 }
             }
         }
-        self.packages.poll_verified();
+        for id in self.packages.poll_verified() {
+            self.unit_verified(&id);
+        }
         self.answer_validations();
         self.shared_tick();
         self.start_queued();
-        self.reload_tick();
+        // Waits for stopped processes that ended: their starts run now,
+        // where `reload_tick` ran (and in the tick `lazy_tick`'s wakes
+        // ran in).
+        self.supervisor_tick();
         self.cleanup_tick();
         let keys = self
             .packages
@@ -1789,15 +1788,15 @@ impl Host {
         ) {
             return Ok(());
         }
-        if let Some(waiting) = op.waiting {
-            if !self.cleanup_done(waiting) {
-                anyhow::ensure!(
-                    self.now_ms() - op.started < 20_000,
-                    "cleanup acknowledgment timed out; recovery remains pending"
-                );
-                return Ok(());
+        if let Some(job) = op.stop_job {
+            match self.package_wait(&op.package, job) {
+                None => return Ok(()),
+                // Its previous process did not go within 20 s of the wait.
+                Some(crate::supervisor::JobResult::Failed(_)) => {
+                    anyhow::bail!("cleanup acknowledgment timed out; recovery remains pending")
+                }
+                Some(_) => op.stop_job = None,
             }
-            op.waiting = None;
         }
         if op.phase == "preparing" && !op.cancel && !op.enabled {
             // It stays (or becomes) disabled: its files are installed and
@@ -1845,7 +1844,8 @@ impl Host {
                     (false, _) => StopReason::Failed,
                 };
                 self.disable(owner, reason);
-                op.waiting = Some(owner);
+                let image = op.target.digest.clone();
+                op.stop_job = self.package_stop_job(&op.package, image);
                 op.owner = None;
                 op.phase = "restoring".into();
                 return Ok(());
@@ -1930,6 +1930,12 @@ impl Host {
         }
         Ok(())
     }
+}
+
+/// Today's `busy` reply of a package RPC while another runs on the same
+/// plugin (`Host::package_rpc_busy`; the supervisor's `Busy`).
+fn busy() -> RpcError {
+    RpcError::new("busy", crate::supervisor::Busy.to_string())
 }
 
 /// `packages.install`'s optional `enabled` (after host 0.6.3): whether the package
@@ -2865,7 +2871,6 @@ mod tests {
             builtins,
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
-            reloads: BTreeMap::new(),
             verified: BTreeMap::new(),
             verify_serial: 0,
             verify_results: std::sync::mpsc::channel(),
@@ -3503,7 +3508,9 @@ mod tests {
     fn b0_start_up_and_wait_tunables() {
         assert_eq!(START_BUDGET, std::time::Duration::from_millis(25));
         assert_eq!(VERIFY_WAIT, std::time::Duration::from_secs(3));
-        assert_eq!(RELOAD_WAIT_MS, 20_000);
+        // The reload's and the install's wait (`RELOAD_WAIT_MS` and a
+        // literal until B2b): the supervisor's `STOP_WAIT`.
+        assert_eq!(crate::supervisor::Tunables::legacy().stop_wait, 20_000);
     }
 
     /// B0: the `StartQueue` semantics `start_queued` relies on (it needs a

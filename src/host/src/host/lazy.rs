@@ -43,9 +43,6 @@ const SCHEMA: u32 = 1;
 const CHECK_MS: u64 = 250;
 /// A wake slower than this shows `Starting <name>…` (§5.2).
 const STARTING_OSD_MS: u64 = 400;
-/// How long a wake waits for the process its plugin was parked from (as
-/// `packages.reload` waits, `RELOAD_WAIT_MS`).
-const STOP_WAIT_MS: u64 = 20_000;
 /// How long after start-up settled wake events still wake nothing: a
 /// state change of start-up (a plugin starting → running) reaches the
 /// next announcement up to 200 ms later (`notify_tick`).
@@ -215,10 +212,10 @@ pub(crate) struct Parked {
     pub origin: Origin,
     /// Its name, for `Starting <name>…`.
     pub name: String,
-    /// Triggers that came while it was parked; held until it is started.
+    /// Triggers that came while it was parked; held until it is started
+    /// (also while its start waits for the process it was parked from:
+    /// the supervisor's job, `Host::wake`).
     pub triggers: Vec<Value>,
-    /// Since when they wait for the process it was parked from to go.
-    pub waiting: Option<u64>,
     /// What it was refused while it ran (`packages.list` `warnings`, and
     /// as text `error`): kept, so a park alone changes nothing there.
     pub warnings: Vec<Value>,
@@ -235,7 +232,6 @@ impl Parked {
             origin,
             name,
             triggers: Vec::new(),
-            waiting: None,
             warnings: Vec::new(),
             warning: None,
         }
@@ -335,10 +331,6 @@ pub(crate) struct Lazy {
     pub first_queue: FirstQueue,
     /// First runs in flight: started, not yet resident or parked and gone.
     first_runs: BTreeSet<u64>,
-    /// The owner of each plugin's last parked process (by id), until it is
-    /// gone: a start of that plugin waits for it (wake, reload, enable,
-    /// install), so two instances never share its data directory.
-    stopping: BTreeMap<String, u64>,
     /// Test switches for the registry diff (tests/lazy_activation.rs):
     /// see [`Probe`].
     pub probe: Probe,
@@ -400,10 +392,6 @@ impl Lazy {
     /// Whether a built-in waits for its first run.
     pub fn builtin_queued(&self) -> bool {
         self.first_queue.builtins > 0
-    }
-    /// The process plugin `id` was last parked from, while it still goes.
-    pub fn stopping(&self, id: &str) -> Option<u64> {
-        self.stopping.get(id).copied()
     }
     /// `owner` was used now.
     pub fn touch(&mut self, owner: u64, now: u64) {
@@ -547,20 +535,51 @@ impl Host {
     /// generation, the recorded entries moved to it, the triggers held for
     /// its ready. Not while the process it was parked from is still going
     /// (two instances would share its data directory; reload and install
-    /// wait the same way): `lazy_tick` starts it once that process is gone.
+    /// wait the same way): the supervisor's job waits for that process
+    /// (`host_start`), and `wake_finished` starts it once it is gone.
     fn wake(&mut self, from: u64) {
-        let now = self.now_ms();
-        let gone = self.process_gone(from);
-        let Some(parked) = self.lazy.parked.get_mut(&from) else {
+        let Some(id) = self.lazy.parked.get(&from).map(|parked| parked.id.clone()) else {
             return;
         };
-        if !gone {
-            if parked.waiting.is_none() {
-                diag!("lazy: {} waits for its stopped process", parked.id);
-                parked.waiting = Some(now);
+        // `Replace` mode: never `Busy`.
+        if let Ok(crate::supervisor::HostStarted::Waits { new, .. }) = self.host_start(
+            &id,
+            crate::supervisor::HostStart::Wake(crate::supervisor::Priority::Interactive),
+        ) {
+            if new {
+                diag!("lazy: {id} waits for its stopped process");
             }
             return;
         }
+        self.wake_now(from);
+    }
+    /// The wake of plugin `id` that waited for its stopped process ended
+    /// (`JobFinished`): it starts now, or, that process not gone within
+    /// 20 s, it fails as today (`wake_failed`, the job's text). Nothing if
+    /// it is no longer parked (its wake job went with it).
+    pub(crate) fn wake_finished(&mut self, id: &str, result: crate::supervisor::JobResult) {
+        let Some(from) = self.lazy.parked_id(&self.supervisor, id) else {
+            return;
+        };
+        match result {
+            crate::supervisor::JobResult::Done => self.wake_now(from),
+            crate::supervisor::JobResult::Failed(text) => {
+                if let Some(parked) = self.lazy.unpark(&mut self.supervisor, from) {
+                    parked.release();
+                    self.wake_failed(from, parked, &text);
+                }
+            }
+            crate::supervisor::JobResult::Canceled => {}
+            // Unreachable: a wake's job is never refused by the merge table
+            // while its unit is parked.
+            crate::supervisor::JobResult::Dropped => {
+                diag!("lazy: {id}: its wake was dropped by the supervisor");
+            }
+        }
+    }
+    /// `wake` once nothing is left to wait for.
+    fn wake_now(&mut self, from: u64) {
+        let now = self.now_ms();
         let Some(parked) = self.lazy.unpark(&mut self.supervisor, from) else {
             return;
         };
@@ -659,13 +678,6 @@ impl Host {
         if self.lazy.parked.contains_key(&owner) {
             self.wake(owner);
         }
-    }
-    /// The process `owner` ran in is gone and the worker cleaned up after it
-    /// (a replayed owner never had one).
-    pub(crate) fn process_gone(&self, owner: u64) -> bool {
-        self.cleanup
-            .get(&owner)
-            .is_none_or(|done| *done == (true, true))
     }
     /// A parked plugin could not start: its entries go, the user is told.
     fn wake_failed(&mut self, from: u64, parked: Parked, error: &str) {
@@ -966,24 +978,6 @@ impl Host {
             return;
         }
         self.probe_tick(now);
-        // Parked plugins whose stopped process is gone start now; one whose
-        // process does not go within `STOP_WAIT_MS` fails, as a reload does.
-        let due = self
-            .lazy
-            .parked
-            .iter()
-            .filter_map(|(owner, parked)| Some((*owner, parked.waiting?)))
-            .collect::<Vec<_>>();
-        for (owner, since) in due {
-            if self.process_gone(owner) {
-                self.wake(owner);
-            } else if now.saturating_sub(since) >= STOP_WAIT_MS
-                && let Some(parked) = self.lazy.unpark(&mut self.supervisor, owner)
-            {
-                parked.release();
-                self.wake_failed(owner, parked, "its stopped process did not go within 20 s");
-            }
-        }
         let slow = self
             .lazy
             .waking
@@ -1057,7 +1051,7 @@ impl Host {
     }
     /// First runs free their place once resident, or once parked and their
     /// process is gone (or gone otherwise); the queue starts in the freed
-    /// places. Parked processes that are gone are no longer waited for.
+    /// places.
     fn lazy_first_runs_tick(&mut self) {
         let first_runs = std::mem::take(&mut self.lazy.first_runs);
         let now = self.now_ms();
@@ -1072,20 +1066,10 @@ impl Host {
                         Ok(activation::Status::Failed { .. } | activation::Status::TimedOut)
                     )
                 } else {
-                    self.lazy.parked.contains_key(owner) && !self.process_gone(*owner)
+                    self.lazy.parked.contains_key(owner) && self.process_going(*owner)
                 }
             })
             .collect();
-        let gone = self
-            .lazy
-            .stopping
-            .iter()
-            .filter(|(_, owner)| self.process_gone(**owner))
-            .map(|(id, _)| id.clone())
-            .collect::<Vec<_>>();
-        for id in gone {
-            self.lazy.stopping.remove(&id);
-        }
         while self.lazy.first_run_free()
             && let Some(id) = self.lazy.first_queue.pop_front()
         {
@@ -1113,7 +1097,7 @@ impl Host {
             self.activation_status(owner, now),
             Ok(activation::Status::Ready)
         ) && !self.dialog_busy
-            && !self.package_busy(&id)
+            && !self.package_rpc_busy(&id)
             && !self.commands.busy(owner)
             && !self.settings.busy(owner)
             && !self.supervisor.activation_ui_waiting(Pid(owner))
@@ -1209,7 +1193,6 @@ impl Host {
         let (warnings, warning) = (self.warnings_of(owner), self.warning_text(owner));
         self.probe_registry(owner, "parking");
         self.stop(owner, StopReason::Idle);
-        self.lazy.stopping.insert(id.clone(), owner);
         diag!("lazy: {id} parked ({count} recorded calls)");
         // `VESTRA_TEST_EXECUTE` entries timed from this park.
         let now = self.now_ms();
@@ -1484,7 +1467,9 @@ mod tests {
         assert_eq!(IDLE_MS, 60_000);
         assert_eq!(CHECK_MS, 250);
         assert_eq!(STARTING_OSD_MS, 400);
-        assert_eq!(STOP_WAIT_MS, 20_000);
+        // The wake's wait for its stopped process (`STOP_WAIT_MS` until
+        // B2b): the supervisor's `STOP_WAIT`.
+        assert_eq!(crate::supervisor::Tunables::legacy().stop_wait, 20_000);
         assert_eq!(QUIET_AFTER_START_MS, 1_000);
         assert_eq!(
             TRIGGERS,

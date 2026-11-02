@@ -56,6 +56,8 @@ impl Gens {
 pub(super) enum Target {
     Unit(UnitId, TimerKind),
     /// The one shutdown deadline.
+    // B4: `shutdown`.
+    #[cfg_attr(not(test), allow(dead_code))]
     Shutdown,
 }
 

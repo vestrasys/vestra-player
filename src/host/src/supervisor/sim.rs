@@ -583,7 +583,10 @@ fn uninstall_from_standby_removes_data_and_refuses_triggers() {
                 pid: holder
             },
             Action::DropCheckpoint { unit: u },
-            Action::RemoveData { unit: u },
+            Action::RemoveData {
+                unit: u,
+                data: None
+            },
         ]
     );
     assert_eq!(
@@ -1143,7 +1146,10 @@ fn merge_restart_then_stop_stop_wins() {
     w.s.process_reaped(pid, None);
     w.s.backend_cleaned(pid);
     let actions = w.tick(20);
-    assert!(actions.contains(&Action::RemoveData { unit: u }));
+    assert!(actions.contains(&Action::RemoveData {
+        unit: u,
+        data: None
+    }));
     assert!(spawns(&actions).is_empty());
     assert_eq!(w.s.job_result(u, stop), Some(&JobResult::Done));
 }
@@ -1195,7 +1201,10 @@ fn stronger_then_wins_while_deactivating() {
         actions[..2],
         [
             Action::DropCheckpoint { unit: u },
-            Action::RemoveData { unit: u },
+            Action::RemoveData {
+                unit: u,
+                data: None
+            },
         ]
     );
     assert!(!actions.iter().any(|a| matches!(a, Action::Revoke { .. })));
@@ -2258,12 +2267,18 @@ fn uninstall_after_a_stuck_stop_removes_data_once_the_process_goes() {
     w.tick(stop + wait);
     w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
     let actions = w.tick(stop + wait + 1);
-    assert!(!actions.contains(&Action::RemoveData { unit: u }));
+    assert!(!actions.contains(&Action::RemoveData {
+        unit: u,
+        data: None
+    }));
     assert_eq!(w.s.list_state(u), Some(ListState::Stopped));
     w.s.process_reaped(pid, Some(0));
     w.s.backend_cleaned(pid);
     let actions = w.tick(stop + wait + 2);
-    assert!(actions.contains(&Action::RemoveData { unit: u }));
+    assert!(actions.contains(&Action::RemoveData {
+        unit: u,
+        data: None
+    }));
 }
 
 /// `"Starting <name>…"` 400 ms after the spawn (today `lazy.waking.since`,
@@ -2621,7 +2636,12 @@ fn reinstall_while_the_uninstalled_process_goes_waits_for_it() {
     let order = |actions: &[Action<u32>], u| {
         let removed = actions
             .iter()
-            .position(|a| *a == Action::RemoveData { unit: u })
+            .position(|a| {
+                *a == Action::RemoveData {
+                    unit: u,
+                    data: None,
+                }
+            })
             .expect("RemoveData");
         let spawned = actions
             .iter()
