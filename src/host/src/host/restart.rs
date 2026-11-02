@@ -223,6 +223,10 @@ fn command_after_loss(
     command.env_remove("VESTRA_TEST_REMOVE_DEVICE");
     command.env_remove("VESTRA_TEST_EXECUTE");
     command.env_remove("VESTRA_TEST_GPU_STALL");
+    // The registry probe (host/lazy/probe.rs): one run's snapshots.
+    command.env_remove("VESTRA_TEST_REGISTRY");
+    command.env_remove("VESTRA_TEST_PARK");
+    command.env_remove("VESTRA_TEST_WAKE");
     if off {
         // `VESTRA_RENDER=gpu` overrides the guard; the child must not.
         command.env("VESTRA_RENDER", "software");
@@ -334,6 +338,13 @@ mod tests {
         assert_eq!(env(&on, "VESTRA_TEST_REMOVE_DEVICE"), Some(None), "removed");
         assert_eq!(env(&on, "VESTRA_TEST_EXECUTE"), Some(None), "removed");
         assert_eq!(env(&on, "VESTRA_TEST_GPU_STALL"), Some(None), "removed");
+        for probe in [
+            "VESTRA_TEST_REGISTRY",
+            "VESTRA_TEST_PARK",
+            "VESTRA_TEST_WAKE",
+        ] {
+            assert_eq!(env(&on, probe), Some(None), "removed");
+        }
         let off = command_after_loss(path, &lost(None), &Value::Null, true);
         assert_eq!(env(&off, "VESTRA_RENDER"), Some(Some("software".into())));
         let args: Vec<_> = off.get_args().collect();

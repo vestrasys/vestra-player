@@ -360,6 +360,15 @@ impl Settings {
             })
             .collect()
     }
+    /// `owner`'s pages in registration order, each with whether it is
+    /// recorded (`VESTRA_TEST_REGISTRY`, host/lazy.rs).
+    pub fn pages_of(&self, owner: u64) -> Vec<(&Page, bool)> {
+        self.pages
+            .iter()
+            .filter(|p| p.owner == owner)
+            .map(|page| (page, self.is_recorded(page)))
+            .collect()
+    }
     /// Whether `owner` has a page compiling or showing in the open window
     /// (it waits for, or answers, its plugin).
     pub fn busy(&self, owner: u64) -> bool {
