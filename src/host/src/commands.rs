@@ -739,16 +739,41 @@ impl Registry {
         }
     }
 
-    /// An owner's commands as sent: local id, current revision, what was sent.
+    /// An owner's commands as sent: local id, current revision, what was
+    /// sent; in registration order, so that a replay registers them in the
+    /// same order and equal menu orders (and the owner's first bar button)
+    /// come out as they did live.
     pub fn sent_of(&self, owner: OwnerGeneration) -> Vec<(&str, u64, &Sent)> {
-        self.sent
+        let mut sent = self
+            .sent
             .iter()
             .filter(|(key, _)| key.owner == owner)
             .filter_map(|(key, sent)| {
                 let entry = self.commands.get(key)?;
-                Some((key.local_id.as_str(), entry.revision, sent))
+                Some((entry.sequence, key.local_id.as_str(), entry.revision, sent))
             })
+            .collect::<Vec<_>>();
+        sent.sort_by_key(|(sequence, ..)| *sequence);
+        sent.into_iter()
+            .map(|(_, id, revision, sent)| (id, revision, sent))
             .collect()
+    }
+
+    /// An owner's entries in registration order (the menu's tie-break),
+    /// each with whether it is recorded and what its plugin sent
+    /// (`VESTRA_TEST_REGISTRY`, host/lazy.rs).
+    pub fn entries_of(
+        &self,
+        owner: OwnerGeneration,
+    ) -> Vec<(&CommandSnapshot, bool, Option<&Sent>)> {
+        let mut entries = self
+            .commands
+            .iter()
+            .filter(|(key, _)| key.owner == owner)
+            .map(|(key, entry)| (entry, self.recorded.contains(key), self.sent.get(key)))
+            .collect::<Vec<_>>();
+        entries.sort_by_key(|(entry, ..)| entry.sequence);
+        entries
     }
 
     /// A command of `owner`'s is busy (its run is in progress).
@@ -2265,6 +2290,54 @@ mod button_tests {
         assert_eq!(names, BUTTON_ICONS);
     }
 
+    /// Lazy activation: a recording lists an owner's commands in the order
+    /// it registered them, not by id, so a replay at the next start gives
+    /// siblings of equal order the same menu places (registry diff test,
+    /// tests/lazy_activation.rs: every built-in's menu came back in id
+    /// order).
+    #[test]
+    fn a_replay_keeps_the_registration_order_of_equal_orders() {
+        let declaration = |path: &[&str]| Declaration::new(path.last().unwrap(), path);
+        fn flatten(nodes: &[MenuNode], out: &mut Vec<String>) {
+            for node in nodes {
+                match node {
+                    MenuNode::Group { children, .. } => flatten(children, out),
+                    MenuNode::Command { entry } => out.push(entry.declaration.title.clone()),
+                }
+            }
+        }
+        let mut live = Registry::new();
+        for id in ["zoom", "fit", "mini"] {
+            live.register(1, "a", id.into(), 1, declaration(&["Screen", id]), state())
+                .unwrap();
+            live.note_sent(
+                1,
+                id,
+                Some(serde_json::json!({})),
+                serde_json::json!({}),
+                serde_json::Value::Null,
+            );
+        }
+        let recorded = live
+            .sent_of(1)
+            .iter()
+            .map(|(id, ..)| id.to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(recorded, ["zoom", "fit", "mini"]);
+        let mut replayed = Registry::new();
+        for id in &recorded {
+            replayed
+                .register(7, "a", id.clone(), 1, declaration(&["Screen", id]), state())
+                .unwrap();
+        }
+        let titles = |registry: &Registry| {
+            let mut out = Vec::new();
+            flatten(&registry.snapshot().roots, &mut out);
+            out
+        };
+        assert_eq!(titles(&replayed), titles(&live));
+    }
+
     /// Lazy activation: a parked owner's entries stay recorded, move to the
     /// woken generation in their menu place, are replaced by the live
     /// registrations, and the ones not registered again go at ready.
@@ -2311,8 +2384,10 @@ mod button_tests {
             serde_json::Value::Null,
         );
         assert_eq!(registry.sent_of(2).len(), 2);
+        // In registration order: hello, then gone.
+        assert_eq!(registry.sent_of(2)[0].0, "hello");
         assert_eq!(
-            registry.sent_of(2)[1].2.state,
+            registry.sent_of(2)[0].2.state,
             serde_json::json!({"enabled":false})
         );
         let order = |registry: &Registry| {

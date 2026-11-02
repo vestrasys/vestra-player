@@ -10,6 +10,7 @@
 #![forbid(unsafe_code)]
 
 use sha2::{Digest, Sha256};
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
@@ -649,4 +650,330 @@ fn a_packages_listener_is_parked_and_woken_by_a_package_change() {
         "{second}"
     );
     assert!(!second.contains(&format!("] {PACKAGES} start")), "{second}");
+}
+
+/// The record's §5.3 check ("a test parks and wakes every built-in and
+/// diffs the registries"): for each built-in, what the host's registries
+/// hold for it (commands with declaration, shown text, bar button, state
+/// and conditions in registration order; key bindings; settings pages;
+/// drop providers; wake events: `VESTRA_TEST_REGISTRY`, host/lazy/probe.rs)
+/// after a normal activation must equal what they hold after record → park,
+/// after replay at the next start, and after its wake. `VESTRA_TEST_PARK=all`
+/// parks resident built-ins too (their live resources are not recorded, so
+/// only the registries are compared); `VESTRA_TEST_WAKE` wakes every
+/// parked one. A difference names the plugin, the step and the entry.
+/// Steps: a normal activation's ready → the first run's ready (`parking`)
+/// → `parked` → `replayed` at the next start → `woken` (its ready after the
+/// prune), and a normal run at quit → the woken run at quit. Commands'
+/// states and pages' values are compared exactly from the park to the
+/// replay and at quit; at the two readies only the registrations are, since
+/// plugins set some of those values after their ready. Recorded marks: all
+/// entries while parked or replayed, none once running.
+///
+/// The real built-ins: `VESTRA_TEST_BUILTINS=<dir with builtin.json>` (a
+/// staged `resources/plugins`), else staged here with
+/// `node scripts/stage-plugins.mjs` (needs `npm ci` in `src/`). Built-ins
+/// whose activation never completes headless (a panel mount waits for a
+/// window) cannot be parked and are listed, not failed.
+#[test]
+#[ignore = "needs Node 26, libmpv and the staged built-ins (npm ci in src): run with --include-ignored (ci:local)"]
+fn every_built_in_keeps_its_registry_through_park_replay_and_wake() {
+    let root = tempfile::tempdir().unwrap();
+    let plugins = match std::env::var_os("VESTRA_TEST_BUILTINS") {
+        Some(dir) => std::path::PathBuf::from(dir),
+        None => {
+            let staged = root.path().join("plugins");
+            let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+            let status = Command::new("node")
+                .arg("scripts/stage-plugins.mjs")
+                .arg(&staged)
+                .current_dir(&source)
+                .status()
+                .expect("node on PATH");
+            assert!(status.success(), "stage-plugins.mjs failed");
+            staged
+        }
+    };
+    let builtins = serde_json::from_slice::<serde_json::Value>(
+        &std::fs::read(plugins.join("builtin.json")).expect("builtin.json"),
+    )
+    .unwrap()["plugins"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["id"].as_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    let probe = |name: &str, seconds: u32, env: &[(&str, &str)]| {
+        let file = root.path().join(format!("{name}.jsonl"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
+        command
+            .args(["--headless", "--silent", "--seconds", &seconds.to_string()])
+            .env("VESTRA_BUILTIN_PLUGINS", &plugins)
+            .env("VESTRA_PACKAGE_STORE", root.path().join("store"))
+            .env("VESTRA_PLUGIN_DATA", root.path().join("data"))
+            .env("APPDATA", root.path().join("appdata"))
+            .env("LOCALAPPDATA", root.path().join("local"))
+            .env("VESTRA_TEST_REGISTRY", &file);
+        for key in [
+            "VESTRA_SHARED",
+            "VESTRA_LAZY",
+            "VESTRA_IDLE_MS",
+            "VESTRA_TEST_EXECUTE",
+            "VESTRA_TEST_PARK",
+            "VESTRA_TEST_WAKE",
+            "VESTRA_INSTANCE_DIR",
+        ] {
+            command.env_remove(key);
+        }
+        for (key, value) in env {
+            command.env(key, value);
+        }
+        let output = command.output().unwrap();
+        let log = String::from_utf8_lossy(&output.stderr).into_owned();
+        assert!(output.status.success(), "{name}: {log}");
+        let lines = std::fs::read_to_string(&file)
+            .unwrap_or_default()
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>();
+        (lines, log)
+    };
+    // The first snapshot at `moment` of `id` (the last one at `quit`).
+    let at = |lines: &[serde_json::Value], moment: &str, id: &str| {
+        let mut found = lines
+            .iter()
+            .filter(|line| line["moment"] == moment && line["id"] == id);
+        let line = if moment == "quit" {
+            found.next_back()
+        } else {
+            found.next()
+        };
+        line.map(|line| line["registry"].clone())
+    };
+
+    // A: lazy activation off, every built-in started at launch.
+    let (normal, _) = probe("normal", 12, &[("VESTRA_LAZY", "0")]);
+    // B: first runs, each parked at its ready.
+    let park = [
+        ("VESTRA_LAZY", "1"),
+        ("VESTRA_TEST_PARK", "all"),
+        ("VESTRA_IDLE_MS", "600000"),
+    ];
+    let (parks, parks_log) = probe("park", 15, &park);
+    // C: replayed at start, all woken at 4 s, still running at quit.
+    let mut wake = park.to_vec();
+    wake.push(("VESTRA_TEST_WAKE", "4000"));
+    let (wakes, wakes_log) = probe("wake", 15, &wake);
+
+    let mut problems = Vec::new();
+    let mut covered = Vec::new();
+    let mut uncovered = Vec::new();
+    for id in &builtins {
+        // At its ready (a park of a first run happens then) and at quit
+        // (what it changed after its ready, asynchronously, is there).
+        let (Some(ready), Some(live)) = (at(&normal, "ready", id), at(&normal, "quit", id)) else {
+            uncovered.push(format!(
+                "{id}: its activation never completes headless (no ready with lazy activation off)"
+            ));
+            continue;
+        };
+        let steps = [
+            ("parking", &parks, "parking"),
+            ("parked", &parks, "parked"),
+            ("replayed", &wakes, "replayed"),
+            ("woken", &wakes, "woken"),
+        ];
+        let mut before = ("a normal activation (ready)", ready);
+        for (label, lines, moment) in steps {
+            let Some(now) = at(lines, moment, id) else {
+                problems.push(format!("{id}: no `{moment}` snapshot ({label})"));
+                break;
+            };
+            let parked = matches!(moment, "parked" | "replayed");
+            // Between two activations (a normal one and a first run; the
+            // recording and a wake) only the registrations are compared: a
+            // command's state and a page's values are what the plugin sets
+            // around its ready, some of it after (video's render-mode reason,
+            // hotkeys' list), compared exactly from the park to the replay
+            // and at quit.
+            let (mut a, mut b) = (before.1.clone(), now.clone());
+            if matches!(moment, "parking" | "woken") {
+                for registry in [&mut a, &mut b] {
+                    for (section, field) in [("commands", "state"), ("pages", "properties")] {
+                        for entry in registry[section].as_array_mut().into_iter().flatten() {
+                            entry[field] = serde_json::Value::Null;
+                        }
+                    }
+                }
+            }
+            problems.extend(
+                registry_diff(&a, &b)
+                    .into_iter()
+                    .map(|d| format!("{id}: {} → {label}: {d}", before.0)),
+            );
+            problems.extend(
+                recorded_marks(&now, parked)
+                    .into_iter()
+                    .map(|d| format!("{id}: {label}: {d}")),
+            );
+            before = (label, now);
+        }
+        // Running after its wake against running normally, both at quit.
+        match at(&wakes, "quit", id) {
+            Some(end) => {
+                let label = "running after its wake (quit)";
+                problems.extend(
+                    registry_diff(&live, &end)
+                        .into_iter()
+                        .map(|d| format!("{id}: a normal activation (quit) → {label}: {d}")),
+                );
+                problems.extend(
+                    recorded_marks(&end, false)
+                        .into_iter()
+                        .map(|d| format!("{id}: {label}: {d}")),
+                );
+            }
+            None => problems.push(format!("{id}: not running after its wake (quit)")),
+        }
+        let count = |section: &str| live[section].as_array().map_or(0, Vec::len);
+        covered.push(format!(
+            "{id}: {} commands, {} bindings, {} pages, {} drop providers, wake events {}",
+            count("commands"),
+            count("bindings"),
+            count("pages"),
+            count("drops"),
+            live["wakes"]
+        ));
+    }
+    // Shown with --nocapture (`eprintln!` is disallowed: it panics on a
+    // closed stderr).
+    let _ = writeln!(
+        std::io::stderr(),
+        "registry diff: covered\n  {}\nnot covered\n  {}",
+        covered.join("\n  "),
+        uncovered.join("\n  ")
+    );
+    assert!(
+        problems.is_empty(),
+        "{} difference(s):\n{}\n--- park run\n{parks_log}\n--- wake run\n{wakes_log}",
+        problems.len(),
+        problems.join("\n")
+    );
+    // Only the built-ins with a panel mount (refused headless, so their
+    // activation fails) may be left out: one that stops reaching its ready
+    // fails here instead of shrinking the coverage unnoticed.
+    const MOUNTS: [&str; 3] = ["vestra.playback", "vestra.playlist", "vestra.visualizer"];
+    let unexpected = uncovered
+        .iter()
+        .filter(|line| !MOUNTS.iter().any(|id| line.starts_with(&format!("{id}:"))))
+        .collect::<Vec<_>>();
+    assert!(
+        unexpected.is_empty(),
+        "built-ins not covered: {unexpected:?}"
+    );
+    assert!(
+        covered.len() >= builtins.len().saturating_sub(MOUNTS.len()) && covered.len() >= 13,
+        "{} of {} built-ins covered: {uncovered:?}",
+        covered.len(),
+        builtins.len()
+    );
+}
+
+/// The differences between two registry snapshots of one plugin, the
+/// `recorded` marks left out: entries by id per section (missing, added,
+/// moved, changed fields) and the wake events.
+fn registry_diff(a: &serde_json::Value, b: &serde_json::Value) -> Vec<String> {
+    type Entries = Vec<(String, serde_json::Value)>;
+    let mut out = Vec::new();
+    for section in ["commands", "bindings", "pages", "drops"] {
+        let list = |v: &serde_json::Value| -> Entries {
+            v[section]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|entry| {
+                    let mut entry = entry.clone();
+                    if let Some(object) = entry.as_object_mut() {
+                        object.remove("recorded");
+                    }
+                    (entry["id"].as_str().unwrap_or_default().to_owned(), entry)
+                })
+                .collect()
+        };
+        let (before, after) = (list(a), list(b));
+        let has = |entries: &Entries, id: &str| entries.iter().any(|(each, _)| each == id);
+        for (id, _) in before.iter().filter(|(id, _)| !has(&after, id)) {
+            out.push(format!("{section} `{id}` missing"));
+        }
+        for (id, _) in after.iter().filter(|(id, _)| !has(&before, id)) {
+            out.push(format!("{section} `{id}` added"));
+        }
+        let order = |of: &Entries, other: &Entries| {
+            of.iter()
+                .filter(|(id, _)| has(other, id))
+                .map(|(id, _)| id.clone())
+                .collect::<Vec<_>>()
+        };
+        let (order_a, order_b) = (order(&before, &after), order(&after, &before));
+        if order_a != order_b {
+            out.push(format!(
+                "{section} in another order: {order_a:?} → {order_b:?}"
+            ));
+        }
+        for (id, entry) in &before {
+            if let Some((_, other)) = after.iter().find(|(each, _)| each == id) {
+                leaf_diff(&format!("{section} `{id}`"), entry, other, &mut out);
+            }
+        }
+    }
+    if a["wakes"] != b["wakes"] {
+        out.push(format!("wake events: {} → {}", a["wakes"], b["wakes"]));
+    }
+    out
+}
+
+/// The differing leaves of `a` and `b` (objects by key, lists of one
+/// length by index), each as `<at>.<path>: <a> → <b>`.
+fn leaf_diff(at: &str, a: &serde_json::Value, b: &serde_json::Value, out: &mut Vec<String>) {
+    use serde_json::Value;
+    if a == b {
+        return;
+    }
+    match (a, b) {
+        (Value::Object(x), Value::Object(y)) => {
+            for key in x.keys().chain(y.keys().filter(|k| !x.contains_key(*k))) {
+                let (left, right) = (x.get(key), y.get(key));
+                leaf_diff(
+                    &format!("{at}.{key}"),
+                    left.unwrap_or(&Value::Null),
+                    right.unwrap_or(&Value::Null),
+                    out,
+                );
+            }
+        }
+        (Value::Array(x), Value::Array(y)) if x.len() == y.len() => {
+            for (n, (left, right)) in x.iter().zip(y).enumerate() {
+                leaf_diff(&format!("{at}[{n}]"), left, right, out);
+            }
+        }
+        _ => out.push(format!("{at}: {a} → {b}")),
+    }
+}
+
+/// Entries whose recorded mark is not `expected` (parked or replayed: all
+/// recorded; running: none).
+fn recorded_marks(registry: &serde_json::Value, expected: bool) -> Vec<String> {
+    let mut out = Vec::new();
+    for section in ["commands", "pages", "drops"] {
+        for entry in registry[section].as_array().into_iter().flatten() {
+            if entry["recorded"] != expected {
+                out.push(format!(
+                    "{section} `{}` recorded: {}, expected {expected}",
+                    entry["id"].as_str().unwrap_or_default(),
+                    entry["recorded"]
+                ));
+            }
+        }
+    }
+    out
 }
