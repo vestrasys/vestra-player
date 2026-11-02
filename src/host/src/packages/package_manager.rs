@@ -79,9 +79,16 @@ impl StartQueue {
             ids: builtins.into_iter().chain(others).collect(),
         }
     }
-    fn push_back(&mut self, id: String, builtin: bool) {
-        self.builtins += usize::from(builtin);
-        self.ids.push_back((id, builtin));
+    /// Queues `id` again (a shared runner restart): a built-in after the
+    /// queued built-ins, before every other plugin, as `new` orders them;
+    /// another plugin at the end.
+    fn push(&mut self, id: String, builtin: bool) {
+        if builtin {
+            self.ids.insert(self.builtins, (id, builtin));
+            self.builtins += 1;
+        } else {
+            self.ids.push_back((id, builtin));
+        }
     }
     /// The id at `at` (0: the next to start).
     fn get(&self, at: usize) -> Option<&str> {
@@ -410,7 +417,7 @@ impl Host {
             }
             if !self.packages.to_start.contains(&plugin) {
                 let builtin = self.packages.builtins.contains_key(&plugin);
-                self.packages.to_start.push_back(plugin, builtin);
+                self.packages.to_start.push(plugin, builtin);
             }
         }
         let text = if failed_open {
@@ -1097,7 +1104,9 @@ impl Host {
     /// The running owner of plugin `id` (`Host::plugin_ids`).
     pub(crate) fn running(&self, id: &str) -> Option<u64> {
         let owner = self.plugin_ids.get(id).copied();
-        debug_assert_eq!(
+        // Tests only: a scan per lookup made a debug start-up quadratic.
+        #[cfg(test)]
+        assert_eq!(
             owner,
             self.plugins
                 .iter()
@@ -2417,8 +2426,41 @@ mod tests {
         assert_eq!(queue.remove(0).as_deref(), Some("b.two"));
         assert_eq!(queue.remove(0), None);
         assert!(!queue.builtin_pending() && queue.is_empty());
-        queue.push_back("vestra.subtitles".into(), true);
+        queue.push("vestra.subtitles".into(), true);
         assert!(queue.builtin_pending() && queue.contains("vestra.subtitles"));
+    }
+
+    /// A shared runner restart mid start-up queues its members again: the
+    /// built-ins go after the built-ins still queued, before every
+    /// third-party plugin, and the others at the end.
+    #[test]
+    fn a_restart_mid_start_up_keeps_builtins_at_the_front() {
+        let builtin = |id: &str| id.starts_with("vestra.");
+        let ids = ["a.one", "b.two", "c.three", "vestra.audio", "vestra.video"].map(String::from);
+        let mut queue = StartQueue::new(ids, builtin);
+        // vestra.audio and vestra.video started; vestra.audio is still being
+        // checked (it stays at the front), a.one started.
+        assert_eq!(queue.remove(1).as_deref(), Some("vestra.video"));
+        assert_eq!(queue.remove(1).as_deref(), Some("a.one"));
+        queue.push("vestra.video".into(), true);
+        queue.push("vestra.subtitles".into(), true);
+        queue.push("z.member".into(), false);
+        let mut order = Vec::new();
+        while let Some(id) = queue.remove(0) {
+            order.push(id);
+        }
+        assert_eq!(
+            order,
+            [
+                "vestra.audio",
+                "vestra.video",
+                "vestra.subtitles",
+                "b.two",
+                "c.three",
+                "z.member"
+            ]
+        );
+        assert!(!queue.builtin_pending());
     }
     use crate::ui::composition;
 

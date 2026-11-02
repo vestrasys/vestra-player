@@ -411,7 +411,9 @@ impl Lazy {
     /// The parked owner of plugin `id`.
     pub fn parked_id(&self, id: &str) -> Option<u64> {
         let owner = self.parked_ids.get(id).copied();
-        debug_assert_eq!(
+        // Tests only: a scan per lookup made a debug start-up quadratic.
+        #[cfg(test)]
+        assert_eq!(
             owner,
             self.parked
                 .iter()
@@ -445,7 +447,8 @@ impl Lazy {
 /// a count beside the order, as the start-up queue asks per plugin.
 #[derive(Default)]
 pub(crate) struct FirstQueue {
-    order: VecDeque<String>,
+    /// Ids, and whether each is a built-in.
+    order: VecDeque<(String, bool)>,
     queued: BTreeSet<String>,
     /// The built-ins, all at the front of `order`.
     builtins: usize,
@@ -458,17 +461,19 @@ impl FirstQueue {
             return;
         }
         if builtin {
-            self.order.insert(self.builtins, id);
+            self.order.insert(self.builtins, (id, builtin));
             self.builtins += 1;
         } else {
-            self.order.push_back(id);
+            self.order.push_back((id, builtin));
         }
     }
     pub fn pop_front(&mut self) -> Option<String> {
-        let id = self.order.pop_front()?;
+        let (id, builtin) = self.order.pop_front()?;
         self.queued.remove(&id);
-        // The built-ins are at the front: the one taken is one while any is.
-        self.builtins = self.builtins.saturating_sub(1);
+        if builtin {
+            debug_assert!(self.builtins > 0, "a built-in taken that was not counted");
+            self.builtins -= 1;
+        }
         Some(id)
     }
     pub fn contains(&self, id: &str) -> bool {
