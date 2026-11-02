@@ -11,7 +11,9 @@ use sha2::{Digest, Sha256};
 use skrifa::raw::TableProvider;
 use skrifa::{FontRef, MetadataProvider};
 
-const FONT_BYTES: &[u8] = include_bytes!("../../assets/fonts/noto-cjk/NotoSansCJKsc-Regular.otf");
+// A `static`, not a `const`: a `const` is inlined per use, and each codegen
+// unit that names it may emit its own 16 MiB copy into the binary.
+static FONT_BYTES: &[u8] = include_bytes!("../../assets/fonts/noto-cjk/NotoSansCJKsc-Regular.otf");
 const DIGEST: &str = "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b";
 const MAX_TEXT_BYTES: usize = 2 * 1024 * 1024;
 static BUNDLED: OnceLock<FontAsset> = OnceLock::new();
