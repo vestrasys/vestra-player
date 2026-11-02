@@ -1109,6 +1109,19 @@ pub struct VBlankWaiter {
     clock: vestra_win32::VBlank,
     hwnd: isize,
     waits: u32,
+    /// Opening the clock of the window's new display failed, and was
+    /// reported (`reopen_failure_to_report`).
+    reopen_failed: bool,
+}
+
+/// Whether a failed reopen of the display clock after a display change is
+/// reported now: the first failure of a run of failures (the check repeats
+/// about once a second while the window stays there), again only after an
+/// open succeeded. `failed` keeps the state between calls.
+fn reopen_failure_to_report(failed: &mut bool, opened: bool) -> bool {
+    let report = !opened && !*failed;
+    *failed = !opened;
+    report
 }
 impl VBlankWaiter {
     /// Block until the next vertical blank; `false` when the display clock
@@ -1120,11 +1133,16 @@ impl VBlankWaiter {
         // second at 60 Hz), and about once a second for a display change
         // without a move (the display arrangement changed).
         self.waits = self.waits.wrapping_add(1);
-        if (moved || self.waits.is_multiple_of(64))
-            && self.clock.moved(self.hwnd)
-            && let Some(clock) = vestra_win32::VBlank::open(self.hwnd)
-        {
-            self.clock = clock;
+        if (moved || self.waits.is_multiple_of(64)) && self.clock.moved(self.hwnd) {
+            let opened = vestra_win32::VBlank::open(self.hwnd);
+            if reopen_failure_to_report(&mut self.reopen_failed, opened.is_some()) {
+                diag!(
+                    "frame pacing: the window is on another display, whose clock could not be opened; pacing keeps the previous display's vertical blanks"
+                );
+            }
+            if let Some(clock) = opened {
+                self.clock = clock;
+            }
         }
         if self.clock.wait() {
             return true;
@@ -1154,6 +1172,7 @@ pub fn vblank_waiter(window: &slint::Window) -> Option<VBlankWaiter> {
         clock,
         hwnd,
         waits: 0,
+        reopen_failed: false,
     })
 }
 
@@ -1188,6 +1207,20 @@ impl crate::playback::renderer::GpuBackend for GpuHandle {
     }
     fn frames(&self) -> u64 {
         vestra_gpu_render::Handle::frames(self)
+    }
+    fn progress(&self) -> Option<crate::playback::renderer::Progress> {
+        let progress = vestra_gpu_render::Handle::progress(self);
+        Some(crate::playback::renderer::Progress {
+            calls: progress.calls,
+            started: progress.started,
+            ready: progress.ready,
+            completed: progress.completed,
+            rings: progress.rings,
+            halted: progress.halted,
+        })
+    }
+    fn device_removed(&self) -> bool {
+        vestra_gpu_render::Handle::device_removed(self)
     }
     fn shown(&self) -> u64 {
         vestra_gpu_render::Handle::shown(self)
@@ -1286,8 +1319,15 @@ pub fn select_wgpu_windows(
     device.on_error(
         |line| diag!("render: {line}"),
         || {
-            // Restart now (whatever the teardown does), then end the loop:
-            // the windows cannot draw any more.
+            // The windows cannot draw any more: take them off the screen at
+            // once, from whatever thread noticed (a black window that stops
+            // responding while the teardown runs is worse than none; the
+            // restarted player shows its own). Then restart now (whatever
+            // the teardown does) and end the loop.
+            let cloaked = vestra_win32::cloak_process_windows();
+            crate::host::restart_log(&format!(
+                "render: {cloaked} window(s) cloaked after the device loss"
+            ));
             if let Some(hook) = LOST_HOOK.get() {
                 hook();
             }
@@ -1437,6 +1477,13 @@ pub fn wait_for_process_exit(pid: u32, timeout: std::time::Duration) -> bool {
         pid,
         timeout.as_millis().min(u128::from(u32::MAX - 1)) as u32,
     )
+}
+
+/// End this process now with `code` (`TerminateProcess` on itself): no
+/// atexit handlers and no DLL detach, which a driver stuck after a device
+/// loss could hang in as `std::process::exit` would.
+pub fn exit_now(code: u32) -> ! {
+    vestra_win32::terminate_current_process(code)
 }
 
 /// The windows' Direct3D 12 device was lost (a driver reset): the event
@@ -1616,6 +1663,12 @@ pub fn sync_dir(directory: &Path) -> std::io::Result<()> {
 
 pub fn app_data_dir() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(|root| PathBuf::from(root).join("Vestra"))
+}
+
+/// `%LOCALAPPDATA%\Vestra`: data the player can make again (mpv's compiled
+/// shaders), kept out of the roaming profile.
+pub fn app_cache_dir() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(|root| PathBuf::from(root).join("Vestra"))
 }
 
 /// FFmpeg's name for its stdin, which is the held source file: the `fd`
@@ -1920,6 +1973,22 @@ mod tests {
         let (extra, line) = fullscreen_match(Some("off"));
         assert_eq!(extra, Some(1));
         assert!(line.unwrap().contains("ignored"));
+    }
+
+    /// F6 (round record 2026-10-windows-render, B.10): a failed reopen of
+    /// the display clock is reported once per run of failures.
+    #[test]
+    fn a_failed_clock_reopen_is_reported_once_per_run() {
+        let mut failed = false;
+        assert!(!reopen_failure_to_report(&mut failed, true));
+        assert!(
+            reopen_failure_to_report(&mut failed, false),
+            "first failure"
+        );
+        assert!(!reopen_failure_to_report(&mut failed, false), "repeat");
+        assert!(!reopen_failure_to_report(&mut failed, false), "repeat");
+        assert!(!reopen_failure_to_report(&mut failed, true), "opened");
+        assert!(reopen_failure_to_report(&mut failed, false), "a new run");
     }
 
     #[test]

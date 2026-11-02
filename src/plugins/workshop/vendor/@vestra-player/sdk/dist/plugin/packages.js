@@ -83,9 +83,11 @@ function installOptions(options) {
         return {};
     if (typeof options !== "object" || options === null)
         throw failure("invalid", "install options must be an object");
-    const { source, replace } = options;
+    const { source, replace, enabled } = options;
     if (replace !== undefined && typeof replace !== "boolean")
         throw failure("invalid", "replace must be a boolean");
+    if (enabled !== undefined && typeof enabled !== "boolean")
+        throw failure("invalid", "enabled must be a boolean");
     if (source !== undefined) {
         const kinds = ["repository", "link", "file", "workshop"];
         if (typeof source !== "object" ||
@@ -99,6 +101,7 @@ function installOptions(options) {
     return {
         ...(source === undefined ? {} : { source: { ...source } }),
         ...(replace ? { replace: true } : {}),
+        ...(enabled === undefined ? {} : { enabled }),
     };
 }
 function candidate(scope, directory, checked) {

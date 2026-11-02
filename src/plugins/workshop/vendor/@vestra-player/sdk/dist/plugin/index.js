@@ -1,4 +1,4 @@
-import { failure, Runtime } from "./runtime.js";
+import { failure, Runtime, stopReason } from "./runtime.js";
 import { ScopeImpl } from "./scope.js";
 import { playerOf } from "./player.js";
 import { windowOf } from "./window.js";
@@ -27,7 +27,8 @@ options) {
     return {
         plugin: root,
         activated: () => runtime.activated(),
-        dispose: async () => {
+        dispose: async (info) => {
+            runtime.stopping ??= { reason: stopReason(info?.reason) };
             await root.dispose();
             runtime.stop();
         },

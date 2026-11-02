@@ -159,6 +159,17 @@ impl Backend {
                 }
                 no_builtin_scripts(&builder)?;
                 let mpv = Arc::new(builder.build()?);
+                // Before any render context exists (mpv reads it when its
+                // renderer starts); a failure costs only the cache.
+                if let Some(directory) = shader_cache_dir()
+                    && let Err(error) = mpv
+                        .set_property("gpu-shader-cache-dir", directory.to_string_lossy().as_ref())
+                {
+                    diag!(
+                        "playback: no shader cache in {}: {error}",
+                        directory.display()
+                    );
+                }
                 // New events wake the worker (it drains them with
                 // `poll_event`); the callback only signals.
                 let event_wake = worker_wake.clone();
@@ -192,6 +203,11 @@ impl Backend {
                     let _ = target_wake.try_send(());
                 }));
                 let stop_wake = render_wake.clone();
+                // Nothing loaded (closed or never opened): the software
+                // renderer drops its frame buffers (`BufferRing::release`).
+                let ring_idle = Arc::new(AtomicBool::new(true));
+                let renderer_idle = ring_idle.clone();
+                let idle_wake = render_wake.clone();
                 let switched = worker_wake.clone();
                 let renderer = thread::spawn(move || {
                     let run = || -> Result<()> {
@@ -226,14 +242,31 @@ impl Backend {
                         let mut source: Option<(u32, u32)> = None;
                         let mut source_read: Option<Instant> = None;
                         let mut last_size = None;
+                        let mut owed = false;
                         let stages = &render_frame.stages;
                         while !renderer_stop.load(Ordering::Relaxed) {
-                            let update = render.update();
+                            let idle = renderer_idle.load(Ordering::Acquire);
+                            if idle {
+                                buffers.release();
+                            }
+                            let mut update = render.update();
                             if update {
                                 stages.update();
                             }
                             let (revision, request) = render_target.get();
-                            if redraw.due(update, revision) {
+                            // Nothing loaded: nothing to draw (the video area
+                            // shows the backdrop; `backdrop_source` cleared the
+                            // picture), so a resize allocates no frame. An
+                            // update mpv signalled meanwhile (a load's first
+                            // frame racing the worker's next turn) is drawn as
+                            // soon as something is loaded.
+                            if idle {
+                                owed |= update;
+                                update = false;
+                            } else if std::mem::take(&mut owed) {
+                                update = true;
+                            }
+                            if !idle && redraw.due(update, revision) {
                                 // The source display size changes only with a
                                 // new load or filter; read it a few times a second.
                                 if source_read
@@ -357,6 +390,12 @@ impl Backend {
                     }
                     jobs.poll();
                     upscaling.poll(&mpv, &out_render, &events, || processing.copy_back_owners());
+                    // The plugin shader guard re-checks a list after the video's
+                    // size changes (`//!WHEN` hooks compile at their first use).
+                    if out_render.gpu().is_some() {
+                        let side = |name: &str| mpv.get_property::<i64>(name).unwrap_or(0);
+                        out_render.set_video_size((side("video-params/w"), side("video-params/h")));
+                    }
                     processing.note_source(sources.generation(), sources.phase());
                     subtitles.note_source(sources.generation(), sources.phase());
                     // Bound work per iteration so continuous controls cannot starve video.
@@ -628,6 +667,7 @@ impl Backend {
                                 render_options.set(owner, values, ready, refresh, &mut player)
                             };
                             pace(&out_render, render_options.settings());
+                            guard_processed(&out_render, &command.params);
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
@@ -643,6 +683,7 @@ impl Backend {
                                 &mut render_options,
                                 &mut crate::playback::video_render::Mpv(&mpv),
                             );
+                            guard_processed(&out_render, &command.params);
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
@@ -787,6 +828,11 @@ impl Backend {
                             "playback.backend".into(),
                             json!({"currentSession":sources.generation(),"event":format!("{event:?}")}),
                         ));
+                    }
+                    let idle = sources.phase() == crate::playback::session::Phase::Empty;
+                    // Woken either way: to drop the buffers, or to draw an owed update.
+                    if ring_idle.swap(idle, Ordering::AcqRel) != idle {
+                        let _ = idle_wake.try_send(());
                     }
                     if !geometry_error && let Err(error) = geometry.tick(&mpv, &sources) {
                         geometry_error = true;
@@ -1007,6 +1053,13 @@ impl GpuRun<'_> {
             // The renderer stopped on its own (Windows: its device was
             // removed): software rendering, as for a window's fallback.
             if let Some(reason) = crate::platform::gpu_failed(&renderer.handle()) {
+                // mpv's device was removed (no restart: software from here
+                // on): a plugin shader list not drawn yet takes the blame,
+                // and the record stays for the next start, as before a
+                // device-loss restart.
+                if crate::playback::renderer::GpuBackend::device_removed(&renderer.handle()) {
+                    crate::host::persist_shader_guard();
+                }
                 self.render
                     .fall_back(crate::playback::render_mode::Reason::WindowFallback(reason));
                 break;
@@ -1023,6 +1076,45 @@ impl GpuRun<'_> {
         // The control worker sets software rendering's `hwdec` when it sees
         // the switch (see `software_hwdec`).
         false
+    }
+}
+/// Where mpv keeps compiled shaders (`gpu-shader-cache-dir`), as the mpv
+/// player does in its cache directory: `shader-cache` in the application
+/// cache directory (`platform::app_cache_dir`: `%LOCALAPPDATA%\Vestra` on
+/// Windows, `~/Library/Caches/Vestra` on macOS, `$XDG_CACHE_HOME/vestra`
+/// elsewhere), `VESTRA_SHADER_CACHE` to override (empty: none). libmpv
+/// has no config directory, so without it every start compiles again: the
+/// shader upscaling plugin's ArtCNN networks took Direct3D 11's compiler
+/// 50 s (C4F16) to several minutes (C4F32) inside the first render call
+/// every time; with the cache the next start renders its first frame at
+/// once (gpu-probe, RTX 4070, 2026-11-01). Created here; `None` when it
+/// cannot be.
+fn shader_cache_dir() -> Option<std::path::PathBuf> {
+    // Unit tests leave the user's application data alone.
+    if cfg!(test) && std::env::var_os("VESTRA_SHADER_CACHE").is_none() {
+        return None;
+    }
+    let directory = match std::env::var_os("VESTRA_SHADER_CACHE") {
+        Some(value) if value.is_empty() => return None,
+        Some(value) => std::path::PathBuf::from(value),
+        None => crate::platform::app_cache_dir()?.join("shader-cache"),
+    };
+    if let Err(error) = std::fs::create_dir_all(&directory) {
+        diag!(
+            "playback: no shader cache in {}: {error}",
+            directory.display()
+        );
+        return None;
+    }
+    Some(directory)
+}
+/// A plugin shader request was processed, its list written to mpv or not
+/// (the same merged list, refused for the limit or software rendering):
+/// the shader guard stops waiting for it (`guardSeq`, set by the capability
+/// layer, `host/diagnostics.rs`).
+fn guard_processed(render: &crate::playback::renderer::Render, params: &Value) {
+    if let Some(seq) = params["guardSeq"].as_u64() {
+        render.shaders_processed(seq);
     }
 }
 /// `hwdec` while the software renderer draws (`renderer::hwdec`).
@@ -1752,6 +1844,19 @@ fn no_builtin_scripts(builder: &rsmpv::Builder) -> Result<()> {
 mod tests {
     use super::*;
     use crate::playback::session::Phase;
+    /// Review 1B: a shader request counts as processed whether or not its
+    /// list was written (the same merged list, `limit`, `unsupported`), so
+    /// the shader guard never waits for it all run.
+    #[test]
+    fn every_numbered_shader_request_is_reported_processed() {
+        use crate::playback::render_mode::{Facts, Preference, decide};
+        let render =
+            crate::playback::renderer::Render::new(&decide(&Facts::default(), Preference::Auto));
+        guard_processed(&render, &json!({"id":"x","paths":[]}));
+        assert_eq!(render.shader_requests().processed, 0, "not numbered");
+        guard_processed(&render, &json!({"id":"x","paths":[],"guardSeq":3}));
+        assert_eq!(render.shader_requests().processed, 3);
+    }
     #[test]
     fn decoding_is_software_for_no_and_hardware_for_a_method() {
         assert_eq!(decoding(Some("no")), Some("software"));

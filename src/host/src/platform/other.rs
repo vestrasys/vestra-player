@@ -140,6 +140,14 @@ pub fn app_data_dir() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
         .map(|root| root.join("vestra"))
 }
+/// `$XDG_CACHE_HOME/vestra`, else `~/.cache/vestra`: data the player can
+/// make again (mpv's compiled shaders).
+pub fn app_cache_dir() -> Option<PathBuf> {
+    std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
+        .map(|root| root.join("vestra"))
+}
 /// FFmpeg's name for its stdin, which is the held source file (seekable).
 pub const HELD_FILE_INPUT: &str = "/dev/fd/0";
 

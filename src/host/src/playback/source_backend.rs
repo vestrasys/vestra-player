@@ -169,6 +169,9 @@ pub struct Sources {
     /// Repeats of a running seek not sent (tests read it).
     #[cfg(test)]
     seek_repeats_skipped: usize,
+    /// `Control::Seek`s sent to mpv (tests read it).
+    #[cfg(test)]
+    seeks_sent: usize,
     #[cfg(feature = "producer-audio")]
     producers: crate::playback::producer::Producers,
     #[cfg(feature = "producer-audio")]
@@ -1735,7 +1738,13 @@ impl Sources {
                             let command = seek_command(*seconds, *keyframes);
                             let sent = mpv.command(&command);
                             match sent {
-                                Ok(()) => self.seek_flight.sent(entry, *seconds, *keyframes),
+                                Ok(()) => {
+                                    self.seek_flight.sent(entry, *seconds, *keyframes);
+                                    #[cfg(test)]
+                                    {
+                                        self.seeks_sent += 1;
+                                    }
+                                }
                                 Err(_) => self.seek_flight.clear(),
                             }
                             sent
@@ -2493,7 +2502,23 @@ mod seek_flight_tests {
             .build()
             .unwrap();
         let mut sources = Sources::default();
+        let started = Instant::now();
+        struct Trace(std::cell::RefCell<Vec<String>>);
+        impl Drop for Trace {
+            fn drop(&mut self) {
+                if std::thread::panicking() {
+                    for line in self.0.borrow().iter() {
+                        crate::diag::line(format_args!("TRACE {line}"));
+                    }
+                }
+            }
+        }
+        let trace = Trace(Default::default());
+        let trace = &trace.0;
         let submit = |sources: &mut Sources, id: u64, intent: Value| {
+            trace
+                .borrow_mut()
+                .push(format!("{:?} submit {id} {intent}", started.elapsed()));
             sources
                 .dispatch(
                     &mpv,
@@ -2503,74 +2528,107 @@ mod seek_flight_tests {
                 )
                 .unwrap();
         };
-        // Pumps events into `sources` until `until` or 20 s; returns the seeks mpv started.
-        let pump = |sources: &mut Sources, until: &dyn Fn(&MpvEvent) -> bool| {
-            let mut seeks = 0;
+        let pump = |sources: &mut Sources, event: &MpvEvent| {
+            sources.event(event);
+            trace
+                .borrow_mut()
+                .push(format!("{:?} {event:?}", started.elapsed()));
+        };
+        // Pumps events into `sources` until mpv has started `seeks` seeks
+        // since the call and the last of them landed (a `PlaybackRestart`
+        // after the `seeks`-th `Seek`), or 20 s. Each seek the host sends
+        // after mpv started the previous one starts on its own (only seeks
+        // still queued together are merged), so this waits for exactly the
+        // seeks sent, however long mpv takes under load: no quiet window.
+        let land = |sources: &mut Sources, seeks: usize| {
+            let mut seen = 0;
             let end = Instant::now() + Duration::from_secs(20);
             while Instant::now() < end {
                 while let Some(event) = mpv.poll_event() {
-                    sources.event(&event);
-                    seeks += usize::from(matches!(event, MpvEvent::Seek));
-                    if until(&event) {
-                        return seeks;
+                    pump(sources, &event);
+                    match event {
+                        MpvEvent::Seek => seen += 1,
+                        MpvEvent::PlaybackRestart if seen >= seeks => return,
+                        _ => {}
                     }
                 }
                 std::thread::sleep(Duration::from_millis(1));
             }
-            panic!("no event in time");
+            panic!("{seen} of {seeks} seeks started; no landing in time");
+        };
+        // Pumps events until mpv started a seek.
+        let seek_started = |sources: &mut Sources| {
+            let end = Instant::now() + Duration::from_secs(20);
+            while Instant::now() < end {
+                while let Some(event) = mpv.poll_event() {
+                    pump(sources, &event);
+                    if matches!(event, MpvEvent::Seek) {
+                        return;
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            panic!("no seek started in time");
         };
         submit(
             &mut sources,
             1,
             json!({"kind":"open","source":file.to_str().unwrap(),"startPaused":true}),
         );
-        pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
+        land(&mut sources, 0);
         // A click: the press, then the release with the same target once mpv
         // has started the press's seek (its Seek event; the flight is cleared
-        // only when it lands). Returns the seeks mpv started from the press
-        // to its landing and then during a quiet second, and whether the host
-        // held the release back (it saw the seek still running). A duplicate
-        // the host sent can start before or after the first landing (mpv may
-        // hold a queued seek for up to 0.3 s), so the quiet window catches it.
-        let click = |sources: &mut Sources, ids: (u64, u64), intent: &Value| {
+        // only when it lands). `expect` gets the seeks the host sent to mpv
+        // for the two and whether it held the release back (it saw the seek
+        // still running); then every seek it sent lands. The count is the
+        // host's own (`seeks_sent`), not mpv's Seek events, so it does not
+        // depend on when mpv runs a seek it queued.
+        let click = |sources: &mut Sources,
+                     ids: (u64, u64),
+                     intent: &Value,
+                     expect: &dyn Fn(usize, bool)| {
+            let sent = sources.seeks_sent;
             submit(sources, ids.0, intent.clone());
-            let mut seeks = pump(sources, &|e| matches!(e, MpvEvent::Seek));
+            seek_started(sources);
             let skipped = sources.seek_repeats_skipped;
             submit(sources, ids.1, intent.clone());
             let held = sources.seek_repeats_skipped == skipped + 1;
-            seeks += pump(sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
-            let quiet = Instant::now() + Duration::from_secs(1);
-            while Instant::now() < quiet {
-                while let Some(event) = mpv.poll_event() {
-                    sources.event(&event);
-                    seeks += usize::from(matches!(event, MpvEvent::Seek));
-                }
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            (seeks, held)
+            let seeks = sources.seeks_sent - sent;
+            // Checked before waiting: a wrong count fails with its message,
+            // not as a landing that never comes.
+            expect(seeks, held);
+            // The press's seek has started already.
+            land(sources, seeks.saturating_sub(1));
         };
         // An exact seek 9.9 s past the keyframe decodes ~590 1080p frames,
         // far longer than the moment between the press's Seek and the release.
         let seek = json!({"kind":"control","control":{"kind":"seek","seconds":9.9}});
-        let (seeks, held) = click(&mut sources, (2, 3), &seek);
-        assert!(held, "the release arrived while the seek ran: not sent");
-        assert_eq!(seeks, 1, "press and release: one seek");
+        click(&mut sources, (2, 3), &seek, &|seeks, held| {
+            assert!(held, "the release arrived while the seek ran: not sent");
+            assert_eq!(seeks, 1, "press and release: one seek");
+        });
         assert!((mpv.get_property::<f64>("time-pos").unwrap() - 9.9).abs() < 0.02);
+        let sent = sources.seeks_sent;
         submit(&mut sources, 4, seek);
-        let again = pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
-        assert_eq!(again, 1, "after it landed the same target seeks again");
+        assert_eq!(
+            sources.seeks_sent - sent,
+            1,
+            "after it landed the same target seeks again"
+        );
+        land(&mut sources, 1);
         // The bar in keyframe mode: 15.0 lands on the keyframe at 10.0 (the
         // clip's keyframes are at 0 and 10 s), press and release seek once.
         // A keyframe seek is quick: if it had already landed when the release
         // came, the release rightly seeks again.
         let key_seek =
             json!({"kind":"control","control":{"kind":"seek","seconds":15.0,"keyframes":true}});
-        let (seeks, held) = click(&mut sources, (5, 6), &key_seek);
-        if held {
-            assert_eq!(seeks, 1, "a keyframe click seeks once");
-        } else {
-            assert_eq!(seeks, 2, "a release after the landing seeks once more");
-        }
+        click(&mut sources, (5, 6), &key_seek, &|seeks, held| {
+            if held {
+                assert_eq!(seeks, 1, "a keyframe click seeks once");
+            } else {
+                assert_eq!(seeks, 2, "a release after the landing seeks once more");
+            }
+        });
         let landed = mpv.get_property::<f64>("time-pos").unwrap();
         assert!(
             (landed - 10.0).abs() < 0.05,
@@ -2579,10 +2637,11 @@ mod seek_flight_tests {
         // A keyframe seek and an exact seek to the same target back to back:
         // the flight keys on the mode too, so the exact one is sent while the
         // keyframe seek runs (keyed on the target alone it could be skipped
-        // and the picture stay on the keyframe at 10.0; whether mpv is already
-        // `seeking` when the second one arrives depends on timing, so the key
-        // itself is asserted by the unit test above). mpv may merge the two
-        // queued seeks into one, so only the landing is asserted here.
+        // and the picture stay on the keyframe at 10.0). The host sends both
+        // whether or not mpv is already `seeking`. mpv may merge the two
+        // queued seeks into one (one Seek event or two), so the wait is for
+        // the landing at 17.0: the exact seek is the last one queued.
+        let sent = sources.seeks_sent;
         submit(
             &mut sources,
             7,
@@ -2593,14 +2652,15 @@ mod seek_flight_tests {
             8,
             json!({"kind":"control","control":{"kind":"seek","seconds":17.0}}),
         );
-        pump(&mut sources, &|e| matches!(e, MpvEvent::PlaybackRestart));
+        assert_eq!(sources.seeks_sent - sent, 2, "both modes sent");
+        land(&mut sources, 1);
         let end = Instant::now() + Duration::from_secs(10);
         while Instant::now() < end
             && (mpv.get_property::<bool>("seeking").unwrap_or(true)
                 || (mpv.get_property::<f64>("time-pos").unwrap() - 17.0).abs() > 0.02)
         {
             while let Some(event) = mpv.poll_event() {
-                sources.event(&event);
+                pump(&mut sources, &event);
             }
             std::thread::sleep(Duration::from_millis(5));
         }

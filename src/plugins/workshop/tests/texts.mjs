@@ -32,6 +32,7 @@ export const banner = (host, say) => shown(host, "ai.slint", "banner-text", say)
 /** The result card's line, as AiWindow.card-text in ai.slint (installs in two parts). */
 export function card(host, say, keys = []) {
   if (say.code === "installed" && keys.length) return host.translate("Installed {0} {1}. Shortcuts not in effect:", say.args);
+  if (say.code === "installed-failed" && say.args[2]) return host.translate("Installed {0} {1}, but it failed: {2}", say.args);
   if (say.code !== "result" && say.code !== "progress") return shown(host, "ai.slint", "card-text", say);
   const [, a, b, status, detail] = say.args;
   const what = host.translate("Install {0} {1}", [a, b]);

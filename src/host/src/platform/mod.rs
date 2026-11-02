@@ -609,6 +609,14 @@ pub fn wait_for_process_exit(_pid: u32, _timeout: std::time::Duration) -> bool {
     true
 }
 
+/// End this process now with `code`, running nothing more of it (a
+/// teardown stuck after a device loss; Windows terminates without DLL
+/// detach, restarts happen only there).
+#[cfg(not(target_os = "windows"))]
+pub fn exit_now(code: u32) -> ! {
+    std::process::exit(code as i32)
+}
+
 /// Why the GPU renderer stopped on its own (Windows; never here).
 #[cfg(not(target_os = "windows"))]
 pub fn gpu_failed(_handle: &GpuHandle) -> Option<String> {

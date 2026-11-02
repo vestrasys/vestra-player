@@ -96,6 +96,23 @@ const DECLARATION_REFUSALS = new Set([
     "conflict",
     "limit",
 ]);
+/** The reasons `StopReason` names; anything else reads as `undefined`. */
+const STOP_REASONS = new Set([
+    "quit",
+    "disable",
+    "uninstall",
+    "reload",
+    "upgrade",
+    "idle",
+    "failed",
+    "host-lost",
+]);
+/** A stop reason the runner passed on, if this SDK knows it. */
+export function stopReason(value) {
+    return typeof value === "string" && STOP_REASONS.has(value)
+        ? value
+        : undefined;
+}
 export const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 /** One value in flight, only the newest waiting. Each push learns its fate. */
 export class Latest {
@@ -191,6 +208,11 @@ export class Runtime {
     views = new Map();
     commands = new Map();
     services = new Map();
+    /**
+     * Set when the player stops the plugin (`PluginInstance.dispose`), before
+     * the root scope is disposed: `DisposeInfo` and `plugin.stopReason`.
+     */
+    stopping;
     /** `plugin.app`, from the start-up handshake; `system()` asks the player. */
     app;
     /** `plugin.i18n.locale`, from the start-up handshake; English when unknown. */

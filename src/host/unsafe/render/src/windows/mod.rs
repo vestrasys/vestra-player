@@ -433,6 +433,13 @@ struct Shared {
     /// mpv's render calls, odd while the render thread is inside one (the
     /// watchdog).
     calls: AtomicU64,
+    /// The newest published-or-not frame: the `calls` value its render
+    /// call started at (odd) and its `ready` value (`Handle::progress`).
+    last_frame: Mutex<(u64, u64)>,
+    /// Ring generations made (a new output size), for `Handle::progress`.
+    rings: AtomicU64,
+    /// mpv's Direct3D 11 device was removed (`Handle::device_removed`).
+    removed: AtomicBool,
     /// The render thread waits on the CPU for each frame before publishing
     /// it (`VESTRA_GPU_CPU_WAIT=1`); set by the render thread.
     cpu_wait: AtomicBool,
@@ -475,6 +482,9 @@ impl Shared {
             ready_enqueued: AtomicU64::new(0),
             done_enqueued: AtomicU64::new(0),
             calls: AtomicU64::new(0),
+            last_frame: Mutex::default(),
+            rings: AtomicU64::new(0),
+            removed: AtomicBool::new(false),
             cpu_wait: AtomicBool::new(false),
             diag: Mutex::default(),
             stats: Mutex::default(),
@@ -596,8 +606,14 @@ impl Renderer {
         started.recv().map_err(|_| "render thread died".to_string())??;
         if let Some(limit) = limit {
             let inner = renderer.shared.clone();
+            // The render thread's handle, for its CPU time: valid while
+            // `renderer.thread` is, and `Drop` joins the watchdog first.
+            let render = renderer.thread.as_ref().map(|t| {
+                use std::os::windows::io::AsRawHandle;
+                RenderThread(t.as_raw_handle() as isize)
+            });
             let thread = thread::Builder::new().name("vestra-gpu-watchdog".into());
-            renderer.watchdog = thread.spawn(move || watch(&inner, limit)).ok();
+            renderer.watchdog = thread.spawn(move || watch(&inner, limit, render)).ok();
         }
         Ok(renderer)
     }
@@ -626,7 +642,7 @@ const WATCH_POLL: Duration = Duration::from_millis(100);
 /// The watchdog thread: until the renderer stops or fails, look at the
 /// fences and the render call every [`WATCH_POLL`]; a stall ends GPU
 /// rendering like a lost device ([`stalled`]).
-fn watch(shared: &Arc<Shared>, limit: Duration) {
+fn watch(shared: &Arc<Shared>, limit: Duration, render: Option<RenderThread>) {
     let mut clocks = watchdog::Watch::new(limit);
     loop {
         thread::park_timeout(WATCH_POLL);
@@ -642,11 +658,44 @@ fn watch(shared: &Arc<Shared>, limit: Duration) {
             ready: (ready, fences.ready.completed()),
             done: (done, fences.done.completed()),
             call: shared.calls.load(Ordering::Acquire),
+            cpu: render.as_ref().map_or(Duration::ZERO, RenderThread::cpu),
         };
         if let Some(reason) = clocks.observe(Instant::now(), sample) {
             stalled(shared, reason);
             return;
         }
+    }
+}
+
+/// The render thread's handle (a raw `HANDLE` value borrowed from its
+/// `JoinHandle`, which outlives the watchdog thread that reads it).
+struct RenderThread(isize);
+
+impl RenderThread {
+    /// The CPU time (kernel and user) the thread has used so far; zero when
+    /// the system does not say.
+    fn cpu(&self) -> Duration {
+        use windows::Win32::Foundation::{FILETIME, HANDLE};
+        use windows::Win32::System::Threading::GetThreadTimes;
+        let (mut created, mut exited, mut kernel, mut user) =
+            (FILETIME::default(), FILETIME::default(), FILETIME::default(), FILETIME::default());
+        // SAFETY: the handle is the live render thread's (see the type); the
+        // four out-parameters are live locals.
+        let ok = unsafe {
+            GetThreadTimes(
+                HANDLE(self.0 as *mut std::ffi::c_void),
+                &mut created,
+                &mut exited,
+                &mut kernel,
+                &mut user,
+            )
+        };
+        let ticks = |t: FILETIME| u64::from(t.dwHighDateTime) << 32 | u64::from(t.dwLowDateTime);
+        if ok.is_err() {
+            return Duration::ZERO;
+        }
+        // FILETIME counts 100 ns.
+        Duration::from_nanos((ticks(kernel) + ticks(user)).saturating_mul(100))
     }
 }
 
@@ -897,7 +946,11 @@ fn produce(
             return;
         }
         let reason = match d3d11.removed() {
-            Some(removed) => format!("{reason} (device removed: {removed})"),
+            Some(removed) => {
+                // Before `failed`: whoever sees the failure sees this too.
+                shared.removed.store(true, Ordering::Release);
+                format!("{reason} (device removed: {removed})")
+            }
             None => reason,
         };
         shared.diag(format!("{reason}; GPU rendering stops"));
@@ -970,6 +1023,7 @@ fn produce(
                 (slots_size, resized) = (Some(size), true);
                 let mut exchange = lock(&shared.exchange);
                 exchange.ring.renew();
+                shared.rings.fetch_add(1, Ordering::AcqRel);
                 exchange.done = [0; RING];
             }
         }
@@ -1042,7 +1096,8 @@ fn produce(
             break;
         }
         let began = Instant::now();
-        shared.calls.fetch_add(1, Ordering::AcqRel);
+        // The call's start, odd (`Handle::progress`).
+        let started = shared.calls.fetch_add(1, Ordering::AcqRel) + 1;
         let rendered = render.render(&slots[index].d3d11, block && pace.is_none());
         shared.calls.fetch_add(1, Ordering::AcqRel);
         if let Err(error) = rendered {
@@ -1067,6 +1122,7 @@ fn produce(
         }
         ready_value += 1;
         shared.ready_enqueued.store(ready_value, Ordering::Release);
+        *lock(&shared.last_frame) = (started, ready_value);
         let completed = match &completion {
             // The GPU-side fences order everything (record §11 item 3):
             // windows wait for `ready` on their queue, mpv's device waits
@@ -1140,6 +1196,25 @@ fn produce(
 /// How long a new video-area size must hold before the ring is remade at it.
 const SETTLE: Duration = Duration::from_millis(150);
 
+/// How far rendering got ([`Handle::progress`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Progress {
+    /// mpv's render calls, counted when each starts and when it returns
+    /// (odd while one runs, as the watchdog reads them).
+    pub calls: u64,
+    /// The newest rendered frame: the `calls` value its render call started
+    /// at (odd; 0: none yet), and its `ready` fence value.
+    pub started: u64,
+    pub ready: u64,
+    /// The `ready` value the GPU reached (`u64::MAX` once released: a
+    /// failure, a removed device, or quitting).
+    pub completed: u64,
+    /// Ring generations made so far (a new output size).
+    pub rings: u64,
+    /// GPU rendering stopped for good (a failure or quitting).
+    pub halted: bool,
+}
+
 /// A frame the renderer published ([`Handle::latest`]).
 pub struct Frame(Payload);
 impl Frame {
@@ -1172,6 +1247,25 @@ impl Handle {
     /// Frames published so far.
     pub fn frames(&self) -> u64 {
         lock(&self.0.exchange).ring.sequence()
+    }
+    /// How far rendering got ([`Progress`]): the host's plugin shader guard
+    /// tells from it whether a frame rendered after a new `glsl-shaders`
+    /// list reached mpv also finished on the GPU.
+    pub fn progress(&self) -> Progress {
+        let (started, ready) = *lock(&self.0.last_frame);
+        Progress {
+            calls: self.0.calls.load(Ordering::Acquire),
+            started,
+            ready,
+            completed: self.0.fences.get().map_or(0, |fences| fences.ready.completed()),
+            rings: self.0.rings.load(Ordering::Acquire),
+            halted: self.0.halted(),
+        }
+    }
+    /// mpv's Direct3D 11 device was removed (set before [`Handle::failed`]
+    /// says why GPU rendering stopped).
+    pub fn device_removed(&self) -> bool {
+        self.0.removed.load(Ordering::Acquire)
     }
     /// Window draws that showed a newer frame.
     pub fn shown(&self) -> u64 {

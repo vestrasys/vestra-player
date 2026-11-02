@@ -327,3 +327,166 @@ fn a_reload_waits_for_a_slow_cleanup_to_finish() {
         "the new instance started before the old cleanup finished:\n{log}"
     );
 }
+
+/// A cleanup that logs why its plugin stops (`DisposeInfo.reason` and
+/// `plugin.stopReason`, SDK 1.5.54): `<id> <n> stopped for <reason> <reason>`.
+fn log_stop(id: &str) -> String {
+    format!(
+        "plugin.onDispose((info) => console.error(\
+         `{id} ${{typeof n === \"number\" ? n : 1}} stopped for ${{info?.reason}} ${{plugin.stopReason}}`));"
+    )
+}
+
+/// An installed (third-party) plugin `id` in the package store: its own
+/// process, never the shared runner.
+fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, main: String) {
+    let manifest = serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
+        "entry":"main.js","capabilities":[]});
+    let files = [
+        ("manifest.json", manifest.to_string()),
+        ("package.json", r#"{"type":"module"}"#.to_owned()),
+        ("main.js", main),
+    ];
+    let directory = store.join("packages").join(digest(&files));
+    std::fs::create_dir_all(&directory).unwrap();
+    for (name, text) in &files {
+        std::fs::write(directory.join(name), text).unwrap();
+    }
+    catalog["installed"][id] = serde_json::json!({"revision":1,
+        "current":{"digest":digest(&files),"manifest":manifest,"directory":directory},
+        "previous":null,
+        "instance":{"guid":format!("00000000-0000-4000-8000-{n:012x}"),
+            "source":{"kind":"file"},"installedAt":1}});
+}
+
+/// An unpacked package to install (`plugin.packages.validate`): `id` at
+/// `version` in `directory`; its path as a JavaScript string.
+fn candidate(directory: &Path, id: &str, version: &str, main: String) -> String {
+    std::fs::create_dir_all(directory).unwrap();
+    let manifest = serde_json::json!({"id":id,"version":version,"apiVersion":"vestra/1",
+        "entry":"main.js","capabilities":[]});
+    std::fs::write(directory.join("manifest.json"), manifest.to_string()).unwrap();
+    std::fs::write(directory.join("package.json"), r#"{"type":"module"}"#).unwrap();
+    std::fs::write(directory.join("main.js"), main).unwrap();
+    serde_json::to_string(&directory.to_string_lossy()).unwrap()
+}
+
+/// Player 0.6.4: every stop the player makes carries its reason to the
+/// plugin's cleanups, in the shared runner and in an own process: a
+/// reload, an uncaught exception (`failed`), a disable, an uninstall, an
+/// update over the running version (`upgrade`), a first install cancelled
+/// while it activates (`uninstall`), and the player quitting (`quit`, both
+/// runners).
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn every_stop_tells_the_plugin_why() {
+    let root = plugins_root();
+    let plugins_dir = root.path().join("plugins");
+    let store = root.path().join("store");
+    let mut catalog =
+        serde_json::json!({"installed":{},"pending":{},"operations":{},"lastCommit":{}});
+    let up = candidate(
+        &root.path().join("candidates/up"),
+        "aa.fixture-up",
+        "2.0.0",
+        format!(
+            "export default function activate(plugin) {{\n{}\n}}\n",
+            log_stop("aa.fixture-up v2")
+        ),
+    );
+    // Still activating when the manager cancels its install.
+    let new = candidate(
+        &root.path().join("candidates/new"),
+        "aa.fixture-new",
+        "1.0.0",
+        format!(
+            "export default async function activate(plugin) {{\n{}\n\
+             await new Promise((done) => setTimeout(done, 4000));\n}}\n",
+            log_stop("aa.fixture-new")
+        ),
+    );
+    for (n, id) in [
+        "aa.fixture-off",
+        "aa.fixture-gone",
+        "aa.fixture-stays",
+        "aa.fixture-up",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        install(
+            &store,
+            &mut catalog,
+            n + 1,
+            id,
+            format!(
+                "export default function activate(plugin) {{\n{}\n}}\n",
+                log_stop(id)
+            ),
+        );
+    }
+    std::fs::write(store.join("catalog.json"), catalog.to_string()).unwrap();
+    let plugins = [
+        builtin(
+            &plugins_dir,
+            "vestra.fixture-reasons",
+            &log_stop("vestra.fixture-reasons"),
+            false,
+        ),
+        builtin(
+            &plugins_dir,
+            "vestra.fixture-faulty",
+            &format!(
+                "{}\nif (n === 1) setTimeout(() => {{ throw new Error(\"boom\"); }}, 300);",
+                log_stop("vestra.fixture-faulty")
+            ),
+            false,
+        ),
+        builtin_with(
+            &plugins_dir,
+            "vestra.fixture-manager",
+            &format!(
+                "const fail = (e) => console.error(`manage failed ${{e.code}} ${{e.message}}`);\n\
+                 if (n === 1) setTimeout(() => {{\n\
+                   plugin.packages.reload(\"vestra.fixture-reasons\").catch(fail);\n\
+                   plugin.packages.setEnabled(\"aa.fixture-off\", false).catch(fail);\n\
+                   plugin.packages.uninstall(\"aa.fixture-gone\").catch(fail);\n\
+                 }}, 1500);\n\
+                 if (n === 1) setTimeout(async () => {{\n\
+                   try {{\n\
+                     const update = await (await plugin.packages.validate({up})).install();\n\
+                     console.error(`update ${{await update.done}}`);\n\
+                     const first = await (await plugin.packages.validate({new})).install();\n\
+                     let asked = false;\n\
+                     first.onChange((status) => {{\n\
+                       if (status === \"activating\" && !asked) {{ asked = true; first.cancel().catch(fail); }}\n\
+                     }});\n\
+                     console.error(`first install ${{await first.done}}`);\n\
+                   }} catch (e) {{ fail(e); }}\n\
+                 }}, 3000);"
+            ),
+            false,
+            &["plugins.manage"],
+        ),
+    ];
+    let log = run(&plugins, root.path(), 12, &[("VESTRA_LAZY", "0")]);
+    assert!(!log.contains("manage failed"), "{log}");
+    for expected in [
+        "vestra.fixture-reasons 1 stopped for reload reload",
+        "vestra.fixture-reasons 2 stopped for quit quit",
+        "vestra.fixture-faulty 1 stopped for failed failed",
+        "aa.fixture-off 1 stopped for disable disable",
+        "aa.fixture-gone 1 stopped for uninstall uninstall",
+        "aa.fixture-stays 1 stopped for quit quit",
+        "update committed",
+        "aa.fixture-up 1 stopped for upgrade upgrade",
+        "aa.fixture-up v2 1 stopped for quit quit",
+        "first install cancelled",
+        "aa.fixture-new 1 stopped for uninstall uninstall",
+    ] {
+        assert!(log.contains(expected), "{expected}: {log}");
+    }
+    // Each plugin stops once per instance; a stop reason is never lost to
+    // `host-lost` (the pipe closing after the stop line).
+    assert!(!log.contains("host-lost"), "{log}");
+}

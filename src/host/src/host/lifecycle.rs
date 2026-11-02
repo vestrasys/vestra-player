@@ -72,7 +72,7 @@ impl Host {
                     _ => "activation timed out".into(),
                 };
                 self.record_failure(owner, &message);
-                self.disable(owner);
+                self.disable(owner, StopReason::Failed);
             }
         }
     }
@@ -152,13 +152,18 @@ impl Host {
         })?;
         Ok(())
     }
-    pub(crate) fn disable(&mut self, owner: u64) {
-        self.stop(owner, false);
+    /// Stop a running plugin for good (until it starts again) and revoke
+    /// what it holds; its `runtime.stop` carries `reason`.
+    pub(crate) fn disable(&mut self, owner: u64, reason: StopReason) {
+        debug_assert_ne!(reason, StopReason::Idle, "an idle stop is a park");
+        self.stop(owner, reason);
     }
-    /// Stop a running plugin and revoke what it holds. `park` (lazy
-    /// activation, `lazy.rs`): its recordable registrations stay, marked
-    /// recorded, and its process gets longer to finish.
-    pub(crate) fn stop(&mut self, owner: u64, park: bool) {
+    /// Stop a running plugin and revoke what it holds; `reason` goes with
+    /// its `runtime.stop`. `Idle` parks it (lazy activation, `lazy.rs`):
+    /// its recordable registrations stay, marked recorded, and its process
+    /// gets longer to finish.
+    pub(crate) fn stop(&mut self, owner: u64, reason: StopReason) {
+        let park = reason == StopReason::Idle;
         // Process exit commonly follows an explicit disable. The first revoke
         // owns cleanup: a duplicate notification must not cancel its id=0
         // rebuild, clear another instance, or repeat backend/resource cleanup.
@@ -262,6 +267,7 @@ impl Host {
         self.cleanup.insert(owner, (false, false));
         // Waiting for graceful disposal/killing belongs off the Slint event loop.
         if let Some(mut plugin) = self.plugins.remove(&owner) {
+            plugin.set_stop_reason(reason);
             if park {
                 // A routine stop, not a fault: its `onDispose` gets time.
                 plugin.set_stop_wait(lazy::PARK_WAIT);
@@ -306,7 +312,9 @@ impl Host {
                 plugin.manifest.id
             ));
         } else {
-            self.disable(owner);
+            // Its queue is full or its pipe closed: the stop line cannot be
+            // queued either, and the process is killed after the wait.
+            self.disable(owner, StopReason::Failed);
         }
     }
     pub(crate) fn broadcast(&mut self, event: &str, data: Value) {

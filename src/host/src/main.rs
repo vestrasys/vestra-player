@@ -33,8 +33,8 @@ pub mod ui;
 use anyhow::{Result, bail};
 use host::package_activation;
 use host::{
-    Event, FRAME_SINK, Host, InputShared, LAST_SOURCE, MenuMode, PIP_GPU_SINK, restart_log,
-    restart_player,
+    Event, FRAME_SINK, Host, InputShared, LAST_SOURCE, MenuMode, PIP_GPU_SINK, event_loop_ended,
+    restart_log, restart_player, teardown_step,
 };
 use packages::package_manager;
 use playback::{backend::Backend, frame_pacing, render_mode, render_target};
@@ -838,12 +838,19 @@ fn main() -> Result<()> {
         // The loop also ends with an error when the windows' GPU device was
         // lost (a driver reset): tear down as usual first.
         let ran = slint::run_event_loop();
+        // The steps below name themselves (`teardown_step`): a player ended
+        // because its teardown after a device loss took too long says in
+        // restart.log where it was. After a device loss the teardown has 5 s
+        // from here (`host/restart.rs`).
+        event_loop_ended();
+        teardown_step("releasing the GPU renderer's fences");
         // However the loop ended (Quit, the last window closed, a restart):
         // release the GPU renderer's fences before the windows, their
         // device and the renderer go, so a stalled frame cannot hold up the
         // teardown (record 2026-10-render-modes §11.6).
         platform::release_gpu_waits();
         // Lazy activation: what each running plugin was at its ready.
+        teardown_step("recording lazy activation");
         host.borrow_mut().lazy_quit();
         stop_handoffs();
         // Read now: only a loss that ended the loop restarts the player.
@@ -851,6 +858,7 @@ fn main() -> Result<()> {
             // Standard practice is a new device; Slint cannot give its
             // windows one, so the player starts again where it was (already
             // started from the device's callback; this is the fallback).
+            teardown_step("saving the UI state");
             host.borrow_mut().ui_state.flush();
             let source = host.borrow().last_source.clone();
             // Plugin shaders stay `applying` if they were: a device lost
@@ -866,6 +874,7 @@ fn main() -> Result<()> {
             ran?;
             logged!("exit: normal");
         }
+        teardown_step("stopping frame pacing");
         timer.stop();
         frame_pacing::stop();
         frame_pacing::on_deliver(None);
@@ -873,12 +882,20 @@ fn main() -> Result<()> {
         PIP_GPU_SINK.with(|sink| sink.borrow_mut().take());
         host.borrow_mut().ui_state.flush();
         // Native windows/resources must be released before process teardown.
+        teardown_step("closing the secondary windows");
         host.borrow_mut().close_secondary_windows();
         // `run()` used to hide the window it showed; the current shell now.
         let shell = host.borrow_mut().shell.take();
         if let Some(shell) = shell {
+            teardown_step("hiding the main window");
             let _ = shell.hide();
         }
+        // The host (the backend with mpv and its renderer, the plugins)
+        // drops here, inside this block that wrapped it in an `Rc`.
+        teardown_step("dropping the windows, mpv and the plugins");
+        drop(host);
     }
+    // Headless: the host drops when `main` returns.
+    teardown_step("dropping the windows, mpv and the plugins");
     Ok(())
 }

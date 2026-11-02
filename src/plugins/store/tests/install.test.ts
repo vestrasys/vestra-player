@@ -313,7 +313,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
   }
 });
 
-test("updating a disabled plugin keeps it disabled (VS Code); a failure to keep it so is reported", async () => {
+test("older player: updating a disabled plugin keeps it disabled (VS Code); a failure to keep it so is reported", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [
     {
@@ -332,6 +332,8 @@ test("updating a disabled plugin keeps it disabled (VS Code); a failure to keep 
     source: { kind: "repository", url: OFFICIAL },
   });
   const { host, store, stop } = await ready(net, [BUILTIN, installed]);
+  // As players up to 0.6.3: every install runs the plugin (the store disables it again).
+  host.installKeepsDisabled = false;
   const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
   try {
     await choose(host, "YouTube");
@@ -426,6 +428,29 @@ test("README links: web addresses open in the browser, anchors are ignored, othe
     await host.settle(20);
     assert.equal(host.system.urls.at(-1), "https://github.com/example/zysilm.youtube");
     assert.ok(!existsSync(join(host.dataDirectory, "downloads", "x")));
+  } finally {
+    await stop();
+  }
+});
+
+test("player 0.6.4 (keeps the disabled flag): updating a disabled plugin keeps it disabled and says so", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [{ ...YT, versions: [{ version: "0.3.0", capabilities: ["commands"] }, { version: "0.2.0", capabilities: ["commands"] }] }]);
+  const installed = info("zysilm.youtube", {
+    version: "0.2.0",
+    state: "disabled",
+    capabilities: ["commands"],
+    source: { kind: "repository", url: OFFICIAL },
+  });
+  const { host, store, stop } = await ready(net, [BUILTIN, installed]);
+  try {
+    await choose(host, "YouTube");
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("act", "update");
+    await until(host, () => host.osd.includes("已更新 YouTube 到 0.3.0（仍停用）"), "still disabled");
+    await until(host, () => !store.busy);
+    assert.equal(host.packages.find((p) => p.id === "zysilm.youtube")!.state, "disabled");
+    assert.deepEqual(actions(host).map((a) => a.text), ["启用", "卸载…"]);
   } finally {
     await stop();
   }

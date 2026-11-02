@@ -76,7 +76,7 @@ msgstr "검사"
 msgid "Pack"
 msgstr "패키징"
 
-#: ai.slint:129 ai.slint:364 ai.slint:691 delivery.ts:169
+#: ai.slint:129 ai.slint:364 ai.slint:694 delivery.ts:205
 #, x-machine
 msgid "Install"
 msgstr "설치"
@@ -247,17 +247,17 @@ msgstr "다시 시도"
 msgid "Open Settings"
 msgstr "설정 열기"
 
-#: ai.slint:365 ai.slint:692
+#: ai.slint:365 ai.slint:695
 #, x-machine
 msgid "Export .vxp"
 msgstr ".vxp 내보내기"
 
-#: ai.slint:366 ai.slint:693
+#: ai.slint:366 ai.slint:696
 #, x-machine
 msgid "Export Source .zip"
 msgstr "소스 .zip 내보내기"
 
-#: ai.slint:367 ai.slint:584 ai.slint:694
+#: ai.slint:367 ai.slint:587 ai.slint:697
 #, x-machine
 msgid "Open Folder"
 msgstr "폴더 열기"
@@ -408,111 +408,123 @@ msgid "Installed {0} {1}."
 msgstr "{0} {1} 설치 완료."
 
 #: ai.slint:471
+msgid "Installed {0} {1}. It stays disabled, as you set it; enable it in the Plugin Store."
+msgstr "{0} {1} 설치 완료. 설정한 대로 비활성화 상태가 유지됩니다. 플러그인 스토어에서 활성화하세요."
+
+#: ai.slint:472
+msgid "Installed {0} {1}, but it failed: {2}"
+msgstr "{0} {1} 설치 완료. 하지만 오류가 발생했습니다: {2}"
+
+#: ai.slint:473
+msgid "Installed {0} {1}, but it failed."
+msgstr "{0} {1} 설치 완료. 하지만 오류가 발생했습니다."
+
+#: ai.slint:474
 #, x-machine
 msgid "Exported {}"
 msgstr "내보내기 완료: {}"
 
-#: ai.slint:472
+#: ai.slint:475
 #, x-machine
 msgid "Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "{} 내보내기 완료. ID가 local.로 시작합니다: 게시하기 전에 manifest.json의 id를 <GitHub 이름>.<이름>으로 바꾸세요. LICENSE는 임시 파일입니다: 게시하기 전에 선택한 라이선스의 전문으로 바꾸고 manifest.json에 license를 지정하세요."
 
-#: ai.slint:473
+#: ai.slint:476
 #, x-machine
 msgid "Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "{} 내보내기 완료. LICENSE는 임시 파일입니다: 게시하기 전에 선택한 라이선스의 전문으로 바꾸고 manifest.json에 license를 지정하세요."
 
-#: ai.slint:474
+#: ai.slint:477
 #, x-machine
 msgid "Something went wrong: {}"
 msgstr "문제가 발생했습니다: {}"
 
-#: ai.slint:480
+#: ai.slint:483
 #, x-machine
 msgid "{0} ({1}) is taken by {2}"
 msgstr "{0} ({1}): {2}에서 사용 중입니다"
 
-#: ai.slint:483
+#: ai.slint:486
 #, x-machine
 msgid "the player “{}”"
 msgstr "플레이어 “{}”"
 
-#: ai.slint:483
+#: ai.slint:486
 #, x-machine
 msgid "{0} “{1}”"
 msgstr "{0} “{1}”"
 
-#: ai.slint:515
+#: ai.slint:518
 #, x-machine
 msgid "+ New Chat"
 msgstr "+ 새 대화"
 
-#: ai.slint:532 ai.slint:574
+#: ai.slint:535 ai.slint:577
 #, x-machine
 msgid "New chat"
 msgstr "새 대화"
 
-#: ai.slint:532
+#: ai.slint:535
 #, x-machine
 msgid "Today"
 msgstr "오늘"
 
-#: ai.slint:532
+#: ai.slint:535
 #, x-machine
 msgid "Earlier"
 msgstr "이전"
 
-#: ai.slint:545 ai.slint:589
+#: ai.slint:548 ai.slint:592
 #, x-machine
 msgid "Delete Chat"
 msgstr "대화 삭제"
 
-#: ai.slint:552
+#: ai.slint:555
 #, x-machine
 msgid "⚙ Settings"
 msgstr "⚙ 설정"
 
-#: ai.slint:610
+#: ai.slint:613
 #, x-machine
 msgid "Go to Settings"
 msgstr "설정으로 이동"
 
-#: ai.slint:624
+#: ai.slint:627
 #, x-machine
 msgid "What plugin would you like to make, or what would you like to ask?"
 msgstr "어떤 플러그인을 만들고 싶으신가요? 아니면 무엇이든 물어보세요."
 
-#: ai.slint:671
+#: ai.slint:674
 #, x-machine
 msgid "Plugin: {}"
 msgstr "플러그인: {}"
 
-#: ai.slint:725
+#: ai.slint:728
 #, x-machine
 msgid "Another conversation is generating; please wait…"
 msgstr "다른 대화에서 생성 중입니다. 잠시 기다리세요…"
 
-#: ai.slint:725
+#: ai.slint:728
 #, x-machine
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr "메시지 입력… Enter로 보내기 · Shift+Enter로 줄 바꿈"
 
-#: ai.slint:742
+#: ai.slint:745
 #, x-machine
 msgid "Send"
 msgstr "보내기"
 
-#: ai.slint:746
+#: ai.slint:749
 #, x-machine
 msgid "■ Stop"
 msgstr "■ 중지"
 
-#: delivery.ts:167
+#: delivery.ts:203
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "AI가 생성한 “{}” 플러그인을 설치할까요?"
 
-#: delivery.ts:168
+#: delivery.ts:204
 #, x-machine
 msgid ""
 "{1} {2}\n"
@@ -521,7 +533,7 @@ msgstr ""
 "{1} {2}\n"
 "권한: {3}"
 
-#: delivery.ts:168
+#: delivery.ts:204
 #, x-machine
 msgid ""
 "{1} {2}\n"
@@ -530,17 +542,17 @@ msgstr ""
 "{1} {2}\n"
 "권한: 없음"
 
-#: delivery.ts:198
+#: delivery.ts:234
 #, x-machine
 msgid "Replace the installed {}?"
 msgstr "설치된 {} 플러그인을 바꿀까요?"
 
-#: delivery.ts:200
+#: delivery.ts:236
 #, x-machine
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "이 플러그인은 다른 곳에서 설치되었습니다 (Vestra Player AI가 만든 것이 아님). 바꾸면 새 플러그인은 비어 있는 새 데이터 폴더로 시작합니다. 원래 플러그인의 데이터는 보관되며, 원래 출처에서 다시 설치하면 다시 사용됩니다."
 
-#: delivery.ts:201
+#: delivery.ts:237
 #, x-machine
 msgid "Replace"
 msgstr "바꾸기"

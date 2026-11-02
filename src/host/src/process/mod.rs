@@ -64,6 +64,55 @@ impl DataKey {
         }
     }
 }
+/// Why the player stops a plugin: `runtime.stop`'s `data.reason` (player
+/// 0.6.4, SDK 1.5.54 `StopReason`; doc/architecture/README.md "Stop reasons").
+/// The runner adds `host-lost` itself when its pipe to the player closes
+/// without a stop; the player never sends that one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StopReason {
+    /// The player quits (a plugin dropped with the host).
+    #[default]
+    Quit,
+    /// The user disabled it (`packages.setEnabled { enabled: false }`, or
+    /// an install with `enabled: false` over the running version).
+    Disable,
+    /// The user uninstalls it (`packages.uninstall`), or cancels its first
+    /// install while it activates.
+    Uninstall,
+    /// It starts again from the same package (`packages.reload`).
+    Reload,
+    /// Another version replaces it: any install over the running package
+    /// (an update, a reinstall, a `replace` from another source), or the
+    /// previous version coming back when the new one's install is cancelled.
+    Upgrade,
+    /// Lazy activation stops it after a while without use (a park).
+    Idle,
+    /// A fault: an unreadable, oversized or malformed line, a malformed
+    /// request, a full input queue, its process exiting, a failed or timed
+    /// out activation, an uncaught exception in the shared runner.
+    Failed,
+}
+impl StopReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Quit => "quit",
+            Self::Disable => "disable",
+            Self::Uninstall => "uninstall",
+            Self::Reload => "reload",
+            Self::Upgrade => "upgrade",
+            Self::Idle => "idle",
+            Self::Failed => "failed",
+        }
+    }
+    /// `{"reason":"<r>"}`: the data of `runtime.stop` and `runner.stop`.
+    pub fn data(self) -> Value {
+        json!({ "reason": self.as_str() })
+    }
+}
+/// The `runtime.stop` line for a plugin stopped for `reason`.
+pub fn stop_message(reason: StopReason) -> Value {
+    json!({"event":"runtime.stop","data":reason.data()})
+}
 /// Bounded per-plugin output queue. Source state alone emits ~10 events/s while playing,
 /// so a small queue disables healthy plugins after a brief event-loop stall.
 const OUTBOUND_CAPACITY: usize = 1024;
@@ -107,6 +156,9 @@ pub struct Plugin {
     runner: Runner,
     /// How long dropping it waits for its own process (`set_stop_wait`).
     stop_wait: Duration,
+    /// What dropping it tells the plugin (`set_stop_reason`); `quit` for a
+    /// plugin dropped with the host.
+    stop_reason: StopReason,
 }
 impl Plugin {
     /// A development load (`--plugin`): always its own process.
@@ -186,6 +238,7 @@ impl Plugin {
             listeners: BTreeMap::new(),
             runner,
             stop_wait: Duration::from_millis(300),
+            stop_reason: StopReason::Quit,
         })
     }
     pub fn send(&mut self, message: Value) -> Result<()> {
@@ -232,6 +285,11 @@ impl Plugin {
     /// park waits longer, `host/lazy.rs`).
     pub fn set_stop_wait(&mut self, wait: Duration) {
         self.stop_wait = wait;
+    }
+    /// Why it stops: the reason its `runtime.stop` carries when it is
+    /// dropped (`Host::stop`).
+    pub fn set_stop_reason(&mut self, reason: StopReason) {
+        self.stop_reason = reason;
     }
     /// Text values in the interface language, with this plugin's catalog
     /// (`i18n::text`).
@@ -289,42 +347,47 @@ fn own_process(
         }
     });
     let stdout = child.stdout.take().context("plugin stdout")?;
-    thread::spawn(move || {
-        let mut reader = BufReader::new(stdout);
-        loop {
-            // Protocol lines are capped at MAX_MESSAGE_BYTES. Oversize/malformed output terminates the instance.
-            let mut bytes = Vec::new();
-            let read = std::io::Read::by_ref(&mut reader)
-                .take(MAX_MESSAGE_BYTES as u64 + 1)
-                .read_until(b'\n', &mut bytes);
-            match read {
-                Ok(0) | Err(_) => break,
-                Ok(_) if bytes.len() > MAX_MESSAGE_BYTES => {
+    thread::spawn(move || read_plugin(BufReader::new(stdout), generation, &events));
+    Ok(Runner::Own { child, outbound })
+}
+/// An own process's stdout, line by line, as events for `generation`,
+/// until it closes. After an oversized or unparsable line (the plugin is
+/// stopped for it) or once the host no longer listens (quitting: its
+/// receiver goes first), the rest is read and dropped rather than the pipe
+/// closed: a closed pipe fails the plugin's next write, and its runner
+/// would stop it as `host-lost` before the `runtime.stop` that follows
+/// (`failed`, `quit`) arrives.
+fn read_plugin(mut reader: impl BufRead, generation: u64, events: &mpsc::Sender<Event>) {
+    let mut forwarding = true;
+    loop {
+        // Protocol lines are capped at MAX_MESSAGE_BYTES.
+        let mut bytes = Vec::new();
+        let read = Read::by_ref(&mut reader)
+            .take(MAX_MESSAGE_BYTES as u64 + 1)
+            .read_until(b'\n', &mut bytes);
+        match read {
+            Ok(0) | Err(_) => break,
+            Ok(_) if !forwarding => {}
+            Ok(_) if bytes.len() > MAX_MESSAGE_BYTES => {
+                let _ = events.send(Event::RuntimeFault(
+                    generation,
+                    format!("protocol message exceeds {} MiB", MAX_MESSAGE_BYTES >> 20),
+                ));
+                forwarding = false;
+            }
+            Ok(_) => match serde_json::from_slice(&bytes) {
+                Ok(message) => forwarding = events.send(request(generation, message)).is_ok(),
+                Err(e) => {
                     let _ = events.send(Event::RuntimeFault(
                         generation,
-                        format!("protocol message exceeds {} MiB", MAX_MESSAGE_BYTES >> 20),
+                        format!("invalid protocol: {e}"),
                     ));
-                    break;
+                    forwarding = false;
                 }
-                Ok(_) => match serde_json::from_slice(&bytes) {
-                    Ok(message) => {
-                        if events.send(request(generation, message)).is_err() {
-                            return;
-                        }
-                    }
-                    Err(e) => {
-                        let _ = events.send(Event::RuntimeFault(
-                            generation,
-                            format!("invalid protocol: {e}"),
-                        ));
-                        break;
-                    }
-                },
-            }
+            },
         }
-        let _ = events.send(Event::Exited(generation));
-    });
-    Ok(Runner::Own { child, outbound })
+    }
+    let _ = events.send(Event::Exited(generation));
 }
 impl Drop for Plugin {
     fn drop(&mut self) {
@@ -335,9 +398,11 @@ impl Drop for Plugin {
             // The runner lives on; past the same 300 ms the member counts as
             // leaked, and the wait goes on until the runner reports it gone
             // (at most 6 s, `Member::stop`).
-            Runner::Shared(member) => member.stop(),
+            Runner::Shared(member) => member.stop(self.stop_reason),
             Runner::Own { child, outbound } => {
-                let _ = outbound.try_send(json!({"event":"runtime.stop","data":null}));
+                // Not delivered when its queue is full or its pipe closed
+                // (a `failed` stop, often): it is killed after the wait.
+                let _ = outbound.try_send(stop_message(self.stop_reason));
                 let deadline = Instant::now() + self.stop_wait;
                 let mut exited = false;
                 while Instant::now() < deadline {
@@ -391,5 +456,133 @@ mod data_key_tests {
             root.join("development").join("a.b")
         );
         assert_eq!(development.secret_service(), "vestra.dev.a.b");
+    }
+}
+
+#[cfg(test)]
+mod stop_tests {
+    use super::*;
+    use std::io::Cursor;
+
+    /// A development plugin that writes a request every 10 ms and, when it
+    /// stops, writes its `DisposeInfo.reason` to `reason.txt` beside it.
+    fn chatty(root: &Path) -> PathBuf {
+        let directory = root.join("chatty");
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("manifest.json"),
+            json!({"id":"test.chatty","version":"1.0.0","apiVersion":API,
+                "entry":"main.js","capabilities":["ui.osd"]})
+            .to_string(),
+        )
+        .unwrap();
+        std::fs::write(directory.join("package.json"), r#"{"type":"module"}"#).unwrap();
+        std::fs::write(
+            directory.join("main.js"),
+            "import { writeFileSync } from \"node:fs\";\n\
+             export default async function activate(plugin) {\n\
+               setInterval(() => plugin.osd.show(\"x\").catch(() => {}), 10);\n\
+               plugin.onDispose((info) =>\n\
+                 writeFileSync(new URL(\"reason.txt\", import.meta.url), String(info?.reason)));\n\
+             }\n",
+        )
+        .unwrap();
+        directory
+    }
+
+    /// GUI quit (review of 0.6.4): the host's event receiver goes before the
+    /// host drops its plugins (main.rs: the tick timer owns it). A reader
+    /// thread that stopped reading then would let a plugin that writes get
+    /// EPIPE and stop as `host-lost` before its `runtime.stop`; it keeps
+    /// draining instead, so the plugin hears `quit`.
+    #[test]
+    #[ignore = "needs Node 26: run with --include-ignored (ci:local)"]
+    fn a_plugin_still_hears_quit_after_the_host_stopped_listening() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = dunce::canonicalize(chatty(root.path())).unwrap();
+        let manifest = crate::packages::manifest::read_development(&directory).unwrap();
+        let (events, receiver) = mpsc::channel();
+        let runner = own_process(
+            crate::process::runtime_paths::get(),
+            &directory,
+            None,
+            1,
+            events,
+        )
+        .unwrap();
+        let mut plugin = Plugin {
+            manifest,
+            directory: directory.clone(),
+            catalog: None,
+            data_key: DataKey::Development("test.chatty".into()),
+            data_directory: None,
+            subscriptions: BTreeMap::new(),
+            listeners: BTreeMap::new(),
+            runner,
+            stop_wait: Duration::from_millis(1000),
+            stop_reason: StopReason::Quit,
+        };
+        // Answer like the host until it writes on its own.
+        let mut shows = 0;
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while shows < 5 {
+            assert!(Instant::now() < deadline, "the plugin never wrote");
+            let Ok(Event::Request(_, message)) = receiver.recv_timeout(Duration::from_secs(15))
+            else {
+                continue;
+            };
+            if message["method"] == "osd.show" {
+                shows += 1;
+            }
+            if let Some(id) = message["id"].as_u64() {
+                plugin.send(json!({"id":id,"result":null})).unwrap();
+            }
+        }
+        // The host stops listening; the plugin goes on writing.
+        drop(receiver);
+        thread::sleep(Duration::from_millis(300));
+        drop(plugin);
+        let reason = std::fs::read_to_string(directory.join("reason.txt")).unwrap();
+        assert_eq!(reason, "quit");
+    }
+
+    #[test]
+    fn the_reader_drains_to_the_end_after_a_fault_or_a_gone_host() {
+        let big = format!("{}\n", "x".repeat(MAX_MESSAGE_BYTES + 10));
+        for (input, fault) in [
+            (format!("{{\"id\":1}}\n{big}{{\"id\":2}}\n"), Some("1 MiB")),
+            (
+                "{\"id\":1}\nnot json\n{\"id\":2}\n".to_owned(),
+                Some("invalid"),
+            ),
+            ("{\"id\":1}\n{\"id\":2}\n".to_owned(), None),
+        ] {
+            let mut cursor = Cursor::new(input.into_bytes());
+            let (events, received) = mpsc::channel();
+            read_plugin(&mut cursor, 3, &events);
+            drop(events);
+            assert_eq!(cursor.position() as usize, cursor.get_ref().len());
+            let received: Vec<_> = received.into_iter().collect();
+            assert!(matches!(&received[0], Event::Request(3, m) if m["id"] == 1));
+            match fault {
+                // The fault, nothing after it, then the exit at the end.
+                Some(text) => {
+                    assert!(matches!(&received[1], Event::RuntimeFault(3, m) if m.contains(text)));
+                    assert_eq!(received.len(), 3);
+                }
+                None => {
+                    assert!(matches!(&received[1], Event::Request(3, m) if m["id"] == 2));
+                    assert_eq!(received.len(), 3);
+                }
+            }
+            assert!(matches!(received.last(), Some(Event::Exited(3))));
+        }
+        // Nobody listens: it still reads everything (the plugin's writes
+        // never fail).
+        let mut cursor = Cursor::new(b"{\"id\":1}\n{\"id\":2}\n".to_vec());
+        let (events, received) = mpsc::channel();
+        drop(received);
+        read_plugin(&mut cursor, 3, &events);
+        assert_eq!(cursor.position(), 18);
     }
 }

@@ -575,6 +575,12 @@ pub fn app_data_dir() -> Option<PathBuf> {
         .map(|home| PathBuf::from(home).join("Library/Application Support/Vestra"))
 }
 
+/// `~/Library/Caches/Vestra`: data the player can make again (mpv's
+/// compiled shaders).
+pub fn app_cache_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Caches/Vestra"))
+}
+
 /// FFmpeg's name for its stdin, which is the held source file (seekable).
 pub const HELD_FILE_INPUT: &str = "/dev/fd/0";
 

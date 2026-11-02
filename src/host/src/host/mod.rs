@@ -5,7 +5,9 @@
 mod actions;
 pub(crate) use actions::migrate_fullscreen_escape;
 mod diagnostics;
-pub(crate) use diagnostics::{ShaderGuard, register_shader_writer, session_end};
+pub(crate) use diagnostics::{
+    ShaderGuard, persist_shader_guard, register_shader_writer, session_end,
+};
 mod dispatch;
 mod events;
 mod handle;
@@ -31,7 +33,7 @@ use crate::playback::{
     backend::{Backend, Command},
     frame_pacing, render_target, video_click,
 };
-use crate::process::{Plugin, shared_runner};
+use crate::process::{Plugin, StopReason, shared_runner};
 use crate::ui::{
     bar_buttons, composition, drops, menu, pip, settings_window, slot_claims, ui_image, ui_state,
     ui_values, view, window_control, window_state,
@@ -73,7 +75,9 @@ pub(crate) use menus::{
     apply_menu_levels, debug_menu, debug_menu_pointer, menu_levels, track_pointer,
 };
 pub(crate) use mounts::refuse_initial;
-pub(crate) use restart::{LAST_SOURCE, LostDevice, restart_log, restart_player};
+pub(crate) use restart::{
+    LAST_SOURCE, LostDevice, event_loop_ended, restart_log, restart_player, teardown_step,
+};
 pub(crate) use rpc::{Reply, Request, RpcError, string, ui_error};
 pub(crate) use state::{LayoutChange, layout_change, policy_slot};
 pub(crate) use video::{FRAME_SINK, PIP_GPU_SINK};

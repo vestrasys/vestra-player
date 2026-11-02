@@ -323,6 +323,18 @@ impl BufferRing {
             *slot = Some(buffer.clone());
         }
     }
+    /// Drop the ring's handles (playback stopped: they would keep up to
+    /// `RING` frames of 25 MB each at 3840x2160 for nothing). Every buffer
+    /// is freed except one the frame slot or the UI still holds (the last
+    /// picture), which lives on through that handle; the next `take` allocates.
+    pub fn release(&mut self) {
+        self.slots.clear();
+    }
+    /// Buffers the ring holds a handle to.
+    #[cfg(test)]
+    pub fn held(&self) -> usize {
+        self.slots.iter().filter(|slot| slot.is_some()).count()
+    }
 }
 
 /// One frame for the video area; `buffer` is drawn into directly and handed to
@@ -787,6 +799,27 @@ mod tests {
         }
         let resized = ring.take(32, 32);
         assert_eq!((resized.width(), resized.height()), (32, 32));
+    }
+
+    #[test]
+    fn a_released_ring_holds_nothing_and_takes_again() {
+        let mut ring = BufferRing::default();
+        for _ in 0..RING {
+            let buffer = ring.take(64, 32);
+            ring.keep(&buffer);
+        }
+        assert_eq!(ring.held(), RING);
+        let mut shown = ring.take(64, 32);
+        shown.make_mut_bytes()[0] = 7;
+        ring.keep(&shown);
+        ring.release();
+        assert_eq!(ring.held(), 0);
+        // The UI's handle keeps its picture.
+        assert_eq!(shown.as_bytes()[0], 7);
+        let again = ring.take(64, 32);
+        assert_eq!((again.width(), again.height()), (64, 32));
+        ring.keep(&again);
+        assert_eq!(ring.held(), 1);
     }
 
     #[test]

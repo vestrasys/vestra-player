@@ -45,8 +45,8 @@ fn fixture(root: &Path) -> serde_json::Value {
              console.error(`{ID} start ${{n}}`);\n\
              plugin.commands.add({{ id: \"hello\", path: [\"Tools\", \"Hello\"],\n\
              run: () => console.error(`{ID} hello in start ${{n}}`) }});\n\
-             plugin.onDispose(() => new Promise((done) => setTimeout(() => {{\n\
-             console.error(`{ID} disposed ${{n}}`); done(); }}, 1200)));\n}}\n"
+             plugin.onDispose((info) => new Promise((done) => setTimeout(() => {{\n\
+             console.error(`{ID} disposed ${{n}} for ${{info?.reason}}`); done(); }}, 1200)));\n}}\n"
         ),
     )
 }
@@ -196,8 +196,9 @@ fn an_idle_plugin_is_parked_replayed_woken_by_its_command_and_parked_again() {
             second.contains(&format!("lazy: {ID} waits for its stopped process")),
             "{second}"
         );
+        // A park is an idle stop (`runtime.stop` reason `idle`, player 0.6.4).
         let disposed = second
-            .find(&format!("{ID} disposed 1"))
+            .find(&format!("{ID} disposed 1 for idle"))
             .unwrap_or_else(|| panic!("disposed: {second}"));
         let again = second
             .find(&format!("{ID} start 2"))

@@ -1,11 +1,12 @@
 import type { Change, Runtime } from "./runtime.ts";
-import type { Disposable, Plugin, PluginError, Scope } from "./types.ts";
+import type { Disposable, DisposeInfo, Plugin, PluginError, Scope, StopReason } from "./types.ts";
 export declare class ScopeImpl implements Plugin {
     #private;
     readonly runtime: Runtime;
     constructor(runtime: Runtime, parent?: ScopeImpl);
     get id(): string;
     get dataDirectory(): string;
+    get stopReason(): StopReason | undefined;
     get disposed(): boolean;
     readonly commands: import("./types.ts").Commands;
     readonly when: import("./types.ts").When;
@@ -49,7 +50,7 @@ export declare class ScopeImpl implements Plugin {
     add<T extends Disposable>(item: T): T;
     /** Handles call this when disposed directly, so the scope forgets them. */
     forget(item: Disposable): void;
-    onDispose(cleanup: () => void | Promise<void>): Disposable;
+    onDispose(cleanup: ((info?: DisposeInfo) => void | Promise<void>) | (() => void | Promise<void>)): Disposable;
     onError(listener: (error: PluginError) => void): Disposable;
     report(error: unknown): void;
     /** Invoke plugin code on its behalf: report failures, then refresh bindings. */

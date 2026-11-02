@@ -56,7 +56,8 @@ struct MpvD3d11Fbo {
 
 const USAGE: &str = "usage: gpu-probe info | gpu-probe adapters | gpu-probe interop default|warp|<index> | gpu-probe run [--adapter default|warp|<index>] \
 [--src <path|url>] [--size WxH] [--seconds S] [--warmup S] [--hwdec MODE] [--gl] [--host-vf] \
-[--block] [--sync] [--lag N] [--png out.png] [--log LEVEL] [--vf FILTERS] [--at SECONDS]";
+[--block] [--sync] [--lag N] [--png out.png] [--log LEVEL] [--vf FILTERS] [--at SECONDS] \
+[--glsl-shaders A;B] [--set NAME=VALUE]... [--set-late NAME=VALUE]... [--sample S] [--hog-mb N] [--max-commit PCT]";
 
 pub fn main() -> i32 {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -107,6 +108,23 @@ struct Options {
     /// After the measurement, pause on the frame at this time (exact seek)
     /// and read that back, so every run captures (--png) the same frame.
     at: Option<f64>,
+    /// mpv's `glsl-shaders` (a `;`-separated list, as mpv takes it on
+    /// Windows), set before loadfile: the shader upscaling plugin's chains.
+    glsl_shaders: Option<String>,
+    /// Further mpv options (`--set name=value`, repeatable), before loadfile.
+    set: Vec<(String, String)>,
+    /// mpv properties set after `mpv_initialize`, before the render context
+    /// (`--set-late`, repeatable): as the host sets `gpu-shader-cache-dir`.
+    set_late: Vec<(String, String)>,
+    /// Print a resource line (frames, render times, GPU memory, private
+    /// bytes, system commit, removed reason) every this many seconds.
+    sample: Option<f64>,
+    /// Before the run, commit and touch this many MiB (memory pressure),
+    /// stopping short of `max_commit`.
+    hog_mb: u64,
+    /// Never push the system commit charge above this percentage: the hog
+    /// stops there, and the run ends once the charge passes it.
+    max_commit: f64,
 }
 
 impl Options {
@@ -127,6 +145,12 @@ impl Options {
             log: "info".into(),
             vf: None,
             at: None,
+            glsl_shaders: None,
+            set: Vec::new(),
+            set_late: Vec::new(),
+            sample: None,
+            hog_mb: 0,
+            max_commit: 92.0,
         };
         let mut args = args.iter();
         while let Some(flag) = args.next() {
@@ -163,6 +187,32 @@ impl Options {
                         return Err("bad --at".into());
                     }
                     options.at = Some(at);
+                }
+                "--glsl-shaders" => options.glsl_shaders = Some(value()?),
+                "--set" => {
+                    let v = value()?;
+                    let (name, setting) = v.split_once('=').ok_or("--set name=value")?;
+                    options.set.push((name.into(), setting.into()));
+                }
+                "--set-late" => {
+                    let v = value()?;
+                    let (name, setting) = v.split_once('=').ok_or("--set-late name=value")?;
+                    options.set_late.push((name.into(), setting.into()));
+                }
+                "--sample" => {
+                    let s: f64 = value()?.parse().map_err(|_| "bad --sample")?;
+                    if !(s.is_finite() && s > 0.0) {
+                        return Err("bad --sample".into());
+                    }
+                    options.sample = Some(s);
+                }
+                "--hog-mb" => options.hog_mb = value()?.parse().map_err(|_| "bad --hog-mb")?,
+                "--max-commit" => {
+                    let p: f64 = value()?.parse().map_err(|_| "bad --max-commit")?;
+                    if !(p > 0.0 && p <= 100.0) {
+                        return Err("bad --max-commit".into());
+                    }
+                    options.max_commit = p;
                 }
                 _ => return Err(format!("unknown argument {flag}\n{USAGE}")),
             }
@@ -1061,6 +1111,14 @@ impl Handle {
         let r = unsafe { mpv::mpv_set_option_string(self.0, n.as_ptr(), v.as_ptr()) };
         if r < 0 { Err(format!("set {name}={value}: {}", error_text(r))) } else { Ok(()) }
     }
+    /// A property after `mpv_initialize` (`mpv_set_property_string`).
+    fn set_property(&self, name: &str, value: &str) -> Result<(), String> {
+        let (n, v) =
+            (CString::new(name).unwrap_or_default(), CString::new(value).unwrap_or_default());
+        // SAFETY: live handle, NUL-terminated strings copied by mpv.
+        let r = unsafe { mpv::mpv_set_property_string(self.0, n.as_ptr(), v.as_ptr()) };
+        if r < 0 { Err(format!("set property {name}={value}: {}", error_text(r))) } else { Ok(()) }
+    }
     fn get(&self, name: &str) -> String {
         let n = CString::new(name).unwrap_or_default();
         // SAFETY: live handle; the returned string is owned by us and freed
@@ -1150,6 +1208,137 @@ fn process_cpu_seconds() -> f64 {
     let _ = unsafe { GetProcessTimes(GetCurrentProcess(), &mut c, &mut e, &mut k, &mut u) };
     let t = |f: FILETIME| ((f.dwHighDateTime as u64) << 32 | f.dwLowDateTime as u64) as f64 * 1e-7;
     t(k) + t(u)
+}
+
+/// The system commit charge in percent of the commit limit, and the charge
+/// and limit in MiB (what Task Manager's "Committed" shows).
+fn system_commit() -> (f64, u64, u64) {
+    use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+    let mut status =
+        MEMORYSTATUSEX { dwLength: size_of::<MEMORYSTATUSEX>() as u32, ..Default::default() };
+    // SAFETY: a live struct with dwLength set, as the call requires.
+    if unsafe { GlobalMemoryStatusEx(&mut status) }.is_err() || status.ullTotalPageFile == 0 {
+        return (0.0, 0, 0);
+    }
+    let used = status.ullTotalPageFile - status.ullAvailPageFile;
+    (
+        100.0 * used as f64 / status.ullTotalPageFile as f64,
+        used >> 20,
+        status.ullTotalPageFile >> 20,
+    )
+}
+
+/// This process's private bytes (commit charge), MiB.
+fn private_mib() -> u64 {
+    use windows::Win32::System::ProcessStatus::{
+        GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
+    };
+    let mut counters = PROCESS_MEMORY_COUNTERS_EX::default();
+    // SAFETY: the current process's pseudo-handle; the buffer is a live
+    // PROCESS_MEMORY_COUNTERS_EX whose size is passed.
+    let ok = unsafe {
+        GetProcessMemoryInfo(
+            GetCurrentProcess(),
+            (&mut counters as *mut PROCESS_MEMORY_COUNTERS_EX).cast::<PROCESS_MEMORY_COUNTERS>(),
+            size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
+        )
+    };
+    if ok.is_ok() { (counters.PrivateUsage >> 20) as u64 } else { 0 }
+}
+
+/// This process's video memory on the device's adapter, MiB:
+/// (local usage, local budget, non-local usage, non-local budget). Local is
+/// the dedicated VRAM of a discrete GPU; non-local is shared system memory.
+fn video_memory(device: &ID3D11Device) -> Option<(u64, u64, u64, u64)> {
+    use windows::Win32::Graphics::Dxgi::{
+        DXGI_MEMORY_SEGMENT_GROUP_LOCAL, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,
+        DXGI_QUERY_VIDEO_MEMORY_INFO, IDXGIAdapter3,
+    };
+    // SAFETY: the device is live; the out-structs are live locals.
+    unsafe {
+        let adapter: IDXGIAdapter3 =
+            device.cast::<IDXGIDevice>().ok()?.GetAdapter().ok()?.cast().ok()?;
+        let (mut local, mut shared) =
+            (DXGI_QUERY_VIDEO_MEMORY_INFO::default(), DXGI_QUERY_VIDEO_MEMORY_INFO::default());
+        adapter.QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &mut local).ok()?;
+        adapter.QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &mut shared).ok()?;
+        Some((
+            local.CurrentUsage >> 20,
+            local.Budget >> 20,
+            shared.CurrentUsage >> 20,
+            shared.Budget >> 20,
+        ))
+    }
+}
+
+/// Why the device stopped working (`GetDeviceRemovedReason`), if it did.
+fn removed_reason(device: &ID3D11Device) -> Option<String> {
+    // SAFETY: the device is live; the call only reads its state.
+    match unsafe { device.GetDeviceRemovedReason() } {
+        Ok(()) => None,
+        Err(e) => Some(format!("{:#010x} {}", e.code().0 as u32, e.message())),
+    }
+}
+
+/// Memory pressure (`--hog-mb`): commit and touch up to `mb` MiB in 64 MiB
+/// blocks, stopping before the system commit charge passes `max_commit`.
+fn hog(mb: u64, max_commit: f64) -> Vec<Vec<u8>> {
+    const BLOCK: u64 = 64;
+    let mut blocks = Vec::new();
+    let mut taken = 0;
+    while taken + BLOCK <= mb {
+        let (percent, used, limit) = system_commit();
+        // The next block's share of the limit must still fit under it.
+        if limit == 0 || percent + 100.0 * BLOCK as f64 / limit as f64 > max_commit {
+            println!(
+                "  hog: stopped at {taken} MiB (system commit {percent:.1}% = {used}/{limit} MiB)"
+            );
+            return blocks;
+        }
+        // Touched (non-zero), so the pages are really committed and resident.
+        blocks.push(vec![1u8; (BLOCK << 20) as usize]);
+        taken += BLOCK;
+    }
+    let (percent, used, limit) = system_commit();
+    println!("  hog: holding {taken} MiB (system commit {percent:.1}% = {used}/{limit} MiB)");
+    blocks
+}
+
+/// One `--sample` interval's counts.
+#[derive(Default)]
+struct Interval {
+    frames: u64,
+    cpu_ms: f64,
+    cpu_max: f64,
+    gpu_ms: f64,
+    gpu_n: u64,
+    gpu_max: f64,
+}
+
+impl Interval {
+    /// The resource line for this interval (and the removed reason, if any).
+    fn line(&self, at: f64, seconds: f64, device: &ID3D11Device) -> (String, Option<String>) {
+        let (commit, used, limit) = system_commit();
+        let vram = video_memory(device).map_or("vram n/a".into(), |(l, lb, s, sb)| {
+            format!("local {l}/{lb} MiB, non-local {s}/{sb} MiB")
+        });
+        let removed = removed_reason(device);
+        let per = |sum: f64, n: u64| if n == 0 { 0.0 } else { sum / n as f64 };
+        (
+            format!(
+                "  [t={at:5.1}s] {:5.1} fps, render cpu mean {:.1} max {:.1} ms, gpu mean {:.1} max {:.1} ms (n={}); {vram}; private {} MiB; commit {commit:.1}% ({used}/{limit} MiB){}",
+                self.frames as f64 / seconds.max(1e-9),
+                per(self.cpu_ms, self.frames),
+                self.cpu_max,
+                per(self.gpu_ms, self.gpu_n),
+                self.gpu_max,
+                self.gpu_n,
+                private_mib(),
+                removed.as_ref().map(|r| format!("; DEVICE REMOVED {r}")).unwrap_or_default()
+            ),
+            removed,
+        )
+    }
 }
 
 /// D3D timestamp queries around one render: GPU time without stalling.
@@ -1380,6 +1569,12 @@ fn capture_at(
 }
 
 fn run(o: &Options) -> Result<(), String> {
+    let (commit, used, limit) = system_commit();
+    println!("system commit at start: {commit:.1}% ({used}/{limit} MiB)");
+    if commit > o.max_commit {
+        return Err(format!("the system commit is above --max-commit {}%", o.max_commit));
+    }
+    let _hog = if o.hog_mb > 0 { hog(o.hog_mb, o.max_commit) } else { Vec::new() };
     let d = create_device(o.adapter)?;
     println!(
         "D3D11 device: {} LUID={} FL=0x{:x} VIDEO_SUPPORT={} multithread-protected",
@@ -1418,6 +1613,12 @@ fn run(o: &Options) -> Result<(), String> {
     if let Some(vf) = o.filter_chain() {
         handle.set("vf", &vf)?;
     }
+    if let Some(shaders) = &o.glsl_shaders {
+        handle.set("glsl-shaders", shaders)?;
+    }
+    for (name, value) in &o.set {
+        handle.set(name, value)?;
+    }
     if o.at.is_some() {
         // Exact seeks (the capture at the end): the frame shown is the first
         // one at or after the target, the same in every run.
@@ -1427,6 +1628,9 @@ fn run(o: &Options) -> Result<(), String> {
     let r = unsafe { mpv::mpv_initialize(handle.0) };
     if r < 0 {
         return Err(format!("mpv_initialize: {}", error_text(r)));
+    }
+    for (name, value) in &o.set_late {
+        handle.set_property(name, value)?;
     }
     let level = CString::new(o.requested_log()).unwrap_or_default();
     // SAFETY: live handle, NUL-terminated level.
@@ -1527,12 +1731,42 @@ fn run(o: &Options) -> Result<(), String> {
     let (mut measured_from, mut cpu_from, mut frames, mut all_frames, mut last_frame) =
         (None::<Instant>, 0.0, 0u64, 0u64, None::<Instant>);
     let mut errors = 0u32;
+    let (mut interval, mut sampled_at) = (Interval::default(), Instant::now());
+    let mut first_frame_logged = false;
+    let mut stopped: Option<String> = None;
     while start.elapsed() < total {
         wake.wait(Duration::from_millis(100));
+        if let Some(every) = o.sample
+            && sampled_at.elapsed().as_secs_f64() >= every
+        {
+            let (line, removed) = interval.line(
+                start.elapsed().as_secs_f64(),
+                sampled_at.elapsed().as_secs_f64(),
+                &d.device,
+            );
+            println!("{line}");
+            (interval, sampled_at) = (Interval::default(), Instant::now());
+            let (commit, _, _) = system_commit();
+            if let Some(removed) = removed {
+                stopped = Some(format!("the device was removed: {removed}"));
+            } else if commit > o.max_commit {
+                stopped = Some(format!("system commit {commit:.1}% passed --max-commit"));
+            }
+            if stopped.is_some() {
+                break;
+            }
+        }
         // SAFETY: live render context, called from this (render) thread only.
         let flags = unsafe { mpv::mpv_render_context_update(render) };
         if flags & mpv::MPV_RENDER_UPDATE_FRAME as u64 == 0 {
             continue;
+        }
+        if !first_frame_logged {
+            first_frame_logged = true;
+            println!(
+                "  first frame due {:.2} s after loadfile (shaders compile inside the render calls that follow)",
+                start.elapsed().as_secs_f64()
+            );
         }
         let measuring = start.elapsed() >= warm;
         if measuring && measured_from.is_none() {
@@ -1546,10 +1780,13 @@ fn run(o: &Options) -> Result<(), String> {
             );
         }
         let slot = (all_frames % timers.len() as u64) as usize;
-        if let Some(ms) = timers[slot].poll(&d.context)
-            && measuring
-        {
-            gpu_ms.0.push(ms);
+        if let Some(ms) = timers[slot].poll(&d.context) {
+            interval.gpu_ms += ms;
+            interval.gpu_n += 1;
+            interval.gpu_max = interval.gpu_max.max(ms);
+            if measuring {
+                gpu_ms.0.push(ms);
+            }
         }
         let timer = &mut timers[slot];
         let can_time = !timer.pending;
@@ -1593,10 +1830,23 @@ fn run(o: &Options) -> Result<(), String> {
             r
         };
         let elapsed = t0.elapsed().as_secs_f64() * 1e3;
+        interval.frames += 1;
+        interval.cpu_ms += elapsed;
+        interval.cpu_max = interval.cpu_max.max(elapsed);
+        if elapsed > 1000.0 {
+            println!(
+                "  [t={:.1}s] one mpv_render_context_render took {elapsed:.0} ms",
+                start.elapsed().as_secs_f64()
+            );
+        }
         if r < 0 {
             errors += 1;
             if errors < 5 {
                 println!("mpv_render_context_render: {}", error_text(r));
+            }
+            if let Some(removed) = removed_reason(&d.device) {
+                stopped = Some(format!("the device was removed: {removed}"));
+                break;
             }
             continue;
         }
@@ -1657,7 +1907,19 @@ fn run(o: &Options) -> Result<(), String> {
     }
     let wall = measured_from.map_or(0.0, |t| t.elapsed().as_secs_f64());
     let cpu = process_cpu_seconds() - cpu_from;
-    if let Some(at) = o.at {
+    if let Some(why) = &stopped {
+        println!("  STOPPED at t={:.1}s: {why}", start.elapsed().as_secs_f64());
+    }
+    if o.sample.is_some() {
+        let (line, _) = interval.line(
+            start.elapsed().as_secs_f64(),
+            sampled_at.elapsed().as_secs_f64(),
+            &d.device,
+        );
+        println!("{line}");
+    }
+    let removed = removed_reason(&d.device).is_some();
+    if let Some(at) = o.at.filter(|_| !removed) {
         // Measurement done: pause on the frame at `at` and render it into a
         // target of its own, which becomes "the last rendered frame" below.
         let slot = (all_frames % RING as u64) as usize;
@@ -1753,13 +2015,17 @@ fn run(o: &Options) -> Result<(), String> {
     if rendered.is_empty() {
         println!("  WARNING: no frame was rendered; the readback is of an empty target");
     }
-    let pixels = read_back(&d, &targets[last], o.size)?;
-    println!("  D3D readback: {}", picture_stats(&pixels));
-    if let Some(path) = &o.png {
+    let pixels = if removed { Vec::new() } else { read_back(&d, &targets[last], o.size)? };
+    if removed {
+        println!("  no readback: the device was removed");
+    } else {
+        println!("  D3D readback: {}", picture_stats(&pixels));
+    }
+    if let Some(path) = o.png.as_ref().filter(|_| !removed) {
         write_png(path, &pixels, o.size)?;
         println!("  wrote {path} (and -small preview)");
     }
-    if let Some(s) = shared.get(last) {
+    if let Some(s) = shared.get(last).filter(|_| !removed) {
         s.blit()?;
         let gl_pixels = s.read_own();
         println!("  GL readback: {}", picture_stats(&gl_pixels));
@@ -1816,6 +2082,44 @@ mod tests {
         assert!(parse(&["--at", "NaN"]).is_err());
         assert!(parse(&["--at", "x"]).is_err());
         assert!(parse(&["--vf"]).is_err());
+    }
+
+    #[test]
+    fn shader_and_resource_options_are_parsed() {
+        let o = parse(&[]).unwrap();
+        assert!(o.glsl_shaders.is_none() && o.set.is_empty() && o.sample.is_none());
+        assert_eq!((o.hog_mb, o.max_commit), (0, 92.0));
+        let o = parse(&[
+            "--glsl-shaders",
+            "a.glsl;b.glsl",
+            "--set",
+            "scale=ewa_lanczos",
+            "--set",
+            "x=a=b",
+            "--sample",
+            "1",
+            "--hog-mb",
+            "512",
+            "--max-commit",
+            "90",
+        ])
+        .unwrap();
+        assert_eq!(o.glsl_shaders.as_deref(), Some("a.glsl;b.glsl"));
+        assert_eq!(
+            o.set,
+            [("scale".to_string(), "ewa_lanczos".to_string()), ("x".into(), "a=b".into())]
+        );
+        assert_eq!((o.sample, o.hog_mb, o.max_commit), (Some(1.0), 512, 90.0));
+        for bad in [
+            &["--set", "novalue"][..],
+            &["--sample", "0"],
+            &["--sample", "x"],
+            &["--max-commit", "0"],
+            &["--max-commit", "101"],
+            &["--hog-mb", "-1"],
+        ] {
+            assert!(parse(bad).is_err(), "{bad:?}");
+        }
     }
 
     #[test]

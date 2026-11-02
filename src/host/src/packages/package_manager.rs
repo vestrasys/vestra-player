@@ -5,7 +5,7 @@ use crate::packages::package_stage::Candidate;
 use crate::packages::package_store::{Instance, Source, Store, StoredPackage};
 use crate::packages::{package_stage, package_store};
 use crate::playback::backend::Command;
-use crate::process::{Plugin, shared_runner};
+use crate::process::{Plugin, StopReason, shared_runner};
 use crate::{i18n, platform, process};
 use anyhow::Result;
 use process::DataKey;
@@ -92,6 +92,10 @@ struct Operation {
     /// A data directory this operation's new instance created; removed when
     /// the operation fails or is cancelled.
     fresh_data: Option<PathBuf>,
+    /// Whether the target runs once committed
+    /// (`package_store::enables_after_install`). When it does not, nothing
+    /// activates it: the commit installs its files only.
+    enabled: bool,
     phase: String,
     owner: Option<u64>,
     waiting: Option<u64>,
@@ -344,8 +348,10 @@ impl Host {
             .filter(|(_, plugin)| plugin.shared_runner() == Some(id))
             .map(|(owner, plugin)| (*owner, plugin.manifest.id.clone()))
             .collect::<Vec<_>>();
+        // The runner is killed already: no member gets its `runtime.stop`
+        // (their cleanups do not run; nothing is left to tell).
         for (owner, _) in &members {
-            self.disable(*owner);
+            self.disable(*owner, StopReason::Failed);
         }
         for (_, plugin) in members {
             if !failed_open {
@@ -521,6 +527,7 @@ impl Host {
                 }
                 let source = install_source(params)?;
                 let replace = params.get("replace").is_some_and(|v| v == true);
+                let requested = install_enabled(params)?;
                 let token = string(params, "token")?;
                 let candidate = self
                     .packages
@@ -546,7 +553,21 @@ impl Host {
                 // waits while the cleanup thread removes that one.
                 self.library_busy(Some(candidate.digest()))?;
                 let target = self.packages.store.stage(&candidate)?;
-                self.start_operation(request, request_spec, target, before, instance, fresh)
+                // An update of a package the user disabled stays disabled
+                // and is not activated, unless the installer asks.
+                let enabled = package_store::enables_after_install(
+                    &before,
+                    self.packages.store.disabled().contains(&id),
+                    requested,
+                );
+                self.start_operation(
+                    request,
+                    request_spec,
+                    target,
+                    before,
+                    (instance, fresh),
+                    enabled,
+                )
             }
             "packages.operation" | "packages.cancel" => {
                 let id = string(params, "operationId")?;
@@ -607,15 +628,16 @@ impl Host {
         install_instance(&self.packages.store, id, before, source, replace)
     }
     /// Journal the install and stop the running version; the tick activates
-    /// the target and commits or restores.
+    /// the target and commits or restores. A target that is not `enabled`
+    /// is committed without activating it (files only).
     fn start_operation(
         &mut self,
         request: String,
         request_spec: Value,
         target: StoredPackage,
         before: package_store::Installed,
-        instance: Option<Instance>,
-        fresh: bool,
+        (instance, fresh): (Option<Instance>, bool),
+        enabled: bool,
     ) -> std::result::Result<Value, RpcError> {
         let id = target.manifest.id.clone();
         let result = json!({"operationId":request,"packageId":id,"status":"preparing","request":request_spec,
@@ -645,8 +667,20 @@ impl Host {
         // digest: its recording is of no use).
         self.forget_parked(&id, true);
         let running = self.running(&id);
+        // `upgrade` for every install over a running version that runs on:
+        // an update, a reinstall of the same version, and a `replace` from
+        // another source (`fresh` data) alike. An install that leaves it
+        // off (`enabled: false`; a running package is never disabled, so
+        // only the installer's option does this) switches the plugin off:
+        // `disable`, as `packages.setEnabled(false)` (its session values go
+        // too, at the commit).
         if let Some(owner) = running {
-            self.disable(owner);
+            let reason = if enabled {
+                StopReason::Upgrade
+            } else {
+                StopReason::Disable
+            };
+            self.disable(owner, reason);
         }
         // Parked just now: its process may still be finishing; the new
         // version starts once it is gone, as after a running one.
@@ -664,6 +698,7 @@ impl Host {
                 target_key: DataKey::Instance(target_guid),
                 old_key,
                 fresh_data,
+                enabled,
                 phase: "preparing".into(),
                 owner: None,
                 waiting,
@@ -1240,7 +1275,7 @@ impl Host {
         }
         if !enabled {
             if let Some(owner) = running {
-                self.disable(owner);
+                self.disable(owner, StopReason::Disable);
             }
             // Parked: its recorded entries go; the recording stays (not
             // replayed while it is disabled).
@@ -1345,7 +1380,7 @@ impl Host {
         self.forget_parked(id, true);
         let running = self.running(id);
         if let Some(owner) = running {
-            self.disable(owner);
+            self.disable(owner, StopReason::Reload);
         }
         if let Some(owner) = running.or_else(|| self.parked_process(id)) {
             let now = self.now_ms();
@@ -1454,7 +1489,7 @@ impl Host {
             .parked_process(&id)
             .filter(|owner| self.cleanup.get(owner).is_some_and(|(reaped, _)| !reaped));
         if let Some(owner) = self.running(&id) {
-            self.disable(owner);
+            self.disable(owner, StopReason::Uninstall);
             // Delete the data after the process is gone (it flushes on stop).
             if let Some(directory) = data.clone() {
                 self.data_removals.insert(owner, directory);
@@ -1591,6 +1626,8 @@ impl Host {
                         target_key: DataKey::Instance(target_guid),
                         old_key,
                         fresh_data,
+                        // Restored, never committed.
+                        enabled: false,
                         phase: "restoring".into(),
                         owner: None,
                         waiting: None,
@@ -1687,6 +1724,18 @@ impl Host {
             }
             op.waiting = None;
         }
+        if op.phase == "preparing" && !op.cancel && !op.enabled {
+            // It stays (or becomes) disabled: its files are installed and
+            // nothing runs it, not even to check its activation.
+            let was_enabled = !self.packages.store.disabled().contains(&op.package);
+            self.commit_operation(op, None)?;
+            // Switched off by this install: its session values go, as for
+            // `packages.setEnabled(false)`.
+            if was_enabled && let Some(key) = &op.old_key {
+                self.session_storage.clear(key);
+            }
+            return Ok(());
+        }
         if op.phase == "preparing" && !op.cancel {
             match self.load_package(
                 &op.target.directory,
@@ -1712,53 +1761,32 @@ impl Host {
                 } else {
                     format!("activation {status}: {}", self.activation(owner)?)
                 });
-                self.disable(owner);
+                // Cancelled: the version it replaced comes back (an
+                // `upgrade` in reverse), or, a first install, it goes
+                // (`uninstall`); else its activation failed.
+                let reason = match (op.cancel, op.old.is_some()) {
+                    (true, true) => StopReason::Upgrade,
+                    (true, false) => StopReason::Uninstall,
+                    (false, _) => StopReason::Failed,
+                };
+                self.disable(owner, reason);
                 op.waiting = Some(owner);
                 op.owner = None;
                 op.phase = "restoring".into();
                 return Ok(());
             }
             if status == "ready" {
-                let receipt = json!({"operationId":op.id,"packageId":op.package,"status":"committed","owner":owner,"request":op.request});
-                let outcome = self
-                    .packages
-                    .store
-                    .commit_with_receipt(&op.package, &op.id, receipt);
-                let installed = match outcome {
-                    Ok(installed) => installed,
-                    Err(error) => {
-                        let installed = self.packages.store.get(&op.package);
-                        if installed
-                            .current
-                            .as_ref()
-                            .is_some_and(|p| p.digest == op.target.digest)
-                            && self
-                                .packages
-                                .store
-                                .operations()
-                                .get(&op.id)
-                                .is_some_and(|v| v["status"] == "committed")
-                        {
-                            installed
-                        } else {
-                            return Err(error);
-                        }
-                    }
-                };
-                op.phase = "committed".into();
-                op.result = json!({"operationId":op.id,"packageId":op.package,"status":"committed","installed":installed,"owner":owner,"request":op.request});
-                // The version this replaced is not kept.
-                if let Some(old) = &op.old {
-                    self.discard(&old.digest);
-                }
-                return Ok(());
+                return self.commit_operation(op, Some(owner));
             }
         }
         if op.phase == "preparing" && op.cancel {
             op.phase = "restoring".into();
         }
         if op.phase == "restoring" {
-            if let Some(old) = op.old.clone() {
+            // The disabled flag is still the one from before the install: a
+            // package that was disabled is restored without running.
+            let stopped = self.packages.store.disabled().contains(&op.package);
+            if let Some(old) = op.old.clone().filter(|_| !stopped) {
                 if op.owner.is_none() {
                     let key = op.old_key.clone().unwrap_or_else(|| op.target_key.clone());
                     op.owner = Some(self.load_package(&old.directory, &old.manifest, key)?);
@@ -1789,6 +1817,55 @@ impl Host {
         }
         op.result = json!({"operationId":op.id,"packageId":op.package,"status":op.phase,"owner":op.owner,"cancelRequested":op.cancel});
         Ok(())
+    }
+    /// Commit `op` (its target activated as `owner`, or not activated at
+    /// all when it stays disabled) with the disabled flag it decided.
+    fn commit_operation(&mut self, op: &mut Operation, owner: Option<u64>) -> Result<()> {
+        let receipt = json!({"operationId":op.id,"packageId":op.package,"status":"committed","owner":owner,"request":op.request});
+        let outcome =
+            self.packages
+                .store
+                .commit_with_receipt(&op.package, &op.id, receipt, Some(op.enabled));
+        let installed = match outcome {
+            Ok(installed) => installed,
+            Err(error) => {
+                let installed = self.packages.store.get(&op.package);
+                if installed
+                    .current
+                    .as_ref()
+                    .is_some_and(|p| p.digest == op.target.digest)
+                    && self
+                        .packages
+                        .store
+                        .operations()
+                        .get(&op.id)
+                        .is_some_and(|v| v["status"] == "committed")
+                {
+                    installed
+                } else {
+                    return Err(error);
+                }
+            }
+        };
+        op.phase = "committed".into();
+        op.result = json!({"operationId":op.id,"packageId":op.package,"status":"committed","installed":installed,"owner":owner,"request":op.request});
+        // The version this replaced is not kept.
+        if let Some(old) = &op.old {
+            self.discard(&old.digest);
+        }
+        Ok(())
+    }
+}
+
+/// `packages.install`'s optional `enabled` (after host 0.6.3): whether the package
+/// runs once installed. Absent (or `null`), a first install runs and an
+/// update or reinstall keeps the installed package's state
+/// (`package_store::enables_after_install`).
+fn install_enabled(params: &Value) -> std::result::Result<Option<bool>, RpcError> {
+    match params.get("enabled") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Bool(enabled)) => Ok(Some(*enabled)),
+        Some(_) => Err(RpcError::invalid("enabled must be a boolean")),
     }
 }
 
@@ -2506,6 +2583,26 @@ mod tests {
         assert!(store.dormant().is_empty());
         let fresh = install(&mut store, "k", "1.0.0", Source::File, false).unwrap();
         assert_ne!(fresh.instance.unwrap().guid, guid);
+    }
+
+    /// `packages.install`'s optional `enabled`: absent for SDKs that do not
+    /// send it, a boolean otherwise.
+    #[test]
+    fn install_enabled_is_optional_and_boolean() {
+        assert_eq!(install_enabled(&json!({})).unwrap(), None);
+        assert_eq!(install_enabled(&json!({"enabled":null})).unwrap(), None);
+        assert_eq!(
+            install_enabled(&json!({"enabled":true})).unwrap(),
+            Some(true)
+        );
+        assert_eq!(
+            install_enabled(&json!({"enabled":false})).unwrap(),
+            Some(false)
+        );
+        assert_eq!(
+            install_enabled(&json!({"enabled":"yes"})).unwrap_err().code,
+            "invalid"
+        );
     }
 
     #[test]

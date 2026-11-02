@@ -40,6 +40,16 @@ pub trait GpuBackend {
     fn set_display_fps(&self, fps: Option<f64>);
     /// Frames rendered so far.
     fn frames(&self) -> u64;
+    /// How far rendering got (the plugin shader guard); `None` where the
+    /// renderer does not say (macOS: no device-loss restart there).
+    fn progress(&self) -> Option<Progress> {
+        None
+    }
+    /// The renderer's own device was removed (Windows: mpv's Direct3D 11
+    /// device), set before it reports its failure.
+    fn device_removed(&self) -> bool {
+        false
+    }
     /// Frames a window showed so far.
     fn shown(&self) -> u64;
     /// The size of the newest frame.
@@ -70,6 +80,37 @@ pub trait GpuBackend {
     }
 }
 
+/// How far the GPU renderer got (`GpuBackend::progress`; Windows:
+/// `vestra-gpu-render`'s `Progress`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Progress {
+    /// mpv's render calls, counted when each starts and when it returns
+    /// (odd while one runs).
+    pub calls: u64,
+    /// The newest rendered frame: the `calls` value its render call
+    /// started at (odd; 0: none yet), and its `ready` fence value.
+    pub started: u64,
+    pub ready: u64,
+    /// The `ready` value the GPU reached (`u64::MAX` once released: a
+    /// failure, a removed device, quitting).
+    pub completed: u64,
+    /// Output sizes rendered at so far (ring generations).
+    pub rings: u64,
+    /// GPU rendering stopped for good.
+    pub halted: bool,
+}
+
+/// The plugin shader requests the control worker processed
+/// (`video.shaders.set`, `video.render.set` / `release` that carry a
+/// `guardSeq`; written to mpv or not): the newest one's number, and mpv's
+/// render calls right after it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ShaderRequests {
+    pub processed: u64,
+    /// `None`: no GPU renderer that says how far it got.
+    pub calls: Option<u64>,
+}
+
 /// Shared by the backend's render thread, its control worker and the UI.
 pub struct Render {
     wanted: bool,
@@ -91,6 +132,12 @@ pub struct Render {
     refresh: Mutex<Option<f64>>,
     /// What the main window really draws (`stats().presentedFps`).
     pub presentation: crate::playback::render_target::Presentation,
+    /// Plugin shader requests numbered (UI thread) and processed (the
+    /// control worker), for the plugin shader guard (`host/diagnostics.rs`).
+    shader_numbered: std::sync::atomic::AtomicU64,
+    shader_requests: Mutex<ShaderRequests>,
+    /// The video's storage size (`video-params/w`, `h`; the control worker).
+    video_size: Mutex<(i64, i64)>,
 }
 impl Render {
     /// From the start-up decision: the render thread tries GPU rendering
@@ -110,6 +157,9 @@ impl Render {
             producer: AtomicBool::new(false),
             refresh: Mutex::new(None),
             presentation: Default::default(),
+            shader_numbered: Default::default(),
+            shader_requests: Mutex::default(),
+            video_size: Mutex::default(),
         })
     }
     pub fn wanted(&self) -> bool {
@@ -174,6 +224,46 @@ impl Render {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .unwrap_or(60.)
+    }
+    /// How far the GPU renderer got, while it draws (`GpuBackend::progress`).
+    pub fn progress(&self) -> Option<Progress> {
+        self.gpu().and_then(GpuBackend::progress)
+    }
+    /// The number of a new plugin shader request (UI thread, before it goes
+    /// to the control worker as `guardSeq`).
+    pub fn number_shader_request(&self) -> u64 {
+        self.shader_numbered.fetch_add(1, Ordering::AcqRel) + 1
+    }
+    /// The control worker processed request `seq` (after any write to mpv,
+    /// done or not): a render call that starts from now on draws with what
+    /// mpv holds.
+    pub fn shaders_processed(&self, seq: u64) {
+        let calls = self.progress().map(|progress| progress.calls);
+        let mut requests = self
+            .shader_requests
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        requests.processed = requests.processed.max(seq);
+        requests.calls = calls;
+    }
+    pub fn shader_requests(&self) -> ShaderRequests {
+        *self
+            .shader_requests
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+    /// The video's storage size (control worker; `(0, 0)`: none).
+    pub fn set_video_size(&self, size: (i64, i64)) {
+        *self
+            .video_size
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = size;
+    }
+    pub fn video_size(&self) -> (i64, i64) {
+        *self
+            .video_size
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
     pub fn backend_name(&self) -> String {
         if self.gpu().is_some() {
@@ -266,5 +356,29 @@ mod tests {
         assert_eq!(render.refresh(), 120.);
         render.set_refresh(Some(f64::NAN));
         assert_eq!(render.refresh(), 60.);
+    }
+
+    /// 0.6.4 shader guard: requests are numbered on the UI thread and
+    /// processed in order by the worker; an older one never lowers the
+    /// number. No GPU renderer: no progress.
+    #[test]
+    fn shader_requests_are_numbered_and_processed_in_order() {
+        use crate::playback::render_mode::{Facts, Preference, decide};
+        let render = Render::new(&decide(&Facts::default(), Preference::Auto));
+        assert_eq!(render.shader_requests(), ShaderRequests::default());
+        assert_eq!(render.number_shader_request(), 1);
+        assert_eq!(render.number_shader_request(), 2);
+        render.shaders_processed(2);
+        render.shaders_processed(1);
+        assert_eq!(
+            render.shader_requests(),
+            ShaderRequests {
+                processed: 2,
+                calls: None
+            }
+        );
+        assert_eq!(render.progress(), None);
+        render.set_video_size((1920, 1080));
+        assert_eq!(render.video_size(), (1920, 1080));
     }
 }
