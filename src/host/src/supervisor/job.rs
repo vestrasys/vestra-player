@@ -90,9 +90,11 @@ pub enum JobState {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JobResult {
     Done,
+    /// Includes a start that passed `TimeoutStartSec` and a wait for the
+    /// previous process that passed `STOP_WAIT` (systemd reports those as
+    /// `timeout`; ours carries today's failure text instead).
     Failed(String),
     Canceled,
-    Timeout,
     /// Refused by the merge table (a trigger never re-enables, start of a
     /// disabled unit, restart of a disabled unit...).
     Dropped,
@@ -231,7 +233,7 @@ impl<P: Clone> Supervisor<P> {
         id
     }
 
-    fn merge_start(&mut self, u: UnitId, job: Job, cause: Cause) -> JobId {
+    fn merge_start(&mut self, u: UnitId, mut job: Job, cause: Cause) -> JobId {
         let unit = &self.units[&u];
         if !unit.enabled() || unit.removed {
             return self.settle(u, job.id, JobResult::Dropped);
@@ -242,6 +244,11 @@ impl<P: Clone> Supervisor<P> {
         }
         let active = matches!(unit.state, UnitState::Active { .. });
         let deactivating = unit.state.is_deactivating();
+        // Today an enable that waits for the previous process is an entry
+        // in `packages.reloads`: `package_busy` until it starts.
+        if cause == Cause::Enable && deactivating && self.tunables.enable_wait_busy {
+            job.origin = Origin::PackageRpc;
+        }
         let Some(installed) = unit.job.as_ref() else {
             if active {
                 return self.settle(u, job.id, JobResult::Done);
@@ -355,7 +362,7 @@ impl<P: Clone> Supervisor<P> {
                 self.finish(u, JobResult::Canceled);
                 let id = self.install(u, job);
                 if deactivating {
-                    // Registrations kept for standby are revoked at reap.
+                    // Registrations kept for standby are revoked now.
                     self.set_then(u, then);
                 } else if let Some(unit) = self.units.get_mut(&u) {
                     unit.asked_at = None;
@@ -374,7 +381,12 @@ impl<P: Clone> Supervisor<P> {
         let Some(installed) = unit.job.as_ref() else {
             // A disabled unit is upgraded/reloaded without starting
             // (`step_restart` ends the job after the stop half, §17.2 Q15).
-            return self.install(u, job);
+            let id = self.install(u, job);
+            if deactivating {
+                // Stopping for standby (B4 crash hold): revoked now (§17.7).
+                self.set_then(u, Then::Inactive);
+            }
+            return id;
         };
         if !unit.enabled() {
             return self.settle(u, job.id, JobResult::Dropped);
@@ -422,6 +434,11 @@ impl<P: Clone> Supervisor<P> {
             installed.origin = job.origin;
         }
         installed.mode = job.mode;
+        // A unit stopping for standby does not land there any more: its
+        // kept registrations go now (§17.7).
+        if deactivating {
+            self.set_then(u, Then::Inactive);
+        }
         installed_id
     }
 
@@ -489,17 +506,33 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// A deactivating unit lands somewhere else (stronger stop merged).
+    /// Leaving `then: Standby` (disable, uninstall, reload, upgrade of a
+    /// unit stopping for standby) revokes the kept registrations at once,
+    /// not at reap, as today's `forget_parked` does (coordinator ruling,
+    /// §17.7): a trigger to them would be refused anyway.
     pub(super) fn set_then(&mut self, u: UnitId, new: Then) {
-        if let Some(unit) = self.units.get_mut(&u)
-            && let UnitState::Deactivating { then, reason, .. } = &mut unit.state
-        {
-            let merged = then.stronger(new);
-            if merged != *then {
-                *then = merged;
-                if merged == Then::Removed {
-                    *reason = StopReason::Uninstall;
-                }
-            }
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        let UnitState::Deactivating {
+            pid, then, reason, ..
+        } = &mut unit.state
+        else {
+            return;
+        };
+        let merged = then.stronger(new);
+        if merged == *then {
+            return;
+        }
+        let was_standby = *then == Then::Standby;
+        let pid = *pid;
+        *then = merged;
+        if merged == Then::Removed {
+            *reason = StopReason::Uninstall;
+        }
+        if was_standby && let Some(stopping) = unit.stopping.as_mut().filter(|s| s.kept) {
+            stopping.kept = false;
+            self.pending.push(Action::Revoke { unit: u, pid });
         }
     }
 }

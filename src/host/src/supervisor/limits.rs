@@ -122,6 +122,49 @@ pub struct Tunables {
     pub runner_restart_window: Ms,
     /// Runner restart backoff (B4: first immediate, then 3 s × 2ⁿ).
     pub runner_backoff: Option<Backoff>,
+
+    // Switches between today's behaviour (`today()`, B1–B2: the core
+    // reproduces today exactly) and the design's (supervisor.md §17.7).
+    /// "<name> stopped" / "…ran out of memory" after a crash (T25; B4).
+    /// Today a crash only records the failure.
+    pub crash_notice: bool,
+    /// "<name> could not start" for every failed start (B3). Today only a
+    /// wake's failure shows it (`wake_failed`); a failed boot, first run,
+    /// enable or reload only records the failure.
+    pub start_failure_notice: bool,
+    /// Held triggers of a start that is canceled or fails are answered one
+    /// by one (§4.6, A9; B3). Today they go silently (`lazy.waking` is
+    /// dropped; `wake_failed` shows one notice).
+    pub answer_held: bool,
+    /// A restart (reload, upgrade, runner restart) carries the triggers held
+    /// for the old run into the new one (§4.3; B3). Today they are lost
+    /// with `lazy.waking`.
+    pub restart_keeps_backlog: bool,
+    /// A `Start{Enable}` that waits for the previous process makes later
+    /// package RPCs and enables `busy`, as today's enable-after-park entry
+    /// in `packages.reloads` does (`package_busy`). Off: the merge table
+    /// (an enable is the user's, never busy for a later enable).
+    pub enable_wait_busy: bool,
+    /// Every ready of a recordable unit may be classified again (today's
+    /// `lazy_ready` → `lazy_classify`): a plugin resident now is re-recorded
+    /// resident, and a run classified lazy is recorded at quit. Off: only a
+    /// run without a checkpoint is classified (T12/T13).
+    pub reclassify: bool,
+    /// A first run classified lazy while busy keeps its first-run place and
+    /// goes to standby as soon as it is idle, checked every `idle_check`
+    /// (today's `lazy_first_lazy`). Off: it frees its place at once and
+    /// waits the idle timeout (§17.4).
+    pub first_run_parks_when_idle: bool,
+    /// Poll interval of `first_run_parks_when_idle` (today `CHECK_MS`).
+    pub idle_check: Ms,
+    /// A boot start waiting for its turn (start queue, built-in verify,
+    /// runner restart) lists `stopped`, as today's `StartQueue` entries do.
+    /// Off: `starting` (§9).
+    pub boot_wait_lists_stopped: bool,
+    /// Runner restart: members start again only once the playback worker
+    /// cleaned up after them (§7.4; B4). Today `restart_shared` queues them
+    /// at once.
+    pub runner_restart_waits_cleanup: bool,
 }
 
 impl Policy {
@@ -182,6 +225,16 @@ impl Tunables {
             runner_restart_limit: 3,
             runner_restart_window: 60_000,
             runner_backoff: None,
+            crash_notice: false,
+            start_failure_notice: false,
+            answer_held: false,
+            restart_keeps_backlog: false,
+            enable_wait_busy: true,
+            reclassify: true,
+            first_run_parks_when_idle: true,
+            idle_check: 250,
+            boot_wait_lists_stopped: true,
+            runner_restart_waits_cleanup: false,
         }
     }
 
@@ -195,6 +248,9 @@ impl Tunables {
         self.lane_max = Some(256);
         self.start_failure_keeps_registrations = true;
         self.builtins_first = BuiltinsFirst::Installed;
+        self.start_failure_notice = true;
+        self.answer_held = true;
+        self.restart_keeps_backlog = true;
         self
     }
 
@@ -246,6 +302,8 @@ impl Tunables {
             reset_after: Some(60_000),
             first_immediate: true,
         });
+        self.crash_notice = true;
+        self.runner_restart_waits_cleanup = true;
         self
     }
 
@@ -259,6 +317,11 @@ impl Tunables {
     pub fn target(cores: usize, physical_mib: u64) -> Self {
         let mut t = Self::today().with_b3(cores).with_b4().with_b5(physical_mib);
         t.idle_timeout = 30_000;
+        // Today's behaviours no earlier batch changes (§17.7).
+        t.enable_wait_busy = false;
+        t.reclassify = false;
+        t.first_run_parks_when_idle = false;
+        t.boot_wait_lists_stopped = false;
         for policy in [&mut t.builtin, &mut t.resident, &mut t.normal] {
             policy.start_timeout = 60_000;
             policy.stop_grace = 5_000;
@@ -343,5 +406,14 @@ mod tests {
             assert_eq!(t.policy(class).restart_sec, None);
         }
         assert!(!t.start_failure_keeps_registrations);
+        assert!(!t.crash_notice && !t.start_failure_notice && !t.answer_held);
+        assert!(!t.restart_keeps_backlog && !t.runner_restart_waits_cleanup);
+        assert!(t.enable_wait_busy && t.reclassify && t.first_run_parks_when_idle);
+        assert!(t.boot_wait_lists_stopped);
+        let target = Tunables::target(8, 16_384);
+        assert!(target.crash_notice && target.start_failure_notice && target.answer_held);
+        assert!(target.restart_keeps_backlog && target.runner_restart_waits_cleanup);
+        assert!(!target.enable_wait_busy && !target.reclassify);
+        assert!(!target.first_run_parks_when_idle && !target.boot_wait_lists_stopped);
     }
 }

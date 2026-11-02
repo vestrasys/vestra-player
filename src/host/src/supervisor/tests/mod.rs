@@ -634,7 +634,6 @@ impl Sim {
             JobResult::Done => R::Done,
             JobResult::Failed(text) => R::Failed(text),
             JobResult::Canceled => R::Canceled,
-            JobResult::Timeout => R::Timeout,
             JobResult::Dropped => R::Dropped,
         })
     }
@@ -750,7 +749,7 @@ impl Sim {
     }
     pub fn wake(&mut self, pid: Pid, t: Trigger<u32>) -> Delivery {
         self.sup.set_now(self.now);
-        self.sup.wake(pid, t)
+        self.sup.wake(pid, &t)
     }
     pub fn kill(&mut self, u: UnitId) -> Vec<Act> {
         self.sup.kill(u);
@@ -802,7 +801,7 @@ impl Sim {
         self.run()
     }
     pub fn exited(&mut self, pid: Pid, cause: ExitCause) -> Vec<Act> {
-        self.sup.process_exited(pid, cause);
+        self.sup.process_exited(pid, cause, None);
         self.run()
     }
     pub fn reaped(&mut self, pid: Pid) -> Vec<Act> {

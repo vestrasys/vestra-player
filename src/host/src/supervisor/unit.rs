@@ -236,6 +236,11 @@ pub struct UnitSpec {
     pub checkpoint: Option<Checkpoint>,
     /// Development `--plugin` start timeout (1–120 s); `None`: the class's.
     pub start_timeout: Option<Ms>,
+    /// It can have a checkpoint (today: `lazy_key` is `Some`: an installed
+    /// package, or a built-in listed with a digest). An unrecordable unit is
+    /// never a first run, never classified, never put in standby and never
+    /// checkpointed. A development load never is.
+    pub recordable: bool,
 }
 impl UnitSpec {
     pub fn new(id: impl Into<String>, class: Class) -> Self {
@@ -249,6 +254,7 @@ impl UnitSpec {
             verify: false,
             checkpoint: None,
             start_timeout: None,
+            recordable: class != Class::Development,
         }
     }
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -273,6 +279,11 @@ impl UnitSpec {
     }
     pub fn start_timeout(mut self, ms: Ms) -> Self {
         self.start_timeout = Some(ms);
+        self
+    }
+    /// No checkpoint possible (a built-in listed without a digest).
+    pub fn unrecordable(mut self) -> Self {
+        self.recordable = false;
         self
     }
 }
@@ -312,8 +323,11 @@ pub struct Unit<P> {
     pub backlog: VecDeque<Trigger<P>>,
     /// It has a valid checkpoint (its entry points are known).
     pub recorded: bool,
-    /// It held a live resource at its first ready (never idle standby).
+    /// Classified resident (at its ready, or by its checkpoint): never idle
+    /// standby.
     pub resident: bool,
+    /// It can have a checkpoint (`UnitSpec::recordable`).
+    pub recordable: bool,
     /// Placement of the current/last run (`Shared` carries that runner).
     pub placement: Placement,
     /// `packages.list` error text of `Failed` (today's `failures`).
@@ -342,6 +356,21 @@ pub struct Unit<P> {
     pub(super) classifying: bool,
     /// Holds a first-run place until classified resident or landed.
     pub(super) first_run: bool,
+    /// The current run was started as a first run (`Start{FirstRun}`): only
+    /// such a run goes to standby at once when classified lazy (T12).
+    pub(super) run_is_first: bool,
+    /// The current run was classified (or its class is known from the
+    /// checkpoint): it is checkpointed at shutdown (today's `lazy.classes`).
+    pub(super) classified_run: bool,
+    /// A ready run with a checkpoint that `classified` may still classify
+    /// (`Tunables::reclassify`, once per run).
+    pub(super) may_reclassify: bool,
+    /// The checkpoint on disk says resident (today's `resident_at_ready`):
+    /// a resident classification writes it only when it does not.
+    pub(super) recorded_resident: bool,
+    /// A first run classified lazy while busy: standby as soon as it is
+    /// idle (`Tunables::first_run_parks_when_idle`).
+    pub(super) park_when_idle: bool,
     /// The run came from `Standby` (`Prune` at ready).
     pub(super) from_standby: bool,
     pub(super) asked_at: Option<Ms>,
@@ -361,6 +390,7 @@ pub struct Unit<P> {
 }
 impl<P> Unit<P> {
     pub(super) fn new(spec: &UnitSpec) -> Self {
+        let recordable = spec.recordable && spec.class != Class::Development;
         Self {
             id: spec.id.clone(),
             name: spec.name.clone(),
@@ -373,8 +403,9 @@ impl<P> Unit<P> {
             state: UnitState::Inactive,
             job: None,
             backlog: VecDeque::new(),
-            recorded: spec.checkpoint.is_some(),
-            resident: spec.checkpoint.is_some_and(|c| c.resident),
+            recorded: recordable && spec.checkpoint.is_some(),
+            resident: recordable && spec.checkpoint.is_some_and(|c| c.resident),
+            recordable,
             placement: Placement::Own,
             failure: None,
             stuck: false,
@@ -394,6 +425,11 @@ impl<P> Unit<P> {
             pending_ui: 0,
             classifying: false,
             first_run: false,
+            run_is_first: false,
+            classified_run: false,
+            may_reclassify: false,
+            recorded_resident: recordable && spec.checkpoint.is_some_and(|c| c.resident),
+            park_when_idle: false,
             from_standby: false,
             asked_at: None,
             failing: None,

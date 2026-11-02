@@ -1,25 +1,12 @@
-//! Stop and kill (systemd `KillMode=`, `KillSignal=`, `TimeoutStopSec=`,
-//! `FinalKillSignal=`): the grace a `Terminate` gets before `Kill`.
+//! Stop and kill (systemd `KillSignal=`, `TimeoutStopSec=`,
+//! `FinalKillSignal=`): the grace a `Terminate` gets before `Kill`. A stop
+//! reaches the unit's own process, or its member in the shared runner
+//! (systemd `KillMode=process`); only a runner failure reaches the whole
+//! group, as `Action::KillRunner` (`KillMode=control-group`, §7.4).
 #![forbid(unsafe_code)]
 
 use super::limits::Policy;
-use super::unit::{Ms, Placement, StopReason, Then};
-
-/// What a stop/kill reaches (§3.3).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum KillMode {
-    /// The unit's own process (or its member in the runner).
-    Process,
-    /// The whole runner (all members): a runner failure.
-    RunnerGroup,
-}
-
-/// `KillMode` of a unit's stop.
-pub fn kill_mode(_placement: Placement) -> KillMode {
-    // A member's stop goes to the runner as a member stop; only a runner
-    // failure reaches the group (`runner_failed`).
-    KillMode::Process
-}
+use super::unit::{Ms, StopReason, Then};
 
 /// `TimeoutStopSec` for a stop (§7.2): standby 2 s today, after a failure
 /// 300 ms, disable/reload/uninstall/upgrade 300 ms today (5 s at B6).

@@ -67,7 +67,7 @@ impl<P: Clone> Supervisor<P> {
         self.sync(u);
     }
 
-    fn land_if_done(&mut self, u: UnitId) {
+    pub(super) fn land_if_done(&mut self, u: UnitId) {
         if self
             .units
             .get(&u)
@@ -146,9 +146,13 @@ impl<P: Clone> Supervisor<P> {
             .and_then(|unit| unit.job.as_ref())
             .map(|job| (job.kind.clone(), job.will_start()));
         match job {
-            Some((JobKind::Stop { .. } | JobKind::Standby, _)) => {
+            Some((kind @ (JobKind::Stop { .. } | JobKind::Standby), _)) => {
                 let result = if stuck {
                     JobResult::Failed(STUCK_RELOAD.to_owned())
+                } else if kind == JobKind::Standby && then != Then::Standby {
+                    // It did not go to standby (a crash landed it in
+                    // `Failed`, a stop elsewhere).
+                    JobResult::Canceled
                 } else {
                     JobResult::Done
                 };
@@ -164,6 +168,13 @@ impl<P: Clone> Supervisor<P> {
                 let text = if wake { STUCK_WAKE } else { STUCK_RELOAD };
                 self.answer_backlog(u, AnswerReason::CouldNotStart);
                 self.finish(u, JobResult::Failed(text.to_owned()));
+                // Today's `wake_failed` shows "<name> could not start".
+                if wake {
+                    self.pending.push(Action::Notify {
+                        unit: Some(u),
+                        notice: super::Notice::CouldNotStart,
+                    });
+                }
                 let keep = wake && self.tunables.start_failure_keeps_registrations;
                 if let Some(unit) = self.units.get_mut(&u) {
                     let standby = matches!(unit.state, UnitState::Standby { .. });

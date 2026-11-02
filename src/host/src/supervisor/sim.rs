@@ -222,8 +222,11 @@ fn standby_wake_round_trip() {
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
     assert_eq!(w.tick(0), [Action::Replay { unit: u, holder }]);
-    assert_eq!(w.s.wake(holder, Trigger::interactive(7)), Delivery::Started);
-    assert_eq!(w.s.wake(holder, Trigger::follow(8)), Delivery::Held);
+    assert_eq!(
+        w.s.wake(holder, &Trigger::interactive(7)),
+        Delivery::Started
+    );
+    assert_eq!(w.s.wake(holder, &Trigger::follow(8)), Delivery::Held);
     let actions = w.tick(10);
     let pid = w.pid(u);
     assert_eq!(
@@ -248,10 +251,10 @@ fn standby_wake_round_trip() {
     assert!(active(&w, u));
     // The old pid forwards; the new one delivers now.
     assert_eq!(
-        w.s.wake(holder, Trigger::interactive(9)),
+        w.s.wake(holder, &Trigger::interactive(9)),
         Delivery::Forward(pid)
     );
-    assert_eq!(w.s.wake(pid, Trigger::interactive(9)), Delivery::Now);
+    assert_eq!(w.s.wake(pid, &Trigger::interactive(9)), Delivery::Now);
     // Idle 60 s after the last use.
     w.s.touch(pid, 1_000);
     assert!(!w.tick(60_999).iter().any(is_terminate));
@@ -281,7 +284,7 @@ fn busy_answer_keeps_it_running_and_asks_again_later() {
     w.s = Supervisor::new(t, 1);
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
-    w.s.wake(holder, Trigger::interactive(1));
+    w.s.wake(holder, &Trigger::interactive(1));
     w.tick(0);
     let pid = w.pid(u);
     w.s.begin_work(pid, 5, 100);
@@ -297,7 +300,7 @@ fn wake_while_deactivating_waits_for_reap() {
     w.auto_reap = false;
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
-    w.s.wake(holder, Trigger::interactive(1));
+    w.s.wake(holder, &Trigger::interactive(1));
     w.tick(0);
     let pid = w.pid(u);
     w.tick(60_000);
@@ -308,7 +311,7 @@ fn wake_while_deactivating_waits_for_reap() {
             ..
         }
     ));
-    assert_eq!(w.s.wake(pid, Trigger::interactive(2)), Delivery::Started);
+    assert_eq!(w.s.wake(pid, &Trigger::interactive(2)), Delivery::Started);
     assert!(spawns(&w.tick(60_100)).is_empty());
     w.s.process_reaped(pid, Some(0));
     assert!(
@@ -332,18 +335,23 @@ fn wake_whose_stopped_process_never_goes_fails_after_20_s() {
     w.auto_reap = false;
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
-    w.s.wake(holder, Trigger::interactive(1));
+    w.s.wake(holder, &Trigger::interactive(1));
     w.tick(0);
     let pid = w.pid(u);
     w.tick(60_000);
-    w.s.wake(pid, Trigger::interactive(2));
+    w.s.wake(pid, &Trigger::interactive(2));
     w.tick(60_001);
     // Kill at the standby grace.
     assert!(w.tick(62_000).contains(&Action::Kill { unit: u, pid }));
     assert!(w.tick(79_999).is_empty());
     let actions = w.tick(80_000);
     assert!(actions.contains(&Action::Revoke { unit: u, pid }));
-    assert_eq!(w.answered, [(AnswerReason::CouldNotStart, 2)]);
+    // Today's `wake_failed`: one notice, the held click goes silently.
+    assert!(actions.contains(&Action::Notify {
+        unit: Some(u),
+        notice: Notice::CouldNotStart
+    }));
+    assert!(w.answered.is_empty());
     assert_eq!(
         w.s.list_state(u),
         Some(ListState::Failed(STUCK_WAKE.into()))
@@ -364,7 +372,7 @@ fn storm(tunables: Tunables) -> (World, Vec<UnitId>, usize) {
     for (i, u) in units.iter().enumerate() {
         let holder = w.holder(*u);
         assert_eq!(
-            w.s.wake(holder, Trigger::interactive(i as u32)),
+            w.s.wake(holder, &Trigger::interactive(i as u32)),
             Delivery::Started
         );
     }
@@ -437,13 +445,13 @@ fn event_wakes_use_the_plain_limit_and_are_muted_at_start_up() {
     w.tick(0);
     w.s.set_muted(true);
     let h0 = w.holder(units[0]);
-    assert_eq!(w.s.wake(h0, Trigger::event("e", 0)), Delivery::Dropped);
+    assert_eq!(w.s.wake(h0, &Trigger::event("e", 0)), Delivery::Dropped);
     w.s.settled(100);
-    assert_eq!(w.s.wake(h0, Trigger::event("e", 0)), Delivery::Dropped);
+    assert_eq!(w.s.wake(h0, &Trigger::event("e", 0)), Delivery::Dropped);
     w.tick(1_100);
     for u in &units {
         let holder = w.holder(*u);
-        assert_eq!(w.s.wake(holder, Trigger::event("e", 1)), Delivery::Started);
+        assert_eq!(w.s.wake(holder, &Trigger::event("e", 1)), Delivery::Started);
     }
     assert_eq!(spawns(&w.tick(1_200)).len(), 4);
 }
@@ -508,12 +516,23 @@ fn package_rpcs_are_busy_while_one_is_installed() {
 }
 
 #[test]
-fn reload_while_activating_carries_held_triggers() {
-    let mut w = World::new(Tunables::today());
+fn reload_while_activating_carries_held_triggers_from_b3() {
+    for b3 in [false, true] {
+        let tunables = if b3 {
+            Tunables::today().with_b3(8)
+        } else {
+            Tunables::today()
+        };
+        reload_while_activating(tunables, b3);
+    }
+}
+
+fn reload_while_activating(tunables: Tunables, carried: bool) {
+    let mut w = World::new(tunables);
     w.auto_ready = false;
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
-    w.s.wake(holder, Trigger::interactive(1));
+    w.s.wake(holder, &Trigger::interactive(1));
     w.tick(0);
     let first = w.pid(u);
     let reload = w.s.restart(u, true, None).unwrap();
@@ -538,7 +557,13 @@ fn reload_while_activating_carries_held_triggers() {
     }));
     w.s.process_ready(second);
     w.tick(20);
-    assert_eq!(w.delivered, [(second, 1)]);
+    // Today the click is lost with `lazy.waking` (silently); from B3 it is
+    // carried to the new run (§4.3).
+    if carried {
+        assert_eq!(w.delivered, [(second, 1)]);
+    } else {
+        assert!(w.delivered.is_empty() && w.answered.is_empty());
+    }
     assert_eq!(w.s.job_result(u, reload), Some(&JobResult::Done));
 }
 
@@ -561,7 +586,10 @@ fn uninstall_from_standby_removes_data_and_refuses_triggers() {
             Action::RemoveData { unit: u },
         ]
     );
-    assert_eq!(w.s.wake(holder, Trigger::interactive(1)), Delivery::Dropped);
+    assert_eq!(
+        w.s.wake(holder, &Trigger::interactive(1)),
+        Delivery::Dropped
+    );
     w.s.remove_unit(u);
     assert_eq!(w.s.by_id("n"), None);
     assert_eq!(w.s.by_pid(holder), None);
@@ -613,12 +641,19 @@ fn spawn_failure_revokes_today_and_keeps_entry_points_from_b3() {
         w.auto_ready = false;
         let u = standby_unit(&mut w, "n");
         let holder = w.holder(u);
-        w.s.wake(holder, Trigger::interactive(5));
+        w.s.wake(holder, &Trigger::interactive(5));
         w.tick(0);
         let pid = w.pid(u);
         w.s.process_spawned(pid, Err("activation tracking limit reached".into()));
         let actions = w.tick(1);
-        assert_eq!(w.answered, [(AnswerReason::CouldNotStart, 5)]);
+        // Today the click goes silently (one notice, `wake_failed`); from
+        // B3 it is answered (§4.6).
+        let answered: &[(AnswerReason, u32)] = if b3 {
+            &[(AnswerReason::CouldNotStart, 5)]
+        } else {
+            &[]
+        };
+        assert_eq!(w.answered, answered);
         assert!(actions.contains(&Action::Notify {
             unit: Some(u),
             notice: Notice::CouldNotStart
@@ -627,10 +662,10 @@ fn spawn_failure_revokes_today_and_keeps_entry_points_from_b3() {
         assert_eq!(revoked, !b3);
         if b3 {
             assert_eq!(w.holder(u), pid);
-            assert_eq!(w.s.wake(pid, Trigger::interactive(6)), Delivery::Started);
+            assert_eq!(w.s.wake(pid, &Trigger::interactive(6)), Delivery::Started);
         } else {
             assert!(matches!(w.state(u), UnitState::Failed { .. }));
-            assert_eq!(w.s.wake(pid, Trigger::interactive(6)), Delivery::Dropped);
+            assert_eq!(w.s.wake(pid, &Trigger::interactive(6)), Delivery::Dropped);
         }
     }
 }
@@ -642,7 +677,7 @@ fn crash_today_fails_every_class() {
         let u = w.s.add_unit(UnitSpec::new("x", class).checkpoint(false));
         w.tick(0);
         let pid = w.pid(u);
-        w.s.process_exited(pid, ExitCause::Exited);
+        w.s.process_exited(pid, ExitCause::Exited, None);
         let actions = w.tick(10);
         assert!(actions.contains(&Action::Terminate {
             unit: u,
@@ -670,11 +705,11 @@ fn b4_normal_crash_holds_in_standby_and_builtin_restarts() {
     w.auto_classify = Some(true);
     w.tick(0);
     let holder = w.holder(n);
-    w.s.wake(holder, Trigger::interactive(1));
+    w.s.wake(holder, &Trigger::interactive(1));
     w.tick(10);
     let npid = w.pid(n);
     w.s.set_now(20);
-    w.s.process_exited(npid, ExitCause::Fault);
+    w.s.process_exited(npid, ExitCause::Fault, None);
     let actions = w.tick(20);
     assert!(actions.contains(&Action::Terminate {
         unit: n,
@@ -694,16 +729,16 @@ fn b4_normal_crash_holds_in_standby_and_builtin_restarts() {
             ..
         }
     ));
-    assert_eq!(w.s.wake(npid, Trigger::interactive(2)), Delivery::Refused);
+    assert_eq!(w.s.wake(npid, &Trigger::interactive(2)), Delivery::Refused);
     w.tick(30);
     assert_eq!(w.answered, [(AnswerReason::Held { until: 1_020 }, 2)]);
-    assert_eq!(w.s.wake(npid, Trigger::event("e", 3)), Delivery::Started);
+    assert_eq!(w.s.wake(npid, &Trigger::event("e", 3)), Delivery::Started);
     assert!(spawns(&w.tick(1_019)).is_empty());
     assert_eq!(spawns(&w.tick(1_020)).len(), 1);
     // Built-in: Restart=on-failure after 3 s.
     let bpid = w.pid(b);
     w.s.set_now(2_000);
-    w.s.process_exited(bpid, ExitCause::Oom);
+    w.s.process_exited(bpid, ExitCause::Oom, None);
     w.tick(2_000);
     assert!(matches!(
         w.state(b),
@@ -731,7 +766,7 @@ fn b4_start_limit_fails_after_five_crashes() {
     w.tick(now);
     for _ in 0..4 {
         let pid = w.pid(b);
-        w.s.process_exited(pid, ExitCause::Exited);
+        w.s.process_exited(pid, ExitCause::Exited, None);
         // Reaped at once; restarted after the backoff.
         w.tick(now);
         assert!(!active(&w, b));
@@ -740,7 +775,7 @@ fn b4_start_limit_fails_after_five_crashes() {
         assert!(active(&w, b), "{:?} {:?}", w.state(b), w.s.job(b));
     }
     let pid = w.pid(b);
-    w.s.process_exited(pid, ExitCause::Exited);
+    w.s.process_exited(pid, ExitCause::Exited, None);
     let actions = w.tick(now + 1);
     assert!(actions.contains(&Action::Notify {
         unit: Some(b),
@@ -776,7 +811,18 @@ fn runtime_failed_is_never_retried() {
 
 #[test]
 fn runner_group_restart_then_fail_open() {
-    let mut w = World::new(World::off_demand());
+    // Today `restart_shared` queues the members again at once; from B4 they
+    // wait for the playback worker's cleanup (§7.4).
+    for waits in [false, true] {
+        runner_group_restart(waits);
+    }
+}
+
+fn runner_group_restart(waits: bool) {
+    let mut w = World::new(Tunables {
+        runner_restart_waits_cleanup: waits,
+        ..World::off_demand()
+    });
     w.auto_reap = false;
     let members = (0..3)
         .map(|i| {
@@ -822,13 +868,23 @@ fn runner_group_restart_then_fail_open() {
             Notice::RunnerRestarted
         };
         assert!(actions.contains(&Action::Notify { unit: None, notice }));
-        assert!(spawns(&actions).is_empty(), "waits for member cleanup");
         assert!(active(&w, own), "own-process built-in untouched");
-        for pid in pids {
-            w.s.backend_cleaned(pid);
-        }
-        now += 10;
-        let actions = w.tick(now);
+        let actions = if waits {
+            assert!(spawns(&actions).is_empty(), "waits for member cleanup");
+            assert_eq!(count(&actions, |a| matches!(a, Action::Verify { .. })), 0);
+            for pid in pids {
+                w.s.backend_cleaned(pid);
+            }
+            now += 10;
+            w.tick(now)
+        } else {
+            // The late cleanups change nothing.
+            for pid in pids {
+                w.s.backend_cleaned(pid);
+            }
+            assert!(w.tick(now).is_empty());
+            actions
+        };
         if round < 3 {
             assert_eq!(count(&actions, |a| matches!(a, Action::Verify { .. })), 3);
             for u in &members {
@@ -859,13 +915,13 @@ fn member_transport_failure_restarts_the_group_and_fault_quarantines() {
     w.tick(0);
     let runner = w.s.runner();
     let apid = w.pid(a);
-    w.s.process_exited(apid, ExitCause::Transport);
+    w.s.process_exited(apid, ExitCause::Transport, None);
     let actions = w.tick(10);
     assert!(actions.contains(&Action::KillRunner { runner }));
     assert_eq!(count(&actions, is_terminate), 2);
     // Attributed fault: that member alone, its own process next.
     let bpid = w.pid(b);
-    w.s.process_exited(bpid, ExitCause::Fault);
+    w.s.process_exited(bpid, ExitCause::Fault, None);
     let actions = w.tick(20);
     assert_eq!(
         count(&actions, |a| matches!(a, Action::KillRunner { .. })),
@@ -885,12 +941,18 @@ fn backlog_overflow_and_stop_answer_every_held_trigger() {
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
     w.tick(0);
-    assert_eq!(w.s.wake(holder, Trigger::interactive(1)), Delivery::Started);
-    assert_eq!(w.s.wake(holder, Trigger::event("e", 2)), Delivery::Held);
-    assert_eq!(w.s.wake(holder, Trigger::event("e", 3)), Delivery::Held);
-    assert_eq!(w.s.wake(holder, Trigger::interactive(4)), Delivery::Held);
-    assert_eq!(w.s.wake(holder, Trigger::interactive(5)), Delivery::Refused);
-    assert_eq!(w.s.wake(holder, Trigger::event("f", 6)), Delivery::Refused);
+    assert_eq!(
+        w.s.wake(holder, &Trigger::interactive(1)),
+        Delivery::Started
+    );
+    assert_eq!(w.s.wake(holder, &Trigger::event("e", 2)), Delivery::Held);
+    assert_eq!(w.s.wake(holder, &Trigger::event("e", 3)), Delivery::Held);
+    assert_eq!(w.s.wake(holder, &Trigger::interactive(4)), Delivery::Held);
+    assert_eq!(
+        w.s.wake(holder, &Trigger::interactive(5)),
+        Delivery::Refused
+    );
+    assert_eq!(w.s.wake(holder, &Trigger::event("f", 6)), Delivery::Refused);
     w.tick(1);
     assert_eq!(w.answered, [(AnswerReason::Busy, 5)]);
     let held =
@@ -925,7 +987,7 @@ fn lane_bound_refuses_new_starts() {
     let mut deliveries = Vec::new();
     for (i, u) in units.iter().enumerate() {
         let holder = w.holder(*u);
-        deliveries.push(w.s.wake(holder, Trigger::interactive(i as u32)));
+        deliveries.push(w.s.wake(holder, &Trigger::interactive(i as u32)));
         w.tick(1);
     }
     assert_eq!(
@@ -954,7 +1016,7 @@ fn budget_world() -> (World, [UnitId; 6]) {
     for (u, at) in [(busy, 0), (old, 0), (recent, 50_000)] {
         let holder = w.holder(u);
         w.s.set_now(at);
-        w.s.wake(holder, Trigger::interactive(0));
+        w.s.wake(holder, &Trigger::interactive(0));
         w.tick(at);
     }
     let pid = w.pid(busy);
@@ -968,7 +1030,7 @@ fn lru_picks_the_least_important_idle_unit_only() {
     let (mut w, [builtin, resident, busy, old, recent, new]) = budget_world();
     let holder = w.holder(new);
     w.s.set_now(100_000);
-    w.s.wake(holder, Trigger::interactive(1));
+    w.s.wake(holder, &Trigger::interactive(1));
     let actions = w.tick(100_000);
     let asked = actions
         .iter()
@@ -992,7 +1054,7 @@ fn lru_never_picks_busy_and_overruns_when_none_qualifies() {
         w.s.begin_work(pid, 2, 90_000);
     }
     let holder = w.holder(new);
-    w.s.wake(holder, Trigger::interactive(1));
+    w.s.wake(holder, &Trigger::interactive(1));
     let actions = w.tick(100_000);
     assert_eq!(
         count(&actions, |a| matches!(a, Action::QueryResources { .. })),
@@ -1005,7 +1067,7 @@ fn lru_never_picks_busy_and_overruns_when_none_qualifies() {
 fn event_wakes_never_cause_lru_standby() {
     let (mut w, [.., new]) = budget_world();
     let holder = w.holder(new);
-    w.s.wake(holder, Trigger::event("e", 1));
+    w.s.wake(holder, &Trigger::event("e", 1));
     let actions = w.tick(100_000);
     assert_eq!(
         count(&actions, |a| matches!(a, Action::QueryResources { .. })),
@@ -1032,9 +1094,9 @@ fn merge_start_start_raises_priority() {
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
     w.tick(0);
-    assert_eq!(w.s.wake(holder, Trigger::event("e", 1)), Delivery::Started);
+    assert_eq!(w.s.wake(holder, &Trigger::event("e", 1)), Delivery::Started);
     let job = w.s.job(u).unwrap().id;
-    assert_eq!(w.s.wake(holder, Trigger::interactive(2)), Delivery::Held);
+    assert_eq!(w.s.wake(holder, &Trigger::interactive(2)), Delivery::Held);
     let installed = w.s.job(u).unwrap();
     assert_eq!(installed.id, job);
     assert_eq!(installed.priority, Priority::Interactive);
@@ -1049,7 +1111,7 @@ fn merge_standby_asking_then_trigger_cancels_standby() {
     let standby = w.s.standby(u);
     let actions = w.s.run_jobs(10);
     assert!(actions.contains(&Action::QueryResources { unit: u, pid }));
-    assert_eq!(w.s.wake(pid, Trigger::interactive(1)), Delivery::Now);
+    assert_eq!(w.s.wake(pid, &Trigger::interactive(1)), Delivery::Now);
     assert_eq!(w.s.job_result(u, standby), Some(&JobResult::Canceled));
     // The late answer is ignored.
     w.s.resources_answered(pid, false);
@@ -1094,7 +1156,10 @@ fn merge_stop_then_trigger_never_re_enables() {
     w.tick(0);
     w.s.set_enabled(u, false);
     w.s.stop(u, StopReason::Disable, Then::Inactive).unwrap();
-    assert_eq!(w.s.wake(holder, Trigger::interactive(1)), Delivery::Dropped);
+    assert_eq!(
+        w.s.wake(holder, &Trigger::interactive(1)),
+        Delivery::Dropped
+    );
     let actions = w.tick(1);
     assert!(actions.contains(&Action::Revoke {
         unit: u,
@@ -1113,24 +1178,27 @@ fn stronger_then_wins_while_deactivating() {
     w.auto_reap = false;
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
-    w.s.wake(holder, Trigger::interactive(1));
+    w.s.wake(holder, &Trigger::interactive(1));
     w.tick(0);
     let pid = w.pid(u);
     w.tick(60_000);
-    // Deactivating for standby, registrations kept; an uninstall arrives.
+    // Deactivating for standby, registrations kept; an uninstall arrives:
+    // they are revoked at once (§17.7, today's `forget_parked`), the data
+    // goes at reap.
     w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
-    w.tick(60_001);
+    let actions = w.tick(60_001);
+    assert!(actions.contains(&Action::Revoke { unit: u, pid }));
     w.s.process_reaped(pid, None);
     w.s.backend_cleaned(pid);
     let actions = w.tick(60_002);
     assert_eq!(
-        actions[..3],
+        actions[..2],
         [
-            Action::Revoke { unit: u, pid },
             Action::DropCheckpoint { unit: u },
             Action::RemoveData { unit: u },
         ]
     );
+    assert!(!actions.iter().any(|a| matches!(a, Action::Revoke { .. })));
 }
 
 // ---- shutdown, timers -------------------------------------------------------
@@ -1158,7 +1226,7 @@ fn shutdown_one_deadline_then_kill() {
     let actions = w.s.run_jobs(1_100);
     assert_eq!(count(&actions, |a| matches!(a, Action::Kill { .. })), 2);
     assert_eq!(
-        w.s.wake(pids[1], Trigger::interactive(1)),
+        w.s.wake(pids[1], &Trigger::interactive(1)),
         Delivery::Dropped
     );
 }
@@ -1175,7 +1243,7 @@ fn timers_cost_nothing_until_due() {
     w.tick(0);
     for u in &units {
         let holder = w.holder(*u);
-        w.s.wake(holder, Trigger::interactive(0));
+        w.s.wake(holder, &Trigger::interactive(0));
     }
     w.tick(5);
     assert_eq!(w.s.next_deadline(), Some(60_005));
@@ -1190,7 +1258,7 @@ fn list_changed_ignores_process_and_reports_state() {
     let u = standby_unit(&mut w, "n");
     w.tick(0);
     let holder = w.holder(u);
-    w.s.wake(holder, Trigger::interactive(1));
+    w.s.wake(holder, &Trigger::interactive(1));
     w.auto_ready = false;
     let actions = w.tick(10);
     // A wake is `running` all along, as today (`lazy.waking`): nothing to
@@ -1247,7 +1315,7 @@ fn seeded_runs_are_deterministic() {
         w.auto_ready = false;
         let u = standby_unit(&mut w, "n");
         let holder = w.holder(u);
-        w.s.wake(holder, Trigger::interactive(1));
+        w.s.wake(holder, &Trigger::interactive(1));
         let mut log = w.tick(0);
         for t in 1..4 {
             let pid = w.pid(u);
@@ -1307,11 +1375,11 @@ fn q24_backoff_and_hold_count_from_the_reap() {
         w.s.add_unit(UnitSpec::new("b", Class::Builtin).checkpoint(true));
     w.tick(0);
     let holder = w.holder(n);
-    w.s.wake(holder, Trigger::interactive(1));
+    w.s.wake(holder, &Trigger::interactive(1));
     w.tick(10);
     let (npid, bpid) = (w.pid(n), w.pid(b));
-    w.s.process_exited(npid, ExitCause::Exited);
-    w.s.process_exited(bpid, ExitCause::Exited);
+    w.s.process_exited(npid, ExitCause::Exited, None);
+    w.s.process_exited(bpid, ExitCause::Exited, None);
     w.tick(100);
     // Reaped 5 s after the exit: the hold and the 3 s backoff start then.
     w.s.set_now(5_100);
@@ -1389,7 +1457,7 @@ fn runner_restart_replays_members_with_a_standby_checkpoint() {
         w.s.add_unit(UnitSpec::new("k", Class::Builtin).shared().checkpoint(true));
     w.tick(0);
     let holder = w.holder(m);
-    w.s.wake(holder, Trigger::interactive(1));
+    w.s.wake(holder, &Trigger::interactive(1));
     w.tick(10);
     assert!(active(&w, m) && active(&w, k));
     let mpid = w.pid(m);
@@ -1403,27 +1471,32 @@ fn runner_restart_replays_members_with_a_standby_checkpoint() {
         unit: m,
         holder: replayed
     }));
-    // The old pid still finds the unit and wakes it.
-    assert_eq!(w.s.wake(mpid, Trigger::interactive(2)), Delivery::Started);
+    // The old pid is dead (today's `forget_running`): dropped; the new
+    // holder wakes it.
+    assert_eq!(w.s.wake(mpid, &Trigger::interactive(2)), Delivery::Dropped);
+    assert_eq!(
+        w.s.wake(replayed, &Trigger::interactive(3)),
+        Delivery::Started
+    );
     assert!(matches!(w.state(a), UnitState::Standby { .. }));
 }
 
 #[test]
 fn crash_during_wake_keeps_a_start_only_for_held_events() {
     for with_event in [false, true] {
-        let mut w = World::new(Tunables::today().with_b4());
+        let mut w = World::new(Tunables::today().with_b3(8).with_b4());
         w.auto_ready = false;
         let u = standby_unit(&mut w, "n");
         let holder = w.holder(u);
         w.tick(0);
-        w.s.wake(holder, Trigger::interactive(1));
+        w.s.wake(holder, &Trigger::interactive(1));
         if with_event {
-            w.s.wake(holder, Trigger::event("e", 2));
+            w.s.wake(holder, &Trigger::event("e", 2));
         }
         w.tick(10);
         let pid = w.pid(u);
         w.s.process_spawned(pid, Ok(()));
-        w.s.process_exited(pid, ExitCause::Fault);
+        w.s.process_exited(pid, ExitCause::Fault, None);
         w.tick(20);
         assert_eq!(w.answered, [(AnswerReason::CouldNotStart, 1)]);
         let until = match w.state(u) {
@@ -1464,4 +1537,549 @@ fn resident_start_timeout_retries_and_never_lands_in_standby() {
     let next = w.s.next_deadline().unwrap();
     assert!((15_250..=15_275).contains(&next), "{next}");
     assert_eq!(spawns(&w.tick(next)).len(), 1);
+}
+
+// ---- today() reproduces today (B1 review, supervisor.md §17.7) ----------
+//
+// The independent review's probe cases (one per deviation) and one test per
+// fix. "Today" cites the code `Tunables::today()` reproduces.
+
+fn target() -> Tunables {
+    Tunables::target(8, 16_384)
+}
+
+fn is_checkpoint(a: &Action<u32>) -> bool {
+    matches!(a, Action::Checkpoint { .. })
+}
+
+/// Item 1 (probe `reload_then_classified_lazy_parks_at_once`): only a
+/// first run goes to standby at its classification (today's
+/// `lazy_classified` checks `lazy.first_runs`); a reload runs until idle.
+#[test]
+fn only_a_first_run_goes_to_standby_when_classified() {
+    for tunables in [Tunables::today(), target()] {
+        let idle = tunables.idle_timeout;
+        let mut w = World::new(tunables);
+        let u = standby_unit(&mut w, "n");
+        w.tick(0);
+        w.s.restart(u, true, None).unwrap();
+        w.tick(10);
+        let pid = w.pid(u);
+        assert!(active(&w, u));
+        w.s.classified(pid, None);
+        let actions = w.tick(20);
+        assert!(active(&w, u), "{actions:?}");
+        assert_eq!(count(&actions, is_terminate), 0);
+        w.tick(10 + idle);
+        assert!(matches!(w.state(u), UnitState::Standby { .. }));
+    }
+    // A first run classified lazy goes at once.
+    let mut w = World::new(Tunables::today());
+    let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.s.classified(pid, None);
+    let actions = w.tick(10);
+    assert!(actions.contains(&Action::Checkpoint {
+        unit: u,
+        pid,
+        resident: false
+    }));
+    assert!(matches!(w.state(u), UnitState::Standby { .. }));
+}
+
+/// Item 2 (probe `development_gets_a_checkpoint_after_classify_wait`): a
+/// development load is never classified, checkpointed or put in standby
+/// (today's `lazy_development` only logs).
+#[test]
+fn development_is_never_classified_or_checkpointed() {
+    let mut w = World::new(Tunables::today());
+    let u =
+        w.s.add_unit(UnitSpec::new("d", Class::Development).start_timeout(120_000));
+    let mut actions = w.tick(0);
+    let pid = w.pid(u);
+    assert!(actions.contains(&Action::Spawn {
+        unit: u,
+        pid,
+        placement: Placement::Own,
+        image: None,
+        first_run: false
+    }));
+    actions.extend(w.tick(6_000));
+    w.s.classified(pid, None);
+    actions.extend(w.tick(6_001));
+    actions.extend(w.tick(200_000));
+    assert!(active(&w, u));
+    actions.extend(w.s.shutdown(200_001, 1_000));
+    assert_eq!(count(&actions, is_checkpoint), 0, "{actions:?}");
+}
+
+/// `UnitSpec::unrecordable` (a built-in without a digest, today's
+/// `lazy_key` is `None`): never a first run, classified or in standby.
+#[test]
+fn unrecordable_builtin_starts_at_boot_and_stays() {
+    let mut w = World::new(Tunables::today());
+    let u =
+        w.s.add_unit(UnitSpec::new("b", Class::Builtin).unrecordable());
+    let mut actions = w.tick(0);
+    let pid = w.pid(u);
+    assert!(actions.contains(&Action::Spawn {
+        unit: u,
+        pid,
+        placement: Placement::Own,
+        image: None,
+        first_run: false
+    }));
+    assert_eq!(w.s.slots_in_use(), (0, 0), "no first-run place");
+    w.s.classified(pid, None);
+    actions.extend(w.tick(200_000));
+    assert!(active(&w, u));
+    actions.extend(w.s.shutdown(200_001, 1_000));
+    assert_eq!(count(&actions, is_checkpoint), 0, "{actions:?}");
+}
+
+/// Item 3 (probe `disabled_failed_unit_lists_failed`), with the fault text
+/// `process_exited` carries: disabling a failed unit clears the failure
+/// and lists `disabled` (today's `set_enabled(false)` + `package_list`).
+#[test]
+fn disabling_a_failed_unit_lists_disabled_and_clears_the_failure() {
+    for tunables in [Tunables::today(), target()] {
+        let mut w = World::new(tunables);
+        let u =
+            w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
+        w.tick(0);
+        let pid = w.pid(u);
+        let text = "uncaught exception: boom";
+        w.s.process_exited(pid, ExitCause::Fault, Some(text.into()));
+        w.tick(10);
+        if w.s.tunables().resident.restart == RestartMode::No {
+            assert_eq!(w.s.list_state(u), Some(ListState::Failed(text.into())));
+        }
+        w.s.disable(u).unwrap();
+        w.tick(20);
+        assert_eq!(w.s.list_state(u), Some(ListState::Disabled));
+        assert!(matches!(w.state(u), UnitState::Inactive));
+        assert_eq!(w.s.unit(u).unwrap().failure, None);
+        w.s.enable(u).unwrap();
+        w.tick(30);
+        assert!(active(&w, u));
+    }
+}
+
+/// A disable of a unit still stopping after its failure lands `Inactive`.
+#[test]
+fn disable_while_a_failure_stops_lands_inactive() {
+    let mut w = World::new(Tunables::today());
+    w.auto_reap = false;
+    let u =
+        w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.s.process_exited(pid, ExitCause::Exited, None);
+    w.tick(10);
+    w.s.disable(u).unwrap();
+    w.tick(20);
+    assert_eq!(w.s.list_state(u), Some(ListState::Disabled));
+    w.s.process_reaped(pid, None);
+    w.s.backend_cleaned(pid);
+    w.tick(30);
+    assert!(matches!(w.state(u), UnitState::Inactive));
+    assert_eq!(w.s.unit(u).unwrap().failure, None);
+}
+
+/// Item 4 (probe `second_enable_while_waiting_is_busy`; B0's
+/// `standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone`):
+/// an enable that waits for the process stopped for standby is `busy` for
+/// a second enable and a reload today (`packages.reloads`); the target keeps
+/// the merge table (an enable is never busy for an enable).
+#[test]
+fn second_enable_while_the_standby_process_goes() {
+    for (tunables, busy) in [(Tunables::today(), true), (target(), false)] {
+        let idle = tunables.idle_timeout;
+        let mut w = World::new(tunables);
+        w.auto_reap = false;
+        let u = standby_unit(&mut w, "n");
+        let holder = w.holder(u);
+        w.s.wake(holder, &Trigger::interactive(9));
+        w.tick(0);
+        let pid = w.pid(u);
+        let actions = w.tick(idle);
+        assert!(actions.iter().any(is_terminate), "{actions:?}");
+        w.s.disable(u).unwrap();
+        w.s.enable(u).unwrap();
+        w.tick(idle + 1);
+        assert_eq!(w.s.enable(u).is_err(), busy);
+        assert_eq!(w.s.package_busy(u), busy);
+        assert_eq!(w.s.restart(u, false, None).is_err(), busy);
+        assert_eq!(w.s.list_state(u), Some(ListState::Starting));
+        w.s.process_reaped(pid, None);
+        w.s.backend_cleaned(pid);
+        w.auto_reap = true;
+        let started = spawns(&w.tick(idle + 2));
+        assert_eq!(started.len(), 1);
+    }
+}
+
+/// `disable`/`enable` check `busy` before changing anything (today's
+/// `set_enabled` checks `package_busy` first).
+#[test]
+fn disable_during_a_package_rpc_changes_nothing() {
+    let mut w = World::new(Tunables::today());
+    w.auto_reap = false;
+    let u =
+        w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
+    w.tick(0);
+    w.s.restart(u, false, Some("2.0.0".into())).unwrap();
+    w.tick(10);
+    assert!(w.s.package_busy(u));
+    assert_eq!(w.s.disable(u), Err(Busy));
+    assert!(w.s.unit(u).unwrap().enabled());
+}
+
+/// Item 5 (probe `exit_today_notifies`): a crash notice is B4's; today a
+/// crash only records the failure.
+#[test]
+fn crash_notice_only_from_b4() {
+    for (tunables, notice) in [
+        (Tunables::today(), false),
+        (Tunables::today().with_b4(), true),
+    ] {
+        let mut w = World::new(tunables);
+        let u =
+            w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
+        w.tick(0);
+        let pid = w.pid(u);
+        w.s.process_exited(pid, ExitCause::Exited, None);
+        let actions = w.tick(10);
+        let crashed = actions.contains(&Action::Notify {
+            unit: Some(u),
+            notice: Notice::Crashed(ExitCause::Exited),
+        });
+        assert_eq!(crashed, notice, "{actions:?}");
+    }
+}
+
+/// Item 5 (probe `boot_spawn_failure_notifies`): "could not start" for a
+/// failed boot start is B3's; today only a wake's failure shows it.
+#[test]
+fn boot_start_failure_notice_only_from_b3() {
+    for (tunables, notice) in [
+        (Tunables::today(), false),
+        (Tunables::today().with_b3(8), true),
+    ] {
+        let mut w = World::new(tunables);
+        w.auto_spawn = false;
+        let u =
+            w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
+        w.tick(0);
+        let pid = w.pid(u);
+        w.s.process_spawned(pid, Err("boom".into()));
+        let actions = w.tick(1);
+        let shown = actions.contains(&Action::Notify {
+            unit: Some(u),
+            notice: Notice::CouldNotStart,
+        });
+        assert_eq!(shown, notice, "{actions:?}");
+        assert_eq!(w.s.list_state(u), Some(ListState::Failed("boom".into())));
+    }
+}
+
+/// Item 5: a start canceled by a disable answers its held triggers only
+/// from B3 (§4.6); today they go silently.
+#[test]
+fn canceled_start_answers_held_triggers_only_from_b3() {
+    for (tunables, answered) in [
+        (Tunables::today(), false),
+        (Tunables::today().with_b3(8), true),
+    ] {
+        let mut w = World::new(tunables);
+        w.auto_ready = false;
+        let u = standby_unit(&mut w, "n");
+        let holder = w.holder(u);
+        w.s.wake(holder, &Trigger::interactive(1));
+        w.tick(0);
+        w.s.disable(u).unwrap();
+        w.tick(10);
+        let expected: &[(AnswerReason, u32)] = if answered {
+            &[(AnswerReason::Disabled, 1)]
+        } else {
+            &[]
+        };
+        assert_eq!(w.answered, expected);
+    }
+}
+
+/// Item 6 (probe `disable_during_standby_stop_revokes_only_at_reap`;
+/// coordinator ruling §17.7): a disable, uninstall or reload of a unit
+/// stopping for standby revokes its kept registrations at once, in both
+/// presets, and not again at reap.
+#[test]
+fn leaving_a_standby_stop_revokes_at_once() {
+    for tunables in [Tunables::today(), target()] {
+        for request in ["disable", "uninstall", "reload"] {
+            let idle = tunables.idle_timeout;
+            let mut w = World::new(tunables.clone());
+            w.auto_reap = false;
+            let u = standby_unit(&mut w, "n");
+            let holder = w.holder(u);
+            w.s.wake(holder, &Trigger::interactive(9));
+            w.tick(0);
+            let pid = w.pid(u);
+            let actions = w.tick(idle);
+            assert!(actions.contains(&Action::Terminate {
+                unit: u,
+                pid,
+                reason: StopReason::Idle,
+                grace: tunables.normal.standby_grace,
+                keep_registrations: true
+            }));
+            let accepted = match request {
+                "disable" => w.s.disable(u),
+                "uninstall" => w.s.stop(u, StopReason::Uninstall, Then::Removed),
+                _ => w.s.restart(u, true, None),
+            };
+            assert!(accepted.is_ok());
+            let actions = w.tick(idle + 1);
+            assert!(
+                actions.contains(&Action::Revoke { unit: u, pid }),
+                "{request}: {actions:?}"
+            );
+            w.auto_reap = true;
+            w.s.process_reaped(pid, None);
+            w.s.backend_cleaned(pid);
+            let actions = w.tick(idle + 2);
+            assert!(
+                !actions.contains(&Action::Revoke { unit: u, pid }),
+                "{request}: revoked once: {actions:?}"
+            );
+            assert!(!matches!(w.state(u), UnitState::Standby { .. }));
+        }
+    }
+}
+
+/// Item 7 (probe `stale_alias_wakes_standby_unit`): the previous pid
+/// forwards while the run it moved to goes on (today's `lazy.moved`), and
+/// is dropped once that run stops (`forget_running`).
+#[test]
+fn previous_pid_forwards_only_while_its_run_goes_on() {
+    let mut w = World::new(Tunables::today());
+    let u = standby_unit(&mut w, "n");
+    let p1 = w.holder(u);
+    w.tick(0);
+    assert_eq!(w.s.wake(p1, &Trigger::interactive(1)), Delivery::Started);
+    w.tick(10);
+    let p2 = w.pid(u);
+    assert_eq!(
+        w.s.wake(p1, &Trigger::interactive(2)),
+        Delivery::Forward(p2)
+    );
+    w.tick(70_000);
+    assert_eq!(w.holder(u), p2);
+    assert_eq!(w.s.wake(p1, &Trigger::interactive(3)), Delivery::Dropped);
+    assert_eq!(w.s.by_pid(p1), None);
+    assert_eq!(w.s.wake(p2, &Trigger::interactive(4)), Delivery::Started);
+}
+
+/// Item 7: a trigger to the previous pid cannot bypass a restart's
+/// absorption (F3): it is held for the new run, not forwarded.
+#[test]
+fn previous_pid_trigger_is_absorbed_by_a_restart() {
+    let mut w = World::new(Tunables::today().with_b3(8));
+    let u = standby_unit(&mut w, "n");
+    let p1 = w.holder(u);
+    w.s.wake(p1, &Trigger::interactive(1));
+    w.tick(0);
+    let p2 = w.pid(u);
+    w.s.restart(u, false, None).unwrap();
+    assert_eq!(w.s.wake(p1, &Trigger::interactive(2)), Delivery::Held);
+    assert_eq!(w.s.wake(p2, &Trigger::interactive(3)), Delivery::Held);
+    w.tick(10);
+    let p3 = w.pid(u);
+    assert_eq!(w.delivered, [(p2, 1), (p3, 2), (p3, 3)]);
+}
+
+/// A dead pid (a run that stopped, not in standby) is dropped even while a
+/// start is installed: today a message to a stopped owner has no receiver.
+#[test]
+fn dead_pid_is_dropped_while_a_restart_waits() {
+    let mut w = World::new(Tunables::today().with_b3(8));
+    w.auto_reap = false;
+    let u =
+        w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.s.restart(u, false, None).unwrap();
+    w.tick(10);
+    // The stopping process is still the unit's current pid.
+    assert_eq!(w.s.wake(pid, &Trigger::interactive(1)), Delivery::Held);
+    w.s.process_reaped(pid, None);
+    w.s.backend_cleaned(pid);
+    w.auto_reap = true;
+    w.tick(20);
+    assert_ne!(w.pid(u), pid);
+    assert_eq!(w.s.wake(pid, &Trigger::interactive(2)), Delivery::Dropped);
+}
+
+/// Item 8: today every ready of a recordable unit may be classified again
+/// (`lazy_ready` → `lazy_classify`): a plugin that holds a live resource
+/// now is re-recorded resident and stays running; once per run. The target
+/// classifies only a run without a checkpoint.
+#[test]
+fn reclassified_resident_at_a_later_ready_today_only() {
+    for (tunables, reclassified) in [(Tunables::today(), true), (target(), false)] {
+        let mut w = World::new(tunables);
+        let u = standby_unit(&mut w, "n");
+        let holder = w.holder(u);
+        w.s.wake(holder, &Trigger::interactive(1));
+        w.tick(0);
+        let pid = w.pid(u);
+        w.s.classified(pid, Some("live".into()));
+        let actions = w.tick(10);
+        let written = actions.contains(&Action::Checkpoint {
+            unit: u,
+            pid,
+            resident: true,
+        });
+        assert_eq!(written, reclassified, "{actions:?}");
+        // Once per run.
+        w.s.classified(pid, Some("live".into()));
+        assert_eq!(count(&w.tick(11), is_checkpoint), 0);
+        w.tick(300_000);
+        assert_eq!(active(&w, u), reclassified, "resident: no idle standby");
+        if reclassified {
+            // At quit: already recorded resident, not written again.
+            assert_eq!(count(&w.s.shutdown(300_001, 1_000), is_checkpoint), 0);
+        }
+    }
+}
+
+/// Item 8: a run started from its checkpoint is recorded at quit (today's
+/// `lazy_quit` records every classified run; its class is the checkpoint's
+/// until classified again).
+#[test]
+fn shutdown_checkpoints_runs_whose_class_is_known() {
+    let mut w = World::new(Tunables::today());
+    let u = standby_unit(&mut w, "n");
+    let holder = w.holder(u);
+    w.s.wake(holder, &Trigger::interactive(1));
+    w.tick(0);
+    let pid = w.pid(u);
+    let r =
+        w.s.add_unit(UnitSpec::new("r", Class::Normal).checkpoint(true));
+    w.tick(10);
+    let actions = w.s.shutdown(20, 1_000);
+    assert!(actions.contains(&Action::Checkpoint {
+        unit: u,
+        pid,
+        resident: false
+    }));
+    // Recorded resident and still resident: not written again.
+    assert!(
+        !actions
+            .iter()
+            .any(|a| matches!(a, Action::Checkpoint { unit, .. } if *unit == r))
+    );
+}
+
+/// Item 9a: today a first run classified lazy while busy keeps its
+/// first-run place and goes to standby as soon as it is idle (checked every
+/// `CHECK_MS`); off, it frees the place and waits the idle timeout.
+#[test]
+fn busy_lazy_first_run_parks_when_idle_today() {
+    for parks in [true, false] {
+        let mut w = World::new(Tunables {
+            first_run_parks_when_idle: parks,
+            ..Tunables::today()
+        });
+        let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+        w.tick(0);
+        let pid = w.pid(u);
+        w.s.begin_work(pid, 1, 5);
+        w.s.classified(pid, None);
+        w.tick(6);
+        assert!(active(&w, u));
+        assert_eq!(w.s.slots_in_use().1, usize::from(parks));
+        w.s.end_work(pid, 1);
+        w.tick(300);
+        assert_eq!(
+            matches!(w.state(u), UnitState::Standby { .. }),
+            parks,
+            "{:?}",
+            w.state(u)
+        );
+        assert_eq!(w.s.slots_in_use().1, 0);
+        if !parks {
+            w.tick(60_006);
+            assert!(matches!(w.state(u), UnitState::Standby { .. }));
+        }
+    }
+}
+
+/// Item 9b: today a boot start not yet spawned (verifying) lists `stopped`
+/// (`StartQueue`); the target says `starting` (§9).
+#[test]
+fn boot_start_waiting_lists_stopped_today() {
+    for (tunables, listed) in [
+        (Tunables::today(), ListState::Stopped),
+        (target(), ListState::Starting),
+    ] {
+        let mut w = World::new(tunables);
+        let u =
+            w.s.add_unit(UnitSpec::new("b", Class::Builtin).verify().checkpoint(true));
+        w.tick(0);
+        assert!(matches!(
+            w.state(u),
+            UnitState::Activating {
+                sub: ActivatingSub::Verify,
+                ..
+            }
+        ));
+        assert_eq!(w.s.list_state(u), Some(listed));
+        w.s.verify_done(u, true);
+        w.tick(1);
+        assert!(active(&w, u));
+    }
+    // A first run waiting for a place is `starting` today too (`first_queue`).
+    let mut w = World::new(Tunables::today());
+    w.auto_ready = false;
+    let units = (0..9)
+        .map(|i| w.s.add_unit(UnitSpec::new(format!("f{i}"), Class::Normal)))
+        .collect::<Vec<_>>();
+    w.tick(0);
+    assert!(matches!(w.state(units[8]), UnitState::Inactive));
+    assert_eq!(w.s.list_state(units[8]), Some(ListState::Starting));
+}
+
+/// Item 9d: a crash cancels an installed Standby job (it did not go to
+/// standby); with B4 the crash's own restart is installed.
+#[test]
+fn crash_cancels_an_installed_standby_job() {
+    let mut w = World::new(Tunables::today());
+    let u =
+        w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
+    w.tick(0);
+    let pid = w.pid(u);
+    // A resident is never idle; ask for standby directly.
+    let job = w.s.standby(u);
+    w.s.process_exited(pid, ExitCause::Exited, None);
+    w.tick(10);
+    assert_eq!(w.s.job_result(u, job), Some(&JobResult::Canceled));
+    assert!(matches!(w.state(u), UnitState::Failed { .. }));
+
+    let mut w = World::new(Tunables::today().with_b4());
+    let b =
+        w.s.add_unit(UnitSpec::new("b", Class::Builtin).checkpoint(true));
+    w.auto_reap = false;
+    w.tick(0);
+    let pid = w.pid(b);
+    let job = w.s.standby(b);
+    w.s.process_exited(pid, ExitCause::Exited, None);
+    w.tick(10);
+    assert_eq!(w.s.job_result(b, job), Some(&JobResult::Canceled));
+    assert!(matches!(
+        w.s.job(b).map(|j| &j.kind),
+        Some(JobKind::Start {
+            cause: Cause::AutoRestart
+        })
+    ));
 }

@@ -35,7 +35,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 pub use exit::ExitCause;
 pub use job::{Busy, Cause, Job, JobId, JobKind, JobMode, JobResult, JobState, Origin, Priority};
-pub use kill::{KillMode, grace, kill_mode};
+pub use kill::grace;
 pub use limits::{
     Backoff, BuiltinsFirst, Policy, RestartMode, Retry, StartLimit, Tunables, max_active_for,
     process_budget_for,
@@ -216,10 +216,16 @@ pub struct Supervisor<P> {
     shutting_down: bool,
 }
 
-/// `packages.list` of one unit (§9).
-fn list_state<P>(unit: &Unit<P>) -> ListState {
+/// `packages.list` of one unit (§9). `boot_stopped`:
+/// `Tunables::boot_wait_lists_stopped`.
+fn list_state<P>(unit: &Unit<P>, boot_stopped: bool) -> ListState {
     if unit.removed {
         return ListState::Stopped;
+    }
+    // Today's `package_list` puts `disabled` before a failure
+    // (`set_enabled(false)` clears it too).
+    if !unit.enabled() {
+        return ListState::Disabled;
     }
     let will_start = unit.job.as_ref().is_some_and(Job::will_start);
     let woken = matches!(
@@ -230,6 +236,26 @@ fn list_state<P>(unit: &Unit<P>) -> ListState {
         unit.job.as_ref().map(|job| &job.kind),
         Some(JobKind::Restart { .. })
     );
+    // Today a boot start waiting in the start queue (or verifying) and a
+    // runner member queued again are not running yet: `stopped`.
+    let boot_wait = boot_stopped
+        && unit.job.as_ref().is_some_and(|job| match job.kind {
+            JobKind::Start { cause } => cause == Cause::Boot,
+            JobKind::Restart { .. } => job.origin == Origin::Crash,
+            _ => false,
+        })
+        && matches!(
+            unit.state,
+            UnitState::Inactive
+                | UnitState::Deactivating { .. }
+                | UnitState::Activating {
+                    sub: ActivatingSub::Verify,
+                    ..
+                }
+        );
+    if boot_wait {
+        return ListState::Stopped;
+    }
     match &unit.state {
         UnitState::Failed { text, .. } => return ListState::Failed(text.clone()),
         UnitState::Deactivating {
@@ -242,9 +268,6 @@ fn list_state<P>(unit: &Unit<P>) -> ListState {
             return ListState::Failed(text);
         }
         _ => {}
-    }
-    if !unit.enabled() {
-        return ListState::Disabled;
     }
     let idle = ListState::Running {
         process: ProcessState::Idle,
@@ -344,9 +367,11 @@ impl<P: Clone> Supervisor<P> {
             unit.class = Class::Resident;
         }
         let class = unit.class;
+        let (recordable, recorded, resident) = (unit.recordable, unit.recorded, unit.resident);
         let replay = self.tunables.on_demand
             && spec.enabled
-            && spec.checkpoint.is_some_and(|c| !c.resident)
+            && recorded
+            && !resident
             && self.tunables.policy(class).idle_standby;
         self.by_id.insert(spec.id.clone(), u);
         self.units.insert(u, unit);
@@ -357,8 +382,9 @@ impl<P: Clone> Supervisor<P> {
         if replay {
             self.replay(u);
         } else {
-            let first =
-                self.tunables.on_demand && spec.checkpoint.is_none() && class != Class::Development;
+            // No recording key (a development load, a built-in without a
+            // digest): started at boot, never a first run.
+            let first = self.tunables.on_demand && recordable && !recorded;
             let cause = if first { Cause::FirstRun } else { Cause::Boot };
             let _ = self.enqueue_job(
                 u,
@@ -404,6 +430,35 @@ impl<P: Clone> Supervisor<P> {
             };
         }
         self.sync(u);
+    }
+
+    /// A package RPC is in flight on `u` (today's `package_busy`): the next
+    /// `JobMode::Fail` request is `Busy`. Checked before changing anything.
+    pub fn package_busy(&self, u: UnitId) -> bool {
+        self.units
+            .get(&u)
+            .and_then(|unit| unit.job.as_ref())
+            .is_some_and(|job| job.origin == Origin::PackageRpc)
+    }
+
+    /// `packages.setEnabled(false)`: `Busy` before anything changes (as
+    /// today), else the unit-file state and the `Stop{Disable}` together.
+    pub fn disable(&mut self, u: UnitId) -> Result<JobId, Busy> {
+        if self.package_busy(u) {
+            return Err(Busy);
+        }
+        self.set_enabled(u, false);
+        self.stop(u, StopReason::Disable, Then::Inactive)
+    }
+
+    /// `packages.setEnabled(true)`: `Busy` before anything changes, else the
+    /// unit-file state and the `Start{Enable}` together (T32).
+    pub fn enable(&mut self, u: UnitId) -> Result<JobId, Busy> {
+        if self.package_busy(u) {
+            return Err(Busy);
+        }
+        self.set_enabled(u, true);
+        self.start(u, Cause::Enable)
     }
 
     // ---- requests ------------------------------------------------------
@@ -470,9 +525,15 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `wake`: a trigger on an entry point of `pid` (systemd socket
-    /// activation: the connection is queued on the listening socket). On
-    /// `Now`/`Forward` the caller sends its own copy of the trigger.
-    pub fn wake(&mut self, pid: Pid, trigger: Trigger<P>) -> Delivery {
+    /// activation: the connection is queued on the listening socket). The
+    /// trigger is borrowed: on `Now`/`Forward` the caller sends the message
+    /// it still owns; a held or answered trigger is copied into the core.
+    ///
+    /// `pid` must be the unit's current process, its holder (standby), or
+    /// the previous pid of a run that is still going (forwarded, today's
+    /// `lazy.moved`). Any other pid of the unit is dead: dropped, as a
+    /// message to a stopped owner is today.
+    pub fn wake(&mut self, pid: Pid, trigger: &Trigger<P>) -> Delivery {
         if self.shutting_down {
             return Delivery::Dropped;
         }
@@ -490,40 +551,55 @@ impl<P: Clone> Supervisor<P> {
         if !unit.enabled() || unit.removed {
             return Delivery::Dropped;
         }
+        let holder = match unit.state {
+            UnitState::Standby { holder, .. } => Some(holder),
+            UnitState::Activating { pid: None, .. } => unit.holder,
+            _ => None,
+        };
+        let live = unit.pid() == Some(pid) || holder == Some(pid) || unit.alias == Some(pid);
+        if !live {
+            return Delivery::Dropped;
+        }
         match &mut unit.state {
             UnitState::Active {
                 pid: current,
                 last_active,
                 ..
             } => {
-                if *current != pid {
-                    return Delivery::Forward(*current);
-                }
+                let current = *current;
+                // Sent to the current process (an old pid is forwarded to
+                // it), after the job rules: an old pid cannot bypass a
+                // restart's absorption (F3).
+                let now_or_forward = if current == pid {
+                    Delivery::Now
+                } else {
+                    Delivery::Forward(current)
+                };
                 let kind = unit.job.as_ref().map(|j| j.kind.clone());
                 match kind {
                     None | Some(JobKind::Start { .. }) => {
                         *last_active = (*last_active).max(now);
-                        return Delivery::Now;
+                        return now_or_forward;
                     }
                     Some(JobKind::Standby) => {
                         *last_active = (*last_active).max(now);
                         self.cancel_standby(u);
                         self.sync(u);
-                        return Delivery::Now;
+                        return now_or_forward;
                     }
                     // Restart[any] × Start: the start is absorbed, the
                     // trigger held for the new run (§4.2).
                     Some(JobKind::Restart { .. }) => {
                         if trigger.kind == TriggerKind::Follow {
-                            unit.backlog.push_back(trigger);
+                            unit.backlog.push_back(trigger.clone());
                             return Delivery::Held;
                         }
-                        if trigger::would_overflow(&unit.backlog, &trigger, backlog_max) {
-                            self.answer(u, AnswerReason::Busy, trigger);
+                        if trigger::would_overflow(&unit.backlog, trigger, backlog_max) {
+                            self.answer(u, AnswerReason::Busy, trigger.clone());
                             return Delivery::Refused;
                         }
                         let priority = trigger.priority();
-                        trigger::hold(&mut unit.backlog, trigger);
+                        trigger::hold(&mut unit.backlog, trigger.clone());
                         self.raise(u, priority);
                         self.sync(u);
                         return Delivery::Held;
@@ -546,8 +622,8 @@ impl<P: Clone> Supervisor<P> {
                         if accepted.is_err() || stopped {
                             return Delivery::Dropped;
                         }
-                        self.touch(pid, now);
-                        return Delivery::Now;
+                        self.touch(current, now);
+                        return now_or_forward;
                     }
                 }
             }
@@ -570,7 +646,7 @@ impl<P: Clone> Supervisor<P> {
         }
         if trigger.kind == TriggerKind::Follow {
             if will_start || !unit.backlog.is_empty() {
-                unit.backlog.push_back(trigger);
+                unit.backlog.push_back(trigger.clone());
                 return Delivery::Held;
             }
             return Delivery::Dropped;
@@ -582,18 +658,18 @@ impl<P: Clone> Supervisor<P> {
             && until > now
             && trigger.answered()
         {
-            self.answer(u, AnswerReason::Held { until }, trigger);
+            self.answer(u, AnswerReason::Held { until }, trigger.clone());
             return Delivery::Refused;
         }
-        if trigger::would_overflow(&unit.backlog, &trigger, backlog_max) {
+        if trigger::would_overflow(&unit.backlog, trigger, backlog_max) {
             if trigger.answered() {
-                self.answer(u, AnswerReason::Busy, trigger);
+                self.answer(u, AnswerReason::Busy, trigger.clone());
             }
             return Delivery::Refused;
         }
         let priority = trigger.priority();
         if will_start {
-            trigger::hold(&mut unit.backlog, trigger);
+            trigger::hold(&mut unit.backlog, trigger.clone());
             self.raise(u, priority);
             self.sync(u);
             return Delivery::Held;
@@ -606,7 +682,7 @@ impl<P: Clone> Supervisor<P> {
                 .is_some_and(|max| self.queued_third.len() >= max)
         {
             if trigger.answered() {
-                self.answer(u, AnswerReason::Busy, trigger);
+                self.answer(u, AnswerReason::Busy, trigger.clone());
             }
             return Delivery::Refused;
         }
@@ -625,7 +701,7 @@ impl<P: Clone> Supervisor<P> {
             return Delivery::Dropped;
         };
         if unit.job.as_ref().is_some_and(|j| j.id == job) {
-            trigger::hold(&mut unit.backlog, trigger);
+            trigger::hold(&mut unit.backlog, trigger.clone());
             self.sync(u);
             Delivery::Started
         } else {
@@ -740,10 +816,13 @@ impl<P: Clone> Supervisor<P> {
         // Every checkpoint before the first Terminate (§7.2 "checkpoints
         // first", coordinator ruling): if the forced exit comes mid-way,
         // each one is already written.
+        // As today's `lazy_quit`: every run classified this run, unless its
+        // checkpoint already says resident and it still is.
         if self.tunables.on_demand {
             for (u, unit) in &self.units {
                 if let UnitState::Active { pid, .. } = unit.state
-                    && unit.recorded
+                    && unit.classified_run
+                    && !(unit.resident && unit.recorded && unit.recorded_resident)
                 {
                     self.pending.push(Action::Checkpoint {
                         unit: *u,
@@ -888,12 +967,14 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `process_exited` (T25; expected exits of a deactivating process
-    /// are ignored: its reap follows).
-    pub fn process_exited(&mut self, pid: Pid, cause: ExitCause) {
+    /// are ignored: its reap follows). `text`: the fault's error text (today
+    /// `RuntimeFault` writes it into `failures`, shown by `packages.list`);
+    /// `None`: the cause's own text.
+    pub fn process_exited(&mut self, pid: Pid, cause: ExitCause, text: Option<String>) {
         let Some(u) = self.current(pid) else {
             return;
         };
-        self.crash(u, cause, None);
+        self.crash(u, cause, text);
         self.sync(u);
     }
 
@@ -931,6 +1012,9 @@ impl<P: Clone> Supervisor<P> {
             self.cancel_standby(u);
         } else {
             let resident = unit.resident;
+            unit.recorded = true;
+            unit.recorded_resident = resident;
+            unit.park_when_idle = false;
             self.pending.push(Action::Checkpoint {
                 unit: u,
                 pid,
@@ -941,48 +1025,85 @@ impl<P: Clone> Supervisor<P> {
         self.sync(u);
     }
 
-    /// §5 `classified` (first run; T12 / T13). `resident`: why it holds a
-    /// live resource.
+    /// §5 `classified` (MOVE `lazy_classified`; T12 / T13). `resident`: why
+    /// it holds a live resource. A run without a checkpoint is classified
+    /// (the 5 s timer runs); with `Tunables::reclassify` (today) any ready
+    /// run of a recordable unit may be, once per run, as today's
+    /// `lazy_ready` classifies on every ready.
     pub fn classified(&mut self, pid: Pid, resident: Option<String>) {
         let Some(u) = self.current(pid) else {
             return;
         };
+        let reclassify = self.tunables.reclassify;
+        let parks_when_idle = self.tunables.first_run_parks_when_idle;
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
-        if !unit.classifying || !matches!(unit.state, UnitState::Active { .. }) {
+        let open = unit.classifying || unit.may_reclassify;
+        if !open || !matches!(unit.state, UnitState::Active { .. }) {
             return;
         }
         unit.classifying = false;
-        unit.recorded = true;
+        unit.may_reclassify = false;
+        unit.classified_run = true;
         Timers::cancel(&mut unit.gens, TimerKind::Classify);
         if resident.is_some() {
             unit.resident = true;
             unit.first_run = false;
+            unit.park_when_idle = false;
             if unit.class == Class::Normal {
                 unit.class = Class::Resident;
             }
             Timers::cancel(&mut unit.gens, TimerKind::Idle);
-            self.pending.push(Action::Checkpoint {
-                unit: u,
-                pid,
-                resident: true,
-            });
+            // Written only when the checkpoint does not say so already.
+            if !(unit.recorded && unit.recorded_resident) {
+                unit.recorded = true;
+                unit.recorded_resident = true;
+                self.pending.push(Action::Checkpoint {
+                    unit: u,
+                    pid,
+                    resident: true,
+                });
+            }
         } else {
             unit.resident = false;
             if unit.class == Class::Resident {
                 unit.class = Class::Normal;
             }
             let idle_standby = self.tunables.policy(unit.class).idle_standby;
-            if unit.job.is_some() || unit.work.busy() || !idle_standby {
-                unit.first_run = false;
+            let at_once = unit.run_is_first && idle_standby;
+            let busy = unit.job.is_some() || unit.work.busy();
+            if !(at_once && !busy) && !reclassify {
+                // Classified once (T12): the checkpoint is written now.
+                // Today (`reclassify`) a lazy class is written only when it
+                // goes to standby, or at quit.
+                unit.recorded = true;
+                unit.recorded_resident = false;
                 self.pending.push(Action::Checkpoint {
                     unit: u,
                     pid,
                     resident: false,
                 });
+            }
+            let Some(unit) = self.units.get_mut(&u) else {
+                return;
+            };
+            // Only a first run goes to standby at once (T12, today's
+            // `lazy_classified`); any other run waits for its idle timeout.
+            if !at_once {
+                self.arm_idle(u);
+            } else if busy {
+                if parks_when_idle {
+                    // Today: it keeps its first-run place and goes to
+                    // standby as soon as it is idle (`lazy_first_lazy`).
+                    unit.park_when_idle = true;
+                } else {
+                    unit.first_run = false;
+                }
                 self.arm_idle(u);
             } else {
+                unit.recorded = true;
+                unit.recorded_resident = false;
                 self.pending.push(Action::Checkpoint {
                     unit: u,
                     pid,
@@ -1073,7 +1194,11 @@ impl<P: Clone> Supervisor<P> {
             .map(|(u, _)| *u)
             .collect::<Vec<_>>();
         let stop_wait = self.tunables.stop_wait;
+        // Today `restart_shared` queues the members again at once; from B4
+        // they wait for the playback worker's cleanup (§7.4).
+        let cleaned = !self.tunables.runner_restart_waits_cleanup;
         for u in members {
+            self.drop_alias(u);
             let Some(unit) = self.units.get_mut(&u) else {
                 continue;
             };
@@ -1099,7 +1224,7 @@ impl<P: Clone> Supervisor<P> {
             unit.stopping = Some(Stopping {
                 pid,
                 reaped: true,
-                backend_cleaned: false,
+                backend_cleaned: cleaned,
                 deadline: now + stop_wait,
                 kept: false,
             });
@@ -1111,7 +1236,7 @@ impl<P: Clone> Supervisor<P> {
             // spawn), as today's `start_installed` replays a recording.
             let replay = self.tunables.on_demand
                 && unit.recorded
-                && !unit.resident
+                && !unit.recorded_resident
                 && self.tunables.policy(unit.class).idle_standby
                 && !unit.job.as_ref().is_some_and(Job::will_start);
             unit.replay_after = replay;
@@ -1125,6 +1250,7 @@ impl<P: Clone> Supervisor<P> {
                 keep_registrations: false,
             });
             if replay {
+                self.land_if_done(u);
                 self.sync(u);
                 continue;
             }
@@ -1143,6 +1269,7 @@ impl<P: Clone> Supervisor<P> {
             {
                 job.not_before = Some(now + delay);
             }
+            self.land_if_done(u);
             self.sync(u);
         }
         let notice = if failed_open {
@@ -1200,7 +1327,10 @@ impl<P: Clone> Supervisor<P> {
         self.by_id.get(id).copied()
     }
     pub fn list_state(&self, u: UnitId) -> Option<ListState> {
-        self.units.get(&u).map(list_state)
+        let boot_stopped = self.tunables.boot_wait_lists_stopped;
+        self.units
+            .get(&u)
+            .map(|unit| list_state(unit, boot_stopped))
     }
     pub fn units(&self) -> impl Iterator<Item = (UnitId, &Unit<P>)> {
         self.units.iter().map(|(u, unit)| (*u, unit))
@@ -1263,12 +1393,15 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// Every held trigger is answered (§4.6); events and follows go
-    /// silently.
+    /// silently. Today (`answer_held` off) they all go silently.
     pub(crate) fn answer_backlog(&mut self, u: UnitId, reason: AnswerReason) {
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
         let backlog = std::mem::take(&mut unit.backlog);
+        if !self.tunables.answer_held {
+            return;
+        }
         for trigger in backlog {
             self.answer(u, reason, trigger);
         }
@@ -1281,13 +1414,16 @@ impl<P: Clone> Supervisor<P> {
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
-        // The previous pid stays forwarded (alias); an older one goes.
-        if let Some(old) = unit.alias.take()
-            && self.by_pid.get(&old) == Some(&u)
+        // Earlier pids are dead (a runner member replayed after its
+        // process went): messages to them are dropped, as today.
+        for old in [unit.alias.take(), unit.last_pid.take()]
+            .into_iter()
+            .flatten()
         {
-            self.by_pid.remove(&old);
+            if self.by_pid.get(&old) == Some(&u) {
+                self.by_pid.remove(&old);
+            }
         }
-        unit.alias = unit.last_pid;
         unit.last_pid = Some(holder);
         unit.state = UnitState::Standby {
             holder,
@@ -1309,6 +1445,9 @@ impl<P: Clone> Supervisor<P> {
             .into_iter()
             .partition(|t| matches!(t.kind, TriggerKind::Event(_)));
         unit.backlog = events;
+        if !self.tunables.answer_held {
+            return;
+        }
         for trigger in others {
             self.answer(u, reason, trigger);
         }
@@ -1327,10 +1466,28 @@ impl<P: Clone> Supervisor<P> {
             Timers::cancel(&mut unit.gens, kind);
         }
         unit.classifying = false;
+        unit.classified_run = false;
+        unit.may_reclassify = false;
+        unit.park_when_idle = false;
         unit.asked_at = None;
         unit.runtime_ready = false;
         unit.pending_ui = 0;
         unit.work.clear();
+    }
+
+    /// The previous pid that forwarded to the run now ending goes (today's
+    /// `forget_running` drops `lazy.moved` entries to a stopped owner):
+    /// later messages to it are dropped.
+    fn drop_alias(&mut self, u: UnitId) {
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        if let Some(alias) = unit.alias.take()
+            && unit.pid() != Some(alias)
+            && self.by_pid.get(&alias) == Some(&u)
+        {
+            self.by_pid.remove(&alias);
+        }
     }
 
     fn arm_idle(&mut self, u: UnitId) {
@@ -1342,12 +1499,17 @@ impl<P: Clone> Supervisor<P> {
         };
         if !self.tunables.on_demand
             || !self.tunables.policy(unit.class).idle_standby
+            || !unit.recordable
             || unit.resident
             || unit.classifying
         {
             return;
         }
-        let due = last_active + self.tunables.idle_timeout;
+        let due = if unit.park_when_idle {
+            self.now + self.tunables.idle_check
+        } else {
+            last_active + self.tunables.idle_timeout
+        };
         self.timers.arm(&mut unit.gens, u, TimerKind::Idle, due);
     }
 
@@ -1361,6 +1523,7 @@ impl<P: Clone> Supervisor<P> {
     }
 
     fn terminate_with(&mut self, u: UnitId, reason: StopReason, then: Then, keep: bool, grace: Ms) {
+        self.drop_alias(u);
         let now = self.now;
         let stop_wait = self.tunables.stop_wait;
         let Some(unit) = self.units.get_mut(&u) else {
@@ -1564,6 +1727,13 @@ impl<P: Clone> Supervisor<P> {
         unit.placement = placement;
         unit.runtime_ready = false;
         unit.pending_ui = 0;
+        unit.classified_run = false;
+        unit.may_reclassify = false;
+        unit.park_when_idle = false;
+        unit.run_is_first = unit
+            .job
+            .as_ref()
+            .is_some_and(|job| job.cause() == Some(Cause::FirstRun));
         unit.from_standby = holder.is_some();
         unit.state = UnitState::Activating {
             pid: Some(pid),
@@ -1596,7 +1766,7 @@ impl<P: Clone> Supervisor<P> {
             pid,
             placement,
             image: unit.image.clone(),
-            first_run: !unit.recorded,
+            first_run: unit.recordable && !unit.recorded,
         });
         self.sync(u);
         self.enforce_budget(u, priority);
@@ -1630,6 +1800,15 @@ impl<P: Clone> Supervisor<P> {
             return;
         }
         unit.restart.retries = 0;
+        // Today only a wake's failure shows "could not start"
+        // (`wake_failed`); a boot, first run, enable or reload only records
+        // it (`start_installed`, `start_stopped`).
+        let woken = matches!(
+            unit.job.as_ref().and_then(Job::cause),
+            Some(Cause::Trigger(_))
+        );
+        let notice = woken || self.tunables.start_failure_notice;
+        self.drop_alias(u);
         self.answer_backlog(u, AnswerReason::CouldNotStart);
         self.finish(u, JobResult::Failed(text.clone()));
         let Some(unit) = self.units.get_mut(&u) else {
@@ -1650,16 +1829,19 @@ impl<P: Clone> Supervisor<P> {
             };
             self.pending.push(Action::Revoke { unit: u, pid });
         }
-        self.pending.push(Action::Notify {
-            unit: Some(u),
-            notice: Notice::CouldNotStart,
-        });
+        if notice {
+            self.pending.push(Action::Notify {
+                unit: Some(u),
+                notice: Notice::CouldNotStart,
+            });
+        }
     }
 
     /// T9: ready and every initial UI registration done.
     fn try_ready(&mut self, u: UnitId) {
         let now = self.now;
         let on_demand = self.tunables.on_demand;
+        let reclassify = self.tunables.reclassify;
         let classify_wait = self.tunables.classify_wait;
         let Some(unit) = self.units.get_mut(&u) else {
             return;
@@ -1695,10 +1877,19 @@ impl<P: Clone> Supervisor<P> {
                 payload: trigger.payload,
             });
         }
-        if on_demand && !unit.recorded {
+        // A run without a checkpoint is classified (T12/T13); never a
+        // development load or a unit without a recording key (today's
+        // `lazy_development`, `lazy_key_of` is `None`). With `reclassify`
+        // (today) a recorded run may be classified again (`classified`),
+        // without the timer.
+        if on_demand && unit.recordable && !unit.recorded {
             unit.classifying = true;
             self.timers
                 .arm(&mut unit.gens, u, TimerKind::Classify, now + classify_wait);
+        } else if on_demand && unit.recordable {
+            // Its class is the checkpoint's until classified again.
+            unit.classified_run = true;
+            unit.may_reclassify = reclassify;
         }
         if unit.job.as_ref().is_some_and(Job::starts) {
             self.finish(u, JobResult::Done);
@@ -1728,6 +1919,19 @@ impl<P: Clone> Supervisor<P> {
                 unit.quarantined = true;
             }
         }
+        // A Standby job does not finish by a crash: canceled (the unit lands
+        // where the class's `Restart=` says).
+        if unit
+            .job
+            .as_ref()
+            .is_some_and(|job| job.kind == JobKind::Standby)
+        {
+            unit.asked_at = None;
+            self.finish(u, JobResult::Canceled);
+        }
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
         let text = text.unwrap_or_else(|| cause.text().to_owned());
         let policy = self.tunables.policy(unit.class).clone();
         let development = unit.class == Class::Development;
@@ -1815,7 +2019,8 @@ impl<P: Clone> Supervisor<P> {
                 }
             }
         }
-        if cause.notifies() {
+        // Today a crash only records the failure; the notice is B4's.
+        if cause.notifies() && self.tunables.crash_notice {
             self.pending.push(Action::Notify {
                 unit: Some(u),
                 notice: Notice::Crashed(cause),
@@ -1866,6 +2071,20 @@ impl<P: Clone> Supervisor<P> {
             (_, StopReason::Disable) => AnswerReason::Disabled,
             _ => AnswerReason::Stopped,
         };
+        // The user's disable clears a failure (today's `set_enabled(false)`
+        // does `failures.remove`).
+        if reason == StopReason::Disable {
+            unit.failure = None;
+            unit.stuck = false;
+            if let UnitState::Deactivating {
+                then: landing @ Then::Failed,
+                ..
+            } = &mut unit.state
+            {
+                *landing = Then::Inactive;
+                unit.failing = None;
+            }
+        }
         match unit.state.clone() {
             UnitState::Deactivating { .. } => self.set_then(u, then),
             UnitState::Active { .. } | UnitState::Activating { pid: Some(_), .. } => {
@@ -1900,7 +2119,9 @@ impl<P: Clone> Supervisor<P> {
                         self.pending.push(Action::RemoveData { unit: u });
                     }
                     _ => {
-                        if !matches!(state, UnitState::Failed { .. }) {
+                        if reason == StopReason::Disable
+                            || !matches!(state, UnitState::Failed { .. })
+                        {
                             unit.state = UnitState::Inactive;
                         }
                     }
@@ -1963,6 +2184,11 @@ impl<P: Clone> Supervisor<P> {
         if let Some(job) = unit.job.as_mut() {
             job.restarting = true;
             job.state = JobState::Waiting;
+        }
+        // Today the triggers held for the old run are lost with it
+        // (`lazy.waking`, `Parked.triggers`); from B3 they carry over.
+        if !self.tunables.restart_keeps_backlog {
+            self.answer_backlog(u, AnswerReason::Stopped);
         }
         if !enabled {
             self.finish(u, JobResult::Done);
@@ -2138,12 +2364,20 @@ impl<P: Clone> Supervisor<P> {
                 if unit.job.is_some() {
                     return;
                 }
-                let due = last_active + self.tunables.idle_timeout;
+                // A first run classified lazy while busy: no idle time,
+                // checked every `idle_check` (today's `lazy_first_lazy`).
+                let (due, again) = if unit.park_when_idle {
+                    (now, now + self.tunables.idle_check)
+                } else {
+                    (
+                        last_active + self.tunables.idle_timeout,
+                        now + self.tunables.idle_timeout,
+                    )
+                };
                 if now < due {
                     self.timers.arm(&mut unit.gens, u, TimerKind::Idle, due);
                 } else if unit.work.busy() {
-                    let due = now + self.tunables.idle_timeout;
-                    self.timers.arm(&mut unit.gens, u, TimerKind::Idle, due);
+                    self.timers.arm(&mut unit.gens, u, TimerKind::Idle, again);
                 } else {
                     let _ = self.enqueue_job(
                         u,
@@ -2281,7 +2515,7 @@ impl<P: Clone> Supervisor<P> {
         } else {
             self.procs_third.remove(&u);
         }
-        let list = list_state(unit);
+        let list = list_state(unit, self.tunables.boot_wait_lists_stopped);
         let changed = unit
             .listed
             .as_ref()
