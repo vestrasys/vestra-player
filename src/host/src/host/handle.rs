@@ -33,9 +33,9 @@ impl Host {
                     diag!("runtime {owner} {event}: {}", message["data"]);
                     let now = self.now_ms();
                     let result = match event {
-                        "runtime.ready" => self.activations.runtime_ready(owner, now),
-                        "runtime.failed" => self.activations.runtime_failed(
-                            owner,
+                        "runtime.ready" => self.supervisor.activation_ready(Pid(owner), now),
+                        "runtime.failed" => self.supervisor.activation_failed(
+                            Pid(owner),
                             message["data"].to_string().chars().take(512).collect(),
                             now,
                         ),
@@ -59,10 +59,12 @@ impl Host {
                         if matches!(request.method.as_str(), "ui.open" | "ui.mount") {
                             let now = self.now_ms();
                             if matches!(
-                                self.activations.status(owner, now),
-                                Ok(package_activation::Status::Pending { .. })
+                                self.activation_status(owner, now),
+                                Ok(activation::Status::Pending { .. })
                             ) {
-                                if let Err(error) = self.activations.ui_begin(owner, reply.id, now)
+                                if let Err(error) =
+                                    self.supervisor
+                                        .activation_ui_begin(Pid(owner), reply.id, now)
                                 {
                                     self.respond(
                                         reply,
@@ -70,7 +72,7 @@ impl Host {
                                     );
                                     return;
                                 }
-                                self.activation_ui.insert((owner, reply.id));
+                                self.supervisor.activation_ui_wait(Pid(owner), reply.id);
                             }
                         }
                         // Built-in plugins claim panel slots, the sequence and resolvers first (slot_claims).
@@ -403,9 +405,11 @@ impl Host {
             Event::RuntimeFault(owner, error) => {
                 diag!("plugin {owner}: {error}");
                 let now = self.now_ms();
-                let _ =
-                    self.activations
-                        .runtime_failed(owner, error.chars().take(512).collect(), now);
+                let _ = self.supervisor.activation_failed(
+                    Pid(owner),
+                    error.chars().take(512).collect(),
+                    now,
+                );
                 self.record_failure(owner, &error);
                 self.disable(owner, StopReason::Failed);
             }

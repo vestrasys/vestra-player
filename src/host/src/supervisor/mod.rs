@@ -9,11 +9,10 @@
 //! Inputs without a time argument use the latest time the supervisor was
 //! given (`run_jobs`, `touch`, `begin_work`, `shutdown`, `set_now`).
 #![forbid(unsafe_code)]
-// B1: the core is not wired yet (B2a wires it and removes both allows);
-// its tests use it.
-#![allow(dead_code, unused_imports)]
 
+pub mod activation;
 mod exit;
+mod identity;
 mod job;
 mod kill;
 mod limits;
@@ -35,18 +34,25 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 pub use exit::ExitCause;
 pub use job::{Busy, Cause, Job, JobId, JobKind, JobMode, JobResult, JobState, Origin, Priority};
+// The stop grace per reason: the adapter's `Terminate` executor reads it
+// from B2b.
+#[allow(unused_imports)]
 pub use kill::grace;
-pub use limits::{
-    Backoff, BuiltinsFirst, Policy, RestartMode, Retry, StartLimit, Tunables, max_active_for,
-    process_budget_for,
-};
+pub use limits::{BuiltinsFirst, RestartMode, Retry, Tunables};
+// Limits and policies the adapter reads once B3–B5 set them.
+#[allow(unused_imports)]
+pub use limits::{Backoff, Policy, StartLimit, max_active_for, process_budget_for};
 pub use pressure::Pressure;
+// The 20 s wait texts: B2b's waits answer with them (the spec tests now).
+#[cfg_attr(not(test), allow(unused_imports))]
 pub use reap::{STUCK_RELOAD, STUCK_WAKE};
 pub use trigger::{AnswerReason, Delivery, Trigger, TriggerKind};
+// A unit spec's checkpoint: B2d's `add_unit` at start-up gives it.
+#[allow(unused_imports)]
+pub use unit::Checkpoint;
 pub use unit::{
-    ActivatingSub, Checkpoint, Class, DeactivatingSub, Enablement, FailResult, ListState, Ms, Pid,
-    Placement, ProcessState, RunnerId, StopReason, Stopping, Then, Unit, UnitId, UnitSpec,
-    UnitState,
+    ActivatingSub, Class, DeactivatingSub, Enablement, FailResult, ListState, Ms, Pid, Placement,
+    ProcessState, RunnerId, StopReason, Stopping, Then, Unit, UnitId, UnitSpec, UnitState,
 };
 pub use work::WorkKind;
 
@@ -214,6 +220,8 @@ pub struct Supervisor<P> {
     quiet_until: Ms,
     pressure: Pressure,
     shutting_down: bool,
+    /// Units holding an activation (`activation.rs`, at most `LIMIT`).
+    activations: usize,
 }
 
 /// `packages.list` of one unit (§9). `boot_stopped`:
@@ -299,6 +307,10 @@ fn list_state<P>(unit: &Unit<P>, boot_stopped: bool) -> ListState {
     }
 }
 
+// The job API (§5): requests, inputs, `run_jobs`, `shutdown`, queries. The
+// Host drives it from B2b (waits), B2c (standby, wake) and B2d (start-up,
+// package starts); until then only the spec and simulation tests do.
+#[cfg_attr(not(test), allow(dead_code))]
 impl<P: Clone> Supervisor<P> {
     pub fn new(tunables: Tunables, seed: u64) -> Self {
         Self {
@@ -329,6 +341,7 @@ impl<P: Clone> Supervisor<P> {
             quiet_until: 0,
             pressure: Pressure::None,
             shutting_down: false,
+            activations: 0,
         }
     }
 
@@ -336,6 +349,8 @@ impl<P: Clone> Supervisor<P> {
         &self.tunables
     }
     /// The latest time given.
+    // The adapter reads it from B2b.
+    #[allow(dead_code)]
     pub fn now(&self) -> Ms {
         self.now
     }
@@ -439,6 +454,9 @@ impl<P: Clone> Supervisor<P> {
         fresh.remove_data = unit.remove_data;
         fresh.last_pid = unit.last_pid;
         fresh.job = unit.job.take();
+        fresh.process = unit.process;
+        fresh.parked = unit.parked;
+        fresh.activation = unit.activation.take();
         fresh.gens = std::mem::take(&mut unit.gens);
         fresh.results = std::mem::take(&mut unit.results);
         *unit = fresh;
@@ -466,9 +484,21 @@ impl<P: Clone> Supervisor<P> {
             return;
         };
         self.by_id.remove(&unit.id);
-        for pid in [unit.pid(), unit.alias, unit.last_pid, unit.holder]
-            .into_iter()
-            .flatten()
+        if unit.activation.is_some() {
+            self.activations -= 1;
+        }
+        let run = unit.activation.as_ref().map(|run| run.pid);
+        for pid in [
+            unit.pid(),
+            unit.alias,
+            unit.last_pid,
+            unit.holder,
+            unit.process,
+            unit.parked,
+            run,
+        ]
+        .into_iter()
+        .flatten()
         {
             if self.by_pid.get(&pid) == Some(&u) {
                 self.by_pid.remove(&pid);
@@ -1403,12 +1433,6 @@ impl<P: Clone> Supervisor<P> {
     }
 
     // ---- internals -----------------------------------------------------
-
-    fn alloc_pid(&mut self) -> Pid {
-        let pid = Pid(self.next_pid);
-        self.next_pid += 1;
-        pid
-    }
 
     fn new_job(&mut self, u: UnitId, kind: JobKind, origin: Origin) -> Job {
         let id = JobId(self.next_job);

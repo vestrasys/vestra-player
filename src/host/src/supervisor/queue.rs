@@ -70,6 +70,8 @@ impl Lanes {
         self.lanes[lane.index()].pop_front()
     }
     /// Entries, stale ones included (for bounds of the backing storage).
+    // B3 bounds the backlog with it.
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.lanes.iter().map(VecDeque::len).sum()
     }

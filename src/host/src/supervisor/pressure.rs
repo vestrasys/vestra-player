@@ -12,6 +12,8 @@ pub enum Pressure {
     #[default]
     None,
     /// Standby jobs for all idle Normal units.
+    // B5 reads memory pressure.
+    #[cfg_attr(not(test), allow(dead_code))]
     Low,
     /// As `Low`, and no Interactive overrun.
     Critical,

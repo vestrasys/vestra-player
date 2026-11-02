@@ -170,6 +170,8 @@ fn answer_for(then: Then, reason: StopReason) -> AnswerReason {
     }
 }
 
+// The merge table: wired in B2b (jobs take over every wait).
+#[cfg_attr(not(test), allow(dead_code))]
 impl<P: Clone> Supervisor<P> {
     /// §5 `enqueue_job`: the merge/supersede table (§4.2) and job modes.
     pub fn enqueue_job(

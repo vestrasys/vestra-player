@@ -110,6 +110,8 @@ impl Timers {
     pub fn next(&self) -> Option<Ms> {
         self.heap.peek().map(|Reverse(e)| e.due)
     }
+    // B3's per-tick budget (A1) bounds the heap with it.
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.heap.len()
     }

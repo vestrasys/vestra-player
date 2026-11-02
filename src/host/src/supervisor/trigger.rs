@@ -18,6 +18,8 @@ pub enum TriggerKind {
     Interactive,
     /// A wake-event broadcast, by event name: merged (newest wins),
     /// dropped silently.
+    // B2c: `lazy_event` wakes through `wake`.
+    #[cfg_attr(not(test), allow(dead_code))]
     Event(String),
     /// A message that follows a held trigger (`source.resolveCancel`): held
     /// only behind one, never starts anything.
@@ -29,6 +31,8 @@ pub struct Trigger<P> {
     pub kind: TriggerKind,
     pub payload: P,
 }
+// B2c: `lazy_deliver` / `lazy_event` wake through `wake`.
+#[cfg_attr(not(test), allow(dead_code))]
 impl<P> Trigger<P> {
     pub fn interactive(payload: P) -> Self {
         Self {

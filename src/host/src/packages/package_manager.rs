@@ -6,6 +6,7 @@ use crate::packages::package_store::{Instance, Source, Store, StoredPackage};
 use crate::packages::{package_stage, package_store};
 use crate::playback::backend::Command;
 use crate::process::{Plugin, StopReason, shared_runner};
+use crate::supervisor::{Pid, activation};
 use crate::{i18n, platform, process};
 use anyhow::Result;
 use process::DataKey;
@@ -441,16 +442,44 @@ impl Host {
         manifest: &package_stage::PackageManifest,
         key: DataKey,
     ) -> Result<u64> {
-        self.next_generation += 1;
-        let owner = self.next_generation;
+        let owner = self.alloc_owner();
         let id = manifest.id.clone();
         anyhow::ensure!(self.running(&id).is_none(), "plugin already running");
-        self.activations.begin(owner, self.now_ms() + 15_000)?;
+        let deadline = self.now_ms() + 15_000;
+        self.activation_begin(&id, owner, deadline)?;
         let manifest = process::Manifest {
             id: id.clone(),
             ..manifest.clone()
         };
-        let plugin = match self.trust(&id, directory) {
+        // A spawn that fails gives its activation back (A18 leak 1, fixed
+        // in B2a: before, the place stayed taken for the rest of the run).
+        let plugin = match self.spawn_package(owner, &id, directory, manifest, key) {
+            Ok(plugin) => plugin,
+            Err(error) => {
+                self.supervisor.activation_end(Pid(owner));
+                return Err(error);
+            }
+        };
+        let name = plugin.manifest.name.clone();
+        self.add_plugin(owner, plugin);
+        self.backend.commands.send(Command {
+            reply: Reply { owner, id: 0 },
+            method: "owner.registered".into(),
+            params: json!({"manifestId":id,"manifestName":name}),
+        })?;
+        Ok(owner)
+    }
+    /// `load_package`'s process: in the shared runner (started if none
+    /// runs) when trusted, else its own.
+    fn spawn_package(
+        &mut self,
+        owner: u64,
+        id: &str,
+        directory: &Path,
+        manifest: process::Manifest,
+        key: DataKey,
+    ) -> Result<Plugin> {
+        Ok(match self.trust(id, directory) {
             Trust::Shared => {
                 if self.shared.is_none() {
                     let runner = self.shared_policy.next_id();
@@ -492,15 +521,7 @@ impl Host {
                     process::Placement::Own,
                 )?
             }
-        };
-        let name = plugin.manifest.name.clone();
-        self.add_plugin(owner, plugin);
-        self.backend.commands.send(Command {
-            reply: Reply { owner, id: 0 },
-            method: "owner.registered".into(),
-            params: json!({"manifestId":id,"manifestName":name}),
-        })?;
-        Ok(owner)
+        })
     }
     fn package_status(&mut self, owner: u64) -> String {
         self.activation(owner)
@@ -790,7 +811,7 @@ impl Host {
             None => self.packages.store.installed_ids(),
         };
         for id in ids {
-            if self.running(&id).is_some() || self.lazy.parked_id(&id).is_some() {
+            if self.running(&id).is_some() || self.lazy.parked_id(&self.supervisor, &id).is_some() {
                 continue;
             }
             let Some(record) = self.packages.store.record(&id).cloned() else {
@@ -1056,8 +1077,8 @@ impl Host {
             .collect::<Vec<_>>();
         builtins.into_iter().any(|owner| {
             matches!(
-                self.activations.status(owner, now),
-                Ok(package_activation::Status::Pending { .. })
+                self.activation_status(owner, now),
+                Ok(activation::Status::Pending { .. })
             )
         })
     }
@@ -1096,25 +1117,10 @@ impl Host {
         owners.into_iter().any(|owner| {
             self.is_builtin(owner)
                 && matches!(
-                    self.activations.status(owner, now),
-                    Ok(package_activation::Status::Pending { .. })
+                    self.activation_status(owner, now),
+                    Ok(activation::Status::Pending { .. })
                 )
         })
-    }
-    /// The running owner of plugin `id` (`Host::plugin_ids`).
-    pub(crate) fn running(&self, id: &str) -> Option<u64> {
-        let owner = self.plugin_ids.get(id).copied();
-        // Tests only: a scan per lookup made a debug start-up quadratic.
-        #[cfg(test)]
-        assert_eq!(
-            owner,
-            self.plugins
-                .iter()
-                .find(|(_, plugin)| plugin.manifest.id == id)
-                .map(|(owner, _)| *owner),
-            "plugin_ids follows plugins"
-        );
-        owner
     }
     fn operation_pending(&self, id: &str) -> bool {
         self.packages.operations.values().any(|op| {
@@ -1132,7 +1138,7 @@ impl Host {
         let mut list = BTreeMap::<String, Value>::new();
         let owners = self.plugins.keys().copied().collect::<Vec<_>>();
         for owner in owners {
-            let status = self.activations.status(owner, now).ok();
+            let status = self.activation_status(owner, now).ok();
             let plugin = &self.plugins[&owner];
             let id = plugin.manifest.id.clone();
             let stored = self.packages.store.get(&id);
@@ -1143,14 +1149,14 @@ impl Host {
             let warnings = self.warnings_of(owner);
             let (state, error) = match status {
                 // Woken from idle (lazy activation): it was running all along.
-                Some(package_activation::Status::Pending { .. })
+                Some(activation::Status::Pending { .. })
                     if self.lazy.waking.contains_key(&owner) =>
                 {
                     ("running", None)
                 }
-                Some(package_activation::Status::Pending { .. }) => ("starting", None),
-                Some(package_activation::Status::Failed { message }) => ("failed", Some(message)),
-                Some(package_activation::Status::TimedOut) => {
+                Some(activation::Status::Pending { .. }) => ("starting", None),
+                Some(activation::Status::Failed { message }) => ("failed", Some(message)),
+                Some(activation::Status::TimedOut) => {
                     ("failed", Some("activation timed out".to_owned()))
                 }
                 // Until the SDK passes `warnings` on (it keeps only the known
@@ -1197,7 +1203,7 @@ impl Host {
             let disabled = self.packages.store.disabled().contains(&id);
             let parked = self
                 .lazy
-                .parked_id(&id)
+                .parked_id(&self.supervisor, &id)
                 .and_then(|owner| self.lazy.parked(owner));
             let (state, error) =
                 if self.package_busy(&id) || !disabled && self.lazy.first_queue.contains(&id) {
@@ -1217,8 +1223,9 @@ impl Host {
                 .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())));
             let builtin = record.instance.as_ref().is_some_and(|i| i.builtin);
             let source = record.instance.map(|i| i.source);
-            let process =
-                (self.lazy.parked_id(&id).is_some() && state == "running").then_some("idle");
+            let process = (self.lazy.parked_id(&self.supervisor, &id).is_some()
+                && state == "running")
+                .then_some("idle");
             let entry = match package {
                 Ok((directory, manifest)) => json!({"id":id,"version":manifest.version,
                     "origin":"installed","state":state,"error":error,"process":process,
@@ -1357,7 +1364,7 @@ impl Host {
             }
             return Ok(());
         }
-        if running.is_some() || self.lazy.parked_id(id).is_some() {
+        if running.is_some() || self.lazy.parked_id(&self.supervisor, id).is_some() {
             return Ok(());
         }
         // Disabled right after a park: it starts once that process is gone

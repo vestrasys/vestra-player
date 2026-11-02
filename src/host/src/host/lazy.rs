@@ -296,8 +296,9 @@ pub(crate) struct Lazy {
     pub enabled: bool,
     /// `VESTRA_IDLE_MS`.
     pub idle_ms: u64,
-    /// Parked plugins by owner (`park`, `unpark`), and their owners by
-    /// manifest id (`parked_id`).
+    /// Parked plugins by owner (`park`, `unpark`). Their owners by
+    /// manifest id are the unit table's (`parked_id`, B2a); `parked_ids`
+    /// stays one release as its `debug_assert` cross-check (removed in B7).
     parked: BTreeMap<u64, Parked>,
     parked_ids: BTreeMap<String, u64>,
     pub waking: BTreeMap<u64, Waking>,
@@ -408,9 +409,14 @@ impl Lazy {
     pub fn touch(&mut self, owner: u64, now: u64) {
         self.active.insert(owner, now);
     }
-    /// The parked owner of plugin `id`.
-    pub fn parked_id(&self, id: &str) -> Option<u64> {
-        let owner = self.parked_ids.get(id).copied();
+    /// The parked owner of plugin `id` (the unit table's standby holder).
+    pub fn parked_id(&self, supervisor: &Supervisor<Value>, id: &str) -> Option<u64> {
+        let owner = super::supervisor::parked_id(supervisor, id);
+        debug_assert_eq!(
+            owner,
+            self.parked_ids.get(id).copied(),
+            "the unit table follows parked_ids"
+        );
         // Tests only: a scan per lookup made a debug start-up quadratic.
         #[cfg(test)]
         assert_eq!(
@@ -427,14 +433,16 @@ impl Lazy {
     pub fn parked(&self, owner: u64) -> Option<&Parked> {
         self.parked.get(&owner)
     }
-    /// `owner` is parked now.
-    fn park(&mut self, owner: u64, parked: Parked) {
+    /// `owner` is parked now (and holds its unit's registrations).
+    fn park(&mut self, supervisor: &mut Supervisor<Value>, owner: u64, parked: Parked) {
+        super::supervisor::unit_parked(supervisor, &parked.id, owner);
         self.parked_ids.insert(parked.id.clone(), owner);
         self.parked.insert(owner, parked);
     }
     /// `owner` is no longer parked.
-    fn unpark(&mut self, owner: u64) -> Option<Parked> {
+    fn unpark(&mut self, supervisor: &mut Supervisor<Value>, owner: u64) -> Option<Parked> {
         let parked = self.parked.remove(&owner)?;
+        super::supervisor::unit_unparked(supervisor, &parked.id, owner);
         if self.parked_ids.get(&parked.id) == Some(&owner) {
             self.parked_ids.remove(&parked.id);
         }
@@ -553,7 +561,7 @@ impl Host {
             }
             return;
         }
-        let Some(parked) = self.lazy.unpark(from) else {
+        let Some(parked) = self.lazy.unpark(&mut self.supervisor, from) else {
             return;
         };
         parked.release();
@@ -639,8 +647,8 @@ impl Host {
             .collect::<Vec<_>>();
         !owners.into_iter().any(|owner| {
             matches!(
-                self.activations.status(owner, now),
-                Ok(package_activation::Status::Pending { .. })
+                self.activation_status(owner, now),
+                Ok(activation::Status::Pending { .. })
             )
         })
     }
@@ -687,10 +695,10 @@ impl Host {
         if drop_recording {
             self.drop_recording(id);
         }
-        let Some(owner) = self.lazy.parked_id(id) else {
+        let Some(owner) = self.lazy.parked_id(&self.supervisor, id) else {
             return false;
         };
-        if let Some(parked) = self.lazy.unpark(owner) {
+        if let Some(parked) = self.lazy.unpark(&mut self.supervisor, owner) {
             parked.release();
             if drop_recording {
                 remove(&self.activation_dir(), &parked.guid);
@@ -709,8 +717,7 @@ impl Host {
         key: &Key,
         recording: Recording,
     ) -> Result<()> {
-        self.next_generation += 1;
-        let owner = self.next_generation;
+        let owner = self.alloc_owner();
         let catalog = i18n::load(directory);
         let origin = Origin {
             id: id.into(),
@@ -735,6 +742,7 @@ impl Host {
             recording.calls.len()
         );
         self.lazy.park(
+            &mut self.supervisor,
             owner,
             Parked::new(id.into(), key.guid.clone(), origin, name),
         );
@@ -970,7 +978,7 @@ impl Host {
             if self.process_gone(owner) {
                 self.wake(owner);
             } else if now.saturating_sub(since) >= STOP_WAIT_MS
-                && let Some(parked) = self.lazy.unpark(owner)
+                && let Some(parked) = self.lazy.unpark(&mut self.supervisor, owner)
             {
                 parked.release();
                 self.wake_failed(owner, parked, "its stopped process did not go within 20 s");
@@ -1060,9 +1068,8 @@ impl Host {
                 // classified), or parked and its process still going.
                 if self.plugins.contains_key(owner) {
                     !matches!(
-                        self.activations.status(*owner, now),
-                        Ok(package_activation::Status::Failed { .. }
-                            | package_activation::Status::TimedOut)
+                        self.activation_status(*owner, now),
+                        Ok(activation::Status::Failed { .. } | activation::Status::TimedOut)
                     )
                 } else {
                     self.lazy.parked.contains_key(owner) && !self.process_gone(*owner)
@@ -1103,13 +1110,13 @@ impl Host {
         }
         let id = self.plugins[&owner].manifest.id.clone();
         matches!(
-            self.activations.status(owner, now),
-            Ok(package_activation::Status::Ready)
+            self.activation_status(owner, now),
+            Ok(activation::Status::Ready)
         ) && !self.dialog_busy
             && !self.package_busy(&id)
             && !self.commands.busy(owner)
             && !self.settings.busy(owner)
-            && !self.activation_ui.iter().any(|(o, _)| *o == owner)
+            && !self.supervisor.activation_ui_waiting(Pid(owner))
             && !self.source_state_replies.iter().any(|(o, _)| *o == owner)
     }
     /// The playback worker answered `owner.resources`: park `owner` if it is
@@ -1217,6 +1224,7 @@ impl Host {
         }
         // Its settings pages still show in its language.
         self.lazy.park(
+            &mut self.supervisor,
             owner,
             Parked {
                 warnings,
@@ -1241,7 +1249,7 @@ impl Host {
                 .iter()
                 .find(|(_, p)| p.manifest.id == test.manifest)
                 .map(|(owner, _)| *owner)
-                .or_else(|| self.lazy.parked_id(&test.manifest));
+                .or_else(|| self.lazy.parked_id(&self.supervisor, &test.manifest));
             let Some(owner) = owner else {
                 diag!("lazy: VESTRA_TEST_EXECUTE: {} is not loaded", test.manifest);
                 continue;
@@ -1296,13 +1304,18 @@ mod tests {
             };
             Parked::new(id.into(), "guid".into(), origin, id.into())
         };
-        lazy.park(7, parked("a.one"));
-        lazy.park(9, parked("b.two"));
-        assert_eq!(lazy.parked_id("a.one"), Some(7));
-        assert!(lazy.unpark(7).is_some());
-        assert_eq!(lazy.parked_id("a.one"), None);
-        assert!(lazy.unpark(7).is_none());
-        assert_eq!(lazy.parked_id("b.two"), Some(9));
+        let mut supervisor = super::super::supervisor::new();
+        lazy.park(&mut supervisor, 7, parked("a.one"));
+        lazy.park(&mut supervisor, 9, parked("b.two"));
+        assert_eq!(lazy.parked_id(&supervisor, "a.one"), Some(7));
+        assert!(lazy.unpark(&mut supervisor, 7).is_some());
+        assert_eq!(lazy.parked_id(&supervisor, "a.one"), None);
+        assert!(lazy.unpark(&mut supervisor, 7).is_none());
+        assert_eq!(lazy.parked_id(&supervisor, "b.two"), Some(9));
+        // The unit table holds the standby holder by id and by pid.
+        let unit = supervisor.by_id("b.two").unwrap();
+        assert_eq!(supervisor.by_pid(Pid(9)), Some(unit));
+        assert_eq!(supervisor.by_pid(Pid(7)), None);
     }
 
     fn key() -> Key {

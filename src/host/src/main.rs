@@ -32,7 +32,6 @@ mod timeline;
 pub mod ui;
 
 use anyhow::{Result, bail};
-use host::package_activation;
 use host::{
     Event, FRAME_SINK, Host, InputShared, LAST_SOURCE, MenuMode, PIP_GPU_SINK, event_loop_ended,
     restart_log, restart_logged, restart_player, run_through_loss, teardown_step,
@@ -428,7 +427,6 @@ fn main() -> Result<()> {
         plugin_ids: BTreeMap::new(),
         views: BTreeMap::new(),
         events,
-        next_generation: 0,
         headless,
         dialog_busy: false,
         shell: None,
@@ -490,8 +488,7 @@ fn main() -> Result<()> {
         menu_generation: 1,
         host_revision: 0,
         window_title: "Vestra Player".into(),
-        activations: package_activation::Book::default(),
-        activation_ui: Default::default(),
+        supervisor: host::supervisor::new(),
         activation_receipts: Default::default(),
         file_types: json!([]),
         held_mounts: Default::default(),

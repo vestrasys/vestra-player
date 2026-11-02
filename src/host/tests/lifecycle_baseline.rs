@@ -20,7 +20,7 @@
 //! | Standby with a process still stopping: wake waits, enable goes through `packages.reloads` (`starting`, `busy`), uninstall removes the data after the reap (or at once once reaped) | here: `standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone` |
 //! | Quit stops own processes one after another (300 ms each) | here: `quit_stops_own_processes_one_after_another` |
 //! | `packages.list` `starting`, `failed` (with its reason), `disabled` | here: `packages_list_shows_starting_failed_and_disabled` |
-//! | Known bug A18-1 (Book entry leaked on a failed spawn) | here: `b0_known_bug_a_failed_spawn_leaks_its_activation_place` |
+//! | A18-1 (Book entry leaked on a failed spawn), fixed in B2a | here: `b2a_a_failed_spawn_gives_its_activation_place_back` |
 //! | Known bug A18-2 (`Host.cleanup` only grows) | here: `b0_known_bug_host_cleanup_only_grows` |
 //! | Known bug D13 (disable then enable runs two processes) | here: `b0_known_bug_disable_then_enable_starts_beside_the_old_process` |
 //!
@@ -467,15 +467,17 @@ fn a_parked_plugin_is_listed_running_idle_and_its_park_announces_nothing() {
     assert!(running <= 1, "the park was announced: {log}");
 }
 
-/// B0 known bug: expected to change in B2a (supervisor.md §0 D3, A18 (1)).
-/// `load_package` takes an activation place (`activations.begin`) before
-/// it spawns, and an early return (`Plugin::load_manifest(..)?`) never gives
-/// it back: after 64 failed spawns the Book is full and every later start
-/// fails with "activation tracking limit reached" instead of its own error.
-/// Node is pointed at a missing file, so no plugin process runs at all.
+/// B0 known bug, fixed in B2a (supervisor.md §0 D3, A18 (1), §17.8).
+/// `load_package` takes an activation place (`activation_begin`) before
+/// it spawns; until B2a an early return (`Plugin::load_manifest(..)?`)
+/// never gave it back, so after 64 failed spawns every later start failed
+/// with "activation tracking limit reached" instead of its own error. Now a
+/// failed spawn ends its activation (and the activation is its unit's, one
+/// per unit): the 65th fails to spawn Node like the others. Node is pointed
+/// at a missing file, so no plugin process runs at all.
 #[test]
 #[ignore = "needs libmpv: run with --include-ignored (ci:local)"]
-fn b0_known_bug_a_failed_spawn_leaks_its_activation_place() {
+fn b2a_a_failed_spawn_gives_its_activation_place_back() {
     let mut root = Root::new();
     // Installed (third-party) plugins: `builtin.json` lists at most 64.
     for n in 0..65 {
@@ -500,20 +502,15 @@ fn b0_known_bug_a_failed_spawn_leaks_its_activation_place() {
         .filter(|line| line.contains("failed to start: "))
         .collect::<Vec<_>>();
     assert_eq!(failures.len(), 65, "{log}");
-    // They start in id order: the first 64 fail to spawn Node...
-    for (n, line) in failures.iter().take(64).enumerate() {
+    // They start in id order, and every one fails to spawn Node: none
+    // finds the places taken by the failures before it.
+    for (n, line) in failures.iter().enumerate() {
         assert!(
             line.contains(&format!("aa.fixture-{n:03} failed to start: start Node")),
             "{line}\n{log}"
         );
     }
-    // ...and each leaks its place: the 65th finds the Book full.
-    // B0 known bug: expected to change in B2a (it then fails to spawn Node
-    // like the others).
-    assert!(
-        failures[64].contains("aa.fixture-064 failed to start: activation tracking limit reached"),
-        "{log}"
-    );
+    assert!(!log.contains("activation tracking limit reached"), "{log}");
 }
 
 /// B0 known bug: expected to change in B2b (supervisor.md §4.7, A18 (2)).

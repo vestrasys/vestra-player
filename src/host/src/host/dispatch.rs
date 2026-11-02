@@ -115,11 +115,15 @@ impl Host {
             let refusal = error.clone();
             result = Err(self.refuse_taken(reply.owner, refusal, text));
         }
-        if self.activation_ui.remove(&(reply.owner, reply.id)) {
+        if self
+            .supervisor
+            .activation_ui_take(Pid(reply.owner), reply.id)
+        {
             let outcome = activation_outcome(&result);
+            let now = self.now_ms();
             if let Err(error) =
-                self.activations
-                    .ui_finish(reply.owner, reply.id, outcome, self.now_ms())
+                self.supervisor
+                    .activation_ui_finish(Pid(reply.owner), reply.id, outcome, now)
             {
                 diag!("activation UI completion: {error}");
             }
