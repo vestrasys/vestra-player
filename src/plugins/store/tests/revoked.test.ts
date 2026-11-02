@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
-import { actions, banners, BUILTIN, choose, FakeNet, info, no, OFFICIAL, openStore, props, publish, start, THIRD, until, yes } from "./helpers.ts";
+import { actions, banners, BUILTIN, choose, FakeNet, info, keepDisabledOnInstall, no, OFFICIAL, openStore, props, publish, start, THIRD, until, yes } from "./helpers.ts";
 
 const fromOfficial = (id: string, version: string) =>
   info(id, { version, source: { kind: "repository", url: OFFICIAL } });
@@ -255,6 +255,88 @@ test("a revoked version accepted, then disabled by the user, stays disabled afte
     await until(host, () => host.osd.includes("已更新 YouTube 到 0.2.1（仍停用）"), "still disabled");
     await until(host, () => !store.busy);
     assert.equal(state(), "disabled");
+  } finally {
+    await stop();
+  }
+});
+
+const enables = (host: { packageCalls: readonly { method: string; enabled?: boolean }[] }) =>
+  host.packageCalls.filter((c) => c.method === "setEnabled" && c.enabled === true).length;
+
+test("player after 0.6.3 (keeps the disabled flag): updating a revoked version the store disabled enables the fix", async () => {
+  const net = new FakeNet();
+  serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
+  const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
+  keepDisabledOnInstall(host);
+  const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
+  try {
+    host.dialogAnswers.push(no);
+    await store.refreshAll(true);
+    await until(host, () => disables(host) === 1, "disabled by the store");
+    await openStore(host);
+    await choose(host, "YouTube");
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("act", "update");
+    await until(host, () => !store.busy && host.osd.some((t) => t.startsWith("已更新 YouTube 到 0.2.1")), "updated");
+    assert.equal(host.osd.at(-1), "已更新 YouTube 到 0.2.1", "not “still disabled”");
+    assert.equal(state(), "running", "the fix runs");
+    assert.equal(enables(host), 1, "the store enabled it after the install");
+    assert.equal(disables(host), 1, "not disabled again");
+  } finally {
+    await stop();
+  }
+});
+
+test("player after 0.6.3: a refused enable of the fix is reported, and the plugin stays disabled", async () => {
+  const net = new FakeNet();
+  serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
+  const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
+  keepDisabledOnInstall(host);
+  const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
+  try {
+    host.dialogAnswers.push(no);
+    await store.refreshAll(true);
+    await until(host, () => disables(host) === 1, "disabled by the store");
+    await openStore(host);
+    await choose(host, "YouTube");
+    host.handle("packages.setEnabled", () => {
+      throw new HostError("busy", "reloading");
+    });
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("act", "update");
+    await until(host, () => host.osd.some((t) => t.startsWith("已更新 YouTube 到 0.2.1，但未能启用：")), "failure reported");
+    await until(host, () => !store.busy);
+    assert.equal(props(host)["status-warn"], true);
+    assert.equal(state(), "disabled");
+  } finally {
+    await stop();
+  }
+});
+
+test("player after 0.6.3: a revoked version accepted, then disabled by the user, stays disabled after the update", async () => {
+  const net = new FakeNet();
+  serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
+  const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
+  keepDisabledOnInstall(host);
+  const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
+  try {
+    host.dialogAnswers.push(no);
+    await store.refreshAll(true);
+    await until(host, () => disables(host) === 1, "disabled by the store");
+    await openStore(host);
+    await choose(host, "YouTube");
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("act", "enable");
+    await until(host, () => state() === "running", "enabled anyway");
+    host.window("store").emit("act", "disable");
+    await until(host, () => state() === "disabled", "disabled by the user");
+    const enabled = enables(host);
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("act", "update");
+    await until(host, () => host.osd.includes("已更新 YouTube 到 0.2.1（仍停用）"), "still disabled");
+    await until(host, () => !store.busy);
+    assert.equal(state(), "disabled");
+    assert.equal(enables(host), enabled, "not enabled by the update");
   } finally {
     await stop();
   }

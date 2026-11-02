@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.10
+
+Needs Vestra Player 0.6.0.
+
+- Works with players that keep a disabled plugin disabled across an install (after 0.6.3) as well as with older ones, which turn a plugin on when they install it. The status line now says what the player reports once the install is done (the plugin list is read again), instead of guessing from the state before the install: "(still disabled)" appears exactly when the plugin ended up disabled.
+- Updating a revoked version the store disabled to the fixed version enables the fix again on every player: the store turns it on after the install (on a newer player the install kept it disabled, and the status line said "Updated" while it stayed off). When the player refuses, the status line says "Updated X to y, but couldn't enable it: …".
+- Replacing a disabled plugin with the same plugin from another source (a repository, a file or a link) keeps it disabled, as an update or reinstall does; formerly an older player left the replacement running.
+
 ## 0.2.9
 
 Needs Vestra Player 0.6.0.
