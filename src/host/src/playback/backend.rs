@@ -157,14 +157,19 @@ impl Backend {
                 if silent {
                     builder = builder.set_property("ao", "null")?;
                 }
-                if let Some(directory) = shader_cache_dir() {
-                    builder = builder.set_property(
-                        "gpu-shader-cache-dir",
-                        directory.to_string_lossy().as_ref(),
-                    )?;
-                }
                 no_builtin_scripts(&builder)?;
                 let mpv = Arc::new(builder.build()?);
+                // Before any render context exists (mpv reads it when its
+                // renderer starts); a failure costs only the cache.
+                if let Some(directory) = shader_cache_dir()
+                    && let Err(error) = mpv
+                        .set_property("gpu-shader-cache-dir", directory.to_string_lossy().as_ref())
+                {
+                    diag!(
+                        "playback: no shader cache in {}: {error}",
+                        directory.display()
+                    );
+                }
                 // New events wake the worker (it drains them with
                 // `poll_event`); the callback only signals.
                 let event_wake = worker_wake.clone();
@@ -1033,7 +1038,9 @@ impl GpuRun<'_> {
 }
 /// Where mpv keeps compiled shaders (`gpu-shader-cache-dir`), as the mpv
 /// player does in its cache directory: `shader-cache` in the application
-/// data directory, `VESTRA_SHADER_CACHE` to override (empty: none). libmpv
+/// cache directory (`platform::app_cache_dir`: `%LOCALAPPDATA%\Vestra` on
+/// Windows, `~/Library/Caches/Vestra` on macOS, `$XDG_CACHE_HOME/vestra`
+/// elsewhere), `VESTRA_SHADER_CACHE` to override (empty: none). libmpv
 /// has no config directory, so without it every start compiles again: the
 /// shader upscaling plugin's ArtCNN networks took Direct3D 11's compiler
 /// 50 s (C4F16) to several minutes (C4F32) inside the first render call
@@ -1048,9 +1055,15 @@ fn shader_cache_dir() -> Option<std::path::PathBuf> {
     let directory = match std::env::var_os("VESTRA_SHADER_CACHE") {
         Some(value) if value.is_empty() => return None,
         Some(value) => std::path::PathBuf::from(value),
-        None => crate::platform::app_data_dir()?.join("shader-cache"),
+        None => crate::platform::app_cache_dir()?.join("shader-cache"),
     };
-    std::fs::create_dir_all(&directory).ok()?;
+    if let Err(error) = std::fs::create_dir_all(&directory) {
+        diag!(
+            "playback: no shader cache in {}: {error}",
+            directory.display()
+        );
+        return None;
+    }
     Some(directory)
 }
 /// `hwdec` while the software renderer draws (`renderer::hwdec`).

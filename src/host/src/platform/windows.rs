@@ -1292,7 +1292,9 @@ pub fn select_wgpu_windows(
             // restarted player shows its own). Then restart now (whatever
             // the teardown does) and end the loop.
             let cloaked = vestra_win32::cloak_process_windows();
-            diag!("render: {cloaked} window(s) cloaked after the device loss");
+            crate::host::restart_log(&format!(
+                "render: {cloaked} window(s) cloaked after the device loss"
+            ));
             if let Some(hook) = LOST_HOOK.get() {
                 hook();
             }
@@ -1442,6 +1444,13 @@ pub fn wait_for_process_exit(pid: u32, timeout: std::time::Duration) -> bool {
         pid,
         timeout.as_millis().min(u128::from(u32::MAX - 1)) as u32,
     )
+}
+
+/// End this process now with `code` (`TerminateProcess` on itself): no
+/// atexit handlers and no DLL detach, which a driver stuck after a device
+/// loss could hang in as `std::process::exit` would.
+pub fn exit_now(code: u32) -> ! {
+    vestra_win32::terminate_current_process(code)
 }
 
 /// The windows' Direct3D 12 device was lost (a driver reset): the event
@@ -1621,6 +1630,12 @@ pub fn sync_dir(directory: &Path) -> std::io::Result<()> {
 
 pub fn app_data_dir() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(|root| PathBuf::from(root).join("Vestra"))
+}
+
+/// `%LOCALAPPDATA%\Vestra`: data the player can make again (mpv's compiled
+/// shaders), kept out of the roaming profile.
+pub fn app_cache_dir() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(|root| PathBuf::from(root).join("Vestra"))
 }
 
 /// FFmpeg's name for its stdin, which is the held source file: the `fd`

@@ -57,7 +57,7 @@ struct MpvD3d11Fbo {
 const USAGE: &str = "usage: gpu-probe info | gpu-probe adapters | gpu-probe interop default|warp|<index> | gpu-probe run [--adapter default|warp|<index>] \
 [--src <path|url>] [--size WxH] [--seconds S] [--warmup S] [--hwdec MODE] [--gl] [--host-vf] \
 [--block] [--sync] [--lag N] [--png out.png] [--log LEVEL] [--vf FILTERS] [--at SECONDS] \
-[--glsl-shaders A;B] [--set NAME=VALUE]... [--sample S] [--hog-mb N] [--max-commit PCT]";
+[--glsl-shaders A;B] [--set NAME=VALUE]... [--set-late NAME=VALUE]... [--sample S] [--hog-mb N] [--max-commit PCT]";
 
 pub fn main() -> i32 {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -113,6 +113,9 @@ struct Options {
     glsl_shaders: Option<String>,
     /// Further mpv options (`--set name=value`, repeatable), before loadfile.
     set: Vec<(String, String)>,
+    /// mpv properties set after `mpv_initialize`, before the render context
+    /// (`--set-late`, repeatable): as the host sets `gpu-shader-cache-dir`.
+    set_late: Vec<(String, String)>,
     /// Print a resource line (frames, render times, GPU memory, private
     /// bytes, system commit, removed reason) every this many seconds.
     sample: Option<f64>,
@@ -144,6 +147,7 @@ impl Options {
             at: None,
             glsl_shaders: None,
             set: Vec::new(),
+            set_late: Vec::new(),
             sample: None,
             hog_mb: 0,
             max_commit: 92.0,
@@ -189,6 +193,11 @@ impl Options {
                     let v = value()?;
                     let (name, setting) = v.split_once('=').ok_or("--set name=value")?;
                     options.set.push((name.into(), setting.into()));
+                }
+                "--set-late" => {
+                    let v = value()?;
+                    let (name, setting) = v.split_once('=').ok_or("--set-late name=value")?;
+                    options.set_late.push((name.into(), setting.into()));
                 }
                 "--sample" => {
                     let s: f64 = value()?.parse().map_err(|_| "bad --sample")?;
@@ -1102,6 +1111,14 @@ impl Handle {
         let r = unsafe { mpv::mpv_set_option_string(self.0, n.as_ptr(), v.as_ptr()) };
         if r < 0 { Err(format!("set {name}={value}: {}", error_text(r))) } else { Ok(()) }
     }
+    /// A property after `mpv_initialize` (`mpv_set_property_string`).
+    fn set_property(&self, name: &str, value: &str) -> Result<(), String> {
+        let (n, v) =
+            (CString::new(name).unwrap_or_default(), CString::new(value).unwrap_or_default());
+        // SAFETY: live handle, NUL-terminated strings copied by mpv.
+        let r = unsafe { mpv::mpv_set_property_string(self.0, n.as_ptr(), v.as_ptr()) };
+        if r < 0 { Err(format!("set property {name}={value}: {}", error_text(r))) } else { Ok(()) }
+    }
     fn get(&self, name: &str) -> String {
         let n = CString::new(name).unwrap_or_default();
         // SAFETY: live handle; the returned string is owned by us and freed
@@ -1611,6 +1628,9 @@ fn run(o: &Options) -> Result<(), String> {
     let r = unsafe { mpv::mpv_initialize(handle.0) };
     if r < 0 {
         return Err(format!("mpv_initialize: {}", error_text(r)));
+    }
+    for (name, value) in &o.set_late {
+        handle.set_property(name, value)?;
     }
     let level = CString::new(o.requested_log()).unwrap_or_default();
     // SAFETY: live handle, NUL-terminated level.

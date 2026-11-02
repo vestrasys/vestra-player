@@ -238,6 +238,28 @@ fn warp_the_watchdog_stops_a_renderer_whose_fences_stop_moving() {
     drop(renderer);
 }
 
+/// Review L3: what `stalled` itself does, with no frame queued that could
+/// signal afterwards: both fences end at `u64::MAX` at once (a release of
+/// `ready` or `done` left out fails here), the reason is kept, and a second
+/// stall does not replace it.
+#[test]
+fn warp_a_stall_releases_both_fences_at_once() {
+    let gpu = warp_gpu();
+    let d3d11 = D3d11::new(&gpu, None).expect("Direct3D 11 WARP");
+    let shared = Shared::new(gpu.clone(), (16, 16));
+    let fences = shared.fences.get_or_init(|| Fences {
+        ready: SharedFence::new(&gpu, &d3d11).expect("ready"),
+        done: SharedFence::new(&gpu, &d3d11).expect("done"),
+    });
+    assert!(d3d11.signal(&fences.ready, 3) && gpu.signal(&fences.done, 2));
+    assert!(until(5, || fences.ready.completed() == 3 && fences.done.completed() == 2));
+    stalled(&shared, "GPU rendering stalled: a test".into());
+    assert_eq!(fences.ready.completed(), u64::MAX, "ready released");
+    assert_eq!(fences.done.completed(), u64::MAX, "done released");
+    stalled(&shared, "a second reason".into());
+    assert_eq!(lock(&shared.failed).as_deref(), Some("GPU rendering stalled: a test"));
+}
+
 /// H17 (record §11.6): a stall with the watchdog off, then the player
 /// quits. Releasing the fences ends every GPU wait (the frame mpv's queue
 /// held finishes), is not reported as a failure, stops the windows'

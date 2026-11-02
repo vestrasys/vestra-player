@@ -562,6 +562,20 @@ pub fn memory_status() -> Option<MemoryStatus> {
     })
 }
 
+/// End this process at once with exit code `code` (`TerminateProcess` on
+/// the current process): no atexit handlers, no thread or DLL detach
+/// notifications, so a driver DLL stuck after a device loss cannot hold up
+/// the exit as it could `ExitProcess`. Never returns.
+pub fn terminate_current_process(code: u32) -> ! {
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
+    // SAFETY: the current process's pseudo-handle (no close needed) and an
+    // exit code by value. TerminateProcess on the calling process does not
+    // return when it succeeds.
+    unsafe { TerminateProcess(GetCurrentProcess(), code) };
+    // Only if the system refused (it does not for the current process).
+    std::process::exit(code as i32)
+}
+
 /// Wait up to `timeout_ms` for process `pid` to end (a player restarting
 /// itself waits for the process it replaces). `true` once it ended or when
 /// it is already gone; `false` on a timeout.

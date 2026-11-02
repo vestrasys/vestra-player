@@ -33,8 +33,8 @@ pub mod ui;
 use anyhow::{Result, bail};
 use host::package_activation;
 use host::{
-    Event, FRAME_SINK, Host, InputShared, LAST_SOURCE, MenuMode, PIP_GPU_SINK, restart_log,
-    restart_player, teardown_step,
+    Event, FRAME_SINK, Host, InputShared, LAST_SOURCE, MenuMode, PIP_GPU_SINK, event_loop_ended,
+    restart_log, restart_player, teardown_step,
 };
 use packages::package_manager;
 use playback::{backend::Backend, frame_pacing, render_mode, render_target};
@@ -840,7 +840,9 @@ fn main() -> Result<()> {
         let ran = slint::run_event_loop();
         // The steps below name themselves (`teardown_step`): a player ended
         // because its teardown after a device loss took too long says in
-        // restart.log where it was.
+        // restart.log where it was. After a device loss the teardown has 5 s
+        // from here (`host/restart.rs`).
+        event_loop_ended();
         teardown_step("releasing the GPU renderer's fences");
         // However the loop ended (Quit, the last window closed, a restart):
         // release the GPU renderer's fences before the windows, their
@@ -888,9 +890,12 @@ fn main() -> Result<()> {
             teardown_step("hiding the main window");
             let _ = shell.hide();
         }
+        // The host (the backend with mpv and its renderer, the plugins)
+        // drops here, inside this block that wrapped it in an `Rc`.
+        teardown_step("dropping the windows, mpv and the plugins");
+        drop(host);
     }
-    // What `main` owns drops now: the windows, the backend (mpv and its
-    // renderer), the plugins.
+    // Headless: the host drops when `main` returns.
     teardown_step("dropping the windows, mpv and the plugins");
     Ok(())
 }

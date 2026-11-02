@@ -31,7 +31,8 @@
 //!     are printed with the results (AI upscaling round, step V0).
 //!     [--glsl-shaders A;B] sets mpv's `glsl-shaders` (the shader upscaling
 //!     plugin's chains), [--set NAME=VALUE] any further mpv option, both
-//!     before loadfile; [--sample S] prints every S seconds the frame rate,
+//!     before loadfile, [--set-late NAME=VALUE] a property after
+//!     `mpv_initialize` (as the host sets `gpu-shader-cache-dir`); [--sample S] prints every S seconds the frame rate,
 //!     render CPU/GPU times, this process's video memory (local and
 //!     non-local, `QueryVideoMemoryInfo`), private bytes, the system commit
 //!     charge and `GetDeviceRemovedReason`, and stops on a removed device;

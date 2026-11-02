@@ -20,8 +20,10 @@
 //! (mpv compiles a user shader inside the first render call that needs it;
 //! Direct3D 11's compiler took 50 s to over a minute for the shader
 //! upscaling plugin's ArtCNN networks on the RTX 4070 machine, gpu-probe,
-//! 2026-11-01), which is not a stall. Such a call stalls only after
-//! [`Watch::call_cap`].
+//! 2026-11-01), which is not a stall. Within one call the looks at which the
+//! thread did not run add up (a running look pauses the clock, it does not
+//! reset it, so a driver that polls still stalls), and a call that keeps
+//! running stalls only after [`Watch::call_cap`].
 //!
 //! The stall clock adds at most [`Watch::cap`] per observation, so a
 //! suspended computer (no observations for minutes) does not count as a
@@ -78,7 +80,7 @@ pub struct Watch {
     pub cap: Duration,
     ready: Track,
     done: Track,
-    /// Inside one call without running.
+    /// Inside one call: the time the thread did not run, added up.
     call: Track,
     /// Inside one call, running or not.
     call_total: Track,
@@ -122,7 +124,12 @@ impl Watch {
         // CPU (20 % of one core): compiling, not waiting.
         let used = sample.cpu.saturating_sub(std::mem::replace(&mut self.last_cpu, sample.cpu));
         let running = !added.is_zero() && used * RUNNING_SHARE >= added;
-        let call_stuck = self.call.step(inside && !running, sample.call, added);
+        // Idle time inside one call adds up, running time pauses it: a
+        // driver that polls (or a thread that runs now and then) does not
+        // start the clock again, while a compile, running almost all the
+        // time, stays far below the limit.
+        let call_stuck =
+            self.call.step(inside, sample.call, if running { Duration::ZERO } else { added });
         let call_total = self.call_total.step(inside, sample.call, added);
         let seconds = |d: Duration| d.as_secs();
         if ready_stuck >= self.limit {
@@ -268,6 +275,32 @@ mod tests {
         assert_eq!(compiling(&mut watch, &mut now, 299., 1.), None);
         let reason = compiling(&mut watch, &mut now, 2., 1.).expect("stalled at the cap");
         assert!(reason.contains("kept the CPU busy"), "{reason}");
+    }
+
+    /// Review M3: a driver that polls inside the call (one busy look in ten)
+    /// must not start the idle clock again each time: the idle looks add
+    /// up, so the stall comes after about 30 s of idle time, not at the cap.
+    #[test]
+    fn a_polling_driver_inside_the_call_still_stalls_at_the_idle_limit() {
+        let mut watch = Watch::new(Duration::from_secs(10));
+        let mut now = Instant::now();
+        let mut cpu = Duration::ZERO;
+        let mut stalled_at = None;
+        for look in 1..=600u32 {
+            now += POLL;
+            if look % 10 == 0 {
+                cpu += POLL; // one look in ten fully on the CPU
+            }
+            let sample = Sample { ready: (5, 5), done: (5, 5), call: 11, cpu };
+            if let Some(reason) = watch.observe(now, sample) {
+                stalled_at = Some((look, reason));
+                break;
+            }
+        }
+        let (look, reason) = stalled_at.expect("a polling driver never stalled");
+        // 30 s of idle looks among 90 % idle: about 33 s.
+        assert!((330..=340).contains(&look), "after {look} looks: {reason}");
+        assert!(!reason.contains("CPU"), "{reason}");
     }
 
     #[test]

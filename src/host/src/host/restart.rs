@@ -69,25 +69,66 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
                 "render: the restarted player is process {}",
                 child.id()
             ));
-            exit_if_stuck(EXIT_AFTER);
+            exit_if_stuck();
         }
         Err(error) => restart_logged(&format!("render: the restart failed: {error}")),
     }
 }
 
-/// How long this player may take to end after a device loss started the new
-/// one, which waits 20 s for it (`main.rs`) and shows nothing until then.
-/// What must survive is saved before the teardown: the crash guard and the
+/// How long this player may take to end once its event loop ended after a
+/// device loss. What must survive is saved by then: the crash guard and the
 /// resume position here, the UI state and the lazy-activation records first
 /// thing after the event loop (`main.rs`); clean teardowns after a loss took
 /// 1 to 5 s (restart.log of the M3 and 0.5.19 hardware tests). Up to host
-/// 0.6.3 this was 15 s, which a teardown stuck in the driver used in full
-/// (0.6.2, shader upscaling at 4K: a black, unresponsive window for 15 s).
-const EXIT_AFTER: std::time::Duration = std::time::Duration::from_secs(5);
+/// 0.6.3 the only limit was 15 s from the restart, which a teardown stuck in
+/// the driver used in full (0.6.2, shader upscaling at 4K: a black,
+/// unresponsive window for 15 s).
+const EXIT_AFTER_LOOP: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The limit from the restart itself, for a UI thread that never leaves the
+/// event loop (stuck in a driver call): under the 20 s the restarted player
+/// waits for this one (`main.rs`), which it starts counting a little later.
+const EXIT_AFTER_RESTART: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// The step of the teardown this process is in, for the line that says it
 /// was ended ([`teardown_step`]).
-static TEARDOWN: std::sync::Mutex<&str> = std::sync::Mutex::new("the device-loss callback");
+static TEARDOWN: std::sync::Mutex<&str> = std::sync::Mutex::new("the event loop (not ended)");
+
+/// When this process is ended after a device loss, and when the restart
+/// started (`None`: no restart); the exit thread waits on [`EXIT_CHANGED`].
+type ExitAt = Option<(std::time::Instant, std::time::Instant)>;
+static EXIT_AT: std::sync::Mutex<ExitAt> = std::sync::Mutex::new(None);
+static EXIT_CHANGED: std::sync::Condvar = std::sync::Condvar::new();
+/// The event loop ended ([`event_loop_ended`]).
+static LOOP_ENDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The event loop ended (`main.rs`, first thing after it): after a device
+/// loss the teardown now has [`EXIT_AFTER_LOOP`], not the rest of
+/// [`EXIT_AFTER_RESTART`].
+pub(crate) fn event_loop_ended() {
+    LOOP_ENDED.store(true, Ordering::Release);
+    let mut exit = EXIT_AT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((at, since)) = *exit {
+        *exit = Some((exit_deadline(at, true, std::time::Instant::now()), since));
+        EXIT_CHANGED.notify_all();
+    }
+}
+
+/// When to end the process: `at` (the deadline so far), brought forward to
+/// [`EXIT_AFTER_LOOP`] from `now` once the event loop ended.
+fn exit_deadline(
+    at: std::time::Instant,
+    loop_ended: bool,
+    now: std::time::Instant,
+) -> std::time::Instant {
+    if loop_ended {
+        at.min(now + EXIT_AFTER_LOOP)
+    } else {
+        at
+    }
+}
 
 /// The teardown reached `step` (`main.rs`, after the event loop): if the
 /// process has to be ended after a device loss, restart.log says where it
@@ -110,17 +151,43 @@ fn stuck_line(after: std::time::Duration, step: &str) -> String {
 /// teardown can hang in the driver, the render thread being stuck in it;
 /// the new player would then wait for this one and the lock (round record
 /// 2026-10-render-modes §10 L6). End the process if it is still there
-/// after `after`.
-fn exit_if_stuck(after: std::time::Duration) {
+/// [`EXIT_AFTER_LOOP`] after its event loop ended, or
+/// [`EXIT_AFTER_RESTART`] after the restart, whichever comes first;
+/// terminated without DLL detach (`platform::exit_now`), which a stuck
+/// driver could hang.
+fn exit_if_stuck() {
+    let now = std::time::Instant::now();
+    let at = exit_deadline(
+        now + EXIT_AFTER_RESTART,
+        LOOP_ENDED.load(Ordering::Acquire),
+        now,
+    );
+    *EXIT_AT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((at, now));
     let _ = std::thread::Builder::new()
         .name("vestra-exit-after-loss".into())
-        .spawn(move || {
-            std::thread::sleep(after);
+        .spawn(|| {
+            let mut exit = EXIT_AT
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let since = loop {
+                let Some((at, since)) = *exit else { return };
+                let left = at.saturating_duration_since(std::time::Instant::now());
+                if left.is_zero() {
+                    break since;
+                }
+                exit = EXIT_CHANGED
+                    .wait_timeout(exit, left)
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .0;
+            };
+            drop(exit);
             let step = *TEARDOWN
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            restart_logged(&stuck_line(after, step));
-            std::process::exit(3);
+            restart_logged(&stuck_line(since.elapsed(), step));
+            platform::exit_now(3);
         });
 }
 
@@ -212,19 +279,41 @@ mod tests {
     }
 
     /// 0.6.2 shader-upscaling loss: a teardown stuck in the driver left a
-    /// black, unresponsive window for 15 s. The process is now ended well
-    /// before the restarted player stops waiting for it (20 s), and the line
-    /// says which teardown step it was stuck in.
+    /// black, unresponsive window for 15 s. The teardown gets 5 s from the
+    /// end of the event loop (normal teardowns take 1 to 5 s), a UI thread
+    /// that never leaves the loop 15 s from the restart, both under the
+    /// restarted player's 20 s wait; the line says where it was stuck.
     #[test]
     fn a_stuck_teardown_is_ended_soon_and_says_where_it_was() {
-        assert!(EXIT_AFTER <= std::time::Duration::from_secs(5));
-        assert!(EXIT_AFTER < std::time::Duration::from_secs(20) / 2);
+        let second = std::time::Duration::from_secs(1);
+        assert!(EXIT_AFTER_RESTART < 20 * second);
+        let restart = std::time::Instant::now();
+        let at = restart + EXIT_AFTER_RESTART;
+        // The loop has not ended: the restart's limit.
+        assert_eq!(exit_deadline(at, false, restart + 3 * second), at);
+        // It ends 3 s later: 5 s from then.
+        assert_eq!(
+            exit_deadline(at, true, restart + 3 * second),
+            restart + 8 * second
+        );
+        // It ends 12 s later: never later than the restart's limit.
+        assert_eq!(exit_deadline(at, true, restart + 12 * second), at);
+        // Restarted from the fallback after the loop already ended.
+        assert_eq!(
+            exit_deadline(restart + EXIT_AFTER_RESTART, true, restart),
+            restart + EXIT_AFTER_LOOP
+        );
+        assert_eq!(
+            *TEARDOWN.lock().unwrap(),
+            "the event loop (not ended)",
+            "inside the loop until main says otherwise"
+        );
         teardown_step("hiding the main window");
         let step = *TEARDOWN.lock().unwrap();
-        let line = stuck_line(EXIT_AFTER, step);
+        let line = stuck_line(8 * second, step);
         assert_eq!(
             line,
-            "render: the player did not end 5 s after the device loss (teardown at: hiding the main window); ending it"
+            "render: the player did not end 8 s after the device loss (teardown at: hiding the main window); ending it"
         );
     }
 
