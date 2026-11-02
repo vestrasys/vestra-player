@@ -40,11 +40,15 @@ pub trait GpuBackend {
     fn set_display_fps(&self, fps: Option<f64>);
     /// Frames rendered so far.
     fn frames(&self) -> u64;
-    /// mpv's render calls, counted at their start and their return (odd
-    /// while one runs; [`rendered_since`]); `None` where the renderer does
-    /// not count them (macOS: no device-loss restart there).
-    fn render_calls(&self) -> Option<u64> {
+    /// How far rendering got (the plugin shader guard); `None` where the
+    /// renderer does not say (macOS: no device-loss restart there).
+    fn progress(&self) -> Option<Progress> {
         None
+    }
+    /// The renderer's own device was removed (Windows: mpv's Direct3D 11
+    /// device), set before it reports its failure.
+    fn device_removed(&self) -> bool {
+        false
     }
     /// Frames a window showed so far.
     fn shown(&self) -> u64;
@@ -76,19 +80,34 @@ pub trait GpuBackend {
     }
 }
 
-/// Whether a render call that started after `mark` (a
-/// [`GpuBackend::render_calls`] value) has returned by `now` (a later one):
-/// a call already running at `mark` (odd) does not count.
-pub fn rendered_since(mark: u64, now: u64) -> bool {
-    now >= mark + mark % 2 + 2
+/// How far the GPU renderer got (`GpuBackend::progress`; Windows:
+/// `vestra-gpu-render`'s `Progress`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Progress {
+    /// mpv's render calls, counted when each starts and when it returns
+    /// (odd while one runs).
+    pub calls: u64,
+    /// The newest rendered frame: the `calls` value its render call
+    /// started at (odd; 0: none yet), and its `ready` fence value.
+    pub started: u64,
+    pub ready: u64,
+    /// The `ready` value the GPU reached (`u64::MAX` once released: a
+    /// failure, a removed device, quitting).
+    pub completed: u64,
+    /// Output sizes rendered at so far (ring generations).
+    pub rings: u64,
+    /// GPU rendering stopped for good.
+    pub halted: bool,
 }
 
-/// The control worker's `glsl-shaders` writes (`video_render::Mpv`): how
-/// many so far, and mpv's render calls at the newest one.
+/// The plugin shader requests the control worker processed
+/// (`video.shaders.set`, `video.render.set` / `release` that carry a
+/// `guardSeq`; written to mpv or not): the newest one's number, and mpv's
+/// render calls right after it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ShaderWrites {
-    pub count: u64,
-    /// `None`: no GPU renderer that counts its render calls draws.
+pub struct ShaderRequests {
+    pub processed: u64,
+    /// `None`: no GPU renderer that says how far it got.
     pub calls: Option<u64>,
 }
 
@@ -113,9 +132,12 @@ pub struct Render {
     refresh: Mutex<Option<f64>>,
     /// What the main window really draws (`stats().presentedFps`).
     pub presentation: crate::playback::render_target::Presentation,
-    /// `glsl-shaders` writes, for the plugin shader guard
-    /// (`host/diagnostics.rs`).
-    shader_writes: Mutex<ShaderWrites>,
+    /// Plugin shader requests numbered (UI thread) and processed (the
+    /// control worker), for the plugin shader guard (`host/diagnostics.rs`).
+    shader_numbered: std::sync::atomic::AtomicU64,
+    shader_requests: Mutex<ShaderRequests>,
+    /// The video's storage size (`video-params/w`, `h`; the control worker).
+    video_size: Mutex<(i64, i64)>,
 }
 impl Render {
     /// From the start-up decision: the render thread tries GPU rendering
@@ -135,7 +157,9 @@ impl Render {
             producer: AtomicBool::new(false),
             refresh: Mutex::new(None),
             presentation: Default::default(),
-            shader_writes: Mutex::default(),
+            shader_numbered: Default::default(),
+            shader_requests: Mutex::default(),
+            video_size: Mutex::default(),
         })
     }
     pub fn wanted(&self) -> bool {
@@ -201,24 +225,43 @@ impl Render {
             .unwrap_or_else(PoisonError::into_inner)
             .unwrap_or(60.)
     }
-    /// mpv's render calls now (`GpuBackend::render_calls`).
-    pub fn render_calls(&self) -> Option<u64> {
-        self.gpu().and_then(GpuBackend::render_calls)
+    /// How far the GPU renderer got, while it draws (`GpuBackend::progress`).
+    pub fn progress(&self) -> Option<Progress> {
+        self.gpu().and_then(GpuBackend::progress)
     }
-    /// The control worker wrote `glsl-shaders` (mpv took or refused it):
-    /// a render call that starts from now on draws with the list mpv holds.
-    pub fn shaders_written(&self) {
-        let calls = self.render_calls();
-        let mut writes = self
-            .shader_writes
+    /// The number of a new plugin shader request (UI thread, before it goes
+    /// to the control worker as `guardSeq`).
+    pub fn number_shader_request(&self) -> u64 {
+        self.shader_numbered.fetch_add(1, Ordering::AcqRel) + 1
+    }
+    /// The control worker processed request `seq` (after any write to mpv,
+    /// done or not): a render call that starts from now on draws with what
+    /// mpv holds.
+    pub fn shaders_processed(&self, seq: u64) {
+        let calls = self.progress().map(|progress| progress.calls);
+        let mut requests = self
+            .shader_requests
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        writes.count += 1;
-        writes.calls = calls;
+        requests.processed = requests.processed.max(seq);
+        requests.calls = calls;
     }
-    pub fn shader_writes(&self) -> ShaderWrites {
+    pub fn shader_requests(&self) -> ShaderRequests {
         *self
-            .shader_writes
+            .shader_requests
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+    /// The video's storage size (control worker; `(0, 0)`: none).
+    pub fn set_video_size(&self, size: (i64, i64)) {
+        *self
+            .video_size
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = size;
+    }
+    pub fn video_size(&self) -> (i64, i64) {
+        *self
+            .video_size
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
     }
@@ -315,31 +358,27 @@ mod tests {
         assert_eq!(render.refresh(), 60.);
     }
 
-    /// 0.6.4 shader guard: only a render call that started after the mark
-    /// counts; one running at the mark (odd) does not.
+    /// 0.6.4 shader guard: requests are numbered on the UI thread and
+    /// processed in order by the worker; an older one never lowers the
+    /// number. No GPU renderer: no progress.
     #[test]
-    fn a_render_call_counts_only_when_it_started_after_the_mark() {
-        // Between calls (even): the next call starts at 5 and returns at 6.
-        assert!(!rendered_since(4, 4));
-        assert!(!rendered_since(4, 5), "running");
-        assert!(rendered_since(4, 6));
-        // Inside a call (odd): it returns at 6, the next one at 8.
-        assert!(!rendered_since(5, 6), "started before the mark");
-        assert!(!rendered_since(5, 7));
-        assert!(rendered_since(5, 8));
-        // Writes are counted with the render calls of the newest one; no
-        // GPU renderer: none.
+    fn shader_requests_are_numbered_and_processed_in_order() {
         use crate::playback::render_mode::{Facts, Preference, decide};
         let render = Render::new(&decide(&Facts::default(), Preference::Auto));
-        assert_eq!(render.shader_writes(), ShaderWrites::default());
-        render.shaders_written();
-        render.shaders_written();
+        assert_eq!(render.shader_requests(), ShaderRequests::default());
+        assert_eq!(render.number_shader_request(), 1);
+        assert_eq!(render.number_shader_request(), 2);
+        render.shaders_processed(2);
+        render.shaders_processed(1);
         assert_eq!(
-            render.shader_writes(),
-            ShaderWrites {
-                count: 2,
+            render.shader_requests(),
+            ShaderRequests {
+                processed: 2,
                 calls: None
             }
         );
+        assert_eq!(render.progress(), None);
+        render.set_video_size((1920, 1080));
+        assert_eq!(render.video_size(), (1920, 1080));
     }
 }

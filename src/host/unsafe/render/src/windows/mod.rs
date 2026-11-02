@@ -433,6 +433,13 @@ struct Shared {
     /// mpv's render calls, odd while the render thread is inside one (the
     /// watchdog).
     calls: AtomicU64,
+    /// The newest published-or-not frame: the `calls` value its render
+    /// call started at (odd) and its `ready` value (`Handle::progress`).
+    last_frame: Mutex<(u64, u64)>,
+    /// Ring generations made (a new output size), for `Handle::progress`.
+    rings: AtomicU64,
+    /// mpv's Direct3D 11 device was removed (`Handle::device_removed`).
+    removed: AtomicBool,
     /// The render thread waits on the CPU for each frame before publishing
     /// it (`VESTRA_GPU_CPU_WAIT=1`); set by the render thread.
     cpu_wait: AtomicBool,
@@ -475,6 +482,9 @@ impl Shared {
             ready_enqueued: AtomicU64::new(0),
             done_enqueued: AtomicU64::new(0),
             calls: AtomicU64::new(0),
+            last_frame: Mutex::default(),
+            rings: AtomicU64::new(0),
+            removed: AtomicBool::new(false),
             cpu_wait: AtomicBool::new(false),
             diag: Mutex::default(),
             stats: Mutex::default(),
@@ -936,7 +946,11 @@ fn produce(
             return;
         }
         let reason = match d3d11.removed() {
-            Some(removed) => format!("{reason} (device removed: {removed})"),
+            Some(removed) => {
+                // Before `failed`: whoever sees the failure sees this too.
+                shared.removed.store(true, Ordering::Release);
+                format!("{reason} (device removed: {removed})")
+            }
             None => reason,
         };
         shared.diag(format!("{reason}; GPU rendering stops"));
@@ -1009,6 +1023,7 @@ fn produce(
                 (slots_size, resized) = (Some(size), true);
                 let mut exchange = lock(&shared.exchange);
                 exchange.ring.renew();
+                shared.rings.fetch_add(1, Ordering::AcqRel);
                 exchange.done = [0; RING];
             }
         }
@@ -1081,7 +1096,8 @@ fn produce(
             break;
         }
         let began = Instant::now();
-        shared.calls.fetch_add(1, Ordering::AcqRel);
+        // The call's start, odd (`Handle::progress`).
+        let started = shared.calls.fetch_add(1, Ordering::AcqRel) + 1;
         let rendered = render.render(&slots[index].d3d11, block && pace.is_none());
         shared.calls.fetch_add(1, Ordering::AcqRel);
         if let Err(error) = rendered {
@@ -1106,6 +1122,7 @@ fn produce(
         }
         ready_value += 1;
         shared.ready_enqueued.store(ready_value, Ordering::Release);
+        *lock(&shared.last_frame) = (started, ready_value);
         let completed = match &completion {
             // The GPU-side fences order everything (record §11 item 3):
             // windows wait for `ready` on their queue, mpv's device waits
@@ -1179,6 +1196,25 @@ fn produce(
 /// How long a new video-area size must hold before the ring is remade at it.
 const SETTLE: Duration = Duration::from_millis(150);
 
+/// How far rendering got ([`Handle::progress`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Progress {
+    /// mpv's render calls, counted when each starts and when it returns
+    /// (odd while one runs, as the watchdog reads them).
+    pub calls: u64,
+    /// The newest rendered frame: the `calls` value its render call started
+    /// at (odd; 0: none yet), and its `ready` fence value.
+    pub started: u64,
+    pub ready: u64,
+    /// The `ready` value the GPU reached (`u64::MAX` once released: a
+    /// failure, a removed device, or quitting).
+    pub completed: u64,
+    /// Ring generations made so far (a new output size).
+    pub rings: u64,
+    /// GPU rendering stopped for good (a failure or quitting).
+    pub halted: bool,
+}
+
 /// A frame the renderer published ([`Handle::latest`]).
 pub struct Frame(Payload);
 impl Frame {
@@ -1212,13 +1248,24 @@ impl Handle {
     pub fn frames(&self) -> u64 {
         lock(&self.0.exchange).ring.sequence()
     }
-    /// mpv's render calls so far, each counted when it starts and when it
-    /// returns (odd while one runs, as the watchdog reads them): a call that
-    /// started after a value `mark` was read has returned once this reaches
-    /// `mark + mark % 2 + 2`. The host's plugin shader guard tells from it
-    /// whether a new `glsl-shaders` list was drawn (compiled) yet.
-    pub fn render_calls(&self) -> u64 {
-        self.0.calls.load(Ordering::Acquire)
+    /// How far rendering got ([`Progress`]): the host's plugin shader guard
+    /// tells from it whether a frame rendered after a new `glsl-shaders`
+    /// list reached mpv also finished on the GPU.
+    pub fn progress(&self) -> Progress {
+        let (started, ready) = *lock(&self.0.last_frame);
+        Progress {
+            calls: self.0.calls.load(Ordering::Acquire),
+            started,
+            ready,
+            completed: self.0.fences.get().map_or(0, |fences| fences.ready.completed()),
+            rings: self.0.rings.load(Ordering::Acquire),
+            halted: self.0.halted(),
+        }
+    }
+    /// mpv's Direct3D 11 device was removed (set before [`Handle::failed`]
+    /// says why GPU rendering stopped).
+    pub fn device_removed(&self) -> bool {
+        self.0.removed.load(Ordering::Acquire)
     }
     /// Window draws that showed a newer frame.
     pub fn shown(&self) -> u64 {

@@ -13,12 +13,14 @@
 //!   quits, or the session ends (Windows `WM_QUERYENDSESSION` /
 //!   `WM_ENDSESSION`). A shutdown, logoff or kill while paused or idle is
 //!   therefore never taken for a shader crash;
-//! - a GPU renderer failure (a device loss, a watchdog stall) after a list
-//!   changed and before mpv drew a frame with video with it (a first-use
-//!   compile that hangs or loses the device: the guard is not armed yet)
-//!   counts as the plugins' crash: `applying` is written before the
-//!   restart ([`persist_shader_guard`]), and nothing settles the record
-//!   after a failure;
+//! - a GPU renderer failure (a device loss, a watchdog stall, mpv's device
+//!   removed) while the source has a video track, after a list changed
+//!   (or the source, the video's size or the output size did) and before
+//!   a frame rendered since finished on the GPU (a first-use compile that
+//!   hangs or loses the device: the guard is not armed yet) counts as the
+//!   plugins' crash: `applying` is written before the restart
+//!   ([`persist_shader_guard`]), and nothing settles the record after a
+//!   failure;
 //! - the file is written by a thread of its own ([`ShaderWriter`]: the
 //!   newest request wins), never on the UI thread, except at quit and at the
 //!   session's end, which wait for it; a new list from the same plugins
@@ -33,7 +35,7 @@
 //! guard may be armed for nothing, never the other way round.
 use super::*;
 use crate::playback::render_state::{GuardFile, GuardKey, SHADER_STABLE_SECS, ShaderBlock};
-use crate::playback::renderer::ShaderWrites;
+use crate::playback::renderer::{Progress, ShaderRequests};
 use std::sync::{Condvar, Mutex, PoisonError};
 
 /// The error code of a plugin shader list refused because the last run
@@ -106,7 +108,7 @@ struct WriterShared {
     ending: std::sync::atomic::AtomicBool,
     /// The `exit:` line for the session's end was written (once).
     exit_logged: std::sync::atomic::AtomicBool,
-    /// Plugin shaders whose new list no frame with video was drawn with yet
+    /// Plugin shaders not verified yet, while the source has a video track
     /// (the UI thread, [`ShaderGuard`]): a GPU renderer failure until then
     /// counts as theirs ([`ShaderWriter::gpu_failed`]).
     untested: Mutex<Option<Vec<String>>>,
@@ -174,13 +176,13 @@ impl ShaderWriter {
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = plugins;
     }
-    /// The GPU renderer failed (a device loss, a watchdog stall; any thread,
-    /// before the restart): no request is taken from now on (`lost`), and
-    /// if a plugin shader list changed and no frame with video was drawn
-    /// with it yet, the failure is theirs: `applying` for them (a first-use
-    /// compile that hangs or loses the device fails before the guard arms).
-    /// The restarted player then starts with plugin shaders off, as after a
-    /// crash. Whether it counted.
+    /// The GPU renderer failed (a device loss, a watchdog stall, mpv's
+    /// device removed; any thread, before a restart): no request is taken
+    /// from now on (`lost`), and plugin shaders not verified yet while a
+    /// video plays are blamed: `applying` for them (a first-use compile
+    /// that hangs or loses the device fails before the guard arms). The
+    /// next player then starts with plugin shaders off, as after a crash.
+    /// Whether it counted.
     fn gpu_failed(&self) -> bool {
         if self.file.is_off() {
             return false;
@@ -204,7 +206,7 @@ impl ShaderWriter {
             return false;
         };
         logged!(
-            "shaders: the GPU renderer failed before a frame with video was drawn with the new plugin shaders of {}; counted as their crash",
+            "shaders: the GPU renderer failed before a frame with the plugin shaders of {} finished on the GPU; counted as their crash",
             plugins.join(", ")
         );
         self.queue(
@@ -317,22 +319,27 @@ pub(crate) struct Observed {
     pub source: u64,
     /// New frames presented so far (`Presentation::counts`).
     pub presented: u64,
-    /// The control worker's `glsl-shaders` writes (`Render::shader_writes`).
-    pub writes: ShaderWrites,
-    /// mpv's render calls now (`Render::render_calls`; `None`: not counted).
-    pub calls: Option<u64>,
+    /// The video's storage size (`Render::video_size`).
+    pub video_size: (i64, i64),
+    /// The plugin shader requests the control worker processed
+    /// (`Render::shader_requests`).
+    pub requests: ShaderRequests,
+    /// How far the GPU renderer got (`Render::progress`; `None`: it does
+    /// not say, or none draws).
+    pub progress: Option<Progress>,
 }
 
-/// A plugin shader list changed and no frame with video was drawn with it
-/// yet ([`ShaderGuard::untested`]).
+/// Plugin shaders not verified yet ([`ShaderGuard::untested`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Untested {
-    /// The worker's `glsl-shaders` writes when it changed: the next one
-    /// hands the list to mpv.
-    writes: u64,
-    /// From that write on: the render calls a frame with video must start
-    /// after (`None` inside: the renderer does not count them).
-    mark: Option<Option<u64>>,
+    /// The request (`guardSeq`) that set the list: mpv holds it once the
+    /// worker processed that one (0: already).
+    seq: u64,
+    /// From then on: the render calls a frame with video must start after.
+    mark: Option<u64>,
+    /// The `ready` fence value of such a frame: verified once the GPU
+    /// reached it.
+    target: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -363,11 +370,20 @@ pub(crate) struct ShaderGuard {
     phase: Phase,
     /// The plugins `applying` was last written for, until it is settled.
     written: Option<Vec<String>>,
-    /// The lists changed and mpv drew no frame with video with them yet: a
-    /// GPU renderer failure until then counts as theirs (the guard arms
-    /// only after frames are drawn, which a compile that hangs or loses the
-    /// device never gets to).
+    /// The lists changed (or the source, the video's size or the output
+    /// size did while they are on) and no frame with video rendered since
+    /// finished on the GPU: a GPU renderer failure until then counts as
+    /// theirs (the guard arms only after frames are presented, which a
+    /// compile that hangs or loses the device never gets to).
     untested: Option<Untested>,
+    /// `untested` was handed to the writer: only while the source has a
+    /// video track (mpv runs user shaders on video only, so a device lost
+    /// while idle or on audio is not theirs).
+    published: bool,
+    /// The last tick saw a video track.
+    video: bool,
+    /// (source, video size, output size generation) at the last tick.
+    shape: Option<(u64, (i64, i64), u64)>,
     source: u64,
     last_tick: Option<Instant>,
 }
@@ -435,12 +451,15 @@ impl ShaderGuard {
     }
     /// The lists changed: wait for them to be drawn again, unless they are
     /// already armed for the same plugins (no write; the timer restarts).
-    /// Untested until a frame with video is drawn with them (`writes`: the
-    /// worker's `glsl-shaders` writes so far).
-    fn changed(&mut self, presented: u64, writes: u64) {
-        self.untested = (!self.lists.is_empty()).then_some(Untested { writes, mark: None });
-        self.writer
-            .set_untested(self.untested.map(|_| self.plugins()));
+    /// Untested until a frame with video rendered with them finished on
+    /// the GPU (`seq`: the request that set them, `guardSeq`).
+    fn changed(&mut self, presented: u64, seq: u64) {
+        self.untested = (!self.lists.is_empty()).then_some(Untested {
+            seq,
+            mark: None,
+            target: None,
+        });
+        self.publish(true);
         if self.lists.is_empty() {
             self.phase = Phase::Off;
             self.settle();
@@ -456,7 +475,7 @@ impl ShaderGuard {
     }
     /// A plugin's list `handle` (`render`, or `shaders:<id>`) now has
     /// `files` files, before the worker gets it (`presented`: new frames
-    /// presented so far; `writes`: the worker's `glsl-shaders` writes).
+    /// presented so far; `seq`: the request's number, `guardSeq`).
     pub(crate) fn set(
         &mut self,
         owner: u64,
@@ -464,7 +483,7 @@ impl ShaderGuard {
         plugin: &str,
         files: usize,
         presented: u64,
-        writes: u64,
+        seq: u64,
     ) {
         let key = (owner, handle.to_owned());
         let before = self.lists.get(&key).map_or(0, |(_, files)| *files);
@@ -481,10 +500,10 @@ impl ShaderGuard {
             handle_for_log(handle),
             self.files()
         );
-        self.changed(presented, writes);
+        self.changed(presented, seq);
     }
     /// A plugin stopped or was parked: the worker removes its lists.
-    pub(crate) fn owner_gone(&mut self, owner: u64, presented: u64, writes: u64) {
+    pub(crate) fn owner_gone(&mut self, owner: u64, presented: u64) {
         let before = self.lists.len();
         self.lists.retain(|(holder, _), _| *holder != owner);
         if self.lists.len() == before {
@@ -495,38 +514,81 @@ impl ShaderGuard {
             self.files()
         );
         if self.lists.is_empty() {
-            self.changed(presented, writes);
-        } else if self.untested.is_some() {
-            self.writer.set_untested(Some(self.plugins()));
+            self.changed(presented, 0);
+        } else {
+            self.publish(true);
         }
     }
-    /// The untested list (`changed`) was drawn: a render call that started
-    /// after the worker handed it to mpv returned while the source has a
-    /// video track. Render calls without one draw no video (mpv runs user
-    /// shaders on video only), so they move the mark instead.
+    /// Hand `untested` to the writer while the source has a video track,
+    /// and take it back otherwise (`force`: the plugins changed).
+    fn publish(&mut self, force: bool) {
+        let want = self.untested.is_some() && self.video;
+        if want != self.published || (force && want) {
+            self.writer.set_untested(want.then(|| self.plugins()));
+        }
+        self.published = want;
+    }
+    /// The source, the video's size or the output size changed while lists
+    /// are on: `//!WHEN` hooks (Anime4K's, for one) compile only once their
+    /// size condition first holds, so the lists are untested again from
+    /// now on (unless still waiting for the worker).
+    fn reshaped(&mut self, progress: Option<Progress>) {
+        let Some(progress) = progress.filter(|_| !self.lists.is_empty()) else {
+            return;
+        };
+        match &mut self.untested {
+            Some(Untested { mark: None, .. }) => {}
+            Some(untested) => {
+                untested.mark = Some(progress.calls);
+                untested.target = None;
+            }
+            None => {
+                self.untested = Some(Untested {
+                    seq: 0,
+                    mark: Some(progress.calls),
+                    target: None,
+                });
+            }
+        }
+    }
+    /// Verify the untested lists: the worker processed the request that set
+    /// them (mpv holds them), a render call started after that while the
+    /// source has a video track, and the GPU finished that frame (its
+    /// `ready` value was reached, so a first frame that times out or stalls
+    /// on the GPU is not verified). Render calls without a video track move
+    /// the mark: mpv runs user shaders on video only.
     fn check_untested(&mut self, seen: Observed) {
         let Some(untested) = &mut self.untested else {
             return;
         };
-        if untested.mark.is_none() && seen.writes.count > untested.writes {
-            untested.mark = Some(seen.writes.calls);
-        }
-        let Some(mark) = untested.mark else {
-            // The worker has not written it yet.
+        let Some(progress) = seen.progress else {
+            // The renderer does not say (macOS; or none draws): nothing to
+            // wait for, and no device-loss restart to blame.
+            self.untested = None;
             return;
         };
-        let drawn = match (mark, seen.calls) {
-            (Some(mark), Some(calls)) => {
-                seen.video && crate::playback::renderer::rendered_since(mark, calls)
+        if untested.mark.is_none() {
+            if seen.requests.processed < untested.seq {
+                // The worker has not processed it (or a newer one) yet.
+                return;
             }
-            // Not counted (no Windows GPU renderer): nothing to wait for.
-            _ => true,
-        };
-        if drawn {
+            untested.mark = Some(seen.requests.calls.unwrap_or(progress.calls));
+        }
+        if !seen.video {
+            untested.mark = Some(progress.calls);
+            untested.target = None;
+            return;
+        }
+        if untested.target.is_none() && untested.mark.is_some_and(|mark| progress.started > mark) {
+            untested.target = Some(progress.ready);
+        }
+        // A released fence (`u64::MAX`: a failure) proves nothing.
+        if let Some(target) = untested.target
+            && !progress.halted
+            && progress.completed != u64::MAX
+            && progress.completed >= target
+        {
             self.untested = None;
-            self.writer.set_untested(None);
-        } else if !seen.video {
-            untested.mark = Some(seen.calls);
         }
     }
     /// Every tick.
@@ -548,7 +610,21 @@ impl ShaderGuard {
             self.writer
                 .send(Op::Applying(plugins, crate::playback::render_state::now()));
         }
+        let shape = (
+            seen.source,
+            seen.video_size,
+            seen.progress.map_or(0, |progress| progress.rings),
+        );
+        if self
+            .shape
+            .replace(shape)
+            .is_some_and(|before| before != shape)
+        {
+            self.reshaped(seen.progress);
+        }
+        self.video = seen.video;
         self.check_untested(seen);
+        self.publish(false);
         match self.phase {
             Phase::Off | Phase::Settled => {}
             Phase::Pending { .. } if !drawn => {
@@ -679,19 +755,21 @@ impl Host {
     /// Before a plugin shader list of `files` files goes to the worker
     /// (`capabilities::processing_video`): refused while this run keeps
     /// plugin shaders off; otherwise followed (GPU rendering only: under
-    /// software rendering the worker refuses non-empty lists).
+    /// software rendering the worker refuses non-empty lists). The
+    /// request's number, which goes to the worker as `guardSeq`.
     pub(crate) fn plugin_shaders(
         &mut self,
         owner: u64,
         handle: &str,
         files: usize,
-    ) -> std::result::Result<(), RpcError> {
+    ) -> std::result::Result<u64, RpcError> {
         let now = crate::playback::render_state::now();
         if let Some(error) = self.shader_guard.refuse(files, now) {
             return Err(error);
         }
+        let seq = self.backend.render.number_shader_request();
         if files > 0 && !self.backend.render.now().0 {
-            return Ok(());
+            return Ok(seq);
         }
         let plugin = self
             .plugins
@@ -699,29 +777,29 @@ impl Host {
             .map(|plugin| plugin.manifest.id.clone())
             .unwrap_or_else(|| format!("plugin {owner}"));
         let presented = self.presented();
-        let writes = self.backend.render.shader_writes().count;
         self.shader_guard
-            .set(owner, handle, &plugin, files, presented, writes);
-        Ok(())
+            .set(owner, handle, &plugin, files, presented, seq);
+        Ok(seq)
     }
     /// A plugin stopped or was parked (its lists go with it).
     pub(crate) fn plugin_shaders_gone(&mut self, owner: u64) {
         let presented = self.presented();
-        let writes = self.backend.render.shader_writes().count;
-        self.shader_guard.owner_gone(owner, presented, writes);
+        self.shader_guard.owner_gone(owner, presented);
     }
     /// Every tick: the shader guard, its OSD line, and the memory line every
     /// [`MEMORY_EVERY`] while the host log is open.
     pub(crate) fn diagnostics_tick(&mut self) {
         let now = Instant::now();
         let source = &self.last_source;
+        let render = &self.backend.render;
         let seen = Observed {
             playing: source["phase"] == "ready" && source["paused"] == false,
             video: source["hasVideo"] == true,
             source: source["stamp"]["generation"].as_u64().unwrap_or(0),
             presented: self.presented(),
-            writes: self.backend.render.shader_writes(),
-            calls: self.backend.render.render_calls(),
+            video_size: render.video_size(),
+            requests: render.shader_requests(),
+            progress: render.progress(),
         };
         self.shader_guard.tick(seen, now);
         if self.shader_guard.take_osd(self.shell.is_some()) {
@@ -909,7 +987,7 @@ mod tests {
         );
         assert_eq!(state(&guard, &file), Some(ShaderState::Ok));
         // Every list emptied: settled.
-        guard.owner_gone(2, 103, 0);
+        guard.owner_gone(2, 103);
         assert_eq!(state(&guard, &file), Some(ShaderState::Ok));
     }
 
@@ -977,32 +1055,57 @@ mod tests {
         persist_shader_guard();
     }
 
-    /// What the tick sees from the worker and the renderer: `writes`
-    /// `glsl-shaders` writes, the newest at `at` render calls, `calls` now.
-    fn rendering(seen: Observed, writes: u64, at: u64, calls: u64) -> Observed {
+    /// The renderer at `calls` render calls, its newest frame started at
+    /// `started` with `ready`, the GPU at `completed`.
+    fn progress(calls: u64, started: u64, ready: u64, completed: u64) -> Progress {
+        Progress {
+            calls,
+            started,
+            ready,
+            completed,
+            ..Progress::default()
+        }
+    }
+
+    /// What a tick sees: requests processed up to `processed` (render
+    /// calls `at` right after), and the renderer's `progress`.
+    fn gpu(seen: Observed, processed: u64, at: u64, progress: Progress) -> Observed {
         Observed {
-            writes: ShaderWrites {
-                count: writes,
+            requests: ShaderRequests {
+                processed,
                 calls: Some(at),
             },
-            calls: Some(calls),
+            progress: Some(progress),
             ..seen
         }
     }
 
+    /// What the writer would blame on a GPU failure now.
+    fn published(guard: &ShaderGuard) -> Option<Vec<String>> {
+        guard.writer.shared.untested.lock().unwrap().clone()
+    }
+
+    fn paused() -> Observed {
+        Observed {
+            playing: false,
+            ..playing(0)
+        }
+    }
+
     /// 0.6.4: a first-use compile that hangs (a watchdog stall) or loses
-    /// the device fails before any frame is drawn, so the guard never
+    /// the device fails before any frame is presented, so the guard never
     /// armed; such a failure after a list change counts as the plugins'.
     /// From then on nothing settles the record (review 0.6.3 item 2a).
     #[test]
     fn a_gpu_failure_before_the_new_list_is_drawn_counts_as_a_shader_crash() {
         let (_dir, file, mut guard) = guard();
         let start = Instant::now();
-        guard.set(1, "shaders:x", "acme.a", 2, 0, 0);
-        // mpv got the list (write 1, at 4 render calls); a render call runs
-        // (it compiles) and does not return.
-        guard.tick(rendering(playing(0), 1, 4, 5), start);
+        guard.set(1, "shaders:x", "acme.a", 2, 0, 1);
+        // The worker processed request 1 at 4 render calls; the call that
+        // started at 5 (it compiles) does not return.
+        guard.tick(gpu(playing(0), 1, 4, progress(5, 3, 7, 7)), start);
         assert_eq!(state(&guard, &file), None, "not armed: nothing drawn");
+        assert_eq!(published(&guard), Some(vec!["acme.a".into()]));
         // The watchdog's restart: counted, on disk before the restart.
         let writer = guard.writer();
         assert!(writer.gpu_failed());
@@ -1014,70 +1117,126 @@ mod tests {
         // The UI thread goes on until its loop ends: playback stops, the
         // lists are cleared, the player quits; the record stays.
         guard.tick(Observed::default(), start + Duration::from_secs(1));
-        guard.set(1, "shaders:x", "acme.a", 0, 0, 1);
+        guard.set(1, "shaders:x", "acme.a", 0, 0, 2);
         guard.quit();
         assert_eq!(state(&guard, &file), Some(ShaderState::Applying));
     }
 
-    /// Once a frame with video was drawn with the new list (a render call
-    /// that started after mpv got it returned), a failure is not theirs
-    /// unless the guard was armed; render calls without video do not count.
+    /// Review 1A: no video track, no shaders run: while idle or on audio
+    /// only (a plugin that sets its list at start-up) nothing is blamed.
     #[test]
-    fn a_gpu_failure_after_the_new_list_was_drawn_is_not_counted() {
+    fn untested_lists_are_blamed_only_while_the_source_has_video() {
+        let (_dir, _file, mut guard) = guard();
         let start = Instant::now();
-        let paused = Observed {
+        let idle = Observed {
+            video: false,
             playing: false,
+            ..Observed::default()
+        };
+        guard.set(1, "render", "acme.a", 1, 0, 1);
+        assert_eq!(published(&guard), None, "set while idle");
+        guard.tick(gpu(idle, 1, 2, progress(2, 0, 0, 0)), start);
+        assert_eq!(published(&guard), None);
+        // A video loads (paused): blamed until verified.
+        guard.tick(gpu(paused(), 1, 2, progress(2, 0, 0, 0)), start);
+        assert_eq!(published(&guard), Some(vec!["acme.a".into()]));
+        // Audio only again: not blamed, and a device lost now is not theirs.
+        let audio = Observed {
+            video: false,
             ..playing(0)
         };
-        // Paused on a video: mpv redraws the frame with the new list.
+        guard.tick(gpu(audio, 1, 2, progress(4, 3, 1, 1)), start);
+        assert_eq!(published(&guard), None);
+        assert!(!guard.writer().gpu_failed());
+    }
+
+    /// Verified only once the GPU finished a frame whose render call
+    /// started after the worker processed the newest request (review 2, 5):
+    /// a render with list A never verifies list B, and a frame that stalls
+    /// on the GPU (or a released fence) never verifies.
+    #[test]
+    fn a_list_is_verified_only_when_its_frame_finished_on_the_gpu() {
         let (_dir, file, mut guard) = guard();
-        guard.set(1, "render", "acme.a", 1, 0, 3);
-        guard.tick(rendering(paused, 3, 8, 9), start);
-        assert!(guard.untested.is_some(), "the worker has not written it");
-        guard.tick(rendering(paused, 4, 9, 10), start);
-        assert!(guard.untested.is_some(), "the call running at the write");
-        guard.tick(rendering(paused, 4, 9, 12), start);
-        assert!(guard.untested.is_none(), "drawn");
+        let start = Instant::now();
+        guard.set(1, "render", "acme.a", 1, 0, 1);
+        // B replaces A before the worker got to either.
+        guard.set(1, "render", "acme.a", 2, 0, 2);
+        guard.tick(gpu(paused(), 0, 0, progress(4, 3, 2, 2)), start);
+        // A processed, and a frame with A rendered and finished: not B.
+        guard.tick(gpu(paused(), 1, 6, progress(8, 7, 3, 3)), start);
+        assert!(guard.untested.is_some(), "A cannot verify B");
+        // B processed at 8; a call started at 9, its frame (4) not done.
+        guard.tick(gpu(paused(), 2, 8, progress(10, 9, 4, 3)), start);
+        assert!(guard.untested.is_some(), "rendered, not finished");
+        guard.tick(gpu(paused(), 2, 8, progress(12, 11, 5, 4)), start);
+        assert!(guard.untested.is_none(), "frame 4 finished");
         assert!(!guard.writer().gpu_failed());
         assert!(guard.writer().persist(Duration::from_secs(5)));
         assert_eq!(state(&guard, &file), None, "paused: never armed");
 
-        // No video yet (a source loading): its render calls move the mark.
+        // The first frame's fence never moves; the watchdog releases it.
         let (_dir, file, mut guard) = self::guard();
-        let loading = Observed {
-            video: false,
-            ..paused
+        guard.set(1, "render", "acme.a", 1, 0, 1);
+        guard.tick(gpu(paused(), 1, 2, progress(4, 3, 1, 0)), start);
+        guard.tick(gpu(paused(), 1, 2, progress(6, 5, 2, 0)), start);
+        let released = Progress {
+            halted: true,
+            ..progress(6, 5, 2, u64::MAX)
         };
-        guard.set(1, "render", "acme.a", 1, 0, 0);
-        guard.tick(rendering(loading, 1, 2, 20), start);
-        guard.tick(rendering(paused, 1, 2, 21), start);
-        assert!(guard.untested.is_some(), "running");
-        guard.tick(rendering(paused, 1, 2, 22), start);
-        assert!(guard.untested.is_none(), "started after the last look");
-        // A new list: untested again until drawn.
-        guard.set(1, "render", "acme.a", 2, 0, 1);
-        assert!(guard.untested.is_some());
+        guard.tick(gpu(paused(), 1, 2, released), start);
+        assert!(guard.untested.is_some(), "a released fence proves nothing");
         let writer = guard.writer();
         assert!(writer.gpu_failed());
         assert!(writer.persist(Duration::from_secs(5)));
         assert_eq!(file.read().shaders.unwrap().state, ShaderState::Applying);
+    }
 
-        // A renderer that does not count its calls (macOS): nothing to wait
-        // for once mpv got the list.
-        let (_dir, _file, mut guard) = self::guard();
-        guard.set(1, "render", "acme.a", 1, 0, 0);
-        let uncounted = Observed {
-            writes: ShaderWrites {
-                count: 1,
-                calls: None,
-            },
-            ..paused
-        };
-        guard.tick(uncounted, start);
-        assert!(guard.untested.is_none());
-        // Every list cleared: nothing untested either.
+    /// Review 3: `//!WHEN` hooks compile when their size condition first
+    /// holds: a new source, video size or output size makes the lists
+    /// untested again; render calls without video only move the mark.
+    #[test]
+    fn a_new_source_or_size_makes_the_lists_untested_again() {
+        let (_dir, _file, mut guard) = guard();
+        let start = Instant::now();
         guard.set(1, "render", "acme.a", 1, 0, 1);
-        guard.set(1, "render", "acme.a", 0, 0, 1);
+        guard.tick(gpu(paused(), 1, 2, progress(4, 3, 1, 1)), start);
+        assert!(guard.untested.is_none());
+        // Full screen: a new ring (output size).
+        let ring = |p: Progress| Progress { rings: 1, ..p };
+        guard.tick(gpu(paused(), 1, 2, ring(progress(6, 5, 2, 2))), start);
+        assert!(guard.untested.is_some(), "output size");
+        assert_eq!(published(&guard), Some(vec!["acme.a".into()]));
+        guard.tick(gpu(paused(), 1, 2, ring(progress(8, 7, 3, 3))), start);
+        assert!(guard.untested.is_none());
+        assert_eq!(published(&guard), None);
+        // Another video size.
+        let sized = Observed {
+            video_size: (3840, 2160),
+            ..paused()
+        };
+        guard.tick(gpu(sized, 1, 2, ring(progress(8, 7, 3, 3))), start);
+        assert!(guard.untested.is_some(), "video size");
+        // A new source, still loading (no video): its calls move the mark.
+        let loading = Observed {
+            source: 2,
+            video: false,
+            ..sized
+        };
+        guard.tick(gpu(loading, 1, 2, ring(progress(12, 11, 5, 5))), start);
+        let next = Observed { source: 2, ..sized };
+        guard.tick(gpu(next, 1, 2, ring(progress(12, 11, 5, 5))), start);
+        assert!(guard.untested.is_some(), "rendered before the video");
+        guard.tick(gpu(next, 1, 2, ring(progress(14, 13, 6, 6))), start);
+        assert!(guard.untested.is_none());
+        // A renderer that does not say how far it got (macOS): nothing to
+        // wait for.
+        guard.set(1, "render", "acme.a", 2, 0, 2);
+        guard.tick(paused(), start);
+        assert!(guard.untested.is_none());
+        // Every list cleared: nothing untested, even after a new size.
+        guard.set(1, "render", "acme.a", 0, 0, 3);
+        guard.tick(gpu(sized, 3, 2, progress(20, 19, 9, 9)), start);
+        guard.tick(gpu(paused(), 3, 2, progress(20, 19, 9, 9)), start);
         assert!(guard.untested.is_none());
         assert!(!guard.writer().gpu_failed());
     }

@@ -368,6 +368,12 @@ impl Backend {
                     }
                     jobs.poll();
                     upscaling.poll(&mpv, &out_render, &events, || processing.copy_back_owners());
+                    // The plugin shader guard re-checks a list after the video's
+                    // size changes (`//!WHEN` hooks compile at their first use).
+                    if out_render.gpu().is_some() {
+                        let side = |name: &str| mpv.get_property::<i64>(name).unwrap_or(0);
+                        out_render.set_video_size((side("video-params/w"), side("video-params/h")));
+                    }
                     processing.note_source(sources.generation(), sources.phase());
                     subtitles.note_source(sources.generation(), sources.phase());
                     // Bound work per iteration so continuous controls cannot starve video.
@@ -495,7 +501,7 @@ impl Backend {
                             }
                             if let Err(error) = render_options.release(
                                 command.reply.owner,
-                                &mut crate::playback::video_render::Mpv(&mpv, &out_render),
+                                &mut crate::playback::video_render::Mpv(&mpv),
                             ) {
                                 let _ = events.send(Event::Broadcast(
                                     "host.error".into(),
@@ -505,7 +511,7 @@ impl Backend {
                             if let Err(error) = shaders.disable(
                                 command.reply.owner,
                                 &mut render_options,
-                                &mut crate::playback::video_render::Mpv(&mpv, &out_render),
+                                &mut crate::playback::video_render::Mpv(&mpv),
                             ) {
                                 let _ = events.send(Event::Broadcast(
                                     "host.error".into(),
@@ -622,7 +628,7 @@ impl Backend {
                         }
                         if command.method.starts_with("video.render.") {
                             let owner = command.reply.owner;
-                            let mut player = crate::playback::video_render::Mpv(&mpv, &out_render);
+                            let mut player = crate::playback::video_render::Mpv(&mpv);
                             let result = if command.method != "video.render.set" {
                                 render_options
                                     .release(owner, &mut player)
@@ -639,6 +645,7 @@ impl Backend {
                                 render_options.set(owner, values, ready, refresh, &mut player)
                             };
                             pace(&out_render, render_options.settings());
+                            guard_processed(&out_render, &command.params);
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
@@ -652,8 +659,9 @@ impl Backend {
                                 ready,
                                 out_render.gpu().is_some(),
                                 &mut render_options,
-                                &mut crate::playback::video_render::Mpv(&mpv, &out_render),
+                                &mut crate::playback::video_render::Mpv(&mpv),
                             );
+                            guard_processed(&out_render, &command.params);
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
@@ -833,7 +841,7 @@ impl Backend {
                     if render_was_gpu && !render_is_gpu {
                         let (pushes, written) = shaders.software_fallback(
                             &mut render_options,
-                            &mut crate::playback::video_render::Mpv(&mpv, &out_render),
+                            &mut crate::playback::video_render::Mpv(&mpv),
                         );
                         for (owner, status) in pushes {
                             let _ = events.send(Event::PluginMessage(
@@ -1018,6 +1026,13 @@ impl GpuRun<'_> {
             // The renderer stopped on its own (Windows: its device was
             // removed): software rendering, as for a window's fallback.
             if let Some(reason) = crate::platform::gpu_failed(&renderer.handle()) {
+                // mpv's device was removed (no restart: software from here
+                // on): a plugin shader list not drawn yet takes the blame,
+                // and the record stays for the next start, as before a
+                // device-loss restart.
+                if crate::playback::renderer::GpuBackend::device_removed(&renderer.handle()) {
+                    crate::host::persist_shader_guard();
+                }
                 self.render
                     .fall_back(crate::playback::render_mode::Reason::WindowFallback(reason));
                 break;
@@ -1065,6 +1080,15 @@ fn shader_cache_dir() -> Option<std::path::PathBuf> {
         return None;
     }
     Some(directory)
+}
+/// A plugin shader request was processed, its list written to mpv or not
+/// (the same merged list, refused for the limit or software rendering):
+/// the shader guard stops waiting for it (`guardSeq`, set by the capability
+/// layer, `host/diagnostics.rs`).
+fn guard_processed(render: &crate::playback::renderer::Render, params: &Value) {
+    if let Some(seq) = params["guardSeq"].as_u64() {
+        render.shaders_processed(seq);
+    }
 }
 /// `hwdec` while the software renderer draws (`renderer::hwdec`).
 fn software_hwdec() -> String {
@@ -1793,6 +1817,19 @@ fn no_builtin_scripts(builder: &rsmpv::Builder) -> Result<()> {
 mod tests {
     use super::*;
     use crate::playback::session::Phase;
+    /// Review 1B: a shader request counts as processed whether or not its
+    /// list was written (the same merged list, `limit`, `unsupported`), so
+    /// the shader guard never waits for it all run.
+    #[test]
+    fn every_numbered_shader_request_is_reported_processed() {
+        use crate::playback::render_mode::{Facts, Preference, decide};
+        let render =
+            crate::playback::renderer::Render::new(&decide(&Facts::default(), Preference::Auto));
+        guard_processed(&render, &json!({"id":"x","paths":[]}));
+        assert_eq!(render.shader_requests().processed, 0, "not numbered");
+        guard_processed(&render, &json!({"id":"x","paths":[],"guardSeq":3}));
+        assert_eq!(render.shader_requests().processed, 3);
+    }
     #[test]
     fn decoding_is_software_for_no_and_hardware_for_a_method() {
         assert_eq!(decoding(Some("no")), Some("software"));
