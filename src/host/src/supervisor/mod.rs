@@ -33,9 +33,12 @@ mod tests;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 pub use exit::ExitCause;
-pub use job::{Busy, Cause, Job, JobId, JobKind, JobMode, JobResult, JobState, Origin, Priority};
+pub use job::{
+    Busy, Cause, HostStart, HostStarted, Job, JobId, JobKind, JobMode, JobResult, JobState, Origin,
+    Priority,
+};
 // The stop grace per reason: the adapter's `Terminate` executor reads it
-// from B2b.
+// from B2d (until then the Host's `stop` sets it, `PARK_WAIT` for a park).
 #[allow(unused_imports)]
 pub use kill::grace;
 pub use limits::{BuiltinsFirst, RestartMode, Retry, Tunables};
@@ -43,8 +46,9 @@ pub use limits::{BuiltinsFirst, RestartMode, Retry, Tunables};
 #[allow(unused_imports)]
 pub use limits::{Backoff, Policy, StartLimit, max_active_for, process_budget_for};
 pub use pressure::Pressure;
-// The 20 s wait texts: B2b's waits answer with them (the spec tests now).
-#[cfg_attr(not(test), allow(unused_imports))]
+// The 20 s wait texts: B2b's waits fail with them in their job results,
+// which carry the text to the Host; only the tests name them.
+#[cfg(test)]
 pub use reap::{STUCK_RELOAD, STUCK_WAKE};
 pub use trigger::{AnswerReason, Delivery, Trigger, TriggerKind};
 // A unit spec's checkpoint: B2d's `add_unit` at start-up gives it.
@@ -108,11 +112,15 @@ pub enum Action<P> {
     },
     /// At ready after a start from standby: drop recorded entries the live
     /// process did not register again.
+    // B2c: a wake's ready.
+    #[cfg_attr(not(test), allow(dead_code))]
     Prune {
         unit: UnitId,
         pid: Pid,
     },
     /// Send a held trigger (`Plugin::send`).
+    // B2c: a wake's held triggers.
+    #[cfg_attr(not(test), allow(dead_code))]
     Deliver {
         unit: UnitId,
         pid: Pid,
@@ -160,9 +168,12 @@ pub enum Action<P> {
         unit: UnitId,
         pid: Pid,
     },
-    /// Remove the unit's data (uninstall), then `remove_unit`.
+    /// Remove the unit's data (uninstall), then `remove_unit`. `data`:
+    /// what the Host resolved at the uninstall request
+    /// (`remove_data_after`), `None` when it gave nothing.
     RemoveData {
         unit: UnitId,
+        data: Option<P>,
     },
     Notify {
         unit: Option<UnitId>,
@@ -172,10 +183,13 @@ pub enum Action<P> {
     ListChanged {
         unit: UnitId,
     },
-    /// A job ended (package transactions read the result).
+    /// A job ended (package transactions read the result). `kind`: what
+    /// it was when it ended (a request merged into it may have changed it,
+    /// §4.2), so the adapter knows whose wait ended (B2b–B2d).
     JobFinished {
         unit: UnitId,
         job: JobId,
+        kind: JobKind,
         result: JobResult,
     },
 }
@@ -216,7 +230,11 @@ pub struct Supervisor<P> {
     runner_policy: RunnerPolicy,
     runner_restart: restart::RestartState,
     rng: Rng,
+    // B2c: `set_muted`, `settled`.
+    #[cfg_attr(not(test), allow(dead_code))]
     muted: bool,
+    // B2c: `set_muted`, `settled`.
+    #[cfg_attr(not(test), allow(dead_code))]
     quiet_until: Ms,
     pressure: Pressure,
     shutting_down: bool,
@@ -307,10 +325,6 @@ fn list_state<P>(unit: &Unit<P>, boot_stopped: bool) -> ListState {
     }
 }
 
-// The job API (§5): requests, inputs, `run_jobs`, `shutdown`, queries. The
-// Host drives it from B2b (waits), B2c (standby, wake) and B2d (start-up,
-// package starts); until then only the spec and simulation tests do.
-#[cfg_attr(not(test), allow(dead_code))]
 impl<P: Clone> Supervisor<P> {
     pub fn new(tunables: Tunables, seed: u64) -> Self {
         Self {
@@ -345,11 +359,13 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
+    // B2c: the adapter times a recorded run's classification with it.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn tunables(&self) -> &Tunables {
         &self.tunables
     }
     /// The latest time given.
-    // The adapter reads it from B2b.
+    // The adapter reads it from B2c (B2b's sets it, `set_now`).
     #[allow(dead_code)]
     pub fn now(&self) -> Ms {
         self.now
@@ -360,10 +376,14 @@ impl<P: Clone> Supervisor<P> {
         self.now = self.now.max(now);
     }
     /// The current shared runner.
+    // B4: the runner restart (`runner_failed`, T29).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn runner(&self) -> RunnerId {
         self.runner
     }
     /// Members run in their own processes for the session (fail-open).
+    // B4: the runner restart (`runner_failed`, T29).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn failed_open(&self) -> bool {
         self.runner_policy.failed_open
     }
@@ -371,6 +391,8 @@ impl<P: Clone> Supervisor<P> {
     // ---- units ---------------------------------------------------------
 
     /// §5 `add_unit` (systemd: load unit): T1 / T2 / T3.
+    // B2d: start-up and install (`add_unit` per installed id).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn add_unit(&mut self, spec: UnitSpec) -> UnitId {
         let mut unit = Unit::new(&spec);
         if unit.class == Class::Normal && unit.resident {
@@ -431,6 +453,8 @@ impl<P: Clone> Supervisor<P> {
     /// Stop job ends `Done`. The adapter resolves which directory
     /// `RemoveData` deletes at the uninstall request, never from the
     /// reinstalled unit (§13 B2d, §17.7). Not a removed unit: `false`.
+    // B2d: `add_unit`.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn reinstall(&mut self, u: UnitId, mut fresh: Unit<P>) -> bool {
         let Some(unit) = self.units.get_mut(&u) else {
             return false;
@@ -452,6 +476,7 @@ impl<P: Clone> Supervisor<P> {
         fresh.placement = unit.placement;
         fresh.stopping = unit.stopping;
         fresh.remove_data = unit.remove_data;
+        fresh.data = unit.data.take();
         fresh.last_pid = unit.last_pid;
         fresh.job = unit.job.take();
         fresh.hosted = unit.hosted;
@@ -478,6 +503,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `remove_unit` (after `RemoveData` / development unload).
+    // B2d: after an uninstall's `RemoveData`.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn remove_unit(&mut self, u: UnitId) {
         let Some(unit) = self.units.remove(&u) else {
             return;
@@ -511,6 +538,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `set_enabled`: unit-file state only; does not enqueue.
+    // B2d: enablement moves into the unit.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn set_enabled(&mut self, u: UnitId, enabled: bool) {
         if let Some(unit) = self.units.get_mut(&u) {
             unit.enablement = if enabled {
@@ -533,6 +562,8 @@ impl<P: Clone> Supervisor<P> {
 
     /// `packages.setEnabled(false)`: `Busy` before anything changes (as
     /// today), else the unit-file state and the `Stop{Disable}` together.
+    // B2d: `packages.setEnabled` as jobs.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn disable(&mut self, u: UnitId) -> Result<JobId, Busy> {
         if self.package_busy(u) {
             return Err(Busy);
@@ -543,6 +574,8 @@ impl<P: Clone> Supervisor<P> {
 
     /// `packages.setEnabled(true)`: `Busy` before anything changes, else the
     /// unit-file state and the `Start{Enable}` together (T32).
+    // B2d: `packages.setEnabled` as jobs.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn enable(&mut self, u: UnitId) -> Result<JobId, Busy> {
         if self.package_busy(u) {
             return Err(Busy);
@@ -555,6 +588,8 @@ impl<P: Clone> Supervisor<P> {
 
     /// §5 `start`. `Enable` is the user's (`JobMode::Fail` against a package
     /// RPC, as `set_enabled` is today); other causes are internal.
+    // B2d: the package starts as jobs (B2b runs them through `host_start`).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn start(&mut self, u: UnitId, cause: Cause) -> Result<JobId, Busy> {
         let (mode, origin) = match cause {
             Cause::Enable => (JobMode::Fail, Origin::User),
@@ -567,6 +602,8 @@ impl<P: Clone> Supervisor<P> {
 
     /// §5 `stop`. Disable is the user's, uninstall/reload/upgrade are
     /// package RPCs (both `JobMode::Fail`); idle/failed/quit are internal.
+    // B2d: the Host's stops as jobs (B2b reports them, `process_stopping`).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn stop(&mut self, u: UnitId, reason: StopReason, then: Then) -> Result<JobId, Busy> {
         let (mode, origin) = match reason {
             StopReason::Disable => (JobMode::Fail, Origin::User),
@@ -587,6 +624,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `restart` (a package RPC: reload, install, upgrade, cancel).
+    // B2d: reload and package operations as jobs (B2b: `host_start`).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn restart(
         &mut self,
         u: UnitId,
@@ -603,6 +642,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `standby`.
+    // B2c: idle standby as a job.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn standby(&mut self, u: UnitId) -> JobId {
         self.enqueue_job(
             u,
@@ -623,6 +664,8 @@ impl<P: Clone> Supervisor<P> {
     /// the previous pid of a run that is still going (forwarded, today's
     /// `lazy.moved`). Any other pid of the unit is dead: dropped, as a
     /// message to a stopped owner is today.
+    // B2c: triggers on entry points in standby.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn wake(&mut self, pid: Pid, trigger: &Trigger<P>) -> Delivery {
         if self.shutting_down {
             return Delivery::Dropped;
@@ -816,6 +859,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `reset_failed` (T28).
+    // B2d: an enable, reload or install clears a failure.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn reset_failed(&mut self, u: UnitId) {
         if let Some(unit) = self.units.get_mut(&u) {
             if matches!(unit.state, UnitState::Failed { .. }) {
@@ -877,6 +922,15 @@ impl<P: Clone> Supervisor<P> {
         std::mem::take(&mut self.pending)
     }
 
+    /// The actions the inputs since the last `run_jobs` queued, without
+    /// running due timers or jobs: B2b's adapter runs an uninstall's
+    /// `RemoveData` at the reap itself (`process_reaped`), where today's
+    /// `Event::Reaped` deleted the data, and leaves the starts that waited
+    /// for its next tick (§17.9). Removed with the B2b inputs (B2d).
+    pub fn take_actions(&mut self) -> Vec<Action<P>> {
+        std::mem::take(&mut self.pending)
+    }
+
     fn stale(&self, entry: &timers::Entry) -> bool {
         match entry.target {
             Target::Shutdown => entry.generation != self.shutdown_generation,
@@ -899,6 +953,8 @@ impl<P: Clone> Supervisor<P> {
     /// §5 `shutdown` (quit / device loss, T31): checkpoints from the
     /// recorded state, every process terminated in parallel with one
     /// deadline `budget`, then killed.
+    // B4: quit and device loss within one deadline (A2).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn shutdown(&mut self, now: Ms, budget: Ms) -> Vec<Action<P>> {
         self.now = self.now.max(now);
         self.shutting_down = true;
@@ -930,7 +986,7 @@ impl<P: Clone> Supervisor<P> {
             let job = unit.job.take();
             let state = unit.state.clone();
             if let Some(job) = job {
-                self.record(u, job.id, JobResult::Canceled);
+                self.record(u, job.id, job.kind, JobResult::Canceled);
             }
             match state {
                 UnitState::Active { .. } | UnitState::Activating { pid: Some(_), .. } => {
@@ -957,6 +1013,8 @@ impl<P: Clone> Supervisor<P> {
     // ---- event inputs --------------------------------------------------
 
     /// §5 `process_spawned` (T7 / T8).
+    // B2c: the core spawns (`Spawn`) for a wake; B2d for every start.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn process_spawned(&mut self, pid: Pid, result: Result<(), String>) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1008,6 +1066,8 @@ impl<P: Clone> Supervisor<P> {
 
     /// §5 `process_ready` (`runtime.ready`; T9 once the UI activation is
     /// done too).
+    // B2c: readiness of a start the core runs.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn process_ready(&mut self, pid: Pid) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1024,6 +1084,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `process_failed` (`runtime.failed`; T10: no retry).
+    // B2c: readiness of a start the core runs.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn process_failed(&mut self, pid: Pid, text: String) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1033,6 +1095,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `ui_begin`: an initial UI registration of an activating process.
+    // B2c: readiness of a start the core runs.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn ui_begin(&mut self, pid: Pid) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1045,6 +1109,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `ui_finish` (a failed one is reported with `process_failed`).
+    // B2c: readiness of a start the core runs.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn ui_finish(&mut self, pid: Pid) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1060,6 +1126,8 @@ impl<P: Clone> Supervisor<P> {
     /// are ignored: its reap follows). `text`: the fault's error text (today
     /// `RuntimeFault` writes it into `failures`, shown by `packages.list`);
     /// `None`: the cause's own text.
+    // B4: exit causes (`exit.rs`, T25).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn process_exited(&mut self, pid: Pid, cause: ExitCause, text: Option<String>) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1204,6 +1272,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `touch`: the unit was used (MOVE `Lazy::touch`).
+    // B2c: the idle timer (`Lazy::touch`).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn touch(&mut self, pid: Pid, now: Ms) {
         self.set_now(now);
         let Some(u) = self.current(pid) else {
@@ -1217,6 +1287,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `begin_work`: work in flight keeps the unit out of standby.
+    // B3: in-flight work, the one "busy" (`work.rs`).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn begin_work(&mut self, pid: Pid, kind: WorkKind, now: Ms) {
         self.touch(pid, now);
         let Some(u) = self.current(pid) else {
@@ -1234,6 +1306,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `end_work`.
+    // B3: in-flight work, the one "busy" (`work.rs`).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn end_work(&mut self, pid: Pid, kind: WorkKind) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1368,6 +1442,8 @@ impl<P: Clone> Supervisor<P> {
 
     /// §5 `memory_pressure` (B5): Low/Critical put every idle reclaimable
     /// unit in standby through the same Standby job (A13).
+    // B5: memory pressure.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn memory_pressure(&mut self, level: Pressure) {
         self.pressure = level;
         if level == Pressure::None {
@@ -1390,11 +1466,15 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// Wake events wake nothing (start-up; `Lazy::mute`).
+    // B2c: wake events muted at start-up (`Lazy::mute`).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn set_muted(&mut self, muted: bool) {
         self.muted = muted;
     }
     /// Start-up settled at `now`: wake events wake again after
     /// `quiet_after_start`.
+    // B2c: wake events muted at start-up (`lazy_settled`).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn settled(&mut self, now: Ms) {
         self.set_now(now);
         self.muted = false;
@@ -1406,26 +1486,36 @@ impl<P: Clone> Supervisor<P> {
     pub fn unit(&self, u: UnitId) -> Option<&Unit<P>> {
         self.units.get(&u)
     }
+    // B2c: triggers by owner (`lazy_deliver`).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn by_pid(&self, pid: Pid) -> Option<UnitId> {
         self.by_pid.get(&pid).copied()
     }
     pub fn by_id(&self, id: &str) -> Option<UnitId> {
         self.by_id.get(id).copied()
     }
+    // B2d: `packages.list` from the units.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn list_state(&self, u: UnitId) -> Option<ListState> {
         let boot_stopped = self.tunables.boot_wait_lists_stopped;
         self.units
             .get(&u)
             .map(|unit| list_state(unit, boot_stopped))
     }
+    // B2d: `packages.list` from the units.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn units(&self) -> impl Iterator<Item = (UnitId, &Unit<P>)> {
         self.units.iter().map(|(u, unit)| (*u, unit))
     }
     /// Third-party processes counted in the budget.
+    // B5: the process budget.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn budget_count(&self) -> usize {
         self.procs_third.len()
     }
     /// Third-party start slots and first-run places in use.
+    // B3: start-job limits.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn slots_in_use(&self) -> (usize, usize) {
         (self.third_slots, self.first_runs)
     }
@@ -1449,6 +1539,7 @@ impl<P: Clone> Supervisor<P> {
             restarting: false,
             reason: StopReason::Idle,
             queued: false,
+            handoff: None,
         }
     }
 
@@ -1458,6 +1549,8 @@ impl<P: Clone> Supervisor<P> {
         (self.units.get(&u)?.pid() == Some(pid)).then_some(u)
     }
 
+    // B2c: `wake`.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn events_muted(&self) -> bool {
         self.muted || self.now < self.quiet_until
     }
@@ -1726,6 +1819,18 @@ impl<P: Clone> Supervisor<P> {
             }
             return;
         }
+        // B2b–B2d (§17.9): the Host starts it (`host_start`), once the
+        // digest check it may still wait for is over.
+        if let Some(handoff) = job.handoff {
+            match handoff.verify_until.filter(|until| *until > now) {
+                Some(until) => {
+                    self.timers
+                        .arm(&mut unit.gens, u, TimerKind::NotBefore, until);
+                }
+                None => self.finish(u, JobResult::Done),
+            }
+            return;
+        }
         let hold = match unit.state {
             UnitState::Standby {
                 hold_until: Some(until),
@@ -1883,6 +1988,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// T8: the process could not be created.
+    // B2c: `process_spawned`.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn spawn_failed(&mut self, u: UnitId, pid: Pid, text: String) {
         let now = self.now;
         let keeps = self.tunables.start_failure_keeps_registrations;
@@ -1948,6 +2055,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// T9: ready and every initial UI registration done.
+    // B2c: `process_ready`.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn try_ready(&mut self, u: UnitId) {
         let now = self.now;
         let on_demand = self.tunables.on_demand;

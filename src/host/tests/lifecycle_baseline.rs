@@ -21,8 +21,9 @@
 //! | Quit stops own processes one after another (300 ms each) | here: `quit_stops_own_processes_one_after_another` |
 //! | `packages.list` `starting`, `failed` (with its reason), `disabled` | here: `packages_list_shows_starting_failed_and_disabled` |
 //! | A18-1 (Book entry leaked on a failed spawn), fixed in B2a | here: `b2a_a_failed_spawn_gives_its_activation_place_back` |
-//! | Known bug A18-2 (`Host.cleanup` only grows) | here: `b0_known_bug_host_cleanup_only_grows` |
-//! | Known bug D13 (disable then enable runs two processes) | here: `b0_known_bug_disable_then_enable_starts_beside_the_old_process` |
+//! | A18-2 (`Host.cleanup` only grew), fixed in B2b | here: `b2b_stop_bookkeeping_is_the_units_and_cannot_grow` |
+//! | D13 (disable then enable ran two processes), fixed in B2b | here: `b2b_disable_then_enable_waits_for_the_old_process` |
+//! | D13 class (uninstall then reinstall ran two processes), fixed in B2b | here: `b2b_uninstall_then_reinstall_waits_for_the_old_process` |
 //!
 //! Built-ins from a `builtin.json` schema 3 under `VESTRA_BUILTIN_PLUGINS`,
 //! the development runner, Node 26 on `PATH` (or `VESTRA_NODE`) and libmpv.
@@ -513,20 +514,23 @@ fn b2a_a_failed_spawn_gives_its_activation_place_back() {
     assert!(!log.contains("activation tracking limit reached"), "{log}");
 }
 
-/// B0 known bug: expected to change in B2b (supervisor.md §4.7, A18 (2)).
+/// B0 known bug A18 (2), fixed in B2b (supervisor.md §4.7, §17.9).
 /// `Host.cleanup` (whether a stopped owner's process is reaped and the
-/// playback worker cleaned up after it) gets an entry at every stop and
-/// none leaves it in a run: no code removes one. No headless output shows
-/// its size, so the source is read: no use of any receiver's `.cleanup`
-/// (the manager's `packages.cleanup`, a library thread, aside) removes
-/// entries or replaces the map. Reads (`get`, `contains_key`, `len`,
-/// `iter`) and `insert` are not counted. B2b replaces the map by the unit's
-/// stopping flags.
+/// playback worker cleaned up after it) got an entry at every stop and none
+/// left it in a run: no code removed one. B2b replaces it by the unit's
+/// `Stopping` (the supervisor's `reap.rs`): one per unit, set at a stop,
+/// cleared when that process is reaped and cleaned up after, so it cannot
+/// grow (the supervisor's `stop_bookkeeping_is_one_per_unit_and_goes`
+/// runs a thousand stops through it). No headless output shows its size, so
+/// the source is read: no receiver's `.cleanup` field is used any more
+/// (the manager's `packages.cleanup`, a library thread, aside), and no
+/// use removes entries from or replaces such a map either.
 #[test]
-fn b0_known_bug_host_cleanup_only_grows() {
-    let removals = cleanup_removals(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"));
-    // B0 known bug: expected to change in B2b (a removal appears, or the
-    // field goes and this test with it).
+fn b2b_stop_bookkeeping_is_the_units_and_cannot_grow() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let uses = cleanup_uses(&source);
+    assert!(uses.is_empty(), "`Host.cleanup` is back: {uses:?}");
+    let removals = cleanup_removals(&source);
     assert!(removals.is_empty(), "{removals:?}");
     // The scanner itself finds each kind of removal, and skips reads,
     // inserts and the manager's own `cleanup`.
@@ -564,6 +568,47 @@ fn b0_known_bug_host_cleanup_only_grows() {
         ],
         "{found:?}"
     );
+}
+
+/// The `.rs` files under `root` whose code (comments aside) uses a
+/// `.cleanup` field other than `packages.cleanup` at all (`cleanup_done`,
+/// `cleanup_tick`, `cleanup_queue` are other names).
+fn cleanup_uses(root: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut stack = vec![root.to_owned()];
+    while let Some(directory) = stack.pop() {
+        for entry in std::fs::read_dir(&directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            // Code only: comments name the old field.
+            let text = std::fs::read_to_string(&path)
+                .unwrap()
+                .lines()
+                .map(|line| line.split("//").next().unwrap_or_default())
+                .collect::<String>()
+                .split_whitespace()
+                .collect::<String>();
+            let used = text.match_indices(".cleanup").any(|(at, _)| {
+                let after = &text[at + ".cleanup".len()..];
+                !after
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_')
+                    && !text[..at].ends_with("packages")
+            });
+            if used {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    found
 }
 
 /// Every use under `root` (`.rs` files) of a `.cleanup` field, other than
@@ -648,20 +693,21 @@ fn cleanup_removals(root: &Path) -> Vec<(PathBuf, String)> {
 
 const TWICE: &str = "aa.fixture-twice";
 
-/// B0 known bug: expected to change in B2b (supervisor.md §0 D13).
-/// `packages.setEnabled(false)` then `setEnabled(true)` on a running
-/// plugin: the stop takes it out of `plugins` at once, `parked_process`
-/// looks only at parked processes, so the enable starts a new process on
-/// the same data directory while the old one is still in its 300 ms grace
-/// (here it never finishes its cleanup, so it is killed at the end of it).
-/// Each instance notes its pid in its data directory when its module loads
-/// and logs the other instances' processes still alive then. A start that
-/// waited for the reap would log `overlaps []` every time; today at least
-/// one of three toggles starts beside the old process (2026-11-02, Windows
-/// laptop: all three did, each new module loaded while the old pid lived).
+/// B0 known bug D13, fixed in B2b (supervisor.md §0 D13, §4.3 "enable
+/// while disabling", §17.9). `packages.setEnabled(false)` then
+/// `setEnabled(true)` on a running plugin: until B2b the stop took it out
+/// of `plugins` at once and `parked_process` looked only at parked
+/// processes, so the enable started a new process on the same data
+/// directory while the old one was still in its 300 ms grace (here it never
+/// finishes its cleanup, so it is killed at the end of it; 2026-11-02,
+/// Windows laptop: all three toggles did). Now the enable is a job that
+/// waits for the old process to be reaped and cleaned up after. Each
+/// instance notes its pid in its data directory when its module loads and
+/// logs the other instances' processes still alive then: `overlaps []`
+/// every time.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
-fn b0_known_bug_disable_then_enable_starts_beside_the_old_process() {
+fn b2b_disable_then_enable_waits_for_the_old_process() {
     let mut root = Root::new();
     root.install(
         1,
@@ -706,11 +752,97 @@ fn b0_known_bug_disable_then_enable_starts_beside_the_old_process() {
         .iter()
         .filter(|line| !line.ends_with("overlaps []"))
         .count();
-    // B0 known bug: expected to change in B2b (then 0: an enable waits for
-    // the old process).
-    assert!(
-        overlapping >= 1,
-        "no enable started beside the old process: {log}"
+    assert_eq!(
+        overlapping, 0,
+        "an enable started beside the old process: {log}"
+    );
+}
+
+const AGAIN: &str = "aa.fixture-again";
+
+/// Review note B2-2 (supervisor.md §17.7 item 19, §17.9), the D13 class:
+/// `packages.uninstall` without `removeData` of a running (not parked)
+/// plugin, then an install of it again at once. The uninstall keeps the
+/// instance (dormant), so the reinstall reconnects to the same data
+/// directory. Until B2b the install's operation waited only for a running
+/// or parked version (`Operation.waiting`), not for the uninstalled one's
+/// process still in its 300 ms grace (its cleanup here never ends), so the
+/// new instance could start beside it. Through the SDK the race is narrow:
+/// on main 767fad55 (2026-11-02, Windows laptop) the reinstalled module
+/// loaded 320–330 ms after the uninstall, just after the old process was
+/// killed (0 of 3 overlapped), so this run does not show the old behaviour
+/// here; the supervisor's `an_install_after_an_uninstall_waits_for_its_process`
+/// pins the wait itself. Now
+/// the operation's start is a job that waits for that process to be reaped
+/// and cleaned up after: `overlaps []` every time, and every uninstall and
+/// install is committed.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn b2b_uninstall_then_reinstall_waits_for_the_old_process() {
+    let mut root = Root::new();
+    let main = format!(
+        "{ALIVE}console.error(`{AGAIN} pid ${{process.pid}} overlaps [${{others}}]`);\n\
+         export default function activate(plugin) {{\n\
+         plugin.onDispose(() => new Promise(() => {{}}));\n}}\n"
+    );
+    root.install(1, AGAIN, &main);
+    // A digest of its own each time: the uninstalled one's directory may
+    // still be being removed by the library thread (an install of the same
+    // digest would be `busy` then).
+    let candidates = (0..3)
+        .map(|n| {
+            let candidate = root.path().join("candidates").join(format!("{AGAIN}-{n}"));
+            package(&candidate, AGAIN, "1.0.0", &[], &format!("{main}// {n}\n"));
+            js_path(&candidate)
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    root.builtin(
+        MANAGER,
+        &["plugins.manage"],
+        &format!(
+            "const sleep = (ms) => new Promise((done) => setTimeout(done, ms));\n\
+             const log = (text) => console.error(`{MANAGER} ${{text}}`);\n\
+             export default function activate(plugin) {{\n\
+             const p = plugin.packages;\n\
+             const candidates = [{candidates}];\n\
+             setTimeout(async () => {{\n\
+             for (let i = 0; i < 3; i++) {{\n\
+             try {{\n\
+             const removal = await p.uninstall(\"{AGAIN}\", {{ removeData: false }});\n\
+             const update = await (await p.validate(candidates[i])).install();\n\
+             log(`again ${{await removal.done}} ${{await update.done}}`);\n\
+             }} catch (e) {{ log(`failed ${{e.code}} ${{e.message}}`); }}\n\
+             await sleep(1500);\n\
+             }}\n\
+             log(\"done\");\n\
+             }}, 1500);\n}}\n"
+        ),
+    );
+    let log = root.run(10, &[("VESTRA_SHARED", "0"), ("VESTRA_LAZY", "0")]);
+    at(&log, &format!("{MANAGER} done"));
+    assert_eq!(
+        log.matches(&format!("{MANAGER} again committed committed"))
+            .count(),
+        3,
+        "{log}"
+    );
+    let starts = log
+        .lines()
+        .filter(|line| line.contains(&format!("{AGAIN} pid ")))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        starts.len(),
+        4,
+        "the first start and three reinstalls: {log}"
+    );
+    let overlapping = starts
+        .iter()
+        .filter(|line| !line.ends_with("overlaps []"))
+        .count();
+    assert_eq!(
+        overlapping, 0,
+        "a reinstall started beside the uninstalled process: {log}"
     );
 }
 

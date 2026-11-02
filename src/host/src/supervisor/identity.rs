@@ -8,13 +8,17 @@
 //! (`alloc_pid`, today's `next_generation += 1`). Activations live in their
 //! unit (`activation.rs`, MOVE of `host/package_activation.rs`).
 //!
-//! None of this installs a job, arms a timer or queues an action: a unit
-//! loaded here stays `Inactive` with no job until B2d's `add_unit`.
+//! None of this installs a job, arms a timer or queues an action; from B2b
+//! the unit's state follows the owner (`Active` under a running process,
+//! `Standby` under a holder, unless it is still deactivating) for the
+//! waits (§17.9), and forgetting a holder cancels its waiting wake. A unit
+//! loaded here gets its real spec from B2d's `add_unit`.
 #![forbid(unsafe_code)]
 
 use super::Supervisor;
 use super::activation::{self, Error, LIMIT, MAX_SAFE, Run, Status};
-use super::unit::{Class, Hosted, Pid, Unit, UnitId, UnitSpec};
+use super::job::{Cause, JobKind, JobResult};
+use super::unit::{Class, Hosted, Pid, Then, Unit, UnitId, UnitSpec, UnitState};
 
 impl<P: Clone> Supervisor<P> {
     /// The unit of manifest `id`; a new one is loaded (no job, `Inactive`,
@@ -48,25 +52,87 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// The Host runs `u` as process `pid` (`Host::add_plugin`); the owner
-    /// this displaced (a bug, `adopt`).
+    /// this displaced (a bug, `adopt`). B2b: the unit is `Active` under it
+    /// (a start the Host ran, `host_start`), unless a stop of it is still
+    /// deactivating (unreachable: every start waits for it, §17.9).
     pub fn adopt_process(&mut self, u: UnitId, pid: Pid) -> Option<(Pid, Hosted)> {
+        let now = self.now;
+        if let Some(unit) = self.units.get_mut(&u)
+            && !unit.state.is_deactivating()
+        {
+            unit.state = UnitState::Active {
+                pid,
+                since: now,
+                last_active: now,
+            };
+        }
         self.adopt(u, pid, Hosted::Running)
     }
 
-    /// Process `pid` of `u` stopped (`Host::stop`).
+    /// Process `pid` of `u` stopped (`Host::stop`, after
+    /// `process_stopping`), or never ran.
     pub fn release_process(&mut self, u: UnitId, pid: Pid) {
+        if let Some(unit) = self.units.get_mut(&u)
+            && matches!(unit.state, UnitState::Active { pid: active, .. } if active == pid)
+        {
+            unit.state = UnitState::Inactive;
+        }
         self.release(u, pid, Hosted::Running);
     }
 
     /// `u`'s registrations are held in standby under `pid` (lazy park, after
-    /// its stop, or replay); the owner this displaced (a bug, `adopt`).
+    /// its stop, or replay); the owner this displaced (a bug, `adopt`). B2b:
+    /// a replayed unit is in `Standby` under it; a parked one lands there
+    /// when its stop does (T16).
     pub fn adopt_holder(&mut self, u: UnitId, pid: Pid) -> Option<(Pid, Hosted)> {
+        if let Some(unit) = self.units.get_mut(&u)
+            && !unit.state.is_deactivating()
+        {
+            unit.state = UnitState::Standby {
+                holder: pid,
+                recorded: true,
+                hold_until: None,
+            };
+        }
         self.adopt(u, pid, Hosted::Standby)
     }
 
     /// `pid` no longer holds `u`'s registrations in standby (woken,
-    /// forgotten).
+    /// forgotten). B2b: a unit stopping for standby lands `Inactive`
+    /// instead (its registrations went with the Host's `forget_parked`),
+    /// and a wake still waiting for its stopped process is canceled, as
+    /// today's `Parked.waiting` goes with the parked entry.
     pub fn release_holder(&mut self, u: UnitId, pid: Pid) {
+        let mut deactivating = false;
+        let mut wake = false;
+        if let Some(unit) = self.units.get_mut(&u) {
+            match unit.state {
+                UnitState::Standby { holder, .. } if holder == pid => {
+                    unit.state = UnitState::Inactive;
+                }
+                UnitState::Deactivating {
+                    pid: stopping,
+                    then: Then::Standby,
+                    ..
+                } if stopping == pid => deactivating = true,
+                _ => {}
+            }
+            wake = unit.job.as_ref().is_some_and(|job| {
+                job.handoff.is_some()
+                    && matches!(
+                        job.kind,
+                        JobKind::Start {
+                            cause: Cause::Trigger(_)
+                        }
+                    )
+            });
+        }
+        if deactivating {
+            self.set_then(u, Then::Inactive);
+        }
+        if wake {
+            self.finish(u, JobResult::Canceled);
+        }
         self.release(u, pid, Hosted::Standby);
     }
 
@@ -276,7 +342,7 @@ impl<P: Clone> Supervisor<P> {
         Ok(&mut run.activation)
     }
 
-    fn map_pid(&mut self, u: UnitId, pid: Pid) {
+    pub(super) fn map_pid(&mut self, u: UnitId, pid: Pid) {
         let previous = self.by_pid.insert(pid, u);
         debug_assert!(
             previous.is_none_or(|previous| previous == u),
@@ -287,7 +353,7 @@ impl<P: Clone> Supervisor<P> {
     /// `pid` leaves `by_pid` once nothing of `u` refers to it: the process,
     /// the standby holder, the activation, and what the job machinery
     /// keeps (state, alias, last pid, holder).
-    fn unmap_pid(&mut self, u: UnitId, pid: Pid) {
+    pub(super) fn unmap_pid(&mut self, u: UnitId, pid: Pid) {
         let Some(unit) = self.units.get(&u) else {
             return;
         };
@@ -412,6 +478,17 @@ mod tests {
         sup.adopt_process(a, pid);
         assert!(sup.job(a).is_none());
         assert!(sup.run_jobs(10).is_empty());
+        // B2b: the state follows the owner (the waits read it), and still
+        // no job, timer or action.
+        assert!(matches!(
+            sup.unit(a).unwrap().state,
+            super::super::UnitState::Active { pid: p, .. } if p == pid
+        ));
+        sup.release_process(a, pid);
+        sup.adopt_holder(a, pid);
+        sup.release_holder(a, pid);
+        assert!(sup.job(a).is_none());
+        assert!(sup.run_jobs(20).is_empty());
         assert_eq!(
             sup.unit(a).unwrap().state,
             super::super::UnitState::Inactive

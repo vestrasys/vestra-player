@@ -68,6 +68,8 @@ impl<P> Trigger<P> {
 
 /// Result of `wake` (§5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+// B2c: `wake`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub enum Delivery {
     /// The unit is active with that pid: send it now.
     Now,
@@ -87,6 +89,8 @@ pub enum Delivery {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AnswerReason {
     /// `"<name> is busy"` (backlog or lane full).
+    // B3: a full backlog or lane.
+    #[cfg_attr(not(test), allow(dead_code))]
     Busy,
     /// `"<name> could not start"`.
     CouldNotStart,
@@ -98,11 +102,15 @@ pub enum AnswerReason {
     /// quit...).
     Stopped,
     /// In standby with a restart hold (T20, B4): until then.
+    // B4: a crash hold (T20).
+    #[cfg_attr(not(test), allow(dead_code))]
     Held { until: Ms },
 }
 
 /// Holds `trigger` (MOVE `hold_event`: a wake event replaces a held one of
 /// the same name). Whether it was added without growing the backlog.
+// B2c: `wake`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn hold<P>(backlog: &mut VecDeque<Trigger<P>>, trigger: Trigger<P>) -> bool {
     let merged = if let TriggerKind::Event(name) = &trigger.kind {
         let before = backlog.len();
@@ -116,6 +124,8 @@ pub(super) fn hold<P>(backlog: &mut VecDeque<Trigger<P>>, trigger: Trigger<P>) -
 }
 
 /// Whether holding `trigger` would grow the backlog past `max`.
+// B2c: `wake`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn would_overflow<P>(
     backlog: &VecDeque<Trigger<P>>,
     trigger: &Trigger<P>,

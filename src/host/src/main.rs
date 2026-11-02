@@ -419,6 +419,7 @@ fn main() -> Result<()> {
             "libav":if ffmpeg.is_string() { json!({"ffmpeg":ffmpeg}) } else { json!({}) },
             "slint":env!("VESTRA_SLINT_VERSION")}}));
     let (mount_events, mount_input) = mpsc::sync_channel(64);
+    let reaper = process::reaper::Reaper::spawn(events.clone());
     let mut host = Host {
         backend,
         shared: None,
@@ -495,7 +496,7 @@ fn main() -> Result<()> {
         prepared: None,
         warnings: BTreeMap::new(),
         packages: package_manager::Manager::open()?,
-        cleanup: Default::default(),
+        reaper,
         power: power::Power::system(),
         last_frame: None,
         sizing: Default::default(),
@@ -511,7 +512,6 @@ fn main() -> Result<()> {
         development: BTreeMap::new(),
         dev_disabled: Default::default(),
         failures: BTreeMap::new(),
-        data_removals: BTreeMap::new(),
         session_storage: Default::default(),
         bindings_sent: 0,
         bindings_list_sent: Value::Null,

@@ -389,19 +389,8 @@ impl Host {
                     self.restart_shared("the shared runner exited");
                 }
             }
-            Event::Reaped(owner) => {
-                if let Some(cleanup) = self.cleanup.get_mut(&owner) {
-                    cleanup.0 = true;
-                }
-                if let Some(directory) = self.data_removals.remove(&owner) {
-                    let _ = std::fs::remove_dir_all(directory);
-                }
-            }
-            Event::BackendCleaned(owner) => {
-                if let Some(cleanup) = self.cleanup.get_mut(&owner) {
-                    cleanup.1 = true;
-                }
-            }
+            Event::Reaped(owner) => self.unit_reaped(owner),
+            Event::BackendCleaned(owner) => self.unit_cleaned(owner),
             Event::RuntimeFault(owner, error) => {
                 diag!("plugin {owner}: {error}");
                 let now = self.now_ms();

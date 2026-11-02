@@ -2,11 +2,12 @@
 //! (`runner.ts`, one JSONL pipe each way), or a member of the shared runner
 //! (`shared_runner.rs`) for the built-ins the host trusts
 //! (`Host::trust`).
+pub(crate) mod reaper;
 pub(crate) mod runtime_paths;
 pub(crate) mod shared_runner;
 
 use crate::host::Event;
-use crate::process::shared_runner::{Member, SharedRunner};
+use crate::process::shared_runner::{Member, MemberStop, SharedRunner};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use std::{
@@ -134,6 +135,74 @@ enum Runner {
         outbound: mpsc::SyncSender<Value>,
     },
     Shared(Member),
+    /// Its stop began (`Plugin::begin_stop`): the process or member is the
+    /// returned [`Stop`]'s.
+    Stopped,
+}
+/// What a plugin's stop leaves to wait for (`Plugin::begin_stop`): its own
+/// process until it exits, killed once its grace is over; or its
+/// shared-runner member until the runner reports it gone
+/// ([`MemberStop`]). Polled by the plugin reaper (`reaper.rs`,
+/// supervisor.md §7.1), or waited for where the plugin is dropped.
+pub enum Stop {
+    Own {
+        child: Child,
+        /// Kept until the process is gone: its stdin closes after the stop
+        /// line, not before (a closed pipe ends it as `host-lost`).
+        _outbound: mpsc::SyncSender<Value>,
+        deadline: Instant,
+    },
+    Member(MemberStop),
+    Gone,
+}
+impl Stop {
+    /// Without blocking: whether it is over at `now`. An own process past
+    /// its grace is killed (and waited for) here.
+    pub fn poll(&mut self, now: Instant) -> bool {
+        match self {
+            Stop::Own {
+                child, deadline, ..
+            } => {
+                if child.try_wait().ok().flatten().is_some() {
+                    return true;
+                }
+                if now < *deadline {
+                    return false;
+                }
+                let _ = child.kill();
+                let _ = child.wait();
+                true
+            }
+            Stop::Member(member) => member.poll(now),
+            Stop::Gone => true,
+        }
+    }
+    /// Blocking until it is over (`Drop for Plugin`: at quit, each plugin
+    /// dropped with the host).
+    pub fn wait(self) {
+        match self {
+            Stop::Own {
+                mut child,
+                deadline,
+                _outbound,
+            } => {
+                let mut exited = false;
+                while Instant::now() < deadline {
+                    if child.try_wait().ok().flatten().is_some() {
+                        exited = true;
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(5));
+                }
+                if !exited {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+            }
+            Stop::Member(member) => member.wait(),
+            Stop::Gone => {}
+        }
+    }
 }
 pub struct Plugin {
     pub manifest: Manifest,
@@ -247,13 +316,40 @@ impl Plugin {
                 anyhow::anyhow!("plugin output backpressure/disconnected: {error}")
             }),
             Runner::Shared(member) => member.send(message),
+            Runner::Stopped => bail!("plugin stopped"),
         }
     }
     /// The shared runner this plugin runs in, if it does.
     pub fn shared_runner(&self) -> Option<crate::process::shared_runner::RunnerId> {
         match &self.runner {
-            Runner::Own { .. } => None,
+            Runner::Own { .. } | Runner::Stopped => None,
             Runner::Shared(member) => Some(member.runner()),
+        }
+    }
+    /// Begin stopping it: its catalog goes and its `runtime.stop` (with
+    /// `set_stop_reason`'s reason) is sent; what is left to wait for is
+    /// the returned [`Stop`] (`set_stop_wait`'s grace for an own
+    /// process). Dropping the plugin afterwards waits for nothing.
+    pub fn begin_stop(&mut self) -> Stop {
+        if let Some(catalog) = self.catalog.take() {
+            crate::i18n::unregister(&self.directory, &catalog);
+        }
+        match std::mem::replace(&mut self.runner, Runner::Stopped) {
+            // The runner lives on; past the same 300 ms the member counts as
+            // leaked, and the wait goes on until the runner reports it gone
+            // (at most 6 s, `MemberStop`).
+            Runner::Shared(member) => Stop::Member(member.begin_stop(self.stop_reason)),
+            Runner::Own { child, outbound } => {
+                // Not delivered when its queue is full or its pipe closed
+                // (a `failed` stop, often): it is killed after the wait.
+                let _ = outbound.try_send(stop_message(self.stop_reason));
+                Stop::Own {
+                    child,
+                    _outbound: outbound,
+                    deadline: Instant::now() + self.stop_wait,
+                }
+            }
+            Runner::Stopped => Stop::Gone,
         }
     }
     /// `plugin.dataDirectory`, when the player could create it.
@@ -390,34 +486,11 @@ fn read_plugin(mut reader: impl BufRead, generation: u64, events: &mpsc::Sender<
     let _ = events.send(Event::Exited(generation));
 }
 impl Drop for Plugin {
+    /// A plugin dropped where it is (at quit, with the host) is stopped
+    /// and waited for here; one the host stops is handed to the plugin
+    /// reaper instead (`Host::stop`), whose `begin_stop` leaves nothing.
     fn drop(&mut self) {
-        if let Some(catalog) = &self.catalog {
-            crate::i18n::unregister(&self.directory, catalog);
-        }
-        match &mut self.runner {
-            // The runner lives on; past the same 300 ms the member counts as
-            // leaked, and the wait goes on until the runner reports it gone
-            // (at most 6 s, `Member::stop`).
-            Runner::Shared(member) => member.stop(self.stop_reason),
-            Runner::Own { child, outbound } => {
-                // Not delivered when its queue is full or its pipe closed
-                // (a `failed` stop, often): it is killed after the wait.
-                let _ = outbound.try_send(stop_message(self.stop_reason));
-                let deadline = Instant::now() + self.stop_wait;
-                let mut exited = false;
-                while Instant::now() < deadline {
-                    if child.try_wait().ok().flatten().is_some() {
-                        exited = true;
-                        break;
-                    }
-                    thread::sleep(Duration::from_millis(5));
-                }
-                if !exited {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                }
-            }
-        }
+        self.begin_stop().wait();
     }
 }
 /// `$VESTRA_PLUGIN_DATA`, else `plugin-data` in the application data

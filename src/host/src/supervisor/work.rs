@@ -17,10 +17,14 @@ pub(super) struct Work {
     items: BTreeMap<WorkKind, (u32, Ms)>,
 }
 impl Work {
+    // B3: `begin_work`.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn begin(&mut self, kind: WorkKind, now: Ms) {
         let entry = self.items.entry(kind).or_insert((0, now));
         entry.0 += 1;
     }
+    // B3: `end_work`.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn end(&mut self, kind: WorkKind) {
         if let Some(entry) = self.items.get_mut(&kind) {
             entry.0 -= 1;
