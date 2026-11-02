@@ -323,9 +323,10 @@ impl BufferRing {
             *slot = Some(buffer.clone());
         }
     }
-    /// Drop the ring's handles (playback stopped: up to `RING` frames, 100 MB
-    /// at 3840x2160, would stay allocated for nothing). A buffer the UI still
-    /// shows lives on through the UI's own handle; the next `take` allocates.
+    /// Drop the ring's handles (playback stopped: they would keep up to
+    /// `RING` frames of 25 MB each at 3840x2160 for nothing). Every buffer
+    /// is freed except one the frame slot or the UI still holds (the last
+    /// picture), which lives on through that handle; the next `take` allocates.
     pub fn release(&mut self) {
         self.slots.clear();
     }

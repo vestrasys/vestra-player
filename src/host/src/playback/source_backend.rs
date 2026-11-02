@@ -2578,12 +2578,15 @@ mod seek_flight_tests {
         land(&mut sources, 0);
         // A click: the press, then the release with the same target once mpv
         // has started the press's seek (its Seek event; the flight is cleared
-        // only when it lands). Returns the seeks the host sent to mpv for
-        // the two, and whether it held the release back (it saw the seek
-        // still running), after every seek it sent landed. The count is the
+        // only when it lands). `expect` gets the seeks the host sent to mpv
+        // for the two and whether it held the release back (it saw the seek
+        // still running); then every seek it sent lands. The count is the
         // host's own (`seeks_sent`), not mpv's Seek events, so it does not
         // depend on when mpv runs a seek it queued.
-        let click = |sources: &mut Sources, ids: (u64, u64), intent: &Value| {
+        let click = |sources: &mut Sources,
+                     ids: (u64, u64),
+                     intent: &Value,
+                     expect: &dyn Fn(usize, bool)| {
             let sent = sources.seeks_sent;
             submit(sources, ids.0, intent.clone());
             seek_started(sources);
@@ -2591,16 +2594,19 @@ mod seek_flight_tests {
             submit(sources, ids.1, intent.clone());
             let held = sources.seek_repeats_skipped == skipped + 1;
             let seeks = sources.seeks_sent - sent;
+            // Checked before waiting: a wrong count fails with its message,
+            // not as a landing that never comes.
+            expect(seeks, held);
             // The press's seek has started already.
             land(sources, seeks.saturating_sub(1));
-            (seeks, held)
         };
         // An exact seek 9.9 s past the keyframe decodes ~590 1080p frames,
         // far longer than the moment between the press's Seek and the release.
         let seek = json!({"kind":"control","control":{"kind":"seek","seconds":9.9}});
-        let (seeks, held) = click(&mut sources, (2, 3), &seek);
-        assert!(held, "the release arrived while the seek ran: not sent");
-        assert_eq!(seeks, 1, "press and release: one seek");
+        click(&mut sources, (2, 3), &seek, &|seeks, held| {
+            assert!(held, "the release arrived while the seek ran: not sent");
+            assert_eq!(seeks, 1, "press and release: one seek");
+        });
         assert!((mpv.get_property::<f64>("time-pos").unwrap() - 9.9).abs() < 0.02);
         let sent = sources.seeks_sent;
         submit(&mut sources, 4, seek);
@@ -2616,12 +2622,13 @@ mod seek_flight_tests {
         // came, the release rightly seeks again.
         let key_seek =
             json!({"kind":"control","control":{"kind":"seek","seconds":15.0,"keyframes":true}});
-        let (seeks, held) = click(&mut sources, (5, 6), &key_seek);
-        if held {
-            assert_eq!(seeks, 1, "a keyframe click seeks once");
-        } else {
-            assert_eq!(seeks, 2, "a release after the landing seeks once more");
-        }
+        click(&mut sources, (5, 6), &key_seek, &|seeks, held| {
+            if held {
+                assert_eq!(seeks, 1, "a keyframe click seeks once");
+            } else {
+                assert_eq!(seeks, 2, "a release after the landing seeks once more");
+            }
+        });
         let landed = mpv.get_property::<f64>("time-pos").unwrap();
         assert!(
             (landed - 10.0).abs() < 0.05,
