@@ -151,27 +151,34 @@ pub enum Stop {
         /// line, not before (a closed pipe ends it as `host-lost`).
         _outbound: mpsc::SyncSender<Value>,
         deadline: Instant,
+        /// Killed at its deadline; waited for without blocking after that.
+        killed: bool,
     },
     Member(MemberStop),
     Gone,
 }
 impl Stop {
     /// Without blocking: whether it is over at `now`. An own process past
-    /// its grace is killed (and waited for) here.
+    /// its grace is killed here once, then polled until it is gone (never
+    /// waited for: one process stuck in the kernel must not hold up every
+    /// other stop on the reaper's one thread).
     pub fn poll(&mut self, now: Instant) -> bool {
         match self {
             Stop::Own {
-                child, deadline, ..
+                child,
+                deadline,
+                killed,
+                ..
             } => {
                 if child.try_wait().ok().flatten().is_some() {
                     return true;
                 }
-                if now < *deadline {
-                    return false;
+                if now >= *deadline && !*killed {
+                    *killed = true;
+                    let _ = child.kill();
+                    return child.try_wait().ok().flatten().is_some();
                 }
-                let _ = child.kill();
-                let _ = child.wait();
-                true
+                false
             }
             Stop::Member(member) => member.poll(now),
             Stop::Gone => true,
@@ -185,6 +192,7 @@ impl Stop {
                 mut child,
                 deadline,
                 _outbound,
+                ..
             } => {
                 let mut exited = false;
                 while Instant::now() < deadline {
@@ -347,6 +355,7 @@ impl Plugin {
                     child,
                     _outbound: outbound,
                     deadline: Instant::now() + self.stop_wait,
+                    killed: false,
                 }
             }
             Runner::Stopped => Stop::Gone,

@@ -182,10 +182,15 @@ impl<P: Clone> Supervisor<P> {
     /// (T16), or stuck after `STOP_WAIT` and still tracked until that
     /// process goes (T18). Every hand-off start waits for it
     /// (`host_start`). `then` `Standby` keeps the registrations (a park).
-    /// The process it displaced from tracking, if one still went: a Host
-    /// bug, since every start waits for the previous process (§17.9).
-    /// Removed in B2d: the Host's stops become `stop` jobs and the
-    /// `Terminate` executor.
+    /// The process it displaced from tracking, if one still went: the
+    /// adapter reports it (the core does no I/O). Precondition, not checked
+    /// here: a start of the unit waited for its previous process. Every
+    /// `host_start` does; the start-up queue, first runs, development loads
+    /// and a package operation's activation do not wait (as before B2b),
+    /// but meet no stopped process of their unit, except after a runner
+    /// restart (`member_killed` lands those at once). Removed in B2d: the
+    /// Host's stops become `stop` jobs and the `Terminate` executor, and
+    /// every start a job.
     pub fn process_stopping(
         &mut self,
         u: UnitId,
@@ -200,11 +205,6 @@ impl<P: Clone> Supervisor<P> {
             .stopping
             .filter(|s| s.pid != pid && !s.done())
             .map(|s| s.pid);
-        debug_assert!(
-            displaced.is_none(),
-            "unit {} stops {pid:?} while {displaced:?} still goes",
-            unit.id
-        );
         Self::cancel_run_timers(unit);
         let last = unit.last_pid.replace(pid);
         unit.state = UnitState::Deactivating {

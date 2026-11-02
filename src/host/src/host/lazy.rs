@@ -569,7 +569,12 @@ impl Host {
                     self.wake_failed(from, parked, &text);
                 }
             }
-            crate::supervisor::JobResult::Canceled | crate::supervisor::JobResult::Dropped => {}
+            crate::supervisor::JobResult::Canceled => {}
+            // Unreachable: a wake's job is never refused by the merge table
+            // while its unit is parked.
+            crate::supervisor::JobResult::Dropped => {
+                diag!("lazy: {id}: its wake was dropped by the supervisor");
+            }
         }
     }
     /// `wake` once nothing is left to wait for.

@@ -130,8 +130,9 @@ impl Host {
             .supervisor
             .process_stopping(unit, Pid(owner), reason, then)
         {
-            // Unreachable (every start waits for the previous process); the
-            // core's `debug_assert!` stops a debug build.
+            // A start that did not wait for the previous process (the
+            // precondition of `process_stopping`; B2d makes every start a
+            // job): the older process is no longer tracked.
             diag!(
                 "supervisor: unit {id} stops {owner} while {} still goes",
                 old.0
@@ -205,7 +206,7 @@ impl Host {
     /// `None` while it waits (today's `Operation.waiting`).
     pub(crate) fn package_wait(&self, id: &str, job: JobId) -> Option<JobResult> {
         let Some(unit) = self.supervisor.by_id(id) else {
-            return Some(JobResult::Done);
+            return Some(JobResult::Failed("no unit".into()));
         };
         if self
             .supervisor
@@ -214,11 +215,15 @@ impl Host {
         {
             return None;
         }
+        // Only a unit's last 8 results are kept: a lost one is not taken
+        // for a process that went.
         Some(
             self.supervisor
                 .job_result(unit, job)
                 .cloned()
-                .unwrap_or(JobResult::Done),
+                .unwrap_or_else(|| {
+                    JobResult::Failed("the wait's result is no longer known".into())
+                }),
         )
     }
     /// An uninstall's data `directory` goes once no process of plugin `id`

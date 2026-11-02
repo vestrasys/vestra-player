@@ -126,6 +126,7 @@ fn begin(item: Item) -> Waiting {
                 child,
                 _outbound: mpsc::sync_channel(0).0,
                 deadline: Instant::now() + wait,
+                killed: false,
             },
             _plugin: None,
         },
@@ -155,20 +156,51 @@ fn run(items: &mpsc::Receiver<Item>, events: &mpsc::Sender<Event>) {
                 }
             }
         };
-        waiting.extend(item.map(begin));
+        waiting.extend(item.and_then(begin_guarded));
         while let Ok(item) = items.try_recv() {
-            waiting.push(begin(item));
+            waiting.extend(begin_guarded(item));
         }
         let now = Instant::now();
         waiting.retain_mut(|stop| {
-            if !stop.stop.poll(now) {
-                return true;
+            // A panic in one stop must not lose the others: that one is
+            // dropped unreported (its unit keeps tracking the process and
+            // lands stuck after 20 s, as for a process that never goes).
+            let over =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| stop.stop.poll(now)));
+            match over {
+                Ok(false) => true,
+                Ok(true) => {
+                    if let Some(owner) = stop.owner {
+                        let _ = events.send(Event::Reaped(owner));
+                    }
+                    false
+                }
+                Err(_) => {
+                    diag!(
+                        "plugin reaper: a stop of owner {:?} panicked; no longer waited for",
+                        stop.owner
+                    );
+                    false
+                }
             }
-            if let Some(owner) = stop.owner {
-                let _ = events.send(Event::Reaped(owner));
-            }
-            false
         });
+    }
+}
+
+/// `begin`, a panic in it reported and that stop dropped (the rest go on).
+fn begin_guarded(item: Item) -> Option<Waiting> {
+    let owner = match &item {
+        Item::Plugin { owner, report, .. } => report.then_some(*owner),
+        Item::Child { .. } => None,
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| begin(item))) {
+        Ok(waiting) => Some(waiting),
+        Err(_) => {
+            diag!(
+                "plugin reaper: the stop of owner {owner:?} panicked as it began; not waited for"
+            );
+            None
+        }
     }
 }
 

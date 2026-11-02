@@ -1732,12 +1732,13 @@ impl Host {
         for id in self.packages.poll_verified() {
             self.unit_verified(&id);
         }
-        // Waits for stopped processes that ended: their starts run now
-        // (today's `reload_tick`, and `lazy_tick`'s wakes).
-        self.supervisor_tick();
         self.answer_validations();
         self.shared_tick();
         self.start_queued();
+        // Waits for stopped processes that ended: their starts run now,
+        // where `reload_tick` ran (and in the tick `lazy_tick`'s wakes
+        // ran in).
+        self.supervisor_tick();
         self.cleanup_tick();
         let keys = self
             .packages
