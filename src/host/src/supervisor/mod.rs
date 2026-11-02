@@ -357,11 +357,6 @@ impl<P: Clone> Supervisor<P> {
 
     /// §5 `add_unit` (systemd: load unit): T1 / T2 / T3.
     pub fn add_unit(&mut self, spec: UnitSpec) -> UnitId {
-        if let Some(&u) = self.by_id.get(&spec.id) {
-            return u;
-        }
-        let u = UnitId(self.next_unit);
-        self.next_unit += 1;
         let mut unit = Unit::new(&spec);
         if unit.class == Class::Normal && unit.resident {
             unit.class = Class::Resident;
@@ -373,8 +368,20 @@ impl<P: Clone> Supervisor<P> {
             && recorded
             && !resident
             && self.tunables.policy(class).idle_standby;
-        self.by_id.insert(spec.id.clone(), u);
-        self.units.insert(u, unit);
+        let u = if let Some(u) = self.by_id.get(&spec.id).copied() {
+            // Loaded already; a reinstall of a unit being removed comes
+            // back (§17.7).
+            if !self.reinstall(u, unit) {
+                return u;
+            }
+            u
+        } else {
+            let u = UnitId(self.next_unit);
+            self.next_unit += 1;
+            self.by_id.insert(spec.id.clone(), u);
+            self.units.insert(u, unit);
+            u
+        };
         if !spec.enabled {
             self.sync(u);
             return u;
@@ -396,6 +403,61 @@ impl<P: Clone> Supervisor<P> {
         }
         self.sync(u);
         u
+    }
+
+    /// `add_unit` of the id of a unit being removed (uninstalled, its
+    /// `remove_unit` not called yet: its stopped process may still run, or
+    /// its uninstall is still stopping it): a reinstall. The unit takes the
+    /// new spec under the same `UnitId` and keeps what the old install left:
+    /// the tracked process (a start waits `STOP_WAIT` from its request for
+    /// it, as after any stuck stop), its timers and job results, and an
+    /// owed `RemoveData` (emitted at that process's reap, so before the new
+    /// spawn). An uninstall still stopping now lands `Inactive` and its
+    /// Stop job ends `Done`. The adapter resolves which directory
+    /// `RemoveData` deletes at the uninstall request, never from the
+    /// reinstalled unit (§13 B2d, §17.7). Not a removed unit: `false`.
+    fn reinstall(&mut self, u: UnitId, mut fresh: Unit<P>) -> bool {
+        let Some(unit) = self.units.get_mut(&u) else {
+            return false;
+        };
+        let uninstalling = matches!(
+            unit.state,
+            UnitState::Deactivating {
+                then: Then::Removed,
+                ..
+            }
+        );
+        if !unit.removed && !uninstalling {
+            return false;
+        }
+        fresh.state = unit.state.clone();
+        if let UnitState::Deactivating { then, .. } = &mut fresh.state {
+            *then = Then::Inactive;
+        }
+        fresh.placement = unit.placement;
+        fresh.stopping = unit.stopping;
+        fresh.remove_data = unit.remove_data;
+        fresh.last_pid = unit.last_pid;
+        fresh.job = unit.job.take();
+        fresh.gens = std::mem::take(&mut unit.gens);
+        fresh.results = std::mem::take(&mut unit.results);
+        *unit = fresh;
+        let uninstall = unit.job.as_ref().is_some_and(|job| {
+            matches!(
+                job.kind,
+                JobKind::Stop {
+                    then: Then::Removed,
+                    ..
+                } | JobKind::Stop {
+                    reason: StopReason::Uninstall,
+                    ..
+                }
+            )
+        });
+        if uninstall {
+            self.finish(u, JobResult::Done);
+        }
+        true
     }
 
     /// §5 `remove_unit` (after `RemoveData` / development unload).
@@ -1199,6 +1261,11 @@ impl<P: Clone> Supervisor<P> {
                     *sub = DeactivatingSub::Cleanup;
                 }
                 Timers::cancel(&mut unit.gens, TimerKind::StopGrace);
+                // Cleaned up first (a shared member: `owner.parked` at
+                // once, reap at `MEMBER_GONE`): it is gone now, landed or
+                // tracked after a stuck landing (§17.7).
+                self.flush_data_removal(u);
+                self.land_if_done(u);
                 self.sync(u);
                 continue;
             }
@@ -1543,6 +1610,9 @@ impl<P: Clone> Supervisor<P> {
             deadline: now + stop_wait,
             kept: keep,
         });
+        if then == Then::Removed {
+            unit.remove_data = true;
+        }
         self.timers
             .arm(&mut unit.gens, u, TimerKind::StopGrace, now + grace);
         self.timers
@@ -1579,6 +1649,13 @@ impl<P: Clone> Supervisor<P> {
     fn step_start(&mut self, u: UnitId) {
         let now = self.now;
         let stop_wait = self.tunables.stop_wait;
+        // A tracked process that is reaped and cleaned up after is gone,
+        // whatever path set the flags (§17.7).
+        if self.units.get(&u).is_some_and(|unit| {
+            !unit.state.is_deactivating() && unit.stopping.is_some_and(|s| s.done())
+        }) {
+            self.land_if_done(u);
+        }
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
@@ -2128,11 +2205,10 @@ impl<P: Clone> Supervisor<P> {
                         unit.removed = true;
                         unit.state = UnitState::Inactive;
                         // The process of a stop that landed stuck may still
-                        // write its data: removed once it goes (`land_if_done`,
-                        // today's `data_removals`, §17.7).
-                        if unit.stopping.is_none() {
-                            self.pending.push(Action::RemoveData { unit: u });
-                        }
+                        // write its data: removed at its reap
+                        // (`flush_data_removal`, today's `data_removals`;
+                        // at once if it was reaped already, §17.7).
+                        unit.remove_data = true;
                     }
                     _ => {
                         if reason == StopReason::Disable
@@ -2142,6 +2218,7 @@ impl<P: Clone> Supervisor<P> {
                         }
                     }
                 }
+                self.flush_data_removal(u);
                 self.finish(u, JobResult::Done);
             }
         }
@@ -2412,9 +2489,12 @@ impl<P: Clone> Supervisor<P> {
             TimerKind::StopGrace => self.kill(u),
             TimerKind::StopWait => {
                 if unit.state.is_deactivating() {
-                    self.land(u, true);
+                    let stuck = !unit.stopping.is_some_and(|s| s.done());
+                    self.land(u, stuck);
                 } else {
-                    // A start waiting for a stop that landed stuck (§17.7).
+                    // A start waiting for a stop that landed stuck (§17.7);
+                    // a process already gone clears it first.
+                    self.land_if_done(u);
                     self.run.push_back(u);
                 }
             }

@@ -2394,3 +2394,301 @@ fn crash_cancels_an_installed_standby_job() {
         })
     ));
 }
+
+// ---- B1 fourth fix round (probe `review-b1c`, supervisor.md §17.7) --------
+
+/// A shared member woken once and stopped for standby by idle. The playback
+/// worker cleaned up after it at once (`owner.parked`); its reap
+/// (`MEMBER_GONE`) never came. Returns (world, unit, old pid, stop time).
+fn shared_standby_stop(tunables: Tunables) -> (World, UnitId, Pid, Ms) {
+    let idle = tunables.idle_timeout;
+    let mut w = World::new(tunables);
+    let u = w.s.add_unit(
+        UnitSpec::new("m", Class::Builtin)
+            .shared()
+            .checkpoint(false),
+    );
+    w.tick(0);
+    let holder = w.holder(u);
+    w.s.wake(holder, &Trigger::interactive(1));
+    w.tick(0);
+    assert_eq!(
+        w.s.unit(u).unwrap().placement,
+        Placement::Shared(w.s.runner())
+    );
+    let pid = w.pid(u);
+    w.auto_reap = false;
+    assert!(w.tick(idle).iter().any(is_terminate));
+    w.s.backend_cleaned(pid);
+    (w, u, pid, idle)
+}
+
+fn is_remove_data(a: &Action<u32>) -> bool {
+    matches!(a, Action::RemoveData { .. })
+}
+
+/// Probe i10 / i9: a runner restart reaps a member whose cleanup came
+/// first. It is gone: a member still stopping lands (not stuck), one whose
+/// stop landed stuck is no longer tracked, and the next wake starts it.
+/// Before the fix neither was cleared and every later start failed stuck.
+#[test]
+fn runner_restart_clears_a_member_cleaned_up_before_its_reap() {
+    for tunables in [Tunables::legacy(), target()] {
+        let wait = tunables.stop_wait;
+        // i10: still deactivating.
+        let (mut w, u, _pid, stop) = shared_standby_stop(tunables.clone());
+        w.tick(stop + 1_000);
+        assert!(w.state(u).is_deactivating());
+        w.s.runner_failed(w.s.runner(), ExitCause::Exited);
+        w.tick(stop + 1_001);
+        assert!(
+            matches!(w.state(u), UnitState::Standby { .. }),
+            "{:?}",
+            w.state(u)
+        );
+        let unit = w.s.unit(u).unwrap();
+        assert!(unit.stopping.is_none() && !unit.stuck);
+        let holder = w.holder(u);
+        w.s.wake(holder, &Trigger::interactive(2));
+        assert_eq!(spawns(&w.tick(stop + 2_000)).len(), 1);
+        w.tick(stop + wait + 2_000);
+        assert!(active(&w, u), "{:?}", w.state(u));
+
+        // i9: the stop landed stuck first, then the runner failed.
+        let (mut w, u, _pid, stop) = shared_standby_stop(tunables.clone());
+        w.tick(stop + wait);
+        assert!(w.s.unit(u).unwrap().stuck);
+        w.s.runner_failed(w.s.runner(), ExitCause::Exited);
+        w.tick(stop + wait + 1);
+        assert!(w.s.unit(u).unwrap().stopping.is_none());
+        let holder = w.holder(u);
+        w.s.wake(holder, &Trigger::interactive(2));
+        assert_eq!(spawns(&w.tick(stop + wait + 1_000)).len(), 1);
+        w.tick(stop + 2 * wait + 2_000);
+        assert!(active(&w, u), "{:?}", w.state(u));
+    }
+}
+
+/// Probe i12: a reload 5 s into a standby stop that lands stuck waits 20 s
+/// from the reload (the merged job counts from the request: today's
+/// `packages.reloads` entry is written with the request's time).
+#[test]
+fn reload_late_in_a_standby_stop_waits_20_s_from_the_reload() {
+    for tunables in [Tunables::legacy(), target()] {
+        let wait = tunables.stop_wait;
+        let (mut w, u, _pid, stop) = stuck_standby_stop(tunables.clone());
+        let at = stop + 5_000;
+        w.tick(at);
+        let job = w.s.restart(u, true, None).unwrap();
+        assert!(spawns(&w.tick(stop + wait)).is_empty());
+        assert_eq!(w.s.job_result(u, job), None, "its own 20 s are not over");
+        assert!(spawns(&w.tick(at + wait - 1)).is_empty());
+        assert_eq!(w.s.job_result(u, job), None);
+        w.tick(at + wait);
+        assert_eq!(
+            w.s.job_result(u, job),
+            Some(&JobResult::Failed(STUCK_RELOAD.into()))
+        );
+        assert_eq!(
+            w.s.list_state(u),
+            Some(ListState::Failed(STUCK_RELOAD.into()))
+        );
+
+        // The same reload, and the process goes 2 s after the stop's 20 s.
+        let (mut w, u, pid, stop) = stuck_standby_stop(tunables);
+        let at = stop + 5_000;
+        w.tick(at);
+        let job = w.s.restart(u, true, None).unwrap();
+        w.tick(stop + wait);
+        w.s.process_reaped(pid, Some(0));
+        w.s.backend_cleaned(pid);
+        assert_eq!(spawns(&w.tick(stop + wait + 2_000)).len(), 1);
+        assert_eq!(w.s.job_result(u, job), Some(&JobResult::Done));
+        assert!(active(&w, u));
+    }
+}
+
+/// Disable then enable during a standby stop that lands stuck: the enable
+/// waits 20 s from the enable (today `set_enabled` → `parked_process` →
+/// `reloads(now)`), not from the stop.
+#[test]
+fn enable_late_in_a_standby_stop_waits_20_s_from_the_enable() {
+    let failed = |w: &World, u| matches!(w.s.list_state(u), Some(ListState::Failed(_)));
+    for (tunables, busy) in [(Tunables::legacy(), true), (target(), false)] {
+        let wait = tunables.stop_wait;
+        let (mut w, u, _pid, stop) = stuck_standby_stop(tunables.clone());
+        w.tick(stop + 2_000);
+        w.s.disable(u).unwrap();
+        let at = stop + 10_000;
+        w.tick(at);
+        w.s.enable(u).unwrap();
+        assert_eq!(w.s.package_busy(u), busy);
+        assert!(spawns(&w.tick(stop + wait)).is_empty());
+        assert!(!failed(&w, u), "{:?}", w.s.list_state(u));
+        assert!(spawns(&w.tick(at + wait - 1)).is_empty());
+        assert!(!failed(&w, u), "{:?}", w.s.list_state(u));
+        w.tick(at + wait);
+        assert_eq!(
+            w.s.list_state(u),
+            Some(ListState::Failed(STUCK_RELOAD.into()))
+        );
+
+        // The process goes 5 s after the stop's 20 s: it starts.
+        let (mut w, u, pid, stop) = stuck_standby_stop(tunables);
+        w.tick(stop + 2_000);
+        w.s.disable(u).unwrap();
+        let at = stop + 10_000;
+        w.tick(at);
+        w.s.enable(u).unwrap();
+        w.tick(stop + wait);
+        w.s.process_reaped(pid, Some(0));
+        w.s.backend_cleaned(pid);
+        assert_eq!(spawns(&w.tick(stop + wait + 5_000)).len(), 1);
+        assert!(active(&w, u));
+    }
+}
+
+/// Probe i3: uninstall of a unit whose stuck process was reaped but not yet
+/// cleaned up after. Today (`uninstall`: `parked_process` reaped → delete at
+/// once) the data goes now; with B4 (`remove_data_waits_cleanup`) only once
+/// the cleanup is in too. Exactly one `RemoveData` either way.
+#[test]
+fn uninstall_after_the_reap_of_a_stuck_process_removes_data_at_once_legacy() {
+    for (tunables, waits) in [(Tunables::legacy(), false), (target(), true)] {
+        let wait = tunables.stop_wait;
+        let (mut w, u, pid, stop) = stuck_standby_stop(tunables);
+        let landed = stop + wait;
+        w.tick(landed);
+        w.s.process_reaped(pid, Some(0));
+        w.tick(landed + 1);
+        w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
+        let actions = w.tick(landed + 2);
+        assert_eq!(actions.iter().any(is_remove_data), !waits, "{actions:?}");
+        w.s.backend_cleaned(pid);
+        let actions = w.tick(landed + 3);
+        assert_eq!(actions.iter().any(is_remove_data), waits, "{actions:?}");
+        assert_eq!(count(&w.log, is_remove_data), 1);
+    }
+}
+
+/// Probe i4: an uninstall whose stop lands stuck. The unit is removed (its
+/// checkpoint goes); its data goes when the late reap arrives (today's
+/// `data_removals` at `Event::Reaped`; with B4 once cleaned up too).
+#[test]
+fn stuck_uninstall_removes_data_at_the_late_reap() {
+    for (tunables, waits) in [(Tunables::legacy(), false), (target(), true)] {
+        let wait = tunables.stop_wait;
+        let mut w = World::new(tunables);
+        let u = standby_unit(&mut w, "n");
+        let holder = w.holder(u);
+        w.s.wake(holder, &Trigger::interactive(1));
+        w.tick(0);
+        let pid = w.pid(u);
+        w.auto_reap = false;
+        w.tick(100);
+        let job = w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
+        w.tick(100);
+        let actions = w.tick(100 + wait);
+        assert!(!actions.iter().any(is_remove_data), "{actions:?}");
+        assert!(actions.contains(&Action::DropCheckpoint { unit: u }));
+        assert_eq!(
+            w.s.job_result(u, job),
+            Some(&JobResult::Failed(STUCK_RELOAD.into()))
+        );
+        assert!(w.s.unit(u).unwrap().removed);
+        w.s.process_reaped(pid, Some(0));
+        let actions = w.tick(100 + wait + 1_000);
+        assert_eq!(actions.iter().any(is_remove_data), !waits, "{actions:?}");
+        w.s.backend_cleaned(pid);
+        let actions = w.tick(100 + wait + 2_000);
+        assert_eq!(actions.iter().any(is_remove_data), waits, "{actions:?}");
+        assert_eq!(count(&w.log, is_remove_data), 1);
+        assert!(w.s.unit(u).unwrap().stopping.is_none());
+    }
+}
+
+/// Probe i5: a reinstall of the same id while the uninstalled unit's
+/// process may still run. `add_unit` brings the unit back under the same
+/// `UnitId` (its spec replaced) and the start waits 20 s from the reinstall
+/// for that process, as any start after a stuck stop (today the install
+/// operation waits for `parked_process`). Never two processes on one data
+/// directory; the uninstall's `RemoveData` comes before the new spawn and
+/// only once (the adapter deletes the directory it resolved at the
+/// uninstall, §13 B2d); if the process never goes, no `RemoveData` and the
+/// start fails.
+#[test]
+fn reinstall_while_the_uninstalled_process_goes_waits_for_it() {
+    let order = |actions: &[Action<u32>], u| {
+        let removed = actions
+            .iter()
+            .position(|a| *a == Action::RemoveData { unit: u })
+            .expect("RemoveData");
+        let spawned = actions
+            .iter()
+            .position(|a| matches!(a, Action::Spawn { .. }))
+            .expect("Spawn");
+        assert!(removed < spawned, "{actions:?}");
+    };
+    for tunables in [Tunables::legacy(), target()] {
+        let wait = tunables.stop_wait;
+
+        // The old process goes 5 s after the reinstall.
+        let (mut w, u, pid, stop) = stuck_standby_stop(tunables.clone());
+        let landed = stop + wait;
+        w.tick(landed);
+        w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
+        assert!(!w.tick(landed + 1).iter().any(is_remove_data));
+        let at = landed + 1_000;
+        w.tick(at);
+        assert_eq!(w.s.add_unit(UnitSpec::new("n", Class::Normal)), u);
+        assert!(!w.s.unit(u).unwrap().removed);
+        assert!(spawns(&w.tick(at)).is_empty(), "never beside the old one");
+        assert!(spawns(&w.tick(at + 5_000)).is_empty());
+        w.s.process_reaped(pid, Some(0));
+        w.s.backend_cleaned(pid);
+        let actions = w.tick(at + 5_001);
+        order(&actions, u);
+        assert!(active(&w, u));
+        assert_eq!(count(&w.log, is_remove_data), 1);
+
+        // It never goes: the reinstall fails 20 s after its request.
+        let (mut w, u, _pid, stop) = stuck_standby_stop(tunables.clone());
+        let landed = stop + wait;
+        w.tick(landed);
+        w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
+        let at = landed + 1_000;
+        w.tick(at);
+        assert_eq!(w.s.add_unit(UnitSpec::new("n", Class::Normal)), u);
+        assert!(spawns(&w.tick(at + wait - 1)).is_empty());
+        assert!(spawns(&w.tick(at + wait)).is_empty());
+        assert_eq!(
+            w.s.list_state(u),
+            Some(ListState::Failed(STUCK_RELOAD.into()))
+        );
+        assert_eq!(count(&w.log, is_remove_data), 0);
+
+        // Reinstalled while the uninstall still stops the running process:
+        // the uninstall's job ends, the unit lands `Inactive` and starts.
+        let mut w = World::new(tunables);
+        let u = standby_unit(&mut w, "n");
+        let holder = w.holder(u);
+        w.s.wake(holder, &Trigger::interactive(1));
+        w.tick(0);
+        let pid = w.pid(u);
+        w.auto_reap = false;
+        w.tick(100);
+        let job = w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
+        w.tick(100);
+        assert!(w.state(u).is_deactivating());
+        w.tick(200);
+        assert_eq!(w.s.add_unit(UnitSpec::new("n", Class::Normal)), u);
+        assert!(spawns(&w.tick(200)).is_empty());
+        assert_eq!(w.s.job_result(u, job), Some(&JobResult::Done));
+        w.s.process_reaped(pid, Some(0));
+        w.s.backend_cleaned(pid);
+        let actions = w.tick(300);
+        order(&actions, u);
+        assert!(active(&w, u));
+        assert_eq!(count(&w.log, is_remove_data), 1);
+    }
+}

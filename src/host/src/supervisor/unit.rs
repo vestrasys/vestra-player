@@ -336,9 +336,14 @@ pub struct Unit<P> {
     /// Landed after `STOP_WAIT` without reap/cleanup (T18); `stopping`
     /// keeps tracking that process until it goes.
     pub stuck: bool,
-    /// Stopped with `then: Removed`; waiting for `remove_unit`.
+    /// Stopped with `then: Removed`; waiting for `remove_unit` (or brought
+    /// back by `add_unit`, a reinstall).
     pub removed: bool,
     pub stopping: Option<Stopping>,
+    /// An uninstall's `RemoveData` is owed: emitted once the process that
+    /// may still write the data is reaped (and cleaned up after, with
+    /// `Tunables::remove_data_waits_cleanup`), at once without one (§17.7).
+    pub(super) remove_data: bool,
     pub(super) shared: bool,
     pub(super) verify: bool,
     pub(super) verifiable: bool,
@@ -413,6 +418,7 @@ impl<P> Unit<P> {
             stuck: false,
             removed: false,
             stopping: None,
+            remove_data: false,
             shared: spec.shared,
             verify: spec.verify,
             verifiable: spec.verify,

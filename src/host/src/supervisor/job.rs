@@ -290,6 +290,10 @@ impl<P: Clone> Supervisor<P> {
                         if job.origin != Origin::Internal {
                             installed.origin = job.origin;
                         }
+                        // It now starts a process: a wait for a stuck stop
+                        // counts from this request (today's `reloads(now)`,
+                        // §17.7).
+                        installed.created = job.created;
                     }
                     installed_id
                 } else {
@@ -435,6 +439,9 @@ impl<P: Clone> Supervisor<P> {
             installed.origin = job.origin;
         }
         installed.mode = job.mode;
+        // A wait for a stuck stop counts from this request (today's
+        // `packages.reloads` entry is written with `now`, §17.7).
+        installed.created = job.created;
         // A unit stopping for standby does not land there any more: its
         // kept registrations go now (§17.7).
         if deactivating {
@@ -530,10 +537,13 @@ impl<P: Clone> Supervisor<P> {
         *then = merged;
         if merged == Then::Removed {
             *reason = StopReason::Uninstall;
+            unit.remove_data = true;
         }
         if was_standby && let Some(stopping) = unit.stopping.as_mut().filter(|s| s.kept) {
             stopping.kept = false;
             self.pending.push(Action::Revoke { unit: u, pid });
         }
+        // An uninstall after the reap: the data goes now (§17.7).
+        self.flush_data_removal(u);
     }
 }

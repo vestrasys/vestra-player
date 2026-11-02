@@ -169,6 +169,10 @@ pub struct Tunables {
     /// cleaned up after them (§7.4; B4). Today `restart_shared` queues them
     /// at once.
     pub runner_restart_waits_cleanup: bool,
+    /// An uninstall's `RemoveData` waits for the playback worker's cleanup
+    /// too, not only for the reap (§17.7 item 18; B4). Today
+    /// `data_removals` deletes at `Event::Reaped`.
+    pub remove_data_waits_cleanup: bool,
 }
 
 impl Policy {
@@ -239,6 +243,7 @@ impl Tunables {
             boot_wait_lists_stopped: true,
             resident_idle_standby: true,
             runner_restart_waits_cleanup: false,
+            remove_data_waits_cleanup: false,
         }
     }
 
@@ -313,6 +318,7 @@ impl Tunables {
         });
         self.crash_notice = true;
         self.runner_restart_waits_cleanup = true;
+        self.remove_data_waits_cleanup = true;
         self
     }
 
@@ -419,6 +425,7 @@ mod tests {
         assert!(!t.restart_keeps_backlog && !t.runner_restart_waits_cleanup);
         assert!(t.enable_wait_busy && t.first_run_parks_when_idle);
         assert!(t.boot_wait_lists_stopped && t.resident_idle_standby);
+        assert!(!t.remove_data_waits_cleanup);
         let b3 = Tunables::legacy().with_b3(8);
         assert!(!b3.enable_wait_busy && !b3.first_run_parks_when_idle);
         assert!(!b3.boot_wait_lists_stopped);
@@ -429,5 +436,6 @@ mod tests {
         assert!(!target.enable_wait_busy);
         assert!(!target.first_run_parks_when_idle && !target.boot_wait_lists_stopped);
         assert!(!target.resident_idle_standby);
+        assert!(target.remove_data_waits_cleanup);
     }
 }

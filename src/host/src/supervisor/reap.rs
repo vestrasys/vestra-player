@@ -5,7 +5,9 @@
 //! condition: a job never starts a unit while it is `Deactivating`, nor
 //! while the process of a stop that landed stuck is still tracked
 //! (`Unit::stopping` outside `Deactivating`): it waits `STOP_WAIT` from its
-//! own request for that process to go, then fails (§17.7).
+//! own request for that process to go, then fails (§17.7). An uninstall's
+//! `RemoveData` waits for that process's reap (today's `data_removals`),
+//! landed or not.
 #![forbid(unsafe_code)]
 
 use super::job::{Cause, JobKind, JobResult};
@@ -49,8 +51,42 @@ impl<P: Clone> Supervisor<P> {
             }
             Timers::cancel(&mut unit.gens, TimerKind::StopGrace);
         }
+        self.flush_data_removal(u);
         self.land_if_done(u);
         self.sync(u);
+    }
+
+    /// Emits an owed `RemoveData` once no process may write the data any
+    /// more: none tracked, or the tracked one reaped (today's
+    /// `data_removals` at `Event::Reaped`; also cleaned up after with
+    /// `remove_data_waits_cleanup`, B4).
+    pub(super) fn flush_data_removal(&mut self, u: UnitId) {
+        let waits = self.tunables.remove_data_waits_cleanup;
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        let gone = unit
+            .stopping
+            .is_none_or(|s| s.reaped && (s.backend_cleaned || !waits));
+        if !unit.remove_data || !gone {
+            return;
+        }
+        unit.remove_data = false;
+        // Never after its data: the checkpoint of a unit being removed goes
+        // first (today's uninstall drops the recording at the request).
+        let removing = unit.removed
+            || matches!(
+                unit.state,
+                UnitState::Deactivating {
+                    then: Then::Removed,
+                    ..
+                }
+            );
+        if removing && unit.recorded {
+            unit.recorded = false;
+            self.pending.push(Action::DropCheckpoint { unit: u });
+        }
+        self.pending.push(Action::RemoveData { unit: u });
     }
 
     /// §5 `backend_cleaned` (`Event::BackendCleaned`).
@@ -81,13 +117,11 @@ impl<P: Clone> Supervisor<P> {
             self.land(u, false);
         } else {
             // The process of a stop that landed stuck went after all: a
-            // start waiting for it goes on, an uninstall removes the data
-            // now (§17.7).
+            // start waiting for it goes on, an owed `RemoveData` goes first
+            // if it still is owed (§17.7).
             unit.stopping = None;
             Timers::cancel(&mut unit.gens, TimerKind::StopWait);
-            if unit.removed {
-                self.pending.push(Action::RemoveData { unit: u });
-            }
+            self.flush_data_removal(u);
             self.run.push_back(u);
         }
     }
@@ -183,18 +217,20 @@ impl<P: Clone> Supervisor<P> {
                 unit.state = UnitState::Failed { result, text };
             }
             Then::Removed => {
+                // Removed even when stuck (today's uninstall removes the
+                // plugin at once); its data goes at the reap of the process
+                // still tracked (`flush_data_removal`, today's
+                // `data_removals`, §17.7).
                 unit.state = UnitState::Inactive;
-                if !stuck {
-                    if unit.recorded {
-                        actions.push(Action::DropCheckpoint { unit: u });
-                    }
-                    unit.recorded = false;
-                    unit.removed = true;
-                    actions.push(Action::RemoveData { unit: u });
+                if unit.recorded {
+                    actions.push(Action::DropCheckpoint { unit: u });
                 }
+                unit.recorded = false;
+                unit.removed = true;
             }
         }
         self.pending.extend(actions);
+        self.flush_data_removal(u);
         let replay = self
             .units
             .get_mut(&u)
