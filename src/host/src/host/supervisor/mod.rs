@@ -59,7 +59,8 @@ impl Host {
     pub(crate) fn unit_started(&mut self, id: &str, owner: u64) {
         self.plugin_ids.insert(id.to_owned(), owner);
         let unit = self.supervisor.load_unit(id);
-        self.supervisor.adopt_process(unit, Pid(owner));
+        let displaced = self.supervisor.adopt_process(unit, Pid(owner));
+        report_hosted_twice(id, displaced, owner, "Running");
     }
     /// Plugin `id`'s process `owner` stopped (`stop`).
     pub(crate) fn unit_stopped(&mut self, id: &str, owner: u64) {
@@ -96,7 +97,25 @@ impl Host {
 /// `Lazy::parked_id`) take the supervisor: `Lazy` is not the `Host`.
 pub(crate) fn unit_parked(supervisor: &mut Supervisor<Value>, id: &str, owner: u64) {
     let unit = supervisor.load_unit(id);
-    supervisor.adopt_holder(unit, Pid(owner));
+    let displaced = supervisor.adopt_holder(unit, Pid(owner));
+    report_hosted_twice(id, displaced, owner, "Standby");
+}
+/// A unit given a second owner, or its owner taken as the other kind, is
+/// a Host bug (unreachable, §17.8): the core's `debug_assert!` stops a debug
+/// build; a release build reports it here (the core does no I/O), and the
+/// new owner has replaced the old.
+fn report_hosted_twice(
+    id: &str,
+    displaced: Option<(Pid, impl std::fmt::Debug)>,
+    owner: u64,
+    how: &str,
+) {
+    if let Some((old, was)) = displaced {
+        diag!(
+            "supervisor: unit {id} hosted twice: {} ({was:?}) then {owner} ({how})",
+            old.0
+        );
+    }
 }
 pub(crate) fn unit_unparked(supervisor: &mut Supervisor<Value>, id: &str, owner: u64) {
     if let Some(unit) = supervisor.by_id(id) {

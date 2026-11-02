@@ -47,9 +47,10 @@ impl<P: Clone> Supervisor<P> {
         Pid(self.next_pid)
     }
 
-    /// The Host runs `u` as process `pid` (`Host::add_plugin`).
-    pub fn adopt_process(&mut self, u: UnitId, pid: Pid) {
-        self.adopt(u, pid, Hosted::Running);
+    /// The Host runs `u` as process `pid` (`Host::add_plugin`); the owner
+    /// this displaced (a bug, `adopt`).
+    pub fn adopt_process(&mut self, u: UnitId, pid: Pid) -> Option<(Pid, Hosted)> {
+        self.adopt(u, pid, Hosted::Running)
     }
 
     /// Process `pid` of `u` stopped (`Host::stop`).
@@ -58,9 +59,9 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// `u`'s registrations are held in standby under `pid` (lazy park, after
-    /// its stop, or replay).
-    pub fn adopt_holder(&mut self, u: UnitId, pid: Pid) {
-        self.adopt(u, pid, Hosted::Standby);
+    /// its stop, or replay); the owner this displaced (a bug, `adopt`).
+    pub fn adopt_holder(&mut self, u: UnitId, pid: Pid) -> Option<(Pid, Hosted)> {
+        self.adopt(u, pid, Hosted::Standby)
     }
 
     /// `pid` no longer holds `u`'s registrations in standby (woken,
@@ -206,35 +207,33 @@ impl<P: Clone> Supervisor<P> {
 
     // ---- internals -------------------------------------------------------
 
-    /// `u`'s one owner is now `pid`, as `how`. The Host never gives a unit
-    /// a second owner while it has one (§17.8: a wake unparks before its
-    /// start, a park stops first, a start of a running or parked plugin
-    /// returns, an install, reload or uninstall forgets the parked owner
-    /// first, no park during a package operation, a development load is
-    /// never parked); one that did would replace the first, as
-    /// `plugin_ids` and `parked_ids` do.
-    fn adopt(&mut self, u: UnitId, pid: Pid, how: Hosted) {
-        let Some(unit) = self.units.get_mut(&u) else {
-            return;
-        };
-        let old = unit.hosted.replace((pid, how));
-        if let Some((old, was)) = old.filter(|(old, _)| *old != pid) {
-            debug_assert!(
-                false,
-                "unit {} hosted twice: {old:?} ({was:?}) then {pid:?} ({how:?})",
-                unit.id
-            );
-            diag!(
-                "supervisor: unit {} hosted twice: {} ({was:?}) then {} ({how:?})",
-                unit.id,
-                old.0,
-                pid.0
-            );
-        }
+    /// `u`'s one owner is now `pid`, as `how`; the owner it displaced, if
+    /// any. The Host never gives a unit a second owner, nor changes the
+    /// kind of the one it has, while it has one (§17.8: a wake unparks
+    /// before its start, a park stops first, a start of a running or
+    /// parked plugin returns, an install, reload or uninstall forgets the
+    /// parked owner first, no park during a package operation, a
+    /// development load is never parked): unreachable. If it happens it is
+    /// a bug: a `debug_assert!` here, reported by the adapter in release,
+    /// and the new owner replaces the old. Adopting the owner it already
+    /// has displaces nothing.
+    fn adopt(&mut self, u: UnitId, pid: Pid, how: Hosted) -> Option<(Pid, Hosted)> {
+        let unit = self.units.get_mut(&u)?;
+        let displaced = unit
+            .hosted
+            .replace((pid, how))
+            .filter(|old| *old != (pid, how));
+        debug_assert!(
+            displaced.is_none(),
+            "unit {} hosted twice: {displaced:?} then {:?}",
+            unit.id,
+            (pid, how)
+        );
         self.map_pid(u, pid);
-        if let Some((old, _)) = old.filter(|(old, _)| *old != pid) {
+        if let Some((old, _)) = displaced.filter(|(old, _)| *old != pid) {
             self.unmap_pid(u, old);
         }
+        displaced
     }
 
     /// `pid` is no longer `u`'s owner as `how`; another owner (a newer one,
@@ -379,6 +378,28 @@ mod tests {
         let a = sup.load_unit("a.one");
         sup.adopt_holder(a, Pid(3));
         sup.adopt_process(a, Pid(4));
+    }
+
+    /// So is the same owner changing kind (a running process taken as the
+    /// standby holder without its stop).
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "hosted twice")]
+    fn an_owner_changing_kind_is_a_bug() {
+        let mut sup = Supervisor::<u32>::new(Tunables::legacy(), 1);
+        let a = sup.load_unit("a.one");
+        sup.adopt_process(a, Pid(3));
+        sup.adopt_holder(a, Pid(3));
+    }
+
+    /// Adopting the owner the unit already has displaces nothing.
+    #[test]
+    fn adopting_the_same_owner_displaces_nothing() {
+        let mut sup = Supervisor::<u32>::new(Tunables::legacy(), 1);
+        let a = sup.load_unit("a.one");
+        assert_eq!(sup.adopt_process(a, Pid(3)), None);
+        assert_eq!(sup.adopt_process(a, Pid(3)), None);
+        assert_eq!(sup.process_of("a.one"), Some(Pid(3)));
     }
 
     /// Loading units this way installs no job and queues nothing.
