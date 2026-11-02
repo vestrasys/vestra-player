@@ -35,7 +35,9 @@ use windows_sys::Win32::Graphics::Gdi::{
     CreateDCW, DeleteDC, GetMonitorInfoW, HMONITOR, MONITOR_DEFAULTTOPRIMARY, MONITORINFOEXW,
     MonitorFromWindow,
 };
-use windows_sys::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONEAREST, MONITORINFO};
+use windows_sys::Win32::Graphics::Gdi::{
+    MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTONULL, MONITORINFO, MonitorFromRect,
+};
 use windows_sys::Win32::System::Power::{
     ES_CONTINUOUS, ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED, SetThreadExecutionState,
 };
@@ -540,8 +542,10 @@ pub fn wait_for_process_exit(pid: u32, timeout_ms: u32) -> bool {
 
 /// When window `hwnd` covers its display exactly (a borderless full-screen
 /// window), make it `extra` pixels taller (negative: shorter) at the bottom,
-/// so that it no longer matches the display's rectangle. Returns whether it
-/// changed the window. Nothing for a window of any other size.
+/// so that it no longer matches the display's rectangle; past another edge
+/// when a display lies directly below, where the extra row would show
+/// (`unmatched`). Returns whether it changed the window. Nothing for a
+/// window of any other size.
 pub fn unmatch_display(hwnd: isize, extra: i32) -> bool {
     // SAFETY: MonitorFromWindow takes the HWND by value and answers the
     // nearest display for any window; it does not touch memory through it.
@@ -577,29 +581,85 @@ pub fn unmatch_display(hwnd: isize, extra: i32) -> bool {
     if unsafe { GetWindowRect(hwnd as HWND, &mut window) } == 0 {
         return false;
     }
-    let display = info.rcMonitor;
-    if (window.left, window.top, window.right, window.bottom)
-        != (display.left, display.top, display.right, display.bottom)
-    {
+    let edges = |rect: RECT| (rect.left, rect.top, rect.right, rect.bottom);
+    let another_display = |(left, top, right, bottom): Edges| {
+        let strip = RECT {
+            left,
+            top,
+            right,
+            bottom,
+        };
+        // SAFETY: `strip` is a valid RECT read for the call; MonitorFromRect
+        // keeps no pointer to it and answers null when no display meets it.
+        !unsafe { MonitorFromRect(&strip, MONITOR_DEFAULTTONULL) }.is_null()
+    };
+    let Some((left, top, right, bottom)) =
+        unmatched(edges(window), edges(info.rcMonitor), extra, another_display)
+    else {
         return false;
-    }
-    let (width, height) = (
-        display.right - display.left,
-        display.bottom - display.top + extra,
-    );
+    };
     // SAFETY: SetWindowPos takes the HWND and plain integers by value (no
     // z-order change, no activation); an invalid HWND makes it fail.
     unsafe {
         SetWindowPos(
             hwnd as HWND,
             std::ptr::null_mut(),
-            display.left,
-            display.top,
-            width,
-            height,
+            left,
+            top,
+            right - left,
+            bottom - top,
             SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE,
         ) != 0
     }
+}
+
+/// A rectangle as (left, top, right, bottom), in screen pixels.
+type Edges = (i32, i32, i32, i32);
+
+/// `unmatch_display`'s rectangle math: `None` unless `window` covers
+/// `display` exactly (so a window already off by its pixels, for example a
+/// main window rebuilt at the old window's size, stays as it is and never
+/// grows). `extra` > 0: the window reaches `extra` pixels past the bottom
+/// edge, or, where that strip lies on another display (`another_display`
+/// of the strip: the pixels would show there), past the top, right or left
+/// edge, the first one free; with another display on every side it is
+/// `extra` pixels short at the bottom instead. `extra` < 0: short at the
+/// bottom.
+fn unmatched(
+    window: Edges,
+    display: Edges,
+    extra: i32,
+    another_display: impl Fn(Edges) -> bool,
+) -> Option<Edges> {
+    if window != display || extra == 0 {
+        return None;
+    }
+    let (left, top, right, bottom) = display;
+    let shorter = (left, top, right, bottom - extra.abs());
+    if extra < 0 {
+        return Some(shorter);
+    }
+    [
+        (
+            (left, bottom, right, bottom + extra),
+            (left, top, right, bottom + extra),
+        ),
+        (
+            (left, top - extra, right, top),
+            (left, top - extra, right, bottom),
+        ),
+        (
+            (right, top, right + extra, bottom),
+            (left, top, right + extra, bottom),
+        ),
+        (
+            (left - extra, top, left, bottom),
+            (left - extra, top, right, bottom),
+        ),
+    ]
+    .into_iter()
+    .find(|(strip, _)| !another_display(*strip))
+    .map_or(Some(shorter), |(_, taller)| Some(taller))
 }
 
 /// The vertical blanks of one display, the clock that paces the host's
@@ -950,10 +1010,70 @@ pub fn video_super_resolution(luid: u64) -> Result<SuperResolution, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        SuperResolution, VBlank, dxgi_adapters, file_is_remote, hidden_top_level, is_own_show,
-        version_parts, video_super_resolution,
+        Edges, SuperResolution, VBlank, dxgi_adapters, file_is_remote, hidden_top_level,
+        is_own_show, unmatched, version_parts, video_super_resolution,
     };
     use std::time::{Duration, Instant};
+
+    /// F4 (round record 2026-10-windows-render, B.10): the extra pixel goes
+    /// where no other display shows it.
+    #[test]
+    fn the_extra_pixel_avoids_a_neighbouring_display() {
+        let display = (0, 0, 1920, 1080);
+        let alone = |_: Edges| false;
+        assert_eq!(
+            unmatched(display, display, 1, alone),
+            Some((0, 0, 1920, 1081)),
+            "below by default"
+        );
+        assert_eq!(
+            unmatched(display, display, -1, alone),
+            Some((0, 0, 1920, 1079))
+        );
+        assert_eq!(unmatched(display, display, 0, alone), None);
+        // A display directly below (only partly: it starts at x = 1000).
+        let below = |(left, top, right, _): Edges| top >= 1080 && right > 1000 && left < 3000;
+        assert_eq!(
+            unmatched(display, display, 1, below),
+            Some((0, -1, 1920, 1080)),
+            "past the top instead"
+        );
+        // Displays below and above: past the right edge.
+        let stacked = |(_, top, _, bottom): Edges| top >= 1080 || bottom <= 0;
+        assert_eq!(
+            unmatched(display, display, 1, stacked),
+            Some((0, 0, 1921, 1080))
+        );
+        // Below, above and right: past the left edge.
+        let three = |(left, top, _, bottom): Edges| top >= 1080 || bottom <= 0 || left >= 1920;
+        assert_eq!(
+            unmatched(display, display, 1, three),
+            Some((-1, 0, 1920, 1080))
+        );
+        // Surrounded: one pixel short at the bottom.
+        assert_eq!(
+            unmatched(display, display, 1, |_| true),
+            Some((0, 0, 1920, 1079))
+        );
+        // A second display at negative coordinates (left of the primary).
+        let side = (-2560, 0, 0, 1440);
+        assert_eq!(unmatched(side, side, 1, alone), Some((-2560, 0, 0, 1441)));
+    }
+
+    /// A window already off by the guard's pixel (for example a main window
+    /// rebuilt at the old window's W×(H+1)) is left as it is: it does not grow.
+    #[test]
+    fn a_window_already_off_its_display_is_left_alone() {
+        let display = (0, 0, 1920, 1080);
+        for window in [
+            (0, 0, 1920, 1081),
+            (0, -1, 1920, 1080),
+            (0, 0, 1920, 1079),
+            (100, 100, 900, 700),
+        ] {
+            assert_eq!(unmatched(window, display, 1, |_| false), None, "{window:?}");
+        }
+    }
 
     #[test]
     fn super_resolution_needs_a_successful_query_with_a_value() {

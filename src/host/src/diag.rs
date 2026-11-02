@@ -53,6 +53,10 @@ pub struct LogFile {
     file: Option<File>,
     size: u64,
     cap: u64,
+    /// A roll-over failure was said on stderr: (the log goes on in the same
+    /// file, the log stopped or cannot open). Each once per log: a log that
+    /// cannot roll over fails again at every later attempt.
+    reported: (bool, bool),
 }
 
 impl LogFile {
@@ -69,6 +73,7 @@ impl LogFile {
             file: Some(file),
             size,
             cap,
+            reported: (false, false),
         };
         if log.size >= cap {
             log.roll_over();
@@ -92,17 +97,57 @@ impl LogFile {
     /// Rust opens files with `FILE_SHARE_DELETE` on Windows, so one player
     /// can rename the file while the other still has it open; the other then
     /// keeps writing into `<path>.1` until its own next roll-over.
+    ///
+    /// A failure is said once on stderr (`reported`); the player goes on
+    /// either way.
     fn roll_over(&mut self) {
+        if let Some((problem, stops)) = self.try_roll_over() {
+            let said = if stops {
+                &mut self.reported.1
+            } else {
+                &mut self.reported.0
+            };
+            if !*said {
+                *said = true;
+                line(format_args!("host log: {problem}"));
+            }
+        }
+    }
+    /// `roll_over` without the report: what went wrong, if anything, and
+    /// whether the log stopped (a failed open is tried again at the next
+    /// line).
+    fn try_roll_over(&mut self) -> Option<(String, bool)> {
         // Closed first: our own handle need not stay on the renamed file.
         self.file = None;
-        let renamed = std::fs::rename(&self.path, Self::older(&self.path)).is_ok();
-        self.file = OpenOptions::new()
+        let renamed = std::fs::rename(&self.path, Self::older(&self.path));
+        let mut problem = match &renamed {
+            // The file is gone (removed by hand): a new one starts.
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Some((
+                format!(
+                    "could not roll over to the older file ({error}); writing on in the same file"
+                ),
+                false,
+            )),
+            _ => None,
+        };
+        self.file = match OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
-            .ok();
+        {
+            Ok(file) => Some(file),
+            Err(error) => {
+                // `size` stays over the cap: the next line tries again.
+                return Some((
+                    format!(
+                        "could not open the log again after rolling over ({error}); lines are dropped until it opens"
+                    ),
+                    true,
+                ));
+            }
+        };
         self.size = 0;
-        if !renamed {
+        if renamed.is_err() {
             let size = self
                 .file
                 .as_ref()
@@ -110,8 +155,13 @@ impl LogFile {
                 .map_or(0, |meta| meta.len());
             if size >= self.cap.saturating_mul(2) {
                 self.file = None;
+                problem = Some((
+                    "could not roll over and the file is at twice its cap; the log stops".into(),
+                    true,
+                ));
             }
         }
+        problem
     }
     /// One line (a newline is added); a write that fails is dropped.
     pub fn write(&mut self, line: &str) {
@@ -389,6 +439,7 @@ mod tests {
         let older = std::fs::read_to_string(LogFile::older(&path)).unwrap();
         assert!(older.starts_with("line 3"), "{older:?}");
         assert!(!dir.path().join("logs").join("host.log.2").exists());
+        assert_eq!(log.reported, (false, false), "nothing went wrong");
         drop(log);
         // A file already at its cap rolls over when opened; a smaller one
         // is appended to.
@@ -467,6 +518,34 @@ mod tests {
         assert!(text.starts_with("line 0"), "{text:?}");
         assert!(text.len() as u64 <= 3 * 40, "{}", text.len());
         assert!(!text.contains("line 9"), "stopped past twice the cap");
+        // Said on stderr: the failed roll-over (once, though every later
+        // line tried again) and the stop.
+        assert_eq!(log.reported, (true, true));
+    }
+
+    #[test]
+    fn a_log_that_cannot_open_again_drops_lines_and_tries_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("logs").join("host.log");
+        // A full log whose folder is gone, with a file in its place: the
+        // rename finds nothing and the open fails.
+        std::fs::write(path.parent().unwrap(), b"").unwrap();
+        let mut log = LogFile {
+            path: path.clone(),
+            file: None,
+            size: 40,
+            cap: 40,
+            reported: (false, false),
+        };
+        log.write("line 1 xxxxxxxxxxxxxxxxxxxx");
+        log.write("line 2 xxxxxxxxxxxxxxxxxxxx");
+        assert_eq!(log.reported, (false, true));
+        assert!(log.file.is_none());
+        // The folder is back: the next line opens a new file.
+        std::fs::remove_file(path.parent().unwrap()).unwrap();
+        std::fs::create_dir(path.parent().unwrap()).unwrap();
+        log.write("line 3");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "line 3\n");
     }
 
     #[test]

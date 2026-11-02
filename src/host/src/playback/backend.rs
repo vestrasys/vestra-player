@@ -192,6 +192,11 @@ impl Backend {
                     let _ = target_wake.try_send(());
                 }));
                 let stop_wake = render_wake.clone();
+                // Nothing loaded (closed or never opened): the software
+                // renderer drops its frame buffers (`BufferRing::release`).
+                let ring_idle = Arc::new(AtomicBool::new(true));
+                let renderer_idle = ring_idle.clone();
+                let idle_wake = render_wake.clone();
                 let switched = worker_wake.clone();
                 let renderer = thread::spawn(move || {
                     let run = || -> Result<()> {
@@ -228,6 +233,10 @@ impl Backend {
                         let mut last_size = None;
                         let stages = &render_frame.stages;
                         while !renderer_stop.load(Ordering::Relaxed) {
+                            let idle = renderer_idle.load(Ordering::Acquire);
+                            if idle {
+                                buffers.release();
+                            }
                             let update = render.update();
                             if update {
                                 stages.update();
@@ -276,7 +285,10 @@ impl Backend {
                                     pixels,
                                 )?;
                                 let took = began.elapsed();
-                                buffers.keep(&buffer);
+                                // Stopped: a redraw at a new size keeps no buffer.
+                                if !idle {
+                                    buffers.keep(&buffer);
+                                }
                                 let resized = last_size
                                     .replace((width, height))
                                     .is_some_and(|last| last != (width, height));
@@ -787,6 +799,10 @@ impl Backend {
                             "playback.backend".into(),
                             json!({"currentSession":sources.generation(),"event":format!("{event:?}")}),
                         ));
+                    }
+                    let idle = sources.phase() == crate::playback::session::Phase::Empty;
+                    if ring_idle.swap(idle, Ordering::AcqRel) != idle && idle {
+                        let _ = idle_wake.try_send(());
                     }
                     if !geometry_error && let Err(error) = geometry.tick(&mpv, &sources) {
                         geometry_error = true;
