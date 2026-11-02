@@ -199,3 +199,22 @@ for (const player of ["older player", "player after 0.6.3"] as const) {
     }
   });
 }
+
+test("the disabled state is read again when the install starts (the store's list may be old)", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  const { host, store, stop } = await start({ net, packages: [BUILTIN, info("someone.a", { version: "1.0.0", source: { kind: "file" } })] });
+  try {
+    await host.command("open").run();
+    // Disabled behind the store's back: no packages.changed reaches it.
+    host.packages = host.packages.map((p) => (p.id === "someone.a" ? { ...p, state: "disabled" } : p));
+    assert.equal(store.packages.find((p) => p.id === "someone.a")!.state, "running");
+    host.dialogAnswers.push([packageFile("a-1.0.1.vxp", { id: "someone.a", version: "1.0.1", name: "A" })], yes);
+    host.window("store").emit("fromFile");
+    await until(host, () => host.osd.includes("已更新 A 到 1.0.1（仍停用）"), "still disabled");
+    await until(host, () => !store.busy);
+    assert.equal(host.packages.find((p) => p.id === "someone.a")!.state, "disabled");
+  } finally {
+    await stop();
+  }
+});
