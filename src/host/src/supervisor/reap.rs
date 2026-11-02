@@ -201,6 +201,26 @@ impl<P: Clone> Supervisor<P> {
         let now = self.now;
         let stop_wait = self.tunables.stop_wait;
         let unit = self.units.get_mut(&u)?;
+        // B2c: the core's own `Terminate` (a park) already is this stop.
+        if matches!(unit.state, UnitState::Deactivating { pid: stopping, .. } if stopping == pid) {
+            return None;
+        }
+        // B2c: the Host stops a run the core started (a wake not ready yet:
+        // a disable, a failed activation): that start ends with it, as
+        // today's `lazy.waking` entry went with the stop (`forget_running`).
+        let starting = matches!(unit.state, UnitState::Activating { pid: Some(run), .. } if run == pid)
+            && unit
+                .job
+                .as_ref()
+                .is_some_and(|job| job.starts() && job.handoff.is_none());
+        if starting {
+            self.answer_backlog(u, AnswerReason::Stopped);
+            self.finish(u, JobResult::Canceled);
+        }
+        // Its previous pid no longer forwards to it (today's
+        // `forget_running` drops the `lazy.moved` entries to it).
+        self.drop_alias(u);
+        let unit = self.units.get_mut(&u)?;
         let displaced = unit
             .stopping
             .filter(|s| s.pid != pid && !s.done())
@@ -409,8 +429,8 @@ impl<P: Clone> Supervisor<P> {
 #[cfg(test)]
 mod tests {
     use super::super::{
-        Action, Busy, HostStart, HostStarted, JobId, JobKind, JobResult, Priority, Supervisor,
-        Tunables,
+        Action, Busy, Delivery, HostStart, HostStarted, JobId, JobKind, JobResult, Priority,
+        Supervisor, Trigger, Tunables,
     };
     use super::*;
 
@@ -440,6 +460,16 @@ mod tests {
                 Action::JobFinished {
                     job, kind, result, ..
                 } => Some((*job, kind.clone(), result.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn spawns(actions: &[Action<u32>]) -> Vec<UnitId> {
+        actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::Spawn { unit, .. } => Some(*unit),
                 _ => None,
             })
             .collect()
@@ -492,13 +522,13 @@ mod tests {
 
     /// T18: a stop not reaped within 20 s lands stuck, its process still
     /// tracked; a start asked later waits 20 s from its own request, and
-    /// goes on once the process goes after all.
+    /// goes on once the process goes after all (since B2c a wake is the
+    /// core's own start: it spawns).
     #[test]
     fn a_stuck_stop_stays_tracked_until_its_process_goes() {
         let mut s = new();
         let u = running(&mut s, "a.one", 1);
         stop(&mut s, u, 1, StopReason::Idle, Then::Standby);
-        s.adopt_holder(u, Pid(1));
         s.run_jobs(20_000);
         assert!(matches!(
             s.unit(u).unwrap().state,
@@ -506,51 +536,53 @@ mod tests {
         ));
         assert_eq!(s.previous_process(u), Some(Pid(1)));
         s.set_now(25_000);
-        let job = waits(s.host_start(u, HostStart::Wake(Priority::Interactive)));
-        assert!(finished(&s.run_jobs(44_999)).is_empty());
+        assert_eq!(s.wake(Pid(1), &Trigger::interactive(7)), Delivery::Started);
+        s.advance(u);
+        assert!(spawns(&s.take_actions()).is_empty());
+        assert!(spawns(&s.run_jobs(44_999)).is_empty());
         s.process_reaped(Pid(1), None);
         s.backend_cleaned(Pid(1));
-        assert_eq!(
-            finished(&s.run_jobs(45_000)),
-            [(job, WAKE, JobResult::Done)]
-        );
+        assert_eq!(spawns(&s.run_jobs(45_000)), [u]);
     }
 
     /// Today's wake (`lazy.rs`): it waits for the process its plugin was
     /// parked from, starts once that is gone (reaped and cleaned up after),
-    /// and fails with today's text 20 s after it was asked; a second wake
-    /// meanwhile neither starts a second job nor moves the deadline.
+    /// and fails with today's text 20 s after it was asked ("could not
+    /// start", entries revoked); a second trigger meanwhile neither starts
+    /// a second job nor moves the deadline.
     #[test]
     fn a_wake_waits_for_the_parked_process_or_fails_after_20_s() {
         let mut s = new();
         let u = running(&mut s, "a.one", 1);
         s.set_now(100);
         stop(&mut s, u, 1, StopReason::Idle, Then::Standby);
-        s.adopt_holder(u, Pid(1));
         s.set_now(1_000);
-        let job = waits(s.host_start(u, HostStart::Wake(Priority::Interactive)));
+        assert_eq!(s.wake(Pid(1), &Trigger::interactive(7)), Delivery::Started);
+        let job = s.job(u).unwrap().id;
         s.set_now(5_000);
         assert_eq!(
-            s.host_start(u, HostStart::Wake(Priority::Event)),
-            Ok(HostStarted::Waits { job, new: false })
+            s.wake(Pid(1), &Trigger::event("packages.changed", 8)),
+            Delivery::Held
         );
+        assert_eq!(s.job(u).unwrap().id, job);
         assert!(finished(&s.run_jobs(20_999)).is_empty());
+        let actions = s.run_jobs(21_000);
         assert_eq!(
-            finished(&s.run_jobs(21_000)),
+            finished(&actions),
             [(job, WAKE, JobResult::Failed(STUCK_WAKE.into()))]
         );
+        assert!(actions.contains(&Action::Revoke {
+            unit: u,
+            pid: Pid(1)
+        }));
         // A wake whose process goes in time starts.
         let v = running(&mut s, "b.two", 3);
         stop(&mut s, v, 3, StopReason::Idle, Then::Standby);
-        s.adopt_holder(v, Pid(3));
-        let job = waits(s.host_start(v, HostStart::Wake(Priority::Interactive)));
+        assert_eq!(s.wake(Pid(3), &Trigger::interactive(9)), Delivery::Started);
         s.process_reaped(Pid(3), None);
-        assert!(finished(&s.run_jobs(21_100)).is_empty(), "not cleaned");
+        assert!(spawns(&s.run_jobs(21_100)).is_empty(), "not cleaned");
         s.backend_cleaned(Pid(3));
-        assert_eq!(
-            finished(&s.run_jobs(21_200)),
-            [(job, WAKE, JobResult::Done)]
-        );
+        assert_eq!(spawns(&s.run_jobs(21_200)), [v]);
     }
 
     /// Nothing to wait for: the Host starts at once, no job.
@@ -559,7 +591,6 @@ mod tests {
         let mut s = new();
         let u = s.load_unit("a.one");
         for start in [
-            HostStart::Wake(Priority::Interactive),
             HostStart::Enable,
             HostStart::Reload { verify_until: None },
             HostStart::Install { image: "d".into() },
@@ -690,11 +721,16 @@ mod tests {
         let mut s = new();
         let u = running(&mut s, "a.one", 1);
         stop(&mut s, u, 1, StopReason::Idle, Then::Standby);
-        s.adopt_holder(u, Pid(1));
-        let job = waits(s.host_start(u, HostStart::Wake(Priority::Interactive)));
-        s.release_holder(u, Pid(1));
+        assert_eq!(s.wake(Pid(1), &Trigger::interactive(7)), Delivery::Started);
+        let job = s.job(u).unwrap().id;
+        s.standby_forgotten(u);
         assert!(s.job(u).is_none());
-        assert!(finished(&s.take_actions()).contains(&(job, WAKE, JobResult::Canceled)));
+        let actions = s.take_actions();
+        assert!(finished(&actions).contains(&(job, WAKE, JobResult::Canceled)));
+        assert!(actions.contains(&Action::Revoke {
+            unit: u,
+            pid: Pid(1)
+        }));
         s.process_reaped(Pid(1), None);
         s.backend_cleaned(Pid(1));
         s.run_jobs(10);

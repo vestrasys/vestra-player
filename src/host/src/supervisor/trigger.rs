@@ -18,8 +18,6 @@ pub enum TriggerKind {
     Interactive,
     /// A wake-event broadcast, by event name: merged (newest wins),
     /// dropped silently.
-    // B2c: `lazy_event` wakes through `wake`.
-    #[cfg_attr(not(test), allow(dead_code))]
     Event(String),
     /// A message that follows a held trigger (`source.resolveCancel`): held
     /// only behind one, never starts anything.
@@ -31,8 +29,6 @@ pub struct Trigger<P> {
     pub kind: TriggerKind,
     pub payload: P,
 }
-// B2c: `lazy_deliver` / `lazy_event` wake through `wake`.
-#[cfg_attr(not(test), allow(dead_code))]
 impl<P> Trigger<P> {
     pub fn interactive(payload: P) -> Self {
         Self {
@@ -68,8 +64,6 @@ impl<P> Trigger<P> {
 
 /// Result of `wake` (§5).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-// B2c: `wake`.
-#[cfg_attr(not(test), allow(dead_code))]
 pub enum Delivery {
     /// The unit is active with that pid: send it now.
     Now,
@@ -109,8 +103,6 @@ pub enum AnswerReason {
 
 /// Holds `trigger` (MOVE `hold_event`: a wake event replaces a held one of
 /// the same name). Whether it was added without growing the backlog.
-// B2c: `wake`.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn hold<P>(backlog: &mut VecDeque<Trigger<P>>, trigger: Trigger<P>) -> bool {
     let merged = if let TriggerKind::Event(name) = &trigger.kind {
         let before = backlog.len();
@@ -124,8 +116,6 @@ pub(super) fn hold<P>(backlog: &mut VecDeque<Trigger<P>>, trigger: Trigger<P>) -
 }
 
 /// Whether holding `trigger` would grow the backlog past `max`.
-// B2c: `wake`.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn would_overflow<P>(
     backlog: &VecDeque<Trigger<P>>,
     trigger: &Trigger<P>,

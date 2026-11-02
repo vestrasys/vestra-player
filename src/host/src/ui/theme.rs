@@ -239,9 +239,12 @@ impl Host {
             self.theme_all();
             let language = self.language_preference();
             let language = language.as_deref().unwrap_or(crate::i18n::SYSTEM);
+            // `changed` (B2c, an additive field): what this event changed, so a
+            // plugin woken by it can tell a palette change from a language
+            // one (doc/architecture/i18n.md §2).
             self.broadcast(
                 "appearance.changed",
-                json!({"theme":theme,"language":language}),
+                json!({"theme":theme,"language":language,"changed":["theme"]}),
             );
         }
         Ok(Value::Null)
@@ -274,7 +277,7 @@ impl Host {
             self.ui_state.touch(now);
             self.broadcast(
                 "appearance.changed",
-                json!({"theme":self.theme(),"language":value}),
+                json!({"theme":self.theme(),"language":value,"changed":["language"]}),
             );
         }
         Ok(Value::Null)

@@ -118,12 +118,12 @@ impl Capability for Events {
     }
     /// The woken plugin subscribes again itself.
     fn rekey(&self, host: &mut Host, from: u64, _: u64) {
-        host.lazy.wakes.remove(&from);
+        host.on_demand.wakes.remove(&from);
     }
     /// A parked plugin keeps its wake events; otherwise they go.
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         if !keep_recorded {
-            host.lazy.wakes.remove(&owner);
+            host.on_demand.wakes.remove(&owner);
             return;
         }
         let Some(plugin) = host.plugins.get(&owner) else {
@@ -136,7 +136,7 @@ impl Capability for Events {
             .map(|(event, _)| event.clone())
             .collect::<std::collections::BTreeSet<_>>();
         if !wakes.is_empty() {
-            host.lazy.wakes.insert(owner, wakes);
+            host.on_demand.wakes.insert(owner, wakes);
         }
     }
     fn replay(&self, host: &mut Host, owner: u64, _: &Origin, call: &Call) -> Handled {
@@ -144,7 +144,7 @@ impl Capability for Events {
         if call.method != "events.subscribe" || !WAKE_EVENTS.contains(&event) {
             return Err(RpcError::new("unsupported", "not a recorded method"));
         }
-        host.lazy
+        host.on_demand
             .wakes
             .entry(owner)
             .or_default()

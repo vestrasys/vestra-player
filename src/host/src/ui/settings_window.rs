@@ -361,7 +361,7 @@ impl Settings {
             .collect()
     }
     /// `owner`'s pages in registration order, each with whether it is
-    /// recorded (`VESTRA_TEST_REGISTRY`, host/lazy.rs).
+    /// recorded (`VESTRA_TEST_REGISTRY`, host/supervisor/probe.rs).
     pub fn pages_of(&self, owner: u64) -> Vec<(&Page, bool)> {
         self.pages
             .iter()
@@ -951,7 +951,7 @@ impl Host {
         if let Some(owner) = shown
             && self.settings.open.is_some()
         {
-            self.lazy_page_shown(owner);
+            self.page_shown(owner);
         }
         Ok(())
     }

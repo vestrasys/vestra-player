@@ -456,9 +456,9 @@ impl Host {
         if let Some(plugin) = self.plugins.get(&owner) {
             return plugin.origin().image_roots();
         }
-        self.lazy
-            .parked(owner)
-            .map(|parked| parked.origin.image_roots())
+        self.on_demand
+            .held(owner)
+            .map(|held| held.origin.image_roots())
             .unwrap_or_default()
     }
     /// A property value for `owner`'s `view`: JSON, Markdown documents at

@@ -1,9 +1,11 @@
-//! Test switches for the registry diff over every built-in (record
-//! doc/process/rounds/2026-10-lazy-activation.md §5.3: "a test parks and
-//! wakes every built-in and diffs the registries";
-//! tests/lazy_activation.rs). Read in any build, like `VESTRA_TEST_EXECUTE`:
+//! Test switches (doc/architecture/supervisor.md §2.2; MOVE of
+//! `lazy/probe.rs` and `lazy.rs`'s `VESTRA_TEST_EXECUTE`, B2c), read in any
+//! build and not passed on to a player restarted after a device loss:
 //!
-//! - `VESTRA_TEST_REGISTRY=<file>`: one JSON line per plugin and moment
+//! - `VESTRA_TEST_REGISTRY=<file>` (the registry diff over every built-in,
+//!   record doc/process/rounds/2026-10-lazy-activation.md §5.3: "a test
+//!   parks and wakes every built-in and diffs the registries";
+//!   tests/lazy_activation.rs): one JSON line per plugin and moment
 //!   (`ready`, `parking`, `parked`, `replayed`, `woken`, `quit`) with what
 //!   the host's registries hold for it: its commands in registration order
 //!   (declaration, shown text, bar button, state, conditions), their key
@@ -21,10 +23,15 @@
 //!   host started (milliseconds from host start, not from start-up), every
 //!   parked plugin is woken (as a shown settings page wakes it: nothing is
 //!   held for its ready).
+//! - `VESTRA_TEST_EXECUTE=<manifest id>/<command id>@<ms>[,...]`: run a
+//!   plugin command that long after start, as a menu click would, or
+//!   `@park+<ms>` that long after the plugin's next park. Headless tests
+//!   have no other way in without input.
 //!
 //! Source resolvers live in the playback worker and are not listed (no
 //! built-in registers one; `owner.resources` reports a lazy plugin's).
 use super::*;
+use crate::capabilities::{self, Call};
 use std::io::Write;
 
 #[derive(Default)]
@@ -53,39 +60,110 @@ pub(crate) fn park_all() -> bool {
     *PARK_ALL.get_or_init(|| std::env::var("VESTRA_TEST_PARK").as_deref() == Ok("all"))
 }
 
+/// One `VESTRA_TEST_EXECUTE` entry.
+pub(crate) struct TestExecute {
+    manifest: String,
+    command: String,
+    at: When,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum When {
+    At(u64),
+    AfterPark(u64),
+}
+
+pub(crate) fn test_executes(text: &str) -> Vec<TestExecute> {
+    text.split(',')
+        .filter_map(|entry| {
+            let (command, at) = entry.trim().rsplit_once('@')?;
+            let (manifest, command) = command.split_once('/')?;
+            Some(TestExecute {
+                manifest: manifest.into(),
+                command: command.into(),
+                at: match at.strip_prefix("park+") {
+                    Some(ms) => When::AfterPark(ms.parse().ok()?),
+                    None => When::At(at.parse().ok()?),
+                },
+            })
+        })
+        .collect()
+}
+
 impl Host {
     /// What a park of `owner` records: its recordable registrations, or
     /// why it cannot be parked; with `VESTRA_TEST_PARK=all`, what a
     /// recording can hold whatever it holds live.
-    pub(super) fn lazy_record(
+    pub(super) fn standby_record(
         &self,
         owner: u64,
         backend: &Value,
     ) -> std::result::Result<Vec<Call>, &'static str> {
-        if self.lazy.probe.park_all {
+        if self.on_demand.probe.park_all {
             return Ok(capabilities::recordable(self, owner, backend));
         }
         capabilities::record(self, owner, backend)
     }
     /// `VESTRA_TEST_WAKE`: once due, every parked plugin wakes.
     pub(super) fn probe_tick(&mut self, now: u64) {
-        if self.lazy.probe.wake_at.is_none_or(|at| now < at) {
+        if self.on_demand.probe.wake_at.is_none_or(|at| now < at) {
             return;
         }
-        self.lazy.probe.wake_at = None;
-        let parked = self.lazy.parked.keys().copied().collect::<Vec<_>>();
+        self.on_demand.probe.wake_at = None;
+        let parked = self.on_demand.held.keys().copied().collect::<Vec<_>>();
         diag!("lazy: VESTRA_TEST_WAKE: {} parked", parked.len());
         for owner in parked {
-            self.wake(owner);
+            self.page_shown(owner);
+        }
+    }
+    /// `VESTRA_TEST_EXECUTE` entries timed from the park of `id` start now.
+    pub(super) fn probe_parked(&mut self, id: &str, now: u64) {
+        if let Some(test) = self
+            .on_demand
+            .tests
+            .iter_mut()
+            .find(|t| t.manifest == id && matches!(t.at, When::AfterPark(_)))
+            && let When::AfterPark(ms) = test.at
+        {
+            test.at = When::At(now + ms);
+        }
+    }
+    /// `VESTRA_TEST_EXECUTE`: the due commands run, by manifest id.
+    pub(super) fn test_execute(&mut self, now: u64) {
+        if self.on_demand.tests.is_empty() {
+            return;
+        }
+        let (due, waiting): (Vec<_>, Vec<_>) = std::mem::take(&mut self.on_demand.tests)
+            .into_iter()
+            .partition(|test| matches!(test.at, When::At(at) if at <= now));
+        self.on_demand.tests = waiting;
+        for test in due {
+            let owner = self
+                .plugins
+                .iter()
+                .find(|(_, p)| p.manifest.id == test.manifest)
+                .map(|(owner, _)| *owner)
+                .or_else(|| self.parked_id(&test.manifest));
+            let Some(owner) = owner else {
+                diag!("lazy: VESTRA_TEST_EXECUTE: {} is not loaded", test.manifest);
+                continue;
+            };
+            diag!(
+                "lazy: VESTRA_TEST_EXECUTE {}/{}",
+                test.manifest,
+                test.command
+            );
+            if let Err(error) = self.execute_command(owner, &test.command) {
+                diag!("lazy: VESTRA_TEST_EXECUTE: {}", error.message);
+            }
         }
     }
     /// `VESTRA_TEST_REGISTRY`: `owner`'s registries now, as one line.
     pub(crate) fn probe_registry(&self, owner: u64, moment: &str) {
-        let Some(file) = &self.lazy.probe.file else {
+        let Some(file) = &self.on_demand.probe.file else {
             return;
         };
-        let id = match self.lazy.parked.get(&owner) {
-            Some(parked) => parked.id.clone(),
+        let id = match self.on_demand.held.get(&owner) {
+            Some(held) => held.id.clone(),
             None => self.plugin_id(owner),
         };
         let line = json!({"moment":moment,"id":id,"registry":self.registry_of(owner)});
@@ -100,10 +178,10 @@ impl Host {
     }
     /// At quit: every running and parked plugin's registries.
     pub(super) fn probe_quit(&self) {
-        if self.lazy.probe.file.is_none() {
+        if self.on_demand.probe.file.is_none() {
             return;
         }
-        for owner in self.plugins.keys().chain(self.lazy.parked.keys()) {
+        for owner in self.plugins.keys().chain(self.on_demand.held.keys()) {
             self.probe_registry(*owner, "quit");
         }
     }
@@ -205,7 +283,7 @@ impl Host {
                 .map(|(event, _)| event.clone())
                 .collect::<Vec<_>>(),
             None => self
-                .lazy
+                .on_demand
                 .wakes
                 .get(&owner)
                 .map(|events| events.iter().cloned().collect())
@@ -218,5 +296,27 @@ impl Host {
             "drops": drops,
             "wakes": wakes,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_executes_name_a_plugin_command_and_a_time() {
+        let tests = test_executes("a.b/hello@1500, c.d/x/y@park+20,bad,e.f/g@soon");
+        let read = tests
+            .iter()
+            .map(|t| (t.manifest.as_str(), t.command.as_str(), t.at))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            read,
+            [
+                ("a.b", "hello", When::At(1500)),
+                ("c.d", "x/y", When::AfterPark(20))
+            ]
+        );
+        assert!(test_executes("").is_empty());
     }
 }

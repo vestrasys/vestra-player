@@ -1,5 +1,6 @@
 //! Finite trusted-package lifecycle. This is not a sandbox or dependency solver.
 #![forbid(unsafe_code)]
+use crate::host::supervisor::checkpoint;
 use crate::host::*;
 use crate::packages::package_stage::Candidate;
 use crate::packages::package_store::{Instance, Source, Store, StoredPackage};
@@ -453,6 +454,17 @@ impl Host {
         key: DataKey,
     ) -> Result<u64> {
         let owner = self.alloc_owner();
+        self.load_package_as(owner, directory, manifest, key)?;
+        Ok(owner)
+    }
+    /// `load_package` as process `owner`, a pid allocated already.
+    fn load_package_as(
+        &mut self,
+        owner: u64,
+        directory: &Path,
+        manifest: &package_stage::PackageManifest,
+        key: DataKey,
+    ) -> Result<()> {
         let id = manifest.id.clone();
         anyhow::ensure!(self.running(&id).is_none(), "plugin already running");
         let deadline = self.now_ms() + 15_000;
@@ -477,7 +489,7 @@ impl Host {
             method: "owner.registered".into(),
             params: json!({"manifestId":id,"manifestName":name}),
         })?;
-        Ok(owner)
+        Ok(())
     }
     /// `load_package`'s process: in the shared runner (started if none
     /// runs) when trusted, else its own.
@@ -740,7 +752,8 @@ impl Host {
             .map(|i| DataKey::Instance(i.guid.clone()));
         // The replaced version's recording (keyed by its instance).
         if let Some(instance) = &before.instance {
-            lazy::remove(&self.activation_dir(), &instance.guid);
+            checkpoint::remove(&self.activation_dir(), &instance.guid);
+            self.checkpoint_known(&id, None);
         }
         self.packages.store.prepare_with_receipt(
             &id,
@@ -823,7 +836,7 @@ impl Host {
             None => self.packages.store.installed_ids(),
         };
         for id in ids {
-            if self.running(&id).is_some() || self.lazy.parked_id(&self.supervisor, &id).is_some() {
+            if self.running(&id).is_some() || self.parked_id(&id).is_some() {
                 continue;
             }
             let Some(record) = self.packages.store.record(&id).cloned() else {
@@ -848,22 +861,24 @@ impl Host {
             else {
                 continue;
             };
-            // Lazy activation: a valid recording of a plugin that was lazy
+            // On-demand start: a valid recording of a plugin that was lazy
             // at its ready is replayed instead; the plugin starts on its
-            // first use (host/lazy.rs). One that was resident starts now.
+            // first use (host/supervisor/). One that was resident starts now.
             // Without a recording (its first run) it waits for a place.
             let mut first_run = false;
-            if self.lazy.enabled
+            if self.on_demand.enabled
                 && let Ok((directory, manifest)) = &package
                 && check_reserved(&id, Some(&instance)).is_ok()
-                && let Some(key) = self.lazy_key(&id)
+                && let Some(key) = self.checkpoint_key(&id)
             {
-                match lazy::read(&self.packages.store.activation_dir(), &key) {
+                let recording = checkpoint::read(&self.packages.store.activation_dir(), &key);
+                self.checkpoint_known(&id, recording.as_ref().map(|r| r.resident_at_ready));
+                match recording {
                     Some(recording) if recording.resident_at_ready => {
                         diag!("lazy: {id} starts: resident at its last ready");
                     }
                     Some(recording) => {
-                        match self.lazy_replay(&id, directory, manifest, &key, recording) {
+                        match self.standby_replay(&id, directory, manifest, &key, recording) {
                             Ok(()) => continue,
                             Err(error) => diag!("lazy: {id} replay failed, starting it: {error}"),
                         }
@@ -871,13 +886,14 @@ impl Host {
                     // Built-ins first: another plugin's first run waits
                     // while a built-in is still to start or queued, since
                     // what it claims at activation waits for them.
-                    None if !self.lazy.first_run_free()
+                    None if !self.on_demand.first_runs.free()
                         || !self.packages.builtins.contains_key(&id)
                             && self.builtin_first_run_pending() =>
                     {
                         let builtins = &self.packages.builtins;
-                        self.lazy
-                            .queue_first_run(id.clone(), |id| builtins.contains_key(id));
+                        self.on_demand
+                            .first_runs
+                            .queue(id.clone(), |id| builtins.contains_key(id));
                         continue;
                     }
                     None => first_run = true,
@@ -893,7 +909,7 @@ impl Host {
             match started {
                 Ok(owner) if first_run => {
                     diag!("lazy: {id} starts for its first run");
-                    self.lazy.first_run(owner);
+                    self.on_demand.first_runs.started(owner);
                 }
                 Ok(_) => (),
                 Err(error) => {
@@ -904,9 +920,10 @@ impl Host {
             }
         }
     }
-    /// Lazy activation: start the parked installed plugin `id` (its first
-    /// use woke it), as `start_installed` would.
-    pub(crate) fn start_package(&mut self, id: &str) -> Result<u64> {
+    /// On-demand start: start installed plugin `id` in standby as process
+    /// `owner` (the pid the core allocated for its wake, `Action::Spawn`),
+    /// as `start_installed` would.
+    pub(crate) fn start_package_as(&mut self, id: &str, owner: u64) -> Result<()> {
         let record = self.packages.store.get(id);
         let instance = record
             .instance
@@ -918,13 +935,18 @@ impl Host {
             .ok_or_else(|| anyhow::anyhow!("not installed"))?
             .map_err(anyhow::Error::msg)?;
         check_reserved(id, Some(&instance)).map_err(|refusal| anyhow::anyhow!(refusal.message))?;
-        self.load_package(&directory, &manifest, DataKey::Instance(instance.guid))
+        self.load_package_as(
+            owner,
+            &directory,
+            &manifest,
+            DataKey::Instance(instance.guid),
+        )
     }
     /// What a recording of installed plugin `id` is valid for: its instance,
     /// its package digest (a library copy's, or the one `builtin.json`
-    /// lists) and version. `None`: it is not recorded (lazy activation
+    /// lists) and version. `None`: it is not recorded (on-demand start
     /// leaves it running), e.g. a built-in listed without a digest.
-    pub(crate) fn lazy_key(&self, id: &str) -> Option<lazy::Key> {
+    pub(crate) fn checkpoint_key(&self, id: &str) -> Option<checkpoint::Key> {
         let record = self.packages.store.get(id);
         let instance = record.instance.as_ref()?;
         let (digest, version) = if instance.builtin {
@@ -934,16 +956,17 @@ impl Host {
             let current = record.current.as_ref()?;
             (current.digest.clone(), current.manifest.version.clone())
         };
-        Some(lazy::Key {
+        Some(checkpoint::Key {
             guid: instance.guid.clone(),
             digest,
             version,
         })
     }
     /// Removes installed plugin `id`'s recording, if it has one.
-    pub(crate) fn drop_recording(&self, id: &str) {
+    pub(crate) fn drop_recording(&mut self, id: &str) {
         if let Some(instance) = self.packages.store.get(id).instance {
-            lazy::remove(&self.activation_dir(), &instance.guid);
+            checkpoint::remove(&self.activation_dir(), &instance.guid);
+            self.checkpoint_known(id, None);
         }
     }
     /// The directory recordings are kept in.
@@ -952,7 +975,7 @@ impl Host {
     }
     /// An installed (not development) plugin `owner` runs as installed:
     /// its recording key.
-    pub(crate) fn lazy_key_of(&self, owner: u64) -> Option<lazy::Key> {
+    pub(crate) fn checkpoint_key_of(&self, owner: u64) -> Option<checkpoint::Key> {
         let plugin = self.plugins.get(&owner)?;
         let DataKey::Instance(guid) = &plugin.data_key else {
             return None;
@@ -966,7 +989,8 @@ impl Host {
             .packages
             .runs_from(id, &record)
             .is_some_and(|package| package.is_ok_and(|(dir, _)| dir == plugin.directory));
-        self.lazy_key(id).filter(|key| runs && key.guid == *guid)
+        self.checkpoint_key(id)
+            .filter(|key| runs && key.guid == *guid)
     }
     /// A package RPC on `id` is answered `busy`: an operation runs on it
     /// (its phases stay the Host's until B2d), or the supervisor has a
@@ -1115,7 +1139,7 @@ impl Host {
     }
     /// A built-in waits for its first run (lazy activation, §2.4).
     pub(crate) fn builtin_first_run_queued(&self) -> bool {
-        self.lazy.builtin_queued()
+        self.on_demand.first_runs.builtin_queued()
     }
     /// A built-in still activating that may mount a panel (it declares
     /// `ui.mount`) and has not asked yet: at start-up the shell waits a
@@ -1176,7 +1200,7 @@ impl Host {
             let (state, error) = match status {
                 // Woken from idle (lazy activation): it was running all along.
                 Some(activation::Status::Pending { .. })
-                    if self.lazy.waking.contains_key(&owner) =>
+                    if self.supervisor.waking(Pid(owner)).is_some() =>
                 {
                     ("running", None)
                 }
@@ -1228,20 +1252,20 @@ impl Host {
             // Waiting for its first run (lazy activation) counts as starting.
             let disabled = self.packages.store.disabled().contains(&id);
             let parked = self
-                .lazy
-                .parked_id(&self.supervisor, &id)
-                .and_then(|owner| self.lazy.parked(owner));
-            let (state, error) =
-                if self.package_rpc_busy(&id) || !disabled && self.lazy.first_queue.contains(&id) {
-                    ("starting", None)
-                } else if let Some(parked) = parked {
-                    // Parked (lazy activation): it runs again on its first use;
-                    // `state` stays `running`, `process` says `idle`, and what
-                    // it was refused while it ran stays listed.
-                    ("running", parked.warning.clone())
-                } else {
-                    stopped(disabled, self.failures.get(&id))
-                };
+                .parked_id(&id)
+                .and_then(|owner| self.on_demand.held(owner));
+            let (state, error) = if self.package_rpc_busy(&id)
+                || !disabled && self.on_demand.first_runs.queue.contains(&id)
+            {
+                ("starting", None)
+            } else if let Some(parked) = parked {
+                // Parked (lazy activation): it runs again on its first use;
+                // `state` stays `running`, `process` says `idle`, and what
+                // it was refused while it ran stays listed.
+                ("running", parked.warning.clone())
+            } else {
+                stopped(disabled, self.failures.get(&id))
+            };
             let warnings = parked.map_or_else(Vec::new, |parked| parked.warnings.clone());
             let data = record
                 .instance
@@ -1249,9 +1273,7 @@ impl Host {
                 .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())));
             let builtin = record.instance.as_ref().is_some_and(|i| i.builtin);
             let source = record.instance.map(|i| i.source);
-            let process = (self.lazy.parked_id(&self.supervisor, &id).is_some()
-                && state == "running")
-                .then_some("idle");
+            let process = (self.parked_id(&id).is_some() && state == "running").then_some("idle");
             let entry = match package {
                 Ok((directory, manifest)) => json!({"id":id,"version":manifest.version,
                     "origin":"installed","state":state,"error":error,"process":process,
@@ -1387,7 +1409,7 @@ impl Host {
             }
             return Ok(());
         }
-        if running.is_some() || self.lazy.parked_id(&self.supervisor, id).is_some() {
+        if running.is_some() || self.parked_id(id).is_some() {
             return Ok(());
         }
         // Its previous process (parked, disabled or failed just now) still
@@ -1737,7 +1759,8 @@ impl Host {
         self.start_queued();
         // Waits for stopped processes that ended: their starts run now,
         // where `reload_tick` ran (and in the tick `lazy_tick`'s wakes
-        // ran in).
+        // ran in); the core's due idle checks, classification and
+        // "Starting…" timers too (B2c, before in `lazy_tick`).
         self.supervisor_tick();
         self.cleanup_tick();
         let keys = self

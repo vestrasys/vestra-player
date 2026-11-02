@@ -137,8 +137,9 @@ pub struct Job {
     /// B2b–B2d (transitional, supervisor.md §17.9): the Host starts the
     /// unit itself once this job may start (`host_start`): where it would
     /// take a lane and `Spawn`, it ends `Done` and the adapter runs
-    /// today's start. Goes when the Host's starts become jobs: wakes in
-    /// B2c, enable, reload and package operations in B2d.
+    /// today's start. Goes when the Host's starts become jobs: enable,
+    /// reload and package operations in B2d (wakes are the core's own
+    /// starts since B2c).
     pub(super) handoff: Option<Handoff>,
 }
 
@@ -156,9 +157,6 @@ pub struct Handoff {
 /// first (B2b–B2d, §17.9; the B2b rows of §4.7).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HostStart {
-    /// A trigger on a unit in standby (today's `lazy.rs` `wake` with
-    /// `Parked.waiting`): `Start{Trigger}`. Removed in B2c.
-    Wake(Priority),
     /// `packages.setEnabled(true)` (today's enable-after-park entry in
     /// `packages.reloads`; now after any stop, the D13 fix):
     /// `Start{Enable}`, `JobMode::Fail`. Removed in B2d.
@@ -589,15 +587,6 @@ impl<P: Clone> Supervisor<P> {
             return Ok(HostStarted::Now);
         }
         let (kind, mode, priority, origin, verify_until) = match start {
-            HostStart::Wake(priority) => (
-                JobKind::Start {
-                    cause: Cause::Trigger(priority),
-                },
-                JobMode::Replace,
-                priority,
-                Origin::Trigger,
-                None,
-            ),
             HostStart::Enable => (
                 JobKind::Start {
                     cause: Cause::Enable,

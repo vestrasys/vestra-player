@@ -122,7 +122,7 @@ impl Drops {
     /// `owner`'s providers in order, each with whether it is recorded and
     /// the extensions an earlier provider of another owner takes (the
     /// first with an extension wins it) (`VESTRA_TEST_REGISTRY`,
-    /// host/lazy.rs).
+    /// host/supervisor/probe.rs).
     pub fn providers_of(&self, owner: u64) -> Vec<(&Provider, bool, Vec<String>)> {
         self.providers
             .iter()

@@ -26,9 +26,9 @@ impl Host {
                 if !self.plugins.contains_key(&owner) {
                     return;
                 }
-                // Lazy activation: a plugin that asks for something is in use.
+                // On-demand start: a plugin that asks for something is in use.
                 let now = self.now_ms();
-                self.lazy.touch(owner, now);
+                self.supervisor.touch(Pid(owner), now);
                 if let Some(event) = message["event"].as_str() {
                     diag!("runtime {owner} {event}: {}", message["data"]);
                     let now = self.now_ms();
@@ -46,7 +46,7 @@ impl Host {
                     }
                     self.activation_tick();
                     if event == "runtime.ready" && self.plugins.contains_key(&owner) {
-                        self.lazy_ready(owner);
+                        self.unit_ready(owner);
                     }
                     return;
                 }
@@ -257,7 +257,7 @@ impl Host {
                 self.ui_state.touch(self.now_ms());
             }
             Event::BarButton(generation, token) => self.bar_click(generation, &token),
-            Event::OwnerResources(owner, answer) => self.lazy_answer(owner, &answer),
+            Event::OwnerResources(owner, answer) => self.resources_answer(owner, &answer),
             Event::PipReturn(generation) => {
                 if generation == self.shell_generation {
                     self.pip.restore();
