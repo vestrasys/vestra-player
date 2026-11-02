@@ -1189,6 +1189,9 @@ impl crate::playback::renderer::GpuBackend for GpuHandle {
     fn frames(&self) -> u64 {
         vestra_gpu_render::Handle::frames(self)
     }
+    fn render_calls(&self) -> Option<u64> {
+        Some(vestra_gpu_render::Handle::render_calls(self))
+    }
     fn shown(&self) -> u64 {
         vestra_gpu_render::Handle::shown(self)
     }

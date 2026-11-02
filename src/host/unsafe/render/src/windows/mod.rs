@@ -1212,6 +1212,14 @@ impl Handle {
     pub fn frames(&self) -> u64 {
         lock(&self.0.exchange).ring.sequence()
     }
+    /// mpv's render calls so far, each counted when it starts and when it
+    /// returns (odd while one runs, as the watchdog reads them): a call that
+    /// started after a value `mark` was read has returned once this reaches
+    /// `mark + mark % 2 + 2`. The host's plugin shader guard tells from it
+    /// whether a new `glsl-shaders` list was drawn (compiled) yet.
+    pub fn render_calls(&self) -> u64 {
+        self.0.calls.load(Ordering::Acquire)
+    }
     /// Window draws that showed a newer frame.
     pub fn shown(&self) -> u64 {
         self.0.shown.load(Ordering::Relaxed)

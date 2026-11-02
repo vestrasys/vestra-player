@@ -40,6 +40,12 @@ pub trait GpuBackend {
     fn set_display_fps(&self, fps: Option<f64>);
     /// Frames rendered so far.
     fn frames(&self) -> u64;
+    /// mpv's render calls, counted at their start and their return (odd
+    /// while one runs; [`rendered_since`]); `None` where the renderer does
+    /// not count them (macOS: no device-loss restart there).
+    fn render_calls(&self) -> Option<u64> {
+        None
+    }
     /// Frames a window showed so far.
     fn shown(&self) -> u64;
     /// The size of the newest frame.
@@ -70,6 +76,22 @@ pub trait GpuBackend {
     }
 }
 
+/// Whether a render call that started after `mark` (a
+/// [`GpuBackend::render_calls`] value) has returned by `now` (a later one):
+/// a call already running at `mark` (odd) does not count.
+pub fn rendered_since(mark: u64, now: u64) -> bool {
+    now >= mark + mark % 2 + 2
+}
+
+/// The control worker's `glsl-shaders` writes (`video_render::Mpv`): how
+/// many so far, and mpv's render calls at the newest one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ShaderWrites {
+    pub count: u64,
+    /// `None`: no GPU renderer that counts its render calls draws.
+    pub calls: Option<u64>,
+}
+
 /// Shared by the backend's render thread, its control worker and the UI.
 pub struct Render {
     wanted: bool,
@@ -91,6 +113,9 @@ pub struct Render {
     refresh: Mutex<Option<f64>>,
     /// What the main window really draws (`stats().presentedFps`).
     pub presentation: crate::playback::render_target::Presentation,
+    /// `glsl-shaders` writes, for the plugin shader guard
+    /// (`host/diagnostics.rs`).
+    shader_writes: Mutex<ShaderWrites>,
 }
 impl Render {
     /// From the start-up decision: the render thread tries GPU rendering
@@ -110,6 +135,7 @@ impl Render {
             producer: AtomicBool::new(false),
             refresh: Mutex::new(None),
             presentation: Default::default(),
+            shader_writes: Mutex::default(),
         })
     }
     pub fn wanted(&self) -> bool {
@@ -174,6 +200,27 @@ impl Render {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .unwrap_or(60.)
+    }
+    /// mpv's render calls now (`GpuBackend::render_calls`).
+    pub fn render_calls(&self) -> Option<u64> {
+        self.gpu().and_then(GpuBackend::render_calls)
+    }
+    /// The control worker wrote `glsl-shaders` (mpv took or refused it):
+    /// a render call that starts from now on draws with the list mpv holds.
+    pub fn shaders_written(&self) {
+        let calls = self.render_calls();
+        let mut writes = self
+            .shader_writes
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        writes.count += 1;
+        writes.calls = calls;
+    }
+    pub fn shader_writes(&self) -> ShaderWrites {
+        *self
+            .shader_writes
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
     pub fn backend_name(&self) -> String {
         if self.gpu().is_some() {
@@ -266,5 +313,33 @@ mod tests {
         assert_eq!(render.refresh(), 120.);
         render.set_refresh(Some(f64::NAN));
         assert_eq!(render.refresh(), 60.);
+    }
+
+    /// 0.6.4 shader guard: only a render call that started after the mark
+    /// counts; one running at the mark (odd) does not.
+    #[test]
+    fn a_render_call_counts_only_when_it_started_after_the_mark() {
+        // Between calls (even): the next call starts at 5 and returns at 6.
+        assert!(!rendered_since(4, 4));
+        assert!(!rendered_since(4, 5), "running");
+        assert!(rendered_since(4, 6));
+        // Inside a call (odd): it returns at 6, the next one at 8.
+        assert!(!rendered_since(5, 6), "started before the mark");
+        assert!(!rendered_since(5, 7));
+        assert!(rendered_since(5, 8));
+        // Writes are counted with the render calls of the newest one; no
+        // GPU renderer: none.
+        use crate::playback::render_mode::{Facts, Preference, decide};
+        let render = Render::new(&decide(&Facts::default(), Preference::Auto));
+        assert_eq!(render.shader_writes(), ShaderWrites::default());
+        render.shaders_written();
+        render.shaders_written();
+        assert_eq!(
+            render.shader_writes(),
+            ShaderWrites {
+                count: 2,
+                calls: None
+            }
+        );
     }
 }

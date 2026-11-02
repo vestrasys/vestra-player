@@ -44,7 +44,9 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
     if RESTARTING.swap(true, Ordering::AcqRel) {
         return;
     }
-    // The shader guard's pending `applying` reaches the disk first.
+    // The shader guard first: a loss or stall before a new plugin shader
+    // list was drawn counts as its crash, and a pending `applying` reaches
+    // the disk; nothing settles the record after this.
     super::diagnostics::persist_shader_guard();
     let off = lost.guard.device_lost(&lost.keys, render_state::now());
     let why = software_after_loss(lost, off, std::time::Instant::now());
@@ -99,17 +101,19 @@ static TEARDOWN: std::sync::Mutex<&str> = std::sync::Mutex::new("the event loop 
 type ExitAt = Option<(std::time::Instant, std::time::Instant)>;
 static EXIT_AT: std::sync::Mutex<ExitAt> = std::sync::Mutex::new(None);
 static EXIT_CHANGED: std::sync::Condvar = std::sync::Condvar::new();
-/// The event loop ended ([`event_loop_ended`]).
+/// The event loop ended ([`event_loop_ended`]). Read and written only with
+/// [`EXIT_AT`] locked: otherwise a restart that read it just before the
+/// loop ended, and set its deadline just after, would keep 15 s, not 5.
 static LOOP_ENDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// The event loop ended (`main.rs`, first thing after it): after a device
 /// loss the teardown now has [`EXIT_AFTER_LOOP`], not the rest of
 /// [`EXIT_AFTER_RESTART`].
 pub(crate) fn event_loop_ended() {
-    LOOP_ENDED.store(true, Ordering::Release);
     let mut exit = EXIT_AT
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    LOOP_ENDED.store(true, Ordering::Release);
     if let Some((at, since)) = *exit {
         *exit = Some((exit_deadline(at, true, std::time::Instant::now()), since));
         EXIT_CHANGED.notify_all();
@@ -156,15 +160,18 @@ fn stuck_line(after: std::time::Duration, step: &str) -> String {
 /// terminated without DLL detach (`platform::exit_now`), which a stuck
 /// driver could hang.
 fn exit_if_stuck() {
-    let now = std::time::Instant::now();
-    let at = exit_deadline(
-        now + EXIT_AFTER_RESTART,
-        LOOP_ENDED.load(Ordering::Acquire),
-        now,
-    );
-    *EXIT_AT
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((at, now));
+    {
+        let mut exit = EXIT_AT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let now = std::time::Instant::now();
+        let at = exit_deadline(
+            now + EXIT_AFTER_RESTART,
+            LOOP_ENDED.load(Ordering::Acquire),
+            now,
+        );
+        *exit = Some((at, now));
+    }
     let _ = std::thread::Builder::new()
         .name("vestra-exit-after-loss".into())
         .spawn(|| {

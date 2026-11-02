@@ -13,6 +13,12 @@
 //!   quits, or the session ends (Windows `WM_QUERYENDSESSION` /
 //!   `WM_ENDSESSION`). A shutdown, logoff or kill while paused or idle is
 //!   therefore never taken for a shader crash;
+//! - a GPU renderer failure (a device loss, a watchdog stall) after a list
+//!   changed and before mpv drew a frame with video with it (a first-use
+//!   compile that hangs or loses the device: the guard is not armed yet)
+//!   counts as the plugins' crash: `applying` is written before the
+//!   restart ([`persist_shader_guard`]), and nothing settles the record
+//!   after a failure;
 //! - the file is written by a thread of its own ([`ShaderWriter`]: the
 //!   newest request wins), never on the UI thread, except at quit and at the
 //!   session's end, which wait for it; a new list from the same plugins
@@ -27,6 +33,7 @@
 //! guard may be armed for nothing, never the other way round.
 use super::*;
 use crate::playback::render_state::{GuardFile, GuardKey, SHADER_STABLE_SECS, ShaderBlock};
+use crate::playback::renderer::ShaderWrites;
 use std::sync::{Condvar, Mutex, PoisonError};
 
 /// The error code of a plugin shader list refused because the last run
@@ -77,6 +84,11 @@ struct WriterState {
     next: Option<Op>,
     busy: bool,
     started: bool,
+    /// The GPU renderer failed (a device loss or a watchdog stall,
+    /// [`ShaderWriter::gpu_failed`]): the record stays as it is for the
+    /// restarted player, so no request is taken any more (the UI thread may
+    /// still tick, and settle, until its event loop ends).
+    lost: bool,
     /// Requests written (tests).
     written: u64,
 }
@@ -94,6 +106,10 @@ struct WriterShared {
     ending: std::sync::atomic::AtomicBool,
     /// The `exit:` line for the session's end was written (once).
     exit_logged: std::sync::atomic::AtomicBool,
+    /// Plugin shaders whose new list no frame with video was drawn with yet
+    /// (the UI thread, [`ShaderGuard`]): a GPU renderer failure until then
+    /// counts as theirs ([`ShaderWriter::gpu_failed`]).
+    untested: Mutex<Option<Vec<String>>>,
 }
 
 /// Writes the shaders' record off the UI thread (`write_replacing` syncs
@@ -121,7 +137,13 @@ impl ShaderWriter {
             .unwrap_or_else(PoisonError::into_inner)
     }
     fn send(&self, op: Op) {
-        if self.file.is_off()
+        if self.file.is_off() {
+            return;
+        }
+        let mut state = self.lock();
+        // Under the lock: `session_end` sets `ending` holding it, so no
+        // `applying` is queued after the session's end settled.
+        if state.lost
             || (matches!(op, Op::Applying(..))
                 && self
                     .shared
@@ -130,7 +152,10 @@ impl ShaderWriter {
         {
             return;
         }
-        let mut state = self.lock();
+        self.queue(&mut state, op);
+    }
+    /// Make `op` the next request (the lock held).
+    fn queue(&self, state: &mut WriterState, op: Op) {
         state.next = Some(op);
         if !state.started {
             let writer = self.clone();
@@ -140,6 +165,53 @@ impl ShaderWriter {
                 .is_ok();
         }
         self.shared.changed.notify_all();
+    }
+    /// The plugins whose new list was not drawn yet (the UI thread).
+    fn set_untested(&self, plugins: Option<Vec<String>>) {
+        *self
+            .shared
+            .untested
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = plugins;
+    }
+    /// The GPU renderer failed (a device loss, a watchdog stall; any thread,
+    /// before the restart): no request is taken from now on (`lost`), and
+    /// if a plugin shader list changed and no frame with video was drawn
+    /// with it yet, the failure is theirs: `applying` for them (a first-use
+    /// compile that hangs or loses the device fails before the guard arms).
+    /// The restarted player then starts with plugin shaders off, as after a
+    /// crash. Whether it counted.
+    fn gpu_failed(&self) -> bool {
+        if self.file.is_off() {
+            return false;
+        }
+        let untested = self
+            .shared
+            .untested
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        let mut state = self.lock();
+        if std::mem::replace(&mut state.lost, true) {
+            return false;
+        }
+        let Some(plugins) = untested.filter(|_| {
+            !self
+                .shared
+                .ending
+                .load(std::sync::atomic::Ordering::Acquire)
+        }) else {
+            return false;
+        };
+        logged!(
+            "shaders: the GPU renderer failed before a frame with video was drawn with the new plugin shaders of {}; counted as their crash",
+            plugins.join(", ")
+        );
+        self.queue(
+            &mut state,
+            Op::Applying(plugins, crate::playback::render_state::now()),
+        );
+        true
     }
     fn execute(&self, op: Op) {
         match op {
@@ -183,6 +255,11 @@ impl ShaderWriter {
                 .changed
                 .wait(state)
                 .unwrap_or_else(PoisonError::into_inner);
+        }
+        // After a GPU renderer failure the record stays for the restart
+        // (a pending write goes on as handed over).
+        if state.lost {
+            return;
         }
         state.next = None;
         state.busy = true;
@@ -240,6 +317,22 @@ pub(crate) struct Observed {
     pub source: u64,
     /// New frames presented so far (`Presentation::counts`).
     pub presented: u64,
+    /// The control worker's `glsl-shaders` writes (`Render::shader_writes`).
+    pub writes: ShaderWrites,
+    /// mpv's render calls now (`Render::render_calls`; `None`: not counted).
+    pub calls: Option<u64>,
+}
+
+/// A plugin shader list changed and no frame with video was drawn with it
+/// yet ([`ShaderGuard::untested`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Untested {
+    /// The worker's `glsl-shaders` writes when it changed: the next one
+    /// hands the list to mpv.
+    writes: u64,
+    /// From that write on: the render calls a frame with video must start
+    /// after (`None` inside: the renderer does not count them).
+    mark: Option<Option<u64>>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -270,6 +363,11 @@ pub(crate) struct ShaderGuard {
     phase: Phase,
     /// The plugins `applying` was last written for, until it is settled.
     written: Option<Vec<String>>,
+    /// The lists changed and mpv drew no frame with video with them yet: a
+    /// GPU renderer failure until then counts as theirs (the guard arms
+    /// only after frames are drawn, which a compile that hangs or loses the
+    /// device never gets to).
+    untested: Option<Untested>,
     source: u64,
     last_tick: Option<Instant>,
 }
@@ -337,7 +435,12 @@ impl ShaderGuard {
     }
     /// The lists changed: wait for them to be drawn again, unless they are
     /// already armed for the same plugins (no write; the timer restarts).
-    fn changed(&mut self, presented: u64) {
+    /// Untested until a frame with video is drawn with them (`writes`: the
+    /// worker's `glsl-shaders` writes so far).
+    fn changed(&mut self, presented: u64, writes: u64) {
+        self.untested = (!self.lists.is_empty()).then_some(Untested { writes, mark: None });
+        self.writer
+            .set_untested(self.untested.map(|_| self.plugins()));
         if self.lists.is_empty() {
             self.phase = Phase::Off;
             self.settle();
@@ -353,7 +456,7 @@ impl ShaderGuard {
     }
     /// A plugin's list `handle` (`render`, or `shaders:<id>`) now has
     /// `files` files, before the worker gets it (`presented`: new frames
-    /// presented so far).
+    /// presented so far; `writes`: the worker's `glsl-shaders` writes).
     pub(crate) fn set(
         &mut self,
         owner: u64,
@@ -361,6 +464,7 @@ impl ShaderGuard {
         plugin: &str,
         files: usize,
         presented: u64,
+        writes: u64,
     ) {
         let key = (owner, handle.to_owned());
         let before = self.lists.get(&key).map_or(0, |(_, files)| *files);
@@ -377,10 +481,10 @@ impl ShaderGuard {
             handle_for_log(handle),
             self.files()
         );
-        self.changed(presented);
+        self.changed(presented, writes);
     }
     /// A plugin stopped or was parked: the worker removes its lists.
-    pub(crate) fn owner_gone(&mut self, owner: u64, presented: u64) {
+    pub(crate) fn owner_gone(&mut self, owner: u64, presented: u64, writes: u64) {
         let before = self.lists.len();
         self.lists.retain(|(holder, _), _| *holder != owner);
         if self.lists.len() == before {
@@ -391,7 +495,38 @@ impl ShaderGuard {
             self.files()
         );
         if self.lists.is_empty() {
-            self.changed(presented);
+            self.changed(presented, writes);
+        } else if self.untested.is_some() {
+            self.writer.set_untested(Some(self.plugins()));
+        }
+    }
+    /// The untested list (`changed`) was drawn: a render call that started
+    /// after the worker handed it to mpv returned while the source has a
+    /// video track. Render calls without one draw no video (mpv runs user
+    /// shaders on video only), so they move the mark instead.
+    fn check_untested(&mut self, seen: Observed) {
+        let Some(untested) = &mut self.untested else {
+            return;
+        };
+        if untested.mark.is_none() && seen.writes.count > untested.writes {
+            untested.mark = Some(seen.writes.calls);
+        }
+        let Some(mark) = untested.mark else {
+            // The worker has not written it yet.
+            return;
+        };
+        let drawn = match (mark, seen.calls) {
+            (Some(mark), Some(calls)) => {
+                seen.video && crate::playback::renderer::rendered_since(mark, calls)
+            }
+            // Not counted (no Windows GPU renderer): nothing to wait for.
+            _ => true,
+        };
+        if drawn {
+            self.untested = None;
+            self.writer.set_untested(None);
+        } else if !seen.video {
+            untested.mark = Some(seen.calls);
         }
     }
     /// Every tick.
@@ -413,6 +548,7 @@ impl ShaderGuard {
             self.writer
                 .send(Op::Applying(plugins, crate::playback::render_state::now()));
         }
+        self.check_untested(seen);
         match self.phase {
             Phase::Off | Phase::Settled => {}
             Phase::Pending { .. } if !drawn => {
@@ -468,13 +604,27 @@ impl ShaderGuard {
 /// ending also writes the `exit:` line, once. Cancelled: a `session:` line
 /// (no `exit:` came before it), and an armed guard writes `applying` again
 /// at the next tick.
+///
+/// Every top-level window gets the messages, so each event may come several
+/// times: a cancel acts and logs only when an end was under way. A `Query`
+/// that no `WM_ENDSESSION` follows (the end called off without a FALSE one
+/// reaching this player) leaves the guard disarmed for the rest of the run:
+/// no `applying` until a cancel, so a later crash with plugin shaders on is
+/// not caught. That can only miss a crash, never blame shaders for one.
 pub(crate) fn session_end(writer: &ShaderWriter, event: platform::SessionEvent) {
     use std::sync::atomic::Ordering;
     let shared = &writer.shared;
     match event {
         platform::SessionEvent::Query | platform::SessionEvent::Ending => {
-            shared.ending.store(true, Ordering::Release);
-            writer.settle_now();
+            // Held while set: a `send` either queued before (settled below)
+            // or sees it. Settled once per end (every window is told).
+            let first = {
+                let _state = writer.lock();
+                !shared.ending.swap(true, Ordering::AcqRel)
+            };
+            if first {
+                writer.settle_now();
+            }
             if event == platform::SessionEvent::Ending
                 && !shared.exit_logged.swap(true, Ordering::AcqRel)
             {
@@ -482,10 +632,11 @@ pub(crate) fn session_end(writer: &ShaderWriter, event: platform::SessionEvent) 
             }
         }
         platform::SessionEvent::Cancelled => {
-            shared.ending.store(false, Ordering::Release);
-            shared.exit_logged.store(false, Ordering::Release);
-            shared.cancelled.store(true, Ordering::Release);
-            logged!("session: the end of the session was cancelled; the player goes on");
+            if shared.ending.swap(false, Ordering::AcqRel) {
+                shared.exit_logged.store(false, Ordering::Release);
+                shared.cancelled.store(true, Ordering::Release);
+                logged!("session: the end of the session was cancelled; the player goes on");
+            }
         }
     }
 }
@@ -500,19 +651,23 @@ pub(crate) fn register_shader_writer(writer: ShaderWriter) {
         .unwrap_or_else(PoisonError::into_inner) = Some(writer);
 }
 
-/// Before a device loss restarts the player (`host/restart.rs`,
-/// `restart_player`; any thread): a shader record handed to the writer is
-/// put on disk first, for at most 2 s, so the `applying` of shaders that
-/// were on survives this process and keeps them off in the restarted one.
+/// Before a device loss or a GPU stall restarts the player
+/// (`host/restart.rs`, `restart_player`; any thread): the record is kept as
+/// it is from now on (`ShaderWriter::gpu_failed`; plugin shaders whose new
+/// list no frame with video was drawn with yet get `applying`), and a
+/// record handed to the writer is put on disk first, for at most 2 s, so
+/// the `applying` of shaders that were on survives this process and keeps
+/// them off in the restarted one.
 pub(crate) fn persist_shader_guard() {
     let writer = RESTART_WRITER
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
-    if let Some(writer) = writer
-        && !writer.persist(Duration::from_secs(2))
-    {
-        diag!("shaders: the crash guard's last write did not finish before the restart");
+    if let Some(writer) = writer {
+        writer.gpu_failed();
+        if !writer.persist(Duration::from_secs(2)) {
+            diag!("shaders: the crash guard's last write did not finish before the restart");
+        }
     }
 }
 
@@ -544,14 +699,16 @@ impl Host {
             .map(|plugin| plugin.manifest.id.clone())
             .unwrap_or_else(|| format!("plugin {owner}"));
         let presented = self.presented();
+        let writes = self.backend.render.shader_writes().count;
         self.shader_guard
-            .set(owner, handle, &plugin, files, presented);
+            .set(owner, handle, &plugin, files, presented, writes);
         Ok(())
     }
     /// A plugin stopped or was parked (its lists go with it).
     pub(crate) fn plugin_shaders_gone(&mut self, owner: u64) {
         let presented = self.presented();
-        self.shader_guard.owner_gone(owner, presented);
+        let writes = self.backend.render.shader_writes().count;
+        self.shader_guard.owner_gone(owner, presented, writes);
     }
     /// Every tick: the shader guard, its OSD line, and the memory line every
     /// [`MEMORY_EVERY`] while the host log is open.
@@ -563,6 +720,8 @@ impl Host {
             video: source["hasVideo"] == true,
             source: source["stamp"]["generation"].as_u64().unwrap_or(0),
             presented: self.presented(),
+            writes: self.backend.render.shader_writes(),
+            calls: self.backend.render.render_calls(),
         };
         self.shader_guard.tick(seen, now);
         if self.shader_guard.take_osd(self.shell.is_some()) {
@@ -617,6 +776,7 @@ mod tests {
             video: true,
             source: 1,
             presented,
+            ..Observed::default()
         }
     }
 
@@ -628,7 +788,7 @@ mod tests {
         let start = Instant::now();
         let at = |s: u64| start + Duration::from_secs(s);
         // Set while nothing plays: nothing written, however long.
-        guard.set(1, "shaders:x", "acme.a", 2, 0);
+        guard.set(1, "shaders:x", "acme.a", 2, 0, 0);
         guard.tick(Observed::default(), at(0));
         guard.tick(Observed::default(), at(100));
         assert_eq!(state(&guard, &file), None);
@@ -666,7 +826,7 @@ mod tests {
         guard.tick(playing(30), at(119));
         assert_eq!(state(&guard, &file), Some(ShaderState::Ok));
         // Quitting while armed settles on the calling thread.
-        guard.set(1, "shaders:x", "acme.a", 1, 30);
+        guard.set(1, "shaders:x", "acme.a", 1, 30, 0);
         guard.tick(playing(32), at(120));
         assert_eq!(state(&guard, &file), Some(ShaderState::Applying));
         guard.quit();
@@ -684,7 +844,7 @@ mod tests {
             video: false,
             ..playing(presented)
         };
-        guard.set(1, "render", "acme.a", 1, 0);
+        guard.set(1, "render", "acme.a", 1, 0, 0);
         guard.tick(audio(0), at(0));
         guard.tick(audio(5), at(30));
         assert_eq!(state(&guard, &file), None, "audio only");
@@ -704,7 +864,7 @@ mod tests {
         guard.tick(next, at(52));
         assert_eq!(state(&guard, &file), Some(ShaderState::Ok));
         // The video track goes while armed: settled.
-        guard.set(1, "render", "acme.a", 2, 9);
+        guard.set(1, "render", "acme.a", 2, 9, 0);
         guard.tick(playing(11), at(53));
         assert_eq!(state(&guard, &file), Some(ShaderState::Applying));
         guard.tick(audio(11), at(54));
@@ -717,12 +877,12 @@ mod tests {
     fn new_lists_from_the_same_plugins_while_armed_write_nothing() {
         let (_dir, file, mut guard) = guard();
         let start = Instant::now();
-        guard.set(1, "shaders:x", "acme.a", 1, 0);
+        guard.set(1, "shaders:x", "acme.a", 1, 0, 0);
         guard.tick(playing(FIRST_FRAMES), start);
         let written = guard.writer.flush();
         assert_eq!(written, 1);
         for step in 0..50 {
-            guard.set(1, "shaders:x", "acme.a", 1 + step % 3, 10);
+            guard.set(1, "shaders:x", "acme.a", 1 + step % 3, 10, 0);
             guard.tick(
                 playing(20 + step as u64),
                 start + Duration::from_millis(step as u64 * 16),
@@ -731,7 +891,7 @@ mod tests {
         assert_eq!(guard.writer.flush(), written, "no write per step");
         assert_eq!(state(&guard, &file), Some(ShaderState::Applying));
         // Another plugin joins: written again once its list is drawn.
-        guard.set(2, "render", "acme.b", 1, 100);
+        guard.set(2, "render", "acme.b", 1, 100, 0);
         guard.tick(playing(101), start + Duration::from_secs(1));
         assert_eq!(guard.writer.flush(), written);
         guard.tick(playing(102), start + Duration::from_secs(1));
@@ -739,7 +899,7 @@ mod tests {
         assert_eq!(file.read().shaders.unwrap().plugins, ["acme.a", "acme.b"]);
         // A list changes while armed, then playback pauses before it is
         // drawn: settled all the same.
-        guard.set(1, "shaders:x", "acme.a", 0, 103);
+        guard.set(1, "shaders:x", "acme.a", 0, 103, 0);
         guard.tick(
             Observed {
                 playing: false,
@@ -749,7 +909,7 @@ mod tests {
         );
         assert_eq!(state(&guard, &file), Some(ShaderState::Ok));
         // Every list emptied: settled.
-        guard.owner_gone(2, 103);
+        guard.owner_gone(2, 103, 0);
         assert_eq!(state(&guard, &file), Some(ShaderState::Ok));
     }
 
@@ -758,7 +918,7 @@ mod tests {
     #[test]
     fn the_end_of_the_session_settles_and_a_cancel_arms_again() {
         let (_dir, file, mut guard) = guard();
-        guard.set(1, "render", "acme.a", 1, 0);
+        guard.set(1, "render", "acme.a", 1, 0, 0);
         guard.tick(playing(FIRST_FRAMES), Instant::now());
         assert_eq!(state(&guard, &file), Some(ShaderState::Applying));
         session_end(&guard.writer(), SessionEvent::Query);
@@ -780,13 +940,13 @@ mod tests {
     #[test]
     fn nothing_is_armed_after_the_session_ended() {
         let (_dir, file, mut guard) = guard();
-        guard.set(1, "render", "acme.a", 1, 0);
+        guard.set(1, "render", "acme.a", 1, 0, 0);
         guard.tick(playing(FIRST_FRAMES), Instant::now());
         assert_eq!(state(&guard, &file), Some(ShaderState::Applying));
         session_end(&guard.writer(), SessionEvent::Ending);
         // Paused and resumed, a new plugin's list drawn: nothing written.
         guard.tick(Observed::default(), Instant::now());
-        guard.set(2, "render", "acme.b", 1, 10);
+        guard.set(2, "render", "acme.b", 1, 10, 0);
         guard.tick(playing(20), Instant::now());
         guard.tick(playing(21), Instant::now());
         assert_eq!(state(&guard, &file), Some(ShaderState::Ok));
@@ -803,7 +963,7 @@ mod tests {
     #[test]
     fn a_pending_applying_is_on_disk_once_persisted() {
         let (_dir, file, mut guard) = guard();
-        guard.set(1, "render", "acme.a", 1, 0);
+        guard.set(1, "render", "acme.a", 1, 0, 0);
         guard.tick(playing(FIRST_FRAMES), Instant::now());
         // No `flush`: what the restart path does.
         assert!(guard.writer().persist(Duration::from_secs(5)));
@@ -815,6 +975,134 @@ mod tests {
         stuck.lock().busy = false;
         // Without a registered writer the restart path does nothing.
         persist_shader_guard();
+    }
+
+    /// What the tick sees from the worker and the renderer: `writes`
+    /// `glsl-shaders` writes, the newest at `at` render calls, `calls` now.
+    fn rendering(seen: Observed, writes: u64, at: u64, calls: u64) -> Observed {
+        Observed {
+            writes: ShaderWrites {
+                count: writes,
+                calls: Some(at),
+            },
+            calls: Some(calls),
+            ..seen
+        }
+    }
+
+    /// 0.6.4: a first-use compile that hangs (a watchdog stall) or loses
+    /// the device fails before any frame is drawn, so the guard never
+    /// armed; such a failure after a list change counts as the plugins'.
+    /// From then on nothing settles the record (review 0.6.3 item 2a).
+    #[test]
+    fn a_gpu_failure_before_the_new_list_is_drawn_counts_as_a_shader_crash() {
+        let (_dir, file, mut guard) = guard();
+        let start = Instant::now();
+        guard.set(1, "shaders:x", "acme.a", 2, 0, 0);
+        // mpv got the list (write 1, at 4 render calls); a render call runs
+        // (it compiles) and does not return.
+        guard.tick(rendering(playing(0), 1, 4, 5), start);
+        assert_eq!(state(&guard, &file), None, "not armed: nothing drawn");
+        // The watchdog's restart: counted, on disk before the restart.
+        let writer = guard.writer();
+        assert!(writer.gpu_failed());
+        assert!(writer.persist(Duration::from_secs(5)));
+        let record = file.read().shaders.unwrap();
+        assert_eq!(record.state, ShaderState::Applying);
+        assert_eq!(record.plugins, ["acme.a"]);
+        assert!(!writer.gpu_failed(), "once");
+        // The UI thread goes on until its loop ends: playback stops, the
+        // lists are cleared, the player quits; the record stays.
+        guard.tick(Observed::default(), start + Duration::from_secs(1));
+        guard.set(1, "shaders:x", "acme.a", 0, 0, 1);
+        guard.quit();
+        assert_eq!(state(&guard, &file), Some(ShaderState::Applying));
+    }
+
+    /// Once a frame with video was drawn with the new list (a render call
+    /// that started after mpv got it returned), a failure is not theirs
+    /// unless the guard was armed; render calls without video do not count.
+    #[test]
+    fn a_gpu_failure_after_the_new_list_was_drawn_is_not_counted() {
+        let start = Instant::now();
+        let paused = Observed {
+            playing: false,
+            ..playing(0)
+        };
+        // Paused on a video: mpv redraws the frame with the new list.
+        let (_dir, file, mut guard) = guard();
+        guard.set(1, "render", "acme.a", 1, 0, 3);
+        guard.tick(rendering(paused, 3, 8, 9), start);
+        assert!(guard.untested.is_some(), "the worker has not written it");
+        guard.tick(rendering(paused, 4, 9, 10), start);
+        assert!(guard.untested.is_some(), "the call running at the write");
+        guard.tick(rendering(paused, 4, 9, 12), start);
+        assert!(guard.untested.is_none(), "drawn");
+        assert!(!guard.writer().gpu_failed());
+        assert!(guard.writer().persist(Duration::from_secs(5)));
+        assert_eq!(state(&guard, &file), None, "paused: never armed");
+
+        // No video yet (a source loading): its render calls move the mark.
+        let (_dir, file, mut guard) = self::guard();
+        let loading = Observed {
+            video: false,
+            ..paused
+        };
+        guard.set(1, "render", "acme.a", 1, 0, 0);
+        guard.tick(rendering(loading, 1, 2, 20), start);
+        guard.tick(rendering(paused, 1, 2, 21), start);
+        assert!(guard.untested.is_some(), "running");
+        guard.tick(rendering(paused, 1, 2, 22), start);
+        assert!(guard.untested.is_none(), "started after the last look");
+        // A new list: untested again until drawn.
+        guard.set(1, "render", "acme.a", 2, 0, 1);
+        assert!(guard.untested.is_some());
+        let writer = guard.writer();
+        assert!(writer.gpu_failed());
+        assert!(writer.persist(Duration::from_secs(5)));
+        assert_eq!(file.read().shaders.unwrap().state, ShaderState::Applying);
+
+        // A renderer that does not count its calls (macOS): nothing to wait
+        // for once mpv got the list.
+        let (_dir, _file, mut guard) = self::guard();
+        guard.set(1, "render", "acme.a", 1, 0, 0);
+        let uncounted = Observed {
+            writes: ShaderWrites {
+                count: 1,
+                calls: None,
+            },
+            ..paused
+        };
+        guard.tick(uncounted, start);
+        assert!(guard.untested.is_none());
+        // Every list cleared: nothing untested either.
+        guard.set(1, "render", "acme.a", 1, 0, 1);
+        guard.set(1, "render", "acme.a", 0, 0, 1);
+        assert!(guard.untested.is_none());
+        assert!(!guard.writer().gpu_failed());
+    }
+
+    /// No failure is counted for shaders while the session ends, and a
+    /// cancel without an end under way (each window is told) does nothing.
+    #[test]
+    fn a_cancel_acts_once_and_a_failure_while_the_session_ends_is_not_counted() {
+        let (_dir, file, mut guard) = guard();
+        session_end(&guard.writer(), SessionEvent::Cancelled);
+        assert!(!guard.writer.shared.cancelled.load(Ordering::Acquire));
+        guard.set(1, "render", "acme.a", 1, 0, 0);
+        session_end(&guard.writer(), SessionEvent::Query);
+        session_end(&guard.writer(), SessionEvent::Query);
+        session_end(&guard.writer(), SessionEvent::Cancelled);
+        assert!(guard.writer.shared.cancelled.swap(false, Ordering::AcqRel));
+        session_end(&guard.writer(), SessionEvent::Cancelled);
+        assert!(
+            !guard.writer.shared.cancelled.load(Ordering::Acquire),
+            "once"
+        );
+        session_end(&guard.writer(), SessionEvent::Ending);
+        assert!(!guard.writer().gpu_failed());
+        assert!(guard.writer().persist(Duration::from_secs(5)));
+        assert_eq!(state(&guard, &file), None, "nothing was armed");
     }
 
     /// The run after a crash with shaders on: non-empty lists are refused
@@ -888,7 +1176,7 @@ mod tests {
     #[test]
     fn without_a_file_nothing_is_written() {
         let mut guard = ShaderGuard::default();
-        guard.set(1, "render", "a", 2, 0);
+        guard.set(1, "render", "a", 2, 0, 0);
         guard.tick(playing(5), Instant::now());
         guard.quit();
         assert_eq!(guard.writer.flush(), 0);

@@ -495,7 +495,7 @@ impl Backend {
                             }
                             if let Err(error) = render_options.release(
                                 command.reply.owner,
-                                &mut crate::playback::video_render::Mpv(&mpv),
+                                &mut crate::playback::video_render::Mpv(&mpv, &out_render),
                             ) {
                                 let _ = events.send(Event::Broadcast(
                                     "host.error".into(),
@@ -505,7 +505,7 @@ impl Backend {
                             if let Err(error) = shaders.disable(
                                 command.reply.owner,
                                 &mut render_options,
-                                &mut crate::playback::video_render::Mpv(&mpv),
+                                &mut crate::playback::video_render::Mpv(&mpv, &out_render),
                             ) {
                                 let _ = events.send(Event::Broadcast(
                                     "host.error".into(),
@@ -622,7 +622,7 @@ impl Backend {
                         }
                         if command.method.starts_with("video.render.") {
                             let owner = command.reply.owner;
-                            let mut player = crate::playback::video_render::Mpv(&mpv);
+                            let mut player = crate::playback::video_render::Mpv(&mpv, &out_render);
                             let result = if command.method != "video.render.set" {
                                 render_options
                                     .release(owner, &mut player)
@@ -652,7 +652,7 @@ impl Backend {
                                 ready,
                                 out_render.gpu().is_some(),
                                 &mut render_options,
-                                &mut crate::playback::video_render::Mpv(&mpv),
+                                &mut crate::playback::video_render::Mpv(&mpv, &out_render),
                             );
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
@@ -833,7 +833,7 @@ impl Backend {
                     if render_was_gpu && !render_is_gpu {
                         let (pushes, written) = shaders.software_fallback(
                             &mut render_options,
-                            &mut crate::playback::video_render::Mpv(&mpv),
+                            &mut crate::playback::video_render::Mpv(&mpv, &out_render),
                         );
                         for (owner, status) in pushes {
                             let _ = events.send(Event::PluginMessage(

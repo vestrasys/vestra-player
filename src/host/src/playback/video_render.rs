@@ -316,8 +316,12 @@ pub fn status_failed(code: &str, message: &str) -> Value {
     json!({"state":"failed","error":{"code":code,"message":message}})
 }
 
-/// The real player.
-pub struct Mpv<'a>(pub &'a rsmpv::Mpv);
+/// The real player, and the renderer told of each `glsl-shaders` write
+/// (`Render::shaders_written`, for the plugin shader guard).
+pub struct Mpv<'a>(
+    pub &'a rsmpv::Mpv,
+    pub &'a crate::playback::renderer::Render,
+);
 impl Player for Mpv<'_> {
     fn set(&mut self, name: &str, value: &str) -> Result<(), String> {
         self.0.set_property(name, value).map_err(|e| e.to_string())
@@ -325,10 +329,14 @@ impl Player for Mpv<'_> {
     fn shaders(&mut self, paths: &[String]) -> Result<(), String> {
         // One item per call: a path may contain the list separator.
         let run = |args: &[&str]| self.0.command(args).map_err(|e| e.to_string());
-        run(&["change-list", "glsl-shaders", "clr", ""])?;
-        paths
-            .iter()
-            .try_for_each(|path| run(&["change-list", "glsl-shaders", "append", path]))
+        let written = run(&["change-list", "glsl-shaders", "clr", ""]).and_then(|()| {
+            paths
+                .iter()
+                .try_for_each(|path| run(&["change-list", "glsl-shaders", "append", path]))
+        });
+        // Taken or not, a render call from now on draws with what mpv holds.
+        self.1.shaders_written();
+        written
     }
 }
 
