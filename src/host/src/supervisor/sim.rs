@@ -2021,32 +2021,275 @@ fn resident_goes_to_standby_when_idle_legacy_only() {
     }
 }
 
-/// Item 8: a run started from its checkpoint is recorded at quit (today's
-/// `lazy_quit` records every classified run; its class is the checkpoint's
-/// until classified again).
+/// Item 8 (refined by the B1 re-review): a run started from its checkpoint
+/// is recorded at quit once its classification answer came back (today's
+/// `lazy_quit` writes the classes in `lazy.classes`, filled by that
+/// answer). A run that quits before the answer (within the 5 s after its
+/// ready) keeps the checkpoint on disk as it is.
 #[test]
 fn shutdown_checkpoints_runs_whose_class_is_known() {
     let mut w = World::new(Tunables::legacy());
     let u = standby_unit(&mut w, "n");
-    let holder = w.holder(u);
-    w.s.wake(holder, &Trigger::interactive(1));
+    let q = standby_unit(&mut w, "q");
+    for unit in [u, q] {
+        let holder = w.holder(unit);
+        w.s.wake(holder, &Trigger::interactive(1));
+    }
     w.tick(0);
     let pid = w.pid(u);
     let r =
         w.s.add_unit(UnitSpec::new("r", Class::Normal).checkpoint(true));
     w.tick(10);
+    w.s.classified(pid, None);
+    let rpid = w.pid(r);
+    w.s.classified(rpid, Some("live".into()));
+    w.tick(15);
     let actions = w.s.shutdown(20, 1_000);
     assert!(actions.contains(&Action::Checkpoint {
         unit: u,
         pid,
         resident: false
     }));
-    // Recorded resident and still resident: not written again.
-    assert!(
-        !actions
+    let written = |x: UnitId| {
+        actions
             .iter()
-            .any(|a| matches!(a, Action::Checkpoint { unit, .. } if *unit == r))
-    );
+            .any(|a| matches!(a, Action::Checkpoint { unit, .. } if *unit == x))
+    };
+    // Recorded resident and still resident: not written again.
+    assert!(!written(r));
+    // No answer yet: the old checkpoint stays.
+    assert!(!written(q), "{actions:?}");
+}
+
+// ---- B1 re-review: a stop into standby that lands stuck ------------------
+//
+// Probe `review-b1b`: after a stuck landing nothing kept the old process
+// in view, so a later wake, enable or reload spawned beside it. Today
+// (`lazy.rs` wake / `lazy_tick`, `package_manager.rs` `parked_process` +
+// `packages.reloads`) each such request waits 20 s from itself for the old
+// process, then fails; it starts at once if the process goes meanwhile.
+
+/// A unit woken once and stopped for standby by idle at `idle`; its
+/// process never goes. Returns (world, unit, old pid, stop time).
+fn stuck_standby_stop(tunables: Tunables) -> (World, UnitId, Pid, Ms) {
+    let idle = tunables.idle_timeout;
+    let mut w = World::new(tunables);
+    let u = standby_unit(&mut w, "n");
+    let holder = w.holder(u);
+    w.s.wake(holder, &Trigger::interactive(1));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.auto_reap = false;
+    let actions = w.tick(idle);
+    assert!(actions.iter().any(is_terminate), "{actions:?}");
+    (w, u, pid, idle)
+}
+
+fn is_could_not_start(a: &Action<u32>) -> bool {
+    matches!(
+        a,
+        Action::Notify {
+            notice: Notice::CouldNotStart,
+            ..
+        }
+    )
+}
+
+#[test]
+fn wake_after_a_stuck_standby_stop_waits_20_s_from_the_wake() {
+    for tunables in [Tunables::legacy(), target()] {
+        let wait = tunables.stop_wait;
+        let (mut w, u, pid, stop) = stuck_standby_stop(tunables);
+        let landed = stop + wait;
+        assert!(spawns(&w.tick(landed)).is_empty());
+        assert!(matches!(w.state(u), UnitState::Standby { .. }));
+        assert!(w.s.unit(u).unwrap().stuck);
+        let at = landed + 10_000;
+        w.tick(at);
+        assert_eq!(w.s.wake(pid, &Trigger::interactive(2)), Delivery::Started);
+        assert!(spawns(&w.tick(at)).is_empty(), "never beside the old one");
+        assert!(spawns(&w.tick(at + wait - 1)).is_empty());
+        assert!(matches!(w.state(u), UnitState::Standby { .. }));
+        let actions = w.tick(at + wait);
+        assert!(spawns(&actions).is_empty());
+        assert!(actions.contains(&Action::Revoke { unit: u, pid }));
+        assert!(actions.iter().any(is_could_not_start), "{actions:?}");
+        assert_eq!(
+            w.s.list_state(u),
+            Some(ListState::Failed(STUCK_WAKE.into()))
+        );
+        // Each later request waits again (here: the user's reload).
+        let again = at + wait + 1;
+        w.s.set_now(again);
+        w.s.restart(u, false, None).unwrap();
+        assert!(spawns(&w.tick(again)).is_empty());
+        assert!(spawns(&w.tick(again + wait - 1)).is_empty());
+        w.tick(again + wait);
+        assert_eq!(
+            w.s.list_state(u),
+            Some(ListState::Failed(STUCK_RELOAD.into()))
+        );
+    }
+}
+
+#[test]
+fn wake_after_a_stuck_standby_stop_starts_once_the_process_goes() {
+    for tunables in [Tunables::legacy(), target()] {
+        let wait = tunables.stop_wait;
+        let (mut w, u, pid, stop) = stuck_standby_stop(tunables);
+        let landed = stop + wait;
+        w.tick(landed);
+        w.s.wake(pid, &Trigger::interactive(2));
+        assert!(spawns(&w.tick(landed + 1_000)).is_empty());
+        w.s.process_reaped(pid, Some(0));
+        assert!(spawns(&w.tick(landed + 2_000)).is_empty(), "not cleaned");
+        w.s.backend_cleaned(pid);
+        let actions = w.tick(landed + 3_000);
+        let started = spawns(&actions);
+        assert_eq!(started.len(), 1, "{actions:?}");
+        let next = started[0].1;
+        assert!(actions.contains(&Action::Rekey {
+            unit: u,
+            from: pid,
+            to: next
+        }));
+        assert!(active(&w, u));
+        assert_eq!(w.delivered.last(), Some(&(next, 2)));
+    }
+}
+
+#[test]
+fn enable_after_a_stuck_standby_stop_waits_and_fails() {
+    for (tunables, busy) in [(Tunables::legacy(), true), (target(), false)] {
+        let wait = tunables.stop_wait;
+        let (mut w, u, _pid, stop) = stuck_standby_stop(tunables);
+        let landed = stop + wait;
+        w.tick(landed);
+        w.s.disable(u).unwrap();
+        w.tick(landed + 1_000);
+        assert_eq!(w.s.list_state(u), Some(ListState::Disabled));
+        let at = landed + 2_000;
+        w.s.set_now(at);
+        w.s.enable(u).unwrap();
+        // Today the enable is an entry in `packages.reloads`: busy.
+        assert_eq!(w.s.package_busy(u), busy);
+        assert!(spawns(&w.tick(at)).is_empty(), "never beside the old one");
+        assert!(spawns(&w.tick(at + wait - 1)).is_empty());
+        let actions = w.tick(at + wait);
+        assert!(spawns(&actions).is_empty());
+        assert!(!actions.iter().any(is_could_not_start), "{actions:?}");
+        assert_eq!(
+            w.s.list_state(u),
+            Some(ListState::Failed(STUCK_RELOAD.into()))
+        );
+    }
+}
+
+#[test]
+fn reload_after_a_stuck_standby_stop_waits_and_fails() {
+    for tunables in [Tunables::legacy(), target()] {
+        let wait = tunables.stop_wait;
+        let (mut w, u, pid, stop) = stuck_standby_stop(tunables);
+        let landed = stop + wait;
+        w.tick(landed);
+        let at = landed + 1;
+        w.s.set_now(at);
+        let job = w.s.restart(u, true, None).unwrap();
+        let actions = w.tick(at);
+        assert!(spawns(&actions).is_empty(), "never beside the old one");
+        // As today's reload: its recording goes and its entry points too.
+        assert!(actions.contains(&Action::DropCheckpoint { unit: u }));
+        assert!(actions.contains(&Action::Revoke { unit: u, pid }));
+        assert!(spawns(&w.tick(at + wait - 1)).is_empty());
+        w.tick(at + wait);
+        assert_eq!(
+            w.s.job_result(u, job),
+            Some(&JobResult::Failed(STUCK_RELOAD.into()))
+        );
+        assert_eq!(
+            w.s.list_state(u),
+            Some(ListState::Failed(STUCK_RELOAD.into()))
+        );
+    }
+}
+
+/// A wake 15 s into the stop waits 20 s from the wake (today), not the 5 s
+/// left of the stop's own wait; it starts if the process goes meanwhile.
+#[test]
+fn wake_late_in_a_standby_stop_waits_20_s_from_the_wake() {
+    for tunables in [Tunables::legacy(), target()] {
+        let wait = tunables.stop_wait;
+        let (mut w, u, pid, stop) = stuck_standby_stop(tunables.clone());
+        let at = stop + 15_000;
+        w.tick(at);
+        w.s.wake(pid, &Trigger::interactive(2));
+        let actions = w.tick(stop + wait);
+        assert!(spawns(&actions).is_empty());
+        assert!(!actions.iter().any(is_could_not_start), "{actions:?}");
+        assert!(matches!(w.state(u), UnitState::Standby { .. }));
+        assert!(spawns(&w.tick(at + wait - 1)).is_empty());
+        let actions = w.tick(at + wait);
+        assert!(actions.iter().any(is_could_not_start), "{actions:?}");
+        assert_eq!(
+            w.s.list_state(u),
+            Some(ListState::Failed(STUCK_WAKE.into()))
+        );
+
+        // The same wake, and the process goes 2 s after the stop's 20 s.
+        let (mut w, u, pid, stop) = stuck_standby_stop(tunables);
+        let at = stop + 15_000;
+        w.tick(at);
+        w.s.wake(pid, &Trigger::interactive(2));
+        w.tick(stop + wait);
+        w.s.process_reaped(pid, Some(0));
+        w.s.backend_cleaned(pid);
+        let started = spawns(&w.tick(stop + wait + 2_000));
+        assert_eq!(started.len(), 1);
+        assert!(active(&w, u));
+    }
+}
+
+/// Uninstalled while the process of a stuck stop may still write its data:
+/// the data goes once that process goes (today's `data_removals`).
+#[test]
+fn uninstall_after_a_stuck_stop_removes_data_once_the_process_goes() {
+    let wait = Tunables::legacy().stop_wait;
+    let (mut w, u, pid, stop) = stuck_standby_stop(Tunables::legacy());
+    w.tick(stop + wait);
+    w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
+    let actions = w.tick(stop + wait + 1);
+    assert!(!actions.contains(&Action::RemoveData { unit: u }));
+    assert_eq!(w.s.list_state(u), Some(ListState::Stopped));
+    w.s.process_reaped(pid, Some(0));
+    w.s.backend_cleaned(pid);
+    let actions = w.tick(stop + wait + 2);
+    assert!(actions.contains(&Action::RemoveData { unit: u }));
+}
+
+/// "Starting <name>…" 400 ms after the spawn (today `lazy.waking.since`,
+/// T7), also for a wake that first waited for the old process.
+#[test]
+fn starting_notice_counts_from_the_spawn() {
+    let (mut w, u, pid, stop) = stuck_standby_stop(Tunables::legacy());
+    w.auto_ready = false;
+    w.s.wake(pid, &Trigger::interactive(2));
+    w.tick(stop + 1);
+    w.s.process_reaped(pid, Some(0));
+    w.s.backend_cleaned(pid);
+    let spawned_at = stop + 3_000;
+    assert_eq!(spawns(&w.tick(spawned_at)).len(), 1);
+    let notice = |a: &Action<u32>| {
+        matches!(
+            a,
+            Action::Notify {
+                notice: Notice::Starting,
+                ..
+            }
+        )
+    };
+    assert!(!w.tick(spawned_at + 399).iter().any(notice));
+    assert!(w.tick(spawned_at + 400).iter().any(notice));
+    assert!(matches!(w.state(u), UnitState::Activating { .. }));
 }
 
 /// Item 9a: today a first run classified lazy while busy keeps its

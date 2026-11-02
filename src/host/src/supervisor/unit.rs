@@ -290,7 +290,8 @@ impl UnitSpec {
 
 /// Reap bookkeeping of the process a `Deactivating` unit waits for
 /// (systemd "control group empty" + `ExecStopPost=`; REPLACE `Host.cleanup`:
-/// it exists only while the unit is deactivating, so it cannot grow).
+/// it exists while the unit is deactivating, and after a stuck landing
+/// until that process goes: one per unit, so it cannot grow).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stopping {
     pub pid: Pid,
@@ -332,7 +333,8 @@ pub struct Unit<P> {
     pub placement: Placement,
     /// `packages.list` error text of `Failed` (today's `failures`).
     pub failure: Option<String>,
-    /// Landed after `STOP_WAIT` without reap/cleanup (T18).
+    /// Landed after `STOP_WAIT` without reap/cleanup (T18); `stopping`
+    /// keeps tracking that process until it goes.
     pub stuck: bool,
     /// Stopped with `then: Removed`; waiting for `remove_unit`.
     pub removed: bool,

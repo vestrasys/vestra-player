@@ -1578,6 +1578,7 @@ impl<P: Clone> Supervisor<P> {
 
     fn step_start(&mut self, u: UnitId) {
         let now = self.now;
+        let stop_wait = self.tunables.stop_wait;
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
@@ -1611,6 +1612,19 @@ impl<P: Clone> Supervisor<P> {
         if !unit.enabled() || unit.removed {
             self.answer_backlog(u, AnswerReason::Disabled);
             self.finish(u, JobResult::Dropped);
+            return;
+        }
+        // The previous stop landed stuck and its process may still run:
+        // never a second instance on the same data. The start waits
+        // `STOP_WAIT` from its own request for that process to go, then
+        // fails (today's `lazy.rs` wake / `packages.reloads`, §17.7).
+        if unit.stopping.is_some() {
+            let due = job.created + stop_wait;
+            if now < due {
+                self.timers.arm(&mut unit.gens, u, TimerKind::StopWait, due);
+            } else {
+                self.fail_stuck(u);
+            }
             return;
         }
         let hold = match unit.state {
@@ -1744,8 +1758,11 @@ impl<P: Clone> Supervisor<P> {
             job.deadline = Some(now + timeout);
             priority = job.priority;
             if matches!(job.cause(), Some(Cause::Trigger(_))) {
-                let due = (job.created + starting_notice).max(now);
-                self.timers.arm(&mut unit.gens, u, TimerKind::Notice, due);
+                // 400 ms after the spawn, as today's `lazy.waking.since`
+                // (T7), not after the request: a start that waited for an
+                // old process still gets its 400 ms.
+                self.timers
+                    .arm(&mut unit.gens, u, TimerKind::Notice, now + starting_notice);
             }
         }
         if let Some(from) = holder {
@@ -1879,8 +1896,10 @@ impl<P: Clone> Supervisor<P> {
             self.timers
                 .arm(&mut unit.gens, u, TimerKind::Classify, now + classify_wait);
         } else if on_demand && unit.recordable {
-            // Its class is the checkpoint's until classified again.
-            unit.classified_run = true;
+            // Classified again once (`classified`). Only that answer makes
+            // the run checkpointed at quit: today's `lazy_quit` writes the
+            // classes in `lazy.classes`, filled when the answer comes back;
+            // until then the checkpoint on disk stays as it is (§17.7).
             unit.may_reclassify = true;
         }
         if unit.job.as_ref().is_some_and(Job::starts) {
@@ -2108,7 +2127,12 @@ impl<P: Clone> Supervisor<P> {
                         unit.recorded = false;
                         unit.removed = true;
                         unit.state = UnitState::Inactive;
-                        self.pending.push(Action::RemoveData { unit: u });
+                        // The process of a stop that landed stuck may still
+                        // write its data: removed once it goes (`land_if_done`,
+                        // today's `data_removals`, §17.7).
+                        if unit.stopping.is_none() {
+                            self.pending.push(Action::RemoveData { unit: u });
+                        }
                     }
                     _ => {
                         if reason == StopReason::Disable
@@ -2386,7 +2410,14 @@ impl<P: Clone> Supervisor<P> {
                 }
             }
             TimerKind::StopGrace => self.kill(u),
-            TimerKind::StopWait => self.land(u, true),
+            TimerKind::StopWait => {
+                if unit.state.is_deactivating() {
+                    self.land(u, true);
+                } else {
+                    // A start waiting for a stop that landed stuck (§17.7).
+                    self.run.push_back(u);
+                }
+            }
             TimerKind::Verify => self.verify_done(u, false),
             TimerKind::NotBefore => self.run.push_back(u),
             TimerKind::Notice => {

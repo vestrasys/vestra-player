@@ -2,7 +2,10 @@
 //! unit lands in its `then` once its process is reaped **and** the backend
 //! cleaned up after it (T16), or after `STOP_WAIT` 20 s flagged stuck
 //! (T18). The "one instance per data directory" rule is a runnability
-//! condition: a job never starts a unit while it is `Deactivating`.
+//! condition: a job never starts a unit while it is `Deactivating`, nor
+//! while the process of a stop that landed stuck is still tracked
+//! (`Unit::stopping` outside `Deactivating`): it waits `STOP_WAIT` from its
+//! own request for that process to go, then fails (§17.7).
 #![forbid(unsafe_code)]
 
 use super::job::{Cause, JobKind, JobResult};
@@ -68,14 +71,68 @@ impl<P: Clone> Supervisor<P> {
     }
 
     pub(super) fn land_if_done(&mut self, u: UnitId) {
-        if self
-            .units
-            .get(&u)
-            .and_then(|unit| unit.stopping)
-            .is_some_and(|s| s.done())
-        {
-            self.land(u, false);
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        if !unit.stopping.is_some_and(|s| s.done()) {
+            return;
         }
+        if unit.state.is_deactivating() {
+            self.land(u, false);
+        } else {
+            // The process of a stop that landed stuck went after all: a
+            // start waiting for it goes on, an uninstall removes the data
+            // now (§17.7).
+            unit.stopping = None;
+            Timers::cancel(&mut unit.gens, TimerKind::StopWait);
+            if unit.removed {
+                self.pending.push(Action::RemoveData { unit: u });
+            }
+            self.run.push_back(u);
+        }
+    }
+
+    /// A start that waited `STOP_WAIT` from its request for the process of
+    /// a stop that landed stuck: failed with today's text, never kept in
+    /// standby (§17.7).
+    pub(super) fn fail_stuck(&mut self, u: UnitId) {
+        let wake = self.units.get(&u).is_some_and(|unit| {
+            matches!(
+                unit.job.as_ref().map(|job| &job.kind),
+                Some(JobKind::Start {
+                    cause: Cause::Trigger(_)
+                })
+            )
+        });
+        let text = if wake { STUCK_WAKE } else { STUCK_RELOAD };
+        self.answer_backlog(u, AnswerReason::CouldNotStart);
+        self.finish(u, JobResult::Failed(text.to_owned()));
+        // Today's `wake_failed` shows "<name> could not start".
+        if wake {
+            self.pending.push(Action::Notify {
+                unit: Some(u),
+                notice: super::Notice::CouldNotStart,
+            });
+        }
+        // Never kept in standby, not even from B3
+        // (`start_failure_keeps_registrations` is for a failed spawn): the
+        // old process may still run, so the next trigger would start a
+        // second instance on the same data.
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        if let UnitState::Standby { holder, .. } = unit.state {
+            self.pending.push(Action::Revoke {
+                unit: u,
+                pid: holder,
+            });
+        }
+        unit.stuck = true;
+        unit.failure = Some(text.to_owned());
+        unit.state = UnitState::Failed {
+            result: FailResult::Stuck,
+            text: text.to_owned(),
+        };
     }
 
     /// T16 / T18: the unit leaves `Deactivating` for its `then`.
@@ -88,7 +145,12 @@ impl<P: Clone> Supervisor<P> {
         };
         let now = self.now;
         let kept = unit.stopping.is_some_and(|s| s.kept);
-        unit.stopping = None;
+        // Stuck: the process is still tracked (reap / cleanup may come
+        // later), and every start waits for it (`step_start`, §17.7).
+        unit.stopping = unit
+            .stopping
+            .filter(|_| stuck)
+            .map(|s| super::unit::Stopping { kept: false, ..s });
         let hold = unit.hold_next.take().map(|delay| now + delay);
         if let Some(delay) = unit.after_reap.take()
             && let Some(job) = unit.job.as_mut().filter(|job| job.will_start())
@@ -140,13 +202,14 @@ impl<P: Clone> Supervisor<P> {
         if replay && then == Then::Inactive && !stuck {
             self.replay(u);
         }
+        let stop_wait = self.tunables.stop_wait;
         let job = self
             .units
             .get(&u)
             .and_then(|unit| unit.job.as_ref())
-            .map(|job| (job.kind.clone(), job.will_start()));
+            .map(|job| (job.kind.clone(), job.will_start(), job.created));
         match job {
-            Some((kind @ (JobKind::Stop { .. } | JobKind::Standby), _)) => {
+            Some((kind @ (JobKind::Stop { .. } | JobKind::Standby), _, _)) => {
                 let result = if stuck {
                     JobResult::Failed(STUCK_RELOAD.to_owned())
                 } else if kind == JobKind::Standby && then != Then::Standby {
@@ -158,40 +221,11 @@ impl<P: Clone> Supervisor<P> {
                 };
                 self.finish(u, result);
             }
-            Some((kind, true)) if stuck => {
-                let wake = matches!(
-                    kind,
-                    JobKind::Start {
-                        cause: Cause::Trigger(_)
-                    }
-                );
-                let text = if wake { STUCK_WAKE } else { STUCK_RELOAD };
-                self.answer_backlog(u, AnswerReason::CouldNotStart);
-                self.finish(u, JobResult::Failed(text.to_owned()));
-                // Today's `wake_failed` shows "<name> could not start".
-                if wake {
-                    self.pending.push(Action::Notify {
-                        unit: Some(u),
-                        notice: super::Notice::CouldNotStart,
-                    });
-                }
-                // Never kept in standby, not even from B3
-                // (`start_failure_keeps_registrations` is for a failed
-                // spawn): the old process may still run, so the next
-                // trigger would start a second instance on the same data.
-                if let Some(unit) = self.units.get_mut(&u) {
-                    if let UnitState::Standby { holder, .. } = unit.state {
-                        self.pending.push(Action::Revoke {
-                            unit: u,
-                            pid: holder,
-                        });
-                    }
-                    unit.failure = Some(text.to_owned());
-                    unit.state = UnitState::Failed {
-                        result: FailResult::Stuck,
-                        text: text.to_owned(),
-                    };
-                }
+            // A start that waited its own `STOP_WAIT` fails now; one asked
+            // later in the stop waits the rest of its 20 s (`step_start`;
+            // today each wait counts from its request, §17.7).
+            Some((_, true, created)) if stuck && now >= created + stop_wait => {
+                self.fail_stuck(u);
             }
             _ => {}
         }

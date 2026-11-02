@@ -245,8 +245,9 @@ impl<P: Clone> Supervisor<P> {
         let active = matches!(unit.state, UnitState::Active { .. });
         let deactivating = unit.state.is_deactivating();
         // Today an enable that waits for the previous process is an entry
-        // in `packages.reloads`: `package_busy` until it starts.
-        if cause == Cause::Enable && deactivating && self.tunables.enable_wait_busy {
+        // in `packages.reloads`: `package_busy` until it starts; also when
+        // that stop already landed stuck (`parked_process`, §17.7).
+        if cause == Cause::Enable && unit.stopping.is_some() && self.tunables.enable_wait_busy {
             job.origin = Origin::PackageRpc;
         }
         let Some(installed) = unit.job.as_ref() else {

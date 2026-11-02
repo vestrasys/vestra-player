@@ -106,8 +106,12 @@ fn s_kill_on_active_unit_does_nothing() {
 #[test]
 fn s_shutdown_checkpoints_before_any_terminate() {
     let mut sim = Sim::new(&Profile::b1());
-    sim.in_active(normal("a"));
-    sim.in_active(normal("b"));
+    let (_, a) = sim.in_active(normal("a"));
+    let (_, b) = sim.in_active(normal("b"));
+    // Setup only (B1 re-review, §17.7): a run is checkpointed at quit once
+    // its classification answer came back, as today's `lazy_quit`.
+    sim.classified(a, false);
+    sim.classified(b, false);
     let acts = sim.shutdown(1_000);
     let last_ck = acts
         .iter()

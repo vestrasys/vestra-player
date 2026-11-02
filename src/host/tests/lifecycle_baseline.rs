@@ -984,14 +984,32 @@ fn quit_stops_own_processes_one_after_another() {
         }
         root.run_timed(4, &[("VESTRA_SHARED", "0"), ("VESTRA_LAZY", "0")])
     };
-    let (_, empty) = run(0);
-    let (log, endless) = run(N);
-    assert_eq!(log.matches("1.0.0 stopping for quit").count(), N, "{log}");
+    // A warm-up run first (a cold start of the host and Node once made the
+    // empty baseline as slow as six endless cleanups), then three of each,
+    // interleaved, compared by their medians.
+    run(0);
+    let median = |mut runs: Vec<std::time::Duration>| {
+        runs.sort_unstable();
+        runs[runs.len() / 2]
+    };
+    let (mut empty, mut endless, mut log) = (Vec::new(), Vec::new(), String::new());
+    for _ in 0..3 {
+        empty.push(run(0).1);
+        let (stderr, took) = run(N);
+        assert_eq!(
+            stderr.matches("1.0.0 stopping for quit").count(),
+            N,
+            "{stderr}"
+        );
+        endless.push(took);
+        log = stderr;
+    }
+    let (empty, endless) = (median(empty), median(endless));
     let extra = endless.saturating_sub(empty);
     // B0: expected to change in B2b/B4 (then about 300 ms).
     assert!(
         extra >= std::time::Duration::from_millis(1_000),
-        "quit took {endless:?} with {N} endless cleanups, {empty:?} with none: \
+        "quit took {endless:?} (median) with {N} endless cleanups, {empty:?} with none: \
          not one after another?\n{log}"
     );
 }
