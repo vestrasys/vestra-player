@@ -174,9 +174,11 @@ struct Catalog {
 /// installer said so (`packages.install`'s `enabled`); otherwise a first
 /// install runs, and an update or reinstall of an installed package keeps
 /// its state, so one the user disabled stays disabled and never runs (as in
-/// VS Code).
+/// VS Code). A built-in always runs (user ruling 2026-10-26; the host never
+/// installs over one, and `committed` enforces it again).
 pub fn enables_after_install(before: &Installed, disabled: bool, requested: Option<bool>) -> bool {
-    requested.unwrap_or(before.current.is_none() || !disabled)
+    before.instance.as_ref().is_some_and(|i| i.builtin)
+        || requested.unwrap_or(before.current.is_none() || !disabled)
 }
 
 pub struct Store {
@@ -1872,6 +1874,16 @@ pub(crate) mod tests {
         let fresh = Installed::default();
         assert!(enables_after_install(&fresh, false, None), "first install");
         assert!(!enables_after_install(&fresh, false, Some(false)));
+        let mut builtin = Instance::new(Source::Bundled);
+        builtin.builtin = true;
+        let builtin = Installed {
+            instance: Some(builtin),
+            ..Installed::default()
+        };
+        assert!(
+            enables_after_install(&builtin, true, Some(false)),
+            "built-ins always run"
+        );
 
         store.prepare("counter", 0, &first, "one").unwrap();
         store.commit("counter", "one").unwrap();
