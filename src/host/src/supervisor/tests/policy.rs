@@ -397,7 +397,7 @@ both! {
 }
 
 // Idle timeout: Resident never (§3.3) — the target. Today's `lazy_idle`
-// does not look at the class (coordinator ruling D3, §17.7): the `…_today`
+// does not look at the class (coordinator ruling D3, §17.7): the `…_legacy`
 // twin below.
 #[test]
 fn p_resident_never_idles() {
@@ -412,7 +412,7 @@ fn p_resident_never_idles() {
 // after the idle timeout, and parked when it has none (`park` keeps
 // `resident` in the checkpoint) (D3).
 #[test]
-fn p_resident_idles_today() {
+fn p_resident_idles_legacy() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, pid) = sim.in_active(resident("r"));
     sim.idle_out(pid);

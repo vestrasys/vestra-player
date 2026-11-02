@@ -9,7 +9,7 @@ fn sim() -> Sim {
 
 /// The cells whose answers per held trigger (A9) or carried backlog (§4.3)
 /// arrive with B3 (§17.7 item 5) run under `Profile::b3()`, with a
-/// `…_today` twin under `b1()`.
+/// `…_legacy` twin under `b1()`.
 fn sim_with(p: &Profile) -> Sim {
     let mut s = Sim::new(p);
     s.settle();
@@ -152,13 +152,13 @@ fn m_start_waiting_stop_replaces_and_answers_backlog() {
 }
 
 #[test]
-fn m_start_waiting_stop_replaces_and_drops_backlog_today() {
+fn m_start_waiting_stop_replaces_and_drops_backlog_legacy() {
     let mut sim = sim();
     let (u, _) = start_waiting(&mut sim);
     sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
     assert_eq!(sim.job(u).map(|j| j.kind()), Some("Stop"));
     let acts = sim.run();
-    assert!(answers(&acts).is_empty(), "today: dropped silently");
+    assert!(answers(&acts).is_empty(), "legacy: dropped silently");
     assert!(spawns(&acts).is_empty());
     assert_eq!(sim.backlog_len(u), 0);
 }
@@ -207,7 +207,7 @@ fn m_start_running_stop_terminates_activating_and_answers() {
 }
 
 #[test]
-fn m_start_running_stop_terminates_activating_today_answers_nothing() {
+fn m_start_running_stop_terminates_activating_legacy_answers_nothing() {
     let mut sim = sim();
     let (u, _, pid) = start_running(&mut sim);
     sim.spawned(pid, true);
@@ -218,7 +218,7 @@ fn m_start_running_stop_terminates_activating_today_answers_nothing() {
         terminates(&acts).iter().map(|t| t.3).collect::<Vec<_>>(),
         vec![pid]
     );
-    assert!(answers(&acts).is_empty(), "today: dropped silently");
+    assert!(answers(&acts).is_empty(), "legacy: dropped silently");
 }
 
 #[test]
@@ -242,7 +242,7 @@ fn m_start_running_restart_terminates_then_starts_again_keeping_backlog() {
 }
 
 #[test]
-fn m_start_running_restart_today_drops_backlog_at_the_new_start() {
+fn m_start_running_restart_legacy_drops_backlog_at_the_new_start() {
     let mut sim = sim();
     let (u, _, pid) = start_running(&mut sim);
     sim.spawned(pid, true);
@@ -253,7 +253,7 @@ fn m_start_running_restart_today_drops_backlog_at_the_new_start() {
     let acts = sim.gone(pid);
     let new = spawns(&acts);
     assert_eq!(new.len(), 1);
-    assert!(answers(&acts).is_empty(), "today: dropped silently");
+    assert!(answers(&acts).is_empty(), "legacy: dropped silently");
     sim.spawned(new[0], true);
     assert!(
         deliveries(&sim.ready(new[0])).is_empty(),

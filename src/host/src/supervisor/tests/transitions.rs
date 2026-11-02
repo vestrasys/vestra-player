@@ -287,7 +287,7 @@ fn t08_spawn_error_b1_fails_and_revokes() {
     let acts = sim.spawned(sim.pid(u), false);
     assert!(sim.st(u).is_failed(), "{:?}", sim.st(u));
     assert!(has(&acts, "Revoke"));
-    assert!(answers(&acts).is_empty(), "today: no answer per trigger");
+    assert!(answers(&acts).is_empty(), "legacy: no answer per trigger");
     assert_eq!(
         acts.iter().filter(|a| is_could_not_start_notice(a)).count(),
         1,
@@ -551,7 +551,7 @@ fn t18_stuck_stop_fails_waiting_reload_with_text() {
     assert!(sim.st(u).is_failed(), "{:?}", sim.st(u));
 }
 
-// "interactive answered" is A9 (B3, §17.7 item 5): `b3()`, and a `…_today`
+// "interactive answered" is A9 (B3, §17.7 item 5): `b3()`, and a `…_legacy`
 // twin with the notice and no answer.
 #[test]
 fn t18_stuck_standby_stop_fails_waiting_wake_and_answers() {
@@ -583,7 +583,7 @@ fn t18_stuck_standby_stop_fails_waiting_wake_and_answers() {
 }
 
 #[test]
-fn t18_stuck_standby_stop_fails_waiting_wake_today() {
+fn t18_stuck_standby_stop_fails_waiting_wake_legacy() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, pid) = sim.deactivating_to_standby(normal("a"));
     let t = sim.now;
@@ -668,7 +668,7 @@ fn t20_wake_during_hold_waits_and_answers_interactive() {
 }
 
 // T21 Standby --Stop job (disable)--> Inactive, disabled; Revoke; checkpoint kept; backlog answered
-// ("backlog answered" is A9: `b3()`; the `…_today` twin drops it silently)
+// ("backlog answered" is A9: `b3()`; the `…_legacy` twin drops it silently)
 #[test]
 fn t21_disable_in_standby_revokes_keeps_checkpoint() {
     let mut sim = Sim::new(&Profile::b3());
@@ -687,7 +687,7 @@ fn t21_disable_in_standby_revokes_keeps_checkpoint() {
 }
 
 #[test]
-fn t21_disable_in_standby_revokes_keeps_checkpoint_today() {
+fn t21_disable_in_standby_revokes_keeps_checkpoint_legacy() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, holder) = sim.in_standby(normal("a"));
     sim.settle();
@@ -700,7 +700,7 @@ fn t21_disable_in_standby_revokes_keeps_checkpoint_today() {
     assert_eq!(count(&acts, "Revoke"), 1);
     assert!(!has(&acts, "DropCheckpoint"), "checkpoint kept");
     assert!(spawns(&acts).is_empty());
-    assert!(answers(&acts).is_empty(), "today: dropped silently");
+    assert!(answers(&acts).is_empty(), "legacy: dropped silently");
     assert_eq!(sim.backlog_len(u), 0);
 }
 

@@ -19,9 +19,9 @@
 //! reserve, backlog 64, lane 256, start retry 3, per-class restart policy,
 //! request timeout 5 min, a process budget). Tests whose expected values
 //! differ between the two are generated for both with `both!`.
-//! `Profile::b3()` is today plus B3 (`Tunables::today().with_b3(8)`): the
+//! `Profile::b3()` is `legacy()` plus B3 (`Tunables::legacy().with_b3(8)`): the
 //! A9/§4.3 cases (answers per held trigger, triggers carried across a
-//! restart) run under it, each with a `…_today` twin under `b1()` that
+//! restart) run under it, each with a `…_legacy` twin under `b1()` that
 //! pins today's behaviour (supervisor.md §17.7 items 5 and 6, D1).
 //!
 //! Lines marked `// ANSWERED (… §17.2 Qn)` were design questions, answered
@@ -111,7 +111,7 @@ impl Profile {
             budget: None,
         }
     }
-    /// B3 on top of today (`Tunables::today().with_b3(8)`): the queue
+    /// B3 on top of `legacy()` (`Tunables::legacy().with_b3(8)`): the queue
     /// limits and the B3 switches of §17.7 (`answer_held`: §4.6 answers per
     /// held trigger, A9; `restart_keeps_backlog`: held triggers carried
     /// across a restart, §4.3), with today's timeouts and no restart policy
@@ -379,14 +379,14 @@ pub(super) type Act = Action<u32>;
 /// Memory for `Tunables::target` (the budget is overridden from the profile).
 const PHYS_MIB: u64 = 16_384;
 
-/// §11 Tunables from the core's presets: `today()` for B1, `target(cores
+/// §11 Tunables from the core's presets: `legacy()` for B1, `target(cores
 /// 8, …)` for the target. Only the machine-dependent budget is taken from
 /// the profile; `t00_presets_match_design_values` checks the rest against
 /// the design's numbers.
 fn tunables(p: &Profile) -> Tunables {
     let mut t = match p.name {
-        "b1" => Tunables::today(),
-        "b3" => Tunables::today().with_b3(8),
+        "b1" => Tunables::legacy(),
+        "b3" => Tunables::legacy().with_b3(8),
         _ => Tunables::target(8, PHYS_MIB),
     };
     t.process_budget = p.budget;
@@ -912,18 +912,18 @@ fn t00_presets_match_design_values() {
             assert_eq!(t.max_active, None, "B1: wakes unlimited");
             assert_eq!(t.first_run_limit, Some(p.max_active), "B1: 8 first runs");
         }
-        let today = p.name == "b1";
-        let bf = if today {
+        let legacy = p.name == "b1";
+        let bf = if legacy {
             BuiltinsFirst::Queued
         } else {
             BuiltinsFirst::Installed
         };
         assert_eq!(t.builtins_first, bf, "{}", p.name);
         // §17.7 switches that `with_b3` sets.
-        assert_eq!(t.answer_held, !today, "{}", p.name);
-        assert_eq!(t.restart_keeps_backlog, !today, "{}", p.name);
-        assert_eq!(t.start_failure_notice, !today, "{}", p.name);
-        assert_eq!(t.start_failure_keeps_registrations, !today, "{}", p.name);
+        assert_eq!(t.answer_held, !legacy, "{}", p.name);
+        assert_eq!(t.restart_keeps_backlog, !legacy, "{}", p.name);
+        assert_eq!(t.start_failure_notice, !legacy, "{}", p.name);
+        assert_eq!(t.start_failure_keeps_registrations, !legacy, "{}", p.name);
         let retries = n.start_retry.map_or(0, |r| r.count);
         assert_eq!(retries, p.start_retries, "{}", p.name);
         for c in [

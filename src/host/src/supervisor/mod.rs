@@ -1027,14 +1027,13 @@ impl<P: Clone> Supervisor<P> {
 
     /// §5 `classified` (MOVE `lazy_classified`; T12 / T13). `resident`: why
     /// it holds a live resource. A run without a checkpoint is classified
-    /// (the 5 s timer runs); with `Tunables::reclassify` (today) any ready
-    /// run of a recordable unit may be, once per run, as today's
-    /// `lazy_ready` classifies on every ready.
+    /// (the 5 s timer runs); any other ready run of a recordable unit may
+    /// be, once per run, as today's `lazy_ready` classifies on every ready
+    /// (supervisor.md §17.7 D2).
     pub fn classified(&mut self, pid: Pid, resident: Option<String>) {
         let Some(u) = self.current(pid) else {
             return;
         };
-        let reclassify = self.tunables.reclassify;
         let parks_when_idle = self.tunables.first_run_parks_when_idle;
         let Some(unit) = self.units.get_mut(&u) else {
             return;
@@ -1075,18 +1074,8 @@ impl<P: Clone> Supervisor<P> {
             let idle_standby = self.tunables.policy(unit.class).idle_standby;
             let at_once = unit.run_is_first && idle_standby;
             let busy = unit.job.is_some() || unit.work.busy();
-            if !(at_once && !busy) && !reclassify {
-                // Classified once (T12): the checkpoint is written now.
-                // Today (`reclassify`) a lazy class is written only when it
-                // goes to standby, or at quit.
-                unit.recorded = true;
-                unit.recorded_resident = false;
-                self.pending.push(Action::Checkpoint {
-                    unit: u,
-                    pid,
-                    resident: false,
-                });
-            }
+            // A lazy class is written only when it goes to standby, or at quit
+            // (today's `lazy_classified` / `park` / `lazy_quit`).
             let Some(unit) = self.units.get_mut(&u) else {
                 return;
             };
@@ -1846,7 +1835,6 @@ impl<P: Clone> Supervisor<P> {
     fn try_ready(&mut self, u: UnitId) {
         let now = self.now;
         let on_demand = self.tunables.on_demand;
-        let reclassify = self.tunables.reclassify;
         let classify_wait = self.tunables.classify_wait;
         let Some(unit) = self.units.get_mut(&u) else {
             return;
@@ -1884,9 +1872,8 @@ impl<P: Clone> Supervisor<P> {
         }
         // A run without a checkpoint is classified (T12/T13); never a
         // development load or a unit without a recording key (today's
-        // `lazy_development`, `lazy_key_of` is `None`). With `reclassify`
-        // (today) a recorded run may be classified again (`classified`),
-        // without the timer.
+        // `lazy_development`, `lazy_key_of` is `None`). A recorded run may be
+        // classified again (`classified`, once per run), without the timer.
         if on_demand && unit.recordable && !unit.recorded {
             unit.classifying = true;
             self.timers
@@ -1894,7 +1881,7 @@ impl<P: Clone> Supervisor<P> {
         } else if on_demand && unit.recordable {
             // Its class is the checkpoint's until classified again.
             unit.classified_run = true;
-            unit.may_reclassify = reclassify;
+            unit.may_reclassify = true;
         }
         if unit.job.as_ref().is_some_and(Job::starts) {
             self.finish(u, JobResult::Done);

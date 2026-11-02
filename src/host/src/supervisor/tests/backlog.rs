@@ -52,7 +52,7 @@ fn b_resolve_drop_callback_are_kept_in_order() {
 }
 
 // A9 answers per held trigger arrive with B3 (`answer_held`, §17.7 item 5):
-// run under `Profile::b3()`; the `…_today` twin pins today's silence.
+// run under `Profile::b3()`; the `…_legacy` twin pins today's silence.
 #[test]
 fn b_cancel_answers_each_non_event_trigger_events_silent() {
     let mut sim = Sim::new(&Profile::b3());
@@ -80,7 +80,7 @@ fn b_cancel_answers_each_non_event_trigger_events_silent() {
 // Today a canceled start drops its held triggers silently (`lazy.waking`
 // is dropped; §17.7 item 5).
 #[test]
-fn b_cancel_today_drops_held_triggers_silently() {
+fn b_cancel_legacy_drops_held_triggers_silently() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, h) = woken_unit(&mut sim);
     sim.wake(h, cmd(1));
@@ -109,7 +109,7 @@ fn b_start_failure_answers_could_not_start() {
 // Today a wake's failure shows one "could not start" notice and answers
 // no held trigger (`wake_failed`; §17.7 item 5).
 #[test]
-fn b_start_failure_today_notifies_once_and_answers_nothing() {
+fn b_start_failure_legacy_notifies_once_and_answers_nothing() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, h) = woken_unit(&mut sim);
     sim.wake(h, cmd(1));

@@ -38,7 +38,7 @@ impl World {
     fn off_demand() -> Tunables {
         Tunables {
             on_demand: false,
-            ..Tunables::today()
+            ..Tunables::legacy()
         }
     }
     /// Runs jobs at `now` and lets the fake adapter answer until quiet.
@@ -135,7 +135,7 @@ fn standby_unit(world: &mut World, id: &str) -> UnitId {
 
 #[test]
 fn boot_builtins_first_and_eight_first_runs() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     w.auto_ready = false;
     let third = (0..12)
         .map(|i| w.s.add_unit(UnitSpec::new(format!("t{i}"), Class::Normal)))
@@ -189,7 +189,7 @@ fn boot_builtins_first_and_eight_first_runs() {
 
 #[test]
 fn verifying_builtin_holds_back_third_party_first_runs() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let b =
         w.s.add_unit(UnitSpec::new("b", Class::Builtin).shared().verify());
     let t = w.s.add_unit(UnitSpec::new("t", Class::Normal));
@@ -218,7 +218,7 @@ fn verify_timeout_runs_in_own_process() {
 
 #[test]
 fn standby_wake_round_trip() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
     assert_eq!(w.tick(0), [Action::Replay { unit: u, holder }]);
@@ -296,7 +296,7 @@ fn busy_answer_keeps_it_running_and_asks_again_later() {
 
 #[test]
 fn wake_while_deactivating_waits_for_reap() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     w.auto_reap = false;
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
@@ -331,7 +331,7 @@ fn wake_while_deactivating_waits_for_reap() {
 
 #[test]
 fn wake_whose_stopped_process_never_goes_fails_after_20_s() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     w.auto_reap = false;
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
@@ -402,9 +402,9 @@ fn storm(tunables: Tunables) -> (World, Vec<UnitId>, usize) {
 }
 
 #[test]
-fn storm_of_200_wakes_today_starts_all_at_once() {
-    let (w, units, max) = storm(Tunables::today());
-    assert_eq!(max, 200, "today: wakes are immediate and unbounded (D4)");
+fn storm_of_200_wakes_legacy_starts_all_at_once() {
+    let (w, units, max) = storm(Tunables::legacy());
+    assert_eq!(max, 200, "legacy: wakes are immediate and unbounded (D4)");
     assert!(units.iter().all(|u| active(&w, *u)));
     let mut payloads = w.delivered.iter().map(|(_, p)| *p).collect::<Vec<_>>();
     payloads.sort_unstable();
@@ -413,7 +413,7 @@ fn storm_of_200_wakes_today_starts_all_at_once() {
 
 #[test]
 fn storm_of_200_wakes_with_b3_limits_is_bounded_and_complete() {
-    let (w, units, max) = storm(Tunables::today().with_b3(8));
+    let (w, units, max) = storm(Tunables::legacy().with_b3(8));
     // max_active 4 + 1 interactive reserve + 1 overrun.
     assert_eq!(max, 6);
     assert!(units.iter().all(|u| active(&w, *u)));
@@ -437,7 +437,7 @@ fn storm_of_200_wakes_with_b3_limits_is_bounded_and_complete() {
 
 #[test]
 fn event_wakes_use_the_plain_limit_and_are_muted_at_start_up() {
-    let mut w = World::new(Tunables::today().with_b3(8));
+    let mut w = World::new(Tunables::legacy().with_b3(8));
     w.auto_ready = false;
     let units = (0..10)
         .map(|i| standby_unit(&mut w, &format!("n{i}")))
@@ -519,9 +519,9 @@ fn package_rpcs_are_busy_while_one_is_installed() {
 fn reload_while_activating_carries_held_triggers_from_b3() {
     for b3 in [false, true] {
         let tunables = if b3 {
-            Tunables::today().with_b3(8)
+            Tunables::legacy().with_b3(8)
         } else {
-            Tunables::today()
+            Tunables::legacy()
         };
         reload_while_activating(tunables, b3);
     }
@@ -569,7 +569,7 @@ fn reload_while_activating(tunables: Tunables, carried: bool) {
 
 #[test]
 fn uninstall_from_standby_removes_data_and_refuses_triggers() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
     w.tick(0);
@@ -598,7 +598,7 @@ fn uninstall_from_standby_removes_data_and_refuses_triggers() {
 // ---- failures -----------------------------------------------------------
 
 #[test]
-fn start_timeout_fails_without_retry_today() {
+fn start_timeout_fails_without_retry_legacy() {
     let mut w = World::new(World::off_demand());
     w.auto_ready = false;
     w.auto_reap = false;
@@ -629,12 +629,12 @@ fn start_timeout_fails_without_retry_today() {
 }
 
 #[test]
-fn spawn_failure_revokes_today_and_keeps_entry_points_from_b3() {
+fn spawn_failure_revokes_legacy_and_keeps_entry_points_from_b3() {
     for b3 in [false, true] {
         let tunables = if b3 {
-            Tunables::today().with_b3(8)
+            Tunables::legacy().with_b3(8)
         } else {
-            Tunables::today()
+            Tunables::legacy()
         };
         let mut w = World::new(tunables);
         w.auto_spawn = false;
@@ -671,7 +671,7 @@ fn spawn_failure_revokes_today_and_keeps_entry_points_from_b3() {
 }
 
 #[test]
-fn crash_today_fails_every_class() {
+fn crash_legacy_fails_every_class() {
     for class in [Class::Builtin, Class::Normal, Class::Development] {
         let mut w = World::new(World::off_demand());
         let u = w.s.add_unit(UnitSpec::new("x", class).checkpoint(false));
@@ -699,7 +699,7 @@ fn crash_today_fails_every_class() {
 
 #[test]
 fn b4_normal_crash_holds_in_standby_and_builtin_restarts() {
-    let mut w = World::new(Tunables::today().with_b4());
+    let mut w = World::new(Tunables::legacy().with_b4());
     let n = standby_unit(&mut w, "n");
     let b = w.s.add_unit(UnitSpec::new("b", Class::Builtin));
     w.auto_classify = Some(true);
@@ -759,7 +759,7 @@ fn b4_normal_crash_holds_in_standby_and_builtin_restarts() {
 
 #[test]
 fn b4_start_limit_fails_after_five_crashes() {
-    let mut w = World::new(Tunables::today().with_b4());
+    let mut w = World::new(Tunables::legacy().with_b4());
     let b = w.s.add_unit(UnitSpec::new("b", Class::Builtin));
     w.auto_classify = Some(true);
     let mut now = 0;
@@ -792,7 +792,7 @@ fn b4_start_limit_fails_after_five_crashes() {
 
 #[test]
 fn runtime_failed_is_never_retried() {
-    let mut w = World::new(Tunables::today().with_b4());
+    let mut w = World::new(Tunables::legacy().with_b4());
     w.auto_ready = false;
     let b =
         w.s.add_unit(UnitSpec::new("b", Class::Builtin).checkpoint(true));
@@ -934,7 +934,7 @@ fn member_transport_failure_restarts_the_group_and_fault_quarantines() {
 
 #[test]
 fn backlog_overflow_and_stop_answer_every_held_trigger() {
-    let mut tunables = Tunables::today().with_b3(8);
+    let mut tunables = Tunables::legacy().with_b3(8);
     tunables.backlog_max = Some(3);
     let mut w = World::new(tunables);
     w.auto_ready = false;
@@ -974,7 +974,7 @@ fn backlog_overflow_and_stop_answer_every_held_trigger() {
 
 #[test]
 fn lane_bound_refuses_new_starts() {
-    let mut tunables = Tunables::today().with_b3(8);
+    let mut tunables = Tunables::legacy().with_b3(8);
     tunables.lane_max = Some(2);
     tunables.max_active = Some(0);
     tunables.interactive_reserve = 0;
@@ -1000,7 +1000,7 @@ fn lane_bound_refuses_new_starts() {
 // ---- budget / LRU ---------------------------------------------------------
 
 fn budget_world() -> (World, [UnitId; 6]) {
-    let mut tunables = Tunables::today();
+    let mut tunables = Tunables::legacy();
     tunables.idle_timeout = 3_600_000;
     tunables.process_budget = Some(4);
     let mut w = World::new(tunables);
@@ -1090,7 +1090,7 @@ fn memory_pressure_standby_skips_busy_and_resident() {
 
 #[test]
 fn merge_start_start_raises_priority() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
     w.tick(0);
@@ -1150,7 +1150,7 @@ fn merge_restart_then_stop_stop_wins() {
 
 #[test]
 fn merge_stop_then_trigger_never_re_enables() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
     w.tick(0);
@@ -1174,7 +1174,7 @@ fn merge_stop_then_trigger_never_re_enables() {
 
 #[test]
 fn stronger_then_wins_while_deactivating() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     w.auto_reap = false;
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
@@ -1254,7 +1254,7 @@ fn timers_cost_nothing_until_due() {
 
 #[test]
 fn list_changed_ignores_process_and_reports_state() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u = standby_unit(&mut w, "n");
     w.tick(0);
     let holder = w.holder(u);
@@ -1280,7 +1280,7 @@ fn list_changed_ignores_process_and_reports_state() {
     );
     // A first run waiting or activating is `starting` (today `first_queue`
     // and a pending activation): announced.
-    let mut w2 = World::new(Tunables::today());
+    let mut w2 = World::new(Tunables::legacy());
     w2.auto_ready = false;
     let f = w2.s.add_unit(UnitSpec::new("f", Class::Normal));
     assert_eq!(w2.s.list_state(f), Some(ListState::Starting));
@@ -1304,7 +1304,7 @@ fn list_changed_ignores_process_and_reports_state() {
 #[test]
 fn seeded_runs_are_deterministic() {
     let run = || {
-        let mut tunables = Tunables::today().with_b3(8).with_b4();
+        let mut tunables = Tunables::legacy().with_b3(8).with_b4();
         tunables.normal.start_retry = Some(Retry {
             count: 3,
             base: 250,
@@ -1335,7 +1335,7 @@ fn seeded_runs_are_deterministic() {
 
 #[test]
 fn q15_upgrade_of_a_disabled_unit_applies_without_starting() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u = w.s.add_unit(
         UnitSpec::new("n", Class::Normal)
             .checkpoint(false)
@@ -1368,7 +1368,7 @@ fn q15_upgrade_of_a_disabled_unit_applies_without_starting() {
 
 #[test]
 fn q24_backoff_and_hold_count_from_the_reap() {
-    let mut w = World::new(Tunables::today().with_b4());
+    let mut w = World::new(Tunables::legacy().with_b4());
     w.auto_reap = false;
     let n = standby_unit(&mut w, "n");
     let b =
@@ -1409,11 +1409,11 @@ fn q24_backoff_and_hold_count_from_the_reap() {
 // ---- coordinator rulings after the spec tests (§17.2) -----------------------
 
 #[test]
-fn builtins_first_today_vs_design_row() {
+fn builtins_first_legacy_vs_design_row() {
     for mode in [BuiltinsFirst::Queued, BuiltinsFirst::Installed] {
         let tunables = Tunables {
             builtins_first: mode,
-            ..Tunables::today()
+            ..Tunables::legacy()
         };
         let mut w = World::new(tunables);
         w.auto_ready = false;
@@ -1446,7 +1446,7 @@ fn builtins_first_today_vs_design_row() {
 
 #[test]
 fn runner_restart_replays_members_with_a_standby_checkpoint() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let a = standby_unit(&mut w, "x");
     let m = w.s.add_unit(
         UnitSpec::new("m", Class::Builtin)
@@ -1484,7 +1484,7 @@ fn runner_restart_replays_members_with_a_standby_checkpoint() {
 #[test]
 fn crash_during_wake_keeps_a_start_only_for_held_events() {
     for with_event in [false, true] {
-        let mut w = World::new(Tunables::today().with_b3(8).with_b4());
+        let mut w = World::new(Tunables::legacy().with_b3(8).with_b4());
         w.auto_ready = false;
         let u = standby_unit(&mut w, "n");
         let holder = w.holder(u);
@@ -1513,7 +1513,7 @@ fn crash_during_wake_keeps_a_start_only_for_held_events() {
 
 #[test]
 fn resident_start_timeout_retries_and_never_lands_in_standby() {
-    let mut w = World::new(Tunables::today().with_b4());
+    let mut w = World::new(Tunables::legacy().with_b4());
     w.auto_ready = false;
     let r =
         w.s.add_unit(UnitSpec::new("r", Class::Normal).checkpoint(true));
@@ -1539,10 +1539,10 @@ fn resident_start_timeout_retries_and_never_lands_in_standby() {
     assert_eq!(spawns(&w.tick(next)).len(), 1);
 }
 
-// ---- today() reproduces today (B1 review, supervisor.md §17.7) ----------
+// ---- legacy() reproduces today (B1 review, supervisor.md §17.7) ----------
 //
 // The independent review's probe cases (one per deviation) and one test per
-// fix. "Today" cites the code `Tunables::today()` reproduces.
+// fix. "Today" cites the code `Tunables::legacy()` reproduces.
 
 fn target() -> Tunables {
     Tunables::target(8, 16_384)
@@ -1557,7 +1557,7 @@ fn is_checkpoint(a: &Action<u32>) -> bool {
 /// `lazy_classified` checks `lazy.first_runs`); a reload runs until idle.
 #[test]
 fn only_a_first_run_goes_to_standby_when_classified() {
-    for tunables in [Tunables::today(), target()] {
+    for tunables in [Tunables::legacy(), target()] {
         let idle = tunables.idle_timeout;
         let mut w = World::new(tunables);
         let u = standby_unit(&mut w, "n");
@@ -1574,7 +1574,7 @@ fn only_a_first_run_goes_to_standby_when_classified() {
         assert!(matches!(w.state(u), UnitState::Standby { .. }));
     }
     // A first run classified lazy goes at once.
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
     w.tick(0);
     let pid = w.pid(u);
@@ -1593,7 +1593,7 @@ fn only_a_first_run_goes_to_standby_when_classified() {
 /// (today's `lazy_development` only logs).
 #[test]
 fn development_is_never_classified_or_checkpointed() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u =
         w.s.add_unit(UnitSpec::new("d", Class::Development).start_timeout(120_000));
     let mut actions = w.tick(0);
@@ -1618,7 +1618,7 @@ fn development_is_never_classified_or_checkpointed() {
 /// `lazy_key` is `None`): never a first run, classified or in standby.
 #[test]
 fn unrecordable_builtin_starts_at_boot_and_stays() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u =
         w.s.add_unit(UnitSpec::new("b", Class::Builtin).unrecordable());
     let mut actions = w.tick(0);
@@ -1643,7 +1643,7 @@ fn unrecordable_builtin_starts_at_boot_and_stays() {
 /// and lists `disabled` (today's `set_enabled(false)` + `package_list`).
 #[test]
 fn disabling_a_failed_unit_lists_disabled_and_clears_the_failure() {
-    for tunables in [Tunables::today(), target()] {
+    for tunables in [Tunables::legacy(), target()] {
         let mut w = World::new(tunables);
         let u =
             w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
@@ -1669,7 +1669,7 @@ fn disabling_a_failed_unit_lists_disabled_and_clears_the_failure() {
 /// A disable of a unit still stopping after its failure lands `Inactive`.
 #[test]
 fn disable_while_a_failure_stops_lands_inactive() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     w.auto_reap = false;
     let u =
         w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
@@ -1694,7 +1694,7 @@ fn disable_while_a_failure_stops_lands_inactive() {
 /// the merge table (an enable is never busy for an enable).
 #[test]
 fn second_enable_while_the_standby_process_goes() {
-    for (tunables, busy) in [(Tunables::today(), true), (target(), false)] {
+    for (tunables, busy) in [(Tunables::legacy(), true), (target(), false)] {
         let idle = tunables.idle_timeout;
         let mut w = World::new(tunables);
         w.auto_reap = false;
@@ -1724,7 +1724,7 @@ fn second_enable_while_the_standby_process_goes() {
 /// `set_enabled` checks `package_busy` first).
 #[test]
 fn disable_during_a_package_rpc_changes_nothing() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     w.auto_reap = false;
     let u =
         w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
@@ -1741,8 +1741,8 @@ fn disable_during_a_package_rpc_changes_nothing() {
 #[test]
 fn crash_notice_only_from_b4() {
     for (tunables, notice) in [
-        (Tunables::today(), false),
-        (Tunables::today().with_b4(), true),
+        (Tunables::legacy(), false),
+        (Tunables::legacy().with_b4(), true),
     ] {
         let mut w = World::new(tunables);
         let u =
@@ -1764,8 +1764,8 @@ fn crash_notice_only_from_b4() {
 #[test]
 fn boot_start_failure_notice_only_from_b3() {
     for (tunables, notice) in [
-        (Tunables::today(), false),
-        (Tunables::today().with_b3(8), true),
+        (Tunables::legacy(), false),
+        (Tunables::legacy().with_b3(8), true),
     ] {
         let mut w = World::new(tunables);
         w.auto_spawn = false;
@@ -1789,8 +1789,8 @@ fn boot_start_failure_notice_only_from_b3() {
 #[test]
 fn canceled_start_answers_held_triggers_only_from_b3() {
     for (tunables, answered) in [
-        (Tunables::today(), false),
-        (Tunables::today().with_b3(8), true),
+        (Tunables::legacy(), false),
+        (Tunables::legacy().with_b3(8), true),
     ] {
         let mut w = World::new(tunables);
         w.auto_ready = false;
@@ -1815,7 +1815,7 @@ fn canceled_start_answers_held_triggers_only_from_b3() {
 /// presets, and not again at reap.
 #[test]
 fn leaving_a_standby_stop_revokes_at_once() {
-    for tunables in [Tunables::today(), target()] {
+    for tunables in [Tunables::legacy(), target()] {
         for request in ["disable", "uninstall", "reload"] {
             let idle = tunables.idle_timeout;
             let mut w = World::new(tunables.clone());
@@ -1862,7 +1862,7 @@ fn leaving_a_standby_stop_revokes_at_once() {
 /// is dropped once that run stops (`forget_running`).
 #[test]
 fn previous_pid_forwards_only_while_its_run_goes_on() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u = standby_unit(&mut w, "n");
     let p1 = w.holder(u);
     w.tick(0);
@@ -1884,7 +1884,7 @@ fn previous_pid_forwards_only_while_its_run_goes_on() {
 /// absorption (F3): it is held for the new run, not forwarded.
 #[test]
 fn previous_pid_trigger_is_absorbed_by_a_restart() {
-    let mut w = World::new(Tunables::today().with_b3(8));
+    let mut w = World::new(Tunables::legacy().with_b3(8));
     let u = standby_unit(&mut w, "n");
     let p1 = w.holder(u);
     w.s.wake(p1, &Trigger::interactive(1));
@@ -1902,7 +1902,7 @@ fn previous_pid_trigger_is_absorbed_by_a_restart() {
 /// start is installed: today a message to a stopped owner has no receiver.
 #[test]
 fn dead_pid_is_dropped_while_a_restart_waits() {
-    let mut w = World::new(Tunables::today().with_b3(8));
+    let mut w = World::new(Tunables::legacy().with_b3(8));
     w.auto_reap = false;
     let u =
         w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
@@ -1927,7 +1927,7 @@ fn dead_pid_is_dropped_while_a_restart_waits() {
 /// target keeps it running.
 #[test]
 fn reclassified_resident_at_a_later_ready() {
-    for (tunables, idles) in [(Tunables::today(), true), (target(), false)] {
+    for (tunables, idles) in [(Tunables::legacy(), true), (target(), false)] {
         let idle = tunables.idle_timeout;
         let mut w = World::new(tunables);
         let u = standby_unit(&mut w, "n");
@@ -1965,10 +1965,13 @@ fn reclassified_resident_at_a_later_ready() {
 /// meanwhile. With B6 (`resident_idle_standby` off) a Resident never stands
 /// by (§3.3).
 #[test]
-fn resident_goes_to_standby_when_idle_today_only() {
+fn resident_goes_to_standby_when_idle_legacy_only() {
     for (tunables, idles) in [
-        (Tunables::today(), true),
-        (Tunables::today().with_b3(8).with_b4().with_b5(16_384), true),
+        (Tunables::legacy(), true),
+        (
+            Tunables::legacy().with_b3(8).with_b4().with_b5(16_384),
+            true,
+        ),
         (target(), false),
     ] {
         let idle = tunables.idle_timeout;
@@ -2023,7 +2026,7 @@ fn resident_goes_to_standby_when_idle_today_only() {
 /// until classified again).
 #[test]
 fn shutdown_checkpoints_runs_whose_class_is_known() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u = standby_unit(&mut w, "n");
     let holder = w.holder(u);
     w.s.wake(holder, &Trigger::interactive(1));
@@ -2050,11 +2053,11 @@ fn shutdown_checkpoints_runs_whose_class_is_known() {
 /// first-run place and goes to standby as soon as it is idle (checked every
 /// `CHECK_MS`); off, it frees the place and waits the idle timeout.
 #[test]
-fn busy_lazy_first_run_parks_when_idle_today() {
+fn busy_lazy_first_run_parks_when_idle_legacy() {
     for parks in [true, false] {
         let mut w = World::new(Tunables {
             first_run_parks_when_idle: parks,
-            ..Tunables::today()
+            ..Tunables::legacy()
         });
         let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
         w.tick(0);
@@ -2083,9 +2086,9 @@ fn busy_lazy_first_run_parks_when_idle_today() {
 /// Item 9b: today a boot start not yet spawned (verifying) lists `stopped`
 /// (`StartQueue`); the target says `starting` (§9).
 #[test]
-fn boot_start_waiting_lists_stopped_today() {
+fn boot_start_waiting_lists_stopped_legacy() {
     for (tunables, listed) in [
-        (Tunables::today(), ListState::Stopped),
+        (Tunables::legacy(), ListState::Stopped),
         (target(), ListState::Starting),
     ] {
         let mut w = World::new(tunables);
@@ -2105,7 +2108,7 @@ fn boot_start_waiting_lists_stopped_today() {
         assert!(active(&w, u));
     }
     // A first run waiting for a place is `starting` today too (`first_queue`).
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     w.auto_ready = false;
     let units = (0..9)
         .map(|i| w.s.add_unit(UnitSpec::new(format!("f{i}"), Class::Normal)))
@@ -2119,7 +2122,7 @@ fn boot_start_waiting_lists_stopped_today() {
 /// standby); with B4 the crash's own restart is installed.
 #[test]
 fn crash_cancels_an_installed_standby_job() {
-    let mut w = World::new(Tunables::today());
+    let mut w = World::new(Tunables::legacy());
     let u =
         w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
     w.tick(0);
@@ -2131,7 +2134,7 @@ fn crash_cancels_an_installed_standby_job() {
     assert_eq!(w.s.job_result(u, job), Some(&JobResult::Canceled));
     assert!(matches!(w.state(u), UnitState::Failed { .. }));
 
-    let mut w = World::new(Tunables::today().with_b4());
+    let mut w = World::new(Tunables::legacy().with_b4());
     let b =
         w.s.add_unit(UnitSpec::new("b", Class::Builtin).checkpoint(true));
     w.auto_reap = false;

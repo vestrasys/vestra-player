@@ -22,7 +22,7 @@ fn nc_start_plus_start_one_job_triggers_accumulate() {
 
 // start, then stop: Stop replaces; held triggers answered
 // Answers per held trigger (A9) arrive with B3 (§17.7 item 5): `b3()`, and a
-// `…_today` twin.
+// `…_legacy` twin.
 #[test]
 fn nc_start_then_stop_answers_held_triggers() {
     let mut sim = Sim::new(&Profile::b3());
@@ -42,7 +42,7 @@ fn nc_start_then_stop_answers_held_triggers() {
 }
 
 #[test]
-fn nc_start_then_stop_today_drops_held_triggers() {
+fn nc_start_then_stop_legacy_drops_held_triggers() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, holder) = sim.in_standby(normal("a"));
     sim.settle();
@@ -86,7 +86,7 @@ fn nc_restart_plus_stop_stop_wins() {
 // process, wait for reap, drop checkpoint, re-verify built-in, start; held
 // triggers carried to the new run
 // Carrying the held triggers is NEW (B3, `restart_keeps_backlog`, §17.7
-// item 5): `b3()`, and a `…_today` twin where they are lost.
+// item 5): `b3()`, and a `…_legacy` twin where they are lost.
 #[test]
 fn nc_reload_while_activating_carries_triggers() {
     let mut sim = Sim::new(&Profile::b3());
@@ -111,7 +111,7 @@ fn nc_reload_while_activating_carries_triggers() {
 }
 
 #[test]
-fn nc_reload_while_activating_today_loses_held_triggers() {
+fn nc_reload_while_activating_legacy_loses_held_triggers() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, holder) = sim.in_standby(normal("a"));
     sim.settle();
@@ -226,7 +226,7 @@ fn nc_wake_while_deactivating_fails_after_20s() {
 }
 
 #[test]
-fn nc_wake_while_deactivating_fails_after_20s_today() {
+fn nc_wake_while_deactivating_fails_after_20s_legacy() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, pid) = sim.deactivating_to_standby(normal("a"));
     let t = sim.now;
@@ -247,7 +247,7 @@ fn nc_wake_while_deactivating_fails_after_20s_today() {
 
 // disable while waking: Stop{Disable, then: Inactive} replaces the Start;
 // Terminate{Disable} the activating process; backlog answered "is disabled"
-// (A9: `b3()`, and a `…_today` twin)
+// (A9: `b3()`, and a `…_legacy` twin)
 #[test]
 fn nc_disable_while_waking() {
     let mut sim = Sim::new(&Profile::b3());
@@ -273,7 +273,7 @@ fn nc_disable_while_waking() {
 }
 
 #[test]
-fn nc_disable_while_waking_today() {
+fn nc_disable_while_waking_legacy() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, holder) = sim.in_standby(normal("a"));
     sim.settle();
@@ -291,7 +291,7 @@ fn nc_disable_while_waking_today() {
             .collect::<Vec<_>>(),
         vec![("disable".into(), pid)]
     );
-    assert!(answers(&acts).is_empty(), "today: dropped silently");
+    assert!(answers(&acts).is_empty(), "legacy: dropped silently");
     sim.gone(pid);
     assert_eq!(sim.st(u), S::Inactive);
 }
@@ -316,7 +316,7 @@ both! {
 }
 
 // uninstall while anything: Stop{then: Removed} supersedes all but another package RPC
-// (the answer to the held trigger is A9: `b3()`, and a `…_today` twin)
+// (the answer to the held trigger is A9: `b3()`, and a `…_legacy` twin)
 #[test]
 fn nc_uninstall_supersedes_internal_jobs() {
     let mut sim = Sim::new(&Profile::b3());
@@ -333,7 +333,7 @@ fn nc_uninstall_supersedes_internal_jobs() {
 }
 
 #[test]
-fn nc_uninstall_supersedes_internal_jobs_today() {
+fn nc_uninstall_supersedes_internal_jobs_legacy() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, holder) = sim.in_standby(normal("a"));
     sim.settle();
@@ -345,7 +345,7 @@ fn nc_uninstall_supersedes_internal_jobs_today() {
     let acts = sim.run();
     assert!(has(&acts, "RemoveData"));
     assert!(spawns(&acts).is_empty());
-    assert!(answers(&acts).is_empty(), "today: dropped silently");
+    assert!(answers(&acts).is_empty(), "legacy: dropped silently");
 }
 
 #[test]

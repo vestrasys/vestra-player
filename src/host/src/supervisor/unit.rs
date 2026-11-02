@@ -28,8 +28,8 @@ pub struct Pid(pub u64);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RunnerId(pub u64);
 
-/// §3.3. `Resident` is observed at a ready (`classified`; the first run and,
-/// with `Tunables::reclassify`, every later one), never declared.
+/// §3.3. `Resident` is observed at a ready (`classified` at every ready of a
+/// recordable unit, supervisor.md §17.7 D2), never declared.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Class {
     Builtin,
@@ -363,7 +363,7 @@ pub struct Unit<P> {
     /// checkpoint): it is checkpointed at shutdown (today's `lazy.classes`).
     pub(super) classified_run: bool,
     /// A ready run with a checkpoint that `classified` may still classify
-    /// (`Tunables::reclassify`, once per run).
+    /// (once per run, §17.7 D2).
     pub(super) may_reclassify: bool,
     /// The checkpoint on disk says resident (today's `resident_at_ready`):
     /// a resident classification writes it only when it does not.

@@ -71,7 +71,7 @@ fn l_builtin_lane_runs_first_in_add_order_b1() {
     assert_eq!(
         spawned_units(&sim, &acts),
         vec![b1, b2, n1, n2],
-        "today: built-ins first in the tick, then third-party first runs"
+        "legacy: built-ins first in the tick, then third-party first runs"
     );
 }
 
@@ -195,7 +195,7 @@ fn l_max_active_limits_wakes_target() {
     assert_eq!(spawns(&sim.run()).len(), p.max_active);
 }
 
-// B1–B2: 8 for first runs only, wakes unlimited (today)
+// B1–B2: 8 for first runs only, wakes unlimited (legacy)
 #[test]
 fn l_b1_wakes_unlimited() {
     let mut sim = Sim::new(&Profile::b1());

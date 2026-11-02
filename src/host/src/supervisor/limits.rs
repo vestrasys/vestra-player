@@ -1,5 +1,5 @@
 //! Per-class policy (systemd unit settings, §3.3) and the tunables (§11).
-//! `Tunables::today()` reproduces today's decisions (B1–B2); every later
+//! `Tunables::legacy()` reproduces today's decisions (B1–B2); every later
 //! batch's change is a value here, not a code path of its own.
 #![forbid(unsafe_code)]
 
@@ -125,7 +125,7 @@ pub struct Tunables {
     /// Runner restart backoff (B4: first immediate, then 3 s × 2ⁿ).
     pub runner_backoff: Option<Backoff>,
 
-    // Switches between today's behaviour (`today()`, B1–B2: the core
+    // Switches between today's behaviour (`legacy()`, B1–B2: the core
     // reproduces today exactly) and the design's (supervisor.md §17.7).
     /// "<name> stopped" / "…ran out of memory" after a crash (T25; B4).
     /// Today a crash only records the failure.
@@ -148,13 +148,6 @@ pub struct Tunables {
     /// the merge table (an enable is the user's, never busy for a later
     /// enable).
     pub enable_wait_busy: bool,
-    /// Every ready of a recordable unit is classified again (today's
-    /// `lazy_ready` → `lazy_classify`): a plugin resident now is re-recorded
-    /// resident, and a run classified lazy is recorded at quit. On in every
-    /// preset: a plugin whose behaviour changed is re-recorded (Chrome
-    /// re-evaluates a service worker's activity per run too). Off: only a
-    /// run without a checkpoint is classified (T12/T13).
-    pub reclassify: bool,
     /// A first run classified lazy while busy keeps its first-run place and
     /// goes to standby as soon as it is idle, checked every `idle_check`
     /// (today's `lazy_first_lazy`). Off (B3, job queue): it frees its place
@@ -179,7 +172,7 @@ pub struct Tunables {
 }
 
 impl Policy {
-    fn today(class: Class) -> Self {
+    fn legacy(class: Class) -> Self {
         Self {
             restart: RestartMode::No,
             restart_sec: None,
@@ -209,13 +202,13 @@ impl Policy {
 
 impl Tunables {
     /// Today's values (B1–B2): the core reproduces today's decisions.
-    pub fn today() -> Self {
+    pub fn legacy() -> Self {
         Self {
             on_demand: true,
-            builtin: Policy::today(Class::Builtin),
-            resident: Policy::today(Class::Resident),
-            normal: Policy::today(Class::Normal),
-            development: Policy::today(Class::Development),
+            builtin: Policy::legacy(Class::Builtin),
+            resident: Policy::legacy(Class::Resident),
+            normal: Policy::legacy(Class::Normal),
+            development: Policy::legacy(Class::Development),
             idle_timeout: 60_000,
             stop_wait: 20_000,
             verify_wait: 3_000,
@@ -241,7 +234,6 @@ impl Tunables {
             answer_held: false,
             restart_keeps_backlog: false,
             enable_wait_busy: true,
-            reclassify: true,
             first_run_parks_when_idle: true,
             idle_check: 250,
             boot_wait_lists_stopped: true,
@@ -332,7 +324,10 @@ impl Tunables {
 
     /// B6 targets (§11) on top of B3–B5.
     pub fn target(cores: usize, physical_mib: u64) -> Self {
-        let mut t = Self::today().with_b3(cores).with_b4().with_b5(physical_mib);
+        let mut t = Self::legacy()
+            .with_b3(cores)
+            .with_b4()
+            .with_b5(physical_mib);
         t.idle_timeout = 30_000;
         // §3.3 "Resident never stands by" (§17.7 D3).
         t.resident_idle_standby = false;
@@ -356,7 +351,7 @@ impl Tunables {
 }
 impl Default for Tunables {
     fn default() -> Self {
-        Self::today()
+        Self::legacy()
     }
 }
 
@@ -400,8 +395,8 @@ mod tests {
     }
 
     #[test]
-    fn today_reproduces_todays_values() {
-        let t = Tunables::today();
+    fn legacy_reproduces_todays_values() {
+        let t = Tunables::legacy();
         assert_eq!(t.idle_timeout, 60_000);
         assert_eq!(t.normal.start_timeout, 15_000);
         assert_eq!(t.normal.stop_grace, 300);
@@ -422,16 +417,16 @@ mod tests {
         assert!(!t.start_failure_keeps_registrations);
         assert!(!t.crash_notice && !t.start_failure_notice && !t.answer_held);
         assert!(!t.restart_keeps_backlog && !t.runner_restart_waits_cleanup);
-        assert!(t.enable_wait_busy && t.reclassify && t.first_run_parks_when_idle);
+        assert!(t.enable_wait_busy && t.first_run_parks_when_idle);
         assert!(t.boot_wait_lists_stopped && t.resident_idle_standby);
-        let b3 = Tunables::today().with_b3(8);
+        let b3 = Tunables::legacy().with_b3(8);
         assert!(!b3.enable_wait_busy && !b3.first_run_parks_when_idle);
         assert!(!b3.boot_wait_lists_stopped);
-        assert!(b3.reclassify && b3.resident_idle_standby);
+        assert!(b3.resident_idle_standby);
         let target = Tunables::target(8, 16_384);
         assert!(target.crash_notice && target.start_failure_notice && target.answer_held);
         assert!(target.restart_keeps_backlog && target.runner_restart_waits_cleanup);
-        assert!(!target.enable_wait_busy && target.reclassify);
+        assert!(!target.enable_wait_busy);
         assert!(!target.first_run_parks_when_idle && !target.boot_wait_lists_stopped);
         assert!(!target.resident_idle_standby);
     }
