@@ -34,10 +34,10 @@ A map for API maintainers: how the components divide the work, how plugins are l
   | Reason | Where the host stops it | Delivered? |
   | --- | --- | --- |
   | `quit` | The player quits: the host is dropped (the shared runner first, one `runner.stop`; then each own process) | Yes, 300 ms, then killed |
-  | `disable` | `packages.setEnabled(id, false)` of a running plugin | Yes |
+  | `disable` | `packages.setEnabled(id, false)` of a running plugin; an install with `enabled: false` over a running version (the new version is committed disabled and does not start) | Yes |
   | `uninstall` | `packages.uninstall` of a running plugin; also a first install (no previous version) cancelled while the new plugin activates | Yes (its data is removed after the process is gone) |
   | `reload` | `packages.reload` of a running plugin | Yes |
-  | `upgrade` | An install over a running package stops the old version: an update, a reinstall of the same version, and a `replace` from another source (fresh data) alike; also a new version stopped because its install was cancelled while the previous version comes back | Yes |
+  | `upgrade` | An install over a running package that runs on stops the old version: an update, a reinstall of the same version, and a `replace` from another source (fresh data) alike (an update of a disabled package has no process to stop); also a new version stopped because its install was cancelled while the previous version comes back | Yes |
   | `idle` | Lazy activation parks it (`host/lazy.rs`, idle or a lazy first run) | Yes, with the longer park wait |
   | `failed` | A malformed request; an oversized (> 1 MiB) or unparsable line from an own process; an oversized line from a member; a failed or timed-out activation; an uncaught exception the shared runner attributes to a member (the runner retires it with `failed` itself, before the host's stop); a full input queue of an own process; its stdin write failing; its process exiting | Partly, see below |
 

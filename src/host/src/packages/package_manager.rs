@@ -667,11 +667,20 @@ impl Host {
         // digest: its recording is of no use).
         self.forget_parked(&id, true);
         let running = self.running(&id);
-        // `upgrade` for every install over a running version: an update, a
-        // reinstall of the same version, and a `replace` from another
-        // source (`fresh` data) alike.
+        // `upgrade` for every install over a running version that runs on:
+        // an update, a reinstall of the same version, and a `replace` from
+        // another source (`fresh` data) alike. An install that leaves it
+        // off (`enabled: false`; a running package is never disabled, so
+        // only the installer's option does this) switches the plugin off:
+        // `disable`, as `packages.setEnabled(false)` (its session values go
+        // too, at the commit).
         if let Some(owner) = running {
-            self.disable(owner, StopReason::Upgrade);
+            let reason = if enabled {
+                StopReason::Upgrade
+            } else {
+                StopReason::Disable
+            };
+            self.disable(owner, reason);
         }
         // Parked just now: its process may still be finishing; the new
         // version starts once it is gone, as after a running one.

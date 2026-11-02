@@ -73,7 +73,8 @@ pub enum StopReason {
     /// The player quits (a plugin dropped with the host).
     #[default]
     Quit,
-    /// The user disabled it (`packages.setEnabled { enabled: false }`).
+    /// The user disabled it (`packages.setEnabled { enabled: false }`, or
+    /// an install with `enabled: false` over the running version).
     Disable,
     /// The user uninstalls it (`packages.uninstall`), or cancels its first
     /// install while it activates.

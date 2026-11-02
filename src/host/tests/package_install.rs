@@ -72,7 +72,7 @@ fn target_main(id: &str, version: &str, broken: bool) -> String {
          const mark = (await plugin.storage.session.get(\"mark\")) ?? \"none\";\n\
          console.error(`{id} start {version} mark ${{mark}}`);\n\
          await plugin.storage.session.set(\"mark\", \"set\");\n\
-         plugin.onDispose(() => console.error(\"{id} stop {version}\"));\n\
+         plugin.onDispose((info) => console.error(`{id} stop {version} for ${{info?.reason}}`));\n\
          {fail}\n}}\n"
     )
 }
@@ -339,8 +339,9 @@ fn enabled_false_stops_a_running_plugin_and_clears_its_session_values() {
     let started = log
         .find(&format!("{RUNNING} start 1.0.0 mark none"))
         .unwrap_or_else(|| panic!("{log}"));
+    // Switched off by the install: `disable`, not `upgrade` (player 0.6.4).
     let stopped = log
-        .find(&format!("{RUNNING} stop 1.0.0"))
+        .find(&format!("{RUNNING} stop 1.0.0 for disable"))
         .unwrap_or_else(|| panic!("{log}"));
     let committed = log
         .find(&format!("{INSTALLER} {RUNNING} committed disabled 1.1.0"))
