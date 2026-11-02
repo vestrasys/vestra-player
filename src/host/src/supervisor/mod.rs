@@ -454,8 +454,7 @@ impl<P: Clone> Supervisor<P> {
         fresh.remove_data = unit.remove_data;
         fresh.last_pid = unit.last_pid;
         fresh.job = unit.job.take();
-        fresh.process = unit.process;
-        fresh.parked = unit.parked;
+        fresh.hosted = unit.hosted;
         fresh.activation = unit.activation.take();
         fresh.gens = std::mem::take(&mut unit.gens);
         fresh.results = std::mem::take(&mut unit.results);
@@ -493,8 +492,7 @@ impl<P: Clone> Supervisor<P> {
             unit.alias,
             unit.last_pid,
             unit.holder,
-            unit.process,
-            unit.parked,
+            unit.hosted.map(|(pid, _)| pid),
             run,
         ]
         .into_iter()

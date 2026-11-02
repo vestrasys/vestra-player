@@ -2,8 +2,9 @@
 //! B2a, §17.8). The Host still decides every start and stop until B2b–B2d
 //! move those decisions into jobs; at its choke points it tells the core
 //! which process runs a unit (`adopt_process`, today's `Host.plugin_ids`)
-//! and which owner holds a unit's registrations in standby (`adopt_holder`,
-//! today's `Lazy.parked_ids`), and it allocates every owner generation here
+//! or which owner holds a unit's registrations in standby (`adopt_holder`,
+//! today's `Lazy.parked_ids`): one owner per unit (`Unit::hosted`, never
+//! both), and it allocates every owner generation here
 //! (`alloc_pid`, today's `next_generation += 1`). Activations live in their
 //! unit (`activation.rs`, MOVE of `host/package_activation.rs`).
 //!
@@ -13,7 +14,7 @@
 
 use super::Supervisor;
 use super::activation::{self, Error, LIMIT, MAX_SAFE, Run, Status};
-use super::unit::{Class, Pid, Unit, UnitId, UnitSpec};
+use super::unit::{Class, Hosted, Pid, Unit, UnitId, UnitSpec};
 
 impl<P: Clone> Supervisor<P> {
     /// The unit of manifest `id`; a new one is loaded (no job, `Inactive`,
@@ -48,62 +49,35 @@ impl<P: Clone> Supervisor<P> {
 
     /// The Host runs `u` as process `pid` (`Host::add_plugin`).
     pub fn adopt_process(&mut self, u: UnitId, pid: Pid) {
-        let Some(unit) = self.units.get_mut(&u) else {
-            return;
-        };
-        let old = unit.process.replace(pid);
-        self.map_pid(u, pid);
-        if let Some(old) = old.filter(|old| *old != pid) {
-            self.unmap_pid(u, old);
-        }
+        self.adopt(u, pid, Hosted::Running);
     }
 
-    /// Process `pid` of `u` stopped (`Host::stop`). Another pid of the unit
-    /// (a newer run) stays.
+    /// Process `pid` of `u` stopped (`Host::stop`).
     pub fn release_process(&mut self, u: UnitId, pid: Pid) {
-        let Some(unit) = self.units.get_mut(&u) else {
-            return;
-        };
-        if unit.process == Some(pid) {
-            unit.process = None;
-            self.unmap_pid(u, pid);
-        }
+        self.release(u, pid, Hosted::Running);
     }
 
-    /// `u`'s registrations are held in standby under `pid` (lazy park or
-    /// replay).
+    /// `u`'s registrations are held in standby under `pid` (lazy park, after
+    /// its stop, or replay).
     pub fn adopt_holder(&mut self, u: UnitId, pid: Pid) {
-        let Some(unit) = self.units.get_mut(&u) else {
-            return;
-        };
-        let old = unit.parked.replace(pid);
-        self.map_pid(u, pid);
-        if let Some(old) = old.filter(|old| *old != pid) {
-            self.unmap_pid(u, old);
-        }
+        self.adopt(u, pid, Hosted::Standby);
     }
 
     /// `pid` no longer holds `u`'s registrations in standby (woken,
-    /// forgotten). Another holder of the unit stays.
+    /// forgotten).
     pub fn release_holder(&mut self, u: UnitId, pid: Pid) {
-        let Some(unit) = self.units.get_mut(&u) else {
-            return;
-        };
-        if unit.parked == Some(pid) {
-            unit.parked = None;
-            self.unmap_pid(u, pid);
-        }
+        self.release(u, pid, Hosted::Standby);
     }
 
     /// The process the Host runs for plugin `id` (today's `Host::running`).
     pub fn process_of(&self, id: &str) -> Option<Pid> {
-        self.units.get(self.by_id.get(id)?)?.process
+        self.hosted_as(id, Hosted::Running)
     }
 
     /// The owner holding plugin `id`'s registrations in standby (today's
     /// `Lazy::parked_id`).
     pub fn holder_of(&self, id: &str) -> Option<Pid> {
-        self.units.get(self.by_id.get(id)?)?.parked
+        self.hosted_as(id, Hosted::Standby)
     }
 
     // ---- activation (MOVE of `host/package_activation.rs`) -------------
@@ -232,6 +206,56 @@ impl<P: Clone> Supervisor<P> {
 
     // ---- internals -------------------------------------------------------
 
+    /// `u`'s one owner is now `pid`, as `how`. The Host never gives a unit
+    /// a second owner while it has one (§17.8: a wake unparks before its
+    /// start, a park stops first, a start of a running or parked plugin
+    /// returns, an install, reload or uninstall forgets the parked owner
+    /// first, no park during a package operation, a development load is
+    /// never parked); one that did would replace the first, as
+    /// `plugin_ids` and `parked_ids` do.
+    fn adopt(&mut self, u: UnitId, pid: Pid, how: Hosted) {
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        let old = unit.hosted.replace((pid, how));
+        if let Some((old, was)) = old.filter(|(old, _)| *old != pid) {
+            debug_assert!(
+                false,
+                "unit {} hosted twice: {old:?} ({was:?}) then {pid:?} ({how:?})",
+                unit.id
+            );
+            diag!(
+                "supervisor: unit {} hosted twice: {} ({was:?}) then {} ({how:?})",
+                unit.id,
+                old.0,
+                pid.0
+            );
+        }
+        self.map_pid(u, pid);
+        if let Some((old, _)) = old.filter(|(old, _)| *old != pid) {
+            self.unmap_pid(u, old);
+        }
+    }
+
+    /// `pid` is no longer `u`'s owner as `how`; another owner (a newer one,
+    /// or `pid` as the other kind) stays.
+    fn release(&mut self, u: UnitId, pid: Pid, how: Hosted) {
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        if unit.hosted == Some((pid, how)) {
+            unit.hosted = None;
+            self.unmap_pid(u, pid);
+        }
+    }
+
+    fn hosted_as(&self, id: &str, how: Hosted) -> Option<Pid> {
+        match self.units.get(self.by_id.get(id)?)?.hosted {
+            Some((pid, hosted)) if hosted == how => Some(pid),
+            _ => None,
+        }
+    }
+
     fn run_of(&mut self, pid: Pid) -> Option<&mut Run> {
         let u = self.by_pid.get(&pid)?;
         self.units
@@ -268,8 +292,7 @@ impl<P: Clone> Supervisor<P> {
         let Some(unit) = self.units.get(&u) else {
             return;
         };
-        let held = unit.process == Some(pid)
-            || unit.parked == Some(pid)
+        let held = unit.hosted.is_some_and(|(hosted, _)| hosted == pid)
             || unit.activation.as_ref().is_some_and(|run| run.pid == pid)
             || unit.pid() == Some(pid)
             || unit.alias == Some(pid)
@@ -296,8 +319,8 @@ mod tests {
         assert_eq!(sup.next_pid(), Pid(3));
     }
 
-    /// `Host.plugin_ids` semantics: the last adopted process wins, a stop
-    /// of an older one leaves it.
+    /// `Host.plugin_ids` semantics: a stop of another pid leaves the
+    /// process, its own stop clears it.
     #[test]
     fn process_index_follows_adopt_and_release() {
         let mut sup = Supervisor::<u32>::new(Tunables::legacy(), 1);
@@ -307,37 +330,55 @@ mod tests {
         assert_ne!(a, b);
         sup.adopt_process(a, Pid(7));
         sup.adopt_process(b, Pid(8));
+        sup.adopt_process(a, Pid(7));
         assert_eq!(sup.process_of("a.one"), Some(Pid(7)));
+        assert_eq!(sup.holder_of("a.one"), None);
         assert_eq!(sup.by_pid(Pid(7)), Some(a));
-        sup.adopt_process(a, Pid(9));
-        assert_eq!(sup.by_pid(Pid(7)), None);
+        sup.release_process(a, Pid(6));
+        sup.release_holder(a, Pid(7));
+        assert_eq!(sup.process_of("a.one"), Some(Pid(7)));
         sup.release_process(a, Pid(7));
-        assert_eq!(sup.process_of("a.one"), Some(Pid(9)));
-        sup.release_process(a, Pid(9));
         assert_eq!(sup.process_of("a.one"), None);
-        assert_eq!(sup.by_pid(Pid(9)), None);
+        assert_eq!(sup.by_pid(Pid(7)), None);
+        sup.adopt_process(a, Pid(9));
+        assert_eq!(sup.process_of("a.one"), Some(Pid(9)));
         assert_eq!(sup.process_of("b.two"), Some(Pid(8)));
         assert_eq!(sup.process_of("c.none"), None);
     }
 
-    /// `Lazy.parked_ids` semantics, and a pid both stopped and holding
-    /// (a park keeps the stopped owner as the holder) stays in `by_pid`
-    /// until both let go.
+    /// `Lazy.parked_ids` semantics, in a park's order (the process stops,
+    /// then the stopped owner holds) and a wake's (the holder lets go, then
+    /// a new process starts).
     #[test]
     fn holder_index_follows_adopt_and_release() {
         let mut sup = Supervisor::<u32>::new(Tunables::legacy(), 1);
         let a = sup.load_unit("a.one");
         sup.adopt_process(a, Pid(3));
-        sup.adopt_holder(a, Pid(3));
         sup.release_process(a, Pid(3));
+        sup.adopt_holder(a, Pid(3));
         assert_eq!(sup.process_of("a.one"), None);
         assert_eq!(sup.holder_of("a.one"), Some(Pid(3)));
         assert_eq!(sup.by_pid(Pid(3)), Some(a));
         sup.release_holder(a, Pid(4));
+        sup.release_process(a, Pid(3));
         assert_eq!(sup.holder_of("a.one"), Some(Pid(3)));
         sup.release_holder(a, Pid(3));
         assert_eq!(sup.holder_of("a.one"), None);
         assert_eq!(sup.by_pid(Pid(3)), None);
+        sup.adopt_process(a, Pid(4));
+        assert_eq!(sup.process_of("a.one"), Some(Pid(4)));
+        assert_eq!(sup.holder_of("a.one"), None);
+    }
+
+    /// A second owner while the unit has one is a Host bug (§17.8).
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "hosted twice")]
+    fn a_second_owner_is_a_bug() {
+        let mut sup = Supervisor::<u32>::new(Tunables::legacy(), 1);
+        let a = sup.load_unit("a.one");
+        sup.adopt_holder(a, Pid(3));
+        sup.adopt_process(a, Pid(4));
     }
 
     /// Loading units this way installs no job and queues nothing.

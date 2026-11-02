@@ -137,6 +137,20 @@ impl Host {
                 return Err(error);
             }
         };
+        // `Plugin::load` reads the manifest again: one changed in between
+        // would run under an id other than the one its activation and the
+        // `running` check above were for.
+        if plugin.manifest.id != candidate.id {
+            self.supervisor.activation_end(Pid(owner));
+            let error = anyhow::anyhow!(
+                "plugin manifest changed while loading: {} became {}",
+                candidate.id,
+                plugin.manifest.id
+            );
+            // Its stop waits for the process: off the event loop, as `stop`.
+            std::thread::spawn(move || drop(plugin));
+            return Err(error);
+        }
         let manifest_id = plugin.manifest.id.clone();
         let plugin_name = plugin.manifest.name.clone();
         // `packages.list` keeps this run's development loads after they stop.

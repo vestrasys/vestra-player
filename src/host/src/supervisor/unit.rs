@@ -315,6 +315,15 @@ impl Stopping {
     }
 }
 
+/// B2a: how the Host has a unit's one owner (`Unit::hosted`): as its
+/// running process, or as the owner its registrations are held under in
+/// standby.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hosted {
+    Running,
+    Standby,
+}
+
 /// One plugin (§3). Read through `Supervisor::unit`; only the supervisor
 /// changes it.
 #[derive(Debug)]
@@ -402,14 +411,12 @@ pub struct Unit<P> {
     pub(super) gens: Gens,
     pub(super) results: VecDeque<(JobId, JobResult)>,
     pub(super) listed: Option<ListState>,
-    /// B2a (identity.rs): the process the Host runs for this unit (today's
-    /// `Host.plugin_ids` entry). Replaced by the state's pid once jobs
-    /// drive the unit (B2b–B2d).
-    pub(super) process: Option<Pid>,
-    /// B2a (identity.rs): the owner its registrations are held under in
-    /// standby (today's `Lazy.parked_ids` entry). Replaced by
-    /// `UnitState::Standby::holder` once jobs drive the unit (B2c).
-    pub(super) parked: Option<Pid>,
+    /// B2a (identity.rs): the one owner the Host has for this unit, running
+    /// (today's `Host.plugin_ids` entry) or holding its registrations in
+    /// standby (today's `Lazy.parked_ids` entry), never both (§17.8). The
+    /// state's pid and `UnitState::Standby::holder` take its place once
+    /// jobs drive the unit (B2b–B2c).
+    pub(super) hosted: Option<(Pid, Hosted)>,
     /// The activation of the run being started (activation.rs, MOVE of
     /// the Host's `Book` entry, B2a).
     pub(super) activation: Option<Run>,
@@ -468,8 +475,7 @@ impl<P> Unit<P> {
             gens: Gens::default(),
             results: VecDeque::new(),
             listed: None,
-            process: None,
-            parked: None,
+            hosted: None,
             activation: None,
         }
     }
