@@ -76,7 +76,7 @@ msgstr "チェック"
 msgid "Pack"
 msgstr "パッケージ化"
 
-#: ai.slint:129 ai.slint:364 ai.slint:691 delivery.ts:169
+#: ai.slint:129 ai.slint:364 ai.slint:694 delivery.ts:205
 #, x-machine
 msgid "Install"
 msgstr "インストール"
@@ -247,17 +247,17 @@ msgstr "再試行"
 msgid "Open Settings"
 msgstr "設定を開く"
 
-#: ai.slint:365 ai.slint:692
+#: ai.slint:365 ai.slint:695
 #, x-machine
 msgid "Export .vxp"
 msgstr ".vxp を書き出す"
 
-#: ai.slint:366 ai.slint:693
+#: ai.slint:366 ai.slint:696
 #, x-machine
 msgid "Export Source .zip"
 msgstr "ソースの .zip を書き出す"
 
-#: ai.slint:367 ai.slint:584 ai.slint:694
+#: ai.slint:367 ai.slint:587 ai.slint:697
 #, x-machine
 msgid "Open Folder"
 msgstr "フォルダを開く"
@@ -408,111 +408,123 @@ msgid "Installed {0} {1}."
 msgstr "{0} {1} をインストールしました。"
 
 #: ai.slint:471
+msgid "Installed {0} {1}. It stays disabled, as you set it; enable it in the Plugin Store."
+msgstr "{0} {1} をインストールしました。設定どおり無効のままです。有効にするにはプラグインストアで操作してください。"
+
+#: ai.slint:472
+msgid "Installed {0} {1}, but it failed: {2}"
+msgstr "{0} {1} をインストールしましたが、エラーが発生しました：{2}"
+
+#: ai.slint:473
+msgid "Installed {0} {1}, but it failed."
+msgstr "{0} {1} をインストールしましたが、エラーが発生しました。"
+
+#: ai.slint:474
 #, x-machine
 msgid "Exported {}"
 msgstr "{} を書き出しました"
 
-#: ai.slint:472
+#: ai.slint:475
 #, x-machine
 msgid "Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "{} を書き出しました。ID が local. で始まっています。公開する前に、manifest.json の id を <GitHub のユーザー名>.<名前> に変更してください。LICENSE はプレースホルダです。公開する前に、選んだライセンスの全文に置き換え、manifest.json の license を設定してください。"
 
-#: ai.slint:473
+#: ai.slint:476
 #, x-machine
 msgid "Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "{} を書き出しました。LICENSE はプレースホルダです。公開する前に、選んだライセンスの全文に置き換え、manifest.json の license を設定してください。"
 
-#: ai.slint:474
+#: ai.slint:477
 #, x-machine
 msgid "Something went wrong: {}"
 msgstr "問題が発生しました：{}"
 
-#: ai.slint:480
+#: ai.slint:483
 #, x-machine
 msgid "{0} ({1}) is taken by {2}"
 msgstr "{0}（{1}）は {2} が使用しています"
 
-#: ai.slint:483
+#: ai.slint:486
 #, x-machine
 msgid "the player “{}”"
 msgstr "プレーヤーの「{}」"
 
-#: ai.slint:483
+#: ai.slint:486
 #, x-machine
 msgid "{0} “{1}”"
 msgstr "{0}「{1}」"
 
-#: ai.slint:515
+#: ai.slint:518
 #, x-machine
 msgid "+ New Chat"
 msgstr "+ 新しいチャット"
 
-#: ai.slint:532 ai.slint:574
+#: ai.slint:535 ai.slint:577
 #, x-machine
 msgid "New chat"
 msgstr "新しいチャット"
 
-#: ai.slint:532
+#: ai.slint:535
 #, x-machine
 msgid "Today"
 msgstr "今日"
 
-#: ai.slint:532
+#: ai.slint:535
 #, x-machine
 msgid "Earlier"
 msgstr "それ以前"
 
-#: ai.slint:545 ai.slint:589
+#: ai.slint:548 ai.slint:592
 #, x-machine
 msgid "Delete Chat"
 msgstr "会話を削除"
 
-#: ai.slint:552
+#: ai.slint:555
 #, x-machine
 msgid "⚙ Settings"
 msgstr "⚙ 設定"
 
-#: ai.slint:610
+#: ai.slint:613
 #, x-machine
 msgid "Go to Settings"
 msgstr "設定へ移動"
 
-#: ai.slint:624
+#: ai.slint:627
 #, x-machine
 msgid "What plugin would you like to make, or what would you like to ask?"
 msgstr "どんなプラグインを作りますか？　それとも、何か質問がありますか？"
 
-#: ai.slint:671
+#: ai.slint:674
 #, x-machine
 msgid "Plugin: {}"
 msgstr "プラグイン：{}"
 
-#: ai.slint:725
+#: ai.slint:728
 #, x-machine
 msgid "Another conversation is generating; please wait…"
 msgstr "別の会話が生成中です。しばらくお待ちください…"
 
-#: ai.slint:725
+#: ai.slint:728
 #, x-machine
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr "メッセージを入力… Enter で送信 · Shift+Enter で改行"
 
-#: ai.slint:742
+#: ai.slint:745
 #, x-machine
 msgid "Send"
 msgstr "送信"
 
-#: ai.slint:746
+#: ai.slint:749
 #, x-machine
 msgid "■ Stop"
 msgstr "■ 停止"
 
-#: delivery.ts:167
+#: delivery.ts:203
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "AI が生成したプラグイン「{}」をインストールしますか？"
 
-#: delivery.ts:168
+#: delivery.ts:204
 #, x-machine
 msgid ""
 "{1} {2}\n"
@@ -521,7 +533,7 @@ msgstr ""
 "{1} {2}\n"
 "機能：{3}"
 
-#: delivery.ts:168
+#: delivery.ts:204
 #, x-machine
 msgid ""
 "{1} {2}\n"
@@ -530,17 +542,17 @@ msgstr ""
 "{1} {2}\n"
 "機能：なし"
 
-#: delivery.ts:198
+#: delivery.ts:234
 #, x-machine
 msgid "Replace the installed {}?"
 msgstr "インストール済みの {} を置き換えますか？"
 
-#: delivery.ts:200
+#: delivery.ts:236
 #, x-machine
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "このプラグインは別の場所からインストールされています（Vestra Player AI で作成したものではありません）。置き換えると、新しいプラグインは新しい空のデータフォルダで起動します。元のプラグインのデータは保持され、元の提供元から再インストールしたときに再び使用されます。"
 
-#: delivery.ts:201
+#: delivery.ts:237
 #, x-machine
 msgid "Replace"
 msgstr "置き換える"

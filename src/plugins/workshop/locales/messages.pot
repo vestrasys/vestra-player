@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.workshop 2.2.23\n"
+"Project-Id-Version: vestra.workshop 2.2.25\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -60,7 +60,7 @@ msgstr ""
 msgid "Pack"
 msgstr ""
 
-#: ai.slint:129 ai.slint:364 ai.slint:691 delivery.ts:169
+#: ai.slint:129 ai.slint:364 ai.slint:694 delivery.ts:205
 msgid "Install"
 msgstr ""
 
@@ -202,15 +202,15 @@ msgstr ""
 msgid "Open Settings"
 msgstr ""
 
-#: ai.slint:365 ai.slint:692
+#: ai.slint:365 ai.slint:695
 msgid "Export .vxp"
 msgstr ""
 
-#: ai.slint:366 ai.slint:693
+#: ai.slint:366 ai.slint:696
 msgid "Export Source .zip"
 msgstr ""
 
-#: ai.slint:367 ai.slint:584 ai.slint:694
+#: ai.slint:367 ai.slint:587 ai.slint:697
 msgid "Open Folder"
 msgstr ""
 
@@ -331,110 +331,122 @@ msgid "Installed {0} {1}."
 msgstr ""
 
 #: ai.slint:471
-msgid "Exported {}"
+msgid "Installed {0} {1}. It stays disabled, as you set it; enable it in the Plugin Store."
 msgstr ""
 
 #: ai.slint:472
-msgid "Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
+msgid "Installed {0} {1}, but it failed: {2}"
 msgstr ""
 
 #: ai.slint:473
-msgid "Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
+msgid "Installed {0} {1}, but it failed."
 msgstr ""
 
 #: ai.slint:474
+msgid "Exported {}"
+msgstr ""
+
+#: ai.slint:475
+msgid "Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
+msgstr ""
+
+#: ai.slint:476
+msgid "Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
+msgstr ""
+
+#: ai.slint:477
 msgid "Something went wrong: {}"
 msgstr ""
 
-#: ai.slint:480
+#: ai.slint:483
 msgid "{0} ({1}) is taken by {2}"
 msgstr ""
 
-#: ai.slint:483
+#: ai.slint:486
 msgid "the player “{}”"
 msgstr ""
 
-#: ai.slint:483
+#: ai.slint:486
 msgid "{0} “{1}”"
 msgstr ""
 
-#: ai.slint:515
+#: ai.slint:518
 msgid "+ New Chat"
 msgstr ""
 
-#: ai.slint:532 ai.slint:574
+#: ai.slint:535 ai.slint:577
 msgid "New chat"
 msgstr ""
 
-#: ai.slint:532
+#: ai.slint:535
 msgid "Today"
 msgstr ""
 
-#: ai.slint:532
+#: ai.slint:535
 msgid "Earlier"
 msgstr ""
 
-#: ai.slint:545 ai.slint:589
+#: ai.slint:548 ai.slint:592
 msgid "Delete Chat"
 msgstr ""
 
-#: ai.slint:552
+#: ai.slint:555
 msgid "⚙ Settings"
 msgstr ""
 
-#: ai.slint:610
+#: ai.slint:613
 msgid "Go to Settings"
 msgstr ""
 
-#: ai.slint:624
+#: ai.slint:627
 msgid "What plugin would you like to make, or what would you like to ask?"
 msgstr ""
 
-#: ai.slint:671
+#: ai.slint:674
 msgid "Plugin: {}"
 msgstr ""
 
-#: ai.slint:725
+#: ai.slint:728
 msgid "Another conversation is generating; please wait…"
 msgstr ""
 
-#: ai.slint:725
+#: ai.slint:728
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr ""
 
-#: ai.slint:742
+#: ai.slint:745
 msgid "Send"
 msgstr ""
 
-#: ai.slint:746
+#: ai.slint:749
 msgid "■ Stop"
 msgstr ""
 
-#: delivery.ts:167
+#: delivery.ts:203
 msgid "Install the AI-generated plugin “{}”?"
 msgstr ""
 
-#: delivery.ts:168
+#: delivery.ts:204
 msgid ""
 "{1} {2}\n"
 "Capabilities: {3}"
 msgstr ""
 
-#: delivery.ts:168
+#: delivery.ts:204
 msgid ""
 "{1} {2}\n"
 "Capabilities: none"
 msgstr ""
 
-#: delivery.ts:198
+#: delivery.ts:234
 msgid "Replace the installed {}?"
 msgstr ""
 
-#: delivery.ts:200
+#: delivery.ts:236
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr ""
 
-#: delivery.ts:201
+#: delivery.ts:237
 msgid "Replace"
 msgstr ""
 

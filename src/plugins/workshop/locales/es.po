@@ -76,7 +76,7 @@ msgstr "Comprobar"
 msgid "Pack"
 msgstr "Empaquetar"
 
-#: ai.slint:129 ai.slint:364 ai.slint:691 delivery.ts:169
+#: ai.slint:129 ai.slint:364 ai.slint:694 delivery.ts:205
 #, x-machine
 msgid "Install"
 msgstr "Instalar"
@@ -251,17 +251,17 @@ msgstr "Reintentar"
 msgid "Open Settings"
 msgstr "Abrir configuración"
 
-#: ai.slint:365 ai.slint:692
+#: ai.slint:365 ai.slint:695
 #, x-machine
 msgid "Export .vxp"
 msgstr "Exportar .vxp"
 
-#: ai.slint:366 ai.slint:693
+#: ai.slint:366 ai.slint:696
 #, x-machine
 msgid "Export Source .zip"
 msgstr "Exportar código fuente .zip"
 
-#: ai.slint:367 ai.slint:584 ai.slint:694
+#: ai.slint:367 ai.slint:587 ai.slint:697
 #, x-machine
 msgid "Open Folder"
 msgstr "Abrir carpeta"
@@ -412,111 +412,123 @@ msgid "Installed {0} {1}."
 msgstr "Se instaló {0} {1}."
 
 #: ai.slint:471
+msgid "Installed {0} {1}. It stays disabled, as you set it; enable it in the Plugin Store."
+msgstr "Se instaló {0} {1}. Sigue desactivado, como lo dejó; actívelo en la Tienda de complementos."
+
+#: ai.slint:472
+msgid "Installed {0} {1}, but it failed: {2}"
+msgstr "Se instaló {0} {1}, pero falló: {2}"
+
+#: ai.slint:473
+msgid "Installed {0} {1}, but it failed."
+msgstr "Se instaló {0} {1}, pero falló."
+
+#: ai.slint:474
 #, x-machine
 msgid "Exported {}"
 msgstr "Exportado: {}"
 
-#: ai.slint:472
+#: ai.slint:475
 #, x-machine
 msgid "Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "Exportado: {}. El id empieza por local.: antes de publicar, cambia el id en manifest.json a <tu nombre de GitHub>.<nombre>; LICENSE es un marcador de posición: antes de publicar, sustitúyelo por el texto completo de la licencia que elijas y define license en manifest.json."
 
-#: ai.slint:473
+#: ai.slint:476
 #, x-machine
 msgid "Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "Exportado: {}. LICENSE es un marcador de posición: antes de publicar, sustitúyelo por el texto completo de la licencia que elijas y define license en manifest.json."
 
-#: ai.slint:474
+#: ai.slint:477
 #, x-machine
 msgid "Something went wrong: {}"
 msgstr "Algo salió mal: {}"
 
-#: ai.slint:480
+#: ai.slint:483
 #, x-machine
 msgid "{0} ({1}) is taken by {2}"
 msgstr "{0} ({1}) lo ocupa {2}"
 
-#: ai.slint:483
+#: ai.slint:486
 #, x-machine
 msgid "the player “{}”"
 msgstr "el reproductor «{}»"
 
-#: ai.slint:483
+#: ai.slint:486
 #, x-machine
 msgid "{0} “{1}”"
 msgstr "{0} «{1}»"
 
-#: ai.slint:515
+#: ai.slint:518
 #, x-machine
 msgid "+ New Chat"
 msgstr "+ Nuevo chat"
 
-#: ai.slint:532 ai.slint:574
+#: ai.slint:535 ai.slint:577
 #, x-machine
 msgid "New chat"
 msgstr "Nuevo chat"
 
-#: ai.slint:532
+#: ai.slint:535
 #, x-machine
 msgid "Today"
 msgstr "Hoy"
 
-#: ai.slint:532
+#: ai.slint:535
 #, x-machine
 msgid "Earlier"
 msgstr "Anteriores"
 
-#: ai.slint:545 ai.slint:589
+#: ai.slint:548 ai.slint:592
 #, x-machine
 msgid "Delete Chat"
 msgstr "Eliminar chat"
 
-#: ai.slint:552
+#: ai.slint:555
 #, x-machine
 msgid "⚙ Settings"
 msgstr "⚙ Configuración"
 
-#: ai.slint:610
+#: ai.slint:613
 #, x-machine
 msgid "Go to Settings"
 msgstr "Ir a la configuración"
 
-#: ai.slint:624
+#: ai.slint:627
 #, x-machine
 msgid "What plugin would you like to make, or what would you like to ask?"
 msgstr "¿Qué complemento quieres crear o qué quieres preguntar?"
 
-#: ai.slint:671
+#: ai.slint:674
 #, x-machine
 msgid "Plugin: {}"
 msgstr "Complemento: {}"
 
-#: ai.slint:725
+#: ai.slint:728
 #, x-machine
 msgid "Another conversation is generating; please wait…"
 msgstr "Otra conversación está generando; espera…"
 
-#: ai.slint:725
+#: ai.slint:728
 #, x-machine
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr "Escribe un mensaje… Enter para enviar · Mayús+Enter para nueva línea"
 
-#: ai.slint:742
+#: ai.slint:745
 #, x-machine
 msgid "Send"
 msgstr "Enviar"
 
-#: ai.slint:746
+#: ai.slint:749
 #, x-machine
 msgid "■ Stop"
 msgstr "■ Detener"
 
-#: delivery.ts:167
+#: delivery.ts:203
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "¿Instalar el complemento generado por IA «{}»?"
 
-#: delivery.ts:168
+#: delivery.ts:204
 #, x-machine
 msgid ""
 "{1} {2}\n"
@@ -525,7 +537,7 @@ msgstr ""
 "{1} {2}\n"
 "Capacidades: {3}"
 
-#: delivery.ts:168
+#: delivery.ts:204
 #, x-machine
 msgid ""
 "{1} {2}\n"
@@ -534,17 +546,17 @@ msgstr ""
 "{1} {2}\n"
 "Capacidades: ninguna"
 
-#: delivery.ts:198
+#: delivery.ts:234
 #, x-machine
 msgid "Replace the installed {}?"
 msgstr "¿Reemplazar {} instalado?"
 
-#: delivery.ts:200
+#: delivery.ts:236
 #, x-machine
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "Se instaló desde otro origen (no lo creó Vestra Player AI). Tras el reemplazo, el nuevo complemento empieza con una carpeta de datos nueva y vacía; los datos del complemento original se conservan y se vuelven a usar si lo reinstalas desde su origen original."
 
-#: delivery.ts:201
+#: delivery.ts:237
 #, x-machine
 msgid "Replace"
 msgstr "Reemplazar"
