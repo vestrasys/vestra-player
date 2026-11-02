@@ -28,8 +28,8 @@ pub struct Pid(pub u64);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RunnerId(pub u64);
 
-/// §3.3. `Resident` is observed at the first run (`classified`), never
-/// declared.
+/// §3.3. `Resident` is observed at a ready (`classified`; the first run and,
+/// with `Tunables::reclassify`, every later one), never declared.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Class {
     Builtin,
@@ -323,8 +323,8 @@ pub struct Unit<P> {
     pub backlog: VecDeque<Trigger<P>>,
     /// It has a valid checkpoint (its entry points are known).
     pub recorded: bool,
-    /// Classified resident (at its ready, or by its checkpoint): never idle
-    /// standby.
+    /// Classified resident (at its ready, or by its checkpoint): no idle
+    /// standby (unless `Tunables::resident_idle_standby`, today).
     pub resident: bool,
     /// It can have a checkpoint (`UnitSpec::recordable`).
     pub recordable: bool,

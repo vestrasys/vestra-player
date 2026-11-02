@@ -1065,6 +1065,8 @@ impl<P: Clone> Supervisor<P> {
                     resident: true,
                 });
             }
+            // Today it is still asked when idle (`resident_idle_standby`).
+            self.arm_idle(u);
         } else {
             unit.resident = false;
             if unit.class == Class::Resident {
@@ -1497,12 +1499,15 @@ impl<P: Clone> Supervisor<P> {
         let UnitState::Active { last_active, .. } = unit.state else {
             return;
         };
-        if !self.tunables.on_demand
-            || !self.tunables.policy(unit.class).idle_standby
-            || !unit.recordable
-            || unit.resident
-            || unit.classifying
-        {
+        // A unit classified resident idles like the rest of its kind only
+        // with `resident_idle_standby` (today's `lazy_idle` ignores the
+        // class); a Resident's own policy says never (§3.3).
+        let idles = if unit.resident || unit.class == Class::Resident {
+            self.tunables.resident_idle_standby && unit.class != Class::Development
+        } else {
+            self.tunables.policy(unit.class).idle_standby
+        };
+        if !self.tunables.on_demand || !idles || !unit.recordable || unit.classifying {
             return;
         }
         let due = if unit.park_when_idle {

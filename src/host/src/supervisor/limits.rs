@@ -58,7 +58,8 @@ pub struct Policy {
     pub standby_grace: Ms,
     /// `TimeoutStopSec` after a failure.
     pub failure_grace: Ms,
-    /// Goes to standby when idle (never for Resident / Development).
+    /// Goes to standby when idle (never for Resident / Development; a unit
+    /// classified resident only with `Tunables::resident_idle_standby`).
     pub idle_standby: bool,
     /// Request timeout of in-flight work.
     pub request_timeout: Option<Ms>,
@@ -112,8 +113,9 @@ pub struct Tunables {
     pub process_budget: Option<usize>,
     /// "Recently used" for importance (−100).
     pub recent: Ms,
-    /// A failed start (spawn error, start timeout, stuck stop wait) keeps
-    /// the entry points in standby (T8, B3) instead of revoking (today).
+    /// A failed start (spawn error, start timeout) keeps the entry points
+    /// in standby (T8, B3) instead of revoking (today). Never after a stuck
+    /// stop wait (T18): the old process may still run.
     pub start_failure_keeps_registrations: bool,
     /// How third-party starts wait for built-ins (§4.4 "Built-ins first").
     pub builtins_first: BuiltinsFirst,
@@ -142,25 +144,34 @@ pub struct Tunables {
     pub restart_keeps_backlog: bool,
     /// A `Start{Enable}` that waits for the previous process makes later
     /// package RPCs and enables `busy`, as today's enable-after-park entry
-    /// in `packages.reloads` does (`package_busy`). Off: the merge table
-    /// (an enable is the user's, never busy for a later enable).
+    /// in `packages.reloads` does (`package_busy`). Off (B3, job queue):
+    /// the merge table (an enable is the user's, never busy for a later
+    /// enable).
     pub enable_wait_busy: bool,
-    /// Every ready of a recordable unit may be classified again (today's
+    /// Every ready of a recordable unit is classified again (today's
     /// `lazy_ready` → `lazy_classify`): a plugin resident now is re-recorded
-    /// resident, and a run classified lazy is recorded at quit. Off: only a
+    /// resident, and a run classified lazy is recorded at quit. On in every
+    /// preset: a plugin whose behaviour changed is re-recorded (Chrome
+    /// re-evaluates a service worker's activity per run too). Off: only a
     /// run without a checkpoint is classified (T12/T13).
     pub reclassify: bool,
     /// A first run classified lazy while busy keeps its first-run place and
     /// goes to standby as soon as it is idle, checked every `idle_check`
-    /// (today's `lazy_first_lazy`). Off: it frees its place at once and
-    /// waits the idle timeout (§17.4).
+    /// (today's `lazy_first_lazy`). Off (B3, job queue): it frees its place
+    /// at once and waits the idle timeout (§17.4).
     pub first_run_parks_when_idle: bool,
     /// Poll interval of `first_run_parks_when_idle` (today `CHECK_MS`).
     pub idle_check: Ms,
     /// A boot start waiting for its turn (start queue, built-in verify,
     /// runner restart) lists `stopped`, as today's `StartQueue` entries do.
-    /// Off: `starting` (§9).
+    /// Off (B3, job queue): `starting` (§9).
     pub boot_wait_lists_stopped: bool,
+    /// A unit classified resident goes to standby when idle like the rest
+    /// of its kind (a Resident as a Normal, a resident built-in as a
+    /// Builtin): today's `lazy_idle` does not look at the class, and `park`
+    /// keeps `resident` in the checkpoint, so it starts at boot again. Off
+    /// (B6): a Resident never stands by (§3.3).
+    pub resident_idle_standby: bool,
     /// Runner restart: members start again only once the playback worker
     /// cleaned up after them (§7.4; B4). Today `restart_shared` queues them
     /// at once.
@@ -234,6 +245,7 @@ impl Tunables {
             first_run_parks_when_idle: true,
             idle_check: 250,
             boot_wait_lists_stopped: true,
+            resident_idle_standby: true,
             runner_restart_waits_cleanup: false,
         }
     }
@@ -251,6 +263,11 @@ impl Tunables {
         self.start_failure_notice = true;
         self.answer_held = true;
         self.restart_keeps_backlog = true;
+        // Bookkeeping today's code needs only for want of a job queue
+        // (§17.7 D2).
+        self.enable_wait_busy = false;
+        self.first_run_parks_when_idle = false;
+        self.boot_wait_lists_stopped = false;
         self
     }
 
@@ -317,11 +334,8 @@ impl Tunables {
     pub fn target(cores: usize, physical_mib: u64) -> Self {
         let mut t = Self::today().with_b3(cores).with_b4().with_b5(physical_mib);
         t.idle_timeout = 30_000;
-        // Today's behaviours no earlier batch changes (§17.7).
-        t.enable_wait_busy = false;
-        t.reclassify = false;
-        t.first_run_parks_when_idle = false;
-        t.boot_wait_lists_stopped = false;
+        // §3.3 "Resident never stands by" (§17.7 D3).
+        t.resident_idle_standby = false;
         for policy in [&mut t.builtin, &mut t.resident, &mut t.normal] {
             policy.start_timeout = 60_000;
             policy.stop_grace = 5_000;
@@ -409,11 +423,16 @@ mod tests {
         assert!(!t.crash_notice && !t.start_failure_notice && !t.answer_held);
         assert!(!t.restart_keeps_backlog && !t.runner_restart_waits_cleanup);
         assert!(t.enable_wait_busy && t.reclassify && t.first_run_parks_when_idle);
-        assert!(t.boot_wait_lists_stopped);
+        assert!(t.boot_wait_lists_stopped && t.resident_idle_standby);
+        let b3 = Tunables::today().with_b3(8);
+        assert!(!b3.enable_wait_busy && !b3.first_run_parks_when_idle);
+        assert!(!b3.boot_wait_lists_stopped);
+        assert!(b3.reclassify && b3.resident_idle_standby);
         let target = Tunables::target(8, 16_384);
         assert!(target.crash_notice && target.start_failure_notice && target.answer_held);
         assert!(target.restart_keeps_backlog && target.runner_restart_waits_cleanup);
-        assert!(!target.enable_wait_busy && !target.reclassify);
+        assert!(!target.enable_wait_busy && target.reclassify);
         assert!(!target.first_run_parks_when_idle && !target.boot_wait_lists_stopped);
+        assert!(!target.resident_idle_standby);
     }
 }

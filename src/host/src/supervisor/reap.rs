@@ -175,22 +175,22 @@ impl<P: Clone> Supervisor<P> {
                         notice: super::Notice::CouldNotStart,
                     });
                 }
-                let keep = wake && self.tunables.start_failure_keeps_registrations;
+                // Never kept in standby, not even from B3
+                // (`start_failure_keeps_registrations` is for a failed
+                // spawn): the old process may still run, so the next
+                // trigger would start a second instance on the same data.
                 if let Some(unit) = self.units.get_mut(&u) {
-                    let standby = matches!(unit.state, UnitState::Standby { .. });
-                    if !(keep && standby) {
-                        if let UnitState::Standby { holder, .. } = unit.state {
-                            self.pending.push(Action::Revoke {
-                                unit: u,
-                                pid: holder,
-                            });
-                        }
-                        unit.failure = Some(text.to_owned());
-                        unit.state = UnitState::Failed {
-                            result: FailResult::Stuck,
-                            text: text.to_owned(),
-                        };
+                    if let UnitState::Standby { holder, .. } = unit.state {
+                        self.pending.push(Action::Revoke {
+                            unit: u,
+                            pid: holder,
+                        });
                     }
+                    unit.failure = Some(text.to_owned());
+                    unit.state = UnitState::Failed {
+                        result: FailResult::Stuck,
+                        text: text.to_owned(),
+                    };
                 }
             }
             _ => {}

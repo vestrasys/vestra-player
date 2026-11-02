@@ -1920,13 +1920,15 @@ fn dead_pid_is_dropped_while_a_restart_waits() {
     assert_eq!(w.s.wake(pid, &Trigger::interactive(2)), Delivery::Dropped);
 }
 
-/// Item 8: today every ready of a recordable unit may be classified again
-/// (`lazy_ready` → `lazy_classify`): a plugin that holds a live resource
-/// now is re-recorded resident and stays running; once per run. The target
-/// classifies only a run without a checkpoint.
+/// Item 8 (ruling D2: every preset): every ready of a recordable unit may
+/// be classified again (`lazy_ready` → `lazy_classify`): a plugin that
+/// holds a live resource now is re-recorded resident; once per run. Today
+/// it still goes to standby when idle (D3, `resident_idle_standby`), the
+/// target keeps it running.
 #[test]
-fn reclassified_resident_at_a_later_ready_today_only() {
-    for (tunables, reclassified) in [(Tunables::today(), true), (target(), false)] {
+fn reclassified_resident_at_a_later_ready() {
+    for (tunables, idles) in [(Tunables::today(), true), (target(), false)] {
+        let idle = tunables.idle_timeout;
         let mut w = World::new(tunables);
         let u = standby_unit(&mut w, "n");
         let holder = w.holder(u);
@@ -1935,21 +1937,84 @@ fn reclassified_resident_at_a_later_ready_today_only() {
         let pid = w.pid(u);
         w.s.classified(pid, Some("live".into()));
         let actions = w.tick(10);
-        let written = actions.contains(&Action::Checkpoint {
-            unit: u,
-            pid,
-            resident: true,
-        });
-        assert_eq!(written, reclassified, "{actions:?}");
+        assert!(
+            actions.contains(&Action::Checkpoint {
+                unit: u,
+                pid,
+                resident: true,
+            }),
+            "{actions:?}"
+        );
         // Once per run.
         w.s.classified(pid, Some("live".into()));
         assert_eq!(count(&w.tick(11), is_checkpoint), 0);
-        w.tick(300_000);
-        assert_eq!(active(&w, u), reclassified, "resident: no idle standby");
-        if reclassified {
-            // At quit: already recorded resident, not written again.
-            assert_eq!(count(&w.s.shutdown(300_001, 1_000), is_checkpoint), 0);
+        if idles {
+            continue;
         }
+        w.tick(5 * idle);
+        assert!(active(&w, u), "resident: no idle standby");
+        // At quit: already recorded resident, not written again.
+        assert_eq!(count(&w.s.shutdown(5 * idle + 1, 1_000), is_checkpoint), 0);
+    }
+}
+
+/// Ruling D3: today a plugin classified resident still goes to standby
+/// once idle and nothing it holds is live (`lazy_tick` asks every plugin,
+/// `lazy_idle` ignores the class); `park` keeps `resident` in the
+/// checkpoint, so the next session starts it at boot. A trigger wakes it
+/// meanwhile. With B6 (`resident_idle_standby` off) a Resident never stands
+/// by (§3.3).
+#[test]
+fn resident_goes_to_standby_when_idle_today_only() {
+    for (tunables, idles) in [
+        (Tunables::today(), true),
+        (Tunables::today().with_b3(8).with_b4().with_b5(16_384), true),
+        (target(), false),
+    ] {
+        let idle = tunables.idle_timeout;
+        let mut w = World::new(tunables.clone());
+        // Resident by its checkpoint, a first run classified resident, and
+        // a resident built-in.
+        let r =
+            w.s.add_unit(UnitSpec::new("r", Class::Normal).checkpoint(true));
+        let b =
+            w.s.add_unit(UnitSpec::new("b", Class::Builtin).checkpoint(true));
+        w.auto_classify = Some(true);
+        let f = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+        w.tick(0);
+        let pids = [r, b, f].map(|u| w.pid(u));
+        for u in [r, b, f] {
+            assert!(active(&w, u));
+        }
+        let actions = w.tick(idle + 1);
+        for (u, pid) in [r, b, f].into_iter().zip(pids) {
+            let standby = matches!(w.state(u), UnitState::Standby { .. });
+            assert_eq!(standby, idles, "{u:?} {actions:?}");
+            // Its checkpoint still says resident.
+            let written = actions.contains(&Action::Checkpoint {
+                unit: u,
+                pid,
+                resident: true,
+            });
+            assert_eq!(written, idles, "{u:?} {actions:?}");
+        }
+        if !idles {
+            continue;
+        }
+        // A trigger wakes it.
+        let holder = w.holder(r);
+        w.s.wake(holder, &Trigger::interactive(7));
+        w.tick(idle + 2);
+        assert!(active(&w, r));
+        assert!(w.delivered.iter().any(|(_, p)| *p == 7));
+        // The next session starts it at boot (not replayed).
+        let mut next = World::new(tunables);
+        let r = next
+            .s
+            .add_unit(UnitSpec::new("r", Class::Normal).checkpoint(true));
+        let started = spawns(&next.tick(0));
+        assert_eq!(started.len(), 1);
+        assert!(active(&next, r));
     }
 }
 
@@ -2059,7 +2124,7 @@ fn crash_cancels_an_installed_standby_job() {
         w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
     w.tick(0);
     let pid = w.pid(u);
-    // A resident is never idle; ask for standby directly.
+    // Before its idle timeout; ask for standby directly.
     let job = w.s.standby(u);
     w.s.process_exited(pid, ExitCause::Exited, None);
     w.tick(10);
