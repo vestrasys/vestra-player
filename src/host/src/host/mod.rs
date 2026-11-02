@@ -76,7 +76,8 @@ pub(crate) use menus::{
 };
 pub(crate) use mounts::refuse_initial;
 pub(crate) use restart::{
-    LAST_SOURCE, LostDevice, event_loop_ended, restart_log, restart_player, teardown_step,
+    LAST_SOURCE, LostDevice, event_loop_ended, restart_log, restart_logged, restart_player,
+    run_through_loss, teardown_step,
 };
 pub(crate) use rpc::{Reply, Request, RpcError, string, ui_error};
 pub(crate) use state::{LayoutChange, layout_change, policy_slot};

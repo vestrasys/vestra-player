@@ -77,6 +77,31 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
     }
 }
 
+/// Run the event loop (`run`, `slint::run_event_loop`). A panic out of it
+/// once the windows' GPU device was lost (`lost`) ends the loop as the
+/// quit the loss asked for would (`None`); any other panic goes on.
+///
+/// Slint's femtovg-wgpu renderer keeps drawing the frames already asked for
+/// until the loop sees that quit, and femtovg makes a new uniform buffer
+/// with `wgpu::util::DeviceExt::create_buffer_init` (its viewport bind
+/// group) whenever a draw switches between a layer texture and the window;
+/// on a lost device that buffer cannot be mapped and wgpu panics (host
+/// 0.6.3 and 0.6.4). Unwinding out of `main` skipped the teardown (no
+/// `exit: restarting`, plugins told `host-lost`, not `quit`), and the host,
+/// still held by the UI thread's thread-locals, dropped only at process
+/// exit, after Windows had ended its other threads: joining one of them
+/// panicked again ("threads should not terminate unexpectedly"). winit
+/// catches a panic in its callbacks and resumes it once out of the
+/// dispatch, so it arrives here; nothing draws on the device after this.
+pub(crate) fn run_through_loss<T>(run: impl FnOnce() -> T, lost: impl Fn() -> bool) -> Option<T> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)) {
+        Ok(ran) => Some(ran),
+        // The panic hook already logged it (`diag::log_panics`).
+        Err(_) if lost() => None,
+        Err(payload) => std::panic::resume_unwind(payload),
+    }
+}
+
 /// How long this player may take to end once its event loop ended after a
 /// device loss. What must survive is saved by then: the crash guard and the
 /// resume position here, the UI state and the lazy-activation records first
@@ -321,6 +346,32 @@ mod tests {
         assert_eq!(
             line,
             "render: the player did not end 8 s after the device loss (teardown at: hiding the main window); ending it"
+        );
+    }
+
+    /// 0.6.3/0.6.4: a draw on the lost window device panicked in wgpu
+    /// (`create_buffer_init` from femtovg) and the panic left `main`, so
+    /// the teardown never ran. After a loss it ends the loop instead; with
+    /// the device fine it is still a panic.
+    #[test]
+    fn a_panic_after_the_loss_ends_the_event_loop_and_others_go_on() {
+        let draw_on_lost_device = || -> Result<(), String> {
+            panic!("Failed to get mapped range for buffer created with mapped_at_creation")
+        };
+        assert_eq!(run_through_loss(draw_on_lost_device, || true), None);
+        assert_eq!(
+            run_through_loss(|| Ok::<_, String>(()), || true),
+            Some(Ok(()))
+        );
+        assert_eq!(
+            run_through_loss(|| Err::<(), _>("loop failed".to_owned()), || false),
+            Some(Err("loop failed".to_owned()))
+        );
+        let resumed = std::panic::catch_unwind(|| run_through_loss(draw_on_lost_device, || false));
+        let payload = resumed.expect_err("no loss: the panic goes on");
+        assert_eq!(
+            payload.downcast_ref::<&str>(),
+            Some(&"Failed to get mapped range for buffer created with mapped_at_creation")
         );
     }
 
