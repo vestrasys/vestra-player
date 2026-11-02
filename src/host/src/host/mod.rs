@@ -31,7 +31,7 @@ use crate::playback::{
     backend::{Backend, Command},
     frame_pacing, render_target, video_click,
 };
-use crate::process::{Plugin, shared_runner};
+use crate::process::{Plugin, StopReason, shared_runner};
 use crate::ui::{
     bar_buttons, composition, drops, menu, pip, settings_window, slot_claims, ui_image, ui_state,
     ui_values, view, window_control, window_state,

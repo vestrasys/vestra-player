@@ -64,6 +64,52 @@ impl DataKey {
         }
     }
 }
+/// Why the player stops a plugin: `runtime.stop`'s `data.reason` (player
+/// 0.6.4, SDK 1.5.54 `StopReason`; doc/architecture/plugin-lifecycle.md).
+/// The runner adds `host-lost` itself when its pipe to the player closes
+/// without a stop; the player never sends that one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StopReason {
+    /// The player quits (a plugin dropped with the host).
+    #[default]
+    Quit,
+    /// The user disabled it (`packages.setEnabled { enabled: false }`).
+    Disable,
+    /// The user uninstalls it (`packages.uninstall`).
+    Uninstall,
+    /// It starts again from the same package (`packages.reload`).
+    Reload,
+    /// Another version replaces it (an install or update of a running
+    /// package, or the version an install restores when it fails).
+    Upgrade,
+    /// Lazy activation stops it after a while without use (a park).
+    Idle,
+    /// A fault: an unreadable, oversized or malformed line, a malformed
+    /// request, a full input queue, its process exiting, a failed or timed
+    /// out activation, an uncaught exception in the shared runner.
+    Failed,
+}
+impl StopReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Quit => "quit",
+            Self::Disable => "disable",
+            Self::Uninstall => "uninstall",
+            Self::Reload => "reload",
+            Self::Upgrade => "upgrade",
+            Self::Idle => "idle",
+            Self::Failed => "failed",
+        }
+    }
+    /// `{"reason":"<r>"}`: the data of `runtime.stop` and `runner.stop`.
+    pub fn data(self) -> Value {
+        json!({ "reason": self.as_str() })
+    }
+}
+/// The `runtime.stop` line for a plugin stopped for `reason`.
+pub fn stop_message(reason: StopReason) -> Value {
+    json!({"event":"runtime.stop","data":reason.data()})
+}
 /// Bounded per-plugin output queue. Source state alone emits ~10 events/s while playing,
 /// so a small queue disables healthy plugins after a brief event-loop stall.
 const OUTBOUND_CAPACITY: usize = 1024;
@@ -107,6 +153,9 @@ pub struct Plugin {
     runner: Runner,
     /// How long dropping it waits for its own process (`set_stop_wait`).
     stop_wait: Duration,
+    /// What dropping it tells the plugin (`set_stop_reason`); `quit` for a
+    /// plugin dropped with the host.
+    stop_reason: StopReason,
 }
 impl Plugin {
     /// A development load (`--plugin`): always its own process.
@@ -186,6 +235,7 @@ impl Plugin {
             listeners: BTreeMap::new(),
             runner,
             stop_wait: Duration::from_millis(300),
+            stop_reason: StopReason::Quit,
         })
     }
     pub fn send(&mut self, message: Value) -> Result<()> {
@@ -232,6 +282,11 @@ impl Plugin {
     /// park waits longer, `host/lazy.rs`).
     pub fn set_stop_wait(&mut self, wait: Duration) {
         self.stop_wait = wait;
+    }
+    /// Why it stops: the reason its `runtime.stop` carries when it is
+    /// dropped (`Host::stop`).
+    pub fn set_stop_reason(&mut self, reason: StopReason) {
+        self.stop_reason = reason;
     }
     /// Text values in the interface language, with this plugin's catalog
     /// (`i18n::text`).
@@ -335,9 +390,11 @@ impl Drop for Plugin {
             // The runner lives on; past the same 300 ms the member counts as
             // leaked, and the wait goes on until the runner reports it gone
             // (at most 6 s, `Member::stop`).
-            Runner::Shared(member) => member.stop(),
+            Runner::Shared(member) => member.stop(self.stop_reason),
             Runner::Own { child, outbound } => {
-                let _ = outbound.try_send(json!({"event":"runtime.stop","data":null}));
+                // Not delivered when its queue is full or its pipe closed
+                // (a `failed` stop, often): it is killed after the wait.
+                let _ = outbound.try_send(stop_message(self.stop_reason));
                 let deadline = Instant::now() + self.stop_wait;
                 let mut exited = false;
                 while Instant::now() < deadline {

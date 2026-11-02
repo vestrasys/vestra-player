@@ -95,7 +95,7 @@ impl Host {
                     }
                     Err(error) => {
                         diag!("malformed request: {error}");
-                        self.disable(owner);
+                        self.disable(owner, StopReason::Failed);
                     }
                 }
             }
@@ -379,7 +379,7 @@ impl Host {
             Event::Exited(owner) => {
                 // Still running: the process ended without being stopped.
                 self.record_failure(owner, "plugin process exited");
-                self.disable(owner)
+                self.disable(owner, StopReason::Failed)
             }
             Event::Runner(runner, message) => self.runner_event(runner, &message),
             Event::RunnerExited(runner) => {
@@ -407,7 +407,7 @@ impl Host {
                     self.activations
                         .runtime_failed(owner, error.chars().take(512).collect(), now);
                 self.record_failure(owner, &error);
-                self.disable(owner);
+                self.disable(owner, StopReason::Failed);
             }
         }
     }

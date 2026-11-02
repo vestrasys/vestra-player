@@ -9,14 +9,19 @@
  *   S → host  {"g":0,"event":"runner.hello","data":{"pid":…,"node":"…"}}       once, at start
  *   host → S  {"g":0,"event":"plugin.start","data":{"g":12,"id":"…","directory":"…",
  *                "dataDirectory":"…","locale":"…","app":{…}}}
- *   host → S  {"g":12,"event":"runtime.stop"}                                   stop one plugin
+ *   host → S  {"g":12,"event":"runtime.stop","data":{"reason":"disable"}}       stop one plugin
  *   S → host  {"g":0,"event":"runner.stopped","data":{"g":12,"timedOut":false}}
  *   S → host  {"g":0,"event":"runner.fault","data":{"g":12,"message":"…"}}      an uncaught exception
  *                                                                               attributed to g (gone);
  *                                                                               g 0: unattributed, S exits 1
  *   host → S  {"g":0,"event":"runner.ping","data":{"seq":41}}
  *   S → host  {"g":0,"event":"runner.pong","data":{"seq":41,"stats":{…}}}
- *   host → S  {"g":0,"event":"runner.stop"}                                     stop all, exit 0
+ *   host → S  {"g":0,"event":"runner.stop","data":{"reason":"quit"}}            stop all, exit 0
+ *
+ * The reason (player 0.6.4, SDK 1.5.54 `StopReason`) reaches the plugin's
+ * cleanups. A closed stdin or a broken stdout without a `runner.stop` stops
+ * every member with `host-lost`; an uncaught exception or a failed
+ * activation retires its member with `failed`.
  *
  * Every other line is a plugin's own message, exactly as `runner.ts` writes
  * and reads it, plus `g`. A plugin's failure, stop or attributed fault never
@@ -32,8 +37,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createInterface } from "node:readline";
 import { format } from "node:util";
-import { boot, readManifest, STOP_TIMEOUT_MS } from "./boot.ts";
-import type { Inbound, Instance } from "./boot.ts";
+import { boot, readManifest, STOP_TIMEOUT_MS, stopReason } from "./boot.ts";
+import type { Inbound, Instance, StopReason } from "./boot.ts";
 
 interface Member {
   g: number;
@@ -99,7 +104,8 @@ for (const method of ["log", "info", "debug", "warn", "error"] as const)
   console[method] = logLine;
 
 let closing = false;
-process.stdout.on("error", () => void stopAll(0));
+// The pipe to the player broke: the player is gone.
+process.stdout.on("error", () => void stopAll(0, "host-lost"));
 
 /** One line: `{"g":<g>,` followed by the inner message's own keys. */
 function post(g: number, line: string) {
@@ -160,7 +166,7 @@ function start(data: Start) {
     const outcome = await instance.done;
     member.readyMs = performance.now() - member.startedAt;
     // A plugin whose activation failed is disposed; the others go on.
-    if (outcome === "failed" && member.alive) void retire(member);
+    if (outcome === "failed" && member.alive) void retire(member, "failed");
   });
 }
 
@@ -168,9 +174,10 @@ function start(data: Start) {
  * Stops one plugin: its pending requests are rejected and its cleanup runs,
  * for at most the stop deadline; then it leaves the process.
  */
-function retire(member: Member): Promise<boolean> {
+function retire(member: Member, reason: StopReason): Promise<boolean> {
   member.alive = false;
-  const settled = als.run(member, () => member.instance?.stop()) ?? undefined;
+  const settled =
+    als.run(member, () => member.instance?.stop(reason)) ?? undefined;
   member.stopped ??= Promise.resolve(settled);
   return Promise.race([
     member.stopped.then(() => false),
@@ -183,19 +190,22 @@ function retire(member: Member): Promise<boolean> {
   });
 }
 
-async function stopOne(g: number) {
+async function stopOne(g: number, reason: StopReason) {
   const member = members.get(g);
-  const timedOut = member ? await retire(member) : false;
+  const timedOut = member ? await retire(member, reason) : false;
   control("runner.stopped", { g, timedOut });
 }
 
 let exiting = false;
-async function stopAll(code: number) {
+/** The first call wins: stdin closing after a `runner.stop` keeps its reason. */
+async function stopAll(code: number, reason: StopReason) {
   if (exiting) return;
   exiting = true;
   closing = true;
   setTimeout(() => process.exit(code), stopTimeout).unref();
-  await Promise.all([...members.values()].map((member) => retire(member)));
+  await Promise.all(
+    [...members.values()].map((member) => retire(member, reason)),
+  );
   process.exit(code);
 }
 
@@ -240,7 +250,7 @@ function runner(message: Inbound) {
       });
       return;
     case "runner.stop":
-      void stopAll(0);
+      void stopAll(0, stopReason(message.data));
       return;
     default:
       logLine(`unknown runner message ${String(message.event)}`);
@@ -249,7 +259,7 @@ function runner(message: Inbound) {
 
 function deliver(g: number, message: Inbound) {
   if (message.event === "runtime.stop") {
-    void stopOne(g);
+    void stopOne(g, stopReason(message.data));
     return;
   }
   const member = members.get(g);
@@ -272,7 +282,7 @@ process.on("uncaughtException", (error) => {
     // reported twice.
     if (!member.alive) return;
     control("runner.fault", { g: member.g, message: String(error) });
-    void retire(member);
+    void retire(member, "failed");
     return;
   }
   stderr(`[shared] uncaught exception: ${format(error)}\n`);
@@ -303,6 +313,7 @@ input.on("line", (line) => {
   if (g === 0) runner(message);
   else deliver(g, message);
 });
-input.on("close", () => void stopAll(0));
+// Closed without a `runner.stop` first: the player crashed or was killed.
+input.on("close", () => void stopAll(0, "host-lost"));
 
 control("runner.hello", { pid: process.pid, node: process.versions.node });
