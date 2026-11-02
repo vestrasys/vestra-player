@@ -16,7 +16,7 @@
 #![forbid(unsafe_code)]
 
 use crate::host::Event;
-use crate::process::MAX_MESSAGE_BYTES;
+use crate::process::{MAX_MESSAGE_BYTES, StopReason, stop_message};
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
 use std::{
@@ -224,7 +224,8 @@ impl Member {
     /// or a stop not reported within [`MEMBER_GONE`] (the runner's input
     /// backed up, for one), can still overlap the new instance; both are
     /// logged. An own process is killed instead; a member cannot be.
-    pub fn stop(&self) {
+    /// `reason` goes with the `runtime.stop` (`process::StopReason`).
+    pub fn stop(&self, reason: StopReason) {
         let (done, wait) = mpsc::channel();
         {
             let mut state = self.link.state();
@@ -237,7 +238,7 @@ impl Member {
         let began = Instant::now();
         let sent = self.link.outbound.try_send(Line {
             g: self.g,
-            message: json!({"event":"runtime.stop","data":null}),
+            message: stop_message(reason),
             queued: None,
         });
         let mut outcome = match sent {
@@ -460,7 +461,8 @@ impl SharedRunner {
 
     /// Let it go without waiting on the caller's thread: `runner.stop`
     /// (every member's cleanup, then exit) when `graceful`, else killed at
-    /// once; killed after [`STOP_WAIT`] either way.
+    /// once; killed after [`STOP_WAIT`] either way. Graceful only when it
+    /// has no member left (`idle`), so its `runner.stop` carries no reason.
     pub fn retire(mut self, graceful: bool) {
         self.link.close();
         let Some(mut child) = self.child.take() else {
@@ -484,20 +486,25 @@ impl SharedRunner {
     }
 }
 impl Drop for SharedRunner {
-    /// The player quits: `runner.stop` (the members' cleanups run
-    /// concurrently in the runner), [`STOP_WAIT`], then killed — the same
-    /// window an own process gets.
+    /// The player quits: `runner.stop` with reason `quit` (the members'
+    /// cleanups run concurrently in the runner), [`STOP_WAIT`], then killed —
+    /// the same window an own process gets.
     fn drop(&mut self) {
         if let Some(mut child) = self.child.take() {
             let _ = self.link.outbound.try_send(Line {
                 g: 0,
-                message: json!({"event":"runner.stop"}),
+                message: runner_stop(StopReason::Quit),
                 queued: None,
             });
             wait_or_kill(&mut child);
         }
         self.link.close();
     }
+}
+
+/// `runner.stop` for every member: each one's cleanup gets `reason`.
+fn runner_stop(reason: StopReason) -> Value {
+    json!({"event":"runner.stop","data":reason.data()})
 }
 
 fn wait_or_kill(child: &mut Child) {
@@ -542,6 +549,13 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
             json!({"event":"runner.fault","data":{"g":0,"message":message}}),
         ));
     };
+    // Read to the end in every case, never closing the pipe early: a closed
+    // pipe fails the runner's next write, and it would stop every member as
+    // `host-lost` before the host's `runner.stop` (`quit`) or the restart.
+    // Once the host no longer listens (quitting: its receiver goes first)
+    // only `runner.stopped` is still handled; after a fault, nothing.
+    let mut listening = true;
+    let mut faulted = false;
     loop {
         let mut bytes = Vec::new();
         let read = Read::by_ref(&mut reader)
@@ -549,18 +563,24 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
             .read_until(b'\n', &mut bytes);
         match read {
             Ok(0) | Err(_) => return,
+            Ok(_) if faulted => {}
             Ok(_) if bytes.len() > LINE_LIMIT => match prefix_generation(&bytes) {
                 // That plugin is stopped; the runner and the others go on.
                 Some(g) if g > 0 && link.is_member(g) => {
-                    let _ = events.send(Event::RuntimeFault(
-                        g,
-                        format!("protocol message exceeds {} MiB", MAX_MESSAGE_BYTES >> 20),
-                    ));
+                    if listening {
+                        let _ = events.send(Event::RuntimeFault(
+                            g,
+                            format!("protocol message exceeds {} MiB", MAX_MESSAGE_BYTES >> 20),
+                        ));
+                    }
                     if !bytes.ends_with(b"\n") && reader.skip_until(b'\n').unwrap_or(0) == 0 {
                         return;
                     }
                 }
-                _ => return fault("an oversize line without a plugin generation".into()),
+                _ => {
+                    fault("an oversize line without a plugin generation".into());
+                    faulted = true;
+                }
             },
             Ok(_) => match parse_line(&bytes) {
                 Ok((0, message)) => {
@@ -568,20 +588,21 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
                         if let Some(g) = message["data"]["g"].as_u64() {
                             link.stopped(g, message["data"]["timedOut"] == true);
                         }
-                    } else if events.send(Event::Runner(link.id, message)).is_err() {
-                        return;
+                    } else if listening {
+                        listening = events.send(Event::Runner(link.id, message)).is_ok();
                     }
                 }
                 Ok((g, message)) => {
                     // A plugin already stopped (its last lines), or none of
                     // this runner's: never another owner's.
-                    if link.is_member(g)
-                        && events.send(crate::process::request(g, message)).is_err()
-                    {
-                        return;
+                    if listening && link.is_member(g) {
+                        listening = events.send(crate::process::request(g, message)).is_ok();
                     }
                 }
-                Err(error) => return fault(error),
+                Err(error) => {
+                    fault(error);
+                    faulted = true;
+                }
             },
         }
     }
@@ -816,13 +837,13 @@ mod tests {
             let line = output.recv().unwrap();
             assert_eq!(
                 envelope(line.g, &line.message).unwrap(),
-                "{\"g\":4,\"data\":null,\"event\":\"runtime.stop\"}"
+                "{\"g\":4,\"data\":{\"reason\":\"disable\"},\"event\":\"runtime.stop\"}"
             );
             answer.stopped(4, false);
             output
         });
         let began = Instant::now();
-        member.stop();
+        member.stop(StopReason::Disable);
         assert!(began.elapsed() < STOP_WAIT);
         assert_eq!(link.members(), 0);
         assert_eq!(link.leaked(), 0);
@@ -836,7 +857,7 @@ mod tests {
             answer.stopped(4, false);
         });
         let began = Instant::now();
-        member.stop();
+        member.stop(StopReason::Idle);
         let took = began.elapsed();
         assert!(took >= STOP_WAIT + Duration::from_millis(400), "{took:?}");
         assert!(took < MEMBER_GONE, "{took:?}");
@@ -845,15 +866,87 @@ mod tests {
         // Never reported: the stop gives up at the runner's own deadline.
         link.state().members.insert(4);
         let began = Instant::now();
-        member.stop();
+        member.stop(StopReason::Idle);
         assert!(began.elapsed() >= MEMBER_GONE - Duration::from_millis(50));
         assert_eq!(link.leaked(), 2);
         assert_eq!(link.members(), 0);
         // Gone: no wait at all.
         link.close();
         let began = Instant::now();
-        member.stop();
+        member.stop(StopReason::Idle);
         assert!(began.elapsed() < Duration::from_millis(50));
+    }
+
+    #[test]
+    fn the_reader_drains_to_the_end_when_the_host_is_gone_or_after_a_fault() {
+        let lines = b"{\"g\":5,\"id\":1,\"method\":\"osd.show\",\"params\":{}}\n\
+            {\"g\":5,\"id\":2,\"method\":\"osd.show\",\"params\":{}}\n\
+            {\"g\":0,\"event\":\"runner.stopped\",\"data\":{\"g\":5,\"timedOut\":false}}\n\
+            {\"g\":5,\"id\":3,\"method\":\"osd.show\",\"params\":{}}\n"
+            .to_vec();
+        // Quitting: nobody receives events, `runner.stopped` still counts.
+        let (runner, _output) = link(&[5]);
+        let (done, stopped) = mpsc::channel();
+        runner.state().waiters.insert(5, done);
+        let (events, received) = mpsc::channel();
+        drop(received);
+        let mut cursor = Cursor::new(lines.clone());
+        read_lines(&mut cursor, &runner, &events);
+        assert_eq!(cursor.position() as usize, lines.len());
+        assert_eq!(stopped.try_recv(), Ok(false));
+        // A line no plugin owns: one fault, the rest read and dropped.
+        let (runner, _output) = link(&[5]);
+        let mut input = b"junk\n".to_vec();
+        input.extend_from_slice(&lines);
+        let (events, received) = mpsc::channel();
+        let mut cursor = Cursor::new(input.clone());
+        read_lines(&mut cursor, &runner, &events);
+        drop(events);
+        assert_eq!(cursor.position() as usize, input.len());
+        let received: Vec<_> = received.into_iter().collect();
+        assert_eq!(received.len(), 1);
+        assert!(matches!(&received[0], Event::Runner(1, m) if m["event"] == "runner.fault"));
+    }
+
+    #[test]
+    fn stops_carry_their_reason_on_the_wire() {
+        let reasons = [
+            (StopReason::Quit, "quit"),
+            (StopReason::Disable, "disable"),
+            (StopReason::Uninstall, "uninstall"),
+            (StopReason::Reload, "reload"),
+            (StopReason::Upgrade, "upgrade"),
+            (StopReason::Idle, "idle"),
+            (StopReason::Failed, "failed"),
+        ];
+        for (reason, name) in reasons {
+            let (link, output) = link(&[6]);
+            link.close();
+            // The runner is gone: no wait, nothing sent.
+            Member {
+                link: Arc::new(link),
+                g: 6,
+                queued: Arc::new(AtomicUsize::new(0)),
+            }
+            .stop(reason);
+            assert!(output.try_recv().is_err());
+            assert_eq!(
+                envelope(6, &stop_message(reason)).unwrap(),
+                format!(
+                    "{{\"g\":6,\"data\":{{\"reason\":\"{name}\"}},\"event\":\"runtime.stop\"}}"
+                )
+            );
+        }
+        // The player quits: one `runner.stop` for every member.
+        assert_eq!(
+            envelope(0, &runner_stop(StopReason::Quit)).unwrap(),
+            "{\"g\":0,\"data\":{\"reason\":\"quit\"},\"event\":\"runner.stop\"}"
+        );
+        // An own process gets the same line without the envelope.
+        assert_eq!(
+            stop_message(StopReason::Uninstall).to_string(),
+            "{\"data\":{\"reason\":\"uninstall\"},\"event\":\"runtime.stop\"}"
+        );
     }
 
     #[test]

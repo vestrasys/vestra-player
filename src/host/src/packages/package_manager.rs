@@ -5,7 +5,7 @@ use crate::packages::package_stage::Candidate;
 use crate::packages::package_store::{Instance, Source, Store, StoredPackage};
 use crate::packages::{package_stage, package_store};
 use crate::playback::backend::Command;
-use crate::process::{Plugin, shared_runner};
+use crate::process::{Plugin, StopReason, shared_runner};
 use crate::{i18n, platform, process};
 use anyhow::Result;
 use process::DataKey;
@@ -348,8 +348,10 @@ impl Host {
             .filter(|(_, plugin)| plugin.shared_runner() == Some(id))
             .map(|(owner, plugin)| (*owner, plugin.manifest.id.clone()))
             .collect::<Vec<_>>();
+        // The runner is killed already: no member gets its `runtime.stop`
+        // (their cleanups do not run; nothing is left to tell).
         for (owner, _) in &members {
-            self.disable(*owner);
+            self.disable(*owner, StopReason::Failed);
         }
         for (_, plugin) in members {
             if !failed_open {
@@ -665,8 +667,11 @@ impl Host {
         // digest: its recording is of no use).
         self.forget_parked(&id, true);
         let running = self.running(&id);
+        // `upgrade` for every install over a running version: an update, a
+        // reinstall of the same version, and a `replace` from another
+        // source (`fresh` data) alike.
         if let Some(owner) = running {
-            self.disable(owner);
+            self.disable(owner, StopReason::Upgrade);
         }
         // Parked just now: its process may still be finishing; the new
         // version starts once it is gone, as after a running one.
@@ -1261,7 +1266,7 @@ impl Host {
         }
         if !enabled {
             if let Some(owner) = running {
-                self.disable(owner);
+                self.disable(owner, StopReason::Disable);
             }
             // Parked: its recorded entries go; the recording stays (not
             // replayed while it is disabled).
@@ -1366,7 +1371,7 @@ impl Host {
         self.forget_parked(id, true);
         let running = self.running(id);
         if let Some(owner) = running {
-            self.disable(owner);
+            self.disable(owner, StopReason::Reload);
         }
         if let Some(owner) = running.or_else(|| self.parked_process(id)) {
             let now = self.now_ms();
@@ -1475,7 +1480,7 @@ impl Host {
             .parked_process(&id)
             .filter(|owner| self.cleanup.get(owner).is_some_and(|(reaped, _)| !reaped));
         if let Some(owner) = self.running(&id) {
-            self.disable(owner);
+            self.disable(owner, StopReason::Uninstall);
             // Delete the data after the process is gone (it flushes on stop).
             if let Some(directory) = data.clone() {
                 self.data_removals.insert(owner, directory);
@@ -1747,7 +1752,15 @@ impl Host {
                 } else {
                     format!("activation {status}: {}", self.activation(owner)?)
                 });
-                self.disable(owner);
+                // Cancelled: the version it replaced comes back (an
+                // `upgrade` in reverse), or, a first install, it goes
+                // (`uninstall`); else its activation failed.
+                let reason = match (op.cancel, op.old.is_some()) {
+                    (true, true) => StopReason::Upgrade,
+                    (true, false) => StopReason::Uninstall,
+                    (false, _) => StopReason::Failed,
+                };
+                self.disable(owner, reason);
                 op.waiting = Some(owner);
                 op.owner = None;
                 op.phase = "restoring".into();

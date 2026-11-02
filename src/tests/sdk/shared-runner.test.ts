@@ -584,6 +584,107 @@ test("requests sent during cleanup are refused, not written: shared runner", asy
   assert.equal(await host.exited, 0);
 });
 
+// Why the plugin stops (player 0.6.4, SDK 1.5.54): the runners hand
+// `runtime.stop`'s and `runner.stop`'s `data.reason` to the SDK
+// (`plugin.stopReason`, each `onDispose` cleanup's `DisposeInfo`), and
+// stop with `host-lost` when the player's pipe closes without a stop.
+const reasonPlugin = (name: string) =>
+  `export default async function activate(plugin) {
+    plugin.onDispose((info) =>
+      console.error("${name} stopped " + info?.reason + " " + plugin.stopReason + " " + info?.stopping));
+  }`;
+const own = (name: string) =>
+  new Host([
+    join(runtime, "runner.ts"),
+    fixture(`test.${name}`, reasonPlugin(name), []),
+  ]);
+
+test("own runner: runtime.stop's reason reaches the cleanups", async () => {
+  for (const [data, expected] of [
+    [{ reason: "disable" }, "disable disable true"],
+    [{ reason: "upgrade" }, "upgrade upgrade true"],
+    // A player up to 0.6.3 (no data) and a reason this SDK does not know.
+    [null, "undefined undefined true"],
+    [{ reason: "bogus" }, "undefined undefined true"],
+  ] as const) {
+    const host = own("one");
+    await host.line((l) => l.event === "runtime.ready", "ready");
+    host.send({ event: "runtime.stop", data });
+    assert.equal(await host.exited, 0);
+    assert.match(host.stderr, new RegExp(`one stopped ${expected}`));
+    // Once: stdin closing after the stop keeps the first reason.
+    assert.equal(host.stderr.match(/stopped/g)?.length, 1, host.stderr);
+  }
+});
+
+test("own runner: stdin closed without a stop is host-lost", async () => {
+  const host = own("lost");
+  await host.line((l) => l.event === "runtime.ready", "ready");
+  host.child.stdin.end();
+  assert.equal(await host.exited, 0);
+  assert.match(host.stderr, /lost stopped host-lost host-lost true/);
+});
+
+test("shared runner: each stop carries its reason, a closed stdin is host-lost", async () => {
+  const host = shared();
+  for (const [g, name] of [
+    [1, "reloaded"],
+    [2, "faulty"],
+    [3, "quitting"],
+    [4, "quitting2"],
+  ] as const)
+    host.start(
+      g,
+      `test.${name}`,
+      fixture(
+        `test.${name}`,
+        name === "faulty"
+          ? reasonPlugin(name).replace(
+              "plugin.onDispose",
+              "setTimeout(() => { throw new Error('boom'); }, 50); plugin.onDispose",
+            )
+          : reasonPlugin(name),
+        [],
+      ),
+    );
+  for (const g of [1, 2, 3, 4]) await host.event(g, "runtime.ready");
+  host.send({ g: 1, event: "runtime.stop", data: { reason: "reload" } });
+  await host.control("runner.stopped", 1);
+  assert.match(
+    host.stderr,
+    /\[test\.reloaded\] reloaded stopped reload reload true/,
+  );
+  // An uncaught exception retires its plugin with `failed`.
+  await host.control("runner.fault", 2);
+  await host.wait(
+    () => (/faulty stopped/.test(host.stderr) ? true : undefined),
+    "the faulty plugin's cleanup",
+  );
+  assert.match(
+    host.stderr,
+    /\[test\.faulty\] faulty stopped failed failed true/,
+  );
+  // The host's own stop after the fault does not run the cleanup again.
+  host.send({ g: 2, event: "runtime.stop", data: { reason: "failed" } });
+  await host.control("runner.stopped", 2);
+  assert.equal(host.stderr.match(/faulty stopped/g)?.length, 1);
+  host.send({ g: 0, event: "runner.stop", data: { reason: "quit" } });
+  assert.equal(await host.exited, 0);
+  assert.match(host.stderr, /quitting stopped quit quit true/);
+  assert.match(host.stderr, /quitting2 stopped quit quit true/);
+  assert.doesNotMatch(host.stderr, /host-lost/);
+
+  const lost = shared();
+  lost.start(1, "test.lost", fixture("test.lost", reasonPlugin("lost"), []));
+  await lost.event(1, "runtime.ready");
+  lost.child.stdin.end();
+  assert.equal(await lost.exited, 0);
+  assert.match(
+    lost.stderr,
+    /\[test\.lost\] lost stopped host-lost host-lost true/,
+  );
+});
+
 test("staging rewrites literal relative .ts imports and refuses any left", () => {
   const source = [
     'import { a } from "./a.ts";',

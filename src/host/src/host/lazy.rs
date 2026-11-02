@@ -1117,7 +1117,7 @@ impl Host {
             return;
         }
         let (warnings, warning) = (self.warnings_of(owner), self.warning_text(owner));
-        self.stop(owner, true);
+        self.stop(owner, StopReason::Idle);
         self.lazy.stopping.insert(id.clone(), owner);
         diag!("lazy: {id} parked ({count} recorded calls)");
         // `VESTRA_TEST_EXECUTE` entries timed from this park.

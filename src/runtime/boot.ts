@@ -74,15 +74,32 @@ export interface BootOptions {
   entryLoaded?(): void;
 }
 
+/**
+ * Why the plugin stops (SDK 1.5.54 `StopReason`): `runtime.stop`'s (and
+ * `runner.stop`'s) `data.reason` as the player sent it, or `"host-lost"`
+ * when the runner's pipe to the player closed or broke without a stop. The
+ * SDK checks it: a value it does not know reads as `undefined`.
+ */
+export type StopReason = unknown;
+
+/** `data.reason` of a `runtime.stop` or `runner.stop` (players up to 0.6.3 send none). */
+export function stopReason(data: unknown): StopReason {
+  return typeof data === "object" && data !== null
+    ? (data as { reason?: unknown }).reason
+    : undefined;
+}
+
 export interface Instance {
   /** A message from the player for this plugin (not `runtime.stop`). */
   deliver(message: Inbound): void;
   /**
-   * Rejects the pending requests and runs the plugin's cleanup; resolves when
-   * the cleanup settled (no deadline here: the caller decides how long to
-   * wait). Idempotent.
+   * Rejects the pending requests and runs the plugin's cleanup with
+   * `reason` (`PluginInstance.dispose({ reason })`: `plugin.stopReason`,
+   * each `onDispose` cleanup's `DisposeInfo`); resolves when the cleanup
+   * settled (no deadline here: the caller decides how long to wait).
+   * Idempotent: a second call keeps the first reason.
    */
-  stop(): Promise<void>;
+  stop(reason?: StopReason): Promise<void>;
   /** Settles once `runtime.ready` or `runtime.failed` has been written. */
   readonly done: Promise<"ready" | "failed">;
   /** Requests written and requests still waiting for their reply. */
@@ -118,7 +135,7 @@ export function boot(options: BootOptions): Instance {
     }
   >();
   const listeners = new Map<string, Set<(data: unknown) => void>>();
-  let dispose: (() => Promise<void>) | undefined;
+  let dispose: ((reason: StopReason) => Promise<void>) | undefined;
   // Set synchronously by `stop`, before the plugin's cleanup runs: a request
   // the cleanup sends is refused, never written (as in the runner before the
   // split).
@@ -194,7 +211,7 @@ export function boot(options: BootOptions): Instance {
     }
   }
 
-  function stop(): Promise<void> {
+  function stop(reason?: StopReason): Promise<void> {
     if (stopped) return stopped;
     stopping = true;
     stopped = (async () => {
@@ -204,7 +221,7 @@ export function boot(options: BootOptions): Instance {
       }
       pending.clear();
       try {
-        await dispose?.();
+        await dispose?.(reason);
       } catch (error) {
         log(error);
       }
@@ -228,7 +245,7 @@ export function boot(options: BootOptions): Instance {
         options.dataDirectory,
         options.app,
       );
-      dispose = () => instance.dispose();
+      dispose = (reason) => instance.dispose({ reason });
       await module.default(instance.plugin);
       // `activated()` throws the first rejected start-up work; called again it
       // waits for the rest. What another plugin holds is not an activation failure.
