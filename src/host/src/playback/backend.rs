@@ -203,6 +203,11 @@ impl Backend {
                     let _ = target_wake.try_send(());
                 }));
                 let stop_wake = render_wake.clone();
+                // Nothing loaded (closed or never opened): the software
+                // renderer drops its frame buffers (`BufferRing::release`).
+                let ring_idle = Arc::new(AtomicBool::new(true));
+                let renderer_idle = ring_idle.clone();
+                let idle_wake = render_wake.clone();
                 let switched = worker_wake.clone();
                 let renderer = thread::spawn(move || {
                     let run = || -> Result<()> {
@@ -237,14 +242,31 @@ impl Backend {
                         let mut source: Option<(u32, u32)> = None;
                         let mut source_read: Option<Instant> = None;
                         let mut last_size = None;
+                        let mut owed = false;
                         let stages = &render_frame.stages;
                         while !renderer_stop.load(Ordering::Relaxed) {
-                            let update = render.update();
+                            let idle = renderer_idle.load(Ordering::Acquire);
+                            if idle {
+                                buffers.release();
+                            }
+                            let mut update = render.update();
                             if update {
                                 stages.update();
                             }
                             let (revision, request) = render_target.get();
-                            if redraw.due(update, revision) {
+                            // Nothing loaded: nothing to draw (the video area
+                            // shows the backdrop; `backdrop_source` cleared the
+                            // picture), so a resize allocates no frame. An
+                            // update mpv signalled meanwhile (a load's first
+                            // frame racing the worker's next turn) is drawn as
+                            // soon as something is loaded.
+                            if idle {
+                                owed |= update;
+                                update = false;
+                            } else if std::mem::take(&mut owed) {
+                                update = true;
+                            }
+                            if !idle && redraw.due(update, revision) {
                                 // The source display size changes only with a
                                 // new load or filter; read it a few times a second.
                                 if source_read
@@ -806,6 +828,11 @@ impl Backend {
                             "playback.backend".into(),
                             json!({"currentSession":sources.generation(),"event":format!("{event:?}")}),
                         ));
+                    }
+                    let idle = sources.phase() == crate::playback::session::Phase::Empty;
+                    // Woken either way: to drop the buffers, or to draw an owed update.
+                    if ring_idle.swap(idle, Ordering::AcqRel) != idle {
+                        let _ = idle_wake.try_send(());
                     }
                     if !geometry_error && let Err(error) = geometry.tick(&mpv, &sources) {
                         geometry_error = true;

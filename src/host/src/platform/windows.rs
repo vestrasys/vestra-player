@@ -1109,6 +1109,19 @@ pub struct VBlankWaiter {
     clock: vestra_win32::VBlank,
     hwnd: isize,
     waits: u32,
+    /// Opening the clock of the window's new display failed, and was
+    /// reported (`reopen_failure_to_report`).
+    reopen_failed: bool,
+}
+
+/// Whether a failed reopen of the display clock after a display change is
+/// reported now: the first failure of a run of failures (the check repeats
+/// about once a second while the window stays there), again only after an
+/// open succeeded. `failed` keeps the state between calls.
+fn reopen_failure_to_report(failed: &mut bool, opened: bool) -> bool {
+    let report = !opened && !*failed;
+    *failed = !opened;
+    report
 }
 impl VBlankWaiter {
     /// Block until the next vertical blank; `false` when the display clock
@@ -1120,11 +1133,16 @@ impl VBlankWaiter {
         // second at 60 Hz), and about once a second for a display change
         // without a move (the display arrangement changed).
         self.waits = self.waits.wrapping_add(1);
-        if (moved || self.waits.is_multiple_of(64))
-            && self.clock.moved(self.hwnd)
-            && let Some(clock) = vestra_win32::VBlank::open(self.hwnd)
-        {
-            self.clock = clock;
+        if (moved || self.waits.is_multiple_of(64)) && self.clock.moved(self.hwnd) {
+            let opened = vestra_win32::VBlank::open(self.hwnd);
+            if reopen_failure_to_report(&mut self.reopen_failed, opened.is_some()) {
+                diag!(
+                    "frame pacing: the window is on another display, whose clock could not be opened; pacing keeps the previous display's vertical blanks"
+                );
+            }
+            if let Some(clock) = opened {
+                self.clock = clock;
+            }
         }
         if self.clock.wait() {
             return true;
@@ -1154,6 +1172,7 @@ pub fn vblank_waiter(window: &slint::Window) -> Option<VBlankWaiter> {
         clock,
         hwnd,
         waits: 0,
+        reopen_failed: false,
     })
 }
 
@@ -1954,6 +1973,22 @@ mod tests {
         let (extra, line) = fullscreen_match(Some("off"));
         assert_eq!(extra, Some(1));
         assert!(line.unwrap().contains("ignored"));
+    }
+
+    /// F6 (round record 2026-10-windows-render, B.10): a failed reopen of
+    /// the display clock is reported once per run of failures.
+    #[test]
+    fn a_failed_clock_reopen_is_reported_once_per_run() {
+        let mut failed = false;
+        assert!(!reopen_failure_to_report(&mut failed, true));
+        assert!(
+            reopen_failure_to_report(&mut failed, false),
+            "first failure"
+        );
+        assert!(!reopen_failure_to_report(&mut failed, false), "repeat");
+        assert!(!reopen_failure_to_report(&mut failed, false), "repeat");
+        assert!(!reopen_failure_to_report(&mut failed, true), "opened");
+        assert!(reopen_failure_to_report(&mut failed, false), "a new run");
     }
 
     #[test]
