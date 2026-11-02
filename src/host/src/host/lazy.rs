@@ -122,6 +122,11 @@ pub(crate) struct Recording {
     pub resident_at_ready: bool,
     pub recorded_at: u64,
     pub calls: Vec<Call>,
+    /// Written under `VESTRA_TEST_PARK=all` (host/lazy/probe.rs): a resident
+    /// plugin recorded as lazy, without what it holds live. Only a run with
+    /// the same switch reads it back; any other run ignores it as stale.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub test_park: bool,
 }
 impl Recording {
     fn new(key: &Key, calls: Vec<Call>, resident_at_ready: bool) -> Self {
@@ -137,6 +142,7 @@ impl Recording {
             resident_at_ready,
             recorded_at,
             calls,
+            test_park: probe::park_all(),
         }
     }
     /// Valid for this package and this player.
@@ -146,6 +152,7 @@ impl Recording {
             && self.build.as_deref() == option_env!("VESTRA_BUILD")
             && self.digest == key.digest
             && self.version == key.version
+            && self.test_park == probe::park_all()
     }
 }
 
@@ -1235,6 +1242,15 @@ mod tests {
         }
         let path = file(directory.path(), &key().guid);
         let mut json: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        // A normal run writes no test mark and ignores a recording made
+        // under `VESTRA_TEST_PARK=all` (incomplete for a resident plugin).
+        assert!(json.get("testPark").is_none(), "{json}");
+        json["testPark"] = true.into();
+        std::fs::write(&path, json.to_string()).unwrap();
+        assert!(read(directory.path(), &key()).is_none());
+        json["testPark"] = false.into();
+        std::fs::write(&path, json.to_string()).unwrap();
+        assert!(read(directory.path(), &key()).is_some());
         // Another player release records again.
         json["player"] = "0.0.1".into();
         std::fs::write(&path, json.to_string()).unwrap();

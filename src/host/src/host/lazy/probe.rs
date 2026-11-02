@@ -11,10 +11,14 @@
 //!   drop providers (and the extensions an earlier provider takes) and the
 //!   wake events it listens to, each with its recorded mark. No owner
 //!   numbers: they change with every generation.
-//! - `VESTRA_TEST_PARK=all`: every installed plugin counts as lazy at its
-//!   ready (what it holds live is ignored) and records what a recording can
-//!   hold (`capabilities::recordable`), so resident ones are parked too.
-//! - `VESTRA_TEST_WAKE=<ms>`: that long after the host started, every
+//! - `VESTRA_TEST_PARK=all` (with `VESTRA_LAZY=1`): every installed plugin
+//!   counts as lazy at its ready (what it holds live is ignored) and records
+//!   what a recording can hold (`capabilities::recordable`), so resident ones
+//!   are parked too. **Isolated profile only**: such recordings are
+//!   incomplete; they carry `testPark: true` and only a run with the same
+//!   switch reads them back (any other run ignores them and records again).
+//! - `VESTRA_TEST_WAKE=<ms>` (with `VESTRA_LAZY=1`): that long after the
+//!   host started (milliseconds from host start, not from start-up), every
 //!   parked plugin is woken (as a shown settings page wakes it: nothing is
 //!   held for its ready).
 //!
@@ -35,12 +39,18 @@ impl Probe {
             file: std::env::var_os("VESTRA_TEST_REGISTRY")
                 .filter(|path| !path.is_empty())
                 .map(PathBuf::from),
-            park_all: std::env::var("VESTRA_TEST_PARK").as_deref() == Ok("all"),
+            park_all: park_all(),
             wake_at: std::env::var("VESTRA_TEST_WAKE")
                 .ok()
                 .and_then(|ms| ms.parse().ok()),
         }
     }
+}
+
+/// `VESTRA_TEST_PARK=all`, read once.
+pub(crate) fn park_all() -> bool {
+    static PARK_ALL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *PARK_ALL.get_or_init(|| std::env::var("VESTRA_TEST_PARK").as_deref() == Ok("all"))
 }
 
 impl Host {
