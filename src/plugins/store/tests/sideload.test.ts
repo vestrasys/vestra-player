@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { BUILTIN, FakeNet, info, keepDisabledOnInstall, no, OFFICIAL, publish, start, until, vxp, yes } from "./helpers.ts";
+import { BUILTIN, FakeNet, info, no, OFFICIAL, publish, start, until, vxp, yes } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-sideload-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -122,10 +122,10 @@ test("从链接安装…: https only, 64 MB at most, the permissions come from t
 const setEnabledCalls = (host: { packageCalls: readonly { method: string; enabled?: boolean }[] }) =>
   host.packageCalls.filter((c) => c.method === "setEnabled").map((c) => c.enabled);
 
-// Both players: an older one turns a plugin on when it installs it (the TestHost's default), one after
-// 0.6.3 keeps its disabled flag (`keepDisabledOnInstall`). Either way a disabled plugin stays disabled,
+// Both players: one up to 0.6.3 turns a plugin on when it installs it (`installKeepsDisabled = false`);
+// 0.6.4 keeps its disabled flag (the TestHost default). Either way a disabled plugin stays disabled,
 // and the status line says what the player reports after the install.
-for (const player of ["older player", "player after 0.6.3"] as const) {
+for (const player of ["older player", "player 0.6.4"] as const) {
   const newer = player !== "older player";
 
   test(`${player}: reinstalling a disabled plugin from a file keeps it disabled`, async () => {
@@ -133,7 +133,7 @@ for (const player of ["older player", "player after 0.6.3"] as const) {
     publish(net, OFFICIAL, []);
     const installed = info("someone.a", { version: "1.0.0", state: "disabled", source: { kind: "file" } });
     const { host, store, stop } = await start({ net, packages: [BUILTIN, installed] });
-    if (newer) keepDisabledOnInstall(host);
+    host.installKeepsDisabled = newer;
     const state = () => host.packages.find((p) => p.id === "someone.a")!.state;
     try {
       await host.command("open").run();
@@ -164,7 +164,7 @@ for (const player of ["older player", "player after 0.6.3"] as const) {
     net.route(url, { body: vxp({ id: "someone.x", version: "1.0.0", name: "X", capabilities: [] }) });
     const installed = info("someone.x", { version: "0.9.0", state: "disabled", source: { kind: "repository", url: OFFICIAL } });
     const { host, store, stop } = await start({ net, packages: [BUILTIN, installed] });
-    if (newer) keepDisabledOnInstall(host);
+    host.installKeepsDisabled = newer;
     const state = () => host.packages.find((p) => p.id === "someone.x")!.state;
     try {
       await host.command("open").run();
@@ -185,7 +185,7 @@ for (const player of ["older player", "player after 0.6.3"] as const) {
     const net = new FakeNet();
     publish(net, OFFICIAL, []);
     const { host, store, stop } = await start({ net });
-    if (newer) keepDisabledOnInstall(host);
+    host.installKeepsDisabled = newer;
     try {
       await host.command("open").run();
       host.dialogAnswers.push([packageFile("b-1.0.0.vxp", { id: "someone.b", version: "1.0.0", name: "B" })], yes);

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
 import { installFromRepository } from "../installer.ts";
-import { actions, allRows, banners, BUILTIN, choose, FakeNet, info, keepDisabledOnInstall, no, OFFICIAL, openStore, props, publish, showBuiltins, start, THIRD, until, yes } from "./helpers.ts";
+import { actions, allRows, banners, BUILTIN, choose, FakeNet, info, no, OFFICIAL, openStore, props, publish, showBuiltins, start, THIRD, until, yes } from "./helpers.ts";
 
 const YT = {
   id: "zysilm.youtube",
@@ -313,7 +313,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
   }
 });
 
-test("updating a disabled plugin keeps it disabled (VS Code); a failure to keep it so is reported", async () => {
+test("older player: updating a disabled plugin keeps it disabled (VS Code); a failure to keep it so is reported", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [
     {
@@ -332,6 +332,8 @@ test("updating a disabled plugin keeps it disabled (VS Code); a failure to keep 
     source: { kind: "repository", url: OFFICIAL },
   });
   const { host, store, stop } = await ready(net, [BUILTIN, installed]);
+  // As players up to 0.6.3: every install runs the plugin (the store disables it again).
+  host.installKeepsDisabled = false;
   const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
   try {
     await choose(host, "YouTube");
@@ -431,7 +433,7 @@ test("README links: web addresses open in the browser, anchors are ignored, othe
   }
 });
 
-test("player after 0.6.3 (keeps the disabled flag): updating a disabled plugin keeps it disabled and says so", async () => {
+test("player 0.6.4 (keeps the disabled flag): updating a disabled plugin keeps it disabled and says so", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [{ ...YT, versions: [{ version: "0.3.0", capabilities: ["commands"] }, { version: "0.2.0", capabilities: ["commands"] }] }]);
   const installed = info("zysilm.youtube", {
@@ -441,7 +443,6 @@ test("player after 0.6.3 (keeps the disabled flag): updating a disabled plugin k
     source: { kind: "repository", url: OFFICIAL },
   });
   const { host, store, stop } = await ready(net, [BUILTIN, installed]);
-  keepDisabledOnInstall(host);
   try {
     await choose(host, "YouTube");
     host.dialogAnswers.push(yes);

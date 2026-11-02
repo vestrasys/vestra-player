@@ -5,7 +5,7 @@
  */
 import { createHash, generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { readFileSync } from "node:fs";
-import type { PackageManifest, PackageSource, Plugin } from "@vestra-player/sdk";
+import type { PackageManifest, Plugin } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import type { Json, Locale } from "@vestra-player/sdk";
 import { startStore } from "../main.ts";
@@ -298,42 +298,6 @@ export async function start(
   await host.settle();
   latest = { host, plugin: started.plugin };
   return { host, net, store, logs, plugin: started.plugin, stop: started.stop };
-}
-
-/**
- * A player after 0.6.3: an install keeps the installed plugin's disabled flag
- * (an update, a reinstall, a `replace` from another source) and does not start
- * it; a first install runs. The SDK 1.5.53 TestHost models the older player,
- * whose install always leaves the plugin running, so this answers
- * `packages.install` the same way (same source rules and calls) but with that
- * state. Without `enabled` in the SDK's `InstallOptions`, nothing sends it.
- */
-export function keepDisabledOnInstall(host: TestHost) {
-  host.handle("packages.install", (p) => {
-    const manifest = host.candidates.get(String(p.token));
-    if (!manifest) throw new HostError("stale", "unknown validation token");
-    const source = (p.source as PackageSource | undefined) ?? { kind: "file" };
-    const replace = p.replace === true;
-    const entry = host.packages.find((each) => each.id === manifest.id);
-    if (entry?.builtin) throw new HostError("unsupported", "built-in plugins are updated with the player");
-    const identity = (s: PackageSource | null | undefined) =>
-      !s || s.kind === "link" || s.kind === "file" ? "manual" : s.kind === "repository" ? `repository ${s.url}` : s.kind;
-    if (entry && identity(entry.source) !== identity(source) && !replace)
-      throw new HostError("conflict", `${manifest.id} is installed from another source`);
-    host.packageCalls.push({ method: "install", id: manifest.id, source, replace });
-    host.setPackages([
-      ...host.packages.filter((each) => each.id !== manifest.id),
-      info(manifest.id, {
-        version: manifest.version,
-        state: entry?.state === "disabled" ? "disabled" : "running",
-        capabilities: [...manifest.capabilities],
-        directory: `/test-host/packages/${manifest.id}`,
-        source,
-        dataDirectory: entry?.dataDirectory ?? null,
-      }),
-    ]);
-    return { operationId: String(p.requestId), status: "committed" };
-  });
 }
 
 /** Wait until `check()` holds (the store's own network work is not awaited by settle). */

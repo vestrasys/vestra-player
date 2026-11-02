@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { HostError } from "@vestra-player/sdk/testing";
-import { actions, banners, BUILTIN, choose, FakeNet, info, keepDisabledOnInstall, no, OFFICIAL, openStore, props, publish, start, THIRD, until, yes } from "./helpers.ts";
+import { HostError, type TestHost } from "@vestra-player/sdk/testing";
+import { actions, banners, BUILTIN, choose, FakeNet, info, no, OFFICIAL, openStore, props, publish, start, THIRD, until, yes } from "./helpers.ts";
 
 const fromOfficial = (id: string, version: string) =>
   info(id, { version, source: { kind: "repository", url: OFFICIAL } });
@@ -212,10 +212,11 @@ test("review A: a delisted plugin revoked with '*' is still disabled (and one wh
   }
 });
 
-test("updating a revoked version the store disabled enables the fix (design §3.10)", async () => {
+test("older player: updating a revoked version the store disabled enables the fix (design §3.10)", async () => {
   const net = new FakeNet();
   serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
   const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
+  host.installKeepsDisabled = false;
   const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
   try {
     host.dialogAnswers.push(no);
@@ -234,10 +235,11 @@ test("updating a revoked version the store disabled enables the fix (design §3.
   }
 });
 
-test("a revoked version accepted, then disabled by the user, stays disabled after the update", async () => {
+test("older player: a revoked version accepted, then disabled by the user, stays disabled after the update", async () => {
   const net = new FakeNet();
   serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
   const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
+  host.installKeepsDisabled = false;
   const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
   try {
     host.dialogAnswers.push(no);
@@ -263,11 +265,10 @@ test("a revoked version accepted, then disabled by the user, stays disabled afte
 const enables = (host: { packageCalls: readonly { method: string; enabled?: boolean }[] }) =>
   host.packageCalls.filter((c) => c.method === "setEnabled" && c.enabled === true).length;
 
-test("player after 0.6.3 (keeps the disabled flag): updating a revoked version the store disabled enables the fix", async () => {
+test("player 0.6.4 (keeps the disabled flag): updating a revoked version the store disabled enables the fix", async () => {
   const net = new FakeNet();
   serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
   const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
-  keepDisabledOnInstall(host);
   const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
   try {
     host.dialogAnswers.push(no);
@@ -287,11 +288,10 @@ test("player after 0.6.3 (keeps the disabled flag): updating a revoked version t
   }
 });
 
-test("player after 0.6.3: a refused enable of the fix is reported, and the plugin stays disabled", async () => {
+test("player 0.6.4: a refused enable of the fix is reported, and the plugin stays disabled", async () => {
   const net = new FakeNet();
   serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
   const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
-  keepDisabledOnInstall(host);
   const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
   try {
     host.dialogAnswers.push(no);
@@ -313,11 +313,10 @@ test("player after 0.6.3: a refused enable of the fix is reported, and the plugi
   }
 });
 
-test("player after 0.6.3: a revoked version accepted, then disabled by the user, stays disabled after the update", async () => {
+test("player 0.6.4: a revoked version accepted, then disabled by the user, stays disabled after the update", async () => {
   const net = new FakeNet();
   serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
   const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
-  keepDisabledOnInstall(host);
   const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
   try {
     host.dialogAnswers.push(no);
@@ -343,7 +342,7 @@ test("player after 0.6.3: a revoked version accepted, then disabled by the user,
 });
 
 /** `setEnabled(true)` answers at once with the plugin `starting`; it ends `end` a little later (a real player). */
-function startsThen(host: Parameters<typeof keepDisabledOnInstall>[0], end: "running" | "failed") {
+function startsThen(host: TestHost, end: "running" | "failed") {
   host.handle("packages.setEnabled", (p) => {
     const id = String(p.id);
     host.packageCalls.push({ method: "setEnabled", id, enabled: p.enabled === true });
@@ -359,11 +358,10 @@ function startsThen(host: Parameters<typeof keepDisabledOnInstall>[0], end: "run
 }
 
 for (const end of ["running", "failed"] as const)
-  test(`player after 0.6.3: the enabled fix is reported once it left starting (${end})`, async () => {
+  test(`player 0.6.4: the enabled fix is reported once it left starting (${end})`, async () => {
     const net = new FakeNet();
     serve(net, [{ id: "zysilm.youtube", versions: "0.2.0", reason: "会删除下载目录" }]);
     const { host, store, stop } = await start({ net, packages: [BUILTIN, fromOfficial("zysilm.youtube", "0.2.0")] });
-    keepDisabledOnInstall(host);
     startsThen(host, end);
     const state = () => host.packages.find((p) => p.id === "zysilm.youtube")!.state;
     try {
