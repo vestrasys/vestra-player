@@ -11,9 +11,13 @@ pub enum RestartMode {
     /// Not restarted; registrations revoked; `Failed` (today, every class).
     No,
     /// Restarted by the supervisor after `RestartSec` (Builtin, Resident; B4).
+    // Set by `with_b4` (B4).
+    #[cfg_attr(not(test), allow(dead_code))]
     OnFailure,
     /// Kept in standby with its entry points; starts again on the next
     /// trigger after a hold (Normal; B4). Needs a checkpoint, else `No`.
+    // Set by `with_b4` (B4).
+    #[cfg_attr(not(test), allow(dead_code))]
     OnNextTrigger,
 }
 
@@ -248,6 +252,8 @@ impl Tunables {
     }
 
     /// B3 values on top of `self`: queue limits live.
+    // The Host switches presets in B3–B6.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn with_b3(mut self, cores: usize) -> Self {
         self.first_run_limit = None;
         self.max_active = Some(max_active_for(cores));
@@ -270,6 +276,8 @@ impl Tunables {
 
     /// B4 values on top of `self`: restart policy, backoff, start limits,
     /// heap cap.
+    // The Host switches presets in B3–B6.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn with_b4(mut self) -> Self {
         let retry = Some(Retry {
             count: 3,
@@ -323,12 +331,16 @@ impl Tunables {
     }
 
     /// B5: the process budget for this machine.
+    // The Host switches presets in B3–B6.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn with_b5(mut self, physical_mib: u64) -> Self {
         self.process_budget = Some(process_budget_for(physical_mib));
         self
     }
 
     /// B6 targets (§11) on top of B3–B5.
+    // The Host switches presets in B3–B6.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn target(cores: usize, physical_mib: u64) -> Self {
         let mut t = Self::legacy()
             .with_b3(cores)
@@ -376,11 +388,15 @@ pub enum BuiltinsFirst {
 }
 
 /// `min(4, max(2, cores/2))` (§4.4).
+// B3 (`with_b3`).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn max_active_for(cores: usize) -> usize {
     (cores / 2).clamp(2, 4)
 }
 
 /// `clamp(physMiB / 2 × 0.30 / 85, 3, 16)` (§8).
+// B5 (`with_b5`).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn process_budget_for(physical_mib: u64) -> usize {
     let n = physical_mib / 2 * 30 / 100 / 85;
     (n as usize).clamp(3, 16)

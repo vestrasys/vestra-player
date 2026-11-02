@@ -16,13 +16,13 @@ pub(crate) mod lazy;
 mod lifecycle;
 mod menus;
 mod mounts;
-pub mod package_activation;
 mod rendering;
 mod restart;
 pub(crate) use rendering::{Relaunch, Rendering, startup as rendering_startup};
 mod rpc;
 mod shell;
 mod state;
+pub(crate) mod supervisor;
 mod video;
 mod window;
 
@@ -34,6 +34,7 @@ use crate::playback::{
     frame_pacing, render_target, video_click,
 };
 use crate::process::{Plugin, StopReason, shared_runner};
+use crate::supervisor::{Pid, Supervisor, activation};
 use crate::ui::{
     bar_buttons, composition, drops, menu, pip, settings_window, slot_claims, ui_image, ui_state,
     ui_values, view, window_control, window_state,
@@ -154,12 +155,13 @@ pub(crate) struct Host {
     /// Restarts, quarantine and fail-open of the shared runner for this run.
     pub(crate) shared_policy: shared_runner::Policy,
     pub(crate) plugins: BTreeMap<u64, Plugin>,
-    /// `plugins` by manifest id (`Host::running`): kept by `add_plugin`
-    /// and `stop`, the only places a plugin comes and goes.
+    /// `plugins` by manifest id, kept by `add_plugin` and `stop`, the
+    /// only places a plugin comes and goes. Since B2a `Host::running`
+    /// answers from the unit table (`supervisor`); this map stays one
+    /// release as its `debug_assert` cross-check (removed in B7).
     pub(crate) plugin_ids: BTreeMap<String, u64>,
     pub(crate) views: BTreeMap<(u64, String), view::View>,
     pub(crate) events: mpsc::Sender<Event>,
-    pub(crate) next_generation: u64,
     pub(crate) headless: bool,
     pub(crate) commands: commands::Registry,
     pub(crate) dialog_busy: bool,
@@ -231,8 +233,11 @@ pub(crate) struct Host {
     pub(crate) menu_generation: u64,
     pub(crate) host_revision: u64,
     pub(crate) window_title: String,
-    pub(crate) activations: package_activation::Book,
-    pub(crate) activation_ui: std::collections::BTreeSet<(u64, u64)>,
+    /// The plugin process supervisor's core (doc/architecture/supervisor.md):
+    /// since B2a the unit table (identity: `by_id`, `by_pid`, owner
+    /// generations) and each unit's activation; the Host adapter is
+    /// `host/supervisor/`.
+    pub(crate) supervisor: Supervisor<Value>,
     pub(crate) activation_receipts: std::collections::VecDeque<Value>,
     /// `resolvers.fileTypes` as last pushed by the backend (an array).
     pub(crate) file_types: Value,

@@ -23,7 +23,7 @@ impl Host {
         if let Some(plugin) = self.plugins.get(&owner) {
             let id = plugin.manifest.id.clone();
             let now = self.now_ms();
-            let status = self.activations.status(owner, now)?;
+            let status = self.activation_status(owner, now)?;
             return Ok(json!({"owner":owner,"id":id,"running":true,"activation":status}));
         }
         Ok(self
@@ -37,7 +37,9 @@ impl Host {
     }
     pub(crate) fn archive_activation(&mut self, owner: u64, message: &str) {
         let now = self.now_ms();
-        let _ = self.activations.runtime_failed(owner, message.into(), now);
+        let _ = self
+            .supervisor
+            .activation_failed(Pid(owner), message.into(), now);
         if let Ok(mut receipt) = self.activation(owner) {
             receipt["running"] = false.into();
             self.activation_receipts
@@ -47,15 +49,14 @@ impl Host {
                 self.activation_receipts.pop_front();
             }
         }
-        self.activations.remove(owner);
-        self.activation_ui
-            .retain(|(candidate, _)| *candidate != owner);
+        // With the UI requests it waited on (the old `activation_ui`).
+        self.supervisor.activation_end(Pid(owner));
     }
     pub(crate) fn activation_tick(&mut self) {
         let owners = self.plugins.keys().copied().collect::<Vec<_>>();
         let now = self.now_ms();
         for owner in owners {
-            let status = match self.activations.status(owner, now) {
+            let status = match self.activation_status(owner, now) {
                 Ok(status) => status,
                 Err(error) => {
                     diag!("activation status: {error}");
@@ -64,11 +65,11 @@ impl Host {
             };
             let terminal_failure = matches!(
                 status,
-                package_activation::Status::Failed { .. } | package_activation::Status::TimedOut
+                activation::Status::Failed { .. } | activation::Status::TimedOut
             );
             if terminal_failure {
                 let message = match status {
-                    package_activation::Status::Failed { message } => message,
+                    activation::Status::Failed { message } => message,
                     _ => "activation timed out".into(),
                 };
                 self.record_failure(owner, &message);
@@ -95,9 +96,10 @@ impl Host {
     pub(crate) fn physical_revoke(&self, reason: producer_input::RevokeReason) {
         self.physical_input(json!({"kind":"revoke","reason":reason}));
     }
-    /// `plugin` runs as `owner` (`plugins` and its index `plugin_ids`).
+    /// `plugin` runs as `owner` (`plugins`, and its unit in the
+    /// supervisor's unit table: `unit_started`).
     pub(crate) fn add_plugin(&mut self, owner: u64, plugin: Plugin) {
-        self.plugin_ids.insert(plugin.manifest.id.clone(), owner);
+        self.unit_started(&plugin.manifest.id, owner);
         self.plugins.insert(owner, plugin);
     }
     /// Load a development package (`--plugin DIR`).
@@ -120,24 +122,35 @@ impl Host {
                 candidate.id
             );
         }
-        self.next_generation = self
-            .next_generation
-            .checked_add(1)
-            .filter(|owner| *owner <= 9_007_199_254_740_991)
-            .ok_or_else(|| anyhow::anyhow!("plugin owner identities exhausted"))?;
-        self.activations.begin(
-            self.next_generation,
+        let owner = self.alloc_owner_checked()?;
+        self.activation_begin(
+            &candidate.id,
+            owner,
             self.now_ms()
                 .checked_add(timeout_ms)
                 .ok_or_else(|| anyhow::anyhow!("activation deadline overflow"))?,
         )?;
-        let plugin = match Plugin::load(directory, self.next_generation, self.events.clone()) {
+        let plugin = match Plugin::load(directory, owner, self.events.clone()) {
             Ok(plugin) => plugin,
             Err(error) => {
-                self.activations.remove(self.next_generation);
+                self.supervisor.activation_end(Pid(owner));
                 return Err(error);
             }
         };
+        // `Plugin::load` reads the manifest again: one changed in between
+        // would run under an id other than the one its activation and the
+        // `running` check above were for.
+        if plugin.manifest.id != candidate.id {
+            self.supervisor.activation_end(Pid(owner));
+            let error = anyhow::anyhow!(
+                "plugin manifest changed while loading: {} became {}",
+                candidate.id,
+                plugin.manifest.id
+            );
+            // Its stop waits for the process: off the event loop, as `stop`.
+            std::thread::spawn(move || drop(plugin));
+            return Err(error);
+        }
         let manifest_id = plugin.manifest.id.clone();
         let plugin_name = plugin.manifest.name.clone();
         // `packages.list` keeps this run's development loads after they stop.
@@ -146,12 +159,9 @@ impl Host {
             (plugin.directory.clone(), plugin.manifest.clone()),
         );
         self.failures.remove(&manifest_id);
-        self.add_plugin(self.next_generation, plugin);
+        self.add_plugin(owner, plugin);
         self.backend.commands.send(Command {
-            reply: Reply {
-                owner: self.next_generation,
-                id: 0,
-            },
+            reply: Reply { owner, id: 0 },
             method: "owner.registered".into(),
             params: json!({"manifestId":manifest_id,"manifestName":plugin_name}),
         })?;
@@ -272,9 +282,7 @@ impl Host {
         self.cleanup.insert(owner, (false, false));
         // Waiting for graceful disposal/killing belongs off the Slint event loop.
         if let Some(mut plugin) = self.plugins.remove(&owner) {
-            if self.plugin_ids.get(&plugin.manifest.id) == Some(&owner) {
-                self.plugin_ids.remove(&plugin.manifest.id);
-            }
+            self.unit_stopped(&plugin.manifest.id, owner);
             plugin.set_stop_reason(reason);
             if park {
                 // A routine stop, not a fault: its `onDispose` gets time.

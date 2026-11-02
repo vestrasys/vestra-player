@@ -1,14 +1,26 @@
-//! First-activation barrier, not a complete package installer.
-//! Callers supply monotonic milliseconds. Runtime readiness and all registered
-//! initial UI work must finish before success; terminal outcomes never reopen.
+//! First-activation barrier of one run (systemd `Type=notify` readiness):
+//! runtime readiness and every registered initial UI request must finish
+//! before success; terminal outcomes never reopen. Callers supply monotonic
+//! milliseconds.
+//!
+//! MOVE (B2a, doc/architecture/supervisor.md §2.1 `activation.rs`) of
+//! `host/package_activation.rs`: an `Activation` is the old `Book` entry,
+//! now held by its `Unit` (one per unit, for the run being activated)
+//! instead of a global map keyed by owner. The Supervisor counts them
+//! against `LIMIT` (removed in B3). The UI requests the Host tracks for an
+//! activation (`Host.activation_ui`) moved with it (`Run::ui_replies`).
 #![forbid(unsafe_code)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use serde::Serialize;
 
-const MAX_SAFE: u64 = (1_u64 << 53) - 1;
-const LIMIT: usize = 64;
+use super::unit::Pid;
+
+pub(super) const MAX_SAFE: u64 = (1_u64 << 53) - 1;
+/// Activations in flight at once, built-ins included (§0 D1; removed in
+/// B3), and initial UI requests per activation.
+pub(super) const LIMIT: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(
@@ -51,6 +63,7 @@ impl std::fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
+#[derive(Debug)]
 enum Phase {
     Pending {
         runtime_ready: bool,
@@ -61,16 +74,29 @@ enum Phase {
     TimedOut,
 }
 
-struct Entry {
+/// One run's activation (the old `Book` entry).
+#[derive(Debug)]
+pub(super) struct Activation {
     deadline_ms: u64,
     last_now: u64,
     phase: Phase,
 }
 
-impl Entry {
+impl Activation {
+    fn new(deadline_ms: u64) -> Self {
+        Self {
+            deadline_ms,
+            last_now: 0,
+            phase: Phase::Pending {
+                runtime_ready: false,
+                pending_ui: BTreeSet::new(),
+            },
+        }
+    }
+
     /// Validation does not mutate. A valid deadline observation permanently
     /// expires pending activation, even when its requested operation is late.
-    fn observe(&mut self, now_ms: u64) -> Result<(), Error> {
+    pub(super) fn observe(&mut self, now_ms: u64) -> Result<(), Error> {
         if now_ms > MAX_SAFE || now_ms < self.last_now {
             return Err(Error::Invalid);
         }
@@ -88,7 +114,7 @@ impl Entry {
         }
     }
 
-    fn status(&self) -> Status {
+    pub(super) fn status(&self) -> Status {
         match &self.phase {
             Phase::Pending {
                 runtime_ready,
@@ -104,67 +130,10 @@ impl Entry {
             Phase::TimedOut => Status::TimedOut,
         }
     }
-}
 
-#[derive(Default)]
-pub struct Book {
-    entries: BTreeMap<u64, Entry>,
-}
-
-fn identity(value: u64) -> Result<(), Error> {
-    if (1..=MAX_SAFE).contains(&value) {
-        Ok(())
-    } else {
-        Err(Error::Invalid)
-    }
-}
-
-fn message(value: &str) -> Result<(), Error> {
-    if value.len() <= 2048 && !value.contains('\0') {
-        Ok(())
-    } else {
-        Err(Error::Invalid)
-    }
-}
-
-impl Book {
-    pub fn begin(&mut self, owner: u64, deadline_ms: u64) -> Result<(), Error> {
-        identity(owner)?;
-        identity(deadline_ms)?;
-        if self.entries.contains_key(&owner) {
-            return Err(Error::Conflict);
-        }
-        if self.entries.len() == LIMIT {
-            return Err(Error::Full);
-        }
-        self.entries.insert(
-            owner,
-            Entry {
-                deadline_ms,
-                last_now: 0,
-                phase: Phase::Pending {
-                    runtime_ready: false,
-                    pending_ui: BTreeSet::new(),
-                },
-            },
-        );
-        Ok(())
-    }
-
-    fn entry(&mut self, owner: u64, now_ms: u64) -> Result<&mut Entry, Error> {
-        identity(owner)?;
-        if now_ms > MAX_SAFE {
-            return Err(Error::Invalid);
-        }
-        let entry = self.entries.get_mut(&owner).ok_or(Error::Unknown)?;
-        entry.observe(now_ms)?;
-        Ok(entry)
-    }
-
-    pub fn ui_begin(&mut self, owner: u64, registration: u64, now_ms: u64) -> Result<(), Error> {
-        identity(registration)?;
-        let entry = self.entry(owner, now_ms)?;
-        match &mut entry.phase {
+    /// Called after `observe`.
+    pub(super) fn ui_begin(&mut self, registration: u64) -> Result<(), Error> {
+        match &mut self.phase {
             Phase::Ready => Err(Error::Conflict),
             Phase::Pending { pending_ui, .. } => {
                 if pending_ui.contains(&registration) {
@@ -180,78 +149,137 @@ impl Book {
         }
     }
 
-    pub fn ui_finish(
+    /// Called after `observe`.
+    pub(super) fn ui_finish(
         &mut self,
-        owner: u64,
         registration: u64,
         result: Result<(), String>,
-        now_ms: u64,
     ) -> Result<(), Error> {
-        identity(registration)?;
-        if let Err(failure) = &result {
-            message(failure)?;
-        }
-        let entry = self.entry(owner, now_ms)?;
-        let Phase::Pending { pending_ui, .. } = &mut entry.phase else {
+        let Phase::Pending { pending_ui, .. } = &mut self.phase else {
             return Err(Error::Terminal);
         };
         if !pending_ui.remove(&registration) {
             return Err(Error::Unknown);
         }
         match result {
-            Ok(()) => entry.complete_if_ready(),
-            Err(failure) => entry.phase = Phase::Failed(failure),
+            Ok(()) => self.complete_if_ready(),
+            Err(failure) => self.phase = Phase::Failed(failure),
         }
         Ok(())
     }
 
-    pub fn runtime_ready(&mut self, owner: u64, now_ms: u64) -> Result<(), Error> {
-        let entry = self.entry(owner, now_ms)?;
-        let Phase::Pending { runtime_ready, .. } = &mut entry.phase else {
+    /// Called after `observe`.
+    pub(super) fn runtime_ready(&mut self) -> Result<(), Error> {
+        let Phase::Pending { runtime_ready, .. } = &mut self.phase else {
             return Err(Error::Terminal);
         };
         *runtime_ready = true;
-        entry.complete_if_ready();
+        self.complete_if_ready();
         Ok(())
     }
 
-    pub fn runtime_failed(
-        &mut self,
-        owner: u64,
-        failure: String,
-        now_ms: u64,
-    ) -> Result<(), Error> {
-        message(&failure)?;
-        let entry = self.entry(owner, now_ms)?;
-        if !matches!(entry.phase, Phase::Pending { .. }) {
+    /// Called after `observe`.
+    pub(super) fn runtime_failed(&mut self, failure: String) -> Result<(), Error> {
+        if !matches!(self.phase, Phase::Pending { .. }) {
             return Err(Error::Terminal);
         }
-        entry.phase = Phase::Failed(failure);
+        self.phase = Phase::Failed(failure);
         Ok(())
     }
+}
 
-    pub fn status(&mut self, owner: u64, now_ms: u64) -> Result<Status, Error> {
-        identity(owner)?;
-        if now_ms > MAX_SAFE {
-            return Err(Error::Invalid);
-        }
-        match self.entries.get_mut(&owner) {
-            Some(entry) => {
-                entry.observe(now_ms)?;
-                Ok(entry.status())
-            }
-            None => Ok(Status::Unknown),
+/// The activation a unit holds: the run (`pid`) it belongs to and the
+/// initial UI requests the Host waits on for it (`ui_replies`, the old
+/// `Host.activation_ui` entries of that owner: reply ids).
+#[derive(Debug)]
+pub(super) struct Run {
+    pub(super) pid: Pid,
+    pub(super) activation: Activation,
+    pub(super) ui_replies: BTreeSet<u64>,
+}
+impl Run {
+    pub(super) fn new(pid: Pid, deadline_ms: u64) -> Self {
+        Self {
+            pid,
+            activation: Activation::new(deadline_ms),
+            ui_replies: BTreeSet::new(),
         }
     }
+}
 
-    pub fn remove(&mut self, owner: u64) {
-        self.entries.remove(&owner);
+pub(super) fn identity(value: u64) -> Result<(), Error> {
+    if (1..=MAX_SAFE).contains(&value) {
+        Ok(())
+    } else {
+        Err(Error::Invalid)
+    }
+}
+
+pub(super) fn message(value: &str) -> Result<(), Error> {
+    if value.len() <= 2048 && !value.contains('\0') {
+        Ok(())
+    } else {
+        Err(Error::Invalid)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    //! The old `Book` tests, against the Supervisor: one unit per owner
+    //! (as the Host's choke points give each run its unit).
+    use super::super::{Supervisor, Tunables, UnitId};
     use super::*;
+
+    struct Book {
+        sup: Supervisor<u32>,
+    }
+    impl Default for Book {
+        fn default() -> Self {
+            Self {
+                sup: Supervisor::new(Tunables::legacy(), 1),
+            }
+        }
+    }
+    impl Book {
+        fn unit(&mut self, owner: u64) -> UnitId {
+            self.sup.load_unit(&format!("a.owner-{owner}"))
+        }
+        fn begin(&mut self, owner: u64, deadline_ms: u64) -> Result<(), Error> {
+            let u = self.unit(owner);
+            self.sup.activation_begin(u, Pid(owner), deadline_ms)
+        }
+        fn ui_begin(&mut self, owner: u64, registration: u64, now_ms: u64) -> Result<(), Error> {
+            self.sup
+                .activation_ui_begin(Pid(owner), registration, now_ms)
+        }
+        fn ui_finish(
+            &mut self,
+            owner: u64,
+            registration: u64,
+            result: Result<(), String>,
+            now_ms: u64,
+        ) -> Result<(), Error> {
+            self.sup
+                .activation_ui_finish(Pid(owner), registration, result, now_ms)
+        }
+        fn runtime_ready(&mut self, owner: u64, now_ms: u64) -> Result<(), Error> {
+            self.sup.activation_ready(Pid(owner), now_ms)
+        }
+        fn runtime_failed(
+            &mut self,
+            owner: u64,
+            failure: String,
+            now_ms: u64,
+        ) -> Result<(), Error> {
+            self.sup.activation_failed(Pid(owner), failure, now_ms)
+        }
+        fn status(&mut self, owner: u64, now_ms: u64) -> Result<Status, Error> {
+            self.sup.activation_status(Pid(owner), now_ms)
+        }
+        fn remove(&mut self, owner: u64) {
+            self.sup.activation_end(Pid(owner));
+        }
+    }
 
     #[test]
     fn runtime_ready_waits_for_all_initial_ui_and_ready_never_reopens() {
@@ -373,11 +401,10 @@ mod tests {
         );
     }
 
-    /// B0 (doc/architecture/supervisor.md §0 D1, D3): the Book holds at
-    /// most 64 entries, built-ins included, and an entry leaves only by
-    /// `remove`: one that timed out or failed keeps its place. A caller that
-    /// never removes an entry (`load_package` when the spawn fails after
-    /// `begin`) leaks a place for the rest of the run.
+    /// B0 (doc/architecture/supervisor.md §0 D1, D3): at most 64
+    /// activations at once, built-ins included, and an activation leaves
+    /// only by `activation_end`: one that timed out or failed keeps its
+    /// place.
     #[test]
     fn b0_a_terminal_entry_keeps_its_place_until_removed() {
         let mut book = Book::default();
@@ -392,5 +419,55 @@ mod tests {
         assert_eq!(book.begin(66, 200), Err(Error::Full));
         book.remove(2);
         book.begin(66, 200).unwrap();
+    }
+
+    /// B2a (A18 leak 1): the activation is the unit's, one per unit. A run
+    /// whose spawn failed and was never ended cannot hold a place past the
+    /// unit's next start: that start's activation replaces it.
+    #[test]
+    fn a_units_next_activation_replaces_a_stale_one_without_taking_a_place() {
+        let mut sup = Supervisor::<u32>::new(Tunables::legacy(), 1);
+        let units = (0..64)
+            .map(|n| sup.load_unit(&format!("a.fixture-{n:03}")))
+            .collect::<Vec<_>>();
+        for (n, u) in units.iter().enumerate() {
+            let pid = sup.alloc_pid();
+            assert_eq!(pid, Pid(n as u64 + 1));
+            sup.activation_begin(*u, pid, 100).unwrap();
+        }
+        // Each unit starts again: the stale activations are replaced, the
+        // count stays at 64, and a 65th unit is still refused.
+        for u in &units {
+            let pid = sup.alloc_pid();
+            sup.activation_begin(*u, pid, 200).unwrap();
+        }
+        assert_eq!(sup.activation_status(Pid(1), 1), Ok(Status::Unknown));
+        assert_eq!(sup.by_pid(Pid(1)), None);
+        let extra = sup.load_unit("a.fixture-064");
+        let pid = sup.alloc_pid();
+        assert_eq!(sup.activation_begin(extra, pid, 200), Err(Error::Full));
+        sup.activation_end(Pid(65));
+        sup.activation_begin(extra, pid, 200).unwrap();
+        assert_eq!(sup.by_pid(pid), Some(extra));
+    }
+
+    /// The UI requests waited on move with the activation (the old
+    /// `Host.activation_ui`): taken once, gone with the activation.
+    #[test]
+    fn ui_replies_follow_the_activation() {
+        let mut sup = Supervisor::<u32>::new(Tunables::legacy(), 1);
+        let u = sup.load_unit("a.one");
+        let pid = sup.alloc_pid();
+        sup.activation_begin(u, pid, 100).unwrap();
+        assert!(!sup.activation_ui_waiting(pid));
+        sup.activation_ui_wait(pid, 7);
+        assert!(sup.activation_ui_waiting(pid));
+        assert!(sup.activation_ui_take(pid, 7));
+        assert!(!sup.activation_ui_take(pid, 7));
+        sup.activation_ui_wait(pid, 8);
+        sup.activation_end(pid);
+        assert!(!sup.activation_ui_waiting(pid));
+        assert!(!sup.activation_ui_take(pid, 8));
+        assert_eq!(sup.by_pid(pid), None);
     }
 }

@@ -14,6 +14,7 @@
 //! each of those hands its file over separately (`single_instance`).
 #![forbid(unsafe_code)]
 use crate::host::*;
+use crate::supervisor::activation;
 use serde_json::json;
 use std::{
     path::PathBuf,
@@ -66,8 +67,8 @@ impl Host {
             let owners = self.plugins.keys().copied().collect::<Vec<_>>();
             !owners.into_iter().any(|owner| {
                 matches!(
-                    self.activations.status(owner, now),
-                    Ok(package_activation::Status::Pending { .. })
+                    self.activation_status(owner, now),
+                    Ok(activation::Status::Pending { .. })
                 )
             })
         };

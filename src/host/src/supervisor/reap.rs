@@ -21,6 +21,8 @@ pub const STUCK_WAKE: &str = "its stopped process did not go within 20 s";
 /// Today's text of a reload / enable-after-stop that waited in vain.
 pub const STUCK_RELOAD: &str = "the previous process did not stop within 20 s";
 
+// Reap inputs: wired in B2b (multiplexed reaper).
+#[cfg_attr(not(test), allow(dead_code))]
 impl<P: Clone> Supervisor<P> {
     /// §5 `process_reaped`: the process is gone (`Event::Reaped`).
     pub fn process_reaped(&mut self, pid: Pid, _status: Option<i32>) {

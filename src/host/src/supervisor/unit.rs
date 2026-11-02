@@ -5,6 +5,7 @@
 
 use std::collections::VecDeque;
 
+use super::activation::Run;
 use super::exit::ExitCause;
 use super::job::{Job, JobId, JobResult};
 use super::restart::RestartState;
@@ -172,6 +173,8 @@ impl UnitState {
         }
     }
     /// systemd's `ActiveState` word.
+    // Diagnostics from B2b (the job machinery's `diag!`).
+    #[allow(dead_code)]
     pub fn name(&self) -> &'static str {
         match self {
             UnitState::Inactive => "inactive",
@@ -242,6 +245,9 @@ pub struct UnitSpec {
     /// checkpointed. A development load never is.
     pub recordable: bool,
 }
+// B2d: `add_unit` at start-up and install builds the specs (`name` is
+// unused by the tests too).
+#[allow(dead_code)]
 impl UnitSpec {
     pub fn new(id: impl Into<String>, class: Class) -> Self {
         let id = id.into();
@@ -309,11 +315,22 @@ impl Stopping {
     }
 }
 
+/// B2a: how the Host has a unit's one owner (`Unit::hosted`): as its
+/// running process, or as the owner its registrations are held under in
+/// standby.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hosted {
+    Running,
+    Standby,
+}
+
 /// One plugin (§3). Read through `Supervisor::unit`; only the supervisor
 /// changes it.
 #[derive(Debug)]
 pub struct Unit<P> {
     pub id: String,
+    // Answers and notices name the plugin from B2c (`Notify`, `Answer`).
+    #[allow(dead_code)]
     pub name: String,
     pub class: Class,
     pub enablement: Enablement,
@@ -394,6 +411,15 @@ pub struct Unit<P> {
     pub(super) gens: Gens,
     pub(super) results: VecDeque<(JobId, JobResult)>,
     pub(super) listed: Option<ListState>,
+    /// B2a (identity.rs): the one owner the Host has for this unit, running
+    /// (today's `Host.plugin_ids` entry) or holding its registrations in
+    /// standby (today's `Lazy.parked_ids` entry), never both (§17.8). The
+    /// state's pid and `UnitState::Standby::holder` take its place once
+    /// jobs drive the unit (B2b–B2c).
+    pub(super) hosted: Option<(Pid, Hosted)>,
+    /// The activation of the run being started (activation.rs, MOVE of
+    /// the Host's `Book` entry, B2a).
+    pub(super) activation: Option<Run>,
 }
 impl<P> Unit<P> {
     pub(super) fn new(spec: &UnitSpec) -> Self {
@@ -449,6 +475,8 @@ impl<P> Unit<P> {
             gens: Gens::default(),
             results: VecDeque::new(),
             listed: None,
+            hosted: None,
+            activation: None,
         }
     }
     /// The pid of its process, if it has one.
@@ -459,6 +487,8 @@ impl<P> Unit<P> {
         self.enablement == Enablement::Enabled
     }
     /// In-flight work (`begin_work` without `end_work`).
+    // B3: the one "busy" (`work.rs`).
+    #[allow(dead_code)]
     pub fn busy(&self) -> bool {
         self.work.busy()
     }

@@ -11,6 +11,8 @@ pub enum ExitCause {
     /// Runtime fault, malformed line, uncaught exception (`signal`).
     Fault,
     /// V8 heap abort (`oom-kill`).
+    // B4 detects it (Windows exit code, stderr tail).
+    #[cfg_attr(not(test), allow(dead_code))]
     Oom,
     /// `TimeoutStartSec` (`timeout`).
     StartTimeout,
