@@ -12,6 +12,13 @@
 //!   for [`GUARD_DAYS`] days, as Firefox's `DriverCrashGuard` does. A lost
 //!   GPU device (a driver reset while the windows draw with it) is recorded
 //!   too: [`LOSSES`] within a day count as a crash (record §3.5 item 4).
+//!   Plugin shaders have a record of their own in the same file
+//!   ([`ShaderRecord`], `shaders`): `applying` before a non-empty plugin
+//!   shader list goes to mpv, `ok` after [`SHADER_STABLE_SECS`] of playback
+//!   with it, when the lists empty or the player quits. A start that finds
+//!   `applying` records `crashed`, and that start applies no plugin shaders;
+//!   [`SHADER_CRASHES`] such crashes within a day keep them off until the
+//!   driver or the player changes, or for [`GUARD_DAYS`] days.
 //!
 //! Without a path (headless runs) nothing is read or written.
 #![forbid(unsafe_code)]
@@ -81,6 +88,69 @@ pub struct Guard {
     /// The records of other keys (none of their own `others`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub others: Vec<Guard>,
+    /// The plugin shaders' record (top level only; host 0.6.3). Older
+    /// players ignore it (and drop it when they rewrite the file).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shaders: Option<ShaderRecord>,
+}
+
+/// Seconds of playback with plugin shaders on after which they count as
+/// working (`ok`).
+pub const SHADER_STABLE_SECS: u64 = 10;
+/// Runs that ended while plugin shaders were on, within a day, that keep
+/// them off for [`GUARD_DAYS`]; fewer keep them off for one start.
+pub const SHADER_CRASHES: usize = 2;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ShaderState {
+    #[default]
+    Ok,
+    Applying,
+    Crashed,
+}
+
+/// `render-state.json`'s `shaders`: whether the last run ended while
+/// plugin shaders were on. Keyed like the GPU records (GPU rendering's
+/// adapter, its driver, the player): plugin shaders run only there.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShaderRecord {
+    #[serde(default)]
+    pub state: ShaderState,
+    #[serde(default, flatten)]
+    pub key: GuardKey,
+    /// Unix seconds: when it was armed, or found crashed.
+    #[serde(default)]
+    pub at: u64,
+    /// The plugins whose shaders were on (manifest ids, no paths).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plugins: Vec<String>,
+    /// When runs ended while they were on (Unix seconds), within a day.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub crashes: Vec<u64>,
+    /// The start that found the crash kept plugin shaders off already (a
+    /// single crash keeps them off for one start only).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub skipped: bool,
+}
+
+/// Why plugin shaders are off for this run (`GuardFile::shader_start`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShaderBlock {
+    /// The plugins whose shaders were on when the run ended.
+    pub plugins: Vec<String>,
+    /// Until when (Unix seconds) they stay off; `None`: this start only.
+    pub until: Option<u64>,
+}
+
+impl ShaderRecord {
+    /// The crashes still counted at `now` (the last day).
+    fn recent(&self, now: u64) -> usize {
+        self.crashes
+            .iter()
+            .filter(|&&at| at <= now && now.saturating_sub(at) < DAY)
+            .count()
+    }
 }
 
 impl Guard {
@@ -109,17 +179,22 @@ impl Guard {
     fn records(&self) -> impl Iterator<Item = &Guard> {
         std::iter::once(self).chain(self.others.iter())
     }
-    /// One record, without `others`.
+    /// One record, without `others` and the shaders' record.
     fn bare(&self) -> Guard {
         Guard {
             others: Vec::new(),
+            shaders: None,
             ..self.clone()
         }
+    }
+    /// Whether this is no GPU record at all (the shaders' record aside).
+    fn is_blank(&self) -> bool {
+        self.bare() == Guard::default()
     }
     /// The record about `keys`, if the file has one.
     fn record_for(&self, keys: &Keys) -> Option<Guard> {
         self.records()
-            .find(|record| record.is_for(keys) && **record != Guard::default())
+            .find(|record| record.is_for(keys) && !record.is_blank())
             .map(Guard::bare)
     }
     /// A record of another key worth keeping: of this player version (a new
@@ -136,15 +211,20 @@ impl Guard {
                     .any(|&at| at <= now && now.saturating_sub(at) < DAY))
     }
     /// The file with `record` (about `keys`) as the current one, the other
-    /// keys' records kept where still worth it.
+    /// keys' records kept where still worth it, the shaders' record as it
+    /// was.
     fn with_current(&self, record: Guard, keys: &Keys, now: u64) -> Guard {
         let others = self
             .records()
-            .filter(|old| !old.is_for(keys) && **old != Guard::default())
+            .filter(|old| !old.is_for(keys) && !old.is_blank())
             .filter(|old| old.worth_keeping(&keys.key.app, now))
             .map(Guard::bare)
             .collect();
-        Guard { others, ..record }
+        Guard {
+            others,
+            shaders: self.shaders.clone(),
+            ..record
+        }
     }
     /// Until when (Unix seconds) the mode keyed on `keys` stays off, and
     /// whether for device losses, if it does: the matching record of the
@@ -195,6 +275,10 @@ impl GuardFile {
     pub fn new(path: Option<PathBuf>) -> Self {
         Self { path }
     }
+    /// Without a path (headless): nothing is read or written.
+    pub fn is_off(&self) -> bool {
+        self.path.is_none()
+    }
     pub fn read(&self) -> Guard {
         self.path
             .as_deref()
@@ -221,7 +305,7 @@ impl GuardFile {
                 return false;
             }
             (record.state, record.at) = (GuardState::Crashed, now);
-            diag!(
+            logged!(
                 "render: the last run ended while the GPU started ({} {}); it stays off until the driver or the player changes, or for {GUARD_DAYS} days",
                 record.key.adapter,
                 record.key.driver
@@ -231,6 +315,25 @@ impl GuardFile {
         let mut changed = crash(&mut guard);
         for other in &mut guard.others {
             changed |= crash(other);
+        }
+        if let Some(record) = guard.shaders.as_mut()
+            && record.state == ShaderState::Applying
+        {
+            record.crashes.retain(|&at| at <= now && now - at < DAY);
+            record.crashes.push(now);
+            (record.state, record.at, record.skipped) = (ShaderState::Crashed, now, false);
+            logged!(
+                "shaders: the last run ended while plugin shaders were on ({}); {}",
+                record.plugins.join(", "),
+                if record.recent(now) >= SHADER_CRASHES {
+                    format!(
+                        "they stay off until the driver or the player changes, or for {GUARD_DAYS} days"
+                    )
+                } else {
+                    "this start applies none".to_string()
+                }
+            );
+            changed = true;
         }
         if changed {
             self.write(&guard);
@@ -259,9 +362,74 @@ impl GuardFile {
             at: now,
             losses,
             others: Vec::new(),
+            shaders: None,
         };
         self.write(&file.with_current(record, keys, now));
         Armed(self.clone())
+    }
+    /// Before a non-empty plugin shader list goes to mpv (`plugins`: whose
+    /// shaders are on, manifest ids): `applying`. Earlier crashes count
+    /// while the key stays the same.
+    pub fn shaders_applying(&self, key: &GuardKey, plugins: Vec<String>, now: u64) {
+        let _one = one_writer();
+        let mut guard = self.read();
+        let crashes = guard
+            .shaders
+            .as_ref()
+            .filter(|record| record.key == *key)
+            .map(|record| record.crashes.clone())
+            .unwrap_or_default();
+        guard.shaders = Some(ShaderRecord {
+            state: ShaderState::Applying,
+            key: key.clone(),
+            at: now,
+            plugins,
+            crashes,
+            skipped: false,
+        });
+        self.write(&guard);
+    }
+    /// Plugin shaders ran long enough, their lists emptied, or the player
+    /// quits: an `applying` becomes `ok`; anything else stays.
+    pub fn shaders_settle(&self) {
+        let _one = one_writer();
+        let mut guard = self.read();
+        if let Some(record) = guard.shaders.as_mut()
+            && record.state == ShaderState::Applying
+        {
+            record.state = ShaderState::Ok;
+            self.write(&guard);
+        }
+    }
+    /// At start, after [`GuardFile::recover`]: whether this run keeps plugin
+    /// shaders off (GPU rendering keyed on `key`). A single crash keeps
+    /// them off for this start only (recorded as `skipped`, so the next
+    /// start tries again); [`SHADER_CRASHES`] within a day keep them off
+    /// until the key changes or [`GUARD_DAYS`] passed.
+    pub fn shader_start(&self, key: &GuardKey, now: u64) -> Option<ShaderBlock> {
+        let _one = one_writer();
+        let mut guard = self.read();
+        let record = guard.shaders.as_mut()?;
+        if record.state != ShaderState::Crashed || record.key != *key {
+            return None;
+        }
+        let until = if record.recent(record.at) >= SHADER_CRASHES {
+            let until = record.at.saturating_add(GUARD_DAYS * DAY);
+            if now >= until {
+                return None;
+            }
+            Some(until)
+        } else if record.skipped {
+            return None;
+        } else {
+            record.skipped = true;
+            None
+        };
+        let plugins = record.plugins.clone();
+        if until.is_none() {
+            self.write(&guard);
+        }
+        Some(ShaderBlock { plugins, until })
     }
     /// The GPU device was lost (the player restarts): record it for `keys`;
     /// the [`LOSSES`]th loss within a day for the same key turns its record
@@ -673,6 +841,113 @@ mod tests {
         assert_eq!(
             (old.schema, old.state, old.key, old.at, old.losses),
             (SCHEMA, GuardState::Ok, key("1"), 0, vec![200])
+        );
+    }
+
+    /// Plugin shaders: a run that ends while they are on keeps them off for
+    /// the next start only; a second such run within a day keeps them off
+    /// until the driver or the player changes, or for `GUARD_DAYS`.
+    #[test]
+    fn a_run_that_died_with_plugin_shaders_on_keeps_them_off_at_the_next_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = GuardFile::new(Some(dir.path().join("render-state.json")));
+        let gpu = key("1");
+        assert_eq!(file.shader_start(&gpu, 100), None, "no file");
+        // Applied, ran, settled: nothing at the next start.
+        file.shaders_applying(&gpu, vec!["acme.sharpen".into()], 100);
+        assert_eq!(file.read().shaders.unwrap().state, ShaderState::Applying);
+        file.shaders_settle();
+        assert_eq!(file.recover(200).shaders.unwrap().state, ShaderState::Ok);
+        assert_eq!(file.shader_start(&gpu, 200), None);
+        // Applied, then the process died.
+        file.shaders_applying(&gpu, vec!["acme.sharpen".into()], 300);
+        let recovered = file.recover(400).shaders.unwrap();
+        assert_eq!(
+            (recovered.state, recovered.at, &recovered.crashes[..]),
+            (ShaderState::Crashed, 400, &[400][..])
+        );
+        // Another driver or player: shaders apply.
+        assert_eq!(file.shader_start(&key("2"), 400), None);
+        let block = file.shader_start(&gpu, 400).unwrap();
+        assert_eq!(
+            block,
+            ShaderBlock {
+                plugins: vec!["acme.sharpen".into()],
+                until: None
+            }
+        );
+        // That start kept them off; the one after tries again.
+        assert!(file.read().shaders.unwrap().skipped);
+        assert_eq!(file.shader_start(&gpu, 500), None);
+        // It dies again within a day: off for days.
+        file.shaders_applying(&gpu, vec!["acme.sharpen".into()], 600);
+        file.recover(700);
+        let until = 700 + GUARD_DAYS * DAY;
+        assert_eq!(file.shader_start(&gpu, 800).unwrap().until, Some(until));
+        assert_eq!(file.shader_start(&gpu, 900).unwrap().until, Some(until));
+        assert_eq!(file.shader_start(&gpu, until), None, "expired");
+        assert_eq!(file.shader_start(&key("2"), 800), None, "driver updated");
+        // A crash a day after the last one counts alone again.
+        let dir = tempfile::tempdir().unwrap();
+        let file = GuardFile::new(Some(dir.path().join("render-state.json")));
+        file.shaders_applying(&gpu, vec![], 100);
+        file.recover(200);
+        file.shaders_applying(&gpu, vec![], 200 + DAY);
+        file.recover(300 + DAY);
+        assert_eq!(file.read().shaders.unwrap().crashes, [300 + DAY]);
+        assert_eq!(file.shader_start(&gpu, 400 + DAY).unwrap().until, None);
+        // Headless: nothing.
+        let none = GuardFile::new(None);
+        none.shaders_applying(&gpu, vec![], 1);
+        assert_eq!(none.recover(2), Guard::default());
+        assert_eq!(none.shader_start(&gpu, 3), None);
+    }
+
+    /// The GPU records and the shaders' record share the file: writing one
+    /// keeps the other.
+    #[test]
+    fn gpu_and_shader_records_keep_each_other() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("render-state.json");
+        let file = GuardFile::new(Some(path.clone()));
+        let gpu = Keys::same(key("1"));
+        let armed = file.arm(&gpu, 100);
+        file.shaders_applying(&gpu.key, vec!["a".into()], 110);
+        file.settle();
+        drop(armed);
+        let guard = file.read();
+        assert_eq!(guard.state, GuardState::Ok);
+        assert_eq!(guard.shaders.as_ref().unwrap().state, ShaderState::Applying);
+        // A device loss and a new arm keep the shaders' record.
+        assert!(!file.device_lost(&gpu, 120));
+        std::mem::forget(file.arm(&Keys::same(key("2")), 130));
+        let guard = file.read();
+        assert_eq!(guard.shaders.as_ref().unwrap().plugins, ["a"]);
+        assert!(guard.others.iter().all(|other| other.shaders.is_none()));
+        // Both died: both are crashes.
+        let guard = file.recover(140);
+        assert_eq!(guard.state, GuardState::Crashed);
+        assert_eq!(guard.shaders.unwrap().state, ShaderState::Crashed);
+        // A file with only the shaders' record holds no GPU record.
+        std::fs::write(&path, br#"{"shaders":{"state":"applying","adapter":"x","driver":"1","app":"0.5.13","at":5,"plugins":["a"]}}"#).unwrap();
+        let guard = file.read();
+        assert!(guard.is_blank());
+        assert!(guard.record_for(&gpu).is_none());
+        assert!(guard.blocks(&gpu, 6).is_none());
+        // A player before 0.6.3 (no `shaders` field) reads such a file.
+        #[derive(Deserialize)]
+        struct Before {
+            state: GuardState,
+            #[serde(flatten)]
+            key: GuardKey,
+        }
+        let old: Before = serde_json::from_slice(
+            br#"{"schema":3,"state":"crashed","adapter":"x","driver":"1","app":"0.6.2","at":0,"shaders":{"state":"crashed"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            (old.state, old.key.app.as_str()),
+            (GuardState::Crashed, "0.6.2")
         );
     }
 

@@ -117,7 +117,7 @@ pub(crate) fn startup(headless: bool) -> Startup {
             (false, true) => "; CPU mode's windows'",
             (false, false) => "",
         };
-        diag!(
+        logged!(
             "render: adapter {} ({:04X}:{:04X}, driver {}{}{role})",
             adapter.name,
             adapter.vendor_id,
@@ -360,7 +360,10 @@ impl Host {
             .spawn()
             .map_err(|error| RpcError::new("failed", format!("the restart failed: {error}")))?;
         RESTARTING.store(true, Ordering::Release);
-        diag!("restart: the new player is process {}", child.id());
+        logged!(
+            "restart: rendering.restart; the new player is process {}",
+            child.id()
+        );
         crate::stop_handoffs();
         self.ui_state.flush();
         // Quitting: nothing may wait on a GPU frame any more (§11.6).

@@ -414,3 +414,9 @@ msgstr "正在启动 {}…"
 #: src/host/lazy.rs
 msgid "{} could not start"
 msgstr "{} 无法启动"
+
+#. The OSD once per start when plugin shaders are kept off because the last run ended while they were on.
+#: src/host/diagnostics.rs
+#, x-machine
+msgid "Plugin shaders are off: the player ended unexpectedly while they were on"
+msgstr "插件着色器已关闭：播放器在其开启时意外退出"

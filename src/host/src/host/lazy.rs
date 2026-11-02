@@ -597,6 +597,7 @@ impl Host {
     /// reloaded or could not start).
     fn forget_entries(&mut self, owner: u64) {
         capabilities::revoke(self, owner, false);
+        self.plugin_shaders_gone(owner);
         let _ = self.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
             method: "owner.disabled".into(),

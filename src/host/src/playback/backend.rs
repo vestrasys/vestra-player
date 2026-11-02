@@ -351,6 +351,9 @@ impl Backend {
                 let mut upscaling = crate::playback::upscaling::Upscaling::default();
                 let upscaling_wake = worker_wake.clone();
                 upscaling.wake_with(move || upscaling_wake.notify());
+                // No upscaler in the chain while a new source's geometry is
+                // prepared: its scaled output never matched (`upscaling.rs`).
+                upscaling.follow_gate(publish_gate.clone());
                 loop {
                     if stopping.try_recv().is_ok() {
                         break;

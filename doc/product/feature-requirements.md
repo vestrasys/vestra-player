@@ -1499,7 +1499,7 @@ The file format has a version number `{ "version": 1, ... }`; for an unknown ver
 
 **Behavior details**:
 - Keys and menu: the value is rounded first, then 1 is added or subtracted, then it is clamped to ±100; OSD "Hue +1% (+5%)" / "Hue -1% (-6%)", in the same format as the existing brightness messages. At +100%, pressing O again: the value does not change, and the OSD still shows "Hue +1% (+100%)" so the user knows the limit is reached.
-- "Reset" (Q) and the "Original" preset both set hue to 0; the Vivid / Cinema / Soft presets do not change hue (hue is fixed at 0 in the preset objects).
+- Reset ▸ Picture (Q) and the "Original" preset both set hue to 0; the Vivid / Cinema / Soft presets do not change hue (hue is fixed at 0 in the preset objects).
 - The existing gamma is kept, as the last row of the color page.
 - With no ready media: the value changes as usual, the OSD shows as usual, the filter state is `waiting`, and it is applied automatically once the media is ready (existing SDK behavior).
 - With "Enable picture effects" off: keys still change the value and show the OSD, but the processing chain is empty; the OSD gets "(picture effects off)" appended.
@@ -1779,10 +1779,10 @@ mpv's `deinterlace` property is not used: it is global player state that belongs
 - **None** (default).
 - **Stretch to X** (X = 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1): add black borders around the picture so that the overall ratio becomes X, without distorting the original picture. For example "Stretch to 4:3" on a 16:9 source adds black borders at the top and bottom; subtitles can be shown in the borders, and screenshots include the borders.
 - **Crop to X**: cut a region with ratio X out of the picture and discard the rest. For example a 2.35:1 film squeezed into a 16:9 file with black bars: "Crop to 2.35:1" removes the top and bottom bars.
-- **Position**: horizontal and vertical position, each 0%–100%, default 50% (centered), deciding which side the picture leans to when adding borders or cropping. The menu's Move Up / Move Down / Move Left / Move Right change it by 5% each time, and "Reset Position" goes back to 50% / 50%.
+- **Position**: horizontal and vertical position, each 0%–100%, default 50% (centered), deciding which side the picture leans to when adding borders or cropping. The menu's Move Up / Move Down / Move Left / Move Right change it by 5% each time, and Reset ▸ Crop Position goes back to 50% / 50%.
 - When the source ratio already equals X, the option has no effect (no node is added).
 
-**Entry points**: the items under "Video ▸ Crop/Stretch ▸"; the "Crop/Stretch" drop-down on the window's "Picture" page (the position is only adjusted in the menu).
+**Entry points**: the items under "Video ▸ Crop/Stretch ▸", and Reset ▸ Crop Position (Crop/Stretch ▸ Reset Position until 2026-11-01); the "Crop/Stretch" drop-down on the window's "Picture" page (the position is only adjusted in the menu).
 
 **Behavior details**:
 - OSD "Crop/stretch: crop to 2.35:1", "Crop/stretch: none"; when moving, "Crop position (50%, 45%)".
@@ -1816,10 +1816,10 @@ mpv's `deinterlace` property is not used: it is global player state that belongs
 **Requirement**:
 - **Zoom In / Out**: overall zoom, factor range 0.25–4.0, each step multiplies or divides by 1.05, default 1.0.
 - **Pan → ← ↑ ↓**: move the picture, each step 1% of the video width (height), range −100%–+100%, default 0.
-- **Reset Framing**: restore zoom and pan to their defaults. **Center Frame**: only set the pan to zero.
+- **Reset Framing** (Reset ▸ Framing): restore zoom and pan to their defaults. **Center Frame**: only set the pan to zero.
 - The "Zoom" slider on the window's "Picture" page controls the overall factor (25%–400%, logarithmic scale, 100% at the slider's midpoint), and its "Default" button equals Reset Framing.
 
-**Entry points**: the items under "Video ▸ Framing ▸" and the shortcut table above (numpad + fallback keys), repeating while held (`repeat: true`); the "Zoom" row on the window's "Picture" page.
+**Entry points**: the items under "Video ▸ Framing ▸", Reset ▸ Framing (Framing ▸ Reset Framing until 2026-11-01), and the shortcut table above (numpad + fallback keys), repeating while held (`repeat: true`); the "Zoom" row on the window's "Picture" page.
 
 **Behavior details**:
 - OSD wording with values: "Framing: larger (110%)", "Framing: smaller (95%)", "Framing: move left (-3%, 0%)" (the pan is (horizontal, vertical), right and down positive), "Framing: reset", "Framing: centered".
@@ -2202,14 +2202,14 @@ Why the core has to do it: switching audio tracks is an operation inside the pla
 **Current state**: the window has a delay slider (±2000 ms, rounded to 10 ms, positive values make the audio later), with no menu commands and no shortcuts; the delay resets when the source or audio track changes.
 
 **Requirement** (only the gaps):
-- Menu commands: "50 ms Earlier" (delay −50, sound earlier), "50 ms Later" (delay +50, sound later), "Reset" (delay 0), auto-repeating while held. Step 50 ms, range ±10 000 ms (widened in core round 2, ruling R-A5).
+- Menu commands: "50 ms Earlier" (delay −50, sound earlier), "50 ms Later" (delay +50, sound later), auto-repeating while held; Reset ▸ Audio Sync (delay 0; Audio Sync ▸ Reset until 2026-11-01). Step 50 ms, range ±10 000 ms (widened in core round 2, ruling R-A5).
 - Keep mode (radio, default "Don't Keep"):
   - **Don't Keep**: the delay goes back to 0 on every source change (as now).
   - **Keep for This Run**: the delay is kept on source change and goes back to 0 after the player quits.
   - **Always Keep**: the delay is written to the data directory and still applies after a restart.
 - Switching audio tracks (G03/G04) **no longer** resets the delay (different tracks of the same source usually need the same offset; users adjust themselves when they need something else).
 
-**Entry points**: the items under "Audio ▸ Audio Sync ▸"; shortcuts `>` earlier, `<` later, `?` reset (subtitle sync changes to `.` `,` `/` accordingly, see the conflict notes); the audio sync slider on the window's "Effects" page (existing), the keep mode drop-down on the "Output" page.
+**Entry points**: the items under "Audio ▸ Audio Sync ▸", and Reset ▸ Audio Sync; shortcuts `>` earlier, `<` later, `?` reset (subtitle sync changes to `.` `,` `/` accordingly, see the conflict notes); the audio sync slider on the window's "Effects" page (existing), the keep mode drop-down on the "Output" page.
 
 **Behavior details**:
 - OSD wording: "Audio sync: -0.05 s", "Audio sync: +0.3 s", "Audio sync: 0 s".
@@ -4014,7 +4014,7 @@ In the "Audio ▸" submenu, playback uses 501–503, audio uses 510–529, and t
 - Start Vestra Player without arguments: the brand logo and "Vestra Player" are shown in the center of the video area, clear and undistorted on the dark background.
 - After opening a file the logo disappears; after closing with F4 it reappears.
 - Drag the window down to the minimum: the logo shrinks to 64px without overflowing; in fullscreen at most 256px.
-- Choose a custom PNG: it replaces the display immediately; after deleting the original and restarting it is still shown; after "Restore Default Logo" it is back to the brand logo.
+- Choose a custom PNG: it replaces the display immediately; after deleting the original and restarting it is still shown; after Reset ▸ Idle Logo it is back to the brand logo.
 - With the toggle off, the idle screen is a plain color.
 - When idle, double-clicking the video area toggles fullscreen.
 

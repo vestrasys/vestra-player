@@ -16,6 +16,13 @@
 //!   upscaler). A new factor waits until the size holds for [`SETTLE`]
 //!   (dragging a window border), then replaces the filter in place. It
 //!   goes when the last plugin that asked turns it off or stops.
+//! - **The publish gate** ([`Upscaling::follow_gate`]). While a new
+//!   source's orientation is prepared (`source_geometry.rs`, the gate
+//!   closed) the filter is not in the chain: it goes as soon as the gate
+//!   closes and comes back once the geometry confirmed the output. A filter
+//!   that scaled the output meanwhile (added while a slow stream started,
+//!   or left from the last file) kept the gate from seeing the size it
+//!   waited for, and the picture froze on the last frame.
 //! - **No "active" signal.** mpv sets the extension and reports nothing the
 //!   driver does with it; `requested` means the filter is in the chain. The
 //!   NVIDIA app's Super Resolution switch must be on, and no program can
@@ -38,7 +45,8 @@ use crate::playback::renderer::Render;
 use rsmpv::{Mpv, Node};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 /// The filter's label in mpv's chain.
@@ -464,6 +472,11 @@ pub struct Upscaling {
     copy_back_owners: Vec<ChainOwner>,
     /// The last `video.upscaling.changed` sent (`publish`).
     published: Option<Value>,
+    /// The renderer's publish gate (`follow_gate`; none: always open).
+    gate: Option<Arc<AtomicBool>>,
+    /// The gate as the last look at the chain saw it: a change is looked
+    /// at at once (`due_in`).
+    gate_seen: bool,
 }
 
 impl Default for Upscaling {
@@ -488,7 +501,23 @@ impl Upscaling {
             waker: None,
             copy_back_owners: Vec::new(),
             published: None,
+            gate: None,
+            gate_seen: true,
         }
+    }
+
+    /// Follow the renderer's publish gate: while it is closed (a new
+    /// source's geometry is being prepared) the filter stays out of the
+    /// chain; once it opens the filter goes back in at the next look, which
+    /// is then at once (`due_in`).
+    pub fn follow_gate(&mut self, gate: Arc<AtomicBool>) {
+        self.gate = Some(gate);
+    }
+
+    fn gate_open(&self) -> bool {
+        self.gate
+            .as_ref()
+            .is_none_or(|gate| gate.load(Ordering::Acquire))
     }
 
     /// A worker command: the two requests (answered once the system's
@@ -596,6 +625,11 @@ impl Upscaling {
     pub fn due_in(&self, now: Instant) -> Option<Duration> {
         if self.owners.is_empty() && self.applied.is_none() {
             return None;
+        }
+        // The gate closed (a new source) or opened (its geometry confirmed)
+        // since the last look: take the filter out or put it back now.
+        if self.gate_open() != self.gate_seen {
+            return Some(Duration::ZERO);
         }
         let check = self.checked.map_or(Duration::ZERO, |at| {
             CHECK_EVERY.saturating_sub(now.saturating_duration_since(at))
@@ -802,13 +836,27 @@ impl Upscaling {
     /// Bring mpv's chain to what is wanted now: no filter, or the filter
     /// with the factor of the current size, last in the chain.
     fn update(&mut self, mpv: &Mpv, render: &Render, now: Instant) {
+        let wanted = !self.owners.is_empty()
+            && self.gate_open()
+            && self.availability(mpv, render, &Value::Null).is_ok();
+        let factor = if wanted {
+            geometry(mpv).and_then(factor)
+        } else {
+            None
+        };
+        self.follow(mpv, factor, now);
+    }
+
+    /// [`Upscaling::update`] with the factor the size asks for (`None`: no
+    /// filter); none while the publish gate is closed.
+    fn follow(&mut self, mpv: &Mpv, factor: Option<f64>, now: Instant) {
         self.checked = Some(now);
-        let desired =
-            if self.owners.is_empty() || self.availability(mpv, render, &Value::Null).is_err() {
-                None
-            } else {
-                geometry(mpv).and_then(factor)
-            };
+        let open = self.gate_open();
+        self.gate_seen = open;
+        if !open && self.applied.is_some() {
+            diag!("upscaling: out of the chain until the new source's geometry is confirmed");
+        }
+        let desired = factor.filter(|_| open);
         match self.step(desired, now) {
             Step::Stay => {}
             Step::Remove => self.remove(mpv),

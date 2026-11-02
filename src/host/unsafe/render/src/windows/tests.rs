@@ -221,7 +221,20 @@ fn warp_the_watchdog_stops_a_renderer_whose_fences_stop_moving() {
     let reason = handle.failed().unwrap();
     assert!(reason.contains("stalled"), "{reason}");
     let fences = shared.fences.get().unwrap();
-    assert_eq!((fences.ready.completed(), fences.done.completed()), (u64::MAX, u64::MAX));
+    // Released: nothing waits on either fence any more. The stalled frame's
+    // own `ready` signal was already queued behind the wait on `done` that
+    // the release ends, so it may land after the release and set `ready`
+    // back to that frame's value (seen once under a loaded `cargo test
+    // --workspace`): that value, never one below what was enqueued.
+    let ready = shared.ready_enqueued.load(Ordering::Acquire);
+    let done = shared.done_enqueued.load(Ordering::Acquire);
+    assert!(
+        until(5, || fences.ready.completed() >= ready && fences.done.completed() >= done),
+        "ready {} of {ready}, done {} of {done}",
+        fences.ready.completed(),
+        fences.done.completed()
+    );
+    assert_eq!(fences.done.completed(), u64::MAX, "no one signals done after the release");
     drop(renderer);
 }
 
