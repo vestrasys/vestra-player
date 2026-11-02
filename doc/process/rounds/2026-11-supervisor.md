@@ -19,7 +19,7 @@ Coordinator record and blackboard for the supervisor project. Design: [superviso
 | B0 | approved (321ebd44), PR batched with B1 | `supervisor-b0` C:\vestra\wt-sup-b0 | — | reviewer 3× 10/10 (90 s each); for B2b: time the 20 s waits from the start of the wait (not `op.started`) and handle a stuck backend worker | fixes done; lifecycle_baseline 10/10 ×3; finding: the three 20 s timeout branches are unreachable today (reap ≤ 6 s, BackendCleaned unconditional) — pinned as "continues after grace, 20 s texts never appear"; B2b covers them in the core's simulation tests | 787 unit + lifecycle_baseline 6/6; known bugs pinned; not pinned: 20 s timeouts, member queue full, busy checks, per-tick budget (need a Host test constructor) |
 | B0+B1 | approved (bb8530e1, B0 merged in); PR open | `supervisor-b1` C:\vestra\wt-sup-b1 | — | four fix rounds; 1164 workspace tests, supervisor 342, lifecycle_baseline 10/10 ×3 |
 | B1 (history) | fix rounds done | spec tests 243/243; | B1 maintainer: F1–F4 fixed, rulings R5–R7 in (switch `BuiltinsFirst::{Queued, Installed}`), §17.6; 295 supervisor tests, 1074 host tests pass | `supervisor-b1` C:\vestra\wt-sup-b1 (a2dc0e95 core; a09036d7 merged spec tests) | API maintainer (B1): mod tests line + answers to the 27 questions in supervisor.md §17.2 + ListChanged check; spec test author: adapter to the real API | core: 825 host tests incl. 46 own; API deviations in supervisor.md §17.1; ruling: shared members (built-ins) stay outside max_active (A7), §4.4 to be corrected |
-| B2a | not started | | | |
+| B2a | in review (dc802559) | `supervisor-b2a` C:\vestra\wt-sup-b2a (from 800e2bb1) | API maintainer | zero-diff evidence: B0 tests ×3 + VESTRA_TEST_REGISTRY dump diff (lazy on/off); flips A18 leak-1 test |
 | B2b | not started | | | |
 | B2c | not started | | | |
 | B2d | not started | | | |
@@ -65,6 +65,17 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 
 ## Open items
 
+- B2c follow-up: host `appearance.changed` gains a "what changed" field (theme/language; pure wire addition), SDK `appearance.ts` uses it when present → closes the woken-by-language extra callback and the rare lost theme change (review-sdkwake r2). Then bump the player's SDK.
+
+- **Transitional unit fields `process`/`parked` (B2a) — user 2026-11-02:** do not preserve "one id with both a running process and a parked owner" long-term; it is the D13 class the new core forbids by construction (one process per unit). Hard deadline: removed in B2b (jobs drive units, the waits are replaced); B2b done check includes `git grep -n "\.parked\b\|\.process\b" src/host/src/supervisor` showing no transitional fields and the §17.8 entry marked closed. If the B2a review shows the overlap can be dropped already in B2a without a visible difference, do it in B2a. Same rule for every "transitional" item: each gets a named removal batch and a grep check in that batch's brief, so none survives silently.
+
+- SDK/API inventory (researcher, 2026-11-02, vs SDK 1.5.55 and main 800e2bb1): no API shape change needed; manifest has no scheduling fields (resident/entry points/wake events are observed). Coordinator ruling on the one open decision: the 5 min request timeout (B6, `work.rs`) applies only to host→plugin requests awaiting a reply (e.g. `source.resolveRequest`); plugin-declared long work (`commands.busy`, settings busy) has no cap — Android foreground-service precedent; Chrome's 5 min limit is per request. Record in supervisor.md §17 at B3. Docs to update per batch: B2c/B2d `host-and-node.md` source excerpts (TRIGGERS, activations.begin, 250 ms poll); B4 crash restart/backoff, 512 MB heap, quit ≤1 s, `idle` meaning, when `failed` arrives; B5 pressure/budget standby as `idle`; B6 timings, resident never stands by, drop VESTRA_LAZY/"off by default", CHANGELOG "who must change: nobody". Optional: TestHost standby→wake helper (maintainer's call). No manifest activation/resident/memory/priority fields.
+- SDK patch 1.5.56 in progress (worktree `C:\vestra\wt-sdkwake`, branch `wake-onchange`): appearance/fileTypes onChange after wake; session-storage "when cleared" wording. Release: SDK repo CI/npm — check how SDK releases run now that remote CI is off for the player (SDK repo may differ).
+
+- B7 done criteria (user confirmed 2026-11-02: the new core fully replaces the old logic, no compatibility layer): remove `Tunables::legacy()` and every legacy-only switch and code path; remove the B2a `debug_assert` cross-checks; remove the non-on-demand path behind `VESTRA_LAZY` (unified scheduling ruling). Only the plugin wire protocol and SDK API stay unchanged. Maintainer to add this to supervisor.md §13 B7 in the next batch.
+
+- No remote CI (user, 2026-11-02: private repo, paid Actions budget set to 0 until release). Every batch merges on local CI content. Releases after B4/B6 cannot use the tag → CI workflow: plan a local Windows release build; macOS artefacts cannot be built here — skip the macOS part and write it to the user at that point (needs the user), continue the rest.
+
 - B2 notes from the final B1 review (review-b1d, non-blocking):
   1. Reinstall whose spec carries a checkpoint goes through `replay` (`mod.rs:1477`), which drops `last_pid` from `by_pid` while `stopping` still tracks it → later reap/cleanup ignored, every start fails Stuck until restart, owed `RemoveData` never sent. Unreachable today (uninstall drops the recording), but fix in the core at B2d (no replay while `stopping`, or keep the mapping) + test like probe j4/j5; B2d contract: reinstall carries no checkpoint.
   2. §17.7 item 19 incomplete: uninstalling a *running* (not parked) plugin then reinstalling without removeData runs two processes on one dir today (D13 class); the core waits — expected B2 difference, document and add a B0 expected-to-change test.
@@ -85,6 +96,28 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 - Known bugs to pin in B0: Book entry leaked when spawn fails after `activations.begin` (`load_package`); `Host.cleanup` only grows; disable then immediate enable can run two processes on one data directory (D13).
 
 ## Log
+
+- 2026-11-02 ~20:45: SDK #71 CI green (Linux/macOS/Windows), squash-merged (3b2e07d), origin/main package.json = 1.5.56, tag v1.5.56 pushed → release workflow publishes to npm. Player bumps the SDK after npm shows 1.5.56 (with B2b or a small batch). B2a re-review → fix first on one point: `diag!` in the pure core (`identity.rs:227`) → move the report to the adapter; same-pid kind change also asserted; §17.8 wording. Maintainer resumed; reviewer said no full re-review needed after that — coordinator checks the diff.
+
+- 2026-11-02 ~20:30: SDK re-review → merge. SDK PR vestra-player-sdk#71 opened (public repo, free CI); after green: squash-merge, check `git show origin/main:package.json` = 1.5.56, tag per the repo's release convention. Residual (not a regression, rare): woken by a theme change, then a language change before ready → held event carries the new language, theme change lost; same root cause as the documented limit. Follow-up: host adds "what changed" to `appearance.changed` (pure addition, maintainer's call) — schedule with B2c (wake events move into the core), then SDK uses it.
+
+- 2026-11-02 ~20:20: B2a follow-up committed (single `hosted` owner, dev-load id check; impl-wide dead_code allow left for B2b: narrowing B2b done check). SDK fix committed (d2bc92f, `#eventLanguage`; `#notified` not initialised from the start read, or the wake bug returns). Both sent back to their reviewers.
+
+- 2026-11-02 ~20:05: SDK 1.5.56 review → fix first: appearance theme `onChange` fires spuriously on language-only `appearance.changed` (host `language_set` broadcasts the unchanged theme; `#notified` started undefined). fileTypes, docs, version OK; `pack:check` failure is environmental (same on 1.5.55: GNU tar takes `C:` as a host). SDK maintainer resumed with the fix; possible later pure addition: host marks what changed in `appearance.changed`.
+
+- 2026-11-02 ~19:55: B2a review → merge (all checks + real-node suites pass; semantics identical; A18 fix covers every failure path). Reviewer: the running+parked overlap is unreachable today (D13 is about unreaped stopped processes, B2b scope). Per user ruling, follow-up in B2a: one identity per unit instead of `process`/`parked` (debug_assert + release diag), dev-load double manifest read fix (activation booked under candidate.id vs process under manifest.id), narrow the impl-wide dead_code allow if cheap. Then a short re-review of the follow-up.
+
+- 2026-11-02 ~19:40: SDK 1.5.56 committed on `wake-onchange` (8bf5f16): appearance/fileTypes `onChange` compare with the last notified value; tests (fail without the fix); session-storage clearing docs verified against host; local checks pass except `pack:check` (Windows tar; SDK repo is public, its CI is free — run there via PR). Process lapse: the SDK maintainer used `git stash push/pop` to test a revert (restored, no residue); briefs already forbid it — reviewers now told to use a `git archive` scratch copy. Independent SDK review started.
+
+- 2026-11-02 ~19:30: B2a committed (dc802559): alloc_pid, by_id/by_pid replace plugin_ids/parked_ids (old kept for debug_assert), activation.rs moved into the core per unit (A18 leak 1 fixed, B0 test flipped), adapter skeleton `host/supervisor/`, module-wide allow removed; §17.8. 1170 workspace tests; real-node suites pass (lifecycle ×3, lazy_activation, shared_runner, package_install); registry dump diff (5 scenarios, 16 built-ins) clean except a `vestra.video` GPU-mode race also seen between two main runs. Independent review started. In parallel: SDK 1.5.56 patch (wake onChange) in `C:\vestra\wt-sdkwake`.
+
+- 2026-11-02 ~18:50: user ruling: merge on full local checks without waiting for remote CI (remote may bill the user's paid quota, being turned off). Cancelled the running CI; **#143 (B0 + B1) squash-merged → main 800e2bb1.** B2a worktree `C:\vestra\wt-sup-b2a` created; maintainer briefed (identity to unit table, activations into Unit, adapter skeleton, drop module-wide allow; zero-diff evidence; CI doc + static steps in done checks).
+
+- 2026-11-02 ~18:40: rustdoc fix d4fe0675 (comment-only diff, checked by the coordinator; local CI `cargo doc` -D warnings, fmt, clippy clean); pushed; CI re-running on #143.
+
+- 2026-11-02 ~18:30: PR #143 CI: macOS green; Windows tests green (1129) but `cargo doc` with `-D warnings` failed on unclosed HTML tags `<name>` in supervisor doc comments (10 places). Maintainer fixing; lesson for briefs: add the CI `cargo doc` step (RUSTDOCFLAGS=-D warnings) to the done checks.
+
+- 2026-11-02 ~18:50: round record copied into `supervisor-b1` (bd371fc4), pushed; PR #143 (B0 + B1) opened; CI running.
 
 - 2026-11-02 ~18:45: re-review of bb8530e1 → **merge** (5 items fixed, no regressions, nothing met the blocking bar; 6 non-blocking B2 notes in Open items). PR for B0+B1 next.
 
