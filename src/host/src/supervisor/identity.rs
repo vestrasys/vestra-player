@@ -128,6 +128,16 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
+    /// Whether run `pid`'s class may still be given (`classified`): asked at
+    /// its ready, not answered yet, not timed out. The adapter drops a
+    /// playback-worker answer that comes later, as today's `lazy_answer`
+    /// drops one after `lazy_classify_tick` gave up on it.
+    pub fn classifying(&self, pid: Pid) -> bool {
+        self.current(pid)
+            .and_then(|u| self.units.get(&u))
+            .is_some_and(|unit| unit.classifying || unit.may_reclassify)
+    }
+
     // ---- B2c–B2d: the Host's own starts (§17.10) ------------------------
 
     /// `runtime.ready` of run `pid`, which the Host started itself (the
@@ -1041,5 +1051,38 @@ mod tests {
         assert!(kinds(&s.take_actions()).is_empty());
         assert!(s.run_jobs(600_000).is_empty());
         assert!(s.quit_checkpoints().is_empty());
+    }
+    /// Review fix: with `start_timeout_by_host` (the adapter's, until B2d)
+    /// a woken run has only the Host's activation deadline: the core never
+    /// fails it on its own, however late its ready.
+    #[test]
+    fn b2c_the_host_times_a_wakes_start() {
+        let mut s = b2c();
+        s.tunables.start_timeout_by_host = true;
+        let u = ready(&mut s, "a.one", 1, 0, false);
+        park(&mut s, u, 1, 60_000);
+        s.wake(Pid(1), &Trigger::interactive(7));
+        s.advance(u);
+        s.take_actions();
+        s.adopt_process(u, Pid(101));
+        s.process_spawned(Pid(101), Ok(()));
+        assert!(!kinds(&s.run_jobs(200_000)).contains(&"Terminate"));
+        s.process_ready(Pid(101));
+        assert!(matches!(s.unit(u).unwrap().state, UnitState::Active { .. }));
+    }
+
+    /// Review fix: a run's classification closes with its answer or its
+    /// timeout; a later answer finds it closed (the adapter drops it).
+    #[test]
+    fn b2c_classification_closes_once() {
+        let mut s = b2c();
+        ready(&mut s, "a.one", 1, 0, true);
+        assert!(s.classifying(Pid(1)));
+        s.run_jobs(5_000);
+        assert!(!s.classifying(Pid(1)), "timed out: resident");
+        ready(&mut s, "b.two", 2, 0, false);
+        assert!(s.classifying(Pid(2)));
+        s.classified_with(Pid(2), None, false);
+        assert!(!s.classifying(Pid(2)));
     }
 }

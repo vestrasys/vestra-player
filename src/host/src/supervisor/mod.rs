@@ -355,8 +355,6 @@ impl<P: Clone> Supervisor<P> {
         &self.tunables
     }
     /// The latest time given.
-    // B2d: the adapter reads it for the starts it hands to the core.
-    #[allow(dead_code)]
     pub fn now(&self) -> Ms {
         self.now
     }
@@ -1968,8 +1966,12 @@ impl<P: Clone> Supervisor<P> {
         let timeout = unit
             .start_timeout
             .unwrap_or(self.tunables.policy(unit.class).start_timeout);
-        self.timers
-            .arm(&mut unit.gens, u, TimerKind::StartTimeout, now + timeout);
+        // B2c–B2d: the Host's activation deadline is the only one
+        // (`Tunables::start_timeout_by_host`).
+        if !self.tunables.start_timeout_by_host {
+            self.timers
+                .arm(&mut unit.gens, u, TimerKind::StartTimeout, now + timeout);
+        }
         let mut priority = Priority::Background;
         if let Some(job) = unit.job.as_mut() {
             job.deadline = Some(now + timeout);

@@ -244,7 +244,7 @@ impl Host {
             // one (doc/architecture/i18n.md §2).
             self.broadcast(
                 "appearance.changed",
-                json!({"theme":theme,"language":language,"changed":["theme"]}),
+                appearance_changed(theme, language, "theme"),
             );
         }
         Ok(Value::Null)
@@ -277,16 +277,38 @@ impl Host {
             self.ui_state.touch(now);
             self.broadcast(
                 "appearance.changed",
-                json!({"theme":self.theme(),"language":value,"changed":["language"]}),
+                appearance_changed(self.theme(), value, "language"),
             );
         }
         Ok(Value::Null)
     }
 }
 
+/// `appearance.changed`'s data: the palette and saved language after the
+/// change, and `changed`, what this event changed (`"theme"` or
+/// `"language"`; an additive field, doc/architecture/i18n.md §2).
+fn appearance_changed(theme: &str, language: &str, changed: &str) -> Value {
+    json!({"theme":theme,"language":language,"changed":[changed]})
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// B2c: `appearance.changed` says what changed, so a plugin woken by it
+    /// can tell a language change from a palette change; the old fields
+    /// stay as they were.
+    #[test]
+    fn appearance_changed_says_what_changed() {
+        assert_eq!(
+            appearance_changed("vestra-light", "system", "theme"),
+            json!({"theme":"vestra-light","language":"system","changed":["theme"]})
+        );
+        assert_eq!(
+            appearance_changed("vestra", "en", "language"),
+            json!({"theme":"vestra","language":"en","changed":["language"]})
+        );
+    }
 
     #[test]
     fn vestra_table_is_the_theme_file_default_and_palettes_match() {

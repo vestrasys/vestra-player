@@ -177,6 +177,13 @@ pub struct Tunables {
     /// too, not only for the reap (§17.7 item 18; B4). Today
     /// `data_removals` deletes at `Event::Reaped`.
     pub remove_data_waits_cleanup: bool,
+    /// B2c–B2d (transitional, supervisor.md §17.10): the Host times the
+    /// start of the runs the core spawns (its activation deadline,
+    /// `activation_tick`), so the core arms no `TimeoutStartSec` of its own
+    /// (two deadlines a few ms apart would fail a run that the Host lets
+    /// become ready). Off in every preset; the adapter sets it. Removed in
+    /// B2d, when the core runs every activation.
+    pub start_timeout_by_host: bool,
 }
 
 impl Policy {
@@ -248,6 +255,7 @@ impl Tunables {
             resident_idle_standby: true,
             runner_restart_waits_cleanup: false,
             remove_data_waits_cleanup: false,
+            start_timeout_by_host: false,
         }
     }
 

@@ -154,6 +154,8 @@ pub(crate) fn new(on_demand: &OnDemand) -> Supervisor<Value> {
         Tunables {
             on_demand: on_demand.enabled,
             idle_timeout,
+            // The Host's activation deadline times every start until B2d.
+            start_timeout_by_host: true,
             ..Tunables::legacy()
         },
         1,
@@ -455,6 +457,14 @@ impl Host {
                 None
             }
             Delivery::Held | Delivery::Refused => {
+                // Held only while the unit starts: a running plugin's trigger
+                // is never kept from it (`legacy()` has no restart absorbing
+                // one before B2d).
+                debug_assert!(
+                    !self.plugins.contains_key(&owner)
+                        || self.supervisor.waking(Pid(owner)).is_some(),
+                    "a trigger for running plugin {owner} was held"
+                );
                 self.supervisor_actions();
                 None
             }
@@ -789,8 +799,10 @@ impl Host {
             params: Value::Null,
         });
         if asked.is_ok() {
-            let now = self.now_ms();
-            self.on_demand.asked.insert(owner, Ask::Classify(now));
+            // The run's ready, as the core has it (`host_ready` /
+            // `process_ready`): one deadline with the core's classify timer.
+            let ready = self.supervisor.now();
+            self.on_demand.asked.insert(owner, Ask::Classify(ready));
         }
     }
     /// The listeners that keep `owner` running (the SDK's mirrors and wake
@@ -849,6 +861,12 @@ impl Host {
     /// lazy first run goes to standby at once if the Host's own idle check
     /// passes and its recording is written, else as soon as it is idle.
     fn class_known(&mut self, owner: u64, resident: Option<String>, backend: Value) {
+        // The core closed this run's classification already (answered, or
+        // timed out): a late answer changes nothing, and writes nothing
+        // (today's `lazy_answer` drops it once `lazy_classify_tick` gave up).
+        if !self.supervisor.classifying(Pid(owner)) {
+            return;
+        }
         let id = self.plugin_id(owner);
         match &resident {
             Some(reason) => diag!(
@@ -1027,8 +1045,11 @@ impl Host {
     }
     /// The playback worker did not answer a classification within
     /// `classify_wait` (5 s): resident (the safe side; its first-run place
-    /// frees), and said so. The core times a run without a checkpoint too;
-    /// this comes first, so the Host logs and frees the place either way.
+    /// frees), and said so. One deadline: the core times a run without a
+    /// checkpoint from the same ready (`Ask::Classify` holds the core's
+    /// time), and this runs before `run_jobs` in the same tick, so it comes
+    /// first and the Host logs and frees the place either way; a recorded
+    /// run has only this one (§17.7). An answer after it is dropped.
     fn classify_timeouts(&mut self, now: u64) {
         let wait = self.supervisor.tunables().classify_wait;
         let late = self

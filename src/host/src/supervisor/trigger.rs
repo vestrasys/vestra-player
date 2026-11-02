@@ -151,4 +151,87 @@ mod tests {
         assert!(would_overflow(&backlog, &Trigger::interactive(5), Some(3)));
         assert!(!would_overflow(&backlog, &Trigger::interactive(5), None));
     }
+    /// The payload of each held trigger, as (event name, data), in order.
+    fn order(backlog: &VecDeque<Trigger<serde_json::Value>>) -> Vec<(String, serde_json::Value)> {
+        backlog
+            .iter()
+            .map(|t| {
+                (
+                    t.payload["event"].as_str().unwrap().to_owned(),
+                    t.payload["data"].clone(),
+                )
+            })
+            .collect()
+    }
+    fn message(event: &str, data: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({"event": event, "data": data})
+    }
+
+    /// Review M1 (MOVE of `lazy.rs` `held_events_keep_their_order_and_only_
+    /// the_newest_of_each`): a woken plugin receives wake events in order,
+    /// only the newest of each, after the trigger that came before them.
+    #[test]
+    fn held_events_keep_their_order_and_only_the_newest_of_each() {
+        use serde_json::json;
+        let mut queue = VecDeque::from([Trigger::interactive(message(
+            "commands.execute",
+            json!({"id":"a"}),
+        ))]);
+        let event = |name: &str, data| Trigger::event(name, message(name, data));
+        hold(&mut queue, event("packages.changed", json!(1)));
+        hold(&mut queue, event("appearance.changed", json!("x")));
+        hold(&mut queue, event("packages.changed", json!(2)));
+        assert_eq!(
+            order(&queue),
+            [
+                ("commands.execute".to_owned(), json!({"id":"a"})),
+                ("appearance.changed".to_owned(), json!("x")),
+                ("packages.changed".to_owned(), json!(2)),
+            ]
+        );
+    }
+
+    /// B0 (MOVE of `lazy.rs` `b0_hold_event_replaces_only_its_own_event`):
+    /// holding a wake event replaces only an older message of its own event
+    /// name (newest wins, at the end) and keeps every other held message in
+    /// its order, the `source.resolveCancel` that follows its request
+    /// included. What `wake` holds end to end: tests/lifecycle_baseline.rs.
+    #[test]
+    fn b0_hold_event_replaces_only_its_own_event() {
+        use serde_json::json;
+        let mut queue = VecDeque::from([Trigger::interactive(message(
+            "commands.execute",
+            json!({"id":"a"}),
+        ))]);
+        hold(
+            &mut queue,
+            Trigger::event("packages.changed", message("packages.changed", json!(1))),
+        );
+        hold(
+            &mut queue,
+            Trigger::interactive(message("commands.execute", json!({"id":"b"}))),
+        );
+        hold(
+            &mut queue,
+            Trigger::interactive(message("source.resolveRequest", json!({"request":1}))),
+        );
+        hold(
+            &mut queue,
+            Trigger::follow(message("source.resolveCancel", json!({"request":1}))),
+        );
+        hold(
+            &mut queue,
+            Trigger::event("packages.changed", message("packages.changed", json!(2))),
+        );
+        assert_eq!(
+            order(&queue),
+            [
+                ("commands.execute".to_owned(), json!({"id":"a"})),
+                ("commands.execute".to_owned(), json!({"id":"b"})),
+                ("source.resolveRequest".to_owned(), json!({"request":1})),
+                ("source.resolveCancel".to_owned(), json!({"request":1})),
+                ("packages.changed".to_owned(), json!(2)),
+            ]
+        );
+    }
 }
