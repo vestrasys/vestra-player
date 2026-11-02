@@ -3488,4 +3488,38 @@ mod tests {
             );
         }
     }
+
+    /// B0 (supervisor.md §10, §11): start-up and wait tunables as they are
+    /// today (the 15 s activation deadline and the install wait of 20 s are
+    /// literals in `load_package` and `advance_package`).
+    #[test]
+    fn b0_start_up_and_wait_tunables() {
+        assert_eq!(START_BUDGET, std::time::Duration::from_millis(25));
+        assert_eq!(VERIFY_WAIT, std::time::Duration::from_secs(3));
+        assert_eq!(RELOAD_WAIT_MS, 20_000);
+    }
+
+    /// B0: a verifying built-in keeps its place at the front, and its
+    /// count, while the plugins behind it start (`start_queued` walks past
+    /// it with `get(at)`), so third-party first runs keep waiting
+    /// (`builtin_pending`).
+    #[test]
+    fn b0_a_verifying_builtin_holds_its_place_and_the_others_pass_it() {
+        let builtin = |id: &str| id.starts_with("vestra.");
+        let ids = ["a.one", "vestra.slow", "vestra.fast"].map(String::from);
+        let mut queue = StartQueue::new(ids, builtin);
+        let verifying = |id: &str| id == "vestra.slow";
+        let mut started = Vec::new();
+        let mut at = 0;
+        while let Some(id) = queue.get(at).map(str::to_owned) {
+            if verifying(&id) {
+                at += 1;
+                continue;
+            }
+            started.push(queue.remove(at).unwrap());
+            assert!(queue.builtin_pending(), "vestra.slow still counts");
+        }
+        assert_eq!(started, ["vestra.fast", "a.one"]);
+        assert_eq!((queue.len(), queue.get(0)), (1, Some("vestra.slow")));
+    }
 }

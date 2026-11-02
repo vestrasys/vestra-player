@@ -1460,4 +1460,58 @@ mod tests {
         );
         assert!(test_executes("").is_empty());
     }
+
+    /// B0 (supervisor.md §11; B1 reproduces these): lazy activation's
+    /// tunables and triggers as they are today.
+    #[test]
+    fn b0_lazy_tunables_and_triggers() {
+        assert_eq!(FIRST_RUNS, 8);
+        assert_eq!(CLASSIFY_WAIT_MS, 5_000);
+        assert_eq!(PARK_WAIT, Duration::from_secs(2));
+        assert_eq!(IDLE_MS, 60_000);
+        assert_eq!(CHECK_MS, 250);
+        assert_eq!(STARTING_OSD_MS, 400);
+        assert_eq!(STOP_WAIT_MS, 20_000);
+        assert_eq!(QUIET_AFTER_START_MS, 1_000);
+        assert_eq!(
+            TRIGGERS,
+            [
+                "commands.execute",
+                "source.resolveRequest",
+                "drops.drop",
+                "ui.callback"
+            ]
+        );
+        let lazy = Lazy::default();
+        assert!(!lazy.enabled && lazy.first_run_free());
+    }
+
+    /// B0: a wake event held for a parked or waking plugin replaces an
+    /// older one of the same event (newest wins) but never a trigger:
+    /// triggers are queued as they come (`lazy_deliver` pushes them), so two
+    /// commands both run, in order, at the ready; a resolution's cancel
+    /// follows its request.
+    #[test]
+    fn b0_held_triggers_are_all_kept_and_wake_events_merge() {
+        let mut queue = vec![json!({"event":"commands.execute","data":{"id":"a"}})];
+        hold_event(&mut queue, json!({"event":"packages.changed","data":1}));
+        queue.push(json!({"event":"commands.execute","data":{"id":"b"}}));
+        queue.push(json!({"event":"source.resolveRequest","data":{"request":1}}));
+        queue.push(json!({"event":"source.resolveCancel","data":{"request":1}}));
+        hold_event(&mut queue, json!({"event":"packages.changed","data":2}));
+        let order = queue
+            .iter()
+            .map(|m| (m["event"].as_str().unwrap(), m["data"].clone()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            order,
+            [
+                ("commands.execute", json!({"id":"a"})),
+                ("commands.execute", json!({"id":"b"})),
+                ("source.resolveRequest", json!({"request":1})),
+                ("source.resolveCancel", json!({"request":1})),
+                ("packages.changed", json!(2)),
+            ]
+        );
+    }
 }

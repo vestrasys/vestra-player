@@ -372,4 +372,25 @@ mod tests {
             Err(Error::Unknown)
         );
     }
+
+    /// B0 (doc/architecture/supervisor.md §0 D1, D3): the Book holds at
+    /// most 64 entries, built-ins included, and an entry leaves only by
+    /// `remove`: one that timed out or failed keeps its place. A caller that
+    /// never removes an entry (`load_package` when the spawn fails after
+    /// `begin`) leaks a place for the rest of the run.
+    #[test]
+    fn b0_a_terminal_entry_keeps_its_place_until_removed() {
+        let mut book = Book::default();
+        for owner in 1..=64 {
+            book.begin(owner, 100).unwrap();
+        }
+        assert_eq!(book.status(1, 100).unwrap(), Status::TimedOut);
+        book.runtime_failed(2, "spawn failed".into(), 1).unwrap();
+        assert_eq!(book.begin(65, 200), Err(Error::Full));
+        book.remove(1);
+        book.begin(65, 200).unwrap();
+        assert_eq!(book.begin(66, 200), Err(Error::Full));
+        book.remove(2);
+        book.begin(66, 200).unwrap();
+    }
 }
