@@ -1,0 +1,702 @@
+# Plugin process supervisor (design, approved 2026-11-02)
+
+This is the design of the host's **plugin process supervisor**: the module that decides *when a plugin process should exist* — start, stop, restart, standby, limits. It is process supervision (service management), modelled on Linux's service manager **systemd**, not CPU scheduling: the OS kernel schedules CPU time and Vestra never does. Restart intensity follows **Erlang/OTP supervisors**, timings follow **Chrome extension service workers**, LRU and importance follow **Android ActivityManager**, and activation events follow **VS Code**. It replaces the start/stop decisions now spread over `package_manager.rs`, `lazy.rs`, `lifecycle.rs` and `handle.rs` (today's behaviour: [Loading and stopping plugins](README.md#2-loading-and-stopping-plugins); lazy activation: [round record](../process/rounds/2026-10-lazy-activation.md)). Implementation follows the migration batches B0–B7 (§13).
+
+Status: approved plan, implementation not started (2026-11-02). All product-owner questions are answered (§12.1).
+
+Baseline: main `0bc4d35d` (#141, "Many-plugin performance"). File:function citations refer to that commit; paths are `src/host/src/...`. Amendments A1–A19 come from the review of an earlier draft and are traced in §14.
+
+History: drafted 2026-11-02 after the 2000-plugin probes, reviewed against past rounds.
+
+## Principles
+
+- A pure core plus a thin Host adapter (§2), built on the current implementation (not a rewrite), migrated in batches B0–B7 (§13); every rule carries a KEEP/MOVE/REPLACE/NEW tag.
+- **No wire-protocol change.**
+- Safe-only core (`#![forbid(unsafe_code)]`); platform calls only in `src/host/unsafe/win32`.
+- No kernel-scheduler vocabulary is used in code or docs from B1 on (no `task_struct`, `schedule()`, `TASK_*`, `wake_up_process`, runqueue, SIGSTOP/SIGCONT naming, nice). "Signal" appears only as systemd's own `KillSignal`/`FinalKillSignal` analogy.
+- Every rule table has a "Prec." (precedent) column; §16 lists the systemd concepts deliberately not taken.
+
+## Tag legend
+
+| Tag | Meaning |
+| --- | --- |
+| **KEEP** | Existing solution kept as is; the citation says where it stays. |
+| **MOVE** | Existing code moved into the supervisor module unchanged (logic and constants identical; only the owner of the state changes). |
+| **REPLACE** | Existing mechanism replaced by a supervisor mechanism; the entry says how the new one covers the old problem. |
+| **NEW** | New behaviour. Changes users see were approved by the product owner on 2026-11-02 (§12.1, amendment A15); §15 lists them. |
+
+Precedent legend (column "Prec."): **systemd**, **Erlang** (OTP supervisor), **Chrome** (extension service workers / process model), **Android** (ActivityManager / LMK), **VS Code** (activation events), **ours** (no external precedent; Vestra-specific).
+
+---
+
+## 0. Diagnosis (re-checked at 0bc4d35d)
+
+| # | Problem | Code | Still true? |
+| --- | --- | --- | --- |
+| D1 | Activation Book `LIMIT = 64` caps running plugins, built-ins included; `Book::begin` → `Full` | `host/package_activation.rs` `const LIMIT`, `Book::begin`; entries removed only in `lifecycle.rs::archive_activation` | Yes |
+| D2 | Full Book → `wake_failed` → `forget_entries` → `capabilities::revoke(.., false)`: menus vanish until restart | `lazy.rs::wake` → `packages/package_manager.rs::start_package` → `load_package` → `activations.begin(owner, now + 15_000)?` | Yes |
+| D3 | Book entry leaks when spawn fails after `activations.begin` (`Plugin::load_manifest(..)?` / `SharedRunner::spawn(..)?` return early without `activations.remove`) | `package_manager.rs::load_package` | Yes (A18; B0 test) |
+| D4 | Wakes are immediate and unbounded (200 wakes = 5.3 s UI stall) | `lazy.rs::lazy_deliver`, `lazy_event` → `wake` → spawn on the UI thread | Yes. `START_BUDGET` 25 ms bounds only `start_queued`; `FIRST_RUNS = 8` bounds only first runs |
+| D5 | No heap cap for own processes | `process/mod.rs::own_process` (shared runner: `shared_runner::MAX_OLD_SPACE` 1024 MB) | Yes |
+| D6 | No failure backoff | `lazy.rs::wake_failed`; `lifecycle.rs::activation_tick` → `disable(Failed)`; `package_manager.rs::restart_shared` (only fail-open 3/60 s) | Yes |
+| D7 | Unbounded held-trigger queues, no timeouts | `lazy.rs::Parked.triggers`, `Waking.queue`; `lazy::hold_event` dedupes same-name events only | Yes |
+| D8 | No per-request timeout; "busy" judged in scattered places | `commands.busy`, `settings.busy`, `source_state_replies`, … | Yes |
+| D9 | Start/stop decisions spread across 4 files | package_manager.rs (`start_installed`, `start_package`, `start_stopped`, `reload`, `reload_tick`, `restart_shared`, `advance_package`), lazy.rs (park/wake/first-run/classify), lifecycle.rs (`stop`, `disable`, `activation_tick`), handle.rs (`Exited`, `RuntimeFault`, `Reaped`, `BackendCleaned`) | Yes |
+| D10 | Per-plugin state in ~12 Host fields keyed by owner or id | `Host.{plugins, cleanup, warnings, activations, activation_ui, data_removals, failures, development, dev_disabled}`, `lazy.{parked, waking, active, asking, told, moved, classifying, classes, wakes, first_runs, stopping, first_queue}`, `packages.{reloads, to_start}` | Partly fixed: `Host.plugin_ids` and `Lazy.parked_ids` are id indexes with single choke points |
+| D11 | Stop waits: one thread per stop polling `try_wait`; serial `Member::stop` up to 300 ms + 6 s (`shared_runner::STOP_WAIT`, `MEMBER_GONE`) | `process/mod.rs` `Drop for Plugin`; `shared_runner.rs` | Yes (A3) |
+| D12 | Linear scans per plugin at start-up and in the UI tick | `start_installed`, `running`, `parked_id`, `builtin_queued`, `commands.snapshot()` per tick | **Fixed by #141** (§1) |
+| D13 | **Four separate "wait until the old process is gone" mechanisms**, each with its own 20 s timeout and failure text, plus RPC-level "busy" rejection: `packages.reloads: BTreeMap<id,(owner,since)>` + `reload_tick` (`RELOAD_WAIT_MS`); `lazy.stopping: BTreeMap<id,owner>` + `Parked.waiting: Option<u64>` checked in `lazy_tick` (`STOP_WAIT_MS`); `Operation.waiting: Option<u64>` checked in `advance_package` (literal `20_000`); `set_enabled` enable-after-park reusing `packages.reloads`. `package_busy` (= operation or reload pending) rejects `set_enabled`/`reload` with `"busy"` | `package_manager.rs` `reload`, `reload_tick`, `set_enabled`, `parked_process`, `advance_package`, `package_busy`; `lazy.rs` `wake`, `lazy_tick` | Yes. **Bug (owner 2026-11-02: fix without approval; B0 test, fixed in B2b):** `set_enabled(false)` then `set_enabled(true)` on a *running* (not in standby) plugin: `running(id)` is already `None` after `stop`, `parked_process` looks only at `lazy.stopping`, so `start_stopped` → `load_package` may start a second process on the same data directory while the first is still in its 300 ms grace. The job model (§4) closes this by construction: a start job always waits for the unit's previous process. |
+
+---
+
+## 1. Baseline after #141 (what the supervisor builds on)
+
+| Element | Where | Tag | Role |
+| --- | --- | --- | --- |
+| Incremental binding claims (`Table::withdraw`/`submit`/`refresh(dirty)`) | `bindings.rs` | **KEEP** | Revoke on standby, `rekey` on wake, `replay` at start-up cost O(the owner's commands). |
+| Command registry path index, per-owner keys (`keys_of`), map-based menu tree | `commands.rs::Registry` | **KEEP** | A wake's re-registration and a standby's revoke touch only that owner (2000-plugin replay 5.9 s → 0.4 s). |
+| Menu snapshot cached per revision | `commands.rs` | **KEEP** | N standby/wake cycles between two menu opens build the tree at most once. |
+| UI tick rebuilds menus only while a menu is open | `main.rs` UI tick | **KEEP** | The supervisor may change registrations every tick with no per-frame snapshot (UI frame-rate rule). |
+| Headless loop: up to 128 events per tick | `main.rs` headless loop | **KEEP** | Bursts of `Exited`/`Reaped` at quit, runner restart or mass standby are drained; `supervisor_tick` runs once after each drained batch. |
+| `StartQueue` (built-ins first, verifying built-in stays in place and counts) | `package_manager.rs` | **REPLACE in B2d** by the job queue's Builtin lane (§4.4), same order, same counting rule | |
+| `FirstQueue` (built-ins at the front) | `lazy.rs` | **REPLACE in B2d** by Start jobs with `cause: FirstRun` in the same job queue | |
+| `Host.plugin_ids` | `host/mod.rs`, `lifecycle.rs` | **REPLACE in B2a** by `Supervisor::by_id` (unit table index); `debug_assert` cross-check kept during migration | |
+| `Lazy.parked_ids` | `lazy.rs` | **REPLACE in B2a** by `by_id` + `by_pid` (the holder pid of a unit in standby is in `by_pid`) | |
+| `Store::record(id)`, `Store::installed_ids()` | `package_store.rs` | **KEEP** | `add_unit` reads one record per unit. |
+
+---
+
+## 2. Module layout
+
+### 2.1 `src/host/src/supervisor/` — pure core (**NEW** module; contents tagged per file)
+
+Every file `#![forbid(unsafe_code)]`. No `Host`, no I/O, no env, no clock (time passed in as `Ms`); randomness from a seeded xorshift (as `bindings.rs` test `Steps`).
+
+| File | systemd / other model | Content | Tag |
+| --- | --- | --- | --- |
+| `mod.rs` | systemd `Manager` | `Supervisor<P>`, public API (§5), `Tunables` | NEW |
+| `unit.rs` | systemd `Unit` + service settings | `Unit<P>`, `UnitId`, `Pid` (generation), `RunnerId`, `UnitState` (§3), `Class{Builtin,Resident,Normal,Development}`, `Placement{Own,Shared(RunnerId)}`, `Enablement{Enabled,Disabled}` (systemd UnitFileState), `Policy` (§3.3); indexes `by_id`, `by_pid` | NEW (indexes REPLACE `plugin_ids`/`parked_ids`) |
+| `activation.rs` | systemd `Type=notify` readiness | `host/package_activation.rs` moved whole (`ui_begin`/`ui_finish`/`runtime_ready`/`runtime_failed`/`status`, `pending_ui` 64, its tests); per-unit activation instead of the global `Book`; `LIMIT = 64` removed in B3 | MOVE (B2a); REPLACE of `LIMIT` (B3): concurrency is bounded by the start-job limit and the process budget; a full queue waits instead of revoking (D1/D2) |
+| `job.rs` | systemd `job.c` (`job_type_merge`, job modes) | `Job{id, unit, kind, mode, priority, origin, state: Waiting\|Running, deadline}`, `JobKind{Start, Stop{then}, Restart{fresh, image}, Standby}`, `JobMode{Replace, Fail}`, merge table (§4.2) | NEW (REPLACE `packages.reloads`, `lazy.stopping`, `Parked.waiting`, `Operation.waiting`, B2b) |
+| `queue.rs` | systemd `manager_dispatch_run_queue`; Chrome process-launch throttling | Runnable-job selection: lanes, priorities, concurrency limit for running start jobs, bounds (§4.4) | REPLACE `StartQueue` + `FirstQueue` + `FIRST_RUNS` + `START_BUDGET` gating (B2d/B3) |
+| `trigger.rs` | systemd socket activation (listening socket backlog) | Held triggers (`Unit::backlog`), merge rule (A9), old pid → current pid forwarding | MOVE `lazy::hold_event` (B2c); REPLACE `lazy.moved` (B2c); bounds NEW (B3) |
+| `kill.rs` | systemd `KillMode=`, `KillSignal=`, `TimeoutStopSec=`, `FinalKillSignal=` | `Terminate{reason, grace, keep_registrations}` → `Kill` escalation; `KillMode::{Process, RunnerGroup}` | NEW API over existing behaviour (`lifecycle.rs::stop`, `restart_shared`) |
+| `exit.rs` | systemd `Result=` (`exit-code`, `signal`, `timeout`, `oom-kill`, `start-limit-hit`) | `ExitCause{Exited, Fault, Oom, StartTimeout, RequestTimeout, Transport, Refused}` → existing `StopReason` (A14) and next state | NEW (B4) |
+| `reap.rs` | systemd "control group empty" + `ExecStopPost=` | Per-unit `stopping: Option<Stopping{pid, reaped, backend_cleaned, deadline}>`, 20 s; the "one instance per data directory" rule is now a job runnability condition (§4.3) | REPLACE `Host.cleanup` (B2b): an entry exists only while its unit is `deactivating`, so it cannot grow (A18 leak 2) |
+| `timers.rs` | systemd `sd-event` timer sources | Deadline min-heap `(due, UnitId, kind, generation)`, lazy deletion; `next_deadline()` | NEW (A1: O(due)) |
+| `restart.rs` | systemd `Restart=`, `RestartSec=`, `RestartSteps=`/`RestartMaxDelaySec=`, `StartLimitBurst=`/`StartLimitIntervalSec=`; Erlang restart intensity | Retry/backoff state and start-limit window per unit; runner fail-open counter mirrors `shared_runner::Policy` | NEW (B4) |
+| `limits.rs` | systemd `MemoryMax=`, `MemoryHigh=`, `TasksMax=` | Per-class limits; soft third-party process budget; LRU candidate list | NEW (B5) |
+| `pressure.rs` | systemd-oomd + `OOMScoreAdjust=`; Android LMK importance/LRU | Pressure levels, standby candidate ordering (busy excluded) | NEW (B5) |
+| `work.rs` | Chrome MV3 "event in flight extends lifetime" | Per-unit in-flight work (`begin_work`/`end_work`, request deadline) = the one "busy" | REPLACE scattered busy checks (B3); existing predicates feed it (D8) |
+| `tests/` | — | Deterministic seeded simulations; B0 scenarios re-run against the core | NEW |
+
+### 2.2 `src/host/src/host/supervisor/` — Host adapter (safe code; executes Actions)
+
+| File | Content | Tag |
+| --- | --- | --- |
+| `mod.rs` | `Host::supervisor_tick()`: now → `run_jobs(now)` → execute Actions under the per-tick budget (§6.1) | NEW (REPLACE `lazy_tick`, `activation_tick`, `start_queued`, `reload_tick`, cleanup polling, `lazy_first_runs_tick`, `lazy_classify_tick` as tick entry points; their bodies MOVE as Action executors) |
+| `checkpoint.rs` | `Recording`, `Key`, `read`/`write`/`remove`, `SCHEMA` | MOVE from `lazy.rs` (B2c) |
+| `probe.rs` | `VESTRA_TEST_*` switches | MOVE from `lazy/probe.rs` (B2c) |
+| `actions.rs` | `Spawn` → `process::Plugin::load_manifest`; `Replay`/`Rekey`/`Prune`/`Revoke`/record → `capabilities::*`; backend `owner.{registered,parked,disabled,resources}`; `Deliver` → `Plugin::send`; `Answer` → explicit failure replies; `Notify` → OSD; `ListChanged` → `packages.changed` | MOVE (bodies) / NEW (dispatch) |
+| `worker.rs` | Off-thread spawn, verify and checkpoint write (A1 option b, §6.1) | NEW |
+
+### 2.3 Stays where it is (**KEEP**)
+
+- `process/*`: spawn, pipes, `Member`, heartbeat (`shared_runner::Heartbeat`, `PING_MS`, `MISSED_LIMIT` — systemd `WatchdogSec=` analog), `shared_runner::Policy` (`quarantined`, `restart` fail-open 3/60 s), `MEMBER_QUEUE`, `MAX_OLD_SPACE`. Changes inside `process/*` are limited to: own-process heap flag (B4), `Reaped` carrying the exit status (B4), the multiplexed reaper (B2b, A3).
+- `capabilities/*` registries, `record`/`replay`/`rekey`/`prune`/`revoke`, and the generation as identity on the wire and in registries (A10).
+- `bindings.rs`, `commands.rs`, `host/menus.rs`, UI tick (§1).
+- Package transactions in `package_manager.rs` (`start_operation`, `advance_package`, `commit_operation`, `uninstall`, `set_enabled`, …): their phases and RPC replies stay; where they now call `stop`/`start_installed`/wait on `op.waiting`, they `enqueue_job` and read the job's result (§4.5).
+- `lifecycle.rs::stop`'s UI cleanup (mounts, sidebar, sequence, info panels, floating, menus, policy/power/timeline/images/pip, views, backend `owner.*`) becomes the body of `Action::Terminate` — order unchanged.
+- `send`/`broadcast`/`transport_failed` (`lifecycle.rs`) stay; they call `supervisor.wake` first, as they call `lazy_deliver`/`lazy_event` today.
+- `session_storage.rs` and its three `clear` call sites (A12; [session storage round](../process/rounds/2026-10-session-storage.md)).
+- `host/restart.rs` device-loss path and `EXIT_AFTER_LOOP` 5 s watchdog.
+
+---
+
+## 3. Units and states
+
+A **Unit** is one plugin (one manifest id), alive from `add_unit` (start-up, install, `--plugin` load) to `remove_unit` (uninstall after data removal, development unload). `UnitId` is stable for the unit's life. Each process run gets a new **`Pid`** = today's owner generation (`load_package`: `next_generation += 1`), which stays the identity on the wire and in every registry (A10; systemd analog: `MainPID` + `InvocationID`, both new per run while the unit name is stable). A shared-runner member's `Pid` is its member generation; the runner has a `RunnerId` (today `shared_policy.next_id()`).
+
+State and job are separate, as in systemd: `systemctl status` shows "inactive" with a "start" job waiting, not a special "queued" state. A unit waiting to start is therefore **`inactive` + an installed Start job**.
+
+### 3.1 States
+
+| State (`UnitState`) | systemd | Process? | Registrations | Sub-states | Today |
+| --- | --- | --- | --- | --- | --- |
+| `Inactive` | `inactive` (+ `UnitFileState=disabled` for a disabled plugin) | none | none | — | `to_start`, `first_queue` entries (with a Start job); disabled plugins (`store.disabled()`, `dev_disabled`) |
+| `Activating{pid, since, sub}` | `activating` | being created / up, not ready | live under `pid` (or rekeyed to it from the holder) | `Verify` (built-in digest check, no process yet; systemd `start-pre`/`ExecCondition`), `Spawn` (process creation in flight), `Ready` (waiting for `runtime.ready` + UI activation; systemd `Type=notify`), `AutoRestart{until}` (no process; waiting `RestartSec`; systemd shows exactly `activating (auto-restart)`) | `lazy.waking`, Book entry pending, verifying built-in in `StartQueue` |
+| `Active{pid, since, last_active}` | `active (running)` | running | live | — | `plugins` + `lazy.active` |
+| `Deactivating{pid, reason, then, sub}` | `deactivating` | stopping | already cleaned at `Terminate` (UI cleanup runs immediately, as `stop` does today), or kept for `then: Standby` | `Term` (grace running; systemd `stop-sigterm`), `Kill` (systemd `stop-sigkill`), `Cleanup` (process gone, waiting for `BackendCleaned`; systemd `stop-post`) | `Host.cleanup` entry, `lazy.stopping`, `packages.reloads`, `Operation.waiting` |
+| `Failed{result, text}` | `failed` with `Result=` | none | revoked (today's behaviour; B4 changes this only for the classes in §3.3) | — | `failures` map, `dev_disabled` after a dev failure |
+| `Standby{holder, recorded, hold_until}` | **ours** (see below) | none | kept under the holder pid (the last run's pid), marked recorded | `hold_until: Option<Ms>` (B4: crash backoff before the next wake is allowed) | `lazy.parked` (today's name) |
+
+`then` of `Deactivating` ∈ `{Inactive, Standby, Failed, Removed}` is where the unit lands when its process is gone. A restart is not a `then`: it is the Start half of a Restart job that waits for the unit to leave `Deactivating` (§4).
+
+**`standby`, explained.** systemd socket activation splits a service into two units: a `.socket` that stays *listening* (the kernel keeps accepting into its backlog) and a `.service` that is *inactive* until a connection arrives, which makes systemd enqueue a start job for the service; the backlog is handed over when the service is up. A plugin in standby is both halves merged into one state: the **entry points stay registered** (menu items, commands, settings pages, wake-event subscriptions, resolvers — the listening socket), held under the holder pid and recorded in the checkpoint, while **no process exists** (the inactive service). A trigger on an entry point is the connection: it goes into the unit's backlog and enqueues a Start job (`wake`, §5). The entry points are known without running the plugin because they were recorded at its first run (VS Code activation events: contributions are declared before activation; here they are observed once, then replayed).
+
+**Naming.** The state is `standby` (`UnitState::Standby`; job `Standby`; API `standby()`); `hold_until` keeps its name. Not `dormant`: `package_store` already uses it for retired instances. Not `idle`: already a wire value with a different meaning (stop reason `idle`, `packages.list` `process: idle`). The wire stays unchanged: a unit in standby still reports stop reason `idle` and `process: idle` (§9). Where this document cites today's code, today's names stay: `lazy.parked`, `Lazy.parked_ids`, `parked_id`, `Parked.triggers`, `Parked.waiting`, `park()`, `forget_parked`, `parked_process`, `PARK_WAIT`, and the backend message `owner.parked` — these are today's names, replaced by the supervisor in the batches of §13.
+
+### 3.2 Transition table
+
+`→` columns: next state; "Job" = the job that drives or completes. Rows are grouped; every row is one rule.
+
+| # | From | Event | To | Actions | Prec. | Tag / batch |
+| --- | --- | --- | --- | --- | --- | --- |
+| T1 | (none) | `add_unit`, enabled, valid checkpoint, class may go to standby | `Standby{holder: new pid, recorded}` | `Replay` | VS Code (contributions without activation) | MOVE `lazy_replay` (B2c) |
+| T2 | (none) | `add_unit`, enabled, no checkpoint / Resident / built-in that does not go to standby | `Inactive` + Start job (`cause: Boot` or `FirstRun`) | — | systemd (`WantedBy=` → start job at boot) | REPLACE `to_start`, `queue_first_run` (B2d) |
+| T3 | (none) | `add_unit`, disabled | `Inactive`, `Enablement::Disabled` | — | systemd (disabled unit file) | MOVE |
+| T4 | `Inactive`/`Standby` | Start job runs, built-in needing digest check | `Activating{Verify}` | `Verify` (worker); deadline `VERIFY_WAIT` 3 s | systemd `ExecCondition=`/`start-pre` | MOVE (A6) |
+| T5 | `Activating{Verify}` | verify done; or 3 s passed → `Placement::Own` | `Activating{Spawn}` | `Spawn` | ours | MOVE `package_manager.rs::trust` (A6) |
+| T6 | `Inactive`/`Standby`/`AutoRestart` due | Start job runs (no verify) | `Activating{Spawn, pid: alloc}` | `Spawn`; from `Standby`: `Rekey(holder → pid)`, forward holder → pid | systemd (socket → service start) | MOVE `lazy.rs::wake` |
+| T7 | `Activating{Spawn}` | `process_spawned(Ok)` | `Activating{Ready}` | arm `TimeoutStartSec`; after 400 ms "Starting &lt;name&gt;…" OSD | systemd `Type=notify` | MOVE (Book, `STARTING_OSD_MS`) |
+| T8 | `Activating{Spawn}` | `process_spawned(Err)` | retries left: `AutoRestart{until: start backoff}`; else Normal/Resident with recording → `Standby{hold_until}`; else `Failed{spawn}` | `Answer` held interactive triggers as failed; `Notify` | systemd `Restart=on-failure` + `RestartSec=` | REPLACE `wake_failed` → `forget_entries` (B3/B4; D2) |
+| T9 | `Activating{Ready}` | `process_ready` (runtime.ready + UI activation finished) | `Active` | `Deliver` backlog in order; arm idle timer; Start job done | systemd `READY=1` | MOVE |
+| T10 | `Activating{Ready}` | `process_failed` (plugin sent `runtime.failed`) | `Deactivating{Failed, then: Failed}` | `Terminate{Failed}`; **no retry** | systemd `RestartPreventExitStatus=` | KEEP behaviour (§12.1) |
+| T11 | `Activating{Spawn\|Ready}` | `TimeoutStartSec` expired | `Deactivating{Failed, then: per Restart=}` | `Terminate{Failed}` | systemd `Result=timeout` | REPLACE `activation_tick` → `disable(Failed)` |
+| T12 | `Active` | first run classified "can go to standby" | `Deactivating{Idle, then: Standby}` | `Checkpoint`; `Terminate{Idle, keep}` | VS Code / ours | MOVE `lazy_classified` |
+| T13 | `Active` | first run classified resident (`why`) | `Active`, class `Resident` | `Checkpoint` (resident) | Android (persistent/foreground importance) | MOVE |
+| T14 | `Active` | idle timer due → Standby job → `QueryResources` → `resources_answered(busy: false)` and `work.rs` empty | `Deactivating{Idle, then: Standby}` | `Checkpoint`; `Terminate{Idle, keep}` | Chrome MV3 idle stop | MOVE `lazy_idle`/`lazy_answer`, REPLACE poll |
+| T15 | `Active` | idle timer due, busy | `Active` | Standby job cancelled; idle timer re-armed | Chrome (pending event extends lifetime) | MOVE |
+| T16 | `Deactivating` | `process_reaped` and `backend_cleaned` both in | `then` (`Inactive` / `Standby` / `Failed` / removed) | waiting job on this unit becomes runnable (§4.3) | systemd (unit inactive when its cgroup is empty, after `ExecStopPost=`) | REPLACE `cleanup`, `process_gone`, `cleanup_done` polling (B2b) |
+| T17 | `Deactivating{Term}` | `TimeoutStopSec` expired | `Deactivating{Kill}` | `Kill` | systemd `TimeoutStopSec=` → `FinalKillSignal=` | KEEP behaviour (`Drop for Plugin`), REPLACE thread (A3) |
+| T18 | `Deactivating` | 20 s and still not reaped/cleaned | `then`, flagged `stuck` | the waiting job fails with today's text ("the previous process did not stop within 20 s" / "its stopped process did not go within 20 s"); `Failed` for a reload | ours | MOVE `RELOAD_WAIT_MS`, `STOP_WAIT_MS`, `advance_package` 20 s |
+| T19 | `Standby` | `wake(pid, trigger)` | `Standby` + Start job (trigger in backlog) | — (OSD after 400 ms once running) | systemd socket activation | MOVE `lazy_deliver`/`lazy_event` (immediate → queued, B3) |
+| T20 | `Standby{hold_until > now}` | `wake` | `Standby`; Start job waits until `hold_until` | interactive trigger: `Answer` failed + item disabled with the reason, OSD with the reason on click (§12.1); event trigger: kept in backlog | systemd `RestartSec=` | NEW (B4) |
+| T21 | `Standby` | Stop job (disable) | `Inactive`, disabled | `Revoke`; checkpoint kept; backlog answered | systemd (stop socket + service) | MOVE `forget_parked(id, false)` |
+| T22 | `Standby` | Restart job `fresh` (reload, upgrade) | `Inactive` + Start part of the job | `Revoke`; `DropCheckpoint` | ours | MOVE `forget_parked(id, true)` |
+| T23 | `Standby` | Stop job `then: Removed` (uninstall) | removed after `RemoveData` | `Revoke`; `DropCheckpoint`; `RemoveData` | systemd (unit unloaded / `not-found`) | MOVE |
+| T24 | `Active`/`Activating` | Stop job (disable, uninstall, upgrade, reload, cancel) | `Deactivating{reason, then}` | `Terminate{reason, grace: TimeoutStopSec}` | systemd stop job | MOVE `lifecycle.rs::stop`/`disable` |
+| T25 | `Active` | `process_exited` unexpected / `Fault` / `Oom` / `RequestTimeout` (B3 timer; `Terminate` first) | `Deactivating{Failed, then: per class}`: Builtin/Resident → Restart job (→ `AutoRestart`); Normal → `Standby{hold_until}`, registrations kept; Development → `Failed` | UI cleanup; `Notify` ("…stopped" / "…ran out of memory") | systemd `Restart=`, `OOMPolicy=`; Erlang (restart child) | B4 (Normal/Resident approved, §12.1); **until B4 every class → `Failed`** (today `disable(Failed)`) |
+| T26 | `Activating{AutoRestart}` | `RestartSec` timer | `Activating{Verify\|Spawn}` | `Spawn` | systemd auto-restart | NEW (B4) |
+| T27 | any start path | start-limit window exceeded (`StartLimitBurst` in `StartLimitIntervalSec`) | `Failed{start-limit-hit}` (runner members: fail-open instead, §7.4) | `Notify`; `failures` text | systemd `StartLimitBurst=`; Erlang restart intensity | NEW (B4) |
+| T28 | `Failed` | `reset_failed` (implicit in enable, reload, install/upgrade — today `start_stopped` does `failures.remove`) | `Inactive` | clear failure text | systemd `reset-failed` | MOVE |
+| T29 | `Active` (member) | runner hang / unattributed fault / runner exit / full member queue | `Deactivating{Failed, sub: Cleanup}` with `reaped` set for all members | `KillRunner` once; Restart jobs per member (first one immediate) | systemd `KillMode=control-group`; Erlang `one_for_all` | REPLACE `restart_shared` loop (B4, A4/A5) |
+| T30 | `Active` | memory pressure or over the process budget; selected; not busy | as T14 | as T14 | Android LMK / LRU | NEW (B5, A13) |
+| T31 | any | `shutdown(now, budget)` | `Deactivating{Quit}` → table dropped | `Checkpoint` from recorded state; `Terminate{Quit}` all in parallel; one deadline; `Kill` | systemd shutdown transaction | REPLACE (A2) |
+| T32 | `Inactive`, disabled | `set_enabled(true)` | `Inactive`, enabled + Start job (waits if a previous process is still `Deactivating`) | — | systemd `enable --now` | MOVE `start_stopped` / REPLACE enable-after-park `reloads` entry |
+
+### 3.3 Classes and policy (systemd unit settings)
+
+Classes: **Builtin** (`packages.builtins`), **Resident** (classified resident at first run from observed live resources — not declared), **Normal** (other installed plugins), **Development** (`--plugin` loads). Each class is a fixed `Policy` (no per-plugin override; manifests cannot set these).
+
+| Setting | What it means | Builtin | Resident | Normal | Development | Prec. |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Restart=` | When the supervisor starts the unit again by itself after its process ended without being asked to | `on-failure` (exit, fault, OOM, start timeout, request timeout) | `on-failure` (A15b) | `no` — instead **re-start on the next trigger** (in standby with registrations kept, T25) (A15c). Until B4: `no`, registrations revoked (today) | `no` → `Failed` | systemd `Restart=`; "on next trigger" = socket activation |
+| Not restarted when | The plugin itself said it cannot start | `runtime.failed` | same | same | same | systemd `RestartPreventExitStatus=` |
+| `RestartSec=` + backoff | Delay before an automatic restart / allowed re-wake, growing on repeats | 3 s × 2ⁿ; counter reset after 60 s stable; **first runner restart immediate** (A4) | 1 s × 2ⁿ, cap 60 s | 1 s × 2ⁿ, cap 60 s (hold before the next wake) | — | systemd `RestartSec=`, `RestartSteps=`, `RestartMaxDelaySec=` |
+| Start retry | Retry of a failed spawn / start timeout within one Start job | 3 × (250 ms × 2ⁿ + 10 % jitter) | same | same | none | systemd `Restart=on-failure` for start failures |
+| `StartLimitBurst=` / `StartLimitIntervalSec=` | Rate limit on starts; when hit, stop trying | Shared members: **3 runner restarts in 60 s → fail-open** (members run in own processes for the session, `shared_runner::Policy::restart`; counter not reset by backoff stability, A4). Own process: **5 starts in 10 min → `Failed{start-limit-hit}`** (systemd model; error text in Settings > Plugins, reload clears it) | 5 crashes in 10 min → `Failed{start-limit-hit}` | 5 in 10 min → `Failed` | 1 failure → `Failed` | systemd `StartLimitBurst=`; Erlang restart intensity (`MaxR`/`MaxT`: the supervisor escalates; ours escalates to "split the group" instead of dying); Chrome extension crash-reload |
+| `TimeoutStartSec=` | Start (spawn → ready) deadline | 15 s → 60 s at B6 | same | same | `--plugin` 1–120 s, kept (A16) | systemd `TimeoutStartSec=`; Chrome SW start |
+| `TimeoutStopSec=` | Grace between `Terminate` and `Kill` | disable/reload/uninstall/upgrade/standby: 300 ms / standby 2 s (today `PARK_WAIT`) → 5 s at B6 (A15d); after a failure: 300 ms (KEEP) | same | same | same | systemd `TimeoutStopSec=`; runner member cleanup 5 s |
+| Shutdown stop | Grace at quit / device loss | ≤ 1 s total, parallel / 300 ms (A2) | same | same | same | systemd `DefaultTimeoutStopSec=` at shutdown, but bounded in total |
+| `KillMode=` | What a stop/kill reaches | Shared member: stop message to the runner + `MEMBER_GONE` wait (member only); runner failure: **runner group** (all members, `retire(false)`) | Own process: `process` | `process` | `process` | systemd `KillMode=process` / `control-group`; Erlang `one_for_all` for the runner |
+| `MemoryMax=` (JS heap) | Hard per-process heap cap | Runner 1024 MB (`MAX_OLD_SPACE`, KEEP, shared by members like a slice limit); own process 512 MB | 512 MB (A15a) | 512 MB (A15a) | none (proposal: developers debug large heaps) | systemd `MemoryMax=`; Chrome per-renderer V8 cap; value ours (no Chrome number: ~58 MB measured per plugin, with margin; revisit if a legitimate plugin hits it) |
+| `TasksMax=`-like process budget | How many processes the class may have | Outside the budget (A7) | Counted, never reclaimed | Counted, reclaimable (LRU standby) | Outside | systemd `TasksMax=` (hard) — ours is soft like `MemoryHigh=`; Chrome renderer process limit |
+| `OOMPolicy=` | What an out-of-memory exit does | Treated as a crash: `Restart=` applies, notify "ran out of memory" | same | same (standby + notify) | `Failed` | systemd `OOMPolicy=continue` + `Restart=` |
+| `OOMScoreAdjust=` / importance | Order for pressure standby (lower = later) | −1000 (never) | −500 (never put in standby by pressure) | 0; −100 if used recently | never | systemd `OOMScoreAdjust=`; Android importance/LRU |
+| Idle timeout | Standby after no activity | Yes, own process and shared members, as today with on-demand start on (mirror subscriptions made 15/17 built-ins non-resident) | never | 60 s → 30 s at B6 | never | **systemd has none for services** (only self-exiting daemons like `systemd-hostnamed`); taken from Chrome MV3 SW 30 s |
+| Request timeout | One in-flight request may not run longer | 5 min from B6 (off before) | same | same | off | Chrome MV3 event 5 min (systemd `WatchdogSec=` is liveness, not per request — the runner heartbeat is our `WatchdogSec=`) |
+| Start priority | Order in the job queue | Builtin lane, first, outside the start-job limit (A7) | third-party lane | third-party lane | not queued (`JobMode` immediate) | ours ("built-ins first" is the only ordering we keep, §16) |
+| Enablement | Can the user disable/uninstall it | No (user ruling 2026-10-26, [plugin management round](../process/rounds/2026-10-plugin-management.md); `set_enabled` returns `unsupported`) | Yes | Yes | Yes (`dev_disabled`) | systemd `static`/vendor units |
+
+---
+
+## 4. Job queue
+
+systemd's central idea: **nothing changes a unit's state except a job**. Every request — from the user, a package RPC, a trigger, a timer, a crash — becomes a job attached to a unit. A unit has **at most one installed job**; a new request is merged with it or supersedes it by a fixed table. The manager runs runnable jobs; a job finishes with a result (`done`, `failed`, `canceled`, `timeout`). This replaces every ad-hoc wait in D13.
+
+### 4.1 Job kinds
+
+| Kind | Meaning | systemd | Today |
+| --- | --- | --- | --- |
+| `Start{cause}` | Bring the unit to `Active`. `cause` ∈ `Boot`, `FirstRun`, `Trigger(priority)` (= **wake**), `Enable`, `AutoRestart` | `start` (socket activation enqueues `start` for a trigger) | `start_installed`, `queue_first_run`, `wake`, `start_stopped` |
+| `Stop{reason, then}` | Bring the unit to no process; `then` ∈ `Inactive` (disable, cancel), `Removed` (uninstall), `Failed` | `stop` | `disable`, `stop`, `forget_parked` |
+| `Restart{fresh, image}` | Stop, wait for the old process, start. `fresh`: drop the checkpoint (and re-verify a built-in). `image`: start a different package (install/upgrade/cancel → old) | `restart` (systemd `reload` = in-process re-read has **no plugin counterpart**; `packages.reload` is a fresh restart) | `reload` + `reload_tick`; `advance_package` with `op.waiting` |
+| `Standby` | Bring the unit to `Standby`; runs only if not busy | ours (closest: socket-activated service exiting when idle) | `lazy_idle` → `lazy_answer` → `park` |
+
+`kill(u)` is **not** a job (as `systemctl kill`): it escalates the current `Deactivating` process to `Kill` at once (used by quit and by `TimeoutStopSec`).
+
+### 4.2 Merge / supersede table
+
+Rows: the installed job (its state in brackets when it matters). Columns: the new request. Cell: the job that remains installed. "Waits" = the job stays `Waiting` until the unit leaves `Deactivating` (§4.3).
+
+| Installed ↓ / new → | `Start` | `Standby` | `Stop` | `Restart` |
+| --- | --- | --- | --- | --- |
+| (none) | Start (if `Active`: done at once, trigger delivered) | Standby | Stop | Restart |
+| `Start` [waiting] | Start (priority = max; triggers appended to backlog) | Start (standby dropped) | **Stop** replaces; Start canceled; backlog answered (§4.6) | Restart (backlog kept) |
+| `Start` [running: `Activating`] | Start (merged) | Start | **Stop**: `Terminate` the activating process; backlog answered | Restart: `Terminate`, then start again (backlog kept) |
+| `Standby` [waiting for resources answer] | **Start** replaces (Standby canceled, unit stays `Active`, trigger delivered now) | Standby | Stop | Restart |
+| `Standby` [running: `Deactivating{then: Standby}`] | Start **waits** for reap, then runs from `Standby` (= "wake while deactivating waits for reap") | Standby | Stop: `then` becomes `Inactive`/`Removed` (registrations revoked at reap) | Restart (waits, then `fresh`/`image` applied) |
+| `Stop` [waiting] | Start replaces → nothing to do if the unit is `Active` (systemd: start replaces stop in `replace` mode) — **except** a Stop for disable/uninstall: then Start is refused (`Dropped`), a trigger never re-enables | Stop | Stop (stronger `then` wins: `Removed` > `Failed` > `Inactive`) | Restart, if the unit is enabled; else refused |
+| `Stop` [running: `Deactivating`] | **Restart**: Start waits for reap (= "stop then start → restart"); same disable/uninstall exception | Stop | Stop (merged, stronger `then`) | Restart (waits) |
+| `Restart` [any] | Restart (Start absorbed; trigger held) | Restart | **Stop** replaces (Start half canceled; if the stop half already runs it continues as the Stop) | Restart (`fresh` = OR, `image` = newest) |
+
+Job mode (systemd `--job-mode`):
+- `Replace` (default for internal, trigger, timer and crash requests): the table above.
+- `Fail` (for package RPCs: `packages.setEnabled`, `packages.reload`, install/upgrade/uninstall): if the installed job has `origin: PackageRpc`, the new RPC is rejected with today's `RpcError("busy", "the package is being installed or reloaded")`. This **keeps** `package_busy` behaviour on the wire (no wire change). Precedent: `systemctl --job-mode=fail`.
+
+### 4.3 Named cases (the questions the merge table must answer)
+
+| Case | Result | Prec. | Tag |
+| --- | --- | --- | --- |
+| start + start | one Start; higher priority kept; triggers accumulate in the backlog (A9 merge rule) | systemd `job_type_merge` start+start | MOVE `hold_event` |
+| start, then stop | Stop replaces; held triggers answered (§4.6) | systemd `replace` | NEW explicit answers (A9) |
+| stop, then start | Restart: start waits for the old process (reap + backend cleaned, ≤ 20 s) | systemd (start replaces stop; unit must reach inactive first) | REPLACE `packages.reloads` reuse in `set_enabled`; **fixes the D13 bug** |
+| restart + stop | Stop wins | systemd (`replace`) | NEW |
+| reload while activating | Restart{fresh}: `Terminate{Reload}` the activating process, wait for reap, drop checkpoint, re-verify built-in, start; held triggers carried to the new run (they belong to the unit) | systemd restart on activating unit; socket activation keeps queued connections across a service restart | REPLACE `reload` + `reload_tick`; carrying triggers is NEW (today they are lost with `lazy.waking`) |
+| upgrade while in standby | Restart{fresh, image: new}: `Revoke` + `DropCheckpoint` at once (no process), wait if the process stopped for standby is still `Deactivating`, then Start of the new image if enabled (first run, records anew) | ours | REPLACE `Operation.waiting` + `forget_parked(id, true)` |
+| wake while deactivating | Start waits for reap; if not gone in 20 s, the job fails with "its stopped process did not go within 20 s" and interactive triggers are answered | ours (one instance per data dir) | REPLACE `Parked.waiting` + `lazy.stopping` |
+| disable while waking | Stop{Disable, then: Inactive} replaces the Start; `Terminate{Disable}` the activating process; backlog answered "&lt;name&gt; is disabled"; session storage cleared (A12) | systemd stop on activating unit | MOVE `set_enabled` |
+| enable while disabling | Start waits for reap (no second instance on the same data) | systemd | REPLACE |
+| uninstall while anything | Stop{then: Removed} supersedes all but another package RPC (`Fail` → "busy") | systemd | MOVE `advance_package` |
+| trigger while `Failed` | `Dropped` (registrations are revoked; nothing to deliver to) | systemd (start of failed unit is allowed, but our trigger has no entry point left) | KEEP |
+| trigger while `Standby{hold_until}` | Start waits for `hold_until`; interactive answered (T20) | systemd `RestartSec` | NEW (B4) |
+| runner restart | one Stop (runner group) for all members, then Restart jobs per member; first immediate | Erlang `one_for_all` | REPLACE `restart_shared` loop |
+
+### 4.4 Running jobs: lanes, priority, concurrency
+
+A job is **runnable** when: the unit is not `Deactivating` (or the job is a Stop/Standby), its `not_before` (backoff, `hold_until`) has passed, and — for Start — a slot is free.
+
+| Rule | Value | Prec. | Tag |
+| --- | --- | --- | --- |
+| Lanes | **Builtin lane** (FIFO in `StartQueue::new` order) runs before the third-party lane; never counts toward the start-job limit (A7) | ours (only ordering kept, §16) | REPLACE `StartQueue` (B2d) |
+| Third-party priority | `Interactive` (commands.execute, source.resolveRequest, drops.drop, ui.callback, settings page shown — today's `TRIGGERS`, `lazy_page_shown`) > `Event` (`WAKE_EVENTS` broadcasts) > `Background` (first runs, Resident restarts); FIFO within a priority | Android (foreground > background start) | NEW |
+| Start-job concurrency | third-party running Start jobs ≤ `max_active` = `min(4, max(2, cores/2))` (B3; B1–B2: 8 for first runs only, wakes unlimited = today) | Chrome process-launch throttling | REPLACE `FIRST_RUNS`, immediate wakes (D4) |
+| Interactive reserve | +1 slot reserved for `Interactive`; if taken, may overrun by 1 more. Targets: cold click p95 ≤ 600 ms, built-in cold wake ≤ 1 s (A8) | ours | NEW |
+| Built-ins first | third-party `Background` Start jobs wait while any Builtin-lane job is installed or a built-in is `Activating{Verify}` (O(1) counter, as `builtin_first_run_pending` today) | ours | MOVE |
+| Event wakes | wait for a slot; never cause LRU standby; muted during start-up and `QUIET_AFTER_START_MS` 1 s after settle (`lazy_settled`, `Lazy::mute`) | ours | KEEP |
+| Shared members | a member Start counts toward `max_active` while `Activating` (runner work is the cost), not toward the process budget (§12.1) | ours | NEW |
+| Development | `--plugin` Start runs immediately (bypasses lanes and limit) | ours | MOVE |
+| Bounds | ≤ 1 installed job per unit (by construction); third-party lane ≤ 256 waiting Start jobs; backlog ≤ 64 triggers per unit (`backlog_max`) | systemd (one job per unit) | NEW (B3, A9) |
+
+Stop and `Standby` jobs are never concurrency-limited (stopping frees resources), but their `Terminate` actions share the per-tick action budget (§6.1).
+
+### 4.5 Deadlines per job
+
+| Job / phase | Deadline | On expiry | Prec. | Tag |
+| --- | --- | --- | --- | --- |
+| Start, waiting for the previous process | 20 s from the stop | job `failed`; today's text; unit stays where `then` put it | ours | MOVE (`RELOAD_WAIT_MS`, `STOP_WAIT_MS`, `advance_package` 20 s — one constant `STOP_WAIT` 20 s) |
+| Start, `Activating{Verify}` | 3 s | continue in own process | ours | MOVE (A6) |
+| Start, `Activating{Spawn\|Ready}` | `TimeoutStartSec` (15 s → 60 s; dev ≤ 120 s) | T11 | systemd `TimeoutStartSec=` | MOVE value / NEW B6 value |
+| Start, waiting for a slot | none: bounded by `max_active` × `TimeoutStartSec` and the 256-entry lane | — ("Starting &lt;name&gt;…" OSD after 400 ms; no cap for interactive triggers either, §12.1) | systemd `JobTimeoutSec=` (default infinity) | NEW |
+| Stop, `Deactivating{Term}` | `TimeoutStopSec` | `Kill` (T17) | systemd | KEEP / NEW value |
+| Stop, reap + backend cleanup | 20 s | T18 | ours | MOVE |
+| Standby, resources answer | today's `lazy.asking` wait (value MOVE) | treat as busy, re-arm idle | ours | MOVE |
+| Request (in-flight work, not a job) | 5 min from B6 | `ExitCause::RequestTimeout` → T25 | Chrome | NEW |
+| Shutdown | one deadline: 1 s quit / 300 ms device loss | `Kill` all | systemd shutdown | REPLACE (A2) |
+
+### 4.6 Backlog answers (A9, never silent)
+
+When a Start job is canceled, fails, or the backlog overflows, `Action::Answer` replies per trigger: `source.resolveRequest` → rejected reply; `commands.execute` → OSD "&lt;name&gt; is busy" / "&lt;name&gt; could not start" / "&lt;name&gt; is disabled" (i18n); `drops.drop`, `ui.callback` → dropped with a diag line; wake events → dropped silently (they are state broadcasts; a woken plugin reads the current state anyway — KEEP). Only wake events merge (same name → newest wins, MOVE `hold_event`).
+
+### 4.7 Existing paths as jobs
+
+| Today | Becomes | Tag | Batch |
+| --- | --- | --- | --- |
+| `packages.reloads` + `reload_tick` (`RELOAD_WAIT_MS`) | `Restart{fresh}` job waiting on `Deactivating` | REPLACE | B2b |
+| `lazy.stopping` + `Parked.waiting` + `lazy_tick` due loop (`STOP_WAIT_MS`) | unit `Deactivating{then: Standby}` + waiting `Start{Trigger}` | REPLACE | B2b |
+| `Operation.waiting` + `advance_package` 20 s check | `Restart{image}` / `Stop{then: Removed}` job; `advance_package` reads the job result instead of polling `cleanup_done` | REPLACE | B2b |
+| `set_enabled` enable-after-park → `packages.reloads.insert` | `Start{Enable}` waiting on `Deactivating` | REPLACE | B2b |
+| `package_busy` | "an installed job with `origin: PackageRpc`" + `JobMode::Fail` | REPLACE (same reply) | B2b |
+| `Host.cleanup`, `process_gone`, `cleanup_done` | `Unit.stopping` flags; T16 | REPLACE | B2b |
+| `StartQueue`, `to_start`, `start_queued` 25 ms | `Start{Boot}` jobs, Builtin/third-party lanes | REPLACE | B2d |
+| `FirstQueue`, `FIRST_RUNS` | `Start{FirstRun}` jobs, `Background` | REPLACE | B2d (limit B3) |
+| `lazy_deliver`/`lazy_event` → `wake` (immediate) | `wake` → `Start{Trigger(prio)}` | REPLACE | B2c logic / B3 limits |
+| `lazy_idle` → `lazy_answer` → `park` | `Standby` job | MOVE + REPLACE poll | B2c |
+| `activation_tick` → `disable(Failed)` | Start job deadline (T11) | REPLACE | B2a/B3 |
+| `restart_shared` | runner-group Stop + per-member `Restart` (T29) | REPLACE loop, KEEP policy | B4 |
+| `lazy_quit` + per-plugin `Drop` | `shutdown` | REPLACE | B2b reaper / B4 deadline |
+
+---
+
+## 5. API
+
+```text
+// units
+add_unit(spec) -> UnitId                    // Store::record / development load (systemd: load unit)
+remove_unit(u)                              // after RemoveData / dev unload
+set_enabled(u, bool)                        // unit-file state; does not enqueue by itself
+
+// requests (each = enqueue_job with a fixed kind/mode)
+start(u, cause) -> Result<JobId, Busy>
+stop(u, reason, then) -> Result<JobId, Busy>
+restart(u, fresh, image) -> Result<JobId, Busy>
+standby(u) -> JobId
+wake(pid, trigger) -> Delivery              // start triggered by an event; the trigger is queued
+                                            // in the backlog like a connection on a listening socket
+kill(u)                                     // escalate the stopping process now (not a job)
+reset_failed(u)
+enqueue_job(u, kind, mode, priority, origin) -> Result<JobId, Busy>
+job(u) -> Option<&Job>                      // the installed job and its result
+
+// decision step (pure)
+run_jobs(now) -> Vec<Action>                // O(due + started), §6.1
+next_deadline() -> Option<Ms>
+shutdown(now, budget) -> Vec<Action>        // quit / device loss
+
+// event inputs
+process_spawned(pid, Result) / verify_done(u, ok)
+process_ready(pid) / process_failed(pid, text)        // runtime.ready / runtime.failed (activation.rs, MOVE)
+ui_begin(pid) / ui_finish(pid)                         // MOVE
+process_exited(pid, ExitCause)
+process_reaped(pid, status) / backend_cleaned(pid)
+resources_answered(pid, busy: bool)                    // = lazy_answer (MOVE)
+classified(pid, resident: Option<why>)                 // = lazy_classified (MOVE)
+touch(pid, now) / begin_work(pid, kind, now) / end_work(pid, kind)
+runner_failed(runner, cause)
+memory_pressure(level)
+
+// queries
+unit(u) / by_pid(pid) / by_id(id) / list_state(id) -> ListState
+```
+
+`Delivery` (result of `wake`): `Now` (unit `Active` with that pid → `Plugin::send`), `Held` (Start job installed; trigger in backlog), `Started` (a new Start job was enqueued; trigger in backlog; 400 ms OSD), `Forward(new_pid)` (old pid of a unit that moved on; REPLACE `lazy.moved`), `Dropped` (disabled/failed/removed unit, or muted wake event), `Refused` (bounds; answered per §4.6).
+
+Actions: `Spawn`, `Verify`, `Replay`, `Rekey`, `Prune`, `Deliver`, `Answer`, `QueryResources`, `Checkpoint`, `DropCheckpoint`, `Terminate{grace, keep_registrations, reason}`, `Kill`, `KillRunner`, `Revoke`, `RemoveData`, `Notify`, `ListChanged`. Payload `P` generic (`serde_json::Value` in production; `u32` in simulations).
+
+Deviations from systemd (intentional): `standby` merges socket + service (§3.1); the pid changes on every start while `UnitId` is stable (systemd's `MainPID` does too, but our registrations must be rekeyed); the process budget is soft (`MemoryHigh=`-like), not `TasksMax=`; the heap cap is a V8 flag, not a cgroup limit; idle standby and pressure standby come from Chrome/Android, not systemd.
+
+**Identity (A10, KEEP):** wire and registries keep the generation (`Pid`); `capabilities::rekey(from, to)` moves registrations on start from `Standby`. No `UnitId`-keyed registries: rekey is O(owner's commands) since #141, and the generation keeps the "stale reply from an old pid is ignored" property.
+
+---
+
+## 6. Ticks, timers and the UI thread
+
+### 6.1 Per-tick budget (A1, NEW)
+
+- `run_jobs(now)` pops only due timers and runnable job heads that fit free slots: O(due + started), never a scan over all units. (Today `lazy_tick` iterates `lazy.active` every `CHECK_MS` 250 ms, `activation_tick` every Book entry, `reload_tick` every reload: REPLACE.)
+- Action execution on the UI thread: **≤ 4 ms per tick while media is playing** (UI frame-rate rule), 25 ms while the player starts and nothing plays (`START_BUDGET`, KEEP for start-up). Leftovers stay queued (`next_deadline()` = now).
+- Off-thread (`host/supervisor/worker.rs`): `Spawn`, `Verify`, `Checkpoint` write. The worker returns `process_spawned(pid, Result)` / checkpointed; the unit stays `Activating{Spawn}` meanwhile. `Replay`/`Rekey`/`Revoke` stay on the UI thread (registries; cheap after #141).
+- Both, in that order: the budget lands in B3, the worker in B3 if P4 measurement (A19) shows one spawn > 4 ms on the reference machine.
+
+### 6.2 Timer kinds
+
+| Timer | Today | Target (B6) | Prec. | Tag |
+| --- | --- | --- | --- | --- |
+| Idle | `IDLE_MS` 60 s, polled every `CHECK_MS` 250 ms | 30 s; one heap entry per `Active` unit, re-armed lazily by `touch` | Chrome MV3 | REPLACE poll |
+| `TimeoutStartSec` | 15 s (Book); dev 1–120 s | 60 s installed; dev unchanged (A16) | systemd / Chrome | KEEP mechanism / NEW value |
+| Request | none | 5 min per in-flight work item | Chrome MV3 | NEW |
+| Classify | `CLASSIFY_WAIT_MS` 5 s | same | ours | MOVE |
+| `TimeoutStopSec` | 300 ms / `PARK_WAIT` 2 s / member 300 ms + 6 s | §7.2 | systemd | REPLACE |
+| Stop wait (reap + cleanup) | 20 s ×3 copies | one `STOP_WAIT` 20 s | ours | MOVE |
+| `RestartSec` / hold | — | §3.3 | systemd | NEW |
+| Verify | `VERIFY_WAIT` 3 s | same | ours | MOVE (A6) |
+| Start-limit window | runner 60 s | + 10 min per unit | systemd / Erlang | NEW |
+| Runner idle exit | 1 s (`SharedRunner::idle`) | ≥ idle timeout once built-in members can go to standby (A17) | ours | NEW (B6) |
+
+The GUI loop sleeps until `min(frame, supervisor.next_deadline())` (KEEP: revision-driven menu rebuild removed the per-tick snapshot).
+
+---
+
+## 7. Stop, exit, reap
+
+### 7.1 Multiplexed reaper (A3, REPLACE in B2b)
+
+Today `lifecycle.rs::stop` spawns one thread per stop that drops the `Plugin` (`Drop for Plugin` polls `try_wait`; a member's `Member::stop` waits up to 300 ms + 6 s `MEMBER_GONE`), then sends `Event::Reaped(owner)`. Serial at quit.
+Target: one `plugin-reaper` thread owns all stopping children and member waiters; polls them together (`try_wait` every 20 ms — safe-only), escalates each to `Kill` at its own `TimeoutStopSec`, sends `Event::Reaped(pid, ExitStatus)`. The UI thread hands the `Plugin` over a channel. The runner's `shared-runner-reap` thread folds in. (systemd: the manager watches all children via one `SIGCHLD` source.)
+
+### 7.2 Stop grace (A2) — `TimeoutStopSec`
+
+| Stop | Today | Target | Prec. | Tag |
+| --- | --- | --- | --- | --- |
+| Quit | 300 ms per plugin, threads in parallel; runner `Drop` `STOP_WAIT` 300 ms | `shutdown(now, 1 s)`: checkpoints first (from the recorded state, no round-trip), parallel `Terminate{Quit}`, **one** deadline ≤ 1 s, then `Kill` | systemd shutdown | REPLACE |
+| Device loss (`host/restart.rs::restart_player`) | as quit, within `EXIT_AFTER_LOOP` 5 s | `shutdown(now, 300 ms)` | ours | REPLACE |
+| Disable / reload / uninstall / upgrade | 300 ms | 5 s (A15d) | systemd `TimeoutStopSec=`; runner's own 5 s member cleanup | NEW value |
+| Standby | `PARK_WAIT` 2 s (today's name) | 5 s (A15d) | same | NEW value |
+| After a failure | 300 ms then kill | unchanged | — | KEEP |
+
+### 7.3 Exit causes (`Result=`), restart and backoff (B4)
+
+`process_exited(pid, cause)` decides the next state per §3.3. Every cause maps onto the existing 7 `StopReason`s (`process/mod.rs`: Quit, Disable, Uninstall, Reload, Upgrade, Idle, Failed) — no new wire value (A14).
+
+| Cause | systemd `Result=` | Detection | Wire `StopReason` | Next | Tag |
+| --- | --- | --- | --- | --- | --- |
+| `Exited` (unexpected) | `exit-code` | `Event::Exited` | Failed | per `Restart=` (T25) | NEW / KEEP for Development |
+| `Fault` | `signal`/`core-dump` | `RuntimeFault`, malformed line, uncaught exception | Failed | as `Exited` | same |
+| `Oom` | `oom-kill` | exit status (exact V8 heap-abort codes per OS verified in B4) **and** stderr tail matching V8's "heap out of memory" | Failed | as `Exited` (`OOMPolicy`); notify "ran out of memory" | NEW (exact codes measured in B4: Windows exit code, stderr tail) |
+| `StartTimeout` | `timeout` | `TimeoutStartSec` | Failed | start retry, then T27/T8 | REPLACE `activation_tick` |
+| `RequestTimeout` | `watchdog` (closest) | request timer | Failed | `Terminate`, then as `Exited` | NEW |
+| `Transport` | — | `transport_failed` | Failed | own process: `Failed` (today `disable(Failed)`); member: runner group restart (A5) | KEEP |
+| `Refused` | `exit-code` with `RestartPreventExitStatus` | `runtime.failed` | Failed | `Failed`, no retry | KEEP |
+
+`Failed` keeps today's `failures` map and `packages.list` error text (KEEP). Session storage (A12, KEEP): cleared only on user disable and uninstall — never on Failed, Oom, LRU/pressure standby, or quit.
+
+### 7.4 Shared runner restart (A4, A5)
+
+The shared runner itself (trust, topology, heartbeat, fail-open) is described in the [shared runner round](../process/rounds/2026-10-shared-runner.md); this section only says how its restarts become supervisor jobs.
+
+| Element | Rule | Prec. | Tag |
+| --- | --- | --- | --- |
+| Trigger | heartbeat hang (`Beat::Hung`), unattributed fault (`runner_event` g = 0), runner exit, full member queue (`transport_failed` on a member, #77) | systemd `WatchdogSec=`; Erlang | KEEP (A5) |
+| Attributed fault | that member alone stops; `Policy.quarantined.insert(id)` | Erlang `one_for_one` | KEEP |
+| Kill | `KillRunner`: `retire(false)`; members → `Deactivating{sub: Cleanup}` with `reaped` set (no member cleanup runs, as today) | systemd `KillMode=control-group`; Erlang `one_for_all` | REPLACE `restart_shared` loop of `disable(owner, Failed)` |
+| First restart | **immediate** (members back in 1.2–1.4 s today); `RestartSec` backoff only from the second restart in the window | systemd `RestartSec=0` first | KEEP timing / NEW after |
+| Fail-open | `Policy::restart` 3 per 60 s → own processes for all members for the run; not reset by backoff stability | Erlang restart intensity (escalation) | KEEP (A4) |
+| Re-placement | placement rewritten from `Policy.quarantined` / fail-open before the Restart jobs run; members with a checkpoint go to `Standby` via `Replay` (no spawn); the rest get Builtin-lane Start jobs | ours | REPLACE `to_start.push_back` |
+| OSD | "Built-in plugins restarted after a fault" / "…run separately for this session…" | — | KEEP |
+| Idle exit | 1 s today; ≥ idle timeout when built-in members may go to standby (A17) | ours | NEW (B6) |
+
+---
+
+## 8. Limits and memory pressure (B5)
+
+| Element | Rule | Prec. | Tag |
+| --- | --- | --- | --- |
+| Own-process heap (`MemoryMax=`) | `--max-old-space-size=512` in `process/mod.rs::own_process`; runner keeps 1024 | systemd `MemoryMax=`; Chrome V8 cap | NEW (A15a) |
+| Third-party process budget (`TasksMax=`-like, soft) | `clamp(physMiB / 2 × 0.30 / 85, 3, 16)` processes | Chrome renderer process limit; systemd `MemoryHigh=` (soft) | NEW |
+| Built-ins | outside the budget (A7) | ours | NEW |
+| Over budget | Standby jobs for idle Normal units in LRU order; Resident and busy never; may overrun if none qualifies | Android LRU | NEW |
+| Standby path | LRU and pressure standby enqueue the **same** `Standby` job as idle standby: `QueryResources` → busy check (`work.rs` + live-resource answer) → `Checkpoint` → `Terminate{Idle, keep}` (A13) | ours | REPLACE (one path) |
+| Pressure source | Windows: `GlobalMemoryStatusEx` + `CreateMemoryResourceNotification` in `src/host/unsafe/win32` (separate review); Linux `/proc/pressure/memory` (PSI, as systemd-oomd uses); macOS fallback 8 GiB | systemd-oomd (PSI) | NEW |
+| Low / critical | low: Standby jobs for all idle Normal units; critical: also no Interactive overrun; no extra anti-thrash floor (the budget formula adapts per machine; recently used units go later by importance, §12.1) | Android LMK levels | NEW |
+| Importance (`OOMScoreAdjust=`) | Builtin −1000, Resident −500, Normal 0, recently used −100 | systemd / Android | NEW |
+
+---
+
+## 9. Compatibility (wire, `packages.list`, `packages.changed`)
+
+- **`list_state` (A11, KEEP output):** `package_list` keeps its shape. `Standby` (and `Deactivating{then: Standby}`) stays `state: "running"` + `process: "idle"`; the comparison that drives `packages.changed` excludes `process`, so standby/start cycles never emit it. New states map: `Inactive`+Start job / `Activating{Verify|Spawn|Ready}` / `Deactivating` with a waiting Restart → `starting`; `Active` → `running`; `Activating{AutoRestart}` and `Standby{hold_until}` → `running` + `process: "idle"`; `Failed` → `failed` + today's error text; `Inactive` disabled → `disabled`. Warnings kept (`Host.warnings` → `Unit`).
+- **RPC replies:** `"busy"`, `"unsupported"` (built-in disable), `"invalid"` (self-disable, reload of a disabled plugin), `"missing"` — unchanged (§4.2 `JobMode::Fail`).
+- **Stop reasons (A14, KEEP):** the 7 values; mapping §7.3.
+- **Generation identity (A10, KEEP).**
+- **SDK:** no change before B6; B6 docs only.
+
+---
+
+## 10. Path mapping
+
+| Path | Today | Supervisor | Tag | Batch |
+| --- | --- | --- | --- | --- |
+| Start-up | `package_tick` → `StartQueue::new(installed_ids)`; `start_queued` 25 ms; `start_installed` → `lazy_replay` or `start_package`; no checkpoint → `queue_first_run` | `add_unit` per id; checkpoint → T1 `Standby`; else T2 `Start{Boot\|FirstRun}` in its lane | REPLACE queues, MOVE bodies | B2d |
+| Built-in verify | `verify` thread; verifying built-in stays in `StartQueue` | `Activating{Verify}`, counted, ≤ 3 s then own process | MOVE (A6) | B2d |
+| First run / classify | `lazy_first_runs_tick`, `lazy_classify`, `lazy_classified` | `Start{FirstRun}` (`Background`); `classified()` → T12/T13 | MOVE | B2c |
+| Triggers | `lazy_deliver`, `lazy_event` → `wake` (immediate) | `wake` → `Start{Trigger}` | REPLACE (bounded) | B2c / B3 |
+| Idle standby | `lazy_tick` → `lazy_idle` → `lazy_answer` → `park` | idle timer → `Standby` job | MOVE + REPLACE poll | B2c |
+| Enable | `start_stopped` (or `reloads` after park) | `set_enabled(true)` + `Start{Enable}` (waits for reap) | MOVE / REPLACE | B2b/B2d |
+| Disable | `set_enabled` → `disable(Disable)`; in standby: `forget_parked(id, false)` | `Stop{Disable, then: Inactive}`; in standby: T21 | MOVE | B2d |
+| Reload | `reload` + `reload_tick` 20 s | `Restart{fresh}` | REPLACE | B2b/B2d |
+| Uninstall | `uninstall` → `advance_package` → data removal after reap | `Stop{Uninstall, then: Removed}` → `RemoveData` → `remove_unit` | MOVE | B2d |
+| Install / upgrade / cancel | `advance_package` (`op.waiting`), `commit_operation` | `Restart{image}` / `Start` of the new unit; operation phases unchanged | MOVE / REPLACE wait | B2b/B2d |
+| Crash / exit / fault | `handle.rs` `Exited`/`RuntimeFault` → `disable(Failed)` | `process_exited(pid, cause)` → T25 | REPLACE | B4 |
+| Start failure incl. full Book | `wake_failed` → `forget_entries` | T8 (keep registrations, retry, backoff) | REPLACE | B3/B4 |
+| Runner restart | `restart_shared` | §7.4 | REPLACE loop, KEEP policy | B4 |
+| `--plugin` dev | `lifecycle.rs::load` (1–120 s), `lazy_development` | Development class, immediate Start, outside budget; `open_files_tick`/"settled" don't wait for background first runs (A16) | MOVE | B2d |
+| Quit | `lazy_quit` + per-plugin `Drop` | `shutdown(now, 1 s)` | REPLACE | B2b / B4 |
+| Device loss | `restart.rs` teardown | `shutdown(now, 300 ms)` | REPLACE | B4 |
+| `packages.list` | `package_list` over `plugins`, `lazy`, `to_start`, `first_queue`, `failures` | `list_state` (§9) | REPLACE source, KEEP output | B2d |
+
+---
+
+## 11. Tunables
+
+| Tunable (systemd name where one exists) | Today | B1–B5 (reproduce today) | B6 target | Prec. |
+| --- | --- | --- | --- | --- |
+| Idle timeout | 60 s | 60 s | 30 s | Chrome MV3 SW idle 30 s |
+| `TimeoutStartSec` | 15 s / dev ≤ 120 s | same | 60 s / dev 120 s | Chrome SW start; systemd |
+| Request timeout | — | off | 5 min | Chrome MV3 event 5 min |
+| `TimeoutStopSec` (disable/reload/uninstall/upgrade/standby) | 300 ms / 2 s | same | 5 s | systemd; runner member cleanup 5 s |
+| Shutdown stop (quit / device loss) | 300 ms each, parallel | ≤ 1 s total / 300 ms (B4) | same | A2 |
+| Stop wait (reap + cleanup) | 20 s (3 copies) | 20 s (one) | 20 s | ours |
+| `max_active` (start-job concurrency) | first runs 8, wakes ∞ | 8 first runs only (B1–B2), then `min(4, max(2, cores/2))` + 1 Interactive reserve (B3) | same | Chrome process-launch throttling |
+| `backlog_max` | ∞ | ∞ (B1), 64 (B3) | 64 | systemd socket `Backlog=` |
+| Third-party process budget | ∞ | ∞ (until B5) | formula §8 | Chrome renderer limit |
+| Start retry | none | none (B1), 3 × 250 ms ×2 +10 % (B4) | same | systemd `Restart=on-failure` |
+| `RestartSec` built-in | immediate, fail-open 3/60 s | + 3 s ×2ⁿ after the first, reset 60 s (B4) | same | systemd `RestartSteps=`; Erlang |
+| `RestartSec` / hold Normal & Resident | — | 1 s ×2ⁿ cap 60 s (B4) | same | systemd `RestartMaxDelaySec=` |
+| `StartLimitBurst`/`IntervalSec` | runner 3/60 s fail-open | + Normal/Resident and own-process built-ins 5/10 min (B4) | same | systemd; Erlang; Chrome crash-reload |
+| `MemoryMax` own process | ∞ | ∞, 512 MB (B4) | 512 MB | Chrome V8 cap |
+| Runner idle exit | 1 s | 1 s | ≥ 30 s | A17 |
+| Per-tick action budget | 25 ms start-up only | 25 ms start-up, 4 ms playing (B3) | same | UI frame-rate rule |
+
+---
+
+## 12. Open questions
+
+### 12.1 Answered (amendments and decisions)
+
+| Question | Answer | Basis / where |
+| --- | --- | --- |
+| Scheduling or supervision? | Supervision / service management; systemd model; no kernel vocabulary | owner 2026-11-02; header |
+| Quit grace vs 5 s device-loss teardown | Quit ≤ 1 s total, parallel; device loss 300 ms; 5 s only for disable/reload/uninstall/upgrade/standby | Forced by the 5 s device-loss teardown budget (`EXIT_AFTER_LOOP`); owner 2026-11-02; A2, §7.2 |
+| Key registries by `UnitId` | Dropped; generation stays identity | A10, §5 |
+| Built-ins vs third-party slots | Builtin lane outside `max_active` and budget; third-party first runs wait | A7, §4.4 |
+| Interactive latency under load | Reserved slot / overrun by one | A8, §4.4 |
+| Merging held triggers | Only wake events; others one by one; explicit answers | A9, §4.6 |
+| `packages.changed` churn | `list_state` compatible, `process` excluded | A11, §9 |
+| Session storage on failure | Cleared only on user disable/uninstall | A12, §7.3 |
+| LRU standby of busy plugins | Same `Standby` job as idle standby incl. busy check | A13, §8 |
+| New exit reasons on the wire | Map to the 7 | A14, §7.3 |
+| Dev load timeout | 120 s kept | A16, §3.3 |
+| Runner churn when members go to standby | Runner idle exit ≥ idle timeout | A17, §7.4 |
+| How concurrent requests on one plugin combine | One installed job per unit + merge table | §4.2–4.3 |
+| Package RPC while another is in flight | `JobMode::Fail` → today's `"busy"` | §4.2, §9 |
+| UI cost of frequent standby/start | Solved by #141 | §1 |
+| Unsafe policy | Only `src/host/unsafe/win32`, separate review | §8 |
+| User-facing name of the no-process state | `standby`, internal only (`UnitState::Standby`, job `Standby`, `standby()`). Nothing user-visible changes: the wire keeps stop reason `idle` and `packages.list` `process: idle`. Not `dormant` (package_store retired instances), not `idle` (wire value, other meaning) | owner 2026-11-02; §3.1 "Naming" |
+| Resident semantics | Observed by the host (`capabilities::record` Live + backend `owner.resources`), never declared by a plugin, so it cannot be faked; counted in the budget, never reclaimed | Existing behaviour; owner 2026-11-02; §3.3 |
+| Built-in members in standby when idle? | Yes, own process and shared members, as today with on-demand start on (mirror subscriptions made 15/17 built-ins non-resident); keep | Existing behaviour under `VESTRA_LAZY=1`; owner 2026-11-02; §3.3 |
+| Shared members and `max_active` | Count toward the start-job limit while `Activating`; not toward the process budget | owner 2026-11-02; §4.4 |
+| Retry on `runtime.failed` | None: the plugin said it cannot start | systemd `RestartPreventExitStatus=`; T10 |
+| OOM detection | Engineering task in B4: measure the Windows exit code and stderr tail of a V8 heap abort; not an owner decision | owner 2026-11-02; §7.3, B4 |
+| Wake-failure / hold UX | Reuse today's command state (disabled with the reason) and the OSD with the reason on click | Existing command state; owner 2026-11-02; T20 |
+| Low-RAM anti-thrash floor | No extra floor: the Chrome-style budget formula already adapts per machine, and "recently used go to standby later" is already in the importance order | Chrome renderer process limit; Android LRU; §8 |
+| Diagnostic / rollback switch after B6 | None, hidden or otherwise | Owner rulings: one scheduler, no modes; no rollback |
+| Behaviour changes from A15 | Approved under the "follow Chrome / standard practice" ruling: a. own-process heap 512 MB (ours: no Chrome number; ~58 MB measured per plugin, with margin; revisit if a legitimate plugin hits it); b. Resident `Restart=on-failure` (systemd `Restart=on-failure`); c. third-party crash keeps entry points and re-starts on the next trigger with backoff (Chrome MV3); d. `TimeoutStopSec` 5 s (Chrome). User-visible: listed in §15 | owner 2026-11-02; A15, §3.3, §7.2, §8 |
+| B6 values | Idle 30 s, `TimeoutStartSec` 60 s | Chrome MV3; owner 2026-11-02; §11 |
+| Start limit for own-process built-ins | systemd model: 5 starts in 10 min → `Failed{start-limit-hit}`, error text in Settings > Plugins, reload clears it | systemd `StartLimitBurst=`/`StartLimitIntervalSec=`; §3.3 |
+| Interactive trigger waiting for a slot: cap? | None; bounded by `max_active`, `TimeoutStartSec` and the lane size; the 400 ms "Starting &lt;name&gt;…" OSD is the feedback | systemd `JobTimeoutSec=` (default infinity); §4.5 |
+| Reload/upgrade while activating: held triggers | Carried to the new run | systemd socket activation keeps queued connections across a service restart; §4.3 |
+| Enable right after disable (D13) | A bug; fixed without approval. B0 test, fixed when the job queue lands (B2b) | owner 2026-11-02; §0, §13 B0/B2b |
+
+### 12.2 Product-owner decisions still needed
+
+None. Every question was answered on 2026-11-02 (§12.1).
+
+### 12.3 Engineering risks
+
+- B2c breadth (lazy.rs ~1200 lines) — MOVE-only rule, B0 tests.
+- `stop()` cleanup order — kept verbatim as `Action::Terminate`.
+- Off-thread spawn ordering vs `Event::Exited` of the same pid — `process_spawned` must precede any event for that pid (reader thread starts after the worker reports).
+- Merge table completeness — every cell is a core unit test; the B0 scenarios (reload 20 s gate, standby-then-wake, upgrade of a plugin in standby) are re-run against job sequences.
+
+---
+
+## 13. Migration batches
+
+Rule for every batch: B0 characterization tests pass unchanged (except where a row says a behaviour changes on purpose), plus the `VESTRA_TEST_REGISTRY` diff of registrations before/after. Sub-agents never commit; reviewer before merge.
+
+| Batch | Content | Tags |
+| --- | --- | --- |
+| **P** (done, #141) | perf-registry, perf-start | KEEP |
+| **B0** | Characterization tests, no behaviour change: start-up order (built-ins first, verifying built-in counted), standby/start/replay round-trip, reload 20 s gate, runner restart and fail-open, quit timing, `packages.list` shapes, `"busy"` replies. **A18:** (1) Book leak when spawn fails after `activations.begin` (expected-failure marker, flipped in B2a); (2) `Host.cleanup` only grows (flipped in B2b). **New:** (3) disable → enable of a running plugin must not start a second process before the first is reaped (D13, a bug: expected-failure marker, flipped in B2b) | NEW tests |
+| **B1** | Pure core `src/host/src/supervisor/` (units, states, job queue with merge table, policies) with today's tunables reproducing today in simulation (idle 60 s, start 15 s, stop 300 ms / standby 2 s, `max_active` 8 for first runs only, unlimited wakes and budget, no backoff, `Restart=no` + revoke for every class). Not wired. | NEW |
+| **B2a** | Unit table owns identity: `by_id`/`by_pid` replace `Host.plugin_ids`, `Lazy.parked_ids` at their choke points; `debug_assert` cross-checks kept one release; `alloc_pid` replaces `next_generation += 1`; activations MOVE into `Unit` (fixes A18 leak 1) | REPLACE, MOVE |
+| **B2b** | Jobs and `Deactivating` take over every wait: `reap.rs` + `job.rs` replace `cleanup`, `lazy.stopping`, `packages.reloads`, `Parked.waiting`, `Operation.waiting`, `data_removals`, `package_busy` (same 20 s, same texts, same `"busy"`); multiplexed reaper (A3) incl. `shared-runner-reap` (fixes A18 leak 2 and the D13 bug) | REPLACE |
+| **B2c** | lazy.rs decisions into the core (Standby job, `wake`, classify); `host/supervisor/{checkpoint,probe,actions}.rs` MOVE; `lazy.rs` deleted; still gated by `VESTRA_LAZY` | MOVE |
+| **B2d** | Job-queue lanes replace `StartQueue`/`FirstQueue` (their unit tests ported); package_manager start decisions → jobs; `package_list` → `list_state` | REPLACE, MOVE |
+| **B3** | Queue limits live: `max_active` + Interactive reserve, priorities, `backlog_max` + explicit answers (A9), `TimeoutStartSec` as job deadline, `work.rs` request deadline (off until B6), 4 ms per-tick budget + O(due) timers (A1), worker if P4 says so; remove `LIMIT 64`; start failure keeps registrations (T8) | NEW, REPLACE |
+| **B4** | `exit.rs` causes (`Reaped` with status), `restart.rs` (`Restart=`, `RestartSec`, start limits), own heap 512 MB, OOM as crash (detection measured here: Windows exit code, stderr tail), Normal crash → `Standby{hold_until}`, own-process built-in start limit 5 / 10 min, runner restart: first immediate then backoff, fail-open unchanged, re-placement (A4); `shutdown` ≤ 1 s, device loss 300 ms (A2) | NEW, REPLACE |
+| **B5** | `limits.rs`/`pressure.rs`: process budget + pressure; Windows calls in `src/host/unsafe/win32` (separate review); Linux PSI; macOS fallback | NEW |
+| **B6** | Flip defaults: on-demand start for everyone, idle 30 s, `TimeoutStartSec` 60 s, `TimeoutStopSec` 5 s, request 5 min, runner idle exit ≥ 30 s; remove `VESTRA_LAZY`; docs. **Prerequisites (A19):** P4 measurement (cold click p95 ≤ 600 ms, built-in cold wake ≤ 1 s, memory saved) and a GUI test run with on-demand start on (isolated profile) | NEW |
+| **B7** | Clean-up only: remove migration `debug_assert` cross-checks and transitional aliases; docs (`docs/` plugin lifecycle page in systemd terms). Names are systemd-style from B1, so no separate renames batch is needed. Keying registries by unit id stays dropped (A10) | — |
+
+---
+
+## 14. Amendment trace
+
+| # | Amendment | Section |
+| --- | --- | --- |
+| A1 | ≤ 4 ms per tick while playing or off-thread spawn/checkpoint; O(due) timers | §6.1, §6.2, B3 |
+| A2 | Quit ≤ 1 s parallel; device loss 300 ms; 5 s only for disable/reload/uninstall/standby | §3.3, §4.5, §7.2, B4 |
+| A3 | Multiplexed reaper | §7.1, B2b |
+| A4 | Runner: first restart immediate, fail-open counter kept, re-placement before restart, members in standby via replay | §3.3, §7.4, B4 |
+| A5 | `transport_failed` semantics kept | §7.3, §7.4 |
+| A6 | `VERIFY_WAIT` 3 s cap, then own process | §3.2 T4/T5, §4.5, §10 |
+| A7 | Built-ins outside start-job limit / budget; third-party first runs wait for built-ins | §3.3, §4.4, §8 |
+| A8 | Interactive reserved slot | §4.4 |
+| A9 | Merge only wake events; explicit answers | §4.3, §4.6 |
+| A10 | Generation identity kept; no `UnitId`-keyed registries | §3, §5, §9, B7 |
+| A11 | `list_state` compatible | §9 |
+| A12 | Session storage cleared only on user disable/uninstall | §2.3, §4.3, §7.3 |
+| A13 | LRU/pressure standby via the same `Standby` job + busy check | §3.2 T30, §8 |
+| A14 | Exit causes → existing 7 stop reasons | §7.3, §9 |
+| A15 | Behaviour changes (approved 2026-11-02, follow standard practice) | §3.3, §7.2, §7.3, §8, §12.1, §15 |
+| A16 | Dev 120 s; open files / settled don't wait for background first runs | §3.3, §10 |
+| A17 | Runner idle exit delay | §6.2, §7.4 |
+| A18 | B0 tests: Book leak, cleanup growth | §0 D3, §13 B0/B2a/B2b |
+| A19 | B6 prerequisites: P4 + GUI test | §13 B6 |
+
+---
+
+## 15. What changes for users, per batch
+
+User-visible behaviour changes, approved 2026-11-02 under the "follow Chrome / standard practice" ruling (§12.1, A15): automatic restart of Resident plugins (B4), a crashed third-party plugin keeping its entry points and starting again on next use with backoff (B4), the 512 MB own-process heap cap (B4), the start limit for built-ins with their own process (B4), and the B6 values (idle 30 s, start timeout 60 s, stop grace 5 s). "Standby" is this document's word only: Settings > Plugins keeps showing `idle`.
+
+**P (#141, merged).** Faster start-up with many plugins (2000-plugin replay 5.9 s → 0.4 s); built-ins (playback, video, subtitles) start before third-party plugins; no frame hitches from menu rebuilding while menus are closed.
+
+**B0.** Nothing (tests only).
+
+**B1.** Nothing (core not wired).
+
+**B2a–B2d.** Nothing intended: same start order, same standby/start behaviour under `VESTRA_LAZY=1`, same `packages.list`, same "busy" answers in Settings > Plugins. Silent fixes: a plugin whose process fails to spawn no longer leaks an activation slot (after ~64 such failures, further plugins could not start); stop bookkeeping no longer grows over a long session; switching a plugin off and straight back on can no longer run two copies of it on the same data for a moment (a bug fix). Quit may be slightly faster (one reaper instead of one thread per plugin).
+
+**B3** (only with `VESTRA_LAZY=1` until B6). Many plugins starting at once no longer freeze the player: they start a few at a time, clicks first. A plugin that fails to start keeps its menu entries (shown disabled with the reason, as commands are today; a click shows the reason in an OSD) instead of losing them until restart. The 64-plugin ceiling is gone. A command whose plugin cannot take more requests shows "&lt;name&gt; is busy" instead of doing nothing silently. Reloading a plugin that is still starting keeps the click that started it.
+
+**B4.** Visible: a third-party plugin that crashes shows a notice, keeps its menu entries and starts again on next use after a short pause; one that crashes 5 times in 10 minutes is turned off as "failed" in Settings > Plugins, as today. Built-ins and Resident plugins restart by themselves; the first runner restart is as fast as today. A built-in with its own process that crashes 5 times in 10 minutes shows as failed in Settings > Plugins (reload clears it). A plugin with its own process is capped at 512 MB of JavaScript heap, and a crash from that says "ran out of memory". Quitting spends at most ~1 s on plugin shutdown; a GPU device-loss restart at most 300 ms.
+
+**B5.** On machines low on memory, idle third-party plugins go to standby sooner, and there's a cap on how many third-party plugin processes run at once (3–16 depending on RAM). A busy plugin (playing, resolving, showing a panel) is never put in standby for this. Built-ins are not affected.
+
+**B6.** The big switch, for everyone: plugins start when first needed and go to standby after 30 s idle. Expect an occasional "Starting &lt;name&gt;…" for slower plugins on first use after idle (target ≤ 600 ms for most clicks). Disabling, reloading, uninstalling or upgrading gives plugins up to 5 s to clean up. A plugin that hangs while starting is reported after 60 s instead of 15 s. Lower memory use with many plugins installed.
+
+**B7.** Nothing (clean-up and docs).
+
+---
+
+## 16. systemd concepts we do NOT take
+
+| Concept | Why not | What we use instead |
+| --- | --- | --- |
+| Dependencies and ordering between units (`Requires=`, `Wants=`, `After=`, `Before=`, `BindsTo=`, `PartOf=`, `Conflicts=`) and the transaction builder that pulls them in | Plugins do not depend on each other's processes; inter-plugin calls go through host registries that already handle an absent provider (and wake it). Transactions would add a solver for no case we have | One fixed ordering only: **built-ins first** (Builtin lane, §4.4) — like a single `After=` on an implicit "built-ins" group |
+| Targets (`multi-user.target`, `isolate`) and job mode `isolate` | No run levels; the player has one mode | Start-up = `add_unit` for every installed id |
+| Unit files, drop-ins, per-unit settings, `daemon-reload` | Manifests must not tune supervision (a plugin could exempt itself from limits) | Fixed per-class `Policy` (§3.3); the package store record is the "unit file" for enablement only |
+| `.socket`/`.path`/`.timer`/`.mount`/`.device` unit types | Our triggers are host RPCs and events, not file descriptors or paths | `Standby` + `wake` (§3.1) |
+| `ExecReload=` (in-process reload) | A plugin cannot re-read its package in place | `packages.reload` = `Restart{fresh}` |
+| Templates / instances (`foo@.service`) | One instance per plugin id per data directory, by rule | — |
+| D-Bus API, `systemctl`, journald | Internal module; the wire stays the plugin protocol | `packages.*` RPCs (unchanged), `diag!` |
+| cgroup hierarchy, slices, `CPUQuota=`/`IOWeight=`, `Delegate=` | No cgroups on Windows/macOS; CPU and I/O scheduling stay the OS kernel's job | Per-process V8 heap flag + soft process count (§8) |
+| `Type=forking`/`oneshot`/`dbus`, `RemainAfterExit=` | One process type: a plugin runtime that reports `runtime.ready` | `Type=notify`-like readiness only |
+| Sandboxing (`ProtectSystem=`, `PrivateTmp=`, …) | Out of scope; permissions are the plugin capability system | `capabilities/*` (KEEP) |
+| Kernel OOM killer / systemd-oomd killing | Killing a plugin mid-work loses user state | Preventive standby of idle units only; busy never (A13) |
+| `SIGSTOP`/`SIGCONT` freezing (systemd `freeze`) | A frozen plugin still holds its memory; a plugin in standby holds none | `Standby` (no process) |
+
+---
+
+## 17. B1 implementation decisions (2026-11-02)
+
+The pure core is in `src/host/src/supervisor/` (not wired; `#![allow(dead_code, unused_imports)]` until B2a). `Tunables::today()` reproduces today; `with_b3(cores)`, `with_b4()`, `with_b5(phys_mib)` and `target(cores, phys_mib)` switch on the later batches' values. Every later change is a tunable or a `Policy` field, not a code path of its own. Decisions the design left open, recorded here so the spec tests and B2 can follow:
+
+### 17.1 API shape (§5)
+
+| §5 entry | As implemented | Why |
+| --- | --- | --- |
+| (constructor) | `Supervisor::<P>::new(tunables, seed)` | Seeded xorshift for jitter |
+| `add_unit(spec)` | `UnitSpec { id, name, class, enabled, shared, verify, checkpoint: Option<Checkpoint{resident}>, start_timeout }` with builder `UnitSpec::new(id, class).disabled().shared().verify().checkpoint(resident).start_timeout(ms)` | `Store::record` fields the core needs |
+| time | Inputs without a time argument use the latest time given (`run_jobs`, `touch`, `begin_work`, `shutdown`, `settled`, `set_now`) | Keeps §5's signatures; the adapter calls `set_now` before an input when it matters |
+| `wake(pid, trigger)` | `Trigger<P> { kind: Interactive \| Event(name) \| Follow, payload }` by value; `Delivery` is a plain enum, so on `Now`/`Forward` the caller sends its own copy | `Follow` = `source.resolveCancel` (held only behind a held trigger, never starts anything) |
+| `process_spawned(pid, Result)` | `Result<(), String>` | Error text becomes the failure text |
+| `process_failed(pid, text)` | `String` | |
+| `ui_begin(pid) / ui_finish(pid)` | A count per pid; the per-registration ids and the Book's error cases stay in the Host until `activation.rs` moves (B2a); a failed UI registration is reported with `process_failed` | |
+| `process_reaped(pid, status)` | `Option<i32>` (exit code; B4 reads it) | |
+| `classified(pid, resident)` | `Option<String>` (why it is resident) | |
+| `begin_work(pid, kind, now)` | `kind: WorkKind = u64` (the adapter's numbering) | |
+| `list_state(id)` | `list_state(UnitId) -> Option<ListState>`; `ListState::{Starting, Running{process: Running\|Idle}, Failed(text), Disabled, Stopped}` | |
+| added | `job_result(u, JobId)` (last 8 kept), `set_now`, `set_muted`/`settled` (event mute, §4.4), `units()`, `runner()`, `failed_open()`, `budget_count()`, `slots_in_use()` | |
+| Actions | §5's list plus `JobFinished{unit, job, result}` (package transactions read the result, §4.7); `Answer{unit, reason, payload}`, `Notify{unit: Option, notice}` | |
+| State names | `UnitState::{Inactive, Activating{pid: Option, since, sub: ActivatingSub}, Active{pid, since, last_active}, Deactivating{pid, reason, then, sub: DeactivatingSub}, Failed{result: FailResult, text}, Standby{holder, recorded, hold_until}}` | `pid` is `None` in `Verify` and `AutoRestart` |
+
+The convenience requests pick origin and mode: `start(Enable)` = user + `Fail`; `stop(Disable)` = user + `Fail`; `stop(Uninstall|Reload|Upgrade)` and `restart` = package RPC + `Fail`; every other cause/reason = internal + `Replace`. A disable is therefore not "busy" for a later RPC, as today (`package_busy` = operation or reload only). `standby(u)` never fails.
+
+### 17.2 Merge table readings (§4.2)
+
+- **Disable/uninstall exception.** A Start is refused when the unit is disabled (`set_enabled(false)` precedes the disable stop, so triggers are refused) or the installed stop is `then: Removed`. An explicit `Start{Enable}` after `set_enabled(true)` is accepted and merges into a Restart that waits for reap (§4.3 "enable while disabling"; the D13 fix).
+- **Job ids.** A request merged into the installed job returns the installed job's id (start + start, stop[running] + start → Restart, restart + restart, start + restart). A request done at once or refused gets its own id with result `Done` / `Dropped` (`JobFinished` emitted).
+- **Standby[running] + Start.** The Standby job ends `Done` (the unit still lands in standby); the Start is installed and waits for reap.
+- **Restart start half** runs at `Interactive` priority (a user's reload).
+
+### 17.3 Lanes and first runs (§4.4)
+
+- Six lanes in order: Builtin, BuiltinFirstRun, Interactive, Event, Background, FirstRun (built-in boot starts, then built-in first runs = `StartQueue` then `FirstQueue`; third-party first runs after other background starts).
+- `first_run_limit` (8 today) counts built-in first runs too, as `FIRST_RUNS` does. A first-run place is held until the run is classified resident, or its process is gone after its first standby (`lazy_first_runs_tick`). A first run classified lazy but busy frees its place at once and stays running until idle.
+- **Open for B3:** §4.4 says shared members count toward `max_active` while activating, A7 says the Builtin lane is outside it. Members are built-ins, so B1 keeps A7 (outside). The coordinator rules before B3.
+
+### 17.4 Other decisions
+
+- **Classification:** `classified(None)` parks at once (T12) through an installed Standby job in `Running`, so merges apply while it deactivates; a busy unit stays running. The 5 s classify timer resolves as resident ("no answer from the playback worker"). The adapter still sends the query at ready; the core only arms the timer.
+- **`packages.list` while waking:** `Activating` maps to `starting` per §9's list, so a wake emits `ListChanged` twice (standby → starting → running), as today (a waking plugin is `starting` in `package_list`). Only the standby half of the cycle is silent. To be confirmed in B2d against the B0 `packages.list` test.
+- **Stuck uninstall (T18 with `then: Removed`):** no `RemoveData`; the job fails with `STUCK_RELOAD`.
+- **Runner restart (T29):** members get `Terminate{Failed, grace: 0}` with `reaped` already set, then a Restart job each (origin crash). They verify again unless failed open (today `packages.verify`). Runner ids are allocated by the core (`RunnerId(1)`, +1 per restart).
+- **Budget (B5):** checked when an in-budget unit spawns for a non-event start; candidates must have a checkpoint (`recorded`) besides the §8 rules.
+- **`on_demand` tunable** = `VESTRA_LAZY`: `today()` models it on; the adapter sets it off when lazy activation is off (no replay, no first runs, no idle standby).
+- **Failure texts:** today's where they exist ("activation timed out", "plugin process exited", the two 20 s texts as `STUCK_WAKE`/`STUCK_RELOAD`); the other `ExitCause` texts are new (B4).
+- **Timers:** stale heap entries at the top are dropped at the end of `run_jobs`, so `next_deadline` is exact after it.
+- **Not in B1:** `activation.rs` (MOVE in B2a; the Book and its `LIMIT` stay in the Host, a full Book reaches the core as `process_spawned(Err)`); `#[cfg(test)] mod tests;` for the spec tests is added when they are committed (the directory belongs to the spec test author).
