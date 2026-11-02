@@ -341,13 +341,20 @@ export function createWire(transport) {
                 file,
             }),
             installed: (id) => transport.request("packages.installed", { id }),
-            /** `source` and `replace` are sent only when given (player 0.2.0). */
+            /**
+             * `source` and `replace` are sent only when given (player 0.2.0);
+             * `enabled` only when given (planned for player 0.6.4, older players
+             * ignore it).
+             */
             install: (token, expectedRevision, requestId, options = {}) => transport.request("packages.install", {
                 token,
                 expectedRevision,
                 requestId,
                 ...(options.source === undefined ? {} : { source: options.source }),
                 ...(options.replace ? { replace: true } : {}),
+                ...(options.enabled === undefined
+                    ? {}
+                    : { enabled: options.enabled }),
             }),
             operation: (operationId) => transport.request("packages.operation", {
                 operationId,

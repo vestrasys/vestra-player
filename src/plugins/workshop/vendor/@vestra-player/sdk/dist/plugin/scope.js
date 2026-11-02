@@ -39,6 +39,9 @@ export class ScopeImpl {
             throw failure("unavailable", "the player provided no data directory");
         return directory;
     }
+    get stopReason() {
+        return this.runtime.stopping?.reason;
+    }
     get disposed() {
         return this.#disposed || (this.#parent?.disposed ?? false);
     }
@@ -102,7 +105,12 @@ export class ScopeImpl {
                     return;
                 done = true;
                 this.forget(item);
-                await cleanup();
+                const stopping = this.runtime.stopping;
+                await cleanup(Object.freeze(stopping
+                    ? stopping.reason === undefined
+                        ? { stopping: true }
+                        : { stopping: true, reason: stopping.reason }
+                    : { stopping: false }));
             },
         };
         return this.add(item);

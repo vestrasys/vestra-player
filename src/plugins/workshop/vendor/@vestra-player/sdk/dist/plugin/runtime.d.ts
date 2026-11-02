@@ -1,5 +1,5 @@
 import type { Json, LocalServices, Transport, Wire } from "../wire.ts";
-import type { App, Disposable, Locale, PluginError, SystemInfo } from "./types.ts";
+import type { App, Disposable, Locale, PluginError, StopReason, SystemInfo } from "./types.ts";
 /**
  * Why something listens, for the player's log line that says why a plugin
  * keeps running (`events.subscribe { why }`, player 0.5.21): computed
@@ -46,6 +46,8 @@ export interface RuntimeOptions {
      */
     strictDeclarations?: boolean;
 }
+/** A stop reason the runner passed on, if this SDK knows it. */
+export declare function stopReason(value: unknown): StopReason | undefined;
 export declare const same: (a: Json | undefined, b: Json | undefined) => boolean;
 /** One value in flight, only the newest waiting. Each push learns its fate. */
 export declare class Latest<T> {
@@ -73,6 +75,13 @@ export declare class Runtime {
     readonly views: Map<string, (callback: string, args: Json[]) => void>;
     readonly commands: Map<string, () => void>;
     readonly services: Map<string, unknown>;
+    /**
+     * Set when the player stops the plugin (`PluginInstance.dispose`), before
+     * the root scope is disposed: `DisposeInfo` and `plugin.stopReason`.
+     */
+    stopping: {
+        reason: StopReason | undefined;
+    } | undefined;
     /** `plugin.app`, from the start-up handshake; `system()` asks the player. */
     readonly app: App;
     /** `plugin.i18n.locale`, from the start-up handshake; English when unknown. */

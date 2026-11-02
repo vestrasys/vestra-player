@@ -731,10 +731,15 @@ export declare function createWire(transport: Transport): {
         /** Player 0.2.0: a `.vxp` file. */
         validateArchive: (file: string) => Promise<PackageValidation>;
         installed: (id: string) => Promise<InstalledPackage>;
-        /** `source` and `replace` are sent only when given (player 0.2.0). */
+        /**
+         * `source` and `replace` are sent only when given (player 0.2.0);
+         * `enabled` only when given (planned for player 0.6.4, older players
+         * ignore it).
+         */
         install: (token: string, expectedRevision: number, requestId: string, options?: {
             source?: WireSource;
             replace?: boolean;
+            enabled?: boolean;
         }) => Promise<PackageOperation>;
         operation: (operationId: string) => Promise<PackageOperation>;
         cancel: (operationId: string) => Promise<PackageOperation>;
