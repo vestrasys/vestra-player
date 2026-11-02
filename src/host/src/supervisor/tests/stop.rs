@@ -101,6 +101,8 @@ fn s_kill_on_active_unit_does_nothing() {
 
 // Shutdown: checkpoints first (from the recorded state, no round-trip),
 // parallel Terminate{Quit}, one deadline, then Kill
+// RULED (coordinator 2026-11-02): every Checkpoint comes before the first
+// Terminate (§7.2 "checkpoints first").
 #[test]
 fn s_shutdown_checkpoints_before_any_terminate() {
     let mut sim = Sim::new(&Profile::b1());

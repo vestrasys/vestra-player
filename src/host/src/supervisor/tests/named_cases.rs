@@ -142,7 +142,7 @@ fn nc_upgrade_of_disabled_unit_in_standby_does_not_start() {
     let mut sim = Sim::new(&Profile::b1());
     let (u, _) = sim.in_standby(normal("a"));
     sim.set_enabled(u, false);
-    // DESIGN QUESTION: §4.2 says Restart on a disabled unit is "refused"
+    // ANSWERED (supervisor.md §17.2 Q15), was a design question: §4.2 says Restart on a disabled unit is "refused"
     // (Stop row) while this case says the new image starts only "if
     // enabled". Best reading: the upgrade job is accepted, drops the
     // checkpoint, and does not start.
@@ -211,18 +211,13 @@ both! {
     fn nc_enable_while_disabling_waits_for_reap(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(normal("a"));
-        sim.set_enabled(u, false);
-        sim.rpc_stop(u, StopReason::Disable, Then::Inactive).unwrap();
+        // The user's disable (origin User, §17.1) — not a package RPC, so a
+        // following enable is not "busy" (as today, §17.2 Q16).
+        sim.user_disable(u).unwrap();
         sim.run();
-        // The disable RPC's job is still installed; the enable RPC must
-        // wait, not be refused as busy and not start a second process.
-        // DESIGN QUESTION: with `JobMode::Fail`, an enable RPC arriving
-        // while the disable RPC's Stop is still running would get "busy";
-        // the D13 fix assumes it is accepted and waits. Best reading: the
-        // Stop job is finished (done) once `Terminate` is issued, and the
-        // waiting is the new Start's runnability condition.
+        // The enable must wait for the old process (D13), not start a second.
         sim.set_enabled(u, true);
-        sim.start(u, StartCause::Enable).unwrap();
+        sim.start(u, Cause::Enable).unwrap();
         assert!(spawns(&sim.after(p.stop_grace)).is_empty());
         assert!(spawns(&sim.reaped(pid)).is_empty());
         let acts = sim.cleaned(pid);
@@ -270,9 +265,10 @@ fn nc_trigger_while_failed_is_dropped() {
 }
 
 // trigger while Standby{hold_until}: Start waits for hold_until; interactive answered (T20)
-#[test]
-fn nc_trigger_while_holding_waits_for_hold_until() {
-    let mut sim = Sim::new(&Profile::target());
+// Coordinator ruling (2026-11-02): an Interactive trigger is answered at
+// once with the reason and not held; a Start waiting for hold_until is
+// installed only while event triggers remain in the backlog.
+fn held_unit(sim: &mut Sim) -> (UnitId, Pid, Ms) {
     let (u, pid) = sim.in_active(normal("a"));
     sim.settle();
     sim.exited(pid, ExitCause::Exited);
@@ -284,9 +280,28 @@ fn nc_trigger_while_holding_waits_for_hold_until() {
     else {
         panic!("{:?}", sim.st(u))
     };
+    (u, holder, until)
+}
+
+#[test]
+fn nc_trigger_while_holding_interactive_is_answered_not_held() {
+    let mut sim = Sim::new(&Profile::target());
+    let (u, holder, until) = held_unit(&mut sim);
     sim.wake(holder, cmd(1));
-    assert_eq!(answers(&sim.run()), vec![(1, Why::CouldNotStart)]);
+    assert_eq!(answers(&sim.run()), vec![(1, Why::Held)]);
+    assert_eq!(sim.backlog_len(u), 0, "not held");
+    assert_eq!(sim.job(u), None, "no Start for an answered trigger");
+    assert!(spawns(&sim.at(until)).is_empty());
+}
+
+#[test]
+fn nc_trigger_while_holding_event_waits_for_hold_until() {
+    let mut sim = Sim::new(&Profile::target());
+    let (u, holder, until) = held_unit(&mut sim);
+    sim.wake(holder, event("playback.state", 2));
+    assert!(answers(&sim.run()).is_empty());
     assert!(matches!(sim.job(u), Some(J::Start { .. })));
+    assert!(spawns(&sim.at(until - 1)).is_empty());
     assert_eq!(spawns(&sim.at(until)).len(), 1);
 }
 
@@ -296,11 +311,15 @@ fn nc_runner_restart_one_group_stop_then_per_member_restart() {
     let mut sim = Sim::new(&Profile::target());
     let (a, pa) = sim.in_active(builtin("a").shared(7));
     let (b, pb) = sim.in_active(builtin("b").shared(7));
-    let (c, pc) = sim.in_active(builtin("c").shared(8)); // other runner
+    let (c, pc) = sim.in_active(builtin("c")); // own process, not in the runner
     let acts = sim.runner_hung(7);
     assert_eq!(count(&acts, "KillRunner"), 1);
     assert!(terminates(&acts).iter().all(|t| t.3 != pc));
-    assert_eq!(sim.st(c), S::Active(pc), "another runner is unaffected");
+    assert_eq!(
+        sim.st(c),
+        S::Active(pc),
+        "an own-process built-in is unaffected"
+    );
     sim.cleaned(pa);
     sim.cleaned(pb);
     assert!(matches!(sim.st(a), S::Spawn(_)));

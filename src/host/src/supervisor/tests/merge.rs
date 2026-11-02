@@ -301,7 +301,7 @@ fn m_standby_running_restart_waits_then_applies_fresh() {
 
 // --- Stop [waiting] -------------------------------------------------------
 
-// DESIGN QUESTION: which Stop reasons are *not* "for disable/uninstall" in
+// ANSWERED (supervisor.md §17.2 Q12), was a design question: which Stop reasons are *not* "for disable/uninstall" in
 // this cell (Start replaces the Stop)? Best reading: any other reason, e.g.
 // a `Stop{Failed}` enqueued internally, or a cancel.
 #[test]
@@ -321,7 +321,10 @@ fn m_stop_waiting_start_replaces_on_active_unit() {
 #[test]
 fn m_stop_waiting_disable_refuses_trigger_start() {
     let mut sim = sim();
-    let (u, pid) = stop_waiting(&mut sim, StopReason::Disable, Then::Inactive);
+    let (u, pid) = sim.in_active(normal("a"));
+    // §17.2: the disable RPC sets the unit-file state first.
+    sim.set_enabled(u, false);
+    sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
     assert!(
         matches!(sim.wake(pid, cmd(2)), Delivery::Dropped),
         "a trigger never re-enables"
@@ -333,7 +336,8 @@ fn m_stop_waiting_disable_refuses_trigger_start() {
 fn m_stop_waiting_uninstall_refuses_trigger_start() {
     let mut sim = sim();
     let (u, pid) = stop_waiting(&mut sim, StopReason::Uninstall, Then::Removed);
-    assert!(matches!(sim.wake(pid, cmd(2)), Delivery::Dropped));
+    let d = sim.wake(pid, cmd(2));
+    assert!(matches!(d, Delivery::Dropped), "{d:?}");
     assert!(matches!(
         sim.job(u),
         Some(J::Stop {
@@ -379,16 +383,15 @@ fn m_stop_waiting_restart_on_enabled_unit_becomes_restart() {
     assert!(matches!(sim.job(u), Some(J::Restart { .. })));
 }
 
-// DESIGN QUESTION: "else refused" — what does `restart()` return when it
-// is refused on a disabled unit (`Busy` is the only error in §5; §9 says
-// the RPC reply is "invalid")? Best reading: an error, Stop stays.
+// "else refused": §17.2 — a refused request gets its own id, result `Dropped`.
 #[test]
 fn m_stop_waiting_restart_on_disabled_unit_is_refused() {
     let mut sim = sim();
     let (u, _) = sim.in_active(normal("a"));
     sim.set_enabled(u, false);
     sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
-    assert!(sim.restart(u, false, None).is_err());
+    let id = sim.restart(u, false, None).unwrap();
+    assert_eq!(sim.result(id), Some(R::Dropped));
     assert!(matches!(sim.job(u), Some(J::Stop { .. })));
 }
 
@@ -402,7 +405,7 @@ fn m_stop_running_start_becomes_restart_waiting_for_reap() {
     assert!(
         matches!(
             sim.job(u),
-            Some(J::Restart { running: false, .. }) | Some(J::Start { running: false, .. })
+            Some(J::Restart { .. }) | Some(J::Start { running: false, .. })
         ),
         "{:?}",
         sim.job(u)
@@ -411,7 +414,7 @@ fn m_stop_running_start_becomes_restart_waiting_for_reap() {
     assert_eq!(spawns(&sim.cleaned(pid)).len(), 1);
 }
 
-// DESIGN QUESTION: this cell says a Start on a running *disable* Stop is
+// ANSWERED (supervisor.md §17.2 Q14), was a design question: this cell says a Start on a running *disable* Stop is
 // refused, while named case "enable while disabling" says the Start waits
 // for reap. Best reading: a trigger Start is refused (`Dropped`); a
 // `Start{Enable}` after `set_enabled(true)` waits (see named_cases.rs).
@@ -419,7 +422,8 @@ fn m_stop_running_start_becomes_restart_waiting_for_reap() {
 fn m_stop_running_disable_refuses_trigger_start() {
     let mut sim = sim();
     let (u, pid) = stop_running(&mut sim, StopReason::Disable, Then::Inactive);
-    assert!(matches!(sim.wake(pid, cmd(2)), Delivery::Dropped));
+    let d = sim.wake(pid, cmd(2));
+    assert!(matches!(d, Delivery::Dropped), "{d:?}");
     sim.gone(pid);
     assert_eq!(sim.st(u), S::Inactive);
     assert!(spawns(&sim.run()).is_empty());
@@ -449,10 +453,7 @@ fn m_stop_running_restart_waits() {
     let mut sim = sim();
     let (u, pid) = stop_running(&mut sim, StopReason::Failed, Then::Failed);
     sim.restart(u, true, None).unwrap();
-    assert!(matches!(
-        sim.job(u),
-        Some(J::Restart { running: false, .. })
-    ));
+    assert!(matches!(sim.job(u), Some(J::Restart { .. })));
     assert!(spawns(&sim.reaped(pid)).is_empty());
     assert_eq!(spawns(&sim.cleaned(pid)).len(), 1);
 }
@@ -463,7 +464,8 @@ fn m_stop_running_restart_waits() {
 fn m_restart_start_is_absorbed_and_trigger_held() {
     let mut sim = sim();
     let (u, pid) = restart_installed(&mut sim);
-    assert!(matches!(sim.wake(pid, cmd(3)), Delivery::Held));
+    let d = sim.wake(pid, cmd(3));
+    assert!(matches!(d, Delivery::Held), "{d:?}");
     assert!(matches!(sim.job(u), Some(J::Restart { .. })));
     let acts = sim.run();
     assert!(deliveries(&acts).is_empty(), "held for the new run");

@@ -161,7 +161,7 @@ State and job are separate, as in systemd: `systemctl status` shows "inactive" w
 | T17 | `Deactivating{Term}` | `TimeoutStopSec` expired | `Deactivating{Kill}` | `Kill` | systemd `TimeoutStopSec=` → `FinalKillSignal=` | KEEP behaviour (`Drop for Plugin`), REPLACE thread (A3) |
 | T18 | `Deactivating` | 20 s and still not reaped/cleaned | `then`, flagged `stuck` | the waiting job fails with today's text ("the previous process did not stop within 20 s" / "its stopped process did not go within 20 s"); `Failed` for a reload | ours | MOVE `RELOAD_WAIT_MS`, `STOP_WAIT_MS`, `advance_package` 20 s |
 | T19 | `Standby` | `wake(pid, trigger)` | `Standby` + Start job (trigger in backlog) | — (OSD after 400 ms once running) | systemd socket activation | MOVE `lazy_deliver`/`lazy_event` (immediate → queued, B3) |
-| T20 | `Standby{hold_until > now}` | `wake` | `Standby`; Start job waits until `hold_until` | interactive trigger: `Answer` failed + item disabled with the reason, OSD with the reason on click (§12.1); event trigger: kept in backlog | systemd `RestartSec=` | NEW (B4) |
+| T20 | `Standby{hold_until > now}` | `wake` | `Standby`; a Start job (waiting until `hold_until`) only while wake events are held | interactive trigger: `Answer` at once with the reason (`Held{until}`; item disabled with the reason, OSD with the reason on click, §12.1), not held, no Start for it; event trigger: kept in backlog, the Start waits for `hold_until` (no demand, no start of a crashing plugin; coordinator ruling 2026-11-02, §17.6) | systemd `RestartSec=` | NEW (B4) |
 | T21 | `Standby` | Stop job (disable) | `Inactive`, disabled | `Revoke`; checkpoint kept; backlog answered | systemd (stop socket + service) | MOVE `forget_parked(id, false)` |
 | T22 | `Standby` | Restart job `fresh` (reload, upgrade) | `Inactive` + Start part of the job | `Revoke`; `DropCheckpoint` | ours | MOVE `forget_parked(id, true)` |
 | T23 | `Standby` | Stop job `then: Removed` (uninstall) | removed after `RemoveData` | `Revoke`; `DropCheckpoint`; `RemoveData` | systemd (unit unloaded / `not-found`) | MOVE |
@@ -173,7 +173,7 @@ State and job are separate, as in systemd: `systemctl status` shows "inactive" w
 | T29 | `Active` (member) | runner hang / unattributed fault / runner exit / full member queue | `Deactivating{Failed, sub: Cleanup}` with `reaped` set for all members | `KillRunner` once; Restart jobs per member (first one immediate) | systemd `KillMode=control-group`; Erlang `one_for_all` | REPLACE `restart_shared` loop (B4, A4/A5) |
 | T30 | `Active` | memory pressure or over the process budget; selected; not busy | as T14 | as T14 | Android LMK / LRU | NEW (B5, A13) |
 | T31 | any | `shutdown(now, budget)` | `Deactivating{Quit}` → table dropped | `Checkpoint` from recorded state; `Terminate{Quit}` all in parallel; one deadline; `Kill` | systemd shutdown transaction | REPLACE (A2) |
-| T32 | `Inactive`, disabled | `set_enabled(true)` | `Inactive`, enabled + Start job (waits if a previous process is still `Deactivating`) | — | systemd `enable --now` | MOVE `start_stopped` / REPLACE enable-after-park `reloads` entry |
+| T32 | `Inactive`, disabled | `set_enabled(true)`, then `start(u, Enable)` (two calls: `set_enabled` itself does not enqueue, §5) | `Inactive`, enabled + Start job (waits if a previous process is still `Deactivating`) | — | systemd `enable --now` | MOVE `start_stopped` / REPLACE enable-after-park `reloads` entry |
 
 ### 3.3 Classes and policy (systemd unit settings)
 
@@ -250,7 +250,7 @@ Job mode (systemd `--job-mode`):
 | enable while disabling | Start waits for reap (no second instance on the same data) | systemd | REPLACE |
 | uninstall while anything | Stop{then: Removed} supersedes all but another package RPC (`Fail` → "busy") | systemd | MOVE `advance_package` |
 | trigger while `Failed` | `Dropped` (registrations are revoked; nothing to deliver to) | systemd (start of failed unit is allowed, but our trigger has no entry point left) | KEEP |
-| trigger while `Standby{hold_until}` | Start waits for `hold_until`; interactive answered (T20) | systemd `RestartSec` | NEW (B4) |
+| trigger while `Standby{hold_until}` | Interactive: answered at once with the reason, no Start job. Event: held; a Start job waits for `hold_until`. A crash that lands in a hold answers the held interactive triggers and keeps the Start only if events remain (T20; coordinator ruling, §17.6) | systemd `RestartSec` | NEW (B4) |
 | runner restart | one Stop (runner group) for all members, then Restart jobs per member; first immediate | Erlang `one_for_all` | REPLACE `restart_shared` loop |
 
 ### 4.4 Running jobs: lanes, priority, concurrency
@@ -263,9 +263,9 @@ A job is **runnable** when: the unit is not `Deactivating` (or the job is a Stop
 | Third-party priority | `Interactive` (commands.execute, source.resolveRequest, drops.drop, ui.callback, settings page shown — today's `TRIGGERS`, `lazy_page_shown`) > `Event` (`WAKE_EVENTS` broadcasts) > `Background` (first runs, Resident restarts); FIFO within a priority | Android (foreground > background start) | NEW |
 | Start-job concurrency | third-party running Start jobs ≤ `max_active` = `min(4, max(2, cores/2))` (B3; B1–B2: 8 for first runs only, wakes unlimited = today) | Chrome process-launch throttling | REPLACE `FIRST_RUNS`, immediate wakes (D4) |
 | Interactive reserve | +1 slot reserved for `Interactive`; if taken, may overrun by 1 more. Targets: cold click p95 ≤ 600 ms, built-in cold wake ≤ 1 s (A8) | ours | NEW |
-| Built-ins first | third-party `Background` Start jobs wait while any Builtin-lane job is installed or a built-in is `Activating{Verify}` (O(1) counter, as `builtin_first_run_pending` today) | ours | MOVE |
+| Built-ins first | Switch `Tunables::builtins_first`. Target (`Installed`, from B3): third-party `Background` Start jobs (first runs included) wait while any built-in has a Start job installed (until it is active) or is `Activating{Verify}`. Today (`Queued`, B1–B2, `builtin_first_run_pending`): only third-party first runs wait, and only while a built-in is still queued or verifying; a built-in that started holds nobody back (coordinator ruling, §17.6) | ours | MOVE (B1–B2) / NEW (B3) |
 | Event wakes | wait for a slot; never cause LRU standby; muted during start-up and `QUIET_AFTER_START_MS` 1 s after settle (`lazy_settled`, `Lazy::mute`) | ours | KEEP |
-| Shared members | a member Start counts toward `max_active` while `Activating` (runner work is the cost), not toward the process budget (§12.1) | ours | NEW |
+| Shared members | members are built-ins: like every built-in they are outside `max_active` (A7) and outside the process budget (coordinator ruling 2026-11-02, §17.2 Q18; an earlier draft counted them while `Activating`) | ours | NEW |
 | Development | `--plugin` Start runs immediately (bypasses lanes and limit) | ours | MOVE |
 | Bounds | ≤ 1 installed job per unit (by construction); third-party lane ≤ 256 waiting Start jobs; backlog ≤ 64 triggers per unit (`backlog_max`) | systemd (one job per unit) | NEW (B3, A9) |
 
@@ -281,7 +281,7 @@ Stop and `Standby` jobs are never concurrency-limited (stopping frees resources)
 | Start, waiting for a slot | none: bounded by `max_active` × `TimeoutStartSec` and the 256-entry lane | — ("Starting &lt;name&gt;…" OSD after 400 ms; no cap for interactive triggers either, §12.1) | systemd `JobTimeoutSec=` (default infinity) | NEW |
 | Stop, `Deactivating{Term}` | `TimeoutStopSec` | `Kill` (T17) | systemd | KEEP / NEW value |
 | Stop, reap + backend cleanup | 20 s | T18 | ours | MOVE |
-| Standby, resources answer | today's `lazy.asking` wait (value MOVE) | treat as busy, re-arm idle | ours | MOVE |
+| Standby, resources answer | none today (`lazy.asking` waits for the answer); tunable `resources_wait`, off | treat as busy, re-arm idle | ours | MOVE |
 | Request (in-flight work, not a job) | 5 min from B6 | `ExitCause::RequestTimeout` → T25 | Chrome | NEW |
 | Shutdown | one deadline: 1 s quit / 300 ms device loss | `Kill` all | systemd shutdown | REPLACE (A2) |
 
@@ -455,7 +455,7 @@ The shared runner itself (trust, topology, heartbeat, fail-open) is described in
 
 ## 9. Compatibility (wire, `packages.list`, `packages.changed`)
 
-- **`list_state` (A11, KEEP output):** `package_list` keeps its shape. `Standby` (and `Deactivating{then: Standby}`) stays `state: "running"` + `process: "idle"`; the comparison that drives `packages.changed` excludes `process`, so standby/start cycles never emit it. New states map: `Inactive`+Start job / `Activating{Verify|Spawn|Ready}` / `Deactivating` with a waiting Restart → `starting`; `Active` → `running`; `Activating{AutoRestart}` and `Standby{hold_until}` → `running` + `process: "idle"`; `Failed` → `failed` + today's error text; `Inactive` disabled → `disabled`. Warnings kept (`Host.warnings` → `Unit`).
+- **`list_state` (A11, KEEP output):** `package_list` keeps its shape. `Standby` (and `Deactivating{then: Standby}`) stays `state: "running"` + `process: "idle"`; the comparison that drives `packages.changed` excludes `process`, so standby/start cycles never emit it. New states map: `Inactive`+Start job / `Activating{Verify|Spawn|Ready}` / `Deactivating` with a waiting Restart → `starting`, except an `Activating` woken by a trigger (`Start{Trigger}`), which stays `running` as today's `lazy.waking` does, so a wake announces nothing either; `Active` → `running`; `Activating{AutoRestart}` and `Standby{hold_until}` → `running` + `process: "idle"`; `Failed` → `failed` + today's error text; `Inactive` disabled → `disabled`. Warnings kept (`Host.warnings` → `Unit`).
 - **RPC replies:** `"busy"`, `"unsupported"` (built-in disable), `"invalid"` (self-disable, reload of a disabled plugin), `"missing"` — unchanged (§4.2 `JobMode::Fail`).
 - **Stop reasons (A14, KEEP):** the 7 values; mapping §7.3.
 - **Generation identity (A10, KEEP).**
@@ -535,7 +535,7 @@ The shared runner itself (trust, topology, heartbeat, fail-open) is described in
 | User-facing name of the no-process state | `standby`, internal only (`UnitState::Standby`, job `Standby`, `standby()`). Nothing user-visible changes: the wire keeps stop reason `idle` and `packages.list` `process: idle`. Not `dormant` (package_store retired instances), not `idle` (wire value, other meaning) | owner 2026-11-02; §3.1 "Naming" |
 | Resident semantics | Observed by the host (`capabilities::record` Live + backend `owner.resources`), never declared by a plugin, so it cannot be faked; counted in the budget, never reclaimed | Existing behaviour; owner 2026-11-02; §3.3 |
 | Built-in members in standby when idle? | Yes, own process and shared members, as today with on-demand start on (mirror subscriptions made 15/17 built-ins non-resident); keep | Existing behaviour under `VESTRA_LAZY=1`; owner 2026-11-02; §3.3 |
-| Shared members and `max_active` | Count toward the start-job limit while `Activating`; not toward the process budget | owner 2026-11-02; §4.4 |
+| Shared members and `max_active` | Outside the start-job limit, like every built-in (A7), and outside the process budget. Coordinator ruling 2026-11-02 (§17.2 Q18) replaces the earlier answer that counted them while `Activating` | owner 2026-11-02; coordinator 2026-11-02; §4.4 |
 | Retry on `runtime.failed` | None: the plugin said it cannot start | systemd `RestartPreventExitStatus=`; T10 |
 | OOM detection | Engineering task in B4: measure the Windows exit code and stderr tail of a V8 heap abort; not an owner decision | owner 2026-11-02; §7.3, B4 |
 | Wake-failure / hold UX | Reuse today's command state (disabled with the reason) and the OSD with the reason on click | Existing command state; owner 2026-11-02; T20 |
@@ -676,27 +676,83 @@ The pure core is in `src/host/src/supervisor/` (not wired; `#![allow(dead_code, 
 
 The convenience requests pick origin and mode: `start(Enable)` = user + `Fail`; `stop(Disable)` = user + `Fail`; `stop(Uninstall|Reload|Upgrade)` and `restart` = package RPC + `Fail`; every other cause/reason = internal + `Replace`. A disable is therefore not "busy" for a later RPC, as today (`package_busy` = operation or reload only). `standby(u)` never fails.
 
-### 17.2 Merge table readings (§4.2)
+### 17.2 Design questions from the spec tests
+
+Raised by the spec test author (branch `supervisor-spec` 22fa2a0f, blackboard "Design questions"), answered by the B1 maintainer from the design, the code and precedent. **Code changed** marks answers that changed the core (with a test in `supervisor/sim.rs`); **Ruling** marks the coordinator's.
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | §5 has no Rust signatures | §17.1 lists them (`UnitSpec`, `Tunables`, `Trigger`, `JobResult`, `by_pid`...). The test adapter follows §17.1 |
+| 2 | How B1 "Restart=no + revoke" and B3 limits are expressed | Values, not switches in code: `Tunables::today()` has every class `Policy.restart = No`, `start_failure_keeps_registrations: false`, `first_run_limit: Some(8)`, `builtins_first: Queued`, `max_active/backlog_max/lane_max/process_budget: None`; `with_b3(cores)`, `with_b4()`, `with_b5(phys_mib)`, `target(..)` set the later values |
+| 3 | Inputs and `wake` carry no `now` | They use the latest time given (`run_jobs`, `touch`, `begin_work`, `shutdown`, `settled`, `set_now`). Precedent: systemd's `sd_event_now()` caches one time per loop iteration. The adapter calls `set_now` first when an input's time matters |
+| 4 | Result of a job no longer installed | `job_result(u, JobId)` (last 8 per unit) and `Action::JobFinished{unit, job, result}` |
+| 5 | No input says start-up settled | `set_muted(true)` at start-up, `settled(now)` when it settled (unmutes; wake events stay muted `quiet_after_start` 1 s more). Default: not muted |
+| 6 | T5 verify failure: own process or start fails? | Own process, the start goes on (T5 "→ `Placement::Own`"; today `trust()` falls back to an own process). `verify_done(u, false)` and the 3 s timer do the same |
+| 7 | T8 in B1: Failed + revoke, or Inactive? | `Failed` + `Revoke` + failure text + "could not start" notice, as today's `wake_failed` (`failures` + `forget_entries`). From B3 (`start_failure_keeps_registrations`) it stays in `Standby` under its pid |
+| 8 | Order of `ui_begin`/`ui_finish` vs `process_ready` | `ui_begin` before `process_ready` (today the plugin registers its UI before `runtime.ready`; the Book rejects `ui_begin` after ready). `ui_finish` may come before or after; `Active` when ready and no UI pending |
+| 9 | T18 Failed vs §4.5 "stays at `then`" | Both: the unit first lands at `then` (§4.5), then the waiting job fails; a Restart (reload) or `Start{Enable}` marks the unit `Failed` with `STUCK_RELOAD` (today `reload_tick` records the failure); a wake's Start marks it `Failed` with `STUCK_WAKE` (today `wake_failed`); a Stop's job fails and the unit stays at `then` |
+| 10 | How the wake-stuck text is observed | `list_state(u)` = `Failed(STUCK_WAKE)`, `unit.failure`, `JobFinished{result: Failed(STUCK_WAKE)}`, or `job_result(u, id)` with the id read from `job(u)` after the wake |
+| 11 | T32 vs "set_enabled does not enqueue" | Two calls: `set_enabled(u, true)` then `start(u, Cause::Enable)`. T32 reworded |
+| 12 | Stop[waiting] + Start: which reasons are the exception | Disable (the unit is disabled) and uninstall (`then: Removed`) refuse the Start; Idle, Failed, Reload, Upgrade let it replace the stop. Quit refuses everything (`shutdown`) |
+| 13 | Error for a restart of a disabled unit | Not an error: `Ok(JobId)` with result `Dropped` when a job is installed (§4.2 row); with no job it is accepted (Q15). Today's RPC reply `"invalid"` for reloading a disabled plugin stays the adapter's check before it enqueues (§9) |
+| 14 | Stop[running] + Start for disable vs "enable while disabling" | As read: triggers are refused (the unit is disabled); `Start{Enable}` after `set_enabled(true)` merges into a Restart that waits for reap (§17.3) |
+| 15 | Upgrade of a disabled unit | **Code changed.** Accepted without starting: the Restart's stop half and `fresh`/`image` apply (checkpoint dropped, new image recorded), then the job ends `Done`; enabling later starts the new image as a first run. Precedent: Debian's `deb-systemd-invoke` restarts a unit on upgrade only if it is enabled. With a job installed the §4.2 refusal stays. Test `q15_upgrade_of_a_disabled_unit_applies_without_starting` |
+| 16 | Enable RPC while a disable job runs: "busy"? | No. Disable/enable have origin user; `JobMode::Fail` rejects only against a package-RPC job (install, upgrade, uninstall, reload), as today's `package_busy` |
+| 17 | Interactive reserve + overrun: max+2 or max+1? | max+2 (reserve 1, overrun 1: "if taken, may overrun by 1 more"); max+1 under critical pressure (§8); B3 at 8 cores: 6 |
+| 18 | Shared members vs `max_active` vs A7 | **Ruling (coordinator 2026-11-02):** built-ins, shared members included, are outside the start-job limit (A7). §4.4 and §12.1 corrected; the code already did this |
+| 19 | Own-process built-in: first restart immediate or after 3 s? | After 3 s (`RestartSec` 3 s × 2ⁿ); "first restart immediate" is the runner's (A4, §7.4: `runner_backoff.first_immediate`) |
+| 20 | Normal/Resident backoff reset; 60 s cap unreachable within 5/10 min | Reset after 60 s active, every class (`Backoff.reset_after`, as Erlang's restart intensity window and systemd resetting the restart counter on a successful run). The cap only bounds the delay; with the start limit at 5 in 10 min it is not reached, which is intended |
+| 21 | Resources-answer timeout "today's `lazy.asking`" | Today there is none (`lazy.asking` waits for the answer). Tunable `resources_wait: None`; §4.5 row corrected |
+| 22 | "Recently used" window | `Tunables::recent` = 60 s (today's idle timeout). Ours; revisit with B5 |
+| 23 | Classification timer start; no action asks | Starts at T9 for a run without a checkpoint (on-demand on). The adapter asks at ready, as today's `lazy_classify` at `runtime.ready`; no action needed |
+| 24 | Backoff/hold from exit or reap | **Code changed:** from the reap (systemd arms `RestartSec` when the unit enters auto-restart, after its stop finished). `AutoRestart{until}` and `Standby{hold_until}` = reap time + delay; start retries likewise. Test `q24_backoff_and_hold_count_from_the_reap` |
+| 25 | `next_deadline` exact vs lazy deletion | Exact after `run_jobs` (stale heap tops dropped); between inputs it can be early, never late |
+| 26 | Budget formula input | Construction-time: `Tunables::with_b5(physical_mib)` / `process_budget_for(mib)`; the adapter reads physical memory (platform, B5). Pressure changes go through `memory_pressure(level)` |
+| 27 | Built-in "5 starts" vs Normal "5 crashes" | One counter for every class: automatic restarts after a crash (5 in 10 min). Manual starts (enable, reload, install) reset it (T28), so counting them would only ever add starts that a reset clears right after; systemd counts all starts but has no such reset |
+
+### 17.3 Merge table readings (§4.2)
 
 - **Disable/uninstall exception.** A Start is refused when the unit is disabled (`set_enabled(false)` precedes the disable stop, so triggers are refused) or the installed stop is `then: Removed`. An explicit `Start{Enable}` after `set_enabled(true)` is accepted and merges into a Restart that waits for reap (§4.3 "enable while disabling"; the D13 fix).
 - **Job ids.** A request merged into the installed job returns the installed job's id (start + start, stop[running] + start → Restart, restart + restart, start + restart). A request done at once or refused gets its own id with result `Done` / `Dropped` (`JobFinished` emitted).
 - **Standby[running] + Start.** The Standby job ends `Done` (the unit still lands in standby); the Start is installed and waits for reap.
 - **Restart start half** runs at `Interactive` priority (a user's reload).
 
-### 17.3 Lanes and first runs (§4.4)
+### 17.4 Lanes and first runs (§4.4)
 
 - Six lanes in order: Builtin, BuiltinFirstRun, Interactive, Event, Background, FirstRun (built-in boot starts, then built-in first runs = `StartQueue` then `FirstQueue`; third-party first runs after other background starts).
 - `first_run_limit` (8 today) counts built-in first runs too, as `FIRST_RUNS` does. A first-run place is held until the run is classified resident, or its process is gone after its first standby (`lazy_first_runs_tick`). A first run classified lazy but busy frees its place at once and stays running until idle.
-- **Open for B3:** §4.4 says shared members count toward `max_active` while activating, A7 says the Builtin lane is outside it. Members are built-ins, so B1 keeps A7 (outside). The coordinator rules before B3.
+- Shared members are outside `max_active` like every built-in (A7; coordinator ruling, §17.2 Q18).
 
-### 17.4 Other decisions
+### 17.5 Other decisions
 
 - **Classification:** `classified(None)` parks at once (T12) through an installed Standby job in `Running`, so merges apply while it deactivates; a busy unit stays running. The 5 s classify timer resolves as resident ("no answer from the playback worker"). The adapter still sends the query at ready; the core only arms the timer.
-- **`packages.list` while waking:** `Activating` maps to `starting` per §9's list, so a wake emits `ListChanged` twice (standby → starting → running), as today (a waking plugin is `starting` in `package_list`). Only the standby half of the cycle is silent. To be confirmed in B2d against the B0 `packages.list` test.
+- **`packages.list` while waking:** matches today exactly. Today's `package_list` lists a plugin in `lazy.waking` as `running` (its pending activation notwithstanding) and a parked one as `running` + `process: idle`; `notify_tick` compares without `process`, so neither a park nor a wake announces anything. The core maps an `Activating` unit whose job is `Start{Trigger}` to `running` (process `running`), so a whole standby → wake → ready cycle emits no `ListChanged`. A first run (waiting or activating), a reload and an enable stay `starting`, as today (`first_queue`, a pending activation, `package_busy`). Test `list_changed_ignores_process_and_reports_state`.
 - **Stuck uninstall (T18 with `then: Removed`):** no `RemoveData`; the job fails with `STUCK_RELOAD`.
-- **Runner restart (T29):** members get `Terminate{Failed, grace: 0}` with `reaped` already set, then a Restart job each (origin crash). They verify again unless failed open (today `packages.verify`). Runner ids are allocated by the core (`RunnerId(1)`, +1 per restart).
+- **Runner restart (T29, §7.4):** members get `Terminate{Failed, grace: 0}` with `reaped` already set. Re-placement (A4): a member with a standby checkpoint (recorded, not resident, on-demand on) and no start in flight goes back to `Standby` by `Replay` under a new holder once its cleanup is in (no spawn; its old pid still forwards), as today's `start_installed` replays a recording; every other member gets a Restart job (origin crash). Members verify again unless failed open (today `packages.verify`). Runner ids are allocated by the core (`RunnerId(1)`, +1 per restart).
 - **Budget (B5):** checked when an in-budget unit spawns for a non-event start; candidates must have a checkpoint (`recorded`) besides the §8 rules.
 - **`on_demand` tunable** = `VESTRA_LAZY`: `today()` models it on; the adapter sets it off when lazy activation is off (no replay, no first runs, no idle standby).
 - **Failure texts:** today's where they exist ("activation timed out", "plugin process exited", the two 20 s texts as `STUCK_WAKE`/`STUCK_RELOAD`); the other `ExitCause` texts are new (B4).
 - **Timers:** stale heap entries at the top are dropped at the end of `run_jobs`, so `next_deadline` is exact after it.
-- **Not in B1:** `activation.rs` (MOVE in B2a; the Book and its `LIMIT` stay in the Host, a full Book reaches the core as `process_spawned(Err)`); `#[cfg(test)] mod tests;` for the spec tests is added when they are committed (the directory belongs to the spec test author).
+- **Not in B1:** `activation.rs` (MOVE in B2a; the Book and its `LIMIT` stay in the Host, a full Book reaches the core as `process_spawned(Err)`).
+- **Spec tests:** `supervisor/tests/` (the spec test author's) is compiled as `#[cfg(test)] mod tests;` in `supervisor/mod.rs`.
+
+### 17.6 Coordinator rulings and fixes after the spec tests (2026-11-02)
+
+Fixes where the core did not follow a design row (tests in `supervisor/sim.rs` and the spec tests):
+
+| # | Row | Fix |
+| --- | --- | --- |
+| F1 | T11 / §3.3 start retry | A start timeout with retries left terminates and retries the start (250 ms × 2ⁿ + 10 % jitter, from the reap). It lands in `Standby` only with a standby checkpoint; a Resident (or any unit without one) goes `Inactive` → `Activating{AutoRestart}`. Also from B3 a spawn failure keeps entry points in `Standby` only for such a unit, never a Resident |
+| F2 | §4.2 Stop[waiting, `then: Removed`] × Start(trigger) | `wake` on the still-active pid returns `Dropped`; a Stop for another reason is replaced by the Start (`Now`, the stop canceled) |
+| F3 | §4.2 Restart[any] × Start(trigger), unit still active | Absorbed: the trigger is held for the new run (`Held`), not sent to the old process |
+| F4 | §7.4 re-placement (A4) | Members with a standby checkpoint come back by `Replay` (§17.5) |
+
+Rulings on the spec author's questions:
+
+| # | Ruling | Implementation |
+| --- | --- | --- |
+| R5 | Trigger while `Standby{hold_until}` (T20, §4.3): an interactive trigger is answered at once with the reason (today's disabled-with-reason command state); a Start job waiting for `hold_until` is installed only while wake events remain in the backlog | `wake`: interactive → `Answer{Held{until}}`, `Refused`, no job; event → held, Start waits. A crash landing in a hold answers the held interactive triggers (`CouldNotStart`) and keeps its Start job only if events remain (`answer_interactive`) |
+| R6 | Shutdown: every `Checkpoint` before the first `Terminate` (§7.2 "checkpoints first"), so a forced exit mid-way finds each checkpoint written | `shutdown` emits the checkpoints in a first pass, then terminates |
+| R7 | Built-ins first: `Tunables::today()` reproduces today exactly; the target follows the §4.4 row; a tunable switch | `Tunables::builtins_first: BuiltinsFirst::{Queued, Installed}`; `today()` = `Queued` (only third-party first runs wait, while a built-in is queued for a place or verifying: `start_queued` lets other starts pass a verifying built-in); `with_b3` = `Installed` (third-party `Background` and first-run starts wait until every built-in with a start job is active) |
+
+Also confirmed: Q17 interactive cap = `max_active` + 2.

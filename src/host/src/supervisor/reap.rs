@@ -86,8 +86,15 @@ impl<P: Clone> Supervisor<P> {
         let UnitState::Deactivating { pid, then, .. } = unit.state else {
             return;
         };
+        let now = self.now;
         let kept = unit.stopping.is_some_and(|s| s.kept);
         unit.stopping = None;
+        let hold = unit.hold_next.take().map(|delay| now + delay);
+        if let Some(delay) = unit.after_reap.take()
+            && let Some(job) = unit.job.as_mut().filter(|job| job.will_start())
+        {
+            job.not_before = Some(now + delay);
+        }
         unit.stuck = stuck;
         unit.first_run = false;
         Timers::cancel(&mut unit.gens, TimerKind::StopGrace);
@@ -101,7 +108,7 @@ impl<P: Clone> Supervisor<P> {
                 unit.state = UnitState::Standby {
                     holder: pid,
                     recorded: true,
-                    hold_until: unit.hold_next.take(),
+                    hold_until: hold,
                 };
             }
             Then::Inactive => unit.state = UnitState::Inactive,
@@ -126,6 +133,13 @@ impl<P: Clone> Supervisor<P> {
             }
         }
         self.pending.extend(actions);
+        let replay = self
+            .units
+            .get_mut(&u)
+            .is_some_and(|unit| std::mem::take(&mut unit.replay_after));
+        if replay && then == Then::Inactive && !stuck {
+            self.replay(u);
+        }
         let job = self
             .units
             .get(&u)

@@ -32,6 +32,16 @@ fn woken(sim: &mut Sim, id: &str, t: Trigger<u32>) -> UnitId {
     u
 }
 
+/// Units in standby, all woken by a command before any `run_jobs` (adding a
+/// unit runs jobs, so `woken` one by one would start the earlier ones).
+fn woken_together<const N: usize>(sim: &mut Sim, ids: [&str; N]) -> [UnitId; N] {
+    let held = ids.map(|id| sim.in_standby(normal(id)));
+    for (i, (_, h)) in held.iter().enumerate() {
+        sim.wake(*h, cmd(i as u32));
+    }
+    held.map(|(u, _)| u)
+}
+
 fn spawned_units(sim: &Sim, acts: &[Act]) -> Vec<UnitId> {
     spawns(acts)
         .into_iter()
@@ -39,14 +49,36 @@ fn spawned_units(sim: &Sim, acts: &[Act]) -> Vec<UnitId> {
         .collect()
 }
 
-// Lanes: Builtin lane (FIFO in add order) before the third-party lane
-#[test]
-fn l_builtin_lane_runs_first_in_add_order() {
-    let mut sim = Sim::new(&Profile::b1());
+// Lanes: Builtin lane (FIFO in add order) before the third-party lane.
+// RULED (coordinator 2026-11-02, `Tunables::builtins_first`): today's
+// tunables reproduce today — lane order within a tick, so built-in boot
+// starts and then third-party first runs spawn in the same tick; target
+// tunables follow the design row — third-party Background starts wait while
+// any built-in has a start job installed (until active) or is verifying.
+fn builtins_and_first_runs(sim: &mut Sim) -> [UnitId; 4] {
     let n1 = sim.add(first_run("n1"));
     let b1 = sim.add(builtin("b1"));
     let n2 = sim.add(first_run("n2"));
     let b2 = sim.add(builtin("b2"));
+    [n1, b1, n2, b2]
+}
+
+#[test]
+fn l_builtin_lane_runs_first_in_add_order_b1() {
+    let mut sim = Sim::new(&Profile::b1());
+    let [n1, b1, n2, b2] = builtins_and_first_runs(&mut sim);
+    let acts = sim.run();
+    assert_eq!(
+        spawned_units(&sim, &acts),
+        vec![b1, b2, n1, n2],
+        "today: built-ins first in the tick, then third-party first runs"
+    );
+}
+
+#[test]
+fn l_builtin_lane_runs_first_in_add_order_target() {
+    let mut sim = Sim::new(&Profile::target());
+    let [n1, b1, n2, b2] = builtins_and_first_runs(&mut sim);
     let acts = sim.run();
     assert_eq!(
         spawned_units(&sim, &acts),
@@ -56,15 +88,16 @@ fn l_builtin_lane_runs_first_in_add_order() {
     assert!(matches!(sim.job(n1), Some(J::Start { running: false, .. })));
     sim.bring_up(b1);
     assert!(
-        spawns(&sim.run()).is_empty(),
+        matches!(sim.job(n1), Some(J::Start { running: false, .. })),
         "still a Builtin-lane job installed (b2)"
     );
     sim.bring_up(b2);
-    let acts = sim.run();
+    sim.run();
+    let order = spawned_units(&sim, &sim.log.clone());
     assert_eq!(
-        spawned_units(&sim, &acts),
-        vec![n1, n2],
-        "FIFO within Background"
+        order,
+        vec![b1, b2, n1, n2],
+        "FIFO within the third-party lane"
     );
 }
 
@@ -89,9 +122,10 @@ fn l_verifying_builtin_holds_background_first_runs() {
     let acts = sim.run();
     assert!(spawns(&acts).is_empty());
     assert_eq!(sim.st(b), S::Verify);
+    assert!(matches!(sim.job(n), Some(J::Start { running: false, .. })));
     sim.bring_up(b);
-    let acts = sim.run();
-    assert_eq!(spawned_units(&sim, &acts), vec![n]);
+    sim.run();
+    assert!(matches!(sim.st(n), S::Spawn(_)), "{:?}", sim.st(n));
 }
 
 // Built-ins first applies to Background only: Interactive starts go
@@ -187,11 +221,18 @@ fn l_b1_first_runs_limited_to_eight() {
     let pid = sim.pid(us[0]);
     sim.spawned(pid, true);
     let acts = sim.ready(pid);
+    assert!(
+        spawned_units(&sim, &acts).is_empty(),
+        "ready keeps the place"
+    );
+    // §17.3 (today's `lazy_first_runs_tick`): the place frees when the
+    // run is classified resident (or its process is gone after standby).
+    let acts = sim.classified(pid, true);
     assert_eq!(spawned_units(&sim, &acts), vec![us[8]]);
 }
 
 // Interactive reserve: +1 slot for Interactive; if taken, may overrun by 1 more
-// DESIGN QUESTION: read as "Interactive may run up to max_active + 2
+// ANSWERED (supervisor.md §17.2 Q17), was a design question: read as "Interactive may run up to max_active + 2
 // Starts in total (reserve + overrun)". The alternative reading — the
 // overrun *is* the reserve — would allow only max_active + 1.
 #[test]
@@ -199,9 +240,7 @@ fn l_interactive_reserve_then_overrun_by_one() {
     let p = Profile::target();
     let mut sim = Sim::new(&p);
     fill_slots(&mut sim, p.max_active);
-    let i1 = woken(&mut sim, "i1", cmd(1));
-    let i2 = woken(&mut sim, "i2", cmd(2));
-    let i3 = woken(&mut sim, "i3", cmd(3));
+    let [i1, i2, i3] = woken_together(&mut sim, ["i1", "i2", "i3"]);
     let acts = sim.run();
     assert_eq!(spawned_units(&sim, &acts), vec![i1, i2]);
     assert!(matches!(sim.job(i3), Some(J::Start { running: false, .. })));
@@ -214,8 +253,7 @@ fn l_critical_pressure_disables_interactive_overrun() {
     let mut sim = Sim::new(&p);
     fill_slots(&mut sim, p.max_active);
     sim.pressure_critical();
-    let i1 = woken(&mut sim, "i1", cmd(1));
-    let i2 = woken(&mut sim, "i2", cmd(2));
+    let [i1, i2] = woken_together(&mut sim, ["i1", "i2"]);
     let acts = sim.run();
     assert_eq!(spawned_units(&sim, &acts), vec![i1]);
     assert!(matches!(sim.job(i2), Some(J::Start { running: false, .. })));
@@ -229,16 +267,16 @@ fn l_event_wake_waits_for_a_slot() {
     let full = fill_slots(&mut sim, p.max_active);
     let e = woken(&mut sim, "e", event("playback.state", 1));
     assert!(spawns(&sim.run()).is_empty());
-    assert_eq!(spawned_units(&sim, &sim.ready(full[0].1)), vec![e]);
+    let acts = sim.ready(full[0].1);
+    assert_eq!(spawned_units(&sim, &acts), vec![e]);
 }
 
 // Event wakes muted during start-up and QUIET_AFTER_START_MS after settle
-// DESIGN QUESTION: no §5 input marks start-up as settled. Best reading:
-// the core settles when no Boot/FirstRun job is left, and mutes event
-// wakes for 1 s after that.
+// (§17.1: the adapter reports start-up with `set_muted` / `settled`.)
 #[test]
 fn l_event_wakes_muted_right_after_start_up() {
     let mut sim = Sim::new(&Profile::b1());
+    sim.mute();
     let (u, holder) = sim.in_standby(normal("a"));
     assert!(matches!(
         sim.wake(holder, event("playback.state", 1)),

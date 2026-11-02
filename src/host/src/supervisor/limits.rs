@@ -115,6 +115,8 @@ pub struct Tunables {
     /// A failed start (spawn error, start timeout, stuck stop wait) keeps
     /// the entry points in standby (T8, B3) instead of revoking (today).
     pub start_failure_keeps_registrations: bool,
+    /// How third-party starts wait for built-ins (§4.4 "Built-ins first").
+    pub builtins_first: BuiltinsFirst,
     /// Runner fail-open: restarts within the window.
     pub runner_restart_limit: u32,
     pub runner_restart_window: Ms,
@@ -176,6 +178,7 @@ impl Tunables {
             process_budget: None,
             recent: 60_000,
             start_failure_keeps_registrations: false,
+            builtins_first: BuiltinsFirst::Queued,
             runner_restart_limit: 3,
             runner_restart_window: 60_000,
             runner_backoff: None,
@@ -191,6 +194,7 @@ impl Tunables {
         self.backlog_max = Some(64);
         self.lane_max = Some(256);
         self.start_failure_keeps_registrations = true;
+        self.builtins_first = BuiltinsFirst::Installed;
         self
     }
 
@@ -277,6 +281,20 @@ impl Default for Tunables {
     fn default() -> Self {
         Self::today()
     }
+}
+
+/// "Built-ins first" (§4.4; coordinator ruling 2026-11-02, §17.2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BuiltinsFirst {
+    /// Today (`builtin_first_run_pending`): only third-party *first runs*
+    /// wait, and only while a built-in is still to start — queued for a
+    /// slot or verifying. A built-in that started does not hold them back,
+    /// so in one tick the built-ins start, then the third-party first runs.
+    Queued,
+    /// Design row (B3): third-party `Background` starts (first runs
+    /// included) wait while any built-in has a start job installed — until
+    /// it is active — or is verifying.
+    Installed,
 }
 
 /// `min(4, max(2, cores/2))` (§4.4).

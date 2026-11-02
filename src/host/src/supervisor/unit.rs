@@ -346,7 +346,13 @@ pub struct Unit<P> {
     pub(super) from_standby: bool,
     pub(super) asked_at: Option<Ms>,
     pub(super) failing: Option<(FailResult, String)>,
+    /// Restart hold (`hold_until`) after a crash, measured from the reap.
     pub(super) hold_next: Option<Ms>,
+    /// Delay of the next automatic start (backoff, retry), from the reap
+    /// (systemd starts `RestartSec` once the stop finished).
+    pub(super) after_reap: Option<Ms>,
+    /// After a runner restart: back to standby by replay at reap (A4).
+    pub(super) replay_after: bool,
     pub(super) work: Work,
     pub(super) restart: RestartState,
     pub(super) gens: Gens,
@@ -392,6 +398,8 @@ impl<P> Unit<P> {
             asked_at: None,
             failing: None,
             hold_next: None,
+            after_reap: None,
+            replay_after: false,
             work: Work::default(),
             restart: RestartState::default(),
             gens: Gens::default(),

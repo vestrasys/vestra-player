@@ -181,7 +181,7 @@ both! {
 
 // Standby, resources answer: "today's lazy.asking wait (value MOVE)" →
 // treat as busy, re-arm idle.
-// DESIGN QUESTION: today's `lazy.asking` has no timeout (an unanswered
+// ANSWERED (supervisor.md §17.2 Q21), was a design question: today's `lazy.asking` has no timeout (an unanswered
 // `owner.resources` keeps the owner out of idle checks until an answer
 // arrives), so there is no value to MOVE. This test only checks that an
 // unanswered query never stops the unit.

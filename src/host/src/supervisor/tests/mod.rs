@@ -20,7 +20,9 @@
 //! request timeout 5 min, a process budget). Tests whose expected values
 //! differ between the two are generated for both with `both!`.
 //!
-//! Lines marked `// DESIGN QUESTION:` are places where the design is
+//! Lines marked `// ANSWERED (… §17.2 Qn)` were design questions, answered
+//! in supervisor.md §17.2; lines marked `// DESIGN QUESTION:` are open:
+//! places where the design is
 //! ambiguous or contradictory; the test encodes the author's best reading.
 #![forbid(unsafe_code)]
 #![allow(dead_code)]
@@ -237,6 +239,7 @@ pub(super) enum R {
     Failed(String),
     Canceled,
     Timeout,
+    Dropped,
 }
 
 /// Why a held trigger was answered (§4.6).
@@ -245,7 +248,10 @@ pub(super) enum Why {
     Busy,
     CouldNotStart,
     Disabled,
-    Other,
+    Removed,
+    Stopped,
+    /// In standby with a restart hold (T20).
+    Held,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -312,7 +318,9 @@ pub(super) fn first_run(id: &str) -> Spec {
 }
 /// Third-party plugin recorded resident.
 pub(super) fn resident(id: &str) -> Spec {
-    Spec::new(id, Class::Resident, Ck::Resident)
+    // Resident is observed, never declared (§3.3): a Normal plugin whose
+    // checkpoint says resident.
+    Spec::new(id, Class::Normal, Ck::Resident)
 }
 /// Built-in in its own process that does not go to standby.
 pub(super) fn builtin(id: &str) -> Spec {
@@ -340,59 +348,50 @@ pub(super) fn norm(x: impl Debug) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// ADAPTER: the only place that names the core's concrete Rust shapes.
+// ---------------------------------------------------------------------------
+// ADAPTER: the only place that names the core's concrete Rust shapes
+// (mapped to the B1 API, supervisor.md §17.1).
 // ---------------------------------------------------------------------------
 
 pub(super) type Act = Action<u32>;
 
-/// §11 Tunables from a profile.
-// DESIGN QUESTION: §11 lists values but not field names, and does not say
-// how B1's "`Restart=no` + revoke for every class" and B3's "limits live"
-// are expressed (tunables? feature switches? per-class `Policy` built from
-// tunables?). This maps each profile field to a guessed tunable.
+/// Memory for `Tunables::target` (the budget is overridden from the profile).
+const PHYS_MIB: u64 = 16_384;
+
+/// §11 Tunables from the core's presets: `today()` for B1, `target(cores
+/// 8, …)` for the target. Only the machine-dependent budget is taken from
+/// the profile; `t00_presets_match_design_values` checks the rest against
+/// the design's numbers.
 fn tunables(p: &Profile) -> Tunables {
-    Tunables {
-        idle_timeout: p.idle,
-        timeout_start: p.start_timeout,
-        timeout_stop: p.stop_grace,
-        timeout_stop_standby: p.standby_grace,
-        timeout_stop_failed: p.failure_grace,
-        stop_wait: STOP_WAIT,
-        verify_wait: VERIFY_WAIT,
-        max_active: p.max_active,
-        max_active_wakes: p.limit_wakes,
-        interactive_reserve: p.reserve,
-        backlog_max: p.backlog_max,
-        lane_max: p.lane_max,
-        start_retries: p.start_retries,
-        restart_policy: p.restart,
-        request_timeout: p.request_timeout,
-        process_budget: p.budget,
-        ..Tunables::default()
-    }
+    let mut t = if p.restart {
+        Tunables::target(8, PHYS_MIB)
+    } else {
+        Tunables::today()
+    };
+    t.process_budget = p.budget;
+    t
 }
 
 fn unit_spec(s: &Spec) -> UnitSpec {
-    UnitSpec {
-        id: s.id.clone(),
-        class: s.class,
-        placement: match s.runner {
-            Some(r) => Placement::Shared(RunnerId(r)),
-            None => Placement::Own,
-        },
-        enablement: if s.enabled {
-            Enablement::Enabled
-        } else {
-            Enablement::Disabled
-        },
-        checkpoint: match s.ck {
-            Ck::None => None,
-            Ck::Standby => Some(false),
-            Ck::Resident => Some(true),
-        },
-        verify: s.verify,
-        dev_timeout: s.dev_timeout,
+    let mut u = UnitSpec::new(s.id.clone(), s.class);
+    if !s.enabled {
+        u = u.disabled();
     }
+    if s.runner.is_some() {
+        u = u.shared();
+    }
+    if s.verify {
+        u = u.verify();
+    }
+    match s.ck {
+        Ck::None => {}
+        Ck::Standby => u = u.checkpoint(false),
+        Ck::Resident => u = u.checkpoint(true),
+    }
+    if let Some(ms) = s.dev_timeout {
+        u = u.start_timeout(ms);
+    }
+    u
 }
 
 fn state_view(s: &UnitState) -> S {
@@ -400,8 +399,8 @@ fn state_view(s: &UnitState) -> S {
         UnitState::Inactive => S::Inactive,
         UnitState::Activating { pid, sub, .. } => match sub {
             ActivatingSub::Verify => S::Verify,
-            ActivatingSub::Spawn => S::Spawn(*pid),
-            ActivatingSub::Ready => S::Ready(*pid),
+            ActivatingSub::Spawn => S::Spawn(pid.expect("Spawn has a pid")),
+            ActivatingSub::Ready => S::Ready(pid.expect("Ready has a pid")),
             ActivatingSub::AutoRestart { until } => S::AutoRestart(*until),
         },
         UnitState::Active { pid, .. } => S::Active(*pid),
@@ -421,10 +420,14 @@ fn state_view(s: &UnitState) -> S {
 }
 
 fn job_view(j: &Job) -> J {
-    let running = norm(&j.state) == "running";
+    let running = j.state == JobState::Running;
     match &j.kind {
         JobKind::Start { cause } => J::Start {
-            cause: norm(cause),
+            // A merged trigger raises the job priority, not the cause (§17.1).
+            cause: match cause {
+                Cause::Trigger(_) => format!("trigger{}", norm(j.priority)),
+                other => norm(other),
+            },
             running,
         },
         JobKind::Stop { then, .. } => J::Stop {
@@ -442,23 +445,23 @@ fn job_view(j: &Job) -> J {
 
 /// Command (`commands.execute`) trigger with payload `p`: Interactive.
 pub(super) fn cmd(p: u32) -> Trigger<u32> {
-    Trigger::Command(p)
+    Trigger::interactive(p)
 }
 /// `source.resolveRequest` trigger: Interactive.
 pub(super) fn resolve(p: u32) -> Trigger<u32> {
-    Trigger::Resolve(p)
+    Trigger::interactive(p)
 }
 /// `drops.drop` trigger: Interactive.
 pub(super) fn drop_(p: u32) -> Trigger<u32> {
-    Trigger::Drop(p)
+    Trigger::interactive(p)
 }
 /// `ui.callback` trigger: Interactive.
 pub(super) fn callback(p: u32) -> Trigger<u32> {
-    Trigger::Callback(p)
+    Trigger::interactive(p)
 }
 /// Wake event broadcast (`WAKE_EVENTS`): Event priority.
 pub(super) fn event(name: &str, p: u32) -> Trigger<u32> {
-    Trigger::Event(name.into(), p)
+    Trigger::event(name, p)
 }
 
 pub(super) fn act_name(a: &Act) -> &'static str {
@@ -480,6 +483,7 @@ pub(super) fn act_name(a: &Act) -> &'static str {
         Action::RemoveData { .. } => "RemoveData",
         Action::Notify { .. } => "Notify",
         Action::ListChanged { .. } => "ListChanged",
+        Action::JobFinished { .. } => "JobFinished",
     }
 }
 
@@ -510,26 +514,26 @@ pub(super) fn rekey(a: &Act) -> Option<(Pid, Pid)> {
 /// `(pid, payload)` of a `Deliver`.
 pub(super) fn delivered(a: &Act) -> Option<(Pid, u32)> {
     match a {
-        Action::Deliver { pid, trigger, .. } => Some((*pid, *trigger.payload())),
+        Action::Deliver { pid, payload, .. } => Some((*pid, *payload)),
         _ => None,
     }
 }
 /// `(payload, why)` of an `Answer`.
 pub(super) fn answered(a: &Act) -> Option<(u32, Why)> {
     match a {
-        Action::Answer { trigger, why, .. } => {
-            let w = norm(why);
-            let why = if w.contains("busy") {
-                Why::Busy
-            } else if w.contains("couldnotstart") || w.contains("start") {
-                Why::CouldNotStart
-            } else if w.contains("disabled") {
-                Why::Disabled
-            } else {
-                Why::Other
-            };
-            Some((*trigger.payload(), why))
-        }
+        Action::Answer {
+            reason, payload, ..
+        } => Some((
+            *payload,
+            match reason {
+                AnswerReason::Busy => Why::Busy,
+                AnswerReason::CouldNotStart => Why::CouldNotStart,
+                AnswerReason::Disabled => Why::Disabled,
+                AnswerReason::Removed => Why::Removed,
+                AnswerReason::Stopped => Why::Stopped,
+                AnswerReason::Held { .. } => Why::Held,
+            },
+        )),
         _ => None,
     }
 }
@@ -546,6 +550,16 @@ pub(super) fn terminate(a: &Act) -> Option<(Ms, bool, String, Pid)> {
         _ => None,
     }
 }
+/// A "…ran out of memory" notice (T25).
+pub(super) fn is_oom_notice(a: &Act) -> bool {
+    matches!(
+        a,
+        Action::Notify {
+            notice: Notice::Crashed(ExitCause::Oom),
+            ..
+        }
+    )
+}
 
 pub(super) struct Sim {
     pub sup: Supervisor<u32>,
@@ -557,8 +571,10 @@ pub(super) struct Sim {
 
 impl Sim {
     pub fn new(p: &Profile) -> Sim {
+        let mut sup = Supervisor::new(tunables(p), 1);
+        sup.set_now(T0);
         Sim {
-            sup: Supervisor::new(tunables(p)),
+            sup,
             now: T0,
             p: p.clone(),
             log: Vec::new(),
@@ -584,54 +600,62 @@ impl Sim {
         let t = self.now + d;
         self.at(t)
     }
-    /// Start-up is over (§4.4 "Event wakes": muted during start-up and
-    /// `QUIET_AFTER_START_MS` after settle).
-    // DESIGN QUESTION: §5 has no input that tells the core start-up has
-    // settled (`lazy_settled`/`Lazy::mute` today). Best reading: the core
-    // settles itself once every Boot/FirstRun job is done; this waits the
-    // quiet second after that.
+    /// Start-up is over (§4.4 "Event wakes"; §17.1: the adapter reports it
+    /// with `settled`), and the quiet second after it has passed.
     pub fn settle(&mut self) -> Vec<Act> {
+        self.sup.settled(self.now);
         self.after(QUIET_AFTER_START)
+    }
+    /// Start-up in progress: wake events wake nothing (`set_muted`).
+    pub fn mute(&mut self) {
+        self.sup.set_muted(true)
     }
 
     pub fn add(&mut self, s: Spec) -> UnitId {
         self.sup.add_unit(unit_spec(&s))
     }
+    fn u(&self, u: UnitId) -> &Unit<u32> {
+        self.sup.unit(u).expect("unit exists")
+    }
     pub fn st(&self, u: UnitId) -> S {
-        state_view(&self.sup.unit(u).state)
+        state_view(&self.u(u).state)
     }
     pub fn job(&self, u: UnitId) -> Option<J> {
         self.sup.job(u).map(job_view)
     }
-    // DESIGN QUESTION: §5 says `job(u)` returns "the installed job and its
-    // result", but a finished job is no longer installed (one installed job
-    // per unit). Best reading: results are kept by `JobId` until read.
+    /// The result of a job that ended, looked up on every unit
+    /// (`job_result(u, id)`).
     pub fn result(&self, id: JobId) -> Option<R> {
-        self.sup.job_result(id).map(|r| match r {
+        let r = self
+            .sup
+            .units()
+            .find_map(|(u, _)| self.sup.job_result(u, id).cloned())?;
+        Some(match r {
             JobResult::Done => R::Done,
-            JobResult::Failed(text) => R::Failed(text.to_string()),
+            JobResult::Failed(text) => R::Failed(text),
             JobResult::Canceled => R::Canceled,
             JobResult::Timeout => R::Timeout,
+            JobResult::Dropped => R::Dropped,
         })
     }
     pub fn class(&self, u: UnitId) -> Class {
-        self.sup.unit(u).class
+        self.u(u).class
     }
     pub fn own_process(&self, u: UnitId) -> bool {
-        matches!(self.sup.unit(u).placement, Placement::Own)
+        matches!(self.u(u).placement, Placement::Own)
     }
     pub fn enabled(&self, u: UnitId) -> bool {
-        matches!(self.sup.unit(u).enablement, Enablement::Enabled)
+        self.u(u).enabled()
     }
     pub fn backlog_len(&self, u: UnitId) -> usize {
-        self.sup.unit(u).backlog.len()
+        self.u(u).backlog.len()
     }
     pub fn stuck(&self, u: UnitId) -> bool {
-        self.sup.unit(u).stuck
+        self.u(u).stuck
     }
     pub fn failure_text(&self, u: UnitId) -> Option<String> {
-        match &self.sup.unit(u).state {
-            UnitState::Failed { text, .. } => Some(text.to_string()),
+        match &self.u(u).state {
+            UnitState::Failed { text, .. } => Some(text.clone()),
             _ => None,
         }
     }
@@ -643,28 +667,56 @@ impl Sim {
     }
     /// The unit's current (or holder) pid; panics if it has none.
     pub fn pid(&self, u: UnitId) -> Pid {
-        match &self.sup.unit(u).state {
-            UnitState::Activating { pid, .. }
-            | UnitState::Active { pid, .. }
-            | UnitState::Deactivating { pid, .. } => *pid,
+        match &self.u(u).state {
             UnitState::Standby { holder, .. } => *holder,
-            other => panic!("no pid in {other:?}"),
+            other => other.pid().unwrap_or_else(|| panic!("no pid in {other:?}")),
         }
     }
 
     // requests
-    pub fn start(&mut self, u: UnitId, cause: StartCause) -> Result<JobId, Busy> {
+    pub fn start(&mut self, u: UnitId, cause: Cause) -> Result<JobId, Busy> {
         self.sup.start(u, cause)
     }
     pub fn start_interactive(&mut self, u: UnitId) -> Result<JobId, Busy> {
-        self.sup
-            .start(u, StartCause::Trigger(Priority::Interactive))
+        self.sup.start(u, Cause::Trigger(Priority::Interactive))
     }
+    /// A stop request in `JobMode::Replace` (the merge table, §4.2). The
+    /// core's `stop()` gives disable/uninstall/reload `JobMode::Fail`
+    /// (§17.1); package-RPC conflicts are tested with `rpc_*`.
     pub fn stop(&mut self, u: UnitId, reason: StopReason, then: Then) -> Result<JobId, Busy> {
-        self.sup.stop(u, reason, then)
+        let kind = JobKind::Stop { reason, then };
+        self.sup.enqueue_job(
+            u,
+            kind,
+            JobMode::Replace,
+            Priority::Background,
+            Origin::Internal,
+        )
     }
+    /// A restart request in `JobMode::Replace` (the core's `restart()` is a
+    /// package RPC, §17.1; see `rpc_restart`).
     pub fn restart(&mut self, u: UnitId, fresh: bool, image: Option<&str>) -> Result<JobId, Busy> {
-        self.sup.restart(u, fresh, image.map(|i| i.to_string()))
+        let kind = JobKind::Restart {
+            fresh,
+            image: image.map(|i| i.to_string()),
+        };
+        self.sup.enqueue_job(
+            u,
+            kind,
+            JobMode::Replace,
+            Priority::Interactive,
+            Origin::Internal,
+        )
+    }
+    /// The user's disable as the package RPC does it: unit-file state, then
+    /// the core's `stop(Disable)` (origin User, `JobMode::Fail` only against a
+    /// package-RPC job; §17.1, §17.2 Q16).
+    pub fn user_disable(&mut self, u: UnitId) -> Result<JobId, Busy> {
+        self.sup.set_enabled(u, false);
+        self.sup.stop(u, StopReason::Disable, Then::Inactive)
+    }
+    pub fn failed_open(&self) -> bool {
+        self.sup.failed_open()
     }
     pub fn standby(&mut self, u: UnitId) -> JobId {
         self.sup.standby(u)
@@ -697,6 +749,7 @@ impl Sim {
         )
     }
     pub fn wake(&mut self, pid: Pid, t: Trigger<u32>) -> Delivery {
+        self.sup.set_now(self.now);
         self.sup.wake(pid, t)
     }
     pub fn kill(&mut self, u: UnitId) -> Vec<Act> {
@@ -753,7 +806,7 @@ impl Sim {
         self.run()
     }
     pub fn reaped(&mut self, pid: Pid) -> Vec<Act> {
-        self.sup.process_reaped(pid, Default::default());
+        self.sup.process_reaped(pid, None);
         self.run()
     }
     pub fn cleaned(&mut self, pid: Pid) -> Vec<Act> {
@@ -771,40 +824,91 @@ impl Sim {
         self.run()
     }
     pub fn classified(&mut self, pid: Pid, resident: bool) -> Vec<Act> {
-        self.sup.classified(
-            pid,
-            if resident {
-                Some("live resource".into())
-            } else {
-                None
-            },
-        );
+        self.sup
+            .classified(pid, resident.then(|| "live resource".to_string()));
         self.run()
     }
     pub fn touch(&mut self, pid: Pid) {
         self.sup.touch(pid, self.now)
     }
     pub fn begin_work(&mut self, pid: Pid) {
-        self.sup.begin_work(pid, Default::default(), self.now)
+        self.sup.begin_work(pid, 1, self.now)
     }
     pub fn end_work(&mut self, pid: Pid) {
-        self.sup.end_work(pid, Default::default())
+        self.sup.end_work(pid, 1)
     }
-    pub fn runner_hung(&mut self, runner: u32) -> Vec<Act> {
-        self.sup.runner_failed(RunnerId(runner), RunnerFault::Hung);
+    /// The shared runner hangs (the core allocates runner ids; the test's
+    /// runner number only says "shared").
+    pub fn runner_hung(&mut self, _runner: u32) -> Vec<Act> {
+        let r = self.sup.runner();
+        self.sup.runner_failed(r, ExitCause::Fault);
         self.run()
     }
     pub fn pressure_low(&mut self) -> Vec<Act> {
-        self.sup.memory_pressure(PressureLevel::Low);
+        self.sup.memory_pressure(Pressure::Low);
         self.run()
     }
     pub fn pressure_critical(&mut self) -> Vec<Act> {
-        self.sup.memory_pressure(PressureLevel::Critical);
+        self.sup.memory_pressure(Pressure::Critical);
         self.run()
     }
     pub fn next_deadline(&self) -> Option<Ms> {
         self.sup.next_deadline()
     }
+}
+
+/// The core's presets carry the design's numbers (§3.3, §11).
+#[test]
+fn t00_presets_match_design_values() {
+    for p in [Profile::b1(), Profile::target()] {
+        let t = tunables(&p);
+        let n = t.policy(Class::Normal);
+        assert_eq!(t.idle_timeout, p.idle, "{}", p.name);
+        assert_eq!(n.start_timeout, p.start_timeout, "{}", p.name);
+        assert_eq!(n.stop_grace, p.stop_grace, "{}", p.name);
+        assert_eq!(n.standby_grace, p.standby_grace, "{}", p.name);
+        assert_eq!(n.failure_grace, p.failure_grace, "{}", p.name);
+        assert_eq!(n.request_timeout, p.request_timeout, "{}", p.name);
+        assert_eq!(t.stop_wait, STOP_WAIT);
+        assert_eq!(t.verify_wait, VERIFY_WAIT);
+        assert_eq!(t.starting_notice, STARTING_OSD);
+        assert_eq!(t.quiet_after_start, QUIET_AFTER_START);
+        assert_eq!(t.backlog_max, p.backlog_max, "{}", p.name);
+        assert_eq!(t.lane_max, p.lane_max, "{}", p.name);
+        assert_eq!(t.interactive_reserve, p.reserve, "{}", p.name);
+        if p.limit_wakes {
+            assert_eq!(t.max_active, Some(p.max_active));
+        } else {
+            assert_eq!(t.max_active, None, "B1: wakes unlimited");
+            assert_eq!(t.first_run_limit, Some(p.max_active), "B1: 8 first runs");
+        }
+        let bf = if p.restart {
+            BuiltinsFirst::Installed
+        } else {
+            BuiltinsFirst::Queued
+        };
+        assert_eq!(t.builtins_first, bf, "{}", p.name);
+        let retries = n.start_retry.map_or(0, |r| r.count);
+        assert_eq!(retries, p.start_retries, "{}", p.name);
+        for c in [
+            Class::Builtin,
+            Class::Resident,
+            Class::Normal,
+            Class::Development,
+        ] {
+            let r = t.policy(c).restart;
+            if !p.restart {
+                assert_eq!(r, RestartMode::No, "B1: Restart=no for {c:?}");
+            }
+        }
+    }
+    assert_eq!(max_active_for(8), 4);
+    assert_eq!(max_active_for(2), 2);
+    assert_eq!(max_active_for(64), 4);
+    // §8: clamp(physMiB / 2 × 0.30 / 85, 3, 16).
+    assert_eq!(process_budget_for(4_096), 7);
+    assert_eq!(process_budget_for(1_024), 3);
+    assert_eq!(process_budget_for(65_536), 16);
 }
 
 // ---------------------------------------------------------------------------

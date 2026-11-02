@@ -1191,11 +1191,38 @@ fn list_changed_ignores_process_and_reports_state() {
     w.tick(0);
     let holder = w.holder(u);
     w.s.wake(holder, Trigger::interactive(1));
+    w.auto_ready = false;
     let actions = w.tick(10);
-    // standby → starting → running: two changes.
+    // A wake is `running` all along, as today (`lazy.waking`): nothing to
+    // announce while it activates or once it is ready.
     assert_eq!(
-        count(&actions, |a| *a == Action::ListChanged { unit: u }),
-        2
+        w.s.list_state(u),
+        Some(ListState::Running {
+            process: ProcessState::Running
+        })
+    );
+    let pid = w.pid(u);
+    w.s.process_ready(pid);
+    let more = w.tick(20);
+    assert!(active(&w, u));
+    assert_eq!(
+        count(&actions, |a| matches!(a, Action::ListChanged { .. }))
+            + count(&more, |a| matches!(a, Action::ListChanged { .. })),
+        0
+    );
+    // A first run waiting or activating is `starting` (today `first_queue`
+    // and a pending activation): announced.
+    let mut w2 = World::new(Tunables::today());
+    w2.auto_ready = false;
+    let f = w2.s.add_unit(UnitSpec::new("f", Class::Normal));
+    assert_eq!(w2.s.list_state(f), Some(ListState::Starting));
+    w2.tick(0);
+    let fpid = w2.pid(f);
+    w2.s.process_ready(fpid);
+    let actions = w2.tick(10);
+    assert_eq!(
+        count(&actions, |a| *a == Action::ListChanged { unit: f }),
+        1
     );
     // running → standby (idle): no change for `packages.changed`.
     let actions = w.tick(60_010);
@@ -1234,4 +1261,207 @@ fn seeded_runs_are_deterministic() {
     let a = run();
     assert_eq!(a, run());
     assert_eq!(spawns(&a).len(), 4, "1 start + 3 retries");
+}
+
+// ---- answers to the spec author's design questions (§17.2) -----------------
+
+#[test]
+fn q15_upgrade_of_a_disabled_unit_applies_without_starting() {
+    let mut w = World::new(Tunables::today());
+    let u = w.s.add_unit(
+        UnitSpec::new("n", Class::Normal)
+            .checkpoint(false)
+            .disabled(),
+    );
+    w.tick(0);
+    let job = w.s.restart(u, true, Some("v2".into())).unwrap();
+    let actions = w.tick(10);
+    assert!(actions.contains(&Action::DropCheckpoint { unit: u }));
+    assert!(spawns(&actions).is_empty());
+    assert_eq!(w.s.job_result(u, job), Some(&JobResult::Done));
+    assert_eq!(w.s.list_state(u), Some(ListState::Disabled));
+    // Enabled later, the new image starts as a first run.
+    w.s.set_enabled(u, true);
+    w.s.start(u, Cause::Enable).unwrap();
+    let started = w.tick(20);
+    assert!(started.contains(&Action::Spawn {
+        unit: u,
+        pid: w.pid(u),
+        placement: Placement::Own,
+        image: Some("v2".into()),
+        first_run: true
+    }));
+    // A disabled unit with a job installed still refuses (§4.2).
+    let v = w.s.add_unit(UnitSpec::new("v", Class::Normal).disabled());
+    w.s.stop(v, StopReason::Disable, Then::Inactive).unwrap();
+    let refused = w.s.restart(v, true, None).unwrap();
+    assert_eq!(w.s.job_result(v, refused), Some(&JobResult::Dropped));
+}
+
+#[test]
+fn q24_backoff_and_hold_count_from_the_reap() {
+    let mut w = World::new(Tunables::today().with_b4());
+    w.auto_reap = false;
+    let n = standby_unit(&mut w, "n");
+    let b =
+        w.s.add_unit(UnitSpec::new("b", Class::Builtin).checkpoint(true));
+    w.tick(0);
+    let holder = w.holder(n);
+    w.s.wake(holder, Trigger::interactive(1));
+    w.tick(10);
+    let (npid, bpid) = (w.pid(n), w.pid(b));
+    w.s.process_exited(npid, ExitCause::Exited);
+    w.s.process_exited(bpid, ExitCause::Exited);
+    w.tick(100);
+    // Reaped 5 s after the exit: the hold and the 3 s backoff start then.
+    w.s.set_now(5_100);
+    for pid in [npid, bpid] {
+        w.s.process_reaped(pid, Some(1));
+        w.s.backend_cleaned(pid);
+    }
+    w.tick(5_100);
+    assert!(matches!(
+        w.state(n),
+        UnitState::Standby {
+            hold_until: Some(6_100),
+            ..
+        }
+    ));
+    assert!(matches!(
+        w.state(b),
+        UnitState::Activating {
+            sub: ActivatingSub::AutoRestart { until: 8_100 },
+            ..
+        }
+    ));
+    assert!(spawns(&w.tick(8_099)).is_empty());
+    assert_eq!(spawns(&w.tick(8_100)).len(), 1);
+}
+
+// ---- coordinator rulings after the spec tests (§17.2) -----------------------
+
+#[test]
+fn builtins_first_today_vs_design_row() {
+    for mode in [BuiltinsFirst::Queued, BuiltinsFirst::Installed] {
+        let tunables = Tunables {
+            builtins_first: mode,
+            ..Tunables::today()
+        };
+        let mut w = World::new(tunables);
+        w.auto_ready = false;
+        let n = w.s.add_unit(UnitSpec::new("n", Class::Normal));
+        let b = w.s.add_unit(UnitSpec::new("b", Class::Builtin));
+        let r =
+            w.s.add_unit(UnitSpec::new("r", Class::Normal).checkpoint(true));
+        let order = spawns(&w.tick(0))
+            .into_iter()
+            .map(|(u, ..)| u)
+            .collect::<Vec<_>>();
+        match mode {
+            // Today: built-ins start first in the tick; a started built-in
+            // holds nobody back.
+            BuiltinsFirst::Queued => assert_eq!(order, [b, r, n]),
+            // Design: third-party background starts wait until it is active.
+            BuiltinsFirst::Installed => {
+                assert_eq!(order, [b]);
+                let pid = w.pid(b);
+                w.s.process_ready(pid);
+                let next = spawns(&w.tick(10))
+                    .into_iter()
+                    .map(|(u, ..)| u)
+                    .collect::<Vec<_>>();
+                assert_eq!(next, [r, n]);
+            }
+        }
+    }
+}
+
+#[test]
+fn runner_restart_replays_members_with_a_standby_checkpoint() {
+    let mut w = World::new(Tunables::today());
+    let a = standby_unit(&mut w, "x");
+    let m = w.s.add_unit(
+        UnitSpec::new("m", Class::Builtin)
+            .shared()
+            .checkpoint(false),
+    );
+    let k =
+        w.s.add_unit(UnitSpec::new("k", Class::Builtin).shared().checkpoint(true));
+    w.tick(0);
+    let holder = w.holder(m);
+    w.s.wake(holder, Trigger::interactive(1));
+    w.tick(10);
+    assert!(active(&w, m) && active(&w, k));
+    let mpid = w.pid(m);
+    w.s.runner_failed(w.s.runner(), ExitCause::Fault);
+    let actions = w.tick(20);
+    let started = spawns(&actions);
+    assert_eq!(started.len(), 1, "only the resident member is spawned");
+    assert_eq!(started[0].0, k);
+    let replayed = w.holder(m);
+    assert!(actions.contains(&Action::Replay {
+        unit: m,
+        holder: replayed
+    }));
+    // The old pid still finds the unit and wakes it.
+    assert_eq!(w.s.wake(mpid, Trigger::interactive(2)), Delivery::Started);
+    assert!(matches!(w.state(a), UnitState::Standby { .. }));
+}
+
+#[test]
+fn crash_during_wake_keeps_a_start_only_for_held_events() {
+    for with_event in [false, true] {
+        let mut w = World::new(Tunables::today().with_b4());
+        w.auto_ready = false;
+        let u = standby_unit(&mut w, "n");
+        let holder = w.holder(u);
+        w.tick(0);
+        w.s.wake(holder, Trigger::interactive(1));
+        if with_event {
+            w.s.wake(holder, Trigger::event("e", 2));
+        }
+        w.tick(10);
+        let pid = w.pid(u);
+        w.s.process_spawned(pid, Ok(()));
+        w.s.process_exited(pid, ExitCause::Fault);
+        w.tick(20);
+        assert_eq!(w.answered, [(AnswerReason::CouldNotStart, 1)]);
+        let until = match w.state(u) {
+            UnitState::Standby {
+                hold_until: Some(until),
+                ..
+            } => *until,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(w.s.job(u).is_some(), with_event);
+        assert_eq!(spawns(&w.tick(until)).len(), usize::from(with_event));
+    }
+}
+
+#[test]
+fn resident_start_timeout_retries_and_never_lands_in_standby() {
+    let mut w = World::new(Tunables::today().with_b4());
+    w.auto_ready = false;
+    let r =
+        w.s.add_unit(UnitSpec::new("r", Class::Normal).checkpoint(true));
+    w.tick(0);
+    let pid = w.pid(r);
+    let actions = w.tick(15_000);
+    assert!(actions.contains(&Action::Terminate {
+        unit: r,
+        pid,
+        reason: StopReason::Failed,
+        grace: 300,
+        keep_registrations: false
+    }));
+    assert!(matches!(
+        w.state(r),
+        UnitState::Activating {
+            sub: ActivatingSub::AutoRestart { .. },
+            ..
+        }
+    ));
+    let next = w.s.next_deadline().unwrap();
+    assert!((15_250..=15_275).contains(&next), "{next}");
+    assert_eq!(spawns(&w.tick(next)).len(), 1);
 }

@@ -28,6 +28,8 @@ mod work;
 
 #[cfg(test)]
 mod sim;
+#[cfg(test)]
+mod tests;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
@@ -35,7 +37,8 @@ pub use exit::ExitCause;
 pub use job::{Busy, Cause, Job, JobId, JobKind, JobMode, JobResult, JobState, Origin, Priority};
 pub use kill::{KillMode, grace, kill_mode};
 pub use limits::{
-    Backoff, Policy, RestartMode, Retry, StartLimit, Tunables, max_active_for, process_budget_for,
+    Backoff, BuiltinsFirst, Policy, RestartMode, Retry, StartLimit, Tunables, max_active_for,
+    process_budget_for,
 };
 pub use pressure::Pressure;
 pub use reap::{STUCK_RELOAD, STUCK_WAKE};
@@ -219,6 +222,10 @@ fn list_state<P>(unit: &Unit<P>) -> ListState {
         return ListState::Stopped;
     }
     let will_start = unit.job.as_ref().is_some_and(Job::will_start);
+    let woken = matches!(
+        unit.job.as_ref().and_then(Job::cause),
+        Some(Cause::Trigger(_))
+    );
     let restart = matches!(
         unit.job.as_ref().map(|job| &job.kind),
         Some(JobKind::Restart { .. })
@@ -249,6 +256,11 @@ fn list_state<P>(unit: &Unit<P>) -> ListState {
             sub: ActivatingSub::AutoRestart { .. },
             ..
         } => idle,
+        // Woken from standby: it was running all along (today's
+        // `package_list` for `lazy.waking`), so a wake announces nothing.
+        UnitState::Activating { .. } if woken => ListState::Running {
+            process: ProcessState::Running,
+        },
         UnitState::Activating { .. } => ListState::Starting,
         UnitState::Active { .. } => ListState::Running {
             process: ProcessState::Running,
@@ -343,17 +355,7 @@ impl<P: Clone> Supervisor<P> {
             return u;
         }
         if replay {
-            let holder = self.alloc_pid();
-            self.by_pid.insert(holder, u);
-            if let Some(unit) = self.units.get_mut(&u) {
-                unit.last_pid = Some(holder);
-                unit.state = UnitState::Standby {
-                    holder,
-                    recorded: true,
-                    hold_until: None,
-                };
-            }
-            self.pending.push(Action::Replay { unit: u, holder });
+            self.replay(u);
         } else {
             let first =
                 self.tunables.on_demand && spec.checkpoint.is_none() && class != Class::Development;
@@ -497,12 +499,57 @@ impl<P: Clone> Supervisor<P> {
                 if *current != pid {
                     return Delivery::Forward(*current);
                 }
-                *last_active = (*last_active).max(now);
-                if matches!(unit.job.as_ref().map(|j| &j.kind), Some(JobKind::Standby)) {
-                    self.cancel_standby(u);
-                    self.sync(u);
+                let kind = unit.job.as_ref().map(|j| j.kind.clone());
+                match kind {
+                    None | Some(JobKind::Start { .. }) => {
+                        *last_active = (*last_active).max(now);
+                        return Delivery::Now;
+                    }
+                    Some(JobKind::Standby) => {
+                        *last_active = (*last_active).max(now);
+                        self.cancel_standby(u);
+                        self.sync(u);
+                        return Delivery::Now;
+                    }
+                    // Restart[any] × Start: the start is absorbed, the
+                    // trigger held for the new run (§4.2).
+                    Some(JobKind::Restart { .. }) => {
+                        if trigger.kind == TriggerKind::Follow {
+                            unit.backlog.push_back(trigger);
+                            return Delivery::Held;
+                        }
+                        if trigger::would_overflow(&unit.backlog, &trigger, backlog_max) {
+                            self.answer(u, AnswerReason::Busy, trigger);
+                            return Delivery::Refused;
+                        }
+                        let priority = trigger.priority();
+                        trigger::hold(&mut unit.backlog, trigger);
+                        self.raise(u, priority);
+                        self.sync(u);
+                        return Delivery::Held;
+                    }
+                    // Stop[waiting] × Start: the start replaces the stop
+                    // (nothing to do on an active unit), except an
+                    // uninstall (a trigger never re-enables, §4.2).
+                    Some(JobKind::Stop { .. }) => {
+                        let priority = trigger.priority();
+                        let accepted = self.enqueue_job(
+                            u,
+                            JobKind::Start {
+                                cause: Cause::Trigger(priority),
+                            },
+                            JobMode::Replace,
+                            priority,
+                            Origin::Trigger,
+                        );
+                        let stopped = self.units.get(&u).is_none_or(|unit| unit.job.is_some());
+                        if accepted.is_err() || stopped {
+                            return Delivery::Dropped;
+                        }
+                        self.touch(pid, now);
+                        return Delivery::Now;
+                    }
                 }
-                return Delivery::Now;
             }
             UnitState::Failed { .. } => return Delivery::Dropped,
             _ => {}
@@ -690,6 +737,22 @@ impl<P: Clone> Supervisor<P> {
         self.now = self.now.max(now);
         self.shutting_down = true;
         let units = self.units.keys().copied().collect::<Vec<_>>();
+        // Every checkpoint before the first Terminate (§7.2 "checkpoints
+        // first", coordinator ruling): if the forced exit comes mid-way,
+        // each one is already written.
+        if self.tunables.on_demand {
+            for (u, unit) in &self.units {
+                if let UnitState::Active { pid, .. } = unit.state
+                    && unit.recorded
+                {
+                    self.pending.push(Action::Checkpoint {
+                        unit: *u,
+                        pid,
+                        resident: unit.resident,
+                    });
+                }
+            }
+        }
         for u in units {
             let Some(unit) = self.units.get_mut(&u) else {
                 continue;
@@ -697,22 +760,11 @@ impl<P: Clone> Supervisor<P> {
             unit.backlog.clear();
             let job = unit.job.take();
             let state = unit.state.clone();
-            let (recorded, resident) = (unit.recorded, unit.resident);
             if let Some(job) = job {
                 self.record(u, job.id, JobResult::Canceled);
             }
             match state {
-                UnitState::Active { pid, .. } => {
-                    if self.tunables.on_demand && recorded {
-                        self.pending.push(Action::Checkpoint {
-                            unit: u,
-                            pid,
-                            resident,
-                        });
-                    }
-                    self.terminate_with(u, StopReason::Quit, Then::Inactive, false, budget);
-                }
-                UnitState::Activating { pid: Some(_), .. } => {
+                UnitState::Active { .. } | UnitState::Activating { pid: Some(_), .. } => {
                     self.terminate_with(u, StopReason::Quit, Then::Inactive, false, budget);
                 }
                 UnitState::Activating { pid: None, .. } => {
@@ -1054,6 +1106,15 @@ impl<P: Clone> Supervisor<P> {
             if !failed_open && unit.verifiable {
                 unit.verify = true;
             }
+            // Re-placement (§7.4, A4): a member with a standby checkpoint
+            // and no start in flight goes back to standby by replay (no
+            // spawn), as today's `start_installed` replays a recording.
+            let replay = self.tunables.on_demand
+                && unit.recorded
+                && !unit.resident
+                && self.tunables.policy(unit.class).idle_standby
+                && !unit.job.as_ref().is_some_and(Job::will_start);
+            unit.replay_after = replay;
             self.timers
                 .arm(&mut unit.gens, u, TimerKind::StopWait, now + stop_wait);
             self.pending.push(Action::Terminate {
@@ -1063,6 +1124,10 @@ impl<P: Clone> Supervisor<P> {
                 grace: 0,
                 keep_registrations: false,
             });
+            if replay {
+                self.sync(u);
+                continue;
+            }
             let _ = self.enqueue_job(
                 u,
                 JobKind::Restart {
@@ -1205,6 +1270,46 @@ impl<P: Clone> Supervisor<P> {
         };
         let backlog = std::mem::take(&mut unit.backlog);
         for trigger in backlog {
+            self.answer(u, reason, trigger);
+        }
+    }
+
+    /// T1 (and runner re-placement, A4): the checkpoint's registrations are
+    /// replayed under a new holder pid; the unit is in standby.
+    fn replay(&mut self, u: UnitId) {
+        let holder = self.alloc_pid();
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        // The previous pid stays forwarded (alias); an older one goes.
+        if let Some(old) = unit.alias.take()
+            && self.by_pid.get(&old) == Some(&u)
+        {
+            self.by_pid.remove(&old);
+        }
+        unit.alias = unit.last_pid;
+        unit.last_pid = Some(holder);
+        unit.state = UnitState::Standby {
+            holder,
+            recorded: true,
+            hold_until: None,
+        };
+        self.by_pid.insert(holder, u);
+        self.pending.push(Action::Replay { unit: u, holder });
+    }
+
+    /// Answers the interactive triggers (follows go with them); wake events
+    /// stay held.
+    fn answer_interactive(&mut self, u: UnitId, reason: AnswerReason) {
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        let backlog = std::mem::take(&mut unit.backlog);
+        let (events, others): (VecDeque<_>, VecDeque<_>) = backlog
+            .into_iter()
+            .partition(|t| matches!(t.kind, TriggerKind::Event(_)));
+        unit.backlog = events;
+        for trigger in others {
             self.answer(u, reason, trigger);
         }
     }
@@ -1530,7 +1635,7 @@ impl<P: Clone> Supervisor<P> {
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
-        if keeps && unit.recorded && unit.class != Class::Development {
+        if keeps && unit.recorded && !unit.resident && policy.idle_standby {
             let hold_until = unit.restart.next_delay(now, policy.restart_sec);
             unit.state = UnitState::Standby {
                 holder: pid,
@@ -1627,6 +1732,9 @@ impl<P: Clone> Supervisor<P> {
         let policy = self.tunables.policy(unit.class).clone();
         let development = unit.class == Class::Development;
         let recorded = unit.recorded;
+        // Its entry points can wait in standby (never a Resident's: it is
+        // started, not woken).
+        let standby_capable = recorded && !unit.resident && policy.idle_standby;
         let retry_left = activating
             && cause == ExitCause::StartTimeout
             && policy
@@ -1644,15 +1752,16 @@ impl<P: Clone> Supervisor<P> {
             });
             let delay = retry_delay(retry, unit.restart.retries, &mut self.rng);
             unit.restart.retries += 1;
-            then = if recorded {
+            then = if standby_capable {
                 Then::Standby
             } else {
                 Then::Inactive
             };
-            keep = recorded;
+            keep = standby_capable;
+            unit.after_reap = Some(delay);
             if let Some(job) = unit.job.as_mut() {
                 job.state = JobState::Waiting;
-                job.not_before = Some(now + delay);
+                job.not_before = None;
             }
         } else if cause.restartable() && !development {
             match policy.restart {
@@ -1662,7 +1771,9 @@ impl<P: Clone> Supervisor<P> {
                         failing = (FailResult::StartLimitHit, text.clone());
                     } else {
                         then = Then::Inactive;
-                        auto_restart = Some(now + unit.restart.next_delay(now, policy.restart_sec));
+                        let delay = unit.restart.next_delay(now, policy.restart_sec);
+                        unit.after_reap = Some(delay);
+                        auto_restart = Some(delay);
                     }
                 }
                 RestartMode::OnNextTrigger if recorded => {
@@ -1672,7 +1783,7 @@ impl<P: Clone> Supervisor<P> {
                         then = Then::Standby;
                         keep = true;
                         let delay = unit.restart.next_delay(now, policy.restart_sec);
-                        unit.hold_next = (delay > 0).then_some(now + delay);
+                        unit.hold_next = (delay > 0).then_some(delay);
                     }
                 }
                 RestartMode::OnNextTrigger => {}
@@ -1687,11 +1798,21 @@ impl<P: Clone> Supervisor<P> {
                 self.finish(u, JobResult::Failed(text.clone()));
             }
         } else if !retry_left && auto_restart.is_none() {
-            // Standby with a hold: a start job in flight ends; its held
-            // triggers wait for the next start.
+            // Standby with a hold (T20 ruling): interactive triggers are
+            // answered now; the start job stays (waiting for the hold) only
+            // while event triggers remain in the backlog — no demand, no
+            // start of a crashing plugin.
             if self.units[&u].job.as_ref().is_some_and(Job::starts) {
-                self.answer_backlog(u, AnswerReason::CouldNotStart);
-                self.finish(u, JobResult::Failed(text.clone()));
+                self.answer_interactive(u, AnswerReason::CouldNotStart);
+                let events_left = !self.units[&u].backlog.is_empty();
+                if events_left {
+                    if let Some(job) = self.units.get_mut(&u).and_then(|unit| unit.job.as_mut()) {
+                        job.state = JobState::Waiting;
+                        job.queued = false;
+                    }
+                } else {
+                    self.finish(u, JobResult::Failed(text.clone()));
+                }
             }
         }
         if cause.notifies() {
@@ -1708,17 +1829,17 @@ impl<P: Clone> Supervisor<P> {
         }
         let failure_grace = self.tunables.policy(self.units[&u].class).failure_grace;
         self.terminate_with(u, cause.stop_reason(), then, keep, failure_grace);
-        if let Some(until) = auto_restart {
+        // The delay (`after_reap`) applies once the process is gone.
+        if auto_restart.is_some() {
             let has_start = self.units[&u].job.as_ref().is_some_and(Job::will_start);
             if !has_start {
-                let mut job = self.new_job(
+                let job = self.new_job(
                     u,
                     JobKind::Start {
                         cause: Cause::AutoRestart,
                     },
                     Origin::Crash,
                 );
-                job.not_before = Some(until);
                 if let Some(unit) = self.units.get_mut(&u)
                     && unit.job.is_none()
                 {
@@ -1727,7 +1848,7 @@ impl<P: Clone> Supervisor<P> {
             } else if let Some(job) = self.units.get_mut(&u).and_then(|unit| unit.job.as_mut()) {
                 job.state = JobState::Waiting;
                 job.queued = false;
-                job.not_before = Some(until);
+                job.not_before = None;
             }
         }
         self.run.push_back(u);
@@ -1947,7 +2068,11 @@ impl<P: Clone> Supervisor<P> {
                 return false;
             }
         }
-        if matches!(lane, Lane::Background | Lane::FirstRun) && !self.builtin_pending.is_empty() {
+        let waits = match self.tunables.builtins_first {
+            BuiltinsFirst::Queued => lane == Lane::FirstRun,
+            BuiltinsFirst::Installed => matches!(lane, Lane::Background | Lane::FirstRun),
+        };
+        if waits && !self.builtin_pending.is_empty() {
             return false;
         }
         true
@@ -2119,18 +2244,20 @@ impl<P: Clone> Supervisor<P> {
                 unit.first_run = false;
             }
         }
+        let installed = self.tunables.builtins_first == BuiltinsFirst::Installed;
         let pending = unit.class == Class::Builtin
             && unit.job.as_ref().is_some_and(Job::will_start)
-            && matches!(
-                unit.state,
-                UnitState::Inactive
-                    | UnitState::Standby { .. }
-                    | UnitState::Failed { .. }
-                    | UnitState::Activating {
-                        sub: ActivatingSub::Verify,
-                        ..
-                    }
-            )
+            && (installed
+                || matches!(
+                    unit.state,
+                    UnitState::Inactive
+                        | UnitState::Standby { .. }
+                        | UnitState::Failed { .. }
+                        | UnitState::Activating {
+                            sub: ActivatingSub::Verify,
+                            ..
+                        }
+                ))
             && unit
                 .job
                 .as_ref()

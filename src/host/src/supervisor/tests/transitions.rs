@@ -127,7 +127,7 @@ fn t05_verify_timeout_spawns_in_own_process() {
     );
 }
 
-// DESIGN QUESTION: T5 says "verify done; or 3 s passed → Placement::Own".
+// ANSWERED (supervisor.md §17.2 Q6), was a design question: T5 says "verify done; or 3 s passed → Placement::Own".
 // Does a *failed* verification also go on in an own process (today's
 // `trust`), or does it fail the start? Best reading: own process.
 #[test]
@@ -269,7 +269,7 @@ fn t08_spawn_error_without_retries_or_recording_fails() {
     assert_eq!(sim.st(u), S::Failed("spawn".into()));
 }
 
-// DESIGN QUESTION: T8 is "REPLACE in B3/B4"; with B1 tunables (no retry,
+// ANSWERED (supervisor.md §17.2 Q7), was a design question: T8 is "REPLACE in B3/B4"; with B1 tunables (no retry,
 // `Restart=no` + revoke) what is today's outcome — `Failed{spawn}` with
 // `Revoke` (today `wake_failed` → `forget_entries`), or `Inactive`? Best
 // reading: Failed + Revoke + the held interactive trigger answered.
@@ -310,7 +310,7 @@ both! {
 }
 
 // T9 detail: "process_ready = runtime.ready + UI activation finished".
-// DESIGN QUESTION: §5 lists `ui_begin`/`ui_finish` and `process_ready`
+// ANSWERED (supervisor.md §17.2 Q8), was a design question: §5 lists `ui_begin`/`ui_finish` and `process_ready`
 // separately; best reading: a unit that began UI activation stays
 // Activating{Ready} until `ui_finish` even after `process_ready`.
 #[test]
@@ -518,7 +518,7 @@ fn t18_stuck_stop_fails_waiting_reload_with_text() {
     sim.at(t + STOP_WAIT);
     assert!(sim.stuck(u));
     assert_eq!(sim.result(job), Some(R::Failed(TEXT_RELOAD_STUCK.into())));
-    // DESIGN QUESTION: T18 says "`Failed` for a reload" while §4.5 says the
+    // ANSWERED (supervisor.md §17.2 Q9), was a design question: T18 says "`Failed` for a reload" while §4.5 says the
     // unit "stays where `then` put it". Best reading: a reload whose stop
     // got stuck leaves the unit Failed.
     assert!(sim.st(u).is_failed(), "{:?}", sim.st(u));
@@ -533,15 +533,11 @@ fn t18_stuck_standby_stop_fails_waiting_wake_and_answers() {
     sim.cleaned(pid); // never reaped
     let acts = sim.at(t + STOP_WAIT);
     assert!(sim.stuck(u));
-    assert!(
-        matches!(sim.st(u), S::Standby { .. }),
-        "lands in `then`: {:?}",
-        sim.st(u)
-    );
+    // §17.2 Q9/Q10: lands at `then`, then the wake's failed Start marks the
+    // unit Failed with the wake text (today `wake_failed`).
+    assert_eq!(sim.st(u), S::Failed("stuck".into()));
+    assert_eq!(sim.failure_text(u).as_deref(), Some(TEXT_WAKE_STUCK));
     assert_eq!(answers(&acts), vec![(1, Why::CouldNotStart)]);
-    // DESIGN QUESTION: how is TEXT_WAKE_STUCK observable for a wake (no
-    // JobId is returned by `wake`)? Best reading: in the Answer/diag only;
-    // not asserted here.
     assert!(
         spawns(&acts).is_empty(),
         "no second instance while the old one may still run"
@@ -585,9 +581,12 @@ fn t20_wake_during_hold_waits_and_answers_interactive() {
     let acts = sim.run();
     assert_eq!(
         answers(&acts),
-        vec![(1, Why::CouldNotStart)],
-        "interactive answered with the reason"
+        vec![(1, Why::Held)],
+        "interactive answered with the reason (the hold)"
     );
+    // Coordinator ruling: the interactive one is not held; the event is.
+    assert_eq!(sim.backlog_len(u), 1);
+    assert!(matches!(sim.job(u), Some(J::Start { .. })));
     assert!(spawns(&acts).is_empty());
     assert!(
         spawns(&sim.at(until - 1)).is_empty(),
@@ -755,11 +754,7 @@ fn t25_oom_notifies_out_of_memory() {
     let mut sim = Sim::new(&Profile::target());
     let (_, pid) = sim.in_active(normal("n"));
     let acts = sim.exited(pid, ExitCause::Oom);
-    assert!(
-        acts.iter()
-            .any(|a| act_name(a) == "Notify" && norm(a).contains("memory")),
-        "{acts:?}"
-    );
+    assert!(acts.iter().any(is_oom_notice), "{acts:?}");
 }
 
 // T25 target: RequestTimeout (B3 timer; Terminate first)
@@ -881,6 +876,7 @@ fn t29_runner_failure_kills_runner_once_and_restarts_members() {
 fn t30_pressure_standby_uses_the_standby_job() {
     let mut sim = Sim::new(&Profile::target());
     let (u, pid) = sim.in_active(normal("n"));
+    sim.after(1_000); // not in the same millisecond as its start
     let acts = sim.pressure_low();
     assert_eq!(
         acts.iter().filter_map(query_pid).collect::<Vec<_>>(),
@@ -907,7 +903,7 @@ fn t31_shutdown_terminates_all_in_one_call() {
 }
 
 // T32 Inactive, disabled --set_enabled(true)--> Inactive, enabled + Start job
-// DESIGN QUESTION: §5 says `set_enabled` "does not enqueue by itself", T32
+// ANSWERED (supervisor.md §17.2 Q11), was a design question: §5 says `set_enabled` "does not enqueue by itself", T32
 // says `set_enabled(true)` → "enabled + Start job". Best reading: the
 // caller (package RPC) does `set_enabled(true)` then `start(u, Enable)`.
 #[test]
@@ -922,7 +918,7 @@ fn t32_enable_then_start_installs_start_job() {
         None,
         "§5: set_enabled does not enqueue by itself"
     );
-    sim.start(u, StartCause::Enable).unwrap();
+    sim.start(u, Cause::Enable).unwrap();
     assert!(matches!(sim.job(u), Some(J::Start { ref cause, .. }) if cause == "enable"));
     let acts = sim.run();
     // Recorded unit: enable goes back to standby via replay or starts;
@@ -939,7 +935,7 @@ both! {
         sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
         sim.run();
         sim.set_enabled(u, true);
-        sim.start(u, StartCause::Enable).unwrap();
+        sim.start(u, Cause::Enable).unwrap();
         let acts = sim.after(p.stop_grace);
         assert!(spawns(&acts).is_empty(), "no second process on the same data directory");
         assert!(spawns(&sim.reaped(pid)).is_empty(), "reaped alone is not enough (T16)");

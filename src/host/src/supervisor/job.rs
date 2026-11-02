@@ -367,13 +367,18 @@ impl<P: Clone> Supervisor<P> {
 
     fn merge_restart(&mut self, u: UnitId, job: Job, fresh: bool, image: Option<String>) -> JobId {
         let unit = &self.units[&u];
-        if !unit.enabled() || unit.removed {
+        if unit.removed {
             return self.settle(u, job.id, JobResult::Dropped);
         }
         let deactivating = unit.state.is_deactivating();
         let Some(installed) = unit.job.as_ref() else {
+            // A disabled unit is upgraded/reloaded without starting
+            // (`step_restart` ends the job after the stop half, §17.2 Q15).
             return self.install(u, job);
         };
+        if !unit.enabled() {
+            return self.settle(u, job.id, JobResult::Dropped);
+        }
         let installed_id = installed.id;
         let old = installed.kind.clone();
         if let JobKind::Stop { then, reason } = old
