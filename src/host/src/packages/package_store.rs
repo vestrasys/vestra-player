@@ -17,6 +17,9 @@ use crate::packages::package_stage::{Candidate, PackageManifest};
 
 const MAX_SAFE: u64 = (1_u64 << 53) - 1;
 const MAX_CATALOG: usize = 2 * 1024 * 1024;
+/// Third-party installed packages at most. Built-ins (`Instance::builtin`)
+/// never count against it and are never refused or set aside by it: the
+/// Plugin Store, the only management UI, is one of them.
 const MAX_PACKAGES: usize = 128;
 /// Operation receipts kept; when full, the oldest finished ones make room.
 const MAX_OPERATIONS: usize = 512;
@@ -179,6 +182,16 @@ struct Catalog {
 pub fn enables_after_install(before: &Installed, disabled: bool, requested: Option<bool>) -> bool {
     before.instance.as_ref().is_some_and(|i| i.builtin)
         || requested.unwrap_or(before.current.is_none() || !disabled)
+}
+
+/// A built-in's record (`Store::sync_builtins`).
+fn is_builtin(installed: &Installed) -> bool {
+    installed.instance.as_ref().is_some_and(|i| i.builtin)
+}
+
+/// Installed records that count against `MAX_PACKAGES`: all but built-ins.
+fn third_party(installed: &BTreeMap<String, Installed>) -> usize {
+    installed.values().filter(|i| !is_builtin(i)).count()
 }
 
 pub struct Store {
@@ -448,10 +461,7 @@ impl Store {
             if next.installed.contains_key(id) || next.pending.contains_key(id) {
                 continue;
             }
-            ensure!(
-                next.installed.len() < MAX_PACKAGES,
-                "installed package limit reached"
-            );
+            // No limit here: built-ins never count against `MAX_PACKAGES`.
             let dormant = next
                 .dormant
                 .iter()
@@ -632,17 +642,30 @@ impl Store {
                 Err(error) => set_aside_installed.push((id.clone(), error)),
             }
         }
-        let over = catalog
+        // Over the limit (a catalog from a player with a higher one): the
+        // newest third-party installs go, the oldest stay; built-ins never
+        // count. Their instances are retired below like any record set
+        // aside, so installing one again from its source finds its data.
+        let mut by_age = catalog
             .installed
-            .keys()
-            .filter(|id| !set_aside_installed.iter().any(|(bad, _)| bad == *id))
-            .skip(MAX_PACKAGES)
-            .cloned()
+            .iter()
+            .filter(|(id, installed)| {
+                !is_builtin(installed) && !set_aside_installed.iter().any(|(bad, _)| bad == *id)
+            })
+            // A record from before instances counts as the oldest.
+            .map(|(id, installed)| {
+                let at = installed.instance.as_ref().map_or(0, |i| i.installed_at);
+                (at, id.clone())
+            })
             .collect::<Vec<_>>();
-        set_aside_installed.extend(
-            over.into_iter()
-                .map(|id| (id, anyhow::anyhow!("installed package limit exceeded"))),
-        );
+        by_age.sort();
+        for (_, id) in by_age.into_iter().skip(MAX_PACKAGES) {
+            if let Some(instance) = &catalog.installed[&id].instance {
+                // Accepted above, so its GUID is unique: free it for `dormant`.
+                guids.remove(&instance.guid);
+            }
+            set_aside_installed.push((id, anyhow::anyhow!("installed package limit exceeded")));
+        }
         let mut retired = Vec::new();
         for (id, error) in set_aside_installed {
             let Some(installed) = catalog.installed.remove(&id) else {
@@ -1153,9 +1176,10 @@ impl Store {
             "package transaction already pending"
         );
         ensure!(catalog.pending.len() < 64, "pending package limit reached");
+        // Third-party records only: built-ins never count.
         ensure!(
             catalog.installed.contains_key(id)
-                || catalog.installed.len()
+                || third_party(&catalog.installed)
                     + catalog
                         .pending
                         .keys()
@@ -1450,12 +1474,11 @@ impl Store {
 /// Idempotent; `true` when it changed `catalog`.
 fn migrate_in_place(catalog: &mut Catalog) -> bool {
     let mut changed = false;
-    let builtin = |installed: &Installed| installed.instance.as_ref().is_some_and(|i| i.builtin);
     let seeds = catalog
         .pending
         .iter()
         .filter(|(_, recovery)| {
-            builtin(&recovery.before) || recovery.instance.as_ref().is_some_and(|i| i.builtin)
+            is_builtin(&recovery.before) || recovery.instance.as_ref().is_some_and(|i| i.builtin)
         })
         .map(|(id, recovery)| (id.clone(), recovery.operation_id.clone()))
         .collect::<Vec<_>>();
@@ -1470,7 +1493,7 @@ fn migrate_in_place(catalog: &mut Catalog) -> bool {
         changed = true;
     }
     for (id, installed) in catalog.installed.iter_mut() {
-        if builtin(installed) {
+        if is_builtin(installed) {
             if installed.current.is_some() {
                 installed.current = None;
                 changed = true;
@@ -2604,5 +2627,130 @@ pub(crate) mod tests {
         .unwrap();
         let store = Store::open(root_path).unwrap();
         assert!(store.quarantine_records().is_empty());
+    }
+
+    /// `count` third-party records (`p000`, `p001`, …; no package, as a
+    /// limit check needs none), installed at `at(n)`, written to the catalog.
+    fn fill_third_party(store: &mut Store, count: usize, at: impl Fn(usize) -> u64) {
+        let mut next = store.catalog.clone();
+        for n in 0..count {
+            next.installed.insert(
+                format!("p{n:03}"),
+                Installed {
+                    instance: Some(Instance {
+                        installed_at: at(n),
+                        ..Instance::new(Source::File)
+                    }),
+                    ..Installed::default()
+                },
+            );
+        }
+        store.publish(next).unwrap();
+    }
+
+    fn builtin_ids() -> BTreeSet<String> {
+        ["vestra.audio", "vestra.info", "vestra.store"]
+            .map(String::from)
+            .into()
+    }
+
+    /// A fresh profile (or a player update that adds a built-in) whose
+    /// third-party records already fill the limit still gets every built-in.
+    #[test]
+    fn builtins_are_added_with_the_third_party_limit_full() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        fill_third_party(&mut store, MAX_PACKAGES, |n| n as u64 + 1);
+        store.sync_builtins(&builtin_ids()).unwrap();
+        for id in builtin_ids() {
+            assert!(is_builtin(&store.get(&id)), "{id}");
+        }
+        assert_eq!(store.installed().len(), MAX_PACKAGES + builtin_ids().len());
+        // And they all stay at the next start.
+        drop(store);
+        let store = Store::open(root.path().into()).unwrap();
+        assert!(store.quarantined().is_empty(), "{:?}", store.quarantined());
+        assert_eq!(store.installed().len(), MAX_PACKAGES + builtin_ids().len());
+    }
+
+    /// Third-party installs go up to `MAX_PACKAGES` with built-ins present;
+    /// one more is refused, and an update of an installed one is not.
+    #[test]
+    fn built_ins_do_not_count_against_the_install_limit() {
+        let root = tempfile::tempdir().unwrap();
+        let (_, first) = candidate("1.0.0");
+        let mut store = Store::open(root.path().into()).unwrap();
+        store.sync_builtins(&builtin_ids()).unwrap();
+        fill_third_party(&mut store, MAX_PACKAGES - 1, |n| n as u64 + 1);
+        let package = store.stage(&first).unwrap();
+        // The 128th third-party install.
+        store.prepare("counter", 0, &package, "last").unwrap();
+        store.commit("counter", "last").unwrap();
+        assert_eq!(
+            third_party(&store.catalog.installed),
+            MAX_PACKAGES,
+            "built-ins present"
+        );
+        // One more is refused.
+        let more = tempfile::tempdir().unwrap();
+        fs::write(more.path().join("manifest.json"), serde_json::to_vec(&serde_json::json!({"id":"one.more","apiVersion":crate::process::API,"version":"1.0.0","entry":"main.js","capabilities":[]})).unwrap()).unwrap();
+        fs::write(more.path().join("main.js"), "export default () => {}").unwrap();
+        let more = store
+            .stage(&Candidate::capture(more.path()).unwrap())
+            .unwrap();
+        let refused = store
+            .prepared(
+                &store.catalog,
+                "one.more",
+                0,
+                &more,
+                "more",
+                serde_json::json!({}),
+                None,
+            )
+            .err()
+            .unwrap();
+        assert_eq!(refused.to_string(), "installed package limit reached");
+        // Updating an installed one still works at the limit.
+        store.prepare("counter", 1, &package, "again").unwrap();
+        store.commit("counter", "again").unwrap();
+    }
+
+    /// A catalog over the limit sets aside the newest third-party installs
+    /// (not the last ids), never a built-in, and retires their instances.
+    #[test]
+    fn over_the_limit_the_newest_third_party_installs_are_set_aside() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        store.sync_builtins(&builtin_ids()).unwrap();
+        // Ids in reverse install order: `p000` is the newest, so ordering by
+        // id would set aside the wrong ones.
+        let total = MAX_PACKAGES + 2;
+        fill_third_party(&mut store, total, |n| (total - n) as u64 * 1000);
+        let newest = ["p000", "p001"].map(|id| store.get(id).instance.unwrap().guid);
+        drop(store);
+        let store = Store::open(root.path().into()).unwrap();
+        let mut aside = store
+            .quarantined()
+            .iter()
+            .map(|q| (q.id.as_str(), q.reason.as_str()))
+            .collect::<Vec<_>>();
+        aside.sort();
+        assert_eq!(
+            aside,
+            [
+                ("p000", "installed package limit exceeded"),
+                ("p001", "installed package limit exceeded"),
+            ]
+        );
+        for id in builtin_ids() {
+            assert!(is_builtin(&store.get(&id)), "{id}");
+        }
+        assert!(store.get(&format!("p{:03}", total - 1)).instance.is_some());
+        assert_eq!(third_party(&store.catalog.installed), MAX_PACKAGES);
+        // Their data stays reachable: the instances are retired.
+        for (guid, id) in newest.iter().zip(["p000", "p001"]) {
+            assert_eq!(store.dormant()[guid].id, id);
+        }
     }
 }
