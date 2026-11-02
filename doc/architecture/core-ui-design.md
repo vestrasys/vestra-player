@@ -249,7 +249,7 @@ impl Table {
 }
 ```
 
-- The table is **derived data**: the whole table is recomputed when a command is registered or removed (plugin deactivated) or when the overlay is loaded; no intermediate state is kept.
+- The table is **derived data**: it always equals a recompute from the declarations and the overlay. Since the perf-registry round (2026-11) it is kept up to date one command at a time: a registration, removal (plugin deactivated) or overlay change takes out and puts back only the claims of the commands it touches, sorted per input, and recomputes the winner, fallbacks and conflicts of those inputs only (a whole recompute per registration was quadratic: 4.3 s for 6000 commands). A unit test checks it against the whole recompute after every kind of change.
 - The host's own commands (owner 0) are also in the table:
 
 | Command | Default bindings | Menu | State |
@@ -269,8 +269,8 @@ impl Table {
   1. User overlay bindings win over any default binding (an overridden default binding is not a conflict, just replaced);
   2. The host's own commands win over plugins;
   3. Among plugins, the one loaded first (smaller owner generation) wins. Generations are assigned in `--plugin` order / package store order, so the same set of plugins gives the same result on every start; newly installed or trial-loaded plugins have larger generations and do not take keys from existing plugins.
-- Reporting: after each recompute, each new conflict writes one host log line (`binding conflict: Space → vestra.playback/toggle-pause; ignored: x.y/z`); the test host provides `host.conflicts` for plugin tests to assert on. There is no conflict query interface for plugins (no users). Alternative rules see §18 Q4.
-- When the winner is deactivated, the table is recomputed and the bindings that lost take effect automatically.
+- Reporting: after each change, each new conflict writes one host log line (`binding conflict: Space → vestra.playback/toggle-pause; ignored: x.y/z`); the test host provides `host.conflicts` for plugin tests to assert on. There is no conflict query interface for plugins (no users). Alternative rules see §18 Q4.
+- When the winner is deactivated, its inputs are recomputed and the bindings that lost take effect automatically.
 - Different scopes do not conflict: a panel-scoped `Enter` and the host's global `Enter` coexist; while the panel has focus, the panel wins.
 - Plugins being trial-loaded: their bindings are always ignored (same as clearing `shortcut` today).
 
@@ -367,7 +367,7 @@ pub struct Registry { commands: BTreeMap<CommandKey, CommandSnapshot>, sequence:
 ```
 
 - `Registry::new` no longer takes a domain list; `snapshot()` builds the tree per §4.2. `MenuNode::Group` gains `order`, `group` (taken from the first child), `MenuNode::Command` is unchanged; the menu projection (`menu.rs`) inserts separator rows where the group changes.
-- The output of `snapshot()` goes to the menu projection; `bindings::Table::label()` provides the shortcut text on the right of each row.
+- The output of `snapshot()` goes to the menu projection; it is built once per registry revision and shared (`Arc<MenuSnapshot>`) until the next change; `bindings::Table::label()` provides the shortcut text on the right of each row.
 
 ### 4.4 Menu style (host, §6.3)
 
@@ -770,7 +770,7 @@ No old interface. In the reference migration, playlist's `mount` adds `title: "P
 
 | Resource | Owner | On plugin deactivation / dispose |
 | --- | --- | --- |
-| Command bindings | With the command | Whole table recomputed after the host's `remove_owner`; when the SDK releases a command, the command becomes disabled (the binding still holds the key but does not execute, same as today) |
+| Command bindings | With the command | The owner's claims taken out after the host's `remove_owner`; when the SDK releases a command, the command becomes disabled (the binding still holds the key but does not execute, same as today) |
 | Sidebar preference, detached state | Host (persisted by manifest id) | Panel unmounted; the state stays in the file for the next mount |
 | Floating window | Host | Closed |
 | Sequence provider | Provider plugin | Revoked; `can.next/previous` become false |
