@@ -216,4 +216,22 @@ mod tests {
             assert_eq!(reference(&bad).unwrap_err().code, "invalid");
         }
     }
+
+    /// B0 (supervisor.md §9): `packages.changed` compares the list without
+    /// `process`: a park (`running` to `idle`) or a wake alone announces
+    /// nothing; any other field does.
+    #[test]
+    fn b0_packages_changed_ignores_only_process() {
+        let running = json!([{"id":"a.b","state":"running","process":"running","error":null}]);
+        let parked = json!([{"id":"a.b","state":"running","process":"idle","error":null}]);
+        assert_eq!(without_process(&running), without_process(&parked));
+        assert_eq!(
+            without_process(&parked),
+            json!([{"id":"a.b","state":"running","error":null}])
+        );
+        let disabled = json!([{"id":"a.b","state":"disabled","process":null,"error":null}]);
+        assert_ne!(without_process(&running), without_process(&disabled));
+        let starting = json!([{"id":"a.b","state":"starting","process":null,"error":null}]);
+        assert_ne!(without_process(&running), without_process(&starting));
+    }
 }

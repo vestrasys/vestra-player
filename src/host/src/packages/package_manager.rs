@@ -3488,4 +3488,39 @@ mod tests {
             );
         }
     }
+
+    /// B0 (supervisor.md §10, §11): start-up and wait tunables as they are
+    /// today (the 15 s activation deadline and the install wait of 20 s are
+    /// literals in `load_package` and `advance_package`).
+    #[test]
+    fn b0_start_up_and_wait_tunables() {
+        assert_eq!(START_BUDGET, std::time::Duration::from_millis(25));
+        assert_eq!(VERIFY_WAIT, std::time::Duration::from_secs(3));
+        assert_eq!(RELOAD_WAIT_MS, 20_000);
+    }
+
+    /// B0: the `StartQueue` semantics `start_queued` relies on (it needs a
+    /// `Host`, so its walk is written out here): `get(at)` and
+    /// `remove(at)` let the plugins behind a held built-in start while it
+    /// keeps its place at the front and its count (`builtin_pending`, which
+    /// keeps third-party first runs waiting).
+    #[test]
+    fn b0_start_queue_lets_others_pass_a_held_builtin() {
+        let builtin = |id: &str| id.starts_with("vestra.");
+        let ids = ["a.one", "vestra.slow", "vestra.fast"].map(String::from);
+        let mut queue = StartQueue::new(ids, builtin);
+        let verifying = |id: &str| id == "vestra.slow";
+        let mut started = Vec::new();
+        let mut at = 0;
+        while let Some(id) = queue.get(at).map(str::to_owned) {
+            if verifying(&id) {
+                at += 1;
+                continue;
+            }
+            started.push(queue.remove(at).unwrap());
+            assert!(queue.builtin_pending(), "vestra.slow still counts");
+        }
+        assert_eq!(started, ["vestra.fast", "a.one"]);
+        assert_eq!((queue.len(), queue.get(0)), (1, Some("vestra.slow")));
+    }
 }
