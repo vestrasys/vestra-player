@@ -4,7 +4,9 @@
 //! resolved execution to that exact instance.
 #![forbid(unsafe_code)]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::ops::Bound;
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
@@ -357,6 +359,15 @@ pub struct Registry {
     conditions: BTreeMap<CommandKey, Conditions>,
     /// What the conditions were last evaluated against.
     facts: Facts,
+    /// The keys of `commands` by menu path (non-empty paths only), so a
+    /// registration finds the paths it collides with, its own and those
+    /// above and below it, without scanning every command.
+    paths: BTreeMap<Vec<String>, Vec<CommandKey>>,
+    /// The last [`Registry::snapshot`], valid while `revision` is its own.
+    menu: Mutex<Option<Arc<MenuSnapshot>>>,
+    /// A test's registry total in place of [`Registry::MAX_COMMANDS`].
+    #[cfg(test)]
+    max_commands: Option<usize>,
 }
 
 /// A command's registration and last state in the form its plugin sent
@@ -625,58 +636,35 @@ impl Registry {
                 "owner/localId already registered".into(),
             ));
         }
-        if !declaration.path.is_empty() {
-            for entry in self.commands.values() {
-                let existing = &entry.declaration.path;
-                // The entry this replaces and the same owner's other recorded
-                // entries (the live one wins below) do not collide.
-                if existing.is_empty()
-                    || entry.key == key
-                    || (entry.key.owner == owner && self.recorded.contains(&entry.key))
-                {
-                    continue;
-                }
-                if existing.starts_with(&declaration.path) || declaration.path.starts_with(existing)
-                {
-                    return Err(CommandError::Conflict(
-                        "menu path duplicates a command or collides with a leaf/group".into(),
-                    ));
-                }
-            }
+        // The entry this replaces and the same owner's other recorded
+        // entries (the live one wins below) do not collide.
+        let colliding = self.colliding(&declaration.path);
+        if colliding
+            .iter()
+            .any(|each| **each != key && !(each.owner == owner && self.recorded.contains(*each)))
+        {
+            return Err(CommandError::Conflict(
+                "menu path duplicates a command or collides with a leaf/group".into(),
+            ));
         }
         if !replaced
-            && (self.commands.len() >= Self::MAX_COMMANDS
-                || self
-                    .commands
-                    .keys()
-                    .filter(|key| key.owner == owner)
-                    .count()
-                    >= Self::MAX_PER_OWNER)
+            && (self.commands.len() >= self.max_commands()
+                || self.keys_of(owner).take(Self::MAX_PER_OWNER).count() >= Self::MAX_PER_OWNER)
         {
             return Err(CommandError::Limit);
         }
         let next = self.next_revision()?;
         // The same owner's recorded entries on this path give way.
-        if !declaration.path.is_empty() {
-            let colliding = self
-                .commands
-                .values()
-                .filter(|entry| {
-                    entry.key != key
-                        && entry.key.owner == owner
-                        && self.recorded.contains(&entry.key)
-                        && !entry.declaration.path.is_empty()
-                        && (entry.declaration.path.starts_with(&declaration.path)
-                            || declaration.path.starts_with(&entry.declaration.path))
-                })
-                .map(|entry| entry.key.clone())
-                .collect::<Vec<_>>();
-            for gone in colliding {
-                self.commands.remove(&gone);
-                self.recorded.remove(&gone);
-                self.sent.remove(&gone);
-                self.conditions.remove(&gone);
-            }
+        let colliding = colliding
+            .into_iter()
+            .filter(|each| **each != key)
+            .cloned()
+            .collect::<Vec<_>>();
+        for gone in colliding {
+            self.remove_entry(&gone);
+            self.recorded.remove(&gone);
+            self.sent.remove(&gone);
+            self.conditions.remove(&gone);
         }
         let sequence = match self.commands.get(&key).filter(|_| replaced) {
             Some(entry) => entry.sequence,
@@ -688,19 +676,77 @@ impl Registry {
         self.recorded.remove(&key);
         self.sent.remove(&key);
         self.conditions.remove(&key);
-        self.commands.insert(
-            key.clone(),
-            CommandSnapshot {
-                key,
-                revision,
-                declaration,
-                state,
-                manifest: manifest.into(),
-                sequence,
-            },
-        );
+        self.insert_entry(CommandSnapshot {
+            key,
+            revision,
+            declaration,
+            state,
+            manifest: manifest.into(),
+            sequence,
+        });
         self.revision = next;
         Ok(())
+    }
+
+    fn max_commands(&self) -> usize {
+        #[cfg(test)]
+        if let Some(max) = self.max_commands {
+            return max;
+        }
+        Self::MAX_COMMANDS
+    }
+
+    /// The keys of `owner`'s entries, in local id order.
+    fn keys_of(&self, owner: OwnerGeneration) -> impl Iterator<Item = &CommandKey> {
+        let first = CommandKey {
+            owner,
+            local_id: String::new(),
+        };
+        self.commands
+            .range(first..)
+            .map(|(key, _)| key)
+            .take_while(move |key| key.owner == owner)
+    }
+
+    /// The entries whose menu path collides with `path`: the same path, a
+    /// path below it (`path` would be their group) or above it (`path`
+    /// would be inside their leaf). None for an empty path.
+    fn colliding(&self, path: &[String]) -> Vec<&CommandKey> {
+        if path.is_empty() {
+            return Vec::new();
+        }
+        // Paths starting with `path` sort together, from `path` itself on.
+        let below = self
+            .paths
+            .range::<[String], _>((Bound::Included(path), Bound::Unbounded))
+            .take_while(|(existing, _)| existing.starts_with(path));
+        let above = (1..path.len()).filter_map(|n| self.paths.get_key_value(&path[..n]));
+        below.chain(above).flat_map(|(_, keys)| keys).collect()
+    }
+
+    /// Stores an entry, replacing the one with its key, and indexes its path.
+    fn insert_entry(&mut self, entry: CommandSnapshot) {
+        self.remove_entry(&entry.key);
+        if !entry.declaration.path.is_empty() {
+            self.paths
+                .entry(entry.declaration.path.clone())
+                .or_default()
+                .push(entry.key.clone());
+        }
+        self.commands.insert(entry.key.clone(), entry);
+    }
+
+    /// Removes an entry and its path from the index.
+    fn remove_entry(&mut self, key: &CommandKey) -> Option<CommandSnapshot> {
+        let entry = self.commands.remove(key)?;
+        let path = &entry.declaration.path;
+        if let Some(keys) = self.paths.get_mut(path) {
+            keys.retain(|each| each != key);
+            if keys.is_empty() {
+                self.paths.remove(path);
+            }
+        }
+        Some(entry)
     }
 
     /// Keep what the plugin sent for `id`, for its recording: the
@@ -819,7 +865,7 @@ impl Registry {
             self.recorded.remove(key);
             self.sent.remove(key);
             self.conditions.remove(key);
-            self.commands.remove(key);
+            self.remove_entry(key);
         }
         self.revision = next;
         Ok(keys.into_iter().map(|key| key.local_id).collect())
@@ -828,12 +874,7 @@ impl Registry {
     /// Wake: `from`'s entries move to the new generation `to`, keeping their
     /// menu place, state and recorded mark.
     pub fn rekey(&mut self, from: OwnerGeneration, to: OwnerGeneration) -> Result<()> {
-        let keys = self
-            .commands
-            .keys()
-            .filter(|key| key.owner == from)
-            .cloned()
-            .collect::<Vec<_>>();
+        let keys = self.keys_of(from).cloned().collect::<Vec<_>>();
         if keys.is_empty() {
             return Ok(());
         }
@@ -843,9 +884,9 @@ impl Registry {
                 owner: to,
                 local_id: key.local_id.clone(),
             };
-            if let Some(mut entry) = self.commands.remove(&key) {
+            if let Some(mut entry) = self.remove_entry(&key) {
                 entry.key = moved.clone();
-                self.commands.insert(moved.clone(), entry);
+                self.insert_entry(entry);
             }
             if self.recorded.remove(&key) {
                 self.recorded.insert(moved.clone());
@@ -899,14 +940,13 @@ impl Registry {
     /// Removes only the specified generation. A replacement instance has a new
     /// owner generation, even if its manifest and local command IDs are equal.
     pub fn remove_owner(&mut self, owner: OwnerGeneration) -> Result<usize> {
-        let count = self
-            .commands
-            .keys()
-            .filter(|key| key.owner == owner)
-            .count();
+        let keys = self.keys_of(owner).cloned().collect::<Vec<_>>();
+        let count = keys.len();
         if count != 0 {
             let next = self.next_revision()?;
-            self.commands.retain(|key, _| key.owner != owner);
+            for key in &keys {
+                self.remove_entry(key);
+            }
             self.recorded.retain(|key| key.owner != owner);
             self.sent.retain(|key, _| key.owner != owner);
             self.conditions.retain(|key, _| key.owner != owner);
@@ -925,7 +965,7 @@ impl Registry {
             return Err(CommandError::Missing(key));
         }
         let next = self.next_revision()?;
-        self.commands.remove(&key);
+        self.remove_entry(&key);
         self.recorded.remove(&key);
         self.sent.remove(&key);
         self.conditions.remove(&key);
@@ -1018,16 +1058,28 @@ impl Registry {
             .collect()
     }
 
-    pub fn snapshot(&self) -> MenuSnapshot {
+    /// The menu tree, built once per revision: every change to what it
+    /// shows advances the revision (the interface language is fixed for
+    /// the process, `i18n::init`).
+    pub fn snapshot(&self) -> Arc<MenuSnapshot> {
+        let mut menu = self
+            .menu
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(snapshot) = menu.as_ref().filter(|menu| menu.revision == self.revision) {
+            return Arc::clone(snapshot);
+        }
         let entries: Vec<_> = self
             .commands
             .values()
             .filter(|entry| !entry.declaration.path.is_empty())
             .collect();
-        MenuSnapshot {
+        let snapshot = Arc::new(MenuSnapshot {
             revision: self.revision,
             roots: tree(&entries, 0, false),
-        }
+        });
+        *menu = Some(Arc::clone(&snapshot));
+        snapshot
     }
 
     /// The commands' bottom-bar buttons: each owner's first declared one,
@@ -1118,7 +1170,9 @@ fn rank(entry: &CommandSnapshot, appended: bool) -> Rank<'_> {
 /// One level: leaves and submenus, each keyed by its own (or first) command;
 /// a built-in top-level menu by its fixed order (`MENU_ANCHORS`).
 fn tree(entries: &[&CommandSnapshot], depth: usize, appended: bool) -> Vec<MenuNode> {
+    // Groups in the order their first member comes, found by title.
     let mut groups: Vec<(String, Vec<&CommandSnapshot>)> = Vec::new();
+    let mut found: HashMap<&str, usize> = HashMap::new();
     let mut nodes: Vec<(Rank<'_>, MenuNode)> = Vec::new();
     for entry in entries {
         let path = &entry.declaration.path;
@@ -1129,11 +1183,10 @@ fn tree(entries: &[&CommandSnapshot], depth: usize, appended: bool) -> Vec<MenuN
                     entry: (*entry).clone(),
                 },
             ));
-        } else if let Some((_, members)) =
-            groups.iter_mut().find(|(title, _)| title == &path[depth])
-        {
-            members.push(entry);
+        } else if let Some(&index) = found.get(path[depth].as_str()) {
+            groups[index].1.push(entry);
         } else {
+            found.insert(&path[depth], groups.len());
             groups.push((path[depth].clone(), vec![entry]));
         }
     }
@@ -1476,7 +1529,7 @@ mod tests {
             registry.get(2, "toggle").unwrap().declaration.path,
             ["Video", "Blur"]
         );
-        let roots = registry.snapshot().roots;
+        let roots = registry.snapshot().roots.clone();
         let mut titles = Vec::new();
         flatten(&roots, &mut titles);
         assert_eq!(titles, ["▸Video", "旋转", "Blur"]);
@@ -1650,7 +1703,7 @@ mod tests {
                 "About…:windows",
             ]
         );
-        let roots = registry.snapshot().roots;
+        let roots = registry.snapshot().roots.clone();
         let MenuNode::Group {
             label, children, ..
         } = &roots[2]
@@ -1686,7 +1739,7 @@ mod tests {
         registry
             .register(1, "m", "all2".into(), 1, hidden, state(true))
             .unwrap();
-        let roots = registry.snapshot().roots;
+        let roots = registry.snapshot().roots.clone();
         assert_eq!(roots.len(), 1);
         assert_eq!(roots[0].group(), "open");
         let MenuNode::Group { children, .. } = &roots[0] else {
@@ -2093,7 +2146,7 @@ mod tests {
         registry
             .register(2, "n", "sharpen".into(), 1, other, state(true))
             .unwrap();
-        let roots = registry.snapshot().roots;
+        let roots = registry.snapshot().roots.clone();
         let MenuNode::Group {
             label, children, ..
         } = &roots[0]
@@ -2537,5 +2590,362 @@ mod button_tests {
         registry.set_conditions(9, "save", None).unwrap();
         assert!(!registry.set_facts(facts("ready", false)));
         assert_eq!(shown(&registry, 9), sent);
+    }
+}
+
+/// perf-registry round: the path index and the cached menu tree give the
+/// answers the scans over every command gave.
+#[cfg(test)]
+mod index_tests {
+    use super::*;
+
+    fn state() -> CommandState {
+        CommandState {
+            enabled: true,
+            checked: None,
+            busy: false,
+            reason: None,
+        }
+    }
+
+    /// `register`'s outcome as the scan over every command decided it
+    /// (before the path index), and the recorded entries it removes.
+    fn scanned(
+        registry: &Registry,
+        owner: OwnerGeneration,
+        id: &str,
+        path: &[String],
+    ) -> (std::result::Result<(), String>, Vec<CommandKey>) {
+        let key = CommandKey {
+            owner,
+            local_id: id.into(),
+        };
+        let replaced = registry.recorded.contains(&key);
+        if registry.commands.contains_key(&key) && !replaced {
+            return (
+                Err(CommandError::Conflict("owner/localId already registered".into()).to_string()),
+                Vec::new(),
+            );
+        }
+        let collides = |existing: &[String]| {
+            !path.is_empty()
+                && !existing.is_empty()
+                && (existing.starts_with(path) || path.starts_with(existing))
+        };
+        for entry in registry.commands.values() {
+            if entry.key == key
+                || (entry.key.owner == owner && registry.recorded.contains(&entry.key))
+            {
+                continue;
+            }
+            if collides(&entry.declaration.path) {
+                return (
+                    Err(CommandError::Conflict(
+                        "menu path duplicates a command or collides with a leaf/group".into(),
+                    )
+                    .to_string()),
+                    Vec::new(),
+                );
+            }
+        }
+        let owned = registry
+            .commands
+            .keys()
+            .filter(|each| each.owner == owner)
+            .count();
+        if !replaced
+            && (registry.commands.len() >= registry.max_commands()
+                || owned >= Registry::MAX_PER_OWNER)
+        {
+            return (Err(CommandError::Limit.to_string()), Vec::new());
+        }
+        let gone = registry
+            .commands
+            .values()
+            .filter(|entry| {
+                entry.key != key
+                    && entry.key.owner == owner
+                    && registry.recorded.contains(&entry.key)
+                    && collides(&entry.declaration.path)
+            })
+            .map(|entry| entry.key.clone())
+            .collect();
+        (Ok(()), gone)
+    }
+
+    /// The menu tree with groups found by a linear search, as before.
+    fn scanned_tree(entries: &[&CommandSnapshot], depth: usize, appended: bool) -> Vec<MenuNode> {
+        let mut groups: Vec<(String, Vec<&CommandSnapshot>)> = Vec::new();
+        let mut nodes: Vec<(Rank<'_>, MenuNode)> = Vec::new();
+        for entry in entries {
+            let path = &entry.declaration.path;
+            if path.len() == depth + 1 {
+                nodes.push((
+                    rank(entry, appended),
+                    MenuNode::Command {
+                        entry: (*entry).clone(),
+                    },
+                ));
+            } else if let Some((_, members)) =
+                groups.iter_mut().find(|(title, _)| title == &path[depth])
+            {
+                members.push(entry);
+            } else {
+                groups.push((path[depth].clone(), vec![entry]));
+            }
+        }
+        for (title, members) in groups {
+            let built_in = if depth == 0 {
+                built_in_menu(&title)
+            } else {
+                None
+            };
+            let first = members
+                .iter()
+                .copied()
+                .min_by(|a, b| rank(a, appended).cmp(&rank(b, appended)))
+                .unwrap();
+            let key = match built_in {
+                Some(order) => (order, "", 0),
+                None => rank(first, appended),
+            };
+            let label = host_group_label(&first.declaration.path[..=depth])
+                .unwrap_or_else(|| first.declaration.shown_segment(depth).to_owned());
+            nodes.push((
+                key,
+                MenuNode::Group {
+                    group: first.declaration.group.clone(),
+                    children: scanned_tree(&members, depth + 1, built_in.is_some()),
+                    title,
+                    label,
+                },
+            ));
+        }
+        nodes.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut nodes: Vec<MenuNode> = nodes.into_iter().map(|(_, node)| node).collect();
+        if depth == 0 {
+            share_groups(&mut nodes);
+        }
+        nodes
+    }
+
+    fn check(registry: &Registry, step: usize) {
+        let mut indexed = BTreeMap::<Vec<String>, Vec<CommandKey>>::new();
+        for entry in registry.commands.values() {
+            if !entry.declaration.path.is_empty() {
+                indexed
+                    .entry(entry.declaration.path.clone())
+                    .or_default()
+                    .push(entry.key.clone());
+            }
+        }
+        let mut index = registry.paths.clone();
+        for keys in index.values_mut() {
+            keys.sort();
+        }
+        assert_eq!(index, indexed, "step {step}");
+        let entries: Vec<_> = registry
+            .commands
+            .values()
+            .filter(|entry| !entry.declaration.path.is_empty())
+            .collect();
+        let snapshot = registry.snapshot();
+        assert_eq!(snapshot.revision, registry.revision(), "step {step}");
+        assert_eq!(
+            snapshot.roots,
+            scanned_tree(&entries, 0, false),
+            "step {step}"
+        );
+    }
+
+    struct Steps(u64);
+    impl Steps {
+        fn next(&mut self, below: u64) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0 % below
+        }
+    }
+
+    #[test]
+    fn indexed_collisions_match_a_scan_of_every_command() {
+        const SEGMENTS: [&str; 4] = ["Video", "A", "B", "Ab"];
+        const IDS: [&str; 6] = ["a", "b", "c", "d", "e", "f"];
+        let mut steps = Steps(0x2545_f491_4f6c_dd1d);
+        let mut registry = Registry {
+            max_commands: Some(24),
+            ..Registry::default()
+        };
+        let mut revision = 1;
+        let (mut updated, mut changed) = (0, 0);
+        for step in 0..4000 {
+            let owner = steps.next(5);
+            let id = IDS[steps.next(IDS.len() as u64) as usize];
+            match steps.next(13) {
+                0..=5 => {
+                    let path = (0..steps.next(4))
+                        .map(|_| SEGMENTS[steps.next(SEGMENTS.len() as u64) as usize])
+                        .collect::<Vec<_>>();
+                    let mut declaration = Declaration::new("x", &path);
+                    declaration.order = steps.next(3) as i32;
+                    let path = declaration.path.clone();
+                    let (expected, gone) = scanned(&registry, owner, id, &path);
+                    let before = registry.commands.keys().cloned().collect::<Vec<_>>();
+                    revision += 1;
+                    let result = registry
+                        .register(
+                            owner,
+                            &format!("m{owner}"),
+                            id.into(),
+                            revision,
+                            declaration,
+                            state(),
+                        )
+                        .map_err(|error| error.to_string());
+                    assert_eq!(result, expected, "step {step}: {owner}/{id} at {path:?}");
+                    if result.is_ok() {
+                        for key in &gone {
+                            assert!(!registry.commands.contains_key(key), "step {step}");
+                        }
+                        let kept = before.iter().filter(|key| !gone.contains(key)).count();
+                        let added = usize::from(
+                            !before
+                                .iter()
+                                .any(|key| key.owner == owner && key.local_id == id),
+                        );
+                        assert_eq!(registry.commands.len(), kept + added, "step {step}");
+                    }
+                }
+                6 => {
+                    let _ = registry.remove(owner, id);
+                }
+                7 => {
+                    let _ = registry.remove_owner(owner);
+                }
+                8 => registry.rekey(owner, steps.next(7)).unwrap(),
+                // State changes advance the revision too: the cached
+                // tree (checked below) must follow them.
+                9 => {
+                    revision += 1;
+                    let state = CommandState {
+                        enabled: steps.next(2) == 0,
+                        checked: Some(steps.next(2) == 0),
+                        busy: false,
+                        reason: Some("why".into()),
+                    };
+                    updated += usize::from(registry.update(owner, id, revision, state).is_ok());
+                }
+                10 => {
+                    let conditions = if steps.next(3) == 0 {
+                        None
+                    } else {
+                        Conditions::parse(&serde_json::json!({
+                            "enabled":{"phase":["ready"]},
+                            "checked":{"fullscreen":true}}))
+                        .unwrap()
+                    };
+                    let _ = registry.set_conditions(owner, id, conditions);
+                }
+                11 => {
+                    let phase = ["empty", "ready"][steps.next(2) as usize];
+                    changed += usize::from(registry.set_facts(Facts::new(
+                        &serde_json::json!({"phase":phase}),
+                        &serde_json::json!({"fullscreen":steps.next(2) == 0}),
+                        "vestra",
+                        "system",
+                    )));
+                }
+                _ => {
+                    if steps.next(2) == 0 {
+                        registry.mark_recorded(owner);
+                    } else {
+                        registry.remove_recorded(owner).unwrap();
+                    }
+                }
+            }
+            check(&registry, step);
+        }
+        assert!(
+            updated > 20 && changed > 5,
+            "{updated} updates, {changed} fact changes"
+        );
+    }
+
+    /// perf-registry round: 2000 plugins of three commands (the probe's
+    /// seed: two in a submenu of their own under Tools, one without a
+    /// path), registered and laid out in a menu tree. Scanning every
+    /// command per registration took 1.4 s in a release build.
+    #[test]
+    fn six_thousand_registrations_stay_fast() {
+        let started = std::time::Instant::now();
+        let mut registry = Registry {
+            max_commands: Some(6000),
+            ..Registry::default()
+        };
+        for owner in 1..=2000_u64 {
+            let manifest = format!("probe.tiny-{owner:04}");
+            let tiny = format!("Tiny {owner:04}");
+            for (id, path) in [
+                ("go", vec!["Tools", tiny.as_str(), "Go"]),
+                ("info", vec!["Tools", tiny.as_str(), "Info"]),
+                ("key", vec![]),
+            ] {
+                registry
+                    .register(
+                        owner,
+                        &manifest,
+                        id.into(),
+                        1,
+                        Declaration::new(id, &path),
+                        state(),
+                    )
+                    .unwrap();
+            }
+        }
+        // Taken: the same path again, a leaf over a group, a group over a leaf.
+        for path in [
+            vec!["Tools", "Tiny 0001", "Go"],
+            vec!["Tools", "Tiny 0002"],
+            vec!["Tools", "Tiny 0003", "Go", "More"],
+        ] {
+            assert!(matches!(
+                registry.register(
+                    1,
+                    "probe.tiny-0001",
+                    "more".into(),
+                    1,
+                    Declaration::new("x", &path),
+                    state()
+                ),
+                Err(CommandError::Conflict(_))
+            ));
+        }
+        assert!(matches!(
+            registry.register(
+                9999,
+                "x",
+                "x".into(),
+                1,
+                Declaration::new("x", &[]),
+                state()
+            ),
+            Err(CommandError::Limit)
+        ));
+        let snapshot = registry.snapshot();
+        let elapsed = started.elapsed();
+        diag!("6000 registrations and a menu tree: {elapsed:?}");
+        let [
+            MenuNode::Group {
+                title, children, ..
+            },
+        ] = snapshot.roots.as_slice()
+        else {
+            panic!("one Tools menu");
+        };
+        assert_eq!((title.as_str(), children.len()), ("Tools", 2000));
+        // The same revision gives the same tree without building it again.
+        assert!(Arc::ptr_eq(&snapshot, &registry.snapshot()));
+        assert!(elapsed < std::time::Duration::from_secs(5), "{elapsed:?}");
     }
 }

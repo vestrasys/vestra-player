@@ -290,7 +290,7 @@ impl Host {
             "info-panels",
             ui_values::from_json(&json!(self.info_panels.values().collect::<Vec<_>>()))?,
         )?;
-        let roots = self.commands.snapshot().roots;
+        let snapshot = self.commands.snapshot();
         let labels = self.labels();
         // Through `apply_menu_levels`, so `menu_shown` follows the window:
         // a new shell's `menu-levels` is not the model it remembers, so this
@@ -300,7 +300,7 @@ impl Host {
         // a whole one too.
         let levels = menu_levels(
             window,
-            &roots,
+            &snapshot.roots,
             &mut self.menu_path.clone(),
             &self.menu_scroll,
             &labels,

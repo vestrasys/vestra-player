@@ -424,6 +424,7 @@ fn main() -> Result<()> {
         shared: None,
         shared_policy: Default::default(),
         plugins: BTreeMap::new(),
+        plugin_ids: BTreeMap::new(),
         views: BTreeMap::new(),
         events,
         next_generation: 0,
@@ -612,17 +613,22 @@ fn main() -> Result<()> {
             let received = receiver.recv_timeout(Duration::from_millis(10));
             // A tick is the work after the wait (`VESTRA_FRAME_LOG=1`).
             let began = Instant::now();
-            match received {
-                Ok(event) => {
-                    if let Event::Broadcast(name, data) = &event
-                        && name == "source.state"
-                    {
-                        observed_source = data.clone();
-                    }
-                    host.handle(event)
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => (),
+            let first = match received {
+                Ok(event) => Some(event),
+                Err(mpsc::RecvTimeoutError::Timeout) => None,
                 Err(_) => break,
+            };
+            // Up to 128 events a tick, as the windowed tick: one a tick fell
+            // behind while the start-up queue held each tick (`START_BUDGET`),
+            // and the shared runner's answered pings waited past its
+            // heartbeat limit.
+            for event in first.into_iter().chain(receiver.try_iter().take(127)) {
+                if let Event::Broadcast(name, data) = &event
+                    && name == "source.state"
+                {
+                    observed_source = data.clone();
+                }
+                host.handle(event);
             }
             host.activation_tick();
             host.lazy_tick();
@@ -785,11 +791,16 @@ fn main() -> Result<()> {
                     let disabled = host.commands.disabled();
                     host.input.borrow_mut().table.set_disabled(disabled);
                 }
+                // The revision alone, not a snapshot: a snapshot builds the
+                // whole menu tree, longer than a frame with many plugins.
+                // A closed menu is built when it opens (`open_menu`).
                 if host.shell.is_some() {
-                    let revision = host.commands.snapshot().revision;
+                    let revision = host.commands.revision();
                     if revision != menu_revision {
                         menu_revision = revision;
-                        if let Err(error) = host.refresh_menu() {
+                        if host.menu_open
+                            && let Err(error) = host.refresh_menu()
+                        {
                             host.broadcast(
                                 "host.error",
                                 json!({"code":"menu-projection","message":error.to_string()}),

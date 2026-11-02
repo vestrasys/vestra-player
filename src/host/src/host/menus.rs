@@ -454,10 +454,10 @@ impl Host {
         let window = &window;
         let model = match &self.menu_mode {
             MenuMode::Main => {
-                let roots = self.commands.snapshot().roots;
+                let snapshot = self.commands.snapshot();
                 let (model, panels) = menu_levels(
                     window,
-                    &roots,
+                    &snapshot.roots,
                     &mut self.menu_path,
                     &self.menu_scroll,
                     &labels,

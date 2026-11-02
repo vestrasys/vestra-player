@@ -1076,6 +1076,16 @@ impl Store {
         self.catalog.installed.clone()
     }
 
+    /// Installed package `id`'s record, without copying the catalog.
+    pub fn record(&self, id: &str) -> Option<&Installed> {
+        self.catalog.installed.get(id)
+    }
+
+    /// The installed packages' ids, in id order.
+    pub fn installed_ids(&self) -> Vec<String> {
+        self.catalog.installed.keys().cloned().collect()
+    }
+
     pub fn stage(&self, candidate: &Candidate) -> Result<StoredPackage> {
         self.library().stage(candidate)
     }

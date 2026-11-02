@@ -154,6 +154,9 @@ pub(crate) struct Host {
     /// Restarts, quarantine and fail-open of the shared runner for this run.
     pub(crate) shared_policy: shared_runner::Policy,
     pub(crate) plugins: BTreeMap<u64, Plugin>,
+    /// `plugins` by manifest id (`Host::running`): kept by `add_plugin`
+    /// and `stop`, the only places a plugin comes and goes.
+    pub(crate) plugin_ids: BTreeMap<String, u64>,
     pub(crate) views: BTreeMap<(u64, String), view::View>,
     pub(crate) events: mpsc::Sender<Event>,
     pub(crate) next_generation: u64,

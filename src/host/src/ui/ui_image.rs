@@ -457,8 +457,7 @@ impl Host {
             return plugin.origin().image_roots();
         }
         self.lazy
-            .parked
-            .get(&owner)
+            .parked(owner)
             .map(|parked| parked.origin.image_roots())
             .unwrap_or_default()
     }

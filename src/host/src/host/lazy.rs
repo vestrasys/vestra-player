@@ -296,7 +296,10 @@ pub(crate) struct Lazy {
     pub enabled: bool,
     /// `VESTRA_IDLE_MS`.
     pub idle_ms: u64,
-    pub parked: BTreeMap<u64, Parked>,
+    /// Parked plugins by owner (`park`, `unpark`), and their owners by
+    /// manifest id (`parked_id`).
+    parked: BTreeMap<u64, Parked>,
+    parked_ids: BTreeMap<String, u64>,
     pub waking: BTreeMap<u64, Waking>,
     /// When each running plugin was last used: a request from it, a
     /// trigger for it, its ready.
@@ -328,7 +331,7 @@ pub(crate) struct Lazy {
     /// events wake nothing before `QUIET_AFTER_START_MS` after it.
     settled_at: Option<u64>,
     /// First runs waiting for a place (manifest ids, in start order).
-    pub first_queue: VecDeque<String>,
+    pub first_queue: FirstQueue,
     /// First runs in flight: started, not yet resident or parked and gone.
     first_runs: BTreeSet<u64>,
     /// The owner of each plugin's last parked process (by id), until it is
@@ -390,23 +393,12 @@ impl Lazy {
     /// first runs must not hold the places while their mounts, sequence and
     /// resolvers wait for the built-ins, `builtins_starting`).
     pub fn queue_first_run(&mut self, id: String, builtin: impl Fn(&str) -> bool) {
-        if self.first_queue.contains(&id) {
-            return;
-        }
-        if builtin(&id) {
-            let at = self
-                .first_queue
-                .iter()
-                .position(|queued| !builtin(queued))
-                .unwrap_or(self.first_queue.len());
-            self.first_queue.insert(at, id);
-        } else {
-            self.first_queue.push_back(id);
-        }
+        let builtin = builtin(&id);
+        self.first_queue.push(id, builtin);
     }
-    /// Whether a built-in waits for its first run (`builtins` names them).
-    pub fn builtin_queued(&self, builtin: impl Fn(&str) -> bool) -> bool {
-        self.first_queue.iter().any(|id| builtin(id))
+    /// Whether a built-in waits for its first run.
+    pub fn builtin_queued(&self) -> bool {
+        self.first_queue.builtins > 0
     }
     /// The process plugin `id` was last parked from, while it still goes.
     pub fn stopping(&self, id: &str) -> Option<u64> {
@@ -418,10 +410,77 @@ impl Lazy {
     }
     /// The parked owner of plugin `id`.
     pub fn parked_id(&self, id: &str) -> Option<u64> {
-        self.parked
-            .iter()
-            .find(|(_, parked)| parked.id == id)
-            .map(|(owner, _)| *owner)
+        let owner = self.parked_ids.get(id).copied();
+        // Tests only: a scan per lookup made a debug start-up quadratic.
+        #[cfg(test)]
+        assert_eq!(
+            owner,
+            self.parked
+                .iter()
+                .find(|(_, parked)| parked.id == id)
+                .map(|(owner, _)| *owner),
+            "parked_ids follows parked"
+        );
+        owner
+    }
+    /// Parked plugin `owner`.
+    pub fn parked(&self, owner: u64) -> Option<&Parked> {
+        self.parked.get(&owner)
+    }
+    /// `owner` is parked now.
+    fn park(&mut self, owner: u64, parked: Parked) {
+        self.parked_ids.insert(parked.id.clone(), owner);
+        self.parked.insert(owner, parked);
+    }
+    /// `owner` is no longer parked.
+    fn unpark(&mut self, owner: u64) -> Option<Parked> {
+        let parked = self.parked.remove(&owner)?;
+        if self.parked_ids.get(&parked.id) == Some(&owner) {
+            self.parked_ids.remove(&parked.id);
+        }
+        Some(parked)
+    }
+}
+
+/// First runs waiting for a place (`Lazy::first_queue`): the built-ins
+/// at the front, the others after them, each in the order queued; a set and
+/// a count beside the order, as the start-up queue asks per plugin.
+#[derive(Default)]
+pub(crate) struct FirstQueue {
+    /// Ids, and whether each is a built-in.
+    order: VecDeque<(String, bool)>,
+    queued: BTreeSet<String>,
+    /// The built-ins, all at the front of `order`.
+    builtins: usize,
+}
+impl FirstQueue {
+    /// A built-in goes after the queued built-ins (before every other
+    /// plugin), another plugin at the end; one already queued stays.
+    fn push(&mut self, id: String, builtin: bool) {
+        if !self.queued.insert(id.clone()) {
+            return;
+        }
+        if builtin {
+            self.order.insert(self.builtins, (id, builtin));
+            self.builtins += 1;
+        } else {
+            self.order.push_back((id, builtin));
+        }
+    }
+    pub fn pop_front(&mut self) -> Option<String> {
+        let (id, builtin) = self.order.pop_front()?;
+        self.queued.remove(&id);
+        if builtin {
+            debug_assert!(self.builtins > 0, "a built-in taken that was not counted");
+            self.builtins -= 1;
+        }
+        Some(id)
+    }
+    pub fn contains(&self, id: &str) -> bool {
+        self.queued.contains(id)
+    }
+    pub fn is_empty(&self) -> bool {
+        self.order.is_empty()
     }
 }
 
@@ -494,7 +553,7 @@ impl Host {
             }
             return;
         }
-        let Some(parked) = self.lazy.parked.remove(&from) else {
+        let Some(parked) = self.lazy.unpark(from) else {
             return;
         };
         parked.release();
@@ -631,7 +690,7 @@ impl Host {
         let Some(owner) = self.lazy.parked_id(id) else {
             return false;
         };
-        if let Some(parked) = self.lazy.parked.remove(&owner) {
+        if let Some(parked) = self.lazy.unpark(owner) {
             parked.release();
             if drop_recording {
                 remove(&self.activation_dir(), &parked.guid);
@@ -675,7 +734,7 @@ impl Host {
             "lazy: {id} replayed ({} calls) as owner {owner}, not started",
             recording.calls.len()
         );
-        self.lazy.parked.insert(
+        self.lazy.park(
             owner,
             Parked::new(id.into(), key.guid.clone(), origin, name),
         );
@@ -911,7 +970,7 @@ impl Host {
             if self.process_gone(owner) {
                 self.wake(owner);
             } else if now.saturating_sub(since) >= STOP_WAIT_MS
-                && let Some(parked) = self.lazy.parked.remove(&owner)
+                && let Some(parked) = self.lazy.unpark(owner)
             {
                 parked.release();
                 self.wake_failed(owner, parked, "its stopped process did not go within 20 s");
@@ -1157,7 +1216,7 @@ impl Host {
             test.at = When::At(now + ms);
         }
         // Its settings pages still show in its language.
-        self.lazy.parked.insert(
+        self.lazy.park(
             owner,
             Parked {
                 warnings,
@@ -1202,6 +1261,49 @@ impl Host {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn first_queue_puts_builtins_first_and_counts_them() {
+        let mut lazy = Lazy::default();
+        let builtin = |id: &str| id.starts_with("vestra.");
+        for id in [
+            "b.one", "vestra.x", "a.two", "vestra.a", "b.one", "vestra.x",
+        ] {
+            lazy.queue_first_run(id.into(), builtin);
+        }
+        assert!(lazy.builtin_queued());
+        assert!(lazy.first_queue.contains("a.two"));
+        let mut order = Vec::new();
+        while let Some(id) = lazy.first_queue.pop_front() {
+            assert_eq!(lazy.builtin_queued(), id == "vestra.x");
+            order.push(id);
+        }
+        assert_eq!(order, ["vestra.x", "vestra.a", "b.one", "a.two"]);
+        assert!(!lazy.first_queue.contains("a.two") && lazy.first_queue.is_empty());
+        lazy.queue_first_run("a.two".into(), builtin);
+        assert!(lazy.first_queue.contains("a.two") && !lazy.builtin_queued());
+    }
+
+    #[test]
+    fn parked_ids_follow_park_and_unpark() {
+        let mut lazy = Lazy::default();
+        let parked = |id: &str| {
+            let origin = Origin {
+                id: id.into(),
+                directory: PathBuf::from(id),
+                catalog: None,
+                data_directory: None,
+            };
+            Parked::new(id.into(), "guid".into(), origin, id.into())
+        };
+        lazy.park(7, parked("a.one"));
+        lazy.park(9, parked("b.two"));
+        assert_eq!(lazy.parked_id("a.one"), Some(7));
+        assert!(lazy.unpark(7).is_some());
+        assert_eq!(lazy.parked_id("a.one"), None);
+        assert!(lazy.unpark(7).is_none());
+        assert_eq!(lazy.parked_id("b.two"), Some(9));
+    }
 
     fn key() -> Key {
         Key {

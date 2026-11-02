@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 
 use crate::platform::KeyLabels;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub type Owner = u64;
 /// Owner generation of the host's own commands; lower generations win conflicts.
@@ -599,6 +599,8 @@ pub struct Target {
 #[derive(Clone, Debug)]
 struct Declared {
     manifest: String,
+    /// `"<manifest>/<id>"`: its overlay key and its name in conflicts.
+    key: String,
     defaults: Vec<Input>,
     panel: bool,
     repeat: bool,
@@ -608,24 +610,51 @@ struct Declared {
     /// wakes under a new generation (`rekey`), so that waking does not
     /// change who wins a key.
     rank: Owner,
+    /// The inputs it claims now (the overlay's, else its defaults), sorted:
+    /// what [`Table::submit`] put in `claims` and `withdraw` takes out.
+    claimed: Vec<Input>,
 }
+
+/// One command's claim on one input. Within an input, claims rank user
+/// bindings first, then by owner generation (host 0 first, earlier-loaded
+/// plugins next), then declaration: the derived order, field by field.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Claim {
+    /// `false` for a user binding, which sorts first.
+    default: bool,
+    rank: Owner,
+    sequence: u64,
+    owner: Owner,
+    id: String,
+}
+
+type Slot = (Scope, Input);
 
 #[derive(Default)]
 pub struct Table {
     declared: BTreeMap<(Owner, String), Declared>,
     /// `"<manifest id>/<command id>"` → bindings; `[]` unbinds.
     overlay: BTreeMap<String, Vec<String>>,
-    active: BTreeMap<(Scope, Input), Target>,
+    /// Every claim on an input, in rank order; the first one is active.
+    /// Kept up to date one command at a time (perf-registry round: a full
+    /// recompute per declaration was quadratic in the number of commands).
+    claims: BTreeMap<Slot, Vec<Claim>>,
+    active: BTreeMap<Slot, Target>,
     /// Commands that lost an input to the active one, in claim order: the
     /// key goes to them while the winner is disabled.
-    fallback: BTreeMap<(Scope, Input), Vec<Target>>,
+    fallback: BTreeMap<Slot, Vec<Target>>,
     /// Disabled commands and their reasons, mirrored from the registry.
     disabled: BTreeMap<(Owner, String), Option<String>>,
-    conflicts: Vec<String>,
-    /// Inputs a command claims but another command holds: (input, winner).
-    shadowed: Shadows,
+    /// Per input: claims ignored for an equal one (both defaults or both
+    /// the user's), with the message logged when it first appears.
+    conflicts: BTreeMap<Slot, Vec<(Claim, String)>>,
+    /// How many of `conflicts` carry each message.
+    conflict_texts: BTreeMap<String, usize>,
+    /// What `refresh` logged, for tests to compare.
+    #[cfg(test)]
+    logged: Vec<String>,
     next: u64,
-    /// Advances on every rebuild (declarations or overlay changed).
+    /// Advances on every change of declarations or overlay.
     revision: u64,
 }
 
@@ -642,9 +671,6 @@ pub enum Lookup<'a> {
     Unbound,
 }
 
-/// Per command: inputs it claims that another command holds, and the winner.
-type Shadows = BTreeMap<(Owner, String), Vec<(Input, Owner, String)>>;
-
 /// One command's bindings for `plugin.bindings.list`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Info {
@@ -658,6 +684,30 @@ pub struct Info {
     pub overridden: bool,
     /// (input, winning manifest, winning command id).
     pub shadowed: Vec<(Input, String, String)>,
+}
+
+fn scope(owner: Owner, panel: bool) -> Scope {
+    if panel {
+        Scope::Panel(owner)
+    } else {
+        Scope::Global
+    }
+}
+
+/// The order conflicts are logged in: by claim rank, then scope, input
+/// and id, as if every claim of every input were sorted together.
+fn conflict_order(
+    (claim, (scope, input)): &(Claim, Slot),
+) -> (bool, Owner, u64, Owner, Scope, &Input, &str) {
+    (
+        claim.default,
+        claim.rank,
+        claim.sequence,
+        claim.owner,
+        *scope,
+        input,
+        &claim.id,
+    )
 }
 
 impl Table {
@@ -679,6 +729,7 @@ impl Table {
             }
             defaults.push(input);
         }
+        let mut dirty = BTreeSet::new();
         // Declared again (a woken plugin's live registration): its rank and
         // place stay.
         let (rank, sequence) = match self.declared.get(&(owner, id.into())) {
@@ -688,36 +739,48 @@ impl Table {
                 (owner, self.next)
             }
         };
+        self.withdraw(owner, id, &mut dirty);
         self.declared.insert(
             (owner, id.into()),
             Declared {
                 manifest: manifest.into(),
+                key: format!("{manifest}/{id}"),
                 defaults,
                 panel,
                 repeat,
                 sequence,
                 rank,
+                claimed: Vec::new(),
             },
         );
-        self.rebuild();
+        self.submit(owner, id, &mut dirty);
+        self.refresh(dirty);
         Ok(())
+    }
+
+    /// The ids `owner` declared.
+    fn ids_of(&self, owner: Owner) -> Vec<String> {
+        self.declared
+            .range((owner, String::new())..)
+            .take_while(|((each, _), _)| *each == owner)
+            .map(|((_, id), _)| id.clone())
+            .collect()
     }
 
     /// Wake: `from`'s declarations move to generation `to`, keeping their
     /// rank, so the same inputs go to the same commands.
     pub fn rekey(&mut self, from: Owner, to: Owner) {
-        let keys = self
-            .declared
-            .keys()
-            .filter(|(owner, _)| *owner == from)
-            .cloned()
-            .collect::<Vec<_>>();
-        if keys.is_empty() {
+        let ids = self.ids_of(from);
+        if ids.is_empty() {
             return;
         }
-        for key in keys {
-            if let Some(declared) = self.declared.remove(&key) {
-                self.declared.insert((to, key.1), declared);
+        let mut dirty = BTreeSet::new();
+        for id in &ids {
+            self.withdraw(from, id, &mut dirty);
+            // A declaration `to` already has under this id is replaced.
+            self.withdraw(to, id, &mut dirty);
+            if let Some(declared) = self.declared.remove(&(from, id.clone())) {
+                self.declared.insert((to, id.clone()), declared);
             }
         }
         // The registry's disabled mirror follows (until its next copy).
@@ -725,27 +788,51 @@ impl Table {
             .into_iter()
             .map(|((owner, id), reason)| ((if owner == from { to } else { owner }, id), reason))
             .collect();
-        self.rebuild();
+        for id in &ids {
+            self.submit(to, id, &mut dirty);
+        }
+        self.refresh(dirty);
     }
 
     /// One command's bindings go; claims it was shadowing become active.
     pub fn remove(&mut self, owner: Owner, id: &str) {
+        let mut dirty = BTreeSet::new();
+        self.withdraw(owner, id, &mut dirty);
         if self.declared.remove(&(owner, id.to_owned())).is_some() {
-            self.rebuild();
+            self.refresh(dirty);
         }
     }
 
     pub fn remove_owner(&mut self, owner: Owner) {
-        let before = self.declared.len();
-        self.declared.retain(|(each, _), _| *each != owner);
-        if before != self.declared.len() {
-            self.rebuild();
+        let ids = self.ids_of(owner);
+        if ids.is_empty() {
+            return;
         }
+        let mut dirty = BTreeSet::new();
+        for id in ids {
+            self.withdraw(owner, &id, &mut dirty);
+            self.declared.remove(&(owner, id));
+        }
+        self.refresh(dirty);
     }
 
     pub fn set_overlay(&mut self, overlay: BTreeMap<String, Vec<String>>) {
+        // Only the commands whose overlay entry changed claim anew.
+        let changed = self
+            .declared
+            .iter()
+            .filter(|(_, declared)| self.overlay.get(&declared.key) != overlay.get(&declared.key))
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        let mut dirty = BTreeSet::new();
+        for (owner, id) in &changed {
+            self.withdraw(*owner, id, &mut dirty);
+        }
         self.overlay = overlay;
-        self.rebuild();
+        for (owner, id) in &changed {
+            self.submit(*owner, id, &mut dirty);
+        }
+        self.refresh(dirty);
     }
 
     pub fn revision(&self) -> u64 {
@@ -769,9 +856,9 @@ impl Table {
     /// The declared commands (`<manifest>/<id>`) whose defaults include `input`.
     pub fn default_holders(&self, input: &Input) -> Vec<String> {
         self.declared
-            .iter()
-            .filter(|(_, declared)| declared.defaults.contains(input))
-            .map(|((_, id), declared)| format!("{}/{id}", declared.manifest))
+            .values()
+            .filter(|declared| declared.defaults.contains(input))
+            .map(|declared| declared.key.clone())
             .collect()
     }
 
@@ -787,8 +874,7 @@ impl Table {
         self.declared
             .iter()
             .map(|((owner, id), declared)| {
-                let key = format!("{}/{id}", declared.manifest);
-                let overridden = self.overlay.get(&key);
+                let overridden = self.overlay.get(&declared.key);
                 Info {
                     owner: *owner,
                     id: id.clone(),
@@ -801,20 +887,47 @@ impl Table {
                     ),
                     overridden: overridden.is_some(),
                     shadowed: self
-                        .shadowed
-                        .get(&(*owner, id.clone()))
+                        .shadowed(*owner, id, declared)
                         .into_iter()
-                        .flatten()
-                        .map(|(input, winner, winner_id)| {
-                            let manifest = self.declared[&(*winner, winner_id.clone())]
+                        .map(|(input, winner)| {
+                            let manifest = self.declared[&(winner.owner, winner.id.clone())]
                                 .manifest
                                 .clone();
-                            (input.clone(), manifest, winner_id.clone())
+                            (input.clone(), manifest, winner.id.clone())
                         })
                         .collect(),
                 }
             })
             .collect()
+    }
+
+    /// Inputs a command claims but another command holds, with the
+    /// winner, in input order.
+    fn shadowed<'a>(
+        &'a self,
+        owner: Owner,
+        id: &str,
+        declared: &'a Declared,
+    ) -> Vec<(&'a Input, &'a Claim)> {
+        let scope = scope(owner, declared.panel);
+        let mut shadowed = Vec::new();
+        let mut last = None;
+        for input in &declared.claimed {
+            // A repeated input (an overlay listing it twice) is one slot.
+            if last == Some(input) {
+                continue;
+            }
+            last = Some(input);
+            let Some(claims) = self.claims.get(&(scope, input.clone())) else {
+                continue;
+            };
+            for claim in &claims[1..] {
+                if claim.owner == owner && claim.id == id {
+                    shadowed.push((input, &claims[0]));
+                }
+            }
+        }
+        shadowed
     }
 
     /// Overlay entries whose command is not declared (its plugin is stopped
@@ -837,107 +950,155 @@ impl Table {
             .any(|(_, input)| input.name == "Mouse:LeftClick")
     }
 
-    /// Recompute from declarations: user overlay first, then defaults by owner
-    /// generation (host 0 first, earlier-loaded plugins next), then declaration.
-    fn rebuild(&mut self) {
-        let mut claims = Vec::new();
-        for ((owner, id), declared) in &self.declared {
-            let scope = if declared.panel {
-                Scope::Panel(*owner)
-            } else {
-                Scope::Global
-            };
-            let key = format!("{}/{id}", declared.manifest);
-            let (user, inputs) = match self.overlay.get(&key) {
-                Some(texts) => (
-                    true,
-                    texts
-                        .iter()
-                        .filter_map(|text| match parse(text) {
-                            Ok(input) => Some(input),
-                            Err(error) => {
-                                diag!("binding overlay {key}: {error}");
-                                None
-                            }
-                        })
-                        .collect(),
-                ),
-                None => (false, declared.defaults.clone()),
-            };
-            for input in inputs {
-                claims.push((
-                    !user,
-                    declared.rank,
-                    declared.sequence,
-                    *owner,
-                    scope,
-                    input,
-                    id.clone(),
-                ));
-            }
-        }
-        claims.sort();
-        let mut active: BTreeMap<(Scope, Input), (bool, Target)> = BTreeMap::new();
-        let mut conflicts = Vec::new();
-        let mut shadowed: Shadows = BTreeMap::new();
-        let mut fallback: BTreeMap<(Scope, Input), Vec<Target>> = BTreeMap::new();
-        for (default, _, _, owner, scope, input, id) in claims {
-            let target = Target {
-                owner,
-                id: id.clone(),
-                repeat: self.declared[&(owner, id.clone())].repeat,
-            };
-            if let Some((_, winner)) = active.get(&(scope, input.clone())) {
-                shadowed.entry((owner, id.clone())).or_default().push((
-                    input.clone(),
-                    winner.owner,
-                    winner.id.clone(),
-                ));
-                fallback
-                    .entry((scope, input.clone()))
-                    .or_default()
-                    .push(target.clone());
-            }
-            match active.get(&(scope, input.clone())) {
-                None => {
-                    active.insert((scope, input), (default, target));
+    /// Takes a declared command's claims out of `claims`, marking the
+    /// inputs it claimed for [`Table::refresh`].
+    fn withdraw(&mut self, owner: Owner, id: &str, dirty: &mut BTreeSet<Slot>) {
+        let Some(declared) = self.declared.get_mut(&(owner, id.to_owned())) else {
+            return;
+        };
+        let scope = scope(owner, declared.panel);
+        for input in std::mem::take(&mut declared.claimed) {
+            let slot = (scope, input);
+            if let Some(claims) = self.claims.get_mut(&slot) {
+                claims.retain(|claim| !(claim.owner == owner && claim.id == id));
+                if claims.is_empty() {
+                    self.claims.remove(&slot);
                 }
-                // A user binding replaces a default one; that is not a conflict.
-                Some((winner_default, winner)) if !*winner_default || default => {
-                    if *winner_default == default {
-                        let name = |owner: Owner, id: &str| {
-                            let manifest = &self.declared[&(owner, id.to_owned())].manifest;
-                            format!("{manifest}/{id}")
-                        };
-                        conflicts.push(format!(
-                            "binding conflict: {} → {}; ignored: {}",
-                            label(&input),
-                            name(winner.owner, &winner.id),
-                            name(owner, &target.id)
-                        ));
-                    }
-                }
-                Some(_) => unreachable!("claims are sorted user-first"),
             }
+            dirty.insert(slot);
         }
-        for conflict in &conflicts {
-            if !self.conflicts.contains(conflict) {
-                diag!("{conflict}");
-            }
-        }
-        self.conflicts = conflicts;
-        self.shadowed = shadowed;
-        self.fallback = fallback;
-        self.revision += 1;
-        self.active = active
-            .into_iter()
-            .map(|(key, (_, target))| (key, target))
-            .collect();
     }
 
+    /// Puts a declared command's claims (the user overlay's, else its
+    /// defaults) in rank order into `claims`.
+    fn submit(&mut self, owner: Owner, id: &str, dirty: &mut BTreeSet<Slot>) {
+        let Some(declared) = self.declared.get_mut(&(owner, id.to_owned())) else {
+            return;
+        };
+        let (user, mut inputs) = match self.overlay.get(&declared.key) {
+            Some(texts) => (
+                true,
+                texts
+                    .iter()
+                    .filter_map(|text| match parse(text) {
+                        Ok(input) => Some(input),
+                        Err(error) => {
+                            diag!("binding overlay {}: {error}", declared.key);
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+            None => (false, declared.defaults.clone()),
+        };
+        inputs.sort();
+        let scope = scope(owner, declared.panel);
+        for input in &inputs {
+            let claim = Claim {
+                default: !user,
+                rank: declared.rank,
+                sequence: declared.sequence,
+                owner,
+                id: id.to_owned(),
+            };
+            let slot = (scope, input.clone());
+            let claims = self.claims.entry(slot.clone()).or_default();
+            let at = claims.partition_point(|each| *each <= claim);
+            claims.insert(at, claim);
+            dirty.insert(slot);
+        }
+        declared.claimed = inputs;
+    }
+
+    /// Recompute the active command, fallbacks and conflicts of the
+    /// `dirty` inputs, which are all whose claims changed; log conflicts
+    /// that are new, in rank order.
+    fn refresh(&mut self, dirty: BTreeSet<Slot>) {
+        let mut found = Vec::new();
+        let mut fresh = Vec::new();
+        for slot in dirty {
+            let claims = self.claims.get(&slot).map_or(&[][..], Vec::as_slice);
+            let target = |claim: &Claim| Target {
+                owner: claim.owner,
+                id: claim.id.clone(),
+                repeat: self.declared[&(claim.owner, claim.id.clone())].repeat,
+            };
+            let conflicts = match claims.split_first() {
+                None => Vec::new(),
+                Some((winner, rest)) => {
+                    // A user binding replaces a default one; that is not a conflict.
+                    let name = |claim: &Claim| &self.declared[&(claim.owner, claim.id.clone())].key;
+                    rest.iter()
+                        .filter(|claim| claim.default == winner.default)
+                        .map(|claim| {
+                            let text = format!(
+                                "binding conflict: {} → {}; ignored: {}",
+                                label(&slot.1),
+                                name(winner),
+                                name(claim)
+                            );
+                            (claim.clone(), text)
+                        })
+                        .collect()
+                }
+            };
+            for (claim, text) in &conflicts {
+                if !self.conflict_texts.contains_key(text) {
+                    fresh.push(((claim.clone(), slot.clone()), text.clone()));
+                }
+            }
+            let active = claims.first().map(target);
+            let fallback = claims.iter().skip(1).map(target).collect::<Vec<_>>();
+            found.push((slot, active, fallback, conflicts));
+        }
+        for (slot, active, fallback, conflicts) in found {
+            match active {
+                Some(target) => self.active.insert(slot.clone(), target),
+                None => self.active.remove(&slot),
+            };
+            if fallback.is_empty() {
+                self.fallback.remove(&slot);
+            } else {
+                self.fallback.insert(slot.clone(), fallback);
+            }
+            for (_, text) in self.conflicts.remove(&slot).into_iter().flatten() {
+                if let Some(count) = self.conflict_texts.get_mut(&text) {
+                    *count -= 1;
+                    if *count == 0 {
+                        self.conflict_texts.remove(&text);
+                    }
+                }
+            }
+            for (_, text) in &conflicts {
+                *self.conflict_texts.entry(text.clone()).or_default() += 1;
+            }
+            if !conflicts.is_empty() {
+                self.conflicts.insert(slot, conflicts);
+            }
+        }
+        fresh.sort_by(|a, b| conflict_order(&a.0).cmp(&conflict_order(&b.0)));
+        for (_, text) in fresh {
+            diag!("{text}");
+            #[cfg(test)]
+            self.logged.push(text);
+        }
+        self.revision += 1;
+    }
+
+    /// Every conflict, in rank order (user first, then owner generation,
+    /// declaration, scope, input).
     #[cfg(test)]
-    pub fn conflicts(&self) -> &[String] {
-        &self.conflicts
+    pub fn conflicts(&self) -> Vec<String> {
+        let mut all = self
+            .conflicts
+            .iter()
+            .flat_map(|(slot, list)| {
+                list.iter()
+                    .map(move |(claim, text)| ((claim.clone(), slot.clone()), text.clone()))
+            })
+            .collect::<Vec<_>>();
+        all.sort_by(|a, b| conflict_order(&a.0).cmp(&conflict_order(&b.0)));
+        all.into_iter().map(|(_, text)| text).collect()
     }
 
     /// The registry's disabled commands (owner, id → reason). Keys bound to
@@ -1981,5 +2142,218 @@ mod tests {
         );
         table.remove_owner(9);
         assert_eq!(table.resolve(&key("Space"), None).unwrap().id, "late");
+    }
+
+    type Shadowed = BTreeMap<(Owner, String), Vec<(Input, Owner, String)>>;
+    type Recomputed = (
+        BTreeMap<Slot, Target>,
+        BTreeMap<Slot, Vec<Target>>,
+        Vec<String>,
+        Shadowed,
+    );
+
+    /// The table as the full recompute before the perf-registry round
+    /// derived it from the declarations and the overlay: active targets,
+    /// fallbacks, conflicts in order and shadowed inputs.
+    fn recomputed(table: &Table) -> Recomputed {
+        let mut claims = Vec::new();
+        for ((owner, id), declared) in &table.declared {
+            let scope = if declared.panel {
+                Scope::Panel(*owner)
+            } else {
+                Scope::Global
+            };
+            let key = format!("{}/{id}", declared.manifest);
+            let (user, inputs) = match table.overlay.get(&key) {
+                Some(texts) => (true, texts.iter().filter_map(|t| parse(t).ok()).collect()),
+                None => (false, declared.defaults.clone()),
+            };
+            for input in inputs {
+                claims.push((
+                    !user,
+                    declared.rank,
+                    declared.sequence,
+                    *owner,
+                    scope,
+                    input,
+                    id.clone(),
+                ));
+            }
+        }
+        claims.sort();
+        let mut active: BTreeMap<Slot, (bool, Target)> = BTreeMap::new();
+        let mut conflicts = Vec::new();
+        let mut shadowed: Shadowed = BTreeMap::new();
+        let mut fallback: BTreeMap<Slot, Vec<Target>> = BTreeMap::new();
+        for (default, _, _, owner, scope, input, id) in claims {
+            let target = Target {
+                owner,
+                id: id.clone(),
+                repeat: table.declared[&(owner, id.clone())].repeat,
+            };
+            if let Some((_, winner)) = active.get(&(scope, input.clone())) {
+                shadowed.entry((owner, id.clone())).or_default().push((
+                    input.clone(),
+                    winner.owner,
+                    winner.id.clone(),
+                ));
+                fallback
+                    .entry((scope, input.clone()))
+                    .or_default()
+                    .push(target.clone());
+            }
+            match active.get(&(scope, input.clone())) {
+                None => {
+                    active.insert((scope, input), (default, target));
+                }
+                Some((winner_default, winner)) => {
+                    if *winner_default == default {
+                        let name = |owner: Owner, id: &str| {
+                            let manifest = &table.declared[&(owner, id.to_owned())].manifest;
+                            format!("{manifest}/{id}")
+                        };
+                        conflicts.push(format!(
+                            "binding conflict: {} → {}; ignored: {}",
+                            label(&input),
+                            name(winner.owner, &winner.id),
+                            name(owner, &target.id)
+                        ));
+                    }
+                }
+            }
+        }
+        let active = active
+            .into_iter()
+            .map(|(slot, (_, target))| (slot, target))
+            .collect();
+        (active, fallback, conflicts, shadowed)
+    }
+
+    /// Small deterministic generator (no dependency): xorshift64.
+    struct Steps(u64);
+    impl Steps {
+        fn next(&mut self, below: u64) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0 % below
+        }
+    }
+
+    /// perf-registry round: the table kept up to date one command at a
+    /// time agrees with the full recompute after every kind of change,
+    /// including overlays, conflicts, panel scopes and wakes.
+    #[test]
+    fn incremental_claims_match_the_full_recompute() {
+        const INPUTS: [&str; 6] = ["Space", "Enter", "K", "Ctrl+O", "Mouse:LeftClick", "F5"];
+        const IDS: [&str; 5] = ["a", "b", "c", "d", "e"];
+        let mut steps = Steps(0x9e37_79b9_7f4a_7c15);
+        let mut table = Table::default();
+        let pick = |steps: &mut Steps| {
+            INPUTS
+                .iter()
+                .filter(|_| steps.next(3) == 0)
+                .map(|text| (*text).to_owned())
+                .collect::<Vec<_>>()
+        };
+        let mut logged_total = 0;
+        for step in 0..3000 {
+            let owner = steps.next(6);
+            let id = IDS[steps.next(IDS.len() as u64) as usize];
+            let before = table.revision();
+            let previous = table.conflicts();
+            match steps.next(10) {
+                0..=4 => {
+                    let bindings = pick(&mut steps);
+                    let (panel, repeat) = (steps.next(4) == 0, steps.next(2) == 0);
+                    table
+                        .declare(owner, id, &format!("m{owner}"), &bindings, panel, repeat)
+                        .unwrap();
+                }
+                5 => table.remove(owner, id),
+                6 => table.remove_owner(owner),
+                7 => table.rekey(owner, steps.next(8)),
+                _ => {
+                    let mut overlay = BTreeMap::new();
+                    for _ in 0..steps.next(4) {
+                        let key = format!("m{}/{}", steps.next(6), IDS[steps.next(5) as usize]);
+                        let mut inputs = pick(&mut steps);
+                        // A hand-edited file may repeat an input or hold junk.
+                        if steps.next(8) == 0 {
+                            inputs.push("Space".into());
+                            inputs.push("Space".into());
+                            inputs.push("Shift+>".into());
+                        }
+                        overlay.insert(key, inputs);
+                    }
+                    table.set_overlay(overlay);
+                }
+            }
+            let (active, fallback, conflicts, shadowed) = recomputed(&table);
+            assert_eq!(table.active, active, "step {step}");
+            assert_eq!(table.fallback, fallback, "step {step}");
+            assert_eq!(table.conflicts(), conflicts, "step {step}");
+            // Logged as the full recompute logged them: each conflict not
+            // in the previous list, repeats included, in rank order.
+            let logged = conflicts
+                .iter()
+                .filter(|text| !previous.contains(text))
+                .cloned()
+                .collect::<Vec<_>>();
+            assert_eq!(std::mem::take(&mut table.logged), logged, "step {step}");
+            logged_total += logged.len();
+            for info in table.infos() {
+                let expected = shadowed
+                    .get(&(info.owner, info.id.clone()))
+                    .into_iter()
+                    .flatten()
+                    .map(|(input, winner, id)| {
+                        let manifest = table.declared[&(*winner, id.clone())].manifest.clone();
+                        (input.clone(), manifest, id.clone())
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(info.shadowed, expected, "step {step} {}", info.id);
+            }
+            assert!(table.revision() >= before, "step {step}");
+        }
+        assert!(logged_total > 100, "{logged_total} conflicts logged");
+    }
+
+    /// perf-registry round: 6000 commands (2000 plugins of three, one
+    /// with a key each, 26 keys between them) declare in linear time; the full recompute per
+    /// declaration took 4.3 s in a release build for this many.
+    #[test]
+    fn six_thousand_declarations_stay_fast() {
+        let started = std::time::Instant::now();
+        let mut table = Table::default();
+        for owner in 1..=2000_u64 {
+            let manifest = format!("probe.tiny-{owner:04}");
+            table
+                .declare(owner, "go", &manifest, &[], false, false)
+                .unwrap();
+            table
+                .declare(owner, "info", &manifest, &[], false, false)
+                .unwrap();
+            let letter = char::from(b'A' + (owner % 26) as u8);
+            table
+                .declare(
+                    owner,
+                    "key",
+                    &manifest,
+                    &[format!("Ctrl+Alt+{letter}")],
+                    false,
+                    false,
+                )
+                .unwrap();
+        }
+        let elapsed = started.elapsed();
+        diag!("6000 declarations: {elapsed:?}");
+        assert_eq!(table.resolve(&key("Ctrl+Alt+B"), None).unwrap().owner, 1);
+        assert_eq!(table.resolve(&key("Ctrl+Alt+A"), None).unwrap().owner, 26);
+        assert_eq!(table.conflicts().len(), 2000 - 26);
+        assert_eq!(table.infos().len(), 6000);
+        // Generous for an unoptimized build on a slow runner; the
+        // quadratic recompute needed far more.
+        assert!(elapsed < std::time::Duration::from_secs(5), "{elapsed:?}");
     }
 }

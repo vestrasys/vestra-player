@@ -2426,7 +2426,7 @@ export component MenuWindow inherits Window {
             window.show().unwrap();
             let mut sim = Self {
                 window,
-                roots: registry.snapshot().roots,
+                roots: registry.snapshot().roots.clone(),
                 path: Vec::new(),
                 aim: crate::ui::menu::HoverAim::default(),
                 panels: Vec::new(),
@@ -2999,7 +2999,7 @@ export component MenuWindow inherits Window {
                 }
             }
         }
-        let roots = registry.snapshot().roots;
+        let roots = registry.snapshot().roots.clone();
         let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
         let shell = crate::ui::composition::compile_json(&bar_and_sidebar(), sender, 1).unwrap();
         let (w, h) = (1280u32, 720u32);
