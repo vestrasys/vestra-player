@@ -74,6 +74,20 @@ fn reasons(why: &Value) -> Vec<String> {
     }
 }
 
+/// `owner`'s listeners of wake events as recorded calls (its other
+/// listeners left out).
+pub(super) fn wake_calls(host: &Host, owner: u64) -> Vec<Call> {
+    let Some(plugin) = host.plugins.get(&owner) else {
+        return Vec::new();
+    };
+    plugin
+        .subscriptions
+        .iter()
+        .filter(|(event, active)| **active && WAKE_EVENTS.contains(&event.as_str()))
+        .map(|(event, _)| Call::new("events.subscribe", json!({ "event": event })))
+        .collect()
+}
+
 impl Capability for Events {
     fn info(&self) -> &'static Info {
         &INFO
@@ -100,12 +114,7 @@ impl Capability for Events {
         if listened.is_empty() {
             return Recorded::Nothing;
         }
-        Recorded::Calls(
-            listened
-                .into_iter()
-                .map(|event| Call::new("events.subscribe", json!({ "event": event })))
-                .collect(),
-        )
+        Recorded::Calls(wake_calls(host, owner))
     }
     /// The woken plugin subscribes again itself.
     fn rekey(&self, host: &mut Host, from: u64, _: u64) {

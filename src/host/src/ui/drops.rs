@@ -119,6 +119,30 @@ impl Drops {
             .map(|p| json!({"id":p.id,"extensions":p.extensions}))
             .collect()
     }
+    /// `owner`'s providers in order, each with whether it is recorded and
+    /// the extensions an earlier provider of another owner takes (the
+    /// first with an extension wins it) (`VESTRA_TEST_REGISTRY`,
+    /// host/lazy.rs).
+    pub fn providers_of(&self, owner: u64) -> Vec<(&Provider, bool, Vec<String>)> {
+        self.providers
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.owner == owner)
+            .map(|(place, p)| {
+                let taken = p
+                    .extensions
+                    .iter()
+                    .filter(|e| {
+                        self.providers[..place]
+                            .iter()
+                            .any(|earlier| earlier.owner != owner && earlier.extensions.contains(e))
+                    })
+                    .cloned()
+                    .collect();
+                (p, self.recorded.contains(&(owner, p.id.clone())), taken)
+            })
+            .collect()
+    }
     /// Replays a recorded `drops.provide` for a parked owner.
     pub fn provide_recorded(&mut self, provider: Provider) {
         let key = (provider.owner, provider.id.clone());

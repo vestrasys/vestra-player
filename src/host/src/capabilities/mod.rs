@@ -233,6 +233,25 @@ pub fn record(host: &Host, owner: u64, backend: &Value) -> Result<Vec<Call>, &'s
     Ok(calls)
 }
 
+/// What `owner` registered that a recording can hold, whatever else it
+/// holds live: every capability's calls, a `Live` one's left out (the
+/// events capability's listeners of wake events kept). Only for
+/// `VESTRA_TEST_PARK=all` (host/lazy.rs), which parks every plugin to
+/// diff its registries; a real park needs [`record`].
+pub fn recordable(host: &Host, owner: u64, backend: &Value) -> Vec<Call> {
+    let mut calls = Vec::new();
+    for capability in ALL {
+        match capability.record(host, owner, backend) {
+            Recorded::Calls(more) => calls.extend(more),
+            Recorded::Live(_) if capability.info().name == "events" => {
+                calls.extend(events::wake_calls(host, owner));
+            }
+            Recorded::Nothing | Recorded::Live(_) => (),
+        }
+    }
+    calls
+}
+
 /// Replays a recorded call: its capability, which the package must declare.
 pub fn replay(
     host: &mut Host,

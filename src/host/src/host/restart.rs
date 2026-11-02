@@ -77,6 +77,34 @@ pub(crate) fn restart_player(lost: &LostDevice, source: &Value) {
     }
 }
 
+/// Run the event loop (`run`, `slint::run_event_loop`). A panic out of it
+/// once the windows' GPU device was lost (`lost`; a watchdog stall sets it
+/// too, with the device healthy) ends the loop as the quit the loss asked
+/// for would (`None`), whatever panicked; a panic before that goes on. Not
+/// covered: an out-of-memory `create_buffer` on a healthy device, which
+/// wgpu-core does not treat as a loss (`doc/architecture/README.md`).
+///
+/// Slint's femtovg-wgpu renderer keeps drawing the frames already asked for
+/// until the loop sees that quit, and femtovg makes a new uniform buffer
+/// with `wgpu::util::DeviceExt::create_buffer_init` (its viewport bind
+/// group) whenever a draw switches between a layer texture and the window;
+/// on a lost device that buffer cannot be mapped and wgpu panics (host
+/// 0.6.3 and 0.6.4; fixed in 0.6.5). Unwinding out of `main` skipped the teardown (no
+/// `exit: restarting`, plugins told `host-lost`, not `quit`), and the host,
+/// still held by the UI thread's thread-locals, dropped only at process
+/// exit, after Windows had ended its other threads: joining one of them
+/// panicked again ("threads should not terminate unexpectedly"). winit
+/// catches a panic in its callbacks and resumes it once out of the
+/// dispatch, so it arrives here; nothing draws on the device after this.
+pub(crate) fn run_through_loss<T>(run: impl FnOnce() -> T, lost: impl Fn() -> bool) -> Option<T> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)) {
+        Ok(ran) => Some(ran),
+        // The panic hook already logged it (`diag::log_panics`).
+        Err(_) if lost() => None,
+        Err(payload) => std::panic::resume_unwind(payload),
+    }
+}
+
 /// How long this player may take to end once its event loop ended after a
 /// device loss. What must survive is saved by then: the crash guard and the
 /// resume position here, the UI state and the lazy-activation records first
@@ -223,6 +251,10 @@ fn command_after_loss(
     command.env_remove("VESTRA_TEST_REMOVE_DEVICE");
     command.env_remove("VESTRA_TEST_EXECUTE");
     command.env_remove("VESTRA_TEST_GPU_STALL");
+    // The registry probe (host/lazy/probe.rs): one run's snapshots.
+    command.env_remove("VESTRA_TEST_REGISTRY");
+    command.env_remove("VESTRA_TEST_PARK");
+    command.env_remove("VESTRA_TEST_WAKE");
     if off {
         // `VESTRA_RENDER=gpu` overrides the guard; the child must not.
         command.env("VESTRA_RENDER", "software");
@@ -324,6 +356,32 @@ mod tests {
         );
     }
 
+    /// 0.6.3/0.6.4: a draw on the lost window device panicked in wgpu
+    /// (`create_buffer_init` from femtovg) and the panic left `main`, so
+    /// the teardown never ran. After a loss it ends the loop instead; with
+    /// the device fine it is still a panic.
+    #[test]
+    fn a_panic_after_the_loss_ends_the_event_loop_and_others_go_on() {
+        let draw_on_lost_device = || -> Result<(), String> {
+            panic!("Failed to get mapped range for buffer created with mapped_at_creation")
+        };
+        assert_eq!(run_through_loss(draw_on_lost_device, || true), None);
+        assert_eq!(
+            run_through_loss(|| Ok::<_, String>(()), || true),
+            Some(Ok(()))
+        );
+        assert_eq!(
+            run_through_loss(|| Err::<(), _>("loop failed".to_owned()), || false),
+            Some(Err("loop failed".to_owned()))
+        );
+        let resumed = std::panic::catch_unwind(|| run_through_loss(draw_on_lost_device, || false));
+        let payload = resumed.expect_err("no loss: the panic goes on");
+        assert_eq!(
+            payload.downcast_ref::<&str>(),
+            Some(&"Failed to get mapped range for buffer created with mapped_at_creation")
+        );
+    }
+
     /// M3 review M1: with `VESTRA_RENDER=gpu` a device that keeps getting
     /// lost must not restart the player on the GPU forever.
     #[test]
@@ -334,6 +392,13 @@ mod tests {
         assert_eq!(env(&on, "VESTRA_TEST_REMOVE_DEVICE"), Some(None), "removed");
         assert_eq!(env(&on, "VESTRA_TEST_EXECUTE"), Some(None), "removed");
         assert_eq!(env(&on, "VESTRA_TEST_GPU_STALL"), Some(None), "removed");
+        for probe in [
+            "VESTRA_TEST_REGISTRY",
+            "VESTRA_TEST_PARK",
+            "VESTRA_TEST_WAKE",
+        ] {
+            assert_eq!(env(&on, probe), Some(None), "removed");
+        }
         let off = command_after_loss(path, &lost(None), &Value::Null, true);
         assert_eq!(env(&off, "VESTRA_RENDER"), Some(Some("software".into())));
         let args: Vec<_> = off.get_args().collect();

@@ -24,6 +24,9 @@ use crate::capabilities::{self, Call};
 use crate::i18n::Catalog;
 use std::collections::{BTreeSet, VecDeque};
 
+mod probe;
+pub(crate) use probe::Probe;
+
 /// First runs (no recording) in flight at once (§2.4).
 const FIRST_RUNS: usize = 8;
 /// How long the classification at ready waits for the playback worker.
@@ -119,6 +122,11 @@ pub(crate) struct Recording {
     pub resident_at_ready: bool,
     pub recorded_at: u64,
     pub calls: Vec<Call>,
+    /// Written under `VESTRA_TEST_PARK=all` (host/lazy/probe.rs): a resident
+    /// plugin recorded as lazy, without what it holds live. Only a run with
+    /// the same switch reads it back; any other run ignores it as stale.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub test_park: bool,
 }
 impl Recording {
     fn new(key: &Key, calls: Vec<Call>, resident_at_ready: bool) -> Self {
@@ -134,6 +142,7 @@ impl Recording {
             resident_at_ready,
             recorded_at,
             calls,
+            test_park: probe::park_all(),
         }
     }
     /// Valid for this package and this player.
@@ -143,6 +152,7 @@ impl Recording {
             && self.build.as_deref() == option_env!("VESTRA_BUILD")
             && self.digest == key.digest
             && self.version == key.version
+            && self.test_park == probe::park_all()
     }
 }
 
@@ -325,6 +335,9 @@ pub(crate) struct Lazy {
     /// gone: a start of that plugin waits for it (wake, reload, enable,
     /// install), so two instances never share its data directory.
     stopping: BTreeMap<String, u64>,
+    /// Test switches for the registry diff (tests/lazy_activation.rs):
+    /// see [`Probe`].
+    pub probe: Probe,
 }
 
 /// A plugin's class at its `runtime.ready` (§3.4).
@@ -343,6 +356,7 @@ impl Lazy {
             .and_then(|ms| ms.parse().ok())
             .unwrap_or(IDLE_MS);
         let tests = test_executes(&std::env::var("VESTRA_TEST_EXECUTE").unwrap_or_default());
+        let probe = Probe::from_env();
         if enabled {
             diag!("lazy: on, idle after {idle_ms} ms");
         }
@@ -350,6 +364,7 @@ impl Lazy {
             enabled,
             idle_ms,
             tests,
+            probe,
             ..Self::default()
         }
     }
@@ -664,6 +679,7 @@ impl Host {
             owner,
             Parked::new(id.into(), key.guid.clone(), origin, name),
         );
+        self.probe_registry(owner, "replayed");
         Ok(())
     }
     /// `runtime.ready` of `owner`: a woken plugin's recorded entries that it
@@ -673,6 +689,7 @@ impl Host {
         let now = self.now_ms();
         self.lazy.touch(owner, now);
         let Some(waking) = self.lazy.waking.remove(&owner) else {
+            self.probe_registry(owner, "ready");
             self.lazy_classify(owner);
             return;
         };
@@ -688,6 +705,7 @@ impl Host {
             })
             .collect::<BTreeMap<_, _>>();
         capabilities::prune(self, owner);
+        self.probe_registry(owner, "woken");
         diag!(
             "lazy: owner {owner} ready after {} ms, {} trigger(s)",
             now.saturating_sub(waking.since),
@@ -731,6 +749,10 @@ impl Host {
             return;
         }
         if !self.lazy.enabled {
+            return;
+        }
+        if self.lazy.probe.park_all {
+            self.lazy_classified(owner, None, Value::Null);
             return;
         }
         if let Err(reason) = capabilities::record(self, owner, &Value::Null) {
@@ -826,7 +848,7 @@ impl Host {
         let now = self.now_ms();
         if lazy && first_run && self.lazy_idle(owner, now, true) {
             let backend = self.lazy.classes[&owner].backend.clone();
-            if let Ok(calls) = capabilities::record(self, owner, &backend) {
+            if let Ok(calls) = self.lazy_record(owner, &backend) {
                 self.park(owner, calls);
             }
         }
@@ -836,6 +858,7 @@ impl Host {
     /// registrations as they are now (left as it was when it holds a live
     /// resource at this moment: an open window, say).
     pub(crate) fn lazy_quit(&mut self) {
+        self.probe_quit();
         if !self.lazy.enabled {
             return;
         }
@@ -853,7 +876,7 @@ impl Host {
                 }
                 (Vec::new(), true)
             } else {
-                match capabilities::record(self, owner, &class.backend) {
+                match self.lazy_record(owner, &class.backend) {
                     Ok(calls) => (calls, false),
                     Err(reason) => {
                         diag!("lazy: {id} not recorded at quit: {reason}");
@@ -875,6 +898,7 @@ impl Host {
         if !self.lazy.enabled {
             return;
         }
+        self.probe_tick(now);
         // Parked plugins whose stopped process is gone start now; one whose
         // process does not go within `STOP_WAIT_MS` fails, as a reload does.
         let due = self
@@ -1061,8 +1085,8 @@ impl Host {
             return;
         }
         let recorded = match answer["live"].as_array().and_then(|live| live.first()) {
-            Some(_) => Err("a resource in the playback worker"),
-            None => capabilities::record(self, owner, answer),
+            Some(_) if !self.lazy.probe.park_all => Err("a resource in the playback worker"),
+            _ => self.lazy_record(owner, answer),
         };
         let calls = match recorded {
             Ok(calls) => calls,
@@ -1117,6 +1141,7 @@ impl Host {
             return;
         }
         let (warnings, warning) = (self.warnings_of(owner), self.warning_text(owner));
+        self.probe_registry(owner, "parking");
         self.stop(owner, StopReason::Idle);
         self.lazy.stopping.insert(id.clone(), owner);
         diag!("lazy: {id} parked ({count} recorded calls)");
@@ -1140,6 +1165,7 @@ impl Host {
                 ..Parked::new(id, key.guid, origin, name)
             },
         );
+        self.probe_registry(owner, "parked");
     }
     /// `VESTRA_TEST_EXECUTE`: the due commands run, by manifest id.
     fn lazy_test_execute(&mut self, now: u64) {
@@ -1216,6 +1242,15 @@ mod tests {
         }
         let path = file(directory.path(), &key().guid);
         let mut json: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        // A normal run writes no test mark and ignores a recording made
+        // under `VESTRA_TEST_PARK=all` (incomplete for a resident plugin).
+        assert!(json.get("testPark").is_none(), "{json}");
+        json["testPark"] = true.into();
+        std::fs::write(&path, json.to_string()).unwrap();
+        assert!(read(directory.path(), &key()).is_none());
+        json["testPark"] = false.into();
+        std::fs::write(&path, json.to_string()).unwrap();
+        assert!(read(directory.path(), &key()).is_some());
         // Another player release records again.
         json["player"] = "0.0.1".into();
         std::fs::write(&path, json.to_string()).unwrap();
