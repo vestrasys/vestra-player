@@ -549,6 +549,13 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
             json!({"event":"runner.fault","data":{"g":0,"message":message}}),
         ));
     };
+    // Read to the end in every case, never closing the pipe early: a closed
+    // pipe fails the runner's next write, and it would stop every member as
+    // `host-lost` before the host's `runner.stop` (`quit`) or the restart.
+    // Once the host no longer listens (quitting: its receiver goes first)
+    // only `runner.stopped` is still handled; after a fault, nothing.
+    let mut listening = true;
+    let mut faulted = false;
     loop {
         let mut bytes = Vec::new();
         let read = Read::by_ref(&mut reader)
@@ -556,18 +563,24 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
             .read_until(b'\n', &mut bytes);
         match read {
             Ok(0) | Err(_) => return,
+            Ok(_) if faulted => {}
             Ok(_) if bytes.len() > LINE_LIMIT => match prefix_generation(&bytes) {
                 // That plugin is stopped; the runner and the others go on.
                 Some(g) if g > 0 && link.is_member(g) => {
-                    let _ = events.send(Event::RuntimeFault(
-                        g,
-                        format!("protocol message exceeds {} MiB", MAX_MESSAGE_BYTES >> 20),
-                    ));
+                    if listening {
+                        let _ = events.send(Event::RuntimeFault(
+                            g,
+                            format!("protocol message exceeds {} MiB", MAX_MESSAGE_BYTES >> 20),
+                        ));
+                    }
                     if !bytes.ends_with(b"\n") && reader.skip_until(b'\n').unwrap_or(0) == 0 {
                         return;
                     }
                 }
-                _ => return fault("an oversize line without a plugin generation".into()),
+                _ => {
+                    fault("an oversize line without a plugin generation".into());
+                    faulted = true;
+                }
             },
             Ok(_) => match parse_line(&bytes) {
                 Ok((0, message)) => {
@@ -575,20 +588,21 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
                         if let Some(g) = message["data"]["g"].as_u64() {
                             link.stopped(g, message["data"]["timedOut"] == true);
                         }
-                    } else if events.send(Event::Runner(link.id, message)).is_err() {
-                        return;
+                    } else if listening {
+                        listening = events.send(Event::Runner(link.id, message)).is_ok();
                     }
                 }
                 Ok((g, message)) => {
                     // A plugin already stopped (its last lines), or none of
                     // this runner's: never another owner's.
-                    if link.is_member(g)
-                        && events.send(crate::process::request(g, message)).is_err()
-                    {
-                        return;
+                    if listening && link.is_member(g) {
+                        listening = events.send(crate::process::request(g, message)).is_ok();
                     }
                 }
-                Err(error) => return fault(error),
+                Err(error) => {
+                    fault(error);
+                    faulted = true;
+                }
             },
         }
     }
@@ -861,6 +875,37 @@ mod tests {
         let began = Instant::now();
         member.stop(StopReason::Idle);
         assert!(began.elapsed() < Duration::from_millis(50));
+    }
+
+    #[test]
+    fn the_reader_drains_to_the_end_when_the_host_is_gone_or_after_a_fault() {
+        let lines = b"{\"g\":5,\"id\":1,\"method\":\"osd.show\",\"params\":{}}\n\
+            {\"g\":5,\"id\":2,\"method\":\"osd.show\",\"params\":{}}\n\
+            {\"g\":0,\"event\":\"runner.stopped\",\"data\":{\"g\":5,\"timedOut\":false}}\n\
+            {\"g\":5,\"id\":3,\"method\":\"osd.show\",\"params\":{}}\n"
+            .to_vec();
+        // Quitting: nobody receives events, `runner.stopped` still counts.
+        let (runner, _output) = link(&[5]);
+        let (done, stopped) = mpsc::channel();
+        runner.state().waiters.insert(5, done);
+        let (events, received) = mpsc::channel();
+        drop(received);
+        let mut cursor = Cursor::new(lines.clone());
+        read_lines(&mut cursor, &runner, &events);
+        assert_eq!(cursor.position() as usize, lines.len());
+        assert_eq!(stopped.try_recv(), Ok(false));
+        // A line no plugin owns: one fault, the rest read and dropped.
+        let (runner, _output) = link(&[5]);
+        let mut input = b"junk\n".to_vec();
+        input.extend_from_slice(&lines);
+        let (events, received) = mpsc::channel();
+        let mut cursor = Cursor::new(input.clone());
+        read_lines(&mut cursor, &runner, &events);
+        drop(events);
+        assert_eq!(cursor.position() as usize, input.len());
+        let received: Vec<_> = received.into_iter().collect();
+        assert_eq!(received.len(), 1);
+        assert!(matches!(&received[0], Event::Runner(1, m) if m["event"] == "runner.fault"));
     }
 
     #[test]

@@ -647,6 +647,9 @@ impl Host {
         // digest: its recording is of no use).
         self.forget_parked(&id, true);
         let running = self.running(&id);
+        // `upgrade` for every install over a running version: an update, a
+        // reinstall of the same version, and a `replace` from another
+        // source (`fresh` data) alike.
         if let Some(owner) = running {
             self.disable(owner, StopReason::Upgrade);
         }
@@ -1715,15 +1718,14 @@ impl Host {
                     format!("activation {status}: {}", self.activation(owner)?)
                 });
                 // Cancelled: the version it replaced comes back (an
-                // `upgrade` in reverse); else its activation failed.
-                self.disable(
-                    owner,
-                    if op.cancel {
-                        StopReason::Upgrade
-                    } else {
-                        StopReason::Failed
-                    },
-                );
+                // `upgrade` in reverse), or, a first install, it goes
+                // (`uninstall`); else its activation failed.
+                let reason = match (op.cancel, op.old.is_some()) {
+                    (true, true) => StopReason::Upgrade,
+                    (true, false) => StopReason::Uninstall,
+                    (false, _) => StopReason::Failed,
+                };
+                self.disable(owner, reason);
                 op.waiting = Some(owner);
                 op.owner = None;
                 op.phase = "restoring".into();
