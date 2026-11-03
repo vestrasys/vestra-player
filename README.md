@@ -53,35 +53,27 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
 ## Architecture
 
 ```mermaid
-flowchart LR
-    subgraph Host["Host process (Rust)"]
-        Playback["Playback (libmpv) and processing chains"]
-        UI["Slint UI composition"]
-        Store["Package store"]
-        Supervisor["Plugin supervisor"]
-        Platform["Platform layer"]
-    end
-    Shared["Shared runner (Node): every built-in plugin"]
-    Own1["Own Node process: one third-party plugin"]
-    Own2["Own Node process: another plugin"]
-    Supervisor -->|"starts, stops, restarts"| Shared
-    Supervisor -->|"starts, stops, restarts"| Own1
-    Supervisor -->|"starts, stops, restarts"| Own2
-    Shared <-->|"vestra/1: JSON lines on stdin/stdout"| Host
-    Own1 <-->|"vestra/1"| Host
-    Own2 <-->|"vestra/1"| Host
+flowchart TB
+    Player["Player (Rust)<br/>plays video · draws the interface · manages plugins"]
+    Builtins["Built-in plugins<br/>share one Node process"]
+    PluginA["Third-party plugin<br/>its own Node process"]
+    PluginB["Third-party plugin<br/>its own Node process"]
+    Player <-->|"plugin API"| Builtins
+    Player <-->|"plugin API"| PluginA
+    Player <-->|"plugin API"| PluginB
 ```
 
-**UI.** Plugins describe their windows and panels in `.slint` files; the host compiles them, places them in the main window or a tool window, and forwards their callbacks to the plugin. Plugins send values and row changes, not pixels, so a 20,000-row playlist is a native `ListView` over rows the host holds ([large lists](doc/architecture/large-lists.md)).
+**Player and plugins.** The player is one Rust program: it plays video with libmpv, draws the interface with Slint and runs the plugins. Everything beyond playing a file, such as the playlist, subtitles, the Plugin Store and Vestra Player AI, is a plugin. A plugin is a TypeScript program that runs in Node and talks to the player through the same message-based API, built-in or not.
 
-**Processes.** Built-in plugins share one Node process, the shared runner; every other plugin gets its own, apart from the player and from each other. A Node process costs about 50 MB, one more plugin in the shared runner about 1 MB (the 14 built-ins of a headless start: 704 MB as separate processes, 61 MB shared, on Windows). The host checks each call against the plugin's declared capabilities and caps messages at 1 MiB. A crashed plugin takes only itself down; playback runs in the host and goes on.
+**Interface.** A plugin describes its windows and panels in Slint files. The player compiles them, places them in the main window or in a window of their own, and tells the plugin what the user does. The plugin sends back data, not pixels, so even long lists stay fast.
 
-**Plugin supervisor.** One component of the host decides when each plugin process should exist ([supervisor](doc/architecture/supervisor.md)). Its core is pure: it takes events (a process started, became ready, exited; a menu item was clicked; a timer is due) and returns actions (start this, stop that), and does no I/O itself, so it is tested by deterministic simulations. A thin adapter carries out its actions.
+**Isolation.** Each third-party plugin runs in its own process; the built-in plugins share one. A plugin can use only what its manifest declares. When a plugin crashes, only that plugin stops, and playback goes on.
 
-- **Plugins start when needed.** At its first run the host records what a plugin adds (menu items, keys, settings pages, the files and addresses it opens). A plugin that holds nothing live (no mounted panel, open window, filter chain or playback listener) then rests in **standby**: no process, but its entries stay and work. The first use starts it again (tens of milliseconds for a built-in, a few hundred for its own process), and 30 s without use puts it back. A plugin that holds something live never stands by. Session storage survives standby.
-- **Bounded starts.** Built-ins start first. Third-party plugins start a few at a time, clicks before background starts, and their processes are created off the UI thread.
-- **Bounded memory.** Each own process has a 512 MB JavaScript heap (the shared runner 1 GB). At most 3–16 third-party processes run at once, depending on physical memory; past that, and under memory pressure, the least recently used idle plugins go to standby.
-- **Stops and faults.** A stopped plugin loses everything it owned and has 5 s to clean up (300 ms after a fault; 1 s for all plugins together when the player quits). A built-in, or a third-party plugin that holds something live, restarts by itself after a growing pause; any other plugin keeps its entries and starts again on its next use after the pause; 5 crashes in 10 minutes leave it stopped. A fault the shared runner cannot attribute to one plugin restarts the runner (first at once, then with a growing pause); after the third restart in a minute each built-in runs in its own process for the session.
+**Plugin manager.** One part of the player decides when each plugin runs ([details](doc/architecture/supervisor.md)):
+
+- **On demand.** A plugin that is not in use is stopped, but its menu items, keys and settings stay; using one starts it again. A plugin that is doing something visible keeps running.
+- **Within limits.** Plugins start a few at a time, each has a memory cap, and when memory runs low the plugins unused the longest are stopped first.
+- **Faults.** A crashed plugin starts again after a short pause; one that keeps crashing is turned off, and the user is told why.
 
 More in the [architecture overview](doc/architecture/README.md#2-loading-and-stopping-plugins).
 
