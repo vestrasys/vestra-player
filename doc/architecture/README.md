@@ -226,7 +226,7 @@ The player has two version numbers (since 0.7.1, user decision 2026-11-03):
 | --- | --- | --- |
 | Where | `src/release.json` (`{ "version": "0.7.1" }`), packaged as `<resources>/release.json` | `version` in `src/host/Cargo.toml` (`CARGO_PKG_VERSION`) |
 | What it names | A release of the player: host, runtime, built-in plugins together | One build of the `vestra-host` binary |
-| Goes up | On every release | Only when host or runtime code changes |
+| Goes up | On every release | Only when the host input hash changes (`src/packaging/host.mjs`) |
 | Seen in | The release tag and notes, `latest.json`, `plugin.app.version` (so the About window, the update check and the store's User-Agent), `minPlayerVersion` checks, the start-up log line | The Windows file version resource, the start-up log line, the GPU crash guard (`render-state.json`) and lazy-activation recordings, which are about the binary |
 
 **Rule: release ≥ host.** A release that only changes built-in plugins raises the release version and reuses the built host, so CI skips the Rust build; a host change raises both. A test (`version::tests`) fails when `src/release.json` is below `Cargo.toml`.
