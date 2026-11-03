@@ -50,6 +50,7 @@ macos = [
   "_CodeSignature/**",
   "MacOS/vestra-host",
   "Resources/AppIcon.icns",
+  "Resources/release.json",
   "Resources/ui/**",
   "Resources/runtime/runner.js",
   "Resources/runtime/boot.js",
@@ -60,6 +61,7 @@ macos = [
 ]
 windows = [
   "vestra-host.exe",
+  "resources/release.json",
   "resources/ui/**",
   "resources/runtime/runner.js",
   "resources/runtime/boot.js",

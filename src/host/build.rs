@@ -79,6 +79,10 @@ fn windows_resources(manifest_dir: &str, out_dir: &str) {
     println!("cargo:rerun-if-changed=windows/resources.rs");
     let ico = std::fs::read(std::path::Path::new(manifest_dir).join("windows/vestra.ico"))
         .expect("read windows/vestra.ico");
+    // The host version (`src/host/Cargo.toml`), not the release version of
+    // `src/release.json`: one built binary ships in every release until the
+    // host changes, so its resource can only name itself (file version ≠
+    // product release; doc/architecture/README.md, "Versions").
     let version = env!("CARGO_PKG_VERSION");
     let res = resources::resource_file(
         &ico,

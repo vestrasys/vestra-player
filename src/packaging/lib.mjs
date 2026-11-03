@@ -100,12 +100,56 @@ export async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
 }
 
-/** `version` from src/host/Cargo.toml ([package]). */
+/**
+ * The host binary's version: `version` from src/host/Cargo.toml ([package]).
+ * It goes up only when host or runtime code changes (doc/releases/README.md).
+ */
 export async function hostVersion() {
   const text = await readFile(join(source, "host/Cargo.toml"), "utf8");
   const version = /^version\s*=\s*"([^"]+)"/m.exec(text)?.[1];
   if (!version) throw new Error("no version in src/host/Cargo.toml");
   return version;
+}
+
+const VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
+
+/**
+ * The player's release version, `version` in src/release.json: the tag,
+ * release notes, installer and archive names, latest.json and the installed
+ * version shown to users. Always ≥ hostVersion().
+ */
+export async function releaseVersion() {
+  const path = join(source, "release.json");
+  const version = JSON.parse(await readFile(path, "utf8")).version;
+  if (typeof version !== "string" || !VERSION.test(version))
+    throw new Error(`${path}: version ${JSON.stringify(version)} is not x.y.z`);
+  return version;
+}
+
+/** Semantic version order of x.y.z[-pre]: negative, 0 or positive. */
+export function compareVersions(a, b) {
+  const parse = (version) => {
+    if (!VERSION.test(version)) throw new Error(`${version} is not x.y.z`);
+    const [core, pre] = version.split(/-(.*)/s);
+    return { core: core.split(".").map(Number), pre };
+  };
+  const [x, y] = [parse(a), parse(b)];
+  for (let index = 0; index < 3; index++)
+    if (x.core[index] !== y.core[index]) return x.core[index] - y.core[index];
+  if (x.pre === y.pre) return 0;
+  if (x.pre === undefined) return 1;
+  if (y.pre === undefined) return -1;
+  return x.pre < y.pre ? -1 : 1;
+}
+
+/** { release, host }, after checking release ≥ host. */
+export async function versions() {
+  const [release, host] = [await releaseVersion(), await hostVersion()];
+  if (compareVersions(release, host) < 0)
+    throw new Error(
+      `src/release.json version ${release} is lower than the host's ${host} (src/host/Cargo.toml)`,
+    );
+  return { release, host };
 }
 
 /** Every file under `root` (relative, `/`-separated); symlinks as files. */

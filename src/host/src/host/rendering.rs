@@ -166,7 +166,9 @@ pub(crate) fn startup(headless: bool) -> Startup {
             .and_then(|adapter| adapter.driver_version.clone())
             .or_else(|| build.clone())
             .unwrap_or_default(),
-        app: env!("CARGO_PKG_VERSION").into(),
+        // The host version: the guard is about this binary, which a
+        // release that only changes built-in plugins reuses (`version.rs`).
+        app: crate::version::HOST.into(),
     };
     // GPU rendering and CPU mode's Direct3D 12 windows may use different
     // adapters on a hybrid laptop: each is guarded on its own.

@@ -23,6 +23,22 @@
  *     [--rust-licenses <html>]   pre-generated cargo-about output
  *     [--identity <name>]        codesign identity (default ad-hoc)
  *     [--no-dmg] [--zip]         skip the DMG / also zip the .app (ditto)
+ *     [--reuse-host]             a host built from the current inputs (host.mjs
+ *                                resolveHost; see bundle-windows.mjs)
+ *     [--host-commit <rev>]      with --reuse-host and --binary: the commit
+ *                                --binary was built from
+ *     [--no-build]               with --reuse-host: fail instead of building
+ *
+ * <version> is the release version (src/release.json): file names,
+ * CFBundleShortVersionString and CFBundleVersion (Info.plist is not part of
+ * the binary, so a release that reuses a host still gets a higher
+ * CFBundleVersion, which LaunchServices uses to pick between copies).
+ * A reused host binary (a release's, already through install_name_tool and
+ * signed) goes through the same steps again: its libmpv reference and rpath
+ * are already right and stay, and every Mach-O is re-signed (codesign
+ * --force), so a future Developer ID signature
+ * covers it as it covers a fresh build. Frameworks/ always comes from the
+ * pinned deps archive, which is part of the host input hash.
  *
  * Output: <out>/Vestra Player.app, <out>/VestraPlayer-<version>-macos-arm64.dmg
  * (and .app.zip with --zip).
@@ -32,6 +48,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fetchNode } from "./fetch-node.mjs";
 import { DISPLAY_NAME, infoPlist } from "./macos-plist.mjs";
+import { resolveHost } from "./host.mjs";
 import { writeIcons } from "./icon.mjs";
 import {
   capture,
@@ -40,13 +57,13 @@ import {
   directorySize,
   exists,
   fail,
-  hostVersion,
   megabytes,
   packaging,
   parseArgs,
   readJson,
   run,
   source,
+  versions,
 } from "./lib.mjs";
 import {
   artifactBase,
@@ -58,13 +75,21 @@ import {
 /** Floor for LSMinimumSystemVersion (picture in picture needs 14). */
 const MIN_MACOS = "14.0";
 
-const options = parseArgs(process.argv.slice(2), ["no-dmg", "zip"]);
+const options = parseArgs(process.argv.slice(2), [
+  "no-dmg",
+  "zip",
+  "reuse-host",
+  "no-build",
+]);
 if (!options.out)
   fail(
     "usage: bundle-macos.mjs --out <dir> [--binary …] [--deps …] (see the header)",
   );
+if (options["host-commit"] && !(options["reuse-host"] && options.binary))
+  fail("--host-commit needs --reuse-host and --binary");
 const out = resolve(options.out);
-const binary = resolve(
+const { release: version } = await versions();
+let binary = resolve(
   options.binary ??
     join(
       process.env.CARGO_TARGET_DIR || join(source, "host/target"),
@@ -76,12 +101,22 @@ const deps = resolve(
     process.env.VESTRA_DEPS_DIR ??
     fail("--deps or VESTRA_DEPS_DIR is required"),
 );
-if (!exists(binary))
-  fail(`${binary} does not exist (cargo build --release first)`);
 if (!exists(join(deps, "components.json")))
   fail(`${deps} is not a deps directory (no components.json)`);
+let reusedLicenses;
+if (options["reuse-host"]) {
+  const host = await resolveHost({
+    target: "aarch64-apple-darwin",
+    binary: options.binary,
+    binaryCommit: options["host-commit"],
+    build: !options["no-build"],
+  });
+  binary = host.binary;
+  reusedLicenses = host.licenses;
+}
+if (!exists(binary))
+  fail(`${binary} does not exist (cargo build --release first)`);
 
-const version = await hostVersion();
 const app = join(out, `${DISPLAY_NAME}.app`);
 const contents = join(app, "Contents");
 await rm(app, { recursive: true, force: true });
@@ -111,9 +146,15 @@ for (const reference of references(host))
     !reference.startsWith("@rpath/")
   )
     change.push("-change", reference, `@rpath/${reference.split("/").pop()}`);
-for (const rpath of rpaths(host)) change.push("-delete_rpath", rpath);
-change.push("-add_rpath", "@executable_path/../Frameworks");
-run("install_name_tool", [...change, host]);
+// A reused host (a release's) already has exactly this rpath: keep it, as
+// install_name_tool refuses an -add_rpath that duplicates an existing one.
+const frameworksRpath = "@executable_path/../Frameworks";
+const existing = rpaths(host);
+for (const rpath of existing)
+  if (rpath !== frameworksRpath) change.push("-delete_rpath", rpath);
+if (!existing.includes(frameworksRpath))
+  change.push("-add_rpath", frameworksRpath);
+if (change.length) run("install_name_tool", [...change, host]);
 
 // Closure: every non-system reference of every Mach-O resolves in Frameworks/.
 const frameworks = new Set(await readdir(join(contents, "Frameworks")));
@@ -142,7 +183,9 @@ await writeFile(join(contents, "Info.plist"), infoPlist(version, minimum));
 await writeFile(join(contents, "PkgInfo"), "APPL????");
 await writeIcons({ icns: join(contents, "Resources/AppIcon.icns") });
 await stageResources(join(contents, "Resources"));
-let rustHtml = options["rust-licenses"] && resolve(options["rust-licenses"]);
+let rustHtml =
+  (options["rust-licenses"] && resolve(options["rust-licenses"])) ||
+  reusedLicenses;
 if (!rustHtml) {
   rustHtml = join(nodeDir, "rust-crates.html");
   rustLicenses("aarch64-apple-darwin", rustHtml);

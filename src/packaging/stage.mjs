@@ -12,7 +12,15 @@ import {
   pluginPackages,
   sourcePlugin,
 } from "./check-licenses.mjs";
-import { copy, exists, hostVersion, readJson, run, source } from "./lib.mjs";
+import {
+  copy,
+  exists,
+  hostVersion,
+  readJson,
+  releaseVersion,
+  run,
+  source,
+} from "./lib.mjs";
 import { stagePlugins } from "../scripts/stage-plugins.mjs";
 import { stageRuntime } from "../scripts/stage-runtime.mjs";
 
@@ -22,8 +30,12 @@ const sdkPackage = dirname(
   ),
 );
 
-/** <resources>/ui, runtime, plugins. */
+/** <resources>/release.json, ui, runtime, plugins. */
 export async function stageResources(resources) {
+  // The player release version the host shows (src/release.json; the
+  // host binary has its own version, doc/releases/README.md).
+  await releaseVersion();
+  await copy(join(source, "release.json"), join(resources, "release.json"));
   await copy(join(source, "host/ui"), join(resources, "ui"));
   await stageRuntime(join(resources, "runtime"));
   // The SDK's Apache-2.0 LICENSE travels with its code (stage-runtime adds
@@ -99,7 +111,7 @@ const escape = (text) =>
   );
 
 async function indexHtml(config, componentsPath) {
-  const version = await hostVersion();
+  const [version, host] = [await releaseVersion(), await hostVersion()];
   const node = await readJson(join(source, "packaging/node.json"));
   const deps = await readJson(componentsPath);
   const link = (file) =>
@@ -142,7 +154,12 @@ async function indexHtml(config, componentsPath) {
 </style>
 </head>
 <body>
-<h1>Vestra Player ${escape(version)}</h1>
+<h1>Vestra Player ${escape(version)}</h1>${
+    host === version
+      ? ""
+      : `
+<p>Host binary ${escape(host)} (the release version and the host binary's own version differ when a release reuses an unchanged host).</p>`
+  }
 <p>Vestra Player is free software under the GNU General Public License, version 3 or later: ${link("LICENSE")}.
 It includes the third-party software below, each under its own license.</p>
 <p>Rust crates linked into the player: ${link("rust-crates.html")}.</p>
@@ -176,7 +193,7 @@ async function expandedPackages(config) {
 const link2 = (url) =>
   url ? `<a href="${escape(url)}">${escape(url)}</a>` : "";
 
-/** Info for file names: VestraPlayer-<version>-<platform>. */
+/** File names: VestraPlayer-<release version>-<platform>. */
 export async function artifactBase(platform) {
-  return `VestraPlayer-${await hostVersion()}-${platform}`;
+  return `VestraPlayer-${await releaseVersion()}-${platform}`;
 }

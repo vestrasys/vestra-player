@@ -1,7 +1,11 @@
-# Unsigned packages (doc/process/ci.md "Packaging"): release build →
-# bundle (macOS .app + DMG, Windows staged dir + Inno Setup installer +
-# portable zip) → license check (inside the bundle scripts) → headless smoke
-# test without node on PATH → artifact. Signing happens in release.yml.
+# Unsigned packages (doc/process/ci.md "Packaging"): release build, or with
+# `reuse-host` the host binary of a published release built from the same
+# host inputs (src/packaging/host.mjs; doc/process/ci.md "Reusing the host
+# binary") → bundle (macOS .app + DMG, Windows staged dir + Inno Setup
+# installer + portable zip) → license check (inside the bundle scripts) →
+# headless smoke test without node on PATH → artifact, plus this platform's
+# host.json entry (artifact host-<artifact>-<os>). Signing happens in
+# release.yml.
 name: package
 
 on:
@@ -19,6 +23,13 @@ on:
         type: number
         default: 1
       cache:
+        type: boolean
+        default: false
+      reuse-host:
+        description: >
+          Take the host binary (and its crate license page) from the newest
+          published release whose host.json lists the same host input hash,
+          verified against that release's SHA256SUMS; build it otherwise.
         type: boolean
         default: false
 
@@ -42,24 +53,51 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-libmpv
+      # A release that changes no host input (plugins, runtime, docs, the
+      # release version) ships the host of an earlier release: no toolchain,
+      # no cargo build, no cargo about.
+      - name: Reuse a released host
+        id: reuse
+        if: inputs.reuse-host
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TARGET: ${{ inputs.os == 'windows' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
+        run: node src/packaging/host.mjs fetch --target "$TARGET" --repo "$REPO" --out "$RUNNER_TEMP/host"
       - uses: ./.github/actions/setup-rust
+        if: steps.reuse.outputs.found != 'true'
         with:
           cache: ${{ inputs.cache }}
           cache-key: package
-      - uses: ./.github/actions/setup-libmpv
-      - uses: ./.github/actions/setup-node
       - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
+        if: steps.reuse.outputs.found != 'true'
         with:
           tool: cargo-about@0.9.2
       - name: cargo build --release
+        if: steps.reuse.outputs.found != 'true'
         working-directory: src/host
         run: cargo build --release --locked
-      - name: Bundle (macOS)
-        if: inputs.os == 'macos'
-        run: node src/packaging/bundle-macos.mjs --out "$RUNNER_TEMP/dist" --binary src/host/target/release/vestra-host --zip
-      - name: Bundle (Windows)
-        if: inputs.os == 'windows'
-        run: node src/packaging/bundle-windows.mjs --out "$RUNNER_TEMP/dist" --binary src/host/target/release/vestra-host.exe
+      - name: Bundle
+        env:
+          OS: ${{ inputs.os }}
+          FOUND: ${{ steps.reuse.outputs.found }}
+          REUSED_BINARY: ${{ steps.reuse.outputs.binary }}
+          REUSED_LICENSES: ${{ steps.reuse.outputs.licenses }}
+        run: |
+          if [ "$FOUND" = true ]; then
+            host=(--binary "$REUSED_BINARY" --rust-licenses "$REUSED_LICENSES")
+          elif [ "$OS" = windows ]; then
+            host=(--binary src/host/target/release/vestra-host.exe)
+          else
+            host=(--binary src/host/target/release/vestra-host)
+          fi
+          if [ "$OS" = windows ]; then
+            node src/packaging/bundle-windows.mjs --out "$RUNNER_TEMP/dist" "${host[@]}"
+          else
+            node src/packaging/bundle-macos.mjs --out "$RUNNER_TEMP/dist" "${host[@]}" --zip
+          fi
       - name: Collect the artifacts
         id: collect
         run: |
@@ -68,6 +106,28 @@ jobs:
             -exec mv {} "$RUNNER_TEMP/upload/" \;
           ls -l "$RUNNER_TEMP/upload"
           test -n "$(ls "$RUNNER_TEMP/upload")"
+      # This platform's entry of the release's host.json (release.yml merges
+      # them): the host input hash, host version, the commit the binary was
+      # built from and its SHA-256 inside the archive, so a later release
+      # with the same inputs can reuse it.
+      # TODO(S7 signing): record from the signed archive.
+      - name: host.json entry
+        env:
+          OS: ${{ inputs.os }}
+          FOUND: ${{ steps.reuse.outputs.found }}
+          REUSED_RECORD: ${{ steps.reuse.outputs.record }}
+        run: |
+          if [ "$OS" = windows ]; then
+            target=x86_64-pc-windows-msvc
+            archive=$(ls "$RUNNER_TEMP"/upload/*-windows-x64-portable.zip)
+          else
+            target=aarch64-apple-darwin
+            archive=$(ls "$RUNNER_TEMP"/upload/*-macos-arm64.app.zip)
+          fi
+          reused=()
+          [ "$FOUND" = true ] && reused=(--reused "$REUSED_RECORD")
+          node src/packaging/host.mjs record --target "$target" --archive "$archive" \
+            --out "$RUNNER_TEMP/host-record/host-$OS.json" "${reused[@]}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ inputs.artifact }}-${{ inputs.os }}
@@ -75,6 +135,12 @@ jobs:
           retention-days: ${{ inputs.retention-days }}
           if-no-files-found: error
           compression-level: 0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: host-${{ inputs.artifact }}-${{ inputs.os }}
+          path: ${{ runner.temp }}/host-record
+          retention-days: ${{ inputs.retention-days }}
+          if-no-files-found: error
 
       - name: Smoke test (macOS, the DMG's app)
         if: inputs.os == 'macos'
