@@ -733,7 +733,7 @@ export declare function createWire(transport: Transport): {
         installed: (id: string) => Promise<InstalledPackage>;
         /**
          * `source` and `replace` are sent only when given (player 0.2.0);
-         * `enabled` only when given (planned for player 0.6.4, older players
+         * `enabled` only when given (player 0.6.4; older players
          * ignore it).
          */
         install: (token: string, expectedRevision: number, requestId: string, options?: {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.32
+
+- The vendored SDK is 1.6.1 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. Documentation only: the AI's documentation names player versions by the first published player, 0.7.1 (0.6.6–0.6.8 and 0.7.0 were internal builds), so selectable Markdown now says `minPlayerVersion` 0.7.1; new pages on the player release version, Windows GPU rendering and the `lut3d` `.cube` format; behaviour shipped in 0.6.4 is no longer called planned. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.6.8 (plugins that set 0.6.8 keep loading on 0.7.1).
+
 ## 2.2.31
 
 - The vendored SDK is 1.6.0 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The AI's documentation now has selectable Markdown (`selectable` on `MarkdownView` and `MarkdownBlocks`, `MarkdownBlock.plain` and `.links`, player 0.6.8) in the SDK's widget library and reference, and the corrected start retries (from player 0.6.7 a start that times out is not tried again). No change to the plugin's own behaviour; `minPlayerVersion` stays 0.6.8.
