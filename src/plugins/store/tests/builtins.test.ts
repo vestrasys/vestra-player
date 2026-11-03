@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { ALL, BUILTIN, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, until } from "./helpers.ts";
+import { ALL, BUILTIN, FakeNet, info, type Info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, until } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-builtins-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -20,8 +20,9 @@ const fromRepo = { kind: "repository", url: OFFICIAL } as const;
 
 /**
  * Installed: the built-in, Alpha, Old (an update). Not installed: Beta, the
- * repository's entry for the built-in ("Video", tagged "core"), and
- * vestra.other, a reserved id the player does not ship (not a built-in).
+ * repository's entry for the built-in ("Video"; All shows the built-in's own
+ * row for it, tagged "core" by the player), and vestra.other, a reserved id
+ * the player does not ship (not a built-in).
  */
 const PLUGINS = [
   { id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] },
@@ -31,12 +32,14 @@ const PLUGINS = [
   { id: "vestra.other", name: "Other", versions: [{ version: "1.0.0" }] },
 ];
 
+const BUILTIN_CORE = { ...BUILTIN, display: { name: "vestra.video", punchline: null, description: null, tags: ["core"] } } as Info;
+
 async function ready(dataDirectory?: string) {
   const net = new FakeNet();
   publish(net, OFFICIAL, PLUGINS);
   const started = await start({
     net,
-    packages: [BUILTIN, info("a.alpha", { version: "1.0.0", source: fromRepo }), info("o.old", { version: "1.0.0", source: fromRepo })],
+    packages: [BUILTIN_CORE, info("a.alpha", { version: "1.0.0", source: fromRepo }), info("o.old", { version: "1.0.0", source: fromRepo })],
     ...(dataDirectory ? { dataDirectory } : {}),
   });
   await openStore(started.host);
@@ -72,9 +75,10 @@ test("on by default: built-ins are left out of the lists, the counts and the tag
     await showBuiltins(host);
     assert.equal(props(host)["hide-builtins"], false);
     assert.equal(store.settings.value.hideBuiltins, false);
-    assert.deepEqual(names(host), ["Alpha", "Beta", "Old", "Other", "vestra.video", "Video"]);
+    // One row per built-in id: its own row stands for the repository's entry ("Video").
+    assert.deepEqual(names(host), ["Alpha", "Beta", "Old", "Other", "vestra.video"]);
     assert.deepEqual(props(host)["tag-model"], ["标签：全部", "audio", "core"]);
-    assert.equal(props(host)["all-count"], 6);
+    assert.equal(props(host)["all-count"], 5);
     assert.equal(details(host), "Alpha", "the selection stays while listed");
     await tab(host, INSTALLED);
     // As before the option: built-ins first under Installed.
@@ -92,7 +96,7 @@ test("hiding the selected built-in selects the list's first row; an emptied list
   try {
     await tab(host, INSTALLED);
     await showBuiltins(host);
-    host.window("store").emit("select","\nvestra.video");
+    host.window("store").emit("select", "\nvestra.video");
     await host.settle();
     assert.equal(details(host), "vestra.video");
     const scroll = props(host)["scroll-request"] as number;
@@ -132,12 +136,12 @@ test("search and tag combine with it; a tag only built-ins have goes back to Tag
     // Both reserved ids match; the built-in's entry is left out.
     assert.deepEqual(names(host), ["Other"]);
     await showBuiltins(host);
-    assert.deepEqual(names(host), ["Other", "vestra.video", "Video"], "All: the built-in's own row too");
+    assert.deepEqual(names(host), ["Other", "vestra.video"], "All: the built-in's own row, for its entry too");
     window.emit("search", "");
     window.emit("setTag", 2);
     await host.settle();
-    assert.deepEqual(names(host), ["Video"]);
-    assert.equal(details(host), "Video");
+    assert.deepEqual(names(host), ["vestra.video"]);
+    assert.equal(details(host), "vestra.video");
     await hide(host, true);
     assert.equal(props(host)["tag-index"], 0, "Tags: All");
     assert.deepEqual(names(host), ["Alpha", "Beta", "Old", "Other"]);

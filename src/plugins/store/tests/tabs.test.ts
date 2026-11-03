@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { ALL, BUILTIN, controls, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, start, tab, THIRD, until, UPDATES } from "./helpers.ts";
+import { ALL, BUILTIN, controls, FakeNet, info, type Info, INSTALLED, OFFICIAL, openStore, props, publish, rows, start, tab, THIRD, until, UPDATES } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-tabs-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -87,28 +87,39 @@ test("All lists the repositories' plugins, installed or not, and installed plugi
   }
 });
 
-test("the same plugin in two repositories: its installed row and the other repository's entry, as before", async () => {
+test("the same plugin in two repositories: one row under All when installed, one per repository when not", async () => {
   const net = new FakeNet();
-  publish(net, OFFICIAL, [{ id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] }]);
-  publish(net, THIRD, [{ id: "a.alpha", name: "Alpha", versions: [{ version: "5.0.0" }] }]);
+  publish(net, OFFICIAL, [
+    { id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] },
+    { id: "b.beta", name: "Beta", versions: [{ version: "1.0.0" }] },
+  ]);
+  publish(net, THIRD, [
+    { id: "a.alpha", name: "Alpha", versions: [{ version: "5.0.0" }] },
+    { id: "b.beta", name: "Beta", versions: [{ version: "2.0.0" }] },
+  ]);
   const { host, store, stop } = await start({ net, packages: [info("a.alpha", { version: "1.0.0", source: fromRepo })] });
   try {
     store.settings.save({ ...store.settings.value, repos: [THIRD] });
     store.repos.sync([THIRD]);
     await store.refreshAll(true);
     await openStore(host);
-    await until(host, () => rows(host).length === 2, "rows");
-    // One row per repository (Installed lists only the installed one, its own repository's, as before).
+    await until(host, () => store.items.length === 4, "rows");
     type Row = { key: string; badge: string };
+    // Alpha (installed from the official repository): its installed row only. Beta (not installed): one row per repository.
     assert.deepEqual(
       (rows(host) as Row[]).map((r) => [r.key, r.badge]).sort(),
       [
         [`${OFFICIAL}\na.alpha`, "已安装"],
-        [`${THIRD}\na.alpha`, "已从仓库 plugins.test安装"],
+        [`${OFFICIAL}\nb.beta`, ""],
+        [`${THIRD}\nb.beta`, ""],
       ].sort(),
     );
-    // A newer version in another repository is no update (updates only from the original source).
+    assert.equal(props(host)["all-count"], 3);
+    // The other repository's version is replaced from the … menu (a newer version there is no update: updates only from the original source).
     assert.equal(props(host)["updates"], 0);
+    const replace = controls(host, "Alpha").menu.at(-1)!;
+    assert.equal(replace.id, `replace:${THIRD}\na.alpha`);
+    assert.match(String(replace.text), /^用.+的 5\.0\.0 替换…$/);
     await tab(host, INSTALLED);
     assert.deepEqual((rows(host) as Row[]).map((r) => r.key), [`${OFFICIAL}\na.alpha`]);
   } finally {
@@ -181,6 +192,34 @@ test("offline, no index: All in English shows the installed plugins, their count
     assert.equal(props(host)["all-count"], 2);
     assert.equal(props(host)["list-note"], "Can't reach the repositories; only installed plugins are shown. Click Refresh to retry.");
     assert.deepEqual(controls(host, "s.side").primary?.id, "disable");
+  } finally {
+    await stop();
+  }
+});
+
+test("All in English: a .vxp install that a repository lists too is one row, its details say where else it is", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [
+    { id: "t.tube", name: "Tube", versions: [{ version: "2.0.0" }] },
+    { id: "g.gamma", name: "Gamma", versions: [{ version: "1.0.0" }] },
+  ]);
+  const tube = {
+    ...info("t.tube", { version: "1.0.0", source: { kind: "file" } }),
+    display: { name: "Tube", punchline: "Plays tubes", description: null, tags: [] },
+  } as Info;
+  const { host, store, stop } = await start({ net, locale: "en", packages: [BUILTIN, tube] });
+  try {
+    await openStore(host);
+    await until(host, () => store.items.length === 4, "rows");
+    assert.deepEqual(rows(host).map((r) => [r.name, r.badge]), [
+      ["Gamma", ""],
+      ["Tube", "Installed"],
+    ]);
+    assert.equal(props(host)["all-count"], 2);
+    host.window("store").emit("select", "\nt.tube");
+    await host.settle();
+    assert.ok((props(host)["banners"] as { text: string }[]).some((b) => b.text === "Also in Official repository"));
+    assert.equal(controls(host, "Tube").menu.at(-1)?.text, "Replace with 2.0.0 from Official repository…");
   } finally {
     await stop();
   }

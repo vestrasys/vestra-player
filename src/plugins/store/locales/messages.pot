@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.store 0.2.10\n"
+"Project-Id-Version: vestra.store 0.2.11\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -24,931 +24,939 @@ msgstr ""
 msgid "store"
 msgstr ""
 
-#: store.ts:509
+#: store.ts:516
 msgid "Plugin Store…"
 msgstr ""
 
-#: store.ts:509
+#: store.ts:516
 msgid "Plugin Store ({} updates)…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Another install is in progress; wait for it to finish"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This system does not support confirmation dialogs; cannot continue"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Another dialog is open; close it first"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Couldn't open the link: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This kind of link cannot be opened"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The downloaded file does not match the repository's description (size); deleted"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The downloaded file does not match the repository's description (checksum); deleted"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The plugin package exceeds 64 MB; download stopped"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The download address is insecure or redirects too often; stopped"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Download cancelled"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Couldn't write the download file: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Download failed: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This is not a valid plugin package: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This plugin needs Vestra Player ≥ {} (current {})"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This plugin needs a newer Vestra Player (current {})"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "“{}” has the same id as a built-in plugin and cannot be installed"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This plugin has the same id as a built-in plugin and cannot be installed"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Plugins are being installed or cleaned up; try again later"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The Plugin Store lacks the “Manage plugins” permission"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This plugin no longer exists"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The plugin package does not match the repository's description (id); not installed"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The plugin package does not match the repository's description (version); not installed"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The plugin package does not match the repository's description (permissions); not installed"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "You can only install from https:// links"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Not installed"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installed {} {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Updated {} to {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installed {} {} (still disabled)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Updated {} to {} (still disabled)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installed {} {}, but couldn't keep it disabled: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Updated {} to {}, but couldn't keep it disabled: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installed {} {}, but couldn't enable it: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Updated {} to {}, but couldn't enable it: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Uninstalled {} (data deleted)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Uninstalled {} (data kept)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Built-in plugins cannot be uninstalled"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Enabled “{}” again"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Couldn't enable “{}”: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Can no longer cancel; the installation continues"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Can no longer cancel; the uninstallation continues"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installation failed; the previous version was restored"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installation cancelled"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Uninstallation cancelled"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installation failed: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Uninstallation failed: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Downloading {} {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Downloading {} {} ({}%)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Downloading the plugin package"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Downloading the plugin package ({}%)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Checking {}…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Checking the plugin package…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installing {}…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Uninstalling {}…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installing… (preparing)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installing… (activating)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Uninstalling… (preparing)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Uninstalling… (activating)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Updating {}…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{0}: up to date at {1}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{0}: updated at {1}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{0}: data from {1}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The official repository has no signature file; this update was ignored"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The official repository's signature check failed (it may have been tampered with); this update was ignored"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The official repository returned an old index; this update was ignored"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{} uses a newer format; please update Vestra Player"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{}'s index is malformed"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{0}'s index is malformed; showing the data from {1}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{0} returned error {1}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{0} returned error {1}; showing the data from {2}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{}'s index exceeds 4 MB; refused"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{0}'s index exceeds 4 MB; refused; showing the data from {1}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{0}: {1}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{0}: {1}; showing the data from {2}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Can't connect to {0} ({1}); its plugins are not available for now"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Can't connect to {0} ({1}); showing the cache from {2}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This repository has already been added"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "At most {} repositories can be added"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Reading {}…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Couldn't read this repository: {}. Check the address (the repository's root address or the full address of index.json)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Added {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Removed {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "No plugins match"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "All plugins are up to date"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "No plugins installed yet"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "No plugins installed besides the built-in ones, which are hidden"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Reading repositories…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Can't reach the repositories. Showing nothing until you're online; click Refresh to retry."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The repositories have no plugins yet"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Can't reach the repositories; only installed plugins are shown. Click Refresh to retry."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{} · {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installed"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Update → {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Revoked"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installed from {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Incompatible"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Cannot be installed"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Disabled"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Failed"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Dev"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Warning"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Development load"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 store.ts:581 store.ts:582 store.ts:584 text.ts:405 ui/store.slint:297 ui/store.slint:402 ui/store.slint:596
+#: store.ts:571 store.ts:586 store.ts:587 store.ts:588 store.ts:589 store.ts:591 text.ts:409 ui/store.slint:297 ui/store.slint:402 ui/store.slint:596
 msgid "Install"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 store.ts:581 store.ts:582 store.ts:584 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 store.ts:588 store.ts:589 store.ts:591 text.ts:409
 msgid "Update"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Enable"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 store.ts:581 store.ts:582 store.ts:584 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 store.ts:588 store.ts:589 store.ts:591 text.ts:409
 msgid "Disable"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Reload"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Open Data Folder"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Working…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Enabled “{}”"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Disabled “{}”"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Reloaded “{}”"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Couldn't disable “{}”: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Couldn't reload “{}”: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Built-in plugins cannot be disabled"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Disabled “{}” until the player quits"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "“{}” is being installed or reloaded; try again later"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "“{}” is disabled; enable it instead of reloading it"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Its data folder does not exist yet"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Couldn't open the data folder: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Install {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Update to {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Enable Anyway…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Replace…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
+msgid "Replace with {0} from {1}…"
+msgstr ""
+
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Uninstall…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Load"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Show Images"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Retry"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This version has been revoked: {}."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This version has been revoked: {}. You confirmed the risk and enabled it again; the store will not disable it again."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This version has been revoked: {}. The store has disabled it."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This is a test repository on this machine, without encryption"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
+msgid "Also in {}"
+msgstr ""
+
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Installed {1} from {0}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data; the current data is kept"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Same id as a built-in plugin of the player; cannot be installed from here"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Built-in plugins are updated with the player and cannot be uninstalled or disabled"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The repository no longer offers this plugin; the store no longer checks it for updates (it still checks for revocations)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Its repository was removed from the store; the store no longer checks it for updates or revocations"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Sideloaded plugin: not reviewed; the store does not check it for updates"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This run uses the development-loaded version"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Loaded for development (--plugin) in this run: disabling it lasts until the player quits, and it cannot be uninstalled here"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Its bottom bar is not shown: “{}” holds the bottom bar"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Its sidebar tab is not shown: “{}” holds that place"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Its sidebar tab is not shown: the sidebar is full"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Its backdrop is not shown: “{}” holds the backdrop"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Its panel is not shown: “{}” holds that place"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Its panel is not shown: that place is full"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Its Previous/Next is not used: “{}” provides them"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "It does not open {}: “{}” does"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Part of it was refused because another plugin holds it ({})"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The description is on another website ({}); not loaded automatically"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Remote images blocked (unofficial source): {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "From the installed version"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Loading…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Loading the description…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Loading the changelog…"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The author provided no description"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The author provided no changelog"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The description is on another website; not loaded automatically"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The changelog is on another website; not loaded automatically"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Couldn't load the description: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Couldn't load the changelog: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Couldn't show the description: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Couldn't show the changelog: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Current"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Current, {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Incompatible: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Latest"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405 ui/store.slint:295 ui/store.slint:571
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409 ui/store.slint:295 ui/store.slint:571
 msgid "Version"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Updated"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Source"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "License"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Code"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Open ↗"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Status"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Running"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Starting"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Stopped"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Failed: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Package"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Data folder"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Data size"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405 ui/store.slint:291
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409 ui/store.slint:291
 msgid "Tags: All"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The new version needs new permissions: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Official repository"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{} ({})"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Unnamed repository ({})"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Unofficial: {} ({})"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Unofficial: Unnamed repository ({})"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Vestra Player official repository"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Built-in"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Local file"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Link"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Plugin Workshop"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Repository {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Unknown source"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Unknown author"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Cancelled"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Only https:// addresses are supported"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Redirected to an insecure address"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Redirect without a target address ({})"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Too many redirects"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Size does not match the description"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "File exceeds the size limit"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Checksum does not match the description"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Connection timed out"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Server not found"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Connection refused"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Connection reset"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Secure connection failed"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "File exceeds 256 KB"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Not JSON"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The top level is not an object"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Wrong schema"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "plugins is not an array"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "revoked is not an array"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "revoked has more than {} entries"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Needs a newer plugin API ({})"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Needs Vestra Player ≥ {} (current {})"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Revoked: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This plugin has been revoked: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This plugin: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Enter a repository address starting with https://"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The address cannot contain a user name or password"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The repository address is too long"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Unknown permission: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Plugin Store: plugin updates available ({})"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Disabled the revoked plugin “{}”"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Replace the installed “{}”?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "{1}\n"
 "\n"
@@ -957,7 +965,7 @@ msgid ""
 "{3}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "{1}\n"
 "\n"
@@ -968,11 +976,11 @@ msgid ""
 "{3}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Update “{}” to {}? The new version needs more permissions"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "Added:\n"
 "{2}\n"
@@ -982,19 +990,19 @@ msgid ""
 "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Update “{}” to {}?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Current: {2}."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Install “{}” {} (reinstall)?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "Current: {2}.\n"
 "\n"
@@ -1002,49 +1010,49 @@ msgid ""
 "{3}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Install “{}” {}?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "From the Vestra Player official repository, author {2}.\n"
 "\n"
 "{3}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Install “{}” {} from an unofficial repository?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "{2}\n"
 "\n"
 "{3}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{1}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The current “{}” {} comes from {}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "It will be able to:\n"
 "{}\n"
@@ -1052,27 +1060,27 @@ msgid ""
 "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Unknown"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "· {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "· Uses none of the player's features"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "{} in total"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Replace the installed version with the plugin package “{}” {}?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "{2}\n"
 "\n"
@@ -1081,11 +1089,11 @@ msgid ""
 "{4}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Install the plugin package “{}” {}?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "{2}\n"
 "\n"
@@ -1094,38 +1102,38 @@ msgid ""
 "{4}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "From the file {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "From the link {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Uninstall “{}”?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Its menus, windows and processing effects are removed immediately."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Add the unofficial repository “{}”?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Add the unofficial repository “Unnamed repository”?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "Address: {1}\n"
 "\n"
 "Its plugins are not reviewed by Vestra Player and may read your files or use the network. The store shows this repository's plugins but does not judge for you whether they can be trusted."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "Address: {1}\n"
 "\n"
@@ -1134,27 +1142,27 @@ msgid ""
 "This is a test repository on this machine, without encryption."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Remove the repository “{} ({})”?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Remove the repository “Unnamed repository ({1})”?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "The store will stop reading this repository. Plugins installed from it stay, but the store no longer checks them for updates and revocations."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Disabled the revoked plugin “{}” {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Disabled {} revoked plugins"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "The repository revoked these versions. Reasons:\n"
 "\n"
@@ -1163,35 +1171,35 @@ msgid ""
 "To keep using one anyway, choose “Enable Anyway…” on its page in the Plugin Store."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "“{}” {}: {}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "“{}” {}: {}\n"
 "You can update to {} in the Plugin Store."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "{}\n"
 "\n"
 "{}"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Enable the revoked “{}” {} anyway?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
 "\n"
 "Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
 "\n"
@@ -1200,18 +1208,18 @@ msgid ""
 "Updating to {3} instead is recommended."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "“{}” {} has been revoked. Keep using it?"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
 "\n"
 "Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
 "\n"
@@ -1220,151 +1228,151 @@ msgid ""
 "Updating to {3} instead is recommended."
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Add menu commands and shortcuts"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Open tool windows"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Show panels in the bottom bar, the sidebar or behind the video"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Show file pickers and confirmations"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Show messages on the video"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Receive files dropped on the player"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Change the player's palette"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Add pages to the Options window"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Read what is playing and the position"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Receive playback changes as they happen"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Open media, control playback, keep the computer awake"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Provide audio and video it generates itself"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Process the picture (filters, shaders)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Process the sound"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Read subtitles"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Load and change subtitles"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Take snapshots and export clips"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Resolve online video addresses"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Show marks on the progress bar"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Adjust the main window (size, on top, picture-in-picture)"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Read and write the clipboard"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Change all shortcuts"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Store sign-in details in the system keychain"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Install, uninstall and disable other plugins"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Choose GPU or software rendering and restart the player"
 msgstr ""
 
-#: store.ts:564 store.ts:579 store.ts:580 text.ts:405
+#: store.ts:571 store.ts:586 store.ts:587 text.ts:409
 msgid "Upscale the video with the GPU's video upscaler"
 msgstr ""
 
-#: store.ts:581 store.ts:582 store.ts:584
+#: store.ts:588 store.ts:589 store.ts:591
 msgid "Replace"
 msgstr ""
 
-#: store.ts:581 store.ts:582 store.ts:584 ui/settings.slint:45 ui/settings.slint:134
+#: store.ts:588 store.ts:589 store.ts:591 ui/settings.slint:45 ui/settings.slint:134
 msgid "Add"
 msgstr ""
 
-#: store.ts:581 store.ts:582 store.ts:584 ui/settings.slint:44 ui/settings.slint:92
+#: store.ts:588 store.ts:589 store.ts:591 ui/settings.slint:44 ui/settings.slint:92
 msgid "Remove"
 msgstr ""
 
-#: store.ts:581 store.ts:582 store.ts:584
+#: store.ts:588 store.ts:589 store.ts:591
 msgid "Install Anyway"
 msgstr ""
 
-#: store.ts:581 store.ts:582 store.ts:584
+#: store.ts:588 store.ts:589 store.ts:591
 msgid "Uninstall"
 msgstr ""
 
-#: store.ts:581 store.ts:582 store.ts:584
+#: store.ts:588 store.ts:589 store.ts:591
 msgid "Also delete its settings and data?"
 msgstr ""
 
-#: store.ts:581 store.ts:582 store.ts:584
+#: store.ts:588 store.ts:589 store.ts:591
 msgid "Open Plugin Store"
 msgstr ""
 
-#: store.ts:581 store.ts:582 store.ts:584
+#: store.ts:588 store.ts:589 store.ts:591
 msgid "OK"
 msgstr ""
 
-#: store.ts:581 store.ts:582 store.ts:584
+#: store.ts:588 store.ts:589 store.ts:591
 msgid "Enable Anyway"
 msgstr ""
 
-#: store.ts:581 store.ts:582 store.ts:584
+#: store.ts:588 store.ts:589 store.ts:591
 msgid "Keep Using"
 msgstr ""
 
-#: store.ts:1328
+#: store.ts:1377
 msgid "Choose a plugin package (.vxp)"
 msgstr ""
 

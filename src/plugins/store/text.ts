@@ -150,6 +150,8 @@ export const WINDOW = [
   "Update to {}",
   "Enable Anyway…",
   "Replace…",
+  // All: an installed plugin's … menu, for another source's version of it (version, repository).
+  "Replace with {0} from {1}…",
   "Uninstall…",
   "Load",
   "Show Images",
@@ -160,6 +162,8 @@ export const WINDOW = [
   "This version has been revoked: {}. The store has disabled it.",
   "Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network",
   "This is a test repository on this machine, without encryption",
+  // All: the installed plugin's row stands for the repositories' entries of the same id.
+  "Also in {}",
   "Installed {1} from {0}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data; the current data is kept",
   "Same id as a built-in plugin of the player; cannot be installed from here",
   "Built-in plugins are updated with the player and cannot be uninstalled or disabled",

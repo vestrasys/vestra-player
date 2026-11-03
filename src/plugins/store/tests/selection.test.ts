@@ -298,3 +298,31 @@ test("an empty list that fills selects its first row; a tab without the chosen t
     await stop();
   }
 });
+
+test("select(key) on All stays on All: an installed plugin hidden by the tag or the search does not jump to Installed", async () => {
+  const { host, store, stop } = await ready();
+  try {
+    assert.equal(props(host)["category"], ALL);
+    // The tag hides Alpha (installed): it goes back to "Tags: All".
+    host.window("store").emit("setTag", 1);
+    await host.settle();
+    assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma"]);
+    store.select(keyOf("a.alpha"));
+    await host.settle();
+    assert.equal(props(host)["category"], ALL);
+    assert.equal(props(host)["tag-index"], 0);
+    assert.equal(details(host), "Alpha");
+    // The search hides Old (installed, with an update): cleared, still All.
+    await search(host, "gamma");
+    const cleared = props(host)["clear-search"] as number;
+    store.select(keyOf("o.old"));
+    await host.settle();
+    assert.equal(props(host)["category"], ALL);
+    assert.equal(store.search, "");
+    assert.equal(props(host)["clear-search"], cleared + 1);
+    assert.equal(details(host), "Old");
+    assert.equal(store.settings.value.tab, undefined, "no tab was picked");
+  } finally {
+    await stop();
+  }
+});
