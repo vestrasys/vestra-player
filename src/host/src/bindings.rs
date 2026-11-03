@@ -659,7 +659,7 @@ pub struct Table {
     /// Advances when what `bindings.list` shows of the table may have
     /// changed: not when a woken plugin's declarations move to its new
     /// owner generation (`rekey`, which keeps their rank) or it declares
-    /// them again as they were (supervisor.md §6.1).
+    /// them again as they were (supervisor.md).
     listed: u64,
 }
 
@@ -2174,7 +2174,7 @@ mod tests {
         assert_eq!(table.resolve(&key("Space"), None).unwrap().id, "late");
     }
 
-    /// `bindings.list`'s gate (supervisor.md §6.1): the listed revision
+    /// `bindings.list`'s gate (supervisor.md): the listed revision
     /// moves with what the list shows, not when a woken plugin's
     /// declarations move to its new generation and are declared again as
     /// they were.

@@ -427,7 +427,6 @@ fn main() -> Result<()> {
         shared_policy: Default::default(),
         plugins: BTreeMap::new(),
         plugins_revision: 0,
-        plugin_ids: BTreeMap::new(),
         views: BTreeMap::new(),
         events,
         headless,
@@ -491,7 +490,7 @@ fn main() -> Result<()> {
         menu_generation: 1,
         host_revision: 0,
         window_title: "Vestra Player".into(),
-        supervisor: host::supervisor::new(&on_demand),
+        supervisor: host::supervisor::new(),
         activation_receipts: Default::default(),
         file_types: json!([]),
         held_mounts: Default::default(),
@@ -876,7 +875,7 @@ fn main() -> Result<()> {
         // teardown (record 2026-10-render-modes §11.6).
         platform::release_gpu_waits();
         // Every plugin process stops within one deadline (supervisor.md
-        // T31: 1 s at quit, 300 ms after a device loss), each running
+        // §9: 1 s at quit, 300 ms after a device loss), each running
         // plugin recorded first.
         teardown_step("stopping the plugins");
         let budget = if platform::window_device_lost() {

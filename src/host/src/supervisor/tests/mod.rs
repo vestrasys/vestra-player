@@ -1,33 +1,26 @@
-//! Spec tests for the pure supervisor core, written from the approved
-//! design (`doc/architecture/supervisor.md`) without reading the
-//! implementation. Each test is named after the design row it checks
-//! (`t19_…` = transition table §3.2 row T19, `m_<row>_<col>` = merge table
-//! §4.2 cell, `nc_…` = named case §4.3, …).
+//! Spec tests for the pure supervisor core, written from the design
+//! without reading the implementation. Each test is named after the row of
+//! the original design tables it checks (`t19_…` = transition row,
+//! `m_<row>_<col>` = a merge table cell, `nc_…` = a named case, …; that
+//! text is in git history, doc/architecture/supervisor.md has the rules
+//! today).
 //!
-//! The design's API (§5) is written as text, not Rust signatures. Every
-//! guess about the concrete Rust shape (type and field names, argument
-//! types, how a finished job's result is read) is confined to the
+//! Every guess about the concrete Rust shape (type and field names,
+//! argument types, how a finished job's result is read) is confined to the
 //! **adapter** section of this file, so that only this file needs mapping
 //! if the core spells something differently. The test files themselves
 //! talk only to `Sim`, `Spec`, `Profile`, `S`, `J` and the action helpers.
 //!
-//! Two tunable profiles (§11): `Profile::b1()` reproduces today's values
-//! (B1–B2: idle 60 s, start 15 s, stop 300 ms / standby 2 s, `max_active`
-//! 8 for first runs only, unlimited wakes/backlog/budget, no retry, no
-//! restart policy); `Profile::target()` is the end state (B3–B6 values:
-//! idle 30 s, start 60 s, stop 5 s, `max_active` 4 + 1 Interactive
-//! reserve, backlog 64, lane 256, start retry 3, per-class restart policy,
-//! request timeout 5 min, a process budget). Tests whose expected values
-//! differ between the two are generated for both with `both!`.
-//! `Profile::b3()` is `legacy()` plus B3 (`Tunables::legacy().with_b3(8)`): the
-//! A9/§4.3 cases (answers per held trigger, triggers carried across a
-//! restart) run under it, each with a `…_legacy` twin under `b1()` that
-//! pins today's behaviour (supervisor.md §17.7 items 5 and 6, D1).
+//! Two tunable profiles: `Profile::target()` is the player's (idle 30 s,
+//! start 60 s, stop 5 s, `max_active` 4 + 1 Interactive reserve, backlog
+//! 64, lane 256, start retry 3, per-class restart policy, request timeout
+//! 5 min, a process budget); `Profile::other_timers()` keeps those rules
+//! with the timer values the earlier tests count with. `spec!` runs a test
+//! under `target()`.
 //!
-//! Lines marked `// ANSWERED (… §17.2 Qn)` were design questions, answered
-//! in supervisor.md §17.2; lines marked `// DESIGN QUESTION:` are open:
-//! places where the design is
-//! ambiguous or contradictory; the test encodes the author's best reading.
+//! Lines marked `// ANSWERED` were design questions, since answered;
+//! lines marked `// DESIGN QUESTION:` are places where the design was
+//! ambiguous; the test encodes the author's best reading.
 #![forbid(unsafe_code)]
 #![allow(dead_code)]
 
@@ -39,95 +32,55 @@ pub(super) type Ms = u64;
 
 /// The time every simulation starts at (not 0, so "armed at 0" bugs show).
 pub(super) const T0: Ms = 1_000;
-/// `STOP_WAIT` (§4.5, §6.2): one constant for every "wait for the old
-/// process" deadline.
+/// `STOP_WAIT`: one constant for every "wait for the old process" deadline.
 pub(super) const STOP_WAIT: Ms = 20_000;
-/// `VERIFY_WAIT` (T4/T5, A6).
+/// `VERIFY_WAIT`.
 pub(super) const VERIFY_WAIT: Ms = 3_000;
-/// `STARTING_OSD_MS` (T7, §4.5).
+/// `STARTING_OSD_MS`.
 pub(super) const STARTING_OSD: Ms = 400;
-/// `QUIET_AFTER_START_MS` (§4.4 "Event wakes").
+/// `QUIET_AFTER_START_MS` ("Event wakes").
 pub(super) const QUIET_AFTER_START: Ms = 1_000;
-/// Text of a Start that waited on a stop job (reload, T18).
+/// Text of a Start that waited on a stop job (reload).
 pub(super) const TEXT_RELOAD_STUCK: &str = "the previous process did not stop within 20 s";
-/// Text of a wake that waited on a standby stop (T18, §4.3).
+/// Text of a wake that waited on a standby stop.
 pub(super) const TEXT_WAKE_STUCK: &str = "its stopped process did not go within 20 s";
 
 // ---------------------------------------------------------------------------
-// Profiles (§11 Tunables)
+// Profiles (Tunables)
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Debug)]
 pub(super) struct Profile {
     pub name: &'static str,
-    /// Idle timeout (§6.2): 60 s → 30 s.
+    /// Idle timeout.
     pub idle: Ms,
-    /// `TimeoutStartSec` installed plugins: 15 s → 60 s.
+    /// `TimeoutStartSec` installed plugins.
     pub start_timeout: Ms,
-    /// `TimeoutStopSec` for disable/reload/uninstall/upgrade: 300 ms → 5 s.
+    /// `TimeoutStopSec` for disable/reload/uninstall/upgrade.
     pub stop_grace: Ms,
-    /// `TimeoutStopSec` for standby: 2 s (`PARK_WAIT`) → 5 s.
+    /// `TimeoutStopSec` for standby.
     pub standby_grace: Ms,
-    /// `TimeoutStopSec` after a failure: 300 ms in both (KEEP).
+    /// `TimeoutStopSec` after a failure.
     pub failure_grace: Ms,
     /// Third-party running Start jobs limit.
     pub max_active: usize,
-    /// Whether `max_active` limits wakes too (B3) or only first runs (B1).
-    pub limit_wakes: bool,
-    /// Interactive reserve slots (+1 from B3, 0 before).
+    /// Interactive reserve slots.
     pub reserve: usize,
-    /// `backlog_max`: None = ∞ (B1), 64 (B3).
-    pub backlog_max: Option<usize>,
-    /// Third-party lane waiting Start jobs: None = ∞ (B1), 256 (B3).
-    pub lane_max: Option<usize>,
-    /// Start retries within one Start job: 0 (B1), 3 (B4).
+    /// `backlog_max`.
+    pub backlog_max: usize,
+    /// Third-party lane waiting Start jobs.
+    pub lane_max: usize,
+    /// Start retries within one Start job.
     pub start_retries: u32,
-    /// Per-class `Restart=`, backoff and start limits (B4). B1: `Restart=no`
-    /// and revoke for every class.
-    pub restart: bool,
-    /// Request timeout: None (off) until B6, 5 min at B6.
+    /// Request timeout.
     pub request_timeout: Option<Ms>,
-    /// Third-party process budget: None = ∞ until B5.
-    pub budget: Option<usize>,
+    /// Third-party process budget.
+    pub budget: usize,
 }
 
 impl Profile {
-    pub fn b1() -> Self {
-        Profile {
-            name: "b1",
-            idle: 60_000,
-            start_timeout: 15_000,
-            stop_grace: 300,
-            standby_grace: 2_000,
-            failure_grace: 300,
-            max_active: 8,
-            limit_wakes: false,
-            reserve: 0,
-            backlog_max: None,
-            lane_max: None,
-            start_retries: 0,
-            restart: false,
-            request_timeout: None,
-            budget: None,
-        }
-    }
-    /// B3 on top of `legacy()` (`Tunables::legacy().with_b3(8)`): the queue
-    /// limits and the B3 switches of §17.7 (`answer_held`: §4.6 answers per
-    /// held trigger, A9; `restart_keeps_backlog`: held triggers carried
-    /// across a restart, §4.3), with today's timeouts and no restart policy
-    /// (B4). The A9/§4.3 cases run here: the behaviour they check arrives
-    /// with B3 and stays in the target.
-    pub fn b3() -> Self {
-        Profile {
-            name: "b3",
-            max_active: 4,
-            limit_wakes: true,
-            reserve: 1,
-            backlog_max: Some(64),
-            lane_max: Some(256),
-            ..Profile::b1()
-        }
-    }
+    /// The player's values (`Tunables::new` for 8 cores) with a budget of
+    /// 3 third-party processes.
     pub fn target() -> Self {
         Profile {
             name: "target",
@@ -138,40 +91,45 @@ impl Profile {
             failure_grace: 300,
             // min(4, max(2, cores / 2)) with cores = 8.
             max_active: 4,
-            limit_wakes: true,
             reserve: 1,
-            backlog_max: Some(64),
-            lane_max: Some(256),
+            backlog_max: 64,
+            lane_max: 256,
             start_retries: 3,
-            restart: true,
             request_timeout: Some(300_000),
-            budget: Some(3),
+            budget: 3,
+        }
+    }
+    /// The player's rules with other timer values: idle 60 s, start 15 s,
+    /// stop 300 ms, standby 2 s, no request timeout and no process budget
+    /// (the numbers the tests written for the earlier batches count with).
+    pub fn other_timers() -> Self {
+        Profile {
+            name: "other_timers",
+            idle: 60_000,
+            start_timeout: 15_000,
+            stop_grace: 300,
+            standby_grace: 2_000,
+            request_timeout: None,
+            budget: usize::MAX,
+            ..Profile::target()
         }
     }
 }
 
-/// Generates one test per profile: `name::b1` and `name::target`.
-macro_rules! both {
+/// A spec test run under `Profile::target()`, bound to `$p`.
+macro_rules! spec {
     ($(#[$m:meta])* fn $name:ident($p:ident) $body:block) => {
         $(#[$m])*
-        mod $name {
-            #[allow(unused_imports)]
-            use super::*;
-            #[allow(unused_variables)]
-            fn run($p: &Profile) $body
-            #[test]
-            fn b1() {
-                run(&Profile::b1())
-            }
-            #[test]
-            fn target() {
-                run(&Profile::target())
-            }
+        #[test]
+        #[allow(unused_variables)]
+        fn $name() {
+            let $p = &Profile::target();
+            $body
         }
     };
 }
 
-// Test files come after `both!` (macro_rules is textually scoped).
+// Test files come after `spec!` (macro_rules is textually scoped).
 mod b3;
 mod b4;
 mod backlog;
@@ -188,7 +146,7 @@ mod transitions;
 // Test-side views (stable vocabulary the test files use)
 // ---------------------------------------------------------------------------
 
-/// Unit state flattened with its sub-state (§3.1).
+/// Unit state flattened with its sub-state.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum S {
     Inactive,
@@ -223,7 +181,7 @@ impl S {
     }
 }
 
-/// Installed job, flattened (§4.1).
+/// Installed job, flattened.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum J {
     Start {
@@ -255,7 +213,7 @@ impl J {
     }
 }
 
-/// Finished job result (§4: `done`, `failed`, `canceled`, `timeout`).
+/// Finished job result (`done`, `failed`, `canceled`, `timeout`).
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum R {
     Done,
@@ -265,7 +223,7 @@ pub(super) enum R {
     Dropped,
 }
 
-/// Why a held trigger was answered (§4.6).
+/// Why a held trigger was answered.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Why {
     Busy,
@@ -273,7 +231,7 @@ pub(super) enum Why {
     Disabled,
     Removed,
     Stopped,
-    /// In standby with a restart hold (T20).
+    /// In standby with a restart hold.
     Held,
 }
 
@@ -295,7 +253,7 @@ pub(super) struct Spec {
     pub runner: Option<u32>,
     pub enabled: bool,
     pub ck: Ck,
-    /// Built-in needing a digest check (T4).
+    /// Built-in needing a digest check.
     pub verify: bool,
     /// `--plugin` start timeout (1–120 s).
     pub dev_timeout: Option<Ms>,
@@ -341,8 +299,8 @@ pub(super) fn first_run(id: &str) -> Spec {
 }
 /// Third-party plugin recorded resident.
 pub(super) fn resident(id: &str) -> Spec {
-    // Resident is observed, never declared (§3.3): a Normal plugin whose
-    // checkpoint says resident.
+    // Resident is observed, never declared: a Normal plugin whose checkpoint
+    // says resident.
     Spec::new(id, Class::Normal, Ck::Resident)
 }
 /// Built-in in its own process that does not go to standby.
@@ -373,24 +331,27 @@ pub(super) fn norm(x: impl Debug) -> String {
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // ADAPTER: the only place that names the core's concrete Rust shapes
-// (mapped to the B1 API, supervisor.md §17.1).
+// (mapped to the core API).
 // ---------------------------------------------------------------------------
 
 pub(super) type Act = Action<u32>;
 
-/// Memory for `Tunables::target` (the budget is overridden from the profile).
+/// Memory for `Tunables::new` (the budget is overridden from the profile).
 const PHYS_MIB: u64 = 16_384;
 
-/// §11 Tunables from the core's presets: `legacy()` for B1, `target(cores
-/// 8, …)` for the target. Only the machine-dependent budget is taken from
-/// the profile; `t00_presets_match_design_values` checks the rest against
-/// the design's numbers.
+/// Tunables from the core's preset (`Tunables::new`, 8 cores) with the
+/// profile's timers and budget; `t00_presets_match_design_values` checks
+/// that `Profile::target()` is the preset.
 fn tunables(p: &Profile) -> Tunables {
-    let mut t = match p.name {
-        "b1" => Tunables::legacy(),
-        "b3" => Tunables::legacy().with_b3(8),
-        _ => Tunables::target(8, PHYS_MIB),
-    };
+    let mut t = Tunables::new(8, PHYS_MIB);
+    t.idle_timeout = p.idle;
+    for policy in [&mut t.builtin, &mut t.resident, &mut t.normal] {
+        policy.start_timeout = p.start_timeout;
+        policy.stop_grace = p.stop_grace;
+        policy.standby_grace = p.standby_grace;
+        policy.failure_grace = p.failure_grace;
+        policy.request_timeout = p.request_timeout;
+    }
     t.process_budget = p.budget;
     t
 }
@@ -446,7 +407,7 @@ fn job_view(j: &Job) -> J {
     let running = j.state == JobState::Running;
     match &j.kind {
         JobKind::Start { cause } => J::Start {
-            // A merged trigger raises the job priority, not the cause (§17.1).
+            // A merged trigger raises the job priority, not the cause.
             cause: match cause {
                 Cause::Trigger(_) => format!("trigger{}", norm(j.priority)),
                 other => norm(other),
@@ -573,7 +534,7 @@ pub(super) fn terminate(a: &Act) -> Option<(Ms, bool, String, Pid)> {
         _ => None,
     }
 }
-/// A "<name> could not start" notice (T8; today's `wake_failed`).
+/// A "<name> could not start" notice (today's `wake_failed`).
 pub(super) fn is_could_not_start_notice(a: &Act) -> bool {
     matches!(
         a,
@@ -583,7 +544,7 @@ pub(super) fn is_could_not_start_notice(a: &Act) -> bool {
         }
     )
 }
-/// A "…ran out of memory" notice (T25).
+/// A "…ran out of memory" notice.
 pub(super) fn is_oom_notice(a: &Act) -> bool {
     matches!(
         a,
@@ -633,8 +594,8 @@ impl Sim {
         let t = self.now + d;
         self.at(t)
     }
-    /// Start-up is over (§4.4 "Event wakes"; §17.1: the adapter reports it
-    /// with `settled`), and the quiet second after it has passed.
+    /// Start-up is over ("Event wakes"; the adapter reports it with `settled`),
+    /// and the quiet second after it has passed.
     pub fn settle(&mut self) -> Vec<Act> {
         self.sup.settled(self.now);
         self.after(QUIET_AFTER_START)
@@ -712,9 +673,9 @@ impl Sim {
     pub fn start_interactive(&mut self, u: UnitId) -> Result<JobId, Busy> {
         self.sup.start(u, Cause::Trigger(Priority::Interactive))
     }
-    /// A stop request in `JobMode::Replace` (the merge table, §4.2). The
-    /// core's `stop()` gives disable/uninstall/reload `JobMode::Fail`
-    /// (§17.1); package-RPC conflicts are tested with `rpc_*`.
+    /// A stop request in `JobMode::Replace` (the merge table). The core's
+    /// `stop` gives disable/uninstall/reload `JobMode::Fail`; package-RPC
+    /// conflicts are tested with `rpc_*`.
     pub fn stop(&mut self, u: UnitId, reason: StopReason, then: Then) -> Result<JobId, Busy> {
         let kind = JobKind::Stop { reason, then };
         self.sup.enqueue_job(
@@ -725,8 +686,8 @@ impl Sim {
             Origin::Internal,
         )
     }
-    /// A restart request in `JobMode::Replace` (the core's `restart()` is a
-    /// package RPC, §17.1; see `rpc_restart`).
+    /// A restart request in `JobMode::Replace` (the core's `restart` is a
+    /// package RPC; see `rpc_restart`).
     pub fn restart(&mut self, u: UnitId, fresh: bool, image: Option<&str>) -> Result<JobId, Busy> {
         let kind = JobKind::Restart {
             fresh,
@@ -740,9 +701,9 @@ impl Sim {
             Origin::Internal,
         )
     }
-    /// The user's disable as the package RPC does it: unit-file state, then
-    /// the core's `stop(Disable)` (origin User, `JobMode::Fail` only against a
-    /// package-RPC job; §17.1, §17.2 Q16).
+    /// The user's disable as the package RPC does it: unit-file state, then the
+    /// core's `stop(Disable)` (origin User, `JobMode::Fail` only against a
+    /// package-RPC job).
     pub fn user_disable(&mut self, u: UnitId) -> Result<JobId, Busy> {
         self.sup.set_enabled(u, false);
         self.sup.stop(u, StopReason::Disable, Then::Inactive)
@@ -814,6 +775,29 @@ impl Sim {
         );
         self.run()
     }
+    /// The spawn of `u` fails, and so does every start retry
+    /// (`Policy::start_retry`) after it; every action of them.
+    pub fn spawn_fails(&mut self, u: UnitId) -> Vec<Act> {
+        let mut acts = Vec::new();
+        loop {
+            let pid = self.pid(u);
+            acts.extend(self.spawned(pid, false));
+            match self.st(u) {
+                S::AutoRestart(until) => acts.extend(self.at(until)),
+                _ => return acts,
+            }
+        }
+    }
+    /// Past the restart hold of `u` in standby, if it has one.
+    pub fn past_hold(&mut self, u: UnitId) -> Vec<Act> {
+        match self.st(u) {
+            S::Standby {
+                hold_until: Some(until),
+                ..
+            } if until > self.now => self.at(until),
+            _ => Vec::new(),
+        }
+    }
     pub fn verified(&mut self, u: UnitId, ok: bool) -> Vec<Act> {
         self.sup.verify_done(u, ok);
         self.run()
@@ -845,7 +829,7 @@ impl Sim {
         self.sup.backend_cleaned(pid);
         self.run()
     }
-    /// Both halves of T16: reaped and backend cleaned.
+    /// Both halves of reaped and backend cleaned.
     pub fn gone(&mut self, pid: Pid) -> Vec<Act> {
         let mut a = self.reaped(pid);
         a.extend(self.cleaned(pid));
@@ -889,61 +873,36 @@ impl Sim {
     }
 }
 
-/// The core's presets carry the design's numbers (§3.3, §11).
+/// The core's presets carry the design's numbers.
 #[test]
 fn t00_presets_match_design_values() {
-    for p in [Profile::b1(), Profile::b3(), Profile::target()] {
-        let t = tunables(&p);
-        let n = t.policy(Class::Normal);
-        assert_eq!(t.idle_timeout, p.idle, "{}", p.name);
-        assert_eq!(n.start_timeout, p.start_timeout, "{}", p.name);
-        assert_eq!(n.stop_grace, p.stop_grace, "{}", p.name);
-        assert_eq!(n.standby_grace, p.standby_grace, "{}", p.name);
-        assert_eq!(n.failure_grace, p.failure_grace, "{}", p.name);
-        assert_eq!(n.request_timeout, p.request_timeout, "{}", p.name);
-        assert_eq!(t.stop_wait, STOP_WAIT);
-        assert_eq!(t.verify_wait, VERIFY_WAIT);
-        assert_eq!(t.starting_notice, STARTING_OSD);
-        assert_eq!(t.quiet_after_start, QUIET_AFTER_START);
-        assert_eq!(t.backlog_max, p.backlog_max, "{}", p.name);
-        assert_eq!(t.lane_max, p.lane_max, "{}", p.name);
-        assert_eq!(t.interactive_reserve, p.reserve, "{}", p.name);
-        if p.limit_wakes {
-            assert_eq!(t.max_active, Some(p.max_active));
-        } else {
-            assert_eq!(t.max_active, None, "B1: wakes unlimited");
-            assert_eq!(t.first_run_limit, Some(p.max_active), "B1: 8 first runs");
-        }
-        let legacy = p.name == "b1";
-        let bf = if legacy {
-            BuiltinsFirst::Queued
-        } else {
-            BuiltinsFirst::Installed
-        };
-        assert_eq!(t.builtins_first, bf, "{}", p.name);
-        // §17.7 switches that `with_b3` sets.
-        assert_eq!(t.answer_held, !legacy, "{}", p.name);
-        assert_eq!(t.restart_keeps_backlog, !legacy, "{}", p.name);
-        assert_eq!(t.start_failure_notice, !legacy, "{}", p.name);
-        assert_eq!(t.start_failure_keeps_registrations, !legacy, "{}", p.name);
+    let p = Profile::target();
+    let t = Tunables::new(8, PHYS_MIB);
+    for c in [Class::Builtin, Class::Resident, Class::Normal] {
+        let n = t.policy(c);
+        assert_eq!(n.start_timeout, p.start_timeout, "{c:?}");
+        assert_eq!(n.stop_grace, p.stop_grace, "{c:?}");
+        assert_eq!(n.standby_grace, p.standby_grace, "{c:?}");
+        assert_eq!(n.failure_grace, p.failure_grace, "{c:?}");
+        assert_eq!(n.request_timeout, p.request_timeout, "{c:?}");
         let retries = n.start_retry.map_or(0, |r| r.count);
-        assert_eq!(retries, p.start_retries, "{}", p.name);
-        for c in [
-            Class::Builtin,
-            Class::Resident,
-            Class::Normal,
-            Class::Development,
-        ] {
-            let r = t.policy(c).restart;
-            if !p.restart {
-                assert_eq!(r, RestartMode::No, "B1: Restart=no for {c:?}");
-            }
-        }
+        assert_eq!(retries, p.start_retries, "{c:?}");
+        assert_ne!(n.restart, RestartMode::No, "{c:?}");
     }
+    assert_eq!(t.idle_timeout, p.idle);
+    assert_eq!(t.stop_wait, STOP_WAIT);
+    assert_eq!(t.verify_wait, VERIFY_WAIT);
+    assert_eq!(t.starting_notice, STARTING_OSD);
+    assert_eq!(t.quiet_after_start, QUIET_AFTER_START);
+    assert_eq!(t.backlog_max, p.backlog_max);
+    assert_eq!(t.lane_max, p.lane_max);
+    assert_eq!(t.interactive_reserve, p.reserve);
+    assert_eq!(t.max_active, p.max_active);
+    assert_eq!(t.policy(Class::Development).restart, RestartMode::No);
     assert_eq!(max_active_for(8), 4);
     assert_eq!(max_active_for(2), 2);
     assert_eq!(max_active_for(64), 4);
-    // §8: clamp(physMiB / 2 × 0.30 / 85, 3, 16).
+    // clamp(physMiB / 2 × 0.30 / 85, 3, 16).
     assert_eq!(process_budget_for(4_096), 7);
     assert_eq!(process_budget_for(1_024), 3);
     assert_eq!(process_budget_for(65_536), 16);
@@ -955,7 +914,7 @@ fn t00_presets_match_design_values() {
 
 impl Sim {
     /// Adds the unit and runs; returns it in `Standby` (needs a standby
-    /// checkpoint, T1) with its holder pid.
+    /// checkpoint) with its holder pid.
     pub fn in_standby(&mut self, s: Spec) -> (UnitId, Pid) {
         let u = self.add(s);
         self.run();
@@ -998,8 +957,8 @@ impl Sim {
         (u, pid)
     }
 
-    /// Active unit whose idle timer fires and that answers "not busy":
-    /// returns the actions of the answer (T14).
+    /// Active unit whose idle timer fires and that answers "not busy": returns
+    /// the actions of the answer.
     pub fn idle_out(&mut self, pid: Pid) -> Vec<Act> {
         let due = self.now + self.p.idle;
         let q = self.at(due);
@@ -1057,7 +1016,7 @@ pub(super) fn terminates(acts: &[Act]) -> Vec<(Ms, bool, String, Pid)> {
 // Adapter additions for the B3 spec tests (`b3.rs`)
 // ---------------------------------------------------------------------------
 
-/// The unit of a "Starting <name>…" notice (T7, §4.5).
+/// The unit of a "Starting <name>…" notice.
 pub(super) fn starting_notice_unit(a: &Act) -> Option<UnitId> {
     match a {
         Action::Notify {
@@ -1087,19 +1046,19 @@ pub(super) fn revoked(a: &Act) -> Option<(UnitId, Pid)> {
     }
 }
 
-/// A plugin-declared long work kind (`commands.busy`, a settings page
-/// busy): `WorkKind::Declared`, never capped (coordinator ruling, blackboard
-/// Open items; supervisor.md §17.12). The number is the adapter's own; see
+/// A plugin-declared long work kind (`commands.busy`, a settings page busy):
+/// `WorkKind::Declared`, never capped (coordinator ruling, blackboard Open
+/// items; supervisor.md). The number is the adapter's own; see
 /// `b3::w_declared_busy_has_no_request_cap`.
 pub(super) const DECLARED_BUSY: WorkKind = WorkKind::Declared(0);
 
 impl Sim {
-    /// Third-party start slots in use (`slots_in_use().0`).
+    /// Third-party start slots in use (`slots_in_use`).
     pub fn slots(&self) -> usize {
-        self.sup.slots_in_use().0
+        self.sup.slots_in_use()
     }
-    /// `begin_work` of a host→plugin request with the adapter's id (§17.1,
-    /// `WorkKind::Request`).
+    /// `begin_work` of a host→plugin request with the adapter's id
+    /// (`WorkKind::Request`).
     pub fn begin_work_kind(&mut self, pid: Pid, kind: u64) {
         self.sup.set_now(self.now);
         self.sup.begin_work(pid, WorkKind::Request(kind), self.now)
@@ -1113,8 +1072,8 @@ impl Sim {
         self.sup.set_now(self.now);
         self.sup.begin_work(pid, DECLARED_BUSY, self.now)
     }
-    /// The B2a identity input `activation_begin` for `n` fresh units, each
-    /// with a new pid: how many were accepted (§13 B3 "remove `LIMIT 64`").
+    /// The B2a identity input `activation_begin` for `n` fresh units, each with
+    /// a new pid: how many were accepted ("remove `LIMIT 64`").
     pub fn activations_accepted(&mut self, n: usize) -> usize {
         (0..n)
             .filter(|i| {
@@ -1137,35 +1096,10 @@ impl Sim {
 }
 
 // ---------------------------------------------------------------------------
-// Adapter additions for the B4 spec tests (`b4.rs`)
+// Adapter additions for the restart-policy spec tests (`b4.rs`)
 // ---------------------------------------------------------------------------
 
-impl Profile {
-    /// B4 on top of B3 (`Tunables::legacy().with_b3(8).with_b4()`): restart
-    /// policy, backoff, start retries and limits, heap cap, crash notice
-    /// (§13 B4, §17.7 switches), with today's timeouts (idle 60 s, start
-    /// 15 s, stop 300 ms / standby 2 s, no request timeout before B6) and
-    /// no process budget (B5).
-    pub fn b4() -> Self {
-        Profile {
-            name: "b4",
-            start_retries: 3,
-            restart: true,
-            ..Profile::b3()
-        }
-    }
-}
-
-/// The B4 preset (§17 header: `with_b4` on top of `with_b3`).
-pub(super) fn b4_tunables() -> Tunables {
-    Tunables::legacy().with_b3(8).with_b4()
-}
-
 impl Sim {
-    /// A simulation under `Profile::b4()` / `b4_tunables()`.
-    pub fn b4() -> Sim {
-        Sim::with_tunables(&Profile::b4(), b4_tunables())
-    }
     pub fn with_tunables(p: &Profile, t: Tunables) -> Sim {
         let mut sup = Supervisor::new(t, 1);
         sup.set_now(T0);
@@ -1176,12 +1110,12 @@ impl Sim {
             log: Vec::new(),
         }
     }
-    /// `process_exited` with the fault's own text (§17.1).
+    /// `process_exited` with the fault's own text.
     pub fn exited_with(&mut self, pid: Pid, cause: ExitCause, text: &str) -> Vec<Act> {
         self.sup.process_exited(pid, cause, Some(text.into()));
         self.run()
     }
-    /// `packages.list` state (§9, `list_state`): `Some(text)` when failed.
+    /// `packages.list` state (`list_state`): `Some(text)` when failed.
     pub fn listed_failed(&self, u: UnitId) -> Option<String> {
         match self.sup.list_state(u) {
             Some(ListState::Failed(text)) => Some(text),
@@ -1193,7 +1127,7 @@ impl Sim {
     }
 }
 
-/// `until` of an `Answer{Held{until}}` (T20).
+/// `until` of an `Answer{Held{until}}`.
 pub(super) fn held_until(a: &Act) -> Option<Ms> {
     match a {
         Action::Answer {
@@ -1243,51 +1177,40 @@ pub(super) fn finished(a: &Act) -> Option<(UnitId, JobId, R)> {
     }
 }
 
-/// The B4 preset carries the design's numbers (§3.3, §8, §11, §17.7
-/// switches table).
+/// The preset's restart policy carries the design's numbers.
 #[test]
-fn t00_b4_preset_matches_design_values() {
-    let t = b4_tunables();
-    // Today's timeouts and B3's queue limits stay (§11: B6 flips them).
-    assert_eq!(t.idle_timeout, 60_000);
-    assert_eq!(t.max_active, Some(4));
-    assert_eq!(t.backlog_max, Some(64));
-    assert_eq!(t.process_budget, None, "budget is B5");
+fn t00_restart_policy_matches_design_values() {
+    let t = Tunables::new(8, PHYS_MIB);
     for c in [Class::Builtin, Class::Resident, Class::Normal] {
         let p = t.policy(c);
-        assert_eq!(p.start_timeout, 15_000, "{c:?}");
-        assert_eq!(p.stop_grace, 300, "{c:?}");
-        assert_eq!(p.standby_grace, 2_000, "{c:?}");
-        assert_eq!(p.failure_grace, 300, "{c:?}");
-        assert_eq!(p.request_timeout, None, "{c:?}: request timeout is B6");
         // Start retry 3 × (250 ms × 2ⁿ + 10 % jitter).
         let r = p.start_retry.expect("start retry");
         assert_eq!((r.count, r.base, r.jitter_pct), (3, 250, 10), "{c:?}");
         // 5 in 10 min.
         let l = p.start_limit.expect("start limit");
         assert_eq!((l.burst, l.interval), (5, 600_000), "{c:?}");
-        // MemoryMax= 512 MB own process (A15a).
+        // MemoryMax= 512 MB own process.
         assert_eq!(p.memory_max_mib, Some(512), "{c:?}");
-        // Reset after 60 s stable (§17.2 Q20).
+        // Reset after 60 s stable.
         let b = p.restart_sec.expect("RestartSec");
         assert_eq!(b.reset_after, Some(60_000), "{c:?}");
         assert!(
             !b.first_immediate,
-            "{c:?}: only the runner's first restart is immediate (Q19)"
+            "{c:?}: only the runner's first restart is immediate"
         );
     }
     let b = t.policy(Class::Builtin);
     assert_eq!(b.restart, RestartMode::OnFailure);
     assert_eq!(b.restart_sec.unwrap().base, 3_000);
     let r = t.policy(Class::Resident);
-    assert_eq!(r.restart, RestartMode::OnFailure, "A15b");
+    assert_eq!(r.restart, RestartMode::OnFailure, "Resident");
     assert_eq!(r.restart_sec.unwrap().base, 1_000);
     assert_eq!(r.restart_sec.unwrap().cap, Some(60_000));
     let n = t.policy(Class::Normal);
     assert_ne!(
         n.restart,
         RestartMode::OnFailure,
-        "Normal: on the next trigger (A15c)"
+        "Normal: on the next trigger"
     );
     assert_ne!(n.restart, RestartMode::No);
     assert_eq!(n.restart_sec.unwrap().base, 1_000);
@@ -1306,14 +1229,7 @@ fn t00_b4_preset_matches_design_values() {
         (t.runner_restart_limit, t.runner_restart_window),
         (3, 60_000)
     );
-    let rb = t.runner_backoff.expect("runner backoff");
+    let rb = t.runner_backoff;
     assert!(rb.first_immediate);
     assert_eq!(rb.base, 3_000);
-    // §17.7 switches set by `with_b4`.
-    assert!(t.crash_notice);
-    assert!(t.runner_restart_waits_cleanup);
-    assert!(t.remove_data_waits_cleanup);
-    assert!(!t.start_job_ends_at_spawn);
-    // Kept until B6 (§17.7 D3).
-    assert!(t.resident_idle_standby);
 }

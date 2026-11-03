@@ -1,17 +1,17 @@
-//! The spawn worker (doc/architecture/supervisor.md §2.2, §6.1, A19; B4):
-//! a plugin's own Node process is created on the `plugin-spawner` thread,
-//! not on the UI thread. Creating one costs about 30 ms on Windows (B3's
-//! 200-wake storm: one spawn per start inside the host tick), which alone
-//! breaks the UI frame-rate rule once a few start in one tick. The thread
-//! runs `Plugin::load_manifest` in request order, puts each process it
-//! created in `Spawner::ready` and answers with `Event::Spawned`; the unit
-//! stays `Activating{Spawn}` meanwhile, and what its process says before
-//! the Host has it is held for it (`Host::spawned`, `held_for_spawn`), so
-//! `process_spawned` comes before any event of the pid (§12.3). A spawn
-//! that panics is a failed spawn. At quit the processes created but not
-//! yet taken are stopped with the rest (`take_ready`). Shared-runner
-//! members (a line to the runner), development loads and a start a package
-//! RPC answers with its spawn's error (`start_now`) stay on the UI thread.
+//! The spawn worker (doc/architecture/supervisor.md; B4): a plugin's own Node
+//! process is created on the `plugin-spawner` thread, not on the UI thread.
+//! Creating one costs about 30 ms on Windows (B3's 200-wake storm: one spawn
+//! per start inside the host tick), which alone breaks the UI frame-rate rule
+//! once a few start in one tick. The thread runs `Plugin::load_manifest` in
+//! request order, puts each process it created in `Spawner::ready` and answers
+//! with `Event::Spawned`; the unit stays `Activating{Spawn}` meanwhile, and
+//! what its process says before the Host has it is held for it
+//! (`Host::spawned`, `held_for_spawn`), so `process_spawned` comes before any
+//! event of the pid. A spawn that panics is a failed spawn. At quit the
+//! processes created but not yet taken are stopped with the rest
+//! (`take_ready`). Shared-runner members (a line to the runner), development
+//! loads and a start a package RPC answers with its spawn's error (`start_now`)
+//! stay on the UI thread.
 use super::*;
 use std::sync::{
     Arc, Mutex,
@@ -204,13 +204,11 @@ pub(crate) struct Spawning {
 }
 
 impl Host {
-    /// Whether this start's own process is created on the spawn thread: with
-    /// on-demand start on (the wakes, first runs and restarts of a storm,
-    /// §6.1), unless a package RPC answers with its spawn's error now
-    /// (`start_now`). With it off every start stays on this thread, as in
-    /// B3 (§17.13).
+    /// Whether this start's own process is created on the spawn thread (the
+    /// wakes, first runs and restarts of a storm): unless a package RPC answers
+    /// with its spawn's error now (`start_now`).
     pub(crate) fn spawn_off_thread(&self) -> bool {
-        self.on_demand.enabled && self.start_error.is_none() && !self.on_demand.quitting
+        self.start_error.is_none() && !self.on_demand.quitting
     }
     /// Queues an own process's creation on the spawn thread; `Err` gives
     /// the job back (no thread: spawn here).

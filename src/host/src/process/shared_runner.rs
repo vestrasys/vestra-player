@@ -220,7 +220,7 @@ impl Member {
     /// `runtime.stop` for this member; the wait for its `runner.stopped` is
     /// the returned [`MemberStop`]'s, where an own process would be waited
     /// for and killed: polled by the plugin reaper beside every other
-    /// stopping plugin (`process/reaper.rs`, supervisor.md §7.1), or waited
+    /// stopping plugin (`process/reaper.rs`, supervisor.md §1), or waited
     /// for at once (`Drop for Plugin`, at quit). The runner lives on. A
     /// cleanup longer than an own process's window ([`STOP_WAIT`]) counts as
     /// a leak, and the wait goes on until the runner reports the member gone
@@ -547,7 +547,7 @@ impl SharedRunner {
     /// Let it go without waiting on the caller's thread: `runner.stop`
     /// (every member's cleanup, then exit) when `graceful`, else killed at
     /// once; killed after [`STOP_WAIT`] either way, by the plugin reaper
-    /// (once a `shared-runner-reap` thread of its own, supervisor.md §7.1).
+    /// (once a `shared-runner-reap` thread of its own, supervisor.md §1).
     /// Graceful only when it has no member left (`idle`), so its
     /// `runner.stop` carries no reason.
     pub fn retire(mut self, graceful: bool, reaper: &crate::process::reaper::Reaper) {
@@ -568,7 +568,7 @@ impl SharedRunner {
     }
 }
 impl SharedRunner {
-    /// The player quits within one deadline (supervisor.md §7.2, T31):
+    /// The player quits within one deadline (supervisor.md §9):
     /// `runner.stop` with reason `quit` (every member's cleanup runs in
     /// the runner at once), killed after `wait` by the plugin reaper rather
     /// than waited for on the caller's thread (its `Drop`).
@@ -977,7 +977,7 @@ mod tests {
         assert!(began.elapsed() < Duration::from_millis(50));
     }
 
-    /// The plugin reaper's half (`MemberStop::poll`, supervisor.md §7.1):
+    /// The plugin reaper's half (`MemberStop::poll`, supervisor.md §1):
     /// the same outcomes as the blocking stop, at the times it is polled.
     #[test]
     fn a_polled_member_stop_ends_as_the_blocking_one() {
@@ -1127,7 +1127,7 @@ mod tests {
         assert_eq!((policy.next_id(), policy.next_id()), (1, 2));
     }
 
-    /// B0 (supervisor.md §7.4, §11): the shared runner's tunables as they
+    /// B0 (supervisor.md §7): the shared runner's tunables as they
     /// are today.
     #[test]
     fn b0_runner_tunables() {

@@ -1,7 +1,5 @@
-//! Per-class policy, design §3.3 (with §7.3 exit causes and §7.4 runner
-//! restarts). Restart policy, backoff and start limits arrive in B4, so
-//! most tests use the target profile; B1 (`Restart=no` for every class) is
-//! covered by `t25_crash_b1_fails_every_class`.
+//! Per-class policy, design (with exit causes and runner restarts), mostly
+//! under the target profile.
 use super::*;
 
 fn target() -> Sim {
@@ -61,7 +59,7 @@ fn p_builtin_restart_on_failure_for_every_cause() {
     }
 }
 
-// Restart= on-failure (Resident, A15b), RestartSec 1 s
+// Restart= on-failure (Resident), RestartSec 1 s
 #[test]
 fn p_resident_restarts_after_one_second() {
     let mut sim = target();
@@ -73,7 +71,7 @@ fn p_resident_restarts_after_one_second() {
     );
 }
 
-// Restart= no for Normal: re-start on the next trigger only (A15c)
+// Restart= no for Normal: re-start on the next trigger only
 #[test]
 fn p_normal_does_not_restart_by_itself() {
     let mut sim = target();
@@ -122,11 +120,9 @@ fn p_no_retry_after_runtime_failed_any_class() {
     }
 }
 
-// RestartSec built-in own process: 3 s × 2ⁿ
-// ANSWERED (supervisor.md §17.2 Q19), was a design question: §3.3 says "first runner restart immediate"; §11 says
-// "+ 3 s ×2ⁿ after the first" for built-ins. Best reading: "immediate
-// first" applies to runner restarts only; an own-process built-in waits
-// 3 s, 6 s, 12 s.
+// RestartSec built-in own process: 3 s × 2ⁿ ANSWERED (supervisor.md), was a design question: says "first runner
+// restart immediate"; says "+ 3 s ×2ⁿ after the first" for built-ins. Best reading: "immediate first" applies to
+// runner restarts only; an own-process built-in waits 3 s, 6 s, 12 s.
 #[test]
 fn p_builtin_own_backoff_grows_3_6_12() {
     let mut sim = target();
@@ -170,12 +166,10 @@ fn p_builtin_backoff_not_reset_before_60s_stable() {
     assert_eq!(delay(&s, now), 6_000);
 }
 
-// RestartSec / hold Normal: 1 s × 2ⁿ (cap 60 s)
-// ANSWERED (supervisor.md §17.2 Q20), was a design question: the 60 s cap cannot be reached within the 5-in-10-min
-// start limit (1+2+4+8 s) unless crashes are spread over more than 10
-// minutes, and §3.3 states the "reset after 60 s stable" rule only for
-// Builtin. Does the Normal/Resident backoff reset after a stable run? Not
-// tested here beyond the first four steps.
+// RestartSec / hold Normal: 1 s × 2ⁿ (cap 60 s) ANSWERED (supervisor.md), was a design question: the 60 s cap
+// cannot be reached within the 5-in-10-min start limit (1+2+4+8 s) unless crashes are spread over more than 10
+// minutes, and states the "reset after 60 s stable" rule only for Builtin. Does the Normal/Resident backoff reset
+// after a stable run? Not tested here beyond the first four steps.
 #[test]
 fn p_normal_hold_grows_1_2_4_8() {
     let mut sim = target();
@@ -204,7 +198,7 @@ fn p_resident_backoff_grows_1_2_4() {
     assert_eq!(got, vec![1_000, 2_000, 4_000]);
 }
 
-// Runner: first restart immediate (A4), then RestartSec 3 s
+// Runner: first restart immediate, then RestartSec 3 s
 #[test]
 fn p_first_runner_restart_immediate_then_3s() {
     let mut sim = target();
@@ -251,7 +245,7 @@ fn p_runner_fail_open_after_three_in_60s() {
         sim.failed_open(),
         "fail-open after the third restart in 60 s"
     );
-    // Placement is rewritten before the restart jobs run (§7.4).
+    // Placement is rewritten before the restart jobs run.
     for u in [a, b] {
         if let S::AutoRestart(t) = sim.st(u) {
             sim.at(t);
@@ -369,18 +363,8 @@ fn p_start_retry_250_500_1000_with_jitter() {
     );
 }
 
-// B1: no start retry
-#[test]
-fn p_b1_no_start_retry() {
-    let mut sim = Sim::new(&Profile::b1());
-    let u = sim.add(resident("r"));
-    sim.run();
-    sim.spawned(sim.pid(u), false);
-    assert!(sim.st(u).is_failed(), "{:?}", sim.st(u));
-}
-
 // Idle timeout: Development never
-both! {
+spec! {
     fn p_development_never_stands_by(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(dev("d", 120_000));
@@ -390,15 +374,13 @@ both! {
         sim.classified(pid, false);
         sim.after(10 * p.idle);
         assert_eq!(sim.st(u), S::Active(pid), "Development never goes to standby");
-        // Never classified or checkpointed either (§17.7 item 2): no
-        // standby record for a development load, across its whole run.
+        // Never classified or checkpointed either: no standby record for a
+        // development load, across its whole run.
         assert!(!has(&sim.log, "Checkpoint"), "{:?}", names(&sim.log));
     }
 }
 
-// Idle timeout: Resident never (§3.3) — the target. Today's `lazy_idle`
-// does not look at the class (coordinator ruling D3, §17.7): the `…_legacy`
-// twin below.
+// Idle timeout: Resident never.
 #[test]
 fn p_resident_never_idles() {
     let p = Profile::target();
@@ -408,19 +390,8 @@ fn p_resident_never_idles() {
     assert_eq!(sim.st(u), S::Active(pid));
 }
 
-// Today a resident plugin idles like any other: asked for its resources
-// after the idle timeout, and parked when it has none (`park` keeps
-// `resident` in the checkpoint) (D3).
-#[test]
-fn p_resident_idles_legacy() {
-    let mut sim = Sim::new(&Profile::b1());
-    let (u, pid) = sim.in_active(resident("r"));
-    sim.idle_out(pid);
-    assert_eq!(sim.st(u).then(), Some(Then::Standby), "{:?}", sim.st(u));
-}
-
 // Idle timeout: Builtin yes (own process and shared members)
-both! {
+spec! {
     fn p_builtin_idles_like_normal(p) {
         for spec in [builtin_standby("b"), builtin_standby("m").shared(1)] {
             let mut sim = Sim::new(p);
@@ -432,7 +403,7 @@ both! {
 }
 
 // TimeoutStopSec after a failure: 300 ms in both profiles (KEEP)
-both! {
+spec! {
     fn p_failure_stop_grace_300ms(p) {
         let mut sim = Sim::new(p);
         let u = sim.add(resident("r"));
@@ -444,12 +415,12 @@ both! {
     }
 }
 
-// B6 review (§17.15, "A start that times out is not retried"): a built-in
-// clicked while it starts, whose start then times out. The click is
-// answered "could not start" at the timeout, not before; the built-in
-// restarts by its class (`Restart=on-failure`) 3 s after the reap, with no
-// start retry 250 ms after it; and the fifth such timeout within 10 min
-// ends in `Failed{start-limit-hit}`, after which nothing starts it again.
+// B6 review ("A start that times out is not retried"): a built-in clicked while
+// it starts, whose start then times out. The click is answered "could not
+// start" at the timeout, not before; the built-in restarts by its class
+// (`Restart=on-failure`) 3 s after the reap, with no start retry 250 ms after
+// it; and the fifth such timeout within 10 min ends in
+// `Failed{start-limit-hit}`, after which nothing starts it again.
 #[test]
 fn p_builtin_clicked_while_its_start_times_out() {
     let mut sim = target();
@@ -501,13 +472,13 @@ fn p_builtin_clicked_while_its_start_times_out() {
     }
 }
 
-// #154 review (§17.15, "A recording written off the UI thread"): the
+// #154 review ("A recording written off the UI thread"): the
 // adapter writes a standby recording again only while the core still
 // waits for it, `standby_asking` (or `classifying`). A reload's restart
 // (a package RPC) replaces the Standby job, as does the answer itself:
 // a write that comes back after either rewrites nothing, so the reload's
 // `drop_recording` stays done.
-both! {
+spec! {
     fn p_standby_recording_wanted_only_while_asked(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(normal("a"));

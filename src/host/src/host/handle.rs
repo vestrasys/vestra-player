@@ -390,10 +390,8 @@ impl Host {
             }
             Event::Exited(owner) => {
                 // Its stdout closed: its process is gone, so its stop sends
-                // no `runtime.stop` (B4, A14: `exit_sends_no_stop`).
-                if self.supervisor.tunables().exit_sends_no_stop
-                    && let Some(plugin) = self.plugins.get_mut(&owner)
-                {
+                // no `runtime.stop`.
+                if let Some(plugin) = self.plugins.get_mut(&owner) {
                     plugin.set_exited();
                 }
                 // Still running: the process ended without being stopped.

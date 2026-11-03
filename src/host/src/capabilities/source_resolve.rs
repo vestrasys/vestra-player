@@ -70,7 +70,7 @@ impl Capability for SourceResolve {
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "sourceResolvers.respond" => {
-                // The request it answers is no longer in flight (§17.12).
+                // The request it answers is no longer in flight.
                 host.resolution_answered(reply.owner, params["requestId"].as_u64());
                 forward(host, reply, method, params)
             }

@@ -1,4 +1,4 @@
-//! Checkpoints (doc/architecture/supervisor.md §2.2; MOVE of `lazy.rs`'s
+//! Checkpoints (doc/architecture/supervisor.md; MOVE of `lazy.rs`'s
 //! recordings, B2c): what a unit in standby registered, so the next start
 //! replays it instead of starting the plugin (round record
 //! doc/process/rounds/2026-10-lazy-activation.md §2.1). The core decides
@@ -6,14 +6,14 @@
 //! not); the adapter writes and reads the file.
 //!
 //! A standby's recording is written on the `plugin-recorder` thread
-//! (`Writer`, supervisor.md §6.1): a write took up to 8 ms on the UI thread
+//! (`Writer`, supervisor.md): a write took up to 8 ms on the UI thread
 //! in B6's 200-wake storm. The thread writes in order and answers each
 //! write with `Event::Recorded`; the standby (or the classification) it was
 //! written ahead for is decided then, as it was right after the write. Every
 //! other read, write or removal of a recording first waits until the
 //! thread wrote what it was given (`Writer::flush`): what was written before
 //! is what is read back, a removal is never undone by an older write, and
-//! the quit writes its checkpoints after them (R6).
+//! the quit writes its checkpoints after them.
 use super::probe;
 use crate::capabilities::Call;
 use crate::host::Event;
@@ -26,9 +26,9 @@ use std::time::{Duration, Instant};
 /// The recording format.
 pub(crate) const SCHEMA: u32 = 1;
 
-/// What a recording is valid for (§2.1): the installed instance, the
-/// package digest and version; the player version and build are checked
-/// too (a new player records again, the safe side).
+/// What a recording is valid for: the installed instance, the package digest
+/// and version; the player version and build are checked too (a new player
+/// records again, the safe side).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Key {
     pub guid: String,
@@ -47,8 +47,8 @@ pub(crate) struct Recording {
     pub digest: String,
     #[serde(default)]
     pub version: Option<String>,
-    /// Whether it held a live resource at its last `runtime.ready` (§3.4):
-    /// the next start launches it instead of replaying `calls`.
+    /// Whether it held a live resource at its last `runtime.ready`: the next
+    /// start launches it instead of replaying `calls`.
     pub resident_at_ready: bool,
     pub recorded_at: u64,
     pub calls: Vec<Call>,
@@ -91,7 +91,7 @@ fn file(directory: &Path, guid: &str) -> PathBuf {
 }
 
 /// The recording of `key`'s instance, if there is a valid one; a stale or
-/// corrupt one is ignored (the plugin starts as before, §2.2).
+/// corrupt one is ignored (the plugin starts as before).
 pub(crate) fn read(directory: &Path, key: &Key) -> Option<Recording> {
     let path = file(directory, &key.guid);
     let bytes = std::fs::read(&path).ok()?;

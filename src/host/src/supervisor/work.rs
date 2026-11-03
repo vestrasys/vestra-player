@@ -1,8 +1,8 @@
 //! In-flight work per unit (Chrome MV3 "an event in flight extends the
 //! lifetime"): the one "busy" (B3: the Host's busy checks are work items
-//! here, supervisor.md §17.12) and the request deadline (off until B6).
+//! here, supervisor.md) and the request deadline (off until B6).
 //!
-//! Two kinds (coordinator ruling, §17.12 item 2): a host→plugin request
+//! Two kinds (coordinator ruling): a host→plugin request
 //! awaiting the plugin's reply is capped by the class's `request_timeout`
 //! (Chrome MV3: 5 min per event); work the plugin or the Host declares
 //! (`commands.busy`, a settings page busy, a dialog, a package RPC...) keeps
@@ -85,8 +85,7 @@ mod tests {
         assert!(!work.busy());
     }
 
-    /// Declared work keeps the unit busy but has no request deadline
-    /// (§17.12 item 2).
+    /// Declared work keeps the unit busy but has no request deadline.
     #[test]
     fn declared_work_is_busy_without_a_deadline() {
         let mut work = Work::default();

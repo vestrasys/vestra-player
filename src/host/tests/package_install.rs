@@ -58,9 +58,9 @@ fn package(
     (manifest, digest(&files))
 }
 
-/// §15 B6: on-demand start is everyone's, so a plugin that holds nothing
+/// On-demand start is everyone's, so a plugin that holds nothing
 /// live goes to standby at its first ready. These fixtures listen to the
-/// player's state (resident: never in standby, §3.3), so they keep running
+/// player's state (resident: never in standby, supervisor.md §2), so they keep running
 /// as they did with on-demand start off before B6.
 const RESIDENT_CAPABILITIES: [&str; 2] = ["events", "playback.read"];
 

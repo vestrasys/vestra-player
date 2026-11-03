@@ -1,11 +1,11 @@
-//! The core's actions, executed (doc/architecture/supervisor.md §2.2, §5):
-//! each executor is the body of today's code that made the same decision.
-//! Since B2d every start (`Spawn`, after `Verify` or `Replay`) and every
-//! stop (`Terminate`) runs here; the Host announces list changes through
-//! `notify_tick` (`ListChanged` is not run), and the reaper times every
-//! stop's grace and kills at it (A3); a `Kill` cuts it short (a quit, a
-//! stuck process). The runner restart retires the runner before the core
-//! decides (`KillRunner` has nothing left to do).
+//! The core's actions, executed (doc/architecture/supervisor.md): each executor
+//! is the body of today's code that made the same decision. Since B2d every
+//! start (`Spawn`, after `Verify` or `Replay`) and every stop (`Terminate`)
+//! runs here; the Host announces list changes through `notify_tick`
+//! (`ListChanged` is not run), and the reaper times every stop's grace and
+//! kills at it; a `Kill` cuts it short (a quit, a stuck process). The runner
+//! restart retires the runner before the core decides (`KillRunner` has nothing
+//! left to do).
 use super::*;
 use crate::supervisor::{AnswerReason, Cause, JobKind, JobResult, Notice, STUCK_RELOAD};
 
@@ -160,16 +160,15 @@ impl Host {
         }
     }
     /// The core's `Terminate` keeping the run's registrations: an idle run
-    /// (T12, T14; today's `park` after its recording), or from B3 a start
-    /// that timed out (T8/T11, `start_failure_keeps_registrations`; its
-    /// recording is the one it was woken from): stopped, held.
+    /// (today's `park` after its recording), or a start that failed or timed
+    /// out (its recording is the one it was woken from): stopped, held.
     fn park(&mut self, owner: u64, reason: crate::supervisor::StopReason, grace: u64) {
         if self.on_demand.quitting {
             self.terminate(owner, reason, grace);
             return;
         }
-        // A start that timed out on the spawn thread keeps its entry points
-        // (T8, B3 ruling 1): held under the pid the core holds it by.
+        // A start that timed out on the spawn thread keeps its entry points (B3
+        // ruling 1): held under the pid the core holds it by.
         if self.spawn_canceled(owner, reason, grace, true) {
             return;
         }
@@ -192,8 +191,8 @@ impl Host {
             if timed_out {
                 self.record_failure(owner, "activation timed out");
             } else {
-                // A crash kept in standby (T25, B4): not failed, it starts
-                // again on its next use after its hold.
+                // A crash kept in standby (B4): not failed, it starts again on
+                // its next use after its hold.
                 self.failures.edit().remove(&id);
             }
             let plugin = &self.plugins[&owner];
@@ -206,7 +205,7 @@ impl Host {
                 origin.catalog.as_deref(),
             );
             let (warnings, warning) = (self.warnings_of(owner), self.warning_text(owner));
-            // Its entries stay (T8, T25): stopped as a park is.
+            // Its entries stay: stopped as a park is.
             self.stop_run(
                 owner,
                 wire_reason(reason),
@@ -264,9 +263,9 @@ impl Host {
     }
     /// A run that ended by itself (`Event::Exited`, a heap abort) is
     /// deactivating in the core without a `Terminate`: nothing to tell a
-    /// process already gone (A14, coordinator ruling 2026-11-03). Its UI
-    /// cleanup runs here, as the `Terminate` executor's would; its entries
-    /// stay when the core keeps them for standby (T25, B4).
+    /// process already gone (coordinator ruling 2026-11-03). Its UI cleanup
+    /// runs here, as the `Terminate` executor's would; its entries stay when
+    /// the core keeps them for standby (B4).
     pub(crate) fn exit_cleanup(&mut self, owner: u64) {
         if !self.plugins.contains_key(&owner) {
             return;
@@ -289,10 +288,9 @@ impl Host {
             self.terminate(owner, reason, grace);
         }
     }
-    /// The core stops run `owner` (T24, T10/T25 under `legacy()`, a
-    /// package RPC's stop half): today's `lifecycle.rs` `stop`. A failed
-    /// activation the core timed or was told of is recorded as
-    /// `activation_tick` records it.
+    /// The core stops run `owner` (a package RPC's stop half): today's
+    /// `lifecycle.rs` `stop`. A failed activation the core timed or was told of
+    /// is recorded as `activation_tick` records it.
     pub(super) fn terminate(
         &mut self,
         owner: u64,
@@ -322,12 +320,12 @@ impl Host {
         }
         self.stop_process(owner, reason, Duration::from_millis(grace));
     }
-    /// The core starts `unit` as process `to` (T6; today's
-    /// `start_installed`, `start_stopped`, `load`, an operation's
-    /// `load_package`, and a wake's `wake_now`): from standby the held
-    /// entries let go of their catalog, the process starts under the pid
-    /// the core allocated, then the entries move to it (`Rekey`). A spawn
-    /// that fails is recorded as the start that asked for it did.
+    /// The core starts `unit` as process `to` (today's `start_installed`,
+    /// `start_stopped`, `load`, an operation's `load_package`, and a wake's
+    /// `wake_now`): from standby the held entries let go of their catalog, the
+    /// process starts under the pid the core allocated, then the entries move
+    /// to it (`Rekey`). A spawn that fails is recorded as the start that asked
+    /// for it did.
     fn spawn_unit(&mut self, unit: UnitId, to: u64, image: Option<String>) {
         let id = self.unit_id(unit);
         let from = self
@@ -416,10 +414,10 @@ impl Host {
             diag!("lazy: {id} starts for its first run");
         }
     }
-    /// `id`'s process `to` could not be created. A start retried shortly
-    /// (B4: the core's `AutoRestart`) is not recorded as failed; a woken
-    /// unit the core keeps (a retry, or standby, T8) holds its entries under
-    /// `to`, the pid the core holds it by, so a click reaches it.
+    /// `id`'s process `to` could not be created. A start retried shortly (B4:
+    /// the core's `AutoRestart`) is not recorded as failed; a woken unit the
+    /// core keeps (a retry, or standby) holds its entries under `to`, the pid
+    /// the core holds it by, so a click reaches it.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn spawn_failed_now(
         &mut self,
@@ -471,10 +469,10 @@ impl Host {
         }
     }
     /// The core stops run `owner` while the spawn thread still creates its
-    /// process: it is stopped when it comes (`spawned`). A woken unit's
-    /// entries go now (the start they waited for is over), unless the core
-    /// keeps them (`keep`: a start that timed out, T8): then they move to
-    /// `owner`, the pid the core holds the unit by in standby.
+    /// process: it is stopped when it comes (`spawned`). A woken unit's entries
+    /// go now (the start they waited for is over), unless the core keeps them
+    /// (`keep`: a start that timed out): then they move to `owner`, the pid the
+    /// core holds the unit by in standby.
     pub(super) fn spawn_canceled(
         &mut self,
         owner: u64,
@@ -538,10 +536,10 @@ impl Host {
             _ => {}
         }
     }
-    /// A built-in's digest check before its start (T4): the check the
-    /// start-up (or a reload, or a runner restart) began on its thread;
-    /// done now if it is over, else when `poll_verified` sees it end or
-    /// its `VERIFY_WAIT` runs out (`verify_tick`).
+    /// A built-in's digest check before its start: the check the start-up (or a
+    /// reload, or a runner restart) began on its thread; done now if it is
+    /// over, else when `poll_verified` sees it end or its `VERIFY_WAIT` runs
+    /// out (`verify_tick`).
     fn verify_unit(&mut self, unit: UnitId) {
         let id = self.unit_id(unit);
         self.packages_verify_begin(&id, unit);
@@ -579,7 +577,7 @@ impl Host {
         let id = self.unit_id(unit);
         self.on_demand.names.get(&id).cloned().unwrap_or(id)
     }
-    /// An OSD for `unit` (i18n texts here, §5).
+    /// An OSD for `unit` (i18n texts here).
     fn notice(&mut self, unit: UnitId, notice: Notice) {
         let name = self.unit_name(unit);
         let id = self.unit_id(unit);
@@ -599,7 +597,7 @@ impl Host {
                 i18n::tr_args("{} stopped unexpectedly", &json!([name]))
             }
             Notice::StartLimitHit => {
-                // Settings > Plugins lists it failed with why (§3.3).
+                // Settings > Plugins lists it failed with why.
                 if let Some(text) = self.supervisor.failure_of(unit) {
                     diag!("supervisor: {id} start limit hit: {text}");
                     self.failures
@@ -615,7 +613,7 @@ impl Host {
         };
         self.supervisor_osd(unit, text);
     }
-    /// The shared runner's restart (§7.4): today's two OSDs.
+    /// The shared runner's restart: today's two OSDs.
     fn runner_notice(&mut self, notice: Notice) {
         let text = match notice {
             Notice::RunnerFailedOpen => {
@@ -652,13 +650,12 @@ impl Host {
             self.on_demand.last_osd = Some((unit, text, now));
         }
     }
-    /// A held trigger that cannot be delivered (§4.6, from B3:
-    /// `answer_held`, and a trigger refused by the bounds): a command shows
-    /// why in an OSD ("`<name>` is busy" / "could not start" / "is
-    /// disabled"); a resolution request fails at once with that text
-    /// instead of at its 30 s deadline; a drop or a UI callback is dropped
-    /// with a diagnostic line; a wake event never comes here (dropped
-    /// silently by the core).
+    /// A held trigger that cannot be delivered (answered, and a
+    /// trigger refused by the bounds): a command shows why in an OSD ("`<name>`
+    /// is busy" / "could not start" / "is disabled"); a resolution request
+    /// fails at once with that text instead of at its 30 s deadline; a drop or
+    /// a UI callback is dropped with a diagnostic line; a wake event never
+    /// comes here (dropped silently by the core).
     fn held_unanswered(&mut self, unit: UnitId, reason: AnswerReason, payload: &Value) {
         let name = self.unit_name(unit);
         let what = event(payload).unwrap_or("a shown settings page");
@@ -670,7 +667,7 @@ impl Host {
             AnswerReason::Busy => i18n::tr_args("{} is busy", &json!([name])),
             AnswerReason::Disabled => i18n::tr_args("{} is disabled", &json!([name])),
             AnswerReason::CouldNotStart => i18n::tr_args("{} could not start", &json!([name])),
-            // A restart hold after a fault (T20): as its menu items say.
+            // A restart hold after a fault: as its menu items say.
             AnswerReason::Held { .. } => i18n::tr_args(
                 "{} stopped after a fault; try again in a moment",
                 &json!([name]),
@@ -697,7 +694,7 @@ impl Host {
     }
 }
 
-/// The wire's stop reason (`runtime.stop`) of the core's (§7.3, A14).
+/// The wire's stop reason (`runtime.stop`) of the core's.
 fn wire_reason(reason: crate::supervisor::StopReason) -> StopReason {
     use crate::supervisor::StopReason as Core;
     match reason {

@@ -1,13 +1,12 @@
-//! Reap (systemd "control group empty" + `ExecStopPost=`): a deactivating
-//! unit lands in its `then` once its process is reaped **and** the backend
-//! cleaned up after it (T16), or after `STOP_WAIT` 20 s flagged stuck
-//! (T18). The "one instance per data directory" rule is a runnability
-//! condition: a job never starts a unit while it is `Deactivating`, nor
-//! while the process of a stop that landed stuck is still tracked
-//! (`Unit::stopping` outside `Deactivating`): it waits `STOP_WAIT` from its
-//! own request for that process to go, then fails (§17.7). An uninstall's
-//! `RemoveData` waits for that process's reap (today's `data_removals`),
-//! landed or not.
+//! Reap (systemd "control group empty" + `ExecStopPost=`): a deactivating unit
+//! lands in its `then` once its process is reaped **and** the backend cleaned
+//! up after it, or after `STOP_WAIT` 20 s flagged stuck. The "one instance per
+//! data directory" rule is a runnability condition: a job never starts a unit
+//! while it is `Deactivating`, nor while the process of a stop that landed
+//! stuck is still tracked (`Unit::stopping` outside `Deactivating`): it waits
+//! `STOP_WAIT` from its own request for that process to go, then fails (搂17.7).
+//! An uninstall's `RemoveData` waits for that process's reap (today's
+//! `data_removals`), landed or not.
 #![forbid(unsafe_code)]
 
 use super::job::{Cause, JobKind, JobResult};
@@ -24,7 +23,7 @@ pub const STUCK_RELOAD: &str = "the previous process did not stop within 20 s";
 impl<P: Clone> Supervisor<P> {
     /// V8 reported a heap allocation failure on `pid`'s stderr (it aborts
     /// next): its exit is `Oom` if it exits with the heap abort's code
-    /// (§7.3, B4).
+    /// (搂7.3, B4).
     pub fn process_out_of_memory(&mut self, pid: Pid) {
         let Some(&u) = self.by_pid.get(&pid) else {
             return;
@@ -34,10 +33,10 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    /// §5 `process_reaped`: the process is gone (`Event::Reaped`), with
+    /// 搂5 `process_reaped`: the process is gone (`Event::Reaped`), with
     /// its exit code (`None` for a shared-runner member). A run that ended
     /// by itself gets its crash notice now: "ran out of memory" when it
-    /// exited with V8's heap abort after V8's heap line (§7.3, B4).
+    /// exited with V8's heap abort after V8's heap line (搂7.3, B4).
     pub fn process_reaped(&mut self, pid: Pid, status: Option<i32>) {
         let Some(&u) = self.by_pid.get(&pid) else {
             return;
@@ -120,18 +119,13 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    /// Emits an owed `RemoveData` once no process may write the data any
-    /// more: none tracked, or the tracked one reaped (today's
-    /// `data_removals` at `Event::Reaped`; also cleaned up after with
-    /// `remove_data_waits_cleanup`, B4).
+    /// Emits an owed `RemoveData` once no process may write the data any more:
+    /// none tracked, or the tracked one reaped and cleaned up after (搂17.7).
     pub(super) fn flush_data_removal(&mut self, u: UnitId) {
-        let waits = self.tunables.remove_data_waits_cleanup;
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
-        let gone = unit
-            .stopping
-            .is_none_or(|s| s.reaped && (s.backend_cleaned || !waits));
+        let gone = unit.stopping.is_none_or(|s| s.reaped && s.backend_cleaned);
         if !unit.remove_data || !gone {
             return;
         }
@@ -153,7 +147,7 @@ impl<P: Clone> Supervisor<P> {
         self.pending.push(Action::RemoveData { unit: u });
     }
 
-    /// §5 `backend_cleaned` (`Event::BackendCleaned`).
+    /// 搂5 `backend_cleaned` (`Event::BackendCleaned`).
     pub fn backend_cleaned(&mut self, pid: Pid) {
         let Some(&u) = self.by_pid.get(&pid) else {
             return;
@@ -182,7 +176,7 @@ impl<P: Clone> Supervisor<P> {
         } else {
             // The process of a stop that landed stuck went after all: a
             // start waiting for it goes on, an owed `RemoveData` goes first
-            // if it still is owed (§17.7).
+            // if it still is owed (搂17.7).
             unit.stopping = None;
             Timers::cancel(&mut unit.gens, TimerKind::StopWait);
             self.flush_data_removal(u);
@@ -192,7 +186,7 @@ impl<P: Clone> Supervisor<P> {
 
     /// A start that waited `STOP_WAIT` from its request for the process of
     /// a stop that landed stuck: failed with today's text, never kept in
-    /// standby (§17.7).
+    /// standby (搂17.7).
     pub(super) fn fail_stuck(&mut self, u: UnitId) {
         let wake = self.units.get(&u).is_some_and(|unit| {
             matches!(
@@ -212,8 +206,8 @@ impl<P: Clone> Supervisor<P> {
                 notice: super::Notice::CouldNotStart,
             });
         }
-        // Never kept in standby, not even from B3
-        // (`start_failure_keeps_registrations` is for a failed spawn): the
+        // Never kept in standby (a failed start keeps its entry points only
+        // after a failed spawn or a start timeout): the
         // old process may still run, so the next trigger would start a
         // second instance on the same data.
         let Some(unit) = self.units.get_mut(&u) else {
@@ -233,7 +227,7 @@ impl<P: Clone> Supervisor<P> {
         };
     }
 
-    /// T16 / T18: the unit leaves `Deactivating` for its `then`.
+    /// the unit leaves `Deactivating` for its `then`.
     pub(super) fn land(&mut self, u: UnitId, stuck: bool) {
         let Some(unit) = self.units.get_mut(&u) else {
             return;
@@ -244,7 +238,7 @@ impl<P: Clone> Supervisor<P> {
         let now = self.now;
         let kept = unit.stopping.is_some_and(|s| s.kept);
         // Stuck: the process is still tracked (reap / cleanup may come
-        // later), and every start waits for it (`step_start`, §17.7).
+        // later), and every start waits for it (`step_start`, 搂17.7).
         unit.stopping = unit
             .stopping
             .filter(|_| stuck)
@@ -256,7 +250,6 @@ impl<P: Clone> Supervisor<P> {
             job.not_before = Some(now + delay);
         }
         unit.stuck = stuck;
-        unit.first_run = false;
         Timers::cancel(&mut unit.gens, TimerKind::StopGrace);
         Timers::cancel(&mut unit.gens, TimerKind::StopWait);
         let mut actions = Vec::new();
@@ -284,7 +277,7 @@ impl<P: Clone> Supervisor<P> {
                 // Removed even when stuck (today's uninstall removes the
                 // plugin at once); its data goes at the reap of the process
                 // still tracked (`flush_data_removal`, today's
-                // `data_removals`, §17.7).
+                // `data_removals`, 搂17.7).
                 unit.state = UnitState::Inactive;
                 if unit.recorded {
                     actions.push(Action::DropCheckpoint { unit: u });
@@ -323,7 +316,7 @@ impl<P: Clone> Supervisor<P> {
             }
             // A start that waited its own `STOP_WAIT` fails now; one asked
             // later in the stop waits the rest of its 20 s (`step_start`;
-            // today each wait counts from its request, §17.7).
+            // today each wait counts from its request, 搂17.7).
             Some((_, true, created)) if stuck && now >= created + stop_wait => {
                 self.fail_stuck(u);
             }
@@ -333,21 +326,21 @@ impl<P: Clone> Supervisor<P> {
     }
 }
 
-/// The waits for stopped processes (§17.9), driven as the adapter drives
+/// The waits for stopped processes (搂17.9), driven as the adapter drives
 /// them since B2d: every start and stop is a job. The Host's side is pinned
 /// end to end by tests/lifecycle_baseline.rs.
 #[cfg(test)]
 mod tests {
     use super::super::{
-        Action, Busy, Class, Delivery, JobId, JobKind, JobMode, JobResult, Origin, Priority,
-        StopReason, Supervisor, Trigger, Tunables, UnitSpec,
+        Action, Class, Delivery, JobId, JobKind, JobMode, JobResult, Origin, Priority, StopReason,
+        Supervisor, Trigger, Tunables, UnitSpec,
     };
     use super::*;
 
     type S = Supervisor<u32>;
 
     fn new() -> S {
-        Supervisor::new(Tunables::legacy(), 1)
+        Supervisor::new(Tunables::new(8, 16_384).with_other_timers(), 1)
     }
 
     /// The pid of the spawn in `actions`.
@@ -448,10 +441,10 @@ mod tests {
         cause: Cause::Trigger(Priority::Interactive),
     };
 
-    /// A18 (2): what `Host.cleanup` kept for every stop of a run is one
-    /// `Stopping` per unit, gone once its process is reaped and cleaned up
-    /// after: a thousand stops leave nothing behind, and the pid index keeps
-    /// only the last pid.
+    /// (2): what `Host.cleanup` kept for every stop of a run is one `Stopping`
+    /// per unit, gone once its process is reaped and cleaned up after: a
+    /// thousand stops leave nothing behind, and the pid index keeps only the
+    /// last pid.
     #[test]
     fn stop_bookkeeping_is_one_per_unit_and_goes() {
         let mut s = new();
@@ -480,9 +473,9 @@ mod tests {
         assert_eq!(s.unit(u).unwrap().state, UnitState::Inactive);
     }
 
-    /// T18: a stop not reaped within 20 s lands stuck, its process still
-    /// tracked; a start asked later waits 20 s from its own request, and
-    /// goes on once the process goes after all.
+    /// a stop not reaped within 20 s lands stuck, its process still tracked; a
+    /// start asked later waits 20 s from its own request, and goes on once the
+    /// process goes after all.
     #[test]
     fn a_stuck_stop_stays_tracked_until_its_process_goes() {
         let mut s = new();
@@ -562,11 +555,10 @@ mod tests {
         assert_eq!(spawns(&s.run_jobs(0)), [w]);
     }
 
-    /// D13: disable then enable of a running plugin: the enable waits for
-    /// the old process (reaped and cleaned up after), is a package RPC
-    /// meanwhile (today's `packages.reloads` entry: a second enable or a
-    /// reload is `busy`), then starts; with the process not gone 20 s after
-    /// the enable, it fails with today's reload text.
+    /// disable then enable of a running plugin: the enable waits for the old
+    /// process (reaped and cleaned up after), is not `busy` for a second enable
+    /// meanwhile (the merge table), then starts; with the process not gone 20 s
+    /// after the enable, it fails with today's reload text.
     #[test]
     fn disable_then_enable_waits_for_the_old_process() {
         let mut s = new();
@@ -574,9 +566,8 @@ mod tests {
         s.disable(u).unwrap();
         s.run_jobs(0);
         let job = s.enable(u).unwrap();
-        assert!(s.package_busy(u));
-        assert_eq!(s.enable(u), Err(Busy));
-        assert_eq!(s.restart(u, true, None), Err(Busy));
+        assert!(!s.package_busy(u));
+        assert!(s.enable(u).is_ok());
         s.process_reaped(Pid(1), None);
         assert!(spawns(&s.run_jobs(10)).is_empty());
         s.backend_cleaned(Pid(1));
@@ -600,8 +591,8 @@ mod tests {
         );
     }
 
-    /// A reload of a built-in waits for its process, then for its digest
-    /// check (`Activating{Verify}`, T4): until it is over, or its 3 s.
+    /// A reload of a built-in waits for its process, then for its digest check
+    /// (`Activating{Verify}`): until it is over, or its 3 s.
     #[test]
     fn a_reload_waits_for_the_process_and_the_digest_check() {
         let mut s = new();
@@ -701,8 +692,8 @@ mod tests {
     }
 
     /// Today's `data_removals`: an uninstall's data goes at once without a
-    /// process that may write it, or once that was reaped (its cleanup not
-    /// awaited under `legacy()`); else at that process's reap. The
+    /// process that may write it, or once that was reaped and cleaned up
+    /// after; else at that process's reap. The
     /// recording goes at the request (review note B2-4).
     #[test]
     fn uninstall_data_goes_at_the_reap() {

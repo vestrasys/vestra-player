@@ -3,12 +3,12 @@
 //! before success; terminal outcomes never reopen. Callers supply monotonic
 //! milliseconds.
 //!
-//! MOVE (B2a, doc/architecture/supervisor.md §2.1 `activation.rs`) of
+//! MOVE (B2a, doc/architecture/supervisor.md `activation.rs`) of
 //! `host/package_activation.rs`: an `Activation` is the old `Book` entry,
 //! now held by its `Unit` (one per unit, for the run being activated)
 //! instead of a global map keyed by owner. The old `LIMIT` of 64
-//! activations at once (§0 D1) is gone (B3, §17.12): how many plugins start
-//! at once is the start-job limit's (`max_active`, §4.4), and a full queue
+//! activations at once is gone (B3): how many plugins start
+//! at once is the start-job limit's (`max_active`), and a full queue
 //! waits instead of failing the start. The UI requests the Host tracks for
 //! an activation (`Host.activation_ui`) moved with it (`Run::ui_replies`).
 #![forbid(unsafe_code)]
@@ -20,9 +20,8 @@ use serde::Serialize;
 use super::unit::Pid;
 
 pub(super) const MAX_SAFE: u64 = (1_u64 << 53) - 1;
-/// Initial UI requests per activation (the old `Book`'s per-entry bound,
-/// MOVE; the 64 activations at once it shared the constant with are gone
-/// since B3, §17.12).
+/// Initial UI requests per activation (the old `Book`'s per-entry bound, MOVE;
+/// the 64 activations at once it shared the constant with are gone since B3).
 pub(super) const UI_LIMIT: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -135,7 +134,7 @@ impl Activation {
     }
 
     /// `status` as `observe(now_ms)` would leave it, without changing it
-    /// (`packages.list` reads the activation, §9).
+    /// (`packages.list` reads the activation).
     pub(super) fn status_at(&self, now_ms: u64) -> Status {
         match self.phase {
             Phase::Pending { .. } if now_ms >= self.deadline_ms => Status::TimedOut,
@@ -248,7 +247,7 @@ mod tests {
     impl Default for Book {
         fn default() -> Self {
             Self {
-                sup: Supervisor::new(Tunables::legacy(), 1),
+                sup: Supervisor::new(Tunables::new(8, 16_384), 1),
             }
         }
     }
@@ -369,8 +368,8 @@ mod tests {
             book.begin(owner, 100).unwrap();
         }
         assert_eq!(book.begin(1, 100), Err(Error::Conflict));
-        // B3 (§15: "the 64-plugin ceiling is gone"): a 65th activation is
-        // taken; the per-activation bound on UI requests stays.
+        // B3 ("the 64-plugin ceiling is gone"): a 65th activation is taken; the
+        // per-activation bound on UI requests stays.
         book.begin(65, 100).unwrap();
         for registration in 1..=64 {
             book.ui_begin(1, registration, 1).unwrap();
@@ -415,11 +414,11 @@ mod tests {
         );
     }
 
-    /// B0 (doc/architecture/supervisor.md §0 D1, D3) pinned at most 64
-    /// activations at once, built-ins included, with a terminal one keeping
-    /// its place until `activation_end`. Flipped in B3 (§15 B3: "the
-    /// 64-plugin ceiling is gone"; §17.12): a terminal activation stays
-    /// readable until it is ended, and holds no place.
+    /// B0 (doc/architecture/supervisor.md) pinned at most 64 activations at
+    /// once, built-ins included, with a terminal one keeping its place until
+    /// `activation_end`. Flipped in B3 ("the 64-plugin ceiling is gone"): a
+    /// terminal activation stays readable until it is ended, and holds no
+    /// place.
     #[test]
     fn b3_terminal_entries_take_no_place_and_more_than_64_activate() {
         let mut book = Book::default();
@@ -436,13 +435,13 @@ mod tests {
         assert_eq!(book.status(1, 102).unwrap(), Status::Unknown);
     }
 
-    /// B2a (A18 leak 1): the activation is the unit's, one per unit. A run
-    /// whose spawn failed and was never ended is replaced by the unit's
-    /// next start's activation (its pid unmapped). (Until B3 this also
-    /// showed it took no second place under `LIMIT`; §17.12.)
+    /// B2a (leak 1): the activation is the unit's, one per unit. A run whose
+    /// spawn failed and was never ended is replaced by the unit's next start's
+    /// activation (its pid unmapped). (Until B3 this also showed it took no
+    /// second place under `LIMIT`;.)
     #[test]
     fn a_units_next_activation_replaces_a_stale_one_without_taking_a_place() {
-        let mut sup = Supervisor::<u32>::new(Tunables::legacy(), 1);
+        let mut sup = Supervisor::<u32>::new(Tunables::new(8, 16_384), 1);
         let units = (0..64)
             .map(|n| sup.load_unit(&format!("a.fixture-{n:03}")))
             .collect::<Vec<_>>();
@@ -471,7 +470,7 @@ mod tests {
     /// `Host.activation_ui`): taken once, gone with the activation.
     #[test]
     fn ui_replies_follow_the_activation() {
-        let mut sup = Supervisor::<u32>::new(Tunables::legacy(), 1);
+        let mut sup = Supervisor::<u32>::new(Tunables::new(8, 16_384), 1);
         let u = sup.load_unit("a.one");
         let pid = sup.alloc_pid();
         sup.activation_begin(u, pid, 100).unwrap();

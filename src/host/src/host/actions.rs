@@ -10,7 +10,7 @@ impl Host {
         let execution = match self.commands.resolve_execution(owner, id) {
             Ok(execution) => execution,
             Err(error) => {
-                // A plugin held after a fault (B4, T20): a click shows why,
+                // A plugin held after a fault (supervisor.md §7): a click shows why,
                 // as a key does.
                 if let commands::CommandError::Disabled {
                     reason: Some(reason),

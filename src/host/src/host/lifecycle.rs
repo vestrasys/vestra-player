@@ -73,8 +73,8 @@ impl Host {
                     _ => "activation timed out".into(),
                 };
                 self.record_failure(owner, &message);
-                // The core stops it (T10; T11 when it timed out, under
-                // `legacy()` without a retry): `Terminate`.
+                // The core stops it (when it timed out too, never
+                // retried): `Terminate`.
                 self.supervisor.set_now(now);
                 self.supervisor.process_failed(Pid(owner), message);
                 self.supervisor_run();
@@ -103,7 +103,7 @@ impl Host {
     /// `plugin` runs as `owner` (`plugins`, and its unit in the
     /// supervisor's unit table: `unit_started`).
     pub(crate) fn add_plugin(&mut self, owner: u64, plugin: Plugin) {
-        self.unit_started(&plugin.manifest.id, owner);
+        self.unit_started(owner);
         self.plugins.insert(owner, plugin);
         self.plugins_revision += 1;
     }
@@ -229,8 +229,8 @@ impl Host {
         self.stopped_anyway(owner);
     }
     /// A run ended or failed by itself (`Event::Exited`, a runtime fault):
-    /// the core's `process_exited` (T25; under `legacy()` every class lands
-    /// failed with `text`, today's `disable(Failed)`).
+    /// the core's `process_exited` (the class's `Restart=` says where
+    /// it lands; `text` is its failure).
     pub(crate) fn process_ended(
         &mut self,
         owner: u64,
@@ -241,7 +241,7 @@ impl Host {
         self.supervisor.set_now(now);
         self.supervisor.process_exited(Pid(owner), cause, text);
         self.supervisor_run();
-        // An exit sends no stop (A14): its run is cleaned up here.
+        // An exit sends no stop: its run is cleaned up here.
         self.exit_cleanup(owner);
         self.stopped_anyway(owner);
     }
@@ -265,7 +265,7 @@ impl Host {
     }
     /// `stop_process`; `park`: its recordable registrations stay, marked
     /// recorded, whatever the reason (a park, or since B4 a crash or a
-    /// failed start kept in standby: T8, T25).
+    /// failed start kept in standby).
     pub(crate) fn stop_run(&mut self, owner: u64, reason: StopReason, grace: Duration, park: bool) {
         // Process exit commonly follows an explicit disable. The first revoke
         // owns cleanup: a duplicate notification must not cancel its id=0
@@ -370,10 +370,9 @@ impl Host {
         // Waiting for graceful disposal/killing belongs off the Slint event
         // loop: the reaper thread's, which reports `Event::Reaped`; until
         // then (and the playback worker's `BackendCleaned`) the unit is
-        // deactivating, and every start of it waits (supervisor.md §17.9).
+        // deactivating, and every start of it waits (supervisor.md).
         if let Some(mut plugin) = self.plugins.remove(&owner) {
             self.plugins_revision += 1;
-            self.unit_stopped(&plugin.manifest.id, owner);
             plugin.set_stop_reason(reason);
             plugin.set_stop_wait(grace);
             self.reaper.reap(owner, plugin);

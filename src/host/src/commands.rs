@@ -350,7 +350,7 @@ pub struct Registry {
     /// another declaration or manifest: what `bindings.list` shows of the
     /// registry. Not on a state update, nor when a woken plugin's commands
     /// move to its new owner generation (`rekey`) and it registers them
-    /// again as they were (supervisor.md §6.1).
+    /// again as they were (supervisor.md).
     listed: u64,
     sequence: u64,
     /// Lazy activation (doc/process/rounds/2026-10-lazy-activation.md §2):
@@ -376,7 +376,7 @@ pub struct Registry {
     max_commands: Option<usize>,
     /// Owners whose commands show disabled with this reason, whatever
     /// their state: a plugin held in standby after a crash until its
-    /// restart hold is over (supervisor.md T20, §12.1; B4). Menus show
+    /// restart hold is over (supervisor.md; B4). Menus show
     /// them greyed out, and a key or click shows the reason.
     held: BTreeMap<OwnerGeneration, String>,
 }
@@ -984,7 +984,7 @@ impl Registry {
 
     /// `owner`'s commands show disabled with `reason` (`None`: as their
     /// state says again), whatever their state: a crashed plugin held in
-    /// standby until its restart hold is over (supervisor.md T20; B4).
+    /// standby until its restart hold is over (supervisor.md; B4).
     /// Whether anything changed.
     pub fn set_held(&mut self, owner: OwnerGeneration, reason: Option<String>) -> bool {
         let changed = match reason {
@@ -1347,7 +1347,7 @@ mod tests {
         Declaration::new(path.last().unwrap(), path)
     }
 
-    /// `bindings.list`'s gate (supervisor.md §6.1): the listed revision
+    /// `bindings.list`'s gate (supervisor.md): the listed revision
     /// moves when a command comes, goes or changes its declaration, not
     /// when a woken plugin's commands move to their new owner and are
     /// registered again as they were, nor on a state update.
@@ -1440,7 +1440,7 @@ mod tests {
         }
     }
 
-    /// A plugin held after a fault (supervisor.md T20; B4): its commands
+    /// A plugin held after a fault (supervisor.md; B4): its commands
     /// show disabled with the reason in the menu, and are refused with it,
     /// until the hold is released; a revoke ends it too.
     #[test]

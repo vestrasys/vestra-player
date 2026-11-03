@@ -1,18 +1,15 @@
-//! B3 spec tests (batch B3: "queue limits live"), written from the design
-//! tables, not from the core: supervisor.md §4.4 (lanes, priorities,
-//! `max_active`, Interactive reserve, built-ins first, bounds), §4.5
-//! (deadlines), §4.6 (answers), §13 / §15 B3 rows, supervisor-loop.md §4 B3
-//! ("LIMIT 64 removed; wake failures keep registrations; 200-wake storm"),
-//! rulings §17.2 Q17/Q18, §17.6 R7/F1, §17.7 items 10 and 13, and the
+//! Start-limit spec tests (queue limits), written from the design tables,
+//! not from the core: lanes, priorities, `max_active`, the Interactive
+//! reserve, built-ins first, bounds, deadlines and answers (supervisor.md
+//! §5 "Start order and limits", §4), supervisor-loop.md §4 B3 ("LIMIT 64
+//! removed; wake failures keep registrations; 200-wake storm"), and the
 //! coordinator's ruling on the request timeout's scope (blackboard
 //! `doc/process/rounds/2026-11-supervisor.md`, Open items).
 //!
-//! Everything runs under `Profile::b3()` (`Tunables::legacy().with_b3(8)`):
-//! `max_active` = min(4, max(2, 8 / 2)) = 4, Interactive cap 4 + 2 = 6
-//! (§17.2 Q17), backlog 64, lane 256, today's timeouts (start 15 s, no
-//! request timeout before B6). The request-timeout scope tests use
-//! `Profile::target()`, the only preset with the 5 min value (B6), because
-//! the ruling's accounting is B3's.
+//! Everything runs under `Profile::other_timers()`: `max_active` =
+//! min(4, max(2, 8 / 2)) = 4, Interactive cap 4 + 2 = 6, backlog 64, lane
+//! 256, start timeout 15 s, no request timeout. The request-timeout scope
+//! tests use `Profile::target()`, which has the 5 min value.
 //!
 //! Names: `c_` concurrency and reserve, `o_` order (priority, FIFO, lanes),
 //! `bf_` built-ins first and outside the limit, `q_` backlog bound and
@@ -23,11 +20,11 @@ use std::collections::{BTreeMap, VecDeque};
 use super::*;
 
 fn b3() -> Sim {
-    Sim::new(&Profile::b3())
+    Sim::new(&Profile::other_timers())
 }
 
 const MAX: usize = 4;
-/// Interactive cap: `max_active` + reserve 1 + overrun 1 (§17.2 Q17).
+/// Interactive cap: `max_active` + reserve 1 + overrun 1.
 const ICAP: usize = MAX + 2;
 const START: Ms = 15_000;
 
@@ -48,7 +45,7 @@ fn spawned_units(sim: &Sim, acts: &[Act]) -> Vec<UnitId> {
 }
 
 /// Third-party units of `us` holding a running Start (`Activating{Spawn |
-/// Ready}`: a slot from `run_jobs` until `process_ready`, §4.4 / T9).
+/// Ready}`: a slot from `run_jobs` until `process_ready`).
 fn starting(sim: &Sim, us: &[UnitId]) -> usize {
     us.iter()
         .filter(|u| matches!(sim.st(**u), S::Spawn(_) | S::Ready(_)))
@@ -91,13 +88,13 @@ fn is_waiting(sim: &Sim, u: UnitId) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// c_: start-job concurrency and the Interactive reserve (§4.4, Q17)
+// c_: start-job concurrency and the Interactive reserve
 // ---------------------------------------------------------------------------
 
 #[test]
 fn c_max_active_is_four_at_eight_cores() {
-    let t = Tunables::legacy().with_b3(8);
-    assert_eq!(t.max_active, Some(4));
+    let t = Tunables::new(8, 16_384);
+    assert_eq!(t.max_active, 4);
     assert_eq!(max_active_for(1), 2, "max(2, …)");
     assert_eq!(max_active_for(4), 2);
     assert_eq!(max_active_for(6), 3);
@@ -184,8 +181,8 @@ fn c_event_waits_until_total_starts_drop_below_max() {
     assert_eq!(spawned_units(&sim, &a), vec![e]);
 }
 
-// A slot is held from `run_jobs` until `process_ready` (T9), and freed by a
-// failed start (T8) as well.
+// A slot is held from `run_jobs` until `process_ready`, and freed by a failed
+// start as well.
 #[test]
 fn c_failed_spawn_frees_its_slot() {
     let mut sim = b3();
@@ -202,7 +199,7 @@ fn c_failed_spawn_frees_its_slot() {
 }
 
 // ---------------------------------------------------------------------------
-// o_: priority order and FIFO within a lane (§4.4, §17.4)
+// o_: priority order and FIFO within a lane
 // ---------------------------------------------------------------------------
 
 /// Spawn order while one running start at a time becomes ready (oldest
@@ -251,7 +248,7 @@ fn o_drain_order_interactive_event_background_first_run_fifo() {
 }
 
 // ---------------------------------------------------------------------------
-// bf_: built-ins first (`Installed`, R7) and outside `max_active` (A7, Q18)
+// bf_: built-ins first (`Installed`) and outside `max_active`
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -284,21 +281,24 @@ fn bf_verifying_builtin_holds_background() {
     sim.run();
     assert_eq!(sim.st(b), S::Verify);
     assert!(is_waiting(&sim, n));
-    sim.at(T0 + VERIFY_WAIT); // own process (A6), still not active
+    sim.at(T0 + VERIFY_WAIT); // own process, still not active
     assert!(is_waiting(&sim, n));
 }
 
-// "until it is active" (§4.4): a built-in whose start fails has no Start job
-// installed any more, so it holds nobody back.
+// "until it is active": a built-in whose start fails has no Start job installed
+// any more, so it holds nobody back.
 #[test]
 fn bf_failed_builtin_start_releases_background() {
     let mut sim = b3();
     let b = sim.add(builtin("b"));
     let n = sim.add(first_run("n"));
     sim.run();
-    let pid = sim.pid(b);
-    let acts = sim.spawned(pid, false);
-    assert_eq!(spawned_units(&sim, &acts), vec![n]);
+    // Its start retries hold the background start back; the last failure
+    // releases it.
+    let acts = sim.spawn_fails(b);
+    assert!(sim.st(b).is_failed(), "{:?}", sim.st(b));
+    let last = spawns(&acts).last().copied().expect("a spawn");
+    assert_eq!(sim.unit_of(last), Some(n));
 }
 
 #[test]
@@ -359,7 +359,7 @@ fn bf_builtin_wake_is_outside_the_limit() {
 }
 
 // ---------------------------------------------------------------------------
-// q_: backlog ≤ 64, the 65th trigger, answers (§4.4 Bounds, §4.6, A9)
+// q_: backlog ≤ 64, the 65th trigger, answers (Bounds)
 // ---------------------------------------------------------------------------
 
 /// The new (65th) trigger is the one refused; the 64 held ones are kept and
@@ -408,7 +408,7 @@ fn q_sixty_fifth_trigger_of_each_kind() {
         } else {
             vec![]
         };
-        assert_eq!(answers(&sim.log), want, "{name}: §4.6");
+        assert_eq!(answers(&sim.log), want, "{name}: answers");
     }
 }
 
@@ -463,12 +463,12 @@ fn q_full_lane_answers_an_interactive_trigger_busy() {
 }
 
 // ---------------------------------------------------------------------------
-// d_: deadlines (§4.5)
+// d_: deadlines
 // ---------------------------------------------------------------------------
 
 /// Waiting for a slot has no deadline and no answer (no cap for interactive
-/// triggers either, §12.1), and no "Starting <name>…" while it waits; once
-/// it has a slot the notice is due 400 ms after its `Spawn` (§17.7 item 13).
+/// triggers either), and no "Starting <name>…" while it waits; once it has a
+/// slot the notice is due 400 ms after its `Spawn`.
 #[test]
 fn d_interactive_waiting_for_a_slot_is_neither_answered_nor_announced() {
     let mut sim = b3();
@@ -534,8 +534,8 @@ fn d_start_timeout_counts_from_the_spawn_after_a_slot_wait() {
     );
 }
 
-/// `TimeoutStartSec` per class under B3 (§3.3, §11: 15 s for every class
-/// until B6; a development load keeps its own 1–120 s).
+/// `TimeoutStartSec` per class under B3 (15 s for every class until B6; a
+/// development load keeps its own 1–120 s).
 #[test]
 fn d_start_timeout_per_class() {
     let cases: [(&str, Spec, Ms); 3] = [
@@ -574,8 +574,7 @@ fn d_start_timeout_per_class() {
 }
 
 // ---------------------------------------------------------------------------
-// k_: wake failures keep registrations (T8 from B3, §17.2 Q7, §17.6 F1,
-// §17.7 item 10)
+// k_: wake failures keep registrations
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -596,15 +595,8 @@ fn k_start_timeout_of_a_wake_keeps_registrations_and_answers() {
     assert!(matches!(sim.st(u), S::Standby { .. }), "{:?}", sim.st(u));
     assert!(!has(&acts, "Revoke"), "{:?}", names(&acts));
     assert_eq!(answers(&acts), vec![(1, Why::CouldNotStart)]);
-    assert!(
-        acts.iter().any(|a| could_not_start_unit(a) == Some(u)),
-        "{:?}",
-        names(&acts)
-    );
-    // The next click starts it again.
-    let holder = sim.pid(u);
-    assert!(matches!(sim.wake(holder, cmd(3)), Delivery::Started));
-    let a = sim.run();
+    // After the restart hold the held wake event starts it again.
+    let a = sim.past_hold(u);
     assert!(spawned_units(&sim, &a).contains(&u));
 }
 
@@ -615,10 +607,10 @@ fn k_spawn_failure_keeps_registrations_and_the_next_click_starts_again() {
     sim.settle();
     sim.wake(h, cmd(1));
     sim.run();
-    let pid = sim.pid(u);
-    let acts = sim.spawned(pid, false);
+    let acts = sim.spawn_fails(u);
     assert!(matches!(sim.st(u), S::Standby { .. }), "{:?}", sim.st(u));
     assert!(acts.iter().filter_map(revoked).next().is_none());
+    sim.past_hold(u);
     let holder = sim.pid(u);
     assert!(matches!(sim.wake(holder, cmd(2)), Delivery::Started));
     let acts = sim.run();
@@ -628,14 +620,13 @@ fn k_spawn_failure_keeps_registrations_and_the_next_click_starts_again() {
     assert_eq!(deliveries(&sim.ready(pid)), vec![2]);
 }
 
-/// F1: never kept in standby for a unit without a standby checkpoint.
+/// never kept in standby for a unit without a standby checkpoint.
 #[test]
 fn k_resident_spawn_failure_is_not_kept_in_standby() {
     let mut sim = b3();
     let u = sim.add(resident("r"));
     sim.run();
-    let pid = sim.pid(u);
-    sim.spawned(pid, false);
+    sim.spawn_fails(u);
     assert!(sim.st(u).is_failed(), "{:?}", sim.st(u));
 }
 
@@ -679,6 +670,15 @@ fn drain(sim: &mut Sim, units: Vec<UnitId>, fail: impl Fn(UnitId) -> bool) -> St
             a
         };
         pending.extend(spawns(&acts));
+        // Start retries of failed spawns are due a moment later.
+        while pending.is_empty()
+            && let Some(next) = sim
+                .next_deadline()
+                .filter(|t| *t > sim.now && *t < sim.now + 5_000)
+        {
+            let acts = sim.at(next);
+            pending.extend(spawns(&acts));
+        }
     }
     assert!(spawns(&sim.run()).is_empty());
     st
@@ -736,9 +736,9 @@ fn s_two_hundred_mixed_wakes_respect_limit_and_reserve() {
     assert!(ans.is_empty());
 }
 
-/// Every trigger is either delivered once or answered once (§4.6: a
-/// command "could not start"; a wake event dropped silently); a failed wake
-/// keeps its entry points (no `Revoke`).
+/// Every trigger is either delivered once or answered once (a command "could
+/// not start"; a wake event dropped silently); a failed wake keeps its entry
+/// points (no `Revoke`).
 #[test]
 fn s_storm_with_failures_delivers_or_answers_every_trigger() {
     let mut sim = b3();
@@ -813,7 +813,7 @@ fn s_two_hundred_wakes_to_one_unit() {
 }
 
 // ---------------------------------------------------------------------------
-// w_: request accounting (§4.5 Request row, §13 B3 `work.rs`) and the
+// w_: request accounting (Request row, `work.rs`) and the
 // timeout scope ruling
 // ---------------------------------------------------------------------------
 
@@ -829,7 +829,7 @@ fn answer_idle(sim: &mut Sim, pid: Pid, acts: &[Act]) -> Vec<(Ms, bool, String, 
 
 #[test]
 fn w_work_in_flight_keeps_the_unit_out_of_standby() {
-    let p = Profile::b3();
+    let p = Profile::other_timers();
     let mut sim = b3();
     let (u, pid) = sim.in_active(normal("a"));
     sim.begin_work_kind(pid, 1);
@@ -845,7 +845,7 @@ fn w_work_in_flight_keeps_the_unit_out_of_standby() {
 
 #[test]
 fn w_work_is_counted_per_request() {
-    let p = Profile::b3();
+    let p = Profile::other_timers();
     let mut sim = b3();
     let (u, pid) = sim.in_active(normal("a"));
     sim.begin_work_kind(pid, 1);
@@ -918,7 +918,7 @@ fn w_declared_busy_has_no_request_cap() {
 }
 
 // ---------------------------------------------------------------------------
-// x_: `LIMIT 64` removed (§13 B3, supervisor-loop.md §4)
+// x_: `LIMIT 64` removed (supervisor-loop.md §4)
 // ---------------------------------------------------------------------------
 
 #[test]

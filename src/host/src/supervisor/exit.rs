@@ -1,5 +1,5 @@
-//! Exit causes (systemd `Result=`, §7.3). Every cause maps onto the wire
-//! stop reason `Failed` (A14).
+//! Exit causes (systemd `Result=`). Every cause maps onto the wire stop reason
+//! `Failed`.
 #![forbid(unsafe_code)]
 
 use super::unit::StopReason;
@@ -17,8 +17,8 @@ pub enum ExitCause {
     /// Runtime fault, malformed line, uncaught exception (`signal`).
     Fault,
     /// V8 heap abort (`oom-kill`): the process exited with
-    /// [`HEAP_ABORT_STATUS`] after V8's heap-out-of-memory line on its
-    /// stderr (B4, §7.3).
+    /// [`HEAP_ABORT_STATUS`] after V8's heap-out-of-memory line on its stderr
+    /// (B4).
     Oom,
     /// `TimeoutStartSec` (`timeout`).
     StartTimeout,
@@ -31,17 +31,17 @@ pub enum ExitCause {
     Refused,
 }
 impl ExitCause {
-    /// The wire stop reason (all 7 kept, A14).
+    /// The wire stop reason (all 7 kept).
     pub fn stop_reason(self) -> StopReason {
         StopReason::Failed
     }
-    /// Retried / restarted per policy: all but `Refused` and an own
-    /// process's `Transport` (§7.3: `Failed`, KEEP; a member's goes to
-    /// its runner group, which restarts; coordinator ruling 2026-11-03).
+    /// Retried / restarted per policy: all but `Refused` and an own process's
+    /// `Transport` (`Failed`, KEEP; a member's goes to its runner group, which
+    /// restarts; coordinator ruling 2026-11-03).
     pub fn restartable(self) -> bool {
         !matches!(self, ExitCause::Refused | ExitCause::Transport)
     }
-    /// A crash notice is shown (T25).
+    /// A crash notice is shown.
     pub fn notifies(self) -> bool {
         matches!(
             self,

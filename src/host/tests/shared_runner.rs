@@ -35,9 +35,9 @@ fn builtin(root: &Path, id: &str, body: &str, tamper: bool) -> serde_json::Value
 
 /// `builtin` with these manifest capabilities.
 ///
-/// §15 B6: on-demand start is everyone's, so a built-in that holds nothing
+/// On-demand start is everyone's, so a built-in that holds nothing
 /// live goes to standby at its first ready. These fixtures listen to the
-/// player's state (resident: never in standby, §3.3), so they keep running
+/// player's state (resident: never in standby, supervisor.md §2), so they keep running
 /// in the shared runner as they did with on-demand start off before B6.
 fn builtin_with(
     root: &Path,
@@ -172,8 +172,8 @@ fn built_ins_share_one_runner_and_a_restart_keeps_their_session_values() {
 }
 
 /// Three restarts within a minute: own processes for the rest of the run.
-/// `VESTRA_SHARED=0`: own processes from the start. Since B4 (§15 B4,
-/// §7.4) only the first restart in the window is immediate, the second
+/// `VESTRA_SHARED=0`: own processes from the start. Since B4 (supervisor.md
+/// §7) only the first restart in the window is immediate, the second
 /// waits 3 s and the third 6 s, so the run is longer.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
@@ -347,7 +347,7 @@ fn log_stop(id: &str) -> String {
     )
 }
 
-/// §15 B6: `main` made resident (it listens to the player's state at the
+/// Since B6 `main` made resident (it listens to the player's state at the
 /// start of `activate(plugin)`), so the plugin keeps running as it did with
 /// on-demand start off before B6; with the capabilities that needs.
 fn resident(main: &str) -> String {
@@ -493,7 +493,7 @@ fn every_stop_tells_the_plugin_why() {
             &["plugins.manage"],
         ),
     ];
-    // §15 B6: no `VESTRA_LAZY=0` any more; the plugins are resident.
+    // The plugins are resident, so they keep running.
     let log = run(&plugins, root.path(), 12, &[]);
     assert!(!log.contains("manage failed"), "{log}");
     for expected in [

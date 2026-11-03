@@ -1,6 +1,6 @@
 //! A value with a revision that moves on every change: `packages.changed`
 //! rebuilds `packages.list` only when one of its sources moved
-//! (`binding_manager.rs` `notify_tick`, supervisor.md §6.1). Reading goes
+//! (`binding_manager.rs` `notify_tick`, supervisor.md). Reading goes
 //! through `Deref`; changing only through `edit`, so a change that skips the
 //! revision does not compile.
 #![forbid(unsafe_code)]

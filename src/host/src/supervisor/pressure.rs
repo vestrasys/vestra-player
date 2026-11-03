@@ -1,6 +1,6 @@
 //! Memory pressure and standby candidate order (systemd-oomd +
-//! `OOMScoreAdjust=`; Android LMK importance/LRU). Busy, built-in and
-//! resident units are never candidates (A13).
+//! `OOMScoreAdjust=`; Android LMK importance/LRU). Busy, built-in and resident
+//! units are never candidates.
 #![forbid(unsafe_code)]
 
 use super::job::Priority;
@@ -60,8 +60,8 @@ pub(super) fn candidates<'a, P: 'a>(
     list.into_iter().map(|(_, _, u)| u).collect()
 }
 
-/// Whether a start of this priority may cause budget standby (event wakes
-/// never do, §4.4).
+/// Whether a start of this priority may cause budget standby (event wakes never
+/// do).
 pub(super) fn may_reclaim(priority: Priority) -> bool {
     priority != Priority::Event
 }

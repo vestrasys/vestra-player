@@ -1,17 +1,17 @@
-//! Deadlines per job, design §4.5 and timer kinds §6.2, with explicit `now`
-//! values: each timer fires at its due time, never one millisecond before,
-//! and `next_deadline()` reports the earliest one.
+//! Deadlines per job, design and timer kinds, with explicit `now` values: each
+//! timer fires at its due time, never one millisecond before, and
+//! `next_deadline` reports the earliest one.
 use super::*;
 
 #[test]
 fn d_next_deadline_none_when_nothing_is_pending() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     assert_eq!(sim.next_deadline(), None);
     sim.in_standby(normal("a"));
     assert_eq!(sim.next_deadline(), None, "a unit in standby has no timer");
 }
 
-both! {
+spec! {
     fn d_next_deadline_is_the_earliest(p) {
         let mut sim = Sim::new(p);
         sim.in_active(normal("a")); // idle due at t0 + idle
@@ -21,14 +21,14 @@ both! {
         sim.run(); // start timeout due at t0 + 1 s + start
         sim.spawned(sim.pid(u), true);
         sim.after(STARTING_OSD); // past any "Starting…" OSD timer
-        // B1: 16 s start < 60 s idle; target: 30 s idle < 61 s start.
+        // Target: 30 s idle < 61 s start.
         let want = (t0 + p.idle).min(t0 + 1_000 + p.start_timeout);
         assert_eq!(sim.next_deadline(), Some(want));
     }
 }
 
 // Start, waiting for the previous process: 20 s from the stop
-both! {
+spec! {
     fn d_start_waiting_for_previous_process_fails_at_20s(p) {
         let mut sim = Sim::new(p);
         let (u, _) = sim.in_active(normal("a"));
@@ -43,10 +43,10 @@ both! {
     }
 }
 
-// Start, Activating{Verify}: 3 s → own process (also T5)
+// Start, Activating{Verify}: 3 s → own process (also)
 #[test]
 fn d_verify_deadline_is_three_seconds() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(builtin("b").shared(1).verify());
     sim.run();
     assert_eq!(sim.next_deadline(), Some(T0 + VERIFY_WAIT));
@@ -57,7 +57,7 @@ fn d_verify_deadline_is_three_seconds() {
 }
 
 // Start, Activating{Spawn|Ready}: TimeoutStartSec (15 s → 60 s)
-both! {
+spec! {
     fn d_start_timeout_from_spawn(p) {
         let mut sim = Sim::new(p);
         let u = sim.add(resident("r"));
@@ -69,8 +69,8 @@ both! {
     }
 }
 
-// Development: `--plugin` start timeout 1–120 s kept (A16)
-both! {
+// Development: `--plugin` start timeout 1–120 s kept
+spec! {
     fn d_development_start_timeout_120s(p) {
         let mut sim = Sim::new(p);
         let u = sim.add(dev("d", 120_000));
@@ -124,7 +124,7 @@ fn d_waiting_for_a_slot_has_no_deadline() {
 // "Starting <name>…" OSD 400 ms after a triggered start
 #[test]
 fn d_starting_osd_after_400ms() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, h) = sim.in_standby(normal("a"));
     sim.settle();
     sim.wake(h, cmd(1));
@@ -137,7 +137,7 @@ fn d_starting_osd_after_400ms() {
 
 #[test]
 fn d_no_starting_osd_when_ready_within_400ms() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, h) = sim.in_standby(normal("a"));
     sim.settle();
     sim.wake(h, cmd(1));
@@ -150,8 +150,8 @@ fn d_no_starting_osd_when_ready_within_400ms() {
     assert!(!has(&sim.at(t + STARTING_OSD), "Notify"));
 }
 
-// Stop, Deactivating{Term}: TimeoutStopSec → Kill (T17); standby 2 s → 5 s
-both! {
+// Stop, Deactivating{Term}: TimeoutStopSec → Kill; standby 2 s → 5 s
+spec! {
     fn d_standby_stop_grace(p) {
         let mut sim = Sim::new(p);
         let (_, pid) = sim.in_active(normal("a"));
@@ -162,8 +162,8 @@ both! {
     }
 }
 
-// Stop, reap + backend cleanup: 20 s → T18
-both! {
+// Stop, reap + backend cleanup: 20 s →
+spec! {
     fn d_reap_and_cleanup_deadline_20s(p) {
         let mut sim = Sim::new(p);
         let (u, _) = sim.in_active(normal("a"));
@@ -179,13 +179,11 @@ both! {
     }
 }
 
-// Standby, resources answer: "today's lazy.asking wait (value MOVE)" →
-// treat as busy, re-arm idle.
-// ANSWERED (supervisor.md §17.2 Q21), was a design question: today's `lazy.asking` has no timeout (an unanswered
-// `owner.resources` keeps the owner out of idle checks until an answer
-// arrives), so there is no value to MOVE. This test only checks that an
-// unanswered query never stops the unit.
-both! {
+// Standby, resources answer: "today's lazy.asking wait (value MOVE)" → treat as busy, re-arm idle. ANSWERED
+// (supervisor.md), was a design question: today's `lazy.asking` has no timeout (an unanswered `owner.resources`
+// keeps the owner out of idle checks until an answer arrives), so there is no value to MOVE. This test only
+// checks that an unanswered query never stops the unit.
+spec! {
     fn d_unanswered_resources_query_never_stops(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(normal("a"));
@@ -197,7 +195,7 @@ both! {
 }
 
 // Request (in-flight work): 5 min from B6, off before
-both! {
+spec! {
     fn d_request_timeout(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(normal("a"));
@@ -235,7 +233,7 @@ fn d_request_timeout_cleared_by_end_work() {
 }
 
 // Idle timer re-armed lazily by `touch`
-both! {
+spec! {
     fn d_touch_pushes_idle_deadline(p) {
         let mut sim = Sim::new(p);
         let (_, pid) = sim.in_active(normal("a"));
@@ -253,7 +251,7 @@ both! {
 #[test]
 fn d_shutdown_single_deadline() {
     for budget in [1_000, 300] {
-        let mut sim = Sim::new(&Profile::b1());
+        let mut sim = Sim::new(&Profile::other_timers());
         let (_, a) = sim.in_active(normal("a"));
         sim.after(100);
         let (_, b) = sim.in_active(builtin("b"));
