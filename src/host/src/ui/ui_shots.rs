@@ -349,7 +349,7 @@ impl Renderer {
             )
         })?;
         let mut problems = self.page_values(shot, &instance, &alias);
-        let rows = crate::ui::settings_window::rows(&[&page], Some(page.serial));
+        let rows = crate::ui::settings_window::rows(&[&page], Some(page.serial), &[page.serial]);
         instance.set_property("rows", crate::ui::ui_values::from_json(&rows)?)?;
         instance.set_property("current", Value::Number(0.))?;
         self.prepare(&instance)?;

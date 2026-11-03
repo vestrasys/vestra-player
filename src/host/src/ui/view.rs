@@ -30,20 +30,27 @@ pub fn settle_layout(window: &slint::Window) {
 }
 
 /// The component tree a window shows, kept while a replacement is built in
-/// the same window (`composition::compile_json_in`): Slint attaches the new
-/// tree as it creates it, so a build that fails after that has to put the
-/// old tree back, and a shown component cannot be attached again through
-/// the public API. Uses Slint's private `WindowInner` like
-/// [`settle_layout`] (recheck on every Slint upgrade; the
-/// `ui::view::tests::shell_swap_*` tests fail if the behaviour changes).
-pub struct ShownTree(slint::private_unstable_api::re_exports::ItemTreeRc);
+/// the same window (`composition::compile_json_in`, the Options window's
+/// `settings_window::create_window`): Slint attaches the new tree as it
+/// creates it, so a build that fails after that has to put the old tree
+/// back, and a shown component cannot be attached again through the public
+/// API. Uses Slint's private `WindowInner` like [`settle_layout`] (recheck
+/// on every Slint upgrade; the `ui::view::tests::shell_swap_*` tests fail if
+/// the behaviour changes).
+pub struct ShownTree {
+    tree: slint::private_unstable_api::re_exports::ItemTreeRc,
+    /// The item that had the focus when the tree was taken.
+    focus: slint::private_unstable_api::re_exports::ItemWeak,
+}
 
 impl ShownTree {
-    /// The tree `window` shows now, if any.
+    /// The tree `window` shows now, if any, with its focused item.
     pub fn of(window: &slint::Window) -> Option<Self> {
-        slint::private_unstable_api::re_exports::WindowInner::from_pub(window)
-            .try_component()
-            .map(Self)
+        let inner = slint::private_unstable_api::re_exports::WindowInner::from_pub(window);
+        inner.try_component().map(|tree| Self {
+            tree,
+            focus: inner.focus_item.borrow().clone(),
+        })
     }
 
     /// Whether `window` shows this tree.
@@ -51,48 +58,68 @@ impl ShownTree {
         slint::private_unstable_api::re_exports::WindowInner::from_pub(window)
             .try_component()
             .is_some_and(|shown| {
-                slint::private_unstable_api::re_exports::VRc::ptr_eq(&shown, &self.0)
+                slint::private_unstable_api::re_exports::VRc::ptr_eq(&shown, &self.tree)
             })
     }
 
     /// Show this tree in `window` again if a replacement took its place;
     /// whether it did (nothing otherwise: re-attaching would close its
-    /// popups and reset its focus).
+    /// popups and reset its focus), and whether the item that had the focus
+    /// has it again.
     ///
     /// Re-attaching clears the window's focus, and the tree's `init` (which
-    /// gave it) does not run again: the caller gives the focus back. A
-    /// replacement whose `show()` failed may hold the window's strong
-    /// reference: showing the window again moves it back to this tree (the
-    /// native window is already visible; winit returns at once).
-    pub fn restore(&self, window: &slint::Window) -> bool {
+    /// gave it) does not run again: the item focused when the tree was taken
+    /// gets it back; without one, the caller gives it. A replacement whose
+    /// `show()` failed may hold the window's strong reference: showing the
+    /// window again moves it back to this tree (the native window is already
+    /// visible; winit returns at once).
+    pub fn restore(&self, window: &slint::Window) -> Option<bool> {
         if self.is_shown_in(window) {
-            return false;
+            return None;
         }
         let inner = slint::private_unstable_api::re_exports::WindowInner::from_pub(window);
-        inner.set_component(&self.0);
+        inner.set_component(&self.tree);
         if window.is_visible() {
             let _ = inner.show();
         }
-        true
+        let focused = self.focus.upgrade().map(|item| {
+            inner.set_focus_item(
+                &item,
+                true,
+                slint::private_unstable_api::re_exports::FocusReason::Programmatic,
+            );
+        });
+        Some(focused.is_some())
     }
 }
 
-/// Build the main window's next shell and show it, the way browsers and
+/// Give the main window's shell the focus on its video area (its `init`
+/// does), for [`replace_shell`] after a failed swap.
+pub fn focus_video(shell: &ComponentInstance) {
+    let _ = shell.invoke("focus-video", &[]);
+}
+
+/// Build the next component tree of a window that stays open (the main
+/// window's shell, the Options window) and show it, the way browsers and
 /// IDEs swap content without touching the top-level window.
 ///
-/// With an `old` shell, `build` gets its window and must build the new shell
-/// in it (`composition::compile_json_in`; a shell built elsewhere is
-/// refused); this then shows it there, which only moves the window's strong
-/// reference to the new tree: the native window stays visible where it was,
-/// at its size, maximized or fullscreen, with its focus and z-order, so
-/// nothing hides, fades, moves or resizes. The old shell must not be hidden
-/// (it shares the window): the caller drops it. If `build` fails, the window
-/// shows the old tree again, with the focus on its video area
-/// (`focus-video`).
+/// With an `old` component, `build` gets its window and must build the new
+/// one in it (`composition::compile_json_in`,
+/// `create_with_existing_window`; one built elsewhere is refused); this
+/// then shows it there, which only moves the window's strong reference to
+/// the new tree: the native window stays visible where it was, at its size,
+/// maximized or fullscreen, with its focus and z-order, so nothing hides,
+/// fades, moves or resizes. The old component must not be hidden (it shares
+/// the window): the caller drops it. If `build` fails, the window shows the
+/// old tree again, the item that had the focus focused again; where none
+/// had it, `refocus` gives the old component the focus (the main window:
+/// its video area).
 ///
-/// Without an old shell, `build` gets `None` and shows its own new window.
+/// Without an old component, `build` gets `None` and shows its own new
+/// window.
 pub fn replace_shell(
     old: Option<&ComponentInstance>,
+    refocus: impl FnOnce(&ComponentInstance),
     build: impl FnOnce(Option<&slint::Window>) -> Result<ComponentInstance>,
 ) -> Result<ComponentInstance> {
     let window = old.map(ComponentHandle::window);
@@ -108,7 +135,7 @@ pub fn replace_shell(
         if let (Some(window), Some(kept)) = (window, &kept)
             && kept.is_shown_in(window)
         {
-            bail!("the new shell was not built in the main window");
+            bail!("the new component was not built in the window it replaces");
         }
         if let Some((fullscreen, maximized, minimized)) = state {
             // All three at once on the new root: `Window::set_fullscreen` and
@@ -129,9 +156,9 @@ pub fn replace_shell(
     });
     if built.is_err()
         && let (Some(old), Some(window), Some(kept)) = (old, window, &kept)
-        && kept.restore(window)
+        && kept.restore(window) == Some(false)
     {
-        let _ = old.invoke("focus-video", &[]);
+        refocus(old);
     }
     built
 }
@@ -1932,7 +1959,7 @@ export component W inherits Window {
         let logical = 2572. / 1.75;
         assert!((video_width(&old) - logical).abs() < 1.);
         let old_tree = ShownTree::of(old.window()).unwrap();
-        let new = replace_shell(Some(&old), |window| {
+        let new = replace_shell(Some(&old), focus_video, |window| {
             let shell = crate::ui::composition::compile_json_in(
                 &bar_and_sidebar(),
                 sender.clone(),
@@ -1961,7 +1988,7 @@ export component W inherits Window {
         // In fullscreen, the panels unmounted again.
         new.window().set_fullscreen(true);
         native_calls();
-        let last = replace_shell(Some(&new), |window| {
+        let last = replace_shell(Some(&new), focus_video, |window| {
             crate::ui::composition::compile_json_in(&[], sender.clone(), 3, window)
         })
         .unwrap();
@@ -1993,7 +2020,7 @@ export component W inherits Window {
         let old_tree = ShownTree::of(old.window()).unwrap();
         let width = video_width(&old);
         assert!(canvas_focused(&old));
-        let failed = replace_shell(Some(&old), |window| {
+        let failed = replace_shell(Some(&old), focus_video, |window| {
             let _shell = crate::ui::composition::compile_json_in(
                 &bar_and_sidebar(),
                 sender.clone(),
@@ -2007,7 +2034,9 @@ export component W inherits Window {
         assert!(canvas_focused(&old));
         // Only the re-show that moves the strong reference back.
         assert_eq!(native_calls(), ["set_visible true"]);
-        let failed = replace_shell(Some(&old), |_| anyhow::bail!("compilation failed"));
+        let failed = replace_shell(Some(&old), focus_video, |_| {
+            anyhow::bail!("compilation failed")
+        });
         assert!(failed.is_err());
         assert!(old_tree.is_shown_in(old.window()));
         assert!(native_calls().is_empty());
@@ -2025,11 +2054,14 @@ export component W inherits Window {
     fn shell_swap_refuses_a_shell_built_in_another_window() {
         let (old, sender) = recorded_main_window();
         let old_tree = ShownTree::of(old.window()).unwrap();
-        let failed = replace_shell(Some(&old), |_| {
+        let failed = replace_shell(Some(&old), focus_video, |_| {
             crate::ui::composition::compile_json(&bar_and_sidebar(), sender.clone(), 2)
         });
         let error = failed.err().unwrap().to_string();
-        assert!(error.contains("not built in the main window"), "{error}");
+        assert!(
+            error.contains("not built in the window it replaces"),
+            "{error}"
+        );
         assert!(old_tree.is_shown_in(old.window()));
         // The stray window was created but never shown.
         assert_eq!(native_calls(), ["new window"]);
@@ -2042,7 +2074,9 @@ export component W inherits Window {
     #[test]
     fn prepare_mount_tick_builds_in_the_main_window() {
         let mounts = include_str!("../host/mounts.rs");
-        assert!(mounts.contains("view::replace_shell(self.shell.as_ref(), build)"));
+        assert!(
+            mounts.contains("view::replace_shell(self.shell.as_ref(), view::focus_video, build)")
+        );
         assert!(mounts.contains("composition::compile_json_in("));
         assert!(!mounts.contains("composition::compile_json("));
         assert!(!mounts.contains(".hide()"));

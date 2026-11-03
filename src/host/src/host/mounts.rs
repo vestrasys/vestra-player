@@ -158,7 +158,7 @@ impl Host {
                 frame_pacing::follow(&shell);
                 Ok(shell)
             };
-        let result = match view::replace_shell(self.shell.as_ref(), build) {
+        let result = match view::replace_shell(self.shell.as_ref(), view::focus_video, build) {
             Ok(shell) => {
                 // The window's one event hook now reports for this shell (not
                 // set while building: a failed candidate leaves the old one).
