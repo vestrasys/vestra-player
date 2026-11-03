@@ -80,8 +80,9 @@ pub struct Policy {
 /// §11.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tunables {
-    /// On-demand start (today `VESTRA_LAZY=1`): replay at `add_unit`, first
-    /// runs, idle standby. Off: every enabled unit starts at boot.
+    /// On-demand start (`VESTRA_LAZY=1` until B6, always on in the player
+    /// since): replay at `add_unit`, first runs, idle standby. Off (the old
+    /// path, removed in B7): every enabled unit starts at boot.
     pub on_demand: bool,
     pub builtin: Policy,
     pub resident: Policy,
@@ -281,10 +282,9 @@ impl Tunables {
         }
     }
 
-    /// B3 values on top of `self`: queue limits live. The player's preset
-    /// with on-demand start on since B3 (`host/supervisor/mod.rs` `new`,
-    /// §17.12); `legacy()` alone with it off, until B6 makes on-demand
-    /// start everyone's.
+    /// B3 values on top of `self`: queue limits live (§17.12). Part of the
+    /// player's preset since B3 (with `VESTRA_LAZY=1` until B6; `target`
+    /// since).
     pub fn with_b3(mut self, cores: usize) -> Self {
         self.first_run_limit = None;
         self.max_active = Some(max_active_for(cores));
@@ -367,16 +367,15 @@ impl Tunables {
         self
     }
 
-    /// B5: the process budget for this machine (§8, §17.2 Q26). The
-    /// player's preset with on-demand start on (§17.14).
+    /// B5: the process budget for this machine (§8, §17.2 Q26; §17.14).
+    /// Part of the player's preset since B5 (`target` since B6).
     pub fn with_b5(mut self, physical_mib: u64) -> Self {
         self.process_budget = Some(process_budget_for(physical_mib));
         self
     }
 
-    /// B6 targets (§11) on top of B3–B5.
-    // The Host switches presets in B3–B6.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// B6 targets (§11) on top of B3–B5: the player's preset since B6
+    /// (`host/supervisor/mod.rs` `new`, §17.15).
     pub fn target(cores: usize, physical_mib: u64) -> Self {
         let mut t = Self::legacy()
             .with_b3(cores)

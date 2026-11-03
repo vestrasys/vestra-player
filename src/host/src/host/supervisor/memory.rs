@@ -1,5 +1,5 @@
 //! B5 (doc/architecture/supervisor.md §8, §17.14): the process budget's
-//! input and the memory pressure source, with on-demand start on. The
+//! input and the memory pressure source, with on-demand start on (for everyone since B6). The
 //! budget is the core's (`Tunables::with_b5` from the physical memory read
 //! once at start-up); the pressure level is read from the system every
 //! `POLL_MS` (Windows: Chrome's thresholds on available physical memory and

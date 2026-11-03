@@ -58,9 +58,15 @@ fn package(
     (manifest, digest(&files))
 }
 
+/// §15 B6: on-demand start is everyone's, so a plugin that holds nothing
+/// live goes to standby at its first ready. These fixtures listen to the
+/// player's state (resident: never in standby, §3.3), so they keep running
+/// as they did with on-demand start off before B6.
+const RESIDENT_CAPABILITIES: [&str; 2] = ["events", "playback.read"];
+
 /// A third-party plugin that logs each start with its version and the
 /// session value `mark` it finds (then sets it), and each stop. `broken`
-/// fails its activation.
+/// fails its activation. Resident (`RESIDENT_CAPABILITIES`).
 fn target_main(id: &str, version: &str, broken: bool) -> String {
     let fail = if broken {
         "throw new Error(\"broken\");"
@@ -69,6 +75,7 @@ fn target_main(id: &str, version: &str, broken: bool) -> String {
     };
     format!(
         "export default async function activate(plugin) {{\n\
+         plugin.player.onChange(() => {{}});\n\
          const mark = (await plugin.storage.session.get(\"mark\")) ?? \"none\";\n\
          console.error(`{id} start {version} mark ${{mark}}`);\n\
          await plugin.storage.session.set(\"mark\", \"set\");\n\
@@ -83,7 +90,7 @@ fn target(directory: &Path, id: &str, version: &str, broken: bool) {
         directory,
         id,
         version,
-        &[],
+        &RESIDENT_CAPABILITIES,
         target_main(id, version, broken),
     );
 }
@@ -93,7 +100,13 @@ fn stored(store: &Path, id: &str, version: &str) -> Value {
     let staging = store
         .join("packages")
         .join(format!("staging-{id}-{version}"));
-    let (manifest, digest) = package(&staging, id, version, &[], target_main(id, version, false));
+    let (manifest, digest) = package(
+        &staging,
+        id,
+        version,
+        &RESIDENT_CAPABILITIES,
+        target_main(id, version, false),
+    );
     let directory = store.join("packages").join(&digest);
     std::fs::rename(&staging, &directory).unwrap();
     json!({"digest":digest,"manifest":manifest,"directory":directory})
@@ -130,7 +143,7 @@ fn installer(root: &Path, steps: &[Step]) -> PathBuf {
         &plugins.join(INSTALLER),
         INSTALLER,
         "1.0.0",
-        &["plugins.manage"],
+        &["plugins.manage", "events", "playback.read"],
         format!(
             "const write = process.stdout.write.bind(process.stdout);\n\
              let enabled = null;\n\
@@ -144,6 +157,7 @@ fn installer(root: &Path, steps: &[Step]) -> PathBuf {
              }};\n\
              const sleep = (ms) => new Promise((done) => setTimeout(done, ms));\n\
              export default function activate(plugin) {{\n\
+             plugin.player.onChange(() => {{}});\n\
              setTimeout(async () => {{\n\
              for (const step of {steps}) {{\n\
              if (step.enable) {{\n\
@@ -177,8 +191,8 @@ fn installer(root: &Path, steps: &[Step]) -> PathBuf {
     plugins
 }
 
-/// Run the host headless for `seconds` on `root` (own processes, no lazy
-/// activation); its stderr.
+/// Run the host headless for `seconds` on `root` (own processes; on-demand
+/// start, everyone's since B6, with resident fixtures); its stderr.
 fn run(root: &Path, seconds: u32) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_vestra-host"))
         .args(["--headless", "--silent", "--seconds", &seconds.to_string()])
@@ -186,7 +200,6 @@ fn run(root: &Path, seconds: u32) -> String {
         .env("VESTRA_PACKAGE_STORE", root.join("store"))
         .env("VESTRA_PLUGIN_DATA", root.join("data"))
         .env("VESTRA_SHARED", "0")
-        .env("VESTRA_LAZY", "0")
         .env_remove("VESTRA_IDLE_MS")
         .env_remove("VESTRA_TEST_EXECUTE")
         .env_remove("VESTRA_INSTANCE_DIR")

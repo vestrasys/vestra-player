@@ -127,8 +127,10 @@ fn count(log: &str, text: &str) -> usize {
 
 /// First run: started (no recording), parked once idle, recorded. Second
 /// run: replayed without a process, woken by its command, which runs, and
-/// parked again. `VESTRA_LAZY=0`: started at launch as before, even with a
-/// recording. Both with the shared runner and with own processes.
+/// parked again. Both with the shared runner and with own processes. Until
+/// B6 `VESTRA_LAZY=0` started it at launch even with a recording; since B6
+/// (§15 B6: on-demand start for everyone) the variable is not read and a
+/// third run with it set to `0` replays the plugin all the same.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn an_idle_plugin_is_parked_replayed_woken_by_its_command_and_parked_again() {
@@ -142,11 +144,7 @@ fn an_idle_plugin_is_parked_replayed_woken_by_its_command_and_parked_again() {
             serde_json::json!({"schema":3,"plugins":[entry]}).to_string(),
         )
         .unwrap();
-        let lazy = [
-            ("VESTRA_SHARED", shared),
-            ("VESTRA_LAZY", "1"),
-            ("VESTRA_IDLE_MS", "500"),
-        ];
+        let lazy = [("VESTRA_SHARED", shared), ("VESTRA_IDLE_MS", "500")];
 
         let first = run(root.path(), 5, &lazy);
         assert_eq!(count(&first, &format!("{ID} start 1")), 1, "{first}");
@@ -216,13 +214,18 @@ fn an_idle_plugin_is_parked_replayed_woken_by_its_command_and_parked_again() {
             "parked twice: {second}"
         );
 
+        // §15 B6: `VESTRA_LAZY=0` no longer starts it at launch (flipped:
+        // it was started there, with no `lazy:` line).
         let eager = run(
             root.path(),
             3,
             &[("VESTRA_SHARED", shared), ("VESTRA_LAZY", "0")],
         );
-        assert!(eager.contains(&format!("{ID} start 1")), "{eager}");
-        assert!(!eager.contains("lazy:"), "{eager}");
+        assert!(
+            eager.contains(&format!("lazy: {ID} replayed (1 calls)")),
+            "{eager}"
+        );
+        assert!(!eager.contains(&format!("{ID} start")), "{eager}");
     }
 }
 
@@ -265,11 +268,7 @@ fn mirror_subscriptions_park_and_wake_a_listener_keeps_a_plugin_resident() {
                 ),
             ]
         });
-        let lazy = [
-            ("VESTRA_SHARED", shared),
-            ("VESTRA_LAZY", "1"),
-            ("VESTRA_IDLE_MS", "500"),
-        ];
+        let lazy = [("VESTRA_SHARED", shared), ("VESTRA_IDLE_MS", "500")];
         let first = run(root.path(), 5, &lazy);
         // First runs: the mirror plugin is parked at once, without waiting
         // for an idle time; the listener stays.
@@ -351,11 +350,7 @@ fn b3_built_in_first_runs_start_at_once() {
     let log = run(
         root.path(),
         8,
-        &[
-            ("VESTRA_SHARED", "1"),
-            ("VESTRA_LAZY", "1"),
-            ("VESTRA_IDLE_MS", "60000"),
-        ],
+        &[("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "60000")],
     );
     let starts = log
         .match_indices("starts for its first run")
@@ -404,11 +399,7 @@ fn third_party_first_runs_start_a_few_at_a_time() {
     let log = run(
         root.path(),
         12,
-        &[
-            ("VESTRA_SHARED", "1"),
-            ("VESTRA_LAZY", "1"),
-            ("VESTRA_IDLE_MS", "60000"),
-        ],
+        &[("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "60000")],
     );
     let max = log
         .lines()
@@ -497,11 +488,7 @@ fn built_in_first_runs_go_before_other_plugins() {
     let log = run(
         root.path(),
         10,
-        &[
-            ("VESTRA_SHARED", "1"),
-            ("VESTRA_LAZY", "1"),
-            ("VESTRA_IDLE_MS", "60000"),
-        ],
+        &[("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "60000")],
     );
     let builtin = log
         .find(&format!("lazy: {ID} starts for its first run"))
@@ -569,11 +556,7 @@ fn a_when_command_is_parked_and_its_state_follows_playback() {
             ),
         ]
     });
-    let lazy = [
-        ("VESTRA_SHARED", "1"),
-        ("VESTRA_LAZY", "1"),
-        ("VESTRA_IDLE_MS", "500"),
-    ];
+    let lazy = [("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "500")];
     let mut executes = lazy.to_vec();
     executes.push((
         "VESTRA_TEST_EXECUTE",
@@ -674,11 +657,7 @@ fn a_packages_listener_is_parked_and_woken_by_a_package_change() {
         "export default function activate() {}\n".into(),
     );
     std::fs::write(store.join("catalog.json"), catalog.to_string()).unwrap();
-    let lazy = [
-        ("VESTRA_SHARED", "1"),
-        ("VESTRA_LAZY", "1"),
-        ("VESTRA_IDLE_MS", "500"),
-    ];
+    let lazy = [("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "500")];
     let first = run(root.path(), 7, &lazy);
     for expected in [
         format!("lazy: {PACKAGES} classified lazy"),
@@ -820,14 +799,11 @@ fn every_built_in_keeps_its_registry_through_park_replay_and_wake() {
         line.map(|line| line["registry"].clone())
     };
 
-    // A: lazy activation off, every built-in started at launch.
-    let (normal, _) = probe("normal", 12, &[("VESTRA_LAZY", "0")]);
+    // A: every built-in started at launch (its first run; with lazy
+    // activation off until B6, §15 B6: on-demand start for everyone).
+    let (normal, _) = probe("normal", 12, &[]);
     // B: first runs, each parked at its ready.
-    let park = [
-        ("VESTRA_LAZY", "1"),
-        ("VESTRA_TEST_PARK", "all"),
-        ("VESTRA_IDLE_MS", "600000"),
-    ];
+    let park = [("VESTRA_TEST_PARK", "all"), ("VESTRA_IDLE_MS", "600000")];
     let (parks, parks_log) = probe("park", 15, &park);
     // C: replayed at start, all woken at 4 s, still running at quit.
     let mut wake = park.to_vec();
