@@ -20,8 +20,8 @@ Coordinator record and blackboard for the supervisor project. Design: [superviso
 | B0+B1 | approved (bb8530e1, B0 merged in); PR open | `supervisor-b1` C:\vestra\wt-sup-b1 | — | four fix rounds; 1164 workspace tests, supervisor 342, lifecycle_baseline 10/10 ×3 |
 | B1 (history) | fix rounds done | spec tests 243/243; | B1 maintainer: F1–F4 fixed, rulings R5–R7 in (switch `BuiltinsFirst::{Queued, Installed}`), §17.6; 295 supervisor tests, 1074 host tests pass | `supervisor-b1` C:\vestra\wt-sup-b1 (a2dc0e95 core; a09036d7 merged spec tests) | API maintainer (B1): mod tests line + answers to the 27 questions in supervisor.md §17.2 + ListChanged check; spec test author: adapter to the real API | core: 825 host tests incl. 46 own; API deviations in supervisor.md §17.1; ruling: shared members (built-ins) stay outside max_active (A7), §4.4 to be corrected |
 | B2a | **merged #144 (767fad55)** | `supervisor-b2a` C:\vestra\wt-sup-b2a (from 800e2bb1) | API maintainer | zero-diff evidence: B0 tests ×3 + VESTRA_TEST_REGISTRY dump diff (lazy on/off); flips A18 leak-1 test |
-| B2b | **merged** (17114d53 + 2b0257fa) | `supervisor-b2b` C:\vestra\wt-sup-b2b (from 767fad55) | API maintainer | fixes A18 leak 2, D13; running-uninstall-reinstall test; narrow job-API dead_code allow |
-| B2c | not started | | | |
+| B2b | **merged #145 (fd198a48)** | `supervisor-b2b` C:\vestra\wt-sup-b2b (from 767fad55) | API maintainer | fixes A18 leak 2, D13; running-uninstall-reinstall test; narrow job-API dead_code allow |
+| B2c | **merged** (registry evidence: 18 scenarios, only pre-existing noise) | `supervisor-b2c` C:\vestra\wt-sup-b2c (from fd198a48) | API maintainer | lazy.rs deleted; appearance.changed "what changed" (wire addition); doc excerpts; §13 B7 removal list |
 | B2d | not started | | | |
 | B3 | not started | | | |
 | B4 | not started | | | release after |
@@ -65,7 +65,10 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 
 ## Open items
 
-- **Needs the user:** SDK v1.5.56 not on npm. Release run 41502365359: macOS jobs never get a runner (cancelled after 15 min, twice; started after the paid budget went to 0 at ~19:00 — macOS runners appear to be affected even for the public SDK repo), so `publish` is skipped. Options: user re-enables macOS runners/budget for the SDK; or allow a release workflow change making macOS non-blocking for publish. Not blocking the supervisor batches; the player keeps SDK 1.5.55 until then.
+- **Done 2026-11-03 (18 scenarios + 2 main baselines, no B2c-caused difference):** B2c registry probes pending: the user is using the machine (game + own Vestra), system commit 86–97 % → probes not allowed (>85 %) and one player at a time. When commit < 85 % and no user Vestra runs: in `scratchpad\sup-b2c\` run `probe.ps1` for the remaining B2c scenarios (shared, 4 manage, classification probes) plus a second main run, then `diffall.sh`; confirm the wake-scenario `vestra.preferences` timing difference and re-run `lazy_activation` (one failure from a Bluetooth headset changing `vestra.audio` devices mid-run). Merge of B2c waits for this.
+- SDK-site doc `host-and-node.md` (SDK repo) still cites `TRIGGERS`, `activations.begin(.., 15_000)`, the 250 ms poll → update in the next SDK docs batch, together with SDK use of `appearance.changed.changed`.
+
+- **Resolved (user ruling 2026-11-02, "一律强制更新"):** cause is GitHub macOS arm64 runner capacity, not billing. SDK 1.5.57 = 1.5.56 content + release workflow where macOS does not gate publish (worktree `C:\vestra\wt-sdkrel`); v1.5.56 tag left alone (no tag moves). Old note: SDK v1.5.56 not on npm. Release run 41502365359: macOS jobs never get a runner (cancelled after 15 min, twice; started after the paid budget went to 0 at ~19:00 — macOS runners appear to be affected even for the public SDK repo), so `publish` is skipped. Options: user re-enables macOS runners/budget for the SDK; or allow a release workflow change making macOS non-blocking for publish. Not blocking the supervisor batches; the player keeps SDK 1.5.55 until then.
 
 - B2c follow-up: host `appearance.changed` gains a "what changed" field (theme/language; pure wire addition), SDK `appearance.ts` uses it when present → closes the woken-by-language extra callback and the rare lost theme change (review-sdkwake r2). Then bump the player's SDK.
 
@@ -98,6 +101,24 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 - Known bugs to pin in B0: Book entry leaked when spawn fails after `activations.begin` (`load_package`); `Host.cleanup` only grows; disable then immediate enable can run two processes on one data directory (D13).
 
 ## Log
+
+- 2026-11-03 ~01:00: B2c last fix (first-run place freed before the `classifying` check; coordinator checked the diff, 1202 tests) + registry evidence: 18 scenarios, second main baseline; every difference also occurs main-vs-main or vanishes on re-run (hotkeys registration timing, wake park timing, idle park counts, storm listener order); classification fixtures and the four wake-event storms identical. B2c PR + merge next; then SDK 1.5.57 bump and B2d in parallel.
+
+- 2026-11-03 ~00:40: user: not using the computer, free use, keep the loop until all goals are done; away > 14 h (until ~15:00). Machine load is now ours: probes and real-node suites can run (still one player at a time, 85 % commit / 8 GB disk guards, isolated profiles only).
+
+- 2026-11-03 ~00:25: B2c follow-up re-review → merge; all four real-node suites passed (commit 81–85 %, no user Vestra). Maintainer: tiny first-run-slot release fix in `class_known`, then the remaining registry scenarios + second main baseline + wake re-run. B2c merges after the probe diff is clean.
+
+- 2026-11-03 ~00:05: **SDK 1.5.57 is on npm.** B2c follow-up committed (eec2f3cc: B0 hold tests ported, one deadline for classification, `start_timeout_by_host` transitional switch until B2d, appearance.changed test); 1202 workspace tests. Commit load 83 %, no user Vestra → reviewer re-checks and runs the remaining real-node suites; registry probes after that (one player at a time).
+
+- 2026-11-02 ~23:48: SDK #72 all green (macOS too this time), squash-merged (65bb17a), origin/main package.json = 1.5.57, tag v1.5.57 pushed; release workflow running. Then: player bump to 1.5.57 (small batch after B2c).
+
+- 2026-11-02 ~23:45: B2c review → fix first (cheap): two B0 hold_event tests not ported; classification timeout double timer (late answer can overwrite a resident record); wake StartTimeout double timer (ready between deadlines → Failed{stuck} while running). lazy_activation 7/7 + lifecycle 11/11 passed at 81 % commit (the earlier failure was the Bluetooth device); shared_runner/package_install skipped at 86 %. Maintainer resumed. Registry probes still pending (machine use).
+
+- 2026-11-02 ~23:25: SDK 1.5.57 (8fe3eb2) reviewed → merge; PR vestra-player-sdk#72 opened. Plan: merge when Linux/Windows checks pass (macOS may hang; owner ruling: don't wait for it), verify `origin/main` package.json = 1.5.57, tag v1.5.57, watch release, then npm view. B2c review running.
+
+- 2026-11-02 ~23:05: B2c committed (37fae5fe): lazy.rs deleted, decisions in the core, adapter files, `Lazy`→`OnDemand`, `appearance.changed.changed`. 1197 workspace tests (lazy.rs tests ported); lifecycle ×3, shared_runner, package_install pass; lazy_activation 6/7 (Bluetooth device change mid-run). Registry probes only partly run: the machine is in use by the user (commit 86–97 %); wake scenario shows a `vestra.preferences` timing difference under load, unconfirmed. Process lapse: maintainer used `git mv` (staged rename, committed as is). Review started (code + cargo checks; real-node suites only if commit < 85 %).
+
+- 2026-11-02 ~22:00: **#145 (B2b) squash-merged → main fd198a48** on local evidence. B2c worktree created; maintainer briefed (incl. appearance.changed "what changed" wire addition, host-and-node doc excerpts, §13 B2b nit and B7 removal list). npm still 1.5.55 (SDK release waits on the user: macOS runners).
 
 - 2026-11-02 ~21:55: B2b follow-up 2b0257fa re-checked → merge (non-blocking reaper, panic isolation, supervisor_tick back at reload_tick's place; wake-start owner order within a tick judged unobservable). Nit for B2c: §13 B2b row "same busy" → "except the D13 fix". B2b PR next.
 
