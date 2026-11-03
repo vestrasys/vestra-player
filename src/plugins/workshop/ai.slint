@@ -1,7 +1,9 @@
 // Vestra Player AI: session sidebar (220 px) | conversation. Assistant
 // messages are Markdown (one document per row, `body`); the rest is text.
+// The text of every message can be selected and copied (right-click: Copy,
+// Select All; Ctrl+C / Ctrl+A).
 // The plugin passes data and codes; the words are here (@tr).
-import { ComboBox, ListView, TextEdit } from "std-widgets.slint";
+import { ComboBox, ListView, Palette, TextEdit } from "std-widgets.slint";
 import { MarkdownBlock, MarkdownBlocks } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icons } from "@vestra/icons.slint";
@@ -19,7 +21,7 @@ export struct ToolCall {
 
 export struct ChatRow {
     id: string,
-    // "user" | "thought" | "tools" | "assistant" | "notice" | "error"
+    // "user" | "activity" | "assistant" | "notice" | "error"
     kind: string,
     // user, assistant: the message.
     text: string,
@@ -32,16 +34,16 @@ export struct ChatRow {
     // assistant: the message as Markdown; empty for the other kinds, and
     // until the plugin made the document (then `text` shows instead).
     body: [MarkdownBlock],
-    // notice, error: what to say; tools: "running" | "after" | "phase" | "done".
+    // notice, error: what to say; activity: "working" | "done".
     code: string,
     args: [string],
-    // notice: a count; tools: the number of calls.
+    // notice: a count; activity: the number of steps (tool calls).
     n: int,
-    // tools: every call (sent while expanded) and the one the line shows.
+    // activity: how long the turn worked, in seconds (0: not known).
+    seconds: int,
+    // activity: every step (sent while expanded) and the latest one.
     calls: [ToolCall],
     call: ToolCall,
-    // tools: "thinking" | "replying" while the turn runs.
-    phase: string,
     failed: int,
     // The message is longer than shown.
     truncated: bool,
@@ -94,6 +96,58 @@ component Small inherits Text {
     overflow: elide;
 }
 
+// Read-only text the user can select and copy: a right-click menu with Copy
+// and Select All, and Ctrl+C / Ctrl+A (⌘C / ⌘A) while it has focus; no caret
+// (as the player's selectable Markdown). Give it a width: its height follows
+// the wrapped text.
+component Selectable {
+    in property <string> text;
+    in property <brush> color: Theme.text;
+    in property <length> font-size: Theme.font-tab;
+    in property <string> font-family;
+    min-height: input.min-height;
+    preferred-height: input.preferred-height;
+    ContextMenuArea {
+        Menu {
+            MenuItem {
+                title: @tr("Copy");
+                enabled: root.text != "";
+                // Nothing selected: the whole text (as the player's Markdown menu).
+                activated => {
+                    if input.anchor-position-byte-offset == input.cursor-position-byte-offset {
+                        input.select-all();
+                        input.copy();
+                        input.clear-selection();
+                    } else {
+                        input.copy();
+                    }
+                }
+            }
+            MenuItem {
+                title: @tr("Select All");
+                enabled: root.text != "";
+                activated => { input.select-all(); }
+            }
+        }
+        input := TextInput {
+            width: root.width;
+            height: root.height;
+            text: root.text;
+            read-only: true;
+            single-line: false;
+            wrap: word-wrap;
+            color: root.color;
+            font-size: root.font-size;
+            font-family: root.font-family;
+            text-cursor-width: 0px;
+            // The std-widgets LineEdit's selection colours, legible in both
+            // palettes (Theme.selected-bg is the user bubble's background).
+            selection-background-color: Palette.selection-background;
+            selection-foreground-color: Palette.selection-foreground;
+        }
+    }
+}
+
 component Link inherits Rectangle {
     in property <string> text;
     callback clicked();
@@ -140,25 +194,24 @@ component Message inherits VerticalLayout {
     pure function mark(state: int) -> string {
         state == 0 ? "…" : state == 1 ? "✓" : "✗"
     }
-    pure function phase-text(phase: string) -> string {
-        phase == "replying" ? @tr("Replying…") : @tr("Thinking…")
+    // The activity row: "Working…" and the latest step while the turn runs; how long and how many steps after it.
+    pure function activity-text(row: ChatRow) -> string {
+        row.code == "working" && row.call.tool == "" ? @tr("Working…")
+            : row.code == "working" ? @tr("Working…") + " · " + root.label(row.call) + (row.call.state == 0 ? "…" : row.call.state == 2 ? " ✗" : " ✓")
+            : row.seconds > 0 && row.n > 0 ? root.worked-text(row.seconds) + " · " + root.steps-text(row)
+            : row.seconds > 0 ? root.worked-text(row.seconds)
+            : root.steps-text(row)
     }
-    // The tool line: the call in progress, else the latest call and what the model does now; a count after the turn.
-    pure function tools-text(row: ChatRow) -> string {
-        row.code == "running" ? root.label(row.call) + "…"
-            : row.code == "after" ? root.label(row.call) + (row.call.state == 2 ? " ✗" : " ✓") + " · " + root.phase-text(row.phase)
-            : row.code == "phase" ? root.phase-text(row.phase)
-            : row.failed > 0 ? @tr("{0}, {1} failed", root.calls-text(row.n), row.failed)
-            : root.calls-text(row.n)
+    // Under a minute in seconds ("Worked for 45 seconds"), then minutes and seconds ("Worked for 5 min 12 s").
+    pure function worked-text(seconds: int) -> string {
+        seconds < 60 ? @tr("Worked for {n} second" | "Worked for {n} seconds" % seconds)
+            : @tr("Worked for {0} min {1} s", floor(seconds / 60), mod(seconds, 60))
     }
-    pure function calls-text(n: int) -> string {
-        @tr("{n} tool call" | "{n} tool calls" % n)
+    pure function steps-text(row: ChatRow) -> string {
+        row.failed > 0 ? @tr("{0}, {1} failed", root.count-text(row.n), row.failed) : root.count-text(row.n)
     }
-    pure function thought-text(row: ChatRow) -> string {
-        row.code == "thinking" ? @tr("Thinking…")
-            : row.code == "thought" ? @tr("Thought for {n} second" | "Thought for {n} seconds" % row.n)
-            : row.code == "thought-untimed" ? @tr("Thought process")
-            : @tr("{n} progress note" | "{n} progress notes" % row.n)
+    pure function count-text(n: int) -> string {
+        @tr("{n} step" | "{n} steps" % n)
     }
     pure function notice-text(row: ChatRow) -> string {
         row.code == "stopped" ? @tr("Stopped")
@@ -208,40 +261,48 @@ component Message inherits VerticalLayout {
             VerticalLayout {
                 padding: 9px;
                 // An explicit width: the wrapped height is measured for it.
-                Body { text: item.text; width: root.width - 2 * 18px - root.bubble-indent - 2 * 9px; }
+                Selectable { text: item.text; width: root.width - 2 * 18px - root.bubble-indent - 2 * 9px; }
             }
         }
     }
 
-    // The model's thinking and its notes between tool calls, collapsed as in
-    // ChatGPT / Claude: "Thought for 12 seconds"; click to read them (dimmed).
-    // Keyboard: Tab reaches the line (a focus ring), Space or Enter expands it;
-    // screen readers see an expandable button.
-    if item.kind == "thought": VerticalLayout {
+    // What the agent did in this turn, one row: "Working…" and the latest
+    // step while it runs, then "Worked for 12 seconds · 3 steps"; click (or
+    // Tab to it, then Space / Enter) to list the steps. Thinking is not shown.
+    // Screen readers see an expandable button (text, and no Tab stop, while
+    // there are no steps to list).
+    if item.kind == "activity": VerticalLayout {
         spacing: 4px;
+        // The whole line toggles the list; the TouchArea is outside the
+        // layout so it takes no cell of its own.
         Rectangle {
             height: 20px;
-            accessible-role: button;
-            accessible-label: root.thought-text(item);
-            accessible-expandable: true;
-            accessible-expanded: item.expanded;
-            accessible-action-default => { root.toggle(item.id); }
+            // The button only while there are steps (the role must be a constant):
+            // without, screen readers read the line's text.
+            if item.n > 0: Rectangle {
+                accessible-role: button;
+                accessible-label: root.activity-text(item);
+                accessible-expandable: true;
+                accessible-expanded: item.expanded;
+                accessible-action-default => { root.toggle(item.id); }
+            }
             Rectangle {
-                visible: thought-keys.has-focus;
+                visible: activity-keys.has-focus;
                 x: -3px;
                 width: parent.width + 6px;
                 border-width: 1px;
                 border-color: Theme.accent;
                 border-radius: Theme.radius-control;
             }
-            thought-keys := FocusScope {
+            activity-keys := FocusScope {
+                enabled: item.n > 0;
                 x: 0;
                 y: 0;
                 width: 0;
                 height: 0;
                 focus-on-click: false;
                 key-pressed(event) => {
-                    if event.text == Key.Space || event.text == Key.Return {
+                    if (event.text == Key.Space || event.text == Key.Return) && item.n > 0 {
                         root.toggle(item.id);
                         return accept;
                     }
@@ -252,57 +313,29 @@ component Message inherits VerticalLayout {
                 spacing: 6px;
                 Small {
                     width: 14px;
-                    text: item.state == 0 ? "●" : "◦";
-                    color: item.state == 0 ? Theme.accent : Theme.text-dim;
-                }
-                Small { text: root.thought-text(item); horizontal-stretch: 1; }
-                Small { horizontal-stretch: 0; text: item.expanded ? @tr("Collapse ▾") : @tr("Show ▸"); color: thought-touch.has-hover ? Theme.accent : Theme.text-dim; }
-            }
-            thought-touch := TouchArea { mouse-cursor: pointer; clicked => { root.toggle(item.id); } }
-        }
-        if item.expanded: Rectangle {
-            background: Theme.bg-list;
-            border-radius: Theme.radius-control;
-            VerticalLayout {
-                padding: 8px;
-                spacing: 4px;
-                Small { text: item.text; wrap: word-wrap; overflow: clip; width: root.width - 2 * 18px - 2 * 8px; }
-                if item.truncated: Small { text: @tr("… (too long; the rest is not shown)"); }
-            }
-        }
-    }
-
-    // The rolling tool line: the latest call while running, a count after; click to list all.
-    if item.kind == "tools": VerticalLayout {
-        spacing: 4px;
-        // The whole line toggles the list; the TouchArea is outside the
-        // layout so it takes no cell of its own.
-        Rectangle {
-            height: 20px;
-            HorizontalLayout {
-                spacing: 6px;
-                Small {
-                    width: 14px;
                     text: item.state == 0 ? "●" : item.state == 2 ? "✗" : "✓";
                     color: item.state == 2 ? Theme.danger : item.state == 0 ? Theme.accent : Theme.text-dim;
                 }
-                Small { text: root.tools-text(item); horizontal-stretch: 1; }
-                Small { horizontal-stretch: 0; text: item.expanded ? @tr("Collapse ▾") : @tr("All ▸"); color: tools-touch.has-hover ? Theme.accent : Theme.text-dim; }
+                Small { text: root.activity-text(item); horizontal-stretch: 1; }
+                if item.n > 0: Small { horizontal-stretch: 0; text: item.expanded ? @tr("Collapse ▾") : @tr("All ▸"); color: activity-touch.has-hover ? Theme.accent : Theme.text-dim; }
             }
-            tools-touch := TouchArea { mouse-cursor: pointer; clicked => { root.toggle(item.id); } }
+            activity-touch := TouchArea {
+                enabled: item.n > 0;
+                mouse-cursor: item.n > 0 ? pointer : default;
+                clicked => { root.toggle(item.id); }
+            }
         }
         if item.expanded: Rectangle {
             background: Theme.bg-list;
             border-radius: Theme.radius-control;
             VerticalLayout {
                 padding: 8px;
-                for call in item.calls: Text {
+                for call in item.calls: Selectable {
                     text: root.mark(call.state) + " " + root.label(call);
                     width: root.width - 2 * 18px - 2 * 8px;
                     color: Theme.text-list;
                     font-family: Theme.font-mono;
                     font-size: Theme.font-body;
-                    wrap: word-wrap;
                 }
             }
         }
@@ -313,6 +346,7 @@ component Message inherits VerticalLayout {
         if item.body.length > 0: MarkdownBlocks {
             blocks: item.body;
             code-copy: true;
+            selectable: true;
             copy-code(code) => { root.copy-code(code); }
             link-clicked(url) => { root.open-link(url); }
         }
@@ -325,6 +359,11 @@ component Message inherits VerticalLayout {
     }
 
     if item.kind == "user" && item.truncated: Small { text: @tr("… (too long; the rest is not shown)"); horizontal-alignment: right; }
+    // Every message can be copied whole (as the assistant's, below its answer).
+    if item.kind == "user": HorizontalLayout {
+        alignment: end;
+        Link { text: @tr("Copy"); clicked => { root.copy(item.id); } }
+    }
 
     if item.kind == "notice": Small { text: root.notice-text(item); horizontal-alignment: center; }
 
@@ -336,8 +375,8 @@ component Message inherits VerticalLayout {
             padding: 9px;
             spacing: 6px;
             // Explicit widths (row minus paddings and border): wrapped height follows.
-            Body { text: "⚠ " + root.error-text(item); color: Theme.danger; width: root.width - 2 * 18px - 2 * 9px - 2px; }
-            if item.detail != "": Small { text: item.detail; wrap: word-wrap; overflow: clip; width: root.width - 2 * 18px - 2 * 9px - 2px; }
+            Selectable { text: "⚠ " + root.error-text(item); color: Theme.danger; width: root.width - 2 * 18px - 2 * 9px - 2px; }
+            if item.detail != "": Selectable { text: item.detail; color: Theme.text-dim; font-size: Theme.font-body; width: root.width - 2 * 18px - 2 * 9px - 2px; }
             HorizontalLayout {
                 alignment: start;
                 spacing: 6px;

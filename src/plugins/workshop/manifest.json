@@ -1,6 +1,6 @@
 {
   "id": "vestra.workshop",
-  "version": "2.2.29",
+  "version": "2.2.30",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -22,5 +22,5 @@
     "Plugin development",
     "Experimental"
   ],
-  "minPlayerVersion": "0.5.10"
+  "minPlayerVersion": "0.6.8"
 }

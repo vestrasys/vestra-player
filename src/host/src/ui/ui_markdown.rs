@@ -111,8 +111,31 @@ pub struct Inline {
     pub format: String,
     pub args: Vec<String>,
     pub plain: String,
+    /// Links: where each one's text starts and ends in `plain`, and its
+    /// resolved address.
+    pub links: Vec<(usize, usize, String)>,
+    /// Starts of links still open.
+    open_links: Vec<usize>,
 }
 impl Inline {
+    /// `plain` with each link's address after its text, `text (url)`
+    /// (not when the text is the address, as an autolink).
+    pub fn plain_with_links(&self) -> String {
+        let mut out = String::with_capacity(self.plain.len());
+        let mut at = 0;
+        for (start, end, url) in &self.links {
+            let text = &self.plain[*start..*end];
+            out.push_str(&self.plain[at..*end]);
+            at = *end;
+            if !url.is_empty() && text != url && url.strip_prefix("mailto:") != Some(text) {
+                out.push_str(" (");
+                out.push_str(url);
+                out.push(')');
+            }
+        }
+        out.push_str(&self.plain[at..]);
+        out
+    }
     fn text(&mut self, text: &str) {
         let text = text.replace(SLOT, "");
         if text.is_empty() {
@@ -314,6 +337,25 @@ impl Builder<'_> {
             return;
         }
         f(&mut self.open().inline);
+    }
+    fn link_start(&mut self) {
+        if self.cell.is_none() && self.image.is_none() {
+            let inline = &mut self.open().inline;
+            inline.open_links.push(inline.plain.len());
+        }
+    }
+    /// A link closed in the block it opened in (an image inside a link
+    /// starts a new block: that link is not recorded).
+    fn link_end(&mut self, url: &str) {
+        if self.cell.is_some() || self.image.is_some() {
+            return;
+        }
+        if let Some(block) = self.current.as_mut()
+            && let Some(start) = block.inline.open_links.pop()
+        {
+            let end = block.inline.plain.len();
+            block.inline.links.push((start, end, url.to_owned()));
+        }
     }
     fn markup(&mut self, text: &str) {
         if self.cell.is_some() || self.image.is_some() {
@@ -570,9 +612,13 @@ pub fn blocks(text: &str, base: Option<&str>) -> Vec<Block> {
     let mut links: Vec<String> = Vec::new();
     for event in Parser::new_ext(text, options) {
         match &event {
-            Md::Start(Tag::Link { dest_url, .. }) => links.push(resolve(base, dest_url)),
+            Md::Start(Tag::Link { dest_url, .. }) => {
+                links.push(resolve(base, dest_url));
+                builder.link_start();
+            }
             Md::End(TagEnd::Link) => {
                 let url = links.pop().unwrap_or_default();
+                builder.link_end(&url);
                 builder.markup(&format!("]({})", destination(&url)));
             }
             _ => {}
@@ -907,6 +953,24 @@ pub fn model(doc: &Doc, mut load: impl FnMut(&str) -> Option<slint::Image>) -> S
     SValue::Model(slint::ModelRc::new(Rows::new(parsed.rows)))
 }
 
+/// A block's text without styles (`MarkdownBlock.plain`, what a selectable
+/// view shows): a code block's code, a table's cells (tab between cells,
+/// a line per row), an image's alt text, otherwise the inline plain text
+/// with each link's address after its text (`text (url)`).
+fn plain(block: &Block) -> String {
+    match block.kind {
+        "code" => block.code.clone(),
+        "table" => block
+            .rows
+            .iter()
+            .map(|(cells, _)| cells.join("\t"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        "image" => block.alt.clone(),
+        _ => block.inline.plain_with_links(),
+    }
+}
+
 /// One `MarkdownBlock` struct.
 fn row_value(block: &Block, image: Option<slint::Image>) -> SValue {
     let list =
@@ -932,6 +996,18 @@ fn row_value(block: &Block, image: Option<slint::Image>) -> SValue {
     set(
         "text",
         SValue::from(block.inline.styled(block.kind == "heading")),
+    );
+    set("plain", SValue::String(plain(block).into()));
+    set(
+        "links",
+        list(
+            block
+                .inline
+                .links
+                .iter()
+                .map(|(_, _, url)| SValue::String(url.as_str().into()))
+                .collect(),
+        ),
     );
     set("code", SValue::String(block.code.as_str().into()));
     set("alt", SValue::String(block.alt.as_str().into()));
