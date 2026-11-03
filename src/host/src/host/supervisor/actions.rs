@@ -26,11 +26,11 @@ impl Host {
                 Action::DropCheckpoint { unit } => self.drop_checkpoint(unit),
                 Action::Terminate {
                     pid,
-                    reason: crate::supervisor::StopReason::Idle,
+                    reason,
                     grace,
                     keep_registrations: true,
                     ..
-                } => self.park(pid.0, grace),
+                } => self.park(pid.0, reason, grace),
                 Action::Terminate {
                     pid, reason, grace, ..
                 } => self.terminate(pid.0, reason, grace),
@@ -144,13 +144,48 @@ impl Host {
             checkpoint::remove(&self.activation_dir(), &instance);
         }
     }
-    /// The core's `Terminate` of an idle run, keeping its registrations
-    /// (T12, T14; today's `park` after its recording): stopped, held.
-    fn park(&mut self, owner: u64, grace: u64) {
+    /// The core's `Terminate` keeping the run's registrations: an idle run
+    /// (T12, T14; today's `park` after its recording), or from B3 a start
+    /// that timed out (T8/T11, `start_failure_keeps_registrations`; its
+    /// recording is the one it was woken from): stopped, held.
+    fn park(&mut self, owner: u64, reason: crate::supervisor::StopReason, grace: u64) {
         let (Some(_), Some(plugin)) = (self.checkpoint_key_of(owner), self.plugins.get(&owner))
         else {
+            // A failed start with nothing to hold: stopped as any other
+            // stop (an idle park of such a run never comes).
+            if reason != crate::supervisor::StopReason::Idle {
+                self.terminate(owner, reason, grace);
+            }
             return;
         };
+        if reason != crate::supervisor::StopReason::Idle {
+            let id = plugin.manifest.id.clone();
+            let now = self.now_ms();
+            if let Ok(activation::Status::TimedOut) = self.activation_status(owner, now) {
+                self.record_failure(owner, "activation timed out");
+            }
+            let plugin = &self.plugins[&owner];
+            let origin = Origin {
+                catalog: i18n::load(&plugin.directory),
+                ..plugin.origin()
+            };
+            let name = crate::packages::package_manager::display_name(
+                &plugin.manifest,
+                origin.catalog.as_deref(),
+            );
+            let (warnings, warning) = (self.warnings_of(owner), self.warning_text(owner));
+            self.stop_process(owner, wire_reason(reason), Duration::from_millis(grace));
+            diag!("lazy: {id} could not start; its entry points stay for the next use");
+            self.hold(
+                owner,
+                Held {
+                    warnings,
+                    warning,
+                    ..Held::new(id, origin, name)
+                },
+            );
+            return;
+        }
         let id = plugin.manifest.id.clone();
         // Its own catalog: the stopping plugin unregisters its `Arc` on
         // the thread that drops it, which must not take the held one's.
@@ -339,29 +374,81 @@ impl Host {
             self.supervisor.remove_unit(unit);
         }
     }
+    /// The name `unit` is shown by in notices (as held).
+    fn unit_name(&self, unit: UnitId) -> String {
+        let id = self.unit_id(unit);
+        self.on_demand.names.get(&id).cloned().unwrap_or(id)
+    }
     /// An OSD for `unit` (i18n texts here, §5).
     fn notice(&mut self, unit: UnitId, notice: Notice) {
-        let id = self.unit_id(unit);
-        let name = self.on_demand.names.get(&id).cloned().unwrap_or(id);
+        let name = self.unit_name(unit);
         let text = match notice {
             Notice::Starting => i18n::tr_args("Starting {}…", &json!([name])),
             Notice::CouldNotStart => i18n::tr_args("{} could not start", &json!([name])),
-            // B4 (crash notices, start limits, runner restarts) and B3.
+            // B4 (crash notices, start limits, runner restarts).
             other => {
-                diag!("supervisor: unit {name}: notice {other:?} not shown before B3/B4");
+                diag!("supervisor: unit {name}: notice {other:?} not shown before B4");
                 return;
             }
         };
-        self.show_osd(&text);
+        self.supervisor_osd(unit, text);
     }
-    /// A held trigger that cannot be delivered (§4.6): from B3
-    /// (`answer_held`); `legacy()` answers nothing.
+    /// A supervisor OSD for `unit`, shown once for the same text within a
+    /// second: a start that could not start and the answers to its held
+    /// clicks, or a storm of clicks answered busy, show one.
+    fn supervisor_osd(&mut self, unit: UnitId, text: String) {
+        let now = self.now_ms();
+        let repeated = self
+            .on_demand
+            .last_osd
+            .as_ref()
+            .is_some_and(|(u, shown, at)| {
+                *u == unit && *shown == text && now.saturating_sub(*at) < 1_000
+            });
+        if !repeated {
+            self.show_osd(&text);
+            self.on_demand.last_osd = Some((unit, text, now));
+        }
+    }
+    /// A held trigger that cannot be delivered (§4.6, from B3:
+    /// `answer_held`, and a trigger refused by the bounds): a command shows
+    /// why in an OSD ("`<name>` is busy" / "could not start" / "is
+    /// disabled"); a resolution request fails at once with that text
+    /// instead of at its 30 s deadline; a drop or a UI callback is dropped
+    /// with a diagnostic line; a wake event never comes here (dropped
+    /// silently by the core).
     fn held_unanswered(&mut self, unit: UnitId, reason: AnswerReason, payload: &Value) {
+        let name = self.unit_name(unit);
+        let what = event(payload).unwrap_or("a shown settings page");
         diag!(
-            "supervisor: unit {}: {} not delivered: {reason:?}",
-            self.unit_id(unit),
-            event(payload).unwrap_or("a trigger")
+            "supervisor: unit {}: {what} not delivered: {reason:?}",
+            self.unit_id(unit)
         );
+        let text = match reason {
+            AnswerReason::Busy => i18n::tr_args("{} is busy", &json!([name])),
+            AnswerReason::Disabled => i18n::tr_args("{} is disabled", &json!([name])),
+            AnswerReason::CouldNotStart | AnswerReason::Held { .. } => {
+                i18n::tr_args("{} could not start", &json!([name]))
+            }
+            // Uninstalled, or its start canceled by another stop (a reload,
+            // quit): nothing the click can still do.
+            AnswerReason::Removed | AnswerReason::Stopped => {
+                i18n::tr_args("{} is no longer available", &json!([name]))
+            }
+        };
+        match what {
+            "commands.execute" => self.supervisor_osd(unit, text),
+            "source.resolveRequest" => {
+                if let Some(id) = payload["data"]["requestId"].as_u64() {
+                    let _ = self.backend.commands.send(Command {
+                        reply: Reply { owner: 0, id: 0 },
+                        method: "owner.refuseResolution".into(),
+                        params: json!({"requestId": id, "message": text}),
+                    });
+                }
+            }
+            _ => {}
+        }
     }
 }
 

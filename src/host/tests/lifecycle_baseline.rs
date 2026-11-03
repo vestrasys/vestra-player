@@ -977,7 +977,8 @@ const REAPED: &str = "aa.fixture-gone-reaped";
 /// meanwhile waits for that process to go, never beside it: a wake by a
 /// command (`Parked.waiting`, `lazy_tick`; the 20 s `STOP_WAIT_MS` never
 /// runs out), a disable and enable (`set_enabled(true)` → `packages.reloads`:
-/// listed `starting`, a second enable `busy`), an uninstall that removes the
+/// listed `starting`; a second enable `busy` until B3, `ok` since), an
+/// uninstall that removes the
 /// data (`data_removals` at the parked process's `Reaped`). An uninstall
 /// once the parked process is gone removes the data at once.
 #[test]
@@ -1063,15 +1064,18 @@ fn standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone() {
     let hello = at(&log, &format!("{WAKE} hello"));
     assert!(second < hello, "{log}");
     // Enabled again right after its disable in standby: `starting` until
-    // the parked process is gone, `busy` meanwhile; then a fresh start
-    // (the disable cleared its session values) beside nothing.
+    // the parked process is gone; then a fresh start (the disable cleared
+    // its session values) beside nothing. A second enable meanwhile was
+    // `busy` (today's enable-after-park entry in `packages.reloads`); since
+    // B3 it is merged into the waiting start (an enable is the user's, not
+    // a package RPC: §15 B3, §17.7 D2, `enable_wait_busy` off).
     at(&log, &format!("lazy: {ENABLE} parked"));
     at(
         &log,
         &format!("{MANAGER} enable off ok on ok then starting"),
     );
     assert!(
-        log.contains(" again busy"),
+        log.contains(" again ok"),
         "a second enable while waiting: {log}"
     );
     at(

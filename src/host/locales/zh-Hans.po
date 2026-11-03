@@ -415,6 +415,16 @@ msgstr "正在启动 {}…"
 msgid "{} could not start"
 msgstr "{} 无法启动"
 
+#. The OSD when a click on a plugin's command cannot be held: too many wait for it to start.
+#: src/host/host/supervisor/actions.rs
+msgid "{} is busy"
+msgstr "{} 正忙"
+
+#. The OSD when a click waiting for a plugin to start finds it switched off.
+#: src/host/host/supervisor/actions.rs
+msgid "{} is disabled"
+msgstr "{} 已停用"
+
 #. The OSD once per start when plugin shaders are kept off because the last run ended while they were on.
 #: src/host/diagnostics.rs
 #, x-machine

@@ -467,6 +467,18 @@ impl Backend {
                                 sources.prune(command.reply.owner);
                                 continue;
                             }
+                            // A resolution request the host could not
+                            // deliver to its resolver (supervisor.md §4.6).
+                            "owner.refuseResolution" => {
+                                if let Some(id) = command.params["requestId"].as_u64() {
+                                    let message = command.params["message"]
+                                        .as_str()
+                                        .unwrap_or("resolver unavailable")
+                                        .to_owned();
+                                    sources.refuse_resolution(id, message);
+                                }
+                                continue;
+                            }
                             "owner.replay" => {
                                 if let Err(error) =
                                     sources.replay_resolver(command.reply.owner, &command.params)

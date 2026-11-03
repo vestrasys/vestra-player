@@ -6,9 +6,11 @@
 //! MOVE (B2a, doc/architecture/supervisor.md §2.1 `activation.rs`) of
 //! `host/package_activation.rs`: an `Activation` is the old `Book` entry,
 //! now held by its `Unit` (one per unit, for the run being activated)
-//! instead of a global map keyed by owner. The Supervisor counts them
-//! against `LIMIT` (removed in B3). The UI requests the Host tracks for an
-//! activation (`Host.activation_ui`) moved with it (`Run::ui_replies`).
+//! instead of a global map keyed by owner. The old `LIMIT` of 64
+//! activations at once (§0 D1) is gone (B3, §17.12): how many plugins start
+//! at once is the start-job limit's (`max_active`, §4.4), and a full queue
+//! waits instead of failing the start. The UI requests the Host tracks for
+//! an activation (`Host.activation_ui`) moved with it (`Run::ui_replies`).
 #![forbid(unsafe_code)]
 
 use std::collections::BTreeSet;
@@ -18,9 +20,10 @@ use serde::Serialize;
 use super::unit::Pid;
 
 pub(super) const MAX_SAFE: u64 = (1_u64 << 53) - 1;
-/// Activations in flight at once, built-ins included (§0 D1; removed in
-/// B3), and initial UI requests per activation.
-pub(super) const LIMIT: usize = 64;
+/// Initial UI requests per activation (the old `Book`'s per-entry bound,
+/// MOVE; the 64 activations at once it shared the constant with are gone
+/// since B3, §17.12).
+pub(super) const UI_LIMIT: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(
@@ -148,7 +151,7 @@ impl Activation {
                 if pending_ui.contains(&registration) {
                     return Err(Error::Conflict);
                 }
-                if pending_ui.len() == LIMIT {
+                if pending_ui.len() == UI_LIMIT {
                     return Err(Error::Full);
                 }
                 pending_ui.insert(registration);
@@ -366,7 +369,9 @@ mod tests {
             book.begin(owner, 100).unwrap();
         }
         assert_eq!(book.begin(1, 100), Err(Error::Conflict));
-        assert_eq!(book.begin(65, 100), Err(Error::Full));
+        // B3 (§15: "the 64-plugin ceiling is gone"): a 65th activation is
+        // taken; the per-activation bound on UI requests stays.
+        book.begin(65, 100).unwrap();
         for registration in 1..=64 {
             book.ui_begin(1, registration, 1).unwrap();
         }
@@ -390,7 +395,7 @@ mod tests {
             }
         );
         book.remove(2);
-        book.begin(65, 100).unwrap();
+        book.begin(66, 100).unwrap();
     }
 
     #[test]
@@ -410,29 +415,31 @@ mod tests {
         );
     }
 
-    /// B0 (doc/architecture/supervisor.md §0 D1, D3): at most 64
-    /// activations at once, built-ins included, and an activation leaves
-    /// only by `activation_end`: one that timed out or failed keeps its
-    /// place.
+    /// B0 (doc/architecture/supervisor.md §0 D1, D3) pinned at most 64
+    /// activations at once, built-ins included, with a terminal one keeping
+    /// its place until `activation_end`. Flipped in B3 (§15 B3: "the
+    /// 64-plugin ceiling is gone"; §17.12): a terminal activation stays
+    /// readable until it is ended, and holds no place.
     #[test]
-    fn b0_a_terminal_entry_keeps_its_place_until_removed() {
+    fn b3_terminal_entries_take_no_place_and_more_than_64_activate() {
         let mut book = Book::default();
         for owner in 1..=64 {
             book.begin(owner, 100).unwrap();
         }
         assert_eq!(book.status(1, 100).unwrap(), Status::TimedOut);
         book.runtime_failed(2, "spawn failed".into(), 1).unwrap();
-        assert_eq!(book.begin(65, 200), Err(Error::Full));
+        for owner in 65..=200 {
+            book.begin(owner, 200).unwrap();
+        }
+        assert_eq!(book.status(1, 101).unwrap(), Status::TimedOut);
         book.remove(1);
-        book.begin(65, 200).unwrap();
-        assert_eq!(book.begin(66, 200), Err(Error::Full));
-        book.remove(2);
-        book.begin(66, 200).unwrap();
+        assert_eq!(book.status(1, 102).unwrap(), Status::Unknown);
     }
 
     /// B2a (A18 leak 1): the activation is the unit's, one per unit. A run
-    /// whose spawn failed and was never ended cannot hold a place past the
-    /// unit's next start: that start's activation replaces it.
+    /// whose spawn failed and was never ended is replaced by the unit's
+    /// next start's activation (its pid unmapped). (Until B3 this also
+    /// showed it took no second place under `LIMIT`; §17.12.)
     #[test]
     fn a_units_next_activation_replaces_a_stale_one_without_taking_a_place() {
         let mut sup = Supervisor::<u32>::new(Tunables::legacy(), 1);
@@ -444,8 +451,8 @@ mod tests {
             assert_eq!(pid, Pid(n as u64 + 1));
             sup.activation_begin(*u, pid, 100).unwrap();
         }
-        // Each unit starts again: the stale activations are replaced, the
-        // count stays at 64, and a 65th unit is still refused.
+        // Each unit starts again: the stale activations are replaced (their
+        // pids unmapped), and a 65th unit activates beside them (B3).
         for u in &units {
             let pid = sup.alloc_pid();
             sup.activation_begin(*u, pid, 200).unwrap();
@@ -454,10 +461,10 @@ mod tests {
         assert_eq!(sup.by_pid(Pid(1)), None);
         let extra = sup.load_unit("a.fixture-064");
         let pid = sup.alloc_pid();
-        assert_eq!(sup.activation_begin(extra, pid, 200), Err(Error::Full));
-        sup.activation_end(Pid(65));
         sup.activation_begin(extra, pid, 200).unwrap();
         assert_eq!(sup.by_pid(pid), Some(extra));
+        sup.activation_end(Pid(65));
+        assert_eq!(sup.by_pid(Pid(65)), None);
     }
 
     /// The UI requests waited on move with the activation (the old

@@ -409,6 +409,16 @@ msgstr ""
 msgid "{} could not start"
 msgstr ""
 
+#. The OSD when a click on a plugin's command cannot be held: too many wait for it to start.
+#: src/host/host/supervisor/actions.rs
+msgid "{} is busy"
+msgstr ""
+
+#. The OSD when a click waiting for a plugin to start finds it switched off.
+#: src/host/host/supervisor/actions.rs
+msgid "{} is disabled"
+msgstr ""
+
 #. The OSD once per start when plugin shaders are kept off because the last run ended while they were on.
 #: src/host/diagnostics.rs
 msgid "Plugin shaders are off: the player ended unexpectedly while they were on"

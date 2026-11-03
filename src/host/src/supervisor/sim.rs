@@ -287,9 +287,9 @@ fn busy_answer_keeps_it_running_and_asks_again_later() {
     w.s.wake(holder, &Trigger::interactive(1));
     w.tick(0);
     let pid = w.pid(u);
-    w.s.begin_work(pid, 5, 100);
+    w.s.begin_work(pid, WorkKind::Request(5), 100);
     assert!(!w.tick(70_000).iter().any(is_terminate), "work in flight");
-    w.s.end_work(pid, 5);
+    w.s.end_work(pid, WorkKind::Request(5));
     let actions = w.tick(140_000);
     assert!(actions.iter().any(is_terminate));
 }
@@ -1023,7 +1023,7 @@ fn budget_world() -> (World, [UnitId; 6]) {
         w.tick(at);
     }
     let pid = w.pid(busy);
-    w.s.begin_work(pid, 1, 60_000);
+    w.s.begin_work(pid, WorkKind::Request(1), 60_000);
     assert_eq!(w.s.budget_count(), 4);
     (w, [builtin, resident, busy, old, recent, new])
 }
@@ -1054,7 +1054,7 @@ fn lru_never_picks_busy_and_overruns_when_none_qualifies() {
     let (mut w, [.., old, recent, new]) = budget_world();
     for u in [old, recent] {
         let pid = w.pid(u);
-        w.s.begin_work(pid, 2, 90_000);
+        w.s.begin_work(pid, WorkKind::Request(2), 90_000);
     }
     let holder = w.holder(new);
     w.s.wake(holder, &Trigger::interactive(1));
@@ -2306,12 +2306,12 @@ fn busy_lazy_first_run_parks_when_idle_legacy() {
         let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
         w.tick(0);
         let pid = w.pid(u);
-        w.s.begin_work(pid, 1, 5);
+        w.s.begin_work(pid, WorkKind::Request(1), 5);
         w.s.classified(pid, None);
         w.tick(6);
         assert!(active(&w, u));
         assert_eq!(w.s.slots_in_use().1, usize::from(parks));
-        w.s.end_work(pid, 1);
+        w.s.end_work(pid, WorkKind::Request(1));
         w.tick(300);
         assert_eq!(
             matches!(w.state(u), UnitState::Standby { .. }),

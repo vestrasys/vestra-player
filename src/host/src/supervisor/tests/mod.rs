@@ -863,10 +863,10 @@ impl Sim {
         self.sup.touch(pid, self.now)
     }
     pub fn begin_work(&mut self, pid: Pid) {
-        self.sup.begin_work(pid, 1, self.now)
+        self.sup.begin_work(pid, WorkKind::Request(1), self.now)
     }
     pub fn end_work(&mut self, pid: Pid) {
-        self.sup.end_work(pid, 1)
+        self.sup.end_work(pid, WorkKind::Request(1))
     }
     /// The shared runner hangs (the core allocates runner ids; the test's
     /// runner number only says "shared").
@@ -1087,30 +1087,30 @@ pub(super) fn revoked(a: &Act) -> Option<(UnitId, Pid)> {
 }
 
 /// A plugin-declared long work kind (`commands.busy`, a settings page
-/// busy). GUESS: §5 `begin_work(pid, kind, now)` has no way to say that a
-/// kind is not a host→plugin request awaiting a reply, while the
-/// coordinator's ruling (blackboard, Open items) gives such work no cap.
-/// This number is the adapter's own; see
+/// busy): `WorkKind::Declared`, never capped (coordinator ruling, blackboard
+/// Open items; supervisor.md §17.12). The number is the adapter's own; see
 /// `b3::w_declared_busy_has_no_request_cap`.
-pub(super) const DECLARED_BUSY: WorkKind = u64::MAX;
+pub(super) const DECLARED_BUSY: WorkKind = WorkKind::Declared(0);
 
 impl Sim {
     /// Third-party start slots in use (`slots_in_use().0`).
     pub fn slots(&self) -> usize {
         self.sup.slots_in_use().0
     }
-    /// `begin_work` with the adapter's kind (a request id, §17.1).
-    pub fn begin_work_kind(&mut self, pid: Pid, kind: WorkKind) {
+    /// `begin_work` of a host→plugin request with the adapter's id (§17.1,
+    /// `WorkKind::Request`).
+    pub fn begin_work_kind(&mut self, pid: Pid, kind: u64) {
         self.sup.set_now(self.now);
-        self.sup.begin_work(pid, kind, self.now)
+        self.sup.begin_work(pid, WorkKind::Request(kind), self.now)
     }
-    pub fn end_work_kind(&mut self, pid: Pid, kind: WorkKind) {
+    pub fn end_work_kind(&mut self, pid: Pid, kind: u64) {
         self.sup.set_now(self.now);
-        self.sup.end_work(pid, kind)
+        self.sup.end_work(pid, WorkKind::Request(kind))
     }
     /// Plugin-declared long work (`commands.busy`): see `DECLARED_BUSY`.
     pub fn begin_declared_busy(&mut self, pid: Pid) {
-        self.begin_work_kind(pid, DECLARED_BUSY)
+        self.sup.set_now(self.now);
+        self.sup.begin_work(pid, DECLARED_BUSY, self.now)
     }
     /// The B2a identity input `activation_begin` for `n` fresh units, each
     /// with a new pid: how many were accepted (§13 B3 "remove `LIMIT 64`").

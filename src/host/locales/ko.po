@@ -506,6 +506,18 @@ msgstr "{} 시작 중…"
 msgid "{} could not start"
 msgstr "{}을(를) 시작할 수 없습니다"
 
+#. The OSD when a click on a plugin's command cannot be held: too many wait for it to start.
+#: src/host/host/supervisor/actions.rs
+#, x-machine
+msgid "{} is busy"
+msgstr "{}이(가) 처리 중입니다"
+
+#. The OSD when a click waiting for a plugin to start finds it switched off.
+#: src/host/host/supervisor/actions.rs
+#, x-machine
+msgid "{} is disabled"
+msgstr "{}이(가) 비활성화되어 있습니다"
+
 #. The OSD once per start when plugin shaders are kept off because the last run ended while they were on.
 #: src/host/diagnostics.rs
 #, x-machine
