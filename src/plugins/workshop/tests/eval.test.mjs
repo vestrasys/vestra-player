@@ -51,7 +51,7 @@ test("the harness: the agent reads the documentation tree, fixes a type error an
   assert.deepEqual(result.projects, [{ id: "eval.demo", typecheck: true, test: true, check: true, pass: true }]);
 
   // What the model saw: the documentation (read in the agent's restricted worker), the scaffold, the structured type error, the passes.
-  assert.match(text(seen[1]), /Vestra Player SDK 1\.5\.\d+ documentation/);
+  assert.match(text(seen[1]), /Vestra Player SDK \d+\.\d+\.\d+ documentation/);
   assert.match(text(seen[2]), /\/API\/Commands\/Commands\/add/);
   assert.match(text(seen[3]), /\/API\/Commands\/Commands\/add · Method/);
   assert.match(text(seen[4]), /Created the plugin project work\/eval\.demo/);

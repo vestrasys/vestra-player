@@ -302,6 +302,10 @@ pub(crate) struct Host {
     /// The binding list `bindings.changed` last announced: a table rebuilt
     /// to the same list (a plugin woken or parked) announces nothing.
     pub(crate) bindings_list_sent: Value,
+    /// What the list behind `bindings_list_sent` showed was built from:
+    /// the table's and the command registry's listed revisions. It is
+    /// built again only once they moved (`notify_tick`).
+    pub(crate) bindings_seen: [u64; 2],
     pub(crate) packages_sent: Value,
     /// The sources of the `packages.list` behind `packages_sent`: the list
     /// is built again only once they moved (`packages_key`).

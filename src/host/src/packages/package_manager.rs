@@ -1310,6 +1310,11 @@ impl Host {
     /// development loads, by id.
     pub(crate) fn package_list(&mut self) -> Value {
         let now = self.now_ms();
+        self.package_list_at(now)
+    }
+    /// [`Host::package_list`] as at `now` (the supervisor's clock): the
+    /// same `now` as [`Host::packages_key`]'s when they are compared.
+    pub(crate) fn package_list_at(&mut self, now: u64) -> Value {
         let mut list = BTreeMap::<String, Value>::new();
         self.supervisor.set_now(now);
         let owners = self.plugins.keys().copied().collect::<Vec<_>>();

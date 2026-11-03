@@ -125,34 +125,56 @@ impl Host {
             return;
         }
         self.notified_at = now;
-        let revision = self.input.borrow().table.revision();
+        let (revision, key) = {
+            let table = &self.input.borrow().table;
+            (
+                table.revision(),
+                [table.listed_revision(), self.commands.listed_revision()],
+            )
+        };
         if revision != self.bindings_sent {
             self.bindings_sent = revision;
             // Only a change of the list: a table rebuilt to the same list
             // (a plugin parked or woken under a new owner, lazy activation
             // §6.9) is not one, so it wakes no parked listener.
-            let list = if self.listened("bindings.changed") {
-                in_order(self.bindings_list())
+            if !self.listened("bindings.changed") {
+                self.bindings_list_sent = Value::Null;
             } else {
-                Value::Null
-            };
-            if list.is_null() {
-                self.bindings_list_sent = list;
-            } else if list != self.bindings_list_sent {
-                // The first list of a run is no change for a parked plugin.
-                let first = self.bindings_list_sent.is_null();
-                self.bindings_list_sent = list;
-                self.announce("bindings.changed", Value::Null, first);
+                // Built and compared only when what it shows may have
+                // changed (supervisor.md §6.1): during a wake storm every
+                // woken plugin's commands move to its new owner, and the
+                // list took 3–6 ms to build each time.
+                let moved = key != self.bindings_seen || self.bindings_list_sent.is_null();
+                if moved || cfg!(debug_assertions) {
+                    let list = in_order(self.bindings_list());
+                    let same = list == self.bindings_list_sent;
+                    // Debug builds (every test with the real player) build
+                    // it anyway: unchanged sources must give the same list.
+                    assert!(
+                        moved || same,
+                        "bindings.list changed while its sources did not: {key:?}"
+                    );
+                    if !same {
+                        // The first list of a run is no change for a parked plugin.
+                        let first = self.bindings_list_sent.is_null();
+                        self.bindings_list_sent = list;
+                        self.announce("bindings.changed", Value::Null, first);
+                    }
+                    self.bindings_seen = key;
+                }
             }
         }
         if self.listened("packages.changed") {
             // Built and compared only once a source moved (supervisor.md
             // §6.1): a list of about 200 packages took 4–12 ms to build, every
             // 200 ms, also when nothing happened.
-            let key = self.packages_key();
+            // One clock reading for both: a start deadline passing between
+            // two would change the list but not the key.
+            let now = self.now_ms();
+            let key = self.packages_key(now);
             let moved = key.is_none() || key != self.packages_seen;
             if moved || cfg!(debug_assertions) {
-                let list = self.package_list();
+                let list = self.package_list_at(now);
                 // A park or a wake alone changes only `process`: no event (§5.3).
                 let same = same_but_process(&list, &self.packages_sent);
                 // Debug builds (every test with the real player) build it
@@ -178,11 +200,10 @@ impl Host {
     /// are installed (a change is a new install: the store's revision);
     /// `process::data_root` and the interface language are fixed for the
     /// run.
-    fn packages_key(&mut self) -> Option<PackagesKey> {
+    fn packages_key(&mut self, now: u64) -> Option<PackagesKey> {
         if !self.development.is_empty() {
             return None;
         }
-        let now = self.now_ms();
         self.supervisor.set_now(now);
         let (store, operations) = self.packages.list_revision();
         Some(PackagesKey {
