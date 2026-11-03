@@ -4,7 +4,8 @@
  * with an empty data directory and a PATH without node, ffmpeg or Homebrew,
  * and requires every built-in plugin to reach runtime.ready (panel plugins
  * may instead report "mounts require a native shell", which is what
- * headless mode answers them).
+ * headless mode answers them), and the start-up line to name the release
+ * version of the packaged release.json (<plugins>/../release.json).
  *
  *   node packaging/smoke.mjs --exe <vestra-host[.exe]> --plugins <Resources/plugins>
  *     [--seconds N]   default 15, on Windows 45
@@ -12,8 +13,8 @@
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, join, resolve } from "node:path";
-import { fail, parseArgs, readJson, walk } from "./lib.mjs";
+import { delimiter, dirname, join, resolve } from "node:path";
+import { exists, fail, parseArgs, readJson, walk } from "./lib.mjs";
 
 const options = parseArgs(process.argv.slice(2));
 if (!options.exe || !options.plugins)
@@ -90,6 +91,19 @@ const failed = output
   .split("\n")
   .filter((line) => /failed to start/.test(line));
 if (failed.length) problems.push(`${failed.length} plugin(s) failed to start`);
+// The host reads the release version from <resources>/release.json and logs
+// `start: Vestra Player <release> (host <host>, <build>) on …`; a missing or
+// unreadable file falls back to the host version, which this catches.
+const releaseFile = join(dirname(resolve(options.plugins)), "release.json");
+if (exists(releaseFile)) {
+  const expected = (await readJson(releaseFile)).version;
+  const shown = /^start: Vestra Player (\S+) \(host /m.exec(output)?.[1];
+  if (shown !== expected)
+    problems.push(
+      `start-up line shows version ${shown ?? "(no start line)"}, release.json says ${expected}`,
+    );
+  else console.log(`smoke: the player reports release ${shown}`);
+} else problems.push(`${releaseFile} is missing`);
 // Counted per plugin, so one plugin reporting twice cannot stand in for
 // another that never got there. The host logs `runtime <owner>
 // runtime.ready: …` (one owner per plugin instance).

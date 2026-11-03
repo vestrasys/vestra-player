@@ -11,7 +11,8 @@
  *
  * The "host input hash" names those inputs: a SHA-256 over a manifest of
  *   - a recipe line (cargo build --release --locked in src/host, default
- *     features, no RUSTFLAGS; bump RECIPE when the build command changes),
+ *     features, no RUSTFLAGS, the cargo-about version; bump RECIPE when the
+ *     build command or the cargo-about version changes),
  *   - the target triple,
  *   - the deps archive the host links (src/packaging/deps.json, that
  *     platform's file and SHA-256: libmpv's import library / dylib),
@@ -35,9 +36,16 @@
  *       files), or of a commit; --list prints the manifest instead.
  *   node packaging/host.mjs versions
  *       Prints release=<x.y.z> and host=<x.y.z>; fails unless release ≥ host.
+ *   node packaging/host.mjs check-bump [--target <triple>] [--repo o/n] [--releases N]
+ *       For each target (default both): fails when a published release
+ *       shipped this host version built from other inputs, or a higher host
+ *       version (raise version in src/host/Cargo.toml). Run before tagging;
+ *       release.yml's verify job runs it, fetch and --reuse-host check it too.
  *   node packaging/host.mjs fetch --target <triple> --out <dir> [--repo o/n] [--releases N]
  *       Looks through the newest N (30) published releases for a host.json
- *       whose entry for this target has this hash; downloads that release's
+ *       whose entry for this target has this hash (after the check-bump
+ *       check; a failure there, or a release that does not check out, is an
+ *       error, not "nothing found"); downloads that release's
  *       archive, checks host.json and the archive against its SHA256SUMS and
  *       the binary against host.json, and writes <dir>/vestra-host[.exe],
  *       <dir>/rust-crates.html and <dir>/host.json. found=true|false (and the
@@ -51,10 +59,12 @@
  * the local host cache, then a published release, then cargo build.
  */
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, join, posix, resolve } from "node:path";
 import {
   capture,
+  compareVersions,
   copy,
   exists,
   fail,
@@ -72,9 +82,14 @@ import {
   zipRead,
 } from "./lib.mjs";
 
-/** Bump when the build command or the manifest format changes. */
+/**
+ * Bump when the build command or the manifest format changes. It names the
+ * cargo-about version too: rust-crates.html is reused with the binary, so a
+ * new cargo-about (`tool: cargo-about@…` in .github/workflows/_package.yml;
+ * a test checks the two agree) must not reuse pages the old one wrote.
+ */
 export const RECIPE =
-  "vestra-host-input/1 cargo build --release --locked (src/host, default features, no RUSTFLAGS)";
+  "vestra-host-input/1 cargo build --release --locked (src/host, default features, no RUSTFLAGS); cargo-about 0.9.2";
 
 export const TARGETS = {
   "x86_64-pc-windows-msvc": {
@@ -338,59 +353,155 @@ export function githubReleases(repoName, limit = 30) {
   };
 }
 
+/**
+ * An error that must stop packaging rather than fall back to a build: a
+ * published release whose files do not check out (verification), or a host
+ * version that a different host was already released under (bump). Anything
+ * else from a release lookup (no gh, no network) only means "nothing to
+ * reuse".
+ */
+export class HostError extends Error {
+  constructor(kind, message) {
+    super(message);
+    this.name = "HostError";
+    this.kind = kind;
+  }
+}
+
 async function checked(path, sums, name) {
   const expected = sums.get(name);
-  if (!expected) throw new Error(`SHA256SUMS does not list ${name}`);
+  if (!expected)
+    throw new HostError("verification", `SHA256SUMS does not list ${name}`);
   const actual = await sha256File(path);
   if (actual !== expected)
-    throw new Error(`${name}: SHA-256 ${actual}, SHA256SUMS says ${expected}`);
+    throw new HostError(
+      "verification",
+      `${name}: SHA-256 ${actual}, SHA256SUMS says ${expected}`,
+    );
+}
+
+/**
+ * Every published (not draft) release with a host.json, newest first:
+ * [{ tag, assets, hosts, sums }], host.json checked against the release's
+ * SHA256SUMS. Throws a HostError when one does not check out.
+ */
+export async function releasedHosts({ from = githubReleases(), scratch }) {
+  const releases = (await from.releases()).filter((release) =>
+    release.assets.includes("host.json"),
+  );
+  const out = [];
+  for (const release of releases) {
+    const dir = join(scratch, release.tag.replace(/[^0-9A-Za-z.+-]/g, "_"));
+    await rm(dir, { recursive: true, force: true });
+    await mkdir(dir, { recursive: true });
+    await from.download(release.tag, ["host.json", "SHA256SUMS"], dir);
+    const sums = parseSums(await readFile(join(dir, "SHA256SUMS"), "utf8"));
+    try {
+      await checked(join(dir, "host.json"), sums, "host.json");
+    } catch (error) {
+      throw new HostError("verification", `${release.tag}: ${error.message}`);
+    }
+    const hosts = (await readJson(join(dir, "host.json"))).hosts ?? {};
+    out.push({ ...release, hosts, sums, dir });
+  }
+  return out;
+}
+
+/**
+ * The host version must name one host: fails (HostError "bump") when a
+ * published release shipped a `target` host under `version` that was built
+ * from other inputs than `hash`. Two binaries with one version would share
+ * everything keyed by it (the GPU crash guard is keyed by host version and
+ * driver, so a guard the old binary set would stick to the fixed one).
+ * Returns the newest release that shipped this host version, if any.
+ */
+export function checkHostBump({ target, hash, version, released }) {
+  const platform = targetInfo(target).platform;
+  for (const release of released) {
+    const record = release.hosts[platform];
+    if (!record || record.target !== target) continue;
+    if (record.hostVersion === version && record.inputHash !== hash)
+      throw new HostError(
+        "bump",
+        `host ${version} (${platform}) was already released in ${release.tag} built from other inputs ` +
+          `(${record.inputHash}, now ${hash}): raise version in src/host/Cargo.toml ` +
+          `(doc/releases/README.md "Release version and host version")`,
+      );
+  }
+  const same = released.find(
+    (release) => release.hosts[platform]?.hostVersion === version,
+  );
+  if (same) return same;
+  // A new host: its version must also be above every one released.
+  for (const release of released) {
+    const record = release.hosts[platform];
+    if (
+      record?.target === target &&
+      compareVersions(record.hostVersion, version) > 0
+    )
+      throw new HostError(
+        "bump",
+        `host ${version} (${platform}) is lower than host ${record.hostVersion} released in ${release.tag}: raise version in src/host/Cargo.toml`,
+      );
+  }
+  return undefined;
 }
 
 /**
  * The newest published (not draft) release whose host.json has `hash` for
  * `target`: its binary and rust-crates.html, verified, in `out`. Returns
- * { binary, licenses, record } or undefined.
+ * { binary, licenses, record } or undefined. Checks the host version first
+ * (checkHostBump). HostError when a release does not check out.
  */
 export async function fetchReleasedHost({
   target,
   hash,
   out,
   from = githubReleases(),
+  version,
 }) {
   const info = targetInfo(target);
-  const releases = (await from.releases()).filter((release) =>
-    release.assets.includes("host.json"),
-  );
-  if (!releases.length) {
-    console.log(`host: no published release of ${from.name} has a host.json`);
-    return undefined;
-  }
   const scratch = join(out, ".download");
-  for (const release of releases) {
-    await rm(scratch, { recursive: true, force: true });
-    await mkdir(scratch, { recursive: true });
-    await from.download(release.tag, ["host.json", "SHA256SUMS"], scratch);
-    const record = (await readJson(join(scratch, "host.json"))).hosts?.[
-      info.platform
-    ];
-    if (record?.inputHash !== hash || record.target !== target) continue;
+  try {
+    const released = await releasedHosts({ from, scratch });
+    if (!released.length) {
+      console.log(`host: no published release of ${from.name} has a host.json`);
+      return undefined;
+    }
+    checkHostBump({
+      target,
+      hash,
+      version: version ?? (await hostVersion()),
+      released,
+    });
+    const release = released.find(
+      (item) =>
+        item.hosts[info.platform]?.inputHash === hash &&
+        item.hosts[info.platform]?.target === target,
+    );
+    if (!release) {
+      console.log(
+        `host: none of ${released.map((item) => item.tag).join(", ")} has a ${info.platform} host with input hash ${hash}`,
+      );
+      return undefined;
+    }
+    const record = release.hosts[info.platform];
     console.log(
       `host: ${release.tag} has a ${info.platform} host built from these inputs (host ${record.hostVersion}, commit ${record.commit})`,
     );
-    const sums = parseSums(await readFile(join(scratch, "SHA256SUMS"), "utf8"));
-    await checked(join(scratch, "host.json"), sums, "host.json");
+    const bad = (message) =>
+      new HostError("verification", `${release.tag}: ${message}`);
     if (!release.assets.includes(record.archive))
-      throw new Error(`${release.tag} has no ${record.archive}`);
-    await from.download(release.tag, [record.archive], scratch);
-    const archive = join(scratch, record.archive);
-    await checked(archive, sums, record.archive);
+      throw bad(`no ${record.archive}`);
+    await from.download(release.tag, [record.archive], release.dir);
+    const archive = join(release.dir, record.archive);
+    await checked(archive, release.sums, record.archive);
     const binary = await zipRead(archive, record.binary);
-    if (!binary) throw new Error(`${record.archive} has no ${record.binary}`);
+    if (!binary) throw bad(`${record.archive} has no ${record.binary}`);
     if (sha256(binary) !== record.binarySha256)
-      throw new Error(`${record.binary}: SHA-256 differs from host.json`);
+      throw bad(`${record.binary}: SHA-256 differs from host.json`);
     const licenses = await zipRead(archive, record.licenses);
-    if (!licenses)
-      throw new Error(`${record.archive} has no ${record.licenses}`);
+    if (!licenses) throw bad(`${record.archive} has no ${record.licenses}`);
     await writeFile(join(out, info.exe), binary, { mode: 0o755 });
     await writeFile(join(out, "rust-crates.html"), licenses);
     const reused = { ...record, reusedFrom: record.reusedFrom ?? release.tag };
@@ -398,18 +509,14 @@ export async function fetchReleasedHost({
       join(out, "host.json"),
       `${JSON.stringify(reused, null, 2)}\n`,
     );
-    await rm(scratch, { recursive: true, force: true });
     return {
       binary: join(out, info.exe),
       licenses: join(out, "rust-crates.html"),
       record: reused,
     };
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
   }
-  await rm(scratch, { recursive: true, force: true });
-  console.log(
-    `host: none of ${releases.map((release) => release.tag).join(", ")} has a ${info.platform} host with input hash ${hash}`,
-  );
-  return undefined;
 }
 
 /** This build's host.json entry for `target`, read from its archive. */
@@ -463,9 +570,13 @@ const cargoTarget = () =>
  *      one directory per target and hash (every host this resolves lands there);
  *   2. `binary` when `binaryCommit` names the commit it was built from and
  *      that commit's hash is the current one (an older staged build);
- *   3. a published release (gh, logged in) with that hash;
+ *   3. a published release (gh, logged in, or `from`) with that hash, after
+ *      checking that no release shipped this host version built from other
+ *      inputs (checkHostBump);
  *   4. cargo build --release --locked in src/host (unless build is false),
  *      in CARGO_TARGET_DIR (one persistent directory keeps it incremental).
+ * Step 3 finding nothing leads to 4; a release that does not check out or a
+ * host version that needs raising throws (HostError) instead.
  * Returns { binary, licenses (rust-crates.html, made with cargo about once
  * per hash), source }.
  */
@@ -474,6 +585,7 @@ export async function resolveHost({
   binary,
   binaryCommit,
   repoName,
+  from,
   build = true,
 }) {
   const info = targetInfo(target);
@@ -521,16 +633,23 @@ export async function resolveHost({
     );
   }
 
+  // No matching release: build. A release that does not check out, or a host
+  // version already released with other inputs: stop (HostError), never
+  // build around it. Only an unavailable lookup (no gh login, offline)
+  // falls through, with a warning, since then nothing could be checked.
   try {
     const found = await fetchReleasedHost({
       target,
       hash,
       out: cache,
-      from: githubReleases(repoName),
+      from: from ?? githubReleases(repoName),
     });
     if (found) return done(`release ${found.record.reusedFrom}`);
   } catch (error) {
-    console.warn(`host: no release lookup (${error.message})`);
+    if (error instanceof HostError) throw error;
+    console.warn(
+      `host: published releases could not be looked up (${error.message}); the host version was not checked against them (host.mjs check-bump)`,
+    );
   }
 
   if (!build)
@@ -568,10 +687,43 @@ async function output(values) {
 if (import.meta.main ?? process.argv[1] === import.meta.filename) {
   const [command, ...rest] = process.argv.slice(2);
   const options = parseArgs(rest, ["list"]);
-  const target = options.target ?? defaultTarget();
+  // Not computed up front: `versions` and `check-bump` run on Linux too,
+  // where there is no default target.
+  const target = () => options.target ?? defaultTarget();
+  const limit = Number(options.releases ?? 30);
   try {
-    if (command === "hash") {
-      const inputs = await hostInputs(target, options.rev);
+    if (command === "check-bump") {
+      const targets = options.target ? [options.target] : Object.keys(TARGETS);
+      const scratch = await mkdtemp(join(tmpdir(), "vestra-check-bump-"));
+      try {
+        const released = await releasedHosts({
+          from: githubReleases(options.repo, limit),
+          scratch,
+        });
+        const version = await hostVersion();
+        for (const triple of targets) {
+          const { platform } = targetInfo(triple);
+          const hash = await hostInputHash(triple);
+          const same = checkHostBump({
+            target: triple,
+            hash,
+            version,
+            released,
+          });
+          const newest = released.find((release) => release.hosts[platform]);
+          console.log(
+            same
+              ? `${platform}: host ${version}, the same inputs as in ${same.tag} (reused)`
+              : newest
+                ? `${platform}: host ${version} is new (last released: ${newest.hosts[platform].hostVersion} in ${newest.tag})`
+                : `${platform}: host ${version}; no published release has a host.json yet`,
+          );
+        }
+      } finally {
+        await rm(scratch, { recursive: true, force: true });
+      }
+    } else if (command === "hash") {
+      const inputs = await hostInputs(target(), options.rev);
       console.log(options.list ? inputs.manifest.trimEnd() : inputs.hash);
     } else if (command === "versions") {
       const { release, host } = await versions();
@@ -581,13 +733,13 @@ if (import.meta.main ?? process.argv[1] === import.meta.filename) {
       if (!options.out) fail("fetch needs --out <dir>");
       const out = resolve(options.out);
       await mkdir(out, { recursive: true });
-      const hash = await hostInputHash(target);
-      console.log(`host input hash (${target}): ${hash}`);
+      const hash = await hostInputHash(target());
+      console.log(`host input hash (${target()}): ${hash}`);
       const found = await fetchReleasedHost({
-        target,
+        target: target(),
         hash,
         out,
-        from: githubReleases(options.repo, Number(options.releases ?? 30)),
+        from: githubReleases(options.repo, limit),
       });
       await output(
         found
@@ -607,19 +759,19 @@ if (import.meta.main ?? process.argv[1] === import.meta.filename) {
         ? await readJson(options.reused)
         : undefined;
       const record = await hostRecord({
-        target,
+        target: target(),
         archive: resolve(options.archive),
         reused,
       });
       await mkdir(resolve(options.out, ".."), { recursive: true });
       await writeFile(
         resolve(options.out),
-        `${JSON.stringify({ [targetInfo(target).platform]: record }, null, 2)}\n`,
+        `${JSON.stringify({ [targetInfo(target()).platform]: record }, null, 2)}\n`,
       );
       console.log(JSON.stringify(record, null, 2));
     } else
       fail(
-        "usage: host.mjs hash|versions|fetch|record [--target <triple>] … (see the header)",
+        "usage: host.mjs hash|versions|check-bump|fetch|record [--target <triple>] … (see the header)",
       );
   } catch (error) {
     fail(error.message);
