@@ -4,6 +4,7 @@
 //! terminate → reaped + backend cleaned, resources → not busy.
 #![forbid(unsafe_code)]
 
+use super::limits::Retry;
 use super::*;
 
 type S = Supervisor<u32>;
@@ -1533,8 +1534,13 @@ fn crash_during_wake_keeps_a_start_only_for_held_events() {
     }
 }
 
+/// A Resident whose start times out restarts by its `Restart=`
+/// (on-failure, 1 s × 2ⁿ from the reap), never in standby. Until the B6
+/// review it was first retried 250 ms after the reap (start retry); since,
+/// a start timeout is not retried (coordinator ruling, supervisor.md
+/// §17.15).
 #[test]
-fn resident_start_timeout_retries_and_never_lands_in_standby() {
+fn resident_start_timeout_restarts_by_its_class_and_never_lands_in_standby() {
     let mut w = World::new(Tunables::legacy().with_b4());
     w.auto_ready = false;
     let r =
@@ -1557,7 +1563,8 @@ fn resident_start_timeout_retries_and_never_lands_in_standby() {
         }
     ));
     let next = w.s.next_deadline().unwrap();
-    assert!((15_250..=15_275).contains(&next), "{next}");
+    assert!((16_000..=16_300).contains(&next), "{next}");
+    assert!(spawns(&w.tick(next - 1)).is_empty());
     assert_eq!(spawns(&w.tick(next)).len(), 1);
 }
 
@@ -2792,11 +2799,13 @@ fn b4_own_transport_fails_and_a_fault_restarts() {
     assert!(spawns(&w.tick(3_001)).len() == 1, "{:?}", w.state(b));
 }
 
-/// With on-demand start off the player keeps a start job ending at its
-/// spawn (§17.13): a start that times out is still retried, as a new
-/// `AutoRestart` start, then fails after the third retry.
+/// With on-demand start off the player kept a start job ending at its
+/// spawn (§17.13): a start that timed out was still retried, as a new
+/// `AutoRestart` start, and failed after the third retry. Since the B6
+/// review a start timeout is not retried (coordinator ruling, supervisor.md
+/// §17.15): a Normal unit without a recording fails at its first timeout.
 #[test]
-fn b4_start_timeout_retries_without_a_start_job() {
+fn b4_start_timeout_is_not_retried_without_a_start_job() {
     let tunables = Tunables {
         start_job_ends_at_spawn: true,
         ..Tunables::legacy().with_b4()
@@ -2813,7 +2822,7 @@ fn b4_start_timeout_retries_without_a_start_job() {
         spawned += spawns(&w.tick(now)).len();
     }
     assert!(matches!(w.state(u), UnitState::Failed { .. }));
-    assert_eq!(spawned, 4, "the start and three retries");
+    assert_eq!(spawned, 1, "the start alone");
 }
 
 /// The Host may run a unit the core placed in the shared runner in its own

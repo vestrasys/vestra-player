@@ -32,7 +32,8 @@ pub struct Backoff {
     pub first_immediate: bool,
 }
 
-/// Retry of a failed spawn / start timeout within one start job.
+/// Retry of a failed spawn within one start job (a start timeout is not
+/// retried since the B6 review, §17.15).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Retry {
     pub count: u32,
@@ -309,11 +310,10 @@ impl Tunables {
     }
 
     /// B4 values on top of `self`: restart policy, backoff, start limits,
-    /// heap cap.
-    // The Host switches presets in B3–B6.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// heap cap. Part of the player's preset since B4 (`target` since B6).
     pub fn with_b4(mut self) -> Self {
-        // A start retry (T11, F1) is the start job's: it lives to the ready.
+        // A start retry (T8; a spawn failure only since the B6 review,
+        // §17.15) is the start job's: it lives to the ready.
         self.start_job_ends_at_spawn = false;
         let retry = Some(Retry {
             count: 3,
@@ -390,6 +390,9 @@ impl Tunables {
             policy.standby_grace = 5_000;
             policy.request_timeout = Some(300_000);
         }
+        // `TimeoutStopSec` 5 s for a development load too (§3.3 "same"; its
+        // start timeout stays 1–120 s, A16).
+        t.development.stop_grace = 5_000;
         t
     }
 

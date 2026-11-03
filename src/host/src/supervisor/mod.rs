@@ -38,7 +38,7 @@ pub use job::{Busy, Cause, Job, JobId, JobKind, JobMode, JobResult, JobState, Or
 // from B2d (until then the Host's `stop` sets it, `PARK_WAIT` for a park).
 #[allow(unused_imports)]
 pub use kill::grace;
-pub use limits::{BuiltinsFirst, RestartMode, Retry, Tunables};
+pub use limits::{BuiltinsFirst, RestartMode, Tunables};
 // Limits and policies the adapter reads once B3–B5 set them.
 #[allow(unused_imports)]
 pub use limits::{Backoff, Policy, StartLimit, max_active_for, process_budget_for};
@@ -2349,19 +2349,20 @@ impl<P: Clone> Supervisor<P> {
         // Its entry points can wait in standby (never a Resident's: it is
         // started, not woken).
         let standby_capable = recorded && !unit.resident && policy.idle_standby;
-        let retry_left = activating
-            && cause == ExitCause::StartTimeout
-            && policy
-                .start_retry
-                .is_some_and(|r| unit.restart.retries < r.count);
-        // A start that timed out with no retry left and no `Restart=` of its
-        // class keeps its entry points in standby, as a failed spawn does
-        // (T8 from B3, `start_failure_keeps_registrations`; coordinator
-        // ruling, §17.12 item 1; Chrome MV3: a worker that fails to start
-        // stays installed and the next event tries again).
-        let kept_start_failure = activating
-            && cause == ExitCause::StartTimeout
-            && !retry_left
+        // A start that timed out is never tried again within its start job:
+        // start retries (`Policy::start_retry`) are for a process that could
+        // not be created (`spawn_failed`). With `TimeoutStartSec` 60 s, four
+        // tries kept a click waiting about 4 min, and a start that times out
+        // is a stuck plugin, not a passing failure (coordinator ruling, B6
+        // review, §17.15; amends §17.6 F1 and §17.13). The unit follows its
+        // class's `Restart=` below.
+        let timed_out = activating && cause == ExitCause::StartTimeout;
+        // A start that timed out with no `Restart=` of its class keeps its
+        // entry points in standby, as a failed spawn does (T8 from B3,
+        // `start_failure_keeps_registrations`; coordinator ruling, §17.12
+        // item 1; Chrome MV3: a worker that fails to start stays installed
+        // and the next event tries again).
+        let kept_start_failure = timed_out
             && self.tunables.start_failure_keeps_registrations
             && standby_capable
             && policy.restart == RestartMode::No;
@@ -2374,25 +2375,6 @@ impl<P: Clone> Supervisor<P> {
             keep = true;
             let delay = unit.restart.next_delay(now, policy.restart_sec);
             unit.hold_next = (delay > 0).then_some(delay);
-        } else if retry_left {
-            let retry = policy.start_retry.unwrap_or(Retry {
-                count: 0,
-                base: 0,
-                jitter_pct: 0,
-            });
-            let delay = retry_delay(retry, unit.restart.retries, &mut self.rng);
-            unit.restart.retries += 1;
-            then = if standby_capable {
-                Then::Standby
-            } else {
-                Then::Inactive
-            };
-            keep = standby_capable;
-            unit.after_reap = Some(delay);
-            if let Some(job) = unit.job.as_mut() {
-                job.state = JobState::Waiting;
-                job.not_before = None;
-            }
         } else if cause.restartable() && !development {
             match policy.restart {
                 RestartMode::No => {}
@@ -2425,14 +2407,6 @@ impl<P: Clone> Supervisor<P> {
             // it (§3.3: "reload clears it").
             failing.1 = start_limit_text(&text, limit);
         }
-        // A start retry after a start timeout with no start job left (one
-        // that ended at its spawn, `start_job_ends_at_spawn`, the player's
-        // preset with on-demand start off): the retry is a new start.
-        let retry_job = retry_left
-            && !self.units[&u]
-                .job
-                .as_ref()
-                .is_some_and(|job| job.will_start());
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
@@ -2457,7 +2431,15 @@ impl<P: Clone> Supervisor<P> {
             if starts {
                 self.finish(u, JobResult::Failed(text.clone()));
             }
-        } else if !retry_left && auto_restart.is_none() {
+        } else if auto_restart.is_some() {
+            // A start that timed out restarts by its class's `Restart=`
+            // (a built-in, a Resident) after its backoff; a click held for
+            // it does not wait that long: answered "could not start" now
+            // (B6 review ruling, §17.15). Wake events stay for the restart.
+            if timed_out {
+                self.answer_interactive(u, AnswerReason::CouldNotStart);
+            }
+        } else {
             // Standby with a hold (T20 ruling): interactive triggers are
             // answered now; the start job stays (waiting for the hold) only
             // while event triggers remain in the backlog — no demand, no
@@ -2508,20 +2490,6 @@ impl<P: Clone> Supervisor<P> {
             self.tunables.exit_sends_no_stop && matches!(cause, ExitCause::Exited | ExitCause::Oom);
         let grace = (!gone).then_some(failure_grace);
         self.deactivate(u, cause.stop_reason(), then, keep, grace);
-        if retry_job {
-            let job = self.new_job(
-                u,
-                JobKind::Start {
-                    cause: Cause::AutoRestart,
-                },
-                Origin::Crash,
-            );
-            if let Some(unit) = self.units.get_mut(&u)
-                && unit.job.is_none()
-            {
-                unit.job = Some(job);
-            }
-        }
         // The delay (`after_reap`) applies once the process is gone.
         if auto_restart.is_some() {
             let has_start = self.units[&u].job.as_ref().is_some_and(Job::will_start);
