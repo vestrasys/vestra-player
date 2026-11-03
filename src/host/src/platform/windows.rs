@@ -1455,6 +1455,47 @@ pub fn memory_status() -> Option<super::MemoryStatus> {
     })
 }
 
+/// Installed physical memory, in bytes (`GlobalMemoryStatusEx`).
+pub fn physical_memory() -> Option<u64> {
+    vestra_win32::physical_memory().map(|memory| memory.total)
+}
+
+/// Memory pressure (supervisor.md §8 "Pressure source"): Chrome's
+/// thresholds on available physical memory (`GlobalMemoryStatusEx`), and
+/// critical while the system's low-memory notification is signaled
+/// (`CreateMemoryResourceNotification`), both through `vestra-win32`.
+#[derive(Debug)]
+pub struct PressureSource {
+    low_memory: Option<vestra_win32::LowMemoryNotification>,
+}
+impl Default for PressureSource {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl PressureSource {
+    pub fn new() -> Self {
+        Self {
+            low_memory: vestra_win32::LowMemoryNotification::new(),
+        }
+    }
+    /// The level now; `None` when the system does not say.
+    pub fn level(&mut self) -> Option<super::MemoryPressure> {
+        let memory = vestra_win32::physical_memory()?;
+        let level = super::pressure_from_available(memory.total >> 20, memory.available >> 20);
+        let low = self
+            .low_memory
+            .as_ref()
+            .and_then(vestra_win32::LowMemoryNotification::signaled)
+            .unwrap_or(false);
+        Some(if low {
+            super::MemoryPressure::Critical
+        } else {
+            level
+        })
+    }
+}
+
 /// The main window starts a draw (frame log: ` ui-gpu`).
 pub fn ui_draw_started() {
     vestra_gpu_render::ui_draw_started();

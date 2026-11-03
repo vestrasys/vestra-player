@@ -77,7 +77,10 @@ pub enum Origin {
     Trigger,
     Timer,
     Crash,
+    /// Memory pressure (`memory_pressure`, B5).
     Pressure,
+    /// Over the process budget (`enforce_budget`, B5).
+    Budget,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -14,6 +14,8 @@ struct World {
     auto_spawn: bool,
     auto_ready: bool,
     auto_reap: bool,
+    /// Answer `QueryResources` at once (not busy).
+    auto_resources: bool,
     /// Answer `classified` at ready of a first run: `Some(resident)`.
     auto_classify: Option<bool>,
     log: Vec<Action<u32>>,
@@ -29,6 +31,7 @@ impl World {
             auto_spawn: true,
             auto_ready: true,
             auto_reap: true,
+            auto_resources: true,
             auto_classify: None,
             log: Vec::new(),
             delivered: Vec::new(),
@@ -78,7 +81,9 @@ impl World {
                 self.s.process_reaped(pid, Some(0));
                 self.s.backend_cleaned(pid);
             }
-            Action::QueryResources { pid, .. } => self.s.resources_answered(pid, false),
+            Action::QueryResources { pid, .. } if self.auto_resources => {
+                self.s.resources_answered(pid, false);
+            }
             Action::Deliver { pid, payload, .. } => self.delivered.push((pid, payload)),
             Action::Answer {
                 reason, payload, ..
@@ -2843,4 +2848,193 @@ fn b4_a_unit_placed_own_is_not_in_the_runner_group() {
             .any(|x| matches!(x, Action::Terminate { pid, .. } if *pid == b))
     );
     assert!(active(&w, own));
+}
+
+// ---- B5: process budget and memory pressure (§8, §17.14) -------------------
+
+/// The player's preset with on-demand start on (`host/supervisor/mod.rs`
+/// `new`): B3, B4 and the budget for `physical_mib`; an idle time long
+/// enough that only the budget or pressure puts a unit in standby.
+fn b5(cores: usize, physical_mib: u64) -> Tunables {
+    Tunables {
+        idle_timeout: 3_600_000,
+        ..Tunables::legacy()
+            .with_b3(cores)
+            .with_b4()
+            .with_b5(physical_mib)
+    }
+}
+
+/// `n` units in standby, each woken by a click 1 s apart and ready
+/// (the first is the least recently used).
+fn clicked(w: &mut World, ids: &[&str], from: Ms) -> Vec<UnitId> {
+    let units = ids.iter().map(|id| standby_unit(w, id)).collect::<Vec<_>>();
+    w.tick(from);
+    for (i, u) in units.iter().enumerate() {
+        let at = from + 1_000 * (i as Ms + 1);
+        let holder = w.holder(*u);
+        w.s.set_now(at);
+        w.s.wake(holder, &Trigger::interactive(i as u32));
+        w.tick(at);
+        assert!(active(w, *u), "{}", ids[i]);
+    }
+    units
+}
+
+fn asked(actions: &[Action<u32>]) -> Vec<UnitId> {
+    actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::QueryResources { unit, .. } => Some(*unit),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn b5_budget_formula_per_machine() {
+    assert_eq!(b5(8, 2_048).process_budget, Some(3));
+    assert_eq!(b5(8, 4_096).process_budget, Some(7));
+    assert_eq!(b5(8, 8_192).process_budget, Some(14));
+    assert_eq!(b5(8, 28_381).process_budget, Some(16));
+    assert_eq!(Tunables::target(8, 8_192).process_budget, Some(14));
+    // B5 changes nothing else of the B3 + B4 preset.
+    let without = Tunables {
+        idle_timeout: 3_600_000,
+        ..Tunables::legacy().with_b3(8).with_b4()
+    };
+    assert_eq!(
+        Tunables {
+            process_budget: None,
+            ..b5(8, 2_048)
+        },
+        without
+    );
+}
+
+/// Clicks on one plugin after another (`Interactive` starts): after each
+/// start the third-party processes are back at the budget, and the one
+/// put in standby is always the least recently used (Android LRU).
+#[test]
+fn b5_budget_holds_under_clicks_in_lru_order() {
+    let mut w = World::new(b5(8, 2_048));
+    let ids = (0..12).map(|i| format!("p{i:02}")).collect::<Vec<_>>();
+    let ids = ids.iter().map(String::as_str).collect::<Vec<_>>();
+    let units = ids
+        .iter()
+        .map(|id| standby_unit(&mut w, id))
+        .collect::<Vec<_>>();
+    w.tick(0);
+    let mut order = Vec::new();
+    for (i, u) in units.iter().enumerate() {
+        let at = 120_000 * (i as Ms + 1);
+        let holder = w.holder(*u);
+        w.s.set_now(at);
+        w.s.wake(holder, &Trigger::interactive(i as u32));
+        let actions = w.tick(at);
+        order.extend(asked(&actions));
+        assert!(active(&w, *u));
+        assert!(w.s.budget_count() <= 3, "after {}", ids[i]);
+    }
+    // p00 went when p03 started, p01 at p04, ...: oldest first.
+    assert_eq!(order, units[..9]);
+    for u in &units[9..] {
+        assert!(active(&w, *u));
+    }
+}
+
+/// Starts in a row while the first standby is still asked for its
+/// resources put only as many units in standby as the budget needs: a
+/// unit whose Standby job is installed is not counted again.
+#[test]
+fn b5_starts_in_a_row_reclaim_only_the_overrun() {
+    let mut w = World::new(b5(8, 2_048));
+    let v = clicked(&mut w, &["a", "b", "c"], 0);
+    let (d, e) = (standby_unit(&mut w, "d"), standby_unit(&mut w, "e"));
+    w.tick(10_000);
+    w.auto_resources = false;
+    for (i, u) in [d, e].into_iter().enumerate() {
+        let holder = w.holder(u);
+        w.s.set_now(10_000);
+        w.s.wake(holder, &Trigger::interactive(10 + i as u32));
+    }
+    let actions = w.tick(10_000);
+    assert_eq!(asked(&actions), [v[0], v[1]], "two over, two asked");
+    for u in [v[0], v[1]] {
+        assert_eq!(w.s.job(u).map(|job| job.origin), Some(Origin::Budget));
+    }
+    for pid in [w.pid(v[0]), w.pid(v[1])] {
+        w.s.resources_answered(pid, false);
+    }
+    w.tick(10_001);
+    assert!(matches!(w.state(v[0]), UnitState::Standby { .. }));
+    assert!(matches!(w.state(v[1]), UnitState::Standby { .. }));
+    for u in [v[2], d, e] {
+        assert!(active(&w, u));
+    }
+    assert_eq!(w.s.budget_count(), 3);
+}
+
+/// Memory pressure (`memory_pressure`, called on a level change): Low
+/// puts every idle reclaimable unit in standby, least important first;
+/// `None` puts nothing; Critical also takes the Interactive overrun
+/// away (max + 1 instead of max + 2, §17.2 Q17).
+#[test]
+fn b5_pressure_levels() {
+    let mut w = World::new(b5(4, 28_381));
+    let v = clicked(&mut w, &["a", "b", "c"], 0);
+    let pid = w.pid(v[1]);
+    w.s.begin_work(pid, WorkKind::Declared(1), 4_000);
+    w.s.set_now(70_000);
+    w.s.memory_pressure(Pressure::None);
+    assert!(asked(&w.tick(70_000)).is_empty());
+    w.s.set_now(70_000);
+    w.s.memory_pressure(Pressure::Low);
+    assert_eq!(w.s.pressure(), Pressure::Low);
+    assert_eq!(asked(&w.tick(70_000)), [v[0], v[2]], "the busy one stays");
+    assert!(active(&w, v[1]));
+    // Critical: max_active 2 at 4 cores; clicks may take 3, not 4.
+    w.s.memory_pressure(Pressure::Critical);
+    w.auto_ready = false;
+    let more = (0..5)
+        .map(|i| standby_unit(&mut w, &format!("x{i}")))
+        .collect::<Vec<_>>();
+    w.tick(80_000);
+    for (i, u) in more.iter().enumerate() {
+        let holder = w.holder(*u);
+        w.s.set_now(80_000);
+        w.s.wake(holder, &Trigger::interactive(100 + i as u32));
+    }
+    assert_eq!(spawns(&w.tick(80_000)).len(), 3);
+    assert_eq!(w.s.slots_in_use().0, 3);
+    // Back to Low: the overrun is there again.
+    w.s.memory_pressure(Pressure::Low);
+    assert_eq!(spawns(&w.tick(80_001)).len(), 1);
+}
+
+/// Built-ins, Residents and development loads are outside pressure
+/// standby; the budget counts Residents but never reclaims them.
+#[test]
+fn b5_pressure_and_budget_never_take_builtins_or_residents() {
+    let mut w = World::new(b5(8, 2_048));
+    let builtin =
+        w.s.add_unit(UnitSpec::new("vestra.b", Class::Builtin).checkpoint(false));
+    let resident =
+        w.s.add_unit(UnitSpec::new("r", Class::Normal).checkpoint(true));
+    w.tick(0);
+    let holder = w.holder(builtin);
+    w.s.wake(holder, &Trigger::interactive(0));
+    w.tick(1);
+    let v = clicked(&mut w, &["a", "b"], 100);
+    assert_eq!(
+        w.s.budget_count(),
+        3,
+        "the resident counts, the built-in not"
+    );
+    w.s.set_now(200_000);
+    w.s.memory_pressure(Pressure::Critical);
+    let actions = w.tick(200_000);
+    assert_eq!(asked(&actions), v);
+    assert!(active(&w, builtin));
+    assert!(active(&w, resident));
 }

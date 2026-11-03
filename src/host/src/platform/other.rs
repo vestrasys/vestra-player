@@ -133,6 +133,25 @@ pub fn os_facts() -> OsFacts {
 pub fn displays() -> Vec<Display> {
     Vec::new()
 }
+/// Installed physical memory, in bytes (`MemTotal` of `/proc/meminfo`;
+/// `None` where there is none).
+pub fn physical_memory() -> Option<u64> {
+    super::meminfo_total(&std::fs::read_to_string("/proc/meminfo").ok()?)
+}
+/// Memory pressure from PSI (`/proc/pressure/memory`, as systemd-oomd
+/// reads it; supervisor.md §8). `None` without PSI (kernels before 4.20,
+/// `psi=0`, other systems).
+#[derive(Debug, Default)]
+pub struct PressureSource;
+impl PressureSource {
+    pub fn new() -> Self {
+        Self
+    }
+    /// The level now; `None` when the system does not say.
+    pub fn level(&mut self) -> Option<super::MemoryPressure> {
+        super::psi_pressure(&std::fs::read_to_string("/proc/pressure/memory").ok()?)
+    }
+}
 /// `$XDG_DATA_HOME/vestra`, else `~/.local/share/vestra`.
 pub fn app_data_dir() -> Option<PathBuf> {
     std::env::var_os("XDG_DATA_HOME")

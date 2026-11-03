@@ -25,8 +25,8 @@ Coordinator record and blackboard for the supervisor project. Design: [superviso
 | B2d | **merged — B2 complete** | `supervisor-b2d` C:\vestra\wt-sup-b2d (from e29c0982) | API maintainer | lanes replace StartQueue/FirstQueue, every start a job, list_state, remove first_runs.rs + start_timeout_by_host, B2 notes 1–5 |
 | SDK bump | **merged #147 (5fb5a7b5)** | `sdk-1.5.57` C:\vestra\wt-sdk157 | API maintainer (2nd instance) | player → @vestra-player/sdk ^1.5.57 |
 | B3 | **merged** (GUI check folded into the B4 release GUI test, VESTRA_LAZY=1) | `supervisor-b3` C:\vestra\wt-sup-b3 (main 0e8b a741 (#148) + spec tests) | API maintainer | live preset → B3; LIMIT 64 removed; rulings 1–4; 200-wake storm before/after; GUI test by coordinator after review |
-| B4 | in progress (maintainer + spec author) | `supervisor-b4` C:\vestra\wt-sup-b4, `supervisor-b4-spec` C:\vestra\wt-sup-b4spec (from ffb17c1d) | API maintainer, spec test author | restart/backoff/OOM/heap cap, shutdown ≤ 1 s, spawn worker + tick budget, ui_begin/finish; then GUI test (incl. B3 with VESTRA_LAZY=1) and release 0.6.x |
-| B5 | not started | | | |
+| B4 | **merged #150 (8400754d), host 0.6.6**; release build + GUI test passed; publishing waits for the user | `supervisor-b4` C:\vestra\wt-sup-b4, `supervisor-b4-spec` C:\vestra\wt-sup-b4spec (from ffb17c1d) | API maintainer, spec test author | restart/backoff/OOM/heap cap, shutdown ≤ 1 s, spawn worker + tick budget, ui_begin/finish; then GUI test (incl. B3 with VESTRA_LAZY=1) and release 0.6.x |
+| B5 | **merged** | `supervisor-b5` C:\vestra\wt-sup-b5 (from 8400754d) | API maintainer | per the design; unsafe/win32 part reviewed separately |
 | B6 | not started | | | release after |
 | B7 | not started | | | |
 
@@ -65,6 +65,8 @@ From the spec test author (2026-11-02, branch `supervisor-spec` 22fa2a0f; 238 te
 Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 (code changes for Q15 upgrade of a disabled unit, Q24 backoff from reap; Q18 ruled by the coordinator: built-ins incl. shared members outside max_active). Spec tests compile: 234/241 pass. Coordinator rulings on the remaining design questions: (a) trigger while Standby{hold_until}: Interactive answered at once with a reason; Start job waits for hold_until only if event triggers remain; (b) shutdown emits all Checkpoints before the first Terminate; (c) built-ins first: today's semantics under `Tunables::today()`, the design row under target tunables (switch). Four implementation fixes sent to the maintainer (T11 Resident retry, Stop{Removed}×trigger Dropped, Restart×trigger Held, runner re-placement via Replay).
 
 ## Open items
+
+- **Needs the user — 0.6.6 publishing:** portable build ready at `C:\vestra\stage-066\VestraPlayer-0.6.6-windows-x64-portable.zip` (+ staged dir), built from main 8400754d, license check passed. Not tagged, not published: the release workflow needs remote CI (budget 0) and macOS assets can't be built here; no Inno Setup on this machine (no setup.exe). No installed player found under `%LOCALAPPDATA%\Programs\Vestra Player`, so nothing was installed as "latest". User to decide: publish a Windows-only release from the local build, wait, or re-enable CI for one release run.
 
 
 - **From B3 (maintainer questions, coordinator rulings 2026-11-03):**
@@ -117,6 +119,14 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 - Known bugs to pin in B0: Book entry leaked when spawn fails after `activations.begin` (`load_package`); `Host.cleanup` only grows; disable then immediate enable can run two processes on one data directory (D13).
 
 ## Log
+
+- 2026-11-03 ~10:50: B5 reviews → merge (unsafe: SAFETY comments true, handle !Send, NULL check right; core: own budget probe LRU order 1..10,2 exactly as predicted, pressure probe as designed). Small fixes sent to the maintainer (README wording, budget-vs-pressure log attribution, §15 annotation, checked_mul). For B6 P4: watch for None↔Low oscillation (no hysteresis).
+
+- 2026-11-03 ~10:25: B5 committed: with VESTRA_LAZY=1 only (lazy off can't reclaim — accepted); enforce_budget double-count fix; pressure polled every 5 s, acted on at level change; budget from physical memory (8 GiB fallback); Windows pressure = Chrome thresholds + low-memory notification; 4 unsafe blocks in win32. 1267 host tests; real-node suites pass; budget probe (phys 2048 → budget 3: peak 3 third-party processes, LRU order exact); simulated pressure probe OK; lazy-off registry unchanged. Rulings on the 5 questions: real memory with fallback, no macOS pressure source in B5 (follow-up, needs unsafe crate + Mac); Chrome thresholds, no commit rule; level-change notify (Android onTrimMemory); event wakes don't trigger LRU (design); Linux PSI untested (not a release target). Two reviews started (core/adapter; unsafe win32).
+
+- 2026-11-03 ~10:35: 0.6.6 release build (main 8400754d) staged at `C:\vestra\stage-066` (portable zip, 510 MB staged, license check passed). GUI test in isolated profile `C:\vestra\guiprof-066`: lazy off — starts, menus with plugin entries, Quit → exit in ~0.5 s, "16 plugin processes stopped in 22 ms", no leftover node; VESTRA_LAZY=1 — after 75 s idle plugins parked (preferences, hotkeys, workshop …), residents classified, Plugin Store woken by its menu command (owner 10→17) and its window opened, Quit → "11 plugin processes stopped in 31 ms", exit normal. (Log mojibake seen only in PowerShell's ANSI read of the UTF-8 log.) Publishing deferred to the user (see Open items). Removed worktree sup-b4.
+
+- 2026-11-03 ~09:50: B4 pre-release re-check → merge after three release-note wording fixes (coordinator edited `doc/releases/v0.6.6.md`: crash limit scope without on-demand start; retry pauses; "main-loop step ≤ 8 ms"). **#150 (B4, host 0.6.6) squash-merged → main 8400754d.** Release build of 0.6.6 running in `C:\vestra\wt-rel066` → stage `C:\vestra\stage-066` (portable; no iscc here). B5 maintainer briefed (design as written). Removed worktrees sup-b3, sup-b4spec.
 
 - 2026-11-03 ~09:20: B4 pre-release fixes + 0.6.6 bump + `doc/releases/v0.6.6.md` committed (3dd23b06); 1256 host tests; real-node suites pass. Reviewer re-checking. Next: merge #150 (B4), local release build, isolated-profile GUI test (lazy off and VESTRA_LAZY=1), stage portable; publishing waits for the user (no remote CI → no tag/CI release workflow; macOS assets can't be built here).
 
