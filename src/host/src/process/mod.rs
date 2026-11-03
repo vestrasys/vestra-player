@@ -287,6 +287,9 @@ pub struct Plugin {
     /// What dropping it tells the plugin (`set_stop_reason`); `quit` for a
     /// plugin dropped with the host.
     stop_reason: StopReason,
+    /// Its process ended by itself (`set_exited`): no `runtime.stop` is
+    /// queued for it (A14).
+    exited: bool,
 }
 impl Plugin {
     /// A development load (`--plugin`): always its own process.
@@ -368,6 +371,7 @@ impl Plugin {
             runner,
             stop_wait: Duration::from_millis(300),
             stop_reason: StopReason::Quit,
+            exited: false,
         })
     }
     pub fn send(&mut self, message: Value) -> Result<()> {
@@ -406,7 +410,9 @@ impl Plugin {
             } => {
                 // Not delivered when its queue is full or its pipe closed
                 // (a `failed` stop, often): it is killed after the wait.
-                let _ = outbound.try_send(stop_message(self.stop_reason));
+                if !self.exited {
+                    let _ = outbound.try_send(stop_message(self.stop_reason));
+                }
                 Stop::Own {
                     child,
                     _outbound: outbound,
@@ -454,6 +460,12 @@ impl Plugin {
     /// dropped (`Host::stop`).
     pub fn set_stop_reason(&mut self, reason: StopReason) {
         self.stop_reason = reason;
+    }
+    /// Its process ended by itself (its stdout closed): its stop sends no
+    /// `runtime.stop` to the closed pipe; the reaper only waits for it (B4,
+    /// A14).
+    pub fn set_exited(&mut self) {
+        self.exited = true;
     }
     /// Text values in the interface language, with this plugin's catalog
     /// (`i18n::text`).
@@ -727,6 +739,7 @@ mod stop_tests {
             runner,
             stop_wait: Duration::from_millis(1000),
             stop_reason: StopReason::Quit,
+            exited: false,
         };
         // Answer like the host until it writes on its own.
         let mut shows = 0;

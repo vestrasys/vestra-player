@@ -21,8 +21,20 @@ impl Host {
         let began = Instant::now();
         let deadline = began + budget;
         self.probe_quit();
-        if let Some(spawner) = &self.on_demand.spawner {
-            spawner.quit();
+        // Nothing more is created; a process the spawn thread created and
+        // the Host did not take yet (its `Event::Spawned` still queued)
+        // stops with the rest, within the same deadline.
+        let created = self
+            .on_demand
+            .spawner
+            .as_ref()
+            .map(worker::Spawner::quit)
+            .unwrap_or_default();
+        for (owner, mut plugin) in created {
+            diag!("supervisor: plugin {owner} created as the player quits; stopped");
+            plugin.set_stop_reason(StopReason::Quit);
+            plugin.set_stop_wait(budget);
+            self.reaper.reap(owner, plugin);
         }
         let now = self.now_ms();
         let budget_ms = u64::try_from(budget.as_millis()).unwrap_or(u64::MAX);

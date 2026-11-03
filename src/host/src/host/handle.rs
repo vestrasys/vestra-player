@@ -18,14 +18,7 @@ impl Host {
     pub(crate) fn handle(&mut self, event: Event) {
         // What a process said before the Host has it (its spawn on the
         // spawn thread is not answered yet) waits for it (`worker.rs`).
-        let from_process = match &event {
-            Event::Request(owner, _)
-            | Event::Prepared(owner, ..)
-            | Event::Exited(owner)
-            | Event::RuntimeFault(owner, _)
-            | Event::OutOfMemory(owner) => Some(*owner),
-            _ => None,
-        };
+        let from_process = super::supervisor::worker::from_process(&event);
         if let Some(owner) = from_process
             && self.spawning(owner)
         {
@@ -396,6 +389,13 @@ impl Host {
                 );
             }
             Event::Exited(owner) => {
+                // Its stdout closed: its process is gone, so its stop sends
+                // no `runtime.stop` (B4, A14: `exit_sends_no_stop`).
+                if self.supervisor.tunables().exit_sends_no_stop
+                    && let Some(plugin) = self.plugins.get_mut(&owner)
+                {
+                    plugin.set_exited();
+                }
                 // Still running: the process ended without being stopped.
                 self.record_failure(owner, "plugin process exited");
                 self.process_ended(owner, crate::supervisor::ExitCause::Exited, None)

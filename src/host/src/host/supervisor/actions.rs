@@ -160,8 +160,13 @@ impl Host {
     /// that timed out (T8/T11, `start_failure_keeps_registrations`; its
     /// recording is the one it was woken from): stopped, held.
     fn park(&mut self, owner: u64, reason: crate::supervisor::StopReason, grace: u64) {
-        if self.spawn_canceled(owner, reason, grace) || self.on_demand.quitting {
+        if self.on_demand.quitting {
             self.terminate(owner, reason, grace);
+            return;
+        }
+        // A start that timed out on the spawn thread keeps its entry points
+        // (T8, B3 ruling 1): held under the pid the core holds it by.
+        if self.spawn_canceled(owner, reason, grace, true) {
             return;
         }
         let (Some(_), Some(plugin)) = (self.checkpoint_key_of(owner), self.plugins.get(&owner))
@@ -290,7 +295,7 @@ impl Host {
         reason: crate::supervisor::StopReason,
         grace: u64,
     ) {
-        if self.spawn_canceled(owner, reason, grace) {
+        if self.spawn_canceled(owner, reason, grace, false) {
             return;
         }
         if self.on_demand.quitting {
@@ -462,24 +467,34 @@ impl Host {
         }
     }
     /// The core stops run `owner` while the spawn thread still creates its
-    /// process: it is stopped when it comes (`spawned`), and a woken
-    /// unit's entries go now (the start they waited for is over).
-    fn spawn_canceled(
+    /// process: it is stopped when it comes (`spawned`). A woken unit's
+    /// entries go now (the start they waited for is over), unless the core
+    /// keeps them (`keep`: a start that timed out, T8): then they move to
+    /// `owner`, the pid the core holds the unit by in standby.
+    pub(super) fn spawn_canceled(
         &mut self,
         owner: u64,
         reason: crate::supervisor::StopReason,
         grace: u64,
+        keep: bool,
     ) -> bool {
         let Some(spawning) = self.on_demand.spawning.get_mut(&owner) else {
             return false;
         };
         if spawning.canceled.is_none() {
-            spawning.canceled = Some((reason, grace));
+            spawning.canceled = Some((reason, grace, keep));
         }
         let from = spawning.from.take();
-        spawning.held = None;
-        if let Some(from) = from {
-            self.forget_entries(from);
+        let held = spawning.held.take();
+        match from {
+            Some(from) if keep => {
+                capabilities::rekey(self, from, owner);
+                if let Some(held) = held {
+                    self.hold(owner, held.reheld());
+                }
+            }
+            Some(from) => self.forget_entries(from),
+            None => {}
         }
         true
     }

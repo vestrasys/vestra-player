@@ -63,8 +63,9 @@ pub(crate) enum Event {
     /// aborts next): (owner).
     OutOfMemory(u64),
     /// The spawn thread created a plugin's own process, or could not
-    /// (`host/supervisor/worker.rs`): (owner, the plugin or the error).
-    Spawned(u64, std::result::Result<Box<Plugin>, String>),
+    /// (`host/supervisor/worker.rs`): (owner, the error); the process waits
+    /// in the spawner for the Host to take it.
+    Spawned(u64, std::result::Result<(), String>),
     BackendCleaned(u64),
     DialogDone(Reply, Option<Vec<PathBuf>>),
     /// An Option + named key handed to Slint again: (window generation, Slint
