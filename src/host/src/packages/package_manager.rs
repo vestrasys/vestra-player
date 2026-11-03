@@ -11,7 +11,7 @@ use crate::supervisor::{
     Busy, Class, JobKind, JobMode, JobResult, ListState, Origin, Pid, Priority, STUCK_RELOAD, Then,
     UnitId, UnitSpec, activation,
 };
-use crate::{i18n, platform, process};
+use crate::{platform, process};
 use anyhow::Result;
 use process::DataKey;
 use serde_json::{Value, json};
@@ -80,17 +80,6 @@ fn start_order(
 ) -> VecDeque<String> {
     let (builtins, others): (Vec<_>, Vec<_>) = ids.into_iter().partition(|id| builtin(id));
     builtins.into_iter().chain(others).collect()
-}
-/// Queues `id` again (a shared runner restart): a built-in after the
-/// built-ins still queued, before every other plugin, as `start_order`
-/// orders them; another plugin at the end.
-fn queue_again(queue: &mut VecDeque<String>, id: String, builtin: impl Fn(&str) -> bool) {
-    if builtin(&id) {
-        let at = queue.iter().take_while(|queued| builtin(queued)).count();
-        queue.insert(at, id);
-    } else {
-        queue.push_back(id);
-    }
 }
 /// A package an operation may start: digest, directory, manifest, data.
 type Image = (String, PathBuf, package_stage::PackageManifest, DataKey);
@@ -403,48 +392,21 @@ impl Host {
             runner.stats
         );
         runner.retire(false, &self.reaper);
-        let failed_open = self.shared_policy.restart(self.now_ms());
-        let members = self
-            .plugins
-            .iter()
-            .filter(|(_, plugin)| plugin.shared_runner() == Some(id))
-            .map(|(owner, plugin)| (*owner, plugin.manifest.id.clone()))
-            .collect::<Vec<_>>();
-        // Queued again first (as today's `to_start`, counted as built-ins
-        // still to load), so no third-party first run takes a place while
-        // their stops run.
-        for (_, plugin) in &members {
-            if !failed_open {
-                self.packages.verify(plugin);
-            }
-            if !self.packages.to_load.contains(plugin) {
-                let builtins = &self.packages.builtins;
-                queue_again(&mut self.packages.to_load, plugin.clone(), |id| {
-                    builtins.contains_key(id)
-                });
-            }
-        }
-        let queued = self.builtins_to_load();
-        self.supervisor.set_builtins_to_load(queued);
-        // The runner is killed already: no member gets its `runtime.stop`
-        // (their cleanups do not run; nothing is left to tell).
-        for (owner, _) in &members {
-            self.stop_failed(*owner);
-        }
-        let owners = members.iter().map(|(owner, _)| *owner).collect::<Vec<_>>();
-        self.units_killed_with_runner(&owners);
+        // The Host's trust check counts the restart too: fail-open after
+        // the third in a minute (A4, `Policy::restart`), as the core does.
+        let now = self.now_ms();
+        self.shared_policy.restart(now);
+        // The core's runner group restart (T29, §7.4; B4): every member
+        // stops at once (no member gets its `runtime.stop`: the runner is
+        // killed), goes back to standby by replay when it has a standby
+        // recording, else starts again in the built-in lane: the first
+        // restart at once, a later one in the window after `RestartSec`
+        // (3 s × 2ⁿ), once the playback worker cleaned up after it.
+        self.supervisor.set_now(now);
+        let runner = self.supervisor.runner();
+        self.supervisor
+            .runner_failed(runner, crate::supervisor::ExitCause::Transport);
         self.supervisor_run();
-        let text = if failed_open {
-            diag!(
-                "shared runner: {} restarts within {} s; every plugin runs in its own process until the player quits",
-                shared_runner::RESTART_LIMIT,
-                shared_runner::RESTART_WINDOW_MS / 1000
-            );
-            i18n::tr("Built-in plugins run separately for this session after repeated faults")
-        } else {
-            i18n::tr("Built-in plugins restarted after a fault")
-        };
-        self.show_osd(&text);
     }
     /// Starts `manifest` from `directory` as process `owner` (the pid the
     /// supervisor allocated with its `Spawn`), its activation due by
@@ -456,7 +418,7 @@ impl Host {
         manifest: &package_stage::PackageManifest,
         key: DataKey,
         deadline: u64,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let id = manifest.id.clone();
         anyhow::ensure!(
             self.running(&id).is_none_or(|running| running == owner),
@@ -470,7 +432,9 @@ impl Host {
         // A spawn that fails gives its activation back (A18 leak 1, fixed
         // in B2a: before, the place stayed taken for the rest of the run).
         let plugin = match self.spawn_package(owner, &id, directory, manifest, key) {
-            Ok(plugin) => plugin,
+            Ok(Some(plugin)) => plugin,
+            // On the spawn thread (`host/supervisor/worker.rs`).
+            Ok(None) => return Ok(false),
             Err(error) => {
                 self.supervisor.activation_end(Pid(owner));
                 return Err(error);
@@ -483,10 +447,12 @@ impl Host {
             method: "owner.registered".into(),
             params: json!({"manifestId":id,"manifestName":name}),
         })?;
-        Ok(())
+        Ok(true)
     }
     /// `load_package`'s process: in the shared runner (started if none
-    /// runs) when trusted, else its own.
+    /// runs) when trusted, else its own, its heap capped by its class
+    /// (`MemoryMax=`, B4: 512 MB; §3.3). `None`: its own process is created
+    /// on the spawn thread (`Event::Spawned`).
     fn spawn_package(
         &mut self,
         owner: u64,
@@ -494,8 +460,8 @@ impl Host {
         directory: &Path,
         manifest: process::Manifest,
         key: DataKey,
-    ) -> Result<Plugin> {
-        Ok(match self.trust(id, directory) {
+    ) -> Result<Option<Plugin>> {
+        Ok(Some(match self.trust(id, directory) {
             Trust::Shared => {
                 if self.shared.is_none() {
                     let runner = self.shared_policy.next_id();
@@ -528,16 +494,45 @@ impl Host {
                     }
                     _ => {}
                 }
-                Plugin::load_manifest(
-                    directory,
-                    owner,
-                    self.events.clone(),
-                    manifest,
-                    key,
-                    process::Placement::Own,
-                )?
+                let heap_mib = self
+                    .supervisor
+                    .by_id(id)
+                    .and_then(|unit| self.supervisor.unit(unit))
+                    .and_then(|unit| self.supervisor.tunables().policy(unit.class).memory_max_mib);
+                if self.spawn_off_thread() {
+                    let job = crate::host::supervisor::worker::SpawnJob {
+                        owner,
+                        directory: directory.to_owned(),
+                        manifest,
+                        key,
+                        heap_mib,
+                    };
+                    match self.spawn_queued(job) {
+                        Ok(()) => return Ok(None),
+                        Err(job) => {
+                            let job = *job;
+                            Plugin::load_manifest(
+                                &job.directory,
+                                owner,
+                                self.events.clone(),
+                                job.manifest,
+                                job.key,
+                                process::Placement::Own { heap_mib },
+                            )?
+                        }
+                    }
+                } else {
+                    Plugin::load_manifest(
+                        directory,
+                        owner,
+                        self.events.clone(),
+                        manifest,
+                        key,
+                        process::Placement::Own { heap_mib },
+                    )?
+                }
             }
-        })
+        }))
     }
     fn package_status(&mut self, owner: u64) -> String {
         self.activation(owner)
@@ -963,6 +958,8 @@ impl Host {
     /// (`Action::Spawn`): a development load, a package operation's target
     /// or the version it restores (`Restart{image}`), or the installed
     /// package (today's `start_installed`, `start_stopped`, a wake).
+    /// `false`: its own process is created on the spawn thread
+    /// (`Event::Spawned`).
     pub(crate) fn start_unit_process(
         &mut self,
         id: &str,
@@ -970,7 +967,7 @@ impl Host {
         image: Option<&str>,
         development: bool,
         deadline: u64,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         if development {
             let directory = self
                 .dev_loading
@@ -981,7 +978,9 @@ impl Host {
                         .map(|(directory, _)| directory.clone())
                 })
                 .ok_or_else(|| anyhow::anyhow!("no development load of {id}"))?;
-            return self.load_development_as(&directory, owner, deadline);
+            return self
+                .load_development_as(&directory, owner, deadline)
+                .map(|()| true);
         }
         if let Some(image) = image
             && let Some(images) = self.packages.images.get(id)
@@ -997,7 +996,7 @@ impl Host {
     }
     /// Starts installed plugin `id` as process `owner`, as `start_installed`
     /// would.
-    fn start_package_as(&mut self, id: &str, owner: u64, deadline: u64) -> Result<()> {
+    fn start_package_as(&mut self, id: &str, owner: u64, deadline: u64) -> Result<bool> {
         let record = self.packages.store.get(id);
         let instance = record
             .instance
@@ -1378,6 +1377,10 @@ impl Host {
                     // `state` stays `running`, `process` says `idle`, and what
                     // it was refused while it ran stays listed.
                     ("running", parked.warning.clone())
+                } else if matches!(listed, Some(ListState::Running { .. })) {
+                    // Waiting to start again by itself after a crash (B4,
+                    // `Activating{AutoRestart}`): running, no process (§9).
+                    ("running", None)
                 } else {
                     stopped(disabled, self.failures.get(&id))
                 };
@@ -1388,7 +1391,10 @@ impl Host {
                 .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())));
             let builtin = record.instance.as_ref().is_some_and(|i| i.builtin);
             let source = record.instance.map(|i| i.source);
-            let process = (self.parked_id(&id).is_some() && state == "running").then_some("idle");
+            let process = ((self.parked_id(&id).is_some()
+                || matches!(listed, Some(ListState::Running { .. })))
+                && state == "running")
+                .then_some("idle");
             let entry = match package {
                 Ok((directory, manifest)) => json!({"id":id,"version":manifest.version,
                     "origin":"installed","state":state,"error":error,"process":process,
@@ -2721,32 +2727,6 @@ mod tests {
         assert_eq!(order, ["vestra.audio", "vestra.video", "a.one", "b.two"]);
     }
 
-    /// A shared runner restart mid start-up queues its members again: the
-    /// built-ins go after the built-ins still queued, before every
-    /// third-party plugin, and the others at the end.
-    #[test]
-    fn a_restart_mid_start_up_keeps_builtins_at_the_front() {
-        let builtin = |id: &str| id.starts_with("vestra.");
-        let ids = ["a.one", "b.two", "c.three", "vestra.audio", "vestra.video"].map(String::from);
-        let mut queue = start_order(ids, builtin);
-        // vestra.audio, vestra.video and a.one were loaded.
-        for _ in 0..3 {
-            queue.pop_front();
-        }
-        queue_again(&mut queue, "vestra.video".into(), builtin);
-        queue_again(&mut queue, "vestra.subtitles".into(), builtin);
-        queue_again(&mut queue, "z.member".into(), builtin);
-        assert_eq!(
-            queue,
-            [
-                "vestra.video",
-                "vestra.subtitles",
-                "b.two",
-                "c.three",
-                "z.member"
-            ]
-        );
-    }
     use crate::ui::composition;
 
     fn candidate(dir: &Path, id: &str, version: &str) -> Candidate {

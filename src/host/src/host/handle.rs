@@ -16,6 +16,15 @@ impl Host {
         }
     }
     pub(crate) fn handle(&mut self, event: Event) {
+        // What a process said before the Host has it (its spawn on the
+        // spawn thread is not answered yet) waits for it (`worker.rs`).
+        let from_process = super::supervisor::worker::from_process(&event);
+        if let Some(owner) = from_process
+            && self.spawning(owner)
+        {
+            self.hold_spawning_event(owner, event);
+            return;
+        }
         match event {
             Event::Prepared(owner, message, prepared) => {
                 self.prepared = message["id"].as_u64().map(|id| (owner, id, prepared));
@@ -73,6 +82,7 @@ impl Host {
                                     return;
                                 }
                                 self.supervisor.activation_ui_wait(Pid(owner), reply.id);
+                                self.ui_begun(owner);
                             }
                         }
                         // Built-in plugins claim panel slots, the sequence and resolvers first (slot_claims).
@@ -379,6 +389,13 @@ impl Host {
                 );
             }
             Event::Exited(owner) => {
+                // Its stdout closed: its process is gone, so its stop sends
+                // no `runtime.stop` (B4, A14: `exit_sends_no_stop`).
+                if self.supervisor.tunables().exit_sends_no_stop
+                    && let Some(plugin) = self.plugins.get_mut(&owner)
+                {
+                    plugin.set_exited();
+                }
                 // Still running: the process ended without being stopped.
                 self.record_failure(owner, "plugin process exited");
                 self.process_ended(owner, crate::supervisor::ExitCause::Exited, None)
@@ -389,7 +406,12 @@ impl Host {
                     self.restart_shared("the shared runner exited");
                 }
             }
-            Event::Reaped(owner) => self.unit_reaped(owner),
+            Event::Reaped(owner, code) => self.unit_reaped(owner, code),
+            Event::Spawned(owner, result) => self.spawned(owner, result),
+            Event::OutOfMemory(owner) => {
+                diag!("plugin {owner}: its JavaScript heap ran out of memory");
+                self.supervisor.process_out_of_memory(Pid(owner));
+            }
             Event::BackendCleaned(owner) => self.unit_cleaned(owner),
             Event::RuntimeFault(owner, error) => {
                 diag!("plugin {owner}: {error}");

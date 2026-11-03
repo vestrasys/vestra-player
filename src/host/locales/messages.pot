@@ -419,6 +419,26 @@ msgstr ""
 msgid "{} is disabled"
 msgstr ""
 
+#. The OSD when a plugin stopped by itself (it crashed); B4.
+#: src/host/host/supervisor/actions.rs
+msgid "{} stopped unexpectedly"
+msgstr ""
+
+#. The OSD when a plugin stopped because its JavaScript heap passed its 512 MB cap; B4.
+#: src/host/host/supervisor/actions.rs
+msgid "{} ran out of memory"
+msgstr ""
+
+#. The OSD when a plugin crashed too often (5 times in 10 minutes) and stays stopped until reloaded; B4.
+#: src/host/host/supervisor/actions.rs
+msgid "{} stopped after repeated faults"
+msgstr ""
+
+#. The reason on a crashed plugin's menu items, and the OSD on a click, while it waits a moment before it may start again; B4.
+#: src/host/host/supervisor/mod.rs src/host/host/supervisor/actions.rs
+msgid "{} stopped after a fault; try again in a moment"
+msgstr ""
+
 #. The OSD once per start when plugin shaders are kept off because the last run ended while they were on.
 #: src/host/diagnostics.rs
 msgid "Plugin shaders are off: the player ended unexpectedly while they were on"

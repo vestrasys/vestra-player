@@ -240,6 +240,8 @@ impl Host {
         self.supervisor.set_now(now);
         self.supervisor.process_exited(Pid(owner), cause, text);
         self.supervisor_run();
+        // An exit sends no stop (A14): its run is cleaned up here.
+        self.exit_cleanup(owner);
         self.stopped_anyway(owner);
     }
     /// Every stop of a running plugin is the core's: one it did not stop is
@@ -258,7 +260,12 @@ impl Host {
     /// standby, the adapter's `park`): its recordable registrations stay,
     /// marked recorded.
     pub(crate) fn stop_process(&mut self, owner: u64, reason: StopReason, grace: Duration) {
-        let park = reason == StopReason::Idle;
+        self.stop_run(owner, reason, grace, reason == StopReason::Idle);
+    }
+    /// `stop_process`; `park`: its recordable registrations stay, marked
+    /// recorded, whatever the reason (a park, or since B4 a crash or a
+    /// failed start kept in standby: T8, T25).
+    pub(crate) fn stop_run(&mut self, owner: u64, reason: StopReason, grace: Duration, park: bool) {
         // Process exit commonly follows an explicit disable. The first revoke
         // owns cleanup: a duplicate notification must not cancel its id=0
         // rebuild, clear another instance, or repeat backend/resource cleanup.

@@ -22,8 +22,23 @@ pub const STUCK_WAKE: &str = "its stopped process did not go within 20 s";
 pub const STUCK_RELOAD: &str = "the previous process did not stop within 20 s";
 
 impl<P: Clone> Supervisor<P> {
-    /// §5 `process_reaped`: the process is gone (`Event::Reaped`).
-    pub fn process_reaped(&mut self, pid: Pid, _status: Option<i32>) {
+    /// V8 reported a heap allocation failure on `pid`'s stderr (it aborts
+    /// next): its exit is `Oom` if it exits with the heap abort's code
+    /// (§7.3, B4).
+    pub fn process_out_of_memory(&mut self, pid: Pid) {
+        let Some(&u) = self.by_pid.get(&pid) else {
+            return;
+        };
+        if let Some(unit) = self.units.get_mut(&u) {
+            unit.out_of_memory = Some(pid);
+        }
+    }
+
+    /// §5 `process_reaped`: the process is gone (`Event::Reaped`), with
+    /// its exit code (`None` for a shared-runner member). A run that ended
+    /// by itself gets its crash notice now: "ran out of memory" when it
+    /// exited with V8's heap abort after V8's heap line (§7.3, B4).
+    pub fn process_reaped(&mut self, pid: Pid, status: Option<i32>) {
         let Some(&u) = self.by_pid.get(&pid) else {
             return;
         };
@@ -39,6 +54,7 @@ impl<P: Clone> Supervisor<P> {
                 return;
             }
         }
+        self.exit_status(u, pid, status);
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
@@ -54,6 +70,54 @@ impl<P: Clone> Supervisor<P> {
         self.flush_data_removal(u);
         self.land_if_done(u);
         self.sync(u);
+    }
+
+    /// The crash notice of a run that ended by itself waits for its exit
+    /// code (`crash`): `Oom` or `Exited`; an `Oom` also changes the
+    /// failure text.
+    fn exit_status(&mut self, u: UnitId, pid: Pid, status: Option<i32>) {
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        let oom = unit.out_of_memory == Some(pid) && status == Some(super::exit::HEAP_ABORT_STATUS);
+        if unit.out_of_memory == Some(pid) {
+            unit.out_of_memory = None;
+        }
+        let noticed = unit.exit_notice == Some(pid);
+        if noticed {
+            unit.exit_notice = None;
+        }
+        if oom {
+            let text = super::ExitCause::Oom.text().to_owned();
+            let exited = FailResult::Exit(super::ExitCause::Exited);
+            if let Some((result, failing)) = unit.failing.as_mut()
+                && *result == exited
+            {
+                *result = FailResult::Exit(super::ExitCause::Oom);
+                *failing = text.clone();
+            }
+            if let UnitState::Failed {
+                result,
+                text: shown,
+            } = &mut unit.state
+                && *result == exited
+            {
+                *result = FailResult::Exit(super::ExitCause::Oom);
+                *shown = text.clone();
+                unit.failure = Some(text);
+            }
+        }
+        if noticed {
+            let cause = if oom {
+                super::ExitCause::Oom
+            } else {
+                super::ExitCause::Exited
+            };
+            self.pending.push(Action::Notify {
+                unit: Some(u),
+                notice: super::Notice::Crashed(cause),
+            });
+        }
     }
 
     /// Emits an owed `RemoveData` once no process may write the data any
@@ -167,34 +231,6 @@ impl<P: Clone> Supervisor<P> {
             result: FailResult::Stuck,
             text: text.to_owned(),
         };
-    }
-
-    // ---- B2b–B4: the runner restart the Host still runs ------------------
-
-    /// A shared-runner member stopped because the Host killed its runner
-    /// (today's `restart_shared`): reaped with the runner, and cleaned up
-    /// after unless `runner_restart_waits_cleanup` (B4), as `runner_failed`
-    /// does for its members (§17.7 item 9c): it lands now, so its restart
-    /// does not wait for it. Removed in B4 (`runner_failed`, T29).
-    pub fn member_killed(&mut self, pid: Pid) {
-        let cleaned = !self.tunables.runner_restart_waits_cleanup;
-        let Some(&u) = self.by_pid.get(&pid) else {
-            return;
-        };
-        let Some(unit) = self.units.get_mut(&u) else {
-            return;
-        };
-        let Some(stopping) = unit.stopping.as_mut().filter(|s| s.pid == pid) else {
-            return;
-        };
-        stopping.reaped = true;
-        stopping.backend_cleaned |= cleaned;
-        if let UnitState::Deactivating { sub, .. } = &mut unit.state {
-            *sub = DeactivatingSub::Cleanup;
-        }
-        self.flush_data_removal(u);
-        self.land_if_done(u);
-        self.sync(u);
     }
 
     /// T16 / T18: the unit leaves `Deactivating` for its `then`.
@@ -705,27 +741,5 @@ mod tests {
             "{actions:?}"
         );
         assert_eq!(spawns(&actions), [u]);
-    }
-
-    /// The members of a runner the Host killed land at once (today's
-    /// `restart_shared`): their restart does not wait for them, and their
-    /// late reap and cleanup change nothing.
-    #[test]
-    fn members_killed_with_their_runner_are_gone_at_once() {
-        let mut s = new();
-        let u = running(&mut s, "vestra.one", 1);
-        stop(&mut s, u, StopReason::Failed, Then::Inactive);
-        s.member_killed(Pid(1));
-        assert_eq!(going(&s, u), None);
-        // Queued again: loaded again with its spec, started at once.
-        s.add_unit(UnitSpec::new("vestra.one", Class::Normal).unrecordable());
-        assert_eq!(spawned(&s.run_jobs(0)), Some(Pid(2)));
-        started(&mut s, 2);
-        s.process_reaped(Pid(1), None);
-        s.backend_cleaned(Pid(1));
-        assert!(matches!(
-            s.unit(u).unwrap().state,
-            UnitState::Active { pid: Pid(2), .. }
-        ));
     }
 }

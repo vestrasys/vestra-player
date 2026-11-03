@@ -15,7 +15,11 @@ use std::{
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::{Child, Stdio},
-    sync::mpsc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -114,6 +118,11 @@ impl StopReason {
 pub fn stop_message(reason: StopReason) -> Value {
     json!({"event":"runtime.stop","data":reason.data()})
 }
+/// The V8 flag that caps a process's JavaScript heap at `mib` MiB (the
+/// shared runner's is `shared_runner::MAX_OLD_SPACE`).
+pub fn heap_flag(mib: u32) -> String {
+    format!("--max-old-space-size={mib}")
+}
 /// Bounded per-plugin output queue. Source state alone emits ~10 events/s while playing,
 /// so a small queue disables healthy plugins after a brief event-loop stall.
 const OUTBOUND_CAPACITY: usize = 1024;
@@ -124,8 +133,10 @@ pub fn set_app_info(info: &Value) {
 }
 /// Where a plugin runs.
 pub enum Placement<'a> {
-    /// Its own Node process.
-    Own,
+    /// Its own Node process, its JavaScript heap capped at `heap_mib` MiB
+    /// when set (`--max-old-space-size`, the supervisor's `MemoryMax=`,
+    /// supervisor.md §3.3, §8; B4).
+    Own { heap_mib: Option<u32> },
     /// A member of this shared runner.
     Shared(&'a mut SharedRunner),
 }
@@ -133,6 +144,8 @@ enum Runner {
     Own {
         child: Child,
         outbound: mpsc::SyncSender<Value>,
+        /// Its stderr was read to the end (`forward_stderr`).
+        stderr_done: Arc<AtomicBool>,
     },
     Shared(Member),
     /// Its stop began (`Plugin::begin_stop`): the process or member is the
@@ -153,6 +166,16 @@ pub enum Stop {
         deadline: Instant,
         /// Killed at its deadline; waited for without blocking after that.
         killed: bool,
+        /// Its exit code once it is gone (`Event::Reaped`: the supervisor
+        /// tells a heap abort by it, supervisor.md §7.3).
+        code: Option<i32>,
+        /// When it was seen gone.
+        exited: Option<Instant>,
+        /// Its stderr was read to the end: everything it wrote there was
+        /// seen (V8's heap abort line, `Event::OutOfMemory`) before it is
+        /// reported gone, or [`STDERR_WAIT`] after it went (a child of the
+        /// plugin may hold the pipe open).
+        stderr_done: Arc<AtomicBool>,
     },
     Member(MemberStop),
     Gone,
@@ -168,20 +191,48 @@ impl Stop {
                 child,
                 deadline,
                 killed,
+                code,
+                exited,
+                stderr_done,
                 ..
             } => {
-                if child.try_wait().ok().flatten().is_some() {
-                    return true;
+                if exited.is_none() {
+                    if let Some(status) = child.try_wait().ok().flatten() {
+                        *code = exit_code(status);
+                        *exited = Some(now);
+                    } else if now >= *deadline && !*killed {
+                        *killed = true;
+                        let _ = child.kill();
+                        if let Some(status) = child.try_wait().ok().flatten() {
+                            *code = exit_code(status);
+                            *exited = Some(now);
+                        }
+                    }
                 }
-                if now >= *deadline && !*killed {
-                    *killed = true;
-                    let _ = child.kill();
-                    return child.try_wait().ok().flatten().is_some();
-                }
-                false
+                exited.is_some_and(|at| {
+                    stderr_done.load(Ordering::Acquire)
+                        || now.saturating_duration_since(at) >= STDERR_WAIT
+                })
             }
             Stop::Member(member) => member.poll(now),
             Stop::Gone => true,
+        }
+    }
+    /// The exit code of an own process that is gone (`None`: a member, a
+    /// process not gone yet, or one the system gave no code for).
+    pub fn code(&self) -> Option<i32> {
+        match self {
+            Stop::Own { code, .. } => *code,
+            _ => None,
+        }
+    }
+    /// Its deadline moves to `deadline` if that is sooner: a quit's one
+    /// deadline, or a kill now (supervisor.md §7.2, T31).
+    pub fn hasten(&mut self, deadline: Instant) {
+        if let Stop::Own { deadline: own, .. } = self
+            && deadline < *own
+        {
+            *own = deadline;
         }
     }
     /// Blocking until it is over (`Drop for Plugin`: at quit, each plugin
@@ -236,6 +287,9 @@ pub struct Plugin {
     /// What dropping it tells the plugin (`set_stop_reason`); `quit` for a
     /// plugin dropped with the host.
     stop_reason: StopReason,
+    /// Its process ended by itself (`set_exited`): no `runtime.stop` is
+    /// queued for it (A14).
+    exited: bool,
 }
 impl Plugin {
     /// A development load (`--plugin`): always its own process.
@@ -249,7 +303,7 @@ impl Plugin {
             events,
             manifest,
             key,
-            Placement::Own,
+            Placement::Own { heap_mib: None },
         )
     }
     pub fn load_manifest(
@@ -286,10 +340,11 @@ impl Plugin {
                     .is_ok()
             });
         let runner = match placement {
-            Placement::Own => own_process(
+            Placement::Own { heap_mib } => own_process(
                 paths,
                 &directory,
                 data_directory.as_deref(),
+                heap_mib,
                 generation,
                 events,
             )?,
@@ -316,6 +371,7 @@ impl Plugin {
             runner,
             stop_wait: Duration::from_millis(300),
             stop_reason: StopReason::Quit,
+            exited: false,
         })
     }
     pub fn send(&mut self, message: Value) -> Result<()> {
@@ -347,15 +403,24 @@ impl Plugin {
             // leaked, and the wait goes on until the runner reports it gone
             // (at most 6 s, `MemberStop`).
             Runner::Shared(member) => Stop::Member(member.begin_stop(self.stop_reason)),
-            Runner::Own { child, outbound } => {
+            Runner::Own {
+                child,
+                outbound,
+                stderr_done,
+            } => {
                 // Not delivered when its queue is full or its pipe closed
                 // (a `failed` stop, often): it is killed after the wait.
-                let _ = outbound.try_send(stop_message(self.stop_reason));
+                if !self.exited {
+                    let _ = outbound.try_send(stop_message(self.stop_reason));
+                }
                 Stop::Own {
                     child,
                     _outbound: outbound,
                     deadline: Instant::now() + self.stop_wait,
                     killed: false,
+                    code: None,
+                    exited: None,
+                    stderr_done,
                 }
             }
             Runner::Stopped => Stop::Gone,
@@ -396,6 +461,12 @@ impl Plugin {
     pub fn set_stop_reason(&mut self, reason: StopReason) {
         self.stop_reason = reason;
     }
+    /// Its process ended by itself (its stdout closed): its stop sends no
+    /// `runtime.stop` to the closed pipe; the reaper only waits for it (B4,
+    /// A14).
+    pub fn set_exited(&mut self) {
+        self.exited = true;
+    }
     /// Text values in the interface language, with this plugin's catalog
     /// (`i18n::text`).
     pub fn texts(&self) -> crate::i18n::text::Texts<'_> {
@@ -405,16 +476,22 @@ impl Plugin {
         }
     }
 }
-/// An own process: `node runner.js <directory>`, the plugin's data
-/// directory, `plugin.app` and the locale in its environment.
+/// An own process: `node [--max-old-space-size=<heap_mib>] runner.js
+/// <directory>`, the plugin's data directory, `plugin.app` and the locale
+/// in its environment. A heap past the cap ends the process with V8's heap
+/// abort, which the supervisor reports as "ran out of memory" (§7.3).
 fn own_process(
     paths: &crate::process::runtime_paths::RuntimePaths,
     directory: &Path,
     data_directory: Option<&Path>,
+    heap_mib: Option<u32>,
     generation: u64,
     events: mpsc::Sender<Event>,
 ) -> Result<Runner> {
     let mut command = paths.node_command();
+    if let Some(mib) = heap_mib {
+        command.arg(heap_flag(mib));
+    }
     if let Some(dir) = data_directory {
         command.env("VESTRA_PLUGIN_DATA_DIR", dir);
     }
@@ -428,9 +505,22 @@ fn own_process(
         .arg(directory)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
+        .stderr(Stdio::piped())
         .spawn()
         .with_context(|| paths.node_failure())?;
+    // Its stderr goes on to the player's, as when inherited; read here so
+    // V8's heap abort is seen (supervisor.md §7.3, B4).
+    let stderr_done = Arc::new(AtomicBool::new(false));
+    if let Some(stderr) = child.stderr.take() {
+        let done = stderr_done.clone();
+        let events = events.clone();
+        thread::spawn(move || {
+            forward_stderr(BufReader::new(stderr), generation, &events);
+            done.store(true, Ordering::Release);
+        });
+    } else {
+        stderr_done.store(true, Ordering::Release);
+    }
     let mut stdin = child.stdin.take().context("plugin stdin")?;
     let (outbound, output) = mpsc::sync_channel::<Value>(OUTBOUND_CAPACITY);
     let write_events = events.clone();
@@ -453,7 +543,52 @@ fn own_process(
     });
     let stdout = child.stdout.take().context("plugin stdout")?;
     thread::spawn(move || read_plugin(BufReader::new(stdout), generation, &events));
-    Ok(Runner::Own { child, outbound })
+    Ok(Runner::Own {
+        child,
+        outbound,
+        stderr_done,
+    })
+}
+/// What V8 writes to stderr when a heap allocation fails past the cap
+/// (`FATAL ERROR: … JavaScript heap out of memory`), before it aborts.
+pub const HEAP_ABORT_LINE: &str = "JavaScript heap out of memory";
+/// How long a reap waits for the end of a gone process's stderr.
+const STDERR_WAIT: Duration = Duration::from_millis(100);
+/// An own process's stderr, copied on to the player's line by line; V8's
+/// heap abort line is reported once as `Event::OutOfMemory`.
+fn forward_stderr(mut reader: impl BufRead, generation: u64, events: &mpsc::Sender<Event>) {
+    let mut told = false;
+    loop {
+        let mut bytes = Vec::new();
+        let read = Read::by_ref(&mut reader)
+            .take(64 * 1024)
+            .read_until(b'\n', &mut bytes);
+        match read {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {
+                let _ = std::io::stderr().lock().write_all(&bytes);
+                if !told && String::from_utf8_lossy(&bytes).contains(HEAP_ABORT_LINE) {
+                    told = true;
+                    let _ = events.send(Event::OutOfMemory(generation));
+                }
+            }
+        }
+    }
+}
+/// A gone process's exit code; on Unix a signal is `128 + signal`, as a
+/// shell reports it (V8's abort: 134 everywhere, measured on Windows in B4).
+fn exit_code(status: std::process::ExitStatus) -> Option<i32> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        status
+            .code()
+            .or_else(|| status.signal().map(|signal| 128 + signal))
+    }
+    #[cfg(not(unix))]
+    {
+        status.code()
+    }
 }
 /// An own process's stdout, line by line, as events for `generation`,
 /// until it closes. After an oversized or unparsable line (the plugin is
@@ -588,6 +723,7 @@ mod stop_tests {
             crate::process::runtime_paths::get(),
             &directory,
             None,
+            None,
             1,
             events,
         )
@@ -603,6 +739,7 @@ mod stop_tests {
             runner,
             stop_wait: Duration::from_millis(1000),
             stop_reason: StopReason::Quit,
+            exited: false,
         };
         // Answer like the host until it writes on its own.
         let mut shows = 0;

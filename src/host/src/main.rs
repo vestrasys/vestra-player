@@ -659,8 +659,9 @@ fn main() -> Result<()> {
                 evidence.sample(&host.backend, &observed_source, start)?;
             }
         }
-        // Lazy activation: what each running plugin was at its ready.
-        host.on_demand_quit();
+        // Every plugin process stops within one deadline (supervisor.md
+        // T31), each running plugin recorded first.
+        host.shutdown_plugins(host::QUIT_BUDGET);
         stop_handoffs();
         host.shader_guard.quit();
         logged!("exit: normal");
@@ -871,9 +872,16 @@ fn main() -> Result<()> {
         // device and the renderer go, so a stalled frame cannot hold up the
         // teardown (record 2026-10-render-modes §11.6).
         platform::release_gpu_waits();
-        // Lazy activation: what each running plugin was at its ready.
-        teardown_step("recording lazy activation");
-        host.borrow_mut().on_demand_quit();
+        // Every plugin process stops within one deadline (supervisor.md
+        // T31: 1 s at quit, 300 ms after a device loss), each running
+        // plugin recorded first.
+        teardown_step("stopping the plugins");
+        let budget = if platform::window_device_lost() {
+            host::DEVICE_LOSS_BUDGET
+        } else {
+            host::QUIT_BUDGET
+        };
+        host.borrow_mut().shutdown_plugins(budget);
         stop_handoffs();
         // Read now: only a loss that ended the loop restarts the player.
         if platform::window_device_lost() {

@@ -198,6 +198,11 @@ pub struct Tunables {
     /// activates; its readiness is the activation's (`packages.list`, an
     /// operation's commit). Off (B3): a start job ends at its ready (T9).
     pub start_job_ends_at_spawn: bool,
+    /// A process that ended by itself (an exit, a heap abort) gets no
+    /// `Terminate`: it is gone, so nothing is sent to it, and the adapter
+    /// cleans up after it on the exit (A14; coordinator ruling 2026-11-03,
+    /// §17.13; B4). Today `disable(Failed)` sends its stop line all the same.
+    pub exit_sends_no_stop: bool,
 }
 
 impl Policy {
@@ -272,6 +277,7 @@ impl Tunables {
             deliver_while_starting: true,
             verify_before_first_run_place: true,
             start_job_ends_at_spawn: true,
+            exit_sends_no_stop: false,
         }
     }
 
@@ -355,6 +361,7 @@ impl Tunables {
             first_immediate: true,
         });
         self.crash_notice = true;
+        self.exit_sends_no_stop = true;
         self.runner_restart_waits_cleanup = true;
         self.remove_data_waits_cleanup = true;
         self

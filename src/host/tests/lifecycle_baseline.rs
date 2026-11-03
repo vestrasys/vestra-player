@@ -479,7 +479,9 @@ fn a_parked_plugin_is_listed_running_idle_and_its_park_announces_nothing() {
 /// with "activation tracking limit reached" instead of its own error. Now a
 /// failed spawn ends its activation (and the activation is its unit's, one
 /// per unit): the 65th fails to spawn Node like the others. Node is pointed
-/// at a missing file, so no plugin process runs at all.
+/// at a missing file, so no plugin process runs at all. Since B4 (§15 B4,
+/// §3.3 "Start retry") each start is tried three more times (250 ms × 2ⁿ)
+/// before it is listed failed, so the failures end in any order.
 #[test]
 #[ignore = "needs libmpv: run with --include-ignored (ci:local)"]
 fn b2a_a_failed_spawn_gives_its_activation_place_back() {
@@ -495,7 +497,7 @@ fn b2a_a_failed_spawn_gives_its_activation_place_back() {
     let node = root.path().join("no-node").join("node.exe");
     let node = node.to_string_lossy();
     let log = root.run(
-        3,
+        6,
         &[
             ("VESTRA_SHARED", "0"),
             ("VESTRA_LAZY", "0"),
@@ -507,14 +509,37 @@ fn b2a_a_failed_spawn_gives_its_activation_place_back() {
         .filter(|line| line.contains("failed to start: "))
         .collect::<Vec<_>>();
     assert_eq!(failures.len(), 65, "{log}");
-    // They start in id order, and every one fails to spawn Node: none
+    // Every one fails to spawn Node after its three retries (B4): none
     // finds the places taken by the failures before it.
-    for (n, line) in failures.iter().enumerate() {
+    for n in 0..65 {
+        let id = format!("aa.fixture-{n:03}");
         assert!(
-            line.contains(&format!("aa.fixture-{n:03} failed to start: start Node")),
-            "{line}\n{log}"
+            failures
+                .iter()
+                .any(|line| line.contains(&format!("{id} failed to start: start Node"))),
+            "{id}\n{log}"
         );
+        let retries = log
+            .lines()
+            .filter(|line| line.contains(&format!("{id} could not start, tried again shortly")))
+            .count();
+        assert_eq!(retries, 3, "{id}\n{log}");
     }
+    // They start in id order: their first tries.
+    let mut firsts = Vec::<String>::new();
+    for line in log.lines() {
+        if let Some(rest) = line.strip_prefix("supervisor: ")
+            && rest.contains("could not start, tried again shortly")
+            && let Some(id) = rest.split_whitespace().next()
+            && !firsts.iter().any(|seen| seen == id)
+        {
+            firsts.push(id.to_owned());
+        }
+    }
+    let ordered = (0..65)
+        .map(|n| format!("aa.fixture-{n:03}"))
+        .collect::<Vec<_>>();
+    assert_eq!(firsts, ordered, "{log}");
     assert!(!log.contains("activation tracking limit reached"), "{log}");
 }
 
@@ -1103,16 +1128,16 @@ fn standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone() {
     // `MEMBER_GONE`).
 }
 
-/// Quit (`lazy_quit`, then each plugin dropped with the host): own
-/// processes are stopped one after another, each given its 300 ms grace.
-/// Six plugins whose cleanup never ends make the quit about 6 × 300 ms
-/// longer than with none (stopped side by side it would be about 300 ms).
-/// B0: expected to change in B2b/B4 (the multiplexed reaper and
-/// `shutdown` within 1 s stop them side by side).
+/// Quit. B0 pinned own processes stopped one after another, each given its
+/// 300 ms grace (six plugins whose cleanup never ends made the quit about
+/// 6 × 300 ms longer than with none). Flipped in B4 (§15 B4: "Quitting
+/// spends at most ~1 s on plugin shutdown"; T31): every process gets its
+/// stop at once and one deadline of 1 s, so twelve endless cleanups (3.6 s
+/// one after another) cost about that 1 s.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
-fn quit_stops_own_processes_one_after_another() {
-    const N: usize = 6;
+fn quit_stops_own_processes_side_by_side_within_one_second() {
+    const N: usize = 12;
     let run = |plugins: usize| {
         let mut root = Root::new();
         for n in 0..plugins {
@@ -1143,12 +1168,21 @@ fn quit_stops_own_processes_one_after_another() {
     }
     let (empty, endless) = (median(empty), median(endless));
     let extra = endless.saturating_sub(empty);
-    // B0: expected to change in B2b/B4 (then about 300 ms).
+    // B4: one deadline for all, about 1 s (B0: N × 300 ms and more).
     assert!(
-        extra >= std::time::Duration::from_millis(1_000),
+        extra < std::time::Duration::from_millis(2_000),
         "quit took {endless:?} (median) with {N} endless cleanups, {empty:?} with none: \
-         not one after another?\n{log}"
+         still one after another?\n{log}"
     );
+    let stopped = log
+        .lines()
+        .find_map(|line| {
+            line.split_once(" plugin processes stopped in ")
+                .map(|(_, rest)| rest)
+        })
+        .and_then(|rest| rest.split(' ').next()?.parse::<u64>().ok())
+        .unwrap_or_else(|| panic!("no shutdown line\n{log}"));
+    assert!((900..1_400).contains(&stopped), "{stopped} ms\n{log}");
 }
 
 const SLOW: &str = "aa.fixture-slow";

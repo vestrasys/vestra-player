@@ -63,6 +63,16 @@ use queue::{LANES, Lane, Lanes};
 use restart::{Rng, RunnerPolicy, retry_delay};
 use timers::{Target, TimerKind, Timers};
 
+/// The failure text of a unit that hit its start limit (T27): the cause,
+/// the limit, and what starts it again (§3.3: a reload clears it).
+fn start_limit_text(cause: &str, limit: StartLimit) -> String {
+    format!(
+        "{cause}; stopped after {} failures within {} minutes (reload it to start it again)",
+        limit.burst,
+        limit.interval / 60_000
+    )
+}
+
 /// A user-visible notice (OSD; i18n texts in the adapter).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Notice {
@@ -1028,9 +1038,9 @@ impl<P: Clone> Supervisor<P> {
 
     /// §5 `shutdown` (quit / device loss, T31): checkpoints from the
     /// recorded state, every process terminated in parallel with one
-    /// deadline `budget`, then killed.
-    // B4: quit and device loss within one deadline (A2).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// deadline `budget`, then killed; the process of a stop that landed
+    /// stuck is killed at once (§17.7 item 20). Wakes are dropped from now
+    /// on.
     pub fn shutdown(&mut self, now: Ms, budget: Ms) -> Vec<Action<P>> {
         self.now = self.now.max(now);
         self.shutting_down = true;
@@ -1052,8 +1062,20 @@ impl<P: Clone> Supervisor<P> {
             unit.backlog.clear();
             let job = unit.job.take();
             let state = unit.state.clone();
+            let stopping = unit.stopping;
             if let Some(job) = job {
                 self.record(u, job.id, job.kind, JobResult::Canceled);
+            }
+            // The process of a stop that landed stuck (§17.7 item 20): still
+            // tracked, past its grace; killed now, so quit leaves no plugin
+            // process behind.
+            if !state.is_deactivating()
+                && let Some(stopping) = stopping.filter(|s| !s.reaped)
+            {
+                self.pending.push(Action::Kill {
+                    unit: u,
+                    pid: stopping.pid,
+                });
             }
             match state {
                 UnitState::Active { .. } | UnitState::Activating { pid: Some(_), .. } => {
@@ -1080,7 +1102,8 @@ impl<P: Clone> Supervisor<P> {
     /// The checkpoints a quit writes (`shutdown`'s first pass, T31), unit by
     /// unit: as today's `lazy_quit`, every run whose class came back this
     /// run, unless its checkpoint already says resident and it still is.
-    /// B2c's adapter writes them at quit itself (`shutdown` is B4's).
+    /// The adapter writes them at quit (`shutdown_plugins`) from the
+    /// registrations as they are then.
     pub fn quit_checkpoints(&self) -> Vec<(UnitId, Pid, bool)> {
         if !self.tunables.on_demand {
             return Vec::new();
@@ -1201,6 +1224,27 @@ impl<P: Clone> Supervisor<P> {
         }
         self.try_ready(u);
         self.sync(u);
+    }
+
+    /// The run `pid` the core placed in the shared runner runs in its own
+    /// process after all (the Host's trust check said so: a built-in not
+    /// from the installation's own directory, say): a runner failure does
+    /// not reach it.
+    pub fn placed_own(&mut self, pid: Pid) {
+        if let Some(u) = self.current(pid)
+            && let Some(unit) = self.units.get_mut(&u)
+        {
+            unit.placement = Placement::Own;
+        }
+    }
+
+    /// The failure text of `u`: its `Failed` state's, or the one it lands
+    /// with (a start limit hit: what `packages.list` shows, §3.3).
+    pub fn failure_of(&self, u: UnitId) -> Option<String> {
+        let unit = self.units.get(&u)?;
+        unit.failure
+            .clone()
+            .or_else(|| unit.failing.as_ref().map(|(_, text)| text.clone()))
     }
 
     /// §5 `process_failed` (`runtime.failed`, or a failed initial UI
@@ -1818,6 +1862,23 @@ impl<P: Clone> Supervisor<P> {
     }
 
     fn terminate_with(&mut self, u: UnitId, reason: StopReason, then: Then, keep: bool, grace: Ms) {
+        self.deactivate(u, reason, then, keep, Some(grace));
+    }
+
+    /// The unit leaves its run for `then`: with `grace`, its process gets
+    /// a `Terminate` (then `Kill` after the grace); without, the process is
+    /// gone already (an exit, a heap abort: A14, coordinator ruling
+    /// 2026-11-03, §17.13) and the adapter cleans up after it on the exit
+    /// itself, without a stop message. Either way the unit waits for the
+    /// reap and the backend cleanup (T16).
+    fn deactivate(
+        &mut self,
+        u: UnitId,
+        reason: StopReason,
+        then: Then,
+        keep: bool,
+        grace: Option<Ms>,
+    ) {
         self.drop_alias(u);
         let now = self.now;
         let stop_wait = self.tunables.stop_wait;
@@ -1848,9 +1909,17 @@ impl<P: Clone> Supervisor<P> {
             unit.remove_data = true;
         }
         self.timers
-            .arm(&mut unit.gens, u, TimerKind::StopGrace, now + grace);
-        self.timers
             .arm(&mut unit.gens, u, TimerKind::StopWait, now + stop_wait);
+        let Some(grace) = grace else {
+            // Gone already: its entries go now unless kept for standby, as
+            // a `Terminate`'s cleanup would revoke them (§3.1).
+            if !keep {
+                self.pending.push(Action::Revoke { unit: u, pid });
+            }
+            return;
+        };
+        self.timers
+            .arm(&mut unit.gens, u, TimerKind::StopGrace, now + grace);
         self.pending.push(Action::Terminate {
             unit: u,
             pid,
@@ -2348,6 +2417,22 @@ impl<P: Clone> Supervisor<P> {
             }
         }
         let limit_hit = failing.0 == FailResult::StartLimitHit;
+        if limit_hit && let Some(limit) = policy.start_limit {
+            // Settings > Plugins says why it stays stopped and what clears
+            // it (§3.3: "reload clears it").
+            failing.1 = start_limit_text(&text, limit);
+        }
+        // A start retry after a start timeout with no start job left (one
+        // that ended at its spawn, `start_job_ends_at_spawn`, the player's
+        // preset with on-demand start off): the retry is a new start.
+        let retry_job = retry_left
+            && !self.units[&u]
+                .job
+                .as_ref()
+                .is_some_and(|job| job.will_start());
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
         if kept_start_failure {
             // As a failed spawn (`spawn_failed`): every held trigger is
             // answered (wake events silently) and the start ends; the next
@@ -2387,12 +2472,25 @@ impl<P: Clone> Supervisor<P> {
                 }
             }
         }
-        // Today a crash only records the failure; the notice is B4's.
-        if cause.notifies() && self.tunables.crash_notice {
-            self.pending.push(Action::Notify {
-                unit: Some(u),
-                notice: Notice::Crashed(cause),
+        // Today a crash only records the failure; the notice is B4's. An
+        // own process that exited by itself is told at its reap, where its
+        // exit code says whether it ran out of memory (§7.3).
+        // A start limit hit says it itself (one notice, not two).
+        if cause.notifies() && self.tunables.crash_notice && !limit_hit {
+            let exited = self.units[&u].pid().filter(|_| {
+                cause == ExitCause::Exited && self.units[&u].placement == Placement::Own
             });
+            match exited {
+                Some(pid) => {
+                    if let Some(unit) = self.units.get_mut(&u) {
+                        unit.exit_notice = Some(pid);
+                    }
+                }
+                None => self.pending.push(Action::Notify {
+                    unit: Some(u),
+                    notice: Notice::Crashed(cause),
+                }),
+            }
         }
         if limit_hit {
             self.pending.push(Action::Notify {
@@ -2401,7 +2499,26 @@ impl<P: Clone> Supervisor<P> {
             });
         }
         let failure_grace = self.tunables.policy(self.units[&u].class).failure_grace;
-        self.terminate_with(u, cause.stop_reason(), then, keep, failure_grace);
+        // An exit or a heap abort: the process is gone, no stop is sent
+        // (A14); anything else is terminated first.
+        let gone =
+            self.tunables.exit_sends_no_stop && matches!(cause, ExitCause::Exited | ExitCause::Oom);
+        let grace = (!gone).then_some(failure_grace);
+        self.deactivate(u, cause.stop_reason(), then, keep, grace);
+        if retry_job {
+            let job = self.new_job(
+                u,
+                JobKind::Start {
+                    cause: Cause::AutoRestart,
+                },
+                Origin::Crash,
+            );
+            if let Some(unit) = self.units.get_mut(&u)
+                && unit.job.is_none()
+            {
+                unit.job = Some(job);
+            }
+        }
         // The delay (`after_reap`) applies once the process is gone.
         if auto_restart.is_some() {
             let has_start = self.units[&u].job.as_ref().is_some_and(Job::will_start);
