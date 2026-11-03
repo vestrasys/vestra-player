@@ -20,7 +20,7 @@
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | opening the player | `on_open_files` (macOS: open-documents Apple events through `vestra-open-files`; elsewhere files come on the command line), `single_instance` / `single_instance_restarted` → `Launch` / `Primary` (shared, in `instance.rs`), `allow_handoff_foreground` (Windows: `AllowSetForegroundWindow`) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
-//! | facts | `os_facts` (blocking), `gpu_adapters` (Windows: DXGI through `vestra-win32`; elsewhere none yet), `memory_status` (Windows: private bytes and commit charge through `vestra-win32`; elsewhere none yet), `on_session_end` (Windows: `WM_QUERYENDSESSION`/`WM_ENDSESSION` through `vestra-win32`; elsewhere nothing, the quit request ends the event loop), `displays` (UI thread),`app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
+//! | facts | `os_facts` (blocking), `gpu_adapters` (Windows: DXGI through `vestra-win32`; elsewhere none yet), `memory_status` (Windows: private bytes and commit charge through `vestra-win32`; elsewhere none yet), `physical_memory` → `physical_memory_mib` (Windows: `GlobalMemoryStatusEx` through `vestra-win32`; macOS: `NSProcessInfo`; Linux: `/proc/meminfo`; 8 GiB when unknown), `PressureSource` → `MemoryPressure` (the plugin supervisor's input: Windows: Chrome's thresholds on available physical memory and the system's low-memory notification through `vestra-win32`; Linux: PSI; macOS: none yet), `on_session_end` (Windows: `WM_QUERYENDSESSION`/`WM_ENDSESSION` through `vestra-win32`; elsewhere nothing, the quit request ends the event loop), `displays` (UI thread),`app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
 //! | installation | `install_layout` (pure, in `layout.rs`, for every system) → `current_install_layout` |
 //! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
@@ -550,6 +550,88 @@ pub fn memory_status() -> Option<MemoryStatus> {
     None
 }
 
+/// Memory pressure as the system reports it: the plugin supervisor's input
+/// (doc/architecture/supervisor.md §8 "Pressure source"; Android LMK levels,
+/// Chrome's moderate / critical).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MemoryPressure {
+    #[default]
+    None,
+    Low,
+    Critical,
+}
+
+/// The physical memory the supervisor's process budget assumes when the
+/// system does not say (supervisor.md §8: "macOS fallback 8 GiB").
+pub const PHYSICAL_MIB_FALLBACK: u64 = 8 * 1024;
+
+/// Installed physical memory in MiB (Windows: `GlobalMemoryStatusEx`
+/// through `vestra-win32`; macOS: `NSProcessInfo.physicalMemory`; Linux:
+/// `/proc/meminfo`), or [`PHYSICAL_MIB_FALLBACK`].
+pub fn physical_memory_mib() -> u64 {
+    imp::physical_memory()
+        .map(|bytes| bytes >> 20)
+        .filter(|mib| *mib > 0)
+        .unwrap_or(PHYSICAL_MIB_FALLBACK)
+}
+
+/// Chrome's Windows memory pressure monitor
+/// (`base/memory/memory_pressure_monitor_win.cc`), on available physical
+/// memory: below 4 GiB installed, moderate under 500 MiB available and
+/// critical under 200 MiB; from 4 GiB, 1000 MiB and 400 MiB.
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+fn pressure_from_available(total_mib: u64, available_mib: u64) -> MemoryPressure {
+    let (moderate, critical) = if total_mib >= 4096 {
+        (1000, 400)
+    } else {
+        (500, 200)
+    };
+    if available_mib < critical {
+        MemoryPressure::Critical
+    } else if available_mib < moderate {
+        MemoryPressure::Low
+    } else {
+        MemoryPressure::None
+    }
+}
+
+/// `/proc/pressure/memory` (PSI, as systemd-oomd reads it) as a level,
+/// with Android lmkd's default stall thresholds over the last 10 s: low
+/// when some task stalled on memory ≥ 20 % of the time
+/// (`ro.lmk.psi_partial_stall_ms` 200 per second), critical when all did ≥
+/// 70 % (`ro.lmk.psi_complete_stall_ms` 700). `None` for a text that is not
+/// PSI.
+#[cfg_attr(all(any(windows, target_os = "macos"), not(test)), allow(dead_code))]
+fn psi_pressure(text: &str) -> Option<MemoryPressure> {
+    let avg10 = |kind: &str| {
+        text.lines()
+            .find_map(|line| line.strip_prefix(kind)?.strip_prefix(' '))?
+            .split_whitespace()
+            .find_map(|field| field.strip_prefix("avg10="))?
+            .parse::<f64>()
+            .ok()
+    };
+    let some = avg10("some")?;
+    let full = avg10("full").unwrap_or(0.);
+    Some(if full >= 70. {
+        MemoryPressure::Critical
+    } else if some >= 20. {
+        MemoryPressure::Low
+    } else {
+        MemoryPressure::None
+    })
+}
+
+/// `MemTotal` of `/proc/meminfo`, in bytes.
+#[cfg_attr(all(any(windows, target_os = "macos"), not(test)), allow(dead_code))]
+fn meminfo_total(text: &str) -> Option<u64> {
+    let line = text
+        .lines()
+        .find_map(|line| line.strip_prefix("MemTotal:"))?;
+    let kib = line.split_whitespace().next()?.parse::<u64>().ok()?;
+    Some(kib * 1024)
+}
+
 /// The main window starts a draw (Windows only).
 #[cfg(not(target_os = "windows"))]
 pub fn ui_draw_started() {}
@@ -844,6 +926,62 @@ mod keyring_store {
 
 #[cfg(test)]
 mod tests {
+    /// Chrome's thresholds on available physical memory, for machines
+    /// below and from 4 GiB.
+    #[test]
+    fn available_memory_maps_to_chromes_levels() {
+        use super::{MemoryPressure as M, pressure_from_available as level};
+        assert_eq!(level(16_384, 4_000), M::None);
+        assert_eq!(level(16_384, 999), M::Low);
+        assert_eq!(level(16_384, 400), M::Low);
+        assert_eq!(level(16_384, 399), M::Critical);
+        assert_eq!(level(4_096, 1_000), M::None);
+        assert_eq!(level(2_048, 999), M::None);
+        assert_eq!(level(2_048, 499), M::Low);
+        assert_eq!(level(2_048, 199), M::Critical);
+    }
+
+    /// PSI lines as the kernel writes them; "full" may be missing (older
+    /// kernels); anything else is not PSI.
+    #[test]
+    fn psi_maps_stalls_to_levels() {
+        use super::{MemoryPressure as M, psi_pressure as level};
+        let psi = |some: f64, full: f64| {
+            format!(
+                "some avg10={some:.2} avg60=0.00 avg300=0.00 total=12
+full avg10={full:.2} avg60=0.00 avg300=0.00 total=3
+"
+            )
+        };
+        assert_eq!(level(&psi(0., 0.)), Some(M::None));
+        assert_eq!(level(&psi(19.99, 5.)), Some(M::None));
+        assert_eq!(level(&psi(20., 5.)), Some(M::Low));
+        assert_eq!(level(&psi(85., 70.)), Some(M::Critical));
+        assert_eq!(
+            level("some avg10=31.00 avg60=1.00 avg300=0.10 total=5"),
+            Some(M::Low)
+        );
+        assert_eq!(level(""), None);
+        assert_eq!(level("some avg60=1.00"), None);
+    }
+
+    #[test]
+    fn meminfo_total_is_read_in_bytes() {
+        let text = "MemTotal:       16303428 kB
+MemFree:         1234 kB
+";
+        assert_eq!(super::meminfo_total(text), Some(16_303_428 * 1024));
+        assert_eq!(super::meminfo_total("MemFree: 1 kB"), None);
+    }
+
+    /// The process budget's input is never 0: the system's figure, or
+    /// 8 GiB.
+    #[test]
+    fn physical_memory_is_known_or_the_fallback() {
+        assert!(super::physical_memory_mib() > 0);
+        assert_eq!(super::PHYSICAL_MIB_FALLBACK, 8_192);
+    }
+
     use super::*;
 
     #[test]

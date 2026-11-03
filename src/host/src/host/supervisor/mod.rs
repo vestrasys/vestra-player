@@ -36,6 +36,11 @@
 //! `held_unanswered`), start failures that keep their entry points. The
 //! Host's busy checks are declared work in the core (`sync_work`), a
 //! `source.resolveRequest` in flight a capped request (`request_sent`).
+//!
+//! B5 (§17.14): with on-demand start on, the process budget for this
+//! machine's physical memory and the memory pressure source
+//! (`memory.rs`): over the budget or under pressure, idle third-party
+//! plugins go to standby through the idle timer's Standby job.
 use super::*;
 use crate::capabilities;
 use crate::supervisor::{Action, Delivery, Trigger, Tunables, UnitId, WorkKind};
@@ -43,6 +48,7 @@ use std::collections::BTreeSet;
 
 pub(crate) mod actions;
 pub(crate) mod checkpoint;
+mod memory;
 pub(crate) mod probe;
 pub(crate) mod shutdown;
 mod standby;
@@ -170,6 +176,8 @@ pub(crate) struct OnDemand {
     spawner: Option<worker::Spawner>,
     /// Starts whose process the spawn thread creates, by pid.
     spawning: BTreeMap<u64, worker::Spawning>,
+    /// The memory pressure source and the level the core has (B5).
+    memory: memory::Memory,
 }
 impl OnDemand {
     pub fn from_env() -> Self {
@@ -179,6 +187,7 @@ impl OnDemand {
             enabled,
             tests,
             probe: probe::Probe::from_env(),
+            memory: memory::Memory::from_env(),
             ..Self::default()
         }
     }
@@ -191,8 +200,10 @@ impl OnDemand {
 /// The Host's supervisor, with on-demand start as `VESTRA_LAZY` and
 /// `VESTRA_IDLE_MS` say (§17.13). With on-demand start on, the B3 values
 /// (§17.12: start-job limits, priorities, a bounded backlog with explicit
-/// answers, start failures that keep entry points) and B4's (restart
-/// policy, backoff, start limits, the heap cap, crash notices). Off, B4's
+/// answers, start failures that keep entry points), B4's (restart
+/// policy, backoff, start limits, the heap cap, crash notices) and B5's
+/// process budget for this machine's physical memory (§17.14; memory
+/// pressure is `memory.rs`'s, polled in `on_demand_tick`). Off, B4's
 /// alone on `Tunables::legacy()` (§15 B4 names no `VESTRA_LAZY`, as B3
 /// did): a start still ends at its spawn there (`start_job_ends_at_spawn`,
 /// B3's bookkeeping, only with on-demand start until B6). Wake events wake
@@ -205,10 +216,15 @@ pub(crate) fn new(on_demand: &OnDemand) -> Supervisor<Value> {
         .unwrap_or(IDLE_MS);
     let base = if on_demand.enabled {
         let cores = std::thread::available_parallelism().map_or(2, std::num::NonZero::get);
-        let tunables = Tunables::legacy().with_b3(cores).with_b4();
+        let physical = memory::physical_mib();
+        let tunables = Tunables::legacy()
+            .with_b3(cores)
+            .with_b4()
+            .with_b5(physical);
         diag!(
-            "lazy: on, idle after {idle_timeout} ms, {} starts at once ({cores} cores)",
-            tunables.max_active.unwrap_or_default()
+            "lazy: on, idle after {idle_timeout} ms, {} starts at once ({cores} cores), {} third-party processes ({physical} MiB)",
+            tunables.max_active.unwrap_or_default(),
+            tunables.process_budget.unwrap_or_default()
         );
         tunables
     } else {
@@ -1170,6 +1186,7 @@ impl Host {
     /// as declared work (today `lazy_tick` asked only an idle plugin), then
     /// the playback worker. Busy (or the worker gone): answered busy.
     pub(super) fn query_resources(&mut self, owner: u64) {
+        self.log_reclaim(owner);
         let now = self.now_ms();
         if self.plugins.contains_key(&owner) && !self.sync_work(owner, false) {
             let asked = self.backend.commands.send(Command {
@@ -1236,6 +1253,7 @@ impl Host {
             return;
         }
         self.probe_tick(now);
+        self.memory_tick(now);
         if now < self.on_demand.next_check {
             return;
         }

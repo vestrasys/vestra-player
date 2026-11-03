@@ -537,6 +537,27 @@ pub fn os_facts() -> OsFacts {
     }
 }
 
+/// Installed physical memory, in bytes (`NSProcessInfo.physicalMemory`).
+pub fn physical_memory() -> Option<u64> {
+    Some(objc2_foundation::NSProcessInfo::processInfo().physicalMemory())
+}
+
+/// No memory pressure source on macOS yet (supervisor.md §8: "macOS
+/// fallback"): the system's pressure events come through a dispatch
+/// source, which would need an unsafe crate. The process budget still
+/// applies.
+#[derive(Debug, Default)]
+pub struct PressureSource;
+impl PressureSource {
+    pub fn new() -> Self {
+        Self
+    }
+    /// Never known here.
+    pub fn level(&mut self) -> Option<super::MemoryPressure> {
+        None
+    }
+}
+
 /// NSScreen's list (the menu-bar screen first) with the names System
 /// Settings shows. Main thread only; empty elsewhere.
 pub fn displays() -> Vec<Display> {

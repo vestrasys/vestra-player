@@ -367,9 +367,8 @@ impl Tunables {
         self
     }
 
-    /// B5: the process budget for this machine.
-    // The Host switches presets in B3–B6.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// B5: the process budget for this machine (§8, §17.2 Q26). The
+    /// player's preset with on-demand start on (§17.14).
     pub fn with_b5(mut self, physical_mib: u64) -> Self {
         self.process_budget = Some(process_budget_for(physical_mib));
         self
@@ -430,8 +429,6 @@ pub fn max_active_for(cores: usize) -> usize {
 }
 
 /// `clamp(physMiB / 2 × 0.30 / 85, 3, 16)` (§8).
-// B5 (`with_b5`).
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn process_budget_for(physical_mib: u64) -> usize {
     let n = physical_mib / 2 * 30 / 100 / 85;
     (n as usize).clamp(3, 16)

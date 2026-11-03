@@ -717,8 +717,9 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `standby`.
-    // B5: an explicit standby (LRU, pressure); the idle timer enqueues its
-    // own Standby job since B2c.
+    // LRU and pressure standby enqueue their Standby jobs inside the core
+    // (`enforce_budget`, `memory_pressure`, B5); the idle timer its own
+    // since B2c. Only tests ask for one from outside.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn standby(&mut self, u: UnitId) -> JobId {
         self.enqueue_job(
@@ -1608,9 +1609,9 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `memory_pressure` (B5): Low/Critical put every idle reclaimable
-    /// unit in standby through the same Standby job (A13).
-    // B5: memory pressure.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// unit in standby through the same Standby job (A13), most important
+    /// last; Critical also takes the Interactive overrun away (`admit`).
+    /// The adapter calls it when the level changes.
     pub fn memory_pressure(&mut self, level: Pressure) {
         self.pressure = level;
         if level == Pressure::None {
@@ -1676,10 +1677,12 @@ impl<P: Clone> Supervisor<P> {
         self.units.iter().map(|(u, unit)| (*u, unit))
     }
     /// Third-party processes counted in the budget.
-    // B5: the process budget.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn budget_count(&self) -> usize {
         self.procs_third.len()
+    }
+    /// The memory pressure level last given (`memory_pressure`).
+    pub fn pressure(&self) -> Pressure {
+        self.pressure
     }
     /// Third-party start slots and first-run places in use.
     // B3: start-job limits.
@@ -2823,7 +2826,10 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// Over the process budget after starting `starting`: standby for the
-    /// least important idle units (event wakes never cause it).
+    /// least important idle units (event wakes never cause it). A unit
+    /// whose Standby job is already installed is on its way out and not
+    /// counted, so starts in a row while those are still asked for their
+    /// resources do not put more units in standby than the budget needs.
     fn enforce_budget(&mut self, starting: UnitId, priority: Priority) {
         let Some(budget) = self.tunables.process_budget else {
             return;
@@ -2831,7 +2837,17 @@ impl<P: Clone> Supervisor<P> {
         if !pressure::may_reclaim(priority) || !self.procs_third.contains(&starting) {
             return;
         }
-        let count = self.procs_third.len();
+        let leaving = self
+            .procs_third
+            .iter()
+            .filter(|u| {
+                self.units[u]
+                    .job
+                    .as_ref()
+                    .is_some_and(|job| matches!(job.kind, JobKind::Standby))
+            })
+            .count();
+        let count = self.procs_third.len() - leaving;
         if count <= budget {
             return;
         }

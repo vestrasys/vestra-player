@@ -15,7 +15,10 @@
 //! file is on a network file system (`file_is_remote`), waiting for a
 //! process to end (`wait_for_process_exit`), the thread's CPU cycles
 //! (`thread_cycles`), the process's private memory and the system commit
-//! charge (`memory_status`, the host log's memory line), the session
+//! charge (`memory_status`, the host log's memory line), the physical
+//! memory and the system's low-memory notification (`physical_memory`,
+//! `LowMemoryNotification`: the plugin supervisor's process budget and
+//! memory pressure), the session
 //! ending (`on_session_end`, a thread-local `WH_CALLWNDPROC` hook), the DXGI adapters with their driver versions
 //! (`dxgi_adapters`, through the `windows` crate's COM interfaces; no device
 //! is created), and whether an adapter's driver offers RTX Video Super
@@ -562,6 +565,77 @@ pub fn memory_status() -> Option<MemoryStatus> {
         commit_limit: (performance.CommitLimit as u64).saturating_mul(page),
         physical_load: system.dwMemoryLoad,
     })
+}
+
+/// The machine's physical memory (`physical_memory`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PhysicalMemory {
+    /// Installed physical memory the system can use, in bytes.
+    pub total: u64,
+    /// Physical memory available now (free, standby and zeroed pages), in
+    /// bytes.
+    pub available: u64,
+}
+
+/// The physical memory in all and available now (`GlobalMemoryStatusEx`:
+/// `ullTotalPhys`, `ullAvailPhys`): the plugin supervisor's process budget
+/// and memory pressure, as Chrome's Windows memory pressure monitor reads
+/// it. `None` when the call fails.
+pub fn physical_memory() -> Option<PhysicalMemory> {
+    use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+    let mut system = MEMORYSTATUSEX {
+        dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: a live local out-parameter with `dwLength` set, as required.
+    if unsafe { GlobalMemoryStatusEx(&mut system) } == 0 {
+        return None;
+    }
+    Some(PhysicalMemory {
+        total: system.ullTotalPhys,
+        available: system.ullAvailPhys,
+    })
+}
+
+/// The system's low-memory notification
+/// (`CreateMemoryResourceNotification(LowMemoryResourceNotification)`):
+/// signaled while the memory manager considers available physical memory
+/// low. Read without waiting (`QueryMemoryResourceNotification`); the
+/// handle is closed on drop.
+#[derive(Debug)]
+pub struct LowMemoryNotification(windows_sys::Win32::Foundation::HANDLE);
+
+impl LowMemoryNotification {
+    /// `None` when the system refuses the handle.
+    pub fn new() -> Option<Self> {
+        use windows_sys::Win32::System::Memory::{
+            CreateMemoryResourceNotification, LowMemoryResourceNotification,
+        };
+        // SAFETY: a notification type by value; the returned handle (null
+        // on failure) is ours and closed exactly once in `Drop`.
+        let handle = unsafe { CreateMemoryResourceNotification(LowMemoryResourceNotification) };
+        (!handle.is_null()).then_some(Self(handle))
+    }
+
+    /// Whether available physical memory is low now; `None` when the query
+    /// fails.
+    pub fn signaled(&self) -> Option<bool> {
+        use windows_sys::Win32::System::Memory::QueryMemoryResourceNotification;
+        let mut state = 0;
+        // SAFETY: the live notification handle this value owns and a live
+        // local out-parameter.
+        let ok = unsafe { QueryMemoryResourceNotification(self.0, &mut state) };
+        (ok != 0).then_some(state != 0)
+    }
+}
+
+impl Drop for LowMemoryNotification {
+    fn drop(&mut self) {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        // SAFETY: the handle `new` created, owned by this value and closed
+        // only here.
+        unsafe { CloseHandle(self.0) };
+    }
 }
 
 /// End this process at once with exit code `code` (`TerminateProcess` on
@@ -1165,6 +1239,24 @@ mod tests {
         assert!(status.commit_used >= status.private_bytes, "{status:?}");
         assert!(status.commit_limit >= status.commit_used, "{status:?}");
         assert!(status.physical_load <= 100, "{status:?}");
+    }
+
+    /// The supervisor's budget and pressure inputs: some memory is
+    /// installed, and no more is available than installed.
+    #[test]
+    fn physical_memory_reads_the_total_and_what_is_available() {
+        let memory = super::physical_memory().expect("the call succeeds");
+        assert!(memory.total > 0, "{memory:?}");
+        assert!(memory.available <= memory.total, "{memory:?}");
+    }
+
+    /// The low-memory notification opens and answers a query (whatever
+    /// the machine's state); it closes on drop.
+    #[test]
+    fn low_memory_notification_answers_a_query() {
+        let notification = super::LowMemoryNotification::new().expect("a handle");
+        assert!(notification.signaled().is_some());
+        drop(notification);
     }
 
     /// An adapter that does not exist is an error, not "unsupported".
