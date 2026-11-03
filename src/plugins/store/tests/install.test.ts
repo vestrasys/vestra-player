@@ -4,7 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
 import { installFromRepository } from "../installer.ts";
-import { actions, allRows, banners, BUILTIN, choose, FakeNet, info, no, OFFICIAL, openStore, props, publish, showBuiltins, start, THIRD, until, yes } from "./helpers.ts";
+import { actions, ALL, allRows, banners, BUILTIN, choose, controls, FakeNet, info, no, OFFICIAL, openStore, props, publish, showBuiltins, start, THIRD, until, yes } from "./helpers.ts";
 
 const YT = {
   id: "zysilm.youtube",
@@ -57,10 +57,11 @@ test("official install: confirm with permissions, download through a redirect, c
     await until(host, () => !store.busy);
     assert.deepEqual(readdirSync(join(host.dataDirectory, "downloads")), [], "download removed");
     assert.equal((await allRows(host)).find((r) => r.name === "YouTube")?.badge, "已安装");
-    // Under Installed now (Available stayed, without it): the row's button and Disable (formerly in the Plugin Manager).
-    assert.equal(props(host)["has-selection"], false);
-    await choose(host, "YouTube");
+    // All lists it installed now: it stays selected, with Disable and Uninstall… (formerly in the Plugin Manager).
+    assert.equal(props(host)["category"], ALL);
+    assert.equal(props(host)["d-name"], "YouTube");
     assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…"]);
+    assert.deepEqual(controls(host, "YouTube").primary, { id: "disable", text: "停用", enabled: true });
   } finally {
     await stop();
   }

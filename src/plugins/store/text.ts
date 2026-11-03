@@ -110,7 +110,8 @@ export const WINDOW = [
   "Reading repositories…",
   "Can't reach the repositories. Showing nothing until you're online; click Refresh to retry.",
   "The repositories have no plugins yet",
-  "Every plugin from the repositories is installed",
+  // Under All's list, offline: the installed plugins are shown, the repositories' are not.
+  "Can't reach the repositories; only installed plugins are shown. Click Refresh to retry.",
   "{} · {}",
   "Installed",
   "Update → {}",

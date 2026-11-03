@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { allRows, AVAILABLE, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, other, props, publish, rows, said, showBuiltins, signWith, start, tab, THIRD, until, UPDATES } from "./helpers.ts";
+import { allRows, ALL, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, other, props, publish, rows, said, showBuiltins, signWith, start, tab, THIRD, until, UPDATES } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-repos-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -18,15 +18,12 @@ test("the official index is read, verified and listed when the window opens", as
   try {
     await openStore(host);
     await showBuiltins(host);
-    // Installed is the first tab; Available lists what the index offers.
-    assert.equal(props(host)["category"], INSTALLED);
+    // All is the first tab: what the index offers, with the installed plugins.
+    assert.equal(props(host)["category"], ALL);
+    await until(host, () => rows(host).length === 3, "rows");
+    assert.deepEqual(rows(host).map((r) => r.name), ["Bilibili 视频", "vestra.video", "YouTube"]);
+    await tab(host, INSTALLED);
     assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video"]);
-    await tab(host, AVAILABLE);
-    await until(host, () => rows(host).length === 2, "rows");
-    assert.deepEqual(
-      rows(host).map((r) => r.name),
-      ["Bilibili 视频", "YouTube"],
-    );
     assert.match(String(props(host)["status-text"]), /^官方仓库 \d\d:\d\d 已更新$/);
     assert.equal(store.repos.official.index?.plugins.length, 2);
     const manifest = readFileSync(new URL("../manifest.json", import.meta.url), "utf8");
@@ -171,9 +168,11 @@ test("offline: installed details come from the package; Updates does not claim u
     assert.deepEqual(rows(third.host), []);
     const calm = "无法连接仓库。联网之前这里不显示内容；点「刷新」重试。";
     assert.equal(props(third.host)["empty-text"], calm);
-    assert.equal(props(third.host)["available-known"], false);
-    await tab(third.host, AVAILABLE);
-    assert.equal(props(third.host)["empty-text"], calm);
+    // All shows what it can: the installed plugins, with a calm note for the repositories.
+    await tab(third.host, ALL);
+    assert.deepEqual(rows(third.host).map((r) => r.name), ["vestra.video", "YouTube"]);
+    assert.equal(props(third.host)["all-count"], 2);
+    assert.equal(props(third.host)["list-note"], "无法连接仓库，只显示已安装的插件。点「刷新」重试。");
     assert.equal(props(third.host)["status-warn"], false);
     await tab(third.host, INSTALLED);
     assert.deepEqual(rows(third.host).map((r) => r.name).sort(), ["YouTube", "vestra.video"]);
@@ -218,7 +217,7 @@ test("third-party repositories: no signature read, `official: true` ignored, lab
     assert.equal(said(third.label), "Vestra 官方（third.example）");
     assert.equal(net.count(`${THIRD}.sig`), 0);
     await openStore(host);
-    await tab(host, AVAILABLE);
+    await tab(host, ALL);
     const row = rows(host).find((r) => r.name === "Viz") as { meta: string } | undefined;
     assert.equal(row?.meta, "Someone · 非官方：Vestra 官方（third.example）");
   } finally {

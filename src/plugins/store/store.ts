@@ -45,6 +45,8 @@ export type Settings = {
   revocations: Record<string, "disabled" | "accepted">;
   /** The window leaves built-in plugins out of its lists; on unless turned off (absent from files before store 0.2.8). */
   hideBuiltins?: boolean;
+  /** The last tab picked (`TAB_NAMES`; absent before store 0.2.11). Read with `tabOf`, not validated: a bad value is All. */
+  tab?: string;
 };
 
 const DEFAULTS: Settings = { repos: [], autoCheck: true, lastCheck: 0, revocations: {}, hideBuiltins: true };
@@ -76,13 +78,25 @@ export const timing = {
   openHeaders: 5_000,
 };
 
-/** The window's tabs. */
-export const INSTALLED = 0;
-export const AVAILABLE = 1;
+/**
+ * The window's tabs (store 0.2.11, user ruling 2026-11-03): All lists every
+ * plugin, installed ones included, with their state on the row, as GNOME
+ * Software, KDE Discover, the JetBrains Marketplace and VS Code do.
+ */
+export const ALL = 0;
+export const INSTALLED = 1;
 export const UPDATES = 2;
+/** The tabs as kept in settings.json, by index. */
+export const TAB_NAMES = ["all", "installed", "updates"] as const;
 
-/** The tab that always lists this row (an update shows under Updates too). */
-const homeOf = (item: Item) => (isInstalledRow(item) ? INSTALLED : AVAILABLE);
+/** A remembered tab: none (the first open), "available" (the tab All replaced in 0.2.11) or anything unknown is All. */
+export const tabOf = (name: unknown): number => {
+  const index = TAB_NAMES.indexOf(name as (typeof TAB_NAMES)[number]);
+  return index < 0 ? ALL : index;
+};
+
+/** The tab a hidden row is brought up on: Installed for an installed one, else All (which lists every row). */
+const homeOf = (item: Item) => (isInstalledRow(item) ? INSTALLED : ALL);
 
 export const MENU_ORDER = 822;
 /**
@@ -156,7 +170,7 @@ export class Store {
   items: Item[] = [];
 
   // Window state
-  category = INSTALLED;
+  category = ALL;
   search = "";
   tag: string | null = null;
   sort = 0;
@@ -201,6 +215,7 @@ export class Store {
     this.settings = plugin.storage.json("settings", { defaults: DEFAULTS, validate: validSettings });
     this.repos = new Repos(this.deps, plugin.dataDirectory);
     this.repos.sync(this.settings.value.repos);
+    this.category = tabOf(this.settings.value.tab);
     this.icons = new Icons(plugin.dataDirectory, deps.fetch, () => this.changed());
     this.revocations = new Revocations(this);
     this.#logo = fileURLToPath(new URL("./assets/icon.png", import.meta.url));
@@ -214,7 +229,7 @@ export class Store {
       this.#listChanged();
     });
     window.on("setCategory", (index: number) => {
-      this.category = Math.max(INSTALLED, Math.min(UPDATES, index));
+      this.#setCategory(Math.max(ALL, Math.min(UPDATES, Math.trunc(Number(index) || 0))));
       // A tag the new tab has no plugin for would empty its list under "Tags: All".
       const tag = this.tag?.toLowerCase();
       if (tag !== undefined && !this.#tags().some((each) => each.toLowerCase() === tag)) this.tag = null;
@@ -370,13 +385,20 @@ export class Store {
         return;
       }
     }
-    this.category = homeOf(item);
+    this.#setCategory(homeOf(item));
     if (!this.#shows(item.key)) this.tag = null;
     if (!this.#shows(item.key)) {
       this.search = "";
       this.#clearSearch++;
     }
     this.#scroll++;
+  }
+
+  /** Switch tabs and remember the tab in settings.json: the next open, also after a restart, starts there. */
+  #setCategory(index: number) {
+    this.category = index;
+    const name = TAB_NAMES[index];
+    if (name !== undefined && this.settings.value.tab !== name) this.settings.save({ ...this.settings.value, tab: name });
   }
 
   /** "Hide built-in plugins" is on: the default, also for settings saved before the option. */
@@ -608,7 +630,8 @@ export class Store {
     const items = this.#listed();
     if (this.category === INSTALLED) return items.filter(isInstalledRow);
     if (this.category === UPDATES) return items.filter((item) => item.state === "update");
-    return items.filter((item) => !isInstalledRow(item));
+    // All: every row, the repositories' and the installed ones (sideloaded, workshop, development loads).
+    return items;
   }
 
   #tags(): string[] {
@@ -617,7 +640,7 @@ export class Store {
     return [...tags.values()].sort((a, b) => a.localeCompare(b, "zh"));
   }
 
-  /** Some repository has an index (fresh or cached): Available and Updates mean something. */
+  /** Some repository has an index (fresh or cached): All's repository part and Updates mean something. */
   #known(): boolean {
     return this.repos.list.some((repo) => repo.index !== null);
   }
@@ -639,9 +662,9 @@ export class Store {
     const listed = this.#listed();
     const base = {
       category: this.category,
+      // All counts what it can show: without any index, the installed plugins only.
+      allCount: listed.length,
       installedCount: listed.filter(isInstalledRow).length,
-      availableCount: listed.filter((each) => !isInstalledRow(each)).length,
-      availableKnown: this.#known(),
       updates: updateCount(this.items),
       // The first entry stands for all tags (the library drop-down shows the model as it is).
       tagModel: [shown(msg("Tags: All")), ...tags],
@@ -650,6 +673,7 @@ export class Store {
       hideBuiltins: this.hideBuiltins,
       rows: visible.map((each) => this.#row(each, action)),
       emptyText: shown(this.#emptyText(visible)),
+      listNote: shown(this.#listNote(visible)),
       linkOpen: this.linkOpen,
       status: this.shown(joined(status, "{} · {}")),
       statusWarn: this.#message?.warn ?? this.repos.list.some((repo) => repo.status.warn),
@@ -691,15 +715,24 @@ export class Store {
       return this.hideBuiltins && this.items.some((item) => isBuiltinRow(item) && isInstalledRow(item))
         ? msg("No plugins installed besides the built-in ones, which are hidden")
         : msg("No plugins installed yet");
-    // Available and Updates need an index (fresh or cached); "up to date" only after one was read.
+    // Updates and All's repository part need an index (fresh or cached); "up to date" only after one was read.
     if (!this.#known()) {
       if (this.repos.list.some((repo) => repo.refreshing)) return msg("Reading repositories…");
       return msg("Can't reach the repositories. Showing nothing until you're online; click Refresh to retry.");
     }
     if (this.category === UPDATES) return msg("All plugins are up to date");
-    return this.repos.list.some((repo) => repo.index?.plugins.length)
-      ? msg("Every plugin from the repositories is installed")
-      : msg("The repositories have no plugins yet");
+    return msg("The repositories have no plugins yet");
+  }
+
+  /**
+   * All without any repository index but with installed plugins to show: a
+   * calm line under the list for the repository part (an empty list says it
+   * itself; the status line names each repository's error).
+   */
+  #listNote(visible: Item[]): Msg | null {
+    if (this.category !== ALL || !visible.length || this.#known() || !this.repos.list.length) return null;
+    if (this.repos.list.some((repo) => repo.refreshing)) return msg("Reading repositories…");
+    return msg("Can't reach the repositories; only installed plugins are shown. Click Refresh to retry.");
   }
 
   #origin(item: Item): Msg {

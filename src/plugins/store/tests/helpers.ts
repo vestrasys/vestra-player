@@ -348,9 +348,9 @@ type Row = { key: string; name: string; badge: string; version: string };
 /** The rows of the current tab. */
 export const rows = (host: TestHost) => (props(host)["rows"] as Row[]) ?? [];
 
-/** The window's tabs. */
-export const INSTALLED = 0;
-export const AVAILABLE = 1;
+/** The window's tabs (store 0.2.11: All replaced Available and comes first). */
+export const ALL = 0;
+export const INSTALLED = 1;
 export const UPDATES = 2;
 
 /** Switch the store window to a tab. */
@@ -365,16 +365,14 @@ export async function showBuiltins(host: TestHost) {
   await host.settle();
 }
 
-/** The rows of every tab (Installed, Available, Updates; an update row shows under Installed too). */
+/** Every row: the All tab's, in its order (by name unless sorted otherwise). */
 export async function allRows(host: TestHost) {
-  const current = (props(host)["category"] as number | undefined) ?? INSTALLED;
+  const current = (props(host)["category"] as number | undefined) ?? ALL;
   // Switching tabs moves the selection (the details follow the list): select the same row again afterwards.
   const selected = (rows(host) as (Row & { selected?: boolean })[]).find((r) => r.selected)?.key;
   const all: Row[] = [];
-  for (const index of [INSTALLED, AVAILABLE]) {
-    await tab(host, index);
-    all.push(...rows(host));
-  }
+  await tab(host, ALL);
+  all.push(...rows(host));
   await tab(host, current);
   if (selected !== undefined) {
     host.window("store").emit("select", selected);
@@ -386,7 +384,7 @@ export async function allRows(host: TestHost) {
 /** Select the row with this name in the store window, switching to the tab that shows it. */
 export async function choose(host: TestHost, name: string) {
   let row = rows(host).find((r) => r.name === name);
-  for (const index of [INSTALLED, AVAILABLE, UPDATES]) {
+  for (const index of [ALL, INSTALLED, UPDATES]) {
     if (row) break;
     await tab(host, index);
     row = rows(host).find((r) => r.name === name);

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { timing } from "../store.ts";
-import { actions, AVAILABLE, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
+import { actions, ALL, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
 
 const path = (host: Awaited<ReturnType<typeof start>>["host"]) => host.command("open").declaration.path;
 
@@ -163,20 +163,27 @@ test("list: filters, search, tags, sort; incompatible and fully revoked plugins"
     await showBuiltins(host);
     await until(host, () => store.items.length === 5);
     const window = host.window("store");
-    // Installed (the first tab): built-ins first, then third-party; tags of this tab only.
-    assert.equal(props(host)["category"], INSTALLED);
+    // All (the first tab): every plugin, each with its state; tags of this tab only.
+    assert.equal(props(host)["category"], ALL);
+    assert.deepEqual(rows(host).map((r) => [r.name, r.badge]), [
+      ["Alpha", ""],
+      ["Beta", "已安装"],
+      ["Delta", "已撤回"],
+      ["Gamma", "不兼容"],
+      ["vestra.video", "内置"],
+    ]);
+    // The first entry is "Tags: All", translated by the plugin.
+    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "网络视频", "字幕"]);
+    assert.equal(props(host)["all-count"], 5);
+    assert.equal(props(host)["installed-count"], 2);
+    // Installed: built-ins first, then third-party.
+    await tab(host, INSTALLED);
     assert.deepEqual(rows(host).map((r) => [r.name, r.badge]), [
       ["vestra.video", "内置"],
       ["Beta", "已安装"],
     ]);
-    // The first entry is "Tags: All", translated by the plugin.
     assert.deepEqual(props(host)["tag-model"], ["标签：全部", "字幕"]);
-    assert.equal(props(host)["installed-count"], 2);
-    assert.equal(props(host)["available-count"], 3);
-    assert.equal(props(host)["available-known"], true);
-    await tab(host, AVAILABLE);
-    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Delta", "Gamma"]);
-    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "网络视频"]);
+    await tab(host, ALL);
     window.emit("setTag", 1);
     await host.settle();
     assert.deepEqual(rows(host).map((r) => r.name), ["Alpha"]);
@@ -190,7 +197,7 @@ test("list: filters, search, tags, sort; incompatible and fully revoked plugins"
     window.emit("search", "");
     window.emit("setSort", 1);
     await host.settle();
-    assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma", "Alpha"]);
+    assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma", "Beta", "Alpha", "vestra.video"]);
 
     const gamma = await choose(host, "Gamma");
     assert.equal(gamma.badge, "不兼容");
