@@ -1,5 +1,5 @@
 // Plugin Store (vestra.store, design §2.1; plugin-center spec 2026-10): tabs
-// Installed / Available / Updates with the refresh and ⚙ menu buttons on top,
+// All / Installed / Updates with the refresh and ⚙ menu buttons on top,
 // then search, tags and sort; the plugin list on the left (300 wide, 62px
 // rows with the logo, one button and a … menu), the selected plugin on the
 // right (header, actions, notices, tabs Description / Changelog / Versions
@@ -184,14 +184,13 @@ export component StoreWindow inherits Window {
     min-height: 480px;
     background: Theme.bg-panel;
 
-    // Tabs and list: 0 Installed, 1 Available, 2 Updates.
+    // Tabs and list: 0 All (installed plugins included), 1 Installed, 2 Updates.
     in-out property <string> search-text;
     // In-out: the tab strip sets it on a click or an arrow key (then asks with set-category).
     in-out property <int> category;
+    // What All can show: without any repository index, the installed plugins only.
+    in property <int> all-count;
     in property <int> installed-count;
-    in property <int> available-count;
-    // Some repository index was read (fresh or cached); otherwise Available counts "—".
-    in property <bool> available-known;
     // Plugins with an update (0: none).
     in property <int> updates;
     // Tags; the first entry ("Tags: All", translated by the plugin) stands for all of them.
@@ -203,6 +202,8 @@ export component StoreWindow inherits Window {
     in-out property <bool> hide-builtins: true;
     in property <[StoreRow]> rows;
     in property <string> empty-text;
+    // Under a list that is not empty: All without any repository index ("" none).
+    in property <string> list-note;
     in property <bool> link-open;
     in-out property <string> link-text;
     // Detail: the selected row (always one the list shows; -1 none) and its details.
@@ -312,8 +313,8 @@ export component StoreWindow inherits Window {
                 horizontal-stretch: 1;
                 background: transparent;
                 model: [
+                    @tr("All ({})", root.all-count),
                     @tr("Installed ({})", root.installed-count),
-                    root.available-known ? @tr("Available ({})", root.available-count) : @tr("Available (—)"),
                     @tr("Updates ({})", root.updates),
                 ];
                 emphasis: [false, false, root.updates > 0];
@@ -406,34 +407,48 @@ export component StoreWindow inherits Window {
         HorizontalLayout {
             vertical-stretch: 1;
             spacing: 8px;
-            // The plugin list.
-            Rectangle {
+            // The plugin list, and under it All's offline note (installed plugins shown, the repositories' not).
+            VerticalLayout {
                 width: 300px;
-                background: Theme.bg-list;
-                border-width: 1px;
-                border-color: Theme.line;
-                plugin-list := ListView {
-                    x: 1px;
-                    y: 1px;
-                    width: parent.width - 2px;
-                    height: parent.height - 2px;
-                    for row in root.rows: ListRow {
-                        item: row;
-                        select => { root.select(row.key); }
-                        act(id) => { root.row-act(row.key, id); }
+                spacing: root.list-note == "" ? 0px : 4px;
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: Theme.bg-list;
+                    border-width: 1px;
+                    border-color: Theme.line;
+                    plugin-list := ListView {
+                        x: 1px;
+                        y: 1px;
+                        width: parent.width - 2px;
+                        height: parent.height - 2px;
+                        for row in root.rows: ListRow {
+                            item: row;
+                            select => { root.select(row.key); }
+                            act(id) => { root.row-act(row.key, id); }
+                        }
+                    }
+                    if root.rows.length == 0: Text {
+                        x: 12px;
+                        width: parent.width - 24px;
+                        height: parent.height;
+                        text: root.empty-text;
+                        color: Theme.text-dim;
+                        font-size: Theme.font-body;
+                        wrap: word-wrap;
+                        line-height-factor: 1.25;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
                     }
                 }
-                if root.rows.length == 0: Text {
-                    x: 12px;
-                    width: parent.width - 24px;
-                    height: parent.height;
-                    text: root.empty-text;
+                // `visible:`, not `if`: a tab change toggles it (menu-view.slint rule); no height while hidden.
+                Text {
+                    visible: root.list-note != "";
+                    max-height: self.visible ? 200px : 0px;
+                    text: root.list-note;
                     color: Theme.text-dim;
                     font-size: Theme.font-body;
                     wrap: word-wrap;
                     line-height-factor: 1.25;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
                 }
             }
             // The selected plugin; an empty list leaves the pane empty (the list says why).

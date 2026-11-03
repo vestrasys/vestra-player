@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.11
+
+Needs Vestra Player 0.6.0.
+
+- The tabs are now All · Installed · Updates, All first (as in GNOME Software, KDE Discover, the JetBrains Marketplace and VS Code). All lists every plugin from every repository, installed ones included, and the installed plugins no repository lists (a `.vxp` from a file or a link, a plugin made in the Plugin Workshop). Each row shows its state and keeps its buttons in their fixed places: Install for a plugin not installed; Update (while a newer version exists), Disable or Enable, Uninstall… for an installed one. Search, the tag, the sort and "Hide built-in plugins" apply to All as they did to Available, which All replaces. The titles read "All (n)", "Installed (n)" and "Updates (n)"; Updates is still in the accent colour while updates wait.
+- All shows one row per installed plugin: a plugin installed from a `.vxp`, the Plugin Workshop or another repository that a repository also lists, and a built-in a repository lists (with "Hide built-in plugins" off), has only its installed row. Its details say "Also in <repository>", and its … menu ends with "Replace with <version> from <repository>…", which asks as Replace… did. A plugin that is not installed still has one row per repository.
+- Without any repository index (offline, nothing cached), All still shows the installed plugins and counts them, with a calm line under the list saying the repositories can't be reached (Available showed "—" and an empty list). Installed, uninstall, disable and installing a `.vxp` still need no network.
+- The store remembers the last tab across restarts too (in its settings.json; before, only while it ran). The first open is All.
+
 ## 0.2.10
 
 Needs Vestra Player 0.6.0.

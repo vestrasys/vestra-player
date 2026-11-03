@@ -13,7 +13,7 @@ import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
 import {
   actions,
-  AVAILABLE,
+  ALL,
   banners,
   BUILTIN,
   choose,
@@ -106,15 +106,19 @@ test("row logos: repository icons through ui.remoteImage for the rows shown; the
   ]);
   const served = join(scratch, "served.png");
   copyFileSync(PNG, served);
-  const { host, stop } = await start({ net, dataDirectory: join(scratch, "data-remote") });
+  // The store opens on the tab it remembers: Installed, which lists none of these.
+  const data = join(scratch, "data-remote");
+  mkdirSync(data, { recursive: true });
+  writeFileSync(join(data, "settings.json"), JSON.stringify({ repos: [], autoCheck: true, lastCheck: 0, revocations: {}, tab: "installed" }));
+  const { host, stop } = await start({ net, dataDirectory: data });
   host.remoteImages.set(good, served);
   host.remoteImages.set(broken, null);
   try {
     await openStore(host);
     await showBuiltins(host);
     await until(host, () => rows(host).length === 1, "installed");
-    assert.equal(host.images.filter((image) => image.path.includes(".vestra-cache")).length, 0, "Available not shown yet: nothing fetched");
-    await tab(host, AVAILABLE);
+    assert.equal(host.images.filter((image) => image.path.includes(".vestra-cache")).length, 0, "their rows not shown yet: nothing fetched");
+    await tab(host, ALL);
     await until(host, () => /\.vestra-cache/.test(String(logoOf(host, "R Icon"))), "remote logo");
     assert.equal(host.images.find((image) => image.path === logoOf(host, "R Icon"))?.maxSide, 64);
     assert.match(String(logoOf(host, "R Broken")), /assets[\\/]icon\.png$/);

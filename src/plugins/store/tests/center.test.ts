@@ -16,7 +16,7 @@ import { timing } from "../store.ts";
 import {
   actions,
   allRows,
-  AVAILABLE,
+  ALL,
   BUILTIN,
   choose,
   controls,
@@ -79,17 +79,27 @@ const enables = (host: Awaited<ReturnType<typeof start>>["host"]) =>
 const reloads = (host: Awaited<ReturnType<typeof start>>["host"]) =>
   host.packageCalls.filter((c) => c.method === "reload").map((c) => c.id);
 
-test("tabs: Installed first (built-ins, then third-party), Available, Updates; counts", async () => {
+test("tabs: All first (every plugin, installed ones with their state), Installed (built-ins first), Updates; counts", async () => {
   const { host, stop } = await center();
   try {
-    assert.equal(props(host)["category"], INSTALLED);
-    assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video", "A Run", "B Off", "C Bad", "D Old"]);
+    assert.equal(props(host)["category"], ALL, "the first open is All");
+    assert.deepEqual(
+      rows(host).map((r) => [r.name, r.badge]),
+      [
+        ["A Run", "已安装"],
+        ["B Off", "已停用"],
+        ["C Bad", "失败"],
+        ["D Old", "可更新 → 2.0.0"],
+        ["E New", ""],
+        ["vestra.video", "内置"],
+      ],
+    );
+    assert.equal(props(host)["all-count"], 6);
     assert.equal(props(host)["installed-count"], 5);
-    assert.equal(props(host)["available-count"], 1);
-    assert.equal(props(host)["available-known"], true);
     assert.equal(props(host)["updates"], 1);
-    await tab(host, AVAILABLE);
-    assert.deepEqual(rows(host).map((r) => r.name), ["E New"]);
+    assert.equal(props(host)["list-note"], "", "an index was read");
+    await tab(host, INSTALLED);
+    assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video", "A Run", "B Off", "C Bad", "D Old"]);
     await tab(host, UPDATES);
     assert.deepEqual(rows(host).map((r) => r.name), ["D Old"]);
   } finally {
@@ -130,7 +140,7 @@ test("row buttons and … menus by state", async () => {
     assert.deepEqual(outdated.primary, { id: "update", text: "更新", enabled: true });
     assert.deepEqual(ids(outdated.menu), ["disable", "uninstall", "reload", "openData"]);
 
-    await tab(host, AVAILABLE);
+    await tab(host, ALL);
     const available = controls(host, "E New");
     assert.deepEqual(available.primary, { id: "install", text: "安装", enabled: true });
     assert.deepEqual(available.menu, []);
@@ -271,29 +281,48 @@ test("details: status, package, data folder (opens) and data size", async () => 
   }
 });
 
-test("offline on open: a short wait for the headers, then a calm note; Installed works meanwhile", async () => {
+test("offline on open: a short wait for the headers, then a calm note; All shows the installed plugins, Installed works", async () => {
   const defaults = { ...timing };
   const net = new FakeNet();
   publish(net, OFFICIAL, [one("a.alpha", "Alpha")]);
   // A blackholed network: the server never answers.
   net.route(OFFICIAL, { delay: 60_000, body: "{}" });
   Object.assign(timing, { openHeaders: 300 });
-  const { host, store, stop } = await start({ net });
+  const side = info("s.side", { version: "1.0.0", source: { kind: "file" } });
+  const { host, store, stop } = await start({ net, packages: [BUILTIN, side] });
   try {
     const opened = Date.now();
     await openStore(host);
-    await showBuiltins(host);
-    assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video"], "the Installed tab needs no network");
-    await tab(host, AVAILABLE);
-    assert.equal(props(host)["available-known"], false);
+    assert.equal(props(host)["category"], ALL);
+    // All needs no network for its installed part; it counts what it can show.
+    assert.deepEqual(rows(host).map((r) => r.name), ["s.side"]);
+    assert.equal(props(host)["all-count"], 1);
+    assert.equal(props(host)["list-note"], "正在读取仓库…");
     await until(host, () => !store.repos.official.refreshing, "gave up");
     assert.ok(Date.now() - opened < 10_000, "not the 15 s header deadline");
-    assert.equal(
-      props(host)["empty-text"],
-      "无法连接仓库。联网之前这里不显示内容；点「刷新」重试。",
-    );
+    assert.equal(props(host)["list-note"], "无法连接仓库，只显示已安装的插件。点「刷新」重试。");
+    assert.equal(props(host)["empty-text"], "");
     assert.match(String(props(host)["status-text"]), /^无法连接 官方仓库/);
     assert.equal(props(host)["status-warn"], false, "calm, not the warning colour");
+    // Its rows keep their buttons offline.
+    assert.deepEqual(ids([controls(host, "s.side").primary!, ...controls(host, "s.side").menu]), ["disable", "uninstall", "reload", "openData"]);
+    await showBuiltins(host);
+    assert.deepEqual(rows(host).map((r) => r.name), ["s.side", "vestra.video"]);
+    assert.equal(props(host)["all-count"], 2);
+    await tab(host, INSTALLED);
+    assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video", "s.side"], "the Installed tab needs no network");
+    assert.equal(props(host)["list-note"], "");
+    await tab(host, ALL);
+    // Nothing installed to show: the empty list says it.
+    host.window("store").emit("search", "alpha");
+    await host.settle();
+    assert.equal(props(host)["empty-text"], "没有符合条件的插件");
+    host.window("store").emit("search", "");
+    host.window("store").emit("setHideBuiltins", true);
+    host.setPackages([BUILTIN]);
+    await until(host, () => rows(host).length === 0, "only the hidden built-in");
+    assert.equal(props(host)["empty-text"], "无法连接仓库。联网之前这里不显示内容；点「刷新」重试。");
+    assert.equal(props(host)["list-note"], "");
     await tab(host, UPDATES);
     assert.equal(props(host)["empty-text"], "无法连接仓库。联网之前这里不显示内容；点「刷新」重试。");
   } finally {
@@ -318,7 +347,7 @@ test("index translations: the interface language, its base language, then Englis
   const { host, stop } = await start({ net });
   try {
     await openStore(host);
-    await tab(host, AVAILABLE);
+    await tab(host, ALL);
     await until(host, () => rows(host).length === 3);
     assert.deepEqual(rows(host).map((r) => r.name).sort(), ["No Translation", "基础", "管道播放器"].sort());
     assert.equal((rows(host).find((r) => r.name === "管道播放器") as { punchline?: string }).punchline, "播放管道");
@@ -341,7 +370,7 @@ test("index translations: the interface language, its base language, then Englis
   const en = await start({ net, locale: "en" });
   try {
     await openStore(en.host);
-    await tab(en.host, AVAILABLE);
+    await tab(en.host, ALL);
     await until(en.host, () => rows(en.host).length === 3);
     assert.deepEqual(rows(en.host).map((r) => r.name), ["Base Only", "No Translation", "Tube Player"]);
   } finally {

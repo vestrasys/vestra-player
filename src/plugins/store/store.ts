@@ -45,6 +45,8 @@ export type Settings = {
   revocations: Record<string, "disabled" | "accepted">;
   /** The window leaves built-in plugins out of its lists; on unless turned off (absent from files before store 0.2.8). */
   hideBuiltins?: boolean;
+  /** The last tab picked (`TAB_NAMES`; absent before store 0.2.11). Read with `tabOf`, not validated: a bad value is All. */
+  tab?: string;
 };
 
 const DEFAULTS: Settings = { repos: [], autoCheck: true, lastCheck: 0, revocations: {}, hideBuiltins: true };
@@ -76,13 +78,32 @@ export const timing = {
   openHeaders: 5_000,
 };
 
-/** The window's tabs. */
-export const INSTALLED = 0;
-export const AVAILABLE = 1;
+/**
+ * The window's tabs (store 0.2.11, user ruling 2026-11-03): All lists every
+ * plugin, installed ones included, with their state on the row, as GNOME
+ * Software, KDE Discover, the JetBrains Marketplace and VS Code do.
+ */
+export const ALL = 0;
+export const INSTALLED = 1;
 export const UPDATES = 2;
+/** The tabs as kept in settings.json, by index. */
+export const TAB_NAMES = ["all", "installed", "updates"] as const;
 
-/** The tab that always lists this row (an update shows under Updates too). */
-const homeOf = (item: Item) => (isInstalledRow(item) ? INSTALLED : AVAILABLE);
+/** A remembered tab: none (the first open), "available" (the tab All replaced in 0.2.11) or anything unknown is All. */
+export const tabOf = (name: unknown): number => {
+  const index = TAB_NAMES.indexOf(name as (typeof TAB_NAMES)[number]);
+  return index < 0 ? ALL : index;
+};
+
+/**
+ * An installed row from the install library (not a development load): All
+ * folds a repository's entries of its id into it. A development load
+ * (`--plugin`) folds nothing, so its id stays installable from a repository.
+ */
+const fromLibrary = (item: Item) => isInstalledRow(item) && !isDevelopmentRow(item);
+
+/** The tab a row hidden by Installed or Updates is brought up on: Installed for an installed one, else All (which lists every row). */
+const homeOf = (item: Item) => (isInstalledRow(item) ? INSTALLED : ALL);
 
 export const MENU_ORDER = 822;
 /**
@@ -156,7 +177,7 @@ export class Store {
   items: Item[] = [];
 
   // Window state
-  category = INSTALLED;
+  category = ALL;
   search = "";
   tag: string | null = null;
   sort = 0;
@@ -201,6 +222,7 @@ export class Store {
     this.settings = plugin.storage.json("settings", { defaults: DEFAULTS, validate: validSettings });
     this.repos = new Repos(this.deps, plugin.dataDirectory);
     this.repos.sync(this.settings.value.repos);
+    this.category = tabOf(this.settings.value.tab);
     this.icons = new Icons(plugin.dataDirectory, deps.fetch, () => this.changed());
     this.revocations = new Revocations(this);
     this.#logo = fileURLToPath(new URL("./assets/icon.png", import.meta.url));
@@ -214,7 +236,7 @@ export class Store {
       this.#listChanged();
     });
     window.on("setCategory", (index: number) => {
-      this.category = Math.max(INSTALLED, Math.min(UPDATES, index));
+      this.#setCategory(Math.max(ALL, Math.min(UPDATES, Math.trunc(Number(index) || 0))));
       // A tag the new tab has no plugin for would empty its list under "Tags: All".
       const tag = this.tag?.toLowerCase();
       if (tag !== undefined && !this.#tags().some((each) => each.toLowerCase() === tag)) this.tag = null;
@@ -345,7 +367,10 @@ export class Store {
    * those filters off first.
    */
   select(key: string) {
-    const item = this.items.find((each) => each.key === key);
+    // A repository entry an installed row stands for shows that row (one row per installed id in All).
+    const found = this.items.find((each) => each.key === key);
+    const item = found ? this.#primary(found) : undefined;
+    if (item) key = item.key;
     this.#pending = item ? null : key;
     if (item) this.#reveal(item);
     this.selected = key;
@@ -357,8 +382,8 @@ export class Store {
 
   /**
    * Bring a row into the list: a hidden built-in shows the built-ins first,
-   * then its tab, then without the tag, then without the search, each only
-   * while the row is still not listed.
+   * then its tab (All stays All, which lists every row), then without the
+   * tag, then without the search, each only while the row is still not listed.
    */
   #reveal(item: Item) {
     this.#pending = null;
@@ -370,13 +395,21 @@ export class Store {
         return;
       }
     }
-    this.category = homeOf(item);
+    // All lists every row: it stays, and only the tag and the search give way.
+    if (this.category !== ALL) this.#setCategory(homeOf(item));
     if (!this.#shows(item.key)) this.tag = null;
     if (!this.#shows(item.key)) {
       this.search = "";
       this.#clearSearch++;
     }
     this.#scroll++;
+  }
+
+  /** Switch tabs and remember the tab in settings.json: the next open, also after a restart, starts there. */
+  #setCategory(index: number) {
+    this.category = index;
+    const name = TAB_NAMES[index];
+    if (name !== undefined && this.settings.value.tab !== name) this.settings.save({ ...this.settings.value, tab: name });
   }
 
   /** "Hide built-in plugins" is on: the default, also for settings saved before the option. */
@@ -433,6 +466,9 @@ export class Store {
       (info) => this.#display(info),
       this.plugin.i18n.locale,
     );
+    // A row that became another source's entry (its plugin installed from elsewhere) gives way to the installed row.
+    const now = this.#pending === null ? this.selectedItem() : null;
+    if (now && this.#primary(now) !== now) this.selected = this.#primary(now).key;
     // A plugin selected before it reached the list (installed from a file or link) is shown once it has.
     const pending = this.#pending !== null && this.selected === this.#pending ? this.selectedItem() : null;
     if (pending) {
@@ -608,7 +644,40 @@ export class Store {
     const items = this.#listed();
     if (this.category === INSTALLED) return items.filter(isInstalledRow);
     if (this.category === UPDATES) return items.filter((item) => item.state === "update");
-    return items.filter((item) => !isInstalledRow(item));
+    // All: every row, the repositories' and the installed ones (sideloaded, workshop, development loads),
+    // one per id where a plugin is installed (store 0.2.11, user ruling 2026-11-03).
+    return this.#collapsed(items);
+  }
+
+  /**
+   * All shows one row per installed id: the installed row stands for the
+   * repositories' entries of the same id (another source's, a built-in's, a
+   * reserved one), which it names ("Also in …") and whose replace action its
+   * … menu offers. A plugin not installed keeps one row per (repository, id).
+   */
+  #collapsed(items: Item[]): Item[] {
+    const installed = new Set(items.filter(fromLibrary).map((each) => each.id));
+    return items.filter((each) => fromLibrary(each) || !installed.has(each.id));
+  }
+
+  /** The row that stands for this one in All: the installed row of the same id, else itself. */
+  #primary(item: Item): Item {
+    if (fromLibrary(item)) return item;
+    return this.items.find((each) => each.id === item.id && fromLibrary(each)) ?? item;
+  }
+
+  /** The repositories' entries an installed row stands for in All. */
+  #alsoIn(item: Item): Item[] {
+    if (this.category !== ALL || !fromLibrary(item)) return [];
+    return this.items.filter((each) => each.id === item.id && each !== item && each.repo !== null && !isInstalledRow(each));
+  }
+
+  /** All: the … menu's "Replace with x from <repository>…", one per other source that offers a version. */
+  #replacements(item: Item): Action[] {
+    const idle = !this.busy && this.#working === null;
+    return this.#alsoIn(item)
+      .filter((each) => each.state === "otherSource" && each.best !== null)
+      .map((each) => ({ id: `replace:${each.key}`, text: msg("Replace with {0} from {1}…", each.best!.version, each.repo!.origin), enabled: idle }));
   }
 
   #tags(): string[] {
@@ -617,7 +686,7 @@ export class Store {
     return [...tags.values()].sort((a, b) => a.localeCompare(b, "zh"));
   }
 
-  /** Some repository has an index (fresh or cached): Available and Updates mean something. */
+  /** Some repository has an index (fresh or cached): All's repository part and Updates mean something. */
   #known(): boolean {
     return this.repos.list.some((repo) => repo.index !== null);
   }
@@ -639,9 +708,9 @@ export class Store {
     const listed = this.#listed();
     const base = {
       category: this.category,
+      // All counts its rows (one per installed id): without any index, the installed plugins only.
+      allCount: this.#collapsed(listed).length,
       installedCount: listed.filter(isInstalledRow).length,
-      availableCount: listed.filter((each) => !isInstalledRow(each)).length,
-      availableKnown: this.#known(),
       updates: updateCount(this.items),
       // The first entry stands for all tags (the library drop-down shows the model as it is).
       tagModel: [shown(msg("Tags: All")), ...tags],
@@ -650,6 +719,7 @@ export class Store {
       hideBuiltins: this.hideBuiltins,
       rows: visible.map((each) => this.#row(each, action)),
       emptyText: shown(this.#emptyText(visible)),
+      listNote: shown(this.#listNote(visible)),
       linkOpen: this.linkOpen,
       status: this.shown(joined(status, "{} · {}")),
       statusWarn: this.#message?.warn ?? this.repos.list.some((repo) => repo.status.warn),
@@ -691,15 +761,24 @@ export class Store {
       return this.hideBuiltins && this.items.some((item) => isBuiltinRow(item) && isInstalledRow(item))
         ? msg("No plugins installed besides the built-in ones, which are hidden")
         : msg("No plugins installed yet");
-    // Available and Updates need an index (fresh or cached); "up to date" only after one was read.
+    // Updates and All's repository part need an index (fresh or cached); "up to date" only after one was read.
     if (!this.#known()) {
       if (this.repos.list.some((repo) => repo.refreshing)) return msg("Reading repositories…");
       return msg("Can't reach the repositories. Showing nothing until you're online; click Refresh to retry.");
     }
     if (this.category === UPDATES) return msg("All plugins are up to date");
-    return this.repos.list.some((repo) => repo.index?.plugins.length)
-      ? msg("Every plugin from the repositories is installed")
-      : msg("The repositories have no plugins yet");
+    return msg("The repositories have no plugins yet");
+  }
+
+  /**
+   * All without any repository index but with installed plugins to show: a
+   * calm line under the list for the repository part (an empty list says it
+   * itself; the status line names each repository's error).
+   */
+  #listNote(visible: Item[]): Msg | null {
+    if (this.category !== ALL || !visible.length || this.#known() || !this.repos.list.length) return null;
+    if (this.repos.list.some((repo) => repo.refreshing)) return msg("Reading repositories…");
+    return msg("Can't reach the repositories; only installed plugins are shown. Click Refresh to retry.");
   }
 
   #origin(item: Item): Msg {
@@ -771,7 +850,8 @@ export class Store {
       dim: isInstalledRow(item) && info?.state === "disabled",
       logo: this.#rowLogo(item),
       primary: action(primary),
-      menu: menu.map((each) => action(each)),
+      // Replace with another source's version last, after the fixed order (All only).
+      menu: [...menu, ...(this.#working === item.key ? [] : this.#replacements(item))].map((each) => action(each)),
     };
   }
 
@@ -975,6 +1055,9 @@ export class Store {
     }
     if (item.state === "allRevoked" || item.state === "incompatible" || item.state === "reserved")
       add(item.blocked, item.state === "incompatible" ? 2 : 3);
+    // All: the repositories that list it too (a built-in's own notice says enough).
+    const also = info?.builtin ? [] : this.#alsoIn(item);
+    if (also.length) add(msg("Also in {}", list(also.map((each) => each.repo!.origin))), 0);
     if (item.repo && !item.repo.official) {
       add(msg("Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network"), 2);
       if (item.repo.local) add(msg("This is a test repository on this machine, without encryption"), 2);
@@ -1127,6 +1210,12 @@ export class Store {
   async #act(action: string) {
     const item = this.selectedItem();
     if (!item) return;
+    if (action.startsWith("replace:")) {
+      // All's … menu: another source's version of the installed plugin (the replace question as before).
+      const other = this.#alsoIn(item).find((each) => `replace:${each.key}` === action);
+      if (other?.state === "otherSource" && other.best) await installer.installFromRepository(this, other, other.best);
+      return;
+    }
     switch (action) {
       case "install":
       case "update":

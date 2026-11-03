@@ -101,7 +101,7 @@ Grouped by area. "User" marks a user ruling; the rest are coordinator or maintai
 
 - Bundled Node 26 (only going up during `vestra/1`); installers on this repository's GitHub Releases; macOS arm64 from 15.0; Windows per-user installer plus portable zip; release notes at `doc/releases/v<version>.md` (user, 10-22).
 - **0.x releases need no question**; the update check is on by default (download and verify; the user runs the installer) (user, 11-01).
-- Internal versions that were never published are combined into the next public one (0.6.6–0.6.8 → 0.7.0, user, 11-03).
+- Internal versions that were never published are combined into the next public one (0.6.6–0.6.8 and 0.7.0 → 0.7.1, user, 11-03).
 
 ## 3. Lessons that changed how we work
 
@@ -123,9 +123,9 @@ Most lessons are already rules in agentic-workflow.md, with their evidence. Thes
 
 | Area | Topic | Evidence / next step |
 | --- | --- | --- |
-| Release | **Publish 0.7.0** (Windows build is local; no remote CI, no macOS build here, no Inno Setup) | Needs the user: Windows-only release, wait, or one CI run |
+| Release | **Publish 0.7.1** through `release.yml` (remote CI re-enabled for main and tags, 2026-11-03) | In progress |
 | Release | macOS signing and notarization; Windows code signing | `release.yml` "TODO(S7)"; Intel macOS build on demand |
-| SDK | 1.6.1 docs patch: "player 0.6.x (planned)" labels → 0.7.0; `platforms.md` and `how-to/gpu-rendering.md` still say Windows has no GPU renderer | SDK repo |
+| SDK | 1.6.1 docs patch: "player 0.6.x (planned)" labels → 0.7.1; `platforms.md` and `how-to/gpu-rendering.md` still say Windows has no GPU renderer | SDK repo |
 | Supervisor | Store shows "Running" for a plugin in standby | `store.ts` has no `idle` state |
 | Supervisor | Hang attribution inside the shared runner (today a hang restarts all members) | `shared-runner.ts` attributes only exceptions |
 | Platform | Install records do not keep the repository index signature evidence; third-party plugins in the shared runner | `package_store` `Source::Repository` |
@@ -149,6 +149,8 @@ Most lessons are already rules in agentic-workflow.md, with their evidence. Thes
 | macOS | Checks owed: ⌥ + named keys and the panel menu after them; deinterlace auto; seek-bar click test; playlist thumbnails; the full-UI-test list | [mac-verification.md](../mac-verification.md) |
 | Repository | Old pre-rewrite commit hashes in docs no longer resolve; SDK `refs/pull` still point at pre-rewrite commits (GitHub Support only) | Leave, or map from the backup |
 | Repository | Typos allowlist for commit hashes; worktree cleanup on this machine | Coordinator |
+| Security | Plugin processes run unsandboxed (only the Vestra AI worker uses Node's permission model). User ruling 2026-11-03: no runtime restriction now (it would push every capability into host APIs); strengthen the official repository instead: automated scan in the plugin repository's PR CI → human review of flagged items. Candidate tools (verify cost/setup first): CodeQL default setup, Dependency Review, secret scanning with push protection (free on public repos); Semgrep CE with our own rules (child processes, eval/new Function, files outside the plugin's dirs, hard-coded hosts, native modules) that label a PR for security review; GuardDog on the packed plugin (fails on malicious-package heuristics); OSV-Scanner for dependencies. The private player repo gets only the free CLI tools until it is public; registered publishers; revocation as today. Optional later: manifest-declared Node permission flags shown at install | Infrastructure maintainer, after 0.7.1 |
+| Repository | The store's own files were never prettier-formatted (no prettier config for `plugins/`); decide a printWidth before formatting them in one commit | — |
 | Platform | Command limit 160 per plugin is no longer twice the largest built-in (video registers 83; all built-ins 318) | `commands.rs` `limits_leave_room_for_real_plugins` still uses 71 |
 
 ## 5. Superseded
@@ -171,10 +173,12 @@ The plugin process supervisor round (B0–B7, 0.6.4–0.7.0) is folded in above.
 
 | Item | State |
 | --- | --- |
-| Release 0.7.0 | Local Windows build and isolated GUI check passed (main 03c75d2e); after this record merges: tag `v0.7.0`, `release.yml` builds the installers, verify `latest.json` against `SHA256SUMS`, publish |
+| Release 0.7.1 | 0.7.0 was built and GUI-checked locally but never tagged; the store tabs change goes in, host 0.7.1. After merge: main CI, tag `v0.7.1`, `release.yml` builds the installers, verify `latest.json` against `SHA256SUMS`, publish (user, 2026-11-03) |
 | SDK 1.6.1 docs patch | Open (see §4) |
-| Download page (`redesign` branch, not deployed) | AI and store clips re-edited with zoom; feature order menus, store, AI, VestraNES; AI workshop chapter removed |
+| Download page (`redesign` branch, not deployed) | AI and store clips re-edited with zoom; feature order menus, store, AI, VestraNES; AI workshop chapter removed; AI clip being re-recorded with a short prompt (the generated colour picker wrote `.cube` files with `MIN`/`MAX` instead of `DOMAIN_MIN`/`DOMAIN_MAX`; asked Vestra AI to fix it from the error text alone) |
 
 Log (newest first):
+
+- 2026-11-03: store tabs All · Installed · Updates (store 0.2.11; user ruling, GNOME Software / JetBrains / VS Code practice); host 0.7.1; release note v0.7.0 → v0.7.1.
 
 - 2026-11-03: round records condensed into this file; workflow moved to `agentic-workflow/` with the loop branch; code comments no longer cite rounds.

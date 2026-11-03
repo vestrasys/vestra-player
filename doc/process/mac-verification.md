@@ -24,7 +24,7 @@ Since 2026-10-26 the GitHub Actions budget has been used up, so CI does not run.
 - [ ] Startup: mount batching, the `settings-check` thread (settings pages compile off the UI thread) and the start queue. Every settings page opens and every panel mounts; no long stall at start (`VESTRA_FRAME_LOG=1`).
 - [ ] Catalog quarantine: none expected. A normal profile starts with no `quarantine.json`.
 - [ ] Vestra Player AI in the **installed** `.app` (a path with spaces and no `node_modules` above it): typecheck, check and pack of a generated plugin succeed, and the plugin card shows only after the agent's turn.
-- [ ] Plugin Store offline (Wi-Fi off): the store opens; Installed and its details, uninstall, and install from a `.vxp` work; Available/Updates show a calm offline state.
+- [ ] Plugin Store offline (Wi-Fi off): the store opens; Installed and its details, uninstall, and install from a `.vxp` work; All shows the installed plugins with a calm offline note; Updates shows a calm offline state.
 - [ ] Playlist: saving a list with relative entries writes `/`.
 
 ### Host 0.5.4 / SDK 1.5.24: deinterlace `when: "auto"` (DEINT-AUTO-1)

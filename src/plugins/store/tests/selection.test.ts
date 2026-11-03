@@ -1,17 +1,17 @@
 /**
- * The details follow the list (GUI test 2026-10-27: Available showed the
- * Installed tab's built-in in its details): a tab, search or tag change keeps
+ * The details follow the list (GUI test 2026-10-27: Available, now All, showed
+ * the Installed tab's built-in in its details): a tab, search or tag change keeps
  * the selection while the list shows it, else selects the list's first row,
  * and an empty list has no details. A plugin that left the list (installed,
  * updated, uninstalled, dropped) gives way to the row in its place; the tab stays.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AVAILABLE, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, until, UPDATES, yes } from "./helpers.ts";
+import { ALL, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, until, UPDATES, yes } from "./helpers.ts";
 
 const fromRepo = { kind: "repository", url: OFFICIAL } as const;
 
-/** Installed: the built-in, Alpha, Old (an update); Available: Beta, Gamma (tagged), Delta. */
+/** Installed: the built-in, Alpha, Old (an update); not installed: Beta, Gamma (tagged), Delta. All lists them all. */
 const PLUGINS = [
   { id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] },
   { id: "o.old", name: "Old", versions: [{ version: "2.0.0" }, { version: "1.0.0" }] },
@@ -63,19 +63,27 @@ const search = async (host: Host, text: string) => {
 test("a tab switch selects the new list's first row, or keeps the selection that it lists", async () => {
   const { host, store, stop } = await ready();
   try {
+    // The first open is All: every plugin, installed ones included.
+    assert.equal(props(host)["category"], ALL);
+    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Gamma", "Old", "vestra.video"]);
     // Alpha was the first row while the built-in was hidden; showing it keeps the selection.
     assert.equal(details(host), "Alpha");
-    await tab(host, AVAILABLE);
-    assert.deepEqual(rows(host).map((r) => r.name), ["Beta", "Delta", "Gamma"]);
-    assert.equal(details(host), "Beta");
+    // Installed lists Alpha too: kept.
+    await tab(host, INSTALLED);
+    assert.equal(details(host), "Alpha");
+    await tab(host, ALL);
     await choose(host, "Gamma");
+    // Installed does not list Gamma: its first row.
+    await tab(host, INSTALLED);
+    assert.equal(details(host), "vestra.video");
     await tab(host, UPDATES);
     assert.equal(details(host), "Old");
-    // Old is listed under Installed too: it stays selected.
+    // Old is listed under Installed and All too: it stays selected.
     await tab(host, INSTALLED);
     assert.equal(details(host), "Old");
-    await tab(host, AVAILABLE);
-    assert.equal(details(host), "Beta");
+    await tab(host, ALL);
+    assert.equal(details(host), "Old");
+    await choose(host, "Beta");
     // A refresh that keeps the selection leaves the list where the user scrolled it.
     const scroll = props(host)["scroll-request"];
     await store.refreshAll(true);
@@ -90,7 +98,7 @@ test("a tab switch selects the new list's first row, or keeps the selection that
 test("a search or tag that hides the selected plugin selects the first row it leaves; none left: no details", async () => {
   const { host, store, stop } = await ready();
   try {
-    await tab(host, AVAILABLE);
+    await tab(host, ALL);
     await choose(host, "Gamma");
     const before = props(host)["scroll-request"] as number;
     // Still listed: kept, and brought into view.
@@ -105,7 +113,7 @@ test("a search or tag that hides the selected plugin selects the first row it le
     assert.equal(details(host), null);
     assert.equal(store.selected, null);
     await search(host, "");
-    assert.equal(details(host), "Beta");
+    assert.equal(details(host), "Alpha");
     // Tags: All, audio, video.
     assert.deepEqual(props(host)["tag-model"], ["标签：全部", "audio", "video"]);
     host.window("store").emit("setTag", 1);
@@ -129,12 +137,14 @@ test("an empty tab has no details; the next tab selects its first row again", as
     await openStore(host);
     await showBuiltins(host);
     await until(host, () => store.items.length === 2, "rows");
+    assert.equal(details(host), "Beta");
+    await tab(host, INSTALLED);
     assert.equal(details(host), "vestra.video");
     await tab(host, UPDATES);
     assert.deepEqual(rows(host), []);
     assert.equal(details(host), null);
     assert.equal(props(host)["empty-text"], "所有插件都是最新的");
-    await tab(host, AVAILABLE);
+    await tab(host, ALL);
     assert.equal(details(host), "Beta");
   } finally {
     await stop();
@@ -144,15 +154,17 @@ test("an empty tab has no details; the next tab selects its first row again", as
 test("install, update, uninstall and a repository dropping a plugin keep the tab; the row in its place is selected", async () => {
   const { host, net, store, stop } = await ready();
   try {
-    await tab(host, AVAILABLE);
+    await tab(host, ALL);
     await choose(host, "Delta");
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", "install");
     await until(host, () => !store.busy && host.packages.some((p) => p.id === "d.delta"), "installed");
     await host.settle();
-    assert.equal(props(host)["category"], AVAILABLE);
-    assert.deepEqual(rows(host).map((r) => r.name), ["Beta", "Gamma"]);
-    assert.equal(details(host), "Gamma");
+    // All lists it installed now: it stays selected, with its new state.
+    assert.equal(props(host)["category"], ALL);
+    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Gamma", "Old", "vestra.video"]);
+    assert.equal(details(host), "Delta");
+    assert.equal(rows(host).find((r) => r.name === "Delta")!.badge, "已安装");
     // The last update under Updates: the tab stays, now empty, without details.
     await tab(host, UPDATES);
     assert.equal(details(host), "Old");
@@ -163,14 +175,14 @@ test("install, update, uninstall and a repository dropping a plugin keep the tab
     assert.equal(props(host)["category"], UPDATES);
     assert.deepEqual(rows(host), []);
     assert.equal(details(host), null);
-    // The repository drops Gamma while it is selected under Available.
-    await tab(host, AVAILABLE);
+    // The repository drops Gamma while it is selected under All: the row in its place.
+    await tab(host, ALL);
     await choose(host, "Gamma");
     publish(net, OFFICIAL, PLUGINS.filter((p) => p.id !== "g.gamma"));
     await store.refreshAll(true);
     await host.settle();
-    assert.deepEqual(rows(host).map((r) => r.name), ["Beta"]);
-    assert.equal(details(host), "Beta");
+    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Old", "vestra.video"]);
+    assert.equal(details(host), "Old");
     // Uninstalled under Installed: the row below takes its place.
     await tab(host, INSTALLED);
     assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video", "Alpha", "Delta", "Old"]);
@@ -192,21 +204,28 @@ const scroll = (host: Host) => props(host)["scroll-request"] as number;
 test("select(key) shows the plugin: its tab, then without the tag, then without the search", async () => {
   const { host, store, stop } = await ready();
   try {
-    await tab(host, AVAILABLE);
+    // Not on this tab: an installed plugin goes to Installed, another to All.
+    await tab(host, UPDATES);
     let before = scroll(host);
-    store.select(keyOf("o.old"));
+    store.select(keyOf("a.alpha"));
     await host.settle();
     assert.equal(props(host)["category"], INSTALLED);
-    assert.equal(details(host), "Old");
+    assert.equal(details(host), "Alpha");
+    assert.ok(scroll(host) > before);
+    before = scroll(host);
+    store.select(keyOf("d.delta"));
+    await host.settle();
+    assert.equal(props(host)["category"], ALL);
+    assert.equal(details(host), "Delta");
     assert.ok(scroll(host) > before);
     // A tag that hides it is dropped.
-    await tab(host, AVAILABLE);
+    await tab(host, ALL);
     host.window("store").emit("setTag", 1);
     await host.settle();
     assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma"]);
     store.select(keyOf("b.beta"));
     await host.settle();
-    assert.equal(props(host)["category"], AVAILABLE);
+    assert.equal(props(host)["category"], ALL);
     assert.equal(props(host)["tag-index"], 0);
     assert.equal(details(host), "Beta");
     // A search that hides it is cleared, in the window's box too.
@@ -217,7 +236,7 @@ test("select(key) shows the plugin: its tab, then without the tag, then without 
     await host.settle();
     assert.equal(props(host)["clear-search"], cleared + 1);
     assert.equal(store.search, "");
-    assert.deepEqual(rows(host).map((r) => r.name), ["Beta", "Delta", "Gamma"]);
+    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Gamma", "Old", "vestra.video"]);
     assert.equal(details(host), "Beta");
     // Sorting keeps the selection and brings it into view.
     before = scroll(host);
@@ -233,7 +252,7 @@ test("select(key) shows the plugin: its tab, then without the tag, then without 
 test("a plugin selected before it is in the plugin list is shown and scrolled to once it arrives", async () => {
   const { host, store, stop } = await ready();
   try {
-    await tab(host, AVAILABLE);
+    await tab(host, ALL);
     const before = scroll(host);
     store.select("\nx.side");
     await host.settle();
@@ -243,7 +262,8 @@ test("a plugin selected before it is in the plugin list is shown and scrolled to
     host.packages = [...host.packages, info("x.side", { version: "1.0.0" })];
     await store.reread();
     await host.settle();
-    assert.equal(props(host)["category"], INSTALLED);
+    // All lists it: the tab stays.
+    assert.equal(props(host)["category"], ALL);
     assert.equal(store.selected, "\nx.side");
     assert.equal(details(host), "x.side");
     assert.ok(scroll(host) > before);
@@ -255,7 +275,7 @@ test("a plugin selected before it is in the plugin list is shown and scrolled to
 test("an empty list that fills selects its first row; a tab without the chosen tag drops it", async () => {
   const { host, net, store, stop } = await ready();
   try {
-    await tab(host, AVAILABLE);
+    await tab(host, ALL);
     await search(host, "zeta");
     assert.deepEqual(rows(host), []);
     assert.equal(details(host), null);
@@ -274,6 +294,34 @@ test("an empty list that fills selects its first row; a tab without the chosen t
     assert.equal(store.tag, null);
     assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video", "Alpha", "Old"]);
     assert.equal(details(host), "vestra.video");
+  } finally {
+    await stop();
+  }
+});
+
+test("select(key) on All stays on All: an installed plugin hidden by the tag or the search does not jump to Installed", async () => {
+  const { host, store, stop } = await ready();
+  try {
+    assert.equal(props(host)["category"], ALL);
+    // The tag hides Alpha (installed): it goes back to "Tags: All".
+    host.window("store").emit("setTag", 1);
+    await host.settle();
+    assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma"]);
+    store.select(keyOf("a.alpha"));
+    await host.settle();
+    assert.equal(props(host)["category"], ALL);
+    assert.equal(props(host)["tag-index"], 0);
+    assert.equal(details(host), "Alpha");
+    // The search hides Old (installed, with an update): cleared, still All.
+    await search(host, "gamma");
+    const cleared = props(host)["clear-search"] as number;
+    store.select(keyOf("o.old"));
+    await host.settle();
+    assert.equal(props(host)["category"], ALL);
+    assert.equal(store.search, "");
+    assert.equal(props(host)["clear-search"], cleared + 1);
+    assert.equal(details(host), "Old");
+    assert.equal(store.settings.value.tab, undefined, "no tab was picked");
   } finally {
     await stop();
   }

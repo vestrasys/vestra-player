@@ -34,11 +34,10 @@ test("English by default: the menu, the list and the OSD", async () => {
     assert.deepEqual(
       (await allRows(host)).map((r) => [r.name, r.badge, (r as { meta?: string }).meta]),
       [
-        ["vestra.video", "Built-in", "Unknown author · Built-in"],
         ["Alpha", "", "Someone · Official repository"],
+        ["vestra.video", "Built-in", "Unknown author · Built-in"],
       ],
     );
-    assert.equal(rows(host)[0]?.name, "vestra.video", "back on the Installed tab");
     host.window("store").emit("openLink", "javascript:alert(1)");
     await host.settle(20);
     assert.ok(host.osd.includes("This kind of link cannot be opened"));
