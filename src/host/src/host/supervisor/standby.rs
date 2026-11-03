@@ -74,6 +74,22 @@ impl Held {
             warning: None,
         }
     }
+    /// Held again (a start that failed after it was let go): its catalog
+    /// registered again.
+    pub(crate) fn reheld(self) -> Self {
+        let Held {
+            id,
+            origin,
+            name,
+            warnings,
+            warning,
+        } = self;
+        Held {
+            warnings,
+            warning,
+            ..Held::new(id, origin, name)
+        }
+    }
     /// It is no longer held: its catalog goes (if still this one).
     pub(crate) fn release(&self) {
         if let Some(catalog) = &self.origin.catalog {

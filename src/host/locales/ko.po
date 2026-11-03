@@ -518,6 +518,30 @@ msgstr "{}이(가) 처리 중입니다"
 msgid "{} is disabled"
 msgstr "{}이(가) 비활성화되어 있습니다"
 
+#. The OSD when a plugin stopped by itself (it crashed); B4.
+#: src/host/host/supervisor/actions.rs
+#, x-machine
+msgid "{} stopped unexpectedly"
+msgstr "{}이(가) 예기치 않게 중지되었습니다"
+
+#. The OSD when a plugin stopped because its JavaScript heap passed its 512 MB cap; B4.
+#: src/host/host/supervisor/actions.rs
+#, x-machine
+msgid "{} ran out of memory"
+msgstr "{}의 메모리가 부족합니다"
+
+#. The OSD when a plugin crashed too often (5 times in 10 minutes) and stays stopped until reloaded; B4.
+#: src/host/host/supervisor/actions.rs
+#, x-machine
+msgid "{} stopped after repeated faults"
+msgstr "{}이(가) 반복된 오류로 중지되었습니다"
+
+#. The reason on a crashed plugin's menu items, and the OSD on a click, while it waits a moment before it may start again; B4.
+#: src/host/host/supervisor/mod.rs src/host/host/supervisor/actions.rs
+#, x-machine
+msgid "{} stopped after a fault; try again in a moment"
+msgstr "{}이(가) 오류로 중지되었습니다. 잠시 후 다시 시도하세요"
+
 #. The OSD once per start when plugin shaders are kept off because the last run ended while they were on.
 #: src/host/diagnostics.rs
 #, x-machine

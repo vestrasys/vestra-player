@@ -10,9 +10,11 @@
 //! supervisor's `process_reaped`). Polled every [`POLL`], as each stop's
 //! own thread polled before.
 //!
-//! A plugin dropped where it is (at quit, with the host) still waits on
-//! that thread (`Drop for Plugin`): quit is unchanged until B4's
-//! `shutdown`.
+//! At quit (B4, T31) every plugin is handed over here too, and
+//! `finish_by` cuts every stop's grace to the quit's one deadline and
+//! answers once none is left; `kill` cuts one stop's grace short now. A
+//! plugin dropped where it is still waits on that thread (`Drop for
+//! Plugin`). Each stop reports the exit code of its own process.
 #![forbid(unsafe_code)]
 
 use crate::host::Event;
@@ -39,6 +41,14 @@ enum Item {
     },
     /// A retired shared runner: killed after `wait`.
     Child { child: Child, wait: Duration },
+    /// Kill that owner's process now (`Action::Kill`: a quit, a stuck
+    /// process).
+    Kill(u64),
+    /// Every stop under way ends by this deadline (the quit's one
+    /// deadline, supervisor.md §7.2).
+    Hasten(Instant),
+    /// Answered once nothing is waited for any more.
+    Flush(mpsc::Sender<()>),
 }
 
 /// One stop being waited for.
@@ -51,6 +61,7 @@ struct Waiting {
 }
 
 /// The host's handle on the reaper thread.
+#[derive(Clone)]
 pub struct Reaper {
     items: mpsc::Sender<Item>,
     events: mpsc::Sender<Event>,
@@ -91,7 +102,24 @@ impl Reaper {
     pub fn child(&self, child: Child, wait: Duration) {
         self.hand_over(Item::Child { child, wait });
     }
+    /// `owner`'s process is killed now (its grace is cut short).
+    pub fn kill(&self, owner: u64) {
+        self.hand_over(Item::Kill(owner));
+    }
+    /// Every stop under way ends by `deadline`; the answer comes once none
+    /// is left (or never, when the thread is gone: the caller waits with a
+    /// timeout).
+    pub fn finish_by(&self, deadline: Instant) -> mpsc::Receiver<()> {
+        let (done, answer) = mpsc::channel();
+        self.hand_over(Item::Hasten(deadline));
+        self.hand_over(Item::Flush(done));
+        answer
+    }
     fn hand_over(&self, item: Item) {
+        if matches!(item, Item::Kill(_) | Item::Hasten(_) | Item::Flush(_)) {
+            let _ = self.items.send(item);
+            return;
+        }
         if let Err(mpsc::SendError(item)) = self.items.send(item) {
             // The reaper thread is gone: a thread of its own, as before.
             let events = self.events.clone();
@@ -101,7 +129,7 @@ impl Reaper {
                     thread::sleep(POLL);
                 }
                 if let Some(owner) = waiting.owner {
-                    let _ = events.send(Event::Reaped(owner));
+                    let _ = events.send(Event::Reaped(owner, waiting.stop.code()));
                 }
             });
         }
@@ -120,6 +148,11 @@ fn begin(item: Item) -> Waiting {
             stop: plugin.begin_stop(),
             _plugin: Some(plugin),
         },
+        Item::Kill(_) | Item::Hasten(_) | Item::Flush(_) => Waiting {
+            owner: None,
+            stop: Stop::Gone,
+            _plugin: None,
+        },
         Item::Child { child, wait } => Waiting {
             owner: None,
             stop: Stop::Own {
@@ -127,6 +160,9 @@ fn begin(item: Item) -> Waiting {
                 _outbound: mpsc::sync_channel(0).0,
                 deadline: Instant::now() + wait,
                 killed: false,
+                code: None,
+                exited: None,
+                stderr_done: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
             },
             _plugin: None,
         },
@@ -138,7 +174,13 @@ fn begin(item: Item) -> Waiting {
 /// over is reported and dropped. Ends when the host is gone.
 fn run(items: &mpsc::Receiver<Item>, events: &mpsc::Sender<Event>) {
     let mut waiting: Vec<Waiting> = Vec::new();
+    let mut flushes: Vec<mpsc::Sender<()>> = Vec::new();
     loop {
+        if waiting.is_empty() {
+            for done in flushes.drain(..) {
+                let _ = done.send(());
+            }
+        }
         let item = if waiting.is_empty() {
             match items.recv() {
                 Ok(item) => Some(item),
@@ -156,9 +198,26 @@ fn run(items: &mpsc::Receiver<Item>, events: &mpsc::Sender<Event>) {
                 }
             }
         };
-        waiting.extend(item.and_then(begin_guarded));
-        while let Ok(item) = items.try_recv() {
-            waiting.extend(begin_guarded(item));
+        let mut next = item;
+        loop {
+            let Some(item) = next.take().or_else(|| items.try_recv().ok()) else {
+                break;
+            };
+            match item {
+                Item::Kill(owner) => {
+                    let now = Instant::now();
+                    for stop in waiting.iter_mut().filter(|w| w.owner == Some(owner)) {
+                        stop.stop.hasten(now);
+                    }
+                }
+                Item::Hasten(deadline) => {
+                    for stop in &mut waiting {
+                        stop.stop.hasten(deadline);
+                    }
+                }
+                Item::Flush(done) => flushes.push(done),
+                item => waiting.extend(begin_guarded(item)),
+            }
         }
         let now = Instant::now();
         waiting.retain_mut(|stop| {
@@ -171,7 +230,7 @@ fn run(items: &mpsc::Receiver<Item>, events: &mpsc::Sender<Event>) {
                 Ok(false) => true,
                 Ok(true) => {
                     if let Some(owner) = stop.owner {
-                        let _ = events.send(Event::Reaped(owner));
+                        let _ = events.send(Event::Reaped(owner, stop.stop.code()));
                     }
                     false
                 }
@@ -191,7 +250,7 @@ fn run(items: &mpsc::Receiver<Item>, events: &mpsc::Sender<Event>) {
 fn begin_guarded(item: Item) -> Option<Waiting> {
     let owner = match &item {
         Item::Plugin { owner, report, .. } => report.then_some(*owner),
-        Item::Child { .. } => None,
+        _ => None,
     };
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| begin(item))) {
         Ok(waiting) => Some(waiting),

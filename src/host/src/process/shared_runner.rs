@@ -566,6 +566,24 @@ impl SharedRunner {
         reaper.child(child, STOP_WAIT);
     }
 }
+impl SharedRunner {
+    /// The player quits within one deadline (supervisor.md §7.2, T31):
+    /// `runner.stop` with reason `quit` (every member's cleanup runs in
+    /// the runner at once), killed after `wait` by the plugin reaper rather
+    /// than waited for on the caller's thread (its `Drop`).
+    pub fn quit(mut self, wait: Duration, reaper: &crate::process::reaper::Reaper) {
+        let Some(child) = self.child.take() else {
+            return;
+        };
+        let _ = self.link.outbound.try_send(Line {
+            g: 0,
+            message: runner_stop(StopReason::Quit),
+            queued: None,
+        });
+        self.link.close();
+        reaper.child(child, wait);
+    }
+}
 impl Drop for SharedRunner {
     /// The player quits: `runner.stop` with reason `quit` (the members'
     /// cleanups run concurrently in the runner), [`STOP_WAIT`], then killed —

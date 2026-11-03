@@ -4,15 +4,21 @@
 
 use super::unit::StopReason;
 
+/// The exit code of V8's heap abort (Node's `abort()`: 134 on Windows,
+/// measured in B4 with Node 26; `SIGABRT` as `128 + 6` on Unix, as the
+/// adapter reports a signal). Any abort exits so, so only together with
+/// V8's heap-out-of-memory line on stderr is it `Oom`.
+pub const HEAP_ABORT_STATUS: i32 = 134;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExitCause {
     /// Exited without being asked (`exit-code`).
     Exited,
     /// Runtime fault, malformed line, uncaught exception (`signal`).
     Fault,
-    /// V8 heap abort (`oom-kill`).
-    // B4 detects it (Windows exit code, stderr tail).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// V8 heap abort (`oom-kill`): the process exited with
+    /// [`HEAP_ABORT_STATUS`] after V8's heap-out-of-memory line on its
+    /// stderr (B4, §7.3).
     Oom,
     /// `TimeoutStartSec` (`timeout`).
     StartTimeout,
@@ -29,9 +35,11 @@ impl ExitCause {
     pub fn stop_reason(self) -> StopReason {
         StopReason::Failed
     }
-    /// Retried / restarted per policy (all but `Refused`).
+    /// Retried / restarted per policy: all but `Refused` and an own
+    /// process's `Transport` (§7.3: `Failed`, KEEP; a member's goes to
+    /// its runner group, which restarts; coordinator ruling 2026-11-03).
     pub fn restartable(self) -> bool {
-        self != ExitCause::Refused
+        !matches!(self, ExitCause::Refused | ExitCause::Transport)
     }
     /// A crash notice is shown (T25).
     pub fn notifies(self) -> bool {

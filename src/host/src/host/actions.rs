@@ -7,10 +7,22 @@ impl Host {
         owner: u64,
         id: &str,
     ) -> std::result::Result<(), RpcError> {
-        let execution = self
-            .commands
-            .resolve_execution(owner, id)
-            .map_err(|e| RpcError::new("command", e.to_string()))?;
+        let execution = match self.commands.resolve_execution(owner, id) {
+            Ok(execution) => execution,
+            Err(error) => {
+                // A plugin held after a fault (B4, T20): a click shows why,
+                // as a key does.
+                if let commands::CommandError::Disabled {
+                    reason: Some(reason),
+                } = &error
+                    && self.commands.held(owner)
+                {
+                    diag!("supervisor: {id} of a held plugin: \"{reason}\"");
+                    self.show_osd(&reason.clone());
+                }
+                return Err(RpcError::new("command", error.to_string()));
+            }
+        };
         if owner == bindings::HOST {
             self.host_command(id);
             return Ok(());

@@ -368,6 +368,11 @@ pub struct Registry {
     /// A test's registry total in place of [`Registry::MAX_COMMANDS`].
     #[cfg(test)]
     max_commands: Option<usize>,
+    /// Owners whose commands show disabled with this reason, whatever
+    /// their state: a plugin held in standby after a crash until its
+    /// restart hold is over (supervisor.md T20, §12.1; B4). Menus show
+    /// them greyed out, and a key or click shows the reason.
+    held: BTreeMap<OwnerGeneration, String>,
 }
 
 /// A command's registration and last state in the form its plugin sent
@@ -952,7 +957,40 @@ impl Registry {
             self.conditions.retain(|key, _| key.owner != owner);
             self.revision = next;
         }
+        self.held.remove(&owner);
         Ok(count)
+    }
+
+    /// `owner`'s commands show disabled with `reason` (`None`: as their
+    /// state says again), whatever their state: a crashed plugin held in
+    /// standby until its restart hold is over (supervisor.md T20; B4).
+    /// Whether anything changed.
+    pub fn set_held(&mut self, owner: OwnerGeneration, reason: Option<String>) -> bool {
+        let changed = match reason {
+            Some(reason) => self.held.insert(owner, reason.clone()) != Some(reason),
+            None => self.held.remove(&owner).is_some(),
+        };
+        if changed && let Ok(next) = self.next_revision() {
+            self.revision = next;
+        }
+        changed
+    }
+
+    /// Whether `owner`'s commands are held disabled (`set_held`).
+    pub fn held(&self, owner: OwnerGeneration) -> bool {
+        self.held.contains_key(&owner)
+    }
+
+    /// The state `entry` shows: its own, or disabled with the reason
+    /// while its owner is held (`set_held`).
+    fn shown_state(&self, entry: &CommandSnapshot) -> Option<CommandState> {
+        let reason = self.held.get(&entry.key.owner)?;
+        Some(CommandState {
+            enabled: false,
+            busy: false,
+            reason: Some(reason.clone()),
+            ..entry.state.clone()
+        })
     }
 
     /// Remove one command (its owner disposed it); the local id is free again.
@@ -1048,13 +1086,15 @@ impl Registry {
     pub fn disabled(&self) -> BTreeMap<(OwnerGeneration, String), Option<String>> {
         self.commands
             .iter()
-            .filter(|(_, entry)| !entry.state.enabled)
             .map(|(key, entry)| {
                 (
-                    (key.owner, key.local_id.clone()),
-                    entry.state.reason.clone(),
+                    key,
+                    self.shown_state(entry)
+                        .unwrap_or_else(|| entry.state.clone()),
                 )
             })
+            .filter(|(_, state)| !state.enabled)
+            .map(|(key, state)| ((key.owner, key.local_id.clone()), state.reason))
             .collect()
     }
 
@@ -1069,10 +1109,25 @@ impl Registry {
         if let Some(snapshot) = menu.as_ref().filter(|menu| menu.revision == self.revision) {
             return Arc::clone(snapshot);
         }
+        // A held owner's entries show disabled with the reason
+        // (`set_held`): copies, few (one plugin's).
+        let held: Vec<CommandSnapshot> = self
+            .commands
+            .values()
+            .filter(|entry| !entry.declaration.path.is_empty())
+            .filter_map(|entry| {
+                self.shown_state(entry).map(|state| CommandSnapshot {
+                    state,
+                    ..entry.clone()
+                })
+            })
+            .collect();
         let entries: Vec<_> = self
             .commands
             .values()
             .filter(|entry| !entry.declaration.path.is_empty())
+            .filter(|entry| !self.held.contains_key(&entry.key.owner))
+            .chain(held.iter())
             .collect();
         let snapshot = Arc::new(MenuSnapshot {
             revision: self.revision,
@@ -1136,6 +1191,11 @@ impl Registry {
             local_id: id.into(),
         };
         let entry = self.commands.get(&key).ok_or(CommandError::Missing(key))?;
+        if let Some(reason) = self.held.get(&owner) {
+            return Err(CommandError::Disabled {
+                reason: Some(reason.clone()),
+            });
+        }
         if entry.state.busy {
             return Err(CommandError::Busy {
                 reason: entry.state.reason.clone(),
@@ -1277,6 +1337,55 @@ mod tests {
                 MenuNode::Command { entry } => out.push(entry.declaration.title.clone()),
             }
         }
+    }
+
+    /// A plugin held after a fault (supervisor.md T20; B4): its commands
+    /// show disabled with the reason in the menu, and are refused with it,
+    /// until the hold is released; a revoke ends it too.
+    #[test]
+    fn a_held_owner_shows_disabled_with_the_reason() {
+        let mut registry = Registry::new();
+        registry
+            .register(
+                7,
+                "p",
+                "go".into(),
+                1,
+                declaration(&["Tools", "Go"]),
+                state(true),
+            )
+            .unwrap();
+        let shown = |registry: &Registry| {
+            let snapshot = registry.snapshot();
+            let MenuNode::Group { children, .. } = &snapshot.roots[0] else {
+                panic!("a group");
+            };
+            let MenuNode::Command { entry } = &children[0] else {
+                panic!("a command");
+            };
+            entry.state.clone()
+        };
+        assert!(shown(&registry).enabled);
+        assert!(registry.set_held(7, Some("p stopped".into())));
+        assert!(!registry.set_held(7, Some("p stopped".into())), "no change");
+        assert_eq!(
+            (shown(&registry).enabled, shown(&registry).reason),
+            (false, Some("p stopped".into()))
+        );
+        assert!(matches!(
+            registry.resolve_execution(7, "go"),
+            Err(CommandError::Disabled { reason: Some(r) }) if r == "p stopped"
+        ));
+        assert_eq!(
+            registry.disabled().get(&(7, "go".into())),
+            Some(&Some("p stopped".into()))
+        );
+        assert!(registry.set_held(7, None));
+        assert!(shown(&registry).enabled);
+        assert!(registry.resolve_execution(7, "go").is_ok());
+        registry.set_held(7, Some("p stopped".into()));
+        registry.remove_owner(7).unwrap();
+        assert!(!registry.held(7));
     }
 
     #[test]

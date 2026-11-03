@@ -56,7 +56,15 @@ pub(crate) enum Event {
     Runner(shared_runner::RunnerId, Value),
     /// The shared runner's stdout closed (it exited or was killed).
     RunnerExited(shared_runner::RunnerId),
-    Reaped(u64),
+    /// A stopped plugin's process is gone (the plugin reaper): (owner, its
+    /// exit code when it had a process of its own).
+    Reaped(u64, Option<i32>),
+    /// V8 reported a heap allocation failure on the plugin's stderr (it
+    /// aborts next): (owner).
+    OutOfMemory(u64),
+    /// The spawn thread created a plugin's own process, or could not
+    /// (`host/supervisor/worker.rs`): (owner, the plugin or the error).
+    Spawned(u64, std::result::Result<Box<Plugin>, String>),
     BackendCleaned(u64),
     DialogDone(Reply, Option<Vec<PathBuf>>),
     /// An Option + named key handed to Slint again: (window generation, Slint

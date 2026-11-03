@@ -164,7 +164,9 @@ fn built_ins_share_one_runner_and_a_restart_keeps_their_session_values() {
 }
 
 /// Three restarts within a minute: own processes for the rest of the run.
-/// `VESTRA_SHARED=0`: own processes from the start.
+/// `VESTRA_SHARED=0`: own processes from the start. Since B4 (§15 B4,
+/// §7.4) only the first restart in the window is immediate, the second
+/// waits 3 s and the third 6 s, so the run is longer.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn repeated_faults_fall_back_to_own_processes_and_the_switch_turns_sharing_off() {
@@ -183,7 +185,7 @@ fn repeated_faults_fall_back_to_own_processes_and_the_switch_turns_sharing_off()
             false,
         ),
     ];
-    let log = run(&plugins, root.path(), 8, &[]);
+    let log = run(&plugins, root.path(), 18, &[]);
     assert!(
         log.contains("every plugin runs in its own process until the player quits"),
         "{log}"

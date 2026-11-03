@@ -86,6 +86,22 @@ impl World {
             _ => {}
         }
     }
+    /// `process_exited`; a process that ended by itself under B4 gets no
+    /// `Terminate` (`exit_sends_no_stop`): the fake adapter cleans up
+    /// after it on the exit and its reap follows (with V8's heap abort
+    /// code for an `Oom`).
+    fn exited(&mut self, pid: Pid, cause: ExitCause, text: Option<String>) {
+        self.s.process_exited(pid, cause, text);
+        let gone = matches!(cause, ExitCause::Exited | ExitCause::Oom);
+        if self.auto_reap && gone && self.s.tunables().exit_sends_no_stop {
+            if cause == ExitCause::Oom {
+                self.s.process_out_of_memory(pid);
+            }
+            let code = (cause == ExitCause::Oom).then_some(super::exit::HEAP_ABORT_STATUS);
+            self.s.process_reaped(pid, code.or(Some(1)));
+            self.s.backend_cleaned(pid);
+        }
+    }
     fn pid(&self, u: UnitId) -> Pid {
         self.s.unit(u).and_then(Unit::pid).expect("a process")
     }
@@ -680,7 +696,7 @@ fn crash_legacy_fails_every_class() {
         let u = w.s.add_unit(UnitSpec::new("x", class).checkpoint(false));
         w.tick(0);
         let pid = w.pid(u);
-        w.s.process_exited(pid, ExitCause::Exited, None);
+        w.exited(pid, ExitCause::Exited, None);
         let actions = w.tick(10);
         assert!(actions.contains(&Action::Terminate {
             unit: u,
@@ -712,7 +728,7 @@ fn b4_normal_crash_holds_in_standby_and_builtin_restarts() {
     w.tick(10);
     let npid = w.pid(n);
     w.s.set_now(20);
-    w.s.process_exited(npid, ExitCause::Fault, None);
+    w.exited(npid, ExitCause::Fault, None);
     let actions = w.tick(20);
     assert!(actions.contains(&Action::Terminate {
         unit: n,
@@ -741,7 +757,7 @@ fn b4_normal_crash_holds_in_standby_and_builtin_restarts() {
     // Built-in: Restart=on-failure after 3 s.
     let bpid = w.pid(b);
     w.s.set_now(2_000);
-    w.s.process_exited(bpid, ExitCause::Oom, None);
+    w.exited(bpid, ExitCause::Oom, None);
     w.tick(2_000);
     assert!(matches!(
         w.state(b),
@@ -769,7 +785,7 @@ fn b4_start_limit_fails_after_five_crashes() {
     w.tick(now);
     for _ in 0..4 {
         let pid = w.pid(b);
-        w.s.process_exited(pid, ExitCause::Exited, None);
+        w.exited(pid, ExitCause::Exited, None);
         // Reaped at once; restarted after the backoff.
         w.tick(now);
         assert!(!active(&w, b));
@@ -778,7 +794,7 @@ fn b4_start_limit_fails_after_five_crashes() {
         assert!(active(&w, b), "{:?} {:?}", w.state(b), w.s.job(b));
     }
     let pid = w.pid(b);
-    w.s.process_exited(pid, ExitCause::Exited, None);
+    w.exited(pid, ExitCause::Exited, None);
     let actions = w.tick(now + 1);
     assert!(actions.contains(&Action::Notify {
         unit: Some(b),
@@ -918,13 +934,13 @@ fn member_transport_failure_restarts_the_group_and_fault_quarantines() {
     w.tick(0);
     let runner = w.s.runner();
     let apid = w.pid(a);
-    w.s.process_exited(apid, ExitCause::Transport, None);
+    w.exited(apid, ExitCause::Transport, None);
     let actions = w.tick(10);
     assert!(actions.contains(&Action::KillRunner { runner }));
     assert_eq!(count(&actions, is_terminate), 2);
     // Attributed fault: that member alone, its own process next.
     let bpid = w.pid(b);
-    w.s.process_exited(bpid, ExitCause::Fault, None);
+    w.exited(bpid, ExitCause::Fault, None);
     let actions = w.tick(20);
     assert_eq!(
         count(&actions, |a| matches!(a, Action::KillRunner { .. })),
@@ -1377,8 +1393,8 @@ fn q24_backoff_and_hold_count_from_the_reap() {
     w.s.wake(holder, &Trigger::interactive(1));
     w.tick(10);
     let (npid, bpid) = (w.pid(n), w.pid(b));
-    w.s.process_exited(npid, ExitCause::Exited, None);
-    w.s.process_exited(bpid, ExitCause::Exited, None);
+    w.exited(npid, ExitCause::Exited, None);
+    w.exited(bpid, ExitCause::Exited, None);
     w.tick(100);
     // Reaped 5 s after the exit: the hold and the 3 s backoff start then.
     w.s.set_now(5_100);
@@ -1497,7 +1513,7 @@ fn crash_during_wake_keeps_a_start_only_for_held_events() {
         w.tick(10);
         let pid = w.pid(u);
         w.s.process_spawned(pid, Ok(()));
-        w.s.process_exited(pid, ExitCause::Fault, None);
+        w.exited(pid, ExitCause::Fault, None);
         w.tick(20);
         assert_eq!(w.answered, [(AnswerReason::CouldNotStart, 1)]);
         let until = match w.state(u) {
@@ -1651,7 +1667,7 @@ fn disabling_a_failed_unit_lists_disabled_and_clears_the_failure() {
         w.tick(0);
         let pid = w.pid(u);
         let text = "uncaught exception: boom";
-        w.s.process_exited(pid, ExitCause::Fault, Some(text.into()));
+        w.exited(pid, ExitCause::Fault, Some(text.into()));
         w.tick(10);
         if w.s.tunables().resident.restart == RestartMode::No {
             assert_eq!(w.s.list_state(u), Some(ListState::Failed(text.into())));
@@ -1676,7 +1692,7 @@ fn disable_while_a_failure_stops_lands_inactive() {
         w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
     w.tick(0);
     let pid = w.pid(u);
-    w.s.process_exited(pid, ExitCause::Exited, None);
+    w.exited(pid, ExitCause::Exited, None);
     w.tick(10);
     w.s.disable(u).unwrap();
     w.tick(20);
@@ -1750,7 +1766,7 @@ fn crash_notice_only_from_b4() {
             w.s.add_unit(UnitSpec::new("n", Class::Normal).checkpoint(true));
         w.tick(0);
         let pid = w.pid(u);
-        w.s.process_exited(pid, ExitCause::Exited, None);
+        w.exited(pid, ExitCause::Exited, None);
         let actions = w.tick(10);
         let crashed = actions.contains(&Action::Notify {
             unit: Some(u),
@@ -2373,7 +2389,7 @@ fn crash_cancels_an_installed_standby_job() {
     let pid = w.pid(u);
     // Before its idle timeout; ask for standby directly.
     let job = w.s.standby(u);
-    w.s.process_exited(pid, ExitCause::Exited, None);
+    w.exited(pid, ExitCause::Exited, None);
     w.tick(10);
     assert_eq!(w.s.job_result(u, job), Some(&JobResult::Canceled));
     assert!(matches!(w.state(u), UnitState::Failed { .. }));
@@ -2385,7 +2401,7 @@ fn crash_cancels_an_installed_standby_job() {
     w.tick(0);
     let pid = w.pid(b);
     let job = w.s.standby(b);
-    w.s.process_exited(pid, ExitCause::Exited, None);
+    w.exited(pid, ExitCause::Exited, None);
     w.tick(10);
     assert_eq!(w.s.job_result(b, job), Some(&JobResult::Canceled));
     assert!(matches!(
@@ -2692,4 +2708,139 @@ fn reinstall_while_the_uninstalled_process_goes_waits_for_it() {
         assert!(active(&w, u));
         assert_eq!(count(&w.log, is_remove_data), 1);
     }
+}
+
+// ---- B4 (supervisor.md §17.13) --------------------------------------------
+
+/// §7.3: an exit is `Oom` only with V8's heap line on stderr **and** the
+/// heap abort's exit code; the notice waits for the reap that brings the
+/// code. Either alone is a plain exit.
+#[test]
+fn b4_oom_needs_the_heap_line_and_the_abort_code() {
+    for (heap_line, code, oom) in [
+        (true, Some(exit::HEAP_ABORT_STATUS), true),
+        (false, Some(exit::HEAP_ABORT_STATUS), false),
+        (true, Some(1), false),
+    ] {
+        let mut w = World::new(Tunables::legacy().with_b4());
+        w.auto_reap = false;
+        let u = w.s.add_unit(UnitSpec::new("d", Class::Development));
+        w.tick(0);
+        let pid = w.pid(u);
+        if heap_line {
+            w.s.process_out_of_memory(pid);
+        }
+        w.s.process_exited(pid, ExitCause::Exited, None);
+        let actions = w.tick(1);
+        // Nothing is sent to a process that is gone (A14); its entries go.
+        assert!(!actions.iter().any(is_terminate), "{actions:?}");
+        assert!(actions.contains(&Action::Revoke { unit: u, pid }));
+        assert!(
+            !actions.iter().any(|a| matches!(
+                a,
+                Action::Notify {
+                    notice: Notice::Crashed(_),
+                    ..
+                }
+            )),
+            "the notice waits for the reap: {actions:?}"
+        );
+        w.s.process_reaped(pid, code);
+        w.s.backend_cleaned(pid);
+        let actions = w.tick(2);
+        let cause = if oom {
+            ExitCause::Oom
+        } else {
+            ExitCause::Exited
+        };
+        assert!(
+            actions.contains(&Action::Notify {
+                unit: Some(u),
+                notice: Notice::Crashed(cause)
+            }),
+            "{actions:?}"
+        );
+        assert_eq!(
+            w.s.list_state(u),
+            Some(ListState::Failed(cause.text().to_owned()))
+        );
+    }
+}
+
+/// §7.3 (coordinator ruling 2026-11-03): an own process's transport
+/// failure fails it for good, every class; a fault restarts a built-in.
+#[test]
+fn b4_own_transport_fails_and_a_fault_restarts() {
+    let mut w = World::new(Tunables::legacy().with_b4());
+    let b = w.s.add_unit(UnitSpec::new("b", Class::Builtin));
+    w.tick(0);
+    let pid = w.pid(b);
+    w.exited(pid, ExitCause::Transport, None);
+    w.tick(1);
+    assert!(matches!(w.state(b), UnitState::Failed { .. }));
+    let mut w = World::new(Tunables::legacy().with_b4());
+    let b = w.s.add_unit(UnitSpec::new("b", Class::Builtin));
+    w.tick(0);
+    let pid = w.pid(b);
+    w.exited(pid, ExitCause::Fault, None);
+    w.tick(1);
+    assert!(spawns(&w.tick(3_001)).len() == 1, "{:?}", w.state(b));
+}
+
+/// With on-demand start off the player keeps a start job ending at its
+/// spawn (§17.13): a start that times out is still retried, as a new
+/// `AutoRestart` start, then fails after the third retry.
+#[test]
+fn b4_start_timeout_retries_without_a_start_job() {
+    let tunables = Tunables {
+        start_job_ends_at_spawn: true,
+        ..Tunables::legacy().with_b4()
+    };
+    let mut w = World::new(tunables);
+    w.auto_ready = false;
+    let u =
+        w.s.add_unit(UnitSpec::new("n", Class::Normal).unrecordable());
+    let mut now = 0;
+    let mut spawned = spawns(&w.tick(now)).len();
+    assert!(w.s.job(u).is_none(), "ended at its spawn");
+    while !matches!(w.state(u), UnitState::Failed { .. }) && now < 200_000 {
+        now += 1_000;
+        spawned += spawns(&w.tick(now)).len();
+    }
+    assert!(matches!(w.state(u), UnitState::Failed { .. }));
+    assert_eq!(spawned, 4, "the start and three retries");
+}
+
+/// The Host may run a unit the core placed in the shared runner in its own
+/// process (its trust check): a runner failure does not reach it.
+#[test]
+fn b4_a_unit_placed_own_is_not_in_the_runner_group() {
+    let mut w = World::new(Tunables::legacy().with_b4());
+    let shared =
+        w.s.add_unit(UnitSpec::new("vestra.a", Class::Builtin).shared());
+    let own =
+        w.s.add_unit(UnitSpec::new("vestra.b", Class::Builtin).shared());
+    w.auto_spawn = false;
+    w.tick(0);
+    let (a, b) = (w.pid(shared), w.pid(own));
+    w.s.process_spawned(a, Ok(()));
+    w.s.placed_own(b);
+    w.s.process_spawned(b, Ok(()));
+    w.s.process_ready(a);
+    w.s.process_ready(b);
+    w.tick(1);
+    let runner = w.s.runner();
+    w.s.runner_failed(runner, ExitCause::Transport);
+    let actions = w.tick(2);
+    assert!(
+        actions
+            .iter()
+            .any(|x| matches!(x, Action::Terminate { pid, .. } if *pid == a))
+    );
+    assert!(
+        !actions
+            .iter()
+            .any(|x| matches!(x, Action::Terminate { pid, .. } if *pid == b))
+    );
+    assert!(active(&w, own));
 }

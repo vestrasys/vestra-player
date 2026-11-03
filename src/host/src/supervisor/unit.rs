@@ -402,6 +402,12 @@ pub struct Unit<P> {
     pub(super) after_reap: Option<Ms>,
     /// After a runner restart: back to standby by replay at reap (A4).
     pub(super) replay_after: bool,
+    /// The run that ended by itself (`ExitCause::Exited`) whose crash
+    /// notice waits for its reap: its exit code tells a heap abort (§7.3).
+    pub(super) exit_notice: Option<Pid>,
+    /// The run whose stderr carried V8's heap abort line
+    /// (`process_out_of_memory`).
+    pub(super) out_of_memory: Option<Pid>,
     pub(super) work: Work,
     pub(super) restart: RestartState,
     pub(super) gens: Gens,
@@ -461,6 +467,8 @@ impl<P> Unit<P> {
             hold_next: None,
             after_reap: None,
             replay_after: false,
+            exit_notice: None,
+            out_of_memory: None,
             work: Work::default(),
             restart: RestartState::default(),
             gens: Gens::default(),

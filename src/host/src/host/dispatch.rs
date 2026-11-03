@@ -115,10 +115,10 @@ impl Host {
             let refusal = error.clone();
             result = Err(self.refuse_taken(reply.owner, refusal, text));
         }
-        if self
+        let activation_ui = self
             .supervisor
-            .activation_ui_take(Pid(reply.owner), reply.id)
-        {
+            .activation_ui_take(Pid(reply.owner), reply.id);
+        if activation_ui {
             let outcome = activation_outcome(&result);
             let now = self.now_ms();
             if let Err(error) =
@@ -133,6 +133,10 @@ impl Host {
             Err(error) => json!({"id":reply.id,"error":error}),
         };
         self.send(reply.owner, message);
+        // Its answer first, then what waited for its UI (T9).
+        if activation_ui {
+            self.ui_finished(reply.owner);
+        }
     }
     /// One request of a plugin's: its route (`capabilities::lookup`), the
     /// permission check, text resolution, then the capability's `handle`.

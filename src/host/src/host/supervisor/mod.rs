@@ -44,7 +44,9 @@ use std::collections::BTreeSet;
 pub(crate) mod actions;
 pub(crate) mod checkpoint;
 pub(crate) mod probe;
+pub(crate) mod shutdown;
 mod standby;
+pub(crate) mod worker;
 
 pub(crate) use standby::{Held, Origin};
 
@@ -153,6 +155,21 @@ pub(crate) struct OnDemand {
     /// Test switches for the registry diff (tests/lazy_activation.rs):
     /// see [`probe::Probe`].
     pub probe: probe::Probe,
+    /// Units held in standby after a fault, by holder: (unit, hold end).
+    /// Their menu items show disabled with the reason meanwhile
+    /// (`note_hold`, T20; B4).
+    holds: BTreeMap<u64, (UnitId, u64)>,
+    /// Owners whose run became ready (`runtime.ready`) while an initial UI
+    /// request of theirs is still answered: ready once it is (T9, with
+    /// on-demand start on; `ui_finished`): when it was woken, if it was.
+    ui_pending: BTreeMap<u64, Option<u64>>,
+    /// The quit's stop has begun (`shutdown_plugins`): a `Terminate` is a
+    /// quit's (no UI cleanup, one deadline).
+    pub quitting: bool,
+    /// The spawn thread (`worker.rs`), started at the first spawn it takes.
+    spawner: Option<worker::Spawner>,
+    /// Starts whose process the spawn thread creates, by pid.
+    spawning: BTreeMap<u64, worker::Spawning>,
 }
 impl OnDemand {
     pub fn from_env() -> Self {
@@ -172,12 +189,15 @@ impl OnDemand {
 }
 
 /// The Host's supervisor, with on-demand start as `VESTRA_LAZY` and
-/// `VESTRA_IDLE_MS` say. With on-demand start on, the B3 values (§17.12:
-/// start-job limits, priorities, a bounded backlog with explicit answers,
-/// start failures that keep entry points); off, `Tunables::legacy()`, as
-/// §15 B3 says ("only with `VESTRA_LAZY=1` until B6"). Wake events wake
-/// nothing until start-up settled (`OnDemand::settled`). The seed only
-/// feeds jitter, which neither preset uses before B4.
+/// `VESTRA_IDLE_MS` say (§17.13). With on-demand start on, the B3 values
+/// (§17.12: start-job limits, priorities, a bounded backlog with explicit
+/// answers, start failures that keep entry points) and B4's (restart
+/// policy, backoff, start limits, the heap cap, crash notices). Off, B4's
+/// alone on `Tunables::legacy()` (§15 B4 names no `VESTRA_LAZY`, as B3
+/// did): a start still ends at its spawn there (`start_job_ends_at_spawn`,
+/// B3's bookkeeping, only with on-demand start until B6). Wake events wake
+/// nothing until start-up settled (`OnDemand::settled`). The seed feeds
+/// the start retries' jitter.
 pub(crate) fn new(on_demand: &OnDemand) -> Supervisor<Value> {
     let idle_timeout = std::env::var("VESTRA_IDLE_MS")
         .ok()
@@ -185,14 +205,17 @@ pub(crate) fn new(on_demand: &OnDemand) -> Supervisor<Value> {
         .unwrap_or(IDLE_MS);
     let base = if on_demand.enabled {
         let cores = std::thread::available_parallelism().map_or(2, std::num::NonZero::get);
-        let tunables = Tunables::legacy().with_b3(cores);
+        let tunables = Tunables::legacy().with_b3(cores).with_b4();
         diag!(
             "lazy: on, idle after {idle_timeout} ms, {} starts at once ({cores} cores)",
             tunables.max_active.unwrap_or_default()
         );
         tunables
     } else {
-        Tunables::legacy()
+        Tunables {
+            start_job_ends_at_spawn: true,
+            ..Tunables::legacy().with_b4()
+        }
     };
     let mut supervisor = Supervisor::new(
         Tunables {
@@ -305,25 +328,18 @@ impl Host {
     }
     // ---- stops and the waits for them (§17.9) --------------------------
 
-    /// The members of a runner the Host killed (`restart_shared`): gone
-    /// with it, so their restart does not wait (today's behaviour, §17.7
-    /// item 9c). B4's `runner_failed` takes this over.
-    pub(crate) fn units_killed_with_runner(&mut self, owners: &[u64]) {
-        for owner in owners {
-            self.supervisor.member_killed(Pid(*owner));
-        }
-    }
     /// `Event::Reaped(owner)`: the reaper saw the process go. An
     /// uninstall's data owed at this reap goes now, as at today's
     /// `data_removals` (the starts waiting for it run in the next
     /// `supervisor_tick`, where today's ticks ran them).
-    pub(crate) fn unit_reaped(&mut self, owner: u64) {
+    pub(crate) fn unit_reaped(&mut self, owner: u64, code: Option<i32>) {
         let now = self.now_ms();
         self.supervisor.set_now(now);
         let unit = self.supervisor.by_pid(Pid(owner));
-        self.supervisor.process_reaped(Pid(owner), None);
+        self.supervisor.process_reaped(Pid(owner), code);
         self.supervisor_run();
         if let Some(unit) = unit {
+            self.note_hold(unit);
             self.remove_if_gone(unit);
         }
     }
@@ -336,7 +352,64 @@ impl Host {
         self.supervisor.backend_cleaned(Pid(owner));
         self.supervisor_run();
         if let Some(unit) = unit {
+            self.note_hold(unit);
             self.remove_if_gone(unit);
+        }
+    }
+    /// A unit that landed in standby with a restart hold (a crash, a start
+    /// that failed: T20, B4): until the hold is over its menu items show
+    /// disabled with the reason, and a key or click shows it (§12.1;
+    /// coordinator ruling 4 of B3). `on_demand_tick` lets go at its end.
+    pub(super) fn note_hold(&mut self, unit: UnitId) {
+        let now = self.now_ms();
+        let Some(crate::supervisor::UnitState::Standby {
+            holder,
+            hold_until: Some(until),
+            ..
+        }) = self.supervisor.unit(unit).map(|u| u.state.clone())
+        else {
+            return;
+        };
+        if until <= now || self.on_demand.holds.contains_key(&holder.0) {
+            return;
+        }
+        let name = self.unit_name(unit);
+        let reason = i18n::tr_args(
+            "{} stopped after a fault; try again in a moment",
+            &json!([name]),
+        );
+        diag!(
+            "supervisor: {} held for {} ms after a fault",
+            self.unit_id(unit),
+            until - now
+        );
+        self.commands.set_held(holder.0, Some(reason));
+        self.on_demand.holds.insert(holder.0, (unit, until));
+    }
+    /// Holds that are over, or whose unit left standby: the menu items
+    /// show their own state again.
+    fn holds_tick(&mut self, now: u64) {
+        let over = self
+            .on_demand
+            .holds
+            .iter()
+            .filter(|(holder, (unit, until))| {
+                *until <= now
+                    || !matches!(
+                        self.supervisor.unit(*unit).map(|u| &u.state),
+                        Some(crate::supervisor::UnitState::Standby { holder: h, .. }) if h.0 == **holder
+                    )
+            })
+            .map(|(holder, _)| *holder)
+            .collect::<Vec<_>>();
+        for holder in over {
+            self.release_hold(holder);
+        }
+    }
+    /// `holder`'s menu items show their own state again.
+    pub(super) fn release_hold(&mut self, holder: u64) {
+        if self.on_demand.holds.remove(&holder).is_some() {
+            self.commands.set_held(holder, None);
         }
     }
     /// A package-RPC job of plugin `id` is installed (a reload, an enable
@@ -663,6 +736,43 @@ impl Host {
         self.supervisor.touch(Pid(owner), now);
         let waking = self.supervisor.waking(Pid(owner));
         self.supervisor.process_ready(Pid(owner));
+        // With on-demand start on, a start is ready once its initial UI
+        // requests are answered too (T9; B4): until then it holds its
+        // triggers and its start slot (`ui_finished`).
+        if self.on_demand.enabled && self.supervisor.activating(Pid(owner)) {
+            diag!("supervisor: owner {owner} ready, its UI not yet");
+            self.on_demand.ui_pending.insert(owner, waking);
+            return;
+        }
+        self.became_ready(owner, waking);
+    }
+    /// An initial UI request of `owner`'s activation was answered (T9,
+    /// with on-demand start on): a run whose `runtime.ready` came already
+    /// is ready once its last one is.
+    pub(crate) fn ui_finished(&mut self, owner: u64) {
+        if !self.on_demand.enabled {
+            return;
+        }
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
+        self.supervisor.ui_finish(Pid(owner));
+        if !self.supervisor.activating(Pid(owner))
+            && let Some(waking) = self.on_demand.ui_pending.remove(&owner)
+        {
+            self.became_ready(owner, waking);
+        }
+    }
+    /// An initial UI request of `owner`'s activation is waited on (T9, with
+    /// on-demand start on).
+    pub(crate) fn ui_begun(&mut self, owner: u64) {
+        if self.on_demand.enabled {
+            self.supervisor.ui_begin(Pid(owner));
+        }
+    }
+    /// `owner`'s run is ready (T9): what was held for it runs, after its
+    /// class was asked (§17.7 item 14).
+    fn became_ready(&mut self, owner: u64, waking: Option<u64>) {
+        let now = self.now_ms();
         let actions = self.supervisor.run_jobs(now);
         let delivers = actions
             .iter()
@@ -1107,6 +1217,7 @@ impl Host {
     /// A run stopped (`Host::stop`): what was asked or logged for it goes.
     pub(crate) fn on_demand_forget(&mut self, owner: u64) {
         self.on_demand.asked.remove(&owner);
+        self.on_demand.ui_pending.remove(&owner);
         self.on_demand.told.remove(&owner);
         self.on_demand.answers.remove(&owner);
         // The core's work of the run went with it.
@@ -1118,6 +1229,9 @@ impl Host {
     pub(crate) fn on_demand_tick(&mut self) {
         let now = self.now_ms();
         self.test_execute(now);
+        if !self.on_demand.holds.is_empty() {
+            self.holds_tick(now);
+        }
         if !self.on_demand.enabled {
             return;
         }
@@ -1136,51 +1250,6 @@ impl Host {
             diag!("lazy: start-up settled");
             self.on_demand.settled = true;
             self.supervisor.settled(now);
-        }
-    }
-    /// At quit (§2.1): every running installed plugin whose class came back
-    /// this run is recorded (the core's `quit_checkpoints`): a resident one
-    /// as resident, a lazy one with its registrations as they are now (left
-    /// as it was when it holds a live resource at this moment: an open
-    /// window, say).
-    pub(crate) fn on_demand_quit(&mut self) {
-        self.probe_quit();
-        if !self.on_demand.enabled {
-            return;
-        }
-        let directory = self.activation_dir();
-        let mut runs = self.supervisor.quit_checkpoints();
-        runs.sort_by_key(|(_, pid, _)| *pid);
-        for (_, pid, resident) in runs {
-            let owner = pid.0;
-            let Some(key) = self.checkpoint_key_of(owner) else {
-                continue;
-            };
-            let id = self.plugin_id(owner);
-            let (calls, resident) = if resident {
-                if checkpoint::read(&directory, &key).is_some_and(|r| r.resident_at_ready) {
-                    continue;
-                }
-                (Vec::new(), true)
-            } else {
-                let backend = self
-                    .on_demand
-                    .answers
-                    .get(&owner)
-                    .cloned()
-                    .unwrap_or(Value::Null);
-                match self.standby_record(owner, &backend) {
-                    Ok(calls) => (calls, false),
-                    Err(reason) => {
-                        diag!("lazy: {id} not recorded at quit: {reason}");
-                        continue;
-                    }
-                }
-            };
-            match checkpoint::write(&directory, &key, calls, resident) {
-                Ok(()) => diag!("lazy: {id} recorded at quit"),
-                Err(error) => diag!("lazy: {id}: its recording: {error}"),
-            }
         }
     }
 }

@@ -81,6 +81,7 @@ pub(crate) use restart::{
 pub(crate) use rpc::{Reply, Request, RpcError, string, ui_error};
 pub(crate) use state::{LayoutChange, layout_change, policy_slot};
 pub(crate) use supervisor::Origin;
+pub(crate) use supervisor::shutdown::{DEVICE_LOSS_BUDGET, QUIT_BUDGET};
 pub(crate) use video::{FRAME_SINK, PIP_GPU_SINK};
 
 #[derive(Clone)]
