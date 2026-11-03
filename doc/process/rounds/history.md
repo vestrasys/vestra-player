@@ -169,16 +169,21 @@ Kept so that old commits and comments make sense:
 
 ## Current round
 
-The plugin process supervisor round (B0–B7, 0.6.4–0.7.0) is folded in above. What is left of it:
+**Overnight loop, 2026-11-03/04** (user asked to finish this list tonight; procedure: [agentic-workflow-loop.md](../../../agentic-workflow/agentic-workflow-loop.md)). Main-repo CI: do not run remote CI without asking the user (merges to main use `[skip ci]`); plugin and SDK repos are public, their CI runs as usual.
 
-| Item | State |
-| --- | --- |
-| Release 0.7.1 | Merged (#158, main 033adccf); tag `v0.7.1` pushed; `release.yml` running. Then verify `latest.json` against `SHA256SUMS` and publish (user, 2026-11-03) |
-| SDK 1.6.1 docs patch | Open (see §4) |
-| Download page (`redesign` branch, not deployed) | Feature order menus, store, AI, VestraNES; AI workshop chapter removed; store and AI clips zoomed; AI clip shows a three-wheel colour grading plugin (install → wheels, no store or menu shots); hero near cards play the AI and VestraNES clips; AI caption generic plus "your own AI provider key" |
-| Plugin repository security scan (`security-scan` branch, plugin repo) | Semgrep plugin-risk rules with a `security-review` label, CodeQL, Dependency Review, OSV-Scanner, Scorecard; bundle inputs checked against the plugin's own files (esbuild metafile); third review running. Repo settings done: `security-review` label, secret scanning + push protection, private vulnerability reporting. SDK request: `vestra-plugin build` could emit its metafile |
-| Window-open hitch and Options flash (`window-compile-cache` branch) | Measured offline: each window's `.slint` is compiled on the UI thread at every open (store ≈260 ms, AI ≈145 ms, Properties ≈65 ms, Options ≈260 ms release), which stalls the video; `ComponentDefinition` is not Send, so no background compile. Bug fixes in progress: Options does not rebuild or replace its native window when a woken plugin re-registers an unchanged page; no double compile on the open path. **Compile cache: not approved** (see the decision below) |
-| Shader Upscale presets (plugin repo) | Adding AMD FSR 1, CfL Lite (chroma) and adaptive-sharpen next to Anime4K; vo_gpu path means no COMPUTE (macOS GL 4.1), no PARAM (macOS mpv 0.41), permissive licences only. ArtCNN waits for gpu-next in libmpv |
+| # | Item | State | Next step |
+| --- | --- | --- | --- |
+| 1 | **Release/host version split** (`release-version-split`, C:\vestra\wt-relsplit) | Host side done (src/release.json, `version::player()`, minPlayerVersion and plugin.app use the release version; 1223 tests). Infrastructure side (host input hash, reuse a published host in release.yml via `host.json`, local reuse staging) running | Infra report → independent review → merge `[skip ci]` |
+| 2 | **Store 0.2.12 row controls** (`store-row-controls`, C:\vestra\wt-store-rows) | One control per row (Install / Update / ⋯), grey ✓ before the version, "Disabled" dims the row; Replace entry added to the detail pane | Screenshot → review → merge `[skip ci]` |
+| 3 | **Player build with 1 + 2** | — | Bump `src/release.json` to 0.7.2 (host stays 0.7.1); stage locally with the reused host (first plugin-only release); isolated GUI check |
+| 4 | **Recordings** (download page, `redesign`) | — | (a) hero centre: Picture Adjustments greying in sync with the butterfly (video ≈1:24–1:34), full-width player, playlist hidden; (b) feature 02 store: same flow as before on the new store, same camera timing as `scratchpad\storevideo2\build.mjs`; edit, commit, push (no deploy) |
+| 5 | **Sidebar tabs design note** | User agreed to VS Code-style overflow; mounted panels make plugins Resident (100 sidebar plugins = 100 processes) | API maintainer writes a short design: overflow `»` menu, no hard cap, only the shown panel mounted (others are recorded placeholders), switch cost measured, API impact. **Implementation waits for the user** |
+| 6 | **Shader Upscale status text truncated** (plugin repo) | "On: Anime4K mode A (Fast) + chroma + sh…" | Plugin author: shorter text or wrap; PR (public CI) |
+| 7 | **SDK 1.6.1 docs patch** (SDK repo) | Open | "planned for player 0.6.x" → 0.7.1; Windows GPU renderer exists; lut3d `.cube` format (DOMAIN_MIN/MAX, no other keywords); two-version note |
+| 8 | **Release 0.7.2** | Needs the user | `release.yml` is remote CI: ask before tagging |
+| 9 | **Cleanup** | — | Old worktrees: remove only merged/clean ones (check status and merge state first); typos allowlist for commit hashes |
+
+Done earlier this round: 0.7.1 published; #160–#162 (records, README, Options window fix); plugin repo #26 (security scan) and #27 (Shader Upscale 0.2.0).
 
 Decisions this round:
 
