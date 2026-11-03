@@ -172,6 +172,7 @@ macro_rules! both {
 }
 
 // Test files come after `both!` (macro_rules is textually scoped).
+mod b3;
 mod backlog;
 mod budget;
 mod deadlines;
@@ -1049,4 +1050,87 @@ pub(super) fn same_set(a: &[Pid], b: &[Pid]) -> bool {
 }
 pub(super) fn terminates(acts: &[Act]) -> Vec<(Ms, bool, String, Pid)> {
     acts.iter().filter_map(terminate).collect()
+}
+
+// ---------------------------------------------------------------------------
+// Adapter additions for the B3 spec tests (`b3.rs`)
+// ---------------------------------------------------------------------------
+
+/// The unit of a "Starting <name>…" notice (T7, §4.5).
+pub(super) fn starting_notice_unit(a: &Act) -> Option<UnitId> {
+    match a {
+        Action::Notify {
+            unit,
+            notice: Notice::Starting,
+        } => *unit,
+        _ => None,
+    }
+}
+
+/// The unit of a "<name> could not start" notice.
+pub(super) fn could_not_start_unit(a: &Act) -> Option<UnitId> {
+    match a {
+        Action::Notify {
+            unit,
+            notice: Notice::CouldNotStart,
+        } => *unit,
+        _ => None,
+    }
+}
+
+/// `(unit, pid)` of a `Revoke`.
+pub(super) fn revoked(a: &Act) -> Option<(UnitId, Pid)> {
+    match a {
+        Action::Revoke { unit, pid } => Some((*unit, *pid)),
+        _ => None,
+    }
+}
+
+/// A plugin-declared long work kind (`commands.busy`, a settings page
+/// busy). GUESS: §5 `begin_work(pid, kind, now)` has no way to say that a
+/// kind is not a host→plugin request awaiting a reply, while the
+/// coordinator's ruling (blackboard, Open items) gives such work no cap.
+/// This number is the adapter's own; see
+/// `b3::w_declared_busy_has_no_request_cap`.
+pub(super) const DECLARED_BUSY: WorkKind = u64::MAX;
+
+impl Sim {
+    /// Third-party start slots in use (`slots_in_use().0`).
+    pub fn slots(&self) -> usize {
+        self.sup.slots_in_use().0
+    }
+    /// `begin_work` with the adapter's kind (a request id, §17.1).
+    pub fn begin_work_kind(&mut self, pid: Pid, kind: WorkKind) {
+        self.sup.set_now(self.now);
+        self.sup.begin_work(pid, kind, self.now)
+    }
+    pub fn end_work_kind(&mut self, pid: Pid, kind: WorkKind) {
+        self.sup.set_now(self.now);
+        self.sup.end_work(pid, kind)
+    }
+    /// Plugin-declared long work (`commands.busy`): see `DECLARED_BUSY`.
+    pub fn begin_declared_busy(&mut self, pid: Pid) {
+        self.begin_work_kind(pid, DECLARED_BUSY)
+    }
+    /// The B2a identity input `activation_begin` for `n` fresh units, each
+    /// with a new pid: how many were accepted (§13 B3 "remove `LIMIT 64`").
+    pub fn activations_accepted(&mut self, n: usize) -> usize {
+        (0..n)
+            .filter(|i| {
+                let u = self.sup.load_unit(&format!("act.fixture-{i:03}"));
+                let pid = self.sup.alloc_pid();
+                self.sup.activation_begin(u, pid, self.now + 15_000).is_ok()
+            })
+            .count()
+    }
+    /// The cause of the unit's running Start job (`J::Start` view), if any.
+    pub fn running_start_cause(&self, u: UnitId) -> Option<String> {
+        match self.job(u) {
+            Some(J::Start {
+                cause,
+                running: true,
+            }) => Some(cause),
+            _ => None,
+        }
+    }
 }
