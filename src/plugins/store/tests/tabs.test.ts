@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { ALL, BUILTIN, controls, FakeNet, info, type Info, INSTALLED, OFFICIAL, openStore, props, publish, rows, start, tab, THIRD, until, UPDATES } from "./helpers.ts";
+import { ALL, BUILTIN, controls, FakeNet, info, type Info, INSTALLED, OFFICIAL, openStore, props, publish, rows, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-tabs-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -220,6 +220,35 @@ test("All in English: a .vxp install that a repository lists too is one row, its
     await host.settle();
     assert.ok((props(host)["banners"] as { text: string }[]).some((b) => b.text === "Also in Official repository"));
     assert.equal(controls(host, "Tube").menu.at(-1)?.text, "Replace with 2.0.0 from Official repository…");
+  } finally {
+    await stop();
+  }
+});
+
+test("a development load (--plugin) folds nothing: the repository's entry of its id stays under All and installs", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [{ id: "t.dev", name: "Dev Tool", versions: [{ version: "1.0.0" }] }]);
+  const dev = info("t.dev", { origin: "development", source: null });
+  const { host, store, stop } = await start({ net, packages: [BUILTIN, dev] });
+  try {
+    await openStore(host);
+    await until(host, () => store.items.length === 3, "rows");
+    type Row = { key: string; name: string; primary: { id: string } };
+    const all = rows(host) as unknown as Row[];
+    assert.deepEqual(all.map((r) => r.key).sort(), ["\nt.dev", `${OFFICIAL}\nt.dev`].sort());
+    assert.equal(props(host)["all-count"], 2);
+    const entry = all.find((r) => r.key === `${OFFICIAL}\nt.dev`)!;
+    assert.equal(entry.primary.id, "install");
+    // Asked for by its key, the entry itself is shown (not the development row).
+    store.select(entry.key);
+    await host.settle();
+    assert.equal(store.selected, entry.key);
+    // No "Also in" and no replace entry on the development row.
+    assert.ok(!controls(host, "t.dev").menu.some((m) => m.id.startsWith("replace:")));
+    // The install question, then (as before 0.2.11) the store's question about replacing the loaded copy.
+    host.dialogAnswers.push(yes, yes);
+    host.window("store").emit("rowAct", entry.key, "install");
+    await until(host, () => host.packageCalls.some((c) => c.method === "install"), "installed from the repository");
   } finally {
     await stop();
   }

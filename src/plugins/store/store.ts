@@ -95,6 +95,13 @@ export const tabOf = (name: unknown): number => {
   return index < 0 ? ALL : index;
 };
 
+/**
+ * An installed row from the install library (not a development load): All
+ * folds a repository's entries of its id into it. A development load
+ * (`--plugin`) folds nothing, so its id stays installable from a repository.
+ */
+const fromLibrary = (item: Item) => isInstalledRow(item) && !isDevelopmentRow(item);
+
 /** The tab a row hidden by Installed or Updates is brought up on: Installed for an installed one, else All (which lists every row). */
 const homeOf = (item: Item) => (isInstalledRow(item) ? INSTALLED : ALL);
 
@@ -649,19 +656,19 @@ export class Store {
    * … menu offers. A plugin not installed keeps one row per (repository, id).
    */
   #collapsed(items: Item[]): Item[] {
-    const installed = new Set(items.filter(isInstalledRow).map((each) => each.id));
-    return items.filter((each) => isInstalledRow(each) || !installed.has(each.id));
+    const installed = new Set(items.filter(fromLibrary).map((each) => each.id));
+    return items.filter((each) => fromLibrary(each) || !installed.has(each.id));
   }
 
   /** The row that stands for this one in All: the installed row of the same id, else itself. */
   #primary(item: Item): Item {
-    if (isInstalledRow(item)) return item;
-    return this.items.find((each) => each.id === item.id && isInstalledRow(each)) ?? item;
+    if (fromLibrary(item)) return item;
+    return this.items.find((each) => each.id === item.id && fromLibrary(each)) ?? item;
   }
 
   /** The repositories' entries an installed row stands for in All. */
   #alsoIn(item: Item): Item[] {
-    if (this.category !== ALL || !isInstalledRow(item)) return [];
+    if (this.category !== ALL || !fromLibrary(item)) return [];
     return this.items.filter((each) => each.id === item.id && each !== item && each.repo !== null && !isInstalledRow(each));
   }
 
