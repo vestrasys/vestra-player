@@ -1205,11 +1205,15 @@ impl Host {
         let Some(plugin) = self.plugins.get(&owner) else {
             return false;
         };
-        let id = &plugin.manifest.id;
+        self.is_builtin_package(&plugin.manifest.id, &plugin.directory)
+    }
+    /// The package `id` in `directory` is a built-in plugin's (also for a
+    /// plugin in standby, which has no process: its replayed sidebar tab).
+    pub(crate) fn is_builtin_package(&self, id: &str, directory: &std::path::Path) -> bool {
         self.packages
             .builtins
             .get(id)
-            .is_some_and(|builtin| builtin.directory == plugin.directory)
+            .is_some_and(|builtin| builtin.directory == directory)
             && self
                 .packages
                 .store

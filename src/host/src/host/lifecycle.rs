@@ -278,6 +278,9 @@ impl Host {
         self.held_mounts.forget(owner);
         self.warnings.edit().remove(&owner);
         capabilities::revoke(self, owner, park);
+        // Parked with a sidebar tab: the tab stays, a placeholder
+        // (sidebar-tabs.md); its panel stays in the shell if it is compiled.
+        let kept_tab = park && self.mounts.get(&owner).is_some_and(|m| m.recorded);
         {
             let mut input = self.input.borrow_mut();
             if input.bottom == Some(owner) {
@@ -299,17 +302,20 @@ impl Host {
             self.show_info_panels();
         }
         // The floating window opens again without this panel (`sync_floating`).
-        if self
-            .floating
-            .as_ref()
-            .is_some_and(|f| f.owners.contains(&owner))
+        if !kept_tab
+            && self
+                .floating
+                .as_ref()
+                .is_some_and(|f| f.owners.contains(&owner))
         {
             self.close_floating();
         }
         if matches!(&self.menu_mode, MenuMode::Panel(menu_owner, _) if *menu_owner == owner) {
             self.close_menu();
         }
-        self.policy.remove_owner(owner);
+        if !kept_tab {
+            self.policy.remove_owner(owner);
+        }
         self.power.remove_owner(owner);
         self.timeline.remove_owner(owner);
         self.images.release_owner(owner);
@@ -328,7 +334,7 @@ impl Host {
         {
             self.preparing = None;
         }
-        if let Some(mount) = self.mounts.remove(&owner) {
+        if let Some(mount) = (!kept_tab).then(|| self.mounts.remove(&owner)).flatten() {
             // Another sidebar tab stays shown until the shell is rebuilt.
             let last_tab = tabs_before.iter().all(|&o| o == owner);
             if let Some(shell) = &self.shell
@@ -494,15 +500,5 @@ mod tests {
             activation_outcome(&Err(RpcError::new("conflict", "owner already mounted"))),
             Err("conflict: owner already mounted".into())
         );
-    }
-
-    #[test]
-    fn a_full_sidebar_is_refused_like_a_taken_slot() {
-        let full = RpcError::sidebar_full();
-        assert_eq!(
-            serde_json::to_value(&full).unwrap(),
-            json!({"code":"conflict","message":"The sidebar holds at most 8 tabs","reason":"slot-occupied","slot":"sidebar"})
-        );
-        assert_eq!(activation_outcome(&Err(full)), Ok(()));
     }
 }

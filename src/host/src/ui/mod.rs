@@ -9,6 +9,7 @@ pub(crate) mod drops;
 pub(crate) mod menu;
 pub(crate) mod pip;
 pub(crate) mod settings_window;
+pub(crate) mod sidebar_tabs;
 #[cfg(test)]
 mod slint_lists;
 pub(crate) mod slot_claims;

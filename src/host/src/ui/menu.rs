@@ -35,10 +35,18 @@ pub struct Point {
 /// Token for a row; parsed back by `parse_token`.
 pub enum Token {
     Group(Vec<String>),
-    Command { owner: u64, id: String },
+    Command {
+        owner: u64,
+        id: String,
+    },
+    /// A sidebar tab of the overflow menu (sidebar-tabs.md), by owner.
+    Tab(u64),
 }
 
 pub fn parse_token(token: &str) -> Option<Token> {
+    if let Some(owner) = token.strip_prefix("t:") {
+        return owner.parse().ok().map(Token::Tab);
+    }
     if let Some(group) = token.strip_prefix("g:") {
         return serde_json::from_str(group).ok().map(Token::Group);
     }
@@ -322,6 +330,31 @@ pub fn context_level(
         "scroll":scrolling,"viewport-y":offset}])
 }
 
+/// The sidebar's overflow menu (sidebar-tabs.md): every tab, in tab order,
+/// the current one checked, as one context level at `origin`.
+pub fn tabs_level(
+    tabs: &[(u64, String)],
+    active: Option<u64>,
+    origin: Point,
+    window: Point,
+    scroll: f64,
+) -> Value {
+    let rows = tabs
+        .iter()
+        .map(|(owner, title)| {
+            json!({"token":format!("t:{owner}"),"title":title,"enabled":true,
+                "checked":Some(*owner) == active,"radio":true,"busy":false,"reason":"",
+                "has-children":false,"open":false,"keys":""})
+        })
+        .collect::<Vec<_>>();
+    let separators = vec![false; rows.len()];
+    let (rows, width, content) = panel(rows, separators);
+    let (height, scrolling, offset) = fit(content, window.y, scroll);
+    let (x, y) = place(origin, width, height, window);
+    json!([{"rows":rows,"x":x,"y":y,"width":width,"height":height,"open":-1,
+        "scroll":scrolling,"viewport-y":offset}])
+}
+
 /// The open chain a hover asks for: a group row opens that group (closing
 /// anything deeper); a command row at `level` closes the levels below it.
 pub fn hover_target(current: &[String], level: usize, token: &str) -> Option<Vec<String>> {
@@ -330,7 +363,9 @@ pub fn hover_target(current: &[String], level: usize, token: &str) -> Option<Vec
             path.truncate(level + 1);
             Some(path)
         }
-        Token::Command { .. } => Some(current.iter().take(level).cloned().collect()),
+        Token::Command { .. } | Token::Tab(_) => {
+            Some(current.iter().take(level).cloned().collect())
+        }
     }
 }
 
@@ -661,6 +696,28 @@ mod tests {
             Some(Token::Command { owner, id }) => assert_eq!((owner, id.as_str()), (7, "open")),
             _ => panic!("command token did not parse"),
         }
+    }
+
+    /// sidebar-tabs.md: `»` lists every tab, in tab order, the current one
+    /// checked; a row's token names its tab.
+    #[test]
+    fn the_overflow_menu_lists_all_tabs_and_checks_the_current_one() {
+        let tabs = (1..=20)
+            .map(|owner| (owner, format!("Tab {owner}")))
+            .collect::<Vec<_>>();
+        let value = tabs_level(&tabs, Some(12), Point { x: 300., y: 31. }, WINDOW, 0.);
+        let rows = value[0]["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 20);
+        for (row, (owner, title)) in rows.iter().zip(&tabs) {
+            assert_eq!(row["title"], title.as_str());
+            assert_eq!(row["checked"], *owner == 12);
+            assert_eq!(row["radio"], true);
+            match parse_token(row["token"].as_str().unwrap()) {
+                Some(Token::Tab(parsed)) => assert_eq!(parsed, *owner),
+                _ => panic!("tab token did not round-trip"),
+            }
+        }
+        assert_eq!(hover_target(&["x".to_owned()], 0, "t:3"), Some(Vec::new()));
     }
 
     #[test]

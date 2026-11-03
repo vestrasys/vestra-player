@@ -643,6 +643,13 @@ impl Host {
             _ => self.supervisor_run(),
         }
     }
+    /// The sidebar tab of `owner` became the current one while its plugin
+    /// stands by (sidebar-tabs.md): an interactive trigger, as a shown
+    /// settings page is; its activation mounts the panel again, which takes
+    /// the tab over.
+    pub(crate) fn panel_shown(&mut self, owner: u64) {
+        self.page_shown(owner);
+    }
     /// Start-up is over: every installed plugin started, replayed or
     /// queued has run its first activation (as files opened at launch wait,
     /// `open_files_tick`).

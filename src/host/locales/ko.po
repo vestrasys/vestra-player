@@ -238,10 +238,10 @@ msgstr "다음 프레임: {}"
 msgid "Previous frame: {}"
 msgstr "이전 프레임: {}"
 
-#: src/main.rs:140
+#: ui/sidebar-tabs.slint:150
 #, x-machine
-msgid "The sidebar holds at most {} tabs"
-msgstr "사이드바에는 탭을 최대 {}개까지 둘 수 있습니다"
+msgid "All tabs"
+msgstr "모든 탭"
 
 #: src/main.rs:150
 #, x-machine

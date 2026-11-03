@@ -1,13 +1,14 @@
 //! `ui.mount`: panels in the bottom bar, the sidebar and the backdrop, their
 //! menus and interaction locks, and the layout of those slots.
-use super::{Capability, Handled, Info, Method, Recorded, Residency, plugin};
+use super::{Call, Capability, Handled, Info, Method, Recorded, Residency, plugin};
 use crate::{
     host::{
-        Host, LayoutChange, MenuMode, Mount, MountChange, Reply, RpcError, debug_keys,
+        Host, LayoutChange, MenuMode, Mount, MountChange, Origin, Reply, RpcError, debug_keys,
         layout_change, policy_slot, refuse_initial, string,
     },
     i18n, process,
     ui::composition,
+    ui::sidebar_tabs,
     ui::slot_claims,
     ui::ui_patch,
     ui::window_state,
@@ -40,19 +41,124 @@ impl Capability for UiMount {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
+    /// A panel keeps its plugin running, except a background sidebar tab
+    /// (sidebar-tabs.md, user ruling 2026-11-03: only the current tab does):
+    /// its `ui.mount` is recorded, and the tab stays as a placeholder while
+    /// the plugin stands by.
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        let queued = host.mount_queue.iter().any(|c| c.reply.owner == owner)
-            || host
-                .preparing
-                .as_ref()
-                .is_some_and(|(_, c)| c.reply.owner == owner)
-            || host.held_mounts.waiting(owner);
-        if host.mounts.contains_key(&owner) || queued {
+        if pending(host, owner) {
             return Recorded::Live("a panel");
         }
-        Recorded::Nothing
+        match host.mounts.get(&owner) {
+            None => Recorded::Nothing,
+            Some(mount)
+                if !sidebar_tabs::live(mount.spec.slot, owner, host.policy.sidebar_active()) =>
+            {
+                Recorded::Calls(vec![Call::new("ui.mount", mount.call.clone())])
+            }
+            Some(_) => Recorded::Live("a panel"),
+        }
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
+    /// A parked plugin woke as `to`: its tab moves with it (still a
+    /// placeholder until its new mount takes it over). A branch compiled
+    /// under `from` stays drawn for the tab meanwhile (`shell_compiled`).
+    fn rekey(&self, host: &mut Host, from: u64, to: u64) {
+        let Some(mut mount) = host.mounts.remove(&from) else {
+            return;
+        };
+        mount.spec.owner = to;
+        host.mounts.insert(to, mount);
+        host.policy.rekey(from, to);
+        if let Some(alias) = host.shell_compiled.remove(&from) {
+            host.shell_compiled.insert(to, alias);
+        }
+        let swap = |owner: &mut u64| {
+            if *owner == from {
+                *owner = to;
+            }
+        };
+        host.shell_tabs.iter_mut().for_each(swap);
+        if let Some(floating) = &mut host.floating {
+            floating.owners.iter_mut().for_each(swap);
+        }
+        for owner in [
+            &mut host.sidebar_active,
+            &mut host.tab_woken,
+            &mut host.input.borrow_mut().sidebar,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            swap(owner);
+        }
+    }
+    /// Parked (`keep_recorded`): a sidebar tab stays, as a placeholder. Gone
+    /// for good (disabled, uninstalled, a placeholder its plugin did not
+    /// mount again): the placeholder goes. A running plugin's mount is
+    /// removed by `Host::stop_run` itself.
+    fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
+        let Some(mount) = host.mounts.get_mut(&owner) else {
+            if !keep_recorded {
+                // A replayed tab not applied yet.
+                host.mount_queue
+                    .retain(|c| c.reply.owner != owner || c.contribution.is_none());
+            }
+            return;
+        };
+        if keep_recorded {
+            if mount.spec.slot == composition::Slot::Sidebar {
+                mount.recorded = true;
+            }
+        } else if mount.recorded {
+            host.mounts.remove(&owner);
+            host.policy.remove_owner(owner);
+            host.mount_queue.retain(|c| c.reply.owner != owner);
+            host.mount_queue.push_front(MountChange {
+                reply: Reply { owner, id: 0 },
+                contribution: None,
+                announced: true,
+            });
+        }
+    }
+    /// At a woken run's ready: a placeholder it did not mount again goes.
+    fn prune(&self, host: &mut Host, owner: u64) {
+        if host.mounts.get(&owner).is_some_and(|m| m.recorded) && !pending(host, owner) {
+            self.revoke(host, owner, false);
+        }
+    }
+    /// A recorded background tab: a placeholder in the sidebar, compiled
+    /// into nothing (sidebar-tabs.md).
+    fn replay(&self, host: &mut Host, owner: u64, origin: &Origin, call: &Call) -> Handled {
+        if call.method != "ui.mount" {
+            return Err(RpcError::new("unsupported", "not a recorded method"));
+        }
+        if host.headless {
+            return Ok(None);
+        }
+        let params = &call.params;
+        if params["slot"] != "sidebar" {
+            return Err(RpcError::invalid("only a sidebar tab is recorded"));
+        }
+        let builtin = host.is_builtin_package(&origin.id, &origin.directory);
+        let (mut mount, _) = new_mount(
+            owner,
+            &origin.directory,
+            &origin.id,
+            params["name"].as_str().unwrap_or(""),
+            |text| origin.text(text),
+            builtin,
+            params,
+        )?;
+        mount.recorded = true;
+        mount.call = params.clone();
+        host.mount_queue.retain(|c| c.reply.owner != owner);
+        host.mount_queue.push_back(MountChange {
+            reply: Reply { owner, id: 0 },
+            contribution: Some(mount),
+            announced: true,
+        });
+        Ok(None)
+    }
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "ui.mount" | "ui.unmount" => {
@@ -95,12 +201,21 @@ fn mount(
             "owner already has a pending UI preparation",
         ));
     }
-    if host.mount_queue.len() >= 8 {
+    // Placeholders replayed from recordings do not count (any number).
+    if host
+        .mount_queue
+        .iter()
+        .filter(|c| !c.contribution.as_ref().is_some_and(|m| m.recorded))
+        .count()
+        >= 8
+    {
         return Err(RpcError::new("busy", "UI preparation queue full"));
     }
     let mut refused = Vec::new();
     let contribution = if method == "ui.mount" {
-        if host.mounts.contains_key(&reply.owner) {
+        // A placeholder tab of this plugin (sidebar-tabs.md): its woken run
+        // mounts the panel again, which takes the tab over.
+        if host.mounts.get(&reply.owner).is_some_and(|m| !m.recorded) {
             return Err(RpcError::new("conflict", "owner already mounted"));
         }
         let slot = match string(params, "slot")? {
@@ -111,63 +226,36 @@ fn mount(
         };
         // One component in the bottom bar and the backdrop (R-U3),
         // whoever mounted it: refused here, not when the shell
-        // compiles. The sidebar takes tabs, up to a limit.
-        let pending = host
-            .mount_queue
-            .iter()
-            .chain(host.preparing.as_ref().map(|(_, change)| change))
-            .map(|c| (c.reply.owner, c.contribution.as_ref().map(|m| m.spec.slot)))
-            .collect::<Vec<_>>();
-        let mounted = host.mounts.values().map(|m| (m.spec.owner, m.spec.slot));
-        if slot == composition::Slot::Sidebar {
-            if slot_claims::tabs(reply.owner, mounted, &pending) >= slot_claims::MAX_SIDEBAR_TABS {
-                let error = RpcError::sidebar_full();
+        // compiles. The sidebar takes any number of tabs (sidebar-tabs.md).
+        if slot != composition::Slot::Sidebar {
+            let pending = host
+                .mount_queue
+                .iter()
+                .chain(host.preparing.as_ref().map(|(_, change)| change))
+                .map(|c| (c.reply.owner, c.contribution.as_ref().map(|m| m.spec.slot)))
+                .collect::<Vec<_>>();
+            let mounted = host.mounts.values().map(|m| (m.spec.owner, m.spec.slot));
+            if let Some(holder) = slot_claims::occupant(slot, reply.owner, mounted, &pending) {
+                let error = RpcError::slot_occupied(slot, &host.plugin_id(holder));
                 let text = i18n::tr_args("Panel not shown: {}", &json!([error.message]));
                 return Err(host.refuse_taken(reply.owner, error, text));
             }
-        } else if let Some(holder) = slot_claims::occupant(slot, reply.owner, mounted, &pending) {
-            let error = RpcError::slot_occupied(slot, &host.plugin_id(holder));
-            let text = i18n::tr_args("Panel not shown: {}", &json!([error.message]));
-            return Err(host.refuse_taken(reply.owner, error, text));
         }
-        let plugin = plugin(host, reply)?;
-        let file = process::package_file(&plugin.directory, string(params, "file")?)?;
-        let mut properties: BTreeMap<String, Value> =
-            serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
-                .map_err(|e| RpcError::invalid(e.to_string()))?;
-        let title = params["title"].as_str().unwrap_or("");
-        if title.len() > 128 || title.chars().any(char::is_control) {
-            return Err(RpcError::invalid("title requires 0..=128 bytes"));
-        }
-        refused = refuse_initial(&mut properties);
-        let manifest = plugin.manifest.id.clone();
-        let name = plugin.manifest.name.clone().unwrap_or_default();
         let builtin = host.is_builtin(reply.owner);
-        // C8: a sidebar panel joins the slot's remembered state
-        // (`remember_sidebar`, applied when it attaches).
-        Some(Mount {
-            spec: composition::CompileSpec {
-                owner: reply.owner,
-                file,
-                component: string(params, "component")?.into(),
-                global: Some(string(params, "global")?.into()),
-                slot,
-            },
-            properties,
-            visible: true,
-            detached: false,
-            // The tab label and the floating window's title, in
-            // the interface language (this plugin's catalog).
-            title: if !title.is_empty() {
-                plugin.text(title)
-            } else if !name.is_empty() {
-                plugin.text(&name)
-            } else {
-                "Vestra Player".into()
-            },
-            manifest,
+        let plugin = plugin(host, reply)?;
+        let name = plugin.manifest.name.clone().unwrap_or_default();
+        let (mut mount, refusals) = new_mount(
+            reply.owner,
+            &plugin.directory,
+            &plugin.manifest.id,
+            &name,
+            |text| plugin.text(text),
             builtin,
-        })
+            params,
+        )?;
+        refused = refusals;
+        mount.call = sidebar_tabs::recorded_call(params, &name);
+        Some(mount)
     } else {
         None
     };
@@ -184,6 +272,74 @@ fn mount(
     Ok(())
 }
 
+/// A mount or unmount of `owner` waits to be applied.
+fn pending(host: &Host, owner: u64) -> bool {
+    host.mount_queue.iter().any(|c| c.reply.owner == owner)
+        || host
+            .preparing
+            .as_ref()
+            .is_some_and(|(_, c)| c.reply.owner == owner)
+        || host.held_mounts.waiting(owner)
+}
+
+/// A panel from `ui.mount`'s `params` (or a recorded call's, which has no
+/// properties), in the package `directory` of plugin `manifest`: its
+/// initial properties over the limits are left out and returned.
+#[allow(clippy::too_many_arguments)]
+fn new_mount(
+    owner: u64,
+    directory: &std::path::Path,
+    manifest: &str,
+    name: &str,
+    text: impl Fn(&str) -> String,
+    builtin: bool,
+    params: &Value,
+) -> std::result::Result<(Mount, Vec<RpcError>), RpcError> {
+    let slot = match string(params, "slot")? {
+        "bottom" => composition::Slot::Bottom,
+        "sidebar" => composition::Slot::Sidebar,
+        "backdrop" => composition::Slot::Backdrop,
+        _ => return Err(RpcError::invalid("unknown mount slot")),
+    };
+    let file = process::package_file(directory, string(params, "file")?)?;
+    let mut properties: BTreeMap<String, Value> =
+        serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
+            .map_err(|e| RpcError::invalid(e.to_string()))?;
+    let title = params["title"].as_str().unwrap_or("");
+    if title.len() > 128 || title.chars().any(char::is_control) {
+        return Err(RpcError::invalid("title requires 0..=128 bytes"));
+    }
+    let refused = refuse_initial(&mut properties);
+    // C8: a sidebar panel joins the slot's remembered state
+    // (`remember_sidebar`, applied when it attaches).
+    let mount = Mount {
+        spec: composition::CompileSpec {
+            owner,
+            file,
+            component: string(params, "component")?.into(),
+            global: Some(string(params, "global")?.into()),
+            slot,
+        },
+        properties,
+        visible: true,
+        detached: false,
+        // The tab label and the floating window's title, in
+        // the interface language (this plugin's catalog).
+        title: if !title.is_empty() {
+            text(title)
+        } else if !name.is_empty() {
+            text(name)
+        } else {
+            "Vestra Player".into()
+        },
+        manifest: manifest.to_owned(),
+        builtin,
+        recorded: false,
+        call: Value::Null,
+    };
+    Ok((mount, refused))
+}
+
 fn set_mount(
     host: &mut Host,
     reply: &Reply,
@@ -195,6 +351,7 @@ fn set_mount(
     let spec = host
         .mounts
         .get(&reply.owner)
+        .filter(|mount| !mount.recorded)
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?
         .spec
         .clone();
@@ -203,11 +360,16 @@ fn set_mount(
         .as_ref()
         .map(ComponentHandle::clone_strong)
         .ok_or_else(|| RpcError::new("unavailable", "native shell unavailable"))?;
+    // A sidebar tab beyond the front tabs is not in the shell (sidebar-tabs.md):
+    // its values are only stored, and written when it is compiled.
+    let shell = (spec.slot != composition::Slot::Sidebar
+        || host.shell_compiled.get(&reply.owner) == Some(&reply.owner))
+    .then_some(shell);
     let property = string(params, "property")?;
     let floating = host
         .floating
         .as_ref()
-        .filter(|f| f.owners.contains(&reply.owner))
+        .filter(|f| f.compiled.contains(&reply.owner))
         .map(|f| f.instance.clone_strong());
     // A part of a whole value sent in parts: held until the last (P3).
     let parted = host.parts(reply.owner, "$mount", property, params, prepared.as_deref())?;
@@ -223,7 +385,7 @@ fn set_mount(
                 if patch_mount(
                     host,
                     reply.owner,
-                    &shell,
+                    shell.as_ref(),
                     floating.as_ref(),
                     property,
                     ops,
@@ -253,7 +415,9 @@ fn set_mount(
         }
     };
     let converted = host.prop_value_with(reply.owner, "$mount", property, &value, rows.as_ref())?;
-    composition::set_global_value(&shell, &spec, property, converted)?;
+    if let Some(shell) = &shell {
+        composition::set_global_value(shell, &spec, property, converted)?;
+    }
     if let Some(floating) = floating {
         let converted =
             host.prop_value_with(reply.owner, "$mount", property, &value, rows.as_ref())?;
@@ -291,7 +455,7 @@ fn patched_mount(
 fn patch_mount(
     host: &mut Host,
     owner: u64,
-    shell: &slint_interpreter::ComponentInstance,
+    shell: Option<&slint_interpreter::ComponentInstance>,
     floating: Option<&slint_interpreter::ComponentInstance>,
     property: &str,
     ops: &Value,
@@ -306,7 +470,7 @@ fn patch_mount(
     };
     let ops = ui_patch::parse(ops, stored.len())?;
     let alias = composition::global_alias(owner);
-    let mut instances = vec![shell];
+    let mut instances = shell.into_iter().collect::<Vec<_>>();
     instances.extend(floating);
     // Converted once (on the reader thread when large), written into each
     // instance's model.

@@ -38,18 +38,6 @@ impl RpcError {
         )
     }
     /// `sequence.set`: another plugin provides next/previous.
-    /// The sidebar has all the tabs it takes (`slot_claims::MAX_SIDEBAR_TABS`);
-    /// like a taken slot, it does not fail activation.
-    pub(crate) fn sidebar_full() -> Self {
-        Self::taken(
-            "slot-occupied",
-            i18n::tr_args(
-                "The sidebar holds at most {} tabs",
-                &json!([slot_claims::MAX_SIDEBAR_TABS]),
-            ),
-            json!({"slot":"sidebar"}),
-        )
-    }
     pub(crate) fn sequence_taken(holder: &str) -> Self {
         Self::taken(
             "sequence-taken",

@@ -194,6 +194,13 @@ impl Host {
                                 diag!("menu execute: {:?}", error);
                             }
                         }
+                        Some(menu::Token::Tab(owner)) => {
+                            self.close_menu();
+                            if self.policy.set_active(owner).is_ok() {
+                                self.remember_sidebar(true);
+                                self.window_tick();
+                            }
+                        }
                         None => (),
                     },
                 }
@@ -299,6 +306,19 @@ impl Host {
                     self.remember_sidebar(true);
                     self.window_tick();
                 }
+            }
+            Event::SidebarOverflow(generation, x, y) => {
+                if !self.window_generation_live(generation) || !x.is_finite() || !y.is_finite() {
+                    return;
+                }
+                if let Some(window) = self
+                    .window_for(generation)
+                    .map(ComponentHandle::clone_strong)
+                {
+                    let _ = window.set_property("menu-origin-x", x.into());
+                    let _ = window.set_property("menu-origin-y", y.into());
+                }
+                self.open_menu(generation, MenuMode::Tabs);
             }
             Event::SidebarDetach(generation) => {
                 if !self.window_generation_live(generation) {

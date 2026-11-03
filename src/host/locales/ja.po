@@ -238,10 +238,10 @@ msgstr "次のフレーム：{}"
 msgid "Previous frame: {}"
 msgstr "前のフレーム：{}"
 
-#: src/main.rs:140
+#: ui/sidebar-tabs.slint:150
 #, x-machine
-msgid "The sidebar holds at most {} tabs"
-msgstr "サイドバーのタブは最大 {} 個です"
+msgid "All tabs"
+msgstr "すべてのタブ"
 
 #: src/main.rs:150
 #, x-machine

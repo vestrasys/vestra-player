@@ -25,7 +25,7 @@ A **unit** is one plugin (one manifest id). It exists from start-up, install or 
 | Normal | every other installed third-party plugin | yes | waits in standby, starts again on its next use | yes |
 | Development | a `--plugin` load | never | listed failed | no |
 
-"Something live" is what only the plugin's process can serve: a mounted panel, an open window, a playback or other high-frequency event listener, a filter chain, a stream. The class is decided again at every ready (see §4), so a plugin that stops holding something live becomes Normal on its next run, and the reverse.
+"Something live" is what only the plugin's process can serve: a panel in the bottom bar or the backdrop, the current sidebar tab, an open window, a playback or other high-frequency event listener, a filter chain, a stream. The class is decided again at every ready (see §4), so a plugin that stops holding something live becomes Normal on its next run, and the reverse. A background sidebar tab is not live (user ruling 2026-11-03, [sidebar-tabs.md](sidebar-tabs.md)): its `ui.mount` is recorded, the tab stays as a placeholder while the plugin stands by, and showing the tab wakes it.
 
 ## 3. States
 
@@ -58,7 +58,7 @@ A unit leaves `Deactivating` only when its process is reaped **and** the playbac
 
 ## 4. Standby and wake
 
-**First run.** A plugin without a recording is started once. At its ready the host checks, within 5 s, whether it holds something live. If it does, it is Resident and keeps running. If not, the host writes a **recording** of everything it registered (commands in registration order, bindings, settings pages, drop targets, resolvers, wake-event subscriptions) and stops it with reason `idle`. From then on, start-up replays the recording: the entry points appear without a process.
+**First run.** A plugin without a recording is started once. At its ready the host checks, within 5 s, whether it holds something live. If it does, it is Resident and keeps running. If not, the host writes a **recording** of everything it registered (commands in registration order, bindings, settings pages, drop targets, resolvers, wake-event subscriptions, a background sidebar tab) and stops it with reason `idle`. From then on, start-up replays the recording: the entry points appear without a process.
 
 **Wake.** A trigger on an entry point of a plugin in standby starts its process. The trigger waits in the unit's queue (its **backlog**) until the new process is ready, then is delivered in order.
 
@@ -66,7 +66,7 @@ A unit leaves `Deactivating` only when its process is reaped **and** the playbac
 | --- | --- | --- |
 | `commands.execute` (menu item, key, bar button) | interactive | notice "*name* is busy" / "… could not start" / "… is disabled" |
 | `source.resolveRequest` | interactive | the open fails at once with that text |
-| `drops.drop`, `ui.callback`, a settings page shown | interactive | dropped, with a diagnostic line |
+| `drops.drop`, `ui.callback`, a settings page shown, a sidebar tab shown | interactive | dropped, with a diagnostic line |
 | `packages.changed`, `bindings.changed`, `appearance.changed`, `resolvers.fileTypes` (wake events) | event | dropped silently: a woken plugin reads the current state anyway |
 
 Other events (`source.state`, `window.state`, playback events, …) never wake a plugin: they come too often, and a listener of one makes its plugin Resident. Wake events merge by name (the newest wins); a backlog holds at most 64 triggers. Wake events wake nothing during start-up and for 1 s after it settles. A start that takes longer than 400 ms shows "Starting *name*…".

@@ -485,6 +485,29 @@ impl Host {
                 self.menu_panels = menu::panels(&value);
                 value
             }
+            MenuMode::Tabs => {
+                // Every tab, in that window's tab order (sidebar-tabs.md).
+                let owners = match &self.floating {
+                    Some(floating) if floating.generation == self.menu_generation => {
+                        &floating.owners
+                    }
+                    _ => &self.shell_tabs,
+                };
+                let tabs = owners
+                    .iter()
+                    .filter_map(|owner| self.mounts.get(owner).map(|m| (*owner, m.title.clone())))
+                    .collect::<Vec<_>>();
+                let (origin, size) = menu_frame(window);
+                let value = menu::tabs_level(
+                    &tabs,
+                    self.policy.sidebar_active(),
+                    origin,
+                    size,
+                    self.menu_scroll.first().copied().unwrap_or(0.),
+                );
+                self.menu_panels = menu::panels(&value);
+                value
+            }
         };
         let write = apply_menu_levels(window, &mut self.menu_shown.borrow_mut(), &model)?;
         if debug_menu() {

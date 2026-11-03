@@ -48,8 +48,9 @@ pub struct Sidebar {
     pub width: f64,
 }
 
-/// At most this many plugin ids are kept in [`SidebarSlot::order`].
-pub const ORDER_LIMIT: usize = 64;
+/// At most this many plugin ids are kept in [`SidebarSlot::order`] (sidebar
+/// tabs have no cap, sidebar-tabs.md; the oldest go first past it).
+pub const ORDER_LIMIT: usize = 512;
 
 /// The sidebar slot, whichever panels it holds (panel-slots.md step 1):
 /// shown and floating as a whole, its current tab and the tab order (plugin
@@ -494,10 +495,10 @@ mod tests {
         assert_eq!(slot.order, ["vestra.playlist", "examples.panel-menu"]);
         assert_eq!(slot.position("examples.panel-menu"), 1);
         assert_eq!(slot.position("new.one"), usize::MAX);
-        for n in 0..100 {
+        for n in 0..ORDER_LIMIT + 10 {
             slot.remember(&format!("p{n}"));
         }
         assert_eq!(slot.order.len(), ORDER_LIMIT);
-        assert_eq!(slot.order.last().unwrap(), "p99");
+        assert_eq!(slot.order.last().unwrap(), &format!("p{}", ORDER_LIMIT + 9));
     }
 }

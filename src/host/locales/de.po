@@ -241,10 +241,10 @@ msgstr "Nächstes Einzelbild: {}"
 msgid "Previous frame: {}"
 msgstr "Vorheriges Einzelbild: {}"
 
-#: src/main.rs:140
+#: ui/sidebar-tabs.slint:150
 #, x-machine
-msgid "The sidebar holds at most {} tabs"
-msgstr "Die Seitenleiste fasst höchstens {} Tabs"
+msgid "All tabs"
+msgstr "Alle Tabs"
 
 #: src/main.rs:150
 #, x-machine

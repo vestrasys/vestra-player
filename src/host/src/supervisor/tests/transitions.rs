@@ -410,6 +410,41 @@ fn t13_first_run_classified_resident_stays_active() {
     assert!(terminates(&acts).is_empty());
 }
 
+// sidebar-tabs.md (user ruling 2026-11-03): twenty plugins whose only panel
+// is a sidebar tab. The host answers "live" only for the current tab's
+// (`sidebar_tabs::live`), so one is Resident and the nineteen background
+// tabs' plugins are Normal: each goes to standby, and an idle one later too.
+#[test]
+fn twenty_sidebar_tab_plugins_are_not_resident_unless_current() {
+    use crate::ui::{composition::Slot, sidebar_tabs};
+    let p = Profile::other_timers();
+    let mut sim = Sim::new(&p);
+    let current = Some(0);
+    let mut resident = 0;
+    for n in 0..20u64 {
+        let (u, pid) = sim.in_active(first_run(&format!("tab{n}")));
+        let live = sidebar_tabs::live(Slot::Sidebar, n, current);
+        let acts = sim.classified(pid, live);
+        if live {
+            assert_eq!(sim.class(u), Class::Resident);
+            resident += 1;
+        } else {
+            assert_ne!(sim.class(u), Class::Resident, "tab{n}");
+            assert_eq!(sim.st(u).then(), Some(Then::Standby), "tab{n}");
+            assert_eq!(terminates(&acts)[0].2, "idle");
+            sim.gone(pid);
+            assert!(matches!(sim.st(u), S::Standby { .. }), "tab{n}");
+        }
+    }
+    assert_eq!(resident, 1);
+    // A background tab's plugin woken and idle again stands by again.
+    let (u, pid) = sim.in_active(normal("woken"));
+    sim.after(p.idle);
+    let acts = sim.resources(pid, false);
+    assert_eq!(sim.st(u).then(), Some(Then::Standby));
+    assert_eq!(terminates(&acts)[0].2, "idle");
+}
+
 // Active --idle timer → Standby job → QueryResources → not busy--> Deactivating{Idle, then: Standby}; Checkpoint; Terminate{Idle, keep}
 spec! {
     fn t14_idle_not_busy_goes_to_standby(p) {

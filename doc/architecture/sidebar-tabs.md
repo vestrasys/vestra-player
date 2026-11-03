@@ -1,6 +1,6 @@
 # Sidebar tabs without a cap (design note)
 
-2026-11-03. Status: **proposal**, not implemented. Builds on [panel-slots.md](panel-slots.md) (step 1, sidebar tabs) and [supervisor.md](supervisor.md) (standby and wake).
+2026-11-03. Status: **implemented** (option B; see [Implementation](#implementation-2026-11-03) for where it differs from the proposal below). User ruling 2026-11-03: **only the foreground sidebar tab keeps its plugin active; background tabs do not keep plugins running**, so they stand by after idle like any Normal plugin and wake when their tab is shown (the MV3-style idle-stop ruling applied to panels). Builds on [panel-slots.md](panel-slots.md) (step 1, sidebar tabs) and [supervisor.md](supervisor.md) (standby and wake).
 
 ## Problem
 
@@ -14,7 +14,7 @@ Three things stand in the way today:
 
 ## Proposal
 
-1. **Strip and overflow.** The strip shows as many tabs as fit at a minimum readable width (80 px; today tabs shrink evenly from 105 px). The rest go into a `»` button at the right end, before detach and close. `»` opens the host's menu layer (`MenuView`, the same one the context menu uses). It lists every tab and checks the current one. The current tab is always visible: if it would overflow, it takes the last visible place. Order: the playlist, then the other built-ins, then the user's order. That order is already saved in `ui_state.sidebarSlot.order`. Picking a tab from `»` moves it to the last visible place and saves the new order, as VS Code does. Drag-to-reorder and pinning are left out of the first version.
+1. **Strip and overflow.** The strip shows as many tabs as fit at a minimum readable width (72 px, which fits 3 at the 317 px default width; tabs shrink evenly from 105 px). The rest go into a `»` button at the right end, before detach and close. `»` opens the host's menu layer (`MenuView`, the same one the context menu uses). It lists every tab and checks the current one. The current tab is always visible: if it would overflow, it takes the last visible place. Order: the playlist, then the other built-ins, then the user's order. That order is already saved in `ui_state.sidebarSlot.order`. Picking a tab from `»` moves it to the last visible place and saves the new order, as VS Code does. Drag-to-reorder and pinning are left out of the first version.
 2. **Only the first tabs are compiled.** The shell compiles the panels of the **front tabs**: the first 3 in strip order, plus the current tab. Every other tab is a **placeholder**: a title, with no Slint component in the shell and no process needed. Switching between front tabs stays a property flip. Picking a placeholder promotes it to the front, which costs one shell compile. The front set changes only when the user picks from `»` or a tab is added or removed, never on resize.
 3. **A background tab is not live.** If a plugin's sidebar tab is not the current one, `UiMount::record` returns the `ui.mount` call itself (`Recorded::Calls`) instead of `Live`. This holds whether the tab is compiled or a placeholder. The current tab, the bottom bar, the backdrop and a queued mount stay `Live`. A plugin whose only live thing was a background tab is therefore **Normal**: it stands by after 30 s idle, counts in the process budget, and memory pressure can stop it.
 4. **Placeholders come from the recording.** A plugin in standby keeps its tab because its recording replays the `ui.mount` call (slot, file, component, global, title), as it already does for commands and settings pages. Replaying adds the tab and compiles nothing.
@@ -95,31 +95,56 @@ The answer differs between the two cases.
 - The panel loses what it already loses today when its tab is left. The `if` branch already destroys the panel's element tree, so scroll position, focus and unsent text are gone. One loss is new: values the panel's own Slint code wrote into an `in-out` property of its bridge global. Today these survive in the shell until the next recompile, which any other plugin's install already triggers.
 - Callbacks from an old shell generation are dropped, as now.
 
-**2. The plugin stands by while its tab is in the background.** This is a behaviour change and needs a user ruling:
+**2. The plugin stands by while its tab is in the background.** This is a behaviour change; the user approved it on 2026-11-03 (see the status line):
 
 - Today a plugin with a sidebar panel never receives `runtime.stop` with reason `idle`. After the change it does, 30 s after its tab went to the background, if it holds nothing else live. Its process then exits.
 - When the user shows its tab again, the plugin starts afresh. `activate` runs, its `ui.mount` resolves `Panel.ready` again, and it must restore its view from storage; `plugin.storage.session` survives standby. Anything it kept only in memory is gone.
 - While it is in standby, its commands and keys wake it like those of any Normal plugin. Its tab is not brought to the front unless the command calls `panel.show()`.
 - A plugin that must keep working in the background, for example a list fed by playback events, stays Resident because of those listeners, as today. Only "has a sidebar panel" stops counting.
 
-This follows the existing rulings: lazy activation with MV3-style idle stop, with session storage keeping state. It also matches VS Code's webview views, which are destroyed when hidden unless they opt into `retainContextWhenHidden`. The ruling to ask for: **"a background sidebar tab does not keep its plugin running"**. If the user declines, case 1 still bounds the shell compile and fixes the strip, but the number of processes is not bounded.
+This follows the existing rulings: lazy activation with MV3-style idle stop, with session storage keeping state. It also matches VS Code's webview views, which are destroyed when hidden unless they opt into `retainContextWhenHidden`. The ruling asked for, and given: **"a background sidebar tab does not keep its plugin running"**.
 
 SDK documentation changes (patch release, no new API): `Panels.mount` (no `conflict` at 8 tabs), the remarks on `Panel.state` (a background tab may be unmounted and its plugin may stand by), and the plugin-lifetime page's list of what keeps a plugin running.
 
-## Files that would change
+## Implementation (2026-11-03)
+
+Where the code differs from the proposal above:
+
+- **Strip.** Tabs are at least 72 px wide (80 px fitted only 2 at the 317 px default width), so the default sidebar shows 3 tabs and `»`. Picking a tab from `»` does **not** reorder the tabs: the strip shows the first tabs and the current one in its last place, and the shell compiles the first 3 and the current one. The order is the playlist, the built-ins, then `ui_state.sidebarSlot.order` (now up to 512 ids). Pinning and dragging were left out (not cheap: the strip would need drag handling and a pinned set in `ui_state`).
+- **`»` menu.** `MenuMode::Tabs` in the host's menu layer (`menu::tabs_level`): every tab in tab order, the current one checked (radio), row tokens `t:<owner>`. It works in the shell and in the floating window.
+- **Compiled set.** `sidebar_tabs::compiled`: the front tabs (first 3 and the current one, at most `MAX_COMPILED` = 4) whose panel can be drawn. A placeholder replayed from a recording is never compiled. A plugin parked while its tab was compiled keeps that branch, with its last values: showing it is instant, and its plugin wakes. `apply_mounts` compiles the shell only when the compiled specs or the presence of the strip change. A tab coming or going outside the compiled set only updates the strip's titles.
+- **Branches.** The shell has `sidebar-shown` (the owner whose branch is drawn, -1 for none) beside `sidebar-active` (the strip's index). A tab without a compiled panel shows the list background until it is compiled.
+- **Switching** to a running plugin's tab outside the compiled set sets `shell_refresh`, and the next tick compiles the shell (`prepare_mount_tick`). A compile that fails is not retried for that tab until another tab becomes current. Switching to a placeholder calls `panel_shown` once (the `page_shown` trigger). The woken plugin is rekeyed (`UiMount::rekey`, `Policy::rekey`), and its `ui.mount` takes the tab over (a mount over a `recorded` one is allowed). At its ready, a placeholder it did not mount again is pruned.
+- **Recording.** `UiMount::record` returns `ui.mount` with slot, file, component, global, title and the plugin's name, without the initial properties, for a sidebar tab that is not the current one (`sidebar_tabs::live`). `checkpoint.rs` is unchanged.
+- **Parking** a plugin with a sidebar tab keeps its `Mount` (marked `recorded`), its place in the policy and the floating window (`Host::stop_run`). Disabling or uninstalling it removes the placeholder (`UiMount::revoke`). Placeholders replayed at start-up do not count against the mount queue's limit of 8.
+- **Floating window.** It compiles the same panels as the shell and opens again when that set changes.
+- **Not done here.** The SDK side: its test host still refuses a 9th tab, and its copy of the player's Chinese texts still has "The sidebar holds at most {} tabs", which the player no longer has (`npm run test:sdk` fails on that one entry until the SDK patch). The SDK documentation patch listed under API impact.
+
+### Switch cost (measured)
+
+Release build, headless, median of 7 runs, Ryzen 9 7940HS. The shell has the real playback bar and visualizer backdrop, and copies of the playlist panel as the compiled tabs. Twenty tabs in the strip.
+
+| Switch | Cost |
+| --- | --- |
+| Between compiled tabs (the front tabs and the current one) | 1.0–1.3 ms (a property change) |
+| To a running plugin's tab outside the compiled set | one shell compile: 212–248 ms with 4 compiled panels (137 ms with 1) |
+| To a placeholder (plugin in standby) | the plugin's start (about 0.2 s), then the same compile when its mount arrives |
+
+### Files
 
 | File (`src/host/`) | Change |
 | --- | --- |
-| `src/ui/slot_claims.rs`, `src/host/rpc.rs`, `src/host/lifecycle.rs` | remove `MAX_SIDEBAR_TABS` and `sidebar_full`; keep one panel each for the bottom bar and the backdrop |
-| `src/capabilities/ui_mount.rs` | no cap; `record` returns the call for a background tab; `replay`, `rekey` and `prune` for placeholders; a woken run's mount takes over its tab; `setMount` on a placeholder |
-| `src/host/mounts.rs` | compile the front set only; placeholders kept as a `Mount` without a compiled branch |
-| `src/host/window.rs` | `tab_order` over mounted and recorded tabs; the front set; picking a tab → promote, or `panel_shown` |
-| `src/host/supervisor/mod.rs` | `panel_shown(owner)`, modelled on `page_shown` |
-| `src/ui/composition.rs` | `sidebar_content` takes the front set and maps each branch to its index among all tabs; the floating window likewise |
-| `ui/sidebar-tabs.slint` | minimum width, number of tabs that fit, `»` button |
-| `src/ui/window_state.rs`, `src/ui/ui_state.rs` | placeholders in `Policy.sidebar`; the order saved for every tab |
-| docs | `panel-slots.md`, `supervisor.md` §2 ("something live"), the SDK pages above |
+| `src/ui/sidebar_tabs.rs` (new) | tab order, front and compiled sets, `live`, `need`, the recorded call; tests (20 tabs → ≤ 4 compiled, 1 live, order persistence, wake vs compile) |
+| `src/host/mounts.rs` | `apply_mounts` / `compile_shell`: compile only when the compiled set changes; `shell_refresh` |
+| `src/host/window.rs` | `tab_order` via `sidebar_tabs`, `tab_demand` (wake or compile the current tab), `sidebar-shown`, floating window with the compiled set, `sidebar-overflow` |
+| `src/capabilities/ui_mount.rs` | no cap; `record`, `rekey`, `revoke`, `prune`, `replay`; take-over of a placeholder; `setMount` on an uncompiled tab stores only |
+| `src/host/lifecycle.rs`, `src/host/rpc.rs`, `src/ui/slot_claims.rs` | parked tabs kept; `sidebar_full` and `MAX_SIDEBAR_TABS` removed |
+| `src/host/supervisor/mod.rs` | `panel_shown` |
+| `src/host/menus.rs`, `src/host/handle.rs`, `src/host/events.rs`, `src/ui/menu.rs` | the `»` menu (`MenuMode::Tabs`, `Token::Tab`, `SidebarOverflow`) |
+| `src/ui/composition.rs` | branches by owner, `*_tabbed` sources (strip and column with no compiled panel) |
+| `ui/sidebar-tabs.slint` | 72 px minimum, `»` button, current tab in the last place |
+| `src/ui/window_state.rs`, `src/ui/ui_state.rs` | `Policy::rekey`; order limit 512 |
+| `locales/*` | "All tabs" replaces "The sidebar holds at most {} tabs" |
+| `src/supervisor/tests/transitions.rs` | twenty sidebar-tab plugins: one Resident (the current tab's), nineteen in standby, an idle woken one parks again |
 
-Not changed: `host/supervisor/checkpoint.rs` (its format), the supervisor core, and the wire protocol.
-
-**Estimate:** about 700–1000 lines of host code and tests, 3–4 days for one maintainer. On top of that: a hardware check (switching, `»`, waking from standby, detach, the fullscreen overlay, 20 dummy sidebar plugins under the process budget) and an SDK documentation patch. All of it ships in one host release.
+Not covered by an automated test: the host-level path end to end (park, replay, wake by a tab, take-over), because headless hosts refuse mounts and these tests do not open the player GUI. A hardware check is still needed: switching, `»`, waking from standby, detach, the fullscreen overlay, and 20 dummy sidebar plugins under the process budget.

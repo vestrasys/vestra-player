@@ -36,8 +36,8 @@ use crate::playback::{
 use crate::process::{Plugin, StopReason, shared_runner};
 use crate::supervisor::{Pid, Supervisor, Trigger, activation};
 use crate::ui::{
-    bar_buttons, composition, drops, menu, pip, settings_window, slot_claims, ui_image, ui_state,
-    ui_values, view, window_control, window_state,
+    bar_buttons, composition, drops, menu, pip, settings_window, sidebar_tabs, slot_claims,
+    ui_image, ui_state, ui_values, view, window_control, window_state,
 };
 use crate::{
     bindings, capabilities, commands, core_actions, i18n, input_trace, open_files, platform, power,
@@ -99,12 +99,21 @@ pub(crate) struct Mount {
     pub(crate) manifest: String,
     /// A built-in plugin's panel: its tab comes first.
     pub(crate) builtin: bool,
+    /// A sidebar tab no process holds (sidebar-tabs.md): replayed from its
+    /// plugin's recording, or kept when its plugin stood by. Showing it
+    /// wakes the plugin, whose `ui.mount` takes it over.
+    pub(crate) recorded: bool,
+    /// The `ui.mount` call a recording keeps for it
+    /// (`sidebar_tabs::recorded_call`).
+    pub(crate) call: Value,
 }
 /// The detached sidebar's own window (C14).
 pub(crate) struct Floating {
     pub(crate) instance: slint_interpreter::ComponentInstance,
     /// The sidebar's panels when it opened, in tab order.
     pub(crate) owners: Vec<u64>,
+    /// The ones compiled into it (the shell's compiled sidebar panels).
+    pub(crate) compiled: Vec<u64>,
     pub(crate) generation: u64,
     /// Its native window, for the pointer at a file drop.
     pub(crate) native: Option<platform::HostWindowId>,
@@ -133,6 +142,8 @@ pub(crate) enum MenuMode {
     Main,
     /// A panel menu (C11): owner and its command ids, `None` = separator.
     Panel(u64, Vec<Option<String>>),
+    /// The sidebar's overflow menu (`»`, sidebar-tabs.md): every tab.
+    Tabs,
 }
 /// One wheel step per this many logical pixels of accumulated scroll.
 pub(crate) const WHEEL_STEP: f64 = 40.;
@@ -212,6 +223,20 @@ pub(crate) struct Host {
     /// The sidebar's panels in the current shell, in its tab order (its
     /// `sidebar-active` indexes this; the policy may already have dropped one).
     pub(crate) shell_tabs: Vec<u64>,
+    /// What the current shell was compiled with: its specs (the sidebar's
+    /// compiled panels among them) and whether it draws the tab strip.
+    pub(crate) shell_specs: Vec<composition::CompileSpec>,
+    pub(crate) shell_tabbed: bool,
+    /// The sidebar tabs compiled into the current shell: owner → the owner
+    /// its branch was compiled under (different after a parked plugin woke
+    /// under a new owner, until its new mount compiles it).
+    pub(crate) shell_compiled: BTreeMap<u64, u64>,
+    /// The current tab needs its panel compiled (`prepare_mount_tick`).
+    pub(crate) shell_refresh: bool,
+    /// The tab whose compile failed: not tried again until another is current.
+    pub(crate) refresh_failed: Option<u64>,
+    /// The placeholder tab whose plugin was woken for being shown.
+    pub(crate) tab_woken: Option<u64>,
     /// The bottom bar was shown at the last tick.
     pub(crate) bottom_shown: bool,
     pub(crate) native_window: Option<platform::HostWindowId>,

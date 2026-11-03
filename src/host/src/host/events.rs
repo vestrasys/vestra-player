@@ -30,6 +30,8 @@ pub(crate) enum Event {
     /// The host's sidebar tab strip (shell or floating window generation): a
     /// tab clicked (its index), the detach/attach button, the close button.
     SidebarTab(u64, usize),
+    /// The strip's `»` (sidebar-tabs.md): the overflow menu's origin, logical px.
+    SidebarOverflow(u64, f64, f64),
     SidebarDetach(u64),
     SidebarClose(u64),
     /// IA-CORE-12: a double click on the video during picture-in-picture.
