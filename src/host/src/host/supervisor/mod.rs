@@ -41,6 +41,15 @@
 //! machine's physical memory and the memory pressure source
 //! (`memory.rs`): over the budget or under pressure, idle third-party
 //! plugins go to standby through the idle timer's Standby job.
+//!
+//! B6 (§17.15): on-demand start is everyone's. `VESTRA_LAZY` is gone: the
+//! player always runs the design's values (`Tunables::target`: idle 30 s,
+//! `TimeoutStartSec` 60 s, `TimeoutStopSec` 5 s, a 5 min cap on a request
+//! awaiting the plugin's reply, a resident plugin never in standby) with
+//! the B3–B5 limits, the spawn thread and the memory pressure source; the
+//! shared runner waits at least 30 s without a member before it exits. The
+//! off path (`OnDemand::enabled` false, `Tunables::legacy()`) is no longer
+//! reachable from the player; B7 removes it.
 use super::*;
 use crate::capabilities;
 use crate::supervisor::{Action, Delivery, Trigger, Tunables, UnitId, WorkKind};
@@ -56,13 +65,18 @@ pub(crate) mod worker;
 
 pub(crate) use standby::{Held, Origin};
 
-/// How long a park waits for its process (lazy activation record §5.4
-/// item 6; disable and quit keep 300 ms): the core's standby grace
-/// (`Policy::standby_grace`), which `Action::Terminate` carries.
+/// How long a park waits for its process: the core's standby grace
+/// (`Policy::standby_grace`), which `Action::Terminate` carries. 2 s until
+/// B6 (lazy activation record §5.4 item 6), `TimeoutStopSec` 5 s since, as
+/// a disable, reload, uninstall or upgrade (§7.2, A15d).
 #[cfg(test)]
-const PARK_WAIT: Duration = Duration::from_secs(2);
-/// `VESTRA_IDLE_MS` when unset (the core's `Tunables::idle_timeout`).
-const IDLE_MS: u64 = 60_000;
+const PARK_WAIT: Duration = Duration::from_secs(5);
+/// `VESTRA_IDLE_MS` when unset (the core's `Tunables::idle_timeout`): 60 s
+/// until B6, Chrome MV3's 30 s since (§11).
+const IDLE_MS: u64 = 30_000;
+/// The shortest time the shared runner stays without a member before it
+/// exits (§11 "≥ 30 s"; `runner_idle_exit`).
+const RUNNER_IDLE_EXIT_MIN: u64 = 30_000;
 /// What a unit in standby is woken by (the recorded entries' triggers);
 /// held for its ready while it starts, answered when it cannot (§4.6).
 pub(crate) const TRIGGERS: &[&str] = &[
@@ -113,7 +127,9 @@ enum Busy {
 /// core's decisions need of the Host and the core does not keep.
 #[derive(Default)]
 pub(crate) struct OnDemand {
-    /// `VESTRA_LAZY=1` (the core's `Tunables::on_demand`).
+    /// On-demand start (the core's `Tunables::on_demand`): always on in the
+    /// player since B6 (`from_env`; was `VESTRA_LAZY=1`). Off only in unit
+    /// tests of the old path, which B7 removes with this field.
     pub enabled: bool,
     /// Units in standby by holder: what their kept registrations need.
     held: BTreeMap<u64, Held>,
@@ -181,7 +197,9 @@ pub(crate) struct OnDemand {
 }
 impl OnDemand {
     pub fn from_env() -> Self {
-        let enabled = std::env::var("VESTRA_LAZY").as_deref() == Ok("1");
+        // B6 (§15 B6): on-demand start for everyone; `VESTRA_LAZY` is no
+        // longer read.
+        let enabled = true;
         let tests = probe::test_executes(&std::env::var("VESTRA_TEST_EXECUTE").unwrap_or_default());
         Self {
             enabled,
@@ -197,18 +215,15 @@ impl OnDemand {
     }
 }
 
-/// The Host's supervisor, with on-demand start as `VESTRA_LAZY` and
-/// `VESTRA_IDLE_MS` say (§17.13). With on-demand start on, the B3 values
-/// (§17.12: start-job limits, priorities, a bounded backlog with explicit
-/// answers, start failures that keep entry points), B4's (restart
-/// policy, backoff, start limits, the heap cap, crash notices) and B5's
-/// process budget for this machine's physical memory (§17.14; memory
-/// pressure is `memory.rs`'s, polled in `on_demand_tick`). Off, B4's
-/// alone on `Tunables::legacy()` (§15 B4 names no `VESTRA_LAZY`, as B3
-/// did): a start still ends at its spawn there (`start_job_ends_at_spawn`,
-/// B3's bookkeeping, only with on-demand start until B6). Wake events wake
-/// nothing until start-up settled (`OnDemand::settled`). The seed feeds
-/// the start retries' jitter.
+/// The Host's supervisor (B6, §17.15): the design's values for everyone,
+/// `Tunables::target` for this machine (B3's start-job limits for its
+/// cores, B4's restart policy, B5's process budget for its physical
+/// memory, and B6's timings), with the idle time from `VESTRA_IDLE_MS`
+/// (30 s when unset; tests shorten it). Memory pressure is `memory.rs`'s,
+/// polled in `on_demand_tick`. Wake events wake nothing until start-up
+/// settled (`OnDemand::settled`). The seed feeds the start retries'
+/// jitter. Only a unit test's `OnDemand` with on-demand start off still
+/// gets the old path, B4's values on `Tunables::legacy()` (removed in B7).
 pub(crate) fn new(on_demand: &OnDemand) -> Supervisor<Value> {
     let idle_timeout = std::env::var("VESTRA_IDLE_MS")
         .ok()
@@ -217,10 +232,7 @@ pub(crate) fn new(on_demand: &OnDemand) -> Supervisor<Value> {
     let base = if on_demand.enabled {
         let cores = std::thread::available_parallelism().map_or(2, std::num::NonZero::get);
         let physical = memory::physical_mib();
-        let tunables = Tunables::legacy()
-            .with_b3(cores)
-            .with_b4()
-            .with_b5(physical);
+        let tunables = Tunables::target(cores, physical);
         diag!(
             "lazy: on, idle after {idle_timeout} ms, {} starts at once ({cores} cores), {} third-party processes ({physical} MiB)",
             tunables.max_active.unwrap_or_default(),
@@ -243,6 +255,14 @@ pub(crate) fn new(on_demand: &OnDemand) -> Supervisor<Value> {
     );
     supervisor.set_muted(true);
     supervisor
+}
+
+/// How long the shared runner stays without a member before it exits (A17,
+/// §6.2, §7.4; B6): at least the idle time and at least 30 s, so built-ins
+/// going to standby one after another do not stop and start it again (1 s
+/// until B6).
+pub(crate) fn runner_idle_exit(supervisor: &Supervisor<Value>) -> u64 {
+    supervisor.tunables().idle_timeout.max(RUNNER_IDLE_EXIT_MIN)
 }
 
 /// The JavaScript-safe integer bound of owner identities on the wire.
@@ -1291,14 +1311,11 @@ mod tests {
         // `STARTING_OSD_MS`, `QUIET_AFTER_START_MS`, `STOP_WAIT_MS`.
         assert_eq!(legacy.first_run_limit, Some(8));
         assert_eq!(legacy.classify_wait, 5_000);
-        assert_eq!(IDLE_MS, 60_000);
-        assert_eq!(legacy.idle_timeout, IDLE_MS);
+        assert_eq!(legacy.idle_timeout, 60_000);
         assert_eq!(legacy.idle_check, 250);
         assert_eq!(legacy.starting_notice, 400);
         assert_eq!(legacy.quiet_after_start, 1_000);
         assert_eq!(legacy.stop_wait, 20_000);
-        // `PARK_WAIT`: the grace the core gives a stop for standby.
-        assert_eq!(PARK_WAIT, Duration::from_secs(2));
         assert_eq!(
             crate::supervisor::grace(
                 legacy.policy(crate::supervisor::Class::Normal),
@@ -1306,6 +1323,26 @@ mod tests {
                 crate::supervisor::Then::Standby
             ),
             2_000
+        );
+        // §15 B6: the player's values flipped to the design's. The idle time
+        // is 30 s (`IDLE_MS`, was 60 s) and `PARK_WAIT`, the grace the core
+        // gives a stop for standby, 5 s (was 2 s); the rest as above.
+        let target = Tunables::target(16, 16_384);
+        assert_eq!(IDLE_MS, 30_000);
+        assert_eq!(target.idle_timeout, IDLE_MS);
+        assert_eq!(target.classify_wait, legacy.classify_wait);
+        assert_eq!(target.idle_check, legacy.idle_check);
+        assert_eq!(target.starting_notice, legacy.starting_notice);
+        assert_eq!(target.quiet_after_start, legacy.quiet_after_start);
+        assert_eq!(target.stop_wait, legacy.stop_wait);
+        assert_eq!(PARK_WAIT, Duration::from_secs(5));
+        assert_eq!(
+            crate::supervisor::grace(
+                target.policy(crate::supervisor::Class::Normal),
+                crate::supervisor::StopReason::Idle,
+                crate::supervisor::Then::Standby
+            ),
+            5_000
         );
         assert_eq!(
             TRIGGERS,
@@ -1316,8 +1353,51 @@ mod tests {
                 "ui.callback"
             ]
         );
-        let on_demand = OnDemand::default();
-        assert!(!on_demand.enabled);
+        // §15 B6: on-demand start is everyone's; only a unit test's default
+        // `OnDemand` has it off (the old path, removed in B7).
+        assert!(!OnDemand::default().enabled);
+        assert!(OnDemand::from_env().enabled);
+    }
+
+    /// §15 B6 (A17): the shared runner waits at least 30 s without a member
+    /// (was 1 s), and at least the idle time.
+    #[test]
+    fn b6_runner_idle_exit_is_at_least_30_s_and_the_idle_time() {
+        let on_demand = OnDemand {
+            enabled: true,
+            ..OnDemand::default()
+        };
+        let supervisor = new(&on_demand);
+        assert!(runner_idle_exit(&supervisor) >= RUNNER_IDLE_EXIT_MIN);
+        assert!(runner_idle_exit(&supervisor) >= supervisor.tunables().idle_timeout);
+        let mut shorter = supervisor.tunables().clone();
+        shorter.idle_timeout = 500;
+        assert_eq!(
+            runner_idle_exit(&Supervisor::new(shorter, 1)),
+            RUNNER_IDLE_EXIT_MIN
+        );
+        let mut longer = supervisor.tunables().clone();
+        longer.idle_timeout = 600_000;
+        assert_eq!(runner_idle_exit(&Supervisor::new(longer, 1)), 600_000);
+    }
+
+    /// §15 B6: the player's supervisor runs the design's values
+    /// (`Tunables::target`) whatever the environment says.
+    #[test]
+    fn b6_the_player_runs_the_target_values() {
+        let supervisor = new(&OnDemand::from_env());
+        let t = supervisor.tunables();
+        let cores = std::thread::available_parallelism().map_or(2, std::num::NonZero::get);
+        let target = Tunables::target(cores, memory::physical_mib());
+        assert!(t.on_demand);
+        assert_eq!(t.normal, target.normal);
+        assert_eq!(t.resident, target.resident);
+        assert_eq!(t.builtin, target.builtin);
+        assert_eq!(t.normal.start_timeout, 60_000);
+        assert_eq!(t.normal.stop_grace, 5_000);
+        assert_eq!(t.normal.request_timeout, Some(300_000));
+        assert!(!t.resident_idle_standby);
+        assert_eq!(t.max_active, target.max_active);
     }
 
     /// `Lazy.parked_ids` (B2a's `parked_ids_follow_park_and_unpark`, ported

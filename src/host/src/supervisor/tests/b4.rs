@@ -524,10 +524,13 @@ fn sr_resident_and_builtin_never_land_in_standby_on_start_failure() {
     }
 }
 
-// §7.3 StartTimeout: terminate, then retry; the retry delay counts from the
-// reap (Q24).
+// §7.3 StartTimeout: terminate; not retried (coordinator ruling in the B6
+// review, supervisor.md §17.15, amending §17.6 F1 and §17.13: start retries
+// are for a process that could not be created; a start that times out is a
+// stuck plugin). The click held for it is answered at the timeout, and no
+// second spawn follows the reap within the retries' 1.1 s.
 #[test]
-fn sr_start_timeout_retries_from_the_reap() {
+fn sr_start_timeout_is_not_retried() {
     let mut sim = b4();
     let (u, holder) = sim.in_standby(normal("a"));
     sim.settle();
@@ -542,20 +545,17 @@ fn sr_start_timeout_retries_from_the_reap() {
         terminates(&acts),
         vec![(FAILURE_GRACE, terminates(&acts)[0].1, "failed".into(), pid)]
     );
-    assert!(answers(&acts).is_empty(), "retries left: the click waits");
+    assert_eq!(answers(&acts), vec![(1, Why::CouldNotStart)]);
     sim.after(200);
     let reap = sim.now;
     sim.gone(pid);
-    // The retry waits in `AutoRestart` or in standby with its Start job
-    // (F1: "lands in Standby only with a standby checkpoint"); either way
-    // the spawn comes 250 ms (+ ≤ 10 %) after the reap.
-    assert!(sim.job(u).is_some(), "the Start job lives on");
-    assert!(spawns(&sim.at(reap + 249)).is_empty(), "{:?}", sim.st(u));
-    assert_eq!(spawns(&sim.at(reap + 275)).len(), 1, "{:?}", sim.st(u));
+    assert!(spawns(&sim.at(reap + 1_100)).is_empty(), "{:?}", sim.st(u));
 }
 
-// B3 ruling 1 with B4's retries: a wake whose starts all time out keeps its
-// entry points in `Standby{hold_until}` and answers the click.
+// B3 ruling 1 with B4's class policy (Normal: `Restart=` on the next
+// trigger): a wake whose start times out keeps its entry points in
+// `Standby{hold_until}` and answers the click, after one try (B6 review
+// ruling, §17.15: no start retry after a timeout; was: after four).
 #[test]
 fn sr_start_timeouts_exhausted_keep_entry_points() {
     let mut sim = b4();
@@ -564,19 +564,13 @@ fn sr_start_timeouts_exhausted_keep_entry_points() {
     sim.wake(holder, cmd(1));
     let mark = sim.log.len();
     sim.run();
-    for attempt in 0..4 {
-        let pid = match sim.st(u) {
-            S::Spawn(pid) => pid,
-            other => panic!("attempt {attempt}: {other:?}"),
-        };
-        sim.spawned(pid, true);
-        sim.after(START);
-        sim.gone(pid);
-        if attempt < 3 {
-            // Retry 250 / 500 / 1000 ms (+ ≤ 10 %) after the reap.
-            sim.after(1_100);
-        }
-    }
+    let pid = match sim.st(u) {
+        S::Spawn(pid) => pid,
+        other => panic!("{other:?}"),
+    };
+    sim.spawned(pid, true);
+    sim.after(START);
+    sim.gone(pid);
     assert!(
         matches!(
             sim.st(u),
@@ -590,6 +584,7 @@ fn sr_start_timeouts_exhausted_keep_entry_points() {
     );
     assert!(!has(&sim.log[mark..], "Revoke"));
     assert_eq!(answers(&sim.log[mark..]), vec![(1, Why::CouldNotStart)]);
+    assert_eq!(spawns(&sim.log[mark..]).len(), 1, "one try");
 }
 
 // `start_job_ends_at_spawn` off (§17.7: "a start retry is the start job's"):

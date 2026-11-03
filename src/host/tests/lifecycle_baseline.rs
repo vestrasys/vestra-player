@@ -105,10 +105,21 @@ impl Root {
         let entry = builtin(&self.path().join("plugins"), id, capabilities, main);
         self.entries.push(entry);
     }
+    /// `builtin` for a `main` that listens to the player (`RESIDENT`): with
+    /// the capabilities that needs.
+    fn builtin_resident(&mut self, id: &str, capabilities: &[&str], main: &str) {
+        let mut capabilities = capabilities.to_vec();
+        capabilities.extend(RESIDENT_CAPABILITIES);
+        self.builtin(id, &capabilities, main);
+    }
     /// Installs third-party `id` as instance `n` (its data directory is
     /// `data/<guid>`).
     fn install(&mut self, n: usize, id: &str, main: &str) -> PathBuf {
         self.install_with(n, id, &[], main)
+    }
+    /// `install` for a `main` that listens to the player (`RESIDENT`).
+    fn install_resident(&mut self, n: usize, id: &str, main: &str) -> PathBuf {
+        self.install_with(n, id, &RESIDENT_CAPABILITIES, main)
     }
     /// `install` with these manifest capabilities.
     fn install_with(&mut self, n: usize, id: &str, capabilities: &[&str], main: &str) -> PathBuf {
@@ -149,7 +160,6 @@ impl Root {
             .env("VESTRA_PLUGIN_DATA", self.path().join("data"));
         for key in [
             "VESTRA_SHARED",
-            "VESTRA_LAZY",
             "VESTRA_IDLE_MS",
             "VESTRA_TEST_EXECUTE",
             "VESTRA_TEST_PARK",
@@ -170,6 +180,16 @@ impl Root {
         (stderr, took)
     }
 }
+
+/// §15 B6: on-demand start is everyone's (`VESTRA_LAZY` is gone), so a
+/// plugin that holds nothing live goes to standby at its first ready. The
+/// tests below that pinned running processes with on-demand start off
+/// (`VESTRA_LAZY=0`) keep their plugins running this way: a listener of the
+/// player's state makes a plugin resident, and a resident plugin never
+/// stands by (§3.3). Inside `activate(plugin)`.
+const RESIDENT: &str = "plugin.player.onChange(() => {});\n";
+/// What `RESIDENT` needs in the manifest.
+const RESIDENT_CAPABILITIES: [&str; 2] = ["events", "playback.read"];
 
 /// The position of `text` in `log`, or a panic with the log.
 fn at(log: &str, text: &str) -> usize {
@@ -197,11 +217,7 @@ fn held_commands_reach_a_woken_plugin_in_order_at_its_ready() {
              plugin.commands.add({{ id, path: [\"Tools\", id], run: () => console.error(`{TWO} ran ${{id}}`) }});\n}}\n"
         ),
     );
-    let lazy = [
-        ("VESTRA_SHARED", "1"),
-        ("VESTRA_LAZY", "1"),
-        ("VESTRA_IDLE_MS", "500"),
-    ];
+    let lazy = [("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "500")];
     // A first run: lazy at its ready, parked at once, recorded.
     let first = root.run(4, &lazy);
     at(&first, &format!("lazy: {TWO} parked (2 recorded calls)"));
@@ -302,9 +318,10 @@ fn fixture(id: &str, version: &str, cleanup: Cleanup, delay_ms: u32, extra: &str
     )
 }
 
-/// `fixture` with a quick cleanup and no delay.
+/// `fixture` with a quick cleanup and no delay, resident (`RESIDENT`, §15
+/// B6: it stays running; installed with `install_resident`).
 fn tracked(id: &str, version: &str) -> String {
-    fixture(id, version, Cleanup::Quick, 0, "")
+    fixture(id, version, Cleanup::Quick, 0, RESIDENT)
 }
 
 const RELOAD: &str = "aa.fixture-reload";
@@ -325,16 +342,16 @@ const MANAGER: &str = "vestra.fixture-manager";
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn own_process_restarts_wait_for_the_old_process_and_session_values_follow_the_reason() {
     let mut root = Root::new();
-    root.install(1, RELOAD, &tracked(RELOAD, "1.0.0"));
-    root.install(2, UPGRADE, &tracked(UPGRADE, "1.0.0"));
-    root.install(3, TOGGLE, &tracked(TOGGLE, "1.0.0"));
-    let gone_data = root.install(4, GONE, &tracked(GONE, "1.0.0"));
+    root.install_resident(1, RELOAD, &tracked(RELOAD, "1.0.0"));
+    root.install_resident(2, UPGRADE, &tracked(UPGRADE, "1.0.0"));
+    root.install_resident(3, TOGGLE, &tracked(TOGGLE, "1.0.0"));
+    let gone_data = root.install_resident(4, GONE, &tracked(GONE, "1.0.0"));
     let candidate = root.path().join("candidates").join(UPGRADE);
     package(
         &candidate,
         UPGRADE,
         "2.0.0",
-        &[],
+        &RESIDENT_CAPABILITIES,
         &tracked(UPGRADE, "2.0.0"),
     );
     let candidate = serde_json::to_string(&candidate.to_string_lossy()).unwrap();
@@ -343,7 +360,7 @@ fn own_process_restarts_wait_for_the_old_process_and_session_values_follow_the_r
         &[],
         "export default function activate() {}\n",
     );
-    root.builtin(
+    root.builtin_resident(
         MANAGER,
         &["plugins.manage"],
         &format!(
@@ -351,6 +368,7 @@ fn own_process_restarts_wait_for_the_old_process_and_session_values_follow_the_r
              const code = (promise) => promise.then(() => \"ok\", (e) => e.code);\n\
              const sleep = (ms) => new Promise((done) => setTimeout(done, ms));\n\
              export default function activate(plugin) {{\n\
+             {RESIDENT}\
              const p = plugin.packages;\n\
              setTimeout(async () => {{\n\
              const first = code(p.reload(\"{RELOAD}\"));\n\
@@ -374,7 +392,9 @@ fn own_process_restarts_wait_for_the_old_process_and_session_values_follow_the_r
              }}, 1500);\n}}\n"
         ),
     );
-    let log = root.run(10, &[("VESTRA_SHARED", "0"), ("VESTRA_LAZY", "0")]);
+    // §15 B6: on-demand start for everyone (no `VESTRA_LAZY=0` any more);
+    // the plugins are resident, so they run as they did with it off.
+    let log = root.run(14, &[("VESTRA_SHARED", "0")]);
     at(&log, &format!("{MANAGER} done"));
     for expected in [
         format!("{MANAGER} reload ok again busy disable busy"),
@@ -388,7 +408,7 @@ fn own_process_restarts_wait_for_the_old_process_and_session_values_follow_the_r
         format!("{MANAGER} uninstall committed"),
         // The new instance loaded once the old process was gone (`overlaps
         // []`, which a cleanup marker alone could not show: the 100 ms
-        // cleanup ends within the 300 ms grace either way); a reload and an
+        // cleanup ends within the grace either way: 300 ms before B6, 5 s since); a reload and an
         // upgrade keep the session values.
         format!("{RELOAD} 1.0.0 stopped for reload"),
         format!("{RELOAD} 1.0.0 start found [started finished] mark set overlaps []"),
@@ -452,14 +472,7 @@ fn a_parked_plugin_is_listed_running_idle_and_its_park_announces_nothing() {
              setTimeout(async () => console.error(`{WATCH} listed ${{shown(await plugin.packages.list())}}`), 3500);\n}}\n"
         ),
     );
-    let log = root.run(
-        5,
-        &[
-            ("VESTRA_SHARED", "1"),
-            ("VESTRA_LAZY", "1"),
-            ("VESTRA_IDLE_MS", "500"),
-        ],
-    );
+    let log = root.run(5, &[("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "500")]);
     let parked = at(&log, &format!("lazy: {IDLE} parked"));
     let listed = at(&log, &format!("{WATCH} listed running idle"));
     assert!(parked < listed, "{log}");
@@ -496,14 +509,7 @@ fn b2a_a_failed_spawn_gives_its_activation_place_back() {
     }
     let node = root.path().join("no-node").join("node.exe");
     let node = node.to_string_lossy();
-    let log = root.run(
-        6,
-        &[
-            ("VESTRA_SHARED", "0"),
-            ("VESTRA_LAZY", "0"),
-            ("VESTRA_NODE", node.as_ref()),
-        ],
-    );
+    let log = root.run(6, &[("VESTRA_SHARED", "0"), ("VESTRA_NODE", node.as_ref())]);
     let failures = log
         .lines()
         .filter(|line| line.contains("failed to start: "))
@@ -738,34 +744,40 @@ const TWICE: &str = "aa.fixture-twice";
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn b2b_disable_then_enable_waits_for_the_old_process() {
     let mut root = Root::new();
-    root.install(
+    // §15 B6: both resident (they stay running, as with on-demand start off
+    // before), and 6 s between toggles: a disable now gives the endless
+    // cleanup 5 s (`TimeoutStopSec`, was 300 ms) before it is killed, and a
+    // toggle while the last one's enable still waits would merge with it.
+    root.install_resident(
         1,
         TWICE,
         &format!(
             "{ALIVE}console.error(`{TWICE} pid ${{process.pid}} overlaps [${{others}}]`);\n\
              export default function activate(plugin) {{\n\
+             {RESIDENT}\
              plugin.onDispose(() => new Promise(() => {{}}));\n}}\n"
         ),
     );
-    root.builtin(
+    root.builtin_resident(
         MANAGER,
         &["plugins.manage"],
         &format!(
             "const sleep = (ms) => new Promise((done) => setTimeout(done, ms));\n\
              export default function activate(plugin) {{\n\
+             {RESIDENT}\
              setTimeout(async () => {{\n\
              for (let i = 0; i < 3; i++) {{\n\
              const off = plugin.packages.setEnabled(\"{TWICE}\", false);\n\
              const on = plugin.packages.setEnabled(\"{TWICE}\", true);\n\
              const codes = await Promise.all([off, on].map((p) => p.then(() => \"ok\", (e) => e.code)));\n\
              console.error(`{MANAGER} toggled ${{codes}}`);\n\
-             await sleep(1500);\n\
+             await sleep(6000);\n\
              }}\n\
              console.error(`{MANAGER} done`);\n\
              }}, 1500);\n}}\n"
         ),
     );
-    let log = root.run(9, &[("VESTRA_SHARED", "0"), ("VESTRA_LAZY", "0")]);
+    let log = root.run(24, &[("VESTRA_SHARED", "0")]);
     at(&log, &format!("{MANAGER} done"));
     assert_eq!(
         log.matches(&format!("{MANAGER} toggled ok,ok")).count(),
@@ -812,27 +824,38 @@ fn b2b_uninstall_then_reinstall_waits_for_the_old_process() {
     let main = format!(
         "{ALIVE}console.error(`{AGAIN} pid ${{process.pid}} overlaps [${{others}}]`);\n\
          export default function activate(plugin) {{\n\
+         {RESIDENT}\
          plugin.onDispose(() => new Promise(() => {{}}));\n}}\n"
     );
-    root.install(1, AGAIN, &main);
+    // §15 B6: resident (it stays running, as with on-demand start off
+    // before); each uninstall now gives the endless cleanup 5 s
+    // (`TimeoutStopSec`, was 300 ms) before the kill, so the run is longer.
+    root.install_resident(1, AGAIN, &main);
     // A digest of its own each time: the uninstalled one's directory may
     // still be being removed by the library thread (an install of the same
     // digest would be `busy` then).
     let candidates = (0..3)
         .map(|n| {
             let candidate = root.path().join("candidates").join(format!("{AGAIN}-{n}"));
-            package(&candidate, AGAIN, "1.0.0", &[], &format!("{main}// {n}\n"));
+            package(
+                &candidate,
+                AGAIN,
+                "1.0.0",
+                &RESIDENT_CAPABILITIES,
+                &format!("{main}// {n}\n"),
+            );
             js_path(&candidate)
         })
         .collect::<Vec<_>>()
         .join(", ");
-    root.builtin(
+    root.builtin_resident(
         MANAGER,
         &["plugins.manage"],
         &format!(
             "const sleep = (ms) => new Promise((done) => setTimeout(done, ms));\n\
              const log = (text) => console.error(`{MANAGER} ${{text}}`);\n\
              export default function activate(plugin) {{\n\
+             {RESIDENT}\
              const p = plugin.packages;\n\
              const candidates = [{candidates}];\n\
              setTimeout(async () => {{\n\
@@ -848,7 +871,7 @@ fn b2b_uninstall_then_reinstall_waits_for_the_old_process() {
              }}, 1500);\n}}\n"
         ),
     );
-    let log = root.run(10, &[("VESTRA_SHARED", "0"), ("VESTRA_LAZY", "0")]);
+    let log = root.run(28, &[("VESTRA_SHARED", "0")]);
     at(&log, &format!("{MANAGER} done"));
     assert_eq!(
         log.matches(&format!("{MANAGER} again committed committed"))
@@ -897,24 +920,26 @@ const BUSY_TEXT: &str = "busy: the package is being installed or reloaded";
 /// within the stop's own grace, and the restart goes on then. A cleanup
 /// that never ends holds a reload of a shared-runner member until the
 /// runner abandons it (its 5 s `STOP_TIMEOUT_MS`, inside the host's 6 s
-/// `MEMBER_GONE`), and an upgrade of an own process for its 300 ms grace
-/// (preconditions for the 20 s texts staying unreachable: see the end of
-/// the test). While the upgrade's operation runs, the
-/// plugin's `setEnabled`, `reload` and `uninstall` are `busy` (the
-/// operation half of `package_busy`).
+/// `MEMBER_GONE`), and an upgrade of an own process for its grace (300 ms
+/// until B6, `TimeoutStopSec` 5 s since: §15 B6) (preconditions for the
+/// 20 s texts staying unreachable: see the end of the test). While the
+/// upgrade's operation runs, the plugin's `setEnabled`, `reload` and
+/// `uninstall` are `busy` (the operation half of `package_busy`). §15 B6:
+/// the plugins are resident (`RESIDENT`) so that they run as they did
+/// with on-demand start off.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn an_endless_cleanup_holds_a_reload_or_an_upgrade_only_for_its_grace() {
     let mut root = Root::new();
-    root.builtin(
+    root.builtin_resident(
         ENDLESS,
         &[],
-        &fixture(ENDLESS, "1.0.0", Cleanup::Endless, 0, ""),
+        &fixture(ENDLESS, "1.0.0", Cleanup::Endless, 0, RESIDENT),
     );
-    root.install(
+    root.install_resident(
         1,
         ENDLESS_UP,
-        &fixture(ENDLESS_UP, "1.0.0", Cleanup::Endless, 0, ""),
+        &fixture(ENDLESS_UP, "1.0.0", Cleanup::Endless, 0, RESIDENT),
     );
     let candidate = root.path().join("candidates").join(ENDLESS_UP);
     // Activates for 3 s: the operation is in `activating` meanwhile.
@@ -922,17 +947,18 @@ fn an_endless_cleanup_holds_a_reload_or_an_upgrade_only_for_its_grace() {
         &candidate,
         ENDLESS_UP,
         "2.0.0",
-        &[],
-        &fixture(ENDLESS_UP, "2.0.0", Cleanup::Quick, 3000, ""),
+        &RESIDENT_CAPABILITIES,
+        &fixture(ENDLESS_UP, "2.0.0", Cleanup::Quick, 3000, RESIDENT),
     );
     let candidate = js_path(&candidate);
-    root.builtin(
+    root.builtin_resident(
         MANAGER,
         &["plugins.manage"],
         &format!(
             "const log = (text) => console.error(`{MANAGER} ${{text}}`);\n\
              const code = (promise) => promise.then(() => \"ok\", (e) => `${{e.code}}: ${{e.message}}`);\n\
              export default function activate(plugin) {{\n\
+             {RESIDENT}\
              const p = plugin.packages;\n\
              setTimeout(async () => {{\n\
              log(`reload ${{await code(p.reload(\"{ENDLESS}\"))}}`);\n\
@@ -952,7 +978,8 @@ fn an_endless_cleanup_holds_a_reload_or_an_upgrade_only_for_its_grace() {
              }}, 1500);\n}}\n"
         ),
     );
-    let log = root.run(13, &[("VESTRA_SHARED", "1"), ("VESTRA_LAZY", "0")]);
+    // Longer than before B6: the upgrade's stop waits the own process's 5 s.
+    let log = root.run(18, &[("VESTRA_SHARED", "1")]);
     at(&log, &format!("{MANAGER} done"));
     at(&log, &format!("{MANAGER} reload ok"));
     // The member: still cleaning up after the host's 300 ms, abandoned by
@@ -998,7 +1025,7 @@ const FRESH: &str = "aa.fixture-gone-fresh";
 const REAPED: &str = "aa.fixture-gone-reaped";
 
 /// Standby (lazy activation) with own processes whose cleanup never ends:
-/// a park waits `PARK_WAIT` (2 s) for its process, and whatever comes
+/// a park waits `PARK_WAIT` (2 s; 5 s since B6, §15 B6) for its process, and whatever comes
 /// meanwhile waits for that process to go, never beside it: a wake by a
 /// command (`Parked.waiting`, `lazy_tick`; the 20 s `STOP_WAIT_MS` never
 /// runs out), a disable and enable (`set_enabled(true)` → `packages.reloads`:
@@ -1068,7 +1095,6 @@ fn standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone() {
         11,
         &[
             ("VESTRA_SHARED", "0"),
-            ("VESTRA_LAZY", "1"),
             ("VESTRA_IDLE_MS", "500"),
             ("VESTRA_TEST_EXECUTE", "aa.fixture-wake/hello@park+100"),
         ],
@@ -1142,9 +1168,15 @@ fn quit_stops_own_processes_side_by_side_within_one_second() {
         let mut root = Root::new();
         for n in 0..plugins {
             let id = format!("aa.fixture-quit-{n}");
-            root.install(n + 1, &id, &fixture(&id, "1.0.0", Cleanup::Endless, 0, ""));
+            // §15 B6: resident, so they run at the quit as they did with
+            // on-demand start off (a lazy one is in standby by then).
+            root.install_resident(
+                n + 1,
+                &id,
+                &fixture(&id, "1.0.0", Cleanup::Endless, 0, RESIDENT),
+            );
         }
-        root.run_timed(4, &[("VESTRA_SHARED", "0"), ("VESTRA_LAZY", "0")])
+        root.run_timed(4, &[("VESTRA_SHARED", "0")])
     };
     // A warm-up run first (a cold start of the host and Node once made the
     // empty baseline as slow as six endless cleanups), then three of each,
@@ -1196,15 +1228,23 @@ const OFF: &str = "aa.fixture-off";
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn packages_list_shows_starting_failed_and_disabled() {
     let mut root = Root::new();
-    root.install(1, SLOW, &fixture(SLOW, "1.0.0", Cleanup::Quick, 5000, ""));
+    // §15 B6: the slow one and the manager are resident (`RESIDENT`): they
+    // stay running, so the slow one lists `running running` once ready, as
+    // with on-demand start off before (a lazy one would list `running idle`
+    // in standby).
+    root.install_resident(
+        1,
+        SLOW,
+        &fixture(SLOW, "1.0.0", Cleanup::Quick, 5000, RESIDENT),
+    );
     root.install(
         2,
         BROKEN,
         "export default function activate() { throw new Error(\"boom\"); }\n",
     );
-    root.install(3, OFF, &tracked(OFF, "1.0.0"));
+    root.install_resident(3, OFF, &tracked(OFF, "1.0.0"));
     root.catalog["disabled"] = json!([OFF]);
-    root.builtin(
+    root.builtin_resident(
         MANAGER,
         &["plugins.manage"],
         &format!(
@@ -1215,11 +1255,12 @@ fn packages_list_shows_starting_failed_and_disabled() {
              let plugin;\n\
              export default function activate(p) {{\n\
              plugin = p;\n\
+             {RESIDENT}\
              setTimeout(() => show(\"early\"), 2000);\n\
              setTimeout(() => show(\"late\"), 8000);\n}}\n"
         ),
     );
-    let log = root.run(10, &[("VESTRA_SHARED", "0"), ("VESTRA_LAZY", "0")]);
+    let log = root.run(10, &[("VESTRA_SHARED", "0")]);
     for expected in [
         format!("{MANAGER} early {SLOW} starting "),
         format!("{MANAGER} early {OFF} disabled "),

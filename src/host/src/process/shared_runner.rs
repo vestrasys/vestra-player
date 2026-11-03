@@ -532,15 +532,16 @@ impl SharedRunner {
         }
     }
 
-    /// Without a member for a second: it is let go (`retire`) until the next
-    /// trusted plugin starts.
-    pub fn idle(&mut self, now: u64) -> bool {
+    /// Without a member for `after` ms (the supervisor's runner idle exit,
+    /// at least 30 s since B6; 1 s before): it is let go (`retire`) until
+    /// the next trusted plugin starts.
+    pub fn idle(&mut self, now: u64, after: u64) -> bool {
         if self.link.members() > 0 {
             self.empty_since = None;
             return false;
         }
         let since = *self.empty_since.get_or_insert(now);
-        now.saturating_sub(since) >= 1_000
+        now.saturating_sub(since) >= after
     }
 
     /// Let it go without waiting on the caller's thread: `runner.stop`

@@ -326,13 +326,15 @@ impl Host {
         )
     }
     /// The shared runner at a host tick: the heartbeat (a hang restarts
-    /// every member), and an idle runner let go.
+    /// every member), and an idle runner let go (A17: after the runner idle
+    /// exit, B6).
     fn shared_tick(&mut self) {
         let now = self.now_ms();
+        let after = crate::host::supervisor::runner_idle_exit(&self.supervisor);
         let Some(shared) = self.shared.as_mut() else {
             return;
         };
-        if shared.idle(now) {
+        if shared.idle(now, after) {
             if let Some(runner) = self.shared.take() {
                 diag!("shared runner {}: no plugin left; stopped", runner.link.id);
                 runner.retire(true, &self.reaper);

@@ -412,7 +412,7 @@ fn t11_start_timeout_b1_then_failed() {
 }
 
 #[test]
-fn t11_start_timeout_target_retries_start() {
+fn t11_start_timeout_target_restarts_by_its_class() {
     let p = Profile::target();
     let mut sim = Sim::new(&p);
     let u = sim.add(resident("r"));
@@ -420,7 +420,8 @@ fn t11_start_timeout_target_retries_start() {
     let pid = sim.pid(u);
     sim.at(T0 + p.start_timeout);
     sim.gone(pid);
-    // §7.3 StartTimeout: "start retry, then T27/T8".
+    // §7.3 StartTimeout, amended in the B6 review (§17.15): no start retry;
+    // a Resident restarts by its `Restart=` (on-failure), so `AutoRestart`.
     assert!(matches!(sim.st(u), S::AutoRestart(_)), "{:?}", sim.st(u));
 }
 

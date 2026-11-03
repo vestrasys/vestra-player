@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.29
+
+- The vendored SDK is 1.5.58 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. Documentation only: the AI's documentation now describes the plugin supervisor as a plugin sees it (player 0.6.6 and the defaults of 0.6.7: start retries, restarts after a crash, the start limit, the 512 MB heap cap, held triggers, standby and its `idle` stop reason, the process budget and memory pressure, the stop graces), the limits page for plugin processes, when each `StopReason` comes, and `appearance.changed`'s `changed` field. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
 ## 2.2.28
 
 - The vendored SDK is 1.5.57 (`npm run vendor:sdk`), the version the player now uses (1.5.56 was never published; 1.5.57 carries its content). Who must change: nobody. The AI's documentation now says that `appearance.onChange` and `resolvers.onFileTypesChange` also run when the player starts a stopped plugin for that change, that a language-only appearance change does not call the theme listener (a plugin started for a language change alone may hear the unchanged palette once), and which events clear session storage. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.

@@ -13,13 +13,13 @@
 //!   drop providers (and the extensions an earlier provider takes) and the
 //!   wake events it listens to, each with its recorded mark. No owner
 //!   numbers: they change with every generation.
-//! - `VESTRA_TEST_PARK=all` (with `VESTRA_LAZY=1`): every installed plugin
+//! - `VESTRA_TEST_PARK=all`: every installed plugin
 //!   counts as lazy at its ready (what it holds live is ignored) and records
 //!   what a recording can hold (`capabilities::recordable`), so resident ones
 //!   are parked too. **Isolated profile only**: such recordings are
 //!   incomplete; they carry `testPark: true` and only a run with the same
 //!   switch reads them back (any other run ignores them and records again).
-//! - `VESTRA_TEST_WAKE=<ms>` (with `VESTRA_LAZY=1`): that long after the
+//! - `VESTRA_TEST_WAKE=<ms>`: that long after the
 //!   host started (milliseconds from host start, not from start-up), every
 //!   parked plugin is woken (as a shown settings page wakes it: nothing is
 //!   held for its ready).

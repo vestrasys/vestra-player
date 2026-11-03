@@ -34,6 +34,11 @@ fn builtin(root: &Path, id: &str, body: &str, tamper: bool) -> serde_json::Value
 }
 
 /// `builtin` with these manifest capabilities.
+///
+/// §15 B6: on-demand start is everyone's, so a built-in that holds nothing
+/// live goes to standby at its first ready. These fixtures listen to the
+/// player's state (resident: never in standby, §3.3), so they keep running
+/// in the shared runner as they did with on-demand start off before B6.
 fn builtin_with(
     root: &Path,
     id: &str,
@@ -41,6 +46,8 @@ fn builtin_with(
     tamper: bool,
     capabilities: &[&str],
 ) -> serde_json::Value {
+    let mut capabilities = capabilities.to_vec();
+    capabilities.extend(["events", "playback.read"]);
     let files = [
         (
             "manifest.json",
@@ -53,6 +60,7 @@ fn builtin_with(
             "main.js",
             format!(
                 "export default async function activate(plugin) {{\n\
+                 plugin.player.onChange(() => {{}});\n\
                  const n = ((await plugin.storage.session.get(\"starts\")) ?? 0) + 1;\n\
                  await plugin.storage.session.set(\"starts\", n);\n\
                  console.error(`{id} start ${{n}} pid ${{process.pid}}`);\n\
@@ -339,15 +347,28 @@ fn log_stop(id: &str) -> String {
     )
 }
 
+/// §15 B6: `main` made resident (it listens to the player's state at the
+/// start of `activate(plugin)`), so the plugin keeps running as it did with
+/// on-demand start off before B6; with the capabilities that needs.
+fn resident(main: &str) -> String {
+    main.replacen(
+        "activate(plugin) {\n",
+        "activate(plugin) {\nplugin.player.onChange(() => {});\n",
+        1,
+    )
+}
+/// The capabilities `resident` needs.
+const RESIDENT_CAPABILITIES: [&str; 2] = ["events", "playback.read"];
+
 /// An installed (third-party) plugin `id` in the package store: its own
-/// process, never the shared runner.
+/// process, never the shared runner; resident (`resident`).
 fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, main: String) {
     let manifest = serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":[]});
+        "entry":"main.js","capabilities":RESIDENT_CAPABILITIES});
     let files = [
         ("manifest.json", manifest.to_string()),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
-        ("main.js", main),
+        ("main.js", resident(&main)),
     ];
     let directory = store.join("packages").join(digest(&files));
     std::fs::create_dir_all(&directory).unwrap();
@@ -362,14 +383,15 @@ fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, ma
 }
 
 /// An unpacked package to install (`plugin.packages.validate`): `id` at
-/// `version` in `directory`; its path as a JavaScript string.
+/// `version` in `directory`, resident (`resident`); its path as a
+/// JavaScript string.
 fn candidate(directory: &Path, id: &str, version: &str, main: String) -> String {
     std::fs::create_dir_all(directory).unwrap();
     let manifest = serde_json::json!({"id":id,"version":version,"apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":[]});
+        "entry":"main.js","capabilities":RESIDENT_CAPABILITIES});
     std::fs::write(directory.join("manifest.json"), manifest.to_string()).unwrap();
     std::fs::write(directory.join("package.json"), r#"{"type":"module"}"#).unwrap();
-    std::fs::write(directory.join("main.js"), main).unwrap();
+    std::fs::write(directory.join("main.js"), resident(&main)).unwrap();
     serde_json::to_string(&directory.to_string_lossy()).unwrap()
 }
 
@@ -471,7 +493,8 @@ fn every_stop_tells_the_plugin_why() {
             &["plugins.manage"],
         ),
     ];
-    let log = run(&plugins, root.path(), 12, &[("VESTRA_LAZY", "0")]);
+    // §15 B6: no `VESTRA_LAZY=0` any more; the plugins are resident.
+    let log = run(&plugins, root.path(), 12, &[]);
     assert!(!log.contains("manage failed"), "{log}");
     for expected in [
         "vestra.fixture-reasons 1 stopped for reload reload",
