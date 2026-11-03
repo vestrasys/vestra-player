@@ -18,6 +18,19 @@
  *     [--deps <dir>]                 the Windows deps directory; default $VESTRA_DEPS_DIR
  *     [--rust-licenses <html>]       pre-generated cargo-about output
  *     [--no-installer]               stage and zip only (any OS; iscc is Windows-only)
+ *     [--reuse-host]                 a host built from the current inputs, by
+ *                                    host.mjs resolveHost(): the host cache,
+ *                                    else --binary if --host-commit (the commit
+ *                                    it was built from) has the same host input
+ *                                    hash, else a published release's, else
+ *                                    cargo build --release; with its crate
+ *                                    license page
+ *     [--host-commit <rev>]          with --reuse-host and --binary, see above
+ *     [--no-build]                   with --reuse-host: fail instead of building
+ *
+ * <version> is the release version (src/release.json), as is the installer's
+ * AppVersion; vestra-host.exe's own file version is the host version
+ * (src/host/Cargo.toml, embedded by build.rs).
  *
  * Output in <out>: VestraPlayer-<version>-windows-x64\ (staged),
  * VestraPlayer-<version>-windows-x64-portable.zip and
@@ -28,6 +41,7 @@ import { readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fetchNode } from "./fetch-node.mjs";
+import { resolveHost } from "./host.mjs";
 import { COMMITTED_ICO } from "./icon.mjs";
 import {
   clean,
@@ -35,12 +49,12 @@ import {
   directorySize,
   exists,
   fail,
-  hostVersion,
   megabytes,
   packaging,
   parseArgs,
   run,
   source,
+  versions,
 } from "./lib.mjs";
 import {
   artifactBase,
@@ -52,13 +66,20 @@ import {
 /** Inno Setup AppId, derived from the macOS bundle id. */
 export const APP_ID = "com.vestraplayer.player";
 
-const options = parseArgs(process.argv.slice(2), ["no-installer"]);
+const options = parseArgs(process.argv.slice(2), [
+  "no-installer",
+  "reuse-host",
+  "no-build",
+]);
 if (!options.out)
   fail(
     "usage: bundle-windows.mjs --out <dir> [--binary …] [--deps …] (see the header)",
   );
+if (options["host-commit"] && !(options["reuse-host"] && options.binary))
+  fail("--host-commit needs --reuse-host and --binary");
 const out = resolve(options.out);
-const binary = resolve(
+const { release: version } = await versions();
+let binary = resolve(
   options.binary ??
     join(
       process.env.CARGO_TARGET_DIR || join(source, "host/target"),
@@ -70,12 +91,22 @@ const deps = resolve(
     process.env.VESTRA_DEPS_DIR ??
     fail("--deps or VESTRA_DEPS_DIR is required"),
 );
-if (!exists(binary))
-  fail(`${binary} does not exist (cargo build --release first)`);
 if (!exists(join(deps, "components.json")))
   fail(`${deps} is not a deps directory (no components.json)`);
+let reusedLicenses;
+if (options["reuse-host"]) {
+  const host = await resolveHost({
+    target: "x86_64-pc-windows-msvc",
+    binary: options.binary,
+    binaryCommit: options["host-commit"],
+    build: !options["no-build"],
+  });
+  binary = host.binary;
+  reusedLicenses = host.licenses;
+}
+if (!exists(binary))
+  fail(`${binary} does not exist (cargo build --release first)`);
 
-const version = await hostVersion();
 const base = await artifactBase("windows-x64");
 const stage = join(out, base);
 await clean(stage);
@@ -92,7 +123,9 @@ await fetchNode("win-x64", nodeDir, join(tmpdir(), "vestra-node-cache"));
 await copy(join(nodeDir, "node.exe"), join(stage, "node/node.exe"));
 
 await stageResources(join(stage, "resources"));
-let rustHtml = options["rust-licenses"] && resolve(options["rust-licenses"]);
+let rustHtml =
+  (options["rust-licenses"] && resolve(options["rust-licenses"])) ||
+  reusedLicenses;
 if (!rustHtml) {
   rustHtml = join(nodeDir, "rust-crates.html");
   rustLicenses("x86_64-pc-windows-msvc", rustHtml);

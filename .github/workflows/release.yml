@@ -2,10 +2,15 @@
 # caches) unless main.yml already passed this commit or one it differs from
 # only in docs (.github/scripts/main-green.sh); the unsigned packages (macOS
 # .dmg + .app zip, Windows setup.exe + portable zip, plus copies of the
-# installers under fixed names for releases/latest/download/), SHA256SUMS,
+# installers under fixed names for releases/latest/download/), host.json
+# (per platform the host input hash, host version and commit of the host
+# binary inside, so that a later release with the same host inputs reuses
+# that binary instead of building it: src/packaging/host.mjs), SHA256SUMS,
 # latest.json (the release's description of itself, for update checks and
 # the download page) and a draft GitHub release in this repository with the notes from
-# doc/releases/v<version>.md. Signing and notarization are TODO
+# doc/releases/v<version>.md. <version> is the player release version in
+# src/release.json; the host binary has its own (src/host/Cargo.toml, never
+# higher). Signing and notarization are TODO
 # jobs in the `release` environment. How to cut a release: doc/releases/README.md.
 name: release
 
@@ -31,6 +36,12 @@ on:
           commit.
         type: boolean
         default: false
+      fresh_host:
+        description: >
+          Build the host even when a published release has one built from
+          the same host inputs. Tag releases always reuse when they can.
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -50,21 +61,27 @@ jobs:
       actions: read # main-green.sh: main.yml runs
     outputs:
       version: ${{ steps.version.outputs.version }}
+      host_version: ${{ steps.version.outputs.host }}
       tested: ${{ steps.tested.outputs.tested }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
+      # The release version (src/release.json) names the tag, the notes and
+      # the files; the host version (src/host/Cargo.toml) stays lower while
+      # the host does not change, and is never higher. `host.mjs versions`
+      # checks both are x.y.z and release ≥ host (Node built-ins only).
       - id: version
         env:
           REF_TYPE: ${{ github.ref_type }}
           TAG: ${{ github.ref_name }}
         run: |
-          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' src/host/Cargo.toml | head -1)
-          echo "src/host/Cargo.toml version: $version"
+          node src/packaging/host.mjs versions \
+            || { echo "::error::src/release.json and src/host/Cargo.toml: see the line above"; exit 1; }
+          version=$(jq -r .version src/release.json)
           if [ "$REF_TYPE" = tag ] && [ "$TAG" != "v$version" ]; then
-            echo "::error::tag $TAG does not match src/host/Cargo.toml version $version"
+            echo "::error::tag $TAG does not match the release version $version in src/release.json"
             exit 1
           fi
           notes="doc/releases/v$version.md"
@@ -130,6 +147,7 @@ jobs:
     uses: ./.github/workflows/_package.yml
     with:
       os: windows
+      reuse-host: ${{ !inputs.fresh_host }}
 
   package-macos:
     needs: [verify, macos]
@@ -141,6 +159,7 @@ jobs:
     uses: ./.github/workflows/_package.yml
     with:
       os: macos
+      reuse-host: ${{ !inputs.fresh_host }}
 
   # SHA256SUMS lists the fixed-name copies too (same hash as the versioned
   # file): whoever downloads releases/latest/download/<fixed name> can check
@@ -169,6 +188,27 @@ jobs:
           pattern: vestra-unsigned-*
           path: dist
           merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: host-vestra-unsigned-*
+          path: host-records
+          merge-multiple: true
+      # host.json: one entry per packaged platform (_package.yml "host.json
+      # entry"), listed in SHA256SUMS so that a later release checks it
+      # before it reuses the host binary (src/packaging/host.mjs fetch).
+      - name: host.json
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          HOST_VERSION: ${{ needs.verify.outputs.host_version }}
+          SHA: ${{ github.sha }}
+        run: |
+          jq -s --arg v "$VERSION" --arg h "$HOST_VERSION" --arg c "$SHA" \
+            '{schema: 1, release: $v, hostVersion: $h, commit: $c, hosts: add}' \
+            host-records/host-*.json > dist/host.json
+          jq -e --arg h "$HOST_VERSION" \
+            '(.hosts | length > 0) and ([.hosts[] | .hostVersion == $h and (.inputHash | test("^[0-9a-f]{64}$"))] | all)' \
+            dist/host.json > /dev/null || { echo "::error::host.json entries are incomplete"; exit 1; }
+          cat dist/host.json
       - name: Fixed-name copies of the installers
         env:
           VERSION: ${{ needs.verify.outputs.version }}
@@ -192,7 +232,9 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vestra-unsigned-SHA256SUMS
-          path: dist/SHA256SUMS
+          path: |
+            dist/SHA256SUMS
+            dist/host.json
           retention-days: 1
           if-no-files-found: error
 
@@ -277,6 +319,8 @@ jobs:
           bash .github/scripts/latest-json.sh check dist "$VERSION" "$GH_REPO"
           jq -e '.downloads["windows-x64"] and .downloads["macos-arm64"]' dist/latest.json > /dev/null \
             || { echo "::error::latest.json must list windows-x64 and macos-arm64"; exit 1; }
+          jq -e '.hosts["windows-x64"] and .hosts["macos-arm64"]' dist/host.json > /dev/null \
+            || { echo "::error::host.json must list windows-x64 and macos-arm64"; exit 1; }
           gh release create "$TAG" --draft --verify-tag \
             --title "Vestra Player $VERSION (unsigned test build)" \
             --notes-file "doc/releases/v$VERSION.md" dist/*

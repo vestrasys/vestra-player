@@ -372,6 +372,7 @@ No new capability. Same as `ui.image`: it is only a kind of property value; the 
 
 ## 6. `minPlayerVersion`
 
+- **Since 0.7.1** the player version is the release version of `src/release.json`, not `Cargo.toml` (README §8); `minPlayerVersion` and `plugin.app.version` use it. The text below is the original design.
 - **Source of the player version number**: the `version` in the host `Cargo.toml` (`env!("CARGO_PKG_VERSION")`), i.e. the `plugin.app.version` that plugins see. At packaging time `Info.plist` / the Windows version resource are generated from it; no second copy is maintained. Suggestion: when S4 ships, bump the host from `0.1.0` to `0.2.0` as the first version supporting the new API.
 - **Semantics**: a plugin can load only if the player version (only the three numeric parts `MAJOR.MINOR.PATCH` are compared; pre-release suffixes are ignored) ≥ `minPlayerVersion`. It expresses "uses an API **added** in a certain player version"; `apiVersion` still expresses breaking major versions. There is no `maxPlayerVersion`.
 - **Check points**: `validate` / `validateArchive` → `code: "versionMismatch"` (the host already has this code; add it to reference §13), message `requires Vestra Player ≥ x.y.z`; development load → load fails with the same message; an installed plugin on a downgraded player → does not start, `state: "failed"`, `error` as above; built-in seeding skips it and logs.

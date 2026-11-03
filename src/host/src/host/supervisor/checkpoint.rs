@@ -26,8 +26,8 @@ use std::time::{Duration, Instant};
 pub(crate) const SCHEMA: u32 = 1;
 
 /// What a recording is valid for: the installed instance, the package digest
-/// and version; the player version and build are checked too (a new player
-/// records again, the safe side).
+/// and version; the player (release) version, the host version and the
+/// build are checked too (a new player records again, the safe side).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Key {
     pub guid: String,
@@ -40,7 +40,12 @@ pub(crate) struct Key {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Recording {
     pub schema: u32,
+    /// The release version (`version::player`).
     pub player: String,
+    /// The host binary's version (`version::HOST`); empty in files from
+    /// before the two were split, which are then stale.
+    #[serde(default)]
+    pub host: String,
     #[serde(default)]
     pub build: Option<String>,
     pub digest: String,
@@ -64,7 +69,8 @@ impl Recording {
             .map_or(0, |d| d.as_millis() as u64);
         Self {
             schema: SCHEMA,
-            player: env!("CARGO_PKG_VERSION").into(),
+            player: crate::version::player().into(),
+            host: crate::version::HOST.into(),
             build: option_env!("VESTRA_BUILD").map(str::to_owned),
             digest: key.digest.clone(),
             version: key.version.clone(),
@@ -77,7 +83,8 @@ impl Recording {
     /// Valid for this package and this player.
     fn matches(&self, key: &Key) -> bool {
         self.schema == SCHEMA
-            && self.player == env!("CARGO_PKG_VERSION")
+            && self.player == crate::version::player()
+            && self.host == crate::version::HOST
             && self.build.as_deref() == option_env!("VESTRA_BUILD")
             && self.digest == key.digest
             && self.version == key.version
@@ -303,9 +310,19 @@ mod tests {
         json["testPark"] = false.into();
         std::fs::write(&path, json.to_string()).unwrap();
         assert!(read(directory.path(), &key()).is_some());
-        // Another player release records again.
-        json["player"] = "0.0.1".into();
-        std::fs::write(&path, json.to_string()).unwrap();
+        // Another player release, or another host binary, records again;
+        // so does a file from before the two versions were split.
+        assert_eq!(json["player"], crate::version::player());
+        assert_eq!(json["host"], crate::version::HOST);
+        for (field, other) in [("player", json!("0.0.1")), ("host", json!("0.0.1"))] {
+            let mut changed = json.clone();
+            changed[field] = other;
+            std::fs::write(&path, changed.to_string()).unwrap();
+            assert!(read(directory.path(), &key()).is_none(), "{field}");
+        }
+        let mut old = json.clone();
+        old.as_object_mut().unwrap().remove("host");
+        std::fs::write(&path, old.to_string()).unwrap();
         assert!(read(directory.path(), &key()).is_none());
         // Corrupt: ignored.
         std::fs::write(&path, "{").unwrap();

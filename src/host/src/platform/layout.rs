@@ -8,6 +8,7 @@
 //! | recognised by | `<X>.app/Contents/MacOS/<exe>` with `Contents/Info.plist` | `<dir>\<exe>` with `<dir>\resources\runtime\runner.js` |
 //! | resources | `Contents/Resources` | `<dir>\resources` |
 //! | ui, runtime, plugins | `<resources>/{ui,runtime,plugins}` | the same |
+//! | release version | `<resources>/release.json` | the same |
 //! | Node | `Contents/MacOS/node` | `<dir>\node\node.exe` |
 //! | FFmpeg | `Contents/MacOS/{ffmpeg,ffprobe}` | `<dir>\ffmpeg\{ffmpeg,ffprobe}.exe` |
 //! | licenses | `Contents/Resources/licenses` | `<dir>\licenses` |
@@ -30,6 +31,8 @@ pub struct InstallLayout {
     /// The built-in plugins: `builtin.json` and one unpacked directory per
     /// plugin, which the host runs in place (`stage-plugins.mjs`).
     pub plugins: PathBuf,
+    /// `release.json`: the player release version (`crate::version`).
+    pub release: PathBuf,
     /// Third-party licenses and the player's own `LICENSE`.
     pub licenses: PathBuf,
     /// The bundled Node executable.
@@ -65,6 +68,7 @@ pub fn install_layout(
                 ui: resources.join("ui"),
                 runtime: resources.join("runtime"),
                 plugins: resources.join("plugins"),
+                release: resources.join("release.json"),
                 licenses: resources.join("licenses"),
                 node: directory.join("node"),
                 ffmpeg: directory.join("ffmpeg"),
@@ -81,6 +85,7 @@ pub fn install_layout(
                 ui: resources.join("ui"),
                 runtime: resources.join("runtime"),
                 plugins: resources.join("plugins"),
+                release: resources.join("release.json"),
                 licenses: directory.join("licenses"),
                 node: directory.join("node").join("node.exe"),
                 ffmpeg: tools.join("ffmpeg.exe"),
@@ -117,6 +122,7 @@ mod tests {
                 ui: contents.join("Resources/ui"),
                 runtime: contents.join("Resources/runtime"),
                 plugins: contents.join("Resources/plugins"),
+                release: contents.join("Resources/release.json"),
                 licenses: contents.join("Resources/licenses"),
                 node: contents.join("MacOS/node"),
                 ffmpeg: contents.join("MacOS/ffmpeg"),
@@ -168,6 +174,7 @@ mod tests {
                 ui: root.join("resources").join("ui"),
                 runtime: root.join("resources").join("runtime"),
                 plugins: root.join("resources").join("plugins"),
+                release: root.join("resources").join("release.json"),
                 licenses: root.join("licenses"),
                 node: root.join("node").join("node.exe"),
                 ffmpeg: root.join("ffmpeg").join("ffmpeg.exe"),

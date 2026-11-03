@@ -8,6 +8,7 @@
 //! | runner | `<runtime>/runner.js` (types stripped at packaging, `stage-runtime.mjs`) | `src/runtime/runner.ts` (Node strips them) |
 //! | shared runner | `<runtime>/shared-runner.js` | `src/runtime/shared-runner.ts` |
 //! | ui | `<ui>` | `src/host/ui` |
+//! | release version | `<resources>/release.json` | `src/release.json` |
 //! | built-in plugins | `$VESTRA_BUILTIN_PLUGINS`, else `<plugins>` | `$VESTRA_BUILTIN_PLUGINS`, else none |
 //! | FFmpeg, ffprobe | `$VESTRA_FFMPEG` / `$VESTRA_FFPROBE`, else the bundled ones | the same variables, else `PATH` |
 //! | licenses | `<licenses>` | none |
@@ -37,6 +38,8 @@ pub struct RuntimePaths {
     /// (`shared_runner.rs`).
     pub shared_runner: PathBuf,
     pub ui: PathBuf,
+    /// `release.json`, the player release version (`crate::version`).
+    pub release: PathBuf,
     /// The directory `builtin.json` is read from, if any.
     pub builtin_plugins: Option<PathBuf>,
     pub ffmpeg: Option<PathBuf>,
@@ -84,6 +87,7 @@ pub fn resolve(
             runner: layout.runtime.join("runner.js"),
             shared_runner: layout.runtime.join("shared-runner.js"),
             ui: layout.ui,
+            release: layout.release,
             builtin_plugins: Some(var("VESTRA_BUILTIN_PLUGINS").unwrap_or(layout.plugins)),
             ffmpeg: tool("VESTRA_FFMPEG", "ffmpeg", Some(&layout.ffmpeg)),
             ffprobe: tool("VESTRA_FFPROBE", "ffprobe", Some(&layout.ffprobe)),
@@ -95,6 +99,7 @@ pub fn resolve(
             runner: source.join("..").join("runtime").join("runner.ts"),
             shared_runner: source.join("..").join("runtime").join("shared-runner.ts"),
             ui: source.join("ui"),
+            release: source.join("..").join("release.json"),
             builtin_plugins: var("VESTRA_BUILTIN_PLUGINS"),
             ffmpeg: tool("VESTRA_FFMPEG", "ffmpeg", None),
             ffprobe: tool("VESTRA_FFPROBE", "ffprobe", None),
@@ -200,6 +205,7 @@ mod tests {
             ui: root.join("res/ui"),
             runtime: root.join("res/runtime"),
             plugins: root.join("res/plugins"),
+            release: root.join("res/release.json"),
             licenses: root.join("licenses"),
             node: root.join("bin/node"),
             ffmpeg: root.join("bin/ffmpeg"),
@@ -238,6 +244,7 @@ mod tests {
                 runner: root.join("res/runtime").join("runner.js"),
                 shared_runner: root.join("res/runtime").join("shared-runner.js"),
                 ui: root.join("res/ui"),
+                release: root.join("res/release.json"),
                 builtin_plugins: Some(root.join("res/plugins")),
                 ffmpeg: Some(root.join("bin/ffmpeg")),
                 ffprobe: Some(root.join("bin/ffprobe")),
@@ -290,6 +297,7 @@ mod tests {
                 runner: source.join("..").join("runtime").join("runner.ts"),
                 shared_runner: source.join("..").join("runtime").join("shared-runner.ts"),
                 ui: source.join("ui"),
+                release: source.join("..").join("release.json"),
                 builtin_plugins: None,
                 ffmpeg: Some(Path::new("/usr/bin").join("ffmpeg")),
                 ffprobe: None,

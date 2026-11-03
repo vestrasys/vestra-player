@@ -71,9 +71,10 @@ impl std::fmt::Display for NeedsPlayer {
 }
 impl std::error::Error for NeedsPlayer {}
 
-/// This player's version (`plugin.app.version`).
+/// This player's version (`plugin.app.version`): the release version
+/// (`crate::version::player`), not the host binary's.
 pub fn player_version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+    crate::version::player()
 }
 
 /// Strict `MAJOR.MINOR.PATCH` (u32 components, no leading zeros).
@@ -431,6 +432,19 @@ mod tests {
         assert!(check_player("0.2.1", "0.2.0").is_err());
         assert!(check_player("0.10.0", "0.9.9").is_err());
         assert!(check_player("01.0.0", "9.0.0").is_err(), "strict format");
+    }
+
+    #[test]
+    fn min_player_version_is_compared_with_the_release_version() {
+        let release = crate::version::player();
+        assert_eq!(player_version(), release);
+        let (major, minor, patch) = player_triple(release);
+        let (root, mut manifest) = package(json!({}));
+        manifest.min_player_version = Some(format!("{major}.{minor}.{patch}"));
+        check(&manifest, root.path(), true).unwrap();
+        manifest.min_player_version = Some(format!("{major}.{minor}.{}", patch + 1));
+        let error = check(&manifest, root.path(), true).unwrap_err();
+        assert!(error.downcast_ref::<NeedsPlayer>().is_some(), "{error}");
     }
 
     #[test]

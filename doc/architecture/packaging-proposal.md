@@ -164,7 +164,7 @@ Measured sizes:
 | `CFBundleExecutable` | `vestra-host` |
 | `CFBundleIconFile` | `AppIcon` |
 | `CFBundlePackageType` | `APPL` |
-| `CFBundleShortVersionString` | The version from `src/host/Cargo.toml` |
+| `CFBundleShortVersionString` | The version from `src/host/Cargo.toml` (since 0.7.1 the player also has a release version, `src/release.json`, README §8; `Info.plist` is written at packaging time, not built into the binary, so it can carry the release version, as Finder shows this key; that is the packaging side's call) |
 | `CFBundleVersion` | The same value |
 | `LSMinimumSystemVersion` | `14.0` |
 | `LSApplicationCategoryType` | `public.app-category.video` |

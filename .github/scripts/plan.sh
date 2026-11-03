@@ -62,8 +62,11 @@ host=false; has '^(src/host/|src/runtime/|src/package(-lock)?\.json$|rust-toolch
 lock=false; has '^(src/host/Cargo\.lock|src/host/deny\.toml|\.github/workflows/_audit\.yml)$' && lock=true
 # A built-in plugin's README / CHANGELOG ship in its package, so a change
 # under src/plugins/ is never docs only: static runs that plugin's tests.
+# src/release.json (the player release version, which only the packages and
+# the host at run time read; release.yml checks it) counts as docs, so that a
+# release bump with its notes runs nothing (doc/releases/README.md).
 docs_only=true
-if [ "$all" = true ] || printf '%s\n' "$files" | grep -Ev '^$|^doc/|\.md$' | grep -q . \
+if [ "$all" = true ] || printf '%s\n' "$files" | grep -Ev '^$|^doc/|\.md$|^src/release\.json$' | grep -q . \
   || printf '%s\n' "$files" | grep -q '^src/plugins/'; then
   docs_only=false
 fi
@@ -89,7 +92,7 @@ if [ "$docs_only" = true ]; then run_windows=false; run_macos=false; lock=false;
 host_ui='^src/host/(ui/|src/ui/(view|ui_values|ui_types|ui_image|ui_markdown[a-z_]*|composition)\.rs$|src/i18n/|Cargo\.lock$)'
 plugins=none
 if [ "$all" = true ] || has "$host_ui" \
-  || printf '%s\n' "$files" | grep -Ev '^$|^doc/|\.md$|^src/host/|^src/plugins/[^/]+/' | grep -q .; then
+  || printf '%s\n' "$files" | grep -Ev '^$|^doc/|\.md$|^src/release\.json$|^src/host/|^src/plugins/[^/]+/' | grep -q .; then
   plugins=all
 else
   names=""

@@ -30,6 +30,7 @@ mod supervisor;
 mod system;
 mod timeline;
 pub mod ui;
+mod version;
 
 use anyhow::{Result, bail};
 use host::{
@@ -210,11 +211,8 @@ fn main() -> Result<()> {
         }
     }
     logged!(
-        "start: Vestra Player {}{} on {} {}{}",
-        env!("CARGO_PKG_VERSION"),
-        option_env!("VESTRA_BUILD")
-            .map(|build| format!(" ({build})"))
-            .unwrap_or_default(),
+        "start: Vestra Player {} on {} {}{}",
+        version::describe(version::player(), option_env!("VESTRA_BUILD")),
         std::env::consts::OS,
         std::env::consts::ARCH,
         if headless { ", headless" } else { "" }
@@ -412,7 +410,8 @@ fn main() -> Result<()> {
     let ffmpeg = &backend.versions["ffmpeg"];
     // `features`: protocol additions the SDK detects (not part of the plugin
     // API): row patches of property writes (ui_patch.rs).
-    process::set_app_info(&json!({"version":env!("CARGO_PKG_VERSION"),
+    // `version` is the release version (`version.rs`), not the host's.
+    process::set_app_info(&json!({"version":version::player(),
         "build":option_env!("VESTRA_BUILD"),
         "features":[ui::ui_patch::FEATURE],
         "components":{"mpv":backend.versions["mpv"],
