@@ -68,6 +68,8 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      # The pinned Node (26) for host.mjs, not whatever the image carries.
+      - uses: ./.github/actions/setup-node
       # The release version (src/release.json) names the tag, the notes and
       # the files; the host version (src/host/Cargo.toml) stays lower while
       # the host does not change, and is never higher. `host.mjs versions`

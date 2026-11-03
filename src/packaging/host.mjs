@@ -36,11 +36,12 @@
  *       files), or of a commit; --list prints the manifest instead.
  *   node packaging/host.mjs versions
  *       Prints release=<x.y.z> and host=<x.y.z>; fails unless release ≥ host.
- *   node packaging/host.mjs check-bump [--target <triple>] [--repo o/n] [--releases N]
+ *   node packaging/host.mjs check-bump [--target <triple>] [--repo o/n] [--releases N] [--releases-dir <dir>]
  *       For each target (default both): fails when a published release
  *       shipped this host version built from other inputs, or a higher host
  *       version (raise version in src/host/Cargo.toml). Run before tagging;
  *       release.yml's verify job runs it, fetch and --reuse-host check it too.
+ *       --releases-dir reads releases from a directory (directoryReleases).
  *   node packaging/host.mjs fetch --target <triple> --out <dir> [--repo o/n] [--releases N]
  *       Looks through the newest N (30) published releases for a host.json
  *       whose entry for this target has this hash (after the check-bump
@@ -59,9 +60,17 @@
  * the local host cache, then a published release, then cargo build.
  */
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, posix, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   capture,
   compareVersions,
@@ -325,31 +334,70 @@ export function githubReleases(repoName, limit = 30) {
   repoName = repository(repoName);
   return {
     name: repoName,
+    releases: () =>
+      retry(`gh api ${repoName} releases`, () =>
+        JSON.parse(
+          capture("gh", [
+            "api",
+            `repos/${repoName}/releases?per_page=${limit}`,
+            "--jq",
+            "[.[] | select(.draft | not) | {tag: .tag_name, assets: [.assets[].name]}]",
+          ]),
+        ),
+      ),
+    download: (tag, names, dir) =>
+      retry(`gh release download ${tag}`, () =>
+        run(
+          "gh",
+          [
+            "release",
+            "download",
+            tag,
+            "--repo",
+            repoName,
+            ...names.flatMap((name) => ["--pattern", name]),
+            "--dir",
+            dir,
+            "--clobber",
+          ],
+          { quiet: true },
+        ),
+      ),
+  };
+}
+
+/** Runs `action` up to `attempts` times, waiting 2 s, then 4 s, between them. */
+export async function retry(what, action, attempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await action();
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      console.warn(`host: ${what} failed (${error.message}); retrying`);
+      await new Promise((done) => setTimeout(done, 2000 * attempt));
+    }
+  }
+}
+
+/**
+ * Releases from a directory instead of GitHub (offline mirrors, tests):
+ * <dir>/releases.json lists the tags newest first, <dir>/<tag>/ holds each
+ * release's assets.
+ */
+export function directoryReleases(dir) {
+  return {
+    name: dir,
     releases: async () =>
-      JSON.parse(
-        capture("gh", [
-          "api",
-          `repos/${repoName}/releases?per_page=${limit}`,
-          "--jq",
-          "[.[] | select(.draft | not) | {tag: .tag_name, assets: [.assets[].name]}]",
-        ]),
-      ),
-    download: async (tag, names, dir) =>
-      run(
-        "gh",
-        [
-          "release",
-          "download",
+      Promise.all(
+        (await readJson(join(dir, "releases.json"))).map(async (tag) => ({
           tag,
-          "--repo",
-          repoName,
-          ...names.flatMap((name) => ["--pattern", name]),
-          "--dir",
-          dir,
-          "--clobber",
-        ],
-        { quiet: true },
+          assets: await readdir(join(dir, tag)),
+        })),
       ),
+    download: async (tag, names, out) => {
+      for (const name of names)
+        await copy(join(dir, tag, name), join(out, name));
+    },
   };
 }
 
@@ -394,6 +442,12 @@ export async function releasedHosts({ from = githubReleases(), scratch }) {
     const dir = join(scratch, release.tag.replace(/[^0-9A-Za-z.+-]/g, "_"));
     await rm(dir, { recursive: true, force: true });
     await mkdir(dir, { recursive: true });
+    // A host.json nothing vouches for is not "no release": stop.
+    if (!release.assets.includes("SHA256SUMS"))
+      throw new HostError(
+        "verification",
+        `${release.tag} has a host.json but no SHA256SUMS`,
+      );
     await from.download(release.tag, ["host.json", "SHA256SUMS"], dir);
     const sums = parseSums(await readFile(join(dir, "SHA256SUMS"), "utf8"));
     try {
@@ -417,28 +471,28 @@ export async function releasedHosts({ from = githubReleases(), scratch }) {
  */
 export function checkHostBump({ target, hash, version, released }) {
   const platform = targetInfo(target).platform;
-  for (const release of released) {
-    const record = release.hosts[platform];
-    if (!record || record.target !== target) continue;
-    if (record.hostVersion === version && record.inputHash !== hash)
+  const records = released
+    .map((release) => ({ release, record: release.hosts[platform] }))
+    .filter(({ record }) => record?.target === target);
+  // Equal by precedence, not by text: 0.7.3+fix is still 0.7.3 to every
+  // version comparison (semver ignores build metadata), so it cannot name a
+  // second binary either.
+  let same;
+  for (const { release, record } of records) {
+    if (compareVersions(record.hostVersion, version) !== 0) continue;
+    if (record.inputHash !== hash)
       throw new HostError(
         "bump",
-        `host ${version} (${platform}) was already released in ${release.tag} built from other inputs ` +
+        `host ${version} (${platform}) was already released in ${release.tag}${record.hostVersion === version ? "" : ` (as ${record.hostVersion})`} built from other inputs ` +
           `(${record.inputHash}, now ${hash}): raise version in src/host/Cargo.toml ` +
           `(doc/releases/README.md "Release version and host version")`,
       );
+    same ??= release;
   }
-  const same = released.find(
-    (release) => release.hosts[platform]?.hostVersion === version,
-  );
   if (same) return same;
   // A new host: its version must also be above every one released.
-  for (const release of released) {
-    const record = release.hosts[platform];
-    if (
-      record?.target === target &&
-      compareVersions(record.hostVersion, version) > 0
-    )
+  for (const { release, record } of records) {
+    if (compareVersions(record.hostVersion, version) > 0)
       throw new HostError(
         "bump",
         `host ${version} (${platform}) is lower than host ${record.hostVersion} released in ${release.tag}: raise version in src/host/Cargo.toml`,
@@ -684,7 +738,12 @@ async function output(values) {
   await writeFile(process.env.GITHUB_OUTPUT, text, { flag: "a" });
 }
 
-if (import.meta.main ?? process.argv[1] === import.meta.filename) {
+// Not import.meta.main / import.meta.filename: undefined before Node 24.2 /
+// 20.11, which would turn every command into a silent exit 0.
+if (
+  process.argv[1] &&
+  pathToFileURL(resolve(process.argv[1])).href === import.meta.url
+) {
   const [command, ...rest] = process.argv.slice(2);
   const options = parseArgs(rest, ["list"]);
   // Not computed up front: `versions` and `check-bump` run on Linux too,
@@ -697,7 +756,9 @@ if (import.meta.main ?? process.argv[1] === import.meta.filename) {
       const scratch = await mkdtemp(join(tmpdir(), "vestra-check-bump-"));
       try {
         const released = await releasedHosts({
-          from: githubReleases(options.repo, limit),
+          from: options["releases-dir"]
+            ? directoryReleases(resolve(options["releases-dir"]))
+            : githubReleases(options.repo, limit),
           scratch,
         });
         const version = await hostVersion();

@@ -16,9 +16,11 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { inflateRawSync } from "node:zlib";
 
-export const packaging = import.meta.dirname;
+// Not import.meta.dirname: undefined before Node 20.11.
+export const packaging = dirname(fileURLToPath(import.meta.url));
 export const source = resolve(packaging, "..");
 export const repo = resolve(source, "..");
 

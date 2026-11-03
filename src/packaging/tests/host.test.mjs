@@ -9,11 +9,14 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { spawnSync } from "node:child_process";
 import { crc32 } from "node:zlib";
 import {
   checkHostBump,
+  directoryReleases,
+  releasedHosts,
   fetchReleasedHost,
   HostError,
   hostInputs,
@@ -385,5 +388,137 @@ test("--reuse-host: no matching release builds, a bad release stops", async () =
   } finally {
     await rm(older.dir, { recursive: true, force: true });
     await rm(tampered.dir, { recursive: true, force: true });
+  }
+});
+
+test("build metadata does not make a second host version", () => {
+  const released = [
+    {
+      tag: "v0.7.3",
+      hosts: {
+        "windows-x64": {
+          target: WINDOWS,
+          hostVersion: "0.7.3",
+          inputHash: "A",
+        },
+      },
+    },
+  ];
+  const check = (version, hash) =>
+    checkHostBump({ target: WINDOWS, hash, version, released });
+  assert.throws(
+    () => check("0.7.3+fix", "B"),
+    (error) => error instanceof HostError && error.kind === "bump",
+  );
+  assert.equal(check("0.7.3+fix", "A").tag, "v0.7.3");
+  assert.equal(check("0.7.4", "B"), undefined);
+});
+
+/**
+ * A releases directory (directoryReleases) with one release: host.json
+ * `hosts`, and SHA256SUMS listing it (`sums`: true, "bad" or false).
+ */
+async function releasesDir(hosts, { sums = true } = {}) {
+  const dir = await mkdtemp(join(tmpdir(), "vestra-host-releases-"));
+  const tag = "v9.0.0";
+  await mkdir(join(dir, tag));
+  await writeFile(
+    join(dir, "releases.json"),
+    JSON.stringify(hosts ? [tag] : []),
+  );
+  if (!hosts) return dir;
+  const host = JSON.stringify({ schema: 1, hosts });
+  await writeFile(join(dir, tag, "host.json"), host);
+  if (sums)
+    await writeFile(
+      join(dir, tag, "SHA256SUMS"),
+      `${sums === "bad" ? "0".repeat(64) : sha256(host)}  host.json\n`,
+    );
+  return dir;
+}
+
+for (const [what, sums] of [
+  ["a host.json that does not match SHA256SUMS", "bad"],
+  ["a host.json without SHA256SUMS", false],
+])
+  test(`${what} is a verification failure, not "nothing found"`, async () => {
+    const dir = await releasesDir(
+      {
+        "windows-x64": {
+          target: WINDOWS,
+          hostVersion: "0.0.1",
+          inputHash: "a",
+        },
+      },
+      { sums },
+    );
+    const scratch = join(dir, "scratch");
+    try {
+      await assert.rejects(
+        releasedHosts({ from: directoryReleases(dir), scratch }),
+        (error) => error instanceof HostError && error.kind === "verification",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+test("versions and check-bump run where there is no packaged host (Linux)", async () => {
+  const preload = join(
+    await mkdtemp(join(tmpdir(), "vestra-linux-")),
+    "linux.cjs",
+  );
+  await writeFile(
+    preload,
+    'Object.defineProperty(process, "platform", { value: "linux" });\n',
+  );
+  const cli = (...args) =>
+    spawnSync(
+      process.execPath,
+      ["--require", preload, join(packaging, "host.mjs"), ...args],
+      { encoding: "utf8" },
+    );
+  const version = await hostVersion();
+  const hashes = {
+    windows: (await hostInputs(WINDOWS)).hash,
+    macos: (await hostInputs("aarch64-apple-darwin")).hash,
+  };
+  const hosts = (windowsHash) => ({
+    "windows-x64": {
+      target: WINDOWS,
+      hostVersion: version,
+      inputHash: windowsHash,
+    },
+    "macos-arm64": {
+      target: "aarch64-apple-darwin",
+      hostVersion: version,
+      inputHash: hashes.macos,
+    },
+  });
+  const empty = await releasesDir(undefined);
+  const same = await releasesDir(hosts(hashes.windows));
+  const changed = await releasesDir(hosts("f".repeat(64)));
+  try {
+    const versions = cli("versions");
+    assert.equal(versions.status, 0, versions.stderr);
+    assert.match(
+      versions.stdout,
+      new RegExp(`^host=${version.replaceAll(".", "\\.")}$`, "m"),
+    );
+    let run = cli("check-bump", "--releases-dir", empty);
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, /no published release has a host\.json yet/);
+    run = cli("check-bump", "--releases-dir", same);
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, /windows-x64: .*the same inputs as in v9\.0\.0/);
+    // The Windows host changed under the same host version: exit 1.
+    run = cli("check-bump", "--releases-dir", changed);
+    assert.equal(run.status, 1, run.stdout);
+    assert.match(run.stderr, /raise version in src\/host\/Cargo\.toml/);
+    // An unknown command is an error, not a silent exit 0.
+    assert.equal(cli("nope").status, 1);
+  } finally {
+    for (const dir of [empty, same, changed, dirname(preload)])
+      await rm(dir, { recursive: true, force: true });
   }
 });

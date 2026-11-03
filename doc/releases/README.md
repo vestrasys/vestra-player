@@ -39,6 +39,8 @@ The player has two versions (user decision 2026-11-03), so that releases which o
 
 The host version is never higher than the release version (the release job and the packaging scripts check it). A release that reuses a host keeps the older host version: 0.7.2 may ship host 0.7.1.
 
+A backport release from an older branch (a host version below one already released) fails `check-bump`'s "lower than" check by design: host versions only go up, so a fix for an older line gets a host version above every released one.
+
 Whether a release can reuse a host is not decided by the versions but by the **host input hash** over everything the binary is built from ([ci.md "Reusing the host binary"](../process/ci.md#packaging)): if any host input changed, the package job compiles. The host version must then go up as well: one host version names one binary, because what the player keys by it (the GPU crash guard is keyed by host version and driver) would otherwise carry over from the old binary to the new one. `check-bump` enforces it, in release.yml's `verify` job and before any reuse. Every release carries `host.json`, listed in `SHA256SUMS`: per platform the target, the host input hash, the host version, the commit the binary was built from, its SHA-256 inside the archive, and `reusedFrom`, the release that first shipped it. Only published releases are reused; a draft never is.
 
 ```
