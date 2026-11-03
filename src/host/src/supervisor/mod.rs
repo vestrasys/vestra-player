@@ -290,6 +290,15 @@ fn first_queued<P>(unit: &Unit<P>) -> bool {
         })
 }
 
+/// What `packages.list` reads of the unit table, one entry per unit in
+/// unit order (`Supervisor::list_key`): its list state, its standby holder
+/// (`holder_of`), whether its run was woken and is not ready yet
+/// (`waking`), whether a package RPC's job is on it (`package_busy`).
+/// `by_id` changes only with `units` (`load_unit`, `add_unit`,
+/// `remove_unit`), and unit ids are never reused.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListKey(Vec<(UnitId, ListState, Option<Pid>, bool, bool)>);
+
 /// `packages.list` of one unit (§9) at `now`. `boot_stopped`:
 /// `Tunables::boot_wait_lists_stopped`. A run's activation (`activation.rs`:
 /// `runtime.ready` and its initial UI requests) says whether it is still
@@ -1670,6 +1679,46 @@ impl<P: Clone> Supervisor<P> {
         self.units
             .get(&u)
             .map(|unit| list_state(unit, boot_stopped, self.now))
+    }
+    /// Everything `packages.list` reads of the unit table now
+    /// (`list_state`, `holder_of`, `waking`, `package_busy`), to compare
+    /// with an earlier one: the same key, the same answers. The clock is in
+    /// it through each run's activation (a start deadline passing turns
+    /// `Starting` into `Failed`). O(units), no I/O.
+    pub fn list_key(&self) -> ListKey {
+        let boot_stopped = self.tunables.boot_wait_lists_stopped;
+        ListKey(
+            self.units
+                .iter()
+                .map(|(u, unit)| {
+                    let holder = match unit.state {
+                        UnitState::Standby { holder, .. } => Some(holder),
+                        UnitState::Deactivating {
+                            pid,
+                            then: Then::Standby,
+                            ..
+                        } => Some(pid),
+                        _ => None,
+                    };
+                    let waking = matches!(
+                        unit.state,
+                        UnitState::Activating { pid: Some(pid), .. }
+                            if unit.from_standby && self.current(pid) == Some(*u)
+                    );
+                    let package_busy = unit
+                        .job
+                        .as_ref()
+                        .is_some_and(|job| job.origin == Origin::PackageRpc);
+                    (
+                        *u,
+                        list_state(unit, boot_stopped, self.now),
+                        holder,
+                        waking,
+                        package_busy,
+                    )
+                })
+                .collect(),
+        )
     }
     // B3: limits over every unit.
     #[cfg_attr(not(test), allow(dead_code))]

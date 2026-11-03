@@ -207,6 +207,10 @@ pub struct Store {
     /// copy of their package could not be read (an antivirus holding a
     /// file): not started, retried at the next start. Id → the error.
     deferred: BTreeMap<String, String>,
+    /// Moves whenever `catalog` or `quarantined` changes (`publish`,
+    /// `set_aside`): `packages.list` is built again only then
+    /// (`binding_manager.rs`).
+    revision: u64,
 }
 
 /// A catalog record that failed its checks when the library opened: taken
@@ -397,6 +401,7 @@ impl Store {
             quarantined: Vec::new(),
             kept: BTreeSet::new(),
             deferred: BTreeMap::new(),
+            revision: 0,
         };
         // One bad record does not stop the library (nor the player): it is
         // set aside (`quarantine.json`) and everything else opens. Nothing
@@ -953,6 +958,7 @@ impl Store {
                 "digests": digests, "entry": entry,
             }));
             self.quarantined.push(item.record.clone());
+            self.revision += 1;
         }
         let excess = kept.len().saturating_sub(MAX_QUARANTINED);
         kept.drain(..excess);
@@ -1001,6 +1007,13 @@ impl Store {
     /// Installed records left as they are this run (`deferred`): id → why.
     pub fn deferred(&self) -> &BTreeMap<String, String> {
         &self.deferred
+    }
+
+    /// Moves whenever what `installed`, `record`, `disabled`,
+    /// `quarantined` or `deferred` answer may have changed (sources of
+    /// `packages.list`).
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// `quarantine.json`'s records; none when it is missing, unreadable or
@@ -1064,6 +1077,7 @@ impl Store {
         // Publish succeeded even if the directory durability barrier fails:
         // callers must query/recover rather than blindly repeat an operation.
         self.catalog = next;
+        self.revision += 1;
         crate::platform::sync_dir(&self.root)?;
         Ok(())
     }
@@ -1074,6 +1088,11 @@ impl Store {
 
     pub fn installed(&self) -> BTreeMap<String, Installed> {
         self.catalog.installed.clone()
+    }
+
+    /// The installed records, without copying the catalog.
+    pub fn installed_records(&self) -> &BTreeMap<String, Installed> {
+        &self.catalog.installed
     }
 
     /// Installed package `id`'s record, without copying the catalog.
@@ -1867,12 +1886,24 @@ pub(crate) mod tests {
             store.set_disabled("counter", true).is_err(),
             "not installed"
         );
+        // Every catalog change moves the revision `packages.changed` checks
+        // (binding_manager.rs); reading does not.
+        let mut revision = store.revision();
+        let mut moved = |store: &Store, what: &str| {
+            assert!(store.revision() > revision, "{what}");
+            revision = store.revision();
+        };
         store.prepare("counter", 0, &first, "one").unwrap();
+        moved(&store, "prepare");
         store.commit("counter", "one").unwrap();
+        moved(&store, "commit");
+        let _ = (store.installed(), store.disabled(), store.deferred());
         store.set_disabled("counter", true).unwrap();
+        moved(&store, "disable");
         drop(store);
         let mut store = Store::open(root.path().into()).unwrap();
         assert!(store.disabled().contains("counter"));
+        let opened = store.revision();
         store
             .uninstall(
                 "counter",
@@ -1881,6 +1912,7 @@ pub(crate) mod tests {
                 false,
             )
             .unwrap();
+        assert!(store.revision() > opened, "uninstall");
         assert!(store.get("counter").current.is_none());
         assert!(store.disabled().is_empty());
         assert!(first.directory.exists(), "files are collected later");

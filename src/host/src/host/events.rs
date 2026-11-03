@@ -66,6 +66,10 @@ pub(crate) enum Event {
     /// (`host/supervisor/worker.rs`): (owner, the error); the process waits
     /// in the spawner for the Host to take it.
     Spawned(u64, std::result::Result<(), String>),
+    /// The recorder thread wrote a standby's recording, or could not
+    /// (`host/supervisor/checkpoint.rs` `Writer`): (owner, the write's
+    /// serial, the error).
+    Recorded(u64, u64, std::result::Result<(), String>),
     BackendCleaned(u64),
     DialogDone(Reply, Option<Vec<PathBuf>>),
     /// An Option + named key handed to Slint again: (window generation, Slint

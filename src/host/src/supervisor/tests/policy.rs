@@ -443,3 +443,60 @@ both! {
         assert_eq!(terminates(&acts)[0].0, 300);
     }
 }
+
+// B6 review (§17.15, "A start that times out is not retried"): a built-in
+// clicked while it starts, whose start then times out. The click is
+// answered "could not start" at the timeout, not before; the built-in
+// restarts by its class (`Restart=on-failure`) 3 s after the reap, with no
+// start retry 250 ms after it; and the fifth such timeout within 10 min
+// ends in `Failed{start-limit-hit}`, after which nothing starts it again.
+#[test]
+fn p_builtin_clicked_while_its_start_times_out() {
+    let mut sim = target();
+    let start = sim.p.start_timeout;
+    let u = sim.add(builtin("b"));
+    sim.run();
+    for i in 1..=5_u32 {
+        if sim.st(u) == S::Verify {
+            sim.verified(u, true);
+        }
+        let pid = match sim.st(u) {
+            S::Spawn(pid) => pid,
+            other => panic!("start {i}: {other:?}"),
+        };
+        sim.spawned(pid, true);
+        let click = 10 + i;
+        assert_eq!(sim.wake(pid, cmd(click)), Delivery::Held, "start {i}");
+        let t = sim.now;
+        assert!(
+            answers(&sim.at(t + start - 1)).is_empty(),
+            "start {i}: answered before the timeout"
+        );
+        let acts = sim.at(t + start);
+        assert_eq!(
+            answers(&acts),
+            vec![(click, Why::CouldNotStart)],
+            "start {i}"
+        );
+        assert_eq!(terminates(&acts).len(), 1, "start {i}");
+        sim.after(200);
+        let reap = sim.now;
+        sim.gone(pid);
+        if i < 5 {
+            let S::AutoRestart(until) = sim.st(u) else {
+                panic!("start {i}: {:?}", sim.st(u));
+            };
+            if i == 1 {
+                assert_eq!(until, reap + 3_000, "the built-in's first backoff");
+            }
+            assert!(
+                spawns(&sim.at(reap + 250)).is_empty(),
+                "start {i}: no start retry after a timeout"
+            );
+            assert!(!spawns(&sim.at(until)).is_empty(), "start {i}: restarted");
+        } else {
+            assert_eq!(sim.st(u), S::Failed("startlimithit".into()));
+            assert!(spawns(&sim.after(3_600_000)).is_empty());
+        }
+    }
+}

@@ -99,7 +99,9 @@ impl Host {
                 JobResult::Failed(error),
             ) => {
                 diag!("lazy: {id} could not start: {error}");
-                self.failures.insert(id, error.chars().take(512).collect());
+                self.failures
+                    .edit()
+                    .insert(id, error.chars().take(512).collect());
             }
             (
                 JobKind::Start {
@@ -108,7 +110,7 @@ impl Host {
                 | JobKind::Restart { image: None, .. },
                 JobResult::Failed(text),
             ) if text == STUCK_RELOAD => {
-                self.failures.insert(id, format!("reload: {text}"));
+                self.failures.edit().insert(id, format!("reload: {text}"));
             }
             _ => {}
         }
@@ -137,6 +139,7 @@ impl Host {
             return;
         }
         let directory = self.activation_dir();
+        self.recordings_written();
         let recorded = checkpoint::read(&directory, &key).is_some_and(|r| r.resident_at_ready);
         if !recorded && let Err(error) = checkpoint::write(&directory, &key, Vec::new(), true) {
             diag!("lazy: {}: its recording: {error}", self.plugin_id(owner));
@@ -152,6 +155,7 @@ impl Host {
     fn drop_checkpoint(&mut self, unit: UnitId) {
         let id = self.unit_id(unit);
         if let Some(instance) = self.installed_instance(&id) {
+            self.recordings_written();
             checkpoint::remove(&self.activation_dir(), &instance);
         }
     }
@@ -190,7 +194,7 @@ impl Host {
             } else {
                 // A crash kept in standby (T25, B4): not failed, it starts
                 // again on its next use after its hold.
-                self.failures.remove(&id);
+                self.failures.edit().remove(&id);
             }
             let plugin = &self.plugins[&owner];
             let origin = Origin {
@@ -518,6 +522,7 @@ impl Host {
             }) => {
                 diag!("installed package {id} failed to start: {error}");
                 self.failures
+                    .edit()
                     .insert(id.into(), error.to_string().chars().take(512).collect());
             }
             Some(
@@ -528,7 +533,7 @@ impl Host {
             ) => {
                 let message = RpcError::from(anyhow::anyhow!("{error:#}")).message;
                 diag!("packages.reload {id}: {message}");
-                self.failures.entry(id.into()).or_insert(message);
+                self.failures.edit().entry(id.into()).or_insert(message);
             }
             _ => {}
         }
@@ -584,7 +589,7 @@ impl Host {
             Notice::Crashed(crate::supervisor::ExitCause::Oom) => {
                 diag!("supervisor: {id} ran out of memory");
                 // Its failure, if it is listed failed, says so too.
-                if let Some(failure) = self.failures.get_mut(&id) {
+                if let Some(failure) = self.failures.edit().get_mut(&id) {
                     *failure = crate::supervisor::ExitCause::Oom.text().to_owned();
                 }
                 i18n::tr_args("{} ran out of memory", &json!([name]))
@@ -597,7 +602,9 @@ impl Host {
                 // Settings > Plugins lists it failed with why (§3.3).
                 if let Some(text) = self.supervisor.failure_of(unit) {
                     diag!("supervisor: {id} start limit hit: {text}");
-                    self.failures.insert(id, text.chars().take(512).collect());
+                    self.failures
+                        .edit()
+                        .insert(id, text.chars().take(512).collect());
                 }
                 i18n::tr_args("{} stopped after repeated faults", &json!([name]))
             }
