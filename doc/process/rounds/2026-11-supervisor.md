@@ -27,7 +27,7 @@ Coordinator record and blackboard for the supervisor project. Design: [superviso
 | B3 | **merged** (GUI check folded into the B4 release GUI test, VESTRA_LAZY=1) | `supervisor-b3` C:\vestra\wt-sup-b3 (main 0e8b a741 (#148) + spec tests) | API maintainer | live preset → B3; LIMIT 64 removed; rulings 1–4; 200-wake storm before/after; GUI test by coordinator after review |
 | B4 | **merged #150 (8400754d), host 0.6.6**; release build + GUI test passed; publishing waits for the user | `supervisor-b4` C:\vestra\wt-sup-b4, `supervisor-b4-spec` C:\vestra\wt-sup-b4spec (from ffb17c1d) | API maintainer, spec test author | restart/backoff/OOM/heap cap, shutdown ≤ 1 s, spawn worker + tick budget, ui_begin/finish; then GUI test (incl. B3 with VESTRA_LAZY=1) and release 0.6.x |
 | B5 | **merged** | `supervisor-b5` C:\vestra\wt-sup-b5 (from 8400754d) | API maintainer | per the design; unsafe/win32 part reviewed separately |
-| B6 | not started | | | release after |
+| B6 | in progress (maintainer; P4 first) | `supervisor-b6` C:\vestra\wt-sup-b6 (from 5a192ba9) | API maintainer | P4 before flip; host 0.6.7; GUI test by coordinator; SDK docs batch in parallel (`supervisor-docs`) |
 | B7 | not started | | | |
 
 ## Design questions (from spec tests or reviews)
@@ -65,6 +65,10 @@ From the spec test author (2026-11-02, branch `supervisor-spec` 22fa2a0f; 238 te
 Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 (code changes for Q15 upgrade of a disabled unit, Q24 backoff from reap; Q18 ruled by the coordinator: built-ins incl. shared members outside max_active). Spec tests compile: 234/241 pass. Coordinator rulings on the remaining design questions: (a) trigger while Standby{hold_until}: Interactive answered at once with a reason; Start job waits for hold_until only if event triggers remain; (b) shutdown emits all Checkpoints before the first Terminate; (c) built-ins first: today's semantics under `Tunables::today()`, the design row under target tunables (switch). Four implementation fixes sent to the maintainer (T11 Resident retry, Stop{Removed}×trigger Dropped, Restart×trigger Held, runner re-placement via Replay).
 
 ## Open items
+
+- SDK docs follow-up (next SDK docs patch, 1.5.59): from player 0.6.7 a timed-out start is not retried (only spawn failures are); 1.5.58's host-and-node.md/limits.md say starts that time out are retried up to 3 times.
+
+- **B7 docs instruction (user 2026-11-03):** also update the main repo `README.md` architecture section. When writing the docs: no references to round records, nor to the precedents/articles consulted (Chrome MV3, systemd, Android, etc.); shorter; plain explanations for experienced engineers who know OS concepts and other languages but not Rust.
 
 - **Needs the user — 0.6.6 publishing:** portable build ready at `C:\vestra\stage-066\VestraPlayer-0.6.6-windows-x64-portable.zip` (+ staged dir), built from main 8400754d, license check passed. Not tagged, not published: the release workflow needs remote CI (budget 0) and macOS assets can't be built here; no Inno Setup on this machine (no setup.exe). No installed player found under `%LOCALAPPDATA%\Programs\Vestra Player`, so nothing was installed as "latest". User to decide: publish a Windows-only release from the local build, wait, or re-enable CI for one release run.
 
@@ -119,6 +123,16 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 - Known bugs to pin in B0: Book entry leaked when spawn fails after `activations.begin` (`load_package`); `Host.cleanup` only grows; disable then immediate enable can run two processes on one data directory (D13).
 
 ## Log
+
+- 2026-11-03 ~13:25: B6 review → fix first (docs and one value): release note budget text (16 from ~9 GB), start-timeout statement, development stop grace 5 s per design. Own P4 re-run: p95 294 ms, idle 1 Node 88 MB; built-in classification identical to main. Ruling: a start that times out is not retried (spawn failures still are) — 4 × 60 s would hold a click ~4 min; after one 60 s timeout held clicks get "could not start" and the class policy applies; recorded by the maintainer in §17.15 (amends §17.13). Also in this round: root README sentence on VESTRA_LAZY, player SDK bump to 1.5.58, stale allow on `with_b4`.
+
+- 2026-11-03 ~12:50: B6 committed (host 0.6.7). P4 before the flip met A19: cold click p95 ~295 ms (≤ 600), built-in cold wake ≤ 61 ms shared / ≤ 370 ms own (≤ 1 s), 67 idle plugins 3744 MB → 90 MB Node private. Flip done (target preset, VESTRA_LAZY gone, old path unreachable; code removal in B7). 1269 host tests; real-node suites pass; registry identical apart from known races. Review started. Coordinator rulings on the maintainer's open points: (1) `notify_tick` rebuilding `packages.list` every 200 ms (4–12 ms ticks at ~216 packages, also when idle) violates the UI frame-rate rule at 120/144 Hz → separate small perf batch right after B6 (emit `packages.changed` on store/supervisor revision change); (2) standby recordings written on the UI thread (≤ 8 ms) → same perf batch (move off the UI thread); (3) no pressure hysteresis — keep until evidence (simulated flapping costs ≤ one 0.2 s restart per 10 s); (4) measurement scripts must recreate scratch profile dirs/junctions each run (temp cleaner).
+
+- 2026-11-03 ~11:12: SDK #73 all 22 checks green, squash-merged, origin/main = 1.5.58, tag v1.5.58 pushed (release workflow publishes; macOS non-gating). Player SDK bump to 1.5.58 is docs-only (types.ts comments) — fold into B6/B7. B6 maintainer measuring P4.
+
+- 2026-11-03 ~11:35: SDK 1.5.58 docs (supervisor behaviour for plugin authors; B5/B6 labelled 0.6.7 since the 0.6.6 build predates B5) reviewed: numbers/labels verified; wording fixes applied and checked by the coordinator; PR vestra-player-sdk#73 opened (public repo CI). Merge + tag v1.5.58 when Linux/Windows checks pass.
+
+- 2026-11-03 ~11:05: B5 follow-up checked (Origin::Budget, checked_mul, docs) → **#151 (B5) squash-merged → main 5a192ba9.** B6 maintainer briefed (P4 measurement first on main with VESTRA_LAZY=1; flip only if targets met; host 0.6.7). SDK docs batch (second maintainer instance, SDK worktree `C:\vestra\wt-sdkdocs-sup`) for B3–B6 behaviour. Removed worktree sup-b5.
 
 - 2026-11-03 ~10:50: B5 reviews → merge (unsafe: SAFETY comments true, handle !Send, NULL check right; core: own budget probe LRU order 1..10,2 exactly as predicted, pressure probe as designed). Small fixes sent to the maintainer (README wording, budget-vs-pressure log attribution, §15 annotation, checked_mul). For B6 P4: watch for None↔Low oscillation (no hysteresis).
 
