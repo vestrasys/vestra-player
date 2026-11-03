@@ -446,7 +446,9 @@ fn a_parked_plugin_is_listed_running_idle_and_its_park_announces_nothing() {
             "const shown = (list) => {{ const p = list.find((p) => p.id === \"{IDLE}\"); return `${{p?.state}} ${{p?.process}}`; }};\n\
              export default function activate(plugin) {{\n\
              plugin.player.onChange(() => {{}});\n\
-             plugin.packages.onChange((list) => console.error(`{WATCH} changed ${{shown(list)}}`));\n\
+             const key = (list) => JSON.stringify(list.map((p) => ({{ ...p, process: undefined }})));\n\
+             let last = null;\n\
+             plugin.packages.onChange((list) => {{ const now = key(list); console.error(`{WATCH} changed ${{shown(list)}} same=${{now === last}}`); last = now; }});\n\
              setTimeout(async () => console.error(`{WATCH} listed ${{shown(await plugin.packages.list())}}`), 3500);\n}}\n"
         ),
     );
@@ -462,10 +464,12 @@ fn a_parked_plugin_is_listed_running_idle_and_its_park_announces_nothing() {
     let listed = at(&log, &format!("{WATCH} listed running idle"));
     assert!(parked < listed, "{log}");
     at(&log, &format!("lazy: {WATCH} classified resident"));
-    // Once `running` (with its process, or already idle if the first
-    // announcement came after the park), never again for the park.
-    let running = log.matches(&format!("{WATCH} changed running")).count();
-    assert!(running <= 1, "the park was announced: {log}");
+    // Every announcement changes something other than `process`: the park
+    // (`process` running → idle) is never announced by itself. (Counting
+    // the announcements that show it `running` raced with another plugin's
+    // change announced after the park: about 1 run in 30.)
+    assert!(log.contains(&format!("{WATCH} changed")), "{log}");
+    assert!(!log.contains("same=true"), "the park was announced: {log}");
 }
 
 /// B0 known bug, fixed in B2a (supervisor.md §0 D3, A18 (1), §17.8).

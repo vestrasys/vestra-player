@@ -1138,6 +1138,16 @@ impl<P: Clone> Supervisor<P> {
                 {
                     *sub = ActivatingSub::Ready;
                 }
+                // Today nothing waits on a start the Host ran once its
+                // process exists; only a wake holds its triggers until the
+                // ready (`start_job_ends_at_spawn`, off from B3).
+                let ends = self.tunables.start_job_ends_at_spawn
+                    && self.units[&u].job.as_ref().is_some_and(|job| {
+                        job.starts() && !matches!(job.cause(), Some(Cause::Trigger(_)))
+                    });
+                if ends {
+                    self.finish(u, JobResult::Done);
+                }
                 self.try_ready(u);
             }
             Err(text) => self.spawn_failed(u, pid, text),

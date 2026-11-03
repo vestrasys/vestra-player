@@ -410,6 +410,22 @@ impl Host {
             .filter(|(_, plugin)| plugin.shared_runner() == Some(id))
             .map(|(owner, plugin)| (*owner, plugin.manifest.id.clone()))
             .collect::<Vec<_>>();
+        // Queued again first (as today's `to_start`, counted as built-ins
+        // still to load), so no third-party first run takes a place while
+        // their stops run.
+        for (_, plugin) in &members {
+            if !failed_open {
+                self.packages.verify(plugin);
+            }
+            if !self.packages.to_load.contains(plugin) {
+                let builtins = &self.packages.builtins;
+                queue_again(&mut self.packages.to_load, plugin.clone(), |id| {
+                    builtins.contains_key(id)
+                });
+            }
+        }
+        let queued = self.builtins_to_load();
+        self.supervisor.set_builtins_to_load(queued);
         // The runner is killed already: no member gets its `runtime.stop`
         // (their cleanups do not run; nothing is left to tell).
         for (owner, _) in &members {
@@ -418,19 +434,6 @@ impl Host {
         let owners = members.iter().map(|(owner, _)| *owner).collect::<Vec<_>>();
         self.units_killed_with_runner(&owners);
         self.supervisor_run();
-        for (_, plugin) in members {
-            if !failed_open {
-                self.packages.verify(&plugin);
-            }
-            if !self.packages.to_load.contains(&plugin) {
-                let builtins = &self.packages.builtins;
-                queue_again(&mut self.packages.to_load, plugin, |id| {
-                    builtins.contains_key(id)
-                });
-            }
-        }
-        let queued = self.builtins_to_load();
-        self.supervisor.set_builtins_to_load(queued);
         let text = if failed_open {
             diag!(
                 "shared runner: {} restarts within {} s; every plugin runs in its own process until the player quits",

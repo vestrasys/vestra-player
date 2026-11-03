@@ -190,6 +190,14 @@ pub struct Tunables {
     /// first-run place (`start_queued` → `start_installed` → `FirstQueue`).
     /// Off (B3): the check runs in `Activating{Verify}` on the place (T4).
     pub verify_before_first_run_place: bool,
+    /// A start that is not a wake (boot, first run, enable, reload, an
+    /// install's target, a restore, a development load) ends `Done` once
+    /// its process is spawned: today the Host's start runs and nothing waits
+    /// on it after (B2b's hand-off ended there), so its triggers go to the
+    /// new process and a package RPC on it is not `busy` while it
+    /// activates; its readiness is the activation's (`packages.list`, an
+    /// operation's commit). Off (B3): a start job ends at its ready (T9).
+    pub start_job_ends_at_spawn: bool,
 }
 
 impl Policy {
@@ -263,6 +271,7 @@ impl Tunables {
             remove_data_waits_cleanup: false,
             deliver_while_starting: true,
             verify_before_first_run_place: true,
+            start_job_ends_at_spawn: true,
         }
     }
 
@@ -288,6 +297,7 @@ impl Tunables {
         self.boot_wait_lists_stopped = false;
         self.deliver_while_starting = false;
         self.verify_before_first_run_place = false;
+        self.start_job_ends_at_spawn = false;
         self
     }
 
@@ -296,6 +306,8 @@ impl Tunables {
     // The Host switches presets in B3–B6.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn with_b4(mut self) -> Self {
+        // A start retry (T11, F1) is the start job's: it lives to the ready.
+        self.start_job_ends_at_spawn = false;
         let retry = Some(Retry {
             count: 3,
             base: 250,
@@ -460,10 +472,12 @@ mod tests {
         assert!(t.boot_wait_lists_stopped && t.resident_idle_standby);
         assert!(!t.remove_data_waits_cleanup);
         assert!(t.deliver_while_starting && t.verify_before_first_run_place);
+        assert!(t.start_job_ends_at_spawn);
         let b3 = Tunables::legacy().with_b3(8);
         assert!(!b3.enable_wait_busy && !b3.first_run_parks_when_idle);
         assert!(!b3.boot_wait_lists_stopped);
         assert!(!b3.deliver_while_starting && !b3.verify_before_first_run_place);
+        assert!(!b3.start_job_ends_at_spawn);
         assert!(b3.resident_idle_standby);
         let target = Tunables::target(8, 16_384);
         assert!(target.crash_notice && target.start_failure_notice && target.answer_held);

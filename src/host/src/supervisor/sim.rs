@@ -614,10 +614,13 @@ fn start_timeout_fails_without_retry_legacy() {
         grace: 300,
         keep_registrations: false
     }));
-    assert!(actions.iter().any(|a| matches!(
-        a,
-        Action::JobFinished { result: JobResult::Failed(t), .. } if t == "activation timed out"
-    )));
+    // Today nothing waits on a start once its process exists
+    // (`start_job_ends_at_spawn`): the timeout is the unit's failure.
+    assert!(
+        !actions
+            .iter()
+            .any(|a| matches!(a, Action::JobFinished { .. }))
+    );
     assert!(w.tick(15_300).contains(&Action::Kill { unit: u, pid }));
     w.s.process_reaped(pid, None);
     w.s.backend_cleaned(pid);
@@ -1407,8 +1410,10 @@ fn q24_backoff_and_hold_count_from_the_reap() {
 #[test]
 fn builtins_first_legacy_vs_design_row() {
     for mode in [BuiltinsFirst::Queued, BuiltinsFirst::Installed] {
+        // The design row reads the start jobs to the ready (B3).
         let tunables = Tunables {
             builtins_first: mode,
+            start_job_ends_at_spawn: mode == BuiltinsFirst::Queued,
             ..Tunables::legacy()
         };
         let mut w = World::new(tunables);

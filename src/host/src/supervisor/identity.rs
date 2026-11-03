@@ -84,9 +84,10 @@ impl<P: Clone> Supervisor<P> {
 
     /// When a unit woken from standby started `pid`, while it is not ready
     /// yet (today's `lazy.waking`): triggers and wake events for it are
-    /// held for its ready. Any other start delivers to its process at once
-    /// under `Tunables::deliver_while_starting` (today's boot, first run,
-    /// enable, reload, install and development starts).
+    /// held for its ready. Any other start (boot, first run, enable, reload,
+    /// an install's target, a restore, a development load) ends its job
+    /// once spawned (`Tunables::start_job_ends_at_spawn`) and delivers to
+    /// its process at once (`Tunables::deliver_while_starting`), as today.
     pub fn waking(&self, pid: Pid) -> Option<Ms> {
         let u = self.current(pid)?;
         let unit = self.units.get(&u)?;
@@ -1079,5 +1080,94 @@ mod tests {
         s.backend_cleaned(Pid(1));
         let actions = s.run_jobs(4);
         assert_eq!(spawned(&actions), Some(Pid(2)), "{actions:?}");
+    }
+
+    /// Review B2d (blocking): a start the Host ran (enable after a disable,
+    /// reload, an install's target) is not waited on once its process
+    /// exists (`start_job_ends_at_spawn`): a trigger to the new process goes
+    /// at once while it activates (an `activate()` awaiting its own
+    /// command or UI callback), and a package RPC on it is not `busy`, as
+    /// in B2c (the hand-off job ended at the spawn). From B3 the job ends at
+    /// its ready: held, busy.
+    #[test]
+    fn b2d_a_restarted_run_is_not_waited_on_once_spawned() {
+        for legacy in [true, false] {
+            for case in ["enable", "reload", "install"] {
+                let tunables = if legacy {
+                    Tunables::legacy()
+                } else {
+                    Tunables::legacy().with_b3(8)
+                };
+                let mut s = Supervisor::<u32>::new(tunables, 1);
+                let u = s.add_unit(UnitSpec::new("a.one", Class::Normal));
+                assert_eq!(spawned(&s.run_jobs(0)), Some(Pid(1)));
+                s.process_spawned(Pid(1), Ok(()));
+                s.process_ready(Pid(1));
+                s.run_jobs(0);
+                match case {
+                    "enable" => {
+                        s.disable(u).unwrap();
+                        s.run_jobs(1);
+                        s.enable(u).unwrap();
+                    }
+                    "reload" => {
+                        s.restart(u, true, None).unwrap();
+                    }
+                    _ => {
+                        s.enqueue_job(
+                            u,
+                            JobKind::Restart {
+                                fresh: true,
+                                image: Some("d".into()),
+                            },
+                            super::super::JobMode::Replace,
+                            super::super::Priority::Interactive,
+                            super::super::Origin::PackageRpc,
+                        )
+                        .unwrap();
+                    }
+                }
+                s.run_jobs(1);
+                s.process_reaped(Pid(1), None);
+                s.backend_cleaned(Pid(1));
+                let pid = spawned(&s.run_jobs(2)).expect("respawn");
+                s.process_spawned(pid, Ok(()));
+                assert_eq!(s.waking(pid), None);
+                let delivery = s.wake(pid, &Trigger::interactive(7));
+                if legacy {
+                    assert_eq!(delivery, Delivery::Now, "{case}");
+                    assert!(!s.package_busy(u), "{case}");
+                    assert!(s.disable(u).is_ok(), "{case}");
+                } else {
+                    assert_eq!(delivery, Delivery::Held, "{case}");
+                    assert!(s.package_busy(u) || case == "enable", "{case}");
+                }
+            }
+        }
+    }
+
+    /// Review notes B2-3 / B2-5: a late `RemoveData` of the uninstalled
+    /// process after a reinstall took the unit back leaves the new unit
+    /// (`removable` is false: it is no longer removed).
+    #[test]
+    fn b2d_a_late_remove_data_after_a_reinstall_keeps_the_new_unit() {
+        let mut s = new();
+        let u = ready(&mut s, "a.one", 1, 0, true);
+        s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
+        s.run_jobs(1);
+        // Stuck: lands removed while its process is still tracked.
+        s.run_jobs(20_001);
+        assert!(s.unit(u).unwrap().removed);
+        assert!(!s.removable(u), "its process is still tracked");
+        assert_eq!(s.add_unit(UnitSpec::new("a.one", Class::Normal)), u);
+        assert!(!s.unit(u).unwrap().removed);
+        s.process_reaped(Pid(1), None);
+        let actions = s.run_jobs(20_002);
+        assert!(actions.contains(&Action::RemoveData { unit: u }));
+        assert!(!s.removable(u), "a reinstall owns the unit");
+        s.backend_cleaned(Pid(1));
+        s.run_jobs(20_003);
+        assert!(!s.removable(u));
+        assert_eq!(s.by_id("a.one"), Some(u));
     }
 }
