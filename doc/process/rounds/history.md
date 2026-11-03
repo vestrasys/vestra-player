@@ -173,11 +173,23 @@ The plugin process supervisor round (B0–B7, 0.6.4–0.7.0) is folded in above.
 
 | Item | State |
 | --- | --- |
-| Release 0.7.1 | 0.7.0 was built and GUI-checked locally but never tagged; the store tabs change goes in, host 0.7.1. After merge: main CI, tag `v0.7.1`, `release.yml` builds the installers, verify `latest.json` against `SHA256SUMS`, publish (user, 2026-11-03) |
+| Release 0.7.1 | Merged (#158, main 033adccf); tag `v0.7.1` pushed; `release.yml` running. Then verify `latest.json` against `SHA256SUMS` and publish (user, 2026-11-03) |
 | SDK 1.6.1 docs patch | Open (see §4) |
-| Download page (`redesign` branch, not deployed) | AI and store clips re-edited with zoom; feature order menus, store, AI, VestraNES; AI workshop chapter removed; AI clip being re-recorded with a short prompt (the generated colour picker wrote `.cube` files with `MIN`/`MAX` instead of `DOMAIN_MIN`/`DOMAIN_MAX`; asked Vestra AI to fix it from the error text alone) |
+| Download page (`redesign` branch, not deployed) | Feature order menus, store, AI, VestraNES; AI workshop chapter removed; store and AI clips zoomed; AI clip shows a three-wheel colour grading plugin (install → wheels, no store or menu shots); hero near cards play the AI and VestraNES clips; AI caption generic plus "your own AI provider key" |
+| Plugin repository security scan (`security-scan` branch, plugin repo) | Semgrep plugin-risk rules with a `security-review` label, CodeQL, Dependency Review, OSV-Scanner, Scorecard; bundle inputs checked against the plugin's own files (esbuild metafile); third review running. Repo settings done: `security-review` label, secret scanning + push protection, private vulnerability reporting. SDK request: `vestra-plugin build` could emit its metafile |
+| Window-open hitch and Options flash (`window-compile-cache` branch) | Measured offline: each window's `.slint` is compiled on the UI thread at every open (store ≈260 ms, AI ≈145 ms, Properties ≈65 ms, Options ≈260 ms release), which stalls the video; `ComponentDefinition` is not Send, so no background compile. Bug fixes in progress: Options does not rebuild or replace its native window when a woken plugin re-registers an unchanged page; no double compile on the open path. **Compile cache: not approved** (see the decision below) |
+| Shader Upscale presets (plugin repo) | Adding AMD FSR 1, CfL Lite (chroma) and adaptive-sharpen next to Anime4K; vo_gpu path means no COMPUTE (macOS GL 4.1), no PARAM (macOS mpv 0.41), permissive licences only. ArtCNN waits for gpu-next in libmpv |
+
+Decisions this round:
+
+- **No compile cache for windows yet** (user, 2026-11-03). A brief stall when a window opens is acceptable for now. A cache keeps compiled definitions in memory and could become a new unbounded consumer, which the supervisor work (2000-plugin stress test) set out to prevent. Before any cache: an experiment that measures memory per cached definition and the total under many plugins, with a hard bound (entries and bytes), cache only on open, eviction with the owning plugin and under memory pressure; then a user decision.
+- **No hide-instead-of-destroy for windows** (user, 2026-11-03): it hides the problem rather than fixing it.
+- **The Options window is not special** in how it compiles and updates (user, 2026-11-03); only its composition of many plugins' pages is.
+- **Plugin repository security** (user, 2026-11-03): no runtime sandbox for plugins; scan at PR time in the plugin repository and review flagged plugins by hand.
 
 Log (newest first):
+
+- 2026-11-03: #157 (history, workflow folder) and #158 (store tabs, 0.7.1) merged; v0.7.1 tagged. #159 README Architecture shortened (current design only, simpler diagram). Vestra AI recordings: a one-line colour-picker prompt produced a plugin whose first version wrote invalid `.cube` files; told only the error text, Vestra AI found and fixed it. Final demo uses a colour-wheels prompt with a DaVinci Resolve example; it worked first time.
 
 - 2026-11-03: store tabs All · Installed · Updates (store 0.2.11; user ruling, GNOME Software / JetBrains / VS Code practice); host 0.7.1; release note v0.7.0 → v0.7.1.
 
