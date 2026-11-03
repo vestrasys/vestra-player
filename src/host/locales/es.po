@@ -461,17 +461,27 @@ msgstr "Separar como ventana flotante"
 msgid "Close the sidebar"
 msgstr "Cerrar la barra lateral"
 
-#: ui/vestra/markdown.slint:142
+#: ui/vestra/markdown.slint:77 ui/vestra/markdown.slint:137 ui/vestra/markdown.slint:286
 #, x-machine
 msgid "Copy"
 msgstr "Copiar"
 
-#: ui/vestra/markdown.slint:163
+#: ui/vestra/markdown.slint:141
+#, x-machine
+msgid "Copy Link"
+msgstr "Copiar enlace"
+
+#: ui/vestra/markdown.slint:82
+#, x-machine
+msgid "Select All"
+msgstr "Seleccionar todo"
+
+#: ui/vestra/markdown.slint:307
 #, x-machine
 msgid "[Image]"
 msgstr "[Imagen]"
 
-#: ui/vestra/markdown.slint:163
+#: ui/vestra/markdown.slint:307
 #, x-machine
 msgid "[Image] {}"
 msgstr "[Imagen] {}"

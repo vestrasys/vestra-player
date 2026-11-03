@@ -13,8 +13,8 @@
 //   ≤ 64 KiB per string, ≤ 1 MiB of text in all (documents included). The
 //   newest rows that fit a smaller budget are sent; a notice says how many
 //   older ones are not shown (they stay in the session's JSONL).
-// - A tool line's calls are sent only while it is expanded (each call is a
-//   few value nodes); a message cut short says so (`truncated`, ai.slint).
+// - An activity row's steps are sent only while it is expanded (each step is
+//   a few value nodes); a message cut short says so (`truncated`, ai.slint).
 import type { MarkdownRef } from "@vestra-player/sdk";
 import type { Row, ToolCall } from "./chat.ts";
 
@@ -60,22 +60,17 @@ export type PropRow = {
   code: string;
   args: string[];
   n: number;
+  seconds: number;
   calls: ToolCall[];
   call: ToolCall;
-  phase: string;
   failed: number;
   /** The message is longer than shown. */
   truncated: boolean;
 };
 
 const textLimit = (row: Row) => (row.kind === "assistant" ? MAX_DOC_BYTES : MAX_FIELD_BYTES);
-/** The calls sent for a row: only an expanded tool line lists them. */
-const callsOf = (row: Row) => (row.kind === "tools" && row.expanded ? row.calls : []);
-/**
- * The text sent for a row: a thought row's (thinking and progress notes, often
- * long) only while it is expanded, so collapsed ones cost the list nothing.
- */
-const textOf = (row: Row) => (row.kind === "thought" && !row.expanded ? "" : row.text);
+/** The steps sent for a row: only an expanded activity row lists them. */
+const callsOf = (row: Row) => (row.kind === "activity" && row.expanded ? row.calls : []);
 
 export class MessageDocs {
   private readonly docs = new Map<string, { text: string; ref: MarkdownRef }>();
@@ -97,7 +92,7 @@ export class MessageDocs {
       const row = rows[first - 1];
       const calls = callsOf(row);
       const size =
-        bytes(cut(textOf(row), textLimit(row))) +
+        bytes(cut(row.text, textLimit(row))) +
         bytes(cut(row.detail, MAX_FIELD_BYTES)) +
         row.args.reduce((sum, arg) => sum + bytes(arg), 0) +
         [...calls, row.call].reduce((sum, call) => sum + bytes(call.tool) + bytes(call.target), 0);
@@ -161,9 +156,9 @@ export class MessageDocs {
         code: "hidden",
         args: [],
         n: hidden,
+        seconds: 0,
         calls: [],
         call: none,
-        phase: "",
         failed: 0,
         truncated: false,
       });
@@ -172,7 +167,7 @@ export class MessageDocs {
       out.push({
         id: row.id,
         kind: row.kind,
-        text: doc ? "" : cut(textOf(row), MAX_FIELD_BYTES),
+        text: doc ? "" : cut(row.text, MAX_FIELD_BYTES),
         detail: cut(row.detail, MAX_FIELD_BYTES),
         state: row.state,
         expanded: row.expanded,
@@ -181,11 +176,11 @@ export class MessageDocs {
         code: row.code,
         args: row.args,
         n: row.n,
+        seconds: row.seconds,
         calls: callsOf(row),
         call: row.call,
-        phase: row.phase,
         failed: row.failed,
-        truncated: bytes(textOf(row)) > (doc ? MAX_DOC_BYTES : MAX_FIELD_BYTES),
+        truncated: bytes(row.text) > (doc ? MAX_DOC_BYTES : MAX_FIELD_BYTES),
       });
     }
     return out;

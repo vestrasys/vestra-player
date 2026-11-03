@@ -116,7 +116,7 @@ test("a tool call that tries to leave the work folder fails and the turn goes on
   );
   const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
   await ai.ask("读 ../meta.json");
-  assert.equal(ai.kinds(), "user,tools,assistant");
+  assert.equal(ai.kinds(), "user,activity,assistant");
   assert.equal(ai.rows()[1].state, 2);
   assert.equal(await ai.calls(1), "✗ 读取 ../meta.json");
   const result = mock.chats[1].body.messages.at(-1);

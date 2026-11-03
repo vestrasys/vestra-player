@@ -63,9 +63,9 @@ test("Custom · Anthropic format: listed model, streamed reply and a tool call o
   assert.deepEqual(ai.page.props.models, ["mock-1", "mock-2"]);
   assert.equal(ai.modelLine(), "自定义 · Anthropic 格式 · mock-1");
   await ai.ask("写 a.md");
-  assert.equal(ai.kinds(), "user,thought,tools,assistant");
-  // 「好的」 came before a tool call: a progress note in the collapsed thought row, not the answer.
-  assert.equal(ai.rows()[3].text, "写好了");
+  assert.equal(ai.kinds(), "user,activity,assistant");
+  // 「好的」 came before a tool call: a progress note, not the answer.
+  assert.equal(ai.rows()[2].text, "写好了");
   const chat = mock.requests.filter((r) => r.method === "POST");
   assert.equal(new URL(chat[0].url, "http://x").pathname, "/v1/messages");
   assert.equal(chat[0].headers["x-api-key"], KEY);
@@ -89,7 +89,7 @@ test("an endpoint without a model list: say so, and a typed model id works", asy
   await ai.stop();
 });
 
-test("the status line is live: Thinking before the first event, each tool call, then the summary; it expands", async () => {
+test("the activity row is live: Working… before the first event, each step, then the summary; it expands", async () => {
   const mock = await server((req) =>
     req.body.messages.at(-1).role === "tool"
       ? { text: ["完成"], delayMs: 1200 }
@@ -97,11 +97,12 @@ test("the status line is live: Thinking before the first event, each tool call, 
   );
   const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
   await ai.ask("写 notes.md", { wait: false });
-  const status = () => (ai.rows()[1]?.kind === "tools" ? ai.shown(1) : undefined);
-  await ai.until(() => status() === "思考中…" && ai.rows()[1].state === 0, "thinking before the first event", 5_000);
-  await ai.until(() => status() === "写入 notes.md ✓ · 思考中…", "the tool call, then thinking again", 5_000);
+  const status = () => (ai.rows()[1]?.kind === "activity" ? ai.shown(1) : undefined);
+  await ai.until(() => status() === "处理中…" && ai.rows()[1].state === 0, "working before the first event", 5_000);
+  assert.deepEqual(ai.kinds(), "user,activity", "one row says what goes on (no separate thinking row)");
+  await ai.until(() => status() === "处理中… · 写入 notes.md ✓", "the step, without a model phase", 5_000);
   await ai.until(() => ai.props.busy === false, "end");
-  assert.equal(status(), "1 个工具调用");
+  assert.match(status(), /^用时 \d+ 秒 · 1 个步骤$/);
   assert.equal(ai.rows()[1].expanded, false);
   await ai.send("toggle", ai.rows()[1].id);
   assert.equal(ai.rows()[1].expanded, true);
@@ -110,11 +111,11 @@ test("the status line is live: Thinking before the first event, each tool call, 
   await ai.stop();
 });
 
-test("a reply without tool calls keeps no status line", async () => {
+test("a reply without tool calls or thinking keeps no activity row", async () => {
   const mock = await server(() => ({ text: ["只是回答"], delayMs: 300 }));
   const ai = await startAi({ compat: mock.url });
   await ai.ask("你好", { wait: false });
-  await ai.until(() => ai.rows()[1]?.kind === "tools" && ai.shown(1) === "Thinking…", "thinking", 5_000);
+  await ai.until(() => ai.rows()[1]?.kind === "activity" && ai.shown(1) === "Working…", "working", 5_000);
   await ai.until(() => ai.props.busy === false, "end");
   assert.equal(ai.kinds(), "user,assistant");
   await ai.stop();
