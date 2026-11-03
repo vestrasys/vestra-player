@@ -861,6 +861,12 @@ impl Host {
     /// lazy first run goes to standby at once if the Host's own idle check
     /// passes and its recording is written, else as soon as it is idle.
     fn class_known(&mut self, owner: u64, resident: Option<String>, backend: Value) {
+        let first_run = self.on_demand.first_runs.running.contains(&owner);
+        if resident.is_some() {
+            // Its place goes to the next first run (also when the core closed
+            // the classification already: today's timeout path frees it).
+            self.on_demand.first_runs.running.remove(&owner);
+        }
         // The core closed this run's classification already (answered, or
         // timed out): a late answer changes nothing, and writes nothing
         // (today's `lazy_answer` drops it once `lazy_classify_tick` gave up).
@@ -874,11 +880,6 @@ impl Host {
                 self.resident_listeners(owner)
             ),
             None => diag!("lazy: {id} classified lazy"),
-        }
-        let first_run = self.on_demand.first_runs.running.contains(&owner);
-        if resident.is_some() {
-            // Its place goes to the next first run.
-            self.on_demand.first_runs.running.remove(&owner);
         }
         let now = self.now_ms();
         let busy = resident.is_none()
