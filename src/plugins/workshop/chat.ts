@@ -94,6 +94,11 @@ export class Chat {
   private startedAt = 0;
   /** The model thought in this turn (keeps the activity row of a turn without steps). */
   private thought = false;
+  /**
+   * The live turn that `endTurn` just closed, for an automatic retry that
+   * continues it (pi retries after an error: the same turn, the same row).
+   */
+  private closed: { row: Row | undefined; calls: (ToolCall & { id: string })[]; startedAt: number; thought: boolean; note: string; answer: Row | undefined } | undefined;
   /** The turn's latest progress note: the answer after all if the turn ends without one. */
   private lastNote = "";
   /** Where the current model message's text starts in the answer row (-1: none open). */
@@ -236,9 +241,11 @@ export class Chat {
   /** Closes the current turn: no more text or calls join its rows. */
   endTurn() {
     this.messageStart = -1;
+    const note = this.lastNote;
+    let answer: Row | undefined;
     // A turn that ends without an answer (the summary came with the last tool
     // call; Stop, a timeout or an error after it): its latest note is the answer.
-    if (!this.assistant && this.lastNote) this.assistant = this.push({ kind: "assistant", text: this.lastNote, state: 1 });
+    if (!this.assistant && note) answer = this.assistant = this.push({ kind: "assistant", text: note, state: 1 });
     this.lastNote = "";
     if (this.assistant) this.assistant.state = 1;
     const row = this.activityRow;
@@ -247,12 +254,34 @@ export class Chat {
       // A turn with no step keeps its row only when it was timed and the model thought.
       if (!this.calls.length && !(this.live && this.thought)) this.rows.splice(this.rows.indexOf(row), 1);
     }
+    this.closed = this.live ? { row, calls: this.calls, startedAt: this.startedAt, thought: this.thought, note, answer } : undefined;
     this.live = false;
     this.refreshActivity();
     this.activityRow = undefined;
     this.assistant = undefined;
     this.calls = [];
     this.thought = false;
+  }
+
+  /**
+   * An automatic retry continues the turn an error closed: "Working…" again
+   * in the same activity row (back in place if it had gone), its steps and
+   * time go on, and a last note shown as the answer is a note again.
+   */
+  private resume() {
+    const closed = this.closed;
+    if (!closed || this.live) return;
+    this.closed = undefined;
+    this.live = true;
+    this.startedAt = closed.startedAt;
+    this.calls = closed.calls;
+    this.thought = closed.thought;
+    this.lastNote = closed.note;
+    if (closed.answer && this.rows.includes(closed.answer)) this.rows.splice(this.rows.indexOf(closed.answer), 1);
+    const row = closed.row ?? Chat.row({ kind: "activity", state: 0 });
+    if (!this.rows.includes(row)) this.rows.splice(this.rows.findLastIndex((r) => r.kind === "user") + 1, 0, row);
+    this.activityRow = row;
+    this.refreshActivity();
   }
 
   /** A live event from the worker. */
@@ -289,6 +318,7 @@ export class Chat {
         // pi retries by itself: the failed attempt's error row gives way.
         if (this.rows.at(-1)?.kind === "error") this.rows.pop();
         this.notice("retry", [event.attempt, event.max]);
+        this.resume();
         break;
       case "compaction":
         this.notice(event.done ? "compacted" : "compacting");

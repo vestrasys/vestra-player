@@ -461,27 +461,27 @@ msgstr "フローティングウインドウとして切り離す"
 msgid "Close the sidebar"
 msgstr "サイドバーを閉じる"
 
-#: ui/vestra/markdown.slint:77 ui/vestra/markdown.slint:137 ui/vestra/markdown.slint:286
+#: ui/vestra/markdown.slint:80 ui/vestra/markdown.slint:148 ui/vestra/markdown.slint:297
 #, x-machine
 msgid "Copy"
 msgstr "コピー"
 
-#: ui/vestra/markdown.slint:141
+#: ui/vestra/markdown.slint:152
 #, x-machine
 msgid "Copy Link"
 msgstr "リンクをコピー"
 
-#: ui/vestra/markdown.slint:82
+#: ui/vestra/markdown.slint:93
 #, x-machine
 msgid "Select All"
 msgstr "すべて選択"
 
-#: ui/vestra/markdown.slint:307
+#: ui/vestra/markdown.slint:318
 #, x-machine
 msgid "[Image]"
 msgstr "[画像]"
 
-#: ui/vestra/markdown.slint:307
+#: ui/vestra/markdown.slint:318
 #, x-machine
 msgid "[Image] {}"
 msgstr "[画像] {}"

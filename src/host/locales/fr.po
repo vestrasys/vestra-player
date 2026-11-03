@@ -463,27 +463,27 @@ msgstr "Détacher en fenêtre flottante"
 msgid "Close the sidebar"
 msgstr "Fermer la barre latérale"
 
-#: ui/vestra/markdown.slint:77 ui/vestra/markdown.slint:137 ui/vestra/markdown.slint:286
+#: ui/vestra/markdown.slint:80 ui/vestra/markdown.slint:148 ui/vestra/markdown.slint:297
 #, x-machine
 msgid "Copy"
 msgstr "Copier"
 
-#: ui/vestra/markdown.slint:141
+#: ui/vestra/markdown.slint:152
 #, x-machine
 msgid "Copy Link"
 msgstr "Copier le lien"
 
-#: ui/vestra/markdown.slint:82
+#: ui/vestra/markdown.slint:93
 #, x-machine
 msgid "Select All"
 msgstr "Tout sélectionner"
 
-#: ui/vestra/markdown.slint:307
+#: ui/vestra/markdown.slint:318
 #, x-machine
 msgid "[Image]"
 msgstr "[Image]"
 
-#: ui/vestra/markdown.slint:307
+#: ui/vestra/markdown.slint:318
 #, x-machine
 msgid "[Image] {}"
 msgstr "[Image] {}"

@@ -378,23 +378,23 @@ msgstr "分离为浮动窗口"
 msgid "Close the sidebar"
 msgstr "关闭侧栏"
 
-#: ui/vestra/markdown.slint:77 ui/vestra/markdown.slint:137 ui/vestra/markdown.slint:286
+#: ui/vestra/markdown.slint:80 ui/vestra/markdown.slint:148 ui/vestra/markdown.slint:297
 msgid "Copy"
 msgstr "复制"
 
-#: ui/vestra/markdown.slint:141
+#: ui/vestra/markdown.slint:152
 msgid "Copy Link"
 msgstr "复制链接"
 
-#: ui/vestra/markdown.slint:82
+#: ui/vestra/markdown.slint:93
 msgid "Select All"
 msgstr "全选"
 
-#: ui/vestra/markdown.slint:307
+#: ui/vestra/markdown.slint:318
 msgid "[Image]"
 msgstr "[图片]"
 
-#: ui/vestra/markdown.slint:307
+#: ui/vestra/markdown.slint:318
 msgid "[Image] {}"
 msgstr "[图片] {}"
 

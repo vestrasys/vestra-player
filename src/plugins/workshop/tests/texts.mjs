@@ -82,7 +82,10 @@ export function activityLine(host, row) {
   if (row.code === "working") return row.call.tool ? `${working} · ${callLabel(host, row.call)}${row.call.state === 0 ? "…" : row.call.state === 2 ? " ✗" : " ✓"}` : working;
   const steps = plural(host, "{n} step", "{n} steps", row.n);
   const done = row.failed > 0 ? host.translate("{0}, {1} failed", [steps, row.failed]) : steps;
-  const worked = plural(host, "Worked for {n} second", "Worked for {n} seconds", row.seconds);
+  const worked =
+    row.seconds < 60
+      ? plural(host, "Worked for {n} second", "Worked for {n} seconds", row.seconds)
+      : host.translate("Worked for {0} min {1} s", [Math.floor(row.seconds / 60), row.seconds % 60]);
   return row.seconds > 0 && row.n > 0 ? `${worked} · ${done}` : row.seconds > 0 ? worked : done;
 }
 

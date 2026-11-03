@@ -461,27 +461,27 @@ msgstr "플로팅 창으로 분리"
 msgid "Close the sidebar"
 msgstr "사이드바 닫기"
 
-#: ui/vestra/markdown.slint:77 ui/vestra/markdown.slint:137 ui/vestra/markdown.slint:286
+#: ui/vestra/markdown.slint:80 ui/vestra/markdown.slint:148 ui/vestra/markdown.slint:297
 #, x-machine
 msgid "Copy"
 msgstr "복사"
 
-#: ui/vestra/markdown.slint:141
+#: ui/vestra/markdown.slint:152
 #, x-machine
 msgid "Copy Link"
 msgstr "링크 복사"
 
-#: ui/vestra/markdown.slint:82
+#: ui/vestra/markdown.slint:93
 #, x-machine
 msgid "Select All"
 msgstr "모두 선택"
 
-#: ui/vestra/markdown.slint:307
+#: ui/vestra/markdown.slint:318
 #, x-machine
 msgid "[Image]"
 msgstr "[이미지]"
 
-#: ui/vestra/markdown.slint:307
+#: ui/vestra/markdown.slint:318
 #, x-machine
 msgid "[Image] {}"
 msgstr "[이미지] {}"

@@ -112,7 +112,16 @@ component Selectable {
             MenuItem {
                 title: @tr("Copy");
                 enabled: root.text != "";
-                activated => { input.copy(); }
+                // Nothing selected: the whole text (as the player's Markdown menu).
+                activated => {
+                    if input.anchor-position-byte-offset == input.cursor-position-byte-offset {
+                        input.select-all();
+                        input.copy();
+                        input.clear-selection();
+                    } else {
+                        input.copy();
+                    }
+                }
             }
             MenuItem {
                 title: @tr("Select All");
@@ -193,8 +202,10 @@ component Message inherits VerticalLayout {
             : row.seconds > 0 ? root.worked-text(row.seconds)
             : root.steps-text(row)
     }
+    // Under a minute in seconds ("Worked for 45 seconds"), then minutes and seconds ("Worked for 5 min 12 s").
     pure function worked-text(seconds: int) -> string {
-        @tr("Worked for {n} second" | "Worked for {n} seconds" % seconds)
+        seconds < 60 ? @tr("Worked for {n} second" | "Worked for {n} seconds" % seconds)
+            : @tr("Worked for {0} min {1} s", floor(seconds / 60), mod(seconds, 60))
     }
     pure function steps-text(row: ChatRow) -> string {
         row.failed > 0 ? @tr("{0}, {1} failed", root.count-text(row.n), row.failed) : root.count-text(row.n)
@@ -258,21 +269,22 @@ component Message inherits VerticalLayout {
     // What the agent did in this turn, one row: "Working…" and the latest
     // step while it runs, then "Worked for 12 seconds · 3 steps"; click (or
     // Tab to it, then Space / Enter) to list the steps. Thinking is not shown.
-    // Screen readers see an expandable button.
+    // Screen readers see an expandable button (text, and no Tab stop, while
+    // there are no steps to list).
     if item.kind == "activity": VerticalLayout {
         spacing: 4px;
         // The whole line toggles the list; the TouchArea is outside the
         // layout so it takes no cell of its own.
         Rectangle {
             height: 20px;
-            accessible-role: button;
-            accessible-label: root.activity-text(item);
-            accessible-expandable: item.n > 0;
-            accessible-expanded: item.expanded;
-            accessible-action-default => {
-                if item.n > 0 {
-                    root.toggle(item.id);
-                }
+            // The button only while there are steps (the role must be a constant):
+            // without, screen readers read the line's text.
+            if item.n > 0: Rectangle {
+                accessible-role: button;
+                accessible-label: root.activity-text(item);
+                accessible-expandable: true;
+                accessible-expanded: item.expanded;
+                accessible-action-default => { root.toggle(item.id); }
             }
             Rectangle {
                 visible: activity-keys.has-focus;
@@ -283,6 +295,7 @@ component Message inherits VerticalLayout {
                 border-radius: Theme.radius-control;
             }
             activity-keys := FocusScope {
+                enabled: item.n > 0;
                 x: 0;
                 y: 0;
                 width: 0;

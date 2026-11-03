@@ -132,6 +132,54 @@ test("an expanded activity row sends its steps to the window, a collapsed one no
   assert.deepEqual(row().calls, [{ tool: "ls", target: "", reference: false, state: 1 }]);
 });
 
+test("an automatic retry continues the turn: one activity row, Working… again, its steps and time go on", () => {
+  let clock = 0;
+  const chat = new Chat(() => clock);
+  chat.user("做个插件");
+  chat.begin();
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "text", delta: "先看看。" });
+  chat.apply({ kind: "tool_start", id: "a", name: "ls", target: "" });
+  chat.apply({ kind: "tool_end", id: "a", name: "ls", ok: true, summary: "" });
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "assistant_end", text: "", stopReason: "error", error: "529 overloaded" });
+  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "activity", "assistant", "error"], "the note stands in for the answer");
+  chat.apply({ kind: "retry", attempt: 1, max: 2, error: "529 overloaded" });
+  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "activity", "notice"], "the note is a note again");
+  assert.equal(activityLine(en, chat.rows[1]), "Working… · List ✓");
+  assert.equal(chat.rows[1].state, 0);
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "tool_start", id: "b", name: "read", target: "a.md" });
+  assert.equal(activityLine(en, chat.rows[1]), "Working… · Read a.md…");
+  chat.apply({ kind: "tool_end", id: "b", name: "read", ok: true, summary: "" });
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "text", delta: "好了。" });
+  chat.apply({ kind: "assistant_end", text: "好了。", stopReason: "stop", error: null });
+  clock += 312_000;
+  chat.apply({ kind: "settled", aborted: false });
+  assert.deepEqual(
+    chat.rows.map((r) => [r.kind, shown(r), r.state]),
+    [
+      ["user", "做个插件", 1],
+      ["activity", "用时 5 分 12 秒 · 2 个步骤", 1],
+      ["notice", "连接失败，正在重试（1/2）…", 1],
+      ["assistant", "好了。", 1],
+    ],
+  );
+  assert.equal(activityLine(en, chat.rows[1]), "Worked for 5 min 12 s · 2 steps");
+
+  // An error before any step: the row had gone; the retry brings it back after the message.
+  chat.user("再来");
+  chat.begin();
+  chat.apply({ kind: "assistant_end", text: "", stopReason: "error", error: "Connection error." });
+  assert.deepEqual(chat.rows.slice(4).map((r) => r.kind), ["user", "error"]);
+  chat.apply({ kind: "retry", attempt: 1, max: 2, error: "Connection error." });
+  assert.deepEqual(chat.rows.slice(4).map((r) => [r.kind, shown(r)]), [["user", "再来"], ["activity", "处理中…"], ["notice", "连接失败，正在重试（1/2）…"]]);
+  chat.apply({ kind: "text", delta: "好" });
+  chat.apply({ kind: "settled", aborted: false });
+  assert.deepEqual(chat.rows.slice(4).map((r) => r.kind), ["user", "notice", "assistant"], "no step, no thinking: no row");
+});
+
 test("errors: key, quota, network; an automatic retry replaces the error row", () => {
   assert.equal(classify("401 Incorrect API key provided").settings, true);
   assert.equal(classify("429 You exceeded your current quota").code, "quota");

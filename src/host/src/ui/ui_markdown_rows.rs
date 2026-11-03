@@ -1014,6 +1014,27 @@ fn selectable_blocks_copy_their_plain_text() {
     let code = (plain + styled) / 2. - 12.;
     assert_eq!(copy(170., code as f32), "fn main() {}");
     assert_eq!(copy(10., code as f32), "fn main() {}");
+    // The menu's Copy without a selection copies the whole block.
+    CLIPBOARD.with(|c| c.borrow_mut().clear());
+    for event in [
+        slint::platform::WindowEvent::PointerPressed {
+            position: slint::LogicalPosition::new(170., 8.),
+            button: slint::platform::PointerEventButton::Right,
+        },
+        slint::platform::WindowEvent::PointerReleased {
+            position: slint::LogicalPosition::new(170., 8.),
+            button: slint::platform::PointerEventButton::Right,
+        },
+    ] {
+        instance.window().dispatch_event(event);
+    }
+    slint::platform::update_timers_and_animations();
+    draw(&window, 320, 400);
+    click(&instance, 190., 22.);
+    assert_eq!(
+        CLIPBOARD.with(|c| c.borrow().clone()),
+        "一段 较长 的文字，换行以后还有一行，再来一行，用来比较高度。"
+    );
 }
 
 /// R-e: in a selectable view a block with links keeps its styled text: a
