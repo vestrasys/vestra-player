@@ -275,9 +275,10 @@ impl Tunables {
         }
     }
 
-    /// B3 values on top of `self`: queue limits live.
-    // The Host switches presets in B3–B6.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// B3 values on top of `self`: queue limits live. The player's preset
+    /// with on-demand start on since B3 (`host/supervisor/mod.rs` `new`,
+    /// §17.12); `legacy()` alone with it off, until B6 makes on-demand
+    /// start everyone's.
     pub fn with_b3(mut self, cores: usize) -> Self {
         self.first_run_limit = None;
         self.max_active = Some(max_active_for(cores));
@@ -417,8 +418,6 @@ pub enum BuiltinsFirst {
 }
 
 /// `min(4, max(2, cores/2))` (§4.4).
-// B3 (`with_b3`).
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn max_active_for(cores: usize) -> usize {
     (cores / 2).clamp(2, 4)
 }

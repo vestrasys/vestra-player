@@ -83,8 +83,6 @@ pub enum Delivery {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AnswerReason {
     /// `"<name> is busy"` (backlog or lane full).
-    // B3: a full backlog or lane.
-    #[cfg_attr(not(test), allow(dead_code))]
     Busy,
     /// `"<name> could not start"`.
     CouldNotStart,

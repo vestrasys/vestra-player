@@ -231,8 +231,6 @@ pub struct Supervisor<P> {
     quiet_until: Ms,
     pressure: Pressure,
     shutting_down: bool,
-    /// Units holding an activation (`activation.rs`, at most `LIMIT`).
-    activations: usize,
     /// Start-up starts still waiting (today's `StartQueue` entries:
     /// `boot_pending`).
     boot_waiting: BTreeSet<UnitId>,
@@ -410,7 +408,6 @@ impl<P: Clone> Supervisor<P> {
             quiet_until: 0,
             pressure: Pressure::None,
             shutting_down: false,
-            activations: 0,
             boot_waiting: BTreeSet::new(),
             first_waiting: BTreeSet::new(),
             builtins_to_load: 0,
@@ -591,9 +588,6 @@ impl<P: Clone> Supervisor<P> {
             return;
         };
         self.by_id.remove(&unit.id);
-        if unit.activation.is_some() {
-            self.activations -= 1;
-        }
         let run = unit.activation.as_ref().map(|run| run.pid);
         for pid in [unit.pid(), unit.alias, unit.last_pid, unit.holder, run]
             .into_iter()
@@ -1105,15 +1099,6 @@ impl<P: Clone> Supervisor<P> {
             .collect()
     }
 
-    /// Runs `u`'s installed job now, as `run_jobs` would, without the due
-    /// timers: a wake starts at once, as today's `wake` did (B2c's adapter
-    /// calls it after `wake` returns `Started`). Removed in B3, where wakes
-    /// wait for a start slot (`run_jobs`, T19).
-    pub fn advance(&mut self, u: UnitId) {
-        self.step(u);
-        self.start_from_lanes();
-    }
-
     // ---- event inputs --------------------------------------------------
 
     /// §5 `process_spawned` (T7 / T8).
@@ -1323,18 +1308,11 @@ impl<P: Clone> Supervisor<P> {
     /// it holds a live resource. A run without a checkpoint is classified
     /// (the 5 s timer runs); any other ready run of a recordable unit may
     /// be, once per run, as today's `lazy_ready` classifies on every ready
-    /// (supervisor.md §17.7 D2).
+    /// (supervisor.md §17.7 D2). A lazy first run goes to standby at once
+    /// unless it is busy: a job, or work in flight (the Host's own idle
+    /// check is declared work since B3, `work.rs`; today's `lazy_classified`
+    /// parks only when `lazy_idle` says idle and its recording was written).
     pub fn classified(&mut self, pid: Pid, resident: Option<String>) {
-        self.classified_with(pid, resident, false);
-    }
-
-    /// `classified`, with what the Host's own idle check says now
-    /// (`host_busy`; today's `lazy_classified` parks a lazy first run only
-    /// when `lazy_idle` says idle and its recording was written): a busy
-    /// lazy first run goes to standby as soon as it is idle
-    /// (`first_run_parks_when_idle`). Removed in B3 (`work.rs`: the Host's
-    /// busy becomes in-flight work, `classified` alone).
-    pub fn classified_with(&mut self, pid: Pid, resident: Option<String>, host_busy: bool) {
         let Some(u) = self.current(pid) else {
             return;
         };
@@ -1377,7 +1355,7 @@ impl<P: Clone> Supervisor<P> {
             }
             let idle_standby = self.tunables.policy(unit.class).idle_standby;
             let at_once = unit.run_is_first && idle_standby;
-            let busy = host_busy || unit.job.is_some() || unit.work.busy();
+            let busy = unit.job.is_some() || unit.work.busy();
             // A lazy class is written only when it goes to standby, or at quit
             // (today's `lazy_classified` / `park` / `lazy_quit`).
             let Some(unit) = self.units.get_mut(&u) else {
@@ -1430,9 +1408,9 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    /// §5 `begin_work`: work in flight keeps the unit out of standby.
-    // B3: in-flight work, the one "busy" (`work.rs`).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// §5 `begin_work`: work in flight keeps the unit out of standby. A
+    /// host→plugin request awaiting a reply (`WorkKind::Request`) is capped
+    /// by the class's `request_timeout` (B6); declared work is not (§17.12).
     pub fn begin_work(&mut self, pid: Pid, kind: WorkKind, now: Ms) {
         self.touch(pid, now);
         let Some(u) = self.current(pid) else {
@@ -1441,17 +1419,18 @@ impl<P: Clone> Supervisor<P> {
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
-        let first = !unit.work.busy();
+        let first = unit.work.oldest_request().is_none();
         unit.work.begin(kind, now);
-        if first && let Some(timeout) = self.tunables.policy(unit.class).request_timeout {
+        if first
+            && kind.capped()
+            && let Some(timeout) = self.tunables.policy(unit.class).request_timeout
+        {
             self.timers
                 .arm(&mut unit.gens, u, TimerKind::Request, now + timeout);
         }
     }
 
-    /// §5 `end_work`.
-    // B3: in-flight work, the one "busy" (`work.rs`).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// §5 `end_work`: the unit was used (its idle time counts from now).
     pub fn end_work(&mut self, pid: Pid, kind: WorkKind) {
         let Some(u) = self.current(pid) else {
             return;
@@ -2303,11 +2282,27 @@ impl<P: Clone> Supervisor<P> {
             && policy
                 .start_retry
                 .is_some_and(|r| unit.restart.retries < r.count);
+        // A start that timed out with no retry left and no `Restart=` of its
+        // class keeps its entry points in standby, as a failed spawn does
+        // (T8 from B3, `start_failure_keeps_registrations`; coordinator
+        // ruling, §17.12 item 1; Chrome MV3: a worker that fails to start
+        // stays installed and the next event tries again).
+        let kept_start_failure = activating
+            && cause == ExitCause::StartTimeout
+            && !retry_left
+            && self.tunables.start_failure_keeps_registrations
+            && standby_capable
+            && policy.restart == RestartMode::No;
         let mut then = Then::Failed;
         let mut keep = false;
         let mut failing = (FailResult::Exit(cause), text.clone());
         let mut auto_restart = None;
-        if retry_left {
+        if kept_start_failure {
+            then = Then::Standby;
+            keep = true;
+            let delay = unit.restart.next_delay(now, policy.restart_sec);
+            unit.hold_next = (delay > 0).then_some(delay);
+        } else if retry_left {
             let retry = policy.start_retry.unwrap_or(Retry {
                 count: 0,
                 base: 0,
@@ -2353,7 +2348,21 @@ impl<P: Clone> Supervisor<P> {
             }
         }
         let limit_hit = failing.0 == FailResult::StartLimitHit;
-        if then == Then::Failed {
+        if kept_start_failure {
+            // As a failed spawn (`spawn_failed`): every held trigger is
+            // answered (wake events silently) and the start ends; the next
+            // trigger starts it again. "Could not start" with every failed
+            // start (`start_failure_notice`, B3).
+            self.drop_alias(u);
+            self.answer_backlog(u, AnswerReason::CouldNotStart);
+            self.finish(u, JobResult::Failed(text.clone()));
+            if self.tunables.start_failure_notice {
+                self.pending.push(Action::Notify {
+                    unit: Some(u),
+                    notice: Notice::CouldNotStart,
+                });
+            }
+        } else if then == Then::Failed {
             unit.failing = Some(failing);
             let starts = unit.job.as_ref().is_some_and(Job::starts);
             self.answer_backlog(u, AnswerReason::CouldNotStart);
@@ -2824,7 +2833,7 @@ impl<P: Clone> Supervisor<P> {
                 }
             }
             TimerKind::Request => {
-                let Some(oldest) = unit.work.oldest() else {
+                let Some(oldest) = unit.work.oldest_request() else {
                     return;
                 };
                 let Some(timeout) = self.tunables.policy(unit.class).request_timeout else {

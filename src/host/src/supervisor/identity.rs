@@ -8,14 +8,14 @@
 //! `stop`, `restart`, `wake`, the idle Standby job): the process of a unit
 //! is its state's pid, not a transitional field the Host sets. What is left
 //! here besides identity are the adapter's answers to actions the core
-//! cannot check itself (`replay_failed`, `checkpoint_failed`) and the
-//! Host's own idle check (`standby_refused`, until B3's `work.rs`).
+//! cannot check itself (`replay_failed`, `checkpoint_failed`). The Host's
+//! own idle check is in-flight work since B3 (`begin_work` / `end_work`,
+//! `work.rs`; §17.12).
 #![forbid(unsafe_code)]
 
 use super::Supervisor;
-use super::activation::{self, Error, LIMIT, MAX_SAFE, Run, Status};
-use super::job::{Cause, Job, JobKind, JobMode, JobResult, Origin, Priority};
-use super::timers::{TimerKind, Timers};
+use super::activation::{self, Error, MAX_SAFE, Run, Status};
+use super::job::{Cause, JobKind, JobMode, Origin, Priority};
 use super::unit::{ActivatingSub, Class, Ms, Pid, Then, UnitId, UnitSpec, UnitState};
 
 impl<P: Clone> Supervisor<P> {
@@ -99,6 +99,14 @@ impl<P: Clone> Supervisor<P> {
             } if unit.from_standby => Some(since),
             _ => None,
         }
+    }
+
+    /// Run `pid` is its unit's process and not ready yet (any start: from
+    /// B3 its triggers are held for its ready, T9).
+    pub fn activating(&self, pid: Pid) -> bool {
+        self.current(pid)
+            .and_then(|u| self.units.get(&u))
+            .is_some_and(|unit| matches!(unit.state, UnitState::Activating { .. }))
     }
 
     /// Whether run `pid`'s class may still be given (`classified`): asked at
@@ -189,66 +197,27 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    /// The Host's own idle check of `pid` says busy (today's `lazy_idle`: a
-    /// dialog, a package RPC, a busy command or settings page, a UI request
-    /// its activation waits on, a pending source state reply, its class
-    /// still asked, its activation not ready): its Standby job is canceled
-    /// without counting as use, and the idle timer checks again after
-    /// `idle_check` (today's 250 ms poll). Nothing without a Standby job
-    /// still asking. Removed in B3 (`work.rs`: these become in-flight work).
-    pub fn standby_refused(&mut self, pid: Pid) {
-        let due = self.now + self.tunables.idle_check;
-        let Some(u) = self.current(pid) else {
-            return;
-        };
-        let Some(unit) = self.units.get_mut(&u) else {
-            return;
-        };
-        let asking = matches!(unit.state, UnitState::Active { .. })
-            && matches!(
-                unit.job,
-                Some(Job {
-                    kind: JobKind::Standby,
-                    ..
-                })
-            );
-        if !asking {
-            return;
-        }
-        unit.asked_at = None;
-        Timers::cancel(&mut unit.gens, TimerKind::Resources);
-        self.timers.arm(&mut unit.gens, u, TimerKind::Idle, due);
-        self.finish(u, JobResult::Canceled);
-        self.sync(u);
-    }
-
     // ---- activation (MOVE of `host/package_activation.rs`) -------------
 
     /// `Book::begin`: the activation of `u`'s run `pid`, due by `deadline`.
     /// One per unit: a unit's earlier activation that was never ended (a
     /// run that never started) is replaced and frees its place (A18 leak
-    /// 1). At most `LIMIT` units activate at once (`Full`, until B3).
+    /// 1). No bound on how many units activate at once: the old `LIMIT` of
+    /// 64 is gone (B3, §17.12); the start-job limit bounds the starts.
     pub fn activation_begin(&mut self, u: UnitId, pid: Pid, deadline: u64) -> Result<(), Error> {
         activation::identity(pid.0)?;
         activation::identity(deadline)?;
         if self.run_of(pid).is_some() {
             return Err(Error::Conflict);
         }
-        let Some(unit) = self.units.get(&u) else {
-            return Err(Error::Unknown);
-        };
-        let stale = unit.activation.as_ref().map(|run| run.pid);
-        if stale.is_none() && self.activations == LIMIT {
-            return Err(Error::Full);
-        }
         let Some(unit) = self.units.get_mut(&u) else {
             return Err(Error::Unknown);
         };
+        let stale = unit.activation.as_ref().map(|run| run.pid);
         unit.activation = Some(Run::new(pid, deadline));
         self.map_pid(u, pid);
-        match stale {
-            Some(old) => self.unmap_pid(u, old),
-            None => self.activations += 1,
+        if let Some(old) = stale {
+            self.unmap_pid(u, old);
         }
         Ok(())
     }
@@ -316,7 +285,6 @@ impl<P: Clone> Supervisor<P> {
         };
         if unit.activation.as_ref().is_some_and(|run| run.pid == pid) {
             unit.activation = None;
-            self.activations -= 1;
             self.unmap_pid(u, pid);
         }
     }
@@ -545,7 +513,7 @@ mod tests {
     //
     // The ported `lazy.rs` paths, driven as the adapter drives them: a run
     // starts (B2d: a start job), reports its ready (`process_ready`) and its
-    // class (`classified_with`); the core decides the standby (idle timer →
+    // class (`classified`); the core decides the standby (idle timer →
     // `QueryResources` → `Checkpoint` + `Terminate`) and the wake (`Rekey` +
     // `Spawn` → `Prune` + `Deliver`).
 
@@ -591,15 +559,15 @@ mod tests {
         s.run_jobs(at + 1);
     }
 
-    /// A wake of `u` in standby (held as `holder`) at `at`: its start runs at
-    /// once (`advance`); the new pid.
+    /// A wake of `u` in standby (held as `holder`) at `at`: its start runs in
+    /// the same `run_jobs` (a free slot); the new pid.
     fn wake(s: &mut S, u: UnitId, holder: u64, at: Ms) -> Pid {
         s.set_now(at);
         assert_eq!(
             s.wake(Pid(holder), &Trigger::interactive(7)),
             Delivery::Started
         );
-        s.advance(u);
+        assert!(s.job(u).is_some());
         spawned(&s.run_jobs(at)).expect("spawned")
     }
 
@@ -624,28 +592,31 @@ mod tests {
         );
     }
 
-    /// Today's `lazy_idle` busy check (a busy command, a dialog...): the
-    /// Host refuses the standby without counting it as use, and is asked
-    /// again 250 ms later (`CHECK_MS`), not after another idle time.
+    /// B3 (§17.12 item 2; replaces B2c's `standby_refused`, which asked
+    /// again 250 ms after a refusal): the Host's busy checks (a busy
+    /// command, a dialog...) are declared work. Busy when the idle time is
+    /// up: not asked; asked an idle time after the work ended (Chrome MV3:
+    /// an event in flight extends the lifetime). Busy found at the ask (the
+    /// adapter syncs its work then): answered busy, which is use, asked
+    /// again after another idle time.
     #[test]
-    fn b2c_a_refused_standby_is_asked_again_after_250_ms() {
+    fn b3_host_busy_is_declared_work() {
+        use super::super::WorkKind;
         let mut s = new();
         let u = ready(&mut s, "a.one", 1, 0, false);
-        assert_eq!(kinds(&s.run_jobs(60_000)), ["QueryResources"]);
-        s.standby_refused(Pid(1));
-        assert!(s.job(u).is_none());
-        assert!(kinds(&s.run_jobs(60_249)).is_empty());
-        assert_eq!(kinds(&s.run_jobs(60_250)), ["QueryResources"]);
-        // A live resource is use: asked again after another idle time.
+        s.begin_work(Pid(1), WorkKind::Declared(1), 10);
+        assert!(kinds(&s.run_jobs(60_010)).is_empty(), "busy");
+        s.set_now(70_000);
+        s.end_work(Pid(1), WorkKind::Declared(1));
+        assert!(kinds(&s.run_jobs(129_999)).is_empty());
+        assert_eq!(kinds(&s.run_jobs(130_000)), ["QueryResources"]);
+        s.begin_work(Pid(1), WorkKind::Declared(2), 130_000);
         s.resources_answered(Pid(1), true);
-        assert!(kinds(&s.run_jobs(120_249)).is_empty());
-        assert_eq!(kinds(&s.run_jobs(120_250)), ["QueryResources"]);
-        // Without a Standby job asking, a refusal changes nothing.
-        s.standby_refused(Pid(1));
-        s.standby_refused(Pid(1));
         assert!(s.job(u).is_none());
-        assert!(kinds(&s.run_jobs(120_499)).is_empty());
-        assert_eq!(kinds(&s.run_jobs(120_500)), ["QueryResources"]);
+        s.set_now(130_100);
+        s.end_work(Pid(1), WorkKind::Declared(2));
+        assert!(kinds(&s.run_jobs(190_099)).is_empty());
+        assert_eq!(kinds(&s.run_jobs(190_100)), ["QueryResources"]);
         assert!(matches!(s.job(u).map(|j| &j.kind), Some(JobKind::Standby)));
     }
 
@@ -657,7 +628,7 @@ mod tests {
     fn b2c_first_runs_park_at_their_classification() {
         let mut s = new();
         let u = ready(&mut s, "a.one", 1, 0, true);
-        s.classified_with(Pid(1), None, false);
+        s.classified(Pid(1), None);
         let actions = s.run_jobs(0);
         assert_eq!(kinds(&actions), ["Checkpoint", "Terminate"], "{actions:?}");
         assert!(actions.contains(&Action::Checkpoint {
@@ -665,17 +636,22 @@ mod tests {
             pid: Pid(1),
             resident: false
         }));
+        // Busy at its classification (the Host's busy is declared work since
+        // B3, §17.12): under `legacy()` it parks once idle, checked every
+        // 250 ms (`first_run_parks_when_idle`).
         let v = ready(&mut s, "b.two", 2, 0, true);
-        s.classified_with(Pid(2), None, true);
+        s.begin_work(Pid(2), super::super::WorkKind::Declared(1), 0);
+        s.classified(Pid(2), None);
         assert!(kinds(&s.run_jobs(0)).is_empty());
-        assert_eq!(kinds(&s.run_jobs(250)), ["QueryResources"]);
-        s.standby_refused(Pid(2));
+        assert!(kinds(&s.run_jobs(250)).is_empty(), "still busy");
+        s.set_now(400);
+        s.end_work(Pid(2), super::super::WorkKind::Declared(1));
         assert_eq!(kinds(&s.run_jobs(500)), ["QueryResources"]);
         s.resources_answered(Pid(2), false);
         assert_eq!(kinds(&s.run_jobs(500)), ["Checkpoint", "Terminate"]);
         assert!(s.unit(v).unwrap().state.is_deactivating());
         let w = ready(&mut s, "c.three", 3, 500, true);
-        s.classified_with(Pid(3), Some("a listener".into()), false);
+        s.classified(Pid(3), Some("a listener".into()));
         assert_eq!(
             s.run_jobs(500)
                 .into_iter()
@@ -688,7 +664,7 @@ mod tests {
             }]
         );
         // Classified once per run: a second answer changes nothing.
-        s.classified_with(Pid(3), None, false);
+        s.classified(Pid(3), None);
         assert!(kinds(&s.run_jobs(500)).is_empty());
     }
 
@@ -705,9 +681,9 @@ mod tests {
             1,
             0,
         );
-        s.classified_with(Pid(1), Some("a panel".into()), false);
+        s.classified(Pid(1), Some("a panel".into()));
         assert!(kinds(&s.run_jobs(0)).is_empty(), "the file says resident");
-        s.classified_with(Pid(1), None, false);
+        s.classified(Pid(1), None);
         assert!(kinds(&s.run_jobs(0)).is_empty(), "once per run");
         // A reload drops the checkpoint: the next run writes it again.
         s.restart(u, true, None).unwrap();
@@ -718,11 +694,11 @@ mod tests {
         s.process_spawned(Pid(2), Ok(()));
         s.process_ready(Pid(2));
         s.run_jobs(2);
-        s.classified_with(Pid(2), Some("a panel".into()), false);
+        s.classified(Pid(2), Some("a panel".into()));
         assert_eq!(kinds(&s.run_jobs(2)), ["Checkpoint"]);
         // A lazy later run waits its idle time (60 s from its ready).
         let v = ready(&mut s, "b.two", 3, 2, false);
-        s.classified_with(Pid(3), None, false);
+        s.classified(Pid(3), None);
         assert!(kinds(&s.run_jobs(2)).is_empty());
         assert!(!s.unit(v).unwrap().state.is_deactivating());
     }
@@ -742,9 +718,9 @@ mod tests {
         );
         ready(&mut s, "c.three", 3, 0, false);
         let d = ready(&mut s, "d.four", 4, 0, false);
-        s.classified_with(Pid(1), None, false);
-        s.classified_with(Pid(2), Some("x".into()), false);
-        s.classified_with(Pid(4), Some("y".into()), false);
+        s.classified(Pid(1), None);
+        s.classified(Pid(2), Some("x".into()));
+        s.classified(Pid(4), Some("y".into()));
         s.run_jobs(0);
         // `d`'s resident class was written at its classification.
         assert!(s.unit(d).unwrap().recorded_resident);
@@ -752,7 +728,7 @@ mod tests {
     }
 
     /// Today's wake (`lazy_deliver` → `wake` → `wake_now` → `lazy_ready`): a
-    /// trigger on a unit in standby starts it at once (`advance`): the
+    /// trigger on a unit in standby starts it in the same `run_jobs`: the
     /// entries move to the new pid, the trigger is held for its ready and
     /// delivered after `Prune`; a trigger to the old pid is held while it
     /// starts and forwarded once it runs (today's `lazy.moved`).
@@ -763,7 +739,6 @@ mod tests {
         park(&mut s, u, 1, 60_000);
         s.set_now(61_000);
         assert_eq!(s.wake(Pid(1), &Trigger::interactive(7)), Delivery::Started);
-        s.advance(u);
         let actions = s.run_jobs(61_000);
         assert_eq!(kinds(&actions), ["Rekey", "Spawn"], "{actions:?}");
         let pid = spawned(&actions).unwrap();
@@ -795,7 +770,7 @@ mod tests {
         );
         assert_eq!(s.wake(pid, &Trigger::interactive(11)), Delivery::Now);
         // The run's class is asked again (it came from a checkpoint).
-        s.classified_with(pid, None, false);
+        s.classified(pid, None);
         assert!(kinds(&s.run_jobs(61_000)).is_empty());
         // The old pid goes with the run (today's `forget_running`).
         s.disable(u).unwrap();
@@ -908,7 +883,6 @@ mod tests {
         let event = |n| Trigger::event("packages.changed", n);
         assert_eq!(s.wake(Pid(1), &event(1)), Delivery::Dropped);
         assert_eq!(s.wake(Pid(1), &Trigger::interactive(2)), Delivery::Started);
-        s.advance(u);
         let pid = spawned(&s.run_jobs(60_001)).unwrap();
         s.process_spawned(pid, Ok(()));
         assert_eq!(s.wake(pid, &event(3)), Delivery::Held);
@@ -945,7 +919,7 @@ mod tests {
         s.run_jobs(60_000);
         s.set_now(60_100);
         assert_eq!(s.wake(Pid(1), &Trigger::interactive(7)), Delivery::Started);
-        s.advance(u);
+        assert!(s.job(u).is_some_and(|job| job.will_start()));
         assert!(kinds(&s.run_jobs(60_100)).is_empty(), "waits for the reap");
         s.process_reaped(Pid(1), None);
         s.backend_cleaned(Pid(1));
@@ -1000,7 +974,7 @@ mod tests {
             1,
             0,
         );
-        s.classified_with(Pid(1), None, false);
+        s.classified(Pid(1), None);
         assert!(kinds(&s.run_jobs(0)).is_empty());
         assert!(s.run_jobs(600_000).is_empty());
         assert!(s.quit_checkpoints().is_empty());
@@ -1049,7 +1023,7 @@ mod tests {
         assert!(!s.classifying(Pid(1)), "timed out: resident");
         ready(&mut s, "b.two", 2, 5_000, false);
         assert!(s.classifying(Pid(2)));
-        s.classified_with(Pid(2), None, false);
+        s.classified(Pid(2), None);
         assert!(!s.classifying(Pid(2)));
     }
 

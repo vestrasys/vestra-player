@@ -321,11 +321,15 @@ fn mirror_subscriptions_park_and_wake_a_listener_keeps_a_plugin_resident() {
     }
 }
 
-/// §2.4: on a fresh profile at most eight first runs are in flight; a lazy
-/// one frees its place once parked and gone, and the queue goes on.
+/// §2.4 pinned at most eight first runs in flight (`FIRST_RUNS`), built-ins
+/// included. Flipped in supervisor batch B3 (supervisor.md §15 B3 "they
+/// start a few at a time", §4.4, §17.12): built-ins' first runs are outside
+/// the start-job limit (A7) and start at once; third-party ones (below,
+/// `third_party_first_runs_start_a_few_at_a_time`) at most `max_active` at a
+/// time, a place freed at each ready.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
-fn first_runs_start_eight_at_a_time() {
+fn b3_built_in_first_runs_start_at_once() {
     let ids = (0..10)
         .map(|n| format!("vestra.fixture-first-{n}"))
         .collect::<Vec<_>>();
@@ -361,11 +365,76 @@ fn first_runs_start_eight_at_a_time() {
     let first_park = log
         .find("parked (1 recorded calls)")
         .unwrap_or_else(|| panic!("{log}"));
-    assert!(starts[7] < first_park && first_park < starts[8], "{log}");
+    assert!(starts[9] < first_park, "{log}");
     for id in &ids {
         let parked = format!("lazy: {id} parked (1 recorded calls)");
         assert!(log.contains(&parked), "{parked}: {log}");
     }
+    assert_eq!(recordings(root.path()).len(), 10);
+}
+
+/// B3 (supervisor.md §4.4, §15 B3, §17.12): ten installed third-party
+/// plugins on a fresh profile start their first runs at most `max_active`
+/// (`min(4, max(2, cores/2))`) at a time: a place frees at each one's
+/// `runtime.ready`. All ten run, none times out, all are parked.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn third_party_first_runs_start_a_few_at_a_time() {
+    let root = root_with(|_| Vec::new());
+    let store = root.path().join("store");
+    let mut catalog =
+        serde_json::json!({"installed":{},"pending":{},"operations":{},"lastCommit":{}});
+    let ids = (0..10)
+        .map(|n| format!("aa.fixture-third-{n}"))
+        .collect::<Vec<_>>();
+    for (n, id) in ids.iter().enumerate() {
+        install(
+            &store,
+            &mut catalog,
+            n + 1,
+            id,
+            format!(
+                "export default function activate(plugin) {{\n\
+                 plugin.resolvers.add({{ id: \"r\", schemes: [\"https\"], hosts: [\"{id}.example\"],\n\
+                 resolve: async () => {{ throw new Error(\"no\"); }} }});\n}}\n"
+            ),
+        );
+    }
+    std::fs::write(store.join("catalog.json"), catalog.to_string()).unwrap();
+    let log = run(
+        root.path(),
+        12,
+        &[
+            ("VESTRA_SHARED", "1"),
+            ("VESTRA_LAZY", "1"),
+            ("VESTRA_IDLE_MS", "60000"),
+        ],
+    );
+    let max = log
+        .lines()
+        .find_map(|line| {
+            let rest = line.split(" starts at once").next()?;
+            rest.rsplit(' ').next()?.parse::<usize>().ok()
+        })
+        .unwrap_or_else(|| panic!("no start limit logged: {log}"));
+    assert!((2..=4).contains(&max), "{max}");
+    let (mut in_flight, mut most, mut starts) = (0_usize, 0_usize, 0_usize);
+    for line in log.lines() {
+        if line.contains("starts for its first run") {
+            in_flight += 1;
+            starts += 1;
+            most = most.max(in_flight);
+        } else if line.contains("runtime.ready") {
+            in_flight = in_flight.saturating_sub(1);
+        }
+    }
+    assert_eq!(starts, 10, "{log}");
+    assert_eq!(most, max, "at most {max} at once: {log}");
+    for id in &ids {
+        let parked = format!("lazy: {id} parked (1 recorded calls)");
+        assert!(log.contains(&parked), "{parked}: {log}");
+    }
+    assert!(!log.contains("timed out"), "{log}");
     assert_eq!(recordings(root.path()).len(), 10);
 }
 

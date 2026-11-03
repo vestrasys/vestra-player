@@ -24,7 +24,7 @@ Coordinator record and blackboard for the supervisor project. Design: [superviso
 | B2c | **merged** (registry evidence: 18 scenarios, only pre-existing noise) | `supervisor-b2c` C:\vestra\wt-sup-b2c (from fd198a48) | API maintainer | lazy.rs deleted; appearance.changed "what changed" (wire addition); doc excerpts; §13 B7 removal list |
 | B2d | **merged — B2 complete** | `supervisor-b2d` C:\vestra\wt-sup-b2d (from e29c0982) | API maintainer | lanes replace StartQueue/FirstQueue, every start a job, list_state, remove first_runs.rs + start_timeout_by_host, B2 notes 1–5 |
 | SDK bump | **merged #147 (5fb5a7b5)** | `sdk-1.5.57` C:\vestra\wt-sdk157 | API maintainer (2nd instance) | player → @vestra-player/sdk ^1.5.57 |
-| B3 | spec tests in progress (author) | `supervisor-b3-spec` C:\vestra\wt-sup-b3spec (from 5fb5a7b5) | spec test author | implementation starts after B2d merges |
+| B3 | **merged** (GUI check folded into the B4 release GUI test, VESTRA_LAZY=1) | `supervisor-b3` C:\vestra\wt-sup-b3 (main 0e8ba741 + spec tests) | API maintainer | live preset → B3; LIMIT 64 removed; rulings 1–4; 200-wake storm before/after; GUI test by coordinator after review |
 | B4 | not started | | | release after |
 | B5 | not started | | | |
 | B6 | not started | | | release after |
@@ -65,6 +65,13 @@ From the spec test author (2026-11-02, branch `supervisor-spec` 22fa2a0f; 238 te
 Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 (code changes for Q15 upgrade of a disabled unit, Q24 backoff from reap; Q18 ruled by the coordinator: built-ins incl. shared members outside max_active). Spec tests compile: 234/241 pass. Coordinator rulings on the remaining design questions: (a) trigger while Standby{hold_until}: Interactive answered at once with a reason; Start job waits for hold_until only if event triggers remain; (b) shutdown emits all Checkpoints before the first Terminate; (c) built-ins first: today's semantics under `Tunables::today()`, the design row under target tunables (switch). Four implementation fixes sent to the maintainer (T11 Resident retry, Stop{Removed}×trigger Dropped, Restart×trigger Held, runner re-placement via Replay).
 
 ## Open items
+
+- **From B3 (maintainer questions, coordinator rulings 2026-11-03):**
+  - B3 limits apply only with `VESTRA_LAZY=1` until B6 (as §15 says); confirmed — B6 makes on-demand the only mode (unified-scheduling ruling).
+  - Spawn on the UI thread costs ~30 ms each (storm max tick 121 ms, then ≤ 52 ms) — violates the UI frame-rate rule under load. The off-thread spawn worker + per-tick budget (§6.1, A19) is **added to B4's scope** (before the B4 release), with a storm re-measure: target no tick > one frame at display rate from supervisor work.
+  - `ui_begin`/`ui_finish` (T9 "ready only after UI") not wired → B4 scope.
+  - Storm tests need `MAX_PACKAGES` raised in a scratch build only (or 127 plugins).
+  - SDK-site docs for B3 (bounded backlog, explicit busy answers, triggers held to ready, busy keeps a plugin running): points at the end of supervisor.md §17.12 → next SDK docs batch.
 
 - **B3 design questions (spec author, 2026-11-03) — coordinator rulings, to record in supervisor.md §17 with B3:**
   1. Wake start timeout under B3 keeps registrations, like a spawn failure (§17.7 item 10, §15 B3 "keeps its menu entries"): the unit returns to Standby with entry points, no Revoke; the core's crash path must not send a start timeout to Failed+Revoke for a wake under B3. Precedent: Chrome MV3 — an extension whose service worker fails to start stays installed and the next event tries again. Test `k_start_timeout_of_a_wake_keeps_registrations_and_answers`.
@@ -109,6 +116,12 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 - Known bugs to pin in B0: Book entry leaked when spawn fails after `activations.begin` (`load_package`); `Host.cleanup` only grows; disable then immediate enable can run two processes on one data directory (D13).
 
 ## Log
+
+- 2026-11-03 ~07:35: B3 review → merge (all checks; own storm re-run: 200 woken, ≤ 4 concurrent, max tick 113 ms then ≤ 75 ms; probe tests for queue interleavings; i18n complete; b3.rs untouched). Non-blocking → B4/docs: GUI run (done-criterion) folded into the B4 release GUI test — B3 only acts with VESTRA_LAZY=1, default users unaffected; tick budget + spawn worker + O(due) timers → B4; SDK docs: an `activate()` awaiting its own command/UI callback waits until ready (T9) → document; `start_now` answers ok before a queued reload/enable spawn error → B4; held triggers dropped unanswered at shutdown (acceptable, B4 shutdown).
+
+- 2026-11-03 ~07:10: B3 committed: limits live with VESTRA_LAZY=1, LIMIT 64 gone, WorkKind Request/Declared, failures keep registrations, explicit OSD answers (7 languages), refused resolveRequest fails at once (`owner.refuseResolution`). 1209 host tests; real-node suites pass. Storm (200 wakes, release ×2): main 63 woken + 137 could-not-start, 63 concurrent, max tick ~1.94 s → B3 200 woken, 4 concurrent, max tick ~120 ms then ≤ 52 ms, all events delivered. Registry 26 scenarios: lazy-off identical; differences explained by B3 rules. Review started.
+
+- 2026-11-03 ~05:45: **#148 (B2d) squash-merged → main 0e8ba741. B2 complete.** B3 worktree created with the spec tests merged in; maintainer briefed (live preset to B3, rulings 1–4, request accounting kinds, storm measurement, registry diff, flips of B0 tests B3 changes on purpose).
 
 - 2026-11-03 ~05:35: B2d follow-up re-review → merge (switch semantics checked on install/restore/first-run/timeout paths; hotkeys snapshot difference accepted: no mechanism in B2d, main-vs-main also differs, not user-visible). B2d PR + merge next; then B3 (merge `supervisor-b3-spec` in, rulings 1–4 in Open items).
 

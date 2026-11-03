@@ -1156,6 +1156,16 @@ impl Sources {
             }
         }
     }
+    /// The host could not deliver resolution request `id` to its resolver
+    /// (a plugin starting from standby that could not start, or whose held
+    /// requests overflowed: supervisor.md §4.6): the open fails now with
+    /// `message` instead of at its deadline. Nothing goes to the resolver,
+    /// which never got the request.
+    pub fn refuse_resolution(&mut self, id: u64, message: String) {
+        if let Some(resolution) = self.resolutions.remove(&id) {
+            self.finish_resolution(&resolution, Err(message));
+        }
+    }
     /// At `runtime.ready` of a woken plugin: the recorded resolvers it did
     /// not register again go.
     pub fn prune(&mut self, owner: u64) {
@@ -2893,6 +2903,36 @@ mod resolution_tests {
             sources.session.state().source.as_deref(),
             Some(rom("a.nes").as_str())
         );
+    }
+    /// supervisor.md §4.6 (B3): a resolution request the host could not
+    /// deliver (its resolver could not start, or held too many) fails the
+    /// open at once with the host's text; nothing goes to the resolver, and
+    /// its late answer is stale.
+    #[test]
+    fn a_refused_resolution_fails_the_open_at_once() {
+        let (mut sources, mpv) = registered();
+        let request = open(&mut sources, &mpv, 1, &rom("a.nes"), false);
+        let id = request["requestId"].as_u64().unwrap();
+        sources.refuse_resolution(id, "Emulator is busy".into());
+        assert!(sources.resolver_events().is_empty());
+        let state = sources.session.state();
+        assert_eq!(state.phase, Phase::Error);
+        assert_eq!(
+            state.terminal_reason,
+            Some(EndReason::Failed("Emulator is busy".into()))
+        );
+        assert_eq!(operation(&mut sources, &mpv, 1)["status"], json!("failed"));
+        let late = call(
+            &mut sources,
+            &mpv,
+            EMULATOR,
+            "sourceResolvers.respond",
+            json!({"requestId":id,"result":{"kind":"stream","producerId":1}}),
+        )
+        .unwrap_err();
+        assert_eq!(late.code, "stale");
+        // An unknown request changes nothing.
+        sources.refuse_resolution(id + 100, "x".into());
     }
     #[test]
     fn closing_or_disabling_cancels_the_resolution() {

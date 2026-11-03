@@ -69,9 +69,14 @@ impl Capability for SourceResolve {
     }
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
-            "sourceResolvers.register"
-            | "sourceResolvers.unregister"
-            | "sourceResolvers.respond" => forward(host, reply, method, params),
+            "sourceResolvers.respond" => {
+                // The request it answers is no longer in flight (§17.12).
+                host.resolution_answered(reply.owner, params["requestId"].as_u64());
+                forward(host, reply, method, params)
+            }
+            "sourceResolvers.register" | "sourceResolvers.unregister" => {
+                forward(host, reply, method, params)
+            }
             _ => Err(RpcError::new("unsupported", "unknown method")),
         }
     }

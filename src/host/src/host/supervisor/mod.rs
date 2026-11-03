@@ -29,9 +29,16 @@
 //! core decides (`actions.rs`: `Spawn`, `Verify`, `Replay`, `Terminate`,
 //! `RemoveData`...) with today's bodies. `packages.list` reads the core's
 //! `list_state`.
+//!
+//! B3 (§17.12): with on-demand start on, the core runs the B3 values
+//! (`with_b3`): third-party starts a few at a time, clicks first, a bounded
+//! backlog whose refused triggers are answered (`actions.rs`
+//! `held_unanswered`), start failures that keep their entry points. The
+//! Host's busy checks are declared work in the core (`sync_work`), a
+//! `source.resolveRequest` in flight a capped request (`request_sent`).
 use super::*;
 use crate::capabilities;
-use crate::supervisor::{Action, Delivery, Trigger, Tunables, UnitId};
+use crate::supervisor::{Action, Delivery, Trigger, Tunables, UnitId, WorkKind};
 use std::collections::BTreeSet;
 
 pub(crate) mod actions;
@@ -68,6 +75,32 @@ enum Ask {
     Standby(u64),
 }
 
+/// What the Host itself knows keeps a run busy (§2.3, today's `lazy_idle`
+/// without its idle time, which is the core's timer): each is declared work
+/// in the core (`WorkKind::Declared`, never capped; §17.12). Being woken,
+/// not recordable or not running are the core's own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Busy {
+    /// Its class is still asked (`Ask::Classify`).
+    Classify = 1,
+    /// Its activation is not over (`runtime.ready`, a UI request it waits
+    /// on).
+    Activation,
+    /// A host dialog is open.
+    Dialog,
+    /// A package RPC of it is in flight.
+    PackageRpc,
+    /// One of its commands is busy (`commands.update { busy }`).
+    Command,
+    /// One of its settings pages is compiling or shown.
+    Settings,
+    /// A source state request of it waits for the playback worker.
+    SourceState,
+    /// Its standby recording could not be written ahead (today's `park`
+    /// does not park then): busy until the next sync.
+    Recording,
+}
+
 /// The Host's side of on-demand start (B2c; today's `Lazy`): what the
 /// core's decisions need of the Host and the core does not keep.
 #[derive(Default)]
@@ -86,6 +119,13 @@ pub(crate) struct OnDemand {
     answers: BTreeMap<u64, Value>,
     /// Plugins already logged as staying up, with the reason.
     told: BTreeMap<u64, &'static str>,
+    /// The Host's busy checks of each run as the core has them (declared
+    /// work, `Busy`; §17.12): synced when the core asks (classification,
+    /// standby) and every `idle_check` while any is in.
+    work: BTreeMap<u64, BTreeSet<Busy>>,
+    /// The last supervisor OSD (unit, text, when): one storm of answers or
+    /// a notice and its answer show it once.
+    last_osd: Option<(UnitId, String, u64)>,
     /// A standby's recording written before the core decided it (the run,
     /// its calls): the core's `Checkpoint` for it is done already.
     written: Option<(u64, usize)>,
@@ -131,23 +171,34 @@ impl OnDemand {
     }
 }
 
-/// The Host's supervisor under `Tunables::legacy()` (today's values), with
-/// on-demand start as `VESTRA_LAZY` and `VESTRA_IDLE_MS` say. Wake events
-/// wake nothing until start-up settled (`OnDemand::settled`). The seed only
-/// feeds jitter, which `legacy()` does not use.
+/// The Host's supervisor, with on-demand start as `VESTRA_LAZY` and
+/// `VESTRA_IDLE_MS` say. With on-demand start on, the B3 values (§17.12:
+/// start-job limits, priorities, a bounded backlog with explicit answers,
+/// start failures that keep entry points); off, `Tunables::legacy()`, as
+/// §15 B3 says ("only with `VESTRA_LAZY=1` until B6"). Wake events wake
+/// nothing until start-up settled (`OnDemand::settled`). The seed only
+/// feeds jitter, which neither preset uses before B4.
 pub(crate) fn new(on_demand: &OnDemand) -> Supervisor<Value> {
     let idle_timeout = std::env::var("VESTRA_IDLE_MS")
         .ok()
         .and_then(|ms| ms.parse().ok())
         .unwrap_or(IDLE_MS);
-    if on_demand.enabled {
-        diag!("lazy: on, idle after {idle_timeout} ms");
-    }
+    let base = if on_demand.enabled {
+        let cores = std::thread::available_parallelism().map_or(2, std::num::NonZero::get);
+        let tunables = Tunables::legacy().with_b3(cores);
+        diag!(
+            "lazy: on, idle after {idle_timeout} ms, {} starts at once ({cores} cores)",
+            tunables.max_active.unwrap_or_default()
+        );
+        tunables
+    } else {
+        Tunables::legacy()
+    };
     let mut supervisor = Supervisor::new(
         Tunables {
             on_demand: on_demand.enabled,
             idle_timeout,
-            ..Tunables::legacy()
+            ..base
         },
         1,
     );
@@ -340,7 +391,10 @@ impl Host {
         let now = self.now_ms();
         self.supervisor.set_now(now);
         match self.supervisor.wake(Pid(owner), &trigger) {
-            Delivery::Now => Some(owner),
+            Delivery::Now => {
+                self.request_sent(owner, message);
+                Some(owner)
+            }
             Delivery::Forward(to) => {
                 self.send(to.0, message.clone());
                 None
@@ -350,9 +404,11 @@ impl Host {
                 None
             }
             Delivery::Held | Delivery::Refused => {
-                // Held only while a unit woken from standby starts, or for
-                // the next run of a restart: a running plugin's trigger is
-                // never kept from it otherwise (`deliver_while_starting`).
+                // Held only while a unit starts (under `legacy()` only one
+                // woken from standby: `deliver_while_starting`; from B3 every
+                // start until its ready, T9), or for the next run of a
+                // restart: a running plugin's trigger is never kept from it
+                // otherwise.
                 let restarting = self
                     .supervisor
                     .by_pid(Pid(owner))
@@ -362,6 +418,7 @@ impl Host {
                     });
                 let held_from_running = self.plugins.contains_key(&owner)
                     && self.supervisor.waking(Pid(owner)).is_none()
+                    && !self.supervisor.activating(Pid(owner))
                     && !restarting;
                 debug_assert!(
                     !held_from_running,
@@ -378,20 +435,61 @@ impl Host {
             Delivery::Dropped => self.plugins.contains_key(&owner).then_some(owner),
         }
     }
-    /// A wake of `owner`'s unit was enqueued: it starts at once (today's
-    /// `wake` started it inside the trigger), unless the process it was
-    /// parked from is still going (one instance per data directory; the
-    /// core's job starts it once that is gone, or fails after 20 s).
+    /// A trigger went to `owner`'s process: a `source.resolveRequest` is a
+    /// host→plugin request awaiting its reply (`WorkKind::Request`, §17.12:
+    /// busy until answered, capped by the request timeout from B6); its
+    /// `source.resolveCancel` ends it.
+    fn request_sent(&mut self, owner: u64, message: &Value) {
+        let Some(id) = message["data"]["requestId"].as_u64() else {
+            return;
+        };
+        let now = self.now_ms();
+        match event(message) {
+            Some("source.resolveRequest") => {
+                self.supervisor
+                    .begin_work(Pid(owner), WorkKind::Request(id), now);
+            }
+            Some("source.resolveCancel") => {
+                self.supervisor.set_now(now);
+                self.supervisor.end_work(Pid(owner), WorkKind::Request(id));
+            }
+            _ => {}
+        }
+    }
+    /// `owner` answered resolution request `id` (`sourceResolvers.respond`).
+    pub(crate) fn resolution_answered(&mut self, owner: u64, id: Option<u64>) {
+        let Some(id) = id else {
+            return;
+        };
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
+        self.supervisor.end_work(Pid(owner), WorkKind::Request(id));
+    }
+    /// A wake of `owner`'s unit was enqueued: it starts in this turn if a
+    /// start slot is free (B3: `max_active` third-party starts at once, an
+    /// interactive trigger first, §4.4), else when one frees; and only once
+    /// the process it was parked from is gone (one instance per data
+    /// directory; the core's job starts it then, or fails after 20 s).
     fn wake_started(&mut self, owner: u64) {
         let Some(unit) = self.supervisor.by_pid(Pid(owner)) else {
             return;
         };
-        self.supervisor.advance(unit);
         let now = self.now_ms();
         let actions = self.supervisor.run_jobs(now);
-        if !actions.iter().any(|a| matches!(a, Action::Spawn { .. })) {
+        let started = actions.iter().any(|a| {
+            matches!(a, Action::Spawn { unit: u, .. } | Action::Verify { unit: u } if *u == unit)
+        });
+        if !started {
             let id = self.unit_id(unit);
-            diag!("lazy: {id} waits for its stopped process");
+            if self
+                .supervisor
+                .unit(unit)
+                .is_some_and(|unit| unit.stopping.is_some())
+            {
+                diag!("lazy: {id} waits for its stopped process");
+            } else {
+                diag!("lazy: {id} waits for a start slot");
+            }
         }
         self.supervisor_execute(actions);
         self.supervisor_run();
@@ -550,26 +648,36 @@ impl Host {
         self.probe_registry(owner, "replayed");
         Ok(())
     }
-    /// `runtime.ready` of `owner` (today's `lazy_ready`). A run the Host
-    /// started otherwise (boot, first run, enable, reload, install): the
-    /// core's `process_ready`, then its class is asked (`classify`). A woken run:
-    /// the core prunes the recorded entries it did not register again and
-    /// delivers its held triggers, each checked against its live state;
-    /// its class is asked before they run (what they open is not what it
-    /// holds at its ready, §17.7 item 14).
+    /// `runtime.ready` of `owner` (today's `lazy_ready`). A run started
+    /// otherwise than from standby (boot, first run, enable, reload,
+    /// install) that holds no trigger: the core's `process_ready`, then its
+    /// class is asked (`classify`). A woken run, or from B3 any start that
+    /// held triggers for its ready (T9): the core prunes the recorded
+    /// entries a woken run did not register again and delivers the held
+    /// triggers, each checked against its live state; its class is asked
+    /// before they run (what they open is not what it holds at its ready,
+    /// §17.7 item 14).
     pub(crate) fn unit_ready(&mut self, owner: u64) {
         let now = self.now_ms();
         self.supervisor.set_now(now);
         self.supervisor.touch(Pid(owner), now);
-        let Some(since) = self.supervisor.waking(Pid(owner)) else {
-            self.supervisor.process_ready(Pid(owner));
+        let waking = self.supervisor.waking(Pid(owner));
+        self.supervisor.process_ready(Pid(owner));
+        let actions = self.supervisor.run_jobs(now);
+        let delivers = actions
+            .iter()
+            .any(|a| matches!(a, Action::Deliver { pid, .. } if pid.0 == owner));
+        // Any other start (boot, first run, enable, reload, install): its
+        // class is asked after its ready's actions ran. From B3 such a start
+        // holds its triggers for its ready too (T9): those are delivered as
+        // a woken run's are, after its class was asked.
+        if waking.is_none() && !delivers {
             self.probe_registry(owner, "ready");
+            self.supervisor_execute(actions);
             self.supervisor_run();
             self.classify(owner);
             return;
-        };
-        self.supervisor.process_ready(Pid(owner));
-        let actions = self.supervisor.run_jobs(now);
+        }
         let triggers = actions
             .iter()
             .filter(|a| matches!(a, Action::Deliver { payload, .. } if !payload.is_null()))
@@ -595,7 +703,8 @@ impl Host {
                 Action::Deliver { pid, payload, .. } => {
                     if !classified {
                         classified = true;
-                        self.woken_ready(owner, now.saturating_sub(since), triggers);
+                        let after = waking.map(|since| now.saturating_sub(since));
+                        self.woken_ready(owner, after, triggers);
                     }
                     self.deliver_held(pid.0, payload, &titles);
                 }
@@ -603,13 +712,23 @@ impl Host {
             }
         }
         if !classified {
-            self.woken_ready(owner, now.saturating_sub(since), triggers);
+            let after = waking.map(|since| now.saturating_sub(since));
+            self.woken_ready(owner, after, triggers);
         }
     }
-    /// A woken run is ready: its registries are probed and its class asked.
-    fn woken_ready(&mut self, owner: u64, after: u64, triggers: usize) {
-        self.probe_registry(owner, "woken");
-        diag!("lazy: owner {owner} ready after {after} ms, {triggers} trigger(s)");
+    /// A run that held triggers is ready (woken from standby: `after` its
+    /// spawn): its registries are probed and its class asked.
+    fn woken_ready(&mut self, owner: u64, after: Option<u64>, triggers: usize) {
+        match after {
+            Some(after) => {
+                self.probe_registry(owner, "woken");
+                diag!("lazy: owner {owner} ready after {after} ms, {triggers} trigger(s)");
+            }
+            None => {
+                self.probe_registry(owner, "ready");
+                diag!("supervisor: owner {owner} ready, {triggers} held trigger(s)");
+            }
+        }
         // Before its triggers run: what they open is not what it holds at
         // its ready.
         self.classify(owner);
@@ -747,37 +866,81 @@ impl Host {
             None => diag!("lazy: {id} classified lazy"),
         }
         let now = self.now_ms();
-        let busy = resident.is_none()
-            && first_run
-            && (!self.host_idle(owner, now) || !self.write_ahead(owner, &backend, false));
-        self.on_demand.answers.insert(owner, backend);
         self.supervisor.set_now(now);
-        self.supervisor.classified_with(Pid(owner), resident, busy);
+        // A lazy first run goes to standby at once unless busy: the Host's
+        // checks are declared work (`sync_work`), and its recording is
+        // written ahead (today's `park` does not park when that fails).
+        if resident.is_none()
+            && first_run
+            && !self.sync_work(owner, false)
+            && !self.write_ahead(owner, &backend, false)
+        {
+            self.sync_work(owner, true);
+        }
+        self.on_demand.answers.insert(owner, backend);
+        self.supervisor.classified(Pid(owner), resident);
         self.supervisor_run();
         self.on_demand.written = None;
     }
-    /// What the Host itself knows of `owner` being idle (§2.3, today's
-    /// `lazy_idle` without its idle time, which is the core's timer):
-    /// installed, ready, not waking, its class not still asked, nothing of
-    /// its in flight.
-    fn host_idle(&mut self, owner: u64, now: u64) -> bool {
-        if !self.plugins.contains_key(&owner)
-            || self.supervisor.waking(Pid(owner)).is_some()
-            || matches!(self.on_demand.asked.get(&owner), Some(Ask::Classify(_)))
-            || self.checkpoint_key_of(owner).is_none()
-        {
-            return false;
+    /// What the Host itself knows keeps `owner` busy now (`Busy`).
+    fn host_busy(&mut self, owner: u64, now: u64) -> BTreeSet<Busy> {
+        let mut busy = BTreeSet::new();
+        let Some(plugin) = self.plugins.get(&owner) else {
+            return busy;
+        };
+        let id = plugin.manifest.id.clone();
+        if matches!(self.on_demand.asked.get(&owner), Some(Ask::Classify(_))) {
+            busy.insert(Busy::Classify);
         }
-        let id = self.plugins[&owner].manifest.id.clone();
-        matches!(
+        if !matches!(
             self.activation_status(owner, now),
             Ok(activation::Status::Ready)
-        ) && !self.dialog_busy
-            && !self.package_rpc_busy(&id)
-            && !self.commands.busy(owner)
-            && !self.settings.busy(owner)
-            && !self.supervisor.activation_ui_waiting(Pid(owner))
-            && !self.source_state_replies.iter().any(|(o, _)| *o == owner)
+        ) || self.supervisor.activation_ui_waiting(Pid(owner))
+        {
+            busy.insert(Busy::Activation);
+        }
+        if self.dialog_busy {
+            busy.insert(Busy::Dialog);
+        }
+        if self.package_rpc_busy(&id) {
+            busy.insert(Busy::PackageRpc);
+        }
+        if self.commands.busy(owner) {
+            busy.insert(Busy::Command);
+        }
+        if self.settings.busy(owner) {
+            busy.insert(Busy::Settings);
+        }
+        if self.source_state_replies.iter().any(|(o, _)| *o == owner) {
+            busy.insert(Busy::SourceState);
+        }
+        busy
+    }
+    /// The core's declared work of `owner` follows the Host's busy checks
+    /// now (`recording`: its standby recording could not be written ahead):
+    /// whether it is busy. Work that ended counts as use (the idle time
+    /// starts again, Chrome MV3: an event in flight extends the lifetime).
+    fn sync_work(&mut self, owner: u64, recording: bool) -> bool {
+        let now = self.now_ms();
+        let mut busy = self.host_busy(owner, now);
+        if recording {
+            busy.insert(Busy::Recording);
+        }
+        let before = self.on_demand.work.remove(&owner).unwrap_or_default();
+        self.supervisor.set_now(now);
+        for kind in before.difference(&busy) {
+            self.supervisor
+                .end_work(Pid(owner), WorkKind::Declared(*kind as u64));
+        }
+        for kind in busy.difference(&before) {
+            self.supervisor
+                .begin_work(Pid(owner), WorkKind::Declared(*kind as u64), now);
+        }
+        if busy.is_empty() {
+            return false;
+        }
+        self.on_demand.work.insert(owner, busy);
+        true
     }
     /// A standby's recording, written before the core decides the standby
     /// (today's `park` writes it first and does not park when it fails):
@@ -849,8 +1012,10 @@ impl Host {
             .and_then(|unit| self.supervisor.unit(unit))
             .and_then(|unit| unit.last_active())
             .is_some_and(|at| at >= asked);
-        if used || !self.host_idle(owner, now) {
-            self.supervisor.standby_refused(Pid(owner));
+        // Busy now (declared work since B3, §17.12): the core keeps it up
+        // and asks again after another idle time.
+        if used || self.sync_work(owner, false) {
+            self.supervisor.resources_answered(Pid(owner), true);
             self.supervisor_run();
             return;
         }
@@ -891,11 +1056,12 @@ impl Host {
         self.on_demand.written = None;
     }
     /// The core's Standby job asks whether `owner` may go to standby
-    /// (`Action::QueryResources`): the Host's own idle check first (today
-    /// `lazy_tick` asked only an idle plugin), then the playback worker.
+    /// (`Action::QueryResources`): the Host's own busy checks first, synced
+    /// as declared work (today `lazy_tick` asked only an idle plugin), then
+    /// the playback worker. Busy (or the worker gone): answered busy.
     pub(super) fn query_resources(&mut self, owner: u64) {
         let now = self.now_ms();
-        if self.host_idle(owner, now) {
+        if self.plugins.contains_key(&owner) && !self.sync_work(owner, false) {
             let asked = self.backend.commands.send(Command {
                 reply: Reply { owner, id: 0 },
                 method: "owner.resources".into(),
@@ -906,7 +1072,8 @@ impl Host {
                 return;
             }
         }
-        self.supervisor.standby_refused(Pid(owner));
+        self.supervisor.set_now(now);
+        self.supervisor.resources_answered(Pid(owner), true);
         self.supervisor_run();
     }
     /// The playback worker did not answer a classification within
@@ -942,6 +1109,8 @@ impl Host {
         self.on_demand.asked.remove(&owner);
         self.on_demand.told.remove(&owner);
         self.on_demand.answers.remove(&owner);
+        // The core's work of the run went with it.
+        self.on_demand.work.remove(&owner);
     }
     /// Every host tick: the test hooks, and every `idle_check` (250 ms)
     /// whether start-up settled. The idle checks, first runs, "Starting…"
@@ -957,6 +1126,12 @@ impl Host {
             return;
         }
         self.on_demand.next_check = now + self.supervisor.tunables().idle_check;
+        // Busy runs: their declared work ends when the Host's checks pass
+        // (O(busy runs) every `idle_check`, today's 250 ms poll).
+        let busy = self.on_demand.work.keys().copied().collect::<Vec<_>>();
+        for owner in busy {
+            self.sync_work(owner, false);
+        }
         if !self.on_demand.settled && self.startup_settled() {
             diag!("lazy: start-up settled");
             self.on_demand.settled = true;
