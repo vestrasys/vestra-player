@@ -173,6 +173,7 @@ macro_rules! both {
 
 // Test files come after `both!` (macro_rules is textually scoped).
 mod b3;
+mod b4;
 mod backlog;
 mod budget;
 mod deadlines;
@@ -1133,4 +1134,186 @@ impl Sim {
             _ => None,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Adapter additions for the B4 spec tests (`b4.rs`)
+// ---------------------------------------------------------------------------
+
+impl Profile {
+    /// B4 on top of B3 (`Tunables::legacy().with_b3(8).with_b4()`): restart
+    /// policy, backoff, start retries and limits, heap cap, crash notice
+    /// (§13 B4, §17.7 switches), with today's timeouts (idle 60 s, start
+    /// 15 s, stop 300 ms / standby 2 s, no request timeout before B6) and
+    /// no process budget (B5).
+    pub fn b4() -> Self {
+        Profile {
+            name: "b4",
+            start_retries: 3,
+            restart: true,
+            ..Profile::b3()
+        }
+    }
+}
+
+/// The B4 preset (§17 header: `with_b4` on top of `with_b3`).
+pub(super) fn b4_tunables() -> Tunables {
+    Tunables::legacy().with_b3(8).with_b4()
+}
+
+impl Sim {
+    /// A simulation under `Profile::b4()` / `b4_tunables()`.
+    pub fn b4() -> Sim {
+        Sim::with_tunables(&Profile::b4(), b4_tunables())
+    }
+    pub fn with_tunables(p: &Profile, t: Tunables) -> Sim {
+        let mut sup = Supervisor::new(t, 1);
+        sup.set_now(T0);
+        Sim {
+            sup,
+            now: T0,
+            p: p.clone(),
+            log: Vec::new(),
+        }
+    }
+    /// `process_exited` with the fault's own text (§17.1).
+    pub fn exited_with(&mut self, pid: Pid, cause: ExitCause, text: &str) -> Vec<Act> {
+        self.sup.process_exited(pid, cause, Some(text.into()));
+        self.run()
+    }
+    /// `packages.list` state (§9, `list_state`): `Some(text)` when failed.
+    pub fn listed_failed(&self, u: UnitId) -> Option<String> {
+        match self.sup.list_state(u) {
+            Some(ListState::Failed(text)) => Some(text),
+            _ => None,
+        }
+    }
+    pub fn package_busy(&self, u: UnitId) -> bool {
+        self.sup.package_busy(u)
+    }
+}
+
+/// `until` of an `Answer{Held{until}}` (T20).
+pub(super) fn held_until(a: &Act) -> Option<Ms> {
+    match a {
+        Action::Answer {
+            reason: AnswerReason::Held { until },
+            ..
+        } => Some(*until),
+        _ => None,
+    }
+}
+
+/// A notice, normalised (`crashedexited`, `crashedoom`, `startlimithit`,
+/// `runnerrestarted`, `runnerfailedopen`, `couldnotstart`, `starting`).
+pub(super) fn notice(a: &Act) -> Option<String> {
+    match a {
+        Action::Notify { notice, .. } => Some(norm(notice)),
+        _ => None,
+    }
+}
+pub(super) fn notices(acts: &[Act]) -> Vec<String> {
+    acts.iter().filter_map(notice).collect()
+}
+
+/// `(pid, own process)` of a `Spawn`.
+pub(super) fn spawn_own(a: &Act) -> Option<(Pid, bool)> {
+    match a {
+        Action::Spawn { pid, placement, .. } => Some((*pid, *placement == Placement::Own)),
+        _ => None,
+    }
+}
+
+/// `(unit, job, result)` of a `JobFinished`.
+pub(super) fn finished(a: &Act) -> Option<(UnitId, JobId, R)> {
+    match a {
+        Action::JobFinished {
+            unit, job, result, ..
+        } => Some((
+            *unit,
+            *job,
+            match result {
+                JobResult::Done => R::Done,
+                JobResult::Failed(t) => R::Failed(t.clone()),
+                JobResult::Canceled => R::Canceled,
+                JobResult::Dropped => R::Dropped,
+            },
+        )),
+        _ => None,
+    }
+}
+
+/// The B4 preset carries the design's numbers (§3.3, §8, §11, §17.7
+/// switches table).
+#[test]
+fn t00_b4_preset_matches_design_values() {
+    let t = b4_tunables();
+    // Today's timeouts and B3's queue limits stay (§11: B6 flips them).
+    assert_eq!(t.idle_timeout, 60_000);
+    assert_eq!(t.max_active, Some(4));
+    assert_eq!(t.backlog_max, Some(64));
+    assert_eq!(t.process_budget, None, "budget is B5");
+    for c in [Class::Builtin, Class::Resident, Class::Normal] {
+        let p = t.policy(c);
+        assert_eq!(p.start_timeout, 15_000, "{c:?}");
+        assert_eq!(p.stop_grace, 300, "{c:?}");
+        assert_eq!(p.standby_grace, 2_000, "{c:?}");
+        assert_eq!(p.failure_grace, 300, "{c:?}");
+        assert_eq!(p.request_timeout, None, "{c:?}: request timeout is B6");
+        // Start retry 3 × (250 ms × 2ⁿ + 10 % jitter).
+        let r = p.start_retry.expect("start retry");
+        assert_eq!((r.count, r.base, r.jitter_pct), (3, 250, 10), "{c:?}");
+        // 5 in 10 min.
+        let l = p.start_limit.expect("start limit");
+        assert_eq!((l.burst, l.interval), (5, 600_000), "{c:?}");
+        // MemoryMax= 512 MB own process (A15a).
+        assert_eq!(p.memory_max_mib, Some(512), "{c:?}");
+        // Reset after 60 s stable (§17.2 Q20).
+        let b = p.restart_sec.expect("RestartSec");
+        assert_eq!(b.reset_after, Some(60_000), "{c:?}");
+        assert!(
+            !b.first_immediate,
+            "{c:?}: only the runner's first restart is immediate (Q19)"
+        );
+    }
+    let b = t.policy(Class::Builtin);
+    assert_eq!(b.restart, RestartMode::OnFailure);
+    assert_eq!(b.restart_sec.unwrap().base, 3_000);
+    let r = t.policy(Class::Resident);
+    assert_eq!(r.restart, RestartMode::OnFailure, "A15b");
+    assert_eq!(r.restart_sec.unwrap().base, 1_000);
+    assert_eq!(r.restart_sec.unwrap().cap, Some(60_000));
+    let n = t.policy(Class::Normal);
+    assert_ne!(
+        n.restart,
+        RestartMode::OnFailure,
+        "Normal: on the next trigger (A15c)"
+    );
+    assert_ne!(n.restart, RestartMode::No);
+    assert_eq!(n.restart_sec.unwrap().base, 1_000);
+    assert_eq!(n.restart_sec.unwrap().cap, Some(60_000));
+    let d = t.policy(Class::Development);
+    assert_eq!(d.restart, RestartMode::No);
+    assert_eq!(d.start_retry.map_or(0, |r| r.count), 0, "no start retry");
+    assert_eq!(
+        d.start_limit.map(|l| l.burst),
+        Some(1),
+        "1 failure → Failed"
+    );
+    assert_eq!(d.memory_max_mib, None, "developers debug large heaps");
+    // Runner: 3 restarts in 60 s → fail-open; first immediate, then 3 s.
+    assert_eq!(
+        (t.runner_restart_limit, t.runner_restart_window),
+        (3, 60_000)
+    );
+    let rb = t.runner_backoff.expect("runner backoff");
+    assert!(rb.first_immediate);
+    assert_eq!(rb.base, 3_000);
+    // §17.7 switches set by `with_b4`.
+    assert!(t.crash_notice);
+    assert!(t.runner_restart_waits_cleanup);
+    assert!(t.remove_data_waits_cleanup);
+    assert!(!t.start_job_ends_at_spawn);
+    // Kept until B6 (§17.7 D3).
+    assert!(t.resident_idle_standby);
 }
