@@ -136,25 +136,21 @@ impl Host {
         let Some(unit) = self.supervisor.by_pid(Pid(owner)) else {
             return;
         };
-        let reclaim = self
-            .supervisor
-            .job(unit)
-            .is_some_and(|job| job.origin == crate::supervisor::Origin::Pressure);
-        if !reclaim {
-            return;
-        }
-        let pressure = self.supervisor.pressure();
-        let why = if pressure == Pressure::None {
-            format!(
+        // The job's origin says which: a budget standby under Low pressure
+        // is still the budget's.
+        let why = match self.supervisor.job(unit).map(|job| job.origin) {
+            Some(crate::supervisor::Origin::Budget) => format!(
                 "over the process budget ({} of {} third-party processes)",
                 self.supervisor.budget_count(),
                 self.supervisor
                     .tunables()
                     .process_budget
                     .unwrap_or_default()
-            )
-        } else {
-            format!("memory pressure {pressure:?}")
+            ),
+            Some(crate::supervisor::Origin::Pressure) => {
+                format!("memory pressure {:?}", self.supervisor.pressure())
+            }
+            _ => return,
         };
         diag!(
             "supervisor: {} to standby if idle: {why}",

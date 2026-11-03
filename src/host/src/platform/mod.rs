@@ -629,7 +629,7 @@ fn meminfo_total(text: &str) -> Option<u64> {
         .lines()
         .find_map(|line| line.strip_prefix("MemTotal:"))?;
     let kib = line.split_whitespace().next()?.parse::<u64>().ok()?;
-    Some(kib * 1024)
+    kib.checked_mul(1024)
 }
 
 /// The main window starts a draw (Windows only).

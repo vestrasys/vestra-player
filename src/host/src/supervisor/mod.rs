@@ -2865,7 +2865,7 @@ impl<P: Clone> Supervisor<P> {
                 JobKind::Standby,
                 JobMode::Replace,
                 Priority::Background,
-                Origin::Pressure,
+                Origin::Budget,
             );
         }
     }

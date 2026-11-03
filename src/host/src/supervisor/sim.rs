@@ -2960,6 +2960,9 @@ fn b5_starts_in_a_row_reclaim_only_the_overrun() {
     }
     let actions = w.tick(10_000);
     assert_eq!(asked(&actions), [v[0], v[1]], "two over, two asked");
+    for u in [v[0], v[1]] {
+        assert_eq!(w.s.job(u).map(|job| job.origin), Some(Origin::Budget));
+    }
     for pid in [w.pid(v[0]), w.pid(v[1])] {
         w.s.resources_answered(pid, false);
     }
