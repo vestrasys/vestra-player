@@ -1051,8 +1051,13 @@ export class Store {
     const list = this.#ordered(item, true);
     if (info.state === "failed")
       list.push({ id: "reload", text: msg("Reload"), enabled: idle && info.id !== this.plugin.id });
-    // A row with an update offers only Update: another repository's version is replaced from here (All).
-    if (this.#rowControls(item).primary?.id === "update") list.push(...this.#replacements(item));
+    // A row with an update offers only Update: what its ⋯ menu would hold comes here instead, Reload
+    // (a running plugin; a failed one has it above), then another repository's version (All).
+    if (this.#rowControls(item).primary?.id === "update") {
+      if (info.state !== "disabled" && info.state !== "failed")
+        list.push({ id: "reload", text: msg("Reload"), enabled: idle && info.id !== this.plugin.id && info.state !== "starting" });
+      list.push(...this.#replacements(item));
+    }
     return list;
   }
 

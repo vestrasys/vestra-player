@@ -6,7 +6,7 @@ Needs Vestra Player 0.6.0.
 
 - Each row in the list has one control in the same place at the bottom right, as in VS Code's extension list: Install for a plugin not installed, Update while a newer version exists, otherwise a ⋯ Manage button (tooltip and accessible name "Manage"). Its menu keeps the fixed order: Disable or Enable, Uninstall…, Reload, Open Data Folder, then "Replace with x from y…" under All. Formerly an installed row showed a Disable or Enable button and a … button, next to the not-installed rows' single Install button.
 - The "Installed" label is gone: a grey ✓ right before the version marks an installed plugin (accessible name "Installed"); a disabled plugin's row is dimmed and says "Disabled" there instead, a failed one "Failed". "Update → x.y.z", Revoked, Built-in and the other states stay on the second line.
-- The details keep their buttons ([Update to x] [Disable | Enable] [Uninstall…]). A row with an update offers only Update; disable or uninstall it from the details, which then also offer "Replace with x from y…" when another repository has a version of it (under All).
+- The details keep their buttons ([Update to x] [Disable | Enable] [Uninstall…]). A row with an update offers only Update; disable, uninstall or reload it from the details, which then also offer Reload (after Uninstall…, while it runs) and "Replace with x from y…" when another repository has a version of it (under All).
 
 ## 0.2.11
 

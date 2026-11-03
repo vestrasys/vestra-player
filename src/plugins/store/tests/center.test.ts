@@ -488,9 +488,18 @@ test("buttons keep their places: Disable and Enable swap only their words (VS Co
     assert.deepEqual(await detail("B Off"), ["enable", "uninstall"], "disabled");
     // A failed one: Reload last, so disabling it moves nothing.
     assert.deepEqual(await detail("C Bad"), ["disable", "uninstall", "reload"], "failed");
-    assert.deepEqual(await detail("D Old"), ["update", "disable", "uninstall"], "update available");
-    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 2.0.0", "停用", "卸载…"]);
+    // Update available: the row has Update only, so the details offer what its ⋯ menu would (Reload after Uninstall…).
+    assert.deepEqual(await detail("D Old"), ["update", "disable", "uninstall", "reload"], "update available");
+    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 2.0.0", "停用", "卸载…", "重新加载"]);
     assert.deepEqual(controls(host, "D Old").menu, [], "the row: Update only");
+    host.window("store").emit("act", "reload");
+    await until(host, () => reloads(host).includes("d.old"), "reloaded from the details");
+    // Starting: Reload stays in its place, disabled.
+    host.setPackages(host.packages.map((p) => (p.id === "d.old" ? { ...p, state: "starting" } : p)));
+    await until(host, () => actions(host).at(-1)?.enabled === false, "starting");
+    assert.deepEqual(ids(actions(host)), ["update", "disable", "uninstall", "reload"]);
+    host.setPackages(host.packages.map((p) => (p.id === "d.old" ? { ...p, state: "running" } : p)));
+    await until(host, () => actions(host).at(-1)?.enabled === true, "running again");
 
     // Disabled with an update: Update stays first, Enable takes Disable's place.
     host.setPackages(host.packages.map((p) => (p.id === "d.old" ? { ...p, state: "disabled" } : p)));

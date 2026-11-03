@@ -295,7 +295,7 @@ test("an update row offers only Update; another repository's version is replaced
     const replace = `replace:${THIRD}\na.alpha`;
     assert.deepEqual(
       (props(host)["actions"] as { id: string }[]).map((a) => a.id),
-      ["update", "disable", "uninstall", replace],
+      ["update", "disable", "uninstall", "reload", replace],
     );
     // Its button asks as Replace… did.
     host.dialogAnswers.push(yes);

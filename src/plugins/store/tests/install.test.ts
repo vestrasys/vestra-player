@@ -296,7 +296,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
   try {
     const row = await choose(host, "YouTube");
     assert.equal(row.badge, "可更新 → 0.3.0");
-    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "停用", "卸载…"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "停用", "卸载…", "重新加载"]);
     assert.ok(banners(host).includes("新版本需要新的权限：读写剪贴板"));
     // The Updates chip shows the count ("Updates {}", in Slint).
     assert.equal(props(host)["updates"], 1);
