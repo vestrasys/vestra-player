@@ -1,7 +1,8 @@
-//! B0 of the plugin process supervisor (doc/architecture/supervisor.md):
-//! characterization tests of the plugin lifecycle before it with the real
-//! host, headless, so that batches B2a–B2d can show zero behaviour
-//! difference. They pin what the other suites do not:
+//! Characterization tests of the plugin lifecycle with the real host,
+//! headless, written before the plugin process supervisor
+//! (doc/architecture/supervisor.md) took over, so that the move could show
+//! zero behaviour difference; updated where the supervisor changed
+//! behaviour on purpose. They pin what the other suites do not:
 //!
 //! | Behaviour | Where it is pinned |
 //! | --- | --- |
@@ -20,10 +21,10 @@
 //! | Standby with a process still stopping: wake waits, enable goes through `packages.reloads` (`starting`, `busy`), uninstall removes the data after the reap (or at once once reaped) | here: `standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone` |
 //! | Quit stops own processes one after another (300 ms each) | here: `quit_stops_own_processes_one_after_another` |
 //! | `packages.list` `starting`, `failed` (with its reason), `disabled` | here: `packages_list_shows_starting_failed_and_disabled` |
-//! | Book entry leaked on a failed spawn, fixed in B2a | here: `b2a_a_failed_spawn_gives_its_activation_place_back` |
-//! | `Host.cleanup` only grew, fixed in B2b | here: `b2b_stop_bookkeeping_is_the_units_and_cannot_grow` |
-//! | Disable then enable ran two processes, fixed in B2b | here: `b2b_disable_then_enable_waits_for_the_old_process` |
-//! | Uninstall then reinstall ran two processes, fixed in B2b | here: `b2b_uninstall_then_reinstall_waits_for_the_old_process` |
+//! | Book entry leaked on a failed spawn, since fixed | here: `b2a_a_failed_spawn_gives_its_activation_place_back` |
+//! | `Host.cleanup` only grew, since fixed | here: `b2b_stop_bookkeeping_is_the_units_and_cannot_grow` |
+//! | Disable then enable ran two processes, since fixed | here: `b2b_disable_then_enable_waits_for_the_old_process` |
+//! | Uninstall then reinstall ran two processes, since fixed | here: `b2b_uninstall_then_reinstall_waits_for_the_old_process` |
 //!
 //! Built-ins from a `builtin.json` schema 3 under `VESTRA_BUILTIN_PLUGINS`,
 //! the development runner, Node 26 on `PATH` (or `VESTRA_NODE`) and libmpv.
@@ -317,8 +318,9 @@ fn fixture(id: &str, version: &str, cleanup: Cleanup, delay_ms: u32, extra: &str
     )
 }
 
-/// `fixture` with a quick cleanup and no delay, resident (`RESIDENT`, since
-/// B6: it stays running; installed with `install_resident`).
+/// `fixture` with a quick cleanup and no delay, resident (`RESIDENT`, so
+/// that it stays running under on-demand start; installed with
+/// `install_resident`).
 fn tracked(id: &str, version: &str) -> String {
     fixture(id, version, Cleanup::Quick, 0, RESIDENT)
 }
@@ -406,7 +408,7 @@ fn own_process_restarts_wait_for_the_old_process_and_session_values_follow_the_r
         format!("{MANAGER} uninstall committed"),
         // The new instance loaded once the old process was gone (`overlaps
         // []`, which a cleanup marker alone could not show: the 100 ms
-        // cleanup ends within the grace either way: 300 ms before B6, 5 s since); a reload and an
+        // cleanup ends within the grace either way: 5 s, 300 ms before on-demand start); a reload and an
         // upgrade keep the session values.
         format!("{RELOAD} 1.0.0 stopped for reload"),
         format!("{RELOAD} 1.0.0 start found [started finished] mark set overlaps []"),
@@ -483,15 +485,15 @@ fn a_parked_plugin_is_listed_running_idle_and_its_park_announces_nothing() {
     assert!(!log.contains("same=true"), "the park was announced: {log}");
 }
 
-/// B0 known bug (an activation place leaked), fixed in B2a.
+/// A bug these tests pinned (an activation place leaked), since fixed.
 /// `load_package` takes an activation place (`activation_begin`) before
-/// it spawns; until B2a an early return (`Plugin::load_manifest(..)?`)
+/// it spawns; before the supervisor an early return (`Plugin::load_manifest(..)?`)
 /// never gave it back, so after 64 failed spawns every later start failed
 /// with "activation tracking limit reached" instead of its own error. Now a
 /// failed spawn ends its activation (and the activation is its unit's, one
 /// per unit): the 65th fails to spawn Node like the others. Node is pointed
-/// at a missing file, so no plugin process runs at all. Since B4 (the start
-/// retry, supervisor.md §6) each start is tried three more times (250 ms × 2ⁿ)
+/// at a missing file, so no plugin process runs at all. With the spawn
+/// retry (supervisor.md §6) each start is tried three more times (250 ms × 2ⁿ)
 /// before it is listed failed, so the failures end in any order.
 #[test]
 #[ignore = "needs libmpv: run with --include-ignored (ci:local)"]
@@ -513,7 +515,7 @@ fn b2a_a_failed_spawn_gives_its_activation_place_back() {
         .filter(|line| line.contains("failed to start: "))
         .collect::<Vec<_>>();
     assert_eq!(failures.len(), 65, "{log}");
-    // Every one fails to spawn Node after its three retries (B4): none
+    // Every one fails to spawn Node after its three retries: none
     // finds the places taken by the failures before it.
     for n in 0..65 {
         let id = format!("aa.fixture-{n:03}");
@@ -547,10 +549,10 @@ fn b2a_a_failed_spawn_gives_its_activation_place_back() {
     assert!(!log.contains("activation tracking limit reached"), "{log}");
 }
 
-/// B0 known bug A18 (2), fixed in B2b (supervisor.md §5).
+/// A bug these tests pinned (A18, part 2), since fixed (supervisor.md §3).
 /// `Host.cleanup` (whether a stopped owner's process is reaped and the
 /// playback worker cleaned up after it) got an entry at every stop and none
-/// left it in a run: no code removed one. B2b replaces it by the unit's
+/// left it in a run: no code removed one. The supervisor replaces it by the unit's
 /// `Stopping` (the supervisor's `reap.rs`): one per unit, set at a stop,
 /// cleared when that process is reaped and cleaned up after, so it cannot
 /// grow (the supervisor's `stop_bookkeeping_is_one_per_unit_and_goes`
@@ -726,9 +728,9 @@ fn cleanup_removals(root: &Path) -> Vec<(PathBuf, String)> {
 
 const TWICE: &str = "aa.fixture-twice";
 
-/// B0 known bug (disable then enable ran two processes), fixed in B2b.
-/// `packages.setEnabled(false)` then
-/// `setEnabled(true)` on a running plugin: until B2b the stop took it out
+/// A bug these tests pinned (disable then enable ran two processes), since
+/// fixed. `packages.setEnabled(false)` then
+/// `setEnabled(true)` on a running plugin: before the supervisor the stop took it out
 /// of `plugins` at once and `parked_process` looked only at parked
 /// processes, so the enable started a new process on the same data
 /// directory while the old one was still in its 300 ms grace (here it never
@@ -742,9 +744,9 @@ const TWICE: &str = "aa.fixture-twice";
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn b2b_disable_then_enable_waits_for_the_old_process() {
     let mut root = Root::new();
-    // Since B6 both resident (they stay running, as with on-demand start off
+    // Both resident (they stay running, as with on-demand start off
     // before), and 6 s between toggles: a disable now gives the endless
-    // cleanup 5 s (`TimeoutStopSec`, was 300 ms) before it is killed, and a
+    // cleanup 5 s (the stop grace, was 300 ms) before it is killed, and a
     // toggle while the last one's enable still waits would merge with it.
     root.install_resident(
         1,
@@ -799,11 +801,11 @@ fn b2b_disable_then_enable_waits_for_the_old_process() {
 
 const AGAIN: &str = "aa.fixture-again";
 
-/// Review note B2-2, the same class of bug:
+/// The same class of bug (found in review):
 /// `packages.uninstall` without `removeData` of a running (not parked)
 /// plugin, then an install of it again at once. The uninstall keeps the
 /// instance (dormant), so the reinstall reconnects to the same data
-/// directory. Until B2b the install's operation waited only for a running
+/// directory. Before the supervisor the install's operation waited only for a running
 /// or parked version (`Operation.waiting`), not for the uninstalled one's
 /// process still in its 300 ms grace (its cleanup here never ends), so the
 /// new instance could start beside it. Through the SDK the race is narrow:
@@ -825,9 +827,9 @@ fn b2b_uninstall_then_reinstall_waits_for_the_old_process() {
          {RESIDENT}\
          plugin.onDispose(() => new Promise(() => {{}}));\n}}\n"
     );
-    // Since B6 resident (it stays running, as with on-demand start off
+    // Resident (it stays running, as with on-demand start off
     // before); each uninstall now gives the endless cleanup 5 s
-    // (`TimeoutStopSec`, was 300 ms) before the kill, so the run is longer.
+    // (the stop grace, was 300 ms) before the kill, so the run is longer.
     root.install_resident(1, AGAIN, &main);
     // A digest of its own each time: the uninstalled one's directory may
     // still be being removed by the library thread (an install of the same
@@ -918,12 +920,12 @@ const BUSY_TEXT: &str = "busy: the package is being installed or reloaded";
 /// within the stop's own grace, and the restart goes on then. A cleanup
 /// that never ends holds a reload of a shared-runner member until the
 /// runner abandons it (its 5 s `STOP_TIMEOUT_MS`, inside the host's 6 s
-/// `MEMBER_GONE`), and an upgrade of an own process for its grace (300 ms
-/// until B6, `TimeoutStopSec` 5 s since) (preconditions for the
+/// `MEMBER_GONE`), and an upgrade of an own process for its grace (the
+/// stop grace, 5 s; 300 ms before on-demand start) (preconditions for the
 /// 20 s texts staying unreachable: see the end of the test). While the
 /// upgrade's operation runs, the plugin's `setEnabled`, `reload` and
-/// `uninstall` are `busy` (the operation half of `package_busy`). Since B6
-/// the plugins are resident (`RESIDENT`) so that they run as they did
+/// `uninstall` are `busy` (the operation half of `package_busy`). The
+/// plugins are resident (`RESIDENT`) so that they run as they did
 /// with on-demand start off.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
@@ -976,7 +978,7 @@ fn an_endless_cleanup_holds_a_reload_or_an_upgrade_only_for_its_grace() {
              }}, 1500);\n}}\n"
         ),
     );
-    // Longer than before B6: the upgrade's stop waits the own process's 5 s.
+    // Longer than before on-demand start: the upgrade's stop waits the own process's 5 s.
     let log = root.run(18, &[("VESTRA_SHARED", "1")]);
     at(&log, &format!("{MANAGER} done"));
     at(&log, &format!("{MANAGER} reload ok"));
@@ -1023,11 +1025,11 @@ const FRESH: &str = "aa.fixture-gone-fresh";
 const REAPED: &str = "aa.fixture-gone-reaped";
 
 /// Standby (lazy activation) with own processes whose cleanup never ends:
-/// a park waits `PARK_WAIT` (2 s; 5 s since B6) for its process, and whatever comes
+/// a park waits `PARK_WAIT` (5 s; 2 s before on-demand start) for its process, and whatever comes
 /// meanwhile waits for that process to go, never beside it: a wake by a
 /// command (`Parked.waiting`, `lazy_tick`; the 20 s `STOP_WAIT_MS` never
 /// runs out), a disable and enable (`set_enabled(true)` → `packages.reloads`:
-/// listed `starting`; a second enable `busy` until B3, `ok` since), an
+/// listed `starting`; a second enable `ok`, formerly `busy`), an
 /// uninstall that removes the
 /// data (`data_removals` at the parked process's `Reaped`). An uninstall
 /// once the parked process is gone removes the data at once.
@@ -1115,8 +1117,8 @@ fn standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone() {
     // Enabled again right after its disable in standby: `starting` until
     // the parked process is gone; then a fresh start (the disable cleared
     // its session values) beside nothing. A second enable meanwhile was
-    // `busy` (today's enable-after-park entry in `packages.reloads`); since
-    // B3 it is merged into the waiting start (an enable is the user's, not
+    // `busy` (the old enable-after-park entry in `packages.reloads`); now
+    // it is merged into the waiting start (an enable is the user's, not
     // a package RPC).
     at(&log, &format!("lazy: {ENABLE} parked"));
     at(
@@ -1152,10 +1154,10 @@ fn standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone() {
     // `MEMBER_GONE`).
 }
 
-/// Quit. B0 pinned own processes stopped one after another, each given its
-/// 300 ms grace (six plugins whose cleanup never ends made the quit about
-/// 6 × 300 ms longer than with none). Flipped in B4 ("Quitting
-/// spends at most ~1 s on plugin shutdown"): every process gets its
+/// Quit. These tests first pinned own processes stopped one after another,
+/// each given its 300 ms grace (six plugins whose cleanup never ends made
+/// the quit about 6 × 300 ms longer than with none). Now quitting spends
+/// at most about 1 s on plugin shutdown (supervisor.md §9): every process gets its
 /// stop at once and one deadline of 1 s, so twelve endless cleanups (3.6 s
 /// one after another) cost about that 1 s.
 #[test]
@@ -1166,7 +1168,7 @@ fn quit_stops_own_processes_side_by_side_within_one_second() {
         let mut root = Root::new();
         for n in 0..plugins {
             let id = format!("aa.fixture-quit-{n}");
-            // Since B6 resident, so they run at the quit as they did with
+            // Resident, so they run at the quit as they did with
             // on-demand start off (a lazy one is in standby by then).
             root.install_resident(
                 n + 1,
@@ -1198,7 +1200,7 @@ fn quit_stops_own_processes_side_by_side_within_one_second() {
     }
     let (empty, endless) = (median(empty), median(endless));
     let extra = endless.saturating_sub(empty);
-    // B4: one deadline for all, about 1 s (B0: N × 300 ms and more).
+    // One deadline for all, about 1 s (before the supervisor: N × 300 ms and more).
     assert!(
         extra < std::time::Duration::from_millis(2_000),
         "quit took {endless:?} (median) with {N} endless cleanups, {empty:?} with none: \
@@ -1226,7 +1228,7 @@ const OFF: &str = "aa.fixture-off";
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn packages_list_shows_starting_failed_and_disabled() {
     let mut root = Root::new();
-    // Since B6 the slow one and the manager are resident (`RESIDENT`): they
+    // The slow one and the manager are resident (`RESIDENT`): they
     // stay running, so the slow one lists `running running` once ready, as
     // with on-demand start off before (a lazy one would list `running idle`
     // in standby).

@@ -134,8 +134,8 @@ pub fn set_app_info(info: &Value) {
 /// Where a plugin runs.
 pub enum Placement<'a> {
     /// Its own Node process, its JavaScript heap capped at `heap_mib` MiB
-    /// when set (`--max-old-space-size`, the supervisor's `MemoryMax=`,
-    /// supervisor.md §2, §8; B4).
+    /// when set (`--max-old-space-size`, the supervisor's heap cap,
+    /// supervisor.md §8).
     Own { heap_mib: Option<u32> },
     /// A member of this shared runner.
     Shared(&'a mut SharedRunner),
@@ -508,7 +508,7 @@ fn own_process(
         .spawn()
         .with_context(|| paths.node_failure())?;
     // Its stderr goes on to the player's, as when inherited; read here so
-    // V8's heap abort is seen (supervisor.md §7, B4).
+    // V8's heap abort is seen (supervisor.md §7, §8).
     let stderr_done = Arc::new(AtomicBool::new(false));
     if let Some(stderr) = child.stderr.take() {
         let done = stderr_done.clone();
@@ -575,7 +575,8 @@ fn forward_stderr(mut reader: impl BufRead, generation: u64, events: &mpsc::Send
     }
 }
 /// A gone process's exit code; on Unix a signal is `128 + signal`, as a
-/// shell reports it (V8's abort: 134 everywhere, measured on Windows in B4).
+/// shell reports it (V8's abort: 134 everywhere, measured on Windows with
+/// Node 26).
 fn exit_code(status: std::process::ExitStatus) -> Option<i32> {
     #[cfg(unix)]
     {

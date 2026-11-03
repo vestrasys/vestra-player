@@ -1,12 +1,12 @@
-//! In-flight work per unit (Chrome MV3 "an event in flight extends the
-//! lifetime"): the one "busy" (B3: the Host's busy checks are work items
-//! here, supervisor.md) and the request deadline (off until B6).
+//! In-flight work per unit (an event in flight extends the lifetime,
+//! supervisor.md §4): the one "busy" (the Host's busy checks are work items
+//! here) and the request deadline.
 //!
 //! Two kinds (coordinator ruling): a host→plugin request
 //! awaiting the plugin's reply is capped by the class's `request_timeout`
-//! (Chrome MV3: 5 min per event); work the plugin or the Host declares
+//! (5 min per request); work the plugin or the Host declares
 //! (`commands.busy`, a settings page busy, a dialog, a package RPC...) keeps
-//! the unit busy without a cap (Android foreground-service precedent).
+//! the unit busy without a cap.
 #![forbid(unsafe_code)]
 
 use std::collections::BTreeMap;
@@ -18,7 +18,7 @@ use super::unit::Ms;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WorkKind {
     /// A host→plugin request awaiting a reply (`source.resolveRequest`):
-    /// capped by `Policy::request_timeout` (B6: 5 min).
+    /// capped by `Policy::request_timeout` (5 min).
     Request(u64),
     /// Declared long work: busy, never capped.
     Declared(u64),

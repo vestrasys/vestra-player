@@ -20,7 +20,7 @@
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | opening the player | `on_open_files` (macOS: open-documents Apple events through `vestra-open-files`; elsewhere files come on the command line), `single_instance` / `single_instance_restarted` → `Launch` / `Primary` (shared, in `instance.rs`), `allow_handoff_foreground` (Windows: `AllowSetForegroundWindow`) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
-//! | facts | `os_facts` (blocking), `gpu_adapters` (Windows: DXGI through `vestra-win32`; elsewhere none yet), `memory_status` (Windows: private bytes and commit charge through `vestra-win32`; elsewhere none yet), `physical_memory` → `physical_memory_mib` (Windows: `GlobalMemoryStatusEx` through `vestra-win32`; macOS: `NSProcessInfo`; Linux: `/proc/meminfo`; 8 GiB when unknown), `PressureSource` → `MemoryPressure` (the plugin supervisor's input: Windows: Chrome's thresholds on available physical memory and the system's low-memory notification through `vestra-win32`; Linux: PSI; macOS: none yet), `on_session_end` (Windows: `WM_QUERYENDSESSION`/`WM_ENDSESSION` through `vestra-win32`; elsewhere nothing, the quit request ends the event loop), `displays` (UI thread),`app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
+//! | facts | `os_facts` (blocking), `gpu_adapters` (Windows: DXGI through `vestra-win32`; elsewhere none yet), `memory_status` (Windows: private bytes and commit charge through `vestra-win32`; elsewhere none yet), `physical_memory` → `physical_memory_mib` (Windows: `GlobalMemoryStatusEx` through `vestra-win32`; macOS: `NSProcessInfo`; Linux: `/proc/meminfo`; 8 GiB when unknown), `PressureSource` → `MemoryPressure` (the plugin supervisor's input: Windows: thresholds on available physical memory and the system's low-memory notification through `vestra-win32`; Linux: PSI; macOS: none yet), `on_session_end` (Windows: `WM_QUERYENDSESSION`/`WM_ENDSESSION` through `vestra-win32`; elsewhere nothing, the quit request ends the event loop), `displays` (UI thread),`app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
 //! | installation | `install_layout` (pure, in `layout.rs`, for every system) → `current_install_layout` |
 //! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
@@ -551,8 +551,7 @@ pub fn memory_status() -> Option<MemoryStatus> {
 }
 
 /// Memory pressure as the system reports it: the plugin supervisor's input
-/// (doc/architecture/supervisor.md §8 "Pressure source"; Android LMK levels,
-/// Chrome's moderate / critical).
+/// (doc/architecture/supervisor.md §8, "Memory pressure").
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MemoryPressure {
     #[default]
@@ -562,7 +561,7 @@ pub enum MemoryPressure {
 }
 
 /// The physical memory the supervisor's process budget assumes when the
-/// system does not say (supervisor.md §8: "macOS fallback 8 GiB").
+/// system does not say: 8 GiB (supervisor.md §8).
 pub const PHYSICAL_MIB_FALLBACK: u64 = 8 * 1024;
 
 /// Installed physical memory in MiB (Windows: `GlobalMemoryStatusEx`
@@ -575,8 +574,7 @@ pub fn physical_memory_mib() -> u64 {
         .unwrap_or(PHYSICAL_MIB_FALLBACK)
 }
 
-/// Chrome's Windows memory pressure monitor
-/// (`base/memory/memory_pressure_monitor_win.cc`), on available physical
+/// The Windows memory pressure thresholds, on available physical
 /// memory: below 4 GiB installed, moderate under 500 MiB available and
 /// critical under 200 MiB; from 4 GiB, 1000 MiB and 400 MiB.
 #[cfg_attr(not(any(windows, test)), allow(dead_code))]
@@ -595,11 +593,10 @@ fn pressure_from_available(total_mib: u64, available_mib: u64) -> MemoryPressure
     }
 }
 
-/// `/proc/pressure/memory` (PSI, as systemd-oomd reads it) as a level,
-/// with Android lmkd's default stall thresholds over the last 10 s: low
-/// when some task stalled on memory ≥ 20 % of the time
-/// (`ro.lmk.psi_partial_stall_ms` 200 per second), critical when all did ≥
-/// 70 % (`ro.lmk.psi_complete_stall_ms` 700). `None` for a text that is not
+/// `/proc/pressure/memory` (PSI) as a level, with common default stall
+/// thresholds over the last 10 s: low
+/// when some task stalled on memory ≥ 20 % of the time, critical when all
+/// did ≥ 70 %. `None` for a text that is not
 /// PSI.
 #[cfg_attr(all(any(windows, target_os = "macos"), not(test)), allow(dead_code))]
 fn psi_pressure(text: &str) -> Option<MemoryPressure> {
@@ -926,7 +923,7 @@ mod keyring_store {
 
 #[cfg(test)]
 mod tests {
-    /// Chrome's thresholds on available physical memory, for machines
+    /// The thresholds on available physical memory, for machines
     /// below and from 4 GiB.
     #[test]
     fn available_memory_maps_to_chromes_levels() {

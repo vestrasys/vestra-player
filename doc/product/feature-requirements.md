@@ -1103,7 +1103,7 @@ Conflict check (against the current bindings in menus.md):
 2. Only text tracks are accepted (`track.text === true`). Image tracks (PGS, VobSub) are disabled in the secondary subtitle menu with the reason "Only text subtitles can be secondary".
 3. "Show Subtitles" Alt+H only toggles the main subtitle; the secondary subtitle keeps its setting.
 4. After the source changes, the secondary subtitle resets to "Off" (the core state is cleared with the source).
-5. Secondary subtitle style: font, color, outline, bold and shadow are the same as the main subtitle; the font size is fixed at 85% of the main subtitle's size; the position is set by the "Position" radio. Sync (`offsetMs`) applies to both. Reason: mpv's secondary subtitle has only a few independent properties (`secondary-sub-pos`, `secondary-sub-delay`, `secondary-sub-ass-override`), so there is no independent style this round.
+5. Secondary subtitle style: font, color, outline, bold and shadow are the same as the main subtitle; the font size is the same as the main subtitle's (mpv has no separate size for the secondary subtitle); the position is set by the "Position" radio. Sync (`offsetMs`) applies to both. Reason: mpv's secondary subtitle has only a few independent properties (`secondary-sub-pos`, `secondary-sub-delay`, `secondary-sub-ass-override`), so there is no independent style this round.
 6. Adding a secondary subtitle uses the same file reading as D18 (format, encoding, size checks). If the upload succeeds but setting it as the secondary subtitle fails, the track stays in the list, OSD "Subtitle loaded, but it cannot be the secondary subtitle".
 7. OSD: `Secondary subtitle: <track name>`, `Secondary subtitle: off`.
 8. With no media or no text track, the secondary subtitle submenu has only "Off" (selected); `Add Secondary Subtitle…` is disabled with the reason "No media to play".
@@ -3720,7 +3720,7 @@ Number range allocation for the "Settings ▸" submenu (across the seven chapter
 
 ## Plugin management (`plugins`)
 
-> **Superseded (2026-10-26):** the Plugin Manager `vestra.plugins` and "Settings ▸ Plugin Manager…" were removed; plugins are managed in the store's Installed tab (`doc/process/rounds/2026-10-plugin-center-spec.md`). This chapter is kept as history.
+> **Superseded (2026-10-26):** the Plugin Manager `vestra.plugins` and "Settings ▸ Plugin Manager…" were removed; plugins are managed in the store's Installed tab ([project history](../process/rounds/history.md#plugin-platform)). This chapter is kept as history.
 
 **Location**: `src/plugins/plugins/` (removed)
 
@@ -3737,7 +3737,7 @@ Current host state (read from `src/host/src`):
 | Startup | `package_manager.rs`: loads all committed `current` packages at startup |
 | Exposed in the SDK | `packages.validate` → `trial` / `install`, and `rollback` (needs `plugins.manage`, used by workshop) |
 | Wire method (not exposed in the SDK) | `packages.installed` (look up one record by id) |
-| Disable | The host has an internal `disable(owner)` (withdraws resources, stops the process) but no external interface; `plugins.list/load/activation/disable` were removed on 2026-10-20 (architecture overview §3), and 2026-10-core-ui records "no external disable entry point" |
+| Disable | The host has an internal `disable(owner)` (withdraws resources, stops the process) but no external interface; `plugins.list/load/activation/disable` were removed on 2026-10-20 (architecture overview §3); the core UI rework kept no external disable entry point |
 | Uninstall | Does not exist: the store has no operation to delete a record |
 | Persisting the disabled state | Does not exist |
 
@@ -4152,7 +4152,7 @@ This chapter adds no core interfaces. It relies on the `format` / `title` / `sel
 
 ## Appendix A: Core API request summary
 
-> **Note**: this table is the authors' request draft from before negotiation (community workflow §4.3). The final outcome of each item (rejected with an alternative / accepted after rewrite / accepted), the final signature and the round it lands in are given by step 3 of the [negotiation record](../process/rounds/2026-10-features-negotiation.md); the authoritative description of implemented interfaces is the [API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html).
+> **Note**: this table is the authors' request draft from before negotiation (community workflow §4.3). The final outcome of each item (rejected with an alternative / accepted after rewrite / accepted), the final signature and the round it lands in were settled in the negotiation of 2026-10-20 ([project history](../process/rounds/history.md#1-timeline); full table: `git show 03c75d2e:doc/process/rounds/2026-10-features-negotiation.md`); the authoritative description of implemented interfaces is the [API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html).
 
 Date: 2026-10-20. Source: the "Core dependencies" and "Chapter core API request summary" of each chapter of this document; interfaces needed only by removed features (A04 A05 A06 A14 B10 B13 B14 B15 B18 B19 B20 B24 B27 B28 C08 C13 C19 C20 C22 C24 C25 C26 D08 D12 D13 D14 D15 D19 D21 E07 E14 E15 F06 F08 F10 F12 G06 G07 G12 G13 G14 H02 H06 H11 I04 J05 J10, and the three plugins files, scenes and timer) are not listed. An interface used by several chapters is listed once.
 

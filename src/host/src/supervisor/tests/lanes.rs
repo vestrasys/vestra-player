@@ -167,7 +167,7 @@ fn l_fifo_within_a_priority() {
     assert_eq!(spawned_units(&sim, &acts), vec![e2]);
 }
 
-// Start-job concurrency: third-party running Starts ≤ max_active (B3)
+// Start-job concurrency: third-party running Starts ≤ max_active
 #[test]
 fn l_max_active_limits_wakes_target() {
     let p = Profile::target();
@@ -255,7 +255,7 @@ fn l_development_start_bypasses_limit() {
     assert_eq!(spawned_units(&sim, &acts), vec![d]);
 }
 
-// Bounds: third-party lane ≤ 256 waiting Start jobs (B3)
+// Bounds: third-party lane ≤ 256 waiting Start jobs
 #[test]
 fn l_third_party_lane_bounded_at_256() {
     let p = Profile::target();

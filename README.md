@@ -11,10 +11,9 @@
 </p>
 <p align="center">
   <a href="https://github.com/vestrasys/vestra-player/releases">Releases</a> ·
-  <a href="https://vestrasys.github.io/vestra-player-sdk/">Plugin SDK docs</a> ·
+  <a href="https://github.com/vestrasys/vestra-player-sdk">Plugin SDK</a> ·
   <a href="https://github.com/vestrasys/vestra-player-plugins">Plugins</a> ·
-  <a href="doc/README.md">Design docs</a> ·
-  <a href="agentic-workflow.md">Agentic Workflow</a>
+  <a href="agentic-workflow/">Agentic Workflow</a>
 </p>
 
 <p align="center">

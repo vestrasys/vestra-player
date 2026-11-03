@@ -1,7 +1,7 @@
 //! `video.upscaling`: the GPU's video upscaler (NVIDIA RTX Video Super
 //! Resolution on Windows): whether it works here and why not, and turning
 //! it on or off for this plugin (`playback/upscaling.rs`, SDK 1.5.37, player
-//! 0.5.16; AI upscaling round record §8 V3). The control worker answers;
+//! 0.5.16; doc/architecture/README.md §4.4). The control worker answers;
 //! the host adds its rendering state, for the advice in a `rendering`
 //! reason.
 //!

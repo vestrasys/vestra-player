@@ -1,7 +1,5 @@
 //! Windows: libmpv draws with Direct3D 11 and Slint shows the frames through
-//! wgpu on Direct3D 12, without a copy (round record
-//! doc/process/rounds/2026-10-windows-wgpu.md; the spike that proved it:
-//! 2026-10-wgpu-d3d-spike.md).
+//! wgpu on Direct3D 12, without a copy (doc/architecture/README.md §4.3).
 //!
 //! - Every Slint window draws with one wgpu device on the Direct3D 12
 //!   backend ([`WindowDevice`], handed to Slint as
@@ -66,7 +64,7 @@ static LIVE: Mutex<Vec<std::sync::Weak<Shared>>> = Mutex::new(Vec::new());
 /// so no GPU wait on them (the windows' queue waiting for a frame mpv's GPU
 /// never finishes, a stall with `VESTRA_GPU_WATCHDOG=0` or before the
 /// watchdog's limit) can hold up the presents, the swapchains' teardown or
-/// the device's drain. Round record 2026-10-render-modes §11.6.
+/// the device's drain.
 pub fn release_gpu_waits() {
     let live: Vec<Arc<Shared>> = lock(&LIVE).iter().filter_map(std::sync::Weak::upgrade).collect();
     for shared in live {
@@ -770,7 +768,7 @@ impl Drop for Completion {
 /// `VESTRA_GPU_CPU_WAIT=1`: the render thread waits on the CPU until each
 /// frame finished on the GPU before publishing it (up to host 0.5.18, for
 /// A/B measurements). Otherwise only the GPU-side fences order the frames
-/// (round record 2026-10-render-modes §11 item 3).
+/// (doc/architecture/README.md §4.3).
 fn cpu_wait_on() -> bool {
     std::env::var("VESTRA_GPU_CPU_WAIT").as_deref() == Ok("1")
 }
@@ -865,8 +863,7 @@ fn gpu_priority() -> Option<i32> {
 /// `VESTRA_GPU_CPU_WAIT=1` it first waits (an event) until the GPU finished
 /// the frame.
 ///
-/// Without that wait (the default) the GPU-side fences carry the ordering
-/// (round record 2026-10-render-modes §11 item 3):
+/// Without that wait (the default) the GPU-side fences carry the ordering:
 ///
 /// - a window samples a texture only after its queue waited for the frame's
 ///   `ready` value (`View::before`/`direct`), so it never shows a frame
@@ -1124,7 +1121,7 @@ fn produce(
         shared.ready_enqueued.store(ready_value, Ordering::Release);
         *lock(&shared.last_frame) = (started, ready_value);
         let completed = match &completion {
-            // The GPU-side fences order everything (record §11 item 3):
+            // The GPU-side fences order everything:
             // windows wait for `ready` on their queue, mpv's device waits
             // for `done` before it renders into a texture again. No
             // completion timeout notices a removed device here: ask.
@@ -1547,7 +1544,7 @@ fn direct_accepts() -> bool {
 /// flush the window's clear separately before `BeforeRendering`, and
 /// femtovg-wgpu then drops every render pipeline the clear did not use
 /// (`pipeline_cache.retain` after each flush), so each draw recreates and
-/// recompiles them (round record §9). The host counts draws itself then.
+/// recompiles them. The host counts draws itself then.
 pub fn uses_rendering_notifier() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var("VESTRA_WGPU_NOTIFIER").as_deref() == Ok("1"))

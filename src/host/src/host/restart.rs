@@ -3,7 +3,7 @@
 //! player is started as `rendering.restart` starts one
 //! (`rendering::relaunch_command`); the loss is recorded in the crash guard
 //! first, so a second loss within a day makes the next start render in
-//! software (round record 2026-10-render-modes §3.5 item 4, §4 M3).
+//! software (doc/architecture/README.md §4.3).
 use super::rendering::{RESTARTING, Relaunch, relaunch_command, restart_refused};
 use crate::platform;
 use crate::playback::render_state::{self, GuardFile, Keys};
@@ -107,7 +107,7 @@ pub(crate) fn run_through_loss<T>(run: impl FnOnce() -> T, lost: impl Fn() -> bo
 
 /// How long this player may take to end once its event loop ended after a
 /// device loss. What must survive is saved by then: the crash guard and the
-/// resume position here, the UI state and the lazy-activation records first
+/// resume position here, the UI state and the standby recordings first
 /// thing after the event loop (`main.rs`); clean teardowns after a loss took
 /// 1 to 5 s (restart.log of the M3 and 0.5.19 hardware tests). Up to host
 /// 0.6.3 the only limit was 15 s from the restart, which a teardown stuck in
@@ -181,8 +181,8 @@ fn stuck_line(after: std::time::Duration, step: &str) -> String {
 
 /// After a device loss or a GPU stall (`vestra-gpu-render`'s watchdog) the
 /// teardown can hang in the driver, the render thread being stuck in it;
-/// the new player would then wait for this one and the lock (round record
-/// 2026-10-render-modes §10 L6). End the process if it is still there
+/// the new player would then wait for this one and the lock. End the
+/// process if it is still there
 /// [`EXIT_AFTER_LOOP`] after its event loop ended, or
 /// [`EXIT_AFTER_RESTART`] after the restart, whichever comes first;
 /// terminated without DLL detach (`platform::exit_now`), which a stuck

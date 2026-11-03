@@ -1,6 +1,6 @@
 //! Video upscaling (`video.upscaling.state`, `video.upscaling.set`;
-//! capability `video.upscaling`, SDK 1.5.37; AI upscaling round record
-//! doc/process/rounds/2026-10-ai-upscaling.md §8 V3), on the control worker.
+//! capability `video.upscaling`, SDK 1.5.37; doc/architecture/README.md
+//! §4.4), on the control worker.
 //!
 //! - **Availability.** The system's check (`platform::upscaler_probe`:
 //!   on Windows an NVIDIA GPU, driver 530 or newer, and the driver's answer

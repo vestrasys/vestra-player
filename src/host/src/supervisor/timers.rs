@@ -1,4 +1,4 @@
-//! Deadline min-heap (systemd `sd-event` timer sources): `(due, unit, kind,
+//! Deadline min-heap: `(due, unit, kind,
 //! generation)` with lazy deletion. Arming or canceling bumps the unit's
 //! generation of that kind, so a stale entry is skipped when popped: `run_jobs`
 //! costs O(due), never a scan over all units.
@@ -13,9 +13,9 @@ use super::unit::{Ms, UnitId};
 pub(super) enum TimerKind {
     /// Idle standby (re-armed lazily: `touch` only moves `last_active`).
     Idle,
-    /// `TimeoutStartSec` (spawn → ready).
+    /// the start timeout (spawn → ready).
     StartTimeout,
-    /// `TimeoutStopSec`: `Term` → `Kill`.
+    /// the stop grace: `Term` → `Kill`.
     StopGrace,
     /// `STOP_WAIT` 20 s: reap + backend cleanup.
     StopWait,

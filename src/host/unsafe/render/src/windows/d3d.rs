@@ -1,4 +1,4 @@
-//! The Direct3D side (doc/process/rounds/2026-10-windows-wgpu.md):
+//! The Direct3D side (doc/architecture/README.md §4.3):
 //!
 //! - the adapter (DXGI), and on it the windows' wgpu device on the
 //!   Direct3D 12 backend ([`Gpu`]; Slint's `WGPUConfiguration::Manual` takes
@@ -47,7 +47,7 @@ fn luid64(luid: LUID) -> u64 {
 /// the host's policy (its platform module: GPU rendering takes the
 /// high-performance GPU unless the user chose one for Vestra in Windows
 /// Settings, CPU mode Windows' order, `VESTRA_GPU_ADAPTER` overrides both;
-/// round record 2026-10-render-modes §12); the host passes the adapter it
+/// doc/architecture/README.md §4.3); the host passes the adapter it
 /// resolved (`Luid`) with its reason. The adapter is chosen once per
 /// process; a change needs a restart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -178,7 +178,7 @@ fn dxgi_adapter(choice: Choice, how: Option<&str>) -> Result<(IDXGIAdapter1, Fac
 /// The fields drop in declaration order, which this type owns for every
 /// user: the raw Direct3D references first, then wgpu's queue and device,
 /// the instance last (dropping the instance before its device crashed the
-/// spike, round record 2026-10-wgpu-d3d-spike §4). The host keeps its one
+/// first prototype). The host keeps its one
 /// `Gpu` for the whole process (see `mod.rs`).
 pub struct Gpu {
     d3d12: ID3D12Device,

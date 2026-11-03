@@ -1,5 +1,5 @@
-//! The shared runner with the real host, headless (doc/process/rounds/
-//! 2026-10-shared-runner.md §8, §11): built-ins from a `builtin.json`
+//! The shared runner with the real host, headless (doc/architecture/
+//! README.md §2, supervisor.md §7): built-ins from a `builtin.json`
 //! schema 3 under `VESTRA_BUILTIN_PLUGINS`, the development runner
 //! (`src/runtime/shared-runner.ts`), Node 26 on `PATH` (or `VESTRA_NODE`)
 //! and libmpv. Ignored by default; `npm run ci:local` runs it
@@ -38,7 +38,7 @@ fn builtin(root: &Path, id: &str, body: &str, tamper: bool) -> serde_json::Value
 /// On-demand start is everyone's, so a built-in that holds nothing
 /// live goes to standby at its first ready. These fixtures listen to the
 /// player's state (resident: never in standby, supervisor.md §2), so they keep running
-/// in the shared runner as they did with on-demand start off before B6.
+/// in the shared runner as they did before on-demand start became the default.
 fn builtin_with(
     root: &Path,
     id: &str,
@@ -172,8 +172,8 @@ fn built_ins_share_one_runner_and_a_restart_keeps_their_session_values() {
 }
 
 /// Three restarts within a minute: own processes for the rest of the run.
-/// `VESTRA_SHARED=0`: own processes from the start. Since B4 (supervisor.md
-/// §7) only the first restart in the window is immediate, the second
+/// `VESTRA_SHARED=0`: own processes from the start. With backoff
+/// (supervisor.md §7) only the first restart in the window is immediate, the second
 /// waits 3 s and the third 6 s, so the run is longer.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
@@ -347,9 +347,9 @@ fn log_stop(id: &str) -> String {
     )
 }
 
-/// Since B6 `main` made resident (it listens to the player's state at the
-/// start of `activate(plugin)`), so the plugin keeps running as it did with
-/// on-demand start off before B6; with the capabilities that needs.
+/// `main` made resident (it listens to the player's state at the start of
+/// `activate(plugin)`), so the plugin keeps running as it did before
+/// on-demand start became the default; with the capabilities that needs.
 fn resident(main: &str) -> String {
     main.replacen(
         "activate(plugin) {\n",

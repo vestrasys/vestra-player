@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Vestra Player AI eval: the fixed tasks of tasks.json against a REAL model.
 // Opt-in and manual (it spends the provider account's money); run it after a
-// change to the system prompt, the tools or the reference, and record the
-// result in the round's notes. Never part of `vestra-plugin test`.
+// change to the system prompt, the tools or the reference, and note the
+// result in the change's review. Never part of `vestra-plugin test`.
 //
 //   VESTRA_EVAL_PROVIDER=anthropic VESTRA_EVAL_MODEL=claude-sonnet-4-5 \
 //   VESTRA_EVAL_API_KEY=… npm run eval -- [--task <id>…] [--json <file>] [--keep] [--timeout <minutes>]

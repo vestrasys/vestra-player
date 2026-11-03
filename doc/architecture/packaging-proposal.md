@@ -159,7 +159,7 @@ Measured sizes:
 
 | Key | Value |
 | --- | --- |
-| `CFBundleIdentifier` | **Set to `com.vestraplayer.player`** (final decision by the coordinator on 2026-10-22, replacing the proposal below and the old value of decision 15 in the round document; the host code does not use the bundle id: the data directory is `Vestra`, the keychain service name is `vestra.plugin.<id>`). Original proposal: `com.vestrasys.player`. Need to confirm whether the domain vestrasys.com is ours; if not, use `io.github.vestrasys.player`. **It cannot be changed once a signed release is out** (keychain, TCC permissions and preferences all hang off it) |
+| `CFBundleIdentifier` | **Set to `com.vestraplayer.player`** (final decision by the coordinator on 2026-10-22, replacing the proposal below and the old value of decision 15; the host code does not use the bundle id: the data directory is `Vestra`, the keychain service name is `vestra.plugin.<id>`). Original proposal: `com.vestrasys.player`. Need to confirm whether the domain vestrasys.com is ours; if not, use `io.github.vestrasys.player`. **It cannot be changed once a signed release is out** (keychain, TCC permissions and preferences all hang off it) |
 | `CFBundleName`, `CFBundleDisplayName` | `Vestra Player` |
 | `CFBundleExecutable` | `vestra-host` |
 | `CFBundleIconFile` | `AppIcon` |

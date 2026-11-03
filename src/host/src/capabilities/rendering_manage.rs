@@ -1,6 +1,6 @@
 //! `rendering.manage`: choosing GPU or software rendering for the next start
-//! and restarting the player (host/rendering.rs; round record
-//! 2026-10-render-modes). Reading the state, `rendering.state`, needs no
+//! and restarting the player (host/rendering.rs; doc/architecture/README.md
+//! §4.3). Reading the state, `rendering.state`, needs no
 //! capability (uncapable.rs).
 use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::host::{Host, Reply};

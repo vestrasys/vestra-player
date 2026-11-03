@@ -30,7 +30,7 @@
 //!   `OVERDUE`, unless the user just gave input or Slint animates (0.5.19):
 //!   in full screen each draw is a present the display shows at once, and
 //!   a present of its own between two video frames moved them off their
-//!   blanks (round record 2026-10-render-modes §11 item 7);
+//!   blanks;
 //! - an owed draw is drawn off the blanks (`overdue`) only while no blank
 //!   arrives.
 //!
@@ -126,7 +126,7 @@ pub struct Gate {
     pub folded: u64,
     /// The owed draw carries a folded UI change (for `folded-late`).
     carried: bool,
-    /// `VESTRA_FRAME_FOLD=0`: no folding (A/B, record §11 item 7).
+    /// `VESTRA_FRAME_FOLD=0`: no folding (A/B).
     pub no_fold: bool,
 }
 impl Gate {
@@ -144,8 +144,8 @@ impl Gate {
     /// and it has not waited `OVERDUE` yet. Each draw is a present, and on a
     /// display that follows the presents (an independent flip, variable
     /// refresh) a present of its own for a UI change shows between two
-    /// video frames and moves them off their blanks (item 7 of round record
-    /// 2026-10-render-modes §11).
+    /// video frames and moves them off their blanks
+    /// (doc/architecture/README.md §4.2).
     fn folds(&self, now: Instant, since: Instant) -> bool {
         let within = |at: Option<Instant>, span: Duration| {
             at.is_some_and(|at| now.saturating_duration_since(at) < span)
@@ -775,15 +775,15 @@ pub fn wanted() -> bool {
 /// the draw is owed when the frame's image is set (`picture_set`), not when
 /// the renderer publishes it. `VESTRA_GPU_FRAME_GATE=0` (A/B tests): the
 /// window takes the newest frame at once and each published frame owes a
-/// draw (wgpu round record §17).
+/// draw.
 pub fn gpu_frames_paced() -> bool {
     static PACED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     wanted() && *PACED.get_or_init(|| std::env::var("VESTRA_GPU_FRAME_GATE").as_deref() != Ok("0"))
 }
 
 /// Whether UI-only draws wait for the next video picture while a video plays
-/// (`Gate::folds`, 0.5.19). `VESTRA_FRAME_FOLD=0` (A/B tests, record §11
-/// item 7): they draw at the next blank, as before; logged once.
+/// (`Gate::folds`, 0.5.19). `VESTRA_FRAME_FOLD=0` (A/B tests): they draw
+/// at the next blank, as before; logged once.
 fn fold_wanted() -> bool {
     static FOLD: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *FOLD.get_or_init(|| {
@@ -1294,7 +1294,7 @@ mod tests {
         assert_eq!(gate.redraw_requested(now), DRAW, "delivered once");
     }
 
-    /// Item 7 (record §11): in full screen (an independent flip, where each
+    /// In full screen (an independent flip, where each
     /// present is shown at once) UI changes without a new picture drew at
     /// a blank of their own, about 11 extra presents a second between the
     /// video frames. While a video plays they now wait for the next picture

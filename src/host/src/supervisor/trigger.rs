@@ -1,5 +1,5 @@
-//! Held triggers (systemd socket activation: the listening socket's backlog).
-//! MOVE `lazy::hold_event` (only wake events merge, newest wins), bounds and
+//! Held triggers (a unit's backlog, supervisor.md §4): formerly
+//! `lazy::hold_event` (only wake events merge, newest wins), bounds and
 //! explicit answers.
 #![forbid(unsafe_code)]
 
@@ -93,11 +93,11 @@ pub enum AnswerReason {
     /// The start was canceled by another stop (reload of a removed image,
     /// quit...).
     Stopped,
-    /// In standby with a restart hold (B4): until then.
+    /// In standby with a restart hold: until then.
     Held { until: Ms },
 }
 
-/// Holds `trigger` (MOVE `hold_event`: a wake event replaces a held one of
+/// Holds `trigger` (formerly `hold_event`: a wake event replaces a held one of
 /// the same name). Whether it was added without growing the backlog.
 pub(super) fn hold<P>(backlog: &mut VecDeque<Trigger<P>>, trigger: Trigger<P>) -> bool {
     let merged = if let TriggerKind::Event(name) = &trigger.kind {
@@ -159,8 +159,8 @@ mod tests {
         serde_json::json!({"event": event, "data": data})
     }
 
-    /// Review M1 (MOVE of `lazy.rs` `held_events_keep_their_order_and_only_
-    /// the_newest_of_each`): a woken plugin receives wake events in order,
+    /// Formerly `lazy.rs`'s `held_events_keep_their_order_and_only_
+    /// the_newest_of_each`: a woken plugin receives wake events in order,
     /// only the newest of each, after the trigger that came before them.
     #[test]
     fn held_events_keep_their_order_and_only_the_newest_of_each() {
@@ -183,7 +183,7 @@ mod tests {
         );
     }
 
-    /// B0 (MOVE of `lazy.rs` `b0_hold_event_replaces_only_its_own_event`):
+    /// Formerly `lazy.rs`'s `b0_hold_event_replaces_only_its_own_event`:
     /// holding a wake event replaces only an older message of its own event
     /// name (newest wins, at the end) and keeps every other held message in
     /// its order, the `source.resolveCancel` that follows its request

@@ -1,5 +1,5 @@
 //! The wgpu twin of the OpenGL texture (Windows: windows draw with femtovg on
-//! wgpu, Direct3D 12; round record doc/process/rounds/2026-10-windows-wgpu.md).
+//! wgpu, Direct3D 12; doc/architecture/README.md §4.3).
 //!
 //! One `Rgba8Unorm` texture per window, kept while the picture's size stays,
 //! shown as a `slint::Image` made from the `wgpu::Texture`. Slint imports only

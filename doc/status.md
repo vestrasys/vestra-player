@@ -6,8 +6,8 @@ Updated: 2026-10-20.
 
 The [interface rework](product/ui-spec.md) has two steps:
 
-- **Step one (core, done 2026-10-20, branch `rebuild/core-ui`)**: input binding table, new menu model, main window shell, theme and widget library, on-screen messages and info layer, play sequence, panel state and detaching, persistent interface state, window title, panel context menus; new playback info plugin (Tab). The old APIs were removed; all plugins were moved to the new style with unchanged interaction. Record: [round record](process/rounds/2026-10-core-ui.md).
-- **Step two (interaction redesign of each plugin, done 2026-10-20, branch `rebuild/plugin-ui`)**: the 10 plugins and the playback info plugin were redesigned according to the rework documents; at plugin request the core added icon buttons, command unregistration and plugin data directories. Record: [round record](process/rounds/2026-10-plugin-ui.md).
+- **Step one (core, done 2026-10-20, branch `rebuild/core-ui`)**: input binding table, new menu model, main window shell, theme and widget library, on-screen messages and info layer, play sequence, panel state and detaching, persistent interface state, window title, panel context menus; new playback info plugin (Tab). The old APIs were removed; all plugins were moved to the new style with unchanged interaction. History: [project history](process/rounds/history.md#1-timeline).
+- **Step two (interaction redesign of each plugin, done 2026-10-20, branch `rebuild/plugin-ui`)**: the 10 plugins and the playback info plugin were redesigned according to the rework documents; at plugin request the core added icon buttons, command unregistration and plugin data directories. History: [project history](process/rounds/history.md#1-timeline).
 
 ## Plugins
 
@@ -37,7 +37,7 @@ Each appeared once in the GUI smoke test after the host cleanup on 2026-10-20; r
 
 ## Pending API requests
 
-Handled through the bottom-up flow of the [community workflow](../agentic-workflow.md).
+Handled through the bottom-up flow of the [community workflow](../agentic-workflow/agentic-workflow.md).
 
 | Item | Source | Suggested priority |
 | --- | --- | --- |

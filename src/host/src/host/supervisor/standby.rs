@@ -1,5 +1,5 @@
-//! What the Host keeps for a unit in standby (MOVE of `lazy.rs`'s `Origin`
-//! and `Parked`, B2c): the core holds its state and held triggers
+//! What the Host keeps for a unit in standby (formerly `lazy.rs`'s `Origin`
+//! and `Parked`): the core holds its state and held triggers
 //! (`UnitState::Standby`, `Unit::backlog`); the registrations it keeps
 //! still need the package's catalog, image roots, name and refusals.
 use crate::i18n::{self, Catalog};

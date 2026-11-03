@@ -193,7 +193,7 @@ fn warp_a_failed_renderer_releases_its_fences_and_windows_stop_claiming() {
     drop(renderer);
 }
 
-/// The watchdog (record §11 item 4): mpv's device waits on the GPU for a
+/// The watchdog (doc/architecture/README.md §4.3): mpv's device waits on the GPU for a
 /// `done` value no window signals, so `ready` stops moving; after the limit
 /// the renderer stops as after a lost device, with both fences released.
 /// Without a stall (playing, then paused) it never fires.
@@ -260,7 +260,7 @@ fn warp_a_stall_releases_both_fences_at_once() {
     assert_eq!(lock(&shared.failed).as_deref(), Some("GPU rendering stalled: a test"));
 }
 
-/// H17 (record §11.6): a stall with the watchdog off, then the player
+/// A stall with the watchdog off, then the player
 /// quits. Releasing the fences ends every GPU wait (the frame mpv's queue
 /// held finishes), is not reported as a failure, stops the windows'
 /// claims, and the renderer then drops at once.
@@ -370,7 +370,7 @@ fn the_adapter_choice_reads_the_environment_value() {
 
 // ------------------------------------------------- real-machine measurements
 
-/// The spike's measurement (round record 2026-10-wgpu-d3d-spike §3) on the
+/// The first prototype's measurement on the
 /// GPU this process gets by default, with a real 4K60 clip: mpv publishes at
 /// the clip's rate through the shared ring, a simulated window takes the
 /// newest frame 60 times a second, and the last frame reads the same
@@ -405,7 +405,7 @@ fn real_gpu_hands_4k60_frames_over_at_the_clip_rate() {
     let produced = (handle.frames() - frames) as f64 / seconds;
     let taken = (handle.shown() - shown) as f64 / seconds;
     let hwdec: String = mpv.get_property("hwdec-current").unwrap_or_default();
-    // The numbers for the record (`--nocapture`); a closed stderr is ignored.
+    // The numbers (`--nocapture`); a closed stderr is ignored.
     let _ = writeln!(
         std::io::stderr(),
         "{}: produced {produced:.1}/s, new frames taken {taken:.1}/s, hwdec {hwdec}{}",

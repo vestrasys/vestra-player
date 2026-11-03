@@ -311,8 +311,8 @@ impl Manager {
     }
 }
 impl Host {
-    /// Where plugin `id`, about to run from `directory`, runs (doc/process/
-    /// rounds/2026-10-shared-runner.md §3): in the shared runner only a
+    /// Where plugin `id`, about to run from `directory`, runs (doc/
+    /// architecture/README.md §2): in the shared runner only a
     /// built-in by provenance — listed in `builtin.json`, running from the
     /// installation's own directory, recorded as built-in in the catalog —
     /// whose files still have the digest packaging recorded, unless
@@ -411,7 +411,7 @@ impl Host {
         // stops at once (no member gets its `runtime.stop`: the runner is
         // killed), goes back to standby by replay when it has a standby
         // recording, else starts again in the built-in lane: the first
-        // restart at once, a later one in the window after `RestartSec`
+        // restart at once, a later one in the window after the restart delay
         // (3 s × 2ⁿ), once the playback worker cleaned up after it.
         self.supervisor.set_now(now);
         let runner = self.supervisor.runner();
@@ -421,7 +421,7 @@ impl Host {
     }
     /// Starts `manifest` from `directory` as process `owner` (the pid the
     /// supervisor allocated with its `Spawn`), its activation due by
-    /// `deadline` (the start's `TimeoutStartSec`, `Job::deadline`).
+    /// `deadline` (the start's the start timeout, `Job::deadline`).
     fn load_package_as(
         &mut self,
         owner: u64,
@@ -440,8 +440,8 @@ impl Host {
             id: id.clone(),
             ..manifest.clone()
         };
-        // A spawn that fails gives its activation back (a leak fixed
-        // in B2a: before, the place stayed taken for the rest of the run).
+        // A spawn that fails gives its activation back (before, the place
+        // stayed taken for the rest of the run).
         let plugin = match self.spawn_package(owner, &id, directory, manifest, key) {
             Ok(Some(plugin)) => plugin,
             // On the spawn thread (`host/supervisor/worker.rs`).
@@ -462,7 +462,7 @@ impl Host {
     }
     /// `load_package`'s process: in the shared runner (started if none
     /// runs) when trusted, else its own, its heap capped by its class
-    /// (`MemoryMax=`, 512 MB; supervisor.md §8). `None`: its own process is created
+    /// (the heap cap, 512 MB; supervisor.md §8). `None`: its own process is created
     /// on the spawn thread (`Event::Spawned`).
     fn spawn_package(
         &mut self,
@@ -1402,8 +1402,8 @@ impl Host {
                     // it was refused while it ran stays listed.
                     ("running", parked.warning.clone())
                 } else if matches!(listed, Some(ListState::Running { .. })) {
-                    // Waiting to start again by itself after a crash (B4,
-                    // `Activating{AutoRestart}`): running, no process.
+                    // Waiting to start again by itself after a crash
+                    // (`Activating{AutoRestart}`): running, no process.
                     ("running", None)
                 } else {
                     stopped(disabled, self.failures.get(&id))
@@ -1709,7 +1709,7 @@ impl Host {
             .flatten();
         let receipt =
             json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
-        // Its recording goes at the request (review note B2-4).
+        // Its recording goes at the request, not when the stop lands.
         self.drop_recording(&id);
         // The supervisor stops it (`Stop{Uninstall, then: Removed}`); its
         // data directory, resolved now, is deleted once no process of it
@@ -2439,8 +2439,7 @@ fn uninstallable(
 /// `runtime/runner.js` and `ui/host.slint` from there too): the `.app`
 /// signature on macOS; on Windows a per-user install (`PrivilegesRequired=
 /// lowest`) is writable by the user, so the digest guards against a damaged
-/// or partial installation, not against a program running as the user
-/// (doc/process/rounds/2026-10-shared-runner.md §3.3).
+/// or partial installation, not against a program running as the user.
 mod builtin {
     use crate::packages::package_stage::PackageManifest;
     use anyhow::{Context, Result, ensure};
@@ -2737,9 +2736,9 @@ mod tests {
     use super::*;
     use crate::packages::package_store::Installed;
 
-    /// The start order (today's `StartQueue::new`): built-ins first, then
-    /// the others, each in id order. Since B2d a built-in still being
-    /// checked no longer stays in this queue: it is loaded in its turn and
+    /// The start order (formerly `StartQueue::new`): built-ins first, then
+    /// the others, each in id order. A built-in still being
+    /// checked does not hold up the others: it is loaded in its turn and
     /// waits in `Activating{Verify}` while the others start, counted as
     /// pending (`supervisor/queue.rs` tests).
     #[test]
@@ -3780,23 +3779,24 @@ mod tests {
         }
     }
 
-    /// B0 (supervisor.md): start-up and wait tunables as they are
-    /// today (the 15 s activation deadline and the install wait of 20 s are
-    /// literals in `load_package` and `advance_package`).
+    /// Characterization test (supervisor.md §6): start-up and wait tunables
+    /// as they were pinned before the supervisor (the 15 s activation
+    /// deadline and the install wait of 20 s were literals in
+    /// `load_package` and `advance_package`).
     #[test]
     fn b0_start_up_and_wait_tunables() {
         assert_eq!(START_BUDGET, std::time::Duration::from_millis(25));
         assert_eq!(VERIFY_WAIT, std::time::Duration::from_secs(3));
-        // The reload's and the install's wait (`RELOAD_WAIT_MS` and a
-        // literal until B2b): the supervisor's `STOP_WAIT`.
+        // The reload's and the install's wait (formerly `RELOAD_WAIT_MS` and
+        // a literal): the supervisor's `STOP_WAIT`.
         assert_eq!(
             crate::supervisor::Tunables::new(8, 16_384).stop_wait,
             20_000
         );
     }
 
-    /// B0: the plugins behind a held built-in start while it keeps its
-    /// place: since B2d the supervisor's lanes (`supervisor/queue.rs`
+    /// Characterization test: the plugins behind a held built-in start while
+    /// it keeps its place: the supervisor's lanes (`supervisor/queue.rs`
     /// `b0_others_pass_a_builtin_being_checked`); the start order itself is
     /// `start_order` (`start_order_puts_builtins_first`).
     #[test]

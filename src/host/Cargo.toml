@@ -105,7 +105,7 @@ getrandom = "=0.3.4"
 vestra-win32 = { path = "unsafe/win32" }
 # Every window draws with Slint's femtovg renderer on wgpu (Direct3D 12) and
 # libmpv's Direct3D 11 frames are shown from textures shared with that device
-# (doc/process/rounds/2026-10-windows-wgpu.md); the `unsafe` stays in
+# (doc/architecture/README.md §4.3); the `unsafe` stays in
 # unsafe/render. Windows only: macOS keeps femtovg on OpenGL. `femtovg` (GL)
 # and the software renderer stay as the fallbacks (platform/windows.rs).
 slint = { version = "=1.18.1", features = ["renderer-femtovg-wgpu", "unstable-wgpu-30"] }

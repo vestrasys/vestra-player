@@ -2,8 +2,8 @@
 
 > Historical design record (core UI round C1–C11, C14, 2026-10-20). Current behaviour: [architecture overview §4](README.md#4-slint-composition-and-input), [Windows, panels, settings pages, dialogs and the OSD](https://vestrasys.github.io/vestra-player-sdk/documents/Windows,_panels,_settings_pages,_dialogs_and_the_OSD.html), [Commands, menus and key bindings](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_key_bindings.html). Not maintained.
 
-Date: 2026-10-20. Stage: P1a design; the P2 review has passed (rulings in [this round's task](../process/rounds/2026-10-core-ui.md) §8 "P2 review", merged into this document); P1b implements this document.
-Basis: [this round's task](../process/rounds/2026-10-core-ui.md) §2, §5; [UI spec](../product/ui-spec.md) §2, §3, §6, §8, §9, §10.
+Date: 2026-10-20. Stage: P1a design; the P2 review has passed (its rulings are merged into this document); P1b implements this document.
+Basis: the core UI round's task; [UI spec](../product/ui-spec.md) §2, §3, §6, §8, §9, §10.
 Current code: `src/host/src/{main,commands}.rs`, `src/host/src/host/`, `src/host/src/ui/{menu,composition,window_state,view}.rs`, `src/host/src/process/mod.rs`, `src/host/ui/*.slint`, `src/sdk/plugin/*.ts`, `src/runtime/runner.ts`.
 
 How to read: each item first gives the public interface, then how the host does it, lifecycle and errors, a usage example, the old things it replaces that are deleted in P4, and how existing plugins migrate. §14 explains why the menu tree does not change after migration, §15 is the rewrite reference for migrators to copy, §16 is the complete deletion list, and §18 holds the questions the coordinator has to decide.
@@ -249,7 +249,7 @@ impl Table {
 }
 ```
 
-- The table is **derived data**: it always equals a recompute from the declarations and the overlay. Since the perf-registry round (2026-11) it is kept up to date one command at a time: a registration, removal (plugin deactivated) or overlay change takes out and puts back only the claims of the commands it touches, sorted per input, and recomputes the winner, fallbacks and conflicts of those inputs only (a whole recompute per registration was quadratic: 4.3 s for 6000 commands). A unit test checks it against the whole recompute after every kind of change.
+- The table is **derived data**: it always equals a recompute from the declarations and the overlay. Since the many-plugin performance work (2026-11-02) it is kept up to date one command at a time: a registration, removal (plugin deactivated) or overlay change takes out and puts back only the claims of the commands it touches, sorted per input, and recomputes the winner, fallbacks and conflicts of those inputs only (a whole recompute per registration was quadratic: 4.3 s for 6000 commands). A unit test checks it against the whole recompute after every kind of change.
 - The host's own commands (owner 0) are also in the table:
 
 | Command | Default bindings | Menu | State |

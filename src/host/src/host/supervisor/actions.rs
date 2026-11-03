@@ -1,5 +1,5 @@
 //! The core's actions, executed (doc/architecture/supervisor.md): each executor
-//! is the body of today's code that made the same decision. Since B2d every
+//! is the body of the code that made the same decision before. Every
 //! start (`Spawn`, after `Verify` or `Replay`) and every stop (`Terminate`)
 //! runs here; the Host announces list changes through `notify_tick`
 //! (`ListChanged` is not run), and the reaper times every stop's grace and
@@ -41,7 +41,7 @@ impl Host {
                 } => self.spawn_unit(unit, pid.0, image),
                 Action::Verify { unit } => self.verify_unit(unit),
                 Action::Replay { unit, holder } => self.replay_unit(unit, holder.0),
-                // A process that ended by itself (no `Terminate`, B4): its
+                // A process that ended by itself (no `Terminate`): its
                 // stop's cleanup revokes; else a held unit's entries.
                 Action::Revoke { unit, pid } if self.plugins.contains_key(&pid.0) => {
                     let grace = self.supervisor.unit(unit).map_or(300, |u| {
@@ -167,8 +167,8 @@ impl Host {
             self.terminate(owner, reason, grace);
             return;
         }
-        // A start that timed out on the spawn thread keeps its entry points (B3
-        // ruling 1): held under the pid the core holds it by.
+        // A start that timed out on the spawn thread keeps its entry points (a
+        // coordinator ruling): held under the pid the core holds it by.
         if self.spawn_canceled(owner, reason, grace, true) {
             return;
         }
@@ -191,7 +191,7 @@ impl Host {
             if timed_out {
                 self.record_failure(owner, "activation timed out");
             } else {
-                // A crash kept in standby (B4): not failed, it starts again on
+                // A crash kept in standby: not failed, it starts again on
                 // its next use after its hold.
                 self.failures.edit().remove(&id);
             }
@@ -265,7 +265,7 @@ impl Host {
     /// deactivating in the core without a `Terminate`: nothing to tell a
     /// process already gone (coordinator ruling 2026-11-03). Its UI cleanup
     /// runs here, as the `Terminate` executor's would; its entries stay when
-    /// the core keeps them for standby (B4).
+    /// the core keeps them for standby.
     pub(crate) fn exit_cleanup(&mut self, owner: u64) {
         if !self.plugins.contains_key(&owner) {
             return;
@@ -414,8 +414,8 @@ impl Host {
             diag!("lazy: {id} starts for its first run");
         }
     }
-    /// `id`'s process `to` could not be created. A start retried shortly (B4:
-    /// the core's `AutoRestart`) is not recorded as failed; a woken unit the
+    /// `id`'s process `to` could not be created. A start retried shortly (the
+    /// core's `AutoRestart`) is not recorded as failed; a woken unit the
     /// core keeps (a retry, or standby) holds its entries under `to`, the pid
     /// the core holds it by, so a click reaches it.
     #[allow(clippy::too_many_arguments)]
@@ -445,8 +445,8 @@ impl Host {
         if retried {
             diag!("supervisor: {id} could not start, tried again shortly: {error:#}");
         }
-        // A package RPC answering now still gets this spawn's error, as
-        // before B4's retries (they go on behind it).
+        // A package RPC answering now still gets this spawn's error; the
+        // retries go on behind it.
         let answering = self
             .start_error
             .as_ref()
@@ -556,7 +556,7 @@ impl Host {
     /// An uninstall's data may go now (no process may write it any more):
     /// every directory the uninstall requests of `unit` resolved goes, then
     /// the unit, while it is still removed and tracks no process (a
-    /// reinstall may own it by now: review notes B2-3, B2-5).
+    /// reinstall may own it by now).
     fn remove_unit_data(&mut self, unit: UnitId) {
         for directory in self.data_removals.remove(&unit).unwrap_or_default() {
             remove_data(&directory);
@@ -565,7 +565,7 @@ impl Host {
     }
     /// `remove_unit` of a unit that is still removed (a reinstall did not
     /// take it back), has no job, tracks no process and owes no data
-    /// removal (review note B2-3): at its `RemoveData`, at the end of its
+    /// removal: at its `RemoveData`, at the end of its
     /// uninstall's stop, or when a stuck stop's process went late.
     pub(super) fn remove_if_gone(&mut self, unit: UnitId) {
         if self.supervisor.removable(unit) {

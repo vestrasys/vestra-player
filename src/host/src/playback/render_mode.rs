@@ -1,7 +1,7 @@
 //! Which renderer pair draws: the video renderer (libmpv on the GPU, or its
 //! software renderer) and Slint's window renderer, decided once at start
-//! from plain facts, with the reason (round record 2026-10-render-modes
-//! §2.1, §3). Pure: `main.rs` gathers the facts (environment, the saved
+//! from plain facts, with the reason (doc/architecture/README.md §4.3).
+//! Pure: `main.rs` gathers the facts (environment, the saved
 //! preference, the adapter, the driver denylist, the crash guard) and
 //! passes them in; nothing here calls the system.
 //!
@@ -48,7 +48,7 @@ pub enum WindowKind {
     Software,
     /// femtovg on wgpu (Direct3D 12): GPU mode's windows on Windows, which
     /// show libmpv's Direct3D 11 textures directly. Not the driver's OpenGL,
-    /// so a `software-windows` rule does not touch them (record §8.7).
+    /// so a `software-windows` rule does not touch them.
     Wgpu,
 }
 
@@ -192,10 +192,10 @@ pub struct Facts {
     /// The index in `adapters` of the one GPU rendering (and GPU mode's
     /// Direct3D 12 windows) would use (`platform::gpu_adapters`; Windows:
     /// the high-performance GPU unless the user chose one for Vestra in
-    /// Windows Settings, record §12); out of range: none.
+    /// Windows Settings); out of range: none.
     pub render_adapter: usize,
     /// The index of the one CPU mode's Direct3D 12 windows would use
-    /// (Windows' order, record §12); out of range: none.
+    /// (Windows' order); out of range: none.
     pub windows_adapter: usize,
     pub denylist: Denylist,
     /// The crash guard keeps GPU rendering off: why, with until when.
@@ -377,7 +377,7 @@ impl Facts {
     /// What keeps GPU rendering off whatever the user prefers: the crash
     /// guard, then the first rule whose action is `cpu`, or a window rule
     /// for the windows GPU mode needs (OpenGL on macOS, Direct3D 12 on
-    /// Windows; record §8.7, §11 item 2).
+    /// Windows).
     fn blocked(&self) -> Option<Reason> {
         if let Some(detail) = &self.crashed {
             return Some(Reason::PreviousCrash(detail.clone()));
@@ -441,7 +441,7 @@ impl Facts {
                 }
             }
         }
-        // CPU mode's Direct3D 12 windows on another adapter (record §12).
+        // CPU mode's Direct3D 12 windows on another adapter (hybrid laptops).
         if self.windows_adapter != self.render_adapter
             && let Some(hit) = self.cpu_direct3d12_rule()
             && !hits.iter().any(|known| known.rule.id == hit.rule.id)
@@ -502,7 +502,7 @@ fn adapter_text(adapter: Option<&GpuAdapter>) -> String {
 /// the preference `auto` where GPU rendering is opt-in (Windows: software),
 /// else GPU. Denylist rules that hold are noted even when something earlier
 /// decided. Then the windows ([`windows`]): a window rule for the API GPU
-/// mode's windows need rules GPU mode out (record §8.7, §11 item 2); an
+/// mode's windows need rules GPU mode out; an
 /// OpenGL window rule gives CPU mode Slint's software renderer where it
 /// would use OpenGL, unless `SLINT_BACKEND` is set; on Windows CPU mode
 /// draws in Direct3D 12 (wgpu) windows unless a Direct3D 12 rule or the
@@ -557,7 +557,7 @@ pub fn decide(facts: &Facts, preference: Preference) -> Decision {
         }
         let action = match (rule.action, rule.windows()) {
             (Some(Action::Cpu), _) => "software rendering",
-            // Scoped to the mode whose adapter it holds for (record §12).
+            // Scoped to the mode whose adapter it holds for.
             (_, Some(WindowApi::Direct3d12)) => {
                 let on = |index: usize| {
                     adapter.is_some_and(|a| {
@@ -833,7 +833,7 @@ mod tests {
         assert_eq!(system_name("macos"), "macOS");
     }
 
-    /// Adrenalin 26.10.1 on the 780M: white OpenGL windows (round record §9).
+    /// Adrenalin 26.10.1 on the 780M: white OpenGL windows.
     #[test]
     fn a_software_windows_rule_changes_the_windows_of_cpu_mode_unless_slint_backend_is_set() {
         let white = GpuAdapter {
@@ -931,7 +931,7 @@ mod tests {
         assert!(decision.notes[0].contains("does not override"));
     }
 
-    /// M3 (record §4, §8.7): Windows has wgpu GPU windows and GPU rendering
+    /// Windows has wgpu GPU windows and GPU rendering
     /// only on request.
     fn windows_gpu() -> Facts {
         Facts {
@@ -1061,7 +1061,7 @@ mod tests {
         );
     }
 
-    /// H1 (M3 review), item 5 (record §11): on Windows CPU mode draws in
+    /// On Windows CPU mode draws in
     /// wgpu windows exactly when nothing keeps it from Direct3D 12; its
     /// fallback windows, and a failed GPU start's, are never wgpu nor
     /// Slint's default (which would be femtovg-wgpu there).
@@ -1152,7 +1152,7 @@ mod tests {
         assert_eq!(stalls.gpu_available().unwrap_err().code(), "denylist");
     }
 
-    /// Item 2 (record §11): a rule for Direct3D 12 windows rules GPU mode
+    /// A rule for Direct3D 12 windows rules GPU mode
     /// out on Windows (even `VESTRA_RENDER=gpu`) and keeps CPU mode on
     /// OpenGL windows; it is matched against the adapter GPU rendering uses.
     #[test]
@@ -1220,7 +1220,7 @@ mod tests {
         assert!(decide(&mac, Preference::Auto).is_gpu());
     }
 
-    /// User ruling 2026-10-31 (record §12): on a hybrid laptop GPU
+    /// User ruling 2026-10-31: on a hybrid laptop GPU
     /// rendering uses the high-performance GPU while CPU mode's Direct3D 12
     /// windows follow Windows' order; a Direct3D 12 rule and the crash guard
     /// each look at the adapter the mode uses.
@@ -1295,7 +1295,7 @@ mod tests {
         );
     }
 
-    /// L1 (record §11): `cpu` rules hold for the adapter GPU rendering uses
+    /// `cpu` rules hold for the adapter GPU rendering uses
     /// (`VESTRA_GPU_ADAPTER`), not for the first one.
     #[test]
     fn a_cpu_rule_holds_for_the_adapter_gpu_rendering_uses() {

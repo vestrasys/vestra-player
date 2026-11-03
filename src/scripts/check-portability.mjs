@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 临时，正式 CI 建立后删除。
- * Temporary portability check (portability round P0); delete it once real CI
+ * Temporary portability check; delete it once real CI
  * builds the host on Windows.
  *
  *   npm run portability [-- --skip-host] [-- --skip-scan]

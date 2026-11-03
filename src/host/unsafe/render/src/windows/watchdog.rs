@@ -1,5 +1,5 @@
-//! When GPU rendering stopped making progress (pure; tested below; round
-//! record 2026-10-render-modes §11).
+//! When GPU rendering stopped making progress (pure; tested below;
+//! doc/architecture/README.md §4.3).
 //!
 //! A driver can stop a queue without resetting the GPU: a shared fence that
 //! is waited for but never reached (a cross-API deadlock) is not a hang to

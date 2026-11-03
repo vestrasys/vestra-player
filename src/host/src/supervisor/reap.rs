@@ -1,10 +1,10 @@
-//! Reap (systemd "control group empty" + `ExecStopPost=`): a deactivating unit
+//! Reap (the process is gone, then its cleanup ran): a deactivating unit
 //! lands in its `then` once its process is reaped **and** the backend cleaned
 //! up after it, or after `STOP_WAIT` 20 s flagged stuck. The "one instance per
 //! data directory" rule is a runnability condition: a job never starts a unit
 //! while it is `Deactivating`, nor while the process of a stop that landed
 //! stuck is still tracked (`Unit::stopping` outside `Deactivating`): it waits
-//! `STOP_WAIT` from its own request for that process to go, then fails (搂17.7).
+//! `STOP_WAIT` from its own request for that process to go, then fails (supervisor.md §3).
 //! An uninstall's `RemoveData` waits for that process's reap (today's
 //! `data_removals`), landed or not.
 #![forbid(unsafe_code)]
@@ -23,7 +23,7 @@ pub const STUCK_RELOAD: &str = "the previous process did not stop within 20 s";
 impl<P: Clone> Supervisor<P> {
     /// V8 reported a heap allocation failure on `pid`'s stderr (it aborts
     /// next): its exit is `Oom` if it exits with the heap abort's code
-    /// (搂7.3, B4).
+    /// (supervisor.md §7).
     pub fn process_out_of_memory(&mut self, pid: Pid) {
         let Some(&u) = self.by_pid.get(&pid) else {
             return;
@@ -33,10 +33,10 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    /// 搂5 `process_reaped`: the process is gone (`Event::Reaped`), with
+    /// `process_reaped`: the process is gone (`Event::Reaped`), with
     /// its exit code (`None` for a shared-runner member). A run that ended
     /// by itself gets its crash notice now: "ran out of memory" when it
-    /// exited with V8's heap abort after V8's heap line (搂7.3, B4).
+    /// exited with V8's heap abort after V8's heap line (supervisor.md §7).
     pub fn process_reaped(&mut self, pid: Pid, status: Option<i32>) {
         let Some(&u) = self.by_pid.get(&pid) else {
             return;
@@ -120,7 +120,7 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// Emits an owed `RemoveData` once no process may write the data any more:
-    /// none tracked, or the tracked one reaped and cleaned up after (搂17.7).
+    /// none tracked, or the tracked one reaped and cleaned up after (supervisor.md §3).
     pub(super) fn flush_data_removal(&mut self, u: UnitId) {
         let Some(unit) = self.units.get_mut(&u) else {
             return;
@@ -147,7 +147,7 @@ impl<P: Clone> Supervisor<P> {
         self.pending.push(Action::RemoveData { unit: u });
     }
 
-    /// 搂5 `backend_cleaned` (`Event::BackendCleaned`).
+    /// `backend_cleaned` (`Event::BackendCleaned`).
     pub fn backend_cleaned(&mut self, pid: Pid) {
         let Some(&u) = self.by_pid.get(&pid) else {
             return;
@@ -176,7 +176,7 @@ impl<P: Clone> Supervisor<P> {
         } else {
             // The process of a stop that landed stuck went after all: a
             // start waiting for it goes on, an owed `RemoveData` goes first
-            // if it still is owed (搂17.7).
+            // if it still is owed (supervisor.md §3).
             unit.stopping = None;
             Timers::cancel(&mut unit.gens, TimerKind::StopWait);
             self.flush_data_removal(u);
@@ -186,7 +186,7 @@ impl<P: Clone> Supervisor<P> {
 
     /// A start that waited `STOP_WAIT` from its request for the process of
     /// a stop that landed stuck: failed with today's text, never kept in
-    /// standby (搂17.7).
+    /// standby (supervisor.md §3).
     pub(super) fn fail_stuck(&mut self, u: UnitId) {
         let wake = self.units.get(&u).is_some_and(|unit| {
             matches!(
@@ -227,7 +227,7 @@ impl<P: Clone> Supervisor<P> {
         };
     }
 
-    /// the unit leaves `Deactivating` for its `then`.
+    /// Landing: the unit leaves `Deactivating` for its `then`.
     pub(super) fn land(&mut self, u: UnitId, stuck: bool) {
         let Some(unit) = self.units.get_mut(&u) else {
             return;
@@ -238,7 +238,7 @@ impl<P: Clone> Supervisor<P> {
         let now = self.now;
         let kept = unit.stopping.is_some_and(|s| s.kept);
         // Stuck: the process is still tracked (reap / cleanup may come
-        // later), and every start waits for it (`step_start`, 搂17.7).
+        // later), and every start waits for it (`step_start`, supervisor.md §3).
         unit.stopping = unit
             .stopping
             .filter(|_| stuck)
@@ -277,7 +277,7 @@ impl<P: Clone> Supervisor<P> {
                 // Removed even when stuck (today's uninstall removes the
                 // plugin at once); its data goes at the reap of the process
                 // still tracked (`flush_data_removal`, today's
-                // `data_removals`, 搂17.7).
+                // `data_removals`, supervisor.md §3).
                 unit.state = UnitState::Inactive;
                 if unit.recorded {
                     actions.push(Action::DropCheckpoint { unit: u });
@@ -316,7 +316,7 @@ impl<P: Clone> Supervisor<P> {
             }
             // A start that waited its own `STOP_WAIT` fails now; one asked
             // later in the stop waits the rest of its 20 s (`step_start`;
-            // today each wait counts from its request, 搂17.7).
+            // today each wait counts from its request, supervisor.md §3).
             Some((_, true, created)) if stuck && now >= created + stop_wait => {
                 self.fail_stuck(u);
             }
@@ -326,8 +326,8 @@ impl<P: Clone> Supervisor<P> {
     }
 }
 
-/// The waits for stopped processes (搂17.9), driven as the adapter drives
-/// them since B2d: every start and stop is a job. The Host's side is pinned
+/// The waits for stopped processes (supervisor.md §3), driven as the adapter drives
+/// them: every start and stop is a job. The Host's side is pinned
 /// end to end by tests/lifecycle_baseline.rs.
 #[cfg(test)]
 mod tests {
@@ -473,7 +473,7 @@ mod tests {
         assert_eq!(s.unit(u).unwrap().state, UnitState::Inactive);
     }
 
-    /// a stop not reaped within 20 s lands stuck, its process still tracked; a
+    /// A stop not reaped within 20 s lands stuck, its process still tracked; a
     /// start asked later waits 20 s from its own request, and goes on once the
     /// process goes after all.
     #[test]
@@ -555,7 +555,7 @@ mod tests {
         assert_eq!(spawns(&s.run_jobs(0)), [w]);
     }
 
-    /// disable then enable of a running plugin: the enable waits for the old
+    /// Disable then enable of a running plugin: the enable waits for the old
     /// process (reaped and cleaned up after), is not `busy` for a second enable
     /// meanwhile (the merge table), then starts; with the process not gone 20 s
     /// after the enable, it fails with today's reload text.
@@ -631,7 +631,7 @@ mod tests {
         )));
     }
 
-    /// Review note B2-2: an install right after the uninstall of a running
+    /// An install right after the uninstall of a running
     /// plugin (a reinstall reconnecting to its data directory) waits for
     /// the uninstalled process.
     #[test]
@@ -694,7 +694,7 @@ mod tests {
     /// Today's `data_removals`: an uninstall's data goes at once without a
     /// process that may write it, or once that was reaped and cleaned up
     /// after; else at that process's reap. The
-    /// recording goes at the request (review note B2-4).
+    /// recording goes at the request.
     #[test]
     fn uninstall_data_goes_at_the_reap() {
         let mut s = new();
@@ -711,7 +711,7 @@ mod tests {
         assert!(s.unit(v).unwrap().removed);
     }
 
-    /// Review note B2-4: the checkpoint of a unit being uninstalled goes at
+    /// The checkpoint of a unit being uninstalled goes at
     /// the request; its landing, after a reinstall took the unit, drops
     /// nothing of the new install.
     #[test]

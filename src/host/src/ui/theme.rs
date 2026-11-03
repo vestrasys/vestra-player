@@ -239,7 +239,7 @@ impl Host {
             self.theme_all();
             let language = self.language_preference();
             let language = language.as_deref().unwrap_or(crate::i18n::SYSTEM);
-            // `changed` (B2c, an additive field): what this event changed, so a
+            // `changed` (an additive field): what this event changed, so a
             // plugin woken by it can tell a palette change from a language
             // one (doc/architecture/i18n.md §2).
             self.broadcast(
@@ -295,7 +295,7 @@ fn appearance_changed(theme: &str, language: &str, changed: &str) -> Value {
 mod tests {
     use super::*;
 
-    /// B2c: `appearance.changed` says what changed, so a plugin woken by it
+    /// `appearance.changed` says what changed, so a plugin woken by it
     /// can tell a language change from a palette change; the old fields
     /// stay as they were.
     #[test]

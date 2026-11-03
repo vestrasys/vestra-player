@@ -40,7 +40,7 @@
 //! timer's Standby job.
 //!
 //! The player runs the design's values (`Tunables::new`: idle 30 s,
-//! `TimeoutStartSec` 60 s, `TimeoutStopSec` 5 s, a 5 min cap on a request
+//! the start timeout 60 s, the stop grace 5 s, a 5 min cap on a request
 //! awaiting the plugin's reply, a resident plugin never in standby)
 //! with the spawn thread and the memory pressure source; the shared runner
 //! waits at least 30 s without a member before it exits.
@@ -62,11 +62,11 @@ pub(crate) use standby::{Held, Origin};
 
 /// How long a park waits for its process: the core's standby grace
 /// (`Policy::standby_grace`), which `Action::Terminate` carries:
-/// `TimeoutStopSec` 5 s, as a disable, reload, uninstall or upgrade.
+/// the stop grace 5 s, as a disable, reload, uninstall or upgrade.
 #[cfg(test)]
 const PARK_WAIT: Duration = Duration::from_secs(5);
-/// `VESTRA_IDLE_MS` when unset (the core's `Tunables::idle_timeout`): Chrome
-/// MV3's 30 s.
+/// `VESTRA_IDLE_MS` when unset (the core's `Tunables::idle_timeout`): 30 s
+/// (supervisor.md §6).
 const IDLE_MS: u64 = 30_000;
 /// How often the Host's busy checks and start-up are polled (`CHECK_MS`
 /// of lazy activation).
@@ -120,7 +120,7 @@ enum Busy {
     Recording,
 }
 
-/// The Host's side of on-demand start (B2c; today's `Lazy`): what the
+/// The Host's side of on-demand start (formerly `lazy.rs`'s `Lazy`): what the
 /// core's decisions need of the Host and the core does not keep.
 #[derive(Default)]
 pub(crate) struct OnDemand {
@@ -174,7 +174,7 @@ pub(crate) struct OnDemand {
     /// see [`probe::Probe`].
     pub probe: probe::Probe,
     /// Units held in standby after a fault, by holder: (unit, hold end). Their
-    /// menu items show disabled with the reason meanwhile (`note_hold`; B4).
+    /// menu items show disabled with the reason meanwhile (`note_hold`).
     holds: BTreeMap<u64, (UnitId, u64)>,
     /// Owners whose run became ready (`runtime.ready`) while an initial UI
     /// request of theirs is still answered: ready once it is (`ui_finished`):
@@ -187,7 +187,7 @@ pub(crate) struct OnDemand {
     spawner: Option<worker::Spawner>,
     /// Starts whose process the spawn thread creates, by pid.
     spawning: BTreeMap<u64, worker::Spawning>,
-    /// The memory pressure source and the level the core has (B5).
+    /// The memory pressure source and the level the core has (supervisor.md §8).
     memory: memory::Memory,
 }
 impl OnDemand {
@@ -267,9 +267,10 @@ pub(crate) fn new() -> Supervisor<Value> {
     supervisor
 }
 
-/// How long the shared runner stays without a member before it exits (B6): at
+/// How long the shared runner stays without a member before it exits: at
 /// least the idle time and at least 30 s, so built-ins going to standby one
-/// after another do not stop and start it again (1 s until B6).
+/// after another do not stop and start it again (it was 1 s before built-ins
+/// went to standby).
 pub(crate) fn runner_idle_exit(supervisor: &Supervisor<Value>) -> u64 {
     supervisor.tunables().idle_timeout.max(RUNNER_IDLE_EXIT_MIN)
 }
@@ -374,9 +375,9 @@ impl Host {
             self.remove_if_gone(unit);
         }
     }
-    /// A unit that landed in standby with a restart hold (a crash, a start that
-    /// failed:, B4): until the hold is over its menu items show disabled with
-    /// the reason, and a key or click shows it (coordinator ruling 4 of B3).
+    /// A unit that landed in standby with a restart hold (after a crash, or a
+    /// start that failed): until the hold is over its menu items show disabled
+    /// with the reason, and a key or click shows it (a coordinator ruling).
     /// `on_demand_tick` lets go at its end.
     pub(super) fn note_hold(&mut self, unit: UnitId) {
         let now = self.now_ms();
@@ -464,7 +465,7 @@ impl Host {
         diag!("supervisor: actions still pending after 64 rounds");
     }
 
-    // ---- B2c: on-demand start ----------------------------------
+    // ---- On-demand start ---------------------------------------
 
     /// Whether `message` for `owner` goes to its process now (`Host::send`):
     /// `Some(owner)`. A trigger (`TRIGGERS`; the `source.resolveCancel`
@@ -526,7 +527,7 @@ impl Host {
     }
     /// A trigger went to `owner`'s process: a `source.resolveRequest` is a
     /// host→plugin request awaiting its reply (`WorkKind::Request`, busy until
-    /// answered, capped by the request timeout from B6); its
+    /// answered, capped by the request timeout); its
     /// `source.resolveCancel` ends it.
     fn request_sent(&mut self, owner: u64, message: &Value) {
         let Some(id) = message["data"]["requestId"].as_u64() else {
@@ -555,7 +556,7 @@ impl Host {
         self.supervisor.end_work(Pid(owner), WorkKind::Request(id));
     }
     /// A wake of `owner`'s unit was enqueued: it starts in this turn if a start
-    /// slot is free (B3: `max_active` third-party starts at once, an
+    /// slot is free (`max_active` third-party starts at once, an
     /// interactive trigger first), else when one frees; and only once the
     /// process it was parked from is gone (one instance per data directory; the
     /// core's job starts it then, or fails after 20 s).
@@ -874,10 +875,11 @@ impl Host {
             Err(error) => diag!("lazy: execute {id}: {error}"),
         }
     }
-    /// at `runtime.ready`, whether installed plugin `owner` holds a live
-    /// resource. The host's half is read now (before any trigger it was woken
-    /// by runs); the playback worker's half is asked, and its answer comes
-    /// before anything the plugin asks it after this (`resources_answer`).
+    /// Classification at `runtime.ready` (supervisor.md §4): whether
+    /// installed plugin `owner` holds a live resource. The host's half is
+    /// read now (before any trigger it was woken by runs); the playback
+    /// worker's half is asked, and its answer comes before anything the
+    /// plugin asks it after this (`resources_answer`).
     fn classify(&mut self, owner: u64) {
         if self.checkpoint_key_of(owner).is_none() {
             self.development_ready(owner);
@@ -1037,7 +1039,7 @@ impl Host {
     /// The core's declared work of `owner` follows the Host's busy checks
     /// now (`recording`: its standby recording could not be written ahead):
     /// whether it is busy. Work that ended counts as use (the idle time
-    /// starts again, Chrome MV3: an event in flight extends the lifetime).
+    /// starts again: an event in flight extends the lifetime).
     fn sync_work(&mut self, owner: u64, recording: bool) -> bool {
         let now = self.now_ms();
         let mut busy = self.host_busy(owner, now);
@@ -1269,7 +1271,7 @@ impl Host {
             .and_then(|unit| self.supervisor.unit(unit))
             .and_then(|unit| unit.last_active())
             .is_some_and(|at| at >= asked);
-        // Busy now (declared work since B3): the core keeps it up and asks
+        // Busy now (declared work): the core keeps it up and asks
         // again after another idle time.
         if used || self.sync_work(owner, false) {
             self.supervisor.resources_answered(Pid(owner), true);
@@ -1448,7 +1450,7 @@ mod tests {
         );
     }
 
-    /// the shared runner waits at least 30 s without a member (was 1 s), and at
+    /// The shared runner waits at least 30 s without a member (was 1 s), and at
     /// least the idle time.
     #[test]
     fn b6_runner_idle_exit_is_at_least_30_s_and_the_idle_time() {
@@ -1466,7 +1468,7 @@ mod tests {
         assert_eq!(runner_idle_exit(&Supervisor::new(longer, 1)), 600_000);
     }
 
-    /// the player's supervisor runs the design's values (`Tunables::new` for
+    /// The player's supervisor runs the design's values (`Tunables::new` for
     /// this machine) whatever the environment says.
     #[test]
     fn b6_the_player_runs_the_target_values() {

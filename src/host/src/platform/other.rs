@@ -138,8 +138,7 @@ pub fn displays() -> Vec<Display> {
 pub fn physical_memory() -> Option<u64> {
     super::meminfo_total(&std::fs::read_to_string("/proc/meminfo").ok()?)
 }
-/// Memory pressure from PSI (`/proc/pressure/memory`, as systemd-oomd
-/// reads it; supervisor.md §8). `None` without PSI (kernels before 4.20,
+/// Memory pressure from PSI (`/proc/pressure/memory`; supervisor.md §8). `None` without PSI (kernels before 4.20,
 /// `psi=0`, other systems).
 #[derive(Debug, Default)]
 pub struct PressureSource;

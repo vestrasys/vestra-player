@@ -10,7 +10,7 @@ The layout follows the feature requirements: the core (host) first, then one cha
 
 - It describes **behaviour**: which input in which state produces which result, including defaults, thresholds, delays and persistence. Sizes, colours and icons belong to the UI specification; this document mentions them only where they affect interaction.
 - The specification has been checked against the code. The values in the items (thresholds, delays, animation durations) are Vestra's values; to change one later, change this document and update the code to match.
-- Interfaces marked [New core API] are request drafts that have not been accepted yet. Following the [community workflow](../../agentic-workflow.md) §4.1 they are submitted separately and go through the negotiation process of §4.3; once the maintainer accepts them they are written into the reference documentation.
+- Interfaces marked [New core API] are request drafts that have not been accepted yet. Following the [community workflow](../../agentic-workflow/agentic-workflow.md) §4.1 they are submitted separately and go through the negotiation process of §4.3; once the maintainer accepts them they are written into the reference documentation.
 
 ### 0.2 Settled interaction decisions
 
@@ -127,7 +127,7 @@ The decisions below replace earlier wording in the feature requirements and the 
 
 #### FS-BAR-1 The fullscreen bar shows only on hover over its band (2026-10-25)
 
-**Status**: implemented (round record `doc/process/rounds/2026-10-ui-polish.md`).
+**Status**: implemented (2026-10-26).
 
 **Requirement**: in fullscreen the bottom bar is hidden and shows only while the pointer is in its band: the bar's own rectangle, from the bottom edge up by the bar's laid-out height (logical px, any monitor size and scale), across the full width minus a popped-out sidebar (a floating sidebar takes nothing). Entering the band shows it at once; it hides 500 ms after the pointer leaves (the G-01 `LEAVE_MS`), and coming back within that time keeps it. Nothing else reveals it: pointer motion elsewhere, keys and bound commands (seek, volume, pause, speed), the wheel, clicks, menus, dialogs, plugin activity and entering fullscreen. A menu or dialog opened while the bar shows holds it until closed; one opened while it is hidden does not reveal it. A bar lock (`setInteraction`, e.g. a seek or volume drag) holds it until released. The OSD is unchanged. The pointer auto-hide is independent of the bar (3 s without motion or keys, no menu or dialog, not over the bar or in its band, no bar lock). Windowed mode is unchanged.
 

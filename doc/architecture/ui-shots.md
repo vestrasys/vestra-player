@@ -1,6 +1,6 @@
 # Offscreen screenshots of plugin interfaces (`ui:shots`)
 
-Plugin authors (and agents) cannot see a GUI: code that compiles and passes its tests can still show oversized buttons, cut-off German labels or a self-drawn drop-down. This tool renders every window and settings page of a plugin to PNG, in the chosen languages, with the states the plugin's own tests produced, through the player's own Slint pipeline and without opening a window. Look at the images with the Read tool. Registered in the [UI polish round](../process/rounds/2026-10-ui-polish.md), Step 0.
+Plugin authors (and agents) cannot see a GUI: code that compiles and passes its tests can still show oversized buttons, cut-off German labels or a self-drawn drop-down. This tool renders every window and settings page of a plugin to PNG, in the chosen languages, with the states the plugin's own tests produced, through the player's own Slint pipeline and without opening a window. Look at the images with the Read tool.
 
 ## Use
 
@@ -20,7 +20,7 @@ npm run ui:shots -- <plugin...> [--lang en,zh-Hans,de] [--out <dir>]
 
 The output directory holds the PNG files and `index.md` / `index.json`: one entry per image with the plugin id, the view (`ai.slint`, `ui/settings.slint StorePage`), the variant, the language, the size, the state (`<test file> › <test name>`), the other states that gave the same picture, and problems (a value the player would refuse, an image it could not show). A first run builds the host's test program (a few minutes from scratch); after that, `store plugins workshop` in three languages (the tests, 127 states, 365 images) took about three minutes on the Windows dev machine.
 
-For task briefs (round doc, Step 0): **before delivering, look at en and de with the screenshot tool and check against ui-spec.**
+For task briefs: **before delivering, look at en and de with the screenshot tool and check against ui-spec.**
 
 ## What is shown
 

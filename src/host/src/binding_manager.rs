@@ -302,7 +302,7 @@ mod tests {
         }
     }
 
-    /// B0 (supervisor.md §10): `packages.changed` compares the list without
+    /// supervisor.md §10: `packages.changed` compares the list without
     /// `process`: a park (`running` to `idle`) or a wake alone announces
     /// nothing; any other field does.
     #[test]

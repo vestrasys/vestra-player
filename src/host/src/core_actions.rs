@@ -1227,7 +1227,7 @@ mod tests {
     fn keyframe_step_seeks_land_on_keyframes_and_always_move() {
         let keys = [0.0, 10.0, 20.0, 30.0, 40.0];
         // From 12: → 5 lands on 20 (first at or after 17). ← 5 lands on 0,
-        // the last at or before 7 (the round's acceptance list says 10, which
+        // the last at or before 7 (an early acceptance list said 10, which
         // is after the target: the rule "at or before position − step" wins).
         // From 10, ← 5 also lands on 0 (never 10); from 16, ← 5 on 10.
         assert_eq!(key_run(&keys, 12.0, &[(true, 5.0)]), [20.0]);

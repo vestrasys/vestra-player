@@ -1,11 +1,11 @@
 {
-  "about": "Graphics drivers the player does not render on with the GPU (round record doc/process/rounds/2026-10-render-modes.md §3.2). Built into the host (playback/render_denylist.rs); a file of the same shape at <app data>/render-denylist.json adds rules or replaces them by id ({\"id\": ..., \"disabled\": true} switches one off). Fields follow Chromium's software_rendering_list.json: os {type, build}, vendor_id, device_id, driver_version {op, value, value2}, exceptions; action cpu (software rendering), software-windows (the player does not draw its windows with the rule's window_api: opengl, the default, matched against every adapter with a GPU, or direct3d12, matched against the adapter GPU rendering uses; the next window renderer takes over, Direct3D 12 → OpenGL → Slint's software renderer, and GPU rendering is off where it needs those windows) or warn (a note only). Versions compare part by part as numbers; op is <, <=, =, >=, > or between (both ends included).",
+  "about": "Graphics drivers the player does not render on with the GPU (doc/architecture/README.md §4.3). Built into the host (playback/render_denylist.rs); a file of the same shape at <app data>/render-denylist.json adds rules or replaces them by id ({\"id\": ..., \"disabled\": true} switches one off). Fields follow Chromium's software_rendering_list.json: os {type, build}, vendor_id, device_id, driver_version {op, value, value2}, exceptions; action cpu (software rendering), software-windows (the player does not draw its windows with the rule's window_api: opengl, the default, matched against every adapter with a GPU, or direct3d12, matched against the adapter GPU rendering uses; the next window renderer takes over, Direct3D 12 → OpenGL → Slint's software renderer, and GPU rendering is off where it needs those windows) or warn (a note only). Versions compare part by part as numbers; op is <, <=, =, >=, > or between (both ends included).",
   "version": 1,
   "rules": [
     {
       "id": "amd-780m-draw-stalls",
       "description": "AMD Radeon 780M driver 31.0.14005: GPU draws stall for tens of milliseconds (p95 52 ms) and 4K60 video drops to about 40 fps",
-      "refs": ["doc/process/rounds/2026-10-windows-wgpu.md §14, §18"],
+      "refs": ["Measured on the Windows test machine, 2026-10-27/28, machine idle: offscreen draws on the 780M p50 3.9 ms, p95 52.1 ms, p99 63.0 ms; the RTX 4070 drew the same frames at p95 1.8 ms with identical pixels"],
       "os": { "type": "windows" },
       "vendor_id": "0x1002",
       "device_id": ["0x15BF"],
@@ -15,7 +15,7 @@
     {
       "id": "amd-780m-white-opengl-windows",
       "description": "AMD Radeon 780M driver 32.0.32015.7029 (Adrenalin 26.10.1) and later: OpenGL (femtovg) windows show only white, plugin windows too, while the frame log counts 60 presented frames per second; Slint's software renderer draws them correctly",
-      "refs": ["doc/process/rounds/2026-10-render-modes.md §9"],
+      "refs": ["Seen on the Windows test machine after the 2026-10-28 driver update; doc/architecture/README.md §4.3"],
       "os": { "type": "windows" },
       "vendor_id": "0x1002",
       "device_id": ["0x15BF"],

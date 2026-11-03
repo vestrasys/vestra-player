@@ -1210,7 +1210,7 @@ mod tests {
     }
 
     /// The tree and the page fill everything above a fixed-height footer
-    /// (round 4a fix: the footer used to take half the window and stretch the
+    /// (a fix: the footer used to take half the window and stretch the
     /// 关闭 button into a 60×200 block).
     #[test]
     fn options_window_fills_the_height_above_a_fixed_footer() {

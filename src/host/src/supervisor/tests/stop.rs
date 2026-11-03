@@ -1,5 +1,5 @@
 //! Stop, exit, reap: both halves (reaped + backend cleaned) are
-//! required; 20 s stuck; `Kill` after `TimeoutStopSec`; `kill(u)` escalates at
+//! required; 20 s stuck; `Kill` after the stop grace; `kill(u)` escalates at
 //! once and is not a job; shutdown is parallel with one deadline.
 use super::*;
 
@@ -107,8 +107,8 @@ fn s_shutdown_checkpoints_before_any_terminate() {
     let mut sim = Sim::new(&Profile::other_timers());
     let (_, a) = sim.in_active(normal("a"));
     let (_, b) = sim.in_active(normal("b"));
-    // Setup only (B1 re-review): a run is checkpointed at quit once its
-    // classification answer came back, as today's `lazy_quit`.
+    // Setup only: a run is checkpointed at quit once its classification
+    // answer came back, as the old `lazy_quit` did.
     sim.classified(a, false);
     sim.classified(b, false);
     let acts = sim.shutdown(1_000);

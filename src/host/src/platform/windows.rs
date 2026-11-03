@@ -773,8 +773,8 @@ fn same_file_name(name: &str, file_name: &str) -> bool {
             .is_some_and(|(_, last)| last.eq_ignore_ascii_case(file_name))
 }
 
-/// How the adapter of a mode is chosen (user ruling 2026-10-31, round
-/// record 2026-10-render-modes §12).
+/// How the adapter of a mode is chosen (user ruling 2026-10-31,
+/// doc/architecture/README.md §4.3, hybrid laptops).
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Policy {
     /// `VESTRA_GPU_ADAPTER` names one (its value).
@@ -1034,9 +1034,9 @@ pub fn displays() -> Vec<Display> {
 /// rectangle). A window that covers a display exactly can be switched by the
 /// graphics driver to the panel's native variable-refresh timing (on the
 /// 60-240 Hz test panel: 60 → 240 Hz and back), which blanks the display and
-/// blocks every present for up to seconds (round doc, Appendix B).
+/// blocks every present for up to seconds.
 /// `exact` is the switch for testing Independent Flip without the extra
-/// pixel (round record 2026-10-render-modes §11 item 6).
+/// pixel.
 fn fullscreen_extra() -> Option<i32> {
     static EXTRA: std::sync::OnceLock<Option<i32>> = std::sync::OnceLock::new();
     *EXTRA.get_or_init(|| {
@@ -1192,11 +1192,11 @@ pub const GPU_RENDER: bool = true;
 pub const GPU_WINDOWS_WGPU: bool = true;
 /// GPU rendering is experimental here: only the user's preference `gpu`
 /// (the Video menu's switch) or `VESTRA_RENDER=gpu` turns it on
-/// (`render_mode::Facts::gpu_opt_in`; round record 2026-10-render-modes §4 M3).
+/// (`render_mode::Facts::gpu_opt_in`; doc/architecture/README.md §4.3).
 pub const GPU_OPT_IN: bool = true;
 
-/// The host's contract with the GPU renderer (round record
-/// 2026-10-render-modes §2.2), by delegation to `vestra-gpu-render`.
+/// The host's contract with the GPU renderer, by delegation to
+/// `vestra-gpu-render`.
 impl crate::playback::renderer::GpuBackend for GpuHandle {
     type Frame = Box<GpuFrame>;
     fn set_size(&self, size: (u32, u32)) {
@@ -1460,8 +1460,8 @@ pub fn physical_memory() -> Option<u64> {
     vestra_win32::physical_memory().map(|memory| memory.total)
 }
 
-/// Memory pressure (supervisor.md §8 "Pressure source"): Chrome's
-/// thresholds on available physical memory (`GlobalMemoryStatusEx`), and
+/// Memory pressure (supervisor.md §8, "Memory pressure"): thresholds on
+/// available physical memory (`GlobalMemoryStatusEx`), and
 /// critical while the system's low-memory notification is signaled
 /// (`CreateMemoryResourceNotification`), both through `vestra-win32`.
 #[derive(Debug)]
@@ -1539,8 +1539,7 @@ pub fn window_device_lost() -> bool {
 const NVIDIA: u32 = 0x10DE;
 
 /// The NVIDIA driver RTX Video Super Resolution needs: 530 or newer, which
-/// DXGI reports as `x.x.15.3000` and above (VLC's check; AI upscaling round
-/// record §2).
+/// DXGI reports as `x.x.15.3000` and above (VLC's check).
 fn nvidia_driver_new_enough(version: [u16; 4]) -> bool {
     (version[2], version[3]) >= (15, 3000)
 }
@@ -1551,7 +1550,7 @@ fn nvidia_driver_name(version: [u16; 4]) -> String {
     format!("{}.{:02}", release / 100, release % 100)
 }
 
-/// Where RTX Video Super Resolution works (AI upscaling round record §2):
+/// Where RTX Video Super Resolution works (doc/architecture/README.md §4.4):
 /// every NVIDIA adapter (vendor `0x10DE`) with a driver of 530 or newer
 /// whose driver answers the PPE stream extension query on a test video
 /// processor (`vestra_win32::video_super_resolution`). Blocking, and it
@@ -1651,8 +1650,8 @@ pub fn gpu_render_adapter() -> Option<(u64, String)> {
 
 /// mpv's filter for RTX Video Super Resolution at `factor` (more than 1):
 /// `d3d11vpp` scales by it with NVIDIA's scaling mode (mpv 0.39 and later).
-/// `VESTRA_UPSCALER_MODE=standard` (a test switch, AI upscaling round record
-/// §8 V3 case U5) asks for the driver's standard scaler instead, to compare
+/// `VESTRA_UPSCALER_MODE=standard` (a test switch) asks for the driver's
+/// standard scaler instead, to compare
 /// pixels in the same chain.
 pub fn upscaler_filter(factor: f64) -> Option<String> {
     let standard =
@@ -1827,7 +1826,7 @@ mod tests {
         assert_eq!(explicit_gpu_preference("AutoHDREnable=1;"), None);
     }
 
-    /// User ruling 2026-10-31 (record §12): GPU rendering defaults to the
+    /// User ruling 2026-10-31: GPU rendering defaults to the
     /// high-performance GPU, unless the user chose one for Vestra in
     /// Windows Settings; CPU mode follows Windows' order;
     /// `VESTRA_GPU_ADAPTER` overrides both; an unknown value of it is
@@ -1892,7 +1891,7 @@ mod tests {
         }
     }
 
-    /// Review items 2 and 3 (record §12): the adapter is resolved once to a
+    /// The adapter is resolved once to a
     /// concrete one (its index for the guard and the denylist, its LUID for
     /// the device); the high-performance default falls back to Windows'
     /// order when it cannot be resolved, an explicit choice does not.
@@ -2004,7 +2003,7 @@ mod tests {
         );
     }
 
-    /// Item 6 (record §11): `exact` turns the extra pixel off.
+    /// `exact` turns the extra pixel off.
     #[test]
     fn the_fullscreen_match_switch_reads_its_values() {
         assert_eq!(fullscreen_match(None), (Some(1), None));
@@ -2016,7 +2015,7 @@ mod tests {
         assert!(line.unwrap().contains("ignored"));
     }
 
-    /// F6 (round record 2026-10-windows-render, B.10): a failed reopen of
+    /// A failed reopen of
     /// the display clock is reported once per run of failures.
     #[test]
     fn a_failed_clock_reopen_is_reported_once_per_run() {

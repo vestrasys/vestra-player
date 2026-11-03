@@ -1,7 +1,6 @@
 // The shared runner (runtime/shared-runner.ts): several plugins in one Node
-// process, one envelope `g` per line (doc/process/rounds/2026-10-shared-runner.md
-// §5, §6.4). The host does not start it yet; these tests answer like the host
-// will.
+// process, one envelope `g` per line (doc/architecture/README.md §2, §5).
+// These tests answer like the host does.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";

@@ -1,9 +1,9 @@
 //! Restart-policy spec tests (exit causes, restart policy, backoff, start
 //! limits, heap cap, OOM, shutdown ≤ 1 s), written from the design tables,
 //! not from the core: the policy per class, a trigger while
-//! `Standby{hold_until}`, `MemoryMax=` (supervisor.md §7, §8), and the
-//! blackboard's B3 ruling 4 (entries disabled with the reason while a hold
-//! holds).
+//! `Standby{hold_until}`, the heap cap (supervisor.md §7, §8), and the
+//! coordinator's ruling on holds (entries disabled with the reason while a
+//! hold holds).
 //!
 //! Everything runs under `Profile::other_timers()`: start 15 s, stop
 //! 300 ms, standby 2 s, idle 60 s, no request timeout, no process budget.
@@ -77,10 +77,10 @@ fn delays(sim: &mut Sim, u: UnitId, cause: ExitCause, n: usize) -> Vec<Ms> {
 }
 
 // ---------------------------------------------------------------------------
-// Restart= and RestartSec per class
+// Restart rule and restart delay per class
 // ---------------------------------------------------------------------------
 
-// under B4: Builtin (own process, with or without a standby checkpoint) and
+// by class: Builtin (own process, with or without a standby checkpoint) and
 // Resident → Restart job (`AutoRestart`); Normal → `Standby{hold_until}`
 // keeping its registrations; Development → `Failed`. First delay per class:
 // Builtin 3 s (the runner's first restart is the only immediate one), Resident
@@ -130,7 +130,7 @@ fn r_crash_lands_per_class() {
     }
 }
 
-// RestartSec × 2ⁿ: Builtin 3 s, 6 s, 12 s; Resident 1 s, 2 s, 4 s; Normal
+// the restart delay × 2ⁿ: Builtin 3 s, 6 s, 12 s; Resident 1 s, 2 s, 4 s; Normal
 // hold 1 s, 2 s, 4 s, 8 s.
 #[test]
 fn r_backoff_grows_per_class() {
@@ -146,8 +146,8 @@ fn r_backoff_grows_per_class() {
     }
 }
 
-// `AutoRestart{until}` and `Standby{hold_until}` = reap time + delay (systemd
-// arms `RestartSec` once the stop finished), not exit time + delay.
+// `AutoRestart{until}` and `Standby{hold_until}` = reap time + delay (the
+// restart delay is armed once the stop finished), not exit time + delay.
 #[test]
 fn r_backoff_counts_from_the_reap() {
     for (spec, delay, standby) in [
@@ -178,7 +178,7 @@ fn r_backoff_counts_from_the_reap() {
 }
 
 // the backoff counter resets after 60 s active, every class. The unit is
-// touched half-way so the 60 s idle timeout (B4 keeps 60 s) does not start a
+// touched half-way so the 60 s idle timeout (this profile's) does not start a
 // Standby job in the middle.
 #[test]
 fn r_backoff_resets_after_60s_active() {
@@ -203,7 +203,7 @@ fn r_backoff_resets_after_60s_active() {
     }
 }
 
-// RestartSec cap 60 s (Normal hold, `RestartMaxDelaySec=`). Reachable when
+// The restart delay is capped at 60 s (Normal hold). Reachable when
 // the crashes are spread over more than 10 min (start limit) and every run
 // lasts under 60 s (no reset): the unit waits in standby between them.
 #[test]
@@ -230,7 +230,7 @@ fn r_normal_hold_caps_at_60s() {
     );
 }
 
-// Normal `Restart=no` — instead re-start on the next trigger: no process
+// Normal no restart — instead re-start on the next trigger: no process
 // without a trigger, however long.
 #[test]
 fn r_normal_does_not_restart_by_itself() {
@@ -270,7 +270,7 @@ fn r_normal_starts_again_on_next_use_after_the_pause() {
 }
 
 // ---------------------------------------------------------------------------
-// Start limits (StartLimitBurst / IntervalSec)
+// Start limits (crashes per window)
 // ---------------------------------------------------------------------------
 
 // Own-process Builtin, Resident, Normal: the fifth crash in 10 min →
@@ -384,8 +384,8 @@ fn l_reload_resets_the_crash_count() {
     );
 }
 
-// manual starts are not counted (systemd counts every start; ours counts
-// crashes): six reloads in a minute and then a crash restart.
+// manual starts are not counted (only crashes count): six reloads in a
+// minute and then a crash restart.
 #[test]
 fn l_manual_starts_do_not_count() {
     let mut sim = b4();
@@ -518,9 +518,9 @@ fn sr_resident_and_builtin_never_land_in_standby_on_start_failure() {
     }
 }
 
-// StartTimeout: terminate; not retried (coordinator ruling in the B6 review,
-// supervisor.md, amending start retries are for a process that could not be
-// created; a start that times out is a stuck plugin). The click held for it is
+// StartTimeout: terminate; not retried (coordinator ruling, supervisor.md §7:
+// start retries are for a process that could not be created; a start that
+// times out is a stuck plugin). The click held for it is
 // answered at the timeout, and no second spawn follows the reap within the
 // retries' 1.1 s.
 #[test]
@@ -546,10 +546,10 @@ fn sr_start_timeout_is_not_retried() {
     assert!(spawns(&sim.at(reap + 1_100)).is_empty(), "{:?}", sim.st(u));
 }
 
-// B3 ruling 1 with B4's class policy (Normal: `Restart=` on the next trigger):
-// a wake whose start times out keeps its entry points in `Standby{hold_until}`
-// and answers the click, after one try (B6 review ruling, no start retry after
-// a timeout; was: after four).
+// A timed-out start keeps its entry points (coordinator ruling) with the class
+// policy (Normal: restarts on the next trigger): a wake whose start times out
+// keeps its entry points in `Standby{hold_until}` and answers the click, after
+// one try (no start retry after a timeout; was: after four).
 #[test]
 fn sr_start_timeouts_exhausted_keep_entry_points() {
     let mut sim = b4();
@@ -615,7 +615,7 @@ fn sr_retry_belongs_to_the_reloads_job() {
 }
 
 // ---------------------------------------------------------------------------
-// Exit causes, stop reasons and notices (MemoryMax)
+// Exit causes, stop reasons and notices (the heap cap)
 // ---------------------------------------------------------------------------
 
 // `runtime.failed` (`Refused`) is never retried or restarted, every class.
@@ -661,7 +661,7 @@ fn x_crash_notice() {
     }
 }
 
-// OOM (`OOMPolicy=`): a crash like any other for the restart policy, with
+// OOM (OOM policy): a crash like any other for the restart policy, with
 // "ran out of memory" in the failure text where the unit fails
 // (Development: `Failed`).
 #[test]
@@ -740,7 +740,7 @@ fn x_transport_of_an_own_process_fails() {
         }
     }
     // DESIGN QUESTION: Transport "own process: `Failed`" (KEEP) vs
-    // `Restart=on-failure` (its list names exit, fault, OOM, start timeout,
+    // restart on failure (its list names exit, fault, OOM, start timeout,
     // request timeout — not transport).
     assert!(
         wrong.is_empty(),
@@ -762,7 +762,7 @@ fn x_fault_text_kept_for_a_failed_unit() {
 }
 
 // ---------------------------------------------------------------------------
-// The crash hold (B3 ruling 4)
+// The crash hold (coordinator ruling)
 // ---------------------------------------------------------------------------
 
 /// A Normal unit (start-up settled) that crashed: `(unit, holder, until)`.
@@ -902,7 +902,7 @@ fn h_crash_into_hold_with_only_clicks_installs_no_start() {
 // Runner restarts (`runner_restart_waits_cleanup`)
 // ---------------------------------------------------------------------------
 
-// B4: members wait for the playback worker's cleanup before they restart;
+// Members wait for the playback worker's cleanup before they restart;
 // the first restart is then immediate; the OSD says so.
 #[test]
 fn rn_first_restart_waits_for_cleanup_then_immediate() {
@@ -929,7 +929,7 @@ fn rn_first_restart_waits_for_cleanup_then_immediate() {
     );
 }
 
-// The second runner restart in the window waits `RestartSec` 3 s.
+// The second runner restart in the window waits the restart delay 3 s.
 #[test]
 fn rn_second_restart_after_3s() {
     let mut sim = b4();
@@ -1136,9 +1136,8 @@ fn q_device_loss_within_300ms() {
     assert!(same_set(&killed, &pids), "{killed:?}");
 }
 
-// (left for B4): a stuck old process the unit still tracks after its stop wait
-// ran out is killed by the shutdown, within its budget. OPEN (B4 scope): main
-// still leaves it ("left for B4").
+// A stuck old process the unit still tracks after its stop wait ran out is
+// killed by the shutdown, within its budget.
 #[test]
 fn q_shutdown_kills_a_stuck_tracked_process() {
     let mut sim = b4();

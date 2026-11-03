@@ -1,7 +1,7 @@
 // The SDK package (installed from the vestra-player-sdk repository) repeats a
 // few of the player's constants and its Slint library; they must agree with
 // this host. A mismatch means: change the SDK repository, release it and
-// upgrade the dependency here (agentic-workflow.md §1.6).
+// upgrade the dependency here (agentic-workflow/agentic-workflow.md §1.6).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";

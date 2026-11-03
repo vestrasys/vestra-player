@@ -16,7 +16,7 @@
  *
  * The runners are `src/runtime/*.ts` with their types stripped here, so a
  * plugin process does not load Node's type stripper (Amaro, a WebAssembly
- * module: about 15 MB of memory per process, doc/process/rounds/2026-10-plugin-memory.md).
+ * module: about 15 MB of memory per process, measured 2026-10-27).
  * Stripping replaces the types with spaces, so line and column numbers in
  * stack traces are those of the source; relative imports of `./x.ts` become
  * `./x.js`. A development build runs the `.ts` files directly.

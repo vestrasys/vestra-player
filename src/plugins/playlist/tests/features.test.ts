@@ -1260,7 +1260,7 @@ test("G-12: with the player's tab strip the list reports top 0 and drops map fro
   }
 });
 
-// ------------------------------------------------------------------ interaction round (G-08, G-11, IA-PL-02)
+// ------------------------------------------------------------------ interaction alignment (G-08, G-11, IA-PL-02)
 
 test("G-11: with 「追加」 a drop on the video area adds to the end; while another source opens it only adds", async () => {
   const app = await start();

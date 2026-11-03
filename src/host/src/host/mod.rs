@@ -234,7 +234,7 @@ pub(crate) struct Host {
     pub(crate) host_revision: u64,
     pub(crate) window_title: String,
     /// The plugin process supervisor's core (doc/architecture/supervisor.md):
-    /// since B2a the unit table (identity: `by_id`, `by_pid`, owner
+    /// the unit table (identity: `by_id`, `by_pid`, owner
     /// generations) and each unit's activation; the Host adapter is
     /// `host/supervisor/`.
     pub(crate) supervisor: Supervisor<Value>,
@@ -347,8 +347,8 @@ pub(crate) struct Host {
     pub(crate) placements: view::Placements,
     /// Bottom-bar command buttons (`bar_buttons.rs`).
     pub(crate) bar: bar_buttons::Strip,
-    /// On-demand start (lazy activation): the Host's side of standby,
-    /// wake and classification (`supervisor/`, B2c).
+    /// On-demand start: the Host's side of standby, wake and
+    /// classification (`supervisor/`, supervisor.md §4).
     pub(crate) on_demand: supervisor::OnDemand,
     /// The plugin shaders' crash guard (`diagnostics.rs`).
     pub(crate) shader_guard: ShaderGuard,

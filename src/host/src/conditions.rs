@@ -1,7 +1,7 @@
 //! Declarative command state (SDK 1.5.40, `plugin.when`): a command's
 //! `enabled` or `checked` given as a condition on state the player owns,
-//! evaluated here, so a plugin that is not running (lazy activation,
-//! doc/process/rounds/2026-10-lazy-activation.md §6.9) still shows a menu
+//! evaluated here, so a plugin that is not running (in standby,
+//! doc/architecture/supervisor.md §4) still shows a menu
 //! that follows playback, fullscreen and the appearance.
 //!
 //! Wire form (`commands.register` / `commands.update` `when`): an object of

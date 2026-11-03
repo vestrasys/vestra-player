@@ -65,7 +65,7 @@ Date: 2026-10-20. Implementation status checked against the current Vestra `main
 | B23 | **A-B loop** (set start / end, fine-tune, toggle) | ✗ | core (loop range) + new plugin or playback |
 | B24 | Loop the current subtitle line | ⊘ | core + subtitles. Dropped in the cut review (2026-10-20). |
 | B25 | Remember playback position (resume where you left off) | ✗ | new plugin (plugin data directory) or playback |
-| B26 | Gapless playback (preload the next file) | ✗ | core |
+| B26 | Fast advance to the next item (formerly "gapless playback"; preloading was dropped) | ✗ | `playlist` |
 | B27 | Action after playback ends (quit, shut down, sleep) | ⊘ | new plugin; shutting down needs system permission, suggest doing only "quit". Dropped in the cut review (2026-10-20). |
 | B28 | Quit on a timer / after inactivity | ⊘ | new plugin. Dropped in the cut review (2026-10-20). |
 | B29 | Prevent the screen saver / sleep while playing | ✗ | core |

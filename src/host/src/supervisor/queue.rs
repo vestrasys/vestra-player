@@ -1,5 +1,5 @@
-//! Runnable start jobs (systemd `manager_dispatch_run_queue`; Chrome
-//! process-launch throttling): lanes in fixed order, FIFO within a lane.
+//! Runnable start jobs (supervisor.md §5 "Start order and limits"): lanes in
+//! fixed order, FIFO within a lane.
 //! Entries are validated when they reach the head (lazy deletion), so a
 //! merged or canceled job costs nothing here.
 #![forbid(unsafe_code)]
@@ -69,7 +69,7 @@ impl Lanes {
 }
 
 /// The start-up queues' tests (`StartQueue`, `FirstQueue`; package_manager.rs
-/// and host/supervisor/first_runs.rs until B2d), ported to the lanes.
+/// and host/supervisor/first_runs.rs before the lanes), ported to the lanes.
 #[cfg(test)]
 mod tests {
     use super::super::{Action, Class, ListState, Supervisor, Tunables, UnitId, UnitSpec};
@@ -90,7 +90,7 @@ mod tests {
             .collect()
     }
 
-    /// B0 (`b0_start_queue_lets_others_pass_a_held_builtin`,
+    /// Characterization tests (`b0_start_queue_lets_others_pass_a_held_builtin`,
     /// `start_queue_starts_builtins_first_and_counts_them`): loaded in the
     /// start order, a built-in still being checked keeps its place while the
     /// others start, counted as pending (`boot_pending`: today's `to_start`),

@@ -1,6 +1,6 @@
 # Vestra Player AI: current state and improvement roadmap
 
-Compiled on 2026-10-24. Based on: the requirements and rulings ([vestra-ai.md](vestra-ai.md)), this round's record ([2026-10-vestra-ai.md](../process/rounds/2026-10-vestra-ai.md)), PR #4 (2.0.0 → 2.1.2) and today's tests on a real machine. Work is divided per the community workflow: plugin code belongs to the AI plugin author, and needed APIs go through §4 requests.
+Compiled on 2026-10-24. Based on: the requirements and rulings ([vestra-ai.md](vestra-ai.md)), PR #4 (2.0.0 → 2.1.2) and today's tests on a real machine. Work is divided per the community workflow: plugin code belongs to the AI plugin author, and needed APIs go through §4 requests.
 
 ## 1. Current state (2.1.2, merged into main)
 

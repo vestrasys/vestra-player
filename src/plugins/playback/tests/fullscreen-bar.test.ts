@@ -4,7 +4,7 @@ import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 
 /**
- * Fullscreen bar on hover only (ui-polish round, request FS-BAR-1): the host
+ * Fullscreen bar on hover only (request FS-BAR-1): the host
  * decides when the fullscreen bar shows; this plugin's share is never to hold
  * it up from the keyboard. Key actions announce on the OSD but take no
  * interaction lock; only a real drag on the bar does, and it is released.

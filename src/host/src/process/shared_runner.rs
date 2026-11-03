@@ -1,6 +1,6 @@
 //! The shared runner: the trusted (built-in) plugins in one Node process
-//! (`src/runtime/shared-runner.ts`, design and protocol in
-//! doc/process/rounds/2026-10-shared-runner.md §5, §7, §8).
+//! (`src/runtime/shared-runner.ts`; placement in doc/architecture/README.md
+//! §2, faults in doc/architecture/supervisor.md §7).
 //!
 //! One stdin/stdout pair carries every member's messages; each line is the
 //! member's own message with the owner generation `g` spliced in as the first
@@ -533,7 +533,7 @@ impl SharedRunner {
     }
 
     /// Without a member for `after` ms (the supervisor's runner idle exit,
-    /// at least 30 s since B6; 1 s before): it is let go (`retire`) until
+    /// at least 30 s): it is let go (`retire`) until
     /// the next trusted plugin starts.
     pub fn idle(&mut self, now: u64, after: u64) -> bool {
         if self.link.members() > 0 {
@@ -1127,8 +1127,8 @@ mod tests {
         assert_eq!((policy.next_id(), policy.next_id()), (1, 2));
     }
 
-    /// B0 (supervisor.md §7): the shared runner's tunables as they
-    /// are today.
+    /// Characterization test (supervisor.md §7): the shared runner's
+    /// tunables.
     #[test]
     fn b0_runner_tunables() {
         assert_eq!(STOP_WAIT, Duration::from_millis(300));
@@ -1140,7 +1140,7 @@ mod tests {
         assert_eq!((RESTART_LIMIT, RESTART_WINDOW_MS), (3, 60_000));
     }
 
-    /// B0: restarts at the edge of the window (one exactly 60 s old has
+    /// Restarts at the edge of the window (one exactly 60 s old has
     /// left it); quarantine is a set of ids, never cleared in a run.
     #[test]
     fn b0_restart_window_edge_and_quarantine() {

@@ -1,6 +1,6 @@
 //! `packages.install` with the real host, headless: an update of a plugin
-//! the user disabled replaces its files, stays disabled and never runs (as
-//! in VS Code); a first install runs; the optional `enabled` enables (and
+//! the user disabled replaces its files, stays disabled and never runs; a
+//! first install runs; the optional `enabled` enables (and
 //! activates) or disables explicitly; a disabled package is never started
 //! when an install is restored (after a failed activation or at start-up).
 //! A built-in installer fixture with `plugins.manage` drives the SDK
@@ -61,7 +61,7 @@ fn package(
 /// On-demand start is everyone's, so a plugin that holds nothing
 /// live goes to standby at its first ready. These fixtures listen to the
 /// player's state (resident: never in standby, supervisor.md §2), so they keep running
-/// as they did with on-demand start off before B6.
+/// as they did before on-demand start became the default.
 const RESIDENT_CAPABILITIES: [&str; 2] = ["events", "playback.read"];
 
 /// A third-party plugin that logs each start with its version and the
@@ -192,7 +192,7 @@ fn installer(root: &Path, steps: &[Step]) -> PathBuf {
 }
 
 /// Run the host headless for `seconds` on `root` (own processes; on-demand
-/// start, everyone's since B6, with resident fixtures); its stderr.
+/// start for everyone, with resident fixtures); its stderr.
 fn run(root: &Path, seconds: u32) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_vestra-host"))
         .args(["--headless", "--silent", "--seconds", &seconds.to_string()])

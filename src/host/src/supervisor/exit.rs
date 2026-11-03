@@ -1,11 +1,11 @@
-//! Exit causes (systemd `Result=`). Every cause maps onto the wire stop reason
+//! Exit causes (supervisor.md §7). Every cause maps onto the wire stop reason
 //! `Failed`.
 #![forbid(unsafe_code)]
 
 use super::unit::StopReason;
 
 /// The exit code of V8's heap abort (Node's `abort()`: 134 on Windows,
-/// measured in B4 with Node 26; `SIGABRT` as `128 + 6` on Unix, as the
+/// measured with Node 26; `SIGABRT` as `128 + 6` on Unix, as the
 /// adapter reports a signal). Any abort exits so, so only together with
 /// V8's heap-out-of-memory line on stderr is it `Oom`.
 pub const HEAP_ABORT_STATUS: i32 = 134;
@@ -17,10 +17,9 @@ pub enum ExitCause {
     /// Runtime fault, malformed line, uncaught exception (`signal`).
     Fault,
     /// V8 heap abort (`oom-kill`): the process exited with
-    /// [`HEAP_ABORT_STATUS`] after V8's heap-out-of-memory line on its stderr
-    /// (B4).
+    /// [`HEAP_ABORT_STATUS`] after V8's heap-out-of-memory line on its stderr.
     Oom,
-    /// `TimeoutStartSec` (`timeout`).
+    /// Start timeout (`timeout`).
     StartTimeout,
     /// Request timeout (`watchdog`, closest).
     RequestTimeout,

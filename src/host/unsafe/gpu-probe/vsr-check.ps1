@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-AI upscaling round, step V1 (doc/process/rounds/2026-10-ai-upscaling.md): does
+AI upscaling check (doc/architecture/README.md §4.4): does
 RTX Video Super Resolution change the picture on this machine?
 
 .DESCRIPTION

@@ -64,7 +64,7 @@ pub struct Info {
     /// Capabilities its SDK members also need (`CAPABILITY_INFO.requires`).
     pub requires: &'static [&'static str],
     /// Whether what a plugin holds through it keeps the plugin running
-    /// (lazy activation, doc/process/rounds/2026-10-lazy-activation.md §3.2).
+    /// (doc/architecture/supervisor.md §2, "something live").
     /// A hint for the JSON; what decides is the capability's `record`.
     pub residency: Residency,
 }
@@ -154,8 +154,8 @@ impl Call {
     }
 }
 
-/// What an owner holds through a capability, for lazy activation
-/// (doc/process/rounds/2026-10-lazy-activation.md §3.2).
+/// What an owner holds through a capability, for standby
+/// (doc/architecture/supervisor.md §2, "something live").
 #[derive(Debug, PartialEq)]
 pub enum Recorded {
     /// Nothing the host keeps for it here.

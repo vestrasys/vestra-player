@@ -590,7 +590,7 @@ export component W inherits Window {
         }
     }
 
-    /// Reported by a plugin author (interaction round): the tip used to
+    /// Reported by a plugin author: the tip used to
     /// assign its timer's `running`, dropping the binding, so it showed once.
     #[test]
     fn tool_tip_shows_again_on_every_hover_and_hides_when_the_pointer_leaves() {

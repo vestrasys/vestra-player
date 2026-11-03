@@ -1,5 +1,5 @@
-//! Go/no-go probe for Windows GPU rendering (doc/process/rounds/2026-10-windows-render.md,
-//! option (c′), §3 step 4; results in Appendix C).
+//! Go/no-go probe for Windows GPU rendering through the D3D11 → OpenGL
+//! bridge, since parked for wgpu/D3D12 (doc/process/rounds/history.md §5).
 //!
 //! * G1: libmpv's Direct3D 11 render API (`api_type = "d3d11"`, render API 2.6)
 //!   renders into a `B8G8R8A8` texture on an `ID3D11Device` we create, with
@@ -28,7 +28,7 @@
 //!     [--at T] after the measurement pauses on the frame at T (exact seek)
 //!     and reads that back, so --png captures the same frame in every run.
 //!     video-params, video-out-params and the adapter
-//!     are printed with the results (AI upscaling round, step V0).
+//!     are printed with the results (for the AI upscaling checks).
 //!     [--glsl-shaders A;B] sets mpv's `glsl-shaders` (the shader upscaling
 //!     plugin's chains), [--set NAME=VALUE] any further mpv option, both
 //!     before loadfile, [--set-late NAME=VALUE] a property after

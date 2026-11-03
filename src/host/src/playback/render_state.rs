@@ -1,5 +1,5 @@
-//! The render files in the application data directory (round record
-//! 2026-10-render-modes §3.4, §3.5):
+//! The render files in the application data directory
+//! (doc/architecture/README.md §4.3):
 //!
 //! - `render.json`: the user's preference (`auto`, `gpu`, `software`),
 //!   written at once and read at the next start.
@@ -11,7 +11,7 @@
 //!   off until the graphics driver, the adapter or the player changes, or
 //!   for [`GUARD_DAYS`] days, as Firefox's `DriverCrashGuard` does. A lost
 //!   GPU device (a driver reset while the windows draw with it) is recorded
-//!   too: [`LOSSES`] within a day count as a crash (record §3.5 item 4).
+//!   too: [`LOSSES`] within a day count as a crash.
 //!   Plugin shaders have a record of their own in the same file
 //!   ([`ShaderRecord`], `shaders`): `applying` before a non-empty plugin
 //!   shader list goes to mpv, `ok` after [`SHADER_STABLE_SECS`] of playback
@@ -66,7 +66,7 @@ pub const KEYED: u32 = 2;
 
 /// `render-state.json`: the current record (the key armed or lost last) at
 /// the top level, as before, and the records of other keys still worth
-/// keeping in `others` (record 2026-10-render-modes §12: GPU rendering and
+/// keeping in `others` (GPU rendering and
 /// CPU mode's Direct3D 12 windows may use different adapters on a hybrid
 /// laptop, and one must not overwrite the other's crash).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -167,7 +167,7 @@ impl Guard {
     /// Whether this record is about `keys`: a current record by the adapter
     /// the mode uses (`keys.key`); one written before 0.5.19 by the first
     /// adapter (`keys.legacy`), as it was then, so an earlier crash keeps
-    /// protecting exactly what it protected (L1, record §11).
+    /// protecting exactly what it protected.
     pub fn is_for(&self, keys: &Keys) -> bool {
         if self.schema >= KEYED {
             self.key == keys.key
@@ -483,7 +483,7 @@ fn one_writer() -> std::sync::MutexGuard<'static, ()> {
 pub const FIRST_DRAWS: u64 = 3;
 
 /// Whether CPU mode's Direct3D 12 windows have started, so the crash guard
-/// settles (record 2026-10-render-modes §11.4, §11.5): the first video
+/// settles (doc/architecture/README.md §4.3): the first video
 /// picture was shown (`pictures`, the presentation's presented frames: its
 /// upload into the windows' texture went through), or the window drew
 /// [`FIRST_DRAWS`] times and no source is being opened (`opening`: a start
@@ -685,7 +685,7 @@ mod tests {
         assert_eq!(other.read().losses, [100 + DAY + 1]);
     }
 
-    /// L1 (record §11): a file written before 0.5.19 (no `schema`) was keyed
+    /// A file written before 0.5.19 (no `schema`) was keyed
     /// on the first adapter; it keeps blocking exactly that, and the next
     /// write keys it on the adapter GPU rendering uses.
     #[test]
@@ -735,7 +735,7 @@ mod tests {
         assert_eq!(file.recover(400), Guard::default());
     }
 
-    /// Re-review M (record §11.5): a start with a file waits for the first
+    /// A start with a file waits for the first
     /// picture, whose upload into the Direct3D 12 texture comes hundreds of
     /// ms after the first draws.
     #[test]
@@ -749,7 +749,7 @@ mod tests {
         assert!(windows_started(0, 1, false));
     }
 
-    /// Review item 1 (record §12): on a hybrid laptop GPU rendering (the
+    /// On a hybrid laptop GPU rendering (the
     /// 4070) and CPU mode's Direct3D 12 windows (the 780M) have their own
     /// keys; arming, settling or losing one must not erase the other's
     /// crash, or every other start would crash again.

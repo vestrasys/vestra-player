@@ -564,7 +564,7 @@ fn spawn_failure_keeps_entry_points() {
     }));
     assert!(!actions.contains(&Action::Revoke { unit: u, pid }));
     assert_eq!(w.holder(u), pid);
-    // After its restart hold (`RestartSec`), the next click starts it.
+    // After its restart hold (the restart delay), the next click starts it.
     if let UnitState::Standby {
         hold_until: Some(until),
         ..
@@ -613,7 +613,7 @@ fn b4_normal_crash_holds_in_standby_and_builtin_restarts() {
     assert_eq!(w.s.wake(npid, &Trigger::event("e", 3)), Delivery::Started);
     assert!(spawns(&w.tick(1_019)).is_empty());
     assert_eq!(spawns(&w.tick(1_020)).len(), 1);
-    // Built-in: Restart=on-failure after 3 s.
+    // Built-in: restart on failure after 3 s.
     let bpid = w.pid(b);
     w.s.set_now(2_000);
     w.exited(bpid, ExitCause::Oom, None);
@@ -1057,7 +1057,7 @@ fn stronger_then_wins_while_deactivating() {
     w.tick(60_000);
     // Deactivating for standby, registrations kept; an uninstall arrives: they
     // are revoked at once (today's `forget_parked`), the data goes at reap; its
-    // checkpoint at the request (review note B2-4).
+    // checkpoint at the request.
     w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
     let actions = w.tick(60_001);
     assert!(actions.contains(&Action::Revoke { unit: u, pid }));
@@ -1365,10 +1365,10 @@ fn crash_during_wake_keeps_a_start_only_for_held_events() {
     }
 }
 
-/// A Resident whose start times out restarts by its `Restart=` (on-failure, 1 s
-/// × 2ⁿ from the reap), never in standby. Until the B6 review it was first
-/// retried 250 ms after the reap (start retry); since, a start timeout is not
-/// retried (coordinator ruling, supervisor.md).
+/// A Resident whose start times out restarts by its class's restart rule (on
+/// failure, 1 s × 2ⁿ from the reap), never in standby. A start timeout is not
+/// retried (coordinator ruling, supervisor.md §7); it used to be retried
+/// 250 ms after the reap.
 #[test]
 fn resident_start_timeout_restarts_by_its_class_and_never_lands_in_standby() {
     let mut w = World::new(preset());
@@ -1543,7 +1543,7 @@ fn disable_while_a_failure_stops_lands_inactive() {
     assert_eq!(w.s.unit(u).unwrap().failure, None);
 }
 
-/// Item 4 (probe `second_enable_while_waiting_is_busy`; B0's
+/// Item 4 (probe `second_enable_while_waiting_is_busy`; the characterization test
 /// `standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone`):
 /// an enable that waits for the process stopped for standby keeps the
 /// merge table: an enable is never busy for an enable or a reload.
@@ -1846,7 +1846,7 @@ fn resident_never_goes_to_standby_when_idle() {
     }
 }
 
-/// Item 8 (refined by the B1 re-review): a run started from its checkpoint
+/// Item 8 (refined by a re-review): a run started from its checkpoint
 /// is recorded at quit once its classification answer came back (today's
 /// `lazy_quit` writes the classes in `lazy.classes`, filled by that
 /// answer). A run that quits before the answer (within the 5 s after its
@@ -1886,7 +1886,7 @@ fn shutdown_checkpoints_runs_whose_class_is_known() {
     assert!(!written(q), "{actions:?}");
 }
 
-// ---- B1 re-review: a stop into standby that lands stuck ------------------
+// ---- A stop into standby that lands stuck --------------------------------
 //
 // Probe `review-b1b`: after a stuck landing nothing kept the old process
 // in view, so a later wake, enable or reload spawned beside it. Today
@@ -2155,7 +2155,7 @@ fn boot_start_waiting_lists_starting() {
 }
 
 /// Item 9d: a crash cancels an installed Standby job (it did not go to
-/// standby); with B4 the crash's own restart is installed.
+/// standby); the crash's own restart is installed.
 #[test]
 fn crash_cancels_an_installed_standby_job() {
     let mut w = World::new(preset());
@@ -2168,7 +2168,7 @@ fn crash_cancels_an_installed_standby_job() {
     w.exited(pid, ExitCause::Exited, None);
     w.tick(10);
     assert_eq!(w.s.job_result(u, job), Some(&JobResult::Canceled));
-    // Resident by its checkpoint: its `Restart=` starts it again.
+    // Resident by its checkpoint: its restart rule starts it again.
     assert!(matches!(
         w.s.job(u).map(|j| &j.kind),
         Some(JobKind::Start {
@@ -2194,7 +2194,7 @@ fn crash_cancels_an_installed_standby_job() {
     ));
 }
 
-// ---- B1 fourth fix round (probe `review-b1c`, supervisor.md) --------
+// ---- A shared member stopped for standby whose reap never came ------
 
 /// A shared member woken once and stopped for standby by idle. The playback
 /// worker cleaned up after it at once (`owner.parked`); its reap
@@ -2375,7 +2375,7 @@ fn uninstall_after_the_reap_of_a_stuck_process_removes_data_once_cleaned() {
 
 /// Probe i4: an uninstall whose stop lands stuck. The unit is removed (its
 /// checkpoint goes); its data goes when the late reap arrives (today's
-/// `data_removals` at `Event::Reaped`; with B4 once cleaned up too).
+/// `data_removals` at `Event::Reaped`; now once cleaned up too).
 #[test]
 fn stuck_uninstall_removes_data_at_the_late_reap() {
     {
@@ -2390,7 +2390,7 @@ fn stuck_uninstall_removes_data_at_the_late_reap() {
         w.auto_reap = false;
         w.tick(100);
         let job = w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
-        // Its checkpoint goes at the request (review note B2-4).
+        // Its checkpoint goes at the request.
         assert!(w.tick(100).contains(&Action::DropCheckpoint { unit: u }));
         let actions = w.tick(100 + wait);
         assert!(!actions.iter().any(is_remove_data), "{actions:?}");
@@ -2498,7 +2498,7 @@ fn reinstall_while_the_uninstalled_process_goes_waits_for_it() {
 
 // ---- exit causes and the restart policy ------------------------------
 
-/// an exit is `Oom` only with V8's heap line on stderr **and** the heap abort's
+/// An exit is `Oom` only with V8's heap line on stderr **and** the heap abort's
 /// exit code; the notice waits for the reap that brings the code. Either alone
 /// is a plain exit.
 #[test]
@@ -2607,7 +2607,7 @@ fn b4_a_unit_placed_own_is_not_in_the_runner_group() {
     assert!(active(&w, own));
 }
 
-// ---- B5: process budget and memory pressure -------------------
+// ---- Process budget and memory pressure -----------------------
 
 /// The player's preset (`host/supervisor/mod.rs` `new`) for this machine,
 /// with an idle time long enough that only the budget or pressure puts a
@@ -2664,7 +2664,7 @@ fn b5_budget_formula_per_machine() {
 
 /// Clicks on one plugin after another (`Interactive` starts): after each
 /// start the third-party processes are back at the budget, and the one
-/// put in standby is always the least recently used (Android LRU).
+/// put in standby is always the least recently used.
 #[test]
 fn b5_budget_holds_under_clicks_in_lru_order() {
     let mut w = World::new(b5(8, 2_048));
