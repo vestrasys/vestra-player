@@ -17,6 +17,14 @@ class FileTypesService {
     #runtime;
     types;
     #listeners = new Set();
+    /**
+     * The list listeners last heard, not the one read at start: a plugin
+     * woken from standby reads the new list from `window.state`, then gets
+     * the `resolvers.fileTypes` the player held for it, and its listeners
+     * still hear that change. The player sends the event only when the list
+     * changed, so a first event is always news to the listeners.
+     */
+    #notified;
     #started = false;
     constructor(runtime) {
         this.#runtime = runtime;
@@ -30,7 +38,7 @@ class FileTypesService {
         this.#runtime.on("resolvers.fileTypes", (data) => {
             const types = data?.fileTypes;
             if (Array.isArray(types) && types.every((t) => typeof t === "string"))
-                this.accept(types);
+                this.changed(types);
         }, "events", true);
         // What changed between the start-up read and the subscription.
         const window = windowOf(this.#runtime);
@@ -39,15 +47,32 @@ class FileTypesService {
                 this.accept(window.fileTypes, this.#runtime.can("events"));
         });
     }
-    /** `notify`: false without `events`, whose listeners never fire. */
+    /** From `resolvers.fileTypes`: listeners hear it unless they already did. */
+    changed(types) {
+        const changed = !sameTypes(types, this.types);
+        if (changed)
+            this.types = Object.freeze([...types]);
+        if (!this.#notified || !sameTypes(types, this.#notified))
+            this.#notify(types);
+        if (changed)
+            this.#runtime.invalidate();
+    }
+    /**
+     * From a `window.state` read: only a change from the current list.
+     * `notify`: false without `events`, whose listeners never fire.
+     */
     accept(types, notify = true) {
         if (sameTypes(types, this.types))
             return;
         this.types = Object.freeze([...types]);
         if (notify)
-            for (const listener of [...this.#listeners])
-                listener([...types]);
+            this.#notify(types);
         this.#runtime.invalidate();
+    }
+    #notify(types) {
+        this.#notified = Object.freeze([...types]);
+        for (const listener of [...this.#listeners])
+            listener([...types]);
     }
     watch(listener) {
         this.#listeners.add(listener);
