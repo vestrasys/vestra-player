@@ -1,23 +1,23 @@
-//! Per-class policy (systemd unit settings) and the tunables. `Tunables::new`
+//! Per-class policy (supervisor.md §2, §6, §7) and the tunables. `Tunables::new`
 //! is the one preset, for this machine's cores and memory; tests change single
 //! values (short timers, small limits).
 #![forbid(unsafe_code)]
 
 use super::unit::{Class, Ms};
 
-/// systemd `Restart=`.
+/// The restart rule of a class (supervisor.md §7).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RestartMode {
     /// Not restarted; registrations revoked; `Failed` (Development).
     No,
-    /// Restarted by the supervisor after `RestartSec` (Builtin, Resident).
+    /// Restarted by the supervisor after the restart delay (Builtin, Resident).
     OnFailure,
     /// Kept in standby with its entry points; starts again on the next
     /// trigger after a hold (Normal). Needs a checkpoint, else `No`.
     OnNextTrigger,
 }
 
-/// `RestartSec=` growing on repeats (`RestartSteps=`, `RestartMaxDelaySec=`).
+/// The restart delay, growing on repeats up to a cap.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Backoff {
     pub base: Ms,
@@ -28,8 +28,8 @@ pub struct Backoff {
     pub first_immediate: bool,
 }
 
-/// Retry of a failed spawn within one start job (a start timeout is not retried
-/// since the B6 review).
+/// Retry of a failed spawn within one start job (a start timeout is not
+/// retried).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Retry {
     pub count: u32,
@@ -51,26 +51,26 @@ pub struct Policy {
     pub restart_sec: Option<Backoff>,
     pub start_retry: Option<Retry>,
     pub start_limit: Option<StartLimit>,
-    /// `TimeoutStartSec`.
+    /// The start timeout.
     pub start_timeout: Ms,
-    /// `TimeoutStopSec` for disable/reload/uninstall/upgrade.
+    /// The stop grace for disable/reload/uninstall/upgrade.
     pub stop_grace: Ms,
-    /// `TimeoutStopSec` for standby.
+    /// The stop grace for standby.
     pub standby_grace: Ms,
-    /// `TimeoutStopSec` after a failure.
+    /// The stop grace after a failure.
     pub failure_grace: Ms,
     /// Goes to standby when idle (never for Resident / Development, nor a
     /// unit classified resident).
     pub idle_standby: bool,
     /// Request timeout of in-flight work.
     pub request_timeout: Option<Ms>,
-    /// `OOMScoreAdjust=`: higher goes to standby first under pressure.
+    /// Higher goes to standby first under pressure.
     pub importance: i32,
     /// Counted in the third-party process budget.
     pub in_budget: bool,
     /// May be put in standby by the budget or pressure.
     pub reclaimable: bool,
-    /// `MemoryMax=` (JS heap, MiB) of an own process; the adapter applies it.
+    /// The heap cap (JS heap, MiB) of an own process; the adapter applies it.
     pub memory_max_mib: Option<u32>,
 }
 
@@ -158,7 +158,7 @@ impl Policy {
             // A development load's start timeout is its own (1–120 s).
             start_timeout: if installed { 60_000 } else { 120_000 },
             stop_grace: 5_000,
-            // `TimeoutStopSec` for standby; a development load never stands
+            // The stop grace for standby; a development load never stands
             // by.
             standby_grace: if installed { 5_000 } else { 2_000 },
             failure_grace: 300,

@@ -148,7 +148,7 @@ pub struct UiState {
     pub sidebar: Option<Sidebar>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sidebar_slot: Option<SidebarSlot>,
-    /// `"<manifest id>/<command id>"` → bindings; read only this round, kept on save.
+    /// `"<manifest id>/<command id>"` → bindings; read only, kept on save.
     #[serde(default)]
     pub bindings: BTreeMap<String, Vec<String>>,
     /// One-time migrations of `bindings` already applied (host 0.6.0:

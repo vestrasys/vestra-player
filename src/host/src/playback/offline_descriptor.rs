@@ -117,7 +117,7 @@ fn subtitle_filter(subtitle: &Subtitle<'_>) -> Result<String> {
         subtitle.display_height
     );
     // force_style ScaleX/Y are libass internal multipliers (1), not ASS style
-    // row percentages (100); see this round's style-mapping.md counterexample.
+    // row percentages (100).
     Ok(format!(
         "subtitles=filename='{carrier}':fontsdir='{fonts}':force_style='{force_style}'"
     ))

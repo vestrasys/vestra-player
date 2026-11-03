@@ -1,6 +1,6 @@
 # Interface specification
 
-This document specifies the Vestra Player interface: sizes, colors, geometry and basic behavior. It is for API maintainers and plugin authors. Interaction details (states, timing, behavior in each mode) are in the [Interaction specification](interaction-spec.md); where the two conflict, the interaction specification wins. The complete menu tree is in [Menus and interface ownership](menus.md); the feature scope is in [Feature requirements](feature-requirements.md). Changes follow the [community workflow](../../agentic-workflow.md).
+This document specifies the Vestra Player interface: sizes, colors, geometry and basic behavior. It is for API maintainers and plugin authors. Interaction details (states, timing, behavior in each mode) are in the [Interaction specification](interaction-spec.md); where the two conflict, the interaction specification wins. The complete menu tree is in [Menus and interface ownership](menus.md); the feature scope is in [Feature requirements](feature-requirements.md). Changes follow the [community workflow](../../agentic-workflow/agentic-workflow.md).
 
 ## 0. How to read this
 
@@ -483,11 +483,11 @@ This section lists the core capabilities the interface depends on. Principle: th
 
 ### 10.3 Implementation record
 
-C1–C11 and C14 were implemented on 2026-10-20; see the [round record](../process/rounds/2026-10-core-ui.md).
+C1–C11 and C14 were implemented on 2026-10-20.
 
 ## 11. Items owned by each plugin
 
-Check this table when a plugin changes its interface. When the core capabilities are not enough, file a request with the API maintainer under §4 of the [community workflow](../../agentic-workflow.md); the maintainer first discusses with the author whether existing interfaces or an in-plugin implementation can solve it, and changes the core only when it is really necessary. Acceptance is by the GUI test in §6.2 of the workflow.
+Check this table when a plugin changes its interface. When the core capabilities are not enough, file a request with the API maintainer under §4 of the [community workflow](../../agentic-workflow/agentic-workflow.md); the maintainer first discusses with the author whether existing interfaces or an in-plugin implementation can solve it, and changes the core only when it is really necessary. Acceptance is by the GUI test in §6.2 of the workflow.
 
 | Plugin | Items |
 | --- | --- |

@@ -1,7 +1,7 @@
 //! The process budget's input and the memory pressure source
 //! (doc/architecture/supervisor.md). The budget is the core's
 //! (`Tunables::new` from the physical memory read once at start-up); the pressure level is read from the system every
-//! `POLL_MS` (Windows: Chrome's thresholds on available physical memory and
+//! `POLL_MS` (Windows: thresholds on available physical memory and
 //! the system's low-memory notification; Linux: PSI; macOS: none yet,
 //! `platform::PressureSource`) and given to the core when it changes
 //! (`memory_pressure`). Both put idle third-party plugins in
@@ -19,8 +19,7 @@ use super::*;
 use crate::platform::{self, MemoryPressure};
 use crate::supervisor::Pressure;
 
-/// How often the system's level is read: Chrome's memory pressure
-/// monitor's polling interval (`kPollingIntervalMs` 5 s).
+/// How often the system's level is read: every 5 s.
 pub(super) const POLL_MS: u64 = 5_000;
 
 /// The pressure source and the level the core has.

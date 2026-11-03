@@ -1,4 +1,4 @@
-//! Units (systemd `Unit` + service settings): one plugin each, its identities,
+//! Units (supervisor.md §2): one plugin each, its identities,
 //! its state (doc/architecture/supervisor.md) and the static facts `add_unit`
 //! is given.
 #![forbid(unsafe_code)]
@@ -46,7 +46,7 @@ pub enum Placement {
     Shared(RunnerId),
 }
 
-/// systemd `UnitFileState`.
+/// Whether the unit is enabled.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Enablement {
     Enabled,
@@ -96,35 +96,35 @@ impl Then {
 /// `Activating` sub-states.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActivatingSub {
-    /// Built-in digest check, no process yet (systemd `start-pre`).
+    /// Built-in digest check, no process yet.
     Verify,
     /// Process creation in flight.
     Spawn,
-    /// Waiting for `runtime.ready` + UI activation (systemd `Type=notify`).
+    /// Waiting for `runtime.ready` + UI activation.
     Ready,
-    /// No process; waiting `RestartSec` (systemd `activating (auto-restart)`).
+    /// No process; waiting for the restart delay.
     AutoRestart { until: Ms },
 }
 
 /// `Deactivating` sub-states.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeactivatingSub {
-    /// Grace running (systemd `stop-sigterm`).
+    /// Grace running.
     Term,
-    /// Kill sent (systemd `stop-sigkill`).
+    /// Kill sent.
     Kill,
-    /// Process gone, waiting for `backend_cleaned` (systemd `stop-post`).
+    /// Process gone, waiting for `backend_cleaned`.
     Cleanup,
 }
 
-/// Why a unit is `Failed` (systemd `Result=`).
+/// Why a unit is `Failed`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FailResult {
     /// The process could not be created (`process_spawned(Err)`).
     Spawn,
     /// The process ended or was ended.
     Exit(ExitCause),
-    /// `StartLimitBurst` hit.
+    /// Start limit hit.
     StartLimitHit,
     /// The previous process did not go within `STOP_WAIT`.
     Stuck,
@@ -271,7 +271,7 @@ impl UnitSpec {
 }
 
 /// Reap bookkeeping of the process a `Deactivating` unit waits for
-/// (systemd "control group empty" + `ExecStopPost=`; REPLACE `Host.cleanup`:
+/// (the process is gone, then its cleanup ran; replaces `Host.cleanup`:
 /// it exists while the unit is deactivating, and after a stuck landing
 /// until that process goes: one per unit, so it cannot grow).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -336,7 +336,7 @@ pub struct Unit<P> {
     /// Registrations of a standby unit between leaving `Standby` for
     /// `Verify` and the spawn that rekeys them.
     pub(super) holder: Option<Pid>,
-    /// Previous pid, forwarded to the current one (REPLACE `lazy.moved`).
+    /// Previous pid, forwarded to the current one (replaces `lazy.moved`).
     pub(super) alias: Option<Pid>,
     /// Last pid this unit had (kept in `by_pid` for late replies).
     pub(super) last_pid: Option<Pid>,
@@ -364,7 +364,7 @@ pub struct Unit<P> {
     /// Restart hold (`hold_until`) after a crash, measured from the reap.
     pub(super) hold_next: Option<Ms>,
     /// Delay of the next automatic start (backoff, retry), from the reap
-    /// (systemd starts `RestartSec` once the stop finished).
+    /// (the restart delay starts once the stop finished).
     pub(super) after_reap: Option<Ms>,
     /// After a runner restart: back to standby by replay at reap.
     pub(super) replay_after: bool,
@@ -379,8 +379,8 @@ pub struct Unit<P> {
     pub(super) gens: Gens,
     pub(super) results: VecDeque<(JobId, JobResult)>,
     pub(super) listed: Option<ListState>,
-    /// The activation of the run being started (activation.rs, MOVE of
-    /// the Host's `Book` entry, B2a).
+    /// The activation of the run being started (activation.rs, formerly
+    /// the Host's `Book` entry).
     pub(super) activation: Option<Run>,
 }
 impl<P> Unit<P> {

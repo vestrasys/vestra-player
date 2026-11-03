@@ -542,8 +542,8 @@ pub fn physical_memory() -> Option<u64> {
     Some(objc2_foundation::NSProcessInfo::processInfo().physicalMemory())
 }
 
-/// No memory pressure source on macOS yet (supervisor.md §8: "macOS
-/// fallback"): the system's pressure events come through a dispatch
+/// No memory pressure source on macOS yet (supervisor.md §8, "Memory
+/// pressure"): the system's pressure events come through a dispatch
 /// source, which would need an unsafe crate. The process budget still
 /// applies.
 #[derive(Debug, Default)]

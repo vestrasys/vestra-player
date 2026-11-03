@@ -1,6 +1,6 @@
 //! `rendering.state`, `rendering.setPreference` and `rendering.restart`
-//! (capability `rendering.manage`, SDK 1.5.35, round record
-//! 2026-10-render-modes §3.4): the mode now and why, the saved preference
+//! (capability `rendering.manage`, SDK 1.5.35, doc/architecture/README.md
+//! §4.3): the mode now and why, the saved preference
 //! and what the next start would choose with it, and a restart that
 //! continues the current file. The preference is saved at once and applies
 //! at the next start, restart or not (as Chrome's and Firefox's hardware
@@ -70,7 +70,7 @@ pub(crate) struct Startup {
     pub guard: GuardFile,
     pub keys: Keys,
     /// The same for CPU mode's Direct3D 12 windows (their adapter may be
-    /// another one, record §12).
+    /// another one on a hybrid laptop).
     pub windows_keys: Keys,
     /// The adapters the two modes open (`select_wgpu_windows`), as resolved
     /// here for the keys and the denylist.
@@ -78,7 +78,7 @@ pub(crate) struct Startup {
     pub windows_adapter: platform::AdapterPick,
 }
 
-/// Gather the facts (round record 2026-10-render-modes §3): the
+/// Gather the facts (doc/architecture/README.md §4.3): the
 /// environment, the system build, the first graphics adapter, the built-in
 /// denylist with `<app data>/render-denylist.json`, the saved preference
 /// (`render.json`) and the crash guard (`render-state.json`). A headless
@@ -126,7 +126,7 @@ pub(crate) fn startup(headless: bool) -> Startup {
             if adapter.software { ", software" } else { "" },
         );
     }
-    // Why (user ruling 2026-10-31, record §12).
+    // Why (user ruling 2026-10-31, hybrid laptops).
     // Systems without adapter facts (macOS, Linux) say nothing here.
     if !headless && !found.gpu.how.is_empty() {
         diag!(
@@ -156,7 +156,7 @@ pub(crate) fn startup(headless: bool) -> Startup {
         diag!("render: render.json is ignored ({warning})");
     }
     let guard = GuardFile::new(path("render-state.json"));
-    // Keyed on the adapter GPU rendering uses (L1, record §11); files from
+    // Keyed on the adapter GPU rendering uses (since 0.5.19); files from
     // before 0.5.19 on the first one (`render_state::Keys`).
     let key_of = |adapter: Option<&platform::GpuAdapter>| GuardKey {
         adapter: adapter
@@ -169,7 +169,7 @@ pub(crate) fn startup(headless: bool) -> Startup {
         app: env!("CARGO_PKG_VERSION").into(),
     };
     // GPU rendering and CPU mode's Direct3D 12 windows may use different
-    // adapters (record §12): each is guarded on its own.
+    // adapters on a hybrid laptop: each is guarded on its own.
     let keys = Keys {
         key: key_of(adapters.get(render_adapter)),
         legacy: key_of(adapters.first()),
@@ -517,7 +517,7 @@ mod tests {
         assert_eq!(denied.preference, Preference::Auto, "not saved");
     }
 
-    /// Item 5 (record §11): the reason of software rendering names the
+    /// The reason of software rendering names the
     /// windows, so About tells Direct3D 12 windows from OpenGL ones.
     #[test]
     fn the_software_reason_names_the_windows() {

@@ -241,7 +241,7 @@ fn main() -> Result<()> {
         }
         bail!("{text}");
     }
-    // The renderer pair and why (round record 2026-10-render-modes): GPU
+    // The renderer pair and why (doc/architecture/README.md §4.3): GPU
     // rendering (SDK site, Concepts: render options) needs the windows the
     // platform pairs with it (macOS: femtovg on OpenGL; Windows: femtovg on
     // wgpu/Direct3D 12, and only when the user turned it on); headless,
@@ -260,7 +260,7 @@ fn main() -> Result<()> {
     // only a process that dies leaves the guard armed.
     let guard = startup.guard.clone();
     // Keyed on the adapter the mode uses: GPU rendering's, or CPU mode's
-    // Direct3D 12 windows' (they may differ on a hybrid laptop, record §12).
+    // Direct3D 12 windows' (they may differ on a hybrid laptop).
     let keys = if render.is_gpu() {
         startup.keys.clone()
     } else {
@@ -350,7 +350,7 @@ fn main() -> Result<()> {
             guard.settle();
         }
         if !render.is_gpu() && render.windows == render_mode::WindowKind::Wgpu {
-            // CPU mode in Direct3D 12 windows (record §11 item 5): software
+            // CPU mode in Direct3D 12 windows: software
             // video uploaded once per frame, flip model with vsync.
             if let Err(error) = wgpu_windows(false) {
                 diag!("render: no Direct3D 12 windows for software rendering ({error})");
@@ -745,7 +745,7 @@ fn main() -> Result<()> {
                 })
             });
         }));
-        // CPU mode's Direct3D 12 windows (record §11.4, §11.5): the crash
+        // CPU mode's Direct3D 12 windows (doc/architecture/README.md §4.3): the crash
         // guard counts a crash only while they are made, draw their first
         // frames and take the first video picture (a start with a file, or
         // a source loading), not one unrelated to the GPU later in the first
@@ -872,7 +872,7 @@ fn main() -> Result<()> {
         // However the loop ended (Quit, the last window closed, a restart):
         // release the GPU renderer's fences before the windows, their
         // device and the renderer go, so a stalled frame cannot hold up the
-        // teardown (record 2026-10-render-modes §11.6).
+        // teardown.
         platform::release_gpu_waits();
         // Every plugin process stops within one deadline (supervisor.md
         // §9: 1 s at quit, 300 ms after a device loss), each running

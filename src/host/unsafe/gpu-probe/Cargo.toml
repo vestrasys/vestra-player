@@ -6,7 +6,8 @@ license = "GPL-3.0-or-later"
 publish = false
 description = "Go/no-go probe for Windows GPU rendering: libmpv's D3D11 render API shown in OpenGL through WGL_NV_DX_interop2 (evidence only, not part of the player)"
 
-# Evidence for doc/process/rounds/2026-10-windows-render.md, Appendix C. A
+# Evidence for the parked D3D11 → OpenGL bridge on Windows
+# (doc/process/rounds/history.md §4, §5). A
 # standalone workspace of its own: it is NOT a member of src/host's workspace,
 # the player never builds or links it, and it has its own Cargo.lock.
 #

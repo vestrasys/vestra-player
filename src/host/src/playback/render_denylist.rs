@@ -1,7 +1,7 @@
 //! Graphics drivers the player does not render on with the GPU: the rules
 //! built into the host (`src/host/render-denylist.json`) and a local file of
 //! the same shape that adds or replaces rules by id, so a rule can change
-//! without a player release (round record 2026-10-render-modes §3.2). The
+//! without a player release (doc/architecture/README.md §4.3). The
 //! format follows Chromium's `software_rendering_list.json`. Pure: the
 //! caller reads the local file and the adapter facts.
 #![forbid(unsafe_code)]
@@ -322,7 +322,7 @@ mod tests {
         let bad = adapter(0x1002, 0x15BF, "31.0.14005.21001");
         assert_eq!(ids(&bad), ["amd-780m-draw-stalls"]);
         assert_eq!(list.matches(on_windows(&bad))[0].action, Some(Action::Cpu));
-        // Adrenalin 26.10.1 and later: white OpenGL windows (round record §9).
+        // Adrenalin 26.10.1 and later: white OpenGL windows.
         let white = adapter(0x1002, 0x15BF, "32.0.32015.7029");
         assert_eq!(ids(&white), ["amd-780m-white-opengl-windows"]);
         assert_eq!(
@@ -407,7 +407,7 @@ mod tests {
         }
     }
 
-    /// Item 2 (record §11): a rule can name Direct3D 12 (wgpu) windows; a
+    /// A rule can name Direct3D 12 (wgpu) windows; a
     /// `software-windows` rule without `window_api` is about OpenGL ones,
     /// as before.
     #[test]

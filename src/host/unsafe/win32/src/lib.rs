@@ -905,8 +905,8 @@ fn monitor_of(hwnd: isize) -> isize {
     unsafe { MonitorFromWindow(hwnd as HWND, MONITOR_DEFAULTTOPRIMARY) as isize }
 }
 
-/// A DXGI adapter as the driver check sees it (round record
-/// 2026-10-render-modes §3.1).
+/// A DXGI adapter as the driver check sees it (doc/architecture/README.md
+/// §4.3).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DxgiAdapter {
     pub name: String,
@@ -1007,7 +1007,7 @@ fn version_parts(value: i64) -> [u16; 4] {
 
 /// NVIDIA's PPE stream extension (`{d43ce1b3-1f4b-48ac-baee-c3c25375e6f7}`),
 /// the one mpv's `d3d11vpp=scaling-mode=nvidia` sets for RTX Video Super
-/// Resolution (AI upscaling round record §2).
+/// Resolution (doc/architecture/README.md §4.4).
 const NVIDIA_PPE: windows::core::GUID =
     windows::core::GUID::from_u128(0xd43ce1b3_1f4b_48ac_baee_c3c25375e6f7);
 
@@ -1024,7 +1024,7 @@ pub struct SuperResolution {
 impl SuperResolution {
     /// The driver offers it: the query succeeded with a non-zero value
     /// (VLC's check). Setting the extension proves nothing: AMD's driver
-    /// accepts NVIDIA's GUID too (round record §5).
+    /// accepts NVIDIA's GUID too.
     pub fn supported(&self) -> bool {
         self.result >= 0 && self.value != 0
     }
@@ -1149,7 +1149,7 @@ mod tests {
     };
     use std::time::{Duration, Instant};
 
-    /// F4 (round record 2026-10-windows-render, B.10): the extra pixel goes
+    /// The extra pixel goes
     /// where no other display shows it.
     #[test]
     fn the_extra_pixel_avoids_a_neighbouring_display() {
@@ -1266,7 +1266,7 @@ mod tests {
         assert!(error.contains("no adapter"), "{error}");
     }
 
-    /// Real machine, read-only (AI upscaling round record §8, case U0):
+    /// Real machine, read-only (doc/architecture/README.md §4.4):
     /// `cargo test -p vestra-win32 -- --ignored --nocapture super_resolution_on_each`
     /// prints every adapter's answer. It wakes a sleeping discrete GPU for a
     /// moment; it renders nothing and changes no setting. Expected: the RTX

@@ -1,5 +1,5 @@
 //! Picture-in-picture on systems without one (Windows, Linux): `unsupported`.
-//! A later round gives them a borderless always-on-top window of the
+//! Later work (an open topic) gives them a borderless always-on-top window of the
 //! player's own; until then `PipWindow` cannot be made, so its methods are
 //! never reached.
 

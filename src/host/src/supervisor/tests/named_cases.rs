@@ -166,7 +166,7 @@ spec! {
     }
 }
 
-// "interactive answered" is (B3): `b3`. Today: the wake's failure shows "could
+// "interactive answered" is in `b3.rs`. Here: the wake's failure shows "could
 // not start" (every preset) and the held trigger goes silently.
 #[test]
 fn nc_wake_while_deactivating_fails_after_20s() {

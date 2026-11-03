@@ -616,7 +616,7 @@ test("a broken settings file is kept aside and reads as the defaults", async () 
   }
 });
 
-// ---------------------------------------------------------------- round 2: tracks, channels, external audio
+// ---------------------------------------------------------------- tracks, channels, external audio
 
 const titled = (trackId: number, title: string, language: string | null, selected: boolean) => ({
   ...track(trackId, selected),
@@ -822,7 +822,7 @@ test("A11: auto-loading same-named audio adds same-named audio next to a local f
   }
 });
 
-// ---------------------------------------------------------------- round 3a: G16 output device
+// ---------------------------------------------------------------- G16 output device
 
 const SPEAKERS = { id: "coreaudio/BuiltInSpeakerDevice", name: "MacBook Air 扬声器" };
 const PHONES = { id: "coreaudio/USB-1", name: "USB 耳机" };

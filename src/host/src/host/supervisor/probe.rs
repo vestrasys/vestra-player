@@ -1,10 +1,9 @@
-//! Test switches (doc/architecture/supervisor.md; MOVE of
-//! `lazy/probe.rs` and `lazy.rs`'s `VESTRA_TEST_EXECUTE`, B2c), read in any
+//! Test switches (doc/architecture/supervisor.md; formerly
+//! `lazy/probe.rs` and `lazy.rs`'s `VESTRA_TEST_EXECUTE`), read in any
 //! build and not passed on to a player restarted after a device loss:
 //!
-//! - `VESTRA_TEST_REGISTRY=<file>` (the registry diff over every built-in,
-//!   record doc/process/rounds/2026-10-lazy-activation.md §5.3: "a test
-//!   parks and wakes every built-in and diffs the registries";
+//! - `VESTRA_TEST_REGISTRY=<file>` (the registry diff over every built-in:
+//!   a test parks and wakes every built-in and diffs the registries,
 //!   tests/lazy_activation.rs): one JSON line per plugin and moment
 //!   (`ready`, `parking`, `parked`, `replayed`, `woken`, `quit`) with what
 //!   the host's registries hold for it: its commands in registration order

@@ -45,7 +45,7 @@ export const PUBLISH_MS = 1000;
  * the bar at most this often (`PUBLISH_MS` still rules the disk writes).
  *
  * The trade-off: the player decodes every sheet it is handed on its UI thread
- * (11.5 ms p50 for a 1600×900 JPEG, `2026-10-ui-redraw-stutter.md`) and
+ * (11.5 ms p50 for a 1600×900 JPEG, measured 2026-10-27) and
  * uploads it as a texture (about 4 ms), so a sheet a second during the 15 s or
  * so of generation stalled the UI thread, and the picture under the pointer,
  * for up to 15–25 ms once a second while the user hovered the bar. At 2.5 s

@@ -54,13 +54,13 @@ pub(super) struct Profile {
     pub name: &'static str,
     /// Idle timeout.
     pub idle: Ms,
-    /// `TimeoutStartSec` installed plugins.
+    /// The start timeout of installed plugins.
     pub start_timeout: Ms,
-    /// `TimeoutStopSec` for disable/reload/uninstall/upgrade.
+    /// The stop grace for disable/reload/uninstall/upgrade.
     pub stop_grace: Ms,
-    /// `TimeoutStopSec` for standby.
+    /// The stop grace for standby.
     pub standby_grace: Ms,
-    /// `TimeoutStopSec` after a failure.
+    /// The stop grace after a failure.
     pub failure_grace: Ms,
     /// Third-party running Start jobs limit.
     pub max_active: usize,
@@ -1013,7 +1013,7 @@ pub(super) fn terminates(acts: &[Act]) -> Vec<(Ms, bool, String, Pid)> {
 }
 
 // ---------------------------------------------------------------------------
-// Adapter additions for the B3 spec tests (`b3.rs`)
+// Adapter additions for the start-limit spec tests (`b3.rs`)
 // ---------------------------------------------------------------------------
 
 /// The unit of a "Starting <name>…" notice.
@@ -1047,8 +1047,8 @@ pub(super) fn revoked(a: &Act) -> Option<(UnitId, Pid)> {
 }
 
 /// A plugin-declared long work kind (`commands.busy`, a settings page busy):
-/// `WorkKind::Declared`, never capped (coordinator ruling, blackboard Open
-/// items; supervisor.md). The number is the adapter's own; see
+/// `WorkKind::Declared`, never capped (coordinator ruling; supervisor.md
+/// §4). The number is the adapter's own; see
 /// `b3::w_declared_busy_has_no_request_cap`.
 pub(super) const DECLARED_BUSY: WorkKind = WorkKind::Declared(0);
 
@@ -1072,8 +1072,8 @@ impl Sim {
         self.sup.set_now(self.now);
         self.sup.begin_work(pid, DECLARED_BUSY, self.now)
     }
-    /// The B2a identity input `activation_begin` for `n` fresh units, each with
-    /// a new pid: how many were accepted ("remove `LIMIT 64`").
+    /// The identity input `activation_begin` for `n` fresh units, each with
+    /// a new pid: how many were accepted (no limit of 64).
     pub fn activations_accepted(&mut self, n: usize) -> usize {
         (0..n)
             .filter(|i| {
@@ -1189,10 +1189,10 @@ fn t00_restart_policy_matches_design_values() {
         // 5 in 10 min.
         let l = p.start_limit.expect("start limit");
         assert_eq!((l.burst, l.interval), (5, 600_000), "{c:?}");
-        // MemoryMax= 512 MB own process.
+        // The heap cap: 512 MB for an own process.
         assert_eq!(p.memory_max_mib, Some(512), "{c:?}");
         // Reset after 60 s stable.
-        let b = p.restart_sec.expect("RestartSec");
+        let b = p.restart_sec.expect("restart delay");
         assert_eq!(b.reset_after, Some(60_000), "{c:?}");
         assert!(
             !b.first_immediate,

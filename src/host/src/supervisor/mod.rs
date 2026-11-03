@@ -1,9 +1,9 @@
 //! Plugin process supervisor, pure core (doc/architecture/supervisor.md):
 //! decides when a plugin process should exist — start, stop, restart,
-//! standby, limits — modelled on systemd's service manager. No `Host`, no
+//! standby, limits. No `Host`, no
 //! I/O, no environment, no clock: time comes in as `Ms`, randomness from a
 //! seeded xorshift, and every decision goes out as an `Action` for the Host
-//! adapter (B2) to execute. Payloads are generic (`serde_json::Value` in
+//! adapter (`host/supervisor/`) to execute. Payloads are generic (`serde_json::Value` in
 //! production, small numbers in simulations).
 //!
 //! Inputs without a time argument use the latest time the supervisor was
@@ -171,7 +171,7 @@ pub enum Action<P> {
     /// still removed and tracks no process. What it deletes is what the adapter
     /// resolved at each uninstall request: never resolved from the unit when
     /// the action comes, since a reinstall may own it by then; one action may
-    /// cover two uninstalls across a reinstall (review note B2-5).
+    /// cover two uninstalls across a reinstall.
     RemoveData {
         unit: UnitId,
     },
@@ -185,7 +185,7 @@ pub enum Action<P> {
     },
     /// A job ended (package transactions read the result). `kind`: what it was
     /// when it ended (a request merged into it may have changed it), so the
-    /// adapter knows whose wait ended (B2b–B2d).
+    /// adapter knows whose wait ended.
     JobFinished {
         unit: UnitId,
         job: JobId,
@@ -194,7 +194,7 @@ pub enum Action<P> {
     },
 }
 
-/// systemd `Manager`.
+/// The supervisor: units, jobs, timers and limits.
 pub struct Supervisor<P> {
     tunables: Tunables,
     units: BTreeMap<UnitId, Unit<P>>,
@@ -443,11 +443,11 @@ impl<P: Clone> Supervisor<P> {
 
     // ---- units ---------------------------------------------------------
 
-    /// `add_unit` (systemd: load unit):. The id of a unit being removed is a
+    /// `add_unit`: load a unit. The id of a unit being removed is a
     /// reinstall; the id of a loaded unit with no process, no job and no
     /// process still going (a runner member queued again, a development load or
     /// a unit loaded for its identity only) takes the new spec and starts as at
-    /// boot (systemd: a `daemon-reload`, then the start). Any other loaded unit
+    /// boot (reloaded, then started). Any other loaded unit
     /// is left as it is.
     pub fn add_unit(&mut self, spec: UnitSpec) -> UnitId {
         let mut unit = Unit::new(&spec);
@@ -478,8 +478,8 @@ impl<P: Clone> Supervisor<P> {
         }
         // A reinstall that still waits for the uninstalled process starts (once
         // it is gone), never replays meanwhile: the replay would drop the pid
-        // that process is tracked under (review note B2-1; a reinstall carries
-        // no checkpoint anyway).
+        // that process is tracked under (a reinstall carries no checkpoint
+        // anyway).
         let going = self
             .units
             .get(&u)
@@ -603,7 +603,7 @@ impl<P: Clone> Supervisor<P> {
 
     /// Whether `remove_unit` may go now: the unit is still removed (a reinstall
     /// did not take it back), has no job, tracks no process and owes no
-    /// `RemoveData` (review note B2-3).
+    /// `RemoveData`.
     pub fn removable(&self, u: UnitId) -> bool {
         self.units.get(&u).is_some_and(|unit| {
             unit.removed && unit.job.is_none() && unit.stopping.is_none() && !unit.remove_data
@@ -716,8 +716,8 @@ impl<P: Clone> Supervisor<P> {
         .unwrap_or(JobId(0))
     }
 
-    /// `wake`: a trigger on an entry point of `pid` (systemd socket
-    /// activation: the connection is queued on the listening socket). The
+    /// `wake`: a trigger on an entry point of `pid` (held in the unit's
+    /// backlog until its process is ready). The
     /// trigger is borrowed: on `Now`/`Forward` the caller sends the message
     /// it still owns; a held or answered trigger is copied into the core.
     ///
@@ -916,7 +916,7 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    /// `reset_failed` (systemd). The adapter's enable, reload and install
+    /// `reset_failed`. The adapter's enable, reload and install
     /// clear a failure by their start (`begin_start`); only tests call it.
     #[cfg(test)]
     pub fn reset_failed(&mut self, u: UnitId) {
@@ -1209,7 +1209,7 @@ impl<P: Clone> Supervisor<P> {
     /// `process_exited` (expected exits of a deactivating process are ignored:
     /// its reap follows). `text`: the fault's error text (today `RuntimeFault`
     /// writes it into `failures`, shown by `packages.list`); `None`: the
-    /// cause's own text. The class's `Restart=` says where the unit lands.
+    /// cause's own text. The class's the restart rule says where the unit lands.
     pub fn process_exited(&mut self, pid: Pid, cause: ExitCause, text: Option<String>) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1269,12 +1269,12 @@ impl<P: Clone> Supervisor<P> {
         self.sync(u);
     }
 
-    /// `classified` (MOVE `lazy_classified`). `resident`: why it holds a live
+    /// `classified` (formerly `lazy_classified`). `resident`: why it holds a live
     /// resource. A run without a checkpoint is classified (the 5 s timer runs);
     /// any other ready run of a recordable unit may be, once per run, as
     /// today's `lazy_ready` classifies on every ready (supervisor.md). A lazy
     /// first run goes to standby at once unless it is busy: a job, or work in
-    /// flight (the Host's own idle check is declared work since B3, `work.rs`;
+    /// flight (the Host's own idle check is declared work, `work.rs`;
     /// today's `lazy_classified` parks only when `lazy_idle` says idle and its
     /// recording was written).
     pub fn classified(&mut self, pid: Pid, resident: Option<String>) {
@@ -1350,7 +1350,7 @@ impl<P: Clone> Supervisor<P> {
         self.sync(u);
     }
 
-    /// `touch`: the unit was used (MOVE `Lazy::touch`).
+    /// `touch`: the unit was used (formerly `Lazy::touch`).
     pub fn touch(&mut self, pid: Pid, now: Ms) {
         self.set_now(now);
         let Some(u) = self.current(pid) else {
@@ -1365,7 +1365,7 @@ impl<P: Clone> Supervisor<P> {
 
     /// `begin_work`: work in flight keeps the unit out of standby. A
     /// host→plugin request awaiting a reply (`WorkKind::Request`) is capped by
-    /// the class's `request_timeout` (B6); declared work is not.
+    /// the class's `request_timeout`; declared work is not.
     pub fn begin_work(&mut self, pid: Pid, kind: WorkKind, now: Ms) {
         self.touch(pid, now);
         let Some(u) = self.current(pid) else {
@@ -1516,7 +1516,7 @@ impl<P: Clone> Supervisor<P> {
         self.pending.push(Action::Notify { unit: None, notice });
     }
 
-    /// `memory_pressure` (B5): Low/Critical put every idle reclaimable unit in
+    /// `memory_pressure` (supervisor.md §8): Low/Critical put every idle reclaimable unit in
     /// standby through the same Standby job, most important last; Critical also
     /// takes the Interactive overrun away (`admit`). The adapter calls it when
     /// the level changes.
@@ -1691,7 +1691,7 @@ impl<P: Clone> Supervisor<P> {
         // Earlier pids are dead (a runner member replayed after its
         // process went): messages to them are dropped, as today. A pid a
         // stop still tracks stays mapped, so its reap and cleanup reach the
-        // unit (review note B2-1).
+        // unit.
         let old = [unit.alias.take(), unit.last_pid.take()];
         unit.last_pid = Some(holder);
         unit.state = UnitState::Standby {
@@ -1788,7 +1788,7 @@ impl<P: Clone> Supervisor<P> {
 
     /// The unit leaves its run for `then`: with `grace`, its process gets a
     /// `Terminate` (then `Kill` after the grace); without, the process is gone
-    /// already (an exit, a heap abort:, coordinator ruling 2026-11-03) and the
+    /// already (an exit or a heap abort; coordinator ruling 2026-11-03) and the
     /// adapter cleans up after it on the exit itself, without a stop message.
     /// Either way the unit waits for the reap and the backend cleanup.
     fn deactivate(
@@ -2000,7 +2000,7 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    /// a new pid, registrations rekeyed from the holder, `Spawn`.
+    /// Spawn: a new pid, registrations rekeyed from the holder, `Spawn`.
     fn spawn(&mut self, u: UnitId) {
         let now = self.now;
         let pid = self.alloc_pid();
@@ -2084,7 +2084,7 @@ impl<P: Clone> Supervisor<P> {
         self.enforce_budget(u, priority);
     }
 
-    /// the process could not be created.
+    /// Spawn failed: the process could not be created.
     fn spawn_failed(&mut self, u: UnitId, pid: Pid, text: String) {
         let now = self.now;
         let Some(unit) = self.units.get_mut(&u) else {
@@ -2139,7 +2139,7 @@ impl<P: Clone> Supervisor<P> {
         });
     }
 
-    /// ready and every initial UI registration done.
+    /// Ready: `runtime.ready` and every initial UI registration done.
     fn try_ready(&mut self, u: UnitId) {
         let now = self.now;
         let Some(unit) = self.units.get_mut(&u) else {
@@ -2211,7 +2211,7 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    /// The process failed or ended unasked, per the class's `Restart=`.
+    /// The process failed or ended unasked, per the class's restart rule.
     fn crash(&mut self, u: UnitId, cause: ExitCause, text: Option<String>) {
         let now = self.now;
         let Some(unit) = self.units.get_mut(&u) else {
@@ -2233,7 +2233,7 @@ impl<P: Clone> Supervisor<P> {
             }
         }
         // A Standby job does not finish by a crash: canceled (the unit lands
-        // where the class's `Restart=` says).
+        // where the class's restart rule says).
         if unit
             .job
             .as_ref()
@@ -2251,10 +2251,9 @@ impl<P: Clone> Supervisor<P> {
         let recorded = unit.recorded;
         // A start that timed out is never tried again within its start job:
         // start retries (`Policy::start_retry`) are for a process that could
-        // not be created (`spawn_failed`). With `TimeoutStartSec` 60 s, four
+        // not be created (`spawn_failed`). With the start timeout 60 s, four
         // tries kept a click waiting about 4 min, and a start that times out is
-        // a stuck plugin, not a passing failure (coordinator ruling, B6 review;
-        // amends). The unit follows its class's `Restart=` below.
+        // a stuck plugin, not a passing failure (coordinator ruling). The unit follows its class's restart rule below.
         let timed_out = activating && cause == ExitCause::StartTimeout;
         let mut then = Then::Failed;
         let mut keep = false;
@@ -2303,9 +2302,9 @@ impl<P: Clone> Supervisor<P> {
                 self.finish(u, JobResult::Failed(text.clone()));
             }
         } else if auto_restart.is_some() {
-            // A start that timed out restarts by its class's `Restart=` (a
+            // A start that timed out restarts by its class's restart rule (a
             // built-in, a Resident) after its backoff; a click held for it does
-            // not wait that long: answered "could not start" now (B6 review
+            // not wait that long: answered "could not start" now (coordinator
             // ruling). Wake events stay for the restart.
             if timed_out {
                 self.answer_interactive(u, AnswerReason::CouldNotStart);
@@ -2414,7 +2413,7 @@ impl<P: Clone> Supervisor<P> {
             UnitState::Deactivating { .. } => self.set_then(u, then),
             UnitState::Active { .. } | UnitState::Activating { pid: Some(_), .. } => {
                 // The checkpoint of a unit being uninstalled goes at the
-                // request, not at the landing (review note B2-4).
+                // request, not at the landing.
                 if then == Then::Removed && unit.recorded {
                     unit.recorded = false;
                     self.pending.push(Action::DropCheckpoint { unit: u });

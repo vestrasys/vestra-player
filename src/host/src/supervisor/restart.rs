@@ -1,6 +1,6 @@
-//! Restart and backoff (systemd `Restart=`, `RestartSec=`,
-//! `RestartSteps=`/`RestartMaxDelaySec=`, `StartLimitBurst=`/
-//! `StartLimitIntervalSec=`; Erlang restart intensity), the runner's
+//! Restart and backoff (supervisor.md §7: the restart rule per class, a
+//! delay that grows on repeats up to a cap, a start limit per window), the
+//! runner's
 //! fail-open counter (mirrors `shared_runner::Policy`), and the seeded
 //! xorshift used for jitter (as `bindings.rs` test `Steps`).
 #![forbid(unsafe_code)]

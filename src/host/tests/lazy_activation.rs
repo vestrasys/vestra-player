@@ -1,7 +1,7 @@
-//! Lazy activation with the real host, headless (doc/process/rounds/
-//! 2026-10-lazy-activation.md §5.1, step A1): a trivial built-in that only
+//! Standby and wake with the real host, headless (doc/architecture/
+//! supervisor.md §4): a trivial built-in that only
 //! adds a menu command is parked when idle, replayed without a process at
-//! the next start, woken by `commands.execute`, and parked again; step B1:
+//! the next start, woken by `commands.execute`, and parked again; then
 //! a plugin with only the SDK's mirror subscriptions is parked, one with a
 //! listener is resident and launched, first runs go eight at a time. Built-ins
 //! from a `builtin.json` schema 3 under `VESTRA_BUILTIN_PLUGINS`, the
@@ -215,7 +215,7 @@ fn an_idle_plugin_is_parked_replayed_woken_by_its_command_and_parked_again() {
 const MIRROR: &str = "vestra.fixture-mirror";
 const LISTENER: &str = "vestra.fixture-listener";
 
-/// Step B1 (§3.1, §3.4): a plugin whose event subscriptions are all the
+/// A plugin whose event subscriptions are all the
 /// SDK's mirrors (`plugin.player.state`) is classified lazy at its first
 /// ready and parked at once, replayed at the next start and woken by its
 /// command, which reads the player's state; a plugin with a listener
@@ -303,10 +303,10 @@ fn mirror_subscriptions_park_and_wake_a_listener_keeps_a_plugin_resident() {
     }
 }
 
-/// Lazy activation (record §2.4) pinned at most eight first runs in flight
+/// The old lazy activation pinned at most eight first runs in flight
 /// (`FIRST_RUNS`), built-ins
-/// included. Flipped in supervisor batch B3 (supervisor.md §5: built-ins
-/// start outside every limit): built-ins' first runs are outside
+/// included. Now built-ins start outside every limit (supervisor.md §5
+/// "Start order and limits"): built-ins' first runs are outside
 /// the start-job limit and start at once; third-party ones (below,
 /// `third_party_first_runs_start_a_few_at_a_time`) at most `max_active` at a
 /// time, a place freed at each ready.
@@ -352,7 +352,7 @@ fn b3_built_in_first_runs_start_at_once() {
     assert_eq!(recordings(root.path()).len(), 10);
 }
 
-/// B3 (supervisor.md §5): ten installed third-party
+/// doc/architecture/supervisor.md §5: ten installed third-party
 /// plugins on a fresh profile start their first runs at most `max_active`
 /// (`min(4, max(2, cores/2))`) at a time: a place frees at each one's
 /// `runtime.ready`. All ten run, none times out, all are parked.
@@ -437,7 +437,7 @@ fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, ma
             "source":{"kind":"file"},"installedAt":1}});
 }
 
-/// Review M (B1): first runs of other plugins never take the places while a
+/// First runs of other plugins never take the places while a
 /// built-in waits for its first run. Their mounts, sequence and resolvers
 /// wait for the built-ins (`builtins_starting`, not headless), so nine
 /// installed plugins whose ids sort before `vestra.` and register a
@@ -492,7 +492,7 @@ fn built_in_first_runs_go_before_other_plugins() {
 const WHEN: &str = "vestra.fixture-when";
 const OPENER: &str = "vestra.fixture-opener";
 
-/// §6.9 (B2): a command whose `enabled` is a `plugin.when` condition is
+/// A command whose `enabled` is a `plugin.when` condition is
 /// evaluated by the host, so its plugin holds nothing and is parked, and
 /// its state follows playback while it is parked: disabled (with its
 /// reason, no wake) before a file is open, enabled once it is ready, when
@@ -597,7 +597,7 @@ fn a_when_command_is_parked_and_its_state_follows_playback() {
 const PACKAGES: &str = "vestra.fixture-packages";
 const CHANGER: &str = "vestra.fixture-changer";
 
-/// §6.9 (B2): a listener of `packages.changed` (a wake event) does not keep
+/// A listener of `packages.changed` (a wake event) does not keep
 /// its plugin running: it is parked with its subscription recorded, and a
 /// package change wakes it to receive the event. On the next start it is
 /// replayed, not launched.
@@ -684,11 +684,11 @@ fn a_packages_listener_is_parked_and_woken_by_a_package_change() {
     assert!(!second.contains(&format!("] {PACKAGES} start")), "{second}");
 }
 
-/// The record's §5.3 check ("a test parks and wakes every built-in and
-/// diffs the registries"): for each built-in, what the host's registries
+/// A test parks and wakes every built-in and diffs the registries: for
+/// each built-in, what the host's registries
 /// hold for it (commands with declaration, shown text, bar button, state
 /// and conditions in registration order; key bindings; settings pages;
-/// drop providers; wake events: `VESTRA_TEST_REGISTRY`, host/lazy/probe.rs)
+/// drop providers; wake events: `VESTRA_TEST_REGISTRY`, host/supervisor/probe.rs)
 /// after a normal activation must equal what they hold after record → park,
 /// after replay at the next start, and after its wake. `VESTRA_TEST_PARK=all`
 /// parks resident built-ins too (their live resources are not recorded, so
@@ -782,8 +782,7 @@ fn every_built_in_keeps_its_registry_through_park_replay_and_wake() {
         line.map(|line| line["registry"].clone())
     };
 
-    // A: every built-in started at launch (its first run; with lazy
-    // activation off until B6).
+    // A: every built-in started at launch (its first run).
     let (normal, _) = probe("normal", 12, &[]);
     // B: first runs, each parked at its ready.
     let park = [("VESTRA_TEST_PARK", "all"), ("VESTRA_IDLE_MS", "600000")];

@@ -43,7 +43,7 @@ fn delay(s: &S, now: Ms) -> Ms {
     }
 }
 
-// Restart= on-failure (Builtin): exit, fault, OOM, request timeout
+// restart on failure (Builtin): exit, fault, OOM, request timeout
 #[test]
 fn p_builtin_restart_on_failure_for_every_cause() {
     for cause in [
@@ -59,7 +59,7 @@ fn p_builtin_restart_on_failure_for_every_cause() {
     }
 }
 
-// Restart= on-failure (Resident), RestartSec 1 s
+// restart on failure (Resident), the restart delay 1 s
 #[test]
 fn p_resident_restarts_after_one_second() {
     let mut sim = target();
@@ -71,7 +71,7 @@ fn p_resident_restarts_after_one_second() {
     );
 }
 
-// Restart= no for Normal: re-start on the next trigger only
+// no restart for Normal: re-start on the next trigger only
 #[test]
 fn p_normal_does_not_restart_by_itself() {
     let mut sim = target();
@@ -91,7 +91,7 @@ fn p_normal_does_not_restart_by_itself() {
     assert!(matches!(sim.st(u), S::Standby { .. }));
 }
 
-// Restart= no → Failed (Development)
+// no restart → Failed (Development)
 #[test]
 fn p_development_crash_fails() {
     let mut sim = target();
@@ -120,7 +120,7 @@ fn p_no_retry_after_runtime_failed_any_class() {
     }
 }
 
-// RestartSec built-in own process: 3 s × 2ⁿ ANSWERED (supervisor.md), was a design question: says "first runner
+// the restart delay built-in own process: 3 s × 2ⁿ ANSWERED (supervisor.md), was a design question: says "first runner
 // restart immediate"; says "+ 3 s ×2ⁿ after the first" for built-ins. Best reading: "immediate first" applies to
 // runner restarts only; an own-process built-in waits 3 s, 6 s, 12 s.
 #[test]
@@ -166,7 +166,7 @@ fn p_builtin_backoff_not_reset_before_60s_stable() {
     assert_eq!(delay(&s, now), 6_000);
 }
 
-// RestartSec / hold Normal: 1 s × 2ⁿ (cap 60 s) ANSWERED (supervisor.md), was a design question: the 60 s cap
+// the restart delay / hold Normal: 1 s × 2ⁿ (cap 60 s) ANSWERED (supervisor.md), was a design question: the 60 s cap
 // cannot be reached within the 5-in-10-min start limit (1+2+4+8 s) unless crashes are spread over more than 10
 // minutes, and states the "reset after 60 s stable" rule only for Builtin. Does the Normal/Resident backoff reset
 // after a stable run? Not tested here beyond the first four steps.
@@ -198,7 +198,7 @@ fn p_resident_backoff_grows_1_2_4() {
     assert_eq!(got, vec![1_000, 2_000, 4_000]);
 }
 
-// Runner: first restart immediate, then RestartSec 3 s
+// Runner: first restart immediate, then the restart delay 3 s
 #[test]
 fn p_first_runner_restart_immediate_then_3s() {
     let mut sim = target();
@@ -402,7 +402,7 @@ spec! {
     }
 }
 
-// TimeoutStopSec after a failure: 300 ms in both profiles (KEEP)
+// the stop grace after a failure: 300 ms in both profiles (KEEP)
 spec! {
     fn p_failure_stop_grace_300ms(p) {
         let mut sim = Sim::new(p);
@@ -415,10 +415,10 @@ spec! {
     }
 }
 
-// B6 review ("A start that times out is not retried"): a built-in clicked while
+// A start that times out is not retried (coordinator ruling): a built-in clicked while
 // it starts, whose start then times out. The click is answered "could not
 // start" at the timeout, not before; the built-in restarts by its class
-// (`Restart=on-failure`) 3 s after the reap, with no start retry 250 ms after
+// (restart on failure) 3 s after the reap, with no start retry 250 ms after
 // it; and the fifth such timeout within 10 min ends in
 // `Failed{start-limit-hit}`, after which nothing starts it again.
 #[test]

@@ -2,7 +2,7 @@
  * `builtin.json` schema 3 records each built-in's package digest, computed
  * by `scripts/stage-plugins.mjs` and checked by the host
  * (`package_stage::read_tree`) before it runs the plugin in the shared runner
- * (doc/process/rounds/2026-10-shared-runner.md §3.2). Both implementations
+ * (doc/architecture/README.md §2). Both implementations
  * hash `tests/fixtures/package-digest.json`; the host's
  * `digest_matches_the_shared_fixture` test reads the same file. A drift
  * fails both sides.

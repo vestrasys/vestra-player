@@ -15,7 +15,7 @@
  * the package digest of `<id>/` (`packageDigest`, the host's
  * `package_stage::read_tree`): the host runs a built-in in the shared runner
  * only while its directory still has that digest
- * (doc/process/rounds/2026-10-shared-runner.md §3.2).
+ * (doc/architecture/README.md §2).
  *
  * Every directory under plugins/ with a manifest.json is built in (the
  * network-video plugins live in the plugins repository and are installed

@@ -1,13 +1,13 @@
-//! First-activation barrier of one run (systemd `Type=notify` readiness):
+//! First-activation barrier of one run (readiness is notified, not assumed):
 //! runtime readiness and every registered initial UI request must finish
 //! before success; terminal outcomes never reopen. Callers supply monotonic
 //! milliseconds.
 //!
-//! MOVE (B2a, doc/architecture/supervisor.md `activation.rs`) of
-//! `host/package_activation.rs`: an `Activation` is the old `Book` entry,
+//! Formerly `host/package_activation.rs` (doc/architecture/supervisor.md
+//! §11, `activation.rs`): an `Activation` is the old `Book` entry,
 //! now held by its `Unit` (one per unit, for the run being activated)
 //! instead of a global map keyed by owner. The old `LIMIT` of 64
-//! activations at once is gone (B3): how many plugins start
+//! activations at once is gone: how many plugins start
 //! at once is the start-job limit's (`max_active`), and a full queue
 //! waits instead of failing the start. The UI requests the Host tracks for
 //! an activation (`Host.activation_ui`) moved with it (`Run::ui_replies`).
@@ -20,8 +20,8 @@ use serde::Serialize;
 use super::unit::Pid;
 
 pub(super) const MAX_SAFE: u64 = (1_u64 << 53) - 1;
-/// Initial UI requests per activation (the old `Book`'s per-entry bound, MOVE;
-/// the 64 activations at once it shared the constant with are gone since B3).
+/// Initial UI requests per activation (the old `Book`'s per-entry bound; the
+/// 64 activations at once it shared the constant with are gone).
 pub(super) const UI_LIMIT: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -368,7 +368,7 @@ mod tests {
             book.begin(owner, 100).unwrap();
         }
         assert_eq!(book.begin(1, 100), Err(Error::Conflict));
-        // B3 ("the 64-plugin ceiling is gone"): a 65th activation is taken; the
+        // No 64-plugin ceiling: a 65th activation is taken; the
         // per-activation bound on UI requests stays.
         book.begin(65, 100).unwrap();
         for registration in 1..=64 {
@@ -414,11 +414,10 @@ mod tests {
         );
     }
 
-    /// B0 (doc/architecture/supervisor.md) pinned at most 64 activations at
-    /// once, built-ins included, with a terminal one keeping its place until
-    /// `activation_end`. Flipped in B3 ("the 64-plugin ceiling is gone"): a
-    /// terminal activation stays readable until it is ended, and holds no
-    /// place.
+    /// The old code allowed at most 64 activations at once, built-ins
+    /// included, with a terminal one keeping its place until
+    /// `activation_end`. Now there is no 64-plugin ceiling: a terminal
+    /// activation stays readable until it is ended, and holds no place.
     #[test]
     fn b3_terminal_entries_take_no_place_and_more_than_64_activate() {
         let mut book = Book::default();
@@ -435,10 +434,9 @@ mod tests {
         assert_eq!(book.status(1, 102).unwrap(), Status::Unknown);
     }
 
-    /// B2a (leak 1): the activation is the unit's, one per unit. A run whose
-    /// spawn failed and was never ended is replaced by the unit's next start's
-    /// activation (its pid unmapped). (Until B3 this also showed it took no
-    /// second place under `LIMIT`;.)
+    /// The activation is the unit's, one per unit (it used to leak). A run
+    /// whose spawn failed and was never ended is replaced by the unit's next
+    /// start's activation (its pid unmapped).
     #[test]
     fn a_units_next_activation_replaces_a_stale_one_without_taking_a_place() {
         let mut sup = Supervisor::<u32>::new(Tunables::new(8, 16_384), 1);
@@ -451,7 +449,7 @@ mod tests {
             sup.activation_begin(*u, pid, 100).unwrap();
         }
         // Each unit starts again: the stale activations are replaced (their
-        // pids unmapped), and a 65th unit activates beside them (B3).
+        // pids unmapped), and a 65th unit activates beside them.
         for u in &units {
             let pid = sup.alloc_pid();
             sup.activation_begin(*u, pid, 200).unwrap();

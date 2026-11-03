@@ -3,9 +3,9 @@
 > Historical design record (S4 core API round, 2026-10-21). Current behaviour: [Manifest](https://vestrasys.github.io/vestra-player-sdk/documents/Manifest.html), [Capabilities](https://vestrasys.github.io/vestra-player-sdk/documents/Capabilities.html), the [architecture overview](README.md) code map (`packages/`). Not maintained.
 
 Date: 2026-10-21. Author: API maintainer. Status: **confirmed (2026-10-21)**, see "Coordinator confirmation" at the end.
-Based on: [Ecosystem plan](../product/ecosystem-plan.md) chapter 1 (1.2, 1.3, 1.4, 1.5a, 1.6) and chapter 4 S4; [Workflow](../../agentic-workflow.md) §1, §1.5, §1.6, §4.3.
+Based on: [Ecosystem plan](../product/ecosystem-plan.md) chapter 1 (1.2, 1.3, 1.4, 1.5a, 1.6) and chapter 4 S4; [Workflow](../../agentic-workflow/agentic-workflow.md) §1, §1.5, §1.6, §4.3.
 
-> **Revised 2026-10-26 ([plugin management round](../process/rounds/2026-10-plugin-management.md), user ruling).** Rollback is removed and built-ins are no longer copied into the library. Plugin management has exactly three operations: install, uninstall, disable/enable. Built-in plugins run in place from the installation (`<resources>/plugins/<id>/`), cannot be uninstalled, and update with the player. **Revised again the same day (user ruling):** built-ins cannot be disabled either; users manage only third-party plugins (install, uninstall, disable/enable). The host answers `setEnabled(builtin, false)` with `unsupported` and clears built-ins' disabled flags when it opens the catalog (§3.2, §3.3; SDK 1.5.18). `packages.rollback` answers `unsupported`, `previousVersion` is always `null` (SDK 1.5.16 deprecates both, 1.5.17 removes them), and no previous version is kept on disk. The sections below are updated where they state the current contract (§0 rows 4 and 8, §1, §1.3, §2.6, §3); the implementation records further down describe the S4 work as it was done and are marked where seeding or rollback has since gone.
+> **Revised 2026-10-26 (user ruling, [history §2](../process/rounds/history.md#plugin-platform)).** Rollback is removed and built-ins are no longer copied into the library. Plugin management has exactly three operations: install, uninstall, disable/enable. Built-in plugins run in place from the installation (`<resources>/plugins/<id>/`), cannot be uninstalled, and update with the player. **Revised again the same day (user ruling):** built-ins cannot be disabled either; users manage only third-party plugins (install, uninstall, disable/enable). The host answers `setEnabled(builtin, false)` with `unsupported` and clears built-ins' disabled flags when it opens the catalog (§3.2, §3.3; SDK 1.5.18). `packages.rollback` answers `unsupported`, `previousVersion` is always `null` (SDK 1.5.16 deprecates both, 1.5.17 removes them), and no previous version is kept on disk. The sections below are updated where they state the current contract (§0 rows 4 and 8, §1, §1.3, §2.6, §3); the implementation records further down describe the S4 work as it was done and are marked where seeding or rollback has since gone.
 
 ## 0. Conclusion
 
@@ -432,7 +432,7 @@ Everything is additive: new methods, optional parameters, new properties on outp
 
 ## 9. Implementation split, order and tests
 
-> Historical (S4 plan). Seeding, seeding tests and rollback were replaced on 2026-10-26: see §3.3 and the [plugin management round](../process/rounds/2026-10-plugin-management.md).
+> Historical (S4 plan). Seeding, seeding tests and rollback were replaced on 2026-10-26: see §3.3.
 
 ### 9.1 Order (maintainer alone; parallelizable items in parentheses)
 

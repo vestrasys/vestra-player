@@ -26,7 +26,7 @@ pub fn software_name() -> String {
 }
 
 /// What the host asks of a GPU renderer's UI-side handle, on every system
-/// (round record 2026-10-render-modes §2.2). Each platform module implements
+/// (doc/architecture/README.md §4.3). Each platform module implements
 /// it for its `platform::GpuHandle` (macOS: `vestra-gpu-render`; elsewhere
 /// the inert `no_gpu` stub), so a missing or different method fails to
 /// compile on every system. Statically dispatched: the host sees the handle

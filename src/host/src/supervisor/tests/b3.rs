@@ -1,10 +1,9 @@
 //! Start-limit spec tests (queue limits), written from the design tables,
 //! not from the core: lanes, priorities, `max_active`, the Interactive
 //! reserve, built-ins first, bounds, deadlines and answers (supervisor.md
-//! §5 "Start order and limits", §4), supervisor-loop.md §4 B3 ("LIMIT 64
-//! removed; wake failures keep registrations; 200-wake storm"), and the
-//! coordinator's ruling on the request timeout's scope (blackboard
-//! `doc/process/rounds/2026-11-supervisor.md`, Open items).
+//! §5 "Start order and limits", §4): no 64-start limit, wake failures keep
+//! registrations, 200-wake storms, and the request timeout capping only
+//! `source.resolveRequest` (§4, §6).
 //!
 //! Everything runs under `Profile::other_timers()`: `max_active` =
 //! min(4, max(2, 8 / 2)) = 4, Interactive cap 4 + 2 = 6, backlog 64, lane
@@ -510,7 +509,7 @@ fn d_interactive_waiting_for_a_slot_is_neither_answered_nor_announced() {
     );
 }
 
-/// `TimeoutStartSec` counts from the `Spawn`, not from the request: a start
+/// The start timeout counts from the `Spawn`, not from the request: a start
 /// that waited 10 s for a slot still gets its full 15 s.
 #[test]
 fn d_start_timeout_counts_from_the_spawn_after_a_slot_wait() {
@@ -534,8 +533,8 @@ fn d_start_timeout_counts_from_the_spawn_after_a_slot_wait() {
     );
 }
 
-/// `TimeoutStartSec` per class under B3 (15 s for every class until B6; a
-/// development load keeps its own 1–120 s).
+/// The start timeout per class (supervisor.md §6; a development load keeps
+/// its own 1–120 s).
 #[test]
 fn d_start_timeout_per_class() {
     let cases: [(&str, Spec, Ms); 3] = [
@@ -620,7 +619,7 @@ fn k_spawn_failure_keeps_registrations_and_the_next_click_starts_again() {
     assert_eq!(deliveries(&sim.ready(pid)), vec![2]);
 }
 
-/// never kept in standby for a unit without a standby checkpoint.
+/// A failed start is never kept in standby for a unit without a standby checkpoint.
 #[test]
 fn k_resident_spawn_failure_is_not_kept_in_standby() {
     let mut sim = b3();
@@ -631,7 +630,7 @@ fn k_resident_spawn_failure_is_not_kept_in_standby() {
 }
 
 // ---------------------------------------------------------------------------
-// s_: 200-wake storms (supervisor-loop.md §4 B3)
+// s_: 200-wake storms
 // ---------------------------------------------------------------------------
 
 struct Storm {
@@ -868,7 +867,7 @@ fn w_no_request_timeout_before_b6() {
     assert_eq!(sim.st(u), S::Active(pid));
 }
 
-/// Chrome's 5 min is per request: a request that ended does not count; the
+/// The 5 min cap is per request: a request that ended does not count; the
 /// deadline is the oldest request still in flight.
 #[test]
 fn w_request_timeout_is_per_request_in_flight() {
@@ -899,7 +898,7 @@ fn w_request_timeout_is_per_request_in_flight() {
     );
 }
 
-/// Coordinator ruling (blackboard, Open items): the 5 min applies only to
+/// Coordinator ruling (supervisor.md §4): the 5 min applies only to
 /// host→plugin requests awaiting a reply; plugin-declared long work
 /// (`commands.busy`, settings busy) has no cap, though it keeps the unit
 /// busy (out of standby).
@@ -918,7 +917,7 @@ fn w_declared_busy_has_no_request_cap() {
 }
 
 // ---------------------------------------------------------------------------
-// x_: `LIMIT 64` removed (supervisor-loop.md §4)
+// x_: no limit of 64 starts at once
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -936,8 +935,7 @@ fn x_more_than_64_builtins_activate_at_once() {
     assert!(us.iter().all(|u| matches!(sim.st(*u), S::Ready(_))));
 }
 
-/// The activation book (B2a identity input) takes more than 64 activations
-/// once B3 is on.
+/// The activation book (the identity input) takes more than 64 activations.
 #[test]
 fn x_activation_book_has_no_64_limit_under_b3() {
     let mut sim = b3();

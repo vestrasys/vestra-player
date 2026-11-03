@@ -960,7 +960,7 @@ mod tests {
         assert!(floating.properties().any(|(name, _)| name == "panel-title"));
     }
 
-    /// Render-modes record §11.7: a new video picture must not touch the
+    /// A new video picture must not touch the
     /// window's layout. When the picture's size fed it, every frame redid the
     /// layout and everything that depends on it (with a UI Automation client,
     /// Slint's accessibility nodes: about 30 ms a frame with VestraTube's

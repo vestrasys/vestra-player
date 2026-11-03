@@ -4,7 +4,7 @@ This file is the authority for how agents work on this repository (it replaces `
 
 This project develops the player with several agents that simulate a plugin community: **plugin authors** are independent consumers who depend only on the public plugin API, the **API maintainer** is the single point that maintains the host and the SDK, and the **coordinator** schedules and integrates. The goal is not only to build the features, but also to test whether the API is easy to understand, whether changes stay under control, and whether the maintainer can meet different needs without opening a back door for any one plugin.
 
-This document applies to long-running tasks (Claude Code loop, Codex goal, and so on). Every agent reads this document and the section for its own role before starting work.
+This document applies to all agent work. When the coordinator drives a project on its own for a long time (a self-paced loop while the user is away), it also follows the branch [agentic-workflow-loop.md](agentic-workflow-loop.md), which adds steps and overrides nothing here. Every agent reads this document and the section for its own role before starting work.
 
 The API evolves in two directions, with different processes:
 
@@ -39,8 +39,10 @@ flowchart TB
     C -- assigns --> RES
     C -. "role it holds itself" .-> IXD
     C -- "assigns review" --> REV
+    LOOP["Branch: agentic-workflow-loop.md<br/>self-paced loop while the user is away"]
+    C -. "long unattended runs follow" .-> LOOP
 
-    BB[("Blackboard: this round's record doc/process/rounds/…<br/>request · maintainer reply (alternative first, conservative)<br/>one rebuttal · ruling · measurements<br/>+ each agent's worktree / branch (uncommitted)")]
+    BB[("Blackboard: the round record doc/process/rounds/history.md<br/>request · maintainer reply (alternative first, conservative)<br/>one rebuttal · ruling · measurements<br/>+ each agent's worktree / branch (uncommitted)")]
     PA -- "missing API: §4.1 request" --> BB
     API -- "reply, implementation status" --> BB
     PA -- "progress" --> BB
@@ -108,7 +110,7 @@ flowchart TB
         RES["Researcher"]
         REV["Independent reviewer"]
     end
-    BB[("Blackboard: this round's record doc/process/rounds/…<br/>requests, replies, rebuttals, rulings, progress<br/>+ each agent's own worktree / branch (uncommitted work)")]
+    BB[("Blackboard: the round record doc/process/rounds/history.md<br/>requests, replies, rebuttals, rulings, progress<br/>+ each agent's own worktree / branch (uncommitted work)")]
     API <-- "read / write" --> BB
     PA <-- "read / write" --> BB
     INF <-- "read / write" --> BB
@@ -223,7 +225,7 @@ A request is closed when the requesting plugin's actual call works and the neces
 
 The core must stay lean, so the maintainer **does not accept** API requests by default. The author has to prove that the change is unavoidable; the maintainer does not have to prove that it can be avoided. Requests go through the following process:
 
-1. **A draft is not an approval**. Core interfaces written in a requirements document (such as Appendix A of the [feature requirements](doc/product/feature-requirements.md)) are only the author's draft requests. Each one must be submitted separately per §4.1 and go through the whole process in this section.
+1. **A draft is not an approval**. Core interfaces written in a requirements document (such as Appendix A of the [feature requirements](../doc/product/feature-requirements.md)) are only the author's draft requests. Each one must be submitted separately per §4.1 and go through the whole process in this section.
 2. **The maintainer first replies with an approach, and does not start implementing first**. For each request, the maintainer first gives a way to do it without changing the API, and states the cost of doing it that way:
    - combine existing APIs;
    - the plugin implements it itself with Node, ffmpeg or OS commands;
@@ -286,7 +288,7 @@ The SDK is in its own repository (§1.6): the SDK parts of P1 and P4 are done on
 
 In `src/`: `npm run check`, `npm run format:check`, `npm run boundaries`, `npm run test:sdk`, `npm run plugins:build`, `npm run plugin -- test <name>` for each plugin, `npm run portability` (build output goes to `$CARGO_TARGET_DIR/portability`, or to `vestra-target/portability` in the system temp directory when it is not set, never into the repository).
 In `src/host/`: `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked`.
-CI (GitHub Actions) runs the same checks, plus typos, cargo-deny, cargo-shear and the unsafe rule; to run them all locally at once use `cd src && npm run ci:local`, see [ci.md](doc/process/ci.md).
+CI (GitHub Actions) runs the same checks, plus typos, cargo-deny, cargo-shear and the unsafe rule; to run them all locally at once use `cd src && npm run ci:local`, see [ci.md](../doc/process/ci.md).
 When you change a plugin in the plugin repository (`vestratube`, `vestrabili`, `vestranes`) or a public API that may affect them, also run in the plugin repository: `npm ci`, `npm run check`, `npm run format:check`, `npm run boundaries`, `npm run portability`, `npm run build`, `npm test` (the same as its CI).
 When you change the SDK, also run in the SDK repository: `npm ci`, `npm run check`, `npm run format:check`, `npm test`, `npm pack --dry-run` (the same as its CI).
 
@@ -342,9 +344,10 @@ When escalating, give: the specific problem, reproduction evidence, the options 
 - **Measurements, not impressions**: GUI checks use scripted input plus `VESTRA_FRAME_LOG` numbers (produced/presented per second, `pacing:`/`ui:`/`mpv:` segments), with a forced render target (`VESTRA_RENDER_TARGET`) to reproduce large screens. Evidence: the 4K menu-hover stutter was located this way (AccessKit tree rebuild, 120–160 ms per hover) and verified fixed (presented 10–14 → 54–60).
 - **What the coordinator decides without asking the user** (user rulings 2026-10-27): SDK patch releases (the release environment needs no manual approval; tag → npm); product details where mpv's default or mainstream players (PotPlayer, mpv, IINA, VLC; Chrome for plugin models) have an established practice — adopt it and mention it. Still asked: §1.6 removals and behaviour changes, real trade-offs, anything without a precedent; technical terms are explained in plain language when asking.
 - **Process changes go into this document**, not only into an agent's memory (user rule).
-- **Project supplements** (2026-11-02): a long project may add a supplement under `doc/process/` that this document links to; it adds steps and temporary roles but cannot override a rule here. Current: [supervisor-loop.md](doc/process/supervisor-loop.md) (plugin process supervisor, self-paced loop, temporary role "spec test author").
+- **Long-running loop** (2026-11-03): self-paced work while the user is away follows [agentic-workflow-loop.md](agentic-workflow-loop.md), the branch of this document written from the plugin process supervisor project (B0–B7). A project may still add a temporary role (for example a spec test author) in its round record; it cannot override a rule here.
+- **Round records** (user, 2026-11-03): the round record is [doc/process/rounds/history.md](../doc/process/rounds/history.md). When a piece of work ends, its lasting decisions, lessons and open topics are folded into that file and its log is deleted; git keeps the old text.
 - **Diagrams are Mermaid**, not ASCII art (user rule, 2026-10-27): every edge is written out (`A --> B`), so an LLM reads the graph without relying on column alignment, and GitHub renders it for people. Plain-text templates stay in `text` blocks.
-- **CI cost**: in private repositories macOS is billed at 10x and Windows at 2x. One push to a branch runs CI only once; record-only changes are collected into one batch before pushing; do not rerun both the push and the PR runs at the same time; macOS runs only when a PR is opened, when the `ci:macos` label is added, and on main, nightly and release ([ci.md](doc/process/ci.md)).
+- **CI cost**: in private repositories macOS is billed at 10x and Windows at 2x. One push to a branch runs CI only once; record-only changes are collected into one batch before pushing; do not rerun both the push and the PR runs at the same time; macOS runs only when a PR is opened, when the `ci:macos` label is added, and on main, nightly and release ([ci.md](../doc/process/ci.md)).
 
 Every sub-agent reports at the end in the following format:
 

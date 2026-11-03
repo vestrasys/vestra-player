@@ -229,7 +229,7 @@ impl Host {
         self.stopped_anyway(owner);
     }
     /// A run ended or failed by itself (`Event::Exited`, a runtime fault):
-    /// the core's `process_exited` (the class's `Restart=` says where
+    /// the core's `process_exited` (the class's restart rule says where
     /// it lands; `text` is its failure).
     pub(crate) fn process_ended(
         &mut self,
@@ -264,8 +264,8 @@ impl Host {
         self.stop_run(owner, reason, grace, reason == StopReason::Idle);
     }
     /// `stop_process`; `park`: its recordable registrations stay, marked
-    /// recorded, whatever the reason (a park, or since B4 a crash or a
-    /// failed start kept in standby).
+    /// recorded, whatever the reason (a park, a crash or a failed start
+    /// kept in standby).
     pub(crate) fn stop_run(&mut self, owner: u64, reason: StopReason, grace: Duration, park: bool) {
         // Process exit commonly follows an explicit disable. The first revoke
         // owns cleanup: a duplicate notification must not cancel its id=0

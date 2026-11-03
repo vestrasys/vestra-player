@@ -56,7 +56,7 @@ fn d_verify_deadline_is_three_seconds() {
     assert!(matches!(sim.st(u), S::Spawn(_)));
 }
 
-// Start, Activating{Spawn|Ready}: TimeoutStartSec (15 s → 60 s)
+// Start, Activating{Spawn|Ready}: the start timeout (15 s → 60 s)
 spec! {
     fn d_start_timeout_from_spawn(p) {
         let mut sim = Sim::new(p);
@@ -91,7 +91,7 @@ fn d_development_start_timeout_is_per_load() {
     assert_eq!(terminates(&sim.at(T0 + 1_000)).len(), 1);
 }
 
-// Start, waiting for a slot: no deadline (systemd JobTimeoutSec=infinity)
+// Start, waiting for a slot: no deadline
 #[test]
 fn d_waiting_for_a_slot_has_no_deadline() {
     let p = Profile::target();
@@ -150,7 +150,7 @@ fn d_no_starting_osd_when_ready_within_400ms() {
     assert!(!has(&sim.at(t + STARTING_OSD), "Notify"));
 }
 
-// Stop, Deactivating{Term}: TimeoutStopSec → Kill; standby 2 s → 5 s
+// Stop, Deactivating{Term}: the stop grace → Kill; standby 2 s → 5 s
 spec! {
     fn d_standby_stop_grace(p) {
         let mut sim = Sim::new(p);
@@ -179,10 +179,9 @@ spec! {
     }
 }
 
-// Standby, resources answer: "today's lazy.asking wait (value MOVE)" → treat as busy, re-arm idle. ANSWERED
-// (supervisor.md), was a design question: today's `lazy.asking` has no timeout (an unanswered `owner.resources`
-// keeps the owner out of idle checks until an answer arrives), so there is no value to MOVE. This test only
-// checks that an unanswered query never stops the unit.
+// Standby, resources answer: treated as busy, idle re-armed. The old `lazy.asking` had no timeout (an
+// unanswered `owner.resources` kept the owner out of idle checks until an answer arrived), so there is no
+// value to carry over. This test only checks that an unanswered query never stops the unit.
 spec! {
     fn d_unanswered_resources_query_never_stops(p) {
         let mut sim = Sim::new(p);
@@ -194,7 +193,7 @@ spec! {
     }
 }
 
-// Request (in-flight work): 5 min from B6, off before
+// Request (in-flight work): 5 min
 spec! {
     fn d_request_timeout(p) {
         let mut sim = Sim::new(p);

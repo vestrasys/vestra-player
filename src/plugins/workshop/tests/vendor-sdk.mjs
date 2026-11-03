@@ -15,7 +15,7 @@
 //   vendor/@types/node/          the SDK's @types/node, and its undici-types
 //   vendor/undici-types/
 //
-// Maintainer's alternative to R-h (round 2026-10-vestra-ai): the player's
+// Maintainer's alternative to request R-h: the player's
 // runtime does not ship the CLI, so this plugin brings it along.
 //
 // The reference the agent reads is the SDK's own documentation tree

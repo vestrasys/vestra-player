@@ -1,5 +1,5 @@
 /**
- * The plugin center (round 2026-10 UI polish, step 1): tabs, one button and a
+ * The plugin center (2026-10-26): tabs, one button and a
  * … menu per row by state, enable / disable / reload / data folder through
  * `packages`, built-ins that can be neither disabled nor uninstalled, the
  * details the Plugin Manager used to show, offline with a short wait and a

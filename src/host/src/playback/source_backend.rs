@@ -194,8 +194,8 @@ pub struct Sources {
     input_epoch: u64,
 }
 /// The last `Control::Seek` sent to mpv while it is still running, so that a
-/// repeat of the same target in the same mode is not sent again
-/// (seekbar-speed round).
+/// repeat of the same target in the same mode is not sent again (a seek-bar
+/// drag repeats targets).
 ///
 /// The seek bar sends the same target on press and on release, so a click is
 /// two identical seeks about 100 ms apart. mpv starts the second one from the
@@ -2904,7 +2904,7 @@ mod resolution_tests {
             Some(rom("a.nes").as_str())
         );
     }
-    /// supervisor.md §4 (B3): a resolution request the host could not
+    /// supervisor.md §4: a resolution request the host could not
     /// deliver (its resolver could not start, or held too many) fails the
     /// open at once with the host's text; nothing goes to the resolver, and
     /// its late answer is stale.

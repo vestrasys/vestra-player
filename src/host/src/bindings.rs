@@ -636,8 +636,8 @@ pub struct Table {
     /// `"<manifest id>/<command id>"` → bindings; `[]` unbinds.
     overlay: BTreeMap<String, Vec<String>>,
     /// Every claim on an input, in rank order; the first one is active.
-    /// Kept up to date one command at a time (perf-registry round: a full
-    /// recompute per declaration was quadratic in the number of commands).
+    /// Kept up to date one command at a time (a full recompute per
+    /// declaration was quadratic in the number of commands).
     claims: BTreeMap<Slot, Vec<Claim>>,
     active: BTreeMap<Slot, Target>,
     /// Commands that lost an input to the active one, in claim order: the
@@ -2232,8 +2232,8 @@ mod tests {
         Shadowed,
     );
 
-    /// The table as the full recompute before the perf-registry round
-    /// derived it from the declarations and the overlay: active targets,
+    /// The table as the full recompute (before the table was kept up to
+    /// date one command at a time) derived it from the declarations and the overlay: active targets,
     /// fallbacks, conflicts in order and shadowed inputs.
     fn recomputed(table: &Table) -> Recomputed {
         let mut claims = Vec::new();
@@ -2320,7 +2320,7 @@ mod tests {
         }
     }
 
-    /// perf-registry round: the table kept up to date one command at a
+    /// The table kept up to date one command at a
     /// time agrees with the full recompute after every kind of change,
     /// including overlays, conflicts, panel scopes and wakes.
     #[test]
@@ -2399,7 +2399,7 @@ mod tests {
         assert!(logged_total > 100, "{logged_total} conflicts logged");
     }
 
-    /// perf-registry round: 6000 commands (2000 plugins of three, one
+    /// 6000 commands (2000 plugins of three, one
     /// with a key each, 26 keys between them) declare in linear time; the full recompute per
     /// declaration took 4.3 s in a release build for this many.
     #[test]

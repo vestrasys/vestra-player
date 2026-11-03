@@ -72,7 +72,7 @@ impl Host {
         let notifier = platform::window_notifiers();
         // Without a notifier the window sets each frame's image between
         // draws; paced, it takes one only after the previous one was drawn,
-        // and the image it sets owes the draw (wgpu round record §17).
+        // and the image it sets owes the draw.
         let paced = !notifier && frame_pacing::gpu_frames_paced();
         let show = move |image: slint::Image| {
             // A generated stream's picture stays (its frames come as pixels).
@@ -237,7 +237,7 @@ impl Host {
                 // rebuilt shell, a cleared picture). Slint 1.18.1 never finds
                 // two wgpu texture images equal, so setting the same one again
                 // still counted as a change and redid everything that depends
-                // on the picture each frame (round record render-modes §11.7).
+                // on the picture each frame.
                 if let Some(texture) = texture
                     && !video_image_hidden()
                     && !matches!(

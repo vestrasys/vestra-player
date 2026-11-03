@@ -2,9 +2,9 @@
 
 > Historical design record (S5 plugin store round, 2026-10-22). Current behaviour: the store plugin's [README](../../src/plugins/store/README.md) and [CHANGELOG](../../src/plugins/store/CHANGELOG.md). Not maintained.
 
-> **2026-10-26 ([plugin management round](../process/rounds/2026-10-plugin-management.md), user rulings Q2/Q3; store 0.1.6):** the player has no rollback, and the store neither rolls back nor installs an older version: Roll Back / Restore is gone, the confirmations no longer say you can roll back or restore, and the Versions tab offers no version older than the installed one from the same source. To go back, the user uninstalls the plugin and installs a `.vxp`. Plugin management has exactly three operations: install, uninstall, disable/enable. This design has been updated accordingly; the decisions in §9.3, §11 and §12 that allowed rollback or older versions are kept as the record and marked superseded. ("Rollback detection" of a stale repository index, §3.4, is a different thing and stays.)
+> **2026-10-26 (user rulings, [history §2](../process/rounds/history.md#plugin-platform); store 0.1.6):** the player has no rollback, and the store neither rolls back nor installs an older version: Roll Back / Restore is gone, the confirmations no longer say you can roll back or restore, and the Versions tab offers no version older than the installed one from the same source. To go back, the user uninstalls the plugin and installs a `.vxp`. Plugin management has exactly three operations: install, uninstall, disable/enable. This design has been updated accordingly; the decisions in §9.3, §11 and §12 that allowed rollback or older versions are kept as the record and marked superseded. ("Rollback detection" of a stale repository index, §3.4, is a different thing and stays.)
 
-Date: 2026-10-22. Author: the store plugin author (ecosystem plan S5, [this round](../process/rounds/2026-10-slint-store.md) step 2.1). Status: **adopted** (coordinator decisions in [the round record](../process/rounds/2026-10-slint-store.md) "Coordinator decisions → 2026-10-22, step 2.2"), **implemented** (step 2.4, `src/plugins/store/` 0.1.0). Where the decisions or the implementation differ from the first draft, the text has been changed, and the differences are summarized in §12.
+Date: 2026-10-22. Author: the store plugin author (ecosystem plan S5, step 2.1). Status: **adopted** (coordinator decisions of 2026-10-22, step 2.2, in §11), **implemented** (step 2.4, `src/plugins/store/` 0.1.0). Where the decisions or the implementation differ from the first draft, the text has been changed, and the differences are summarized in §12.
 
 Sources: [ecosystem plan](../product/ecosystem-plan.md) 1.1–1.6 (in particular 1.3 index format, 1.5a ids and install instances, the 12 decisions in 1.6, the record of the second half of S3); [S4 proposal](../architecture/store-api-proposal.md); store-changes (S4 change notice, deleted; the parts still valid are on the [SDK documentation site](https://vestrasys.github.io/vestra-player-sdk/)); [API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html); `types.d.ts` of SDK `@vestra-player/sdk` 1.1.2; the plugin repository's `scripts/lib/{signing,semver,publishing,revoked}.mjs` and `keys/index-signing.pub.pem`; the live `https://vestrasys.github.io/vestra-player-plugins/index.json` and `.sig` (fetched 2026-10-22; the signature verifies with the built-in public key, and fails after changing one byte).
 
@@ -46,7 +46,7 @@ No `events` and no `playback.*`: the store has nothing to do with playback state
 
 ### 1.3 The only management interface
 
-**Since 2026-10-26 the store is the only place where plugins are managed** (user ruling in [the UI polish round](../process/rounds/2026-10-ui-polish.md), [plugin-center spec](../process/rounds/2026-10-plugin-center-spec.md); store 0.2.0, finished in 0.2.1). The Plugin Manager (`vestra.plugins`) and "Settings ▸ Plugin Manager…" were removed; what it did moved into the store's Installed tab. Plugin management is install, uninstall, disable/enable, nothing else (no rollback, no older version, no Undo).
+**Since 2026-10-26 the store is the only place where plugins are managed** (user ruling, [history §2](../process/rounds/history.md#plugin-platform); store 0.2.0, finished in 0.2.1). The Plugin Manager (`vestra.plugins`) and "Settings ▸ Plugin Manager…" were removed; what it did moved into the store's Installed tab. Plugin management is install, uninstall, disable/enable, nothing else (no rollback, no older version, no Undo).
 
 | Operation | Where in the store | API |
 | --- | --- | --- |
@@ -631,7 +631,7 @@ All open questions have been decided (§11).
 
 ## 11. Coordinator decisions (2026-10-22, step 2.2)
 
-The first draft listed 6 open questions here; all have been decided (original text in [the round record](../process/rounds/2026-10-slint-store.md)):
+The first draft listed 6 open questions here; all have been decided:
 
 | # | Question | Decision | Where |
 | --- | --- | --- | --- |

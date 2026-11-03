@@ -1,5 +1,5 @@
-//! Memory pressure and standby candidate order (systemd-oomd +
-//! `OOMScoreAdjust=`; Android LMK importance/LRU). Busy, built-in and resident
+//! Memory pressure and standby candidate order (supervisor.md §8: by
+//! importance, then least recently used). Busy, built-in and resident
 //! units are never candidates.
 #![forbid(unsafe_code)]
 

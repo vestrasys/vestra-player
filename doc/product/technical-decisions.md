@@ -79,4 +79,4 @@ plugin.video.filter("blur").set([{ kind: "gblur", sigma: 3, steps: 3 }]);
 | Plugin management UI | The host can install / roll back, but there is no user-facing management UI yet |
 | Hardware decoding and GPU rendering path | Currently libmpv software rendering |
 
-The technical direction is settled; specific capabilities evolve with the needs of real plugins ([community workflow](../../agentic-workflow.md)).
+The technical direction is settled; specific capabilities evolve with the needs of real plugins ([community workflow](../../agentic-workflow/agentic-workflow.md)).

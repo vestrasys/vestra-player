@@ -2,8 +2,8 @@
  * One plugin's life inside a runner: the wire client (`request`, `on`), the
  * SDK instance, activation, `runtime.ready` / `runtime.failed`, and `stop`.
  *
- * Shared by the two runner entries (doc/process/rounds/2026-10-shared-runner.md
- * §6): `runner.ts` (one plugin, its own Node process: today's wire) and
+ * Shared by the two runner entries (doc/architecture/README.md §2):
+ * `runner.ts` (one plugin, its own Node process: today's wire) and
  * `shared-runner.ts` (several trusted plugins in one process, one envelope
  * per line). Everything that belongs to the process is a parameter here:
  * this module never reads `process.argv` or `process.env`, never writes

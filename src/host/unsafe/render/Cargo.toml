@@ -16,7 +16,7 @@ objc2-io-surface = { version = "=0.3.2", default-features = false, features = ["
 rsmpv = { version = "=0.2.1", features = ["render"] }
 slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2"] }
 
-# Windows (doc/process/rounds/2026-10-windows-wgpu.md): libmpv's Direct3D 11
+# Windows (doc/architecture/README.md §4.3): libmpv's Direct3D 11
 # render API (render API 2.6; rsmpv has no binding for it, so rsmpv-sys with
 # the two structs of mpv's render_d3d11.h), textures and fences shared with
 # the windows' Direct3D 12 device, wrapped for wgpu through its Direct3D 12

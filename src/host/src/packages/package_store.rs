@@ -176,8 +176,8 @@ struct Catalog {
 /// Whether a package runs once its install commits: `requested` when the
 /// installer said so (`packages.install`'s `enabled`); otherwise a first
 /// install runs, and an update or reinstall of an installed package keeps
-/// its state, so one the user disabled stays disabled and never runs (as in
-/// VS Code). A built-in always runs (user ruling 2026-10-26; the host never
+/// its state, so one the user disabled stays disabled and never runs. A
+/// built-in always runs (user ruling 2026-10-26; the host never
 /// installs over one, and `committed` enforces it again).
 pub fn enables_after_install(before: &Installed, disabled: bool, requested: Option<bool>) -> bool {
     before.instance.as_ref().is_some_and(|i| i.builtin)
@@ -1343,8 +1343,8 @@ impl Store {
         insert_receipt(&mut next, operation_id, receipt)?;
         next.installed.insert(id.into(), installed.clone());
         next.last_commit.insert(id.into(), operation_id.into());
-        // An update or reinstall keeps a disabled package disabled (as in
-        // VS Code); a first install runs, and so does an explicit `enabled`.
+        // An update or reinstall keeps a disabled package disabled; a first
+        // install runs, and so does an explicit `enabled`.
         if enabled {
             next.disabled.remove(id);
         } else {
@@ -1929,7 +1929,7 @@ pub(crate) mod tests {
         );
     }
 
-    /// As in VS Code: an update or reinstall of a package the user disabled
+    /// An update or reinstall of a package the user disabled
     /// replaces its files and leaves it disabled; a first install runs; the
     /// installer can say `enabled` either way (a revoked version the store
     /// disabled, replaced by its fix).

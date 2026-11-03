@@ -353,7 +353,7 @@ pub struct Registry {
     /// again as they were (supervisor.md).
     listed: u64,
     sequence: u64,
-    /// Lazy activation (doc/process/rounds/2026-10-lazy-activation.md §2):
+    /// Standby (doc/architecture/supervisor.md §4):
     /// entries kept for an owner without a process (parked, or replayed from
     /// its recording). A live registration of the same key replaces one.
     recorded: std::collections::BTreeSet<CommandKey>,
@@ -376,7 +376,7 @@ pub struct Registry {
     max_commands: Option<usize>,
     /// Owners whose commands show disabled with this reason, whatever
     /// their state: a plugin held in standby after a crash until its
-    /// restart hold is over (supervisor.md; B4). Menus show
+    /// restart hold is over (supervisor.md §7). Menus show
     /// them greyed out, and a key or click shows the reason.
     held: BTreeMap<OwnerGeneration, String>,
 }
@@ -449,8 +449,9 @@ const SHARES_GROUP_WITH: [(&str, &str); 1] = [("Reset", "Settings")];
 /// The player's Chinese menu titles from before English keys (players up
 /// to 0.4.2): a plugin that still declares one lands in the same menu.
 /// Parent path, old title, key. The last entries are submenus that a
-/// migrated built-in plugin shares with plugins not migrated yet (i18n
-/// round 2 removes the need; doc/product/menus.md has the English keys).
+/// migrated built-in plugin shares with plugins not migrated yet (the need
+/// goes once every plugin declares English keys; doc/product/menus.md has
+/// them).
 const LEGACY_MENUS: [(&[&str], &str, &str); 10] = [
     (&[], "打开", "Open"),
     (&[], "播放", "Playback"),
@@ -984,7 +985,7 @@ impl Registry {
 
     /// `owner`'s commands show disabled with `reason` (`None`: as their
     /// state says again), whatever their state: a crashed plugin held in
-    /// standby until its restart hold is over (supervisor.md; B4).
+    /// standby until its restart hold is over (supervisor.md §7).
     /// Whether anything changed.
     pub fn set_held(&mut self, owner: OwnerGeneration, reason: Option<String>) -> bool {
         let changed = match reason {
@@ -1440,7 +1441,7 @@ mod tests {
         }
     }
 
-    /// A plugin held after a fault (supervisor.md; B4): its commands
+    /// A plugin held after a fault (supervisor.md §7): its commands
     /// show disabled with the reason in the menu, and are refused with it,
     /// until the hold is released; a revoke ends it too.
     #[test]
@@ -2127,7 +2128,7 @@ mod tests {
     }
 
     /// The menus of the shipped plugins fit with room to spare
-    /// (doc/process/rounds/menus-snapshot.test.ts: video 71, all ~290).
+    /// (src/tests/menus-snapshot.test.ts: video 71, all ~290).
     #[test]
     fn limits_leave_room_for_real_plugins() {
         const VIDEO_AT_IDLE: usize = 71;
@@ -2138,7 +2139,8 @@ mod tests {
 
     /// core-ui-design.md §14: the migration orders reproduce the tree that the
     /// old registry (fixed domain list, then UTF-8 byte order of path[1..])
-    /// built from the same 46 commands (doc/process/rounds/menus-before.json).
+    /// built from the same 46 commands (the old menu tree, recorded before
+    /// the migration).
     /// The 模拟器 lines came from the built-in NES plugin, now the store
     /// plugin zysilm.vestranes; the paths and orders stay as recorded; owner
     /// ids follow the current plugin ids.
@@ -2803,7 +2805,7 @@ mod button_tests {
     }
 }
 
-/// perf-registry round: the path index and the cached menu tree give the
+/// The path index and the cached menu tree give the
 /// answers the scans over every command gave.
 #[cfg(test)]
 mod index_tests {
@@ -3082,7 +3084,7 @@ mod index_tests {
         );
     }
 
-    /// perf-registry round: 2000 plugins of three commands (the probe's
+    /// 2000 plugins of three commands (the probe's
     /// seed: two in a submenu of their own under Tools, one without a
     /// path), registered and laid out in a menu tree. Scanning every
     /// command per registration took 1.4 s in a release build.

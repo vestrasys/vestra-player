@@ -1,15 +1,15 @@
 //! The unit table's identity and what the adapter reads of it
-//! (doc/architecture/supervisor.md –B2d): owner
-//! generations (`alloc_pid`, today's `next_generation += 1`), the indexes
+//! (doc/architecture/supervisor.md §2): owner
+//! generations (`alloc_pid`, formerly `next_generation += 1`), the indexes
 //! by id and by pid, the process and standby holder of an id, and each
-//! run's activation (`activation.rs`, MOVE of `host/package_activation.rs`).
+//! run's activation (`activation.rs`, formerly `host/package_activation.rs`).
 //!
-//! Since B2d every start and stop of a unit is a job (`add_unit`, `start`,
+//! Every start and stop of a unit is a job (`add_unit`, `start`,
 //! `stop`, `restart`, `wake`, the idle Standby job): the process of a unit
 //! is its state's pid, not a transitional field the Host sets. What is left
 //! here besides identity are the adapter's answers to actions the core
 //! cannot check itself (`replay_failed`, `checkpoint_failed`). The Host's
-//! own idle check is in-flight work since B3 (`begin_work` / `end_work`,
+//! own idle check is in-flight work (`begin_work` / `end_work`,
 //! `work.rs`).
 #![forbid(unsafe_code)]
 
@@ -98,8 +98,8 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    /// Run `pid` is its unit's process and not ready yet (any start: from B3
-    /// its triggers are held for its ready).
+    /// Run `pid` is its unit's process and not ready yet (any start: its
+    /// triggers are held for its ready).
     pub fn activating(&self, pid: Pid) -> bool {
         self.current(pid)
             .and_then(|u| self.units.get(&u))
@@ -194,12 +194,12 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    // ---- activation (MOVE of `host/package_activation.rs`) -------------
+    // ---- activation (formerly `host/package_activation.rs`) ------------
 
     /// `Book::begin`: the activation of `u`'s run `pid`, due by `deadline`. One
     /// per unit: a unit's earlier activation that was never ended (a run that
     /// never started) is replaced and frees its place (leak 1). No bound on how
-    /// many units activate at once: the old `LIMIT` of 64 is gone (B3); the
+    /// many units activate at once: the old `LIMIT` of 64 is gone; the
     /// start-job limit bounds the starts.
     pub fn activation_begin(&mut self, u: UnitId, pid: Pid, deadline: u64) -> Result<(), Error> {
         activation::identity(pid.0)?;
@@ -394,7 +394,7 @@ mod tests {
         })
     }
 
-    /// A run started as the adapter starts it (B2d: every start a job),
+    /// A run started as the adapter starts it (every start a job),
     /// spawned as `pid` and ready at `at`: a unit added without a
     /// checkpoint is a first run; with one it is
     /// loaded disabled, then enabled and started (`Start{Enable}`), so its
@@ -550,10 +550,10 @@ mod tests {
         assert!(sup.run_jobs(20).is_empty());
     }
 
-    // ---- B2c: standby, wake and classification -----------------
+    // ---- Standby, wake and classification -----------------------
     //
     // The ported `lazy.rs` paths, driven as the adapter drives them: a run
-    // starts (B2d: a start job), reports its ready (`process_ready`) and its
+    // starts (a start job), reports its ready (`process_ready`) and its
     // class (`classified`); the core decides the standby (idle timer →
     // `QueryResources` → `Checkpoint` + `Terminate`) and the wake (`Rekey` +
     // `Spawn` → `Prune` + `Deliver`).
@@ -633,10 +633,10 @@ mod tests {
         );
     }
 
-    /// B3 (replaces B2c's `standby_refused`, which asked again 250 ms after a
-    /// refusal): the Host's busy checks (a busy command, a dialog...) are
-    /// declared work. Busy when the idle time is up: not asked; asked an idle
-    /// time after the work ended (Chrome MV3: an event in flight extends the
+    /// The Host's busy checks (a busy command, a dialog...) are declared
+    /// work; they replace `standby_refused`, which asked again 250 ms after a
+    /// refusal. Busy when the idle time is up: not asked; asked an idle
+    /// time after the work ended (an event in flight extends the
     /// lifetime). Busy found at the ask (the adapter syncs its work then):
     /// answered busy, which is use, asked again after another idle time.
     #[test]
@@ -986,10 +986,10 @@ mod tests {
         assert!(s.run_jobs(1_200_000).is_empty());
     }
 
-    /// B2d: a woken run has one start deadline, the core's (the adapter
+    /// A woken run has one start deadline, the core's (the adapter
     /// gives the activation the same one): no ready within it, the run is
     /// stopped as failed ("activation timed out") and, a Normal with a
-    /// recording, goes back to standby (its `Restart=`).
+    /// recording, goes back to standby (its restart rule).
     #[test]
     fn b2d_a_wakes_start_times_out_once() {
         let mut s = new();
@@ -1024,7 +1024,7 @@ mod tests {
         assert!(!s.classifying(Pid(2)));
     }
 
-    /// Review note B2-1: a reinstall that still waits for the uninstalled
+    /// A reinstall that still waits for the uninstalled
     /// process does not replay (its pid stays tracked: the reap reaches the
     /// unit, the owed data removal goes, and the start runs then).
     #[test]
@@ -1105,7 +1105,7 @@ mod tests {
         }
     }
 
-    /// Review notes B2-3 / B2-5: a late `RemoveData` of the uninstalled
+    /// A late `RemoveData` of the uninstalled
     /// process after a reinstall took the unit back leaves the new unit
     /// (`removable` is false: it is no longer removed).
     #[test]

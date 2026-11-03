@@ -346,7 +346,7 @@ impl Host {
             return;
         }
         if id == "quit" {
-            // Before anything waits on the GPU (record §11.6).
+            // Before anything waits on the GPU.
             platform::release_gpu_waits();
             crate::stop_handoffs();
             self.ui_state.flush();

@@ -178,7 +178,7 @@ fn t06_start_from_standby_rekeys_holder_to_new_pid() {
     );
 }
 
-// Activating{Spawn} --process_spawned(Ok)--> Activating{Ready}; arm TimeoutStartSec
+// Activating{Spawn} --process_spawned(Ok)--> Activating{Ready}; arm the start timeout
 spec! {
     fn t07_spawned_ok_waits_for_ready_with_start_timeout(p) {
         let mut sim = Sim::new(p);
@@ -269,7 +269,7 @@ fn t08_spawn_error_without_retries_or_recording_fails() {
     assert_eq!(sim.st(u), S::Failed("spawn".into()));
 }
 
-// from B3 without B4's retries: a recorded unit keeps its entry points in
+// Without spawn retries: a recorded unit keeps its entry points in
 // Standby (no Revoke) and the held interactive trigger is answered.
 #[test]
 fn t08_spawn_error_answers_and_keeps_registrations() {
@@ -348,7 +348,7 @@ spec! {
     }
 }
 
-// Activating{Spawn|Ready} --TimeoutStartSec--> Deactivating{Failed, then per Restart=}; Terminate{Failed}
+// Activating{Spawn|Ready} --the start timeout--> Deactivating{Failed, then per restart rule}; Terminate{Failed}
 spec! {
     fn t11_start_timeout_terminates(p) {
         let mut sim = Sim::new(p);
@@ -375,8 +375,8 @@ fn t11_start_timeout_target_restarts_by_its_class() {
     let pid = sim.pid(u);
     sim.at(T0 + p.start_timeout);
     sim.gone(pid);
-    // StartTimeout, amended in the B6 review: no start retry; a Resident
-    // restarts by its `Restart=` (on-failure), so `AutoRestart`.
+    // StartTimeout: no start retry; a Resident restarts by its class's
+    // restart rule (on failure), so `AutoRestart`.
     assert!(matches!(sim.st(u), S::AutoRestart(_)), "{:?}", sim.st(u));
 }
 
@@ -470,7 +470,7 @@ spec! {
     }
 }
 
-// Deactivating{Term} --TimeoutStopSec--> Deactivating{Kill}; Kill
+// Deactivating{Term} --the stop grace--> Deactivating{Kill}; Kill
 spec! {
     fn t17_stop_grace_expiry_kills(p) {
         let mut sim = Sim::new(p);
@@ -646,7 +646,7 @@ fn t23_uninstall_in_standby_removes_data() {
     assert_eq!(sim.by_id("a"), None);
 }
 
-// Active/Activating --Stop job--> Deactivating{reason, then}; Terminate{reason, grace: TimeoutStopSec}
+// Active/Activating --Stop job--> Deactivating{reason, then}; Terminate{reason, grace: the stop grace}
 spec! {
     fn t24_stop_active_terminates_with_stop_grace(p) {
         let mut sim = Sim::new(p);
@@ -731,7 +731,7 @@ fn t25_oom_notifies_out_of_memory() {
     assert!(acts.iter().any(is_oom_notice), "{acts:?}");
 }
 
-// target: RequestTimeout (B3 timer; Terminate first)
+// target: RequestTimeout (a timer; Terminate first)
 #[test]
 fn t25_request_timeout_terminates_then_as_crash() {
     let p = Profile::target();
@@ -755,7 +755,7 @@ fn t25_request_timeout_terminates_then_as_crash() {
     );
 }
 
-// Activating{AutoRestart} --RestartSec timer--> Activating{Verify|Spawn}; Spawn
+// Activating{AutoRestart} --the restart delay timer--> Activating{Verify|Spawn}; Spawn
 #[test]
 fn t26_auto_restart_spawns_when_due() {
     let mut sim = Sim::new(&Profile::target());

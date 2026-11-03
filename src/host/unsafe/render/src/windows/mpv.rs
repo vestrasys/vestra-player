@@ -1,7 +1,6 @@
 //! libmpv's Direct3D 11 render context (render API 2.6). rsmpv has no
 //! binding for it, so this uses rsmpv-sys with the two structs of mpv's
-//! `render_d3d11.h` (the parked `gpu-render` branch's code, round record
-//! 2026-10-windows-render Appendix C).
+//! `render_d3d11.h` (the parked `gpu-render` branch's code).
 
 use rsmpv::Mpv;
 use rsmpv_sys as sys;

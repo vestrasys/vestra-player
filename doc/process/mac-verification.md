@@ -27,9 +27,16 @@ Since 2026-10-26 the GitHub Actions budget has been used up, so CI does not run.
 - [ ] Plugin Store offline (Wi-Fi off): the store opens; Installed and its details, uninstall, and install from a `.vxp` work; Available/Updates show a calm offline state.
 - [ ] Playlist: saving a list with relative entries writes `/`.
 
-### Host 0.5.4 / SDK 1.5.24: deinterlace `when: "auto"` (DEINT-AUTO-1, `doc/process/rounds/2026-10-deinterlace-auto.md`)
-Default settings, GPU rendering; once `vestra.video` 1.1.6 uses the node (until then, with a test chain of only `{ kind: "deinterlace", when: "auto", output: "field" }`). Interlaced clip: the `ffmpeg` command in the round record.
+### Host 0.5.4 / SDK 1.5.24: deinterlace `when: "auto"` (DEINT-AUTO-1)
+Default settings, GPU rendering; once `vestra.video` 1.1.6 uses the node (until then, with a test chain of only `{ kind: "deinterlace", when: "auto", output: "field" }`). Interlaced clip (25i, top field first): `ffmpeg -f lavfi -i "testsrc2=size=1920x1080:rate=50,interlace=scan=tff" -t 20 -c:v libx264 -flags +ildct+ilme -x264-params tff=1 -pix_fmt yuv420p interlaced-tff.mp4`.
 - [ ] Progressive file: `stats().video.hwdec` (`hwdec-current`) is `videotoolbox`, not `videotoolbox-copy`; `deinterlace-active` false.
 - [ ] Interlaced clip: no combing on motion, double rate (50 fps for 25i), `hwdec-current` still `videotoolbox`; the log has `HW-downloading from videotoolbox` and no `no deinterlace filter available` / `creating deinterlacer failed`.
 - [ ] Mixed source (progressive then interlaced in one file). Encode the halves separately and join them without re-encoding, so only the second half is flagged: `ffmpeg -f lavfi -i testsrc2=size=1920x1080:rate=25 -t 5 -c:v libx264 -pix_fmt yuv420p p.ts`, `ffmpeg -f lavfi -i "testsrc2=size=1920x1080:rate=50,interlace=scan=tff" -t 5 -c:v libx264 -pix_fmt yuv420p -flags +ildct+ilme -x264-params tff=1 i.ts`, then `ffmpeg -i "concat:p.ts|i.ts" -c copy mixed.ts`. Expected: zero-copy (no download) for the progressive part; from the first interlaced frame on every frame is downloaded (mpv keeps its deinterlacer once inserted), with no stall, error or `hwdec` change at the switch; the next file starts zero-copy again.
 - [ ] Paused on an interlaced frame, turning Auto off (or stopping the video plugin) shows the combed frame at once, without resuming.
+
+### Carried over from the round records (2026-10-20 to 11-02)
+- [ ] ⌥ + named keys (for example ⌥⌦) on a real keyboard trigger their bindings, and the panel context menu still works afterwards; ⌥E/N/U/I/\` dead keys also work in the floating sidebar window.
+- [ ] Full UI test items first checked on Windows: CoreAudio with `requestedFrames: 1024`; snapshots and `cover.jpg` on leased loads; VestraNES at 60 fps; subtitle auto-load (at most 2 tracks); store keeps its tab and selects the neighbour row after install/uninstall; capture file naming; hotkeys still offers ⌘ combinations; bottom-bar buttons and their narrowing order; submenu sweep highlighting.
+- [ ] `cargo test -- --include-ignored a_click_on_the_seek_bar_seeks_once`, and a click, drag and keyframe drag on the seek bar in the GUI.
+- [ ] Playlist row thumbnails: light theme, audio covers, link rows, a 2000-row list.
+- [ ] The `.app` first start and `codesign --verify --deep` after the plugin-management changes; the host compiles on macOS after the source split.

@@ -1,6 +1,6 @@
-//! The spawn worker (doc/architecture/supervisor.md; B4): a plugin's own Node
+//! The spawn worker (doc/architecture/supervisor.md §1): a plugin's own Node
 //! process is created on the `plugin-spawner` thread, not on the UI thread.
-//! Creating one costs about 30 ms on Windows (B3's 200-wake storm: one spawn
+//! Creating one costs about 30 ms on Windows (a 200-wake storm: one spawn
 //! per start inside the host tick), which alone breaks the UI frame-rate rule
 //! once a few start in one tick. The thread runs `Plugin::load_manifest` in
 //! request order, puts each process it created in `Spawner::ready` and answers

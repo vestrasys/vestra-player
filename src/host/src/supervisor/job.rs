@@ -1,4 +1,4 @@
-//! Jobs (systemd `job.c`): nothing changes a unit's state except a job; one
+//! Jobs (supervisor.md §5): nothing changes a unit's state except a job; one
 //! installed job per unit; a new request merges with or supersedes it by the
 //! table of doc/architecture/supervisor.md.
 #![forbid(unsafe_code)]
@@ -56,7 +56,7 @@ pub enum JobKind {
     Standby,
 }
 
-/// systemd `--job-mode`.
+/// How a new request treats the installed job.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JobMode {
     /// The merge table.
@@ -76,9 +76,9 @@ pub enum Origin {
     Trigger,
     Timer,
     Crash,
-    /// Memory pressure (`memory_pressure`, B5).
+    /// Memory pressure (`memory_pressure`, supervisor.md §8).
     Pressure,
-    /// Over the process budget (`enforce_budget`, B5).
+    /// Over the process budget (`enforce_budget`, supervisor.md §8).
     Budget,
 }
 
@@ -88,13 +88,12 @@ pub enum JobState {
     Running,
 }
 
-/// How a job ended (systemd job results).
+/// How a job ended.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JobResult {
     Done,
-    /// Includes a start that passed `TimeoutStartSec` and a wait for the
-    /// previous process that passed `STOP_WAIT` (systemd reports those as
-    /// `timeout`; ours carries today's failure text instead).
+    /// Includes a start that passed the start timeout and a wait for the
+    /// previous process that passed `STOP_WAIT`; it carries the failure text.
     Failed(String),
     Canceled,
     /// Refused by the merge table (a trigger never re-enables, start of a
@@ -384,7 +383,7 @@ impl<P: Clone> Supervisor<P> {
             // (`step_restart` ends the job after the stop half).
             let id = self.install(u, job);
             if deactivating {
-                // Stopping for standby (B4 crash hold): revoked now.
+                // Stopping for standby (a crash hold): revoked now.
                 self.set_then(u, Then::Inactive);
             }
             return id;
@@ -535,9 +534,9 @@ impl<P: Clone> Supervisor<P> {
         if merged == Then::Removed {
             *reason = StopReason::Uninstall;
             unit.remove_data = true;
-            // The checkpoint goes at the uninstall request, as today's
+            // The checkpoint goes at the uninstall request, as the
             // uninstall drops the recording at once: never at the landing,
-            // where a reinstall may own the unit (review note B2-4).
+            // where a reinstall may own the unit.
             if unit.recorded {
                 unit.recorded = false;
                 self.pending.push(Action::DropCheckpoint { unit: u });

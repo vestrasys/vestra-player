@@ -1,11 +1,11 @@
-//! Quit and a device-loss restart (doc/architecture/supervisor.md; B4): the
+//! Quit and a device-loss restart (doc/architecture/supervisor.md §9): the
 //! core's `shutdown` with one deadline for every plugin process, 1 s at quit
 //! and 300 ms after a GPU device loss. Every checkpoint is written before the
 //! first stop (coordinator ruling); then every process gets its `runtime.stop`
 //! at once (the shared runner one `runner.stop` for all its members), and what
 //! is still running at the deadline is killed. A process left from a stop that
-//! landed stuck is killed at once. Before B4 each plugin was dropped with the
-//! host, one after another, up to 300 ms each.
+//! landed stuck is killed at once. Before the supervisor each plugin was
+//! dropped with the host, one after another, up to 300 ms each.
 use super::*;
 
 /// The quit's deadline for every plugin process.
