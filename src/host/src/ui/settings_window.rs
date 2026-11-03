@@ -292,15 +292,26 @@ fn create_window(
     old: Option<&slint_interpreter::ComponentInstance>,
     setup: impl FnOnce(&slint_interpreter::ComponentInstance) -> Result<()>,
 ) -> Result<slint_interpreter::ComponentInstance> {
-    crate::ui::view::replace_shell(old, |window| {
-        let instance = match window {
-            Some(window) => definition.create_with_existing_window(window)?,
-            None => definition.create()?,
-        };
-        setup(&instance)?;
-        Ok(instance)
-    })
+    // The Options window has nothing of its own to focus: after a failed
+    // swap, the item focused before (a page's) gets it back, or none.
+    crate::ui::view::replace_shell(
+        old,
+        |_| {},
+        |window| {
+            let instance = match window {
+                Some(window) => definition.create_with_existing_window(window)?,
+                None => definition.create()?,
+            };
+            setup(&instance)?;
+            Ok(instance)
+        },
+    )
 }
+
+/// What a new window component was set up with: each page's owner as its
+/// callbacks read it, and the values it could not take (reported to
+/// their plugins once the window shows).
+type Wired = (BTreeMap<u64, Rc<Cell<u64>>>, Vec<(u64, Value)>);
 
 /// A page's bridge callbacks: each goes to the plugin that owns the page
 /// when it is called (`owner`, which a wake moves to the new generation).
@@ -343,8 +354,8 @@ fn wire_page(
 }
 
 /// The properties `after` sets to other values than `before` had: what a
-/// page registered again writes into an open window. One it no longer sets
-/// keeps the value the window shows.
+/// page registered again writes into an open window (one it no longer sets
+/// builds the window again: `Settings::in_place`).
 fn changed_values<'a>(before: &Page, after: &'a Page) -> Vec<(&'a str, &'a Value)> {
     after
         .properties
@@ -447,6 +458,28 @@ impl Settings {
         self.recorded.remove(&serial);
         self.sent.insert(serial, sent);
         Some(before)
+    }
+    /// After [`Self::reregister`]: the page as registered again when the open
+    /// window can take it in place. A value it no longer sets returns to its
+    /// default (the SDK contract: an omitted property keeps its default),
+    /// which only a new component gives: the window is built again
+    /// (`stale`), inside its own native window. `None` too without a window.
+    fn in_place(&mut self, before: &Page) -> Option<Page> {
+        self.open.as_ref()?;
+        let page = self
+            .pages
+            .iter()
+            .find(|p| p.serial == before.serial)?
+            .clone();
+        if before
+            .properties
+            .keys()
+            .any(|name| !page.properties.contains_key(name))
+        {
+            self.stale = true;
+            return None;
+        }
+        Some(page)
     }
     /// Wake: `from`'s pages move to generation `to`, in an open window too
     /// (its callbacks read their page's owner when called): nothing is
@@ -896,9 +929,9 @@ impl Host {
         // page added or removed while it is open neither closes it nor
         // moves, resizes or flashes it.
         let old = self.settings.open.take();
-        let mut owners = BTreeMap::new();
+        let mut wired = None;
         let built = create_window(&definition, old.as_ref().map(|o| &o.instance), |instance| {
-            owners = self.settings_wire(&definition, instance, &pages, generation)?;
+            wired = Some(self.settings_wire(&definition, instance, &pages, generation)?);
             Ok(())
         });
         let instance = match built {
@@ -911,6 +944,11 @@ impl Host {
         };
         // Not hidden: it shared the native window with the new tree.
         drop(old);
+        let (owners, reports) = wired.unwrap_or_default();
+        self.settings_bind_window(&instance, generation);
+        for (owner, report) in reports {
+            self.send(owner, report);
+        }
         self.settings.open = Some(Open {
             instance,
             generation,
@@ -928,7 +966,7 @@ impl Host {
         instance: &slint_interpreter::ComponentInstance,
         pages: &[Page],
         generation: u64,
-    ) -> Result<BTreeMap<u64, Rc<Cell<u64>>>> {
+    ) -> Result<Wired> {
         let mut owners = BTreeMap::new();
         let mut reports = Vec::new();
         for page in pages {
@@ -956,9 +994,6 @@ impl Host {
                 self.events.clone(),
             )?;
         }
-        for (owner, report) in reports {
-            self.send(owner, report);
-        }
         let events = self.events.clone();
         instance.set_callback("select", move |args| {
             if let Some(SValue::Number(index)) = args.first()
@@ -973,8 +1008,17 @@ impl Host {
             let _ = events.send(Event::Settings(generation, None));
             SValue::Void
         })?;
-        // The native window's handlers: set again for each new tree (they
-        // name its generation).
+        self.theme_view(instance);
+        Ok((owners, reports))
+    }
+    /// The native window's handlers, once its new tree is shown (they name
+    /// its generation; set during a build that then failed, the old tree's
+    /// close button and Ctrl+W would have sent an unknown generation).
+    fn settings_bind_window(
+        &self,
+        instance: &slint_interpreter::ComponentInstance,
+        generation: u64,
+    ) {
         let events = self.events.clone();
         instance.window().on_close_requested(move || {
             let _ = events.send(Event::Settings(generation, None));
@@ -994,28 +1038,21 @@ impl Host {
                     }
                 });
         }
-        self.theme_view(instance);
-        Ok(owners)
     }
     /// A woken plugin registered `before`'s page again with the same files
     /// (the page now holds the new registration): an open window takes the
     /// changed values in place, and its tree the new title, category or
     /// order. Nothing is compiled; the component and its native window
-    /// stay.
+    /// stay. A registration that leaves out a value the page had is built
+    /// again instead (`Settings::in_place`).
     fn settings_update(&mut self, before: &Page) {
+        let Some(page) = self.settings.in_place(before) else {
+            return;
+        };
         let Some(instance) = self
             .settings
             .window()
             .map(slint::ComponentHandle::clone_strong)
-        else {
-            return;
-        };
-        let Some(page) = self
-            .settings
-            .pages
-            .iter()
-            .find(|p| p.serial == before.serial)
-            .cloned()
         else {
             return;
         };
@@ -1626,8 +1663,10 @@ mod tests {
         let before = settings.reregister(&again, json!({"id":"keys"})).unwrap();
         assert!(!settings.stale, "the same source is not compiled again");
         assert!(settings.recorded.is_empty());
-        let page = settings.page(9, "keys").unwrap().clone();
+        let page = settings.in_place(&before).expect("taken in place");
+        assert!(!settings.stale);
         assert_eq!(page.serial, 1, "the page keeps its serial (its alias)");
+        assert_eq!(settings.page(9, "keys").unwrap().serial, 1);
 
         // What `settings_update` writes: only the changed value.
         let changed = changed_values(&before, &page);
@@ -1762,5 +1801,98 @@ mod tests {
         assert_eq!(window.size(), slint::PhysicalSize::new(640, 480));
         assert_eq!(window.position(), slint::PhysicalPosition::new(120, 64));
         drop(instance);
+    }
+
+    /// A woken plugin that registers its page again without a value the
+    /// page had (the visualizer leaves `logo` out until its image is ready)
+    /// gets that property's default, as the SDK says of an omitted property:
+    /// the window is built again, in its own native window, instead of
+    /// keeping the recorded value on screen.
+    #[test]
+    fn a_registration_that_leaves_a_value_out_rebuilds_with_its_default() {
+        let native_calls = crate::ui::view::recording_platform();
+        let (events, _received) = mpsc::channel();
+        let mut settings = Settings::default();
+        let mut keys = page("x.hotkeys", "keys", 5, 0, 1);
+        keys.owner = 4;
+        keys.properties.insert("caption".into(), json!("custom"));
+        settings.pages = vec![keys.clone()];
+        open_window(&mut settings, &events, None);
+        let instance = settings.window().unwrap().clone_strong();
+        assert_eq!(
+            caption(&settings, 1),
+            SValue::from(slint::SharedString::from("custom"))
+        );
+        native_calls();
+
+        settings.mark_recorded(4);
+        settings.rekey(4, 9);
+        let again = Page {
+            owner: 9,
+            properties: BTreeMap::new(),
+            ..keys.clone()
+        };
+        let before = settings.reregister(&again, json!({})).unwrap();
+        assert!(settings.in_place(&before).is_none());
+        assert!(settings.stale, "built again, as `settings_tick` does");
+        let old = settings.open.take();
+        open_window(&mut settings, &events, old);
+        assert_eq!(
+            caption(&settings, 1),
+            SValue::from(slint::SharedString::default()),
+            "the omitted property shows its default"
+        );
+        let calls = native_calls();
+        assert!(!calls.iter().any(|c| c == "new window"), "{calls:?}");
+        drop(instance);
+    }
+
+    /// A swap that fails puts the old tree back with the focus where it
+    /// was (a page's field): the Options window has no video area to fall
+    /// back on.
+    #[test]
+    fn a_failed_swap_gives_the_focus_back_to_the_page() {
+        let _ = crate::ui::view::recording_platform();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/settings");
+        let (events, _received) = mpsc::channel();
+        let mut settings = Settings {
+            pages: vec![Page {
+                file: base.join("combo.slint"),
+                component: "ComboPage".into(),
+                global: "ComboBridge".into(),
+                ..page("a.plugin", "combo", 6, 0, 1)
+            }],
+            ..Default::default()
+        };
+        open_window(&mut settings, &events, None);
+        settings
+            .window()
+            .unwrap()
+            .set_property("current", SValue::Number(0.))
+            .unwrap();
+        crate::ui::view::settle_layout(settings.window().unwrap().window());
+        // Tab moves the focus into the page (its ComboBox).
+        let window = settings.window().unwrap().window();
+        window.dispatch_event(slint::platform::WindowEvent::KeyPressed {
+            text: slint::platform::Key::Tab.into(),
+        });
+        window.dispatch_event(slint::platform::WindowEvent::KeyReleased {
+            text: slint::platform::Key::Tab.into(),
+        });
+        let focused = || {
+            slint::private_unstable_api::re_exports::WindowInner::from_pub(
+                settings.window().unwrap().window(),
+            )
+            .focus_item
+            .borrow()
+            .upgrade()
+        };
+        let before = focused().expect("a page item has the focus");
+        let definition = composition::build(source(&[]).unwrap(), "OptionsWindow").unwrap();
+        let failed = create_window(&definition, settings.window(), |_| {
+            anyhow::bail!("set-up failed")
+        });
+        assert!(failed.is_err());
+        assert_eq!(focused(), Some(before));
     }
 }
