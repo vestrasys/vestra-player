@@ -99,13 +99,13 @@ export async function startAi({ data, compat, secrets = {}, deny = false, locale
     /** The text of row `i`: the message, or the line its code makes. */
     shown: (i) => {
       const row = ai.rows().at(i);
-      return row.kind === "tools" ? texts.toolLine(host, row) : row.kind === "thought" ? texts.thoughtLine(host, row) : row.kind === "error" ? texts.error(host, row) : row.kind === "notice" ? texts.notice(host, row) : row.text;
+      return row.kind === "activity" ? texts.activityLine(host, row) : row.kind === "error" ? texts.error(host, row) : row.kind === "notice" ? texts.notice(host, row) : row.text;
     },
     /** The expanded call list of tool row `i` (a collapsed row is expanded for the reading, then collapsed again). */
     async calls(i) {
       const { id, expanded } = props.rows.at(i);
       if (!expanded) await send("toggle", id);
-      const list = texts.toolList(host, props.rows.find((r) => r.id === id));
+      const list = texts.stepList(host, props.rows.find((r) => r.id === id));
       if (!expanded) await send("toggle", id);
       return list;
     },

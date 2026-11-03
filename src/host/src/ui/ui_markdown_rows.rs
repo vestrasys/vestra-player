@@ -194,6 +194,16 @@ impl slint::platform::Platform for Headless {
     {
         Ok(self.0.clone())
     }
+    fn set_clipboard_text(&self, text: &str, clipboard: slint::platform::Clipboard) {
+        if clipboard == slint::platform::Clipboard::DefaultClipboard {
+            CLIPBOARD.with(|c| *c.borrow_mut() = text.to_owned());
+        }
+    }
+}
+
+thread_local! {
+    /// What the last copy put on the clipboard (each test has its thread).
+    static CLIPBOARD: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 }
 
 fn compile(
@@ -853,4 +863,236 @@ export component W inherits Window {
     // The wheel moved the view: top, middle and end of the varied
     // document all show something different.
     assert!(frames[2] != frames[3] && frames[3] != frames[4] && frames[2] != frames[4]);
+}
+
+/// R-e: `MarkdownBlock.plain` is each block's text without styles, what a
+/// selectable view shows and copies.
+#[test]
+fn plain_text_of_every_block_kind() {
+    let doc = Doc {
+        text: "段落 **粗** *斜* ~~删~~ `码` [链接](https://a.example/)\n下一行  \n硬换行\n\n\
+               ## 标题 **粗**\n\n- 项 *一*\n  1. 子项\n\n> 引用 **粗**\n\n\
+               ```rust\nfn main() {\n\n    1\n}\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n\
+               ![替代](https://a.example/i.png)\n\n---\n\n\
+               见 <https://b.example/> 与 <x@b.example> 和 [甲](a.md)、[乙](https://c.example/)\n"
+            .into(),
+        ..Default::default()
+    };
+    let value = super::model(&doc, |_| None);
+    let blocks: Vec<(String, String)> = model(&value)
+        .iter()
+        .map(|row| {
+            let text = |name| match field(&row, name) {
+                SValue::String(s) => s.to_string(),
+                other => panic!("{name}: {other:?}"),
+            };
+            (text("kind"), text("plain"))
+        })
+        .collect();
+    let links: Vec<usize> = model(&value)
+        .iter()
+        .map(|row| model(&field(&row, "links")).row_count())
+        .collect();
+    assert_eq!(links, [1, 0, 0, 0, 0, 0, 0, 0, 0, 4]);
+    let expected = [
+        (
+            "paragraph",
+            "段落 粗 斜 删 码 链接 (https://a.example/) 下一行\n硬换行",
+        ),
+        ("heading", "标题 粗"),
+        ("item", "项 一"),
+        ("item", "子项"),
+        ("paragraph", "引用 粗"),
+        ("code", "fn main() {\n\n    1\n}"),
+        ("table", "a\tb\n1\t2"),
+        ("image", "替代"),
+        ("rule", ""),
+        // An autolink is its own address; a relative one stays as written
+        // (no base).
+        (
+            "paragraph",
+            "见 https://b.example/ 与 x@b.example 和 甲 (a.md)、乙 (https://c.example/)",
+        ),
+    ];
+    assert_eq!(blocks, expected.map(|(k, p)| (k.to_owned(), p.to_owned())),);
+}
+
+const SELECTABLE: &str = r#"
+import { MarkdownBlocks, MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
+import { ListView } from "std-widgets.slint";
+export struct Message { id: string, role: string, body: [MarkdownBlock] }
+export component W inherits Window {
+    width: 320px; height: 400px; background: white;
+    in property <[MarkdownBlock]> doc;
+    in property <[Message]> messages;
+    in property <bool> selectable: true;
+    out property <length> styled-height: styled.preferred-height;
+    out property <length> plain-height: plain.preferred-height;
+    styled := MarkdownBlocks { x: 0px; y: 0px; width: 150px; blocks: root.doc; }
+    plain := MarkdownBlocks {
+        x: 160px;
+        y: 0px;
+        width: 150px;
+        blocks: root.doc;
+        selectable: root.selectable;
+    }
+    MarkdownView { x: 0px; y: 300px; width: 320px; height: 50px; blocks: root.doc; selectable: true; }
+    ListView {
+        x: 0px;
+        y: 350px;
+        width: 320px;
+        height: 50px;
+        for message in root.messages: MarkdownBlocks { blocks: message.body; selectable: true; code-copy: true; }
+    }
+}"#;
+
+fn press(instance: &slint_interpreter::ComponentInstance, keys: &[slint::SharedString]) {
+    for key in keys {
+        instance
+            .window()
+            .dispatch_event(slint::platform::WindowEvent::KeyPressed { text: key.clone() });
+    }
+    for key in keys.iter().rev() {
+        instance
+            .window()
+            .dispatch_event(slint::platform::WindowEvent::KeyReleased { text: key.clone() });
+    }
+}
+
+/// R-e: `selectable` compiles without warnings in a column, a
+/// `MarkdownView` and a `ListView` row; wrapped text is as tall as the
+/// styled text; a click focuses a block and Ctrl+A, Ctrl+C copy its plain
+/// text. Code blocks are selectable in either mode (the left column).
+#[test]
+fn selectable_blocks_copy_their_plain_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let result = pollster::block_on(
+        crate::ui::view::compiler()
+            .build_from_source(SELECTABLE.into(), dir.path().join("w.slint")),
+    );
+    let diagnostics: Vec<_> = result.diagnostics().map(|d| d.to_string()).collect();
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    let (instance, window) = compile(SELECTABLE, (320, 400));
+    let doc = Doc {
+        text: "一段 **较长** 的文字，换行以后还有一行，再来一行，用来比较高度。\n\n```\nfn main() {}\n```\n"
+            .into(),
+        ..Default::default()
+    };
+    instance
+        .set_property("doc", super::model(&doc, |_| None))
+        .unwrap();
+    instance
+        .set_property(
+            "messages",
+            convert_plain(&mut Cache::default(), SLOT, &chat(&["# 你好\n\n第一条"])),
+        )
+        .unwrap();
+    draw(&window, 320, 400);
+    let length = |name| match instance.get_property(name).unwrap() {
+        SValue::Number(n) => n,
+        other => panic!("{name}: {other:?}"),
+    };
+    let (styled, plain) = (length("styled-height"), length("plain-height"));
+    assert!(styled > 60., "the paragraph wraps: {styled}");
+    assert!(
+        (styled - plain).abs() <= 4.,
+        "as tall as the styled text: {styled} vs {plain}"
+    );
+    let control = slint::SharedString::from(slint::platform::Key::Control);
+    let copy = |x: f32, y: f32| {
+        CLIPBOARD.with(|c| c.borrow_mut().clear());
+        click(&instance, x, y);
+        press(&instance, &[control.clone(), "a".into()]);
+        press(&instance, &[control.clone(), "c".into()]);
+        CLIPBOARD.with(|c| c.borrow().clone())
+    };
+    assert_eq!(
+        copy(170., 8.),
+        "一段 较长 的文字，换行以后还有一行，再来一行，用来比较高度。"
+    );
+    // The code block, below the paragraph, in both columns.
+    let code = (plain + styled) / 2. - 12.;
+    assert_eq!(copy(170., code as f32), "fn main() {}");
+    assert_eq!(copy(10., code as f32), "fn main() {}");
+    // The menu's Copy without a selection copies the whole block.
+    CLIPBOARD.with(|c| c.borrow_mut().clear());
+    for event in [
+        slint::platform::WindowEvent::PointerPressed {
+            position: slint::LogicalPosition::new(170., 8.),
+            button: slint::platform::PointerEventButton::Right,
+        },
+        slint::platform::WindowEvent::PointerReleased {
+            position: slint::LogicalPosition::new(170., 8.),
+            button: slint::platform::PointerEventButton::Right,
+        },
+    ] {
+        instance.window().dispatch_event(event);
+    }
+    slint::platform::update_timers_and_animations();
+    draw(&window, 320, 400);
+    click(&instance, 190., 22.);
+    assert_eq!(
+        CLIPBOARD.with(|c| c.borrow().clone()),
+        "一段 较长 的文字，换行以后还有一行，再来一行，用来比较高度。"
+    );
+}
+
+/// R-e: in a selectable view a block with links keeps its styled text: a
+/// left click on the link still reports it (through the menu above it),
+/// and the right-click menu's Copy puts the plain text with the address on
+/// the clipboard.
+#[test]
+fn selectable_blocks_with_links_keep_their_links() {
+    let (instance, window) = compile(
+        r#"
+import { MarkdownBlocks, MarkdownBlock } from "@vestra/markdown.slint";
+export component W inherits Window {
+    width: 320px; height: 200px; background: white;
+    in property <[MarkdownBlock]> doc;
+    in-out property <string> clicked;
+    MarkdownBlocks {
+        y: 0px;
+        width: 320px;
+        blocks: root.doc;
+        selectable: true;
+        link-clicked(url) => { root.clicked = url; }
+    }
+}"#,
+        (320, 200),
+    );
+    let doc = Doc {
+        text: "[链接链接链接](https://a.example/) 之后".into(),
+        ..Default::default()
+    };
+    instance
+        .set_property("doc", super::model(&doc, |_| None))
+        .unwrap();
+    draw(&window, 320, 200);
+    click(&instance, 10., 8.);
+    assert_eq!(
+        instance.get_property("clicked").unwrap(),
+        SValue::String("https://a.example/".into())
+    );
+    // Right click: the menu opens at the pointer; Copy is its first item.
+    CLIPBOARD.with(|c| c.borrow_mut().clear());
+    for event in [
+        slint::platform::WindowEvent::PointerPressed {
+            position: slint::LogicalPosition::new(10., 8.),
+            button: slint::platform::PointerEventButton::Right,
+        },
+        slint::platform::WindowEvent::PointerReleased {
+            position: slint::LogicalPosition::new(10., 8.),
+            button: slint::platform::PointerEventButton::Right,
+        },
+    ] {
+        instance.window().dispatch_event(event);
+    }
+    slint::platform::update_timers_and_animations();
+    draw(&window, 320, 200);
+    click(&instance, 30., 22.);
+    draw(&window, 320, 200);
+    assert_eq!(
+        CLIPBOARD.with(|c| c.borrow().clone()),
+        "链接链接链接 (https://a.example/) 之后"
+    );
 }

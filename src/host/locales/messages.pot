@@ -372,15 +372,23 @@ msgstr ""
 msgid "Close the sidebar"
 msgstr ""
 
-#: ui/vestra/markdown.slint:142
+#: ui/vestra/markdown.slint:80 ui/vestra/markdown.slint:148 ui/vestra/markdown.slint:297
 msgid "Copy"
 msgstr ""
 
-#: ui/vestra/markdown.slint:163
+#: ui/vestra/markdown.slint:152
+msgid "Copy Link"
+msgstr ""
+
+#: ui/vestra/markdown.slint:93
+msgid "Select All"
+msgstr ""
+
+#: ui/vestra/markdown.slint:318
 msgid "[Image]"
 msgstr ""
 
-#: ui/vestra/markdown.slint:163
+#: ui/vestra/markdown.slint:318
 msgid "[Image] {}"
 msgstr ""
 

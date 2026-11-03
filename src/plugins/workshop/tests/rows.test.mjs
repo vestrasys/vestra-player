@@ -1,67 +1,98 @@
-// Conversation rows: the rolling tool line, errors, and rebuilding from pi's JSONL.
+// Conversation rows: the turn's activity row, errors, and rebuilding from pi's JSONL.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Chat, classify } from "../chat.ts";
 import { MessageDocs } from "../messages.ts";
-import { error, notice, thoughtLine, toolLine, toolList, translator } from "./texts.mjs";
+import { activityLine, error, notice, stepList, translator } from "./texts.mjs";
 
 const zh = translator("zh-Hans");
 const en = translator("en");
 /** A row as the window shows it in Simplified Chinese: the message, or the line its code makes. */
-const shown = (row) => (row.kind === "tools" ? toolLine(zh, row) : row.kind === "thought" ? thoughtLine(zh, row) : row.kind === "error" ? error(zh, row) : row.text);
+const shown = (row) => (row.kind === "activity" ? activityLine(zh, row) : row.kind === "error" ? error(zh, row) : row.kind === "notice" ? notice(zh, row) : row.text);
 
-test("tool calls share one line: the latest replaces the previous, the list expands", () => {
-  const chat = new Chat();
+test("one activity row per turn: Working… at once, the latest step while it runs, a summary after; the steps expand", () => {
+  let clock = 1000;
+  const chat = new Chat(() => clock);
   chat.user("做个插件");
-  chat.apply({ kind: "assistant_start" });
-  chat.apply({ kind: "tool_start", id: "a", name: "write", target: "main.ts" });
-  assert.equal(toolLine(zh, chat.rows[1]), "写入 main.ts…");
-  assert.equal(toolLine(en, chat.rows[1]), "Write main.ts…");
-  chat.apply({ kind: "tool_end", id: "a", name: "write", ok: true, summary: "" });
-  chat.apply({ kind: "tool_start", id: "b", name: "read", target: "manifest.json" });
-  assert.equal(chat.rows.length, 2, "still one tool line");
-  assert.equal(toolLine(zh, chat.rows[1]), "读取 manifest.json…");
+  chat.begin();
+  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "activity"], "before the model's first event");
+  assert.equal(activityLine(zh, chat.rows[1]), "处理中…");
+  assert.equal(activityLine(en, chat.rows[1]), "Working…");
   assert.equal(chat.rows[1].state, 0);
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "thinking", delta: "The user wants a plugin." });
+  assert.equal(activityLine(en, chat.rows[1]), "Working…", "thinking is not shown");
+  chat.apply({ kind: "tool_start", id: "a", name: "write", target: "main.ts" });
+  assert.equal(activityLine(zh, chat.rows[1]), "处理中… · 写入 main.ts…");
+  assert.equal(activityLine(en, chat.rows[1]), "Working… · Write main.ts…");
+  chat.apply({ kind: "tool_end", id: "a", name: "write", ok: true, summary: "" });
+  assert.equal(activityLine(en, chat.rows[1]), "Working… · Write main.ts ✓", "no model phase after the step");
+  chat.apply({ kind: "tool_start", id: "b", name: "read", target: "manifest.json" });
+  assert.equal(chat.rows.length, 2, "still one activity row");
+  assert.equal(activityLine(zh, chat.rows[1]), "处理中… · 读取 manifest.json…");
   chat.apply({ kind: "tool_end", id: "b", name: "read", ok: false, summary: "" });
+  assert.equal(activityLine(en, chat.rows[1]), "Working… · Read manifest.json ✗");
   chat.apply({ kind: "assistant_start" });
   chat.apply({ kind: "text", delta: "完成" });
   chat.apply({ kind: "assistant_end", text: "完成", stopReason: "stop", error: null });
+  clock += 12_000;
   chat.apply({ kind: "settled", aborted: false });
   assert.deepEqual(
     chat.rows.map((r) => [r.kind, shown(r), r.state]),
     [
       ["user", "做个插件", 1],
-      ["tools", "2 个工具调用，1 个失败", 2],
+      ["activity", "用时 12 秒 · 2 个步骤，1 个失败", 2],
       ["assistant", "完成", 1],
     ],
   );
-  assert.equal(toolLine(en, chat.rows[1]), "2 tool calls, 1 failed");
-  assert.equal(toolList(zh, chat.rows[1]), "✓ 写入 main.ts\n✗ 读取 manifest.json");
+  assert.equal(activityLine(en, chat.rows[1]), "Worked for 12 seconds · 2 steps, 1 failed");
+  assert.equal(stepList(zh, chat.rows[1]), "✓ 写入 main.ts\n✗ 读取 manifest.json");
   chat.toggle(chat.rows[1].id);
   assert.equal(chat.rows[1].expanded, true);
 });
 
-test("text before a tool call is a progress note: it leaves the answer for the collapsed thought row, before the tool line", () => {
-  const chat = new Chat();
-  chat.user("hi");
-  chat.apply({ kind: "text", delta: "先说一句。\n" });
-  chat.apply({ kind: "text", delta: "再说一句。" });
-  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "assistant"], "shown while it streams");
-  chat.apply({ kind: "tool_start", id: "a", name: "ls", target: "" });
-  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "thought", "tools"]);
-  assert.equal(chat.rows[1].text, "先说一句。\n再说一句。");
-  assert.equal(chat.rows[1].expanded, false);
-  assert.equal(thoughtLine(zh, chat.rows[1]), "1 条进度说明");
+test("a reply without steps or thinking keeps no activity row; one that thought keeps how long it worked", () => {
+  let clock = 0;
+  const chat = new Chat(() => clock);
+  chat.user("你好");
+  chat.begin();
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "text", delta: "你好！" });
+  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "activity", "assistant"], "Working… while the answer streams");
+  chat.apply({ kind: "assistant_end", text: "你好！", stopReason: "stop", error: null });
+  chat.apply({ kind: "settled", aborted: false });
+  assert.deepEqual(chat.rows.map((r) => [r.kind, r.text]), [["user", "你好"], ["assistant", "你好！"]]);
+
+  chat.user("想一想");
+  chat.begin();
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "thinking", delta: "Hmm." });
+  clock += 3400;
+  chat.apply({ kind: "text", delta: "好。" });
+  chat.apply({ kind: "assistant_end", text: "好。", stopReason: "stop", error: null });
+  chat.apply({ kind: "settled", aborted: false });
+  assert.deepEqual(chat.rows.slice(2).map((r) => [r.kind, shown(r)]), [["user", "想一想"], ["activity", "用时 3 秒"], ["assistant", "好。"]]);
+  assert.equal(activityLine(en, chat.rows[3]), "Worked for 3 seconds");
+  assert.equal(chat.rows[3].n, 0, "nothing to expand");
+
+  // Stopped before the model said anything: no row is left behind.
+  chat.user("算了");
+  chat.begin();
+  chat.apply({ kind: "assistant_end", text: "", stopReason: "aborted", error: null });
+  assert.deepEqual(chat.rows.slice(5).map((r) => r.kind), ["user", "notice"]);
 });
 
-test("notes between tool calls go to the thought row; the answer is what the model wrote without a tool call", () => {
+test("text before a tool call is a progress note: shown while it streams, then not shown; the answer is what the model wrote without a tool call", () => {
   const chat = new Chat();
   chat.user("写个插件");
+  chat.begin();
   chat.apply({ kind: "assistant_start" });
   chat.apply({ kind: "text", delta: "I'll start by reading " });
   chat.apply({ kind: "text", delta: "the SDK documentation.\n\n" });
+  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "activity", "assistant"], "shown while it streams");
   chat.apply({ kind: "assistant_end", text: "", stopReason: "toolUse", error: null });
   chat.apply({ kind: "tool_start", id: "a", name: "docs", target: "/" });
+  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "activity"]);
   chat.apply({ kind: "tool_end", id: "a", name: "read", ok: true, summary: "" });
   chat.apply({ kind: "assistant_start" });
   chat.apply({ kind: "text", delta: "测试失败是因为绑定写法不对。" });
@@ -73,68 +104,80 @@ test("notes between tool calls go to the thought row; the answer is what the mod
   chat.apply({ kind: "assistant_end", text: "", stopReason: "stop", error: null });
   chat.apply({ kind: "settled", aborted: false });
   assert.deepEqual(
-    chat.rows.map((r) => [r.kind, r.kind === "thought" ? thoughtLine(zh, r) : shown(r)]),
+    chat.rows.map((r) => [r.kind, r.kind === "activity" ? r.n : r.text]),
     [
       ["user", "写个插件"],
-      ["thought", "2 条进度说明"],
-      ["tools", "2 个工具调用"],
+      ["activity", 2],
       ["assistant", "插件做好了。"],
     ],
   );
-  assert.equal(chat.rows[1].text, "I'll start by reading the SDK documentation.\n\n测试失败是因为绑定写法不对。");
-  assert.equal(thoughtLine(en, chat.rows[1]), "2 progress notes");
-  // A reply without tool calls is the answer, short or long.
-  chat.user("你好");
-  chat.apply({ kind: "text", delta: "你好！" });
-  chat.apply({ kind: "assistant_end", text: "你好！", stopReason: "stop", error: null });
-  assert.deepEqual(chat.rows.slice(-2).map((r) => [r.kind, r.text]), [["user", "你好"], ["assistant", "你好！"]]);
+  assert.equal(chat.rows[1].text, "", "no notes in the activity row");
 });
 
-test("thinking shows as one collapsed row, timed while live: Thinking…, then Thought for n seconds", () => {
-  let clock = 1000;
-  const chat = new Chat(() => clock);
-  chat.user("做个插件");
-  chat.begin();
-  chat.apply({ kind: "assistant_start" });
-  chat.apply({ kind: "thinking", delta: "The user wants " });
-  chat.apply({ kind: "thinking", delta: "a plugin." });
-  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "thought", "tools"]);
-  assert.equal(thoughtLine(zh, chat.rows[1]), "思考中…");
-  assert.equal(chat.rows[1].state, 0);
-  clock += 4000;
-  chat.apply({ kind: "assistant_end", text: "", stopReason: "toolUse", error: null });
-  chat.apply({ kind: "tool_start", id: "a", name: "docs", target: "/" });
-  chat.apply({ kind: "tool_end", id: "a", name: "read", ok: true, summary: "" });
-  chat.apply({ kind: "assistant_start" });
-  chat.apply({ kind: "thinking", delta: "Now the code." });
-  clock += 8000;
-  chat.apply({ kind: "text", delta: "好了。" });
-  chat.apply({ kind: "assistant_end", text: "", stopReason: "stop", error: null });
-  chat.apply({ kind: "settled", aborted: false });
-  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "thought", "tools", "assistant"]);
-  assert.equal(chat.rows[1].state, 1);
-  assert.equal(thoughtLine(en, chat.rows[1]), "Thought for 12 seconds");
-  assert.equal(chat.rows[1].text, "The user wants a plugin.\n\nNow the code.");
-  assert.equal(chat.rows[3].text, "好了。", "no thinking in the answer");
-  chat.toggle(chat.rows[1].id);
-  assert.equal(chat.rows[1].expanded, true);
-});
-
-test("a collapsed thought row sends no text to the window; expanded, at most 16 KB of it", async () => {
+test("an expanded activity row sends its steps to the window, a collapsed one none", async () => {
   const chat = new Chat();
   chat.user("hi");
-  chat.apply({ kind: "assistant_start" });
+  chat.begin();
   chat.apply({ kind: "thinking", delta: "想".repeat(100_000) });
+  chat.apply({ kind: "tool_start", id: "a", name: "ls", target: "" });
+  chat.apply({ kind: "tool_end", id: "a", name: "ls", ok: true, summary: "" });
   chat.apply({ kind: "text", delta: "好" });
   chat.apply({ kind: "settled", aborted: false });
   const docs = new MessageDocs(async (text) => [text]);
   await docs.sync(chat.rows);
-  const row = () => docs.props(chat.rows).find((r) => r.kind === "thought");
-  assert.equal(row().text, "");
-  assert.equal(row().truncated, false);
+  const row = () => docs.props(chat.rows).find((r) => r.kind === "activity");
+  assert.equal(row().text, "", "thinking is not sent");
+  assert.deepEqual(row().calls, []);
   chat.toggle(chat.rows[1].id);
-  assert.ok(Buffer.byteLength(row().text) <= 16 * 1024);
-  assert.equal(row().truncated, true);
+  assert.deepEqual(row().calls, [{ tool: "ls", target: "", reference: false, state: 1 }]);
+});
+
+test("an automatic retry continues the turn: one activity row, Working… again, its steps and time go on", () => {
+  let clock = 0;
+  const chat = new Chat(() => clock);
+  chat.user("做个插件");
+  chat.begin();
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "text", delta: "先看看。" });
+  chat.apply({ kind: "tool_start", id: "a", name: "ls", target: "" });
+  chat.apply({ kind: "tool_end", id: "a", name: "ls", ok: true, summary: "" });
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "assistant_end", text: "", stopReason: "error", error: "529 overloaded" });
+  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "activity", "assistant", "error"], "the note stands in for the answer");
+  chat.apply({ kind: "retry", attempt: 1, max: 2, error: "529 overloaded" });
+  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "activity", "notice"], "the note is a note again");
+  assert.equal(activityLine(en, chat.rows[1]), "Working… · List ✓");
+  assert.equal(chat.rows[1].state, 0);
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "tool_start", id: "b", name: "read", target: "a.md" });
+  assert.equal(activityLine(en, chat.rows[1]), "Working… · Read a.md…");
+  chat.apply({ kind: "tool_end", id: "b", name: "read", ok: true, summary: "" });
+  chat.apply({ kind: "assistant_start" });
+  chat.apply({ kind: "text", delta: "好了。" });
+  chat.apply({ kind: "assistant_end", text: "好了。", stopReason: "stop", error: null });
+  clock += 312_000;
+  chat.apply({ kind: "settled", aborted: false });
+  assert.deepEqual(
+    chat.rows.map((r) => [r.kind, shown(r), r.state]),
+    [
+      ["user", "做个插件", 1],
+      ["activity", "用时 5 分 12 秒 · 2 个步骤", 1],
+      ["notice", "连接失败，正在重试（1/2）…", 1],
+      ["assistant", "好了。", 1],
+    ],
+  );
+  assert.equal(activityLine(en, chat.rows[1]), "Worked for 5 min 12 s · 2 steps");
+
+  // An error before any step: the row had gone; the retry brings it back after the message.
+  chat.user("再来");
+  chat.begin();
+  chat.apply({ kind: "assistant_end", text: "", stopReason: "error", error: "Connection error." });
+  assert.deepEqual(chat.rows.slice(4).map((r) => r.kind), ["user", "error"]);
+  chat.apply({ kind: "retry", attempt: 1, max: 2, error: "Connection error." });
+  assert.deepEqual(chat.rows.slice(4).map((r) => [r.kind, shown(r)]), [["user", "再来"], ["activity", "处理中…"], ["notice", "连接失败，正在重试（1/2）…"]]);
+  chat.apply({ kind: "text", delta: "好" });
+  chat.apply({ kind: "settled", aborted: false });
+  assert.deepEqual(chat.rows.slice(4).map((r) => r.kind), ["user", "notice", "assistant"], "no step, no thinking: no row");
 });
 
 test("errors: key, quota, network; an automatic retry replaces the error row", () => {
@@ -160,6 +203,8 @@ test("rows from pi's JSONL", () => {
     { type: "message", message: { role: "assistant", content: [{ type: "thinking", thinking: "Write a.md." }, { type: "text", text: "I'll write the file." }, { type: "toolCall", id: "c1", name: "write", arguments: { path: "a.md", content: "x" } }], stopReason: "toolUse" } },
     { type: "message", message: { role: "toolResult", toolCallId: "c1", toolName: "write", content: [], isError: false } },
     { type: "message", message: { role: "assistant", content: [{ type: "text", text: "写好了" }], stopReason: "stop" } },
+    { type: "message", message: { role: "user", content: "想想" } },
+    { type: "message", message: { role: "assistant", content: [{ type: "thinking", thinking: "Hmm." }, { type: "text", text: "好" }], stopReason: "stop" } },
     { type: "message", message: { role: "user", content: "再来" } },
     { type: "message", message: { role: "assistant", content: [], stopReason: "error", errorMessage: "401 invalid x-api-key" } },
   ];
@@ -168,15 +213,17 @@ test("rows from pi's JSONL", () => {
     chat.rows.map((r) => [r.kind, shown(r)]),
     [
       ["user", "写文件"],
-      ["thought", "思考过程"],
-      ["tools", "1 个工具调用"],
+      // The record has no durations: the steps only.
+      ["activity", "1 个步骤"],
       ["assistant", "写好了"],
+      ["user", "想想"],
+      ["assistant", "好"],
       ["user", "再来"],
       ["error", "API key 无效或没有权限，请在设置中检查。"],
     ],
   );
-  assert.equal(chat.rows[1].text, "Write a.md.\n\nI'll write the file.");
-  assert.equal(chat.rows[1].expanded, false, "older sessions' thinking is collapsed too");
+  assert.equal(activityLine(en, chat.rows[1]), "1 step");
+  assert.equal(chat.rows[1].text, "");
   assert.equal(chat.lastPrompt, "再来");
 });
 
@@ -188,39 +235,41 @@ test("a turn that ends without an answer shows its last note as the answer: summ
     chat.apply({ kind: "tool_start", id, name: "check", target: "local.demo" });
     chat.apply({ kind: "tool_end", id, name: "check", ok: true, summary: "" });
   };
-  const chat = new Chat();
+  const chat = new Chat(() => 0);
   chat.user("做个插件");
+  chat.begin();
   note(chat, "先检查。", "a");
   note(chat, "插件做好了，可以安装。", "b");
   // The model's last message is empty.
   chat.apply({ kind: "assistant_start" });
   chat.apply({ kind: "assistant_end", text: "", stopReason: "stop", error: null });
   chat.apply({ kind: "settled", aborted: false });
-  assert.deepEqual(chat.rows.map((r) => [r.kind, r.kind === "thought" ? thoughtLine(zh, r) : shown(r)]), [
+  assert.deepEqual(chat.rows.map((r) => [r.kind, shown(r)]), [
     ["user", "做个插件"],
-    ["thought", "1 条进度说明"],
-    ["tools", "2 个工具调用"],
+    ["activity", "用时 1 秒 · 2 个步骤"],
     ["assistant", "插件做好了，可以安装。"],
   ]);
-  assert.equal(chat.rows[1].text, "先检查。");
 
-  // Stop after one note: the note is the answer, and no thought row stays empty.
+  // Stop after one note: the note is the answer.
   chat.user("再改改");
+  chat.begin();
   note(chat, "改好了一半。", "c");
   chat.apply({ kind: "assistant_end", text: "", stopReason: "aborted", error: null });
-  assert.deepEqual(chat.rows.slice(4).map((r) => [r.kind, r.kind === "notice" ? notice(zh, r) : shown(r)]), [
+  assert.deepEqual(chat.rows.slice(3).map((r) => [r.kind, shown(r)]), [
     ["user", "再改改"],
-    ["tools", "1 个工具调用"],
+    ["activity", "用时 1 秒 · 1 个步骤"],
     ["assistant", "改好了一半。"],
     ["notice", "已停止"],
   ]);
 
   // An error after a note: the note, then the error.
   chat.user("继续");
+  chat.begin();
   note(chat, "正在测试。", "d");
   chat.apply({ kind: "assistant_end", text: "", stopReason: "error", error: "Connection error." });
-  assert.deepEqual(chat.rows.slice(-3).map((r) => r.kind), ["tools", "assistant", "error"]);
+  assert.deepEqual(chat.rows.slice(-3).map((r) => r.kind), ["activity", "assistant", "error"]);
   assert.equal(chat.rows.at(-2).text, "正在测试。");
+  assert.equal(chat.rows.at(-3).state, 1, "the turn is over");
 });
 
 test("an endpoint that refuses the reasoning parameters: an error that points to Settings ▸ Thinking", () => {
@@ -241,9 +290,10 @@ test("an endpoint that refuses the reasoning parameters: an error that points to
   );
 });
 
-test("the last note becomes the answer also when thinking came after it: it leaves the thought row, the thinking stays", () => {
+test("the last note becomes the answer also when thinking came after it; the thinking shows nowhere", () => {
   const chat = new Chat();
   chat.user("做个插件");
+  chat.begin();
   chat.apply({ kind: "assistant_start" });
   chat.apply({ kind: "thinking", delta: "Plan it." });
   chat.apply({ kind: "text", delta: "插件做好了。" });
@@ -254,7 +304,7 @@ test("the last note becomes the answer also when thinking came after it: it leav
   chat.apply({ kind: "thinking", delta: "Done, nothing to add." });
   chat.apply({ kind: "assistant_end", text: "", stopReason: "stop", error: null });
   chat.apply({ kind: "settled", aborted: false });
-  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "thought", "tools", "assistant"]);
-  assert.equal(chat.rows[1].text, "Plan it.\n\nDone, nothing to add.");
-  assert.equal(chat.rows[3].text, "插件做好了。");
+  assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "activity", "assistant"]);
+  assert.equal(chat.rows[2].text, "插件做好了。");
+  assert.ok(!chat.rows.some((r) => /Plan it|nothing to add/.test(r.text)));
 });

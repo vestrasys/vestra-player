@@ -1,18 +1,21 @@
 // The rows of one conversation as the window shows them, built from the
 // worker's live events or from pi's JSONL. One user turn is: the user's
-// message, ONE collapsed "thought" row (the model's thinking and the notes it
-// wrote between tool calls: "Thought for 12 s", expandable), ONE rolling tool
-// line (the latest call replaces the previous one; expandable to the whole
-// list), then the assistant's answer, as ChatGPT, Claude and Cursor show it.
-// The answer is the text of model messages that did not end in a tool call;
-// the text of one that did is a progress note and moves to the thought row
-// when its tool call comes (while it streams it shows as the answer).
+// message, ONE activity row (while the model works: "Working…" and the latest
+// tool call; after the turn: "Worked for 12 seconds · 3 steps", expandable to
+// the tool calls), then the assistant's answer.
 //
-// Rows carry data, not sentences: notices, errors and the tool line say what
-// happened with a `code` and its `args`; ai.slint has the words (@tr).
+// The model's thinking is not shown: it only keeps a turn's activity row (a
+// turn that thought and called no tool still says how long it worked). The
+// answer is the text of model messages that did not end in a tool call; the
+// text of one that did is a progress note and is not shown either (while it
+// streams it shows as the answer; the record keeps it). A turn that ends
+// without an answer shows its last note as the answer.
+//
+// Rows carry data, not sentences: notices, errors and the activity row say
+// what happened with a `code` and its `args`; ai.slint has the words (@tr).
 import type { WorkerEvent } from "./worker/protocol.ts";
 
-/** One tool call: its tool, what it is about, 0 running / 1 done / 2 failed. */
+/** One tool call (a step): its tool, what it is about, 0 running / 1 done / 2 failed. */
 export type ToolCall = {
   tool: string;
   target: string;
@@ -25,7 +28,7 @@ const NO_CALL: ToolCall = { tool: "", target: "", reference: false, state: 0 };
 
 export interface Row {
   id: string;
-  /** "user" | "thought" | "tools" | "assistant" | "notice" | "error" */
+  /** "user" | "activity" | "assistant" | "notice" | "error" */
   kind: string;
   /** user and assistant: the message (data). */
   text: string;
@@ -37,21 +40,19 @@ export interface Row {
   /** error rows: offer Open Settings. */
   settings: boolean;
   /**
-   * notice / error: what to say (see ai.slint). tools: "running" (`call` in
-   * progress), "after" (`call` ended, the model `phase`), "phase" (no call
-   * yet), "done" (the turn is over: `n` calls, `failed` failed).
-   * thought: "thinking" (now), "thought" (`n` seconds), "thought-untimed"
-   * (from the record, which has no durations), "notes" (`n` notes, no thinking).
+   * notice / error: what to say (see ai.slint). activity: "working" (the
+   * turn runs; `call` is the latest step, if any), "done" (the turn is over:
+   * `seconds`, `n` steps, `failed` failed).
    */
   code: string;
   args: string[];
-  /** notice: the count of a plural notice; tools: the number of calls. */
+  /** notice: the count of a plural notice; activity: the number of steps. */
   n: number;
-  /** tools: every call of the turn, and the one the line shows. */
+  /** activity: how long the turn worked, in seconds (0: from the record, which has no durations). */
+  seconds: number;
+  /** activity: every step of the turn, and the latest one. */
   calls: ToolCall[];
   call: ToolCall;
-  /** tools: "thinking" | "replying" while the turn runs. */
-  phase: string;
   failed: number;
 }
 
@@ -85,27 +86,21 @@ const nextId = () => `r${++serial}`;
 export class Chat {
   rows: Row[] = [];
   private calls: (ToolCall & { id: string })[] = [];
-  private toolsRow: Row | undefined;
+  private activityRow: Row | undefined;
   private assistant: Row | undefined;
-  /** A live turn is in progress (the status line says what the agent is doing). */
+  /** A live turn is in progress (the activity row says "Working…"). */
   private live = false;
-  /** The latest model output of the live turn is text (not a tool call). */
-  private replying = false;
-  /** The turn's thought row: thinking and progress notes. */
-  private thought: Row | undefined;
-  /** What the thought row's text ends with, to start a paragraph when it changes. */
-  private segment: "" | "thinking" | "note" = "";
-  /** When the current stretch of thinking began (0: not thinking), and the turn's total. */
-  private thinkingSince = 0;
-  private thinkingMs = 0;
-  private thinkingSeen = false;
-  /** Thinking came from the record (no durations). */
-  private untimed = false;
-  private notes = 0;
+  /** When the live turn began (its duration is the activity row's). */
+  private startedAt = 0;
+  /** The model thought in this turn (keeps the activity row of a turn without steps). */
+  private thought = false;
+  /**
+   * The live turn that `endTurn` just closed, for an automatic retry that
+   * continues it (pi retries after an error: the same turn, the same row).
+   */
+  private closed: { row: Row | undefined; calls: (ToolCall & { id: string })[]; startedAt: number; thought: boolean; note: string; answer: Row | undefined } | undefined;
   /** The turn's latest progress note: the answer after all if the turn ends without one. */
   private lastNote = "";
-  /** Where that note is in the thought row's text (thinking may follow it). */
-  private lastNoteAt: [number, number] = [0, 0];
   /** Where the current model message's text starts in the answer row (-1: none open). */
   private messageStart = -1;
   private readonly now: () => number;
@@ -118,7 +113,7 @@ export class Chat {
   model = "";
 
   private static row(fields: Pick<Row, "kind"> & Partial<Row>): Row {
-    return { id: nextId(), text: "", detail: "", state: 1, expanded: false, settings: false, code: "", args: [], n: 0, calls: [], call: NO_CALL, phase: "", failed: 0, ...fields };
+    return { id: nextId(), text: "", detail: "", state: 1, expanded: false, settings: false, code: "", args: [], n: 0, seconds: 0, calls: [], call: NO_CALL, failed: 0, ...fields };
   }
 
   private push(fields: Pick<Row, "kind"> & Partial<Row>): Row {
@@ -134,26 +129,26 @@ export class Chat {
   }
 
   /**
-   * A live turn starts (a message was sent): the status line appears at once
-   * as "Thinking…", before the model's first event, and follows every event.
+   * A live turn starts (a message was sent): the activity row appears at once
+   * as "Working…", before the model's first event, and follows every event.
    */
   begin() {
     this.live = true;
-    this.replying = false;
-    this.statusRow();
-    this.refreshTools();
+    this.startedAt = this.now();
+    this.activity();
+    this.refreshActivity();
   }
 
-  private statusRow(): Row {
-    if (!this.toolsRow) {
-      const row = Chat.row({ kind: "tools", state: 0 });
-      // Before the turn's text: the line reads as "what the agent did".
+  private activity(): Row {
+    if (!this.activityRow) {
+      const row = Chat.row({ kind: "activity", state: 0 });
+      // Before the turn's text: the row reads as "what the agent did".
       const at = this.assistant ? this.rows.indexOf(this.assistant) : -1;
       if (at >= 0) this.rows.splice(at, 0, row);
       else this.rows.push(row);
-      this.toolsRow = row;
+      this.activityRow = row;
     }
-    return this.toolsRow;
+    return this.activityRow;
   }
 
   /** A notice row: `code` and its arguments (see ai.slint). */
@@ -174,24 +169,20 @@ export class Chat {
     });
   }
 
-  private refreshTools() {
-    const row = this.toolsRow;
+  private refreshActivity() {
+    const row = this.activityRow;
     if (!row) return;
-    const running = this.calls.findLast((call) => call.state === 0);
-    const last = this.calls.at(-1);
     const failed = this.calls.filter((call) => call.state === 2).length;
     const plain = ({ tool, target, reference, state }: ToolCall): ToolCall => ({ tool, target, reference, state });
-    if (running || this.live) {
-      // While the turn runs: the call in progress, else the latest call and
-      // what the model does now; each new call replaces the previous one.
+    if (this.live) {
+      // While the turn runs: "Working…" and the latest step (each new one replaces the previous one).
+      const last = this.calls.at(-1);
       row.state = 0;
-      row.phase = this.replying ? "replying" : "thinking";
-      row.code = running ? "running" : last ? "after" : "phase";
-      row.call = running ? plain(running) : last ? plain(last) : NO_CALL;
+      row.code = "working";
+      row.call = last ? plain(last) : NO_CALL;
     } else {
       row.state = failed ? 2 : 1;
       row.code = "done";
-      row.phase = "";
       row.call = NO_CALL;
     }
     row.n = this.calls.length;
@@ -200,70 +191,20 @@ export class Chat {
   }
 
   private toolCall(id: string, call: Omit<ToolCall, "state">, state: number) {
-    this.statusRow();
-    if (state === 0) this.replying = false;
+    this.activity();
     const known = this.calls.find((c) => c.id === id);
     if (known) known.state = state;
     else this.calls.push({ id, ...call, state });
-    this.refreshTools();
+    this.refreshActivity();
   }
 
-  private thoughtRow(): Row {
-    if (!this.thought) {
-      const row = Chat.row({ kind: "thought", state: 0 });
-      // First in the turn: before the tool line and the answer.
-      const before = this.toolsRow ?? this.assistant;
-      const at = before ? this.rows.indexOf(before) : -1;
-      if (at >= 0) this.rows.splice(at, 0, row);
-      else this.rows.push(row);
-      this.thought = row;
-    }
-    return this.thought;
-  }
-
-  private refreshThought() {
-    const row = this.thought;
-    if (!row) return;
-    const thinking = this.thinkingSince > 0;
-    row.state = thinking ? 0 : 1;
-    row.code = thinking ? "thinking" : !this.thinkingSeen ? "notes" : this.untimed ? "thought-untimed" : "thought";
-    row.n = this.thinkingSeen ? Math.max(1, Math.round(this.thinkingMs / 1000)) : this.notes;
-  }
-
-  private addThought(kind: "thinking" | "note", text: string) {
-    const row = this.thoughtRow();
-    if (this.segment !== kind || kind === "note") {
-      if (row.text) row.text += "\n\n";
-      this.segment = kind;
-    }
-    row.text += text;
-    this.refreshThought();
-  }
-
-  /** Thinking text of the model; `timed`: live (its duration counts). */
-  private thinking(delta: string, timed: boolean) {
-    if (!delta) return;
-    this.thinkingSeen = true;
-    if (!timed) this.untimed = true;
-    else if (!this.thinkingSince) this.thinkingSince = this.now();
-    this.addThought("thinking", delta);
-  }
-
-  /** A stretch of thinking ended (text, a tool call or the end of the message came). */
-  private stopThinking() {
-    if (!this.thinkingSince) return;
-    this.thinkingMs += this.now() - this.thinkingSince;
-    this.thinkingSince = 0;
-    this.refreshThought();
+  /** Thinking of the model: not shown, only counted as work. */
+  private thinking(delta: string) {
+    if (delta) this.thought = true;
   }
 
   private appendText(text: string) {
     if (!text) return;
-    this.stopThinking();
-    if (this.live && !this.replying) {
-      this.replying = true;
-      this.refreshTools();
-    }
     if (!this.assistant) this.assistant = this.push({ kind: "assistant", text: "", state: 0 });
     this.assistant.text += text;
   }
@@ -278,8 +219,6 @@ export class Chat {
   private messageBegin() {
     this.messageStart = this.assistant?.text.length ?? 0;
     if (this.assistant?.text) this.assistant.text += "\n\n";
-    // Its thinking is a paragraph of its own in the thought row.
-    this.segment = "";
   }
 
   /**
@@ -287,7 +226,6 @@ export class Chat {
    * the text of a message that calls a tool is a progress note, not the answer.
    */
   private messageEnd(stopReason: string) {
-    this.stopThinking();
     const start = this.messageStart;
     this.messageStart = -1;
     if (stopReason !== "toolUse" || start < 0 || !this.assistant) return;
@@ -297,56 +235,53 @@ export class Chat {
       this.rows.splice(this.rows.indexOf(this.assistant), 1);
       this.assistant = undefined;
     }
-    if (note) {
-      this.notes++;
-      this.lastNote = note;
-      const start = this.thought?.text.length ?? 0;
-      this.addThought("note", note);
-      this.lastNoteAt = [start, this.thought!.text.length];
-    }
-  }
-
-  /**
-   * A turn that ends without an answer (the summary came with the last tool
-   * call; Stop, a timeout or an error after it): its latest note is the answer.
-   */
-  private restoreAnswer() {
-    const row = this.thought;
-    const note = this.lastNote;
-    if (this.assistant || !note || !row) return;
-    // Cut the note out where it is, also when thinking came after it.
-    const [start, end] = this.lastNoteAt;
-    if (row.text.slice(start, end).trim() === note) {
-      const head = row.text.slice(0, start).replace(/\s+$/, "");
-      const tail = row.text.slice(end).replace(/^\s+/, "");
-      row.text = head && tail ? `${head}\n\n${tail}` : head + tail;
-    }
-    this.notes--;
-    this.refreshThought();
-    if (!row.text) this.rows.splice(this.rows.indexOf(row), 1);
-    this.assistant = this.push({ kind: "assistant", text: note, state: 1 });
+    if (note) this.lastNote = note;
   }
 
   /** Closes the current turn: no more text or calls join its rows. */
   endTurn() {
-    this.stopThinking();
     this.messageStart = -1;
-    this.restoreAnswer();
+    const note = this.lastNote;
+    let answer: Row | undefined;
+    // A turn that ends without an answer (the summary came with the last tool
+    // call; Stop, a timeout or an error after it): its latest note is the answer.
+    if (!this.assistant && note) answer = this.assistant = this.push({ kind: "assistant", text: note, state: 1 });
     this.lastNote = "";
     if (this.assistant) this.assistant.state = 1;
-    this.thought = undefined;
-    this.segment = "";
-    this.thinkingMs = 0;
-    this.thinkingSeen = false;
-    this.untimed = false;
-    this.notes = 0;
+    const row = this.activityRow;
+    if (row) {
+      row.seconds = this.live ? Math.max(1, Math.round((this.now() - this.startedAt) / 1000)) : 0;
+      // A turn with no step keeps its row only when it was timed and the model thought.
+      if (!this.calls.length && !(this.live && this.thought)) this.rows.splice(this.rows.indexOf(row), 1);
+    }
+    this.closed = this.live ? { row, calls: this.calls, startedAt: this.startedAt, thought: this.thought, note, answer } : undefined;
     this.live = false;
-    // A turn without tool calls keeps no status line.
-    if (this.toolsRow && !this.calls.length) this.rows.splice(this.rows.indexOf(this.toolsRow), 1);
-    else this.refreshTools();
-    this.toolsRow = undefined;
+    this.refreshActivity();
+    this.activityRow = undefined;
     this.assistant = undefined;
     this.calls = [];
+    this.thought = false;
+  }
+
+  /**
+   * An automatic retry continues the turn an error closed: "Working…" again
+   * in the same activity row (back in place if it had gone), its steps and
+   * time go on, and a last note shown as the answer is a note again.
+   */
+  private resume() {
+    const closed = this.closed;
+    if (!closed || this.live) return;
+    this.closed = undefined;
+    this.live = true;
+    this.startedAt = closed.startedAt;
+    this.calls = closed.calls;
+    this.thought = closed.thought;
+    this.lastNote = closed.note;
+    if (closed.answer && this.rows.includes(closed.answer)) this.rows.splice(this.rows.indexOf(closed.answer), 1);
+    const row = closed.row ?? Chat.row({ kind: "activity", state: 0 });
+    if (!this.rows.includes(row)) this.rows.splice(this.rows.findLastIndex((r) => r.kind === "user") + 1, 0, row);
+    this.activityRow = row;
+    this.refreshActivity();
   }
 
   /** A live event from the worker. */
@@ -359,7 +294,7 @@ export class Chat {
         this.text(event.delta);
         break;
       case "thinking":
-        this.thinking(event.delta, true);
+        this.thinking(event.delta);
         break;
       case "assistant_end":
         this.messageEnd(event.stopReason);
@@ -374,7 +309,6 @@ export class Chat {
         break;
       case "tool_start":
         this.messageEnd("toolUse");
-        this.stopThinking();
         this.toolCall(event.id, { tool: event.name, target: event.target, reference: !!event.reference }, 0);
         break;
       case "tool_end":
@@ -384,6 +318,7 @@ export class Chat {
         // pi retries by itself: the failed attempt's error row gives way.
         if (this.rows.at(-1)?.kind === "error") this.rows.pop();
         this.notice("retry", [event.attempt, event.max]);
+        this.resume();
         break;
       case "compaction":
         this.notice(event.done ? "compacted" : "compacting");
@@ -419,7 +354,7 @@ export class Chat {
         chat.apply({ kind: "assistant_start" });
         for (const part of parts) {
           if (part.type === "text") chat.text(String(part.text ?? ""));
-          else if (part.type === "thinking") chat.thinking(String(part.thinking ?? ""), false);
+          else if (part.type === "thinking") chat.thinking(String(part.thinking ?? ""));
           else if (part.type === "toolCall") {
             const args = (part.arguments ?? {}) as Record<string, unknown>;
             const target = ["path", "pattern", "query", "file", "id", "name"].map((k) => args[k]).find((v) => typeof v === "string") as string | undefined;

@@ -6,515 +6,504 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: ai.slint:115
+#: ai.slint:113 ai.slint:357 ai.slint:365
+#, x-machine
+msgid "Copy"
+msgstr "복사"
+
+#: ai.slint:127
+#, x-machine
+msgid "Select All"
+msgstr "모두 선택"
+
+#: ai.slint:169
 #, x-machine
 msgid "Read"
 msgstr "읽기"
 
-#: ai.slint:116
+#: ai.slint:170
 #, x-machine
 msgid "Write"
 msgstr "쓰기"
 
-#: ai.slint:117
+#: ai.slint:171
 #, x-machine
 msgid "Edit"
 msgstr "편집"
 
-#: ai.slint:118
+#: ai.slint:172
 #, x-machine
 msgid "List"
 msgstr "목록"
 
-#: ai.slint:119
+#: ai.slint:173
 #, x-machine
 msgid "Find"
 msgstr "찾기"
 
-#: ai.slint:120
+#: ai.slint:174
 #, x-machine
 msgid "Search"
 msgstr "검색"
 
-#: ai.slint:121 main.ts:542 settings.slint:197
+#: ai.slint:175 main.ts:542 settings.slint:197
 #, x-machine
 msgid "Delete"
 msgstr "삭제"
 
-#: ai.slint:122
+#: ai.slint:176
 #, x-machine
 msgid "Docs"
 msgstr "문서"
 
-#: ai.slint:123
+#: ai.slint:177
 #, x-machine
 msgid "Search docs"
 msgstr "문서 검색"
 
-#: ai.slint:124
+#: ai.slint:178
 #, x-machine
 msgid "Create plugin"
 msgstr "플러그인 만들기"
 
-#: ai.slint:125
+#: ai.slint:179
 #, x-machine
 msgid "Type check"
 msgstr "타입 검사"
 
-#: ai.slint:126
+#: ai.slint:180
 #, x-machine
 msgid "Run tests"
 msgstr "테스트 실행"
 
-#: ai.slint:127
+#: ai.slint:181
 #, x-machine
 msgid "Check"
 msgstr "검사"
 
-#: ai.slint:128
+#: ai.slint:182
 #, x-machine
 msgid "Pack"
 msgstr "패키징"
 
-#: ai.slint:129 ai.slint:364 ai.slint:694 delivery.ts:205
+#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:205
 #, x-machine
 msgid "Install"
 msgstr "설치"
 
 #. a file of the read-only reference, e.g. "reference/sdk/dist/plugin/types.d.ts".
-#: ai.slint:134
+#: ai.slint:188
 #, x-machine
 msgid "reference/{}"
 msgstr "참고 자료/{}"
 
 #. a tool and what it is about, e.g. "Read main.ts".
-#: ai.slint:138
+#: ai.slint:192
 #, x-machine
 msgid "{0} {1}"
 msgstr "{0} {1}"
 
-#: ai.slint:144
+#: ai.slint:199 ai.slint:200
 #, x-machine
-msgid "Replying…"
-msgstr "답변 중…"
+msgid "Working…"
+msgstr "작업 중…"
 
-#: ai.slint:144 ai.slint:158
+#: ai.slint:207
 #, x-machine
-msgid "Thinking…"
-msgstr "생각 중…"
+msgid "Worked for {n} second"
+msgid_plural "Worked for {n} seconds"
+msgstr[0] "{n}초 동안 작업함"
 
-#: ai.slint:151
+#: ai.slint:208
+#, x-machine
+msgid "Worked for {0} min {1} s"
+msgstr "{0}분 {1}초 동안 작업함"
+
+#: ai.slint:211
 #, x-machine
 msgid "{0}, {1} failed"
 msgstr "{0}, {1}개 실패"
 
-#: ai.slint:155
+#: ai.slint:214
 #, x-machine
-msgid "{n} tool call"
-msgid_plural "{n} tool calls"
-msgstr[0] "도구 호출 {n}회"
+msgid "{n} step"
+msgid_plural "{n} steps"
+msgstr[0] "{n}단계"
 
-#: ai.slint:159
-#, x-machine
-msgid "Thought for {n} second"
-msgid_plural "Thought for {n} seconds"
-msgstr[0] "{n}초 동안 생각함"
-
-#: ai.slint:160
-#, x-machine
-msgid "Thought process"
-msgstr "생각 과정"
-
-#: ai.slint:161
-#, x-machine
-msgid "{n} progress note"
-msgid_plural "{n} progress notes"
-msgstr[0] "진행 메모 {n}개"
-
-#: ai.slint:164
+#: ai.slint:217
 #, x-machine
 msgid "Stopped"
 msgstr "중지됨"
 
-#: ai.slint:165
+#: ai.slint:218
 #, x-machine
 msgid "The last reply was interrupted (the player or the plugin quit)"
 msgstr "마지막 답변이 중단되었습니다 (플레이어 또는 플러그인이 종료됨)"
 
-#: ai.slint:166
+#: ai.slint:219
 #, x-machine
 msgid "Connection failed; retrying ({0}/{1})…"
 msgstr "연결 실패, 다시 시도 중 ({0}/{1})…"
 
-#: ai.slint:167
+#: ai.slint:220
 #, x-machine
 msgid "Compacting the context…"
 msgstr "컨텍스트 압축 중…"
 
-#: ai.slint:168
+#: ai.slint:221
 #, x-machine
 msgid "Context compacted"
 msgstr "컨텍스트를 압축했습니다"
 
-#: ai.slint:169
+#: ai.slint:222
 #, x-machine
 msgid "Could not delete “{0}”: {1}"
 msgstr "“{0}”을(를) 삭제하지 못했습니다: {1}"
 
-#: ai.slint:170
+#: ai.slint:223
 #, x-machine
 msgid "{n} earlier message is not shown (the full record is in the session folder)"
 msgid_plural "{n} earlier messages are not shown (the full record is in the session folder)"
 msgstr[0] "이전 메시지 {n}개는 표시되지 않습니다 (전체 기록은 세션 폴더에 있음)"
 
-#: ai.slint:174
+#: ai.slint:227
 #, x-machine
 msgid "The API key is invalid or has no permission; check it in the settings."
 msgstr "API 키가 올바르지 않거나 권한이 없습니다. 설정에서 확인하세요."
 
-#: ai.slint:175
+#: ai.slint:228
 #, x-machine
 msgid "The model “{}” is not available; choose another model in the settings."
 msgstr "“{}” 모델을 사용할 수 없습니다. 설정에서 다른 모델을 선택하세요."
 
-#: ai.slint:176
+#: ai.slint:229
 #, x-machine
 msgid "The model is not available; choose another model in the settings."
 msgstr "모델을 사용할 수 없습니다. 설정에서 다른 모델을 선택하세요."
 
-#: ai.slint:177
+#: ai.slint:230
 #, x-machine
 msgid "The model does not accept the thinking settings: in the settings, set Thinking to Off, or clear “This model can think before it answers”."
 msgstr "모델이 생각 설정을 받아들이지 않습니다. 설정에서 “생각”을 “끄기”로 하거나 “이 모델은 답하기 전에 생각합니다” 선택을 해제하세요."
 
-#: ai.slint:178
+#: ai.slint:231
 #, x-machine
 msgid "Out of quota or too many requests; try again later."
 msgstr "할당량이 부족하거나 요청이 너무 많습니다. 나중에 다시 시도하세요."
 
-#: ai.slint:179
+#: ai.slint:232
 #, x-machine
 msgid "Network error: cannot reach the provider."
 msgstr "네트워크 오류: 제공자에 연결할 수 없습니다."
 
-#: ai.slint:180
+#: ai.slint:233
 #, x-machine
 msgid "No reply from the provider for {} seconds; stopped."
 msgstr "{}초 동안 제공자의 응답이 없어 중지했습니다."
 
-#: ai.slint:181
+#: ai.slint:234
 #, x-machine
 msgid "The agent process quit unexpectedly."
 msgstr "에이전트 프로세스가 예기치 않게 종료되었습니다."
 
-#: ai.slint:183
+#: ai.slint:236
 #, x-machine
 msgid "Something went wrong."
 msgstr "문제가 발생했습니다."
 
-#: ai.slint:259 ai.slint:290
+#: ai.slint:320
 #, x-machine
 msgid "Collapse ▾"
 msgstr "접기 ▾"
 
-#: ai.slint:259
-#, x-machine
-msgid "Show ▸"
-msgstr "펼치기 ▸"
-
-#: ai.slint:270 ai.slint:320 ai.slint:327
-#, x-machine
-msgid "… (too long; the rest is not shown)"
-msgstr "… (너무 길어서 나머지는 표시하지 않음)"
-
-#: ai.slint:290
+#: ai.slint:320
 #, x-machine
 msgid "All ▸"
 msgstr "모두 ▸"
 
-#: ai.slint:323
+#: ai.slint:354 ai.slint:361
 #, x-machine
-msgid "Copy"
-msgstr "복사"
+msgid "… (too long; the rest is not shown)"
+msgstr "… (너무 길어서 나머지는 표시하지 않음)"
 
-#: ai.slint:345
+#: ai.slint:384
 #, x-machine
 msgid "Retry"
 msgstr "다시 시도"
 
-#: ai.slint:346
+#: ai.slint:385
 #, x-machine
 msgid "Open Settings"
 msgstr "설정 열기"
 
-#: ai.slint:365 ai.slint:695
+#: ai.slint:404 ai.slint:734
 #, x-machine
 msgid "Export .vxp"
 msgstr ".vxp 내보내기"
 
-#: ai.slint:366 ai.slint:696
+#: ai.slint:405 ai.slint:735
 #, x-machine
 msgid "Export Source .zip"
 msgstr "소스 .zip 내보내기"
 
-#: ai.slint:367 ai.slint:587 ai.slint:697
+#: ai.slint:406 ai.slint:626 ai.slint:736
 #, x-machine
 msgid "Open Folder"
 msgstr "폴더 열기"
 
-#: ai.slint:433
+#: ai.slint:472
 #, x-machine
 msgid "Reading the API key from the keychain… (the system may ask for permission)"
 msgstr "키체인에서 API 키 읽는 중… (시스템에서 권한을 요청할 수 있음)"
 
-#: ai.slint:434
+#: ai.slint:473
 #, x-machine
 msgid "Cannot read the key from the keychain; save it again in the settings. ({})"
 msgstr "키체인에서 키를 읽을 수 없습니다. 설정에서 다시 저장하세요. ({})"
 
-#: ai.slint:435
+#: ai.slint:474
 #, x-machine
 msgid "Cannot read the key from the keychain; save it again in the settings. (The key is not in the keychain)"
 msgstr "키체인에서 키를 읽을 수 없습니다. 설정에서 다시 저장하세요. (키체인에 키가 없음)"
 
-#: ai.slint:436
+#: ai.slint:475
 #, x-machine
 msgid "The API key has not been read yet."
 msgstr "아직 API 키를 읽지 않았습니다."
 
-#: ai.slint:437
+#: ai.slint:476
 #, x-machine
 msgid "No provider set up: choose a provider in the settings and save its API key first."
 msgstr "설정된 제공자가 없습니다. 먼저 설정에서 제공자를 선택하고 API 키를 저장하세요."
 
-#: ai.slint:442
+#: ai.slint:481
 #, x-machine
 msgid "Install {0} {1}"
 msgstr "{0} {1} 설치"
 
-#: ai.slint:445
+#: ai.slint:484
 #, x-machine
 msgid "done"
 msgstr "완료"
 
-#: ai.slint:446
+#: ai.slint:485
 #, x-machine
 msgid "cancelled"
 msgstr "취소됨"
 
-#: ai.slint:447
+#: ai.slint:486
 #, x-machine
 msgid "failed"
 msgstr "실패"
 
-#: ai.slint:448
+#: ai.slint:487
 #, x-machine
 msgid "failed; the previous version could not be fully restored"
 msgstr "실패. 이전 버전을 완전히 복원하지 못했습니다"
 
-#: ai.slint:449
+#: ai.slint:488
 #, x-machine
 msgid "too late to cancel"
 msgstr "이미 취소할 수 없음"
 
-#: ai.slint:453
+#: ai.slint:492
 #, x-machine
 msgid "Packing {}…"
 msgstr "{} 패키징 중…"
 
-#: ai.slint:454
+#: ai.slint:493
 #, x-machine
 msgid "The player is validating {}…"
 msgstr "플레이어에서 {} 검증 중…"
 
-#: ai.slint:455
+#: ai.slint:494
 #, x-machine
 msgid "The player's validation failed ({0}): {1}"
 msgstr "플레이어 검증 실패 ({0}): {1}"
 
-#: ai.slint:456
+#: ai.slint:495
 #, x-machine
 msgid "Checks before packing failed: {} problem(s)"
 msgstr "패키징 전 검사 실패: 문제 {}개"
 
-#: ai.slint:457
+#: ai.slint:496
 #, x-machine
 msgid "Packing failed: {} type error(s)"
 msgstr "패키징 실패: 타입 오류 {}개"
 
-#: ai.slint:458
+#: ai.slint:497
 #, x-machine
 msgid "Packing failed"
 msgstr "패키징 실패"
 
-#: ai.slint:459
+#: ai.slint:498
 #, x-machine
 msgid "Packing failed: no .vxp was written"
 msgstr "패키징 실패: .vxp 파일이 만들어지지 않았습니다"
 
-#: ai.slint:460
+#: ai.slint:499
 #, x-machine
 msgid "Packing cancelled"
 msgstr "패키징을 취소했습니다"
 
-#: ai.slint:461
+#: ai.slint:500
 #, x-machine
 msgid "Packing timed out and was stopped"
 msgstr "패키징 시간이 초과되어 중지했습니다"
 
-#: ai.slint:462
+#: ai.slint:501
 #, x-machine
 msgid "Not installed (cancelled)."
 msgstr "설치하지 않았습니다 (취소됨)."
 
-#: ai.slint:463
+#: ai.slint:502
 #, x-machine
 msgid "Installing {}…"
 msgstr "{} 설치 중…"
 
-#: ai.slint:464
+#: ai.slint:503
 #, x-machine
 msgid "{} has the name of a plugin built into the player and cannot be installed; choose another id."
 msgstr "{}: 플레이어 내장 플러그인과 이름이 같아 설치할 수 없습니다. 다른 ID를 선택하세요."
 
-#: ai.slint:465
+#: ai.slint:504
 #, x-machine
 msgid "Not installed: the installed plugin was kept."
 msgstr "설치하지 않았습니다: 기존에 설치된 플러그인을 유지했습니다."
 
-#: ai.slint:466
+#: ai.slint:505
 #, x-machine
 msgid "{0}: {1}…"
 msgstr "{0}: {1}…"
 
-#: ai.slint:467
+#: ai.slint:506
 #, x-machine
 msgid "{0}: {1} ({2})"
 msgstr "{0}: {1} ({2})"
 
-#: ai.slint:468
+#: ai.slint:507
 #, x-machine
 msgid "{0}: {1}"
 msgstr "{0}: {1}"
 
-#: ai.slint:469
+#: ai.slint:508
 #, x-machine
 msgid "Installed {0} {1}. Shortcuts not in effect:"
 msgstr "{0} {1} 설치 완료. 적용되지 않은 단축키:"
 
-#: ai.slint:470
+#: ai.slint:509
 #, x-machine
 msgid "Installed {0} {1}."
 msgstr "{0} {1} 설치 완료."
 
-#: ai.slint:471
+#: ai.slint:510
 msgid "Installed {0} {1}. It stays disabled, as you set it; enable it in the Plugin Store."
 msgstr "{0} {1} 설치 완료. 설정한 대로 비활성화 상태가 유지됩니다. 플러그인 스토어에서 활성화하세요."
 
-#: ai.slint:472
+#: ai.slint:511
 msgid "Installed {0} {1}, but it failed: {2}"
 msgstr "{0} {1} 설치 완료. 하지만 오류가 발생했습니다: {2}"
 
-#: ai.slint:473
+#: ai.slint:512
 msgid "Installed {0} {1}, but it failed."
 msgstr "{0} {1} 설치 완료. 하지만 오류가 발생했습니다."
 
-#: ai.slint:474
+#: ai.slint:513
 #, x-machine
 msgid "Exported {}"
 msgstr "내보내기 완료: {}"
 
-#: ai.slint:475
+#: ai.slint:514
 #, x-machine
 msgid "Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "{} 내보내기 완료. ID가 local.로 시작합니다: 게시하기 전에 manifest.json의 id를 <GitHub 이름>.<이름>으로 바꾸세요. LICENSE는 임시 파일입니다: 게시하기 전에 선택한 라이선스의 전문으로 바꾸고 manifest.json에 license를 지정하세요."
 
-#: ai.slint:476
+#: ai.slint:515
 #, x-machine
 msgid "Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json."
 msgstr "{} 내보내기 완료. LICENSE는 임시 파일입니다: 게시하기 전에 선택한 라이선스의 전문으로 바꾸고 manifest.json에 license를 지정하세요."
 
-#: ai.slint:477
+#: ai.slint:516
 #, x-machine
 msgid "Something went wrong: {}"
 msgstr "문제가 발생했습니다: {}"
 
-#: ai.slint:483
+#: ai.slint:522
 #, x-machine
 msgid "{0} ({1}) is taken by {2}"
 msgstr "{0} ({1}): {2}에서 사용 중입니다"
 
-#: ai.slint:486
+#: ai.slint:525
 #, x-machine
 msgid "the player “{}”"
 msgstr "플레이어 “{}”"
 
-#: ai.slint:486
+#: ai.slint:525
 #, x-machine
 msgid "{0} “{1}”"
 msgstr "{0} “{1}”"
 
-#: ai.slint:518
+#: ai.slint:557
 #, x-machine
 msgid "+ New Chat"
 msgstr "+ 새 대화"
 
-#: ai.slint:535 ai.slint:577
+#: ai.slint:574 ai.slint:616
 #, x-machine
 msgid "New chat"
 msgstr "새 대화"
 
-#: ai.slint:535
+#: ai.slint:574
 #, x-machine
 msgid "Today"
 msgstr "오늘"
 
-#: ai.slint:535
+#: ai.slint:574
 #, x-machine
 msgid "Earlier"
 msgstr "이전"
 
-#: ai.slint:548 ai.slint:592
+#: ai.slint:587 ai.slint:631
 #, x-machine
 msgid "Delete Chat"
 msgstr "대화 삭제"
 
-#: ai.slint:555
+#: ai.slint:594
 #, x-machine
 msgid "⚙ Settings"
 msgstr "⚙ 설정"
 
-#: ai.slint:613
+#: ai.slint:652
 #, x-machine
 msgid "Go to Settings"
 msgstr "설정으로 이동"
 
-#: ai.slint:627
+#: ai.slint:666
 #, x-machine
 msgid "What plugin would you like to make, or what would you like to ask?"
 msgstr "어떤 플러그인을 만들고 싶으신가요? 아니면 무엇이든 물어보세요."
 
-#: ai.slint:674
+#: ai.slint:713
 #, x-machine
 msgid "Plugin: {}"
 msgstr "플러그인: {}"
 
-#: ai.slint:728
+#: ai.slint:767
 #, x-machine
 msgid "Another conversation is generating; please wait…"
 msgstr "다른 대화에서 생성 중입니다. 잠시 기다리세요…"
 
-#: ai.slint:728
+#: ai.slint:767
 #, x-machine
 msgid "Type a message… Enter to send · Shift+Enter for a new line"
 msgstr "메시지 입력… Enter로 보내기 · Shift+Enter로 줄 바꿈"
 
-#: ai.slint:745
+#: ai.slint:784
 #, x-machine
 msgid "Send"
 msgstr "보내기"
 
-#: ai.slint:749
+#: ai.slint:788
 #, x-machine
 msgid "■ Stop"
 msgstr "■ 중지"

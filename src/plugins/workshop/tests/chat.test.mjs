@@ -57,18 +57,17 @@ test("a saved key goes to the keychain only and is shown masked", async () => {
   await ai.stop();
 });
 
-test("a message streams back; the write tool shows one tool line and the file lands in work/", async () => {
+test("a message streams back; the write tool is a step of the activity row and the file lands in work/", async () => {
   const mock = await server(writeThenDone);
   const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
   await ai.ask("写一个 notes.md");
-  assert.equal(ai.kinds(), "user,thought,tools,assistant");
-  const [user, thought, tools, reply] = ai.rows();
+  assert.equal(ai.kinds(), "user,activity,assistant");
+  const [user, activity, reply] = ai.rows();
   assert.equal(user.text, "写一个 notes.md");
-  // 「好的，我来写。」 came before a tool call: a progress note in the collapsed thought row, not the answer.
-  assert.equal(ai.shown(1), "1 条进度说明");
-  assert.equal(thought.text, "", "collapsed: no text sent");
-  assert.equal(ai.shown(2), "1 个工具调用");
-  assert.equal(await ai.calls(2), "✓ 写入 notes.md");
+  // 「好的，我来写。」 came before a tool call: a progress note, not the answer, and not shown.
+  assert.match(ai.shown(1), /^用时 \d+ 秒 · 1 个步骤$/);
+  assert.equal(activity.text, "");
+  assert.equal(await ai.calls(1), "✓ 写入 notes.md");
   assert.equal(reply.text, "写好了：notes.md。");
 
   const [meta] = (await fs.readdir(path.join(ai.plugin.dataDirectory, "sessions"))).map((id) => path.join(ai.plugin.dataDirectory, "sessions", id));
@@ -91,12 +90,13 @@ test("a message streams back; the write tool shows one tool line and the file la
     ["check", "delete", "docs", "docs_search", "edit", "find", "grep", "install_plugin", "ls", "pack", "read", "scaffold_plugin", "test", "typecheck", "write"],
   );
 
-  await ai.send("toggle", tools.id);
-  assert.equal(ai.rows()[2].expanded, true);
-  await ai.send("toggle", thought.id);
-  assert.equal(ai.rows()[1].text, "好的，我来写。");
+  await ai.send("toggle", activity.id);
+  assert.equal(ai.rows()[1].expanded, true);
   await ai.send("copy", reply.id);
   assert.equal(ai.host.clipboard.text, reply.text);
+  // The user's own message has a Copy link too.
+  await ai.send("copy", user.id);
+  assert.equal(ai.host.clipboard.text, "写一个 notes.md");
   await ai.send("open-folder");
   assert.deepEqual(ai.host.system.opened.map((p) => path.basename(p)), ["work"]);
   await ai.stop();

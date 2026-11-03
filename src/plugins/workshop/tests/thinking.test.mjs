@@ -1,5 +1,5 @@
 // Reasoning models: thinking is on ("low") where the model reasons, comes
-// back as thinking (a collapsed row), not as the answer, and the settings
+// back as thinking (not shown: it only counts as the turn's work), not as the answer, and the settings
 // choose the level and, for a custom endpoint, whether its model reasons.
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -16,7 +16,7 @@ const thinkThenAnswer = (req) => {
     : { thinking: ["The user wants ", "the folder listed."], text: ["我先看看文件夹。"], toolCalls: [{ name: "ls", args: { path: "." } }] };
 };
 
-test("a custom Anthropic-format reasoning model (MiniMax-M3): thinking low with room for the answer, shown collapsed", async () => {
+test("a custom Anthropic-format reasoning model (MiniMax-M3): thinking low with room for the answer, not shown", async () => {
   const mock = await server(thinkThenAnswer, { models: ["MiniMax-M3"] });
   const ai = await startAi({ locale: "zh-Hans" });
   await ai.configure(mock.url, { format: "Anthropic" });
@@ -29,11 +29,12 @@ test("a custom Anthropic-format reasoning model (MiniMax-M3): thinking low with 
   assert.equal(body.thinking.budget_tokens, 2048);
   assert.ok(body.max_tokens > body.thinking.budget_tokens + 8000, `max_tokens ${body.max_tokens} leaves room after the thinking budget`);
 
-  assert.equal(ai.kinds(), "user,thought,tools,assistant");
-  assert.equal(ai.rows()[3].text, "文件夹是空的。", "the answer has no thinking in it");
-  assert.match(ai.shown(1), /^已思考 \d+ 秒$/);
+  assert.equal(ai.kinds(), "user,activity,assistant");
+  assert.equal(ai.rows()[2].text, "文件夹是空的。", "the answer has no thinking in it");
+  assert.match(ai.shown(1), /^用时 \d+ 秒 · 1 个步骤$/);
   await ai.send("toggle", ai.rows()[1].id);
-  assert.equal(ai.rows()[1].text, "The user wants the folder listed.\n\n我先看看文件夹。\n\nThe folder is empty.");
+  assert.equal(ai.rows()[1].text, "", "no thinking sent to the window");
+  assert.equal(await ai.calls(1), "✓ 列出 .");
   // The thinking went back to the model with its signature (Anthropic requires it with tool use).
   const replay = mock.chats[1].body.messages.find((m) => m.role === "assistant");
   assert.deepEqual(replay.content[0], { type: "thinking", thinking: "The user wants the folder listed.", signature: "sig-test" });
@@ -70,7 +71,8 @@ test("an OpenAI-format endpoint's reasoning_content arrives as thinking, not as 
   const ai = await startAi({ locale: "zh-Hans" });
   await ai.configure(mock.url);
   await ai.ask("你好");
-  assert.equal(ai.kinds(), "user,thought,assistant");
+  assert.equal(ai.kinds(), "user,activity,assistant");
+  assert.match(ai.shown(1), /^用时 \d+ 秒$/, "a turn that thought says how long it worked");
   assert.equal(ai.rows()[2].text, "你好！");
   await ai.stop();
 });
