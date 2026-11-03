@@ -40,15 +40,15 @@ test("All lists the repositories' plugins, installed or not, and installed plugi
     await openStore(host);
     await until(host, () => store.items.length === 6, "rows");
     assert.equal(props(host)["category"], ALL);
-    type Row = { name: string; badge: string; meta?: string };
+    type Row = { name: string; mark: string; badge: string; meta?: string };
     assert.deepEqual(
-      (rows(host) as Row[]).map((r) => [r.name, r.badge, r.meta]),
+      (rows(host) as Row[]).map((r) => [r.name, r.mark, r.badge, r.meta]),
       [
-        ["Alpha", "已安装", "Someone · 官方仓库"],
-        ["Beta", "可更新 → 2.0.0", "Someone · 官方仓库"],
-        ["Gamma", "", "Someone · 官方仓库"],
-        ["s.side", "已安装", "未知作者 · 本地文件"],
-        ["w.work", "已停用", "未知作者 · 插件工坊"],
+        ["Alpha", "✓", "", "Someone · 官方仓库"],
+        ["Beta", "", "可更新 → 2.0.0", "Someone · 官方仓库"],
+        ["Gamma", "", "", "Someone · 官方仓库"],
+        ["s.side", "✓", "", "未知作者 · 本地文件"],
+        ["w.work", "已停用", "", "未知作者 · 插件工坊"],
       ],
       "the built-in is hidden (the check box is on by default)",
     );
@@ -56,14 +56,14 @@ test("All lists the repositories' plugins, installed or not, and installed plugi
     assert.equal(props(host)["installed-count"], 4);
     assert.equal(props(host)["updates"], 1);
 
-    // Each row's buttons by its state, in the fixed order Update, Disable or Enable, Uninstall….
+    // Each row's one control by its state (Install, Update, else the ⋯ menu in the fixed order Disable or Enable, Uninstall…).
     const of = (name: string) => {
       const { primary, menu } = controls(host, name);
       return [...(primary ? [primary] : []), ...menu].map((a) => a.id);
     };
     assert.deepEqual(of("Gamma"), ["install"]);
     assert.deepEqual(of("Alpha"), ["disable", "uninstall", "reload", "openData"]);
-    assert.deepEqual(of("Beta"), ["update", "disable", "uninstall", "reload", "openData"]);
+    assert.deepEqual(of("Beta"), ["update"]);
     assert.deepEqual(of("s.side"), ["disable", "uninstall", "reload", "openData"]);
     assert.deepEqual(of("w.work"), ["enable", "uninstall", "openData"]);
     assert.equal(controls(host, "w.work").dim, true);
@@ -104,12 +104,12 @@ test("the same plugin in two repositories: one row under All when installed, one
     await store.refreshAll(true);
     await openStore(host);
     await until(host, () => store.items.length === 4, "rows");
-    type Row = { key: string; badge: string };
+    type Row = { key: string; mark: string };
     // Alpha (installed from the official repository): its installed row only. Beta (not installed): one row per repository.
     assert.deepEqual(
-      (rows(host) as Row[]).map((r) => [r.key, r.badge]).sort(),
+      (rows(host) as Row[]).map((r) => [r.key, r.mark]).sort(),
       [
-        [`${OFFICIAL}\na.alpha`, "已安装"],
+        [`${OFFICIAL}\na.alpha`, "✓"],
         [`${OFFICIAL}\nb.beta`, ""],
         [`${THIRD}\nb.beta`, ""],
       ].sort(),
@@ -191,31 +191,53 @@ test("offline, no index: All in English shows the installed plugins, their count
     assert.deepEqual(rows(host).map((r) => r.name), ["s.side", "w.work"]);
     assert.equal(props(host)["all-count"], 2);
     assert.equal(props(host)["list-note"], "Can't reach the repositories; only installed plugins are shown. Click Refresh to retry.");
-    assert.deepEqual(controls(host, "s.side").primary?.id, "disable");
+    assert.deepEqual(controls(host, "s.side").menu[0]?.id, "disable");
   } finally {
     await stop();
   }
 });
 
-test("All in English: a .vxp install that a repository lists too is one row, its details say where else it is", async () => {
+test("All in English: one control per row (Install, Update, ⋯) and the state left of the version; a .vxp install a repository lists too is one row", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [
     { id: "t.tube", name: "Tube", versions: [{ version: "2.0.0" }] },
     { id: "g.gamma", name: "Gamma", versions: [{ version: "1.0.0" }] },
+    { id: "n.newer", name: "Newer", versions: [{ version: "1.4.0" }, { version: "1.3.0" }] },
+    { id: "q.quiet", name: "Quiet", versions: [{ version: "0.9.0" }] },
   ]);
   const tube = {
     ...info("t.tube", { version: "1.0.0", source: { kind: "file" } }),
     display: { name: "Tube", punchline: "Plays tubes", description: null, tags: [] },
   } as Info;
-  const { host, store, stop } = await start({ net, locale: "en", packages: [BUILTIN, tube] });
+  const { host, store, stop } = await start({
+    net,
+    locale: "en",
+    packages: [
+      BUILTIN,
+      tube,
+      info("n.newer", { version: "1.3.0", source: fromRepo }),
+      info("q.quiet", { version: "0.9.0", source: fromRepo, state: "disabled" }),
+    ],
+  });
   try {
     await openStore(host);
-    await until(host, () => store.items.length === 4, "rows");
-    assert.deepEqual(rows(host).map((r) => [r.name, r.badge]), [
-      ["Gamma", ""],
-      ["Tube", "Installed"],
-    ]);
-    assert.equal(props(host)["all-count"], 2);
+    await until(host, () => store.items.length === 6, "rows");
+    type Row = { name: string; mark: string; markLabel: string; version: string; badge: string; dim: boolean };
+    assert.deepEqual(
+      (rows(host) as unknown as Row[]).map((r) => [r.name, r.mark, r.markLabel, r.version, r.badge, r.dim]),
+      [
+        ["Gamma", "", "", "1.0.0", "", false],
+        ["Newer", "", "", "1.3.0", "Update → 1.4.0", false],
+        ["Quiet", "Disabled", "", "0.9.0", "", true],
+        ["Tube", "✓", "Installed", "1.0.0", "", false],
+      ],
+    );
+    const one = (name: string) => {
+      const { primary, menu } = controls(host, name);
+      return primary ? primary.text : menu.length ? "⋯" : "";
+    };
+    assert.deepEqual(["Gamma", "Newer", "Quiet", "Tube"].map(one), ["Install", "Update", "⋯", "⋯"]);
+    assert.equal(props(host)["all-count"], 4);
     host.window("store").emit("select", "\nt.tube");
     await host.settle();
     assert.ok((props(host)["banners"] as { text: string }[]).some((b) => b.text === "Also in Official repository"));
@@ -249,6 +271,37 @@ test("a development load (--plugin) folds nothing: the repository's entry of its
     host.dialogAnswers.push(yes, yes);
     host.window("store").emit("rowAct", entry.key, "install");
     await until(host, () => host.packageCalls.some((c) => c.method === "install"), "installed from the repository");
+  } finally {
+    await stop();
+  }
+});
+
+test("an update row offers only Update; another repository's version is replaced from the details", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [{ id: "a.alpha", name: "Alpha", versions: [{ version: "2.0.0" }, { version: "1.0.0" }] }]);
+  publish(net, THIRD, [{ id: "a.alpha", name: "Alpha", versions: [{ version: "5.0.0" }] }]);
+  const { host, store, stop } = await start({ net, packages: [info("a.alpha", { version: "1.0.0", source: fromRepo })] });
+  try {
+    store.settings.save({ ...store.settings.value, repos: [THIRD] });
+    store.repos.sync([THIRD]);
+    // Opened first: an update count re-registers the menu command.
+    await openStore(host);
+    await store.refreshAll(true);
+    await until(host, () => rows(host).length === 1, "rows");
+    assert.deepEqual(controls(host, "Alpha").primary?.id, "update");
+    assert.deepEqual(controls(host, "Alpha").menu, []);
+    host.window("store").emit("select", rows(host)[0]!.key);
+    await host.settle();
+    const replace = `replace:${THIRD}\na.alpha`;
+    assert.deepEqual(
+      (props(host)["actions"] as { id: string }[]).map((a) => a.id),
+      ["update", "disable", "uninstall", replace],
+    );
+    // Its button asks as Replace… did.
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("act", replace);
+    await until(host, () => host.packageCalls.some((c) => c.method === "install"), "replaced");
+    assert.deepEqual(host.packageCalls.find((c) => c.method === "install")?.source, { kind: "repository", url: THIRD });
   } finally {
     await stop();
   }

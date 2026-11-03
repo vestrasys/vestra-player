@@ -179,7 +179,7 @@ test("reload: busy, invalid (disabled meanwhile), missing (list read again) and 
       );
     });
     window.emit("rowAct", "\nd.run", "reload");
-    await until(host, () => status() === "无法重新加载「d.run」：boom" && controls(host, "d.run").badge === "失败", "failed restart");
+    await until(host, () => status() === "无法重新加载「d.run」：boom" && controls(host, "d.run").mark === "失败", "failed restart");
     assert.deepEqual(reloads(host), ["d.run"]);
   } finally {
     await stop();
@@ -231,10 +231,12 @@ test("development loads: under Installed with a Dev tag; disable and enable for 
     assert.equal((row(host, "d.dev") as { meta?: string }).meta, "未知作者 · 开发加载");
     assert.equal(props(host)["installed-count"], 2);
     const shown = controls(host, "d.dev");
-    assert.deepEqual(shown.primary, { id: "disable", text: "停用", enabled: true });
+    // The ⋯ manage menu, no button; no ✓ (its Dev tag says what it is).
+    assert.equal(shown.primary, null);
+    assert.equal(shown.mark, "");
     assert.deepEqual(
       shown.menu.map((m) => m.id),
-      ["reload", "openData"],
+      ["disable", "reload", "openData"],
     );
     await choose(host, "d.dev");
     assert.ok(!actions(host).some((a) => a.id === "uninstall"), "a development load is not uninstalled from the store");
@@ -244,10 +246,10 @@ test("development loads: under Installed with a Dev tag; disable and enable for 
     host.window("store").emit("rowAct", "\nd.dev", "disable");
     await until(host, () => controls(host, "d.dev").dim && props(host)["status-text"] === "已停用「d.dev」，到播放器退出为止", "disabled");
     assert.equal(host.confirms.length, 0, "no question (user ruling)");
-    assert.deepEqual(controls(host, "d.dev").primary, { id: "enable", text: "启用", enabled: true });
-    assert.deepEqual(controls(host, "d.dev").menu.map((m) => m.id), ["openData"], "not reloaded while disabled");
+    assert.equal(controls(host, "d.dev").primary, null);
+    assert.deepEqual(controls(host, "d.dev").menu.map((m) => m.id), ["enable", "openData"], "not reloaded while disabled");
     assert.deepEqual(actions(host).map((a) => a.id), ["enable"], "Enable in Disable's place");
-    assert.deepEqual(row(host, "d.dev")!.badge, "已停用");
+    assert.deepEqual(controls(host, "d.dev").mark, "已停用");
     host.window("store").emit("rowAct", "\nd.dev", "enable");
     await until(host, () => !controls(host, "d.dev").dim && props(host)["status-text"] === "已启用「d.dev」", "enabled");
     assert.deepEqual(
@@ -259,9 +261,9 @@ test("development loads: under Installed with a Dev tag; disable and enable for 
     );
     // Failed: the same places, Reload after them.
     host.setPackages(host.packages.map((p) => (p.id === "d.dev" ? { ...p, state: "failed", error: "boom" } : p)));
-    await until(host, () => row(host, "d.dev")!.badge === "失败", "failed");
-    assert.deepEqual(controls(host, "d.dev").primary, { id: "disable", text: "停用", enabled: true });
-    assert.deepEqual(controls(host, "d.dev").menu.map((m) => m.id), ["reload", "openData"]);
+    await until(host, () => controls(host, "d.dev").mark === "失败", "failed");
+    assert.equal(controls(host, "d.dev").primary, null);
+    assert.deepEqual(controls(host, "d.dev").menu.map((m) => m.id), ["disable", "reload", "openData"]);
     assert.deepEqual(actions(host).map((a) => a.id), ["disable", "reload"]);
   } finally {
     await stop();

@@ -343,7 +343,7 @@ export function props(host: TestHost): Record<string, Json> {
 /** The settings page's props as shown. */
 export const pageProps = (host: TestHost) => host.settingsPage("store.repos").props as Record<string, Json>;
 
-type Row = { key: string; name: string; badge: string; version: string };
+type Row = { key: string; name: string; badge: string; version: string; mark: string; markLabel: string };
 
 /** The rows of the current tab. */
 export const rows = (host: TestHost) => (props(host)["rows"] as Row[]) ?? [];
@@ -401,7 +401,7 @@ export const controls = (host: TestHost, name: string) => {
     | (Row & { primary: { id: string; text: string; enabled: boolean }; menu: { id: string; text: string; enabled: boolean }[]; dim: boolean })
     | undefined;
   if (!row) throw new Error(`no row ${name} in this tab`);
-  return { primary: row.primary.id === "" && row.primary.text === "" ? null : row.primary, menu: row.menu, dim: row.dim, badge: row.badge };
+  return { primary: row.primary.id === "" && row.primary.text === "" ? null : row.primary, menu: row.menu, dim: row.dim, badge: row.badge, mark: row.mark };
 };
 
 export const actions = (host: TestHost) => (props(host)["actions"] as { id: string; text: string; enabled: boolean }[]) ?? [];

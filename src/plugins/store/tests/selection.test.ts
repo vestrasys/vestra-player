@@ -164,7 +164,7 @@ test("install, update, uninstall and a repository dropping a plugin keep the tab
     assert.equal(props(host)["category"], ALL);
     assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Gamma", "Old", "vestra.video"]);
     assert.equal(details(host), "Delta");
-    assert.equal(rows(host).find((r) => r.name === "Delta")!.badge, "已安装");
+    assert.equal(rows(host).find((r) => r.name === "Delta")!.mark, "✓");
     // The last update under Updates: the tab stays, now empty, without details.
     await tab(host, UPDATES);
     assert.equal(details(host), "Old");

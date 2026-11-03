@@ -165,9 +165,9 @@ test("list: filters, search, tags, sort; incompatible and fully revoked plugins"
     const window = host.window("store");
     // All (the first tab): every plugin, each with its state; tags of this tab only.
     assert.equal(props(host)["category"], ALL);
-    assert.deepEqual(rows(host).map((r) => [r.name, r.badge]), [
+    assert.deepEqual(rows(host).map((r) => [r.name, r.badge || r.mark]), [
       ["Alpha", ""],
-      ["Beta", "已安装"],
+      ["Beta", "✓"],
       ["Delta", "已撤回"],
       ["Gamma", "不兼容"],
       ["vestra.video", "内置"],
@@ -178,9 +178,9 @@ test("list: filters, search, tags, sort; incompatible and fully revoked plugins"
     assert.equal(props(host)["installed-count"], 2);
     // Installed: built-ins first, then third-party.
     await tab(host, INSTALLED);
-    assert.deepEqual(rows(host).map((r) => [r.name, r.badge]), [
+    assert.deepEqual(rows(host).map((r) => [r.name, r.badge || r.mark]), [
       ["vestra.video", "内置"],
-      ["Beta", "已安装"],
+      ["Beta", "✓"],
     ]);
     assert.deepEqual(props(host)["tag-model"], ["标签：全部", "字幕"]);
     await tab(host, ALL);

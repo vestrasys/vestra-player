@@ -82,7 +82,7 @@ test("the settings page: add a third-party repository with a warning, refuse bad
     assert.equal(second.store.settings.value.autoCheck, false);
     assert.equal(second.store.repos.find(THIRD)?.index?.plugins.length, 1, "its cache is loaded");
     await openStore(second.host);
-    assert.equal(rows(second.host).find((r) => r.name === "Viz")?.badge, "已安装");
+    assert.equal(rows(second.host).find((r) => r.name === "Viz")?.mark, "✓");
 
     second.host.dialogAnswers.push(yes);
     second.host.settingsPage("store.repos").emit("remove", THIRD);

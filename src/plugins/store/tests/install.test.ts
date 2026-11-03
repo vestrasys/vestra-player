@@ -56,12 +56,13 @@ test("official install: confirm with permissions, download through a redirect, c
     await until(host, () => host.osd.includes("已安装 YouTube 0.2.0"), "osd");
     await until(host, () => !store.busy);
     assert.deepEqual(readdirSync(join(host.dataDirectory, "downloads")), [], "download removed");
-    assert.equal((await allRows(host)).find((r) => r.name === "YouTube")?.badge, "已安装");
+    assert.equal((await allRows(host)).find((r) => r.name === "YouTube")?.mark, "✓");
     // All lists it installed now: it stays selected, with Disable and Uninstall… (formerly in the Plugin Manager).
     assert.equal(props(host)["category"], ALL);
     assert.equal(props(host)["d-name"], "YouTube");
     assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…"]);
-    assert.deepEqual(controls(host, "YouTube").primary, { id: "disable", text: "停用", enabled: true });
+    assert.equal(controls(host, "YouTube").primary, null);
+    assert.equal(controls(host, "YouTube").menu[0]?.id, "disable");
   } finally {
     await stop();
   }
@@ -138,18 +139,19 @@ test("installed from a .vxp and in a repository: one row under All; its … menu
     // All: the installed row (named from its manifest, here unreadable: the id) stands for the repository's entry.
     const all = await allRows(host);
     assert.deepEqual(
-      all.filter((r) => r.key.endsWith("zysilm.youtube")).map((r) => [r.key, r.badge]),
-      [[local, "已安装"]],
+      all.filter((r) => r.key.endsWith("zysilm.youtube")).map((r) => [r.key, r.mark]),
+      [[local, "✓"]],
     );
     assert.equal(props(host)["all-count"], 1);
     await choose(host, "zysilm.youtube");
     assert.ok(banners(host).includes("也在官方仓库里"));
     // Its buttons stay; Replace with the repository's version is last in the … menu.
     const { primary, menu } = controls(host, "zysilm.youtube");
-    assert.equal(primary?.id, "disable");
+    assert.equal(primary, null);
     assert.deepEqual(
       menu.map((m) => [m.id, m.text]),
       [
+        ["disable", "停用"],
         ["uninstall", "卸载…"],
         ["reload", "重新加载"],
         ["openData", "打开数据目录"],

@@ -793,17 +793,23 @@ export class Store {
     const shown = item.state === "otherSource" || item.state === "available" || item.state === "incompatible" || item.state === "allRevoked" || item.state === "reserved"
       ? (item.best ?? item.entry?.versions[0])?.version ?? ""
       : installedVersion;
-    // Disabled and Failed tag installed rows; Revoked says more and stays.
-    const own = isInstalledRow(item) && item.state !== "revoked" ? info : null;
+    const own = isInstalledRow(item) ? info : null;
     const dev = isDevelopmentRow(item);
-    const [badge, tone] = ((): [Msg | null, number] => {
+    // Left of the version (store 0.2.12, VS Code's extension list): ✓ for an installed plugin
+    // in grey (not for one with an update, whose badge says so, nor for a development load, tagged Dev),
+    // Disabled or Failed for one that does not run.
+    const check = raw("✓");
+    const [mark, markTone] = ((): [Msg | null, number] => {
       if (own?.state === "disabled") return [msg("Disabled"), 4];
       if (own?.state === "failed") return [msg("Failed"), 2];
+      if (!own || dev || item.state === "update") return [null, 0];
+      return [check, 4];
+    })();
+    // The second line's badge: what more there is to say (an update, a revocation, another source…).
+    const [badge, tone] = ((): [Msg | null, number] => {
       // A development load says so in its Dev tag.
       if (dev) return [null, 0];
       switch (item.state) {
-        case "installed":
-          return [msg("Installed"), 0];
         case "update":
           return [msg("Update → {}", item.best!.version), 1];
         case "revoked":
@@ -818,13 +824,11 @@ export class Store {
           return [msg("Cannot be installed"), 3];
         case "allRevoked":
           return [msg("Revoked"), 3];
-        case "local":
-          return [msg("Installed"), 0];
         default:
           return [null, 0];
       }
     })();
-    const { primary, menu } = this.#controls(item, false);
+    const { primary, menu } = this.#rowControls(item);
     const warnings = own?.state === "running" ? this.#warnings(own) : [];
     // Small tags before the badge: a development load, and what a running plugin was refused.
     const flags: { text: TextValue; tone: number }[] = [];
@@ -843,6 +847,10 @@ export class Store {
           : warnings.length
             ? this.shown(joined(warnings, "{} · {}"))
             : (item.punchline ?? ""),
+      mark: this.shown(mark),
+      markTone,
+      // The ✓'s text alternative (a word mark reads as itself).
+      markLabel: mark === check ? this.shown(msg("Installed")) : "",
       badge: this.shown(badge),
       tone,
       flags,
@@ -850,9 +858,23 @@ export class Store {
       dim: isInstalledRow(item) && info?.state === "disabled",
       logo: this.#rowLogo(item),
       primary: action(primary),
-      // Replace with another source's version last, after the fixed order (All only).
-      menu: [...menu, ...(this.#working === item.key ? [] : this.#replacements(item))].map((each) => action(each)),
+      menu: menu.map((each) => action(each)),
     };
+  }
+
+  /**
+   * A row's one control in its bottom-right slot (store 0.2.12, user ruling
+   * 2026-11-03, VS Code's extension list): Install for a plugin not
+   * installed, Update while a newer version exists, else the ⋯ manage menu
+   * with every action in the fixed order (Disable or Enable, Uninstall…,
+   * Reload, Open Data Folder), then All's "Replace with x from y…". The
+   * details keep their buttons.
+   */
+  #rowControls(item: Item): { primary: Action | null; menu: Action[] } {
+    const { primary, menu } = this.#controls(item, false);
+    if (this.#working === item.key || !isInstalledRow(item)) return { primary, menu };
+    if (primary?.id === "update") return { primary, menu: [] };
+    return { primary: null, menu: [...(primary ? [primary] : []), ...menu, ...this.#replacements(item)] };
   }
 
   /**
@@ -1029,6 +1051,8 @@ export class Store {
     const list = this.#ordered(item, true);
     if (info.state === "failed")
       list.push({ id: "reload", text: msg("Reload"), enabled: idle && info.id !== this.plugin.id });
+    // A row with an update offers only Update: another repository's version is replaced from here (All).
+    if (this.#rowControls(item).primary?.id === "update") list.push(...this.#replacements(item));
     return list;
   }
 

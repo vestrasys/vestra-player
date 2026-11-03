@@ -26,6 +26,13 @@ export struct StoreRow {
     version: string,
     meta: string,
     punchline: string,
+    // Left of the version: ✓ (installed), Disabled or Failed; "" none.
+    mark: string,
+    // As tone.
+    markTone: int,
+    // The mark's text alternative when it is a symbol (✓: "Installed"); "" when it is a word.
+    markLabel: string,
+    // The second line's state (Update → x, Revoked, Built-in…); "" none.
     badge: string,
     // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim (see Tone)
     tone: int,
@@ -38,7 +45,8 @@ export struct StoreRow {
     flags: [StoreTag],
     // The plugin's logo (drawn 32px, decoded at 64).
     logo: image,
-    // The one button by state (`id` "": none) and the … menu (empty: none).
+    // The row's one control, bottom right: a button by state (Install, Update; `id` "": none),
+    // else the ⋯ manage menu (empty: none). Never both.
     primary: MenuEntry,
     menu: [MenuEntry],
 }
@@ -143,6 +151,12 @@ component ListRow inherits Rectangle {
                 height: 18px;
                 spacing: 6px;
                 Cell { horizontal-stretch: 1; text: root.item.name; color: root.item.dim ? Theme.text-dim : Theme.text; font-size: Theme.font-tab; }
+                // ✓ / Disabled / Failed right before the version (VS Code's extension list).
+                if root.item.mark != "": Cell {
+                    text: root.item.mark;
+                    color: Tone.color(root.item.markTone);
+                    accessible-label: root.item.markLabel != "" ? root.item.markLabel : root.item.mark;
+                }
                 Cell { text: root.item.version; color: Theme.text-dim; }
             }
             HorizontalLayout {
@@ -162,11 +176,12 @@ component ListRow inherits Rectangle {
                     enabled: root.item.primary.enabled;
                     clicked => { root.act(root.item.primary.id); }
                 }
-                if root.item.menu.length > 0: MenuButton {
+                // One control in the same place on every row: the button, or the ⋯ manage menu.
+                if root.item.primary.id == "" && root.item.primary.text == "" && root.item.menu.length > 0: MenuButton {
                     width: Theme.button-small-height;
                     height: Theme.button-small-height;
                     icon: StoreIcons.more;
-                    tip: @tr("More");
+                    tip: @tr("Manage");
                     entries: root.item.menu;
                     picked(id) => { root.act(id); }
                 }
