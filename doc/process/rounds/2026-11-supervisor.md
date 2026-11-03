@@ -24,8 +24,8 @@ Coordinator record and blackboard for the supervisor project. Design: [superviso
 | B2c | **merged** (registry evidence: 18 scenarios, only pre-existing noise) | `supervisor-b2c` C:\vestra\wt-sup-b2c (from fd198a48) | API maintainer | lazy.rs deleted; appearance.changed "what changed" (wire addition); doc excerpts; §13 B7 removal list |
 | B2d | **merged — B2 complete** | `supervisor-b2d` C:\vestra\wt-sup-b2d (from e29c0982) | API maintainer | lanes replace StartQueue/FirstQueue, every start a job, list_state, remove first_runs.rs + start_timeout_by_host, B2 notes 1–5 |
 | SDK bump | **merged #147 (5fb5a7b5)** | `sdk-1.5.57` C:\vestra\wt-sdk157 | API maintainer (2nd instance) | player → @vestra-player/sdk ^1.5.57 |
-| B3 | **merged** (GUI check folded into the B4 release GUI test, VESTRA_LAZY=1) | `supervisor-b3` C:\vestra\wt-sup-b3 (main 0e8ba741 + spec tests) | API maintainer | live preset → B3; LIMIT 64 removed; rulings 1–4; 200-wake storm before/after; GUI test by coordinator after review |
-| B4 | not started | | | release after |
+| B3 | **merged** (GUI check folded into the B4 release GUI test, VESTRA_LAZY=1) | `supervisor-b3` C:\vestra\wt-sup-b3 (main 0e8b a741 (#148) + spec tests) | API maintainer | live preset → B3; LIMIT 64 removed; rulings 1–4; 200-wake storm before/after; GUI test by coordinator after review |
+| B4 | in progress (maintainer + spec author) | `supervisor-b4` C:\vestra\wt-sup-b4, `supervisor-b4-spec` C:\vestra\wt-sup-b4spec (from ffb17c1d) | API maintainer, spec test author | restart/backoff/OOM/heap cap, shutdown ≤ 1 s, spawn worker + tick budget, ui_begin/finish; then GUI test (incl. B3 with VESTRA_LAZY=1) and release 0.6.x |
 | B5 | not started | | | |
 | B6 | not started | | | release after |
 | B7 | not started | | | |
@@ -65,6 +65,7 @@ From the spec test author (2026-11-02, branch `supervisor-spec` 22fa2a0f; 238 te
 Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 (code changes for Q15 upgrade of a disabled unit, Q24 backoff from reap; Q18 ruled by the coordinator: built-ins incl. shared members outside max_active). Spec tests compile: 234/241 pass. Coordinator rulings on the remaining design questions: (a) trigger while Standby{hold_until}: Interactive answered at once with a reason; Start job waits for hold_until only if event triggers remain; (b) shutdown emits all Checkpoints before the first Terminate; (c) built-ins first: today's semantics under `Tunables::today()`, the design row under target tunables (switch). Four implementation fixes sent to the maintainer (T11 Resident retry, Stop{Removed}×trigger Dropped, Restart×trigger Held, runner re-placement via Replay).
 
 ## Open items
+
 
 - **From B3 (maintainer questions, coordinator rulings 2026-11-03):**
   - B3 limits apply only with `VESTRA_LAZY=1` until B6 (as §15 says); confirmed — B6 makes on-demand the only mode (unified-scheduling ruling).
@@ -117,11 +118,21 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 
 ## Log
 
+- 2026-11-03 ~09:20: B4 pre-release fixes + 0.6.6 bump + `doc/releases/v0.6.6.md` committed (3dd23b06); 1256 host tests; real-node suites pass. Reviewer re-checking. Next: merge #150 (B4), local release build, isolated-profile GUI test (lazy off and VESTRA_LAZY=1), stage portable; publishing waits for the user (no remote CI → no tag/CI release workflow; macOS assets can't be built here).
+
+- 2026-11-03 ~08:55: B4 review → merge (own storm re-run p99 2.5 ms, max 7.8 ms; crash/OOM probes match; stderr pipe drained on its own thread, bounded, no deadlock; worker ordering holds). Accepted: stderr piping (amend §2.3), no 4 ms budget (revisit for 120/144 Hz before B6), worker only with lazy until B6. Before release, follow-up to the maintainer: §6.1 text, exact "no runtime.stop" wording, worker edge cases (spawn-timeout park losing kept entries; panicking spawn thread), quit gap for unprocessed Spawned, and 0.6.6 bump + release notes. Then GUI test (isolated profile, lazy on and off) and local release build.
+
+- 2026-11-03 ~08:20: B4 committed (0487738c) + spec tests merged (8ecb6472); 1254 host tests incl. spec; real-node suites pass. Storm: p99 tick 30 → 2.6 ms, max 118 → 6.8 ms, ticks > 16.7 ms 198 → 0. Quit (40 plugins): 580 → 114 ms. Crash probe: backoff 1/2/4/8 s, StartLimit on 5th, Resident ~1.2/2.2/4.2/8.2 s, 512 MB OOM detected in 0.8 s. Coordinator inclinations (reviewer to judge): accept own-process stderr piping for OOM detection (§7.3 over §2.3's list, amend §2.3); no 4 ms action budget (goal "no tick > one frame" met); spawn worker only with lazy on until B6. Typos flagged a commit hash in the blackboard (fixed in the record). Review started.
+
+- 2026-11-03 ~08:05: B4 spec tests committed on `supervisor-b4-spec` (40 + preset; 472/475 on main). Rulings sent to the maintainer: (1) Exited/OOM send no stop (A14), adapter does UI cleanup on reap; (2) own-process transport failure → Failed (§7.3); (3) shutdown kills stuck tracked old process; (4) disabled-with-reason derived by the adapter from hold_until; (5) reload retries belong to the Restart job (busy until ready) under B4.
+
+- 2026-11-03 ~07:45: **#149 (B3) squash-merged → main ffb17c1d.** Removed merged worktrees (sup-b2d, sup-b3spec). B4 started: maintainer (scope incl. spawn worker/tick budget, ui_begin/finish, start_now answer, shutdown) and spec test author (B4 policy tables) in parallel.
+
 - 2026-11-03 ~07:35: B3 review → merge (all checks; own storm re-run: 200 woken, ≤ 4 concurrent, max tick 113 ms then ≤ 75 ms; probe tests for queue interleavings; i18n complete; b3.rs untouched). Non-blocking → B4/docs: GUI run (done-criterion) folded into the B4 release GUI test — B3 only acts with VESTRA_LAZY=1, default users unaffected; tick budget + spawn worker + O(due) timers → B4; SDK docs: an `activate()` awaiting its own command/UI callback waits until ready (T9) → document; `start_now` answers ok before a queued reload/enable spawn error → B4; held triggers dropped unanswered at shutdown (acceptable, B4 shutdown).
 
 - 2026-11-03 ~07:10: B3 committed: limits live with VESTRA_LAZY=1, LIMIT 64 gone, WorkKind Request/Declared, failures keep registrations, explicit OSD answers (7 languages), refused resolveRequest fails at once (`owner.refuseResolution`). 1209 host tests; real-node suites pass. Storm (200 wakes, release ×2): main 63 woken + 137 could-not-start, 63 concurrent, max tick ~1.94 s → B3 200 woken, 4 concurrent, max tick ~120 ms then ≤ 52 ms, all events delivered. Registry 26 scenarios: lazy-off identical; differences explained by B3 rules. Review started.
 
-- 2026-11-03 ~05:45: **#148 (B2d) squash-merged → main 0e8ba741. B2 complete.** B3 worktree created with the spec tests merged in; maintainer briefed (live preset to B3, rulings 1–4, request accounting kinds, storm measurement, registry diff, flips of B0 tests B3 changes on purpose).
+- 2026-11-03 ~05:45: **#148 (B2d) squash-merged → main 0e8b a741 (#148). B2 complete.** B3 worktree created with the spec tests merged in; maintainer briefed (live preset to B3, rulings 1–4, request accounting kinds, storm measurement, registry diff, flips of B0 tests B3 changes on purpose).
 
 - 2026-11-03 ~05:35: B2d follow-up re-review → merge (switch semantics checked on install/restore/first-run/timeout paths; hotkeys snapshot difference accepted: no mechanism in B2d, main-vs-main also differs, not user-visible). B2d PR + merge next; then B3 (merge `supervisor-b3-spec` in, rulings 1–4 in Open items).
 
