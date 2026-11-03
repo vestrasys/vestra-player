@@ -71,7 +71,7 @@ A unit leaves `Deactivating` only when its process is reaped **and** the playbac
 
 Other events (`source.state`, `window.state`, playback events, …) never wake a plugin: they come too often, and a listener of one makes its plugin Resident. Wake events merge by name (the newest wins); a backlog holds at most 64 triggers. Wake events wake nothing during start-up and for 1 s after it settles. A start that takes longer than 400 ms shows "Starting *name*…".
 
-**Idle.** An Active Built-in or Normal unit with no job and no work in flight for **30 s** gets a standby job: the host asks the playback worker whether the plugin still holds a live resource, writes its recording, and stops it with reason `idle` and the usual 5 s grace. If it is busy, it is asked again after another idle period. **Work in flight** is a request from the host still waiting for the plugin's reply (a source state request, a `source.resolveRequest`, a package RPC; capped at 5 min, see §7) or work the plugin declared busy (a busy command, an open settings page or dialog; no cap). Idle time counts from the end of the last work.
+**Idle.** An Active Built-in or Normal unit with no job and no work in flight for **30 s** gets a standby job: the host asks the playback worker whether the plugin still holds a live resource, writes its recording, and stops it with reason `idle` and the usual 5 s grace. If it is busy, it is asked again after another idle period. **Work in flight** is of two kinds. A **request** is a `source.resolveRequest` sent to the plugin and not yet answered (`sourceResolvers.respond`) or canceled; it is the only kind capped, at 5 min (see §7). **Declared work** has no cap: the host itself sees the plugin as busy while one of its commands is marked busy, one of its settings pages is compiling or shown, a host dialog is open, a package RPC on it is in progress, a source state request of it waits for the playback worker, its activation or classification is not over, or its standby recording could not be written. Idle time counts from the end of the last work.
 
 A plugin in standby is listed in `packages.list` as `running` with `process: "idle"`; going to standby and waking never send `packages.changed`. Its session storage survives standby, crashes, reloads and upgrades; it is cleared when the user switches the plugin off or uninstalls it.
 
@@ -129,7 +129,7 @@ A start waiting for a slot has no deadline of its own: the slots free up within 
 | Stop grace after a fault | 300 ms |
 | Player quit | 1 s for all plugins together; 300 ms after a lost graphics device |
 | Wait for the previous process before a new start | 20 s from the start's own request |
-| Request awaiting the plugin's reply | 5 min, then treated as a fault; declared busy work has no cap; not for development loads |
+| Unanswered `source.resolveRequest` | 5 min, then treated as a fault; declared work has no cap; not for development loads |
 | "Starting *name*…" notice | after 400 ms |
 | Wake events after start-up settles | muted for 1 s |
 | Shared runner without members | exits after the idle time, at least 30 s |
@@ -144,7 +144,7 @@ A start waiting for a slot has no deadline of its own: the slots free up within 
 | Fault | an uncaught exception, a malformed or oversized line | the class's crash rule |
 | Out of memory | V8's "JavaScript heap out of memory" on stderr **and** exit code 134 | the class's crash rule; notice "*name* ran out of memory" |
 | Start timeout | 60 s without ready | the class's crash rule, no retry |
-| Request timeout | a reply missing for 5 min | stopped (300 ms grace), then the class's crash rule |
+| Request timeout | a `source.resolveRequest` unanswered for 5 min | stopped (300 ms grace), then the class's crash rule |
 | Transport | a full input queue or a failed write | own process: listed failed; shared-runner member: the runner restarts |
 | Refused | the plugin sent `runtime.failed` | listed failed, never retried |
 
