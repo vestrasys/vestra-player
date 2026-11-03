@@ -85,6 +85,8 @@ export component MenuButton {
             icon-width: root.icon-width;
             icon-height: root.icon-height;
             stroked: true;
+            // An icon only: its tooltip is its name.
+            accessible-label: root.tip;
             enabled: root.enabled && root.entries.length > 0;
             clicked => { menu.show(); }
         }
