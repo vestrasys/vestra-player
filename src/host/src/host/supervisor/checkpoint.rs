@@ -4,11 +4,24 @@
 //! doc/process/rounds/2026-10-lazy-activation.md §2.1). The core decides
 //! when one is written (`Action::Checkpoint`) and what it says (resident or
 //! not); the adapter writes and reads the file.
+//!
+//! A standby's recording is written on the `plugin-recorder` thread
+//! (`Writer`, supervisor.md §6.1): a write took up to 8 ms on the UI thread
+//! in B6's 200-wake storm. The thread writes in order and answers each
+//! write with `Event::Recorded`; the standby (or the classification) it was
+//! written ahead for is decided then, as it was right after the write. Every
+//! other read, write or removal of a recording first waits until the
+//! thread wrote what it was given (`Writer::flush`): what was written before
+//! is what is read back, a removal is never undone by an older write, and
+//! the quit writes its checkpoints after them (R6).
 use super::probe;
 use crate::capabilities::Call;
+use crate::host::Event;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Condvar, Mutex, mpsc};
+use std::time::{Duration, Instant};
 
 /// The recording format.
 pub(crate) const SCHEMA: u32 = 1;
@@ -111,6 +124,123 @@ pub(crate) fn write(
     Ok(())
 }
 
+/// One recording for the writer thread (`Writer::write`).
+struct Job {
+    directory: PathBuf,
+    key: Key,
+    calls: Vec<Call>,
+    resident: bool,
+    /// The run it is written for and the write's serial
+    /// (`Event::Recorded`).
+    owner: u64,
+    serial: u64,
+}
+
+/// Writes done by the thread, and the condition `flush` waits on.
+type Done = Arc<(Mutex<u64>, Condvar)>;
+
+/// The Host's handle on the `plugin-recorder` thread.
+pub(crate) struct Writer {
+    jobs: mpsc::Sender<Job>,
+    /// Writes given to the thread (the last serial).
+    sent: u64,
+    done: Done,
+}
+impl Writer {
+    /// Starts the thread (`None`: it could not start; the Host then writes
+    /// on its own thread, as before).
+    pub(crate) fn start(events: mpsc::Sender<Event>) -> Option<Self> {
+        let (jobs, received) = mpsc::channel::<Job>();
+        let done: Done = Arc::default();
+        let finished = done.clone();
+        let spawned = std::thread::Builder::new()
+            .name("plugin-recorder".into())
+            .spawn(move || {
+                serve(received, &finished, |job| {
+                    let calls = job.calls;
+                    let written = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        write(&job.directory, &job.key, calls, job.resident)
+                    }));
+                    let result = match written {
+                        Ok(Ok(())) => Ok(()),
+                        Ok(Err(error)) => Err(format!("{error:#}")),
+                        Err(_) => Err("its recording could not be written (panicked)".into()),
+                    };
+                    let _ = events.send(Event::Recorded(job.owner, job.serial, result));
+                });
+            });
+        match spawned {
+            Ok(_) => Some(Self {
+                jobs,
+                sent: 0,
+                done,
+            }),
+            Err(error) => {
+                diag!("plugin recorder: {error}");
+                None
+            }
+        }
+    }
+    /// Queues `key`'s recording for run `owner`: its serial, answered by
+    /// `Event::Recorded(owner, serial, result)`. The calls back when the
+    /// thread is gone (nothing was queued).
+    pub(crate) fn write(
+        &mut self,
+        directory: PathBuf,
+        key: Key,
+        calls: Vec<Call>,
+        resident: bool,
+        owner: u64,
+    ) -> std::result::Result<u64, Vec<Call>> {
+        let serial = self.sent + 1;
+        let job = Job {
+            directory,
+            key,
+            calls,
+            resident,
+            owner,
+            serial,
+        };
+        self.jobs
+            .send(job)
+            .map_err(|mpsc::SendError(job)| job.calls)?;
+        self.sent = serial;
+        Ok(serial)
+    }
+    /// Waits until every write queued so far is on disk (or failed), at
+    /// most `budget`: whether they all are.
+    pub(crate) fn flush(&self, budget: Duration) -> bool {
+        let (count, all) = &*self.done;
+        let deadline = Instant::now() + budget;
+        let mut done = count
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        while *done < self.sent {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return false;
+            }
+            done = all
+                .wait_timeout(done, left)
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .0;
+        }
+        true
+    }
+}
+
+/// The thread's loop: each job in order, then counted as done (`flush`).
+fn serve<J>(jobs: mpsc::Receiver<J>, done: &Done, mut run: impl FnMut(J)) {
+    for job in jobs {
+        run(job);
+        let (count, all) = &**done;
+        *count
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) += 1;
+        all.notify_all();
+    }
+}
+
 /// Removes `guid`'s recording (uninstall, reload, upgrade).
 pub(crate) fn remove(directory: &Path, guid: &str) {
     let path = file(directory, guid);
@@ -184,5 +314,74 @@ mod tests {
         remove(directory.path(), &key().guid);
         assert!(!path.exists());
         remove(directory.path(), &key().guid);
+    }
+
+    /// The writer thread writes in order, answers each write with its
+    /// serial, and `flush` returns once everything queued is on disk: the
+    /// last of several writes of one recording is what is read back.
+    #[test]
+    fn the_writer_writes_in_order_and_flush_waits_for_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let (events, received) = mpsc::channel();
+        let mut writer = Writer::start(events).unwrap();
+        assert!(writer.flush(Duration::ZERO), "nothing queued");
+        let call = |n: u64| Call::new("commands.register", json!({"id":format!("c{n}")}));
+        let mut serials = Vec::new();
+        for n in 1..=20 {
+            let calls = (1..=n).map(call).collect();
+            serials.push(
+                writer
+                    .write(directory.path().into(), key(), calls, false, 7)
+                    .unwrap(),
+            );
+        }
+        assert_eq!(serials, (1..=20).collect::<Vec<_>>());
+        assert!(writer.flush(Duration::from_secs(10)));
+        assert_eq!(read(directory.path(), &key()).unwrap().calls.len(), 20);
+        let answered = received
+            .try_iter()
+            .map(|event| match event {
+                Event::Recorded(owner, serial, result) => (owner, serial, result.is_ok()),
+                _ => panic!("another event"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            answered,
+            (1..=20).map(|serial| (7, serial, true)).collect::<Vec<_>>()
+        );
+        // A write that fails (the directory is a file) is answered as such.
+        let file = directory.path().join("not-a-directory");
+        std::fs::write(&file, "x").unwrap();
+        let serial = writer.write(file, key(), Vec::new(), false, 8).unwrap();
+        assert!(writer.flush(Duration::from_secs(10)));
+        assert!(matches!(
+            received.recv().unwrap(),
+            Event::Recorded(8, s, Err(_)) if s == serial
+        ));
+    }
+
+    /// `flush` gives up at its budget while a write is still going.
+    #[test]
+    fn flush_gives_up_at_its_budget() {
+        let (jobs, received) = mpsc::channel::<u64>();
+        let done: Done = Arc::default();
+        let (gate, open) = mpsc::channel::<()>();
+        let finished = done.clone();
+        let thread = std::thread::spawn(move || {
+            serve(received, &finished, |_| {
+                let _ = open.recv();
+            })
+        });
+        jobs.send(1).unwrap();
+        let writer = Writer {
+            jobs: mpsc::channel().0,
+            sent: 1,
+            done: done.clone(),
+        };
+        assert!(!writer.flush(Duration::from_millis(50)));
+        gate.send(()).unwrap();
+        assert!(writer.flush(Duration::from_secs(10)));
+        drop(jobs);
+        thread.join().unwrap();
     }
 }

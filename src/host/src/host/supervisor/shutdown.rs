@@ -52,6 +52,9 @@ impl Host {
             })
             .collect::<Vec<_>>();
         runs.sort_unstable();
+        // The recordings the recorder thread was given land first (R6:
+        // every checkpoint before the first stop), within the deadline.
+        self.recordings_written_by(deadline.saturating_duration_since(Instant::now()));
         for (owner, resident) in runs {
             self.quit_checkpoint(owner, resident);
         }
@@ -90,6 +93,7 @@ impl Host {
         let Some(mut plugin) = self.plugins.remove(&owner) else {
             return;
         };
+        self.plugins_revision += 1;
         self.unit_stopped(&plugin.manifest.id.clone(), owner);
         plugin.set_stop_reason(StopReason::Quit);
         plugin.set_stop_wait(Duration::from_millis(grace));

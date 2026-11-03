@@ -137,6 +137,12 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 
 ## Log
 
+- 2026-11-03 ~17:20: perf batch committed (0731501f) + main merged (7d3f84ce): packages.changed gated by source revisions (Revised<T>, store/supervisor keys; debug assert), standby recordings on a background writer, built-in timeout test. Idle p99 5.7 → 0.5 ms (no idle tick > 4 ms); storm ticks > 8.3 ms 64 → ~12, none > 16.7. Remaining storm cost: `bindings.changed` rebuilt on every wake (3.3–5.7 ms) → next small perf item (revision-gate it like packages; needed for 120/144 Hz). Review started. Lapse noted: one real-node test overlapped a probe once (guard killed and re-ran).
+
+- 2026-11-03 ~17:10: SDK 1.6.0 review → merge (markdown.slint byte-identical to the player's; docs match behaviour; retry correction right). **SDK #74 squash-merged, tag v1.6.0 pushed.** Follow-up (with 0.7.0 docs patch 1.6.1): remove "planned for player 0.6.7" wording, label the shipped version. Next: player bump to ^1.6.0 once npm shows it.
+
+- 2026-11-03 ~17:00: **#153 (AI chat fix, host 0.6.8, Workshop 2.2.30) squash-merged → main f348bec8.** SDK #74 (1.6.0) CI green, markdown.slint matches the merged player copy; independent SDK review started; then merge + tag v1.6.0, then player bump to ^1.6.0 (with the perf batch or alone).
+
 - 2026-11-03 ~16:50: GUI check of `ai-chat-fix` (stage-068pre, isolated profile `C:\vestra\guiprof-068`, local slow mock via Custom · OpenAI format, no key): one activity row "Working…" → "Working… · Write notes.md ✓" → "Worked for 13 seconds · 1 step  All ▸"; no thinking text anywhere; answer text drag-select + Ctrl+C copies; user bubble drag-select + Ctrl+C and right-click Copy/Select All work; selection colour readable in the bubble; line spacing fine. Merge next.
 
 - 2026-11-03 ~16:30: AI chat fix re-check → merge (retry resumes one row incl. double retry and stop; Copy-all; minute durations; risk of Slint-internal `anchor/cursor-position-byte-offset` accepted — add "check these properties still exist" to the Slint upgrade checklist). Building `ai-chat-fix` release to `C:\vestra\stage-068pre` for the GUI check with the slow mock in an isolated profile (line spacing and selection colour in user bubbles). Proposal to the user: keep 0.6.8 during work, ship the first public release after B7 as 0.7.0 (awaiting answer).

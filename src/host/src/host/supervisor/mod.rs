@@ -50,6 +50,7 @@
 //! shared runner waits at least 30 s without a member before it exits. The
 //! off path (`OnDemand::enabled` false, `Tunables::legacy()`) is no longer
 //! reachable from the player; B7 removes it.
+use super::revised::Revised;
 use super::*;
 use crate::capabilities;
 use crate::supervisor::{Action, Delivery, Trigger, Tunables, UnitId, WorkKind};
@@ -132,7 +133,7 @@ pub(crate) struct OnDemand {
     /// tests of the old path, which B7 removes with this field.
     pub enabled: bool,
     /// Units in standby by holder: what their kept registrations need.
-    held: BTreeMap<u64, Held>,
+    held: Revised<BTreeMap<u64, Held>>,
     /// `held` by manifest id: the B2a `debug_assert` cross-check of the
     /// core's `holder_of` (removed in B7).
     parked_ids: BTreeMap<String, u64>,
@@ -153,6 +154,12 @@ pub(crate) struct OnDemand {
     /// A standby's recording written before the core decided it (the run,
     /// its calls): the core's `Checkpoint` for it is done already.
     written: Option<(u64, usize)>,
+    /// The recorder thread (`checkpoint::Writer`), started at the first
+    /// recording it takes.
+    recorder: Option<checkpoint::Writer>,
+    /// Recordings being written ahead, by run: what waits for each
+    /// (`Event::Recorded`).
+    recording: BTreeMap<u64, Recording>,
     /// A wake's `Rekey` until its `Spawn` (from, to): the entries move once
     /// the process started, as today's `wake_now` moves them.
     rekey: Option<(u64, u64)>,
@@ -213,7 +220,38 @@ impl OnDemand {
     pub fn held(&self, owner: u64) -> Option<&Held> {
         self.held.get(&owner)
     }
+    /// Moves whenever a unit is held or let go (a source of
+    /// `packages.list`: a held unit's `warning` and `warnings`).
+    pub fn held_revision(&self) -> u64 {
+        self.held.revision()
+    }
 }
+
+/// A recording written ahead on the recorder thread (`record_ahead`).
+struct Recording {
+    /// The write's serial: a later write for the run replaces it.
+    serial: u64,
+    /// What it holds: compared with the registrations once it is written
+    /// (a plugin still runs meanwhile and may change them).
+    calls: Vec<capabilities::Call>,
+    resident: bool,
+    after: AfterRecording,
+}
+
+/// What waits for a recording written ahead: decided once it is written,
+/// as it was right after the write when the Host wrote on its own thread.
+enum AfterRecording {
+    /// The standby the core asked about, with the playback worker's answer
+    /// (`standby_answer`).
+    Standby(Value),
+    /// A lazy first run's classification, with the playback worker's
+    /// answer (`class_known`).
+    Classified(Value),
+}
+
+/// How long a read, write or removal of a recording waits at most for the
+/// recorder thread's earlier writes (`recordings_written`).
+const RECORDING_WAIT: Duration = Duration::from_secs(2);
 
 /// The Host's supervisor (B6, §17.15): the design's values for everyone,
 /// `Tunables::target` for this machine (B3's start-job limits for its
@@ -692,11 +730,11 @@ impl Host {
         self.on_demand
             .names
             .insert(held.id.clone(), held.name.clone());
-        self.on_demand.held.insert(owner, held);
+        self.on_demand.held.edit().insert(owner, held);
     }
     /// `owner` is no longer held: its catalog goes.
     pub(super) fn unhold(&mut self, owner: u64) -> Option<Held> {
-        let held = self.on_demand.held.remove(&owner)?;
+        let held = self.on_demand.held.edit().remove(&owner)?;
         if self.on_demand.parked_ids.get(&held.id) == Some(&owner) {
             self.on_demand.parked_ids.remove(&held.id);
         }
@@ -1015,14 +1053,23 @@ impl Host {
         self.supervisor.set_now(now);
         // A lazy first run goes to standby at once unless busy: the Host's
         // checks are declared work (`sync_work`), and its recording is
-        // written ahead (today's `park` does not park when that fails).
-        if resident.is_none()
-            && first_run
-            && !self.sync_work(owner, false)
-            && !self.write_ahead(owner, &backend, false)
-        {
-            self.sync_work(owner, true);
+        // written ahead (today's `park` does not park when that fails), on
+        // the recorder thread: the classification waits for it.
+        if resident.is_none() && first_run && !self.sync_work(owner, false) {
+            match self.standby_record(owner, &backend) {
+                Ok(calls) => {
+                    self.on_demand.answers.insert(owner, backend.clone());
+                    self.record_ahead(owner, calls, false, AfterRecording::Classified(backend));
+                    return;
+                }
+                Err(_) => {
+                    self.sync_work(owner, true);
+                }
+            }
         }
+        self.classify_with(owner, resident, backend);
+    }
+    fn classify_with(&mut self, owner: u64, resident: Option<String>, backend: Value) {
         self.on_demand.answers.insert(owner, backend);
         self.supervisor.classified(Pid(owner), resident);
         self.supervisor_run();
@@ -1089,35 +1136,167 @@ impl Host {
         true
     }
     /// A standby's recording, written before the core decides the standby
-    /// (today's `park` writes it first and does not park when it fails):
-    /// whether it was written. The core's `Checkpoint` for it is then done.
-    fn write_ahead(&mut self, owner: u64, backend: &Value, resident: bool) -> bool {
-        let Ok(calls) = self.standby_record(owner, backend) else {
-            return false;
-        };
-        self.write_recording(owner, calls, resident)
-    }
-    fn write_recording(
+    /// (today's `park` writes it first and does not park when it fails),
+    /// on the recorder thread (supervisor.md §6.1): `after` waits for it
+    /// (`recorded`). The core's `Checkpoint` for it is then done. Without
+    /// the thread it is written here, as before.
+    fn record_ahead(
         &mut self,
         owner: u64,
         calls: Vec<capabilities::Call>,
         resident: bool,
-    ) -> bool {
-        let Some(key) = self.checkpoint_key_of(owner) else {
-            return false;
-        };
+        after: AfterRecording,
+    ) {
         let count = calls.len();
-        if let Err(error) = checkpoint::write(&self.activation_dir(), &key, calls, resident) {
-            diag!(
-                "lazy: {} not parked: its recording: {error}",
-                self.plugin_id(owner)
-            );
-            let now = self.now_ms();
-            self.supervisor.touch(Pid(owner), now);
-            return false;
+        let Some(key) = self.checkpoint_key_of(owner) else {
+            self.recorded_then(owner, count, Err(None), after);
+            return;
+        };
+        let directory = self.activation_dir();
+        if self.on_demand.recorder.is_none() {
+            self.on_demand.recorder = checkpoint::Writer::start(self.events.clone());
         }
-        self.on_demand.written = Some((owner, count));
-        true
+        let kept = calls.clone();
+        let queued = match self.on_demand.recorder.as_mut() {
+            Some(recorder) => {
+                recorder.write(directory.clone(), key.clone(), calls, resident, owner)
+            }
+            None => Err(calls),
+        };
+        match queued {
+            Ok(serial) => {
+                self.on_demand.recording.insert(
+                    owner,
+                    Recording {
+                        serial,
+                        calls: kept,
+                        resident,
+                        after,
+                    },
+                );
+            }
+            Err(calls) => {
+                let result = checkpoint::write(&directory, &key, calls, resident)
+                    .map_err(|error| Some(format!("{error:#}")));
+                self.recorded_then(owner, count, result, after);
+            }
+        }
+    }
+    /// `Event::Recorded`: the recorder thread wrote `owner`'s recording,
+    /// or could not. A write a later one for the run replaced, and any
+    /// once the player quits, decide nothing.
+    pub(crate) fn recorded(
+        &mut self,
+        owner: u64,
+        serial: u64,
+        result: std::result::Result<(), String>,
+    ) {
+        if self
+            .on_demand
+            .recording
+            .get(&owner)
+            .is_none_or(|recording| recording.serial != serial)
+        {
+            return;
+        }
+        let Some(recording) = self.on_demand.recording.remove(&owner) else {
+            return;
+        };
+        if self.on_demand.quitting {
+            return;
+        }
+        // The plugin still ran while it was written: what it registered
+        // since goes in too, written again before anything is decided (the
+        // recording is the registrations as they are at the decision, as
+        // when it was written in the same turn).
+        if result.is_ok() && self.plugins.contains_key(&owner) {
+            let backend = match &recording.after {
+                AfterRecording::Standby(answer) | AfterRecording::Classified(answer) => answer,
+            };
+            match self.standby_record(owner, backend) {
+                Ok(calls) if calls != recording.calls => {
+                    self.record_ahead(owner, calls, recording.resident, recording.after);
+                    return;
+                }
+                Ok(_) => {}
+                // Nothing can be recorded now (a live resource): not parked.
+                Err(_) => {
+                    self.recorded_then(owner, recording.calls.len(), Err(None), recording.after);
+                    return;
+                }
+            }
+        }
+        self.recorded_then(
+            owner,
+            recording.calls.len(),
+            result.map_err(Some),
+            recording.after,
+        );
+    }
+    /// What waited for `owner`'s recording, decided as right after its
+    /// write (`Err(None)`: there was nothing to write it for). The Host's
+    /// own busy checks are synced again first: they may have changed while
+    /// it was written.
+    fn recorded_then(
+        &mut self,
+        owner: u64,
+        count: usize,
+        result: std::result::Result<(), Option<String>>,
+        after: AfterRecording,
+    ) {
+        let written = match result {
+            Ok(()) => {
+                self.on_demand.written = Some((owner, count));
+                true
+            }
+            Err(error) => {
+                if let Some(error) = error {
+                    diag!(
+                        "lazy: {} not parked: its recording: {error}",
+                        self.plugin_id(owner)
+                    );
+                    let now = self.now_ms();
+                    self.supervisor.touch(Pid(owner), now);
+                }
+                false
+            }
+        };
+        match after {
+            AfterRecording::Standby(_) => {
+                if self.plugins.contains_key(&owner) {
+                    let busy = !written || self.sync_work(owner, false);
+                    let now = self.now_ms();
+                    self.supervisor.set_now(now);
+                    self.supervisor.resources_answered(Pid(owner), busy);
+                    self.supervisor_run();
+                }
+            }
+            AfterRecording::Classified(backend) => {
+                if self.supervisor.classifying(Pid(owner)) {
+                    if !self.sync_work(owner, false) && !written {
+                        self.sync_work(owner, true);
+                    }
+                    self.classify_with(owner, None, backend);
+                }
+            }
+        }
+        self.on_demand.written = None;
+    }
+    /// Waits (at most `RECORDING_WAIT`) until the recorder thread wrote
+    /// every recording it was given: before a recording is read, written
+    /// here or removed, so that an earlier write never lands after it.
+    pub(crate) fn recordings_written(&self) {
+        self.recordings_written_by(RECORDING_WAIT);
+    }
+    pub(crate) fn recordings_written_by(&self, budget: Duration) {
+        if let Some(recorder) = &self.on_demand.recorder
+            && !recorder.flush(budget)
+        {
+            diag!(
+                "lazy: recordings still being written after {} ms",
+                budget.as_millis()
+            );
+        }
     }
     /// The playback worker answered `owner.resources` (today's
     /// `lazy_answer`): the worker's half of a classification at ready, or
@@ -1169,16 +1348,22 @@ impl Host {
             Some(_) if !self.on_demand.probe.park_all => Err("a resource in the playback worker"),
             _ => self.standby_record(owner, answer),
         };
-        let parks = match recorded {
+        match recorded {
             // A plugin resident at its ready that let go of everything since
-            // is parked, but the next start still launches it (§3.4).
+            // is parked, but the next start still launches it (§3.4). The
+            // core is answered once its recording is written (`recorded`).
             Ok(calls) => {
                 let resident = self
                     .supervisor
                     .by_pid(Pid(owner))
                     .and_then(|unit| self.supervisor.unit(unit))
                     .is_some_and(|unit| unit.resident);
-                self.write_recording(owner, calls, resident)
+                self.record_ahead(
+                    owner,
+                    calls,
+                    resident,
+                    AfterRecording::Standby(answer.clone()),
+                );
             }
             Err(reason) => {
                 // Asked again after another idle period.
@@ -1194,12 +1379,10 @@ impl Host {
                         self.resident_listeners(owner)
                     );
                 }
-                false
+                self.supervisor.resources_answered(Pid(owner), true);
+                self.supervisor_run();
             }
-        };
-        self.supervisor.resources_answered(Pid(owner), !parks);
-        self.supervisor_run();
-        self.on_demand.written = None;
+        }
     }
     /// The core's Standby job asks whether `owner` may go to standby
     /// (`Action::QueryResources`): the Host's own busy checks first, synced
@@ -1433,7 +1616,7 @@ mod tests {
                 })
                 .expect("replayed");
             on_demand.parked_ids.insert(id.into(), holder);
-            on_demand.held.insert(holder, held(id));
+            on_demand.held.edit().insert(holder, held(id));
         }
         assert_eq!(supervisor.holder_of("a.one"), Some(Pid(1)));
         let a = supervisor.by_id("a.one").unwrap();

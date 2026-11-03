@@ -105,6 +105,7 @@ impl Host {
     pub(crate) fn add_plugin(&mut self, owner: u64, plugin: Plugin) {
         self.unit_started(&plugin.manifest.id, owner);
         self.plugins.insert(owner, plugin);
+        self.plugins_revision += 1;
     }
     /// Load a development package (`--plugin DIR`): checked here, then a
     /// start job of its `Development` unit (outside the lanes, with its own
@@ -185,11 +186,11 @@ impl Host {
         let manifest_id = plugin.manifest.id.clone();
         let plugin_name = plugin.manifest.name.clone();
         // `packages.list` keeps this run's development loads after they stop.
-        self.development.insert(
+        self.development.edit().insert(
             manifest_id.clone(),
             (plugin.directory.clone(), plugin.manifest.clone()),
         );
-        self.failures.remove(&manifest_id);
+        self.failures.edit().remove(&manifest_id);
         self.add_plugin(owner, plugin);
         self.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
@@ -275,7 +276,7 @@ impl Host {
         self.archive_activation(owner, "plugin disabled before activation completed");
         self.on_demand_forget(owner);
         self.held_mounts.forget(owner);
-        self.warnings.remove(&owner);
+        self.warnings.edit().remove(&owner);
         capabilities::revoke(self, owner, park);
         {
             let mut input = self.input.borrow_mut();
@@ -371,6 +372,7 @@ impl Host {
         // then (and the playback worker's `BackendCleaned`) the unit is
         // deactivating, and every start of it waits (supervisor.md §17.9).
         if let Some(mut plugin) = self.plugins.remove(&owner) {
+            self.plugins_revision += 1;
             self.unit_stopped(&plugin.manifest.id, owner);
             plugin.set_stop_reason(reason);
             plugin.set_stop_wait(grace);
@@ -460,7 +462,7 @@ impl Host {
     /// Why a plugin stopped on its own (`packages.list` state `failed`).
     pub(crate) fn record_failure(&mut self, owner: u64, message: &str) {
         if let Some(plugin) = self.plugins.get(&owner) {
-            self.failures.insert(
+            self.failures.edit().insert(
                 plugin.manifest.id.clone(),
                 message.chars().take(512).collect(),
             );

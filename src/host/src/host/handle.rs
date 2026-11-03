@@ -408,6 +408,7 @@ impl Host {
             }
             Event::Reaped(owner, code) => self.unit_reaped(owner, code),
             Event::Spawned(owner, result) => self.spawned(owner, result),
+            Event::Recorded(owner, serial, result) => self.recorded(owner, serial, result),
             Event::OutOfMemory(owner) => {
                 diag!("plugin {owner}: its JavaScript heap ran out of memory");
                 self.supervisor.process_out_of_memory(Pid(owner));

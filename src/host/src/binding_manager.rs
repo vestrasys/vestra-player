@@ -146,15 +146,58 @@ impl Host {
             }
         }
         if self.listened("packages.changed") {
-            let list = self.package_list();
-            // A park or a wake alone changes only `process`: no event (§5.3).
-            let compared = without_process(&list);
-            if compared != self.packages_sent {
-                let first = self.packages_sent.is_null();
-                self.packages_sent = compared;
-                self.announce("packages.changed", list, first);
+            // Built and compared only once a source moved (supervisor.md
+            // §6.1): a list of about 200 packages took 4–12 ms to build, every
+            // 200 ms, also when nothing happened.
+            let key = self.packages_key();
+            let moved = key.is_none() || key != self.packages_seen;
+            if moved || cfg!(debug_assertions) {
+                let list = self.package_list();
+                // A park or a wake alone changes only `process`: no event (§5.3).
+                let same = same_but_process(&list, &self.packages_sent);
+                // Debug builds (every test with the real player) build it
+                // anyway: unchanged sources must give the same list.
+                assert!(
+                    moved || same,
+                    "packages.list changed while its sources did not: {key:?}"
+                );
+                if !same {
+                    let first = self.packages_sent.is_null();
+                    self.packages_sent = list.clone();
+                    self.announce("packages.changed", list, first);
+                }
+                self.packages_seen = key;
             }
         }
+    }
+    /// Everything `packages.list` (`package_list`) is built from, or
+    /// `None` when that cannot be told: a development load's translations
+    /// are read from its directory at each build, which may change on disk
+    /// (built every time then, as before). Installed packages run from the
+    /// library or the installation, whose files do not change while they
+    /// are installed (a change is a new install: the store's revision);
+    /// `process::data_root` and the interface language are fixed for the
+    /// run.
+    fn packages_key(&mut self) -> Option<PackagesKey> {
+        if !self.development.is_empty() {
+            return None;
+        }
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
+        let (store, operations) = self.packages.list_revision();
+        Some(PackagesKey {
+            revisions: [
+                self.plugins_revision,
+                self.warnings.revision(),
+                self.failures.revision(),
+                self.dev_disabled.revision(),
+                self.development.revision(),
+                self.on_demand.held_revision(),
+                store,
+                operations,
+            ],
+            units: self.supervisor.list_key(),
+        })
     }
     /// Broadcast `event`; `first` (the first of a run) wakes no parked plugin.
     fn announce(&mut self, event: &str, data: Value, first: bool) {
@@ -175,6 +218,17 @@ impl Host {
     }
 }
 
+/// The sources of `packages.list` (`Host::packages_key`): the revisions of
+/// the Host's (running plugins, their warnings, failures, development
+/// loads and those disabled, units held in standby) and the package
+/// manager's (the library's catalog, operations), and what the unit table
+/// answers now (`Supervisor::list_key`).
+#[derive(Debug, PartialEq)]
+pub(crate) struct PackagesKey {
+    revisions: [u64; 8],
+    units: crate::supervisor::ListKey,
+}
+
 /// `bindings.list` with its commands by plugin and command id: the
 /// table's order follows owner generations, which a wake changes.
 fn in_order(mut list: Value) -> Value {
@@ -187,15 +241,25 @@ fn in_order(mut list: Value) -> Value {
     list
 }
 
-/// `packages.list` without each plugin's `process`, to compare.
-fn without_process(list: &Value) -> Value {
-    let mut list = list.clone();
-    if let Some(plugins) = list.as_array_mut() {
-        for plugin in plugins.iter_mut().filter_map(Value::as_object_mut) {
-            plugin.remove("process");
-        }
-    }
-    list
+/// Two `packages.list`s are the same but for each plugin's `process`
+/// (compared in place: no copy of either).
+fn same_but_process(a: &Value, b: &Value) -> bool {
+    let (Some(a), Some(b)) = (a.as_array(), b.as_array()) else {
+        return a == b;
+    };
+    a.len() == b.len()
+        && a.iter().zip(b).all(|(a, b)| {
+            let (Some(a), Some(b)) = (a.as_object(), b.as_object()) else {
+                return a == b;
+            };
+            let fields = |plugin: &serde_json::Map<String, Value>| {
+                plugin.keys().filter(|key| *key != "process").count()
+            };
+            fields(a) == fields(b)
+                && a.iter()
+                    .filter(|(key, _)| *key != "process")
+                    .all(|(key, value)| b.get(key) == Some(value))
+        })
 }
 
 #[cfg(test)]
@@ -224,14 +288,26 @@ mod tests {
     fn b0_packages_changed_ignores_only_process() {
         let running = json!([{"id":"a.b","state":"running","process":"running","error":null}]);
         let parked = json!([{"id":"a.b","state":"running","process":"idle","error":null}]);
-        assert_eq!(without_process(&running), without_process(&parked));
-        assert_eq!(
-            without_process(&parked),
-            json!([{"id":"a.b","state":"running","error":null}])
-        );
+        assert!(same_but_process(&running, &parked));
+        // An entry without `process` (a quarantined record) against one
+        // with it: the other fields decide.
+        let bare = json!([{"id":"a.b","state":"running","error":null}]);
+        assert!(same_but_process(&parked, &bare) && same_but_process(&bare, &parked));
         let disabled = json!([{"id":"a.b","state":"disabled","process":null,"error":null}]);
-        assert_ne!(without_process(&running), without_process(&disabled));
+        assert!(!same_but_process(&running, &disabled));
         let starting = json!([{"id":"a.b","state":"starting","process":null,"error":null}]);
-        assert_ne!(without_process(&running), without_process(&starting));
+        assert!(!same_but_process(&running, &starting));
+        // Another field, a field more, another plugin, another count.
+        let error = json!([{"id":"a.b","state":"running","process":"running","error":"x"}]);
+        assert!(!same_but_process(&running, &error));
+        let more = json!([{"id":"a.b","state":"running","process":"running","error":null,"x":1}]);
+        assert!(!same_but_process(&running, &more) && !same_but_process(&more, &running));
+        let other = json!([{"id":"c.d","state":"running","process":"running","error":null}]);
+        assert!(!same_but_process(&running, &other));
+        let two = json!([running[0], other[0]]);
+        assert!(!same_but_process(&running, &two));
+        // The first list of a run (nothing sent yet) is a change.
+        assert!(!same_but_process(&running, &Value::Null));
+        assert!(same_but_process(&json!([]), &json!([])));
     }
 }

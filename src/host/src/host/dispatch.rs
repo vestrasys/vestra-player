@@ -58,7 +58,7 @@ impl Host {
         if let Some(reason) = warning.as_object_mut().and_then(|w| w.remove("reason")) {
             warning["code"] = reason;
         }
-        let warnings = self.warnings.entry(owner).or_default();
+        let warnings = self.warnings.edit().entry(owner).or_default();
         warnings.retain(|(w, _)| w["code"] != warning["code"] || w["slot"] != warning["slot"]);
         warnings.push((warning.clone(), text.clone()));
         diag!("{id}: {}", error.message);
@@ -69,7 +69,7 @@ impl Host {
         error
     }
     pub(crate) fn clear_warning(&mut self, owner: u64, code: &str) {
-        if let Some(warnings) = self.warnings.get_mut(&owner) {
+        if let Some(warnings) = self.warnings.edit().get_mut(&owner) {
             warnings.retain(|(w, _)| w["code"] != code);
         }
     }

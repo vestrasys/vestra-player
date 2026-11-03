@@ -369,8 +369,8 @@ impl<P: Clone> Supervisor<P> {
 #[cfg(test)]
 mod tests {
     use super::super::{
-        Action, ActivatingSub, Delivery, JobKind, JobResult, StopReason, Supervisor, Trigger,
-        Tunables,
+        Action, ActivatingSub, Delivery, JobKind, JobResult, ListState, StopReason, Supervisor,
+        Trigger, Tunables,
     };
     use super::*;
 
@@ -429,6 +429,51 @@ mod tests {
             spec.checkpoint(false)
         };
         start_with(s, spec, pid, at)
+    }
+
+    /// `packages.changed` builds `packages.list` again only once the unit
+    /// table's answers moved (`list_key`, supervisor.md §6.1): the key stays
+    /// while nothing happens, and moves with a start, with a start deadline
+    /// passing (the clock alone turns `Starting` into `Failed`), with a
+    /// ready, a standby (its holder) and a wake (`waking`).
+    #[test]
+    fn list_key_moves_with_every_answer_packages_list_reads() {
+        let mut s = new();
+        let quiet = |s: &mut S, at: Ms| {
+            let key = s.list_key();
+            s.set_now(at);
+            assert_eq!(s.list_key(), key, "nothing happened until {at}");
+            key
+        };
+        // A run that starts and misses its start deadline.
+        s.set_now(0);
+        let u = s.add_unit(UnitSpec::new("a.one", Class::Normal));
+        let pid = spawned(&s.run_jobs(0)).expect("first run");
+        s.process_spawned(pid, Ok(()));
+        s.activation_begin(u, pid, 5_000).unwrap();
+        assert_eq!(s.list_state(u), Some(ListState::Starting));
+        let starting = quiet(&mut s, 4_999);
+        s.set_now(5_000);
+        assert!(matches!(s.list_state(u), Some(ListState::Failed(_))));
+        assert_ne!(s.list_key(), starting, "the start deadline passed");
+        // A run that becomes ready, goes to standby and is woken.
+        let b = ready(&mut s, "b.two", 2, 5_000, true);
+        let b_id = s.unit(b).unwrap().id.clone();
+        let active = quiet(&mut s, 6_000);
+        park(&mut s, b, 2, 70_000);
+        assert_eq!(s.holder_of(&b_id), Some(Pid(2)));
+        let standby = s.list_key();
+        assert_ne!(standby, active, "standby");
+        let parked = quiet(&mut s, 80_000);
+        let woken = wake(&mut s, b, 2, 80_000);
+        s.process_spawned(woken, Ok(()));
+        assert!(s.waking(woken).is_some());
+        assert_ne!(s.list_key(), parked, "woken");
+        let waking = quiet(&mut s, 80_500);
+        s.process_ready(woken);
+        s.run_jobs(80_500);
+        assert!(s.waking(woken).is_none());
+        assert_ne!(s.list_key(), waking, "ready");
     }
 
     /// `Host.plugin_ids` semantics, now the state's: a unit's process is the

@@ -1,5 +1,6 @@
 //! Finite trusted-package lifecycle. This is not a sandbox or dependency solver.
 #![forbid(unsafe_code)]
+use crate::host::revised::Revised;
 use crate::host::supervisor::checkpoint;
 use crate::host::*;
 use crate::packages::package_stage::Candidate;
@@ -34,7 +35,8 @@ pub struct Manager {
     /// is oldest first, and a new validation drops the oldest token (`stale`).
     candidates: BTreeMap<String, Candidate>,
     candidate_order: VecDeque<String>,
-    operations: BTreeMap<String, Operation>,
+    /// Package operations by id; a source of `packages.list` (`list_revision`).
+    operations: Revised<BTreeMap<String, Operation>>,
     next: u64,
     receipts: BTreeMap<String, Value>,
     booted: bool,
@@ -202,7 +204,7 @@ impl Manager {
             secrets,
             candidates: BTreeMap::new(),
             candidate_order: VecDeque::new(),
-            operations: BTreeMap::new(),
+            operations: Revised::default(),
             next: 0,
             receipts,
             booted: false,
@@ -218,6 +220,13 @@ impl Manager {
             verify_results: std::sync::mpsc::channel(),
             validations: Default::default(),
         })
+    }
+    /// The package side's sources of `packages.list`: the library's
+    /// catalog (`Store::revision`) and this run's operations
+    /// (`binding_manager.rs` `packages_key`). The built-ins' list
+    /// (`builtins`) does not change after the start.
+    pub(crate) fn list_revision(&self) -> (u64, u64) {
+        (self.store.revision(), self.operations.revision())
     }
     /// Where an installed record's plugin runs from: a built-in from the
     /// installation, any other from its package in the library. `None`
@@ -673,6 +682,7 @@ impl Host {
                 let operation = self
                     .packages
                     .operations
+                    .edit()
                     .get_mut(id)
                     .ok_or_else(|| RpcError::new("missing", "operation unknown"))?;
                 if method == "packages.cancel" {
@@ -743,6 +753,7 @@ impl Host {
             .map(|i| DataKey::Instance(i.guid.clone()));
         // The replaced version's recording (keyed by its instance).
         if let Some(instance) = &before.instance {
+            self.recordings_written();
             checkpoint::remove(&self.activation_dir(), &instance.guid);
         }
         self.packages.store.prepare_with_receipt(
@@ -763,7 +774,7 @@ impl Host {
         let operation = request.clone();
         // In the table before its start: the supervisor's spawn of the
         // target reads it (`start_unit_process`).
-        self.packages.operations.insert(
+        self.packages.operations.edit().insert(
             request.clone(),
             Operation {
                 id: request,
@@ -836,7 +847,7 @@ impl Host {
                 Priority::Interactive,
                 Origin::PackageRpc,
             );
-            if let Some(op) = self.packages.operations.get_mut(&operation) {
+            if let Some(op) = self.packages.operations.edit().get_mut(&operation) {
                 op.job = job.ok();
                 op.started = started;
             }
@@ -873,7 +884,9 @@ impl Host {
         // Its library copy could not be read at start: kept as it is, not
         // started (`runs_from`); the next start tries again.
         if let Some(error) = self.packages.store.deferred().get(id) {
-            self.failures.insert(id.to_owned(), deferred_failure(error));
+            self.failures
+                .edit()
+                .insert(id.to_owned(), deferred_failure(error));
             return;
         }
         let (Some(package), Some(instance)) =
@@ -896,6 +909,7 @@ impl Host {
             && self.on_demand.enabled
             && let Some(key) = self.checkpoint_key(id)
         {
+            self.recordings_written();
             match checkpoint::read(&self.packages.store.activation_dir(), &key) {
                 Some(recording) if recording.resident_at_ready => {
                     diag!("lazy: {id} starts: resident at its last ready");
@@ -1090,6 +1104,7 @@ impl Host {
     /// Removes installed plugin `id`'s recording, if it has one.
     pub(crate) fn drop_recording(&mut self, id: &str) {
         if let Some(instance) = self.packages.store.get(id).instance {
+            self.recordings_written();
             checkpoint::remove(&self.activation_dir(), &instance.guid);
         }
     }
@@ -1352,11 +1367,14 @@ impl Host {
                 ("stopped", None)
             }
         };
-        for (id, record) in self.packages.store.installed() {
-            if list.contains_key(&id) {
+        // The catalog's records as they are (not a copy of it: `notify_tick`
+        // builds this list while plugins come and go, supervisor.md §6.1).
+        for (id, record) in self.packages.store.installed_records() {
+            if list.contains_key(id) {
                 continue;
             }
-            let Some(package) = self.packages.runs_from(&id, &record) else {
+            let id = id.clone();
+            let Some(package) = self.packages.runs_from(&id, record) else {
                 continue;
             };
             // The supervisor's state of its unit (§9): a start it waits for
@@ -1392,7 +1410,7 @@ impl Host {
                 .as_ref()
                 .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())));
             let builtin = record.instance.as_ref().is_some_and(|i| i.builtin);
-            let source = record.instance.map(|i| i.source);
+            let source = record.instance.as_ref().map(|i| i.source.clone());
             let process = ((self.parked_id(&id).is_some()
                 || matches!(listed, Some(ListState::Running { .. })))
                 && state == "running")
@@ -1450,7 +1468,7 @@ impl Host {
                     "display":{"name":null,"punchline":null,"description":null,"tags":[]}}),
             );
         }
-        for (id, (directory, manifest)) in &self.development {
+        for (id, (directory, manifest)) in self.development.iter() {
             if list.contains_key(id) {
                 continue;
             }
@@ -1511,9 +1529,9 @@ impl Host {
         if installed.is_some() && development.is_none() {
             self.packages.store.set_disabled(id, !enabled)?;
         } else if enabled {
-            self.dev_disabled.remove(id);
+            self.dev_disabled.edit().remove(id);
         } else {
-            self.dev_disabled.insert(id.into());
+            self.dev_disabled.edit().insert(id.into());
         }
         let unit = self.ensure_unit(id);
         let now = self.now_ms();
@@ -1525,7 +1543,7 @@ impl Host {
                 return Err(busy());
             }
             self.supervisor_run();
-            self.failures.remove(id);
+            self.failures.edit().remove(id);
             // The user switched it off: its session values go (a reload, an
             // upgrade or a crash keeps them; session_storage.rs).
             let stopped = match &development {
@@ -1568,7 +1586,7 @@ impl Host {
         key: Option<DataKey>,
         development: bool,
     ) -> std::result::Result<(), RpcError> {
-        self.failures.remove(id);
+        self.failures.edit().remove(id);
         match (installed, development) {
             (_, true) => Ok(()),
             (Some(package), false) => {
@@ -1576,7 +1594,7 @@ impl Host {
                 // Nothing runnable (a deferred record, a broken built-in):
                 // it stays listed as failed, with the same reason.
                 package.map_err(|failure| {
-                    self.failures.insert(id.into(), failure.clone());
+                    self.failures.edit().insert(id.into(), failure.clone());
                     RpcError::new("unavailable", failure)
                 })?;
                 // Built-in records and installs both have an instance.
@@ -1725,7 +1743,7 @@ impl Host {
             self.discard(&current.digest);
         }
         self.packages.receipts = self.packages.store.operations();
-        self.failures.remove(&id);
+        self.failures.edit().remove(&id);
         // Session values go with every uninstall, whether or not the files do.
         if let Some(instance) = &installed.instance {
             self.session_storage
@@ -1848,7 +1866,7 @@ impl Host {
                             && !self.packages.store.dormant().contains_key(&i.guid)
                     })
                     .and_then(|i| process::data_root().map(|root| root.join(&i.guid)));
-                self.packages.operations.insert(
+                self.packages.operations.edit().insert(
                     recovery.operation_id.clone(),
                     Operation {
                         id: recovery.operation_id,
@@ -1926,7 +1944,7 @@ impl Host {
             .map(|(key, _)| key.clone())
             .collect::<Vec<_>>();
         for key in keys {
-            let mut op = self.packages.operations.remove(&key).unwrap();
+            let mut op = self.packages.operations.edit().remove(&key).unwrap();
             let result = self.advance_package(&mut op);
             if let Err(error) = result {
                 op.phase = "failedDegraded".into();
@@ -1951,7 +1969,7 @@ impl Host {
                 self.packages.receipts = self.packages.store.operations();
                 self.packages.images.remove(&op.package);
             } else {
-                self.packages.operations.insert(key, op);
+                self.packages.operations.edit().insert(key, op);
             }
         }
     }
@@ -3117,7 +3135,7 @@ mod tests {
             secrets: crate::packages::secret_index::Index::new(None),
             candidates: BTreeMap::new(),
             candidate_order: VecDeque::new(),
-            operations: BTreeMap::new(),
+            operations: Revised::default(),
             next: 0,
             receipts: BTreeMap::new(),
             booted: false,

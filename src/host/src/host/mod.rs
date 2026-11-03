@@ -17,6 +17,7 @@ mod menus;
 mod mounts;
 mod rendering;
 mod restart;
+pub(crate) mod revised;
 pub(crate) use rendering::{Relaunch, Rendering, startup as rendering_startup};
 mod rpc;
 mod shell;
@@ -155,6 +156,9 @@ pub(crate) struct Host {
     /// Restarts, quarantine and fail-open of the shared runner for this run.
     pub(crate) shared_policy: shared_runner::Policy,
     pub(crate) plugins: BTreeMap<u64, Plugin>,
+    /// Moves when a plugin comes or goes in `plugins` (`add_plugin`, `stop`,
+    /// `quit_stop`): a source of `packages.list` (`packages_key`).
+    pub(crate) plugins_revision: u64,
     /// `plugins` by manifest id, kept by `add_plugin` and `stop`, the
     /// only places a plugin comes and goes. Since B2a `Host::running`
     /// answers from the unit table (`supervisor`); this map stays one
@@ -249,7 +253,7 @@ pub(crate) struct Host {
     pub(crate) prepared: Option<(u64, u64, Box<crate::ui::ui_values::Prepared>)>,
     /// What a running plugin was refused because another holds it: the
     /// `packages.list` `warnings` entry and its text, per owner.
-    pub(crate) warnings: BTreeMap<u64, Vec<(Value, String)>>,
+    pub(crate) warnings: revised::Revised<BTreeMap<u64, Vec<(Value, String)>>>,
     pub(crate) packages: package_manager::Manager,
     /// The `plugin-reaper` thread: every plugin the host stops is waited
     /// for (and killed after its grace) there (supervisor.md §7.1).
@@ -276,11 +280,11 @@ pub(crate) struct Host {
     /// `window.setVideoArea` answered once the video area shows the target.
     pub(crate) area_replies: Vec<AreaReply>,
     /// Development loads of this run (`--plugin`, or re-enabled): directory, manifest.
-    pub(crate) development: BTreeMap<String, (PathBuf, process::Manifest)>,
+    pub(crate) development: revised::Revised<BTreeMap<String, (PathBuf, process::Manifest)>>,
     /// Development loads the user disabled (this run only).
-    pub(crate) dev_disabled: std::collections::BTreeSet<String>,
+    pub(crate) dev_disabled: revised::Revised<std::collections::BTreeSet<String>>,
     /// Why a plugin last stopped on its own, by id.
-    pub(crate) failures: BTreeMap<String, String>,
+    pub(crate) failures: revised::Revised<BTreeMap<String, String>>,
     /// A package RPC that starts a plugin and answers with its start's
     /// error (`setEnabled`, `reload`, a development load): the id, and
     /// the error of a spawn that failed while the RPC ran (`spawn_unit`).
@@ -299,6 +303,9 @@ pub(crate) struct Host {
     /// to the same list (a plugin woken or parked) announces nothing.
     pub(crate) bindings_list_sent: Value,
     pub(crate) packages_sent: Value,
+    /// The sources of the `packages.list` behind `packages_sent`: the list
+    /// is built again only once they moved (`packages_key`).
+    pub(crate) packages_seen: Option<crate::binding_manager::PackagesKey>,
     pub(crate) notified_at: u64,
     /// `plugin.timeline` layers (R-M3).
     pub(crate) timeline: timeline::Timeline,
