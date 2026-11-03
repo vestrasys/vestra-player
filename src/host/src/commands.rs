@@ -807,7 +807,7 @@ impl Registry {
 
     /// An owner's entries in registration order (the menu's tie-break),
     /// each with whether it is recorded and what its plugin sent
-    /// (`VESTRA_TEST_REGISTRY`, host/lazy.rs).
+    /// (`VESTRA_TEST_REGISTRY`, host/supervisor/probe.rs).
     pub fn entries_of(
         &self,
         owner: OwnerGeneration,

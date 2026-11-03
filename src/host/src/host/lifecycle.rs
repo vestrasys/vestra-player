@@ -174,7 +174,8 @@ impl Host {
         self.stop(owner, reason);
     }
     /// Stop a running plugin and revoke what it holds; `reason` goes with
-    /// its `runtime.stop`. `Idle` parks it (lazy activation, `lazy.rs`):
+    /// its `runtime.stop`. `Idle` parks it (the core's standby, the adapter's
+    /// `park`):
     /// its recordable registrations stay, marked recorded, and its process
     /// gets longer to finish.
     pub(crate) fn stop(&mut self, owner: u64, reason: StopReason) {
@@ -186,7 +187,7 @@ impl Host {
             return;
         }
         self.archive_activation(owner, "plugin disabled before activation completed");
-        self.lazy.forget_running(owner);
+        self.on_demand_forget(owner);
         self.held_mounts.forget(owner);
         self.warnings.remove(&owner);
         capabilities::revoke(self, owner, park);
@@ -289,18 +290,18 @@ impl Host {
             plugin.set_stop_reason(reason);
             if park {
                 // A routine stop, not a fault: its `onDispose` gets time.
-                plugin.set_stop_wait(lazy::PARK_WAIT);
+                plugin.set_stop_wait(super::supervisor::PARK_WAIT);
             }
             self.reaper.reap(owner, plugin);
         }
     }
     pub(crate) fn send(&mut self, owner: u64, message: Value) {
-        // Lazy activation: a parked owner has no process; a trigger wakes
-        // it, and is held (as are triggers for a plugin still waking) until
-        // its `runtime.ready`.
-        if !self.lazy_deliver(owner, &message) {
+        // On-demand start: an owner in standby has no process; a trigger
+        // wakes it, and is held (as are triggers for a plugin still waking)
+        // until its `runtime.ready` (the core's `wake`).
+        let Some(owner) = self.deliver_to(owner, &message) else {
             return;
-        }
+        };
         let failed = self
             .plugins
             .get_mut(&owner)
@@ -347,6 +348,8 @@ impl Host {
             capabilities::refresh_conditions(self);
         }
         let wake = capabilities::WAKE_EVENTS.contains(&event);
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
         let mut failed = Vec::new();
         for (owner, plugin) in self
             .plugins
@@ -354,9 +357,11 @@ impl Host {
             .filter(|(_, p)| p.subscriptions.contains_key(event))
         {
             // A plugin woken for a wake event receives the held one at its
-            // ready: a newer one waits behind it, never before (§6.9).
-            if wake && let Some(waking) = self.lazy.waking.get_mut(owner) {
-                lazy::hold_event(&mut waking.queue, json!({"event":event,"data":data}));
+            // ready: a newer one waits behind it, never before (§6.9; the
+            // core holds it while its start is waking).
+            if wake && self.supervisor.waking(Pid(*owner)).is_some() {
+                let trigger = Trigger::event(event, json!({"event":event,"data":data}));
+                self.supervisor.wake(Pid(*owner), &trigger);
                 continue;
             }
             if let Err(error) = plugin.send(json!({"event":event,"data":data})) {
@@ -366,9 +371,9 @@ impl Host {
         for (owner, error) in failed {
             self.transport_failed(owner, &error);
         }
-        // A parked plugin that listens to a low-frequency event is woken
-        // to receive it (lazy activation §6.9).
-        self.lazy_event(event, &data);
+        // A plugin in standby that listens to a low-frequency event is
+        // woken to receive it (lazy activation §6.9).
+        self.wake_listeners(event, &data);
     }
     /// Why a plugin stopped on its own (`packages.list` state `failed`).
     pub(crate) fn record_failure(&mut self, owner: u64, message: &str) {

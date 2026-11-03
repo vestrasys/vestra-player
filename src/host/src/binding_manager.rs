@@ -158,9 +158,9 @@ impl Host {
     }
     /// Broadcast `event`; `first` (the first of a run) wakes no parked plugin.
     fn announce(&mut self, event: &str, data: Value, first: bool) {
-        self.lazy.mute = first;
+        self.on_demand.mute = first;
         self.broadcast(event, data);
-        self.lazy.mute = false;
+        self.on_demand.mute = false;
     }
     /// A running plugin subscribed to `event`, or a parked one is woken by it.
     fn listened(&self, event: &str) -> bool {
@@ -168,7 +168,7 @@ impl Host {
             .values()
             .any(|plugin| plugin.subscriptions.contains_key(event))
             || self
-                .lazy
+                .on_demand
                 .wakes
                 .values()
                 .any(|events| events.contains(event))

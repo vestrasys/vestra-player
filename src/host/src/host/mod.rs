@@ -12,7 +12,6 @@ mod dispatch;
 mod events;
 mod handle;
 mod input;
-pub(crate) mod lazy;
 mod lifecycle;
 mod menus;
 mod mounts;
@@ -34,7 +33,7 @@ use crate::playback::{
     frame_pacing, render_target, video_click,
 };
 use crate::process::{Plugin, StopReason, shared_runner};
-use crate::supervisor::{Pid, Supervisor, activation};
+use crate::supervisor::{Pid, Supervisor, Trigger, activation};
 use crate::ui::{
     bar_buttons, composition, drops, menu, pip, settings_window, slot_claims, ui_image, ui_state,
     ui_values, view, window_control, window_state,
@@ -68,7 +67,6 @@ pub(crate) use input::{
     debug_keys, double_click_interval, fire, inject_option_key, observe_key, observe_side_button,
     release_modifiers, slint_mods,
 };
-pub(crate) use lazy::Origin;
 pub(crate) use lifecycle::activation_outcome;
 #[cfg(test)]
 pub(crate) use menus::{MenuWrite, ShownMenu, set_menu_model};
@@ -82,6 +80,7 @@ pub(crate) use restart::{
 };
 pub(crate) use rpc::{Reply, Request, RpcError, string, ui_error};
 pub(crate) use state::{LayoutChange, layout_change, policy_slot};
+pub(crate) use supervisor::Origin;
 pub(crate) use video::{FRAME_SINK, PIP_GPU_SINK};
 
 #[derive(Clone)]
@@ -330,8 +329,9 @@ pub(crate) struct Host {
     pub(crate) placements: view::Placements,
     /// Bottom-bar command buttons (`bar_buttons.rs`).
     pub(crate) bar: bar_buttons::Strip,
-    /// Lazy activation: parked and waking plugins, idle times (`lazy.rs`).
-    pub(crate) lazy: lazy::Lazy,
+    /// On-demand start (lazy activation): the Host's side of standby,
+    /// wake and classification (`supervisor/`, B2c).
+    pub(crate) on_demand: supervisor::OnDemand,
     /// The plugin shaders' crash guard (`diagnostics.rs`).
     pub(crate) shader_guard: ShaderGuard,
     /// When the memory line last went to the host log (`diagnostics.rs`).

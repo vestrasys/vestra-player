@@ -1100,7 +1100,7 @@ impl Store {
     }
 
     /// Where lazy activation keeps its recordings, one file per installed
-    /// instance (`host/lazy.rs`): beside the catalog, outside every
+    /// instance (`host/supervisor/checkpoint.rs`): beside the catalog, outside every
     /// plugin's data directory.
     pub fn activation_dir(&self) -> PathBuf {
         self.root.join("activation")

@@ -251,7 +251,7 @@ fn command_after_loss(
     command.env_remove("VESTRA_TEST_REMOVE_DEVICE");
     command.env_remove("VESTRA_TEST_EXECUTE");
     command.env_remove("VESTRA_TEST_GPU_STALL");
-    // The registry probe (host/lazy/probe.rs): one run's snapshots.
+    // The registry probe (host/supervisor/probe.rs): one run's snapshots.
     command.env_remove("VESTRA_TEST_REGISTRY");
     command.env_remove("VESTRA_TEST_PARK");
     command.env_remove("VESTRA_TEST_WAKE");

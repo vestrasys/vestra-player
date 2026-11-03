@@ -420,6 +420,7 @@ fn main() -> Result<()> {
             "slint":env!("VESTRA_SLINT_VERSION")}}));
     let (mount_events, mount_input) = mpsc::sync_channel(64);
     let reaper = process::reaper::Reaper::spawn(events.clone());
+    let on_demand = host::supervisor::OnDemand::from_env();
     let mut host = Host {
         backend,
         shared: None,
@@ -489,7 +490,7 @@ fn main() -> Result<()> {
         menu_generation: 1,
         host_revision: 0,
         window_title: "Vestra Player".into(),
-        supervisor: host::supervisor::new(),
+        supervisor: host::supervisor::new(&on_demand),
         activation_receipts: Default::default(),
         file_types: json!([]),
         held_mounts: Default::default(),
@@ -536,7 +537,7 @@ fn main() -> Result<()> {
         theme_pending: false,
         placements: view::Placements::default(),
         bar: bar_buttons::Strip::default(),
-        lazy: host::lazy::Lazy::from_env(),
+        on_demand,
         commands: commands::Registry::new(),
         shader_guard,
         memory_logged: None,
@@ -629,7 +630,7 @@ fn main() -> Result<()> {
                 host.handle(event);
             }
             host.activation_tick();
-            host.lazy_tick();
+            host.on_demand_tick();
             host.power_tick();
             host.diagnostics_tick();
             host.package_tick();
@@ -656,7 +657,7 @@ fn main() -> Result<()> {
             }
         }
         // Lazy activation: what each running plugin was at its ready.
-        host.lazy_quit();
+        host.on_demand_quit();
         stop_handoffs();
         host.shader_guard.quit();
         logged!("exit: normal");
@@ -772,7 +773,7 @@ fn main() -> Result<()> {
                 host.prepare_mount_tick();
                 host.window_tick();
                 host.activation_tick();
-                host.lazy_tick();
+                host.on_demand_tick();
                 host.power_tick();
                 host.diagnostics_tick();
                 host.package_tick();
@@ -869,7 +870,7 @@ fn main() -> Result<()> {
         platform::release_gpu_waits();
         // Lazy activation: what each running plugin was at its ready.
         teardown_step("recording lazy activation");
-        host.borrow_mut().lazy_quit();
+        host.borrow_mut().on_demand_quit();
         stop_handoffs();
         // Read now: only a loss that ended the loop restarts the player.
         if platform::window_device_lost() {

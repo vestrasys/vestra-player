@@ -424,7 +424,7 @@ impl Backend {
                         if upscaling.command(&mpv, &out_render, &command, &events) {
                             continue;
                         }
-                        // Lazy activation (host/lazy.rs): what a plugin
+                        // Lazy activation (host/supervisor/): what a plugin
                         // holds here, its resolvers kept while it is parked,
                         // moved when it wakes, pruned at its ready.
                         match command.method.as_str() {

@@ -139,7 +139,7 @@ impl Method {
 pub type Handled = std::result::Result<Option<Value>, RpcError>;
 
 /// A request that recreates a registration without the plugin's process,
-/// in the form the plugin sent it (lazy activation, `host/lazy.rs`).
+/// in the form the plugin sent it (lazy activation, `host/supervisor/checkpoint.rs`).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Call {
     pub method: String,
@@ -236,7 +236,7 @@ pub fn record(host: &Host, owner: u64, backend: &Value) -> Result<Vec<Call>, &'s
 /// What `owner` registered that a recording can hold, whatever else it
 /// holds live: every capability's calls, a `Live` one's left out (the
 /// events capability's listeners of wake events kept). Only for
-/// `VESTRA_TEST_PARK=all` (host/lazy.rs), which parks every plugin to
+/// `VESTRA_TEST_PARK=all` (host/supervisor/probe.rs), which parks every plugin to
 /// diff its registries; a real park needs [`record`].
 pub fn recordable(host: &Host, owner: u64, backend: &Value) -> Vec<Call> {
     let mut calls = Vec::new();

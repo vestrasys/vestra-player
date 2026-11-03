@@ -387,7 +387,7 @@ impl Plugin {
         }
     }
     /// How long a stop waits for its own process before killing it (a
-    /// park waits longer, `host/lazy.rs`).
+    /// park waits longer, `host/supervisor/` `PARK_WAIT`).
     pub fn set_stop_wait(&mut self, wait: Duration) {
         self.stop_wait = wait;
     }

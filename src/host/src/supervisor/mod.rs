@@ -112,15 +112,11 @@ pub enum Action<P> {
     },
     /// At ready after a start from standby: drop recorded entries the live
     /// process did not register again.
-    // B2c: a wake's ready.
-    #[cfg_attr(not(test), allow(dead_code))]
     Prune {
         unit: UnitId,
         pid: Pid,
     },
     /// Send a held trigger (`Plugin::send`).
-    // B2c: a wake's held triggers.
-    #[cfg_attr(not(test), allow(dead_code))]
     Deliver {
         unit: UnitId,
         pid: Pid,
@@ -230,11 +226,7 @@ pub struct Supervisor<P> {
     runner_policy: RunnerPolicy,
     runner_restart: restart::RestartState,
     rng: Rng,
-    // B2c: `set_muted`, `settled`.
-    #[cfg_attr(not(test), allow(dead_code))]
     muted: bool,
-    // B2c: `set_muted`, `settled`.
-    #[cfg_attr(not(test), allow(dead_code))]
     quiet_until: Ms,
     pressure: Pressure,
     shutting_down: bool,
@@ -359,14 +351,10 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    // B2c: the adapter times a recorded run's classification with it.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn tunables(&self) -> &Tunables {
         &self.tunables
     }
     /// The latest time given.
-    // The adapter reads it from B2c (B2b's sets it, `set_now`).
-    #[allow(dead_code)]
     pub fn now(&self) -> Ms {
         self.now
     }
@@ -519,7 +507,7 @@ impl<P: Clone> Supervisor<P> {
             unit.alias,
             unit.last_pid,
             unit.holder,
-            unit.hosted.map(|(pid, _)| pid),
+            unit.hosted,
             run,
         ]
         .into_iter()
@@ -642,7 +630,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `standby`.
-    // B2c: idle standby as a job.
+    // B5: an explicit standby (LRU, pressure); the idle timer enqueues its
+    // own Standby job since B2c.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn standby(&mut self, u: UnitId) -> JobId {
         self.enqueue_job(
@@ -664,8 +653,6 @@ impl<P: Clone> Supervisor<P> {
     /// the previous pid of a run that is still going (forwarded, today's
     /// `lazy.moved`). Any other pid of the unit is dead: dropped, as a
     /// message to a stopped owner is today.
-    // B2c: triggers on entry points in standby.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn wake(&mut self, pid: Pid, trigger: &Trigger<P>) -> Delivery {
         if self.shutting_down {
             return Delivery::Dropped;
@@ -673,14 +660,18 @@ impl<P: Clone> Supervisor<P> {
         let Some(&u) = self.by_pid.get(&pid) else {
             return Delivery::Dropped;
         };
-        if matches!(trigger.kind, TriggerKind::Event(_)) && self.events_muted() {
-            return Delivery::Dropped;
-        }
+        let muted = matches!(trigger.kind, TriggerKind::Event(_)) && self.events_muted();
         let now = self.now;
         let backlog_max = self.tunables.backlog_max;
         let Some(unit) = self.units.get_mut(&u) else {
             return Delivery::Dropped;
         };
+        // A muted wake event starts nothing; a unit whose start already
+        // spawned holds it for its ready all the same (today's broadcast
+        // holds wake events for `lazy.waking` whatever `lazy_event` mutes).
+        if muted && !matches!(unit.state, UnitState::Activating { pid: Some(_), .. }) {
+            return Delivery::Dropped;
+        }
         if !unit.enabled() || unit.removed {
             return Delivery::Dropped;
         }
@@ -962,21 +953,12 @@ impl<P: Clone> Supervisor<P> {
         // Every checkpoint before the first Terminate (§7.2 "checkpoints
         // first", coordinator ruling): if the forced exit comes mid-way,
         // each one is already written.
-        // As today's `lazy_quit`: every run classified this run, unless its
-        // checkpoint already says resident and it still is.
-        if self.tunables.on_demand {
-            for (u, unit) in &self.units {
-                if let UnitState::Active { pid, .. } = unit.state
-                    && unit.classified_run
-                    && !(unit.resident && unit.recorded && unit.recorded_resident)
-                {
-                    self.pending.push(Action::Checkpoint {
-                        unit: *u,
-                        pid,
-                        resident: unit.resident,
-                    });
-                }
-            }
+        for (unit, pid, resident) in self.quit_checkpoints() {
+            self.pending.push(Action::Checkpoint {
+                unit,
+                pid,
+                resident,
+            });
         }
         for u in units {
             let Some(unit) = self.units.get_mut(&u) else {
@@ -1010,11 +992,40 @@ impl<P: Clone> Supervisor<P> {
         self.run_jobs(now)
     }
 
+    /// The checkpoints a quit writes (`shutdown`'s first pass, T31), unit by
+    /// unit: as today's `lazy_quit`, every run whose class came back this
+    /// run, unless its checkpoint already says resident and it still is.
+    /// B2c's adapter writes them at quit itself (`shutdown` is B4's).
+    pub fn quit_checkpoints(&self) -> Vec<(UnitId, Pid, bool)> {
+        if !self.tunables.on_demand {
+            return Vec::new();
+        }
+        self.units
+            .iter()
+            .filter_map(|(u, unit)| match unit.state {
+                UnitState::Active { pid, .. }
+                    if unit.classified_run
+                        && !(unit.resident && unit.recorded && unit.recorded_resident) =>
+                {
+                    Some((*u, pid, unit.resident))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Runs `u`'s installed job now, as `run_jobs` would, without the due
+    /// timers: a wake starts at once, as today's `wake` did (B2c's adapter
+    /// calls it after `wake` returns `Started`). Removed in B3, where wakes
+    /// wait for a start slot (`run_jobs`, T19).
+    pub fn advance(&mut self, u: UnitId) {
+        self.step(u);
+        self.start_from_lanes();
+    }
+
     // ---- event inputs --------------------------------------------------
 
     /// §5 `process_spawned` (T7 / T8).
-    // B2c: the core spawns (`Spawn`) for a wake; B2d for every start.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn process_spawned(&mut self, pid: Pid, result: Result<(), String>) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1066,8 +1077,6 @@ impl<P: Clone> Supervisor<P> {
 
     /// §5 `process_ready` (`runtime.ready`; T9 once the UI activation is
     /// done too).
-    // B2c: readiness of a start the core runs.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn process_ready(&mut self, pid: Pid) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1084,7 +1093,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `process_failed` (`runtime.failed`; T10: no retry).
-    // B2c: readiness of a start the core runs.
+    // B2d: readiness of every start the core runs (until then the Host's
+    // `activation_tick` stops a failed activation, `process_stopping`).
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn process_failed(&mut self, pid: Pid, text: String) {
         let Some(u) = self.current(pid) else {
@@ -1095,7 +1105,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `ui_begin`: an initial UI registration of an activating process.
-    // B2c: readiness of a start the core runs.
+    // B2d: readiness of every start the core runs (the activation's UI
+    // requests stay in `activation.rs` until then).
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn ui_begin(&mut self, pid: Pid) {
         let Some(u) = self.current(pid) else {
@@ -1109,7 +1120,7 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `ui_finish` (a failed one is reported with `process_failed`).
-    // B2c: readiness of a start the core runs.
+    // B2d: as `ui_begin`.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn ui_finish(&mut self, pid: Pid) {
         let Some(u) = self.current(pid) else {
@@ -1189,6 +1200,16 @@ impl<P: Clone> Supervisor<P> {
     /// be, once per run, as today's `lazy_ready` classifies on every ready
     /// (supervisor.md §17.7 D2).
     pub fn classified(&mut self, pid: Pid, resident: Option<String>) {
+        self.classified_with(pid, resident, false);
+    }
+
+    /// `classified`, with what the Host's own idle check says now
+    /// (`host_busy`; today's `lazy_classified` parks a lazy first run only
+    /// when `lazy_idle` says idle and its recording was written): a busy
+    /// lazy first run goes to standby as soon as it is idle
+    /// (`first_run_parks_when_idle`). Removed in B3 (`work.rs`: the Host's
+    /// busy becomes in-flight work, `classified` alone).
+    pub fn classified_with(&mut self, pid: Pid, resident: Option<String>, host_busy: bool) {
         let Some(u) = self.current(pid) else {
             return;
         };
@@ -1231,7 +1252,7 @@ impl<P: Clone> Supervisor<P> {
             }
             let idle_standby = self.tunables.policy(unit.class).idle_standby;
             let at_once = unit.run_is_first && idle_standby;
-            let busy = unit.job.is_some() || unit.work.busy();
+            let busy = host_busy || unit.job.is_some() || unit.work.busy();
             // A lazy class is written only when it goes to standby, or at quit
             // (today's `lazy_classified` / `park` / `lazy_quit`).
             let Some(unit) = self.units.get_mut(&u) else {
@@ -1272,8 +1293,6 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `touch`: the unit was used (MOVE `Lazy::touch`).
-    // B2c: the idle timer (`Lazy::touch`).
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn touch(&mut self, pid: Pid, now: Ms) {
         self.set_now(now);
         let Some(u) = self.current(pid) else {
@@ -1466,15 +1485,11 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// Wake events wake nothing (start-up; `Lazy::mute`).
-    // B2c: wake events muted at start-up (`Lazy::mute`).
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn set_muted(&mut self, muted: bool) {
         self.muted = muted;
     }
     /// Start-up settled at `now`: wake events wake again after
     /// `quiet_after_start`.
-    // B2c: wake events muted at start-up (`lazy_settled`).
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn settled(&mut self, now: Ms) {
         self.set_now(now);
         self.muted = false;
@@ -1486,8 +1501,6 @@ impl<P: Clone> Supervisor<P> {
     pub fn unit(&self, u: UnitId) -> Option<&Unit<P>> {
         self.units.get(&u)
     }
-    // B2c: triggers by owner (`lazy_deliver`).
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn by_pid(&self, pid: Pid) -> Option<UnitId> {
         self.by_pid.get(&pid).copied()
     }
@@ -1549,8 +1562,6 @@ impl<P: Clone> Supervisor<P> {
         (self.units.get(&u)?.pid() == Some(pid)).then_some(u)
     }
 
-    // B2c: `wake`.
-    #[cfg_attr(not(test), allow(dead_code))]
     fn events_muted(&self) -> bool {
         self.muted || self.now < self.quiet_until
     }
@@ -1955,8 +1966,12 @@ impl<P: Clone> Supervisor<P> {
         let timeout = unit
             .start_timeout
             .unwrap_or(self.tunables.policy(unit.class).start_timeout);
-        self.timers
-            .arm(&mut unit.gens, u, TimerKind::StartTimeout, now + timeout);
+        // B2c–B2d: the Host's activation deadline is the only one
+        // (`Tunables::start_timeout_by_host`).
+        if !self.tunables.start_timeout_by_host {
+            self.timers
+                .arm(&mut unit.gens, u, TimerKind::StartTimeout, now + timeout);
+        }
         let mut priority = Priority::Background;
         if let Some(job) = unit.job.as_mut() {
             job.deadline = Some(now + timeout);
@@ -1988,8 +2003,6 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// T8: the process could not be created.
-    // B2c: `process_spawned`.
-    #[cfg_attr(not(test), allow(dead_code))]
     fn spawn_failed(&mut self, u: UnitId, pid: Pid, text: String) {
         let now = self.now;
         let keeps = self.tunables.start_failure_keeps_registrations;
@@ -2055,12 +2068,8 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// T9: ready and every initial UI registration done.
-    // B2c: `process_ready`.
-    #[cfg_attr(not(test), allow(dead_code))]
     fn try_ready(&mut self, u: UnitId) {
         let now = self.now;
-        let on_demand = self.tunables.on_demand;
-        let classify_wait = self.tunables.classify_wait;
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
@@ -2095,10 +2104,30 @@ impl<P: Clone> Supervisor<P> {
                 payload: trigger.payload,
             });
         }
-        // A run without a checkpoint is classified (T12/T13); never a
-        // development load or a unit without a recording key (today's
-        // `lazy_development`, `lazy_key_of` is `None`). A recorded run may be
-        // classified again (`classified`, once per run), without the timer.
+        if unit.job.as_ref().is_some_and(Job::starts) {
+            self.finish(u, JobResult::Done);
+        }
+        self.arm_classification(u);
+        self.arm_idle(u);
+    }
+
+    /// At a run's ready: a run without a checkpoint is classified (T12/T13,
+    /// the 5 s timer); never a development load or a unit without a
+    /// recording key (today's `lazy_development`, `lazy_key_of` is `None`).
+    /// A recorded run may be classified again (`classified`, once per run),
+    /// without the core's timer (the adapter times its answer, §17.7).
+    fn arm_classification(&mut self, u: UnitId) {
+        let now = self.now;
+        let on_demand = self.tunables.on_demand;
+        let classify_wait = self.tunables.classify_wait;
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        unit.classifying = false;
+        unit.classified_run = false;
+        unit.may_reclassify = false;
+        unit.park_when_idle = false;
+        Timers::cancel(&mut unit.gens, TimerKind::Classify);
         if on_demand && unit.recordable && !unit.recorded {
             unit.classifying = true;
             self.timers
@@ -2110,10 +2139,6 @@ impl<P: Clone> Supervisor<P> {
             // until then the checkpoint on disk stays as it is (§17.7).
             unit.may_reclassify = true;
         }
-        if unit.job.as_ref().is_some_and(Job::starts) {
-            self.finish(u, JobResult::Done);
-        }
-        self.arm_idle(u);
     }
 
     /// The process failed or ended unasked (T10 / T11 / T25), per the
