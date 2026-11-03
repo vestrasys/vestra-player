@@ -73,7 +73,11 @@ impl Host {
                     _ => "activation timed out".into(),
                 };
                 self.record_failure(owner, &message);
-                self.disable(owner, StopReason::Failed);
+                // The core stops it (T10; T11 when it timed out, under
+                // `legacy()` without a retry): `Terminate`.
+                self.supervisor.set_now(now);
+                self.supervisor.process_failed(Pid(owner), message);
+                self.supervisor_run();
             }
         }
     }
@@ -102,7 +106,9 @@ impl Host {
         self.unit_started(&plugin.manifest.id, owner);
         self.plugins.insert(owner, plugin);
     }
-    /// Load a development package (`--plugin DIR`).
+    /// Load a development package (`--plugin DIR`): checked here, then a
+    /// start job of its `Development` unit (outside the lanes, with its own
+    /// start timeout); its spawn is `load_development_as`.
     pub(crate) fn load(&mut self, directory: &Path, timeout_ms: u64) -> Result<()> {
         if !(1_000..=120_000).contains(&timeout_ms) {
             bail!("activation timeout must be 1000..120000ms");
@@ -122,14 +128,39 @@ impl Host {
                 candidate.id
             );
         }
-        let owner = self.alloc_owner_checked()?;
-        self.activation_begin(
-            &candidate.id,
-            owner,
-            self.now_ms()
-                .checked_add(timeout_ms)
-                .ok_or_else(|| anyhow::anyhow!("activation deadline overflow"))?,
-        )?;
+        if self.owners_exhausted() {
+            bail!("plugin owner identities exhausted");
+        }
+        self.now_ms()
+            .checked_add(timeout_ms)
+            .ok_or_else(|| anyhow::anyhow!("activation deadline overflow"))?;
+        self.dev_loading = Some(directory.to_owned());
+        let spec =
+            crate::supervisor::UnitSpec::new(&candidate.id, crate::supervisor::Class::Development)
+                .start_timeout(timeout_ms);
+        let unit = self.supervisor.add_unit(spec);
+        if self.supervisor.unit(unit).is_some_and(|u| u.job.is_none()) {
+            // A unit of this id still stopping or busy keeps it: as an enable.
+            self.supervisor.set_enabled(unit, true);
+            let _ = self
+                .supervisor
+                .start(unit, crate::supervisor::Cause::Enable);
+        }
+        let started = self.start_now(&candidate.id);
+        self.dev_loading = None;
+        started.map_err(|error| anyhow::anyhow!(error.message))
+    }
+    /// The core's spawn of a development unit (`Action::Spawn`): today's
+    /// `load` after its checks, as process `owner` with the activation
+    /// deadline the core gave its start.
+    pub(crate) fn load_development_as(
+        &mut self,
+        directory: &Path,
+        owner: u64,
+        deadline: u64,
+    ) -> Result<()> {
+        let candidate = manifest::read_development(directory)?;
+        self.activation_begin(&candidate.id, owner, deadline)?;
         let plugin = match Plugin::load(directory, owner, self.events.clone()) {
             Ok(plugin) => plugin,
             Err(error) => {
@@ -139,7 +170,7 @@ impl Host {
         };
         // `Plugin::load` reads the manifest again: one changed in between
         // would run under an id other than the one its activation and the
-        // `running` check above were for.
+        // `running` check were for.
         if plugin.manifest.id != candidate.id {
             self.supervisor.activation_end(Pid(owner));
             let error = anyhow::anyhow!(
@@ -167,18 +198,66 @@ impl Host {
         })?;
         Ok(())
     }
-    /// Stop a running plugin for good (until it starts again) and revoke
-    /// what it holds; its `runtime.stop` carries `reason`.
-    pub(crate) fn disable(&mut self, owner: u64, reason: StopReason) {
-        debug_assert_ne!(reason, StopReason::Idle, "an idle stop is a park");
-        self.stop(owner, reason);
+    /// Runs the core now for a package RPC that starts plugin `id` and
+    /// answers with its start's error (`setEnabled`, `reload`, a
+    /// development load): the error of a spawn that failed meanwhile, as
+    /// today's synchronous start returned it.
+    pub(crate) fn start_now(&mut self, id: &str) -> std::result::Result<(), RpcError> {
+        let outer = self.start_error.replace((id.to_owned(), None));
+        self.supervisor_run();
+        let error = std::mem::replace(&mut self.start_error, outer).and_then(|(_, error)| error);
+        error.map_or(Ok(()), Err)
+    }
+    /// A running plugin stops after a failure the Host found (a malformed
+    /// request, a full or closed pipe, its runner killed): the core's stop
+    /// (`Stop{Failed, then: Inactive}`: listed stopped, as today's
+    /// `disable(Failed)` without a recorded failure).
+    pub(crate) fn stop_failed(&mut self, owner: u64) {
+        if let Some(unit) = self.supervisor.by_pid(Pid(owner))
+            && self.supervisor.process_of(&self.unit_id(unit)) == Some(Pid(owner))
+        {
+            let now = self.now_ms();
+            self.supervisor.set_now(now);
+            let _ = self.supervisor.stop(
+                unit,
+                crate::supervisor::StopReason::Failed,
+                crate::supervisor::Then::Inactive,
+            );
+            self.supervisor_run();
+        }
+        self.stopped_anyway(owner);
+    }
+    /// A run ended or failed by itself (`Event::Exited`, a runtime fault):
+    /// the core's `process_exited` (T25; under `legacy()` every class lands
+    /// failed with `text`, today's `disable(Failed)`).
+    pub(crate) fn process_ended(
+        &mut self,
+        owner: u64,
+        cause: crate::supervisor::ExitCause,
+        text: Option<String>,
+    ) {
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
+        self.supervisor.process_exited(Pid(owner), cause, text);
+        self.supervisor_run();
+        self.stopped_anyway(owner);
+    }
+    /// Every stop of a running plugin is the core's: one it did not stop is
+    /// a bug (its unit does not run it), reported, and stopped here as
+    /// before (a `debug_assert!` stops a debug build).
+    fn stopped_anyway(&mut self, owner: u64) {
+        if self.plugins.contains_key(&owner) {
+            debug_assert!(false, "running plugin {owner} not stopped by its unit");
+            diag!("supervisor: running plugin {owner} not stopped by its unit");
+            self.stop_process(owner, StopReason::Failed, Duration::from_millis(300));
+        }
     }
     /// Stop a running plugin and revoke what it holds; `reason` goes with
-    /// its `runtime.stop`. `Idle` parks it (the core's standby, the adapter's
-    /// `park`):
-    /// its recordable registrations stay, marked recorded, and its process
-    /// gets longer to finish.
-    pub(crate) fn stop(&mut self, owner: u64, reason: StopReason) {
+    /// its `runtime.stop`, and the reaper gives it `grace` before it kills
+    /// it (the `Terminate` executor's body). `Idle` parks it (the core's
+    /// standby, the adapter's `park`): its recordable registrations stay,
+    /// marked recorded.
+    pub(crate) fn stop_process(&mut self, owner: u64, reason: StopReason, grace: Duration) {
         let park = reason == StopReason::Idle;
         // Process exit commonly follows an explicit disable. The first revoke
         // owns cleanup: a duplicate notification must not cancel its id=0
@@ -285,13 +364,9 @@ impl Host {
         // then (and the playback worker's `BackendCleaned`) the unit is
         // deactivating, and every start of it waits (supervisor.md §17.9).
         if let Some(mut plugin) = self.plugins.remove(&owner) {
-            self.unit_stopping(&plugin.manifest.id, owner, reason);
             self.unit_stopped(&plugin.manifest.id, owner);
             plugin.set_stop_reason(reason);
-            if park {
-                // A routine stop, not a fault: its `onDispose` gets time.
-                plugin.set_stop_wait(super::supervisor::PARK_WAIT);
-            }
+            plugin.set_stop_wait(grace);
             self.reaper.reap(owner, plugin);
         }
     }
@@ -330,7 +405,7 @@ impl Host {
         } else {
             // Its queue is full or its pipe closed: the stop line cannot be
             // queued either, and the process is killed after the wait.
-            self.disable(owner, StopReason::Failed);
+            self.stop_failed(owner);
         }
     }
     pub(crate) fn broadcast(&mut self, event: &str, data: Value) {

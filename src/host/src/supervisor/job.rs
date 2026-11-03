@@ -29,8 +29,6 @@ pub enum Cause {
     AutoRestart,
 }
 impl Cause {
-    // B2d: `start`.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn priority(self) -> Priority {
         match self {
             Cause::Trigger(priority) => priority,
@@ -46,8 +44,6 @@ pub enum JobKind {
     Start {
         cause: Cause,
     },
-    // B2d: the Host's stops as jobs.
-    #[cfg_attr(not(test), allow(dead_code))]
     Stop {
         reason: StopReason,
         then: Then,
@@ -134,55 +130,8 @@ pub struct Job {
     pub(super) reason: StopReason,
     /// Start-like and waiting in a lane.
     pub(super) queued: bool,
-    /// B2b–B2d (transitional, supervisor.md §17.9): the Host starts the
-    /// unit itself once this job may start (`host_start`): where it would
-    /// take a lane and `Spawn`, it ends `Done` and the adapter runs
-    /// today's start. Goes when the Host's starts become jobs: enable,
-    /// reload and package operations in B2d (wakes are the core's own
-    /// starts since B2c).
-    pub(super) handoff: Option<Handoff>,
 }
 
-/// A hand-off job's own extra wait (B2b–B2d, §17.9): a reload of a
-/// built-in also waits for the digest check it asked for, as today's
-/// `reload_tick` waits for `!verifying(id)`: until `verify_finished`, or
-/// `verify_until` (`VERIFY_WAIT` after the request). B2d's
-/// `Activating{Verify}` (T4) replaces it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Handoff {
-    pub verify_until: Option<Ms>,
-}
-
-/// A start the Host runs itself, waiting for the unit's previous process
-/// first (B2b–B2d, §17.9; the B2b rows of §4.7).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum HostStart {
-    /// `packages.setEnabled(true)` (today's enable-after-park entry in
-    /// `packages.reloads`; now after any stop, the D13 fix):
-    /// `Start{Enable}`, `JobMode::Fail`. Removed in B2d.
-    Enable,
-    /// `packages.reload` (today's `packages.reloads` + `reload_tick`):
-    /// `Restart{fresh}`, `JobMode::Fail`. Removed in B2d.
-    Reload { verify_until: Option<Ms> },
-    /// A package operation's start: install, upgrade, reinstall, or the
-    /// old version back after a failed or cancelled one (today's
-    /// `Operation.waiting`): `Restart{fresh, image}`. The operation is
-    /// the package RPC that is busy already, so it merges with what is
-    /// installed (`JobMode::Replace`), as today's install goes on beside a
-    /// waiting reload. Removed in B2d.
-    Install { image: String },
-}
-
-/// What `host_start` answers.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum HostStarted {
-    /// Nothing to wait for: the Host starts now.
-    Now,
-    /// The job waits; `JobFinished` of `job` says when (`Done`: start now)
-    /// or that it failed. `new`: no job was installed before (a request
-    /// merged into an installed one is not new).
-    Waits { job: JobId, new: bool },
-}
 impl Job {
     /// Runs as a start now (Start, or Restart past its stop half).
     pub fn starts(&self) -> bool {
@@ -263,7 +212,6 @@ impl<P: Clone> Supervisor<P> {
             created: self.now,
             restarting: false,
             queued: false,
-            handoff: None,
         };
         if self.shutting_down {
             self.record(u, id, job.kind, JobResult::Dropped);
@@ -567,83 +515,6 @@ impl<P: Clone> Supervisor<P> {
         self.arm_idle(u);
     }
 
-    // ---- B2b–B2d: starts the Host runs itself (§17.9) -------------------
-
-    /// A start the Host runs itself (`HostStart`), once the unit's
-    /// previous process is gone (§4.3 "stop, then start", "wake while
-    /// deactivating"; the D13 fix: every start waits, whatever stopped that
-    /// process). `Now` when no process of the unit may still run and no
-    /// job is installed; else a hand-off job waits `STOP_WAIT` from this
-    /// request (`JobFinished` `Done`, or `Failed` with today's text,
-    /// `fail_stuck`). `Busy`: `JobMode::Fail` against an installed
-    /// package-RPC job (today's `package_busy` reply).
-    pub fn host_start(&mut self, u: UnitId, start: HostStart) -> Result<HostStarted, Busy> {
-        let Some(unit) = self.units.get(&u) else {
-            return Ok(HostStarted::Now);
-        };
-        let going = unit.stopping.is_some_and(|s| !s.done());
-        let installed = unit.job.as_ref().map(|job| job.id);
-        if !going && installed.is_none() {
-            return Ok(HostStarted::Now);
-        }
-        let (kind, mode, priority, origin, verify_until) = match start {
-            HostStart::Enable => (
-                JobKind::Start {
-                    cause: Cause::Enable,
-                },
-                JobMode::Fail,
-                Priority::Interactive,
-                Origin::User,
-                None,
-            ),
-            HostStart::Reload { verify_until } => (
-                JobKind::Restart {
-                    fresh: true,
-                    image: None,
-                },
-                JobMode::Fail,
-                Priority::Interactive,
-                Origin::PackageRpc,
-                verify_until,
-            ),
-            HostStart::Install { image } => (
-                JobKind::Restart {
-                    fresh: true,
-                    image: Some(image),
-                },
-                JobMode::Replace,
-                Priority::Interactive,
-                Origin::PackageRpc,
-                None,
-            ),
-        };
-        let job = self.enqueue_job(u, kind, mode, priority, origin)?;
-        if let Some(installed) = self
-            .units
-            .get_mut(&u)
-            .and_then(|unit| unit.job.as_mut())
-            .filter(|installed| installed.id == job)
-        {
-            installed.handoff = Some(Handoff { verify_until });
-        }
-        Ok(HostStarted::Waits {
-            job,
-            new: installed != Some(job),
-        })
-    }
-
-    /// The digest check a hand-off reload waits for is over (§17.9).
-    pub fn verify_finished(&mut self, u: UnitId) {
-        let Some(job) = self.units.get_mut(&u).and_then(|unit| unit.job.as_mut()) else {
-            return;
-        };
-        if let Some(handoff) = job.handoff.as_mut()
-            && handoff.verify_until.take().is_some()
-        {
-            self.run.push_back(u);
-        }
-    }
-
     /// A deactivating unit lands somewhere else (stronger stop merged).
     /// Leaving `then: Standby` (disable, uninstall, reload, upgrade of a
     /// unit stopping for standby) revokes the kept registrations at once,
@@ -669,6 +540,13 @@ impl<P: Clone> Supervisor<P> {
         if merged == Then::Removed {
             *reason = StopReason::Uninstall;
             unit.remove_data = true;
+            // The checkpoint goes at the uninstall request, as today's
+            // uninstall drops the recording at once: never at the landing,
+            // where a reinstall may own the unit (review note B2-4).
+            if unit.recorded {
+                unit.recorded = false;
+                self.pending.push(Action::DropCheckpoint { unit: u });
+            }
         }
         if was_standby && let Some(stopping) = unit.stopping.as_mut().filter(|s| s.kept) {
             stopping.kept = false;

@@ -177,13 +177,19 @@ pub struct Tunables {
     /// too, not only for the reap (§17.7 item 18; B4). Today
     /// `data_removals` deletes at `Event::Reaped`.
     pub remove_data_waits_cleanup: bool,
-    /// B2c–B2d (transitional, supervisor.md §17.10): the Host times the
-    /// start of the runs the core spawns (its activation deadline,
-    /// `activation_tick`), so the core arms no `TimeoutStartSec` of its own
-    /// (two deadlines a few ms apart would fail a run that the Host lets
-    /// become ready). Off in every preset; the adapter sets it. Removed in
-    /// B2d, when the core runs every activation.
-    pub start_timeout_by_host: bool,
+    /// A trigger for a unit that is starting, but not woken from standby
+    /// (a boot start, a first run, an enable, a reload, an install, a
+    /// development load), goes to its process at once: today only a unit
+    /// woken from standby holds triggers until its ready (`lazy.waking`).
+    /// Off (B3, job queue): every start holds them for its ready (T9).
+    pub deliver_while_starting: bool,
+    /// A first run of a built-in whose digest is still being checked takes
+    /// its first-run place only once the check is over, and goes back to
+    /// the end of its lane when none is free then: today a verifying
+    /// built-in stays in the start queue, and only once checked asks for a
+    /// first-run place (`start_queued` → `start_installed` → `FirstQueue`).
+    /// Off (B3): the check runs in `Activating{Verify}` on the place (T4).
+    pub verify_before_first_run_place: bool,
 }
 
 impl Policy {
@@ -255,7 +261,8 @@ impl Tunables {
             resident_idle_standby: true,
             runner_restart_waits_cleanup: false,
             remove_data_waits_cleanup: false,
-            start_timeout_by_host: false,
+            deliver_while_starting: true,
+            verify_before_first_run_place: true,
         }
     }
 
@@ -279,6 +286,8 @@ impl Tunables {
         self.enable_wait_busy = false;
         self.first_run_parks_when_idle = false;
         self.boot_wait_lists_stopped = false;
+        self.deliver_while_starting = false;
+        self.verify_before_first_run_place = false;
         self
     }
 
@@ -450,9 +459,11 @@ mod tests {
         assert!(t.enable_wait_busy && t.first_run_parks_when_idle);
         assert!(t.boot_wait_lists_stopped && t.resident_idle_standby);
         assert!(!t.remove_data_waits_cleanup);
+        assert!(t.deliver_while_starting && t.verify_before_first_run_place);
         let b3 = Tunables::legacy().with_b3(8);
         assert!(!b3.enable_wait_busy && !b3.first_run_parks_when_idle);
         assert!(!b3.boot_wait_lists_stopped);
+        assert!(!b3.deliver_while_starting && !b3.verify_before_first_run_place);
         assert!(b3.resident_idle_standby);
         let target = Tunables::target(8, 16_384);
         assert!(target.crash_notice && target.start_failure_notice && target.answer_held);

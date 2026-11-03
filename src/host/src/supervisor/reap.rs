@@ -13,9 +13,7 @@
 use super::job::{Cause, JobKind, JobResult};
 use super::timers::{TimerKind, Timers};
 use super::trigger::AnswerReason;
-use super::unit::{
-    DeactivatingSub, FailResult, Pid, StopReason, Stopping, Then, UnitId, UnitState,
-};
+use super::unit::{DeactivatingSub, FailResult, Pid, Then, UnitId, UnitState};
 use super::{Action, Supervisor};
 
 /// Today's text of a wake whose stopped process did not go (`lazy.rs`).
@@ -74,7 +72,6 @@ impl<P: Clone> Supervisor<P> {
             return;
         }
         unit.remove_data = false;
-        let data = unit.data.take();
         // Never after its data: the checkpoint of a unit being removed goes
         // first (today's uninstall drops the recording at the request).
         let removing = unit.removed
@@ -89,7 +86,7 @@ impl<P: Clone> Supervisor<P> {
             unit.recorded = false;
             self.pending.push(Action::DropCheckpoint { unit: u });
         }
-        self.pending.push(Action::RemoveData { unit: u, data });
+        self.pending.push(Action::RemoveData { unit: u });
     }
 
     /// §5 `backend_cleaned` (`Event::BackendCleaned`).
@@ -172,86 +169,7 @@ impl<P: Clone> Supervisor<P> {
         };
     }
 
-    // ---- B2b–B2d: stops the Host executes itself (§17.9) ----------------
-
-    /// The Host stopped process `pid` of `u` itself (`lifecycle.rs`
-    /// `stop`; today's `Host.cleanup` entry): T24's `Deactivating`,
-    /// without a `Terminate` action (the Host ran it) and without the
-    /// `TimeoutStopSec` timer (the reaper times the grace and kills, A3).
-    /// It lands as any stop does: at `process_reaped` + `backend_cleaned`
-    /// (T16), or stuck after `STOP_WAIT` and still tracked until that
-    /// process goes (T18). Every hand-off start waits for it
-    /// (`host_start`). `then` `Standby` keeps the registrations (a park).
-    /// The process it displaced from tracking, if one still went: the
-    /// adapter reports it (the core does no I/O). Precondition, not checked
-    /// here: a start of the unit waited for its previous process. Every
-    /// `host_start` does; the start-up queue, first runs, development loads
-    /// and a package operation's activation do not wait (as before B2b),
-    /// but meet no stopped process of their unit, except after a runner
-    /// restart (`member_killed` lands those at once). Removed in B2d: the
-    /// Host's stops become `stop` jobs and the `Terminate` executor, and
-    /// every start a job.
-    pub fn process_stopping(
-        &mut self,
-        u: UnitId,
-        pid: Pid,
-        reason: StopReason,
-        then: Then,
-    ) -> Option<Pid> {
-        let now = self.now;
-        let stop_wait = self.tunables.stop_wait;
-        let unit = self.units.get_mut(&u)?;
-        // B2c: the core's own `Terminate` (a park) already is this stop.
-        if matches!(unit.state, UnitState::Deactivating { pid: stopping, .. } if stopping == pid) {
-            return None;
-        }
-        // B2c: the Host stops a run the core started (a wake not ready yet:
-        // a disable, a failed activation): that start ends with it, as
-        // today's `lazy.waking` entry went with the stop (`forget_running`).
-        let starting = matches!(unit.state, UnitState::Activating { pid: Some(run), .. } if run == pid)
-            && unit
-                .job
-                .as_ref()
-                .is_some_and(|job| job.starts() && job.handoff.is_none());
-        if starting {
-            self.answer_backlog(u, AnswerReason::Stopped);
-            self.finish(u, JobResult::Canceled);
-        }
-        // Its previous pid no longer forwards to it (today's
-        // `forget_running` drops the `lazy.moved` entries to it).
-        self.drop_alias(u);
-        let unit = self.units.get_mut(&u)?;
-        let displaced = unit
-            .stopping
-            .filter(|s| s.pid != pid && !s.done())
-            .map(|s| s.pid);
-        Self::cancel_run_timers(unit);
-        let last = unit.last_pid.replace(pid);
-        unit.state = UnitState::Deactivating {
-            pid,
-            reason,
-            then,
-            sub: DeactivatingSub::Term,
-        };
-        unit.stopping = Some(Stopping {
-            pid,
-            reaped: false,
-            backend_cleaned: false,
-            deadline: now + stop_wait,
-            kept: then == Then::Standby,
-        });
-        Timers::cancel(&mut unit.gens, TimerKind::StopGrace);
-        self.timers
-            .arm(&mut unit.gens, u, TimerKind::StopWait, now + stop_wait);
-        self.map_pid(u, pid);
-        for old in [last, displaced].into_iter().flatten() {
-            if old != pid {
-                self.unmap_pid(u, old);
-            }
-        }
-        self.sync(u);
-        displaced
-    }
+    // ---- B2b–B4: the runner restart the Host still runs ------------------
 
     /// A shared-runner member stopped because the Host killed its runner
     /// (today's `restart_shared`): reaped with the runner, and cleaned up
@@ -277,50 +195,6 @@ impl<P: Clone> Supervisor<P> {
         self.flush_data_removal(u);
         self.land_if_done(u);
         self.sync(u);
-    }
-
-    /// An uninstall asks for `data` (what the Host resolved at the request)
-    /// to be removed once no process of `u` may write it any more (today's
-    /// `data_removals`: at the reap under `legacy()`, also after the
-    /// playback worker's cleanup with `remove_data_waits_cleanup`, §17.5,
-    /// §17.7 item 18). `Some(data)` back when that is now (no process
-    /// tracked, or the tracked one gone that far): the Host removes it at
-    /// once. Otherwise it is owed and comes back as `RemoveData { data }`
-    /// at that process's reap. Removed in B2d (`stop(u, Uninstall,
-    /// Removed)` with the data resolved at the request, §13 B2d).
-    pub fn remove_data_after(&mut self, u: UnitId, data: P) -> Option<P> {
-        let waits = self.tunables.remove_data_waits_cleanup;
-        let Some(unit) = self.units.get_mut(&u) else {
-            return Some(data);
-        };
-        let gone = unit
-            .stopping
-            .is_none_or(|s| s.reaped && (s.backend_cleaned || !waits));
-        if gone {
-            return Some(data);
-        }
-        unit.remove_data = true;
-        unit.data = Some(data);
-        None
-    }
-
-    /// The process of `u` that may still run after its stop: tracked and
-    /// not yet reaped and cleaned up after (today's `!process_gone`,
-    /// `parked_process`, `!cleanup_done`). A start waits for it.
-    pub fn previous_process(&self, u: UnitId) -> Option<Pid> {
-        self.units
-            .get(&u)?
-            .stopping
-            .filter(|s| !s.done())
-            .map(|s| s.pid)
-    }
-
-    /// Whether `pid` is such a process (today's `!process_gone(owner)`).
-    pub fn process_going(&self, pid: Pid) -> bool {
-        self.by_pid
-            .get(&pid)
-            .and_then(|u| self.previous_process(*u))
-            == Some(pid)
     }
 
     /// T16 / T18: the unit leaves `Deactivating` for its `then`.
@@ -423,14 +297,14 @@ impl<P: Clone> Supervisor<P> {
     }
 }
 
-/// The B2b inputs (§17.9): stops the Host runs itself, the hand-off waits
-/// of the starts it runs, and an uninstall's data removal. The Host's side
-/// is pinned end to end by tests/lifecycle_baseline.rs.
+/// The waits for stopped processes (§17.9), driven as the adapter drives
+/// them since B2d: every start and stop is a job. The Host's side is pinned
+/// end to end by tests/lifecycle_baseline.rs.
 #[cfg(test)]
 mod tests {
     use super::super::{
-        Action, Busy, Delivery, HostStart, HostStarted, JobId, JobKind, JobResult, Priority,
-        Supervisor, Trigger, Tunables,
+        Action, Busy, Class, Delivery, JobId, JobKind, JobMode, JobResult, Origin, Priority,
+        StopReason, Supervisor, Trigger, Tunables, UnitSpec,
     };
     use super::*;
 
@@ -440,17 +314,60 @@ mod tests {
         Supervisor::new(Tunables::legacy(), 1)
     }
 
-    /// A unit running `pid` (the Host's `add_plugin`).
+    /// The pid of the spawn in `actions`.
+    fn spawned(actions: &[Action<u32>]) -> Option<Pid> {
+        actions.iter().find_map(|a| match a {
+            Action::Spawn { pid, .. } => Some(*pid),
+            _ => None,
+        })
+    }
+
+    /// A unit running `pid` (its start job spawned it, it is ready).
     fn running(s: &mut S, id: &str, pid: u64) -> UnitId {
-        let u = s.load_unit(id);
-        s.adopt_process(u, Pid(pid));
+        let u = s.add_unit(UnitSpec::new(id, Class::Normal).unrecordable());
+        let now = s.now();
+        assert_eq!(spawned(&s.run_jobs(now)), Some(Pid(pid)));
+        s.process_spawned(Pid(pid), Ok(()));
+        s.process_ready(Pid(pid));
+        s.run_jobs(now);
         u
     }
 
-    /// The Host's `stop` of `pid`.
-    fn stop(s: &mut S, u: UnitId, pid: u64, reason: StopReason, then: Then) {
-        assert_eq!(s.process_stopping(u, Pid(pid), reason, then), None);
-        s.release_process(u, Pid(pid));
+    /// A start of `u` (an enable) ran: spawned as `pid` and ready.
+    fn started(s: &mut S, pid: u64) {
+        s.process_spawned(Pid(pid), Ok(()));
+        s.process_ready(Pid(pid));
+    }
+
+    /// The core stops `u`'s process (`Terminate`): a stop job, or for
+    /// standby the idle Standby job (`QueryResources` answered idle).
+    fn stop(s: &mut S, u: UnitId, reason: StopReason, then: Then) {
+        if then == Then::Standby {
+            // Not used since its ready.
+            let later = s.now() + 1;
+            s.set_now(later);
+            s.standby(u);
+            let now = s.now();
+            let pid = s.unit(u).unwrap().pid().unwrap();
+            assert!(
+                s.run_jobs(now)
+                    .contains(&Action::QueryResources { unit: u, pid })
+            );
+            s.resources_answered(pid, false);
+        } else {
+            s.stop(u, reason, then).unwrap();
+        }
+        let now = s.now();
+        assert!(
+            s.run_jobs(now)
+                .iter()
+                .any(|a| matches!(a, Action::Terminate { .. }))
+        );
+    }
+
+    /// The process a start of `u` waits for (today's `!process_gone`).
+    fn going(s: &S, u: UnitId) -> Option<Pid> {
+        s.unit(u)?.stopping.filter(|s| !s.done()).map(|s| s.pid)
     }
 
     fn finished(actions: &[Action<u32>]) -> Vec<(JobId, JobKind, JobResult)> {
@@ -475,18 +392,24 @@ mod tests {
             .collect()
     }
 
-    fn waits(started: Result<HostStarted, Busy>) -> JobId {
-        match started {
-            Ok(HostStarted::Waits { job, .. }) => job,
-            other => panic!("{other:?}"),
-        }
+    /// A package operation's start (`Restart{fresh, image}`, merged with
+    /// what is installed: the operation is the busy RPC already).
+    fn install(s: &mut S, u: UnitId) -> JobId {
+        s.enqueue_job(
+            u,
+            JobKind::Restart {
+                fresh: true,
+                image: Some("d".into()),
+            },
+            JobMode::Replace,
+            Priority::Interactive,
+            Origin::PackageRpc,
+        )
+        .unwrap()
     }
 
     const WAKE: JobKind = JobKind::Start {
         cause: Cause::Trigger(Priority::Interactive),
-    };
-    const ENABLE: JobKind = JobKind::Start {
-        cause: Cause::Enable,
     };
 
     /// A18 (2): what `Host.cleanup` kept for every stop of a run is one
@@ -496,13 +419,10 @@ mod tests {
     #[test]
     fn stop_bookkeeping_is_one_per_unit_and_goes() {
         let mut s = new();
-        let u = s.load_unit("a.one");
+        let u = running(&mut s, "a.one", 1);
         for n in 1..=1000 {
-            s.set_now(n * 10);
-            s.adopt_process(u, Pid(n));
-            stop(&mut s, u, n, StopReason::Disable, Then::Inactive);
-            assert_eq!(s.previous_process(u), Some(Pid(n)));
-            assert!(s.process_going(Pid(n)));
+            stop(&mut s, u, StopReason::Disable, Then::Inactive);
+            assert_eq!(going(&s, u), Some(Pid(n)));
             // Either order (the playback worker is often first).
             if n % 2 == 0 {
                 s.backend_cleaned(Pid(n));
@@ -511,10 +431,14 @@ mod tests {
                 s.process_reaped(Pid(n), None);
                 s.backend_cleaned(Pid(n));
             }
-            assert_eq!(s.previous_process(u), None);
-            assert!(!s.process_going(Pid(n)));
+            assert_eq!(going(&s, u), None);
             assert!(s.unit(u).unwrap().stopping.is_none());
             s.run_jobs(n * 10);
+            if n < 1000 {
+                s.enable(u).unwrap();
+                assert_eq!(spawned(&s.run_jobs(n * 10)), Some(Pid(n + 1)));
+                started(&mut s, n + 1);
+            }
         }
         assert!(s.by_pid.len() <= 1, "{:?}", s.by_pid);
         assert_eq!(s.unit(u).unwrap().state, UnitState::Inactive);
@@ -522,23 +446,18 @@ mod tests {
 
     /// T18: a stop not reaped within 20 s lands stuck, its process still
     /// tracked; a start asked later waits 20 s from its own request, and
-    /// goes on once the process goes after all (since B2c a wake is the
-    /// core's own start: it spawns).
+    /// goes on once the process goes after all.
     #[test]
     fn a_stuck_stop_stays_tracked_until_its_process_goes() {
         let mut s = new();
         let u = running(&mut s, "a.one", 1);
-        stop(&mut s, u, 1, StopReason::Idle, Then::Standby);
+        stop(&mut s, u, StopReason::Disable, Then::Inactive);
         s.run_jobs(20_000);
-        assert!(matches!(
-            s.unit(u).unwrap().state,
-            UnitState::Standby { .. }
-        ));
-        assert_eq!(s.previous_process(u), Some(Pid(1)));
+        assert_eq!(s.unit(u).unwrap().state, UnitState::Inactive);
+        assert_eq!(going(&s, u), Some(Pid(1)));
         s.set_now(25_000);
-        assert_eq!(s.wake(Pid(1), &Trigger::interactive(7)), Delivery::Started);
-        s.advance(u);
-        assert!(spawns(&s.take_actions()).is_empty());
+        s.enable(u).unwrap();
+        assert!(spawns(&s.run_jobs(25_000)).is_empty());
         assert!(spawns(&s.run_jobs(44_999)).is_empty());
         s.process_reaped(Pid(1), None);
         s.backend_cleaned(Pid(1));
@@ -555,7 +474,7 @@ mod tests {
         let mut s = new();
         let u = running(&mut s, "a.one", 1);
         s.set_now(100);
-        stop(&mut s, u, 1, StopReason::Idle, Then::Standby);
+        stop(&mut s, u, StopReason::Idle, Then::Standby);
         s.set_now(1_000);
         assert_eq!(s.wake(Pid(1), &Trigger::interactive(7)), Delivery::Started);
         let job = s.job(u).unwrap().id;
@@ -565,7 +484,11 @@ mod tests {
             Delivery::Held
         );
         assert_eq!(s.job(u).unwrap().id, job);
-        assert!(finished(&s.run_jobs(20_999)).is_empty());
+        assert!(
+            !finished(&s.run_jobs(20_999))
+                .iter()
+                .any(|(j, ..)| *j == job)
+        );
         let actions = s.run_jobs(21_000);
         assert_eq!(
             finished(&actions),
@@ -576,192 +499,212 @@ mod tests {
             pid: Pid(1)
         }));
         // A wake whose process goes in time starts.
-        let v = running(&mut s, "b.two", 3);
-        stop(&mut s, v, 3, StopReason::Idle, Then::Standby);
-        assert_eq!(s.wake(Pid(3), &Trigger::interactive(9)), Delivery::Started);
-        s.process_reaped(Pid(3), None);
+        let v = running(&mut s, "b.two", 2);
+        stop(&mut s, v, StopReason::Idle, Then::Standby);
+        assert_eq!(s.wake(Pid(2), &Trigger::interactive(9)), Delivery::Started);
+        s.process_reaped(Pid(2), None);
         assert!(spawns(&s.run_jobs(21_100)).is_empty(), "not cleaned");
-        s.backend_cleaned(Pid(3));
+        s.backend_cleaned(Pid(2));
         assert_eq!(spawns(&s.run_jobs(21_200)), [v]);
     }
 
-    /// Nothing to wait for: the Host starts at once, no job.
+    /// Nothing to wait for: an enable, a reload or an install starts at
+    /// once.
     #[test]
     fn a_start_without_a_previous_process_is_now() {
         let mut s = new();
-        let u = s.load_unit("a.one");
-        for start in [
-            HostStart::Enable,
-            HostStart::Reload { verify_until: None },
-            HostStart::Install { image: "d".into() },
-        ] {
-            assert_eq!(s.host_start(u, start), Ok(HostStarted::Now));
-        }
-        assert!(s.job(u).is_none());
+        let u = s.add_unit(UnitSpec::new("a.one", Class::Normal).disabled());
+        s.enable(u).unwrap();
+        assert_eq!(spawns(&s.run_jobs(0)), [u]);
+        let v = s.add_unit(UnitSpec::new("b.two", Class::Normal).disabled());
+        s.set_enabled(v, true);
+        s.restart(v, true, None).unwrap();
+        assert_eq!(spawns(&s.run_jobs(0)), [v]);
+        let w = s.add_unit(UnitSpec::new("c.three", Class::Normal).disabled());
+        s.set_enabled(w, true);
+        install(&mut s, w);
+        assert_eq!(spawns(&s.run_jobs(0)), [w]);
     }
 
     /// D13: disable then enable of a running plugin: the enable waits for
     /// the old process (reaped and cleaned up after), is a package RPC
     /// meanwhile (today's `packages.reloads` entry: a second enable or a
-    /// reload is `busy`), then hands off; with the process not gone 20 s
-    /// after the enable, it fails with today's reload text.
+    /// reload is `busy`), then starts; with the process not gone 20 s after
+    /// the enable, it fails with today's reload text.
     #[test]
     fn disable_then_enable_waits_for_the_old_process() {
         let mut s = new();
         let u = running(&mut s, "a.one", 1);
-        stop(&mut s, u, 1, StopReason::Disable, Then::Inactive);
-        let job = waits(s.host_start(u, HostStart::Enable));
+        s.disable(u).unwrap();
+        s.run_jobs(0);
+        let job = s.enable(u).unwrap();
         assert!(s.package_busy(u));
-        assert_eq!(s.host_start(u, HostStart::Enable), Err(Busy));
-        assert_eq!(
-            s.host_start(u, HostStart::Reload { verify_until: None }),
-            Err(Busy)
-        );
+        assert_eq!(s.enable(u), Err(Busy));
+        assert_eq!(s.restart(u, true, None), Err(Busy));
         s.process_reaped(Pid(1), None);
-        assert!(finished(&s.run_jobs(10)).is_empty());
+        assert!(spawns(&s.run_jobs(10)).is_empty());
         s.backend_cleaned(Pid(1));
-        assert_eq!(finished(&s.run_jobs(20)), [(job, ENABLE, JobResult::Done)]);
+        assert_eq!(spawns(&s.run_jobs(20)), [u]);
+        assert_eq!(s.job(u).unwrap().id, job);
+        started(&mut s, 2);
+        assert!(finished(&s.run_jobs(20)).iter().any(|(j, ..)| *j == job));
         assert!(!s.package_busy(u));
         // Never gone: failed 20 s after the enable.
-        s.adopt_process(u, Pid(2));
         s.set_now(1_000);
-        stop(&mut s, u, 2, StopReason::Disable, Then::Inactive);
+        s.disable(u).unwrap();
+        s.run_jobs(1_000);
         s.set_now(2_000);
-        let job = waits(s.host_start(u, HostStart::Enable));
+        let job = s.enable(u).unwrap();
         assert!(finished(&s.run_jobs(21_999)).is_empty());
+        let done = finished(&s.run_jobs(22_000));
+        assert_eq!(done.len(), 1);
         assert_eq!(
-            finished(&s.run_jobs(22_000)),
-            [(job, ENABLE, JobResult::Failed(STUCK_RELOAD.into()))]
+            (done[0].0, &done[0].2),
+            (job, &JobResult::Failed(STUCK_RELOAD.into()))
         );
     }
 
-    /// Today's reload of a built-in also waits for its digest check: until
-    /// it is over, or its 3 s, whichever comes first once the process is
-    /// gone.
+    /// A reload of a built-in waits for its process, then for its digest
+    /// check (`Activating{Verify}`, T4): until it is over, or its 3 s.
     #[test]
     fn a_reload_waits_for_the_process_and_the_digest_check() {
         let mut s = new();
-        let u = running(&mut s, "a.one", 1);
-        stop(&mut s, u, 1, StopReason::Reload, Then::Inactive);
-        let job = waits(s.host_start(
-            u,
-            HostStart::Reload {
-                verify_until: Some(3_000),
-            },
-        ));
+        let u = s.add_unit(
+            UnitSpec::new("vestra.one", Class::Builtin)
+                .unrecordable()
+                .verify(),
+        );
+        assert_eq!(s.run_jobs(0), [Action::Verify { unit: u }]);
+        s.verify_done(u, true);
+        assert_eq!(spawned(&s.run_jobs(0)), Some(Pid(1)));
+        started(&mut s, 1);
+        s.restart(u, true, None).unwrap();
+        s.run_jobs(0);
         s.process_reaped(Pid(1), None);
         s.backend_cleaned(Pid(1));
-        assert!(finished(&s.run_jobs(100)).is_empty(), "still checking");
+        assert_eq!(s.run_jobs(100), [Action::Verify { unit: u }]);
         assert!(s.package_busy(u));
-        s.verify_finished(u);
-        let done = finished(&s.run_jobs(150));
-        assert_eq!(done.len(), 1);
-        assert_eq!((done[0].0, &done[0].2), (job, &JobResult::Done));
-        // Its 3 s over: it goes on without the check.
-        s.adopt_process(u, Pid(2));
-        stop(&mut s, u, 2, StopReason::Reload, Then::Inactive);
-        let job = waits(s.host_start(
-            u,
-            HostStart::Reload {
-                verify_until: Some(3_000),
-            },
-        ));
+        s.verify_done(u, true);
+        assert_eq!(spawns(&s.run_jobs(150)), [u]);
+        started(&mut s, 2);
+        // Its 3 s over: it goes on without the check (its own process).
+        s.restart(u, true, None).unwrap();
+        s.run_jobs(150);
         s.process_reaped(Pid(2), None);
         s.backend_cleaned(Pid(2));
-        assert!(finished(&s.run_jobs(2_999)).is_empty());
-        assert_eq!(finished(&s.run_jobs(3_000))[0].0, job);
+        assert_eq!(s.run_jobs(200), [Action::Verify { unit: u }]);
+        assert!(spawns(&s.run_jobs(3_199)).is_empty());
+        let actions = s.run_jobs(3_200);
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            Action::Spawn {
+                placement: super::super::Placement::Own,
+                ..
+            }
+        )));
     }
 
     /// Review note B2-2: an install right after the uninstall of a running
     /// plugin (a reinstall reconnecting to its data directory) waits for
-    /// the uninstalled process; until B2b it waited only for a running or
-    /// parked version.
+    /// the uninstalled process.
     #[test]
     fn an_install_after_an_uninstall_waits_for_its_process() {
         let mut s = new();
         let u = running(&mut s, "a.one", 1);
-        stop(&mut s, u, 1, StopReason::Uninstall, Then::Inactive);
-        let job = waits(s.host_start(u, HostStart::Install { image: "d".into() }));
+        stop(&mut s, u, StopReason::Uninstall, Then::Removed);
+        let v = s.add_unit(UnitSpec::new("a.one", Class::Normal).disabled());
+        assert_eq!(v, u, "a reinstall: the same unit");
+        s.set_enabled(u, true);
+        let job = install(&mut s, u);
         assert!(s.package_busy(u));
         s.process_reaped(Pid(1), None);
-        assert!(finished(&s.run_jobs(10)).is_empty());
+        assert!(spawns(&s.run_jobs(10)).is_empty());
         s.backend_cleaned(Pid(1));
-        assert_eq!(finished(&s.run_jobs(20))[0].0, job);
+        assert_eq!(spawns(&s.run_jobs(20)), [u]);
+        assert_eq!(s.job(u).unwrap().id, job);
     }
 
-    /// A package operation's wait merges with a waiting reload (today the
+    /// A package operation's start merges with a waiting reload (today the
     /// install went on and the reload's start was dropped): never `Busy`,
-    /// one job, ending as the operation's.
+    /// one job, the operation's image.
     #[test]
     fn an_install_takes_over_a_waiting_reload() {
         let mut s = new();
         let u = running(&mut s, "a.one", 1);
-        stop(&mut s, u, 1, StopReason::Reload, Then::Inactive);
-        let reload = waits(s.host_start(u, HostStart::Reload { verify_until: None }));
-        let install = waits(s.host_start(u, HostStart::Install { image: "d".into() }));
-        assert_eq!(install, reload);
+        let reload = s.restart(u, true, None).unwrap();
+        s.run_jobs(0);
+        let job = install(&mut s, u);
+        assert_eq!(job, reload);
         s.process_reaped(Pid(1), None);
         s.backend_cleaned(Pid(1));
-        let done = finished(&s.run_jobs(10));
-        assert!(
-            matches!(
-                &done[..],
-                [(job, JobKind::Restart { image: Some(_), .. }, JobResult::Done)] if *job == install
-            ),
-            "{done:?}"
-        );
+        let actions = s.run_jobs(10);
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            Action::Spawn { image: Some(image), .. } if image == "d"
+        )));
     }
 
-    /// A parked plugin forgotten (disabled, reloaded, uninstalled) while its
-    /// wake waits: the wake goes with it (canceled), as today's
-    /// `Parked.waiting` went with the parked entry, and the unit no longer
-    /// lands in standby.
+    /// A parked plugin disabled while its wake waits: the wake goes with it
+    /// (canceled), as today's `Parked.waiting` went with the parked entry,
+    /// and the unit no longer lands in standby.
     #[test]
-    fn forgetting_a_parked_unit_cancels_its_waiting_wake() {
+    fn a_disable_cancels_the_waiting_wake_of_a_parked_unit() {
         let mut s = new();
         let u = running(&mut s, "a.one", 1);
-        stop(&mut s, u, 1, StopReason::Idle, Then::Standby);
+        stop(&mut s, u, StopReason::Idle, Then::Standby);
         assert_eq!(s.wake(Pid(1), &Trigger::interactive(7)), Delivery::Started);
         let job = s.job(u).unwrap().id;
-        s.standby_forgotten(u);
-        assert!(s.job(u).is_none());
-        let actions = s.take_actions();
+        s.disable(u).unwrap();
+        let actions = s.run_jobs(0);
         assert!(finished(&actions).contains(&(job, WAKE, JobResult::Canceled)));
-        assert!(actions.contains(&Action::Revoke {
-            unit: u,
-            pid: Pid(1)
-        }));
         s.process_reaped(Pid(1), None);
         s.backend_cleaned(Pid(1));
         s.run_jobs(10);
         assert_eq!(s.unit(u).unwrap().state, UnitState::Inactive);
+        assert!(s.job(u).is_none());
     }
 
     /// Today's `data_removals`: an uninstall's data goes at once without a
     /// process that may write it, or once that was reaped (its cleanup not
-    /// awaited under `legacy()`); else at that process's reap, with what
-    /// the Host resolved at the request.
+    /// awaited under `legacy()`); else at that process's reap. The
+    /// recording goes at the request (review note B2-4).
     #[test]
     fn uninstall_data_goes_at_the_reap() {
         let mut s = new();
-        let u = s.load_unit("a.one");
-        assert_eq!(s.remove_data_after(u, 7), Some(7));
-        s.adopt_process(u, Pid(1));
-        stop(&mut s, u, 1, StopReason::Uninstall, Then::Inactive);
-        assert_eq!(s.remove_data_after(u, 8), None);
-        s.backend_cleaned(Pid(1));
         let removed = |a: &Action<u32>| matches!(a, Action::RemoveData { .. });
-        assert!(!s.take_actions().iter().any(removed));
+        let u = s.add_unit(UnitSpec::new("a.one", Class::Normal).disabled());
+        s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
+        assert!(s.run_jobs(0).iter().any(removed));
+        let v = running(&mut s, "b.two", 1);
+        stop(&mut s, v, StopReason::Uninstall, Then::Removed);
+        s.backend_cleaned(Pid(1));
+        assert!(!s.run_jobs(0).iter().any(removed));
         s.process_reaped(Pid(1), None);
-        assert!(s.take_actions().contains(&Action::RemoveData {
-            unit: u,
-            data: Some(8)
-        }));
-        // Reaped, not cleaned up after: at once (legacy).
-        s.adopt_process(u, Pid(2));
-        stop(&mut s, u, 2, StopReason::Uninstall, Then::Inactive);
-        s.process_reaped(Pid(2), None);
-        assert_eq!(s.remove_data_after(u, 9), Some(9));
+        assert!(s.run_jobs(0).contains(&Action::RemoveData { unit: v }));
+        assert!(s.unit(v).unwrap().removed);
+    }
+
+    /// Review note B2-4: the checkpoint of a unit being uninstalled goes at
+    /// the request; its landing, after a reinstall took the unit, drops
+    /// nothing of the new install.
+    #[test]
+    fn an_uninstalls_checkpoint_goes_at_the_request() {
+        let mut s = new();
+        let u = s.add_unit(UnitSpec::new("a.one", Class::Normal).checkpoint(true));
+        assert_eq!(spawned(&s.run_jobs(0)), Some(Pid(1)));
+        started(&mut s, 1);
+        s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
+        let actions = s.run_jobs(0);
+        assert!(actions.contains(&Action::DropCheckpoint { unit: u }));
+        s.add_unit(UnitSpec::new("a.one", Class::Normal));
+        s.process_reaped(Pid(1), None);
+        s.backend_cleaned(Pid(1));
+        let actions = s.run_jobs(10);
+        assert!(
+            !actions.contains(&Action::DropCheckpoint { unit: u }),
+            "{actions:?}"
+        );
+        assert_eq!(spawns(&actions), [u]);
     }
 
     /// The members of a runner the Host killed land at once (today's
@@ -771,11 +714,13 @@ mod tests {
     fn members_killed_with_their_runner_are_gone_at_once() {
         let mut s = new();
         let u = running(&mut s, "vestra.one", 1);
-        stop(&mut s, u, 1, StopReason::Failed, Then::Failed);
+        stop(&mut s, u, StopReason::Failed, Then::Inactive);
         s.member_killed(Pid(1));
-        assert_eq!(s.previous_process(u), None);
-        assert_eq!(s.host_start(u, HostStart::Enable), Ok(HostStarted::Now));
-        s.adopt_process(u, Pid(2));
+        assert_eq!(going(&s, u), None);
+        // Queued again: loaded again with its spec, started at once.
+        s.add_unit(UnitSpec::new("vestra.one", Class::Normal).unrecordable());
+        assert_eq!(spawned(&s.run_jobs(0)), Some(Pid(2)));
+        started(&mut s, 2);
         s.process_reaped(Pid(1), None);
         s.backend_cleaned(Pid(1));
         assert!(matches!(

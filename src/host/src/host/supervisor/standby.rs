@@ -49,7 +49,6 @@ impl Origin {
 /// core's backlog now).
 pub(crate) struct Held {
     pub id: String,
-    pub guid: String,
     /// Its package: its catalog (registered for its settings pages' Slint,
     /// `i18n::catalog_for`: an `Arc` of its own, since the stopped plugin
     /// unregisters its own on another thread), and where its images come
@@ -63,13 +62,12 @@ pub(crate) struct Held {
     pub warning: Option<String>,
 }
 impl Held {
-    pub(crate) fn new(id: String, guid: String, origin: Origin, name: String) -> Self {
+    pub(crate) fn new(id: String, origin: Origin, name: String) -> Self {
         if let Some(catalog) = &origin.catalog {
             i18n::register(&origin.directory, catalog.clone());
         }
         Self {
             id,
-            guid,
             origin,
             name,
             warnings: Vec::new(),
@@ -110,12 +108,7 @@ mod tests {
         i18n::register(directory.path(), own.clone());
         // As `park`: a catalog of its own (loaded again), then the plugin's
         // drop unregisters the plugin's.
-        let held = Held::new(
-            "a.b".into(),
-            "guid".into(),
-            origin(directory.path(), None),
-            "A".into(),
-        );
+        let held = Held::new("a.b".into(), origin(directory.path(), None), "A".into());
         i18n::unregister(directory.path(), &own);
         let shown = i18n::catalog_for(&page).expect("still registered");
         assert!(Arc::ptr_eq(&shown, held.origin.catalog.as_ref().unwrap()));

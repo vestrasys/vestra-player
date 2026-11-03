@@ -131,6 +131,15 @@ impl Activation {
         }
     }
 
+    /// `status` as `observe(now_ms)` would leave it, without changing it
+    /// (`packages.list` reads the activation, §9).
+    pub(super) fn status_at(&self, now_ms: u64) -> Status {
+        match self.phase {
+            Phase::Pending { .. } if now_ms >= self.deadline_ms => Status::TimedOut,
+            _ => self.status(),
+        }
+    }
+
     /// Called after `observe`.
     pub(super) fn ui_begin(&mut self, registration: u64) -> Result<(), Error> {
         match &mut self.phase {
