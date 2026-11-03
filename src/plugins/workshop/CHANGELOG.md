@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.28
+
+- The vendored SDK is 1.5.57 (`npm run vendor:sdk`), the version the player now uses (1.5.56 was never published; 1.5.57 carries its content). Who must change: nobody. The AI's documentation now says that `appearance.onChange` and `resolvers.onFileTypesChange` also run when the player starts a stopped plugin for that change, that a language-only appearance change does not call the theme listener (a plugin started for a language change alone may hear the unchanged palette once), and which events clear session storage. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
+
 ## 2.2.27
 
 - The vendored SDK is 1.5.55 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The AI's documentation now has the stop reasons (`Plugin.stopReason`, `StopReason`, `DisposeInfo`, SDK 1.5.54), `InstallOptions.enabled` and the rule that an update keeps a disabled plugin disabled (SDK 1.5.55), and `TestHost.installKeepsDisabled`, so the tests the AI writes run on a TestHost that plays player 0.6.4 by default. No change to the plugin's own behaviour; `minPlayerVersion` stays 0.5.10.
