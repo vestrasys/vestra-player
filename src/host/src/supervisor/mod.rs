@@ -33,10 +33,7 @@ mod tests;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 pub use exit::ExitCause;
-pub use job::{
-    Busy, Cause, HostStart, HostStarted, Job, JobId, JobKind, JobMode, JobResult, JobState, Origin,
-    Priority,
-};
+pub use job::{Busy, Cause, Job, JobId, JobKind, JobMode, JobResult, JobState, Origin, Priority};
 // The stop grace per reason: the adapter's `Terminate` executor reads it
 // from B2d (until then the Host's `stop` sets it, `PARK_WAIT` for a park).
 #[allow(unused_imports)]
@@ -46,12 +43,14 @@ pub use limits::{BuiltinsFirst, RestartMode, Retry, Tunables};
 #[allow(unused_imports)]
 pub use limits::{Backoff, Policy, StartLimit, max_active_for, process_budget_for};
 pub use pressure::Pressure;
-// The 20 s wait texts: B2b's waits fail with them in their job results,
-// which carry the text to the Host; only the tests name them.
+// The 20 s wait texts: the waits fail with them in their job results. The
+// adapter tells a reload's or enable's wait that ran out (today's
+// "reload: …" failure) from a failed spawn by the text.
+pub use reap::STUCK_RELOAD;
 #[cfg(test)]
-pub use reap::{STUCK_RELOAD, STUCK_WAKE};
+pub use reap::STUCK_WAKE;
 pub use trigger::{AnswerReason, Delivery, Trigger, TriggerKind};
-// A unit spec's checkpoint: B2d's `add_unit` at start-up gives it.
+// A unit spec's checkpoint (`UnitSpec::checkpoint` builds it).
 #[allow(unused_imports)]
 pub use unit::Checkpoint;
 pub use unit::{
@@ -164,12 +163,14 @@ pub enum Action<P> {
         unit: UnitId,
         pid: Pid,
     },
-    /// Remove the unit's data (uninstall), then `remove_unit`. `data`:
-    /// what the Host resolved at the uninstall request
-    /// (`remove_data_after`), `None` when it gave nothing.
+    /// Remove the unit's data (uninstall), then `remove_unit` while the
+    /// unit is still removed and tracks no process. What it deletes is
+    /// what the adapter resolved at each uninstall request (§13 B2d): never
+    /// resolved from the unit when the action comes, since a reinstall may
+    /// own it by then (§17.7 item 19); one action may cover two uninstalls
+    /// across a reinstall (review note B2-5).
     RemoveData {
         unit: UnitId,
-        data: Option<P>,
     },
     Notify {
         unit: Option<UnitId>,
@@ -232,11 +233,61 @@ pub struct Supervisor<P> {
     shutting_down: bool,
     /// Units holding an activation (`activation.rs`, at most `LIMIT`).
     activations: usize,
+    /// Start-up starts still waiting (today's `StartQueue` entries:
+    /// `boot_pending`).
+    boot_waiting: BTreeSet<UnitId>,
+    /// First runs waiting for a place (today's `FirstQueue`:
+    /// `first_runs_queued`).
+    first_waiting: BTreeSet<UnitId>,
+    /// Built-ins the adapter has still to load (`set_builtins_to_load`):
+    /// third-party first runs wait for them as for a built-in queued.
+    builtins_to_load: usize,
 }
 
-/// `packages.list` of one unit (§9). `boot_stopped`:
-/// `Tunables::boot_wait_lists_stopped`.
-fn list_state<P>(unit: &Unit<P>, boot_stopped: bool) -> ListState {
+/// A start-up start that has not started yet (today's `StartQueue`
+/// entries): a boot start (or a runner member's restart) waiting for its
+/// turn or its digest check, or a first run whose digest is still checked
+/// (`Tunables::verify_before_first_run_place`).
+fn waits_at_boot<P>(unit: &Unit<P>) -> bool {
+    let Some(job) = unit.job.as_ref() else {
+        return false;
+    };
+    let verifying = matches!(
+        unit.state,
+        UnitState::Activating {
+            sub: ActivatingSub::Verify,
+            ..
+        }
+    );
+    let boot = match job.kind {
+        JobKind::Start { cause } => {
+            cause == Cause::Boot
+                || (cause == Cause::FirstRun && verifying && unit.place_after_verify)
+        }
+        JobKind::Restart { .. } => job.origin == Origin::Crash,
+        _ => false,
+    };
+    boot && (verifying
+        || matches!(
+            unit.state,
+            UnitState::Inactive | UnitState::Deactivating { .. }
+        ))
+}
+
+/// A first run waiting for a place (today's `FirstQueue` entry).
+fn first_queued<P>(unit: &Unit<P>) -> bool {
+    matches!(unit.state, UnitState::Inactive)
+        && unit.job.as_ref().is_some_and(|job| {
+            job.cause() == Some(Cause::FirstRun) && job.state == JobState::Waiting
+        })
+}
+
+/// `packages.list` of one unit (§9) at `now`. `boot_stopped`:
+/// `Tunables::boot_wait_lists_stopped`. A run's activation (`activation.rs`:
+/// `runtime.ready` and its initial UI requests) says whether it is still
+/// starting, as today's `package_list` reads the activation of a running
+/// plugin.
+fn list_state<P>(unit: &Unit<P>, boot_stopped: bool, now: Ms) -> ListState {
     if unit.removed {
         return ListState::Stopped;
     }
@@ -256,23 +307,35 @@ fn list_state<P>(unit: &Unit<P>, boot_stopped: bool) -> ListState {
     );
     // Today a boot start waiting in the start queue (or verifying) and a
     // runner member queued again are not running yet: `stopped`.
-    let boot_wait = boot_stopped
-        && unit.job.as_ref().is_some_and(|job| match job.kind {
-            JobKind::Start { cause } => cause == Cause::Boot,
-            JobKind::Restart { .. } => job.origin == Origin::Crash,
-            _ => false,
-        })
-        && matches!(
-            unit.state,
-            UnitState::Inactive
-                | UnitState::Deactivating { .. }
-                | UnitState::Activating {
-                    sub: ActivatingSub::Verify,
-                    ..
-                }
-        );
-    if boot_wait {
+    if boot_stopped && waits_at_boot(unit) {
         return ListState::Stopped;
+    }
+    // A spawned run: its activation says (today's `Status` of a plugin in
+    // `plugins`; one woken from standby was running all along until its
+    // ready, `lazy.waking`).
+    if let Some(pid) = match unit.state {
+        UnitState::Activating {
+            pid: Some(pid),
+            sub: ActivatingSub::Ready,
+            ..
+        }
+        | UnitState::Active { pid, .. } => Some(pid),
+        _ => None,
+    } && let Some(run) = unit.activation.as_ref().filter(|run| run.pid == pid)
+    {
+        let woken = unit.from_standby && matches!(unit.state, UnitState::Activating { .. });
+        let running = ListState::Running {
+            process: ProcessState::Running,
+        };
+        return match run.activation.status_at(now) {
+            activation::Status::Pending { .. } if woken => running,
+            activation::Status::Pending { .. } => ListState::Starting,
+            activation::Status::Failed { message } => ListState::Failed(message),
+            activation::Status::TimedOut => {
+                ListState::Failed(ExitCause::StartTimeout.text().to_owned())
+            }
+            _ => running,
+        };
     }
     match &unit.state {
         UnitState::Failed { text, .. } => return ListState::Failed(text.clone()),
@@ -348,6 +411,9 @@ impl<P: Clone> Supervisor<P> {
             pressure: Pressure::None,
             shutting_down: false,
             activations: 0,
+            boot_waiting: BTreeSet::new(),
+            first_waiting: BTreeSet::new(),
+            builtins_to_load: 0,
         }
     }
 
@@ -378,9 +444,13 @@ impl<P: Clone> Supervisor<P> {
 
     // ---- units ---------------------------------------------------------
 
-    /// §5 `add_unit` (systemd: load unit): T1 / T2 / T3.
-    // B2d: start-up and install (`add_unit` per installed id).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// §5 `add_unit` (systemd: load unit): T1 / T2 / T3. The id of a unit
+    /// being removed is a reinstall (§17.7 item 19); the id of a loaded unit
+    /// with no process, no job and no process still going (a runner member
+    /// queued again, a development load or a unit loaded for its identity
+    /// only) takes the new spec and starts as at boot (systemd: a
+    /// `daemon-reload`, then the start). Any other loaded unit is left as
+    /// it is.
     pub fn add_unit(&mut self, spec: UnitSpec) -> UnitId {
         let mut unit = Unit::new(&spec);
         if unit.class == Class::Normal && unit.resident {
@@ -395,7 +465,7 @@ impl<P: Clone> Supervisor<P> {
             && self.tunables.policy(class).idle_standby;
         let u = if let Some(u) = self.by_id.get(&spec.id).copied() {
             // Loaded already; a reinstall of a unit being removed comes
-            // back (§17.7).
+            // back (§17.7), an idle unit takes the new spec.
             if !self.reinstall(u, unit) {
                 return u;
             }
@@ -411,7 +481,15 @@ impl<P: Clone> Supervisor<P> {
             self.sync(u);
             return u;
         }
-        if replay {
+        // A reinstall that still waits for the uninstalled process starts
+        // (once it is gone), never replays meanwhile: the replay would drop
+        // the pid that process is tracked under (review note B2-1; a
+        // reinstall carries no checkpoint anyway, §13 B2d).
+        let going = self
+            .units
+            .get(&u)
+            .is_some_and(|unit| unit.stopping.is_some());
+        if replay && !going {
             self.replay(u);
         } else {
             // No recording key (a development load, a built-in without a
@@ -430,7 +508,10 @@ impl<P: Clone> Supervisor<P> {
         u
     }
 
-    /// `add_unit` of the id of a unit being removed (uninstalled, its
+    /// `add_unit` of the id of a loaded unit: a unit without a process,
+    /// a job or a process still going takes the new spec (`true`), keeping
+    /// its run history (results, timers, runner quarantine, last pid).
+    /// Otherwise the id of a unit being removed (uninstalled, its
     /// `remove_unit` not called yet: its stopped process may still run, or
     /// its uninstall is still stopping it): a reinstall. The unit takes the
     /// new spec under the same `UnitId` and keeps what the old install left:
@@ -441,12 +522,26 @@ impl<P: Clone> Supervisor<P> {
     /// Stop job ends `Done`. The adapter resolves which directory
     /// `RemoveData` deletes at the uninstall request, never from the
     /// reinstalled unit (§13 B2d, §17.7). Not a removed unit: `false`.
-    // B2d: `add_unit`.
-    #[cfg_attr(not(test), allow(dead_code))]
     fn reinstall(&mut self, u: UnitId, mut fresh: Unit<P>) -> bool {
         let Some(unit) = self.units.get_mut(&u) else {
             return false;
         };
+        let idle = !unit.removed
+            && unit.job.is_none()
+            && unit.stopping.is_none()
+            && unit.activation.is_none()
+            && matches!(unit.state, UnitState::Inactive | UnitState::Failed { .. });
+        if idle {
+            fresh.placement = unit.placement;
+            fresh.quarantined = unit.quarantined;
+            fresh.last_pid = unit.last_pid;
+            fresh.restart = std::mem::take(&mut unit.restart);
+            fresh.gens = std::mem::take(&mut unit.gens);
+            fresh.results = std::mem::take(&mut unit.results);
+            fresh.listed = unit.listed.take();
+            *unit = fresh;
+            return true;
+        }
         let uninstalling = matches!(
             unit.state,
             UnitState::Deactivating {
@@ -464,10 +559,8 @@ impl<P: Clone> Supervisor<P> {
         fresh.placement = unit.placement;
         fresh.stopping = unit.stopping;
         fresh.remove_data = unit.remove_data;
-        fresh.data = unit.data.take();
         fresh.last_pid = unit.last_pid;
         fresh.job = unit.job.take();
-        fresh.hosted = unit.hosted;
         fresh.activation = unit.activation.take();
         fresh.gens = std::mem::take(&mut unit.gens);
         fresh.results = std::mem::take(&mut unit.results);
@@ -490,9 +583,9 @@ impl<P: Clone> Supervisor<P> {
         true
     }
 
-    /// §5 `remove_unit` (after `RemoveData` / development unload).
-    // B2d: after an uninstall's `RemoveData`.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// §5 `remove_unit` (after `RemoveData` / development unload). The
+    /// adapter calls it only while the unit is still removed and tracks no
+    /// process (§13 B2d).
     pub fn remove_unit(&mut self, u: UnitId) {
         let Some(unit) = self.units.remove(&u) else {
             return;
@@ -502,16 +595,9 @@ impl<P: Clone> Supervisor<P> {
             self.activations -= 1;
         }
         let run = unit.activation.as_ref().map(|run| run.pid);
-        for pid in [
-            unit.pid(),
-            unit.alias,
-            unit.last_pid,
-            unit.holder,
-            unit.hosted,
-            run,
-        ]
-        .into_iter()
-        .flatten()
+        for pid in [unit.pid(), unit.alias, unit.last_pid, unit.holder, run]
+            .into_iter()
+            .flatten()
         {
             if self.by_pid.get(&pid) == Some(&u) {
                 self.by_pid.remove(&pid);
@@ -525,9 +611,16 @@ impl<P: Clone> Supervisor<P> {
         self.sync(u);
     }
 
+    /// Whether `remove_unit` may go now: the unit is still removed (a
+    /// reinstall did not take it back), has no job, tracks no process and
+    /// owes no `RemoveData` (§13 B2d, review note B2-3).
+    pub fn removable(&self, u: UnitId) -> bool {
+        self.units.get(&u).is_some_and(|unit| {
+            unit.removed && unit.job.is_none() && unit.stopping.is_none() && !unit.remove_data
+        })
+    }
+
     /// §5 `set_enabled`: unit-file state only; does not enqueue.
-    // B2d: enablement moves into the unit.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn set_enabled(&mut self, u: UnitId, enabled: bool) {
         if let Some(unit) = self.units.get_mut(&u) {
             unit.enablement = if enabled {
@@ -550,8 +643,6 @@ impl<P: Clone> Supervisor<P> {
 
     /// `packages.setEnabled(false)`: `Busy` before anything changes (as
     /// today), else the unit-file state and the `Stop{Disable}` together.
-    // B2d: `packages.setEnabled` as jobs.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn disable(&mut self, u: UnitId) -> Result<JobId, Busy> {
         if self.package_busy(u) {
             return Err(Busy);
@@ -562,8 +653,6 @@ impl<P: Clone> Supervisor<P> {
 
     /// `packages.setEnabled(true)`: `Busy` before anything changes, else the
     /// unit-file state and the `Start{Enable}` together (T32).
-    // B2d: `packages.setEnabled` as jobs.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn enable(&mut self, u: UnitId) -> Result<JobId, Busy> {
         if self.package_busy(u) {
             return Err(Busy);
@@ -576,8 +665,6 @@ impl<P: Clone> Supervisor<P> {
 
     /// §5 `start`. `Enable` is the user's (`JobMode::Fail` against a package
     /// RPC, as `set_enabled` is today); other causes are internal.
-    // B2d: the package starts as jobs (B2b runs them through `host_start`).
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn start(&mut self, u: UnitId, cause: Cause) -> Result<JobId, Busy> {
         let (mode, origin) = match cause {
             Cause::Enable => (JobMode::Fail, Origin::User),
@@ -590,8 +677,6 @@ impl<P: Clone> Supervisor<P> {
 
     /// §5 `stop`. Disable is the user's, uninstall/reload/upgrade are
     /// package RPCs (both `JobMode::Fail`); idle/failed/quit are internal.
-    // B2d: the Host's stops as jobs (B2b reports them, `process_stopping`).
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn stop(&mut self, u: UnitId, reason: StopReason, then: Then) -> Result<JobId, Busy> {
         let (mode, origin) = match reason {
             StopReason::Disable => (JobMode::Fail, Origin::User),
@@ -612,8 +697,6 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `restart` (a package RPC: reload, install, upgrade, cancel).
-    // B2d: reload and package operations as jobs (B2b: `host_start`).
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn restart(
         &mut self,
         u: UnitId,
@@ -683,6 +766,19 @@ impl<P: Clone> Supervisor<P> {
         let live = unit.pid() == Some(pid) || holder == Some(pid) || unit.alias == Some(pid);
         if !live {
             return Delivery::Dropped;
+        }
+        // Today only a unit woken from standby holds triggers until its
+        // ready (`lazy.waking`); any other start's process gets them at once
+        // (`Tunables::deliver_while_starting`, off from B3: T9).
+        if self.tunables.deliver_while_starting
+            && !unit.from_standby
+            && matches!(unit.state, UnitState::Activating { pid: Some(p), sub: ActivatingSub::Ready, .. } if p == pid)
+            && unit
+                .job
+                .as_ref()
+                .is_none_or(|job| matches!(job.kind, JobKind::Start { .. }))
+        {
+            return Delivery::Now;
         }
         match &mut unit.state {
             UnitState::Active {
@@ -849,8 +945,9 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    /// §5 `reset_failed` (T28).
-    // B2d: an enable, reload or install clears a failure.
+    /// §5 `reset_failed` (T28). The adapter's enable, reload and install
+    /// clear a failure by their start (`begin_start`); B4 calls it for a
+    /// unit that hit its start limit.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn reset_failed(&mut self, u: UnitId) {
         if let Some(unit) = self.units.get_mut(&u) {
@@ -913,15 +1010,6 @@ impl<P: Clone> Supervisor<P> {
         std::mem::take(&mut self.pending)
     }
 
-    /// The actions the inputs since the last `run_jobs` queued, without
-    /// running due timers or jobs: B2b's adapter runs an uninstall's
-    /// `RemoveData` at the reap itself (`process_reaped`), where today's
-    /// `Event::Reaped` deleted the data, and leaves the starts that waited
-    /// for its next tick (§17.9). Removed with the B2b inputs (B2d).
-    pub fn take_actions(&mut self) -> Vec<Action<P>> {
-        std::mem::take(&mut self.pending)
-    }
-
     fn stale(&self, entry: &timers::Entry) -> bool {
         match entry.target {
             Target::Shutdown => entry.generation != self.shutdown_generation,
@@ -934,6 +1022,9 @@ impl<P: Clone> Supervisor<P> {
 
     /// §5 `next_deadline`: when `run_jobs` has something to do (`now` while
     /// actions or runnable jobs wait).
+    // The GUI loop sleeps until it from B3 (§6.1, §6.2); the adapter runs
+    // the jobs every host tick until then.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn next_deadline(&self) -> Option<Ms> {
         if !self.pending.is_empty() || !self.run.is_empty() {
             return Some(self.now);
@@ -1047,6 +1138,16 @@ impl<P: Clone> Supervisor<P> {
                 {
                     *sub = ActivatingSub::Ready;
                 }
+                // Today nothing waits on a start the Host ran once its
+                // process exists; only a wake holds its triggers until the
+                // ready (`start_job_ends_at_spawn`, off from B3).
+                let ends = self.tunables.start_job_ends_at_spawn
+                    && self.units[&u].job.as_ref().is_some_and(|job| {
+                        job.starts() && !matches!(job.cause(), Some(Cause::Trigger(_)))
+                    });
+                if ends {
+                    self.finish(u, JobResult::Done);
+                }
                 self.try_ready(u);
             }
             Err(text) => self.spawn_failed(u, pid, text),
@@ -1071,6 +1172,31 @@ impl<P: Clone> Supervisor<P> {
         unit.verify = false;
         unit.own_this_run = !ok;
         Timers::cancel(&mut unit.gens, TimerKind::Verify);
+        // Checked before its first-run place (`verify_before_first_run_place`):
+        // it takes one now, or goes back to the end of its lane.
+        let queued = if std::mem::take(&mut unit.place_after_verify) {
+            unit.job
+                .as_ref()
+                .map(|job| (Lane::of(unit.class, job.cause(), job.priority), job.id))
+        } else {
+            None
+        };
+        if let Some((lane, id)) = queued {
+            if self.admit(lane) {
+                self.take_slot(u, lane);
+            } else {
+                if let Some(unit) = self.units.get_mut(&u) {
+                    unit.state = UnitState::Inactive;
+                    if let Some(job) = unit.job.as_mut() {
+                        job.state = JobState::Waiting;
+                        job.queued = true;
+                    }
+                }
+                self.lanes.push(lane, u, id);
+                self.sync(u);
+                return;
+            }
+        }
         self.spawn(u);
         self.sync(u);
     }
@@ -1092,10 +1218,8 @@ impl<P: Clone> Supervisor<P> {
         self.sync(u);
     }
 
-    /// §5 `process_failed` (`runtime.failed`; T10: no retry).
-    // B2d: readiness of every start the core runs (until then the Host's
-    // `activation_tick` stops a failed activation, `process_stopping`).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// §5 `process_failed` (`runtime.failed`, or a failed initial UI
+    /// registration, as the activation says; T10: no retry).
     pub fn process_failed(&mut self, pid: Pid, text: String) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1105,8 +1229,10 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `ui_begin`: an initial UI registration of an activating process.
-    // B2d: readiness of every start the core runs (the activation's UI
-    // requests stay in `activation.rs` until then).
+    // B3 (T9: ready once its UI is): under `legacy()` a run is `Active` at
+    // `runtime.ready`, as today's `lazy_ready` classifies it then; the
+    // activation (`activation.rs`) tracks its UI requests for
+    // `packages.list`.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn ui_begin(&mut self, pid: Pid) {
         let Some(u) = self.current(pid) else {
@@ -1120,7 +1246,7 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// §5 `ui_finish` (a failed one is reported with `process_failed`).
-    // B2d: as `ui_begin`.
+    // B3: as `ui_begin`.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn ui_finish(&mut self, pid: Pid) {
         let Some(u) = self.current(pid) else {
@@ -1136,9 +1262,8 @@ impl<P: Clone> Supervisor<P> {
     /// §5 `process_exited` (T25; expected exits of a deactivating process
     /// are ignored: its reap follows). `text`: the fault's error text (today
     /// `RuntimeFault` writes it into `failures`, shown by `packages.list`);
-    /// `None`: the cause's own text.
-    // B4: exit causes (`exit.rs`, T25).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// `None`: the cause's own text. Under `legacy()` every class lands
+    /// `Failed` (today's `disable(Failed)`); B4 reads the exit status.
     pub fn process_exited(&mut self, pid: Pid, cause: ExitCause, text: Option<String>) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1484,6 +1609,14 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
+    /// How many built-ins the adapter has still to load at start-up (its
+    /// start order keeps a built-in whose digest is checked in place, as
+    /// today's `StartQueue`): under `BuiltinsFirst::Queued` third-party
+    /// first runs wait for them as for a queued built-in.
+    pub fn set_builtins_to_load(&mut self, count: usize) {
+        self.builtins_to_load = count;
+    }
+
     /// Wake events wake nothing (start-up; `Lazy::mute`).
     pub fn set_muted(&mut self, muted: bool) {
         self.muted = muted;
@@ -1507,15 +1640,14 @@ impl<P: Clone> Supervisor<P> {
     pub fn by_id(&self, id: &str) -> Option<UnitId> {
         self.by_id.get(id).copied()
     }
-    // B2d: `packages.list` from the units.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// `packages.list`'s state of `u` now (§9).
     pub fn list_state(&self, u: UnitId) -> Option<ListState> {
         let boot_stopped = self.tunables.boot_wait_lists_stopped;
         self.units
             .get(&u)
-            .map(|unit| list_state(unit, boot_stopped))
+            .map(|unit| list_state(unit, boot_stopped, self.now))
     }
-    // B2d: `packages.list` from the units.
+    // B3: limits over every unit.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn units(&self) -> impl Iterator<Item = (UnitId, &Unit<P>)> {
         self.units.iter().map(|(u, unit)| (*u, unit))
@@ -1552,7 +1684,6 @@ impl<P: Clone> Supervisor<P> {
             restarting: false,
             reason: StopReason::Idle,
             queued: false,
-            handoff: None,
         }
     }
 
@@ -1599,15 +1730,10 @@ impl<P: Clone> Supervisor<P> {
             return;
         };
         // Earlier pids are dead (a runner member replayed after its
-        // process went): messages to them are dropped, as today.
-        for old in [unit.alias.take(), unit.last_pid.take()]
-            .into_iter()
-            .flatten()
-        {
-            if self.by_pid.get(&old) == Some(&u) {
-                self.by_pid.remove(&old);
-            }
-        }
+        // process went): messages to them are dropped, as today. A pid a
+        // stop still tracks stays mapped, so its reap and cleanup reach the
+        // unit (review note B2-1).
+        let old = [unit.alias.take(), unit.last_pid.take()];
         unit.last_pid = Some(holder);
         unit.state = UnitState::Standby {
             holder,
@@ -1615,6 +1741,9 @@ impl<P: Clone> Supervisor<P> {
             hold_until: None,
         };
         self.by_pid.insert(holder, u);
+        for old in old.into_iter().flatten() {
+            self.unmap_pid(u, old);
+        }
         self.pending.push(Action::Replay { unit: u, holder });
     }
 
@@ -1830,18 +1959,6 @@ impl<P: Clone> Supervisor<P> {
             }
             return;
         }
-        // B2b–B2d (§17.9): the Host starts it (`host_start`), once the
-        // digest check it may still wait for is over.
-        if let Some(handoff) = job.handoff {
-            match handoff.verify_until.filter(|until| *until > now) {
-                Some(until) => {
-                    self.timers
-                        .arm(&mut unit.gens, u, TimerKind::NotBefore, until);
-                }
-                None => self.finish(u, JobResult::Done),
-            }
-            return;
-        }
         let hold = match unit.state {
             UnitState::Standby {
                 hold_until: Some(until),
@@ -1966,12 +2083,10 @@ impl<P: Clone> Supervisor<P> {
         let timeout = unit
             .start_timeout
             .unwrap_or(self.tunables.policy(unit.class).start_timeout);
-        // B2c–B2d: the Host's activation deadline is the only one
-        // (`Tunables::start_timeout_by_host`).
-        if !self.tunables.start_timeout_by_host {
-            self.timers
-                .arm(&mut unit.gens, u, TimerKind::StartTimeout, now + timeout);
-        }
+        // The one start deadline: the adapter gives the activation the same
+        // one (`Job::deadline`).
+        self.timers
+            .arm(&mut unit.gens, u, TimerKind::StartTimeout, now + timeout);
         let mut priority = Priority::Background;
         if let Some(job) = unit.job.as_mut() {
             job.deadline = Some(now + timeout);
@@ -2332,6 +2447,12 @@ impl<P: Clone> Supervisor<P> {
         match unit.state.clone() {
             UnitState::Deactivating { .. } => self.set_then(u, then),
             UnitState::Active { .. } | UnitState::Activating { pid: Some(_), .. } => {
+                // The checkpoint of a unit being uninstalled goes at the
+                // request, not at the landing (review note B2-4).
+                if then == Then::Removed && unit.recorded {
+                    unit.recorded = false;
+                    self.pending.push(Action::DropCheckpoint { unit: u });
+                }
                 self.answer_backlog(u, answer);
                 self.terminate(u, reason, then, false);
             }
@@ -2488,26 +2609,48 @@ impl<P: Clone> Supervisor<P> {
                     self.lanes.pop(lane);
                     continue;
                 }
+                // Today a verifying built-in waits in the start queue and
+                // asks for a first-run place once checked: the check runs
+                // without a place (`verify_before_first_run_place`).
+                if lane.first_run()
+                    && self.tunables.verify_before_first_run_place
+                    && self.units.get(&u).is_some_and(|unit| unit.verify)
+                {
+                    self.lanes.pop(lane);
+                    if let Some(unit) = self.units.get_mut(&u) {
+                        unit.place_after_verify = true;
+                    }
+                    self.begin_start(u);
+                    self.sync(u);
+                    started = true;
+                    continue;
+                }
                 if !self.admit(lane) {
                     break;
                 }
                 self.lanes.pop(lane);
-                let first_run = lane.first_run() && self.tunables.first_run_limit.is_some();
-                let third = !lane.builtin() && self.tunables.max_active.is_some();
-                if first_run || third {
-                    self.slots.insert(u, Slot { first_run, third });
-                    self.first_runs += usize::from(first_run);
-                    self.third_slots += usize::from(third);
-                    if let Some(unit) = self.units.get_mut(&u) {
-                        unit.first_run = first_run;
-                    }
-                }
+                self.take_slot(u, lane);
                 self.begin_start(u);
                 self.sync(u);
                 started = true;
             }
         }
         started
+    }
+
+    /// `u` leaves `lane` for a start: its first-run place and third-party
+    /// slot, if those are counted.
+    fn take_slot(&mut self, u: UnitId, lane: Lane) {
+        let first_run = lane.first_run() && self.tunables.first_run_limit.is_some();
+        let third = !lane.builtin() && self.tunables.max_active.is_some();
+        if first_run || third {
+            self.slots.insert(u, Slot { first_run, third });
+            self.first_runs += usize::from(first_run);
+            self.third_slots += usize::from(third);
+            if let Some(unit) = self.units.get_mut(&u) {
+                unit.first_run = first_run;
+            }
+        }
     }
 
     fn valid_entry(&self, u: UnitId, id: JobId, lane: Lane) -> bool {
@@ -2547,7 +2690,7 @@ impl<P: Clone> Supervisor<P> {
             BuiltinsFirst::Queued => lane == Lane::FirstRun,
             BuiltinsFirst::Installed => matches!(lane, Lane::Background | Lane::FirstRun),
         };
-        if waits && !self.builtin_pending.is_empty() {
+        if waits && (!self.builtin_pending.is_empty() || self.builtins_to_load > 0) {
             return false;
         }
         true
@@ -2710,6 +2853,8 @@ impl<P: Clone> Supervisor<P> {
             self.builtin_pending.remove(&u);
             self.queued_third.remove(&u);
             self.procs_third.remove(&u);
+            self.boot_waiting.remove(&u);
+            self.first_waiting.remove(&u);
             return;
         };
         if let Some(slot) = self.slots.get(&u).copied() {
@@ -2774,7 +2919,17 @@ impl<P: Clone> Supervisor<P> {
         } else {
             self.procs_third.remove(&u);
         }
-        let list = list_state(unit, self.tunables.boot_wait_lists_stopped);
+        if waits_at_boot(unit) {
+            self.boot_waiting.insert(u);
+        } else {
+            self.boot_waiting.remove(&u);
+        }
+        if first_queued(unit) {
+            self.first_waiting.insert(u);
+        } else {
+            self.first_waiting.remove(&u);
+        }
+        let list = list_state(unit, self.tunables.boot_wait_lists_stopped, self.now);
         let changed = unit
             .listed
             .as_ref()

@@ -280,6 +280,16 @@ pub(crate) struct Host {
     pub(crate) dev_disabled: std::collections::BTreeSet<String>,
     /// Why a plugin last stopped on its own, by id.
     pub(crate) failures: BTreeMap<String, String>,
+    /// A package RPC that starts a plugin and answers with its start's
+    /// error (`setEnabled`, `reload`, a development load): the id, and
+    /// the error of a spawn that failed while the RPC ran (`spawn_unit`).
+    pub(crate) start_error: Option<(String, Option<RpcError>)>,
+    /// An uninstall's data directories, resolved at each request, by unit:
+    /// deleted at the core's `RemoveData` (supervisor.md §13 B2d).
+    pub(crate) data_removals: BTreeMap<crate::supervisor::UnitId, Vec<PathBuf>>,
+    /// The directory of a development load being started (`load`), for its
+    /// spawn (`load_development_as`).
+    pub(crate) dev_loading: Option<PathBuf>,
     /// `plugin.storage.session`: per plugin identity, for this player run.
     pub(crate) session_storage: session_storage::SessionStorage,
     /// What `bindings.changed` / `packages.changed` last announced.

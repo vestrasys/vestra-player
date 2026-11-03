@@ -1,32 +1,27 @@
-//! B2a: the unit table owns identity (doc/architecture/supervisor.md §13
-//! B2a, §17.8). The Host still decides the starts and stops B2d moves into
-//! jobs; at its choke points it tells the core which process runs a unit
-//! (`adopt_process`, today's `Host.plugin_ids`): one process per unit
-//! (`Unit::hosted`), and it allocates every owner generation here
-//! (`alloc_pid`, today's `next_generation += 1`). Activations live in their
-//! unit (`activation.rs`, MOVE of `host/package_activation.rs`).
+//! The unit table's identity and what the adapter reads of it
+//! (doc/architecture/supervisor.md §13 B2a–B2d, §17.8, §17.11): owner
+//! generations (`alloc_pid`, today's `next_generation += 1`), the indexes
+//! by id and by pid, the process and standby holder of an id, and each
+//! run's activation (`activation.rs`, MOVE of `host/package_activation.rs`).
 //!
-//! None of this installs a job or queues an action; from B2b the unit's
-//! state follows the process (`Active`, unless it is still deactivating)
-//! for the waits (§17.9). Since B2c standby is the core's own state
-//! (`UnitState::Standby`, reached through the Standby job and left through
-//! `wake`, §17.10); the Host's starts that are not jobs yet report their
-//! readiness and what they found on disk here (`host_ready`,
-//! `checkpoint_known`, `standby_replayed`, `standby_forgotten`; removed in
-//! B2d). A unit loaded here gets its real spec from B2d's `add_unit`.
+//! Since B2d every start and stop of a unit is a job (`add_unit`, `start`,
+//! `stop`, `restart`, `wake`, the idle Standby job): the process of a unit
+//! is its state's pid, not a transitional field the Host sets. What is left
+//! here besides identity are the adapter's answers to actions the core
+//! cannot check itself (`replay_failed`, `checkpoint_failed`) and the
+//! Host's own idle check (`standby_refused`, until B3's `work.rs`).
 #![forbid(unsafe_code)]
 
+use super::Supervisor;
 use super::activation::{self, Error, LIMIT, MAX_SAFE, Run, Status};
-use super::job::{Cause, Job, JobKind, JobResult};
+use super::job::{Cause, Job, JobKind, JobMode, JobResult, Origin, Priority};
 use super::timers::{TimerKind, Timers};
-use super::trigger::AnswerReason;
-use super::unit::{Class, Ms, Pid, Then, UnitId, UnitSpec, UnitState};
-use super::{Action, Supervisor};
+use super::unit::{ActivatingSub, Class, Ms, Pid, Then, UnitId, UnitSpec, UnitState};
 
 impl<P: Clone> Supervisor<P> {
     /// The unit of manifest `id`; a new one is loaded (no job, `Inactive`,
-    /// enabled) when there is none. Its class is not read before B2d, whose
-    /// `add_unit` gives the real spec.
+    /// enabled, class `Normal`) when there is none. `add_unit` gives a
+    /// loaded unit its spec.
     pub fn load_unit(&mut self, id: &str) -> UnitId {
         if let Some(u) = self.by_id.get(id) {
             return *u;
@@ -49,50 +44,25 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// The pid the next `alloc_pid` returns, for a caller that refuses to
-    /// allocate past the wire's safe integers (a development load).
+    /// start past the wire's safe integers (a development load).
     pub fn next_pid(&self) -> Pid {
         Pid(self.next_pid)
     }
 
-    /// The Host runs `u` as process `pid` (`Host::add_plugin`); the process
-    /// this displaced (a bug, `adopt`). B2b: the unit is `Active` under it
-    /// (a start the Host ran, `host_start`), unless a stop of it is still
-    /// deactivating (unreachable: every start waits for it, §17.9). B2c: a
-    /// process the core spawned itself (a wake's `Spawn`) stays
-    /// `Activating` until `process_ready`.
-    pub fn adopt_process(&mut self, u: UnitId, pid: Pid) -> Option<Pid> {
-        let now = self.now;
-        if let Some(unit) = self.units.get_mut(&u)
-            && !unit.state.is_deactivating()
-            && !matches!(unit.state, UnitState::Activating { pid: Some(spawned), .. } if spawned == pid)
-        {
-            unit.state = UnitState::Active {
-                pid,
-                since: now,
-                last_active: now,
-            };
-        }
-        self.adopt(u, pid)
-    }
-
-    /// Process `pid` of `u` stopped (`Host::stop`, after
-    /// `process_stopping`), or never ran.
-    pub fn release_process(&mut self, u: UnitId, pid: Pid) {
-        let Some(unit) = self.units.get_mut(&u) else {
-            return;
-        };
-        if matches!(unit.state, UnitState::Active { pid: active, .. } if active == pid) {
-            unit.state = UnitState::Inactive;
-        }
-        if unit.hosted == Some(pid) {
-            unit.hosted = None;
-            self.unmap_pid(u, pid);
-        }
-    }
-
-    /// The process the Host runs for plugin `id` (today's `Host::running`).
+    /// The process that runs plugin `id` (today's `Host::running`): the
+    /// state's pid once its spawn ran (`Activating{Ready}` or `Active`);
+    /// none while the spawn is still to be executed, in standby, or while
+    /// its process stops.
     pub fn process_of(&self, id: &str) -> Option<Pid> {
-        self.units.get(self.by_id.get(id)?)?.hosted
+        match self.units.get(self.by_id.get(id)?)?.state {
+            UnitState::Activating {
+                pid: Some(pid),
+                sub: ActivatingSub::Ready,
+                ..
+            }
+            | UnitState::Active { pid, .. } => Some(pid),
+            _ => None,
+        }
     }
 
     /// The owner holding plugin `id`'s registrations in standby (today's
@@ -112,18 +82,21 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
-    /// When the core's own start of `pid` spawned it, while it is not ready
+    /// When a unit woken from standby started `pid`, while it is not ready
     /// yet (today's `lazy.waking`): triggers and wake events for it are
-    /// held for its ready. The Host's own starts are `Active` at once and
-    /// never waking.
+    /// held for its ready. Any other start (boot, first run, enable, reload,
+    /// an install's target, a restore, a development load) ends its job
+    /// once spawned (`Tunables::start_job_ends_at_spawn`) and delivers to
+    /// its process at once (`Tunables::deliver_while_starting`), as today.
     pub fn waking(&self, pid: Pid) -> Option<Ms> {
         let u = self.current(pid)?;
-        match self.units.get(&u)?.state {
+        let unit = self.units.get(&u)?;
+        match unit.state {
             UnitState::Activating {
                 pid: Some(_),
                 since,
                 ..
-            } => Some(since),
+            } if unit.from_standby => Some(since),
             _ => None,
         }
     }
@@ -138,119 +111,82 @@ impl<P: Clone> Supervisor<P> {
             .is_some_and(|unit| unit.classifying || unit.may_reclassify)
     }
 
-    // ---- B2c–B2d: the Host's own starts (§17.10) ------------------------
+    /// Run `pid` was started as a first run (`Start{FirstRun}`, today's
+    /// `lazy.first_runs`): only such a run goes to standby at once when
+    /// classified lazy (T12).
+    pub fn run_is_first(&self, pid: Pid) -> bool {
+        self.current(pid)
+            .and_then(|u| self.units.get(&u))
+            .is_some_and(|unit| unit.run_is_first)
+    }
 
-    /// `runtime.ready` of run `pid`, which the Host started itself (the
-    /// start-up queue, a first run, an enable, a reload, an install, a
-    /// development load): as `try_ready`'s end for a run the core starts,
-    /// the run's class is asked for (the 5 s timer for a run without a
-    /// checkpoint) and its idle timer armed. `recordable`: it can have a
-    /// checkpoint (today's `lazy_key_of` is `Some`); `first_run`: it was
-    /// started as a first run (today's `lazy.first_runs`). Removed in B2d
-    /// (every start a job; `add_unit` gives the spec).
-    pub fn host_ready(&mut self, pid: Pid, recordable: bool, first_run: bool) {
-        let now = self.now;
-        let Some(u) = self.current(pid) else {
-            return;
-        };
+    /// A start-up start still waits (today's `StartQueue` is not empty): a
+    /// `Start{Boot}` (or a runner member's restart) not yet past its digest
+    /// check, or a first run still being checked (`packages_started`).
+    pub fn boot_pending(&self) -> bool {
+        !self.boot_waiting.is_empty()
+    }
+
+    /// First runs wait for a place (today's `FirstQueue`): any, and whether
+    /// a built-in is among them (`builtin_first_run_queued`).
+    pub fn first_runs_queued(&self) -> (bool, bool) {
+        (
+            !self.first_waiting.is_empty(),
+            self.first_waiting.iter().any(|u| {
+                self.units
+                    .get(u)
+                    .is_some_and(|unit| unit.class == Class::Builtin)
+            }),
+        )
+    }
+
+    /// The adapter could not replay `u`'s checkpoint (`Action::Replay`;
+    /// today's `lazy_replay` failing in `start_installed`): it revoked what
+    /// it registered under the holder, and the unit starts instead, as
+    /// today's "replay failed, starting it" (a start at boot, its checkpoint
+    /// still on disk: not a first run).
+    pub fn replay_failed(&mut self, u: UnitId) {
         let Some(unit) = self.units.get_mut(&u) else {
             return;
         };
-        let UnitState::Active { last_active, .. } = &mut unit.state else {
+        let UnitState::Standby { holder, .. } = unit.state else {
             return;
         };
-        *last_active = now;
-        unit.recordable = recordable && unit.class != Class::Development;
-        unit.run_is_first = first_run;
-        unit.from_standby = false;
-        Timers::cancel(&mut unit.gens, TimerKind::Idle);
-        self.arm_classification(u);
-        self.arm_idle(u);
+        unit.state = UnitState::Inactive;
+        if unit.last_pid == Some(holder) {
+            unit.last_pid = None;
+        }
+        self.unmap_pid(u, holder);
+        let _ = self.enqueue_job(
+            u,
+            JobKind::Start { cause: Cause::Boot },
+            JobMode::Replace,
+            Priority::Background,
+            Origin::Internal,
+        );
+        self.sync(u);
     }
 
-    /// What the Host found of `u`'s checkpoint on disk (`Some(resident)`) at
-    /// a start it runs itself (today's `start_installed` reads the
-    /// recording), or that it is gone (`None`: uninstall, reload, install,
-    /// upgrade, a write that failed and left none): the core's `recorded` /
-    /// `recorded_resident` follow the file, so `classified` and
-    /// `quit_checkpoints` write what today's checks of the file write.
-    /// Removed in B2d (`add_unit`'s spec, the `DropCheckpoint` executor).
-    pub fn checkpoint_known(&mut self, u: UnitId, checkpoint: Option<bool>) {
+    /// Whether `u` can have a checkpoint changed with its package: a package
+    /// operation's target cannot while it activates (its package is not
+    /// committed: today's `lazy_key_of` is `None` for it, so its ready is
+    /// not classified), and can from its commit on. Read at the next ready
+    /// (a development load never can).
+    pub fn set_recordable(&mut self, u: UnitId, recordable: bool) {
         if let Some(unit) = self.units.get_mut(&u) {
-            unit.recorded = unit.recordable && checkpoint.is_some();
-            unit.recorded_resident = unit.recorded && checkpoint == Some(true);
+            unit.recordable = recordable && unit.class != Class::Development;
+        }
+    }
+
+    /// The `Checkpoint` executor could not write `u`'s recording; what is
+    /// on disk now (`Some(resident)`, or none): `classified` and
+    /// `quit_checkpoints` follow the file, as today's checks of the file do.
+    pub fn checkpoint_failed(&mut self, u: UnitId, on_disk: Option<bool>) {
+        if let Some(unit) = self.units.get_mut(&u) {
+            unit.recorded = unit.recordable && on_disk.is_some();
+            unit.recorded_resident = unit.recorded && on_disk == Some(true);
             unit.resident = unit.recorded_resident;
         }
-    }
-
-    /// Start-up replayed `u`'s checkpoint under `holder` itself (today's
-    /// `start_installed` → `lazy_replay`; T1 without `add_unit`): `u` is in
-    /// standby, recorded lazy. Removed in B2d (`add_unit`'s `Replay`).
-    pub fn standby_replayed(&mut self, u: UnitId, holder: Pid) {
-        let Some(unit) = self.units.get_mut(&u) else {
-            return;
-        };
-        if unit.state.is_deactivating() {
-            // Unreachable: the Host replays only a plugin without a process.
-            debug_assert!(false, "unit {} replayed while it stops", unit.id);
-            return;
-        }
-        unit.recorded = unit.recordable;
-        unit.recorded_resident = false;
-        unit.resident = false;
-        unit.state = UnitState::Standby {
-            holder,
-            recorded: true,
-            hold_until: None,
-        };
-        let old = [unit.alias.take(), unit.last_pid.replace(holder)];
-        self.map_pid(u, holder);
-        for old in old.into_iter().flatten() {
-            if old != holder {
-                self.unmap_pid(u, old);
-            }
-        }
-        self.sync(u);
-    }
-
-    /// The Host forgot `u`'s standby (today's `forget_parked`: a disable,
-    /// uninstall, reload, install or upgrade of a plugin in standby): its
-    /// kept registrations are revoked now (T21–T23's `Revoke`, without the
-    /// stop job the Host does not enqueue before B2d). A unit still stopping
-    /// for standby lands `Inactive` (§17.7 item 6), and a wake waiting for
-    /// that process goes with it, as today's `Parked.waiting` went with the
-    /// parked entry. Removed in B2d (stop and restart jobs).
-    pub fn standby_forgotten(&mut self, u: UnitId) {
-        let Some(unit) = self.units.get_mut(&u) else {
-            return;
-        };
-        let wake = unit.job.as_ref().is_some_and(|job| {
-            matches!(
-                job.kind,
-                JobKind::Start {
-                    cause: Cause::Trigger(_)
-                }
-            )
-        });
-        match unit.state {
-            UnitState::Standby { holder, .. } => {
-                unit.state = UnitState::Inactive;
-                self.pending.push(Action::Revoke {
-                    unit: u,
-                    pid: holder,
-                });
-            }
-            UnitState::Deactivating {
-                then: Then::Standby,
-                ..
-            } => self.set_then(u, Then::Inactive),
-            _ => {}
-        }
-        if wake {
-            self.answer_backlog(u, AnswerReason::Stopped);
-            self.finish(u, JobResult::Canceled);
-        }
-        self.sync(u);
     }
 
     /// The Host's own idle check of `pid` says busy (today's `lazy_idle`: a
@@ -412,28 +348,6 @@ impl<P: Clone> Supervisor<P> {
 
     // ---- internals -------------------------------------------------------
 
-    /// `u`'s process is now `pid`; the process it displaced, if any. The
-    /// Host never gives a unit a second process while it has one (§17.8: a
-    /// start of a running plugin returns; a reload, install or uninstall
-    /// stops it first): unreachable. If it happens it is a bug: a
-    /// `debug_assert!` here, reported by the adapter in release, and the new
-    /// process replaces the old. Adopting the process it already has
-    /// displaces nothing.
-    fn adopt(&mut self, u: UnitId, pid: Pid) -> Option<Pid> {
-        let unit = self.units.get_mut(&u)?;
-        let displaced = unit.hosted.replace(pid).filter(|old| *old != pid);
-        debug_assert!(
-            displaced.is_none(),
-            "unit {} hosted twice: {displaced:?} then {pid:?}",
-            unit.id
-        );
-        self.map_pid(u, pid);
-        if let Some(old) = displaced {
-            self.unmap_pid(u, old);
-        }
-        displaced
-    }
-
     fn run_of(&mut self, pid: Pid) -> Option<&mut Run> {
         let u = self.by_pid.get(&pid)?;
         self.units
@@ -471,8 +385,7 @@ impl<P: Clone> Supervisor<P> {
         let Some(unit) = self.units.get(&u) else {
             return;
         };
-        let held = unit.hosted == Some(pid)
-            || unit.stopping.is_some_and(|s| s.pid == pid)
+        let held = unit.stopping.is_some_and(|s| s.pid == pid)
             || unit.activation.as_ref().is_some_and(|run| run.pid == pid)
             || unit.pid() == Some(pid)
             || unit.alias == Some(pid)
@@ -499,16 +412,6 @@ mod tests {
         Supervisor::new(Tunables::legacy(), 1)
     }
 
-    /// For the B2c tests: the pids a test gives are below 100, the ones the
-    /// core allocates for a wake from 101.
-    fn b2c() -> S {
-        let mut s = new();
-        while s.next_pid().0 <= 100 {
-            s.alloc_pid();
-        }
-        s
-    }
-
     #[test]
     fn pids_count_from_one_like_the_owner_generation() {
         let mut sup = new();
@@ -518,119 +421,133 @@ mod tests {
         assert_eq!(sup.next_pid(), Pid(3));
     }
 
-    /// `Host.plugin_ids` semantics: a stop of another pid leaves the
-    /// process, its own stop clears it.
+    /// The spawn of `actions`.
+    fn spawned(actions: &[Action<u32>]) -> Option<Pid> {
+        actions.iter().find_map(|a| match a {
+            Action::Spawn { pid, .. } => Some(*pid),
+            _ => None,
+        })
+    }
+
+    /// A run started as the adapter starts it (B2d: every start a job),
+    /// spawned as `pid` and ready at `at`: a unit added without a
+    /// checkpoint is a first run (on-demand start on); with one it is
+    /// loaded disabled, then enabled and started (`Start{Enable}`), so its
+    /// checkpoint is kept and it does not replay.
+    fn start_with(s: &mut S, spec: UnitSpec, pid: u64, at: Ms) -> UnitId {
+        s.set_now(at);
+        let replays = spec.checkpoint.is_some();
+        let spec = if replays { spec.disabled() } else { spec };
+        let u = s.add_unit(spec);
+        if replays {
+            s.set_enabled(u, true);
+            s.start(u, Cause::Enable).unwrap();
+        }
+        let actions = s.run_jobs(at);
+        assert_eq!(spawned(&actions), Some(Pid(pid)), "{actions:?}");
+        s.process_spawned(Pid(pid), Ok(()));
+        s.process_ready(Pid(pid));
+        s.run_jobs(at);
+        u
+    }
+
+    /// `start_with` for a third-party unit: a first run, or a run whose
+    /// checkpoint says lazy.
+    fn ready(s: &mut S, id: &str, pid: u64, at: Ms, first_run: bool) -> UnitId {
+        let spec = UnitSpec::new(id, Class::Normal);
+        let spec = if first_run {
+            spec
+        } else {
+            spec.checkpoint(false)
+        };
+        start_with(s, spec, pid, at)
+    }
+
+    /// `Host.plugin_ids` semantics, now the state's: a unit's process is the
+    /// run its start spawned, until its stop; another id has its own.
     #[test]
-    fn process_index_follows_adopt_and_release() {
+    fn process_index_follows_the_runs() {
         let mut sup = new();
-        let a = sup.load_unit("a.one");
+        let a = ready(&mut sup, "a.one", 1, 0, true);
         assert_eq!(sup.load_unit("a.one"), a);
-        let b = sup.load_unit("b.two");
+        let b = ready(&mut sup, "b.two", 2, 0, true);
         assert_ne!(a, b);
-        sup.adopt_process(a, Pid(7));
-        sup.adopt_process(b, Pid(8));
-        sup.adopt_process(a, Pid(7));
-        assert_eq!(sup.process_of("a.one"), Some(Pid(7)));
+        assert_eq!(sup.process_of("a.one"), Some(Pid(1)));
         assert_eq!(sup.holder_of("a.one"), None);
-        assert_eq!(sup.by_pid(Pid(7)), Some(a));
-        sup.release_process(a, Pid(6));
-        assert_eq!(sup.process_of("a.one"), Some(Pid(7)));
-        sup.release_process(a, Pid(7));
+        assert_eq!(sup.by_pid(Pid(1)), Some(a));
+        sup.disable(a).unwrap();
+        sup.run_jobs(1);
         assert_eq!(sup.process_of("a.one"), None);
-        assert_eq!(sup.by_pid(Pid(7)), None);
-        sup.adopt_process(a, Pid(9));
-        assert_eq!(sup.process_of("a.one"), Some(Pid(9)));
-        assert_eq!(sup.process_of("b.two"), Some(Pid(8)));
+        // Still tracked until it is reaped and cleaned up after.
+        assert_eq!(sup.by_pid(Pid(1)), Some(a));
+        assert_eq!(sup.process_of("b.two"), Some(Pid(2)));
         assert_eq!(sup.process_of("c.none"), None);
     }
 
-    /// `Lazy.parked_ids` semantics (B2a's `holder_index_follows_adopt_and_
-    /// release`, ported to B2c's inputs): a replayed unit is held under its
-    /// holder; forgetting it revokes and clears the index; a later run
-    /// starts with no holder.
+    /// `Lazy.parked_ids` semantics: a replayed unit is held under its
+    /// holder; a disable revokes and clears the index; its last pid stays
+    /// mapped for late replies until its next run.
     #[test]
-    fn holder_index_follows_replay_and_forget() {
+    fn holder_index_follows_replay_and_disable() {
         let mut sup = new();
-        let a = sup.load_unit("a.one");
-        sup.standby_replayed(a, Pid(3));
-        assert_eq!(sup.process_of("a.one"), None);
-        assert_eq!(sup.holder_of("a.one"), Some(Pid(3)));
-        assert_eq!(sup.by_pid(Pid(3)), Some(a));
-        sup.standby_forgotten(a);
-        assert!(sup.take_actions().contains(&Action::Revoke {
+        let a = sup.add_unit(UnitSpec::new("a.one", Class::Normal).checkpoint(false));
+        let actions = sup.run_jobs(0);
+        assert!(actions.contains(&Action::Replay {
             unit: a,
-            pid: Pid(3)
+            holder: Pid(1)
+        }));
+        assert_eq!(sup.process_of("a.one"), None);
+        assert_eq!(sup.holder_of("a.one"), Some(Pid(1)));
+        assert_eq!(sup.by_pid(Pid(1)), Some(a));
+        sup.disable(a).unwrap();
+        assert!(sup.run_jobs(1).contains(&Action::Revoke {
+            unit: a,
+            pid: Pid(1)
         }));
         assert_eq!(sup.holder_of("a.one"), None);
-        // Its last pid stays mapped for late replies until the next run.
-        sup.adopt_process(a, Pid(4));
-        assert_eq!(sup.by_pid(Pid(3)), Some(a));
-        assert_eq!(sup.process_of("a.one"), Some(Pid(4)));
+        assert_eq!(sup.by_pid(Pid(1)), Some(a));
+        sup.enable(a).unwrap();
+        let actions = sup.run_jobs(2);
+        assert_eq!(spawned(&actions), Some(Pid(2)));
+        assert_eq!(sup.by_pid(Pid(1)), None);
         assert_eq!(sup.holder_of("a.one"), None);
     }
 
-    /// A second process while the unit has one is a Host bug (§17.8).
+    /// One process per unit by construction (§17.8's "hosted twice" is the
+    /// adapter's `debug_assert!` now): a start of a running unit spawns
+    /// nothing.
     #[test]
-    #[cfg(debug_assertions)]
-    #[should_panic(expected = "hosted twice")]
-    fn a_second_owner_is_a_bug() {
+    fn a_start_of_a_running_unit_spawns_nothing() {
         let mut sup = new();
-        let a = sup.load_unit("a.one");
-        sup.adopt_process(a, Pid(3));
-        sup.adopt_process(a, Pid(4));
+        let a = ready(&mut sup, "a.one", 1, 0, true);
+        let job = sup.start(a, Cause::Enable).unwrap();
+        assert_eq!(sup.job_result(a, job), Some(&JobResult::Done));
+        assert_eq!(spawned(&sup.run_jobs(1)), None);
+        assert_eq!(sup.process_of("a.one"), Some(Pid(1)));
     }
 
-    /// Adopting the process the unit already has displaces nothing.
-    #[test]
-    fn adopting_the_same_owner_displaces_nothing() {
-        let mut sup = new();
-        let a = sup.load_unit("a.one");
-        assert_eq!(sup.adopt_process(a, Pid(3)), None);
-        assert_eq!(sup.adopt_process(a, Pid(3)), None);
-        assert_eq!(sup.process_of("a.one"), Some(Pid(3)));
-    }
-
-    /// Loading units this way installs no job and queues nothing.
+    /// Loading a unit for its identity (an activation of an id `add_unit`
+    /// did not load) installs no job and queues nothing.
     #[test]
     fn identity_inputs_queue_no_action() {
         let mut sup = new();
         let a = sup.load_unit("a.one");
         let pid = sup.alloc_pid();
         sup.activation_begin(a, pid, 1_000).unwrap();
-        sup.adopt_process(a, pid);
         assert!(sup.job(a).is_none());
         assert!(sup.run_jobs(10).is_empty());
-        // B2b: the state follows the process (the waits read it), and still
-        // no job, timer or action.
-        assert!(matches!(
-            sup.unit(a).unwrap().state,
-            UnitState::Active { pid: p, .. } if p == pid
-        ));
-        sup.release_process(a, pid);
-        assert!(sup.job(a).is_none());
-        assert!(sup.run_jobs(20).is_empty());
         assert_eq!(sup.unit(a).unwrap().state, UnitState::Inactive);
+        sup.activation_end(pid);
+        assert!(sup.run_jobs(20).is_empty());
     }
 
     // ---- B2c: standby, wake and classification (§17.10) -----------------
     //
-    // The ported `lazy.rs` paths, driven as the adapter drives them: the
-    // Host starts a run (`adopt_process`), reports its ready (`host_ready`)
-    // and its class (`classified_with`); the core decides the standby
-    // (idle timer → `QueryResources` → `Checkpoint` + `Terminate`) and the
-    // wake (`Rekey` + `Spawn` → `Prune` + `Deliver`).
-
-    /// A run the Host started, ready at `at` (`first_run`: no checkpoint).
-    fn ready(s: &mut S, id: &str, pid: u64, at: Ms, first_run: bool) -> UnitId {
-        s.set_now(at);
-        let u = s.load_unit(id);
-        if !first_run {
-            s.checkpoint_known(u, Some(false));
-        }
-        s.adopt_process(u, Pid(pid));
-        s.host_ready(Pid(pid), true, first_run);
-        u
-    }
+    // The ported `lazy.rs` paths, driven as the adapter drives them: a run
+    // starts (B2d: a start job), reports its ready (`process_ready`) and its
+    // class (`classified_with`); the core decides the standby (idle timer →
+    // `QueryResources` → `Checkpoint` + `Terminate`) and the wake (`Rekey` +
+    // `Spawn` → `Prune` + `Deliver`).
 
     fn kinds(actions: &[Action<u32>]) -> Vec<&'static str> {
         actions
@@ -653,9 +570,9 @@ mod tests {
             .collect()
     }
 
-    /// The core parks a stopped run as today's `park`: the Host's stop of it
-    /// is the core's `Terminate` (`process_stopping` changes nothing), and it
-    /// lands in standby once reaped and cleaned up after.
+    /// The core parks an idle run as today's `park` (`Terminate` keeping
+    /// its registrations), and it lands in standby once reaped and cleaned
+    /// up after.
     fn park(s: &mut S, u: UnitId, pid: u64, at: Ms) {
         let actions = s.run_jobs(at);
         assert!(
@@ -666,17 +583,24 @@ mod tests {
             "{actions:?}"
         );
         s.resources_answered(Pid(pid), false);
-        let actions = s.take_actions();
+        let actions = s.run_jobs(at);
         assert_eq!(kinds(&actions), ["Checkpoint", "Terminate"], "{actions:?}");
-        assert_eq!(
-            s.process_stopping(u, Pid(pid), StopReason::Idle, Then::Standby),
-            None
-        );
-        s.release_process(u, Pid(pid));
         assert_eq!(s.holder_of(&s.unit(u).unwrap().id.clone()), Some(Pid(pid)));
         s.process_reaped(Pid(pid), None);
         s.backend_cleaned(Pid(pid));
         s.run_jobs(at + 1);
+    }
+
+    /// A wake of `u` in standby (held as `holder`) at `at`: its start runs at
+    /// once (`advance`); the new pid.
+    fn wake(s: &mut S, u: UnitId, holder: u64, at: Ms) -> Pid {
+        s.set_now(at);
+        assert_eq!(
+            s.wake(Pid(holder), &Trigger::interactive(7)),
+            Delivery::Started
+        );
+        s.advance(u);
+        spawned(&s.run_jobs(at)).expect("spawned")
     }
 
     /// Today's idle park (`lazy_tick` → `owner.resources` → `lazy_answer` →
@@ -684,7 +608,7 @@ mod tests {
     /// it; the unit lands in standby under its last pid.
     #[test]
     fn b2c_idle_standby_after_the_idle_time() {
-        let mut s = b2c();
+        let mut s = new();
         let u = ready(&mut s, "a.one", 1, 0, false);
         assert!(s.run_jobs(59_999).is_empty());
         s.touch(Pid(1), 30_000);
@@ -705,7 +629,7 @@ mod tests {
     /// again 250 ms later (`CHECK_MS`), not after another idle time.
     #[test]
     fn b2c_a_refused_standby_is_asked_again_after_250_ms() {
-        let mut s = b2c();
+        let mut s = new();
         let u = ready(&mut s, "a.one", 1, 0, false);
         assert_eq!(kinds(&s.run_jobs(60_000)), ["QueryResources"]);
         s.standby_refused(Pid(1));
@@ -731,10 +655,10 @@ mod tests {
     /// checkpointed resident once.
     #[test]
     fn b2c_first_runs_park_at_their_classification() {
-        let mut s = b2c();
+        let mut s = new();
         let u = ready(&mut s, "a.one", 1, 0, true);
         s.classified_with(Pid(1), None, false);
-        let actions = s.take_actions();
+        let actions = s.run_jobs(0);
         assert_eq!(kinds(&actions), ["Checkpoint", "Terminate"], "{actions:?}");
         assert!(actions.contains(&Action::Checkpoint {
             unit: u,
@@ -743,17 +667,17 @@ mod tests {
         }));
         let v = ready(&mut s, "b.two", 2, 0, true);
         s.classified_with(Pid(2), None, true);
-        assert!(kinds(&s.take_actions()).is_empty());
+        assert!(kinds(&s.run_jobs(0)).is_empty());
         assert_eq!(kinds(&s.run_jobs(250)), ["QueryResources"]);
         s.standby_refused(Pid(2));
         assert_eq!(kinds(&s.run_jobs(500)), ["QueryResources"]);
         s.resources_answered(Pid(2), false);
-        assert_eq!(kinds(&s.take_actions()), ["Checkpoint", "Terminate"]);
+        assert_eq!(kinds(&s.run_jobs(500)), ["Checkpoint", "Terminate"]);
         assert!(s.unit(v).unwrap().state.is_deactivating());
-        let w = ready(&mut s, "c.three", 3, 0, true);
+        let w = ready(&mut s, "c.three", 3, 500, true);
         s.classified_with(Pid(3), Some("a listener".into()), false);
         assert_eq!(
-            s.take_actions()
+            s.run_jobs(500)
                 .into_iter()
                 .filter(|a| matches!(a, Action::Checkpoint { .. }))
                 .collect::<Vec<_>>(),
@@ -765,41 +689,41 @@ mod tests {
         );
         // Classified once per run: a second answer changes nothing.
         s.classified_with(Pid(3), None, false);
-        assert!(kinds(&s.take_actions()).is_empty());
+        assert!(kinds(&s.run_jobs(500)).is_empty());
     }
 
     /// A run that is not a first run is classified at every ready (today's
     /// `lazy_ready` classifies every ready) and parks only after its idle
-    /// time; a resident class is written once while the file says so
-    /// (`checkpoint_known`), and again after the file was removed.
+    /// time; a resident class is written once while the checkpoint says so,
+    /// and again after a reload dropped it.
     #[test]
     fn b2c_later_runs_are_classified_and_checkpointed_as_the_file_says() {
-        let mut s = b2c();
-        let u = s.load_unit("a.one");
-        s.checkpoint_known(u, Some(true));
-        s.adopt_process(u, Pid(1));
-        s.host_ready(Pid(1), true, false);
-        s.classified_with(Pid(1), Some("a panel".into()), false);
-        assert!(
-            kinds(&s.take_actions()).is_empty(),
-            "the file says resident"
+        let mut s = new();
+        let u = start_with(
+            &mut s,
+            UnitSpec::new("a.one", Class::Normal).checkpoint(true),
+            1,
+            0,
         );
+        s.classified_with(Pid(1), Some("a panel".into()), false);
+        assert!(kinds(&s.run_jobs(0)).is_empty(), "the file says resident");
         s.classified_with(Pid(1), None, false);
-        assert!(kinds(&s.take_actions()).is_empty(), "once per run");
-        // A reload removes the file: the next run writes it again.
-        s.checkpoint_known(u, None);
-        s.process_stopping(u, Pid(1), StopReason::Reload, Then::Inactive);
-        s.release_process(u, Pid(1));
+        assert!(kinds(&s.run_jobs(0)).is_empty(), "once per run");
+        // A reload drops the checkpoint: the next run writes it again.
+        s.restart(u, true, None).unwrap();
+        assert_eq!(kinds(&s.run_jobs(1)), ["Terminate"]);
         s.process_reaped(Pid(1), None);
         s.backend_cleaned(Pid(1));
-        s.adopt_process(u, Pid(101));
-        s.host_ready(Pid(101), true, false);
-        s.classified_with(Pid(101), Some("a panel".into()), false);
-        assert_eq!(kinds(&s.take_actions()), ["Checkpoint"]);
+        assert_eq!(spawned(&s.run_jobs(2)), Some(Pid(2)));
+        s.process_spawned(Pid(2), Ok(()));
+        s.process_ready(Pid(2));
+        s.run_jobs(2);
+        s.classified_with(Pid(2), Some("a panel".into()), false);
+        assert_eq!(kinds(&s.run_jobs(2)), ["Checkpoint"]);
         // A lazy later run waits its idle time (60 s from its ready).
-        let v = ready(&mut s, "b.two", 3, 0, false);
+        let v = ready(&mut s, "b.two", 3, 2, false);
         s.classified_with(Pid(3), None, false);
-        assert!(kinds(&s.take_actions()).is_empty());
+        assert!(kinds(&s.run_jobs(2)).is_empty());
         assert!(!s.unit(v).unwrap().state.is_deactivating());
     }
 
@@ -808,18 +732,20 @@ mod tests {
     /// a run whose answer never came is not.
     #[test]
     fn b2c_quit_checkpoints_the_classified_runs() {
-        let mut s = b2c();
+        let mut s = new();
         let a = ready(&mut s, "a.one", 1, 0, false);
-        let b = s.load_unit("b.two");
-        s.checkpoint_known(b, Some(true));
-        s.adopt_process(b, Pid(101));
-        s.host_ready(Pid(101), true, false);
+        start_with(
+            &mut s,
+            UnitSpec::new("b.two", Class::Normal).checkpoint(true),
+            2,
+            0,
+        );
         ready(&mut s, "c.three", 3, 0, false);
         let d = ready(&mut s, "d.four", 4, 0, false);
         s.classified_with(Pid(1), None, false);
-        s.classified_with(Pid(101), Some("x".into()), false);
+        s.classified_with(Pid(2), Some("x".into()), false);
         s.classified_with(Pid(4), Some("y".into()), false);
-        s.take_actions();
+        s.run_jobs(0);
         // `d`'s resident class was written at its classification.
         assert!(s.unit(d).unwrap().recorded_resident);
         assert_eq!(s.quit_checkpoints(), [(a, Pid(1), false)]);
@@ -832,31 +758,28 @@ mod tests {
     /// starts and forwarded once it runs (today's `lazy.moved`).
     #[test]
     fn b2c_a_trigger_wakes_a_unit_in_standby() {
-        let mut s = b2c();
+        let mut s = new();
         let u = ready(&mut s, "a.one", 1, 0, false);
         park(&mut s, u, 1, 60_000);
         s.set_now(61_000);
         assert_eq!(s.wake(Pid(1), &Trigger::interactive(7)), Delivery::Started);
         s.advance(u);
-        let actions = s.take_actions();
+        let actions = s.run_jobs(61_000);
         assert_eq!(kinds(&actions), ["Rekey", "Spawn"], "{actions:?}");
-        let Some(Action::Spawn { pid, .. }) = actions.last().cloned() else {
-            unreachable!()
-        };
-        assert_eq!(pid, Pid(101));
+        let pid = spawned(&actions).unwrap();
+        assert_eq!(pid, Pid(2));
         assert!(actions.contains(&Action::Rekey {
             unit: u,
             from: Pid(1),
             to: pid
         }));
-        s.adopt_process(u, pid);
-        assert_eq!(s.waking(pid), Some(61_000));
         s.process_spawned(pid, Ok(()));
+        assert_eq!(s.waking(pid), Some(61_000));
         assert_eq!(s.wake(Pid(1), &Trigger::interactive(8)), Delivery::Held);
         assert_eq!(s.wake(pid, &Trigger::interactive(9)), Delivery::Held);
         s.process_ready(pid);
         assert_eq!(s.waking(pid), None);
-        let actions = s.take_actions();
+        let actions = s.run_jobs(61_000);
         assert_eq!(kinds(&actions), ["Prune", "Deliver", "Deliver", "Deliver"]);
         let delivered = actions
             .iter()
@@ -873,25 +796,57 @@ mod tests {
         assert_eq!(s.wake(pid, &Trigger::interactive(11)), Delivery::Now);
         // The run's class is asked again (it came from a checkpoint).
         s.classified_with(pid, None, false);
-        assert!(kinds(&s.take_actions()).is_empty());
+        assert!(kinds(&s.run_jobs(61_000)).is_empty());
         // The old pid goes with the run (today's `forget_running`).
-        s.process_stopping(u, pid, StopReason::Disable, Then::Inactive);
+        s.disable(u).unwrap();
+        s.run_jobs(61_000);
         assert_eq!(s.wake(Pid(1), &Trigger::interactive(12)), Delivery::Dropped);
+    }
+
+    /// B2d: a trigger to a run started otherwise (boot, first run, enable,
+    /// reload, install) goes to its process at once while it starts
+    /// (`deliver_while_starting`, today: only `lazy.waking` holds them).
+    #[test]
+    fn b2d_a_starting_run_not_woken_gets_its_triggers_at_once() {
+        let mut s = new();
+        let u = s.add_unit(UnitSpec::new("a.one", Class::Normal));
+        assert_eq!(spawned(&s.run_jobs(0)), Some(Pid(1)));
+        s.process_spawned(Pid(1), Ok(()));
+        assert!(matches!(
+            s.unit(u).unwrap().state,
+            UnitState::Activating {
+                sub: ActivatingSub::Ready,
+                ..
+            }
+        ));
+        assert_eq!(s.waking(Pid(1)), None);
+        assert_eq!(s.wake(Pid(1), &Trigger::interactive(7)), Delivery::Now);
+        let mut target = Supervisor::<u32>::new(Tunables::legacy().with_b3(8), 1);
+        let v = target.add_unit(UnitSpec::new("a.one", Class::Normal));
+        target.run_jobs(0);
+        target.process_spawned(Pid(1), Ok(()));
+        assert_eq!(
+            target.wake(Pid(1), &Trigger::interactive(7)),
+            Delivery::Held,
+            "from B3 held for its ready (T9)"
+        );
+        target.process_ready(Pid(1));
+        assert!(target.run_jobs(0).contains(&Action::Deliver {
+            unit: v,
+            pid: Pid(1),
+            payload: 7
+        }));
     }
 
     /// "Starting <name>…" 400 ms after a wake's spawn while it is not ready
     /// (today's `lazy_tick` over `lazy.waking`).
     #[test]
     fn b2c_a_slow_wake_shows_starting() {
-        let mut s = b2c();
+        let mut s = new();
         let u = ready(&mut s, "a.one", 1, 0, false);
         park(&mut s, u, 1, 60_000);
-        s.set_now(61_000);
-        s.wake(Pid(1), &Trigger::interactive(7));
-        s.advance(u);
-        s.take_actions();
-        s.adopt_process(u, Pid(101));
-        s.process_spawned(Pid(101), Ok(()));
+        let pid = wake(&mut s, u, 1, 61_000);
+        s.process_spawned(pid, Ok(()));
         assert!(kinds(&s.run_jobs(61_399)).is_empty());
         assert_eq!(kinds(&s.run_jobs(61_400)), ["Notify"]);
     }
@@ -900,14 +855,12 @@ mod tests {
     /// the error, the entries are revoked, "could not start" shows.
     #[test]
     fn b2c_a_wake_that_cannot_start_revokes_and_tells() {
-        let mut s = b2c();
+        let mut s = new();
         let u = ready(&mut s, "a.one", 1, 0, false);
         park(&mut s, u, 1, 60_000);
-        s.wake(Pid(1), &Trigger::interactive(7));
-        s.advance(u);
-        s.take_actions();
-        s.process_spawned(Pid(101), Err("start Node".into()));
-        let actions = s.take_actions();
+        let pid = wake(&mut s, u, 1, 61_000);
+        s.process_spawned(pid, Err("start Node".into()));
+        let actions = s.run_jobs(61_000);
         assert_eq!(kinds(&actions), ["Revoke", "Notify"], "{actions:?}");
         assert!(actions.iter().any(|a| matches!(
             a,
@@ -916,18 +869,15 @@ mod tests {
         assert!(matches!(s.unit(u).unwrap().state, UnitState::Failed { .. }));
     }
 
-    /// The Host stops a waking run (a disable, a failed activation): the
-    /// core's start goes with it, and so does the old pid's forwarding.
+    /// A disable of a waking run (or a failed activation): the core's
+    /// start goes with it, and so does the old pid's forwarding.
     #[test]
-    fn b2c_a_host_stop_of_a_waking_run_ends_its_start() {
-        let mut s = b2c();
+    fn b2c_a_stop_of_a_waking_run_ends_its_start() {
+        let mut s = new();
         let u = ready(&mut s, "a.one", 1, 0, false);
         park(&mut s, u, 1, 60_000);
-        s.wake(Pid(1), &Trigger::interactive(7));
-        s.advance(u);
-        s.take_actions();
-        s.adopt_process(u, Pid(101));
-        s.process_spawned(Pid(101), Ok(()));
+        let pid = wake(&mut s, u, 1, 61_000);
+        s.process_spawned(pid, Ok(()));
         assert!(matches!(
             s.unit(u).unwrap().state,
             UnitState::Activating {
@@ -935,12 +885,12 @@ mod tests {
                 ..
             }
         ));
-        s.process_stopping(u, Pid(101), StopReason::Disable, Then::Inactive);
-        assert!(s.job(u).is_none());
+        s.disable(u).unwrap();
+        assert!(kinds(&s.run_jobs(61_000)).contains(&"Terminate"));
+        assert!(!s.job(u).is_some_and(|job| job.starts()));
         assert_eq!(s.wake(Pid(1), &Trigger::interactive(8)), Delivery::Dropped);
-        s.release_process(u, Pid(101));
-        s.process_reaped(Pid(101), None);
-        s.backend_cleaned(Pid(101));
+        s.process_reaped(pid, None);
+        s.backend_cleaned(pid);
         s.run_jobs(70_000);
         assert_eq!(s.unit(u).unwrap().state, UnitState::Inactive);
     }
@@ -951,7 +901,7 @@ mod tests {
     /// newest of each.
     #[test]
     fn b2c_muted_wake_events_still_reach_a_waking_unit() {
-        let mut s = b2c();
+        let mut s = new();
         s.set_muted(true);
         let u = ready(&mut s, "a.one", 1, 0, false);
         park(&mut s, u, 1, 60_000);
@@ -959,14 +909,13 @@ mod tests {
         assert_eq!(s.wake(Pid(1), &event(1)), Delivery::Dropped);
         assert_eq!(s.wake(Pid(1), &Trigger::interactive(2)), Delivery::Started);
         s.advance(u);
-        s.take_actions();
-        s.adopt_process(u, Pid(101));
-        s.process_spawned(Pid(101), Ok(()));
-        assert_eq!(s.wake(Pid(101), &event(3)), Delivery::Held);
-        assert_eq!(s.wake(Pid(101), &event(4)), Delivery::Held);
-        s.process_ready(Pid(101));
+        let pid = spawned(&s.run_jobs(60_001)).unwrap();
+        s.process_spawned(pid, Ok(()));
+        assert_eq!(s.wake(pid, &event(3)), Delivery::Held);
+        assert_eq!(s.wake(pid, &event(4)), Delivery::Held);
+        s.process_ready(pid);
         let delivered = s
-            .take_actions()
+            .run_jobs(60_001)
             .into_iter()
             .filter_map(|a| match a {
                 Action::Deliver { payload, .. } => Some(payload),
@@ -984,41 +933,42 @@ mod tests {
         assert_eq!(s.wake(Pid(3), &event(6)), Delivery::Started);
     }
 
-    /// A wake while the parked process still goes waits for it (today's
-    /// `host_start(Wake)` of B2b, now the core's own start), and a standby
-    /// forgotten meanwhile takes the wake with it.
+    /// A wake while the parked process still goes waits for it, and a
+    /// disable meanwhile takes the wake with it (today's `Parked.waiting`
+    /// went with the parked entry).
     #[test]
     fn b2c_a_wake_waits_for_the_parked_process_and_goes_with_its_standby() {
-        let mut s = b2c();
+        let mut s = new();
         let u = ready(&mut s, "a.one", 1, 0, false);
         assert_eq!(kinds(&s.run_jobs(60_000)), ["QueryResources"]);
         s.resources_answered(Pid(1), false);
-        s.take_actions();
-        s.process_stopping(u, Pid(1), StopReason::Idle, Then::Standby);
-        s.release_process(u, Pid(1));
+        s.run_jobs(60_000);
         s.set_now(60_100);
         assert_eq!(s.wake(Pid(1), &Trigger::interactive(7)), Delivery::Started);
         s.advance(u);
-        assert!(kinds(&s.take_actions()).is_empty(), "waits for the reap");
+        assert!(kinds(&s.run_jobs(60_100)).is_empty(), "waits for the reap");
         s.process_reaped(Pid(1), None);
         s.backend_cleaned(Pid(1));
         assert_eq!(kinds(&s.run_jobs(60_200)), ["Rekey", "Spawn"]);
-        // Again, forgotten before the process went.
-        let v = ready(&mut s, "b.two", 10, 0, false);
-        s.run_jobs(70_000);
-        s.resources_answered(Pid(10), false);
-        s.take_actions();
-        s.process_stopping(v, Pid(10), StopReason::Idle, Then::Standby);
-        s.release_process(v, Pid(10));
-        assert_eq!(s.wake(Pid(10), &Trigger::interactive(7)), Delivery::Started);
-        s.standby_forgotten(v);
-        let actions = s.take_actions();
-        assert_eq!(kinds(&actions), ["Revoke"], "{actions:?}");
-        assert!(s.job(v).is_none());
-        s.process_reaped(Pid(10), None);
-        s.backend_cleaned(Pid(10));
-        assert!(kinds(&s.run_jobs(70_100)).is_empty());
+        // Again, disabled before the process went.
+        let v = ready(&mut s, "b.two", 3, 60_200, false);
+        s.run_jobs(120_200);
+        s.resources_answered(Pid(3), false);
+        s.run_jobs(120_200);
+        assert_eq!(s.wake(Pid(3), &Trigger::interactive(7)), Delivery::Started);
+        s.disable(v).unwrap();
+        let actions = s.run_jobs(120_200);
+        assert_eq!(
+            kinds(&actions).iter().filter(|k| **k == "Revoke").count(),
+            1,
+            "{actions:?}"
+        );
+        assert!(!s.job(v).is_some_and(|job| job.will_start()));
+        s.process_reaped(Pid(3), None);
+        s.backend_cleaned(Pid(3));
+        assert!(kinds(&s.run_jobs(120_300)).is_empty());
         assert_eq!(s.unit(v).unwrap().state, UnitState::Inactive);
+        assert!(s.job(v).is_none());
     }
 
     /// Lazy activation off (`on_demand` false): nothing is classified or
@@ -1039,50 +989,185 @@ mod tests {
     }
 
     /// An unrecordable run (a development load, a built-in without a
-    /// digest: today's `lazy_key_of` is `None`) is never classified nor put
-    /// in standby.
+    /// digest, a package operation's target before its commit: today's
+    /// `lazy_key_of` is `None`) is never classified nor put in standby.
     #[test]
     fn b2c_an_unrecordable_run_is_never_classified() {
-        let mut s = b2c();
-        let u = s.load_unit("a.one");
-        s.adopt_process(u, Pid(1));
-        s.host_ready(Pid(1), false, false);
+        let mut s = new();
+        start_with(
+            &mut s,
+            UnitSpec::new("a.one", Class::Normal).unrecordable(),
+            1,
+            0,
+        );
         s.classified_with(Pid(1), None, false);
-        assert!(kinds(&s.take_actions()).is_empty());
+        assert!(kinds(&s.run_jobs(0)).is_empty());
         assert!(s.run_jobs(600_000).is_empty());
         assert!(s.quit_checkpoints().is_empty());
+        // `set_recordable(false)`: an install's target is not classified.
+        let u = s.add_unit(UnitSpec::new("b.two", Class::Normal).disabled());
+        s.set_recordable(u, false);
+        s.set_enabled(u, true);
+        s.restart(u, true, Some("digest".into())).unwrap();
+        let pid = spawned(&s.run_jobs(600_000)).unwrap();
+        s.process_spawned(pid, Ok(()));
+        s.process_ready(pid);
+        s.run_jobs(600_000);
+        assert!(!s.classifying(pid));
+        assert!(s.run_jobs(1_200_000).is_empty());
     }
-    /// Review fix: with `start_timeout_by_host` (the adapter's, until B2d)
-    /// a woken run has only the Host's activation deadline: the core never
-    /// fails it on its own, however late its ready.
+
+    /// B2d: a woken run has one start deadline, the core's (the adapter
+    /// gives the activation the same one): no ready within it, the run is
+    /// stopped as failed ("activation timed out").
     #[test]
-    fn b2c_the_host_times_a_wakes_start() {
-        let mut s = b2c();
-        s.tunables.start_timeout_by_host = true;
+    fn b2d_a_wakes_start_times_out_once() {
+        let mut s = new();
         let u = ready(&mut s, "a.one", 1, 0, false);
         park(&mut s, u, 1, 60_000);
-        s.wake(Pid(1), &Trigger::interactive(7));
-        s.advance(u);
-        s.take_actions();
-        s.adopt_process(u, Pid(101));
-        s.process_spawned(Pid(101), Ok(()));
-        assert!(!kinds(&s.run_jobs(200_000)).contains(&"Terminate"));
-        s.process_ready(Pid(101));
-        assert!(matches!(s.unit(u).unwrap().state, UnitState::Active { .. }));
+        let pid = wake(&mut s, u, 1, 61_000);
+        s.process_spawned(pid, Ok(()));
+        assert!(!kinds(&s.run_jobs(75_999)).contains(&"Terminate"));
+        assert!(kinds(&s.run_jobs(76_000)).contains(&"Terminate"));
+        assert!(matches!(
+            s.unit(u).unwrap().state,
+            UnitState::Deactivating {
+                then: Then::Failed,
+                ..
+            }
+        ));
     }
 
     /// Review fix: a run's classification closes with its answer or its
     /// timeout; a later answer finds it closed (the adapter drops it).
     #[test]
     fn b2c_classification_closes_once() {
-        let mut s = b2c();
+        let mut s = new();
         ready(&mut s, "a.one", 1, 0, true);
         assert!(s.classifying(Pid(1)));
         s.run_jobs(5_000);
         assert!(!s.classifying(Pid(1)), "timed out: resident");
-        ready(&mut s, "b.two", 2, 0, false);
+        ready(&mut s, "b.two", 2, 5_000, false);
         assert!(s.classifying(Pid(2)));
         s.classified_with(Pid(2), None, false);
         assert!(!s.classifying(Pid(2)));
+    }
+
+    /// Review note B2-1: a reinstall that still waits for the uninstalled
+    /// process does not replay (its pid stays tracked: the reap reaches the
+    /// unit, the owed data removal goes, and the start runs then).
+    #[test]
+    fn b2d_a_reinstall_with_a_checkpoint_waits_without_replaying() {
+        let mut s = new();
+        let u = ready(&mut s, "a.one", 1, 0, true);
+        s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
+        assert!(kinds(&s.run_jobs(1)).contains(&"Terminate"));
+        // A reinstall whose spec carries a checkpoint (the adapter's never
+        // does: the uninstall drops it).
+        s.add_unit(UnitSpec::new("a.one", Class::Normal).checkpoint(false));
+        let actions = s.run_jobs(2);
+        assert!(
+            !actions.iter().any(|a| matches!(a, Action::Replay { .. })),
+            "{actions:?}"
+        );
+        assert_eq!(s.by_pid(Pid(1)), Some(u));
+        s.process_reaped(Pid(1), None);
+        let actions = s.run_jobs(3);
+        assert!(
+            actions.contains(&Action::RemoveData { unit: u }),
+            "{actions:?}"
+        );
+        s.backend_cleaned(Pid(1));
+        let actions = s.run_jobs(4);
+        assert_eq!(spawned(&actions), Some(Pid(2)), "{actions:?}");
+    }
+
+    /// Review B2d (blocking): a start the Host ran (enable after a disable,
+    /// reload, an install's target) is not waited on once its process
+    /// exists (`start_job_ends_at_spawn`): a trigger to the new process goes
+    /// at once while it activates (an `activate()` awaiting its own
+    /// command or UI callback), and a package RPC on it is not `busy`, as
+    /// in B2c (the hand-off job ended at the spawn). From B3 the job ends at
+    /// its ready: held, busy.
+    #[test]
+    fn b2d_a_restarted_run_is_not_waited_on_once_spawned() {
+        for legacy in [true, false] {
+            for case in ["enable", "reload", "install"] {
+                let tunables = if legacy {
+                    Tunables::legacy()
+                } else {
+                    Tunables::legacy().with_b3(8)
+                };
+                let mut s = Supervisor::<u32>::new(tunables, 1);
+                let u = s.add_unit(UnitSpec::new("a.one", Class::Normal));
+                assert_eq!(spawned(&s.run_jobs(0)), Some(Pid(1)));
+                s.process_spawned(Pid(1), Ok(()));
+                s.process_ready(Pid(1));
+                s.run_jobs(0);
+                match case {
+                    "enable" => {
+                        s.disable(u).unwrap();
+                        s.run_jobs(1);
+                        s.enable(u).unwrap();
+                    }
+                    "reload" => {
+                        s.restart(u, true, None).unwrap();
+                    }
+                    _ => {
+                        s.enqueue_job(
+                            u,
+                            JobKind::Restart {
+                                fresh: true,
+                                image: Some("d".into()),
+                            },
+                            super::super::JobMode::Replace,
+                            super::super::Priority::Interactive,
+                            super::super::Origin::PackageRpc,
+                        )
+                        .unwrap();
+                    }
+                }
+                s.run_jobs(1);
+                s.process_reaped(Pid(1), None);
+                s.backend_cleaned(Pid(1));
+                let pid = spawned(&s.run_jobs(2)).expect("respawn");
+                s.process_spawned(pid, Ok(()));
+                assert_eq!(s.waking(pid), None);
+                let delivery = s.wake(pid, &Trigger::interactive(7));
+                if legacy {
+                    assert_eq!(delivery, Delivery::Now, "{case}");
+                    assert!(!s.package_busy(u), "{case}");
+                    assert!(s.disable(u).is_ok(), "{case}");
+                } else {
+                    assert_eq!(delivery, Delivery::Held, "{case}");
+                    assert!(s.package_busy(u) || case == "enable", "{case}");
+                }
+            }
+        }
+    }
+
+    /// Review notes B2-3 / B2-5: a late `RemoveData` of the uninstalled
+    /// process after a reinstall took the unit back leaves the new unit
+    /// (`removable` is false: it is no longer removed).
+    #[test]
+    fn b2d_a_late_remove_data_after_a_reinstall_keeps_the_new_unit() {
+        let mut s = new();
+        let u = ready(&mut s, "a.one", 1, 0, true);
+        s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
+        s.run_jobs(1);
+        // Stuck: lands removed while its process is still tracked.
+        s.run_jobs(20_001);
+        assert!(s.unit(u).unwrap().removed);
+        assert!(!s.removable(u), "its process is still tracked");
+        assert_eq!(s.add_unit(UnitSpec::new("a.one", Class::Normal)), u);
+        assert!(!s.unit(u).unwrap().removed);
+        s.process_reaped(Pid(1), None);
+        let actions = s.run_jobs(20_002);
+        assert!(actions.contains(&Action::RemoveData { unit: u }));
+        assert!(!s.removable(u), "a reinstall owns the unit");
+        s.backend_cleaned(Pid(1));
+        s.run_jobs(20_003);
+        assert!(!s.removable(u));
+        assert_eq!(s.by_id("a.one"), Some(u));
     }
 }

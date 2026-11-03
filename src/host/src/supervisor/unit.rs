@@ -173,7 +173,7 @@ impl UnitState {
         }
     }
     /// systemd's `ActiveState` word.
-    // B2d: the adapter's diagnostics of the units it starts as jobs.
+    // The adapter's diagnostics (B3 logs a unit's state with its job).
     #[allow(dead_code)]
     pub fn name(&self) -> &'static str {
         match self {
@@ -245,9 +245,6 @@ pub struct UnitSpec {
     /// checkpointed. A development load never is.
     pub recordable: bool,
 }
-// B2d: `add_unit` at start-up and install builds the specs (`name` is
-// unused by the tests too).
-#[allow(dead_code)]
 impl UnitSpec {
     pub fn new(id: impl Into<String>, class: Class) -> Self {
         let id = id.into();
@@ -263,6 +260,9 @@ impl UnitSpec {
             recordable: class != Class::Development,
         }
     }
+    // B3: the answers name the plugin (§4.6); the adapter keeps the names
+    // it shows until then.
+    #[allow(dead_code)]
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name = name.into();
         self
@@ -320,8 +320,8 @@ impl Stopping {
 #[derive(Debug)]
 pub struct Unit<P> {
     pub id: String,
-    // B2d: `add_unit`'s spec names the plugin for answers and notices
-    // (until then the adapter keeps the names it shows).
+    // The adapter keeps the names it shows (its catalogs); B3's answers
+    // read this one.
     #[allow(dead_code)]
     pub name: String,
     pub class: Class,
@@ -353,15 +353,13 @@ pub struct Unit<P> {
     /// may still write the data is reaped (and cleaned up after, with
     /// `Tunables::remove_data_waits_cleanup`), at once without one (§17.7).
     pub(super) remove_data: bool,
-    /// What the owed `RemoveData` deletes, as the Host resolved it at the
-    /// uninstall request (`remove_data_after`, B2b): never resolved from
-    /// the unit when the action comes, since a reinstall may own the unit
-    /// by then (§17.7 item 19). `None`: nothing to delete (an uninstall
-    /// without `removeData`, or one the core asked for itself).
-    pub(super) data: Option<P>,
     pub(super) shared: bool,
     pub(super) verify: bool,
     pub(super) verifiable: bool,
+    /// A first run whose digest check runs before it takes a first-run
+    /// place (`Tunables::verify_before_first_run_place`): back in its lane
+    /// after the check when no place is free.
+    pub(super) place_after_verify: bool,
     pub(super) own_this_run: bool,
     pub(super) quarantined: bool,
     pub(super) start_timeout: Option<Ms>,
@@ -409,14 +407,6 @@ pub struct Unit<P> {
     pub(super) gens: Gens,
     pub(super) results: VecDeque<(JobId, JobResult)>,
     pub(super) listed: Option<ListState>,
-    /// B2a (identity.rs): the process the Host runs for this unit (today's
-    /// `Host.plugin_ids` entry). From B2b the state follows it too
-    /// (`adopt_process`: `Active`), since the waits read the state. Since
-    /// B2c a unit in standby is the state's own (`UnitState::Standby`, or
-    /// `Deactivating{then: Standby}` while its process goes), driven by the
-    /// core's Standby job and `wake` (§17.10). Transitional: the state's pid
-    /// takes its place in B2d (every start a job).
-    pub(super) hosted: Option<Pid>,
     /// The activation of the run being started (activation.rs, MOVE of
     /// the Host's `Book` entry, B2a).
     pub(super) activation: Option<Run>,
@@ -445,10 +435,10 @@ impl<P> Unit<P> {
             removed: false,
             stopping: None,
             remove_data: false,
-            data: None,
             shared: spec.shared,
             verify: spec.verify,
             verifiable: spec.verify,
+            place_after_verify: false,
             own_this_run: false,
             quarantined: false,
             start_timeout: spec.start_timeout,
@@ -476,7 +466,6 @@ impl<P> Unit<P> {
             gens: Gens::default(),
             results: VecDeque::new(),
             listed: None,
-            hosted: None,
             activation: None,
         }
     }

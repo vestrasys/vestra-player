@@ -109,6 +109,7 @@ impl Timers {
     /// The earliest due time (`run_jobs` drops stale entries at the top;
     /// one armed after it may still be stale: an early wake-up at most,
     /// never a late one).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn next(&self) -> Option<Ms> {
         self.heap.peek().map(|Reverse(e)| e.due)
     }

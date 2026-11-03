@@ -1,11 +1,12 @@
 //! The core's actions, executed (doc/architecture/supervisor.md §2.2, §5):
-//! each executor is the body of today's code that made the same decision
-//! (`lazy.rs` until B2c). B2c runs the actions of standby, wake and
-//! classification; the Host still starts and stops package RPCs' runs
-//! itself and announces through `notify_tick` (B2d), so those actions are
-//! not run here.
+//! each executor is the body of today's code that made the same decision.
+//! Since B2d every start (`Spawn`, after `Verify` or `Replay`) and every
+//! stop (`Terminate`) runs here; the Host announces list changes through
+//! `notify_tick` (`ListChanged` is not run), and the reaper times every
+//! stop's grace and kills at it (A3: `Kill`), until B4's `shutdown` and
+//! runner restart (`KillRunner`).
 use super::*;
-use crate::supervisor::{AnswerReason, Cause, JobKind, Notice};
+use crate::supervisor::{AnswerReason, Cause, JobKind, JobResult, Notice, STUCK_RELOAD};
 
 impl Host {
     /// Runs what the core decided, in order.
@@ -15,23 +16,30 @@ impl Host {
                 Action::JobFinished {
                     unit, kind, result, ..
                 } => self.job_finished(unit, &kind, result),
-                Action::RemoveData {
-                    data: Some(data), ..
-                } => remove_data(&data),
+                Action::RemoveData { unit } => self.remove_unit_data(unit),
                 Action::QueryResources { pid, .. } => self.query_resources(pid.0),
                 Action::Checkpoint {
                     unit,
                     pid,
                     resident,
                 } => self.checkpoint(unit, pid.0, resident),
+                Action::DropCheckpoint { unit } => self.drop_checkpoint(unit),
                 Action::Terminate {
                     pid,
                     reason: crate::supervisor::StopReason::Idle,
+                    grace,
                     keep_registrations: true,
                     ..
-                } => self.park(pid.0),
+                } => self.park(pid.0, grace),
+                Action::Terminate {
+                    pid, reason, grace, ..
+                } => self.terminate(pid.0, reason, grace),
                 Action::Rekey { from, to, .. } => self.on_demand.rekey = Some((from.0, to.0)),
-                Action::Spawn { unit, pid, .. } => self.spawn_woken(unit, pid.0),
+                Action::Spawn {
+                    unit, pid, image, ..
+                } => self.spawn_unit(unit, pid.0, image),
+                Action::Verify { unit } => self.verify_unit(unit),
+                Action::Replay { unit, holder } => self.replay_unit(unit, holder.0),
                 Action::Revoke { pid, .. } => self.revoke_held(pid.0),
                 Action::Notify {
                     unit: Some(unit),
@@ -46,45 +54,51 @@ impl Host {
                 // (`unit_ready`).
                 Action::Prune { pid, .. } => capabilities::prune(self, pid.0),
                 Action::Deliver { pid, payload, .. } => self.send(pid.0, payload),
-                // The reaper times every stop's grace and kills at it (A3),
-                // the Host removes recordings and data at its own choke
-                // points, and nothing announces through the core before
-                // B2d's `list_state`; the Host's own stops (`stop`) are not
-                // the core's `Terminate` until B2d, nor its verifies.
-                Action::RemoveData { data: None, .. }
-                | Action::Terminate { .. }
-                | Action::Kill { .. }
+                Action::Kill { .. }
                 | Action::KillRunner { .. }
-                | Action::Verify { .. }
-                | Action::Replay { .. }
-                | Action::DropCheckpoint { .. }
                 | Action::Notify { unit: None, .. }
                 | Action::ListChanged { .. } => {}
             }
         }
     }
-    /// A job ended. B2b–B2d: the wait of a start the Host runs itself (an
-    /// enable, a reload; a package operation reads its result,
-    /// `package_wait`). B2c: a wake that failed (its spawn, or its stopped
-    /// process that did not go within 20 s) is today's `wake_failed`.
+    /// A job ended. A wake that failed (its spawn, or its stopped process
+    /// that did not go within 20 s) is today's `wake_failed`; an enable or
+    /// reload whose previous process did not go is today's `reload_tick`
+    /// failure. A failed spawn of any other start was recorded by its
+    /// executor (`spawn_unit`); a package operation reads its job's result.
     fn job_finished(&mut self, unit: UnitId, kind: &JobKind, result: JobResult) {
         let id = self.unit_id(unit);
         if id.is_empty() {
             return;
         }
-        match kind {
-            JobKind::Start {
-                cause: Cause::Trigger(_),
-            } => {
-                if let JobResult::Failed(error) = result {
-                    diag!("lazy: {id} could not start: {error}");
-                    self.failures.insert(id, error.chars().take(512).collect());
+        if matches!(
+            kind,
+            JobKind::Stop {
+                then: crate::supervisor::Then::Removed,
+                ..
+            }
+        ) {
+            self.remove_if_gone(unit);
+        }
+        match (kind, result) {
+            (
+                JobKind::Start {
+                    cause: Cause::Trigger(_),
+                },
+                JobResult::Failed(error),
+            ) => {
+                diag!("lazy: {id} could not start: {error}");
+                self.failures.insert(id, error.chars().take(512).collect());
+            }
+            (
+                JobKind::Start {
+                    cause: Cause::Enable,
                 }
+                | JobKind::Restart { image: None, .. },
+                JobResult::Failed(text),
+            ) if text == STUCK_RELOAD => {
+                self.failures.insert(id, format!("reload: {text}"));
             }
-            JobKind::Start {
-                cause: Cause::Enable,
-            }
-            | JobKind::Restart { image: None, .. } => self.restart_finished(&id, result),
             _ => {}
         }
     }
@@ -117,13 +131,23 @@ impl Host {
             diag!("lazy: {}: its recording: {error}", self.plugin_id(owner));
             // The core follows the file as it is now.
             let left = checkpoint::read(&directory, &key).map(|r| r.resident_at_ready);
-            self.supervisor.checkpoint_known(unit, left);
+            self.supervisor.checkpoint_failed(unit, left);
+        }
+    }
+    /// The unit's recording is of no use any more (an uninstall at its
+    /// request, a reload, an install or upgrade: `Restart{fresh}`): the
+    /// installed instance's recording goes (today's `forget_parked(id,
+    /// true)`; the package RPCs remove it at the request too).
+    fn drop_checkpoint(&mut self, unit: UnitId) {
+        let id = self.unit_id(unit);
+        if let Some(instance) = self.installed_instance(&id) {
+            checkpoint::remove(&self.activation_dir(), &instance);
         }
     }
     /// The core's `Terminate` of an idle run, keeping its registrations
     /// (T12, T14; today's `park` after its recording): stopped, held.
-    fn park(&mut self, owner: u64) {
-        let (Some(key), Some(plugin)) = (self.checkpoint_key_of(owner), self.plugins.get(&owner))
+    fn park(&mut self, owner: u64, grace: u64) {
+        let (Some(_), Some(plugin)) = (self.checkpoint_key_of(owner), self.plugins.get(&owner))
         else {
             return;
         };
@@ -145,7 +169,7 @@ impl Host {
             .map_or(0, |(_, count)| count);
         let (warnings, warning) = (self.warnings_of(owner), self.warning_text(owner));
         self.probe_registry(owner, "parking");
-        self.stop(owner, StopReason::Idle);
+        self.stop_process(owner, StopReason::Idle, Duration::from_millis(grace));
         diag!("lazy: {id} parked ({count} recorded calls)");
         // `VESTRA_TEST_EXECUTE` entries timed from this park.
         let now = self.now_ms();
@@ -156,15 +180,39 @@ impl Host {
             Held {
                 warnings,
                 warning,
-                ..Held::new(id, key.guid, origin, name)
+                ..Held::new(id, origin, name)
             },
         );
         self.probe_registry(owner, "parked");
     }
-    /// The core's start of a unit in standby (T6; today's `wake_now`): the
-    /// held entries let go of their catalog, the process starts under the
-    /// pid the core allocated, then the entries move to it (`Rekey`).
-    fn spawn_woken(&mut self, unit: UnitId, to: u64) {
+    /// The core stops run `owner` (T24, T10/T25 under `legacy()`, a
+    /// package RPC's stop half): today's `lifecycle.rs` `stop`. A failed
+    /// activation the core timed or was told of is recorded as
+    /// `activation_tick` records it.
+    fn terminate(&mut self, owner: u64, reason: crate::supervisor::StopReason, grace: u64) {
+        if !self.plugins.contains_key(&owner) {
+            return;
+        }
+        let reason = wire_reason(reason);
+        if reason == StopReason::Failed {
+            let now = self.now_ms();
+            match self.activation_status(owner, now) {
+                Ok(activation::Status::Failed { message }) => self.record_failure(owner, &message),
+                Ok(activation::Status::TimedOut) => {
+                    self.record_failure(owner, "activation timed out")
+                }
+                _ => {}
+            }
+        }
+        self.stop_process(owner, reason, Duration::from_millis(grace));
+    }
+    /// The core starts `unit` as process `to` (T6; today's
+    /// `start_installed`, `start_stopped`, `load`, an operation's
+    /// `load_package`, and a wake's `wake_now`): from standby the held
+    /// entries let go of their catalog, the process starts under the pid
+    /// the core allocated, then the entries move to it (`Rekey`). A spawn
+    /// that fails is recorded as the start that asked for it did.
+    fn spawn_unit(&mut self, unit: UnitId, to: u64, image: Option<String>) {
         let id = self.unit_id(unit);
         let from = self
             .on_demand
@@ -184,7 +232,17 @@ impl Host {
                     .find(|trigger| !trigger.payload.is_null())
             })
             .and_then(|trigger| event(&trigger.payload).map(str::to_owned));
-        match self.start_package_as(&id, to) {
+        let job = self.supervisor.job(unit).cloned();
+        let now = self.now_ms();
+        let deadline = job
+            .as_ref()
+            .and_then(|job| job.deadline)
+            .unwrap_or(now + 15_000);
+        let development = self
+            .supervisor
+            .unit(unit)
+            .is_some_and(|unit| unit.class == crate::supervisor::Class::Development);
+        match self.start_unit_process(&id, to, image.as_deref(), development, deadline) {
             Ok(()) => {
                 if let Some(from) = from {
                     diag!(
@@ -193,17 +251,66 @@ impl Host {
                     );
                     capabilities::rekey(self, from, to);
                 }
-                self.supervisor.process_spawned(Pid(to), Ok(()));
+                if job
+                    .as_ref()
+                    .is_some_and(|job| job.cause() == Some(Cause::FirstRun))
+                {
+                    diag!("lazy: {id} starts for its first run");
+                }
             }
             Err(error) => {
                 if let Some(from) = from {
                     self.on_demand.unrekeyed.insert(to, from);
                 }
+                self.start_failed(&id, job.as_ref().map(|job| &job.kind), &error);
                 self.supervisor
                     .process_spawned(Pid(to), Err(error.to_string()));
             }
         }
-        self.supervisor_actions();
+    }
+    /// A start's process could not be created: where today's start put
+    /// the error. A package RPC answering now (`setEnabled`, `reload`, a
+    /// development load) returns it; a boot start or first run is listed
+    /// failed (`start_installed`); an enable or reload that waited is
+    /// listed failed (today's `restart_finished`); a wake is today's `wake_failed`
+    /// (`job_finished`); an operation reads its job's result.
+    fn start_failed(&mut self, id: &str, kind: Option<&JobKind>, error: &anyhow::Error) {
+        if let Some(slot) = self.start_error.as_mut()
+            && slot.0 == id
+            && slot.1.is_none()
+        {
+            slot.1 = Some(RpcError::from(anyhow::anyhow!("{error:#}")));
+            return;
+        }
+        match kind {
+            Some(JobKind::Start {
+                cause: Cause::Boot | Cause::FirstRun,
+            }) => {
+                diag!("installed package {id} failed to start: {error}");
+                self.failures
+                    .insert(id.into(), error.to_string().chars().take(512).collect());
+            }
+            Some(
+                JobKind::Start {
+                    cause: Cause::Enable | Cause::AutoRestart,
+                }
+                | JobKind::Restart { image: None, .. },
+            ) => {
+                let message = RpcError::from(anyhow::anyhow!("{error:#}")).message;
+                diag!("packages.reload {id}: {message}");
+                self.failures.entry(id.into()).or_insert(message);
+            }
+            _ => {}
+        }
+    }
+    /// A built-in's digest check before its start (T4): the check the
+    /// start-up (or a reload, or a runner restart) began on its thread;
+    /// done now if it is over, else when `poll_verified` sees it end or
+    /// its `VERIFY_WAIT` runs out (`verify_tick`).
+    fn verify_unit(&mut self, unit: UnitId) {
+        let id = self.unit_id(unit);
+        self.packages_verify_begin(&id, unit);
+        self.verify_tick();
     }
     /// The core revokes the registrations under `owner` (a failed wake, a
     /// standby left for good): today's `forget_entries`, and the held data
@@ -212,6 +319,25 @@ impl Host {
         let owner = self.on_demand.unrekeyed.remove(&owner).unwrap_or(owner);
         self.unhold(owner);
         self.forget_entries(owner);
+    }
+    /// An uninstall's data may go now (no process may write it any more):
+    /// every directory the uninstall requests of `unit` resolved goes, then
+    /// the unit, while it is still removed and tracks no process (a
+    /// reinstall may own it by now: review notes B2-3, B2-5).
+    fn remove_unit_data(&mut self, unit: UnitId) {
+        for directory in self.data_removals.remove(&unit).unwrap_or_default() {
+            remove_data(&directory);
+        }
+        self.remove_if_gone(unit);
+    }
+    /// `remove_unit` of a unit that is still removed (a reinstall did not
+    /// take it back), has no job, tracks no process and owes no data
+    /// removal (review note B2-3): at its `RemoveData`, at the end of its
+    /// uninstall's stop, or when a stuck stop's process went late.
+    pub(super) fn remove_if_gone(&mut self, unit: UnitId) {
+        if self.supervisor.removable(unit) {
+            self.supervisor.remove_unit(unit);
+        }
     }
     /// An OSD for `unit` (i18n texts here, §5).
     fn notice(&mut self, unit: UnitId, notice: Notice) {
@@ -236,5 +362,19 @@ impl Host {
             self.unit_id(unit),
             event(payload).unwrap_or("a trigger")
         );
+    }
+}
+
+/// The wire's stop reason (`runtime.stop`) of the core's (§7.3, A14).
+fn wire_reason(reason: crate::supervisor::StopReason) -> StopReason {
+    use crate::supervisor::StopReason as Core;
+    match reason {
+        Core::Quit => StopReason::Quit,
+        Core::Disable => StopReason::Disable,
+        Core::Uninstall => StopReason::Uninstall,
+        Core::Reload => StopReason::Reload,
+        Core::Upgrade => StopReason::Upgrade,
+        Core::Idle => StopReason::Idle,
+        Core::Failed => StopReason::Failed,
     }
 }

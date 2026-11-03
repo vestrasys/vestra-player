@@ -583,10 +583,7 @@ fn uninstall_from_standby_removes_data_and_refuses_triggers() {
                 pid: holder
             },
             Action::DropCheckpoint { unit: u },
-            Action::RemoveData {
-                unit: u,
-                data: None
-            },
+            Action::RemoveData { unit: u },
         ]
     );
     assert_eq!(
@@ -617,10 +614,13 @@ fn start_timeout_fails_without_retry_legacy() {
         grace: 300,
         keep_registrations: false
     }));
-    assert!(actions.iter().any(|a| matches!(
-        a,
-        Action::JobFinished { result: JobResult::Failed(t), .. } if t == "activation timed out"
-    )));
+    // Today nothing waits on a start once its process exists
+    // (`start_job_ends_at_spawn`): the timeout is the unit's failure.
+    assert!(
+        !actions
+            .iter()
+            .any(|a| matches!(a, Action::JobFinished { .. }))
+    );
     assert!(w.tick(15_300).contains(&Action::Kill { unit: u, pid }));
     w.s.process_reaped(pid, None);
     w.s.backend_cleaned(pid);
@@ -1146,10 +1146,7 @@ fn merge_restart_then_stop_stop_wins() {
     w.s.process_reaped(pid, None);
     w.s.backend_cleaned(pid);
     let actions = w.tick(20);
-    assert!(actions.contains(&Action::RemoveData {
-        unit: u,
-        data: None
-    }));
+    assert!(actions.contains(&Action::RemoveData { unit: u }));
     assert!(spawns(&actions).is_empty());
     assert_eq!(w.s.job_result(u, stop), Some(&JobResult::Done));
 }
@@ -1190,23 +1187,16 @@ fn stronger_then_wins_while_deactivating() {
     w.tick(60_000);
     // Deactivating for standby, registrations kept; an uninstall arrives:
     // they are revoked at once (§17.7, today's `forget_parked`), the data
-    // goes at reap.
+    // goes at reap; its checkpoint at the request (review note B2-4).
     w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
     let actions = w.tick(60_001);
     assert!(actions.contains(&Action::Revoke { unit: u, pid }));
+    assert!(actions.contains(&Action::DropCheckpoint { unit: u }));
     w.s.process_reaped(pid, None);
     w.s.backend_cleaned(pid);
     let actions = w.tick(60_002);
-    assert_eq!(
-        actions[..2],
-        [
-            Action::DropCheckpoint { unit: u },
-            Action::RemoveData {
-                unit: u,
-                data: None
-            },
-        ]
-    );
+    assert_eq!(actions[..1], [Action::RemoveData { unit: u }]);
+    assert!(!actions.contains(&Action::DropCheckpoint { unit: u }));
     assert!(!actions.iter().any(|a| matches!(a, Action::Revoke { .. })));
 }
 
@@ -1420,8 +1410,10 @@ fn q24_backoff_and_hold_count_from_the_reap() {
 #[test]
 fn builtins_first_legacy_vs_design_row() {
     for mode in [BuiltinsFirst::Queued, BuiltinsFirst::Installed] {
+        // The design row reads the start jobs to the ready (B3).
         let tunables = Tunables {
             builtins_first: mode,
+            start_job_ends_at_spawn: mode == BuiltinsFirst::Queued,
             ..Tunables::legacy()
         };
         let mut w = World::new(tunables);
@@ -2267,18 +2259,12 @@ fn uninstall_after_a_stuck_stop_removes_data_once_the_process_goes() {
     w.tick(stop + wait);
     w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
     let actions = w.tick(stop + wait + 1);
-    assert!(!actions.contains(&Action::RemoveData {
-        unit: u,
-        data: None
-    }));
+    assert!(!actions.contains(&Action::RemoveData { unit: u }));
     assert_eq!(w.s.list_state(u), Some(ListState::Stopped));
     w.s.process_reaped(pid, Some(0));
     w.s.backend_cleaned(pid);
     let actions = w.tick(stop + wait + 2);
-    assert!(actions.contains(&Action::RemoveData {
-        unit: u,
-        data: None
-    }));
+    assert!(actions.contains(&Action::RemoveData { unit: u }));
 }
 
 /// `"Starting <name>…"` 400 ms after the spawn (today `lazy.waking.since`,
@@ -2602,10 +2588,10 @@ fn stuck_uninstall_removes_data_at_the_late_reap() {
         w.auto_reap = false;
         w.tick(100);
         let job = w.s.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
-        w.tick(100);
+        // Its checkpoint goes at the request (review note B2-4).
+        assert!(w.tick(100).contains(&Action::DropCheckpoint { unit: u }));
         let actions = w.tick(100 + wait);
         assert!(!actions.iter().any(is_remove_data), "{actions:?}");
-        assert!(actions.contains(&Action::DropCheckpoint { unit: u }));
         assert_eq!(
             w.s.job_result(u, job),
             Some(&JobResult::Failed(STUCK_RELOAD.into()))
@@ -2636,12 +2622,7 @@ fn reinstall_while_the_uninstalled_process_goes_waits_for_it() {
     let order = |actions: &[Action<u32>], u| {
         let removed = actions
             .iter()
-            .position(|a| {
-                *a == Action::RemoveData {
-                    unit: u,
-                    data: None,
-                }
-            })
+            .position(|a| *a == Action::RemoveData { unit: u })
             .expect("RemoveData");
         let spawned = actions
             .iter()

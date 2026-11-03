@@ -6,8 +6,11 @@ use crate::packages::package_stage::Candidate;
 use crate::packages::package_store::{Instance, Source, Store, StoredPackage};
 use crate::packages::{package_stage, package_store};
 use crate::playback::backend::Command;
-use crate::process::{Plugin, StopReason, shared_runner};
-use crate::supervisor::{Pid, activation};
+use crate::process::{Plugin, shared_runner};
+use crate::supervisor::{
+    Busy, Class, JobKind, JobMode, JobResult, ListState, Origin, Pid, Priority, STUCK_RELOAD, Then,
+    UnitId, UnitSpec, activation,
+};
 use crate::{i18n, platform, process};
 use anyhow::Result;
 use process::DataKey;
@@ -20,8 +23,8 @@ use std::{
 
 /// Validated candidates kept at once (each is a staged copy on disk).
 const MAX_CANDIDATES: usize = 32;
-/// At start-up, how long one tick may spend starting installed plugins
-/// (`start_queued`).
+/// At start-up, how long one tick may spend loading installed plugins into
+/// the supervisor and starting them (`load_queued`; §6.1).
 const START_BUDGET: std::time::Duration = std::time::Duration::from_millis(25);
 pub struct Manager {
     store: Store,
@@ -35,8 +38,21 @@ pub struct Manager {
     next: u64,
     receipts: BTreeMap<String, Value>,
     booted: bool,
-    /// Installed plugins still to start at start-up (`start_queued`).
-    to_start: StartQueue,
+    /// Installed plugins still to load into the supervisor at start-up, in
+    /// start order (built-ins first, then the others, each in id order;
+    /// `start_order`), a few per tick (`load_queued`); their starts wait in
+    /// the supervisor's lanes (supervisor.md §4.4).
+    to_load: VecDeque<String>,
+    /// Starts that wait for a built-in's digest check (`Action::Verify`),
+    /// by id (`verify_tick`).
+    awaiting: BTreeMap<String, UnitId>,
+    /// Recordings read for the supervisor's `Replay` (`load_installed`).
+    replays: BTreeMap<String, checkpoint::Recording>,
+    /// What a pending package operation on an id may start (its target and
+    /// the version it restores), by digest: the supervisor's `Spawn` of a
+    /// `Restart{image}` (`start_unit_process`), also while `package_tick`
+    /// holds the operation itself.
+    images: BTreeMap<String, Vec<Image>>,
     /// The installation's built-in plugins (`builtin.json`) by id; empty
     /// when it has none (a development run).
     builtins: BTreeMap<String, builtin::Builtin>,
@@ -55,63 +71,46 @@ pub struct Manager {
     /// `packages.validate*` on their threads (package_validate.rs).
     validations: crate::packages::package_validate::Validations,
 }
-/// Installed plugins still to start, in start order, and how many of them
-/// are built-ins (`builtin_first_run_pending` asks once per plugin started).
-#[derive(Default)]
-struct StartQueue {
-    ids: VecDeque<(String, bool)>,
-    builtins: usize,
+/// The start-up order of installed plugins `ids` (today's `StartQueue`):
+/// built-ins first, then the others, each in id order: the built-ins
+/// (playback, video, subtitles) do not wait behind third-party plugins.
+fn start_order(
+    ids: impl IntoIterator<Item = String>,
+    builtin: impl Fn(&str) -> bool,
+) -> VecDeque<String> {
+    let (builtins, others): (Vec<_>, Vec<_>) = ids.into_iter().partition(|id| builtin(id));
+    builtins.into_iter().chain(others).collect()
 }
-impl StartQueue {
-    /// Built-ins first, then the others, each in id order: the built-ins
-    /// (playback, video, subtitles) do not wait behind third-party plugins.
-    fn new(ids: impl IntoIterator<Item = String>, builtin: impl Fn(&str) -> bool) -> Self {
-        let (builtins, others): (Vec<_>, Vec<_>) = ids
-            .into_iter()
-            .map(|id| {
-                let is_builtin = builtin(&id);
-                (id, is_builtin)
-            })
-            .partition(|(_, is_builtin)| *is_builtin);
-        Self {
-            builtins: builtins.len(),
-            ids: builtins.into_iter().chain(others).collect(),
-        }
+/// Queues `id` again (a shared runner restart): a built-in after the
+/// built-ins still queued, before every other plugin, as `start_order`
+/// orders them; another plugin at the end.
+fn queue_again(queue: &mut VecDeque<String>, id: String, builtin: impl Fn(&str) -> bool) {
+    if builtin(&id) {
+        let at = queue.iter().take_while(|queued| builtin(queued)).count();
+        queue.insert(at, id);
+    } else {
+        queue.push_back(id);
     }
-    /// Queues `id` again (a shared runner restart): a built-in after the
-    /// queued built-ins, before every other plugin, as `new` orders them;
-    /// another plugin at the end.
-    fn push(&mut self, id: String, builtin: bool) {
-        if builtin {
-            self.ids.insert(self.builtins, (id, builtin));
-            self.builtins += 1;
-        } else {
-            self.ids.push_back((id, builtin));
-        }
+}
+/// A package an operation may start: digest, directory, manifest, data.
+type Image = (String, PathBuf, package_stage::PackageManifest, DataKey);
+/// The images of `op` (`Manager::images`).
+fn images_of(op: &Operation) -> Vec<Image> {
+    let mut images = vec![(
+        op.target.digest.clone(),
+        op.target.directory.clone(),
+        op.target.manifest.clone(),
+        op.target_key.clone(),
+    )];
+    if let Some(old) = &op.old {
+        images.push((
+            old.digest.clone(),
+            old.directory.clone(),
+            old.manifest.clone(),
+            op.old_key.clone().unwrap_or_else(|| op.target_key.clone()),
+        ));
     }
-    /// The id at `at` (0: the next to start).
-    fn get(&self, at: usize) -> Option<&str> {
-        self.ids.get(at).map(|(id, _)| id.as_str())
-    }
-    /// Takes the id at `at` out of the queue.
-    fn remove(&mut self, at: usize) -> Option<String> {
-        let (id, builtin) = self.ids.remove(at)?;
-        self.builtins -= usize::from(builtin);
-        Some(id)
-    }
-    fn contains(&self, id: &str) -> bool {
-        self.ids.iter().any(|(queued, _)| queued == id)
-    }
-    fn is_empty(&self) -> bool {
-        self.ids.is_empty()
-    }
-    fn len(&self) -> usize {
-        self.ids.len()
-    }
-    /// A built-in is still to start.
-    fn builtin_pending(&self) -> bool {
-        self.builtins > 0
-    }
+    images
 }
 /// A finished digest check: id, serial, outcome.
 type VerifyResult = (String, u64, std::result::Result<(), String>);
@@ -153,11 +152,13 @@ struct Operation {
     enabled: bool,
     phase: String,
     owner: Option<u64>,
-    /// The supervisor's job that waits for the package's previous process
-    /// (the running or parked version it stopped, or its own target after a
-    /// failed or cancelled activation) before the next start
-    /// (`Host::host_start`; today's `Operation.waiting` until B2b).
-    stop_job: Option<crate::supervisor::JobId>,
+    /// The supervisor's job the operation waits on (§4.7): its target's
+    /// start (`Restart{fresh, image}`, which stops the running or parked
+    /// version first), the old version's (`restoring`), or its target's
+    /// stop when nothing is restored.
+    job: Option<crate::supervisor::JobId>,
+    /// Its target's start was asked (`job` is its `Restart{image}`).
+    started: bool,
     cancel: bool,
     failure: Option<String>,
     result: Value,
@@ -216,7 +217,10 @@ impl Manager {
             next: 0,
             receipts,
             booted: false,
-            to_start: StartQueue::default(),
+            to_load: VecDeque::new(),
+            awaiting: BTreeMap::new(),
+            replays: BTreeMap::new(),
+            images: BTreeMap::new(),
             builtins,
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
@@ -289,10 +293,9 @@ impl Manager {
         };
         self.verified.insert(id.to_owned(), state);
     }
-    /// Take the finished digest checks: their ids (a reload waiting for
-    /// one goes on, `Host::unit_verified`).
-    fn poll_verified(&mut self) -> Vec<String> {
-        let mut finished = Vec::new();
+    /// Take the finished digest checks (a start waiting for one goes on,
+    /// `Host::verify_tick`, in start order as today's queue).
+    fn poll_verified(&mut self) {
         while let Ok((id, serial, result)) = self.verify_results.1.try_recv() {
             if !matches!(self.verified.get(&id), Some(Verified::Running(s, _)) if *s == serial) {
                 continue;
@@ -300,19 +303,7 @@ impl Manager {
             if let Err(error) = &result {
                 diag!("built-in plugin {id}: {error}");
             }
-            self.verified.insert(id.clone(), Verified::Done(result));
-            finished.push(id);
-        }
-        finished
-    }
-    /// How much longer a start of `id` waits for its digest check
-    /// (`verifying`), if one runs.
-    fn verify_left(&self, id: &str) -> Option<std::time::Duration> {
-        match self.verified.get(id) {
-            Some(Verified::Running(_, since)) => VERIFY_WAIT
-                .checked_sub(since.elapsed())
-                .filter(|left| !left.is_zero()),
-            _ => None,
+            self.verified.insert(id, Verified::Done(result));
         }
     }
     /// A digest check of `id` is running and its start may still wait for
@@ -419,22 +410,30 @@ impl Host {
             .filter(|(_, plugin)| plugin.shared_runner() == Some(id))
             .map(|(owner, plugin)| (*owner, plugin.manifest.id.clone()))
             .collect::<Vec<_>>();
+        // Queued again first (as today's `to_start`, counted as built-ins
+        // still to load), so no third-party first run takes a place while
+        // their stops run.
+        for (_, plugin) in &members {
+            if !failed_open {
+                self.packages.verify(plugin);
+            }
+            if !self.packages.to_load.contains(plugin) {
+                let builtins = &self.packages.builtins;
+                queue_again(&mut self.packages.to_load, plugin.clone(), |id| {
+                    builtins.contains_key(id)
+                });
+            }
+        }
+        let queued = self.builtins_to_load();
+        self.supervisor.set_builtins_to_load(queued);
         // The runner is killed already: no member gets its `runtime.stop`
         // (their cleanups do not run; nothing is left to tell).
         for (owner, _) in &members {
-            self.disable(*owner, StopReason::Failed);
+            self.stop_failed(*owner);
         }
         let owners = members.iter().map(|(owner, _)| *owner).collect::<Vec<_>>();
         self.units_killed_with_runner(&owners);
-        for (_, plugin) in members {
-            if !failed_open {
-                self.packages.verify(&plugin);
-            }
-            if !self.packages.to_start.contains(&plugin) {
-                let builtin = self.packages.builtins.contains_key(&plugin);
-                self.packages.to_start.push(plugin, builtin);
-            }
-        }
+        self.supervisor_run();
         let text = if failed_open {
             diag!(
                 "shared runner: {} restarts within {} s; every plugin runs in its own process until the player quits",
@@ -447,27 +446,22 @@ impl Host {
         };
         self.show_osd(&text);
     }
-    fn load_package(
-        &mut self,
-        directory: &Path,
-        manifest: &package_stage::PackageManifest,
-        key: DataKey,
-    ) -> Result<u64> {
-        let owner = self.alloc_owner();
-        self.load_package_as(owner, directory, manifest, key)?;
-        Ok(owner)
-    }
-    /// `load_package` as process `owner`, a pid allocated already.
+    /// Starts `manifest` from `directory` as process `owner` (the pid the
+    /// supervisor allocated with its `Spawn`), its activation due by
+    /// `deadline` (the start's `TimeoutStartSec`, `Job::deadline`).
     fn load_package_as(
         &mut self,
         owner: u64,
         directory: &Path,
         manifest: &package_stage::PackageManifest,
         key: DataKey,
+        deadline: u64,
     ) -> Result<()> {
         let id = manifest.id.clone();
-        anyhow::ensure!(self.running(&id).is_none(), "plugin already running");
-        let deadline = self.now_ms() + 15_000;
+        anyhow::ensure!(
+            self.running(&id).is_none_or(|running| running == owner),
+            "plugin already running"
+        );
         self.activation_begin(&id, owner, deadline)?;
         let manifest = process::Manifest {
             id: id.clone(),
@@ -753,7 +747,6 @@ impl Host {
         // The replaced version's recording (keyed by its instance).
         if let Some(instance) = &before.instance {
             checkpoint::remove(&self.activation_dir(), &instance.guid);
-            self.checkpoint_known(&id, None);
         }
         self.packages.store.prepare_with_receipt(
             &id,
@@ -763,39 +756,21 @@ impl Host {
             result.clone(),
             instance,
         )?;
-        // A parked version goes like a running one (an upgrade has a new
-        // digest: its recording is of no use).
-        self.forget_parked(&id, true);
-        let running = self.running(&id);
+        // Its recording goes (an upgrade has a new digest: of no use).
+        self.drop_recording(&id);
+        let running = self.running(&id).is_some() || self.parked_id(&id).is_some();
         let image = target.digest.clone();
-        // `upgrade` for every install over a running version that runs on:
-        // an update, a reinstall of the same version, and a `replace` from
-        // another source (`fresh` data) alike. An install that leaves it
-        // off (`enabled: false`; a running package is never disabled, so
-        // only the installer's option does this) switches the plugin off:
-        // `disable`, as `packages.setEnabled(false)` (its session values go
-        // too, at the commit).
-        if let Some(owner) = running {
-            let reason = if enabled {
-                StopReason::Upgrade
-            } else {
-                StopReason::Disable
-            };
-            self.disable(owner, reason);
-        }
-        // The version it stopped (running, or parked just now: its process
-        // may still be finishing), or any other stopped process of it still
-        // going (an uninstall's, the D13 fix): the new version starts once
-        // it is gone.
-        let stop_job = self.package_stop_job(&id, image);
         let fresh_data = fresh
             .then(|| process::data_root().map(|root| root.join(&target_guid)))
             .flatten();
+        let operation = request.clone();
+        // In the table before its start: the supervisor's spawn of the
+        // target reads it (`start_unit_process`).
         self.packages.operations.insert(
             request.clone(),
             Operation {
                 id: request,
-                package: id,
+                package: id.clone(),
                 target,
                 old: before.current,
                 target_key: DataKey::Instance(target_guid),
@@ -804,13 +779,72 @@ impl Host {
                 enabled,
                 phase: "preparing".into(),
                 owner: None,
-                stop_job,
+                job: None,
+                started: false,
                 cancel: false,
                 failure: None,
                 result: result.clone(),
                 request: request_spec,
             },
         );
+        if let Some(op) = self.packages.operations.get(&operation) {
+            let images = images_of(op);
+            self.packages.images.insert(id.clone(), images);
+        }
+        let unit = self.operation_unit(&id);
+        // The target is not committed while it activates: no recording of
+        // it, no classification (today's `lazy_key_of` is `None` for it).
+        self.supervisor.set_recordable(unit, false);
+        // `upgrade` for every install over a running (or parked) version
+        // that runs on: an update, a reinstall of the same version, and a
+        // `replace` from another source (`fresh` data) alike; the target
+        // starts once that version's process is gone (any process of it
+        // still going, the D13 fix). An install that leaves it off
+        // (`enabled: false`; a running package is never disabled, so only the
+        // installer's option does this) switches the plugin off: a
+        // `Disable` stop, as `packages.setEnabled(false)` (its session values
+        // go too, at the commit). The operation is the busy package RPC, so
+        // its job merges with what is installed (`JobMode::Replace`), as
+        // today's install goes on beside a waiting reload.
+        // A target with nothing to stop first starts at the next tick
+        // (`advance_package`), as today's `load_package` there; a parked
+        // version only lets go of its entries now.
+        let process = self.running(&id).is_some();
+        if enabled {
+            self.supervisor.set_enabled(unit, true);
+        }
+        let kind = if enabled && process {
+            Some(JobKind::Restart {
+                fresh: true,
+                image: Some(image),
+            })
+        } else if running {
+            Some(JobKind::Stop {
+                reason: if enabled {
+                    crate::supervisor::StopReason::Upgrade
+                } else {
+                    crate::supervisor::StopReason::Disable
+                },
+                then: Then::Inactive,
+            })
+        } else {
+            None
+        };
+        let started = enabled && process;
+        if let Some(kind) = kind {
+            let job = self.supervisor.enqueue_job(
+                unit,
+                kind,
+                JobMode::Replace,
+                Priority::Interactive,
+                Origin::PackageRpc,
+            );
+            if let Some(op) = self.packages.operations.get_mut(&operation) {
+                op.job = job.ok();
+                op.started = started;
+            }
+            self.supervisor_run();
+        }
         Ok(result)
     }
     /// The data directory of an installed instance, development load or
@@ -818,112 +852,152 @@ impl Host {
     fn data_directory_of(&self, key: &DataKey) -> Option<PathBuf> {
         process::data_root().map(|root| key.directory(&root))
     }
-    /// Start the installed packages (only `only`, when given) that are not
-    /// disabled, not replaced by a development load and not in an
-    /// operation. Built-ins run in place from the installation
-    /// (`runs_from`); nothing is copied.
-    pub(crate) fn start_installed(&mut self, only: Option<&str>) {
-        // One record (the start-up queue starts them one by one), not a
-        // copy of the whole catalog per plugin.
-        let ids = match only {
-            Some(only) => self
-                .packages
-                .store
-                .record(only)
-                .map(|_| only.to_owned())
-                .into_iter()
-                .collect(),
-            None => self.packages.store.installed_ids(),
+    /// Loads installed package `id` into the supervisor (`add_unit`: at
+    /// start-up, and a shared runner member queued again), unless it runs
+    /// already, is in an operation, or a development load of the same id
+    /// runs instead (R-H10). A disabled one is loaded disabled (it stays
+    /// stopped). Built-ins run in place from the installation
+    /// (`runs_from`); nothing is copied. The supervisor replays a valid
+    /// recording of a plugin that was lazy at its ready (on-demand start:
+    /// it starts on its first use), starts one that was resident, and
+    /// queues a first run without one (§3.2 T1–T3).
+    pub(crate) fn load_installed(&mut self, id: &str) {
+        if self.running(id).is_some() || self.parked_id(id).is_some() {
+            return;
+        }
+        let Some(record) = self.packages.store.record(id).cloned() else {
+            return;
         };
-        for id in ids {
-            if self.running(&id).is_some() || self.parked_id(&id).is_some() {
-                continue;
-            }
-            let Some(record) = self.packages.store.record(&id).cloned() else {
-                continue;
-            };
-            // R-H10: a package the user disabled stays stopped; a
-            // development load of the same id runs instead this run.
-            if self.packages.operations.values().any(|o| o.package == id)
-                || self.packages.store.disabled().contains(&id)
-                || self.development.contains_key(&id)
-            {
-                continue;
-            }
-            // Its library copy could not be read at start: kept as it is,
-            // not started (`runs_from`); the next start tries again.
-            if let Some(error) = self.packages.store.deferred().get(&id) {
-                self.failures.insert(id.clone(), deferred_failure(error));
-                continue;
-            }
-            let (Some(package), Some(instance)) =
-                (self.packages.runs_from(&id, &record), record.instance)
-            else {
-                continue;
-            };
-            // On-demand start: a valid recording of a plugin that was lazy
-            // at its ready is replayed instead; the plugin starts on its
-            // first use (host/supervisor/). One that was resident starts now.
-            // Without a recording (its first run) it waits for a place.
-            let mut first_run = false;
-            if self.on_demand.enabled
-                && let Ok((directory, manifest)) = &package
-                && check_reserved(&id, Some(&instance)).is_ok()
-                && let Some(key) = self.checkpoint_key(&id)
-            {
-                let recording = checkpoint::read(&self.packages.store.activation_dir(), &key);
-                self.checkpoint_known(&id, recording.as_ref().map(|r| r.resident_at_ready));
-                match recording {
-                    Some(recording) if recording.resident_at_ready => {
-                        diag!("lazy: {id} starts: resident at its last ready");
-                    }
-                    Some(recording) => {
-                        match self.standby_replay(&id, directory, manifest, &key, recording) {
-                            Ok(()) => continue,
-                            Err(error) => diag!("lazy: {id} replay failed, starting it: {error}"),
-                        }
-                    }
-                    // Built-ins first: another plugin's first run waits
-                    // while a built-in is still to start or queued, since
-                    // what it claims at activation waits for them.
-                    None if !self.on_demand.first_runs.free()
-                        || !self.packages.builtins.contains_key(&id)
-                            && self.builtin_first_run_pending() =>
-                    {
-                        let builtins = &self.packages.builtins;
-                        self.on_demand
-                            .first_runs
-                            .queue(id.clone(), |id| builtins.contains_key(id));
-                        continue;
-                    }
-                    None => first_run = true,
+        if self.packages.operations.values().any(|o| o.package == id)
+            || self.development.contains_key(id)
+        {
+            return;
+        }
+        // Its library copy could not be read at start: kept as it is, not
+        // started (`runs_from`); the next start tries again.
+        if let Some(error) = self.packages.store.deferred().get(id) {
+            self.failures.insert(id.to_owned(), deferred_failure(error));
+            return;
+        }
+        let (Some(package), Some(instance)) =
+            (self.packages.runs_from(id, &record), record.instance)
+        else {
+            return;
+        };
+        let disabled = self.packages.store.disabled().contains(id);
+        let startable = package.is_ok() && check_reserved(id, Some(&instance)).is_ok();
+        let mut spec = self.unit_spec(id);
+        if disabled {
+            spec = spec.disabled();
+        }
+        if !startable {
+            // Its start fails (recorded as today's); never a first run.
+            spec = spec.unrecordable();
+        }
+        if !disabled
+            && startable
+            && self.on_demand.enabled
+            && let Some(key) = self.checkpoint_key(id)
+        {
+            match checkpoint::read(&self.packages.store.activation_dir(), &key) {
+                Some(recording) if recording.resident_at_ready => {
+                    diag!("lazy: {id} starts: resident at its last ready");
+                    spec = spec.checkpoint(true);
                 }
-            }
-            let started = package
-                .map_err(anyhow::Error::msg)
-                .and_then(|(directory, manifest)| {
-                    check_reserved(&id, Some(&instance))
-                        .map_err(|refusal| anyhow::anyhow!(refusal.message))?;
-                    self.load_package(&directory, &manifest, DataKey::Instance(instance.guid))
-                });
-            match started {
-                Ok(owner) if first_run => {
-                    diag!("lazy: {id} starts for its first run");
-                    self.on_demand.first_runs.started(owner);
+                Some(recording) => {
+                    spec = spec.checkpoint(false);
+                    self.packages.replays.insert(id.to_owned(), recording);
                 }
-                Ok(_) => (),
-                Err(error) => {
-                    diag!("installed package {id} failed to start: {error}");
-                    self.failures
-                        .insert(id.clone(), error.to_string().chars().take(512).collect());
-                }
+                None => {}
             }
         }
+        self.supervisor.add_unit(spec);
+        self.supervisor_run();
+        self.packages.replays.remove(id);
     }
-    /// On-demand start: start installed plugin `id` in standby as process
-    /// `owner` (the pid the core allocated for its wake, `Action::Spawn`),
-    /// as `start_installed` would.
-    pub(crate) fn start_package_as(&mut self, id: &str, owner: u64) -> Result<()> {
+    /// The supervisor's spec of plugin `id` (`add_unit`), enabled, without a
+    /// checkpoint: a development load of the id runs instead of the
+    /// installed copy; a built-in is checked (its digest) before it joins
+    /// the shared runner; one without a recording key is never recorded.
+    fn unit_spec(&self, id: &str) -> UnitSpec {
+        if self.development.contains_key(id) {
+            return UnitSpec::new(id, Class::Development).start_timeout(120_000);
+        }
+        let builtin = self.packages.builtins.get(id);
+        let class = if builtin.is_some() {
+            Class::Builtin
+        } else {
+            Class::Normal
+        };
+        let mut spec = UnitSpec::new(id, class);
+        if self.checkpoint_key(id).is_none() {
+            spec = spec.unrecordable();
+        }
+        if shared_runner::enabled()
+            && builtin.is_some_and(|b| b.digest.is_some() && b.manifest.is_ok())
+        {
+            spec = spec.shared().verify();
+        }
+        spec
+    }
+    /// The unit of plugin `id`; loaded disabled (nothing starts) when the
+    /// supervisor has none yet (a deferred record, a package RPC on an id
+    /// start-up did not load).
+    fn ensure_unit(&mut self, id: &str) -> UnitId {
+        if let Some(unit) = self.supervisor.by_id(id) {
+            return unit;
+        }
+        let spec = self.unit_spec(id).disabled();
+        self.supervisor.add_unit(spec)
+    }
+    /// The unit a package operation on `id` starts and stops: loaded (a
+    /// first install), or brought back by `add_unit` when it is being
+    /// removed (a reinstall, §17.7 item 19: it keeps waiting for the
+    /// uninstalled process); loaded disabled, the operation enables it when
+    /// it starts its target.
+    fn operation_unit(&mut self, id: &str) -> UnitId {
+        let spec = self.unit_spec(id).disabled();
+        self.supervisor.add_unit(spec)
+    }
+    /// The supervisor's spawn of plugin `id` as process `owner`
+    /// (`Action::Spawn`): a development load, a package operation's target
+    /// or the version it restores (`Restart{image}`), or the installed
+    /// package (today's `start_installed`, `start_stopped`, a wake).
+    pub(crate) fn start_unit_process(
+        &mut self,
+        id: &str,
+        owner: u64,
+        image: Option<&str>,
+        development: bool,
+        deadline: u64,
+    ) -> Result<()> {
+        if development {
+            let directory = self
+                .dev_loading
+                .clone()
+                .or_else(|| {
+                    self.development
+                        .get(id)
+                        .map(|(directory, _)| directory.clone())
+                })
+                .ok_or_else(|| anyhow::anyhow!("no development load of {id}"))?;
+            return self.load_development_as(&directory, owner, deadline);
+        }
+        if let Some(image) = image
+            && let Some(images) = self.packages.images.get(id)
+        {
+            let (_, directory, manifest, key) = images
+                .iter()
+                .find(|(digest, ..)| digest == image)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("the package {image} is not this operation's"))?;
+            return self.load_package_as(owner, &directory, &manifest, key, deadline);
+        }
+        self.start_package_as(id, owner, deadline)
+    }
+    /// Starts installed plugin `id` as process `owner`, as `start_installed`
+    /// would.
+    fn start_package_as(&mut self, id: &str, owner: u64, deadline: u64) -> Result<()> {
         let record = self.packages.store.get(id);
         let instance = record
             .instance
@@ -940,7 +1014,57 @@ impl Host {
             &directory,
             &manifest,
             DataKey::Instance(instance.guid),
+            deadline,
         )
+    }
+    /// What the supervisor's `Replay` of `id` registers: the recording read
+    /// at `load_installed`, the package and its recording key.
+    pub(crate) fn packages_replay(
+        &mut self,
+        id: &str,
+    ) -> Option<(
+        checkpoint::Recording,
+        PathBuf,
+        package_stage::PackageManifest,
+        checkpoint::Key,
+    )> {
+        let recording = self.packages.replays.remove(id)?;
+        let record = self.packages.store.get(id);
+        let (directory, manifest) = self.packages.runs_from(id, &record)?.ok()?;
+        let key = self.checkpoint_key(id)?;
+        Some((recording, directory, manifest, key))
+    }
+    /// The instance installed plugin `id` runs with (its recording's key).
+    pub(crate) fn installed_instance(&self, id: &str) -> Option<String> {
+        self.packages.store.get(id).instance.map(|i| i.guid)
+    }
+    /// A start of built-in `id` waits for its digest check (`Action::Verify`):
+    /// the one start-up, a reload or a runner restart began, or one now.
+    pub(crate) fn packages_verify_begin(&mut self, id: &str, unit: UnitId) {
+        if !self.packages.verified.contains_key(id) {
+            self.packages.verify(id);
+        }
+        self.packages.awaiting.insert(id.to_owned(), unit);
+    }
+    /// The digest checks a start waits for that are over, or past
+    /// `VERIFY_WAIT` (then it runs in its own process, as today's
+    /// `verifying` lets it start): the supervisor's `verify_done`.
+    pub(crate) fn verify_tick(&mut self) {
+        let over = self
+            .packages
+            .awaiting
+            .iter()
+            .filter(|(id, _)| !self.packages.verifying(id))
+            .map(|(id, unit)| (id.clone(), *unit))
+            .collect::<Vec<_>>();
+        for (id, unit) in over {
+            self.packages.awaiting.remove(&id);
+            let ok = matches!(
+                self.packages.verified.get(&id),
+                Some(Verified::Done(Ok(())))
+            );
+            self.supervisor.verify_done(unit, ok);
+        }
     }
     /// What a recording of installed plugin `id` is valid for: its instance,
     /// its package digest (a library copy's, or the one `builtin.json`
@@ -966,7 +1090,6 @@ impl Host {
     pub(crate) fn drop_recording(&mut self, id: &str) {
         if let Some(instance) = self.packages.store.get(id).instance {
             checkpoint::remove(&self.activation_dir(), &instance.guid);
-            self.checkpoint_known(id, None);
         }
     }
     /// The directory recordings are kept in.
@@ -993,22 +1116,12 @@ impl Host {
             .filter(|key| runs && key.guid == *guid)
     }
     /// A package RPC on `id` is answered `busy`: an operation runs on it
-    /// (its phases stay the Host's until B2d), or the supervisor has a
-    /// package-RPC job of it installed (`JobMode::Fail`: a reload, an enable
-    /// or an operation waiting for the previous process; today's
+    /// (its phases are the package transaction's, §2.3), or the supervisor
+    /// has a package-RPC job of it installed (`JobMode::Fail`: a reload, an
+    /// enable or an operation waiting for the previous process; today's
     /// `packages.reloads` entry).
     pub(crate) fn package_rpc_busy(&self, id: &str) -> bool {
         self.operation_pending(id) || self.package_job_busy(id)
-    }
-    /// The supervisor's wait of a package operation on `id` for its
-    /// previous process (`HostStart::Install`), if there is one to wait
-    /// for (today's `Operation.waiting`).
-    fn package_stop_job(&mut self, id: &str, image: String) -> Option<crate::supervisor::JobId> {
-        // `Replace` mode: never `Busy` (the operation is the busy RPC).
-        match self.host_start(id, crate::supervisor::HostStart::Install { image }) {
-            Ok(crate::supervisor::HostStarted::Waits { job, .. }) => Some(job),
-            _ => None,
-        }
     }
     /// While the `library-cleanup` thread scans the whole library (once, at
     /// start), installs and uninstalls wait; later runs remove only the
@@ -1132,14 +1245,10 @@ impl Host {
             )
         })
     }
-    /// A built-in is still to start at start-up (`to_start`) or waits for
-    /// its first run: other plugins' first runs wait for it.
-    fn builtin_first_run_pending(&self) -> bool {
-        self.packages.to_start.builtin_pending() || self.builtin_first_run_queued()
-    }
-    /// A built-in waits for its first run (lazy activation, §2.4).
+    /// A built-in waits for its first run (lazy activation, §2.4; the
+    /// supervisor's first-run lane).
     pub(crate) fn builtin_first_run_queued(&self) -> bool {
-        self.on_demand.first_runs.builtin_queued()
+        self.supervisor.first_runs_queued().1
     }
     /// A built-in still activating that may mount a panel (it declares
     /// `ui.mount`) and has not asked yet: at start-up the shell waits a
@@ -1186,9 +1295,9 @@ impl Host {
     pub(crate) fn package_list(&mut self) -> Value {
         let now = self.now_ms();
         let mut list = BTreeMap::<String, Value>::new();
+        self.supervisor.set_now(now);
         let owners = self.plugins.keys().copied().collect::<Vec<_>>();
         for owner in owners {
-            let status = self.activation_status(owner, now).ok();
             let plugin = &self.plugins[&owner];
             let id = plugin.manifest.id.clone();
             let stored = self.packages.store.get(&id);
@@ -1197,17 +1306,17 @@ impl Host {
                 .runs_from(&id, &stored)
                 .is_some_and(|package| package.is_ok_and(|(dir, _)| dir == plugin.directory));
             let warnings = self.warnings_of(owner);
-            let (state, error) = match status {
+            // The supervisor's state of its unit, its activation read (§9).
+            let listed = self
+                .supervisor
+                .by_id(&id)
+                .and_then(|unit| self.supervisor.list_state(unit));
+            let (state, error) = match listed {
+                Some(ListState::Starting) => ("starting", None),
+                Some(ListState::Failed(message)) => ("failed", Some(message)),
                 // Woken from idle (lazy activation): it was running all along.
-                Some(activation::Status::Pending { .. })
-                    if self.supervisor.waking(Pid(owner)).is_some() =>
-                {
+                Some(ListState::Running { .. }) if self.supervisor.waking(Pid(owner)).is_some() => {
                     ("running", None)
-                }
-                Some(activation::Status::Pending { .. }) => ("starting", None),
-                Some(activation::Status::Failed { message }) => ("failed", Some(message)),
-                Some(activation::Status::TimedOut) => {
-                    ("failed", Some("activation timed out".to_owned()))
                 }
                 // Until the SDK passes `warnings` on (it keeps only the known
                 // fields), a running plugin's `error` carries them as text.
@@ -1249,23 +1358,29 @@ impl Host {
             let Some(package) = self.packages.runs_from(&id, &record) else {
                 continue;
             };
-            // Waiting for its first run (lazy activation) counts as starting.
+            // The supervisor's state of its unit (§9): a start it waits for
+            // (a first run waiting for a place, a reload or an enable
+            // waiting for the previous process) and a package operation
+            // count as starting; one waiting at start-up lists `stopped`.
             let disabled = self.packages.store.disabled().contains(&id);
             let parked = self
                 .parked_id(&id)
                 .and_then(|owner| self.on_demand.held(owner));
-            let (state, error) = if self.package_rpc_busy(&id)
-                || !disabled && self.on_demand.first_runs.queue.contains(&id)
-            {
-                ("starting", None)
-            } else if let Some(parked) = parked {
-                // Parked (lazy activation): it runs again on its first use;
-                // `state` stays `running`, `process` says `idle`, and what
-                // it was refused while it ran stays listed.
-                ("running", parked.warning.clone())
-            } else {
-                stopped(disabled, self.failures.get(&id))
-            };
+            let listed = self
+                .supervisor
+                .by_id(&id)
+                .and_then(|unit| self.supervisor.list_state(unit));
+            let (state, error) =
+                if self.operation_pending(&id) || listed == Some(ListState::Starting) {
+                    ("starting", None)
+                } else if let Some(parked) = parked {
+                    // Parked (lazy activation): it runs again on its first use;
+                    // `state` stays `running`, `process` says `idle`, and what
+                    // it was refused while it ran stays listed.
+                    ("running", parked.warning.clone())
+                } else {
+                    stopped(disabled, self.failures.get(&id))
+                };
             let warnings = parked.map_or_else(Vec::new, |parked| parked.warnings.clone());
             let data = record
                 .instance
@@ -1349,7 +1464,9 @@ impl Host {
         Value::Array(list.into_values().collect())
     }
     /// `packages.setEnabled`: disabling stops it (and keeps it stopped across
-    /// launches when installed); enabling starts it again.
+    /// launches when installed); enabling starts it again. Both are the
+    /// supervisor's jobs (`disable`, `enable`: `Stop{Disable}`,
+    /// `Start{Enable}`, which waits for the plugin's previous process, D13).
     fn set_enabled(
         &mut self,
         caller: u64,
@@ -1390,13 +1507,16 @@ impl Host {
         } else {
             self.dev_disabled.insert(id.into());
         }
+        let unit = self.ensure_unit(id);
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
         if !enabled {
-            if let Some(owner) = running {
-                self.disable(owner, StopReason::Disable);
+            // Its process stops; in standby its recorded entries go and its
+            // recording stays (not replayed while it is disabled).
+            if self.supervisor.disable(unit).is_err() {
+                return Err(busy());
             }
-            // Parked: its recorded entries go; the recording stays (not
-            // replayed while it is disabled).
-            self.forget_parked(id, false);
+            self.supervisor_run();
             self.failures.remove(id);
             // The user switched it off: its session values go (a reload, an
             // upgrade or a crash keeps them; session_storage.rs).
@@ -1410,55 +1530,62 @@ impl Host {
             return Ok(());
         }
         if running.is_some() || self.parked_id(id).is_some() {
+            self.supervisor.set_enabled(unit, true);
             return Ok(());
         }
         // Its previous process (parked, disabled or failed just now) still
-        // going: it starts once that is gone (`restart_finished`), never
-        // beside it on the same data (D13), and is `busy` meanwhile.
-        match self.host_start(id, crate::supervisor::HostStart::Enable) {
-            Ok(crate::supervisor::HostStarted::Now) => {}
-            Ok(crate::supervisor::HostStarted::Waits { .. }) => return Ok(()),
-            Err(crate::supervisor::Busy) => return Err(busy()),
+        // going: it starts once that is gone, never beside it on the same
+        // data (D13), and is `busy` meanwhile; checked when it starts.
+        let waits = self
+            .supervisor
+            .unit(unit)
+            .is_some_and(|u| u.stopping.is_some() || u.job.is_some());
+        if !waits {
+            self.startable(id, installed, reserved, key, development.is_some())?;
         }
-        self.start_stopped(id, installed, reserved, key, development)
+        if let Err(Busy) = self.supervisor.enable(unit) {
+            return Err(busy());
+        }
+        self.start_now(id)
     }
-    /// Start a stopped plugin: its development load, else its installed
-    /// package (`set_enabled`, `reload`). The disabled flag is not touched.
-    fn start_stopped(
+    /// What today's `start_stopped` checked before it started a stopped
+    /// plugin (its development load, else its installed package), with the
+    /// same replies; the supervisor's job starts it. The disabled flag is
+    /// not touched.
+    fn startable(
         &mut self,
         id: &str,
         installed: Option<std::result::Result<(PathBuf, package_stage::PackageManifest), String>>,
         reserved: std::result::Result<(), RpcError>,
         key: Option<DataKey>,
-        development: Option<(PathBuf, process::Manifest)>,
+        development: bool,
     ) -> std::result::Result<(), RpcError> {
         self.failures.remove(id);
         match (installed, development) {
-            (_, Some((directory, _))) => self.load(&directory, 120_000)?,
-            (Some(package), None) => {
+            (_, true) => Ok(()),
+            (Some(package), false) => {
                 reserved?;
                 // Nothing runnable (a deferred record, a broken built-in):
                 // it stays listed as failed, with the same reason.
-                let (directory, manifest) = package.map_err(|failure| {
+                package.map_err(|failure| {
                     self.failures.insert(id.into(), failure.clone());
                     RpcError::new("unavailable", failure)
                 })?;
                 // Built-in records and installs both have an instance.
-                let key = key.ok_or_else(|| {
+                key.ok_or_else(|| {
                     RpcError::new("unavailable", "the installed package has no instance")
                 })?;
-                self.load_package(&directory, &manifest, key)?;
+                Ok(())
             }
-            (None, None) => return Err(RpcError::new("missing", format!("no plugin {id}"))),
+            (None, false) => Err(RpcError::new("missing", format!("no plugin {id}"))),
         }
-        Ok(())
     }
     /// `packages.reload { id }` (SDK 1.5.19, STORE-RELOAD-BUILTIN): stop the
     /// running plugin and start it again from the same package and data, once
-    /// its process is gone (the supervisor's job, `restart_finished`); a
-    /// stopped or failed one starts now. Built-ins included; the disabled
-    /// flag is never written, so a reload never leaves a plugin disabled.
-    /// Same caller rules as `setEnabled`: `plugins.manage`, never itself.
+    /// its process is gone (the supervisor's `Restart{fresh}`); a stopped or
+    /// failed one starts now. Built-ins included; the disabled flag is never
+    /// written, so a reload never leaves a plugin disabled. Same caller rules
+    /// as `setEnabled`: `plugins.manage`, never itself.
     fn reload(&mut self, caller: u64, id: &str) -> std::result::Result<(), RpcError> {
         if self.plugins[&caller].manifest.id == id {
             return Err(RpcError::invalid("a plugin cannot reload itself"));
@@ -1482,59 +1609,31 @@ impl Host {
                 "{id} is disabled: enable it instead of reloading it"
             )));
         }
-        // Parked: it has no process, so it starts now, observed fresh (its
-        // recording goes); once the process it was parked from is gone.
-        self.forget_parked(id, true);
-        let running = self.running(id);
-        if let Some(owner) = running {
-            self.disable(owner, StopReason::Reload);
-        }
-        if self.previous_process(id).is_some() {
+        // Observed fresh: its recording goes, in standby or not.
+        self.drop_recording(id);
+        let unit = self.ensure_unit(id);
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
+        let going = self.running(id).is_some()
+            || self
+                .supervisor
+                .unit(unit)
+                .is_some_and(|u| u.stopping.is_some_and(|s| !s.done()));
+        if going {
             // A built-in's files are checked again before it shares the
-            // runner (its start waits for the check too).
+            // runner (its start waits for the check too: `Activating{Verify}`).
             if shared_runner::enabled() {
                 self.packages.verify(id);
             }
-            let verify_until = self
-                .packages
-                .verify_left(id)
-                .map(|left| self.now_ms() + left.as_millis() as u64);
-            return match self.host_start(id, crate::supervisor::HostStart::Reload { verify_until })
-            {
-                Err(crate::supervisor::Busy) => Err(busy()),
-                Ok(_) => Ok(()),
-            };
+        } else {
+            let reserved = check_reserved(id, record.instance.as_ref());
+            let key = record.instance.map(|i| DataKey::Instance(i.guid));
+            self.startable(id, installed, reserved, key, development.is_some())?;
         }
-        let reserved = check_reserved(id, record.instance.as_ref());
-        let key = record.instance.map(|i| DataKey::Instance(i.guid));
-        self.start_stopped(id, installed, reserved, key, development)
-    }
-    /// A reload or an enable of `id` that waited for the previous process
-    /// ended (`JobFinished`; today's `reload_tick`): it starts now, or,
-    /// that process not gone within 20 s, it is listed as failed instead.
-    pub(crate) fn restart_finished(&mut self, id: &str, result: crate::supervisor::JobResult) {
-        match result {
-            crate::supervisor::JobResult::Done => {}
-            crate::supervisor::JobResult::Failed(text) => {
-                self.failures.insert(id.into(), format!("reload: {text}"));
-                return;
-            }
-            crate::supervisor::JobResult::Canceled | crate::supervisor::JobResult::Dropped => {
-                return;
-            }
+        if let Err(Busy) = self.supervisor.restart(unit, true, None) {
+            return Err(busy());
         }
-        if self.running(id).is_some() {
-            return;
-        }
-        let record = self.packages.store.get(id);
-        let installed = self.packages.runs_from(id, &record);
-        let reserved = check_reserved(id, record.instance.as_ref());
-        let key = record.instance.map(|i| DataKey::Instance(i.guid));
-        let development = self.development.get(id).cloned();
-        if let Err(error) = self.start_stopped(id, installed, reserved, key, development) {
-            diag!("packages.reload {id}: {}", error.message);
-            self.failures.entry(id.into()).or_insert(error.message);
-        }
+        self.start_now(id)
     }
     /// `packages.uninstall { id, removeData, expectedRevision, requestId }`:
     /// stop it, remove it from the library (one catalog replacement), and
@@ -1580,15 +1679,36 @@ impl Host {
             .flatten();
         let receipt =
             json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
-        self.forget_parked(&id, true);
-        if let Some(owner) = self.running(&id) {
-            self.disable(owner, StopReason::Uninstall);
-        }
-        // Deleted once its process is gone (it flushes on stop): one
-        // running, parked just now, or stopped otherwise and still going;
-        // at once without one.
-        if let Some(directory) = data {
-            self.remove_data_after(&id, directory);
+        // Its recording goes at the request (review note B2-4).
+        self.drop_recording(&id);
+        // The supervisor stops it (`Stop{Uninstall, then: Removed}`); its
+        // data directory, resolved now, is deleted once no process of it
+        // may write it (`RemoveData`): one running, parked just now, or
+        // stopped otherwise and still going; at once without one.
+        match self.supervisor.by_id(&id) {
+            Some(unit) => {
+                if let Some(directory) = data {
+                    self.data_removals.entry(unit).or_default().push(directory);
+                }
+                let now = self.now_ms();
+                self.supervisor.set_now(now);
+                let _ = self.supervisor.enqueue_job(
+                    unit,
+                    JobKind::Stop {
+                        reason: crate::supervisor::StopReason::Uninstall,
+                        then: Then::Removed,
+                    },
+                    JobMode::Replace,
+                    Priority::Background,
+                    Origin::PackageRpc,
+                );
+                self.supervisor_run();
+            }
+            None => {
+                if let Some(directory) = data {
+                    let _ = std::fs::remove_dir_all(directory);
+                }
+            }
         }
         self.packages
             .store
@@ -1633,44 +1753,60 @@ impl Host {
         }
     }
     /// The installed packages, built-ins included, were started (the first
-    /// `package_tick`).
+    /// `package_tick`): every one loaded into the supervisor, and none of
+    /// their start-up starts still waiting for its turn or its digest check.
     pub(crate) fn packages_started(&self) -> bool {
-        self.packages.booted && self.packages.to_start.is_empty()
+        self.packages.booted && self.packages.to_load.is_empty() && !self.supervisor.boot_pending()
     }
-    /// Start the next installed plugins of the start-up queue, in their
-    /// order, until `START_BUDGET` of this tick is spent (at least one).
-    /// Starting a plugin spawns its Node process, several milliseconds each
-    /// on Windows; all of them in one tick held the UI thread for 150 ms.
-    fn start_queued(&mut self) {
-        if self.packages.to_start.is_empty() {
+    /// Loads the next installed plugins of the start order into the
+    /// supervisor, which starts them, until `START_BUDGET` of this tick is
+    /// spent (at least one). Starting a plugin spawns its Node process,
+    /// several milliseconds each on Windows; all of them in one tick held
+    /// the UI thread for 150 ms.
+    fn load_queued(&mut self) {
+        if self.packages.to_load.is_empty() {
             return;
         }
         let began = std::time::Instant::now();
         let mut started = 0;
-        // A built-in whose digest is still being checked stays queued, in
-        // its place (it starts once the check is done, shared or alone, and
-        // other plugins' first runs still wait for it); the others do not
-        // wait for it: a large package's first read can take seconds.
+        // A built-in whose digest is still being checked stays in its place
+        // (loaded once the check is done, shared or alone, and third-party
+        // first runs still wait for it: `set_builtins_to_load`); the others
+        // pass it: a large package's first read can take seconds.
         let mut at = 0;
-        while let Some(id) = self.packages.to_start.get(at).map(str::to_owned) {
+        while let Some(id) = self.packages.to_load.get(at).cloned() {
             if self.packages.verifying(&id) {
                 at += 1;
                 continue;
             }
-            self.packages.to_start.remove(at);
-            self.start_installed(Some(&id));
+            self.packages.to_load.remove(at);
+            let builtins = self.builtins_to_load();
+            self.supervisor.set_builtins_to_load(builtins);
+            self.load_installed(&id);
             started += 1;
             if began.elapsed() >= START_BUDGET {
                 break;
             }
         }
+        let builtins = self.builtins_to_load();
+        self.supervisor.set_builtins_to_load(builtins);
         if self.frame_log.is_some() {
             diag!(
                 "vestra packages: {started} started in {:.1} ms, {} to go",
                 began.elapsed().as_secs_f64() * 1000.,
-                self.packages.to_start.len()
+                self.packages.to_load.len()
             );
         }
+    }
+    /// Built-ins still to load (`to_load` keeps them first, so they are its
+    /// front).
+    fn builtins_to_load(&self) -> usize {
+        let builtins = &self.packages.builtins;
+        self.packages
+            .to_load
+            .iter()
+            .take_while(|id| builtins.contains_key(id.as_str()))
+            .count()
     }
     pub(crate) fn package_tick(&mut self) {
         self.purge_dropped_secrets();
@@ -1718,7 +1854,8 @@ impl Host {
                         enabled: false,
                         phase: "restoring".into(),
                         owner: None,
-                        stop_job: None,
+                        job: None,
+                        started: false,
                         cancel: false,
                         failure: Some(
                             "application stopped before commit; restoring last committed version"
@@ -1729,14 +1866,21 @@ impl Host {
                     },
                 );
             }
+            let recovering = self
+                .packages
+                .operations
+                .values()
+                .map(|op| (op.package.clone(), images_of(op)))
+                .collect::<Vec<_>>();
+            self.packages.images.extend(recovering);
             // The previous versions and built-in copies players up to 0.5
             // kept, and any leftovers, go on the cleanup thread.
             self.collect_garbage();
-            // Start committed packages and the built-ins independently of
-            // the authoring plugin: queued, a few per tick (`START_BUDGET`).
-            // Built-ins first (`StartQueue::new`).
+            // Load committed packages and the built-ins independently of
+            // the authoring plugin: a few per tick (`START_BUDGET`), built-ins
+            // first (`start_order`); the supervisor starts them.
             let builtins = &self.packages.builtins;
-            self.packages.to_start = StartQueue::new(self.packages.store.installed_ids(), |id| {
+            self.packages.to_load = start_order(self.packages.store.installed_ids(), |id| {
                 builtins.contains_key(id)
             });
             // The shared runner admits a built-in once its digest checked
@@ -1751,16 +1895,14 @@ impl Host {
                 }
             }
         }
-        for id in self.packages.poll_verified() {
-            self.unit_verified(&id);
-        }
+        self.packages.poll_verified();
+        self.verify_tick();
         self.answer_validations();
         self.shared_tick();
-        self.start_queued();
-        // Waits for stopped processes that ended: their starts run now,
-        // where `reload_tick` ran (and in the tick `lazy_tick`'s wakes
-        // ran in); the core's due idle checks, classification and
-        // "Starting…" timers too (B2c, before in `lazy_tick`).
+        self.load_queued();
+        // The supervisor's jobs: starts whose previous process went, first
+        // runs whose place freed, due idle checks, classifications and
+        // "Starting…" timers.
         self.supervisor_tick();
         self.cleanup_tick();
         let keys = self
@@ -1799,6 +1941,7 @@ impl Host {
                 "committed" | "failed" | "cancelled" | "failedDegraded"
             ) {
                 self.packages.receipts = self.packages.store.operations();
+                self.packages.images.remove(&op.package);
             } else {
                 self.packages.operations.insert(key, op);
             }
@@ -1811,42 +1954,64 @@ impl Host {
         ) {
             return Ok(());
         }
-        if let Some(job) = op.stop_job {
-            match self.package_wait(&op.package, job) {
-                None => return Ok(()),
-                // Its previous process did not go within 20 s of the wait.
-                Some(crate::supervisor::JobResult::Failed(_)) => {
-                    anyhow::bail!("cleanup acknowledgment timed out; recovery remains pending")
-                }
-                Some(_) => op.stop_job = None,
+        let stuck =
+            || anyhow::anyhow!("cleanup acknowledgment timed out; recovery remains pending");
+        let ended = self.operation_job(op);
+        if op.phase == "preparing" {
+            // Its previous process did not go within 20 s of the wait.
+            if matches!(&ended, Some(JobResult::Failed(text)) if text == STUCK_RELOAD) {
+                return Err(stuck());
             }
-        }
-        if op.phase == "preparing" && !op.cancel && !op.enabled {
-            // It stays (or becomes) disabled: its files are installed and
-            // nothing runs it, not even to check its activation.
-            let was_enabled = !self.packages.store.disabled().contains(&op.package);
-            self.commit_operation(op, None)?;
-            // Switched off by this install: its session values go, as for
-            // `packages.setEnabled(false)`.
-            if was_enabled && let Some(key) = &op.old_key {
-                self.session_storage.clear(key);
+            if !op.cancel && !op.enabled {
+                // It stays (or becomes) disabled: its files are installed and
+                // nothing runs it, not even to check its activation; once the
+                // version it switched off is gone.
+                if ended.is_none() {
+                    return Ok(());
+                }
+                let was_enabled = !self.packages.store.disabled().contains(&op.package);
+                self.commit_operation(op, None)?;
+                // Switched off by this install: its session values go, as for
+                // `packages.setEnabled(false)`.
+                if was_enabled && let Some(key) = &op.old_key {
+                    self.session_storage.clear(key);
+                }
+                return Ok(());
             }
-            return Ok(());
-        }
-        if op.phase == "preparing" && !op.cancel {
-            match self.load_package(
-                &op.target.directory,
-                &op.target.manifest,
-                op.target_key.clone(),
-            ) {
-                Ok(owner) => {
-                    op.owner = Some(owner);
-                    op.phase = "activating".into();
+            // Its target starts once what it replaces is stopped (today's
+            // `load_package` in this tick), as the supervisor's
+            // `Restart{fresh, image}`.
+            if !op.cancel && !op.started {
+                if ended.is_none() {
+                    return Ok(());
                 }
-                Err(error) => {
-                    op.failure = Some(error.to_string());
-                    op.phase = "restoring".into();
+                let unit = self.ensure_unit(&op.package);
+                op.started = true;
+                op.job = self.operation_enqueue(
+                    unit,
+                    JobKind::Restart {
+                        fresh: true,
+                        image: Some(op.target.digest.clone()),
+                    },
+                );
+            }
+            let ended = self.operation_job(op);
+            // The supervisor started its target: its activation is watched.
+            if let Some(owner) = self.running(&op.package) {
+                op.owner = Some(owner);
+                op.phase = "activating".into();
+            } else if op.cancel {
+                op.phase = "restoring".into();
+                op.job = None;
+            } else {
+                match ended.clone() {
+                    None => return Ok(()),
+                    // Its process could not be created.
+                    Some(JobResult::Failed(text)) => op.failure = Some(text),
+                    Some(other) => op.failure = Some(format!("activation {other:?}")),
                 }
+                op.phase = "restoring".into();
+                op.job = None;
             }
         }
         if op.phase == "activating" {
@@ -1859,35 +2024,53 @@ impl Host {
                     format!("activation {status}: {}", self.activation(owner)?)
                 });
                 // Cancelled: the version it replaced comes back (an
-                // `upgrade` in reverse), or, a first install, it goes
-                // (`uninstall`); else its activation failed.
-                let reason = match (op.cancel, op.old.is_some()) {
-                    (true, true) => StopReason::Upgrade,
-                    (true, false) => StopReason::Uninstall,
-                    (false, _) => StopReason::Failed,
-                };
-                self.disable(owner, reason);
-                let image = op.target.digest.clone();
-                op.stop_job = self.package_stop_job(&op.package, image);
+                // `upgrade` in reverse), or, a first install, it goes (an
+                // uninstall), which stops it (`restoring`); else its
+                // activation failed and the supervisor stops it already (T10).
                 op.owner = None;
                 op.phase = "restoring".into();
+                op.job = None;
                 return Ok(());
             }
             if status == "ready" {
                 return self.commit_operation(op, Some(owner));
             }
         }
-        if op.phase == "preparing" && op.cancel {
-            op.phase = "restoring".into();
-        }
         if op.phase == "restoring" {
             // The disabled flag is still the one from before the install: a
             // package that was disabled is restored without running.
             let stopped = self.packages.store.disabled().contains(&op.package);
+            let unit = self.ensure_unit(&op.package);
             if let Some(old) = op.old.clone().filter(|_| !stopped) {
+                if op.job.is_none() && op.owner.is_none() {
+                    // The old version starts once its target's process is gone
+                    // (it stops it first when it still runs).
+                    let recordable = self.checkpoint_key(&op.package).is_some();
+                    self.supervisor.set_recordable(unit, recordable);
+                    self.supervisor.set_enabled(unit, true);
+                    op.job = self.operation_enqueue(
+                        unit,
+                        JobKind::Restart {
+                            fresh: false,
+                            image: Some(old.digest.clone()),
+                        },
+                    );
+                    return Ok(());
+                }
                 if op.owner.is_none() {
-                    let key = op.old_key.clone().unwrap_or_else(|| op.target_key.clone());
-                    op.owner = Some(self.load_package(&old.directory, &old.manifest, key)?);
+                    match self.running(&op.package) {
+                        Some(owner) => op.owner = Some(owner),
+                        None => match self.operation_job(op) {
+                            None => return Ok(()),
+                            Some(JobResult::Failed(text)) if text == STUCK_RELOAD => {
+                                return Err(stuck());
+                            }
+                            Some(JobResult::Failed(text)) => anyhow::bail!("{text}"),
+                            Some(other) => anyhow::bail!(
+                                "old version recovery failed: {other:?}; recovery remains pending"
+                            ),
+                        },
+                    }
                     return Ok(());
                 }
                 let status = self.package_status(op.owner.unwrap());
@@ -1898,6 +2081,31 @@ impl Host {
                     status == "ready",
                     "old version recovery failed: {status}; recovery remains pending"
                 );
+            } else {
+                // Nothing to restore: the target's process goes first (a
+                // first install's unit goes with it, as its record does).
+                if op.job.is_none() {
+                    let reason = match (op.cancel, op.old.is_some()) {
+                        (true, true) => crate::supervisor::StopReason::Upgrade,
+                        (true, false) => crate::supervisor::StopReason::Uninstall,
+                        (false, _) => crate::supervisor::StopReason::Failed,
+                    };
+                    let then = if op.old.is_some() {
+                        Then::Inactive
+                    } else {
+                        Then::Removed
+                    };
+                    op.job = self.operation_enqueue(unit, JobKind::Stop { reason, then });
+                }
+                match self.operation_job(op) {
+                    None => return Ok(()),
+                    Some(JobResult::Failed(text)) if text == STUCK_RELOAD => return Err(stuck()),
+                    Some(_) => {}
+                }
+                if op.old.is_some() {
+                    let recordable = self.checkpoint_key(&op.package).is_some();
+                    self.supervisor.set_recordable(unit, recordable);
+                }
             }
             op.phase = if op.cancel { "cancelled" } else { "failed" }.into();
             // The new instance's data (it ran during activation) goes too.
@@ -1915,6 +2123,53 @@ impl Host {
         }
         op.result = json!({"operationId":op.id,"packageId":op.package,"status":op.phase,"owner":op.owner,"cancelRequested":op.cancel});
         Ok(())
+    }
+    /// The operation's job (`Operation.job`): `None` while it runs, else
+    /// how it ended (`Done` when there is none: nothing to wait for).
+    fn operation_job(&self, op: &Operation) -> Option<JobResult> {
+        let (Some(unit), Some(job)) = (self.supervisor.by_id(&op.package), op.job) else {
+            return Some(JobResult::Done);
+        };
+        if self
+            .supervisor
+            .job(unit)
+            .is_some_and(|installed| installed.id == job)
+        {
+            return None;
+        }
+        // Only a unit's last 8 results are kept: a lost one is not taken for
+        // a process that went.
+        Some(
+            self.supervisor
+                .job_result(unit, job)
+                .cloned()
+                .unwrap_or_else(|| {
+                    JobResult::Failed("the wait's result is no longer known".into())
+                }),
+        )
+    }
+    /// A package operation's job on `unit`: it merges with what is
+    /// installed (`JobMode::Replace`; the operation is the busy RPC already),
+    /// and runs now.
+    fn operation_enqueue(
+        &mut self,
+        unit: UnitId,
+        kind: JobKind,
+    ) -> Option<crate::supervisor::JobId> {
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
+        let job = self
+            .supervisor
+            .enqueue_job(
+                unit,
+                kind,
+                JobMode::Replace,
+                Priority::Interactive,
+                Origin::PackageRpc,
+            )
+            .ok();
+        self.supervisor_run();
+        job
     }
     /// Commit `op` (its target activated as `owner`, or not activated at
     /// all when it stays disabled) with the disabled flag it decided.
@@ -1947,6 +2202,13 @@ impl Host {
         };
         op.phase = "committed".into();
         op.result = json!({"operationId":op.id,"packageId":op.package,"status":"committed","installed":installed,"owner":owner,"request":op.request});
+        // The unit runs the committed package now: recorded from its next
+        // run, and enabled as the commit decided.
+        if let Some(unit) = self.supervisor.by_id(&op.package) {
+            let recordable = self.checkpoint_key(&op.package).is_some();
+            self.supervisor.set_recordable(unit, recordable);
+            self.supervisor.set_enabled(unit, op.enabled);
+        }
         // The version this replaced is not kept.
         if let Some(old) = &op.old {
             self.discard(&old.digest);
@@ -2445,25 +2707,18 @@ mod tests {
     use super::*;
     use crate::packages::package_store::Installed;
 
+    /// The start order (today's `StartQueue::new`): built-ins first, then
+    /// the others, each in id order. Since B2d a built-in still being
+    /// checked no longer stays in this queue: it is loaded in its turn and
+    /// waits in `Activating{Verify}` while the others start, counted as
+    /// pending (`supervisor/queue.rs` tests).
     #[test]
-    fn start_queue_starts_builtins_first_and_counts_them() {
+    fn start_order_puts_builtins_first() {
         let builtin = |id: &str| id.starts_with("vestra.");
         // `installed_ids` gives them in id order.
         let ids = ["a.one", "b.two", "vestra.audio", "vestra.video"].map(String::from);
-        let mut queue = StartQueue::new(ids, builtin);
-        assert_eq!(queue.get(0), Some("vestra.audio"));
-        // `start_queued` skips a built-in still being checked: it stays
-        // queued, and counted, while the others start.
-        assert_eq!(queue.remove(1).as_deref(), Some("vestra.video"));
-        assert_eq!(queue.remove(1).as_deref(), Some("a.one"));
-        assert!(queue.builtin_pending());
-        assert_eq!(queue.remove(0).as_deref(), Some("vestra.audio"));
-        assert!(!queue.builtin_pending());
-        assert_eq!(queue.remove(0).as_deref(), Some("b.two"));
-        assert_eq!(queue.remove(0), None);
-        assert!(!queue.builtin_pending() && queue.is_empty());
-        queue.push("vestra.subtitles".into(), true);
-        assert!(queue.builtin_pending() && queue.contains("vestra.subtitles"));
+        let order = start_order(ids, builtin);
+        assert_eq!(order, ["vestra.audio", "vestra.video", "a.one", "b.two"]);
     }
 
     /// A shared runner restart mid start-up queues its members again: the
@@ -2473,22 +2728,17 @@ mod tests {
     fn a_restart_mid_start_up_keeps_builtins_at_the_front() {
         let builtin = |id: &str| id.starts_with("vestra.");
         let ids = ["a.one", "b.two", "c.three", "vestra.audio", "vestra.video"].map(String::from);
-        let mut queue = StartQueue::new(ids, builtin);
-        // vestra.audio and vestra.video started; vestra.audio is still being
-        // checked (it stays at the front), a.one started.
-        assert_eq!(queue.remove(1).as_deref(), Some("vestra.video"));
-        assert_eq!(queue.remove(1).as_deref(), Some("a.one"));
-        queue.push("vestra.video".into(), true);
-        queue.push("vestra.subtitles".into(), true);
-        queue.push("z.member".into(), false);
-        let mut order = Vec::new();
-        while let Some(id) = queue.remove(0) {
-            order.push(id);
+        let mut queue = start_order(ids, builtin);
+        // vestra.audio, vestra.video and a.one were loaded.
+        for _ in 0..3 {
+            queue.pop_front();
         }
+        queue_again(&mut queue, "vestra.video".into(), builtin);
+        queue_again(&mut queue, "vestra.subtitles".into(), builtin);
+        queue_again(&mut queue, "z.member".into(), builtin);
         assert_eq!(
-            order,
+            queue,
             [
-                "vestra.audio",
                 "vestra.video",
                 "vestra.subtitles",
                 "b.two",
@@ -2496,7 +2746,6 @@ mod tests {
                 "z.member"
             ]
         );
-        assert!(!queue.builtin_pending());
     }
     use crate::ui::composition;
 
@@ -2890,7 +3139,10 @@ mod tests {
             next: 0,
             receipts: BTreeMap::new(),
             booted: false,
-            to_start: StartQueue::default(),
+            to_load: VecDeque::new(),
+            awaiting: BTreeMap::new(),
+            replays: BTreeMap::new(),
+            images: BTreeMap::new(),
             builtins,
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
@@ -3536,28 +3788,15 @@ mod tests {
         assert_eq!(crate::supervisor::Tunables::legacy().stop_wait, 20_000);
     }
 
-    /// B0: the `StartQueue` semantics `start_queued` relies on (it needs a
-    /// `Host`, so its walk is written out here): `get(at)` and
-    /// `remove(at)` let the plugins behind a held built-in start while it
-    /// keeps its place at the front and its count (`builtin_pending`, which
-    /// keeps third-party first runs waiting).
+    /// B0: the plugins behind a held built-in start while it keeps its
+    /// place: since B2d the supervisor's lanes (`supervisor/queue.rs`
+    /// `b0_others_pass_a_builtin_being_checked`); the start order itself is
+    /// `start_order` (`start_order_puts_builtins_first`).
     #[test]
-    fn b0_start_queue_lets_others_pass_a_held_builtin() {
+    fn b0_start_order_is_builtins_first_then_id_order() {
         let builtin = |id: &str| id.starts_with("vestra.");
         let ids = ["a.one", "vestra.slow", "vestra.fast"].map(String::from);
-        let mut queue = StartQueue::new(ids, builtin);
-        let verifying = |id: &str| id == "vestra.slow";
-        let mut started = Vec::new();
-        let mut at = 0;
-        while let Some(id) = queue.get(at).map(str::to_owned) {
-            if verifying(&id) {
-                at += 1;
-                continue;
-            }
-            started.push(queue.remove(at).unwrap());
-            assert!(queue.builtin_pending(), "vestra.slow still counts");
-        }
-        assert_eq!(started, ["vestra.fast", "a.one"]);
-        assert_eq!((queue.len(), queue.get(0)), (1, Some("vestra.slow")));
+        let order = start_order(ids, builtin);
+        assert_eq!(order, ["vestra.slow", "vestra.fast", "a.one"]);
     }
 }

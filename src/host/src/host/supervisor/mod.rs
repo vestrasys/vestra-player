@@ -9,48 +9,43 @@
 //! and `OnDemand.parked_ids` stay as `debug_assert` cross-checks of the
 //! answers (B7 removes them).
 //!
-//! B2b (§17.9): every wait for a stopped process is the core's. A stop the
-//! Host runs makes its unit `Deactivating` (`unit_stopping`) until the
-//! reaper's `Event::Reaped` and the playback worker's `BackendCleaned` are
-//! in (`unit_reaped`, `unit_cleaned`); a start that must wait for it (an
-//! enable, a reload, a package operation) is a hand-off job (`host_start`),
-//! and the Host runs the start once the job says so (`supervisor_tick` →
-//! `JobFinished`). An uninstall's data goes at the reap
-//! (`remove_data_after` → `RemoveData`).
+//! B2b (§17.9): every wait for a stopped process is the core's: a unit is
+//! deactivating until the reaper's `Event::Reaped` and the playback
+//! worker's `BackendCleaned` are in (`unit_reaped`, `unit_cleaned`).
 //!
 //! B2c (§17.10): on-demand start (lazy activation, `VESTRA_LAZY=1` until
-//! B6) is the core's. It decides when a run is idle (its idle timer, the
-//! Standby job → `QueryResources` → `resources_answered`), what a run's
-//! class is (`classified`) and when a lazy first run goes to standby, and
-//! it wakes a unit in standby (`wake` → `Rekey` + `Spawn`, the held
-//! triggers → `Prune` + `Deliver` at its ready). The adapter feeds it the
-//! Host's half of each decision (the playback worker's answers, the Host's
-//! own busy checks, what is on disk) and executes its actions
-//! (`actions.rs`); recordings are `checkpoint.rs`, the test switches
-//! `probe.rs`. Still the Host's until B2d: start-up replay and first runs
-//! (`first_runs.rs`), and the starts and stops of package RPCs.
+//! B6) is the core's: when a run is idle, its class, when a lazy first run
+//! goes to standby, and the wake of a unit in standby. The adapter feeds it
+//! the Host's half of each decision (the playback worker's answers, the
+//! Host's own busy checks, what is on disk); recordings are
+//! `checkpoint.rs`, the test switches `probe.rs`.
+//!
+//! B2d (§17.11): every start and stop is a job. Start-up adds the installed
+//! units in the start order under the per-tick start budget (`load_queued`,
+//! package_manager.rs); the core replays, verifies and starts them in its
+//! lanes (built-ins first, first runs at most 8 at a time). Package RPCs
+//! enqueue `start` / `stop` / `restart` jobs, crashes and failed
+//! activations are the core's inputs, and the adapter executes what the
+//! core decides (`actions.rs`: `Spawn`, `Verify`, `Replay`, `Terminate`,
+//! `RemoveData`...) with today's bodies. `packages.list` reads the core's
+//! `list_state`.
 use super::*;
 use crate::capabilities;
-use crate::supervisor::{
-    Action, Busy, Delivery, HostStart, HostStarted, JobId, JobResult, Then, Trigger, Tunables,
-    UnitId,
-};
+use crate::supervisor::{Action, Delivery, Trigger, Tunables, UnitId};
 use std::collections::BTreeSet;
 
 pub(crate) mod actions;
 pub(crate) mod checkpoint;
-mod first_runs;
 pub(crate) mod probe;
 mod standby;
 
-pub(crate) use first_runs::FirstRuns;
 pub(crate) use standby::{Held, Origin};
 
 /// How long a park waits for its process (lazy activation record §5.4
 /// item 6; disable and quit keep 300 ms): the core's standby grace
-/// (`Policy::standby_grace`, `Action::Terminate::grace`), which the Host's
-/// `stop` gives the reaper until B2d's `Terminate` executor.
-pub(crate) const PARK_WAIT: Duration = Duration::from_secs(2);
+/// (`Policy::standby_grace`), which `Action::Terminate` carries.
+#[cfg(test)]
+const PARK_WAIT: Duration = Duration::from_secs(2);
 /// `VESTRA_IDLE_MS` when unset (the core's `Tunables::idle_timeout`).
 const IDLE_MS: u64 = 60_000;
 /// What a unit in standby is woken by (the recorded entries' triggers);
@@ -115,8 +110,6 @@ pub(crate) struct OnDemand {
     settled: bool,
     next_check: u64,
     tests: Vec<probe::TestExecute>,
-    /// First runs (B2d: Start jobs of `cause: FirstRun`).
-    pub first_runs: FirstRuns,
     /// Test switches for the registry diff (tests/lazy_activation.rs):
     /// see [`probe::Probe`].
     pub probe: probe::Probe,
@@ -154,8 +147,6 @@ pub(crate) fn new(on_demand: &OnDemand) -> Supervisor<Value> {
         Tunables {
             on_demand: on_demand.enabled,
             idle_timeout,
-            // The Host's activation deadline times every start until B2d.
-            start_timeout_by_host: true,
             ..Tunables::legacy()
         },
         1,
@@ -172,17 +163,10 @@ fn event(message: &Value) -> Option<&str> {
 }
 
 impl Host {
-    /// A new owner generation (today's `next_generation += 1`).
-    pub(crate) fn alloc_owner(&mut self) -> u64 {
-        self.supervisor.alloc_pid().0
-    }
-    /// `alloc_owner`, refused past the wire's safe integers without using
-    /// one up (a development load).
-    pub(crate) fn alloc_owner_checked(&mut self) -> Result<u64> {
-        if self.supervisor.next_pid().0 > MAX_OWNER {
-            bail!("plugin owner identities exhausted");
-        }
-        Ok(self.alloc_owner())
+    /// Whether a development load would start past the wire's safe
+    /// integers (the core allocates its pid with the `Spawn`).
+    pub(crate) fn owners_exhausted(&self) -> bool {
+        self.supervisor.next_pid().0 > MAX_OWNER
     }
     /// The activation of plugin `id`'s run `owner` begins, due at
     /// `deadline` (before its process is spawned).
@@ -203,26 +187,27 @@ impl Host {
     ) -> std::result::Result<activation::Status, activation::Error> {
         self.supervisor.activation_status(Pid(owner), now)
     }
-    /// Plugin `id` runs as `owner` (`add_plugin`).
+    /// Plugin `id` runs as `owner` (`add_plugin`): the core's spawn of it
+    /// ran. Every start is a job and waits for the unit's previous process
+    /// (§4.3), so a second process of one id is a bug: a `debug_assert!`,
+    /// and a diagnostic line in a release build (the core does no I/O).
     pub(crate) fn unit_started(&mut self, id: &str, owner: u64) {
-        self.plugin_ids.insert(id.to_owned(), owner);
+        let displaced = self.plugin_ids.insert(id.to_owned(), owner);
+        debug_assert!(
+            displaced.is_none_or(|old| old == owner),
+            "unit {id} hosted twice: {displaced:?} then {owner}"
+        );
+        if let Some(old) = displaced.filter(|old| *old != owner) {
+            diag!("supervisor: unit {id} hosted twice: {old} then {owner}");
+        }
         let now = self.now_ms();
         self.supervisor.set_now(now);
-        let unit = self.supervisor.load_unit(id);
-        if let Some(old) = self.supervisor.adopt_process(unit, Pid(owner)) {
-            // A Host bug (unreachable, §17.8): the core's `debug_assert!`
-            // stops a debug build; a release build reports it here (the
-            // core does no I/O), and the new process has replaced the old.
-            diag!("supervisor: unit {id} hosted twice: {} then {owner}", old.0);
-        }
+        self.supervisor.process_spawned(Pid(owner), Ok(()));
     }
-    /// Plugin `id`'s process `owner` stopped (`stop`).
+    /// Plugin `id`'s process `owner` stopped (the `Terminate` executor).
     pub(crate) fn unit_stopped(&mut self, id: &str, owner: u64) {
         if self.plugin_ids.get(id) == Some(&owner) {
             self.plugin_ids.remove(id);
-        }
-        if let Some(unit) = self.supervisor.by_id(id) {
-            self.supervisor.release_process(unit, Pid(owner));
         }
     }
     /// The running owner of plugin `id` (by `by_id`).
@@ -267,41 +252,8 @@ impl Host {
         );
         owner
     }
-    // ---- B2b: stops and the waits for them (§17.9) ---------------------
+    // ---- stops and the waits for them (§17.9) --------------------------
 
-    /// The Host stops process `owner` of plugin `id` for `reason`
-    /// (`lifecycle.rs` `stop`, before the reaper takes it): its unit is
-    /// deactivating until the process is reaped and the playback worker
-    /// cleaned up after it (today's `Host.cleanup` entry). A park keeps the
-    /// registrations and lands in standby; a fault lands failed; any other
-    /// stop lands inactive (an uninstalled unit stays loaded until B2d).
-    pub(crate) fn unit_stopping(&mut self, id: &str, owner: u64, reason: StopReason) {
-        use crate::supervisor::StopReason as Reason;
-        let (reason, then) = match reason {
-            StopReason::Idle => (Reason::Idle, Then::Standby),
-            StopReason::Failed => (Reason::Failed, Then::Failed),
-            StopReason::Quit => (Reason::Quit, Then::Inactive),
-            StopReason::Disable => (Reason::Disable, Then::Inactive),
-            StopReason::Uninstall => (Reason::Uninstall, Then::Inactive),
-            StopReason::Reload => (Reason::Reload, Then::Inactive),
-            StopReason::Upgrade => (Reason::Upgrade, Then::Inactive),
-        };
-        let now = self.now_ms();
-        self.supervisor.set_now(now);
-        let unit = self.supervisor.load_unit(id);
-        if let Some(old) = self
-            .supervisor
-            .process_stopping(unit, Pid(owner), reason, then)
-        {
-            // A start that did not wait for the previous process (the
-            // precondition of `process_stopping`; B2d makes every start a
-            // job): the older process is no longer tracked.
-            diag!(
-                "supervisor: unit {id} stops {owner} while {} still goes",
-                old.0
-            );
-        }
-    }
     /// The members of a runner the Host killed (`restart_shared`): gone
     /// with it, so their restart does not wait (today's behaviour, §17.7
     /// item 9c). B4's `runner_failed` takes this over.
@@ -317,45 +269,24 @@ impl Host {
     pub(crate) fn unit_reaped(&mut self, owner: u64) {
         let now = self.now_ms();
         self.supervisor.set_now(now);
+        let unit = self.supervisor.by_pid(Pid(owner));
         self.supervisor.process_reaped(Pid(owner), None);
-        let actions = self.supervisor.take_actions();
-        self.supervisor_execute(actions);
+        self.supervisor_run();
+        if let Some(unit) = unit {
+            self.remove_if_gone(unit);
+        }
     }
     /// `Event::BackendCleaned(owner)`: the playback worker let go of what
     /// it held for that owner.
     pub(crate) fn unit_cleaned(&mut self, owner: u64) {
         let now = self.now_ms();
         self.supervisor.set_now(now);
+        let unit = self.supervisor.by_pid(Pid(owner));
         self.supervisor.backend_cleaned(Pid(owner));
-        let actions = self.supervisor.take_actions();
-        self.supervisor_execute(actions);
-    }
-    /// The process a start of plugin `id` must wait for: stopped, not yet
-    /// reaped and cleaned up after (today's `!process_gone`,
-    /// `parked_process`, `!cleanup_done`).
-    pub(crate) fn previous_process(&self, id: &str) -> Option<u64> {
-        let unit = self.supervisor.by_id(id)?;
-        self.supervisor.previous_process(unit).map(|pid| pid.0)
-    }
-    /// Whether process `owner` was stopped and is not gone yet (today's
-    /// `!process_gone(owner)`).
-    pub(crate) fn process_going(&self, owner: u64) -> bool {
-        self.supervisor.process_going(Pid(owner))
-    }
-    /// A start of plugin `id` the Host runs itself (§17.9): `Now`, or a job
-    /// that waits for its previous process (`JobFinished`). `Busy`: a
-    /// package RPC's job is installed (`JobMode::Fail`).
-    pub(crate) fn host_start(
-        &mut self,
-        id: &str,
-        start: HostStart,
-    ) -> std::result::Result<HostStarted, Busy> {
-        let Some(unit) = self.supervisor.by_id(id) else {
-            return Ok(HostStarted::Now);
-        };
-        let now = self.now_ms();
-        self.supervisor.set_now(now);
-        self.supervisor.host_start(unit, start)
+        self.supervisor_run();
+        if let Some(unit) = unit {
+            self.remove_if_gone(unit);
+        }
     }
     /// A package-RPC job of plugin `id` is installed (a reload, an enable
     /// or a package operation waiting for the previous process): the
@@ -365,50 +296,6 @@ impl Host {
             .by_id(id)
             .is_some_and(|unit| self.supervisor.package_busy(unit))
     }
-    /// The result of a package operation's wait `job` for plugin `id`:
-    /// `None` while it waits (today's `Operation.waiting`).
-    pub(crate) fn package_wait(&self, id: &str, job: JobId) -> Option<JobResult> {
-        let Some(unit) = self.supervisor.by_id(id) else {
-            return Some(JobResult::Failed("no unit".into()));
-        };
-        if self
-            .supervisor
-            .job(unit)
-            .is_some_and(|installed| installed.id == job)
-        {
-            return None;
-        }
-        // Only a unit's last 8 results are kept: a lost one is not taken
-        // for a process that went.
-        Some(
-            self.supervisor
-                .job_result(unit, job)
-                .cloned()
-                .unwrap_or_else(|| {
-                    JobResult::Failed("the wait's result is no longer known".into())
-                }),
-        )
-    }
-    /// An uninstall's data `directory` goes once no process of plugin `id`
-    /// may write it (today's `data_removals`: at once without one, else at
-    /// its reap).
-    pub(crate) fn remove_data_after(&mut self, id: &str, directory: PathBuf) {
-        let data = Value::String(directory.to_string_lossy().into_owned());
-        let now_or_later = match self.supervisor.by_id(id) {
-            Some(unit) => self.supervisor.remove_data_after(unit, data),
-            None => Some(data),
-        };
-        if let Some(data) = now_or_later {
-            remove_data(&data);
-        }
-    }
-    /// A built-in's digest check is over: a reload that waits for it goes
-    /// on (today's `reload_tick` `!verifying(id)`).
-    pub(crate) fn unit_verified(&mut self, id: &str) {
-        if let Some(unit) = self.supervisor.by_id(id) {
-            self.supervisor.verify_finished(unit);
-        }
-    }
     /// Due timers and waits end (`run_jobs`): once per host tick (today's
     /// `lazy_tick` idle checks, wake loop and "Starting…" notices, and
     /// `reload_tick`). A classification the playback worker did not answer
@@ -416,17 +303,23 @@ impl Host {
     pub(crate) fn supervisor_tick(&mut self) {
         let now = self.now_ms();
         self.classify_timeouts(now);
-        if self.supervisor.next_deadline().is_none_or(|due| due > now) {
-            return;
-        }
-        let actions = self.supervisor.run_jobs(now);
-        self.supervisor_execute(actions);
+        self.supervisor_run();
     }
-    /// Runs what the core queued since the last batch (an input's actions,
-    /// in the order today's code did them inside that input).
-    fn supervisor_actions(&mut self) {
-        let actions = self.supervisor.take_actions();
-        self.supervisor_execute(actions);
+    /// Runs the core's jobs now and executes what it decided, until it has
+    /// nothing more (an executor's input may start more: a spawn that
+    /// failed, a check that is over). Every request and input of the Host
+    /// ends with it, so a stop or start happens inside the call that asked
+    /// for it, as today's direct calls did.
+    pub(crate) fn supervisor_run(&mut self) {
+        for _ in 0..64 {
+            let now = self.now_ms();
+            let actions = self.supervisor.run_jobs(now);
+            if actions.is_empty() {
+                return;
+            }
+            self.supervisor_execute(actions);
+        }
+        diag!("supervisor: actions still pending after 64 rounds");
     }
 
     // ---- B2c: on-demand start (§17.10) ----------------------------------
@@ -457,15 +350,27 @@ impl Host {
                 None
             }
             Delivery::Held | Delivery::Refused => {
-                // Held only while the unit starts: a running plugin's trigger
-                // is never kept from it (`legacy()` has no restart absorbing
-                // one before B2d).
+                // Held only while a unit woken from standby starts, or for
+                // the next run of a restart: a running plugin's trigger is
+                // never kept from it otherwise (`deliver_while_starting`).
+                let restarting = self
+                    .supervisor
+                    .by_pid(Pid(owner))
+                    .and_then(|unit| self.supervisor.job(unit))
+                    .is_some_and(|job| {
+                        matches!(job.kind, crate::supervisor::JobKind::Restart { .. })
+                    });
+                let held_from_running = self.plugins.contains_key(&owner)
+                    && self.supervisor.waking(Pid(owner)).is_none()
+                    && !restarting;
                 debug_assert!(
-                    !self.plugins.contains_key(&owner)
-                        || self.supervisor.waking(Pid(owner)).is_some(),
+                    !held_from_running,
                     "a trigger for running plugin {owner} was held"
                 );
-                self.supervisor_actions();
+                if held_from_running {
+                    diag!("supervisor: a trigger for running plugin {owner} was held");
+                }
+                self.supervisor_run();
                 None
             }
             // No unit runs it any more (a stopped run's late message), or
@@ -482,15 +387,17 @@ impl Host {
             return;
         };
         self.supervisor.advance(unit);
-        let actions = self.supervisor.take_actions();
+        let now = self.now_ms();
+        let actions = self.supervisor.run_jobs(now);
         if !actions.iter().any(|a| matches!(a, Action::Spawn { .. })) {
             let id = self.unit_id(unit);
             diag!("lazy: {id} waits for its stopped process");
         }
         self.supervisor_execute(actions);
+        self.supervisor_run();
     }
     /// The manifest id of `unit`.
-    fn unit_id(&self, unit: UnitId) -> String {
+    pub(crate) fn unit_id(&self, unit: UnitId) -> String {
         self.supervisor
             .unit(unit)
             .map(|unit| unit.id.clone())
@@ -545,7 +452,7 @@ impl Host {
             .wake(Pid(owner), &Trigger::interactive(Value::Null))
         {
             Delivery::Started => self.wake_started(owner),
-            _ => self.supervisor_actions(),
+            _ => self.supervisor_run(),
         }
     }
     /// Start-up is over: every installed plugin started, replayed or
@@ -554,7 +461,7 @@ impl Host {
     fn startup_settled(&mut self) -> bool {
         if !self.packages_started()
             || self.builtin_first_run_queued()
-            || !self.on_demand.first_runs.queue.is_empty()
+            || self.supervisor.first_runs_queued().0
         {
             return false;
         }
@@ -581,7 +488,7 @@ impl Host {
         self.on_demand.held.insert(owner, held);
     }
     /// `owner` is no longer held: its catalog goes.
-    fn unhold(&mut self, owner: u64) -> Option<Held> {
+    pub(super) fn unhold(&mut self, owner: u64) -> Option<Held> {
         let held = self.on_demand.held.remove(&owner)?;
         if self.on_demand.parked_ids.get(&held.id) == Some(&owner) {
             self.on_demand.parked_ids.remove(&held.id);
@@ -591,7 +498,7 @@ impl Host {
     }
     /// A held owner's registrations go (it is disabled, uninstalled,
     /// reloaded or could not start).
-    fn forget_entries(&mut self, owner: u64) {
+    pub(super) fn forget_entries(&mut self, owner: u64) {
         capabilities::revoke(self, owner, false);
         self.plugin_shaders_gone(owner);
         let _ = self.backend.commands.send(Command {
@@ -600,56 +507,23 @@ impl Host {
             params: Value::Null,
         });
     }
-    /// Plugin `id`, if in standby, leaves it: its entries go. With
-    /// `drop_recording` its recording goes too, in standby or not and
-    /// whether on-demand start is on or not (an uninstall, reload, install
-    /// or upgrade: what it recorded is of no use any more). Whether it was
-    /// in standby.
-    pub(crate) fn forget_parked(&mut self, id: &str, drop_recording: bool) -> bool {
-        if drop_recording {
-            self.drop_recording(id);
+    /// `Action::Replay` (T1; today's `lazy_replay` from `start_installed`):
+    /// `id`'s recorded calls are registered under `holder`, a pid with no
+    /// process; the unit is in standby. One that cannot be replayed starts
+    /// instead (`replay_failed`).
+    pub(super) fn replay_unit(&mut self, unit: UnitId, holder: u64) {
+        let id = self.unit_id(unit);
+        let replayed = self.standby_replay(&id, holder);
+        if let Err(error) = replayed {
+            diag!("lazy: {id} replay failed, starting it: {error}");
+            self.supervisor.replay_failed(unit);
         }
-        let Some(owner) = self.parked_id(id) else {
-            return false;
-        };
-        let guid = self
-            .on_demand
-            .held
-            .get(&owner)
-            .map(|held| held.guid.clone());
-        if let Some(unit) = self.supervisor.by_id(id) {
-            self.supervisor.standby_forgotten(unit);
-            self.supervisor_actions();
-        }
-        // The core revoked its entries (`Revoke`); a holder it did not
-        // name is let go here all the same.
-        if self.unhold(owner).is_some() {
-            diag!("supervisor: unit {id}: standby forgotten without a revoke");
-            self.forget_entries(owner);
-        }
-        if drop_recording && let Some(guid) = guid {
-            checkpoint::remove(&self.activation_dir(), &guid);
-        }
-        true
     }
-    /// What the core knows of plugin `id`'s recording now: the file was
-    /// removed (`None`) or read at a start (`Some(resident)`).
-    pub(crate) fn checkpoint_known(&mut self, id: &str, checkpoint: Option<bool>) {
-        let unit = self.supervisor.load_unit(id);
-        self.supervisor.checkpoint_known(unit, checkpoint);
-    }
-    /// At start-up: register `id`'s recorded calls under a new owner with no
-    /// process; the unit is in standby (§2.2; B2d: `add_unit`'s `Replay`).
-    pub(crate) fn standby_replay(
-        &mut self,
-        id: &str,
-        directory: &Path,
-        manifest: &process::Manifest,
-        key: &checkpoint::Key,
-        recording: checkpoint::Recording,
-    ) -> Result<()> {
-        let owner = self.alloc_owner();
-        let catalog = i18n::load(directory);
+    fn standby_replay(&mut self, id: &str, owner: u64) -> Result<()> {
+        let (recording, directory, manifest, key) = self
+            .packages_replay(id)
+            .ok_or_else(|| anyhow::anyhow!("its recording is gone"))?;
+        let catalog = i18n::load(&directory);
         let origin = Origin {
             id: id.into(),
             directory: directory.to_owned(),
@@ -667,19 +541,18 @@ impl Host {
         }
         // Everything replayed is recorded (live registrations replace it).
         capabilities::revoke(self, owner, true);
-        let name = crate::packages::package_manager::display_name(manifest, catalog.as_deref());
+        let name = crate::packages::package_manager::display_name(&manifest, catalog.as_deref());
         diag!(
             "lazy: {id} replayed ({} calls) as owner {owner}, not started",
             recording.calls.len()
         );
-        let unit = self.supervisor.load_unit(id);
-        self.supervisor.standby_replayed(unit, Pid(owner));
-        self.hold(owner, Held::new(id.into(), key.guid.clone(), origin, name));
+        self.hold(owner, Held::new(id.into(), origin, name));
         self.probe_registry(owner, "replayed");
         Ok(())
     }
     /// `runtime.ready` of `owner` (today's `lazy_ready`). A run the Host
-    /// started: its class is asked (`host_ready`, `classify`). A woken run:
+    /// started otherwise (boot, first run, enable, reload, install): the
+    /// core's `process_ready`, then its class is asked (`classify`). A woken run:
     /// the core prunes the recorded entries it did not register again and
     /// delivers its held triggers, each checked against its live state;
     /// its class is asked before they run (what they open is not what it
@@ -689,17 +562,14 @@ impl Host {
         self.supervisor.set_now(now);
         self.supervisor.touch(Pid(owner), now);
         let Some(since) = self.supervisor.waking(Pid(owner)) else {
+            self.supervisor.process_ready(Pid(owner));
             self.probe_registry(owner, "ready");
-            let recordable = self.checkpoint_key_of(owner).is_some();
-            let first_run = self.on_demand.first_runs.running.contains(&owner);
-            self.supervisor
-                .host_ready(Pid(owner), recordable, first_run);
-            self.supervisor_actions();
+            self.supervisor_run();
             self.classify(owner);
             return;
         };
         self.supervisor.process_ready(Pid(owner));
-        let actions = self.supervisor.take_actions();
+        let actions = self.supervisor.run_jobs(now);
         let triggers = actions
             .iter()
             .filter(|a| matches!(a, Action::Deliver { payload, .. } if !payload.is_null()))
@@ -799,8 +669,8 @@ impl Host {
             params: Value::Null,
         });
         if asked.is_ok() {
-            // The run's ready, as the core has it (`host_ready` /
-            // `process_ready`): one deadline with the core's classify timer.
+            // The run's ready, as the core has it (`process_ready`): one
+            // deadline with the core's classify timer.
             let ready = self.supervisor.now();
             self.on_demand.asked.insert(owner, Ask::Classify(ready));
         }
@@ -861,12 +731,7 @@ impl Host {
     /// lazy first run goes to standby at once if the Host's own idle check
     /// passes and its recording is written, else as soon as it is idle.
     fn class_known(&mut self, owner: u64, resident: Option<String>, backend: Value) {
-        let first_run = self.on_demand.first_runs.running.contains(&owner);
-        if resident.is_some() {
-            // Its place goes to the next first run (also when the core closed
-            // the classification already: today's timeout path frees it).
-            self.on_demand.first_runs.running.remove(&owner);
-        }
+        let first_run = self.supervisor.run_is_first(Pid(owner));
         // The core closed this run's classification already (answered, or
         // timed out): a late answer changes nothing, and writes nothing
         // (today's `lazy_answer` drops it once `lazy_classify_tick` gave up).
@@ -888,7 +753,7 @@ impl Host {
         self.on_demand.answers.insert(owner, backend);
         self.supervisor.set_now(now);
         self.supervisor.classified_with(Pid(owner), resident, busy);
-        self.supervisor_actions();
+        self.supervisor_run();
         self.on_demand.written = None;
     }
     /// What the Host itself knows of `owner` being idle (§2.3, today's
@@ -986,7 +851,7 @@ impl Host {
             .is_some_and(|at| at >= asked);
         if used || !self.host_idle(owner, now) {
             self.supervisor.standby_refused(Pid(owner));
-            self.supervisor_actions();
+            self.supervisor_run();
             return;
         }
         let recorded = match answer["live"].as_array().and_then(|live| live.first()) {
@@ -1022,7 +887,7 @@ impl Host {
             }
         };
         self.supervisor.resources_answered(Pid(owner), !parks);
-        self.supervisor_actions();
+        self.supervisor_run();
         self.on_demand.written = None;
     }
     /// The core's Standby job asks whether `owner` may go to standby
@@ -1042,7 +907,7 @@ impl Host {
             }
         }
         self.supervisor.standby_refused(Pid(owner));
-        self.supervisor_actions();
+        self.supervisor_run();
     }
     /// The playback worker did not answer a classification within
     /// `classify_wait` (5 s): resident (the safe side; its first-run place
@@ -1079,9 +944,8 @@ impl Host {
         self.on_demand.answers.remove(&owner);
     }
     /// Every host tick: the test hooks, and every `idle_check` (250 ms)
-    /// whether start-up settled and which first runs may start. The idle
-    /// checks, "Starting…" notices and classification timers are the
-    /// core's (`supervisor_tick`).
+    /// whether start-up settled. The idle checks, first runs, "Starting…"
+    /// notices and classification timers are the core's (`supervisor_tick`).
     pub(crate) fn on_demand_tick(&mut self) {
         let now = self.now_ms();
         self.test_execute(now);
@@ -1098,7 +962,6 @@ impl Host {
             self.on_demand.settled = true;
             self.supervisor.settled(now);
         }
-        self.first_runs_tick();
     }
     /// At quit (§2.1): every running installed plugin whose class came back
     /// this run is recorded (the core's `quit_checkpoints`): a resident one
@@ -1147,11 +1010,9 @@ impl Host {
     }
 }
 
-/// Deletes an uninstalled plugin's data directory (`remove_data_after`).
-fn remove_data(data: &Value) {
-    if let Some(directory) = data.as_str() {
-        let _ = std::fs::remove_dir_all(directory);
-    }
+/// Deletes an uninstalled plugin's data directory (`Action::RemoveData`).
+fn remove_data(directory: &Path) {
+    let _ = std::fs::remove_dir_all(directory);
 }
 
 #[cfg(test)]
@@ -1166,8 +1027,7 @@ mod tests {
         let legacy = Tunables::legacy();
         // `FIRST_RUNS`, `CLASSIFY_WAIT_MS`, `IDLE_MS`, `CHECK_MS`,
         // `STARTING_OSD_MS`, `QUIET_AFTER_START_MS`, `STOP_WAIT_MS`.
-        assert_eq!(first_runs::FIRST_RUNS, 8);
-        assert_eq!(legacy.first_run_limit, Some(first_runs::FIRST_RUNS));
+        assert_eq!(legacy.first_run_limit, Some(8));
         assert_eq!(legacy.classify_wait, 5_000);
         assert_eq!(IDLE_MS, 60_000);
         assert_eq!(legacy.idle_timeout, IDLE_MS);
@@ -1181,7 +1041,7 @@ mod tests {
             crate::supervisor::grace(
                 legacy.policy(crate::supervisor::Class::Normal),
                 crate::supervisor::StopReason::Idle,
-                Then::Standby
+                crate::supervisor::Then::Standby
             ),
             2_000
         );
@@ -1195,12 +1055,13 @@ mod tests {
             ]
         );
         let on_demand = OnDemand::default();
-        assert!(!on_demand.enabled && on_demand.first_runs.free());
+        assert!(!on_demand.enabled);
     }
 
     /// `Lazy.parked_ids` (B2a's `parked_ids_follow_park_and_unpark`, ported
-    /// to B2c): the adapter's held units and their cross-check follow the
-    /// core's standby, by id and by pid.
+    /// to B2c and B2d): the adapter's held units and their cross-check
+    /// follow the core's standby, by id and by pid: a replay at `add_unit`
+    /// holds a unit, a disable lets it go (`Revoke`).
     #[test]
     fn parked_ids_follow_hold_and_unhold() {
         let held = |id: &str| {
@@ -1210,24 +1071,41 @@ mod tests {
                 catalog: None,
                 data_directory: None,
             };
-            Held::new(id.into(), "guid".into(), origin, id.into())
+            Held::new(id.into(), origin, id.into())
         };
-        let mut on_demand = OnDemand::default();
+        let mut on_demand = OnDemand {
+            enabled: true,
+            ..OnDemand::default()
+        };
         let mut supervisor = new(&on_demand);
-        for (id, owner) in [("a.one", 7), ("b.two", 9)] {
-            let unit = supervisor.load_unit(id);
-            supervisor.standby_replayed(unit, Pid(owner));
-            on_demand.parked_ids.insert(id.into(), owner);
-            on_demand.held.insert(owner, held(id));
+        for id in ["a.one", "b.two"] {
+            let spec = crate::supervisor::UnitSpec::new(id, crate::supervisor::Class::Normal)
+                .checkpoint(false);
+            let unit = supervisor.add_unit(spec);
+            let actions = supervisor.run_jobs(0);
+            let holder = actions
+                .iter()
+                .find_map(|a| match a {
+                    Action::Replay { unit: u, holder } if *u == unit => Some(holder.0),
+                    _ => None,
+                })
+                .expect("replayed");
+            on_demand.parked_ids.insert(id.into(), holder);
+            on_demand.held.insert(holder, held(id));
         }
-        assert_eq!(supervisor.holder_of("a.one"), Some(Pid(7)));
+        assert_eq!(supervisor.holder_of("a.one"), Some(Pid(1)));
         let a = supervisor.by_id("a.one").unwrap();
-        supervisor.standby_forgotten(a);
+        supervisor.disable(a).unwrap();
+        let actions = supervisor.run_jobs(1);
+        assert!(actions.contains(&Action::Revoke {
+            unit: a,
+            pid: Pid(1)
+        }));
         assert_eq!(supervisor.holder_of("a.one"), None);
-        assert_eq!(supervisor.holder_of("b.two"), Some(Pid(9)));
+        assert_eq!(supervisor.holder_of("b.two"), Some(Pid(2)));
         // The unit table holds the standby holder by id and by pid.
         let unit = supervisor.by_id("b.two").unwrap();
-        assert_eq!(supervisor.by_pid(Pid(9)), Some(unit));
-        assert_eq!(on_demand.parked_ids.get("b.two"), Some(&9));
+        assert_eq!(supervisor.by_pid(Pid(2)), Some(unit));
+        assert_eq!(on_demand.parked_ids.get("b.two"), Some(&2));
     }
 }

@@ -22,8 +22,9 @@ Coordinator record and blackboard for the supervisor project. Design: [superviso
 | B2a | **merged #144 (767fad55)** | `supervisor-b2a` C:\vestra\wt-sup-b2a (from 800e2bb1) | API maintainer | zero-diff evidence: B0 tests ×3 + VESTRA_TEST_REGISTRY dump diff (lazy on/off); flips A18 leak-1 test |
 | B2b | **merged #145 (fd198a48)** | `supervisor-b2b` C:\vestra\wt-sup-b2b (from 767fad55) | API maintainer | fixes A18 leak 2, D13; running-uninstall-reinstall test; narrow job-API dead_code allow |
 | B2c | **merged** (registry evidence: 18 scenarios, only pre-existing noise) | `supervisor-b2c` C:\vestra\wt-sup-b2c (from fd198a48) | API maintainer | lazy.rs deleted; appearance.changed "what changed" (wire addition); doc excerpts; §13 B7 removal list |
-| B2d | not started | | | |
-| B3 | not started | | | |
+| B2d | **merged — B2 complete** | `supervisor-b2d` C:\vestra\wt-sup-b2d (from e29c0982) | API maintainer | lanes replace StartQueue/FirstQueue, every start a job, list_state, remove first_runs.rs + start_timeout_by_host, B2 notes 1–5 |
+| SDK bump | **merged #147 (5fb5a7b5)** | `sdk-1.5.57` C:\vestra\wt-sdk157 | API maintainer (2nd instance) | player → @vestra-player/sdk ^1.5.57 |
+| B3 | spec tests in progress (author) | `supervisor-b3-spec` C:\vestra\wt-sup-b3spec (from 5fb5a7b5) | spec test author | implementation starts after B2d merges |
 | B4 | not started | | | release after |
 | B5 | not started | | | |
 | B6 | not started | | | release after |
@@ -65,6 +66,13 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 
 ## Open items
 
+- **B3 design questions (spec author, 2026-11-03) — coordinator rulings, to record in supervisor.md §17 with B3:**
+  1. Wake start timeout under B3 keeps registrations, like a spawn failure (§17.7 item 10, §15 B3 "keeps its menu entries"): the unit returns to Standby with entry points, no Revoke; the core's crash path must not send a start timeout to Failed+Revoke for a wake under B3. Precedent: Chrome MV3 — an extension whose service worker fails to start stays installed and the next event tries again. Test `k_start_timeout_of_a_wake_keeps_registrations_and_answers`.
+  2. Work accounting distinguishes kinds: host→plugin requests awaiting a reply are capped by `request_timeout` (B6 value 5 min); plugin-declared long work (`commands.busy`, settings busy, etc.) is uncapped. `begin_work` gets a kind/flag for that (pure core API change, maintainer's call on shape). Since `standby_refused`/host busy move into `work.rs` in B3, declared busy enters `begin_work` with the uncapped kind. Test `w_declared_busy_has_no_request_cap`.
+  3. LIMIT 64 in `activation.rs` is removed in B3 (done criterion); if `activation_begin` disappears, keep only `x_more_than_64_builtins_activate_at_once`.
+  4. Failed-start menu items: under B3 (no backoff) entries stay enabled and a click retries the start; from B4, while `hold_until` holds (backoff, T20/R5), items are shown disabled with the reason and a click shows the OSD. §15 B3 wording to be split accordingly.
+- B3 spec tests committed on `supervisor-b3-spec` (29 tests; 26 pass on main, the 3 above fail until B3). Merge that branch into the B3 implementation branch.
+
 - **Done 2026-11-03 (18 scenarios + 2 main baselines, no B2c-caused difference):** B2c registry probes pending: the user is using the machine (game + own Vestra), system commit 86–97 % → probes not allowed (>85 %) and one player at a time. When commit < 85 % and no user Vestra runs: in `scratchpad\sup-b2c\` run `probe.ps1` for the remaining B2c scenarios (shared, 4 manage, classification probes) plus a second main run, then `diffall.sh`; confirm the wake-scenario `vestra.preferences` timing difference and re-run `lazy_activation` (one failure from a Bluetooth headset changing `vestra.audio` devices mid-run). Merge of B2c waits for this.
 - SDK-site doc `host-and-node.md` (SDK repo) still cites `TRIGGERS`, `activations.begin(.., 15_000)`, the 250 ms poll → update in the next SDK docs batch, together with SDK use of `appearance.changed.changed`.
 
@@ -101,6 +109,20 @@ Status 2026-11-02: all 27 answered by the B1 maintainer in supervisor.md §17.2 
 - Known bugs to pin in B0: Book entry leaked when spawn fails after `activations.begin` (`load_package`); `Host.cleanup` only grows; disable then immediate enable can run two processes on one data directory (D13).
 
 ## Log
+
+- 2026-11-03 ~05:35: B2d follow-up re-review → merge (switch semantics checked on install/restore/first-run/timeout paths; hotkeys snapshot difference accepted: no mechanism in B2d, main-vs-main also differs, not user-visible). B2d PR + merge next; then B3 (merge `supervisor-b3-spec` in, rulings 1–4 in Open items).
+
+- 2026-11-03 ~05:15: B2d follow-up committed (`start_job_ends_at_spawn` legacy switch, off from B3/B4; repro ported; runner-restart order; late RemoveData test; flaky test fixed test-side; docs). 1208 tests; real-node suites pass; manage scenarios = noise; boot-off session 1 shows a hotkeys ready-snapshot timing difference (final content equal) — sent to the reviewer to judge.
+
+- 2026-11-03 ~04:35: B2d review → fix first: Restart-kind starts (reload, install target, restore, disable-then-enable) hold triggers and keep package_busy for the whole activation (B2c delivered at once / ended the wait at spawn) — legacy-visible, could hang an activate() awaiting its own command. Plus cheap items (runner-restart ordering, §17.11 text, late RemoveData test, lifecycle test flake 1/30). Remaining registry differences confirmed main-vs-main noise. Maintainer resumed on e873e489.
+
+- 2026-11-03 ~04:05: B2d committed (b5b838fd) + main merged (e873e489). Lanes replace StartQueue/FirstQueue; every start/stop through the core (one Spawn and one Terminate executor, one deadline); packages.list from list_state; remove_unit per contract; B2 notes 1–5 closed with tests; ~20 transitional items removed; new legacy switches `deliver_while_starting`, `verify_before_first_run_place` (off in B3). 1206 workspace tests; real-node suites pass; registry diff 18 + 4 boot-order scenarios: only main-vs-main noise (two real differences found and fixed during probing). Ruling: `operation_pending` stays (package transaction stage, §2.3 KEEP). Process lapse: maintainer ran `git rm --cached` then `git restore --staged` (index restored). Independent review started.
+
+- 2026-11-03 ~02:05: removed merged, clean worktrees (sup-b0/b1/b2a/b2b/b2c/spec, sdk157; SDK wake/rel), branches checked pushed and PRs merged; disk 31 GB. Spec test author started on B3 (new test files only, from the design tables) in parallel with B2d.
+
+- 2026-11-03 ~01:45: SDK bump reviewed (lock integrity = npm, vendored files byte-identical to the published 1.5.57), **#147 merged → main 5fb5a7b5.** B2d (branched from e29c0982) will need main merged in before its PR (package files only, no overlap). B2d maintainer working.
+
+- 2026-11-03 ~01:10: **#146 (B2c) squash-merged → main e29c0982.** Briefed in parallel (disjoint files): B2d maintainer (host) and SDK bump to 1.5.57 (second maintainer instance, package files). Disk 33 GB free.
 
 - 2026-11-03 ~01:00: B2c last fix (first-run place freed before the `classifying` check; coordinator checked the diff, 1202 tests) + registry evidence: 18 scenarios, second main baseline; every difference also occurs main-vs-main or vanishes on re-run (hotkeys registration timing, wake park timing, idle park counts, storm listener order); classification fixtures and the four wake-event storms identical. B2c PR + merge next; then SDK 1.5.57 bump and B2d in parallel.
 
