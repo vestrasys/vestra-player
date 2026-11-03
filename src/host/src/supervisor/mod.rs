@@ -282,6 +282,19 @@ fn waits_at_boot<P>(unit: &Unit<P>) -> bool {
         ))
 }
 
+/// The unit's job is a Standby job that asked for its resources (or is
+/// asking: `step_standby` set it running).
+fn standby_running<P>(unit: &Unit<P>) -> bool {
+    matches!(
+        unit.job.as_ref(),
+        Some(Job {
+            kind: JobKind::Standby,
+            state: JobState::Running,
+            ..
+        })
+    )
+}
+
 /// A first run waiting for a place (today's `FirstQueue` entry).
 fn first_queued<P>(unit: &Unit<P>) -> bool {
     matches!(unit.state, UnitState::Inactive)
@@ -1311,6 +1324,20 @@ impl<P: Clone> Supervisor<P> {
         self.sync(u);
     }
 
+    /// Whether run `pid`'s Standby job asked for its resources
+    /// (`QueryResources`) and still waits for `resources_answered`: the
+    /// adapter's standby recording is still wanted. A job that replaced it
+    /// (a reload's restart, a stop) or the answer ends that.
+    pub fn standby_asking(&self, pid: Pid) -> bool {
+        self.current(pid)
+            .and_then(|u| self.units.get(&u))
+            .is_some_and(|unit| {
+                matches!(unit.state, UnitState::Active { .. })
+                    && unit.asked_at.is_some()
+                    && standby_running(unit)
+            })
+    }
+
     /// §5 `resources_answered` (`owner.resources` for a Standby job; T14 /
     /// T15).
     pub fn resources_answered(&mut self, pid: Pid, busy: bool) {
@@ -1324,15 +1351,7 @@ impl<P: Clone> Supervisor<P> {
         let UnitState::Active { last_active, .. } = unit.state else {
             return;
         };
-        let asking = matches!(
-            unit.job.as_ref(),
-            Some(Job {
-                kind: JobKind::Standby,
-                state: JobState::Running,
-                ..
-            })
-        );
-        let Some(asked) = unit.asked_at.filter(|_| asking) else {
+        let Some(asked) = unit.asked_at.filter(|_| standby_running(unit)) else {
             return;
         };
         Timers::cancel(&mut unit.gens, TimerKind::Resources);

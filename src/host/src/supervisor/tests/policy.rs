@@ -500,3 +500,30 @@ fn p_builtin_clicked_while_its_start_times_out() {
         }
     }
 }
+
+// #154 review (§17.15, "A recording written off the UI thread"): the
+// adapter writes a standby recording again only while the core still
+// waits for it, `standby_asking` (or `classifying`). A reload's restart
+// (a package RPC) replaces the Standby job, as does the answer itself:
+// a write that comes back after either rewrites nothing, so the reload's
+// `drop_recording` stays done.
+both! {
+    fn p_standby_recording_wanted_only_while_asked(p) {
+        let mut sim = Sim::new(p);
+        let (u, pid) = sim.in_active(normal("a"));
+        assert!(!sim.sup.standby_asking(pid), "no Standby job yet");
+        sim.after(p.idle);
+        assert!(matches!(sim.job(u), Some(J::Standby { .. })));
+        assert!(sim.sup.standby_asking(pid), "asked for its resources");
+        sim.rpc_restart(u, true, None).unwrap();
+        sim.run();
+        assert!(!sim.sup.standby_asking(pid), "the reload replaced the Standby job");
+
+        let mut sim = Sim::new(p);
+        let (_, pid) = sim.in_active(normal("b"));
+        sim.after(p.idle);
+        assert!(sim.sup.standby_asking(pid));
+        sim.resources(pid, true);
+        assert!(!sim.sup.standby_asking(pid), "answered: the job is over");
+    }
+}

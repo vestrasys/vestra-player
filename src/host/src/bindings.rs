@@ -656,6 +656,11 @@ pub struct Table {
     next: u64,
     /// Advances on every change of declarations or overlay.
     revision: u64,
+    /// Advances when what `bindings.list` shows of the table may have
+    /// changed: not when a woken plugin's declarations move to its new
+    /// owner generation (`rekey`, which keeps their rank) or it declares
+    /// them again as they were (supervisor.md §6.1).
+    listed: u64,
 }
 
 /// What an input resolves to.
@@ -733,8 +738,18 @@ impl Table {
         // Declared again (a woken plugin's live registration): its rank and
         // place stay.
         let (rank, sequence) = match self.declared.get(&(owner, id.into())) {
-            Some(existing) => (existing.rank, existing.sequence),
+            Some(existing) => {
+                if existing.manifest != manifest
+                    || existing.defaults != defaults
+                    || existing.panel != panel
+                    || existing.repeat != repeat
+                {
+                    self.listed += 1;
+                }
+                (existing.rank, existing.sequence)
+            }
             None => {
+                self.listed += 1;
                 self.next += 1;
                 (owner, self.next)
             }
@@ -774,6 +789,12 @@ impl Table {
         if ids.is_empty() {
             return;
         }
+        // Moved alone, the same commands keep the same claims (a panel
+        // scope moves with all of its owner's). One `to` declared already
+        // changes that.
+        if !self.ids_of(to).is_empty() {
+            self.listed += 1;
+        }
         let mut dirty = BTreeSet::new();
         for id in &ids {
             self.withdraw(from, id, &mut dirty);
@@ -799,6 +820,7 @@ impl Table {
         let mut dirty = BTreeSet::new();
         self.withdraw(owner, id, &mut dirty);
         if self.declared.remove(&(owner, id.to_owned())).is_some() {
+            self.listed += 1;
             self.refresh(dirty);
         }
     }
@@ -813,6 +835,7 @@ impl Table {
             self.withdraw(owner, &id, &mut dirty);
             self.declared.remove(&(owner, id));
         }
+        self.listed += 1;
         self.refresh(dirty);
     }
 
@@ -828,6 +851,7 @@ impl Table {
         for (owner, id) in &changed {
             self.withdraw(*owner, id, &mut dirty);
         }
+        self.listed += 1;
         self.overlay = overlay;
         for (owner, id) in &changed {
             self.submit(*owner, id, &mut dirty);
@@ -837,6 +861,12 @@ impl Table {
 
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// What `bindings.list` shows of the table changed when this moved
+    /// (`listed`).
+    pub fn listed_revision(&self) -> u64 {
+        self.listed
     }
 
     /// The overlay inputs a command (or an orphan key) would get: each one
@@ -2142,6 +2172,56 @@ mod tests {
         );
         table.remove_owner(9);
         assert_eq!(table.resolve(&key("Space"), None).unwrap().id, "late");
+    }
+
+    /// `bindings.list`'s gate (supervisor.md §6.1): the listed revision
+    /// moves with what the list shows, not when a woken plugin's
+    /// declarations move to its new generation and are declared again as
+    /// they were.
+    #[test]
+    fn the_listed_revision_ignores_a_rekey_and_the_same_declaration() {
+        let mut table = Table::default();
+        table
+            .declare(2, "a", "p.a", &["Space".into()], true, false)
+            .unwrap();
+        table
+            .declare(5, "b", "p.b", &["Space".into()], false, false)
+            .unwrap();
+        let listed = table.listed_revision();
+        let revision = table.revision();
+        table.rekey(2, 9);
+        table
+            .declare(9, "a", "p.a", &["Space".into()], true, false)
+            .unwrap();
+        table.set_disabled(BTreeMap::new());
+        assert!(table.revision() > revision, "the table changed");
+        assert_eq!(table.listed_revision(), listed, "the list did not");
+        table
+            .declare(9, "a", "p.a", &["Enter".into()], true, false)
+            .unwrap();
+        let declared = table.listed_revision();
+        assert!(declared > listed, "other bindings");
+        table.remove(9, "a");
+        assert!(table.listed_revision() > declared);
+        let removed = table.listed_revision();
+        table
+            .declare(9, "c", "p.a", &["F1".into()], false, false)
+            .unwrap();
+        table
+            .declare(12, "d", "p.d", &["F2".into()], false, false)
+            .unwrap();
+        let both = table.listed_revision();
+        assert!(both > removed);
+        // A generation that already declares something: the move may change
+        // who is shadowed, so it counts.
+        table.rekey(9, 12);
+        assert!(table.listed_revision() > both);
+        let moved = table.listed_revision();
+        table.set_overlay(BTreeMap::from([(
+            "p.d/d".to_owned(),
+            vec!["F3".to_owned()],
+        )]));
+        assert!(table.listed_revision() > moved, "the overlay");
     }
 
     type Shadowed = BTreeMap<(Owner, String), Vec<(Input, Owner, String)>>;

@@ -346,6 +346,12 @@ type Result<T> = std::result::Result<T, CommandError>;
 pub struct Registry {
     commands: BTreeMap<CommandKey, CommandSnapshot>,
     revision: u64,
+    /// Advances when a command comes, goes or is registered again with
+    /// another declaration or manifest: what `bindings.list` shows of the
+    /// registry. Not on a state update, nor when a woken plugin's commands
+    /// move to its new owner generation (`rekey`) and it registers them
+    /// again as they were (supervisor.md §6.1).
+    listed: u64,
     sequence: u64,
     /// Lazy activation (doc/process/rounds/2026-10-lazy-activation.md §2):
     /// entries kept for an owner without a process (parked, or replayed from
@@ -665,6 +671,15 @@ impl Registry {
             .filter(|each| **each != key)
             .cloned()
             .collect::<Vec<_>>();
+        // The same command registered again as it was (a woken plugin's
+        // live registration of its recorded one) lists nothing new.
+        let same = colliding.is_empty()
+            && self.commands.get(&key).is_some_and(|entry| {
+                replaced && entry.manifest == manifest && entry.declaration == declaration
+            });
+        if !same {
+            self.listed += 1;
+        }
         for gone in colliding {
             self.remove_entry(&gone);
             self.recorded.remove(&gone);
@@ -873,6 +888,7 @@ impl Registry {
             self.remove_entry(key);
         }
         self.revision = next;
+        self.listed += 1;
         Ok(keys.into_iter().map(|key| key.local_id).collect())
     }
 
@@ -889,6 +905,10 @@ impl Registry {
                 owner: to,
                 local_id: key.local_id.clone(),
             };
+            // An entry `to` already has under this id is replaced.
+            if self.commands.contains_key(&moved) {
+                self.listed += 1;
+            }
             if let Some(mut entry) = self.remove_entry(&key) {
                 entry.key = moved.clone();
                 self.insert_entry(entry);
@@ -956,6 +976,7 @@ impl Registry {
             self.sent.retain(|key, _| key.owner != owner);
             self.conditions.retain(|key, _| key.owner != owner);
             self.revision = next;
+            self.listed += 1;
         }
         self.held.remove(&owner);
         Ok(count)
@@ -1008,6 +1029,7 @@ impl Registry {
         self.sent.remove(&key);
         self.conditions.remove(&key);
         self.revision = next;
+        self.listed += 1;
         Ok(())
     }
 
@@ -1080,6 +1102,12 @@ impl Registry {
 
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// What `bindings.list` shows of the registry changed when this moved
+    /// (`listed`).
+    pub fn listed_revision(&self) -> u64 {
+        self.listed
     }
 
     /// Disabled commands (owner, id → reason), for the key bindings to skip.
@@ -1317,6 +1345,79 @@ mod tests {
     }
     fn declaration(path: &[&str]) -> Declaration {
         Declaration::new(path.last().unwrap(), path)
+    }
+
+    /// `bindings.list`'s gate (supervisor.md §6.1): the listed revision
+    /// moves when a command comes, goes or changes its declaration, not
+    /// when a woken plugin's commands move to their new owner and are
+    /// registered again as they were, nor on a state update.
+    #[test]
+    fn the_listed_revision_ignores_a_wake_that_registers_the_same() {
+        let mut registry = Registry::new();
+        let listed = |registry: &Registry| registry.listed_revision();
+        registry
+            .register(
+                1,
+                "a",
+                "x".into(),
+                1,
+                declaration(&["Tools", "X"]),
+                state(true),
+            )
+            .unwrap();
+        let first = listed(&registry);
+        assert!(first > 0, "a new command");
+        registry.mark_recorded(1);
+        registry.rekey(1, 9).unwrap();
+        registry
+            .register(
+                9,
+                "a",
+                "x".into(),
+                2,
+                declaration(&["Tools", "X"]),
+                state(true),
+            )
+            .unwrap();
+        registry.update(9, "x", 3, state(false)).unwrap();
+        assert_eq!(listed(&registry), first, "parked, woken, registered again");
+        registry.mark_recorded(9);
+        registry.rekey(9, 10).unwrap();
+        registry
+            .register(
+                10,
+                "a",
+                "x".into(),
+                4,
+                declaration(&["Tools", "Y"]),
+                state(true),
+            )
+            .unwrap();
+        let renamed = listed(&registry);
+        assert!(renamed > first, "registered again with another title");
+        registry
+            .register(
+                10,
+                "a",
+                "z".into(),
+                1,
+                declaration(&["Tools", "Z"]),
+                state(true),
+            )
+            .unwrap();
+        let added = listed(&registry);
+        assert!(added > renamed);
+        registry.remove(10, "z").unwrap();
+        let removed = listed(&registry);
+        assert!(removed > added);
+        registry.mark_recorded(10);
+        registry.rekey(10, 11).unwrap();
+        assert_eq!(listed(&registry), removed);
+        assert_eq!(registry.remove_recorded(11).unwrap(), vec!["x".to_owned()]);
+        assert!(
+            listed(&registry) > removed,
+            "a recorded command not registered again"
+        );
     }
     fn ordered(path: &[&str], order: i32) -> Declaration {
         Declaration {

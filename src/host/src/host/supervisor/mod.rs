@@ -1208,8 +1208,15 @@ impl Host {
         // The plugin still ran while it was written: what it registered
         // since goes in too, written again before anything is decided (the
         // recording is the registrations as they are at the decision, as
-        // when it was written in the same turn).
-        if result.is_ok() && self.plugins.contains_key(&owner) {
+        // when it was written in the same turn). Only while the core still
+        // waits for it (its Standby job asking, its class not given yet):
+        // after a reload replaced that job, its `drop_recording` stays done
+        // (#154 review).
+        let waited = match &recording.after {
+            AfterRecording::Standby(_) => self.supervisor.standby_asking(Pid(owner)),
+            AfterRecording::Classified(_) => self.supervisor.classifying(Pid(owner)),
+        };
+        if result.is_ok() && waited && self.plugins.contains_key(&owner) {
             let backend = match &recording.after {
                 AfterRecording::Standby(answer) | AfterRecording::Classified(answer) => answer,
             };

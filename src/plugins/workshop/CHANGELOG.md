@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.31
+
+- The vendored SDK is 1.6.0 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The AI's documentation now has selectable Markdown (`selectable` on `MarkdownView` and `MarkdownBlocks`, `MarkdownBlock.plain` and `.links`, player 0.6.8) in the SDK's widget library and reference, and the corrected start retries (from player 0.6.7 a start that times out is not tried again). No change to the plugin's own behaviour; `minPlayerVersion` stays 0.6.8.
+- Tests: the documentation tree's title is checked for any SDK version, not only 1.5.x.
+
 ## 2.2.30
 
 - One activity row per turn instead of a thinking row and a status line, which both said "Thinking…" at the same time. While the AI works it reads "Working…" (at once, before the model answers) and the latest step ("Working… · Write notes.md ✓": no "Thinking…" or "Replying…" after a step); when the turn is over it reads "Worked for 12 seconds · 3 steps" (from a minute on "Worked for 5 min 12 s") (failed steps counted as before; "1 step" alone for older conversations, whose record has no durations; "Worked for 3 seconds" for a turn that thought but used no tool), and a click, or Space / Enter once Tab reached it, lists the steps (screen readers see an expandable button; a row without steps is text, with no Tab stop). An automatic retry after a provider error continues the turn in the same row: "Working…" again, its steps and time go on, and a note that stood in for the answer is a note again. The model's thinking is no longer shown anywhere: it only keeps a turn's row; the notes the AI writes before a tool call are not shown either once their tool call starts (a turn without an answer still shows its last note as the answer). A turn with no step and no thinking keeps no row. New texts "Working…", "Worked for {n} seconds", "Worked for {0} min {1} s", "{n} steps" in all six languages; the texts of the thinking row and the old status line are gone.
