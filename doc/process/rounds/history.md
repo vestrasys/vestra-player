@@ -1,4 +1,4 @@
-# Project history and current round
+| 9 | **Cleanup** | 22 merged clean worktrees removed; wt-store-all and the SDK wt-sdk161 locked by a process (retry) | Unmerged/dirty worktrees (probes, wgpu spikes, docdrift, font, perfreg, thumbidx, videoreset) left for the user; typos allowlist for commit hashes || 7 | **SDK 1.6.1 docs patch** | Published; player and Workshop 2.2.32 on 1.6.1 (#168) | — || 6 | **Shader Upscale status text truncated** (plugin repo) | Done | — || 5 | **Sidebar tabs on demand** | Implemented on `sidebar-tabs-design` (C:estrawt-sidebar, rebased on #168): no cap, ≤4 compiled panels, background tabs on standby, `»` menu; 1226 tests + real-node suites pass. SDK test host still caps tabs | Independent review running; SDK 1.6.2 (no cap) running → publish → player on ^1.6.2 → merge `[skip ci]` → isolated GUI check || 4 | **Recordings** (download page, `redesign`) | (a) hero centre done: page 0c9e6ba (`hero-menus-2`, full-width player, standard frame), pushed, not deployed. (b) store clip open | (b) on the final 0.7.3 build, same flow and camera timing as the earlier store edit; commit, push || 3 | **Local build after 1 + 2** | Skipped: the hero take used the 0.7.1 stage (the shot needs no new feature) | — || 1 | **Release/host version split** | Merged #166; follow-ups (verify job import fix, `check-bump` in release verify, explicit reuse errors) merged #167 | — (for 0.7.3: `Cargo.toml` host version must be bumped by hand; no release has `host.json` yet) |# Project history and current round
 
 This file replaces the per-topic round records of October and November 2026. It keeps what still matters: how the project got here, the decisions in force, the lessons that changed how we work, and the open topics. Process rules live in [agentic-workflow](../../../agentic-workflow/README.md); architecture lives in [doc/architecture](../../architecture/README.md).
 
@@ -193,6 +193,8 @@ Decisions this round:
 - **Plugin repository security** (user, 2026-11-03): no runtime sandbox for plugins; scan at PR time in the plugin repository and review flagged plugins by hand.
 
 Log (newest first):
+
+- 2026-11-04: #167 host version guard, #168 SDK 1.6.1 + Workshop 2.2.32 merged without remote CI. Hero centre re-recorded (first take lost the Picture Adjustments window behind the main window) and pushed to the page. Sidebar on demand implemented; review and SDK 1.6.2 in progress.
 
 - 2026-11-03: #157 (history, workflow folder) and #158 (store tabs, 0.7.1) merged; v0.7.1 tagged. #159 README Architecture shortened (current design only, simpler diagram). Vestra AI recordings: a one-line colour-picker prompt produced a plugin whose first version wrote invalid `.cube` files; told only the error text, Vestra AI found and fixed it. Final demo uses a colour-wheels prompt with a DaVinci Resolve example; it worked first time.
 
