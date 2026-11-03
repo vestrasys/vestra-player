@@ -16,9 +16,11 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { inflateRawSync } from "node:zlib";
 
-export const packaging = import.meta.dirname;
+// Not import.meta.dirname: undefined before Node 20.11.
+export const packaging = dirname(fileURLToPath(import.meta.url));
 export const source = resolve(packaging, "..");
 export const repo = resolve(source, "..");
 
@@ -102,7 +104,8 @@ export async function readJson(path) {
 
 /**
  * The host binary's version: `version` from src/host/Cargo.toml ([package]).
- * It goes up only when host or runtime code changes (doc/releases/README.md).
+ * It goes up when the host input hash changes (host.mjs check-bump;
+ * doc/releases/README.md), not for src/runtime, which is not in the binary.
  */
 export async function hostVersion() {
   const text = await readFile(join(source, "host/Cargo.toml"), "utf8");
@@ -111,7 +114,39 @@ export async function hostVersion() {
   return version;
 }
 
-const VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
+/**
+ * A version as the host's `version::parse` accepts it (src/host/src/version.rs
+ * with `packages::manifest::parse_version`): at most 64 ASCII characters; up
+ * to the first `-` or `+`, MAJOR.MINOR.PATCH of u32 numbers without leading
+ * zeros (at most 32 characters); anything after it is kept as is. Returns
+ * { core: [major, minor, patch], pre, build } or undefined. `pre` is the part
+ * after a leading `-` up to `+`, `build` the part after the first `+`.
+ */
+export function parseVersion(version) {
+  if (
+    typeof version !== "string" ||
+    version.length > 64 ||
+    !/^[\x00-\x7f]*$/.test(version)
+  )
+    return undefined;
+  const cut = version.search(/[-+]/);
+  const core = cut < 0 ? version : version.slice(0, cut);
+  const parts = core.split(".");
+  if (
+    core.length > 32 ||
+    parts.length !== 3 ||
+    !parts.every((part) => /^(0|[1-9][0-9]*)$/.test(part)) ||
+    parts.some((part) => Number(part) > 0xffffffff)
+  )
+    return undefined;
+  const rest = cut < 0 ? "" : version.slice(cut);
+  const plus = rest.indexOf("+");
+  const build = plus < 0 ? undefined : rest.slice(plus + 1);
+  const pre = rest.startsWith("-")
+    ? rest.slice(1, plus < 0 ? undefined : plus)
+    : undefined;
+  return { core: parts.map(Number), pre, build };
+}
 
 /**
  * The player's release version, `version` in src/release.json: the tag,
@@ -121,17 +156,30 @@ const VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 export async function releaseVersion() {
   const path = join(source, "release.json");
   const version = JSON.parse(await readFile(path, "utf8")).version;
-  if (typeof version !== "string" || !VERSION.test(version))
-    throw new Error(`${path}: version ${JSON.stringify(version)} is not x.y.z`);
+  if (!parseVersion(version))
+    throw new Error(
+      `${path}: version ${JSON.stringify(version)} is not MAJOR.MINOR.PATCH[-pre][+build]`,
+    );
+  // It names files, the tag and release assets: no spaces, slashes, quotes.
+  if (!/^[0-9A-Za-z.+-]+$/.test(version))
+    throw new Error(
+      `${path}: version ${JSON.stringify(version)} has characters a file name cannot carry`,
+    );
   return version;
 }
 
-/** Semantic version order of x.y.z[-pre]: negative, 0 or positive. */
+/**
+ * Semantic version precedence (semver.org §11): negative, 0 or positive.
+ * Build metadata (`+…`) does not count; a pre-release is lower than its
+ * release; pre-release identifiers compare numerically when both are
+ * numbers, otherwise as ASCII, and a longer list wins a tie.
+ */
 export function compareVersions(a, b) {
   const parse = (version) => {
-    if (!VERSION.test(version)) throw new Error(`${version} is not x.y.z`);
-    const [core, pre] = version.split(/-(.*)/s);
-    return { core: core.split(".").map(Number), pre };
+    const parsed = parseVersion(version);
+    if (!parsed)
+      throw new Error(`${version} is not MAJOR.MINOR.PATCH[-pre][+build]`);
+    return parsed;
   };
   const [x, y] = [parse(a), parse(b)];
   for (let index = 0; index < 3; index++)
@@ -139,7 +187,18 @@ export function compareVersions(a, b) {
   if (x.pre === y.pre) return 0;
   if (x.pre === undefined) return 1;
   if (y.pre === undefined) return -1;
-  return x.pre < y.pre ? -1 : 1;
+  const [p, q] = [x.pre.split("."), y.pre.split(".")];
+  for (let index = 0; index < Math.min(p.length, q.length); index++) {
+    if (p[index] === q[index]) continue;
+    const [m, n] = [p[index], q[index]].map((id) =>
+      /^[0-9]+$/.test(id) ? Number(id) : undefined,
+    );
+    if (m !== undefined && n !== undefined) return m - n;
+    if (m !== undefined) return -1;
+    if (n !== undefined) return 1;
+    return p[index] < q[index] ? -1 : 1;
+  }
+  return p.length - q.length;
 }
 
 /** { release, host }, after checking release ≥ host. */

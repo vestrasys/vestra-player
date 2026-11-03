@@ -68,6 +68,8 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      # The pinned Node (26) for host.mjs, not whatever the image carries.
+      - uses: ./.github/actions/setup-node
       # The release version (src/release.json) names the tag, the notes and
       # the files; the host version (src/host/Cargo.toml) stays lower while
       # the host does not change, and is never higher. `host.mjs versions`
@@ -95,6 +97,17 @@ jobs:
           jq -e '.release and .assets["macos-arm64"] and .assets["windows-x64"]' src/packaging/deps.json > /dev/null \
             || { echo "::error::src/packaging/deps.json pins no deps release"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
+      # One host version names one host: when the host inputs changed since a
+      # published release shipped this host version, src/host/Cargo.toml must
+      # go up (everything keyed by the host version, such as the GPU crash
+      # guard, would otherwise carry over to a different binary). Fails also
+      # when the host version is below a released one. Both platforms, even
+      # on a one-platform dry run.
+      - name: host version raised when the host changed (check-bump)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: node src/packaging/host.mjs check-bump --repo "$REPO"
       - name: main.yml already passed this commit?
         id: tested
         if: ${{ !inputs.checks }}

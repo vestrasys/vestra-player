@@ -9,7 +9,7 @@ Installers are published on this repository's own GitHub Releases (coordinator d
 1. **Check that dependencies are pinned**: `release` in `src/packaging/deps.json` points to an existing `deps-*` release; to upgrade libmpv/FFmpeg, run `deps.yml` first and commit the new `deps.json` ([ci.md "Packaging"](../process/ci.md#packaging)). Upgrade the Node patch version with `node src/packaging/fetch-node.mjs --pin <version>` (the major version stays the same).
 2. **Bump the versions** (see "Release version and host version" below):
    - always the **release version**, `version` in `src/release.json`;
-   - the **host version**, `version` in `src/host/Cargo.toml` (`cargo build` updates `Cargo.lock`), only when host or runtime code changed since the last release: set it to the new release version. A release that changes only built-in plugins, docs or other non-host files leaves it alone, and CI then reuses the last release's host binary instead of compiling it;
+   - the **host version**, `version` in `src/host/Cargo.toml` (`cargo build` updates `Cargo.lock`), when the host input hash changed since the last release (host code, `Cargo.lock`, the toolchain, the deps archive, …; not `src/runtime/`, which is not in the binary): set it to the new release version. A release that changes only built-in plugins, the runtime, docs or other non-host files leaves it alone, and CI then reuses the last release's host binary instead of compiling it. `node src/packaging/host.mjs check-bump` says whether it has to go up: it fails when a published release shipped this host version built from other inputs (release.yml runs it too and stops the release);
    - built-in plugins that changed bump their own versions too, otherwise they are not updated on users' machines (see the notes in `src/scripts/stage-plugins.mjs`).
 
    A commit that changes only `src/release.json` and `doc/` runs no CI checks (it counts as documentation; the release job checks it).
@@ -35,14 +35,17 @@ The player has two versions (user decision 2026-11-03), so that releases which o
 | | Where | Bumped | Used for |
 | --- | --- | --- | --- |
 | Release version | `src/release.json` | every release | the tag `v<version>`, `v<version>.md`, installer and archive names, `latest.json`, the installer's version, macOS `CFBundleShortVersionString` and `CFBundleVersion`, the version the player shows (it reads `<resources>/release.json`) and the update check compares |
-| Host version | `src/host/Cargo.toml` | only when host or runtime code changed; then set to the release version | what the binary embeds (`vestra-host.exe`'s file version), `host.json` |
+| Host version | `src/host/Cargo.toml` | when the host input hash changed (not for `src/runtime/`, which is not in the binary or the hash); then set to the release version | what the binary embeds (`vestra-host.exe`'s file version), `host.json` |
 
 The host version is never higher than the release version (the release job and the packaging scripts check it). A release that reuses a host keeps the older host version: 0.7.2 may ship host 0.7.1.
 
-Whether a release can reuse a host is not decided by the versions but by the **host input hash** over everything the binary is built from ([ci.md "Reusing the host binary"](../process/ci.md#packaging)): if any host input changed, the package job compiles even when nobody bumped the host version (then bump it, so the binary says what it is). Every release carries `host.json`, listed in `SHA256SUMS`: per platform the target, the host input hash, the host version, the commit the binary was built from, its SHA-256 inside the archive, and `reusedFrom`, the release that first shipped it. Only published releases are reused; a draft never is.
+A backport release from an older branch (a host version below one already released) fails `check-bump`'s "lower than" check by design: host versions only go up, so a fix for an older line gets a host version above every released one.
+
+Whether a release can reuse a host is not decided by the versions but by the **host input hash** over everything the binary is built from ([ci.md "Reusing the host binary"](../process/ci.md#packaging)): if any host input changed, the package job compiles. The host version must then go up as well: one host version names one binary, because what the player keys by it (the GPU crash guard is keyed by host version and driver) would otherwise carry over from the old binary to the new one. `check-bump` enforces it, in release.yml's `verify` job and before any reuse. Every release carries `host.json`, listed in `SHA256SUMS`: per platform the target, the host input hash, the host version, the commit the binary was built from, its SHA-256 inside the archive, and `reusedFrom`, the release that first shipped it. Only published releases are reused; a draft never is.
 
 ```
 node src/packaging/host.mjs versions   # release=… host=…; fails unless release ≥ host
+node src/packaging/host.mjs check-bump # fails when the host version must go up (against published releases)
 node src/packaging/host.mjs hash       # this checkout's host input hash (Windows target on Windows)
 ```
 

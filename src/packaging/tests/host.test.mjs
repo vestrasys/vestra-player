@@ -9,16 +9,29 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { spawnSync } from "node:child_process";
 import { crc32 } from "node:zlib";
 import {
+  checkHostBump,
+  directoryReleases,
+  releasedHosts,
   fetchReleasedHost,
+  HostError,
   hostInputs,
   hostRecord,
+  RECIPE,
+  resolveHost,
   TARGETS,
 } from "../host.mjs";
-import { compareVersions, sha256 } from "../lib.mjs";
+import {
+  compareVersions,
+  hostVersion,
+  packaging,
+  parseVersion,
+  sha256,
+} from "../lib.mjs";
 
 const WINDOWS = "x86_64-pc-windows-msvc";
 
@@ -100,10 +113,68 @@ test("release ≥ host: semantic version order", () => {
   assert.equal(compareVersions("1.2.3", "1.2.3"), 0);
   assert.ok(compareVersions("1.2.3-rc.1", "1.2.3") < 0);
   assert.throws(() => compareVersions("1.2", "1.2.0"));
+  // Build metadata does not count; pre-release identifiers per semver §11.
+  assert.equal(compareVersions("1.2.3+a", "1.2.3+b"), 0);
+  assert.ok(compareVersions("1.2.3-alpha.2", "1.2.3-alpha.10") < 0);
+  assert.ok(compareVersions("1.0.0-alpha", "1.0.0-alpha.1") < 0);
+  assert.ok(compareVersions("1.0.0-alpha.1", "1.0.0-alpha.beta") < 0);
+  assert.ok(compareVersions("1.0.0-beta", "1.0.0-rc.1") < 0);
+  assert.ok(compareVersions("1.0.0-rc.1+build.9", "1.0.0") < 0);
+});
+
+test("versions parse as the host's version::parse does", () => {
+  for (const version of [
+    "1.2.3",
+    "0.0.0",
+    "1.2.3-rc.1",
+    "1.2.3+build.5",
+    "1.2.3-rc.1+build.5",
+    "1.2.3+b-c",
+    "4294967295.0.0",
+  ])
+    assert.ok(parseVersion(version), version);
+  assert.deepEqual(parseVersion("1.2.3-rc.1+b.2"), {
+    core: [1, 2, 3],
+    pre: "rc.1",
+    build: "b.2",
+  });
+  assert.deepEqual(parseVersion("1.2.3+b-c"), {
+    core: [1, 2, 3],
+    pre: undefined,
+    build: "b-c",
+  });
+  for (const version of [
+    "1.2",
+    "1.2.3.4",
+    "01.2.3",
+    "1.02.3",
+    "v1.2.3",
+    " 1.2.3",
+    "4294967296.0.0",
+    "1.2.3-é",
+    `1.2.3-${"x".repeat(60)}`,
+    "",
+    undefined,
+    7,
+  ])
+    assert.equal(parseVersion(version), undefined, String(version));
+});
+
+test("RECIPE names the cargo-about version the package workflow installs", async () => {
+  const workflow = await readFile(
+    join(packaging, "../../.github/workflows/_package.yml"),
+    "utf8",
+  );
+  const installed = /tool: cargo-about@([0-9.]+)/.exec(workflow)?.[1];
+  assert.ok(installed, "_package.yml installs cargo-about");
+  assert.ok(
+    RECIPE.endsWith(`cargo-about ${installed}`),
+    `RECIPE (${RECIPE}) must name cargo-about ${installed}`,
+  );
 });
 
 /** A fake published release v1.0.1 with a Windows host built from `hash`. */
-async function fakeRelease(hash, { tamper } = {}) {
+async function fakeRelease(hash, { tamper, version } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "vestra-host-release-"));
   const exe = Buffer.from("MZ fake host");
   const html = Buffer.from("<html>crates</html>");
@@ -127,6 +198,7 @@ async function fakeRelease(hash, { tamper } = {}) {
     },
   });
   record.inputHash = hash;
+  if (version) record.hostVersion = version;
   if (tamper === "binary") record.binarySha256 = sha256("other");
   const host = JSON.stringify({
     schema: 1,
@@ -174,11 +246,13 @@ test("a released host with the same input hash is reused, verified", async () =>
       found.record.binary,
       "VestraPlayer-1.0.1-windows-x64/vestra-host.exe",
     );
-    // Another hash: nothing to reuse, so the caller builds.
+    // Another hash under a new host version: nothing to reuse, so the
+    // caller builds.
     assert.equal(
       await fetchReleasedHost({
         target: WINDOWS,
         hash: "b".repeat(64),
+        version: "99.0.0",
         out,
         from: release.from,
       }),
@@ -204,3 +278,247 @@ for (const tamper of ["binary", "archive"])
       await rm(release.dir, { recursive: true, force: true });
     }
   });
+
+test("a host version released with other inputs must be raised", async () => {
+  const version = await hostVersion();
+  const release = await fakeRelease("a".repeat(64), { version });
+  const out = join(release.dir, "out");
+  await mkdir(out);
+  try {
+    // The same host version, other inputs: two binaries, one version.
+    await assert.rejects(
+      fetchReleasedHost({
+        target: WINDOWS,
+        hash: "b".repeat(64),
+        version,
+        out,
+        from: release.from,
+      }),
+      (error) =>
+        error instanceof HostError &&
+        error.kind === "bump" &&
+        /raise version in src\/host\/Cargo\.toml/.test(error.message),
+    );
+    // A lower host version than one released.
+    await assert.rejects(
+      fetchReleasedHost({
+        target: WINDOWS,
+        hash: "b".repeat(64),
+        version: "0.0.1",
+        out,
+        from: release.from,
+      }),
+      (error) => error instanceof HostError && error.kind === "bump",
+    );
+  } finally {
+    await rm(release.dir, { recursive: true, force: true });
+  }
+});
+
+test("checkHostBump: same inputs reuse, a new version passes, other platforms do not count", () => {
+  const released = [
+    {
+      tag: "v1.0.2",
+      hosts: {
+        "windows-x64": {
+          target: WINDOWS,
+          hostVersion: "1.0.1",
+          inputHash: "a",
+        },
+        "macos-arm64": {
+          target: "aarch64-apple-darwin",
+          hostVersion: "1.0.1",
+          inputHash: "m",
+        },
+      },
+    },
+  ];
+  const check = (version, hash) =>
+    checkHostBump({ target: WINDOWS, hash, version, released });
+  assert.equal(check("1.0.1", "a").tag, "v1.0.2");
+  assert.equal(check("1.0.2", "b"), undefined);
+  assert.throws(() => check("1.0.1", "b"), /already released in v1\.0\.2/);
+  assert.throws(() => check("1.0.0", "b"), /lower than host 1\.0\.1/);
+});
+
+/** resolveHost with a fake release list, a scratch cache and no build. */
+async function resolveWith(from) {
+  const cache = await mkdtemp(join(tmpdir(), "vestra-host-cache-"));
+  const saved = process.env.VESTRA_HOST_CACHE;
+  process.env.VESTRA_HOST_CACHE = cache;
+  try {
+    return await resolveHost({ target: WINDOWS, from, build: false });
+  } finally {
+    if (saved === undefined) delete process.env.VESTRA_HOST_CACHE;
+    else process.env.VESTRA_HOST_CACHE = saved;
+    await rm(cache, { recursive: true, force: true });
+  }
+}
+
+test("--reuse-host: no matching release builds, a bad release stops", async () => {
+  const hash = (await hostInputs(WINDOWS)).hash;
+  // No release with this hash (an older host version): falls through to the
+  // build, which build: false turns into this error.
+  const older = await fakeRelease("a".repeat(64), { version: "0.0.1" });
+  // The matching release, but its archive does not check out.
+  const tampered = await fakeRelease(hash, { tamper: "archive" });
+  try {
+    await assert.rejects(
+      resolveWith(older.from),
+      (error) =>
+        !(error instanceof HostError) &&
+        /no host built from input hash/.test(error.message),
+    );
+    await assert.rejects(
+      resolveWith(tampered.from),
+      (error) => error instanceof HostError && error.kind === "verification",
+    );
+    // The lookup itself unavailable (no gh login, offline): a warning, then
+    // the build.
+    await assert.rejects(
+      resolveWith({
+        name: "offline",
+        releases: async () => {
+          throw new Error("gh: not logged in");
+        },
+        download: async () => {},
+      }),
+      /no host built from input hash/,
+    );
+  } finally {
+    await rm(older.dir, { recursive: true, force: true });
+    await rm(tampered.dir, { recursive: true, force: true });
+  }
+});
+
+test("build metadata does not make a second host version", () => {
+  const released = [
+    {
+      tag: "v0.7.3",
+      hosts: {
+        "windows-x64": {
+          target: WINDOWS,
+          hostVersion: "0.7.3",
+          inputHash: "A",
+        },
+      },
+    },
+  ];
+  const check = (version, hash) =>
+    checkHostBump({ target: WINDOWS, hash, version, released });
+  assert.throws(
+    () => check("0.7.3+fix", "B"),
+    (error) => error instanceof HostError && error.kind === "bump",
+  );
+  assert.equal(check("0.7.3+fix", "A").tag, "v0.7.3");
+  assert.equal(check("0.7.4", "B"), undefined);
+});
+
+/**
+ * A releases directory (directoryReleases) with one release: host.json
+ * `hosts`, and SHA256SUMS listing it (`sums`: true, "bad" or false).
+ */
+async function releasesDir(hosts, { sums = true } = {}) {
+  const dir = await mkdtemp(join(tmpdir(), "vestra-host-releases-"));
+  const tag = "v9.0.0";
+  await mkdir(join(dir, tag));
+  await writeFile(
+    join(dir, "releases.json"),
+    JSON.stringify(hosts ? [tag] : []),
+  );
+  if (!hosts) return dir;
+  const host = JSON.stringify({ schema: 1, hosts });
+  await writeFile(join(dir, tag, "host.json"), host);
+  if (sums)
+    await writeFile(
+      join(dir, tag, "SHA256SUMS"),
+      `${sums === "bad" ? "0".repeat(64) : sha256(host)}  host.json\n`,
+    );
+  return dir;
+}
+
+for (const [what, sums] of [
+  ["a host.json that does not match SHA256SUMS", "bad"],
+  ["a host.json without SHA256SUMS", false],
+])
+  test(`${what} is a verification failure, not "nothing found"`, async () => {
+    const dir = await releasesDir(
+      {
+        "windows-x64": {
+          target: WINDOWS,
+          hostVersion: "0.0.1",
+          inputHash: "a",
+        },
+      },
+      { sums },
+    );
+    const scratch = join(dir, "scratch");
+    try {
+      await assert.rejects(
+        releasedHosts({ from: directoryReleases(dir), scratch }),
+        (error) => error instanceof HostError && error.kind === "verification",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+test("versions and check-bump run where there is no packaged host (Linux)", async () => {
+  const preload = join(
+    await mkdtemp(join(tmpdir(), "vestra-linux-")),
+    "linux.cjs",
+  );
+  await writeFile(
+    preload,
+    'Object.defineProperty(process, "platform", { value: "linux" });\n',
+  );
+  const cli = (...args) =>
+    spawnSync(
+      process.execPath,
+      ["--require", preload, join(packaging, "host.mjs"), ...args],
+      { encoding: "utf8" },
+    );
+  const version = await hostVersion();
+  const hashes = {
+    windows: (await hostInputs(WINDOWS)).hash,
+    macos: (await hostInputs("aarch64-apple-darwin")).hash,
+  };
+  const hosts = (windowsHash) => ({
+    "windows-x64": {
+      target: WINDOWS,
+      hostVersion: version,
+      inputHash: windowsHash,
+    },
+    "macos-arm64": {
+      target: "aarch64-apple-darwin",
+      hostVersion: version,
+      inputHash: hashes.macos,
+    },
+  });
+  const empty = await releasesDir(undefined);
+  const same = await releasesDir(hosts(hashes.windows));
+  const changed = await releasesDir(hosts("f".repeat(64)));
+  try {
+    const versions = cli("versions");
+    assert.equal(versions.status, 0, versions.stderr);
+    assert.match(
+      versions.stdout,
+      new RegExp(`^host=${version.replaceAll(".", "\\.")}$`, "m"),
+    );
+    let run = cli("check-bump", "--releases-dir", empty);
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, /no published release has a host\.json yet/);
+    run = cli("check-bump", "--releases-dir", same);
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, /windows-x64: .*the same inputs as in v9\.0\.0/);
+    // The Windows host changed under the same host version: exit 1.
+    run = cli("check-bump", "--releases-dir", changed);
+    assert.equal(run.status, 1, run.stdout);
+    assert.match(run.stderr, /raise version in src\/host\/Cargo\.toml/);
+    // An unknown command is an error, not a silent exit 0.
+    assert.equal(cli("nope").status, 1);
+  } finally {
+    for (const dir of [empty, same, changed, dirname(preload)])
+      await rm(dir, { recursive: true, force: true });
+  }
+});
