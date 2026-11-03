@@ -11,7 +11,7 @@ use anyhow::Result;
 use serde_json::{Value, json};
 use slint::ComponentHandle;
 use slint_interpreter::Value as SValue;
-use std::{collections::BTreeMap, path::PathBuf, sync::mpsc};
+use std::{cell::Cell, collections::BTreeMap, path::PathBuf, rc::Rc, sync::mpsc};
 
 /// Fixed order of the tree (J04); `category_label` has the headers.
 pub const CATEGORIES: [&str; 9] = [
@@ -77,8 +77,14 @@ pub fn alias(serial: u64) -> String {
 struct Open {
     instance: slint_interpreter::ComponentInstance,
     generation: u64,
-    /// Page serials in display order: the `current` index points here.
+    /// Page serials in the order the window was built with: a page's slot
+    /// (the `current` index, a row's `page`) points here. The tree may show
+    /// them in another order since (a page's order or category changed in
+    /// place); the slots stay.
     order: Vec<u64>,
+    /// Each page's owner as its callbacks read it (by serial): a woken
+    /// plugin's pages move to its new generation without a rebuild.
+    owners: BTreeMap<u64, Rc<Cell<u64>>>,
 }
 
 #[derive(Default)]
@@ -153,22 +159,24 @@ fn pick<'a>(pages: &[&'a Page], wanted: Option<&str>, category: Option<usize>) -
         .copied()
 }
 
-/// The tree model: a header per non-empty category, then its pages.
-pub(crate) fn rows(pages: &[&Page], current: Option<u64>) -> Value {
+/// The tree model: a header per non-empty category, then its pages. A
+/// row's `page` is its page's slot in `slots` (the open window's build
+/// order), -1 for a page the window does not hold yet.
+pub(crate) fn rows(pages: &[&Page], current: Option<u64>, slots: &[u64]) -> Value {
     let mut rows = Vec::new();
     for (index, name) in CATEGORIES.iter().enumerate() {
         let label = category_label(name);
         let mut first = true;
-        for (position, page) in pages
-            .iter()
-            .enumerate()
-            .filter(|(_, p)| p.category == index)
-        {
+        for page in pages.iter().filter(|p| p.category == index) {
             if first {
                 rows.push(json!({"label":label,"page":-1,"header":true,"selected":false}));
                 first = false;
             }
-            rows.push(json!({"label":page.title,"page":position,"header":false,
+            let slot = slots
+                .iter()
+                .position(|serial| *serial == page.serial)
+                .map_or(-1, |slot| slot as i64);
+            rows.push(json!({"label":page.title,"page":slot,"header":false,
                 "selected":Some(page.serial) == current}));
         }
     }
@@ -274,6 +282,83 @@ export component OptionsWindow inherits Window {{
     Ok(source)
 }
 
+/// A window component of `definition`, set up by `setup` before it shows:
+/// with an `old` window open, its tree replaces the old one's inside the
+/// same native window (`view::replace_shell`; size, position, maximized
+/// state and z-order stay, nothing hides or flashes), and if that fails the
+/// old tree shows again. Without one, a new window the caller shows.
+fn create_window(
+    definition: &slint_interpreter::ComponentDefinition,
+    old: Option<&slint_interpreter::ComponentInstance>,
+    setup: impl FnOnce(&slint_interpreter::ComponentInstance) -> Result<()>,
+) -> Result<slint_interpreter::ComponentInstance> {
+    crate::ui::view::replace_shell(old, |window| {
+        let instance = match window {
+            Some(window) => definition.create_with_existing_window(window)?,
+            None => definition.create()?,
+        };
+        setup(&instance)?;
+        Ok(instance)
+    })
+}
+
+/// A page's bridge callbacks: each goes to the plugin that owns the page
+/// when it is called (`owner`, which a wake moves to the new generation).
+fn wire_page(
+    definition: &slint_interpreter::ComponentDefinition,
+    instance: &slint_interpreter::ComponentInstance,
+    alias: &str,
+    owner: Rc<Cell<u64>>,
+    view: String,
+    events: mpsc::Sender<Event>,
+) -> Result<()> {
+    let callbacks = definition
+        .global_callbacks(alias)
+        .with_context(|| format!("settings global unavailable: {alias}"))?;
+    for callback in callbacks {
+        let (owner, view, events, name) = (
+            owner.clone(),
+            view.clone(),
+            events.clone(),
+            callback.clone(),
+        );
+        instance.set_global_callback(alias, &callback, move |args| {
+            let owner = owner.get();
+            let message = match composition::json_args(args) {
+                Ok(args) => json!({"view":view,"callback":name,"args":args}),
+                Err(error) => {
+                    let _ = events.send(Event::PluginMessage(
+                        owner,
+                        "ui.error".into(),
+                        json!({"code":"ui","message":format!("callback {name}: {error}")}),
+                    ));
+                    return SValue::Void;
+                }
+            };
+            let _ = events.send(Event::UiCallback(owner, message));
+            SValue::Void
+        })?;
+    }
+    Ok(())
+}
+
+/// The properties `after` sets to other values than `before` had: what a
+/// page registered again writes into an open window. One it no longer sets
+/// keeps the value the window shows.
+fn changed_values<'a>(before: &Page, after: &'a Page) -> Vec<(&'a str, &'a Value)> {
+    after
+        .properties
+        .iter()
+        .filter(|(name, value)| before.properties.get(*name) != Some(*value))
+        .map(|(name, value)| (name.as_str(), value))
+        .collect()
+}
+
+/// Whether the tree shows `after` elsewhere or under another title.
+fn moved(before: &Page, after: &Page) -> bool {
+    before.title != after.title || before.category != after.category || before.order != after.order
+}
+
 impl Settings {
     pub fn window(&self) -> Option<&slint_interpreter::ComponentInstance> {
         self.open.as_ref().map(|open| &open.instance)
@@ -337,15 +422,42 @@ impl Settings {
         self.stale |= changed && self.open.is_some();
         changed
     }
-    /// Wake: `from`'s pages move to generation `to`. An open window is built
-    /// again, since its callbacks name the owner.
+    /// A woken plugin's registration of a recorded page with the same files
+    /// (the recording is of this package, so the same source): the page
+    /// takes it under its serial, and the window, open or not, is left to
+    /// be updated in place; the page as it was. `None`: not such a
+    /// re-registration (nothing changed).
+    fn reregister(&mut self, page: &Page, sent: Value) -> Option<Page> {
+        let slot = self.pages.iter_mut().find(|p| {
+            p.owner == page.owner
+                && p.id == page.id
+                && self.recorded.contains(&p.serial)
+                && p.file == page.file
+                && p.component == page.component
+                && p.global == page.global
+        })?;
+        let serial = slot.serial;
+        let before = std::mem::replace(
+            slot,
+            Page {
+                serial,
+                ..page.clone()
+            },
+        );
+        self.recorded.remove(&serial);
+        self.sent.insert(serial, sent);
+        Some(before)
+    }
+    /// Wake: `from`'s pages move to generation `to`, in an open window too
+    /// (its callbacks read their page's owner when called): nothing is
+    /// built again.
     pub fn rekey(&mut self, from: u64, to: u64) {
-        let mut moved = false;
         for page in self.pages.iter_mut().filter(|p| p.owner == from) {
             page.owner = to;
-            moved = true;
+            if let Some(owner) = self.open.as_ref().and_then(|o| o.owners.get(&page.serial)) {
+                owner.set(to);
+            }
         }
-        self.stale |= moved && self.open.is_some();
     }
     /// `owner`'s pages as `settings.register` calls, each with its current
     /// properties; `None` when one has no sent form (cannot be recorded).
@@ -420,38 +532,10 @@ impl Host {
                 self.images.reset_writes(owner, &page.view());
                 // A woken plugin registers its recorded page again: the same
                 // files need no compile (the recording is of this package).
-                if let Some(recorded) = self
-                    .settings
-                    .pages
-                    .iter()
-                    .find(|p| p.owner == owner && p.id == page.id)
-                    .filter(|p| {
-                        self.settings.is_recorded(p)
-                            && p.file == page.file
-                            && p.component == page.component
-                            && p.global == page.global
-                    })
-                    .cloned()
-                {
-                    let page = Page {
-                        serial: recorded.serial,
-                        ..page
-                    };
-                    self.settings.recorded.remove(&page.serial);
-                    self.settings.sent.insert(page.serial, sent_page(params));
-                    let changed = recorded.properties != page.properties
-                        || recorded.title != page.title
-                        || recorded.category != page.category
-                        || recorded.order != page.order;
-                    if let Some(slot) = self
-                        .settings
-                        .pages
-                        .iter_mut()
-                        .find(|p| p.serial == page.serial)
-                    {
-                        *slot = page;
-                    }
-                    self.settings.stale |= changed && self.settings.open.is_some();
+                if let Some(before) = self.settings.reregister(&page, sent_page(params)) {
+                    // The same source: an open window keeps its component
+                    // and its native window; only what changed is written.
+                    self.settings_update(&before);
                     self.report_refused(owner, refused);
                     return Ok(Some(Value::Null));
                 }
@@ -805,14 +889,54 @@ impl Host {
             .collect();
         let refs: Vec<&Page> = pages.iter().collect();
         let definition = composition::build(source(&refs)?, "OptionsWindow")?;
-        let instance = definition.create()?;
+        self.next_shell_generation += 1;
+        let generation = self.next_shell_generation;
+        // An open window keeps its native window: the new component tree
+        // takes the old one's place in it (`view::replace_shell`), so a
+        // page added or removed while it is open neither closes it nor
+        // moves, resizes or flashes it.
+        let old = self.settings.open.take();
+        let mut owners = BTreeMap::new();
+        let built = create_window(&definition, old.as_ref().map(|o| &o.instance), |instance| {
+            owners = self.settings_wire(&definition, instance, &pages, generation)?;
+            Ok(())
+        });
+        let instance = match built {
+            Ok(instance) => instance,
+            Err(error) => {
+                // The old window shows its old tree again (`replace_shell`).
+                self.settings.open = old;
+                return Err(error);
+            }
+        };
+        // Not hidden: it shared the native window with the new tree.
+        drop(old);
+        self.settings.open = Some(Open {
+            instance,
+            generation,
+            order,
+            owners,
+        });
+        self.settings.stale = false;
+        Ok(())
+    }
+    /// A new window component's values, callbacks, window handlers and
+    /// theme; each page's owner as its callbacks read it.
+    fn settings_wire(
+        &mut self,
+        definition: &slint_interpreter::ComponentDefinition,
+        instance: &slint_interpreter::ComponentInstance,
+        pages: &[Page],
+        generation: u64,
+    ) -> Result<BTreeMap<u64, Rc<Cell<u64>>>> {
+        let mut owners = BTreeMap::new();
         let mut reports = Vec::new();
-        for page in &pages {
+        for page in pages {
             let alias = alias(page.serial);
-            crate::ui::ui_values::own_default_models(&instance, Some(&alias))?;
+            crate::ui::ui_values::own_default_models(instance, Some(&alias))?;
             for (name, value) in &page.properties {
                 match self.prop_value(page.owner, &page.view(), name, value) {
-                    Ok(value) => composition::set_alias_value(&instance, &alias, name, value)?,
+                    Ok(value) => composition::set_alias_value(instance, &alias, name, value)?,
                     Err(error) => {
                         // Checked when written (`check_property`): an image
                         // removed since. Logged and reported to the plugin.
@@ -821,34 +945,20 @@ impl Host {
                     }
                 }
             }
-            let callbacks = definition
-                .global_callbacks(&alias)
-                .with_context(|| format!("settings global unavailable: {alias}"))?;
-            for callback in callbacks {
-                let events = self.events.clone();
-                let (owner, view, name) = (page.owner, page.view(), callback.clone());
-                instance.set_global_callback(&alias, &callback, move |args| {
-                    let message = match composition::json_args(args) {
-                        Ok(args) => json!({"view":view,"callback":name,"args":args}),
-                        Err(error) => {
-                            let _ = events.send(Event::PluginMessage(
-                                owner,
-                                "ui.error".into(),
-                                json!({"code":"ui","message":format!("callback {name}: {error}")}),
-                            ));
-                            return SValue::Void;
-                        }
-                    };
-                    let _ = events.send(Event::UiCallback(owner, message));
-                    SValue::Void
-                })?;
-            }
+            let owner = Rc::new(Cell::new(page.owner));
+            owners.insert(page.serial, owner.clone());
+            wire_page(
+                definition,
+                instance,
+                &alias,
+                owner,
+                page.view(),
+                self.events.clone(),
+            )?;
         }
         for (owner, report) in reports {
             self.send(owner, report);
         }
-        self.next_shell_generation += 1;
-        let generation = self.next_shell_generation;
         let events = self.events.clone();
         instance.set_callback("select", move |args| {
             if let Some(SValue::Number(index)) = args.first()
@@ -863,6 +973,8 @@ impl Host {
             let _ = events.send(Event::Settings(generation, None));
             SValue::Void
         })?;
+        // The native window's handlers: set again for each new tree (they
+        // name its generation).
         let events = self.events.clone();
         instance.window().on_close_requested(move || {
             let _ = events.send(Event::Settings(generation, None));
@@ -882,25 +994,65 @@ impl Host {
                     }
                 });
         }
-        self.theme_view(&instance);
-        if let Some(old) = self.settings.open.take() {
-            let window = old.instance.window();
-            let scale = window.scale_factor();
-            let size = window.size();
-            instance.window().set_size(slint::LogicalSize::new(
-                size.width as f32 / scale,
-                size.height as f32 / scale,
-            ));
-            self.placements.show_at(&instance, window.position())?;
-            crate::platform::shown(&instance);
-            let _ = old.instance.hide();
+        self.theme_view(instance);
+        Ok(owners)
+    }
+    /// A woken plugin registered `before`'s page again with the same files
+    /// (the page now holds the new registration): an open window takes the
+    /// changed values in place, and its tree the new title, category or
+    /// order. Nothing is compiled; the component and its native window
+    /// stay.
+    fn settings_update(&mut self, before: &Page) {
+        let Some(instance) = self
+            .settings
+            .window()
+            .map(slint::ComponentHandle::clone_strong)
+        else {
+            return;
+        };
+        let Some(page) = self
+            .settings
+            .pages
+            .iter()
+            .find(|p| p.serial == before.serial)
+            .cloned()
+        else {
+            return;
+        };
+        let alias = alias(page.serial);
+        for (name, value) in changed_values(before, &page) {
+            let written = self
+                .prop_value(page.owner, &page.view(), name, value)
+                .map_err(|error| {
+                    self.send(page.owner, crate::host::ui_error(&error));
+                    anyhow::anyhow!(error.message)
+                })
+                .and_then(|value| composition::set_alias_value(&instance, &alias, name, value));
+            if let Err(error) = written {
+                diag!("settings property {}/{name}: {error:#}", page.key());
+            }
         }
-        self.settings.open = Some(Open {
-            instance,
-            generation,
-            order,
-        });
-        self.settings.stale = false;
+        if moved(before, &page)
+            && let Err(error) = self.settings_rows()
+        {
+            diag!("host.error settings window: {error:#}");
+        }
+    }
+    /// The open window's tree, with the current page selected.
+    fn settings_rows(&mut self) -> Result<()> {
+        let Some(open) = &self.settings.open else {
+            return Ok(());
+        };
+        let pages = sorted(&self.settings.pages);
+        let current = self
+            .settings
+            .current
+            .as_deref()
+            .and_then(|key| pages.iter().find(|p| p.key() == key))
+            .map(|p| p.serial);
+        let tree = rows(&pages, current, &open.order);
+        open.instance
+            .set_property("rows", ui_values::from_json(&tree)?)?;
         Ok(())
     }
     /// Show `serial`, or the current / last page with the fallbacks of `pick`.
@@ -923,10 +1075,10 @@ impl Host {
             Some(page) => (Some(page.key()), Some(page.serial), Some(page.category)),
             None => (None, None, None),
         };
-        let tree = rows(&pages, chosen_serial);
         self.settings.current = key.clone();
         self.settings_category = category;
         if let Some(open) = &self.settings.open {
+            let tree = rows(&pages, chosen_serial, &open.order);
             let index = chosen_serial
                 .and_then(|serial| open.order.iter().position(|s| *s == serial))
                 .map_or(-1., |i| i as f64);
@@ -1065,7 +1217,8 @@ mod tests {
         let sorted = sorted(&pages);
         let ids: Vec<_> = sorted.iter().map(|p| p.id.as_str()).collect();
         assert_eq!(ids, ["keys", "first", "look", "logo"]);
-        let tree = rows(&sorted, Some(2));
+        let slots: Vec<u64> = sorted.iter().map(|p| p.serial).collect();
+        let tree = rows(&sorted, Some(2), &slots);
         let labels: Vec<_> = tree
             .as_array()
             .unwrap()
@@ -1251,8 +1404,12 @@ mod tests {
         slint::platform::set_platform(Box::new(Headless(window.clone()))).unwrap();
         let definition = composition::build(source(pages).unwrap(), "OptionsWindow").unwrap();
         let instance = definition.create().unwrap();
+        let slots: Vec<u64> = pages.iter().map(|p| p.serial).collect();
         instance
-            .set_property("rows", ui_values::from_json(&rows(pages, None)).unwrap())
+            .set_property(
+                "rows",
+                ui_values::from_json(&rows(pages, None, &slots)).unwrap(),
+            )
             .unwrap();
         instance
             .window()
@@ -1359,5 +1516,251 @@ mod tests {
             pages.push(page);
         }
         change_every_global(&sorted(&pages));
+    }
+
+    /// Opens `settings`' window as `settings_build` does (the values as
+    /// they are, each page's callbacks reading its owner cell), in place of
+    /// `old` when given.
+    fn open_window(settings: &mut Settings, events: &mpsc::Sender<Event>, old: Option<Open>) {
+        let order: Vec<u64> = sorted(&settings.pages).iter().map(|p| p.serial).collect();
+        let pages: Vec<Page> = order
+            .iter()
+            .map(|serial| {
+                settings
+                    .pages
+                    .iter()
+                    .find(|p| p.serial == *serial)
+                    .unwrap()
+                    .clone()
+            })
+            .collect();
+        let definition = composition::build(
+            source(&pages.iter().collect::<Vec<_>>()).unwrap(),
+            "OptionsWindow",
+        )
+        .unwrap();
+        let mut owners = BTreeMap::new();
+        let instance = create_window(&definition, old.as_ref().map(|o| &o.instance), |instance| {
+            for page in &pages {
+                let alias = alias(page.serial);
+                for (name, value) in &page.properties {
+                    let value = ui_values::from_json(value)?;
+                    composition::set_alias_value(instance, &alias, name, value)?;
+                }
+                let owner = Rc::new(Cell::new(page.owner));
+                owners.insert(page.serial, owner.clone());
+                wire_page(
+                    &definition,
+                    instance,
+                    &alias,
+                    owner,
+                    page.view(),
+                    events.clone(),
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        if old.is_none() {
+            instance
+                .window()
+                .set_size(slint::PhysicalSize::new(640, 480));
+            instance.show().unwrap();
+        }
+        drop(old);
+        settings.open = Some(Open {
+            instance,
+            generation: 1,
+            order,
+            owners,
+        });
+        settings.stale = false;
+    }
+
+    fn caption(settings: &Settings, serial: u64) -> SValue {
+        settings
+            .window()
+            .unwrap()
+            .get_global_property(&alias(serial), "caption")
+            .unwrap()
+    }
+
+    /// A parked plugin woken while the Options window is open registers its
+    /// page again with the same files: nothing is compiled or rebuilt, the
+    /// window and its component stay, the changed value is written in
+    /// place, the tree takes the new title and order, and the page's
+    /// callbacks go to the new generation.
+    #[test]
+    fn a_woken_page_with_the_same_files_changes_in_place_without_a_new_window() {
+        let native_calls = crate::ui::view::recording_platform();
+        let (events, received) = mpsc::channel();
+        let mut settings = Settings::default();
+        let mut keys = page("x.hotkeys", "keys", 5, 0, 1);
+        keys.owner = 4;
+        keys.properties.insert("caption".into(), json!("before"));
+        settings.pages = vec![keys.clone(), page("y.other", "other", 5, 10, 2)];
+        open_window(&mut settings, &events, None);
+        assert_eq!(
+            native_calls().iter().filter(|c| *c == "new window").count(),
+            1
+        );
+        let instance = settings.window().unwrap().clone_strong();
+        let tree = crate::ui::view::ShownTree::of(instance.window()).unwrap();
+        assert_eq!(
+            caption(&settings, 1),
+            SValue::from(slint::SharedString::from("before"))
+        );
+
+        // Park, wake (the new generation is 9), register again.
+        settings.mark_recorded(4);
+        settings.rekey(4, 9);
+        assert!(!settings.stale, "a wake does not rebuild the window");
+        let mut again = Page {
+            owner: 9,
+            serial: 77,
+            title: "Keys!".into(),
+            order: 20,
+            ..keys.clone()
+        };
+        again.properties.insert("caption".into(), json!("after"));
+        let before = settings.reregister(&again, json!({"id":"keys"})).unwrap();
+        assert!(!settings.stale, "the same source is not compiled again");
+        assert!(settings.recorded.is_empty());
+        let page = settings.page(9, "keys").unwrap().clone();
+        assert_eq!(page.serial, 1, "the page keeps its serial (its alias)");
+
+        // What `settings_update` writes: only the changed value.
+        let changed = changed_values(&before, &page);
+        assert_eq!(changed, [("caption", &json!("after"))]);
+        let window = settings.window().unwrap();
+        for (name, value) in changed {
+            composition::set_alias_value(
+                window,
+                &alias(1),
+                name,
+                ui_values::from_json(value).unwrap(),
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            caption(&settings, 1),
+            SValue::from(slint::SharedString::from("after"))
+        );
+        // The tree: "keys" now after "other", still pointing at its slot.
+        assert!(moved(&before, &page));
+        let open = settings.open.as_ref().unwrap();
+        let tree_rows = rows(&sorted(&settings.pages), Some(1), &open.order);
+        let labels: Vec<_> = tree_rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                (
+                    r["label"].as_str().unwrap().to_owned(),
+                    r["page"].as_i64().unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                ("Keys and Mouse".to_owned(), -1),
+                ("other".to_owned(), 1),
+                ("Keys!".to_owned(), 0)
+            ]
+        );
+        assert_eq!(open.owners[&1].get(), 9);
+
+        // The same component in the same native window: nothing was asked
+        // of the windowing system.
+        assert!(native_calls().is_empty());
+        assert!(tree.is_shown_in(instance.window()));
+        assert!(settings.window().unwrap().as_weak().upgrade().is_some());
+        drop(received);
+    }
+
+    /// The page's bridge callbacks name the owner it has when called: a
+    /// wake moves them to the new generation without a new component.
+    #[test]
+    fn page_callbacks_follow_the_owner_through_a_wake() {
+        let _ = crate::ui::view::recording_platform();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins");
+        let (events, received) = mpsc::channel();
+        let mut settings = Settings::default();
+        let mut page = Page {
+            file: base.join("window/ui/page.slint"),
+            component: "WindowSettingsPage".into(),
+            global: "WindowPage".into(),
+            ..page("built.in", "window", 1, 0, 3)
+        };
+        page.owner = 4;
+        settings.pages = vec![page];
+        open_window(&mut settings, &events, None);
+        let instance = settings.window().unwrap().clone_strong();
+        let fire = || {
+            instance
+                .invoke_global(&alias(3), "set-auto", &[SValue::Number(1.)])
+                .unwrap();
+        };
+        fire();
+        settings.mark_recorded(4);
+        settings.rekey(4, 9);
+        fire();
+        let owners: Vec<u64> = received
+            .try_iter()
+            .filter_map(|event| match event {
+                Event::UiCallback(owner, message) => {
+                    assert_eq!(message["callback"], "set-auto");
+                    Some(owner)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(owners, [4, 9]);
+    }
+
+    /// A page added, removed or with other files needs a new compile; an
+    /// open window then takes the new component tree in its own native
+    /// window (no new window, nothing hidden, moved or resized).
+    #[test]
+    fn a_changed_page_source_compiles_again_in_the_same_native_window() {
+        let native_calls = crate::ui::view::recording_platform();
+        let (events, _received) = mpsc::channel();
+        let mut settings = Settings::default();
+        let mut keys = page("x.hotkeys", "keys", 5, 0, 1);
+        keys.owner = 4;
+        settings.pages = vec![keys.clone()];
+        open_window(&mut settings, &events, None);
+        let instance = settings.window().unwrap().clone_strong();
+        instance
+            .window()
+            .set_position(slint::PhysicalPosition::new(120, 64));
+        let old_tree = crate::ui::view::ShownTree::of(instance.window()).unwrap();
+        let before = source(&[&keys]).unwrap();
+        native_calls();
+
+        // Woken with another file: not a re-registration of the same source.
+        settings.mark_recorded(4);
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/settings");
+        let other = Page {
+            file: base.join("tall.slint"),
+            component: "Tall".into(),
+            serial: 2,
+            ..keys.clone()
+        };
+        assert!(settings.reregister(&other, json!({})).is_none());
+        assert_ne!(source(&[&other]).unwrap(), before);
+        settings.pages = vec![other];
+        let old = settings.open.take();
+        open_window(&mut settings, &events, old);
+        let calls = native_calls();
+        assert!(!calls.iter().any(|c| c == "new window"), "{calls:?}");
+        assert!(!calls.iter().any(|c| c == "set_visible false"), "{calls:?}");
+        let window = settings.window().unwrap().window();
+        assert!(!old_tree.is_shown_in(window));
+        assert!(window.is_visible());
+        assert_eq!(window.size(), slint::PhysicalSize::new(640, 480));
+        assert_eq!(window.position(), slint::PhysicalPosition::new(120, 64));
+        drop(instance);
     }
 }
